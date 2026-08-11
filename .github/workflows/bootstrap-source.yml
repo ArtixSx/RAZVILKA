@@ -22,8 +22,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .bootstrap/part-* > /tmp/razvilka-source.b64
+          cat \
+            .bootstrap/part-01 \
+            .bootstrap/part-02a \
+            .bootstrap/part-02b \
+            .bootstrap/part-03a \
+            .bootstrap/part-03b \
+            .bootstrap/part-04 \
+            .bootstrap/part-05 \
+            .bootstrap/part-06 \
+            > /tmp/razvilka-source.b64
           base64 -d /tmp/razvilka-source.b64 > /tmp/razvilka-source.tar.gz
+          echo '48835edd90be02ece19608b6584cfdd675602a00a3895695b5339a0dc5887044  /tmp/razvilka-source.tar.gz' | sha256sum -c -
+          tar -tzf /tmp/razvilka-source.tar.gz >/dev/null
           tar -xzf /tmp/razvilka-source.tar.gz -C .
           rm -rf .bootstrap
           rm -f CODEX_TEST.md MIGRATION_NOTE.md
