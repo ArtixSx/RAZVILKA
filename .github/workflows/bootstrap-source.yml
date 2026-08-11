@@ -36,9 +36,13 @@ jobs:
           echo '48835edd90be02ece19608b6584cfdd675602a00a3895695b5339a0dc5887044  /tmp/razvilka-source.tar.gz' | sha256sum -c -
           tar -tzf /tmp/razvilka-source.tar.gz >/dev/null
           tar -xzf /tmp/razvilka-source.tar.gz -C .
+
+          # GITHUB_TOKEN is intentionally not granted workflow-file write scope.
+          # Keep this bootstrap workflow untouched and publish normal CI/release
+          # workflows with the connected GitHub integration after source import.
+          rm -f .github/workflows/ci.yml .github/workflows/release.yml
           rm -rf .bootstrap
           rm -f CODEX_TEST.md MIGRATION_NOTE.md
-          rm -f .github/workflows/bootstrap-source.yml
 
       - name: Commit imported source
         shell: bash
