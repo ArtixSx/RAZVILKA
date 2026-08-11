@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07110c">
+  <title>RAZVILKA</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-glyph">RZ</div><div><b>RAZVILKA</b><small id="version">v0.0.7</small></div></div>
+    <nav class="nav-list">
+      <button class="nav active" data-view="overview"><span>⌂</span><b>Обзор</b></button>
+      <div class="nav-label">МАРШРУТИЗАЦИЯ</div>
+      <button class="nav" data-view="services"><span>◫</span><b>Сервисы</b><i id="serviceNavCount">0</i></button>
+      <button class="nav" data-view="connections"><span>↔</span><b>Соединения</b><i id="connectionCounter">0</i></button>
+      <button class="nav" data-view="engines"><span>⇢</span><b>Движки</b></button>
+      <button class="nav" data-view="devices"><span>▣</span><b>Устройства</b></button>
+      <div class="nav-label">ДАННЫЕ</div>
+      <button class="nav" data-view="sources"><span>↻</span><b>Источники</b></button>
+      <button class="nav" data-view="testlab"><span>✓</span><b>Тест обходов</b></button>
+      <button class="nav" data-view="diagnostics"><span>⌁</span><b>Диагностика</b></button>
+      <div class="nav-label">СИСТЕМА</div>
+      <button class="nav" data-view="settings"><span>⚙</span><b>Настройки</b></button>
+    </nav>
+    <div class="sidebar-foot"><span class="local-dot"></span><div><b>Local-first</b><small>Keenetic / Netcraze</small></div></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="page-title"><h1 id="pageTitle">Обзор</h1><p id="pageSubtitle">Состояние маршрутизации и системы</p></div>
+      <div class="top-actions">
+        <button class="icon-button" id="refreshAll" title="Обновить">↻</button>
+        <div class="status-chip"><i></i><span id="systemText">Подключение…</span></div>
+        <div class="router-chip" id="listenChip">:8787</div>
+      </div>
+    </header>
+
+    <div class="draft-bar" id="draftBar">
+      <div><span class="draft-pulse"></span><b>Есть неподтверждённые изменения</b><small>Сначала проверяем план, затем применяем атомарно</small></div>
+      <div class="draft-actions"><button class="secondary" id="discardChanges">Отменить</button><button class="primary" id="applyChanges">Применить</button></div>
+    </div>
+
+    <section class="view active" id="view-overview">
+      <section class="hero">
+        <div class="hero-copy"><span class="eyebrow">ADAPTIVE ROUTING CONTROL PLANE</span><h2>Один интерфейс для всех способов обхода</h2><p>RAZVILKA выбирает маршрут для каждого сервиса, показывает фактический путь соединения и сохраняет безопасную точку отката.</p><div class="hero-actions"><button class="primary" data-view="services">Настроить сервисы</button><button class="secondary" data-view="diagnostics">Проверить систему</button></div></div>
+        <div class="hero-route"><small>Пример логики AUTO</small><div class="route-flow"><span>ChatGPT</span><b>→</b><span>WARP</span><b>→</b><span>VLESS NL</span></div><div class="route-caption">fallback включается только после подтверждённой ошибки маршрута</div></div>
+      </section>
+
+      <section class="kpis">
+        <article class="kpi"><small>Режим</small><strong id="kpiState">Safe Mode</strong><span id="kpiStateSub">dataplane не изменяется</span></article>
+        <article class="kpi"><small>Движки</small><strong id="kpiEngines">0 / 0</strong><span>запущено / установлено</span></article>
+        <article class="kpi"><small>Сервисы</small><strong id="kpiServices">0 / 0</strong><span>включено / каталог</span></article>
+        <article class="kpi"><small>Live</small><strong id="kpiConnections">0</strong><span>активных соединений</span></article>
+        <article class="kpi"><small>WAN</small><strong id="kpiWan">—</strong><span id="kpiArch">определение…</span></article>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel service-overview-panel">
+          <div class="panel-title"><div><h2>Маршруты сервисов</h2><p>Желаемый маршрут, AUTO-план и применённое состояние</p></div><button class="text-button" data-view="services">Все сервисы →</button></div>
+          <div id="overviewServices" class="overview-services"></div>
+        </article>
+        <article class="panel health-panel">
+          <div class="panel-title"><div><h2>Готовность системы</h2><p>Что понадобится перед включением dataplane</p></div></div>
+          <div id="readinessMini" class="readiness-mini"></div>
+        </article>
+        <article class="panel engine-overview-panel">
+          <div class="panel-title"><div><h2>Обходы</h2><p>Движки и туннели в одной модели</p></div><button class="text-button" data-view="engines">Подробнее →</button></div>
+          <div id="engineCards" class="engine-cards"></div>
+        </article>
+        <article class="panel source-overview-panel">
+          <div class="panel-title"><div><h2>Каталог и источники</h2><p>Загрузка → проверка → атомарный cache</p></div><button class="text-button" data-view="sources">Источники →</button></div>
+          <div id="sourceOverview" class="source-overview"></div>
+        </article>
+      </section>
+    </section>
+
+    <section class="view" id="view-services">
+      <article class="panel full-panel">
+        <div class="panel-title sticky-title"><div><h2>Сервисы</h2><p>Простой уровень: включить сервис и выбрать AUTO или конкретный маршрут</p></div><div class="filters"><input id="serviceSearch" placeholder="Поиск сервиса"><select id="serviceCategory"><option value="">Все категории</option></select></div></div>
+        <div class="selector-legend"><span><i class="legend-dot auto"></i>AUTO</span><span><i class="legend-dot ok"></i>доступен</span><span><i class="legend-dot dirty"></i>изменён</span><span><i class="legend-dot off"></i>не установлен</span></div>
+        <div id="serviceList" class="service-list"></div>
+      </article>
+    </section>
+
+    <section class="view" id="view-connections">
+      <article class="panel full-panel">
+        <div class="panel-title sticky-title"><div><h2>Соединения</h2><p>Фактический путь трафика, а не только запланированное правило</p></div><div class="filters"><input id="connectionFilter" placeholder="Сервис, host, устройство, маршрут"><label class="check"><input type="checkbox" id="showClosed"> завершённые</label></div></div>
+        <div class="connection-toolbar"><span><b id="activeConn">0</b> активных</span><span><b id="closedConn">0</b> завершённых</span><span id="telemetryState">ожидание dataplane adapter</span></div>
+        <div class="table-wrap"><table class="connection-table"><thead><tr><th>Цепочка</th><th>Хост</th><th>Протокол</th><th>Источник</th><th>Трафик</th><th>Время</th></tr></thead><tbody id="connectionRows"></tbody></table></div>
+        <div id="connectionEmpty" class="empty-state"><div class="empty-icon">↔</div><strong>Подтверждённых соединений пока нет</strong><span>Строки появятся только после того, как реальный adapter передаст route evidence.</span></div>
+      </article>
+    </section>
+
+    <section class="view" id="view-engines">
+      <article class="panel full-panel">
+        <div class="panel-title sticky-title"><div><h2>Движки и конфигурации</h2><p>Настройка установленных компонентов без переустановки: draft → validate → backup → apply</p></div><div class="engine-head-actions"><span class="safe-badge" id="engineSafeBadge">SAFE MODE</span></div></div>
+        <div class="engine-workspace">
+          <aside class="engine-control-list" id="engineControlList"></aside>
+          <section class="engine-control-main">
+            <div class="engine-selected-head" id="engineSelectedHead"></div>
+            <div class="engine-tabs">
+              <button class="engine-tab active" data-engine-tab="config">Конфиг</button>
+              <button class="engine-tab" data-engine-tab="files">Файлы</button>
+              <button class="engine-tab" data-engine-tab="transfer">Импорт / экспорт</button>
+              <button class="engine-tab" data-engine-tab="check">Проверка</button>
+            </div>
+            <div class="engine-tab-panel active" id="engine-tab-config">
+              <div class="editor-toolbar">
+                <label><span>Файл</span><select id="engineFileSelect"></select></label>
+                <div class="editor-file-state" id="engineFileState">—</div>
+              </div>
+              <textarea id="engineEditor" class="config-editor" spellcheck="false" placeholder="Выберите файл конфигурации"></textarea>
+              <div class="editor-message" id="engineEditorMessage"></div>
+              <div class="editor-actions">
+                <button class="secondary" id="engineReload">Перечитать</button>
+                <button class="secondary" id="engineDiscardDraft">Отменить draft</button>
+                <button class="secondary" id="engineValidate">Проверить</button>
+                <button class="primary" id="engineSaveDraft">Сохранить draft</button>
+                <button class="danger-button" id="engineApplyConfig">Записать live</button>
+              </div>
+            </div>
+            <div class="engine-tab-panel" id="engine-tab-files">
+              <div id="engineFilesTable" class="engine-files-table"></div>
+            </div>
+            <div class="engine-tab-panel" id="engine-tab-transfer">
+              <div class="transfer-grid">
+                <div><h3>Импорт</h3><p>Загрузить конфиг или список в выбранный файл. Он попадёт сначала в draft и не затронет работающий движок.</p><input type="file" id="engineImportInput" hidden><button class="secondary" id="engineImport">Выбрать файл…</button></div>
+                <div><h3>Экспорт</h3><p>Скачать текущую live/draft версию. Секретные профили не выдаются браузеру до появления обязательной авторизации.</p><button class="secondary" id="engineExport">Экспортировать выбранный файл</button></div>
+              </div>
+            </div>
+            <div class="engine-tab-panel" id="engine-tab-check">
+              <div class="engine-check-grid"><div><span>Базовая проверка</span><b id="engineCheckBasic">не запускалась</b></div><div><span>Native validator</span><b id="engineCheckNative">—</b></div><div><span>Запущен</span><b id="engineCheckRunning">—</b></div><div><span>Safe apply</span><b id="engineCheckApply">—</b></div></div>
+              <pre class="plan-box engine-check-output" id="engineCheckOutput">Нажмите «Проверить» во вкладке «Конфиг».</pre>
+            </div>
+          </section>
+        </div>
+      </article>
+    </section>
+
+    <section class="view" id="view-devices">
+      <article class="panel full-panel">
+        <div class="panel-title"><div><h2>Устройства</h2><p>Персональные политики и friendly names для клиентов домашней сети</p></div></div>
+        <div class="empty-state device-empty"><div class="empty-icon">▣</div><strong>Device adapter ещё не подключён</strong><span>Здесь будут устройства Keenetic, их IP/имя, активные сервисы, текущий маршрут и объём трафика. Мы не подставляем фиктивных клиентов.</span></div>
+      </article>
+    </section>
+
+    <section class="view" id="view-sources">
+      <article class="panel full-panel">
+        <div class="panel-title"><div><h2>Источники данных</h2><p>Каждый внешний список проходит локальную валидацию перед попаданием в cache</p></div><button class="secondary" id="refreshSources">Обновить включённые</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Источник</th><th>Роль</th><th>Состояние</th><th>Записи</th><th>Последняя ошибка</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+      </article>
+    </section>
+
+    <section class="view" id="view-testlab">
+      <article class="panel full-panel">
+        <div class="panel-title sticky-title"><div><h2>Тест обходов</h2><p>Проверяем фактическую доступность сервисов и постепенно строим матрицу «сервис × движок»</p></div><div class="test-actions"><select id="testScope"><option value="all">Все сервисы</option><option value="enabled">Только включённые</option></select><button class="primary" id="runCurrentTests">Проверить текущую конфигурацию</button></div></div>
+        <div class="test-explainer"><div><b>Текущий маршрут</b><span>Реальный HTTP-probe с роутера через уже применённую конфигурацию.</span></div><div><b>Полная матрица</b><span>Каждый движок будет тестироваться изолированно; RAZVILKA не станет временно ломать рабочие маршруты ради теста.</span></div></div>
+        <div class="test-summary" id="testSummary"></div>
+        <div class="subheading"><div><h3>Результаты текущей конфигурации</h3><p>PASS означает, что probe URL реально ответил; PARTIAL — сеть доступна, но сервис вернул policy/auth/geo HTTP-ответ.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Сервис</th><th>Результат</th><th>HTTP</th><th>Задержка</th><th>Маршрут</th><th>Детали</th></tr></thead><tbody id="testCurrentRows"></tbody></table></div>
+        <div class="section-separator"></div>
+        <div class="subheading"><div><h3>Матрица совместимости обходов</h3><p>Сейчас показывает готовность адаптеров. После подключения изолированных probes эти клетки станут реальными PASS / PARTIAL / FAIL.</p></div><button class="secondary" id="refreshTestLab">Обновить</button></div>
+        <div class="matrix-wrap" id="testMatrix"></div>
+      </article>
+    </section>
+
+    <section class="view" id="view-diagnostics">
+      <div class="two-col">
+        <article class="panel"><div class="panel-title"><div><h2>Preflight</h2><p>Реальные возможности текущего устройства</p></div><button class="secondary" id="refreshSystem">Повторить</button></div><div id="systemProbe" class="probe-grid"></div></article>
+        <article class="panel"><div class="panel-title"><div><h2>Dry-run маршрутов</h2><p>Никаких изменений firewall/DNS/routes</p></div><button class="secondary" id="showPlan">Обновить план</button></div><pre id="planBox" class="plan-box">Загрузка…</pre></article>
+      </div>
+      <article class="panel diagnostics-notes"><div class="panel-title"><div><h2>Compatibility gates</h2><p>Что RAZVILKA будет проверять до реального Apply</p></div></div><div class="gate-grid"><div><b>Engine schema</b><span>версия ядра совместима с генерируемым конфигом</span></div><div><b>Port/TUN</b><span>нет конфликтов портов и виртуальных интерфейсов</span></div><div><b>Route safety</b><span>нет self-proxy loop и перехвата управляющего трафика</span></div><div><b>Health probe</b><span>маршрут действительно открывает нужный сервис</span></div><div><b>Rollback</b><span>snapshot готов до первой записи в dataplane</span></div><div><b>Restart test</b><span>после перезагрузки порядок запуска остаётся корректным</span></div></div></article>
+    </section>
+
+    <section class="view" id="view-settings">
+      <div class="two-col">
+        <article class="panel"><div class="panel-title"><div><h2>Безопасность применения</h2><p>Текущая Lab-сборка</p></div></div><div class="settings-list"><div><span>Safe Mode</span><b id="settingSafeMode">ON</b></div><div><span>Route draft</span><b id="settingPending">нет</b></div><div><span>Engine config drafts</span><b id="settingEngineDrafts">0</b></div><div><span>Последнее применение</span><b id="settingApplied">—</b></div><div><span>Revision</span><b id="settingRevision">0 / 0</b></div></div></article>
+        <article class="panel"><div class="panel-title"><div><h2>Конфигурация</h2><p>Backup/export перед активным dataplane</p></div></div><div class="settings-actions"><button class="secondary" id="exportConfig">Экспорт JSON</button><button class="secondary" id="discardSettings">Отменить draft</button><button class="primary" id="applySettings">Применить draft</button></div></article>
+      </div>
+    </section>
+
+    <section class="details-drawer" id="detailsPanel"><div class="drawer-head"><div><h3>Детали</h3><p>Технический вывод</p></div><button id="hideDetails">×</button></div><pre id="details"></pre></section>
+    <footer>RAZVILKA <span id="footerVersion">v0.0.7</span> · control lab · config center + bypass test lab</footer>
+  </main>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

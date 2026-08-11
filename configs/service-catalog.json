@@ -1,0 +1,399 @@
+{
+  "services": [
+    {
+      "id": "chatgpt",
+      "name": "ChatGPT / OpenAI",
+      "category": "AI",
+      "icon": "AI",
+      "description": "ChatGPT web, apps, WebSocket, uploads and OpenAI endpoints",
+      "domains": [
+        "auth.openai.com",
+        "chatgpt.com",
+        "ct.sendgrid.net",
+        "intercom.io",
+        "intercomcdn.com",
+        "oaistatic.com",
+        "oaiusercontent.com",
+        "openai.com",
+        "oaistatsig.com",
+        "auth0.openai.com",
+        "cdn.openaimerge.com",
+        "cdn.workos.com",
+        "challenges.cloudflare.com",
+        "forwarder.workos.com",
+        "humb.apple.com",
+        "images.workoscdn.com",
+        "js.stripe.com",
+        "rum.browser-intake-datadoghq.com"
+      ],
+      "strategy": [
+        "usque",
+        "warp-wg",
+        "sing-box",
+        "nfqws2"
+      ],
+      "probe_url": "https://chatgpt.com/",
+      "source_refs": [
+        "openai-network",
+        "refilter-domains",
+        "v2fly-dlc"
+      ],
+      "note": "Service-aware probe required: successful TLS alone does not prove account/service availability."
+    },
+    {
+      "id": "claude",
+      "name": "Claude",
+      "category": "AI",
+      "icon": "CL",
+      "description": "Anthropic Claude web and API",
+      "domains": [
+        "claude.ai",
+        "anthropic.com",
+        "api.anthropic.com"
+      ],
+      "strategy": [
+        "usque",
+        "warp-wg",
+        "sing-box",
+        "nfqws2"
+      ],
+      "probe_url": "https://claude.ai/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini",
+      "category": "AI",
+      "icon": "GM",
+      "description": "Google Gemini web and API",
+      "domains": [
+        "gemini.google.com",
+        "generativelanguage.googleapis.com",
+        "ai.google.dev"
+      ],
+      "strategy": [
+        "usque",
+        "warp-wg",
+        "sing-box",
+        "nfqws2"
+      ],
+      "probe_url": "https://gemini.google.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity",
+      "category": "AI",
+      "icon": "PX",
+      "description": "Perplexity web and API",
+      "domains": [
+        "perplexity.ai",
+        "pplx.ai"
+      ],
+      "strategy": [
+        "usque",
+        "warp-wg",
+        "sing-box",
+        "nfqws2"
+      ],
+      "probe_url": "https://www.perplexity.ai/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube",
+      "category": "Видео",
+      "icon": "YT",
+      "description": "YouTube web, video CDN, thumbnails and API",
+      "domains": [
+        "youtube.com",
+        "youtu.be",
+        "googlevideo.com",
+        "ytimg.com",
+        "youtubei.googleapis.com",
+        "ggpht.com",
+        "youtube-nocookie.com"
+      ],
+      "strategy": [
+        "nfqws2",
+        "usque",
+        "warp-wg",
+        "sing-box"
+      ],
+      "probe_url": "https://www.youtube.com/generate_204",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "twitch",
+      "name": "Twitch",
+      "category": "Видео",
+      "icon": "TW",
+      "description": "Twitch streams, API and CDN",
+      "domains": [
+        "twitch.tv",
+        "ttvnw.net",
+        "jtvnw.net",
+        "twitchcdn.net"
+      ],
+      "strategy": [
+        "nfqws2",
+        "usque",
+        "warp-wg",
+        "sing-box"
+      ],
+      "probe_url": "https://www.twitch.tv/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "discord",
+      "name": "Discord",
+      "category": "Мессенджеры",
+      "icon": "DS",
+      "description": "Discord web, gateway, voice and media CDN",
+      "domains": [
+        "discord.com",
+        "discord.gg",
+        "discordapp.com",
+        "discordapp.net",
+        "discordcdn.com",
+        "discord.media"
+      ],
+      "strategy": [
+        "nfqws2",
+        "usque",
+        "warp-wg",
+        "sing-box"
+      ],
+      "probe_url": "https://discord.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram",
+      "category": "Мессенджеры",
+      "icon": "TG",
+      "description": "Telegram web, messaging and official network ranges",
+      "domains": [
+        "telegram.org",
+        "t.me",
+        "telegram.me",
+        "telegra.ph"
+      ],
+      "strategy": [
+        "direct",
+        "nfqws2",
+        "usque",
+        "sing-box"
+      ],
+      "probe_url": "https://telegram.org/",
+      "source_refs": [
+        "telegram-cidrs",
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp",
+      "category": "Мессенджеры",
+      "icon": "WA",
+      "description": "WhatsApp web and Meta messaging endpoints",
+      "domains": [
+        "whatsapp.com",
+        "whatsapp.net",
+        "web.whatsapp.com"
+      ],
+      "strategy": [
+        "direct",
+        "nfqws2",
+        "usque",
+        "sing-box"
+      ],
+      "probe_url": "https://www.whatsapp.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "instagram",
+      "name": "Instagram",
+      "category": "Соцсети",
+      "icon": "IG",
+      "description": "Instagram web and media CDN",
+      "domains": [
+        "instagram.com",
+        "cdninstagram.com"
+      ],
+      "strategy": [
+        "nfqws2",
+        "usque",
+        "warp-wg",
+        "sing-box"
+      ],
+      "probe_url": "https://www.instagram.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "x",
+      "name": "X / Twitter",
+      "category": "Соцсети",
+      "icon": "X",
+      "description": "X web, media and API",
+      "domains": [
+        "x.com",
+        "twitter.com",
+        "twimg.com",
+        "t.co"
+      ],
+      "strategy": [
+        "nfqws2",
+        "usque",
+        "warp-wg",
+        "sing-box"
+      ],
+      "probe_url": "https://x.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "tiktok",
+      "name": "TikTok",
+      "category": "Соцсети",
+      "icon": "TT",
+      "description": "TikTok web and media",
+      "domains": [
+        "tiktok.com",
+        "tiktokcdn.com",
+        "tiktokv.com"
+      ],
+      "strategy": [
+        "usque",
+        "warp-wg",
+        "sing-box",
+        "nfqws2"
+      ],
+      "probe_url": "https://www.tiktok.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "reddit",
+      "name": "Reddit",
+      "category": "Соцсети",
+      "icon": "RD",
+      "description": "Reddit web, API and media",
+      "domains": [
+        "reddit.com",
+        "redd.it",
+        "redditmedia.com",
+        "redditstatic.com"
+      ],
+      "strategy": [
+        "nfqws2",
+        "usque",
+        "warp-wg",
+        "sing-box"
+      ],
+      "probe_url": "https://www.reddit.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "linkedin",
+      "name": "LinkedIn",
+      "category": "Работа",
+      "icon": "IN",
+      "description": "LinkedIn web and media",
+      "domains": [
+        "linkedin.com",
+        "licdn.com"
+      ],
+      "strategy": [
+        "usque",
+        "warp-wg",
+        "sing-box",
+        "nfqws2"
+      ],
+      "probe_url": "https://www.linkedin.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "spotify",
+      "name": "Spotify",
+      "category": "Музыка",
+      "icon": "SP",
+      "description": "Spotify web and streaming services",
+      "domains": [
+        "spotify.com",
+        "scdn.co",
+        "spotifycdn.com"
+      ],
+      "strategy": [
+        "usque",
+        "warp-wg",
+        "sing-box",
+        "nfqws2"
+      ],
+      "probe_url": "https://open.spotify.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "category": "Разработка",
+      "icon": "GH",
+      "description": "GitHub web, API, raw content and assets",
+      "domains": [
+        "github.com",
+        "githubusercontent.com",
+        "githubassets.com",
+        "github.io"
+      ],
+      "strategy": [
+        "direct",
+        "nfqws2",
+        "usque",
+        "sing-box"
+      ],
+      "probe_url": "https://github.com/",
+      "source_refs": [
+        "refilter-domains",
+        "v2fly-dlc"
+      ]
+    }
+  ]
+}

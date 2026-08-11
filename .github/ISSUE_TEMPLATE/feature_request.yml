@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest a service, engine adapter, or control-plane improvement
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Service catalog
+        - Engine adapter
+        - Smart routing
+        - Test Lab
+        - Web UI
+        - Devices / policies
+        - Sources
+        - Diagnostics
+        - Installer / updates
+        - Other
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true

@@ -1,0 +1,16 @@
+#!/bin/sh
+ENABLED=yes
+PROCS=razvilka
+PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+WAN_DEV="$(ip route show default 2>/dev/null | awk '{print $5; exit}')"
+LAN_IP="$(ip -4 -o addr show br0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
+if [ -z "$LAN_IP" ]; then
+  LAN_IP="$(ip -4 -o addr show scope global 2>/dev/null | awk -v wan="$WAN_DEV" '$2 != wan {split($4,a,"/"); if (a[1] ~ /^10\./ || a[1] ~ /^192\.168\./ || a[1] ~ /^172\.(1[6-9]|2[0-9]|3[01])\./) {print a[1]; exit}}')"
+fi
+[ -n "$LAN_IP" ] || LAN_IP="127.0.0.1"
+
+ARGS="--config /opt/etc/razvilka/config.json --catalog /opt/etc/razvilka/service-catalog.json --sources /opt/etc/razvilka/sources.json --cache /opt/var/cache/razvilka --listen ${LAN_IP}:8787"
+PREARGS=""
+DESC="RAZVILKA"
+. /opt/etc/init.d/rc.func

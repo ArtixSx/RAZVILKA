@@ -1,0 +1,6 @@
+{
+  "listen": ":8787",
+  "services": {},
+  "engine_order": ["nfqws2", "usque", "warp-wg", "sing-box"],
+  "safe_mode": true
+}

@@ -1,0 +1,87 @@
+{
+  "sources": [
+    {
+      "id": "rkn-registry",
+      "name": "Реестр Роскомнадзора",
+      "kind": "reference",
+      "format": "reference",
+      "url": "https://eais.rkn.gov.ru/",
+      "enabled": true,
+      "description": "Официальный источник для точечной проверки. Полный публичный bulk-список обычным пользователям не выдаётся."
+    },
+    {
+      "id": "refilter-domains",
+      "name": "Re:filter · домены",
+      "kind": "domains",
+      "format": "lines",
+      "url": "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst",
+      "license": "MIT",
+      "enabled": true,
+      "min_entries": 1000,
+      "max_bytes": 4194304,
+      "description": "Операционный список заблокированных и ограниченных доменов РФ; проходит локальную валидацию перед использованием."
+    },
+    {
+      "id": "refilter-cidrs",
+      "name": "Re:filter · IP/CIDR",
+      "kind": "cidrs",
+      "format": "lines",
+      "url": "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst",
+      "license": "MIT",
+      "enabled": false,
+      "min_entries": 1000,
+      "max_bytes": 4194304,
+      "description": "IP/CIDR использовать осторожно: shared CDN могут давать ложные совпадения; доменные правила имеют приоритет."
+    },
+    {
+      "id": "telegram-cidrs",
+      "name": "Telegram · официальные CIDR",
+      "kind": "cidrs",
+      "format": "lines",
+      "url": "https://core.telegram.org/resources/cidr.txt",
+      "enabled": true,
+      "min_entries": 5,
+      "max_bytes": 65536,
+      "description": "Официально опубликованные Telegram IPv4/IPv6 сети."
+    },
+    {
+      "id": "runetfreedom-geosite",
+      "name": "RunetFreedom · GeoSite",
+      "kind": "reference",
+      "format": "reference",
+      "url": "https://github.com/runetfreedom/russia-blocked-geosite",
+      "license": "GPL-3.0",
+      "enabled": true,
+      "description": "Второй независимый агрегатор доменов; обновляется каждые 6 часов и содержит категории сервисов."
+    },
+    {
+      "id": "runetfreedom-geoip",
+      "name": "RunetFreedom · GeoIP",
+      "kind": "reference",
+      "format": "reference",
+      "url": "https://github.com/runetfreedom/russia-blocked-geoip",
+      "license": "GPL-3.0",
+      "enabled": true,
+      "description": "Агрегатор IP/CIDR с форматами для sing-box/mihomo/V2Ray; обновляется каждые 6 часов."
+    },
+    {
+      "id": "v2fly-dlc",
+      "name": "v2fly · Domain List Community",
+      "kind": "reference",
+      "format": "reference",
+      "url": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT",
+      "enabled": true,
+      "description": "Классификация доменов по сервисам (YouTube, Discord, OpenAI и др.), а не источник факта блокировки."
+    },
+    {
+      "id": "openai-network",
+      "name": "OpenAI · network allowlist",
+      "kind": "reference",
+      "format": "reference",
+      "url": "https://help.openai.com/en/articles/9247338-network-recommendations-for-chatgpt-errors-on-web-and-apps",
+      "enabled": true,
+      "description": "Официальный перечень доменов ChatGPT/OpenAI для сверки service manifest."
+    }
+  ]
+}
