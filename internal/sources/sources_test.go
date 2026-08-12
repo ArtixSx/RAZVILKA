@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -85,5 +86,97 @@ func TestRegistryRejectsNonHTTPS(t *testing.T) {
 	}
 	if _, err := LoadRegistry(p); err == nil {
 		t.Fatal("expected non-https source to be rejected")
+	}
+}
+
+func TestReferenceSourceIsNotReportedAsReady(t *testing.T) {
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "docs", Name: "Docs", Kind: "reference", URL: "https://example.com/docs", Enabled: true,
+	}}}, t.TempDir())
+	states := m.List()
+	if len(states) != 1 || states[0].Ready {
+		t.Fatalf("reference source must not count as a ready local list: %+v", states)
+	}
+}
+
+func TestTamperedCacheIsRejectedOnStartup(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "x.lst"), []byte("valid.example\ncom\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "x", Name: "X", Kind: "domains", URL: "https://example.com/list", Enabled: true, MinEntries: 1,
+	}}}, dir)
+	states := m.List()
+	if len(states) != 1 || states[0].Ready || !strings.Contains(states[0].LastError, "canonical") {
+		t.Fatalf("tampered cache was trusted: %+v", states)
+	}
+}
+
+func TestConcurrentRefreshLeavesOneCanonicalFile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("b.example\na.example\n"))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "x", Name: "X", Kind: "domains", URL: srv.URL, Enabled: true, MinEntries: 2,
+	}}}, dir)
+	const workers = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- m.Refresh(context.Background(), "x")
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "x.lst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "a.example\nb.example\n" {
+		t.Fatalf("non-canonical final cache: %q", b)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "x.lst" {
+		t.Fatalf("temporary cache files leaked: %+v", entries)
+	}
+}
+
+func TestHTTPSRedirectCannotDowngrade(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://127.0.0.1/private", http.StatusFound)
+	}))
+	defer srv.Close()
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "x", Name: "X", Kind: "domains", URL: srv.URL, Enabled: true,
+	}}}, t.TempDir())
+	m.SetHTTPClient(srv.Client())
+	err := m.Refresh(context.Background(), "x")
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "https") {
+		t.Fatalf("downgrade redirect was not rejected: %v", err)
+	}
+}
+
+func TestRegistryRejectsUnsafeSourceID(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "sources.json")
+	if err := os.WriteFile(p, []byte(`{"sources":[{"id":"../escape","name":"X","kind":"domains","url":"https://example.com/x","enabled":true}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadRegistry(p); err == nil {
+		t.Fatal("expected unsafe source id to be rejected")
 	}
 }

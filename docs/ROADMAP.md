@@ -38,6 +38,15 @@
 - Entware init framework (`rc.func`) is checked before install.
 - GitHub-first development workflow.
 
+### v0.0.8 — Security Gate
+- Persistent 256-bit local administrator token.
+- Bearer + JSON + Origin enforcement for state-changing API calls.
+- Transactional config persistence and serialized engine/source writes.
+- Exact engine process/status detection and native validator timeouts.
+- Strict selectable route/profile validation with honest AUTO fallback.
+- Startup cache revalidation, safe source IDs and HTTPS redirect policy.
+- Race detector and security/concurrency regression suite.
+
 ## Next: Engine Lab
 
 ### Engine capability registry
@@ -94,7 +103,7 @@
 
 No general active-routing release until all of these pass on real Keenetic/Netcraze hardware:
 
-- authentication/session + CSRF,
+- authenticated mutation + Origin gate survives reboot, token-permission and LAN penetration tests,
 - version/schema/native config checks,
 - snapshot + generation rollback,
 - boot-loop prevention,

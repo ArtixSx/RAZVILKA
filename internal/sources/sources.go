@@ -53,11 +53,13 @@ type State struct {
 }
 
 type Manager struct {
-	mu       sync.RWMutex
-	reg      Registry
-	cacheDir string
-	client   *http.Client
-	states   map[string]State
+	mu        sync.RWMutex
+	refreshMu sync.Mutex
+	clientMu  sync.RWMutex
+	reg       Registry
+	cacheDir  string
+	client    *http.Client
+	states    map[string]State
 }
 
 func LoadRegistry(path string) (Registry, error) {
@@ -71,7 +73,7 @@ func LoadRegistry(path string) (Registry, error) {
 	}
 	seen := map[string]bool{}
 	for _, s := range r.Sources {
-		if s.ID == "" || s.Name == "" || s.Kind == "" || s.URL == "" {
+		if !validSourceID(s.ID) || s.Name == "" || s.Kind == "" || s.URL == "" {
 			return Registry{}, fmt.Errorf("invalid source entry: %+v", s)
 		}
 		if seen[s.ID] {
@@ -90,22 +92,47 @@ func LoadRegistry(path string) (Registry, error) {
 }
 
 func NewManager(reg Registry, cacheDir string) *Manager {
-	m := &Manager{reg: reg, cacheDir: cacheDir, client: &http.Client{Timeout: 25 * time.Second}, states: map[string]State{}}
+	m := &Manager{
+		reg:      reg,
+		cacheDir: cacheDir,
+		client:   &http.Client{Timeout: 25 * time.Second, CheckRedirect: safeRedirect},
+		states:   map[string]State{},
+	}
 	for _, s := range reg.Sources {
-		st := State{ID: s.ID, Name: s.Name, Kind: s.Kind, URL: s.URL, Enabled: s.Enabled, Description: s.Description}
-		if s.Kind == "reference" {
-			st.Ready = true
-		}
-		m.states[s.ID] = st
+		m.states[s.ID] = State{ID: s.ID, Name: s.Name, Kind: s.Kind, URL: s.URL, Enabled: s.Enabled, Description: s.Description}
 	}
 	m.inspectCache()
 	return m
 }
 
 func (m *Manager) SetHTTPClient(c *http.Client) {
-	if c != nil {
-		m.client = c
+	if c == nil {
+		return
 	}
+	clone := *c
+	clone.CheckRedirect = safeRedirect
+	m.clientMu.Lock()
+	m.client = &clone
+	m.clientMu.Unlock()
+}
+
+func safeRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 5 {
+		return errors.New("too many source redirects")
+	}
+	if req.URL == nil || !strings.EqualFold(req.URL.Scheme, "https") {
+		return errors.New("source redirect must use https")
+	}
+	host := strings.ToLower(req.URL.Hostname())
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return errors.New("source redirect has an unsafe host")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return errors.New("source redirect targets a non-public address")
+		}
+	}
+	return nil
 }
 
 func (m *Manager) List() []State {
@@ -129,6 +156,8 @@ func (m *Manager) RefreshEnabled(ctx context.Context) []State {
 }
 
 func (m *Manager) Refresh(ctx context.Context, id string) error {
+	m.refreshMu.Lock()
+	defer m.refreshMu.Unlock()
 	var src *Source
 	for i := range m.reg.Sources {
 		if m.reg.Sources[i].ID == id {
@@ -138,6 +167,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	}
 	if src == nil {
 		return fmt.Errorf("unknown source %q", id)
+	}
+	if !validSourceID(src.ID) {
+		return m.fail(*src, fmt.Errorf("unsafe source id %q", src.ID))
 	}
 	if src.Kind == "reference" {
 		return nil
@@ -151,8 +183,11 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	if err != nil {
 		return m.fail(*src, err)
 	}
-	req.Header.Set("User-Agent", "RAZVILKA/0.0.7-control-lab")
-	resp, err := m.client.Do(req)
+	req.Header.Set("User-Agent", "RAZVILKA/0.0.8-security-gate")
+	m.clientMu.RLock()
+	client := m.client
+	m.clientMu.RUnlock()
+	resp, err := client.Do(req)
 	if err != nil {
 		return m.fail(*src, err)
 	}
@@ -183,12 +218,7 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 		return m.fail(*src, err)
 	}
 	dst := filepath.Join(m.cacheDir, src.ID+".lst")
-	tmp := dst + ".tmp"
-	if err := os.WriteFile(tmp, []byte(normalized), 0o600); err != nil {
-		return m.fail(*src, err)
-	}
-	if err := os.Rename(tmp, dst); err != nil {
-		_ = os.Remove(tmp)
+	if err := writeAtomic(dst, []byte(normalized), 0o600); err != nil {
 		return m.fail(*src, err)
 	}
 
@@ -207,38 +237,96 @@ func (m *Manager) fail(src Source, err error) error {
 	return err
 }
 
+func writeAtomic(path string, content []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+	}()
+	if err := tmp.Chmod(mode); err != nil {
+		return err
+	}
+	if _, err := tmp.Write(content); err != nil {
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
 func (m *Manager) inspectCache() {
 	for _, src := range m.reg.Sources {
-		if src.Kind == "reference" {
+		if src.Kind == "reference" || !validSourceID(src.ID) {
 			continue
+		}
+		max := src.MaxBytes
+		if max <= 0 {
+			max = 8 << 20
 		}
 		path := filepath.Join(m.cacheDir, src.ID+".lst")
-		f, err := os.Open(path)
+		b, err := readCacheLimited(path, max)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil {
+			m.rejectCache(src, err)
 			continue
 		}
-		h := sha256.New()
-		scanner := bufio.NewScanner(io.TeeReader(f, h))
-		count := 0
-		for scanner.Scan() {
-			if strings.TrimSpace(scanner.Text()) != "" {
-				count++
-			}
+		entries, err := validateLines(src.Kind, string(b))
+		if err == nil && src.MinEntries > 0 && len(entries) < src.MinEntries {
+			err = fmt.Errorf("too few valid entries: %d < %d", len(entries), src.MinEntries)
 		}
-		_ = f.Close()
-		if scanner.Err() != nil {
+		normalized := strings.Join(entries, "\n") + "\n"
+		if err == nil && string(b) != normalized {
+			err = errors.New("cache is not canonical")
+		}
+		if err != nil {
+			m.rejectCache(src, err)
 			continue
 		}
+		digest := sha256.Sum256([]byte(normalized))
 		info, _ := os.Stat(path)
 		st := m.states[src.ID]
 		st.Ready = true
-		st.Entries = count
-		st.SHA256 = hex.EncodeToString(h.Sum(nil))
+		st.Entries = len(entries)
+		st.SHA256 = hex.EncodeToString(digest[:])
 		if info != nil {
 			st.UpdatedAt = info.ModTime().UTC()
 		}
 		m.states[src.ID] = st
 	}
+}
+
+func (m *Manager) rejectCache(src Source, err error) {
+	st := m.states[src.ID]
+	st.Ready = false
+	st.LastError = "cached source rejected: " + err.Error()
+	m.states[src.ID] = st
+}
+
+func readCacheLimited(path string, max int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	reader := &io.LimitedReader{R: f, N: max + 1}
+	b, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > max {
+		return nil, fmt.Errorf("cached source exceeds max_bytes=%d", max)
+	}
+	return b, nil
 }
 
 func validateLines(kind, body string) ([]string, error) {
@@ -281,6 +369,22 @@ func validateLines(kind, body string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+func validSourceID(id string) bool {
+	if len(id) == 0 || len(id) > 64 || !isSourceIDAlphaNumeric(id[0]) {
+		return false
+	}
+	for i := 1; i < len(id); i++ {
+		if !isSourceIDAlphaNumeric(id[i]) && id[i] != '-' && id[i] != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func isSourceIDAlphaNumeric(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 }
 
 func normalizeDomain(v string) (string, error) {

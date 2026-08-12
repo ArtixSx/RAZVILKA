@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,9 +18,10 @@ type ServiceState struct {
 }
 
 type Config struct {
+	SchemaVersion   int                     `json:"schema_version"`
 	Listen          string                  `json:"listen"`
 	Services        map[string]ServiceState `json:"services"` // desired/draft state
-	AppliedServices map[string]ServiceState `json:"applied_services,omitempty"`
+	AppliedServices map[string]ServiceState `json:"applied_services"`
 	EngineOrder     []string                `json:"engine_order"`
 	SafeMode        bool                    `json:"safe_mode"`
 	CatalogPath     string                  `json:"catalog_path,omitempty"`
@@ -35,7 +37,7 @@ type Store struct {
 }
 
 func Default() Config {
-	return Config{Listen: ":8787", Services: map[string]ServiceState{}, AppliedServices: map[string]ServiceState{}, EngineOrder: []string{"nfqws2", "usque", "warp-wg", "sing-box"}, SafeMode: true}
+	return Config{SchemaVersion: CurrentSchemaVersion, Listen: ":8787", Services: map[string]ServiceState{}, AppliedServices: map[string]ServiceState{}, EngineOrder: []string{"nfqws2", "usque", "warp-wg", "sing-box"}, SafeMode: true}
 }
 
 func Load(path string) (*Store, error) {
@@ -50,24 +52,11 @@ func Load(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(b, &s.cfg); err != nil {
+	cfg, _, err := InspectBytes(b)
+	if err != nil {
 		return nil, err
 	}
-	if s.cfg.Services == nil {
-		s.cfg.Services = map[string]ServiceState{}
-	}
-	if s.cfg.AppliedServices == nil {
-		s.cfg.AppliedServices = cloneServices(s.cfg.Services)
-	}
-	if s.cfg.Listen == "" {
-		s.cfg.Listen = ":8787"
-	}
-	if len(s.cfg.EngineOrder) == 0 {
-		s.cfg.EngineOrder = []string{"nfqws2", "usque", "warp-wg", "sing-box"}
-	}
-	if s.cfg.AppliedRevision == 0 && len(s.cfg.AppliedServices) > 0 {
-		s.cfg.AppliedRevision = s.cfg.Revision
-	}
+	s.cfg = cfg
 	return s, nil
 }
 
@@ -95,10 +84,15 @@ func normalizeState(state ServiceState) ServiceState {
 func (s *Store) UpdateService(id string, state ServiceState) error {
 	state = normalizeState(state)
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := cloneConfig(s.cfg)
 	s.cfg.Services[id] = state
 	s.cfg.Revision++
-	s.mu.Unlock()
-	return s.Save()
+	if err := s.saveLocked(); err != nil {
+		s.cfg = previous
+		return err
+	}
+	return nil
 }
 
 func (s *Store) Dirty() bool {
@@ -109,37 +103,81 @@ func (s *Store) Dirty() bool {
 
 func (s *Store) ApplyDraft() error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := cloneConfig(s.cfg)
 	s.cfg.AppliedServices = cloneServices(s.cfg.Services)
 	s.cfg.AppliedRevision = s.cfg.Revision
 	s.cfg.LastAppliedAt = time.Now().UTC().Format(time.RFC3339)
-	s.mu.Unlock()
-	return s.Save()
+	if err := s.saveLocked(); err != nil {
+		s.cfg = previous
+		return err
+	}
+	return nil
 }
 
 func (s *Store) DiscardDraft() error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := cloneConfig(s.cfg)
 	s.cfg.Services = cloneServices(s.cfg.AppliedServices)
 	s.cfg.Revision++
-	s.mu.Unlock()
-	return s.Save()
+	if err := s.saveLocked(); err != nil {
+		s.cfg = previous
+		return err
+	}
+	return nil
 }
 
 func (s *Store) Save() error {
-	s.mu.RLock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.saveLocked()
+}
+
+func (s *Store) saveLocked() error {
 	b, err := json.MarshalIndent(s.cfg, "", "  ")
-	s.mu.RUnlock()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(s.path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create config transaction: %w", err)
 	}
-	return os.Rename(tmp, s.path)
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+	}()
+	if err := tmp.Chmod(0o600); err != nil {
+		return fmt.Errorf("protect config transaction: %w", err)
+	}
+	if _, err := tmp.Write(b); err != nil {
+		return fmt.Errorf("write config transaction: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fmt.Errorf("sync config transaction: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close config transaction: %w", err)
+	}
+	if err := os.Rename(tmpPath, s.path); err != nil {
+		return fmt.Errorf("commit config transaction: %w", err)
+	}
+	return nil
 }
+
+func cloneConfig(in Config) Config {
+	out := in
+	out.Services = cloneServices(in.Services)
+	out.AppliedServices = cloneServices(in.AppliedServices)
+	out.EngineOrder = append([]string(nil), in.EngineOrder...)
+	return out
+}
+
 func cloneServices(in map[string]ServiceState) map[string]ServiceState {
 	out := make(map[string]ServiceState, len(in))
 	for k, v := range in {

@@ -19,12 +19,12 @@ echo "[3/5] Installing RAZVILKA manager in Safe Mode..."
 
 echo "[4/5] Verifying process and local API..."
 sleep 1
-if command -v wget >/dev/null 2>&1; then
+if [ -x /opt/bin/razvilka ]; then
   LAN_IP="$(ip -4 -o addr show br0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
   [ -n "$LAN_IP" ] || LAN_IP=127.0.0.1
-  wget -qO- "http://$LAN_IP:8787/api/v1/status" 2>/dev/null || echo "WARN: API probe failed; collect logs next"
+  /opt/bin/razvilka -healthcheck "http://$LAN_IP:8787/api/v1/status" || echo "WARN: API probe failed; collect logs next"
 else
-  echo "WARN: wget missing; skipping HTTP probe"
+  echo "WARN: RAZVILKA binary missing; skipping HTTP probe"
 fi
 
 echo "[5/5] Running post-install preflight..."

@@ -2,6 +2,7 @@ package engineconfig
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engine"
@@ -85,12 +87,14 @@ type Validation struct {
 }
 
 type Manager struct {
-	StageRoot  string
-	BackupRoot string
+	StageRoot     string
+	BackupRoot    string
+	NativeTimeout time.Duration
+	mu            sync.RWMutex
 }
 
 func New(stageRoot, backupRoot string) *Manager {
-	return &Manager{StageRoot: stageRoot, BackupRoot: backupRoot}
+	return &Manager{StageRoot: stageRoot, BackupRoot: backupRoot, NativeTimeout: 10 * time.Second}
 }
 
 func Specs() []EngineSpec {
@@ -130,6 +134,8 @@ func Specs() []EngineSpec {
 }
 
 func (m *Manager) List() []EngineView {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	statuses := map[string]engine.Status{}
 	for _, st := range (engine.Detector{}).All() {
 		statuses[st.ID] = st
@@ -137,7 +143,7 @@ func (m *Manager) List() []EngineView {
 	out := make([]EngineView, 0, len(Specs()))
 	for _, spec := range Specs() {
 		st := statuses[spec.ID]
-		view := EngineView{ID: spec.ID, Name: spec.Name, Description: spec.Description, Installed: st.Installed, Running: st.Running, Kind: st.Kind, CanValidate: true, CanRestart: st.Installed}
+		view := EngineView{ID: spec.ID, Name: spec.Name, Description: spec.Description, Installed: st.Installed, Running: st.Running, Kind: st.Kind, CanValidate: true, CanRestart: false}
 		for _, f := range spec.Files {
 			view.Files = append(view.Files, m.fileView(spec.ID, f))
 		}
@@ -147,6 +153,8 @@ func (m *Manager) List() []EngineView {
 }
 
 func (m *Manager) Read(engineID, fileID string) (Content, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	_, f, err := lookup(engineID, fileID)
 	if err != nil {
 		return Content{}, err
@@ -176,6 +184,8 @@ func (m *Manager) Read(engineID, fileID string) (Content, error) {
 }
 
 func (m *Manager) Stage(engineID, fileID, content string) (Content, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	_, f, err := lookup(engineID, fileID)
 	if err != nil {
 		return Content{}, err
@@ -190,11 +200,7 @@ func (m *Manager) Stage(engineID, fileID, content string) (Content, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return Content{}, err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o600); err != nil {
-		return Content{}, err
-	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := writeAtomic(path, []byte(content), 0o600); err != nil {
 		return Content{}, err
 	}
 	livePath := choosePath(f.Paths)
@@ -205,6 +211,8 @@ func (m *Manager) Stage(engineID, fileID, content string) (Content, error) {
 }
 
 func (m *Manager) Discard(engineID, fileID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if _, _, err := lookup(engineID, fileID); err != nil {
 		return err
 	}
@@ -216,6 +224,12 @@ func (m *Manager) Discard(engineID, fileID string) error {
 }
 
 func (m *Manager) Validate(engineID, fileID string) Validation {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.validateLocked(engineID, fileID)
+}
+
+func (m *Manager) validateLocked(engineID, fileID string) Validation {
 	_, f, err := lookup(engineID, fileID)
 	if err != nil {
 		return Validation{OK: false, EngineID: engineID, FileID: fileID, Output: err.Error()}
@@ -243,18 +257,20 @@ func (m *Manager) Validate(engineID, fileID string) Validation {
 		}
 		if engineID == "sing-box" {
 			if bin := findBin([]string{"/opt/bin/sing-box", "/opt/usr/bin/sing-box", "sing-box"}); bin != "" {
-				return runNative(v, bin, "check", "-c", path)
+				return runNative(v, m.nativeTimeout(), bin, "check", "-c", path)
 			}
 		}
 		if engineID == "xray" {
 			if bin := findBin([]string{"/opt/bin/xray", "/opt/usr/bin/xray", "xray"}); bin != "" {
 				// Modern Xray supports `run -test -config`; if an older build rejects it, JSON validation still reports separately in output.
-				return runNative(v, bin, "run", "-test", "-config", path)
+				return runNative(v, m.nativeTimeout(), bin, "run", "-test", "-config", path)
 			}
 		}
 	case "shell":
-		if sh := findBin([]string{"/bin/sh", "/opt/bin/sh", "sh"}); sh != "" {
-			return runNative(v, sh, "-n", path)
+		// Keenetic's system /bin/sh is not a full POSIX shell and rejects -n.
+		// Prefer Entware's BusyBox shell when it is installed under /opt.
+		if sh := findBin([]string{"/opt/bin/sh", "/bin/sh", "sh"}); sh != "" {
+			return runNative(v, m.nativeTimeout(), sh, "-n", path)
 		}
 	case "cidr-list":
 		if err := validateCIDRList(string(b)); err != nil {
@@ -276,6 +292,8 @@ func (m *Manager) Validate(engineID, fileID string) Validation {
 }
 
 func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	_, f, err := lookup(engineID, fileID)
 	if err != nil {
 		return "", err
@@ -283,7 +301,7 @@ func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) 
 	if safeMode {
 		return "", errors.New("Safe Mode blocks writes to engine configs; draft is preserved")
 	}
-	validation := m.Validate(engineID, fileID)
+	validation := m.validateLocked(engineID, fileID)
 	if !validation.OK {
 		return "", fmt.Errorf("validation failed: %s", validation.Output)
 	}
@@ -299,12 +317,12 @@ func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) 
 		if err := os.MkdirAll(m.BackupRoot, 0o700); err != nil {
 			return "", err
 		}
-		backup := filepath.Join(m.BackupRoot, fmt.Sprintf("%s-%s-%s.bak", safeName(engineID), safeName(fileID), time.Now().UTC().Format("20060102T150405Z")))
+		backup := filepath.Join(m.BackupRoot, fmt.Sprintf("%s-%s-%s.bak", safeName(engineID), safeName(fileID), time.Now().UTC().Format("20060102T150405.000000000Z")))
 		b, err := readLimited(dst)
 		if err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(backup, b, 0o600); err != nil {
+		if err := writeAtomic(backup, b, 0o600); err != nil {
 			return "", err
 		}
 	}
@@ -312,15 +330,13 @@ func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	tmp := dst + ".razvilka.tmp"
 	mode := os.FileMode(0o600)
-	if fi, err := os.Stat(dst); err == nil {
-		mode = fi.Mode().Perm()
+	if !f.Sensitive {
+		if fi, err := os.Stat(dst); err == nil {
+			mode = fi.Mode().Perm()
+		}
 	}
-	if err := os.WriteFile(tmp, b, mode); err != nil {
-		return "", err
-	}
-	if err := os.Rename(tmp, dst); err != nil {
+	if err := writeAtomic(dst, b, mode); err != nil {
 		return "", err
 	}
 	_ = os.Remove(staged)
@@ -386,6 +402,36 @@ func safeName(v string) string {
 	}, v)
 }
 func fileExists(path string) bool { fi, err := os.Stat(path); return err == nil && !fi.IsDir() }
+
+func writeAtomic(path string, content []byte, mode os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create transaction for %s: %w", path, err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+	}()
+	if err := tmp.Chmod(mode); err != nil {
+		return fmt.Errorf("protect transaction for %s: %w", path, err)
+	}
+	if _, err := tmp.Write(content); err != nil {
+		return fmt.Errorf("write transaction for %s: %w", path, err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fmt.Errorf("sync transaction for %s: %w", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close transaction for %s: %w", path, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("commit transaction for %s: %w", path, err)
+	}
+	return nil
+}
+
 func readLimited(path string) ([]byte, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -411,9 +457,26 @@ func findBin(candidates []string) string {
 	}
 	return ""
 }
-func runNative(v Validation, bin string, args ...string) Validation {
-	out, err := exec.Command(bin, args...).CombinedOutput()
+func (m *Manager) nativeTimeout() time.Duration {
+	if m.NativeTimeout <= 0 {
+		return 10 * time.Second
+	}
+	return m.NativeTimeout
+}
+
+func runNative(v Validation, timeout time.Duration, bin string, args ...string) Validation {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bin, args...).CombinedOutput()
 	v.Native = true
+	if ctx.Err() == context.DeadlineExceeded {
+		v.OK = false
+		v.Output = fmt.Sprintf("native validator timed out after %s", timeout)
+		return v
+	}
 	text := strings.TrimSpace(string(out))
 	if text == "" {
 		text = "native validator passed"

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +13,8 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
+	"github.com/ArtixSx/razvilka/internal/security"
 	"github.com/ArtixSx/razvilka/internal/sources"
 	"github.com/ArtixSx/razvilka/internal/telemetry"
 	"github.com/ArtixSx/razvilka/internal/testlab"
@@ -75,6 +78,9 @@ func TestAPIServiceAndHTTPSListRefresh(t *testing.T) {
 	if status["listen"] != "127.0.0.1:8787" {
 		t.Fatalf("effective listen not reported: %v", status["listen"])
 	}
+	if got := int(status["process_id"].(float64)); got != os.Getpid() {
+		t.Fatalf("process_id=%d, want %d", got, os.Getpid())
+	}
 }
 
 func TestSelectorsAndConnectionsAPI(t *testing.T) {
@@ -90,7 +96,7 @@ func TestSelectorsAndConnectionsAPI(t *testing.T) {
 	ts := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer ts.Close()
 
-	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/services/youtube", strings.NewReader(`{"enabled":true,"route":"nfqws2"}`))
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/services/youtube", strings.NewReader(`{"enabled":true,"route":"direct"}`))
 	req.Header.Set("content-type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -110,7 +116,7 @@ func TestSelectorsAndConnectionsAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-	if len(views) != 1 || views[0].Route != "nfqws2" || views[0].Planned != "nfqws2" {
+	if len(views) != 1 || views[0].Route != "direct" || views[0].Planned != "direct" {
 		t.Fatalf("unexpected selector view: %+v", views)
 	}
 
@@ -330,5 +336,70 @@ func TestTestLabAPIUsesFixedCatalogProbe(t *testing.T) {
 	_ = resp.Body.Close()
 	if len(snap.Current) != 1 || snap.Current[0].Status != "pass" {
 		t.Fatalf("unexpected testlab snapshot: %+v", snap)
+	}
+}
+
+func TestAppSecurityGateProtectsMutation(t *testing.T) {
+	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const token = "0123456789abcdefghijklmnopqrstuvwxyz-ADMIN"
+	gate, err := security.NewGate(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{
+		Store:    store,
+		Catalog:  catalog.Catalog{Services: []catalog.Service{{ID: "youtube", Name: "YouTube"}}},
+		Security: gate,
+		Start:    time.Now(),
+	}
+	handler := a.Handler(http.NotFoundHandler())
+
+	unauthorized := httptest.NewRequest(http.MethodPut, "http://router.local/api/v1/services/youtube", strings.NewReader(`{"enabled":true,"route":"direct"}`))
+	unauthorized.Header.Set("Content-Type", "application/json")
+	unauthorized.Header.Set("Origin", "http://router.local")
+	unauthorizedResult := httptest.NewRecorder()
+	handler.ServeHTTP(unauthorizedResult, unauthorized)
+	if unauthorizedResult.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status=%d, want %d", unauthorizedResult.Code, http.StatusUnauthorized)
+	}
+	if _, exists := store.Get().Services["youtube"]; exists {
+		t.Fatal("unauthorized mutation changed the store")
+	}
+
+	authorized := httptest.NewRequest(http.MethodPut, "http://router.local/api/v1/services/youtube", strings.NewReader(`{"enabled":true,"route":"direct"}`))
+	authorized.Header.Set("Content-Type", "application/json")
+	authorized.Header.Set("Origin", "http://router.local")
+	authorized.Header.Set("Authorization", "Bearer "+token)
+	authorizedResult := httptest.NewRecorder()
+	handler.ServeHTTP(authorizedResult, authorized)
+	if authorizedResult.Code != http.StatusOK {
+		t.Fatalf("authorized status=%d, body=%s", authorizedResult.Code, authorizedResult.Body.String())
+	}
+	if !store.Get().Services["youtube"].Enabled {
+		t.Fatal("authorized mutation was not persisted")
+	}
+}
+
+func TestPlannedEngineSkipsUnavailableRoutes(t *testing.T) {
+	options := []routecatalog.Option{
+		{ID: "auto", Selectable: true},
+		{ID: "direct", Selectable: true},
+		{ID: "nfqws2", Selectable: false},
+		{ID: "sing-box", Selectable: true},
+		{ID: "usque", Selectable: true},
+	}
+	service := catalog.Service{Strategy: []string{"nfqws2", "sing-box:ai-primary"}}
+	if got := plannedEngineWithOptions(service, []string{"usque"}, options); got != "sing-box:ai-primary" {
+		t.Fatalf("strategy fallback=%q", got)
+	}
+	service.Strategy = nil
+	if got := plannedEngineWithOptions(service, []string{"xray", "usque"}, options); got != "usque" {
+		t.Fatalf("order fallback=%q", got)
+	}
+	if got := plannedEngineWithOptions(service, []string{"xray"}, options); got != "direct" {
+		t.Fatalf("direct fallback=%q", got)
 	}
 }
