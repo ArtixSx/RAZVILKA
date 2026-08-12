@@ -10,7 +10,7 @@ func TestCheckHealth(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"name":"RAZVILKA","version":"0.0.8-security-gate","process_id":1234}`))
+		_, _ = w.Write([]byte(`{"name":"RAZVILKA","version":"0.0.9-ui-layout","process_id":1234}`))
 	}))
 	defer server.Close()
 
@@ -18,7 +18,7 @@ func TestCheckHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("checkHealth: %v", err)
 	}
-	if version != "0.0.8-security-gate" {
+	if version != "0.0.9-ui-layout" {
 		t.Fatalf("version = %q", version)
 	}
 	if _, err := checkHealth(server.URL, 0); err != nil {

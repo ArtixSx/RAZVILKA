@@ -12,7 +12,13 @@
 
 RAZVILKA is an open-source local-first routing hub and control plane that unifies multiple bypass/routing engines behind one service-oriented Web UI. It keeps service intent separate from engine internals and is designed to choose, validate, apply and observe the best available route without hiding uncertainty.
 
-> **Current status: v0.0.8-security-gate / Safe Mode.** Authenticated service-route drafts, engine-config drafts, validation, import/export, diagnostics and current-routing probes work. Safe Mode intentionally blocks dataplane changes to firewall, DNS and policy routes.
+> **Current status: v0.0.9-ui-layout / Safe Mode.** Authenticated service-route drafts, engine-config drafts, validation, import/export, diagnostics and current-routing probes work. Safe Mode intentionally blocks dataplane changes to firewall, DNS and policy routes.
+
+## v0.0.9 UI Layout
+
+- Full-page panels now size to their content instead of reserving most of the viewport.
+- Section headers no longer shift down and cover the first rows inside clipped panels.
+- Web assets use versioned URLs so an upgraded router cannot serve stale layout CSS from browser cache.
 
 ## v0.0.8 Security Gate
 

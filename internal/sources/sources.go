@@ -183,7 +183,7 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	if err != nil {
 		return m.fail(*src, err)
 	}
-	req.Header.Set("User-Agent", "RAZVILKA/0.0.8-security-gate")
+	req.Header.Set("User-Agent", "RAZVILKA/0.0.9-ui-layout")
 	m.clientMu.RLock()
 	client := m.client
 	m.clientMu.RUnlock()
