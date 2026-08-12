@@ -1,0 +1,202 @@
+#!/bin/sh
+set -eu
+umask 077
+
+PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:/usr/sbin:/usr/bin:/sbin:/bin
+BASE="${RAZVILKA_BASE:-/opt}"
+BINARY="${RAZVILKA_BINARY:-$BASE/bin/razvilka}"
+APPDIR="${RAZVILKA_APPDIR:-$BASE/etc/razvilka}"
+CACHEDIR="${RAZVILKA_CACHE:-$BASE/var/cache/razvilka}"
+STATEDIR="${RAZVILKA_STATE_DIR:-$BASE/var/lib/razvilka}"
+LOGDIR="${RAZVILKA_LOG_DIR:-$BASE/var/log/razvilka}"
+RUNDIR="${RAZVILKA_RUN_DIR:-$BASE/var/run}"
+PORT="${RAZVILKA_PORT:-8787}"
+PIDFILE="${RAZVILKA_PID_FILE:-$RUNDIR/razvilka.pid}"
+LOGFILE="${RAZVILKA_LOG_FILE:-$LOGDIR/server.log}"
+FAILFILE="$STATEDIR/start-failures"
+DISABLED="$STATEDIR/boot-disabled"
+MAX_FAILURES="${RAZVILKA_MAX_START_FAILURES:-3}"
+FAILURE_WINDOW="${RAZVILKA_FAILURE_WINDOW_SECONDS:-300}"
+HEALTH_RETRIES="${RAZVILKA_HEALTH_RETRIES:-10}"
+DAEMON="${RAZVILKA_START_STOP_DAEMON:-$BASE/sbin/start-stop-daemon}"
+
+detect_lan_ip() {
+  WAN_DEV="$(ip route show default 2>/dev/null | awk '{print $5; exit}')"
+  LAN_IP="$(ip -4 -o addr show br0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
+  if [ -z "$LAN_IP" ]; then
+    LAN_IP="$(ip -4 -o addr show scope global 2>/dev/null | awk -v wan="$WAN_DEV" '$2 != wan {split($4,a,"/"); if (a[1] ~ /^10\./ || a[1] ~ /^192\.168\./ || a[1] ~ /^172\.(1[6-9]|2[0-9]|3[01])\./) {print a[1]; exit}}')"
+  fi
+  [ -n "$LAN_IP" ] || LAN_IP="127.0.0.1"
+  printf '%s\n' "$LAN_IP"
+}
+
+valid_pid() {
+  case "${1:-}" in
+    ''|*[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+running_pid() {
+  [ -r "$PIDFILE" ] || return 1
+  PID="$(cat "$PIDFILE")"
+  valid_pid "$PID" || return 1
+  [ -d "/proc/$PID" ] || return 1
+  RUNNING_BINARY="$(readlink "/proc/$PID/exe" 2>/dev/null || true)"
+  [ "$RUNNING_BINARY" = "$BINARY" ] || return 1
+  printf '%s\n' "$PID"
+}
+
+health() {
+  PID="$(running_pid 2>/dev/null || true)"
+  [ -n "$PID" ] || return 1
+  "$BINARY" -healthcheck "http://$LAN_IP:$PORT/api/v1/status" -healthcheck-pid "$PID" >/dev/null 2>&1
+}
+
+record_failure() {
+  mkdir -p "$STATEDIR"
+  NOW="$(date +%s)"
+  FIRST="$NOW"
+  COUNT=0
+  if [ -r "$FAILFILE" ]; then
+    read -r FIRST COUNT <"$FAILFILE" || true
+    valid_pid "$FIRST" || FIRST="$NOW"
+    valid_pid "$COUNT" || COUNT=0
+  fi
+  if [ $((NOW - FIRST)) -gt "$FAILURE_WINDOW" ]; then
+    FIRST="$NOW"
+    COUNT=0
+  fi
+  COUNT=$((COUNT + 1))
+  printf '%s %s\n' "$FIRST" "$COUNT" >"$FAILFILE"
+  chmod 600 "$FAILFILE"
+  if [ "$COUNT" -ge "$MAX_FAILURES" ]; then
+    printf '%s\n' "start guard tripped after $COUNT failures in ${FAILURE_WINDOW}s" >"$DISABLED"
+    chmod 600 "$DISABLED"
+    echo "RAZVILKA start guard tripped; run '$0 clear-guard' after inspection" >&2
+  fi
+}
+
+clear_failure() {
+  rm -f "$FAILFILE"
+}
+
+stop_process() {
+  PID="$(running_pid 2>/dev/null || true)"
+  if [ -z "$PID" ]; then
+    if [ -r "$PIDFILE" ]; then
+      STALE="$(cat "$PIDFILE" 2>/dev/null || true)"
+      if valid_pid "$STALE" && [ -d "/proc/$STALE" ]; then
+        echo "Refusing to stop pid $STALE: it is not $BINARY" >&2
+        return 1
+      fi
+      rm -f "$PIDFILE"
+    fi
+    echo "RAZVILKA is not running"
+    return 0
+  fi
+
+  "$DAEMON" -K -p "$PIDFILE" -x "$BINARY" -s TERM >/dev/null 2>&1 || kill "$PID"
+  WAIT=0
+  while kill -0 "$PID" 2>/dev/null && [ "$WAIT" -lt 10 ]; do
+    sleep 1
+    WAIT=$((WAIT + 1))
+  done
+  if kill -0 "$PID" 2>/dev/null; then
+    echo "RAZVILKA did not stop after 10 seconds; PID file kept" >&2
+    return 1
+  fi
+  rm -f "$PIDFILE"
+  echo "RAZVILKA stopped"
+}
+
+start_process() {
+  if [ -e "$DISABLED" ]; then
+    echo "RAZVILKA start blocked by $DISABLED" >&2
+    return 2
+  fi
+  PID="$(running_pid 2>/dev/null || true)"
+  if [ -n "$PID" ]; then
+    echo "RAZVILKA already running (pid $PID)"
+    return 0
+  fi
+  [ -x "$BINARY" ] || { echo "RAZVILKA binary is not executable: $BINARY" >&2; record_failure; return 1; }
+  [ -x "$DAEMON" ] || { echo "start-stop-daemon is unavailable: $DAEMON" >&2; record_failure; return 1; }
+
+  mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR/staging" "$STATEDIR/backups" "$LOGDIR" "$RUNDIR"
+  LAN_IP="$(detect_lan_ip)"
+  if ! "$DAEMON" -S -b -m -p "$PIDFILE" -x "$BINARY" -O "$LOGFILE" -- \
+    -config "$APPDIR/config.json" \
+    -catalog "$APPDIR/service-catalog.json" \
+    -sources "$APPDIR/sources.json" \
+    -cache "$CACHEDIR" \
+    -stage "$STATEDIR/staging" \
+    -backups "$STATEDIR/backups" \
+    -token-file "$APPDIR/admin.token" \
+    -listen "$LAN_IP:$PORT"
+  then
+    record_failure
+    return 1
+  fi
+
+  WAIT=0
+  while [ "$WAIT" -lt "$HEALTH_RETRIES" ]; do
+    if health; then
+      clear_failure
+      PID="$(running_pid)"
+      echo "RAZVILKA healthy on http://$LAN_IP:$PORT/ (pid $PID)"
+      return 0
+    fi
+    sleep 1
+    WAIT=$((WAIT + 1))
+  done
+
+  echo "RAZVILKA failed health check; stopping failed process" >&2
+  stop_process >/dev/null 2>&1 || true
+  record_failure
+  return 1
+}
+
+status_process() {
+  LAN_IP="$(detect_lan_ip)"
+  if health; then
+    PID="$(running_pid)"
+    echo "RAZVILKA healthy on http://$LAN_IP:$PORT/ (pid $PID)"
+    return 0
+  fi
+  PID="$(running_pid 2>/dev/null || true)"
+  if [ -n "$PID" ]; then
+    echo "RAZVILKA process exists but health check failed (pid $PID)" >&2
+  else
+    echo "RAZVILKA is not running" >&2
+  fi
+  return 1
+}
+
+guard_status() {
+  if [ -e "$DISABLED" ]; then
+    echo "blocked: $(cat "$DISABLED" 2>/dev/null || true)"
+    return 1
+  fi
+  if [ -r "$FAILFILE" ]; then
+    echo "armed: $(cat "$FAILFILE")"
+  else
+    echo "clear"
+  fi
+}
+
+case "${1:-}" in
+  start) start_process ;;
+  stop) stop_process ;;
+  restart) stop_process && start_process ;;
+  status|check) status_process ;;
+  clear-guard)
+    rm -f "$FAILFILE" "$DISABLED"
+    echo "RAZVILKA start guard cleared"
+    ;;
+  guard-status) guard_status ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status|clear-guard|guard-status}" >&2
+    exit 2
+    ;;
+esac

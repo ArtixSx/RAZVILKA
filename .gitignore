@@ -1,0 +1,20 @@
+# Build output
+/dist/*
+!/dist/.gitkeep
+
+# Local runtime/test state
+*.log
+*.pid
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# Local secrets / imported engine profiles
+*.secret
+*.private
+configs/local/

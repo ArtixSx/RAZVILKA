@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible RAZVILKA problem
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste passwords, proxy URIs, private keys, cookies, or router backups.
+  - type: input
+    id: version
+    attributes:
+      label: RAZVILKA version
+      placeholder: v0.0.7-control-lab
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Router / firmware
+      placeholder: Keenetic or Netcraze model and firmware version
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine
+      options:
+        - Manager / UI
+        - NFQWS2
+        - usque / MASQUE
+        - WARP WireGuard
+        - sing-box
+        - Xray
+        - AmneziaWG
+        - Other / not sure
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Exact sequence that reproduces the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Paste only non-sensitive output. Prefer the preflight summary rather than full secret configs.

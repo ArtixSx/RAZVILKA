@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.5'
+          cache: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Run checks and cross-build
+        run: ./scripts/check.sh
+
+      - name: Package Entware bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          BINARY_VERSION="$(./dist/razvilka-linux-amd64 -version)"
+          if [[ "$VERSION" != "$BINARY_VERSION" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match binary version $BINARY_VERSION" >&2
+            exit 1
+          fi
+          STAGE="RAZVILKA-${VERSION}"
+          mkdir -p "$STAGE"
+          cp -a \
+            README.md README_RU.md LAB.md CHANGELOG.md LICENSE SECURITY.md THIRD_PARTY.md \
+            configs docs dist scripts "$STAGE"/
+          test -x "$STAGE/scripts/install-entware.sh"
+          test -x "$STAGE/scripts/upgrade-entware.sh"
+          test -x "$STAGE/scripts/rollback-entware.sh"
+          test -x "$STAGE/scripts/uninstall-entware.sh"
+          test -x "$STAGE/scripts/S99razvilka"
+          test -x "$STAGE/scripts/test-entware-transaction.sh"
+          test -f "$STAGE/configs/config.example.json"
+          test -f "$STAGE/docs/V0.0.8_DEPLOYMENT_RU.md"
+          (cd "$STAGE" && sha256sum -c dist/SHA256SUMS)
+          if find "$STAGE" -type f \( -name '*.token' -o -name 'admin.token' \) | grep -q .; then
+            echo "Refusing to package a token file" >&2
+            exit 1
+          fi
+          tar -czf "RAZVILKA-${VERSION}-entware.tar.gz" "$STAGE"
+          zip -qr "RAZVILKA-${VERSION}-entware.zip" "$STAGE"
+          sha256sum "RAZVILKA-${VERSION}-entware.tar.gz" "RAZVILKA-${VERSION}-entware.zip" > "RAZVILKA-${VERSION}.SHA256SUMS"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            --title "RAZVILKA $GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/razvilka-linux-amd64 \
+            dist/razvilka-linux-arm64 \
+            dist/razvilka-linux-mips \
+            dist/razvilka-linux-mipsle \
+            dist/SHA256SUMS \
+            "RAZVILKA-${VERSION}-entware.tar.gz" \
+            "RAZVILKA-${VERSION}-entware.zip" \
+            "RAZVILKA-${VERSION}.SHA256SUMS"
