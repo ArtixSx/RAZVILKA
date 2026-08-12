@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.9-ui-layout — compact, non-overlapping control panels
+
+- Fixed sticky panel headers being offset inside clipped panels and covering the first rows of Services, Connections, Engines and Test Lab.
+- Removed viewport-forced minimum heights from full-page panels and the engine workspace so pages size to their real content.
+- Reduced the oversized Devices empty state while retaining a readable responsive minimum.
+- Added versioned asset URLs to prevent a router upgrade from reusing stale CSS or JavaScript from browser cache.
+- Added embedded Web UI regression tests for panel-header positioning, forced heights and cache keys.
+
 ## v0.0.8-security-gate — authenticated control plane hardening
 
 - Added a persistent random 256-bit administrator token with owner-only permissions.

@@ -23,7 +23,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/testlab"
 )
 
-const Version = "0.0.8-security-gate"
+const Version = "0.0.9-ui-layout"
 
 type App struct {
 	Store           *config.Store
@@ -373,7 +373,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode": cfg.SafeMode,
-		"note":      "v0.0.8-security-gate: authenticated control UI, staged Apply and telemetry model are enabled; dataplane adapters still do not change firewall/routing/DNS in Safe Mode.",
+		"note":      "v0.0.9-ui-layout: authenticated control UI, staged Apply and telemetry model are enabled; dataplane adapters still do not change firewall/routing/DNS in Safe Mode.",
 		"routes":    rows,
 	})
 }
