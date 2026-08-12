@@ -27,18 +27,55 @@ func Options() []Option {
 }
 
 func Valid(id string) bool {
+	return ValidWithOptions(id, Options())
+}
+
+var profileCapable = map[string]bool{
+	"sing-box":  true,
+	"xray":      true,
+	"usque":     true,
+	"warp-wg":   true,
+	"amneziawg": true,
+}
+
+func ValidWithOptions(id string, options []Option) bool {
 	if id == "" {
 		return false
 	}
-	for _, o := range Options() {
-		if o.ID == id {
-			return true
+	base, profile, profiled := strings.Cut(id, ":")
+	if profiled && !profileCapable[base] {
+		return false
+	}
+
+	selectable := false
+	for _, option := range options {
+		if option.ID == base && option.Selectable {
+			selectable = true
+			break
 		}
 	}
-	for _, p := range []string{"sing-box:", "xray:", "usque:", "warp:", "awg:"} {
-		if strings.HasPrefix(id, p) && len(id) > len(p) {
-			return true
+	if !selectable {
+		return false
+	}
+	if !profiled {
+		return true
+	}
+	return validProfile(profile)
+}
+
+func validProfile(profile string) bool {
+	if len(profile) == 0 || len(profile) > 64 || !isAlphaNumeric(profile[0]) {
+		return false
+	}
+	for i := 1; i < len(profile); i++ {
+		c := profile[i]
+		if !isAlphaNumeric(c) && c != '.' && c != '_' && c != '-' {
+			return false
 		}
 	}
-	return false
+	return true
+}
+
+func isAlphaNumeric(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 }

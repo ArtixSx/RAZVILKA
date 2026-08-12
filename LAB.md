@@ -1,4 +1,4 @@
-# RAZVILKA v0.0.7-control-lab
+# RAZVILKA v0.0.8-security-gate
 
 This build is designed for a clean secondary Entware USB on Keenetic / Netcraze.
 
@@ -18,6 +18,14 @@ cat /opt/var/log/razvilka/preflight-after-install.txt
 ```
 
 Open the URL printed by the bootstrap (normally `http://<LAN-IP>:8787`).
+
+Before the first state-changing action, read the local administrator token:
+
+```sh
+cat /opt/etc/razvilka/admin.token
+```
+
+The Web UI requests this token on the first Apply, Discard, refresh, test run or config edit and keeps it only for the current browser tab.
 
 Verify:
 
@@ -40,7 +48,7 @@ Verify:
 - firewall/DNS/policy-route modification: blocked;
 - engine restart triggered by RAZVILKA: not enabled yet.
 
-Secret configurations (WireGuard private keys, VLESS/Reality credentials, Xray/sing-box credentials) are redacted from the browser API until mandatory authentication is implemented.
+Secret configurations (WireGuard private keys, VLESS/Reality credentials, Xray/sing-box credentials) remain redacted even after authentication; v0.0.8 does not expose them to the browser.
 
 ## Test Lab semantics
 

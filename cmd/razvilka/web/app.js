@@ -45,8 +45,29 @@ const fallbackLabels = {
   amneziawg: 'AmneziaWG',
 };
 
-async function api(url, options = {}) {
-  const response = await fetch(url, options);
+const ADMIN_TOKEN_KEY = 'razvilka.adminToken';
+
+async function api(url, options = {}, allowTokenPrompt = true) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
+
+  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  if (token) headers.set('authorization', `Bearer ${token}`);
+
+  const response = await fetch(url, { ...options, method, headers });
+  if (response.status === 401 && allowTokenPrompt) {
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    const entered = window.prompt(
+      'Введите токен администратора RAZVILKA. Он хранится на роутере в /opt/etc/razvilka/admin.token',
+    );
+    if (entered?.trim()) {
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, entered.trim());
+      return api(url, options, false);
+    }
+  }
   if (!response.ok) {
     const text = (await response.text()).trim();
     throw new Error(text || `HTTP ${response.status}`);
@@ -244,7 +265,7 @@ function renderServices() {
         <div><span class="control-label">AUTO / фактический план</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
         <div class="service-actions"><button class="mini-button" data-detail-id="${esc(s.id)}" title="Технические детали">i</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Dry-run маршрута">⚡</button></div>
       </div>
-      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${Number((s.domains || []).length).toLocaleString('ru-RU')} доменов</span><span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${appliedText}` : `применено: ${appliedText}`}</span></div>
+      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${Number((s.domains || []).length).toLocaleString('ru-RU')} доменов</span><span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></div>
     </article>`;
   }).join('') || '<div class="empty-inline">Ничего не найдено</div>';
 

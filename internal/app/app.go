@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,13 +16,14 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
+	"github.com/ArtixSx/razvilka/internal/security"
 	"github.com/ArtixSx/razvilka/internal/sources"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 	"github.com/ArtixSx/razvilka/internal/telemetry"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 )
 
-const Version = "0.0.7-control-lab"
+const Version = "0.0.8-security-gate"
 
 type App struct {
 	Store           *config.Store
@@ -30,6 +32,7 @@ type App struct {
 	Telemetry       *telemetry.Store
 	EngineConfigs   *engineconfig.Manager
 	TestLab         *testlab.Runner
+	Security        *security.Gate
 	Start           time.Time
 	EffectiveListen string
 }
@@ -67,7 +70,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/sources/refresh", a.sourceRefreshAll)
 	mux.HandleFunc("/api/v1/sources/", a.sourceAction)
 	mux.Handle("/", static)
-	return securityHeaders(mux)
+	return securityHeaders(a.Security.Middleware(mux))
 }
 
 func (a *App) status(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +120,8 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"name": "RAZVILKA", "version": Version, "safe_mode": cfg.SafeMode,
+		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "safe_mode": cfg.SafeMode,
+		"auth_required": a.Security != nil, "authenticated": a.Security != nil && a.Security.Authenticated(r),
 		"uptime_seconds": int(time.Since(a.Start).Seconds()), "listen": effectiveListen(a.EffectiveListen, cfg.Listen),
 		"enabled_services": enabled, "catalog_services": len(a.Catalog.Services),
 		"engines_installed": installed, "engines_running": running,
@@ -369,7 +373,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode": cfg.SafeMode,
-		"note":      "v0.0.7-control-lab: target UI, staged Apply and telemetry model are enabled; dataplane adapters still do not change firewall/routing/DNS in Safe Mode.",
+		"note":      "v0.0.8-security-gate: authenticated control UI, staged Apply and telemetry model are enabled; dataplane adapters still do not change firewall/routing/DNS in Safe Mode.",
 		"routes":    rows,
 	})
 }
@@ -379,12 +383,18 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	// Safe Lab: commit desired state only. Dataplane transactions will be inserted before this commit.
+	// Commit manager state only. Dataplane transactions must be inserted before
+	// this commit is allowed to claim a live route change.
 	if err := a.Store.ApplyDraft(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "safe_mode": a.Store.Get().SafeMode, "pending_changes": false, "note": "Draft committed. Safe Mode still prevents firewall/DNS/route changes."})
+	cfg := a.Store.Get()
+	note := "Draft committed. Safe Mode prevents firewall/DNS/route changes."
+	if !cfg.SafeMode {
+		note = "Desired state committed, but no dataplane adapter transaction was executed."
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "safe_mode": cfg.SafeMode, "pending_changes": false, "note": note})
 }
 
 func (a *App) discard(w http.ResponseWriter, r *http.Request) {
@@ -543,11 +553,20 @@ func (a *App) sourceAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func plannedEngine(s catalog.Service, order []string) string {
-	if len(s.Strategy) > 0 {
-		return s.Strategy[0]
-	}
-	if len(order) > 0 {
-		return order[0]
+	return plannedEngineWithOptions(s, order, routecatalog.Options())
+}
+
+func plannedEngineWithOptions(s catalog.Service, order []string, options []routecatalog.Option) string {
+	candidates := make([]string, 0, len(s.Strategy)+len(order))
+	candidates = append(candidates, s.Strategy...)
+	candidates = append(candidates, order...)
+	for _, candidate := range candidates {
+		if candidate == "auto" {
+			continue
+		}
+		if routecatalog.ValidWithOptions(candidate, options) {
+			return candidate
+		}
 	}
 	return "direct"
 }

@@ -1,6 +1,24 @@
 #!/bin/sh
 set -eu
-[ -x /opt/etc/init.d/S99razvilka ] && /opt/etc/init.d/S99razvilka stop || true
-rm -f /opt/etc/init.d/S99razvilka /opt/bin/razvilka
+umask 077
+
+BASE="${RAZVILKA_BASE:-/opt}"
+HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+STATEDIR="$BASE/var/lib/razvilka"
+CURRENT_BACKUP="$STATEDIR/current-backup"
+ROLLBACK="$HERE/rollback-entware.sh"
+INIT="$BASE/etc/init.d/S99razvilka"
+BINARY="$BASE/bin/razvilka"
+
+if [ -r "$CURRENT_BACKUP" ]; then
+  [ -x "$ROLLBACK" ] || { echo "Rollback helper is unavailable: $ROLLBACK" >&2; exit 1; }
+  BACKUP="$(cat "$CURRENT_BACKUP")"
+  echo "Restoring pre-install snapshot instead of removing files blindly: $BACKUP"
+  export RAZVILKA_BASE="$BASE"
+  exec "$ROLLBACK" "$BACKUP"
+fi
+
+[ -x "$INIT" ] && RAZVILKA_BASE="$BASE" "$INIT" stop || true
+rm -f "$INIT" "$BINARY"
 # Keep config/catalog/cache by default: future reinstall or rollback can reuse them.
-echo "RAZVILKA binary/service removed. Data kept at /opt/etc/razvilka and /opt/var/cache/razvilka"
+echo "RAZVILKA binary/service removed. Data kept at $BASE/etc/razvilka and $BASE/var/cache/razvilka"

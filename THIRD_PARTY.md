@@ -1,6 +1,6 @@
 # Third-party components and data sources
 
-RAZVILKA v0.0.7-control-lab does not bundle the following engines/data into its manager binary. It detects, references or plans adapters for them. Their own licenses and trademarks remain applicable.
+RAZVILKA v0.0.8-security-gate does not bundle the following engines/data into its manager binary. It detects, references or plans adapters for them. Their own licenses and trademarks remain applicable.
 
 - nfqws2-keenetic / zapret2 — anti-DPI engine/integration.
 - usque / usque-keenetic — Cloudflare WARP MASQUE implementation/integration.
