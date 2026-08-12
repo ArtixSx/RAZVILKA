@@ -4,7 +4,15 @@ RAZVILKA is a network control plane. Security issues may affect routing, credent
 
 ## Current status
 
-The project is pre-release. Safe Mode is the default and active dataplane changes remain gated until authentication, CSRF protection, rollback, version checks, and real-hardware tests are complete.
+The project is pre-release. v0.0.8-security-gate requires a local Bearer token,
+JSON content type and a matching browser Origin for every state-changing request.
+The token is generated locally with mode `0600`; secret engine fields are not
+returned to the browser.
+
+Safe Mode is the default. Active dataplane changes remain gated until
+least-privilege engine adapters, strict command allowlists, signed catalog and
+update manifests, per-engine transactional rollback/watchdogs, and expanded
+real-hardware validation are complete.
 
 ## Reporting a vulnerability
 
