@@ -6,6 +6,8 @@
 [![Release](https://img.shields.io/github/v/release/ArtixSx/RAZVILKA?include_prereleases)](https://github.com/ArtixSx/RAZVILKA/releases)
 [![License](https://img.shields.io/github/license/ArtixSx/RAZVILKA)](LICENSE)
 
+💬 [Project Telegram — news, test builds and support](https://t.me/RAZVILKA_UI)
+
 [Русский](README_RU.md) · English
 
 **Universal multi-engine routing hub for Keenetic / Netcraze + Entware.**
