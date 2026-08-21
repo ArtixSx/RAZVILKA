@@ -39,6 +39,11 @@ func TestDiscoveryMergesIPv4IPv6AndPersistsFriendlyMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Keep the persistence assertion independent from neighbors on the host
+	// running the test (for example /proc/net/arp on a GitHub runner).
+	reloaded.Runner = nil
+	reloaded.ARPPaths = nil
+	reloaded.LeasePaths = nil
 	offline := reloaded.List(context.Background())
 	if len(offline) != 1 || offline[0].Name != "Телефон" || offline[0].Group != "Семья" || offline[0].Discovered {
 		t.Fatalf("metadata was not persisted: %+v", offline)
