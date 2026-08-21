@@ -19,6 +19,12 @@ if [ -r "$CURRENT_BACKUP" ]; then
 fi
 
 [ -x "$INIT" ] && RAZVILKA_BASE="$BASE" "$INIT" stop || true
+if [ -x "$BINARY" ]; then
+  "$BINARY" -deactivate-dataplane \
+    -stage "$STATEDIR/staging" \
+    -backups "$STATEDIR/backups" \
+    -dataplane-state "$STATEDIR/dataplane" >/dev/null
+fi
 rm -f "$INIT" "$BINARY"
 # Keep config/catalog/cache by default: future reinstall or rollback can reuse them.
 echo "RAZVILKA binary/service removed. Data kept at $BASE/etc/razvilka and $BASE/var/cache/razvilka"

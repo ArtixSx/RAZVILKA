@@ -52,6 +52,11 @@ func Probe() Snapshot {
 	return s
 }
 
+// DetectWANInterface performs only the route lookup needed by the bounded
+// traffic sampler. Full Probe also inspects packages, modules and tunnels and
+// would be unnecessarily expensive on every metrics interval.
+func DetectWANInterface() string { return wanInterface() }
+
 func commandExists(name string) bool { _, err := exec.LookPath(name); return err == nil }
 func fileExists(path string) bool    { st, err := os.Stat(path); return err == nil && !st.IsDir() }
 func commandOutput(name string, args ...string) string {

@@ -37,3 +37,28 @@ func TestDecodeRunRequest(t *testing.T) {
 		t.Fatalf("ids=%v", ids)
 	}
 }
+
+type fakeRouteProber struct{}
+
+func (fakeRouteProber) Probe(_ context.Context, service catalog.Service, route string) Result {
+	return Result{ServiceID: service.ID, ServiceName: service.Name, Route: route, Status: "pass", RouteConfirmed: true, EvidenceSource: "test", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+}
+
+func TestProbeRoutesStoresConfirmedMatrixEvidence(t *testing.T) {
+	runner := NewRunner()
+	cat := catalog.Catalog{Services: []catalog.Service{{ID: "video", Name: "Video", ProbeURL: "https://example.com/"}}}
+	results := runner.ProbeRoutes(context.Background(), cat, []string{"video"}, []string{"warp-wg"}, fakeRouteProber{})
+	if len(results) != 1 || !results[0].RouteConfirmed {
+		t.Fatalf("results = %+v", results)
+	}
+	snapshot := runner.Snapshot(cat)
+	found := false
+	for _, cell := range snapshot.Matrix {
+		if cell.ServiceID == "video" && cell.Route == "warp-wg" && cell.Last != nil {
+			found = cell.Status == "pass" && cell.Last.RouteConfirmed
+		}
+	}
+	if !found {
+		t.Fatalf("confirmed matrix cell missing: %+v", snapshot.Matrix)
+	}
+}

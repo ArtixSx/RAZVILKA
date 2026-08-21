@@ -3,23 +3,37 @@ package catalog
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 )
 
+var serviceIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
+
 type Service struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Category    string   `json:"category"`
-	Icon        string   `json:"icon"`
-	Description string   `json:"description"`
-	Domains     []string `json:"domains"`
-	CIDRs       []string `json:"cidrs,omitempty"`
-	Strategy    []string `json:"strategy"`
-	ProbeURL    string   `json:"probe_url,omitempty"`
-	SourceRefs  []string `json:"source_refs,omitempty"`
-	Note        string   `json:"note,omitempty"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Category    string      `json:"category"`
+	Icon        string      `json:"icon"`
+	Description string      `json:"description"`
+	Domains     []string    `json:"domains"`
+	CIDRs       []string    `json:"cidrs,omitempty"`
+	Strategy    []string    `json:"strategy"`
+	ProbeURL    string      `json:"probe_url,omitempty"`
+	SourceRefs  []string    `json:"source_refs,omitempty"`
+	Note        string      `json:"note,omitempty"`
+	Provenance  *Provenance `json:"provenance,omitempty"`
+}
+
+type Provenance struct {
+	Provider  string `json:"provider"`
+	EntryID   string `json:"entry_id"`
+	URL       string `json:"url"`
+	License   string `json:"license,omitempty"`
+	SHA256    string `json:"sha256"`
+	FetchedAt string `json:"fetched_at"`
 }
 type Catalog struct {
 	Services []Service `json:"services"`
@@ -45,6 +59,9 @@ func Validate(c Catalog) error {
 		if s.ID == "" || s.Name == "" || s.Category == "" {
 			return fmt.Errorf("service requires id/name/category")
 		}
+		if !serviceIDPattern.MatchString(s.ID) {
+			return fmt.Errorf("service %q has invalid id", s.ID)
+		}
 		if seen[s.ID] {
 			return fmt.Errorf("duplicate service id %q", s.ID)
 		}
@@ -53,8 +70,13 @@ func Validate(c Catalog) error {
 			return fmt.Errorf("service %s has empty strategy", s.ID)
 		}
 		for _, d := range s.Domains {
-			if strings.ContainsAny(d, " /\\") || !strings.Contains(d, ".") {
+			if strings.ContainsAny(d, " /\\:") || !strings.Contains(d, ".") || strings.HasPrefix(d, ".") || strings.HasSuffix(d, ".") {
 				return fmt.Errorf("service %s invalid domain %q", s.ID, d)
+			}
+		}
+		for _, cidr := range s.CIDRs {
+			if _, _, err := net.ParseCIDR(cidr); err != nil {
+				return fmt.Errorf("service %s invalid cidr %q", s.ID, cidr)
 			}
 		}
 		if s.ProbeURL != "" {

@@ -1,137 +1,119 @@
+<p align="center">
+  <img src="docs/assets/razvilka-banner.png" alt="RAZVILKA routing control center" width="100%">
+</p>
+
+<p align="center">
+  <a href="README_RU.md">Русский</a> ·
+  <a href="https://t.me/RAZVILKA_UI">Telegram</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
+
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.12.0-46d77b">
+  <img alt="Keenetic / Netcraze" src="https://img.shields.io/badge/Keenetic%20%2F%20Netcraze-Entware-18a999">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-596a74">
+  <img alt="Safe Mode" src="https://img.shields.io/badge/Safe%20Mode-default-f0b84b">
+</p>
+
 # RAZVILKA
 
-![RAZVILKA — service-first routing hub](docs/assets/razvilka-banner.png)
+RAZVILKA is a free local-first routing control center for Keenetic/Netcraze routers. Users select the apps and websites they need; RAZVILKA installs optional bypass components, tests available paths and assigns a confirmed route per service.
 
-[![CI](https://github.com/ArtixSx/RAZVILKA/actions/workflows/ci.yml/badge.svg)](https://github.com/ArtixSx/RAZVILKA/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ArtixSx/RAZVILKA?include_prereleases)](https://github.com/ArtixSx/RAZVILKA/releases)
-[![License](https://img.shields.io/github/license/ArtixSx/RAZVILKA)](LICENSE)
+No cloud account is required. The UI, credentials, configuration and diagnostics remain on the router.
 
-💬 [Project Telegram — news, test builds and support](https://t.me/RAZVILKA_UI)
+> **v0.12.0 is a public preview.** Installation and upgrades are verified on an ARM64 Netcraze Ultra NC-1812 running KeeneticOS 5.1.3. The `1.0.0` label remains reserved for broader reboot, fault, IPv6, low-memory and multi-model testing.
 
-[Русский](README_RU.md) · English
+## Highlights
 
-**Universal multi-engine routing hub for Keenetic / Netcraze + Entware.**
+- One-switch service catalog for YouTube, Discord, Telegram, ChatGPT, Spotify and more.
+- UI-only default installation; add only the bypasses the router actually needs.
+- Unified control for NFQWS2, WARP/MASQUE, WARP/WireGuard, sing-box, Xray and AmneziaWG.
+- Isolated route probes and evidence-driven `AUTO` selection.
+- NFQWS2 Strategy Lab inspired by practical z2k workflows, without installing z2k as a duplicate runtime.
+- Live CPU, RAM, Entware, WAN traffic and router-capacity indicators.
+- Custom services, domain/CIDR lists, checked sources and encrypted private backups.
+- Transactional `plan → snapshot → validate → health → commit/rollback` apply flow.
 
-RAZVILKA is an open-source local-first routing hub and control plane that unifies multiple bypass/routing engines behind one service-oriented Web UI. It keeps service intent separate from engine internals and is designed to choose, validate, apply and observe the best available route without hiding uncertainty.
+## One-command installation
 
-> **Current status: v0.0.9-ui-layout / Safe Mode.** Authenticated service-route drafts, engine-config drafts, validation, import/export, diagnostics and current-routing probes work. Safe Mode intentionally blocks dataplane changes to firewall, DNS and policy routes.
-
-## v0.0.9 UI Layout
-
-- Full-page panels now size to their content instead of reserving most of the viewport.
-- Section headers no longer shift down and cover the first rows inside clipped panels.
-- Web assets use versioned URLs so an upgraded router cannot serve stale layout CSS from browser cache.
-
-## v0.0.8 Security Gate
-
-### Security Gate
-
-- A random 256-bit administrator token is created at `/opt/etc/razvilka/admin.token` with mode `0600`.
-- Every state-changing API request requires `Authorization: Bearer`, `application/json` and a matching browser `Origin`.
-- The Web UI asks for the token on the first write and keeps it in `sessionStorage` only for the current tab.
-- Read-only status endpoints remain available on the LAN so the dashboard can load before authentication.
-- Configuration persistence, engine staging and source caches use unique atomic transactions with `fsync`.
-- Secret engine configurations remain redacted; v0.0.8 does not expose private keys or proxy credentials to the browser.
-
-### Service routing
-
-- 16-service catalog and per-service `AUTO / DIRECT / engine` selectors.
-- Desired / planned / applied state kept separate.
-- Draft / Apply / Discard workflow for service routing.
-- Engine-agnostic Connections model + SSE stream for future real dataplane evidence.
-
-### Config Center
-
-Each supported engine has one management workspace instead of requiring reinstall/repackaging after every configuration change.
-
-- NFQWS2: `nfqws2.conf`, `user.list`, `auto.list`, `exclude.list`, `ipset.list`, `ipset_exclude.list`.
-- usque/MASQUE: `usque.conf`.
-- WARP WireGuard, sing-box, Xray and AmneziaWG manifests are registered, but their secret content is deliberately redacted even for the authenticated UI.
-- Fixed file manifests only: the browser cannot request arbitrary filesystem paths.
-- Maximum draft size 2 MiB, atomic staging and mode `0600`.
-- Draft -> basic/native validation -> backup -> live apply model.
-- JSON validation and native `sing-box check` / Xray test where the binary supports it.
-- Shell syntax validation for NFQWS2/usque configs.
-- Domain/CIDR list validation.
-- Import/export for non-sensitive files.
-- Safe Mode blocks live writes and preserves drafts.
-
-### Bypass Test Lab
-
-- `Current routing` test performs real HTTP probes for catalog services through the configuration currently applied on the router.
-- Results are `PASS / PARTIAL / FAIL / NOT READY` with HTTP status and latency.
-- The route matrix is already present but does **not** invent per-engine results. Until an isolated adapter exists, cells show engine readiness (`NOT READY / ADAPTER`).
-- The API accepts catalog service IDs only, not arbitrary browser-supplied URLs.
-- Future route-specific sweep will isolate each engine, run service-aware probes, record evidence and rollback without changing the user's normal route.
-
-### Device safety
-
-- Detects architecture, RAM, `/opt`, opkg, WAN, TUN, iptables/ip6tables/nft and NFQUEUE.
-- Detects NFQWS2, usque, WARP-WG, sing-box, Xray and AmneziaWG.
-- Detects existing external tunnel routes and warns when CURRENT tests may be contaminated by them.
-- Source lists enforce safe IDs/redirects, are size/type validated, atomically cached and revalidated after restart.
-- Control plane is separate from future dataplane.
-- UI stays LAN-only. Bearer authentication and Origin checks are mandatory for mutations; active dataplane writes still require transactional adapters and rollback.
-
-## Development run
+Enable Entware storage first, then connect to the router over SSH as `root`:
 
 ```sh
-go run ./cmd/razvilka \
-  --config ./configs/config.example.json \
-  --catalog ./configs/service-catalog.json \
-  --sources ./configs/sources.json \
-  --cache /tmp/razvilka-cache \
-  --stage /tmp/razvilka-stage \
-  --backups /tmp/razvilka-backups \
-  --token-file /tmp/razvilka-admin.token \
-  --listen 127.0.0.1:8787
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-## Checks
+`wget` alternative:
+
+```sh
+wget -qO- https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
+```
+
+The guided installer checks Entware and architecture, downloads the stable release bundle, verifies SHA-256, creates a rollback snapshot, starts RAZVILKA and prints the local UI URL.
+
+The default install contains only the UI/control plane. Install individual bypasses from **Bypasses**, or explicitly request the starter pack:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh -s -- --starter-pack
+```
+
+Supported architectures: `arm64`, `mips`, `mipsle`, `amd64`.
+
+## First login
+
+A fresh installation prints a unique setup/recovery key and a local setup URL. Open it and create your own username and password. RAZVILKA intentionally has no universal `admin/admin` credential and never imports the router SSH password.
+
+Upgrades preserve the UI account and do not echo the recovery secret again.
+
+## Three-step setup
+
+1. Open **Bypasses** and install NFQWS2 or another required component.
+2. Enable services and keep `AUTO`, or pin a route manually.
+3. Run **Route tests**, review the plan, then leave Safe Mode only when ready for Active Apply.
+
+Safe Mode is enabled on first installation and prevents firewall, DNS, TUN and policy-routing writes until explicit confirmation.
+
+## UI
+
+![RAZVILKA v0.12.0 overview](docs/screenshots/overview-v0.12.0.png)
+
+Route comparison is human-readable; raw API data is kept under a collapsed technical-details section.
+
+![RAZVILKA v0.12.0 route test](docs/screenshots/route-test-v0.12.0.png)
+
+![RAZVILKA v0.12.0 onboarding](docs/screenshots/onboarding-v0.12.0.png)
+
+## Components
+
+| Component | Purpose | Provisioning |
+|---|---|---|
+| NFQWS2 | local DPI desynchronization / Zapret2 | UI or starter pack |
+| WARP · MASQUE | Cloudflare WARP through usque | UI when a compatible package is available |
+| WARP · WireGuard | generated WARP profile and policy route | UI |
+| WARP Generator | generate, validate, import and replace a profile | UI |
+| sing-box / Xray | VLESS, Reality, Hysteria2, TUIC, Shadowsocks | UI with a user profile |
+| AmneziaWG | DPI-resistant WireGuard-compatible tunnel | compatible kernel/repository required |
+
+Package availability depends on architecture, KeeneticOS and configured opkg repositories. Missing components are never reported as active, and routes are not selected without health evidence.
+
+## Update and rollback
+
+Run the installation command again. User services, credentials, bypass configs and committed dataplane state are preserved.
+
+The latest snapshot path is stored in `/opt/var/lib/razvilka/current-backup`. See [README_RU.md](README_RU.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed recovery and design notes.
+
+## Validation
 
 ```sh
 ./scripts/check.sh
 ```
 
-The check script runs Go tests, the race detector, vet, shell/JavaScript syntax checks, cross-builds linux amd64/arm64/mips/mipsle, verifies binary checksums and exercises the full Entware apply/rollback transaction without rewriting source files.
+The release gate runs Go tests, the race detector, vet, JavaScript/shell syntax checks, Linux cross-builds for all supported architectures, SHA-256 verification and a transactional Entware apply/rollback test.
 
-## Entware Lab install
+## Support
 
-A source checkout does **not** commit generated binaries. Build them first:
+- Telegram: [@RAZVILKA_UI](https://t.me/RAZVILKA_UI)
+- Bugs and feature requests: [GitHub Issues](https://github.com/ArtixSx/RAZVILKA/issues)
+- Vulnerability reports: [SECURITY.md](SECURITY.md)
 
-```sh
-./build.sh
-./scripts/lab-bootstrap.sh
-```
-
-GitHub Releases package the cross-built binaries automatically. The bootstrap runs preflight before/after install and installs only the RAZVILKA Manager. It does not install or activate bypass engines.
-
-## Transactional Entware upgrade
-
-Upgrade defaults to a read-only dry-run. An active ARTEM Flow instance requires an explicit, reversible handover flag:
-
-```sh
-./scripts/upgrade-entware.sh --dry-run --from-artem-flow
-./scripts/upgrade-entware.sh --apply --from-artem-flow
-```
-
-Preflight verifies the architecture, optional release checksum, candidate binary, config schema, service catalog and sources registry before writing. Apply creates a root-only snapshot, installs files atomically, migrates the config and rolls back automatically unless the exact RAZVILKA/version health check succeeds.
-
-Manual rollback uses the recorded snapshot:
-
-```sh
-./scripts/rollback-entware.sh "$(cat /opt/var/lib/razvilka/current-backup)"
-```
-`uninstall-entware.sh` uses the same snapshot automatically. After an ARTEM Flow handover it restores the previous binary, init and running state instead of leaving the legacy service disabled.
-
-
-Service lifecycle and boot guard:
-
-```sh
-/opt/etc/init.d/S99razvilka status
-/opt/etc/init.d/S99razvilka restart
-/opt/etc/init.d/S99razvilka guard-status
-/opt/etc/init.d/S99razvilka clear-guard
-```
-
-Three failed starts within five minutes block further automatic starts until the failure is inspected and the guard is explicitly cleared. The built-in health check has a four-second timeout and accepts only the exact current RAZVILKA name, version and pidfile process ID.
+RAZVILKA is free software under the [MIT License](LICENSE).

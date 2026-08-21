@@ -4,17 +4,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
 
 type ServiceState struct {
-	Enabled bool   `json:"enabled"`
-	Mode    string `json:"mode,omitempty"` // legacy compatibility
-	Route   string `json:"route,omitempty"`
+	Enabled bool     `json:"enabled"`
+	Mode    string   `json:"mode,omitempty"` // legacy compatibility
+	Route   string   `json:"route,omitempty"`
+	Sources []string `json:"sources,omitempty"` // empty means every LAN client
 }
 
 type Config struct {
@@ -82,11 +86,99 @@ func normalizeState(state ServiceState) ServiceState {
 }
 
 func (s *Store) UpdateService(id string, state ServiceState) error {
+	sources, err := NormalizeSources(state.Sources)
+	if err != nil {
+		return err
+	}
+	state.Sources = sources
 	state = normalizeState(state)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	previous := cloneConfig(s.cfg)
 	s.cfg.Services[id] = state
+	s.cfg.Revision++
+	if err := s.saveLocked(); err != nil {
+		s.cfg = previous
+		return err
+	}
+	return nil
+}
+
+// SetSafeMode changes only the live-write gate. Existing committed routes are
+// not claimed as stopped or modified by this setting change.
+func (s *Store) SetSafeMode(enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cfg.SafeMode == enabled {
+		return nil
+	}
+	previous := cloneConfig(s.cfg)
+	s.cfg.SafeMode = enabled
+	s.cfg.Revision++
+	if err := s.saveLocked(); err != nil {
+		s.cfg = previous
+		return err
+	}
+	return nil
+}
+
+// MergeDraft stages a portable profile in one config transaction. It never
+// changes AppliedServices, so importing a shared profile cannot affect live
+// routing before the normal preview/validate/apply flow is completed.
+func (s *Store) MergeDraft(states map[string]ServiceState) error {
+	normalizedStates := make(map[string]ServiceState, len(states))
+	for id, state := range states {
+		sources, err := NormalizeSources(state.Sources)
+		if err != nil {
+			return fmt.Errorf("service %s: %w", id, err)
+		}
+		state.Sources = sources
+		normalizedStates[id] = normalizeState(state)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := cloneConfig(s.cfg)
+	for id, state := range normalizedStates {
+		s.cfg.Services[id] = state
+	}
+	s.cfg.Revision++
+	if err := s.saveLocked(); err != nil {
+		s.cfg = previous
+		return err
+	}
+	return nil
+}
+
+// ReplaceDraft is used to restore the exact desired state if a multi-store
+// profile import cannot finish. AppliedServices are deliberately untouched.
+func (s *Store) ReplaceDraft(states map[string]ServiceState) error {
+	normalizedStates := make(map[string]ServiceState, len(states))
+	for id, state := range states {
+		sources, err := NormalizeSources(state.Sources)
+		if err != nil {
+			return fmt.Errorf("service %s: %w", id, err)
+		}
+		state.Sources = sources
+		normalizedStates[id] = normalizeState(state)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := cloneConfig(s.cfg)
+	s.cfg.Services = cloneServices(normalizedStates)
+	s.cfg.Revision++
+	if err := s.saveLocked(); err != nil {
+		s.cfg = previous
+		return err
+	}
+	return nil
+}
+
+func (s *Store) DeleteService(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := cloneConfig(s.cfg)
+	delete(s.cfg.Services, id)
+	delete(s.cfg.AppliedServices, id)
 	s.cfg.Revision++
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
@@ -102,17 +194,44 @@ func (s *Store) Dirty() bool {
 }
 
 func (s *Store) ApplyDraft() error {
+	_, err := s.ApplyDraftWithRollback()
+	return err
+}
+
+// ApplyDraftWithRollback commits the desired state and returns a guarded undo
+// function for the surrounding dataplane transaction. Undo refuses to clobber
+// a configuration that changed after the commit.
+func (s *Store) ApplyDraftWithRollback() (func() error, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	previous := cloneConfig(s.cfg)
 	s.cfg.AppliedServices = cloneServices(s.cfg.Services)
 	s.cfg.AppliedRevision = s.cfg.Revision
 	s.cfg.LastAppliedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
-		return err
+		s.mu.Unlock()
+		return nil, err
 	}
-	return nil
+	committed := cloneConfig(s.cfg)
+	s.mu.Unlock()
+	used := false
+	return func() error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if used {
+			return nil
+		}
+		if !reflect.DeepEqual(s.cfg, committed) {
+			return errors.New("configuration changed after dataplane commit; automatic config rollback refused")
+		}
+		s.cfg = cloneConfig(previous)
+		if err := s.saveLocked(); err != nil {
+			s.cfg = committed
+			return err
+		}
+		used = true
+		return nil
+	}, nil
 }
 
 func (s *Store) DiscardDraft() error {
@@ -181,7 +300,43 @@ func cloneConfig(in Config) Config {
 func cloneServices(in map[string]ServiceState) map[string]ServiceState {
 	out := make(map[string]ServiceState, len(in))
 	for k, v := range in {
+		v.Sources = append([]string(nil), v.Sources...)
 		out[k] = v
 	}
 	return out
+}
+
+func NormalizeSources(values []string) ([]string, error) {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			address, addressErr := netip.ParseAddr(value)
+			if addressErr != nil {
+				return nil, fmt.Errorf("invalid device source %q", value)
+			}
+			address = address.Unmap()
+			prefix = netip.PrefixFrom(address, address.BitLen())
+		}
+		prefix = prefix.Masked()
+		address := prefix.Addr()
+		if !address.IsValid() || address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() {
+			return nil, fmt.Errorf("unsafe device source %q", value)
+		}
+		canonical := prefix.String()
+		if !seen[canonical] {
+			seen[canonical] = true
+			out = append(out, canonical)
+		}
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
 }

@@ -65,6 +65,23 @@ PRIMARY_BACKUP="$(cat "$PRIMARY/var/lib/razvilka/current-backup")"
 [ "$(ls -ld "$PRIMARY_BACKUP" | awk '{print $1}')" = drwx------ ] || { echo "Snapshot mode is not 700" >&2; exit 1; }
 [ "$(ls -ld "$PRIMARY_BACKUP/manifest" | awk '{print $1}')" = -rw------- ] || { echo "Manifest mode is not 600" >&2; exit 1; }
 
+# A same-version upgrade must preserve committed adapter metadata that is
+# temporarily removed by controlled dataplane deactivation.
+mkdir -p "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter"
+printf '%s\n' preserved >"$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker"
+RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
+  "$UPGRADE" --apply --without-components >/dev/null
+[ "$(cat "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker")" = preserved ] || {
+  echo "Dataplane runtime snapshot was not restored after upgrade" >&2
+  exit 1
+}
+SECOND_BACKUP="$(cat "$PRIMARY/var/lib/razvilka/current-backup")"
+RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$SECOND_BACKUP" >/dev/null
+[ "$(cat "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker")" = preserved ] || {
+  echo "Dataplane runtime snapshot was not restored by rollback" >&2
+  exit 1
+}
+
 # The second instance cannot bind to the occupied port. It must fail and remove
 # every newly installed target through the automatic rollback trap.
 if RAZVILKA_BASE="$CONFLICT" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=2 \
@@ -75,6 +92,7 @@ fi
 assert_absent "$CONFLICT/bin/razvilka"
 assert_absent "$CONFLICT/etc/init.d/S99razvilka"
 assert_absent "$CONFLICT/etc/razvilka/config.json"
+assert_absent "$CONFLICT/etc/razvilka/community-catalog.json"
 
 # A manifest is data, never shell. Unknown keys are rejected before a service
 # is stopped, and embedded command substitution must remain literal.
@@ -101,6 +119,7 @@ RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$PRIMARY_BACKUP" >/d
 assert_absent "$PRIMARY/bin/razvilka"
 assert_absent "$PRIMARY/etc/init.d/S99razvilka"
 assert_absent "$PRIMARY/etc/razvilka/config.json"
+assert_absent "$PRIMARY/etc/razvilka/community-catalog.json"
 # Uninstall is rollback-aware: a fresh transactional install has a snapshot,
 # so uninstall must restore that snapshot instead of deleting files blindly.
 RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
@@ -111,6 +130,7 @@ RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" "$UNINSTALL" >/dev/null
 assert_absent "$REMOVAL/bin/razvilka"
 assert_absent "$REMOVAL/etc/init.d/S99razvilka"
 assert_absent "$REMOVAL/etc/razvilka/config.json"
+assert_absent "$REMOVAL/etc/razvilka/community-catalog.json"
 
 
 trap - EXIT HUP INT TERM

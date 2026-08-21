@@ -20,11 +20,11 @@ RAZVILKA manager
   ├── Service catalog
   ├── Validated source cache
   ├── System/capability probe
-  ├── Engine inventory + version matrix (next)
+  ├── Engine inventory + version/native-schema checks
   ├── Route planner / AUTO policy
   ├── Normalized telemetry store
-  ├── Health/service probes (next)
-  └── Transaction coordinator (next)
+  ├── Health/service probes + Smart Route evidence
+  └── Transaction coordinator + atomic journals/rollback
 ```
 
 The Web UI is embedded static HTML/CSS/JS. No Node/PHP/frontend runtime is required on the router.
@@ -109,13 +109,15 @@ The UI receives normalized data over SSE and a REST snapshot fallback.
 
 ## Device layer
 
-Future device discovery can merge data from Keenetic host/device information, neighbor tables, DHCP/DNS sources and adapter telemetry. Identity must be cached and bounded; IP alone is not a permanent identity.
+Device discovery merges neighbor tables, ARP and available DHCP leases with a bounded local identity cache. Friendly names and groups never leave the router; IP alone is not treated as permanent identity.
 
-Per-device routing must remain independent from per-service routing so the final rule can express:
+Tunnel adapters compile optional service source scopes into source/destination policy rules:
 
 ```text
 (device/group) + service + protocol → route policy
 ```
+
+`v0.10.0` supports one selected route per service with zero or more device sources. Multiple competing routes for the same service across different groups are reserved for a future priority-aware schema.
 
 ## AI/service-aware health
 

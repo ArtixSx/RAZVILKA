@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build-release:
@@ -62,7 +64,24 @@ jobs:
           fi
           tar -czf "RAZVILKA-${VERSION}-entware.tar.gz" "$STAGE"
           zip -qr "RAZVILKA-${VERSION}-entware.zip" "$STAGE"
+          cp "RAZVILKA-${VERSION}-entware.tar.gz" RAZVILKA-entware.tar.gz
+          sha256sum RAZVILKA-entware.tar.gz > RAZVILKA-entware.tar.gz.sha256
           sha256sum "RAZVILKA-${VERSION}-entware.tar.gz" "RAZVILKA-${VERSION}-entware.zip" > "RAZVILKA-${VERSION}.SHA256SUMS"
+
+      - name: Attest release provenance
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: |
+            dist/razvilka-linux-amd64
+            dist/razvilka-linux-arm64
+            dist/razvilka-linux-mips
+            dist/razvilka-linux-mipsle
+            dist/SHA256SUMS
+            RAZVILKA-*-entware.tar.gz
+            RAZVILKA-*-entware.zip
+            RAZVILKA-*.SHA256SUMS
+            RAZVILKA-entware.tar.gz
+            RAZVILKA-entware.tar.gz.sha256
 
       - name: Publish GitHub Release
         env:
@@ -79,4 +98,6 @@ jobs:
             dist/SHA256SUMS \
             "RAZVILKA-${VERSION}-entware.tar.gz" \
             "RAZVILKA-${VERSION}-entware.zip" \
-            "RAZVILKA-${VERSION}.SHA256SUMS"
+            "RAZVILKA-${VERSION}.SHA256SUMS" \
+            RAZVILKA-entware.tar.gz \
+            RAZVILKA-entware.tar.gz.sha256
