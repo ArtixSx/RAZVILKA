@@ -5,12 +5,11 @@
 <p align="center">
   <a href="README_RU.md">Русский</a> ·
   <a href="https://t.me/RAZVILKA_UI">Telegram</a> ·
-  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/ArtixSx/RAZVILKA/releases">Releases</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.12.0-46d77b">
   <img alt="Keenetic / Netcraze" src="https://img.shields.io/badge/Keenetic%20%2F%20Netcraze-Entware-18a999">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-596a74">
   <img alt="Safe Mode" src="https://img.shields.io/badge/Safe%20Mode-default-f0b84b">
@@ -21,8 +20,6 @@
 RAZVILKA is a free local-first routing control center for Keenetic/Netcraze routers. Users select the apps and websites they need; RAZVILKA installs optional bypass components, tests available paths and assigns a confirmed route per service.
 
 No cloud account is required. The UI, credentials, configuration and diagnostics remain on the router.
-
-> **v0.12.0 is a public preview.** Installation and upgrades are verified on an ARM64 Netcraze Ultra NC-1812 running KeeneticOS 5.1.3. The `1.0.0` label remains reserved for broader reboot, fault, IPv6, low-memory and multi-model testing.
 
 ## Highlights
 
@@ -75,13 +72,13 @@ Safe Mode is enabled on first installation and prevents firewall, DNS, TUN and p
 
 ## UI
 
-![RAZVILKA v0.12.0 overview](docs/screenshots/overview-v0.12.0.png)
+![RAZVILKA overview](docs/screenshots/overview-v0.12.0.png)
 
 Route comparison is human-readable; raw API data is kept under a collapsed technical-details section.
 
-![RAZVILKA v0.12.0 route test](docs/screenshots/route-test-v0.12.0.png)
+![RAZVILKA route test](docs/screenshots/route-test-v0.12.0.png)
 
-![RAZVILKA v0.12.0 onboarding](docs/screenshots/onboarding-v0.12.0.png)
+![RAZVILKA onboarding](docs/screenshots/onboarding-v0.12.0.png)
 
 ## Components
 

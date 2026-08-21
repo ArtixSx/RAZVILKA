@@ -5,12 +5,11 @@
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="https://t.me/RAZVILKA_UI">Telegram</a> ·
-  <a href="CHANGELOG.md">История версий</a> ·
+  <a href="https://github.com/ArtixSx/RAZVILKA/releases">Релизы</a> ·
   <a href="SECURITY.md">Безопасность</a>
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.12.0-46d77b">
   <img alt="Keenetic / Netcraze" src="https://img.shields.io/badge/Keenetic%20%2F%20Netcraze-Entware-18a999">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-596a74">
   <img alt="Safe Mode" src="https://img.shields.io/badge/Safe%20Mode-default-f0b84b">
@@ -21,8 +20,6 @@
 RAZVILKA — бесплатная локальная панель для Keenetic/Netcraze. Пользователь выбирает нужные сайты и приложения, а панель устанавливает доступные обходы, проверяет их и назначает каждому сервису рабочий маршрут.
 
 Внешний аккаунт и облачный сервер не нужны: интерфейс, конфигурация и диагностические данные находятся на самом роутере.
-
-> **v0.12.0 — публичная preview-версия.** Установка и обновление проверены на Netcraze Ultra NC-1812 (ARM64, KeeneticOS 5.1.3). Версия `1.0.0` будет выпущена после расширенных reboot/fault/IPv6/low-memory и multi-model тестов.
 
 ## Что умеет
 
@@ -65,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/boots
 После чистой установки консоль покажет:
 
 ```text
-[OK] RAZVILKA 0.12.0 установлена и запущена
+[OK] RAZVILKA установлена и запущена
 Панель: http://192.168.1.1:8787
 Ключ настройки: <уникальный recovery key>
 ```
@@ -86,17 +83,17 @@ Safe Mode включён при первой установке и не меня
 
 ### Обзор сервисов, маршрутов и ресурсов
 
-![Обзор RAZVILKA v0.12.0](docs/screenshots/overview-v0.12.0.png)
+![Обзор RAZVILKA](docs/screenshots/overview-v0.12.0.png)
 
 ### Понятный результат сравнения обходов
 
 Вместо JSON панель показывает итог, статус каждого маршрута и причину решения. Полный API-ответ остаётся под сворачиваемой кнопкой «Показать технические данные».
 
-![Тест обходов RAZVILKA v0.12.0](docs/screenshots/route-test-v0.12.0.png)
+![Тест обходов RAZVILKA](docs/screenshots/route-test-v0.12.0.png)
 
 ### Мастер первого запуска
 
-![Мастер настройки RAZVILKA v0.12.0](docs/screenshots/onboarding-v0.12.0.png)
+![Мастер настройки RAZVILKA](docs/screenshots/onboarding-v0.12.0.png)
 
 ## Обходы
 
