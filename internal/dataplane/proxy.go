@@ -23,23 +23,24 @@ import (
 // the interface by policy routing; neither process may replace the host's
 // default route.
 type ProxyTunnelAdapter struct {
-	EngineID   string
-	Configs    *engineconfig.Manager
-	StateRoot  string
-	Runner     NFQWS2Runner
-	Processes  ProcessController
-	Resolver   PrefixResolver
-	Probe      func(context.Context, string) error
-	SOCKSProbe func(context.Context, string) error
-	EngineBin  string
-	SidecarBin string
-	IP         string
-	SOCKSPort  int
-	Interface  string
-	TunnelCIDR string
-	Table      int
-	Priority   int
-	Timeout    time.Duration
+	EngineID    string
+	Configs     *engineconfig.Manager
+	StateRoot   string
+	Runner      NFQWS2Runner
+	Processes   ProcessController
+	Resolver    PrefixResolver
+	Probe       func(context.Context, string) error
+	SOCKSProbe  func(context.Context, string) error
+	EngineBin   string
+	SidecarBin  string
+	PackageInit string
+	IP          string
+	SOCKSPort   int
+	Interface   string
+	TunnelCIDR  string
+	Table       int
+	Priority    int
+	Timeout     time.Duration
 }
 
 type proxySnapshot struct {
@@ -56,6 +57,7 @@ type proxySnapshot struct {
 	PolicyExists        bool        `json:"policy_exists"`
 	EngineWasRunning    bool        `json:"engine_was_running"`
 	SidecarWasRunning   bool        `json:"sidecar_was_running"`
+	PackageWasRunning   bool        `json:"package_was_running,omitempty"`
 }
 
 func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot string) (*ProxyTunnelAdapter, error) {
@@ -75,7 +77,7 @@ func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot s
 
 func (a *ProxyTunnelAdapter) ID() string { return a.EngineID }
 
-func (a *ProxyTunnelAdapter) Snapshot(_ context.Context, _ Plan, root string) error {
+func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, _ Plan, root string) error {
 	if err := a.valid(); err != nil {
 		return err
 	}
@@ -107,10 +109,14 @@ func (a *ProxyTunnelAdapter) Snapshot(_ context.Context, _ Plan, root string) er
 	if err != nil {
 		return err
 	}
+	packageWasRunning, err := a.packageRuntimeRunning(ctx)
+	if err != nil {
+		return err
+	}
 	snapshot := proxySnapshot{
 		ConfigPath: view.Path, Config: live, ConfigExisted: liveExists, ConfigDraft: draftExists, StagedConfig: draft,
 		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists,
-		Policy: policy, PolicyExists: policyExists, EngineWasRunning: a.Processes.Running(a.engineProcess()), SidecarWasRunning: a.Processes.Running(a.sidecarProcess()),
+		Policy: policy, PolicyExists: policyExists, EngineWasRunning: a.Processes.Running(a.engineProcess()), SidecarWasRunning: a.Processes.Running(a.sidecarProcess()), PackageWasRunning: packageWasRunning,
 	}
 	data, _ := json.MarshalIndent(snapshot, "", "  ")
 	return writeAtomic(filepath.Join(root, "snapshot.json"), data, 0o600)
@@ -200,6 +206,10 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 }
 
 func (a *ProxyTunnelAdapter) Activate(ctx context.Context, _ Plan, root string) error {
+	snapshot, err := readProxySnapshot(root)
+	if err != nil {
+		return err
+	}
 	desired, err := a.readStagedPolicy(root)
 	if err != nil {
 		return err
@@ -213,6 +223,11 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, _ Plan, root string) 
 	}
 	if err := a.stopOwned(ctx); err != nil {
 		return err
+	}
+	if snapshot.PackageWasRunning {
+		if err := a.stopPackageRuntime(ctx); err != nil {
+			return err
+		}
 	}
 	engineCandidate, err := os.ReadFile(filepath.Join(root, "engine.staged.json"))
 	if err != nil {
@@ -285,6 +300,12 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) error {
 	}
 	if !exists || !regularFile(a.engineConfigPath()) || !regularFile(a.sidecarConfigPath()) {
 		return fmt.Errorf("committed %s runtime state is missing", a.ID())
+	}
+	// usque-keenetic starts its own nativetun process during installation and
+	// boot. RAZVILKA owns a separate loopback SOCKS process and must not leave
+	// both runtimes competing for the same Cloudflare session.
+	if err := a.stopPackageRuntime(ctx); err != nil {
+		return err
 	}
 	if err := a.healthState(ctx, plan, state); err == nil {
 		return nil
@@ -464,6 +485,11 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 			firstErr = err
 		}
 	}
+	if snapshot.PackageWasRunning {
+		if err := a.startPackageRuntime(ctx); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
 	return firstErr
 }
 
@@ -522,13 +548,70 @@ func (a *ProxyTunnelAdapter) engineProcess() ProcessSpec {
 	args := []string{}
 	switch a.ID() {
 	case "usque":
-		args = []string{"-c", config, "socks", "-b", "127.0.0.1", "-p", strconv.Itoa(a.SOCKSPort)}
+		// HTTP/2 keeps MASQUE on ordinary TCP/443. This is the reliable fallback
+		// when the WireGuard/QUIC transports used by WARP are filtered. The SOCKS
+		// listener remains loopback-only and reconnects after an idle tunnel loss.
+		args = []string{"-c", config, "socks", "-b", "127.0.0.1", "-p", strconv.Itoa(a.SOCKSPort), "--http2", "--always-reconnect", "-S"}
 	case "sing-box":
 		args = []string{"run", "-c", config}
 	case "xray":
 		args = []string{"run", "-config", config}
 	}
 	return ProcessSpec{ID: a.ID() + "-engine", Binary: a.engineBinary(), Args: args, Dir: a.runtimeRoot(), PIDPath: filepath.Join(a.runtimeRoot(), "engine.pid"), LogPath: filepath.Join(a.runtimeRoot(), "engine.log"), MatchArg: config}
+}
+
+func (a *ProxyTunnelAdapter) packageInitPath() string {
+	if a.ID() != "usque" {
+		return ""
+	}
+	if a.PackageInit != "" {
+		return a.PackageInit
+	}
+	const path = "/opt/etc/init.d/S51usque"
+	if regularFile(path) {
+		return path
+	}
+	return ""
+}
+
+func (a *ProxyTunnelAdapter) packageRuntimeRunning(ctx context.Context) (bool, error) {
+	init := a.packageInitPath()
+	if init == "" {
+		return false, nil
+	}
+	output, err := a.run(ctx, init, "status")
+	if err != nil {
+		// The Entware init script may return non-zero for the normal stopped
+		// state. Its bounded status output is still authoritative.
+		if strings.Contains(strings.ToLower(string(output)), " is stopped") {
+			return false, nil
+		}
+		return false, fmt.Errorf("inspect package %s runtime: %s", a.ID(), shortOutput(output, err))
+	}
+	return strings.Contains(strings.ToLower(string(output)), " is running"), nil
+}
+
+func (a *ProxyTunnelAdapter) stopPackageRuntime(ctx context.Context) error {
+	running, err := a.packageRuntimeRunning(ctx)
+	if err != nil || !running {
+		return err
+	}
+	init := a.packageInitPath()
+	if output, err := a.run(ctx, init, "stop"); err != nil {
+		return fmt.Errorf("stop package %s runtime: %s", a.ID(), shortOutput(output, err))
+	}
+	return nil
+}
+
+func (a *ProxyTunnelAdapter) startPackageRuntime(ctx context.Context) error {
+	init := a.packageInitPath()
+	if init == "" {
+		return nil
+	}
+	if output, err := a.run(ctx, init, "start"); err != nil {
+		return fmt.Errorf("restore package %s runtime: %s", a.ID(), shortOutput(output, err))
+	}
+	return nil
 }
 func (a *ProxyTunnelAdapter) sidecarProcess() ProcessSpec {
 	config := a.sidecarConfigPath()

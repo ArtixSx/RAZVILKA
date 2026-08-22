@@ -31,12 +31,30 @@ func (p *proxyFakeProcesses) Stop(_ context.Context, spec ProcessSpec) error {
 func (p *proxyFakeProcesses) Running(spec ProcessSpec) bool { return p.running[spec.ID] }
 
 type proxyFakeRunner struct {
-	processes *proxyFakeProcesses
-	iface     string
+	processes      *proxyFakeProcesses
+	iface          string
+	packageRunning bool
+	packageCalls   []string
 }
 
 func (r *proxyFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	joined := strings.Join(args, " ")
+	if name == "/opt/etc/init.d/S51usque" {
+		r.packageCalls = append(r.packageCalls, joined)
+		switch joined {
+		case "status":
+			if r.packageRunning {
+				return []byte("Service USQUE is running (PID 123)"), nil
+			}
+			return []byte("Service USQUE is stopped"), nil
+		case "stop":
+			r.packageRunning = false
+			return []byte("stopped"), nil
+		case "start":
+			r.packageRunning = true
+			return []byte("started"), nil
+		}
+	}
 	if name == "sing-box" && joined == "version" {
 		return []byte("sing-box version 1.14.0"), nil
 	}
@@ -50,6 +68,46 @@ func (r *proxyFakeRunner) Run(_ context.Context, name string, args ...string) ([
 		return []byte("198.51.100.20 dev " + r.iface), nil
 	}
 	return []byte("ok"), nil
+}
+
+func TestUsqueUsesHTTP2FallbackAndReconnect(t *testing.T) {
+	adapter, err := NewProxyTunnelAdapter("usque", engineconfig.New(t.TempDir(), t.TempDir()), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter.EngineBin = "usque"
+	args := strings.Join(adapter.engineProcess().Args, " ")
+	for _, required := range []string{"socks", "-b 127.0.0.1", "-p 18080", "--http2", "--always-reconnect", "-S"} {
+		if !strings.Contains(args, required) {
+			t.Fatalf("usque command %q is missing %q", args, required)
+		}
+	}
+}
+
+func TestUsquePackageRuntimeCanBeSuspendedAndRestored(t *testing.T) {
+	adapter, err := NewProxyTunnelAdapter("usque", engineconfig.New(t.TempDir(), t.TempDir()), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &proxyFakeRunner{packageRunning: true}
+	adapter.Runner = runner
+	adapter.PackageInit = "/opt/etc/init.d/S51usque"
+	if err := adapter.stopPackageRuntime(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if runner.packageRunning {
+		t.Fatal("package runtime was not stopped")
+	}
+	if err := adapter.startPackageRuntime(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !runner.packageRunning {
+		t.Fatal("package runtime was not restored")
+	}
+	want := []string{"status", "stop", "start"}
+	if strings.Join(runner.packageCalls, ",") != strings.Join(want, ",") {
+		t.Fatalf("calls=%v want=%v", runner.packageCalls, want)
+	}
 }
 
 func TestBuildProxyCandidateReplacesListeners(t *testing.T) {

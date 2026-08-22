@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.12.4 — WARP MASQUE TCP fallback
+
+- WARP · MASQUE now runs USQUE over HTTP/2 on TCP/443 with automatic reconnect, avoiding the blocked or throttled UDP transports observed during hardware testing.
+- Installing WARP · MASQUE also installs the managed sing-box TUN dependency.
+- Transaction snapshots now detect the `usque-keenetic` package runtime, suspend it before RAZVILKA starts its isolated SOCKS/TUN pair, and restore it after rollback.
+- Added regression tests for the HTTP/2 command line, dependency graph and package-runtime lifecycle.
+
 ## v0.12.3 — first WARP Apply without a circular blocker
 
 - A structurally valid staged WARP · WireGuard profile can now be assigned to a service before its first transactional Apply.

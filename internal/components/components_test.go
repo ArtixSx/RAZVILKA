@@ -51,9 +51,37 @@ func TestUsqueInstallUsesKeeneticPackageInsteadOfOverwritingManagedBinary(t *tes
 	if string(data) != wantRepo {
 		t.Fatalf("repository=%q want=%q", data, wantRepo)
 	}
-	wantCalls := [][]string{{"/opt/bin/opkg", "list-installed"}, {"/opt/bin/opkg", "update"}, {"/opt/bin/opkg", "install", "usque-keenetic"}, {"/opt/bin/opkg", "list-installed"}}
+	wantCalls := [][]string{
+		{"/opt/bin/opkg", "list-installed"}, {"/opt/bin/opkg", "install", "sing-box-go"}, {"/opt/bin/opkg", "list-installed"},
+		{"/opt/bin/opkg", "list-installed"}, {"/opt/bin/opkg", "update"}, {"/opt/bin/opkg", "install", "usque-keenetic"}, {"/opt/bin/opkg", "list-installed"},
+	}
 	if !reflect.DeepEqual(r.calls, wantCalls) {
 		t.Fatalf("calls=%v want=%v", r.calls, wantCalls)
+	}
+}
+
+func TestUsqueDeclaresHTTP2AndManagedTunDependency(t *testing.T) {
+	var usque Spec
+	for _, spec := range Specs() {
+		if spec.ID == "usque" {
+			usque = spec
+			break
+		}
+	}
+	if usque.ID == "" {
+		t.Fatal("usque component is missing")
+	}
+	if !reflect.DeepEqual(usque.Dependencies, []string{"sing-box"}) {
+		t.Fatalf("dependencies=%v", usque.Dependencies)
+	}
+	hasHTTP2 := false
+	for _, capability := range usque.Capabilities {
+		if capability == "http2" {
+			hasHTTP2 = true
+		}
+	}
+	if !hasHTTP2 {
+		t.Fatalf("HTTP/2 fallback is not declared: %v", usque.Capabilities)
 	}
 }
 
