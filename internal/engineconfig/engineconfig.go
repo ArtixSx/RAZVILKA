@@ -106,7 +106,7 @@ func New(stageRoot, backupRoot string) *Manager {
 func Specs() []EngineSpec {
 	return []EngineSpec{
 		{
-			ID: "nfqws2", Name: "NFQWS2", Description: "Локальный DPI bypass через NFQUEUE / zapret2",
+			ID: "nfqws2", Name: "NFQWS2", Description: "Локальный обход DPI через NFQUEUE / zapret2",
 			Files: []FileSpec{
 				{ID: "main", Name: "Основной конфиг", Kind: "config", Syntax: "shell", Paths: []string{"/opt/etc/nfqws2/nfqws2.conf"}, Description: "NFQWS_ARGS, интерфейс, порты, политика и режимы"},
 				{ID: "user-list", Name: "user.list", Kind: "domains", Syntax: "list", Paths: []string{"/opt/etc/nfqws2/lists/user.list"}, Description: "Пользовательский список доменов"},
@@ -133,7 +133,7 @@ func Specs() []EngineSpec {
 			Files: []FileSpec{{ID: "main", Name: "config.json", Kind: "secret-config", Syntax: "json", Paths: []string{"/opt/etc/xray/config.json", "/opt/etc/xray.json"}, Sensitive: true, Description: "Основной JSON-конфиг Xray; может содержать UUID, пароли и ключи"}},
 		},
 		{
-			ID: "amneziawg", Name: "AmneziaWG", Description: "DPI-resistant WireGuard-compatible tunnel",
+			ID: "amneziawg", Name: "AmneziaWG", Description: "Устойчивый к DPI туннель на основе WireGuard",
 			Files: []FileSpec{{ID: "main", Name: "AmneziaWG", Kind: "secret-config", Syntax: "ini", Paths: []string{"/opt/etc/amnezia/amneziawg.conf", "/opt/etc/wireguard/awg.conf"}, Sensitive: true, Description: "Содержит ключи; чтение из UI скрыто до появления авторизации"}},
 		},
 	}

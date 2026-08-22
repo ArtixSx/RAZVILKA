@@ -1,4 +1,22 @@
-/* v0.12.1 — clearer bypass setup and a consistent branded shell. */
+/* v0.12.2 — resilient loading, clearer language and keyboard-friendly controls. */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #62d992;
+  outline-offset: 3px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
 .brand-glyph{overflow:hidden;background:linear-gradient(145deg,#12271c,#0d1713);border-color:#35684a}
 .brand-glyph img{width:100%;height:100%;display:block;object-fit:contain;padding:3px}
 .auth-brand .brand-glyph img,.onboarding-aside .brand-glyph img{padding:2px}

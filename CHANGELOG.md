@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.12.2 — resilient and clearer Web UI
+
+- The dashboard now keeps available sections working when one optional API request fails, and reports the unavailable part without blanking the whole page.
+- User-facing statuses and safety controls use clear Russian wording; technical details remain available on demand.
+- Unsaved WARP policy and bypass configuration edits now trigger a browser leave warning.
+- Route selectors and icon-only controls have accessible names, keyboard focus is visible, and the active mobile navigation item follows the selected page.
+
 ## v0.12.1 — honest WARP Apply and clearer bypass settings
 
 - Fixed the WARP policy/profile flow: an engine draft can no longer look applied when no enabled service uses that bypass.

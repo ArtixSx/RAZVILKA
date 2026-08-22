@@ -45,20 +45,21 @@ const state = {
   stream: null,
   onboardingStep: 0,
   onboardingAutoEvaluated: false,
+  loadIssues: [],
 };
 
 const viewMeta = {
-  overview: ['Обзор', 'Состояние маршрутизации и системы'],
-  services: ['Сервисы', 'Выбор маршрута отдельно для каждого сервиса'],
-  connections: ['Соединения', 'Фактический путь живого трафика'],
-  engines: ['Обходы', 'Установка, удаление и обновление компонентов'],
-  engineconfig: ['Настройка обходов', 'Конфиги, файлы, импорт, проверка и безопасное применение'],
-  devices: ['Устройства', 'Клиенты сети и персональные политики'],
-  sources: ['Источники', 'Каталоги доменов, CIDR и service manifests'],
-  testlab: ['Тест обходов', 'Фактическая доступность сервисов и матрица обходов'],
-  strategylab: ['Strategy Lab', 'Экспертный подбор и проверка стратегий NFQWS2'],
-  diagnostics: ['Диагностика', 'Preflight, dry-run и compatibility gates'],
-  settings: ['Настройки', 'Safe Apply, export и состояние конфигурации'],
+  overview: ['Обзор', 'Главное состояние сервисов, обходов и роутера'],
+  services: ['Сервисы', 'Включите нужный сервис — режим AUTO подберёт доступный обход'],
+  connections: ['Соединения', 'Подтверждённый путь реального сетевого трафика'],
+  engines: ['Обходы', 'Установите только нужные обходы — маршруты от этого не изменятся'],
+  engineconfig: ['Настройка обходов', 'Сохраните черновик, проверьте его и примените вместе с выбранным сервисом'],
+  devices: ['Устройства', 'Назначьте сервисы конкретным клиентам или группам'],
+  sources: ['Источники', 'Списки доменов и адресов для автоматического распознавания сервисов'],
+  testlab: ['Тест обходов', 'Сравните доступность сервиса через установленные обходы'],
+  strategylab: ['Подбор NFQWS2', 'Расширенная проверка стратегий для опытных пользователей'],
+  diagnostics: ['Диагностика', 'Проверка роутера и причин, мешающих применению'],
+  settings: ['Настройки', 'Режим применения, резервные копии и учётная запись'],
 };
 
 const fallbackLabels = {
@@ -90,12 +91,29 @@ async function api(url, options = {}) {
 	const text = (await response.text()).trim();
 	let payload = null;
 	try { payload = text ? JSON.parse(text) : null; } catch (_) { /* plain-text API error */ }
-	const error = new Error(payload?.error || text || `HTTP ${response.status}`);
-	error.payload = payload;
+	const rawError = payload?.error || text || `HTTP ${response.status}`;
+	const error = new Error(friendlyErrorMessage(rawError, response.status));
+	error.technicalMessage = rawError;
+	error.payload = payload || { error: rawError };
 	error.status = response.status;
 	throw error;
   }
   return response.json();
+}
+
+function friendlyErrorMessage(value, status = 0) {
+  const text = String(value || '').trim();
+  const lower = text.toLowerCase();
+  if (lower.includes('administrator login is required')) return 'Сессия завершилась. Войдите снова.';
+  if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) return 'Не удалось связаться с RAZVILKA. Проверьте, что служба запущена, и повторите попытку.';
+  if (lower === 'engine is not installed') return 'Этот обход не установлен.';
+  if (lower === 'engine is installed but not running') return 'Обход установлен, но сейчас не запущен.';
+  if (/[Ѐ-ӿ]/.test(text)) return text;
+  if (status === 401) return 'Нужно снова войти в RAZVILKA.';
+  if (status === 403) return 'Недостаточно прав для этого действия.';
+  if (status === 404) return 'Нужный объект не найден. Обновите страницу и повторите.';
+  if (status === 409) return 'Действие пока невозможно из-за текущего состояния. Откройте технические детали.';
+  return 'Операция не выполнена. Откройте технические детали и повторите попытку.';
 }
 
 function captureSetupKey() {
@@ -203,6 +221,8 @@ function routeAvailable(id) {
 function setView(name) {
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
   $$('.nav[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
+  const activeNav = $(`.nav[data-view="${CSS.escape(name)}"]`);
+  if (activeNav && window.matchMedia('(max-width: 760px)').matches) activeNav.scrollIntoView({ block: 'nearest', inline: 'center' });
   const meta = viewMeta[name] || [name, ''];
   $('#pageTitle').textContent = meta[0];
   $('#pageSubtitle').textContent = meta[1];
@@ -339,14 +359,14 @@ function renderOnboarding() {
   let content = '';
   if (step === 0) {
     const capacity = state.metrics.capacity || {};
-    content = `<span class="eyebrow">ШАГ 1 ИЗ 4</span><h2>Сначала — безопасная база</h2><p class="onboarding-lead">UI уже работает, но обходы не устанавливаются скрытно. Проверим, что роутер готов, и сохраним рабочий интернет без изменений.</p><div class="onboarding-checks"><div><i>✓</i><span><b>RAZVILKA запущена</b><small>${esc(state.status.listen || ':8787')} · ${esc(state.system.architecture || state.system.arch || 'архитектура определяется')}</small></span></div><div><i>✓</i><span><b>Safe Mode включён</b><small>firewall, DNS, TUN и маршруты не меняются без подтверждения</small></span></div><div><i>${capacity.level && capacity.level !== 'critical' ? '✓' : '·'}</i><span><b>Ресурсы роутера</b><small>${esc((capacity.reasons || []).join(' · ') || 'замеры появятся после нескольких секунд работы')}</small></span></div></div><div class="onboarding-note">Если интернет сейчас работает, мастер не должен его прервать: установка компонента и применение маршрута — разные подтверждаемые операции.</div>`;
+    content = `<span class="eyebrow">ШАГ 1 ИЗ 4</span><h2>Сначала — безопасная база</h2><p class="onboarding-lead">Панель уже работает, но обходы не устанавливаются скрытно. Проверим, что роутер готов, и сохраним рабочий интернет без изменений.</p><div class="onboarding-checks"><div><i>✓</i><span><b>RAZVILKA запущена</b><small>${esc(state.status.listen || ':8787')} · ${esc(state.system.architecture || state.system.arch || 'архитектура определяется')}</small></span></div><div><i>✓</i><span><b>Безопасный режим включён</b><small>правила сети, DNS, туннели и маршруты не меняются без подтверждения</small></span></div><div><i>${capacity.level && capacity.level !== 'critical' ? '✓' : '·'}</i><span><b>Ресурсы роутера</b><small>${esc((capacity.reasons || []).join(' · ') || 'замеры появятся после нескольких секунд работы')}</small></span></div></div><div class="onboarding-note">Если интернет сейчас работает, мастер не должен его прервать: установка обхода и применение маршрута — разные подтверждаемые операции.</div>`;
   } else if (step === 1) {
     const unavailable = components.some((component) => !component.installed && !component.available);
     content = `<span class="eyebrow">ШАГ 2 ИЗ 4</span><h2>Выберите первый обход</h2><p class="onboarding-lead">Начните с одного. Остальные можно установить позже во вкладке «Обходы», когда увидите нагрузку и результаты тестов.</p>${unavailable ? '<div class="onboarding-repository"><span><b>Список пакетов ещё не проверен</b><small>RAZVILKA добавит только известные feed NFQWS2/Usque и выполнит opkg update. Обходы при этом не устанавливаются.</small></span><button class="secondary" data-onboarding-refresh>Проверить доступность</button></div>' : ''}<div class="onboarding-components">${components.map((component) => { const installedText = component.installed ? `Установлен ${component.installed_version || ''}` : (component.available ? `Доступен ${component.available_version || ''}` : 'Сначала проверьте список пакетов'); const action = component.installed ? '<span class="engine-state installed">ГОТОВ</span>' : `<button class="secondary" data-onboarding-component="${esc(component.id)}" ${component.available ? '' : 'disabled'}>Установить</button>`; return `<article class="${component.id === 'nfqws2' ? 'recommended' : ''}">${component.id === 'nfqws2' ? '<em>РЕКОМЕНДУЕМ НАЧАТЬ</em>' : ''}<b>${esc(component.name)}</b><p>${esc(component.description || '')}</p><small>${esc(installedText)}</small>${action}</article>`; }).join('')}</div><div class="onboarding-note">WARP Generator ставится как зависимость только при выборе WARP WireGuard. WARP MASQUE и NFQWS2 можно устанавливать независимо.</div>`;
   } else if (step === 2) {
-    content = `<span class="eyebrow">ШАГ 3 ИЗ 4</span><h2>Отметьте нужные сервисы</h2><p class="onboarding-lead">Сейчас создаётся только draft с маршрутом AUTO. RAZVILKA ещё ничего не применяет в систему.</p><div class="onboarding-services">${services.map((service) => `<button class="${service.enabled ? 'selected' : ''}" data-onboarding-service="${esc(service.id)}"><span>${esc(service.icon || '◇')}</span><b>${esc(service.name)}</b><i>${service.enabled ? '✓' : '+'}</i></button>`).join('')}</div><div class="onboarding-selection"><b>${enabled.length}</b><span>сервисов выбрано</span></div>`;
+    content = `<span class="eyebrow">ШАГ 3 ИЗ 4</span><h2>Отметьте нужные сервисы</h2><p class="onboarding-lead">Сейчас создаётся только черновик с автоматическим выбором обхода. RAZVILKA ещё ничего не применяет в систему.</p><div class="onboarding-services">${services.map((service) => `<button class="${service.enabled ? 'selected' : ''}" data-onboarding-service="${esc(service.id)}"><span>${esc(service.icon || '◇')}</span><b>${esc(service.name)}</b><i>${service.enabled ? '✓' : '+'}</i></button>`).join('')}</div><div class="onboarding-selection"><b>${enabled.length}</b><span>сервисов выбрано</span></div>`;
   } else {
-    content = `<span class="eyebrow">ШАГ 4 ИЗ 4</span><h2>Проверьте план перед запуском</h2><p class="onboarding-lead">Выбор сохранён в draft. Сначала RAZVILKA покажет блокеры, создаваемые правила и rollback; Active Apply включается отдельно.</p><div class="onboarding-summary"><div><span>Установленные обходы</span><b>${installed.length ? installed.map((item) => item.name).join(', ') : 'пока нет'}</b></div><div><span>Выбранные сервисы</span><b>${enabled.length ? enabled.map((item) => item.name).slice(0, 6).join(', ') + (enabled.length > 6 ? ` +${enabled.length - 6}` : '') : 'пока нет'}</b></div><div><span>Текущее состояние</span><b>${state.status.safe_mode ? 'Safe Mode — live не изменён' : 'Active Apply разрешён'}</b></div></div><div class="onboarding-note success">Мастер не обещает доступ без теста: после установки обхода откройте план, затем выполните проверку маршрутов.</div>`;
+    content = `<span class="eyebrow">ШАГ 4 ИЗ 4</span><h2>Проверьте план перед запуском</h2><p class="onboarding-lead">Выбор сохранён в черновике. Сначала RAZVILKA покажет препятствия и создаваемые правила, затем сделает резервную копию. Рабочее применение включается отдельно.</p><div class="onboarding-summary"><div><span>Установленные обходы</span><b>${installed.length ? installed.map((item) => item.name).join(', ') : 'пока нет'}</b></div><div><span>Выбранные сервисы</span><b>${enabled.length ? enabled.map((item) => item.name).slice(0, 6).join(', ') + (enabled.length > 6 ? ` +${enabled.length - 6}` : '') : 'пока нет'}</b></div><div><span>Текущее состояние</span><b>${state.status.safe_mode ? 'Безопасный режим — рабочая сеть не изменена' : 'Рабочее применение разрешено'}</b></div></div><div class="onboarding-note success">Мастер не обещает доступ без теста: после установки обхода откройте план, затем выполните проверку маршрутов.</div>`;
   }
   $('#onboardingContent').innerHTML = content;
   $('#onboardingBack').disabled = step === 0;
@@ -441,28 +461,42 @@ async function refreshAll() {
       return false;
     }
     hideAuth();
-    const [system, metrics, services, engines, engineConfigs, components, warp, sources, routeOptions, connections, devices, testlab, engineLab, strategyLab, z2kPreview, smartRoute, authSessions] = await Promise.all([
-      api('/api/v1/system'),
-      api('/api/v1/metrics?limit=120'),
-      api('/api/v1/services'),
-      api('/api/v1/engines'),
-      api('/api/v1/engine-configs'),
-      api('/api/v1/components'),
-      api('/api/v1/warp'),
-      api('/api/v1/sources'),
-      api('/api/v1/routes/options'),
-      api('/api/v1/connections?include_closed=true'),
-      api('/api/v1/devices'),
-      api('/api/v1/testlab'),
-      api('/api/v1/engine-lab'),
-      api('/api/v1/strategy-lab'),
-      api('/api/v1/migrations/z2k/preview'),
-      api('/api/v1/smart-route'),
-      api('/api/v1/auth/sessions'),
-    ]);
-    Object.assign(state, { status, system, metrics, services, engines, engineConfigs, components, warp, sources, routeOptions, connections, devices, testlab, engineLab, strategyLab, z2kPreview, smartRoute, sessions: authSessions.sessions || [] });
+    const requests = [
+      ['system', '/api/v1/system'],
+      ['metrics', '/api/v1/metrics?limit=120'],
+      ['services', '/api/v1/services'],
+      ['engines', '/api/v1/engines'],
+      ['engineConfigs', '/api/v1/engine-configs'],
+      ['components', '/api/v1/components'],
+      ['warp', '/api/v1/warp'],
+      ['sources', '/api/v1/sources'],
+      ['routeOptions', '/api/v1/routes/options'],
+      ['connections', '/api/v1/connections?include_closed=true'],
+      ['devices', '/api/v1/devices'],
+      ['testlab', '/api/v1/testlab'],
+      ['engineLab', '/api/v1/engine-lab'],
+      ['strategyLab', '/api/v1/strategy-lab'],
+      ['z2kPreview', '/api/v1/migrations/z2k/preview'],
+      ['smartRoute', '/api/v1/smart-route'],
+      ['sessions', '/api/v1/auth/sessions'],
+    ];
+    const settled = await Promise.allSettled(requests.map(([, url]) => api(url)));
+    const issues = [];
+    settled.forEach((result, index) => {
+      const [key, url] = requests[index];
+      if (result.status === 'fulfilled') {
+        state[key] = key === 'sessions' ? (result.value.sessions || []) : result.value;
+        return;
+      }
+      issues.push({ section: key, url, message: result.reason?.message || 'Раздел временно недоступен', technical: result.reason?.technicalMessage || '' });
+    });
+    state.status = status;
+    state.loadIssues = issues;
     renderAll();
     $('#systemText').textContent = status.safe_mode ? 'Защита включена' : (status.live_active ? 'Маршруты активны' : 'Запись разрешена');
+    if (issues.length) {
+      showNotice('review', 'Часть данных временно недоступна', `${issues.length} ${issues.length === 1 ? 'раздел не загрузился' : 'раздела не загрузились'}. Остальная панель продолжает работать.`, { issues });
+    }
     if (!state.onboardingAutoEvaluated) {
       state.onboardingAutoEvaluated = true;
       setTimeout(() => openOnboarding(false), 0);
@@ -470,9 +504,9 @@ async function refreshAll() {
     return true;
   } catch (error) {
     $('#systemText').textContent = 'Ошибка связи';
-    if (String(error.message).includes('administrator login is required')) {
+    if (error.status === 401 || String(error.technicalMessage || '').includes('administrator login is required')) {
       const status = await api('/api/v1/status'); showAuth(status, 'Сессия завершилась. Войдите снова.');
-    } else showDetails({ error: error.message }, 'Ошибка API');
+    } else showDetails({ error: error.message, technical: error.technicalMessage || '', response: error.payload }, 'Не удалось обновить панель');
     return false;
   }
 }
@@ -596,15 +630,16 @@ function renderStatus() {
   $('#version').textContent = `v${s.version || '—'}`;
   $('#footerVersion').textContent = `v${s.version || '—'}`;
   $('#listenChip').textContent = s.listen || ':8787';
-  $('#topModeLabel').textContent = s.safe_mode ? 'Safe Mode' : 'Active Apply';
+  $('#topModeLabel').textContent = s.safe_mode ? 'Безопасный режим' : 'Рабочий режим';
   $('#systemText').textContent = s.safe_mode ? 'Защита включена' : (s.live_active ? 'Маршруты активны' : 'Запись разрешена');
   $('#topModeControl').classList.toggle('active-apply', !s.safe_mode);
   $('#topToggleSafeMode').setAttribute('aria-checked', String(!!s.safe_mode));
-  $('#topToggleSafeMode').setAttribute('aria-label', s.safe_mode ? 'Разрешить Active Apply' : 'Включить Safe Mode');
-  $('#topToggleSafeMode').title = s.safe_mode ? 'Разрешить Active Apply' : 'Включить Safe Mode';
+  const modeAction = s.safe_mode ? 'Безопасный режим включён. Перейти в рабочий режим' : 'Рабочий режим включён. Вернуться в безопасный режим';
+  $('#topToggleSafeMode').setAttribute('aria-label', modeAction);
+  $('#topToggleSafeMode').title = modeAction;
   $('#topUptime').textContent = formatUptime(s.uptime_seconds);
-  $('#kpiState').textContent = s.live_active ? 'Активна' : (s.safe_mode ? 'Safe Mode' : 'Не применено');
-  $('#kpiStateSub').textContent = s.live_active ? 'маршруты подтверждены' : (s.safe_mode ? 'dataplane не изменяется' : 'нет подтверждённой транзакции');
+  $('#kpiState').textContent = s.live_active ? 'Активна' : (s.safe_mode ? 'Безопасный режим' : 'Не применено');
+  $('#kpiStateSub').textContent = s.live_active ? 'маршруты подтверждены' : (s.safe_mode ? 'рабочие маршруты не изменяются' : 'нет подтверждённого применения');
   $('#kpiEngines').textContent = `${s.engines_running || 0} / ${s.engines_installed || 0}`;
   $('#kpiServices').textContent = `${s.enabled_services || 0} / ${s.catalog_services || 0}`;
   $('#kpiConnections').textContent = s.active_connections || 0;
@@ -617,9 +652,9 @@ function renderStatus() {
     : (s.safe_mode ? 'Изменения сохранены как черновик' : 'Есть неподтверждённые изменения');
   $('#draftHint').textContent = engineDrafts > 0
     ? 'Черновик применяется только вместе с сервисом, назначенным этому обходу'
-    : (s.safe_mode ? 'Безопасный режим проверит план, но не изменит live-маршруты' : 'Сначала проверяем план, затем применяем атомарно');
+    : (s.safe_mode ? 'Безопасный режим проверит план, но не изменит рабочие маршруты' : 'Сначала проверяем план, затем применяем всё одной операцией');
   $('#applyChanges').textContent = s.safe_mode ? 'Проверить план' : 'Применить';
-  $('#applySettings').textContent = s.safe_mode ? 'Проверить план' : 'Применить draft';
+  $('#applySettings').textContent = s.safe_mode ? 'Проверить план' : 'Применить черновик';
 }
 
 function renderSystem() {
@@ -629,13 +664,13 @@ function renderSystem() {
 
   const values = [
     ['Архитектура', s.architecture || '—', true],
-    ['Kernel', s.kernel || '—', !!s.kernel],
-    ['Hostname', s.hostname || '—', !!s.hostname],
+    ['Ядро системы', s.kernel || '—', !!s.kernel],
+    ['Имя роутера', s.hostname || '—', !!s.hostname],
     ['WAN', s.wan_interface || '—', !!s.wan_interface],
     ['RAM', `${formatMemory(s.mem_available_kb)} свободно / ${formatMemory(s.mem_total_kb)}`, !!s.mem_total_kb],
     ['/opt', ...yesNo(s.opt_ready)],
     ['opkg', ...yesNo(s.opkg)],
-    ['ip command', ...yesNo(s.ip_command)],
+    ['Управление маршрутами', ...yesNo(s.ip_command)],
     ['/dev/net/tun', ...yesNo(s.tun)],
     ['iptables', ...yesNo(s.iptables)],
     ['ip6tables', ...yesNo(s.ip6tables)],
@@ -691,7 +726,7 @@ function renderMetrics() {
 function renderEngineLab() {
   const report = state.engineLab || {};
   const conflicts = report.conflicts || [];
-  $('#engineLabSummary').innerHTML = `<div class="engine-lab-kpi ${report.ready_for_isolated_probes ? 'pass' : 'warn'}"><strong>${report.ready_for_isolated_probes ? 'READY' : 'ТРЕБУЕТ ВНИМАНИЯ'}</strong><span>изолированные probes</span></div><div class="engine-lab-kpi ${conflicts.length ? 'warn' : 'pass'}"><strong>${conflicts.length}</strong><span>конфликтов ресурсов</span></div><div class="engine-lab-kpi"><strong>${(report.engines || []).filter((engine) => engine.installed).length}</strong><span>обходов установлено</span></div><div class="engine-lab-kpi"><strong>${report.generated_at ? timeAgo(report.generated_at) : '—'}</strong><span>последняя проверка</span></div>`;
+  $('#engineLabSummary').innerHTML = `<div class="engine-lab-kpi ${report.ready_for_isolated_probes ? 'pass' : 'warn'}"><strong>${report.ready_for_isolated_probes ? 'ГОТОВО' : 'ТРЕБУЕТ ВНИМАНИЯ'}</strong><span>изолированные проверки</span></div><div class="engine-lab-kpi ${conflicts.length ? 'warn' : 'pass'}"><strong>${conflicts.length}</strong><span>конфликтов ресурсов</span></div><div class="engine-lab-kpi"><strong>${(report.engines || []).filter((engine) => engine.installed).length}</strong><span>обходов установлено</span></div><div class="engine-lab-kpi"><strong>${report.generated_at ? timeAgo(report.generated_at) : '—'}</strong><span>последняя проверка</span></div>`;
   $('#engineLabRows').innerHTML = (report.engines || []).map((engine) => {
     const checks = (engine.checks || []).map((check) => `<span class="lab-check ${esc(check.status)}" title="${esc(check.detail)}"><i></i>${esc(check.id)}</span>`).join('');
     const resources = (engine.resources || []).map((resource) => `${resource.kind}:${resource.value}`).join(' · ') || 'ресурсы не объявлены';
@@ -710,11 +745,11 @@ function renderStrategyLab() {
   const migration = state.z2kPreview || {};
 	const target = $('#strategyTarget').value;
 	const probeServices = (state.services || []).filter((service) => service.probe_url);
-	$('#strategyTarget').innerHTML = probeServices.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('') || '<option value="">Нет сервисов с Probe URL</option>';
+  $('#strategyTarget').innerHTML = probeServices.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('') || '<option value="">Нет сервисов с адресом проверки</option>';
 	if (probeServices.some((service) => service.id === target)) $('#strategyTarget').value = target;
   $('#z2kMigration').innerHTML = migration.found
-    ? `<div><span class="external-owner-tag">ТОЛЬКО ИМПОРТ</span><b>Найдена внешняя конфигурация NFQWS2 ${esc(migration.version || '')}</b><small>${migration.files?.length || 0} файлов · ${migration.strategies?.length || 0} стратегий · ${(migration.extra_domains?.length || 0) + (migration.auto_domains?.length || 0)} доменов. Сам z2k не устанавливается и не становится обходом RAZVILKA.</small></div><div class="z2k-migration-actions"><button class="secondary" id="showZ2KPreview" type="button">Показать источник</button><button class="primary" id="importZ2KStrategies" type="button">Импортировать в NFQWS2 draft</button></div>`
-    : '<div><b>Внешняя конфигурация NFQWS2 не обнаружена</b><small>Strategy Lab работает с обычным NFQWS2. Отдельный сервис z2k не требуется и не устанавливается.</small></div>';
+    ? `<div><span class="external-owner-tag">ТОЛЬКО ИМПОРТ</span><b>Найдена внешняя конфигурация NFQWS2 ${esc(migration.version || '')}</b><small>${migration.files?.length || 0} файлов · ${migration.strategies?.length || 0} стратегий · ${(migration.extra_domains?.length || 0) + (migration.auto_domains?.length || 0)} доменов. Сам z2k не устанавливается и не становится обходом RAZVILKA.</small></div><div class="z2k-migration-actions"><button class="secondary" id="showZ2KPreview" type="button">Показать источник</button><button class="primary" id="importZ2KStrategies" type="button">Импортировать в черновик NFQWS2</button></div>`
+    : '<div><b>Внешняя конфигурация NFQWS2 не обнаружена</b><small>Подбор стратегий работает с обычным NFQWS2. Отдельный сервис z2k не требуется и не устанавливается.</small></div>';
   $('#showZ2KPreview')?.addEventListener('click', () => showDetails(migration, 'Внешний источник NFQWS2 · только чтение'));
   $('#importZ2KStrategies')?.addEventListener('click', importZ2KStrategies);
   const currentPool = $('#strategyPool').value;
@@ -729,28 +764,28 @@ function renderStrategyLab() {
     const validation = candidate.validation || {};
 		const pool = pools.find((item) => item.id === candidate.pool_id);
     const cls = validation.ok && validation.native ? 'pass' : validation.native ? 'fail' : 'warn';
-    const label = validation.ok && validation.native ? 'NATIVE PASS' : validation.native ? 'ОТКЛОНЕНО' : 'НУЖЕН DRY-RUN';
+    const label = validation.ok && validation.native ? 'ПРОВЕРЕНО' : validation.native ? 'ОТКЛОНЕНО' : 'НУЖНА ПРОВЕРКА';
 		const probe = validation.ok && validation.native
 			? ['tcp', 'quic'].includes(pool?.protocol) ? `<button class="primary" data-strategy-probe="${esc(candidate.id)}">${pool?.protocol === 'quic' ? 'Тест HTTP/3' : 'Тест маршрута'}</button>` : '<button class="secondary" disabled title="Для голосового UDP нужен сервисный handshake">UDP сервиса</button>'
 			: '';
-    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'expert')}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${cls}" title="${esc(validation.output || '')}">${label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Dry-run</button>${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
+    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${cls}" title="${esc(validation.output || '')}">${label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Проверить</button>${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
   }).join('') || '<div class="strategy-empty">Добавьте кандидата вручную или позже импортируйте совместимые данные. Ничего не применяется автоматически.</div>';
 	const evidence = lab.evidence || [];
   $('#strategyEvidence').innerHTML = summaries.map((summary) => {
 		const latest = [...evidence].reverse().find((item) => item.candidate_id === summary.candidate_id && item.service_id === summary.service_id && item.protocol === summary.protocol && item.ip_family === summary.ip_family);
-		return `<button class="strategy-summary ${summary.eligible ? 'eligible' : ''}" data-strategy-evidence="${esc(latest ? evidence.indexOf(latest) : '')}"><div><b>${esc(serviceName(summary.service_id))}</b><small>${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</small></div><span>${summary.passes} PASS / ${summary.failures} FAIL</span><em>${Math.round((summary.success_rate || 0) * 100)}%</em><small>${esc(summary.reason)}</small></button>`;
-	}).join('') || '<div class="strategy-empty">Evidence появится после изолированных тестов DNS → TCP → TLS → HTTP и подтверждения счётчика NFQUEUE.</div>';
+		return `<button class="strategy-summary ${summary.eligible ? 'eligible' : ''}" data-strategy-evidence="${esc(latest ? evidence.indexOf(latest) : '')}"><div><b>${esc(serviceName(summary.service_id))}</b><small>${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</small></div><span>${summary.passes} успешно / ${summary.failures} ошибок</span><em>${Math.round((summary.success_rate || 0) * 100)}%</em><small>${esc(summary.reason)}</small></button>`;
+	}).join('') || '<div class="strategy-empty">Результаты появятся после изолированных проверок DNS → TCP → TLS → HTTP и подтверждения счётчика NFQUEUE.</div>';
 }
 
 async function importZ2KStrategies() {
-  if (!await askConfirmation('Импортировать совместимые внешние стратегии?', 'Источник останется только для чтения. В NFQWS2 Strategy Lab попадут кандидаты без native PASS; live NFQUEUE, конфиги и маршруты не изменятся.', 'Импортировать в draft')) return;
+  if (!await askConfirmation('Импортировать совместимые внешние стратегии?', 'Источник останется только для чтения. В подбор NFQWS2 попадут непроверенные кандидаты; рабочие NFQUEUE, конфиги и маршруты не изменятся.', 'Импортировать в черновик')) return;
   const button = $('#importZ2KStrategies');
   button.disabled = true; button.textContent = 'Импорт…';
   try {
     const result = await api('/api/v1/migrations/z2k/import-strategies', { method: 'POST', body: JSON.stringify({ confirm: 'IMPORT_Z2K_STRATEGIES' }) });
     state.strategyLab = await api('/api/v1/strategy-lab');
     renderStrategyLab();
-    showDetails(result, 'Внешние стратегии импортированы в NFQWS2 draft');
+    showDetails(result, 'Внешние стратегии импортированы в черновик NFQWS2');
   } catch (error) {
     showDetails({ error: error.message, response: error.payload }, 'Импорт внешних стратегий не выполнен');
   }
@@ -781,8 +816,8 @@ async function validateStrategyCandidate(id) {
 
 async function probeStrategyCandidate(id) {
 	const serviceID = $('#strategyTarget').value;
-	if (!serviceID) return showDetails({ error: 'В каталоге нет сервиса с Probe URL' }, 'Тест не запущен');
-	if (!await askConfirmation('Запустить изолированный NFQWS2-тест?', `RAZVILKA временно направит только одно соединение к ${serviceName(serviceID)} в отдельную NFQUEUE. Default route и live-конфиг не меняются; правило удаляется даже при таймауте.`, 'Запустить тест')) return;
+	if (!serviceID) return showDetails({ error: 'В каталоге нет сервиса с адресом проверки' }, 'Тест не запущен');
+	if (!await askConfirmation('Запустить изолированный тест NFQWS2?', `RAZVILKA временно направит только одно соединение к ${serviceName(serviceID)} в отдельную NFQUEUE. Основной маршрут и рабочий конфиг не меняются; временное правило удалится даже при тайм-ауте.`, 'Запустить тест')) return;
 	try {
 		const evidence = await api(`/api/v1/strategy-lab/candidates/${encodeURIComponent(id)}/probe`, { method: 'POST', body: JSON.stringify({ service_id: serviceID, ip_family: $('#strategyFamily').value }) });
 		state.strategyLab = await api('/api/v1/strategy-lab');
@@ -795,7 +830,7 @@ async function probeStrategyCandidate(id) {
 
 async function deleteStrategyCandidate(id) {
 	const candidate = (state.strategyLab?.candidates || []).find((item) => item.id === id);
-	if (!await askConfirmation('Удалить кандидата?', `Будут удалены только draft «${candidate?.name || id}», его результаты тестов и выборы. Рабочий конфиг NFQWS2 не изменится.`, 'Удалить')) return;
+	if (!await askConfirmation('Удалить кандидата?', `Будут удалены только черновик «${candidate?.name || id}», его результаты тестов и выборы. Рабочий конфиг NFQWS2 не изменится.`, 'Удалить')) return;
 	try {
 		await api(`/api/v1/strategy-lab/candidates/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({}) });
 		state.strategyLab = await api('/api/v1/strategy-lab');
@@ -823,7 +858,7 @@ function routeSelectHTML(service) {
   if (service.route && !options.some((o) => o.id === service.route)) {
     options.push({ id: service.route, name: service.route, installed: true, selectable: true, kind: 'custom' });
   }
-  return `<select class="route-select" data-route-id="${esc(service.id)}">${options.map((o) => {
+  return `<select class="route-select" data-route-id="${esc(service.id)}" aria-label="Маршрут для ${esc(service.name)}">${options.map((o) => {
     const selected = o.id === service.route ? 'selected' : '';
     const disabled = (!o.selectable && o.id !== service.route) ? 'disabled' : '';
     const suffix = !o.selectable && o.id !== 'auto' && o.id !== 'direct' ? ' · не установлен' : '';
@@ -863,9 +898,9 @@ function renderServices() {
       <div class="service-control-grid">
         <div><span class="control-label">Желаемый маршрут</span>${routeSelectHTML(s)}</div>
         <div><span class="control-label">AUTO / фактический план</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
-        <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства">◎</button><button class="mini-button" data-detail-id="${esc(s.id)}" title="Технические детали">i</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Dry-run маршрута">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить">×</button>` : ''}</div>
+        <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button" data-detail-id="${esc(s.id)}" title="Технические детали" aria-label="Технические детали ${esc(s.name)}">i</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
       </div>
-      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${Number((s.domains || []).length).toLocaleString('ru-RU')} доменов · ${s.sources?.length ? `${s.sources.length} scope` : 'весь LAN'}</span><span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></div>
+      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${Number((s.domains || []).length).toLocaleString('ru-RU')} доменов · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'}</span><span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></div>
     </article>`;
   }).join('') || '<div class="empty-inline">Ничего не найдено</div>';
 
@@ -881,13 +916,13 @@ function renderServices() {
 function renderOverviewServices() {
   const chosen = [...state.services].sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name, 'ru')).slice(0, 7);
   $('#overviewServices').innerHTML = chosen.map((s) => {
-    const desired = s.enabled ? routeLabel(s.route) : 'OFF';
+    const desired = s.enabled ? routeLabel(s.route) : 'ВЫКЛ';
     const planned = s.enabled ? routeLabel(s.planned_engine) : '—';
-    const applied = s.applied_enabled ? routeLabel(s.applied_route) : 'OFF';
+    const applied = s.applied_enabled ? routeLabel(s.applied_route) : 'ВЫКЛ';
     const desiredClass = s.route === 'auto' ? 'auto' : (routeAvailable(s.route) ? 'good' : 'warn');
     const appliedClass = s.applied_enabled ? 'good' : '';
     return `<div class="overview-service">
-      <div class="service-name"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${s.dirty ? ' · draft' : ''}</small></div></div>
+      <div class="service-name"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${s.dirty ? ' · черновик' : ''}</small></div></div>
       <span class="route-pill ${desiredClass}">${esc(desired)}${s.route === 'auto' && s.enabled ? ` → ${esc(planned)}` : ''}</span>
       <span class="overview-arrow">→</span>
       <span class="route-pill ${appliedClass} applied-route">${esc(applied)}</span>
@@ -909,22 +944,22 @@ function renderReadiness() {
   const operationalSources = state.sources.filter((s) => s.kind !== 'reference' && s.enabled);
   const sourceReady = operationalSources.filter((s) => s.ready).length;
   const rows = [
-    ['Entware /opt', sys.opt_ready && sys.opkg, sys.opt_ready && sys.opkg ? 'готов' : 'нужно проверить'],
-    ['WAN interface', !!sys.wan_interface, sys.wan_interface || 'не определён'],
-    ['Netfilter / NFQUEUE', !!sys.nfqueue, sys.nfqueue ? 'обнаружен' : 'нужен для nfqws2'],
-    ['TUN', !!sys.tun, sys.tun ? 'доступен' : 'может понадобиться proxy/VPN'],
-    ['Route contamination', !sys.route_contamination, sys.route_contamination ? `внешние маршруты: ${(sys.external_tunnels || []).join(', ') || 'обнаружены'}` : 'не обнаружено'],
+    ['Entware', sys.opt_ready && sys.opkg, sys.opt_ready && sys.opkg ? 'готов' : 'нужно проверить /opt и opkg'],
+    ['Интернет-интерфейс', !!sys.wan_interface, sys.wan_interface || 'не определён'],
+    ['NFQUEUE', !!sys.nfqueue, sys.nfqueue ? 'готов для NFQWS2' : 'нужен для NFQWS2'],
+    ['Туннельный интерфейс', !!sys.tun, sys.tun ? 'доступен' : 'может понадобиться туннельным обходам'],
+    ['Внешние туннели', !sys.route_contamination, sys.route_contamination ? `обнаружены: ${(sys.external_tunnels || []).join(', ') || 'неизвестный туннель'}` : 'не обнаружены'],
     ['Обходы', installed > 0, installed ? `${installed} установлено` : 'пока чистая среда'],
     ['Источники', operationalSources.length > 0 && sourceReady === operationalSources.length, `${sourceReady} / ${operationalSources.length} включённых списков готовы`],
-    ['Pending config', !state.status.pending_changes, state.status.pending_changes ? 'есть draft' : 'чисто'],
+    ['Несохранённые изменения', !state.status.pending_changes, state.status.pending_changes ? 'есть черновик' : 'нет'],
   ];
-  $('#readinessMini').innerHTML = rows.map(([name, ok, detail]) => `<div class="readiness-row"><div><b>${esc(name)}</b><small>${esc(detail)}</small></div><span class="ready-state ${ok ? '' : 'warn'}">${ok ? 'OK' : 'CHECK'}</span></div>`).join('');
+  $('#readinessMini').innerHTML = rows.map(([name, ok, detail]) => `<div class="readiness-row"><div><b>${esc(name)}</b><small>${esc(detail)}</small></div><span class="ready-state ${ok ? '' : 'warn'}">${ok ? 'ГОТОВО' : 'ПРОВЕРИТЬ'}</span></div>`).join('');
 }
 
 function renderEngines() {
   const cards = state.engines.map((e) => {
     const cls = e.running ? 'running' : e.installed ? 'installed' : '';
-    const text = e.running ? 'RUNNING' : e.installed ? 'INSTALLED' : 'NOT FOUND';
+    const text = e.running ? 'РАБОТАЕТ' : e.installed ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН';
     const kind = e.kind === 'local' ? 'Локальный' : e.kind === 'tunnel' ? 'Туннель' : (e.kind || 'Обход');
     return `<button class="concept-engine-row" data-engine-open="${esc(e.id)}"><div><b>${esc(e.name)}</b><small>${esc(kind)}</small></div><span class="engine-state ${cls}">${text}</span><span class="engine-config-link">Настроить →</span></button>`;
   }).join('');
@@ -949,10 +984,10 @@ function selectedEngineFile() {
 }
 
 function engineStatusText(engine) {
-  if (!engine) return ['UNKNOWN', ''];
-  if (engine.running) return ['RUNNING', 'running'];
-  if (engine.installed) return ['INSTALLED', 'installed'];
-  return ['NOT FOUND', ''];
+  if (!engine) return ['НЕИЗВЕСТНО', ''];
+  if (engine.running) return ['РАБОТАЕТ', 'running'];
+  if (engine.installed) return ['УСТАНОВЛЕН', 'installed'];
+  return ['НЕ УСТАНОВЛЕН', ''];
 }
 
 function renderEngineControl() {
@@ -967,14 +1002,14 @@ function renderEngineControl() {
   const file = selectedEngineFile();
   renderWarpManager();
 
-  $('#engineSafeBadge').textContent = state.status.safe_mode ? 'SAFE MODE · LIVE WRITE OFF' : 'ACTIVE APPLY';
+  $('#engineSafeBadge').textContent = state.status.safe_mode ? 'БЕЗОПАСНЫЙ РЕЖИМ · ЗАПИСЬ ВЫКЛЮЧЕНА' : 'РАБОЧИЙ РЕЖИМ';
   $('#engineSafeBadge').classList.toggle('active-apply', !state.status.safe_mode);
   $('#engineControlList').innerHTML = state.engineConfigs.map((e) => {
     const [text, cls] = engineStatusText(e);
     const drafts = (e.files || []).filter((f) => f.staged).length;
     return `<button class="engine-control-item ${e.id === state.selectedEngine ? 'active' : ''}" data-engine-id="${esc(e.id)}">
       <div><b>${esc(e.name)}</b><small>${esc(e.description || '')}</small></div>
-      <div class="engine-control-meta"><span class="engine-state ${cls}">${text}</span>${drafts ? `<span class="draft-count">${drafts} draft</span>` : ''}</div>
+      <div class="engine-control-meta"><span class="engine-state ${cls}">${text}</span>${drafts ? `<span class="draft-count">${drafts} черн.</span>` : ''}</div>
     </button>`;
   }).join('');
   $$('[data-engine-id]').forEach((b) => b.addEventListener('click', () => selectEngine(b.dataset.engineId)));
@@ -982,12 +1017,12 @@ function renderEngineControl() {
   const [statusText, statusClass] = engineStatusText(engine);
   $('#engineSelectedHead').innerHTML = `<div><h3>${esc(engine.name)}</h3><p>${esc(engine.description || '')}</p></div><div class="engine-selected-meta"><span class="engine-state ${statusClass}">${statusText}</span><span>${(engine.files || []).length} файлов</span></div>`;
 
-  $('#engineFileSelect').innerHTML = (engine.files || []).map((f) => `<option value="${esc(f.id)}" ${f.id === state.selectedEngineFile ? 'selected' : ''}>${esc(f.name)}${f.staged ? ' · draft' : ''}${f.sensitive ? ' · secret' : ''}</option>`).join('');
-  $('#engineFilesTable').innerHTML = (engine.files || []).map((f) => `<div class="engine-file-row ${f.id === state.selectedEngineFile ? 'active' : ''}" data-engine-file-row="${esc(f.id)}"><div><b>${esc(f.name)}</b><small>${esc(f.description || '')}</small></div><div class="engine-file-meta"><span>${esc(f.syntax)}</span><span>${f.exists ? formatBytes(f.size) : 'нет live-файла'}</span>${f.staged ? '<span class="draft-count">DRAFT</span>' : ''}${f.sensitive ? '<span class="secret-tag">SECRET</span>' : ''}</div><code>${esc(f.path || '—')}</code></div>`).join('');
+  $('#engineFileSelect').innerHTML = (engine.files || []).map((f) => `<option value="${esc(f.id)}" ${f.id === state.selectedEngineFile ? 'selected' : ''}>${esc(f.name)}${f.staged ? ' · черновик' : ''}${f.sensitive ? ' · секретный' : ''}</option>`).join('');
+  $('#engineFilesTable').innerHTML = (engine.files || []).map((f) => `<div class="engine-file-row ${f.id === state.selectedEngineFile ? 'active' : ''}" data-engine-file-row="${esc(f.id)}"><div><b>${esc(f.name)}</b><small>${esc(f.description || '')}</small></div><div class="engine-file-meta"><span>${esc(f.syntax)}</span><span>${f.exists ? formatBytes(f.size) : 'нет рабочего файла'}</span>${f.staged ? '<span class="draft-count">ЧЕРНОВИК</span>' : ''}${f.sensitive ? '<span class="secret-tag">СЕКРЕТНЫЙ</span>' : ''}</div><code>${esc(f.path || '—')}</code></div>`).join('');
   $$('[data-engine-file-row]').forEach((row) => row.addEventListener('click', () => selectEngineFile(row.dataset.engineFileRow)));
 
   $('#engineCheckRunning').textContent = engine.running ? 'да' : engine.installed ? 'установлен, но остановлен' : 'нет';
-  $('#engineCheckApply').textContent = state.status.safe_mode ? 'запрещён Safe Mode' : 'разрешён после validate';
+  $('#engineCheckApply').textContent = state.status.safe_mode ? 'запрещён безопасным режимом' : 'разрешён после проверки';
 
   const loadedSame = state.engineLoaded && state.engineLoaded.engine_id === engine.id && state.engineLoaded.file_id === file?.id;
   const guidedSame = state.engineGuided && state.engineGuided.engine_id === engine.id && state.engineGuided.file_id === file?.id;
@@ -1012,25 +1047,25 @@ function renderEngineControl() {
     return;
   }
 
-  const fileState = [file.exists ? 'LIVE' : 'NO LIVE', file.staged ? 'DRAFT' : '', file.sensitive ? 'SECRET' : '', file.modified_at ? `изменён ${timeAgo(file.modified_at)} назад` : ''].filter(Boolean).join(' · ');
+  const fileState = [file.exists ? 'РАБОЧИЙ' : 'РАБОЧЕГО ФАЙЛА НЕТ', file.staged ? 'ЧЕРНОВИК' : '', file.sensitive ? 'СЕКРЕТНЫЙ' : '', file.modified_at ? `изменён ${timeAgo(file.modified_at)} назад` : ''].filter(Boolean).join(' · ');
   $('#engineFileState').textContent = fileState;
 
   if (!expert) {
     if (guidedSame) renderGuidedEditor();
     else if (!state.engineGuidedLoading && !state.engineEditorDirty) void loadEngineGuided();
-    $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть изменения в простых полях. Сохраните draft.' : (guidedSame ? `Источник: ${state.engineGuided.source || '—'}` : 'Загрузка простых параметров…');
+    $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть изменения в простых полях. Сохраните черновик.' : (guidedSame ? `Источник: ${state.engineGuided.source || '—'}` : 'Загрузка простых параметров…');
   } else {
     editor.placeholder = file.sensitive ? 'Секретный конфиг: не копируйте ключи в чужие сервисы.' : 'Конфигурация / список';
     if (loadedSame && !state.engineEditorDirty) editor.value = state.engineLoaded.content || '';
-    $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть локальные изменения. Нажмите «Сохранить draft».' : (loadedSame ? `Источник: ${state.engineLoaded.source || '—'}` : 'Загрузка…');
+    $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть локальные изменения. Нажмите «Сохранить черновик».' : (loadedSame ? `Источник: ${state.engineLoaded.source || '—'}` : 'Загрузка…');
     if (!loadedSame && !state.engineEditorDirty) void loadEngineFile();
   }
 
   const v = state.engineValidation;
   if (v && v.engine_id === engine.id && v.file_id === file.id) {
-    $('#engineCheckBasic').textContent = v.ok ? 'PASS' : 'FAIL';
+    $('#engineCheckBasic').textContent = v.ok ? 'ПРОЙДЕНА' : 'ОШИБКА';
     $('#engineCheckBasic').className = v.ok ? 'probe-ok' : 'probe-no';
-    $('#engineCheckNative').textContent = v.native ? 'да' : 'нет / basic';
+    $('#engineCheckNative').textContent = v.native ? 'да' : 'нет / только базовая';
     $('#engineCheckOutput').textContent = v.output || '—';
   } else {
     $('#engineCheckBasic').textContent = 'не запускалась';
@@ -1050,9 +1085,9 @@ function renderWarpManager() {
   $('#warpGeneratorState').textContent = w.generator_installed ? (w.generator_version || 'wgcf установлен') : 'wgcf не установлен';
   $('#warpAccountState').textContent = w.account_registered ? 'зарегистрирован' : 'нет аккаунта';
   $('#warpLiveState').textContent = w.live_profile ? (w.valid ? 'валиден' : 'ошибка профиля') : 'нет';
-  $('#warpCandidateState').textContent = w.candidate_staged ? 'draft готов' : 'нет draft';
+  $('#warpCandidateState').textContent = w.candidate_staged ? 'черновик готов' : 'нет черновика';
   const badge = $('#warpStateBadge');
-  badge.textContent = w.live_profile && w.valid ? 'LIVE ГОТОВ' : w.candidate_staged ? 'DRAFT' : 'НЕ НАСТРОЕН';
+  badge.textContent = w.live_profile && w.valid ? 'РАБОЧИЙ ПРОФИЛЬ ГОТОВ' : w.candidate_staged ? 'ЧЕРНОВИК ГОТОВ' : 'НЕ НАСТРОЕН';
   badge.className = `engine-state ${w.live_profile && w.valid ? 'running' : w.candidate_staged ? 'installed' : ''}`;
   $('#warpNote').textContent = w.validation_error || w.note || '';
   $('#warpGenerate').disabled = !w.generator_installed;
@@ -1075,7 +1110,7 @@ function renderWarpManager() {
   const warpAssigned = state.services.some((service) => service.enabled && (service.resolved_route === 'warp-wg' || service.route === 'warp-wg'));
   $('#warpApplyHint').classList.toggle('ready', warpAssigned);
   $('#warpApplyHint').textContent = warpAssigned
-    ? 'WARP назначен включённому сервису. После проверки общий Apply сможет активировать профиль с backup и rollback.'
+    ? 'WARP назначен включённому сервису. После проверки общее применение сможет активировать профиль с резервной копией и автоматическим возвратом при ошибке.'
     : 'Профиль-кандидат не меняет интернет сам по себе. Для применения назначьте WARP хотя бы одному включённому сервису.';
   $('#warpHealthBadge').textContent = policy.enabled ? (health.eligible ? 'ГОТОВА К КАНДИДАТУ' : 'НАБЛЮДЕНИЕ') : 'ВЫКЛЮЧЕНА';
   $('#warpHealthBadge').className = health.eligible ? 'ready' : '';
@@ -1084,19 +1119,19 @@ function renderWarpManager() {
     'terms-not-accepted': 'Нужно принять условия Cloudflare',
     'waiting-for-confirmed-warp-route-evidence': 'Ожидание изолированного подтверждения маршрута WARP',
     'healthy-or-insufficient-failures': 'Маршрут работает или ошибок недостаточно',
-    'candidate-already-staged': 'Candidate уже ожидает проверки',
+    'candidate-already-staged': 'Кандидат уже ожидает проверки',
     'daily-rotation-limit-reached': 'Достигнут суточный лимит ротаций',
-    'rotation-cooldown-active': 'Активен cooldown после ротации',
-    'eligible-to-stage-fresh-candidate': 'Порог достигнут — можно создать candidate',
-    'candidate-staged-awaiting-isolated-validation': 'Candidate создан и ждёт изолированной проверки',
-    'fresh-candidate-staged-awaiting-transactional-apply': 'Новый candidate готов и ждёт ручного Apply',
-    'fresh-candidate-staged-safe-mode-blocked-auto-apply': 'Candidate готов, но Safe Mode запрещает автоматический Apply',
-    'fresh-candidate-staged-route-draft-blocked-auto-apply': 'Candidate готов; автоматический Apply остановлен из-за изменений маршрутов',
-    'fresh-candidate-staged-other-engine-drafts-blocked-auto-apply': 'Candidate готов; автоматический Apply остановлен из-за других черновиков обходов',
-    'fresh-candidate-staged-dataplane-unavailable': 'Candidate готов, но dataplane недоступен',
-    'fresh-candidate-staged-transaction-blocked': 'Candidate готов, но preflight транзакции не пройден',
+    'rotation-cooldown-active': 'Ещё не закончилась пауза после ротации',
+    'eligible-to-stage-fresh-candidate': 'Порог достигнут — можно создать нового кандидата',
+    'candidate-staged-awaiting-isolated-validation': 'Кандидат создан и ждёт изолированной проверки',
+    'fresh-candidate-staged-awaiting-transactional-apply': 'Новый кандидат готов и ждёт ручного применения',
+    'fresh-candidate-staged-safe-mode-blocked-auto-apply': 'Кандидат готов, но безопасный режим запрещает автоматическое применение',
+    'fresh-candidate-staged-route-draft-blocked-auto-apply': 'Кандидат готов; автоматическое применение остановлено из-за изменений маршрутов',
+    'fresh-candidate-staged-other-engine-drafts-blocked-auto-apply': 'Кандидат готов; автоматическое применение остановлено из-за других черновиков обходов',
+    'fresh-candidate-staged-dataplane-unavailable': 'Кандидат готов, но управление маршрутами недоступно',
+    'fresh-candidate-staged-transaction-blocked': 'Кандидат готов, но проверка перед применением не пройдена',
     'fresh-profile-activated': 'Новый WARP-профиль применён и проверен',
-    'fresh-profile-activation-failed': 'Новый профиль не прошёл Apply; восстановлен предыдущий',
+    'fresh-profile-activation-failed': 'Новый профиль не прошёл проверку; восстановлен предыдущий',
   };
   const reason = health.reason || healthState.last_decision || 'policy-disabled';
   $('#warpHealthReason').textContent = healthReasons[reason] || reason.replaceAll('-', ' ');
@@ -1112,20 +1147,20 @@ async function generateWarp(fresh) {
   const needsAcceptance = fresh || !state.warp.account_registered;
   if (needsAcceptance && !$('#warpAcceptTOS').checked) { showDetails({ message: 'Для нового аккаунта отметьте принятие условий Cloudflare.' }, 'Нужно подтверждение'); return; }
   const title = fresh ? 'Создать новый аккаунт WARP' : 'Создать профиль WARP';
-  const message = fresh ? 'Текущий аккаунт wgcf будет сохранён в backup. Новый профиль попадёт в draft и не заменит live автоматически.' : 'wgcf создаст проверенный профиль-кандидат. Live-профиль пока не изменится.';
+  const message = fresh ? 'Текущий аккаунт wgcf будет сохранён в резервной копии. Новый профиль попадёт в черновик и не заменит рабочий автоматически.' : 'wgcf создаст проверенный профиль-кандидат. Рабочий профиль пока не изменится.';
   if (!await askConfirmation(title, message, 'Создать')) return;
   const button = fresh ? $('#warpRotate') : $('#warpGenerate'); button.disabled = true; button.textContent = 'Генерация…';
   try {
     const result = await api('/api/v1/warp/generate', { method: 'POST', body: JSON.stringify({ fresh, accept_tos: needsAcceptance && $('#warpAcceptTOS').checked }) });
     state.engineLoaded = null; state.engineGuided = null; state.engineValidation = null;
     await refreshEngineConfigs(); await refreshWarp();
-    showNotice('success', 'WARP-кандидат готов', result.message || 'Профиль сохранён как черновик и ещё не меняет live-маршрут.', result);
+    showNotice('success', 'Профиль WARP готов', result.message || 'Профиль сохранён как черновик и ещё не меняет рабочий маршрут.', result);
   } catch (error) {
     const payload = error.payload || {};
     if (payload.code === 'WARP_REGISTRATION_UNAVAILABLE') {
       showNotice('error', 'Cloudflare временно не отвечает', payload.hint || error.message, payload);
     } else {
-      showNotice('error', 'Не удалось создать WARP', error.message, payload);
+      showNotice('error', 'Не удалось создать WARP', error.message, { ...payload, technical: error.technicalMessage || '' });
     }
   }
   finally { button.textContent = fresh ? 'Новый аккаунт + профиль' : 'Создать профиль'; renderWarpManager(); }
@@ -1139,16 +1174,16 @@ async function importWarpFile(event) {
     const result = await api('/api/v1/warp/import', { method: 'POST', body: JSON.stringify({ content: await file.text() }) });
     state.engineLoaded = null; state.engineGuided = null; state.engineValidation = null;
     await refreshEngineConfigs(); await refreshWarp(); showDetails(result, 'WARP-профиль загружен');
-  } catch (error) { showDetails({ error: error.message }, 'Профиль не принят'); }
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '', response: error.payload }, 'Профиль не принят'); }
 }
 
 async function checkWarp() {
   try { showDetails(await api('/api/v1/warp/check', { method: 'POST' }), 'Проверка WARP'); }
-  catch (error) { showDetails({ error: error.message }, 'WARP не прошёл проверку'); }
+  catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '', response: error.payload }, 'WARP не прошёл проверку'); }
 }
 
 async function deleteWarp() {
-  if (!await askConfirmation('Удалить рабочий WARP', 'Перед удалением будет создан backup. Аккаунт wgcf останется, чтобы профиль можно было создать снова.', 'Удалить')) return;
+  if (!await askConfirmation('Удалить рабочий WARP', 'Перед удалением будет создана резервная копия. Аккаунт wgcf останется, чтобы профиль можно было создать снова.', 'Удалить')) return;
   try { const result = await api('/api/v1/warp/profile', { method: 'DELETE' }); await refreshEngineConfigs(); await refreshWarp(); showDetails(result, 'WARP удалён'); }
   catch (error) { showDetails({ error: error.message }, 'Удаление заблокировано'); }
 }
@@ -1169,7 +1204,7 @@ async function saveWarpHealthPolicy() {
     return;
   }
   if (policy.auto_apply_candidate && !policy.auto_generate_candidate) {
-    showDetails({ message: 'Автоматический Apply требует включённой автогенерации candidate.' }, 'Политика не сохранена');
+    showDetails({ message: 'Автоматическое применение требует включённой автогенерации профиля-кандидата.' }, 'Политика не сохранена');
     return;
   }
   const button = $('#warpSaveHealth'); button.disabled = true; button.textContent = 'Сохранение…';
@@ -1179,7 +1214,7 @@ async function saveWarpHealthPolicy() {
     await refreshWarp();
     $('#warpPolicyFeedback').textContent = 'Сохранено';
     showNotice('success', 'Автоконтроль WARP сохранён', policy.enabled ? 'Политика включена. Замена профиля произойдёт только после заданного числа подтверждённых сбоев.' : 'Политика выключена. Профиль WARP не будет заменяться автоматически.');
-  } catch (error) { showDetails({ error: error.message }, 'Политика не сохранена'); }
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '', response: error.payload }, 'Политика не сохранена'); }
   finally { button.disabled = false; button.textContent = 'Сохранить автоконтроль'; }
 }
 
@@ -1189,7 +1224,7 @@ async function runWarpHealthCheck() {
     const result = await api('/api/v1/warp/health/check', { method: 'POST' });
     await refreshWarp();
     showDetails(result, 'Проверка WARP-сервисов');
-  } catch (error) { showDetails({ error: error.message }, 'Проверка WARP недоступна'); }
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '', response: error.payload }, 'Проверка WARP недоступна'); }
   finally { button.disabled = false; button.textContent = 'Проверить WARP-сервисы'; }
 }
 
@@ -1222,7 +1257,7 @@ function renderGuidedEditor() {
     return `<label class="guided-field"><span>${esc(field.label)}${field.required ? ' *' : ''}</span>${control}${field.description ? `<small>${esc(field.description)}</small>` : ''}</label>`;
   }).join('')}</div></section>`).join('');
   $$('[data-guided-field]').forEach((input) => {
-    const dirty = () => { state.engineEditorDirty = true; $('#engineEditorMessage').textContent = 'Есть изменения в простых полях. Нажмите «Сохранить draft».'; };
+    const dirty = () => { state.engineEditorDirty = true; $('#engineEditorMessage').textContent = 'Есть изменения в простых полях. Нажмите «Сохранить черновик».'; };
     input.addEventListener('input', dirty); input.addEventListener('change', dirty);
   });
   $('#engineSaveDraft').disabled = false;
@@ -1236,7 +1271,7 @@ async function loadEngineGuided(force = false) {
     state.engineGuided = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/guided?file=${encodeURIComponent(file.id)}`);
     state.engineEditorDirty = false;
     renderGuidedEditor();
-    $('#engineEditorMessage').textContent = state.engineGuided.source === 'missing' ? 'Live-файл отсутствует. После заполнения будет создан draft.' : `Источник: ${state.engineGuided.source || '—'}`;
+    $('#engineEditorMessage').textContent = state.engineGuided.source === 'missing' ? 'Рабочий файл отсутствует. После заполнения будет создан черновик.' : `Источник: ${state.engineGuided.source || '—'}`;
   } catch (error) {
     $('#guidedEditor').innerHTML = `<div class="guided-empty"><b>Не удалось прочитать параметры</b><span>${esc(error.message)}</span></div>`;
     $('#engineEditorMessage').textContent = `Ошибка: ${error.message}`;
@@ -1290,7 +1325,7 @@ async function loadEngineFile(force = false) {
     state.engineLoaded = content;
     state.engineEditorDirty = false;
     $('#engineEditor').value = content.content || '';
-    $('#engineEditorMessage').textContent = content.source === 'missing' ? 'Live-файл отсутствует. Можно импортировать или создать draft.' : `Источник: ${content.source}`;
+    $('#engineEditorMessage').textContent = content.source === 'missing' ? 'Рабочий файл отсутствует. Можно импортировать или создать черновик.' : `Источник: ${content.source}`;
   } catch (error) {
     $('#engineEditorMessage').textContent = `Ошибка чтения: ${error.message}`;
   }
@@ -1322,9 +1357,9 @@ async function saveEngineDraft() {
     state.engineEditorDirty = false;
     state.engineValidation = null;
     await refreshEngineConfigs();
-    $('#engineEditorMessage').textContent = 'Draft сохранён. Live-конфиг не изменён.';
+    $('#engineEditorMessage').textContent = 'Черновик сохранён. Рабочая конфигурация не изменена.';
   } catch (error) {
-    showDetails({ error: error.message }, 'Не удалось сохранить draft');
+    showDetails({ error: error.message }, 'Не удалось сохранить черновик');
   } finally { button.disabled = false; }
 }
 
@@ -1350,7 +1385,7 @@ async function discardEngineConfigDraft() {
     state.engineLoaded = null; state.engineGuided = null; state.engineEditorDirty = false; state.engineValidation = null;
     await refreshEngineConfigs();
     if (state.engineMode === 'guided') await loadEngineGuided(true); else await loadEngineFile(true);
-  } catch (error) { showDetails({ error: error.message }, 'Не удалось отменить draft'); }
+  } catch (error) { showDetails({ error: error.message }, 'Не удалось отменить черновик'); }
 }
 
 async function applyEngineConfig() {
@@ -1382,7 +1417,7 @@ async function handleEngineImport(event) {
     const text = await picked.text();
     $('#engineEditor').value = text; state.engineEditorDirty = true; switchEngineTab('config'); renderEngineControl();
     $('#engineEditor').value = text; // render keeps loaded text, so restore imported local buffer explicitly.
-    $('#engineEditorMessage').textContent = `Импортирован локально: ${picked.name}. Нажмите «Сохранить draft».`;
+    $('#engineEditorMessage').textContent = `Импортирован локально: ${picked.name}. Нажмите «Сохранить черновик».`;
   } catch (error) { showDetails({ error: error.message }, 'Ошибка импорта'); }
 }
 
@@ -1405,7 +1440,7 @@ function switchEngineTab(name) {
 }
 
 function testStatusLabel(status) {
-  return ({ pass: 'PASS', partial: 'PARTIAL', fail: 'FAIL', 'not-ready': 'NOT READY', 'adapter-pending': 'ADAPTER', pending: 'PENDING' })[status] || String(status || '—').toUpperCase();
+  return ({ pass: 'РАБОТАЕТ', partial: 'ЧАСТИЧНО', fail: 'ОШИБКА', 'not-ready': 'НЕ ГОТОВ', 'adapter-pending': 'НУЖЕН АДАПТЕР', pending: 'ОЖИДАНИЕ' })[status] || String(status || '—').toUpperCase();
 }
 
 function renderTestLab() {
@@ -1413,9 +1448,9 @@ function renderTestLab() {
   const counts = { pass: 0, partial: 0, fail: 0, 'not-ready': 0 };
   current.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
   $('#testSummary').innerHTML = [
-    ['PASS', counts.pass, 'pass'], ['PARTIAL', counts.partial, 'partial'], ['FAIL', counts.fail, 'fail'], ['Проверено', current.length, ''],
+    ['Работает', counts.pass, 'pass'], ['Частично', counts.partial, 'partial'], ['Ошибок', counts.fail, 'fail'], ['Проверено', current.length, ''],
   ].map(([label, n, cls]) => `<div class="test-stat ${cls}"><strong>${n}</strong><span>${label}</span></div>`).join('');
-  $('#testCurrentRows').innerHTML = current.map((r) => `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span></td><td>${r.http_status || '—'}</td><td>${Number.isFinite(Number(r.latency_ms)) ? `${r.latency_ms} ms` : '—'}</td><td>${r.route === 'current' ? 'CURRENT<small>текущая применённая</small>' : esc(routeLabel(r.route))}</td><td>${esc(r.detail || '—')}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
+  $('#testCurrentRows').innerHTML = current.map((r) => `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span></td><td>${r.http_status || '—'}</td><td>${Number.isFinite(Number(r.latency_ms)) ? `${r.latency_ms} мс` : '—'}</td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}</td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
 
   const routes = state.routeOptions.filter((o) => o.id !== 'auto');
   const cells = state.testlab?.matrix || [];
@@ -1445,12 +1480,12 @@ function renderSmartRoute() {
   $('#smartRouteSummary').innerHTML = rows.map(([id, item]) => {
     const service = state.services.find((candidate) => candidate.id === id);
     const evidence = item.evidence?.[item.selected_route];
-    return `<div class="smart-route-row"><span><b>${esc(service?.name || id)}</b><small>${esc(item.reason || 'подтверждено')}</small></span><i>→</i><strong>${esc(routeLabel(item.selected_route))}</strong><em>${evidence ? `${esc(testStatusLabel(evidence.status))} · ${evidence.latency_ms || 0} ms` : '—'}</em></div>`;
+    return `<div class="smart-route-row"><span><b>${esc(service?.name || id)}</b><small>${esc(detailReasonLabels[item.reason] || item.reason || 'подтверждено')}</small></span><i>→</i><strong>${esc(routeLabel(item.selected_route))}</strong><em>${evidence ? `${esc(testStatusLabel(evidence.status))} · ${evidence.latency_ms || 0} мс` : '—'}</em></div>`;
   }).join('') || '<div class="empty-inline">Сначала запустите изолированное сравнение. AUTO пока использует порядок стратегии каталога.</div>';
 }
 
 async function refreshTestLab() {
-  try { [state.testlab, state.smartRoute] = await Promise.all([api('/api/v1/testlab'), api('/api/v1/smart-route')]); renderTestLab(); } catch (error) { showDetails({ error: error.message }, 'Ошибка Test Lab'); }
+  try { [state.testlab, state.smartRoute] = await Promise.all([api('/api/v1/testlab'), api('/api/v1/smart-route')]); renderTestLab(); } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Тесты не обновлены'); }
 }
 
 async function runCurrentTests() {
@@ -1459,7 +1494,7 @@ async function runCurrentTests() {
   const ids = enabledOnly ? state.services.filter((s) => s.applied_enabled).map((s) => s.id) : [];
   if (enabledOnly && ids.length === 0) {
     button.disabled = false; button.textContent = 'Проверить текущую конфигурацию';
-    showDetails({ message: 'Нет применённых включённых сервисов. Выберите «Все сервисы» или сначала примените сервисный draft.' }, 'Нечего проверять');
+    showDetails({ message: 'Нет применённых включённых сервисов. Выберите «Все сервисы» или сначала примените черновик сервисов.' }, 'Нечего проверять');
     return;
   }
   try {
@@ -1499,6 +1534,10 @@ function sourceStateText(s) {
   return ['не загружен', ''];
 }
 
+function sourceKindText(kind) {
+  return ({ reference: 'справочник', downloadable: 'загружаемый список', local: 'локальный список', community: 'каталог сообщества' })[kind] || kind || 'справочник';
+}
+
 function renderSources() {
   const operational = state.sources.filter((s) => s.kind !== 'reference' && s.enabled);
   const ready = operational.filter((s) => s.ready).length;
@@ -1506,7 +1545,7 @@ function renderSources() {
   $('#sourceOverview').innerHTML = `<div class="source-stat"><strong>${ready}</strong><span>из ${operational.length} включённых списков готовы · ${references} справочных источников</span></div><div class="source-mini-list">${state.sources.slice(0, 8).map((s) => `<span class="source-mini">${esc(s.name)}</span>`).join('')}</div>`;
   $('#sourceRows').innerHTML = state.sources.map((s) => {
     const [text, cls] = sourceStateText(s);
-    return `<tr><td><b>${esc(s.name)}</b><div class="source-role">${esc(s.url || '')}</div></td><td>${esc(s.kind || 'reference')}</td><td><span class="source-state"><i class="state-dot ${cls}"></i>${esc(text)}</span></td><td>${s.entries ? Number(s.entries).toLocaleString('ru-RU') : '—'}</td><td>${esc(s.last_error || '—')}</td></tr>`;
+    return `<tr><td><b>${esc(s.name)}</b><div class="source-role">${esc(s.url || '')}</div></td><td>${esc(sourceKindText(s.kind))}</td><td><span class="source-state"><i class="state-dot ${cls}"></i>${esc(text)}</span></td><td>${s.entries ? Number(s.entries).toLocaleString('ru-RU') : '—'}</td><td>${esc(s.last_error || '—')}</td></tr>`;
   }).join('');
 }
 
@@ -1526,8 +1565,8 @@ function renderConnections() {
   $('#connectionCounter').textContent = payload.active || 0;
   $('#kpiConnections').textContent = payload.active || 0;
   $('#telemetryState').textContent = payload.live
-    ? ((payload.active || 0) > 0 ? 'live route evidence' : 'источник подключён · активных соединений нет')
-    : (payload.reason || 'телеметрия недоступна');
+    ? ((payload.active || 0) > 0 ? 'данные о маршрутах поступают' : 'источник подключён · активных соединений нет')
+    : friendlyDetail(payload.reason || 'телеметрия недоступна');
   $('#connectionRows').innerHTML = filtered.map((c) => {
     const chainData = c.chain && c.chain.length ? c.chain : [c.service_name || 'Unknown', routeLabel(c.route)];
     const chain = chainData.map((part) => `<span class="chain-node">${esc(part)}</span>`).join('<b class="chain-arrow">→</b>');
@@ -1636,7 +1675,7 @@ async function saveDevicePolicy(event) {
   const sources = [...new Set(members.flatMap((item) => item.ips || []))].sort();
   if (!sources.length) { showDetails({ error: 'У выбранной области нет известных IP.' }, 'Политика не сохранена'); return; }
   const route = $('#devicePolicyRoute').value;
-  if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: ${routeLabel(route)} будет применяться только к ${sources.length} адресу(ам). Изменение попадёт в draft и потребует общего Apply.`, 'Сохранить в draft')) return;
+  if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: ${routeLabel(route)} будет применяться только к ${sources.length} адресу(ам). Изменение попадёт в черновик и потребует общего применения.`, 'Сохранить в черновик')) return;
   try {
     await api(`/api/v1/services/${encodeURIComponent(service.id)}`, { method: 'PUT', body: JSON.stringify({ enabled: true, route, sources }) });
     $('#devicePolicyDialog').close();
@@ -1648,9 +1687,9 @@ async function saveDevicePolicy(event) {
 
 function renderSettings() {
   const s = state.status || {};
-  $('#settingSafeMode').textContent = s.safe_mode ? 'ON' : 'OFF';
+  $('#settingSafeMode').textContent = s.safe_mode ? 'Безопасный' : 'Рабочий';
   $('#settingSafeMode').className = s.safe_mode ? '' : 'active-apply';
-  $('#toggleSafeMode').textContent = s.safe_mode ? 'Разрешить Active Apply' : 'Включить Safe Mode';
+  $('#toggleSafeMode').textContent = s.safe_mode ? 'Перейти в рабочий режим' : 'Включить безопасный режим';
   $('#settingPending').textContent = s.pending_changes ? 'есть' : 'нет';
   $('#settingEngineDrafts').textContent = s.engine_config_drafts || 0;
   $('#settingApplied').textContent = s.last_applied_at ? new Date(s.last_applied_at).toLocaleString('ru-RU') : '—';
@@ -1662,17 +1701,17 @@ function renderSettings() {
 
 async function toggleSafeMode() {
   const enable = !state.status.safe_mode;
-  const title = enable ? 'Включить Safe Mode' : 'Разрешить Active Apply';
+  const title = enable ? 'Включить безопасный режим' : 'Перейти в рабочий режим';
   const message = enable
-    ? 'Новые Apply будут заблокированы. Уже работающие маршруты не изменятся до следующего применения.'
-    : 'Следующий Apply сможет изменить firewall, TUN и policy routing. Перед записью всё равно выполняются preflight, snapshot, health-check и rollback.';
+    ? 'Новые применения будут только проверяться. Уже работающие маршруты останутся без изменений.'
+    : 'Следующее применение сможет изменить правила сети и маршруты. Перед записью RAZVILKA создаст снимок, проверит конфигурацию и вернёт прежнее состояние при ошибке.';
   if (!await askConfirmation(title, message, enable ? 'Включить' : 'Разрешить')) return;
   const controls = [$('#toggleSafeMode'), $('#topToggleSafeMode')];
   controls.forEach((button) => { button.disabled = true; });
   try {
     await api('/api/v1/settings/safe-mode', { method: 'PUT', body: JSON.stringify({ enabled: enable }) });
     await refreshCoreAfterEdit();
-  } catch (error) { showDetails({ error: error.message }, 'Safe Mode не изменён'); }
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Режим не изменён'); }
   finally { controls.forEach((button) => { button.disabled = false; }); }
 }
 
@@ -1837,7 +1876,7 @@ async function importCommunityService(id) {
   const imported = state.community.find((item) => item.id === id)?.imported;
   let allowConflicts = false;
   if (conflicts.length) {
-    allowConflicts = await askConfirmation('Импортировать с конфликтами?', `${conflicts.length} доменов или сетей уже используются другими сервисами. Они не будут удалены; при активном dataplane потребуется выбрать приоритет.`, 'Всё равно импортировать');
+    allowConflicts = await askConfirmation('Импортировать с конфликтами?', `${conflicts.length} доменов или сетей уже используются другими сервисами. Они не будут удалены; при активных маршрутах потребуется выбрать приоритет.`, 'Всё равно импортировать');
     if (!allowConflicts) return;
   }
   const button = $(`[data-community-import="${CSS.escape(id)}"]`);
@@ -1910,7 +1949,7 @@ function openServiceScope(id) {
   state.scopeService = id;
   $('#serviceScopeTitle').textContent = `${service.name}: устройства`;
   $('#serviceScopeSources').value = (service.sources || []).join('\n');
-  $('#serviceScopeSummary').textContent = service.sources?.length ? `Сейчас маршрут ограничен: ${(service.sources || []).join(', ')}` : 'Сейчас маршрут применяется ко всему LAN.';
+  $('#serviceScopeSummary').textContent = service.sources?.length ? `Сейчас маршрут ограничен: ${(service.sources || []).join(', ')}` : 'Сейчас маршрут применяется ко всей локальной сети.';
   $('#serviceScopeDialog').showModal();
 }
 
@@ -1931,7 +1970,7 @@ async function saveServiceScope(event) {
     service.sources = previous;
     $('#serviceScopeSummary').textContent = error.message;
   } finally {
-    button.disabled = false; button.textContent = 'Сохранить в draft';
+    button.disabled = false; button.textContent = 'Сохранить в черновик';
   }
 }
 
@@ -1978,9 +2017,9 @@ async function showServicePlan(id) {
   try {
     const plan = await api('/api/v1/plan');
     const row = (plan.routes || []).find((r) => r.service_id === id);
-    showDetails(row || { service: id, note: 'Сервис выключен. Включите его для появления в dry-run.' }, 'Dry-run сервиса');
+    showDetails(row || { service: id, note: 'Сервис выключен. Включите его для появления в предварительной проверке.' }, 'Предварительная проверка сервиса');
   } catch (error) {
-    showDetails({ error: error.message }, 'Ошибка dry-run');
+    showDetails({ error: error.message }, 'Предварительная проверка завершилась ошибкой');
   }
 }
 
@@ -1992,14 +2031,14 @@ async function applyDraft() {
     const unusedDrafts = (preview.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
     if (unusedDrafts.length) {
       const names = unusedDrafts.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
-      showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один включённый сервис для этого обхода либо отмените черновик. Live-настройки не изменены.`, preview, true);
+      showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один включённый сервис для этого обхода либо отмените черновик. Рабочие настройки не изменены.`, preview, true);
       return;
     }
     const result = await api('/api/v1/apply', { method: 'POST' });
     await refreshCoreAfterEdit();
     await showPlan();
     if (result.safe_mode && result.reviewed && !result.live_applied) {
-      showNotice('review', 'План проверен — live-маршруты не изменены', 'Это нормальная работа Safe Mode. Черновик сохранён; откройте план или явно разрешите Active Apply в настройках.', result, true);
+      showNotice('review', 'План проверен — рабочие маршруты не изменены', 'Это нормальная работа безопасного режима. Черновик сохранён; откройте план или явно перейдите в рабочий режим в настройках.', result, true);
     } else if (result.live_applied && !result.pending_changes) {
       showNotice('success', 'Настройки применены', result.note || 'Маршруты активированы, проверены и зафиксированы.', result);
     } else if (result.pending_changes) {
@@ -2012,7 +2051,7 @@ async function applyDraft() {
 	const unused = (error.payload?.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
 	if (unused.length) {
 	  const names = unused.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
-	  showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один сервис для этого обхода либо отмените его черновик. Ничего в live не изменено.`, error.payload, true);
+	  showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один сервис для этого обхода либо отмените его черновик. Рабочие настройки не изменены.`, error.payload, true);
 	} else {
 	  showNotice('error', 'Применение заблокировано', error.payload?.note || error.message, error.payload || { error: error.message }, true);
 	}
@@ -2029,7 +2068,7 @@ async function discardDraft() {
     await refreshEngineConfigs();
     showNotice('success', 'Черновики отменены', result.discarded_engine_drafts ? `Отменено конфигураций обходов: ${result.discarded_engine_drafts}.` : 'Желаемые маршруты возвращены к последнему применённому состоянию.', result);
   } catch (error) {
-    showDetails({ error: error.message }, 'Не удалось отменить draft');
+    showDetails({ error: error.message }, 'Не удалось отменить черновик');
   }
 }
 
@@ -2043,7 +2082,7 @@ async function refreshSources() {
     renderSources();
     renderStatus();
     renderReadiness();
-    showDetails({ message: 'Включённые operational-источники обновлены и провалидированы.', sources: state.sources }, 'Источники обновлены');
+    showDetails({ message: 'Включённые источники обновлены и проверены.', sources: state.sources }, 'Источники обновлены');
   } catch (error) {
     showDetails({ error: error.message }, 'Ошибка источников');
   } finally {
@@ -2058,7 +2097,7 @@ async function refreshSystem() {
     renderSystem();
     renderReadiness();
   } catch (error) {
-    showDetails({ error: error.message }, 'Ошибка Preflight');
+    showDetails({ error: error.message }, 'Проверка роутера завершилась ошибкой');
   }
 }
 
@@ -2074,7 +2113,7 @@ async function inspectDomain() {
       $('#domainInspectorResult').innerHTML = `<div class="community-empty">Для <b>${esc(result.normalized)}</b> правило не найдено. Добавьте сервис вручную или через Community-каталог.</div>`;
       return;
     }
-    $('#domainInspectorResult').innerHTML = `<div class="domain-inspector-summary ${result.conflict ? 'conflict' : ''}"><div><span>Нормализовано</span><b>${esc(result.normalized)}</b></div><div><span>Совпадений</span><b>${matches.length}</b></div><div><span>Конфликт</span><b>${result.conflict ? 'ДА — проверьте приоритет' : 'нет'}</b></div><div><span>Live evidence</span><b>${result.live_route_confirmed ? 'подтверждено' : 'не подтверждено'}</b></div></div><div class="domain-match-list">${matches.map((match, index) => `<div class="domain-match ${index === 0 ? 'candidate' : ''}"><span class="service-badge">${index + 1}</span><div><b>${esc(match.service_name)}</b><small>${esc(match.service_id)} · правило <code>${esc(match.matched_rule)}</code>${match.custom ? ' · пользовательский' : ''}</small></div><div><span>${match.enabled ? 'ВКЛЮЧЁН' : 'ВЫКЛЮЧЕН'}</span><b>${esc(match.selected_route)} → ${esc(match.resolved_route)}</b><small>applied: ${match.applied_enabled ? esc(match.applied_route) : 'выключен'}</small></div></div>`).join('')}</div><small class="domain-note">${esc(result.note)}</small>`;
+    $('#domainInspectorResult').innerHTML = `<div class="domain-inspector-summary ${result.conflict ? 'conflict' : ''}"><div><span>Проверенный адрес</span><b>${esc(result.normalized)}</b></div><div><span>Совпадений</span><b>${matches.length}</b></div><div><span>Конфликт</span><b>${result.conflict ? 'ДА — проверьте приоритет' : 'нет'}</b></div><div><span>Фактический маршрут</span><b>${result.live_route_confirmed ? 'подтверждён' : 'не подтверждён'}</b></div></div><div class="domain-match-list">${matches.map((match, index) => `<div class="domain-match ${index === 0 ? 'candidate' : ''}"><span class="service-badge">${index + 1}</span><div><b>${esc(match.service_name)}</b><small>${esc(match.service_id)} · правило <code>${esc(match.matched_rule)}</code>${match.custom ? ' · пользовательский' : ''}</small></div><div><span>${match.enabled ? 'ВКЛЮЧЁН' : 'ВЫКЛЮЧЕН'}</span><b>${esc(match.selected_route)} → ${esc(match.resolved_route)}</b><small>применён: ${match.applied_enabled ? esc(match.applied_route) : 'выключен'}</small></div></div>`).join('')}</div><small class="domain-note">${esc(result.note)}</small>`;
   } catch (error) { $('#domainInspectorResult').innerHTML = `<div class="community-empty error">${esc(error.message)}</div>`; }
   finally { button.disabled = false; button.textContent = 'Разобрать'; }
 }
@@ -2087,10 +2126,11 @@ async function showPlan() {
     const warnings = tx.warnings || [];
     const actions = tx.actions || [];
     const routes = tx.routes || [];
-    const stateLabel = tx.noop ? 'ИЗМЕНЕНИЯ НЕ НУЖНЫ' : tx.ready ? 'ГОТОВО К LIVE APPLY' : 'LIVE APPLY ЗАБЛОКИРОВАН';
+    const stateLabel = tx.noop ? 'ИЗМЕНЕНИЯ НЕ НУЖНЫ' : tx.ready ? 'ГОТОВО К ПРИМЕНЕНИЮ' : 'ПРИМЕНЕНИЕ ЗАБЛОКИРОВАНО';
     const stateClass = tx.noop || tx.ready ? 'ready' : 'blocked';
-    const phaseLabels = { snapshot: 'Снимок', stage: 'Подготовка', validate: 'Проверка', activate: 'Активация', health: 'Health-check', commit: 'Commit' };
-    $('#planBox').innerHTML = `<div class="transaction-head"><div><span class="eyebrow">TRANSACTION ${esc(tx.plan_id || '—')}</span><h3>${esc(stateLabel)}</h3><p>${esc(tx.note || plan.note || '')}</p></div><span class="transaction-state ${stateClass}">${tx.safe_mode ? 'SAFE MODE' : esc(tx.state || 'planned')}</span></div><div class="transaction-metrics"><div><b>${routes.length}</b><span>маршрутов</span></div><div><b>${(tx.adapters || []).length}</b><span>адаптеров</span></div><div><b>${actions.length}</b><span>шагов</span></div><div><b>${blockers.length}</b><span>блокеров</span></div></div>${blockers.length ? `<div class="transaction-blockers"><h4>Что мешает применению</h4>${blockers.map((item) => `<div class="transaction-blocker"><span>${esc(item.code)}</span><div><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.message)}</b>${item.resolution ? `<small>${esc(item.resolution)}</small>` : ''}</div></div>`).join('')}</div>` : '<div class="transaction-clean">Все обязательные проверки пройдены.</div>'}${warnings.length ? `<details class="transaction-details"><summary>Предупреждения (${warnings.length})</summary>${warnings.map((item) => `<div class="transaction-warning"><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.code)}</b><span>${esc(item.message)}</span></div>`).join('')}</details>` : ''}<div class="transaction-flow">${actions.map((item) => `<div class="transaction-step"><span>${item.order}</span><div><b>${esc(phaseLabels[item.phase] || item.phase)} · ${esc(item.adapter)}</b><small>${esc(item.summary)}</small><code>${esc(item.target)}</code></div><i class="${item.razvilka_owned ? 'owned' : ''}">${item.razvilka_owned ? 'RZ owned' : 'external'}</i></div>`).join('') || '<div class="transaction-clean">Маршруты direct не требуют изменений dataplane.</div>'}</div><details class="transaction-details"><summary>Маршруты (${routes.length}) и digest</summary><div class="transaction-routes">${routes.map((route) => `<div><b>${esc(route.service_name)}</b><span>${esc(route.selected_route)} → ${esc(route.resolved_route)}</span></div>`).join('') || '<span>Нет включённых сервисов.</span>'}</div><code class="transaction-digest">${esc(tx.digest || '—')}</code></details>`;
+    const phaseLabels = { snapshot: 'Снимок', stage: 'Подготовка', validate: 'Проверка', activate: 'Активация', health: 'Проверка доступности', commit: 'Сохранение' };
+    const planState = tx.safe_mode ? 'БЕЗОПАСНЫЙ РЕЖИМ' : ({ planned: 'ПЛАН', reviewed: 'ПРОВЕРЕНО', ready: 'ГОТОВО' }[tx.state] || tx.state || 'ПЛАН');
+    $('#planBox').innerHTML = `<div class="transaction-head"><div><span class="eyebrow">ПЛАН ${esc(tx.plan_id || '—')}</span><h3>${esc(stateLabel)}</h3><p>${esc(tx.note || plan.note || '')}</p></div><span class="transaction-state ${stateClass}">${esc(planState)}</span></div><div class="transaction-metrics"><div><b>${routes.length}</b><span>маршрутов</span></div><div><b>${(tx.adapters || []).length}</b><span>обходов</span></div><div><b>${actions.length}</b><span>шагов</span></div><div><b>${blockers.length}</b><span>проблем</span></div></div>${blockers.length ? `<div class="transaction-blockers"><h4>Что мешает применению</h4>${blockers.map((item) => `<div class="transaction-blocker"><span>${esc(item.code)}</span><div><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.message)}</b>${item.resolution ? `<small>${esc(item.resolution)}</small>` : ''}</div></div>`).join('')}</div>` : '<div class="transaction-clean">Все обязательные проверки пройдены.</div>'}${warnings.length ? `<details class="transaction-details"><summary>Предупреждения (${warnings.length})</summary>${warnings.map((item) => `<div class="transaction-warning"><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.code)}</b><span>${esc(item.message)}</span></div>`).join('')}</details>` : ''}<div class="transaction-flow">${actions.map((item) => `<div class="transaction-step"><span>${item.order}</span><div><b>${esc(phaseLabels[item.phase] || item.phase)} · ${esc(item.adapter)}</b><small>${esc(item.summary)}</small><code>${esc(item.target)}</code></div><i class="${item.razvilka_owned ? 'owned' : ''}">${item.razvilka_owned ? 'RAZVILKA' : 'ВНЕШНИЙ'}</i></div>`).join('') || '<div class="transaction-clean">Прямые маршруты не требуют изменения сетевых правил.</div>'}</div><details class="transaction-details"><summary>Маршруты (${routes.length}) и контрольная сумма</summary><div class="transaction-routes">${routes.map((route) => `<div><b>${esc(route.service_name)}</b><span>${esc(route.selected_route)} → ${esc(route.resolved_route)}</span></div>`).join('') || '<span>Нет включённых сервисов.</span>'}</div><code class="transaction-digest">${esc(tx.digest || '—')}</code></details>`;
   } catch (error) {
     $('#planBox').innerHTML = `<div class="transaction-error">План не построен: ${esc(error.message)}</div>`;
   }
@@ -2207,32 +2247,32 @@ async function importProfile() {
   const preview = state.profilePreview;
   if (!bundle || !preview?.valid) return;
   const allowUpdates = !!preview.requires_custom_update_approval;
-  const text = `Профиль «${preview.name}» будет добавлен только в draft. Live-маршруты и секретные конфиги не изменятся.${allowUpdates ? ' Существующие пользовательские сервисы будут обновлены.' : ''}`;
-  if (!await askConfirmation('Импортировать проверенный профиль?', text, 'Импортировать в draft')) return;
+  const text = `Профиль «${preview.name}» будет добавлен только в черновик. Рабочие маршруты и секретные конфиги не изменятся.${allowUpdates ? ' Существующие пользовательские сервисы будут обновлены.' : ''}`;
+  if (!await askConfirmation('Импортировать проверенный профиль?', text, 'Импортировать в черновик')) return;
   const button = $('#confirmProfileImport'); button.disabled = true; button.textContent = 'Импорт…';
   try {
     const result = await api('/api/v1/profiles/import', { method: 'POST', body: JSON.stringify({ bundle, allow_custom_updates: allowUpdates }) });
     state.profileBundle = null; state.profilePreview = null;
-    $('#profilePreview').innerHTML = '<div class="community-clean">Профиль импортирован в draft. Проверьте план и engine-файлы перед Apply.</div>';
+    $('#profilePreview').innerHTML = '<div class="community-clean">Профиль импортирован в черновик. Проверьте план и файлы обходов перед применением.</div>';
     await refreshAll(); await showPlan();
     showDetails(result, 'Профиль импортирован');
   } catch (error) { showDetails({ error: error.message }, 'Импорт профиля не выполнен'); renderProfilePreview(); }
-  finally { button.textContent = 'Импортировать в draft'; button.disabled = !state.profilePreview?.valid; }
+  finally { button.textContent = 'Импортировать в черновик'; button.disabled = !state.profilePreview?.valid; }
 }
 
 async function exportPrivateBackup() {
   const password = $('#privateBackupPassword').value;
   const repeat = $('#privateBackupPasswordRepeat').value;
-  if (password.length < 12) { showDetails({ error: 'Пароль должен содержать минимум 12 символов.' }, 'Backup не создан'); return; }
-  if (password !== repeat) { showDetails({ error: 'Пароли архива не совпадают.' }, 'Backup не создан'); return; }
+  if (password.length < 12) { showDetails({ error: 'Пароль должен содержать минимум 12 символов.' }, 'Резервная копия не создана'); return; }
+  if (password !== repeat) { showDetails({ error: 'Пароли архива не совпадают.' }, 'Резервная копия не создана'); return; }
   const button = $('#exportPrivateBackup'); button.disabled = true; button.textContent = 'Шифрование…';
   try {
     const envelope = await api('/api/v1/private-backups/export', { method: 'POST', body: JSON.stringify({ password }) });
     downloadJSON(envelope, `razvilka-private-${timestampName()}.json`);
     $('#privateBackupPassword').value = ''; $('#privateBackupPasswordRepeat').value = '';
-    showDetails({ cipher: envelope.cipher, kdf: envelope.kdf, iterations: envelope.iterations, created_at: envelope.created_at }, 'Приватный backup создан');
-  } catch (error) { showDetails({ error: error.message }, 'Backup не создан'); }
-  finally { button.disabled = false; button.textContent = 'Скачать зашифрованный backup'; }
+    showDetails({ cipher: envelope.cipher, kdf: envelope.kdf, iterations: envelope.iterations, created_at: envelope.created_at }, 'Приватная резервная копия создана');
+  } catch (error) { showDetails({ error: error.message }, 'Резервная копия не создана'); }
+  finally { button.disabled = false; button.textContent = 'Скачать зашифрованную копию'; }
 }
 
 async function selectPrivateBackupFile(event) {
@@ -2241,10 +2281,10 @@ async function selectPrivateBackupFile(event) {
   state.privateBackupEnvelope = null; state.privateBackupPreview = null;
   $('#confirmPrivateBackup').disabled = true;
   if (!file) return;
-  if (file.size > 18 * 1024 * 1024) { showDetails({ error: 'Файл больше 18 МБ.' }, 'Backup не принят'); return; }
+  if (file.size > 18 * 1024 * 1024) { showDetails({ error: 'Файл больше 18 МБ.' }, 'Резервная копия не принята'); return; }
   try {
     const envelope = JSON.parse(await file.text());
-    if (envelope.kind !== 'razvilka-private-backup' || !envelope.ciphertext) throw new Error('Это не приватный backup RAZVILKA.');
+    if (envelope.kind !== 'razvilka-private-backup' || !envelope.ciphertext) throw new Error('Это не приватная резервная копия RAZVILKA.');
     state.privateBackupEnvelope = envelope;
     $('#previewPrivateBackup').disabled = false;
     $('#privateBackupPreview').innerHTML = `<div class="community-empty">Выбран архив ${esc(file.name)}. Введите пароль и запустите проверку.</div>`;
@@ -2257,13 +2297,13 @@ async function selectPrivateBackupFile(event) {
 async function previewPrivateBackup() {
   const envelope = state.privateBackupEnvelope;
   const password = $('#privateBackupImportPassword').value;
-  if (!envelope || password.length < 12) { showDetails({ error: 'Выберите архив и введите его пароль.' }, 'Preview недоступно'); return; }
+  if (!envelope || password.length < 12) { showDetails({ error: 'Выберите архив и введите его пароль.' }, 'Предварительный просмотр недоступен'); return; }
   const button = $('#previewPrivateBackup'); button.disabled = true; button.textContent = 'Проверка…';
   try {
     const preview = await api('/api/v1/private-backups/preview', { method: 'POST', body: JSON.stringify({ envelope, password }) });
     state.privateBackupPreview = preview;
     const warnings = preview.warnings || [];
-    $('#privateBackupPreview').innerHTML = `<div class="private-backup-ok"><span class="engine-state installed">AEAD + SHA-256 OK</span><h3>Backup RAZVILKA ${esc(preview.from_version)}</h3><p>${preview.created_at ? new Date(preview.created_at).toLocaleString('ru-RU') : '—'}</p><div class="private-backup-metrics"><div><b>${preview.services || 0}</b><span>сервисов</span></div><div><b>${preview.engine_files?.length || 0}</b><span>конфигов</span></div><div><b>${preview.sensitive_files || 0}</b><span>секретных</span></div><div><b>${preview.custom_services || 0}</b><span>custom</span></div><div><b>${preview.devices || 0}</b><span>устройств</span></div><div><b>draft</b><span>режим</span></div></div>${warnings.map((warning) => `<div class="private-backup-warning">${esc(warning)}</div>`).join('')}<div class="private-backup-digest">${esc(preview.digest)}</div></div>`;
+    $('#privateBackupPreview').innerHTML = `<div class="private-backup-ok"><span class="engine-state installed">ШИФРОВАНИЕ И ЦЕЛОСТНОСТЬ ПРОВЕРЕНЫ</span><h3>Резервная копия RAZVILKA ${esc(preview.from_version)}</h3><p>${preview.created_at ? new Date(preview.created_at).toLocaleString('ru-RU') : '—'}</p><div class="private-backup-metrics"><div><b>${preview.services || 0}</b><span>сервисов</span></div><div><b>${preview.engine_files?.length || 0}</b><span>конфигов</span></div><div><b>${preview.sensitive_files || 0}</b><span>секретных</span></div><div><b>${preview.custom_services || 0}</b><span>пользовательских</span></div><div><b>${preview.devices || 0}</b><span>устройств</span></div><div><b>черновик</b><span>режим</span></div></div>${warnings.map((warning) => `<div class="private-backup-warning">${esc(warning)}</div>`).join('')}<div class="private-backup-digest">${esc(preview.digest)}</div></div>`;
     $('#confirmPrivateBackup').disabled = !preview.valid;
   } catch (error) {
     state.privateBackupPreview = null;
@@ -2274,18 +2314,18 @@ async function previewPrivateBackup() {
 
 async function importPrivateBackup() {
   if (!state.privateBackupEnvelope || !state.privateBackupPreview?.valid) return;
-  if (!await askConfirmation('Импортировать приватный backup?', 'Сервисы, устройства и все engine-конфиги, включая ключи, попадут только в draft. Live dataplane, UI-пароль и recovery key не изменятся.', 'Импортировать в draft')) return;
+  if (!await askConfirmation('Импортировать приватную резервную копию?', 'Сервисы, устройства и все конфиги обходов, включая ключи, попадут только в черновик. Рабочие маршруты, пароль панели и ключ восстановления не изменятся.', 'Импортировать в черновик')) return;
   const button = $('#confirmPrivateBackup'); button.disabled = true; button.textContent = 'Импорт…';
   try {
     const result = await api('/api/v1/private-backups/import', { method: 'POST', body: JSON.stringify({ envelope: state.privateBackupEnvelope, password: $('#privateBackupImportPassword').value, confirm: 'IMPORT_PRIVATE_BACKUP' }) });
     state.privateBackupEnvelope = null; state.privateBackupPreview = null;
     $('#privateBackupImportPassword').value = '';
     $('#previewPrivateBackup').disabled = true;
-    $('#privateBackupPreview').innerHTML = '<div class="community-clean">Приватные данные импортированы в draft. Проверьте конфиги и общий план перед Apply.</div>';
+    $('#privateBackupPreview').innerHTML = '<div class="community-clean">Приватные данные импортированы в черновик. Проверьте конфиги и общий план перед применением.</div>';
     await refreshAll(); await showPlan();
-    showDetails(result, 'Приватный backup импортирован');
-  } catch (error) { showDetails({ error: error.message }, 'Импорт backup не выполнен'); }
-  finally { button.textContent = 'Импортировать приватные данные в draft'; button.disabled = !state.privateBackupPreview?.valid; }
+    showDetails(result, 'Приватная резервная копия импортирована');
+  } catch (error) { showDetails({ error: error.message }, 'Импорт резервной копии не выполнен'); }
+  finally { button.textContent = 'Импортировать приватные данные в черновик'; button.disabled = !state.privateBackupPreview?.valid; }
 }
 
 async function refreshConnections() {
@@ -2319,11 +2359,16 @@ function startConnectionStream() {
     }
   });
   stream.onerror = () => {
-    $('#telemetryState').textContent = 'SSE reconnect…';
+    $('#telemetryState').textContent = 'соединение восстанавливается…';
   };
 }
 
 function bindEvents() {
+  window.addEventListener('beforeunload', (event) => {
+    if (!state.engineEditorDirty && !state.warpPolicyDirty) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
   $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
   $('#serviceSearch').addEventListener('input', renderServices);
   $('#serviceCategory').addEventListener('change', renderServices);
@@ -2364,7 +2409,7 @@ function bindEvents() {
 	$('#strategyEvidence').addEventListener('click', (event) => {
 		const row = event.target.closest('[data-strategy-evidence]');
 		const index = Number(row?.dataset.strategyEvidence);
-		if (row && Number.isInteger(index) && state.strategyLab?.evidence?.[index]) showDetails(state.strategyLab.evidence[index], 'Typed evidence Strategy Lab');
+		if (row && Number.isInteger(index) && state.strategyLab?.evidence?.[index]) showDetails(state.strategyLab.evidence[index], 'Подтверждённый результат NFQWS2');
 	});
   $('#refreshComponents').addEventListener('click', () => refreshComponents(true));
   $('#openEngineConfig').addEventListener('click', () => openEngineConfiguration());
@@ -2400,7 +2445,7 @@ function bindEvents() {
   $('#engineFileSelect').addEventListener('change', (e) => selectEngineFile(e.target.value));
   $('#engineModeGuided').addEventListener('click', () => switchEngineMode('guided'));
   $('#engineModeExpert').addEventListener('click', () => switchEngineMode('expert'));
-  $('#engineEditor').addEventListener('input', () => { state.engineEditorDirty = true; $('#engineEditorMessage').textContent = 'Есть локальные изменения. Нажмите «Сохранить draft».'; });
+  $('#engineEditor').addEventListener('input', () => { state.engineEditorDirty = true; $('#engineEditorMessage').textContent = 'Есть локальные изменения. Нажмите «Сохранить черновик».'; });
   $('#engineReload').addEventListener('click', async () => { if (!state.engineEditorDirty || await askConfirmation('Перечитать конфигурацию', 'Потерять локальные изменения и перечитать файл?', 'Перечитать')) { state.engineEditorDirty = false; state.engineLoaded = null; state.engineGuided = null; if (state.engineMode === 'guided') await loadEngineGuided(true); else await loadEngineFile(true); renderEngineControl(); } });
   $('#engineSaveDraft').addEventListener('click', saveEngineDraft);
   $('#engineValidate').addEventListener('click', validateEngineFile);

@@ -44,13 +44,13 @@ func TestEmbeddedWebAssetsUseCurrentCacheKey(t *testing.T) {
 	}
 	html := string(data)
 	for _, asset := range []string{
-		"/style.css?v=0.12.1",
-		"/v010.css?v=0.12.1",
-		"/v011.css?v=0.12.1",
-		"/v011-theme.css?v=0.12.1",
-		"/v012.css?v=0.12.1",
-		"/app.js?v=0.12.1",
-		"/favicon.ico?v=0.12.1",
+		"/style.css?v=0.12.2",
+		"/v010.css?v=0.12.2",
+		"/v011.css?v=0.12.2",
+		"/v011-theme.css?v=0.12.2",
+		"/v012.css?v=0.12.2",
+		"/app.js?v=0.12.2",
+		"/favicon.ico?v=0.12.2",
 	} {
 		if !strings.Contains(html, asset) {
 			t.Fatalf("cache-busted asset missing %q", asset)
@@ -155,6 +155,37 @@ func TestUnifiedThemeCoversAllLegacyWorkspaces(t *testing.T) {
 	} {
 		if !strings.Contains(css, required) {
 			t.Fatalf("current theme does not cover legacy workspace %q", required)
+		}
+	}
+}
+
+func TestWebUIRemainsUsableOnPartialFailure(t *testing.T) {
+	t.Parallel()
+
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatalf("read embedded app: %v", err)
+	}
+	cssData, err := embedded.ReadFile("web/v012.css")
+	if err != nil {
+		t.Fatalf("read embedded accessibility stylesheet: %v", err)
+	}
+	app, css := string(appData), string(cssData)
+	for _, required := range []string{
+		"Promise.allSettled",
+		"friendlyErrorMessage",
+		"beforeunload",
+		"Часть данных временно недоступна",
+		"Безопасный режим",
+		"Подбор NFQWS2",
+	} {
+		if !strings.Contains(app, required) {
+			t.Fatalf("resilient UX guard missing %q", required)
+		}
+	}
+	for _, required := range []string{"button:focus-visible", "cursor: not-allowed"} {
+		if !strings.Contains(css, required) {
+			t.Fatalf("accessibility style missing %q", required)
 		}
 	}
 }

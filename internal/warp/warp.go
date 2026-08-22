@@ -71,7 +71,7 @@ func New(root, backupRoot string, configs *engineconfig.Manager) *Manager {
 func (m *Manager) Status(ctx context.Context) Status {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	status := Status{Note: "Новый профиль сначала попадает в draft. Рабочий профиль не заменяется до validate, backup и явного Apply."}
+	status := Status{Note: "Новый профиль сначала сохраняется как черновик. Рабочий профиль заменяется только после проверки, резервной копии и явного применения."}
 	doc, _ := m.loadHealthLocked()
 	status.Health = m.healthStatusLocked(doc)
 	bin := findBinary(m.BinPaths)
@@ -249,7 +249,7 @@ func (m *Manager) Import(content string) (Result, error) {
 	if _, err := m.EngineConfigs.Stage("warp-wg", "main", content); err != nil {
 		return Result{}, err
 	}
-	return Result{OK: true, Source: "import", SHA256: digest(b), Message: "Профиль проверен и сохранён как draft. Рабочий профиль не изменён."}, nil
+	return Result{OK: true, Source: "import", SHA256: digest(b), Message: "Профиль проверен и сохранён как черновик. Рабочий профиль не изменён."}, nil
 }
 
 func (m *Manager) CheckCandidate() (Result, error) {

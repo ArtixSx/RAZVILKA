@@ -42,7 +42,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.12.1"
+const Version = "0.12.2"
 
 type App struct {
 	Store           *config.Store
@@ -1860,7 +1860,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
-		"note":        "v0.12.1: WARP drafts now use one honest transactional Apply, bypass settings are clearer, and the branded favicon is included. Safe Mode remains the default.",
+		"note":        "v0.12.2: the UI keeps working when an optional section is unavailable, uses clearer Russian wording, warns about unsaved edits, and improves keyboard accessibility. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})
