@@ -42,7 +42,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.12.0"
+const Version = "0.12.1"
 
 type App struct {
 	Store           *config.Store
@@ -247,10 +247,10 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 			dataplaneAdapters = len(latest.Adapters)
 			if runtime.Recovery != nil && runtime.Recovery.PlanID == latest.PlanID {
 				dataplaneRecoveryState = runtime.Recovery.State
-				liveActive = latest.State == "committed" && len(latest.Adapters) > 0 && !a.Store.Dirty() && runtime.Recovery.State == "recovered"
+				liveActive = latest.State == "committed" && len(latest.Adapters) > 0 && !a.Store.Dirty() && configDrafts == 0 && runtime.Recovery.State == "recovered"
 			} else if runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID {
 				dataplaneRecoveryState = "current-process"
-				liveActive = latest.State == "committed" && len(latest.Adapters) > 0 && !a.Store.Dirty() && runtime.Execution.State == "committed"
+				liveActive = latest.State == "committed" && len(latest.Adapters) > 0 && !a.Store.Dirty() && configDrafts == 0 && runtime.Execution.State == "committed"
 			}
 		}
 	}
@@ -265,7 +265,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"sources_downloadable": sourceDownloadable, "sources_reference": sourceReferences,
 		"active_connections": activeConnections, "engine_config_drafts": configDrafts,
 		"dataplane_state": dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
-		"pending_changes": a.Store.Dirty(), "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
+		"pending_changes": a.Store.Dirty() || configDrafts > 0, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
 	})
 }
 
@@ -1344,16 +1344,14 @@ func (a *App) engineConfigAction(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w)
 			return
 		}
-		if !a.Store.Get().SafeMode {
-			http.Error(w, "live engine config activation requires the transactional runtime adapter; draft is preserved", http.StatusConflict)
-			return
-		}
-		dst, err := a.EngineConfigs.Apply(engineID, fileID, true)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "path": dst})
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"ok":              false,
+			"error":           "Отдельное применение конфигурации отключено: используйте общий транзакционный Apply.",
+			"resolution":      "Назначьте включённый сервис этому обходу, проверьте план и нажмите «Применить» в верхней панели.",
+			"engine_id":       engineID,
+			"file_id":         fileID,
+			"pending_changes": true,
+		})
 	default:
 		http.NotFound(w, r)
 	}
@@ -1862,7 +1860,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
-		"note":        "v0.12.0: human-readable route evidence, live RAM in the top bar, a safer first-run console and release-ready documentation. Safe Mode remains the default.",
+		"note":        "v0.12.1: WARP drafts now use one honest transactional Apply, bypass settings are clearer, and the branded favicon is included. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})
@@ -1939,13 +1937,13 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		execution, applyErr := a.Dataplane.Apply(r.Context(), transaction, a.Store.ApplyDraftWithRollback)
 		if applyErr != nil {
 			writeJSON(w, http.StatusConflict, map[string]any{
-				"ok": false, "safe_mode": false, "pending_changes": a.Store.Dirty(), "live_applied": false,
+				"ok": false, "safe_mode": false, "pending_changes": a.pendingChanges(), "live_applied": false,
 				"error": applyErr.Error(), "transaction": transaction, "execution": execution,
 			})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"ok": true, "safe_mode": false, "pending_changes": false, "live_applied": true,
+			"ok": true, "safe_mode": false, "pending_changes": a.pendingChanges(), "live_applied": true,
 			"note": "Dataplane activated, health-checked and committed.", "transaction": transaction, "execution": execution,
 		})
 		return
@@ -1962,7 +1960,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 	if !record() {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "safe_mode": cfg.SafeMode, "pending_changes": false, "live_applied": liveApplied, "note": note, "transaction": transaction})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "safe_mode": cfg.SafeMode, "pending_changes": a.pendingChanges(), "live_applied": liveApplied, "note": note, "transaction": transaction})
 }
 
 func (a *App) buildDataplanePlan(cfg config.Config, options []routecatalog.Option) (dataplane.Plan, error) {
@@ -1994,7 +1992,27 @@ func (a *App) buildDataplanePlan(cfg config.Config, options []routecatalog.Optio
 		}
 		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: option.Selectable, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID)})
 	}
-	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, Engines: engines, Host: dataplane.DiscoverHost()})
+	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, Engines: engines, EngineConfigDrafts: a.stagedEngineConfigRefs(), Host: dataplane.DiscoverHost()})
+}
+
+func (a *App) stagedEngineConfigRefs() []string {
+	if a.EngineConfigs == nil {
+		return nil
+	}
+	var refs []string
+	for _, engineView := range a.EngineConfigs.List() {
+		for _, fileView := range engineView.Files {
+			if fileView.Staged {
+				refs = append(refs, engineView.ID+"/"+fileView.ID)
+			}
+		}
+	}
+	sort.Strings(refs)
+	return refs
+}
+
+func (a *App) pendingChanges() bool {
+	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0
 }
 
 func (a *App) discard(w http.ResponseWriter, r *http.Request) {
@@ -2006,7 +2024,16 @@ func (a *App) discard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "pending_changes": false})
+	discarded := 0
+	if a.EngineConfigs != nil {
+		for _, ref := range a.stagedEngineConfigRefs() {
+			parts := strings.SplitN(ref, "/", 2)
+			if len(parts) == 2 && a.EngineConfigs.Discard(parts[0], parts[1]) == nil {
+				discarded++
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "pending_changes": a.pendingChanges(), "discarded_engine_drafts": discarded})
 }
 
 func (a *App) systemInfo(w http.ResponseWriter, r *http.Request) {

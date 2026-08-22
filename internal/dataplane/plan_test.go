@@ -19,6 +19,26 @@ func TestBuildDirectPlanIsReadyNoop(t *testing.T) {
 	}
 }
 
+func TestBuildBlocksEngineDraftWithoutMatchingServiceRoute(t *testing.T) {
+	plan, err := BuildAt(Input{
+		Revision:           7,
+		Routes:             []Route{{ServiceID: "youtube", ServiceName: "YouTube", Resolved: "direct"}},
+		EngineConfigDrafts: []string{"warp-wg/main"},
+	}, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Ready || plan.Noop || len(plan.Blockers) != 1 {
+		t.Fatalf("unexpected plan: %+v", plan)
+	}
+	if got := plan.Blockers[0]; got.Code != "ENGINE_DRAFT_UNUSED" || got.Adapter != "warp-wg" {
+		t.Fatalf("unexpected blocker: %+v", got)
+	}
+	if len(plan.EngineDrafts) != 1 || plan.EngineDrafts[0] != "warp-wg/main" {
+		t.Fatalf("engine drafts not exposed: %+v", plan.EngineDrafts)
+	}
+}
+
 type fakeAdapter struct {
 	id          string
 	calls       []string

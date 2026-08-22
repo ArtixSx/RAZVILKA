@@ -12,6 +12,7 @@ const state = {
   components: [],
   componentFilter: 'all',
   warp: {},
+  warpPolicyDirty: false,
   engineConfigs: [],
   selectedEngine: 'nfqws2',
   selectedEngineFile: 'main',
@@ -591,6 +592,7 @@ async function manageComponent(id, requestedAction) {
 
 function renderStatus() {
   const s = state.status;
+  const engineDrafts = Number(s.engine_config_drafts || 0);
   $('#version').textContent = `v${s.version || '—'}`;
   $('#footerVersion').textContent = `v${s.version || '—'}`;
   $('#listenChip').textContent = s.listen || ':8787';
@@ -608,10 +610,14 @@ function renderStatus() {
   $('#kpiConnections').textContent = s.active_connections || 0;
   $('#connectionCounter').textContent = s.active_connections || 0;
   $('#serviceNavCount').textContent = s.enabled_services || 0;
-  $('#draftBar').classList.toggle('show', !!s.pending_changes || Number(s.engine_config_drafts || 0) > 0);
+  $('#draftBar').classList.toggle('show', !!s.pending_changes || engineDrafts > 0);
   $('#draftBar').classList.toggle('safe-review', !!s.safe_mode);
-  $('#draftTitle').textContent = s.safe_mode ? 'Изменения сохранены как черновик' : 'Есть неподтверждённые изменения';
-  $('#draftHint').textContent = s.safe_mode ? 'Безопасный режим проверит план, но не изменит live-маршруты' : 'Сначала проверяем план, затем применяем атомарно';
+  $('#draftTitle').textContent = engineDrafts > 0
+    ? `${engineDrafts} ${engineDrafts === 1 ? 'черновик обхода ждёт применения' : 'черновика обходов ждут применения'}`
+    : (s.safe_mode ? 'Изменения сохранены как черновик' : 'Есть неподтверждённые изменения');
+  $('#draftHint').textContent = engineDrafts > 0
+    ? 'Черновик применяется только вместе с сервисом, назначенным этому обходу'
+    : (s.safe_mode ? 'Безопасный режим проверит план, но не изменит live-маршруты' : 'Сначала проверяем план, затем применяем атомарно');
   $('#applyChanges').textContent = s.safe_mode ? 'Проверить план' : 'Применить';
   $('#applySettings').textContent = s.safe_mode ? 'Проверить план' : 'Применить draft';
 }
@@ -1055,14 +1061,22 @@ function renderWarpManager() {
   const health = w.health || {};
   const policy = health.policy || {};
   const healthState = health.state || {};
-  $('#warpHealthEnabled').value = String(!!policy.enabled);
-  $('#warpFailureThreshold').value = policy.failure_threshold || 3;
-  $('#warpMinFailedServices').value = policy.min_failed_services || 2;
-  $('#warpCooldownHours').value = policy.cooldown_hours || 24;
-  $('#warpMaxRotations').value = policy.max_rotations_per_day || 1;
-  $('#warpAutoCandidate').checked = !!policy.auto_generate_candidate;
-  $('#warpAutoApply').checked = !!policy.auto_apply_candidate;
-  $('#warpHealthAcceptTOS').checked = !!policy.accept_tos;
+  if (!state.warpPolicyDirty) {
+    $('#warpHealthEnabled').value = String(!!policy.enabled);
+    $('#warpFailureThreshold').value = policy.failure_threshold || 3;
+    $('#warpMinFailedServices').value = policy.min_failed_services || 2;
+    $('#warpCooldownHours').value = policy.cooldown_hours || 24;
+    $('#warpMaxRotations').value = policy.max_rotations_per_day || 1;
+    $('#warpAutoCandidate').checked = !!policy.auto_generate_candidate;
+    $('#warpAutoApply').checked = !!policy.auto_apply_candidate;
+    $('#warpHealthAcceptTOS').checked = !!policy.accept_tos;
+  }
+  $('#warpPolicyFeedback').textContent = state.warpPolicyDirty ? 'Есть несохранённые изменения' : '';
+  const warpAssigned = state.services.some((service) => service.enabled && (service.resolved_route === 'warp-wg' || service.route === 'warp-wg'));
+  $('#warpApplyHint').classList.toggle('ready', warpAssigned);
+  $('#warpApplyHint').textContent = warpAssigned
+    ? 'WARP назначен включённому сервису. После проверки общий Apply сможет активировать профиль с backup и rollback.'
+    : 'Профиль-кандидат не меняет интернет сам по себе. Для применения назначьте WARP хотя бы одному включённому сервису.';
   $('#warpHealthBadge').textContent = policy.enabled ? (health.eligible ? 'ГОТОВА К КАНДИДАТУ' : 'НАБЛЮДЕНИЕ') : 'ВЫКЛЮЧЕНА';
   $('#warpHealthBadge').className = health.eligible ? 'ready' : '';
   const healthReasons = {
@@ -1161,9 +1175,12 @@ async function saveWarpHealthPolicy() {
   const button = $('#warpSaveHealth'); button.disabled = true; button.textContent = 'Сохранение…';
   try {
     await api('/api/v1/warp/health/policy', { method: 'PUT', body: JSON.stringify(policy) });
+    state.warpPolicyDirty = false;
     await refreshWarp();
+    $('#warpPolicyFeedback').textContent = 'Сохранено';
+    showNotice('success', 'Автоконтроль WARP сохранён', policy.enabled ? 'Политика включена. Замена профиля произойдёт только после заданного числа подтверждённых сбоев.' : 'Политика выключена. Профиль WARP не будет заменяться автоматически.');
   } catch (error) { showDetails({ error: error.message }, 'Политика не сохранена'); }
-  finally { button.disabled = false; button.textContent = 'Сохранить политику'; }
+  finally { button.disabled = false; button.textContent = 'Сохранить автоконтроль'; }
 }
 
 async function runWarpHealthCheck() {
@@ -1344,7 +1361,13 @@ async function applyEngineConfig() {
     state.engineValidation = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/validate?file=${encodeURIComponent(file.id)}`, { method: 'POST' });
     if (!state.engineValidation.ok) throw new Error(state.engineValidation.output || 'Конфигурация не прошла проверку');
     await refreshEngineConfigs();
-    showDetails({ message: 'Draft проверен и добавлен в общий транзакционный Apply. Он будет записан только если обход выбран для включённого сервиса; после запуска выполнятся health-check и rollback при ошибке.', engine: engine.name, file: file.name, safe_mode: state.status.safe_mode }, 'Конфигурация подготовлена');
+    const plan = await api('/api/v1/plan');
+    const unused = (plan.transaction?.blockers || []).find((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED' && blocker.adapter === engine.id);
+    if (unused) {
+      showNotice('review', `Сначала назначьте сервис обходу ${engine.name}`, unused.resolution || 'Откройте «Сервисы», включите нужный ресурс и выберите этот обход. После этого повторите Apply.', plan, true);
+      return;
+    }
+    await applyDraft();
   } catch (error) { showDetails({ error: error.message }, 'Конфигурация не подготовлена'); }
 }
 
@@ -1965,19 +1988,34 @@ async function applyDraft() {
   const buttons = [$('#applyChanges'), $('#applySettings')];
   buttons.forEach((b) => { b.disabled = true; b.textContent = 'Применение…'; });
   try {
+    const preview = await api('/api/v1/plan');
+    const unusedDrafts = (preview.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
+    if (unusedDrafts.length) {
+      const names = unusedDrafts.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
+      showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один включённый сервис для этого обхода либо отмените черновик. Live-настройки не изменены.`, preview, true);
+      return;
+    }
     const result = await api('/api/v1/apply', { method: 'POST' });
     await refreshCoreAfterEdit();
     await showPlan();
     if (result.safe_mode && result.reviewed && !result.live_applied) {
       showNotice('review', 'План проверен — live-маршруты не изменены', 'Это нормальная работа Safe Mode. Черновик сохранён; откройте план или явно разрешите Active Apply в настройках.', result, true);
-    } else if (result.live_applied) {
+    } else if (result.live_applied && !result.pending_changes) {
       showNotice('success', 'Настройки применены', result.note || 'Маршруты активированы, проверены и зафиксированы.', result);
+    } else if (result.pending_changes) {
+      showNotice('review', 'Часть изменений ещё ждёт применения', 'Проверьте, что каждый черновик обхода назначен хотя бы одному включённому сервису.', result, true);
     } else {
       showNotice('success', 'Изменения обработаны', result.note || 'Операция завершена.', result);
     }
   } catch (error) {
 	await showPlan();
-	showNotice('error', 'Применение заблокировано', error.payload?.note || error.message, error.payload || { error: error.message }, true);
+	const unused = (error.payload?.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
+	if (unused.length) {
+	  const names = unused.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
+	  showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один сервис для этого обхода либо отмените его черновик. Ничего в live не изменено.`, error.payload, true);
+	} else {
+	  showNotice('error', 'Применение заблокировано', error.payload?.note || error.message, error.payload || { error: error.message }, true);
+	}
   } finally {
     buttons.forEach((button) => { button.disabled = false; });
     renderStatus();
@@ -1988,7 +2026,8 @@ async function discardDraft() {
   try {
     const result = await api('/api/v1/discard', { method: 'POST' });
     await refreshCoreAfterEdit();
-    showDetails(result, 'Draft отменён');
+    await refreshEngineConfigs();
+    showNotice('success', 'Черновики отменены', result.discarded_engine_drafts ? `Отменено конфигураций обходов: ${result.discarded_engine_drafts}.` : 'Желаемые маршруты возвращены к последнему применённому состоянию.', result);
   } catch (error) {
     showDetails({ error: error.message }, 'Не удалось отменить draft');
   }
@@ -2378,6 +2417,14 @@ function bindEvents() {
   $('#warpDelete').addEventListener('click', deleteWarp);
   $('#warpSaveHealth').addEventListener('click', saveWarpHealthPolicy);
   $('#warpRunHealth').addEventListener('click', runWarpHealthCheck);
+  ['warpHealthEnabled', 'warpFailureThreshold', 'warpMinFailedServices', 'warpCooldownHours', 'warpMaxRotations', 'warpAutoCandidate', 'warpAutoApply', 'warpHealthAcceptTOS'].forEach((id) => {
+    const markWarpPolicyDirty = () => {
+      state.warpPolicyDirty = true;
+      $('#warpPolicyFeedback').textContent = 'Есть несохранённые изменения';
+    };
+    $(`#${id}`).addEventListener('input', markWarpPolicyDirty);
+    $(`#${id}`).addEventListener('change', markWarpPolicyDirty);
+  });
   $$('.engine-tab').forEach((b) => b.addEventListener('click', () => switchEngineTab(b.dataset.engineTab)));
   $('#runCurrentTests').addEventListener('click', runCurrentTests);
 	$('#runIsolatedTests').addEventListener('click', runIsolatedTests);

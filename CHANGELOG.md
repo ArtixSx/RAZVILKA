@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.12.1 — honest WARP Apply and clearer bypass settings
+
+- Fixed the WARP policy/profile flow: an engine draft can no longer look applied when no enabled service uses that bypass.
+- Unified route and bypass drafts under one transactional Apply with a clear `ENGINE_DRAFT_UNUSED` blocker, backup, health-check and rollback.
+- The global pending state now includes engine configuration drafts, and global discard removes both route and engine drafts.
+- Added visible save feedback for WARP autocontrol and protected unsaved policy fields from background refreshes.
+- Reworked WARP setup into a four-step flow with plain-language thresholds and clearer next actions.
+- Added the RAZVILKA application icon, browser favicon, Apple touch icon and a Telegram-ready avatar.
+
 ## v0.12.0 — human-readable tests and release-ready installation
 
 - Replaced raw route-comparison JSON with a concise decision, per-bypass result cards, latency/HTTP evidence and an optional collapsed technical payload.

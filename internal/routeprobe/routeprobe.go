@@ -533,7 +533,7 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 		result.Detail = err.Error()
 		return result
 	}
-	request.Header.Set("User-Agent", "RAZVILKA-Isolated-Probe/0.12.0")
+	request.Header.Set("User-Agent", "RAZVILKA-Isolated-Probe/0.12.1")
 	request.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
 	request.Header.Set("Range", "bytes=0-4095")
 	start := time.Now()

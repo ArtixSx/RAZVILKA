@@ -44,14 +44,39 @@ func TestEmbeddedWebAssetsUseCurrentCacheKey(t *testing.T) {
 	}
 	html := string(data)
 	for _, asset := range []string{
-		"/style.css?v=0.12.0",
-		"/v010.css?v=0.12.0",
-		"/v011.css?v=0.12.0",
-		"/v011-theme.css?v=0.12.0",
-		"/app.js?v=0.12.0",
+		"/style.css?v=0.12.1",
+		"/v010.css?v=0.12.1",
+		"/v011.css?v=0.12.1",
+		"/v011-theme.css?v=0.12.1",
+		"/v012.css?v=0.12.1",
+		"/app.js?v=0.12.1",
+		"/favicon.ico?v=0.12.1",
 	} {
 		if !strings.Contains(html, asset) {
 			t.Fatalf("cache-busted asset missing %q", asset)
+		}
+	}
+}
+
+func TestWarpSettingsExplainTransactionalApply(t *testing.T) {
+	t.Parallel()
+	indexData, err := embedded.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatalf("read embedded index: %v", err)
+	}
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatalf("read embedded app: %v", err)
+	}
+	html, app := string(indexData), string(appData)
+	for _, required := range []string{`id="warpApplyHint"`, `class="warp-steps"`, `id="warpPolicyFeedback"`, `Проверить и применить`} {
+		if !strings.Contains(html, required) {
+			t.Fatalf("WARP guidance missing %q", required)
+		}
+	}
+	for _, required := range []string{"ENGINE_DRAFT_UNUSED", "warpPolicyDirty", "Сначала назначьте сервис"} {
+		if !strings.Contains(app, required) {
+			t.Fatalf("WARP apply guard missing %q", required)
 		}
 	}
 }

@@ -57,11 +57,12 @@ type HostState struct {
 }
 
 type Input struct {
-	Revision uint64    `json:"revision"`
-	SafeMode bool      `json:"safe_mode"`
-	Routes   []Route   `json:"routes"`
-	Engines  []Engine  `json:"engines"`
-	Host     HostState `json:"host"`
+	Revision           uint64    `json:"revision"`
+	SafeMode           bool      `json:"safe_mode"`
+	Routes             []Route   `json:"routes"`
+	Engines            []Engine  `json:"engines"`
+	EngineConfigDrafts []string  `json:"engine_config_drafts,omitempty"`
+	Host               HostState `json:"host"`
 }
 
 type Action struct {
@@ -97,6 +98,7 @@ type Plan struct {
 	Ready         bool      `json:"ready"`
 	Noop          bool      `json:"noop"`
 	RouteCount    int       `json:"route_count"`
+	EngineDrafts  []string  `json:"engine_config_drafts,omitempty"`
 	Adapters      []string  `json:"adapters"`
 	Routes        []Route   `json:"routes"`
 	Actions       []Action  `json:"actions"`
@@ -179,6 +181,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		CreatedAt:     now.Format(time.RFC3339),
 		SafeMode:      input.SafeMode,
 		RouteCount:    len(input.Routes),
+		EngineDrafts:  input.EngineConfigDrafts,
 		Routes:        input.Routes,
 		Host:          input.Host,
 		Protocol:      []string{"plan", "snapshot", "stage", "validate", "activate", "health", "commit-or-rollback"},
@@ -205,6 +208,17 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		plan.Adapters = append(plan.Adapters, adapter)
 	}
 	sort.Strings(plan.Adapters)
+	for _, draft := range input.EngineConfigDrafts {
+		engineID := strings.SplitN(draft, "/", 2)[0]
+		if !adapterSet[engineID] {
+			plan.Blockers = append(plan.Blockers, Blocker{
+				Code:       "ENGINE_DRAFT_UNUSED",
+				Adapter:    engineID,
+				Message:    fmt.Sprintf("Черновик %s не связан ни с одним включённым сервисом", draft),
+				Resolution: "Назначьте хотя бы один сервис этому обходу и повторите Apply либо отмените черновик в настройках обхода.",
+			})
+		}
+	}
 	plan.Noop = len(plan.Adapters) == 0 && len(plan.Blockers) == 0
 	if plan.Noop {
 		plan.Ready = true
@@ -367,6 +381,7 @@ func adapterID(route string) string {
 }
 
 func canonicalize(input *Input) {
+	input.EngineConfigDrafts = sortedUnique(input.EngineConfigDrafts)
 	for i := range input.Routes {
 		route := &input.Routes[i]
 		route.Domains = sortedUnique(route.Domains)

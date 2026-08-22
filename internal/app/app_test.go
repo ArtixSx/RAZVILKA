@@ -664,6 +664,70 @@ func TestEngineConfigAPIStagesValidatesAndSafeModeBlocksApply(t *testing.T) {
 	}
 }
 
+func TestUnifiedApplyKeepsUnroutedEngineDraftPending(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "config.json")
+	cfg := config.Default()
+	cfg.SafeMode = false
+	encoded, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := engineconfig.New(filepath.Join(tmp, "stage"), filepath.Join(tmp, "backups"))
+	a := &App{Store: store, Catalog: catalog.Catalog{}, EngineConfigs: mgr, Start: time.Now()}
+	ts := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/engine-configs/warp-wg/file?file=main", strings.NewReader(`{"content":"[Interface]\nPrivateKey = test\nAddress = 172.16.0.2/32\n\n[Peer]\nPublicKey = peer\nEndpoint = 1.1.1.1:2408\nAllowedIPs = 0.0.0.0/0\n"}`))
+	req.Header.Set("content-type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("stage status=%d", resp.StatusCode)
+	}
+
+	resp, err = http.Post(ts.URL+"/api/v1/apply", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("apply status=%d body=%s", resp.StatusCode, readTestBody(resp))
+	}
+	var payload struct {
+		Pending     bool           `json:"pending_changes"`
+		Transaction dataplane.Plan `json:"transaction"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if !payload.Pending || len(payload.Transaction.Blockers) != 1 || payload.Transaction.Blockers[0].Code != "ENGINE_DRAFT_UNUSED" {
+		t.Fatalf("unexpected apply response: %+v", payload)
+	}
+
+	resp, err = http.Post(ts.URL+"/api/v1/discard", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("discard status=%d", resp.StatusCode)
+	}
+	if got := mgr.List()[2].Files[0].Staged; got {
+		t.Fatal("global discard left WARP draft staged")
+	}
+}
+
 func TestTestLabAPIUsesFixedCatalogProbe(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	defer upstream.Close()
