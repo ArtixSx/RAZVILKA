@@ -35,6 +35,14 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		}
 		return nil, fmt.Errorf("device not found")
 	}
+	if name == "ip" && len(args) >= 2 && args[0] == "link" && args[1] == "add" {
+		r.active = true
+		return []byte("ok"), nil
+	}
+	if name == "ip" && len(args) >= 2 && args[0] == "link" && args[1] == "delete" {
+		r.active = false
+		return []byte("ok"), nil
+	}
 	if name == "ip" && len(args) >= 3 && args[0] == "route" && args[1] == "get" {
 		return []byte(args[2] + " dev rz-warp table 201"), nil
 	}
@@ -52,6 +60,23 @@ func TestSanitizeWGQuickProfileRemovesExecutableHooks(t *testing.T) {
 	}
 	if strings.Contains(got, "PostUp") || strings.Contains(got, "DNS =") || strings.Contains(got, "Table = auto") || strings.Count(got, "Table = off") != 1 {
 		t.Fatalf("unsafe wg-quick profile=%q", got)
+	}
+}
+
+func TestNativeWGConfigSeparatesInterfaceSettingsFromSecrets(t *testing.T) {
+	profile := strings.Replace(testWARPProfile(), "Address = 172.16.0.2/32\n", "Address = 172.16.0.2/32, 2606:4700:110::2/128\nDNS = 1.1.1.1\nMTU = 1280\nTable = off\n", 1)
+	setconf, addresses, mtu, err := nativeWGConfig(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(setconf, "Address =") || strings.Contains(setconf, "DNS =") || strings.Contains(setconf, "MTU =") || strings.Contains(setconf, "Table =") {
+		t.Fatalf("wg setconf received wg-quick-only fields: %q", setconf)
+	}
+	if !strings.Contains(setconf, "PrivateKey =") || !strings.Contains(setconf, "PublicKey =") {
+		t.Fatalf("wg configuration lost required keys: %q", setconf)
+	}
+	if len(addresses) != 2 || mtu != 1280 {
+		t.Fatalf("native settings addresses=%v mtu=%d", addresses, mtu)
 	}
 }
 
@@ -79,7 +104,7 @@ func TestWARPAdapterActivatesHealthChecksAndRollsBack(t *testing.T) {
 	runner := &warpFakeRunner{}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
-	adapter.WGQuick, adapter.WG, adapter.IP = "wg-quick", "wg", "ip"
+	adapter.WG, adapter.IP = "wg", "ip"
 	adapter.Runner = runner
 	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
 		if host == "engage.cloudflareclient.com" {
@@ -107,6 +132,9 @@ func TestWARPAdapterActivatesHealthChecksAndRollsBack(t *testing.T) {
 	}
 	if !runner.active {
 		t.Fatal("WARP candidate interface was not activated")
+	}
+	if joined := strings.Join(runner.calls, "\n"); !strings.Contains(joined, "wg setconf rz-warp") || strings.Contains(joined, "wg-quick up") {
+		t.Fatalf("native Entware activation was not used:\n%s", joined)
 	}
 	if err := adapter.Rollback(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.12.3 — first WARP Apply without a circular blocker
+
+- A structurally valid staged WARP · WireGuard profile can now be assigned to a service before its first transactional Apply.
+- Keenetic/Entware can start the owned WARP interface with native `ip` + `wg setconf` when the optional `wg-quick` helper is not packaged.
+- WARP health checks now confirm the WireGuard handshake before probing a service, so failures identify the actual layer.
+- The staged tunnel remains excluded from AUTO until it has actually started, so an untested profile cannot be selected implicitly.
+- Invalid or incomplete staged WARP profiles remain unavailable.
+
 ## v0.12.2 — resilient and clearer Web UI
 
 - The dashboard now keeps available sections working when one optional API request fails, and reports the unavailable part without blanking the whole page.

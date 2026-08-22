@@ -42,7 +42,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.12.2"
+const Version = "0.12.3"
 
 type App struct {
 	Store           *config.Store
@@ -1860,7 +1860,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
-		"note":        "v0.12.2: the UI keeps working when an optional section is unavailable, uses clearer Russian wording, warns about unsaved edits, and improves keyboard accessibility. Safe Mode remains the default.",
+		"note":        "v0.12.3: a valid staged WARP profile can be assigned before its first transactional Apply, while AUTO still waits for a running tunnel. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})
@@ -2938,9 +2938,39 @@ func (a *App) routeOptionsSnapshot() []routecatalog.Option {
 		if options[i].ID == "auto" || options[i].ID == "direct" {
 			continue
 		}
-		options[i].Ready = options[i].Selectable && a.Dataplane != nil && a.Dataplane.Capable(options[i].ID)
+		a.prepareRouteOption(&options[i])
 	}
 	return options
+}
+
+func (a *App) prepareRouteOption(option *routecatalog.Option) {
+	if option == nil {
+		return
+	}
+	// A newly generated WARP profile exists only in RAZVILKA's staging area
+	// until the first transactional Apply. The generic engine detector cannot
+	// see that file, so without this bridge the user cannot assign a service
+	// to WARP and Apply reports ENGINE_DRAFT_UNUSED. Keep Ready false until the
+	// tunnel is actually running; this makes the staged route explicitly
+	// selectable without allowing AUTO to pick an untested tunnel.
+	if option.ID == "warp-wg" && option.Installed && !option.Selectable && a.validStagedWARPProfile() {
+		option.Selectable = true
+	}
+	option.Ready = option.Selectable && a.Dataplane != nil && a.Dataplane.Capable(option.ID)
+	if option.ID == "warp-wg" && !option.Running {
+		option.Ready = false
+	}
+}
+
+func (a *App) validStagedWARPProfile() bool {
+	if a.EngineConfigs == nil {
+		return false
+	}
+	content, err := a.EngineConfigs.ReadExpert("warp-wg", "main")
+	if err != nil || content.Source != "staged" || strings.TrimSpace(content.Content) == "" {
+		return false
+	}
+	return warp.ValidateProfile([]byte(content.Content)) == nil
 }
 
 func (a *App) resolveAutoWithOptions(s catalog.Service, order []string, options []routecatalog.Option) string {

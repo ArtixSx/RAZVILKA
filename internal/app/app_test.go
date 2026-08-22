@@ -728,6 +728,60 @@ func TestUnifiedApplyKeepsUnroutedEngineDraftPending(t *testing.T) {
 	}
 }
 
+func TestValidStagedWARPProfileCanBeSelectedBeforeFirstApply(t *testing.T) {
+	tmp := t.TempDir()
+	configs := engineconfig.New(filepath.Join(tmp, "stage"), filepath.Join(tmp, "backups"))
+	profile := `[Interface]
+PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+Address = 172.16.0.2/32
+DNS = 1.1.1.1
+MTU = 1280
+
+[Peer]
+PublicKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = engage.cloudflareclient.com:2408
+`
+	if _, err := configs.Stage("warp-wg", "main", profile); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{EngineConfigs: configs}
+	if !a.validStagedWARPProfile() {
+		t.Fatal("valid staged WARP profile was not recognized")
+	}
+	options := []routecatalog.Option{{ID: "warp-wg", Installed: true}}
+	if options[0].Selectable {
+		t.Fatal("test precondition: WARP option is already selectable")
+	}
+	if options[0].Ready {
+		t.Fatal("test precondition: WARP option is already ready")
+	}
+	a.prepareRouteOption(&options[0])
+	if !options[0].Selectable {
+		t.Fatal("valid staged WARP option remains unselectable")
+	}
+	if options[0].Ready {
+		t.Fatal("untested staged WARP option was exposed to AUTO")
+	}
+	if !routecatalog.ValidWithOptions("warp-wg", options) {
+		t.Fatal("staged WARP route cannot be selected for its first transactional Apply")
+	}
+}
+
+func TestInvalidStagedWARPProfileRemainsUnavailable(t *testing.T) {
+	tmp := t.TempDir()
+	configs := engineconfig.New(filepath.Join(tmp, "stage"), filepath.Join(tmp, "backups"))
+	if _, err := configs.Stage("warp-wg", "main", "[Interface]\nPrivateKey = invalid\n"); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{EngineConfigs: configs}
+	option := routecatalog.Option{ID: "warp-wg", Installed: true}
+	a.prepareRouteOption(&option)
+	if a.validStagedWARPProfile() || option.Selectable {
+		t.Fatal("invalid staged WARP profile was accepted")
+	}
+}
+
 func TestTestLabAPIUsesFixedCatalogProbe(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	defer upstream.Close()

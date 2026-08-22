@@ -156,8 +156,8 @@ func (a *WARPWireGuardAdapter) Validate(ctx context.Context, _ Plan, root string
 			return err
 		}
 	}
-	if a.wgQuick() == "" || a.wg() == "" || a.ip() == "" {
-		return errors.New("wg, wg-quick and ip are required for WARP WireGuard")
+	if a.wg() == "" || a.ip() == "" {
+		return errors.New("wg and ip are required for WARP WireGuard")
 	}
 	snapshot, err := readWarpWGSnapshot(root)
 	if err != nil {
@@ -183,14 +183,14 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, _ Plan, root string
 		}
 	}
 	if snapshot.InterfaceWasActive {
-		if _, err := a.run(ctx, a.wgQuick(), "down", a.RuntimeConfigPath); err != nil {
+		if err := a.stopInterface(ctx); err != nil {
 			return fmt.Errorf("stop previous WARP interface: %w", err)
 		}
 	}
 	if err := installStaged(filepath.Join(root, "rz-warp.conf.staged"), a.RuntimeConfigPath); err != nil {
 		return err
 	}
-	if _, err := a.run(ctx, a.wgQuick(), "up", a.RuntimeConfigPath); err != nil {
+	if err := a.startInterface(ctx); err != nil {
 		return fmt.Errorf("start WARP interface: %w", err)
 	}
 	state, err := a.readStagedPolicy(root)
@@ -218,6 +218,24 @@ func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state
 	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), state); err != nil {
 		return err
 	}
+	// Confirm the tunnel itself before attributing a timeout to the selected
+	// service. This produces an actionable handshake error instead of making
+	// every unreachable endpoint look like a service-specific failure.
+	deadline := time.Now().Add(a.timeout())
+	for {
+		output, commandErr := a.run(ctx, a.wg(), "show", state.Interface, "latest-handshakes")
+		if commandErr == nil && latestHandshakeOK(string(output), time.Now()) {
+			break
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("WARP handshake was not confirmed: %s", shortOutput(output, commandErr))
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 	probe := a.HealthProbe
 	if probe == nil {
 		probe = defaultTunnelProbe
@@ -233,21 +251,7 @@ func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state
 			return fmt.Errorf("%s WARP health probe: %w", route.ServiceName, err)
 		}
 	}
-	deadline := time.Now().Add(a.timeout())
-	for {
-		output, commandErr := a.run(ctx, a.wg(), "show", state.Interface, "latest-handshakes")
-		if commandErr == nil && latestHandshakeOK(string(output), time.Now()) {
-			return nil
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("WARP handshake was not confirmed: %s", shortOutput(output, commandErr))
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(500 * time.Millisecond):
-		}
-	}
+	return nil
 }
 
 func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
@@ -265,20 +269,20 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 	}
 	_ = removePolicy(ctx, a.Runner, a.ip(), state)
 	if a.interfaceActive(ctx) {
-		if output, err := a.run(ctx, a.wgQuick(), "down", a.RuntimeConfigPath); err != nil {
-			return fmt.Errorf("stop stale %s interface: %s", a.ID(), shortOutput(output, err))
+		if err := a.stopInterface(ctx); err != nil {
+			return fmt.Errorf("stop stale %s interface: %w", a.ID(), err)
 		}
 	}
-	if output, err := a.run(ctx, a.wgQuick(), "up", a.RuntimeConfigPath); err != nil {
-		return fmt.Errorf("recover %s interface: %s", a.ID(), shortOutput(output, err))
+	if err := a.startInterface(ctx); err != nil {
+		return fmt.Errorf("recover %s interface: %w", a.ID(), err)
 	}
 	if err := applyPolicy(ctx, a.Runner, a.ip(), state); err != nil {
-		_, _ = a.run(ctx, a.wgQuick(), "down", a.RuntimeConfigPath)
+		_ = a.stopInterface(ctx)
 		return err
 	}
 	if err := a.healthState(ctx, plan, state); err != nil {
 		_ = removePolicy(ctx, a.Runner, a.ip(), state)
-		_, _ = a.run(ctx, a.wgQuick(), "down", a.RuntimeConfigPath)
+		_ = a.stopInterface(ctx)
 		return err
 	}
 	return nil
@@ -329,12 +333,8 @@ func (a *WARPWireGuardAdapter) Deactivate(ctx context.Context) error {
 		}
 	}
 	if a.interfaceActive(ctx) {
-		if output, err := a.run(ctx, a.wgQuick(), "down", a.RuntimeConfigPath); err != nil {
-			// wg-quick needs its runtime file. If that was lost, remove only the
-			// exact RAZVILKA-owned interface instead of touching other tunnels.
-			if deleteOutput, deleteErr := a.run(ctx, a.ip(), "link", "delete", "dev", a.interfaceName()); deleteErr != nil && firstErr == nil {
-				firstErr = fmt.Errorf("stop %s interface: %s; fallback: %s", a.ID(), shortOutput(output, err), shortOutput(deleteOutput, deleteErr))
-			}
+		if err := a.stopInterface(ctx); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("stop %s interface: %w", a.ID(), err)
 		}
 	}
 	for _, path := range []string{a.statePath(), a.RuntimeConfigPath} {
@@ -381,7 +381,7 @@ func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string
 		}
 	}
 	if a.interfaceActive(ctx) {
-		if _, err := a.run(ctx, a.wgQuick(), "down", a.RuntimeConfigPath); err != nil && firstErr == nil {
+		if err := a.stopInterface(ctx); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -389,7 +389,7 @@ func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string
 		firstErr = err
 	}
 	if snapshot.InterfaceWasActive && snapshot.RuntimeExisted {
-		if _, err := a.run(ctx, a.wgQuick(), "up", a.RuntimeConfigPath); err != nil && firstErr == nil {
+		if err := a.startInterface(ctx); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -509,6 +509,138 @@ func (a *WARPWireGuardAdapter) interfaceActive(ctx context.Context) bool {
 	}
 	_, err := a.run(ctx, a.ip(), "link", "show", "dev", a.interfaceName())
 	return err == nil
+}
+
+func (a *WARPWireGuardAdapter) startInterface(ctx context.Context) error {
+	if quick := a.wgQuick(); quick != "" {
+		output, err := a.run(ctx, quick, "up", a.RuntimeConfigPath)
+		if err != nil {
+			return fmt.Errorf("wg-quick up: %s", shortOutput(output, err))
+		}
+		return nil
+	}
+	return a.startNativeInterface(ctx)
+}
+
+func (a *WARPWireGuardAdapter) stopInterface(ctx context.Context) error {
+	if quick := a.wgQuick(); quick != "" && regularFile(a.RuntimeConfigPath) {
+		if output, err := a.run(ctx, quick, "down", a.RuntimeConfigPath); err == nil {
+			return nil
+		} else if deleteOutput, deleteErr := a.run(ctx, a.ip(), "link", "delete", "dev", a.interfaceName()); deleteErr != nil {
+			return fmt.Errorf("wg-quick down: %s; native fallback: %s", shortOutput(output, err), shortOutput(deleteOutput, deleteErr))
+		}
+		return nil
+	}
+	output, err := a.run(ctx, a.ip(), "link", "delete", "dev", a.interfaceName())
+	if err != nil {
+		return fmt.Errorf("delete interface: %s", shortOutput(output, err))
+	}
+	return nil
+}
+
+// startNativeInterface is the BusyBox/Entware fallback. Entware ships the wg
+// binary on several Keenetic targets without the optional wg-quick shell
+// helper. Only the exact RAZVILKA-owned interface is created, while service
+// routing remains managed separately by the policy transaction.
+func (a *WARPWireGuardAdapter) startNativeInterface(ctx context.Context) (retErr error) {
+	content, err := os.ReadFile(a.RuntimeConfigPath)
+	if err != nil {
+		return err
+	}
+	setconf, addresses, mtu, err := nativeWGConfig(string(content))
+	if err != nil {
+		return err
+	}
+	temporary := a.RuntimeConfigPath + ".setconf"
+	if err := writeAtomic(temporary, []byte(setconf), 0o600); err != nil {
+		return err
+	}
+	defer os.Remove(temporary)
+	if output, err := a.run(ctx, a.ip(), "link", "add", "dev", a.interfaceName(), "type", "wireguard"); err != nil {
+		return fmt.Errorf("create interface: %s", shortOutput(output, err))
+	}
+	defer func() {
+		if retErr != nil {
+			_, _ = a.run(ctx, a.ip(), "link", "delete", "dev", a.interfaceName())
+		}
+	}()
+	if output, err := a.run(ctx, a.wg(), "setconf", a.interfaceName(), temporary); err != nil {
+		return fmt.Errorf("wg setconf: %s", shortOutput(output, err))
+	}
+	for _, address := range addresses {
+		if output, err := a.run(ctx, a.ip(), "address", "add", address, "dev", a.interfaceName()); err != nil {
+			return fmt.Errorf("assign address %s: %s", address, shortOutput(output, err))
+		}
+	}
+	if mtu > 0 {
+		if output, err := a.run(ctx, a.ip(), "link", "set", "dev", a.interfaceName(), "mtu", strconv.Itoa(mtu)); err != nil {
+			return fmt.Errorf("set MTU: %s", shortOutput(output, err))
+		}
+	}
+	if output, err := a.run(ctx, a.ip(), "link", "set", "dev", a.interfaceName(), "up"); err != nil {
+		return fmt.Errorf("bring interface up: %s", shortOutput(output, err))
+	}
+	return nil
+}
+
+func nativeWGConfig(content string) (string, []string, int, error) {
+	if err := warp.ValidateProfile([]byte(content)); err != nil {
+		return "", nil, 0, err
+	}
+	section := ""
+	addresses := []string{}
+	mtu := 0
+	setconf := make([]string, 0, 16)
+	for _, line := range strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			section = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+			setconf = append(setconf, trimmed)
+			continue
+		}
+		key, value, assigned := strings.Cut(trimmed, "=")
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if section == "Interface" && assigned {
+			switch strings.ToLower(key) {
+			case "address":
+				for _, address := range splitCommaValues(value) {
+					if _, _, err := net.ParseCIDR(address); err != nil {
+						return "", nil, 0, fmt.Errorf("invalid interface address %q", address)
+					}
+					addresses = append(addresses, address)
+				}
+				continue
+			case "mtu":
+				parsed, err := strconv.Atoi(value)
+				if err != nil || parsed < 576 || parsed > 9000 {
+					return "", nil, 0, fmt.Errorf("invalid MTU %q", value)
+				}
+				mtu = parsed
+				continue
+			case "dns", "table", "preup", "postup", "predown", "postdown", "saveconfig":
+				continue
+			}
+		}
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, ";") {
+			setconf = append(setconf, trimmed)
+		}
+	}
+	if len(addresses) == 0 {
+		return "", nil, 0, errors.New("WARP interface has no addresses")
+	}
+	return strings.Join(setconf, "\n") + "\n", addresses, mtu, nil
+}
+
+func splitCommaValues(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func readWarpWGSnapshot(root string) (warpWGSnapshot, error) {

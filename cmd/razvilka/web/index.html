@@ -6,15 +6,15 @@
   <meta name="theme-color" content="#0b0e12">
   <meta name="application-name" content="RAZVILKA">
   <title>RAZVILKA</title>
-<link rel="icon" href="/favicon.ico?v=0.12.2" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=0.12.2">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=0.12.2">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.12.2">
-<link rel="stylesheet" href="/style.css?v=0.12.2">
-<link rel="stylesheet" href="/v010.css?v=0.12.2">
-<link rel="stylesheet" href="/v011.css?v=0.12.2">
-<link rel="stylesheet" href="/v011-theme.css?v=0.12.2">
-<link rel="stylesheet" href="/v012.css?v=0.12.2">
+<link rel="icon" href="/favicon.ico?v=0.12.3" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=0.12.3">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=0.12.3">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.12.3">
+<link rel="stylesheet" href="/style.css?v=0.12.3">
+<link rel="stylesheet" href="/v010.css?v=0.12.3">
+<link rel="stylesheet" href="/v011.css?v=0.12.3">
+<link rel="stylesheet" href="/v011-theme.css?v=0.12.3">
+<link rel="stylesheet" href="/v012.css?v=0.12.3">
 </head>
 <body>
 <svg class="icon-sprite" aria-hidden="true">
@@ -34,7 +34,7 @@
 </svg>
 <section class="auth-screen" id="authScreen" hidden>
   <div class="auth-card">
-    <div class="auth-brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.12.2" alt=""></div><div><b>RAZVILKA</b><small>Локальная панель маршрутизации</small></div></div>
+    <div class="auth-brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.12.3" alt=""></div><div><b>RAZVILKA</b><small>Локальная панель маршрутизации</small></div></div>
     <div id="authSetupPanel" hidden>
       <span class="eyebrow">ПЕРВЫЙ ЗАПУСК</span><h1>Создайте администратора</h1>
       <p>Ключ первого входа показан установщиком. После регистрации вход выполняется обычным логином и паролем.</p>
@@ -62,7 +62,7 @@
 </section>
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.12.2" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.12.2</small></div></div>
+    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.12.3" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.12.3</small></div></div>
     <nav class="nav-list">
       <button class="nav active" data-view="overview"><span><svg><use href="#i-home"/></svg></span><b>Обзор</b></button>
       <div class="nav-label">МАРШРУТИЗАЦИЯ</div>
@@ -311,13 +311,13 @@
     </section>
 
     <section class="details-drawer" id="detailsPanel"><div class="drawer-head"><div><h3>Детали</h3><p id="detailsSubtitle">Понятный результат · технические данные ниже</p></div><button id="hideDetails" aria-label="Закрыть">×</button></div><div class="details-content" id="details"></div></section>
-    <footer>RAZVILKA <span id="footerVersion">v0.12.2</span> · локальная панель маршрутизации · <a href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer">Telegram</a></footer>
+    <footer>RAZVILKA <span id="footerVersion">v0.12.3</span> · локальная панель маршрутизации · <a href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer">Telegram</a></footer>
   </main>
 </div>
 <dialog class="action-dialog" id="actionDialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ</span><h3 id="actionDialogTitle">Подтвердите действие</h3><p id="actionDialogText"></p><div class="dialog-actions"><button class="secondary" value="cancel">Отмена</button><button class="primary" id="actionDialogConfirm" value="confirm">Продолжить</button></div></form></dialog>
 <dialog class="onboarding-dialog" id="onboardingDialog">
   <div class="onboarding-shell">
-    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.12.2" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
+    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.12.3" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
     <section class="onboarding-main"><button class="dialog-close" id="onboardingClose" type="button" aria-label="Закрыть">×</button><div id="onboardingContent"></div><div class="onboarding-actions"><button class="secondary" id="onboardingBack" type="button">Назад</button><button class="text-button" id="onboardingLater" type="button">Продолжить позже</button><button class="primary" id="onboardingNext" type="button">Далее</button></div></section>
   </div>
 </dialog>
@@ -372,6 +372,6 @@
     </div>
   </div>
 </dialog>
-<script src="/app.js?v=0.12.2"></script>
+<script src="/app.js?v=0.12.3"></script>
 </body>
 </html>
