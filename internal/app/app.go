@@ -42,7 +42,17 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.13.0"
+const Version = "0.13.1"
+
+type applyFailureAdvice struct {
+	Code           string   `json:"code"`
+	Title          string   `json:"title"`
+	Message        string   `json:"message"`
+	Resolution     string   `json:"resolution"`
+	DraftPreserved bool     `json:"draft_preserved"`
+	Retryable      bool     `json:"retryable"`
+	Alternatives   []string `json:"alternatives,omitempty"`
+}
 
 type App struct {
 	Store           *config.Store
@@ -233,6 +243,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	dataplaneRecoveryState := "not-required"
 	dataplaneAdapters := 0
 	dataplaneError := ""
+	lastApplyFailure := ""
 	liveActive := false
 	if a.Dataplane != nil {
 		if runtime, err := a.Dataplane.Status(); err != nil {
@@ -252,6 +263,9 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 				dataplaneRecoveryState = "current-process"
 				liveActive = latest.State == "committed" && len(latest.Adapters) > 0 && !a.Store.Dirty() && configDrafts == 0 && runtime.Execution.State == "committed"
 			}
+			if latest.Revision == cfg.Revision && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && runtime.Execution.State == "rolled-back" {
+				lastApplyFailure = classifyApplyFailure(runtime.Execution.Error).Code
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -265,7 +279,8 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"sources_downloadable": sourceDownloadable, "sources_reference": sourceReferences,
 		"active_connections": activeConnections, "engine_config_drafts": configDrafts,
 		"dataplane_state": dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
-		"pending_changes": a.Store.Dirty() || configDrafts > 0, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
+		"last_apply_failure": lastApplyFailure,
+		"pending_changes":    a.Store.Dirty() || configDrafts > 0, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
 	})
 }
 
@@ -1860,7 +1875,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
-		"note":        "v0.13.0: route tests measure TTFB and response-stream integrity; diagnostics report transparent proxy prerequisites. Safe Mode remains the default.",
+		"note":        "v0.13.1: WARP WireGuard retries documented UDP fallback ports and reports a safe rollback without exposing peer identifiers. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})
@@ -1936,9 +1951,10 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		}
 		execution, applyErr := a.Dataplane.Apply(r.Context(), transaction, a.Store.ApplyDraftWithRollback)
 		if applyErr != nil {
+			failure := classifyApplyFailure(applyErr.Error())
 			writeJSON(w, http.StatusConflict, map[string]any{
 				"ok": false, "safe_mode": false, "pending_changes": a.pendingChanges(), "live_applied": false,
-				"error": applyErr.Error(), "transaction": transaction, "execution": execution,
+				"error": applyErr.Error(), "note": failure.Message, "failure": failure, "transaction": transaction, "execution": execution,
 			})
 			return
 		}
@@ -1961,6 +1977,24 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "safe_mode": cfg.SafeMode, "pending_changes": a.pendingChanges(), "live_applied": liveApplied, "note": note, "transaction": transaction})
+}
+
+func classifyApplyFailure(message string) applyFailureAdvice {
+	advice := applyFailureAdvice{
+		Code: "DATAPLANE_APPLY_FAILED", Title: "Изменения не применены",
+		Message:        "Проверка нового маршрута не прошла. Рабочая конфигурация автоматически восстановлена, а черновик сохранён.",
+		Resolution:     "Откройте технические детали, исправьте причину и повторите применение либо отмените черновик.",
+		DraftPreserved: true, Retryable: true,
+	}
+	lower := strings.ToLower(message)
+	if strings.Contains(lower, "warp wireguard handshake was not confirmed") || strings.Contains(lower, "warp handshake was not confirmed") {
+		advice.Code = "WARP_WIREGUARD_HANDSHAKE"
+		advice.Title = "WARP WireGuard не подключился"
+		advice.Message = "Cloudflare не подтвердил WireGuard-handshake. RAZVILKA проверила настроенный и резервные UDP-порты, затем безопасно вернула прежний интернет; черновик сохранён."
+		advice.Resolution = "Если повтор не помогает, используйте WARP · MASQUE либо импортируйте отдельный AmneziaWG/VLESS-профиль. Профиль WARP нельзя преобразовать в AmneziaWG без совместимого сервера."
+		advice.Alternatives = []string{"usque", "amneziawg", "sing-box"}
+	}
+	return advice
 }
 
 func (a *App) buildDataplanePlan(cfg config.Config, options []routecatalog.Option) (dataplane.Plan, error) {

@@ -33,6 +33,27 @@ type WARPWireGuardAdapter struct {
 	Resolver          PrefixResolver
 	HealthProbe       func(context.Context, string) error
 	Timeout           time.Duration
+	HandshakeTimeout  time.Duration
+	FallbackPorts     []int
+}
+
+type warpWGSelection struct {
+	Endpoint string `json:"endpoint"`
+}
+
+type WARPHandshakeError struct {
+	Ports []int
+}
+
+func (e WARPHandshakeError) Error() string {
+	ports := make([]string, 0, len(e.Ports))
+	for _, port := range e.Ports {
+		ports = append(ports, strconv.Itoa(port))
+	}
+	if len(ports) == 0 {
+		return "WARP WireGuard handshake was not confirmed"
+	}
+	return "WARP WireGuard handshake was not confirmed on UDP ports " + strings.Join(ports, ", ")
 }
 
 type warpWGSnapshot struct {
@@ -208,10 +229,10 @@ func (a *WARPWireGuardAdapter) Health(ctx context.Context, plan Plan, root strin
 	if err != nil {
 		return err
 	}
-	return a.healthState(ctx, plan, state)
+	return a.healthState(ctx, plan, state, root)
 }
 
-func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state PolicyState) error {
+func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state PolicyState, transactionRoot string) error {
 	if !a.interfaceActive(ctx) {
 		return fmt.Errorf("WARP interface %s is not active", state.Interface)
 	}
@@ -221,19 +242,34 @@ func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state
 	// Confirm the tunnel itself before attributing a timeout to the selected
 	// service. This produces an actionable handshake error instead of making
 	// every unreachable endpoint look like a service-specific failure.
-	deadline := time.Now().Add(a.timeout())
-	for {
-		output, commandErr := a.run(ctx, a.wg(), "show", state.Interface, "latest-handshakes")
-		if commandErr == nil && latestHandshakeOK(string(output), time.Now()) {
+	if err := a.confirmHandshake(ctx, state.Interface); err != nil {
+		if a.ID() != "warp-wg" || transactionRoot == "" {
+			return err
+		}
+		ports, portErr := a.warpEndpointPorts()
+		if portErr != nil {
+			return portErr
+		}
+		attempted := []int{ports[0]}
+		connected := false
+		for _, port := range ports[1:] {
+			attempted = append(attempted, port)
+			endpoint, switchErr := a.switchEndpointPort(ctx, port)
+			if switchErr != nil {
+				continue
+			}
+			if handshakeErr := a.confirmHandshake(ctx, state.Interface); handshakeErr != nil {
+				continue
+			}
+			selection, _ := json.Marshal(warpWGSelection{Endpoint: endpoint})
+			if writeErr := writeAtomic(filepath.Join(transactionRoot, "selected-endpoint.json"), selection, 0o600); writeErr != nil {
+				return writeErr
+			}
+			connected = true
 			break
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("WARP handshake was not confirmed: %s", shortOutput(output, commandErr))
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(500 * time.Millisecond):
+		if !connected {
+			return WARPHandshakeError{Ports: attempted}
 		}
 	}
 	probe := a.HealthProbe
@@ -263,7 +299,7 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 		return fmt.Errorf("committed %s runtime state is missing", a.ID())
 	}
 	if a.interfaceActive(ctx) {
-		if err := a.healthState(ctx, plan, state); err == nil {
+		if err := a.healthState(ctx, plan, state, ""); err == nil {
 			return nil
 		}
 	}
@@ -280,7 +316,7 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 		_ = a.stopInterface(ctx)
 		return err
 	}
-	if err := a.healthState(ctx, plan, state); err != nil {
+	if err := a.healthState(ctx, plan, state, ""); err != nil {
 		_ = removePolicy(ctx, a.Runner, a.ip(), state)
 		_ = a.stopInterface(ctx)
 		return err
@@ -311,7 +347,7 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bo
 	if err := replacePolicy(ctx, a.Runner, a.ip(), oldState, newState); err != nil {
 		return false, err
 	}
-	if err := a.healthState(ctx, plan, newState); err != nil {
+	if err := a.healthState(ctx, plan, newState, ""); err != nil {
 		_ = replacePolicy(ctx, a.Runner, a.ip(), newState, oldState)
 		return false, err
 	}
@@ -350,10 +386,26 @@ func (a *WARPWireGuardAdapter) Commit(_ context.Context, _ Plan, root string) er
 	if err != nil {
 		return err
 	}
+	profile := snapshot.Profile
 	if snapshot.ProfileDraft {
-		if err := installStagedBytes(snapshot.StagedProfile, snapshot.ProfilePath, 0o600); err != nil {
+		profile = snapshot.StagedProfile
+	}
+	selection, selected, err := readWarpWGSelection(root)
+	if err != nil {
+		return err
+	}
+	if selected {
+		profile, err = replaceWGEndpoint(profile, selection.Endpoint)
+		if err != nil {
 			return err
 		}
+	}
+	if snapshot.ProfileDraft || selected {
+		if err := installStagedBytes(profile, snapshot.ProfilePath, 0o600); err != nil {
+			return err
+		}
+	}
+	if snapshot.ProfileDraft {
 		if err := a.Configs.Discard(a.ID(), "main"); err != nil {
 			return err
 		}
@@ -466,6 +518,102 @@ func (a *WARPWireGuardAdapter) timeout() time.Duration {
 		return 25 * time.Second
 	}
 	return a.Timeout
+}
+func (a *WARPWireGuardAdapter) handshakeTimeout() time.Duration {
+	if a.HandshakeTimeout <= 0 {
+		return 8 * time.Second
+	}
+	return a.HandshakeTimeout
+}
+
+func (a *WARPWireGuardAdapter) confirmHandshake(ctx context.Context, interfaceName string) error {
+	deadline := time.Now().Add(a.handshakeTimeout())
+	for {
+		output, commandErr := a.run(ctx, a.wg(), "show", interfaceName, "latest-handshakes")
+		if commandErr == nil && latestHandshakeOK(string(output), time.Now()) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return WARPHandshakeError{}
+		}
+		delay := 500 * time.Millisecond
+		if remaining := time.Until(deadline); remaining < delay {
+			delay = remaining
+		}
+		if delay <= 0 {
+			return WARPHandshakeError{}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+}
+
+func (a *WARPWireGuardAdapter) warpEndpointPorts() ([]int, error) {
+	content, err := os.ReadFile(a.RuntimeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+	endpoint, err := wgEndpoint(string(content))
+	if err != nil {
+		return nil, err
+	}
+	_, portText, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return nil, errors.New("invalid WireGuard endpoint")
+	}
+	configured, err := strconv.Atoi(portText)
+	if err != nil || configured < 1 || configured > 65535 {
+		return nil, errors.New("invalid WireGuard endpoint port")
+	}
+	fallback := a.FallbackPorts
+	if fallback == nil {
+		fallback = []int{2408, 500, 1701, 4500}
+	}
+	ports := []int{configured}
+	seen := map[int]bool{configured: true}
+	for _, port := range fallback {
+		if port < 1 || port > 65535 || seen[port] {
+			continue
+		}
+		seen[port] = true
+		ports = append(ports, port)
+	}
+	return ports, nil
+}
+
+func (a *WARPWireGuardAdapter) switchEndpointPort(ctx context.Context, port int) (string, error) {
+	content, err := os.ReadFile(a.RuntimeConfigPath)
+	if err != nil {
+		return "", err
+	}
+	current, err := wgEndpoint(string(content))
+	if err != nil {
+		return "", err
+	}
+	host, _, err := net.SplitHostPort(current)
+	if err != nil {
+		return "", errors.New("invalid WireGuard endpoint")
+	}
+	endpoint := net.JoinHostPort(strings.Trim(host, "[]"), strconv.Itoa(port))
+	updated, err := replaceWGEndpoint(content, endpoint)
+	if err != nil {
+		return "", err
+	}
+	if a.interfaceActive(ctx) {
+		if err := a.stopInterface(ctx); err != nil {
+			return "", err
+		}
+	}
+	if err := writeAtomic(a.RuntimeConfigPath, updated, 0o600); err != nil {
+		return "", err
+	}
+	if err := a.startInterface(ctx); err != nil {
+		return "", err
+	}
+	return endpoint, nil
 }
 func (a *WARPWireGuardAdapter) wgQuick() string {
 	if a.WGQuick != "" {
@@ -653,6 +801,71 @@ func readWarpWGSnapshot(root string) (warpWGSnapshot, error) {
 		return warpWGSnapshot{}, err
 	}
 	return snapshot, nil
+}
+
+func readWarpWGSelection(root string) (warpWGSelection, bool, error) {
+	data, err := os.ReadFile(filepath.Join(root, "selected-endpoint.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return warpWGSelection{}, false, nil
+	}
+	if err != nil {
+		return warpWGSelection{}, false, err
+	}
+	var selection warpWGSelection
+	if err := json.Unmarshal(data, &selection); err != nil {
+		return warpWGSelection{}, false, err
+	}
+	if _, _, err := net.SplitHostPort(selection.Endpoint); err != nil {
+		return warpWGSelection{}, false, errors.New("invalid selected WireGuard endpoint")
+	}
+	return selection, true, nil
+}
+
+func wgEndpoint(content string) (string, error) {
+	section := ""
+	for _, line := range strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			section = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+			continue
+		}
+		key, value, ok := strings.Cut(trimmed, "=")
+		if ok && section == "Peer" && strings.EqualFold(strings.TrimSpace(key), "Endpoint") {
+			endpoint := strings.TrimSpace(value)
+			if _, _, err := net.SplitHostPort(endpoint); err != nil {
+				return "", errors.New("invalid WireGuard endpoint")
+			}
+			return endpoint, nil
+		}
+	}
+	return "", errors.New("WireGuard endpoint is missing")
+}
+
+func replaceWGEndpoint(content []byte, endpoint string) ([]byte, error) {
+	if _, _, err := net.SplitHostPort(endpoint); err != nil {
+		return nil, errors.New("invalid WireGuard endpoint")
+	}
+	lines := strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n")
+	section := ""
+	replaced := false
+	for index, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			section = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+			continue
+		}
+		key, _, ok := strings.Cut(trimmed, "=")
+		if ok && section == "Peer" && strings.EqualFold(strings.TrimSpace(key), "Endpoint") {
+			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+			lines[index] = indent + "Endpoint = " + endpoint
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		return nil, errors.New("WireGuard endpoint is missing")
+	}
+	return []byte(strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\n"), nil
 }
 
 func sanitizeWGQuickProfile(content string) (string, error) {

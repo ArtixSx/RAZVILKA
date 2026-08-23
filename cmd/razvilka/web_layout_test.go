@@ -44,13 +44,13 @@ func TestEmbeddedWebAssetsUseCurrentCacheKey(t *testing.T) {
 	}
 	html := string(data)
 	for _, asset := range []string{
-		"/style.css?v=0.13.0",
-		"/v010.css?v=0.13.0",
-		"/v011.css?v=0.13.0",
-		"/v011-theme.css?v=0.13.0",
-		"/v012.css?v=0.13.0",
-		"/app.js?v=0.13.0",
-		"/favicon.ico?v=0.13.0",
+		"/style.css?v=0.13.1",
+		"/v010.css?v=0.13.1",
+		"/v011.css?v=0.13.1",
+		"/v011-theme.css?v=0.13.1",
+		"/v012.css?v=0.13.1",
+		"/app.js?v=0.13.1",
+		"/favicon.ico?v=0.13.1",
 	} {
 		if !strings.Contains(html, asset) {
 			t.Fatalf("cache-busted asset missing %q", asset)

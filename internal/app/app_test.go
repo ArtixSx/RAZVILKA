@@ -44,6 +44,21 @@ func (strategyValidator) Validate(_ context.Context, arguments []string) strateg
 
 type strategyProbeExecutor struct{}
 
+func TestClassifyWARPHandshakeFailure(t *testing.T) {
+	failure := classifyApplyFailure("WARP WireGuard handshake was not confirmed on UDP ports 2408, 500, 1701, 4500")
+	if failure.Code != "WARP_WIREGUARD_HANDSHAKE" || !failure.DraftPreserved || !failure.Retryable {
+		t.Fatalf("unexpected failure advice: %+v", failure)
+	}
+	if len(failure.Alternatives) != 3 || !strings.Contains(failure.Resolution, "AmneziaWG") {
+		t.Fatalf("missing safe alternatives: %+v", failure)
+	}
+
+	legacy := classifyApplyFailure("WARP handshake was not confirmed: peer handshake timestamp is zero")
+	if legacy.Code != "WARP_WIREGUARD_HANDSHAKE" {
+		t.Fatalf("legacy WARP failure was not classified: %+v", legacy)
+	}
+}
+
 func TestStaticUIIsNeverServedFromAnOldRouterCache(t *testing.T) {
 	a := &App{}
 	request := httptest.NewRequest(http.MethodGet, "/", nil)

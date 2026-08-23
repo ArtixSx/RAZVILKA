@@ -647,14 +647,23 @@ function renderStatus() {
   $('#serviceNavCount').textContent = s.enabled_services || 0;
   $('#draftBar').classList.toggle('show', !!s.pending_changes || engineDrafts > 0);
   $('#draftBar').classList.toggle('safe-review', !!s.safe_mode);
-  $('#draftTitle').textContent = engineDrafts > 0
+  const failedApply = !s.safe_mode && !!s.pending_changes && !!s.last_apply_failure;
+  $('#draftBar').classList.toggle('apply-failed', failedApply);
+  $('#draftTitle').textContent = failedApply
+    ? 'Применение отменено — интернет восстановлен'
+    : engineDrafts > 0
     ? `${engineDrafts} ${engineDrafts === 1 ? 'черновик обхода ждёт применения' : 'черновика обходов ждут применения'}`
     : (s.safe_mode ? 'Изменения сохранены как черновик' : 'Есть неподтверждённые изменения');
-  $('#draftHint').textContent = engineDrafts > 0
+  $('#draftHint').textContent = failedApply && s.last_apply_failure === 'WARP_WIREGUARD_HANDSHAKE'
+    ? 'WARP WireGuard не получил ответ. Можно повторить проверку резервных UDP-портов или отменить сохранённый черновик.'
+    : failedApply
+    ? 'Новый маршрут не прошёл проверку. Исправьте настройки и повторите либо отмените черновик.'
+    : engineDrafts > 0
     ? 'Черновик применяется только вместе с сервисом, назначенным этому обходу'
     : (s.safe_mode ? 'Безопасный режим проверит план, но не изменит рабочие маршруты' : 'Сначала проверяем план, затем применяем всё одной операцией');
-  $('#applyChanges').textContent = s.safe_mode ? 'Проверить план' : 'Применить';
-  $('#applySettings').textContent = s.safe_mode ? 'Проверить план' : 'Применить черновик';
+  $('#applyChanges').textContent = s.safe_mode ? 'Проверить план' : (failedApply ? 'Повторить' : 'Применить');
+  $('#applySettings').textContent = s.safe_mode ? 'Проверить план' : (failedApply ? 'Повторить проверку' : 'Применить черновик');
+  $('#discardChanges').textContent = failedApply ? 'Отменить черновик' : 'Отменить';
 }
 
 function renderSystem() {
@@ -2075,7 +2084,12 @@ async function applyDraft() {
 	  const names = unused.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
 	  showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один сервис для этого обхода либо отмените его черновик. Рабочие настройки не изменены.`, error.payload, true);
 	} else {
-	  showNotice('error', 'Применение заблокировано', error.payload?.note || error.message, error.payload || { error: error.message }, true);
+	  const failure = error.payload?.failure;
+	  if (failure) {
+	    showNotice('error', failure.title || 'Изменения не применены', `${failure.message || error.message} ${failure.resolution || ''}`.trim(), error.payload, true);
+	  } else {
+	    showNotice('error', 'Применение заблокировано', error.payload?.note || error.message, error.payload || { error: error.message }, true);
+	  }
 	}
   } finally {
     buttons.forEach((button) => { button.disabled = false; });

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.13.1 — WARP handshake recovery and clear rollback state
+
+- WARP WireGuard now retries Cloudflare's documented UDP fallback ports `500`, `1701` and `4500` when the configured endpoint does not complete a handshake.
+- The first working WARP endpoint port is committed atomically with the profile; all failed candidates are removed by the existing rollback transaction.
+- Handshake errors no longer include peer identifiers in the public API or UI.
+- A failed Apply is now shown as a successful safety rollback: the UI explains that internet access was restored, keeps the draft intentionally and offers clear retry or discard actions.
+- The UI explains that Cloudflare WARP cannot be converted into AmneziaWG without a compatible AmneziaWG server and suggests independent MASQUE, AmneziaWG or sing-box routes instead.
+
 ## v0.13.0 — route quality evidence and compatibility advisor
 
 - Extended current and isolated service tests with TTFB, total response time, bytes read and a bounded 32 KiB stream-integrity sample.

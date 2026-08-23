@@ -15,8 +15,11 @@ import (
 )
 
 type warpFakeRunner struct {
-	active bool
-	calls  []string
+	active                bool
+	calls                 []string
+	starts                int
+	handshakeAfterRestart bool
+	neverHandshake        bool
 }
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -37,6 +40,7 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 	}
 	if name == "ip" && len(args) >= 2 && args[0] == "link" && args[1] == "add" {
 		r.active = true
+		r.starts++
 		return []byte("ok"), nil
 	}
 	if name == "ip" && len(args) >= 2 && args[0] == "link" && args[1] == "delete" {
@@ -47,9 +51,79 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		return []byte(args[2] + " dev rz-warp table 201"), nil
 	}
 	if name == "wg" && len(args) > 0 && args[0] == "show" {
+		if r.neverHandshake || (r.handshakeAfterRestart && r.starts < 2) {
+			return []byte("peer\t0\n"), nil
+		}
 		return []byte(fmt.Sprintf("peer\t%d\n", time.Now().Unix())), nil
 	}
 	return []byte("ok"), nil
+}
+
+func TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner(t *testing.T) {
+	root := t.TempDir()
+	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	if _, err := configs.Stage("warp-wg", "main", testWARPProfile()); err != nil {
+		t.Fatal(err)
+	}
+	runner := &warpFakeRunner{handshakeAfterRestart: true}
+	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
+	adapter.WG, adapter.IP = "wg", "ip"
+	adapter.Runner = runner
+	adapter.HandshakeTimeout = time.Millisecond
+	adapter.FallbackPorts = []int{500, 4500}
+	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
+		if host == "engage.cloudflareclient.com" {
+			return []netip.Addr{netip.MustParseAddr("162.159.192.1")}, nil
+		}
+		return []netip.Addr{netip.MustParseAddr("198.51.100.20")}, nil
+	}
+	adapter.HealthProbe = func(context.Context, string) error { return nil }
+	transaction := filepath.Join(root, "transaction")
+	plan := Plan{Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := readWarpWGSnapshot(transaction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.ProfilePath = filepath.Join(root, "live", "wgcf-profile.conf")
+	snapshotData, _ := json.Marshal(snapshot)
+	if err := os.WriteFile(filepath.Join(transaction, "snapshot.json"), snapshotData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	steps := []struct {
+		name   string
+		action func() error
+	}{
+		{"stage", func() error { return adapter.Stage(context.Background(), plan, transaction) }},
+		{"validate", func() error { return adapter.Validate(context.Background(), plan, transaction) }},
+		{"activate", func() error { return adapter.Activate(context.Background(), plan, transaction) }},
+		{"health", func() error { return adapter.Health(context.Background(), plan, transaction) }},
+		{"commit", func() error { return adapter.Commit(context.Background(), plan, transaction) }},
+	}
+	for _, step := range steps {
+		if err := step.action(); err != nil {
+			t.Fatalf("%s: %v", step.name, err)
+		}
+	}
+	live, err := os.ReadFile(snapshot.ProfilePath)
+	if err != nil || !strings.Contains(string(live), "Endpoint = engage.cloudflareclient.com:500") {
+		t.Fatalf("fallback endpoint was not committed: content=%q err=%v", live, err)
+	}
+}
+
+func TestWARPHandshakeFailureDoesNotExposePeerKey(t *testing.T) {
+	runner := &warpFakeRunner{active: true, neverHandshake: true}
+	adapter := NewWARPWireGuardAdapter(nil, t.TempDir())
+	adapter.WG, adapter.IP = "wg", "ip"
+	adapter.Runner = runner
+	adapter.HandshakeTimeout = time.Millisecond
+	err := adapter.confirmHandshake(context.Background(), "rz-warp")
+	if err == nil || strings.Contains(err.Error(), "peer") || !strings.Contains(err.Error(), "handshake") {
+		t.Fatalf("unexpected handshake error: %v", err)
+	}
 }
 
 func TestSanitizeWGQuickProfileRemovesExecutableHooks(t *testing.T) {
