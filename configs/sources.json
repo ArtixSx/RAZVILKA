@@ -40,6 +40,7 @@
       "format": "lines",
       "url": "https://core.telegram.org/resources/cidr.txt",
       "enabled": true,
+	  "services": ["telegram"],
       "min_entries": 5,
       "max_bytes": 65536,
       "description": "Официально опубликованные Telegram IPv4/IPv6 сети."

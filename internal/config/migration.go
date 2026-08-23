@@ -63,6 +63,11 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 		report.add("services initialized")
 	}
 	for id, state := range cfg.Services {
+		sources, err := NormalizeSources(state.Sources)
+		if err != nil {
+			return Config{}, report, fmt.Errorf("service %s sources: %w", id, err)
+		}
+		state.Sources = sources
 		normalized := normalizeState(state)
 		if !reflect.DeepEqual(state, normalized) {
 			cfg.Services[id] = normalized
@@ -74,6 +79,11 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 		report.add("applied_services initialized from services")
 	}
 	for id, state := range cfg.AppliedServices {
+		sources, err := NormalizeSources(state.Sources)
+		if err != nil {
+			return Config{}, report, fmt.Errorf("applied service %s sources: %w", id, err)
+		}
+		state.Sources = sources
 		normalized := normalizeState(state)
 		if !reflect.DeepEqual(state, normalized) {
 			cfg.AppliedServices[id] = normalized

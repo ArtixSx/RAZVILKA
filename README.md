@@ -1,137 +1,106 @@
+<p align="center"><img src="docs/assets/razvilka-banner.png" alt="RAZVILKA — единая панель обходов" width="100%"></p>
+
+<p align="center"><strong>Выберите сервис — RAZVILKA подберёт, проверит и безопасно применит подходящий маршрут.</strong></p>
+
+<p align="center"><a href="README_EN.md">English</a> · <a href="https://t.me/RAZVILKA_UI">Telegram</a> · <a href="https://github.com/ArtixSx/RAZVILKA/releases">Скачать</a> · <a href="SECURITY.md">Безопасность</a></p>
+
+<p align="center">
+  <img alt="Keenetic / Netcraze" src="https://img.shields.io/badge/Keenetic%20%2F%20Netcraze-Entware-18a999">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-596a74">
+  <img alt="Safe Mode" src="https://img.shields.io/badge/Safe%20Mode-по%20умолчанию-f0b84b">
+  <img alt="Local first" src="https://img.shields.io/badge/данные-на%20роутере-43d17b">
+</p>
+
 # RAZVILKA
 
-![RAZVILKA — service-first routing hub](docs/assets/razvilka-banner.png)
+RAZVILKA — бесплатная локальная панель управления доступом к сервисам для роутеров Keenetic/Netcraze с Entware. Пользователь включает Telegram, YouTube, Discord, ChatGPT или собственный ресурс, а приложение управляет доменами и IP-сетями, сравнивает доступные обходы и применяет выбранный маршрут с резервной копией и автоматическим возвратом при ошибке.
 
-[![CI](https://github.com/ArtixSx/RAZVILKA/actions/workflows/ci.yml/badge.svg)](https://github.com/ArtixSx/RAZVILKA/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ArtixSx/RAZVILKA?include_prereleases)](https://github.com/ArtixSx/RAZVILKA/releases)
-[![License](https://img.shields.io/github/license/ArtixSx/RAZVILKA)](LICENSE)
+Панель, учётная запись, конфигурации и диагностические данные находятся на роутере. Внешняя регистрация RAZVILKA и облачный аккаунт не нужны.
 
-💬 [Project Telegram — news, test builds and support](https://t.me/RAZVILKA_UI)
+> Проект находится до версии `1.0.0`: интерфейс пригоден для аппаратного тестирования, но массовый релиз будет объявлен только после расширенной матрицы роутеров, перезагрузок, IPv6, low-memory и аварийного восстановления.
 
-[Русский](README_RU.md) · English
+## Установка
 
-**Universal multi-engine routing hub for Keenetic / Netcraze + Entware.**
-
-RAZVILKA is an open-source local-first routing hub and control plane that unifies multiple bypass/routing engines behind one service-oriented Web UI. It keeps service intent separate from engine internals and is designed to choose, validate, apply and observe the best available route without hiding uncertainty.
-
-> **Current status: v0.0.9-ui-layout / Safe Mode.** Authenticated service-route drafts, engine-config drafts, validation, import/export, diagnostics and current-routing probes work. Safe Mode intentionally blocks dataplane changes to firewall, DNS and policy routes.
-
-## v0.0.9 UI Layout
-
-- Full-page panels now size to their content instead of reserving most of the viewport.
-- Section headers no longer shift down and cover the first rows inside clipped panels.
-- Web assets use versioned URLs so an upgraded router cannot serve stale layout CSS from browser cache.
-
-## v0.0.8 Security Gate
-
-### Security Gate
-
-- A random 256-bit administrator token is created at `/opt/etc/razvilka/admin.token` with mode `0600`.
-- Every state-changing API request requires `Authorization: Bearer`, `application/json` and a matching browser `Origin`.
-- The Web UI asks for the token on the first write and keeps it in `sessionStorage` only for the current tab.
-- Read-only status endpoints remain available on the LAN so the dashboard can load before authentication.
-- Configuration persistence, engine staging and source caches use unique atomic transactions with `fsync`.
-- Secret engine configurations remain redacted; v0.0.8 does not expose private keys or proxy credentials to the browser.
-
-### Service routing
-
-- 16-service catalog and per-service `AUTO / DIRECT / engine` selectors.
-- Desired / planned / applied state kept separate.
-- Draft / Apply / Discard workflow for service routing.
-- Engine-agnostic Connections model + SSE stream for future real dataplane evidence.
-
-### Config Center
-
-Each supported engine has one management workspace instead of requiring reinstall/repackaging after every configuration change.
-
-- NFQWS2: `nfqws2.conf`, `user.list`, `auto.list`, `exclude.list`, `ipset.list`, `ipset_exclude.list`.
-- usque/MASQUE: `usque.conf`.
-- WARP WireGuard, sing-box, Xray and AmneziaWG manifests are registered, but their secret content is deliberately redacted even for the authenticated UI.
-- Fixed file manifests only: the browser cannot request arbitrary filesystem paths.
-- Maximum draft size 2 MiB, atomic staging and mode `0600`.
-- Draft -> basic/native validation -> backup -> live apply model.
-- JSON validation and native `sing-box check` / Xray test where the binary supports it.
-- Shell syntax validation for NFQWS2/usque configs.
-- Domain/CIDR list validation.
-- Import/export for non-sensitive files.
-- Safe Mode blocks live writes and preserves drafts.
-
-### Bypass Test Lab
-
-- `Current routing` test performs real HTTP probes for catalog services through the configuration currently applied on the router.
-- Results are `PASS / PARTIAL / FAIL / NOT READY` with HTTP status and latency.
-- The route matrix is already present but does **not** invent per-engine results. Until an isolated adapter exists, cells show engine readiness (`NOT READY / ADAPTER`).
-- The API accepts catalog service IDs only, not arbitrary browser-supplied URLs.
-- Future route-specific sweep will isolate each engine, run service-aware probes, record evidence and rollback without changing the user's normal route.
-
-### Device safety
-
-- Detects architecture, RAM, `/opt`, opkg, WAN, TUN, iptables/ip6tables/nft and NFQUEUE.
-- Detects NFQWS2, usque, WARP-WG, sing-box, Xray and AmneziaWG.
-- Detects existing external tunnel routes and warns when CURRENT tests may be contaminated by them.
-- Source lists enforce safe IDs/redirects, are size/type validated, atomically cached and revalidated after restart.
-- Control plane is separate from future dataplane.
-- UI stays LAN-only. Bearer authentication and Origin checks are mandatory for mutations; active dataplane writes still require transactional adapters and rollback.
-
-## Development run
+Заранее включите Entware на накопителе, подключитесь к роутеру по SSH как `root` и выполните одну команду:
 
 ```sh
-go run ./cmd/razvilka \
-  --config ./configs/config.example.json \
-  --catalog ./configs/service-catalog.json \
-  --sources ./configs/sources.json \
-  --cache /tmp/razvilka-cache \
-  --stage /tmp/razvilka-stage \
-  --backups /tmp/razvilka-backups \
-  --token-file /tmp/razvilka-admin.token \
-  --listen 127.0.0.1:8787
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-## Checks
+Если доступен только `wget`:
 
 ```sh
-./scripts/check.sh
+wget -qO- https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-The check script runs Go tests, the race detector, vet, shell/JavaScript syntax checks, cross-builds linux amd64/arm64/mips/mipsle, verifies binary checksums and exercises the full Entware apply/rollback transaction without rewriting source files.
+Установщик проверяет Entware и архитектуру, сверяет SHA-256 релиза, делает снимок для возврата, запускает панель и печатает локальный адрес вместе с одноразовым ключом первого входа. Универсального пароля `admin/admin` нет.
 
-## Entware Lab install
+По умолчанию устанавливается только UI. Нужные обходы добавляются из раздела **«Обходы»**, поэтому слабый роутер не расходует память на неиспользуемые компоненты. Поддерживаются `arm64`, `mips`, `mipsle` и `amd64`.
 
-A source checkout does **not** commit generated binaries. Build them first:
+## Как это выглядит
 
-```sh
-./build.sh
-./scripts/lab-bootstrap.sh
-```
+![Обзор RAZVILKA v0.14.0](docs/screenshots/overview-v0.14.0.png)
 
-GitHub Releases package the cross-built binaries automatically. The bootstrap runs preflight before/after install and installs only the RAZVILKA Manager. It does not install or activate bypass engines.
+![Каталог сервисов и покрытие IP-сетей](docs/screenshots/services-v0.14.0.png)
 
-## Transactional Entware upgrade
+## Три шага
 
-Upgrade defaults to a read-only dry-run. An active ARTEM Flow instance requires an explicit, reversible handover flag:
+1. В разделе **«Обходы»** установите предложенный компонент.
+2. В **«Сервисах»** включите нужное приложение и оставьте `AUTO` либо закрепите маршрут вручную.
+3. Запустите **«Тест обходов»**, проверьте план и подтвердите рабочий режим.
 
-```sh
-./scripts/upgrade-entware.sh --dry-run --from-artem-flow
-./scripts/upgrade-entware.sh --apply --from-artem-flow
-```
+Safe Mode включён после установки и не меняет firewall, DNS, TUN или policy routing без явного действия пользователя.
 
-Preflight verifies the architecture, optional release checksum, candidate binary, config schema, service catalog and sources registry before writing. Apply creates a root-only snapshot, installs files atomically, migrates the config and rolls back automatically unless the exact RAZVILKA/version health check succeeds.
+## Какой обход выбрать
 
-Manual rollback uses the recorded snapshot:
+| Обход | Когда подходит | Что требуется |
+|---|---|---|
+| **NFQWS2** | DPI-фильтрация, замедление и доменные блокировки | внешний сервер не нужен |
+| **WARP · MASQUE** | полная блокировка по IP; MASQUE QUIC/UDP 443 с проверкой TCP/443 как запасного пути | доступ к Cloudflare, пакеты usque и sing-box |
+| **WARP · WireGuard** | бесплатный split-туннель, когда UDP Cloudflare отвечает | профиль wgcf и успешный handshake |
+| **Sing-box** | VLESS/Reality, Hysteria2, TUIC, Shadowsocks; TCP/UDP и IP-сети | свой удалённый сервер или готовый профиль |
+| **Xray** | альтернативный VLESS/Reality-клиент | свой удалённый сервер |
+| **AmneziaWG** | обычный WireGuard распознаётся или блокируется DPI | совместимый AmneziaWG-сервер и runtime |
 
-```sh
-./scripts/rollback-entware.sh "$(cat /opt/var/lib/razvilka/current-backup)"
-```
-`uninstall-entware.sh` uses the same snapshot automatically. After an ARTEM Flow handover it restores the previous binary, init and running state instead of leaving the legacy service disabled.
+Генератор WARP создаёт ключи и профиль, но сам по себе не является обходом. RAZVILKA не показывает установленный бинарник как работающий маршрут.
 
+## Полная блокировка Telegram и других приложений
 
-Service lifecycle and boot guard:
+Доменного списка недостаточно, если приложение подключается прямо к IP-адресам. Для Telegram RAZVILKA использует одновременно веб-домены и официальные IPv4/IPv6 CIDR Telegram, включая сети MTProto и media/CDN. Обновляемый источник привязан только к Telegram и не может случайно расширить маршруты других сервисов.
 
-```sh
-/opt/etc/init.d/S99razvilka status
-/opt/etc/init.d/S99razvilka restart
-/opt/etc/init.d/S99razvilka guard-status
-/opt/etc/init.d/S99razvilka clear-guard
-```
+При полной IP-блокировке `AUTO` предпочитает подтверждённый туннель: MASQUE, Sing-box, AmneziaWG или WARP WireGuard. NFQWS2 остаётся резервом для DPI-сценариев, но не выдаётся за универсальную замену туннеля.
 
-Three failed starts within five minutes block further automatic starts until the failure is inspected and the guard is explicitly cleared. The built-in health check has a four-second timeout and accepts only the exact current RAZVILKA name, version and pidfile process ID.
+Пользовательские сервисы можно добавлять вручную с доменами, IP/CIDR, проверочным URL и отдельным маршрутом.
+
+## Проверка WARP
+
+Панель различает три независимых этапа:
+
+- TLS-доступ к API регистрации Cloudflare;
+- доступность MASQUE endpoint по TCP/443 как запасного транспорта;
+- настоящий WireGuard handshake на UDP `2408`, `500`, `1701` или `4500` во время транзакционного Apply.
+
+Если новый WARP-маршрут не проходит проверку, RAZVILKA удаляет временный интерфейс и правила, возвращает предыдущий рабочий маршрут и сохраняет черновик для исправления. Если Cloudflare недоступен целиком, панель предлагает туннель со своим сервером вместо бесконечной перегенерации одинаковых профилей.
+
+## Возможности
+
+- изолированное сравнение маршрутов; в `AUTO` участвует только подтверждённый путь;
+- HTTP-статус, TTFB и проверка ограниченного фрагмента потока;
+- подбор стратегий обычного NFQWS2 в Strategy Lab без установки z2k как второго сервиса;
+- CPU, RAM, Entware, температура и локальный WAN-трафик;
+- проверки NFQUEUE, TProxy, socket match, ipset, conntrack, TUN и конфликтующих процессов;
+- маршруты для отдельных устройств и групп локальной сети;
+- публичные профили и зашифрованные приватные backup;
+- применение по схеме `plan → snapshot → validate → health → commit/rollback`.
+
+## Обновление и восстановление
+
+Повторите команду установки. Учётная запись, пользовательские сервисы, конфиги обходов и подтверждённое состояние сохраняются. Последний снимок находится по указателю `/opt/var/lib/razvilka/current-backup`.
+
+Архитектура описана в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), критерии массового выпуска — в [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## Поддержка
+
+- Telegram: [@RAZVILKA_UI](https://t.me/RAZVILKA_UI)
+- Ошибки и предложения: [GitHub Issues](https://github.com/ArtixSx/RAZVILKA/issues)
+- Лицензия: [MIT](LICENSE)

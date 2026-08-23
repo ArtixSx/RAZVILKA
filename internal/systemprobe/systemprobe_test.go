@@ -1,10 +1,28 @@
 package systemprobe
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestProbeAlwaysReportsArchitecture(t *testing.T) {
 	if Probe().Architecture == "" {
 		t.Fatal("empty architecture")
+	}
+}
+
+func TestKernelFeatureAvailable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "targets")
+	if err := os.WriteFile(path, []byte("NFQUEUE\nTPROXY\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !kernelFeatureAvailable("tproxy", path) {
+		t.Fatal("TPROXY target was not detected")
+	}
+	if kernelFeatureAvailable("socket", path) {
+		t.Fatal("missing socket match was reported")
 	}
 }
 

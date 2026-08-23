@@ -13,15 +13,17 @@ type Option struct {
 	Installed   bool   `json:"installed"`
 	Running     bool   `json:"running"`
 	Selectable  bool   `json:"selectable"`
+	Ready       bool   `json:"ready"`
 }
 
 func Options() []Option {
 	out := []Option{
-		{ID: "auto", Name: "AUTO", Kind: "policy", Description: "RAZVILKA выбирает рабочий маршрут", Installed: true, Running: true, Selectable: true},
-		{ID: "direct", Name: "DIRECT", Kind: "direct", Description: "Без обхода", Installed: true, Running: true, Selectable: true},
+		{ID: "auto", Name: "AUTO", Kind: "policy", Description: "RAZVILKA выбирает рабочий маршрут", Installed: true, Running: true, Selectable: true, Ready: true},
+		{ID: "direct", Name: "DIRECT", Kind: "direct", Description: "Без обхода", Installed: true, Running: true, Selectable: true, Ready: true},
 	}
-	for _, e := range (engine.Detector{}).All() {
-		out = append(out, Option{ID: e.ID, Name: e.Name, Kind: e.Kind, Description: e.Description, Installed: e.Installed, Running: e.Running, Selectable: e.Installed})
+	for _, e := range engine.Visible((engine.Detector{}).Inventory()) {
+		selectable := e.RuntimeReady
+		out = append(out, Option{ID: e.ID, Name: e.Name, Kind: e.Kind, Description: e.Description, Installed: e.Installed, Running: e.Running, Selectable: selectable, Ready: selectable && e.Running})
 	}
 	return out
 }
@@ -30,20 +32,15 @@ func Valid(id string) bool {
 	return ValidWithOptions(id, Options())
 }
 
-var profileCapable = map[string]bool{
-	"sing-box":  true,
-	"xray":      true,
-	"usque":     true,
-	"warp-wg":   true,
-	"amneziawg": true,
-}
-
 func ValidWithOptions(id string, options []Option) bool {
 	if id == "" {
 		return false
 	}
-	base, profile, profiled := strings.Cut(id, ":")
-	if profiled && !profileCapable[base] {
+	base, _, profiled := strings.Cut(id, ":")
+	// Profile routes are accepted only after a profile registry can prove that
+	// the referenced node exists. Accepting syntactically valid but unresolved
+	// IDs would make AUTO and isolated probes report a route they cannot use.
+	if profiled {
 		return false
 	}
 
@@ -57,10 +54,19 @@ func ValidWithOptions(id string, options []Option) bool {
 	if !selectable {
 		return false
 	}
-	if !profiled {
-		return true
+	return true
+}
+
+func ReadyWithOptions(id string, options []Option) bool {
+	if strings.Contains(id, ":") {
+		return false
 	}
-	return validProfile(profile)
+	for _, option := range options {
+		if option.ID == id {
+			return option.Ready
+		}
+	}
+	return false
 }
 
 func validProfile(profile string) bool {

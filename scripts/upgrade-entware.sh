@@ -4,13 +4,17 @@ umask 077
 
 MODE=dry-run
 FROM_ARTEM=0
+INSTALL_COMPONENTS=0
 for ARG in "$@"; do
   case "$ARG" in
     --dry-run) MODE=dry-run ;;
     --apply) MODE=apply ;;
     --from-artem-flow) FROM_ARTEM=1 ;;
+	--with-components|--starter-pack) INSTALL_COMPONENTS=1 ;;
+	--without-components) INSTALL_COMPONENTS=0 ;;
     -h|--help)
-      echo "Usage: $0 [--dry-run|--apply] [--from-artem-flow]"
+      echo "Usage: $0 [--dry-run|--apply] [--from-artem-flow] [--starter-pack]"
+      echo "Default: install/update only the RAZVILKA UI/control plane."
       exit 0
       ;;
     *) echo "Unknown option: $ARG" >&2; exit 2 ;;
@@ -30,11 +34,13 @@ HERE="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 INIT_SOURCE="$HERE/scripts/S99razvilka"
 ROLLBACK="$HERE/scripts/rollback-entware.sh"
 CATALOG_SOURCE="$HERE/configs/service-catalog.json"
+COMMUNITY_SOURCE="$HERE/configs/community-catalog.json"
 SOURCES_SOURCE="$HERE/configs/sources.json"
 EXAMPLE_CONFIG="$HERE/configs/config.example.json"
 RAZ_INIT="$INITDIR/S99razvilka"
 LEGACY_INIT="$INITDIR/S99artem-flow"
 LEGACY_DISABLED="$INITDIR/S99artem-flow.razvilka-disabled"
+LEGACY_CONTROL=""
 
 ARCH_RAW="$(uname -m)"
 case "$ARCH_RAW" in
@@ -54,6 +60,7 @@ require_file "$BIN_SOURCE"
 require_file "$INIT_SOURCE"
 require_file "$ROLLBACK"
 require_file "$CATALOG_SOURCE"
+require_file "$COMMUNITY_SOURCE"
 require_file "$SOURCES_SOURCE"
 require_file "$EXAMPLE_CONFIG"
 [ -x "$BIN_SOURCE" ] || { echo "Candidate binary is not executable: $BIN_SOURCE" >&2; exit 1; }
@@ -73,7 +80,15 @@ if [ -n "$EXPECTED" ] && [ "$ACTUAL" != "$EXPECTED" ]; then
 fi
 
 LEGACY_RUNNING_DETECTED=0
-if [ -x "$LEGACY_INIT" ] && command -v pidof >/dev/null 2>&1 && [ -n "$(pidof artem-flow 2>/dev/null || true)" ]; then
+if [ -x "$LEGACY_INIT" ]; then
+  LEGACY_CONTROL="$LEGACY_INIT"
+elif [ -x "$LEGACY_DISABLED" ]; then
+  # A previously interrupted or manually reverted handover can leave the
+  # legacy process alive while its init already has the disabled suffix.
+  # Keep that state reversible and use the existing script as the controller.
+  LEGACY_CONTROL="$LEGACY_DISABLED"
+fi
+if [ -n "$LEGACY_CONTROL" ] && command -v pidof >/dev/null 2>&1 && [ -n "$(pidof artem-flow 2>/dev/null || true)" ]; then
   LEGACY_RUNNING_DETECTED=1
 fi
 if [ "$LEGACY_RUNNING_DETECTED" -eq 1 ] && [ "$FROM_ARTEM" -ne 1 ]; then
@@ -95,7 +110,7 @@ fi
 
 VERSION="$($BIN_SOURCE -version)"
 [ -n "$VERSION" ] || { echo "Candidate did not report a version" >&2; exit 1; }
-CHECK_OUTPUT="$($BIN_SOURCE -check -config "$CONFIG_SOURCE" -catalog "$CATALOG_SOURCE" -sources "$SOURCES_SOURCE")"
+CHECK_OUTPUT="$($BIN_SOURCE -check -config "$CONFIG_SOURCE" -catalog "$CATALOG_SOURCE" -sources "$SOURCES_SOURCE" -community-catalog "$COMMUNITY_SOURCE")"
 printf '%s\n' "$CHECK_OUTPUT" | grep -q '"ok": true' || { echo "Candidate preflight did not report success" >&2; exit 1; }
 
 echo "RAZVILKA transactional preflight"
@@ -127,8 +142,13 @@ RAZ_BINARY_PRESENT="$(present "$BINDIR/razvilka")"
 RAZ_INIT_PRESENT="$(present "$RAZ_INIT")"
 CONFIG_PRESENT="$(present "$APPDIR/config.json")"
 CATALOG_PRESENT="$(present "$APPDIR/service-catalog.json")"
+COMMUNITY_PRESENT="$(present "$APPDIR/community-catalog.json")"
 SOURCES_PRESENT="$(present "$APPDIR/sources.json")"
 TOKEN_PRESENT="$(present "$APPDIR/admin.token")"
+CREDENTIALS_PRESENT="$(present "$APPDIR/admin.credentials.json")"
+CUSTOM_SERVICES_PRESENT="$(present "$APPDIR/custom-services.json")"
+DEVICES_PRESENT="$(present "$APPDIR/devices.json")"
+DATAPLANE_STATE_PRESENT="$(present "$STATEDIR/dataplane")"
 LEGACY_INIT_PRESENT="$(present "$LEGACY_INIT")"
 LEGACY_DISABLED_PRESENT="$(present "$LEGACY_DISABLED")"
 LEGACY_WAS_RUNNING="$LEGACY_RUNNING_DETECTED"
@@ -142,8 +162,13 @@ RAZ_BINARY_PRESENT=$RAZ_BINARY_PRESENT
 RAZ_INIT_PRESENT=$RAZ_INIT_PRESENT
 CONFIG_PRESENT=$CONFIG_PRESENT
 CATALOG_PRESENT=$CATALOG_PRESENT
+COMMUNITY_PRESENT=$COMMUNITY_PRESENT
 SOURCES_PRESENT=$SOURCES_PRESENT
 TOKEN_PRESENT=$TOKEN_PRESENT
+CREDENTIALS_PRESENT=$CREDENTIALS_PRESENT
+CUSTOM_SERVICES_PRESENT=$CUSTOM_SERVICES_PRESENT
+DEVICES_PRESENT=$DEVICES_PRESENT
+DATAPLANE_STATE_PRESENT=$DATAPLANE_STATE_PRESENT
 LEGACY_INIT_PRESENT=$LEGACY_INIT_PRESENT
 LEGACY_DISABLED_PRESENT=$LEGACY_DISABLED_PRESENT
 LEGACY_WAS_RUNNING=$LEGACY_WAS_RUNNING
@@ -163,8 +188,16 @@ backup_file "$BINDIR/razvilka" razvilka.bin
 backup_file "$RAZ_INIT" S99razvilka
 backup_file "$APPDIR/config.json" config.json
 backup_file "$APPDIR/service-catalog.json" service-catalog.json
+backup_file "$APPDIR/community-catalog.json" community-catalog.json
 backup_file "$APPDIR/sources.json" sources.json
 backup_file "$APPDIR/admin.token" admin.token
+backup_file "$APPDIR/admin.credentials.json" admin.credentials.json
+backup_file "$APPDIR/custom-services.json" custom-services.json
+backup_file "$APPDIR/devices.json" devices.json
+if [ "$DATAPLANE_STATE_PRESENT" -eq 1 ]; then
+  mkdir "$BACKUP/dataplane"
+  cp -a "$STATEDIR/dataplane/." "$BACKUP/dataplane/"
+fi
 backup_file "$LEGACY_INIT" S99artem-flow
 backup_file "$LEGACY_DISABLED" S99artem-flow.razvilka-disabled
 
@@ -184,7 +217,7 @@ if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
   "$RAZ_INIT" stop
 fi
 if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_WAS_RUNNING" -eq 1 ]; then
-  "$LEGACY_INIT" stop
+  "$LEGACY_CONTROL" stop
 fi
 
 install_atomic() {
@@ -203,6 +236,7 @@ if [ "$CONFIG_PRESENT" -eq 0 ]; then
   install_atomic "$CONFIG_SOURCE" "$APPDIR/config.json" 600
 fi
 install_atomic "$CATALOG_SOURCE" "$APPDIR/service-catalog.json" 600
+install_atomic "$COMMUNITY_SOURCE" "$APPDIR/community-catalog.json" 600
 install_atomic "$SOURCES_SOURCE" "$APPDIR/sources.json" 600
 
 if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_INIT_PRESENT" -eq 1 ]; then
@@ -213,11 +247,53 @@ fi
 "$BINDIR/razvilka" -migrate-config \
   -config "$APPDIR/config.json" \
   -catalog "$APPDIR/service-catalog.json" \
-  -sources "$APPDIR/sources.json" >/dev/null
+  -sources "$APPDIR/sources.json" \
+  -community-catalog "$APPDIR/community-catalog.json" >/dev/null
+
+# Quiesce only RAZVILKA-owned runtime objects before replacing engine
+# binaries. The committed journal is kept, so the new manager can recover the
+# same verified plan after components are updated.
+"$BINDIR/razvilka" -deactivate-dataplane \
+  -stage "$STATEDIR/staging" \
+  -backups "$STATEDIR/backups" \
+  -dataplane-state "$STATEDIR/dataplane" >/dev/null
+
+# The base install is UI-only. The optional starter pack is best-effort and
+# runs while managed dataplane is quiescent. Exact GitHub assets are checked
+# against upstream checksums.txt; opkg packages are selected only from the
+# fixed component registry.
+if [ "$INSTALL_COMPONENTS" -eq 1 ]; then
+  echo "Installing recommended bypass components..."
+  COMPONENT_REPORT="$STATEDIR/component-install-$STAMP.json"
+  if "$BINDIR/razvilka" -install-components >"$COMPONENT_REPORT"; then
+    chmod 600 "$COMPONENT_REPORT"
+    echo "Component report: $COMPONENT_REPORT"
+  else
+    chmod 600 "$COMPONENT_REPORT" 2>/dev/null || true
+    echo "Some components could not be installed; RAZVILKA remains installable and the report is at $COMPONENT_REPORT" >&2
+  fi
+  echo "AmneziaWG remains platform-gated because it requires a matching Keenetic kernel/userspace runtime."
+fi
+
+if [ "$INSTALL_COMPONENTS" -eq 0 ]; then
+  echo "Bypass runtimes were not installed automatically; existing components were preserved."
+  echo "Open the 'Обходы' section to install only what you need."
+fi
+
+# Deactivation intentionally removed live objects before component replacement.
+# Restore the exact committed runtime metadata/configs so the new process can
+# reconcile them and prove the previous route before the upgrade is accepted.
+if [ "$DATAPLANE_STATE_PRESENT" -eq 1 ]; then
+  mkdir -p "$STATEDIR/dataplane"
+  cp -a "$BACKUP/dataplane/." "$STATEDIR/dataplane/"
+fi
 
 RAZVILKA_BASE="$BASE" "$RAZ_INIT" clear-guard
 RAZVILKA_BASE="$BASE" "$RAZ_INIT" start
 RAZVILKA_BASE="$BASE" "$RAZ_INIT" status
+RUNNING_PID="$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" pid)"
+"$BINDIR/razvilka" -healthcheck "http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip):${RAZVILKA_PORT:-8787}/api/v1/status" \
+  -healthcheck-pid "$RUNNING_PID" -healthcheck-require-dataplane >/dev/null
 
 printf '%s\n' "$BACKUP" >"$CURRENT_BACKUP"
 chmod 600 "$CURRENT_BACKUP"
@@ -225,7 +301,26 @@ trap - EXIT HUP INT TERM
 
 LAN_IP="$(ip -4 -o addr show br0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
 [ -n "$LAN_IP" ] || LAN_IP="127.0.0.1"
-echo "Upgrade complete. Rollback snapshot: $BACKUP"
-echo "Open: http://$LAN_IP:${RAZVILKA_PORT:-8787}"
-echo "Admin token file: $APPDIR/admin.token"
-echo "Safe Mode remains controlled by $APPDIR/config.json"
+echo ""
+echo "============================================================"
+echo " [OK] RAZVILKA $VERSION установлена и запущена"
+echo " Панель: http://$LAN_IP:${RAZVILKA_PORT:-8787}"
+echo " Rollback: $BACKUP"
+echo ""
+if [ "$CREDENTIALS_PRESENT" -eq 0 ]; then
+  ADMIN_TOKEN="$(tr -d '\r\n' < "$APPDIR/admin.token")"
+  echo " ПЕРВЫЙ ВХОД"
+  echo " Ключ настройки: $ADMIN_TOKEN"
+  echo ""
+  echo " Откройте ссылку и создайте свой логин и пароль:"
+  echo " http://$LAN_IP:${RAZVILKA_PORT:-8787}/#setup=$ADMIN_TOKEN"
+  echo ""
+  echo " Важно: сохраните recovery key в менеджере паролей."
+  echo " RAZVILKA не использует и не хранит SSH-пароль роутера."
+else
+  echo " Существующие логин и пароль UI сохранены."
+  echo " Recovery key скрыт и повторно в консоль не выводится."
+fi
+echo "============================================================"
+echo " Рекомендация: сначала откройте мастер настройки и оставьте"
+echo " Safe Mode включённым до завершения проверки маршрутов."

@@ -1,0 +1,164 @@
+package routeprobe
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestClassifyProbeStream(t *testing.T) {
+	response := &http.Response{ContentLength: 65536}
+	if got := classifyProbeStream(response, 16384, errors.New("timeout")); got != "interrupted" {
+		t.Fatalf("got %q", got)
+	}
+	if got := classifyProbeStream(response, 32768, nil); got != "sampled" {
+		t.Fatalf("got %q", got)
+	}
+	if got := classifyProbeStream(&http.Response{ContentLength: 120}, 120, nil); got != "complete" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestEndpointFromJSONUsesOnlyLoopbackSocksInbound(t *testing.T) {
+	endpoint, username, password := endpointFromJSON("sing-box", []byte(`{
+  "inbounds": [{"type":"socks","listen":"0.0.0.0","listen_port":2080,"users":[{"username":"u","password":"p"}]}]
+}`))
+	if endpoint != "127.0.0.1:2080" || username != "u" || password != "p" {
+		t.Fatalf("unexpected endpoint: %q %q %q", endpoint, username, password)
+	}
+	endpoint, _, _ = endpointFromJSON("xray", []byte(`{"inbounds":[{"protocol":"socks","listen":"192.168.1.1","port":1080}]}`))
+	if endpoint != "" {
+		t.Fatalf("non-loopback endpoint must be rejected: %q", endpoint)
+	}
+}
+
+func TestManagedSOCKSEndpointMatchesDataplaneRuntime(t *testing.T) {
+	root := t.TempDir()
+	runtimeRoot := filepath.Join(root, "sing-box", "runtime")
+	if err := os.MkdirAll(runtimeRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	config := []byte(`{"inbounds":[{"type":"socks","listen":"127.0.0.1","listen_port":18081}]}`)
+	if err := os.WriteFile(filepath.Join(runtimeRoot, "engine.json"), config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := New(nil)
+	manager.DataplaneRoot = root
+	if endpoint := manager.managedSOCKSEndpoint("sing-box"); endpoint != "127.0.0.1:18081" {
+		t.Fatalf("endpoint=%q", endpoint)
+	}
+}
+
+func TestParseScopedNFQueuePackets(t *testing.T) {
+	output := "Chain RZRP1234 (1 references)\n pkts bytes target prot opt in out source destination\n 7 420 NFQUEUE tcp -- * * 0.0.0.0/0 0.0.0.0/0 NFQUEUE num 300\n"
+	if packets := parseScopedNFQueuePackets(output); packets != 7 {
+		t.Fatalf("packets=%d", packets)
+	}
+}
+
+func TestParseNFQWSQueueArgs(t *testing.T) {
+	for _, test := range []struct {
+		args  []string
+		queue int
+		ok    bool
+	}{
+		{[]string{"--daemon", "--qnum=300", "--filter-tcp=443"}, 300, true},
+		{[]string{"--qnum", "64610"}, 64610, true},
+		{[]string{"--qnum=70000"}, 0, false},
+		{[]string{"--filter-tcp=443"}, 0, false},
+	} {
+		queue, ok := parseNFQWSQueueArgs(test.args)
+		if queue != test.queue || ok != test.ok {
+			t.Fatalf("args=%v queue=%d ok=%v", test.args, queue, ok)
+		}
+	}
+}
+
+func TestProfileAddress(t *testing.T) {
+	ip, err := profileAddress("[Interface]\nAddress = 172.16.0.2/32, 2606:4700:110::2/128\n")
+	if err != nil || ip.String() != "172.16.0.2" {
+		t.Fatalf("unexpected address %v, err=%v", ip, err)
+	}
+}
+
+func TestProbeURLRejectsLocalDestinations(t *testing.T) {
+	for _, value := range []string{"http://example.com", "https://127.0.0.1/", "https://192.168.1.1/", "https://[::1]/"} {
+		if validateProbeURL(value) == nil {
+			t.Fatalf("expected rejection for %s", value)
+		}
+	}
+	if err := validateProbeURL("https://example.com/status"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSafeDialRejectsDNSResolvedLoopback(t *testing.T) {
+	called := false
+	dial := safeDial(func(context.Context, string, string) (net.Conn, error) {
+		called = true
+		return nil, nil
+	})
+	_, err := dial(context.Background(), "tcp", "localhost:443")
+	if err == nil || !strings.Contains(err.Error(), "private or local") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if called {
+		t.Fatal("underlying dialer must not receive a local destination")
+	}
+}
+
+func TestSocksDialerHandshake(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	done := make(chan error, 1)
+	go func() {
+		connection, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			done <- acceptErr
+			return
+		}
+		defer connection.Close()
+		greeting := make([]byte, 3)
+		if _, acceptErr = io.ReadFull(connection, greeting); acceptErr != nil {
+			done <- acceptErr
+			return
+		}
+		_, _ = connection.Write([]byte{0x05, 0x00})
+		header := make([]byte, 4)
+		if _, acceptErr = io.ReadFull(connection, header); acceptErr != nil {
+			done <- acceptErr
+			return
+		}
+		addressLength := 4
+		if header[3] == 0x03 {
+			length := []byte{0}
+			_, _ = io.ReadFull(connection, length)
+			addressLength = int(length[0])
+		} else if header[3] == 0x04 {
+			addressLength = 16
+		}
+		_, _ = io.CopyN(io.Discard, connection, int64(addressLength+2))
+		_, _ = connection.Write([]byte{0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0, 1})
+		done <- nil
+	}()
+
+	dialer := socksDialer{ProxyAddress: listener.Addr().String(), Timeout: time.Second}
+	connection, err := dialer.DialContext(context.Background(), "tcp", "93.184.216.34:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = connection.Close()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

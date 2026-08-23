@@ -17,15 +17,22 @@ import (
 )
 
 type Result struct {
-	ServiceID   string `json:"service_id"`
-	ServiceName string `json:"service_name"`
-	ProbeURL    string `json:"probe_url"`
-	Route       string `json:"route"`
-	Status      string `json:"status"` // pass, partial, fail, not-ready, pending
-	HTTPStatus  int    `json:"http_status,omitempty"`
-	LatencyMS   int64  `json:"latency_ms,omitempty"`
-	CheckedAt   string `json:"checked_at"`
-	Detail      string `json:"detail,omitempty"`
+	ServiceID      string `json:"service_id"`
+	ServiceName    string `json:"service_name"`
+	ProbeURL       string `json:"probe_url"`
+	Route          string `json:"route"`
+	Status         string `json:"status"` // pass, partial, fail, not-ready, pending
+	HTTPStatus     int    `json:"http_status,omitempty"`
+	LatencyMS      int64  `json:"latency_ms,omitempty"`
+	TTFBMS         int64  `json:"ttfb_ms,omitempty"`
+	ReadMS         int64  `json:"read_ms,omitempty"`
+	BytesRead      int64  `json:"bytes_read,omitempty"`
+	StreamStatus   string `json:"stream_status,omitempty"`
+	CheckedAt      string `json:"checked_at"`
+	Detail         string `json:"detail,omitempty"`
+	RouteConfirmed bool   `json:"route_confirmed"`
+	EvidenceSource string `json:"evidence_source,omitempty"`
+	EgressIP       string `json:"egress_ip,omitempty"`
 }
 
 type MatrixCell struct {
@@ -45,6 +52,10 @@ type Runner struct {
 	Client *http.Client
 	mu     sync.RWMutex
 	latest map[string]Result
+}
+
+type RouteProber interface {
+	Probe(context.Context, catalog.Service, string) Result
 }
 
 func NewRunner() *Runner {
@@ -82,7 +93,44 @@ func (r *Runner) ProbeCurrent(ctx context.Context, cat catalog.Catalog, ids []st
 	sort.Slice(results, func(i, j int) bool { return results[i].ServiceName < results[j].ServiceName })
 	r.mu.Lock()
 	for _, v := range results {
-		r.latest[v.ServiceID] = v
+		r.latest[resultKey(v)] = v
+	}
+	r.mu.Unlock()
+	return results
+}
+
+func (r *Runner) ProbeRoutes(ctx context.Context, cat catalog.Catalog, ids, routes []string, prober RouteProber) []Result {
+	selected := selectServices(cat, ids)
+	if len(selected) == 0 || len(routes) == 0 || prober == nil {
+		return []Result{}
+	}
+	sem := make(chan struct{}, 3)
+	results := make([]Result, len(selected)*len(routes))
+	var wg sync.WaitGroup
+	index := 0
+	for _, service := range selected {
+		for _, route := range routes {
+			i, currentService, currentRoute := index, service, route
+			index++
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				results[i] = prober.Probe(ctx, currentService, currentRoute)
+			}()
+		}
+	}
+	wg.Wait()
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].ServiceName == results[j].ServiceName {
+			return results[i].Route < results[j].Route
+		}
+		return results[i].ServiceName < results[j].ServiceName
+	})
+	r.mu.Lock()
+	for _, result := range results {
+		r.latest[resultKey(result)] = result
 	}
 	r.mu.Unlock()
 	return results
@@ -102,7 +150,7 @@ func (r *Runner) Snapshot(cat catalog.Catalog) Snapshot {
 func (r *Runner) matrix(cat catalog.Catalog, current []Result) []MatrixCell {
 	last := map[string]Result{}
 	for _, v := range current {
-		last[v.ServiceID] = v
+		last[resultKey(v)] = v
 	}
 	opts := routecatalog.Options()
 	statuses := map[string]engine.Status{}
@@ -132,7 +180,12 @@ func (r *Runner) matrix(cat catalog.Catalog, current []Result) []MatrixCell {
 				cell.Status = "adapter-pending"
 				cell.Reason = "DIRECT needs an isolated bypass-free socket before it can be compared fairly"
 			}
-			if v, ok := last[s.ID]; ok && v.Route == "current" {
+			if v, ok := last[s.ID+"|"+o.ID]; ok {
+				copy := v
+				cell.Last = &copy
+				cell.Status = v.Status
+				cell.Reason = v.Detail
+			} else if v, ok := last[s.ID+"|current"]; ok {
 				copy := v
 				cell.Last = &copy
 			}
@@ -154,19 +207,29 @@ func (r *Runner) probe(ctx context.Context, s catalog.Service) Result {
 		res.Detail = err.Error()
 		return res
 	}
-	req.Header.Set("User-Agent", "RAZVILKA-Probe/0.0.8")
+	req.Header.Set("User-Agent", "RAZVILKA-Probe/0.14.0")
 	req.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
-	req.Header.Set("Range", "bytes=0-4095")
+	req.Header.Set("Range", "bytes=0-32767")
 	start := time.Now()
 	resp, err := r.Client.Do(req)
-	res.LatencyMS = time.Since(start).Milliseconds()
+	res.TTFBMS = time.Since(start).Milliseconds()
 	if err != nil {
+		res.LatencyMS = time.Since(start).Milliseconds()
 		res.Detail = short(err.Error())
 		return res
 	}
 	defer resp.Body.Close()
 	res.HTTPStatus = resp.StatusCode
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	readStarted := time.Now()
+	res.BytesRead, err = io.Copy(io.Discard, io.LimitReader(resp.Body, 32768))
+	res.ReadMS = time.Since(readStarted).Milliseconds()
+	res.LatencyMS = time.Since(start).Milliseconds()
+	res.StreamStatus = classifyStream(resp, res.BytesRead, err)
+	if err != nil {
+		res.Status = "fail"
+		res.Detail = fmt.Sprintf("response stream interrupted after %d bytes: %s", res.BytesRead, short(err.Error()))
+		return res
+	}
 	switch {
 	case resp.StatusCode >= 200 && resp.StatusCode < 400:
 		res.Status = "pass"
@@ -183,6 +246,21 @@ func (r *Runner) probe(ctx context.Context, s catalog.Service) Result {
 	}
 	return res
 }
+
+func classifyStream(resp *http.Response, bytesRead int64, readErr error) string {
+	if readErr != nil {
+		return "interrupted"
+	}
+	if bytesRead == 0 {
+		return "empty"
+	}
+	if bytesRead >= 32768 || resp.ContentLength > bytesRead {
+		return "sampled"
+	}
+	return "complete"
+}
+
+func resultKey(result Result) string { return result.ServiceID + "|" + result.Route }
 
 func selectServices(cat catalog.Catalog, ids []string) []catalog.Service {
 	if len(ids) == 0 {

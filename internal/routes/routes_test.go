@@ -7,11 +7,11 @@ import (
 
 func TestValidWithOptions(t *testing.T) {
 	options := []Option{
-		{ID: "auto", Selectable: true},
-		{ID: "direct", Selectable: true},
-		{ID: "nfqws2", Selectable: true},
-		{ID: "sing-box", Selectable: true},
-		{ID: "usque", Selectable: true},
+		{ID: "auto", Selectable: true, Ready: true},
+		{ID: "direct", Selectable: true, Ready: true},
+		{ID: "nfqws2", Selectable: true, Ready: true},
+		{ID: "sing-box", Selectable: true, Ready: true},
+		{ID: "usque", Selectable: true, Ready: true},
 		{ID: "xray", Installed: true, Selectable: false},
 	}
 	tests := []struct {
@@ -21,8 +21,8 @@ func TestValidWithOptions(t *testing.T) {
 		{id: "auto", want: true},
 		{id: "direct", want: true},
 		{id: "nfqws2", want: true},
-		{id: "sing-box:ai-primary", want: true},
-		{id: "usque:warp_1.2", want: true},
+		{id: "sing-box:ai-primary", want: false},
+		{id: "usque:warp_1.2", want: false},
 		{id: "xray", want: false},
 		{id: "missing", want: false},
 		{id: "nfqws2:profile", want: false},

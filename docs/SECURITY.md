@@ -1,27 +1,33 @@
-# Security model (v0.0.8-security-gate)
+# Security model (`v0.10.0`)
 
-v0.0.8-security-gate is intentionally in Safe Mode and does not modify firewall, DNS, policy-routing or engine dataplane rules.
+RAZVILKA runs locally on a router and may control privileged networking objects. Safe Mode is enabled by default, but an administrator can explicitly enable transactional Active Apply.
 
-Implemented now:
+## Control plane
 
-- UI listener is bound by the Entware init script to a detected private LAN address, not intentionally exposed on WAN.
-- A random 256-bit administrator token is created locally with mode `0600`.
-- Every state-changing request requires Bearer authentication, JSON content type and a matching browser Origin.
-- The Web UI keeps the token only in the current tab's `sessionStorage`; read-only endpoints do not return engine secrets.
-- restrictive browser security headers (CSP, frame denial, no-referrer, Permissions-Policy).
-- request body limits for mutable API calls.
-- source IDs are predefined; the browser cannot submit arbitrary fetch URLs.
-- HTTPS-only source registry.
-- source byte limits, syntax validation and atomic cache replacement.
-- config files installed with mode 0600.
-- Safe Mode rejects live dataplane writes while retaining validated drafts.
+- Entware init binds the UI to a detected private LAN address, not intentionally to WAN.
+- First install creates a 256-bit recovery key (`0600`) and prints a setup/recovery URL; the user then creates a separate RAZVILKA login/password.
+- SSH/Entware/router credentials are never read or reused.
+- Passwords use PBKDF2-SHA256; sessions are time-limited `HttpOnly`, `SameSite=Strict` cookies and can be revoked.
+- Login attempts are throttled by source IP. Mutations additionally require JSON and a matching browser Origin.
+- CSP, frame denial, no-referrer, Permissions-Policy and bounded request bodies reduce browser attack surface.
 
-Required before active routing:
+## Dataplane
 
-- privilege separation between Web manager and dataplane helper where feasible,
-- per-engine adapters with strict command allowlists; no arbitrary shell from Web input,
-- signed RAZVILKA catalog/update manifests,
-- transactional rollback watchdogs and last-known-good startup generation per engine,
-- expanded real-hardware fault and recovery tests.
+- Browser input selects allowlisted service/route IDs; it cannot submit shell commands, file paths, executable names or arbitrary probe URLs.
+- Every Active Apply freezes a deterministic plan and runs snapshot, stage, native validation, activation, health and commit under one operation lock.
+- Any failure rolls prepared adapters back in reverse order. Boot recovery acts only on the last committed plan.
+- Runtime files, processes, interfaces, tables and rule priorities are namespaced. Deactivation targets exact recorded RAZVILKA ownership.
+- Tunnel/proxy endpoints are checked against routed prefixes to prevent self-loop; TUN sidecars do not own the default route. sing-box 1.14+ DNS mode is explicitly disabled for the managed sidecar.
+- NFQWS2 uses bounded managed blocks in official list files and the official init lifecycle; it does not claim exclusive ownership of a third-party NFQWS2 installation.
 
-If cookie-based login sessions are introduced later, they must add CSRF tokens; the current API uses an explicit Bearer header plus Origin validation instead of ambient cookie credentials.
+## Data and supply chain
+
+- Source URLs are fixed by local registries, HTTPS-only, redirect-allowlisted, size-limited, syntax-validated and atomically cached.
+- Public profile export rejects known secret files/content. Private backup uses AES-256-GCM, PBKDF2-HMAC-SHA256, random salt/nonce and an authenticated SHA-256-sealed payload.
+- Diagnostic export omits credentials, config contents, device identity, source scopes, history and public IP data.
+- Release CI publishes checksums and GitHub/Sigstore artifact attestations. `usque-keenetic` is installed through its fixed opkg feed; the external `wgcf` binary requires the checksum shipped in the same official upstream release.
+- The Web UI checks the official RAZVILKA GitHub release only on user request and never executes a root update automatically.
+
+## Remaining `1.0.0` gate
+
+The code-level controls do not replace LAN penetration, power-loss, low-memory, multi-engine and cross-architecture tests on real Keenetic/Netcraze hardware. See [PRODUCT_GAPS_RU.md](PRODUCT_GAPS_RU.md).

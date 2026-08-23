@@ -4,15 +4,15 @@ RAZVILKA is a network control plane. Security issues may affect routing, credent
 
 ## Current status
 
-The project is pre-release. v0.0.8-security-gate requires a local Bearer token,
-JSON content type and a matching browser Origin for every state-changing request.
-The token is generated locally with mode `0600`; secret engine fields are not
-returned to the browser.
+`v0.10.0` is a release candidate. Safe Mode is the default; explicit Active Apply
+uses command-allowlisted transactional adapters, native validation, health
+evidence, reverse rollback and committed-plan boot recovery. Local registration,
+PBKDF2 passwords, revocable sessions, Origin/JSON checks, encrypted private
+backups and privacy-safe diagnostics are implemented.
 
-Safe Mode is the default. Active dataplane changes remain gated until
-least-privilege engine adapters, strict command allowlists, signed catalog and
-update manifests, per-engine transactional rollback/watchdogs, and expanded
-real-hardware validation are complete.
+Release bundles receive GitHub/Sigstore artifact attestations. `1.0.0` remains
+blocked on the documented cross-architecture, power-loss, low-memory and LAN
+security hardware matrix.
 
 ## Reporting a vulnerability
 

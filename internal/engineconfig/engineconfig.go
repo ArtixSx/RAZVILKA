@@ -86,6 +86,12 @@ type Validation struct {
 	Output    string `json:"output"`
 }
 
+type StageItem struct {
+	EngineID string `json:"engine_id"`
+	FileID   string `json:"file_id"`
+	Content  string `json:"content"`
+}
+
 type Manager struct {
 	StageRoot     string
 	BackupRoot    string
@@ -100,7 +106,7 @@ func New(stageRoot, backupRoot string) *Manager {
 func Specs() []EngineSpec {
 	return []EngineSpec{
 		{
-			ID: "nfqws2", Name: "NFQWS2", Description: "Локальный DPI bypass через NFQUEUE / zapret2",
+			ID: "nfqws2", Name: "NFQWS2", Description: "Локальный обход DPI через NFQUEUE / zapret2",
 			Files: []FileSpec{
 				{ID: "main", Name: "Основной конфиг", Kind: "config", Syntax: "shell", Paths: []string{"/opt/etc/nfqws2/nfqws2.conf"}, Description: "NFQWS_ARGS, интерфейс, порты, политика и режимы"},
 				{ID: "user-list", Name: "user.list", Kind: "domains", Syntax: "list", Paths: []string{"/opt/etc/nfqws2/lists/user.list"}, Description: "Пользовательский список доменов"},
@@ -112,7 +118,7 @@ func Specs() []EngineSpec {
 		},
 		{
 			ID: "usque", Name: "WARP · MASQUE", Description: "Cloudflare WARP через usque / MASQUE",
-			Files: []FileSpec{{ID: "main", Name: "usque.conf", Kind: "config", Syntax: "shell", Paths: []string{"/opt/etc/usque/usque.conf"}, Description: "Интерфейс, SNI, HTTP/2 и параметры запуска"}},
+			Files: []FileSpec{{ID: "main", Name: "session.conf", Kind: "secret-config", Syntax: "json", Paths: []string{"/opt/etc/usque/session.conf", "/opt/etc/usque/config.json", "/opt/var/lib/usque/config.json"}, Sensitive: true, Description: "JSON-сессия usque/usque-keenetic: регистрация MASQUE, публичные endpoints и назначенные адреса; приватные поля скрыты в простом режиме"}},
 		},
 		{
 			ID: "warp-wg", Name: "WARP · WireGuard", Description: "WARP WireGuard профиль",
@@ -127,7 +133,7 @@ func Specs() []EngineSpec {
 			Files: []FileSpec{{ID: "main", Name: "config.json", Kind: "secret-config", Syntax: "json", Paths: []string{"/opt/etc/xray/config.json", "/opt/etc/xray.json"}, Sensitive: true, Description: "Основной JSON-конфиг Xray; может содержать UUID, пароли и ключи"}},
 		},
 		{
-			ID: "amneziawg", Name: "AmneziaWG", Description: "DPI-resistant WireGuard-compatible tunnel",
+			ID: "amneziawg", Name: "AmneziaWG", Description: "Устойчивый к DPI туннель на основе WireGuard",
 			Files: []FileSpec{{ID: "main", Name: "AmneziaWG", Kind: "secret-config", Syntax: "ini", Paths: []string{"/opt/etc/amnezia/amneziawg.conf", "/opt/etc/wireguard/awg.conf"}, Sensitive: true, Description: "Содержит ключи; чтение из UI скрыто до появления авторизации"}},
 		},
 	}
@@ -155,13 +161,23 @@ func (m *Manager) List() []EngineView {
 func (m *Manager) Read(engineID, fileID string) (Content, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return m.readLocked(engineID, fileID, false)
+}
+
+func (m *Manager) ReadExpert(engineID, fileID string) (Content, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.readLocked(engineID, fileID, true)
+}
+
+func (m *Manager) readLocked(engineID, fileID string, revealSensitive bool) (Content, error) {
 	_, f, err := lookup(engineID, fileID)
 	if err != nil {
 		return Content{}, err
 	}
 	livePath := choosePath(f.Paths)
 	staged := m.stagePath(engineID, fileID)
-	if f.Sensitive {
+	if f.Sensitive && !revealSensitive {
 		src := "missing"
 		if fileExists(staged) {
 			src = "staged"
@@ -180,7 +196,7 @@ func (m *Manager) Read(engineID, fileID string) (Content, error) {
 	if err != nil {
 		return Content{}, err
 	}
-	return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: src, Content: string(b), SHA256: sum(b), Sensitive: false}, nil
+	return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: src, Content: string(b), SHA256: sum(b), Sensitive: f.Sensitive}, nil
 }
 
 func (m *Manager) Stage(engineID, fileID, content string) (Content, error) {
@@ -208,6 +224,118 @@ func (m *Manager) Stage(engineID, fileID, content string) (Content, error) {
 		return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: "staged", Sensitive: true, SHA256: sum([]byte(content))}, nil
 	}
 	return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: "staged", Content: content, Sensitive: false, SHA256: sum([]byte(content))}, nil
+}
+
+// PublicFile reports whether a file is explicitly classified as non-secret.
+// Portable profiles are restricted to this allowlist.
+func PublicFile(engineID, fileID string) bool {
+	_, file, err := lookup(engineID, fileID)
+	return err == nil && !file.Sensitive
+}
+
+// ValidateContent performs the portable, non-mutating validation used by
+// profile preview. Native validators run only after a draft exists.
+func ValidateContent(engineID, fileID, content string) Validation {
+	_, file, err := lookup(engineID, fileID)
+	if err != nil {
+		return Validation{OK: false, EngineID: engineID, FileID: fileID, Output: err.Error()}
+	}
+	result := Validation{OK: true, EngineID: engineID, FileID: fileID, Validator: file.Syntax, Output: "portable validation passed"}
+	if file.Sensitive {
+		result.OK = false
+		result.Output = "sensitive engine files are not accepted in portable profiles"
+		return result
+	}
+	if len(content) > maxConfigBytes || strings.IndexByte(content, 0) >= 0 {
+		result.OK = false
+		result.Output = "file is too large or contains NUL"
+		return result
+	}
+	return validateBytes(result, file.Syntax, []byte(content))
+}
+
+// ValidatePrivateContent accepts known sensitive file slots for an already
+// authenticated and decrypted private backup. It still applies the same size,
+// NUL and syntax checks and never runs or writes the configuration.
+func ValidatePrivateContent(engineID, fileID, content string) Validation {
+	_, file, err := lookup(engineID, fileID)
+	if err != nil {
+		return Validation{OK: false, EngineID: engineID, FileID: fileID, Output: err.Error()}
+	}
+	result := Validation{OK: true, EngineID: engineID, FileID: fileID, Validator: file.Syntax, Output: "encrypted private backup validation passed"}
+	if len(content) > maxConfigBytes || strings.IndexByte(content, 0) >= 0 {
+		result.OK = false
+		result.Output = "file is too large or contains NUL"
+		return result
+	}
+	return validateBytes(result, file.Syntax, []byte(content))
+}
+
+// StagePublic validates every item before writing and rolls already-written
+// draft files back if an I/O error occurs. It never touches live configs.
+func (m *Manager) StagePublic(items []StageItem) ([]Content, error) {
+	return m.stageValidated(items, ValidateContent)
+}
+
+// StagePrivate is the encrypted-backup counterpart of StagePublic. Sensitive
+// files are allowed only because the caller has already authenticated,
+// decrypted and previewed the AEAD envelope. Writes remain draft-only and are
+// rolled back as one local transaction on any error.
+func (m *Manager) StagePrivate(items []StageItem) ([]Content, error) {
+	return m.stageValidated(items, ValidatePrivateContent)
+}
+
+func (m *Manager) stageValidated(items []StageItem, validate func(string, string, string) Validation) ([]Content, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	type prior struct {
+		path    string
+		existed bool
+		content []byte
+	}
+	seen := map[string]bool{}
+	previous := make([]prior, 0, len(items))
+	for _, item := range items {
+		key := item.EngineID + "/" + item.FileID
+		if seen[key] {
+			return nil, fmt.Errorf("duplicate engine draft %q", key)
+		}
+		seen[key] = true
+		validation := validate(item.EngineID, item.FileID, item.Content)
+		if !validation.OK {
+			return nil, fmt.Errorf("%s: %s", key, validation.Output)
+		}
+		path := m.stagePath(item.EngineID, item.FileID)
+		old, err := os.ReadFile(path)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		previous = append(previous, prior{path: path, existed: err == nil, content: old})
+	}
+	restore := func(written int) {
+		for i := written - 1; i >= 0; i-- {
+			if previous[i].existed {
+				_ = writeAtomic(previous[i].path, previous[i].content, 0o600)
+			} else {
+				_ = os.Remove(previous[i].path)
+			}
+		}
+	}
+	out := make([]Content, 0, len(items))
+	for i, item := range items {
+		path := m.stagePath(item.EngineID, item.FileID)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			restore(i)
+			return nil, err
+		}
+		if err := writeAtomic(path, []byte(item.Content), 0o600); err != nil {
+			restore(i)
+			return nil, err
+		}
+		_, file, _ := lookup(item.EngineID, item.FileID)
+		out = append(out, Content{EngineID: item.EngineID, FileID: item.FileID, Path: choosePath(file.Paths), Source: "staged", Content: item.Content, SHA256: sum([]byte(item.Content))})
+	}
+	return out, nil
 }
 
 func (m *Manager) Discard(engineID, fileID string) error {
@@ -247,14 +375,12 @@ func (m *Manager) validateLocked(engineID, fileID string) Validation {
 	if err != nil {
 		return Validation{OK: false, EngineID: engineID, FileID: fileID, Validator: f.Syntax, Output: err.Error()}
 	}
-	v := Validation{OK: true, EngineID: engineID, FileID: fileID, Validator: f.Syntax, Output: "basic validation passed"}
+	v := validateBytes(Validation{OK: true, EngineID: engineID, FileID: fileID, Validator: f.Syntax, Output: "basic validation passed"}, f.Syntax, b)
+	if !v.OK {
+		return v
+	}
 	switch f.Syntax {
 	case "json":
-		if !json.Valid(b) {
-			v.OK = false
-			v.Output = "invalid JSON"
-			return v
-		}
 		if engineID == "sing-box" {
 			if bin := findBin([]string{"/opt/bin/sing-box", "/opt/usr/bin/sing-box", "sing-box"}); bin != "" {
 				return runNative(v, m.nativeTimeout(), bin, "check", "-c", path)
@@ -272,18 +398,34 @@ func (m *Manager) validateLocked(engineID, fileID string) Validation {
 		if sh := findBin([]string{"/opt/bin/sh", "/bin/sh", "sh"}); sh != "" {
 			return runNative(v, m.nativeTimeout(), sh, "-n", path)
 		}
+	}
+	return v
+}
+
+func validateBytes(v Validation, syntax string, data []byte) Validation {
+	switch syntax {
+	case "json":
+		if !json.Valid(data) {
+			v.OK = false
+			v.Output = "invalid JSON"
+		}
+	case "shell":
+		if len(bytes.TrimSpace(data)) == 0 {
+			v.OK = false
+			v.Output = "shell config is empty"
+		}
 	case "cidr-list":
-		if err := validateCIDRList(string(b)); err != nil {
+		if err := validateCIDRList(string(data)); err != nil {
 			v.OK = false
 			v.Output = err.Error()
 		}
 	case "list":
-		if err := validateTextList(string(b)); err != nil {
+		if err := validateTextList(string(data)); err != nil {
 			v.OK = false
 			v.Output = err.Error()
 		}
 	case "ini":
-		if !bytes.Contains(b, []byte("[Interface]")) {
+		if !bytes.Contains(data, []byte("[Interface]")) {
 			v.OK = false
 			v.Output = "missing [Interface] section"
 		}
