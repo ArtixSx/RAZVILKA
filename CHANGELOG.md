@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.13.0 — route quality evidence and compatibility advisor
+
+- Extended current and isolated service tests with TTFB, total response time, bytes read and a bounded 32 KiB stream-integrity sample.
+- Interrupted or stalled response bodies no longer become false successful tests merely because HTTP headers arrived.
+- Strategy Lab now records HTTP status, TTFB, read duration, bytes and stream state and shows average TTFB next to reproducibility.
+- Added read-only TProxy, socket match, ipset and conntrack capability checks so UDP/QUIC and transparent-proxy readiness is visible before installing a profile.
+- Kept all probes bounded, catalog-only and rollback-safe; no remote relay, universal credential or competitor runtime is bundled.
+
 ## v0.12.4 — WARP MASQUE TCP fallback
 
 - WARP · MASQUE now runs USQUE over HTTP/2 on TCP/443 with automatic reconnect, avoiding the blocked or throttled UDP transports observed during hardware testing.

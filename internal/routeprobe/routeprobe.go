@@ -533,19 +533,28 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 		result.Detail = err.Error()
 		return result
 	}
-	request.Header.Set("User-Agent", "RAZVILKA-Isolated-Probe/0.12.4")
+	request.Header.Set("User-Agent", "RAZVILKA-Isolated-Probe/0.13.0")
 	request.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
-	request.Header.Set("Range", "bytes=0-4095")
+	request.Header.Set("Range", "bytes=0-32767")
 	start := time.Now()
 	response, err := client.Do(request)
-	result.LatencyMS = time.Since(start).Milliseconds()
+	result.TTFBMS = time.Since(start).Milliseconds()
 	if err != nil {
+		result.LatencyMS = time.Since(start).Milliseconds()
 		result.Detail = shortened(err.Error())
 		return result
 	}
 	defer response.Body.Close()
 	result.HTTPStatus = response.StatusCode
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+	readStarted := time.Now()
+	result.BytesRead, err = io.Copy(io.Discard, io.LimitReader(response.Body, 32768))
+	result.ReadMS = time.Since(readStarted).Milliseconds()
+	result.LatencyMS = time.Since(start).Milliseconds()
+	result.StreamStatus = classifyProbeStream(response, result.BytesRead, err)
+	if err != nil {
+		result.Detail = fmt.Sprintf("response stream interrupted after %d bytes: %s", result.BytesRead, shortened(err.Error()))
+		return result
+	}
 	switch {
 	case response.StatusCode >= 200 && response.StatusCode < 400:
 		result.Status = "pass"
@@ -560,6 +569,19 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 		result.Detail = fmt.Sprintf("service returned HTTP %d", response.StatusCode)
 	}
 	return result
+}
+
+func classifyProbeStream(response *http.Response, bytesRead int64, readErr error) string {
+	if readErr != nil {
+		return "interrupted"
+	}
+	if bytesRead == 0 {
+		return "empty"
+	}
+	if bytesRead >= 32768 || response.ContentLength > bytesRead {
+		return "sampled"
+	}
+	return "complete"
 }
 
 func probeEgress(ctx context.Context, client *http.Client) string {

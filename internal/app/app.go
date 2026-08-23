@@ -42,7 +42,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.12.4"
+const Version = "0.13.0"
 
 type App struct {
 	Store           *config.Store
@@ -1860,7 +1860,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
-		"note":        "v0.12.4: WARP MASQUE uses the HTTP/2 TCP/443 fallback and avoids concurrent package runtimes. Safe Mode remains the default.",
+		"note":        "v0.13.0: route tests measure TTFB and response-stream integrity; diagnostics report transparent proxy prerequisites. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})

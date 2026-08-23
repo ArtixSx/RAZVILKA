@@ -24,6 +24,10 @@ type Result struct {
 	Status         string `json:"status"` // pass, partial, fail, not-ready, pending
 	HTTPStatus     int    `json:"http_status,omitempty"`
 	LatencyMS      int64  `json:"latency_ms,omitempty"`
+	TTFBMS         int64  `json:"ttfb_ms,omitempty"`
+	ReadMS         int64  `json:"read_ms,omitempty"`
+	BytesRead      int64  `json:"bytes_read,omitempty"`
+	StreamStatus   string `json:"stream_status,omitempty"`
 	CheckedAt      string `json:"checked_at"`
 	Detail         string `json:"detail,omitempty"`
 	RouteConfirmed bool   `json:"route_confirmed"`
@@ -203,19 +207,29 @@ func (r *Runner) probe(ctx context.Context, s catalog.Service) Result {
 		res.Detail = err.Error()
 		return res
 	}
-	req.Header.Set("User-Agent", "RAZVILKA-Probe/0.10.0")
+	req.Header.Set("User-Agent", "RAZVILKA-Probe/0.13.0")
 	req.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
-	req.Header.Set("Range", "bytes=0-4095")
+	req.Header.Set("Range", "bytes=0-32767")
 	start := time.Now()
 	resp, err := r.Client.Do(req)
-	res.LatencyMS = time.Since(start).Milliseconds()
+	res.TTFBMS = time.Since(start).Milliseconds()
 	if err != nil {
+		res.LatencyMS = time.Since(start).Milliseconds()
 		res.Detail = short(err.Error())
 		return res
 	}
 	defer resp.Body.Close()
 	res.HTTPStatus = resp.StatusCode
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	readStarted := time.Now()
+	res.BytesRead, err = io.Copy(io.Discard, io.LimitReader(resp.Body, 32768))
+	res.ReadMS = time.Since(readStarted).Milliseconds()
+	res.LatencyMS = time.Since(start).Milliseconds()
+	res.StreamStatus = classifyStream(resp, res.BytesRead, err)
+	if err != nil {
+		res.Status = "fail"
+		res.Detail = fmt.Sprintf("response stream interrupted after %d bytes: %s", res.BytesRead, short(err.Error()))
+		return res
+	}
 	switch {
 	case resp.StatusCode >= 200 && resp.StatusCode < 400:
 		res.Status = "pass"
@@ -231,6 +245,19 @@ func (r *Runner) probe(ctx context.Context, s catalog.Service) Result {
 		res.Detail = fmt.Sprintf("HTTP endpoint returned %d", resp.StatusCode)
 	}
 	return res
+}
+
+func classifyStream(resp *http.Response, bytesRead int64, readErr error) string {
+	if readErr != nil {
+		return "interrupted"
+	}
+	if bytesRead == 0 {
+		return "empty"
+	}
+	if bytesRead >= 32768 || resp.ContentLength > bytesRead {
+		return "sampled"
+	}
+	return "complete"
 }
 
 func resultKey(result Result) string { return result.ServiceID + "|" + result.Route }

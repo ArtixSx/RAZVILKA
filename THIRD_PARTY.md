@@ -29,6 +29,10 @@ Before a public packaged release, exact bundled-vs-referenced license obligation
 - MetaCubeXD and Zashboard — dashboard/product UX references; no code bundled.
 - Pi-hole Web and AdGuard Home — network activity/client UX references; no code bundled.
 - HomeProxy / PassWall — router control-plane/config-validation references; no code bundled.
+- [HydraRoute](https://github.com/Ground-Zerro/HydraRoute) — selective service/domain routing and one-command installation reference; no code bundled.
+- [keenetic-sing-box-ui](https://github.com/CoOre/keenetic-sing-box-ui) — checked releases, TProxy/REDIRECT fallback and profile-management UX reference; no code bundled.
+- [NFQWS2 Strategy Selector](https://github.com/Omn1z/nfqws2-keenetic-strategy-selector) — isolated strategy testing, response-stall evidence and live diagnostics reference; no code bundled.
+- [SKeen](https://github.com/jinndi/SKeen) — TProxy/socket fast-path, anti-loop and resource-efficiency reference; no code bundled.
 - AntiGoblin — Keenetic selective-routing UX/transaction reference; no code bundled.
 - Hiddify App — profile/automatic-selection UX reference; no code bundled.
 - 3x-ui — node/traffic/multi-hop operational UX reference; no code bundled.

@@ -1,4 +1,8 @@
-/* v0.12.4 — resilient loading, clearer language and keyboard-friendly controls. */
+/* v0.13.0 — route-quality evidence and transparent-proxy readiness. */
+
+.stream-status { color: var(--muted); white-space: nowrap; }
+.stream-status.complete, .stream-status.sampled { color: var(--green); }
+.stream-status.interrupted { color: var(--red); font-weight: 700; }
 
 button:focus-visible,
 a:focus-visible,

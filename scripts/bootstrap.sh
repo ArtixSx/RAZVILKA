@@ -35,7 +35,7 @@ for ARG in "$@"; do
     -h|--help)
       echo "Usage: sh bootstrap.sh [--from-artem-flow] [--starter-pack]"
       echo "Default: install only the RAZVILKA UI/control plane."
-      echo "Optional environment: RAZVILKA_VERSION=v0.12.4"
+      echo "Optional environment: RAZVILKA_VERSION=v0.13.0"
       exit 0
       ;;
     *) echo "Unknown option: $ARG" >&2; exit 2 ;;

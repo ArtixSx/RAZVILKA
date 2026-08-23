@@ -28,6 +28,27 @@ func TestProbeCurrent(t *testing.T) {
 	}
 }
 
+func TestProbeCurrentDetectsInterruptedResponseStream(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "32768")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(strings.Repeat("x", 16384)))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		time.Sleep(180 * time.Millisecond)
+	}))
+	defer ts.Close()
+	runner := NewRunner()
+	runner.Client = ts.Client()
+	runner.Client.Timeout = 60 * time.Millisecond
+	cat := catalog.Catalog{Services: []catalog.Service{{ID: "stream", Name: "Stream", ProbeURL: ts.URL}}}
+	got := runner.ProbeCurrent(context.Background(), cat, nil)
+	if len(got) != 1 || got[0].Status != "fail" || got[0].StreamStatus != "interrupted" || got[0].BytesRead == 0 {
+		t.Fatalf("interrupted stream was not detected: %+v", got)
+	}
+}
+
 func TestDecodeRunRequest(t *testing.T) {
 	ids, err := DecodeRunRequest(strings.NewReader(`{"services":["youtube","chatgpt"]}`))
 	if err != nil {

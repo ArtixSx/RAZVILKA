@@ -25,6 +25,10 @@ type Snapshot struct {
 	IP6Tables          bool     `json:"ip6tables"`
 	NFTables           bool     `json:"nftables"`
 	NFQueue            bool     `json:"nfqueue"`
+	IPSet              bool     `json:"ipset"`
+	TProxy             bool     `json:"tproxy"`
+	SocketMatch        bool     `json:"socket_match"`
+	Conntrack          bool     `json:"conntrack"`
 	ExternalTunnels    []string `json:"external_tunnels,omitempty"`
 	RouteContamination bool     `json:"route_contamination"`
 }
@@ -46,6 +50,10 @@ func Probe() Snapshot {
 	s.NFTables = commandExists("nft") || fileExists("/opt/sbin/nft")
 	s.TUN = fileExists("/dev/net/tun")
 	s.NFQueue = nfqueueAvailable()
+	s.IPSet = commandExists("ipset") || fileExists("/opt/sbin/ipset") || fileExists("/opt/bin/ipset")
+	s.TProxy = kernelFeatureAvailable("tproxy", "/proc/net/ip_tables_targets", "/proc/modules")
+	s.SocketMatch = kernelFeatureAvailable("socket", "/proc/net/ip_tables_matches", "/proc/modules")
+	s.Conntrack = commandExists("conntrack") || fileExists("/opt/sbin/conntrack") || fileExists("/opt/bin/conntrack") || fileExists("/proc/net/nf_conntrack")
 	s.WANInterface = wanInterface()
 	s.ExternalTunnels = externalTunnels()
 	s.RouteContamination = len(s.ExternalTunnels) > 0
@@ -89,12 +97,17 @@ func memory() (total, available uint64) {
 	return
 }
 func nfqueueAvailable() bool {
-	for _, p := range []string{"/proc/net/ip_tables_targets", "/proc/modules"} {
-		if b, err := os.ReadFile(p); err == nil {
-			t := strings.ToLower(string(b))
-			if strings.Contains(t, "nfqueue") || strings.Contains(t, "nfnetlink_queue") {
-				return true
-			}
+	return kernelFeatureAvailable("nfqueue", "/proc/net/ip_tables_targets") || kernelFeatureAvailable("nfnetlink_queue", "/proc/modules")
+}
+
+func kernelFeatureAvailable(feature string, paths ...string) bool {
+	feature = strings.ToLower(strings.TrimSpace(feature))
+	if feature == "" {
+		return false
+	}
+	for _, path := range paths {
+		if b, err := os.ReadFile(path); err == nil && strings.Contains(strings.ToLower(string(b)), feature) {
+			return true
 		}
 	}
 	return false

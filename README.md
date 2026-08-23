@@ -26,9 +26,10 @@ No cloud account is required. The UI, credentials, configuration and diagnostics
 - One-switch service catalog for YouTube, Discord, Telegram, ChatGPT, Spotify and more.
 - UI-only default installation; add only the bypasses the router actually needs.
 - Unified control for NFQWS2, WARP/MASQUE, WARP/WireGuard, sing-box, Xray and AmneziaWG.
-- Isolated route probes and evidence-driven `AUTO` selection.
+- Isolated route probes with TTFB and a bounded 32 KiB response-integrity sample; only confirmed evidence affects `AUTO`.
 - NFQWS2 Strategy Lab inspired by practical z2k workflows, without installing z2k as a duplicate runtime.
 - Live CPU, RAM, Entware, WAN traffic and router-capacity indicators.
+- Read-only NFQUEUE, TProxy, socket-match, ipset and conntrack readiness checks.
 - Custom services, domain/CIDR lists, checked sources and encrypted private backups.
 - Transactional `plan → snapshot → validate → health → commit/rollback` apply flow.
 

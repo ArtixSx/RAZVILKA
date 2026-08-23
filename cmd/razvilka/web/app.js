@@ -676,6 +676,10 @@ function renderSystem() {
     ['ip6tables', ...yesNo(s.ip6tables)],
     ['nftables', ...yesNo(s.nftables)],
     ['NFQUEUE', ...yesNo(s.nfqueue)],
+		['ipset', s.ipset ? 'есть' : 'не установлен', s.ipset ? 'probe-ok' : 'probe-warn'],
+		['TProxy · TCP/UDP', s.tproxy ? 'поддерживается' : 'модуль не обнаружен', s.tproxy ? 'probe-ok' : 'probe-warn'],
+		['Socket match · быстрый путь', s.socket_match ? 'поддерживается' : 'модуль не обнаружен', s.socket_match ? 'probe-ok' : 'probe-warn'],
+		['Conntrack · активность', s.conntrack ? 'доступен' : 'ограничено', s.conntrack ? 'probe-ok' : 'probe-warn'],
     ['Внешние туннели', s.route_contamination ? (s.external_tunnels || []).join(', ') || 'обнаружены' : 'не обнаружены', s.route_contamination ? 'probe-warn' : 'probe-ok'],
   ];
   $('#systemProbe').innerHTML = values.map(([name, value, okOrClass]) => {
@@ -773,7 +777,8 @@ function renderStrategyLab() {
 	const evidence = lab.evidence || [];
   $('#strategyEvidence').innerHTML = summaries.map((summary) => {
 		const latest = [...evidence].reverse().find((item) => item.candidate_id === summary.candidate_id && item.service_id === summary.service_id && item.protocol === summary.protocol && item.ip_family === summary.ip_family);
-		return `<button class="strategy-summary ${summary.eligible ? 'eligible' : ''}" data-strategy-evidence="${esc(latest ? evidence.indexOf(latest) : '')}"><div><b>${esc(serviceName(summary.service_id))}</b><small>${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</small></div><span>${summary.passes} успешно / ${summary.failures} ошибок</span><em>${Math.round((summary.success_rate || 0) * 100)}%</em><small>${esc(summary.reason)}</small></button>`;
+		const quality = summary.passes > 0 ? `TTFB ≈ ${Math.round(summary.average_ttfb_ms || summary.average_latency_ms || 0)} мс` : 'нет успешного замера';
+		return `<button class="strategy-summary ${summary.eligible ? 'eligible' : ''}" data-strategy-evidence="${esc(latest ? evidence.indexOf(latest) : '')}"><div><b>${esc(serviceName(summary.service_id))}</b><small>${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</small></div><span>${summary.passes} успешно / ${summary.failures} ошибок · ${esc(quality)}</span><em>${Math.round((summary.success_rate || 0) * 100)}%</em><small>${esc(summary.reason)}</small></button>`;
 	}).join('') || '<div class="strategy-empty">Результаты появятся после изолированных проверок DNS → TCP → TLS → HTTP и подтверждения счётчика NFQUEUE.</div>';
 }
 
@@ -1443,6 +1448,23 @@ function testStatusLabel(status) {
   return ({ pass: 'РАБОТАЕТ', partial: 'ЧАСТИЧНО', fail: 'ОШИБКА', 'not-ready': 'НЕ ГОТОВ', 'adapter-pending': 'НУЖЕН АДАПТЕР', pending: 'ОЖИДАНИЕ' })[status] || String(status || '—').toUpperCase();
 }
 
+function streamStatusLabel(status) {
+  return ({ complete: 'прочитан', sampled: '32 КБ проверено', empty: 'без тела', interrupted: 'оборван' })[status] || 'не измерен';
+}
+
+function probeTiming(result) {
+  const ttfb = Number(result?.ttfb_ms);
+  const total = Number(result?.latency_ms);
+  if (Number.isFinite(ttfb) && ttfb >= 0) return `TTFB ${ttfb} мс${Number.isFinite(total) && total > ttfb ? ` · всего ${total} мс` : ''}`;
+  return Number.isFinite(total) ? `${total} мс` : '—';
+}
+
+function probeStream(result) {
+  const bytes = Number(result?.bytes_read);
+  const size = Number.isFinite(bytes) && bytes > 0 ? formatBytes(bytes) : '';
+  return [streamStatusLabel(result?.stream_status), size].filter(Boolean).join(' · ');
+}
+
 function renderTestLab() {
   const current = state.testlab?.current || [];
   const counts = { pass: 0, partial: 0, fail: 0, 'not-ready': 0 };
@@ -1450,7 +1472,7 @@ function renderTestLab() {
   $('#testSummary').innerHTML = [
     ['Работает', counts.pass, 'pass'], ['Частично', counts.partial, 'partial'], ['Ошибок', counts.fail, 'fail'], ['Проверено', current.length, ''],
   ].map(([label, n, cls]) => `<div class="test-stat ${cls}"><strong>${n}</strong><span>${label}</span></div>`).join('');
-  $('#testCurrentRows').innerHTML = current.map((r) => `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span></td><td>${r.http_status || '—'}</td><td>${Number.isFinite(Number(r.latency_ms)) ? `${r.latency_ms} мс` : '—'}</td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}</td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`).join('') || '<tr><td colspan="6"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
+  $('#testCurrentRows').innerHTML = current.map((r) => `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span></td><td>${r.http_status || '—'}</td><td>${esc(probeTiming(r))}</td><td><span class="stream-status ${esc(r.stream_status || '')}">${esc(probeStream(r))}</span></td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}</td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`).join('') || '<tr><td colspan="7"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
 
   const routes = state.routeOptions.filter((o) => o.id !== 'auto');
   const cells = state.testlab?.matrix || [];

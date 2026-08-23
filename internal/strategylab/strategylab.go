@@ -80,6 +80,11 @@ type Evidence struct {
 	Success        bool            `json:"success"`
 	RouteConfirmed bool            `json:"route_confirmed"`
 	LatencyMS      int64           `json:"latency_ms"`
+	TTFBMS         int64           `json:"ttfb_ms,omitempty"`
+	ReadMS         int64           `json:"read_ms,omitempty"`
+	BytesRead      int64           `json:"bytes_read,omitempty"`
+	StreamStatus   string          `json:"stream_status,omitempty"`
+	HTTPStatus     int             `json:"http_status,omitempty"`
 	Stages         []StageEvidence `json:"stages"`
 	CheckedAt      string          `json:"checked_at"`
 }
@@ -94,6 +99,7 @@ type Summary struct {
 	Confirmed      int     `json:"confirmed"`
 	SuccessRate    float64 `json:"success_rate"`
 	AverageLatency float64 `json:"average_latency_ms"`
+	AverageTTFB    float64 `json:"average_ttfb_ms"`
 	LastCheckedAt  string  `json:"last_checked_at,omitempty"`
 	Eligible       bool    `json:"eligible"`
 	Reason         string  `json:"reason"`
@@ -449,6 +455,7 @@ func summarize(state State, now time.Time) []Summary {
 	type aggregate struct {
 		s       Summary
 		latency int64
+		ttfb    int64
 		latest  time.Time
 	}
 	groups := map[string]*aggregate{}
@@ -462,6 +469,7 @@ func summarize(state State, now time.Time) []Summary {
 		if evidence.Success {
 			group.s.Passes++
 			group.latency += evidence.LatencyMS
+			group.ttfb += evidence.TTFBMS
 		} else {
 			group.s.Failures++
 		}
@@ -481,6 +489,7 @@ func summarize(state State, now time.Time) []Summary {
 		}
 		if group.s.Passes > 0 {
 			group.s.AverageLatency = float64(group.latency) / float64(group.s.Passes)
+			group.s.AverageTTFB = float64(group.ttfb) / float64(group.s.Passes)
 		}
 		group.s.LastCheckedAt = group.latest.UTC().Format(time.RFC3339)
 		switch {

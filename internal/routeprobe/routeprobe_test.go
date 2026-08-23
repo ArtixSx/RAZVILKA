@@ -2,14 +2,29 @@ package routeprobe
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestClassifyProbeStream(t *testing.T) {
+	response := &http.Response{ContentLength: 65536}
+	if got := classifyProbeStream(response, 16384, errors.New("timeout")); got != "interrupted" {
+		t.Fatalf("got %q", got)
+	}
+	if got := classifyProbeStream(response, 32768, nil); got != "sampled" {
+		t.Fatalf("got %q", got)
+	}
+	if got := classifyProbeStream(&http.Response{ContentLength: 120}, 120, nil); got != "complete" {
+		t.Fatalf("got %q", got)
+	}
+}
 
 func TestEndpointFromJSONUsesOnlyLoopbackSocksInbound(t *testing.T) {
 	endpoint, username, password := endpointFromJSON("sing-box", []byte(`{

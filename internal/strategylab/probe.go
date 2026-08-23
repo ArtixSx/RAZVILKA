@@ -41,6 +41,14 @@ type ProbeExecutor interface {
 	Execute(context.Context, Candidate, ProbeTarget) (Evidence, error)
 }
 
+type probeHTTPResult struct {
+	Status       int
+	TTFBMS       int64
+	ReadMS       int64
+	BytesRead    int64
+	StreamStatus string
+}
+
 // SystemProbeExecutor runs one serialized, narrowly scoped NFQUEUE probe. It
 // never edits an engine config or the default route. Its temporary OUTPUT rule
 // is limited to one destination IP, destination port and reserved source port.
@@ -208,14 +216,19 @@ func (x *SystemProbeExecutor) Execute(ctx context.Context, candidate Candidate, 
 	jumpCreated = true
 	stage("firewall", "pass", fmt.Sprintf("только %s:%d, source-port %d", address, destinationPort, port), firewallStarted)
 
-	var httpStatus int
+	var responseResult probeHTTPResult
 	var traceStages []StageEvidence
 	var requestErr error
 	if target.Protocol == "quic" {
-		httpStatus, traceStages, requestErr = executePinnedHTTP3(ctx, u, address, port, target.IPFamily)
+		responseResult, traceStages, requestErr = executePinnedHTTP3(ctx, u, address, port, target.IPFamily)
 	} else {
-		httpStatus, traceStages, requestErr = executePinnedHTTPS(ctx, u, address, port, target.IPFamily)
+		responseResult, traceStages, requestErr = executePinnedHTTPS(ctx, u, address, port, target.IPFamily)
 	}
+	evidence.HTTPStatus = responseResult.Status
+	evidence.TTFBMS = responseResult.TTFBMS
+	evidence.ReadMS = responseResult.ReadMS
+	evidence.BytesRead = responseResult.BytesRead
+	evidence.StreamStatus = responseResult.StreamStatus
 	evidence.Stages = append(evidence.Stages, traceStages...)
 	processAlive := true
 	select {
@@ -237,11 +250,11 @@ func (x *SystemProbeExecutor) Execute(ctx context.Context, candidate Candidate, 
 		stage("result", "fail", requestErr.Error(), time.Now())
 		return evidence, nil
 	}
-	evidence.Success = evidence.RouteConfirmed && httpStatus >= 200 && httpStatus < 400
+	evidence.Success = evidence.RouteConfirmed && responseResult.Status >= 200 && responseResult.Status < 400 && responseResult.StreamStatus != "interrupted"
 	if evidence.Success {
-		stage("result", "pass", fmt.Sprintf("HTTP %d через изолированную очередь", httpStatus), time.Now())
+		stage("result", "pass", fmt.Sprintf("HTTP %d; TTFB %d мс; прочитано %d байт (%s)", responseResult.Status, responseResult.TTFBMS, responseResult.BytesRead, responseResult.StreamStatus), time.Now())
 	} else {
-		stage("result", "fail", fmt.Sprintf("HTTP %d не считается доступным сервисом", httpStatus), time.Now())
+		stage("result", "fail", fmt.Sprintf("HTTP %d или поток ответа не подтверждает доступность сервиса (%s)", responseResult.Status, responseResult.StreamStatus), time.Now())
 	}
 	return evidence, nil
 }
@@ -305,7 +318,7 @@ func reserveProbePort(protocol, family string) (int, error) {
 	return port, nil
 }
 
-func executePinnedHTTPS(ctx context.Context, u *url.URL, address netip.Addr, sourcePort int, family string) (int, []StageEvidence, error) {
+func executePinnedHTTPS(ctx context.Context, u *url.URL, address netip.Addr, sourcePort int, family string) (probeHTTPResult, []StageEvidence, error) {
 	started := time.Now()
 	localIP := net.IPv4zero
 	network := "tcp4"
@@ -342,11 +355,11 @@ func executePinnedHTTPS(ctx context.Context, u *url.URL, address netip.Addr, sou
 	}
 	request, err := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, trace), http.MethodGet, u.String(), nil)
 	if err != nil {
-		return 0, nil, err
+		return probeHTTPResult{}, nil, err
 	}
-	request.Header.Set("User-Agent", "RAZVILKA-Strategy-Lab/0.11")
+	request.Header.Set("User-Agent", "RAZVILKA-Strategy-Lab/0.13")
 	request.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
-	request.Header.Set("Range", "bytes=0-4095")
+	request.Header.Set("Range", "bytes=0-32767")
 	client := &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, requestErr := client.Do(request)
 	mu.Lock()
@@ -364,14 +377,19 @@ func executePinnedHTTPS(ctx context.Context, u *url.URL, address netip.Addr, sou
 	traceStage("tls", tlsCopy)
 	traceStage("first-byte", firstByteCopy)
 	if requestErr != nil {
-		return 0, stages, requestErr
+		return probeHTTPResult{TTFBMS: time.Since(started).Milliseconds(), StreamStatus: "interrupted"}, stages, requestErr
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-	return response.StatusCode, stages, nil
+	result := probeHTTPResult{Status: response.StatusCode, TTFBMS: firstByteCopy.Sub(started).Milliseconds()}
+	readStarted := time.Now()
+	result.BytesRead, requestErr = io.Copy(io.Discard, io.LimitReader(response.Body, 32768))
+	result.ReadMS = time.Since(readStarted).Milliseconds()
+	result.StreamStatus = classifyStrategyStream(response, result.BytesRead, requestErr)
+	stages = append(stages, StageEvidence{Stage: "read", Status: map[bool]string{true: "pass", false: "fail"}[requestErr == nil], Detail: fmt.Sprintf("%d байт · %s", result.BytesRead, result.StreamStatus), Elapsed: result.ReadMS})
+	return result, stages, requestErr
 }
 
-func executePinnedHTTP3(ctx context.Context, u *url.URL, address netip.Addr, sourcePort int, family string) (int, []StageEvidence, error) {
+func executePinnedHTTP3(ctx context.Context, u *url.URL, address netip.Addr, sourcePort int, family string) (probeHTTPResult, []StageEvidence, error) {
 	started := time.Now()
 	localAddress := &net.UDPAddr{IP: net.IPv4zero, Port: sourcePort}
 	network := "udp4"
@@ -380,7 +398,7 @@ func executePinnedHTTP3(ctx context.Context, u *url.URL, address netip.Addr, sou
 	}
 	udpConnection, err := net.ListenUDP(network, localAddress)
 	if err != nil {
-		return 0, []StageEvidence{{Stage: "udp", Status: "fail", Detail: shortProbeText(err.Error())}}, err
+		return probeHTTPResult{}, []StageEvidence{{Stage: "udp", Status: "fail", Detail: shortProbeText(err.Error())}}, err
 	}
 	defer udpConnection.Close()
 	quicTransport := &quic.Transport{Conn: udpConnection}
@@ -404,11 +422,11 @@ func executePinnedHTTP3(ctx context.Context, u *url.URL, address netip.Addr, sou
 	defer transport.Close()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return 0, nil, err
+		return probeHTTPResult{}, nil, err
 	}
-	request.Header.Set("User-Agent", "RAZVILKA-Strategy-Lab/0.11")
+	request.Header.Set("User-Agent", "RAZVILKA-Strategy-Lab/0.13")
 	request.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
-	request.Header.Set("Range", "bytes=0-4095")
+	request.Header.Set("Range", "bytes=0-32767")
 	client := &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, requestErr := client.Do(request)
 	if requestErr == nil {
@@ -428,11 +446,29 @@ func executePinnedHTTP3(ctx context.Context, u *url.URL, address netip.Addr, sou
 	traceStage("quic-handshake", handshakeCopy)
 	traceStage("h3-first-byte", firstByteAt)
 	if requestErr != nil {
-		return 0, stages, requestErr
+		return probeHTTPResult{TTFBMS: time.Since(started).Milliseconds(), StreamStatus: "interrupted"}, stages, requestErr
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-	return response.StatusCode, stages, nil
+	result := probeHTTPResult{Status: response.StatusCode, TTFBMS: firstByteAt.Sub(started).Milliseconds()}
+	readStarted := time.Now()
+	result.BytesRead, requestErr = io.Copy(io.Discard, io.LimitReader(response.Body, 32768))
+	result.ReadMS = time.Since(readStarted).Milliseconds()
+	result.StreamStatus = classifyStrategyStream(response, result.BytesRead, requestErr)
+	stages = append(stages, StageEvidence{Stage: "read", Status: map[bool]string{true: "pass", false: "fail"}[requestErr == nil], Detail: fmt.Sprintf("%d байт · %s", result.BytesRead, result.StreamStatus), Elapsed: result.ReadMS})
+	return result, stages, requestErr
+}
+
+func classifyStrategyStream(response *http.Response, bytesRead int64, readErr error) string {
+	if readErr != nil {
+		return "interrupted"
+	}
+	if bytesRead == 0 {
+		return "empty"
+	}
+	if bytesRead >= 32768 || response.ContentLength > bytesRead {
+		return "sampled"
+	}
+	return "complete"
 }
 
 func findProbeBinary(candidates []string) string {
