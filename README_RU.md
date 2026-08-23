@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> ·
+  <a href="README_EN.md">English</a> ·
   <a href="https://t.me/RAZVILKA_UI">Telegram</a> ·
   <a href="https://github.com/ArtixSx/RAZVILKA/releases">Релизы</a> ·
   <a href="SECURITY.md">Безопасность</a>

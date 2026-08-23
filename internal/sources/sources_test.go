@@ -180,3 +180,25 @@ func TestRegistryRejectsUnsafeSourceID(t *testing.T) {
 		t.Fatal("expected unsafe source id to be rejected")
 	}
 }
+
+func TestEntriesForServiceReturnsOnlyExplicitlyScopedSources(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "telegram.lst"), []byte("149.154.160.0/20\n91.108.56.0/22\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "global.lst"), []byte("8.8.8.0/24\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(Registry{Sources: []Source{
+		{ID: "telegram", Name: "Telegram", Kind: "cidrs", URL: "https://example.com/telegram", Enabled: true, Services: []string{"telegram"}},
+		{ID: "global", Name: "Global", Kind: "cidrs", URL: "https://example.com/global", Enabled: true},
+	}}, dir)
+	_, cidrs := m.EntriesForService("telegram")
+	if got := strings.Join(cidrs, ","); got != "149.154.160.0/20,91.108.56.0/22" {
+		t.Fatalf("unexpected service CIDRs: %s", got)
+	}
+	_, unrelated := m.EntriesForService("youtube")
+	if len(unrelated) != 0 {
+		t.Fatalf("unscoped source leaked into service: %v", unrelated)
+	}
+}

@@ -70,17 +70,20 @@ func (r *proxyFakeRunner) Run(_ context.Context, name string, args ...string) ([
 	return []byte("ok"), nil
 }
 
-func TestUsqueUsesHTTP2FallbackAndReconnect(t *testing.T) {
+func TestUsqueUsesUpstreamMASQUEDefaultAndReconnect(t *testing.T) {
 	adapter, err := NewProxyTunnelAdapter("usque", engineconfig.New(t.TempDir(), t.TempDir()), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	adapter.EngineBin = "usque"
 	args := strings.Join(adapter.engineProcess().Args, " ")
-	for _, required := range []string{"socks", "-b 127.0.0.1", "-p 18080", "--http2", "--always-reconnect", "-S"} {
+	for _, required := range []string{"socks", "-b 127.0.0.1", "-p 18080", "--always-reconnect", "-S"} {
 		if !strings.Contains(args, required) {
 			t.Fatalf("usque command %q is missing %q", args, required)
 		}
+	}
+	if strings.Contains(args, "--http2") {
+		t.Fatalf("usque command %q must not force the HTTP/2 fallback", args)
 	}
 }
 

@@ -42,7 +42,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.13.1"
+const Version = "0.14.0"
 
 type applyFailureAdvice struct {
 	Code           string   `json:"code"`
@@ -999,6 +999,14 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
+	case "connectivity":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		defer cancel()
+		writeJSON(w, http.StatusOK, a.Warp.CheckConnectivity(ctx))
 	case "profile":
 		if r.Method != http.MethodDelete {
 			methodNotAllowed(w)
@@ -1875,7 +1883,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
-		"note":        "v0.13.1: WARP WireGuard retries documented UDP fallback ports and reports a safe rollback without exposing peer identifiers. Safe Mode remains the default.",
+		"note":        "v0.14.0: service-scoped CIDR sources cover full IP blocks, tunnel roles are explicit and WARP transports can be checked before Apply. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})
@@ -1993,6 +2001,12 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 		advice.Message = "Cloudflare не подтвердил WireGuard-handshake. RAZVILKA проверила настроенный и резервные UDP-порты, затем безопасно вернула прежний интернет; черновик сохранён."
 		advice.Resolution = "Если повтор не помогает, используйте WARP · MASQUE либо импортируйте отдельный AmneziaWG/VLESS-профиль. Профиль WARP нельзя преобразовать в AmneziaWG без совместимого сервера."
 		advice.Alternatives = []string{"usque", "amneziawg", "sing-box"}
+	} else if strings.Contains(lower, "usque probe") || (strings.Contains(lower, "masque") && strings.Contains(lower, "timeout")) {
+		advice.Code = "WARP_MASQUE_SERVICE_TIMEOUT"
+		advice.Title = "WARP MASQUE подключился, но сервис не ответил"
+		advice.Message = "Сессия с Cloudflare была создана, однако проверочный запрос выбранного сервиса не прошёл через туннель. RAZVILKA вернула прежние маршруты; интернет роутера не изменён."
+		advice.Resolution = "Создайте новую MASQUE-сессию и повторите один раз. Если результат тот же, сеть провайдера блокирует или повреждает трафик WARP — используйте Sing-box/VLESS либо AmneziaWG со своим сервером."
+		advice.Alternatives = []string{"sing-box", "amneziawg", "nfqws2"}
 	}
 	return advice
 }
@@ -3058,7 +3072,33 @@ func (a *App) catalogSnapshot() catalog.Catalog {
 	if a.CustomServices != nil {
 		services = append(services, a.CustomServices.List()...)
 	}
+	if a.Sources != nil {
+		for index := range services {
+			domains, cidrs := a.Sources.EntriesForService(services[index].ID)
+			services[index].Domains = mergeUniqueStrings(services[index].Domains, domains)
+			services[index].CIDRs = mergeUniqueStrings(services[index].CIDRs, cidrs)
+		}
+	}
 	return catalog.Catalog{Services: services}
+}
+func mergeUniqueStrings(base, extra []string) []string {
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	out := make([]string, 0, len(base)+len(extra))
+	for _, values := range [][]string{base, extra} {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			out = append(out, value)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

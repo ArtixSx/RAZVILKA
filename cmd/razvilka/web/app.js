@@ -573,7 +573,7 @@ function renderComponents() {
     const budget = c.resource_budget || {};
     const budgetText = [budget.ram_mib ? `${budget.ram_mib} МиБ RAM` : '', budget.flash_mib ? `${budget.flash_mib} МиБ flash` : '', budget.cpu_class || ''].filter(Boolean).join(' · ');
     const statusClass = c.update_available ? 'has-update' : c.installed ? 'is-installed' : c.available ? 'is-available' : 'is-unavailable';
-    return `<div class="component-item ${statusClass} ${c.external_owner ? 'external' : ''}"><div><b>${esc(c.name)}</b><small>${esc(c.description || '')}</small><small class="component-budget">${esc(budgetText)}</small><small class="component-version ${c.update_available ? 'update' : ''}">${esc(version)}</small></div><div class="component-actions">${actions}</div></div>`;
+    return `<div class="component-item ${statusClass} ${c.external_owner ? 'external' : ''}"><div><b>${esc(c.name)}</b><small>${esc(c.description || '')}</small>${c.use_case ? `<small class="component-purpose"><strong>Подходит:</strong> ${esc(c.use_case)}</small>` : ''}${c.requirement ? `<small class="component-requirement"><strong>Нужно:</strong> ${esc(c.requirement)}</small>` : ''}<small class="component-budget">${esc(budgetText)}</small><small class="component-version ${c.update_available ? 'update' : ''}">${esc(version)}</small></div><div class="component-actions">${actions}</div></div>`;
   }).join('');
 }
 
@@ -655,7 +655,9 @@ function renderStatus() {
     ? `${engineDrafts} ${engineDrafts === 1 ? 'черновик обхода ждёт применения' : 'черновика обходов ждут применения'}`
     : (s.safe_mode ? 'Изменения сохранены как черновик' : 'Есть неподтверждённые изменения');
   $('#draftHint').textContent = failedApply && s.last_apply_failure === 'WARP_WIREGUARD_HANDSHAKE'
-    ? 'WARP WireGuard не получил ответ. Можно повторить проверку резервных UDP-портов или отменить сохранённый черновик.'
+    ? 'WARP WireGuard не получил ответ ни на одном резервном UDP-порту. Проверьте Cloudflare и используйте WARP · MASQUE по TCP/443 либо свой сервер.'
+    : failedApply && s.last_apply_failure === 'WARP_MASQUE_SERVICE_TIMEOUT'
+    ? 'Cloudflare принял MASQUE-сессию, но сервис не ответил через туннель. После одной смены сессии выберите Sing-box/VLESS или AmneziaWG со своим сервером.'
     : failedApply
     ? 'Новый маршрут не прошёл проверку. Исправьте настройки и повторите либо отмените черновик.'
     : engineDrafts > 0
@@ -904,6 +906,11 @@ function renderServices() {
     const resolvedClass = plannedAvailable ? '' : 'off';
     const appliedText = s.applied_enabled ? routeLabel(s.applied_route) : 'выключен';
     const dirty = s.dirty ? 'dirty' : '';
+    const domainCount = Number((s.domains || []).length);
+    const cidrCount = Number((s.cidrs || []).length);
+    const coverageClass = cidrCount > 0 ? 'full' : 'domains';
+    const coverageLabel = cidrCount > 0 ? 'ДОМЕНЫ + IP' : 'ТОЛЬКО ДОМЕНЫ';
+    const coverageTitle = cidrCount > 0 ? 'Учтены домены и IP-сети приложения' : 'Приложение может обращаться по IP; при полной блокировке лучше туннель';
     return `<article class="service-card ${s.enabled ? 'enabled' : ''} ${dirty}">
       <div class="service-top">
         <div class="service-id"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><h3>${esc(s.name)}</h3><p>${esc(s.description || '')}</p></div></div>
@@ -914,7 +921,7 @@ function renderServices() {
         <div><span class="control-label">AUTO / фактический план</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
         <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button" data-detail-id="${esc(s.id)}" title="Технические детали" aria-label="Технические детали ${esc(s.name)}">i</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
       </div>
-      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${Number((s.domains || []).length).toLocaleString('ru-RU')} доменов · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'}</span><span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></div>
+      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></div>
     </article>`;
   }).join('') || '<div class="empty-inline">Ничего не найдено</div>';
 
@@ -1194,6 +1201,24 @@ async function importWarpFile(event) {
 async function checkWarp() {
   try { showDetails(await api('/api/v1/warp/check', { method: 'POST' }), 'Проверка WARP'); }
   catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '', response: error.payload }, 'WARP не прошёл проверку'); }
+}
+
+async function checkWarpConnectivity() {
+  const button = $('#warpConnectivity');
+  button.disabled = true; button.textContent = 'Проверяем…';
+  try {
+    const result = await api('/api/v1/warp/connectivity', { method: 'POST' });
+    const rows = [
+      { name: 'Регистрация профиля', status: result.registration?.ready ? 'ДОСТУПНА' : 'НЕДОСТУПНА', detail: result.registration?.message, latency_ms: result.registration?.latency_ms },
+      { name: 'MASQUE по TCP/443', status: result.masque_http2?.ready ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН', detail: result.masque_http2?.message, latency_ms: result.masque_http2?.latency_ms },
+      { name: 'WARP WireGuard', status: 'ПРОВЕРЯЕТСЯ ПРИ APPLY', detail: `UDP-порты: ${(result.wireguard_ports || []).join(', ')}` },
+    ];
+    showDetails({ result: result.ok ? 'Есть доступный транспорт Cloudflare' : 'Cloudflare не подтверждён', checks: rows, recommendation: result.recommendation, note: result.note }, 'Какой WARP использовать');
+  } catch (error) {
+    showDetails({ error: error.message, response: error.payload }, 'Проверка Cloudflare не выполнена');
+  } finally {
+    button.disabled = false; button.textContent = 'Проверить Cloudflare';
+  }
 }
 
 async function deleteWarp() {
@@ -2041,7 +2066,22 @@ async function changeRoute(id, route) {
 
 function showServiceDetails(id) {
   const service = state.services.find((s) => s.id === id);
-  if (service) showDetails(service, service.name);
+  if (service) {
+    const domains = service.domains || [];
+    const cidrs = service.cidrs || [];
+    showDetails({
+      summary: cidrs.length
+        ? `Полное покрытие: ${domains.length} доменов и ${cidrs.length} IP/CIDR. Для полной IP-блокировки назначьте туннель (MASQUE, Sing-box или AmneziaWG).`
+        : `Покрытие по доменам: ${domains.length}. Если приложение использует прямые IP-адреса, добавьте CIDR или назначьте туннель.`,
+      desired_route: service.enabled ? routeLabel(service.route) : 'Выключен',
+      planned_route: service.enabled ? routeLabel(service.planned_engine) : '—',
+      applied_route: service.applied_enabled ? routeLabel(service.applied_route) : 'Выключен',
+      domains,
+      cidrs,
+      source_refs: service.source_refs || [],
+      devices_and_groups: service.sources || [],
+    }, service.name);
+  }
 }
 
 async function showServicePlan(id) {
@@ -2495,6 +2535,7 @@ function bindEvents() {
   $('#warpImport').addEventListener('click', () => $('#warpImportInput').click());
   $('#warpImportInput').addEventListener('change', importWarpFile);
   $('#warpCheck').addEventListener('click', checkWarp);
+  $('#warpConnectivity').addEventListener('click', checkWarpConnectivity);
   $('#warpDelete').addEventListener('click', deleteWarp);
   $('#warpSaveHealth').addEventListener('click', saveWarpHealthPolicy);
   $('#warpRunHealth').addEventListener('click', runWarpHealthCheck);

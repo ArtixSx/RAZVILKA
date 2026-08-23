@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	xnetproxy "golang.org/x/net/proxy"
 )
 
 // ProxyTunnelAdapter runs an engine as an isolated loopback-only SOCKS5
@@ -61,7 +63,7 @@ type proxySnapshot struct {
 }
 
 func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot string) (*ProxyTunnelAdapter, error) {
-	a := &ProxyTunnelAdapter{EngineID: id, Configs: configs, StateRoot: filepath.Join(stateRoot, id), Runner: nfqws2ExecRunner{}, Processes: OSProcessController{}, Probe: defaultTunnelProbe, SOCKSProbe: probeSOCKS5}
+	a := &ProxyTunnelAdapter{EngineID: id, Configs: configs, StateRoot: filepath.Join(stateRoot, id), Runner: nfqws2ExecRunner{}, Processes: OSProcessController{}, SOCKSProbe: probeSOCKS5}
 	switch id {
 	case "usque":
 		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18080, "rz-usque", "172.31.20.1/30", 202, 20000
@@ -71,6 +73,9 @@ func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot s
 		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18082, "rz-xray", "172.31.22.1/30", 204, 24000
 	default:
 		return nil, fmt.Errorf("unsupported proxy tunnel engine %q", id)
+	}
+	a.Probe = func(ctx context.Context, rawURL string) error {
+		return probeTunnelViaSOCKS(ctx, rawURL, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort)))
 	}
 	return a, nil
 }
@@ -548,10 +553,11 @@ func (a *ProxyTunnelAdapter) engineProcess() ProcessSpec {
 	args := []string{}
 	switch a.ID() {
 	case "usque":
-		// HTTP/2 keeps MASQUE on ordinary TCP/443. This is the reliable fallback
-		// when the WireGuard/QUIC transports used by WARP are filtered. The SOCKS
-		// listener remains loopback-only and reconnects after an idle tunnel loss.
-		args = []string{"-c", config, "socks", "-b", "127.0.0.1", "-p", strconv.Itoa(a.SOCKSPort), "--http2", "--always-reconnect", "-S"}
+		// Keep upstream USQUE's default MASQUE transport (QUIC/UDP 443). Hardware
+		// tests showed that a TCP socket to the HTTP/2 endpoint can succeed while
+		// actual tunneled requests still stall. A separate connectivity check
+		// reports TCP/443 as a fallback without mistaking it for a working tunnel.
+		args = []string{"-c", config, "socks", "-b", "127.0.0.1", "-p", strconv.Itoa(a.SOCKSPort), "--always-reconnect", "-S"}
 	case "sing-box":
 		args = []string{"run", "-c", config}
 	case "xray":
@@ -906,6 +912,38 @@ func probeSOCKS5(ctx context.Context, address string) error {
 	}
 	if reply[0] != 5 || reply[1] != 0 {
 		return fmt.Errorf("unexpected SOCKS5 greeting %v", reply)
+	}
+	return nil
+}
+
+// probeTunnelViaSOCKS proves that the candidate proxy can carry an actual
+// service request. Policy rules are validated independently, so this probe
+// must not depend on the host resolver choosing IPv4 or IPv6 for the temporary
+// TUN interface.
+func probeTunnelViaSOCKS(ctx context.Context, rawURL, address string) error {
+	dialer, err := xnetproxy.SOCKS5("tcp", address, nil, &net.Dialer{Timeout: 5 * time.Second})
+	if err != nil {
+		return err
+	}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
+			return dialer.(xnetproxy.ContextDialer).DialContext(ctx, network, target)
+		},
+		ForceAttemptHTTP2: true,
+	}
+	defer transport.CloseIdleConnections()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("User-Agent", "RAZVILKA-Proxy-Health/0.14")
+	response, err := (&http.Client{Transport: transport, Timeout: 15 * time.Second}).Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= 500 {
+		return fmt.Errorf("HTTP %d", response.StatusCode)
 	}
 	return nil
 }

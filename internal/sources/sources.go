@@ -22,16 +22,17 @@ import (
 )
 
 type Source struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Kind        string `json:"kind"` // domains, cidrs, reference
-	URL         string `json:"url"`
-	Format      string `json:"format"` // lines, reference
-	License     string `json:"license,omitempty"`
-	Enabled     bool   `json:"enabled"`
-	MinEntries  int    `json:"min_entries,omitempty"`
-	MaxBytes    int64  `json:"max_bytes,omitempty"`
-	Description string `json:"description,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Kind        string   `json:"kind"` // domains, cidrs, reference
+	URL         string   `json:"url"`
+	Format      string   `json:"format"` // lines, reference
+	License     string   `json:"license,omitempty"`
+	Enabled     bool     `json:"enabled"`
+	MinEntries  int      `json:"min_entries,omitempty"`
+	MaxBytes    int64    `json:"max_bytes,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Services    []string `json:"services,omitempty"`
 }
 
 type Registry struct {
@@ -143,6 +144,69 @@ func (m *Manager) List() []State {
 		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// EntriesForService returns only cached entries from sources that explicitly
+// opt in to enriching a service. SourceRefs remain provenance metadata and do
+// not implicitly merge broad community lists into a single route.
+func (m *Manager) EntriesForService(serviceID string) (domains, cidrs []string) {
+	serviceID = strings.ToLower(strings.TrimSpace(serviceID))
+	if serviceID == "" {
+		return nil, nil
+	}
+	m.mu.RLock()
+	sourcesForService := make([]Source, 0)
+	for _, src := range m.reg.Sources {
+		state := m.states[src.ID]
+		if !src.Enabled || !state.Ready || src.Kind == "reference" || !containsFold(src.Services, serviceID) {
+			continue
+		}
+		sourcesForService = append(sourcesForService, src)
+	}
+	m.mu.RUnlock()
+	for _, src := range sourcesForService {
+		max := src.MaxBytes
+		if max <= 0 {
+			max = 8 << 20
+		}
+		body, err := readCacheLimited(filepath.Join(m.cacheDir, src.ID+".lst"), max)
+		if err != nil {
+			continue
+		}
+		entries, err := validateLines(src.Kind, string(body))
+		if err != nil {
+			continue
+		}
+		if src.Kind == "domains" {
+			domains = append(domains, entries...)
+		} else if src.Kind == "cidrs" {
+			cidrs = append(cidrs, entries...)
+		}
+	}
+	return uniqueSorted(domains), uniqueSorted(cidrs)
+}
+
+func containsFold(values []string, needle string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueSorted(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
 	return out
 }
 

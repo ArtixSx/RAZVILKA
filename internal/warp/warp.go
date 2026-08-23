@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,6 +47,22 @@ type Result struct {
 	FreshAccount bool   `json:"fresh_account,omitempty"`
 	SHA256       string `json:"sha256,omitempty"`
 	Message      string `json:"message"`
+}
+
+type ConnectivityCheck struct {
+	OK             bool              `json:"ok"`
+	Registration   ConnectivityProbe `json:"registration"`
+	MASQUEHTTP2    ConnectivityProbe `json:"masque_http2"`
+	WireGuardPorts []int             `json:"wireguard_ports"`
+	Recommendation string            `json:"recommendation"`
+	Note           string            `json:"note"`
+}
+
+type ConnectivityProbe struct {
+	Ready     bool   `json:"ready"`
+	Target    string `json:"target"`
+	LatencyMS int64  `json:"latency_ms,omitempty"`
+	Message   string `json:"message"`
 }
 
 type Manager struct {
@@ -270,6 +287,64 @@ func (m *Manager) CheckCandidate() (Result, error) {
 		return Result{}, err
 	}
 	return Result{OK: true, Source: content.Source, SHA256: digest(b), Message: "Структура, ключи, endpoint и сети корректны. Проверка реального handshake выполняется после подключения dataplane adapter."}, nil
+}
+
+// CheckConnectivity verifies only facts that can be confirmed without changing
+// routes. A WireGuard UDP handshake is deliberately left to transactional Apply.
+func (m *Manager) CheckConnectivity(ctx context.Context) ConnectivityCheck {
+	registration := probeHTTPS(ctx, "https://api.cloudflareclient.com/")
+	masque := probeTCP(ctx, "162.159.198.2:443")
+	recommendation := "Сначала попробуйте WARP · WireGuard; реальный UDP handshake будет проверен при применении."
+	if !registration.Ready && masque.Ready {
+		recommendation = "Регистрация wgcf сейчас недоступна, но TCP/443 до Cloudflare отвечает. Используйте WARP · MASQUE или загрузите готовый WARP-профиль."
+	} else if masque.Ready {
+		recommendation = "TCP/443 до Cloudflare доступен: WARP · MASQUE — основной запасной маршрут при блокировке WireGuard UDP."
+	} else if !registration.Ready {
+		recommendation = "Cloudflare недоступен и для регистрации, и по MASQUE TCP/443. Используйте Sing-box/AmneziaWG со своим сервером."
+	}
+	return ConnectivityCheck{
+		OK: registration.Ready || masque.Ready, Registration: registration, MASQUEHTTP2: masque,
+		WireGuardPorts: []int{2408, 500, 1701, 4500}, Recommendation: recommendation,
+		Note: "TCP/TLS-проверка не подменяет реальный туннель. WireGuard подтверждается только handshake, а MASQUE — изолированным запросом выбранного сервиса после Apply.",
+	}
+}
+
+func probeHTTPS(ctx context.Context, target string) ConnectivityProbe {
+	started := time.Now()
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, target, nil)
+	if err != nil {
+		return ConnectivityProbe{Target: target, Message: "не удалось создать TLS-проверку"}
+	}
+	client := &http.Client{Timeout: 6 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ConnectivityProbe{Target: target, Message: shortConnectivityError(err)}
+	}
+	_ = resp.Body.Close()
+	return ConnectivityProbe{Ready: true, Target: target, LatencyMS: time.Since(started).Milliseconds(), Message: fmt.Sprintf("TLS отвечает (HTTP %d)", resp.StatusCode)}
+}
+
+func probeTCP(ctx context.Context, target string) ConnectivityProbe {
+	started := time.Now()
+	conn, err := (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp", target)
+	if err != nil {
+		return ConnectivityProbe{Target: target, Message: shortConnectivityError(err)}
+	}
+	_ = conn.Close()
+	return ConnectivityProbe{Ready: true, Target: target, LatencyMS: time.Since(started).Milliseconds(), Message: "TCP/443 отвечает"}
+}
+
+func shortConnectivityError(err error) string {
+	message := strings.ToLower(err.Error())
+	for _, item := range []struct{ fragment, text string }{
+		{"timeout", "тайм-аут соединения"}, {"no such host", "DNS не разрешил адрес"},
+		{"refused", "соединение отклонено"}, {"unreachable", "сеть недоступна"},
+	} {
+		if strings.Contains(message, item.fragment) {
+			return item.text
+		}
+	}
+	return "соединение не установлено"
 }
 
 func (m *Manager) DeleteProfile(safeMode bool) (Result, error) {

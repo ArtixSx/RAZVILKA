@@ -59,6 +59,16 @@ func TestClassifyWARPHandshakeFailure(t *testing.T) {
 	}
 }
 
+func TestClassifyWARPMASQUEServiceTimeout(t *testing.T) {
+	failure := classifyApplyFailure(`usque probe for Telegram failed: Get "https://telegram.org/": context deadline exceeded`)
+	if failure.Code != "WARP_MASQUE_SERVICE_TIMEOUT" || !failure.DraftPreserved || !failure.Retryable {
+		t.Fatalf("unexpected failure advice: %+v", failure)
+	}
+	if len(failure.Alternatives) != 3 || !strings.Contains(failure.Resolution, "Sing-box") {
+		t.Fatalf("missing non-WARP alternatives: %+v", failure)
+	}
+}
+
 func TestStaticUIIsNeverServedFromAnOldRouterCache(t *testing.T) {
 	a := &App{}
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -397,6 +407,31 @@ func TestAPIServiceAndHTTPSListRefresh(t *testing.T) {
 	}
 	if got := int(status["process_id"].(float64)); got != os.Getpid() {
 		t.Fatalf("process_id=%d, want %d", got, os.Getpid())
+	}
+}
+
+func TestCatalogSnapshotEnrichesOnlyExplicitServiceSources(t *testing.T) {
+	root := t.TempDir()
+	cache := filepath.Join(root, "sources")
+	if err := os.MkdirAll(cache, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cache, "telegram.lst"), []byte("149.154.160.0/20\n91.108.56.0/22\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := sources.NewManager(sources.Registry{Sources: []sources.Source{{
+		ID: "telegram", Name: "Telegram networks", Kind: "cidrs", URL: "https://example.com/telegram", Enabled: true, Services: []string{"telegram"},
+	}}}, cache)
+	a := &App{Catalog: catalog.Catalog{Services: []catalog.Service{
+		{ID: "telegram", Name: "Telegram", Category: "Messaging", Domains: []string{"telegram.org"}, CIDRs: []string{"91.108.56.0/22"}, Strategy: []string{"usque"}},
+		{ID: "youtube", Name: "YouTube", Category: "Video", Domains: []string{"youtube.com"}, Strategy: []string{"nfqws2"}},
+	}}, Sources: manager}
+	snapshot := a.catalogSnapshot()
+	if got := strings.Join(snapshot.Services[0].CIDRs, ","); got != "149.154.160.0/20,91.108.56.0/22" {
+		t.Fatalf("telegram CIDR enrichment failed: %s", got)
+	}
+	if len(snapshot.Services[1].CIDRs) != 0 {
+		t.Fatalf("telegram source leaked into YouTube: %v", snapshot.Services[1].CIDRs)
 	}
 }
 

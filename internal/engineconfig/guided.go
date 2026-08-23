@@ -196,6 +196,7 @@ func guidedFields(engineID, fileID string) []GuidedField {
 			{ID: "inbounds.0.listen", Label: "Адрес прослушивания", Group: "Первый inbound", Placeholder: "127.0.0.1", Description: "Для локального proxy используйте loopback, а не 0.0.0.0."},
 			{ID: "inbounds.0.listen_port", Label: "Порт", Group: "Первый inbound", Type: "number", Min: 1, Max: 65535},
 			{ID: "outbounds.0.tag", Label: "Имя первого выхода", Group: "Первый outbound", Type: "identifier", Placeholder: "proxy-out"},
+			{ID: "outbounds.0.type", Label: "Протокол сервера", Group: "Первый outbound", Type: "select", Required: true, Options: []GuidedOption{{"vless", "VLESS / Reality"}, {"hysteria2", "Hysteria2"}, {"tuic", "TUIC"}, {"shadowsocks", "Shadowsocks"}, {"trojan", "Trojan"}, {"socks", "SOCKS5"}}, Description: "Выберите тип уже имеющегося удалённого профиля. RAZVILKA не создаёт сервер автоматически."},
 			{ID: "outbounds.0.server", Label: "Сервер", Group: "Первый outbound", Placeholder: "example.com"},
 			{ID: "outbounds.0.server_port", Label: "Порт сервера", Group: "Первый outbound", Type: "number", Min: 1, Max: 65535},
 		}

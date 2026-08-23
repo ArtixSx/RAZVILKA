@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.14.0 — full-block routing and honest tunnel guidance
+
+- Official Telegram IPv4/IPv6 CIDRs now enter the actual service route instead of remaining source-status metadata.
+- Source lists can enrich only explicitly associated services, preventing broad community lists from leaking into unrelated routes.
+- Telegram AUTO prefers available tunnel transports for full IP blocks while retaining NFQWS2 and direct fallbacks.
+- Component cards now explain what each bypass solves and what it requires; Sing-box and Xray are identified as clients for a user-provided server.
+- Added an explicit Cloudflare connectivity check for profile registration and MASQUE TCP/443; WireGuard remains confirmed only by a real transactional handshake.
+- USQUE now follows its upstream MASQUE transport by default and proves the selected service through its own SOCKS5 candidate; policy-rule evidence is validated separately.
+- Service cards show domain/IP coverage and technical details explain when a tunnel is required.
+
 ## v0.13.1 — WARP handshake recovery and clear rollback state
 
 - WARP WireGuard now retries Cloudflare's documented UDP fallback ports `500`, `1701` and `4500` when the configured endpoint does not complete a handshake.
