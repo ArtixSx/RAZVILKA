@@ -88,6 +88,27 @@ func TestDNSProfileAPIKeepsChangesDraftOnly(t *testing.T) {
 	}
 }
 
+func TestNextDNSProfileAPIValidatesAndStaysLocal(t *testing.T) {
+	manager, err := dnscontrol.New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{DNS: manager}
+	invalid := httptest.NewRecorder()
+	a.dnsNextDNS(invalid, httptest.NewRequest(http.MethodPut, "/api/v1/dns/nextdns", strings.NewReader(`{"profile_id":"not-valid"}`)))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid status=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+	response := httptest.NewRecorder()
+	a.dnsNextDNS(response, httptest.NewRequest(http.MethodPut, "/api/v1/dns/nextdns", strings.NewReader(`{"profile_id":"a1b2c3"}`)))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"nextdns_profile_id":"a1b2c3"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if manager.Snapshot().Applied.ProfileID != "automatic" {
+		t.Fatal("NextDNS setup changed applied DNS")
+	}
+}
+
 func TestProviderProfilePreviewAndImportStayDraftOnly(t *testing.T) {
 	root := t.TempDir()
 	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))

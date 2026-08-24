@@ -21,16 +21,19 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 )
 
-const schema = 1
+const schema = 2
 
 type Provider struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Servers     []string `json:"servers,omitempty"`
-	DoH         string   `json:"doh,omitempty"`
-	DoT         string   `json:"dot,omitempty"`
-	Filters     []string `json:"filters,omitempty"`
+	ID                    string   `json:"id"`
+	Name                  string   `json:"name"`
+	Description           string   `json:"description"`
+	Servers               []string `json:"servers,omitempty"`
+	DoH                   string   `json:"doh,omitempty"`
+	DoT                   string   `json:"dot,omitempty"`
+	Filters               []string `json:"filters,omitempty"`
+	RequiresConfiguration bool     `json:"requires_configuration,omitempty"`
+	Configured            bool     `json:"configured"`
+	ConfigurationHint     string   `json:"configuration_hint,omitempty"`
 }
 
 type Profile struct {
@@ -54,17 +57,18 @@ type ProbeResult struct {
 }
 
 type Snapshot struct {
-	Schema         int           `json:"schema"`
-	Draft          Selection     `json:"draft"`
-	Applied        Selection     `json:"applied"`
-	Dirty          bool          `json:"dirty"`
-	Providers      []Provider    `json:"providers"`
-	Profiles       []Profile     `json:"profiles"`
-	Mode           string        `json:"mode"`
-	Note           string        `json:"note"`
-	LastProbe      []ProbeResult `json:"last_probe,omitempty"`
-	ProbedAt       string        `json:"probed_at,omitempty"`
-	ProbeProfileID string        `json:"probe_profile_id,omitempty"`
+	Schema           int           `json:"schema"`
+	Draft            Selection     `json:"draft"`
+	Applied          Selection     `json:"applied"`
+	Dirty            bool          `json:"dirty"`
+	Providers        []Provider    `json:"providers"`
+	Profiles         []Profile     `json:"profiles"`
+	Mode             string        `json:"mode"`
+	Note             string        `json:"note"`
+	LastProbe        []ProbeResult `json:"last_probe,omitempty"`
+	ProbedAt         string        `json:"probed_at,omitempty"`
+	ProbeProfileID   string        `json:"probe_profile_id,omitempty"`
+	NextDNSProfileID string        `json:"nextdns_profile_id,omitempty"`
 }
 
 type PlanCheck struct {
@@ -91,12 +95,13 @@ type Plan struct {
 }
 
 type document struct {
-	Schema         int           `json:"schema"`
-	Draft          Selection     `json:"draft"`
-	Applied        Selection     `json:"applied"`
-	LastProbe      []ProbeResult `json:"last_probe,omitempty"`
-	ProbedAt       string        `json:"probed_at,omitempty"`
-	ProbeProfileID string        `json:"probe_profile_id,omitempty"`
+	Schema           int           `json:"schema"`
+	Draft            Selection     `json:"draft"`
+	Applied          Selection     `json:"applied"`
+	LastProbe        []ProbeResult `json:"last_probe,omitempty"`
+	ProbedAt         string        `json:"probed_at,omitempty"`
+	ProbeProfileID   string        `json:"probe_profile_id,omitempty"`
+	NextDNSProfileID string        `json:"nextdns_profile_id,omitempty"`
 }
 
 type Manager struct {
@@ -115,12 +120,13 @@ func New(path string) (*Manager, error) {
 
 func Providers() []Provider {
 	return []Provider{
-		{ID: "system", Name: "Системный DNS", Description: "DNS из Keenetic или от провайдера.", Filters: []string{"без изменений"}},
-		{ID: "cloudflare", Name: "Cloudflare", Description: "Публичный резолвер без фильтрации.", Servers: []string{"1.1.1.1:53", "1.0.0.1:53"}, DoH: "https://cloudflare-dns.com/dns-query", DoT: "cloudflare-dns.com:853", Filters: []string{"DNSSEC", "без фильтрации"}},
-		{ID: "quad9", Name: "Quad9", Description: "Защитный DNS с блокировкой опасных доменов.", Servers: []string{"9.9.9.9:53", "149.112.112.112:53"}, DoH: "https://dns.quad9.net/dns-query", DoT: "dns.quad9.net:853", Filters: []string{"DNSSEC", "вредоносные домены"}},
-		{ID: "adguard", Name: "AdGuard DNS", Description: "Блокирует рекламу и трекеры.", Servers: []string{"94.140.14.14:53", "94.140.15.15:53"}, DoH: "https://dns.adguard-dns.com/dns-query", DoT: "dns.adguard-dns.com:853", Filters: []string{"реклама", "трекеры"}},
-		{ID: "adguard-family", Name: "AdGuard Family", Description: "Блокирует рекламу, трекеры и взрослый контент.", Servers: []string{"94.140.14.15:53", "94.140.15.16:53"}, DoH: "https://family.adguard-dns.com/dns-query", DoT: "family.adguard-dns.com:853", Filters: []string{"реклама", "трекеры", "семейный"}},
-		{ID: "google", Name: "Google Public DNS", Description: "Публичный DNS без контентной фильтрации.", Servers: []string{"8.8.8.8:53", "8.8.4.4:53"}, DoH: "https://dns.google/dns-query", DoT: "dns.google:853", Filters: []string{"DNSSEC", "без фильтрации"}},
+		{ID: "system", Name: "Системный DNS", Description: "DNS из Keenetic или от провайдера.", Filters: []string{"без изменений"}, Configured: true},
+		{ID: "cloudflare", Name: "Cloudflare", Description: "Публичный резолвер без фильтрации.", Servers: []string{"1.1.1.1:53", "1.0.0.1:53"}, DoH: "https://cloudflare-dns.com/dns-query", DoT: "cloudflare-dns.com:853", Filters: []string{"DNSSEC", "без фильтрации"}, Configured: true},
+		{ID: "quad9", Name: "Quad9", Description: "Защитный DNS с блокировкой опасных доменов.", Servers: []string{"9.9.9.9:53", "149.112.112.112:53"}, DoH: "https://dns.quad9.net/dns-query", DoT: "dns.quad9.net:853", Filters: []string{"DNSSEC", "вредоносные домены"}, Configured: true},
+		{ID: "adguard", Name: "AdGuard DNS", Description: "Блокирует рекламу и трекеры.", Servers: []string{"94.140.14.14:53", "94.140.15.15:53"}, DoH: "https://dns.adguard-dns.com/dns-query", DoT: "dns.adguard-dns.com:853", Filters: []string{"реклама", "трекеры"}, Configured: true},
+		{ID: "adguard-family", Name: "AdGuard Family", Description: "Блокирует рекламу, трекеры и взрослый контент.", Servers: []string{"94.140.14.15:53", "94.140.15.16:53"}, DoH: "https://family.adguard-dns.com/dns-query", DoT: "family.adguard-dns.com:853", Filters: []string{"реклама", "трекеры", "семейный"}, Configured: true},
+		{ID: "google", Name: "Google Public DNS", Description: "Публичный DNS без контентной фильтрации.", Servers: []string{"8.8.8.8:53", "8.8.4.4:53"}, DoH: "https://dns.google/dns-query", DoT: "dns.google:853", Filters: []string{"DNSSEC", "без фильтрации"}, Configured: true},
+		{ID: "nextdns", Name: "NextDNS", Description: "Персональная фильтрация по вашему профилю NextDNS.", Filters: []string{"настраиваемая фильтрация", "аналитика NextDNS"}, RequiresConfiguration: true, ConfigurationHint: "Укажите шестизначный ID профиля из кабинета NextDNS."},
 	}
 }
 
@@ -132,13 +138,14 @@ func Profiles() []Profile {
 		{ID: "ad-block", Name: "Без рекламы", Description: "Блокировать рекламу и трекеры через AdGuard DNS.", ProviderID: "adguard"},
 		{ID: "family", Name: "Семейный", Description: "Фильтровать рекламу, трекеры и взрослый контент.", ProviderID: "adguard-family"},
 		{ID: "unfiltered", Name: "Без фильтрации", Description: "Google Public DNS без контентной фильтрации.", ProviderID: "google"},
+		{ID: "nextdns", Name: "Мой NextDNS", Description: "Персональные списки, реклама и защита из вашего профиля NextDNS.", ProviderID: "nextdns"},
 	}
 }
 
 func (m *Manager) Snapshot() Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return Snapshot{Schema: schema, Draft: m.doc.Draft, Applied: m.doc.Applied, Dirty: m.doc.Draft != m.doc.Applied, Providers: Providers(), Profiles: Profiles(), Mode: "preview", Note: "Профиль сохранён как черновик. Рабочий DNS роутера не меняется до появления транзакционного адаптера и проверки конфликтов.", LastProbe: append([]ProbeResult(nil), m.doc.LastProbe...), ProbedAt: m.doc.ProbedAt, ProbeProfileID: m.doc.ProbeProfileID}
+	return Snapshot{Schema: schema, Draft: m.doc.Draft, Applied: m.doc.Applied, Dirty: m.doc.Draft != m.doc.Applied, Providers: providersFor(m.doc), Profiles: Profiles(), Mode: "preview", Note: "Профиль сохранён как черновик. Рабочий DNS роутера не меняется до появления транзакционного адаптера и проверки конфликтов.", LastProbe: append([]ProbeResult(nil), m.doc.LastProbe...), ProbedAt: m.doc.ProbedAt, ProbeProfileID: m.doc.ProbeProfileID, NextDNSProfileID: m.doc.NextDNSProfileID}
 }
 
 // Plan describes the safety contract for the selected DNS profile without
@@ -149,7 +156,7 @@ func (m *Manager) Plan(listener string) Plan {
 	doc := m.doc
 	m.mu.RUnlock()
 	profile, _ := profileByID(doc.Draft.ProfileID)
-	provider, _ := providerByID(profile.ProviderID)
+	provider, _ := providerByIDFor(profile.ProviderID, doc)
 	plan := Plan{
 		Profile: profile, Provider: provider, Mode: "preview", Listener: listener,
 		Checks: []PlanCheck{},
@@ -169,6 +176,9 @@ func (m *Manager) Plan(listener string) Plan {
 		plan.Recommendation = "Применение не требуется: DNS остаётся под управлением системы."
 		plan.Ready = true
 		return plan
+	}
+	if !provider.Configured {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "configuration", Status: "fail", Message: provider.ConfigurationHint})
 	}
 	passed := 0
 	for _, result := range doc.LastProbe {
@@ -210,6 +220,27 @@ func (m *Manager) SetDraft(profileID string) error {
 	return nil
 }
 
+func (m *Manager) SetNextDNSProfileID(profileID string) error {
+	profileID = strings.ToLower(strings.TrimSpace(profileID))
+	if profileID != "" && !validNextDNSProfileID(profileID) {
+		return errors.New("ID NextDNS должен состоять ровно из 6 строчных шестнадцатеричных символов")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.doc
+	m.doc.NextDNSProfileID = profileID
+	if m.doc.ProbeProfileID == "nextdns" {
+		m.doc.LastProbe = nil
+		m.doc.ProbedAt = ""
+		m.doc.ProbeProfileID = ""
+	}
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
 func (m *Manager) Discard() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -227,7 +258,13 @@ func (m *Manager) Probe(ctx context.Context, profileID string) ([]ProbeResult, e
 	if !ok {
 		return nil, fmt.Errorf("unknown DNS profile %q", profileID)
 	}
-	provider, _ := providerByID(profile.ProviderID)
+	m.mu.RLock()
+	doc := m.doc
+	m.mu.RUnlock()
+	provider, _ := providerByIDFor(profile.ProviderID, doc)
+	if !provider.Configured {
+		return nil, errors.New(provider.ConfigurationHint)
+	}
 	if provider.ID == "system" {
 		results := []ProbeResult{probeSystem(ctx)}
 		m.mu.Lock()
@@ -262,6 +299,10 @@ func (m *Manager) Probe(ctx context.Context, profileID string) ([]ProbeResult, e
 	}
 	probes.Wait()
 	m.mu.Lock()
+	if provider.ID == "nextdns" && m.doc.NextDNSProfileID != doc.NextDNSProfileID {
+		m.mu.Unlock()
+		return results, errors.New("ID NextDNS изменился во время проверки; запустите её повторно")
+	}
 	m.doc.LastProbe = append([]ProbeResult(nil), results...)
 	m.doc.ProbedAt = time.Now().UTC().Format(time.RFC3339)
 	m.doc.ProbeProfileID = profile.ID
@@ -487,13 +528,42 @@ func profileByID(id string) (Profile, bool) {
 	return Profile{}, false
 }
 
-func providerByID(id string) (Provider, bool) {
-	for _, provider := range Providers() {
+func providerByIDFor(id string, doc document) (Provider, bool) {
+	for _, provider := range providersFor(doc) {
 		if provider.ID == id {
 			return provider, true
 		}
 	}
 	return Provider{}, false
+}
+
+func providersFor(doc document) []Provider {
+	providers := Providers()
+	if !validNextDNSProfileID(doc.NextDNSProfileID) {
+		return providers
+	}
+	for index := range providers {
+		if providers[index].ID != "nextdns" {
+			continue
+		}
+		providers[index].Configured = true
+		providers[index].DoH = "https://dns.nextdns.io/" + doc.NextDNSProfileID
+		providers[index].DoT = doc.NextDNSProfileID + ".dns.nextdns.io:853"
+		break
+	}
+	return providers
+}
+
+func validNextDNSProfileID(value string) bool {
+	if len(value) != 6 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Manager) load() error {
@@ -511,9 +581,10 @@ func (m *Manager) load() error {
 	if err := json.Unmarshal(b, &loaded); err != nil {
 		return fmt.Errorf("decode DNS state: %w", err)
 	}
-	if loaded.Schema != schema {
+	if loaded.Schema != 1 && loaded.Schema != schema {
 		return fmt.Errorf("unsupported DNS state schema %d", loaded.Schema)
 	}
+	loaded.Schema = schema
 	if _, ok := profileByID(loaded.Draft.ProfileID); !ok {
 		loaded.Draft.ProfileID = "automatic"
 	}

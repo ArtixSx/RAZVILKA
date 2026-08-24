@@ -41,7 +41,7 @@ func TestRejectsUnknownProfile(t *testing.T) {
 }
 
 func TestCatalogHasUsefulProfiles(t *testing.T) {
-	wanted := map[string]bool{"ad-block": false, "family": false, "security": false, "private": false}
+	wanted := map[string]bool{"ad-block": false, "family": false, "security": false, "private": false, "nextdns": false}
 	for _, profile := range Profiles() {
 		if _, ok := wanted[profile.ID]; ok {
 			wanted[profile.ID] = true
@@ -51,6 +51,45 @@ func TestCatalogHasUsefulProfiles(t *testing.T) {
 		if !found {
 			t.Fatalf("missing profile %s", id)
 		}
+	}
+}
+
+func TestNextDNSRequiresValidatedProfileID(t *testing.T) {
+	m, err := New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetDraft("nextdns"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Probe(context.Background(), "nextdns"); err == nil {
+		t.Fatal("unconfigured NextDNS was probed")
+	}
+	configurationBlocked := false
+	for _, check := range m.Plan("").Checks {
+		if check.ID == "configuration" && check.Status == "fail" {
+			configurationBlocked = true
+		}
+	}
+	if !configurationBlocked {
+		t.Fatal("unconfigured NextDNS plan has no configuration blocker")
+	}
+	if err := m.SetNextDNSProfileID("wrong-id"); err == nil {
+		t.Fatal("invalid NextDNS ID accepted")
+	}
+	if err := m.SetNextDNSProfileID("a1b2c3"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := m.Snapshot()
+	if snapshot.NextDNSProfileID != "a1b2c3" {
+		t.Fatalf("profile ID = %q", snapshot.NextDNSProfileID)
+	}
+	provider, ok := providerByIDFor("nextdns", m.doc)
+	if !ok || !provider.Configured || provider.DoH != "https://dns.nextdns.io/a1b2c3" || provider.DoT != "a1b2c3.dns.nextdns.io:853" {
+		t.Fatalf("configured NextDNS = %+v", provider)
+	}
+	if err := m.SetNextDNSProfileID(""); err != nil || m.Snapshot().NextDNSProfileID != "" {
+		t.Fatalf("NextDNS ID was not cleared: %v", err)
 	}
 }
 

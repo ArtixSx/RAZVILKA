@@ -1678,7 +1678,7 @@ function renderDNS() {
     const applied = profile.id === appliedID;
     return `<button class="dns-profile-card ${selected ? 'selected' : ''}" type="button" data-dns-profile="${esc(profile.id)}" aria-pressed="${selected}">
       <span class="dns-profile-icon"><svg><use href="#i-dns"/></svg></span>
-      <span><b>${esc(profile.name)}</b><small>${esc(profile.description)}</small><em>${esc(provider?.name || profile.provider_id)}</em></span>
+      <span><b>${esc(profile.name)}</b><small>${esc(profile.description)}</small><em>${esc(provider?.name || profile.provider_id)}${provider?.requires_configuration && !provider?.configured ? ' · НУЖНА НАСТРОЙКА' : ''}</em></span>
       <i>${applied ? 'ТЕКУЩИЙ' : (selected ? 'ЧЕРНОВИК' : '')}</i>
     </button>`;
   }).join('') || '<div class="community-empty">DNS-профили временно недоступны.</div>';
@@ -1686,10 +1686,13 @@ function renderDNS() {
   const provider = dnsProviderByID(profile?.provider_id);
   $('#dnsProvider').innerHTML = provider ? `<div class="dns-provider-name"><span class="dns-profile-icon"><svg><use href="#i-dns"/></svg></span><div><b>${esc(provider.name)}</b><small>${esc(provider.description)}</small></div></div>
     <div class="dns-provider-rows"><div><span>Обычный DNS</span><b>${esc((provider.servers || []).join(' · ') || 'управляет система')}</b></div><div><span>DoH</span><b>${esc(provider.doh || 'не указан')}</b></div><div><span>DoT</span><b>${esc(provider.dot || 'не указан')}</b></div></div>
-    <div class="outbound-tags">${(provider.filters || []).map((filter) => `<span>${esc(filter)}</span>`).join('')}</div>` : '<div class="community-empty">Провайдер не найден.</div>';
+    <div class="outbound-tags">${(provider.filters || []).map((filter) => `<span>${esc(filter)}</span>`).join('')}</div>
+    ${provider.id === 'nextdns' ? `<div class="dns-provider-config"><label><span>ID профиля NextDNS</span><input id="dnsNextDNSID" maxlength="6" inputmode="text" autocomplete="off" spellcheck="false" placeholder="abc123" value="${esc(dns.nextdns_profile_id || '')}"><small>${esc(provider.configuration_hint || 'ID находится в кабинете NextDNS.')}</small></label><div class="dns-provider-config-actions"><button class="secondary" id="dnsSaveNextDNS" type="button">Сохранить ID</button>${dns.nextdns_profile_id ? '<button class="text-danger" id="dnsClearNextDNS" type="button">Удалить ID</button>' : ''}</div></div>` : ''}` : '<div class="community-empty">Провайдер не найден.</div>';
+  $('#dnsSaveNextDNS')?.addEventListener('click', saveNextDNSProfile);
+  $('#dnsClearNextDNS')?.addEventListener('click', clearNextDNSProfile);
   $('#dnsProbeResults').innerHTML = (dns.last_probe || []).map((result) => `<div class="dns-probe-row"><span class="state-dot ${result.status === 'pass' ? 'good' : 'bad'}"></span><div><b><span class="dns-transport">${esc(result.transport || 'DNS')}</span>${esc(result.server)}</b><small>${result.status === 'pass' ? `${Number(result.latency_ms || 0)} мс · адресов: ${Number(result.addresses || 0)}` : esc(result.error || 'нет ответа')}</small></div></div>`).join('') || '<div class="community-empty">Проверка ещё не запускалась.</div>';
 	const plan = state.dnsPlan || dns.plan;
-	$('#dnsPlan').innerHTML = plan ? `<div class="dns-plan-summary ${plan.ready ? 'ready' : 'blocked'}"><div><span>${plan.ready ? 'ГОТОВО' : 'ПРЕДПРОСМОТР'}</span><b>${esc(plan.profile?.name || 'DNS')}</b></div><p>${esc(plan.recommendation || '')}</p></div><div class="dns-plan-checks">${(plan.checks || []).map((check) => `<div class="dns-plan-check ${esc(check.status)}"><i>${check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '×'}</i><span><b>${esc(check.id === 'probe' ? 'Доступность' : check.id === 'ownership' ? 'Владелец DNS' : check.id === 'adapter' ? 'Применение' : 'Профиль')}</b><small>${esc(check.message)}</small></span></div>`).join('')}</div><details class="dns-plan-steps"><summary>Показать этапы безопасного Apply</summary>${(plan.steps || []).map((step) => `<div><i>${Number(step.order)}</i><span><b>${esc(step.name)}</b><small>${esc(step.summary)}</small></span></div>`).join('')}</details>` : '<div class="community-empty">DNS-план временно недоступен.</div>';
+	$('#dnsPlan').innerHTML = plan ? `<div class="dns-plan-summary ${plan.ready ? 'ready' : 'blocked'}"><div><span>${plan.ready ? 'ГОТОВО' : 'ПРЕДПРОСМОТР'}</span><b>${esc(plan.profile?.name || 'DNS')}</b></div><p>${esc(plan.recommendation || '')}</p></div><div class="dns-plan-checks">${(plan.checks || []).map((check) => `<div class="dns-plan-check ${esc(check.status)}"><i>${check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '×'}</i><span><b>${esc(check.id === 'probe' ? 'Доступность' : check.id === 'ownership' ? 'Владелец DNS' : check.id === 'adapter' ? 'Применение' : check.id === 'configuration' ? 'Настройка' : 'Профиль')}</b><small>${esc(check.message)}</small></span></div>`).join('')}</div><details class="dns-plan-steps"><summary>Показать этапы безопасного Apply</summary>${(plan.steps || []).map((step) => `<div><i>${Number(step.order)}</i><span><b>${esc(step.name)}</b><small>${esc(step.summary)}</small></span></div>`).join('')}</details>` : '<div class="community-empty">DNS-план временно недоступен.</div>';
   $('#dnsDiscard').disabled = !dns.dirty;
 }
 
@@ -1701,6 +1704,33 @@ async function selectDNSProfile(profileID) {
     showNotice('review', 'DNS-профиль сохранён как черновик', 'Рабочий DNS роутера не изменён. Сначала проверьте доступность выбранных серверов.', state.dns);
   } catch (error) {
     showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'DNS-профиль не сохранён');
+  }
+}
+
+async function saveNextDNSProfile() {
+  const profileID = ($('#dnsNextDNSID')?.value || '').trim().toLowerCase();
+  if (!profileID) {
+    showDetails({ message: 'Введите шестизначный ID из кабинета NextDNS. Для удаления сохранённого ID используйте отдельную кнопку.' }, 'ID NextDNS не указан');
+    return;
+  }
+  try {
+    state.dns = await api('/api/v1/dns/nextdns', { method: 'PUT', body: JSON.stringify({ profile_id: profileID }) });
+    state.dnsPlan = await api('/api/v1/dns/plan');
+    renderDNS();
+    showNotice('review', 'Профиль NextDNS настроен', 'ID сохранён только на роутере. Теперь можно проверить DoH и DoT; рабочий DNS ещё не изменён.', state.dns);
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'ID NextDNS не сохранён');
+  }
+}
+
+async function clearNextDNSProfile() {
+  try {
+    state.dns = await api('/api/v1/dns/nextdns', { method: 'PUT', body: JSON.stringify({ profile_id: '' }) });
+    state.dnsPlan = await api('/api/v1/dns/plan');
+    renderDNS();
+    showNotice('review', 'ID NextDNS удалён', 'Персональный endpoint больше не используется. Рабочий DNS роутера не менялся.', state.dns);
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'ID NextDNS не удалён');
   }
 }
 
