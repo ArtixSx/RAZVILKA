@@ -60,11 +60,14 @@
 - [x] В установке, обзоре и настройке прямо объясняется назначение sing-box:
   это универсальный клиент VLESS/Reality, Hysteria2, TUIC и Shadowsocks для
   удалённого узла; одна установка доступ не создаёт.
-- [ ] Provider/subscription manager: URI, JSON/YAML, Clash/Mihomo и sing-box;
-  нормализация узлов, тест handshake/egress/сервиса, срок действия и причины
-  отказа без показа секретов.
-  - [x] Локальный preview и draft-only импорт одиночных VLESS/Reality,
-    Hysteria2, TUIC и Shadowsocks URI в Sing-box без возврата ключей в UI.
+- [ ] Provider/subscription manager:
+  - [x] одиночные URI VLESS/Reality, Hysteria2, TUIC и Shadowsocks;
+  - [x] многоузловые текстовые и Base64-подписки, JSON-массивы и JSON sing-box;
+  - [x] безопасный предпросмотр без UUID/паролей/ключей и нормализация без чужих inbounds/routes/API;
+  - [ ] YAML и Clash/Mihomo;
+  - [ ] реестр провайдеров, обновление подписок и явный выбор узла;
+  - [ ] тест handshake/egress/сервиса, срок действия и причины отказа без
+    показа секретов.
 - [ ] Generic Tunnel для уже существующего интерфейса, Tailscale/Headscale и
   SSH SOCKS — только при явном подтверждении маршрута.
 - [ ] Единый Cloudflare Provider для WARP WireGuard и MASQUE: endpoint scan,

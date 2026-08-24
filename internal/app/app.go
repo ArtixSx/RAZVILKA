@@ -1623,14 +1623,14 @@ func (a *App) providerProfilePreview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := providerprofile.ParseURI(uri)
+	result, err := providerprofile.ParseProfile(uri)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "draft_only": true, "preview": result.Preview,
-		"note": "Ключи и пароли не показываются. Предпросмотр ничего не сохраняет.",
+		"note": "Ключи и пароли не показываются. Предпросмотр ничего не сохраняет; исходный пакет нормализуется в безопасный конфиг RAZVILKA.",
 	})
 }
 
@@ -1651,7 +1651,7 @@ func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "явно подтвердите импорт удалённого профиля", http.StatusPreconditionRequired)
 		return
 	}
-	result, err := providerprofile.ParseURI(uri)
+	result, err := providerprofile.ParseProfile(uri)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1670,23 +1670,28 @@ func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": native.OK, "draft_only": true, "preview": result.Preview,
 		"draft": draft, "validation": native,
-		"note": "Профиль сохранён только в черновик Sing-box. Назначьте сервис, проверьте план и выполните общий Apply.",
+		"note": "Пакет узлов сохранён только в черновик Sing-box. Назначьте сервис, проверьте план и выполните общий Apply.",
 	})
 }
 
 func decodeProviderProfileRequest(w http.ResponseWriter, r *http.Request) (uri, confirm string, ok bool) {
 	var input struct {
 		URI     string `json:"uri"`
+		Profile string `json:"profile"`
 		Confirm string `json:"confirm"`
 	}
-	reader := http.MaxBytesReader(w, r.Body, providerprofile.MaxURIBytes+(8<<10))
+	reader := http.MaxBytesReader(w, r.Body, 2*providerprofile.MaxProfileBytes+(8<<10))
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
 		http.Error(w, "некорректный запрос профиля", http.StatusBadRequest)
 		return "", "", false
 	}
-	return input.URI, input.Confirm, true
+	profile := input.Profile
+	if profile == "" {
+		profile = input.URI
+	}
+	return profile, input.Confirm, true
 }
 
 func (a *App) testLabSnapshot(w http.ResponseWriter, r *http.Request) {

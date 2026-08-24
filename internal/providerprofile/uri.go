@@ -31,16 +31,34 @@ type Result struct {
 }
 
 func ParseURI(raw string) (Result, error) {
+	outbound, preview, err := parseURIOutbound(raw)
+	if err != nil {
+		return Result{}, err
+	}
+	preview.EngineID = "sing-box"
+	document := map[string]any{
+		"log":       map[string]any{"level": "warn", "timestamp": true},
+		"outbounds": []any{outbound, map[string]any{"type": "direct", "tag": "direct"}},
+		"route":     map[string]any{"auto_detect_interface": true},
+	}
+	config, err := json.MarshalIndent(document, "", "  ")
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Preview: preview, Config: append(config, '\n')}, nil
+}
+
+func parseURIOutbound(raw string) (map[string]any, Preview, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return Result{}, errors.New("вставьте ссылку профиля")
+		return nil, Preview{}, errors.New("вставьте ссылку профиля")
 	}
 	if len(raw) > MaxURIBytes || strings.ContainsAny(raw, "\r\n\x00") {
-		return Result{}, errors.New("ссылка слишком длинная или содержит недопустимые символы")
+		return nil, Preview{}, errors.New("ссылка слишком длинная или содержит недопустимые символы")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return Result{}, errors.New("не удалось разобрать ссылку профиля")
+		return nil, Preview{}, errors.New("не удалось разобрать ссылку профиля")
 	}
 	var outbound map[string]any
 	var preview Preview
@@ -57,19 +75,10 @@ func ParseURI(raw string) (Result, error) {
 		err = fmt.Errorf("протокол %q пока не поддерживается; используйте VLESS, Hysteria2, TUIC, Shadowsocks или импорт JSON", u.Scheme)
 	}
 	if err != nil {
-		return Result{}, err
+		return nil, Preview{}, err
 	}
 	preview.EngineID = "sing-box"
-	document := map[string]any{
-		"log":       map[string]any{"level": "warn", "timestamp": true},
-		"outbounds": []any{outbound, map[string]any{"type": "direct", "tag": "direct"}},
-		"route":     map[string]any{"auto_detect_interface": true},
-	}
-	config, err := json.MarshalIndent(document, "", "  ")
-	if err != nil {
-		return Result{}, err
-	}
-	return Result{Preview: preview, Config: append(config, '\n')}, nil
+	return outbound, preview, nil
 }
 
 func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
@@ -202,11 +211,7 @@ func parseShadowsocks(u *url.URL) (map[string]any, Preview, error) {
 	}
 	out := map[string]any{"type": "shadowsocks", "tag": "proxy", "server": server, "server_port": port, "method": method, "password": password}
 	if plugin := strings.TrimSpace(q.Get("plugin")); plugin != "" {
-		name, options, _ := strings.Cut(plugin, ";")
-		out["plugin"] = name
-		if options != "" {
-			out["plugin_opts"] = options
-		}
+		return nil, Preview{}, errors.New("Shadowsocks-plugin не импортируется автоматически: загрузите проверенный конфиг вручную")
 	}
 	return out, Preview{Protocol: "Shadowsocks", Name: profileName(u), Server: server, Port: port, Transport: "TCP/UDP", Security: method}, nil
 }

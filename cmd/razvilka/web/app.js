@@ -2,6 +2,14 @@
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
+const plural = (value, one, few, many) => {
+  const number = Math.abs(Number(value)) % 100;
+  const last = number % 10;
+  if (number > 10 && number < 20) return many;
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
+  return many;
+};
 
 const state = {
   status: {},
@@ -1535,13 +1543,16 @@ async function handleEngineImport(event) {
 function renderRemoteProfilePreview() {
   const container = $('#remoteProfilePreview');
   const preview = state.remoteProfilePreview?.preview;
-  $('#remoteProfileImportButton').disabled = !preview;
+  $('#remoteProfileImportButton').disabled = !preview?.node_count;
   if (!preview) {
-    container.innerHTML = '<span>Ссылка обрабатывается локально на роутере и не попадает в технический журнал.</span>';
+    container.innerHTML = '<span>Данные обрабатываются локально. Исходные inbounds, маршруты и внешние панели из JSON будут удалены.</span>';
     return;
   }
-  const warnings = (preview.warnings || []).map((warning) => `<small>${esc(warning)}</small>`).join('');
-  container.innerHTML = `<div><b>${esc(preview.name || preview.protocol)}</b><span>${esc(preview.protocol)} · ${esc(preview.server)}:${Number(preview.port) || '—'}</span></div><div><span>${preview.tls ? 'TLS включён' : 'Без TLS'}${preview.transport ? ` · ${esc(preview.transport)}` : ''}${preview.security ? ` · ${esc(preview.security)}` : ''}</span>${warnings}</div>`;
+  const nodes = preview.nodes || [];
+  const visible = nodes.slice(0, 6).map((node, index) => `<li><b>${esc(node.name || `Узел ${index + 1}`)}</b><span>${esc(node.protocol)} · ${esc(node.server)}:${Number(node.port) || '—'}${node.transport ? ` · ${esc(node.transport)}` : ''}</span></li>`).join('');
+  const hidden = nodes.length > 6 ? `<li><b>Ещё ${nodes.length - 6}</b><span>будут сохранены в локальном селекторе</span></li>` : '';
+  const warnings = [...(preview.warnings || []), ...nodes.flatMap((node) => node.warnings || [])].map((warning) => `<small>${esc(warning)}</small>`).join('');
+  container.innerHTML = `<div class="remote-profile-summary"><b>${Number(preview.node_count)} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')} · ${esc(preview.format || 'профиль')}</b><span>Доступы скрыты; рабочая конфигурация не изменяется</span>${warnings}</div><ul>${visible}${hidden}</ul>`;
 }
 
 async function previewRemoteProfile() {
@@ -1552,22 +1563,22 @@ async function previewRemoteProfile() {
   const button = $('#remoteProfilePreviewButton');
   button.disabled = true; button.textContent = 'Проверяем…';
   try {
-    state.remoteProfilePreview = await api('/api/v1/provider-profiles/preview', { method: 'POST', body: JSON.stringify({ uri }) });
+    state.remoteProfilePreview = await api('/api/v1/provider-profiles/preview', { method: 'POST', body: JSON.stringify({ profile: uri }) });
     renderRemoteProfilePreview();
   } catch (error) {
-    showDetails({ error: error.message, resolution: 'Проверьте формат ссылки или загрузите готовый config.json обычным импортом.' }, 'Ссылка профиля не принята');
-  } finally { button.disabled = false; button.textContent = 'Проверить ссылку'; }
+    showDetails({ error: error.message, resolution: 'Поддерживаются отдельные URI, текстовые/Base64-подписки и JSON Sing-box. Проверьте формат и обязательные ключи.' }, 'Пакет профилей не принят');
+  } finally { button.disabled = false; button.textContent = 'Проверить пакет'; }
 }
 
 async function importRemoteProfile() {
   const uri = $('#remoteProfileURI').value.trim();
   const preview = state.remoteProfilePreview?.preview;
   if (!uri || !preview) return;
-  if (!await askConfirmation('Создать черновик Sing-box', `${preview.protocol} · ${preview.server}:${preview.port}. Текущий рабочий профиль не изменится до общего Apply.`, 'Создать черновик')) return;
+  if (!await askConfirmation('Создать черновик Sing-box', `${preview.node_count} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')}. Активным станет первый узел; текущий рабочий профиль не изменится до общего Apply.`, 'Создать черновик')) return;
   const button = $('#remoteProfileImportButton');
   button.disabled = true; button.textContent = 'Создаём…';
   try {
-    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ uri, confirm: 'IMPORT_REMOTE_PROFILE' }) });
+    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ profile: uri, confirm: 'IMPORT_REMOTE_PROFILE' }) });
     $('#remoteProfileURI').value = '';
     state.remoteProfilePreview = null;
     state.engineValidation = result.validation || null;
@@ -1578,6 +1589,32 @@ async function importRemoteProfile() {
   } catch (error) {
     showDetails({ error: error.message, response: error.payload }, 'Профиль не импортирован');
   } finally { button.disabled = false; button.textContent = 'Создать черновик'; }
+}
+
+async function selectRemoteProfileFile(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  if (file.size > 256 * 1024) {
+    showDetails({ error: 'Файл больше 256 КБ.' }, 'Пакет профилей не принят');
+    return;
+  }
+  try {
+    $('#remoteProfileURI').value = await file.text();
+    state.remoteProfilePreview = null;
+    renderRemoteProfilePreview();
+    await previewRemoteProfile();
+  } catch (error) {
+    showDetails({ error: error.message }, 'Не удалось прочитать файл');
+  }
+}
+
+function toggleRemoteProfileVisibility() {
+  const input = $('#remoteProfileURI');
+  const button = $('#remoteProfileReveal');
+  const visible = input.classList.toggle('revealed');
+  button.textContent = visible ? 'Скрыть' : 'Показать';
+  button.setAttribute('aria-pressed', String(visible));
 }
 
 async function exportEngineFile() {
@@ -2805,6 +2842,9 @@ function bindEvents() {
   $('#engineImportInput').addEventListener('change', handleEngineImport);
   $('#engineExport').addEventListener('click', exportEngineFile);
   $('#remoteProfileURI').addEventListener('input', () => { state.remoteProfilePreview = null; renderRemoteProfilePreview(); });
+  $('#remoteProfileFileButton').addEventListener('click', () => $('#remoteProfileFile').click());
+  $('#remoteProfileFile').addEventListener('change', selectRemoteProfileFile);
+  $('#remoteProfileReveal').addEventListener('click', toggleRemoteProfileVisibility);
   $('#remoteProfilePreviewButton').addEventListener('click', previewRemoteProfile);
   $('#remoteProfileImportButton').addEventListener('click', importRemoteProfile);
   $('#warpGenerate').addEventListener('click', () => generateWarp(false));

@@ -144,7 +144,7 @@ func TestProviderProfilePreviewAndImportStayDraftOnly(t *testing.T) {
 	previewBody, _ := json.Marshal(map[string]string{"uri": uri})
 	preview := httptest.NewRecorder()
 	a.providerProfilePreview(preview, httptest.NewRequest(http.MethodPost, "/api/v1/provider-profiles/preview", bytes.NewReader(previewBody)))
-	if preview.Code != http.StatusOK || strings.Contains(preview.Body.String(), "123e4567") || strings.Contains(preview.Body.String(), "PUBLIC_KEY") {
+	if preview.Code != http.StatusOK || !strings.Contains(preview.Body.String(), `"node_count":1`) || strings.Contains(preview.Body.String(), "123e4567") || strings.Contains(preview.Body.String(), "PUBLIC_KEY") {
 		t.Fatalf("preview status=%d leaked profile: %s", preview.Code, preview.Body.String())
 	}
 	if content, err := configs.Read("sing-box", "main"); err != nil || content.Source != "missing" {
