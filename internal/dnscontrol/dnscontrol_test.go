@@ -93,6 +93,58 @@ func TestNextDNSRequiresValidatedProfileID(t *testing.T) {
 	}
 }
 
+func TestCustomDNSProviderIsNormalizedAndDraftOnly(t *testing.T) {
+	m, err := New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetDraft("custom"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Probe(context.Background(), "custom"); err == nil {
+		t.Fatal("unconfigured custom DNS was probed")
+	}
+	input := CustomProviderInput{
+		Name:    "Домашний DNS",
+		Servers: []string{"9.9.9.9", "9.9.9.9:53", "2001:4860:4860::8888"},
+		DoH:     "https://dns.example/dns-query",
+		DoT:     "dns.example",
+	}
+	if err := m.SetCustomProvider(input); err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := providerByIDFor("custom", m.doc)
+	if !ok || !provider.Configured || len(provider.Servers) != 2 || provider.Servers[0] != "9.9.9.9:53" || provider.Servers[1] != "[2001:4860:4860::8888]:53" || provider.DoT != "dns.example:853" {
+		t.Fatalf("custom provider = %+v", provider)
+	}
+	if m.Snapshot().Applied.ProfileID != "automatic" {
+		t.Fatal("custom DNS changed applied selection")
+	}
+	if err := m.ClearCustomProvider(); err != nil {
+		t.Fatal(err)
+	}
+	provider, _ = providerByIDFor("custom", m.doc)
+	if provider.Configured {
+		t.Fatal("custom DNS was not cleared")
+	}
+}
+
+func TestCustomDNSRejectsUnsafeEndpoints(t *testing.T) {
+	m, _ := New("")
+	invalid := []CustomProviderInput{
+		{DoH: "http://dns.example/dns-query"},
+		{DoH: "https://user:pass@dns.example/dns-query"},
+		{DoH: "https://dns.example/dns-query?token=secret"},
+		{Servers: []string{"9.9.9.9:http"}},
+		{DoT: "dns.example:70000"},
+	}
+	for _, input := range invalid {
+		if err := m.SetCustomProvider(input); err == nil {
+			t.Fatalf("unsafe custom DNS accepted: %+v", input)
+		}
+	}
+}
+
 func TestPlanRefusesToReplaceExistingRouterDNS(t *testing.T) {
 	m, _ := New("")
 	if err := m.SetDraft("ad-block"); err != nil {

@@ -109,6 +109,32 @@ func TestNextDNSProfileAPIValidatesAndStaysLocal(t *testing.T) {
 	}
 }
 
+func TestCustomDNSAPIValidatesAndDoesNotApply(t *testing.T) {
+	manager, err := dnscontrol.New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{DNS: manager}
+	invalid := httptest.NewRecorder()
+	a.dnsCustom(invalid, httptest.NewRequest(http.MethodPut, "/api/v1/dns/custom", strings.NewReader(`{"doh":"http://dns.example/query"}`)))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid status=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+	response := httptest.NewRecorder()
+	a.dnsCustom(response, httptest.NewRequest(http.MethodPut, "/api/v1/dns/custom", strings.NewReader(`{"name":"Home","servers":["9.9.9.9"],"doh":"https://dns.example/dns-query"}`)))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"id":"custom"`) || !strings.Contains(response.Body.String(), `"9.9.9.9:53"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if manager.Snapshot().Applied.ProfileID != "automatic" {
+		t.Fatal("custom DNS API changed applied selection")
+	}
+	deleted := httptest.NewRecorder()
+	a.dnsCustom(deleted, httptest.NewRequest(http.MethodDelete, "/api/v1/dns/custom", nil))
+	if deleted.Code != http.StatusOK || strings.Contains(deleted.Body.String(), `"name":"Home"`) {
+		t.Fatalf("delete status=%d body=%s", deleted.Code, deleted.Body.String())
+	}
+}
+
 func TestProviderProfilePreviewAndImportStayDraftOnly(t *testing.T) {
 	root := t.TempDir()
 	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))

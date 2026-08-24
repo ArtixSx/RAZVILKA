@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,6 +103,14 @@ type document struct {
 	ProbedAt         string        `json:"probed_at,omitempty"`
 	ProbeProfileID   string        `json:"probe_profile_id,omitempty"`
 	NextDNSProfileID string        `json:"nextdns_profile_id,omitempty"`
+	CustomProvider   *Provider     `json:"custom_provider,omitempty"`
+}
+
+type CustomProviderInput struct {
+	Name    string   `json:"name"`
+	Servers []string `json:"servers"`
+	DoH     string   `json:"doh"`
+	DoT     string   `json:"dot"`
 }
 
 type Manager struct {
@@ -127,6 +136,7 @@ func Providers() []Provider {
 		{ID: "adguard-family", Name: "AdGuard Family", Description: "Блокирует рекламу, трекеры и взрослый контент.", Servers: []string{"94.140.14.15:53", "94.140.15.16:53"}, DoH: "https://family.adguard-dns.com/dns-query", DoT: "family.adguard-dns.com:853", Filters: []string{"реклама", "трекеры", "семейный"}, Configured: true},
 		{ID: "google", Name: "Google Public DNS", Description: "Публичный DNS без контентной фильтрации.", Servers: []string{"8.8.8.8:53", "8.8.4.4:53"}, DoH: "https://dns.google/dns-query", DoT: "dns.google:853", Filters: []string{"DNSSEC", "без фильтрации"}, Configured: true},
 		{ID: "nextdns", Name: "NextDNS", Description: "Персональная фильтрация по вашему профилю NextDNS.", Filters: []string{"настраиваемая фильтрация", "аналитика NextDNS"}, RequiresConfiguration: true, ConfigurationHint: "Укажите шестизначный ID профиля из кабинета NextDNS."},
+		{ID: "custom", Name: "Свой DNS", Description: "Ваш обычный DNS, DoH или DoT endpoint.", Filters: []string{"пользовательский"}, RequiresConfiguration: true, ConfigurationHint: "Укажите хотя бы один DNS, DoH или DoT endpoint."},
 	}
 }
 
@@ -139,6 +149,7 @@ func Profiles() []Profile {
 		{ID: "family", Name: "Семейный", Description: "Фильтровать рекламу, трекеры и взрослый контент.", ProviderID: "adguard-family"},
 		{ID: "unfiltered", Name: "Без фильтрации", Description: "Google Public DNS без контентной фильтрации.", ProviderID: "google"},
 		{ID: "nextdns", Name: "Мой NextDNS", Description: "Персональные списки, реклама и защита из вашего профиля NextDNS.", ProviderID: "nextdns"},
+		{ID: "custom", Name: "Свой провайдер", Description: "Проверяемый DNS-провайдер, заданный вручную.", ProviderID: "custom"},
 	}
 }
 
@@ -241,6 +252,45 @@ func (m *Manager) SetNextDNSProfileID(profileID string) error {
 	return nil
 }
 
+func (m *Manager) SetCustomProvider(input CustomProviderInput) error {
+	provider, err := normalizeCustomProvider(input)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.doc
+	m.doc.CustomProvider = &provider
+	m.clearProbeLocked("custom")
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) ClearCustomProvider() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.doc
+	m.doc.CustomProvider = nil
+	m.clearProbeLocked("custom")
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) clearProbeLocked(profileID string) {
+	if m.doc.ProbeProfileID != profileID {
+		return
+	}
+	m.doc.LastProbe = nil
+	m.doc.ProbedAt = ""
+	m.doc.ProbeProfileID = ""
+}
+
 func (m *Manager) Discard() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -299,9 +349,10 @@ func (m *Manager) Probe(ctx context.Context, profileID string) ([]ProbeResult, e
 	}
 	probes.Wait()
 	m.mu.Lock()
-	if provider.ID == "nextdns" && m.doc.NextDNSProfileID != doc.NextDNSProfileID {
+	currentProvider, _ := providerByIDFor(profile.ProviderID, m.doc)
+	if providerFingerprint(provider) != providerFingerprint(currentProvider) {
 		m.mu.Unlock()
-		return results, errors.New("ID NextDNS изменился во время проверки; запустите её повторно")
+		return results, errors.New("настройки DNS изменились во время проверки; запустите её повторно")
 	}
 	m.doc.LastProbe = append([]ProbeResult(nil), results...)
 	m.doc.ProbedAt = time.Now().UTC().Format(time.RFC3339)
@@ -539,19 +590,134 @@ func providerByIDFor(id string, doc document) (Provider, bool) {
 
 func providersFor(doc document) []Provider {
 	providers := Providers()
-	if !validNextDNSProfileID(doc.NextDNSProfileID) {
-		return providers
-	}
 	for index := range providers {
-		if providers[index].ID != "nextdns" {
-			continue
+		switch providers[index].ID {
+		case "nextdns":
+			if validNextDNSProfileID(doc.NextDNSProfileID) {
+				providers[index].Configured = true
+				providers[index].DoH = "https://dns.nextdns.io/" + doc.NextDNSProfileID
+				providers[index].DoT = doc.NextDNSProfileID + ".dns.nextdns.io:853"
+			}
+		case "custom":
+			if doc.CustomProvider != nil {
+				providers[index] = cloneProvider(*doc.CustomProvider)
+			}
 		}
-		providers[index].Configured = true
-		providers[index].DoH = "https://dns.nextdns.io/" + doc.NextDNSProfileID
-		providers[index].DoT = doc.NextDNSProfileID + ".dns.nextdns.io:853"
-		break
 	}
 	return providers
+}
+
+func normalizeCustomProvider(input CustomProviderInput) (Provider, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		name = "Свой DNS"
+	}
+	if len(name) > 80 || strings.IndexFunc(name, func(character rune) bool { return character < 32 || character == 127 }) >= 0 {
+		return Provider{}, errors.New("название DNS должно быть короче 80 символов и не содержать управляющие символы")
+	}
+	servers := make([]string, 0, len(input.Servers))
+	seen := map[string]bool{}
+	for _, raw := range input.Servers {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		endpoint, err := normalizeDNSEndpoint(raw, "53")
+		if err != nil {
+			return Provider{}, fmt.Errorf("обычный DNS: %w", err)
+		}
+		if !seen[endpoint] {
+			servers = append(servers, endpoint)
+			seen[endpoint] = true
+		}
+		if len(servers) > 4 {
+			return Provider{}, errors.New("можно указать не больше 4 обычных DNS endpoint")
+		}
+	}
+	doh := strings.TrimSpace(input.DoH)
+	if doh != "" {
+		parsed, err := url.Parse(doh)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || len(doh) > 512 {
+			return Provider{}, errors.New("DoH должен быть HTTPS URL без логина, пароля, query и фрагмента")
+		}
+		if !validDNSHost(parsed.Hostname()) {
+			return Provider{}, errors.New("DoH содержит некорректный IP или DNS-имя")
+		}
+		if parsed.Port() != "" {
+			port, err := strconv.Atoi(parsed.Port())
+			if err != nil || port < 1 || port > 65535 {
+				return Provider{}, errors.New("порт DoH должен быть числом от 1 до 65535")
+			}
+		}
+		doh = parsed.String()
+	}
+	dot := strings.TrimSpace(input.DoT)
+	if dot != "" {
+		var err error
+		dot, err = normalizeDNSEndpoint(dot, "853")
+		if err != nil {
+			return Provider{}, fmt.Errorf("DoT: %w", err)
+		}
+	}
+	if len(servers) == 0 && doh == "" && dot == "" {
+		return Provider{}, errors.New("укажите хотя бы один обычный DNS, DoH или DoT endpoint")
+	}
+	return Provider{ID: "custom", Name: name, Description: "Пользовательский DNS-провайдер, сохранённый локально.", Servers: servers, DoH: doh, DoT: dot, Filters: []string{"пользовательский"}, RequiresConfiguration: true, Configured: true, ConfigurationHint: "Endpoint сохранён локально и должен пройти проверку до применения."}, nil
+}
+
+func normalizeDNSEndpoint(raw, defaultPort string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" || len(value) > 255 || strings.ContainsAny(value, "/?#@") {
+		return "", errors.New("ожидается IP или имя хоста с необязательным портом")
+	}
+	host, port, err := net.SplitHostPort(value)
+	if err != nil {
+		if ip := net.ParseIP(value); ip != nil {
+			host, port = ip.String(), defaultPort
+		} else if strings.Count(value, ":") == 0 {
+			host, port = value, defaultPort
+		} else {
+			return "", errors.New("IPv6 с портом нужно записать как [адрес]:порт")
+		}
+	}
+	if !validDNSHost(host) {
+		return "", errors.New("некорректный IP или DNS-имя")
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return "", errors.New("порт должен быть числом от 1 до 65535")
+	}
+	return net.JoinHostPort(strings.TrimSuffix(strings.ToLower(host), "."), port), nil
+}
+
+func validDNSHost(host string) bool {
+	host = strings.TrimSuffix(strings.TrimSpace(host), ".")
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	if host == "" || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') && (character < '0' || character > '9') && character != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func cloneProvider(provider Provider) Provider {
+	provider.Servers = append([]string(nil), provider.Servers...)
+	provider.Filters = append([]string(nil), provider.Filters...)
+	return provider
+}
+
+func providerFingerprint(provider Provider) string {
+	return strings.Join([]string{provider.ID, provider.Name, strings.Join(provider.Servers, ","), provider.DoH, provider.DoT}, "\x00")
 }
 
 func validNextDNSProfileID(value string) bool {
@@ -590,6 +756,14 @@ func (m *Manager) load() error {
 	}
 	if _, ok := profileByID(loaded.Applied.ProfileID); !ok {
 		loaded.Applied.ProfileID = "automatic"
+	}
+	if loaded.CustomProvider != nil {
+		normalized, err := normalizeCustomProvider(CustomProviderInput{Name: loaded.CustomProvider.Name, Servers: loaded.CustomProvider.Servers, DoH: loaded.CustomProvider.DoH, DoT: loaded.CustomProvider.DoT})
+		if err != nil {
+			loaded.CustomProvider = nil
+		} else {
+			loaded.CustomProvider = &normalized
+		}
 	}
 	m.doc = loaded
 	return nil
