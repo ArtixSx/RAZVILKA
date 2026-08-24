@@ -1892,7 +1892,7 @@ func (a *App) dnsTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "profile_id": input.ProfileID, "results": results, "note": "Проверка обращается непосредственно к выбранным DNS-серверам. Она не меняет DNS роутера и не доказывает отсутствие утечки клиентов."})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "profile_id": input.ProfileID, "results": results, "note": "Проверка отдельно обращается к заявленным UDP, TCP, DoH и DoT endpoint. Она не меняет DNS роутера; DoH/DoT могут использовать системный DNS только для bootstrap имени провайдера и не доказывают отсутствие утечки LAN-клиентов."})
 }
 
 func (a *App) dnsDiscard(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 func TestDraftPersistsWithoutChangingApplied(t *testing.T) {
@@ -77,5 +79,58 @@ func TestAutomaticDNSPlanRequiresNoLiveChange(t *testing.T) {
 	plan := m.Plan("Keenetic ndnproxy: udp :53")
 	if !plan.Ready || plan.Profile.ID != "automatic" {
 		t.Fatalf("automatic plan = %+v", plan)
+	}
+}
+
+func TestDNSQueryAndResponseValidation(t *testing.T) {
+	query, err := buildDNSQuery(4242)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parser dnsmessage.Parser
+	header, err := parser.Start(query)
+	if err != nil || header.ID != 4242 || !header.RecursionDesired {
+		t.Fatalf("query header = %+v, err = %v", header, err)
+	}
+	questions, err := parser.AllQuestions()
+	if err != nil || len(questions) != 1 || questions[0].Name.String() != "example.com." {
+		t.Fatalf("questions = %+v, err = %v", questions, err)
+	}
+
+	name := dnsmessage.MustNewName("example.com.")
+	responseBuilder := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: 4242, Response: true, RecursionAvailable: true})
+	if err := responseBuilder.StartQuestions(); err != nil {
+		t.Fatal(err)
+	}
+	if err := responseBuilder.Question(dnsmessage.Question{Name: name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}); err != nil {
+		t.Fatal(err)
+	}
+	if err := responseBuilder.StartAnswers(); err != nil {
+		t.Fatal(err)
+	}
+	if err := responseBuilder.AResource(dnsmessage.ResourceHeader{Name: name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: 60}, dnsmessage.AResource{A: [4]byte{93, 184, 216, 34}}); err != nil {
+		t.Fatal(err)
+	}
+	response, err := responseBuilder.Finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	addresses, err := validateDNSResponse(query, response)
+	if err != nil || addresses != 1 {
+		t.Fatalf("addresses = %d, err = %v", addresses, err)
+	}
+}
+
+func TestDNSResponseMustMatchQuery(t *testing.T) {
+	query, err := buildDNSQuery(11)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := buildDNSQuery(12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := validateDNSResponse(query, response); err == nil {
+		t.Fatal("mismatched non-response packet accepted")
 	}
 }

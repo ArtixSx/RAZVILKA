@@ -1,16 +1,24 @@
 package dnscontrol
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 const schema = 1
@@ -38,6 +46,7 @@ type Selection struct {
 
 type ProbeResult struct {
 	Server    string `json:"server"`
+	Transport string `json:"transport"`
 	Status    string `json:"status"`
 	LatencyMS int64  `json:"latency_ms,omitempty"`
 	Addresses int    `json:"addresses,omitempty"`
@@ -170,11 +179,11 @@ func (m *Manager) Plan(listener string) Plan {
 	if doc.ProbeProfileID != profile.ID || len(doc.LastProbe) == 0 {
 		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "fail", Message: "Сначала проверьте выбранный профиль."})
 	} else if passed == 0 {
-		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "fail", Message: "Ни один сервер выбранного профиля не ответил."})
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "fail", Message: "Ни один транспорт выбранного профиля не ответил."})
 	} else if passed < len(doc.LastProbe) {
-		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "warn", Message: fmt.Sprintf("Ответили %d из %d серверов; нужен failover.", passed, len(doc.LastProbe))})
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "warn", Message: fmt.Sprintf("Доступны %d из %d проверенных транспортов; нужен failover.", passed, len(doc.LastProbe))})
 	} else {
-		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "pass", Message: "Все серверы выбранного профиля ответили."})
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "pass", Message: "Все заявленные транспорты выбранного профиля ответили."})
 	}
 	if strings.TrimSpace(listener) != "" {
 		plan.Checks = append(plan.Checks, PlanCheck{ID: "ownership", Status: "fail", Message: "Порт 53 уже обслуживает " + listener + ". Нужна интеграция через upstream, а не второй DNS-сервер."})
@@ -219,14 +228,39 @@ func (m *Manager) Probe(ctx context.Context, profileID string) ([]ProbeResult, e
 		return nil, fmt.Errorf("unknown DNS profile %q", profileID)
 	}
 	provider, _ := providerByID(profile.ProviderID)
-	servers := append([]string(nil), provider.Servers...)
 	if provider.ID == "system" {
-		servers = []string{"system"}
+		results := []ProbeResult{probeSystem(ctx)}
+		m.mu.Lock()
+		m.doc.LastProbe = append([]ProbeResult(nil), results...)
+		m.doc.ProbedAt = time.Now().UTC().Format(time.RFC3339)
+		m.doc.ProbeProfileID = profile.ID
+		err := m.saveLocked()
+		m.mu.Unlock()
+		return results, err
 	}
-	results := make([]ProbeResult, 0, len(servers))
-	for _, server := range servers {
-		results = append(results, probeServer(ctx, server))
+	targets := make([]dnsTarget, 0, len(provider.Servers)*2+2)
+	for _, server := range provider.Servers {
+		targets = append(targets,
+			dnsTarget{"UDP", server, probeDNSOverUDP},
+			dnsTarget{"TCP", server, probeDNSOverTCP},
+		)
 	}
+	if provider.DoH != "" {
+		targets = append(targets, dnsTarget{"DoH", provider.DoH, probeDNSOverHTTPS})
+	}
+	if provider.DoT != "" {
+		targets = append(targets, dnsTarget{"DoT", provider.DoT, probeDNSOverTLS})
+	}
+	results := make([]ProbeResult, len(targets))
+	var probes sync.WaitGroup
+	probes.Add(len(targets))
+	for index, target := range targets {
+		go func() {
+			defer probes.Done()
+			results[index] = probeEndpoint(ctx, target.transport, target.endpoint, target.probe)
+		}()
+	}
+	probes.Wait()
 	m.mu.Lock()
 	m.doc.LastProbe = append([]ProbeResult(nil), results...)
 	m.doc.ProbedAt = time.Now().UTC().Format(time.RFC3339)
@@ -236,18 +270,20 @@ func (m *Manager) Probe(ctx context.Context, profileID string) ([]ProbeResult, e
 	return results, err
 }
 
-func probeServer(parent context.Context, server string) ProbeResult {
+type dnsProbe func(context.Context, string, []byte) ([]byte, error)
+
+type dnsTarget struct {
+	transport string
+	endpoint  string
+	probe     dnsProbe
+}
+
+func probeSystem(parent context.Context) ProbeResult {
 	ctx, cancel := context.WithTimeout(parent, 4*time.Second)
 	defer cancel()
 	started := time.Now()
-	resolver := net.DefaultResolver
-	if server != "system" {
-		resolver = &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, "udp", server)
-		}}
-	}
-	addresses, err := resolver.LookupHost(ctx, "example.com")
-	result := ProbeResult{Server: server, LatencyMS: time.Since(started).Milliseconds()}
+	addresses, err := net.DefaultResolver.LookupHost(ctx, "example.com")
+	result := ProbeResult{Server: "system", Transport: "Системный", LatencyMS: time.Since(started).Milliseconds()}
 	if err != nil {
 		result.Status = "fail"
 		result.Error = friendlyProbeError(err)
@@ -258,6 +294,170 @@ func probeServer(parent context.Context, server string) ProbeResult {
 	return result
 }
 
+func probeEndpoint(parent context.Context, transport, endpoint string, probe dnsProbe) ProbeResult {
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	started := time.Now()
+	query, err := buildDNSQuery(uint16(time.Now().UnixNano()))
+	if err == nil {
+		var response []byte
+		response, err = probe(ctx, endpoint, query)
+		if err == nil {
+			var addresses int
+			addresses, err = validateDNSResponse(query, response)
+			if err == nil {
+				return ProbeResult{Server: endpoint, Transport: transport, Status: "pass", LatencyMS: time.Since(started).Milliseconds(), Addresses: addresses}
+			}
+		}
+	}
+	return ProbeResult{Server: endpoint, Transport: transport, Status: "fail", LatencyMS: time.Since(started).Milliseconds(), Error: friendlyProbeError(err)}
+}
+
+func buildDNSQuery(id uint16) ([]byte, error) {
+	builder := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: id, RecursionDesired: true})
+	builder.EnableCompression()
+	if err := builder.StartQuestions(); err != nil {
+		return nil, err
+	}
+	if err := builder.Question(dnsmessage.Question{Name: dnsmessage.MustNewName("example.com."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}); err != nil {
+		return nil, err
+	}
+	return builder.Finish()
+}
+
+func validateDNSResponse(query, response []byte) (int, error) {
+	var queryParser dnsmessage.Parser
+	queryHeader, err := queryParser.Start(query)
+	if err != nil {
+		return 0, fmt.Errorf("invalid DNS query: %w", err)
+	}
+	var parser dnsmessage.Parser
+	header, err := parser.Start(response)
+	if err != nil {
+		return 0, fmt.Errorf("invalid DNS response: %w", err)
+	}
+	if !header.Response || header.ID != queryHeader.ID {
+		return 0, errors.New("DNS response does not match the request")
+	}
+	if header.RCode != dnsmessage.RCodeSuccess {
+		return 0, fmt.Errorf("DNS server returned %s", header.RCode)
+	}
+	if err := parser.SkipAllQuestions(); err != nil {
+		return 0, fmt.Errorf("invalid DNS question section: %w", err)
+	}
+	answers, err := parser.AllAnswers()
+	if err != nil {
+		return 0, fmt.Errorf("invalid DNS answer section: %w", err)
+	}
+	addresses := 0
+	for _, answer := range answers {
+		switch answer.Body.(type) {
+		case *dnsmessage.AResource, *dnsmessage.AAAAResource:
+			addresses++
+		}
+	}
+	if addresses == 0 {
+		return 0, errors.New("DNS response contains no addresses")
+	}
+	return addresses, nil
+}
+
+func probeDNSOverUDP(ctx context.Context, endpoint string, query []byte) ([]byte, error) {
+	connection, err := (&net.Dialer{}).DialContext(ctx, "udp", endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer connection.Close()
+	applyContextDeadline(ctx, connection)
+	if _, err := connection.Write(query); err != nil {
+		return nil, err
+	}
+	response := make([]byte, 4096)
+	n, err := connection.Read(response)
+	return response[:n], err
+}
+
+func probeDNSOverTCP(ctx context.Context, endpoint string, query []byte) ([]byte, error) {
+	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer connection.Close()
+	applyContextDeadline(ctx, connection)
+	return exchangeFramedDNS(connection, query)
+}
+
+func probeDNSOverTLS(ctx context.Context, endpoint string, query []byte) ([]byte, error) {
+	host, _, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DoT endpoint: %w", err)
+	}
+	dialer := tls.Dialer{Config: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host}}
+	connection, err := dialer.DialContext(ctx, "tcp", endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer connection.Close()
+	applyContextDeadline(ctx, connection)
+	return exchangeFramedDNS(connection, query)
+}
+
+func probeDNSOverHTTPS(ctx context.Context, endpoint string, query []byte) ([]byte, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return nil, errors.New("invalid DoH HTTPS endpoint")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(query))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Accept", "application/dns-message")
+	request.Header.Set("Content-Type", "application/dns-message")
+	client := &http.Client{
+		Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
+		CheckRedirect: func(request *http.Request, _ []*http.Request) error {
+			if request.URL.Scheme != "https" {
+				return errors.New("DoH endpoint redirected outside HTTPS")
+			}
+			return nil
+		},
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("DoH endpoint returned HTTP %d", response.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(response.Body, 65536))
+}
+
+func exchangeFramedDNS(connection net.Conn, query []byte) ([]byte, error) {
+	if len(query) > 65535 {
+		return nil, errors.New("DNS query is too large")
+	}
+	frame := make([]byte, len(query)+2)
+	binary.BigEndian.PutUint16(frame[:2], uint16(len(query)))
+	copy(frame[2:], query)
+	if _, err := connection.Write(frame); err != nil {
+		return nil, err
+	}
+	var size [2]byte
+	if _, err := io.ReadFull(connection, size[:]); err != nil {
+		return nil, err
+	}
+	response := make([]byte, int(binary.BigEndian.Uint16(size[:])))
+	_, err := io.ReadFull(connection, response)
+	return response, err
+}
+
+func applyContextDeadline(ctx context.Context, connection net.Conn) {
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = connection.SetDeadline(deadline)
+	}
+}
+
 func friendlyProbeError(err error) string {
 	text := strings.ToLower(err.Error())
 	if errors.Is(err, context.DeadlineExceeded) || strings.Contains(text, "timeout") {
@@ -265,6 +465,15 @@ func friendlyProbeError(err error) string {
 	}
 	if strings.Contains(text, "refused") {
 		return "DNS-сервер отклонил соединение"
+	}
+	if strings.Contains(text, "certificate") || strings.Contains(text, "tls") {
+		return "Не удалось подтвердить защищённое TLS-соединение"
+	}
+	if strings.Contains(text, "no addresses") {
+		return "DNS-сервер ответил, но не вернул адрес"
+	}
+	if strings.Contains(text, "http") {
+		return "DoH-сервер вернул неожиданный HTTP-ответ"
 	}
 	return "Не удалось получить DNS-ответ"
 }
