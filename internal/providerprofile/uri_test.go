@@ -110,6 +110,79 @@ func TestParseProfileNormalizesSingBoxJSONAndDropsUnmanagedSections(t *testing.T
 	}
 }
 
+func TestParseProfileNormalizesClashYAMLAndDropsUnmanagedSections(t *testing.T) {
+	const source = `port: 7890
+external-controller: 0.0.0.0:9090
+secret: panel-secret
+dns:
+  enable: true
+  nameserver: [1.1.1.1]
+rules:
+  - MATCH,DIRECT
+proxies:
+  - name: Home Reality
+    type: vless
+    server: edge.example
+    port: 443
+    uuid: 123e4567-e89b-12d3-a456-426614174000
+    tls: true
+    servername: front.example
+    client-fingerprint: chrome
+    network: grpc
+    grpc-opts:
+      grpc-service-name: gate
+    reality-opts:
+      public-key: PUBLIC_KEY
+      short-id: abcd
+  - name: Fast HY2
+    type: hysteria2
+    server: hy.example
+    port: 8443
+    password: super-secret
+    sni: cdn.example
+  - name: Unsupported Trojan
+    type: trojan
+    server: ignored.example
+    port: 443
+    password: ignored-secret
+`
+	result, err := ParseProfile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Preview.Format != "clash-mihomo-yaml" || result.Preview.NodeCount != 2 || len(result.Preview.Warnings) < 2 {
+		t.Fatalf("unexpected YAML preview: %+v", result.Preview)
+	}
+	preview, _ := json.Marshal(result.Preview)
+	if strings.Contains(string(preview), "123e4567") || strings.Contains(string(preview), "super-secret") || strings.Contains(string(preview), "PUBLIC_KEY") {
+		t.Fatalf("YAML preview leaked credentials: %s", preview)
+	}
+	config := string(result.Config)
+	for _, forbidden := range []string{"external-controller", "panel-secret", "nameserver", "MATCH,DIRECT", "ignored.example", "ignored-secret"} {
+		if strings.Contains(config, forbidden) {
+			t.Fatalf("unmanaged YAML field %q survived normalization: %s", forbidden, config)
+		}
+	}
+	for _, required := range []string{`"type": "selector"`, `"server": "edge.example"`, `"public_key": "PUBLIC_KEY"`, `"server": "hy.example"`} {
+		if !strings.Contains(config, required) {
+			t.Fatalf("normalized YAML lost %s: %s", required, config)
+		}
+	}
+}
+
+func TestParseProfileRejectsBrokenSupportedClashProxy(t *testing.T) {
+	const source = `proxies:
+  - name: Broken
+    type: vless
+    server: edge.example
+    port: 443
+    uuid: not-a-uuid
+`
+	if _, err := ParseProfile(source); err == nil {
+		t.Fatal("accepted broken supported Clash proxy")
+	}
+}
+
 func TestParseProfileRejectsUnsupportedOrOversizedBundles(t *testing.T) {
 	invalid := []string{
 		`{"outbounds":[{"type":"socks","server":"proxy.example","server_port":1080}]}`,

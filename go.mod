@@ -4,7 +4,10 @@ go 1.26.0
 
 toolchain go1.26.5
 
-require github.com/quic-go/quic-go v0.61.0
+require (
+	github.com/quic-go/quic-go v0.61.0
+	gopkg.in/yaml.v3 v3.0.1
+)
 
 require (
 	github.com/quic-go/qpack v0.6.0 // indirect

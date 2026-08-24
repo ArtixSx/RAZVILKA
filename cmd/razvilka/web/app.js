@@ -1581,7 +1581,7 @@ function renderRemoteProfilePreview() {
   const preview = state.remoteProfilePreview?.preview;
   $('#remoteProfileImportButton').disabled = !preview?.node_count;
   if (!preview) {
-    container.innerHTML = '<span>Данные обрабатываются локально. Исходные inbounds, маршруты и внешние панели из JSON будут удалены.</span>';
+    container.innerHTML = '<span>Обработка локальная. Из JSON/YAML берутся только поддерживаемые узлы; чужие DNS, маршруты, скрипты и панели удаляются.</span>';
     return;
   }
   const nodes = preview.nodes || [];
@@ -1602,7 +1602,7 @@ async function previewRemoteProfile() {
     state.remoteProfilePreview = await api('/api/v1/provider-profiles/preview', { method: 'POST', body: JSON.stringify({ profile: uri }) });
     renderRemoteProfilePreview();
   } catch (error) {
-    showDetails({ error: error.message, resolution: 'Поддерживаются отдельные URI, текстовые/Base64-подписки и JSON Sing-box. Проверьте формат и обязательные ключи.' }, 'Пакет профилей не принят');
+    showDetails({ error: error.message, resolution: 'Поддерживаются URI, текстовые/Base64-подписки, JSON Sing-box и YAML Clash/Mihomo. Проверьте формат, адрес, порт и обязательные ключи.' }, 'Пакет профилей не принят');
   } finally { button.disabled = false; button.textContent = 'Проверить пакет'; }
 }
 

@@ -30,9 +30,10 @@ type BundleResult struct {
 }
 
 // ParseProfile accepts a single share URI, a plain-text/base64 subscription,
-// an array of share URIs, or a sing-box JSON document. Every accepted input is
-// rebuilt into a small RAZVILKA-owned configuration; arbitrary inbounds,
-// routing rules, services and experimental APIs from the source are ignored.
+// a Clash/Mihomo YAML document, an array of share URIs, or a sing-box JSON
+// document. Every accepted input is rebuilt into a small RAZVILKA-owned
+// configuration; arbitrary inbounds, routing and DNS rules, services and
+// experimental APIs from the source are ignored.
 func ParseProfile(raw string) (BundleResult, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -42,13 +43,13 @@ func ParseProfile(raw string) (BundleResult, error) {
 		return BundleResult{}, errors.New("профиль слишком большой или содержит недопустимые данные")
 	}
 
-	outbounds, nodes, format, err := parseProfileContent(raw)
+	outbounds, nodes, format, warnings, err := parseProfileContent(raw)
 	if err != nil {
 		decoded := decodeSubscription(raw)
 		if decoded == "" || decoded == raw {
 			return BundleResult{}, err
 		}
-		outbounds, nodes, format, err = parseProfileContent(decoded)
+		outbounds, nodes, format, warnings, err = parseProfileContent(decoded)
 		if err != nil {
 			return BundleResult{}, errors.New("не удалось разобрать закодированную подписку")
 		}
@@ -65,31 +66,35 @@ func ParseProfile(raw string) (BundleResult, error) {
 	if err != nil {
 		return BundleResult{}, err
 	}
-	preview := BundlePreview{Format: format, EngineID: "sing-box", NodeCount: len(nodes), Nodes: nodes}
+	preview := BundlePreview{Format: format, EngineID: "sing-box", NodeCount: len(nodes), Nodes: nodes, Warnings: warnings}
 	if len(nodes) > 1 {
 		preview.Warnings = append(preview.Warnings, "После импорта активным будет первый узел. Остальные сохранятся в локальном селекторе Sing-box.")
 	}
 	return BundleResult{Preview: preview, Config: config}, nil
 }
 
-func parseProfileContent(raw string) ([]map[string]any, []Preview, string, error) {
+func parseProfileContent(raw string) ([]map[string]any, []Preview, string, []string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
-		return parseJSONProfile([]byte(trimmed))
+		outbounds, nodes, format, err := parseJSONProfile([]byte(trimmed))
+		return outbounds, nodes, format, nil, err
+	}
+	if looksLikeClashYAML(trimmed) {
+		return parseClashYAML([]byte(trimmed))
 	}
 	lines := subscriptionLines(trimmed)
 	if len(lines) == 0 {
-		return nil, nil, "", errors.New("подписка не содержит ссылок")
+		return nil, nil, "", nil, errors.New("подписка не содержит ссылок")
 	}
 	if len(lines) > MaxNodes {
-		return nil, nil, "", fmt.Errorf("в подписке больше %d строк", MaxNodes)
+		return nil, nil, "", nil, fmt.Errorf("в подписке больше %d строк", MaxNodes)
 	}
 	outbounds := make([]map[string]any, 0, len(lines))
 	nodes := make([]Preview, 0, len(lines))
 	for index, line := range lines {
 		outbound, preview, err := parseURIOutbound(line)
 		if err != nil {
-			return nil, nil, "", fmt.Errorf("узел %d: %w", index+1, err)
+			return nil, nil, "", nil, fmt.Errorf("узел %d: %w", index+1, err)
 		}
 		outbounds = append(outbounds, outbound)
 		nodes = append(nodes, preview)
@@ -98,7 +103,7 @@ func parseProfileContent(raw string) ([]map[string]any, []Preview, string, error
 	if len(lines) > 1 {
 		format = "text-subscription"
 	}
-	return outbounds, nodes, format, nil
+	return outbounds, nodes, format, nil, nil
 }
 
 func subscriptionLines(raw string) []string {
