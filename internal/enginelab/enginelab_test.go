@@ -104,6 +104,33 @@ func TestApplyConflictsBlocksListenerForStoppedAdapter(t *testing.T) {
 	}
 }
 
+func TestPolicyConflictsBlockForeignPriorityAndReservedTable(t *testing.T) {
+	conflicts := policyConflictsFromState(
+		[]string{"18100: from all to 203.0.113.7 lookup 999\n22000: from all to 198.51.100.8 lookup 203\n", ""},
+		map[string]string{
+			"warp-wg|4":  "default via 192.0.2.1 dev foreign0\n",
+			"sing-box|4": "default dev rz-sing scope link\n",
+		},
+	)
+	if len(conflicts) != 2 {
+		t.Fatalf("policy conflicts = %+v", conflicts)
+	}
+	kinds := map[string]Conflict{}
+	for _, conflict := range conflicts {
+		kinds[conflict.Kind] = conflict
+	}
+	if kinds["priority"].Value != "18100" || kinds["priority"].Engines[0] != "warp-wg" || kinds["table"].Value != "201" {
+		t.Fatalf("unexpected policy ownership conflicts: %+v", conflicts)
+	}
+	report := Report{Engines: []EngineReport{{Status: engine.Status{ID: "warp-wg", Running: true}}}, Conflicts: conflicts}
+	if got := report.ApplyConflicts([]string{"warp-wg"}); len(got) != 2 {
+		t.Fatalf("running adapter hid foreign policy resources: %+v", got)
+	}
+	if got := report.ApplyConflicts([]string{"sing-box"}); len(got) != 0 {
+		t.Fatalf("own sing-box policy was reported as foreign: %+v", got)
+	}
+}
+
 func TestDNSListenerIsScopedToDNSControl(t *testing.T) {
 	manager := New(nil)
 	manager.Statuses = func() []engine.Status {

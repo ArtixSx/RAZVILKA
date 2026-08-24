@@ -1,6 +1,7 @@
 package enginelab
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
@@ -22,7 +24,7 @@ type Check struct {
 }
 
 type Resource struct {
-	Kind     string `json:"kind"` // port, interface, nfqueue, dns
+	Kind     string `json:"kind"` // port, interface, nfqueue, dns, priority, table
 	Value    string `json:"value"`
 	EngineID string `json:"engine_id"`
 	Source   string `json:"source"`
@@ -80,6 +82,10 @@ func (report Report) ApplyConflicts(adapters []string) []Conflict {
 		if !relevant || !conflict.Blocking {
 			continue
 		}
+		if conflict.Kind == "priority" || conflict.Kind == "table" {
+			out = append(out, conflict)
+			continue
+		}
 		if conflict.Value == "external-owner" || len(conflict.Engines) > 1 {
 			out = append(out, conflict)
 			continue
@@ -92,10 +98,11 @@ func (report Report) ApplyConflicts(adapters []string) []Conflict {
 }
 
 type Manager struct {
-	Configs        *engineconfig.Manager
-	Statuses       func() []engine.Status
-	System         func() systemprobe.Snapshot
-	ListeningPorts func() map[string]string
+	Configs         *engineconfig.Manager
+	Statuses        func() []engine.Status
+	System          func() systemprobe.Snapshot
+	ListeningPorts  func() map[string]string
+	PolicyConflicts func() []Conflict
 }
 
 type capabilitySpec struct {
@@ -130,6 +137,15 @@ func New(configs *engineconfig.Manager) *Manager {
 		Statuses:       func() []engine.Status { return (engine.Detector{}).All() },
 		System:         systemprobe.Probe,
 		ListeningPorts: listeningPorts,
+	}
+}
+
+// EnablePolicyInspection turns on read-only inspection of the policy priority
+// ranges and routing tables reserved by RAZVILKA. It is explicit so unit tests
+// and offline tools do not depend on the host running their test suite.
+func (m *Manager) EnablePolicyInspection() {
+	if m != nil {
+		m.PolicyConflicts = discoverPolicyConflicts
 	}
 }
 
@@ -193,6 +209,9 @@ func (m *Manager) Inspect() Report {
 		report.Engines = append(report.Engines, item)
 	}
 	report.Conflicts = resourceConflicts(allResources, listening)
+	if m.PolicyConflicts != nil {
+		report.Conflicts = append(report.Conflicts, m.PolicyConflicts()...)
+	}
 	if conflict, ok := dnsListenerConflict(listening); ok {
 		report.Conflicts = append(report.Conflicts, conflict)
 		report.Gate["dns_ownership"] = map[string]interface{}{
@@ -225,6 +244,103 @@ func (m *Manager) Inspect() Report {
 	report.Gate["mode"] = "read-only-preflight"
 	report.Gate["note"] = "Engine Lab inventories capabilities and conflicts but does not change firewall, routes, DNS or running processes."
 	return report
+}
+
+var policyRulePattern = regexp.MustCompile(`^\s*(\d+):.*\b(?:lookup|table)\s+([^\s]+)`)
+
+func discoverPolicyConflicts() []Conflict {
+	ipCommand := ""
+	for _, candidate := range []string{"/opt/sbin/ip", "/opt/bin/ip"} {
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+			ipCommand = candidate
+			break
+		}
+	}
+	if ipCommand == "" {
+		if found, err := exec.LookPath("ip"); err == nil {
+			ipCommand = found
+		}
+	}
+	if ipCommand == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	run := func(args ...string) string {
+		output, err := exec.CommandContext(ctx, ipCommand, args...).CombinedOutput()
+		if err != nil {
+			return ""
+		}
+		return string(output)
+	}
+	rules := []string{run("rule", "show"), run("-6", "rule", "show")}
+	tables := map[string]string{}
+	for _, spec := range dataplane.PolicyOwnershipSpecs() {
+		tables[spec.Adapter+"|4"] = run("route", "show", "table", strconv.Itoa(spec.Table))
+		tables[spec.Adapter+"|6"] = run("-6", "route", "show", "table", strconv.Itoa(spec.Table))
+	}
+	return policyConflictsFromState(rules, tables)
+}
+
+func policyConflictsFromState(ruleOutputs []string, tableOutputs map[string]string) []Conflict {
+	conflicts := []Conflict{}
+	seen := map[string]bool{}
+	appendConflict := func(conflict Conflict) {
+		key := conflict.Kind + "\x00" + conflict.Value + "\x00" + strings.Join(conflict.Engines, ",") + "\x00" + conflict.SystemUse
+		if !seen[key] {
+			seen[key] = true
+			conflicts = append(conflicts, conflict)
+		}
+	}
+	for familyIndex, output := range ruleOutputs {
+		family := "IPv4"
+		if familyIndex == 1 {
+			family = "IPv6"
+		}
+		for _, line := range strings.Split(output, "\n") {
+			match := policyRulePattern.FindStringSubmatch(strings.TrimSpace(line))
+			if len(match) != 3 {
+				continue
+			}
+			priority, err := strconv.Atoi(match[1])
+			if err != nil {
+				continue
+			}
+			for _, spec := range dataplane.PolicyOwnershipSpecs() {
+				if priority < spec.PriorityBase || priority > spec.PriorityEnd || match[2] == strconv.Itoa(spec.Table) {
+					continue
+				}
+				appendConflict(Conflict{Kind: "priority", Value: match[1], Engines: []string{spec.Adapter}, SystemUse: family + " lookup/table " + match[2], Blocking: true})
+			}
+		}
+	}
+	for _, spec := range dataplane.PolicyOwnershipSpecs() {
+		for _, family := range []string{"4", "6"} {
+			output := strings.TrimSpace(tableOutputs[spec.Adapter+"|"+family])
+			if output == "" {
+				continue
+			}
+			foreign := []string{}
+			for _, line := range strings.Split(output, "\n") {
+				line = strings.TrimSpace(line)
+				if line != "" && !strings.Contains(" "+line+" ", " dev "+spec.Interface+" ") {
+					foreign = append(foreign, line)
+				}
+			}
+			if len(foreign) == 0 {
+				continue
+			}
+			label := "IPv4"
+			if family == "6" {
+				label = "IPv6"
+			}
+			appendConflict(Conflict{Kind: "table", Value: strconv.Itoa(spec.Table), Engines: []string{spec.Adapter}, SystemUse: label + " содержит сторонних маршрутов: " + strconv.Itoa(len(foreign)), Blocking: true})
+		}
+	}
+	sort.Slice(conflicts, func(i, j int) bool {
+		return conflicts[i].Kind+conflicts[i].Value+conflicts[i].SystemUse < conflicts[j].Kind+conflicts[j].Value+conflicts[j].SystemUse
+	})
+	return conflicts
 }
 
 func declaredResources(status engine.Status) []Resource {

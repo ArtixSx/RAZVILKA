@@ -14,6 +14,27 @@ import (
 
 const maxPolicyPrefixes = 1024
 
+// PolicyOwnershipSpec publishes the kernel resources reserved by each
+// transactional tunnel adapter. Engine Lab uses the same source of truth as
+// activation, so preflight cannot silently drift from runtime defaults.
+type PolicyOwnershipSpec struct {
+	Adapter      string
+	Interface    string
+	Table        int
+	PriorityBase int
+	PriorityEnd  int
+}
+
+func PolicyOwnershipSpecs() []PolicyOwnershipSpec {
+	return []PolicyOwnershipSpec{
+		{Adapter: "warp-wg", Interface: "rz-warp", Table: 201, PriorityBase: 18100, PriorityEnd: 18100 + maxPolicyPrefixes - 1},
+		{Adapter: "usque", Interface: "rz-usque", Table: 202, PriorityBase: 20000, PriorityEnd: 20000 + maxPolicyPrefixes - 1},
+		{Adapter: "sing-box", Interface: "rz-sing", Table: 203, PriorityBase: 22000, PriorityEnd: 22000 + maxPolicyPrefixes - 1},
+		{Adapter: "xray", Interface: "rz-xray", Table: 204, PriorityBase: 24000, PriorityEnd: 24000 + maxPolicyPrefixes - 1},
+		{Adapter: "amneziawg", Interface: "rz-awg", Table: 205, PriorityBase: 26000, PriorityEnd: 26000 + maxPolicyPrefixes - 1},
+	}
+}
+
 type PrefixResolver func(context.Context, string) ([]netip.Addr, error)
 
 type PolicyState struct {

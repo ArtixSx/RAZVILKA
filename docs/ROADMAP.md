@@ -41,6 +41,10 @@ The journal also keeps the latest reviewed plan separate from the last
 successfully committed plan, so a Safe Mode preview cannot hide the route used
 for reboot recovery or AUTO evidence.
 
+Apply preflight now also reads IPv4/IPv6 policy rules and routing tables in the
+adapter-owned ranges. A foreign rule becomes an explicit adapter blocker;
+RAZVILKA reports it and never deletes it automatically.
+
 ## Implemented dataplane foundation
 
 - Runtime adapters for NFQWS2, usque, WARP-WG, AmneziaWG, sing-box and Xray.

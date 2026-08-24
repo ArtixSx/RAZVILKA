@@ -8,6 +8,34 @@ import (
 	"testing"
 )
 
+func TestPolicyOwnershipSpecsMatchAdapterDefaults(t *testing.T) {
+	specs := map[string]PolicyOwnershipSpec{}
+	for _, spec := range PolicyOwnershipSpecs() {
+		specs[spec.Adapter] = spec
+		if spec.PriorityEnd-spec.PriorityBase+1 != maxPolicyPrefixes {
+			t.Fatalf("%s priority range=%d..%d", spec.Adapter, spec.PriorityBase, spec.PriorityEnd)
+		}
+	}
+	warp := NewWARPWireGuardAdapter(nil, t.TempDir())
+	if spec := specs["warp-wg"]; spec.Interface != warp.Interface || spec.Table != warp.Table || spec.PriorityBase != warp.PriorityBase {
+		t.Fatalf("WARP ownership spec drifted: spec=%+v adapter=%+v", spec, warp)
+	}
+	amnezia := NewAmneziaWGAdapter(nil, t.TempDir())
+	if spec := specs["amneziawg"]; spec.Interface != amnezia.Interface || spec.Table != amnezia.Table || spec.PriorityBase != amnezia.PriorityBase {
+		t.Fatalf("AmneziaWG ownership spec drifted: spec=%+v adapter=%+v", spec, amnezia)
+	}
+	for _, id := range []string{"usque", "sing-box", "xray"} {
+		adapter, err := NewProxyTunnelAdapter(id, nil, t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec := specs[id]
+		if spec.Interface != adapter.Interface || spec.Table != adapter.Table || spec.PriorityBase != adapter.Priority {
+			t.Fatalf("%s ownership spec drifted: spec=%+v adapter=%+v", id, spec, adapter)
+		}
+	}
+}
+
 func TestResolvePolicyPrefixesCombinesCIDRsAndDNS(t *testing.T) {
 	plan := Plan{Routes: []Route{{Resolved: "warp-wg", Domains: []string{"example.com"}, CIDRs: []string{"203.0.113.0/24"}}}}
 	got, err := resolvePolicyPrefixes(context.Background(), plan, "warp-wg", func(context.Context, string) ([]netip.Addr, error) {

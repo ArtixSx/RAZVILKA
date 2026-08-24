@@ -262,8 +262,17 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 			code = "NFQUEUE_CONFLICT"
 		case "dns":
 			code = "DNS_CONFLICT"
+		case "priority":
+			code = "POLICY_PRIORITY_CONFLICT"
+		case "table":
+			code = "POLICY_TABLE_CONFLICT"
 		}
 		message := fmt.Sprintf("Ресурс %s %s уже занят", conflict.Kind, conflict.Value)
+		if conflict.Kind == "priority" {
+			message = fmt.Sprintf("Приоритет policy routing %s уже занят сторонним правилом", conflict.Value)
+		} else if conflict.Kind == "table" {
+			message = fmt.Sprintf("Таблица маршрутизации %s уже содержит сторонний маршрут", conflict.Value)
+		}
 		if len(conflict.Engines) > 1 {
 			message = fmt.Sprintf("Ресурс %s %s одновременно заявлен обходами %s", conflict.Kind, conflict.Value, strings.Join(conflict.Engines, ", "))
 		} else if conflict.SystemUse != "" {
@@ -272,6 +281,8 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		resolution := "Освободите ресурс или измените порт, интерфейс либо NFQUEUE в настройках конфликтующего обхода, затем обновите план."
 		if conflict.Kind == "dns" {
 			resolution = "Выберите безопасный режим интеграции с системным DNS (forwarder или upstream) и подтвердите ownership порта 53 перед применением."
+		} else if conflict.Kind == "priority" || conflict.Kind == "table" {
+			resolution = "Откройте диагностику, определите владельца стороннего VPN/туннеля и измените его диапазон либо отключите конфликтующий маршрут. RAZVILKA не удаляет чужие правила автоматически."
 		}
 		plan.Blockers = append(plan.Blockers, Blocker{Code: code, Adapter: adapter, Message: message, Resolution: resolution})
 	}

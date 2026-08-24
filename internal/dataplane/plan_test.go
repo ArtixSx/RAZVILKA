@@ -405,6 +405,26 @@ func TestBuildBlocksSelectedAdapterResourceConflict(t *testing.T) {
 	t.Fatalf("resource conflict blocker missing: %+v", plan.Blockers)
 }
 
+func TestBuildNamesPolicyOwnershipConflicts(t *testing.T) {
+	plan, err := BuildAt(Input{
+		Revision:          1,
+		Routes:            []Route{{ServiceID: "video", ServiceName: "Video", Resolved: "sing-box"}},
+		Engines:           []Engine{{ID: "sing-box", Installed: true, Configured: true, Activatable: true}},
+		Host:              HostState{IPCommand: true, TUN: true},
+		ResourceConflicts: []ResourceConflict{{Kind: "priority", Value: "22000", Engines: []string{"sing-box"}, SystemUse: "lookup 999"}, {Kind: "table", Value: "203", Engines: []string{"sing-box"}, SystemUse: "default dev foreign0"}},
+	}, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	codes := map[string]bool{}
+	for _, blocker := range plan.Blockers {
+		codes[blocker.Code] = true
+	}
+	if !codes["POLICY_PRIORITY_CONFLICT"] || !codes["POLICY_TABLE_CONFLICT"] {
+		t.Fatalf("policy conflicts were not named: %+v", plan.Blockers)
+	}
+}
+
 func TestManagerRecordsLatestPlanAtomically(t *testing.T) {
 	manager := New(filepath.Join(t.TempDir(), "dataplane"))
 	plan, err := BuildAt(Input{Revision: 1}, time.Unix(100, 0).UTC())
