@@ -184,12 +184,22 @@ func TestDNSQueryAndResponseValidation(t *testing.T) {
 		t.Fatalf("query header = %+v, err = %v", header, err)
 	}
 	questions, err := parser.AllQuestions()
-	if err != nil || len(questions) != 1 || questions[0].Name.String() != "example.com." {
+	if err != nil || len(questions) != 1 || questions[0].Name.String() != "cloudflare.com." {
 		t.Fatalf("questions = %+v, err = %v", questions, err)
 	}
+	if err := parser.SkipAllAnswers(); err != nil {
+		t.Fatal(err)
+	}
+	if err := parser.SkipAllAuthorities(); err != nil {
+		t.Fatal(err)
+	}
+	ednsHeader, err := parser.AdditionalHeader()
+	if err != nil || ednsHeader.Type != dnsmessage.TypeOPT || !ednsHeader.DNSSECAllowed() {
+		t.Fatalf("EDNS header = %+v, err = %v", ednsHeader, err)
+	}
 
-	name := dnsmessage.MustNewName("example.com.")
-	responseBuilder := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: 4242, Response: true, RecursionAvailable: true})
+	name := dnsmessage.MustNewName("cloudflare.com.")
+	responseBuilder := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: 4242, Response: true, RecursionAvailable: true, AuthenticData: true})
 	if err := responseBuilder.StartQuestions(); err != nil {
 		t.Fatal(err)
 	}
@@ -206,9 +216,9 @@ func TestDNSQueryAndResponseValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	addresses, err := validateDNSResponse(query, response)
-	if err != nil || addresses != 1 {
-		t.Fatalf("addresses = %d, err = %v", addresses, err)
+	addresses, authenticated, err := validateDNSResponse(query, response)
+	if err != nil || addresses != 1 || !authenticated {
+		t.Fatalf("addresses = %d, authenticated = %t, err = %v", addresses, authenticated, err)
 	}
 }
 
@@ -221,7 +231,25 @@ func TestDNSResponseMustMatchQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := validateDNSResponse(query, response); err == nil {
+	if _, _, err := validateDNSResponse(query, response); err == nil {
 		t.Fatal("mismatched non-response packet accepted")
+	}
+}
+
+func TestDNSSECResultIsExplainedInPlan(t *testing.T) {
+	m, _ := New("")
+	if err := m.SetDraft("private"); err != nil {
+		t.Fatal(err)
+	}
+	m.doc.ProbeProfileID = "private"
+	m.doc.LastProbe = []ProbeResult{{Server: "https://cloudflare-dns.com/dns-query", Transport: "DoH", Status: "pass", DNSSEC: "confirmed", Addresses: 2}}
+	found := false
+	for _, check := range m.Plan("").Checks {
+		if check.ID == "dnssec" && check.Status == "pass" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("confirmed DNSSEC was not reflected in the plan")
 	}
 }

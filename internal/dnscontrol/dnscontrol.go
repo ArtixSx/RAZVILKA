@@ -52,6 +52,7 @@ type ProbeResult struct {
 	Server    string `json:"server"`
 	Transport string `json:"transport"`
 	Status    string `json:"status"`
+	DNSSEC    string `json:"dnssec,omitempty"`
 	LatencyMS int64  `json:"latency_ms,omitempty"`
 	Addresses int    `json:"addresses,omitempty"`
 	Error     string `json:"error,omitempty"`
@@ -205,6 +206,19 @@ func (m *Manager) Plan(listener string) Plan {
 		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "warn", Message: fmt.Sprintf("Доступны %d из %d проверенных транспортов; нужен failover.", passed, len(doc.LastProbe))})
 	} else {
 		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "pass", Message: "Все заявленные транспорты выбранного профиля ответили."})
+	}
+	if providerHasFilter(provider, "DNSSEC") && doc.ProbeProfileID == profile.ID && len(doc.LastProbe) > 0 {
+		dnssecConfirmed := 0
+		for _, result := range doc.LastProbe {
+			if result.Status == "pass" && result.DNSSEC == "confirmed" {
+				dnssecConfirmed++
+			}
+		}
+		if dnssecConfirmed > 0 {
+			plan.Checks = append(plan.Checks, PlanCheck{ID: "dnssec", Status: "pass", Message: fmt.Sprintf("DNSSEC подтверждён на %d транспорт(ах).", dnssecConfirmed)})
+		} else {
+			plan.Checks = append(plan.Checks, PlanCheck{ID: "dnssec", Status: "warn", Message: "Сервер отвечает, но AD-флаг DNSSEC не подтверждён."})
+		}
 	}
 	if strings.TrimSpace(listener) != "" {
 		plan.Checks = append(plan.Checks, PlanCheck{ID: "ownership", Status: "fail", Message: "Порт 53 уже обслуживает " + listener + ". Нужна интеграция через upstream, а не второй DNS-сервер."})
@@ -396,9 +410,14 @@ func probeEndpoint(parent context.Context, transport, endpoint string, probe dns
 		response, err = probe(ctx, endpoint, query)
 		if err == nil {
 			var addresses int
-			addresses, err = validateDNSResponse(query, response)
+			var authenticated bool
+			addresses, authenticated, err = validateDNSResponse(query, response)
 			if err == nil {
-				return ProbeResult{Server: endpoint, Transport: transport, Status: "pass", LatencyMS: time.Since(started).Milliseconds(), Addresses: addresses}
+				dnssec := "not-confirmed"
+				if authenticated {
+					dnssec = "confirmed"
+				}
+				return ProbeResult{Server: endpoint, Transport: transport, Status: "pass", DNSSEC: dnssec, LatencyMS: time.Since(started).Milliseconds(), Addresses: addresses}
 			}
 		}
 	}
@@ -411,35 +430,45 @@ func buildDNSQuery(id uint16) ([]byte, error) {
 	if err := builder.StartQuestions(); err != nil {
 		return nil, err
 	}
-	if err := builder.Question(dnsmessage.Question{Name: dnsmessage.MustNewName("example.com."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}); err != nil {
+	if err := builder.Question(dnsmessage.Question{Name: dnsmessage.MustNewName("cloudflare.com."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}); err != nil {
+		return nil, err
+	}
+	if err := builder.StartAdditionals(); err != nil {
+		return nil, err
+	}
+	var ednsHeader dnsmessage.ResourceHeader
+	if err := ednsHeader.SetEDNS0(1232, dnsmessage.RCodeSuccess, true); err != nil {
+		return nil, err
+	}
+	if err := builder.OPTResource(ednsHeader, dnsmessage.OPTResource{}); err != nil {
 		return nil, err
 	}
 	return builder.Finish()
 }
 
-func validateDNSResponse(query, response []byte) (int, error) {
+func validateDNSResponse(query, response []byte) (int, bool, error) {
 	var queryParser dnsmessage.Parser
 	queryHeader, err := queryParser.Start(query)
 	if err != nil {
-		return 0, fmt.Errorf("invalid DNS query: %w", err)
+		return 0, false, fmt.Errorf("invalid DNS query: %w", err)
 	}
 	var parser dnsmessage.Parser
 	header, err := parser.Start(response)
 	if err != nil {
-		return 0, fmt.Errorf("invalid DNS response: %w", err)
+		return 0, false, fmt.Errorf("invalid DNS response: %w", err)
 	}
 	if !header.Response || header.ID != queryHeader.ID {
-		return 0, errors.New("DNS response does not match the request")
+		return 0, false, errors.New("DNS response does not match the request")
 	}
 	if header.RCode != dnsmessage.RCodeSuccess {
-		return 0, fmt.Errorf("DNS server returned %s", header.RCode)
+		return 0, false, fmt.Errorf("DNS server returned %s", header.RCode)
 	}
 	if err := parser.SkipAllQuestions(); err != nil {
-		return 0, fmt.Errorf("invalid DNS question section: %w", err)
+		return 0, false, fmt.Errorf("invalid DNS question section: %w", err)
 	}
 	answers, err := parser.AllAnswers()
 	if err != nil {
-		return 0, fmt.Errorf("invalid DNS answer section: %w", err)
+		return 0, false, fmt.Errorf("invalid DNS answer section: %w", err)
 	}
 	addresses := 0
 	for _, answer := range answers {
@@ -449,9 +478,9 @@ func validateDNSResponse(query, response []byte) (int, error) {
 		}
 	}
 	if addresses == 0 {
-		return 0, errors.New("DNS response contains no addresses")
+		return 0, false, errors.New("DNS response contains no addresses")
 	}
-	return addresses, nil
+	return addresses, header.AuthenticData, nil
 }
 
 func probeDNSOverUDP(ctx context.Context, endpoint string, query []byte) ([]byte, error) {
@@ -718,6 +747,15 @@ func cloneProvider(provider Provider) Provider {
 
 func providerFingerprint(provider Provider) string {
 	return strings.Join([]string{provider.ID, provider.Name, strings.Join(provider.Servers, ","), provider.DoH, provider.DoT}, "\x00")
+}
+
+func providerHasFilter(provider Provider, filter string) bool {
+	for _, candidate := range provider.Filters {
+		if strings.EqualFold(candidate, filter) {
+			return true
+		}
+	}
+	return false
 }
 
 func validNextDNSProfileID(value string) bool {
