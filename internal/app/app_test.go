@@ -88,6 +88,40 @@ func TestDNSProfileAPIKeepsChangesDraftOnly(t *testing.T) {
 	}
 }
 
+func TestProviderProfilePreviewAndImportStayDraftOnly(t *testing.T) {
+	root := t.TempDir()
+	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	a := &App{EngineConfigs: configs}
+	const uri = "vless://123e4567-e89b-12d3-a456-426614174000@edge.example:443?security=reality&sni=front.example&pbk=PUBLIC_KEY&type=tcp#Home"
+
+	previewBody, _ := json.Marshal(map[string]string{"uri": uri})
+	preview := httptest.NewRecorder()
+	a.providerProfilePreview(preview, httptest.NewRequest(http.MethodPost, "/api/v1/provider-profiles/preview", bytes.NewReader(previewBody)))
+	if preview.Code != http.StatusOK || strings.Contains(preview.Body.String(), "123e4567") || strings.Contains(preview.Body.String(), "PUBLIC_KEY") {
+		t.Fatalf("preview status=%d leaked profile: %s", preview.Code, preview.Body.String())
+	}
+	if content, err := configs.Read("sing-box", "main"); err != nil || content.Source != "missing" {
+		t.Fatalf("preview wrote a draft: %+v err=%v", content, err)
+	}
+
+	missingConfirm := httptest.NewRecorder()
+	a.providerProfileImport(missingConfirm, httptest.NewRequest(http.MethodPost, "/api/v1/provider-profiles/import", bytes.NewReader(previewBody)))
+	if missingConfirm.Code != http.StatusPreconditionRequired {
+		t.Fatalf("missing confirmation status=%d body=%s", missingConfirm.Code, missingConfirm.Body.String())
+	}
+
+	importBody, _ := json.Marshal(map[string]string{"uri": uri, "confirm": "IMPORT_REMOTE_PROFILE"})
+	imported := httptest.NewRecorder()
+	a.providerProfileImport(imported, httptest.NewRequest(http.MethodPost, "/api/v1/provider-profiles/import", bytes.NewReader(importBody)))
+	if imported.Code != http.StatusOK || !strings.Contains(imported.Body.String(), `"draft_only":true`) {
+		t.Fatalf("import status=%d body=%s", imported.Code, imported.Body.String())
+	}
+	content, err := configs.ReadExpert("sing-box", "main")
+	if err != nil || content.Source != "staged" || !strings.Contains(content.Content, "PUBLIC_KEY") {
+		t.Fatalf("sing-box draft=%+v err=%v", content, err)
+	}
+}
+
 func TestClassifyWARPMASQUEServiceTimeout(t *testing.T) {
 	failure := classifyApplyFailure(`usque probe for Telegram failed: Get "https://telegram.org/": context deadline exceeded`)
 	if failure.Code != "WARP_MASQUE_SERVICE_TIMEOUT" || !failure.DraftPreserved || !failure.Retryable {

@@ -31,6 +31,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
+	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
 	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
 	"github.com/ArtixSx/razvilka/internal/security"
@@ -233,6 +234,8 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/migrations/z2k/import-strategies", a.z2kMigrationImportStrategies)
 	mux.HandleFunc("/api/v1/engine-configs", a.engineConfigs)
 	mux.HandleFunc("/api/v1/engine-configs/", a.engineConfigAction)
+	mux.HandleFunc("/api/v1/provider-profiles/preview", a.providerProfilePreview)
+	mux.HandleFunc("/api/v1/provider-profiles/import", a.providerProfileImport)
 	mux.HandleFunc("/api/v1/components", a.componentList)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
@@ -1607,6 +1610,81 @@ func (a *App) engineConfigAction(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (a *App) providerProfilePreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	uri, _, ok := decodeProviderProfileRequest(w, r)
+	if !ok {
+		return
+	}
+	result, err := providerprofile.ParseURI(uri)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "draft_only": true, "preview": result.Preview,
+		"note": "Ключи и пароли не показываются. Предпросмотр ничего не сохраняет.",
+	})
+}
+
+func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.EngineConfigs == nil {
+		http.Error(w, "engine config manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	uri, confirm, ok := decodeProviderProfileRequest(w, r)
+	if !ok {
+		return
+	}
+	if confirm != "IMPORT_REMOTE_PROFILE" {
+		http.Error(w, "явно подтвердите импорт удалённого профиля", http.StatusPreconditionRequired)
+		return
+	}
+	result, err := providerprofile.ParseURI(uri)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	validation := engineconfig.ValidatePrivateContent("sing-box", "main", string(result.Config))
+	if !validation.OK {
+		http.Error(w, validation.Output, http.StatusBadRequest)
+		return
+	}
+	draft, err := a.EngineConfigs.Stage("sing-box", "main", string(result.Config))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	native := a.EngineConfigs.Validate("sing-box", "main")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": native.OK, "draft_only": true, "preview": result.Preview,
+		"draft": draft, "validation": native,
+		"note": "Профиль сохранён только в черновик Sing-box. Назначьте сервис, проверьте план и выполните общий Apply.",
+	})
+}
+
+func decodeProviderProfileRequest(w http.ResponseWriter, r *http.Request) (uri, confirm string, ok bool) {
+	var input struct {
+		URI     string `json:"uri"`
+		Confirm string `json:"confirm"`
+	}
+	reader := http.MaxBytesReader(w, r.Body, providerprofile.MaxURIBytes+(8<<10))
+	decoder := json.NewDecoder(reader)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "некорректный запрос профиля", http.StatusBadRequest)
+		return "", "", false
+	}
+	return input.URI, input.Confirm, true
 }
 
 func (a *App) testLabSnapshot(w http.ResponseWriter, r *http.Request) {

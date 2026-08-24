@@ -39,6 +39,7 @@ const state = {
   communityPreview: null,
   profileBundle: null,
   profilePreview: null,
+  remoteProfilePreview: null,
   privateBackupEnvelope: null,
   privateBackupPreview: null,
   appUpdate: null,
@@ -1126,6 +1127,7 @@ function renderEngineControl() {
   $('#engineSaveDraft').disabled = !file;
   $('#engineImport').disabled = !file;
   $('#engineExport').disabled = !file;
+  $('#remoteProfileImport').hidden = engine.id !== 'sing-box' || file?.id !== 'main';
   $('#engineApplyConfig').disabled = !file?.staged;
   $('#engineDiscardDraft').disabled = !file?.staged;
 
@@ -1528,6 +1530,54 @@ async function handleEngineImport(event) {
     $('#engineEditor').value = text; // render keeps loaded text, so restore imported local buffer explicitly.
     $('#engineEditorMessage').textContent = `Импортирован локально: ${picked.name}. Нажмите «Сохранить черновик».`;
   } catch (error) { showDetails({ error: error.message }, 'Ошибка импорта'); }
+}
+
+function renderRemoteProfilePreview() {
+  const container = $('#remoteProfilePreview');
+  const preview = state.remoteProfilePreview?.preview;
+  $('#remoteProfileImportButton').disabled = !preview;
+  if (!preview) {
+    container.innerHTML = '<span>Ссылка обрабатывается локально на роутере и не попадает в технический журнал.</span>';
+    return;
+  }
+  const warnings = (preview.warnings || []).map((warning) => `<small>${esc(warning)}</small>`).join('');
+  container.innerHTML = `<div><b>${esc(preview.name || preview.protocol)}</b><span>${esc(preview.protocol)} · ${esc(preview.server)}:${Number(preview.port) || '—'}</span></div><div><span>${preview.tls ? 'TLS включён' : 'Без TLS'}${preview.transport ? ` · ${esc(preview.transport)}` : ''}${preview.security ? ` · ${esc(preview.security)}` : ''}</span>${warnings}</div>`;
+}
+
+async function previewRemoteProfile() {
+  const uri = $('#remoteProfileURI').value.trim();
+  state.remoteProfilePreview = null;
+  renderRemoteProfilePreview();
+  if (!uri) return;
+  const button = $('#remoteProfilePreviewButton');
+  button.disabled = true; button.textContent = 'Проверяем…';
+  try {
+    state.remoteProfilePreview = await api('/api/v1/provider-profiles/preview', { method: 'POST', body: JSON.stringify({ uri }) });
+    renderRemoteProfilePreview();
+  } catch (error) {
+    showDetails({ error: error.message, resolution: 'Проверьте формат ссылки или загрузите готовый config.json обычным импортом.' }, 'Ссылка профиля не принята');
+  } finally { button.disabled = false; button.textContent = 'Проверить ссылку'; }
+}
+
+async function importRemoteProfile() {
+  const uri = $('#remoteProfileURI').value.trim();
+  const preview = state.remoteProfilePreview?.preview;
+  if (!uri || !preview) return;
+  if (!await askConfirmation('Создать черновик Sing-box', `${preview.protocol} · ${preview.server}:${preview.port}. Текущий рабочий профиль не изменится до общего Apply.`, 'Создать черновик')) return;
+  const button = $('#remoteProfileImportButton');
+  button.disabled = true; button.textContent = 'Создаём…';
+  try {
+    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ uri, confirm: 'IMPORT_REMOTE_PROFILE' }) });
+    $('#remoteProfileURI').value = '';
+    state.remoteProfilePreview = null;
+    state.engineValidation = result.validation || null;
+    await refreshEngineConfigs();
+    renderRemoteProfilePreview();
+    switchEngineTab('check');
+    showNotice(result.ok ? 'success' : 'review', result.ok ? 'Черновик Sing-box готов' : 'Черновик создан, нужна проверка', result.note, result, true);
+  } catch (error) {
+    showDetails({ error: error.message, response: error.payload }, 'Профиль не импортирован');
+  } finally { button.disabled = false; button.textContent = 'Создать черновик'; }
 }
 
 async function exportEngineFile() {
@@ -2688,6 +2738,9 @@ function bindEvents() {
   $('#engineImport').addEventListener('click', importEngineFile);
   $('#engineImportInput').addEventListener('change', handleEngineImport);
   $('#engineExport').addEventListener('click', exportEngineFile);
+  $('#remoteProfileURI').addEventListener('input', () => { state.remoteProfilePreview = null; renderRemoteProfilePreview(); });
+  $('#remoteProfilePreviewButton').addEventListener('click', previewRemoteProfile);
+  $('#remoteProfileImportButton').addEventListener('click', importRemoteProfile);
   $('#warpGenerate').addEventListener('click', () => generateWarp(false));
   $('#warpRotate').addEventListener('click', () => generateWarp(true));
   $('#warpImport').addEventListener('click', () => $('#warpImportInput').click());

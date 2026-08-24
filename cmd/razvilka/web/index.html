@@ -230,6 +230,12 @@
               <div class="transfer-grid">
                 <div><h3>Импорт</h3><p>Загрузить конфиг или список в выбранный файл. Он сначала попадёт в черновик и не затронет работающий обход.</p><input type="file" id="engineImportInput" aria-label="Выбрать файл конфигурации" hidden><button class="secondary" id="engineImport">Выбрать файл…</button></div>
                 <div><h3>Экспорт</h3><p>Скачать рабочую версию или черновик. Для секретного файла потребуется отдельное подтверждение.</p><button class="secondary" id="engineExport">Экспортировать выбранный файл</button></div>
+                <div class="remote-profile-import" id="remoteProfileImport" hidden>
+                  <div><span class="eyebrow">БЫСТРЫЙ ПРОФИЛЬ SING-BOX</span><h3>Вставить ссылку провайдера</h3><p>VLESS, Reality, Hysteria2, TUIC или Shadowsocks. Сначала покажем протокол и адрес без UUID, ключа и пароля; затем создадим только черновик.</p></div>
+                  <label><span>Ссылка профиля</span><input id="remoteProfileURI" type="password" maxlength="16384" autocomplete="off" spellcheck="false" placeholder="vless://…  hysteria2://…  tuic://…  ss://…"></label>
+                  <div class="remote-profile-actions"><button class="secondary" id="remoteProfilePreviewButton" type="button">Проверить ссылку</button><button class="primary" id="remoteProfileImportButton" type="button" disabled>Создать черновик</button></div>
+                  <div class="remote-profile-preview" id="remoteProfilePreview"><span>Ссылка обрабатывается локально на роутере и не попадает в технический журнал.</span></div>
+                </div>
               </div>
             </div>
             <div class="engine-tab-panel" id="engine-tab-check">

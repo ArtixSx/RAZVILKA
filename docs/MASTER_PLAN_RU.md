@@ -63,6 +63,8 @@
 - [ ] Provider/subscription manager: URI, JSON/YAML, Clash/Mihomo и sing-box;
   нормализация узлов, тест handshake/egress/сервиса, срок действия и причины
   отказа без показа секретов.
+  - [x] Локальный preview и draft-only импорт одиночных VLESS/Reality,
+    Hysteria2, TUIC и Shadowsocks URI в Sing-box без возврата ключей в UI.
 - [ ] Generic Tunnel для уже существующего интерфейса, Tailscale/Headscale и
   SSH SOCKS — только при явном подтверждении маршрута.
 - [ ] Единый Cloudflare Provider для WARP WireGuard и MASQUE: endpoint scan,
