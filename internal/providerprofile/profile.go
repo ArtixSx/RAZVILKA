@@ -17,11 +17,12 @@ const (
 )
 
 type BundlePreview struct {
-	Format    string    `json:"format"`
-	EngineID  string    `json:"engine_id"`
-	NodeCount int       `json:"node_count"`
-	Nodes     []Preview `json:"nodes"`
-	Warnings  []string  `json:"warnings,omitempty"`
+	Format        string    `json:"format"`
+	EngineID      string    `json:"engine_id"`
+	NodeCount     int       `json:"node_count"`
+	SelectedIndex int       `json:"selected_index"`
+	Nodes         []Preview `json:"nodes"`
+	Warnings      []string  `json:"warnings,omitempty"`
 }
 
 type BundleResult struct {
@@ -35,6 +36,12 @@ type BundleResult struct {
 // configuration; arbitrary inbounds, routing and DNS rules, services and
 // experimental APIs from the source are ignored.
 func ParseProfile(raw string) (BundleResult, error) {
+	return ParseProfileWithSelection(raw, 0)
+}
+
+// ParseProfileWithSelection selects the initial node in the generated local
+// selector. The source bundle itself never gets control over routes or APIs.
+func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return BundleResult{}, errors.New("вставьте ссылку, подписку или JSON-профиль")
@@ -61,12 +68,15 @@ func ParseProfile(raw string) (BundleResult, error) {
 	if len(nodes) > MaxNodes {
 		return BundleResult{}, fmt.Errorf("в профиле %d узлов; допустимо не более %d", len(nodes), MaxNodes)
 	}
+	if selectedIndex < 0 || selectedIndex >= len(nodes) {
+		return BundleResult{}, errors.New("выбранный узел отсутствует в профиле")
+	}
 
-	config, err := buildBundleConfig(outbounds)
+	config, err := buildBundleConfig(outbounds, selectedIndex)
 	if err != nil {
 		return BundleResult{}, err
 	}
-	preview := BundlePreview{Format: format, EngineID: "sing-box", NodeCount: len(nodes), Nodes: nodes, Warnings: warnings}
+	preview := BundlePreview{Format: format, EngineID: "sing-box", NodeCount: len(nodes), SelectedIndex: selectedIndex, Nodes: nodes, Warnings: warnings}
 	if len(nodes) > 1 {
 		preview.Warnings = append(preview.Warnings, "После импорта активным будет первый узел. Остальные сохранятся в локальном селекторе Sing-box.")
 	}
@@ -264,7 +274,7 @@ func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, er
 	return outbound, preview, nil
 }
 
-func buildBundleConfig(outbounds []map[string]any) ([]byte, error) {
+func buildBundleConfig(outbounds []map[string]any, selectedIndex int) ([]byte, error) {
 	items := make([]any, 0, len(outbounds)+2)
 	if len(outbounds) == 1 {
 		outbounds[0]["tag"] = "proxy"
@@ -276,7 +286,7 @@ func buildBundleConfig(outbounds []map[string]any) ([]byte, error) {
 			outbound["tag"] = tag
 			tags = append(tags, tag)
 		}
-		items = append(items, map[string]any{"type": "selector", "tag": "proxy", "outbounds": tags, "default": tags[0]})
+		items = append(items, map[string]any{"type": "selector", "tag": "proxy", "outbounds": tags, "default": tags[selectedIndex]})
 		for _, outbound := range outbounds {
 			items = append(items, outbound)
 		}

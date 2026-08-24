@@ -48,6 +48,7 @@ const state = {
   profileBundle: null,
   profilePreview: null,
   remoteProfilePreview: null,
+  remoteProfileSelectedIndex: 0,
   privateBackupEnvelope: null,
   privateBackupPreview: null,
   appUpdate: null,
@@ -1585,15 +1586,20 @@ function renderRemoteProfilePreview() {
     return;
   }
   const nodes = preview.nodes || [];
-  const visible = nodes.slice(0, 6).map((node, index) => `<li><b>${esc(node.name || `Узел ${index + 1}`)}</b><span>${esc(node.protocol)} · ${esc(node.server)}:${Number(node.port) || '—'}${node.transport ? ` · ${esc(node.transport)}` : ''}</span></li>`).join('');
+	if (state.remoteProfileSelectedIndex >= nodes.length) state.remoteProfileSelectedIndex = 0;
+  const visible = nodes.slice(0, 6).map((node, index) => `<li class="${state.remoteProfileSelectedIndex === index ? 'selected' : ''}"><button type="button" data-provider-node="${index}" aria-pressed="${state.remoteProfileSelectedIndex === index}"><i>${state.remoteProfileSelectedIndex === index ? 'ВЫБРАН' : 'ВЫБРАТЬ'}</i><b>${esc(node.name || `Узел ${index + 1}`)}</b><span>${esc(node.protocol)} · ${esc(node.server)}:${Number(node.port) || '—'}${node.transport ? ` · ${esc(node.transport)}` : ''}</span></button></li>`).join('');
   const hidden = nodes.length > 6 ? `<li><b>Ещё ${nodes.length - 6}</b><span>будут сохранены в локальном селекторе</span></li>` : '';
   const warnings = [...(preview.warnings || []), ...nodes.flatMap((node) => node.warnings || [])].map((warning) => `<small>${esc(warning)}</small>`).join('');
-  container.innerHTML = `<div class="remote-profile-summary"><b>${Number(preview.node_count)} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')} · ${esc(preview.format || 'профиль')}</b><span>Доступы скрыты; рабочая конфигурация не изменяется</span>${warnings}</div><ul>${visible}${hidden}</ul>`;
+	const selector = `<label class="provider-node-select"><span>Начальный узел</span><select id="remoteProfileNode">${nodes.map((node, index) => `<option value="${index}" ${state.remoteProfileSelectedIndex === index ? 'selected' : ''}>${esc(node.name || `Узел ${index + 1}`)} · ${esc(node.protocol)}</option>`).join('')}</select></label>`;
+  container.innerHTML = `<div class="remote-profile-summary"><b>${Number(preview.node_count)} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')} · ${esc(preview.format || 'профиль')}</b><span>Доступы скрыты; рабочая конфигурация не изменяется</span>${selector}${warnings}</div><ul>${visible}${hidden}</ul>`;
+	$$('[data-provider-node]').forEach((button) => button.addEventListener('click', () => { state.remoteProfileSelectedIndex = Number(button.dataset.providerNode) || 0; renderRemoteProfilePreview(); }));
+	$('#remoteProfileNode')?.addEventListener('change', (event) => { state.remoteProfileSelectedIndex = Number(event.target.value) || 0; renderRemoteProfilePreview(); });
 }
 
 async function previewRemoteProfile() {
   const uri = $('#remoteProfileURI').value.trim();
   state.remoteProfilePreview = null;
+	state.remoteProfileSelectedIndex = 0;
   renderRemoteProfilePreview();
   if (!uri) return;
   const button = $('#remoteProfilePreviewButton');
@@ -1610,13 +1616,15 @@ async function importRemoteProfile() {
   const uri = $('#remoteProfileURI').value.trim();
   const preview = state.remoteProfilePreview?.preview;
   if (!uri || !preview) return;
-  if (!await askConfirmation('Создать черновик Sing-box', `${preview.node_count} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')}. Активным станет первый узел; текущий рабочий профиль не изменится до общего Apply.`, 'Создать черновик')) return;
+	const selected = preview.nodes?.[state.remoteProfileSelectedIndex];
+  if (!await askConfirmation('Создать черновик Sing-box', `${preview.node_count} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')}. Начальным станет «${selected?.name || `Узел ${state.remoteProfileSelectedIndex + 1}`}»; рабочий профиль не изменится до общего Apply.`, 'Создать черновик')) return;
   const button = $('#remoteProfileImportButton');
   button.disabled = true; button.textContent = 'Создаём…';
   try {
-    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ profile: uri, confirm: 'IMPORT_REMOTE_PROFILE' }) });
+    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ profile: uri, selected_index: state.remoteProfileSelectedIndex, confirm: 'IMPORT_REMOTE_PROFILE' }) });
     $('#remoteProfileURI').value = '';
     state.remoteProfilePreview = null;
+		state.remoteProfileSelectedIndex = 0;
     state.engineValidation = result.validation || null;
     await refreshEngineConfigs();
     renderRemoteProfilePreview();
@@ -1638,6 +1646,7 @@ async function selectRemoteProfileFile(event) {
   try {
     $('#remoteProfileURI').value = await file.text();
     state.remoteProfilePreview = null;
+		state.remoteProfileSelectedIndex = 0;
     renderRemoteProfilePreview();
     await previewRemoteProfile();
   } catch (error) {
@@ -2883,7 +2892,7 @@ function bindEvents() {
   $('#engineImport').addEventListener('click', importEngineFile);
   $('#engineImportInput').addEventListener('change', handleEngineImport);
   $('#engineExport').addEventListener('click', exportEngineFile);
-  $('#remoteProfileURI').addEventListener('input', () => { state.remoteProfilePreview = null; renderRemoteProfilePreview(); });
+  $('#remoteProfileURI').addEventListener('input', () => { state.remoteProfilePreview = null; state.remoteProfileSelectedIndex = 0; renderRemoteProfilePreview(); });
   $('#remoteProfileFileButton').addEventListener('click', () => $('#remoteProfileFile').click());
   $('#remoteProfileFile').addEventListener('change', selectRemoteProfileFile);
   $('#remoteProfileReveal').addEventListener('click', toggleRemoteProfileVisibility);

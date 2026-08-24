@@ -1619,11 +1619,11 @@ func (a *App) providerProfilePreview(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	uri, _, ok := decodeProviderProfileRequest(w, r)
+	input, ok := decodeProviderProfileRequest(w, r)
 	if !ok {
 		return
 	}
-	result, err := providerprofile.ParseProfile(uri)
+	result, err := providerprofile.ParseProfile(input.Profile)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1643,15 +1643,15 @@ func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "engine config manager disabled", http.StatusServiceUnavailable)
 		return
 	}
-	uri, confirm, ok := decodeProviderProfileRequest(w, r)
+	input, ok := decodeProviderProfileRequest(w, r)
 	if !ok {
 		return
 	}
-	if confirm != "IMPORT_REMOTE_PROFILE" {
+	if input.Confirm != "IMPORT_REMOTE_PROFILE" {
 		http.Error(w, "явно подтвердите импорт удалённого профиля", http.StatusPreconditionRequired)
 		return
 	}
-	result, err := providerprofile.ParseProfile(uri)
+	result, err := providerprofile.ParseProfileWithSelection(input.Profile, input.SelectedIndex)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1674,24 +1674,28 @@ func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func decodeProviderProfileRequest(w http.ResponseWriter, r *http.Request) (uri, confirm string, ok bool) {
-	var input struct {
-		URI     string `json:"uri"`
-		Profile string `json:"profile"`
-		Confirm string `json:"confirm"`
-	}
+type providerProfileRequest struct {
+	URI           string `json:"uri"`
+	Profile       string `json:"profile"`
+	Confirm       string `json:"confirm"`
+	SelectedIndex int    `json:"selected_index"`
+}
+
+func decodeProviderProfileRequest(w http.ResponseWriter, r *http.Request) (providerProfileRequest, bool) {
+	var input providerProfileRequest
 	reader := http.MaxBytesReader(w, r.Body, 2*providerprofile.MaxProfileBytes+(8<<10))
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
 		http.Error(w, "некорректный запрос профиля", http.StatusBadRequest)
-		return "", "", false
+		return providerProfileRequest{}, false
 	}
 	profile := input.Profile
 	if profile == "" {
 		profile = input.URI
 	}
-	return profile, input.Confirm, true
+	input.Profile = profile
+	return input, true
 }
 
 func (a *App) testLabSnapshot(w http.ResponseWriter, r *http.Request) {

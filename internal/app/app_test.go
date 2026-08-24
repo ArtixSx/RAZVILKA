@@ -169,6 +169,24 @@ func TestProviderProfilePreviewAndImportStayDraftOnly(t *testing.T) {
 	}
 }
 
+func TestProviderProfileImportHonorsExplicitNodeSelection(t *testing.T) {
+	root := t.TempDir()
+	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	a := &App{EngineConfigs: configs}
+	profile := "vless://123e4567-e89b-12d3-a456-426614174000@one.example:443?security=tls#One\n" +
+		"hysteria2://secret@two.example:8443?sni=front.example#Two"
+	body, _ := json.Marshal(map[string]any{"profile": profile, "confirm": "IMPORT_REMOTE_PROFILE", "selected_index": 1})
+	response := httptest.NewRecorder()
+	a.providerProfileImport(response, httptest.NewRequest(http.MethodPost, "/api/v1/provider-profiles/import", bytes.NewReader(body)))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"selected_index":1`) {
+		t.Fatalf("import status=%d body=%s", response.Code, response.Body.String())
+	}
+	content, err := configs.ReadExpert("sing-box", "main")
+	if err != nil || !strings.Contains(content.Content, `"default": "node-02"`) {
+		t.Fatalf("selected node was not staged: %+v err=%v", content, err)
+	}
+}
+
 func TestClassifyWARPMASQUEServiceTimeout(t *testing.T) {
 	failure := classifyApplyFailure(`usque probe for Telegram failed: Get "https://telegram.org/": context deadline exceeded`)
 	if failure.Code != "WARP_MASQUE_SERVICE_TIMEOUT" || !failure.DraftPreserved || !failure.Retryable {

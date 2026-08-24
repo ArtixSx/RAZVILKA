@@ -85,6 +85,23 @@ func TestParseProfileAcceptsTextAndBase64SubscriptionsWithoutPreviewLeaks(t *tes
 	}
 }
 
+func TestParseProfileAllowsExplicitInitialNodeSelection(t *testing.T) {
+	const subscription = "vless://123e4567-e89b-12d3-a456-426614174000@one.example:443?security=tls#One\n" +
+		"hysteria2://secret@two.example:8443?sni=front.example#Two\n"
+	result, err := ParseProfileWithSelection(subscription, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Preview.SelectedIndex != 1 || !strings.Contains(string(result.Config), `"default": "node-02"`) {
+		t.Fatalf("explicit selection was lost: preview=%+v config=%s", result.Preview, result.Config)
+	}
+	for _, invalid := range []int{-1, 2} {
+		if _, err := ParseProfileWithSelection(subscription, invalid); err == nil {
+			t.Fatalf("accepted invalid selected index %d", invalid)
+		}
+	}
+}
+
 func TestParseProfileNormalizesSingBoxJSONAndDropsUnmanagedSections(t *testing.T) {
 	const source = `{
   "inbounds": [{"type":"mixed","listen":"0.0.0.0","listen_port":1080}],
