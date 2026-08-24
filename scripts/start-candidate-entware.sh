@@ -3,12 +3,12 @@ set -eu
 
 umask 077
 
-BINARY=/opt/bin/razvilka-v0.0.8-candidate
+BINARY=/opt/bin/razvilka-candidate
 CONFIG_DIR=/opt/etc/razvilka-candidate
 STATE_DIR=/opt/var/lib/razvilka-candidate
 CACHE_DIR=/opt/var/cache/razvilka-candidate
 LOG_DIR=/opt/var/log/razvilka-candidate
-PID_FILE=/opt/var/run/razvilka-v0.0.8-candidate.pid
+PID_FILE=/opt/var/run/razvilka-candidate.pid
 LOG_FILE="$LOG_DIR/server.log"
 DAEMON=/opt/sbin/start-stop-daemon
 

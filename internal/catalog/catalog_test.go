@@ -12,3 +12,14 @@ func TestValidateCatalog(t *testing.T) {
 		t.Fatal("expected invalid domain")
 	}
 }
+
+func TestValidateServiceProbeScenarios(t *testing.T) {
+	service := Service{ID: "telegram", Name: "Telegram", Category: "Messaging", Domains: []string{"telegram.org"}, Strategy: []string{"direct"}, Probes: []Probe{{ID: "web", Label: "Web", URL: "https://web.telegram.org/", Required: true}}}
+	if err := Validate(Catalog{Services: []Service{service}}); err != nil {
+		t.Fatal(err)
+	}
+	service.Probes = append(service.Probes, Probe{ID: "web", Label: "Duplicate", URL: "https://telegram.org/"})
+	if err := Validate(Catalog{Services: []Service{service}}); err == nil {
+		t.Fatal("duplicate probe id must fail validation")
+	}
+}

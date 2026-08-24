@@ -1,6 +1,7 @@
 package engineconfig
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -36,6 +37,64 @@ func TestStageReadValidateDiscard(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "stage", "nfqws2", "main.draft")); !os.IsNotExist(err) {
 		t.Fatalf("draft still exists: %v", err)
+	}
+}
+
+func TestUsqueKeeneticSessionIsThePrimaryEditableProfile(t *testing.T) {
+	for _, spec := range Specs() {
+		if spec.ID != "usque" {
+			continue
+		}
+		if len(spec.Files) != 1 || len(spec.Files[0].Paths) == 0 || spec.Files[0].Paths[0] != "/opt/etc/usque/session.conf" || spec.Files[0].Syntax != "json" {
+			t.Fatalf("unexpected usque profile specification: %#v", spec.Files)
+		}
+		return
+	}
+	t.Fatal("usque engine config specification is missing")
+}
+
+func TestGuidedJSONUpdatesNamedBlocksInsideArrays(t *testing.T) {
+	input := []byte(`{"log":{"level":"warn"},"inbounds":[{"type":"socks","listen":"127.0.0.1","listen_port":1080}],"outbounds":[{"type":"vless","server":"old.example","server_port":443}]}`)
+	fields := guidedFields("sing-box", "main")
+	updated, err := encodeGuided("json", input, fields, map[string]string{
+		"log.level": "info", "inbounds.0.listen_port": "2080", "outbounds.0.server": "new.example", "outbounds.0.server_port": "8443",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(updated, &document); err != nil {
+		t.Fatal(err)
+	}
+	if got := jsonScalar(getJSONPath(document, "inbounds.0.listen_port")); got != "2080" {
+		t.Fatalf("listen_port=%q, document=%s", got, updated)
+	}
+	if got := jsonScalar(getJSONPath(document, "outbounds.0.server")); got != "new.example" {
+		t.Fatalf("server=%q", got)
+	}
+}
+
+func TestGuidedJSONDoesNotCreateAbsentOptionalEmptyBlock(t *testing.T) {
+	updated, err := encodeGuided("json", []byte(`{"log":{"level":"warn"}}`), guidedFields("xray", "main"), map[string]string{"inbounds.0.listen": ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	_ = json.Unmarshal(updated, &document)
+	if _, exists := document["inbounds"]; exists {
+		t.Fatalf("empty optional block was created: %s", updated)
+	}
+}
+
+func TestNFQWSGuidedArgumentsRejectShellExecution(t *testing.T) {
+	field := GuidedField{ID: "NFQWS_ARGS", Type: "arguments"}
+	for _, value := range []string{"--filter-tcp=443; reboot", "$(touch /tmp/pwned)", "`id`", "--foo | sh"} {
+		if err := validateGuidedValue(field, value); err == nil {
+			t.Fatalf("unsafe arguments accepted: %q", value)
+		}
+	}
+	if err := validateGuidedValue(field, "--filter-tcp=443 --dpi-desync=fake,split2 --new"); err != nil {
+		t.Fatalf("valid strategy rejected: %v", err)
 	}
 }
 

@@ -15,6 +15,7 @@ func TestPreflightCheckAndMigrate(t *testing.T) {
 	sourceConfig := filepath.Join(repositoryConfigs, "config.example.json")
 	catalogPath := filepath.Join(repositoryConfigs, "service-catalog.json")
 	sourcesPath := filepath.Join(repositoryConfigs, "sources.json")
+	communityPath := filepath.Join(repositoryConfigs, "community-catalog.json")
 
 	data, err := os.ReadFile(sourceConfig)
 	if err != nil {
@@ -29,7 +30,7 @@ func TestPreflightCheckAndMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	checked, err := preflight(configPath, catalogPath, sourcesPath, false)
+	checked, err := preflight(configPath, catalogPath, sourcesPath, communityPath, false)
 	if err != nil {
 		t.Fatalf("check preflight: %v", err)
 	}
@@ -39,8 +40,8 @@ func TestPreflightCheckAndMigrate(t *testing.T) {
 	if checked.Config.FromSchema != 0 || checked.Config.ToSchema != config.CurrentSchemaVersion {
 		t.Fatalf("check schema report = %+v", checked.Config)
 	}
-	if checked.CatalogServices != 16 || checked.Sources != 8 {
-		t.Fatalf("catalog=%d sources=%d", checked.CatalogServices, checked.Sources)
+	if checked.CatalogServices != 16 || checked.Sources != 8 || checked.CommunityEntries != 35 {
+		t.Fatalf("catalog=%d sources=%d community=%d", checked.CatalogServices, checked.Sources, checked.CommunityEntries)
 	}
 	unchanged, err := os.ReadFile(configPath)
 	if err != nil {
@@ -50,7 +51,7 @@ func TestPreflightCheckAndMigrate(t *testing.T) {
 		t.Fatal("read-only preflight changed the config")
 	}
 
-	migrated, err := preflight(configPath, catalogPath, sourcesPath, true)
+	migrated, err := preflight(configPath, catalogPath, sourcesPath, communityPath, true)
 	if err != nil {
 		t.Fatalf("migration preflight: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestPreflightCheckAndMigrate(t *testing.T) {
 		t.Fatalf("migration report = %+v", migrated)
 	}
 
-	second, err := preflight(configPath, catalogPath, sourcesPath, true)
+	second, err := preflight(configPath, catalogPath, sourcesPath, communityPath, true)
 	if err != nil {
 		t.Fatalf("second migration preflight: %v", err)
 	}

@@ -2,13 +2,21 @@ package systemprobe
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+type WANProfile struct {
+	ID           string `json:"id"`
+	WANInterface string `json:"wan_interface,omitempty"`
+}
 
 type Snapshot struct {
 	Architecture       string   `json:"architecture"`
@@ -20,11 +28,16 @@ type Snapshot struct {
 	Opkg               bool     `json:"opkg"`
 	IPCommand          bool     `json:"ip_command"`
 	WANInterface       string   `json:"wan_interface,omitempty"`
+	NetworkProfileID   string   `json:"network_profile_id,omitempty"`
 	TUN                bool     `json:"tun"`
 	IPTables           bool     `json:"iptables"`
 	IP6Tables          bool     `json:"ip6tables"`
 	NFTables           bool     `json:"nftables"`
 	NFQueue            bool     `json:"nfqueue"`
+	IPSet              bool     `json:"ipset"`
+	TProxy             bool     `json:"tproxy"`
+	SocketMatch        bool     `json:"socket_match"`
+	Conntrack          bool     `json:"conntrack"`
 	ExternalTunnels    []string `json:"external_tunnels,omitempty"`
 	RouteContamination bool     `json:"route_contamination"`
 }
@@ -46,10 +59,45 @@ func Probe() Snapshot {
 	s.NFTables = commandExists("nft") || fileExists("/opt/sbin/nft")
 	s.TUN = fileExists("/dev/net/tun")
 	s.NFQueue = nfqueueAvailable()
-	s.WANInterface = wanInterface()
+	s.IPSet = commandExists("ipset") || fileExists("/opt/sbin/ipset") || fileExists("/opt/bin/ipset")
+	s.TProxy = kernelFeatureAvailable("tproxy", "/proc/net/ip_tables_targets", "/proc/modules")
+	s.SocketMatch = kernelFeatureAvailable("socket", "/proc/net/ip_tables_matches", "/proc/modules")
+	s.Conntrack = commandExists("conntrack") || fileExists("/opt/sbin/conntrack") || fileExists("/opt/bin/conntrack") || fileExists("/proc/net/nf_conntrack")
+	profile := DetectWANProfile()
+	s.WANInterface = profile.WANInterface
+	s.NetworkProfileID = profile.ID
 	s.ExternalTunnels = externalTunnels()
 	s.RouteContamination = len(s.ExternalTunnels) > 0
 	return s
+}
+
+// DetectWANInterface performs only the route lookup needed by the bounded
+// traffic sampler. Full Probe also inspects packages, modules and tunnels and
+// would be unnecessarily expensive on every metrics interval.
+func DetectWANInterface() string { return DetectWANProfile().WANInterface }
+
+var wanProfileCache struct {
+	sync.Mutex
+	profile WANProfile
+	at      time.Time
+}
+
+// DetectWANProfile returns a privacy-safe identifier for the current uplink.
+// The gateway and source address are used only as local hash input and are
+// never persisted or returned to the Web UI.
+func DetectWANProfile() WANProfile {
+	wanProfileCache.Lock()
+	defer wanProfileCache.Unlock()
+	if !wanProfileCache.at.IsZero() && time.Since(wanProfileCache.at) < 10*time.Second {
+		return wanProfileCache.profile
+	}
+	profile := WANProfile{ID: "network-unknown"}
+	if line := wanRouteLine(); line != "" {
+		profile = networkProfileFromRoute(line)
+	}
+	wanProfileCache.profile = profile
+	wanProfileCache.at = time.Now()
+	return profile
 }
 
 func commandExists(name string) bool { _, err := exec.LookPath(name); return err == nil }
@@ -84,12 +132,17 @@ func memory() (total, available uint64) {
 	return
 }
 func nfqueueAvailable() bool {
-	for _, p := range []string{"/proc/net/ip_tables_targets", "/proc/modules"} {
-		if b, err := os.ReadFile(p); err == nil {
-			t := strings.ToLower(string(b))
-			if strings.Contains(t, "nfqueue") || strings.Contains(t, "nfnetlink_queue") {
-				return true
-			}
+	return kernelFeatureAvailable("nfqueue", "/proc/net/ip_tables_targets") || kernelFeatureAvailable("nfnetlink_queue", "/proc/modules")
+}
+
+func kernelFeatureAvailable(feature string, paths ...string) bool {
+	feature = strings.ToLower(strings.TrimSpace(feature))
+	if feature == "" {
+		return false
+	}
+	for _, path := range paths {
+		if b, err := os.ReadFile(path); err == nil && strings.Contains(strings.ToLower(string(b)), feature) {
+			return true
 		}
 	}
 	return false
@@ -142,7 +195,9 @@ func isExternalTunnelName(dev string) bool {
 	return false
 }
 
-func wanInterface() string {
+func wanInterface() string { return DetectWANProfile().WANInterface }
+
+func wanRouteLine() string {
 	candidates := [][]string{{"ip", "route", "get", "1.1.1.1"}, {"/opt/sbin/ip", "route", "get", "1.1.1.1"}, {"/opt/bin/ip", "route", "get", "1.1.1.1"}}
 	for _, c := range candidates {
 		if c[0][0] == '/' && !fileExists(c[0]) {
@@ -154,12 +209,28 @@ func wanInterface() string {
 		if err != nil {
 			continue
 		}
-		f := strings.Fields(string(b))
-		for i := 0; i+1 < len(f); i++ {
-			if f[i] == "dev" {
-				return f[i+1]
-			}
-		}
+		return strings.TrimSpace(string(b))
 	}
 	return ""
+}
+
+func networkProfileFromRoute(line string) WANProfile {
+	fields := strings.Fields(line)
+	values := map[string]string{}
+	for i := 0; i+1 < len(fields); i++ {
+		switch fields[i] {
+		case "dev", "via", "src":
+			values[fields[i]] = fields[i+1]
+		}
+	}
+	dev := strings.TrimSpace(values["dev"])
+	if dev == "" {
+		return WANProfile{ID: "network-unknown"}
+	}
+	identity := dev + "|" + values["via"]
+	if values["via"] == "" {
+		identity += "|" + values["src"]
+	}
+	digest := sha256.Sum256([]byte(identity))
+	return WANProfile{ID: fmt.Sprintf("wan-%x", digest[:6]), WANInterface: dev}
 }

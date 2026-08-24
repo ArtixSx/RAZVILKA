@@ -1,32 +1,33 @@
 name: Feature request
-description: Suggest a service, engine adapter, or control-plane improvement
+description: Предложить сервис, обход или улучшение интерфейса
 title: "[Feature] "
 labels: ["enhancement"]
 body:
   - type: dropdown
     id: area
     attributes:
-      label: Area
+      label: Раздел
       options:
         - Service catalog
-        - Engine adapter
+        - Обходы
         - Smart routing
         - Test Lab
         - Web UI
         - Devices / policies
         - Sources
         - Diagnostics
+        - DNS
         - Installer / updates
         - Other
   - type: textarea
     id: problem
     attributes:
-      label: Problem to solve
+      label: Какую проблему нужно решить
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed behavior
+      label: Как это должно работать для обычного пользователя
     validations:
       required: true

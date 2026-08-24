@@ -32,10 +32,43 @@ type Store struct {
 	closed      map[string]Connection
 	subscribers map[chan struct{}]struct{}
 	maxClosed   int
+	live        bool
+	producer    string
+	reason      string
 }
 
 func NewStore() *Store {
-	return &Store{active: map[string]Connection{}, closed: map[string]Connection{}, subscribers: map[chan struct{}]struct{}{}, maxClosed: 500}
+	return &Store{
+		active: map[string]Connection{}, closed: map[string]Connection{},
+		subscribers: map[chan struct{}]struct{}{}, maxClosed: 500,
+		reason: "no dataplane telemetry producer is connected",
+	}
+}
+
+type Status struct {
+	Live     bool   `json:"live"`
+	Producer string `json:"producer,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+// SetProducer records whether a real dataplane telemetry source is currently
+// feeding the store. A Store existing in memory is not itself live evidence.
+func (s *Store) SetProducer(live bool, producer, reason string) {
+	s.mu.Lock()
+	s.live = live
+	s.producer = producer
+	s.reason = reason
+	if live && s.reason == "" {
+		s.reason = "dataplane telemetry producer is connected"
+	}
+	s.notifyLocked()
+	s.mu.Unlock()
+}
+
+func (s *Store) Status() Status {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return Status{Live: s.live, Producer: s.producer, Reason: s.reason}
 }
 
 func (s *Store) Upsert(c Connection) {
@@ -52,8 +85,60 @@ func (s *Store) Upsert(c Connection) {
 	c.Active = true
 	c.Chain = append([]string(nil), c.Chain...)
 	s.mu.Lock()
+	if current, exists := s.active[c.ID]; exists && !current.StartedAt.IsZero() {
+		c.StartedAt = current.StartedAt
+	}
+	if !s.live {
+		s.live = true
+		if s.producer == "" {
+			s.producer = "dataplane-adapter"
+		}
+		s.reason = "dataplane adapter published route evidence"
+	}
 	s.active[c.ID] = c
 	delete(s.closed, c.ID)
+	s.notifyLocked()
+	s.mu.Unlock()
+}
+
+// ReplaceActive atomically reconciles a complete snapshot from a real
+// producer. Missing rows become bounded closed history and existing rows keep
+// their original start time.
+func (s *Store) ReplaceActive(producer string, rows []Connection) {
+	now := time.Now().UTC()
+	next := make(map[string]Connection, len(rows))
+	s.mu.Lock()
+	for _, connection := range rows {
+		if connection.ID == "" {
+			continue
+		}
+		if current, exists := s.active[connection.ID]; exists && !current.StartedAt.IsZero() {
+			connection.StartedAt = current.StartedAt
+		}
+		if connection.StartedAt.IsZero() {
+			connection.StartedAt = now
+		}
+		if connection.UpdatedAt.IsZero() {
+			connection.UpdatedAt = now
+		}
+		connection.Active = true
+		connection.Chain = append([]string(nil), connection.Chain...)
+		next[connection.ID] = connection
+		delete(s.closed, connection.ID)
+	}
+	for id, connection := range s.active {
+		if _, exists := next[id]; exists {
+			continue
+		}
+		connection.Active = false
+		connection.UpdatedAt = now
+		s.closed[id] = connection
+	}
+	s.active = next
+	s.live = true
+	s.producer = producer
+	s.reason = "kernel telemetry snapshot is current"
+	s.trimClosedLocked()
 	s.notifyLocked()
 	s.mu.Unlock()
 }
