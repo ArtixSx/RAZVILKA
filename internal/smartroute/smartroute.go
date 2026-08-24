@@ -7,22 +7,29 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 )
 
-const schema = 1
+const (
+	schema         = 2
+	defaultProfile = "network-unknown"
+	legacyProfile  = "legacy-unscoped"
+)
 
 type Evidence struct {
-	Route       string `json:"route"`
-	Status      string `json:"status"`
-	LatencyMS   int64  `json:"latency_ms,omitempty"`
-	Score       int    `json:"score"`
-	EgressIP    string `json:"egress_ip,omitempty"`
-	Evidence    string `json:"evidence_source,omitempty"`
-	ConfirmedAt string `json:"confirmed_at"`
+	Route       string         `json:"route"`
+	Status      string         `json:"status"`
+	LatencyMS   int64          `json:"latency_ms,omitempty"`
+	Score       int            `json:"score"`
+	EgressIP    string         `json:"egress_ip,omitempty"`
+	Evidence    string         `json:"evidence_source,omitempty"`
+	Level       evidence.Level `json:"evidence_level"`
+	ConfirmedAt string         `json:"confirmed_at"`
 }
 
 type ServiceState struct {
@@ -34,6 +41,8 @@ type ServiceState struct {
 
 type Snapshot struct {
 	Schema         int                     `json:"schema"`
+	NetworkProfile string                  `json:"network_profile"`
+	KnownProfiles  int                     `json:"known_profiles"`
 	Hysteresis     int                     `json:"hysteresis"`
 	CooldownMinute int                     `json:"cooldown_minutes"`
 	EvidenceHours  int                     `json:"evidence_ttl_hours"`
@@ -49,8 +58,8 @@ type Decision struct {
 }
 
 type document struct {
-	Schema   int                     `json:"schema"`
-	Services map[string]ServiceState `json:"services"`
+	Schema   int                                `json:"schema"`
+	Profiles map[string]map[string]ServiceState `json:"profiles"`
 }
 
 type Manager struct {
@@ -58,13 +67,16 @@ type Manager struct {
 	Hysteresis int
 	Cooldown   time.Duration
 	TTL        time.Duration
-	now        func() time.Time
-	mu         sync.RWMutex
-	doc        document
+	// Profile supplies a privacy-safe identifier for the current WAN network.
+	// Evidence and selections are never reused across different identifiers.
+	Profile func() string
+	now     func() time.Time
+	mu      sync.RWMutex
+	doc     document
 }
 
 func New(path string) (*Manager, error) {
-	m := &Manager{Path: path, Hysteresis: 12, Cooldown: 10 * time.Minute, TTL: 24 * time.Hour, now: time.Now, doc: document{Schema: schema, Services: map[string]ServiceState{}}}
+	m := &Manager{Path: path, Hysteresis: 12, Cooldown: 10 * time.Minute, TTL: 24 * time.Hour, now: time.Now, doc: document{Schema: schema, Profiles: map[string]map[string]ServiceState{}}}
 	if err := m.load(); err != nil {
 		return nil, err
 	}
@@ -74,13 +86,15 @@ func New(path string) (*Manager, error) {
 func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	services := m.servicesLocked(m.activeProfileLocked())
 	touched := map[string]bool{}
 	now := m.now().UTC()
 	for _, result := range results {
-		if !result.RouteConfirmed || result.ServiceID == "" || result.Route == "" || !knownStatus(result.Status) {
+		level := result.AssuranceLevel()
+		if !level.AtLeast(evidence.Route) || result.ServiceID == "" || result.Route == "" || !knownStatus(result.Status) {
 			continue
 		}
-		state := m.doc.Services[result.ServiceID]
+		state := services[result.ServiceID]
 		if state.Evidence == nil {
 			state.Evidence = map[string]Evidence{}
 		}
@@ -88,8 +102,8 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 		if parsed, err := time.Parse(time.RFC3339, checked); err != nil || parsed.After(now.Add(time.Minute)) {
 			checked = now.Format(time.RFC3339)
 		}
-		state.Evidence[result.Route] = Evidence{Route: result.Route, Status: result.Status, LatencyMS: result.LatencyMS, Score: score(result.Route, result.Status, result.LatencyMS), EgressIP: result.EgressIP, Evidence: result.EvidenceSource, ConfirmedAt: checked}
-		m.doc.Services[result.ServiceID] = state
+		state.Evidence[result.Route] = Evidence{Route: result.Route, Status: result.Status, LatencyMS: result.LatencyMS, Score: score(result.Route, result.Status, result.LatencyMS), EgressIP: result.EgressIP, Evidence: result.EvidenceSource, Level: level, ConfirmedAt: checked}
+		services[result.ServiceID] = state
 		touched[result.ServiceID] = true
 	}
 	ids := make([]string, 0, len(touched))
@@ -99,7 +113,7 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 	sort.Strings(ids)
 	decisions := make([]Decision, 0, len(ids))
 	for _, id := range ids {
-		decisions = append(decisions, m.evaluateLocked(id, now))
+		decisions = append(decisions, m.evaluateLocked(services, id, now))
 	}
 	if len(touched) > 0 {
 		if err := m.saveLocked(); err != nil {
@@ -112,12 +126,12 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 func (m *Manager) Suggest(serviceID, fallback string) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	state, ok := m.doc.Services[serviceID]
+	state, ok := m.doc.Profiles[m.activeProfileLocked()][serviceID]
 	if !ok || state.SelectedRoute == "" {
 		return fallback
 	}
-	evidence, ok := state.Evidence[state.SelectedRoute]
-	if !ok || !viable(evidence.Status) || m.expired(evidence, m.now().UTC()) {
+	confirmed, ok := state.Evidence[state.SelectedRoute]
+	if !ok || !viable(confirmed.Status) || m.expired(confirmed, m.now().UTC()) {
 		return fallback
 	}
 	return state.SelectedRoute
@@ -126,25 +140,27 @@ func (m *Manager) Suggest(serviceID, fallback string) string {
 func (m *Manager) Snapshot() Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	services := make(map[string]ServiceState, len(m.doc.Services))
-	for id, state := range m.doc.Services {
+	profile := m.activeProfileLocked()
+	current := m.doc.Profiles[profile]
+	services := make(map[string]ServiceState, len(current))
+	for id, state := range current {
 		copyState := state
 		copyState.Evidence = make(map[string]Evidence, len(state.Evidence))
-		for route, evidence := range state.Evidence {
-			copyState.Evidence[route] = evidence
+		for route, confirmed := range state.Evidence {
+			copyState.Evidence[route] = confirmed
 		}
 		services[id] = copyState
 	}
-	return Snapshot{Schema: schema, Hysteresis: m.Hysteresis, CooldownMinute: int(m.Cooldown.Minutes()), EvidenceHours: int(m.TTL.Hours()), Services: services}
+	return Snapshot{Schema: schema, NetworkProfile: profile, KnownProfiles: len(m.doc.Profiles), Hysteresis: m.Hysteresis, CooldownMinute: int(m.Cooldown.Minutes()), EvidenceHours: int(m.TTL.Hours()), Services: services}
 }
 
-func (m *Manager) evaluateLocked(serviceID string, now time.Time) Decision {
-	state := m.doc.Services[serviceID]
+func (m *Manager) evaluateLocked(services map[string]ServiceState, serviceID string, now time.Time) Decision {
+	state := services[serviceID]
 	decision := Decision{ServiceID: serviceID, Previous: state.SelectedRoute, Selected: state.SelectedRoute, Reason: "insufficient-confirmed-evidence"}
 	valid := make([]Evidence, 0, len(state.Evidence))
-	for _, evidence := range state.Evidence {
-		if !m.expired(evidence, now) {
-			valid = append(valid, evidence)
+	for _, confirmed := range state.Evidence {
+		if !m.expired(confirmed, now) {
+			valid = append(valid, confirmed)
 		}
 	}
 	sort.Slice(valid, func(i, j int) bool {
@@ -155,7 +171,7 @@ func (m *Manager) evaluateLocked(serviceID string, now time.Time) Decision {
 	})
 	if len(valid) == 0 || !viable(valid[0].Status) {
 		state.Reason = decision.Reason
-		m.doc.Services[serviceID] = state
+		services[serviceID] = state
 		return decision
 	}
 	best := valid[0]
@@ -165,7 +181,7 @@ func (m *Manager) evaluateLocked(serviceID string, now time.Time) Decision {
 	if !selectBest && best.Route == state.SelectedRoute {
 		decision.Reason = "current-route-remains-best"
 		state.Reason = decision.Reason
-		m.doc.Services[serviceID] = state
+		services[serviceID] = state
 		return decision
 	}
 	if !selectBest && !viable(current.Status) {
@@ -175,7 +191,7 @@ func (m *Manager) evaluateLocked(serviceID string, now time.Time) Decision {
 	if !selectBest && withinCooldown(state.LastSwitch, now, m.Cooldown) {
 		decision.Reason = "switch-cooldown-active"
 		state.Reason = decision.Reason
-		m.doc.Services[serviceID] = state
+		services[serviceID] = state
 		return decision
 	}
 	if !selectBest && best.Score >= current.Score+m.Hysteresis {
@@ -185,21 +201,21 @@ func (m *Manager) evaluateLocked(serviceID string, now time.Time) Decision {
 	if !selectBest {
 		decision.Reason = "hysteresis-kept-current-route"
 		state.Reason = decision.Reason
-		m.doc.Services[serviceID] = state
+		services[serviceID] = state
 		return decision
 	}
 	state.SelectedRoute = best.Route
 	state.LastSwitch = now.Format(time.RFC3339)
 	state.Reason = reason
-	m.doc.Services[serviceID] = state
+	services[serviceID] = state
 	decision.Selected = best.Route
 	decision.Changed = decision.Previous != best.Route
 	decision.Reason = reason
 	return decision
 }
 
-func (m *Manager) expired(evidence Evidence, now time.Time) bool {
-	checked, err := time.Parse(time.RFC3339, evidence.ConfirmedAt)
+func (m *Manager) expired(confirmed Evidence, now time.Time) bool {
+	checked, err := time.Parse(time.RFC3339, confirmed.ConfirmedAt)
 	return err != nil || now.Sub(checked) > m.TTL
 }
 
@@ -238,15 +254,35 @@ func (m *Manager) load() error {
 	if err != nil {
 		return fmt.Errorf("read Smart Route state: %w", err)
 	}
+	var header struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(b, &header); err != nil {
+		return fmt.Errorf("decode Smart Route state: %w", err)
+	}
+	if header.Schema == 1 {
+		var old struct {
+			Schema   int                     `json:"schema"`
+			Services map[string]ServiceState `json:"services"`
+		}
+		if err := json.Unmarshal(b, &old); err != nil {
+			return fmt.Errorf("decode Smart Route v1 state: %w", err)
+		}
+		if old.Services == nil {
+			old.Services = map[string]ServiceState{}
+		}
+		m.doc = document{Schema: schema, Profiles: map[string]map[string]ServiceState{legacyProfile: old.Services}}
+		return nil
+	}
+	if header.Schema != schema {
+		return fmt.Errorf("unsupported Smart Route schema %d", header.Schema)
+	}
 	var loaded document
 	if err := json.Unmarshal(b, &loaded); err != nil {
 		return fmt.Errorf("decode Smart Route state: %w", err)
 	}
-	if loaded.Schema != schema {
-		return fmt.Errorf("unsupported Smart Route schema %d", loaded.Schema)
-	}
-	if loaded.Services == nil {
-		loaded.Services = map[string]ServiceState{}
+	if loaded.Profiles == nil {
+		loaded.Profiles = map[string]map[string]ServiceState{}
 	}
 	m.doc = loaded
 	return nil
@@ -289,4 +325,27 @@ func (m *Manager) saveLocked() error {
 		return err
 	}
 	return os.Chmod(m.Path, 0600)
+}
+
+func (m *Manager) activeProfileLocked() string {
+	if m.Profile == nil {
+		return defaultProfile
+	}
+	profile := strings.TrimSpace(m.Profile())
+	if profile == "" {
+		return defaultProfile
+	}
+	return profile
+}
+
+func (m *Manager) servicesLocked(profile string) map[string]ServiceState {
+	if m.doc.Profiles == nil {
+		m.doc.Profiles = map[string]map[string]ServiceState{}
+	}
+	services := m.doc.Profiles[profile]
+	if services == nil {
+		services = map[string]ServiceState{}
+		m.doc.Profiles[profile] = services
+	}
+	return services
 }

@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: RAZVILKA version
-      placeholder: v0.0.7-control-lab
+      placeholder: v0.14.0
     validations:
       required: true
   - type: input
@@ -22,9 +22,9 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: engine
+    id: bypass
     attributes:
-      label: Engine
+      label: Обход или раздел
       options:
         - Manager / UI
         - NFQWS2
@@ -33,22 +33,23 @@ body:
         - sing-box
         - Xray
         - AmneziaWG
+        - DNS
         - Other / not sure
   - type: textarea
     id: steps
     attributes:
-      label: Reproduction steps
-      description: Exact sequence that reproduces the issue.
+      label: Шаги воспроизведения
+      description: Точная последовательность действий. Не прикладывайте секретные конфиги.
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
+      label: Ожидаемое поведение
     validations:
       required: true
   - type: textarea
     id: diagnostics
     attributes:
-      label: Sanitized diagnostics
-      description: Paste only non-sensitive output. Prefer the preflight summary rather than full secret configs.
+      label: Очищенная диагностика
+      description: Прикладывайте отчёт диагностики RAZVILKA, а не полный конфиг с ключами.

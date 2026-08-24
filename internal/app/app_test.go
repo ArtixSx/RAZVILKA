@@ -12,12 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/auditlog"
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/devices"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
@@ -59,6 +61,32 @@ func TestClassifyWARPHandshakeFailure(t *testing.T) {
 	}
 }
 
+func TestDNSProfileAPIKeepsChangesDraftOnly(t *testing.T) {
+	manager, err := dnscontrol.New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{DNS: manager}
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/dns/draft", strings.NewReader(`{"profile_id":"ad-block"}`))
+	response := httptest.NewRecorder()
+	a.dnsDraft(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("draft status=%d body=%s", response.Code, response.Body.String())
+	}
+	var snapshot dnscontrol.Snapshot
+	if err := json.NewDecoder(response.Body).Decode(&snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if !snapshot.Dirty || snapshot.Draft.ProfileID != "ad-block" || snapshot.Applied.ProfileID != "automatic" || snapshot.Mode != "preview" {
+		t.Fatalf("DNS API claimed a live change: %+v", snapshot)
+	}
+	status := httptest.NewRecorder()
+	a.dnsStatus(status, httptest.NewRequest(http.MethodGet, "/api/v1/dns", nil))
+	if status.Code != http.StatusOK || !strings.Contains(status.Body.String(), `"mode":"preview"`) {
+		t.Fatalf("status=%d body=%s", status.Code, status.Body.String())
+	}
+}
+
 func TestClassifyWARPMASQUEServiceTimeout(t *testing.T) {
 	failure := classifyApplyFailure(`usque probe for Telegram failed: Get "https://telegram.org/": context deadline exceeded`)
 	if failure.Code != "WARP_MASQUE_SERVICE_TIMEOUT" || !failure.DraftPreserved || !failure.Retryable {
@@ -66,6 +94,13 @@ func TestClassifyWARPMASQUEServiceTimeout(t *testing.T) {
 	}
 	if len(failure.Alternatives) != 3 || !strings.Contains(failure.Resolution, "Sing-box") {
 		t.Fatalf("missing non-WARP alternatives: %+v", failure)
+	}
+}
+
+func TestClassifyApplyFailureExplainsTimeoutAndRollback(t *testing.T) {
+	failure := classifyApplyFailure("stage nfqws2: context deadline exceeded")
+	if failure.Code != "DATAPLANE_OPERATION_CANCELLED" || !failure.DraftPreserved || !strings.Contains(strings.ToLower(failure.Message), "rollback") {
+		t.Fatalf("timeout advice = %+v", failure)
 	}
 }
 
@@ -869,7 +904,7 @@ func TestTestLabAPIUsesFixedCatalogProbe(t *testing.T) {
 	}
 }
 
-func TestIsolatedRouteAPIFeedsSmartRoute(t *testing.T) {
+func TestIsolatedRouteAPIAddsDirectControlAndFeedsSmartRoute(t *testing.T) {
 	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -882,13 +917,24 @@ func TestIsolatedRouteAPIFeedsSmartRoute(t *testing.T) {
 	a := &App{Store: store, Catalog: cat, TestLab: testlab.NewRunner(), RouteProber: confirmedRouteProber{}, SmartRoute: smart, Start: time.Now()}
 	ts := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer ts.Close()
-	resp, err := http.Post(ts.URL+"/api/v1/testlab/routes", "application/json", strings.NewReader(`{"services":["probe"],"routes":["direct"]}`))
+	resp, err := http.Post(ts.URL+"/api/v1/testlab/routes", "application/json", strings.NewReader(`{"services":["probe"],"routes":["nfqws2"]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var payload struct {
+		ControlAdded bool                           `json:"control_added"`
+		Results      []testlab.Result               `json:"results"`
+		Assessments  []testlab.ComparisonAssessment `json:"assessments"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if !payload.ControlAdded || len(payload.Results) != 2 || len(payload.Assessments) != 1 || payload.Assessments[0].Conclusion != "direct-sufficient" {
+		t.Fatalf("DIRECT control was not added: %+v", payload)
 	}
 	if got := smart.Suggest("probe", "fallback"); got != "direct" {
 		t.Fatalf("suggestion=%q", got)
@@ -936,6 +982,36 @@ func TestAppSecurityGateProtectsMutation(t *testing.T) {
 	}
 	if !store.Get().Services["youtube"].Enabled {
 		t.Fatal("authorized mutation was not persisted")
+	}
+}
+
+func TestMutationAuditRecordsOutcomeWithoutRequestBody(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := config.Load(filepath.Join(tmp, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal := auditlog.New(filepath.Join(tmp, "audit", "events.jsonl"))
+	a := &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram"}}}, Audit: journal, Start: time.Now()}
+	handler := a.Handler(http.NotFoundHandler())
+	request := httptest.NewRequest(http.MethodPut, "http://router.local/api/v1/services/telegram", strings.NewReader(`{"enabled":true,"route":"direct","password":"must-not-be-logged"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", "http://router.local")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	snapshot := journal.Read(10)
+	if len(snapshot.Events) != 1 || snapshot.Events[0].Path != "/api/v1/services/telegram" || snapshot.Events[0].Outcome != "ok" {
+		t.Fatalf("events = %+v", snapshot.Events)
+	}
+	raw, err := os.ReadFile(journal.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "must-not-be-logged") || strings.Contains(string(raw), "password") {
+		t.Fatalf("audit leaked request body: %s", raw)
 	}
 }
 

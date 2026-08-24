@@ -1,10 +1,12 @@
 package smartroute
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 )
 
@@ -41,6 +43,20 @@ func TestObserveChoosesConfirmedRouteAndPersists(t *testing.T) {
 	if _, exists := reloaded.Snapshot().Services["youtube"].Evidence["warp-wg"]; exists {
 		t.Fatal("unconfirmed route evidence must not be stored")
 	}
+	if got := reloaded.Snapshot().Services["youtube"].Evidence["usque"].Level; got != evidence.Service {
+		t.Fatalf("stored evidence level = %q, want %q", got, evidence.Service)
+	}
+}
+
+func TestObserveRejectsDeclaredRuntimeOnlyEvidence(t *testing.T) {
+	m, _ := New("")
+	decisions, err := m.Observe([]testlab.Result{{ServiceID: "svc", Route: "nfqws2", Status: "pass", RouteConfirmed: true, EvidenceLevel: evidence.Runtime, CheckedAt: time.Now().UTC().Format(time.RFC3339)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decisions) != 0 || len(m.Snapshot().Services) != 0 {
+		t.Fatalf("runtime-only evidence armed Smart Route: decisions=%+v state=%+v", decisions, m.Snapshot())
+	}
 }
 
 func TestHysteresisCooldownAndConfirmedFailover(t *testing.T) {
@@ -69,5 +85,51 @@ func TestSuggestionExpires(t *testing.T) {
 	m.now = func() time.Time { return now.Add(25 * time.Hour) }
 	if got := m.Suggest("svc", "warp-wg"); got != "warp-wg" {
 		t.Fatalf("expired evidence must fall back, got %q", got)
+	}
+}
+
+func TestEvidenceIsScopedToCurrentNetworkProfile(t *testing.T) {
+	m, _ := New("")
+	profile := "wan-a"
+	m.Profile = func() string { return profile }
+	now := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
+	m.now = func() time.Time { return now }
+	_, err := m.Observe([]testlab.Result{{ServiceID: "telegram", Route: "warp-wg", Status: "pass", RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Suggest("telegram", "nfqws2"); got != "warp-wg" {
+		t.Fatalf("same profile suggestion = %q", got)
+	}
+	profile = "wan-b"
+	if got := m.Suggest("telegram", "nfqws2"); got != "nfqws2" {
+		t.Fatalf("evidence leaked into another WAN profile: %q", got)
+	}
+	if got := m.Snapshot().NetworkProfile; got != "wan-b" {
+		t.Fatalf("snapshot profile = %q", got)
+	}
+	profile = "wan-a"
+	if got := m.Suggest("telegram", "direct"); got != "warp-wg" {
+		t.Fatalf("returning to known profile lost evidence: %q", got)
+	}
+}
+
+func TestSchemaOneMigratesWithoutArmingCurrentNetwork(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "smart-route.json")
+	old := `{"schema":1,"services":{"telegram":{"selected_route":"warp-wg","evidence":{"warp-wg":{"route":"warp-wg","status":"pass","score":90,"evidence_level":"service-confirmed","confirmed_at":"2026-08-14T12:00:00Z"}}}}}`
+	if err := os.WriteFile(path, []byte(old), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Profile = func() string { return "wan-current" }
+	m.now = func() time.Time { return time.Date(2026, 8, 14, 13, 0, 0, 0, time.UTC) }
+	if got := m.Suggest("telegram", "direct"); got != "direct" {
+		t.Fatalf("legacy unscoped evidence armed current network: %q", got)
+	}
+	if m.Snapshot().KnownProfiles != 1 {
+		t.Fatalf("legacy profile was not preserved: %+v", m.Snapshot())
 	}
 }

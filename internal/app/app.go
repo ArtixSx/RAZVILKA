@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/auditlog"
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/community"
 	"github.com/ArtixSx/razvilka/internal/components"
@@ -23,6 +24,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/devices"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
@@ -42,7 +44,8 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.14.0"
+const Version = "0.15.0"
+const defaultDataplaneApplyTimeout = 8 * time.Minute
 
 type applyFailureAdvice struct {
 	Code           string   `json:"code"`
@@ -67,6 +70,7 @@ type App struct {
 	CustomServices  *customservices.Manager
 	Dataplane       *dataplane.Manager
 	Devices         *devices.Manager
+	DNS             *dnscontrol.Manager
 	Warp            *warp.Manager
 	TestLab         *testlab.Runner
 	RouteProber     testlab.RouteProber
@@ -74,6 +78,7 @@ type App struct {
 	Updates         *updatecheck.Manager
 	Stats           *routerstats.Sampler
 	Security        *security.Gate
+	Audit           *auditlog.Journal
 	Start           time.Time
 	EffectiveListen string
 	Z2KRoot         string
@@ -96,6 +101,7 @@ type serviceView struct {
 func (a *App) Handler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/status", a.status)
+	mux.HandleFunc("/api/v1/audit", a.auditSnapshot)
 	mux.HandleFunc("/api/v1/auth/status", a.authStatus)
 	mux.HandleFunc("/api/v1/auth/setup", a.authSetup)
 	mux.HandleFunc("/api/v1/auth/login", a.authLogin)
@@ -123,6 +129,11 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/testlab/current", a.testLabCurrent)
 	mux.HandleFunc("/api/v1/testlab/routes", a.testLabRoutes)
 	mux.HandleFunc("/api/v1/smart-route", a.smartRouteStatus)
+	mux.HandleFunc("/api/v1/dns", a.dnsStatus)
+	mux.HandleFunc("/api/v1/dns/plan", a.dnsPlan)
+	mux.HandleFunc("/api/v1/dns/draft", a.dnsDraft)
+	mux.HandleFunc("/api/v1/dns/test", a.dnsTest)
+	mux.HandleFunc("/api/v1/dns/discard", a.dnsDiscard)
 	mux.HandleFunc("/api/v1/routes/options", a.routeOptions)
 	mux.HandleFunc("/api/v1/services", a.services)
 	mux.HandleFunc("/api/v1/services/", a.service)
@@ -155,7 +166,101 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/sources/refresh", a.sourceRefreshAll)
 	mux.HandleFunc("/api/v1/sources/", a.sourceAction)
 	mux.Handle("/", noStoreUI(static))
-	return securityHeaders(a.Security.Middleware(mux))
+	return securityHeaders(a.auditMiddleware(a.Security.Middleware(mux)))
+}
+
+type auditResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (writer *auditResponseWriter) WriteHeader(status int) {
+	if writer.status != 0 {
+		return
+	}
+	writer.status = status
+	writer.ResponseWriter.WriteHeader(status)
+}
+
+func (writer *auditResponseWriter) Write(value []byte) (int, error) {
+	if writer.status == 0 {
+		writer.status = http.StatusOK
+	}
+	return writer.ResponseWriter.Write(value)
+}
+
+func (a *App) auditMiddleware(next http.Handler) http.Handler {
+	if a.Audit == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") || r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+		started := time.Now()
+		actor := "anonymous"
+		if a.Security != nil && a.Security.RecoveryAuthenticated(r) {
+			actor = "recovery-key"
+		} else if a.Security != nil && a.Security.Authenticated(r) {
+			actor = a.Security.Username()
+		}
+		writer := &auditResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(writer, r)
+		status := writer.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		outcome := "ok"
+		if status == http.StatusUnauthorized || status == http.StatusForbidden {
+			outcome = "denied"
+		} else if status >= 400 {
+			outcome = "failed"
+		}
+		_ = a.Audit.Append(auditlog.Event{Action: r.Method, Path: boundedAuditPath(r.URL.Path), Outcome: outcome, StatusCode: status, Actor: actor, RemoteIP: requestRemoteIP(r), DurationMS: time.Since(started).Milliseconds()})
+	})
+}
+
+func boundedAuditPath(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 240 {
+		return value[:240]
+	}
+	return value
+}
+
+func requestRemoteIP(request *http.Request) string {
+	if request == nil {
+		return "local"
+	}
+	if address, err := netip.ParseAddrPort(request.RemoteAddr); err == nil {
+		return address.Addr().String()
+	}
+	if address, err := netip.ParseAddr(request.RemoteAddr); err == nil {
+		return address.String()
+	}
+	return "unknown"
+}
+
+func (a *App) auditSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Audit == nil {
+		http.Error(w, "audit journal disabled", http.StatusServiceUnavailable)
+		return
+	}
+	limit := 50
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 500 {
+			http.Error(w, "limit must be between 1 and 500", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+	writeJSON(w, http.StatusOK, a.Audit.Read(limit))
 }
 
 func noStoreUI(next http.Handler) http.Handler {
@@ -1057,12 +1162,13 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()
 		results := a.TestLab.ProbeRoutes(ctx, a.catalogSnapshot(), ids, []string{"warp-wg"}, a.RouteProber)
+		aggregated := testlab.AggregateScenarios(results)
 		if a.SmartRoute != nil {
-			_, _ = a.SmartRoute.Observe(results)
+			_, _ = a.SmartRoute.Observe(aggregated)
 		}
-		evidence := make([]warp.HealthEvidence, 0, len(results))
-		for _, result := range results {
-			evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed})
+		evidence := make([]warp.HealthEvidence, 0, len(aggregated))
+		for _, result := range aggregated {
+			evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel()})
 		}
 		decision, err := a.processWarpHealth(ctx, evidence)
 		if err != nil {
@@ -1201,12 +1307,13 @@ func (a *App) backgroundWarpHealth(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
 	results := a.TestLab.ProbeRoutes(ctx, a.catalogSnapshot(), ids, []string{"warp-wg"}, a.RouteProber)
+	aggregated := testlab.AggregateScenarios(results)
 	if a.SmartRoute != nil {
-		_, _ = a.SmartRoute.Observe(results)
+		_, _ = a.SmartRoute.Observe(aggregated)
 	}
-	evidence := make([]warp.HealthEvidence, 0, len(results))
-	for _, result := range results {
-		evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed})
+	evidence := make([]warp.HealthEvidence, 0, len(aggregated))
+	for _, result := range aggregated {
+		evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel()})
 	}
 	_, _ = a.processWarpHealth(ctx, evidence)
 }
@@ -1229,7 +1336,7 @@ func (a *App) backgroundSmartRoute(parent context.Context) {
 		ctx, cancel := context.WithTimeout(parent, 45*time.Second)
 		results := a.TestLab.ProbeRoutes(ctx, catalog.Catalog{Services: []catalog.Service{service}}, []string{service.ID}, routes, a.RouteProber)
 		cancel()
-		_, _ = a.SmartRoute.Observe(results)
+		_, _ = a.SmartRoute.Observe(testlab.AggregateScenarios(results))
 		checked++
 		if checked >= 6 || parent.Err() != nil {
 			return
@@ -1466,21 +1573,33 @@ func (a *App) testLabRoutes(w http.ResponseWriter, r *http.Request) {
 			routes = append(routes, route)
 		}
 	}
+	controlAdded := false
+	if !seenRoutes["direct"] {
+		for _, route := range routes {
+			if route != "direct" {
+				routes = append([]string{"direct"}, routes...)
+				controlAdded = true
+				break
+			}
+		}
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
 	results := a.TestLab.ProbeRoutes(ctx, a.catalogSnapshot(), services, routes, a.RouteProber)
+	aggregated := testlab.AggregateScenarios(results)
+	assessments := testlab.AssessComparisons(results)
 	decisions := []smartroute.Decision{}
 	if a.SmartRoute != nil {
 		var err error
-		decisions, err = a.SmartRoute.Observe(results)
+		decisions, err = a.SmartRoute.Observe(aggregated)
 		if err != nil {
 			http.Error(w, "save Smart Route evidence: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"mode": "isolated-route", "safe_mode": a.Store.Get().SafeMode, "results": results, "decisions": decisions,
-		"note": "Изолированная проверка не меняет DNS или маршрут по умолчанию. Для NFQWS2 создаётся временная цепочка только для одного destination/source-port и удаляется после теста; остальные обходы подтверждаются явным SOCKS-транспортом либо привязкой сокета к интерфейсу.",
+		"mode": "isolated-route", "safe_mode": a.Store.Get().SafeMode, "results": results, "summary": aggregated, "decisions": decisions, "assessments": assessments, "control_added": controlAdded,
+		"note": "Изолированная проверка не меняет DNS или маршрут по умолчанию. DIRECT добавляется как контроль: только его подтверждённый отказ доказывает необходимость обхода. Для NFQWS2 создаётся временная цепочка только для одного destination/source-port и удаляется после теста; остальные обходы подтверждаются явным SOCKS-транспортом либо привязкой сокета к интерфейсу.",
 	})
 }
 
@@ -1494,6 +1613,102 @@ func (a *App) smartRouteStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, a.SmartRoute.Snapshot())
+}
+
+func (a *App) dnsStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsPlan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	listener := ""
+	if a.EngineLab != nil {
+		for _, conflict := range a.EngineLab.Inspect().ApplyConflicts([]string{"dns-control"}) {
+			if conflict.Kind == "dns" {
+				listener = conflict.SystemUse
+				break
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Plan(listener))
+}
+
+func (a *App) dnsDraft(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if err := a.DNS.SetDraft(input.ProfileID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	results, err := a.DNS.Probe(r.Context(), input.ProfileID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "profile_id": input.ProfileID, "results": results, "note": "Проверка обращается непосредственно к выбранным DNS-серверам. Она не меняет DNS роутера и не доказывает отсутствие утечки клиентов."})
+}
+
+func (a *App) dnsDiscard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if err := a.DNS.Discard(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
 }
 
 func (a *App) routeOptions(w http.ResponseWriter, r *http.Request) {
@@ -1883,7 +2098,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
-		"note":        "v0.14.0: service-scoped CIDR sources cover full IP blocks, tunnel roles are explicit and WARP transports can be checked before Apply. Safe Mode remains the default.",
+		"note":        "v0.15.0: evidence is WAN-scoped, Telegram uses required multi-scenario checks, and DNS has an ownership-aware safe preview. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})
@@ -1957,7 +2172,9 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "dataplane runtime is not configured", http.StatusServiceUnavailable)
 			return
 		}
-		execution, applyErr := a.Dataplane.Apply(r.Context(), transaction, a.Store.ApplyDraftWithRollback)
+		applyContext, cancelApply := context.WithTimeout(r.Context(), defaultDataplaneApplyTimeout)
+		defer cancelApply()
+		execution, applyErr := a.Dataplane.Apply(applyContext, transaction, a.Store.ApplyDraftWithRollback)
 		if applyErr != nil {
 			failure := classifyApplyFailure(applyErr.Error())
 			writeJSON(w, http.StatusConflict, map[string]any{
@@ -2007,6 +2224,11 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 		advice.Message = "Сессия с Cloudflare была создана, однако проверочный запрос выбранного сервиса не прошёл через туннель. RAZVILKA вернула прежние маршруты; интернет роутера не изменён."
 		advice.Resolution = "Создайте новую MASQUE-сессию и повторите один раз. Если результат тот же, сеть провайдера блокирует или повреждает трафик WARP — используйте Sing-box/VLESS либо AmneziaWG со своим сервером."
 		advice.Alternatives = []string{"sing-box", "amneziawg", "nfqws2"}
+	} else if strings.Contains(lower, "context deadline exceeded") || strings.Contains(lower, "context canceled") {
+		advice.Code = "DATAPLANE_OPERATION_CANCELLED"
+		advice.Title = "Применение остановлено по времени"
+		advice.Message = "Операция была отменена или превысила безопасное время ожидания. RAZVILKA запустила rollback в отдельном ограниченном окне; черновик сохранён."
+		advice.Resolution = "Проверьте состояние rollback в диагностике. Если сеть работает, устраните медленный или недоступный обход и повторите Apply; не запускайте вторую операцию одновременно."
 	}
 	return advice
 }
@@ -2040,7 +2262,24 @@ func (a *App) buildDataplanePlan(cfg config.Config, options []routecatalog.Optio
 		}
 		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: option.Selectable, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID)})
 	}
-	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, Engines: engines, EngineConfigDrafts: a.stagedEngineConfigRefs(), Host: dataplane.DiscoverHost()})
+	resourceConflicts := []dataplane.ResourceConflict{}
+	if a.EngineLab != nil {
+		adapterSet := map[string]bool{}
+		for _, route := range routes {
+			if adapter := dataplane.AdapterID(route.Resolved); adapter != "" && adapter != "direct" {
+				adapterSet[adapter] = true
+			}
+		}
+		adapters := make([]string, 0, len(adapterSet))
+		for adapter := range adapterSet {
+			adapters = append(adapters, adapter)
+		}
+		sort.Strings(adapters)
+		for _, conflict := range a.EngineLab.Inspect().ApplyConflicts(adapters) {
+			resourceConflicts = append(resourceConflicts, dataplane.ResourceConflict{Kind: conflict.Kind, Value: conflict.Value, Engines: conflict.Engines, SystemUse: conflict.SystemUse})
+		}
+	}
+	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, Engines: engines, EngineConfigDrafts: a.stagedEngineConfigRefs(), ResourceConflicts: resourceConflicts, Host: dataplane.DiscoverHost()})
 }
 
 func (a *App) stagedEngineConfigRefs() []string {
@@ -3078,6 +3317,9 @@ func (a *App) catalogSnapshot() catalog.Catalog {
 			services[index].Domains = mergeUniqueStrings(services[index].Domains, domains)
 			services[index].CIDRs = mergeUniqueStrings(services[index].CIDRs, cidrs)
 		}
+	}
+	for index := range services {
+		services[index].Probes = append([]catalog.Probe(nil), services[index].Probes...)
 	}
 	return catalog.Catalog{Services: services}
 }

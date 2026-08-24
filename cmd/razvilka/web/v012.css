@@ -1,4 +1,4 @@
-/* v0.14.0 — full-block coverage, transport guidance and clearer component roles. */
+/* v0.15.0 — evidence hardening, required service scenarios and DNS preview. */
 
 .stream-status { color: var(--muted); white-space: nowrap; }
 .stream-status.complete, .stream-status.sampled { color: var(--green); }

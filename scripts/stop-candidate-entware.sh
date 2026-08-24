@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-BINARY=/opt/bin/razvilka-v0.0.8-candidate
-PID_FILE=/opt/var/run/razvilka-v0.0.8-candidate.pid
+BINARY=/opt/bin/razvilka-candidate
+PID_FILE=/opt/var/run/razvilka-candidate.pid
 
 if [ ! -r "$PID_FILE" ]; then
     echo "RAZVILKA candidate is not running (PID file absent)"

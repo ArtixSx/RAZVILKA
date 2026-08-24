@@ -79,6 +79,63 @@ func TestVersionCompatibilityIsEvidenceBased(t *testing.T) {
 	}
 }
 
+func TestApplyConflictsIgnoresOwnListenerButBlocksCrossEngineConflict(t *testing.T) {
+	report := Report{
+		Engines: []EngineReport{{Status: engine.Status{ID: "sing-box", Running: true}}, {Status: engine.Status{ID: "usque", Running: false}}},
+		Conflicts: []Conflict{
+			{Kind: "port", Value: "1080", Engines: []string{"sing-box"}, SystemUse: "tcp 127.0.0.1:1080 LISTEN", Blocking: true},
+			{Kind: "port", Value: "2080", Engines: []string{"sing-box", "usque"}, Blocking: true},
+		},
+	}
+	got := report.ApplyConflicts([]string{"sing-box"})
+	if len(got) != 1 || got[0].Value != "2080" {
+		t.Fatalf("apply conflicts = %+v", got)
+	}
+}
+
+func TestApplyConflictsBlocksListenerForStoppedAdapter(t *testing.T) {
+	report := Report{
+		Engines:   []EngineReport{{Status: engine.Status{ID: "sing-box", Running: false}}},
+		Conflicts: []Conflict{{Kind: "port", Value: "1080", Engines: []string{"sing-box"}, SystemUse: "tcp 127.0.0.1:1080 LISTEN", Blocking: true}},
+	}
+	got := report.ApplyConflicts([]string{"sing-box"})
+	if len(got) != 1 || got[0].Value != "1080" {
+		t.Fatalf("apply conflicts = %+v", got)
+	}
+}
+
+func TestDNSListenerIsScopedToDNSControl(t *testing.T) {
+	manager := New(nil)
+	manager.Statuses = func() []engine.Status {
+		return []engine.Status{{ID: "sing-box", Name: "Sing-box", Installed: true, Configured: true, Running: true, RuntimeReady: true}}
+	}
+	manager.System = func() systemprobe.Snapshot { return systemprobe.Snapshot{IPCommand: true} }
+	manager.ListeningPorts = func() map[string]string {
+		return map[string]string{"53": "udp UNCONN 0 0 0.0.0.0:53 users:((\"ndnproxy\",pid=731,fd=7))"}
+	}
+	report := manager.Inspect()
+	if !report.Ready {
+		t.Fatalf("DNS listener must not block unrelated engine probes: %+v", report)
+	}
+	if len(report.Conflicts) != 1 || report.Conflicts[0].Kind != "dns" || report.Conflicts[0].SystemUse == "" {
+		t.Fatalf("DNS ownership conflict = %+v", report.Conflicts)
+	}
+	conflicts := report.ApplyConflicts([]string{"dns-control"})
+	if len(conflicts) != 1 || conflicts[0].Kind != "dns" {
+		t.Fatalf("dns-control conflicts = %+v", conflicts)
+	}
+	if got := report.ApplyConflicts([]string{"sing-box"}); len(got) != 0 {
+		t.Fatalf("unrelated conflicts = %+v", got)
+	}
+}
+
+func TestDNSListenerOwnerFallsBackWithoutProcessMetadata(t *testing.T) {
+	conflict, ok := dnsListenerConflict(map[string]string{"53": "udp 0 0 0.0.0.0:53 0.0.0.0:*"})
+	if !ok || conflict.SystemUse == "" || conflict.Engines[0] != "dns-control" {
+		t.Fatalf("conflict = %+v, ok=%v", conflict, ok)
+	}
+}
+
 func hasResource(resources []Resource, kind, value string) bool {
 	for _, resource := range resources {
 		if resource.Kind == kind && resource.Value == value {

@@ -222,6 +222,26 @@
 		"direct"
       ],
       "probe_url": "https://telegram.org/",
+	  "probes": [
+		{
+		  "id": "site",
+		  "label": "Сайт Telegram",
+		  "url": "https://telegram.org/",
+		  "required": true
+		},
+		{
+		  "id": "web-client",
+		  "label": "Telegram Web",
+		  "url": "https://web.telegram.org/",
+		  "required": true
+		},
+		{
+		  "id": "developer-api",
+		  "label": "Core / API",
+		  "url": "https://core.telegram.org/",
+		  "required": true
+		}
+	  ],
       "source_refs": [
         "telegram-cidrs",
         "refilter-domains",

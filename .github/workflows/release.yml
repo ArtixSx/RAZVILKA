@@ -56,7 +56,7 @@ jobs:
           test -x "$STAGE/scripts/S99razvilka"
           test -x "$STAGE/scripts/test-entware-transaction.sh"
           test -f "$STAGE/configs/config.example.json"
-          test -f "$STAGE/docs/V0.0.8_DEPLOYMENT_RU.md"
+          test -f "$STAGE/docs/MASTER_PLAN_RU.md"
           (cd "$STAGE" && sha256sum -c dist/SHA256SUMS)
           if find "$STAGE" -type f \( -name '*.token' -o -name 'admin.token' \) | grep -q .; then
             echo "Refusing to package a token file" >&2

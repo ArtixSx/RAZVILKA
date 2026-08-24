@@ -6,15 +6,15 @@
   <meta name="theme-color" content="#0b0e12">
   <meta name="application-name" content="RAZVILKA">
   <title>RAZVILKA</title>
-<link rel="icon" href="/favicon.ico?v=0.14.0" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=0.14.0">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=0.14.0">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.14.0">
-<link rel="stylesheet" href="/style.css?v=0.14.0">
-<link rel="stylesheet" href="/v010.css?v=0.14.0">
-<link rel="stylesheet" href="/v011.css?v=0.14.0">
-<link rel="stylesheet" href="/v011-theme.css?v=0.14.0">
-<link rel="stylesheet" href="/v012.css?v=0.14.0">
+<link rel="icon" href="/favicon.ico?v=0.15.0" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=0.15.0">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=0.15.0">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.15.0">
+<link rel="stylesheet" href="/style.css?v=0.15.0">
+<link rel="stylesheet" href="/v010.css?v=0.15.0">
+<link rel="stylesheet" href="/v011.css?v=0.15.0">
+<link rel="stylesheet" href="/v011-theme.css?v=0.15.0">
+<link rel="stylesheet" href="/v012.css?v=0.15.0">
 </head>
 <body>
 <svg class="icon-sprite" aria-hidden="true">
@@ -29,12 +29,13 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
   <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A7 7 0 0 0 15 6l-.3-2.6h-4L10.5 6A7 7 0 0 0 9 7.1l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1A7 7 0 0 0 10.5 18l.2 2.6h4L15 18a7 7 0 0 0 1.5-1.1l2.4 1 2-3.4-2-1.5a7 7 0 0 0 .1-1z"/></symbol>
+  <symbol id="i-dns" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 4 6 4 9s-1 6-4 9c-3-3-4-6-4-9s1-6 4-9"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 10 4.6-2 8-5 8-10V6z"/><path d="m8 12 3 3 5-6"/></symbol>
   <symbol id="i-telegram" viewBox="0 0 24 24"><path d="m21 4-3 16-6-4-3 3v-5l9-7-11 6-4-2z"/></symbol>
 </svg>
 <section class="auth-screen" id="authScreen" hidden>
   <div class="auth-card">
-    <div class="auth-brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.14.0" alt=""></div><div><b>RAZVILKA</b><small>Локальная панель маршрутизации</small></div></div>
+    <div class="auth-brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.15.0" alt=""></div><div><b>RAZVILKA</b><small>Локальная панель маршрутизации</small></div></div>
     <div id="authSetupPanel" hidden>
       <span class="eyebrow">ПЕРВЫЙ ЗАПУСК</span><h1>Создайте администратора</h1>
       <p>Ключ первого входа показан установщиком. После регистрации вход выполняется обычным логином и паролем.</p>
@@ -62,7 +63,7 @@
 </section>
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.14.0" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.14.0</small></div></div>
+    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.15.0" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.15.0</small></div></div>
     <nav class="nav-list">
       <button class="nav active" data-view="overview"><span><svg><use href="#i-home"/></svg></span><b>Обзор</b></button>
       <div class="nav-label">МАРШРУТИЗАЦИЯ</div>
@@ -71,6 +72,7 @@
       <button class="nav" data-view="engines"><span><svg><use href="#i-bolt"/></svg></span><b>Обходы</b></button>
       <button class="nav" data-view="engineconfig"><span><svg><use href="#i-settings"/></svg></span><b>Настройка обходов</b></button>
       <button class="nav" data-view="devices"><span><svg><use href="#i-device"/></svg></span><b>Устройства</b></button>
+      <button class="nav" data-view="dns"><span><svg><use href="#i-dns"/></svg></span><b>DNS</b></button>
       <div class="nav-label">ДАННЫЕ</div>
       <button class="nav" data-view="sources"><span><svg><use href="#i-refresh"/></svg></span><b>Источники</b></button>
       <button class="nav" data-view="testlab"><span><svg><use href="#i-check"/></svg></span><b>Тест обходов</b></button>
@@ -259,7 +261,7 @@
       <article class="panel full-panel">
         <div class="panel-title sticky-title"><div><h2>Тест обходов</h2><p>Проверяем фактическую доступность сервисов и постепенно строим матрицу «сервис × обход»</p></div><div class="test-actions"><select id="testScope"><option value="all">Все сервисы</option><option value="enabled">Только включённые</option></select><button class="primary" id="runCurrentTests">Проверить текущую конфигурацию</button></div></div>
         <div class="test-explainer"><div><b>Текущий маршрут</b><span>Реальный HTTP-probe с роутера через уже применённую конфигурацию.</span></div><div><b>Изолированный маршрут</b><span>Явный SOCKS5 или привязанный к интерфейсу сокет; firewall, DNS и default route не меняются.</span></div></div>
-        <div class="isolated-probe-panel"><div><h3>Сравнить маршруты</h3><p>Выберите один сервис и несколько обходов. Только подтверждённые результаты участвуют в AUTO / Smart Route.</p></div><label><span>Сервис</span><select id="isolatedService"></select></label><div><span class="control-label">Маршруты</span><div class="route-test-choices" id="isolatedRoutes"></div></div><button class="primary" id="runIsolatedTests">Запустить сравнение</button></div>
+        <div class="isolated-probe-panel"><div><h3>Сравнить маршруты</h3><p>Выберите сервис и обходы. DIRECT-контроль добавится автоматически: так RAZVILKA отличит необходимый обход от лишнего.</p></div><label><span>Сервис</span><select id="isolatedService"></select></label><div><span class="control-label">Маршруты</span><div class="route-test-choices" id="isolatedRoutes"></div></div><button class="primary" id="runIsolatedTests">Запустить сравнение</button></div>
         <div class="smart-route-panel"><div><span class="eyebrow">SMART ROUTE</span><h3>AUTO на фактических данных</h3><p>Выбор меняется только после подтверждённого преимущества или отказа текущего маршрута. Hysteresis и cooldown защищают от постоянных переключений.</p></div><div id="smartRouteSummary" class="smart-route-summary"></div></div>
         <div class="test-summary" id="testSummary"></div>
         <div class="subheading"><div><h3>Последние результаты</h3><p>«Работает» означает, что сервис действительно ответил. «Частично» — сеть доступна, но сервис вернул ограничение авторизации, региона или политики. Автовыбор учитывает только подтверждённые маршруты.</p></div></div>
@@ -285,6 +287,22 @@
       </article>
     </section>
 
+    <section class="view" id="view-dns">
+      <article class="panel dns-intro">
+        <div class="panel-title"><div><span class="eyebrow">DNS CONTROL</span><h2>Как обрабатывать доменные имена</h2><p>Выберите понятный профиль и сначала проверьте его с роутера. Черновик не меняет рабочий DNS, DHCP или настройки клиентов.</p></div><span class="safe-badge">ПРЕДПРОСМОТР</span></div>
+        <div class="dns-safety-note"><svg><use href="#i-shield"/></svg><div><b>Безопасное внедрение по этапам</b><span>RAZVILKA уже обнаруживает владельца порта 53 и строит план snapshot → canary → rollback. Рабочее применение включится только после отдельной аппаратной проверки интеграции с DNS Keenetic/Netcraze.</span></div></div>
+      </article>
+      <article class="panel">
+        <div class="panel-title"><div><h2>Готовые профили</h2><p>DNS-фильтрация не убирает встроенную рекламу YouTube и не заменяет обход IP/SNI-блокировки.</p></div><div class="dns-actions"><button class="secondary" id="dnsDiscard" type="button">Сбросить черновик</button><button class="primary" id="dnsTest" type="button">Проверить выбранный</button></div></div>
+        <div id="dnsProfiles" class="dns-profile-grid"><div class="community-empty">Загружаем DNS-профили…</div></div>
+      </article>
+      <div class="two-col dns-details-grid">
+        <article class="panel"><div class="panel-title"><div><h2>Выбранный провайдер</h2><p>Адреса и поддерживаемые защищённые транспорты</p></div></div><div id="dnsProvider" class="dns-provider-detail"><div class="community-empty">Выберите профиль.</div></div></article>
+        <article class="panel"><div class="panel-title"><div><h2>Последняя проверка</h2><p>Прямой DNS-запрос к каждому серверу выбранного профиля</p></div></div><div id="dnsProbeResults" class="dns-probe-results"><div class="community-empty">Проверка ещё не запускалась.</div></div></article>
+      </div>
+      <article class="panel"><div class="panel-title"><div><h2>План безопасного применения</h2><p>Показывает обязательные проверки и текущий блокер; сам план ничего не меняет.</p></div></div><div id="dnsPlan" class="dns-plan"><div class="community-empty">Строим DNS-план…</div></div></article>
+    </section>
+
     <section class="view" id="view-diagnostics">
       <div class="two-col diagnostics-overview">
         <article class="panel"><div class="panel-title"><div><h2>Готовность роутера</h2><p>Проверка необходимых возможностей текущего устройства</p></div><div class="test-actions"><button class="secondary" id="downloadDiagnostics">Скачать отчёт</button><button class="secondary" id="refreshSystem">Повторить</button></div></div><div id="systemProbe" class="probe-grid"></div></article>
@@ -292,6 +310,7 @@
       </div>
       <article class="panel domain-inspector-panel"><div class="panel-title"><div><span class="eyebrow">ПРОВЕРКА ДОМЕНА</span><h2>Почему ресурс попал в этот маршрут?</h2><p>Показывает совпавший сервис, домен или IP-сеть, конфликты списков и рассчитанный автоматический маршрут. Это объяснение настроек, а не предполагаемый трафик.</p></div><div class="domain-inspector-input"><input id="domainInspectorInput" placeholder="www.youtube.com или 203.0.113.8"><button class="primary" id="inspectDomain" type="button">Разобрать</button></div></div><div id="domainInspectorResult" class="domain-inspector-result"><div class="community-empty">Введите домен, IP или HTTPS-ссылку.</div></div></article>
       <article class="panel engine-lab-panel"><div class="panel-title"><div><h2>Лаборатория обходов</h2><p>Версии, проверки возможностей, занятые порты, интерфейсы и NFQUEUE без активных изменений</p></div><button class="secondary" id="refreshEngineLab">Перепроверить</button></div><div id="engineLabSummary" class="engine-lab-summary"></div><div id="engineLabRows" class="engine-lab-rows"></div></article>
+      <article class="panel audit-panel"><div class="panel-title"><div><span class="eyebrow">ЛОКАЛЬНЫЙ ЖУРНАЛ</span><h2>Последние действия</h2><p>Показывает изменения и ошибки панели. Пароли, ключи, токены, заголовки и содержимое конфигов никогда не записываются.</p></div><span class="safe-badge">ДО 2 МиБ</span></div><div id="auditRows" class="audit-rows"><div class="community-empty">Журнал пока пуст.</div></div></article>
       <article class="panel diagnostics-notes"><div class="panel-title"><div><h2>Проверки совместимости</h2><p>Что RAZVILKA проверит перед изменением рабочих маршрутов</p></div></div><div class="gate-grid"><div><b>Формат конфига</b><span>версия обхода совместима с создаваемой конфигурацией</span></div><div><b>Порты и TUN</b><span>нет конфликтов портов и виртуальных интерфейсов</span></div><div><b>Безопасность маршрута</b><span>нет зацикливания и перехвата управляющего трафика</span></div><div><b>Доступность сервиса</b><span>маршрут действительно открывает нужный сервис</span></div><div><b>Восстановление</b><span>резервная копия готова до первой записи</span></div><div><b>Перезапуск</b><span>после перезагрузки порядок запуска останется корректным</span></div></div></article>
     </section>
 
@@ -311,13 +330,13 @@
     </section>
 
     <section class="details-drawer" id="detailsPanel"><div class="drawer-head"><div><h3>Детали</h3><p id="detailsSubtitle">Понятный результат · технические данные ниже</p></div><button id="hideDetails" aria-label="Закрыть">×</button></div><div class="details-content" id="details"></div></section>
-    <footer>RAZVILKA <span id="footerVersion">v0.14.0</span> · локальная панель маршрутизации · <a href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer">Telegram</a></footer>
+    <footer>RAZVILKA <span id="footerVersion">v0.15.0</span> · локальная панель маршрутизации · <a href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer">Telegram</a></footer>
   </main>
 </div>
 <dialog class="action-dialog" id="actionDialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ</span><h3 id="actionDialogTitle">Подтвердите действие</h3><p id="actionDialogText"></p><div class="dialog-actions"><button class="secondary" value="cancel">Отмена</button><button class="primary" id="actionDialogConfirm" value="confirm">Продолжить</button></div></form></dialog>
 <dialog class="onboarding-dialog" id="onboardingDialog">
   <div class="onboarding-shell">
-    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.14.0" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
+    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.15.0" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
     <section class="onboarding-main"><button class="dialog-close" id="onboardingClose" type="button" aria-label="Закрыть">×</button><div id="onboardingContent"></div><div class="onboarding-actions"><button class="secondary" id="onboardingBack" type="button">Назад</button><button class="text-button" id="onboardingLater" type="button">Продолжить позже</button><button class="primary" id="onboardingNext" type="button">Далее</button></div></section>
   </div>
 </dialog>
@@ -372,6 +391,6 @@
     </div>
   </div>
 </dialog>
-<script src="/app.js?v=0.14.0"></script>
+<script src="/app.js?v=0.15.0"></script>
 </body>
 </html>

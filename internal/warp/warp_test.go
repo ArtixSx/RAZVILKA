@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ArtixSx/razvilka/internal/evidence"
+
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
 
@@ -122,6 +124,22 @@ func TestHealthPolicyRequiresConfirmedEvidenceAndThreshold(t *testing.T) {
 	}
 	if status := m.Health(); status.Eligible || status.State.ConsecutiveFailedRounds != 0 {
 		t.Fatalf("rotation did not reset/cool down policy: %+v", status)
+	}
+}
+
+func TestHealthPolicyRejectsExplicitRuntimeOnlySuccess(t *testing.T) {
+	root := t.TempDir()
+	m := New(filepath.Join(root, "warp"), filepath.Join(root, "backups"), nil)
+	policy := HealthPolicy{Enabled: true, AcceptTOS: true, FailureThreshold: 3, MinFailedServices: 1, CooldownHours: 24, MaxRotationsPerDay: 1}
+	if _, err := m.UpdateHealthPolicy(policy); err != nil {
+		t.Fatal(err)
+	}
+	decision, err := m.ObserveHealth([]HealthEvidence{{ServiceID: "telegram", Status: "pass", RouteConfirmed: true, Level: evidence.Runtime}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.State.RouteEvidenceConfirmed || len(decision.State.LastSuccessfulServices) != 0 {
+		t.Fatalf("runtime-only response armed WARP health: %+v", decision.State)
 	}
 }
 

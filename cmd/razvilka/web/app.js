@@ -25,9 +25,11 @@ const state = {
   engineTab: 'config',
   testlab: { current: [], matrix: [] },
   engineLab: { engines: [], conflicts: [] },
+  audit: { events: [], available: false },
   strategyLab: { pools: [], candidates: [], summaries: [], selections: [] },
   z2kPreview: { found: false, read_only: true },
   smartRoute: { services: {} },
+  dns: { profiles: [], providers: [], draft: { profile_id: 'automatic' }, applied: { profile_id: 'automatic' }, plan: null },
   sessions: [],
   sources: [],
   routeOptions: [],
@@ -55,6 +57,7 @@ const viewMeta = {
   engines: ['Обходы', 'Установите только нужные обходы — маршруты от этого не изменятся'],
   engineconfig: ['Настройка обходов', 'Сохраните черновик, проверьте его и примените вместе с выбранным сервисом'],
   devices: ['Устройства', 'Назначьте сервисы конкретным клиентам или группам'],
+  dns: ['DNS', 'Выберите профиль, проверьте резолверы и подготовьте безопасный черновик'],
   sources: ['Источники', 'Списки доменов и адресов для автоматического распознавания сервисов'],
   testlab: ['Тест обходов', 'Сравните доступность сервиса через установленные обходы'],
   strategylab: ['Подбор NFQWS2', 'Расширенная проверка стратегий для опытных пользователей'],
@@ -262,13 +265,36 @@ function technicalDetails(value) {
   return `<details class="technical-details"><summary>Показать технические данные</summary><pre>${esc(raw)}</pre></details>`;
 }
 
+function evidenceLevelLabel(level) {
+  return ({
+    none: 'нет доказательств',
+    catalog: 'только каталог',
+    configured: 'конфигурация сохранена',
+    runtime: 'сервис ответил, маршрут не доказан',
+    'route-confirmed': 'маршрут подтверждён',
+    'service-confirmed': 'сервис и маршрут подтверждены',
+  })[String(level || 'none')] || 'уровень не определён';
+}
+
 function renderRouteComparisonDetails(value) {
   const results = Array.isArray(value.results) ? value.results : [];
   const decisions = Array.isArray(value.decisions) ? value.decisions : [];
+  const assessments = Array.isArray(value.assessments) ? value.assessments : [];
   const serviceName = results.find((item) => item?.service_name)?.service_name || decisions[0]?.service_id || 'Сервис';
   const confirmed = results.filter((item) => item?.route_confirmed && item?.status === 'pass');
-  const selected = decisions[0]?.selected || confirmed[0]?.route || '';
+  const assessment = assessments[0] || null;
+  const selected = assessment?.recommended_route || decisions[0]?.selected || confirmed[0]?.route || '';
   const summary = selected ? `${serviceName} → ${routeLabel(selected)}` : `${serviceName}: рабочий обход не подтверждён`;
+  const assessmentTone = ({ 'direct-sufficient': 'pass', 'bypass-required': 'pass', 'bypass-improves-access': 'warn', 'direct-partial': 'warn', 'control-unavailable': 'warn', 'control-not-run': 'warn', 'no-working-route': 'fail' })[assessment?.conclusion] || (confirmed.length ? 'pass' : 'warn');
+  const assessmentTitle = ({
+    'direct-sufficient': 'Обход не требуется',
+    'bypass-required': 'Обход действительно нужен',
+    'bypass-improves-access': 'Обход улучшает доступ',
+    'direct-partial': 'DIRECT работает частично',
+    'control-unavailable': 'DIRECT-контроль недоступен',
+    'control-not-run': 'DIRECT-контроль не запускался',
+    'no-working-route': 'Рабочий маршрут не найден',
+  })[assessment?.conclusion] || 'Итог сравнения';
   const decisionCards = decisions.map((decision) => {
     const reason = detailReasonLabels[decision.reason] || decision.reason || 'Решение принято по результатам проверки.';
     const changeText = decision.changed ? `Маршрут изменён: ${routeLabel(decision.previous)} → ${routeLabel(decision.selected)}` : `Оставлен ${routeLabel(decision.selected)}`;
@@ -279,11 +305,12 @@ function renderRouteComparisonDetails(value) {
     const metrics = [
       result.http_status ? `HTTP ${result.http_status}` : '',
       Number.isFinite(Number(result.latency_ms)) && Number(result.latency_ms) > 0 ? `${Number(result.latency_ms)} мс` : '',
-      result.route_confirmed ? 'маршрут подтверждён' : '',
+      result.evidence_level ? evidenceLevelLabel(result.evidence_level) : (result.route_confirmed ? 'маршрут подтверждён' : ''),
     ].filter(Boolean);
-    return `<article class="route-result-card status-${esc(status)}"><div class="route-result-head"><strong>${esc(routeLabel(result.route))}</strong><span>${esc(detailStatusLabels[status] || status)}</span></div>${metrics.length ? `<div class="route-result-metrics">${metrics.map((metric) => `<b>${esc(metric)}</b>`).join('')}</div>` : ''}<p>${esc(friendlyDetail(result.detail))}</p></article>`;
+    const scenario = result.scenario_label ? `<small>${esc(result.scenario_label)}${result.scenario_required ? ' · обязательный' : ''}</small>` : '';
+    return `<article class="route-result-card status-${esc(status)}"><div class="route-result-head"><strong>${esc(routeLabel(result.route))}${scenario}</strong><span>${esc(detailStatusLabels[status] || status)}</span></div>${metrics.length ? `<div class="route-result-metrics">${metrics.map((metric) => `<b>${esc(metric)}</b>`).join('')}</div>` : ''}<p>${esc(friendlyDetail(result.detail))}</p></article>`;
   }).join('');
-  return `<div class="detail-hero ${confirmed.length ? 'pass' : 'warn'}"><span>Результат сравнения</span><h4>${esc(summary)}</h4><p>${confirmed.length ? `Подтверждено рабочих вариантов: ${confirmed.length}.` : 'Ни один выбранный вариант пока не дал подтверждённый ответ.'}</p></div>${decisionCards ? `<section class="detail-section"><h4>Решение Smart Route</h4>${decisionCards}</section>` : ''}<section class="detail-section"><h4>Проверенные маршруты</h4><div class="route-result-list">${resultCards || '<div class="detail-empty">Результаты проверки отсутствуют.</div>'}</div></section>${value.note ? `<div class="detail-note"><b>Как выполнялся тест</b><p>${esc(value.note)}</p></div>` : ''}${technicalDetails(value)}`;
+  return `<div class="detail-hero ${esc(assessmentTone)}"><span>${esc(assessmentTitle)}</span><h4>${esc(summary)}</h4><p>${esc(assessment?.message || (confirmed.length ? `Подтверждено рабочих вариантов: ${confirmed.length}.` : 'Ни один выбранный вариант пока не дал подтверждённый ответ.'))}</p></div>${value.control_added ? '<div class="detail-note"><b>Контроль добавлен автоматически</b><p>RAZVILKA проверила DIRECT вместе с выбранными обходами, чтобы не назначать обход без необходимости.</p></div>' : ''}${decisionCards ? `<section class="detail-section"><h4>Решение Smart Route</h4>${decisionCards}</section>` : ''}<section class="detail-section"><h4>Проверенные маршруты</h4><div class="route-result-list">${resultCards || '<div class="detail-empty">Результаты проверки отсутствуют.</div>'}</div></section>${value.note ? `<div class="detail-note"><b>Как выполнялся тест</b><p>${esc(value.note)}</p></div>` : ''}${technicalDetails(value)}`;
 }
 
 function renderGenericDetails(value) {
@@ -475,9 +502,12 @@ async function refreshAll() {
       ['devices', '/api/v1/devices'],
       ['testlab', '/api/v1/testlab'],
       ['engineLab', '/api/v1/engine-lab'],
+      ['audit', '/api/v1/audit?limit=40'],
       ['strategyLab', '/api/v1/strategy-lab'],
       ['z2kPreview', '/api/v1/migrations/z2k/preview'],
       ['smartRoute', '/api/v1/smart-route'],
+      ['dns', '/api/v1/dns'],
+      ['dnsPlan', '/api/v1/dns/plan'],
       ['sessions', '/api/v1/auth/sessions'],
     ];
     const settled = await Promise.allSettled(requests.map(([, url]) => api(url)));
@@ -528,7 +558,9 @@ function renderAll() {
   renderDevices();
   renderTestLab();
   renderEngineLab();
+  renderAudit();
   renderStrategyLab();
+  renderDNS();
   renderSettings();
 }
 
@@ -750,6 +782,15 @@ function renderEngineLab() {
   if (conflicts.length) {
     $('#engineLabRows').insertAdjacentHTML('beforeend', `<div class="engine-conflicts"><b>Блокирующие конфликты</b>${conflicts.map((conflict) => `<span>${esc(conflict.kind)} <code>${esc(conflict.value)}</code>: ${esc((conflict.engines || []).join(', '))}${conflict.system_use ? ` · занято системой: ${esc(conflict.system_use)}` : ''}</span>`).join('')}</div>`);
   }
+}
+
+function renderAudit() {
+  const target = $('#auditRows');
+  if (!target) return;
+  const events = state.audit?.events || [];
+  const actionLabels = { POST: 'Запуск', PUT: 'Изменение', PATCH: 'Изменение', DELETE: 'Удаление' };
+  const outcomeLabels = { ok: 'выполнено', failed: 'ошибка', denied: 'отклонено' };
+  target.innerHTML = events.map((event) => `<div class="audit-row ${esc(event.outcome || '')}"><span class="audit-outcome">${esc(outcomeLabels[event.outcome] || event.outcome || '—')}</span><div><b>${esc(actionLabels[event.action] || event.action || 'Действие')}</b><code>${esc(event.path || '—')}</code></div><small>${esc(event.actor || 'локально')} · ${esc(event.remote_ip || '—')} · ${esc(timeAgo(event.timestamp))}</small><em>${Number(event.duration_ms || 0)} мс</em></div>`).join('') || `<div class="community-empty">${state.audit?.available === false && state.audit?.last_error ? esc(state.audit.last_error) : 'Действий пока нет.'}</div>`;
 }
 
 function renderStrategyLab() {
@@ -1155,7 +1196,8 @@ function renderWarpManager() {
     'fresh-profile-activation-failed': 'Новый профиль не прошёл проверку; восстановлен предыдущий',
   };
   const reason = health.reason || healthState.last_decision || 'policy-disabled';
-  $('#warpHealthReason').textContent = healthReasons[reason] || reason.replaceAll('-', ' ');
+  const assurance = healthState.evidence_level && healthState.evidence_level !== 'none' ? ` · ${evidenceLevelLabel(healthState.evidence_level)}` : '';
+  $('#warpHealthReason').textContent = `${healthReasons[reason] || reason.replaceAll('-', ' ')}${assurance}`;
   $('#warpHealthRounds').textContent = `${healthState.consecutive_failed_rounds || 0} / ${policy.failure_threshold || 3}`;
 }
 
@@ -1506,7 +1548,7 @@ function renderTestLab() {
   $('#testSummary').innerHTML = [
     ['Работает', counts.pass, 'pass'], ['Частично', counts.partial, 'partial'], ['Ошибок', counts.fail, 'fail'], ['Проверено', current.length, ''],
   ].map(([label, n, cls]) => `<div class="test-stat ${cls}"><strong>${n}</strong><span>${label}</span></div>`).join('');
-  $('#testCurrentRows').innerHTML = current.map((r) => `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span></td><td>${r.http_status || '—'}</td><td>${esc(probeTiming(r))}</td><td><span class="stream-status ${esc(r.stream_status || '')}">${esc(probeStream(r))}</span></td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}</td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`).join('') || '<tr><td colspan="7"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
+  $('#testCurrentRows').innerHTML = current.map((r) => `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.scenario_label || 'Основной доступ')}${r.scenario_required ? ' · обязательный' : ''}</small><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span></td><td>${r.http_status || '—'}</td><td>${esc(probeTiming(r))}</td><td><span class="stream-status ${esc(r.stream_status || '')}">${esc(probeStream(r))}</span></td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}<small>${esc(evidenceLevelLabel(r.evidence_level))}</small></td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`).join('') || '<tr><td colspan="7"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
 
   const routes = state.routeOptions.filter((o) => o.id !== 'auto');
   const cells = state.testlab?.matrix || [];
@@ -1536,8 +1578,80 @@ function renderSmartRoute() {
   $('#smartRouteSummary').innerHTML = rows.map(([id, item]) => {
     const service = state.services.find((candidate) => candidate.id === id);
     const evidence = item.evidence?.[item.selected_route];
-    return `<div class="smart-route-row"><span><b>${esc(service?.name || id)}</b><small>${esc(detailReasonLabels[item.reason] || item.reason || 'подтверждено')}</small></span><i>→</i><strong>${esc(routeLabel(item.selected_route))}</strong><em>${evidence ? `${esc(testStatusLabel(evidence.status))} · ${evidence.latency_ms || 0} мс` : '—'}</em></div>`;
+    return `<div class="smart-route-row"><span><b>${esc(service?.name || id)}</b><small>${esc(detailReasonLabels[item.reason] || item.reason || 'подтверждено')}</small></span><i>→</i><strong>${esc(routeLabel(item.selected_route))}</strong><em>${evidence ? `${esc(testStatusLabel(evidence.status))} · ${evidence.latency_ms || 0} мс · ${esc(evidenceLevelLabel(evidence.evidence_level))}` : '—'}</em></div>`;
   }).join('') || '<div class="empty-inline">Сначала запустите изолированное сравнение. AUTO пока использует порядок стратегии каталога.</div>';
+}
+
+function dnsProfileByID(id) {
+  return (state.dns?.profiles || []).find((profile) => profile.id === id);
+}
+
+function dnsProviderByID(id) {
+  return (state.dns?.providers || []).find((provider) => provider.id === id);
+}
+
+function renderDNS() {
+  const dns = state.dns || {};
+  const selectedID = dns.draft?.profile_id || 'automatic';
+  const appliedID = dns.applied?.profile_id || 'automatic';
+  $('#dnsProfiles').innerHTML = (dns.profiles || []).map((profile) => {
+    const provider = dnsProviderByID(profile.provider_id);
+    const selected = profile.id === selectedID;
+    const applied = profile.id === appliedID;
+    return `<button class="dns-profile-card ${selected ? 'selected' : ''}" type="button" data-dns-profile="${esc(profile.id)}" aria-pressed="${selected}">
+      <span class="dns-profile-icon"><svg><use href="#i-dns"/></svg></span>
+      <span><b>${esc(profile.name)}</b><small>${esc(profile.description)}</small><em>${esc(provider?.name || profile.provider_id)}</em></span>
+      <i>${applied ? 'ТЕКУЩИЙ' : (selected ? 'ЧЕРНОВИК' : '')}</i>
+    </button>`;
+  }).join('') || '<div class="community-empty">DNS-профили временно недоступны.</div>';
+  const profile = dnsProfileByID(selectedID);
+  const provider = dnsProviderByID(profile?.provider_id);
+  $('#dnsProvider').innerHTML = provider ? `<div class="dns-provider-name"><span class="dns-profile-icon"><svg><use href="#i-dns"/></svg></span><div><b>${esc(provider.name)}</b><small>${esc(provider.description)}</small></div></div>
+    <div class="dns-provider-rows"><div><span>Обычный DNS</span><b>${esc((provider.servers || []).join(' · ') || 'управляет система')}</b></div><div><span>DoH</span><b>${esc(provider.doh || 'не указан')}</b></div><div><span>DoT</span><b>${esc(provider.dot || 'не указан')}</b></div></div>
+    <div class="outbound-tags">${(provider.filters || []).map((filter) => `<span>${esc(filter)}</span>`).join('')}</div>` : '<div class="community-empty">Провайдер не найден.</div>';
+  $('#dnsProbeResults').innerHTML = (dns.last_probe || []).map((result) => `<div class="dns-probe-row"><span class="state-dot ${result.status === 'pass' ? 'good' : 'bad'}"></span><div><b>${esc(result.server)}</b><small>${result.status === 'pass' ? `${Number(result.latency_ms || 0)} мс · адресов: ${Number(result.addresses || 0)}` : esc(result.error || 'нет ответа')}</small></div></div>`).join('') || '<div class="community-empty">Проверка ещё не запускалась.</div>';
+	const plan = state.dnsPlan || dns.plan;
+	$('#dnsPlan').innerHTML = plan ? `<div class="dns-plan-summary ${plan.ready ? 'ready' : 'blocked'}"><div><span>${plan.ready ? 'ГОТОВО' : 'ПРЕДПРОСМОТР'}</span><b>${esc(plan.profile?.name || 'DNS')}</b></div><p>${esc(plan.recommendation || '')}</p></div><div class="dns-plan-checks">${(plan.checks || []).map((check) => `<div class="dns-plan-check ${esc(check.status)}"><i>${check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '×'}</i><span><b>${esc(check.id === 'probe' ? 'Доступность' : check.id === 'ownership' ? 'Владелец DNS' : check.id === 'adapter' ? 'Применение' : 'Профиль')}</b><small>${esc(check.message)}</small></span></div>`).join('')}</div><details class="dns-plan-steps"><summary>Показать этапы безопасного Apply</summary>${(plan.steps || []).map((step) => `<div><i>${Number(step.order)}</i><span><b>${esc(step.name)}</b><small>${esc(step.summary)}</small></span></div>`).join('')}</details>` : '<div class="community-empty">DNS-план временно недоступен.</div>';
+  $('#dnsDiscard').disabled = !dns.dirty;
+}
+
+async function selectDNSProfile(profileID) {
+  try {
+    state.dns = await api('/api/v1/dns/draft', { method: 'PUT', body: JSON.stringify({ profile_id: profileID }) });
+	state.dnsPlan = await api('/api/v1/dns/plan');
+    renderDNS();
+    showNotice('review', 'DNS-профиль сохранён как черновик', 'Рабочий DNS роутера не изменён. Сначала проверьте доступность выбранных серверов.', state.dns);
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'DNS-профиль не сохранён');
+  }
+}
+
+async function testDNSProfile() {
+  const button = $('#dnsTest');
+  const profileID = state.dns?.draft?.profile_id || 'automatic';
+  button.disabled = true; button.textContent = 'Проверка…';
+  try {
+    const result = await api('/api/v1/dns/test', { method: 'POST', body: JSON.stringify({ profile_id: profileID }) });
+    state.dns = await api('/api/v1/dns');
+	state.dnsPlan = await api('/api/v1/dns/plan');
+    renderDNS();
+    const passed = (result.results || []).filter((item) => item.status === 'pass').length;
+    showDetails({ result: passed ? `Ответили серверы: ${passed} из ${(result.results || []).length}` : 'Выбранные DNS-серверы не ответили', checks: result.results, note: result.note }, 'Проверка DNS');
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Проверка DNS не выполнена');
+  } finally {
+    button.disabled = false; button.textContent = 'Проверить выбранный';
+  }
+}
+
+async function discardDNSDraft() {
+  try {
+    state.dns = await api('/api/v1/dns/discard', { method: 'POST', body: '{}' });
+	state.dnsPlan = await api('/api/v1/dns/plan');
+    renderDNS();
+  } catch (error) {
+    showDetails({ error: error.message }, 'DNS-черновик не сброшен');
+  }
 }
 
 async function refreshTestLab() {
@@ -2467,6 +2581,12 @@ function bindEvents() {
   $('#devicePolicyService').addEventListener('change', () => updateDevicePolicyForm(false));
   $('#devicePolicyScope').addEventListener('change', () => updateDevicePolicyForm(true));
   $('#refreshAll').addEventListener('click', async () => { await refreshAll(); await showPlan(); });
+  $('#dnsProfiles').addEventListener('click', (event) => {
+    const profile = event.target.closest('[data-dns-profile]');
+    if (profile) selectDNSProfile(profile.dataset.dnsProfile);
+  });
+  $('#dnsTest').addEventListener('click', testDNSProfile);
+  $('#dnsDiscard').addEventListener('click', discardDNSDraft);
   $('#refreshSources').addEventListener('click', refreshSources);
   $('#refreshSystem').addEventListener('click', refreshSystem);
   $('#downloadDiagnostics').addEventListener('click', downloadDiagnostics);

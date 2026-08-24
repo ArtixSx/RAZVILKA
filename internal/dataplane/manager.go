@@ -13,11 +13,13 @@ import (
 )
 
 type Manager struct {
-	operationMu sync.Mutex
-	journalMu   sync.RWMutex
-	registryMu  sync.RWMutex
-	StateRoot   string
-	Adapters    map[string]Adapter
+	operationOnce   sync.Once
+	operationGate   chan struct{}
+	journalMu       sync.RWMutex
+	registryMu      sync.RWMutex
+	StateRoot       string
+	Adapters        map[string]Adapter
+	RollbackTimeout time.Duration
 }
 
 type Adapter interface {
@@ -63,11 +65,13 @@ type RecoveryStep struct {
 }
 
 type Recovery struct {
-	PlanID     string         `json:"plan_id,omitempty"`
-	State      string         `json:"state"`
-	StartedAt  string         `json:"started_at"`
-	FinishedAt string         `json:"finished_at"`
-	Steps      []RecoveryStep `json:"steps"`
+	PlanID       string         `json:"plan_id,omitempty"`
+	State        string         `json:"state"`
+	FailureCount int            `json:"failure_count,omitempty"`
+	Guarded      bool           `json:"boot_loop_guard,omitempty"`
+	StartedAt    string         `json:"started_at"`
+	FinishedAt   string         `json:"finished_at"`
+	Steps        []RecoveryStep `json:"steps"`
 }
 
 type ExecutionStep struct {
@@ -109,7 +113,37 @@ type RuntimeStatus struct {
 }
 
 func New(stateRoot string) *Manager {
-	return &Manager{StateRoot: stateRoot, Adapters: map[string]Adapter{}}
+	return &Manager{StateRoot: stateRoot, Adapters: map[string]Adapter{}, operationGate: make(chan struct{}, 1), RollbackTimeout: 45 * time.Second}
+}
+
+func (m *Manager) beginOperation(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	m.operationOnce.Do(func() {
+		if m.operationGate == nil {
+			m.operationGate = make(chan struct{}, 1)
+		}
+	})
+	select {
+	case m.operationGate <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("wait for conflicting dataplane operation: %w", ctx.Err())
+	}
+}
+
+func (m *Manager) endOperation() {
+	if m != nil && m.operationGate != nil {
+		<-m.operationGate
+	}
+}
+
+func (m *Manager) rollbackTimeout() time.Duration {
+	if m != nil && m.RollbackTimeout > 0 {
+		return m.RollbackTimeout
+	}
+	return 45 * time.Second
 }
 
 func (m *Manager) Register(adapter Adapter) error {
@@ -152,8 +186,10 @@ func (m *Manager) Record(plan Plan) error {
 	if m == nil || m.StateRoot == "" {
 		return errors.New("dataplane state root is not configured")
 	}
-	m.operationMu.Lock()
-	defer m.operationMu.Unlock()
+	if err := m.beginOperation(context.Background()); err != nil {
+		return err
+	}
+	defer m.endOperation()
 	return m.recordLocked(plan)
 }
 
@@ -256,8 +292,10 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	if m == nil || m.StateRoot == "" {
 		return Recovery{}, errors.New("dataplane state root is not configured")
 	}
-	m.operationMu.Lock()
-	defer m.operationMu.Unlock()
+	if err := m.beginOperation(ctx); err != nil {
+		return Recovery{State: "cancelled", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), FinishedAt: time.Now().UTC().Format(time.RFC3339Nano)}, err
+	}
+	defer m.endOperation()
 	recovery := Recovery{State: "skipped", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []RecoveryStep{}}
 	plan, exists, err := m.latestLocked()
 	if err != nil {
@@ -269,6 +307,25 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		return recovery, nil
 	}
 	recovery.PlanID = plan.PlanID
+	var previous *Recovery
+	if _, readErr := readOptionalJournal(filepath.Join(m.StateRoot, "latest-recovery.json"), &previous); readErr != nil {
+		return recovery, readErr
+	}
+	if previous != nil && previous.PlanID == plan.PlanID && (previous.State == "degraded" || previous.State == "safe-mode") {
+		recovery.State = "safe-mode"
+		recovery.Guarded = true
+		recovery.FailureCount = previous.FailureCount + 1
+		if recovery.FailureCount < 2 {
+			recovery.FailureCount = 2
+		}
+		recovery.Steps = append(recovery.Steps, m.deactivateForRecovery(ctx, plan)...)
+		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		guardErr := errors.New("boot-loop guard blocked repeated dataplane recovery; Recovery Safe Mode is required")
+		if err := m.writeRecoveryLocked(recovery); err != nil {
+			return recovery, fmt.Errorf("%w; write recovery guard: %v", guardErr, err)
+		}
+		return recovery, guardErr
+	}
 	recovery.State = "recovering"
 	var firstErr error
 	for _, id := range plan.Adapters {
@@ -291,12 +348,36 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	recovery.State = "recovered"
 	if firstErr != nil {
 		recovery.State = "degraded"
+		recovery.FailureCount = 1
+		recovery.Steps = append(recovery.Steps, m.deactivateForRecovery(ctx, plan)...)
 	}
 	recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	if err := m.writeRecoveryLocked(recovery); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	return recovery, firstErr
+}
+
+func (m *Manager) deactivateForRecovery(parent context.Context, plan Plan) []RecoveryStep {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), m.rollbackTimeout())
+	defer cancel()
+	steps := []RecoveryStep{}
+	for i := len(plan.Adapters) - 1; i >= 0; i-- {
+		id := plan.Adapters[i]
+		step := RecoveryStep{Adapter: id, State: "safe-mode-skipped", Detail: "adapter has no owned-runtime deactivator"}
+		adapter, ok := m.adapter(id)
+		if !ok {
+			step.State = "safe-mode-failed"
+			step.Detail = "adapter is not registered"
+		} else if deactivator, ok := adapter.(RuntimeDeactivator); ok {
+			step.State, step.Detail = "safe-mode-deactivated", ""
+			if err := deactivator.Deactivate(ctx); err != nil {
+				step.State, step.Detail = "safe-mode-failed", err.Error()
+			}
+		}
+		steps = append(steps, step)
+	}
+	return steps
 }
 
 func (m *Manager) writeRecoveryLocked(recovery Recovery) error {
@@ -311,8 +392,10 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 	if m == nil || m.StateRoot == "" {
 		return nil, errors.New("dataplane state root is not configured")
 	}
-	m.operationMu.Lock()
-	defer m.operationMu.Unlock()
+	if err := m.beginOperation(ctx); err != nil {
+		return nil, err
+	}
+	defer m.endOperation()
 	plan, exists, err := m.latestLocked()
 	if err != nil {
 		return nil, err
@@ -361,8 +444,11 @@ func (m *Manager) Deactivate(ctx context.Context) (Deactivation, error) {
 	if m == nil || m.StateRoot == "" {
 		return Deactivation{}, errors.New("dataplane state root is not configured")
 	}
-	m.operationMu.Lock()
-	defer m.operationMu.Unlock()
+	if err := m.beginOperation(ctx); err != nil {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		return Deactivation{State: "cancelled", StartedAt: now, FinishedAt: now}, err
+	}
+	defer m.endOperation()
 	report := Deactivation{State: "deactivated", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []DeactivationStep{}}
 	m.registryMu.RLock()
 	ids := make([]string, 0, len(m.Adapters))
@@ -409,9 +495,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	if m == nil || m.StateRoot == "" {
 		return Execution{}, errors.New("dataplane state root is not configured")
 	}
-	m.operationMu.Lock()
-	defer m.operationMu.Unlock()
 	execution := Execution{PlanID: plan.PlanID, Digest: plan.Digest, State: "applying", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []ExecutionStep{}}
+	if err := m.beginOperation(ctx); err != nil {
+		execution.State = "cancelled"
+		execution.Error = err.Error()
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return execution, err
+	}
+	defer m.endOperation()
 	if plan.SchemaVersion != SchemaVersion || plan.PlanID == "" || plan.Digest == "" {
 		return execution, errors.New("invalid dataplane plan")
 	}
@@ -437,7 +528,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 
 	prepared := make([]Adapter, 0, len(plan.Adapters))
 	var undoCommit func() error
-	run := func(adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
+	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
 		step := ExecutionStep{Adapter: adapter.ID(), Phase: phase, State: "running", StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		execution.Steps = append(execution.Steps, step)
 		index := len(execution.Steps) - 1
@@ -450,7 +541,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			writeExecution()
 			return err
 		}
-		err := action(ctx, plan, adapterRoot)
+		err := action(runCtx, plan, adapterRoot)
 		execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if err != nil {
 			execution.Steps[index].State = "failed"
@@ -462,13 +553,15 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return err
 	}
 	rollback := func(cause error) error {
+		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(ctx), m.rollbackTimeout())
+		defer cancelRollback()
 		execution.Error = cause.Error()
 		execution.State = "rolling-back"
 		writeExecution()
 		var rollbackErr error
 		for i := len(prepared) - 1; i >= 0; i-- {
 			adapter := prepared[i]
-			if err := run(adapter, "rollback", adapter.Rollback); err != nil && rollbackErr == nil {
+			if err := run(rollbackCtx, adapter, "rollback", adapter.Rollback); err != nil && rollbackErr == nil {
 				rollbackErr = err
 			}
 		}
@@ -522,7 +615,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		adapters = append(adapters, adapter)
 	}
 	for _, adapter := range adapters {
-		if err := run(adapter, "snapshot", adapter.Snapshot); err != nil {
+		if err := run(ctx, adapter, "snapshot", adapter.Snapshot); err != nil {
 			return execution, rollback(err)
 		}
 		prepared = append(prepared, adapter)
@@ -538,7 +631,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		{name: "commit-adapter", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Commit }},
 	} {
 		for _, adapter := range adapters {
-			if err := run(adapter, phase.name, phase.call(adapter)); err != nil {
+			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
 				return execution, rollback(err)
 			}
 		}

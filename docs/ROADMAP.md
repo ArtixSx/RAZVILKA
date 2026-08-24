@@ -1,5 +1,9 @@
 # RAZVILKA roadmap
 
+> Актуальный подробный план реализации находится в
+> [MASTER_PLAN_RU.md](MASTER_PLAN_RU.md). Этот файл сохраняет историю уже
+> выпущенных этапов и релизные ворота.
+
 ## Completed milestones
 
 - `v0.0.2–v0.0.10`: source/control plane, clean Entware Lab, service selectors, honest telemetry model, multi-architecture CI, security gate, transactional installer and component versions/updates.
@@ -12,17 +16,26 @@
   diagnostics, release verification and real-Keenetic compatibility fixes.
 - `v0.10.0`: z2k discovery/NFQUEUE ownership protection, guided Safe Mode
   results, resilient WARP registration and user-facing «Обходы» terminology.
+- `v0.11.0–v0.12.x`: on-demand bypasses, Strategy Lab, resource/traffic UI,
+  WARP workflow and real-router usability fixes.
+- `v0.13.0–v0.14.0`: route-quality evidence, WARP recovery, official Telegram
+  CIDR coverage, explicit tunnel roles and pre-Apply transport diagnostics.
 
-## `v0.11.0` — on-demand bypasses and Strategy Lab
+## Current development — evidence hardening and adaptive routing
 
-The tracked implementation, router-test matrix and release gate are maintained
-in [V0.11.0_RELEASE_PLAN_RU.md](V0.11.0_RELEASE_PLAN_RU.md).
+The next implementation sequence is P0 truth/safety, network-aware NFQWS2,
+provider/subscription management, the DNS control surface and AutoPilot. See
+[MASTER_PLAN_RU.md](MASTER_PLAN_RU.md) for acceptance criteria.
 
-Key scope: UI-only base install, on-demand bypass lifecycle, NFQWS2 strategy
-selection, safe z2k migration, real router resource/traffic metrics, simplified
-first-run UI and expert Strategy Lab.
+Implemented in the current development cycle: ordered route evidence,
+automatic DIRECT controls, Apply conflict gates, a bounded local audit,
+Recovery Safe Mode with a boot-loop guard, WAN-scoped Smart Route memory and a
+non-live DNS profile/probe/ownership plan. Telegram route tests use several
+required scenarios instead of one landing page. Transactional DNS activation
+remains deliberately disabled until the platform adapter and rollback are
+proven on hardware.
 
-## `v0.9.0` — software-complete release candidate
+## Implemented dataplane foundation
 
 - Runtime adapters for NFQWS2, usque, WARP-WG, AmneziaWG, sing-box and Xray.
 - One locked transaction: snapshot, stage, native validation, activation, route/service health, adapter commit and reverse rollback.
@@ -34,7 +47,7 @@ first-run UI and expert Strategy Lab.
 - GitHub/Sigstore artifact attestations for release bundles.
 - Graceful shutdown, slower-router recovery allowance and non-blocking transaction status.
 
-## `v0.9.x` — hardware release-candidate fixes
+## Hardware release-candidate fixes
 
 Only evidence-driven fixes found by the release matrix belong here. Compatible corrections increment the patch (`0.9.1`, `0.9.2`). A format/behavior redesign increments the minor.
 

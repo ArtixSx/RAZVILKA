@@ -556,6 +556,7 @@ func clonePreview(in Preview) Preview {
 	out.Service.CIDRs = append([]string(nil), in.Service.CIDRs...)
 	out.Service.Strategy = append([]string(nil), in.Service.Strategy...)
 	out.Service.SourceRefs = append([]string(nil), in.Service.SourceRefs...)
+	out.Service.Probes = append([]catalog.Probe(nil), in.Service.Probes...)
 	out.Conflicts = append([]Conflict(nil), in.Conflicts...)
 	if in.Service.Provenance != nil {
 		provenance := *in.Service.Provenance

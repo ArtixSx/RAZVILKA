@@ -54,6 +54,27 @@ type blockingAdapter struct {
 	release chan struct{}
 }
 
+type cancellationAdapter struct {
+	stageStarted      chan struct{}
+	rollbackUnblocked bool
+}
+
+func (a *cancellationAdapter) ID() string                                   { return "nfqws2" }
+func (a *cancellationAdapter) Snapshot(context.Context, Plan, string) error { return nil }
+func (a *cancellationAdapter) Stage(ctx context.Context, _ Plan, _ string) error {
+	close(a.stageStarted)
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (a *cancellationAdapter) Validate(context.Context, Plan, string) error { return nil }
+func (a *cancellationAdapter) Activate(context.Context, Plan, string) error { return nil }
+func (a *cancellationAdapter) Health(context.Context, Plan, string) error   { return nil }
+func (a *cancellationAdapter) Commit(context.Context, Plan, string) error   { return nil }
+func (a *cancellationAdapter) Rollback(ctx context.Context, _ Plan, _ string) error {
+	a.rollbackUnblocked = ctx.Err() == nil
+	return ctx.Err()
+}
+
 func (a *blockingAdapter) ID() string { return "nfqws2" }
 func (a *blockingAdapter) Snapshot(context.Context, Plan, string) error {
 	close(a.started)
@@ -165,6 +186,67 @@ func TestRuntimeStatusDoesNotWaitForLongApply(t *testing.T) {
 	}
 }
 
+func TestConflictingOperationWaitIsContextAware(t *testing.T) {
+	manager := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &blockingAdapter{started: make(chan struct{}), release: make(chan struct{})}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	plan := readyNFQWS2Plan(t)
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := manager.Apply(context.Background(), plan, nil)
+		firstDone <- err
+	}()
+	<-adapter.started
+	waitCtx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	execution, err := manager.Apply(waitCtx, plan, nil)
+	if !errors.Is(err, context.DeadlineExceeded) || execution.State != "cancelled" {
+		t.Fatalf("second apply did not cancel while waiting: execution=%+v err=%v", execution, err)
+	}
+	close(adapter.release)
+	if err := <-firstDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRollbackUsesIndependentBoundedContext(t *testing.T) {
+	manager := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &cancellationAdapter{stageStarted: make(chan struct{})}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	plan := readyNFQWS2Plan(t)
+	done := make(chan struct {
+		execution Execution
+		err       error
+	}, 1)
+	go func() {
+		execution, err := manager.Apply(ctx, plan, nil)
+		done <- struct {
+			execution Execution
+			err       error
+		}{execution, err}
+	}()
+	<-adapter.stageStarted
+	cancel()
+	result := <-done
+	if !errors.Is(result.err, context.Canceled) || result.execution.State != "rolled-back" || !adapter.rollbackUnblocked {
+		t.Fatalf("cancelled apply did not get a fresh rollback context: execution=%+v rollback=%v err=%v", result.execution, adapter.rollbackUnblocked, result.err)
+	}
+}
+
+func readyNFQWS2Plan(t *testing.T) Plan {
+	t.Helper()
+	plan, err := BuildAt(Input{Revision: 1, Routes: []Route{{ServiceID: "youtube", Resolved: "nfqws2"}}, Engines: []Engine{{ID: "nfqws2", Installed: true, Configured: true, Activatable: true}}, Host: HostState{IPCommand: true, IPTables: true, IP6Tables: true, NFQueueTarget: true, NFQWS2Config: true, NFQWS2Init: true, OffloadState: "disabled"}}, time.Unix(100, 0).UTC())
+	if err != nil || !plan.Ready {
+		t.Fatalf("plan=%+v err=%v", plan, err)
+	}
+	return plan
+}
+
 func TestManagerApplyRollsBackBeforeCommitOnHealthFailure(t *testing.T) {
 	manager := New(filepath.Join(t.TempDir(), "dataplane"))
 	adapter := &fakeAdapter{id: "nfqws2", failAt: "health"}
@@ -255,6 +337,25 @@ func TestBuildBlocksStandaloneNFQWS2WhileZ2KOwnsNFQueue(t *testing.T) {
 	t.Fatalf("z2k ownership blocker missing: %+v", plan.Blockers)
 }
 
+func TestBuildBlocksSelectedAdapterResourceConflict(t *testing.T) {
+	plan, err := BuildAt(Input{
+		Revision:          1,
+		Routes:            []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box"}},
+		Engines:           []Engine{{ID: "sing-box", Installed: true, Configured: true, Activatable: true}},
+		Host:              HostState{IPCommand: true, TUN: true, SingBox: true},
+		ResourceConflicts: []ResourceConflict{{Kind: "port", Value: "1080", Engines: []string{"sing-box", "usque"}}},
+	}, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, blocker := range plan.Blockers {
+		if blocker.Code == "PORT_CONFLICT" && blocker.Adapter == "sing-box" && strings.Contains(blocker.Message, "1080") {
+			return
+		}
+	}
+	t.Fatalf("resource conflict blocker missing: %+v", plan.Blockers)
+}
+
 func TestManagerRecordsLatestPlanAtomically(t *testing.T) {
 	manager := New(filepath.Join(t.TempDir(), "dataplane"))
 	plan, err := BuildAt(Input{Revision: 1}, time.Unix(100, 0).UTC())
@@ -299,6 +400,31 @@ func TestManagerRecoversOnlyCommittedPlan(t *testing.T) {
 	recovery, err = manager.Recover(context.Background())
 	if err != nil || recovery.State != "skipped" || adapter.recovered {
 		t.Fatalf("unsafe recovery=%+v recovered=%v err=%v", recovery, adapter.recovered, err)
+	}
+}
+
+func TestManagerEntersRecoverySafeModeAndGuardsRepeatedBootFailure(t *testing.T) {
+	manager := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &fakeAdapter{id: "nfqws2", failAt: "reconcile"}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := BuildAt(Input{Revision: 1, Routes: []Route{{ServiceID: "telegram", Resolved: "nfqws2"}}, Engines: []Engine{{ID: "nfqws2", Installed: true, Configured: true, Activatable: true}}, Host: HostState{IPCommand: true, IPTables: true, IP6Tables: true, NFQueueTarget: true, NFQWS2Config: true, NFQWS2Init: true, OffloadState: "disabled"}}, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.State = "committed"
+	if err := manager.Record(plan); err != nil {
+		t.Fatal(err)
+	}
+	first, err := manager.Recover(context.Background())
+	if err == nil || first.State != "degraded" || first.FailureCount != 1 || !adapter.deactivated {
+		t.Fatalf("first recovery=%+v deactivated=%v err=%v", first, adapter.deactivated, err)
+	}
+	adapter.recovered, adapter.deactivated = false, false
+	second, err := manager.Recover(context.Background())
+	if err == nil || second.State != "safe-mode" || !second.Guarded || second.FailureCount < 2 || adapter.recovered || !adapter.deactivated {
+		t.Fatalf("second recovery=%+v recovered=%v deactivated=%v err=%v", second, adapter.recovered, adapter.deactivated, err)
 	}
 }
 

@@ -35,8 +35,11 @@ The installer verifies the release checksum, snapshots the previous installation
 | AmneziaWG | networks that identify ordinary WireGuard | compatible server and runtime |
 
 Telegram routing includes its web domains and official IPv4/IPv6 MTProto/media networks. Service-scoped source lists cannot leak into unrelated routes.
+Its Test Lab scenarios check the public site, Web client and Core/API independently; one successful landing page cannot hide a required scenario failure.
 
 WARP checks distinguish registration TLS, MASQUE TCP/443 connectivity and a real WireGuard handshake. Failed activation rolls back temporary interfaces and rules before reporting the error.
+
+The DNS tab offers system, Cloudflare, Quad9, AdGuard and Google profiles with direct resolver probes and an ownership-aware preview plan. Live DNS replacement remains disabled until the Keenetic/Netcraze system-resolver adapter passes hardware rollback tests.
 
 ## Safety and status
 

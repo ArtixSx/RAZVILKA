@@ -56,13 +56,21 @@ type HostState struct {
 	Z2KVersion       string `json:"z2k_version,omitempty"`
 }
 
+type ResourceConflict struct {
+	Kind      string   `json:"kind"`
+	Value     string   `json:"value"`
+	Engines   []string `json:"engines"`
+	SystemUse string   `json:"system_use,omitempty"`
+}
+
 type Input struct {
-	Revision           uint64    `json:"revision"`
-	SafeMode           bool      `json:"safe_mode"`
-	Routes             []Route   `json:"routes"`
-	Engines            []Engine  `json:"engines"`
-	EngineConfigDrafts []string  `json:"engine_config_drafts,omitempty"`
-	Host               HostState `json:"host"`
+	Revision           uint64             `json:"revision"`
+	SafeMode           bool               `json:"safe_mode"`
+	Routes             []Route            `json:"routes"`
+	Engines            []Engine           `json:"engines"`
+	EngineConfigDrafts []string           `json:"engine_config_drafts,omitempty"`
+	ResourceConflicts  []ResourceConflict `json:"resource_conflicts,omitempty"`
+	Host               HostState          `json:"host"`
 }
 
 type Action struct {
@@ -89,25 +97,26 @@ type Warning struct {
 }
 
 type Plan struct {
-	SchemaVersion int       `json:"schema_version"`
-	PlanID        string    `json:"plan_id"`
-	Digest        string    `json:"digest"`
-	Revision      uint64    `json:"revision"`
-	CreatedAt     string    `json:"created_at"`
-	SafeMode      bool      `json:"safe_mode"`
-	Ready         bool      `json:"ready"`
-	Noop          bool      `json:"noop"`
-	RouteCount    int       `json:"route_count"`
-	EngineDrafts  []string  `json:"engine_config_drafts,omitempty"`
-	Adapters      []string  `json:"adapters"`
-	Routes        []Route   `json:"routes"`
-	Actions       []Action  `json:"actions"`
-	Blockers      []Blocker `json:"blockers"`
-	Warnings      []Warning `json:"warnings"`
-	Host          HostState `json:"host"`
-	Protocol      []string  `json:"protocol"`
-	State         string    `json:"state"`
-	Note          string    `json:"note"`
+	SchemaVersion     int                `json:"schema_version"`
+	PlanID            string             `json:"plan_id"`
+	Digest            string             `json:"digest"`
+	Revision          uint64             `json:"revision"`
+	CreatedAt         string             `json:"created_at"`
+	SafeMode          bool               `json:"safe_mode"`
+	Ready             bool               `json:"ready"`
+	Noop              bool               `json:"noop"`
+	RouteCount        int                `json:"route_count"`
+	EngineDrafts      []string           `json:"engine_config_drafts,omitempty"`
+	ResourceConflicts []ResourceConflict `json:"resource_conflicts,omitempty"`
+	Adapters          []string           `json:"adapters"`
+	Routes            []Route            `json:"routes"`
+	Actions           []Action           `json:"actions"`
+	Blockers          []Blocker          `json:"blockers"`
+	Warnings          []Warning          `json:"warnings"`
+	Host              HostState          `json:"host"`
+	Protocol          []string           `json:"protocol"`
+	State             string             `json:"state"`
+	Note              string             `json:"note"`
 }
 
 // DiscoverHost is read-only. It only inventories binaries, the NFQUEUE kernel
@@ -174,19 +183,20 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	sum := sha256.Sum256(encoded)
 	digest := hex.EncodeToString(sum[:])
 	plan := Plan{
-		SchemaVersion: SchemaVersion,
-		PlanID:        "dp-" + digest[:16],
-		Digest:        digest,
-		Revision:      input.Revision,
-		CreatedAt:     now.Format(time.RFC3339),
-		SafeMode:      input.SafeMode,
-		RouteCount:    len(input.Routes),
-		EngineDrafts:  input.EngineConfigDrafts,
-		Routes:        input.Routes,
-		Host:          input.Host,
-		Protocol:      []string{"plan", "snapshot", "stage", "validate", "activate", "health", "commit-or-rollback"},
-		State:         "planned",
-		Note:          "План ничего не изменяет сам по себе. Live Apply разрешается только после проверки установленного обхода, ownership, snapshot, native validation, health и готовности rollback.",
+		SchemaVersion:     SchemaVersion,
+		PlanID:            "dp-" + digest[:16],
+		Digest:            digest,
+		Revision:          input.Revision,
+		CreatedAt:         now.Format(time.RFC3339),
+		SafeMode:          input.SafeMode,
+		RouteCount:        len(input.Routes),
+		EngineDrafts:      input.EngineConfigDrafts,
+		ResourceConflicts: input.ResourceConflicts,
+		Routes:            input.Routes,
+		Host:              input.Host,
+		Protocol:          []string{"plan", "snapshot", "stage", "validate", "activate", "health", "commit-or-rollback"},
+		State:             "planned",
+		Note:              "План ничего не изменяет сам по себе. Live Apply разрешается только после проверки установленного обхода, ownership, snapshot, native validation, health и готовности rollback.",
 	}
 
 	engineByID := make(map[string]Engine, len(input.Engines))
@@ -208,6 +218,40 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		plan.Adapters = append(plan.Adapters, adapter)
 	}
 	sort.Strings(plan.Adapters)
+	for _, conflict := range input.ResourceConflicts {
+		adapter := ""
+		for _, engineID := range conflict.Engines {
+			if adapterSet[engineID] {
+				adapter = engineID
+				break
+			}
+		}
+		if adapter == "" {
+			continue
+		}
+		code := "RESOURCE_CONFLICT"
+		switch conflict.Kind {
+		case "port":
+			code = "PORT_CONFLICT"
+		case "interface":
+			code = "INTERFACE_CONFLICT"
+		case "nfqueue":
+			code = "NFQUEUE_CONFLICT"
+		case "dns":
+			code = "DNS_CONFLICT"
+		}
+		message := fmt.Sprintf("Ресурс %s %s уже занят", conflict.Kind, conflict.Value)
+		if len(conflict.Engines) > 1 {
+			message = fmt.Sprintf("Ресурс %s %s одновременно заявлен обходами %s", conflict.Kind, conflict.Value, strings.Join(conflict.Engines, ", "))
+		} else if conflict.SystemUse != "" {
+			message += ": " + conflict.SystemUse
+		}
+		resolution := "Освободите ресурс или измените порт, интерфейс либо NFQUEUE в настройках конфликтующего обхода, затем обновите план."
+		if conflict.Kind == "dns" {
+			resolution = "Выберите безопасный режим интеграции с системным DNS (forwarder или upstream) и подтвердите ownership порта 53 перед применением."
+		}
+		plan.Blockers = append(plan.Blockers, Blocker{Code: code, Adapter: adapter, Message: message, Resolution: resolution})
+	}
 	for _, draft := range input.EngineConfigDrafts {
 		engineID := strings.SplitN(draft, "/", 2)[0]
 		if !adapterSet[engineID] {
@@ -380,8 +424,15 @@ func adapterID(route string) string {
 	}
 }
 
+// AdapterID returns the runtime adapter represented by a public route value.
+// Profile suffixes such as sing-box:home map to their base adapter.
+func AdapterID(route string) string { return adapterID(route) }
+
 func canonicalize(input *Input) {
 	input.EngineConfigDrafts = sortedUnique(input.EngineConfigDrafts)
+	for i := range input.ResourceConflicts {
+		input.ResourceConflicts[i].Engines = sortedUnique(input.ResourceConflicts[i].Engines)
+	}
 	for i := range input.Routes {
 		route := &input.Routes[i]
 		route.Domains = sortedUnique(route.Domains)
@@ -391,6 +442,9 @@ func canonicalize(input *Input) {
 	}
 	sort.Slice(input.Routes, func(i, j int) bool { return input.Routes[i].ServiceID < input.Routes[j].ServiceID })
 	sort.Slice(input.Engines, func(i, j int) bool { return input.Engines[i].ID < input.Engines[j].ID })
+	sort.Slice(input.ResourceConflicts, func(i, j int) bool {
+		return input.ResourceConflicts[i].Kind+"\x00"+input.ResourceConflicts[i].Value < input.ResourceConflicts[j].Kind+"\x00"+input.ResourceConflicts[j].Value
+	})
 }
 
 func sortedUnique(values []string) []string {
@@ -412,7 +466,7 @@ func uniqueBlockers(values []Blocker) []Blocker {
 	seen := map[string]bool{}
 	out := make([]Blocker, 0, len(values))
 	for _, value := range values {
-		key := value.Code + "\x00" + value.Adapter
+		key := value.Code + "\x00" + value.Adapter + "\x00" + value.Message
 		if seen[key] {
 			continue
 		}

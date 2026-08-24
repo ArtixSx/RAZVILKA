@@ -287,6 +287,11 @@ func normalize(s catalog.Service) catalog.Service {
 	}
 	s.SourceRefs = normalizedList(s.SourceRefs, false)
 	s.ProbeURL = strings.TrimSpace(s.ProbeURL)
+	for index := range s.Probes {
+		s.Probes[index].ID = strings.ToLower(strings.TrimSpace(s.Probes[index].ID))
+		s.Probes[index].Label = strings.TrimSpace(s.Probes[index].Label)
+		s.Probes[index].URL = strings.TrimSpace(s.Probes[index].URL)
+	}
 	return s
 }
 
@@ -342,6 +347,7 @@ func clone(in []catalog.Service) []catalog.Service {
 		out[i].CIDRs = append([]string(nil), s.CIDRs...)
 		out[i].Strategy = append([]string(nil), s.Strategy...)
 		out[i].SourceRefs = append([]string(nil), s.SourceRefs...)
+		out[i].Probes = append([]catalog.Probe(nil), s.Probes...)
 		if s.Provenance != nil {
 			p := *s.Provenance
 			out[i].Provenance = &p

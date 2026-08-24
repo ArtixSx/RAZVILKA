@@ -1,4 +1,4 @@
-# Security model (`v0.10.0`)
+# Security model
 
 RAZVILKA runs locally on a router and may control privileged networking objects. Safe Mode is enabled by default, but an administrator can explicitly enable transactional Active Apply.
 
@@ -16,6 +16,8 @@ RAZVILKA runs locally on a router and may control privileged networking objects.
 - Browser input selects allowlisted service/route IDs; it cannot submit shell commands, file paths, executable names or arbitrary probe URLs.
 - Every Active Apply freezes a deterministic plan and runs snapshot, stage, native validation, activation, health and commit under one operation lock.
 - Any failure rolls prepared adapters back in reverse order. Boot recovery acts only on the last committed plan.
+- Cancellation does not cancel rollback: recovery receives a separate bounded context, and repeated failed boots enter Recovery Safe Mode.
+- Port, interface, NFQUEUE and DNS ownership conflicts are discovered before the corresponding adapter may apply.
 - Runtime files, processes, interfaces, tables and rule priorities are namespaced. Deactivation targets exact recorded RAZVILKA ownership.
 - Tunnel/proxy endpoints are checked against routed prefixes to prevent self-loop; TUN sidecars do not own the default route. sing-box 1.14+ DNS mode is explicitly disabled for the managed sidecar.
 - NFQWS2 uses bounded managed blocks in official list files and the official init lifecycle; it does not claim exclusive ownership of a third-party NFQWS2 installation.

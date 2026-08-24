@@ -22,7 +22,7 @@ type Check struct {
 }
 
 type Resource struct {
-	Kind     string `json:"kind"` // port, interface, nfqueue
+	Kind     string `json:"kind"` // port, interface, nfqueue, dns
 	Value    string `json:"value"`
 	EngineID string `json:"engine_id"`
 	Source   string `json:"source"`
@@ -53,6 +53,42 @@ type Report struct {
 	Conflicts   []Conflict             `json:"conflicts"`
 	Ready       bool                   `json:"ready_for_isolated_probes"`
 	Gate        map[string]interface{} `json:"gate"`
+}
+
+// ApplyConflicts returns only conflicts that are safe to use as a hard gate
+// for the selected adapters. A single listener owned by an already running
+// adapter is treated as that adapter's own runtime, because the generic
+// netstat fallback cannot reliably report process ownership on every router.
+func (report Report) ApplyConflicts(adapters []string) []Conflict {
+	selected := map[string]bool{}
+	for _, adapter := range adapters {
+		selected[adapter] = true
+	}
+	running := map[string]bool{}
+	for _, item := range report.Engines {
+		running[item.ID] = item.Running
+	}
+	out := []Conflict{}
+	for _, conflict := range report.Conflicts {
+		relevant := false
+		for _, engineID := range conflict.Engines {
+			if selected[engineID] {
+				relevant = true
+				break
+			}
+		}
+		if !relevant || !conflict.Blocking {
+			continue
+		}
+		if conflict.Value == "external-owner" || len(conflict.Engines) > 1 {
+			out = append(out, conflict)
+			continue
+		}
+		if conflict.SystemUse != "" && len(conflict.Engines) == 1 && !running[conflict.Engines[0]] {
+			out = append(out, conflict)
+		}
+	}
+	return out
 }
 
 type Manager struct {
@@ -157,6 +193,17 @@ func (m *Manager) Inspect() Report {
 		report.Engines = append(report.Engines, item)
 	}
 	report.Conflicts = resourceConflicts(allResources, listening)
+	if conflict, ok := dnsListenerConflict(listening); ok {
+		report.Conflicts = append(report.Conflicts, conflict)
+		report.Gate["dns_ownership"] = map[string]interface{}{
+			"ready": false, "listener": conflict.SystemUse,
+			"action": "select an explicit integration mode before replacing or forwarding the router DNS listener",
+		}
+	} else {
+		report.Gate["dns_ownership"] = map[string]interface{}{
+			"ready": true, "action": "no local port 53 listener was detected",
+		}
+	}
 	if z2kRunning {
 		detail := "активный внешний владелец NFQUEUE (z2k/Zapret2)"
 		if !nfqws2Installed {
@@ -165,10 +212,15 @@ func (m *Manager) Inspect() Report {
 		report.Conflicts = append(report.Conflicts, Conflict{Kind: "nfqueue", Value: "external-owner", Engines: []string{"nfqws2"}, SystemUse: detail, Blocking: true})
 	}
 	for _, conflict := range report.Conflicts {
-		if conflict.Blocking {
+		// A DNS listener is an expected part of a router. It blocks only the
+		// future dns-control adapter, not otherwise isolated engine probes.
+		if conflict.Blocking && conflict.Kind != "dns" {
 			report.Ready = false
 		}
 	}
+	sort.Slice(report.Conflicts, func(i, j int) bool {
+		return report.Conflicts[i].Kind+report.Conflicts[i].Value < report.Conflicts[j].Kind+report.Conflicts[j].Value
+	})
 	report.Gate["active_writes"] = false
 	report.Gate["mode"] = "read-only-preflight"
 	report.Gate["note"] = "Engine Lab inventories capabilities and conflicts but does not change firewall, routes, DNS or running processes."
@@ -318,7 +370,10 @@ func resourceConflicts(resources []Resource, listening map[string]string) []Conf
 }
 
 func listeningPorts() map[string]string {
-	commands := [][]string{{"ss", "-lntu"}, {"netstat", "-lntu"}, {"/opt/bin/netstat", "-lntu"}}
+	commands := [][]string{
+		{"ss", "-lntup"}, {"netstat", "-lntup"}, {"/opt/bin/netstat", "-lntup"},
+		{"ss", "-lntu"}, {"netstat", "-lntu"}, {"/opt/bin/netstat", "-lntu"},
+	}
 	for _, command := range commands {
 		if strings.Contains(command[0], "/") {
 			if info, err := os.Stat(command[0]); err != nil || !info.Mode().IsRegular() {
@@ -334,6 +389,43 @@ func listeningPorts() map[string]string {
 		return parseListeningPorts(string(output))
 	}
 	return map[string]string{}
+}
+
+func dnsListenerConflict(listening map[string]string) (Conflict, bool) {
+	line := strings.TrimSpace(listening["53"])
+	if line == "" {
+		return Conflict{}, false
+	}
+	return Conflict{
+		Kind:      "dns",
+		Value:     "53",
+		Engines:   []string{"dns-control"},
+		SystemUse: dnsListenerOwner(line),
+		Blocking:  true,
+	}, true
+}
+
+func dnsListenerOwner(line string) string {
+	lower := strings.ToLower(line)
+	known := []struct {
+		needle string
+		name   string
+	}{
+		{"adguardhome", "AdGuard Home"},
+		{"adguard", "AdGuard"},
+		{"dnsmasq", "dnsmasq"},
+		{"ndnproxy", "Keenetic ndnproxy"},
+		{"stubby", "Stubby"},
+		{"unbound", "Unbound"},
+		{"smartdns", "SmartDNS"},
+		{"resolved", "systemd-resolved"},
+	}
+	for _, item := range known {
+		if strings.Contains(lower, item.needle) {
+			return item.name + ": " + shortLine(line)
+		}
+	}
+	return "неизвестный локальный DNS-процесс: " + shortLine(line)
 }
 
 func parseListeningPorts(output string) map[string]string {

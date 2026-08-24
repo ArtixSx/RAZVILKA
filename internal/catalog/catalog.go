@@ -22,9 +22,20 @@ type Service struct {
 	CIDRs       []string    `json:"cidrs,omitempty"`
 	Strategy    []string    `json:"strategy"`
 	ProbeURL    string      `json:"probe_url,omitempty"`
+	Probes      []Probe     `json:"probes,omitempty"`
 	SourceRefs  []string    `json:"source_refs,omitempty"`
 	Note        string      `json:"note,omitempty"`
 	Provenance  *Provenance `json:"provenance,omitempty"`
+}
+
+// Probe is a fixed, catalog-owned service scenario. The browser may select a
+// service ID, but it can never supply these URLs, which keeps Test Lab from
+// becoming an arbitrary request primitive on the router.
+type Probe struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	URL      string `json:"url"`
+	Required bool   `json:"required"`
 }
 
 type Provenance struct {
@@ -84,6 +95,27 @@ func Validate(c Catalog) error {
 			if err != nil || u.Scheme != "https" || u.Host == "" {
 				return fmt.Errorf("service %s invalid probe url", s.ID)
 			}
+		}
+		probeIDs := map[string]bool{}
+		requiredProbes := 0
+		for _, probe := range s.Probes {
+			if !serviceIDPattern.MatchString(probe.ID) || strings.TrimSpace(probe.Label) == "" {
+				return fmt.Errorf("service %s has invalid probe identity", s.ID)
+			}
+			if probeIDs[probe.ID] {
+				return fmt.Errorf("service %s has duplicate probe %q", s.ID, probe.ID)
+			}
+			probeIDs[probe.ID] = true
+			if probe.Required {
+				requiredProbes++
+			}
+			u, err := url.Parse(probe.URL)
+			if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+				return fmt.Errorf("service %s has invalid probe %q URL", s.ID, probe.ID)
+			}
+		}
+		if len(s.Probes) > 0 && requiredProbes == 0 {
+			return fmt.Errorf("service %s has no required probe", s.ID)
 		}
 	}
 	return nil

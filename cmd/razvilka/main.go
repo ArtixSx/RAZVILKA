@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/app"
+	"github.com/ArtixSx/razvilka/internal/auditlog"
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/community"
 	"github.com/ArtixSx/razvilka/internal/components"
@@ -27,6 +28,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/devices"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
@@ -66,6 +68,8 @@ func main() {
 	defaultDevices := getenv("RAZVILKA_DEVICES", "/opt/etc/razvilka/devices.json")
 	defaultMetricsHistory := getenv("RAZVILKA_METRICS_HISTORY", "/opt/var/lib/razvilka/metrics/history.jsonl")
 	defaultStrategyLabState := getenv("RAZVILKA_STRATEGY_LAB_STATE", "/opt/var/lib/razvilka/strategy-lab.json")
+	defaultAuditLog := getenv("RAZVILKA_AUDIT_LOG", "/opt/var/lib/razvilka/audit/events.jsonl")
+	defaultDNSState := getenv("RAZVILKA_DNS_STATE", "/opt/var/lib/razvilka/dns/state.json")
 	defaultZ2KRoot := getenv("RAZVILKA_Z2K_ROOT", "/opt/zapret2")
 	cfgPath := flag.String("config", defaultCfg, "config path")
 	catalogPath := flag.String("catalog", defaultCatalog, "service catalog path")
@@ -83,6 +87,8 @@ func main() {
 	devicesPath := flag.String("devices", defaultDevices, "local device names and groups path")
 	metricsHistoryPath := flag.String("metrics-history", defaultMetricsHistory, "bounded router metrics history path")
 	strategyLabStatePath := flag.String("strategy-lab-state", defaultStrategyLabState, "NFQWS2 Strategy Lab state path")
+	auditLogPath := flag.String("audit-log", defaultAuditLog, "bounded control-plane audit journal path")
+	dnsStatePath := flag.String("dns-state", defaultDNSState, "DNS profile draft and probe state path")
 	z2kRoot := flag.String("z2k-root", defaultZ2KRoot, "read-only z2k migration source root")
 	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
 	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
@@ -227,6 +233,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Smart Route state: %v", err)
 	}
+	smartRouteManager.Profile = func() string { return systemprobe.DetectWANProfile().ID }
+	dnsManager, err := dnscontrol.New(*dnsStatePath)
+	if err != nil {
+		log.Fatalf("DNS profile state: %v", err)
+	}
 	strategyLabManager, err := strategylab.New(*strategyLabStatePath)
 	if err != nil {
 		log.Fatalf("Strategy Lab state: %v", err)
@@ -239,7 +250,7 @@ func main() {
 	if err := statsSampler.EnablePersistence(*metricsHistoryPath); err != nil {
 		log.Printf("router metrics history disabled: %v", err)
 	}
-	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: enginelab.New(engineConfigs), StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, Warp: warpManager, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
+	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: enginelab.New(engineConfigs), StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
@@ -247,8 +258,15 @@ func main() {
 	cancelRecovery()
 	if recoveryErr != nil {
 		log.Printf("dataplane boot recovery %s: %v", recovery.State, recoveryErr)
+		if safeErr := store.SetSafeMode(true); safeErr != nil {
+			log.Printf("enable Recovery Safe Mode: %v", safeErr)
+		} else {
+			log.Printf("Recovery Safe Mode enabled; live writes require explicit review")
+		}
+		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "failed", Actor: "system", RemoteIP: "local"})
 	} else if recovery.State == "recovered" {
 		log.Printf("dataplane boot recovery completed for %s", recovery.PlanID)
+		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "ok", Actor: "system", RemoteIP: "local"})
 	}
 	a.StartBackground(runtimeContext)
 	statsSampler.Start(runtimeContext)

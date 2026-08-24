@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/evidence"
 )
 
 type HealthPolicy struct {
@@ -23,15 +25,16 @@ type HealthPolicy struct {
 }
 
 type HealthState struct {
-	ConsecutiveFailedRounds int      `json:"consecutive_failed_rounds"`
-	LastChecked             string   `json:"last_checked,omitempty"`
-	LastDecision            string   `json:"last_decision,omitempty"`
-	LastFailedServices      []string `json:"last_failed_services,omitempty"`
-	LastSuccessfulServices  []string `json:"last_successful_services,omitempty"`
-	RouteEvidenceConfirmed  bool     `json:"route_evidence_confirmed"`
-	Rotations               []string `json:"rotations,omitempty"`
-	LastActivation          string   `json:"last_activation,omitempty"`
-	LastActivationError     string   `json:"last_activation_error,omitempty"`
+	ConsecutiveFailedRounds int            `json:"consecutive_failed_rounds"`
+	LastChecked             string         `json:"last_checked,omitempty"`
+	LastDecision            string         `json:"last_decision,omitempty"`
+	LastFailedServices      []string       `json:"last_failed_services,omitempty"`
+	LastSuccessfulServices  []string       `json:"last_successful_services,omitempty"`
+	RouteEvidenceConfirmed  bool           `json:"route_evidence_confirmed"`
+	EvidenceLevel           evidence.Level `json:"evidence_level"`
+	Rotations               []string       `json:"rotations,omitempty"`
+	LastActivation          string         `json:"last_activation,omitempty"`
+	LastActivationError     string         `json:"last_activation_error,omitempty"`
 }
 
 type HealthStatus struct {
@@ -45,6 +48,7 @@ type HealthEvidence struct {
 	ServiceID      string
 	Status         string
 	RouteConfirmed bool
+	Level          evidence.Level
 }
 
 type HealthDecision struct {
@@ -90,7 +94,7 @@ func (m *Manager) UpdateHealthPolicy(policy HealthPolicy) (HealthStatus, error) 
 	return m.healthStatusLocked(doc), nil
 }
 
-func (m *Manager) ObserveHealth(evidence []HealthEvidence) (HealthDecision, error) {
+func (m *Manager) ObserveHealth(items []HealthEvidence) (HealthDecision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	doc, err := m.loadHealthLocked()
@@ -99,13 +103,21 @@ func (m *Manager) ObserveHealth(evidence []HealthEvidence) (HealthDecision, erro
 	}
 	doc.State.LastChecked = time.Now().UTC().Format(time.RFC3339)
 	failures, successes := []string{}, []string{}
-	for _, item := range evidence {
-		if !item.RouteConfirmed || strings.TrimSpace(item.ServiceID) == "" {
+	doc.State.EvidenceLevel = evidence.None
+	for _, item := range items {
+		level := item.Level
+		if !level.Valid() || level == evidence.None {
+			level = evidence.FromProbe(item.Status, item.RouteConfirmed)
+		}
+		if !level.AtLeast(evidence.Route) || strings.TrimSpace(item.ServiceID) == "" {
 			continue
 		}
+		doc.State.EvidenceLevel = evidence.Stronger(doc.State.EvidenceLevel, level)
 		switch item.Status {
 		case "pass", "partial":
-			successes = append(successes, item.ServiceID)
+			if level.AtLeast(evidence.Service) {
+				successes = append(successes, item.ServiceID)
+			}
 		case "fail":
 			failures = append(failures, item.ServiceID)
 		}

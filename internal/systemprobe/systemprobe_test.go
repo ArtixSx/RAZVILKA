@@ -3,6 +3,7 @@ package systemprobe
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,5 +36,20 @@ func TestIsExternalTunnelName(t *testing.T) {
 		if got := isExternalTunnelName(dev); got != want {
 			t.Fatalf("%s: got %v want %v", dev, got, want)
 		}
+	}
+}
+
+func TestNetworkProfileFromRouteIsStableAndPrivate(t *testing.T) {
+	first := networkProfileFromRoute("1.1.1.1 via 203.0.113.1 dev eth3 src 198.51.100.10 uid 0")
+	second := networkProfileFromRoute("1.1.1.1 via 203.0.113.1 dev eth3 src 198.51.100.99 uid 0")
+	if first.ID == "" || first.ID != second.ID || first.WANInterface != "eth3" {
+		t.Fatalf("unexpected profiles: %+v %+v", first, second)
+	}
+	if strings.Contains(first.ID, "203.0.113.1") || strings.Contains(first.ID, "198.51.100") {
+		t.Fatalf("profile leaks route identity: %q", first.ID)
+	}
+	changed := networkProfileFromRoute("1.1.1.1 via 203.0.113.2 dev eth3 src 198.51.100.10")
+	if changed.ID == first.ID {
+		t.Fatal("different gateway must create a separate network profile")
 	}
 }

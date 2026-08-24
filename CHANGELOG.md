@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.15.0 — evidence hardening, WAN profiles and DNS preview
+
+- Added automatic DIRECT control to isolated comparisons and plain-language
+  conclusions that distinguish a useful bypass from ordinary reachability.
+- Smart Route evidence is now isolated by a privacy-safe WAN profile. Results
+  from one provider or gateway cannot silently select a route on another
+  network; schema v1 data migrates as unscoped history only.
+- Engine Lab port, interface and NFQUEUE conflicts now block the real Apply
+  plan instead of remaining advisory diagnostics. Port 53 ownership is scoped
+  to the DNS adapter and identifies common router resolvers when process
+  metadata is available.
+- Added a bounded, secret-safe local action journal and a boot-loop guard that
+  enters Recovery Safe Mode after an unsuccessful dataplane recovery.
+- Added the first DNS control surface with Automatic, Private, Security,
+  Ad-block, Family and Unfiltered profiles plus bounded direct resolver probes.
+  It now builds a six-stage ownership-aware snapshot/canary/rollback preview;
+  live DNS remains disabled until the router-specific adapter passes hardware
+  recovery tests.
+- Catalog services can define several fixed required probe scenarios. Telegram
+  checks its site, Web client and Core/API independently, and Smart Route/WARP
+  health consume a conservative aggregate that cannot hide one failed required
+  scenario behind another successful endpoint.
+- Added one ordered assurance model shared by Test Lab and Smart Route:
+  catalog/configured/runtime/route-confirmed/service-confirmed.
+- Current-path HTTP success is now explicitly runtime reachability and cannot be
+  presented as proof of a particular bypass; isolated successful probes carry
+  service-and-route confirmation.
+- Smart Route rejects explicitly weaker evidence and persists the accepted
+  assurance level for UI and diagnostics.
+- Conflicting dataplane operations now wait through a context-aware gate instead
+  of an uninterruptible mutex. A cancelled Apply still performs rollback through
+  a fresh bounded recovery context.
+- Live Apply has an explicit eight-minute safety deadline and returns a concise
+  cancellation/rollback explanation instead of an unbounded request.
+- Consolidated the active roadmap, including the transactional DNS control
+  surface, in `docs/MASTER_PLAN_RU.md`.
+
 ## v0.14.0 — full-block routing and honest tunnel guidance
 
 - Official Telegram IPv4/IPv6 CIDRs now enter the actual service route instead of remaining source-status metadata.
