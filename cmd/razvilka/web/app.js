@@ -270,10 +270,25 @@ function evidenceLevelLabel(level) {
     none: 'нет доказательств',
     catalog: 'только каталог',
     configured: 'конфигурация сохранена',
-    runtime: 'сервис ответил, маршрут не доказан',
+    runtime: 'обход запущен, маршрут не доказан',
     'route-confirmed': 'маршрут подтверждён',
     'service-confirmed': 'сервис и маршрут подтверждены',
   })[String(level || 'none')] || 'уровень не определён';
+}
+
+function evidenceAtLeast(actual, required) {
+  const rank = { none: 0, catalog: 1, configured: 2, runtime: 3, 'route-confirmed': 4, 'service-confirmed': 5 };
+  return (rank[String(actual || 'none')] || 0) >= (rank[String(required || 'none')] || 0);
+}
+
+function evidenceBadgeHTML(item, compact = false) {
+  const level = String(item?.evidence_level || 'none');
+  const label = evidenceLevelLabel(level);
+  const route = item?.evidence_route ? routeLabel(item.evidence_route) : '';
+  const checked = item?.evidence_checked_at ? new Date(item.evidence_checked_at).toLocaleString('ru-RU') : '';
+  const title = [`Уровень подтверждения: ${label}`, route ? `обход: ${route}` : '', checked ? `проверено: ${checked}` : '', item?.evidence_source ? `источник: ${item.evidence_source}` : ''].filter(Boolean).join(' · ');
+  const text = compact ? label : `Подтверждение: ${label}`;
+  return `<em class="evidence-badge evidence-${esc(level)}" title="${esc(title)}">${esc(text)}</em>`;
 }
 
 function renderRouteComparisonDetails(value) {
@@ -962,7 +977,7 @@ function renderServices() {
         <div><span class="control-label">AUTO / фактический план</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
         <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button" data-detail-id="${esc(s.id)}" title="Технические детали" aria-label="Технические детали ${esc(s.name)}">i</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
       </div>
-      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></div>
+      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="service-proof-line">${evidenceBadgeHTML(s)}<span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></span></div>
     </article>`;
   }).join('') || '<div class="empty-inline">Ничего не найдено</div>';
 
@@ -987,7 +1002,7 @@ function renderOverviewServices() {
       <div class="service-name"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${s.dirty ? ' · черновик' : ''}</small></div></div>
       <span class="route-pill ${desiredClass}">${esc(desired)}${s.route === 'auto' && s.enabled ? ` → ${esc(planned)}` : ''}</span>
       <span class="overview-arrow">→</span>
-      <span class="route-pill ${appliedClass} applied-route">${esc(applied)}</span>
+      <span class="overview-applied"><span class="route-pill ${appliedClass} applied-route">${esc(applied)}</span>${evidenceBadgeHTML(s, true)}</span>
     </div>`;
   }).join('');
 }
@@ -2190,6 +2205,11 @@ function showServiceDetails(id) {
       desired_route: service.enabled ? routeLabel(service.route) : 'Выключен',
       planned_route: service.enabled ? routeLabel(service.planned_engine) : '—',
       applied_route: service.applied_enabled ? routeLabel(service.applied_route) : 'Выключен',
+      evidence: evidenceLevelLabel(service.evidence_level),
+      evidence_route: service.evidence_route ? routeLabel(service.evidence_route) : 'не определён',
+      evidence_status: service.evidence_status || 'нет проверки',
+      evidence_source: service.evidence_source || 'нет',
+      evidence_checked_at: service.evidence_checked_at || 'не проверялось',
       domains,
       cidrs,
       source_refs: service.source_refs || [],
@@ -2316,11 +2336,16 @@ async function showPlan() {
     const warnings = tx.warnings || [];
     const actions = tx.actions || [];
     const routes = tx.routes || [];
+    const routeEvidence = tx.route_evidence || [];
     const stateLabel = tx.noop ? 'ИЗМЕНЕНИЯ НЕ НУЖНЫ' : tx.ready ? 'ГОТОВО К ПРИМЕНЕНИЮ' : 'ПРИМЕНЕНИЕ ЗАБЛОКИРОВАНО';
     const stateClass = tx.noop || tx.ready ? 'ready' : 'blocked';
     const phaseLabels = { snapshot: 'Снимок', stage: 'Подготовка', validate: 'Проверка', activate: 'Активация', health: 'Проверка доступности', commit: 'Сохранение' };
-    const planState = tx.safe_mode ? 'БЕЗОПАСНЫЙ РЕЖИМ' : ({ planned: 'ПЛАН', reviewed: 'ПРОВЕРЕНО', ready: 'ГОТОВО' }[tx.state] || tx.state || 'ПЛАН');
-    $('#planBox').innerHTML = `<div class="transaction-head"><div><span class="eyebrow">ПЛАН ${esc(tx.plan_id || '—')}</span><h3>${esc(stateLabel)}</h3><p>${esc(tx.note || plan.note || '')}</p></div><span class="transaction-state ${stateClass}">${esc(planState)}</span></div><div class="transaction-metrics"><div><b>${routes.length}</b><span>маршрутов</span></div><div><b>${(tx.adapters || []).length}</b><span>обходов</span></div><div><b>${actions.length}</b><span>шагов</span></div><div><b>${blockers.length}</b><span>проблем</span></div></div>${blockers.length ? `<div class="transaction-blockers"><h4>Что мешает применению</h4>${blockers.map((item) => `<div class="transaction-blocker"><span>${esc(item.code)}</span><div><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.message)}</b>${item.resolution ? `<small>${esc(item.resolution)}</small>` : ''}</div></div>`).join('')}</div>` : '<div class="transaction-clean">Все обязательные проверки пройдены.</div>'}${warnings.length ? `<details class="transaction-details"><summary>Предупреждения (${warnings.length})</summary>${warnings.map((item) => `<div class="transaction-warning"><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.code)}</b><span>${esc(item.message)}</span></div>`).join('')}</details>` : ''}<div class="transaction-flow">${actions.map((item) => `<div class="transaction-step"><span>${item.order}</span><div><b>${esc(phaseLabels[item.phase] || item.phase)} · ${esc(item.adapter)}</b><small>${esc(item.summary)}</small><code>${esc(item.target)}</code></div><i class="${item.razvilka_owned ? 'owned' : ''}">${item.razvilka_owned ? 'RAZVILKA' : 'ВНЕШНИЙ'}</i></div>`).join('') || '<div class="transaction-clean">Прямые маршруты не требуют изменения сетевых правил.</div>'}</div><details class="transaction-details"><summary>Маршруты (${routes.length}) и контрольная сумма</summary><div class="transaction-routes">${routes.map((route) => `<div><b>${esc(route.service_name)}</b><span>${esc(route.selected_route)} → ${esc(route.resolved_route)}</span></div>`).join('') || '<span>Нет включённых сервисов.</span>'}</div><code class="transaction-digest">${esc(tx.digest || '—')}</code></details>`;
+    const planState = tx.safe_mode ? 'БЕЗОПАСНЫЙ РЕЖИМ' : ({ planned: 'ПЛАН', reviewed: 'ПРОВЕРЕНО', ready: 'ГОТОВО', committed: 'ПРИМЕНЕНО' }[tx.state] || tx.state || 'ПЛАН');
+    const requiredEvidence = String(tx.required_evidence || 'none');
+    const observedEvidence = String(tx.observed_evidence || 'none');
+    const evidenceReady = evidenceAtLeast(observedEvidence, requiredEvidence);
+    const evidencePanel = `<div class="transaction-evidence ${evidenceReady ? 'confirmed' : ''}"><div><span>Нужно для подтверждения</span><b>${esc(evidenceLevelLabel(requiredEvidence))}</b></div><i>→</i><div><span>Наблюдается сейчас</span><b>${esc(evidenceLevelLabel(observedEvidence))}</b></div><p>${esc(tx.evidence_note || 'План не является доказательством работы маршрута.')}</p></div>`;
+    $('#planBox').innerHTML = `<div class="transaction-head"><div><span class="eyebrow">ПЛАН ${esc(tx.plan_id || '—')}</span><h3>${esc(stateLabel)}</h3><p>${esc(tx.note || plan.note || '')}</p></div><span class="transaction-state ${stateClass}">${esc(planState)}</span></div><div class="transaction-metrics"><div><b>${routes.length}</b><span>маршрутов</span></div><div><b>${(tx.adapters || []).length}</b><span>обходов</span></div><div><b>${actions.length}</b><span>шагов</span></div><div><b>${blockers.length}</b><span>проблем</span></div></div>${evidencePanel}${blockers.length ? `<div class="transaction-blockers"><h4>Что мешает применению</h4>${blockers.map((item) => `<div class="transaction-blocker"><span>${esc(item.code)}</span><div><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.message)}</b>${item.resolution ? `<small>${esc(item.resolution)}</small>` : ''}</div></div>`).join('')}</div>` : '<div class="transaction-clean">Все обязательные проверки конфигурации пройдены. Доступ подтверждается отдельным health-check.</div>'}${warnings.length ? `<details class="transaction-details"><summary>Предупреждения (${warnings.length})</summary>${warnings.map((item) => `<div class="transaction-warning"><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.code)}</b><span>${esc(item.message)}</span></div>`).join('')}</details>` : ''}<div class="transaction-flow">${actions.map((item) => `<div class="transaction-step"><span>${item.order}</span><div><b>${esc(phaseLabels[item.phase] || item.phase)} · ${esc(item.adapter)}</b><small>${esc(item.summary)}</small><code>${esc(item.target)}</code></div><i class="${item.razvilka_owned ? 'owned' : ''}">${item.razvilka_owned ? 'RAZVILKA' : 'ВНЕШНИЙ'}</i></div>`).join('') || '<div class="transaction-clean">Прямые маршруты не требуют изменения сетевых правил.</div>'}</div><details class="transaction-details"><summary>Маршруты (${routes.length}) и контрольная сумма</summary><div class="transaction-routes">${routes.map((route) => { const proof = routeEvidence.find((item) => item.service_id === route.service_id && item.route === route.resolved_route); return `<div><b>${esc(route.service_name)}</b><span>${esc(route.selected_route)} → ${esc(route.resolved_route)} · ${esc(evidenceLevelLabel(proof?.observed_evidence))}</span></div>`; }).join('') || '<span>Нет включённых сервисов.</span>'}</div><code class="transaction-digest">${esc(tx.digest || '—')}</code></details>`;
   } catch (error) {
     $('#planBox').innerHTML = `<div class="transaction-error">План не построен: ${esc(error.message)}</div>`;
   }

@@ -34,3 +34,12 @@ func TestStrongerIgnoresInvalidLevel(t *testing.T) {
 		t.Fatalf("stronger level = %q, want %q", got, Route)
 	}
 }
+
+func TestWeakerKeepsAggregateAtLeastProvenRoute(t *testing.T) {
+	if got := Weaker(Service, None); got != None {
+		t.Fatalf("weaker level = %q, want %q", got, None)
+	}
+	if got := Weaker(Service, Route); got != Route {
+		t.Fatalf("weaker level = %q, want %q", got, Route)
+	}
+}

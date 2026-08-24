@@ -49,6 +49,21 @@ func Stronger(left, right Level) Level {
 	return left
 }
 
+// Weaker returns the lower valid level. It is used for aggregate status where
+// one unproven route must keep the whole transaction from looking confirmed.
+func Weaker(left, right Level) Level {
+	if !left.Valid() {
+		left = None
+	}
+	if !right.Valid() {
+		right = None
+	}
+	if ranks[right] < ranks[left] {
+		return right
+	}
+	return left
+}
+
 // FromProbe derives an assurance level from observed probe facts. A successful
 // endpoint response on the current path proves runtime reachability, but not a
 // particular bypass. Only an isolated, route-confirmed response proves that a

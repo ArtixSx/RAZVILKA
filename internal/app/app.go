@@ -28,6 +28,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
@@ -86,16 +87,127 @@ type App struct {
 
 type serviceView struct {
 	catalog.Service
-	Custom         bool     `json:"custom"`
-	Enabled        bool     `json:"enabled"`
-	Mode           string   `json:"mode"`
-	Route          string   `json:"route"`
-	Planned        string   `json:"planned_engine"`
-	Applied        bool     `json:"applied_enabled"`
-	AppliedRoute   string   `json:"applied_route"`
-	Sources        []string `json:"sources,omitempty"`
-	AppliedSources []string `json:"applied_sources,omitempty"`
-	Dirty          bool     `json:"dirty"`
+	Custom         bool           `json:"custom"`
+	Enabled        bool           `json:"enabled"`
+	Mode           string         `json:"mode"`
+	Route          string         `json:"route"`
+	Planned        string         `json:"planned_engine"`
+	Applied        bool           `json:"applied_enabled"`
+	AppliedRoute   string         `json:"applied_route"`
+	Sources        []string       `json:"sources,omitempty"`
+	AppliedSources []string       `json:"applied_sources,omitempty"`
+	Dirty          bool           `json:"dirty"`
+	EvidenceLevel  evidence.Level `json:"evidence_level"`
+	EvidenceRoute  string         `json:"evidence_route,omitempty"`
+	EvidenceStatus string         `json:"evidence_status,omitempty"`
+	EvidenceSource string         `json:"evidence_source,omitempty"`
+	EvidenceAt     string         `json:"evidence_checked_at,omitempty"`
+}
+
+type serviceEvidenceView struct {
+	Level     evidence.Level
+	Route     string
+	Status    string
+	Source    string
+	CheckedAt string
+}
+
+// serviceEvidenceSnapshot derives assurance only from applied state and
+// observations. Desired and planned routes are deliberately absent: selecting
+// an option in the UI must never make that route look proven.
+func (a *App) serviceEvidenceSnapshot(cfg config.Config, services []catalog.Service) map[string]serviceEvidenceView {
+	out := make(map[string]serviceEvidenceView, len(services))
+	for _, service := range services {
+		out[service.ID] = serviceEvidenceView{Level: evidence.Catalog, Status: "catalog-present", Source: "catalog"}
+	}
+
+	// AUTO is resolved from the last committed journal only. A newly calculated
+	// plan is intent, not evidence of the route currently carrying traffic.
+	committedRoutes := map[string]string{}
+	if a.Dataplane != nil {
+		if plan, exists, err := a.Dataplane.Committed(); err == nil && exists && plan.State == "committed" && plan.Revision == cfg.AppliedRevision {
+			for _, route := range plan.Routes {
+				committedRoutes[route.ServiceID] = route.Resolved
+			}
+		}
+	}
+
+	engineByID := map[string]engine.Status{}
+	for _, status := range (engine.Detector{}).Inventory() {
+		engineByID[status.ID] = status
+	}
+	effectiveRoute := map[string]string{}
+	for serviceID, applied := range cfg.AppliedServices {
+		if !applied.Enabled {
+			continue
+		}
+		route := selectedRoute(applied)
+		if route == "auto" {
+			route = committedRoutes[serviceID]
+		}
+		effectiveRoute[serviceID] = route
+		adapter := dataplane.AdapterID(route)
+		if adapter == "" || adapter == "direct" {
+			continue
+		}
+		status, exists := engineByID[adapter]
+		if !exists {
+			continue
+		}
+		observed := out[serviceID]
+		observed.Route = route
+		if status.Installed && status.Configured {
+			observed.Level = evidence.Stronger(observed.Level, evidence.Configured)
+			observed.Status = "engine-configured"
+			observed.Source = "engine-inventory"
+		}
+		if status.Running {
+			observed.Level = evidence.Stronger(observed.Level, evidence.Runtime)
+			observed.Status = "engine-running"
+			observed.Source = "process-and-interface-inventory"
+		}
+		out[serviceID] = observed
+	}
+
+	if a.TestLab == nil {
+		return out
+	}
+	for _, result := range testlab.AggregateScenarios(a.TestLab.Snapshot(a.catalogSnapshot()).Current) {
+		applied := cfg.AppliedServices[result.ServiceID]
+		if !applied.Enabled {
+			continue
+		}
+		route := effectiveRoute[result.ServiceID]
+		level := result.AssuranceLevel()
+		matchedRoute := result.Route == route && route != ""
+		if result.Route == "current" {
+			// A current-path request proves that the router attempted the request,
+			// but cannot identify which bypass actually carried it.
+			if level.AtLeast(evidence.Runtime) {
+				level = evidence.Runtime
+			}
+		} else if !matchedRoute {
+			continue
+		}
+		observed := out[result.ServiceID]
+		stronger := evidence.Stronger(observed.Level, level)
+		if stronger != observed.Level || stronger == level && result.CheckedAt >= observed.CheckedAt {
+			observed.Level = stronger
+			observed.Route = route
+			observed.Status = result.Status
+			observed.Source = result.EvidenceSource
+			if observed.Source == "" {
+				if result.Route == "current" {
+					observed.Source = "current-path-probe"
+				} else {
+					observed.Source = "isolated-route-probe"
+				}
+			}
+			observed.CheckedAt = result.CheckedAt
+			out[result.ServiceID] = observed
+		}
+	}
+	return out
 }
 
 func (a *App) Handler(static http.Handler) http.Handler {
@@ -360,18 +472,27 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		} else if runtime.Exists && runtime.Plan != nil {
 			latest := runtime.Plan
 			dataplaneState = latest.State
-			dataplaneAdapters = len(latest.Adapters)
-			if runtime.Recovery != nil && runtime.Recovery.PlanID == latest.PlanID {
+			appliedPlan := runtime.CommittedPlan
+			if appliedPlan != nil {
+				dataplaneAdapters = len(appliedPlan.Adapters)
+			}
+			if appliedPlan != nil && runtime.Recovery != nil && runtime.Recovery.PlanID == appliedPlan.PlanID {
 				dataplaneRecoveryState = runtime.Recovery.State
-				liveActive = latest.State == "committed" && len(latest.Adapters) > 0 && !a.Store.Dirty() && configDrafts == 0 && runtime.Recovery.State == "recovered"
-			} else if runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID {
+				liveActive = len(appliedPlan.Adapters) > 0 && runtime.Recovery.State == "recovered"
+			} else if appliedPlan != nil && runtime.Execution != nil && runtime.Execution.PlanID == appliedPlan.PlanID {
 				dataplaneRecoveryState = "current-process"
-				liveActive = latest.State == "committed" && len(latest.Adapters) > 0 && !a.Store.Dirty() && configDrafts == 0 && runtime.Execution.State == "committed"
+				liveActive = len(appliedPlan.Adapters) > 0 && runtime.Execution.State == "committed"
 			}
 			if latest.Revision == cfg.Revision && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && runtime.Execution.State == "rolled-back" {
 				lastApplyFailure = classifyApplyFailure(runtime.Execution.Error).Code
 			}
 		}
+	}
+	evidenceCounts := map[string]int{}
+	highestEvidence := evidence.None
+	for _, proof := range a.serviceEvidenceSnapshot(cfg, a.catalogSnapshot().Services) {
+		evidenceCounts[string(proof.Level)]++
+		highestEvidence = evidence.Stronger(highestEvidence, proof.Level)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "safe_mode": cfg.SafeMode,
@@ -384,8 +505,9 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"sources_downloadable": sourceDownloadable, "sources_reference": sourceReferences,
 		"active_connections": activeConnections, "engine_config_drafts": configDrafts,
 		"dataplane_state": dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
-		"last_apply_failure": lastApplyFailure,
-		"pending_changes":    a.Store.Dirty() || configDrafts > 0, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
+		"last_apply_failure":     lastApplyFailure,
+		"highest_evidence_level": highestEvidence, "evidence_counts": evidenceCounts,
+		"pending_changes": a.Store.Dirty() || configDrafts > 0, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
 	})
 }
 
@@ -1727,6 +1849,7 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 	cfg := a.Store.Get()
 	services := a.catalogSnapshot().Services
 	options := a.routeOptionsSnapshot()
+	observedEvidence := a.serviceEvidenceSnapshot(cfg, services)
 	views := make([]serviceView, 0, len(services))
 	for _, s := range services {
 		st := cfg.Services[s.ID]
@@ -1739,7 +1862,8 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		appliedRoute := selectedRoute(applied)
 		dirty := st.Enabled != applied.Enabled || selected != appliedRoute || !stringSlicesEqual(st.Sources, applied.Sources)
 		custom := a.CustomServices != nil && a.CustomServices.Has(s.ID)
-		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty})
+		proof := observedEvidence[s.ID]
+		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt})
 	}
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Category == views[j].Category {
@@ -2096,6 +2220,18 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// A freshly built plan describes current intent. Reuse observed evidence
+	// only when it is byte-for-byte the same input (digest + revision) as the
+	// last committed plan. Drafts and newly selected routes therefore always
+	// start unproven, while the UI can still show proof for the active plan.
+	if a.Dataplane != nil {
+		if committed, exists, committedErr := a.Dataplane.Committed(); committedErr == nil && exists && committed.State == "committed" && committed.Digest == transaction.Digest && committed.Revision == transaction.Revision {
+			transaction.State = committed.State
+			transaction.ObservedEvidence = committed.ObservedEvidence
+			transaction.EvidenceNote = committed.EvidenceNote
+			transaction.RouteEvidence = append([]dataplane.RouteEvidence(nil), committed.RouteEvidence...)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
 		"note":        "v0.15.0: evidence is WAN-scoped, Telegram uses required multi-scenario checks, and DNS has an ownership-aware safe preview. Safe Mode remains the default.",
@@ -2450,13 +2586,18 @@ type diagnosticSource struct {
 }
 
 type diagnosticDataplane struct {
-	Exists       bool     `json:"exists"`
-	PlanID       string   `json:"plan_id,omitempty"`
-	Digest       string   `json:"digest,omitempty"`
-	State        string   `json:"state,omitempty"`
-	Adapters     []string `json:"adapters,omitempty"`
-	BlockerCodes []string `json:"blocker_codes,omitempty"`
-	WarningCodes []string `json:"warning_codes,omitempty"`
+	Exists            bool           `json:"exists"`
+	PlanID            string         `json:"plan_id,omitempty"`
+	Digest            string         `json:"digest,omitempty"`
+	State             string         `json:"state,omitempty"`
+	Adapters          []string       `json:"adapters,omitempty"`
+	BlockerCodes      []string       `json:"blocker_codes,omitempty"`
+	WarningCodes      []string       `json:"warning_codes,omitempty"`
+	RequiredEvidence  evidence.Level `json:"required_evidence"`
+	ObservedEvidence  evidence.Level `json:"observed_evidence"`
+	CommittedPlanID   string         `json:"committed_plan_id,omitempty"`
+	CommittedState    string         `json:"committed_state,omitempty"`
+	CommittedEvidence evidence.Level `json:"committed_evidence"`
 }
 
 type diagnosticDocument struct {
@@ -2475,6 +2616,8 @@ type diagnosticDocument struct {
 	AppliedServices  int                  `json:"applied_services"`
 	SelectedRoutes   map[string]int       `json:"selected_route_counts"`
 	AppliedRoutes    map[string]int       `json:"applied_route_counts"`
+	HighestEvidence  evidence.Level       `json:"highest_evidence_level"`
+	EvidenceCounts   map[string]int       `json:"evidence_counts"`
 	PrivacyOmissions []string             `json:"privacy_omissions"`
 	Digest           string               `json:"digest"`
 }
@@ -2490,12 +2633,13 @@ func (a *App) diagnosticReport(w http.ResponseWriter, r *http.Request) {
 	// capability flags are sufficient for compatibility analysis.
 	system.Hostname = ""
 	document := diagnosticDocument{
-		Kind: "razvilka-diagnostic", Schema: 1, AppVersion: Version,
+		Kind: "razvilka-diagnostic", Schema: 2, AppVersion: Version,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339), System: system,
 		Engines: (engine.Detector{}).All(), SafeMode: cfg.SafeMode,
 		Revision: cfg.Revision, AppliedRevision: cfg.AppliedRevision,
-		SelectedRoutes: map[string]int{}, AppliedRoutes: map[string]int{},
-		PrivacyOmissions: []string{"engine configuration and credentials", "recovery key and UI sessions", "client IP/CIDR scopes", "connection and browsing history", "router hostname and public IP addresses"},
+		Dataplane:      diagnosticDataplane{RequiredEvidence: evidence.None, ObservedEvidence: evidence.None, CommittedEvidence: evidence.None},
+		SelectedRoutes: map[string]int{}, AppliedRoutes: map[string]int{}, HighestEvidence: evidence.None, EvidenceCounts: map[string]int{},
+		PrivacyOmissions: []string{"engine configuration and credentials", "recovery key and UI sessions", "client IP/CIDR scopes", "connection and browsing history", "probe URLs and raw probe responses", "router hostname and public IP addresses"},
 	}
 	for _, state := range cfg.Services {
 		if state.Enabled {
@@ -2509,6 +2653,10 @@ func (a *App) diagnosticReport(w http.ResponseWriter, r *http.Request) {
 			document.AppliedRoutes[selectedRoute(state)]++
 		}
 	}
+	for _, proof := range a.serviceEvidenceSnapshot(cfg, a.catalogSnapshot().Services) {
+		document.EvidenceCounts[string(proof.Level)]++
+		document.HighestEvidence = evidence.Stronger(document.HighestEvidence, proof.Level)
+	}
 	if a.Sources != nil {
 		for _, source := range a.Sources.List() {
 			document.Sources = append(document.Sources, diagnosticSource{ID: source.ID, Kind: source.Kind, Ready: source.Ready, Entries: source.Entries, LastError: source.LastError})
@@ -2519,6 +2667,7 @@ func (a *App) diagnosticReport(w http.ResponseWriter, r *http.Request) {
 			document.Dataplane.Exists = exists
 			if exists {
 				document.Dataplane.PlanID, document.Dataplane.Digest, document.Dataplane.State = plan.PlanID, plan.Digest, plan.State
+				document.Dataplane.RequiredEvidence, document.Dataplane.ObservedEvidence = plan.RequiredEvidence, plan.ObservedEvidence
 				document.Dataplane.Adapters = append([]string(nil), plan.Adapters...)
 				for _, blocker := range plan.Blockers {
 					document.Dataplane.BlockerCodes = append(document.Dataplane.BlockerCodes, blocker.Code)
@@ -2527,6 +2676,11 @@ func (a *App) diagnosticReport(w http.ResponseWriter, r *http.Request) {
 					document.Dataplane.WarningCodes = append(document.Dataplane.WarningCodes, warning.Code)
 				}
 			}
+		}
+		if committed, exists, err := a.Dataplane.Committed(); err == nil && exists {
+			document.Dataplane.CommittedPlanID = committed.PlanID
+			document.Dataplane.CommittedState = committed.State
+			document.Dataplane.CommittedEvidence = committed.ObservedEvidence
 		}
 	}
 	document.Digest = ""

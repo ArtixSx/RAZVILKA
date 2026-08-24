@@ -21,6 +21,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
@@ -904,6 +905,114 @@ func TestTestLabAPIUsesFixedCatalogProbe(t *testing.T) {
 	}
 }
 
+func TestServiceEvidenceNeverUsesDesiredOrPlannedRoute(t *testing.T) {
+	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("probe", config.ServiceState{Enabled: true, Route: "nfqws2"}); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "probe", Name: "Probe"}}}, TestLab: testlab.NewRunner()}
+	views := a.serviceEvidenceSnapshot(store.Get(), a.Catalog.Services)
+	if got := views["probe"].Level; got != evidence.Catalog {
+		t.Fatalf("desired route promoted evidence to %s", got)
+	}
+}
+
+func TestServiceEvidenceRequiresMatchingAppliedRouteProbe(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	defer upstream.Close()
+	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("probe", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyDraft(); err != nil {
+		t.Fatal(err)
+	}
+	runner := testlab.NewRunner()
+	runner.Client = upstream.Client()
+	cat := catalog.Catalog{Services: []catalog.Service{{ID: "probe", Name: "Probe", ProbeURL: upstream.URL}}}
+	a := &App{Store: store, Catalog: cat, TestLab: runner}
+	runner.ProbeCurrent(context.Background(), cat, []string{"probe"})
+	views := a.serviceEvidenceSnapshot(store.Get(), cat.Services)
+	if got := views["probe"].Level; got != evidence.Runtime {
+		t.Fatalf("current-path probe level=%s, want runtime", got)
+	}
+	runner.ProbeRoutes(context.Background(), cat, []string{"probe"}, []string{"nfqws2"}, confirmedRouteProber{})
+	views = a.serviceEvidenceSnapshot(store.Get(), cat.Services)
+	if got := views["probe"].Level; got != evidence.Runtime {
+		t.Fatalf("probe for non-applied route promoted evidence to %s", got)
+	}
+	runner.ProbeRoutes(context.Background(), cat, []string{"probe"}, []string{"direct"}, confirmedRouteProber{})
+	views = a.serviceEvidenceSnapshot(store.Get(), cat.Services)
+	if got := views["probe"].Level; got != evidence.Service {
+		t.Fatalf("matching isolated probe level=%s, want service-confirmed", got)
+	}
+}
+
+func TestPlanReusesEvidenceOnlyFromMatchingCommittedTransaction(t *testing.T) {
+	root := t.TempDir()
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("probe", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyDraft(); err != nil {
+		t.Fatal(err)
+	}
+	manager := dataplane.New(filepath.Join(root, "dataplane"))
+	cat := catalog.Catalog{Services: []catalog.Service{{ID: "probe", Name: "Probe", ProbeURL: "https://example.com/"}}}
+	a := &App{Store: store, Catalog: cat, Dataplane: manager}
+	committed, err := a.buildDataplanePlan(store.Get(), a.routeOptionsSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	committed.State = "committed"
+	committed.ObservedEvidence = evidence.Service
+	committed.EvidenceNote = "confirmed evidence"
+	committed.RouteEvidence[0].Observed = evidence.Service
+	committed.RouteEvidence[0].Source = "isolated-test"
+	if err := manager.Record(committed); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	a.plan(response, httptest.NewRequest(http.MethodGet, "/api/v1/plan", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("plan status=%d body=%s", response.Code, response.Body.String())
+	}
+	var matching struct {
+		Transaction dataplane.Plan `json:"transaction"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&matching); err != nil {
+		t.Fatal(err)
+	}
+	if matching.Transaction.State != "committed" || matching.Transaction.ObservedEvidence != evidence.Service || matching.Transaction.RouteEvidence[0].Source != "isolated-test" {
+		t.Fatalf("matching committed evidence was not restored: %+v", matching.Transaction)
+	}
+
+	if err := store.UpdateService("probe", config.ServiceState{Enabled: true, Route: "auto"}); err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	a.plan(response, httptest.NewRequest(http.MethodGet, "/api/v1/plan", nil))
+	var changed struct {
+		Transaction dataplane.Plan `json:"transaction"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&changed); err != nil {
+		t.Fatal(err)
+	}
+	if changed.Transaction.State == "committed" || changed.Transaction.ObservedEvidence != evidence.None {
+		t.Fatalf("changed draft inherited old evidence: %+v", changed.Transaction)
+	}
+}
+
 func TestIsolatedRouteAPIAddsDirectControlAndFeedsSmartRoute(t *testing.T) {
 	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
 	if err != nil {
@@ -1244,7 +1353,7 @@ func TestDiagnosticReportIsPrivacySafe(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &document); err != nil {
 		t.Fatal(err)
 	}
-	if document.Kind != "razvilka-diagnostic" || document.Schema != 1 {
+	if document.Kind != "razvilka-diagnostic" || document.Schema != 2 {
 		t.Fatalf("unexpected document identity: %+v", document)
 	}
 	if document.System.Hostname != "" {

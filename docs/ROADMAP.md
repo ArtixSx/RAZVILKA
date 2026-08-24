@@ -35,6 +35,12 @@ required scenarios instead of one landing page. Transactional DNS activation
 remains deliberately disabled until the platform adapter and rollback are
 proven on hardware.
 
+Evidence is now visible per service and per transaction in the UI and in the
+privacy-safe diagnostic report. Desired or reviewed plans cannot promote it.
+The journal also keeps the latest reviewed plan separate from the last
+successfully committed plan, so a Safe Mode preview cannot hide the route used
+for reboot recovery or AUTO evidence.
+
 ## Implemented dataplane foundation
 
 - Runtime adapters for NFQWS2, usque, WARP-WG, AmneziaWG, sing-box and Xray.

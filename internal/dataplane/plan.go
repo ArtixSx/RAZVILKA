@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engine"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 )
 
 const SchemaVersion = 1
@@ -96,6 +97,15 @@ type Warning struct {
 	Message string `json:"message"`
 }
 
+type RouteEvidence struct {
+	ServiceID string         `json:"service_id"`
+	Route     string         `json:"route"`
+	Required  evidence.Level `json:"required_evidence"`
+	Observed  evidence.Level `json:"observed_evidence"`
+	Source    string         `json:"source,omitempty"`
+	Note      string         `json:"note,omitempty"`
+}
+
 type Plan struct {
 	SchemaVersion     int                `json:"schema_version"`
 	PlanID            string             `json:"plan_id"`
@@ -113,6 +123,10 @@ type Plan struct {
 	Actions           []Action           `json:"actions"`
 	Blockers          []Blocker          `json:"blockers"`
 	Warnings          []Warning          `json:"warnings"`
+	RequiredEvidence  evidence.Level     `json:"required_evidence"`
+	ObservedEvidence  evidence.Level     `json:"observed_evidence"`
+	EvidenceNote      string             `json:"evidence_note"`
+	RouteEvidence     []RouteEvidence    `json:"route_evidence"`
 	Host              HostState          `json:"host"`
 	Protocol          []string           `json:"protocol"`
 	State             string             `json:"state"`
@@ -193,10 +207,19 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		EngineDrafts:      input.EngineConfigDrafts,
 		ResourceConflicts: input.ResourceConflicts,
 		Routes:            input.Routes,
+		RequiredEvidence:  evidence.None,
+		ObservedEvidence:  evidence.None,
+		EvidenceNote:      "План описывает намерение и сам по себе не подтверждает доступ. Уровень повышается только после health-check уже активированного маршрута.",
 		Host:              input.Host,
 		Protocol:          []string{"plan", "snapshot", "stage", "validate", "activate", "health", "commit-or-rollback"},
 		State:             "planned",
 		Note:              "План ничего не изменяет сам по себе. Live Apply разрешается только после проверки установленного обхода, ownership, snapshot, native validation, health и готовности rollback.",
+	}
+	if len(input.Routes) > 0 {
+		plan.RequiredEvidence = evidence.Service
+		for _, route := range input.Routes {
+			plan.RouteEvidence = append(plan.RouteEvidence, RouteEvidence{ServiceID: route.ServiceID, Route: route.Resolved, Required: evidence.Service, Observed: evidence.None, Note: "Ожидается изолированный health-check уже активированного маршрута."})
+		}
 	}
 
 	engineByID := make(map[string]Engine, len(input.Engines))

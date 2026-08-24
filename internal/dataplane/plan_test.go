@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/evidence"
 )
 
 func TestBuildDirectPlanIsReadyNoop(t *testing.T) {
@@ -16,6 +18,9 @@ func TestBuildDirectPlanIsReadyNoop(t *testing.T) {
 	}
 	if !plan.Ready || !plan.Noop || len(plan.Blockers) != 0 {
 		t.Fatalf("unexpected direct plan: %+v", plan)
+	}
+	if plan.RequiredEvidence != evidence.Service || plan.ObservedEvidence != evidence.None {
+		t.Fatalf("desired direct route promoted evidence: required=%s observed=%s", plan.RequiredEvidence, plan.ObservedEvidence)
 	}
 }
 
@@ -125,7 +130,7 @@ func TestManagerApplyCommitsOnlyAfterHealth(t *testing.T) {
 	if err := manager.Register(adapter); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := BuildAt(Input{Revision: 1, Routes: []Route{{ServiceID: "youtube", Resolved: "nfqws2"}}, Engines: []Engine{{ID: "nfqws2", Installed: true, Configured: true, Activatable: true}}, Host: HostState{IPCommand: true, IPTables: true, IP6Tables: true, NFQueueTarget: true, NFQWS2Config: true, NFQWS2Init: true, OffloadState: "disabled"}}, time.Unix(100, 0).UTC())
+	plan, err := BuildAt(Input{Revision: 1, Routes: []Route{{ServiceID: "youtube", Resolved: "nfqws2", ProbeURL: "https://www.youtube.com/generate_204"}}, Engines: []Engine{{ID: "nfqws2", Installed: true, Configured: true, Activatable: true}}, Host: HostState{IPCommand: true, IPTables: true, IP6Tables: true, NFQueueTarget: true, NFQWS2Config: true, NFQWS2Init: true, OffloadState: "disabled"}}, time.Unix(100, 0).UTC())
 	if err != nil || !plan.Ready {
 		t.Fatalf("plan=%+v err=%v", plan, err)
 	}
@@ -140,6 +145,50 @@ func TestManagerApplyCommitsOnlyAfterHealth(t *testing.T) {
 	want := []string{"snapshot", "stage", "validate", "activate", "health", "commit-adapter"}
 	if strings.Join(adapter.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("calls=%v want=%v", adapter.calls, want)
+	}
+	committedPlan, exists, latestErr := manager.Latest()
+	if latestErr != nil || !exists {
+		t.Fatalf("latest plan missing: exists=%v err=%v", exists, latestErr)
+	}
+	if committedPlan.ObservedEvidence != evidence.Service || committedPlan.RequiredEvidence != evidence.Service {
+		t.Fatalf("successful health was not recorded as service evidence: %+v", committedPlan)
+	}
+}
+
+func TestManagerDoesNotPromoteUnprobedDirectRoute(t *testing.T) {
+	manager := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &fakeAdapter{id: "nfqws2"}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := BuildAt(Input{
+		Revision: 2,
+		Routes: []Route{
+			{ServiceID: "youtube", Resolved: "nfqws2", ProbeURL: "https://www.youtube.com/generate_204"},
+			{ServiceID: "github", Resolved: "direct"},
+		},
+		Engines: []Engine{{ID: "nfqws2", Installed: true, Configured: true, Activatable: true}},
+		Host:    HostState{IPCommand: true, IPTables: true, IP6Tables: true, NFQueueTarget: true, NFQWS2Config: true, NFQWS2Init: true, OffloadState: "disabled"},
+	}, time.Unix(100, 0).UTC())
+	if err != nil || !plan.Ready {
+		t.Fatalf("plan=%+v err=%v", plan, err)
+	}
+	if _, err := manager.Apply(context.Background(), plan, nil); err != nil {
+		t.Fatal(err)
+	}
+	committed, exists, err := manager.Latest()
+	if err != nil || !exists {
+		t.Fatalf("latest plan missing: exists=%v err=%v", exists, err)
+	}
+	if committed.ObservedEvidence != evidence.None {
+		t.Fatalf("DIRECT route was promoted by another adapter health: %s", committed.ObservedEvidence)
+	}
+	proofs := map[string]RouteEvidence{}
+	for _, proof := range committed.RouteEvidence {
+		proofs[proof.ServiceID] = proof
+	}
+	if proofs["youtube"].Observed != evidence.Service || proofs["github"].Observed != evidence.None {
+		t.Fatalf("unexpected per-route evidence: %+v", proofs)
 	}
 }
 
@@ -374,7 +423,7 @@ func TestManagerRecordsLatestPlanAtomically(t *testing.T) {
 	}
 }
 
-func TestManagerRecoversOnlyCommittedPlan(t *testing.T) {
+func TestManagerReviewedDraftDoesNotReplaceCommittedRecoveryPlan(t *testing.T) {
 	manager := New(filepath.Join(t.TempDir(), "dataplane"))
 	adapter := &fakeAdapter{id: "nfqws2"}
 	if err := manager.Register(adapter); err != nil {
@@ -397,9 +446,14 @@ func TestManagerRecoversOnlyCommittedPlan(t *testing.T) {
 	if err := manager.Record(plan); err != nil {
 		t.Fatal(err)
 	}
+	latest, latestExists, latestErr := manager.Latest()
+	committed, committedExists, committedErr := manager.Committed()
+	if latestErr != nil || committedErr != nil || !latestExists || !committedExists || latest.State != "reviewed" || committed.State != "committed" {
+		t.Fatalf("journals were not separated: latest=%+v committed=%+v errors=%v/%v", latest, committed, latestErr, committedErr)
+	}
 	recovery, err = manager.Recover(context.Background())
-	if err != nil || recovery.State != "skipped" || adapter.recovered {
-		t.Fatalf("unsafe recovery=%+v recovered=%v err=%v", recovery, adapter.recovered, err)
+	if err != nil || recovery.State != "recovered" || !adapter.recovered {
+		t.Fatalf("committed recovery was hidden by reviewed draft: recovery=%+v recovered=%v err=%v", recovery, adapter.recovered, err)
 	}
 }
 

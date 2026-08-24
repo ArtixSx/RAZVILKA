@@ -8,8 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/evidence"
 )
 
 type Manager struct {
@@ -106,6 +109,7 @@ type PolicyRefresh struct {
 type RuntimeStatus struct {
 	Exists        bool           `json:"exists"`
 	Plan          *Plan          `json:"plan,omitempty"`
+	CommittedPlan *Plan          `json:"committed_plan,omitempty"`
 	Execution     *Execution     `json:"execution,omitempty"`
 	Recovery      *Recovery      `json:"recovery,omitempty"`
 	PolicyRefresh *PolicyRefresh `json:"policy_refresh,omitempty"`
@@ -203,7 +207,15 @@ func (m *Manager) recordLocked(plan Plan) error {
 	if err := os.MkdirAll(m.StateRoot, 0o700); err != nil {
 		return fmt.Errorf("create dataplane state: %w", err)
 	}
-	return writeAtomic(filepath.Join(m.StateRoot, "latest-plan.json"), data, 0o600)
+	if err := writeAtomic(filepath.Join(m.StateRoot, "latest-plan.json"), data, 0o600); err != nil {
+		return err
+	}
+	if plan.State == "committed" {
+		if err := writeAtomic(filepath.Join(m.StateRoot, "latest-committed-plan.json"), data, 0o600); err != nil {
+			return fmt.Errorf("record committed dataplane plan: %w", err)
+		}
+	}
+	return nil
 }
 
 func (m *Manager) Latest() (Plan, bool, error) {
@@ -211,6 +223,16 @@ func (m *Manager) Latest() (Plan, bool, error) {
 		return Plan{}, false, nil
 	}
 	return m.latestLocked()
+}
+
+// Committed returns the last plan that actually reached commit. Reviewed,
+// blocked and rolled-back drafts remain visible through Latest but cannot
+// replace the boot recovery source or the applied AUTO-route evidence.
+func (m *Manager) Committed() (Plan, bool, error) {
+	if m == nil || m.StateRoot == "" {
+		return Plan{}, false, nil
+	}
+	return m.committedLocked()
 }
 
 func (m *Manager) Status() (RuntimeStatus, error) {
@@ -225,6 +247,13 @@ func (m *Manager) Status() (RuntimeStatus, error) {
 	status.Exists = exists
 	if exists {
 		status.Plan = &plan
+	}
+	committed, committedExists, err := m.Committed()
+	if err != nil {
+		return status, err
+	}
+	if committedExists {
+		status.CommittedPlan = &committed
 	}
 	if found, err := readOptionalJournal(filepath.Join(m.StateRoot, "latest-execution.json"), &status.Execution); err != nil {
 		return status, err
@@ -268,16 +297,36 @@ func readOptionalJournal[T any](path string, target **T) (bool, error) {
 func (m *Manager) latestLocked() (Plan, bool, error) {
 	m.journalMu.RLock()
 	defer m.journalMu.RUnlock()
-	data, err := os.ReadFile(filepath.Join(m.StateRoot, "latest-plan.json"))
+	return readPlanJournal(filepath.Join(m.StateRoot, "latest-plan.json"))
+}
+
+func (m *Manager) committedLocked() (Plan, bool, error) {
+	m.journalMu.RLock()
+	defer m.journalMu.RUnlock()
+	plan, exists, err := readPlanJournal(filepath.Join(m.StateRoot, "latest-committed-plan.json"))
+	if err != nil || exists {
+		return plan, exists, err
+	}
+	// Backward compatibility: before v0.15 the committed plan lived only in
+	// latest-plan.json. Promote it lazily only when its state is unambiguous.
+	plan, exists, err = readPlanJournal(filepath.Join(m.StateRoot, "latest-plan.json"))
+	if err != nil || !exists || plan.State != "committed" {
+		return Plan{}, false, err
+	}
+	return plan, true, nil
+}
+
+func readPlanJournal(path string) (Plan, bool, error) {
+	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return Plan{}, false, nil
 	}
 	if err != nil {
-		return Plan{}, false, fmt.Errorf("read dataplane plan: %w", err)
+		return Plan{}, false, fmt.Errorf("read dataplane plan %s: %w", filepath.Base(path), err)
 	}
 	var plan Plan
 	if err := json.Unmarshal(data, &plan); err != nil {
-		return Plan{}, false, fmt.Errorf("decode dataplane plan: %w", err)
+		return Plan{}, false, fmt.Errorf("decode dataplane plan %s: %w", filepath.Base(path), err)
 	}
 	if plan.SchemaVersion != SchemaVersion || plan.PlanID == "" || plan.Digest == "" {
 		return Plan{}, false, errors.New("invalid dataplane plan journal")
@@ -297,7 +346,7 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	}
 	defer m.endOperation()
 	recovery := Recovery{State: "skipped", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []RecoveryStep{}}
-	plan, exists, err := m.latestLocked()
+	plan, exists, err := m.committedLocked()
 	if err != nil {
 		return recovery, err
 	}
@@ -396,7 +445,7 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 		return nil, err
 	}
 	defer m.endOperation()
-	plan, exists, err := m.latestLocked()
+	plan, exists, err := m.committedLocked()
 	if err != nil {
 		return nil, err
 	}
@@ -644,6 +693,42 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 	}
 	plan.State = "committed"
+	plan.ObservedEvidence = plan.RequiredEvidence
+	directPending := false
+	routeInputs := map[string]Route{}
+	for _, route := range plan.Routes {
+		routeInputs[route.ServiceID+"|"+route.Resolved] = route
+	}
+	for index := range plan.RouteEvidence {
+		proof := &plan.RouteEvidence[index]
+		route := routeInputs[proof.ServiceID+"|"+proof.Route]
+		switch {
+		case AdapterID(proof.Route) == "direct":
+			directPending = true
+			proof.Note = "DIRECT не повышается из успеха другого обхода; требуется отдельный изолированный контроль."
+		case strings.TrimSpace(route.ProbeURL) == "":
+			proof.Note = "У сервиса нет контрольного URL; успешный запуск адаптера не подтверждает доступ к самому сервису."
+		case len(route.Sources) > 0:
+			proof.Note = "Маршрут ограничен устройствами; общий health-check не доказывает путь конкретного клиента."
+		default:
+			proof.Observed = proof.Required
+			proof.Source = "adapter-health"
+			proof.Note = "Обязательный health-check сервиса через активированный адаптер завершился успешно."
+		}
+		plan.ObservedEvidence = evidence.Weaker(plan.ObservedEvidence, proof.Observed)
+	}
+	if len(plan.RouteEvidence) != len(plan.Routes) {
+		plan.ObservedEvidence = evidence.None
+	}
+	if !plan.ObservedEvidence.AtLeast(plan.RequiredEvidence) {
+		if directPending {
+			plan.EvidenceNote = "Обходы прошли health-check, но DIRECT-сервисы требуют отдельного изолированного контроля; общий уровень не повышен."
+		} else {
+			plan.EvidenceNote = "Адаптеры активированы, но не для каждого сервиса выполнена изолированная проверка; смотрите доказательность по маршрутам."
+		}
+	} else {
+		plan.EvidenceNote = "Все адаптеры активированы, а обязательные health-check сервисов через назначенные маршруты завершились успешно."
+	}
 	plan.Note = "Dataplane adapters activated, health-checked and committed."
 	execution.State = "committed"
 	execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
