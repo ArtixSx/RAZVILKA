@@ -206,6 +206,109 @@ func TestDeleteCandidateRemovesOnlyItsDraftEvidenceAndSelections(t *testing.T) {
 	}
 }
 
+func TestConfidenceDecayStopsOldFailuresFromOutvotingFreshPasses(t *testing.T) {
+	now := time.Date(2026, time.August, 24, 12, 0, 0, 0, time.UTC)
+	manager, err := New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.Now = func() time.Time { return now }
+	manager.Validator = fakeValidator{result: Validation{OK: true, Native: true, Code: "PASS"}}
+	candidate, err := manager.AddCandidate("tcp-tls", "fresh wins", "--filter-tcp=443", "expert")
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, err = manager.Validate(context.Background(), candidate.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < 20; index++ {
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, CheckedAt: now.Add(-72 * time.Hour).Add(time.Duration(index) * time.Minute).Format(time.RFC3339), Stages: []StageEvidence{{Stage: "route", Status: "fail"}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for index := 0; index < RequiredPasses; index++ {
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, CheckedAt: now.Add(time.Duration(index) * time.Second).Format(time.RFC3339), Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	summary := manager.Snapshot().Summaries[0]
+	if !summary.Eligible || summary.FreshPasses != RequiredPasses || summary.SuccessRate >= 0.75 || summary.Confidence < 0.75 {
+		t.Fatalf("confidence decay did not prefer fresh confirmed evidence: %+v", summary)
+	}
+}
+
+func TestSelectionRollsBackAfterRepeatedFreshFailures(t *testing.T) {
+	now := time.Date(2026, time.August, 24, 12, 0, 0, 0, time.UTC)
+	manager, err := New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.Now = func() time.Time { return now }
+	manager.Validator = fakeValidator{result: Validation{OK: true, Native: true, Code: "PASS"}}
+	first, _ := manager.AddCandidate("tcp-tls", "first", "--filter-tcp=443", "expert")
+	second, _ := manager.AddCandidate("tcp-tls", "second", "--filter-tcp=443 --payload=tls_client_hello", "expert")
+	first, _ = manager.Validate(context.Background(), first.ID)
+	second, _ = manager.Validate(context.Background(), second.ID)
+	pass := func(candidate Candidate) {
+		now = now.Add(time.Second)
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for index := 0; index < RequiredPasses; index++ {
+		pass(first)
+		pass(second)
+	}
+	if _, err := manager.Select("video", "tcp", "ipv4", first.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Select("video", "tcp", "ipv4", second.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < RollbackFailures; index++ {
+		now = now.Add(time.Minute)
+		if err := manager.Record(Evidence{CandidateID: second.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, Stages: []StageEvidence{{Stage: "route", Status: "fail"}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	selection := manager.Snapshot().Selections[0]
+	if selection.CandidateID != first.ID || selection.PreviousCandidateID != second.ID || selection.RolledBackAt == "" || selection.RollbackReason == "" || !selection.Healthy {
+		t.Fatalf("selection was not rolled back to the fresh alternative: %+v", selection)
+	}
+}
+
+func TestFrozenSelectionReportsDegradationWithoutRollback(t *testing.T) {
+	now := time.Date(2026, time.August, 24, 12, 0, 0, 0, time.UTC)
+	manager, err := New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.Now = func() time.Time { return now }
+	manager.Validator = fakeValidator{result: Validation{OK: true, Native: true, Code: "PASS"}}
+	candidate, _ := manager.AddCandidate("tcp-tls", "frozen", "--filter-tcp=443", "expert")
+	candidate, _ = manager.Validate(context.Background(), candidate.ID)
+	for index := 0; index < RequiredPasses; index++ {
+		now = now.Add(time.Second)
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := manager.Select("video", "tcp", "ipv4", candidate.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < RollbackFailures; index++ {
+		now = now.Add(time.Minute)
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, Stages: []StageEvidence{{Stage: "route", Status: "fail"}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	selection := manager.Snapshot().Selections[0]
+	if selection.CandidateID != candidate.ID || selection.Status != "frozen-degraded" || selection.ConsecutiveFailures != RollbackFailures {
+		t.Fatalf("frozen selection did not remain visible and unchanged: %+v", selection)
+	}
+}
+
 func TestParseNFQueuePackets(t *testing.T) {
 	output := "Chain RZST1234 (1 references)\n pkts bytes target prot opt in out source destination\n 7 420 NFQUEUE all -- * * 0.0.0.0/0 0.0.0.0/0 NFQUEUE num 64610\n"
 	if got := parseNFQueuePackets(output); got != 7 {

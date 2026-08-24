@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,10 +18,12 @@ import (
 )
 
 const (
-	SchemaVersion     = 1
-	MaxEvidence       = 2000
-	RequiredPasses    = 3
-	EvidenceFreshness = 24 * time.Hour
+	SchemaVersion      = 1
+	MaxEvidence        = 2000
+	RequiredPasses     = 3
+	RollbackFailures   = 3
+	EvidenceFreshness  = 24 * time.Hour
+	ConfidenceHalfLife = 12 * time.Hour
 )
 
 type Pool struct {
@@ -97,7 +100,10 @@ type Summary struct {
 	Passes         int     `json:"passes"`
 	Failures       int     `json:"failures"`
 	Confirmed      int     `json:"confirmed"`
+	FreshPasses    int     `json:"fresh_passes"`
+	FreshFailures  int     `json:"fresh_failures"`
 	SuccessRate    float64 `json:"success_rate"`
+	Confidence     float64 `json:"confidence"`
 	AverageLatency float64 `json:"average_latency_ms"`
 	AverageTTFB    float64 `json:"average_ttfb_ms"`
 	LastCheckedAt  string  `json:"last_checked_at,omitempty"`
@@ -106,12 +112,21 @@ type Summary struct {
 }
 
 type Selection struct {
-	ServiceID   string `json:"service_id"`
-	Protocol    string `json:"protocol"`
-	IPFamily    string `json:"ip_family"`
-	CandidateID string `json:"candidate_id"`
-	Frozen      bool   `json:"frozen"`
-	SelectedAt  string `json:"selected_at"`
+	ServiceID           string  `json:"service_id"`
+	Protocol            string  `json:"protocol"`
+	IPFamily            string  `json:"ip_family"`
+	CandidateID         string  `json:"candidate_id"`
+	PreviousCandidateID string  `json:"previous_candidate_id,omitempty"`
+	Frozen              bool    `json:"frozen"`
+	SelectedAt          string  `json:"selected_at"`
+	LastHealthyAt       string  `json:"last_healthy_at,omitempty"`
+	RolledBackAt        string  `json:"rolled_back_at,omitempty"`
+	RollbackReason      string  `json:"rollback_reason,omitempty"`
+	Healthy             bool    `json:"healthy"`
+	Confidence          float64 `json:"confidence"`
+	ConsecutiveFailures int     `json:"consecutive_failures"`
+	Status              string  `json:"status"`
+	Reason              string  `json:"reason"`
 }
 
 type State struct {
@@ -264,18 +279,17 @@ func (m *Manager) Snapshot() Snapshot {
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].PoolID+candidates[i].Name < candidates[j].PoolID+candidates[j].Name
 	})
-	selections := make([]Selection, 0, len(m.state.Selections))
-	for _, selection := range m.state.Selections {
-		selections = append(selections, selection)
-	}
+	now := m.now()
+	summaries := summarize(m.state, now)
+	selections := selectionsWithHealth(m.state, summaries)
 	sort.Slice(selections, func(i, j int) bool {
 		return selectionKey(selections[i].ServiceID, selections[i].Protocol, selections[i].IPFamily) < selectionKey(selections[j].ServiceID, selections[j].Protocol, selections[j].IPFamily)
 	})
 	evidence := append(make([]Evidence, 0, len(m.state.Evidence)), m.state.Evidence...)
 	return Snapshot{
 		SchemaVersion: SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
-		Candidates: candidates, Evidence: evidence, Summaries: summarize(m.state, m.now()), Selections: selections,
-		Safety: map[string]any{"live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses},
+		Candidates: candidates, Evidence: evidence, Summaries: summaries, Selections: selections,
+		Safety: map[string]any{"live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour)},
 	}
 }
 
@@ -390,6 +404,9 @@ func (m *Manager) DeleteCandidate(id string) error {
 	for key, selection := range m.state.Selections {
 		if selection.CandidateID == id {
 			delete(m.state.Selections, key)
+		} else if selection.PreviousCandidateID == id {
+			selection.PreviousCandidateID = ""
+			m.state.Selections[key] = selection
 		}
 	}
 	return m.saveLocked()
@@ -421,6 +438,7 @@ func (m *Manager) Record(evidence Evidence) error {
 	if len(m.state.Evidence) > MaxEvidence {
 		m.state.Evidence = append([]Evidence(nil), m.state.Evidence[len(m.state.Evidence)-MaxEvidence:]...)
 	}
+	m.reconcileSelectionLocked(evidence)
 	return m.saveLocked()
 }
 
@@ -436,7 +454,11 @@ func (m *Manager) Select(serviceID, protocol, family, candidateID string, frozen
 			if !summary.Eligible {
 				return Selection{}, errors.New(summary.Reason)
 			}
-			selection := Selection{ServiceID: serviceID, Protocol: protocol, IPFamily: family, CandidateID: candidateID, Frozen: frozen, SelectedAt: m.now().UTC().Format(time.RFC3339)}
+			now := m.now().UTC().Format(time.RFC3339)
+			selection := Selection{ServiceID: serviceID, Protocol: protocol, IPFamily: family, CandidateID: candidateID, Frozen: frozen, SelectedAt: now, LastHealthyAt: summary.LastCheckedAt, Healthy: true, Confidence: summary.Confidence, Status: "healthy", Reason: summary.Reason}
+			if previous, ok := m.state.Selections[key]; ok && previous.CandidateID != candidateID {
+				selection.PreviousCandidateID = previous.CandidateID
+			}
 			m.state.Selections[key] = selection
 			return selection, m.saveLocked()
 		}
@@ -453,10 +475,13 @@ func (m *Manager) ResetSelection(serviceID, protocol, family string) error {
 
 func summarize(state State, now time.Time) []Summary {
 	type aggregate struct {
-		s       Summary
-		latency int64
-		ttfb    int64
-		latest  time.Time
+		s               Summary
+		latency         int64
+		ttfb            int64
+		latest          time.Time
+		weightedSuccess float64
+		weightedTotal   float64
+		freshConfirmed  int
 	}
 	groups := map[string]*aggregate{}
 	for _, evidence := range state.Evidence {
@@ -476,7 +501,29 @@ func summarize(state State, now time.Time) []Summary {
 		if evidence.RouteConfirmed {
 			group.s.Confirmed++
 		}
-		checked, _ := time.Parse(time.RFC3339, evidence.CheckedAt)
+		checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
+		if err != nil {
+			continue
+		}
+		age := now.Sub(checked)
+		if age < 0 {
+			age = 0
+		}
+		weight := math.Exp2(-float64(age) / float64(ConfidenceHalfLife))
+		group.weightedTotal += weight
+		if evidence.Success {
+			group.weightedSuccess += weight
+		}
+		if age <= EvidenceFreshness {
+			if evidence.Success {
+				group.s.FreshPasses++
+				if evidence.RouteConfirmed {
+					group.freshConfirmed++
+				}
+			} else {
+				group.s.FreshFailures++
+			}
+		}
 		if checked.After(group.latest) {
 			group.latest = checked
 		}
@@ -487,20 +534,23 @@ func summarize(state State, now time.Time) []Summary {
 		if total > 0 {
 			group.s.SuccessRate = float64(group.s.Passes) / float64(total)
 		}
+		if group.weightedTotal > 0 {
+			group.s.Confidence = group.weightedSuccess / group.weightedTotal
+		}
 		if group.s.Passes > 0 {
 			group.s.AverageLatency = float64(group.latency) / float64(group.s.Passes)
 			group.s.AverageTTFB = float64(group.ttfb) / float64(group.s.Passes)
 		}
 		group.s.LastCheckedAt = group.latest.UTC().Format(time.RFC3339)
 		switch {
-		case group.s.Passes < RequiredPasses:
-			group.s.Reason = fmt.Sprintf("нужно минимум %d подтверждённых прохода", RequiredPasses)
-		case group.s.Confirmed < group.s.Passes:
-			group.s.Reason = "не каждый успешный проход подтвердил изолированный маршрут"
-		case group.s.SuccessRate < 0.75:
-			group.s.Reason = "повторяемость ниже 75%"
 		case group.latest.IsZero() || now.Sub(group.latest) > EvidenceFreshness:
-			group.s.Reason = "результат устарел"
+			group.s.Reason = "результат устарел; выполните новый изолированный тест"
+		case group.s.FreshPasses < RequiredPasses:
+			group.s.Reason = fmt.Sprintf("нужно минимум %d свежих подтверждённых прохода", RequiredPasses)
+		case group.freshConfirmed < group.s.FreshPasses:
+			group.s.Reason = "не каждый успешный проход подтвердил изолированный маршрут"
+		case group.s.Confidence < 0.75:
+			group.s.Reason = "доверие с учётом давности ниже 75%"
 		default:
 			group.s.Eligible = true
 			group.s.Reason = "кандидат воспроизводим и готов только к переносу в draft"
@@ -511,6 +561,104 @@ func summarize(state State, now time.Time) []Summary {
 		return out[i].ServiceID+out[i].Protocol+out[i].IPFamily+out[i].CandidateID < out[j].ServiceID+out[j].Protocol+out[j].IPFamily+out[j].CandidateID
 	})
 	return out
+}
+
+func selectionsWithHealth(state State, summaries []Summary) []Selection {
+	byCandidate := make(map[string]Summary, len(summaries))
+	for _, summary := range summaries {
+		byCandidate[summary.CandidateID+"|"+selectionKey(summary.ServiceID, summary.Protocol, summary.IPFamily)] = summary
+	}
+	selections := make([]Selection, 0, len(state.Selections))
+	for key, selection := range state.Selections {
+		summary, ok := byCandidate[selection.CandidateID+"|"+key]
+		selection.Healthy = ok && summary.Eligible
+		selection.Confidence = summary.Confidence
+		selection.ConsecutiveFailures = consecutiveFailures(state.Evidence, selection)
+		if ok {
+			selection.Reason = summary.Reason
+		} else {
+			selection.Reason = "для выбранного кандидата нет результатов"
+		}
+		switch {
+		case selection.Frozen && selection.Healthy:
+			selection.Status = "frozen-healthy"
+		case selection.Frozen:
+			selection.Status = "frozen-degraded"
+		case selection.Healthy:
+			selection.Status = "healthy"
+		default:
+			selection.Status = "degraded"
+		}
+		selections = append(selections, selection)
+	}
+	return selections
+}
+
+func consecutiveFailures(evidence []Evidence, selection Selection) int {
+	selectedAt, _ := time.Parse(time.RFC3339, selection.SelectedAt)
+	count := 0
+	for index := len(evidence) - 1; index >= 0; index-- {
+		item := evidence[index]
+		if item.CandidateID != selection.CandidateID || selectionKey(item.ServiceID, item.Protocol, item.IPFamily) != selectionKey(selection.ServiceID, selection.Protocol, selection.IPFamily) {
+			continue
+		}
+		checked, _ := time.Parse(time.RFC3339, item.CheckedAt)
+		if !selectedAt.IsZero() && !checked.IsZero() && checked.Before(selectedAt) {
+			break
+		}
+		if item.Success {
+			break
+		}
+		count++
+	}
+	return count
+}
+
+func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
+	key := selectionKey(evidence.ServiceID, evidence.Protocol, evidence.IPFamily)
+	selection, ok := m.state.Selections[key]
+	if !ok || selection.CandidateID != evidence.CandidateID {
+		return
+	}
+	if evidence.Success && evidence.RouteConfirmed {
+		selection.LastHealthyAt = evidence.CheckedAt
+		m.state.Selections[key] = selection
+		return
+	}
+	if selection.Frozen || consecutiveFailures(m.state.Evidence, selection) < RollbackFailures {
+		return
+	}
+	summaries := summarize(m.state, m.now())
+	var alternatives []Summary
+	for _, summary := range summaries {
+		if summary.CandidateID != selection.CandidateID && summary.Eligible && selectionKey(summary.ServiceID, summary.Protocol, summary.IPFamily) == key {
+			alternatives = append(alternatives, summary)
+		}
+	}
+	if len(alternatives) == 0 {
+		return
+	}
+	sort.SliceStable(alternatives, func(i, j int) bool {
+		if alternatives[i].CandidateID == selection.PreviousCandidateID {
+			return true
+		}
+		if alternatives[j].CandidateID == selection.PreviousCandidateID {
+			return false
+		}
+		if alternatives[i].Confidence != alternatives[j].Confidence {
+			return alternatives[i].Confidence > alternatives[j].Confidence
+		}
+		return alternatives[i].AverageLatency < alternatives[j].AverageLatency
+	})
+	fallback := alternatives[0]
+	now := m.now().UTC().Format(time.RFC3339)
+	selection.PreviousCandidateID = selection.CandidateID
+	selection.CandidateID = fallback.CandidateID
+	selection.SelectedAt = now
+	selection.LastHealthyAt = fallback.LastCheckedAt
+	selection.RolledBackAt = now
+	selection.RollbackReason = fmt.Sprintf("%d последовательных изолированных отказа; выбран свежий подтверждённый кандидат", RollbackFailures)
+	m.state.Selections[key] = selection
 }
 
 func parseArguments(raw string) ([]string, error) {

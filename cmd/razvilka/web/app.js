@@ -151,6 +151,7 @@ function hideAuth() {
   $('#authScreen').hidden = true;
   $('.app-shell').removeAttribute('aria-hidden');
   $('#authMessage').textContent = '';
+  $('#detailsPanel').classList.remove('open');
 }
 
 async function submitSetup(event) {
@@ -822,6 +823,7 @@ function renderStrategyLab() {
   const pools = lab.pools || [];
   const candidates = lab.candidates || [];
   const summaries = lab.summaries || [];
+  const selections = lab.selections || [];
   const migration = state.z2kPreview || {};
 	const target = $('#strategyTarget').value;
 	const probeServices = (state.services || []).filter((service) => service.probe_url);
@@ -854,8 +856,34 @@ function renderStrategyLab() {
   $('#strategyEvidence').innerHTML = summaries.map((summary) => {
 		const latest = [...evidence].reverse().find((item) => item.candidate_id === summary.candidate_id && item.service_id === summary.service_id && item.protocol === summary.protocol && item.ip_family === summary.ip_family);
 		const quality = summary.passes > 0 ? `TTFB ≈ ${Math.round(summary.average_ttfb_ms || summary.average_latency_ms || 0)} мс` : 'нет успешного замера';
-		return `<button class="strategy-summary ${summary.eligible ? 'eligible' : ''}" data-strategy-evidence="${esc(latest ? evidence.indexOf(latest) : '')}"><div><b>${esc(serviceName(summary.service_id))}</b><small>${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</small></div><span>${summary.passes} успешно / ${summary.failures} ошибок · ${esc(quality)}</span><em>${Math.round((summary.success_rate || 0) * 100)}%</em><small>${esc(summary.reason)}</small></button>`;
+		return `<button class="strategy-summary ${summary.eligible ? 'eligible' : ''}" data-strategy-evidence="${esc(latest ? evidence.indexOf(latest) : '')}"><div><b>${esc(serviceName(summary.service_id))}</b><small>${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</small></div><span>${summary.fresh_passes || 0} свежих успеха / ${summary.fresh_failures || 0} ошибок · ${esc(quality)}</span><em>${Math.round((summary.confidence || 0) * 100)}% доверия</em><small>${esc(summary.reason)}</small></button>`;
 	}).join('') || '<div class="strategy-empty">Результаты появятся после изолированных проверок DNS → TCP → TLS → HTTP и подтверждения счётчика NFQUEUE.</div>';
+	const selectionKey = (item) => `${item.service_id}|${item.protocol}|${item.ip_family}`;
+	const currentByKey = new Map(selections.map((selection) => [selectionKey(selection), selection.candidate_id]));
+	const statusLabels = { healthy: 'РАБОТАЕТ', 'frozen-healthy': 'ЗАКРЕПЛЕНО', degraded: 'НУЖНА ПРОВЕРКА', 'frozen-degraded': 'ЗАКРЕПЛЕНО · ЕСТЬ ОШИБКИ' };
+	const remembered = selections.map((selection) => {
+		const candidate = candidates.find((item) => item.id === selection.candidate_id);
+		return `<article class="strategy-memory-card ${selection.healthy ? 'healthy' : 'degraded'}"><div><span>${esc(statusLabels[selection.status] || selection.status || 'СОСТОЯНИЕ НЕИЗВЕСТНО')}</span><b>${esc(serviceName(selection.service_id))} · ${esc(selection.protocol.toUpperCase())} · ${esc(selection.ip_family)}</b><small>${esc(candidate?.name || selection.candidate_id)} · ${Math.round((selection.confidence || 0) * 100)}% доверия</small></div><p>${esc(selection.rollback_reason || selection.reason || 'Ожидаются новые проверки')}</p><button class="secondary" data-strategy-reset="1" data-service="${esc(selection.service_id)}" data-protocol="${esc(selection.protocol)}" data-family="${esc(selection.ip_family)}">Не запоминать</button></article>`;
+	});
+	const available = summaries.filter((summary) => summary.eligible && currentByKey.get(selectionKey(summary)) !== summary.candidate_id).map((summary) => {
+		const candidate = candidates.find((item) => item.id === summary.candidate_id);
+		return `<article class="strategy-memory-card available"><div><span>ГОТОВ К ПАМЯТИ</span><b>${esc(serviceName(summary.service_id))} · ${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</b><small>${esc(candidate?.name || summary.candidate_id)} · ${Math.round((summary.confidence || 0) * 100)}% доверия</small></div><p>Автовозврат сработает только после ${lab.safety?.automatic_rollback_failures || 3} последовательных изолированных отказов.</p><button class="primary" data-strategy-select="${esc(summary.candidate_id)}" data-service="${esc(summary.service_id)}" data-protocol="${esc(summary.protocol)}" data-family="${esc(summary.ip_family)}">Запомнить</button></article>`;
+	});
+	$('#strategyMemory').innerHTML = [...remembered, ...available].join('') || '<div class="strategy-empty">Сначала получите три свежих подтверждённых результата для одного кандидата.</div>';
+}
+
+async function updateStrategyMemory(button, reset = false) {
+	button.disabled = true;
+	try {
+		const body = { action: reset ? 'reset' : 'select', service_id: button.dataset.service, protocol: button.dataset.protocol, ip_family: button.dataset.family, candidate_id: button.dataset.strategySelect || '', frozen: false };
+		await api('/api/v1/strategy-lab/selections', { method: 'POST', body: JSON.stringify(body) });
+		state.strategyLab = await api('/api/v1/strategy-lab');
+		renderStrategyLab();
+	} catch (error) {
+		showDetails({ error: error.message, response: error.payload }, reset ? 'Память стратегии не сброшена' : 'Стратегия не запомнена');
+	} finally {
+		button.disabled = false;
+	}
 }
 
 async function importZ2KStrategies() {
@@ -2797,6 +2825,12 @@ function bindEvents() {
 		const row = event.target.closest('[data-strategy-evidence]');
 		const index = Number(row?.dataset.strategyEvidence);
 		if (row && Number.isInteger(index) && state.strategyLab?.evidence?.[index]) showDetails(state.strategyLab.evidence[index], 'Подтверждённый результат NFQWS2');
+	});
+	$('#strategyMemory').addEventListener('click', (event) => {
+		const select = event.target.closest('[data-strategy-select]');
+		const reset = event.target.closest('[data-strategy-reset]');
+		if (select) updateStrategyMemory(select, false);
+		if (reset) updateStrategyMemory(reset, true);
 	});
   $('#refreshComponents').addEventListener('click', () => refreshComponents(true));
   $('#openEngineConfig').addEventListener('click', () => openEngineConfiguration());
