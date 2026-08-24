@@ -197,6 +197,7 @@ type Manager struct {
 	Path      string
 	Validator Validator
 	Executor  ProbeExecutor
+	Resources ResourceInspector
 	Now       func() time.Time
 
 	mu    sync.RWMutex
@@ -204,7 +205,7 @@ type Manager struct {
 }
 
 func New(path string) (*Manager, error) {
-	m := &Manager{Path: path, Validator: ExecValidator{}, Executor: &SystemProbeExecutor{}, Now: time.Now, state: emptyState()}
+	m := &Manager{Path: path, Validator: ExecValidator{}, Executor: &SystemProbeExecutor{}, Resources: SystemResourceInspector{}, Now: time.Now, state: emptyState()}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -252,7 +253,13 @@ func (m *Manager) Probe(ctx context.Context, id string, target ProbeTarget) (Evi
 	if executor == nil {
 		return Evidence{}, errors.New("isolated Strategy Lab executor is disabled")
 	}
-	evidence, err := executor.Execute(ctx, candidate, target)
+	budget := m.resourceBudget()
+	if !budget.Allowed {
+		return Evidence{}, fmt.Errorf("изолированный тест временно заблокирован: %s", budget.Reason)
+	}
+	probeContext, cancel := context.WithTimeout(ctx, ProbeTimeout)
+	defer cancel()
+	evidence, err := executor.Execute(probeContext, candidate, target)
 	if err != nil {
 		return evidence, err
 	}
@@ -289,8 +296,15 @@ func (m *Manager) Snapshot() Snapshot {
 	return Snapshot{
 		SchemaVersion: SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
 		Candidates: candidates, Evidence: evidence, Summaries: summaries, Selections: selections,
-		Safety: map[string]any{"live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour)},
+		Safety: map[string]any{"live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour), "probe_budget": m.resourceBudget()},
 	}
+}
+
+func (m *Manager) resourceBudget() ResourceBudget {
+	if m.Resources == nil {
+		return evaluateResourceBudget(ResourceBudget{})
+	}
+	return evaluateResourceBudget(m.Resources.Inspect())
 }
 
 func (m *Manager) AddCandidate(poolID, name, arguments, origin string) (Candidate, error) {

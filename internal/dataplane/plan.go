@@ -52,6 +52,7 @@ type HostState struct {
 	NFQWS2Init       bool   `json:"nfqws2_init"`
 	NFQWS2InitPath   string `json:"nfqws2_init_path,omitempty"`
 	OffloadState     string `json:"offload_state"`
+	OffloadSource    string `json:"offload_source,omitempty"`
 	Z2KInstalled     bool   `json:"z2k_installed"`
 	Z2KRunning       bool   `json:"z2k_running"`
 	Z2KVersion       string `json:"z2k_version,omitempty"`
@@ -144,6 +145,10 @@ func DiscoverHost() HostState {
 		IP6Tables:    lookupAny("/opt/sbin/ip6tables", "/opt/bin/ip6tables", "ip6tables"),
 		OffloadState: "unknown",
 	}
+	host.OffloadState, host.OffloadSource = detectOffloadState(
+		"/proc/sys/net/netfilter/nf_conntrack_fastnat",
+		"/sys/module/nf_conntrack/parameters/fastnat",
+	)
 	for _, path := range []string{"/opt/etc/nfqws2/nfqws2.conf", "/etc/nfqws2/nfqws2.conf"} {
 		if regularFile(path) {
 			host.NFQWS2Config = true
@@ -179,6 +184,28 @@ func DiscoverHost() HostState {
 		}
 	}
 	return host
+}
+
+func detectOffloadState(paths ...string) (state, source string) {
+	disabledSource := ""
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(string(data))) {
+		case "1", "y", "yes", "on", "enabled":
+			return "enabled", path
+		case "0", "n", "no", "off", "disabled":
+			if disabledSource == "" {
+				disabledSource = path
+			}
+		}
+	}
+	if disabledSource != "" {
+		return "disabled", disabledSource
+	}
+	return "unknown", ""
 }
 
 func Build(input Input) (Plan, error) {
@@ -419,8 +446,11 @@ func addNFQWS2Preflight(plan *Plan, host HostState) {
 	if !host.IP6Tables {
 		plan.Warnings = append(plan.Warnings, Warning{Code: "IPV6_NOT_READY", Adapter: "nfqws2", Message: "ip6tables не найден: IPv6 нельзя считать покрытым."})
 	}
-	if host.OffloadState == "unknown" || host.OffloadState == "enabled" {
-		plan.Warnings = append(plan.Warnings, Warning{Code: "OFFLOAD_UNCONFIRMED", Adapter: "nfqws2", Message: "Состояние аппаратного ускорения не подтверждено; оно может обходить netfilter."})
+	switch host.OffloadState {
+	case "enabled":
+		plan.Warnings = append(plan.Warnings, Warning{Code: "OFFLOAD_ENABLED", Adapter: "nfqws2", Message: "Обнаружен включённый FastNAT/offload; часть соединений может пройти мимо NFQUEUE. RAZVILKA не меняет системный ускоритель автоматически."})
+	case "unknown":
+		plan.Warnings = append(plan.Warnings, Warning{Code: "OFFLOAD_UNCONFIRMED", Adapter: "nfqws2", Message: "Состояние FastNAT/offload не удалось прочитать; результат подтвердит точечный счётчик NFQUEUE во время health-check."})
 	}
 }
 

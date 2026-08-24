@@ -825,6 +825,14 @@ function renderStrategyLab() {
   const summaries = lab.summaries || [];
   const selections = lab.selections || [];
   const migration = state.z2kPreview || {};
+	const budget = lab.safety?.probe_budget || {};
+	const budgetNode = $('#strategyResourceBudget');
+	if (budgetNode) {
+		budgetNode.classList.toggle('blocked', budget.allowed === false);
+		const memory = budget.memory_total_kb ? `${Math.round((budget.memory_available_kb || 0) / 1024)} МиБ свободно · ${budget.memory_available_percent || 0}%` : 'RAM не определена';
+		const load = budget.cpu_count ? `load ${Number(budget.load_1 || 0).toFixed(2)} / ${budget.cpu_count} CPU` : 'нагрузка не определена';
+		budgetNode.innerHTML = `<b>${budget.allowed === false ? 'ТЕСТ ОТЛОЖЕН' : 'РЕСУРСЫ ТЕСТА'}</b><span>${esc(budget.reason || 'Проверяем RAM и нагрузку роутера…')} ${esc(memory)} · ${esc(load)} · лимит ${Math.round((budget.timeout_ms || 15000) / 1000)} с.</span>`;
+	}
 	const target = $('#strategyTarget').value;
 	const probeServices = (state.services || []).filter((service) => service.probe_url);
   $('#strategyTarget').innerHTML = probeServices.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('') || '<option value="">Нет сервисов с адресом проверки</option>';

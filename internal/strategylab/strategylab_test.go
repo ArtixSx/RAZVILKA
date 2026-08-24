@@ -14,9 +14,13 @@ type fakeValidator struct {
 type fakeProbeExecutor struct {
 	evidence Evidence
 	target   ProbeTarget
+	called   bool
+	deadline time.Time
 }
 
-func (f *fakeProbeExecutor) Execute(_ context.Context, candidate Candidate, target ProbeTarget) (Evidence, error) {
+func (f *fakeProbeExecutor) Execute(ctx context.Context, candidate Candidate, target ProbeTarget) (Evidence, error) {
+	f.called = true
+	f.deadline, _ = ctx.Deadline()
 	f.target = target
 	result := f.evidence
 	result.CandidateID = candidate.ID
@@ -25,6 +29,10 @@ func (f *fakeProbeExecutor) Execute(_ context.Context, candidate Candidate, targ
 	result.IPFamily = target.IPFamily
 	return result, nil
 }
+
+type fakeResourceInspector struct{ budget ResourceBudget }
+
+func (f fakeResourceInspector) Inspect() ResourceBudget { return f.budget }
 
 func (v fakeValidator) Validate(_ context.Context, arguments []string) Validation {
 	result := v.result
@@ -149,6 +157,44 @@ func TestProbeRequiresNativeValidationAndRecordsTypedEvidence(t *testing.T) {
 	}
 	if !evidence.Success || executor.target.Protocol != "tcp" || len(manager.Snapshot().Evidence) != 1 {
 		t.Fatalf("unexpected isolated evidence: %+v target=%+v", evidence, executor.target)
+	}
+	if executor.deadline.IsZero() || time.Until(executor.deadline) > ProbeTimeout+time.Second {
+		t.Fatalf("probe deadline was not bounded: %v", executor.deadline)
+	}
+}
+
+func TestProbeResourceGateBlocksLowMemoryBeforeExecutor(t *testing.T) {
+	manager, err := New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.Validator = fakeValidator{result: Validation{OK: true, Native: true, Code: "PASS"}}
+	candidate, err := manager.AddCandidate("tcp-tls", "low memory", "--filter-tcp=443", "expert")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = manager.Validate(context.Background(), candidate.ID); err != nil {
+		t.Fatal(err)
+	}
+	executor := &fakeProbeExecutor{evidence: Evidence{Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}}
+	manager.Executor = executor
+	manager.Resources = fakeResourceInspector{budget: ResourceBudget{Observed: true, MemoryTotalKB: 128 * 1024, MemoryAvailableKB: 12 * 1024, CPUCount: 2}}
+	if _, err = manager.Probe(context.Background(), candidate.ID, ProbeTarget{ServiceID: "video", ProbeURL: "https://example.com/"}); err == nil {
+		t.Fatal("low-memory probe was not blocked")
+	}
+	if executor.called {
+		t.Fatal("executor ran despite resource blocker")
+	}
+	budget, ok := manager.Snapshot().Safety["probe_budget"].(ResourceBudget)
+	if !ok || budget.Allowed || budget.Reason == "" {
+		t.Fatalf("resource blocker is not exposed: %#v", manager.Snapshot().Safety["probe_budget"])
+	}
+}
+
+func TestResourceBudgetBlocksSustainedHighLoad(t *testing.T) {
+	budget := evaluateResourceBudget(ResourceBudget{Observed: true, MemoryTotalKB: 256 * 1024, MemoryAvailableKB: 128 * 1024, CPUCount: 1, Load1: 2.5})
+	if budget.Allowed || budget.Reason == "" {
+		t.Fatalf("high load was not blocked: %+v", budget)
 	}
 }
 

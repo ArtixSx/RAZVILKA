@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,6 +11,45 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/evidence"
 )
+
+func TestDetectOffloadState(t *testing.T) {
+	root := t.TempDir()
+	disabled := filepath.Join(root, "disabled")
+	enabled := filepath.Join(root, "enabled")
+	if err := os.WriteFile(disabled, []byte("0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(enabled, []byte("Y\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if state, source := detectOffloadState(filepath.Join(root, "missing"), disabled); state != "disabled" || source != disabled {
+		t.Fatalf("unexpected disabled state: %s %s", state, source)
+	}
+	if state, source := detectOffloadState(disabled, enabled); state != "enabled" || source != enabled {
+		t.Fatalf("enabled source must win: %s %s", state, source)
+	}
+	if state, source := detectOffloadState(filepath.Join(root, "missing")); state != "unknown" || source != "" {
+		t.Fatalf("unexpected unknown state: %s %s", state, source)
+	}
+}
+
+func TestBuildWarnsWhenFastNATIsEnabled(t *testing.T) {
+	plan, err := BuildAt(Input{
+		Revision: 1,
+		Routes:   []Route{{ServiceID: "youtube", Resolved: "nfqws2"}},
+		Engines:  []Engine{{ID: "nfqws2", Installed: true, Configured: true, Activatable: true}},
+		Host:     HostState{IPCommand: true, IPTables: true, IP6Tables: true, NFQueueTarget: true, NFQWS2Config: true, NFQWS2Init: true, OffloadState: "enabled"},
+	}, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, warning := range plan.Warnings {
+		if warning.Code == "OFFLOAD_ENABLED" {
+			return
+		}
+	}
+	t.Fatalf("enabled FastNAT warning is missing: %+v", plan.Warnings)
+}
 
 func TestBuildDirectPlanIsReadyNoop(t *testing.T) {
 	plan, err := BuildAt(Input{Revision: 3, SafeMode: true, Routes: []Route{{ServiceID: "example", ServiceName: "Example", Selected: "direct", Resolved: "direct"}}}, time.Unix(100, 0).UTC())
