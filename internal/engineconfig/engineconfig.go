@@ -125,7 +125,7 @@ func Specs() []EngineSpec {
 			Files: []FileSpec{{ID: "main", Name: "WARP WireGuard", Kind: "secret-config", Syntax: "ini", Paths: []string{"/opt/etc/razvilka/warp/wgcf-profile.conf", "/opt/etc/wireguard/warp.conf"}, Sensitive: true, Description: "Содержит приватный ключ; чтение из UI скрыто до появления авторизации"}},
 		},
 		{
-			ID: "sing-box", Name: "Sing-box", Description: "VLESS / Reality / Hysteria2 / TUIC / Shadowsocks",
+			ID: "sing-box", Name: "Sing-box · свой сервер", Description: "Универсальный клиент VLESS / Reality / Hysteria2 / TUIC / Shadowsocks; без удалённого профиля доступ не создаёт",
 			Files: []FileSpec{{ID: "main", Name: "config.json", Kind: "secret-config", Syntax: "json", Paths: []string{"/opt/etc/sing-box/config.json", "/opt/etc/singbox/config.json", "/opt/etc/sing-box.json"}, Sensitive: true, Description: "Основной JSON-конфиг sing-box; может содержать UUID, пароли и ключи"}},
 		},
 		{

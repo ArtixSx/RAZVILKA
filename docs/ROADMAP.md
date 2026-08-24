@@ -48,6 +48,7 @@ RAZVILKA reports it and never deletes it automatically.
 ## Implemented dataplane foundation
 
 - Runtime adapters for NFQWS2, usque, WARP-WG, AmneziaWG, sing-box and Xray.
+- Bypass cards explain whether a method works locally, uses Cloudflare, or requires a remote server/profile; Sing-box is presented as a client rather than a standalone unblocker.
 - One locked transaction: snapshot, stage, native validation, activation, route/service health, adapter commit and reverse rollback.
 - Atomic execution/recovery/policy/deactivation journals and committed-plan boot recovery.
 - Exact process/PID ownership, isolated interfaces/tables/priorities and endpoint/self-loop guards.

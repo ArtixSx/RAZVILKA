@@ -1038,10 +1038,22 @@ function renderEngines() {
     const cls = e.running ? 'running' : e.installed ? 'installed' : '';
     const text = e.running ? 'РАБОТАЕТ' : e.installed ? 'УСТАНОВЛЕН' : 'НЕ УСТАНОВЛЕН';
     const kind = e.kind === 'local' ? 'Локальный' : e.kind === 'tunnel' ? 'Туннель' : (e.kind || 'Обход');
-    return `<button class="concept-engine-row" data-engine-open="${esc(e.id)}"><div><b>${esc(e.name)}</b><small>${esc(kind)}</small></div><span class="engine-state ${cls}">${text}</span><span class="engine-config-link">Настроить →</span></button>`;
+    const guide = engineRoleGuide(e.id);
+    return `<button class="concept-engine-row" data-engine-open="${esc(e.id)}"><div><b>${esc(e.name)}</b><small>${esc(kind)}${guide ? ` · ${esc(guide.short)}` : ''}</small></div><span class="engine-state ${cls}">${text}</span><span class="engine-config-link">Настроить →</span></button>`;
   }).join('');
   $('#engineCards').innerHTML = cards;
   $$('[data-engine-open]').forEach((button) => button.addEventListener('click', async () => { await openEngineConfiguration(button.dataset.engineOpen); }));
+}
+
+function engineRoleGuide(id) {
+  return ({
+    nfqws2: { short: 'без сервера', title: 'Локальный обход DPI', text: 'Меняет вид DPI-трафика прямо на роутере. Подходит, когда домен доступен по IP, но провайдер вмешивается в TCP, TLS или QUIC.', need: 'Удалённый сервер не нужен.' },
+    usque: { short: 'Cloudflare MASQUE', title: 'Туннель WARP через MASQUE', text: 'Отправляет выбранные сервисы через Cloudflare по QUIC/HTTP2. Полезен при полной IP-блокировке, когда одного NFQWS2 недостаточно.', need: 'Нужен доступ к Cloudflare; свой сервер не нужен.' },
+    'warp-wg': { short: 'Cloudflare WireGuard', title: 'Туннель WARP WireGuard', text: 'Отправляет выбранные IP-сети через профиль Cloudflare WARP. Работает только если провайдер пропускает WireGuard-handshake.', need: 'Нужен созданный или импортированный WARP-профиль.' },
+    'sing-box': { short: 'нужен удалённый профиль', title: 'Универсальный клиент для своего сервера', text: 'Подключает VLESS/Reality, Hysteria2, TUIC или Shadowsocks и ведёт выбранные сервисы через удалённый узел. Это вариант для полной блокировки, TCP, UDP и IP-сетей.', need: 'Одна установка ничего не разблокирует: нужен рабочий профиль своего или доверенного сервера.' },
+    xray: { short: 'нужен VLESS-профиль', title: 'Альтернативный VLESS/Reality-клиент', text: 'Подключает удалённый Xray/VLESS-узел и используется как туннельный маршрут для выбранных сервисов.', need: 'Нужны адрес, UUID/ключи и доступный удалённый сервер.' },
+    amneziawg: { short: 'нужен AWG-сервер', title: 'Устойчивый туннель AmneziaWG', text: 'Ведёт выбранные сервисы через сервер с поддержкой AmneziaWG и помогает там, где обычный WireGuard фильтруется.', need: 'Нужен собственный или доверенный сервер AmneziaWG; профиль WARP сюда не подходит.' },
+  })[String(id || '')] || null;
 }
 
 async function openEngineConfiguration(id = '') {
@@ -1092,7 +1104,8 @@ function renderEngineControl() {
   $$('[data-engine-id]').forEach((b) => b.addEventListener('click', () => selectEngine(b.dataset.engineId)));
 
   const [statusText, statusClass] = engineStatusText(engine);
-  $('#engineSelectedHead').innerHTML = `<div><h3>${esc(engine.name)}</h3><p>${esc(engine.description || '')}</p></div><div class="engine-selected-meta"><span class="engine-state ${statusClass}">${statusText}</span><span>${(engine.files || []).length} файлов</span></div>`;
+  const role = engineRoleGuide(engine.id);
+  $('#engineSelectedHead').innerHTML = `<div><h3>${esc(engine.name)}</h3><p>${esc(engine.description || '')}</p>${role ? `<div class="engine-role-guide"><span>ЗАЧЕМ НУЖЕН</span><b>${esc(role.title)}</b><p>${esc(role.text)}</p><small>${esc(role.need)}</small></div>` : ''}</div><div class="engine-selected-meta"><span class="engine-state ${statusClass}">${statusText}</span><span>${(engine.files || []).length} файлов</span></div>`;
 
   $('#engineFileSelect').innerHTML = (engine.files || []).map((f) => `<option value="${esc(f.id)}" ${f.id === state.selectedEngineFile ? 'selected' : ''}>${esc(f.name)}${f.staged ? ' · черновик' : ''}${f.sensitive ? ' · секретный' : ''}</option>`).join('');
   $('#engineFilesTable').innerHTML = (engine.files || []).map((f) => `<div class="engine-file-row ${f.id === state.selectedEngineFile ? 'active' : ''}" data-engine-file-row="${esc(f.id)}"><div><b>${esc(f.name)}</b><small>${esc(f.description || '')}</small></div><div class="engine-file-meta"><span>${esc(f.syntax)}</span><span>${f.exists ? formatBytes(f.size) : 'нет рабочего файла'}</span>${f.staged ? '<span class="draft-count">ЧЕРНОВИК</span>' : ''}${f.sensitive ? '<span class="secret-tag">СЕКРЕТНЫЙ</span>' : ''}</div><code>${esc(f.path || '—')}</code></div>`).join('');

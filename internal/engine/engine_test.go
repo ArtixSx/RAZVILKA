@@ -116,6 +116,19 @@ func TestFastInventoryKeepsRegistryMetadataWithoutVersionCommands(t *testing.T) 
 	}
 }
 
+func TestSingBoxInventoryExplainsRemoteProfileRequirement(t *testing.T) {
+	for _, item := range specifications() {
+		if item.id != "sing-box" {
+			continue
+		}
+		if !strings.Contains(item.name, "свой сервер") || !strings.Contains(item.description, "без удалённого профиля") {
+			t.Fatalf("sing-box inventory must explain its role, got name=%q description=%q", item.name, item.description)
+		}
+		return
+	}
+	t.Fatal("sing-box inventory item is missing")
+}
+
 func TestVisibleOmitsExternalNFQWS2Owner(t *testing.T) {
 	items := Visible([]Status{{ID: "nfqws2", Name: "NFQWS2"}, {ID: "z2k", Name: "z2k", External: true}, {ID: "usque", Name: "WARP MASQUE"}})
 	if len(items) != 2 || items[0].ID != "nfqws2" || items[1].ID != "usque" {
