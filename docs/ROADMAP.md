@@ -45,6 +45,20 @@ Apply preflight now also reads IPv4/IPv6 policy rules and routing tables in the
 adapter-owned ranges. A foreign rule becomes an explicit adapter blocker;
 RAZVILKA reports it and never deletes it automatically.
 
+The 2026-08-25 architecture review is recorded in
+[ARCHITECTURE_GAP_2026-08-25.md](ARCHITECTURE_GAP_2026-08-25.md). The first
+scoped-draft slice is complete: Services and Devices apply routing changes
+independently, and an unused WARP profile no longer blocks them. DNS and Sources
+still need their own transactional scopes. A safe USQUE re-registration
+experiment (including an optional temporary Quad9 candidate) is planned in
+[USQUE_RECOVERY_PLAN_RU.md](USQUE_RECOVERY_PLAN_RU.md); it is not implemented
+as a live router mutation yet.
+
+Public VLESS/subscription sources remain a future Source Hub item. They will not
+be hardcoded directly into sing-box: provenance, deduplication, strict parsing,
+local router/service verification, quarantine and a selected-service-only trust
+boundary are required first.
+
 ## Implemented dataplane foundation
 
 - Runtime adapters for NFQWS2, usque, WARP-WG, AmneziaWG, sing-box and Xray.

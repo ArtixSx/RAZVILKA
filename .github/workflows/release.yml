@@ -88,9 +88,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          NOTES_OPTION="--generate-notes"
+          if [[ -f "docs/releases/${VERSION}.md" ]]; then
+            NOTES_OPTION="--notes-file=docs/releases/${VERSION}.md"
+          fi
           gh release create "$GITHUB_REF_NAME" \
             --title "RAZVILKA $GITHUB_REF_NAME" \
-            --generate-notes \
+            "$NOTES_OPTION" \
             dist/razvilka-linux-amd64 \
             dist/razvilka-linux-arm64 \
             dist/razvilka-linux-mips \

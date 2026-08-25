@@ -46,7 +46,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.15.0"
+const Version = "0.15.1"
 const defaultDataplaneApplyTimeout = 8 * time.Minute
 
 type applyFailureAdvice struct {
@@ -509,6 +509,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"sources_ready": readySources, "sources_total": sourceCount, "sources_catalog_total": sourceCatalogCount,
 		"sources_downloadable": sourceDownloadable, "sources_reference": sourceReferences,
 		"active_connections": activeConnections, "engine_config_drafts": configDrafts,
+		"routing_pending_changes": a.Store.Dirty(), "engine_pending_changes": configDrafts > 0,
 		"dataplane_state": dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
 		"last_apply_failure":     lastApplyFailure,
 		"highest_evidence_level": highestEvidence, "evidence_counts": evidenceCounts,
@@ -2337,6 +2338,11 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	scope, engineID, scopeErr := changeScopeFromRequest(r)
+	if scopeErr != nil {
+		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
+		return
+	}
 	cfg := a.Store.Get()
 	options := a.routeOptionsSnapshot()
 	var rows []map[string]any
@@ -2355,7 +2361,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 			"domains": len(s.Domains), "cidrs": len(s.CIDRs), "source_refs": s.SourceRefs,
 		})
 	}
-	transaction, err := a.buildDataplanePlan(cfg, options)
+	transaction, err := a.buildDataplanePlanForScope(cfg, options, scope, engineID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2374,7 +2380,8 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
-		"note":        "v0.15.0: evidence is WAN-scoped, Telegram uses required multi-scenario checks, and DNS has an ownership-aware safe preview. Safe Mode remains the default.",
+		"scope":       scope,
+		"note":        "v0.15.1: service and device routing changes apply independently from unrelated engine drafts. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})
@@ -2402,8 +2409,21 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	scope, engineID, scopeErr := changeScopeFromRequest(r)
+	if scopeErr != nil {
+		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
+		return
+	}
+	if scope == changeScopeEngine && a.Store.Dirty() {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"ok": false, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": true,
+			"error": "routing changes must be applied first",
+			"note":  "Сначала примените или отмените изменения на вкладке «Сервисы». Конфигурация обхода сохранена и не потеряна.",
+		})
+		return
+	}
 	cfg := a.Store.Get()
-	transaction, err := a.buildDataplanePlan(cfg, a.routeOptionsSnapshot())
+	transaction, err := a.buildDataplanePlanForScope(cfg, a.routeOptionsSnapshot(), scope, engineID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2428,7 +2448,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"ok": true, "reviewed": true, "safe_mode": true, "pending_changes": true, "live_applied": false,
+			"ok": true, "reviewed": true, "safe_mode": true, "scope": scope, "pending_changes": true, "scope_pending_changes": true, "live_applied": false,
 			"note": transaction.Note, "transaction": transaction,
 		})
 		return
@@ -2438,7 +2458,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusConflict, map[string]any{
-			"ok": false, "safe_mode": false, "pending_changes": true, "live_applied": false,
+			"ok": false, "safe_mode": false, "scope": scope, "pending_changes": true, "scope_pending_changes": true, "live_applied": false,
 			"error": "dataplane transaction is blocked", "transaction": transaction,
 		})
 		return
@@ -2454,13 +2474,13 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		if applyErr != nil {
 			failure := classifyApplyFailure(applyErr.Error())
 			writeJSON(w, http.StatusConflict, map[string]any{
-				"ok": false, "safe_mode": false, "pending_changes": a.pendingChanges(), "live_applied": false,
+				"ok": false, "safe_mode": false, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "live_applied": false,
 				"error": applyErr.Error(), "note": failure.Message, "failure": failure, "transaction": transaction, "execution": execution,
 			})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"ok": true, "safe_mode": false, "pending_changes": a.pendingChanges(), "live_applied": true,
+			"ok": true, "safe_mode": false, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "live_applied": true,
 			"note": "Dataplane activated, health-checked and committed.", "transaction": transaction, "execution": execution,
 		})
 		return
@@ -2477,7 +2497,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 	if !record() {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "safe_mode": cfg.SafeMode, "pending_changes": a.pendingChanges(), "live_applied": liveApplied, "note": note, "transaction": transaction})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "safe_mode": cfg.SafeMode, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "live_applied": liveApplied, "note": note, "transaction": transaction})
 }
 
 func classifyApplyFailure(message string) applyFailureAdvice {
@@ -2510,6 +2530,34 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 }
 
 func (a *App) buildDataplanePlan(cfg config.Config, options []routecatalog.Option) (dataplane.Plan, error) {
+	return a.buildDataplanePlanForScope(cfg, options, changeScopeAll, "")
+}
+
+type changeScope string
+
+const (
+	changeScopeAll     changeScope = "all"
+	changeScopeRouting changeScope = "routing"
+	changeScopeEngine  changeScope = "engine"
+)
+
+func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
+	raw := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("scope")))
+	if raw == "" {
+		raw = string(changeScopeAll)
+	}
+	scope := changeScope(raw)
+	if scope != changeScopeAll && scope != changeScopeRouting && scope != changeScopeEngine {
+		return "", "", fmt.Errorf("unknown change scope %q", raw)
+	}
+	engineID := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("engine")))
+	if scope == changeScopeEngine && engineID == "" {
+		return "", "", errors.New("engine scope requires engine id")
+	}
+	return scope, engineID, nil
+}
+
+func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
 	routes := make([]dataplane.Route, 0)
 	for _, service := range a.catalogSnapshot().Services {
 		state := cfg.Services[service.ID]
@@ -2555,7 +2603,31 @@ func (a *App) buildDataplanePlan(cfg config.Config, options []routecatalog.Optio
 			resourceConflicts = append(resourceConflicts, dataplane.ResourceConflict{Kind: conflict.Kind, Value: conflict.Value, Engines: conflict.Engines, SystemUse: conflict.SystemUse})
 		}
 	}
-	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, Engines: engines, EngineConfigDrafts: a.stagedEngineConfigRefs(), ResourceConflicts: resourceConflicts, Host: dataplane.DiscoverHost()})
+	drafts := a.stagedEngineConfigRefs()
+	switch scope {
+	case changeScopeRouting:
+		used := map[string]bool{}
+		for _, route := range routes {
+			if adapter := dataplane.AdapterID(route.Resolved); adapter != "" && adapter != "direct" {
+				used[adapter] = true
+			}
+		}
+		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return used[id] })
+	case changeScopeEngine:
+		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id == engineID })
+	}
+	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: dataplane.DiscoverHost()})
+}
+
+func filterEngineConfigRefs(refs []string, keep func(string) bool) []string {
+	filtered := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		engineID := strings.SplitN(ref, "/", 2)[0]
+		if keep(engineID) {
+			filtered = append(filtered, ref)
+		}
+	}
+	return filtered
 }
 
 func (a *App) stagedEngineConfigRefs() []string {
@@ -2578,25 +2650,50 @@ func (a *App) pendingChanges() bool {
 	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0
 }
 
+func (a *App) scopePendingChanges(scope changeScope, engineID string) bool {
+	switch scope {
+	case changeScopeRouting:
+		return a.Store.Dirty()
+	case changeScopeEngine:
+		return len(filterEngineConfigRefs(a.stagedEngineConfigRefs(), func(id string) bool { return id == engineID })) > 0
+	default:
+		return a.pendingChanges()
+	}
+}
+
 func (a *App) discard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
 		return
 	}
-	if err := a.Store.DiscardDraft(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	scope, engineID, scopeErr := changeScopeFromRequest(r)
+	if scopeErr != nil {
+		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
 		return
 	}
+	if scope != changeScopeEngine {
+		if err := a.Store.DiscardDraft(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 	discarded := 0
+	if scope == changeScopeRouting {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": false, "discarded_engine_drafts": 0})
+		return
+	}
 	if a.EngineConfigs != nil {
 		for _, ref := range a.stagedEngineConfigRefs() {
 			parts := strings.SplitN(ref, "/", 2)
-			if len(parts) == 2 && a.EngineConfigs.Discard(parts[0], parts[1]) == nil {
+			if len(parts) != 2 || (scope == changeScopeEngine && parts[0] != engineID) {
+				continue
+			}
+			if a.EngineConfigs.Discard(parts[0], parts[1]) == nil {
 				discarded++
 			}
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "pending_changes": a.pendingChanges(), "discarded_engine_drafts": discarded})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "discarded_engine_drafts": discarded})
 }
 
 func (a *App) systemInfo(w http.ResponseWriter, r *http.Request) {

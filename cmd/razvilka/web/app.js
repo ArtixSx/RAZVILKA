@@ -703,6 +703,12 @@ function renderStatus() {
   $('#kpiConnections').textContent = s.active_connections || 0;
   $('#connectionCounter').textContent = s.active_connections || 0;
   $('#serviceNavCount').textContent = s.enabled_services || 0;
+  $('#serviceDraftBar').classList.toggle('show', !!s.routing_pending_changes);
+  $('#serviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
+  $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить маршруты' : 'Применить маршруты';
+  $('#deviceDraftBar').classList.toggle('show', !!s.routing_pending_changes);
+  $('#deviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
+  $('#applyDeviceChanges').textContent = s.safe_mode ? 'Проверить политики' : 'Применить политики';
   $('#draftBar').classList.toggle('show', !!s.pending_changes || engineDrafts > 0);
   $('#draftBar').classList.toggle('safe-review', !!s.safe_mode);
   const failedApply = !s.safe_mode && !!s.pending_changes && !!s.last_apply_failure;
@@ -1549,16 +1555,20 @@ async function applyEngineConfig() {
   if (!engine || !file) return;
   try {
     if (state.engineEditorDirty) await saveEngineDraft();
+    if (state.status.routing_pending_changes) {
+      showNotice('review', 'Сначала решите изменения сервисов', 'Примените или отмените маршруты на вкладке «Сервисы». Черновик обхода сохранён и не потеряется.', { scope: 'routing' }, true);
+      return;
+    }
     state.engineValidation = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/validate?file=${encodeURIComponent(file.id)}`, { method: 'POST' });
     if (!state.engineValidation.ok) throw new Error(state.engineValidation.output || 'Конфигурация не прошла проверку');
     await refreshEngineConfigs();
-    const plan = await api('/api/v1/plan');
+    const plan = await api(`/api/v1/plan?scope=engine&engine=${encodeURIComponent(engine.id)}`);
     const unused = (plan.transaction?.blockers || []).find((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED' && blocker.adapter === engine.id);
     if (unused) {
       showNotice('review', `Сначала назначьте сервис обходу ${engine.name}`, unused.resolution || 'Откройте «Сервисы», включите нужный ресурс и выберите этот обход. После этого повторите Apply.', plan, true);
       return;
     }
-    await applyDraft();
+    await applyDraft('engine', engine.id);
   } catch (error) { showDetails({ error: error.message }, 'Конфигурация не подготовлена'); }
 }
 
@@ -2439,26 +2449,34 @@ async function showServicePlan(id) {
   }
 }
 
-async function applyDraft() {
-  const buttons = [$('#applyChanges'), $('#applySettings')];
+async function applyDraft(scope = 'all', engineID = '') {
+  const buttons = scope === 'routing'
+    ? [$('#applyChanges'), $('#applyServiceChanges'), $('#applyDeviceChanges')]
+    : scope === 'engine'
+    ? [$('#engineApplyConfig')]
+    : [$('#applyChanges'), $('#applySettings')];
+  const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}${engineID ? `&engine=${encodeURIComponent(engineID)}` : ''}`;
   buttons.forEach((b) => { b.disabled = true; b.textContent = 'Применение…'; });
   try {
-    const preview = await api('/api/v1/plan');
+    const preview = await api(`/api/v1/plan${query}`);
     const unusedDrafts = (preview.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
     if (unusedDrafts.length) {
       const names = unusedDrafts.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
       showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один включённый сервис для этого обхода либо отмените черновик. Рабочие настройки не изменены.`, preview, true);
       return;
     }
-    const result = await api('/api/v1/apply', { method: 'POST' });
+    const result = await api(`/api/v1/apply${query}`, { method: 'POST' });
     await refreshCoreAfterEdit();
+    await refreshEngineConfigs();
     await showPlan();
     if (result.safe_mode && result.reviewed && !result.live_applied) {
       showNotice('review', 'План проверен — рабочие маршруты не изменены', 'Это нормальная работа безопасного режима. Черновик сохранён; откройте план или явно перейдите в рабочий режим в настройках.', result, true);
-    } else if (result.live_applied && !result.pending_changes) {
+    } else if (result.live_applied && !result.scope_pending_changes) {
       showNotice('success', 'Настройки применены', result.note || 'Маршруты активированы, проверены и зафиксированы.', result);
-    } else if (result.pending_changes) {
+    } else if (result.scope_pending_changes) {
       showNotice('review', 'Часть изменений ещё ждёт применения', 'Проверьте, что каждый черновик обхода назначен хотя бы одному включённому сервису.', result, true);
+    } else if (result.pending_changes) {
+      showNotice('success', 'Изменения этого раздела применены', 'В другом разделе остался независимый черновик. Он не мешает текущим маршрутам.', result);
     } else {
       showNotice('success', 'Изменения обработаны', result.note || 'Операция завершена.', result);
     }
@@ -2479,15 +2497,21 @@ async function applyDraft() {
   } finally {
     buttons.forEach((button) => { button.disabled = false; });
     renderStatus();
+    if (scope === 'engine') $('#engineApplyConfig').textContent = 'Проверить и применить';
+    if (scope === 'routing') {
+      $('#applyServiceChanges').textContent = state.status.safe_mode ? 'Проверить маршруты' : 'Применить маршруты';
+      $('#applyDeviceChanges').textContent = state.status.safe_mode ? 'Проверить политики' : 'Применить политики';
+    }
   }
 }
 
-async function discardDraft() {
+async function discardDraft(scope = 'all') {
+  const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}`;
   try {
-    const result = await api('/api/v1/discard', { method: 'POST' });
+    const result = await api(`/api/v1/discard${query}`, { method: 'POST' });
     await refreshCoreAfterEdit();
-    await refreshEngineConfigs();
-    showNotice('success', 'Черновики отменены', result.discarded_engine_drafts ? `Отменено конфигураций обходов: ${result.discarded_engine_drafts}.` : 'Желаемые маршруты возвращены к последнему применённому состоянию.', result);
+    if (scope !== 'routing') await refreshEngineConfigs();
+    showNotice('success', scope === 'routing' ? 'Изменения сервисов отменены' : 'Черновики отменены', result.discarded_engine_drafts ? `Отменено конфигураций обходов: ${result.discarded_engine_drafts}.` : 'Желаемые маршруты возвращены к последнему применённому состоянию.', result);
   } catch (error) {
     showDetails({ error: error.message }, 'Не удалось отменить черновик');
   }
@@ -2872,12 +2896,16 @@ function bindEvents() {
     if (button) manageComponent(button.dataset.component, button.dataset.componentAction);
   });
   $('#showPlan').addEventListener('click', showPlan);
-  $('#applyChanges').addEventListener('click', applyDraft);
-  $('#applySettings').addEventListener('click', applyDraft);
+  $('#applyChanges').addEventListener('click', () => applyDraft(state.status.routing_pending_changes ? 'routing' : 'all'));
+  $('#applySettings').addEventListener('click', () => applyDraft('all'));
+  $('#applyServiceChanges').addEventListener('click', () => applyDraft('routing'));
+  $('#applyDeviceChanges').addEventListener('click', () => applyDraft('routing'));
   $('#toggleSafeMode').addEventListener('click', toggleSafeMode);
   $('#topToggleSafeMode').addEventListener('click', toggleSafeMode);
-  $('#discardChanges').addEventListener('click', discardDraft);
-  $('#discardSettings').addEventListener('click', discardDraft);
+  $('#discardChanges').addEventListener('click', () => discardDraft(state.status.routing_pending_changes ? 'routing' : 'all'));
+  $('#discardSettings').addEventListener('click', () => discardDraft('all'));
+  $('#discardServiceChanges').addEventListener('click', () => discardDraft('routing'));
+  $('#discardDeviceChanges').addEventListener('click', () => discardDraft('routing'));
   $('#exportConfig').addEventListener('click', exportConfig);
   $('#overviewExportConfig').addEventListener('click', exportConfig);
   $('#engineFileSelect').addEventListener('change', (e) => selectEngineFile(e.target.value));

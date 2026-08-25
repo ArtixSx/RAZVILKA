@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.15.1 — independent page apply and clearer route controls
+
+- Service and device routing drafts now have their own visible Apply/Discard
+  controls inside the relevant page.
+- Applying routing changes includes only engine drafts used by the selected
+  routes. An unrelated or unfinished WARP profile no longer blocks Telegram,
+  DIRECT or another independent service edit.
+- Applying one page reports success for that scope even when an unrelated
+  engine draft remains pending elsewhere.
+- Engine configuration Apply is scoped to the selected engine and refuses to
+  absorb unrelated service edits; the UI points to the exact page that must be
+  resolved first.
+- Unavailable bypasses remain visible for explanation but disabled in service
+  route selectors and explicitly labelled as not installed.
+- Added regression coverage for the original unused-WARP-draft conflict and
+  browser-tested both Services and Devices flows.
+
 ## v0.15.0 — evidence hardening, WAN profiles and DNS preview
 
 - Added automatic DIRECT control to isolated comparisons and plain-language

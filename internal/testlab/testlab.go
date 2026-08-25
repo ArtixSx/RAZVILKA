@@ -393,7 +393,7 @@ func (r *Runner) probe(ctx context.Context, s catalog.Service, probe catalog.Pro
 		res.Detail = err.Error()
 		return res
 	}
-	req.Header.Set("User-Agent", "RAZVILKA-Probe/0.15.0")
+	req.Header.Set("User-Agent", "RAZVILKA-Probe/0.15.1")
 	req.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
 	req.Header.Set("Range", "bytes=0-32767")
 	start := time.Now()

@@ -900,6 +900,28 @@ func TestUnifiedApplyKeepsUnroutedEngineDraftPending(t *testing.T) {
 		t.Fatalf("unexpected apply response: %+v", payload)
 	}
 
+	resp, err = http.Post(ts.URL+"/api/v1/apply?scope=routing", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("routing apply status=%d body=%s", resp.StatusCode, readTestBody(resp))
+	}
+	var scoped struct {
+		Pending      bool `json:"pending_changes"`
+		ScopePending bool `json:"scope_pending_changes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&scoped); err != nil {
+		t.Fatal(err)
+	}
+	if !scoped.Pending || scoped.ScopePending {
+		t.Fatalf("routing scope did not isolate unrelated engine draft: %+v", scoped)
+	}
+	if got := mgr.List()[2].Files[0].Staged; !got {
+		t.Fatal("routing apply unexpectedly discarded the unrelated WARP draft")
+	}
+
 	resp, err = http.Post(ts.URL+"/api/v1/discard", "application/json", nil)
 	if err != nil {
 		t.Fatal(err)
