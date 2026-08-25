@@ -46,7 +46,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.15.1"
+const Version = "0.16.0"
 const defaultDataplaneApplyTimeout = 8 * time.Minute
 
 type applyFailureAdvice struct {
@@ -98,6 +98,8 @@ type serviceView struct {
 	Sources        []string       `json:"sources,omitempty"`
 	AppliedSources []string       `json:"applied_sources,omitempty"`
 	Dirty          bool           `json:"dirty"`
+	RouteAvailable bool           `json:"route_available"`
+	RouteIssue     string         `json:"route_issue,omitempty"`
 	EvidenceLevel  evidence.Level `json:"evidence_level"`
 	EvidenceRoute  string         `json:"evidence_route,omitempty"`
 	EvidenceStatus string         `json:"evidence_status,omitempty"`
@@ -1050,6 +1052,7 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 	defer cancel()
+	_ = a.Components.RecordOperation(id, action, "running", "Операция запущена; итоговая проверка ещё не завершена")
 	var result components.Result
 	var err error
 	if action == "remove" {
@@ -1058,6 +1061,7 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		result, err = a.Components.Apply(ctx, id)
 	}
 	if err != nil {
+		_ = a.Components.RecordOperation(id, action, "failed", err.Error())
 		if result.Output != "" {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "output": result.Output})
 		} else {
@@ -1065,6 +1069,7 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	_ = a.Components.RecordOperation(id, action, "succeeded", "Фактическое состояние компонента повторно проверено")
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -2002,9 +2007,14 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		}
 		appliedRoute := selectedRoute(applied)
 		dirty := st.Enabled != applied.Enabled || selected != appliedRoute || !stringSlicesEqual(st.Sources, applied.Sources)
+		routeAvailable := routecatalog.ValidWithOptions(selected, options)
+		routeIssue := ""
+		if !routeAvailable {
+			routeIssue = "Выбранный обход больше не доступен. Установите его или выберите AUTO / DIRECT."
+		}
 		custom := a.CustomServices != nil && a.CustomServices.Has(s.ID)
 		proof := observedEvidence[s.ID]
-		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt})
+		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt})
 	}
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Category == views[j].Category {
@@ -2141,8 +2151,19 @@ func (a *App) service(w http.ResponseWriter, r *http.Request) {
 		selected = "auto"
 	}
 	if !routecatalog.ValidWithOptions(selected, a.routeOptionsSnapshot()) {
-		http.Error(w, "invalid route", http.StatusBadRequest)
-		return
+		current := a.Store.Get().Services[id]
+		// A component can disappear after a route was saved. The user must still
+		// be able to disable that service without first reinstalling the missing
+		// component. Re-enabling or creating a new unavailable assignment remains
+		// blocked and receives a user-facing recovery action.
+		if in.Enabled || selected != selectedRoute(current) {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok": false, "code": "ROUTE_UNAVAILABLE", "route": selected,
+				"error":      "выбранный обход недоступен",
+				"resolution": "Установите этот обход либо выберите AUTO или DIRECT. Выключить сервис можно без переустановки обхода.",
+			})
+			return
+		}
 	}
 	in.Route = selected
 	in.Mode = selected
@@ -2381,7 +2402,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":   cfg.SafeMode,
 		"scope":       scope,
-		"note":        "v0.15.1: service and device routing changes apply independently from unrelated engine drafts. Safe Mode remains the default.",
+		"note":        "v0.16.0: page-scoped drafts, explicit unavailable routes and persistent component-install verification. Safe Mode remains the default.",
 		"routes":      rows,
 		"transaction": transaction,
 	})

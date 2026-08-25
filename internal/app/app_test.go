@@ -624,6 +624,62 @@ func TestSelectorsAndConnectionsAPI(t *testing.T) {
 	}
 }
 
+func TestUnavailableRouteCanBeDisabledButNotEnabled(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := config.Load(filepath.Join(tmp, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "missing-engine"}); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram"}}}, Start: time.Now()}
+	ts := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/v1/services")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var views []serviceView
+	if err := json.NewDecoder(resp.Body).Decode(&views); err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if len(views) != 1 || views[0].RouteAvailable || views[0].RouteIssue == "" {
+		t.Fatalf("unavailable route was not explained: %+v", views)
+	}
+
+	put := func(body string) *http.Response {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/services/telegram", strings.NewReader(body))
+		req.Header.Set("content-type", "application/json")
+		response, requestErr := http.DefaultClient.Do(req)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		return response
+	}
+	disabled := put(`{"enabled":false,"route":"missing-engine"}`)
+	if disabled.StatusCode != http.StatusOK {
+		t.Fatalf("disable stale route status=%d body=%s", disabled.StatusCode, readTestBody(disabled))
+	}
+	_ = disabled.Body.Close()
+
+	enabled := put(`{"enabled":true,"route":"missing-engine"}`)
+	if enabled.StatusCode != http.StatusConflict {
+		t.Fatalf("enable stale route status=%d body=%s", enabled.StatusCode, readTestBody(enabled))
+	}
+	var failure map[string]any
+	if err := json.NewDecoder(enabled.Body).Decode(&failure); err != nil {
+		t.Fatal(err)
+	}
+	_ = enabled.Body.Close()
+	if failure["code"] != "ROUTE_UNAVAILABLE" || failure["resolution"] == "" {
+		t.Fatalf("missing recovery action: %+v", failure)
+	}
+}
+
 func TestDraftApplyDiscardAndSystemAPI(t *testing.T) {
 	tmp := t.TempDir()
 	store, err := config.Load(filepath.Join(tmp, "config.json"))

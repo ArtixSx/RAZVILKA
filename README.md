@@ -26,13 +26,64 @@ RAZVILKA — бесплатная локальная панель для Keeneti
 
 ## Установка
 
-Нужен роутер с Entware и SSH-доступом `root`. Выполните одну команду:
+Нужен роутер с Entware и SSH-доступом `root`. На полностью новом роутере сначала
+установите Entware на накопитель средствами Keenetic/Netcraze и убедитесь, что
+каталог `/opt` подключён. Универсальной безопасной командой установить сам
+Entware нельзя: разметка накопителя и имя компонента зависят от модели и
+прошивки.
+
+Для Keenetic используйте только установщик Entware своей архитектуры. Проверить
+архитектуру можно командой `uname -m`:
+
+| Результат `uname -m` | Entware для Keenetic |
+|---|---|
+| `aarch64` / `arm64` | [`aarch64-k3.10`](https://bin.entware.net/aarch64-k3.10/installer/aarch64-installer.tar.gz) |
+| `mips` | [`mipssf-k3.4`](https://bin.entware.net/mipssf-k3.4/installer/mips-installer.tar.gz) |
+| `mipsel` / `mipsle` | [`mipselsf-k3.4`](https://bin.entware.net/mipselsf-k3.4/installer/mipsel-installer.tar.gz) |
+
+Не выбирайте установщик только по названию модели: сначала сравните вывод
+`uname -m`. Сборка RAZVILKA `amd64` предназначена для других совместимых
+Entware/Linux-систем и не является вариантом для Keenetic.
+
+### 1. Подготовка чистого Entware
+
+Подключитесь по SSH и проверьте окружение:
+
+```sh
+test -d /opt && command -v opkg && echo "Entware готов"
+opkg update
+opkg install ca-certificates coreutils-sha256sum tar
+```
+
+Затем установите **один** HTTPS-загрузчик. Рекомендуемый вариант:
+
+```sh
+opkg install curl
+```
+
+Если `curl` недоступен или вы предпочитаете `wget`:
+
+```sh
+opkg install wget-ssl
+```
+
+Если `opkg` сообщает о конфликте с `wget-nossl`, сначала удалите только этот
+пакет и повторите установку TLS-версии:
+
+```sh
+opkg remove wget-nossl
+opkg install wget-ssl
+```
+
+### 2. Установка RAZVILKA
+
+С `curl`:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-Если доступен только `wget`:
+С `wget`:
 
 ```sh
 wget -qO- https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
@@ -41,6 +92,27 @@ wget -qO- https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootst
 Установщик проверит архитектуру и Entware, сверит SHA-256 релиза, создаст резервную копию и напечатает локальный адрес панели с одноразовым ключом первого входа. После входа задайте собственный логин и пароль.
 
 По умолчанию устанавливается только UI. Нужные обходы добавляются позже из раздела **«Обходы»**, поэтому память роутера не занята неиспользуемыми компонентами.
+
+### 3. Проверка установки
+
+```sh
+/opt/bin/razvilka -version
+/opt/etc/init.d/S99razvilka status
+/opt/bin/razvilka -healthcheck http://127.0.0.1:8787/api/v1/status
+```
+
+Успешная проверка показывает версию, строку `RAZVILKA healthy` и
+`healthy: <версия>`. Если проверка не прошла, не включайте рабочий режим:
+
+```sh
+/opt/bin/razvilka doctor
+tail -n 120 /opt/var/log/razvilka/razvilka.log
+```
+
+В разделе **«Обходы»** после каждой установки отображаются отдельно:
+фактически установленная версия, подтверждение контрольной операции,
+состояние настройки и запущен ли процесс. Сообщение «доступен» не означает
+«установлен», а «установлен» не выдаётся за работающий маршрут без проверки.
 
 ## Интерфейс
 

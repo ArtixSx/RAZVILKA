@@ -163,6 +163,9 @@ func releaseAssetName(spec Spec, version, architecture string) (string, error) {
 }
 
 func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error) {
+	if err := m.prepareReceiptDir(); err != nil {
+		return Result{Component: spec.ID, Action: "install"}, err
+	}
 	info, err := m.latestRelease(ctx, spec)
 	if err != nil {
 		return Result{Component: spec.ID, Action: "install"}, err
@@ -194,6 +197,7 @@ func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error
 		return Result{Component: spec.ID, Action: "install"}, errors.New("release binary is empty or too large")
 	}
 	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
+	beforeVersion := externalInstalledVersion(target)
 	receipt := externalReceiptPath(target)
 	oldBinary, oldErr := os.ReadFile(target)
 	oldExisted := oldErr == nil
@@ -247,6 +251,10 @@ func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error
 	action := "install"
 	if oldExisted {
 		action = "update"
+	}
+	if err := m.writeLifecycleReceipt(lifecycleReceipt{SchemaVersion: 1, Component: spec.ID, Provider: spec.Provider, Action: action, BeforeVersion: beforeVersion, AfterVersion: installedVersion, CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}); err != nil {
+		restorePrevious()
+		return Result{Component: spec.ID, Action: action}, fmt.Errorf("write lifecycle receipt: %w; previous binary restored", err)
 	}
 	return Result{OK: true, Component: spec.ID, Action: action, Output: fmt.Sprintf("installed %s %s from verified upstream release", spec.Name, info.Version)}, nil
 }

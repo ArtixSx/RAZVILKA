@@ -35,7 +35,7 @@ for ARG in "$@"; do
     -h|--help)
       echo "Usage: sh bootstrap.sh [--from-artem-flow] [--starter-pack]"
       echo "Default: install only the RAZVILKA UI/control plane."
-      echo "Optional environment: RAZVILKA_VERSION=v0.15.0"
+      echo "Optional environment: RAZVILKA_VERSION=v0.16.0 (or latest)"
       exit 0
       ;;
     *) echo "Unknown option: $ARG" >&2; exit 2 ;;
@@ -43,10 +43,22 @@ for ARG in "$@"; do
 done
 
 step '1/5' 'Проверяю Entware и системные инструменты…'
-[ -d /opt ] || { echo "ОШИБКА: раздел Entware /opt не найден" >&2; exit 10; }
-command -v opkg >/dev/null 2>&1 || { echo "ОШИБКА: opkg не найден; сначала установите Entware" >&2; exit 11; }
-command -v sha256sum >/dev/null 2>&1 || { echo "ОШИБКА: требуется sha256sum" >&2; exit 12; }
-command -v tar >/dev/null 2>&1 || { echo "ОШИБКА: требуется tar" >&2; exit 13; }
+[ -d /opt ] || {
+  echo "ОШИБКА: раздел Entware /opt не найден." >&2
+  echo "Сначала установите Entware для своей модели Keenetic/Netcraze, затем повторите команду." >&2
+  exit 10
+}
+command -v opkg >/dev/null 2>&1 || {
+  echo "ОШИБКА: opkg не найден в /opt. Установка Entware не завершена или /opt не подключён." >&2
+  exit 11
+}
+if ! command -v sha256sum >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
+  echo "ОШИБКА: не хватает инструментов для безопасной проверки и распаковки релиза." >&2
+  echo "Выполните:" >&2
+  echo "  opkg update" >&2
+  echo "  opkg install ca-certificates coreutils-sha256sum tar" >&2
+  exit 12
+fi
 ok "Entware готов; архитектура: $(uname -m)"
 
 if [ "$VERSION" = latest ]; then
@@ -71,7 +83,12 @@ download() {
   elif command -v wget >/dev/null 2>&1; then
     wget -q -O "$DEST" "$URL"
   else
-    echo "ERROR: install curl or wget" >&2
+    echo "ОШИБКА: не найден ни curl, ни HTTPS-версия wget." >&2
+    echo "Установите один из вариантов:" >&2
+    echo "  opkg update && opkg install curl" >&2
+    echo "или:" >&2
+    echo "  opkg update && opkg install wget-ssl" >&2
+    echo "Если wget-ssl конфликтует с wget-nossl: opkg remove wget-nossl && opkg install wget-ssl" >&2
     exit 14
   fi
 }
@@ -90,9 +107,9 @@ INSTALLER=""
 for CANDIDATE in "$WORKDIR"/RAZVILKA-*/scripts/install-entware.sh; do
   if [ -f "$CANDIDATE" ]; then INSTALLER="$CANDIDATE"; break; fi
 done
-[ -n "$INSTALLER" ] && [ -f "$INSTALLER" ] || { echo "ERROR: installer is missing from release bundle" >&2; exit 15; }
+[ -n "$INSTALLER" ] && [ -f "$INSTALLER" ] || { echo "ОШИБКА: в архиве релиза не найден штатный установщик" >&2; exit 15; }
 RELEASE_ROOT="$(CDPATH= cd -- "$(dirname -- "$INSTALLER")/.." && pwd)"
-case "$RELEASE_ROOT" in "$WORKDIR"/*) : ;; *) echo "ERROR: unsafe archive layout" >&2; exit 16 ;; esac
+case "$RELEASE_ROOT" in "$WORKDIR"/*) : ;; *) echo "ОШИБКА: небезопасная структура архива" >&2; exit 16 ;; esac
 
 step '5/5' 'Запускаю установку со снимком и автоматическим rollback…'
 set --

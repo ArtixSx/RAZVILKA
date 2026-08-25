@@ -13,6 +13,8 @@ import (
 
 var validLifecycleActions = map[string]bool{"install": true, "update": true, "remove": true}
 
+var validOperationStatuses = map[string]bool{"running": true, "succeeded": true, "failed": true}
+
 type lifecycleReceipt struct {
 	SchemaVersion int    `json:"schema_version"`
 	Component     string `json:"component"`
@@ -22,6 +24,15 @@ type lifecycleReceipt struct {
 	BeforeVersion string `json:"before_version,omitempty"`
 	AfterVersion  string `json:"after_version,omitempty"`
 	CompletedAt   string `json:"completed_at"`
+}
+
+type operationReceipt struct {
+	SchemaVersion int    `json:"schema_version"`
+	Component     string `json:"component"`
+	Action        string `json:"action"`
+	Status        string `json:"status"`
+	Message       string `json:"message,omitempty"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 func (m *Manager) Plan(ctx context.Context, id, action string, refresh bool) (Plan, error) {
@@ -186,6 +197,57 @@ func (m *Manager) prepareReceiptDir() error {
 	return nil
 }
 
+// RecordOperation persists the last component action independently from the
+// success receipt. This lets the UI keep showing a failed or interrupted
+// installation after a page reload or router restart.
+func (m *Manager) RecordOperation(id, action, status, message string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := lookup(id); !ok {
+		return fmt.Errorf("unknown component %q", id)
+	}
+	action = strings.ToLower(strings.TrimSpace(action))
+	if !validLifecycleActions[action] {
+		return fmt.Errorf("unsupported component action %q", action)
+	}
+	status = strings.ToLower(strings.TrimSpace(status))
+	if !validOperationStatuses[status] {
+		return fmt.Errorf("unsupported component operation status %q", status)
+	}
+	return m.writeOperationReceipt(operationReceipt{
+		SchemaVersion: 1,
+		Component:     id,
+		Action:        action,
+		Status:        status,
+		Message:       boundedMessage(message),
+		UpdatedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+	})
+}
+
+func (m *Manager) writeOperationReceipt(receipt operationReceipt) error {
+	if strings.TrimSpace(m.StateDir) == "" {
+		return nil
+	}
+	data, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return err
+	}
+	directory := filepath.Join(m.StateDir, "operations")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("prepare component operation directory: %w", err)
+	}
+	path := filepath.Join(directory, receipt.Component+".json")
+	temporary := path + ".tmp"
+	if err := os.WriteFile(temporary, append(data, '\n'), 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		_ = os.Remove(temporary)
+		return err
+	}
+	return nil
+}
+
 func (m *Manager) writeLifecycleReceipt(receipt lifecycleReceipt) error {
 	if strings.TrimSpace(m.StateDir) == "" {
 		return nil
@@ -208,6 +270,87 @@ func (m *Manager) writeLifecycleReceipt(receipt lifecycleReceipt) error {
 		return err
 	}
 	return nil
+}
+
+func (m *Manager) attachLifecycleVerification(view *View) {
+	if view == nil {
+		return
+	}
+	view.Verification = "not-verified"
+	if strings.TrimSpace(m.StateDir) == "" {
+		return
+	}
+	m.attachOperationStatus(view)
+	data, err := os.ReadFile(filepath.Join(m.StateDir, "receipts", view.ID+".json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		view.Verification = "receipt-error"
+		return
+	}
+	var receipt lifecycleReceipt
+	if json.Unmarshal(data, &receipt) != nil || receipt.SchemaVersion != 1 || receipt.Component != view.ID {
+		view.Verification = "receipt-error"
+		return
+	}
+	view.LastAction = receipt.Action
+	view.LastActionAt = receipt.CompletedAt
+	view.VerifiedVersion = receipt.AfterVersion
+	switch receipt.Action {
+	case "install", "update":
+		if view.Installed && receipt.AfterVersion != "" && compareVersions(view.InstalledVersion, receipt.AfterVersion) == 0 {
+			view.Verification = "verified"
+		} else {
+			view.Verification = "changed-after-verification"
+		}
+	case "remove":
+		if !view.Installed {
+			view.Verification = "verified-removed"
+		} else {
+			view.Verification = "changed-after-verification"
+		}
+	}
+}
+
+func (m *Manager) attachOperationStatus(view *View) {
+	data, err := os.ReadFile(filepath.Join(m.StateDir, "operations", view.ID+".json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		view.OperationStatus = "receipt-error"
+		view.OperationMessage = "Не удалось прочитать результат последней операции"
+		return
+	}
+	var receipt operationReceipt
+	if json.Unmarshal(data, &receipt) != nil || receipt.SchemaVersion != 1 || receipt.Component != view.ID || !validOperationStatuses[receipt.Status] {
+		view.OperationStatus = "receipt-error"
+		view.OperationMessage = "Файл результата последней операции повреждён"
+		return
+	}
+	view.OperationStatus = receipt.Status
+	view.OperationAction = receipt.Action
+	view.OperationAt = receipt.UpdatedAt
+	view.OperationMessage = receipt.Message
+	if receipt.Status != "running" {
+		return
+	}
+	updatedAt, parseErr := time.Parse(time.RFC3339Nano, receipt.UpdatedAt)
+	if parseErr != nil || time.Since(updatedAt) > 3*time.Minute {
+		view.OperationStatus = "interrupted"
+		if view.OperationMessage == "" {
+			view.OperationMessage = "Предыдущая операция не сохранила итоговый результат"
+		}
+	}
+}
+
+func boundedMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if len(message) > 2048 {
+		message = message[len(message)-2048:]
+	}
+	return message
 }
 
 func boundedOutput(out []byte) string {
@@ -251,6 +394,11 @@ func (m *Manager) removeExternal(spec Spec) (Result, error) {
 	if err := os.Remove(receipt); err != nil {
 		_ = installReleaseBinary(target, binary)
 		return Result{}, fmt.Errorf("remove component receipt: %w; binary restored", err)
+	}
+	if err := m.writeLifecycleReceipt(lifecycleReceipt{SchemaVersion: 1, Component: spec.ID, Provider: spec.Provider, Action: "remove", BeforeVersion: version, CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}); err != nil {
+		_ = installReleaseBinary(target, binary)
+		_ = installExternalReceipt(receipt, receiptData)
+		return Result{}, fmt.Errorf("write lifecycle receipt: %w; component restored", err)
 	}
 	delete(m.external, spec.ID)
 	return Result{OK: true, Component: spec.ID, Action: "remove", Output: fmt.Sprintf("removed %s %s; recovery snapshot: %s", spec.Name, version, backupDir)}, nil

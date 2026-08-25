@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeRunner struct {
@@ -191,6 +192,74 @@ func TestApplyUsesFixedPackageAllowlist(t *testing.T) {
 	if !reflect.DeepEqual(r.calls[len(r.calls)-2], want) {
 		t.Fatalf("call=%v want=%v", r.calls, want)
 	}
+}
+
+func TestSuccessfulInstallIsVisibleAsVerified(t *testing.T) {
+	r := &fakeRunner{output: map[string]string{
+		"list-installed": "",
+		"list":           "nfqws2-keenetic - 1.0.0 - dpi\n",
+		"update":         "updated",
+		"install":        "installed",
+	}}
+	m := &Manager{Opkg: "/opt/bin/opkg", RepoDir: t.TempDir(), Runner: r, StateDir: t.TempDir()}
+	result, err := m.Apply(context.Background(), "nfqws2")
+	if err != nil || !result.OK {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	views, err := m.List(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range views {
+		if view.ID != "nfqws2" {
+			continue
+		}
+		if view.Verification != "verified" || view.LastAction != "install" || view.VerifiedVersion != "1.0.0" || view.LastActionAt == "" {
+			t.Fatalf("verified lifecycle is not visible: %+v", view)
+		}
+		return
+	}
+	t.Fatal("nfqws2 view not found")
+}
+
+func TestFailedAndInterruptedOperationsRemainVisible(t *testing.T) {
+	stateDir := t.TempDir()
+	m := &Manager{StateDir: stateDir}
+	if err := m.RecordOperation("nfqws2", "install", "failed", "download failed"); err != nil {
+		t.Fatal(err)
+	}
+	views, err := m.List(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundFailed := false
+	for _, view := range views {
+		if view.ID == "nfqws2" && (view.OperationStatus != "failed" || view.OperationAction != "install" || view.OperationMessage != "download failed" || view.OperationAt == "") {
+			t.Fatalf("failed operation is not visible: %+v", view)
+		}
+		if view.ID == "nfqws2" {
+			foundFailed = true
+		}
+	}
+	if !foundFailed {
+		t.Fatal("nfqws2 failed operation view not found")
+	}
+	if err := m.writeOperationReceipt(operationReceipt{SchemaVersion: 1, Component: "nfqws2", Action: "update", Status: "running", UpdatedAt: time.Now().Add(-4 * time.Minute).UTC().Format(time.RFC3339Nano)}); err != nil {
+		t.Fatal(err)
+	}
+	views, err = m.List(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range views {
+		if view.ID == "nfqws2" {
+			if view.OperationStatus != "interrupted" || view.OperationAction != "update" {
+				t.Fatalf("interrupted operation is not visible: %+v", view)
+			}
+			return
+		}
+	}
+	t.Fatal("nfqws2 view not found")
 }
 
 func TestApplyRejectsComponentWithoutManagedProvider(t *testing.T) {

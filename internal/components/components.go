@@ -52,6 +52,14 @@ type View struct {
 	Configured       bool   `json:"configured"`
 	Running          bool   `json:"running"`
 	ExternalOwner    bool   `json:"external_owner"`
+	Verification     string `json:"verification"`
+	LastAction       string `json:"last_action,omitempty"`
+	LastActionAt     string `json:"last_action_at,omitempty"`
+	VerifiedVersion  string `json:"verified_version,omitempty"`
+	OperationStatus  string `json:"operation_status,omitempty"`
+	OperationAction  string `json:"operation_action,omitempty"`
+	OperationAt      string `json:"operation_at,omitempty"`
+	OperationMessage string `json:"operation_message,omitempty"`
 }
 
 type Result struct {
@@ -158,6 +166,7 @@ func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 			view.CanInstall = !view.Installed && view.Available
 			view.CanUpdate = view.UpdateAvailable
 			view.CanRemove = view.Installed && spec.Removable
+			m.attachLifecycleVerification(&view)
 			views = append(views, view)
 			continue
 		}
@@ -166,7 +175,9 @@ func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 			if spec.Provider == "external" {
 				state = "external"
 			}
-			views = append(views, View{Spec: spec, State: state})
+			view := View{Spec: spec, State: state}
+			m.attachLifecycleVerification(&view)
+			views = append(views, view)
 			continue
 		}
 		iv, av := installed[spec.Package], available[spec.Package]
@@ -184,6 +195,7 @@ func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 		v.CanInstall = !v.Installed && v.Available
 		v.CanUpdate = v.UpdateAvailable
 		v.CanRemove = v.Installed && spec.Removable
+		m.attachLifecycleVerification(&v)
 		views = append(views, v)
 	}
 	return views, nil

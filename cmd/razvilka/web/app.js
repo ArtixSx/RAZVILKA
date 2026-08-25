@@ -631,7 +631,35 @@ function renderComponents() {
     const budget = c.resource_budget || {};
     const budgetText = [budget.ram_mib ? `${budget.ram_mib} МиБ RAM` : '', budget.flash_mib ? `${budget.flash_mib} МиБ flash` : '', budget.cpu_class || ''].filter(Boolean).join(' · ');
     const statusClass = c.update_available ? 'has-update' : c.installed ? 'is-installed' : c.available ? 'is-available' : 'is-unavailable';
-    return `<div class="component-item ${statusClass} ${c.external_owner ? 'external' : ''}"><div><b>${esc(c.name)}</b><small>${esc(c.description || '')}</small>${c.use_case ? `<small class="component-purpose"><strong>Подходит:</strong> ${esc(c.use_case)}</small>` : ''}${c.requirement ? `<small class="component-requirement"><strong>Нужно:</strong> ${esc(c.requirement)}</small>` : ''}<small class="component-budget">${esc(budgetText)}</small><small class="component-version ${c.update_available ? 'update' : ''}">${esc(version)}</small></div><div class="component-actions">${actions}</div></div>`;
+    const verification = c.verification === 'verified'
+      ? ['verified', `УСТАНОВКА ПРОВЕРЕНА${c.verified_version ? ` · ${c.verified_version}` : ''}`]
+      : c.verification === 'verified-removed'
+      ? ['verified', 'УДАЛЕНИЕ ПРОВЕРЕНО']
+      : c.verification === 'changed-after-verification'
+      ? ['warning', 'СОСТОЯНИЕ ИЗМЕНИЛОСЬ ПОСЛЕ ПРОВЕРКИ']
+      : c.verification === 'receipt-error'
+      ? ['failed', 'ОШИБКА ЧТЕНИЯ РЕЗУЛЬТАТА УСТАНОВКИ']
+      : c.installed
+      ? ['unverified', 'УСТАНОВЛЕН ВНЕ RAZVILKA ИЛИ ЕЩЁ НЕ ПРОВЕРЕН']
+      : ['', ''];
+    const runtime = c.running ? '<span class="component-runtime running">ЗАПУЩЕН</span>' : c.configured ? '<span class="component-runtime configured">НАСТРОЕН · НЕ ЗАПУЩЕН</span>' : c.installed ? '<span class="component-runtime">НЕ НАСТРОЕН</span>' : '';
+    const verificationHTML = verification[1] ? `<span class="component-verification ${verification[0]}">${verification[1]}${c.last_action_at ? ` · ${esc(timeAgo(c.last_action_at))} назад` : ''}</span>` : '';
+    const operationName = ({ install: 'УСТАНОВКА', update: 'ОБНОВЛЕНИЕ', remove: 'УДАЛЕНИЕ' })[c.operation_action] || 'ОПЕРАЦИЯ';
+    const operationLabels = {
+      running: ['running', `${operationName} ВЫПОЛНЯЕТСЯ`],
+      succeeded: ['', `${operationName} ЗАВЕРШЕНО`],
+      failed: ['failed', `${operationName} ЗАВЕРШИЛОСЬ ОШИБКОЙ`],
+      interrupted: ['failed', `${operationName} БЫЛО ПРЕРВАНО`],
+      'receipt-error': ['failed', 'РЕЗУЛЬТАТ ОПЕРАЦИИ НЕ ЧИТАЕТСЯ'],
+    };
+    const operation = operationLabels[c.operation_status];
+    const operationHTML = operation
+      ? `<span class="component-operation ${operation[0]}" title="${esc(c.operation_message || '')}">${operation[1]}${c.operation_at ? ` · ${esc(timeAgo(c.operation_at))} назад` : ''}</span>`
+      : '';
+    const operationDetail = ['failed', 'interrupted', 'receipt-error'].includes(c.operation_status) && c.operation_message
+      ? `<small class="component-operation-message">${esc(friendlyDetail(c.operation_message))}</small>`
+      : '';
+    return `<div class="component-item ${statusClass} ${c.external_owner ? 'external' : ''}"><div><b>${esc(c.name)}</b><small>${esc(c.description || '')}</small>${c.use_case ? `<small class="component-purpose"><strong>Подходит:</strong> ${esc(c.use_case)}</small>` : ''}${c.requirement ? `<small class="component-requirement"><strong>Нужно:</strong> ${esc(c.requirement)}</small>` : ''}<small class="component-budget">${esc(budgetText)}</small><small class="component-version ${c.update_available ? 'update' : ''}">${esc(version)}</small><div class="component-health-line">${verificationHTML}${runtime}${operationHTML}</div>${operationDetail}</div><div class="component-actions">${actions}</div></div>`;
   }).join('');
 }
 
@@ -677,9 +705,15 @@ async function manageComponent(id, requestedAction) {
     const [engines, engineConfigs] = await Promise.all([api('/api/v1/engines'), api('/api/v1/engine-configs')]);
     Object.assign(state, { engines, engineConfigs });
     renderEngines(); renderEngineControl();
+    showNotice('success', `${component.name}: ${action === 'remove' ? 'удаление завершено' : 'установка проверена'}`, action === 'remove' ? 'Компонент удалён и повторная проверка подтвердила результат.' : 'Версия повторно прочитана с роутера, контрольный результат сохранён. Маршруты сервисов пока не менялись.', { plan, result });
     showDetails({ plan, result }, `${component.name}: готово`);
     return true;
-  } catch (error) { showDetails({ error: error.message, response: error.payload, plan }, `${component.name}: ошибка`); return false; }
+  } catch (error) {
+    await refreshComponents(false);
+    showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Причина сохранена в карточке компонента; устраните её и повторите операцию. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
+    showDetails({ error: error.message, response: error.payload, plan }, `${component.name}: ошибка`);
+    return false;
+  }
 }
 
 function renderStatus() {
@@ -984,8 +1018,10 @@ function routeSelectHTML(service) {
   }
   return `<select class="route-select" data-route-id="${esc(service.id)}" aria-label="Маршрут для ${esc(service.name)}">${options.map((o) => {
     const selected = o.id === service.route ? 'selected' : '';
-    const disabled = (!o.selectable && o.id !== service.route) ? 'disabled' : '';
-    const suffix = !o.selectable && o.id !== 'auto' && o.id !== 'direct' ? ' · не установлен' : '';
+    const disabled = !o.selectable ? 'disabled' : '';
+    const suffix = !o.selectable && o.id !== 'auto' && o.id !== 'direct'
+      ? (o.id === service.route ? ' · требуется установка' : ' · не установлен')
+      : '';
     return `<option value="${esc(o.id)}" ${selected} ${disabled}>${esc(o.name || routeLabel(o.id))}${suffix}</option>`;
   }).join('')}</select>`;
 }
@@ -1019,7 +1055,8 @@ function renderServices() {
     const coverageClass = cidrCount > 0 ? 'full' : 'domains';
     const coverageLabel = cidrCount > 0 ? 'ДОМЕНЫ + IP' : 'ТОЛЬКО ДОМЕНЫ';
     const coverageTitle = cidrCount > 0 ? 'Учтены домены и IP-сети приложения' : 'Приложение может обращаться по IP; при полной блокировке лучше туннель';
-    return `<article class="service-card ${s.enabled ? 'enabled' : ''} ${dirty}">
+    const routeNeedsAction = s.route_available === false && s.route !== 'auto' && s.route !== 'direct';
+    return `<article class="service-card ${s.enabled ? 'enabled' : ''} ${dirty} ${routeNeedsAction ? 'route-action-required' : ''}">
       <div class="service-top">
         <div class="service-id"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><h3>${esc(s.name)}</h3><p>${esc(s.description || '')}</p></div></div>
         <button class="toggle ${s.enabled ? 'on' : ''}" data-toggle-id="${esc(s.id)}" aria-label="${s.enabled ? 'Выключить' : 'Включить'} ${esc(s.name)}"><i></i></button>
@@ -1029,6 +1066,7 @@ function renderServices() {
         <div><span class="control-label">AUTO / фактический план</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
         <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button" data-detail-id="${esc(s.id)}" title="Технические детали" aria-label="Технические детали ${esc(s.name)}">i</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
       </div>
+      ${routeNeedsAction ? `<div class="service-route-warning"><span><b>Маршрут требует действия</b><small>${esc(s.route_issue || 'Обход не установлен. Выберите AUTO / DIRECT или установите компонент.')}</small></span><button class="secondary" type="button" data-route-setup="${esc(s.route)}">Открыть установку</button></div>` : ''}
       <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="service-proof-line">${evidenceBadgeHTML(s)}<span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></span></div>
     </article>`;
   }).join('') || '<div class="empty-inline">Ничего не найдено</div>';
@@ -1040,6 +1078,7 @@ function renderServices() {
   $$('[data-test-id]').forEach((button) => button.addEventListener('click', () => showServicePlan(button.dataset.testId)));
   $$('[data-edit-service]').forEach((button) => button.addEventListener('click', () => openCustomServiceDialog(button.dataset.editService)));
   $$('[data-delete-service]').forEach((button) => button.addEventListener('click', () => deleteCustomService(button.dataset.deleteService)));
+  $$('[data-route-setup]').forEach((button) => button.addEventListener('click', () => openRouteInstallation(button.dataset.routeSetup)));
 }
 
 function renderOverviewServices() {
@@ -1113,6 +1152,17 @@ async function openEngineConfiguration(id = '') {
   setView('engineconfig');
 }
 
+function openRouteInstallation(id = '') {
+  setView('engines');
+  const component = state.components.find((item) => item.id === id);
+  const name = component?.name || routeLabel(id);
+  const message = component?.available
+    ? 'Компонент доступен для установки. Нажмите «Установить»; после проверки вернитесь к сервису и выберите маршрут снова.'
+    : 'Компонент не найден в подключённых источниках для этой архитектуры. Обновите каталог и откройте технические детали компонента.';
+  showNotice(component?.available ? 'review' : 'error', `${name}: требуется установка`, message, component || { component: id }, false);
+  requestAnimationFrame(() => document.querySelector(`.component-action[data-component="${CSS.escape(id)}"]`)?.focus());
+}
+
 
 function selectedEngineView() {
   return state.engineConfigs.find((e) => e.id === state.selectedEngine) || state.engineConfigs[0] || null;
@@ -1135,6 +1185,7 @@ function renderEngineControl() {
   if (!state.engineConfigs.length) {
     $('#engineControlList').innerHTML = '<div class="empty-inline">Нет описаний обходов</div>';
     $('#engineSelectedHead').innerHTML = '';
+    $('#engineDraftDependency').hidden = true;
     return;
   }
   if (!state.engineConfigs.some((e) => e.id === state.selectedEngine)) state.selectedEngine = state.engineConfigs[0].id;
@@ -1158,6 +1209,15 @@ function renderEngineControl() {
   const [statusText, statusClass] = engineStatusText(engine);
   const role = engineRoleGuide(engine.id);
   $('#engineSelectedHead').innerHTML = `<div><h3>${esc(engine.name)}</h3><p>${esc(engine.description || '')}</p>${role ? `<div class="engine-role-guide"><span>ЗАЧЕМ НУЖЕН</span><b>${esc(role.title)}</b><p>${esc(role.text)}</p><small>${esc(role.need)}</small></div>` : ''}</div><div class="engine-selected-meta"><span class="engine-state ${statusClass}">${statusText}</span><span>${(engine.files || []).length} файлов</span></div>`;
+
+  const stagedFiles = (engine.files || []).filter((item) => item.staged);
+  const assignedServices = state.services.filter((service) => service.enabled && (service.route === engine.id || service.planned_engine === engine.id));
+  const dependency = $('#engineDraftDependency');
+  dependency.hidden = stagedFiles.length === 0 || assignedServices.length > 0;
+  if (!dependency.hidden) {
+    $('#engineDraftDependencyTitle').textContent = `${engine.name}: черновик ещё не назначен сервису`;
+    $('#engineDraftDependencyText').textContent = `Рабочая конфигурация не изменена. Назначьте ${engine.name} хотя бы одному включённому сервису или удалите ${stagedFiles.length === 1 ? 'этот черновик' : `${stagedFiles.length} черновика`}.`;
+  }
 
   $('#engineFileSelect').innerHTML = (engine.files || []).map((f) => `<option value="${esc(f.id)}" ${f.id === state.selectedEngineFile ? 'selected' : ''}>${esc(f.name)}${f.staged ? ' · черновик' : ''}${f.sensitive ? ' · секретный' : ''}</option>`).join('');
   $('#engineFilesTable').innerHTML = (engine.files || []).map((f) => `<div class="engine-file-row ${f.id === state.selectedEngineFile ? 'active' : ''}" data-engine-file-row="${esc(f.id)}"><div><b>${esc(f.name)}</b><small>${esc(f.description || '')}</small></div><div class="engine-file-meta"><span>${esc(f.syntax)}</span><span>${f.exists ? formatBytes(f.size) : 'нет рабочего файла'}</span>${f.staged ? '<span class="draft-count">ЧЕРНОВИК</span>' : ''}${f.sensitive ? '<span class="secret-tag">СЕКРЕТНЫЙ</span>' : ''}</div><code>${esc(f.path || '—')}</code></div>`).join('');
@@ -1548,6 +1608,24 @@ async function discardEngineConfigDraft() {
     await refreshEngineConfigs();
     if (state.engineMode === 'guided') await loadEngineGuided(true); else await loadEngineFile(true);
   } catch (error) { showDetails({ error: error.message }, 'Не удалось отменить черновик'); }
+}
+
+async function discardSelectedEngineDrafts() {
+  const engine = selectedEngineView();
+  if (!engine || !(engine.files || []).some((file) => file.staged)) return;
+  if (!await askConfirmation('Удалить черновик обхода?', `${engine.name}: будут удалены только неподтверждённые файлы. Рабочая конфигурация останется без изменений.`, 'Удалить черновик')) return;
+  await discardDraft('engine', engine.id);
+}
+
+function assignSelectedEngineToService() {
+  const engine = selectedEngineView();
+  if (!engine) return;
+  setView('services');
+  $('#serviceSearch').value = '';
+  $('#serviceCategory').value = '';
+  renderServices();
+  showNotice('review', `Назначьте сервис обходу ${engine.name}`, `В карточке нужного сервиса включите его и выберите «${engine.name}» в поле «Желаемый маршрут». Затем примените изменения этой вкладки.`, { engine: engine.id, action: 'assign-service' });
+  requestAnimationFrame(() => $('#serviceSearch')?.focus());
 }
 
 async function applyEngineConfig() {
@@ -2392,7 +2470,7 @@ async function toggleService(id) {
   } catch (error) {
     service.enabled = previous;
     renderServices();
-    showDetails({ error: error.message }, 'Не удалось изменить сервис');
+    showDetails(error.payload || { error: error.message }, 'Не удалось изменить сервис');
   }
 }
 
@@ -2410,7 +2488,7 @@ async function changeRoute(id, route) {
     service.route = previous;
     service.mode = previous;
     renderServices();
-    showDetails({ error: error.message }, 'Не удалось изменить маршрут');
+    showDetails(error.payload || { error: error.message }, 'Не удалось изменить маршрут');
   }
 }
 
@@ -2505,13 +2583,14 @@ async function applyDraft(scope = 'all', engineID = '') {
   }
 }
 
-async function discardDraft(scope = 'all') {
-  const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}`;
+async function discardDraft(scope = 'all', engineID = '') {
+  const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}${engineID ? `&engine=${encodeURIComponent(engineID)}` : ''}`;
   try {
     const result = await api(`/api/v1/discard${query}`, { method: 'POST' });
     await refreshCoreAfterEdit();
     if (scope !== 'routing') await refreshEngineConfigs();
-    showNotice('success', scope === 'routing' ? 'Изменения сервисов отменены' : 'Черновики отменены', result.discarded_engine_drafts ? `Отменено конфигураций обходов: ${result.discarded_engine_drafts}.` : 'Желаемые маршруты возвращены к последнему применённому состоянию.', result);
+    const title = scope === 'routing' ? 'Изменения сервисов отменены' : scope === 'engine' ? 'Черновик обхода удалён' : 'Черновики отменены';
+    showNotice('success', title, result.discarded_engine_drafts ? `Отменено конфигураций обходов: ${result.discarded_engine_drafts}. Рабочие файлы не менялись.` : 'Желаемые маршруты возвращены к последнему применённому состоянию.', result);
   } catch (error) {
     showDetails({ error: error.message }, 'Не удалось отменить черновик');
   }
@@ -2916,6 +2995,8 @@ function bindEvents() {
   $('#engineSaveDraft').addEventListener('click', saveEngineDraft);
   $('#engineValidate').addEventListener('click', validateEngineFile);
   $('#engineDiscardDraft').addEventListener('click', discardEngineConfigDraft);
+  $('#engineDiscardAllDrafts').addEventListener('click', discardSelectedEngineDrafts);
+  $('#engineAssignService').addEventListener('click', assignSelectedEngineToService);
   $('#engineApplyConfig').addEventListener('click', applyEngineConfig);
   $('#engineImport').addEventListener('click', importEngineFile);
   $('#engineImportInput').addEventListener('change', handleEngineImport);

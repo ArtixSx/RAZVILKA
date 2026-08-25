@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.16.0 — verified component setup and recoverable scoped drafts
+
+- Component cards now separate availability, installation, configuration,
+  runtime state and a verified lifecycle receipt instead of treating them as
+  one generic status.
+- The last install, update or removal failure is saved locally and remains
+  visible after a page reload. A stale running operation is reported as
+  interrupted instead of pretending that installation succeeded.
+- Clean-router installation instructions now cover Entware prerequisites,
+  missing `curl`/`wget`, TLS packages, SHA-256 tools and post-install health
+  checks. Keenetic documentation now lists only the verified aarch64, mips and
+  mipsel Entware installer lines; amd64 is explicitly limited to other systems.
+  The bootstrap prints exact recovery commands for missing tools.
+- A service can no longer enable or switch to an unavailable route. Existing
+  stale selections remain recoverable: the service can still be disabled and
+  the UI links directly to the required component installation.
+- Unused engine drafts have an explicit explanation, assignment action and
+  scoped discard action. They no longer look like an Apply button that silently
+  does nothing.
+- Service/device routing and engine configuration keep independent Apply and
+  Discard controls, with regression coverage for unrelated draft conflicts.
+
 ## v0.15.1 — independent page apply and clearer route controls
 
 - Service and device routing drafts now have their own visible Apply/Discard

@@ -44,13 +44,13 @@ func TestEmbeddedWebAssetsUseCurrentCacheKey(t *testing.T) {
 	}
 	html := string(data)
 	for _, asset := range []string{
-		"/style.css?v=0.15.1",
-		"/v010.css?v=0.15.1",
-		"/v011.css?v=0.15.1",
-		"/v011-theme.css?v=0.15.1",
-		"/v012.css?v=0.15.1",
-		"/app.js?v=0.15.1",
-		"/favicon.ico?v=0.15.1",
+		"/style.css?v=0.16.0",
+		"/v010.css?v=0.16.0",
+		"/v011.css?v=0.16.0",
+		"/v011-theme.css?v=0.16.0",
+		"/v012.css?v=0.16.0",
+		"/app.js?v=0.16.0",
+		"/favicon.ico?v=0.16.0",
 	} {
 		if !strings.Contains(html, asset) {
 			t.Fatalf("cache-busted asset missing %q", asset)
@@ -77,6 +77,29 @@ func TestWarpSettingsExplainTransactionalApply(t *testing.T) {
 	for _, required := range []string{"ENGINE_DRAFT_UNUSED", "warpPolicyDirty", "Сначала назначьте сервис", "/api/v1/warp/connectivity"} {
 		if !strings.Contains(app, required) {
 			t.Fatalf("WARP apply guard missing %q", required)
+		}
+	}
+}
+
+func TestComponentLifecycleAndEngineDraftRecoveryAreVisible(t *testing.T) {
+	t.Parallel()
+	indexData, err := embedded.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatalf("read embedded index: %v", err)
+	}
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatalf("read embedded app: %v", err)
+	}
+	html, app := string(indexData), string(appData)
+	for _, required := range []string{`id="engineDraftDependency"`, `id="engineDiscardAllDrafts"`, `id="engineAssignService"`} {
+		if !strings.Contains(html, required) {
+			t.Fatalf("engine draft recovery control missing %q", required)
+		}
+	}
+	for _, required := range []string{"operation_status", "БЫЛО ПРЕРВАНО", "openRouteInstallation", "discardSelectedEngineDrafts"} {
+		if !strings.Contains(app, required) {
+			t.Fatalf("component lifecycle guidance missing %q", required)
 		}
 	}
 }
