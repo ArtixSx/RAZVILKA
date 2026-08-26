@@ -40,6 +40,14 @@ type Store struct {
 	cfg  Config
 }
 
+type DraftScope string
+
+const (
+	DraftScopeAll      DraftScope = "all"
+	DraftScopeServices DraftScope = "services"
+	DraftScopeDevices  DraftScope = "devices"
+)
+
 func Default() Config {
 	return Config{SchemaVersion: CurrentSchemaVersion, Listen: ":8787", Services: map[string]ServiceState{}, AppliedServices: map[string]ServiceState{}, EngineOrder: []string{"nfqws2", "usque", "warp-wg", "sing-box"}, SafeMode: true}
 }
@@ -188,9 +196,13 @@ func (s *Store) DeleteService(id string) error {
 }
 
 func (s *Store) Dirty() bool {
+	return s.DirtyScope(DraftScopeAll)
+}
+
+func (s *Store) DirtyScope(scope DraftScope) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return !reflect.DeepEqual(s.cfg.Services, s.cfg.AppliedServices)
+	return draftScopeDirty(s.cfg, scope)
 }
 
 func (s *Store) ApplyDraft() error {
@@ -202,9 +214,19 @@ func (s *Store) ApplyDraft() error {
 // function for the surrounding dataplane transaction. Undo refuses to clobber
 // a configuration that changed after the commit.
 func (s *Store) ApplyDraftWithRollback() (func() error, error) {
+	return s.ApplyDraftScopeWithRollback(DraftScopeAll)
+}
+
+// ApplyDraftScopeWithRollback commits only fields owned by one UI section.
+// Service routing and device/source policies share ServiceState on disk, but
+// they must never be applied implicitly by a button on the other page.
+func (s *Store) ApplyDraftScopeWithRollback(scope DraftScope) (func() error, error) {
+	if !validDraftScope(scope) {
+		return nil, fmt.Errorf("unknown draft scope %q", scope)
+	}
 	s.mu.Lock()
 	previous := cloneConfig(s.cfg)
-	s.cfg.AppliedServices = cloneServices(s.cfg.Services)
+	applyDraftScope(&s.cfg, scope)
 	s.cfg.AppliedRevision = s.cfg.Revision
 	s.cfg.LastAppliedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := s.saveLocked(); err != nil {
@@ -235,16 +257,103 @@ func (s *Store) ApplyDraftWithRollback() (func() error, error) {
 }
 
 func (s *Store) DiscardDraft() error {
+	return s.DiscardDraftScope(DraftScopeAll)
+}
+
+func (s *Store) DiscardDraftScope(scope DraftScope) error {
+	if !validDraftScope(scope) {
+		return fmt.Errorf("unknown draft scope %q", scope)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	previous := cloneConfig(s.cfg)
-	s.cfg.Services = cloneServices(s.cfg.AppliedServices)
+	discardDraftScope(&s.cfg, scope)
 	s.cfg.Revision++
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
 		return err
 	}
 	return nil
+}
+
+func validDraftScope(scope DraftScope) bool {
+	return scope == DraftScopeAll || scope == DraftScopeServices || scope == DraftScopeDevices
+}
+
+func draftScopeDirty(cfg Config, scope DraftScope) bool {
+	if scope == DraftScopeAll {
+		return !reflect.DeepEqual(cfg.Services, cfg.AppliedServices)
+	}
+	for id := range serviceKeys(cfg.Services, cfg.AppliedServices) {
+		desired := normalizeState(cfg.Services[id])
+		applied := normalizeState(cfg.AppliedServices[id])
+		switch scope {
+		case DraftScopeServices:
+			if desired.Enabled != applied.Enabled || desired.Route != applied.Route {
+				return true
+			}
+		case DraftScopeDevices:
+			if !reflect.DeepEqual(desired.Sources, applied.Sources) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func applyDraftScope(cfg *Config, scope DraftScope) {
+	if scope == DraftScopeAll {
+		cfg.AppliedServices = cloneServices(cfg.Services)
+		return
+	}
+	next := cloneServices(cfg.AppliedServices)
+	for id, desired := range cfg.Services {
+		desired = normalizeState(desired)
+		applied := normalizeState(next[id])
+		switch scope {
+		case DraftScopeServices:
+			applied.Enabled = desired.Enabled
+			applied.Route = desired.Route
+			applied.Mode = desired.Route
+		case DraftScopeDevices:
+			applied.Sources = append([]string(nil), desired.Sources...)
+		}
+		next[id] = applied
+	}
+	cfg.AppliedServices = next
+}
+
+func discardDraftScope(cfg *Config, scope DraftScope) {
+	if scope == DraftScopeAll {
+		cfg.Services = cloneServices(cfg.AppliedServices)
+		return
+	}
+	next := cloneServices(cfg.Services)
+	for id := range serviceKeys(cfg.Services, cfg.AppliedServices) {
+		desired := normalizeState(next[id])
+		applied := normalizeState(cfg.AppliedServices[id])
+		switch scope {
+		case DraftScopeServices:
+			desired.Enabled = applied.Enabled
+			desired.Route = applied.Route
+			desired.Mode = applied.Route
+		case DraftScopeDevices:
+			desired.Sources = append([]string(nil), applied.Sources...)
+		}
+		next[id] = desired
+	}
+	cfg.Services = next
+}
+
+func serviceKeys(left, right map[string]ServiceState) map[string]struct{} {
+	keys := make(map[string]struct{}, len(left)+len(right))
+	for id := range left {
+		keys[id] = struct{}{}
+	}
+	for id := range right {
+		keys[id] = struct{}{}
+	}
+	return keys
 }
 
 func (s *Store) Save() error {

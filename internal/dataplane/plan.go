@@ -455,6 +455,16 @@ func (p Plan) RoutePlanFor(adapter string) RoutePlan {
 	return ir
 }
 
+func planUsesEngineDraft(plan Plan, engineID, fileID string) bool {
+	wanted := strings.ToLower(strings.TrimSpace(engineID)) + "/" + strings.ToLower(strings.TrimSpace(fileID))
+	for _, ref := range plan.EngineDrafts {
+		if strings.ToLower(strings.TrimSpace(ref)) == wanted {
+			return true
+		}
+	}
+	return false
+}
+
 func addAdapterActions(plan *Plan, adapter string, canary bool, order *int) {
 	appendAction := func(phase, kind, target, summary string, owned bool) {
 		plan.Actions = append(plan.Actions, Action{Order: *order, Phase: phase, Adapter: adapter, Kind: kind, Target: target, Summary: summary, Owned: owned})

@@ -64,6 +64,56 @@ func TestApplyDraftWithRollbackRestoresAppliedState(t *testing.T) {
 	}
 }
 
+func TestScopedDraftApplyKeepsOtherPagePending(t *testing.T) {
+	store, err := Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("telegram", ServiceState{Enabled: true, Route: "sing-box", Sources: []string{"192.168.1.25"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !store.DirtyScope(DraftScopeServices) || !store.DirtyScope(DraftScopeDevices) {
+		t.Fatal("both page scopes must start dirty")
+	}
+	undo, err := store.ApplyDraftScopeWithRollback(DraftScopeServices)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := store.Get().AppliedServices["telegram"]
+	if !applied.Enabled || applied.Route != "sing-box" || len(applied.Sources) != 0 {
+		t.Fatalf("service apply leaked device policy: %+v", applied)
+	}
+	if store.DirtyScope(DraftScopeServices) || !store.DirtyScope(DraftScopeDevices) || !store.Dirty() {
+		t.Fatal("device page must remain independently pending")
+	}
+	if err := undo(); err != nil {
+		t.Fatal(err)
+	}
+	if !store.DirtyScope(DraftScopeServices) || !store.DirtyScope(DraftScopeDevices) {
+		t.Fatal("rollback did not restore both pending scopes")
+	}
+}
+
+func TestScopedDraftDiscardKeepsOtherPageDraft(t *testing.T) {
+	store, err := Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("telegram", ServiceState{Enabled: true, Route: "sing-box", Sources: []string{"192.168.1.25"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DiscardDraftScope(DraftScopeDevices); err != nil {
+		t.Fatal(err)
+	}
+	desired := store.Get().Services["telegram"]
+	if !desired.Enabled || desired.Route != "sing-box" || len(desired.Sources) != 0 {
+		t.Fatalf("device discard changed service route draft: %+v", desired)
+	}
+	if !store.DirtyScope(DraftScopeServices) || store.DirtyScope(DraftScopeDevices) {
+		t.Fatal("only service page should remain pending")
+	}
+}
+
 func TestConcurrentUpdatesAreNotLost(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	s, err := Load(path)

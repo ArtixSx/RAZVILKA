@@ -12,6 +12,14 @@
   working TUN or policy rules can be changed.
 - Plans explicitly report adapters that still lack a separate canary instead
   of presenting post-activation health as equivalent protection.
+- Service route drafts and device/source policy drafts now have independent
+  Apply and Discard transactions. Applying one page preserves the other page's
+  pending fields.
+- Dataplane adapters may read a staged engine file only when that exact
+  `engine/file` is explicitly included in the transaction plan. A device-only
+  change can no longer activate an unrelated engine draft.
+- The device policy dialog now owns only the client/group scope. It shows the
+  current route as read-only and directs route changes to the Services page.
 
 ## v0.16.0 — verified component setup and recoverable scoped drafts
 

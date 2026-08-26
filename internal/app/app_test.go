@@ -998,6 +998,71 @@ func TestUnifiedApplyKeepsUnroutedEngineDraftPending(t *testing.T) {
 	}
 }
 
+func TestServiceAndDevicePagesApplyOnlyTheirOwnFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	store, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetSafeMode(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct", Sources: []string{"192.168.1.25"}}); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", ProbeURL: "https://telegram.org/"}}}, Start: time.Now()}
+	ts := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer ts.Close()
+
+	response, err := http.Post(ts.URL+"/api/v1/apply?scope=services", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("service apply status=%d body=%s", response.StatusCode, readTestBody(response))
+	}
+	applied := store.Get().AppliedServices["telegram"]
+	if !applied.Enabled || applied.Route != "direct" || len(applied.Sources) != 0 {
+		t.Fatalf("service page leaked device fields: %+v", applied)
+	}
+	if store.DirtyScope(config.DraftScopeServices) || !store.DirtyScope(config.DraftScopeDevices) {
+		t.Fatal("device policy did not remain independently pending")
+	}
+
+	response, err = http.Post(ts.URL+"/api/v1/apply?scope=devices", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("device apply status=%d body=%s", response.StatusCode, readTestBody(response))
+	}
+	applied = store.Get().AppliedServices["telegram"]
+	if len(applied.Sources) != 1 || applied.Sources[0] != "192.168.1.25/32" || store.Dirty() {
+		t.Fatalf("device page did not commit only its source policy: %+v", applied)
+	}
+}
+
+func TestConfigForChangeScopeUsesOnlyPageOwnedDraft(t *testing.T) {
+	cfg := config.Default()
+	cfg.Services["telegram"] = config.ServiceState{Enabled: true, Route: "sing-box", Mode: "sing-box", Sources: []string{"192.168.1.25/32"}}
+	cfg.AppliedServices["telegram"] = config.ServiceState{Enabled: true, Route: "direct", Mode: "direct"}
+
+	services := configForChangeScope(cfg, changeScopeServices).Services["telegram"]
+	if services.Route != "sing-box" || len(services.Sources) != 0 {
+		t.Fatalf("service scope=%+v", services)
+	}
+	devices := configForChangeScope(cfg, changeScopeDevices).Services["telegram"]
+	if devices.Route != "direct" || len(devices.Sources) != 1 {
+		t.Fatalf("device scope=%+v", devices)
+	}
+	engine := configForChangeScope(cfg, changeScopeEngine).Services["telegram"]
+	if engine.Route != "direct" || len(engine.Sources) != 0 {
+		t.Fatalf("engine scope=%+v", engine)
+	}
+}
+
 func TestValidStagedWARPProfileCanBeSelectedBeforeFirstApply(t *testing.T) {
 	tmp := t.TempDir()
 	configs := engineconfig.New(filepath.Join(tmp, "stage"), filepath.Join(tmp, "backups"))

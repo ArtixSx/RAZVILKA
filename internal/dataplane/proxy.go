@@ -83,7 +83,7 @@ func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot s
 
 func (a *ProxyTunnelAdapter) ID() string { return a.EngineID }
 
-func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, _ Plan, root string) error {
+func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root string) error {
 	if err := a.valid(); err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, _ Plan, root string) 
 		return err
 	}
 	var draft []byte
-	draftExists := view.Source == "staged"
+	draftExists := planUsesEngineDraft(plan, a.ID(), "main") && view.Source == "staged"
 	if draftExists {
 		draft = []byte(view.Content)
 	}

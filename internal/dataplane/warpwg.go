@@ -92,7 +92,7 @@ func (a *WARPWireGuardAdapter) ID() string {
 	return a.EngineID
 }
 
-func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, _ Plan, root string) error {
+func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, plan Plan, root string) error {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, _ Plan, root string
 	if err != nil {
 		return err
 	}
-	snapshot := warpWGSnapshot{ProfilePath: content.Path, ProfileDraft: content.Source == "staged"}
+	snapshot := warpWGSnapshot{ProfilePath: content.Path, ProfileDraft: planUsesEngineDraft(plan, a.ID(), "main") && content.Source == "staged"}
 	snapshot.Profile, snapshot.ProfileExisted, err = optionalFile(content.Path)
 	if err != nil {
 		return err
@@ -128,19 +128,27 @@ func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, _ Plan, root string
 }
 
 func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string) error {
-	content, err := a.Configs.ReadExpert(a.ID(), "main")
-	if err != nil || content.Content == "" {
+	snapshot, err := readWarpWGSnapshot(root)
+	if err != nil {
+		return err
+	}
+	profile := snapshot.Profile
+	if snapshot.ProfileDraft {
+		profile = snapshot.StagedProfile
+	}
+	if len(profile) == 0 {
 		return errors.New("WARP WireGuard profile is missing")
 	}
-	if err := warp.ValidateProfile([]byte(content.Content)); err != nil {
+	profileText := string(profile)
+	if err := warp.ValidateProfile(profile); err != nil {
 		return err
 	}
 	if a.ID() == "amneziawg" {
-		if err := validateAmneziaProfile(content.Content); err != nil {
+		if err := validateAmneziaProfile(profileText); err != nil {
 			return err
 		}
 	}
-	runtimeProfile, err := sanitizeWGQuickProfile(content.Content)
+	runtimeProfile, err := sanitizeWGQuickProfile(profileText)
 	if err != nil {
 		return err
 	}
@@ -151,7 +159,7 @@ func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string
 	if err != nil {
 		return err
 	}
-	prefixes, err = excludeWGEndpoint(ctx, prefixes, content.Content, a.Resolver)
+	prefixes, err = excludeWGEndpoint(ctx, prefixes, profileText, a.Resolver)
 	if err != nil {
 		return err
 	}

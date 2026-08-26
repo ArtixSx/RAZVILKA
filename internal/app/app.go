@@ -98,6 +98,8 @@ type serviceView struct {
 	Sources        []string       `json:"sources,omitempty"`
 	AppliedSources []string       `json:"applied_sources,omitempty"`
 	Dirty          bool           `json:"dirty"`
+	RouteDirty     bool           `json:"route_dirty"`
+	SourcesDirty   bool           `json:"sources_dirty"`
 	RouteAvailable bool           `json:"route_available"`
 	RouteIssue     string         `json:"route_issue,omitempty"`
 	EvidenceLevel  evidence.Level `json:"evidence_level"`
@@ -511,8 +513,11 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"sources_ready": readySources, "sources_total": sourceCount, "sources_catalog_total": sourceCatalogCount,
 		"sources_downloadable": sourceDownloadable, "sources_reference": sourceReferences,
 		"active_connections": activeConnections, "engine_config_drafts": configDrafts,
-		"routing_pending_changes": a.Store.Dirty(), "engine_pending_changes": configDrafts > 0,
-		"dataplane_state": dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
+		"routing_pending_changes":  a.Store.Dirty(),
+		"services_pending_changes": a.Store.DirtyScope(config.DraftScopeServices),
+		"devices_pending_changes":  a.Store.DirtyScope(config.DraftScopeDevices),
+		"engine_pending_changes":   configDrafts > 0,
+		"dataplane_state":          dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
 		"last_apply_failure":     lastApplyFailure,
 		"highest_evidence_level": highestEvidence, "evidence_counts": evidenceCounts,
 		"pending_changes": a.Store.Dirty() || configDrafts > 0, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
@@ -2006,7 +2011,9 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 			planned = a.resolveAutoWithOptions(s, cfg.EngineOrder, options)
 		}
 		appliedRoute := selectedRoute(applied)
-		dirty := st.Enabled != applied.Enabled || selected != appliedRoute || !stringSlicesEqual(st.Sources, applied.Sources)
+		routeDirty := st.Enabled != applied.Enabled || selected != appliedRoute
+		sourcesDirty := !stringSlicesEqual(st.Sources, applied.Sources)
+		dirty := routeDirty || sourcesDirty
 		routeAvailable := routecatalog.ValidWithOptions(selected, options)
 		routeIssue := ""
 		if !routeAvailable {
@@ -2014,7 +2021,7 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		}
 		custom := a.CustomServices != nil && a.CustomServices.Has(s.ID)
 		proof := observedEvidence[s.ID]
-		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt})
+		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt})
 	}
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Category == views[j].Category {
@@ -2435,14 +2442,6 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
 		return
 	}
-	if scope == changeScopeEngine && a.Store.Dirty() {
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"ok": false, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": true,
-			"error": "routing changes must be applied first",
-			"note":  "Сначала примените или отмените изменения на вкладке «Сервисы». Конфигурация обхода сохранена и не потеряна.",
-		})
-		return
-	}
 	cfg := a.Store.Get()
 	transaction, err := a.buildDataplanePlanForScope(cfg, a.routeOptionsSnapshot(), scope, engineID)
 	if err != nil {
@@ -2491,7 +2490,18 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		}
 		applyContext, cancelApply := context.WithTimeout(r.Context(), defaultDataplaneApplyTimeout)
 		defer cancelApply()
-		execution, applyErr := a.Dataplane.Apply(applyContext, transaction, a.Store.ApplyDraftWithRollback)
+		var commit func() (func() error, error)
+		switch scope {
+		case changeScopeServices:
+			commit = func() (func() error, error) { return a.Store.ApplyDraftScopeWithRollback(config.DraftScopeServices) }
+		case changeScopeDevices:
+			commit = func() (func() error, error) { return a.Store.ApplyDraftScopeWithRollback(config.DraftScopeDevices) }
+		case changeScopeEngine:
+			commit = nil
+		default:
+			commit = a.Store.ApplyDraftWithRollback
+		}
+		execution, applyErr := a.Dataplane.Apply(applyContext, transaction, commit)
 		if applyErr != nil {
 			failure := classifyApplyExecutionFailure(applyErr.Error(), execution.State)
 			writeJSON(w, http.StatusConflict, map[string]any{
@@ -2506,8 +2516,20 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if err := a.Store.ApplyDraft(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	var applyErr error
+	switch scope {
+	case changeScopeServices:
+		_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeServices)
+	case changeScopeDevices:
+		_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeDevices)
+	case changeScopeEngine:
+		// Engine drafts are committed by their adapter. A no-op engine plan has
+		// no configuration authority to claim here.
+	default:
+		applyErr = a.Store.ApplyDraft()
+	}
+	if applyErr != nil {
+		http.Error(w, applyErr.Error(), http.StatusInternalServerError)
 		return
 	}
 	cfg = a.Store.Get()
@@ -2571,9 +2593,11 @@ func (a *App) buildDataplanePlan(cfg config.Config, options []routecatalog.Optio
 type changeScope string
 
 const (
-	changeScopeAll     changeScope = "all"
-	changeScopeRouting changeScope = "routing"
-	changeScopeEngine  changeScope = "engine"
+	changeScopeAll      changeScope = "all"
+	changeScopeRouting  changeScope = "routing"
+	changeScopeServices changeScope = "services"
+	changeScopeDevices  changeScope = "devices"
+	changeScopeEngine   changeScope = "engine"
 )
 
 func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
@@ -2582,7 +2606,7 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 		raw = string(changeScopeAll)
 	}
 	scope := changeScope(raw)
-	if scope != changeScopeAll && scope != changeScopeRouting && scope != changeScopeEngine {
+	if scope != changeScopeAll && scope != changeScopeRouting && scope != changeScopeServices && scope != changeScopeDevices && scope != changeScopeEngine {
 		return "", "", fmt.Errorf("unknown change scope %q", raw)
 	}
 	engineID := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("engine")))
@@ -2593,6 +2617,7 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 }
 
 func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
+	cfg = configForChangeScope(cfg, scope)
 	routes := make([]dataplane.Route, 0)
 	for _, service := range a.catalogSnapshot().Services {
 		state := cfg.Services[service.ID]
@@ -2640,7 +2665,7 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 	}
 	drafts := a.stagedEngineConfigRefs()
 	switch scope {
-	case changeScopeRouting:
+	case changeScopeRouting, changeScopeServices:
 		used := map[string]bool{}
 		for _, route := range routes {
 			if adapter := dataplane.AdapterID(route.Resolved); adapter != "" && adapter != "direct" {
@@ -2648,10 +2673,43 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 			}
 		}
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return used[id] })
+	case changeScopeDevices:
+		drafts = nil
 	case changeScopeEngine:
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id == engineID })
 	}
 	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: dataplane.DiscoverHost()})
+}
+
+func configForChangeScope(cfg config.Config, scope changeScope) config.Config {
+	clone := func(states map[string]config.ServiceState) map[string]config.ServiceState {
+		out := make(map[string]config.ServiceState, len(states))
+		for id, state := range states {
+			state.Sources = append([]string(nil), state.Sources...)
+			out[id] = state
+		}
+		return out
+	}
+	switch scope {
+	case changeScopeServices:
+		services := clone(cfg.Services)
+		for id, state := range services {
+			state.Sources = append([]string(nil), cfg.AppliedServices[id].Sources...)
+			services[id] = state
+		}
+		cfg.Services = services
+	case changeScopeDevices:
+		services := clone(cfg.AppliedServices)
+		for id, desired := range cfg.Services {
+			state := services[id]
+			state.Sources = append([]string(nil), desired.Sources...)
+			services[id] = state
+		}
+		cfg.Services = services
+	case changeScopeEngine:
+		cfg.Services = clone(cfg.AppliedServices)
+	}
+	return cfg
 }
 
 func filterEngineConfigRefs(refs []string, keep func(string) bool) []string {
@@ -2689,6 +2747,10 @@ func (a *App) scopePendingChanges(scope changeScope, engineID string) bool {
 	switch scope {
 	case changeScopeRouting:
 		return a.Store.Dirty()
+	case changeScopeServices:
+		return a.Store.DirtyScope(config.DraftScopeServices)
+	case changeScopeDevices:
+		return a.Store.DirtyScope(config.DraftScopeDevices)
 	case changeScopeEngine:
 		return len(filterEngineConfigRefs(a.stagedEngineConfigRefs(), func(id string) bool { return id == engineID })) > 0
 	default:
@@ -2707,13 +2769,22 @@ func (a *App) discard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if scope != changeScopeEngine {
-		if err := a.Store.DiscardDraft(); err != nil {
+		var err error
+		switch scope {
+		case changeScopeServices:
+			err = a.Store.DiscardDraftScope(config.DraftScopeServices)
+		case changeScopeDevices:
+			err = a.Store.DiscardDraftScope(config.DraftScopeDevices)
+		default:
+			err = a.Store.DiscardDraft()
+		}
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 	discarded := 0
-	if scope == changeScopeRouting {
+	if scope == changeScopeRouting || scope == changeScopeServices || scope == changeScopeDevices {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": false, "discarded_engine_drafts": 0})
 		return
 	}

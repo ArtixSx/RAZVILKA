@@ -202,7 +202,7 @@ func TestProxyAdapterStagesActivatesHealthAndRollsBack(t *testing.T) {
 		return nil
 	}
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{Routes: []Route{{ServiceName: "Example", Resolved: "sing-box", Domains: []string{"example.com"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://example.com"}}}
+	plan := Plan{EngineDrafts: []string{"sing-box/main"}, Routes: []Route{{ServiceName: "Example", Resolved: "sing-box", Domains: []string{"example.com"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://example.com"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestProxyCanaryFailureCleansCandidateAndLeavesRuntimeUntouched(t *testing.T
 	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
 	adapter.CanaryProbe = func(context.Context, string, string) error { return fmt.Errorf("forced service failure") }
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	plan := Plan{EngineDrafts: []string{"sing-box/main"}, Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}
@@ -287,6 +287,32 @@ func TestProxyCanaryFailureCleansCandidateAndLeavesRuntimeUntouched(t *testing.T
 	}
 	if regularFile(adapter.engineConfigPath()) || regularFile(adapter.sidecarConfigPath()) || regularFile(adapter.policyPath()) {
 		t.Fatal("failed canary changed live runtime state")
+	}
+}
+
+func TestProxySnapshotIgnoresEngineDraftOutsideTransactionScope(t *testing.T) {
+	root := t.TempDir()
+	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	if _, err := configs.Stage("sing-box", "main", `{"outbounds":[{"type":"vless","server":"draft.example","server_port":443}]}`); err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := NewProxyTunnelAdapter("sing-box", configs, filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction := filepath.Join(root, "transaction")
+	if err := adapter.Snapshot(context.Background(), Plan{}, transaction); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := readProxySnapshot(transaction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.ConfigDraft || len(snapshot.StagedConfig) != 0 {
+		t.Fatal("unscoped engine draft received transaction authority")
+	}
+	if err := adapter.Stage(context.Background(), Plan{}, transaction); err == nil || !strings.Contains(err.Error(), "configuration is empty") {
+		t.Fatalf("unscoped draft was unexpectedly staged: %v", err)
 	}
 }
 

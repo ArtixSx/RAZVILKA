@@ -67,7 +67,7 @@ func NewNFQWS2Adapter() *NFQWS2Adapter {
 
 func (*NFQWS2Adapter) ID() string { return "nfqws2" }
 
-func (a *NFQWS2Adapter) Snapshot(ctx context.Context, _ Plan, root string) error {
+func (a *NFQWS2Adapter) Snapshot(ctx context.Context, plan Plan, root string) error {
 	snapshot := nfqws2Snapshot{}
 	var err error
 	snapshot.Config, snapshot.ConfigExisted, err = optionalFile(a.ConfigPath)
@@ -79,7 +79,7 @@ func (a *NFQWS2Adapter) Snapshot(ctx context.Context, _ Plan, root string) error
 		if readErr != nil {
 			return fmt.Errorf("read NFQWS2 config draft: %w", readErr)
 		}
-		if content.Source == "staged" {
+		if planUsesEngineDraft(plan, a.ID(), "main") && content.Source == "staged" {
 			snapshot.ConfigDraft = true
 			snapshot.StagedConfig = []byte(content.Content)
 		}
@@ -106,22 +106,16 @@ func (a *NFQWS2Adapter) Snapshot(ctx context.Context, _ Plan, root string) error
 }
 
 func (a *NFQWS2Adapter) Stage(_ context.Context, plan Plan, root string) error {
-	config := []byte(nil)
-	if a.Configs != nil {
-		content, err := a.Configs.ReadExpert(a.ID(), "main")
-		if err != nil {
-			return err
-		}
-		if content.Content != "" {
-			config = []byte(content.Content)
-		}
+	snapshot, err := readNFQWS2Snapshot(root)
+	if err != nil {
+		return err
+	}
+	config := snapshot.Config
+	if snapshot.ConfigDraft {
+		config = snapshot.StagedConfig
 	}
 	if len(config) == 0 {
-		var err error
-		config, err = os.ReadFile(a.ConfigPath)
-		if err != nil {
-			return fmt.Errorf("stage NFQWS2 config: %w", err)
-		}
+		return errors.New("NFQWS2 configuration is empty")
 	}
 	if err := writeAtomic(filepath.Join(root, "nfqws2.conf.staged"), config, 0o600); err != nil {
 		return err

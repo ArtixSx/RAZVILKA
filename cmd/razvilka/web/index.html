@@ -394,9 +394,9 @@
 </dialog>
 <dialog class="form-dialog" id="devicePolicyDialog">
   <form id="devicePolicyForm">
-    <div class="dialog-head"><div><span class="eyebrow">КЛИЕНТ → СЕРВИС → МАРШРУТ</span><h3 id="devicePolicyTitle">Политика устройства</h3><p id="devicePolicyIdentity"></p></div><button class="dialog-close" id="devicePolicyClose" type="button">×</button></div>
+    <div class="dialog-head"><div><span class="eyebrow">КЛИЕНТ → СЕРВИС</span><h3 id="devicePolicyTitle">Область устройства</h3><p id="devicePolicyIdentity"></p></div><button class="dialog-close" id="devicePolicyClose" type="button">×</button></div>
     <input id="devicePolicyID" type="hidden">
-    <div class="form-grid compact-form"><label><span>Сервис</span><select id="devicePolicyService" required></select></label><label><span>Маршрут сервиса</span><select id="devicePolicyRoute" required></select></label><label class="wide"><span>Область</span><select id="devicePolicyScope"><option value="device">Только это устройство</option><option value="group">Вся его группа</option></select><small>Список IP будет сохранён в черновик. При изменении DHCP обновите область или закрепите адрес на роутере.</small></label></div>
+    <div class="form-grid compact-form"><label><span>Сервис</span><select id="devicePolicyService" required></select></label><label><span>Текущий маршрут · меняется в «Сервисы»</span><select id="devicePolicyRoute" disabled></select><small>Эта вкладка изменяет только список устройств, поэтому другой черновик маршрута не будет применён случайно.</small></label><label class="wide"><span>Область</span><select id="devicePolicyScope"><option value="device">Только это устройство</option><option value="group">Вся его группа</option></select><small>Список IP будет сохранён в черновик. При изменении DHCP обновите область или закрепите адрес на роутере.</small></label></div>
     <div class="device-policy-warning" id="devicePolicyWarning"></div>
     <div class="dialog-actions"><button class="secondary" id="devicePolicyCancel" type="button">Отмена</button><button class="primary" type="submit">Сохранить в черновик</button></div>
   </form>

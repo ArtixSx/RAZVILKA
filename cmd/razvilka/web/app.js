@@ -737,10 +737,10 @@ function renderStatus() {
   $('#kpiConnections').textContent = s.active_connections || 0;
   $('#connectionCounter').textContent = s.active_connections || 0;
   $('#serviceNavCount').textContent = s.enabled_services || 0;
-  $('#serviceDraftBar').classList.toggle('show', !!s.routing_pending_changes);
+  $('#serviceDraftBar').classList.toggle('show', !!s.services_pending_changes);
   $('#serviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить маршруты' : 'Применить маршруты';
-  $('#deviceDraftBar').classList.toggle('show', !!s.routing_pending_changes);
+  $('#deviceDraftBar').classList.toggle('show', !!s.devices_pending_changes);
   $('#deviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#applyDeviceChanges').textContent = s.safe_mode ? 'Проверить политики' : 'Применить политики';
   $('#draftBar').classList.toggle('show', !!s.pending_changes || engineDrafts > 0);
@@ -1050,6 +1050,13 @@ function renderServices() {
     const resolvedClass = plannedAvailable ? '' : 'off';
     const appliedText = s.applied_enabled ? routeLabel(s.applied_route) : 'выключен';
     const dirty = s.dirty ? 'dirty' : '';
+    const draftText = s.route_dirty && s.sources_dirty
+      ? 'маршрут и область изменены'
+      : s.route_dirty
+      ? 'маршрут изменён'
+      : s.sources_dirty
+      ? 'область устройств изменена'
+      : '';
     const domainCount = Number((s.domains || []).length);
     const cidrCount = Number((s.cidrs || []).length);
     const coverageClass = cidrCount > 0 ? 'full' : 'domains';
@@ -1067,7 +1074,7 @@ function renderServices() {
         <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button" data-detail-id="${esc(s.id)}" title="Технические детали" aria-label="Технические детали ${esc(s.name)}">i</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
       </div>
       ${routeNeedsAction ? `<div class="service-route-warning"><span><b>Маршрут требует действия</b><small>${esc(s.route_issue || 'Обход не установлен. Выберите AUTO / DIRECT или установите компонент.')}</small></span><button class="secondary" type="button" data-route-setup="${esc(s.route)}">Открыть установку</button></div>` : ''}
-      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="service-proof-line">${evidenceBadgeHTML(s)}<span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `изменено · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></span></div>
+      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="service-proof-line">${evidenceBadgeHTML(s)}<span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `${esc(draftText)} · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></span></div>
     </article>`;
   }).join('') || '<div class="empty-inline">Ничего не найдено</div>';
 
@@ -1089,8 +1096,9 @@ function renderOverviewServices() {
     const applied = s.applied_enabled ? routeLabel(s.applied_route) : 'ВЫКЛ';
     const desiredClass = s.route === 'auto' ? 'auto' : (routeAvailable(s.route) ? 'good' : 'warn');
     const appliedClass = s.applied_enabled ? 'good' : '';
+    const draftLabel = s.route_dirty && s.sources_dirty ? 'маршрут + область' : s.route_dirty ? 'маршрут' : s.sources_dirty ? 'область' : '';
     return `<div class="overview-service">
-      <div class="service-name"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${s.dirty ? ' · черновик' : ''}</small></div></div>
+      <div class="service-name"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${draftLabel ? ` · черновик: ${draftLabel}` : ''}</small></div></div>
       <span class="route-pill ${desiredClass}">${esc(desired)}${s.route === 'auto' && s.enabled ? ` → ${esc(planned)}` : ''}</span>
       <span class="overview-arrow">→</span>
       <span class="overview-applied"><span class="route-pill ${appliedClass} applied-route">${esc(applied)}</span>${evidenceBadgeHTML(s, true)}</span>
@@ -2128,21 +2136,22 @@ function openDevicePolicy(id) {
   $('#devicePolicyTitle').textContent = deviceDisplayName(device);
   $('#devicePolicyIdentity').textContent = (device.ips || []).join(' · ');
   $('#devicePolicyService').innerHTML = (state.services || []).map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('');
-  $('#devicePolicyRoute').innerHTML = (state.routeOptions || []).filter((route) => route.selectable).map((route) => `<option value="${esc(route.id)}">${esc(route.name)}${route.ready ? '' : ' · не запущен'}</option>`).join('');
   $('#devicePolicyScope').value = device.group ? 'group' : 'device';
   $('#devicePolicyScope').querySelector('option[value="group"]').disabled = !device.group;
   updateDevicePolicyForm();
   $('#devicePolicyDialog').showModal();
 }
 
-function updateDevicePolicyForm(preserveRoute = false) {
+function updateDevicePolicyForm() {
   const device = state.devices.find((item) => item.id === $('#devicePolicyID').value);
   const service = state.services.find((item) => item.id === $('#devicePolicyService').value);
   if (!device || !service) return;
-  if (!preserveRoute) $('#devicePolicyRoute').value = service.route || 'auto';
+  $('#devicePolicyRoute').innerHTML = `<option value="${esc(service.route || 'auto')}">${esc(routeLabel(service.route || 'auto'))}</option>`;
   const scope = $('#devicePolicyScope').value;
   const count = scope === 'group' ? state.devices.filter((item) => item.group && item.group === device.group).length : 1;
-  const globalWarning = service.enabled && !(service.sources || []).length
+  const globalWarning = !service.enabled
+    ? 'Сервис сейчас выключен. Область сохранится отдельно и начнёт действовать только после включения сервиса на вкладке «Сервисы».'
+    : service.enabled && !(service.sources || []).length
     ? 'Сейчас сервис действует на все устройства. После сохранения он будет ограничен выбранной областью.'
     : 'Существующая область этого сервиса будет заменена выбранным устройством или группой.';
   $('#devicePolicyWarning').textContent = `${globalWarning} Клиентов в новой области: ${count}. Один сервис использует один маршрут для всей своей области.`;
@@ -2158,10 +2167,10 @@ async function saveDevicePolicy(event) {
     : [device];
   const sources = [...new Set(members.flatMap((item) => item.ips || []))].sort();
   if (!sources.length) { showDetails({ error: 'У выбранной области нет известных IP.' }, 'Политика не сохранена'); return; }
-  const route = $('#devicePolicyRoute').value;
-  if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: ${routeLabel(route)} будет применяться только к ${sources.length} адресу(ам). Изменение попадёт в черновик и потребует общего применения.`, 'Сохранить в черновик')) return;
+  const route = service.route || 'auto';
+  if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: область будет ограничена ${sources.length} адресом(ами). Маршрут ${routeLabel(route)} и состояние сервиса эта вкладка не изменяет.`, 'Сохранить в черновик')) return;
   try {
-    await api(`/api/v1/services/${encodeURIComponent(service.id)}`, { method: 'PUT', body: JSON.stringify({ enabled: true, route, sources }) });
+    await api(`/api/v1/services/${encodeURIComponent(service.id)}`, { method: 'PUT', body: JSON.stringify({ enabled: service.enabled, route, sources }) });
     $('#devicePolicyDialog').close();
     await refreshCoreAfterEdit();
     await refreshDevices();
@@ -2530,6 +2539,10 @@ async function showServicePlan(id) {
 async function applyDraft(scope = 'all', engineID = '') {
   const buttons = scope === 'routing'
     ? [$('#applyChanges'), $('#applyServiceChanges'), $('#applyDeviceChanges')]
+    : scope === 'services'
+    ? [$('#applyServiceChanges')]
+    : scope === 'devices'
+    ? [$('#applyDeviceChanges')]
     : scope === 'engine'
     ? [$('#engineApplyConfig')]
     : [$('#applyChanges'), $('#applySettings')];
@@ -2576,8 +2589,10 @@ async function applyDraft(scope = 'all', engineID = '') {
     buttons.forEach((button) => { button.disabled = false; });
     renderStatus();
     if (scope === 'engine') $('#engineApplyConfig').textContent = 'Проверить и применить';
-    if (scope === 'routing') {
+    if (scope === 'routing' || scope === 'services') {
       $('#applyServiceChanges').textContent = state.status.safe_mode ? 'Проверить маршруты' : 'Применить маршруты';
+    }
+    if (scope === 'routing' || scope === 'devices') {
       $('#applyDeviceChanges').textContent = state.status.safe_mode ? 'Проверить политики' : 'Применить политики';
     }
   }
@@ -2589,7 +2604,7 @@ async function discardDraft(scope = 'all', engineID = '') {
     const result = await api(`/api/v1/discard${query}`, { method: 'POST' });
     await refreshCoreAfterEdit();
     if (scope !== 'routing') await refreshEngineConfigs();
-    const title = scope === 'routing' ? 'Изменения сервисов отменены' : scope === 'engine' ? 'Черновик обхода удалён' : 'Черновики отменены';
+    const title = scope === 'services' ? 'Изменения сервисов отменены' : scope === 'devices' ? 'Изменения областей отменены' : scope === 'routing' ? 'Изменения маршрутов отменены' : scope === 'engine' ? 'Черновик обхода удалён' : 'Черновики отменены';
     showNotice('success', title, result.discarded_engine_drafts ? `Отменено конфигураций обходов: ${result.discarded_engine_drafts}. Рабочие файлы не менялись.` : 'Желаемые маршруты возвращены к последнему применённому состоянию.', result);
   } catch (error) {
     showDetails({ error: error.message }, 'Не удалось отменить черновик');
@@ -2917,8 +2932,8 @@ function bindEvents() {
   $('#devicePolicyForm').addEventListener('submit', saveDevicePolicy);
   $('#devicePolicyClose').addEventListener('click', () => $('#devicePolicyDialog').close());
   $('#devicePolicyCancel').addEventListener('click', () => $('#devicePolicyDialog').close());
-  $('#devicePolicyService').addEventListener('change', () => updateDevicePolicyForm(false));
-  $('#devicePolicyScope').addEventListener('change', () => updateDevicePolicyForm(true));
+  $('#devicePolicyService').addEventListener('change', updateDevicePolicyForm);
+  $('#devicePolicyScope').addEventListener('change', updateDevicePolicyForm);
   $('#refreshAll').addEventListener('click', async () => { await refreshAll(); await showPlan(); });
   $('#dnsProfiles').addEventListener('click', (event) => {
     const profile = event.target.closest('[data-dns-profile]');
@@ -2977,14 +2992,14 @@ function bindEvents() {
   $('#showPlan').addEventListener('click', showPlan);
   $('#applyChanges').addEventListener('click', () => applyDraft(state.status.routing_pending_changes ? 'routing' : 'all'));
   $('#applySettings').addEventListener('click', () => applyDraft('all'));
-  $('#applyServiceChanges').addEventListener('click', () => applyDraft('routing'));
-  $('#applyDeviceChanges').addEventListener('click', () => applyDraft('routing'));
+  $('#applyServiceChanges').addEventListener('click', () => applyDraft('services'));
+  $('#applyDeviceChanges').addEventListener('click', () => applyDraft('devices'));
   $('#toggleSafeMode').addEventListener('click', toggleSafeMode);
   $('#topToggleSafeMode').addEventListener('click', toggleSafeMode);
   $('#discardChanges').addEventListener('click', () => discardDraft(state.status.routing_pending_changes ? 'routing' : 'all'));
   $('#discardSettings').addEventListener('click', () => discardDraft('all'));
-  $('#discardServiceChanges').addEventListener('click', () => discardDraft('routing'));
-  $('#discardDeviceChanges').addEventListener('click', () => discardDraft('routing'));
+  $('#discardServiceChanges').addEventListener('click', () => discardDraft('services'));
+  $('#discardDeviceChanges').addEventListener('click', () => discardDraft('devices'));
   $('#exportConfig').addEventListener('click', exportConfig);
   $('#overviewExportConfig').addEventListener('click', exportConfig);
   $('#engineFileSelect').addEventListener('change', (e) => selectEngineFile(e.target.value));
