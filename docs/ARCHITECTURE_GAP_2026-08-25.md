@@ -23,19 +23,19 @@ evidence, rollback или UX-критерии. Наличие карточки �
 | Test Lab attribution | PARTIAL | Explicit SOCKS/interface/NFQUEUE evidence: `internal/routeprobe`, `internal/testlab` | Route Sandbox для каждого адаптера и negative controls | P0 |
 | Egress identity | MISSING | Отдельные диагностические фрагменты существуют | Единая модель IP/country/ASN/stickiness | P2/P4 |
 | Provider/subscriptions | PARTIAL | Ручной безопасный импорт до 64 узлов | Локальный registry, expiry/refresh, node health | P2 |
-| Source Hub / Free Pool | MISSING | Исследованы источники; реализация намеренно отложена | Provenance/dedupe/trust/quarantine и локальная проверка | P2.5 |
+| Source Hub / Free Pool | PARTIAL | Встроенные validated lists и независимый persisted desired/applied выбор | Внешние provider provenance/dedupe/trust/quarantine и локальная проверка | P2.5 |
 | Devices | PARTIAL | LAN discovery, имена, группы, scoped policies: `internal/devices` | Стабильная идентичность DHCP/IPv6 и device class | P4/P5 |
 | DNS | PARTIAL | Профили, независимый черновик/Apply guard и read-only probes: `internal/dnscontrol` | Platform apply, port-53 ownership, leak test, rollback | P3 |
 | Logs / audit | PARTIAL | Локальный redacted audit: `internal/auditlog` | Полный old/new path, evidence и rollback correlation | P0/P5 |
 | Timeouts / cancellation | PARTIAL | Ключевые Apply/network/component операции ограничены | Полная инвентаризация subprocess/DNS/fetch и bounded workers | P0 |
 | Component Manager | PARTIAL | opkg/GitHub components, планы, версии: `internal/components` | Signed compatibility registry, smoke/rollback per component | P6 |
-| UI | PARTIAL | Service-first страницы, Simple/Expert engine config и scoped Apply для Services/Devices/DNS | Sources scope, Simple/Advanced split, Repair Wizard, mobile | P5 |
+| UI | PARTIAL | Service-first страницы, Simple/Expert engine config и scoped Apply для Services/Devices/DNS/Sources | Multi-scope preview, Simple/Advanced split, Repair Wizard, mobile | P5 |
 | Tests / CI | PARTIAL | Go/JS/release tests и часть артефактных проверок | ARM64+MIPS hardware matrix, fault injection, soak, SBOM | P6 |
 
 ## Ближайшие обязательные изменения
 
-1. Завершить scoped-черновик Источников и общую сводку зависимостей;
-   routing/engine/DNS scopes уже реализованы.
+1. Добавить общий multi-scope preview и сводку зависимостей; отдельные
+   routing/engine/DNS/Sources scopes уже реализованы.
 2. Route Sandbox/canary и единый evidence contract.
 3. USQUE recovery candidate без необратимого изменения DNS или live-сессии.
 4. Provider registry для пользовательских профилей sing-box.

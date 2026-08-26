@@ -742,8 +742,10 @@ function renderStatus() {
   $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить маршруты' : 'Применить маршруты';
   $('#deviceDraftBar').classList.toggle('show', !!s.devices_pending_changes);
   $('#deviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
+  $('#sourceDraftBar').classList.toggle('show', !!s.sources_pending_changes);
+  $('#sourceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#applyDeviceChanges').textContent = s.safe_mode ? 'Проверить политики' : 'Применить политики';
-  $('#draftBar').classList.toggle('show', !!s.pending_changes || engineDrafts > 0);
+  $('#draftBar').classList.toggle('show', !!s.routing_pending_changes || !!s.engine_pending_changes || engineDrafts > 0);
   $('#draftBar').classList.toggle('safe-review', !!s.safe_mode);
   const failedApply = !s.safe_mode && !!s.pending_changes && !!s.last_apply_failure;
   $('#draftBar').classList.toggle('apply-failed', failedApply);
@@ -2059,18 +2061,23 @@ function sourceStateText(s) {
 }
 
 function sourceKindText(kind) {
-  return ({ reference: 'справочник', downloadable: 'загружаемый список', local: 'локальный список', community: 'каталог сообщества' })[kind] || kind || 'справочник';
+  return ({ reference: 'справочный источник', domains: 'доменные имена', cidrs: 'IP-сети', downloadable: 'загружаемый список', local: 'локальный список', community: 'каталог сообщества' })[kind] || kind || 'справочник';
 }
 
 function renderSources() {
-  const operational = state.sources.filter((s) => s.kind !== 'reference' && s.enabled);
+  const operational = state.sources.filter((s) => s.kind !== 'reference' && s.applied_enabled);
   const ready = operational.filter((s) => s.ready).length;
   const references = state.sources.filter((s) => s.kind === 'reference').length;
-  $('#sourceOverview').innerHTML = `<div class="source-stat"><strong>${ready}</strong><span>из ${operational.length} включённых списков готовы · ${references} справочных источников</span></div><div class="source-mini-list">${state.sources.slice(0, 8).map((s) => `<span class="source-mini">${esc(s.name)}</span>`).join('')}</div>`;
+  $('#sourceOverview').innerHTML = `<div class="source-stat"><strong>${ready}</strong><span>из ${operational.length} используемых списков готовы · ${references} справочных источников</span></div><div class="source-mini-list">${state.sources.slice(0, 8).map((s) => `<span class="source-mini">${esc(s.name)}</span>`).join('')}</div>`;
   $('#sourceRows').innerHTML = state.sources.map((s) => {
     const [text, cls] = sourceStateText(s);
-    return `<tr><td><b>${esc(s.name)}</b><div class="source-role">${esc(s.url || '')}</div></td><td>${esc(sourceKindText(s.kind))}</td><td><span class="source-state"><i class="state-dot ${cls}"></i>${esc(text)}</span></td><td>${s.entries ? Number(s.entries).toLocaleString('ru-RU') : '—'}</td><td>${esc(s.last_error || '—')}</td></tr>`;
+    const control = s.kind === 'reference'
+      ? '<span class="source-reference-mark">справочно</span>'
+      : `<button class="toggle ${s.enabled ? 'on' : ''}" data-source-toggle="${esc(s.id)}" aria-pressed="${s.enabled ? 'true' : 'false'}" aria-label="${s.enabled ? 'Не использовать' : 'Использовать'} ${esc(s.name)}"><i></i></button><small class="source-applied-state">${s.dirty ? `черновик · сейчас ${s.applied_enabled ? 'включён' : 'выключен'}` : s.applied_enabled ? 'используется' : 'выключен'}</small>`;
+    const stateText = s.dirty ? `${text} · выбор изменён` : text;
+    return `<tr class="${s.dirty ? 'source-dirty-row' : ''}"><td><b>${esc(s.name)}</b><div class="source-role">${esc(s.description || 'Проверяемый внешний источник данных.')}</div>${s.url ? `<a class="source-url" href="${esc(s.url)}" target="_blank" rel="noreferrer">Открыть источник ↗</a>` : ''}</td><td><div class="source-choice">${control}</div></td><td>${esc(sourceKindText(s.kind))}</td><td><span class="source-state"><i class="state-dot ${s.dirty ? 'warn' : cls}"></i>${esc(stateText)}</span></td><td>${s.entries ? Number(s.entries).toLocaleString('ru-RU') : '—'}</td><td>${esc(s.last_error || '—')}</td></tr>`;
   }).join('');
+  $$('[data-source-toggle]').forEach((button) => button.addEventListener('click', () => setSourceDraft(button.dataset.sourceToggle, button.getAttribute('aria-pressed') !== 'true')));
 }
 
 function renderConnections() {
@@ -2653,12 +2660,54 @@ async function refreshSources() {
     renderSources();
     renderStatus();
     renderReadiness();
-    showDetails({ message: 'Включённые источники обновлены и проверены.', sources: state.sources }, 'Источники обновлены');
+    showDetails({ message: 'Сохранённые как используемые источники обновлены и проверены.', sources: state.sources }, 'Источники обновлены');
   } catch (error) {
     showDetails({ error: error.message }, 'Ошибка источников');
   } finally {
     button.disabled = false;
-    button.textContent = 'Обновить включённые';
+    button.textContent = 'Обновить используемые';
+  }
+}
+
+async function setSourceDraft(id, enabled) {
+  try {
+    state.sources = await api(`/api/v1/sources/${encodeURIComponent(id)}/draft`, { method: 'POST', body: JSON.stringify({ enabled }) });
+    state.status = await api('/api/v1/status');
+    renderSources();
+    renderStatus();
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Выбор источника не сохранён');
+  }
+}
+
+async function applySourceDraft() {
+  const button = $('#applySourceChanges');
+  button.disabled = true;
+  button.textContent = 'Сохранение…';
+  try {
+    const result = await api('/api/v1/sources/apply', { method: 'POST', body: '{}' });
+    state.sources = result.sources || await api('/api/v1/sources');
+    state.status = await api('/api/v1/status');
+    renderSources();
+    renderStatus();
+    renderReadiness();
+    showNotice('success', 'Выбор источников сохранён', result.note || 'Маршруты и обходы не менялись.', result);
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Источники не сохранены');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Сохранить выбор';
+  }
+}
+
+async function discardSourceDraft() {
+  try {
+    state.sources = await api('/api/v1/sources/discard', { method: 'POST', body: '{}' });
+    state.status = await api('/api/v1/status');
+    renderSources();
+    renderStatus();
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Изменения источников не отменены');
   }
 }
 
@@ -2975,6 +3024,8 @@ function bindEvents() {
   $('#dnsApply').addEventListener('click', applyDNSDraft);
   $('#dnsDiscard').addEventListener('click', discardDNSDraft);
   $('#refreshSources').addEventListener('click', refreshSources);
+  $('#applySourceChanges').addEventListener('click', applySourceDraft);
+  $('#discardSourceChanges').addEventListener('click', discardSourceDraft);
   $('#refreshSystem').addEventListener('click', refreshSystem);
   $('#downloadDiagnostics').addEventListener('click', downloadDiagnostics);
 	$('#inspectDomain').addEventListener('click', inspectDomain);

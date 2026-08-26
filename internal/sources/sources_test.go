@@ -202,3 +202,58 @@ func TestEntriesForServiceReturnsOnlyExplicitlyScopedSources(t *testing.T) {
 		t.Fatalf("unscoped source leaked into service: %v", unrelated)
 	}
 }
+
+func TestSourceSelectionIsDraftedAppliedAndPersistedIndependently(t *testing.T) {
+	dir := t.TempDir()
+	cacheDir := filepath.Join(dir, "cache")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, "telegram.lst"), []byte("91.108.56.0/22\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reg := Registry{Sources: []Source{{
+		ID: "telegram", Name: "Telegram", Kind: "cidrs", URL: "https://example.com/telegram", Enabled: true, Services: []string{"telegram"},
+	}}}
+	settingsPath := filepath.Join(dir, "source-state.json")
+	m := NewManager(reg, cacheDir, settingsPath)
+	if err := m.SetDraft("telegram", false); err != nil {
+		t.Fatal(err)
+	}
+	states := m.List()
+	if !m.Dirty() || len(states) != 1 || states[0].Enabled || !states[0].AppliedEnabled || !states[0].Dirty {
+		t.Fatalf("draft state is not separated from applied state: %+v", states)
+	}
+	_, beforeApply := m.EntriesForService("telegram")
+	if len(beforeApply) != 1 {
+		t.Fatalf("draft changed active source before apply: %v", beforeApply)
+	}
+	if err := m.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	_, afterApply := m.EntriesForService("telegram")
+	if m.Dirty() || len(afterApply) != 0 {
+		t.Fatalf("applied source selection was not activated: %v", afterApply)
+	}
+	reloaded := NewManager(reg, cacheDir, settingsPath)
+	states = reloaded.List()
+	if len(states) != 1 || states[0].Enabled || states[0].AppliedEnabled || states[0].Dirty {
+		t.Fatalf("source selection was not persisted: %+v", states)
+	}
+}
+
+func TestDiscardSourceSelectionRestoresAppliedState(t *testing.T) {
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "x", Name: "X", Kind: "domains", URL: "https://example.com/x", Enabled: false,
+	}}}, t.TempDir(), filepath.Join(t.TempDir(), "source-state.json"))
+	if err := m.SetDraft("x", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Discard(); err != nil {
+		t.Fatal(err)
+	}
+	states := m.List()
+	if m.Dirty() || len(states) != 1 || states[0].Enabled || states[0].AppliedEnabled {
+		t.Fatalf("discard did not restore applied selection: %+v", states)
+	}
+}

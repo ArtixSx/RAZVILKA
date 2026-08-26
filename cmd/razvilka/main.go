@@ -212,7 +212,7 @@ func main() {
 	if err != nil {
 		log.Printf("sources registry disabled: %v", err)
 	} else {
-		sm = sources.NewManager(reg, *cachePath)
+		sm = sources.NewManager(reg, *cachePath, filepath.Join(filepath.Dir(*sourcesPath), "source-state.json"))
 	}
 	cfg := store.Get()
 	addr := cfg.Listen

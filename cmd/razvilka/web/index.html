@@ -270,8 +270,12 @@
 
     <section class="view" id="view-sources">
       <article class="panel full-panel">
-        <div class="panel-title"><div><h2>Источники данных</h2><p>Каждый внешний список проходит локальную валидацию перед попаданием в cache</p></div><button class="secondary" id="refreshSources">Обновить включённые</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Источник</th><th>Роль</th><th>Состояние</th><th>Записи</th><th>Последняя ошибка</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+        <div class="panel-title"><div><h2>Источники данных</h2><p>Выберите списки, сохраните выбор и только затем обновляйте их. Маршруты от этого не переключаются.</p></div><button class="secondary" id="refreshSources">Обновить используемые</button></div>
+        <div class="draft-bar section-draft-bar" id="sourceDraftBar">
+          <div><span class="draft-pulse"></span><b>Выбор источников изменён</b><small>Черновик относится только к этой вкладке. Сервисы, DNS и обходы останутся без изменений.</small></div>
+          <div class="draft-actions"><button class="secondary" id="discardSourceChanges" type="button">Отменить здесь</button><button class="primary" id="applySourceChanges" type="button">Сохранить выбор</button></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Источник</th><th>Использовать</th><th>Роль</th><th>Состояние</th><th>Записи</th><th>Последняя ошибка</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
       </article>
     </section>
 

@@ -286,6 +286,8 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/connections/stream", a.connectionStream)
 	mux.HandleFunc("/api/v1/sources", a.sourceList)
 	mux.HandleFunc("/api/v1/sources/refresh", a.sourceRefreshAll)
+	mux.HandleFunc("/api/v1/sources/apply", a.sourceApply)
+	mux.HandleFunc("/api/v1/sources/discard", a.sourceDiscard)
 	mux.HandleFunc("/api/v1/sources/", a.sourceAction)
 	mux.Handle("/", noStoreUI(static))
 	return securityHeaders(a.auditMiddleware(a.Security.Middleware(mux)))
@@ -443,7 +445,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			sourceDownloadable++
-			if !s.Enabled {
+			if !s.AppliedEnabled {
 				continue
 			}
 			sourceCount++
@@ -505,6 +507,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		highestEvidence = evidence.Stronger(highestEvidence, proof.Level)
 	}
 	dnsPending := a.DNS != nil && a.DNS.Dirty()
+	sourcesPending := a.Sources != nil && a.Sources.Dirty()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "safe_mode": cfg.SafeMode,
 		"auth_required": a.Security != nil, "authenticated": a.Security != nil && a.Security.Authenticated(r),
@@ -519,11 +522,12 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"services_pending_changes": a.Store.DirtyScope(config.DraftScopeServices),
 		"devices_pending_changes":  a.Store.DirtyScope(config.DraftScopeDevices),
 		"dns_pending_changes":      dnsPending,
+		"sources_pending_changes":  sourcesPending,
 		"engine_pending_changes":   configDrafts > 0,
 		"dataplane_state":          dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
 		"last_apply_failure":     lastApplyFailure,
 		"highest_evidence_level": highestEvidence, "evidence_counts": evidenceCounts,
-		"pending_changes": a.Store.Dirty() || configDrafts > 0 || dnsPending, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
+		"pending_changes": a.Store.Dirty() || configDrafts > 0 || dnsPending || sourcesPending, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
 	})
 }
 
@@ -2479,6 +2483,19 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
 		return
 	}
+	if scope == changeScopeAll && !a.Store.Dirty() && len(a.stagedEngineConfigRefs()) == 0 {
+		dnsPending := a.DNS != nil && a.DNS.Dirty()
+		sourcesPending := a.Sources != nil && a.Sources.Dirty()
+		if dnsPending || sourcesPending {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok": false, "code": "CONTEXTUAL_APPLY_REQUIRED", "pending_changes": true,
+				"dns_pending_changes": dnsPending, "sources_pending_changes": sourcesPending,
+				"error":      "Независимые черновики применяются на своих вкладках.",
+				"resolution": "Откройте DNS или Источники и используйте кнопку подтверждения в этой вкладке.",
+			})
+			return
+		}
+	}
 	cfg := a.Store.Get()
 	transaction, err := a.buildDataplanePlanForScope(cfg, a.routeOptionsSnapshot(), scope, engineID)
 	if err != nil {
@@ -2777,7 +2794,7 @@ func (a *App) stagedEngineConfigRefs() []string {
 }
 
 func (a *App) pendingChanges() bool {
-	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 || (a.DNS != nil && a.DNS.Dirty())
+	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 || (a.DNS != nil && a.DNS.Dirty()) || (a.Sources != nil && a.Sources.Dirty())
 }
 
 func (a *App) scopePendingChanges(scope changeScope, engineID string) bool {
@@ -2816,12 +2833,6 @@ func (a *App) discard(w http.ResponseWriter, r *http.Request) {
 			err = a.Store.DiscardDraft()
 		}
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	if scope == changeScopeAll && a.DNS != nil {
-		if err := a.DNS.Discard(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -3721,6 +3732,41 @@ func (a *App) sourceRefreshAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a.Sources.RefreshEnabled(ctx))
 }
 
+func (a *App) sourceApply(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Sources == nil {
+		http.Error(w, "sources disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if err := a.Sources.Apply(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "network_changed": false, "sources": a.Sources.List(),
+		"note": "Выбор источников сохранён. Маршруты и обходы не изменялись; включённые списки можно обновить отдельно.",
+	})
+}
+
+func (a *App) sourceDiscard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Sources == nil {
+		http.Error(w, "sources disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if err := a.Sources.Discard(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.Sources.List())
+}
+
 func (a *App) sourceAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -3732,8 +3778,23 @@ func (a *App) sourceAction(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/sources/")
 	id, action, ok := strings.Cut(path, "/")
-	if !ok || id == "" || action != "refresh" {
+	if !ok || id == "" || (action != "refresh" && action != "draft") {
 		http.NotFound(w, r)
+		return
+	}
+	if action == "draft" {
+		var input struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if err := a.Sources.SetDraft(id, input.Enabled); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, a.Sources.List())
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)

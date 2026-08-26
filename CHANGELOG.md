@@ -26,6 +26,13 @@
 - DNS Apply is deliberately disabled with the exact missing-adapter reason for
   non-system profiles. The draft is preserved, while the Automatic profile can
   be confirmed without falsely claiming that router DNS was changed.
+- Downloadable Sources now have persisted desired/applied selections and their
+  own Save/Discard controls. A draft never changes active service enrichment;
+  only the confirmed selection is refreshed and consumed.
+- Source selection state is included in upgrade snapshots and rollback, while
+  source refresh remains a separate, explicit network action.
+- Global route/engine Discard now preserves independent DNS and Sources drafts;
+  those drafts can only be cancelled from their own page.
 
 ## v0.16.0 — verified component setup and recoverable scoped drafts
 

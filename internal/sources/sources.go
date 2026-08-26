@@ -40,27 +40,37 @@ type Registry struct {
 }
 
 type State struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Kind        string    `json:"kind"`
-	URL         string    `json:"url"`
-	Enabled     bool      `json:"enabled"`
-	Ready       bool      `json:"ready"`
-	Entries     int       `json:"entries"`
-	SHA256      string    `json:"sha256,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at,omitempty"`
-	LastError   string    `json:"last_error,omitempty"`
-	Description string    `json:"description,omitempty"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Kind           string    `json:"kind"`
+	URL            string    `json:"url"`
+	Enabled        bool      `json:"enabled"`
+	AppliedEnabled bool      `json:"applied_enabled"`
+	Dirty          bool      `json:"dirty"`
+	Ready          bool      `json:"ready"`
+	Entries        int       `json:"entries"`
+	SHA256         string    `json:"sha256,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at,omitempty"`
+	LastError      string    `json:"last_error,omitempty"`
+	Description    string    `json:"description,omitempty"`
+}
+
+type settingsDocument struct {
+	Schema  int             `json:"schema"`
+	Draft   map[string]bool `json:"draft"`
+	Applied map[string]bool `json:"applied"`
 }
 
 type Manager struct {
-	mu        sync.RWMutex
-	refreshMu sync.Mutex
-	clientMu  sync.RWMutex
-	reg       Registry
-	cacheDir  string
-	client    *http.Client
-	states    map[string]State
+	mu           sync.RWMutex
+	refreshMu    sync.Mutex
+	clientMu     sync.RWMutex
+	reg          Registry
+	cacheDir     string
+	settingsPath string
+	settings     settingsDocument
+	client       *http.Client
+	states       map[string]State
 }
 
 func LoadRegistry(path string) (Registry, error) {
@@ -92,16 +102,25 @@ func LoadRegistry(path string) (Registry, error) {
 	return r, nil
 }
 
-func NewManager(reg Registry, cacheDir string) *Manager {
+func NewManager(reg Registry, cacheDir string, settingsPath ...string) *Manager {
+	path := ""
+	if len(settingsPath) > 0 {
+		path = strings.TrimSpace(settingsPath[0])
+	}
 	m := &Manager{
-		reg:      reg,
-		cacheDir: cacheDir,
-		client:   &http.Client{Timeout: 25 * time.Second, CheckRedirect: safeRedirect},
-		states:   map[string]State{},
+		reg:          reg,
+		cacheDir:     cacheDir,
+		settingsPath: path,
+		settings:     settingsDocument{Schema: 1, Draft: map[string]bool{}, Applied: map[string]bool{}},
+		client:       &http.Client{Timeout: 25 * time.Second, CheckRedirect: safeRedirect},
+		states:       map[string]State{},
 	}
 	for _, s := range reg.Sources {
-		m.states[s.ID] = State{ID: s.ID, Name: s.Name, Kind: s.Kind, URL: s.URL, Enabled: s.Enabled, Description: s.Description}
+		m.settings.Draft[s.ID] = s.Enabled
+		m.settings.Applied[s.ID] = s.Enabled
+		m.states[s.ID] = State{ID: s.ID, Name: s.Name, Kind: s.Kind, URL: s.URL, Enabled: s.Enabled, AppliedEnabled: s.Enabled, Description: s.Description}
 	}
+	m.loadSettings()
 	m.inspectCache()
 	return m
 }
@@ -141,10 +160,63 @@ func (m *Manager) List() []State {
 	defer m.mu.RUnlock()
 	out := make([]State, 0, len(m.states))
 	for _, s := range m.states {
+		s.Enabled = m.settings.Draft[s.ID]
+		s.AppliedEnabled = m.settings.Applied[s.ID]
+		s.Dirty = s.Enabled != s.AppliedEnabled
 		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+func (m *Manager) Dirty() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for id, draft := range m.settings.Draft {
+		if draft != m.settings.Applied[id] {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Manager) SetDraft(id string, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.states[id]; !ok {
+		return fmt.Errorf("unknown source %q", id)
+	}
+	previous := cloneSettings(m.settings)
+	m.settings.Draft[id] = enabled
+	if err := m.saveSettingsLocked(); err != nil {
+		m.settings = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) Apply() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := cloneSettings(m.settings)
+	m.settings.Applied = cloneBoolMap(m.settings.Draft)
+	if err := m.saveSettingsLocked(); err != nil {
+		m.settings = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) Discard() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := cloneSettings(m.settings)
+	m.settings.Draft = cloneBoolMap(m.settings.Applied)
+	if err := m.saveSettingsLocked(); err != nil {
+		m.settings = previous
+		return err
+	}
+	return nil
 }
 
 // EntriesForService returns only cached entries from sources that explicitly
@@ -159,7 +231,7 @@ func (m *Manager) EntriesForService(serviceID string) (domains, cidrs []string) 
 	sourcesForService := make([]Source, 0)
 	for _, src := range m.reg.Sources {
 		state := m.states[src.ID]
-		if !src.Enabled || !state.Ready || src.Kind == "reference" || !containsFold(src.Services, serviceID) {
+		if !m.settings.Applied[src.ID] || !state.Ready || src.Kind == "reference" || !containsFold(src.Services, serviceID) {
 			continue
 		}
 		sourcesForService = append(sourcesForService, src)
@@ -211,8 +283,11 @@ func uniqueSorted(values []string) []string {
 }
 
 func (m *Manager) RefreshEnabled(ctx context.Context) []State {
+	m.mu.RLock()
+	enabled := cloneBoolMap(m.settings.Applied)
+	m.mu.RUnlock()
 	for _, src := range m.reg.Sources {
-		if src.Enabled && src.Kind != "reference" {
+		if enabled[src.ID] && src.Kind != "reference" {
 			_ = m.Refresh(ctx, src.ID)
 		}
 	}
@@ -287,9 +362,62 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	}
 
 	m.mu.Lock()
-	m.states[src.ID] = State{ID: src.ID, Name: src.Name, Kind: src.Kind, URL: src.URL, Enabled: src.Enabled, Ready: true, Entries: len(entries), SHA256: digest, UpdatedAt: time.Now().UTC(), Description: src.Description}
+	draftEnabled := m.settings.Draft[src.ID]
+	appliedEnabled := m.settings.Applied[src.ID]
+	m.states[src.ID] = State{ID: src.ID, Name: src.Name, Kind: src.Kind, URL: src.URL, Enabled: draftEnabled, AppliedEnabled: appliedEnabled, Dirty: draftEnabled != appliedEnabled, Ready: true, Entries: len(entries), SHA256: digest, UpdatedAt: time.Now().UTC(), Description: src.Description}
 	m.mu.Unlock()
 	return nil
+}
+
+func (m *Manager) loadSettings() {
+	if m.settingsPath == "" {
+		return
+	}
+	b, err := os.ReadFile(m.settingsPath)
+	if err != nil {
+		return
+	}
+	var stored settingsDocument
+	if json.Unmarshal(b, &stored) != nil || stored.Schema != 1 {
+		return
+	}
+	for _, src := range m.reg.Sources {
+		if enabled, ok := stored.Applied[src.ID]; ok {
+			m.settings.Applied[src.ID] = enabled
+		}
+		if enabled, ok := stored.Draft[src.ID]; ok {
+			m.settings.Draft[src.ID] = enabled
+		} else {
+			m.settings.Draft[src.ID] = m.settings.Applied[src.ID]
+		}
+	}
+}
+
+func (m *Manager) saveSettingsLocked() error {
+	if m.settingsPath == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(m.settingsPath), 0o755); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(m.settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	return writeAtomic(m.settingsPath, b, 0o600)
+}
+
+func cloneSettings(in settingsDocument) settingsDocument {
+	return settingsDocument{Schema: in.Schema, Draft: cloneBoolMap(in.Draft), Applied: cloneBoolMap(in.Applied)}
+}
+
+func cloneBoolMap(in map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 func (m *Manager) fail(src Source, err error) error {

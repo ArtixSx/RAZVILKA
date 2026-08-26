@@ -144,6 +144,7 @@ CONFIG_PRESENT="$(present "$APPDIR/config.json")"
 CATALOG_PRESENT="$(present "$APPDIR/service-catalog.json")"
 COMMUNITY_PRESENT="$(present "$APPDIR/community-catalog.json")"
 SOURCES_PRESENT="$(present "$APPDIR/sources.json")"
+SOURCE_STATE_PRESENT="$(present "$APPDIR/source-state.json")"
 TOKEN_PRESENT="$(present "$APPDIR/admin.token")"
 CREDENTIALS_PRESENT="$(present "$APPDIR/admin.credentials.json")"
 CUSTOM_SERVICES_PRESENT="$(present "$APPDIR/custom-services.json")"
@@ -164,6 +165,7 @@ CONFIG_PRESENT=$CONFIG_PRESENT
 CATALOG_PRESENT=$CATALOG_PRESENT
 COMMUNITY_PRESENT=$COMMUNITY_PRESENT
 SOURCES_PRESENT=$SOURCES_PRESENT
+SOURCE_STATE_PRESENT=$SOURCE_STATE_PRESENT
 TOKEN_PRESENT=$TOKEN_PRESENT
 CREDENTIALS_PRESENT=$CREDENTIALS_PRESENT
 CUSTOM_SERVICES_PRESENT=$CUSTOM_SERVICES_PRESENT
@@ -190,6 +192,7 @@ backup_file "$APPDIR/config.json" config.json
 backup_file "$APPDIR/service-catalog.json" service-catalog.json
 backup_file "$APPDIR/community-catalog.json" community-catalog.json
 backup_file "$APPDIR/sources.json" sources.json
+backup_file "$APPDIR/source-state.json" source-state.json
 backup_file "$APPDIR/admin.token" admin.token
 backup_file "$APPDIR/admin.credentials.json" admin.credentials.json
 backup_file "$APPDIR/custom-services.json" custom-services.json

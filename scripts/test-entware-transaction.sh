@@ -69,16 +69,27 @@ PRIMARY_BACKUP="$(cat "$PRIMARY/var/lib/razvilka/current-backup")"
 # temporarily removed by controlled dataplane deactivation.
 mkdir -p "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter"
 printf '%s\n' preserved >"$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker"
+SOURCE_STATE_ORIGINAL='{"schema":1,"draft":{"telegram-cidrs":false},"applied":{"telegram-cidrs":true}}'
+printf '%s\n' "$SOURCE_STATE_ORIGINAL" >"$PRIMARY/etc/razvilka/source-state.json"
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
   "$UPGRADE" --apply --without-components >/dev/null
 [ "$(cat "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker")" = preserved ] || {
   echo "Dataplane runtime snapshot was not restored after upgrade" >&2
   exit 1
 }
+[ "$(cat "$PRIMARY/etc/razvilka/source-state.json")" = "$SOURCE_STATE_ORIGINAL" ] || {
+  echo "Source selection state changed during upgrade" >&2
+  exit 1
+}
 SECOND_BACKUP="$(cat "$PRIMARY/var/lib/razvilka/current-backup")"
+printf '%s\n' '{"schema":1,"draft":{},"applied":{}}' >"$PRIMARY/etc/razvilka/source-state.json"
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$SECOND_BACKUP" >/dev/null
 [ "$(cat "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker")" = preserved ] || {
   echo "Dataplane runtime snapshot was not restored by rollback" >&2
+  exit 1
+}
+[ "$(cat "$PRIMARY/etc/razvilka/source-state.json")" = "$SOURCE_STATE_ORIGINAL" ] || {
+  echo "Source selection state was not restored by rollback" >&2
   exit 1
 }
 

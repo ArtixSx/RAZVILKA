@@ -493,6 +493,97 @@ func TestStatusCountsOnlyEnabledDownloadableSourcesAsReadinessGate(t *testing.T)
 	}
 }
 
+func TestSourceDraftAPIIsIndependentAndVisibleInStatus(t *testing.T) {
+	root := t.TempDir()
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := sources.NewManager(sources.Registry{Sources: []sources.Source{{
+		ID: "list", Name: "List", Kind: "domains", URL: "https://example.com/list", Enabled: true,
+	}}}, filepath.Join(root, "cache"), filepath.Join(root, "source-state.json"))
+	a := &App{Store: store, Catalog: catalog.Catalog{}, Sources: manager, Start: time.Now()}
+
+	draftRequest := httptest.NewRequest(http.MethodPost, "/api/v1/sources/list/draft", strings.NewReader(`{"enabled":false}`))
+	draftResponse := httptest.NewRecorder()
+	a.sourceAction(draftResponse, draftRequest)
+	if draftResponse.Code != http.StatusOK || !manager.Dirty() {
+		t.Fatalf("source draft failed: status=%d body=%s", draftResponse.Code, draftResponse.Body.String())
+	}
+
+	statusResponse := httptest.NewRecorder()
+	a.status(statusResponse, httptest.NewRequest(http.MethodGet, "/api/v1/status", nil))
+	var status map[string]any
+	if err := json.NewDecoder(statusResponse.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status["sources_pending_changes"] != true || status["pending_changes"] != true || status["routing_pending_changes"] != false {
+		t.Fatalf("source draft was not independently reported: %v", status)
+	}
+	if status["sources_total"] != float64(1) {
+		t.Fatalf("draft changed active source readiness before apply: %v", status)
+	}
+
+	applyResponse := httptest.NewRecorder()
+	a.sourceApply(applyResponse, httptest.NewRequest(http.MethodPost, "/api/v1/sources/apply", strings.NewReader(`{}`)))
+	if applyResponse.Code != http.StatusOK || manager.Dirty() {
+		t.Fatalf("source apply failed: status=%d body=%s", applyResponse.Code, applyResponse.Body.String())
+	}
+	states := manager.List()
+	if len(states) != 1 || states[0].AppliedEnabled {
+		t.Fatalf("source selection was not applied: %+v", states)
+	}
+}
+
+func TestGlobalApplyRefusesToPretendItAppliedSourceDraft(t *testing.T) {
+	root := t.TempDir()
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := sources.NewManager(sources.Registry{Sources: []sources.Source{{
+		ID: "list", Name: "List", Kind: "domains", URL: "https://example.com/list", Enabled: true,
+	}}}, filepath.Join(root, "cache"))
+	if err := manager.SetDraft("list", false); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, Catalog: catalog.Catalog{}, Sources: manager, Start: time.Now()}
+	response := httptest.NewRecorder()
+	a.apply(response, httptest.NewRequest(http.MethodPost, "/api/v1/apply", strings.NewReader(`{}`)))
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "CONTEXTUAL_APPLY_REQUIRED") || !manager.Dirty() {
+		t.Fatalf("global apply silently consumed or misreported a source draft: status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestGlobalDiscardPreservesIndependentSourceDraft(t *testing.T) {
+	root := t.TempDir()
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := sources.NewManager(sources.Registry{Sources: []sources.Source{{
+		ID: "list", Name: "List", Kind: "domains", URL: "https://example.com/list", Enabled: true,
+	}}}, filepath.Join(root, "cache"))
+	if err := manager.SetDraft("list", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, Catalog: catalog.Catalog{}, Sources: manager, Start: time.Now()}
+	response := httptest.NewRecorder()
+	a.discard(response, httptest.NewRequest(http.MethodPost, "/api/v1/discard", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("global discard failed: status=%d body=%s", response.Code, response.Body.String())
+	}
+	if store.Dirty() {
+		t.Fatal("global discard left the routing draft pending")
+	}
+	if !manager.Dirty() {
+		t.Fatal("global discard unexpectedly removed the independent source draft")
+	}
+}
+
 func TestStatusReportsDataplaneJournalFailureWithoutLeakingPath(t *testing.T) {
 	root := t.TempDir()
 	store, err := config.Load(filepath.Join(root, "config.json"))
