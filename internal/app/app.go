@@ -254,6 +254,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/dns/nextdns", a.dnsNextDNS)
 	mux.HandleFunc("/api/v1/dns/custom", a.dnsCustom)
 	mux.HandleFunc("/api/v1/dns/test", a.dnsTest)
+	mux.HandleFunc("/api/v1/dns/apply", a.dnsApply)
 	mux.HandleFunc("/api/v1/dns/discard", a.dnsDiscard)
 	mux.HandleFunc("/api/v1/routes/options", a.routeOptions)
 	mux.HandleFunc("/api/v1/services", a.services)
@@ -503,6 +504,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		evidenceCounts[string(proof.Level)]++
 		highestEvidence = evidence.Stronger(highestEvidence, proof.Level)
 	}
+	dnsPending := a.DNS != nil && a.DNS.Dirty()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "safe_mode": cfg.SafeMode,
 		"auth_required": a.Security != nil, "authenticated": a.Security != nil && a.Security.Authenticated(r),
@@ -516,11 +518,12 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"routing_pending_changes":  a.Store.Dirty(),
 		"services_pending_changes": a.Store.DirtyScope(config.DraftScopeServices),
 		"devices_pending_changes":  a.Store.DirtyScope(config.DraftScopeDevices),
+		"dns_pending_changes":      dnsPending,
 		"engine_pending_changes":   configDrafts > 0,
 		"dataplane_state":          dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
 		"last_apply_failure":     lastApplyFailure,
 		"highest_evidence_level": highestEvidence, "evidence_counts": evidenceCounts,
-		"pending_changes": a.Store.Dirty() || configDrafts > 0, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
+		"pending_changes": a.Store.Dirty() || configDrafts > 0 || dnsPending, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
 	})
 }
 
@@ -1858,6 +1861,10 @@ func (a *App) dnsPlan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
 		return
 	}
+	writeJSON(w, http.StatusOK, a.dnsPlanSnapshot())
+}
+
+func (a *App) dnsPlanSnapshot() dnscontrol.Plan {
 	listener := ""
 	if a.EngineLab != nil {
 		for _, conflict := range a.EngineLab.Inspect().ApplyConflicts([]string{"dns-control"}) {
@@ -1867,7 +1874,7 @@ func (a *App) dnsPlan(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, http.StatusOK, a.DNS.Plan(listener))
+	return a.DNS.Plan(listener)
 }
 
 func (a *App) dnsDraft(w http.ResponseWriter, r *http.Request) {
@@ -1982,6 +1989,36 @@ func (a *App) dnsDiscard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsApply(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	plan := a.dnsPlanSnapshot()
+	if !plan.Ready {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"ok": false, "code": "DNS_LIVE_ADAPTER_UNAVAILABLE", "draft_preserved": true,
+			"error": "DNS live apply is blocked", "resolution": plan.Recommendation, "plan": plan,
+		})
+		return
+	}
+	if err := a.DNS.Apply(); err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"ok": false, "code": "DNS_LIVE_ADAPTER_UNAVAILABLE", "draft_preserved": true,
+			"error": err.Error(), "resolution": "Оставьте профиль черновиком и используйте проверку до появления платформенного DNS-адаптера.", "plan": plan,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "live_applied": false, "network_changed": false,
+		"note": "Системный DNS подтверждён без изменения настроек роутера.", "plan": plan, "dns": a.DNS.Snapshot(),
+	})
 }
 
 func (a *App) routeOptions(w http.ResponseWriter, r *http.Request) {
@@ -2740,7 +2777,7 @@ func (a *App) stagedEngineConfigRefs() []string {
 }
 
 func (a *App) pendingChanges() bool {
-	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0
+	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 || (a.DNS != nil && a.DNS.Dirty())
 }
 
 func (a *App) scopePendingChanges(scope changeScope, engineID string) bool {
@@ -2779,6 +2816,12 @@ func (a *App) discard(w http.ResponseWriter, r *http.Request) {
 			err = a.Store.DiscardDraft()
 		}
 		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if scope == changeScopeAll && a.DNS != nil {
+		if err := a.DNS.Discard(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

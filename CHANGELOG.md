@@ -20,6 +20,12 @@
   change can no longer activate an unrelated engine draft.
 - The device policy dialog now owns only the client/group scope. It shows the
   current route as read-only and directs route changes to the Services page.
+- DNS selections now have an independent pending-state indicator and their own
+  Apply/Discard workflow. They no longer disappear into the global routing
+  draft or block an unrelated service/device transaction.
+- DNS Apply is deliberately disabled with the exact missing-adapter reason for
+  non-system profiles. The draft is preserved, while the Automatic profile can
+  be confirmed without falsely claiming that router DNS was changed.
 
 ## v0.16.0 — verified component setup and recoverable scoped drafts
 

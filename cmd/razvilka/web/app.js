@@ -1884,13 +1884,26 @@ function renderDNS() {
 	const plan = state.dnsPlan || dns.plan;
 	$('#dnsPlan').innerHTML = plan ? `<div class="dns-plan-summary ${plan.ready ? 'ready' : 'blocked'}"><div><span>${plan.ready ? 'ГОТОВО' : 'ПРЕДПРОСМОТР'}</span><b>${esc(plan.profile?.name || 'DNS')}</b></div><p>${esc(plan.recommendation || '')}</p></div><div class="dns-plan-checks">${(plan.checks || []).map((check) => `<div class="dns-plan-check ${esc(check.status)}"><i>${check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '×'}</i><span><b>${esc(check.id === 'probe' ? 'Доступность' : check.id === 'ownership' ? 'Владелец DNS' : check.id === 'adapter' ? 'Применение' : check.id === 'configuration' ? 'Настройка' : check.id === 'dnssec' ? 'DNSSEC' : 'Профиль')}</b><small>${esc(check.message)}</small></span></div>`).join('')}</div><details class="dns-plan-steps"><summary>Показать этапы безопасного Apply</summary>${(plan.steps || []).map((step) => `<div><i>${Number(step.order)}</i><span><b>${esc(step.name)}</b><small>${esc(step.summary)}</small></span></div>`).join('')}</details>` : '<div class="community-empty">DNS-план временно недоступен.</div>';
   $('#dnsDiscard').disabled = !dns.dirty;
+  const apply = $('#dnsApply');
+  const canApply = !!dns.dirty && !!plan?.ready;
+  apply.disabled = !canApply;
+  apply.textContent = !dns.dirty ? 'Нет изменений' : plan?.ready ? 'Подтвердить DNS' : 'Применение недоступно';
+  apply.title = plan?.recommendation || '';
+  $('#dnsApplyHint').classList.toggle('ready', canApply);
+  $('#dnsApplyHint').textContent = !dns.dirty
+    ? 'DNS-черновиков нет. Рабочие настройки роутера не менялись.'
+    : plan?.ready
+    ? 'Этот профиль не требует изменения сети и может быть подтверждён отдельно.'
+    : (plan?.recommendation || 'Live-применение заблокировано; черновик сохранён, проверка серверов доступна.');
 }
 
 async function selectDNSProfile(profileID) {
   try {
     state.dns = await api('/api/v1/dns/draft', { method: 'PUT', body: JSON.stringify({ profile_id: profileID }) });
 	state.dnsPlan = await api('/api/v1/dns/plan');
+    state.status = await api('/api/v1/status');
     renderDNS();
+    renderStatus();
     showNotice('review', 'DNS-профиль сохранён как черновик', 'Рабочий DNS роутера не изменён. Сначала проверьте доступность выбранных серверов.', state.dns);
   } catch (error) {
     showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'DNS-профиль не сохранён');
@@ -1970,9 +1983,28 @@ async function discardDNSDraft() {
   try {
     state.dns = await api('/api/v1/dns/discard', { method: 'POST', body: '{}' });
 	state.dnsPlan = await api('/api/v1/dns/plan');
+    state.status = await api('/api/v1/status');
     renderDNS();
+    renderStatus();
   } catch (error) {
     showDetails({ error: error.message }, 'DNS-черновик не сброшен');
+  }
+}
+
+async function applyDNSDraft() {
+  const button = $('#dnsApply');
+  button.disabled = true;
+  button.textContent = 'Проверка…';
+  try {
+    const result = await api('/api/v1/dns/apply', { method: 'POST', body: '{}' });
+    [state.dns, state.dnsPlan, state.status] = await Promise.all([api('/api/v1/dns'), api('/api/v1/dns/plan'), api('/api/v1/status')]);
+    renderDNS();
+    renderStatus();
+    showNotice('success', 'DNS-раздел подтверждён', result.note || 'Действие завершено без изменения сети.', result);
+  } catch (error) {
+    showNotice('review', 'DNS пока нельзя применить', error.payload?.resolution || error.message, error.payload || { error: error.message }, true);
+  } finally {
+    renderDNS();
   }
 }
 
@@ -2940,6 +2972,7 @@ function bindEvents() {
     if (profile) selectDNSProfile(profile.dataset.dnsProfile);
   });
   $('#dnsTest').addEventListener('click', testDNSProfile);
+  $('#dnsApply').addEventListener('click', applyDNSDraft);
   $('#dnsDiscard').addEventListener('click', discardDNSDraft);
   $('#refreshSources').addEventListener('click', refreshSources);
   $('#refreshSystem').addEventListener('click', refreshSystem);

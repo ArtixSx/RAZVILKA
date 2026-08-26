@@ -173,6 +173,38 @@ func TestAutomaticDNSPlanRequiresNoLiveChange(t *testing.T) {
 	}
 }
 
+func TestApplyRefusesNonSystemProfileAndPreservesDraft(t *testing.T) {
+	m, err := New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetDraft("ad-block"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Apply(); err == nil {
+		t.Fatal("filtering DNS was applied without a platform adapter")
+	}
+	snapshot := m.Snapshot()
+	if !snapshot.Dirty || snapshot.Draft.ProfileID != "ad-block" || snapshot.Applied.ProfileID != "automatic" {
+		t.Fatalf("blocked DNS draft was not preserved: %+v", snapshot)
+	}
+}
+
+func TestApplyConfirmsAutomaticProfileWithoutNetworkClaim(t *testing.T) {
+	m, err := New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.doc.Applied = Selection{ProfileID: "ad-block"}
+	m.doc.Draft = Selection{ProfileID: "automatic"}
+	if err := m.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot := m.Snapshot(); snapshot.Dirty || snapshot.Applied.ProfileID != "automatic" {
+		t.Fatalf("automatic DNS was not confirmed: %+v", snapshot)
+	}
+}
+
 func TestDNSQueryAndResponseValidation(t *testing.T) {
 	query, err := buildDNSQuery(4242)
 	if err != nil {

@@ -313,8 +313,9 @@
         <div class="dns-safety-note"><svg><use href="#i-shield"/></svg><div><b>Безопасное внедрение по этапам</b><span>RAZVILKA уже обнаруживает владельца порта 53 и строит план snapshot → canary → rollback. Рабочее применение включится только после отдельной аппаратной проверки интеграции с DNS Keenetic/Netcraze.</span></div></div>
       </article>
       <article class="panel">
-        <div class="panel-title"><div><h2>Готовые профили</h2><p>DNS-фильтрация не убирает встроенную рекламу YouTube и не заменяет обход IP/SNI-блокировки.</p></div><div class="dns-actions"><button class="secondary" id="dnsDiscard" type="button">Сбросить черновик</button><button class="primary" id="dnsTest" type="button">Проверить выбранный</button></div></div>
+        <div class="panel-title"><div><h2>Готовые профили</h2><p>DNS-фильтрация не убирает встроенную рекламу YouTube и не заменяет обход IP/SNI-блокировки.</p></div><div class="dns-actions"><button class="secondary" id="dnsDiscard" type="button">Сбросить черновик</button><button class="secondary" id="dnsTest" type="button">Проверить выбранный</button><button class="primary" id="dnsApply" type="button">Применить DNS</button></div></div>
         <div id="dnsProfiles" class="dns-profile-grid"><div class="community-empty">Загружаем DNS-профили…</div></div>
+        <div class="dns-apply-hint" id="dnsApplyHint">Сначала выберите профиль и проверьте план.</div>
       </article>
       <div class="two-col dns-details-grid">
         <article class="panel"><div class="panel-title"><div><h2>Выбранный провайдер</h2><p>Адреса и поддерживаемые защищённые транспорты</p></div></div><div id="dnsProvider" class="dns-provider-detail"><div class="community-empty">Выберите профиль.</div></div></article>

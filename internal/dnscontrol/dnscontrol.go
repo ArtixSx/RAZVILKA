@@ -160,6 +160,12 @@ func (m *Manager) Snapshot() Snapshot {
 	return Snapshot{Schema: schema, Draft: m.doc.Draft, Applied: m.doc.Applied, Dirty: m.doc.Draft != m.doc.Applied, Providers: providersFor(m.doc), Profiles: Profiles(), Mode: "preview", Note: "Профиль сохранён как черновик. Рабочий DNS роутера не меняется до появления транзакционного адаптера и проверки конфликтов.", LastProbe: append([]ProbeResult(nil), m.doc.LastProbe...), ProbedAt: m.doc.ProbedAt, ProbeProfileID: m.doc.ProbeProfileID, NextDNSProfileID: m.doc.NextDNSProfileID}
 }
 
+func (m *Manager) Dirty() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.doc.Draft != m.doc.Applied
+}
+
 // Plan describes the safety contract for the selected DNS profile without
 // changing the router. listener is supplied by Engine Lab and deliberately
 // contains no command that could stop or replace the current resolver.
@@ -310,6 +316,24 @@ func (m *Manager) Discard() error {
 	defer m.mu.Unlock()
 	previous := m.doc
 	m.doc.Draft = m.doc.Applied
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+// Apply commits only the no-change system profile. Non-system profiles require
+// a platform DNS adapter and must remain drafts until that adapter can perform
+// snapshot, canary, health and rollback on real hardware.
+func (m *Manager) Apply() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.doc.Draft.ProfileID != "automatic" {
+		return errors.New("live DNS adapter is not available; the selected profile remains a draft")
+	}
+	previous := m.doc
+	m.doc.Applied = m.doc.Draft
 	if err := m.saveLocked(); err != nil {
 		m.doc = previous
 		return err

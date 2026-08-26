@@ -88,6 +88,46 @@ func TestDNSProfileAPIKeepsChangesDraftOnly(t *testing.T) {
 	}
 }
 
+func TestDNSApplyExplainsMissingLiveAdapterAndPreservesDraft(t *testing.T) {
+	manager, err := dnscontrol.New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SetDraft("ad-block"); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{DNS: manager}
+	response := httptest.NewRecorder()
+	a.dnsApply(response, httptest.NewRequest(http.MethodPost, "/api/v1/dns/apply", nil))
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"DNS_LIVE_ADAPTER_UNAVAILABLE"`) || !strings.Contains(response.Body.String(), `"draft_preserved":true`) {
+		t.Fatalf("DNS apply response=%d body=%s", response.Code, response.Body.String())
+	}
+	if !manager.Snapshot().Dirty {
+		t.Fatal("blocked DNS apply discarded the draft")
+	}
+}
+
+func TestStatusIncludesIndependentDNSDraft(t *testing.T) {
+	root := t.TempDir()
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := dnscontrol.New(filepath.Join(root, "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SetDraft("security"); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, DNS: manager, Start: time.Now()}
+	response := httptest.NewRecorder()
+	a.status(response, httptest.NewRequest(http.MethodGet, "/api/v1/status", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"dns_pending_changes":true`) || !strings.Contains(response.Body.String(), `"pending_changes":true`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestNextDNSProfileAPIValidatesAndStaysLocal(t *testing.T) {
 	manager, err := dnscontrol.New(filepath.Join(t.TempDir(), "dns.json"))
 	if err != nil {

@@ -47,9 +47,9 @@ RAZVILKA reports it and never deletes it automatically.
 
 The 2026-08-25 architecture review is recorded in
 [ARCHITECTURE_GAP_2026-08-25.md](ARCHITECTURE_GAP_2026-08-25.md). The first
-scoped-draft slice is complete: Services and Devices apply routing changes
-independently, and an unused WARP profile no longer blocks them. DNS and Sources
-still need their own transactional scopes. A safe USQUE re-registration
+scoped-draft slice now covers Services, Devices and DNS independently, and an
+unused WARP or DNS profile no longer blocks an unrelated page. Sources still
+need their own transactional scope. A safe USQUE re-registration
 experiment (including an optional temporary Quad9 candidate) is planned in
 [USQUE_RECOVERY_PLAN_RU.md](USQUE_RECOVERY_PLAN_RU.md); it is not implemented
 as a live router mutation yet.
