@@ -204,6 +204,13 @@ func TestClassifyApplyFailureExplainsTimeoutAndRollback(t *testing.T) {
 	}
 }
 
+func TestClassifyCanaryFailureSaysLiveRouteWasUntouched(t *testing.T) {
+	failure := classifyApplyExecutionFailure("sing-box candidate probe for Telegram failed", "canary-failed")
+	if failure.Code != "CANARY_FAILED" || !strings.Contains(failure.Message, "не изменялись") || !failure.DraftPreserved || !failure.Retryable {
+		t.Fatalf("unexpected canary advice: %+v", failure)
+	}
+}
+
 func TestStaticUIIsNeverServedFromAnOldRouterCache(t *testing.T) {
 	a := &App{}
 	request := httptest.NewRequest(http.MethodGet, "/", nil)

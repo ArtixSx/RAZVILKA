@@ -36,6 +36,13 @@ type Adapter interface {
 	Rollback(context.Context, Plan, string) error
 }
 
+// CanaryAdapter can validate a staged candidate through an isolated path
+// before Activate replaces a working process, interface, list or policy.
+// Implementations receive a RoutePlan scoped to their own adapter only.
+type CanaryAdapter interface {
+	Canary(context.Context, RoutePlan, string) error
+}
+
 type RuntimeReconciler interface {
 	Reconcile(context.Context, Plan) error
 }
@@ -173,6 +180,15 @@ func (m *Manager) Capable(id string) bool {
 	m.registryMu.RLock()
 	defer m.registryMu.RUnlock()
 	_, ok := m.Adapters[id]
+	return ok
+}
+
+func (m *Manager) CanaryCapable(id string) bool {
+	adapter, ok := m.adapter(id)
+	if !ok {
+		return false
+	}
+	_, ok = adapter.(CanaryAdapter)
 	return ok
 }
 
@@ -636,6 +652,17 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		return cause
 	}
+	rejectCanary := func(cause error) error {
+		plan.Ready = false
+		plan.State = "canary-failed"
+		plan.Note = cause.Error()
+		execution.Error = cause.Error()
+		execution.State = "canary-failed"
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		_ = m.recordLocked(plan)
+		writeExecution()
+		return cause
+	}
 
 	if plan.Noop {
 		if commit != nil {
@@ -675,6 +702,32 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}{
 		{name: "stage", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Stage }},
 		{name: "validate", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Validate }},
+	} {
+		for _, adapter := range adapters {
+			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
+				return execution, rollback(err)
+			}
+		}
+	}
+	for _, adapter := range adapters {
+		canary, ok := adapter.(CanaryAdapter)
+		if !ok {
+			continue
+		}
+		routePlan := plan.RoutePlanFor(adapter.ID())
+		if err := run(ctx, adapter, "canary", func(runCtx context.Context, _ Plan, root string) error {
+			return canary.Canary(runCtx, routePlan, root)
+		}); err != nil {
+			// CanaryAdapter owns and removes only its isolated candidate. Calling
+			// the live Rollback method here could unnecessarily interrupt the
+			// still-working process even though Activate has not started.
+			return execution, rejectCanary(err)
+		}
+	}
+	for _, phase := range []struct {
+		name string
+		call func(Adapter) func(context.Context, Plan, string) error
+	}{
 		{name: "activate", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Activate }},
 		{name: "health", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Health }},
 		{name: "commit-adapter", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Commit }},

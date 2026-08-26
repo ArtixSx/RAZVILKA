@@ -518,7 +518,7 @@ func defaultNFQWS2Probe(ctx context.Context, rawURL string) error {
 	if err != nil {
 		return err
 	}
-	request.Header.Set("User-Agent", "RAZVILKA-NFQWS2-Health/0.6")
+	request.Header.Set("User-Agent", "RAZVILKA-NFQWS2-Health/1")
 	request.Header.Set("Range", "bytes=0-2047")
 	client := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(_ *http.Request, via []*http.Request) error {
 		if len(via) > 4 {

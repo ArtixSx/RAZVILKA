@@ -2653,8 +2653,8 @@ async function showPlan() {
     const routeEvidence = tx.route_evidence || [];
     const stateLabel = tx.noop ? 'ИЗМЕНЕНИЯ НЕ НУЖНЫ' : tx.ready ? 'ГОТОВО К ПРИМЕНЕНИЮ' : 'ПРИМЕНЕНИЕ ЗАБЛОКИРОВАНО';
     const stateClass = tx.noop || tx.ready ? 'ready' : 'blocked';
-    const phaseLabels = { snapshot: 'Снимок', stage: 'Подготовка', validate: 'Проверка', activate: 'Активация', health: 'Проверка доступности', commit: 'Сохранение' };
-    const planState = tx.safe_mode ? 'БЕЗОПАСНЫЙ РЕЖИМ' : ({ planned: 'ПЛАН', reviewed: 'ПРОВЕРЕНО', ready: 'ГОТОВО', committed: 'ПРИМЕНЕНО' }[tx.state] || tx.state || 'ПЛАН');
+    const phaseLabels = { snapshot: 'Снимок', stage: 'Подготовка', validate: 'Проверка', canary: 'Пробный запуск', activate: 'Активация', health: 'Проверка доступности', commit: 'Сохранение' };
+    const planState = tx.safe_mode ? 'БЕЗОПАСНЫЙ РЕЖИМ' : ({ planned: 'ПЛАН', reviewed: 'ПРОВЕРЕНО', ready: 'ГОТОВО', committed: 'ПРИМЕНЕНО', 'canary-failed': 'ПРОБНЫЙ ЗАПУСК НЕ ПРОЙДЕН' }[tx.state] || tx.state || 'ПЛАН');
     const requiredEvidence = String(tx.required_evidence || 'none');
     const observedEvidence = String(tx.observed_evidence || 'none');
     const evidenceReady = evidenceAtLeast(observedEvidence, requiredEvidence);

@@ -1035,7 +1035,7 @@ func defaultTunnelProbe(ctx context.Context, rawURL string) error {
 	if err != nil {
 		return err
 	}
-	request.Header.Set("User-Agent", "RAZVILKA-Tunnel-Health/0.7")
+	request.Header.Set("User-Agent", "RAZVILKA-Tunnel-Health/1")
 	client := &http.Client{Timeout: 15 * time.Second}
 	response, err := client.Do(request)
 	if err != nil {

@@ -149,7 +149,12 @@ RAZVILKA также предоставляет:
 - маршруты для отдельных устройств и групп;
 - CPU, RAM, Entware, температуру и локальный WAN-трафик;
 - экспорт публичных профилей и зашифрованные приватные резервные копии;
-- транзакционное применение `plan → snapshot → validate → health → commit/rollback`.
+- транзакционное применение `plan → snapshot → stage → validate → canary → activate → health → commit/rollback`;
+- предварительный canary для Sing-box, Xray и WARP · MASQUE: временный
+  loopback SOCKS-кандидат проверяется и удаляется до изменения рабочего TUN и
+  policy routing. Для NFQWS2 и WireGuard отдельный canary пока находится в
+  аппаратной разработке, поэтому UI честно показывает обязательный
+  post-activation health-check.
 
 ## Рекомендации
 

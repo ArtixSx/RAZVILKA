@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — isolated canary foundation
+
+- Added an adapter-scoped neutral RoutePlan contract. A candidate receives
+  only its own services, actions and resource claims, never unrelated routing
+  intent or manager journal authority.
+- Added a real pre-activation canary phase with rollback-before-activation on
+  failure. The existing post-activation health check remains mandatory.
+- sing-box, Xray and USQUE/MASQUE now start a temporary loopback-only SOCKS
+  candidate on a separate port, verify service egress and remove it before the
+  working TUN or policy rules can be changed.
+- Plans explicitly report adapters that still lack a separate canary instead
+  of presenting post-activation health as equivalent protection.
+
 ## v0.16.0 — verified component setup and recoverable scoped drafts
 
 - Component cards now separate availability, installation, configuration,

@@ -490,8 +490,8 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 				dataplaneRecoveryState = "current-process"
 				liveActive = len(appliedPlan.Adapters) > 0 && runtime.Execution.State == "committed"
 			}
-			if latest.Revision == cfg.Revision && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && runtime.Execution.State == "rolled-back" {
-				lastApplyFailure = classifyApplyFailure(runtime.Execution.Error).Code
+			if latest.Revision == cfg.Revision && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && (runtime.Execution.State == "rolled-back" || runtime.Execution.State == "canary-failed") {
+				lastApplyFailure = classifyApplyExecutionFailure(runtime.Execution.Error, runtime.Execution.State).Code
 			}
 		}
 	}
@@ -2493,7 +2493,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		defer cancelApply()
 		execution, applyErr := a.Dataplane.Apply(applyContext, transaction, a.Store.ApplyDraftWithRollback)
 		if applyErr != nil {
-			failure := classifyApplyFailure(applyErr.Error())
+			failure := classifyApplyExecutionFailure(applyErr.Error(), execution.State)
 			writeJSON(w, http.StatusConflict, map[string]any{
 				"ok": false, "safe_mode": false, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "live_applied": false,
 				"error": applyErr.Error(), "note": failure.Message, "failure": failure, "transaction": transaction, "execution": execution,
@@ -2547,6 +2547,20 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 		advice.Message = "Операция была отменена или превысила безопасное время ожидания. RAZVILKA запустила rollback в отдельном ограниченном окне; черновик сохранён."
 		advice.Resolution = "Проверьте состояние rollback в диагностике. Если сеть работает, устраните медленный или недоступный обход и повторите Apply; не запускайте вторую операцию одновременно."
 	}
+	return advice
+}
+
+func classifyApplyExecutionFailure(message, state string) applyFailureAdvice {
+	advice := classifyApplyFailure(message)
+	if state != "canary-failed" {
+		return advice
+	}
+	advice.Code = "CANARY_FAILED"
+	advice.Title = "Пробный запуск не прошёл"
+	advice.Message = "Новый обход проверен отдельно и отклонён до активации. Рабочий маршрут и его процессы не изменялись, черновик сохранён."
+	advice.Resolution = "Проверьте адрес и ключ узла, доступность транспорта и результат проверки сервиса, затем повторите применение."
+	advice.DraftPreserved = true
+	advice.Retryable = true
 	return advice
 }
 
@@ -2605,7 +2619,7 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 		if option.ID == "auto" || option.ID == "direct" {
 			continue
 		}
-		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: option.Selectable, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID)})
+		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: option.Selectable, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
 	}
 	resourceConflicts := []dataplane.ResourceConflict{}
 	if a.EngineLab != nil {

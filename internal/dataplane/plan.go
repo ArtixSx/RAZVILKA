@@ -37,6 +37,7 @@ type Engine struct {
 	Configured  bool   `json:"configured"`
 	Running     bool   `json:"running"`
 	Activatable bool   `json:"activatable"`
+	Canary      bool   `json:"canary"`
 	Version     string `json:"version,omitempty"`
 }
 
@@ -107,6 +108,22 @@ type RouteEvidence struct {
 	Note      string         `json:"note,omitempty"`
 }
 
+// RoutePlan is the adapter-neutral, read-only intent passed to a canary.
+// It deliberately contains only routes and actions owned by one adapter, so a
+// candidate cannot infer authority over another engine or global router state.
+type RoutePlan struct {
+	SchemaVersion    int                `json:"schema_version"`
+	PlanID           string             `json:"plan_id"`
+	Digest           string             `json:"digest"`
+	Revision         uint64             `json:"revision"`
+	CreatedAt        string             `json:"created_at"`
+	Adapter          string             `json:"adapter"`
+	Routes           []Route            `json:"routes"`
+	Actions          []Action           `json:"actions"`
+	ResourceClaims   []ResourceConflict `json:"resource_claims,omitempty"`
+	RequiredEvidence evidence.Level     `json:"required_evidence"`
+}
+
 type Plan struct {
 	SchemaVersion     int                `json:"schema_version"`
 	PlanID            string             `json:"plan_id"`
@@ -120,6 +137,7 @@ type Plan struct {
 	EngineDrafts      []string           `json:"engine_config_drafts,omitempty"`
 	ResourceConflicts []ResourceConflict `json:"resource_conflicts,omitempty"`
 	Adapters          []string           `json:"adapters"`
+	CanaryAdapters    []string           `json:"canary_adapters,omitempty"`
 	Routes            []Route            `json:"routes"`
 	Actions           []Action           `json:"actions"`
 	Blockers          []Blocker          `json:"blockers"`
@@ -238,7 +256,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		ObservedEvidence:  evidence.None,
 		EvidenceNote:      "План описывает намерение и сам по себе не подтверждает доступ. Уровень повышается только после health-check уже активированного маршрута.",
 		Host:              input.Host,
-		Protocol:          []string{"plan", "snapshot", "stage", "validate", "activate", "health", "commit-or-rollback"},
+		Protocol:          []string{"plan", "snapshot", "stage", "validate", "canary-if-supported", "activate", "health", "commit-or-rollback"},
 		State:             "planned",
 		Note:              "План ничего не изменяет сам по себе. Live Apply разрешается только после проверки установленного обхода, ownership, snapshot, native validation, health и готовности rollback.",
 	}
@@ -268,6 +286,11 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		plan.Adapters = append(plan.Adapters, adapter)
 	}
 	sort.Strings(plan.Adapters)
+	for _, adapter := range plan.Adapters {
+		if engineByID[adapter].Canary {
+			plan.CanaryAdapters = append(plan.CanaryAdapters, adapter)
+		}
+	}
 	for _, conflict := range input.ResourceConflicts {
 		adapter := ""
 		for _, engineID := range conflict.Engines {
@@ -339,11 +362,11 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	}
 	addAction("snapshot", "manager", "journal", "/opt/var/lib/razvilka/dataplane", "Зафиксировать revision, digest и снимок только объектов RAZVILKA.", true)
 	for _, adapter := range plan.Adapters {
-		addAdapterActions(&plan, adapter, &order)
 		engineState, exists := engineByID[adapter]
 		if adapter == "xray" {
 			engineState, exists = engineByID["xray"]
 		}
+		addAdapterActions(&plan, adapter, engineState.Canary, &order)
 		if !exists || !engineState.Installed {
 			plan.Blockers = append(plan.Blockers, Blocker{Code: "ENGINE_NOT_INSTALLED", Adapter: adapter, Message: fmt.Sprintf("Обход %s не установлен", adapter), Resolution: "Установите компонент в разделе «Обходы», затем обновите план."})
 		}
@@ -380,6 +403,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		if !exists || !engineState.Activatable {
 			plan.Blockers = append(plan.Blockers, Blocker{Code: "ADAPTER_ACTIVATION_PENDING", Adapter: adapter, Message: fmt.Sprintf("Для %s ещё нет транзакционного runtime-адаптера", adapter), Resolution: "Используйте обход только после появления snapshot/activate/health/rollback реализации для этой платформы."})
 		}
+		if exists && engineState.Activatable && !engineState.Canary {
+			plan.Warnings = append(plan.Warnings, Warning{Code: "CANARY_PENDING", Adapter: adapter, Message: fmt.Sprintf("%s пока проверяется обязательным health-check после активации; отдельный candidate canary ещё не поддерживается.", adapter)})
+		}
 	}
 	addAction("commit", "manager", "state", "/opt/etc/razvilka/config.json", "Зафиксировать applied revision только после успешного health; иначе выполнить rollback.", true)
 	if input.SafeMode {
@@ -394,7 +420,42 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	return plan, nil
 }
 
-func addAdapterActions(plan *Plan, adapter string, order *int) {
+// RoutePlanFor returns the smallest authority an adapter can receive for an
+// isolated candidate check. Manager/global journal actions and unrelated
+// routes are intentionally omitted.
+func (p Plan) RoutePlanFor(adapter string) RoutePlan {
+	adapter = AdapterID(adapter)
+	ir := RoutePlan{
+		SchemaVersion:    p.SchemaVersion,
+		PlanID:           p.PlanID,
+		Digest:           p.Digest,
+		Revision:         p.Revision,
+		CreatedAt:        p.CreatedAt,
+		Adapter:          adapter,
+		RequiredEvidence: p.RequiredEvidence,
+	}
+	for _, route := range p.Routes {
+		if adapterID(route.Resolved) == adapter {
+			ir.Routes = append(ir.Routes, route)
+		}
+	}
+	for _, action := range p.Actions {
+		if action.Adapter == adapter {
+			ir.Actions = append(ir.Actions, action)
+		}
+	}
+	for _, claim := range p.ResourceConflicts {
+		for _, engineID := range claim.Engines {
+			if AdapterID(engineID) == adapter {
+				ir.ResourceClaims = append(ir.ResourceClaims, claim)
+				break
+			}
+		}
+	}
+	return ir
+}
+
+func addAdapterActions(plan *Plan, adapter string, canary bool, order *int) {
 	appendAction := func(phase, kind, target, summary string, owned bool) {
 		plan.Actions = append(plan.Actions, Action{Order: *order, Phase: phase, Adapter: adapter, Kind: kind, Target: target, Summary: summary, Owned: owned})
 		*order++
@@ -403,18 +464,27 @@ func addAdapterActions(plan *Plan, adapter string, order *int) {
 	case "nfqws2":
 		appendAction("stage", "lists", "/opt/var/lib/razvilka/dataplane/nfqws2", "Сгенерировать нормализованные domain/CIDR-листы в изолированной staging-папке.", true)
 		appendAction("validate", "native", "nfqws2 + iptables", "Проверить синтаксис, NFQUEUE, WAN binding, IPv4/IPv6 и offload без записи правил.", true)
-		appendAction("activate", "netfilter", "RAZVILKA-owned chain/set", "Подключить собственную цепочку атомарно, не удаляя чужие правила.", true)
 	case "usque":
 		appendAction("stage", "candidate", "/opt/var/lib/razvilka/dataplane/usque", "Запустить candidate SOCKS/TUN рядом с рабочим профилем.", true)
 		appendAction("validate", "route", "MASQUE endpoint", "Закрепить bootstrap route и подтвердить handshake/egress.", true)
-		appendAction("activate", "policy-route", "RAZVILKA-owned table", "Подключить только выбранные сервисные сети.", true)
 	case "warp-wg", "amneziawg":
 		appendAction("stage", "candidate", "/opt/var/lib/razvilka/dataplane/"+adapter, "Создать отдельный candidate interface без замены live-профиля.", true)
 		appendAction("validate", "handshake", adapter+" endpoint", "Проверить handshake, egress и сервисные probes.", true)
-		appendAction("activate", "policy-route", "RAZVILKA-owned table", "Переключить сервисные правила на подтверждённый interface.", true)
 	case "sing-box", "xray":
 		appendAction("stage", "candidate", "/opt/var/lib/razvilka/dataplane/"+adapter, "Сгенерировать candidate-конфиг со стабильными node ID.", true)
 		appendAction("validate", "native", adapter+" check", "Выполнить native config check и локальный proxy probe.", true)
+	}
+	if canary {
+		appendAction("canary", "isolated-probe", adapter, "Проверить candidate через отдельный путь до замены рабочего процесса или правил.", true)
+	}
+	switch adapter {
+	case "nfqws2":
+		appendAction("activate", "netfilter", "RAZVILKA-owned chain/set", "Подключить собственную цепочку атомарно, не удаляя чужие правила.", true)
+	case "usque":
+		appendAction("activate", "policy-route", "RAZVILKA-owned table", "Подключить только выбранные сервисные сети.", true)
+	case "warp-wg", "amneziawg":
+		appendAction("activate", "policy-route", "RAZVILKA-owned table", "Переключить сервисные правила на подтверждённый interface.", true)
+	case "sing-box", "xray":
 		appendAction("activate", "policy-route", "RAZVILKA-owned table", "Подключить service policy после защиты от self-proxy loop.", true)
 	}
 	appendAction("health", "probe", adapter, "Проверить выбранные сервисы через изолированный маршрут и сохранить evidence.", true)

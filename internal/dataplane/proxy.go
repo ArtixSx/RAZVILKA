@@ -33,6 +33,7 @@ type ProxyTunnelAdapter struct {
 	Resolver    PrefixResolver
 	Probe       func(context.Context, string) error
 	SOCKSProbe  func(context.Context, string) error
+	CanaryProbe func(context.Context, string, string) error
 	EngineBin   string
 	SidecarBin  string
 	PackageInit string
@@ -206,6 +207,76 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 	}
 	if output, err := a.run(ctx, a.sidecarBinary(), "check", "-c", sidecarCandidate); err != nil {
 		return fmt.Errorf("sing-box TUN validation failed: %s", shortOutput(output, err))
+	}
+	return nil
+}
+
+// Canary starts only the staged proxy engine on an isolated loopback SOCKS
+// port. It does not stop the working process, create a TUN interface or touch
+// policy routing. The candidate is always removed before Activate can run.
+func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root string) (resultErr error) {
+	if err := a.valid(); err != nil {
+		return err
+	}
+	staged, err := os.ReadFile(filepath.Join(root, "engine.staged.json"))
+	if err != nil {
+		return err
+	}
+	port, err := a.canaryPort()
+	if err != nil {
+		return err
+	}
+	candidate, _, err := buildProxyCandidate(a.ID(), staged, port)
+	if err != nil {
+		return err
+	}
+	canaryRoot := filepath.Join(root, "canary")
+	if err := os.MkdirAll(canaryRoot, 0o700); err != nil {
+		return err
+	}
+	configPath := filepath.Join(canaryRoot, "engine.json")
+	if err := writeAtomic(configPath, candidate, 0o600); err != nil {
+		return err
+	}
+	spec := a.engineProcessAt(configPath, port, canaryRoot, a.ID()+"-canary")
+	if err := a.Processes.Start(ctx, spec); err != nil {
+		return fmt.Errorf("start isolated %s candidate: %w", a.ID(), err)
+	}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.timeout())
+		defer cancel()
+		if err := a.Processes.Stop(cleanupCtx, spec); err != nil && resultErr == nil {
+			resultErr = fmt.Errorf("stop isolated %s candidate: %w", a.ID(), err)
+		}
+	}()
+	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	if err := a.waitForSOCKSProcess(ctx, spec, address); err != nil {
+		return err
+	}
+	probe := a.CanaryProbe
+	if probe == nil {
+		probe = probeTunnelViaSOCKS
+	}
+	probed := false
+	for _, route := range plan.Routes {
+		if strings.TrimSpace(route.ProbeURL) == "" {
+			continue
+		}
+		probed = true
+		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
+		err = probe(probeCtx, route.ProbeURL, address)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("%s candidate probe for %s failed: %w", a.ID(), route.ServiceName, err)
+		}
+	}
+	if !probed {
+		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
+		err = probe(probeCtx, "https://www.cloudflare.com/cdn-cgi/trace", address)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("%s candidate egress probe failed: %w", a.ID(), err)
+		}
 	}
 	return nil
 }
@@ -549,7 +620,10 @@ func (a *ProxyTunnelAdapter) ip() string {
 	return findExecutable("/opt/sbin/ip", "/opt/bin/ip", "ip")
 }
 func (a *ProxyTunnelAdapter) engineProcess() ProcessSpec {
-	config := a.engineConfigPath()
+	return a.engineProcessAt(a.engineConfigPath(), a.SOCKSPort, a.runtimeRoot(), a.ID()+"-engine")
+}
+
+func (a *ProxyTunnelAdapter) engineProcessAt(config string, port int, root, processID string) ProcessSpec {
 	args := []string{}
 	switch a.ID() {
 	case "usque":
@@ -557,13 +631,24 @@ func (a *ProxyTunnelAdapter) engineProcess() ProcessSpec {
 		// tests showed that a TCP socket to the HTTP/2 endpoint can succeed while
 		// actual tunneled requests still stall. A separate connectivity check
 		// reports TCP/443 as a fallback without mistaking it for a working tunnel.
-		args = []string{"-c", config, "socks", "-b", "127.0.0.1", "-p", strconv.Itoa(a.SOCKSPort), "--always-reconnect", "-S"}
+		args = []string{"-c", config, "socks", "-b", "127.0.0.1", "-p", strconv.Itoa(port), "--always-reconnect", "-S"}
 	case "sing-box":
 		args = []string{"run", "-c", config}
 	case "xray":
 		args = []string{"run", "-config", config}
 	}
-	return ProcessSpec{ID: a.ID() + "-engine", Binary: a.engineBinary(), Args: args, Dir: a.runtimeRoot(), PIDPath: filepath.Join(a.runtimeRoot(), "engine.pid"), LogPath: filepath.Join(a.runtimeRoot(), "engine.log"), MatchArg: config}
+	return ProcessSpec{ID: processID, Binary: a.engineBinary(), Args: args, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config}
+}
+
+func (a *ProxyTunnelAdapter) canaryPort() (int, error) {
+	port := a.SOCKSPort + 1000
+	if port > 65535 {
+		port = a.SOCKSPort - 1000
+	}
+	if port < 1024 || port > 65535 || port == a.SOCKSPort {
+		return 0, errors.New("no safe loopback port is available for proxy canary")
+	}
+	return port, nil
 }
 
 func (a *ProxyTunnelAdapter) packageInitPath() string {
@@ -646,14 +731,18 @@ func (a *ProxyTunnelAdapter) run(parent context.Context, name string, args ...st
 	return output, err
 }
 func (a *ProxyTunnelAdapter) waitForSOCKS(ctx context.Context) error {
-	deadline := time.Now().Add(a.timeout())
 	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))
+	return a.waitForSOCKSProcess(ctx, a.engineProcess(), address)
+}
+
+func (a *ProxyTunnelAdapter) waitForSOCKSProcess(ctx context.Context, spec ProcessSpec, address string) error {
+	deadline := time.Now().Add(a.timeout())
 	probe := a.SOCKSProbe
 	if probe == nil {
 		probe = probeSOCKS5
 	}
 	for {
-		if !a.Processes.Running(a.engineProcess()) {
+		if !a.Processes.Running(spec) {
 			return errors.New("proxy engine exited before SOCKS became ready")
 		}
 		if err := probe(ctx, address); err == nil {
@@ -936,7 +1025,7 @@ func probeTunnelViaSOCKS(ctx context.Context, rawURL, address string) error {
 	if err != nil {
 		return err
 	}
-	request.Header.Set("User-Agent", "RAZVILKA-Proxy-Health/0.14")
+	request.Header.Set("User-Agent", "RAZVILKA-Proxy-Health/1")
 	response, err := (&http.Client{Transport: transport, Timeout: 15 * time.Second}).Do(request)
 	if err != nil {
 		return err

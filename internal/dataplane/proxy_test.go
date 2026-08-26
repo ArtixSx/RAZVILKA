@@ -190,8 +190,19 @@ func TestProxyAdapterStagesActivatesHealthAndRollsBack(t *testing.T) {
 	}
 	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
 	adapter.Probe = func(context.Context, string) error { return nil }
+	canaryProbes := 0
+	adapter.CanaryProbe = func(_ context.Context, rawURL, address string) error {
+		canaryProbes++
+		if !strings.HasSuffix(address, ":19081") {
+			t.Fatalf("unexpected canary address %q", address)
+		}
+		if rawURL != "https://example.com" {
+			t.Fatalf("unexpected canary probe URL %q", rawURL)
+		}
+		return nil
+	}
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{Routes: []Route{{ServiceName: "Example", Resolved: "sing-box", Domains: []string{"example.com"}, ProbeURL: "https://example.com"}}}
+	plan := Plan{Routes: []Route{{ServiceName: "Example", Resolved: "sing-box", Domains: []string{"example.com"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://example.com"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}
@@ -200,6 +211,18 @@ func TestProxyAdapterStagesActivatesHealthAndRollsBack(t *testing.T) {
 	}
 	if err := adapter.Validate(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
+	}
+	if err := adapter.Canary(context.Background(), Plan{Routes: plan.Routes}.RoutePlanFor("sing-box"), transaction); err != nil {
+		t.Fatal(err)
+	}
+	if canaryProbes != 1 {
+		t.Fatalf("canary probes=%d want=1", canaryProbes)
+	}
+	if len(processes.running) != 0 {
+		t.Fatalf("canary process remained before activation: %v", processes.running)
+	}
+	if regularFile(adapter.engineConfigPath()) || regularFile(adapter.sidecarConfigPath()) || regularFile(adapter.policyPath()) {
+		t.Fatal("canary wrote live runtime state before activation")
 	}
 	if err := adapter.Activate(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
@@ -219,6 +242,51 @@ func TestProxyAdapterStagesActivatesHealthAndRollsBack(t *testing.T) {
 	content, err := configs.ReadExpert("sing-box", "main")
 	if err != nil || content.Source != "staged" {
 		t.Fatalf("draft was not preserved: %+v err=%v", content, err)
+	}
+}
+
+func TestProxyCanaryFailureCleansCandidateAndLeavesRuntimeUntouched(t *testing.T) {
+	root := t.TempDir()
+	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	if _, err := configs.Stage("sing-box", "main", `{"outbounds":[{"type":"vless","server":"node.example","server_port":443}]}`); err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := NewProxyTunnelAdapter("sing-box", configs, filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	processes := &proxyFakeProcesses{running: map[string]bool{"sing-box-engine": true, "sing-box-tun": true}}
+	adapter.Processes = processes
+	adapter.Runner = &proxyFakeRunner{processes: processes, iface: adapter.Interface}
+	adapter.EngineBin, adapter.SidecarBin, adapter.IP = "sing-box", "sing-box", "ip"
+	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
+		if host == "node.example" {
+			return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
+		}
+		return []netip.Addr{netip.MustParseAddr("198.51.100.20")}, nil
+	}
+	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
+	adapter.CanaryProbe = func(context.Context, string, string) error { return fmt.Errorf("forced service failure") }
+	transaction := filepath.Join(root, "transaction")
+	plan := Plan{Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Stage(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Validate(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	err = adapter.Canary(context.Background(), plan.RoutePlanFor("sing-box"), transaction)
+	if err == nil || !strings.Contains(err.Error(), "candidate probe") {
+		t.Fatalf("unexpected canary result: %v", err)
+	}
+	if !processes.running["sing-box-engine"] || !processes.running["sing-box-tun"] || len(processes.running) != 2 {
+		t.Fatalf("failed canary changed live processes: %v", processes.running)
+	}
+	if regularFile(adapter.engineConfigPath()) || regularFile(adapter.sidecarConfigPath()) || regularFile(adapter.policyPath()) {
+		t.Fatal("failed canary changed live runtime state")
 	}
 }
 

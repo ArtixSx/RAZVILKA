@@ -84,6 +84,35 @@ func TestBuildBlocksEngineDraftWithoutMatchingServiceRoute(t *testing.T) {
 	}
 }
 
+func TestBuildPlacesSupportedCanaryBeforeActivation(t *testing.T) {
+	plan, err := BuildAt(Input{
+		Revision: 4,
+		Routes:   []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}},
+		Engines:  []Engine{{ID: "sing-box", Installed: true, Configured: true, Activatable: true, Canary: true}},
+		Host:     HostState{IPCommand: true, TUN: true, SingBox: true},
+	}, time.Unix(100, 0).UTC())
+	if err != nil || !plan.Ready {
+		t.Fatalf("plan=%+v err=%v", plan, err)
+	}
+	if len(plan.CanaryAdapters) != 1 || plan.CanaryAdapters[0] != "sing-box" {
+		t.Fatalf("canary adapters=%v", plan.CanaryAdapters)
+	}
+	positions := map[string]int{}
+	for _, action := range plan.Actions {
+		if action.Adapter == "sing-box" {
+			positions[action.Phase] = action.Order
+		}
+	}
+	if positions["validate"] == 0 || positions["canary"] <= positions["validate"] || positions["activate"] <= positions["canary"] {
+		t.Fatalf("unexpected action order: %+v", positions)
+	}
+	for _, warning := range plan.Warnings {
+		if warning.Code == "CANARY_PENDING" {
+			t.Fatalf("supported canary was reported as pending: %+v", warning)
+		}
+	}
+}
+
 type fakeAdapter struct {
 	id          string
 	calls       []string
@@ -92,6 +121,21 @@ type fakeAdapter struct {
 	recovered   bool
 	refreshed   bool
 	deactivated bool
+}
+
+type canaryFakeAdapter struct {
+	*fakeAdapter
+	received RoutePlan
+	fail     bool
+}
+
+func (a *canaryFakeAdapter) Canary(_ context.Context, plan RoutePlan, _ string) error {
+	a.received = plan
+	a.calls = append(a.calls, "canary")
+	if a.fail {
+		return errors.New("forced canary failure")
+	}
+	return nil
 }
 
 type blockingAdapter struct {
@@ -192,6 +236,68 @@ func TestManagerApplyCommitsOnlyAfterHealth(t *testing.T) {
 	}
 	if committedPlan.ObservedEvidence != evidence.Service || committedPlan.RequiredEvidence != evidence.Service {
 		t.Fatalf("successful health was not recorded as service evidence: %+v", committedPlan)
+	}
+}
+
+func TestManagerCanaryReceivesOnlyItsNeutralRoutePlan(t *testing.T) {
+	manager := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &canaryFakeAdapter{fakeAdapter: &fakeAdapter{id: "nfqws2"}}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	plan := Plan{
+		SchemaVersion: SchemaVersion,
+		PlanID:        "dp-canary-scope",
+		Digest:        strings.Repeat("a", 64),
+		Ready:         true,
+		Adapters:      []string{"nfqws2"},
+		Routes: []Route{
+			{ServiceID: "youtube", Resolved: "nfqws2", ProbeURL: "https://example.com"},
+			{ServiceID: "github", Resolved: "direct", ProbeURL: "https://example.net"},
+		},
+		Actions: []Action{
+			{Adapter: "manager", Phase: "snapshot", Kind: "journal"},
+			{Adapter: "nfqws2", Phase: "canary", Kind: "probe"},
+			{Adapter: "sing-box", Phase: "canary", Kind: "probe"},
+		},
+	}
+	if !manager.CanaryCapable("nfqws2") {
+		t.Fatal("registered canary adapter was not discovered")
+	}
+	execution, err := manager.Apply(context.Background(), plan, nil)
+	if err != nil || execution.State != "committed" {
+		t.Fatalf("execution=%+v err=%v", execution, err)
+	}
+	wantCalls := []string{"snapshot", "stage", "validate", "canary", "activate", "health", "commit-adapter"}
+	if strings.Join(adapter.calls, ",") != strings.Join(wantCalls, ",") {
+		t.Fatalf("calls=%v want=%v", adapter.calls, wantCalls)
+	}
+	if adapter.received.Adapter != "nfqws2" || len(adapter.received.Routes) != 1 || adapter.received.Routes[0].ServiceID != "youtube" {
+		t.Fatalf("canary received unrelated route authority: %+v", adapter.received)
+	}
+	if len(adapter.received.Actions) != 1 || adapter.received.Actions[0].Adapter != "nfqws2" {
+		t.Fatalf("canary received unrelated actions: %+v", adapter.received.Actions)
+	}
+}
+
+func TestManagerCanaryFailureDoesNotTouchLiveRollback(t *testing.T) {
+	manager := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &canaryFakeAdapter{fakeAdapter: &fakeAdapter{id: "nfqws2"}, fail: true}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	plan := Plan{SchemaVersion: SchemaVersion, PlanID: "dp-canary-fail", Digest: strings.Repeat("b", 64), Ready: true, Adapters: []string{"nfqws2"}, Routes: []Route{{ServiceID: "youtube", Resolved: "nfqws2"}}}
+	committed := false
+	execution, err := manager.Apply(context.Background(), plan, func() (func() error, error) {
+		committed = true
+		return nil, nil
+	})
+	if err == nil || committed || execution.State != "canary-failed" {
+		t.Fatalf("execution=%+v committed=%v err=%v", execution, committed, err)
+	}
+	wantCalls := []string{"snapshot", "stage", "validate", "canary"}
+	if strings.Join(adapter.calls, ",") != strings.Join(wantCalls, ",") {
+		t.Fatalf("calls=%v want=%v", adapter.calls, wantCalls)
 	}
 }
 
