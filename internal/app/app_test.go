@@ -584,6 +584,83 @@ func TestGlobalDiscardPreservesIndependentSourceDraft(t *testing.T) {
 	}
 }
 
+func TestPlanSummarizesIncludedAndDeferredScopes(t *testing.T) {
+	root := t.TempDir()
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyDraft(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "nfqws2", Sources: []string{"192.168.1.25"}}); err != nil {
+		t.Fatal(err)
+	}
+	manager := sources.NewManager(sources.Registry{Sources: []sources.Source{{
+		ID: "list", Name: "List", Kind: "domains", URL: "https://example.com/list", Enabled: true,
+	}}}, filepath.Join(root, "cache"))
+	if err := manager.SetDraft("list", false); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram"}}}, Sources: manager, Start: time.Now()}
+	response := httptest.NewRecorder()
+	a.plan(response, httptest.NewRequest(http.MethodGet, "/api/v1/plan?scope=services", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("plan failed: status=%d body=%s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Summary applyChangeSummary `json:"change_summary"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Summary.Scope != changeScopeServices || len(payload.Summary.Services) != 1 || len(payload.Summary.Devices) != 0 || !payload.Summary.NetworkChange || payload.Summary.WorkingChange {
+		t.Fatalf("unexpected included summary: %+v", payload.Summary)
+	}
+	deferred := map[string]int{}
+	for _, item := range payload.Summary.Deferred {
+		deferred[item.ID] = item.Count
+	}
+	if deferred["devices"] != 1 || deferred["sources"] != 1 {
+		t.Fatalf("independent changes are missing from deferred summary: %+v", payload.Summary.Deferred)
+	}
+}
+
+func TestPlanDoesNotTreatSwitchToDirectAsNetworkNoop(t *testing.T) {
+	cfg := config.Default()
+	cfg.SafeMode = false
+	cfg.AppliedServices["telegram"] = config.ServiceState{Enabled: true, Route: "nfqws2"}
+	cfg.Services["telegram"] = config.ServiceState{Enabled: true, Route: "direct"}
+	a := &App{Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram"}}}}
+	plan, err := a.buildDataplanePlanForScope(cfg, []routecatalog.Option{{ID: "nfqws2", Installed: true, Selectable: true}}, changeScopeServices, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Noop || len(plan.RetiringAdapters) != 1 || plan.RetiringAdapters[0] != "nfqws2" {
+		t.Fatalf("switch to direct lost previous runtime adapter: %+v", plan)
+	}
+}
+
+func TestPlanKeepsAdapterUsedByAnotherDesiredService(t *testing.T) {
+	cfg := config.Default()
+	cfg.SafeMode = false
+	cfg.AppliedServices["telegram"] = config.ServiceState{Enabled: true, Route: "nfqws2"}
+	cfg.AppliedServices["youtube"] = config.ServiceState{Enabled: true, Route: "nfqws2"}
+	cfg.Services["telegram"] = config.ServiceState{Enabled: true, Route: "direct"}
+	cfg.Services["youtube"] = config.ServiceState{Enabled: true, Route: "nfqws2"}
+	a := &App{Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram"}, {ID: "youtube", Name: "YouTube"}}}}
+	plan, err := a.buildDataplanePlanForScope(cfg, []routecatalog.Option{{ID: "nfqws2", Installed: true, Selectable: true}}, changeScopeServices, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.RetiringAdapters) != 0 {
+		t.Fatalf("shared adapter was incorrectly retired: %+v", plan.RetiringAdapters)
+	}
+}
+
 func TestStatusReportsDataplaneJournalFailureWithoutLeakingPath(t *testing.T) {
 	root := t.TempDir()
 	store, err := config.Load(filepath.Join(root, "config.json"))

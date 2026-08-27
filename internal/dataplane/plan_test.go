@@ -64,6 +64,30 @@ func TestBuildDirectPlanIsReadyNoop(t *testing.T) {
 	}
 }
 
+func TestBuildDirectPlanRetiresPreviousAdapter(t *testing.T) {
+	plan, err := BuildAt(Input{
+		Revision:         4,
+		Routes:           []Route{{ServiceID: "telegram", ServiceName: "Telegram", Selected: "direct", Resolved: "direct"}},
+		RetiringAdapters: []string{"nfqws2"},
+		Engines:          []Engine{{ID: "nfqws2", Activatable: true}},
+	}, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !plan.Ready || plan.Noop || len(plan.RetiringAdapters) != 1 || plan.RetiringAdapters[0] != "nfqws2" {
+		t.Fatalf("previous adapter was not scheduled for retirement: %+v", plan)
+	}
+	found := false
+	for _, action := range plan.Actions {
+		if action.Adapter == "nfqws2" && action.Phase == "deactivate" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("retirement action is missing: %+v", plan.Actions)
+	}
+}
+
 func TestBuildBlocksEngineDraftWithoutMatchingServiceRoute(t *testing.T) {
 	plan, err := BuildAt(Input{
 		Revision:           7,
@@ -236,6 +260,62 @@ func TestManagerApplyCommitsOnlyAfterHealth(t *testing.T) {
 	}
 	if committedPlan.ObservedEvidence != evidence.Service || committedPlan.RequiredEvidence != evidence.Service {
 		t.Fatalf("successful health was not recorded as service evidence: %+v", committedPlan)
+	}
+}
+
+func TestManagerApplyRetiresPreviousAdapterBeforeCommit(t *testing.T) {
+	manager := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &fakeAdapter{id: "nfqws2"}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := BuildAt(Input{
+		Revision:         5,
+		Routes:           []Route{{ServiceID: "telegram", Resolved: "direct"}},
+		RetiringAdapters: []string{"nfqws2"},
+		Engines:          []Engine{{ID: "nfqws2", Activatable: true}},
+	}, time.Unix(100, 0).UTC())
+	if err != nil || !plan.Ready {
+		t.Fatalf("plan=%+v err=%v", plan, err)
+	}
+	committed := false
+	execution, err := manager.Apply(context.Background(), plan, func() (func() error, error) {
+		committed = true
+		return func() error { committed = false; return nil }, nil
+	})
+	if err != nil || !committed || execution.State != "committed" || !adapter.deactivated {
+		t.Fatalf("execution=%+v committed=%v adapter=%+v err=%v", execution, committed, adapter, err)
+	}
+	want := []string{"snapshot", "deactivate"}
+	if strings.Join(adapter.calls, ",") != strings.Join(want, ",") {
+		t.Fatalf("calls=%v want=%v", adapter.calls, want)
+	}
+}
+
+func TestManagerRollsBackRetiredAdapterWhenCommitFails(t *testing.T) {
+	manager := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &fakeAdapter{id: "nfqws2"}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := BuildAt(Input{
+		Revision:         6,
+		Routes:           []Route{{ServiceID: "telegram", Resolved: "direct"}},
+		RetiringAdapters: []string{"nfqws2"},
+		Engines:          []Engine{{ID: "nfqws2", Activatable: true}},
+	}, time.Unix(100, 0).UTC())
+	if err != nil || !plan.Ready {
+		t.Fatalf("plan=%+v err=%v", plan, err)
+	}
+	execution, err := manager.Apply(context.Background(), plan, func() (func() error, error) {
+		return nil, errors.New("forced config commit failure")
+	})
+	if err == nil || execution.State != "rolled-back" || !adapter.rollback {
+		t.Fatalf("execution=%+v adapter=%+v err=%v", execution, adapter, err)
+	}
+	want := []string{"snapshot", "deactivate", "rollback"}
+	if strings.Join(adapter.calls, ",") != strings.Join(want, ",") {
+		t.Fatalf("calls=%v want=%v", adapter.calls, want)
 	}
 }
 

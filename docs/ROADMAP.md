@@ -49,8 +49,9 @@ The 2026-08-25 architecture review is recorded in
 [ARCHITECTURE_GAP_2026-08-25.md](ARCHITECTURE_GAP_2026-08-25.md). The first
 scoped-draft slice now covers Services, Devices, DNS and Sources independently;
 an unused WARP/DNS profile or unconfirmed source selection no longer changes or
-blocks an unrelated page. A compatible multi-scope preview is still pending. A safe USQUE re-registration
-experiment (including an optional temporary Quad9 candidate) is planned in
+blocks an unrelated page. The Apply preview now separates included and deferred
+scopes before confirmation. A safe USQUE re-registration experiment (including
+an optional temporary Quad9 candidate) is planned in
 [USQUE_RECOVERY_PLAN_RU.md](USQUE_RECOVERY_PLAN_RU.md); it is not implemented
 as a live router mutation yet.
 

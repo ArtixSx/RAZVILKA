@@ -591,7 +591,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	writeExecution()
 
-	prepared := make([]Adapter, 0, len(plan.Adapters))
+	prepared := make([]Adapter, 0, len(plan.Adapters)+len(plan.RetiringAdapters))
 	var undoCommit func() error
 	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
 		step := ExecutionStep{Adapter: adapter.ID(), Phase: phase, State: "running", StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
@@ -682,6 +682,17 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, nil
 	}
 
+	retiringAdapters := make([]Adapter, 0, len(plan.RetiringAdapters))
+	for _, id := range plan.RetiringAdapters {
+		adapter, ok := m.adapter(id)
+		if !ok {
+			return execution, rollback(fmt.Errorf("retiring adapter %s is not registered", id))
+		}
+		if _, ok := adapter.(RuntimeDeactivator); !ok {
+			return execution, rollback(fmt.Errorf("retiring adapter %s cannot be safely deactivated", id))
+		}
+		retiringAdapters = append(retiringAdapters, adapter)
+	}
 	adapters := make([]Adapter, 0, len(plan.Adapters))
 	for _, id := range plan.Adapters {
 		adapter, ok := m.adapter(id)
@@ -690,7 +701,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		adapters = append(adapters, adapter)
 	}
-	for _, adapter := range adapters {
+	for _, adapter := range append(append([]Adapter(nil), retiringAdapters...), adapters...) {
 		if err := run(ctx, adapter, "snapshot", adapter.Snapshot); err != nil {
 			return execution, rollback(err)
 		}
@@ -722,6 +733,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			// the live Rollback method here could unnecessarily interrupt the
 			// still-working process even though Activate has not started.
 			return execution, rejectCanary(err)
+		}
+	}
+	for _, adapter := range retiringAdapters {
+		deactivator := adapter.(RuntimeDeactivator)
+		if err := run(ctx, adapter, "deactivate", func(runCtx context.Context, _ Plan, _ string) error {
+			return deactivator.Deactivate(runCtx)
+		}); err != nil {
+			return execution, rollback(err)
 		}
 	}
 	for _, phase := range []struct {

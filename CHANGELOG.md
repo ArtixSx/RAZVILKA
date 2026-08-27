@@ -33,6 +33,12 @@
   source refresh remains a separate, explicit network action.
 - Global route/engine Discard now preserves independent DNS and Sources drafts;
   those drafts can only be cancelled from their own page.
+- Every routing Apply now opens a human-readable preview with included changes,
+  deferred page-scoped drafts, required verification, rollback behaviour and
+  blockers before the user can confirm the operation.
+- Switching a service to DIRECT, another engine or the disabled state now
+  snapshots and retires an unused previous adapter transactionally; a later
+  failure restores it instead of leaving a hidden stale route active.
 
 ## v0.16.0 — verified component setup and recoverable scoped drafts
 

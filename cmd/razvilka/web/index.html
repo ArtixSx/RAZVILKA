@@ -359,6 +359,13 @@
   </main>
 </div>
 <dialog class="action-dialog" id="actionDialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ</span><h3 id="actionDialogTitle">Подтвердите действие</h3><p id="actionDialogText"></p><div class="dialog-actions"><button class="secondary" value="cancel">Отмена</button><button class="primary" id="actionDialogConfirm" value="confirm">Продолжить</button></div></form></dialog>
+<dialog class="form-dialog apply-review-dialog" id="applyReviewDialog">
+  <form method="dialog">
+    <div class="dialog-head"><div><span class="eyebrow">ПЕРЕД ПРИМЕНЕНИЕМ</span><h3 id="applyReviewTitle">Проверьте изменения</h3><p id="applyReviewSubtitle">Показываем только то, что относится к выбранной операции.</p></div><button class="dialog-close" value="cancel" aria-label="Закрыть">×</button></div>
+    <div class="apply-review-content" id="applyReviewContent"></div>
+    <div class="dialog-actions"><button class="secondary" value="cancel">Вернуться</button><button class="primary" id="applyReviewConfirm" value="confirm">Применить</button></div>
+  </form>
+</dialog>
 <dialog class="onboarding-dialog" id="onboardingDialog">
   <div class="onboarding-shell">
     <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.16.0" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>

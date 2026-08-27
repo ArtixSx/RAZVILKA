@@ -29,16 +29,14 @@ evidence, rollback или UX-критерии. Наличие карточки �
 | Logs / audit | PARTIAL | Локальный redacted audit: `internal/auditlog` | Полный old/new path, evidence и rollback correlation | P0/P5 |
 | Timeouts / cancellation | PARTIAL | Ключевые Apply/network/component операции ограничены | Полная инвентаризация subprocess/DNS/fetch и bounded workers | P0 |
 | Component Manager | PARTIAL | opkg/GitHub components, планы, версии: `internal/components` | Signed compatibility registry, smoke/rollback per component | P6 |
-| UI | PARTIAL | Service-first страницы, Simple/Expert engine config и scoped Apply для Services/Devices/DNS/Sources | Multi-scope preview, Simple/Advanced split, Repair Wizard, mobile | P5 |
+| UI | PARTIAL | Service-first страницы, scoped Apply и multi-scope preview для Services/Devices/DNS/Sources | Simple/Advanced split, Repair Wizard, mobile | P5 |
 | Tests / CI | PARTIAL | Go/JS/release tests и часть артефактных проверок | ARM64+MIPS hardware matrix, fault injection, soak, SBOM | P6 |
 
 ## Ближайшие обязательные изменения
 
-1. Добавить общий multi-scope preview и сводку зависимостей; отдельные
-   routing/engine/DNS/Sources scopes уже реализованы.
-2. Route Sandbox/canary и единый evidence contract.
-3. USQUE recovery candidate без необратимого изменения DNS или live-сессии.
-4. Provider registry для пользовательских профилей sing-box.
-5. DNS platform adapter только после hardware rollback test.
-6. Source Hub — последним из перечисленных блоков, не раньше trust boundary и
+1. Route Sandbox/canary и единый evidence contract.
+2. USQUE recovery candidate без необратимого изменения DNS или live-сессии.
+3. Provider registry для пользовательских профилей sing-box.
+4. DNS platform adapter только после hardware rollback test.
+5. Source Hub — последним из перечисленных блоков, не раньше trust boundary и
    локальной service-проверки.

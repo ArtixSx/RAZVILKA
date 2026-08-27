@@ -70,6 +70,7 @@ type Input struct {
 	Revision           uint64             `json:"revision"`
 	SafeMode           bool               `json:"safe_mode"`
 	Routes             []Route            `json:"routes"`
+	RetiringAdapters   []string           `json:"retiring_adapters,omitempty"`
 	Engines            []Engine           `json:"engines"`
 	EngineConfigDrafts []string           `json:"engine_config_drafts,omitempty"`
 	ResourceConflicts  []ResourceConflict `json:"resource_conflicts,omitempty"`
@@ -137,6 +138,7 @@ type Plan struct {
 	EngineDrafts      []string           `json:"engine_config_drafts,omitempty"`
 	ResourceConflicts []ResourceConflict `json:"resource_conflicts,omitempty"`
 	Adapters          []string           `json:"adapters"`
+	RetiringAdapters  []string           `json:"retiring_adapters,omitempty"`
 	CanaryAdapters    []string           `json:"canary_adapters,omitempty"`
 	Routes            []Route            `json:"routes"`
 	Actions           []Action           `json:"actions"`
@@ -251,12 +253,13 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		RouteCount:        len(input.Routes),
 		EngineDrafts:      input.EngineConfigDrafts,
 		ResourceConflicts: input.ResourceConflicts,
+		RetiringAdapters:  input.RetiringAdapters,
 		Routes:            input.Routes,
 		RequiredEvidence:  evidence.None,
 		ObservedEvidence:  evidence.None,
 		EvidenceNote:      "План описывает намерение и сам по себе не подтверждает доступ. Уровень повышается только после health-check уже активированного маршрута.",
 		Host:              input.Host,
-		Protocol:          []string{"plan", "snapshot", "stage", "validate", "canary-if-supported", "activate", "health", "commit-or-rollback"},
+		Protocol:          []string{"plan", "snapshot", "stage", "validate", "canary-if-supported", "deactivate-retired", "activate", "health", "commit-or-rollback"},
 		State:             "planned",
 		Note:              "План ничего не изменяет сам по себе. Live Apply разрешается только после проверки установленного обхода, ownership, snapshot, native validation, health и готовности rollback.",
 	}
@@ -286,6 +289,15 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		plan.Adapters = append(plan.Adapters, adapter)
 	}
 	sort.Strings(plan.Adapters)
+	retiring := plan.RetiringAdapters[:0]
+	for _, adapter := range plan.RetiringAdapters {
+		adapter = adapterID(adapter)
+		if adapter == "" || adapter == "direct" || adapterSet[adapter] {
+			continue
+		}
+		retiring = append(retiring, adapter)
+	}
+	plan.RetiringAdapters = sortedUnique(retiring)
 	for _, adapter := range plan.Adapters {
 		if engineByID[adapter].Canary {
 			plan.CanaryAdapters = append(plan.CanaryAdapters, adapter)
@@ -347,7 +359,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 			})
 		}
 	}
-	plan.Noop = len(plan.Adapters) == 0 && len(plan.Blockers) == 0
+	plan.Noop = len(plan.Adapters) == 0 && len(plan.RetiringAdapters) == 0 && len(plan.Blockers) == 0
 	if plan.Noop {
 		plan.Ready = true
 		plan.State = "ready"
@@ -361,6 +373,13 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		order++
 	}
 	addAction("snapshot", "manager", "journal", "/opt/var/lib/razvilka/dataplane", "Зафиксировать revision, digest и снимок только объектов RAZVILKA.", true)
+	for _, adapter := range plan.RetiringAdapters {
+		engineState, exists := engineByID[adapter]
+		addAction("deactivate", adapter, "retire", adapter, "Отключить прежний обход только после snapshot и вернуть его при ошибке следующего этапа.", true)
+		if !exists || !engineState.Activatable {
+			plan.Blockers = append(plan.Blockers, Blocker{Code: "ADAPTER_RETIREMENT_PENDING", Adapter: adapter, Message: fmt.Sprintf("Прежний обход %s нельзя безопасно отключить", adapter), Resolution: "Восстановите компонент или runtime-адаптер, затем повторите Apply. RAZVILKA не оставит старый маршрут скрыто активным."})
+		}
+	}
 	for _, adapter := range plan.Adapters {
 		engineState, exists := engineByID[adapter]
 		if adapter == "xray" {
@@ -408,6 +427,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		}
 	}
 	addAction("commit", "manager", "state", "/opt/etc/razvilka/config.json", "Зафиксировать applied revision только после успешного health; иначе выполнить rollback.", true)
+	sortActions(plan.Actions)
 	if input.SafeMode {
 		plan.Blockers = append(plan.Blockers, Blocker{Code: "SAFE_MODE", Message: "Safe Mode запрещает изменения firewall, DNS, TUN и policy routing", Resolution: "Проверьте план, backup и hardware preflight, затем явно разрешите Active Apply в настройках."})
 	}
@@ -574,6 +594,13 @@ func AdapterID(route string) string { return adapterID(route) }
 
 func canonicalize(input *Input) {
 	input.EngineConfigDrafts = sortedUnique(input.EngineConfigDrafts)
+	retiring := make([]string, 0, len(input.RetiringAdapters))
+	for _, value := range input.RetiringAdapters {
+		if adapter := adapterID(value); adapter != "" && adapter != "direct" {
+			retiring = append(retiring, adapter)
+		}
+	}
+	input.RetiringAdapters = sortedUnique(retiring)
 	for i := range input.ResourceConflicts {
 		input.ResourceConflicts[i].Engines = sortedUnique(input.ResourceConflicts[i].Engines)
 	}
@@ -589,6 +616,27 @@ func canonicalize(input *Input) {
 	sort.Slice(input.ResourceConflicts, func(i, j int) bool {
 		return input.ResourceConflicts[i].Kind+"\x00"+input.ResourceConflicts[i].Value < input.ResourceConflicts[j].Kind+"\x00"+input.ResourceConflicts[j].Value
 	})
+}
+
+func sortActions(actions []Action) {
+	priority := map[string]int{"snapshot": 0, "stage": 1, "validate": 2, "canary": 3, "deactivate": 4, "activate": 5, "health": 6, "commit": 7}
+	sort.SliceStable(actions, func(i, j int) bool {
+		left, leftOK := priority[actions[i].Phase]
+		right, rightOK := priority[actions[j].Phase]
+		if !leftOK {
+			left = 99
+		}
+		if !rightOK {
+			right = 99
+		}
+		if left == right {
+			return actions[i].Adapter < actions[j].Adapter
+		}
+		return left < right
+	})
+	for index := range actions {
+		actions[index].Order = index + 1
+	}
 }
 
 func sortedUnique(values []string) []string {

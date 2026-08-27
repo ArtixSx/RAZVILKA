@@ -59,6 +59,42 @@ type applyFailureAdvice struct {
 	Alternatives   []string `json:"alternatives,omitempty"`
 }
 
+type applyChangeArea struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+type applyServiceChange struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	BeforeEnabled bool   `json:"before_enabled"`
+	AfterEnabled  bool   `json:"after_enabled"`
+	BeforeRoute   string `json:"before_route"`
+	AfterRoute    string `json:"after_route"`
+}
+
+type applyDeviceChange struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	BeforeCount int    `json:"before_count"`
+	AfterCount  int    `json:"after_count"`
+}
+
+type applyChangeSummary struct {
+	Scope             changeScope          `json:"scope"`
+	Included          []applyChangeArea    `json:"included"`
+	Deferred          []applyChangeArea    `json:"deferred"`
+	Services          []applyServiceChange `json:"services"`
+	Devices           []applyDeviceChange  `json:"devices"`
+	EngineDrafts      []string             `json:"engine_drafts"`
+	NetworkChange     bool                 `json:"network_change"`
+	WorkingChange     bool                 `json:"working_change"`
+	Verification      string               `json:"verification"`
+	Rollback          string               `json:"rollback"`
+	IndependentNotice string               `json:"independent_notice,omitempty"`
+}
+
 type App struct {
 	Store           *config.Store
 	Catalog         catalog.Catalog
@@ -2395,6 +2431,121 @@ func selectedRoute(st config.ServiceState) string {
 	return "auto"
 }
 
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	a := append([]string(nil), left...)
+	b := append([]string(nil), right...)
+	sort.Strings(a)
+	sort.Strings(b)
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (a *App) changeSummary(cfg config.Config, scope changeScope, transaction dataplane.Plan) applyChangeSummary {
+	servicesIncluded := scope == changeScopeAll || scope == changeScopeRouting || scope == changeScopeServices
+	devicesIncluded := scope == changeScopeAll || scope == changeScopeRouting || scope == changeScopeDevices
+	names := map[string]string{}
+	for _, service := range a.catalogSnapshot().Services {
+		names[service.ID] = service.Name
+	}
+	keys := map[string]bool{}
+	for id := range cfg.Services {
+		keys[id] = true
+	}
+	for id := range cfg.AppliedServices {
+		keys[id] = true
+	}
+	ids := make([]string, 0, len(keys))
+	for id := range keys {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	allServices := make([]applyServiceChange, 0)
+	allDevices := make([]applyDeviceChange, 0)
+	for _, id := range ids {
+		desired := cfg.Services[id]
+		applied := cfg.AppliedServices[id]
+		name := names[id]
+		if name == "" {
+			name = id
+		}
+		desiredRoute := selectedRoute(desired)
+		appliedRoute := selectedRoute(applied)
+		if desired.Enabled != applied.Enabled || desiredRoute != appliedRoute {
+			allServices = append(allServices, applyServiceChange{ID: id, Name: name, BeforeEnabled: applied.Enabled, AfterEnabled: desired.Enabled, BeforeRoute: appliedRoute, AfterRoute: desiredRoute})
+		}
+		if !sameStringSet(desired.Sources, applied.Sources) {
+			allDevices = append(allDevices, applyDeviceChange{ID: id, Name: name, BeforeCount: len(applied.Sources), AfterCount: len(desired.Sources)})
+		}
+	}
+	summary := applyChangeSummary{
+		Scope:         scope,
+		EngineDrafts:  append([]string(nil), transaction.EngineDrafts...),
+		NetworkChange: !transaction.Noop,
+		WorkingChange: !cfg.SafeMode && !transaction.Noop && transaction.Ready,
+		Verification:  "Проверка конфигурации, изолированный canary доступных обходов и контрольный запрос сервиса.",
+		Rollback:      "Перед изменением создаётся снимок; при ошибке проверки рабочее состояние восстанавливается автоматически.",
+	}
+	if transaction.Noop {
+		summary.Verification = "Сетевые правила не меняются; подтверждается только сохранение выбранного состояния."
+		summary.Rollback = "Откат сети не требуется, потому что сетевых изменений нет."
+	} else if cfg.SafeMode {
+		summary.Verification = "Безопасный режим проверит план, но не изменит рабочую сеть."
+		summary.Rollback = "Рабочая сеть не меняется; черновик останется до явного рабочего применения."
+	} else if !transaction.Ready {
+		summary.Verification = "Применение заблокировано, пока не устранены перечисленные причины."
+		summary.Rollback = "Изменения не начнутся, поэтому откат не потребуется."
+	}
+	if servicesIncluded {
+		summary.Services = allServices
+		if len(allServices) > 0 {
+			summary.Included = append(summary.Included, applyChangeArea{ID: "services", Label: "Маршруты сервисов", Count: len(allServices)})
+		}
+	} else if len(allServices) > 0 {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "services", Label: "Маршруты сервисов", Count: len(allServices)})
+	}
+	if devicesIncluded {
+		summary.Devices = allDevices
+		if len(allDevices) > 0 {
+			summary.Included = append(summary.Included, applyChangeArea{ID: "devices", Label: "Области устройств", Count: len(allDevices)})
+		}
+	} else if len(allDevices) > 0 {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "devices", Label: "Области устройств", Count: len(allDevices)})
+	}
+	if len(transaction.EngineDrafts) > 0 {
+		summary.Included = append(summary.Included, applyChangeArea{ID: "engines", Label: "Конфигурации обходов", Count: len(transaction.EngineDrafts)})
+	}
+	includedDrafts := map[string]bool{}
+	for _, ref := range transaction.EngineDrafts {
+		includedDrafts[ref] = true
+	}
+	deferredEngines := 0
+	for _, ref := range a.stagedEngineConfigRefs() {
+		if !includedDrafts[ref] {
+			deferredEngines++
+		}
+	}
+	if deferredEngines > 0 {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "engines", Label: "Другие конфигурации обходов", Count: deferredEngines})
+	}
+	if a.DNS != nil && a.DNS.Dirty() {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "dns", Label: "DNS", Count: 1})
+	}
+	if a.Sources != nil && a.Sources.Dirty() {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "sources", Label: "Источники данных", Count: 1})
+	}
+	if len(summary.Deferred) > 0 {
+		summary.IndependentNotice = "Отложенные изменения останутся черновиками и не будут применены или отменены этой операцией."
+	}
+	return summary
+}
+
 func effectiveListen(actual, configured string) string {
 	if actual != "" {
 		return actual
@@ -2448,11 +2599,12 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"safe_mode":   cfg.SafeMode,
-		"scope":       scope,
-		"note":        "v0.16.0: page-scoped drafts, explicit unavailable routes and persistent component-install verification. Safe Mode remains the default.",
-		"routes":      rows,
-		"transaction": transaction,
+		"safe_mode":      cfg.SafeMode,
+		"scope":          scope,
+		"note":           "v0.16.0: page-scoped drafts, explicit unavailable routes and persistent component-install verification. Safe Mode remains the default.",
+		"routes":         rows,
+		"transaction":    transaction,
+		"change_summary": a.changeSummary(cfg, scope, transaction),
 	})
 }
 
@@ -2673,26 +2825,64 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
 	cfg = configForChangeScope(cfg, scope)
 	routes := make([]dataplane.Route, 0)
+	committedRoutes := map[string]string{}
+	if a.Dataplane != nil {
+		if committed, exists, err := a.Dataplane.Committed(); err == nil && exists && committed.State == "committed" && committed.Revision == cfg.AppliedRevision {
+			for _, route := range committed.Routes {
+				committedRoutes[route.ServiceID] = route.Resolved
+			}
+		}
+	}
+	desiredAdapters := map[string]bool{}
+	appliedAdapters := map[string]bool{}
 	for _, service := range a.catalogSnapshot().Services {
 		state := cfg.Services[service.ID]
-		if !state.Enabled {
-			continue
-		}
-		selected := selectedRoute(state)
-		resolved := selected
-		if selected == "auto" {
-			resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+		if state.Enabled {
+			selected := selectedRoute(state)
+			resolved := selected
+			if selected == "auto" {
+				resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+			}
+			if adapter := dataplane.AdapterID(resolved); adapter != "" && adapter != "direct" {
+				desiredAdapters[adapter] = true
+			}
+			applied := cfg.AppliedServices[service.ID]
+			appliedRoute := ""
+			if applied.Enabled {
+				appliedRoute = committedRoutes[service.ID]
+				if appliedRoute == "" {
+					appliedRoute = selectedRoute(applied)
+					if appliedRoute == "auto" {
+						appliedRoute = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+					}
+				}
+			}
+			routes = append(routes, dataplane.Route{
+				ServiceID: service.ID, ServiceName: service.Name, Selected: selected, Resolved: resolved,
+				Domains: service.Domains, CIDRs: service.CIDRs, SourceRefs: service.SourceRefs, Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL, AppliedRoute: appliedRoute,
+			})
 		}
 		applied := cfg.AppliedServices[service.ID]
-		appliedRoute := ""
 		if applied.Enabled {
-			appliedRoute = selectedRoute(applied)
+			resolved := committedRoutes[service.ID]
+			if resolved == "" {
+				resolved = selectedRoute(applied)
+				if resolved == "auto" {
+					resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+				}
+			}
+			if adapter := dataplane.AdapterID(resolved); adapter != "" && adapter != "direct" {
+				appliedAdapters[adapter] = true
+			}
 		}
-		routes = append(routes, dataplane.Route{
-			ServiceID: service.ID, ServiceName: service.Name, Selected: selected, Resolved: resolved,
-			Domains: service.Domains, CIDRs: service.CIDRs, SourceRefs: service.SourceRefs, Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL, AppliedRoute: appliedRoute,
-		})
 	}
+	retiringAdapters := make([]string, 0)
+	for adapter := range appliedAdapters {
+		if !desiredAdapters[adapter] {
+			retiringAdapters = append(retiringAdapters, adapter)
+		}
+	}
+	sort.Strings(retiringAdapters)
 	engines := make([]dataplane.Engine, 0, len(options))
 	for _, option := range options {
 		if option.ID == "auto" || option.ID == "direct" {
@@ -2732,7 +2922,7 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 	case changeScopeEngine:
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id == engineID })
 	}
-	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: dataplane.DiscoverHost()})
+	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: dataplane.DiscoverHost()})
 }
 
 func configForChangeScope(cfg config.Config, scope changeScope) config.Config {

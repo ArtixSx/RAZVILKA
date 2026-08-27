@@ -212,6 +212,48 @@ function askConfirmation(title, text, action = 'Продолжить') {
   return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
 }
 
+function applyStateText(enabled, route) {
+  return enabled ? routeLabel(route || 'auto') : 'выключен';
+}
+
+function reviewApplyPlan(preview) {
+  const dialog = $('#applyReviewDialog');
+  const summary = preview.change_summary || {};
+  const tx = preview.transaction || {};
+  const included = summary.included || [];
+  const deferred = summary.deferred || [];
+  const services = summary.services || [];
+  const devices = summary.devices || [];
+  const blockers = (tx.blockers || []).filter((item) => item.code !== 'SAFE_MODE');
+  const scopeNames = { all: 'общих изменений', routing: 'маршрутов и политик', services: 'маршрутов сервисов', devices: 'областей устройств', engine: 'конфигурации обхода' };
+  $('#applyReviewTitle').textContent = `Проверка ${scopeNames[summary.scope] || 'изменений'}`;
+  $('#applyReviewSubtitle').textContent = summary.working_change
+    ? 'После подтверждения рабочая сеть изменится только по этому плану.'
+    : preview.safe_mode && summary.network_change
+    ? 'Безопасный режим проверит план и не изменит рабочую сеть.'
+    : summary.network_change
+    ? 'План пока не готов к рабочему применению.'
+    : 'Сетевые правила не изменятся.';
+  const includedHTML = included.length
+    ? included.map((item) => `<div><b>${Number(item.count) || 0}</b><span>${esc(item.label)}</span></div>`).join('')
+    : '<div class="empty"><b>0</b><span>новых сетевых изменений</span></div>';
+  const servicesHTML = services.slice(0, 8).map((item) => `<div class="apply-review-change"><b>${esc(item.name)}</b><span>${esc(applyStateText(item.before_enabled, item.before_route))}</span><i>→</i><strong>${esc(applyStateText(item.after_enabled, item.after_route))}</strong></div>`).join('');
+  const devicesHTML = devices.slice(0, 8).map((item) => `<div class="apply-review-change"><b>${esc(item.name)}</b><span>${Number(item.before_count) ? `${Number(item.before_count)} адресов` : 'вся сеть'}</span><i>→</i><strong>${Number(item.after_count) ? `${Number(item.after_count)} адресов` : 'вся сеть'}</strong></div>`).join('');
+  const deferredHTML = deferred.length ? `<section class="apply-review-deferred"><h4>Останется на других вкладках</h4><div>${deferred.map((item) => `<span><b>${Number(item.count) || 0}</b>${esc(item.label)}</span>`).join('')}</div><p>${esc(summary.independent_notice || '')}</p></section>` : '';
+  const blockersHTML = blockers.length ? `<section class="apply-review-blockers"><h4>Сначала исправьте</h4>${blockers.map((item) => `<div><b>${esc(item.message)}</b><span>${esc(item.resolution || 'Откройте технический план для подробностей.')}</span></div>`).join('')}</section>` : '';
+  const blocked = !preview.safe_mode && !tx.ready && !tx.noop;
+  const impactLabel = blocked ? 'ПРИМЕНЕНИЕ ЗАБЛОКИРОВАНО' : summary.working_change ? 'РАБОЧАЯ СЕТЬ ИЗМЕНИТСЯ' : preview.safe_mode && summary.network_change ? 'ТОЛЬКО ПРОВЕРКА' : 'БЕЗ ИЗМЕНЕНИЯ СЕТИ';
+  const impactText = blocked ? 'Ничего не изменится до устранения причин' : summary.working_change ? 'Применение с автоматическим откатом' : preview.safe_mode && summary.network_change ? 'Черновик останется неподтверждённым' : 'Сохраняется только выбранное состояние';
+  $('#applyReviewContent').innerHTML = `<section class="apply-review-impact ${summary.working_change ? 'working' : ''} ${blocked ? 'blocked' : ''}"><div><span>${impactLabel}</span><b>${impactText}</b></div></section><section class="apply-review-areas">${includedHTML}</section>${servicesHTML ? `<section class="apply-review-list"><h4>Сервисы</h4>${servicesHTML}${services.length > 8 ? `<small>И ещё ${services.length - 8}</small>` : ''}</section>` : ''}${devicesHTML ? `<section class="apply-review-list"><h4>Устройства</h4>${devicesHTML}${devices.length > 8 ? `<small>И ещё ${devices.length - 8}</small>` : ''}</section>` : ''}<section class="apply-review-safety"><div><b>Как проверяем</b><span>${esc(summary.verification || 'Сначала проверяется план.')}</span></div><div><b>Если проверка не пройдёт</b><span>${esc(summary.rollback || 'Рабочее состояние не изменится.')}</span></div></section>${deferredHTML}${blockersHTML}`;
+  const confirm = $('#applyReviewConfirm');
+  const canContinue = !!preview.safe_mode || !!tx.ready || !!tx.noop;
+  confirm.disabled = !canContinue;
+  confirm.textContent = !canContinue ? 'Сначала исправьте причины' : preview.safe_mode && summary.network_change ? 'Проверить без применения' : summary.working_change ? 'Применить и проверить' : 'Сохранить';
+  dialog.returnValue = '';
+  dialog.showModal();
+  return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+}
+
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -2586,7 +2628,7 @@ async function applyDraft(scope = 'all', engineID = '') {
     ? [$('#engineApplyConfig')]
     : [$('#applyChanges'), $('#applySettings')];
   const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}${engineID ? `&engine=${encodeURIComponent(engineID)}` : ''}`;
-  buttons.forEach((b) => { b.disabled = true; b.textContent = 'Применение…'; });
+  buttons.forEach((b) => { b.disabled = true; b.textContent = 'Проверка…'; });
   try {
     const preview = await api(`/api/v1/plan${query}`);
     const unusedDrafts = (preview.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
@@ -2595,6 +2637,8 @@ async function applyDraft(scope = 'all', engineID = '') {
       showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один включённый сервис для этого обхода либо отмените черновик. Рабочие настройки не изменены.`, preview, true);
       return;
     }
+    if (!await reviewApplyPlan(preview)) return;
+    buttons.forEach((b) => { b.textContent = 'Применение…'; });
     const result = await api(`/api/v1/apply${query}`, { method: 'POST' });
     await refreshCoreAfterEdit();
     await refreshEngineConfigs();
