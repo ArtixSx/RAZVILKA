@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -14,7 +15,8 @@ import (
 )
 
 type proxyFakeProcesses struct {
-	running map[string]bool
+	running    map[string]bool
+	startSpecs []ProcessSpec
 }
 
 func (p *proxyFakeProcesses) Start(_ context.Context, spec ProcessSpec) error {
@@ -22,6 +24,7 @@ func (p *proxyFakeProcesses) Start(_ context.Context, spec ProcessSpec) error {
 		p.running = map[string]bool{}
 	}
 	p.running[spec.ID] = true
+	p.startSpecs = append(p.startSpecs, spec)
 	return nil
 }
 func (p *proxyFakeProcesses) Stop(_ context.Context, spec ProcessSpec) error {
@@ -84,6 +87,71 @@ func TestUsqueUsesUpstreamMASQUEDefaultAndReconnect(t *testing.T) {
 	}
 	if strings.Contains(args, "--http2") {
 		t.Fatalf("usque command %q must not force the HTTP/2 fallback", args)
+	}
+}
+
+func TestParseUsqueTransportAcceptsOnlySafePackageSettings(t *testing.T) {
+	got := parseUsqueTransport("SNI=\"ozon.ru\"\nHTTP2_ENABLE=1\n")
+	if got.SNI != "ozon.ru" || !got.HTTP2 {
+		t.Fatalf("transport=%+v", got)
+	}
+	got = parseUsqueTransport("SNI='bad value; reboot'\nHTTP2_ENABLE=0\n")
+	if got.SNI != "" || got.HTTP2 {
+		t.Fatalf("unsafe transport setting was accepted: %+v", got)
+	}
+}
+
+func TestUsqueCanaryFallsBackToHTTP2AndPersistsSelection(t *testing.T) {
+	root := t.TempDir()
+	adapter, err := NewProxyTunnelAdapter("usque", engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups")), filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter.EngineBin = "usque"
+	adapter.UsqueConfig = filepath.Join(root, "usque.conf")
+	if err := os.WriteFile(adapter.UsqueConfig, []byte("SNI=\"ozon.ru\"\nHTTP2_ENABLE=0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	processes := &proxyFakeProcesses{running: map[string]bool{}}
+	adapter.Processes = processes
+	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
+	probeCount := 0
+	adapter.CanaryProbe = func(context.Context, string, string) error {
+		probeCount++
+		if probeCount == 1 {
+			return errors.New("QUIC tunnel stalled")
+		}
+		return nil
+	}
+	transaction := filepath.Join(root, "transaction")
+	if err := os.MkdirAll(transaction, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	config := `{"private_key":"key","endpoint_pub_key":"pub","id":"device","access_token":"token"}`
+	if err := os.WriteFile(filepath.Join(transaction, "engine.staged.json"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan := RoutePlan{Routes: []Route{{ServiceName: "Telegram", ProbeURL: "https://telegram.org/"}}}
+	if err := adapter.Canary(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if probeCount != 2 || len(processes.startSpecs) != 2 {
+		t.Fatalf("probes=%d starts=%d", probeCount, len(processes.startSpecs))
+	}
+	firstArgs := strings.Join(processes.startSpecs[0].Args, " ")
+	secondArgs := strings.Join(processes.startSpecs[1].Args, " ")
+	if strings.Contains(firstArgs, "--http2") || !strings.Contains(firstArgs, "-s ozon.ru") {
+		t.Fatalf("unexpected QUIC args: %s", firstArgs)
+	}
+	if !strings.Contains(secondArgs, "--http2") || !strings.Contains(secondArgs, "-s ozon.ru") {
+		t.Fatalf("unexpected HTTP/2 args: %s", secondArgs)
+	}
+	selected, err := adapter.stagedUsqueTransport(transaction)
+	if err != nil || !selected.HTTP2 || selected.SNI != "ozon.ru" {
+		t.Fatalf("selected=%+v err=%v", selected, err)
+	}
+	if len(processes.running) != 0 {
+		t.Fatalf("canary process remained: %v", processes.running)
 	}
 }
 

@@ -10,6 +10,12 @@
 - sing-box, Xray and USQUE/MASQUE now start a temporary loopback-only SOCKS
   candidate on a separate port, verify service egress and remove it before the
   working TUN or policy rules can be changed.
+- USQUE canary now inherits the safe SNI setting from the Entware package,
+  verifies real service traffic over both QUIC and HTTP/2, and persists only
+  the transport that actually passed. A successful MASQUE connection message
+  without Telegram egress is no longer accepted as route evidence.
+- A failed USQUE canary now keeps the specific Russian WARP · MASQUE guidance
+  in the notice instead of replacing it with a generic technical failure.
 - Plans explicitly report adapters that still lack a separate canary instead
   of presenting post-activation health as equivalent protection.
 - Service route drafts and device/source policy drafts now have independent

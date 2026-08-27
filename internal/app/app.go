@@ -2763,7 +2763,9 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 		advice.Message = "Cloudflare не подтвердил WireGuard-handshake. RAZVILKA проверила настроенный и резервные UDP-порты, затем безопасно вернула прежний интернет; черновик сохранён."
 		advice.Resolution = "Если повтор не помогает, используйте WARP · MASQUE либо импортируйте отдельный AmneziaWG/VLESS-профиль. Профиль WARP нельзя преобразовать в AmneziaWG без совместимого сервера."
 		advice.Alternatives = []string{"usque", "amneziawg", "sing-box"}
-	} else if strings.Contains(lower, "usque probe") || (strings.Contains(lower, "masque") && strings.Contains(lower, "timeout")) {
+	} else if strings.Contains(lower, "usque probe") ||
+		(strings.Contains(lower, "usque") && strings.Contains(lower, "candidate") && strings.Contains(lower, "probe")) ||
+		(strings.Contains(lower, "masque") && strings.Contains(lower, "timeout")) {
 		advice.Code = "WARP_MASQUE_SERVICE_TIMEOUT"
 		advice.Title = "WARP MASQUE подключился, но сервис не ответил"
 		advice.Message = "Сессия с Cloudflare была создана, однако проверочный запрос выбранного сервиса не прошёл через туннель. RAZVILKA вернула прежние маршруты; интернет роутера не изменён."
@@ -2781,6 +2783,12 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 func classifyApplyExecutionFailure(message, state string) applyFailureAdvice {
 	advice := classifyApplyFailure(message)
 	if state != "canary-failed" {
+		return advice
+	}
+	if advice.Code != "DATAPLANE_APPLY_FAILED" && advice.Code != "DATAPLANE_OPERATION_CANCELLED" {
+		advice.Message += " Проверка выполнялась изолированно: рабочий маршрут и его процессы не изменялись."
+		advice.DraftPreserved = true
+		advice.Retryable = true
 		return advice
 	}
 	advice.Code = "CANARY_FAILED"

@@ -237,6 +237,13 @@ func TestClassifyWARPMASQUEServiceTimeout(t *testing.T) {
 	}
 }
 
+func TestClassifyUSQUETransportCanaryKeepsHelpfulAdvice(t *testing.T) {
+	failure := classifyApplyExecutionFailure(`usque candidate transports failed: QUIC: candidate probe for Telegram failed: context deadline exceeded; HTTP/2: candidate probe for Telegram failed: context deadline exceeded`, "canary-failed")
+	if failure.Code != "WARP_MASQUE_SERVICE_TIMEOUT" || !strings.Contains(failure.Message, "не изменялись") {
+		t.Fatalf("unexpected transport advice: %+v", failure)
+	}
+}
+
 func TestClassifyApplyFailureExplainsTimeoutAndRollback(t *testing.T) {
 	failure := classifyApplyFailure("stage nfqws2: context deadline exceeded")
 	if failure.Code != "DATAPLANE_OPERATION_CANCELLED" || !failure.DraftPreserved || !strings.Contains(strings.ToLower(failure.Message), "rollback") {

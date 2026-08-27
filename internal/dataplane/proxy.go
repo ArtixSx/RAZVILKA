@@ -44,6 +44,12 @@ type ProxyTunnelAdapter struct {
 	Table       int
 	Priority    int
 	Timeout     time.Duration
+	UsqueConfig string
+}
+
+type usqueTransport struct {
+	HTTP2 bool   `json:"http2"`
+	SNI   string `json:"sni,omitempty"`
 }
 
 type proxySnapshot struct {
@@ -56,6 +62,8 @@ type proxySnapshot struct {
 	RuntimeEngineExists bool        `json:"runtime_engine_exists"`
 	RuntimeSidecar      []byte      `json:"runtime_sidecar,omitempty"`
 	RuntimeSideExists   bool        `json:"runtime_sidecar_exists"`
+	Transport           []byte      `json:"transport,omitempty"`
+	TransportExists     bool        `json:"transport_exists,omitempty"`
 	Policy              PolicyState `json:"policy"`
 	PolicyExists        bool        `json:"policy_exists"`
 	EngineWasRunning    bool        `json:"engine_was_running"`
@@ -64,7 +72,7 @@ type proxySnapshot struct {
 }
 
 func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot string) (*ProxyTunnelAdapter, error) {
-	a := &ProxyTunnelAdapter{EngineID: id, Configs: configs, StateRoot: filepath.Join(stateRoot, id), Runner: nfqws2ExecRunner{}, Processes: OSProcessController{}, SOCKSProbe: probeSOCKS5}
+	a := &ProxyTunnelAdapter{EngineID: id, Configs: configs, StateRoot: filepath.Join(stateRoot, id), Runner: nfqws2ExecRunner{}, Processes: OSProcessController{}, SOCKSProbe: probeSOCKS5, UsqueConfig: "/opt/etc/usque/usque.conf"}
 	switch id {
 	case "usque":
 		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18080, "rz-usque", "172.31.20.1/30", 202, 20000
@@ -111,6 +119,10 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	if err != nil {
 		return err
 	}
+	transport, transportExists, err := optionalFile(a.transportPath())
+	if err != nil {
+		return err
+	}
 	policy, policyExists, err := a.loadPolicy()
 	if err != nil {
 		return err
@@ -121,7 +133,7 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	}
 	snapshot := proxySnapshot{
 		ConfigPath: view.Path, Config: live, ConfigExisted: liveExists, ConfigDraft: draftExists, StagedConfig: draft,
-		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists,
+		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists, Transport: transport, TransportExists: transportExists,
 		Policy: policy, PolicyExists: policyExists, EngineWasRunning: a.Processes.Running(a.engineProcess()), SidecarWasRunning: a.Processes.Running(a.sidecarProcess()), PackageWasRunning: packageWasRunning,
 	}
 	data, _ := json.MarshalIndent(snapshot, "", "  ")
@@ -214,7 +226,7 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 // Canary starts only the staged proxy engine on an isolated loopback SOCKS
 // port. It does not stop the working process, create a TUN interface or touch
 // policy routing. The candidate is always removed before Activate can run.
-func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root string) (resultErr error) {
+func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root string) error {
 	if err := a.valid(); err != nil {
 		return err
 	}
@@ -238,18 +250,48 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 	if err := writeAtomic(configPath, candidate, 0o600); err != nil {
 		return err
 	}
-	spec := a.engineProcessAt(configPath, port, canaryRoot, a.ID()+"-canary")
+	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	transports := []usqueTransport{{}}
+	if a.ID() == "usque" {
+		preferred := a.preferredUsqueTransport()
+		transports = []usqueTransport{preferred, {HTTP2: !preferred.HTTP2, SNI: preferred.SNI}}
+	}
+	failed := make([]string, 0, len(transports))
+	for _, transport := range transports {
+		spec := a.engineProcessAt(configPath, port, canaryRoot, a.ID()+"-canary", transport)
+		if err := a.runCanaryAttempt(ctx, plan, spec, address); err != nil {
+			if a.Processes.Running(spec) {
+				return fmt.Errorf("isolated %s candidate could not be stopped after failed %s probe", a.ID(), usqueTransportName(transport))
+			}
+			failed = append(failed, usqueTransportName(transport)+": "+err.Error())
+			continue
+		}
+		if a.ID() == "usque" {
+			data, _ := json.MarshalIndent(transport, "", "  ")
+			if err := writeAtomic(filepath.Join(root, "transport.staged.json"), data, 0o600); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("%s candidate transports failed: %s", a.ID(), strings.Join(failed, "; "))
+}
+
+func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePlan, spec ProcessSpec, address string) (resultErr error) {
 	if err := a.Processes.Start(ctx, spec); err != nil {
 		return fmt.Errorf("start isolated %s candidate: %w", a.ID(), err)
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.timeout())
 		defer cancel()
-		if err := a.Processes.Stop(cleanupCtx, spec); err != nil && resultErr == nil {
-			resultErr = fmt.Errorf("stop isolated %s candidate: %w", a.ID(), err)
+		if err := a.Processes.Stop(cleanupCtx, spec); err != nil {
+			if resultErr == nil {
+				resultErr = fmt.Errorf("stop isolated %s candidate: %w", a.ID(), err)
+			} else {
+				resultErr = fmt.Errorf("%v; stop isolated %s candidate: %w", resultErr, a.ID(), err)
+			}
 		}
 	}()
-	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
 	if err := a.waitForSOCKSProcess(ctx, spec, address); err != nil {
 		return err
 	}
@@ -264,18 +306,18 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 		}
 		probed = true
 		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
-		err = probe(probeCtx, route.ProbeURL, address)
+		err := probe(probeCtx, route.ProbeURL, address)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("%s candidate probe for %s failed: %w", a.ID(), route.ServiceName, err)
+			return fmt.Errorf("candidate probe for %s failed: %w", route.ServiceName, err)
 		}
 	}
 	if !probed {
 		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
-		err = probe(probeCtx, "https://www.cloudflare.com/cdn-cgi/trace", address)
+		err := probe(probeCtx, "https://www.cloudflare.com/cdn-cgi/trace", address)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("%s candidate egress probe failed: %w", a.ID(), err)
+			return fmt.Errorf("candidate egress probe failed: %w", err)
 		}
 	}
 	return nil
@@ -322,7 +364,11 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, _ Plan, root string) 
 	if err := writeAtomic(a.sidecarConfigPath(), sideCandidate, 0o600); err != nil {
 		return err
 	}
-	if err := a.Processes.Start(ctx, a.engineProcess()); err != nil {
+	transport, err := a.stagedUsqueTransport(root)
+	if err != nil {
+		return err
+	}
+	if err := a.Processes.Start(ctx, a.engineProcessWithTransport(transport)); err != nil {
 		return err
 	}
 	if err := a.waitForSOCKS(ctx); err != nil {
@@ -457,7 +503,7 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 }
 
 func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
-	owned := regularFile(a.policyPath()) || regularFile(a.engineConfigPath()) || regularFile(a.sidecarConfigPath()) || regularFile(a.engineProcess().PIDPath) || regularFile(a.sidecarProcess().PIDPath)
+	owned := regularFile(a.policyPath()) || regularFile(a.engineConfigPath()) || regularFile(a.sidecarConfigPath()) || regularFile(a.transportPath()) || regularFile(a.engineProcess().PIDPath) || regularFile(a.sidecarProcess().PIDPath)
 	if !owned {
 		return nil
 	}
@@ -481,7 +527,7 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 			}
 		}
 	}
-	for _, path := range []string{a.policyPath(), a.engineConfigPath(), a.sidecarConfigPath(), a.engineProcess().PIDPath, a.sidecarProcess().PIDPath} {
+	for _, path := range []string{a.policyPath(), a.engineConfigPath(), a.sidecarConfigPath(), a.transportPath(), a.engineProcess().PIDPath, a.sidecarProcess().PIDPath} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) && firstErr == nil {
 			firstErr = err
 		}
@@ -510,7 +556,20 @@ func (a *ProxyTunnelAdapter) Commit(_ context.Context, _ Plan, root string) erro
 	if err := os.MkdirAll(a.StateRoot, 0o700); err != nil {
 		return err
 	}
-	return writeAtomic(a.policyPath(), data, 0o600)
+	if err := writeAtomic(a.policyPath(), data, 0o600); err != nil {
+		return err
+	}
+	if a.ID() == "usque" {
+		transport, err := a.stagedUsqueTransport(root)
+		if err != nil {
+			return err
+		}
+		data, _ := json.MarshalIndent(transport, "", "  ")
+		if err := writeAtomic(a.transportPath(), data, 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) error {
@@ -531,6 +590,9 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 		firstErr = err
 	}
 	if err := restoreOptional(a.sidecarConfigPath(), snapshot.RuntimeSidecar, snapshot.RuntimeSideExists); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if err := restoreOptional(a.transportPath(), snapshot.Transport, snapshot.TransportExists); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	if snapshot.EngineWasRunning {
@@ -620,10 +682,14 @@ func (a *ProxyTunnelAdapter) ip() string {
 	return findExecutable("/opt/sbin/ip", "/opt/bin/ip", "ip")
 }
 func (a *ProxyTunnelAdapter) engineProcess() ProcessSpec {
-	return a.engineProcessAt(a.engineConfigPath(), a.SOCKSPort, a.runtimeRoot(), a.ID()+"-engine")
+	return a.engineProcessWithTransport(a.preferredUsqueTransport())
 }
 
-func (a *ProxyTunnelAdapter) engineProcessAt(config string, port int, root, processID string) ProcessSpec {
+func (a *ProxyTunnelAdapter) engineProcessWithTransport(transport usqueTransport) ProcessSpec {
+	return a.engineProcessAt(a.engineConfigPath(), a.SOCKSPort, a.runtimeRoot(), a.ID()+"-engine", transport)
+}
+
+func (a *ProxyTunnelAdapter) engineProcessAt(config string, port int, root, processID string, transport usqueTransport) ProcessSpec {
 	args := []string{}
 	switch a.ID() {
 	case "usque":
@@ -632,12 +698,88 @@ func (a *ProxyTunnelAdapter) engineProcessAt(config string, port int, root, proc
 		// actual tunneled requests still stall. A separate connectivity check
 		// reports TCP/443 as a fallback without mistaking it for a working tunnel.
 		args = []string{"-c", config, "socks", "-b", "127.0.0.1", "-p", strconv.Itoa(port), "--always-reconnect", "-S"}
+		if transport.SNI != "" {
+			args = append(args, "-s", transport.SNI)
+		}
+		if transport.HTTP2 {
+			args = append(args, "--http2")
+		}
 	case "sing-box":
 		args = []string{"run", "-c", config}
 	case "xray":
 		args = []string{"run", "-config", config}
 	}
 	return ProcessSpec{ID: processID, Binary: a.engineBinary(), Args: args, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config}
+}
+
+func (a *ProxyTunnelAdapter) transportPath() string {
+	return filepath.Join(a.StateRoot, "transport.json")
+}
+
+func (a *ProxyTunnelAdapter) preferredUsqueTransport() usqueTransport {
+	if a.ID() != "usque" {
+		return usqueTransport{}
+	}
+	if data, exists, _ := optionalFile(a.transportPath()); exists {
+		var transport usqueTransport
+		if json.Unmarshal(data, &transport) == nil {
+			return transport
+		}
+	}
+	data, err := os.ReadFile(a.UsqueConfig)
+	if err != nil {
+		return usqueTransport{}
+	}
+	return parseUsqueTransport(string(data))
+}
+
+func (a *ProxyTunnelAdapter) stagedUsqueTransport(root string) (usqueTransport, error) {
+	if a.ID() != "usque" {
+		return usqueTransport{}, nil
+	}
+	data, err := os.ReadFile(filepath.Join(root, "transport.staged.json"))
+	if err != nil {
+		return usqueTransport{}, errors.New("validated USQUE transport selection is missing")
+	}
+	var transport usqueTransport
+	if err := json.Unmarshal(data, &transport); err != nil {
+		return usqueTransport{}, errors.New("validated USQUE transport selection is invalid")
+	}
+	return transport, nil
+}
+
+var safeSNI = regexp.MustCompile(`(?i)^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
+
+func parseUsqueTransport(content string) usqueTransport {
+	transport := usqueTransport{}
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
+		switch key {
+		case "HTTP2_ENABLE":
+			transport.HTTP2 = value == "1"
+		case "SNI":
+			if safeSNI.MatchString(value) {
+				transport.SNI = value
+			}
+		}
+	}
+	return transport
+}
+
+func usqueTransportName(transport usqueTransport) string {
+	if transport.HTTP2 {
+		return "HTTP/2"
+	}
+	return "QUIC"
 }
 
 func (a *ProxyTunnelAdapter) canaryPort() (int, error) {
