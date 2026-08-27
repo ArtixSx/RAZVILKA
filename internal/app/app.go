@@ -42,6 +42,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/telemetry"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
+	"github.com/ArtixSx/razvilka/internal/usquediag"
 	"github.com/ArtixSx/razvilka/internal/warp"
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
@@ -114,6 +115,7 @@ type App struct {
 	RouteProber     testlab.RouteProber
 	SmartRoute      *smartroute.Manager
 	Updates         *updatecheck.Manager
+	USQUE           *usquediag.Manager
 	Stats           *routerstats.Sampler
 	Security        *security.Gate
 	Audit           *auditlog.Journal
@@ -310,6 +312,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/settings/safe-mode", a.safeModeSetting)
 	mux.HandleFunc("/api/v1/update", a.updateStatus)
 	mux.HandleFunc("/api/v1/diagnostics/domain", a.domainDiagnostic)
+	mux.HandleFunc("/api/v1/diagnostics/usque", a.usqueDiagnostic)
 	mux.HandleFunc("/api/v1/diagnostics/report", a.diagnosticReport)
 	mux.HandleFunc("/api/v1/config/export", a.configExport)
 	mux.HandleFunc("/api/v1/profiles/export", a.profileExport)
@@ -1214,6 +1217,20 @@ func (a *App) warpStatus(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	writeJSON(w, http.StatusOK, a.Warp.Status(ctx))
+}
+
+func (a *App) usqueDiagnostic(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.USQUE == nil {
+		http.Error(w, "USQUE diagnostics disabled", http.StatusServiceUnavailable)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, a.USQUE.Check(ctx))
 }
 
 func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {

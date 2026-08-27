@@ -2765,6 +2765,26 @@ async function refreshSystem() {
   }
 }
 
+async function checkUsqueDoctor() {
+  const button = $('#checkUsqueDoctor');
+  button.disabled = true; button.textContent = 'Проверяем…';
+  $('#usqueDoctorResult').innerHTML = '<div class="community-empty">Читаем только безопасные метаданные и проверяем доступность Cloudflare…</div>';
+  try {
+    const report = await api('/api/v1/diagnostics/usque', { method: 'POST', body: '{}' });
+    const checks = report.checks || [];
+    const stateLabel = report.state === 'ready' ? 'ГОТОВО' : report.state === 'attention' ? 'НУЖНО ВНИМАНИЕ' : 'НАЙДЕНА ПРОБЛЕМА';
+    const stateClass = report.state === 'ready' ? 'running' : report.state === 'attention' ? 'installed' : '';
+    const config = report.config || {};
+    const endpoints = report.endpoints || {};
+    const publicEndpoints = [endpoints.ipv4, endpoints.http2_ipv4, endpoints.ipv6, endpoints.http2_ipv6].filter(Boolean);
+    $('#usqueDoctorResult').innerHTML = `<div class="usque-doctor-head"><div><span class="engine-state ${stateClass}">${esc(stateLabel)}</span><h3>${esc(config.transport || 'USQUE')} · ${esc(config.sni || 'SNI по умолчанию')}</h3><p>${esc(config.interface || 'интерфейс не определён')}${report.endpoint_route_interface ? ` · endpoint через ${esc(report.endpoint_route_interface)}` : ''}</p></div><small>${esc(report.checked_at ? new Date(report.checked_at).toLocaleString('ru-RU') : '')}</small></div><div class="usque-check-grid">${checks.map((check) => `<div class="usque-check ${esc(check.status)}"><span>${check.status === 'pass' ? '✓' : check.status === 'warning' ? '!' : '×'}</span><div><b>${esc(check.label)}</b><p>${esc(check.message)}</p>${check.action ? `<small>${esc(check.action)}</small>` : ''}</div></div>`).join('')}</div>${publicEndpoints.length ? `<details class="transaction-details"><summary>Публичные endpoints (${publicEndpoints.length})</summary><code>${publicEndpoints.map(esc).join('\n')}</code></details>` : ''}<div class="usque-doctor-note">${esc(report.note || '')}</div>`;
+  } catch (error) {
+    $('#usqueDoctorResult').innerHTML = `<div class="community-empty error">Проверка USQUE не выполнена: ${esc(error.message)}</div>`;
+  } finally {
+    button.disabled = false; button.textContent = 'Проверить снова';
+  }
+}
+
 async function inspectDomain() {
   const query = $('#domainInspectorInput').value.trim();
   if (!query) return;
@@ -3072,6 +3092,7 @@ function bindEvents() {
   $('#discardSourceChanges').addEventListener('click', discardSourceDraft);
   $('#refreshSystem').addEventListener('click', refreshSystem);
   $('#downloadDiagnostics').addEventListener('click', downloadDiagnostics);
+	$('#checkUsqueDoctor').addEventListener('click', checkUsqueDoctor);
 	$('#inspectDomain').addEventListener('click', inspectDomain);
 	$('#domainInspectorInput').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); inspectDomain(); } });
 	$('#refreshEngineLab').addEventListener('click', refreshEngineLab);

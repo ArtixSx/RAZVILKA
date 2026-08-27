@@ -2,6 +2,16 @@
 
 ## Unreleased — isolated canary foundation
 
+- Expanded the USQUE recovery specification from real Keenetic troubleshooting:
+  package/feed checks, secret-safe session inspection, `ndmc` library isolation,
+  stale TUN detection, Cloudflare API/TLS checks, endpoint routing, IPv6 leakage,
+  `warp=on` versus service evidence, and a guarded repair ladder.
+- Added a read-only USQUE Doctor to Diagnostics. It reports safe package/config
+  metadata, validates that required session fields exist without returning their
+  values, checks supported Keenetic architectures and duplicate official feed
+  declarations, checks init/TUN, compares normal and clean-library `ndmc`,
+  probes the Cloudflare registration API and explains the public endpoint route.
+
 - Added an adapter-scoped neutral RoutePlan contract. A candidate receives
   only its own services, actions and resource claims, never unrelated routing
   intent or manager journal authority.
