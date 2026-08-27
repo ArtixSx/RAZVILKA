@@ -42,6 +42,13 @@
 - DNS Apply is deliberately disabled with the exact missing-adapter reason for
   non-system profiles. The draft is preserved, while the Automatic profile can
   be confirmed without falsely claiming that router DNS was changed.
+- Added verified catalog entries for Control D Unfiltered/Uncensored, Xbox DNS,
+  UncensoredDNS and FlashStart alongside Quad9, Cloudflare and Google. Provider
+  warnings call out UDP/53 interception, Smart DNS uncertainty and the explicit
+  ban on using FlashStart for USQUE registration.
+- Added persistent per-service DNS drafts. A service may inherit the global
+  profile or select its own resolver, but the UI and API keep every binding
+  non-live until a tested Keenetic DNS dispatcher exists.
 - Downloadable Sources now have persisted desired/applied selections and their
   own Save/Discard controls. A draft never changes active service enrichment;
   only the confirmed selection is refreshed and consumed.

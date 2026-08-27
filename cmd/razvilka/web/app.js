@@ -1919,14 +1919,27 @@ function renderDNS() {
   $('#dnsProvider').innerHTML = provider ? `<div class="dns-provider-name"><span class="dns-profile-icon"><svg><use href="#i-dns"/></svg></span><div><b>${esc(provider.name)}</b><small>${esc(provider.description)}</small></div></div>
     <div class="dns-provider-rows"><div><span>Обычный DNS</span><b>${esc((provider.servers || []).join(' · ') || (provider.id === 'system' ? 'управляет система' : 'не указан'))}</b></div><div><span>DoH</span><b>${esc(provider.doh || 'не указан')}</b></div><div><span>DoT</span><b>${esc(provider.dot || 'не указан')}</b></div></div>
     <div class="outbound-tags">${(provider.filters || []).map((filter) => `<span>${esc(filter)}</span>`).join('')}</div>
+    ${(provider.recommended_for || []).length ? `<div class="dns-recommended"><b>Подходит для</b><span>${esc(provider.recommended_for.join(' · '))}</span></div>` : ''}
+    ${(provider.warnings || []).map((warning) => `<div class="dns-provider-warning"><b>Важно</b><span>${esc(warning)}</span></div>`).join('')}
+    ${provider.usque_registration === 'blocked' ? '<div class="dns-provider-warning danger"><b>USQUE</b><span>Этот DNS нельзя выбирать для регистрации или перерегистрации USQUE.</span></div>' : ''}
     ${dnsProviderConfigMarkup(provider, dns)}` : '<div class="community-empty">Провайдер не найден.</div>';
   $('#dnsSaveNextDNS')?.addEventListener('click', saveNextDNSProfile);
   $('#dnsClearNextDNS')?.addEventListener('click', clearNextDNSProfile);
   $('#dnsSaveCustom')?.addEventListener('click', saveCustomDNSProvider);
   $('#dnsClearCustom')?.addEventListener('click', clearCustomDNSProvider);
+  const serviceProfiles = (dns.profiles || []).filter((item) => {
+    const itemProvider = dnsProviderByID(item.provider_id);
+    return item.id !== 'automatic' && (!itemProvider?.requires_configuration || itemProvider?.configured);
+  });
+  const serviceDrafts = dns.service_drafts || {};
+  const services = [...(state.services || [])].sort((left, right) => Number(right.enabled) - Number(left.enabled) || left.name.localeCompare(right.name, 'ru'));
+  $('#dnsServiceBindings').innerHTML = services.map((service) => {
+    const selectedProfile = serviceDrafts[service.id] || 'inherit';
+    return `<label class="dns-service-binding ${selectedProfile !== 'inherit' ? 'changed' : ''}"><span><b>${esc(service.name)}</b><small>${service.enabled ? 'Сервис включён' : 'Сервис выключен'} · рабочий DNS не изменён</small></span><select data-dns-service="${esc(service.id)}" aria-label="DNS для ${esc(service.name)}"><option value="inherit">Наследовать общий DNS</option>${serviceProfiles.map((item) => `<option value="${esc(item.id)}" ${item.id === selectedProfile ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select></label>`;
+  }).join('') || '<div class="community-empty">Каталог сервисов временно недоступен.</div>';
   $('#dnsProbeResults').innerHTML = (dns.last_probe || []).map((result) => `<div class="dns-probe-row"><span class="state-dot ${result.status === 'pass' ? 'good' : 'bad'}"></span><div><b><span class="dns-transport">${esc(result.transport || 'DNS')}</span>${esc(result.server)}</b><small>${result.status === 'pass' ? `${Number(result.latency_ms || 0)} мс · адресов: ${Number(result.addresses || 0)} · ${result.dnssec === 'confirmed' ? 'DNSSEC подтверждён' : result.dnssec === 'not-confirmed' ? 'DNSSEC не подтверждён' : 'DNSSEC не проверялся'}` : esc(result.error || 'нет ответа')}</small></div></div>`).join('') || '<div class="community-empty">Проверка ещё не запускалась.</div>';
 	const plan = state.dnsPlan || dns.plan;
-	$('#dnsPlan').innerHTML = plan ? `<div class="dns-plan-summary ${plan.ready ? 'ready' : 'blocked'}"><div><span>${plan.ready ? 'ГОТОВО' : 'ПРЕДПРОСМОТР'}</span><b>${esc(plan.profile?.name || 'DNS')}</b></div><p>${esc(plan.recommendation || '')}</p></div><div class="dns-plan-checks">${(plan.checks || []).map((check) => `<div class="dns-plan-check ${esc(check.status)}"><i>${check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '×'}</i><span><b>${esc(check.id === 'probe' ? 'Доступность' : check.id === 'ownership' ? 'Владелец DNS' : check.id === 'adapter' ? 'Применение' : check.id === 'configuration' ? 'Настройка' : check.id === 'dnssec' ? 'DNSSEC' : 'Профиль')}</b><small>${esc(check.message)}</small></span></div>`).join('')}</div><details class="dns-plan-steps"><summary>Показать этапы безопасного Apply</summary>${(plan.steps || []).map((step) => `<div><i>${Number(step.order)}</i><span><b>${esc(step.name)}</b><small>${esc(step.summary)}</small></span></div>`).join('')}</details>` : '<div class="community-empty">DNS-план временно недоступен.</div>';
+	$('#dnsPlan').innerHTML = plan ? `<div class="dns-plan-summary ${plan.ready ? 'ready' : 'blocked'}"><div><span>${plan.ready ? 'ГОТОВО' : 'ПРЕДПРОСМОТР'}</span><b>${esc(plan.profile?.name || 'DNS')}</b></div><p>${esc(plan.recommendation || '')}</p></div><div class="dns-plan-checks">${(plan.checks || []).map((check) => `<div class="dns-plan-check ${esc(check.status)}"><i>${check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '×'}</i><span><b>${esc(check.id === 'probe' ? 'Доступность' : check.id === 'ownership' ? 'Владелец DNS' : check.id === 'adapter' ? 'Применение' : check.id === 'configuration' ? 'Настройка' : check.id === 'dnssec' ? 'DNSSEC' : check.id === 'service-bindings' ? 'Привязки сервисов' : 'Профиль')}</b><small>${esc(check.message)}</small></span></div>`).join('')}</div><details class="dns-plan-steps"><summary>Показать этапы безопасного Apply</summary>${(plan.steps || []).map((step) => `<div><i>${Number(step.order)}</i><span><b>${esc(step.name)}</b><small>${esc(step.summary)}</small></span></div>`).join('')}</details>` : '<div class="community-empty">DNS-план временно недоступен.</div>';
   $('#dnsDiscard').disabled = !dns.dirty;
   const apply = $('#dnsApply');
   const canApply = !!dns.dirty && !!plan?.ready;
@@ -1939,6 +1952,20 @@ function renderDNS() {
     : plan?.ready
     ? 'Этот профиль не требует изменения сети и может быть подтверждён отдельно.'
     : (plan?.recommendation || 'Live-применение заблокировано; черновик сохранён, проверка серверов доступна.');
+}
+
+async function selectServiceDNSProfile(serviceID, profileID) {
+  try {
+    state.dns = await api('/api/v1/dns/service-draft', { method: 'PUT', body: JSON.stringify({ service_id: serviceID, profile_id: profileID }) });
+    state.dnsPlan = await api('/api/v1/dns/plan');
+    state.status = await api('/api/v1/status');
+    renderDNS();
+    renderStatus();
+    const service = state.services.find((item) => item.id === serviceID);
+    showNotice('review', 'DNS для сервиса сохранён', `${service?.name || serviceID}: ${profileID === 'inherit' ? 'общий DNS' : dnsProfileByID(profileID)?.name || profileID}. Это черновик, сеть не изменена.`, state.dns);
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Привязка DNS не сохранена');
+  }
 }
 
 async function selectDNSProfile(profileID) {
@@ -3083,6 +3110,10 @@ function bindEvents() {
   $('#dnsProfiles').addEventListener('click', (event) => {
     const profile = event.target.closest('[data-dns-profile]');
     if (profile) selectDNSProfile(profile.dataset.dnsProfile);
+  });
+  $('#dnsServiceBindings').addEventListener('change', (event) => {
+    const select = event.target.closest('[data-dns-service]');
+    if (select) selectServiceDNSProfile(select.dataset.dnsService, select.value);
   });
   $('#dnsTest').addEventListener('click', testDNSProfile);
   $('#dnsApply').addEventListener('click', applyDNSDraft);

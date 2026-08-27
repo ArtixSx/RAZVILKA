@@ -289,6 +289,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/dns", a.dnsStatus)
 	mux.HandleFunc("/api/v1/dns/plan", a.dnsPlan)
 	mux.HandleFunc("/api/v1/dns/draft", a.dnsDraft)
+	mux.HandleFunc("/api/v1/dns/service-draft", a.dnsServiceDraft)
 	mux.HandleFunc("/api/v1/dns/nextdns", a.dnsNextDNS)
 	mux.HandleFunc("/api/v1/dns/custom", a.dnsCustom)
 	mux.HandleFunc("/api/v1/dns/test", a.dnsTest)
@@ -1951,6 +1952,41 @@ func (a *App) dnsDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.DNS.SetDraft(input.ProfileID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsServiceDraft(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		ServiceID string `json:"service_id"`
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	found := false
+	for _, service := range a.catalogSnapshot().Services {
+		if service.ID == input.ServiceID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, "unknown service", http.StatusBadRequest)
+		return
+	}
+	if err := a.DNS.SetServiceDraft(input.ServiceID, input.ProfileID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

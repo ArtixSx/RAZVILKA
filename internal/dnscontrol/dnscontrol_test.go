@@ -3,6 +3,7 @@ package dnscontrol
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -41,7 +42,7 @@ func TestRejectsUnknownProfile(t *testing.T) {
 }
 
 func TestCatalogHasUsefulProfiles(t *testing.T) {
-	wanted := map[string]bool{"ad-block": false, "family": false, "security": false, "private": false, "nextdns": false}
+	wanted := map[string]bool{"ad-block": false, "family": false, "security": false, "private": false, "nextdns": false, "controld-unfiltered": false, "controld-uncensored": false, "xbox-dns": false, "uncensoreddns": false, "flashstart": false}
 	for _, profile := range Profiles() {
 		if _, ok := wanted[profile.ID]; ok {
 			wanted[profile.ID] = true
@@ -51,6 +52,70 @@ func TestCatalogHasUsefulProfiles(t *testing.T) {
 		if !found {
 			t.Fatalf("missing profile %s", id)
 		}
+	}
+}
+
+func TestRequestedDNSProvidersCarrySafetyMetadata(t *testing.T) {
+	wanted := map[string]bool{"quad9": false, "controld-unfiltered": false, "controld-uncensored": false, "xbox-dns": false, "cloudflare": false, "google": false, "uncensoreddns": false, "flashstart": false}
+	for _, provider := range Providers() {
+		if _, ok := wanted[provider.ID]; ok {
+			wanted[provider.ID] = true
+		}
+		if provider.ID == "uncensoreddns" && (len(provider.Warnings) == 0 || !strings.Contains(provider.Warnings[0], "UDP/53")) {
+			t.Fatal("UncensoredDNS has no UDP/53 warning")
+		}
+		if provider.ID == "flashstart" && (provider.USQUERegistration != "blocked" || len(provider.Warnings) == 0) {
+			t.Fatal("FlashStart is not blocked for USQUE registration")
+		}
+	}
+	for id, found := range wanted {
+		if !found {
+			t.Fatalf("missing provider %s", id)
+		}
+	}
+}
+
+func TestServiceDNSDraftPersistsAndNeverAppliesWithoutAdapter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "dns.json")
+	m, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetServiceDraft("telegram", "controld-uncensored"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := m.Snapshot()
+	if !snapshot.Dirty || snapshot.ServiceDrafts["telegram"] != "controld-uncensored" || len(snapshot.ServiceApplied) != 0 {
+		t.Fatalf("unexpected service DNS draft: %+v", snapshot)
+	}
+	if m.Plan("").Ready {
+		t.Fatal("per-service DNS plan became ready without an adapter")
+	}
+	if err := m.Apply(); err == nil {
+		t.Fatal("per-service DNS draft was applied without an adapter")
+	}
+	reloaded, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Snapshot().ServiceDrafts["telegram"] != "controld-uncensored" {
+		t.Fatal("service DNS draft did not persist")
+	}
+	if err := reloaded.SetServiceDraft("telegram", "inherit"); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := reloaded.Snapshot().ServiceDrafts["telegram"]; exists {
+		t.Fatal("inherit did not remove service DNS draft")
+	}
+}
+
+func TestServiceDNSDraftRejectsUnknownValues(t *testing.T) {
+	m, _ := New("")
+	if err := m.SetServiceDraft("bad/service", "private"); err == nil {
+		t.Fatal("invalid service ID accepted")
+	}
+	if err := m.SetServiceDraft("telegram", "missing-profile"); err == nil {
+		t.Fatal("unknown DNS profile accepted")
 	}
 }
 
