@@ -253,7 +253,9 @@ func main() {
 	}
 	engineLab := enginelab.New(engineConfigs)
 	engineLab.EnablePolicyInspection()
-	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usquediag.New(), TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
+	usqueDoctor := usquediag.New()
+	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")
+	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)

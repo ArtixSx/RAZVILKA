@@ -22,14 +22,17 @@ const (
 )
 
 type Evidence struct {
-	Route       string         `json:"route"`
-	Status      string         `json:"status"`
-	LatencyMS   int64          `json:"latency_ms,omitempty"`
-	Score       int            `json:"score"`
-	EgressIP    string         `json:"egress_ip,omitempty"`
-	Evidence    string         `json:"evidence_source,omitempty"`
-	Level       evidence.Level `json:"evidence_level"`
-	ConfirmedAt string         `json:"confirmed_at"`
+	Route       string           `json:"route"`
+	Status      string           `json:"status"`
+	LatencyMS   int64            `json:"latency_ms,omitempty"`
+	Score       int              `json:"score"`
+	EgressIP    string           `json:"egress_ip,omitempty"`
+	Evidence    string           `json:"evidence_source,omitempty"`
+	Level       evidence.Level   `json:"evidence_level"`
+	Outcome     evidence.Outcome `json:"outcome,omitempty"`
+	ProbeID     string           `json:"probe_id,omitempty"`
+	FreshUntil  string           `json:"fresh_until,omitempty"`
+	ConfirmedAt string           `json:"confirmed_at"`
 }
 
 type ServiceState struct {
@@ -90,6 +93,7 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 	touched := map[string]bool{}
 	now := m.now().UTC()
 	for _, result := range results {
+		result.NormalizeEvidence()
 		level := result.AssuranceLevel()
 		if !level.AtLeast(evidence.Route) || result.ServiceID == "" || result.Route == "" || !knownStatus(result.Status) {
 			continue
@@ -102,7 +106,11 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 		if parsed, err := time.Parse(time.RFC3339, checked); err != nil || parsed.After(now.Add(time.Minute)) {
 			checked = now.Format(time.RFC3339)
 		}
-		state.Evidence[result.Route] = Evidence{Route: result.Route, Status: result.Status, LatencyMS: result.LatencyMS, Score: score(result.Route, result.Status, result.LatencyMS), EgressIP: result.EgressIP, Evidence: result.EvidenceSource, Level: level, ConfirmedAt: checked}
+		probeID := ""
+		if result.EvidenceV2 != nil {
+			probeID = result.EvidenceV2.ProbeID
+		}
+		state.Evidence[result.Route] = Evidence{Route: result.Route, Status: result.Status, LatencyMS: result.LatencyMS, Score: score(result.Route, result.Status, result.LatencyMS), EgressIP: result.EgressIP, Evidence: result.EvidenceSource, Level: level, Outcome: result.Outcome, ProbeID: probeID, FreshUntil: result.EvidenceFreshUntil, ConfirmedAt: checked}
 		services[result.ServiceID] = state
 		touched[result.ServiceID] = true
 	}
@@ -131,7 +139,7 @@ func (m *Manager) Suggest(serviceID, fallback string) string {
 		return fallback
 	}
 	confirmed, ok := state.Evidence[state.SelectedRoute]
-	if !ok || !viable(confirmed.Status) || m.expired(confirmed, m.now().UTC()) {
+	if !ok || !viable(confirmed) || m.expired(confirmed, m.now().UTC()) {
 		return fallback
 	}
 	return state.SelectedRoute
@@ -169,7 +177,7 @@ func (m *Manager) evaluateLocked(services map[string]ServiceState, serviceID str
 		}
 		return valid[i].Score > valid[j].Score
 	})
-	if len(valid) == 0 || !viable(valid[0].Status) {
+	if len(valid) == 0 || !viable(valid[0]) {
 		state.Reason = decision.Reason
 		services[serviceID] = state
 		return decision
@@ -184,7 +192,7 @@ func (m *Manager) evaluateLocked(services map[string]ServiceState, serviceID str
 		services[serviceID] = state
 		return decision
 	}
-	if !selectBest && !viable(current.Status) {
+	if !selectBest && !viable(current) {
 		selectBest = true
 		reason = "confirmed-failover"
 	}
@@ -233,7 +241,9 @@ func score(route, status string, latency int64) int {
 	return value
 }
 
-func viable(status string) bool { return status == "pass" || status == "partial" }
+func viable(confirmed Evidence) bool {
+	return confirmed.Status == "pass" && confirmed.Level.AtLeast(evidence.Service) && (confirmed.Outcome == "" || confirmed.Outcome == evidence.OutcomeServiceAccepted)
+}
 func knownStatus(status string) bool {
 	return status == "pass" || status == "partial" || status == "fail"
 }

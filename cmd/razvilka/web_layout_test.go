@@ -44,17 +44,52 @@ func TestEmbeddedWebAssetsUseCurrentCacheKey(t *testing.T) {
 	}
 	html := string(data)
 	for _, asset := range []string{
-		"/style.css?v=0.16.0",
-		"/v010.css?v=0.16.0",
-		"/v011.css?v=0.16.0",
-		"/v011-theme.css?v=0.16.0",
-		"/v012.css?v=0.16.0",
-		"/app.js?v=0.16.0",
-		"/favicon.ico?v=0.16.0",
+		"/style.css?v=0.17.0",
+		"/v010.css?v=0.17.0",
+		"/v011.css?v=0.17.0",
+		"/v011-theme.css?v=0.17.0",
+		"/v012.css?v=0.17.0",
+		"/app.js?v=0.17.0",
+		"/favicon.ico?v=0.17.0",
 	} {
 		if !strings.Contains(html, asset) {
 			t.Fatalf("cache-busted asset missing %q", asset)
 		}
+	}
+}
+
+func TestSettingsExposeBuildProvenance(t *testing.T) {
+	t.Parallel()
+	html, err := embedded.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"id=\"settingBuild\"", "build_commit", "build_dirty_known", "build_time"} {
+		if !strings.Contains(string(html)+string(js), required) {
+			t.Fatalf("build provenance marker %q is missing", required)
+		}
+	}
+}
+
+func TestLoginScreenRendersPublicRuntimeStatus(t *testing.T) {
+	t.Parallel()
+	data, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := string(data)
+	statusIndex := strings.Index(app, "state.status = status;")
+	if statusIndex < 0 {
+		t.Fatal("public status assignment is missing")
+	}
+	renderIndex := strings.Index(app[statusIndex:], "renderStatus();")
+	authIndex := strings.Index(app[statusIndex:], "if (status.setup_required")
+	if renderIndex < 0 || authIndex < 0 || renderIndex > authIndex {
+		t.Fatal("public runtime status must render before the login/setup early return")
 	}
 }
 
@@ -69,14 +104,107 @@ func TestWarpSettingsExplainTransactionalApply(t *testing.T) {
 		t.Fatalf("read embedded app: %v", err)
 	}
 	html, app := string(indexData), string(appData)
-	for _, required := range []string{`id="warpApplyHint"`, `class="warp-steps"`, `id="warpPolicyFeedback"`, `id="warpConnectivity"`, `Проверить Cloudflare`, `Проверить и применить`} {
+	for _, required := range []string{`id="warpInstallHint"`, `id="warpInstallComponent"`, `id="warpApplyHint"`, `class="warp-steps"`, `id="warpPolicyFeedback"`, `id="warpConnectivity"`, `id="warpCanaryService"`, `id="warpCanary"`, `Проверить Cloudflare`, `Проверить без применения`, `Проверить и применить`} {
 		if !strings.Contains(html, required) {
 			t.Fatalf("WARP guidance missing %q", required)
 		}
 	}
-	for _, required := range []string{"ENGINE_DRAFT_UNUSED", "warpPolicyDirty", "Сначала назначьте сервис", "/api/v1/warp/connectivity"} {
+	for _, required := range []string{"ENGINE_DRAFT_UNUSED", "warpPolicyDirty", "Сначала назначьте сервис", "компонент не установлен", "сначала создайте или импортируйте профиль", "openRouteInstallation('warp-wg')", "/api/v1/warp/connectivity", "/api/v1/warp/canary", "checkWarpCanary"} {
 		if !strings.Contains(app, required) {
 			t.Fatalf("WARP apply guard missing %q", required)
+		}
+	}
+}
+
+func TestServiceCatalogExposesAddressListsAndSourceFreshness(t *testing.T) {
+	t.Parallel()
+	indexData, err := embedded.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatalf("read embedded index: %v", err)
+	}
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatalf("read embedded app: %v", err)
+	}
+	html, app := string(indexData), string(appData)
+	for _, required := range []string{`id="openBypassSetup"`, `+ Установить обход`} {
+		if !strings.Contains(html, required) {
+			t.Fatalf("service setup control missing %q", required)
+		}
+	}
+	for _, required := range []string{"Домены, IP-сети и актуальность источников", "renderServiceListsDetails", "detail_kind: 'service-lists'", "ip_and_cidr", "source_updates", "list_status"} {
+		if !strings.Contains(app, required) {
+			t.Fatalf("service address details missing %q", required)
+		}
+	}
+}
+
+func TestDNSUIExplainsEndpointSafetyAndADBit(t *testing.T) {
+	t.Parallel()
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cssData, err := embedded.ReadFile("web/v012.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, css := string(appData), string(cssData)
+	for _, required := range []string{"dnsCustomTrustedLocal", "resolver-reported-ad", "резолвер сообщил AD-флаг", "migration_warnings", "Проверяемые endpoint"} {
+		if !strings.Contains(app, required) {
+			t.Fatalf("DNS safety explanation missing %q", required)
+		}
+	}
+	if !strings.Contains(css, ".dns-trusted-local") {
+		t.Fatal("trusted-local control is not styled")
+	}
+}
+
+func TestEvidenceV2OutcomeAndAgeAreVisible(t *testing.T) {
+	t.Parallel()
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := string(appData)
+	for _, required := range []string{"evidenceOutcomeLabel", "service_blocked", "content_mismatch", "evidence_v2?.finished_at", "факт:"} {
+		if !strings.Contains(app, required) {
+			t.Fatalf("Evidence v2 UI marker missing %q", required)
+		}
+	}
+}
+
+func TestRouteAndServiceProbeOutcomesAreExplainedSeparately(t *testing.T) {
+	t.Parallel()
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cssData, err := embedded.ReadFile("web/v012.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, css := string(appData), string(cssData)
+	for _, required := range []string{"probeVerdict", "Маршрут использован, сервис не ответил", "Сервис работает через этот маршрут", "Сам путь трафика проверяется отдельно"} {
+		if !strings.Contains(app, required) {
+			t.Fatalf("probe outcome explanation missing %q", required)
+		}
+	}
+	if !strings.Contains(css, ".probe-verdict") {
+		t.Fatal("probe verdict is not styled")
+	}
+}
+
+func TestUnavailableRoutesExplainInstallationAndProfileSeparately(t *testing.T) {
+	t.Parallel()
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := string(appData)
+	for _, required := range []string{"компонент не установлен", "сначала создайте или импортируйте профиль", "route.selectable", "disabled"} {
+		if !strings.Contains(app, required) {
+			t.Fatalf("route readiness guidance missing %q", required)
 		}
 	}
 }

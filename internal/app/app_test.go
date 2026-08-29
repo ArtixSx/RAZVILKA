@@ -36,6 +36,7 @@ import (
 )
 
 type confirmedRouteProber struct{}
+type staleRouteProber struct{ checkedAt string }
 
 type deviceRunner struct{ output string }
 
@@ -123,7 +124,7 @@ func TestStatusIncludesIndependentDNSDraft(t *testing.T) {
 	a := &App{Store: store, DNS: manager, Start: time.Now()}
 	response := httptest.NewRecorder()
 	a.status(response, httptest.NewRequest(http.MethodGet, "/api/v1/status", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"dns_pending_changes":true`) || !strings.Contains(response.Body.String(), `"pending_changes":true`) {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"dns_pending_changes":true`) || !strings.Contains(response.Body.String(), `"pending_changes":true`) || !strings.Contains(response.Body.String(), `"build_commit"`) || !strings.Contains(response.Body.String(), `"build_dirty_known"`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
@@ -271,6 +272,23 @@ func TestStaticUIIsNeverServedFromAnOldRouterCache(t *testing.T) {
 	}
 	if got := response.Header().Get("X-RAZVILKA-UI-Version"); got != Version {
 		t.Fatalf("static UI version header = %q, want %q", got, Version)
+	}
+}
+
+func TestBuildMetadataDoesNotClaimLastStableRelease(t *testing.T) {
+	previousVersion, previousCommit, previousTime, previousDirty := Version, BuildCommit, BuildTime, BuildDirty
+	t.Cleanup(func() {
+		Version, BuildCommit, BuildTime, BuildDirty = previousVersion, previousCommit, previousTime, previousDirty
+	})
+	Version, BuildCommit, BuildTime, BuildDirty = "0.17.0-dev+abc1234", "abc1234", "2026-08-28T12:00:00Z", "true"
+
+	build := CurrentBuildInfo()
+	if build.Version != Version || build.Commit != "abc1234" || build.BuiltAt != "2026-08-28T12:00:00Z" || !build.Dirty || !build.DirtyKnown {
+		t.Fatalf("unexpected build metadata: %+v", build)
+	}
+	BuildDirty = "unknown"
+	if build = CurrentBuildInfo(); build.Dirty || build.DirtyKnown {
+		t.Fatalf("unknown dirty state must stay explicit: %+v", build)
 	}
 }
 
@@ -702,6 +720,10 @@ func (r deviceRunner) Run(context.Context, string, ...string) ([]byte, error) {
 
 func (confirmedRouteProber) Probe(_ context.Context, service catalog.Service, route string) testlab.Result {
 	return testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: "pass", LatencyMS: 12, CheckedAt: time.Now().UTC().Format(time.RFC3339), RouteConfirmed: true, EvidenceSource: "test-adapter"}
+}
+
+func (prober staleRouteProber) Probe(_ context.Context, service catalog.Service, route string) testlab.Result {
+	return testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: "pass", HTTPStatus: 204, LatencyMS: 12, CheckedAt: prober.checkedAt, RouteConfirmed: true, EvidenceSource: "stale-test-adapter"}
 }
 
 func TestAPIServiceAndHTTPSListRefresh(t *testing.T) {
@@ -1310,6 +1332,9 @@ Endpoint = engage.cloudflareclient.com:2408
 	if !options[0].Selectable {
 		t.Fatal("valid staged WARP option remains unselectable")
 	}
+	if !options[0].Configured {
+		t.Fatal("valid staged WARP option remains labelled as missing a profile")
+	}
 	if options[0].Ready {
 		t.Fatal("untested staged WARP option was exposed to AUTO")
 	}
@@ -1327,7 +1352,7 @@ func TestInvalidStagedWARPProfileRemainsUnavailable(t *testing.T) {
 	a := &App{EngineConfigs: configs}
 	option := routecatalog.Option{ID: "warp-wg", Installed: true}
 	a.prepareRouteOption(&option)
-	if a.validStagedWARPProfile() || option.Selectable {
+	if a.validStagedWARPProfile() || option.Configured || option.Selectable {
 		t.Fatal("invalid staged WARP profile was accepted")
 	}
 }
@@ -1415,6 +1440,30 @@ func TestServiceEvidenceRequiresMatchingAppliedRouteProbe(t *testing.T) {
 	views = a.serviceEvidenceSnapshot(store.Get(), cat.Services)
 	if got := views["probe"].Level; got != evidence.Service {
 		t.Fatalf("matching isolated probe level=%s, want service-confirmed", got)
+	}
+	if got := views["probe"]; got.Outcome != evidence.OutcomeServiceAccepted || got.ProbeID == "" || got.FreshUntil == "" {
+		t.Fatalf("structured evidence was not exposed: %+v", got)
+	}
+}
+
+func TestServiceEvidenceDoesNotPromoteExpiredProbe(t *testing.T) {
+	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("probe", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyDraft(); err != nil {
+		t.Fatal(err)
+	}
+	runner := testlab.NewRunner()
+	cat := catalog.Catalog{Services: []catalog.Service{{ID: "probe", Name: "Probe", ProbeURL: "https://example.com/"}}}
+	runner.ProbeRoutes(context.Background(), cat, []string{"probe"}, []string{"direct"}, staleRouteProber{checkedAt: time.Now().UTC().Add(-25 * time.Hour).Format(time.RFC3339)})
+	a := &App{Store: store, Catalog: cat, TestLab: runner}
+	view := a.serviceEvidenceSnapshot(store.Get(), cat.Services)["probe"]
+	if view.Level.AtLeast(evidence.Service) || view.Status != "stale" || view.FreshUntil == "" {
+		t.Fatalf("expired probe was promoted: %+v", view)
 	}
 }
 

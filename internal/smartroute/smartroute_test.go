@@ -59,6 +59,23 @@ func TestObserveRejectsDeclaredRuntimeOnlyEvidence(t *testing.T) {
 	}
 }
 
+func TestObserveNeverSelectsPolicyBlockedService(t *testing.T) {
+	m, _ := New("")
+	now := time.Now().UTC()
+	decisions, err := m.Observe([]testlab.Result{{ServiceID: "telegram", Route: "warp-wg", Status: "partial", HTTPStatus: 451, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := m.Suggest("telegram", "direct")
+	if len(decisions) != 1 || decisions[0].Selected != "" || got != "direct" {
+		t.Fatalf("blocked response armed Smart Route: decisions=%+v snapshot=%+v", decisions, m.Snapshot())
+	}
+	stored := m.Snapshot().Services["telegram"].Evidence["warp-wg"]
+	if stored.Level != evidence.Route || stored.Outcome != evidence.OutcomeServiceBlocked || stored.FreshUntil == "" {
+		t.Fatalf("blocked evidence was not preserved honestly: %+v", stored)
+	}
+}
+
 func TestHysteresisCooldownAndConfirmedFailover(t *testing.T) {
 	m, err := New("")
 	if err != nil {

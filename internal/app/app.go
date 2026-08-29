@@ -47,7 +47,39 @@ import (
 	"github.com/ArtixSx/razvilka/internal/z2kimport"
 )
 
-const Version = "0.16.0"
+var (
+	// Release builds override these values through -ldflags. Keeping useful
+	// development defaults prevents an unreleased binary from identifying
+	// itself as the last stable release.
+	Version     = "0.17.0-dev"
+	BuildCommit = "unknown"
+	BuildTime   = "unknown"
+	BuildDirty  = "unknown"
+)
+
+type BuildInfo struct {
+	Version    string `json:"version"`
+	Commit     string `json:"commit"`
+	BuiltAt    string `json:"built_at"`
+	Dirty      bool   `json:"dirty"`
+	DirtyKnown bool   `json:"dirty_known"`
+}
+
+func CurrentBuildInfo() BuildInfo {
+	dirty, err := strconv.ParseBool(strings.TrimSpace(BuildDirty))
+	return BuildInfo{
+		Version: Version, Commit: fallbackBuildValue(BuildCommit), BuiltAt: fallbackBuildValue(BuildTime),
+		Dirty: dirty, DirtyKnown: err == nil,
+	}
+}
+
+func fallbackBuildValue(value string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return "unknown"
+}
+
 const defaultDataplaneApplyTimeout = 8 * time.Minute
 
 type applyFailureAdvice struct {
@@ -126,33 +158,39 @@ type App struct {
 
 type serviceView struct {
 	catalog.Service
-	Custom         bool           `json:"custom"`
-	Enabled        bool           `json:"enabled"`
-	Mode           string         `json:"mode"`
-	Route          string         `json:"route"`
-	Planned        string         `json:"planned_engine"`
-	Applied        bool           `json:"applied_enabled"`
-	AppliedRoute   string         `json:"applied_route"`
-	Sources        []string       `json:"sources,omitempty"`
-	AppliedSources []string       `json:"applied_sources,omitempty"`
-	Dirty          bool           `json:"dirty"`
-	RouteDirty     bool           `json:"route_dirty"`
-	SourcesDirty   bool           `json:"sources_dirty"`
-	RouteAvailable bool           `json:"route_available"`
-	RouteIssue     string         `json:"route_issue,omitempty"`
-	EvidenceLevel  evidence.Level `json:"evidence_level"`
-	EvidenceRoute  string         `json:"evidence_route,omitempty"`
-	EvidenceStatus string         `json:"evidence_status,omitempty"`
-	EvidenceSource string         `json:"evidence_source,omitempty"`
-	EvidenceAt     string         `json:"evidence_checked_at,omitempty"`
+	Custom             bool             `json:"custom"`
+	Enabled            bool             `json:"enabled"`
+	Mode               string           `json:"mode"`
+	Route              string           `json:"route"`
+	Planned            string           `json:"planned_engine"`
+	Applied            bool             `json:"applied_enabled"`
+	AppliedRoute       string           `json:"applied_route"`
+	Sources            []string         `json:"sources,omitempty"`
+	AppliedSources     []string         `json:"applied_sources,omitempty"`
+	Dirty              bool             `json:"dirty"`
+	RouteDirty         bool             `json:"route_dirty"`
+	SourcesDirty       bool             `json:"sources_dirty"`
+	RouteAvailable     bool             `json:"route_available"`
+	RouteIssue         string           `json:"route_issue,omitempty"`
+	EvidenceLevel      evidence.Level   `json:"evidence_level"`
+	EvidenceRoute      string           `json:"evidence_route,omitempty"`
+	EvidenceStatus     string           `json:"evidence_status,omitempty"`
+	EvidenceSource     string           `json:"evidence_source,omitempty"`
+	EvidenceAt         string           `json:"evidence_checked_at,omitempty"`
+	EvidenceOutcome    evidence.Outcome `json:"evidence_outcome,omitempty"`
+	EvidenceProbeID    string           `json:"evidence_probe_id,omitempty"`
+	EvidenceFreshUntil string           `json:"evidence_fresh_until,omitempty"`
 }
 
 type serviceEvidenceView struct {
-	Level     evidence.Level
-	Route     string
-	Status    string
-	Source    string
-	CheckedAt string
+	Level      evidence.Level
+	Route      string
+	Status     string
+	Source     string
+	CheckedAt  string
+	Outcome    evidence.Outcome
+	ProbeID    string
+	FreshUntil string
 }
 
 // serviceEvidenceSnapshot derives assurance only from applied state and
@@ -216,6 +254,7 @@ func (a *App) serviceEvidenceSnapshot(cfg config.Config, services []catalog.Serv
 		return out
 	}
 	for _, result := range testlab.AggregateScenarios(a.TestLab.Snapshot(a.catalogSnapshot()).Current) {
+		result.NormalizeEvidence()
 		applied := cfg.AppliedServices[result.ServiceID]
 		if !applied.Enabled {
 			continue
@@ -233,6 +272,17 @@ func (a *App) serviceEvidenceSnapshot(cfg config.Config, services []catalog.Serv
 			continue
 		}
 		observed := out[result.ServiceID]
+		if result.EvidenceV2 != nil && !result.EvidenceV2.Fresh(time.Now().UTC(), 24*time.Hour) {
+			observed.Route = route
+			observed.Status = "stale"
+			observed.Source = result.EvidenceSource
+			observed.CheckedAt = result.CheckedAt
+			observed.Outcome = result.Outcome
+			observed.ProbeID = result.EvidenceV2.ProbeID
+			observed.FreshUntil = result.EvidenceFreshUntil
+			out[result.ServiceID] = observed
+			continue
+		}
 		stronger := evidence.Stronger(observed.Level, level)
 		if stronger != observed.Level || stronger == level && result.CheckedAt >= observed.CheckedAt {
 			observed.Level = stronger
@@ -247,6 +297,11 @@ func (a *App) serviceEvidenceSnapshot(cfg config.Config, services []catalog.Serv
 				}
 			}
 			observed.CheckedAt = result.CheckedAt
+			observed.Outcome = result.Outcome
+			observed.FreshUntil = result.EvidenceFreshUntil
+			if result.EvidenceV2 != nil {
+				observed.ProbeID = result.EvidenceV2.ProbeID
+			}
 			out[result.ServiceID] = observed
 		}
 	}
@@ -548,8 +603,10 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	}
 	dnsPending := a.DNS != nil && a.DNS.Dirty()
 	sourcesPending := a.Sources != nil && a.Sources.Dirty()
+	build := CurrentBuildInfo()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "safe_mode": cfg.SafeMode,
+		"build_commit": build.Commit, "build_time": build.BuiltAt, "build_dirty": build.Dirty, "build_dirty_known": build.DirtyKnown,
 		"auth_required": a.Security != nil, "authenticated": a.Security != nil && a.Security.Authenticated(r),
 		"setup_required": a.Security != nil && a.Security.SetupRequired(), "username": securityUsername(a.Security),
 		"uptime_seconds": int(time.Since(a.Start).Seconds()), "listen": effectiveListen(a.EffectiveListen, cfg.Listen),
@@ -1303,6 +1360,77 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
+	case "canary":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		if a.Dataplane == nil || !a.Dataplane.CanaryCapable("warp-wg") {
+			http.Error(w, "WARP isolated canary is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var in struct {
+			ServiceID string `json:"service_id"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		if in.ServiceID == "" {
+			in.ServiceID = "telegram"
+		}
+		var service catalog.Service
+		for _, candidate := range a.catalogSnapshot().Services {
+			if candidate.ID == in.ServiceID {
+				service = candidate
+				break
+			}
+		}
+		if service.ID == "" {
+			http.Error(w, "unknown service", http.StatusNotFound)
+			return
+		}
+		probeURL := service.ProbeURL
+		if probeURL == "" {
+			for _, probe := range service.Probes {
+				if probe.Required && probe.URL != "" {
+					probeURL = probe.URL
+					break
+				}
+			}
+		}
+		if probeURL == "" {
+			http.Error(w, "service has no catalog-owned probe", http.StatusConflict)
+			return
+		}
+		plan := dataplane.Plan{
+			SchemaVersion: dataplane.SchemaVersion,
+			PlanID:        fmt.Sprintf("warp-canary-%d", time.Now().UnixNano()),
+			EngineDrafts:  []string{"warp-wg/main"},
+			Adapters:      []string{"warp-wg"},
+			Routes: []dataplane.Route{{
+				ServiceID: service.ID, ServiceName: service.Name, Selected: "warp-wg", Resolved: "warp-wg",
+				Domains: append([]string(nil), service.Domains...), CIDRs: append([]string(nil), service.CIDRs...),
+				SourceRefs: append([]string(nil), service.SourceRefs...), ProbeURL: probeURL,
+			}},
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 110*time.Second)
+		defer cancel()
+		started := time.Now()
+		if err := a.Dataplane.ProbeCandidate(ctx, plan, "warp-wg"); err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]any{
+				"ok": false, "service_id": service.ID, "service_name": service.Name,
+				"error": err.Error(), "duration_ms": time.Since(started).Milliseconds(),
+				"note": "Временный WARP-интерфейс и его правила удалены. Рабочие маршруты не менялись.",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "service_id": service.ID, "service_name": service.Name,
+			"duration_ms": time.Since(started).Milliseconds(),
+			"message":     "Handshake WARP, Cloudflare trace и выбранный сервис подтверждены через временный интерфейс.",
+			"note":        "Проверка завершена; временный интерфейс удалён. Рабочие маршруты не менялись.",
+		})
 	case "connectivity":
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w)
@@ -2151,7 +2279,7 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		}
 		custom := a.CustomServices != nil && a.CustomServices.Has(s.ID)
 		proof := observedEvidence[s.ID]
-		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt})
+		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil})
 	}
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Category == views[j].Category {
@@ -2654,7 +2782,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":      cfg.SafeMode,
 		"scope":          scope,
-		"note":           "v0.16.0: page-scoped drafts, explicit unavailable routes and persistent component-install verification. Safe Mode remains the default.",
+		"note":           "Development build: page-scoped drafts, explicit unavailable routes and persistent component-install verification. Safe Mode remains the default.",
 		"routes":         rows,
 		"transaction":    transaction,
 		"change_summary": a.changeSummary(cfg, scope, transaction),
@@ -3252,6 +3380,7 @@ type diagnosticDocument struct {
 	Kind             string               `json:"kind"`
 	Schema           int                  `json:"schema"`
 	AppVersion       string               `json:"app_version"`
+	Build            BuildInfo            `json:"build"`
 	GeneratedAt      string               `json:"generated_at"`
 	System           systemprobe.Snapshot `json:"system"`
 	Engines          []engine.Status      `json:"engines"`
@@ -3281,7 +3410,7 @@ func (a *App) diagnosticReport(w http.ResponseWriter, r *http.Request) {
 	// capability flags are sufficient for compatibility analysis.
 	system.Hostname = ""
 	document := diagnosticDocument{
-		Kind: "razvilka-diagnostic", Schema: 2, AppVersion: Version,
+		Kind: "razvilka-diagnostic", Schema: 2, AppVersion: Version, Build: CurrentBuildInfo(),
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339), System: system,
 		Engines: (engine.Detector{}).All(), SafeMode: cfg.SafeMode,
 		Revision: cfg.Revision, AppliedRevision: cfg.AppliedRevision,
@@ -4093,6 +4222,7 @@ func (a *App) prepareRouteOption(option *routecatalog.Option) {
 	// tunnel is actually running; this makes the staged route explicitly
 	// selectable without allowing AUTO to pick an untested tunnel.
 	if option.ID == "warp-wg" && option.Installed && !option.Selectable && a.validStagedWARPProfile() {
+		option.Configured = true
 		option.Selectable = true
 	}
 	option.Ready = option.Selectable && a.Dataplane != nil && a.Dataplane.Capable(option.ID)

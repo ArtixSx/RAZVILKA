@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -32,6 +33,7 @@ type WARPWireGuardAdapter struct {
 	Runner            NFQWS2Runner
 	Resolver          PrefixResolver
 	HealthProbe       func(context.Context, string) error
+	CanaryProbe       func(context.Context, string, string) error
 	Timeout           time.Duration
 	HandshakeTimeout  time.Duration
 	FallbackPorts     []int
@@ -199,6 +201,187 @@ func (a *WARPWireGuardAdapter) Validate(ctx context.Context, _ Plan, root string
 		return err
 	}
 	return ctx.Err()
+}
+
+// Canary validates a staged WireGuard profile on a temporary interface before
+// Activate is allowed to touch the live interface or service policy. The only
+// temporary policy rule matches the candidate tunnel source address, so LAN
+// clients and the router's ordinary traffic keep their current routes.
+func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root string) (retErr error) {
+	staged := filepath.Join(root, "rz-warp.conf.staged")
+	profile, err := os.ReadFile(staged)
+	if err != nil {
+		return fmt.Errorf("read WARP canary profile: %w", err)
+	}
+	if err := warp.ValidateProfile(profile); err != nil {
+		return err
+	}
+	runtimeProfile, err := sanitizeWGQuickProfile(string(profile))
+	if err != nil {
+		return err
+	}
+	_, addresses, _, err := nativeWGConfig(runtimeProfile)
+	if err != nil {
+		return err
+	}
+	source, err := firstIPv4TunnelAddress(addresses)
+	if err != nil {
+		return err
+	}
+
+	candidate := *a
+	candidate.Interface = "rz-warp-canary"
+	if a.ID() == "amneziawg" {
+		candidate.Interface = "rz-awg-canary"
+	}
+	candidate.StateRoot = filepath.Join(root, "canary")
+	candidate.RuntimeConfigPath = filepath.Join(candidate.StateRoot, "candidate.conf")
+	candidate.Table = 219
+	candidate.PriorityBase = 18050
+	if candidate.interfaceActive(ctx) {
+		return fmt.Errorf("temporary interface %s already exists", candidate.interfaceName())
+	}
+	if err := candidate.ensureCanaryPolicyFree(ctx); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(candidate.StateRoot, 0o700); err != nil {
+		return err
+	}
+	if err := writeAtomic(candidate.RuntimeConfigPath, []byte(runtimeProfile), 0o600); err != nil {
+		return err
+	}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		cleanupErr := candidate.cleanupCanaryPolicy(cleanupCtx, source)
+		if candidate.interfaceActive(cleanupCtx) {
+			if err := candidate.stopInterface(cleanupCtx); cleanupErr == nil {
+				cleanupErr = err
+			}
+		}
+		_ = os.RemoveAll(candidate.StateRoot)
+		if retErr == nil && cleanupErr != nil {
+			retErr = fmt.Errorf("cleanup WARP canary: %w", cleanupErr)
+		}
+	}()
+	if err := candidate.startInterface(ctx); err != nil {
+		return fmt.Errorf("start temporary WARP interface: %w", err)
+	}
+	if err := candidate.installCanaryPolicy(ctx, source); err != nil {
+		return err
+	}
+
+	probe := candidate.CanaryProbe
+	if probe == nil {
+		probe = sourceBoundWARPProbe
+	}
+	ports, err := candidate.warpEndpointPorts()
+	if err != nil {
+		return err
+	}
+	attempted := make([]int, 0, len(ports))
+	connected := false
+	for index, port := range ports {
+		attempted = append(attempted, port)
+		if index > 0 {
+			if _, err := candidate.switchEndpointPort(ctx, port); err != nil {
+				continue
+			}
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, candidate.timeout())
+		probeErr := probe(probeCtx, "https://www.cloudflare.com/cdn-cgi/trace", source.String())
+		cancel()
+		if probeErr != nil || candidate.confirmHandshake(ctx, candidate.interfaceName()) != nil {
+			continue
+		}
+		connected = true
+		if index > 0 {
+			endpoint, endpointErr := wgEndpoint(string(mustRead(candidate.RuntimeConfigPath)))
+			if endpointErr != nil {
+				return endpointErr
+			}
+			selection, _ := json.Marshal(warpWGSelection{Endpoint: endpoint})
+			if err := writeAtomic(filepath.Join(root, "selected-endpoint.json"), selection, 0o600); err != nil {
+				return err
+			}
+		}
+		break
+	}
+	if !connected {
+		return WARPHandshakeError{Ports: attempted}
+	}
+	checked := 0
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) != a.ID() || route.ProbeURL == "" || len(route.Sources) > 0 {
+			continue
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, candidate.timeout())
+		err := probe(probeCtx, route.ProbeURL, source.String())
+		cancel()
+		if err != nil {
+			return fmt.Errorf("%s WARP canary probe: %w", route.ServiceName, err)
+		}
+		checked++
+	}
+	if checked == 0 {
+		return errors.New("WARP canary has no safe service probe without device scope")
+	}
+	return nil
+}
+
+func firstIPv4TunnelAddress(addresses []string) (netip.Addr, error) {
+	for _, raw := range addresses {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
+		if err == nil && prefix.Addr().Is4() {
+			return prefix.Addr(), nil
+		}
+	}
+	return netip.Addr{}, errors.New("WARP canary requires an IPv4 tunnel address")
+}
+
+func (a *WARPWireGuardAdapter) ensureCanaryPolicyFree(ctx context.Context) error {
+	rules, err := a.run(ctx, a.ip(), "rule", "show")
+	if err != nil {
+		return fmt.Errorf("inspect temporary WARP rule priority: %w", err)
+	}
+	prefix := strconv.Itoa(a.priorityBase()) + ":"
+	for _, line := range strings.Split(string(rules), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), prefix) {
+			return fmt.Errorf("temporary WARP rule priority %d is already used", a.priorityBase())
+		}
+	}
+	routes, err := a.run(ctx, a.ip(), "route", "show", "table", strconv.Itoa(a.table()))
+	if err != nil {
+		return fmt.Errorf("inspect temporary WARP route table: %w", err)
+	}
+	if strings.TrimSpace(string(routes)) != "" {
+		return fmt.Errorf("temporary WARP route table %d is already used", a.table())
+	}
+	return nil
+}
+
+func (a *WARPWireGuardAdapter) installCanaryPolicy(ctx context.Context, source netip.Addr) error {
+	if _, err := a.run(ctx, a.ip(), "route", "add", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table())); err != nil {
+		return fmt.Errorf("add temporary WARP route: %w", err)
+	}
+	prefix := netip.PrefixFrom(source, 32).String()
+	if _, err := a.run(ctx, a.ip(), "rule", "add", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "lookup", strconv.Itoa(a.table())); err != nil {
+		_, _ = a.run(ctx, a.ip(), "route", "flush", "table", strconv.Itoa(a.table()))
+		return fmt.Errorf("add temporary WARP source rule: %w", err)
+	}
+	return nil
+}
+
+func (a *WARPWireGuardAdapter) cleanupCanaryPolicy(ctx context.Context, source netip.Addr) error {
+	var first error
+	prefix := netip.PrefixFrom(source, 32).String()
+	if _, err := a.run(ctx, a.ip(), "rule", "del", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "lookup", strconv.Itoa(a.table())); err != nil && !commandMissing(err) {
+		first = err
+	}
+	if _, err := a.run(ctx, a.ip(), "route", "flush", "table", strconv.Itoa(a.table())); err != nil && first == nil && !commandMissing(err) {
+		first = err
+	}
+	return first
 }
 
 func (a *WARPWireGuardAdapter) Activate(ctx context.Context, _ Plan, root string) error {
@@ -1054,6 +1237,90 @@ func defaultTunnelProbe(ctx context.Context, rawURL string) error {
 		return fmt.Errorf("HTTP %d", response.StatusCode)
 	}
 	return nil
+}
+
+func sourceBoundWARPProbe(ctx context.Context, rawURL, source string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return err
+	}
+	if request.URL.User != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") || request.URL.Hostname() == "" {
+		return errors.New("WARP canary URL must be an absolute HTTP(S) URL without credentials")
+	}
+	sourceIP := net.ParseIP(source)
+	if sourceIP == nil || sourceIP.To4() == nil {
+		return errors.New("invalid WARP canary IPv4 source")
+	}
+	dialer := &net.Dialer{Timeout: 8 * time.Second, LocalAddr: &net.TCPAddr{IP: sourceIP.To4()}}
+	transport := &http.Transport{
+		Proxy: nil,
+		DialContext: func(dialCtx context.Context, _ string, address string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
+			if port != "80" && port != "443" {
+				return nil, errors.New("WARP canary permits only HTTP/HTTPS service ports")
+			}
+			ips, err := net.DefaultResolver.LookupIP(dialCtx, "ip4", host)
+			if err != nil {
+				return nil, err
+			}
+			var last error
+			for _, ip := range ips {
+				if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast() {
+					continue
+				}
+				conn, err := dialer.DialContext(dialCtx, "tcp4", net.JoinHostPort(ip.String(), port))
+				if err == nil {
+					return conn, nil
+				}
+				last = err
+			}
+			if last != nil {
+				return nil, last
+			}
+			return nil, errors.New("WARP canary target has no public IPv4 address")
+		},
+		TLSHandshakeTimeout: 8 * time.Second,
+		ForceAttemptHTTP2:   true,
+	}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   15 * time.Second,
+		CheckRedirect: func(next *http.Request, via []*http.Request) error {
+			if len(via) >= 2 || next.URL.Scheme != via[0].URL.Scheme || !strings.EqualFold(next.URL.Hostname(), via[0].URL.Hostname()) {
+				return errors.New("WARP canary rejected a cross-origin or excessive redirect")
+			}
+			return nil
+		},
+	}
+	request.Header.Set("User-Agent", "RAZVILKA-WARP-Canary/1")
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+	if err != nil {
+		return err
+	}
+	if response.StatusCode >= 400 {
+		return fmt.Errorf("HTTP %d", response.StatusCode)
+	}
+	if request.URL.Hostname() == "www.cloudflare.com" && request.URL.Path == "/cdn-cgi/trace" && !strings.Contains("\n"+string(body)+"\n", "\nwarp=on\n") {
+		return errors.New("Cloudflare trace did not confirm warp=on")
+	}
+	return nil
+}
+
+func commandMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "not found") || strings.Contains(message, "no such") || strings.Contains(message, "cannot find")
 }
 
 func mustRead(path string) []byte {

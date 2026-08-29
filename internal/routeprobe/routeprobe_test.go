@@ -11,7 +11,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/catalog"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
 
 func TestClassifyProbeStream(t *testing.T) {
 	response := &http.Response{ContentLength: 65536}
@@ -53,6 +61,27 @@ func TestManagedSOCKSEndpointMatchesDataplaneRuntime(t *testing.T) {
 	manager.DataplaneRoot = root
 	if endpoint := manager.managedSOCKSEndpoint("sing-box"); endpoint != "127.0.0.1:18081" {
 		t.Fatalf("endpoint=%q", endpoint)
+	}
+}
+
+func TestUSQUENativeInterfaceParserRejectsShellSyntax(t *testing.T) {
+	if got := usqueInterfaceName("SNI=ozon.ru\nIFACE='opkgtun0'\n"); got != "opkgtun0" {
+		t.Fatalf("interface=%q", got)
+	}
+	for _, value := range []string{"IFACE=$(touch /tmp/bad)\n", "IFACE=opkgtun0 extra\n", "IFACE=\n"} {
+		if got := usqueInterfaceName(value); got != "" {
+			t.Fatalf("unsafe interface accepted from %q: %q", value, got)
+		}
+	}
+}
+
+func TestFailedSOCKSRequestIsNotRouteConfirmed(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("connect local SOCKS5 proxy: connection refused")
+	})}
+	result := probeHTTP(context.Background(), client, catalog.Service{ID: "telegram", Name: "Telegram", ProbeURL: "https://telegram.org/"}, "usque", "explicit-socks5:usque@127.0.0.1:1080", true)
+	if result.RouteConfirmed {
+		t.Fatalf("failed SOCKS request must not confirm a route: %+v", result)
 	}
 }
 

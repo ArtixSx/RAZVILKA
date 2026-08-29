@@ -98,7 +98,8 @@ wget -qO- https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootst
 ```sh
 /opt/bin/razvilka -version
 /opt/etc/init.d/S99razvilka status
-/opt/bin/razvilka -healthcheck http://127.0.0.1:8787/api/v1/status
+LAN_IP=$(/opt/etc/init.d/S99razvilka lan-ip)
+/opt/bin/razvilka -healthcheck "http://$LAN_IP:8787/api/v1/status"
 ```
 
 Успешная проверка показывает версию, строку `RAZVILKA healthy` и
@@ -152,9 +153,11 @@ RAZVILKA также предоставляет:
 - транзакционное применение `plan → snapshot → stage → validate → canary → activate → health → commit/rollback`;
 - предварительный canary для Sing-box, Xray и WARP · MASQUE: временный
   loopback SOCKS-кандидат проверяется и удаляется до изменения рабочего TUN и
-  policy routing. Для NFQWS2 и WireGuard отдельный canary пока находится в
-  аппаратной разработке, поэтому UI честно показывает обязательный
-  post-activation health-check.
+  policy routing;
+- отдельную безопасную проверку WARP · WireGuard: временный интерфейс проверяет
+  handshake на официальных UDP-портах Cloudflare, `warp=on` и выбранный сервис,
+  после чего полностью удаляется. Отказ не меняет рабочий маршрут. Для NFQWS2
+  и AmneziaWG отдельные аппаратные canary ещё разрабатываются.
 
 ## Рекомендации
 

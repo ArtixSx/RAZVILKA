@@ -115,6 +115,9 @@ func TestUsqueCanaryFallsBackToHTTP2AndPersistsSelection(t *testing.T) {
 	processes := &proxyFakeProcesses{running: map[string]bool{}}
 	adapter.Processes = processes
 	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
+	adapter.CanaryTraceProbe = func(context.Context, string) (usqueCanaryEvidence, error) {
+		return usqueCanaryEvidence{Warp: "on", Colo: "DME", Loc: "RU", EgressIP: "203.0.113.4"}, nil
+	}
 	probeCount := 0
 	adapter.CanaryProbe = func(context.Context, string, string) error {
 		probeCount++
@@ -152,6 +155,17 @@ func TestUsqueCanaryFallsBackToHTTP2AndPersistsSelection(t *testing.T) {
 	}
 	if len(processes.running) != 0 {
 		t.Fatalf("canary process remained: %v", processes.running)
+	}
+}
+
+func TestParseCloudflareTraceKeepsOnlySafeEvidence(t *testing.T) {
+	evidence, err := parseCloudflareTrace("fl=1\nip=203.0.113.7\nloc=RU\ncolo=DME\nwarp=on\n")
+	if err != nil || evidence.Warp != "on" || evidence.Colo != "DME" || evidence.Loc != "RU" || evidence.EgressIP != "203.0.113.7" {
+		t.Fatalf("evidence=%+v err=%v", evidence, err)
+	}
+	evidence, err = parseCloudflareTrace("ip=not-an-ip\nloc=unsafe\ncolo=too-long\nwarp=off\n")
+	if err != nil || evidence.Warp != "off" || evidence.Colo != "" || evidence.Loc != "" || evidence.EgressIP != "" {
+		t.Fatalf("unsafe trace fields were accepted: evidence=%+v err=%v", evidence, err)
 	}
 }
 

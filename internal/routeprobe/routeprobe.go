@@ -32,6 +32,7 @@ import (
 type Manager struct {
 	Configs       *engineconfig.Manager
 	DataplaneRoot string
+	USQUEConfig   string
 	Statuses      func() []engine.Status
 	System        func() systemprobe.Snapshot
 	Timeout       time.Duration
@@ -42,6 +43,7 @@ func New(configs *engineconfig.Manager) *Manager {
 	return &Manager{
 		Configs:       configs,
 		DataplaneRoot: "/opt/var/lib/razvilka/dataplane",
+		USQUEConfig:   "/opt/etc/usque/usque.conf",
 		Statuses:      func() []engine.Status { return (engine.Detector{}).All() },
 		System:        systemprobe.Probe,
 		Timeout:       12 * time.Second,
@@ -73,7 +75,12 @@ func (m *Manager) Probe(ctx context.Context, service catalog.Service, route stri
 	switch route {
 	case "direct":
 		client, evidence, confirmed, err = m.directClient(service.ProbeURL)
-	case "usque", "sing-box", "xray":
+	case "usque":
+		client, evidence, confirmed, err = m.socksClient(route)
+		if err != nil {
+			client, evidence, confirmed, err = m.usqueNativeClient(service.ProbeURL)
+		}
+	case "sing-box", "xray":
 		client, evidence, confirmed, err = m.socksClient(route)
 	case "warp-wg", "amneziawg":
 		client, evidence, confirmed, err = m.interfaceClient(route, service.ProbeURL)
@@ -398,7 +405,7 @@ func (m *Manager) directClient(rawURL string) (*http.Client, string, bool, error
 	}
 	confirmed := routeUsesDevice(ip, rawURL, system.WANInterface)
 	dialer := &net.Dialer{Timeout: 6 * time.Second, KeepAlive: -1, LocalAddr: &net.TCPAddr{IP: ip}}
-	return hardenedClient(dialer.DialContext, m.timeout()), "source-address-bound:" + system.WANInterface, confirmed, nil
+	return hardenedIPv4Client(dialer.DialContext, m.timeout()), "source-address-bound:" + system.WANInterface, confirmed, nil
 }
 
 func (m *Manager) socksClient(route string) (*http.Client, string, bool, error) {
@@ -425,11 +432,53 @@ func (m *Manager) socksEndpoint(route string) (string, string, string, error) {
 		if endpoint := endpointFromProcess("usque"); endpoint != "" {
 			return endpoint, "", "", nil
 		}
-		// Official usque SOCKS mode defaults to 0.0.0.0:1080. The probe uses
-		// loopback and still requires a successful SOCKS handshake.
-		return "127.0.0.1:1080", "", "", nil
 	}
 	return "", "", "", errors.New("no loopback SOCKS inbound found in the active configuration")
+}
+
+func (m *Manager) usqueNativeClient(rawURL string) (*http.Client, string, bool, error) {
+	configPath := m.USQUEConfig
+	if configPath == "" {
+		configPath = "/opt/etc/usque/usque.conf"
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, "", false, errors.New("USQUE has neither a loopback SOCKS listener nor a readable nativetun configuration")
+	}
+	interfaceName := usqueInterfaceName(string(data))
+	if interfaceName == "" {
+		return nil, "", false, errors.New("USQUE nativetun configuration has no safe IFACE value")
+	}
+	ip, err := firstInterfaceIP(interfaceName)
+	if err != nil {
+		return nil, "", false, err
+	}
+	if !routeUsesDevice(ip, rawURL, interfaceName) {
+		return nil, "", false, fmt.Errorf("USQUE source address %s exists on %s, but the kernel route does not use that interface for this destination", ip, interfaceName)
+	}
+	dialer := &net.Dialer{Timeout: 6 * time.Second, KeepAlive: -1, LocalAddr: &net.TCPAddr{IP: ip}}
+	return hardenedIPv4Client(dialer.DialContext, m.timeout()), "source-address-and-kernel-route:" + interfaceName + ";runtime=nativetun", true, nil
+}
+
+func usqueInterfaceName(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "IFACE") {
+			continue
+		}
+		value = strings.Trim(strings.TrimSpace(value), "\"'")
+		if value == "" || len(value) > 32 || strings.IndexFunc(value, func(r rune) bool {
+			return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_.:-", r))
+		}) >= 0 {
+			return ""
+		}
+		return value
+	}
+	return ""
 }
 
 func (m *Manager) managedSOCKSEndpoint(route string) string {
@@ -474,7 +523,7 @@ func (m *Manager) interfaceClient(route, rawURL string) (*http.Client, string, b
 		return nil, "", false, fmt.Errorf("source address %s exists on %s, but kernel route evidence does not confirm that destination uses this interface", ip, interfaceName)
 	}
 	dialer := &net.Dialer{Timeout: 6 * time.Second, KeepAlive: -1, LocalAddr: &net.TCPAddr{IP: ip}}
-	return hardenedClient(dialer.DialContext, m.timeout()), "source-address-and-kernel-route:" + interfaceName, true, nil
+	return hardenedIPv4Client(dialer.DialContext, m.timeout()), "source-address-and-kernel-route:" + interfaceName, true, nil
 }
 
 func (m *Manager) timeout() time.Duration {
@@ -485,8 +534,16 @@ func (m *Manager) timeout() time.Duration {
 }
 
 func hardenedClient(dial func(context.Context, string, string) (net.Conn, error), timeout time.Duration) *http.Client {
+	return hardenedResolvedClient(safeDial(dial), timeout)
+}
+
+func hardenedIPv4Client(dial func(context.Context, string, string) (net.Conn, error), timeout time.Duration) *http.Client {
+	return hardenedResolvedClient(safeDialNetwork(dial, "ip4", "tcp4"), timeout)
+}
+
+func hardenedResolvedClient(dial func(context.Context, string, string) (net.Conn, error), timeout time.Duration) *http.Client {
 	transport := &http.Transport{
-		Proxy: nil, DialContext: safeDial(dial), ForceAttemptHTTP2: true, DisableKeepAlives: true,
+		Proxy: nil, DialContext: dial, ForceAttemptHTTP2: true, DisableKeepAlives: true,
 		TLSHandshakeTimeout: 7 * time.Second, ResponseHeaderTimeout: 8 * time.Second,
 	}
 	return &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: func(request *http.Request, via []*http.Request) error {
@@ -498,12 +555,16 @@ func hardenedClient(dial func(context.Context, string, string) (net.Conn, error)
 }
 
 func safeDial(dial func(context.Context, string, string) (net.Conn, error)) func(context.Context, string, string) (net.Conn, error) {
+	return safeDialNetwork(dial, "ip", "")
+}
+
+func safeDialNetwork(dial func(context.Context, string, string) (net.Conn, error), lookupNetwork, forcedNetwork string) func(context.Context, string, string) (net.Conn, error) {
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(address)
 		if err != nil {
 			return nil, err
 		}
-		resolved, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+		resolved, err := net.DefaultResolver.LookupNetIP(ctx, lookupNetwork, host)
 		if err != nil {
 			return nil, fmt.Errorf("resolve probe destination: %w", err)
 		}
@@ -513,7 +574,11 @@ func safeDial(dial func(context.Context, string, string) (net.Conn, error)) func
 			if !publicAddress(candidate) {
 				continue
 			}
-			connection, dialErr := dial(ctx, network, net.JoinHostPort(candidate.String(), port))
+			dialNetwork := network
+			if forcedNetwork != "" {
+				dialNetwork = forcedNetwork
+			}
+			connection, dialErr := dial(ctx, dialNetwork, net.JoinHostPort(candidate.String(), port))
 			if dialErr == nil {
 				return connection, nil
 			}
@@ -527,7 +592,10 @@ func safeDial(dial func(context.Context, string, string) (net.Conn, error)) func
 }
 
 func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service, route, evidence string, confirmed bool) testlab.Result {
-	result := testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: "fail", CheckedAt: time.Now().UTC().Format(time.RFC3339), RouteConfirmed: confirmed, EvidenceSource: evidence}
+	// A configured SOCKS endpoint is not proof by itself. Confirm it only after
+	// the proxy accepted CONNECT and an HTTP response arrived through it.
+	confirmAfterResponse := strings.HasPrefix(evidence, "explicit-socks5:")
+	result := testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: "fail", CheckedAt: time.Now().UTC().Format(time.RFC3339), RouteConfirmed: confirmed && !confirmAfterResponse, EvidenceSource: evidence}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, service.ProbeURL, nil)
 	if err != nil {
 		result.Detail = err.Error()
@@ -545,6 +613,9 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 		return result
 	}
 	defer response.Body.Close()
+	if confirmAfterResponse {
+		result.RouteConfirmed = true
+	}
 	result.HTTPStatus = response.StatusCode
 	readStarted := time.Now()
 	result.BytesRead, err = io.Copy(io.Discard, io.LimitReader(response.Body, 32768))

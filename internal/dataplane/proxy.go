@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -25,31 +26,42 @@ import (
 // the interface by policy routing; neither process may replace the host's
 // default route.
 type ProxyTunnelAdapter struct {
-	EngineID    string
-	Configs     *engineconfig.Manager
-	StateRoot   string
-	Runner      NFQWS2Runner
-	Processes   ProcessController
-	Resolver    PrefixResolver
-	Probe       func(context.Context, string) error
-	SOCKSProbe  func(context.Context, string) error
-	CanaryProbe func(context.Context, string, string) error
-	EngineBin   string
-	SidecarBin  string
-	PackageInit string
-	IP          string
-	SOCKSPort   int
-	Interface   string
-	TunnelCIDR  string
-	Table       int
-	Priority    int
-	Timeout     time.Duration
-	UsqueConfig string
+	EngineID         string
+	Configs          *engineconfig.Manager
+	StateRoot        string
+	Runner           NFQWS2Runner
+	Processes        ProcessController
+	Resolver         PrefixResolver
+	Probe            func(context.Context, string) error
+	SOCKSProbe       func(context.Context, string) error
+	CanaryProbe      func(context.Context, string, string) error
+	CanaryTraceProbe func(context.Context, string) (usqueCanaryEvidence, error)
+	EngineBin        string
+	SidecarBin       string
+	PackageInit      string
+	IP               string
+	SOCKSPort        int
+	Interface        string
+	TunnelCIDR       string
+	Table            int
+	Priority         int
+	Timeout          time.Duration
+	UsqueConfig      string
 }
 
 type usqueTransport struct {
 	HTTP2 bool   `json:"http2"`
 	SNI   string `json:"sni,omitempty"`
+}
+
+type usqueCanaryEvidence struct {
+	CheckedAt       string   `json:"checked_at"`
+	Transport       string   `json:"transport"`
+	Warp            string   `json:"warp"`
+	Colo            string   `json:"colo,omitempty"`
+	Loc             string   `json:"loc,omitempty"`
+	EgressIP        string   `json:"egress_ip,omitempty"`
+	ConfirmedRoutes []string `json:"confirmed_routes,omitempty"`
 }
 
 type proxySnapshot struct {
@@ -64,6 +76,8 @@ type proxySnapshot struct {
 	RuntimeSideExists   bool        `json:"runtime_sidecar_exists"`
 	Transport           []byte      `json:"transport,omitempty"`
 	TransportExists     bool        `json:"transport_exists,omitempty"`
+	Evidence            []byte      `json:"evidence,omitempty"`
+	EvidenceExists      bool        `json:"evidence_exists,omitempty"`
 	Policy              PolicyState `json:"policy"`
 	PolicyExists        bool        `json:"policy_exists"`
 	EngineWasRunning    bool        `json:"engine_was_running"`
@@ -123,6 +137,10 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	if err != nil {
 		return err
 	}
+	evidence, evidenceExists, err := optionalFile(a.evidencePath())
+	if err != nil {
+		return err
+	}
 	policy, policyExists, err := a.loadPolicy()
 	if err != nil {
 		return err
@@ -133,7 +151,7 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	}
 	snapshot := proxySnapshot{
 		ConfigPath: view.Path, Config: live, ConfigExisted: liveExists, ConfigDraft: draftExists, StagedConfig: draft,
-		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists, Transport: transport, TransportExists: transportExists,
+		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists, Transport: transport, TransportExists: transportExists, Evidence: evidence, EvidenceExists: evidenceExists,
 		Policy: policy, PolicyExists: policyExists, EngineWasRunning: a.Processes.Running(a.engineProcess()), SidecarWasRunning: a.Processes.Running(a.sidecarProcess()), PackageWasRunning: packageWasRunning,
 	}
 	data, _ := json.MarshalIndent(snapshot, "", "  ")
@@ -259,7 +277,8 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 	failed := make([]string, 0, len(transports))
 	for _, transport := range transports {
 		spec := a.engineProcessAt(configPath, port, canaryRoot, a.ID()+"-canary", transport)
-		if err := a.runCanaryAttempt(ctx, plan, spec, address); err != nil {
+		evidence, err := a.runCanaryAttempt(ctx, plan, spec, address)
+		if err != nil {
 			if a.Processes.Running(spec) {
 				return fmt.Errorf("isolated %s candidate could not be stopped after failed %s probe", a.ID(), usqueTransportName(transport))
 			}
@@ -271,15 +290,21 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 			if err := writeAtomic(filepath.Join(root, "transport.staged.json"), data, 0o600); err != nil {
 				return err
 			}
+			evidence.CheckedAt = time.Now().UTC().Format(time.RFC3339)
+			evidence.Transport = usqueTransportName(transport)
+			data, _ = json.MarshalIndent(evidence, "", "  ")
+			if err := writeAtomic(filepath.Join(root, "evidence.staged.json"), data, 0o600); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
 	return fmt.Errorf("%s candidate transports failed: %s", a.ID(), strings.Join(failed, "; "))
 }
 
-func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePlan, spec ProcessSpec, address string) (resultErr error) {
+func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePlan, spec ProcessSpec, address string) (evidence usqueCanaryEvidence, resultErr error) {
 	if err := a.Processes.Start(ctx, spec); err != nil {
-		return fmt.Errorf("start isolated %s candidate: %w", a.ID(), err)
+		return evidence, fmt.Errorf("start isolated %s candidate: %w", a.ID(), err)
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.timeout())
@@ -293,7 +318,27 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 		}
 	}()
 	if err := a.waitForSOCKSProcess(ctx, spec, address); err != nil {
-		return err
+		return evidence, err
+	}
+	if a.ID() == "usque" {
+		traceProbe := a.CanaryTraceProbe
+		if traceProbe == nil {
+			traceProbe = probeCloudflareTraceViaSOCKS
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
+		trace, err := traceProbe(probeCtx, address)
+		cancel()
+		if err != nil {
+			return evidence, fmt.Errorf("candidate WARP trace failed: %w", err)
+		}
+		if trace.Warp != "on" && trace.Warp != "plus" {
+			warpState := trace.Warp
+			if warpState == "" {
+				warpState = "unknown"
+			}
+			return evidence, fmt.Errorf("candidate Cloudflare trace reported warp=%s", warpState)
+		}
+		evidence = trace
 	}
 	probe := a.CanaryProbe
 	if probe == nil {
@@ -309,18 +354,22 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 		err := probe(probeCtx, route.ProbeURL, address)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("candidate probe for %s failed: %w", route.ServiceName, err)
+			if a.ID() == "usque" {
+				return evidence, fmt.Errorf("candidate service probe for %s failed after WARP was confirmed: %w", route.ServiceName, err)
+			}
+			return evidence, fmt.Errorf("candidate probe for %s failed: %w", route.ServiceName, err)
 		}
+		evidence.ConfirmedRoutes = append(evidence.ConfirmedRoutes, route.ServiceName)
 	}
-	if !probed {
+	if !probed && a.ID() != "usque" {
 		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
 		err := probe(probeCtx, "https://www.cloudflare.com/cdn-cgi/trace", address)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("candidate egress probe failed: %w", err)
+			return evidence, fmt.Errorf("candidate egress probe failed: %w", err)
 		}
 	}
-	return nil
+	return evidence, nil
 }
 
 func (a *ProxyTunnelAdapter) Activate(ctx context.Context, _ Plan, root string) error {
@@ -568,6 +617,13 @@ func (a *ProxyTunnelAdapter) Commit(_ context.Context, _ Plan, root string) erro
 		if err := writeAtomic(a.transportPath(), data, 0o600); err != nil {
 			return err
 		}
+		evidence, err := os.ReadFile(filepath.Join(root, "evidence.staged.json"))
+		if err != nil {
+			return errors.New("validated USQUE canary evidence is missing")
+		}
+		if err := writeAtomic(a.evidencePath(), evidence, 0o600); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -593,6 +649,9 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 		firstErr = err
 	}
 	if err := restoreOptional(a.transportPath(), snapshot.Transport, snapshot.TransportExists); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if err := restoreOptional(a.evidencePath(), snapshot.Evidence, snapshot.EvidenceExists); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	if snapshot.EngineWasRunning {
@@ -714,6 +773,10 @@ func (a *ProxyTunnelAdapter) engineProcessAt(config string, port int, root, proc
 
 func (a *ProxyTunnelAdapter) transportPath() string {
 	return filepath.Join(a.StateRoot, "transport.json")
+}
+
+func (a *ProxyTunnelAdapter) evidencePath() string {
+	return filepath.Join(a.StateRoot, "evidence.json")
 }
 
 func (a *ProxyTunnelAdapter) preferredUsqueTransport() usqueTransport {
@@ -1152,23 +1215,10 @@ func probeSOCKS5(ctx context.Context, address string) error {
 // must not depend on the host resolver choosing IPv4 or IPv6 for the temporary
 // TUN interface.
 func probeTunnelViaSOCKS(ctx context.Context, rawURL, address string) error {
-	dialer, err := xnetproxy.SOCKS5("tcp", address, nil, &net.Dialer{Timeout: 5 * time.Second})
-	if err != nil {
-		return err
+	response, cleanup, err := socksHTTPGet(ctx, rawURL, address)
+	if cleanup != nil {
+		defer cleanup()
 	}
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
-			return dialer.(xnetproxy.ContextDialer).DialContext(ctx, network, target)
-		},
-		ForceAttemptHTTP2: true,
-	}
-	defer transport.CloseIdleConnections()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return err
-	}
-	request.Header.Set("User-Agent", "RAZVILKA-Proxy-Health/1")
-	response, err := (&http.Client{Transport: transport, Timeout: 15 * time.Second}).Do(request)
 	if err != nil {
 		return err
 	}
@@ -1177,4 +1227,72 @@ func probeTunnelViaSOCKS(ctx context.Context, rawURL, address string) error {
 		return fmt.Errorf("HTTP %d", response.StatusCode)
 	}
 	return nil
+}
+
+func probeCloudflareTraceViaSOCKS(ctx context.Context, address string) (usqueCanaryEvidence, error) {
+	response, cleanup, err := socksHTTPGet(ctx, "https://www.cloudflare.com/cdn-cgi/trace", address)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		return usqueCanaryEvidence{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return usqueCanaryEvidence{}, fmt.Errorf("Cloudflare trace returned HTTP %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 16*1024))
+	if err != nil {
+		return usqueCanaryEvidence{}, err
+	}
+	return parseCloudflareTrace(string(body))
+}
+
+func parseCloudflareTrace(body string) (usqueCanaryEvidence, error) {
+	values := map[string]string{}
+	for _, line := range strings.Split(body, "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "=", 2)
+		if len(parts) == 2 {
+			values[strings.ToLower(parts[0])] = strings.TrimSpace(parts[1])
+		}
+	}
+	evidence := usqueCanaryEvidence{Warp: strings.ToLower(values["warp"])}
+	if value := strings.ToUpper(values["colo"]); regexp.MustCompile(`^[A-Z0-9]{3}$`).MatchString(value) {
+		evidence.Colo = value
+	}
+	if value := strings.ToUpper(values["loc"]); regexp.MustCompile(`^[A-Z]{2}$`).MatchString(value) {
+		evidence.Loc = value
+	}
+	if value := values["ip"]; net.ParseIP(value) != nil {
+		evidence.EgressIP = value
+	}
+	if evidence.Warp == "" {
+		return usqueCanaryEvidence{}, errors.New("Cloudflare trace did not include WARP state")
+	}
+	return evidence, nil
+}
+
+func socksHTTPGet(ctx context.Context, rawURL, address string) (*http.Response, func(), error) {
+	dialer, err := xnetproxy.SOCKS5("tcp", address, nil, &net.Dialer{Timeout: 5 * time.Second})
+	if err != nil {
+		return nil, nil, err
+	}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
+			return dialer.(xnetproxy.ContextDialer).DialContext(ctx, network, target)
+		},
+		ForceAttemptHTTP2: true,
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		transport.CloseIdleConnections()
+		return nil, nil, err
+	}
+	request.Header.Set("User-Agent", "RAZVILKA-Proxy-Health/1")
+	response, err := (&http.Client{Transport: transport, Timeout: 15 * time.Second}).Do(request)
+	if err != nil {
+		transport.CloseIdleConnections()
+		return nil, nil, err
+	}
+	return response, transport.CloseIdleConnections, nil
 }

@@ -53,7 +53,6 @@ func TestUsqueInstallUsesKeeneticPackageInsteadOfOverwritingManagedBinary(t *tes
 		t.Fatalf("repository=%q want=%q", data, wantRepo)
 	}
 	wantCalls := [][]string{
-		{"/opt/bin/opkg", "list-installed"}, {"/opt/bin/opkg", "install", "sing-box-go"}, {"/opt/bin/opkg", "list-installed"},
 		{"/opt/bin/opkg", "list-installed"}, {"/opt/bin/opkg", "update"}, {"/opt/bin/opkg", "install", "usque-keenetic"}, {"/opt/bin/opkg", "list-installed"},
 	}
 	if !reflect.DeepEqual(r.calls, wantCalls) {
@@ -61,7 +60,7 @@ func TestUsqueInstallUsesKeeneticPackageInsteadOfOverwritingManagedBinary(t *tes
 	}
 }
 
-func TestUsqueDeclaresHTTP2AndManagedTunDependency(t *testing.T) {
+func TestUsqueDeclaresHTTP2AndNativeTunWithoutSingBoxDependency(t *testing.T) {
 	var usque Spec
 	for _, spec := range Specs() {
 		if spec.ID == "usque" {
@@ -72,17 +71,20 @@ func TestUsqueDeclaresHTTP2AndManagedTunDependency(t *testing.T) {
 	if usque.ID == "" {
 		t.Fatal("usque component is missing")
 	}
-	if !reflect.DeepEqual(usque.Dependencies, []string{"sing-box"}) {
-		t.Fatalf("dependencies=%v", usque.Dependencies)
+	if len(usque.Dependencies) != 0 {
+		t.Fatalf("USQUE nativetun must not require Sing-box: %v", usque.Dependencies)
 	}
-	hasHTTP2 := false
+	hasHTTP2, hasNativeTun := false, false
 	for _, capability := range usque.Capabilities {
 		if capability == "http2" {
 			hasHTTP2 = true
 		}
+		if capability == "nativetun" {
+			hasNativeTun = true
+		}
 	}
-	if !hasHTTP2 {
-		t.Fatalf("HTTP/2 fallback is not declared: %v", usque.Capabilities)
+	if !hasHTTP2 || !hasNativeTun {
+		t.Fatalf("USQUE transport capabilities are incomplete: %v", usque.Capabilities)
 	}
 }
 

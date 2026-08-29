@@ -286,7 +286,7 @@ func (m *Manager) CheckCandidate() (Result, error) {
 	if err := ValidateProfile(b); err != nil {
 		return Result{}, err
 	}
-	return Result{OK: true, Source: content.Source, SHA256: digest(b), Message: "Структура, ключи, endpoint и сети корректны. Проверка реального handshake выполняется после подключения dataplane adapter."}, nil
+	return Result{OK: true, Source: content.Source, SHA256: digest(b), Message: "Структура, ключи, endpoint и сети корректны. Перед применением запустите безопасную проверку: временный интерфейс подтвердит handshake и доступ к выбранному сервису, а затем будет удалён."}, nil
 }
 
 // CheckConnectivity verifies only facts that can be confirmed without changing
@@ -294,7 +294,7 @@ func (m *Manager) CheckCandidate() (Result, error) {
 func (m *Manager) CheckConnectivity(ctx context.Context) ConnectivityCheck {
 	registration := probeHTTPS(ctx, "https://api.cloudflareclient.com/")
 	masque := probeTCP(ctx, "162.159.198.2:443")
-	recommendation := "Сначала попробуйте WARP · WireGuard; реальный UDP handshake будет проверен при применении."
+	recommendation := "Создайте или загрузите профиль WARP · WireGuard, затем запустите безопасную проверку без применения. Она проверит UDP handshake через временный интерфейс и не изменит рабочие маршруты."
 	if !registration.Ready && masque.Ready {
 		recommendation = "Регистрация wgcf сейчас недоступна, но TCP/443 до Cloudflare отвечает. Используйте WARP · MASQUE или загрузите готовый WARP-профиль."
 	} else if masque.Ready {
@@ -305,7 +305,7 @@ func (m *Manager) CheckConnectivity(ctx context.Context) ConnectivityCheck {
 	return ConnectivityCheck{
 		OK: registration.Ready || masque.Ready, Registration: registration, MASQUEHTTP2: masque,
 		WireGuardPorts: []int{2408, 500, 1701, 4500}, Recommendation: recommendation,
-		Note: "TCP/TLS-проверка не подменяет реальный туннель. WireGuard подтверждается только handshake, а MASQUE — изолированным запросом выбранного сервиса после Apply.",
+		Note: "TCP/TLS-проверка не подменяет реальный туннель. WireGuard подтверждается безопасной проверкой handshake и выбранного сервиса; MASQUE — изолированным запросом сервиса.",
 	}
 }
 

@@ -310,6 +310,9 @@ function friendlyDetail(value) {
   }
   if (text === 'service endpoint reachable through isolated nfqws2 adapter') return 'Сервис ответил через изолированный NFQWS2.';
   if (text === 'service endpoint reachable through current route') return 'Сервис ответил через уже применённый маршрут.';
+  if (text.includes('i/o timeout') || text.includes('context deadline exceeded') || text.includes('Client.Timeout exceeded')) {
+    return 'Сервис не ответил за отведённое время. Сам путь трафика проверяется отдельно — это ещё не означает, что сервис доступен.';
+  }
   return text;
 }
 
@@ -334,14 +337,38 @@ function evidenceAtLeast(actual, required) {
   return (rank[String(actual || 'none')] || 0) >= (rank[String(required || 'none')] || 0);
 }
 
+function evidenceOutcomeLabel(outcome) {
+  return ({
+    transport_reachable: 'транспорт доступен',
+    tls_valid: 'TLS корректен',
+    service_accepted: 'сервис принял запрос',
+    service_blocked: 'сервис вернул блокирующий ответ',
+    content_mismatch: 'TLS или содержимое не совпало',
+    edge_unsuitable: 'точка выхода не подходит',
+    unknown: 'результат не определён',
+  })[String(outcome || 'unknown')] || 'результат не определён';
+}
+
+function probeVerdict(result) {
+  const status = String(result?.status || 'not-ready');
+  const routeConfirmed = !!result?.route_confirmed;
+  if (status === 'pass' && routeConfirmed) return { tone: 'pass', text: 'Сервис работает через этот маршрут' };
+  if (status === 'pass') return { tone: 'warn', text: 'Сервис ответил, но путь трафика не доказан' };
+  if (routeConfirmed) return { tone: 'fail', text: 'Маршрут использован, сервис не ответил' };
+  if (status === 'not-ready') return { tone: 'muted', text: 'Проверка маршрута недоступна' };
+  return { tone: 'fail', text: 'Доступ через маршрут не подтверждён' };
+}
+
 function evidenceBadgeHTML(item, compact = false) {
   const level = String(item?.evidence_level || 'none');
   const label = evidenceLevelLabel(level);
   const route = item?.evidence_route ? routeLabel(item.evidence_route) : '';
   const checked = item?.evidence_checked_at ? new Date(item.evidence_checked_at).toLocaleString('ru-RU') : '';
-  const title = [`Уровень подтверждения: ${label}`, route ? `обход: ${route}` : '', checked ? `проверено: ${checked}` : '', item?.evidence_source ? `источник: ${item.evidence_source}` : ''].filter(Boolean).join(' · ');
-  const text = compact ? label : `Подтверждение: ${label}`;
-  return `<em class="evidence-badge evidence-${esc(level)}" title="${esc(title)}">${esc(text)}</em>`;
+  const stale = item?.evidence_fresh_until && new Date(item.evidence_fresh_until).getTime() <= Date.now();
+  const outcome = item?.evidence_outcome ? evidenceOutcomeLabel(item.evidence_outcome) : '';
+  const title = [`Уровень подтверждения: ${label}`, outcome ? `итог: ${outcome}` : '', route ? `обход: ${route}` : '', checked ? `проверено: ${checked}` : '', item?.evidence_source ? `источник: ${item.evidence_source}` : '', item?.evidence_probe_id ? `probe: ${item.evidence_probe_id}` : ''].filter(Boolean).join(' · ');
+  const text = stale ? 'Данные устарели' : compact ? label : `Подтверждение: ${label}`;
+  return `<em class="evidence-badge evidence-${esc(level)} ${stale ? 'evidence-stale' : ''}" title="${esc(title)}">${esc(text)}</em>`;
 }
 
 function renderRouteComparisonDetails(value) {
@@ -370,13 +397,16 @@ function renderRouteComparisonDetails(value) {
   }).join('');
   const resultCards = results.map((result) => {
     const status = String(result.status || 'not-ready');
+    const verdict = probeVerdict(result);
     const metrics = [
       result.http_status ? `HTTP ${result.http_status}` : '',
       Number.isFinite(Number(result.latency_ms)) && Number(result.latency_ms) > 0 ? `${Number(result.latency_ms)} мс` : '',
       result.evidence_level ? evidenceLevelLabel(result.evidence_level) : (result.route_confirmed ? 'маршрут подтверждён' : ''),
+      result.outcome ? evidenceOutcomeLabel(result.outcome) : '',
+      result.evidence_v2?.finished_at ? `факт: ${timeAgo(result.evidence_v2.finished_at)}` : '',
     ].filter(Boolean);
     const scenario = result.scenario_label ? `<small>${esc(result.scenario_label)}${result.scenario_required ? ' · обязательный' : ''}</small>` : '';
-    return `<article class="route-result-card status-${esc(status)}"><div class="route-result-head"><strong>${esc(routeLabel(result.route))}${scenario}</strong><span>${esc(detailStatusLabels[status] || status)}</span></div>${metrics.length ? `<div class="route-result-metrics">${metrics.map((metric) => `<b>${esc(metric)}</b>`).join('')}</div>` : ''}<p>${esc(friendlyDetail(result.detail))}</p></article>`;
+    return `<article class="route-result-card status-${esc(status)}"><div class="route-result-head"><strong>${esc(routeLabel(result.route))}${scenario}</strong><span>${esc(detailStatusLabels[status] || status)}</span></div><div class="probe-verdict ${esc(verdict.tone)}">${esc(verdict.text)}</div>${metrics.length ? `<div class="route-result-metrics">${metrics.map((metric) => `<b>${esc(metric)}</b>`).join('')}</div>` : ''}<p>${esc(friendlyDetail(result.detail))}</p></article>`;
   }).join('');
   return `<div class="detail-hero ${esc(assessmentTone)}"><span>${esc(assessmentTitle)}</span><h4>${esc(summary)}</h4><p>${esc(assessment?.message || (confirmed.length ? `Подтверждено рабочих вариантов: ${confirmed.length}.` : 'Ни один выбранный вариант пока не дал подтверждённый ответ.'))}</p></div>${value.control_added ? '<div class="detail-note"><b>Контроль добавлен автоматически</b><p>RAZVILKA проверила DIRECT вместе с выбранными обходами, чтобы не назначать обход без необходимости.</p></div>' : ''}${decisionCards ? `<section class="detail-section"><h4>Решение Smart Route</h4>${decisionCards}</section>` : ''}<section class="detail-section"><h4>Проверенные маршруты</h4><div class="route-result-list">${resultCards || '<div class="detail-empty">Результаты проверки отсутствуют.</div>'}</div></section>${value.note ? `<div class="detail-note"><b>Как выполнялся тест</b><p>${esc(value.note)}</p></div>` : ''}${technicalDetails(value)}`;
 }
@@ -389,11 +419,26 @@ function renderGenericDetails(value) {
   return `<div class="detail-hero ${value.error || value.ok === false ? 'fail' : 'pass'}"><span>${value.error ? 'Ошибка' : 'Результат'}</span><h4>${esc(headline)}</h4></div>${primitive.length ? `<dl class="detail-kv">${primitive.map(([key, item]) => `<div><dt>${esc(key.replaceAll('_', ' '))}</dt><dd>${esc(typeof item === 'boolean' ? (item ? 'да' : 'нет') : item)}</dd></div>`).join('')}</dl>` : ''}${technicalDetails(value)}`;
 }
 
+function renderServiceListsDetails(value) {
+  const domains = Array.isArray(value.domains) ? value.domains : [];
+  const cidrs = Array.isArray(value.ip_and_cidr) ? value.ip_and_cidr : [];
+  const sources = Array.isArray(value.source_updates) ? value.source_updates : [];
+  const list = (items, empty) => items.length
+    ? `<pre>${items.slice(0, 120).map(esc).join('\n')}</pre>${items.length > 120 ? `<small>Показаны первые 120 из ${items.length} записей.</small>` : ''}`
+    : `<div class="detail-empty">${esc(empty)}</div>`;
+  const sourceRows = sources.length
+    ? sources.map((source) => `<div><b>${esc(source.id)}</b><span>${esc(source.status || 'статус неизвестен')}</span><small>${esc(source.updated_at || 'время обновления не указано')}</small></div>`).join('')
+    : '<div><b>Встроенный каталог</b><span>поставляется вместе с этой версией RAZVILKA</span><small>Обновляется при обновлении приложения</small></div>';
+  return `<div class="detail-hero"><span>Списки маршрутизации</span><h4>${esc(value.summary || 'Домены и IP-сети сервиса')}</h4><p>Это адреса, которыми RAZVILKA распознаёт сервис. Они не доказывают, что маршрут уже работает: доступ подтверждается отдельной проверкой.</p></div><section class="detail-section service-list-details"><h4>Домены (${domains.length})</h4>${list(domains, 'Для этого сервиса доменные правила не заданы.')}<h4>IP и CIDR (${cidrs.length})</h4>${list(cidrs, 'IP-сети не заданы: сейчас сервис распознаётся только по доменам. Для полной IP-блокировки понадобится актуальный IP-источник или туннель.')}</section><section class="detail-section"><h4>Актуальность списков</h4><div class="service-source-status">${sourceRows}</div><p class="detail-footnote">${esc(value.list_status || '')}</p></section>${technicalDetails(value)}`;
+}
+
 function showDetails(value, title = 'Детали') {
   $('#detailsPanel').classList.add('open');
-  $('#details').innerHTML = value && typeof value === 'object' && Array.isArray(value.results) && Array.isArray(value.decisions)
-    ? renderRouteComparisonDetails(value)
-    : renderGenericDetails(value);
+  $('#details').innerHTML = value?.detail_kind === 'service-lists'
+    ? renderServiceListsDetails(value)
+    : value && typeof value === 'object' && Array.isArray(value.results) && Array.isArray(value.decisions)
+      ? renderRouteComparisonDetails(value)
+      : renderGenericDetails(value);
   $('.drawer-head h3').textContent = title;
   $('#detailsSubtitle').textContent = 'Краткий итог · технические данные доступны ниже';
 }
@@ -550,6 +595,9 @@ async function refreshAll() {
   try {
     const status = await api('/api/v1/status');
     state.status = status;
+    // Status is intentionally public so the login/setup screen can show the
+    // real build and router mode before an administrator session exists.
+    renderStatus();
     if (status.setup_required || (status.auth_required && !status.authenticated)) {
       showAuth(status);
       $('#systemText').textContent = 'Требуется вход';
@@ -763,6 +811,10 @@ function renderStatus() {
   const engineDrafts = Number(s.engine_config_drafts || 0);
   $('#version').textContent = `v${s.version || '—'}`;
   $('#footerVersion').textContent = `v${s.version || '—'}`;
+  const buildCommit = s.build_commit && s.build_commit !== 'unknown' ? String(s.build_commit).slice(0, 10) : 'commit неизвестен';
+  const buildState = s.build_dirty_known ? (s.build_dirty ? 'есть локальные изменения' : 'чистая сборка') : 'состояние исходников неизвестно';
+  $('#settingBuild').textContent = `v${s.version || '—'} · ${buildCommit}`;
+  $('#settingBuild').title = `${buildState}${s.build_time && s.build_time !== 'unknown' ? ` · ${new Date(s.build_time).toLocaleString('ru-RU')}` : ''}`;
   $('#listenChip').textContent = s.listen || ':8787';
   $('#topModeLabel').textContent = s.safe_mode ? 'Безопасный режим' : 'Рабочий режим';
   $('#systemText').textContent = s.safe_mode ? 'Защита включена' : (s.live_active ? 'Маршруты активны' : 'Запись разрешена');
@@ -1064,7 +1116,11 @@ function routeSelectHTML(service) {
     const selected = o.id === service.route ? 'selected' : '';
     const disabled = !o.selectable ? 'disabled' : '';
     const suffix = !o.selectable && o.id !== 'auto' && o.id !== 'direct'
-      ? (o.id === service.route ? ' · требуется установка' : ' · не установлен')
+      ? !o.installed
+        ? ' · компонент не установлен'
+        : !o.configured
+        ? ' · сначала создайте или импортируйте профиль'
+        : ' · конфигурация не готова'
       : '';
     return `<option value="${esc(o.id)}" ${selected} ${disabled}>${esc(o.name || routeLabel(o.id))}${suffix}</option>`;
   }).join('')}</select>`;
@@ -1115,7 +1171,7 @@ function renderServices() {
       <div class="service-control-grid">
         <div><span class="control-label">Желаемый маршрут</span>${routeSelectHTML(s)}</div>
         <div><span class="control-label">AUTO / фактический план</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
-        <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button" data-detail-id="${esc(s.id)}" title="Технические детали" aria-label="Технические детали ${esc(s.name)}">i</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
+        <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button list-button" data-detail-id="${esc(s.id)}" title="Домены, IP-сети и актуальность источников" aria-label="Показать домены и IP-сети ${esc(s.name)}">Списки</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
       </div>
       ${routeNeedsAction ? `<div class="service-route-warning"><span><b>Маршрут требует действия</b><small>${esc(s.route_issue || 'Обход не установлен. Выберите AUTO / DIRECT или установите компонент.')}</small></span><button class="secondary" type="button" data-route-setup="${esc(s.route)}">Открыть установку</button></div>` : ''}
       <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="service-proof-line">${evidenceBadgeHTML(s)}<span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `${esc(draftText)} · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></span></div>
@@ -1337,6 +1393,9 @@ function renderWarpManager() {
   panel.hidden = !visible;
   if (!visible) return;
   const w = state.warp || {};
+  const component = state.components.find((item) => item.id === 'warp-wg');
+  const installed = !!component?.installed;
+  $('#warpInstallHint').hidden = installed;
   $('#warpGeneratorState').textContent = w.generator_installed ? (w.generator_version || 'wgcf установлен') : 'wgcf не установлен';
   $('#warpAccountState').textContent = w.account_registered ? 'зарегистрирован' : 'нет аккаунта';
   $('#warpLiveState').textContent = w.live_profile ? (w.valid ? 'валиден' : 'ошибка профиля') : 'нет';
@@ -1345,8 +1404,15 @@ function renderWarpManager() {
   badge.textContent = w.live_profile && w.valid ? 'РАБОЧИЙ ПРОФИЛЬ ГОТОВ' : w.candidate_staged ? 'ЧЕРНОВИК ГОТОВ' : 'НЕ НАСТРОЕН';
   badge.className = `engine-state ${w.live_profile && w.valid ? 'running' : w.candidate_staged ? 'installed' : ''}`;
   $('#warpNote').textContent = w.validation_error || w.note || '';
-  $('#warpGenerate').disabled = !w.generator_installed;
-  $('#warpRotate').disabled = !w.generator_installed;
+  $('#warpGenerate').disabled = !installed || !w.generator_installed;
+  $('#warpRotate').disabled = !installed || !w.generator_installed;
+  $('#warpCheck').disabled = !installed || (!w.candidate_staged && !w.live_profile);
+  const canarySelect = $('#warpCanaryService');
+  const selectedCanaryService = canarySelect.value || 'telegram';
+  canarySelect.innerHTML = state.services.filter((service) => service.probe_url || (service.probes || []).some((probe) => probe.required && probe.url)).map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('');
+  if ([...canarySelect.options].some((option) => option.value === selectedCanaryService)) canarySelect.value = selectedCanaryService;
+  else if ([...canarySelect.options].some((option) => option.value === 'telegram')) canarySelect.value = 'telegram';
+  $('#warpCanary').disabled = !installed || (!w.candidate_staged && !w.live_profile) || !canarySelect.value;
   $('#warpDelete').disabled = !!state.status.safe_mode || !w.live_profile;
   const health = w.health || {};
   const policy = health.policy || {};
@@ -1438,6 +1504,31 @@ async function checkWarp() {
   catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '', response: error.payload }, 'WARP не прошёл проверку'); }
 }
 
+async function checkWarpCanary() {
+  const serviceID = $('#warpCanaryService').value;
+  const service = state.services.find((item) => item.id === serviceID);
+  if (!serviceID) return;
+  if (!await askConfirmation('Проверить WARP без применения?', `RAZVILKA временно поднимет отдельный WARP-интерфейс, проверит Cloudflare и ${service?.name || serviceID}, затем удалит интерфейс и правила. Рабочие маршруты не изменятся.`, 'Запустить проверку')) return;
+  const button = $('#warpCanary');
+  button.disabled = true; button.textContent = 'Проверяем…';
+  try {
+    const result = await api('/api/v1/warp/canary', { method: 'POST', body: JSON.stringify({ service_id: serviceID }) });
+    showNotice('success', 'WARP готов к применению', result.message, result);
+  } catch (error) {
+    const payload = error.payload || {};
+    const raw = payload.error || error.message || '';
+    const message = /handshake was not confirmed/i.test(raw)
+      ? 'Провайдер не пропустил WARP WireGuard ни на UDP 2408, 500, 1701 или 4500. Профиль сохранён как черновик, рабочие маршруты не изменены. Используйте WARP · MASQUE либо другой установленный обход.'
+      : /canary probe.*deadline|context deadline|timeout/i.test(raw)
+        ? `WARP-туннель поднялся, но ${service?.name || serviceID} через него не ответил вовремя. Такой профиль не следует применять для этого сервиса.`
+        : 'Безопасная проверка не пройдена. Профиль оставлен черновиком, рабочие маршруты не изменены.';
+    showNotice('error', 'WARP не прошёл безопасную проверку', message, { ...payload, technical: raw || error.technicalMessage || '' });
+  } finally {
+    button.textContent = 'Проверить без применения';
+    renderWarpManager();
+  }
+}
+
 async function checkWarpConnectivity() {
   const button = $('#warpConnectivity');
   button.disabled = true; button.textContent = 'Проверяем…';
@@ -1446,7 +1537,7 @@ async function checkWarpConnectivity() {
     const rows = [
       { name: 'Регистрация профиля', status: result.registration?.ready ? 'ДОСТУПНА' : 'НЕДОСТУПНА', detail: result.registration?.message, latency_ms: result.registration?.latency_ms },
       { name: 'MASQUE по TCP/443', status: result.masque_http2?.ready ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН', detail: result.masque_http2?.message, latency_ms: result.masque_http2?.latency_ms },
-      { name: 'WARP WireGuard', status: 'ПРОВЕРЯЕТСЯ ПРИ APPLY', detail: `UDP-порты: ${(result.wireguard_ports || []).join(', ')}` },
+      { name: 'WARP WireGuard', status: 'НУЖНА БЕЗОПАСНАЯ ПРОВЕРКА', detail: `Создайте профиль и нажмите «Проверить без применения». UDP-порты: ${(result.wireguard_ports || []).join(', ')}` },
     ];
     showDetails({ result: result.ok ? 'Есть доступный транспорт Cloudflare' : 'Cloudflare не подтверждён', checks: rows, recommendation: result.recommendation, note: result.note }, 'Какой WARP использовать');
   } catch (error) {
@@ -1848,7 +1939,7 @@ function renderTestLab() {
   $('#testSummary').innerHTML = [
     ['Работает', counts.pass, 'pass'], ['Частично', counts.partial, 'partial'], ['Ошибок', counts.fail, 'fail'], ['Проверено', current.length, ''],
   ].map(([label, n, cls]) => `<div class="test-stat ${cls}"><strong>${n}</strong><span>${label}</span></div>`).join('');
-  $('#testCurrentRows').innerHTML = current.map((r) => `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.scenario_label || 'Основной доступ')}${r.scenario_required ? ' · обязательный' : ''}</small><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span></td><td>${r.http_status || '—'}</td><td>${esc(probeTiming(r))}</td><td><span class="stream-status ${esc(r.stream_status || '')}">${esc(probeStream(r))}</span></td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}<small>${esc(evidenceLevelLabel(r.evidence_level))}</small></td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`).join('') || '<tr><td colspan="7"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
+  $('#testCurrentRows').innerHTML = current.map((r) => { const verdict = probeVerdict(r); return `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.scenario_label || 'Основной доступ')}${r.scenario_required ? ' · обязательный' : ''}</small><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span><small>${esc(evidenceOutcomeLabel(r.outcome))}</small></td><td>${r.http_status || '—'}</td><td>${esc(probeTiming(r))}</td><td><span class="stream-status ${esc(r.stream_status || '')}">${esc(probeStream(r))}</span></td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}<span class="probe-verdict ${esc(verdict.tone)}">${esc(verdict.text)}</span><small>${esc(evidenceLevelLabel(r.evidence_level))}</small><small>${r.evidence_v2?.finished_at ? esc(`факт: ${timeAgo(r.evidence_v2.finished_at)}`) : ''}</small></td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`; }).join('') || '<tr><td colspan="7"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
 
   const routes = state.routeOptions.filter((o) => o.id !== 'auto');
   const cells = state.testlab?.matrix || [];
@@ -1868,7 +1959,11 @@ function renderTestLab() {
   serviceSelect.innerHTML = state.services.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('');
   if (state.services.some((service) => service.id === selectedService)) serviceSelect.value = selectedService;
   const selectedRoutes = new Set($$('#isolatedRoutes input:checked').map((input) => input.value));
-  $('#isolatedRoutes').innerHTML = routes.map((route) => `<label class="route-test-choice ${route.installed || route.id === 'direct' ? '' : 'unavailable'}"><input type="checkbox" value="${esc(route.id)}" ${(selectedRoutes.has(route.id) || (selectedRoutes.size === 0 && route.id === 'direct')) ? 'checked' : ''}><span>${esc(route.name || routeLabel(route.id))}</span><small>${route.installed || route.id === 'direct' ? 'готов к проверке' : 'не установлен'}</small></label>`).join('');
+  $('#isolatedRoutes').innerHTML = routes.map((route) => {
+    const available = route.id === 'direct' || !!route.selectable;
+    const stateText = available ? 'готов к проверке' : !route.installed ? 'компонент не установлен' : !route.configured ? 'сначала создайте или импортируйте профиль' : 'конфигурация не готова';
+    return `<label class="route-test-choice ${available ? '' : 'unavailable'}"><input type="checkbox" value="${esc(route.id)}" ${(available && (selectedRoutes.has(route.id) || (selectedRoutes.size === 0 && route.id === 'direct'))) ? 'checked' : ''} ${available ? '' : 'disabled'}><span>${esc(route.name || routeLabel(route.id))}</span><small>${esc(stateText)}</small></label>`;
+  }).join('');
   renderSmartRoute();
 }
 
@@ -1878,7 +1973,7 @@ function renderSmartRoute() {
   $('#smartRouteSummary').innerHTML = rows.map(([id, item]) => {
     const service = state.services.find((candidate) => candidate.id === id);
     const evidence = item.evidence?.[item.selected_route];
-    return `<div class="smart-route-row"><span><b>${esc(service?.name || id)}</b><small>${esc(detailReasonLabels[item.reason] || item.reason || 'подтверждено')}</small></span><i>→</i><strong>${esc(routeLabel(item.selected_route))}</strong><em>${evidence ? `${esc(testStatusLabel(evidence.status))} · ${evidence.latency_ms || 0} мс · ${esc(evidenceLevelLabel(evidence.evidence_level))}` : '—'}</em></div>`;
+    return `<div class="smart-route-row"><span><b>${esc(service?.name || id)}</b><small>${esc(detailReasonLabels[item.reason] || item.reason || 'подтверждено')}</small></span><i>→</i><strong>${esc(routeLabel(item.selected_route))}</strong><em>${evidence ? `${esc(testStatusLabel(evidence.status))} · ${evidence.latency_ms || 0} мс · ${esc(evidenceOutcomeLabel(evidence.outcome))} · ${esc(evidenceLevelLabel(evidence.evidence_level))}` : '—'}</em></div>`;
   }).join('') || '<div class="empty-inline">Сначала запустите изолированное сравнение. AUTO пока использует порядок стратегии каталога.</div>';
 }
 
@@ -1890,12 +1985,19 @@ function dnsProviderByID(id) {
   return (state.dns?.providers || []).find((provider) => provider.id === id);
 }
 
+function dnsEndpointLabel(endpoint) {
+  const transport = String(endpoint.transport || 'dns').toUpperCase();
+  const target = endpoint.url || (endpoint.address ? `${endpoint.address.includes(':') ? `[${endpoint.address}]` : endpoint.address}:${Number(endpoint.port || 0)}` : 'адрес не указан');
+  const scope = endpoint.scope && endpoint.scope !== 'production' ? ` · ${endpoint.scope}` : '';
+  return `${transport} · ${target}${scope}`;
+}
+
 function dnsProviderConfigMarkup(provider, dns) {
   if (provider.id === 'nextdns') {
     return `<div class="dns-provider-config"><label><span>ID профиля NextDNS</span><input id="dnsNextDNSID" maxlength="6" inputmode="text" autocomplete="off" spellcheck="false" placeholder="abc123" value="${esc(dns.nextdns_profile_id || '')}"><small>${esc(provider.configuration_hint || 'ID находится в кабинете NextDNS.')}</small></label><div class="dns-provider-config-actions"><button class="secondary" id="dnsSaveNextDNS" type="button">Сохранить ID</button>${dns.nextdns_profile_id ? '<button class="text-danger" id="dnsClearNextDNS" type="button">Удалить ID</button>' : ''}</div></div>`;
   }
   if (provider.id === 'custom') {
-    return `<div class="dns-custom-config"><label><span>Название</span><input id="dnsCustomName" maxlength="80" placeholder="Домашний DNS" value="${esc(provider.configured ? provider.name : '')}"></label><label><span>Обычный DNS · по одному на строку</span><textarea id="dnsCustomServers" maxlength="1200" placeholder="192.168.1.2:53&#10;9.9.9.9">${esc((provider.servers || []).join('\n'))}</textarea></label><label><span>DoH · только HTTPS URL</span><input id="dnsCustomDoH" maxlength="512" placeholder="https://dns.example/dns-query" value="${esc(provider.doh || '')}"></label><label><span>DoT · имя или IP, порт 853 добавится автоматически</span><input id="dnsCustomDoT" maxlength="255" placeholder="dns.example:853" value="${esc(provider.dot || '')}"></label><small>Endpoint сохраняются только на роутере. Query-параметры, логины и пароли в DoH запрещены.</small><div class="dns-provider-config-actions"><button class="secondary" id="dnsSaveCustom" type="button">Сохранить провайдер</button>${provider.configured ? '<button class="text-danger" id="dnsClearCustom" type="button">Удалить</button>' : ''}</div></div>`;
+    return `<div class="dns-custom-config"><label><span>Название</span><input id="dnsCustomName" maxlength="80" placeholder="Домашний DNS" value="${esc(provider.configured ? provider.name : '')}"></label><label><span>Обычный DNS · по одному на строку</span><textarea id="dnsCustomServers" maxlength="1200" placeholder="9.9.9.9&#10;149.112.112.112">${esc((provider.servers || []).join('\n'))}</textarea></label><label><span>DoH · только HTTPS URL</span><input id="dnsCustomDoH" maxlength="512" placeholder="https://dns.example/dns-query" value="${esc(provider.doh || '')}"></label><label><span>DoT · имя или IP, порт 853 добавится автоматически</span><input id="dnsCustomDoT" maxlength="255" placeholder="dns.example:853" value="${esc(provider.dot || '')}"></label><label class="dns-trusted-local"><input id="dnsCustomTrustedLocal" type="checkbox" ${provider.trusted_local ? 'checked' : ''}><span><b>Это мой DNS в локальной сети</b><small>Разрешает частные IP только по явному выбору. Не включайте для чужого endpoint.</small></span></label><small>Endpoint сохраняются только на роутере. Переадресация DoH ограничена HTTPS и исходным сайтом.</small><div class="dns-provider-config-actions"><button class="secondary" id="dnsSaveCustom" type="button">Сохранить провайдер</button>${provider.configured ? '<button class="text-danger" id="dnsClearCustom" type="button">Удалить</button>' : ''}</div></div>`;
   }
   return '';
 }
@@ -1917,11 +2019,12 @@ function renderDNS() {
   const profile = dnsProfileByID(selectedID);
   const provider = dnsProviderByID(profile?.provider_id);
   $('#dnsProvider').innerHTML = provider ? `<div class="dns-provider-name"><span class="dns-profile-icon"><svg><use href="#i-dns"/></svg></span><div><b>${esc(provider.name)}</b><small>${esc(provider.description)}</small></div></div>
-    <div class="dns-provider-rows"><div><span>Обычный DNS</span><b>${esc((provider.servers || []).join(' · ') || (provider.id === 'system' ? 'управляет система' : 'не указан'))}</b></div><div><span>DoH</span><b>${esc(provider.doh || 'не указан')}</b></div><div><span>DoT</span><b>${esc(provider.dot || 'не указан')}</b></div></div>
-    <div class="outbound-tags">${(provider.filters || []).map((filter) => `<span>${esc(filter)}</span>`).join('')}</div>
+    <div class="dns-provider-rows"><div><span>Обычный DNS</span><b>${esc((provider.servers || []).join(' · ') || (provider.id === 'system' ? 'управляет система' : 'не используется'))}</b></div><div><span>DoH</span><b>${esc(provider.doh || 'не указан')}</b></div><div><span>DoT</span><b>${esc(provider.dot || 'не указан')}</b></div>${(provider.endpoints || []).length ? `<div><span>Проверяемые endpoint</span><b>${(provider.endpoints || []).map((endpoint) => esc(dnsEndpointLabel(endpoint))).join('<br>')}</b></div>` : ''}</div>
+    <div class="outbound-tags"><span>${esc(provider.scope === 'negative-control' ? 'только лаборатория' : provider.scope === 'lab' ? 'лабораторный' : provider.scope === 'trusted-local' ? 'доверенный LAN' : provider.scope === 'production' ? 'обычное использование' : provider.scope === 'custom' ? 'пользовательский' : 'системный')}</span>${provider.encrypted_only ? '<span>только DoH/DoT</span>' : ''}${(provider.filters || []).map((filter) => `<span>${esc(filter)}</span>`).join('')}</div>
     ${(provider.recommended_for || []).length ? `<div class="dns-recommended"><b>Подходит для</b><span>${esc(provider.recommended_for.join(' · '))}</span></div>` : ''}
     ${(provider.warnings || []).map((warning) => `<div class="dns-provider-warning"><b>Важно</b><span>${esc(warning)}</span></div>`).join('')}
-    ${provider.usque_registration === 'blocked' ? '<div class="dns-provider-warning danger"><b>USQUE</b><span>Этот DNS нельзя выбирать для регистрации или перерегистрации USQUE.</span></div>' : ''}
+    ${provider.usque_registration === 'blocked' || provider.allowed_for_usque_bootstrap === false ? '<div class="dns-provider-warning danger"><b>USQUE</b><span>Этот DNS не будет автоматически использован для регистрации USQUE.</span></div>' : ''}
+    ${(dns.migration_warnings || []).map((warning) => `<div class="dns-provider-warning"><b>Обновление</b><span>${esc(warning)}</span></div>`).join('')}
     ${dnsProviderConfigMarkup(provider, dns)}` : '<div class="community-empty">Провайдер не найден.</div>';
   $('#dnsSaveNextDNS')?.addEventListener('click', saveNextDNSProfile);
   $('#dnsClearNextDNS')?.addEventListener('click', clearNextDNSProfile);
@@ -1937,7 +2040,7 @@ function renderDNS() {
     const selectedProfile = serviceDrafts[service.id] || 'inherit';
     return `<label class="dns-service-binding ${selectedProfile !== 'inherit' ? 'changed' : ''}"><span><b>${esc(service.name)}</b><small>${service.enabled ? 'Сервис включён' : 'Сервис выключен'} · рабочий DNS не изменён</small></span><select data-dns-service="${esc(service.id)}" aria-label="DNS для ${esc(service.name)}"><option value="inherit">Наследовать общий DNS</option>${serviceProfiles.map((item) => `<option value="${esc(item.id)}" ${item.id === selectedProfile ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select></label>`;
   }).join('') || '<div class="community-empty">Каталог сервисов временно недоступен.</div>';
-  $('#dnsProbeResults').innerHTML = (dns.last_probe || []).map((result) => `<div class="dns-probe-row"><span class="state-dot ${result.status === 'pass' ? 'good' : 'bad'}"></span><div><b><span class="dns-transport">${esc(result.transport || 'DNS')}</span>${esc(result.server)}</b><small>${result.status === 'pass' ? `${Number(result.latency_ms || 0)} мс · адресов: ${Number(result.addresses || 0)} · ${result.dnssec === 'confirmed' ? 'DNSSEC подтверждён' : result.dnssec === 'not-confirmed' ? 'DNSSEC не подтверждён' : 'DNSSEC не проверялся'}` : esc(result.error || 'нет ответа')}</small></div></div>`).join('') || '<div class="community-empty">Проверка ещё не запускалась.</div>';
+  $('#dnsProbeResults').innerHTML = (dns.last_probe || []).map((result) => `<div class="dns-probe-row"><span class="state-dot ${result.status === 'pass' ? 'good' : 'bad'}"></span><div><b><span class="dns-transport">${esc(result.transport || 'DNS')}</span>${esc(result.server)}</b><small>${result.status === 'pass' ? `${Number(result.latency_ms || 0)} мс · адресов: ${Number(result.addresses || 0)} · ${result.dnssec === 'resolver-reported-ad' || result.dnssec === 'confirmed' ? 'резолвер сообщил AD-флаг' : result.dnssec === 'not-reported' || result.dnssec === 'not-confirmed' ? 'AD-флаг не сообщён' : 'AD-флаг не проверялся'}` : esc(result.error || 'нет ответа')}</small></div></div>`).join('') || '<div class="community-empty">Проверка ещё не запускалась.</div>';
 	const plan = state.dnsPlan || dns.plan;
 	$('#dnsPlan').innerHTML = plan ? `<div class="dns-plan-summary ${plan.ready ? 'ready' : 'blocked'}"><div><span>${plan.ready ? 'ГОТОВО' : 'ПРЕДПРОСМОТР'}</span><b>${esc(plan.profile?.name || 'DNS')}</b></div><p>${esc(plan.recommendation || '')}</p></div><div class="dns-plan-checks">${(plan.checks || []).map((check) => `<div class="dns-plan-check ${esc(check.status)}"><i>${check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '×'}</i><span><b>${esc(check.id === 'probe' ? 'Доступность' : check.id === 'ownership' ? 'Владелец DNS' : check.id === 'adapter' ? 'Применение' : check.id === 'configuration' ? 'Настройка' : check.id === 'dnssec' ? 'DNSSEC' : check.id === 'service-bindings' ? 'Привязки сервисов' : 'Профиль')}</b><small>${esc(check.message)}</small></span></div>`).join('')}</div><details class="dns-plan-steps"><summary>Показать этапы безопасного Apply</summary>${(plan.steps || []).map((step) => `<div><i>${Number(step.order)}</i><span><b>${esc(step.name)}</b><small>${esc(step.summary)}</small></span></div>`).join('')}</details>` : '<div class="community-empty">DNS-план временно недоступен.</div>';
   $('#dnsDiscard').disabled = !dns.dirty;
@@ -2010,7 +2113,7 @@ async function clearNextDNSProfile() {
 
 async function saveCustomDNSProvider() {
   const servers = ($('#dnsCustomServers')?.value || '').split(/[\n,;]+/).map((value) => value.trim()).filter(Boolean);
-  const input = { name: ($('#dnsCustomName')?.value || '').trim(), servers, doh: ($('#dnsCustomDoH')?.value || '').trim(), dot: ($('#dnsCustomDoT')?.value || '').trim() };
+  const input = { name: ($('#dnsCustomName')?.value || '').trim(), servers, doh: ($('#dnsCustomDoH')?.value || '').trim(), dot: ($('#dnsCustomDoT')?.value || '').trim(), trusted_local: !!$('#dnsCustomTrustedLocal')?.checked };
   try {
     state.dns = await api('/api/v1/dns/custom', { method: 'PUT', body: JSON.stringify(input) });
     state.dnsPlan = await api('/api/v1/dns/plan');
@@ -2614,7 +2717,21 @@ function showServiceDetails(id) {
   if (service) {
     const domains = service.domains || [];
     const cidrs = service.cidrs || [];
+    const sourceRefs = service.source_refs || [];
+    const sourceFreshness = sourceRefs.map((sourceID) => {
+      const source = (state.sources || []).find((item) => item.id === sourceID);
+      const rawUpdatedAt = source?.updated_at || source?.checked_at || source?.last_success_at || '';
+      const updatedAt = rawUpdatedAt && Date.parse(rawUpdatedAt) > Date.parse('2000-01-01T00:00:00Z')
+        ? new Date(rawUpdatedAt).toLocaleString('ru-RU')
+        : 'ещё не обновлялся';
+      return {
+        id: sourceID,
+        status: source?.ready ? 'готов' : source ? 'требует проверки' : 'встроенный список',
+        updated_at: updatedAt,
+      };
+    });
     showDetails({
+      detail_kind: 'service-lists',
       summary: cidrs.length
         ? `Полное покрытие: ${domains.length} доменов и ${cidrs.length} IP/CIDR. Для полной IP-блокировки назначьте туннель (MASQUE, Sing-box или AmneziaWG).`
         : `Покрытие по доменам: ${domains.length}. Если приложение использует прямые IP-адреса, добавьте CIDR или назначьте туннель.`,
@@ -2627,8 +2744,14 @@ function showServiceDetails(id) {
       evidence_source: service.evidence_source || 'нет',
       evidence_checked_at: service.evidence_checked_at || 'не проверялось',
       domains,
-      cidrs,
-      source_refs: service.source_refs || [],
+      ip_and_cidr: cidrs,
+      list_status: service.custom
+        ? 'Пользовательский список: актуальность проверяет владелец.'
+        : sourceRefs.length
+          ? 'Базовые правила встроены в RAZVILKA; подключённые источники обновляются отдельно во вкладке «Источники».'
+          : 'Список встроен в текущую версию RAZVILKA и обновляется вместе с приложением.',
+      source_updates: sourceFreshness,
+      source_refs: sourceRefs,
       devices_and_groups: service.sources || [],
     }, service.name);
   }
@@ -2799,12 +2922,29 @@ async function checkUsqueDoctor() {
   try {
     const report = await api('/api/v1/diagnostics/usque', { method: 'POST', body: '{}' });
     const checks = report.checks || [];
-    const stateLabel = report.state === 'ready' ? 'ГОТОВО' : report.state === 'attention' ? 'НУЖНО ВНИМАНИЕ' : 'НАЙДЕНА ПРОБЛЕМА';
-    const stateClass = report.state === 'ready' ? 'running' : report.state === 'attention' ? 'installed' : '';
+    const readiness = report.readiness || (report.state === 'ready' ? 'READY' : report.state === 'attention' ? 'DEGRADED' : 'BLOCKED');
+    const stateLabel = { READY: 'ГОТОВО', DEGRADED: 'НУЖНО ВНИМАНИЕ', BLOCKED: 'ПРОВЕРКА ЗАБЛОКИРОВАНА', UNKNOWN: 'НЕДОСТАТОЧНО ДАННЫХ' }[readiness] || 'СОСТОЯНИЕ НЕИЗВЕСТНО';
+    const stateClass = readiness === 'READY' ? 'running' : readiness === 'DEGRADED' ? 'installed' : readiness === 'UNKNOWN' ? 'unknown' : '';
     const config = report.config || {};
+    const versions = report.versions || {};
+    const environment = report.environment || {};
+    const ownership = report.ownership || {};
+    const repair = report.ndmc_repair_preview || {};
+    const files = report.files || {};
+    const lastBackup = report.last_backup || {};
     const endpoints = report.endpoints || {};
+    const evidence = report.canary_evidence || {};
+    const routeMatrix = report.endpoint_routes || [];
     const publicEndpoints = [endpoints.ipv4, endpoints.http2_ipv4, endpoints.ipv6, endpoints.http2_ipv6].filter(Boolean);
-    $('#usqueDoctorResult').innerHTML = `<div class="usque-doctor-head"><div><span class="engine-state ${stateClass}">${esc(stateLabel)}</span><h3>${esc(config.transport || 'USQUE')} · ${esc(config.sni || 'SNI по умолчанию')}</h3><p>${esc(config.interface || 'интерфейс не определён')}${report.endpoint_route_interface ? ` · endpoint через ${esc(report.endpoint_route_interface)}` : ''}</p></div><small>${esc(report.checked_at ? new Date(report.checked_at).toLocaleString('ru-RU') : '')}</small></div><div class="usque-check-grid">${checks.map((check) => `<div class="usque-check ${esc(check.status)}"><span>${check.status === 'pass' ? '✓' : check.status === 'warning' ? '!' : '×'}</span><div><b>${esc(check.label)}</b><p>${esc(check.message)}</p>${check.action ? `<small>${esc(check.action)}</small>` : ''}</div></div>`).join('')}</div>${publicEndpoints.length ? `<details class="transaction-details"><summary>Публичные endpoints (${publicEndpoints.length})</summary><code>${publicEndpoints.map(esc).join('\n')}</code></details>` : ''}<div class="usque-doctor-note">${esc(report.note || '')}</div>`;
+    const evidenceTime = evidence.checked_at ? new Date(evidence.checked_at).toLocaleString('ru-RU') : 'ещё не проверялся';
+    const confirmedServices = (evidence.confirmed_routes || []).join(', ') || 'не подтверждены';
+    const evidencePanel = `<div class="usque-evidence"><div><span>Технический WARP</span><b>${evidence.warp === 'on' || evidence.warp === 'plus' ? `warp=${esc(evidence.warp)}` : 'нет подтверждения'}</b><small>${esc(evidence.transport || 'транспорт не выбран')} · ${esc(evidenceTime)}</small></div><div><span>Выход Cloudflare</span><b>${esc(evidence.colo || 'POP неизвестен')}${evidence.loc ? ` · ${esc(evidence.loc)}` : ''}</b><small>${esc(evidence.egress_ip || 'IP не сохранён')}</small></div><div><span>Выбранный сервис</span><b>${esc(confirmedServices)}</b><small>Проверяется отдельно после WARP</small></div></div>`;
+    const routesPanel = routeMatrix.length ? `<div class="usque-route-matrix">${routeMatrix.map((route) => `<span class="${route.dependency_loop ? 'loop' : route.expected ? 'available' : ''}"><b>${esc(route.family)}</b><small>${route.dependency_loop ? `петля через ${esc(route.interface || 'TUN')}` : route.available ? `через ${esc(route.interface || 'системный маршрут')}` : 'маршрут не найден'}</small></span>`).join('')}</div>` : '';
+    const metadataPanel = `<div class="usque-metadata"><div><span>Версия пакета</span><b>${esc(versions.package || 'не определена')}</b><small>ядро: ${esc(versions.core || 'отдельно не опубликовано')} · конфиг: ${esc(versions.config || 'не указан')}</small></div><div><span>Окружение</span><b>${esc(environment.architecture || 'архитектура неизвестна')}</b><small>маршруты: ${esc(environment.route_tool || 'утилита не найдена')} · ndmc: ${esc(environment.ndmc_mode || 'не проверен')}</small></div><div><span>Владелец TUN</span><b>${ownership.runtime_owner === 'consistent-with-usque-init' ? 'согласуется со службой USQUE' : 'не подтверждён'}</b><small>${esc(ownership.interface || 'IFACE не задан')} · источник: ${esc(ownership.claimed_by || 'нет')}</small></div></div>`;
+    const repairPanel = repair.summary ? `<details class="transaction-details usque-repair-preview"><summary>Предпросмотр ремонта ndmc · ${esc(repair.status || 'неизвестно')}</summary><div class="usque-doctor-note"><b>${esc(repair.needed ? 'Нужен точечный ремонт' : repair.eligible ? 'Изменения не требуются' : 'Ремонт заблокирован')}</b><p>${esc(repair.summary)}</p><small>Вызовы ndmc: ${esc(repair.ndmc_invocations ?? 0)} · уже изолированы: ${esc(repair.scoped_invocations ?? 0)}. Это только просмотр: файлы и службы не изменены.</small>${(repair.steps || []).length ? `<ol>${repair.steps.map((step) => `<li>${esc(step)}</li>`).join('')}</ol>` : ''}${(repair.blockers || []).length ? `<p class="danger-text">${repair.blockers.map(esc).join(' · ')}</p>` : ''}</div></details>` : '';
+    const fileRows = Object.entries(files).map(([kind, file]) => `<div><b>${esc({ config: 'Конфигурация', session: 'Сессия', binary: 'Бинарник', init: 'Запуск' }[kind] || kind)}</b><span>${file.present ? `${esc(file.name || 'файл')} · права ${esc(file.mode || 'неизвестны')}${file.owner_uid ? ` · UID ${esc(file.owner_uid)}` : ''}` : 'не найден'}</span><small>${file.modified_at ? new Date(file.modified_at).toLocaleString('ru-RU') : 'дата неизвестна'}${file.sha256 ? ` · SHA-256 ${esc(file.sha256.slice(0, 12))}…` : ''}</small></div>`).join('');
+    const filesPanel = `<details class="transaction-details usque-file-facts"><summary>Файлы и резервная копия</summary><div class="usque-file-grid">${fileRows || '<span>Метаданные файлов недоступны.</span>'}${lastBackup.present ? `<div><b>Последняя резервная копия</b><span>${esc(lastBackup.name || 'backup')} · права ${esc(lastBackup.mode || 'неизвестны')}</span><small>${esc(lastBackup.modified_at ? new Date(lastBackup.modified_at).toLocaleString('ru-RU') : '')}${lastBackup.sha256 ? ` · SHA-256 ${esc(lastBackup.sha256.slice(0, 12))}…` : ''}</small></div>` : '<div><b>Резервная копия</b><span>не найдена в известных каталогах</span><small>Doctor ничего не создаёт автоматически</small></div>'}</div></details>`;
+    $('#usqueDoctorResult').innerHTML = `<div class="usque-doctor-head"><div><span class="engine-state ${stateClass}">${esc(stateLabel)}</span><h3>${esc(config.transport || 'USQUE')} · ${esc(config.sni || 'SNI по умолчанию')}</h3><p>${esc(config.interface || 'интерфейс не определён')}${report.endpoint_route_interface ? ` · IPv4 endpoint через ${esc(report.endpoint_route_interface)}` : ''}</p></div><small>${esc(report.checked_at ? new Date(report.checked_at).toLocaleString('ru-RU') : '')}</small></div>${metadataPanel}${evidencePanel}${routesPanel}<div class="usque-check-grid">${checks.map((check) => `<div class="usque-check ${esc(check.status)}"><span>${check.status === 'pass' ? '✓' : check.status === 'warning' ? '!' : check.status === 'skipped' ? '–' : '×'}</span><div><b>${esc(check.label)}</b><p>${esc(check.message)}</p>${check.action ? `<small>${esc(check.action)}</small>` : ''}</div></div>`).join('')}</div>${repairPanel}${publicEndpoints.length ? `<details class="transaction-details"><summary>Публичные endpoints (${publicEndpoints.length})</summary><code>${publicEndpoints.map(esc).join('\n')}</code></details>` : ''}${filesPanel}<div class="usque-doctor-note">${esc(report.note || '')} Совпадение init-скрипта и TUN — полезный признак, но не доказательство владельца процесса. Исправный WARP также не считается доказательством доступности Telegram: эти результаты показаны отдельно.</div>`;
   } catch (error) {
     $('#usqueDoctorResult').innerHTML = `<div class="community-empty error">Проверка USQUE не выполнена: ${esc(error.message)}</div>`;
   } finally {
@@ -3203,10 +3343,12 @@ function bindEvents() {
   $('#remoteProfilePreviewButton').addEventListener('click', previewRemoteProfile);
   $('#remoteProfileImportButton').addEventListener('click', importRemoteProfile);
   $('#warpGenerate').addEventListener('click', () => generateWarp(false));
+  $('#warpInstallComponent').addEventListener('click', () => openRouteInstallation('warp-wg'));
   $('#warpRotate').addEventListener('click', () => generateWarp(true));
   $('#warpImport').addEventListener('click', () => $('#warpImportInput').click());
   $('#warpImportInput').addEventListener('change', importWarpFile);
   $('#warpCheck').addEventListener('click', checkWarp);
+  $('#warpCanary').addEventListener('click', checkWarpCanary);
   $('#warpConnectivity').addEventListener('click', checkWarpConnectivity);
   $('#warpDelete').addEventListener('click', deleteWarp);
   $('#warpSaveHealth').addEventListener('click', saveWarpHealthPolicy);
@@ -3253,6 +3395,10 @@ function bindEvents() {
   $('#confirmPrivateBackup').addEventListener('click', importPrivateBackup);
   $('#checkAppUpdate').addEventListener('click', checkAppUpdate);
   $('#addCustomService').addEventListener('click', () => openCustomServiceDialog());
+  $('#openBypassSetup').addEventListener('click', () => {
+    $('#detailsPanel').classList.remove('open');
+    setView('engines');
+  });
   $('#openCommunityCatalog').addEventListener('click', openCommunityCatalog);
   $('#communityCatalogClose').addEventListener('click', closeCommunityCatalog);
   $('#communitySearchButton').addEventListener('click', searchCommunityCatalog);

@@ -56,6 +56,10 @@ require_file() {
   [ -f "$1" ] || { echo "Required file is missing: $1" >&2; exit 1; }
 }
 
+stage() {
+  printf '\n[%s/7] %s\n' "$1" "$2"
+}
+
 require_file "$BIN_SOURCE"
 require_file "$INIT_SOURCE"
 require_file "$ROLLBACK"
@@ -63,9 +67,9 @@ require_file "$CATALOG_SOURCE"
 require_file "$COMMUNITY_SOURCE"
 require_file "$SOURCES_SOURCE"
 require_file "$EXAMPLE_CONFIG"
-[ -x "$BIN_SOURCE" ] || { echo "Candidate binary is not executable: $BIN_SOURCE" >&2; exit 1; }
-[ -x "$INIT_SOURCE" ] || { echo "Init script is not executable: $INIT_SOURCE" >&2; exit 1; }
-[ -x "$ROLLBACK" ] || { echo "Rollback script is not executable: $ROLLBACK" >&2; exit 1; }
+[ -r "$BIN_SOURCE" ] || { echo "Candidate binary is not readable: $BIN_SOURCE" >&2; exit 1; }
+[ -r "$INIT_SOURCE" ] || { echo "Init script is not readable: $INIT_SOURCE" >&2; exit 1; }
+[ -r "$ROLLBACK" ] || { echo "Rollback script is not readable: $ROLLBACK" >&2; exit 1; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum is required" >&2; exit 1; }
 [ -x "$BASE/sbin/start-stop-daemon" ] || { echo "$BASE/sbin/start-stop-daemon is required" >&2; exit 1; }
 
@@ -77,6 +81,13 @@ ACTUAL="$(sha256sum "$BIN_SOURCE" | awk '{print $1}')"
 if [ -n "$EXPECTED" ] && [ "$ACTUAL" != "$EXPECTED" ]; then
   echo "Candidate checksum mismatch: expected $EXPECTED, got $ACTUAL" >&2
   exit 1
+fi
+# Windows and some NAS unpackers discard Unix executable bits. Normalizing the
+# extracted candidate is safe after its checksum has been verified and avoids a
+# manual chmod step; the live binary is still installed atomically with 0755.
+if [ ! -x "$BIN_SOURCE" ]; then
+  chmod 755 "$BIN_SOURCE" || { echo "Cannot make candidate binary executable: $BIN_SOURCE" >&2; exit 1; }
+  echo "Archive mode normalized for candidate binary: $BIN_SOURCE"
 fi
 
 LEGACY_RUNNING_DETECTED=0
@@ -208,7 +219,7 @@ rollback_on_error() {
   CODE="$1"
   trap - EXIT HUP INT TERM
   echo "Upgrade failed; restoring $BACKUP" >&2
-  "$ROLLBACK" "$BACKUP" --auto || echo "Automatic rollback failed; manual intervention required" >&2
+  sh "$ROLLBACK" "$BACKUP" --auto || echo "Automatic rollback failed; manual intervention required" >&2
   exit "$CODE"
 }
 trap 'rollback_on_error $?' EXIT
@@ -216,6 +227,7 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+stage 1 "Останавливаем текущую версию (обычно 10–15 секунд; не прерывайте)..."
 if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
   "$RAZ_INIT" stop
 fi
@@ -223,6 +235,7 @@ if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_WAS_RUNNING" -eq 1 ]; then
   "$LEGACY_CONTROL" stop
 fi
 
+stage 2 "Устанавливаем проверенные файлы с безопасными правами..."
 install_atomic() {
   SRC="$1"
   DST="$2"
@@ -247,6 +260,7 @@ if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_INIT_PRESENT" -eq 1 ]; then
   mv "$LEGACY_INIT" "$LEGACY_DISABLED"
 fi
 
+stage 3 "Проверяем и при необходимости мигрируем конфигурацию..."
 "$BINDIR/razvilka" -migrate-config \
   -config "$APPDIR/config.json" \
   -catalog "$APPDIR/service-catalog.json" \
@@ -256,6 +270,7 @@ fi
 # Quiesce only RAZVILKA-owned runtime objects before replacing engine
 # binaries. The committed journal is kept, so the new manager can recover the
 # same verified plan after components are updated.
+stage 4 "Сохраняем и отключаем только принадлежащий RAZVILKA dataplane (до 2 минут)..."
 "$BINDIR/razvilka" -deactivate-dataplane \
   -stage "$STATEDIR/staging" \
   -backups "$STATEDIR/backups" \
@@ -286,15 +301,18 @@ fi
 # Deactivation intentionally removed live objects before component replacement.
 # Restore the exact committed runtime metadata/configs so the new process can
 # reconcile them and prove the previous route before the upgrade is accepted.
+stage 5 "Возвращаем подтверждённое состояние маршрутов для безопасного reconcile..."
 if [ "$DATAPLANE_STATE_PRESENT" -eq 1 ]; then
   mkdir -p "$STATEDIR/dataplane"
   cp -a "$BACKUP/dataplane/." "$STATEDIR/dataplane/"
 fi
 
+stage 6 "Запускаем новую версию и ждём восстановления маршрутов (до 130 секунд)..."
 RAZVILKA_BASE="$BASE" "$RAZ_INIT" clear-guard
 RAZVILKA_BASE="$BASE" "$RAZ_INIT" start
 RAZVILKA_BASE="$BASE" "$RAZ_INIT" status
 RUNNING_PID="$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" pid)"
+stage 7 "Проверяем процесс, HTTP и восстановленный dataplane..."
 "$BINDIR/razvilka" -healthcheck "http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip):${RAZVILKA_PORT:-8787}/api/v1/status" \
   -healthcheck-pid "$RUNNING_PID" -healthcheck-require-dataplane >/dev/null
 

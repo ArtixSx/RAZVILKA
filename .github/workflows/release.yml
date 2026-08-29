@@ -32,7 +32,13 @@ jobs:
           package-manager-cache: false
 
       - name: Run checks and cross-build
-        run: ./scripts/check.sh
+        shell: bash
+        run: |
+          export RAZVILKA_VERSION="${GITHUB_REF_NAME#v}"
+          export RAZVILKA_COMMIT="$GITHUB_SHA"
+          export RAZVILKA_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export RAZVILKA_DIRTY=false
+          ./scripts/check.sh
 
       - name: Package Entware bundle
         shell: bash

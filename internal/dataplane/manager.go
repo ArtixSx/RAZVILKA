@@ -192,6 +192,53 @@ func (m *Manager) CanaryCapable(id string) bool {
 	return ok
 }
 
+// ProbeCandidate runs the non-live half of a transaction for one adapter:
+// snapshot, stage, validate and isolated canary. It never calls Activate,
+// Commit or Rollback because the CanaryAdapter contract must leave live state
+// untouched and clean only its temporary resources.
+func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID string) error {
+	if m == nil || m.StateRoot == "" {
+		return errors.New("dataplane state root is not configured")
+	}
+	adapter, ok := m.adapter(adapterID)
+	if !ok {
+		return fmt.Errorf("dataplane adapter %q is unavailable", adapterID)
+	}
+	canary, ok := adapter.(CanaryAdapter)
+	if !ok {
+		return fmt.Errorf("dataplane adapter %q has no isolated canary", adapterID)
+	}
+	if err := m.beginOperation(ctx); err != nil {
+		return err
+	}
+	defer m.endOperation()
+	base := filepath.Join(m.StateRoot, "candidate-probes")
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		return err
+	}
+	root, err := os.MkdirTemp(base, adapterID+"-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+	for _, phase := range []struct {
+		name string
+		call func(context.Context, Plan, string) error
+	}{
+		{name: "snapshot", call: adapter.Snapshot},
+		{name: "stage", call: adapter.Stage},
+		{name: "validate", call: adapter.Validate},
+	} {
+		if err := phase.call(ctx, plan, root); err != nil {
+			return fmt.Errorf("%s candidate %s: %w", adapterID, phase.name, err)
+		}
+	}
+	if err := canary.Canary(ctx, plan.RoutePlanFor(adapterID), root); err != nil {
+		return fmt.Errorf("%s isolated canary: %w", adapterID, err)
+	}
+	return nil
+}
+
 func (m *Manager) adapter(id string) (Adapter, bool) {
 	if m == nil {
 		return nil, false

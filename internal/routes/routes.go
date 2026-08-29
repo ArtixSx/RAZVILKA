@@ -11,6 +11,7 @@ type Option struct {
 	Kind        string `json:"kind"`
 	Description string `json:"description"`
 	Installed   bool   `json:"installed"`
+	Configured  bool   `json:"configured"`
 	Running     bool   `json:"running"`
 	Selectable  bool   `json:"selectable"`
 	Ready       bool   `json:"ready"`
@@ -23,7 +24,7 @@ func Options() []Option {
 	}
 	for _, e := range engine.Visible((engine.Detector{}).Inventory()) {
 		selectable := e.RuntimeReady
-		out = append(out, Option{ID: e.ID, Name: e.Name, Kind: e.Kind, Description: e.Description, Installed: e.Installed, Running: e.Running, Selectable: selectable, Ready: selectable && e.Running})
+		out = append(out, Option{ID: e.ID, Name: e.Name, Kind: e.Kind, Description: e.Description, Installed: e.Installed, Configured: e.Configured, Running: e.Running, Selectable: selectable, Ready: selectable && e.Running})
 	}
 	return out
 }

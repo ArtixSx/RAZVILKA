@@ -6,16 +6,16 @@
   <meta name="theme-color" content="#0b0e12">
   <meta name="application-name" content="RAZVILKA">
   <title>RAZVILKA</title>
-<link rel="icon" href="/favicon.ico?v=0.16.0" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=0.16.0">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=0.16.0">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.16.0">
-<link rel="stylesheet" href="/style.css?v=0.16.0">
-<link rel="stylesheet" href="/v010.css?v=0.16.0">
-<link rel="stylesheet" href="/v011.css?v=0.16.0">
-<link rel="stylesheet" href="/v011-theme.css?v=0.16.0">
-<link rel="stylesheet" href="/v012.css?v=0.16.0">
-<link rel="stylesheet" href="/usque-doctor.css?v=0.16.0">
+<link rel="icon" href="/favicon.ico?v=0.17.0" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=0.17.0">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=0.17.0">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.17.0">
+<link rel="stylesheet" href="/style.css?v=0.17.0">
+<link rel="stylesheet" href="/v010.css?v=0.17.0">
+<link rel="stylesheet" href="/v011.css?v=0.17.0">
+<link rel="stylesheet" href="/v011-theme.css?v=0.17.0">
+<link rel="stylesheet" href="/v012.css?v=0.17.0">
+<link rel="stylesheet" href="/usque-doctor.css?v=0.17.0">
 </head>
 <body>
 <svg class="icon-sprite" aria-hidden="true">
@@ -36,7 +36,7 @@
 </svg>
 <section class="auth-screen" id="authScreen" hidden>
   <div class="auth-card">
-    <div class="auth-brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.16.0" alt=""></div><div><b>RAZVILKA</b><small>Локальная панель маршрутизации</small></div></div>
+    <div class="auth-brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.17.0" alt=""></div><div><b>RAZVILKA</b><small>Локальная панель маршрутизации</small></div></div>
     <div id="authSetupPanel" hidden>
       <span class="eyebrow">ПЕРВЫЙ ЗАПУСК</span><h1>Создайте администратора</h1>
       <p>Ключ первого входа показан установщиком. После регистрации вход выполняется обычным логином и паролем.</p>
@@ -64,7 +64,7 @@
 </section>
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.16.0" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.16.0</small></div></div>
+    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.17.0" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.17.0-dev</small></div></div>
     <nav class="nav-list">
       <button class="nav active" data-view="overview"><span><svg><use href="#i-home"/></svg></span><b>Обзор</b></button>
       <div class="nav-label">МАРШРУТИЗАЦИЯ</div>
@@ -137,7 +137,7 @@
 
     <section class="view" id="view-services">
       <article class="panel full-panel">
-        <div class="panel-title sticky-title"><div><h2>Сервисы</h2><p>Встроенные, community и ваши ресурсы: домены, IP/CIDR и отдельный маршрут</p></div><div class="filters"><button class="secondary" id="openCommunityCatalog">⌕ Community-каталог</button><button class="primary" id="addCustomService">+ Добавить вручную</button><input id="serviceSearch" placeholder="Поиск сервиса"><select id="serviceCategory"><option value="">Все категории</option></select></div></div>
+        <div class="panel-title sticky-title"><div><h2>Сервисы</h2><p>Встроенные, community и ваши ресурсы: домены, IP/CIDR и отдельный маршрут</p></div><div class="filters"><button class="secondary" id="openBypassSetup">+ Установить обход</button><button class="secondary" id="openCommunityCatalog">⌕ Community-каталог</button><button class="primary" id="addCustomService">+ Добавить вручную</button><input id="serviceSearch" placeholder="Поиск сервиса"><select id="serviceCategory"><option value="">Все категории</option></select></div></div>
         <div class="selector-legend"><span><i class="legend-dot auto"></i>AUTO</span><span><i class="legend-dot ok"></i>доступен</span><span><i class="legend-dot dirty"></i>изменён</span><span><i class="legend-dot off"></i>не установлен</span></div>
         <div class="draft-bar section-draft-bar" id="serviceDraftBar">
           <div><span class="draft-pulse"></span><b>Маршруты сервисов изменены</b><small>Применятся только маршруты и используемые ими конфигурации обходов. Посторонние черновики не помешают.</small></div>
@@ -184,9 +184,11 @@
             </section>
             <section class="warp-manager" id="warpManager" hidden>
               <div class="warp-manager-head"><div><span class="eyebrow">УПРАВЛЕНИЕ WARP</span><h3>Профиль Cloudflare WARP</h3><p>Созданный или загруженный профиль сначала сохраняется как черновик. Рабочий профиль не изменится до общей проверки и применения.</p></div><span class="engine-state" id="warpStateBadge">НЕ НАСТРОЕН</span></div>
+              <div class="warp-install-hint" id="warpInstallHint" hidden><div><b>Сначала установите WARP · WireGuard</b><span>Установка добавит WireGuard и генератор профиля. После неё здесь появятся создание профиля, проверка и назначение сервису.</span></div><button class="primary" id="warpInstallComponent" type="button">Открыть установку</button></div>
               <div class="warp-status-grid"><div><span>Генератор</span><b id="warpGeneratorState">—</b></div><div><span>Аккаунт</span><b id="warpAccountState">—</b></div><div><span>Рабочий профиль</span><b id="warpLiveState">—</b></div><div><span>Черновик профиля</span><b id="warpCandidateState">—</b></div></div>
               <div class="warp-steps" aria-label="Порядок настройки WARP"><div><i>1</i><span><b>Профиль</b><small>создайте или загрузите</small></span></div><div><i>2</i><span><b>Сервис</b><small>назначьте WARP-маршрут</small></span></div><div><i>3</i><span><b>Проверка</b><small>подтвердите доступ</small></span></div><div><i>4</i><span><b>Применение</b><small>с резервной копией и возвратом при ошибке</small></span></div></div>
               <div class="warp-apply-hint" id="warpApplyHint">Профиль-кандидат не меняет интернет сам по себе. Для применения назначьте WARP хотя бы одному включённому сервису.</div>
+              <div class="warp-canary-control"><label><span>Безопасная проверка профиля</span><select id="warpCanaryService" aria-label="Сервис для проверки WARP"></select><small>Временный интерфейс проверит handshake, Cloudflare и сервис, затем будет удалён.</small></label><button class="primary" id="warpCanary" type="button">Проверить без применения</button></div>
               <label class="tos-check"><input type="checkbox" id="warpAcceptTOS"><span>При регистрации нового аккаунта я принимаю <a href="https://www.cloudflare.com/application/terms/" target="_blank" rel="noreferrer">условия Cloudflare</a></span></label>
               <div class="warp-actions"><button class="primary" id="warpGenerate" type="button">Создать профиль</button><button class="secondary" id="warpRotate" type="button">Новый аккаунт + профиль</button><input id="warpImportInput" type="file" accept=".conf,.ini,text/plain" hidden><button class="secondary" id="warpImport" type="button">Загрузить свой</button><button class="secondary" id="warpCheck" type="button">Проверить профиль</button><button class="secondary" id="warpConnectivity" type="button">Проверить Cloudflare</button><button class="danger-button" id="warpDelete" type="button">Удалить рабочий профиль</button></div>
               <div class="warp-note" id="warpNote"></div>
@@ -335,7 +337,7 @@
         <article class="panel"><div class="panel-title"><div><h2>Готовность роутера</h2><p>Проверка необходимых возможностей текущего устройства</p></div><div class="test-actions"><button class="secondary" id="downloadDiagnostics">Скачать отчёт</button><button class="secondary" id="refreshSystem">Повторить</button></div></div><div id="systemProbe" class="probe-grid"></div></article>
         <article class="panel"><div class="panel-title"><div><h2>Готовность применения</h2><p>Пошаговый план, ownership и причины блокировки без изменений firewall/DNS/routes</p></div><button class="secondary" id="showPlan">Обновить план</button></div><div id="planBox" class="plan-box"><div class="transaction-loading">Проверяем маршруты…</div></div></article>
       </div>
-      <article class="panel usque-doctor-panel"><div class="panel-title"><div><span class="eyebrow">WARP · MASQUE</span><h2>Проверка USQUE</h2><p>Безопасно проверяет пакет, сессию без показа ключей, службу, TUN, ndmc, Cloudflare API и маршрут до endpoint. Ничего не исправляет и не перезапускает.</p></div><button class="secondary" id="checkUsqueDoctor" type="button">Проверить USQUE</button></div><div id="usqueDoctorResult" class="usque-doctor-result" aria-live="polite"><div class="community-empty">Запустите проверку перед восстановлением или перерегистрацией USQUE.</div></div></article>
+      <article class="panel usque-doctor-panel"><div class="panel-title"><div><span class="eyebrow">WARP · MASQUE</span><h2>Проверка USQUE</h2><p>Раздельно показывает состояние пакета, IPv4/IPv6, технический WARP и доступность выбранного сервиса. Ничего не исправляет и не перезапускает.</p></div><button class="secondary" id="checkUsqueDoctor" type="button">Проверить USQUE</button></div><div id="usqueDoctorResult" class="usque-doctor-result" aria-live="polite"><div class="community-empty">Запустите проверку перед восстановлением или перерегистрацией USQUE.</div></div></article>
       <article class="panel domain-inspector-panel"><div class="panel-title"><div><span class="eyebrow">ПРОВЕРКА ДОМЕНА</span><h2>Почему ресурс попал в этот маршрут?</h2><p>Показывает совпавший сервис, домен или IP-сеть, конфликты списков и рассчитанный автоматический маршрут. Это объяснение настроек, а не предполагаемый трафик.</p></div><div class="domain-inspector-input"><input id="domainInspectorInput" placeholder="www.youtube.com или 203.0.113.8"><button class="primary" id="inspectDomain" type="button">Разобрать</button></div></div><div id="domainInspectorResult" class="domain-inspector-result"><div class="community-empty">Введите домен, IP или HTTPS-ссылку.</div></div></article>
       <article class="panel engine-lab-panel"><div class="panel-title"><div><h2>Лаборатория обходов</h2><p>Версии, проверки возможностей, занятые порты, интерфейсы и NFQUEUE без активных изменений</p></div><button class="secondary" id="refreshEngineLab">Перепроверить</button></div><div id="engineLabSummary" class="engine-lab-summary"></div><div id="engineLabRows" class="engine-lab-rows"></div></article>
       <article class="panel audit-panel"><div class="panel-title"><div><span class="eyebrow">ЛОКАЛЬНЫЙ ЖУРНАЛ</span><h2>Последние действия</h2><p>Показывает изменения и ошибки панели. Пароли, ключи, токены, заголовки и содержимое конфигов никогда не записываются.</p></div><span class="safe-badge">ДО 2 МиБ</span></div><div id="auditRows" class="audit-rows"><div class="community-empty">Журнал пока пуст.</div></div></article>
@@ -344,7 +346,7 @@
 
     <section class="view" id="view-settings">
       <div class="two-col">
-        <article class="panel"><div class="panel-title"><div><h2>Режим применения</h2><p>Безопасный режим разрешает проверку, но не меняет рабочие маршруты</p></div><button class="secondary" id="toggleSafeMode" type="button">Перейти в рабочий режим</button></div><div class="settings-list"><div><span>Текущий режим</span><b id="settingSafeMode">Безопасный</b></div><div><span>Маршруты в черновике</span><b id="settingPending">нет</b></div><div><span>Черновики обходов</span><b id="settingEngineDrafts">0</b></div><div><span>Последнее применение</span><b id="settingApplied">—</b></div><div><span>Версия настроек</span><b id="settingRevision">0 / 0</b></div></div></article>
+        <article class="panel"><div class="panel-title"><div><h2>Режим применения</h2><p>Безопасный режим разрешает проверку, но не меняет рабочие маршруты</p></div><button class="secondary" id="toggleSafeMode" type="button">Перейти в рабочий режим</button></div><div class="settings-list"><div><span>Текущий режим</span><b id="settingSafeMode">Безопасный</b></div><div><span>Маршруты в черновике</span><b id="settingPending">нет</b></div><div><span>Черновики обходов</span><b id="settingEngineDrafts">0</b></div><div><span>Последнее применение</span><b id="settingApplied">—</b></div><div><span>Версия настроек</span><b id="settingRevision">0 / 0</b></div><div><span>Сборка приложения</span><b id="settingBuild">загружается…</b></div></div></article>
         <article class="panel"><div class="panel-title"><div><h2>Сохранённые изменения</h2><p>Черновик можно проверить, применить или отменить без ручного поиска файлов</p></div></div><div class="settings-actions"><button class="secondary" id="exportConfig">Скачать техническую копию</button><button class="secondary" id="discardSettings">Отменить черновик</button><button class="primary" id="applySettings">Проверить черновик</button></div></article>
       </div>
       <article class="panel app-update-panel"><div class="panel-title"><div><span class="eyebrow">ОФИЦИАЛЬНЫЙ РЕЛИЗ</span><h2>Обновление RAZVILKA</h2><p>Проверка выполняется только через официальный GitHub. Обновление не запускается автоматически: сначала сохраните зашифрованную резервную копию и проверьте подлинность релиза на компьютере.</p></div><button class="secondary" id="checkAppUpdate" type="button">Проверить версию</button></div><div id="appUpdateState" class="app-update-state"><div class="community-empty">Нажмите «Проверить версию». Фоновый запрос не выполняется без вашего действия.</div></div></article>
@@ -358,7 +360,7 @@
     </section>
 
     <section class="details-drawer" id="detailsPanel"><div class="drawer-head"><div><h3>Детали</h3><p id="detailsSubtitle">Понятный результат · технические данные ниже</p></div><button id="hideDetails" aria-label="Закрыть">×</button></div><div class="details-content" id="details"></div></section>
-    <footer>RAZVILKA <span id="footerVersion">v0.16.0</span> · локальная панель маршрутизации · <a href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer">Telegram</a></footer>
+    <footer>RAZVILKA <span id="footerVersion">v0.17.0-dev</span> · локальная панель маршрутизации · <a href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer">Telegram</a></footer>
   </main>
 </div>
 <dialog class="action-dialog" id="actionDialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ</span><h3 id="actionDialogTitle">Подтвердите действие</h3><p id="actionDialogText"></p><div class="dialog-actions"><button class="secondary" value="cancel">Отмена</button><button class="primary" id="actionDialogConfirm" value="confirm">Продолжить</button></div></form></dialog>
@@ -371,7 +373,7 @@
 </dialog>
 <dialog class="onboarding-dialog" id="onboardingDialog">
   <div class="onboarding-shell">
-    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.16.0" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
+    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.17.0" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
     <section class="onboarding-main"><button class="dialog-close" id="onboardingClose" type="button" aria-label="Закрыть">×</button><div id="onboardingContent"></div><div class="onboarding-actions"><button class="secondary" id="onboardingBack" type="button">Назад</button><button class="text-button" id="onboardingLater" type="button">Продолжить позже</button><button class="primary" id="onboardingNext" type="button">Далее</button></div></section>
   </div>
 </dialog>
@@ -426,6 +428,6 @@
     </div>
   </div>
 </dialog>
-<script src="/app.js?v=0.16.0"></script>
+<script src="/app.js?v=0.17.0"></script>
 </body>
 </html>

@@ -1,6 +1,88 @@
 # Changelog
 
-## Unreleased — isolated canary foundation
+## v0.17.0 — Hardware truth and safe canaries
+
+- Hardware testing now detects the official USQUE `nativetun` runtime and
+  probes it by a source address plus matching kernel-route evidence instead of
+  assuming that every running USQUE process exposes SOCKS on port 1080.
+- A refused or failed SOCKS connection can no longer be labelled
+  `route-confirmed`; confirmation is granted only after the proxy returns a
+  real HTTP response. The USQUE component also no longer installs Sing-box as
+  a false dependency because `usque-keenetic` owns `opkgtun0` itself.
+- Route-test results now explain route evidence and service availability
+  separately, so a confirmed TUN path with a Telegram timeout is no longer
+  presented like a successful bypass.
+- Route selectors now distinguish a missing bypass package from an installed
+  component that still needs a profile. Unconfigured routes are disabled in
+  isolated comparison instead of being presented as ready to test.
+- WARP WireGuard gained a pre-activation canary: a temporary interface and a
+  source-only policy rule verify Cloudflare `warp=on`, a real handshake and a
+  catalog-owned service probe, then are removed before any live Apply. The UI
+  can run this check for Telegram or another selected service without changing
+  working routes.
+- ARM64 hardware validation confirmed the canary's failure path: when the
+  provider rejected WireGuard on UDP `2408`, `500`, `1701` and `4500`, the
+  temporary interface, source rule and route table were removed and the live
+  route remained untouched. Candidate validation and the UI now direct users
+  to this safe check instead of implying that Apply is the first handshake test.
+- The login and first-run screens now display the running server version and
+  current Safe Mode state instead of retaining the static development fallback.
+
+- Entware archives no longer fail preflight when an unpacker loses executable
+  mode bits on the bundled init or rollback scripts. The installer requires
+  readable sources, invokes rollback through `sh` and atomically installs the
+  live init with mode `0755`. After checksum verification it also restores the
+  extracted candidate binary's executable bit, so a clean-router installation
+  no longer needs a manual `chmod` after unpacking on Windows or NAS tools.
+- The transactional installer now prints seven explicit progress stages and
+  the expected waits for graceful shutdown, dataplane deactivation and boot
+  reconciliation. A normal 10–130 second quiet period is no longer presented
+  like a frozen installation, reducing unnecessary user interrupts while the
+  existing rollback behavior remains unchanged.
+- Unreleased builds now identify themselves as `0.17.0-dev` (or
+  `0.17.0-dev+<commit>` in CI) instead of claiming to be the published
+  `0.16.0`. Status, Settings and redacted diagnostics expose commit, build time
+  and whether dirty-state is known; tag builds still report the exact tag.
+- USQUE Doctor now reports missing init, empty `IFACE` and unavailable route
+  tooling explicitly. Dependent checks become `SKIPPED` with a reason, while a
+  new backward-compatible readiness field distinguishes `READY`, `DEGRADED`,
+  `BLOCKED` and `UNKNOWN`.
+- USQUE Doctor v2 now separates package, core and config versions, exposes only
+  a small redacted environment summary and labels TUN ownership as unconfirmed
+  unless the init/TUN observations agree. A Cloudflare endpoint routed back
+  through the same USQUE TUN is treated as a blocking dependency loop. Tests
+  assert that Doctor leaves files unchanged and invokes only fixed read-only
+  commands. File permissions, owner UID, timestamps and SHA-256 values plus the
+  latest known backup are reported without returning file contents.
+- USQUE Doctor now includes a read-only `ndmc` repair preview. It counts command
+  sites without exposing the init script, detects already scoped system-library
+  calls and forbidden global `LD_LIBRARY_PATH`, and lists the future
+  backup/patch/validate/rollback steps while making no changes.
+- DNS state schema 4 removes obsolete plaintext port 53 endpoints from
+  UncensoredDNS and invalidates matching stale probe evidence without losing
+  the user's draft. FlashStart is now a lab-only negative control and is
+  ineligible for USQUE bootstrap and AutoPilot.
+- DNS providers expose typed transport endpoints and explicit production/lab
+  policy. Quad9 secure, unfiltered and ECS profiles include separate diagnostic
+  alternate-port endpoints rather than silently replacing the defaults.
+- Custom DNS probes now reject local/private, link-local, multicast,
+  unspecified and other non-public destinations unless the user explicitly
+  marks their own LAN resolver as trusted. DNS names are resolved and checked
+  again immediately before each connection.
+- DoH probes allow at most two same-origin HTTPS redirects, keep certificate
+  verification mandatory and block untrusted redirect targets. Probe timeout
+  text now uses the actual timeout, bounded workers limit concurrency, and the
+  UI describes the resolver-reported AD bit without claiming local DNSSEC
+  validation.
+- Added backward-compatible Evidence v2 records with probe ID, timestamps,
+  route path, outcome, source, latency, HTTP status, confidence and error code.
+  Existing evidence levels remain in the API, but are now derived conservatively
+  from the structured result.
+- HTTP 403/451, TLS/certificate mismatch, policy responses and unsuitable edges
+  can prove only the isolated route, never successful service access. Smart
+  Route retains those facts for diagnosis but cannot select them as a working
+  bypass. The UI shows the outcome, source and age and marks expired facts as
+  stale.
 
 - Expanded the USQUE recovery specification from real Keenetic troubleshooting:
   package/feed checks, secret-safe session inspection, `ndmc` library isolation,
@@ -11,6 +93,17 @@
   values, checks supported Keenetic architectures and duplicate official feed
   declarations, checks init/TUN, compares normal and clean-library `ndmc`,
   probes the Cloudflare registration API and explains the public endpoint route.
+- USQUE canary now proves Cloudflare `warp=on` first and the selected service
+  second. The committed evidence stores the transport, POP/location, safe
+  egress metadata and confirmed service names; Diagnostics displays technical
+  WARP, Telegram/service proof and IPv4/IPv6 endpoint routes separately.
+- Service cards now use an explicit **Lists** action for their domains and
+  IP/CIDR ranges, including catalog/source freshness, instead of hiding this
+  information behind an unexplained `i` button.
+- The Services page links directly to bypass installation. WARP WireGuard now
+  explains that the component and profile must be installed before it becomes
+  selectable, and its profile check is disabled until there is something real
+  to validate.
 
 - Added an adapter-scoped neutral RoutePlan contract. A candidate receives
   only its own services, actions and resource claims, never unrelated routing

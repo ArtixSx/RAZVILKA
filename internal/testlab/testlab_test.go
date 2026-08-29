@@ -98,6 +98,24 @@ func TestProbeRoutesStoresConfirmedMatrixEvidence(t *testing.T) {
 	}
 }
 
+func TestPolicyHTTPResponseNeverBecomesServiceConfirmed(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusUnavailableForLegalReasons} {
+		result := Result{ServiceID: "telegram", Route: "warp-wg", Status: "partial", HTTPStatus: status, RouteConfirmed: true, CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+		result.NormalizeEvidence()
+		if result.EvidenceLevel != evidence.Route || result.Outcome != evidence.OutcomeServiceBlocked || result.EvidenceV2 == nil || result.EvidenceFreshUntil == "" {
+			t.Fatalf("HTTP %d produced unsafe evidence: %+v", status, result)
+		}
+	}
+}
+
+func TestTLSMismatchNeverBecomesServiceConfirmed(t *testing.T) {
+	result := Result{ServiceID: "telegram", Route: "warp-wg", Status: "fail", RouteConfirmed: true, Detail: "tls: certificate is valid for another.example", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	result.NormalizeEvidence()
+	if result.EvidenceLevel != evidence.Route || result.Outcome != evidence.OutcomeContentMismatch || result.EvidenceV2.ErrorCode != "tls-certificate-mismatch" {
+		t.Fatalf("TLS mismatch produced unsafe evidence: %+v", result)
+	}
+}
+
 func TestRequiredScenarioFailureCannotBeHiddenByLandingPage(t *testing.T) {
 	runner := NewRunner()
 	cat := catalog.Catalog{Services: []catalog.Service{{
@@ -118,6 +136,21 @@ func TestRequiredScenarioFailureCannotBeHiddenByLandingPage(t *testing.T) {
 	assessment := AssessComparisons(append(results, Result{ServiceID: "telegram", ServiceName: "Telegram", Route: "direct", Status: "fail", RouteConfirmed: true}))
 	if len(assessment) != 1 || assessment[0].Conclusion != "no-working-route" {
 		t.Fatalf("assessment must reject partially working bypass: %+v", assessment)
+	}
+}
+
+func TestAggregateCannotHideBlockedRequiredScenario(t *testing.T) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	rows := []Result{
+		{ServiceID: "telegram", Route: "warp-wg", ScenarioID: "site", ScenarioLabel: "Сайт", ScenarioNeeded: true, Status: "pass", HTTPStatus: 200, RouteConfirmed: true, CheckedAt: now},
+		{ServiceID: "telegram", Route: "warp-wg", ScenarioID: "web", ScenarioLabel: "Web", ScenarioNeeded: true, Status: "partial", HTTPStatus: 451, RouteConfirmed: true, CheckedAt: now},
+	}
+	for index := range rows {
+		rows[index].NormalizeEvidence()
+	}
+	aggregated := AggregateScenarios(rows)
+	if len(aggregated) != 1 || aggregated[0].AssuranceLevel() != evidence.Route || aggregated[0].Outcome != evidence.OutcomeServiceBlocked {
+		t.Fatalf("blocked required scenario was promoted: %+v", aggregated)
 	}
 }
 

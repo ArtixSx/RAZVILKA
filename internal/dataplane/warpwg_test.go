@@ -50,6 +50,12 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 	if name == "ip" && len(args) >= 3 && args[0] == "route" && args[1] == "get" {
 		return []byte(args[2] + " dev rz-warp table 201"), nil
 	}
+	if name == "ip" && len(args) >= 2 && args[0] == "rule" && args[1] == "show" {
+		return nil, nil
+	}
+	if name == "ip" && len(args) >= 4 && args[0] == "route" && args[1] == "show" && args[2] == "table" {
+		return nil, nil
+	}
 	if name == "wg" && len(args) > 0 && args[0] == "show" {
 		if r.neverHandshake || (r.handshakeAfterRestart && r.starts < 2) {
 			return []byte("peer\t0\n"), nil
@@ -57,6 +63,65 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		return []byte(fmt.Sprintf("peer\t%d\n", time.Now().Unix())), nil
 	}
 	return []byte("ok"), nil
+}
+
+func TestWARPCanaryUsesTemporarySourcePolicyAndCleansIt(t *testing.T) {
+	root := t.TempDir()
+	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	if _, err := configs.Stage("warp-wg", "main", testWARPProfile()); err != nil {
+		t.Fatal(err)
+	}
+	runner := &warpFakeRunner{}
+	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
+	adapter.WG, adapter.IP = "wg", "ip"
+	adapter.Runner = runner
+	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
+		if host == "engage.cloudflareclient.com" {
+			return []netip.Addr{netip.MustParseAddr("162.159.192.1")}, nil
+		}
+		return []netip.Addr{netip.MustParseAddr("198.51.100.20")}, nil
+	}
+	var probes []string
+	adapter.CanaryProbe = func(_ context.Context, rawURL, source string) error {
+		if source != "172.16.0.2" {
+			t.Fatalf("canary source=%q", source)
+		}
+		probes = append(probes, rawURL)
+		return nil
+	}
+	transaction := filepath.Join(root, "transaction")
+	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Stage(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Validate(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Canary(context.Background(), plan.RoutePlanFor("warp-wg"), transaction); err != nil {
+		t.Fatal(err)
+	}
+	if runner.active {
+		t.Fatal("temporary WARP interface remained active")
+	}
+	if len(probes) != 2 || probes[0] != "https://www.cloudflare.com/cdn-cgi/trace" || probes[1] != "https://telegram.org/" {
+		t.Fatalf("canary probes=%v", probes)
+	}
+	joined := strings.Join(runner.calls, "\n")
+	for _, required := range []string{
+		"wg setconf rz-warp-canary",
+		"ip route add default dev rz-warp-canary table 219",
+		"ip rule add priority 18050 from 172.16.0.2/32 lookup 219",
+		"ip rule del priority 18050 from 172.16.0.2/32 lookup 219",
+		"ip link delete dev rz-warp-canary",
+	} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("canary call missing %q:\n%s", required, joined)
+		}
+	}
 }
 
 func TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner(t *testing.T) {
