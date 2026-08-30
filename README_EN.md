@@ -2,7 +2,7 @@
 
 <p align="center"><strong>Select a service. RAZVILKA verifies available bypasses and helps apply a suitable route safely.</strong></p>
 
-<p align="center"><a href="README.md">Русский</a> · <a href="https://github.com/ArtixSx/RAZVILKA/releases">Releases</a> · <a href="https://t.me/RAZVILKA_UI">Telegram</a> · <a href="SECURITY.md">Security</a></p>
+<p align="center"><a href="README.md">Русский</a> · <a href="https://github.com/ArtixSx/RAZVILKA/releases">Releases</a> · <a href="docs/CURRENT_STATUS_RU.md">Verified status</a> · <a href="https://t.me/RAZVILKA_UI">Telegram</a> · <a href="SECURITY.md">Security</a></p>
 
 # RAZVILKA
 
@@ -11,6 +11,10 @@ RAZVILKA is a free local-first routing panel for Keenetic/Netcraze routers with 
 Credentials, configurations and diagnostics stay on the router. No RAZVILKA cloud account is required.
 
 > The project is still undergoing hardware testing. Version `1.0.0` is reserved for the multi-router, IPv4/IPv6, reboot, low-memory and recovery release gate.
+
+The latest stable release is `v0.18.0`; `main` is the `0.18.1-dev` development
+cycle. The [verified status](docs/CURRENT_STATUS_RU.md) separates implemented,
+CI-tested, router-tested and experimental capabilities.
 
 ## Install
 
@@ -21,13 +25,6 @@ curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/boots
 ```
 
 The installer verifies the router architecture and release checksum, creates a rollback snapshot, starts the local UI and prints its URL plus a one-time setup key. Only the UI is installed by default; add the required bypasses later from the **Bypasses** page.
-
-## Interface
-
-<p align="center">
-  <img src="docs/screenshots/overview-v0.15.0.jpg" alt="RAZVILKA overview" width="49%">
-  <img src="docs/screenshots/services-v0.15.0.jpg" alt="RAZVILKA service catalog" width="49%">
-</p>
 
 ## Basic workflow
 

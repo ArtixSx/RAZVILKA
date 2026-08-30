@@ -322,7 +322,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	if err != nil {
 		return m.fail(*src, err)
 	}
-	req.Header.Set("User-Agent", "RAZVILKA/0.2.0")
+	// Keep the fetch identity stable and free from a separately maintained
+	// version literal. Build provenance is exposed by the local status API.
+	req.Header.Set("User-Agent", "RAZVILKA/source-hub")
 	m.clientMu.RLock()
 	client := m.client
 	m.clientMu.RUnlock()

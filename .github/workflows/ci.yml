@@ -35,7 +35,8 @@ jobs:
       - name: Full project checks
         shell: bash
         run: |
-          export RAZVILKA_VERSION="0.17.0-dev+${GITHUB_SHA::7}"
+          BASE_VERSION="$(tr -d '\r\n' < VERSION)"
+          export RAZVILKA_VERSION="${BASE_VERSION}+${GITHUB_SHA::7}"
           export RAZVILKA_COMMIT="$GITHUB_SHA"
           export RAZVILKA_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export RAZVILKA_DIRTY=false

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.1-dev — Truth and safety
+
+- Added a canonical development version consumed by local builds and CI, plus
+  a release guard that rejects tags which do not match the source version.
+- Added a verified capability matrix and a roadmap rebased on the published
+  `v0.18.0`; older gap documents are now explicitly historical.
+- Removed the stale Source Hub `0.2.0` identity and exposed version, commit,
+  build date and source state together in Settings.
+- Added automated consistency and current-document link checks.
+
 ## v0.18.0 — Autopilot and honest route checks
 
 - Fixed NFQWS2 activation on Entware: generated host/IP lists are readable by

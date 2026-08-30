@@ -51,7 +51,7 @@ var (
 	// Release builds override these values through -ldflags. Keeping useful
 	// development defaults prevents an unreleased binary from identifying
 	// itself as the last stable release.
-	Version     = "0.18.0-dev"
+	Version     = "0.18.1-dev"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"

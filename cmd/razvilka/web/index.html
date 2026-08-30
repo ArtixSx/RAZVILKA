@@ -6,16 +6,16 @@
   <meta name="theme-color" content="#0b0e12">
   <meta name="application-name" content="RAZVILKA">
   <title>RAZVILKA</title>
-<link rel="icon" href="/favicon.ico?v=0.18.0" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=0.18.0">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=0.18.0">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.18.0">
-<link rel="stylesheet" href="/style.css?v=0.18.0">
-<link rel="stylesheet" href="/v010.css?v=0.18.0">
-<link rel="stylesheet" href="/v011.css?v=0.18.0">
-<link rel="stylesheet" href="/v011-theme.css?v=0.18.0">
-<link rel="stylesheet" href="/v012.css?v=0.18.0">
-<link rel="stylesheet" href="/usque-doctor.css?v=0.18.0">
+<link rel="icon" href="/favicon.ico?v=0.18.1" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=0.18.1">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=0.18.1">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.18.1">
+<link rel="stylesheet" href="/style.css?v=0.18.1">
+<link rel="stylesheet" href="/v010.css?v=0.18.1">
+<link rel="stylesheet" href="/v011.css?v=0.18.1">
+<link rel="stylesheet" href="/v011-theme.css?v=0.18.1">
+<link rel="stylesheet" href="/v012.css?v=0.18.1">
+<link rel="stylesheet" href="/usque-doctor.css?v=0.18.1">
 </head>
 <body>
 <svg class="icon-sprite" aria-hidden="true">
@@ -36,7 +36,7 @@
 </svg>
 <section class="auth-screen" id="authScreen" hidden>
   <div class="auth-card">
-    <div class="auth-brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.0" alt=""></div><div><b>RAZVILKA</b><small>Локальная панель маршрутизации</small></div></div>
+    <div class="auth-brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.1" alt=""></div><div><b>RAZVILKA</b><small>Локальная панель маршрутизации</small></div></div>
     <div id="authSetupPanel" hidden>
       <span class="eyebrow">ПЕРВЫЙ ЗАПУСК</span><h1>Создайте администратора</h1>
       <p>Ключ первого входа показан установщиком. После регистрации вход выполняется обычным логином и паролем.</p>
@@ -64,7 +64,7 @@
 </section>
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.0" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.18.0-dev</small></div></div>
+    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.1" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.18.1-dev</small></div></div>
     <nav class="nav-list">
       <button class="nav active" data-view="overview"><span><svg><use href="#i-home"/></svg></span><b>Обзор</b></button>
       <div class="nav-label">МАРШРУТИЗАЦИЯ</div>
@@ -346,7 +346,7 @@
 
     <section class="view" id="view-settings">
       <div class="two-col">
-        <article class="panel"><div class="panel-title"><div><h2>Режим применения</h2><p>Безопасный режим разрешает проверку, но не меняет рабочие маршруты</p></div><button class="secondary" id="toggleSafeMode" type="button">Перейти в рабочий режим</button></div><div class="settings-list"><div><span>Текущий режим</span><b id="settingSafeMode">Безопасный</b></div><div><span>Маршруты в черновике</span><b id="settingPending">нет</b></div><div><span>Черновики обходов</span><b id="settingEngineDrafts">0</b></div><div><span>Последнее применение</span><b id="settingApplied">—</b></div><div><span>Версия настроек</span><b id="settingRevision">0 / 0</b></div><div><span>Сборка приложения</span><b id="settingBuild">загружается…</b></div></div></article>
+        <article class="panel"><div class="panel-title"><div><h2>Режим применения</h2><p>Безопасный режим разрешает проверку, но не меняет рабочие маршруты</p></div><button class="secondary" id="toggleSafeMode" type="button">Перейти в рабочий режим</button></div><div class="settings-list"><div><span>Текущий режим</span><b id="settingSafeMode">Безопасный</b></div><div><span>Маршруты в черновике</span><b id="settingPending">нет</b></div><div><span>Черновики обходов</span><b id="settingEngineDrafts">0</b></div><div><span>Последнее применение</span><b id="settingApplied">—</b></div><div><span>Версия настроек</span><b id="settingRevision">0 / 0</b></div><div><span>Сборка приложения</span><b id="settingBuild">загружается…</b><small id="settingBuildDetails">версия, commit и дата появятся после подключения</small></div></div></article>
         <article class="panel"><div class="panel-title"><div><h2>Сохранённые изменения</h2><p>Черновик можно проверить, применить или отменить без ручного поиска файлов</p></div></div><div class="settings-actions"><button class="secondary" id="exportConfig">Скачать техническую копию</button><button class="secondary" id="discardSettings">Отменить черновик</button><button class="primary" id="applySettings">Проверить черновик</button></div></article>
       </div>
       <article class="panel app-update-panel"><div class="panel-title"><div><span class="eyebrow">ОФИЦИАЛЬНЫЙ РЕЛИЗ</span><h2>Обновление RAZVILKA</h2><p>Проверка выполняется только через официальный GitHub. Обновление не запускается автоматически: сначала сохраните зашифрованную резервную копию и проверьте подлинность релиза на компьютере.</p></div><button class="secondary" id="checkAppUpdate" type="button">Проверить версию</button></div><div id="appUpdateState" class="app-update-state"><div class="community-empty">Нажмите «Проверить версию». Фоновый запрос не выполняется без вашего действия.</div></div></article>
@@ -360,7 +360,7 @@
     </section>
 
     <section class="details-drawer" id="detailsPanel"><div class="drawer-head"><div><h3>Детали</h3><p id="detailsSubtitle">Понятный результат · технические данные ниже</p></div><button id="hideDetails" aria-label="Закрыть">×</button></div><div class="details-content" id="details"></div></section>
-    <footer>RAZVILKA <span id="footerVersion">v0.18.0-dev</span> · локальная панель маршрутизации · <a href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer">Telegram</a></footer>
+    <footer>RAZVILKA <span id="footerVersion">v0.18.1-dev</span> · локальная панель маршрутизации · <a href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer">Telegram</a></footer>
   </main>
 </div>
 <dialog class="action-dialog" id="actionDialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ</span><h3 id="actionDialogTitle">Подтвердите действие</h3><p id="actionDialogText"></p><div class="dialog-actions"><button class="secondary" value="cancel">Отмена</button><button class="primary" id="actionDialogConfirm" value="confirm">Продолжить</button></div></form></dialog>
@@ -373,7 +373,7 @@
 </dialog>
 <dialog class="onboarding-dialog" id="onboardingDialog">
   <div class="onboarding-shell">
-    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.0" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
+    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.1" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
     <section class="onboarding-main"><button class="dialog-close" id="onboardingClose" type="button" aria-label="Закрыть">×</button><div id="onboardingContent"></div><div class="onboarding-actions"><button class="secondary" id="onboardingBack" type="button">Назад</button><button class="text-button" id="onboardingLater" type="button">Продолжить позже</button><button class="primary" id="onboardingNext" type="button">Далее</button></div></section>
   </div>
 </dialog>
@@ -428,6 +428,6 @@
     </div>
   </div>
 </dialog>
-<script src="/app.js?v=0.18.0"></script>
+<script src="/app.js?v=0.18.1"></script>
 </body>
 </html>

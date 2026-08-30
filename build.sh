@@ -1,7 +1,15 @@
 #!/bin/sh
 set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+cd "$ROOT"
 mkdir -p dist
-VERSION="${RAZVILKA_VERSION:-0.17.0-dev}"
+VERSION_FILE="$ROOT/VERSION"
+[ -f "$VERSION_FILE" ] || { echo "Missing canonical VERSION file: $VERSION_FILE" >&2; exit 1; }
+PROJECT_VERSION="$(tr -d '\r\n' < "$VERSION_FILE")"
+case "$PROJECT_VERSION" in
+  ''|*[!0-9A-Za-z.+-]*) echo "Invalid canonical version: $PROJECT_VERSION" >&2; exit 1 ;;
+esac
+VERSION="${RAZVILKA_VERSION:-$PROJECT_VERSION}"
 COMMIT="${RAZVILKA_COMMIT:-unknown}"
 BUILD_TIME="${RAZVILKA_BUILD_TIME:-unknown}"
 DIRTY="${RAZVILKA_DIRTY:-unknown}"

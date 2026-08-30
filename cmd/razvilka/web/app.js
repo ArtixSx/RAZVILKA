@@ -831,8 +831,10 @@ function renderStatus() {
   $('#footerVersion').textContent = `v${s.version || '—'}`;
   const buildCommit = s.build_commit && s.build_commit !== 'unknown' ? String(s.build_commit).slice(0, 10) : 'commit неизвестен';
   const buildState = s.build_dirty_known ? (s.build_dirty ? 'есть локальные изменения' : 'чистая сборка') : 'состояние исходников неизвестно';
+  const buildTime = s.build_time && s.build_time !== 'unknown' ? new Date(s.build_time).toLocaleString('ru-RU') : 'дата сборки неизвестна';
   $('#settingBuild').textContent = `v${s.version || '—'} · ${buildCommit}`;
-  $('#settingBuild').title = `${buildState}${s.build_time && s.build_time !== 'unknown' ? ` · ${new Date(s.build_time).toLocaleString('ru-RU')}` : ''}`;
+  $('#settingBuild').title = `${buildState} · ${buildTime}`;
+  $('#settingBuildDetails').textContent = `${buildTime} · ${buildState}`;
   $('#listenChip').textContent = s.listen || ':8787';
   $('#topModeLabel').textContent = s.safe_mode ? 'Безопасный режим' : 'Рабочий режим';
   $('#systemText').textContent = s.safe_mode ? 'Защита включена' : (s.live_active ? 'Маршруты активны' : 'Запись разрешена');

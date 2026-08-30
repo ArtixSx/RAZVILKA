@@ -34,7 +34,13 @@ jobs:
       - name: Run checks and cross-build
         shell: bash
         run: |
-          export RAZVILKA_VERSION="${GITHUB_REF_NAME#v}"
+          SOURCE_VERSION="$(tr -d '\r\n' < VERSION)"
+          RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${SOURCE_VERSION%-dev}" != "$RELEASE_VERSION" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match canonical VERSION $SOURCE_VERSION" >&2
+            exit 1
+          fi
+          export RAZVILKA_VERSION="$RELEASE_VERSION"
           export RAZVILKA_COMMIT="$GITHUB_SHA"
           export RAZVILKA_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export RAZVILKA_DIRTY=false
@@ -53,7 +59,7 @@ jobs:
           STAGE="RAZVILKA-${VERSION}"
           mkdir -p "$STAGE"
           cp -a \
-            README.md README_RU.md LAB.md CHANGELOG.md LICENSE SECURITY.md THIRD_PARTY.md \
+            VERSION README.md README_RU.md LAB.md CHANGELOG.md LICENSE SECURITY.md THIRD_PARTY.md \
             configs docs dist scripts "$STAGE"/
           test -x "$STAGE/scripts/install-entware.sh"
           test -x "$STAGE/scripts/upgrade-entware.sh"

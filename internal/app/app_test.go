@@ -300,10 +300,10 @@ func TestBuildMetadataDoesNotClaimLastStableRelease(t *testing.T) {
 	t.Cleanup(func() {
 		Version, BuildCommit, BuildTime, BuildDirty = previousVersion, previousCommit, previousTime, previousDirty
 	})
-	Version, BuildCommit, BuildTime, BuildDirty = "0.18.0-dev+abc1234", "abc1234", "2026-08-28T12:00:00Z", "true"
+	Version, BuildCommit, BuildTime, BuildDirty = "0.18.1-dev+abc1234", "abc1234", "2026-08-30T12:00:00Z", "true"
 
 	build := CurrentBuildInfo()
-	if build.Version != Version || build.Commit != "abc1234" || build.BuiltAt != "2026-08-28T12:00:00Z" || !build.Dirty || !build.DirtyKnown {
+	if build.Version != Version || build.Commit != "abc1234" || build.BuiltAt != "2026-08-30T12:00:00Z" || !build.Dirty || !build.DirtyKnown {
 		t.Fatalf("unexpected build metadata: %+v", build)
 	}
 	BuildDirty = "unknown"
