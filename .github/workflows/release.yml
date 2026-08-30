@@ -36,7 +36,8 @@ jobs:
         run: |
           SOURCE_VERSION="$(tr -d '\r\n' < VERSION)"
           RELEASE_VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "${SOURCE_VERSION%-dev}" != "$RELEASE_VERSION" ]]; then
+          SOURCE_BASE="${SOURCE_VERSION%-dev}"
+          if [[ "$SOURCE_BASE" != "$RELEASE_VERSION" && ! "$RELEASE_VERSION" =~ ^"$SOURCE_BASE"-rc\.[1-9][0-9]*$ ]]; then
             echo "Release tag $GITHUB_REF_NAME does not match canonical VERSION $SOURCE_VERSION" >&2
             exit 1
           fi
@@ -104,8 +105,13 @@ jobs:
           if [[ -f "docs/releases/${VERSION}.md" ]]; then
             NOTES_OPTION="--notes-file=docs/releases/${VERSION}.md"
           fi
+          RELEASE_OPTIONS=(--verify-tag)
+          if [[ "$VERSION" == *-rc.* ]]; then
+            RELEASE_OPTIONS+=(--prerelease --latest=false)
+          fi
           gh release create "$GITHUB_REF_NAME" \
             --title "RAZVILKA $GITHUB_REF_NAME" \
+            "${RELEASE_OPTIONS[@]}" \
             "$NOTES_OPTION" \
             dist/razvilka-linux-amd64 \
             dist/razvilka-linux-arm64 \

@@ -60,6 +60,8 @@ func TestCanonicalDevelopmentVersionIsConsistent(t *testing.T) {
 		`SOURCE_VERSION="$(tr -d '\r\n' < VERSION)"`,
 		`"${SOURCE_VERSION%-dev}"`,
 		`VERSION README.md`,
+		`RELEASE_OPTIONS+=(--prerelease --latest=false)`,
+		`RELEASE_OPTIONS=(--verify-tag)`,
 	} {
 		if !strings.Contains(releaseWorkflow, required) {
 			t.Errorf("release workflow is missing canonical version guard %q", required)
