@@ -370,11 +370,27 @@ function evidenceOutcomeLabel(outcome) {
 function probeVerdict(result) {
   const status = String(result?.status || 'not-ready');
   const routeConfirmed = !!result?.route_confirmed;
-  if (status === 'pass' && routeConfirmed) return { tone: 'pass', text: 'Сервис работает через этот маршрут' };
+  const verdict = String(result?.verdict || result?.evidence_v2?.verdict || '');
+  const errorCode = String(result?.error_code || result?.evidence_v2?.error_code || '');
+  if (verdict === 'MISROUTED') return { tone: 'fail', text: 'Ответ пришёл через другой маршрут — обход не подтверждён' };
+  if (verdict === 'BLOCKED' && errorCode === 'timeout') return { tone: 'warn', text: 'Проверка не дождалась ответа; это ещё не доказывает блокировку' };
+  if (verdict === 'BLOCKED' && errorCode.includes('tls')) return { tone: 'warn', text: 'Безопасное TLS-соединение не подтверждено' };
+  if (verdict === 'BLOCKED') return { tone: 'warn', text: 'Получен блокирующий ответ, работа сервиса не подтверждена' };
+  if (verdict === 'INCONCLUSIVE') return { tone: 'warn', text: 'Недостаточно данных для вывода о работе сервиса' };
+  if (verdict === 'ERROR') return { tone: 'warn', text: 'Ошибка проверки — это не доказательство неработающего обхода' };
+  if (verdict === 'PARTIAL') return { tone: 'warn', text: 'Доступ подтверждён лишь частично' };
+  if (status === 'pass' && routeConfirmed && evidenceAtLeast(result?.evidence_level, 'service-confirmed')) return { tone: 'pass', text: 'Сервис работает через этот маршрут' };
   if (status === 'pass') return { tone: 'warn', text: 'Сервис ответил, но путь трафика не доказан' };
   if (routeConfirmed) return { tone: 'fail', text: 'Маршрут использован, сервис не ответил' };
   if (status === 'not-ready') return { tone: 'muted', text: 'Проверка маршрута недоступна' };
   return { tone: 'fail', text: 'Доступ через маршрут не подтверждён' };
+}
+
+function probeStatusLabel(result) {
+  const errorCode = String(result?.error_code || result?.evidence_v2?.error_code || '');
+  if (result?.verdict === 'BLOCKED' && errorCode === 'timeout') return 'Нет ответа';
+  if (result?.verdict === 'BLOCKED' && errorCode.includes('tls')) return 'TLS не подтверждён';
+  return ({ PASS: 'Проверено', PARTIAL: 'Частично', BLOCKED: 'Блокирующий ответ', MISROUTED: 'Другой маршрут', INCONCLUSIVE: 'Не подтверждено', ERROR: 'Ошибка проверки' })[result?.verdict] || testStatusLabel(result?.status);
 }
 
 function evidenceBadgeHTML(item, compact = false) {
@@ -394,7 +410,7 @@ function renderRouteComparisonDetails(value) {
   const decisions = Array.isArray(value.decisions) ? value.decisions : [];
   const assessments = Array.isArray(value.assessments) ? value.assessments : [];
   const serviceName = results.find((item) => item?.service_name)?.service_name || decisions[0]?.service_id || 'Сервис';
-  const confirmed = results.filter((item) => item?.route_confirmed && item?.status === 'pass');
+  const confirmed = results.filter((item) => item?.route_confirmed && item?.status === 'pass' && evidenceAtLeast(item?.evidence_level, 'service-confirmed') && (!item?.verdict || item.verdict === 'PASS'));
   const assessment = assessments[0] || null;
   const selected = assessment?.recommended_route || decisions[0]?.selected || confirmed[0]?.route || '';
   const summary = selected ? `${serviceName} → ${routeLabel(selected)}` : `${serviceName}: рабочий обход не подтверждён`;
@@ -424,7 +440,7 @@ function renderRouteComparisonDetails(value) {
       result.evidence_v2?.finished_at ? `факт: ${timeAgo(result.evidence_v2.finished_at)}` : '',
     ].filter(Boolean);
     const scenario = result.scenario_label ? `<small>${esc(result.scenario_label)}${result.scenario_required ? ' · обязательный' : ''}</small>` : '';
-    return `<article class="route-result-card status-${esc(status)}"><div class="route-result-head"><strong>${esc(routeLabel(result.route))}${scenario}</strong><span>${esc(detailStatusLabels[status] || status)}</span></div><div class="probe-verdict ${esc(verdict.tone)}">${esc(verdict.text)}</div>${metrics.length ? `<div class="route-result-metrics">${metrics.map((metric) => `<b>${esc(metric)}</b>`).join('')}</div>` : ''}<p>${esc(friendlyDetail(result.detail))}</p></article>`;
+    return `<article class="route-result-card status-${esc(status)}"><div class="route-result-head"><strong>${esc(routeLabel(result.route))}${scenario}</strong><span>${esc(probeStatusLabel(result))}</span></div><div class="probe-verdict ${esc(verdict.tone)}">${esc(verdict.text)}</div>${metrics.length ? `<div class="route-result-metrics">${metrics.map((metric) => `<b>${esc(metric)}</b>`).join('')}</div>` : ''}<p>${esc(friendlyDetail(result.detail))}</p></article>`;
   }).join('');
   return `<div class="detail-hero ${esc(assessmentTone)}"><span>${esc(assessmentTitle)}</span><h4>${esc(summary)}</h4><p>${esc(assessment?.message || (confirmed.length ? `Подтверждено рабочих вариантов: ${confirmed.length}.` : 'Ни один выбранный вариант пока не дал подтверждённый ответ.'))}</p></div>${value.control_added ? '<div class="detail-note"><b>Контроль добавлен автоматически</b><p>RAZVILKA проверила DIRECT вместе с выбранными обходами, чтобы не назначать обход без необходимости.</p></div>' : ''}${decisionCards ? `<section class="detail-section"><h4>Решение Smart Route</h4>${decisionCards}</section>` : ''}<section class="detail-section"><h4>Проверенные маршруты</h4><div class="route-result-list">${resultCards || '<div class="detail-empty">Результаты проверки отсутствуют.</div>'}</div></section>${value.note ? `<div class="detail-note"><b>Как выполнялся тест</b><p>${esc(value.note)}</p></div>` : ''}${technicalDetails(value)}`;
 }
@@ -1961,7 +1977,7 @@ function renderTestLab() {
   $('#testSummary').innerHTML = [
     ['Работает', counts.pass, 'pass'], ['Частично', counts.partial, 'partial'], ['Ошибок', counts.fail, 'fail'], ['Проверено', current.length, ''],
   ].map(([label, n, cls]) => `<div class="test-stat ${cls}"><strong>${n}</strong><span>${label}</span></div>`).join('');
-  $('#testCurrentRows').innerHTML = current.map((r) => { const verdict = probeVerdict(r); return `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.scenario_label || 'Основной доступ')}${r.scenario_required ? ' · обязательный' : ''}</small><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${testStatusLabel(r.status)}</span><small>${esc(evidenceOutcomeLabel(r.outcome))}</small></td><td>${r.http_status || '—'}</td><td>${esc(probeTiming(r))}</td><td><span class="stream-status ${esc(r.stream_status || '')}">${esc(probeStream(r))}</span></td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}<span class="probe-verdict ${esc(verdict.tone)}">${esc(verdict.text)}</span><small>${esc(evidenceLevelLabel(r.evidence_level))}</small><small>${r.evidence_v2?.finished_at ? esc(`факт: ${timeAgo(r.evidence_v2.finished_at)}`) : ''}</small></td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`; }).join('') || '<tr><td colspan="7"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
+  $('#testCurrentRows').innerHTML = current.map((r) => { const verdict = probeVerdict(r); return `<tr><td><b>${esc(r.service_name)}</b><small>${esc(r.scenario_label || 'Основной доступ')}${r.scenario_required ? ' · обязательный' : ''}</small><small>${esc(r.probe_url || '')}</small></td><td><span class="test-status ${esc(r.status)}">${esc(probeStatusLabel(r))}</span><small>${esc(evidenceOutcomeLabel(r.outcome))}</small></td><td>${r.http_status || '—'}</td><td>${esc(probeTiming(r))}</td><td><span class="stream-status ${esc(r.stream_status || '')}">${esc(probeStream(r))}</span></td><td>${r.route === 'current' ? 'ТЕКУЩИЙ<small>применённый маршрут</small>' : esc(routeLabel(r.route))}<span class="probe-verdict ${esc(verdict.tone)}">${esc(verdict.text)}</span><small>${esc(evidenceLevelLabel(r.evidence_level))}</small><small>${r.evidence_v2?.finished_at ? esc(`факт: ${timeAgo(r.evidence_v2.finished_at)}`) : ''}</small></td><td>${esc(friendlyDetail(r.detail || '—'))}</td></tr>`; }).join('') || '<tr><td colspan="7"><div class="empty-inline">Проверки ещё не запускались</div></td></tr>';
 
   const routes = state.routeOptions.filter((o) => o.id !== 'auto');
   const cells = state.testlab?.matrix || [];

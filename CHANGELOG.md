@@ -9,6 +9,16 @@
 - Removed the stale Source Hub `0.2.0` identity and exposed version, commit,
   build date and source state together in Settings.
 - Added automated consistency and current-document link checks.
+- Added shared strict HTTP predicates for Test Lab, isolated route probes and
+  candidate health checks: redirects, block pages, policy statuses, JSON fields
+  and content types no longer count as service success without validation.
+- Added explicit probe verdicts and redacted redirect/content-fingerprint
+  metadata; declared success without an HTTP response is now inconclusive.
+- Prevented route mismatches and blocked required scenarios from inheriting a
+  successful result. Smart Route revokes observed misrouted evidence and ignores
+  inconclusive high-score candidates.
+- Clarified that the YouTube connectivity probe requires HTTP 204 but does not
+  prove video playback. These changes still require router acceptance testing.
 
 ## v0.18.0 — Autopilot and honest route checks
 

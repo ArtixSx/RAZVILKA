@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -82,6 +84,39 @@ func TestFailedSOCKSRequestIsNotRouteConfirmed(t *testing.T) {
 	result := probeHTTP(context.Background(), client, catalog.Service{ID: "telegram", Name: "Telegram", ProbeURL: "https://telegram.org/"}, "usque", "explicit-socks5:usque@127.0.0.1:1080", true)
 	if result.RouteConfirmed {
 		t.Fatalf("failed SOCKS request must not confirm a route: %+v", result)
+	}
+}
+
+func TestIsolatedProbeRejectsBlockPageAndInvalidJSON(t *testing.T) {
+	for _, test := range []struct {
+		body, contentType string
+		expect            catalog.ProbeExpectation
+		verdict           evidence.Verdict
+	}{
+		{"<html>Доступ к запрашиваемому ресурсу ограничен</html>", "text/html", catalog.ProbeExpectation{}, evidence.VerdictBlocked},
+		{"<html>portal</html>", "application/json", catalog.ProbeExpectation{JSON: true}, evidence.VerdictError},
+	} {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", test.contentType)
+			_, _ = w.Write([]byte(test.body))
+		}))
+		service := catalog.Service{ID: "test", ProbeURL: server.URL, Probes: []catalog.Probe{{URL: server.URL, Expect: test.expect}}}
+		result := probeHTTP(context.Background(), server.Client(), service, "sing-box", "explicit-socks5:test", true)
+		result.NormalizeEvidence()
+		if result.Verdict != test.verdict || result.AssuranceLevel().AtLeast(evidence.Service) {
+			t.Errorf("unsafe result: %+v", result)
+		}
+		server.Close()
+	}
+}
+
+func TestIsolatedProbeDoesNotIgnoreTLSVerification(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
+	defer server.Close()
+	result := probeHTTP(context.Background(), &http.Client{Timeout: time.Second}, catalog.Service{ID: "test", ProbeURL: server.URL}, "sing-box", "explicit-socks5:test", true)
+	result.NormalizeEvidence()
+	if result.Verdict != evidence.VerdictBlocked || result.RouteConfirmed || result.AssuranceLevel().AtLeast(evidence.Service) {
+		t.Fatalf("untrusted TLS became proof: %+v", result)
 	}
 }
 

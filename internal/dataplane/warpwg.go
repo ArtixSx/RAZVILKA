@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -1228,15 +1227,13 @@ func defaultTunnelProbe(ctx context.Context, rawURL string) error {
 	}
 	request.Header.Set("User-Agent", "RAZVILKA-Tunnel-Health/1")
 	client := &http.Client{Timeout: 15 * time.Second}
-	response, err := client.Do(request)
+	response, err := serviceProbeClient(client, rawURL).Do(request)
 	if err != nil {
 		return err
 	}
 	defer response.Body.Close()
-	if response.StatusCode >= 500 {
-		return fmt.Errorf("HTTP %d", response.StatusCode)
-	}
-	return nil
+	_, err = strictServiceResponse(rawURL, response)
+	return err
 }
 
 func sourceBoundWARPProbe(ctx context.Context, rawURL, source string) error {
@@ -1297,17 +1294,14 @@ func sourceBoundWARPProbe(ctx context.Context, rawURL, source string) error {
 		},
 	}
 	request.Header.Set("User-Agent", "RAZVILKA-WARP-Canary/1")
-	response, err := client.Do(request)
+	response, err := serviceProbeClient(client, rawURL).Do(request)
 	if err != nil {
 		return err
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+	body, err := strictServiceResponse(rawURL, response)
 	if err != nil {
 		return err
-	}
-	if response.StatusCode >= 400 {
-		return fmt.Errorf("HTTP %d", response.StatusCode)
 	}
 	if request.URL.Hostname() == "www.cloudflare.com" && request.URL.Path == "/cdn-cgi/trace" && !strings.Contains("\n"+string(body)+"\n", "\nwarp=on\n") {
 		return errors.New("Cloudflare trace did not confirm warp=on")

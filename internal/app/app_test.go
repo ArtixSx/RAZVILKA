@@ -739,7 +739,7 @@ func (r deviceRunner) Run(context.Context, string, ...string) ([]byte, error) {
 }
 
 func (confirmedRouteProber) Probe(_ context.Context, service catalog.Service, route string) testlab.Result {
-	return testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: "pass", LatencyMS: 12, CheckedAt: time.Now().UTC().Format(time.RFC3339), RouteConfirmed: true, EvidenceSource: "test-adapter"}
+	return testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: "pass", HTTPStatus: 204, LatencyMS: 12, CheckedAt: time.Now().UTC().Format(time.RFC3339), RouteConfirmed: true, EvidenceSource: "test-adapter"}
 }
 
 func (prober staleRouteProber) Probe(_ context.Context, service catalog.Service, route string) testlab.Result {

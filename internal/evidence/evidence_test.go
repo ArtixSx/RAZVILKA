@@ -15,6 +15,9 @@ func TestFromProbeDoesNotPromoteCurrentPath(t *testing.T) {
 }
 
 func TestFromProbeRequiresRouteAndServiceSuccess(t *testing.T) {
+	if got := FromProbe("pass", true); got != Route {
+		t.Fatalf("legacy status without HTTP facts became %s", got)
+	}
 	if got := FromProbe("fail", true); got != Route {
 		t.Fatalf("confirmed failed route = %q, want %q", got, Route)
 	}
@@ -34,7 +37,7 @@ func TestEvidenceV2NeverPromotesBlockedOrMismatchedContent(t *testing.T) {
 			t.Fatalf("outcome %s = %s, want route-confirmed", outcome, got)
 		}
 	}
-	accepted := ProbeEvidence{SchemaVersion: ProbeSchemaVersion, StartedAt: now.Add(-time.Second), FinishedAt: now, RoutePathID: "isolated:warp", Outcome: OutcomeServiceAccepted}
+	accepted := ProbeEvidence{SchemaVersion: ProbeSchemaVersion, StartedAt: now.Add(-time.Second), FinishedAt: now, RoutePathID: "isolated:warp", Outcome: OutcomeServiceAccepted, HTTPStatus: 204}
 	if got := accepted.AssuranceLevel(); got != Service {
 		t.Fatalf("accepted service = %s", got)
 	}

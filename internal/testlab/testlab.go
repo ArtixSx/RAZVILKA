@@ -14,33 +14,61 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
 )
 
 type Result struct {
-	ServiceID          string                  `json:"service_id"`
-	ServiceName        string                  `json:"service_name"`
-	ProbeURL           string                  `json:"probe_url"`
-	ScenarioID         string                  `json:"scenario_id,omitempty"`
-	ScenarioLabel      string                  `json:"scenario_label,omitempty"`
-	ScenarioNeeded     bool                    `json:"scenario_required,omitempty"`
-	Route              string                  `json:"route"`
-	Status             string                  `json:"status"` // pass, partial, fail, not-ready, pending
-	HTTPStatus         int                     `json:"http_status,omitempty"`
-	LatencyMS          int64                   `json:"latency_ms,omitempty"`
-	TTFBMS             int64                   `json:"ttfb_ms,omitempty"`
-	ReadMS             int64                   `json:"read_ms,omitempty"`
-	BytesRead          int64                   `json:"bytes_read,omitempty"`
-	StreamStatus       string                  `json:"stream_status,omitempty"`
-	CheckedAt          string                  `json:"checked_at"`
-	Detail             string                  `json:"detail,omitempty"`
-	RouteConfirmed     bool                    `json:"route_confirmed"`
-	EvidenceSource     string                  `json:"evidence_source,omitempty"`
-	EvidenceLevel      evidence.Level          `json:"evidence_level"`
-	Outcome            evidence.Outcome        `json:"outcome"`
-	EvidenceV2         *evidence.ProbeEvidence `json:"evidence_v2,omitempty"`
-	EvidenceFreshUntil string                  `json:"evidence_fresh_until,omitempty"`
-	EgressIP           string                  `json:"egress_ip,omitempty"`
+	ServiceID              string                  `json:"service_id"`
+	ServiceName            string                  `json:"service_name"`
+	ProbeURL               string                  `json:"probe_url"`
+	ScenarioID             string                  `json:"scenario_id,omitempty"`
+	ScenarioLabel          string                  `json:"scenario_label,omitempty"`
+	ScenarioNeeded         bool                    `json:"scenario_required,omitempty"`
+	Route                  string                  `json:"route"`
+	Status                 string                  `json:"status"` // pass, partial, fail, not-ready, pending
+	HTTPStatus             int                     `json:"http_status,omitempty"`
+	LatencyMS              int64                   `json:"latency_ms,omitempty"`
+	TTFBMS                 int64                   `json:"ttfb_ms,omitempty"`
+	ReadMS                 int64                   `json:"read_ms,omitempty"`
+	BytesRead              int64                   `json:"bytes_read,omitempty"`
+	StreamStatus           string                  `json:"stream_status,omitempty"`
+	CheckedAt              string                  `json:"checked_at"`
+	Detail                 string                  `json:"detail,omitempty"`
+	RouteConfirmed         bool                    `json:"route_confirmed"`
+	EvidenceSource         string                  `json:"evidence_source,omitempty"`
+	EvidenceLevel          evidence.Level          `json:"evidence_level"`
+	Outcome                evidence.Outcome        `json:"outcome"`
+	EvidenceV2             *evidence.ProbeEvidence `json:"evidence_v2,omitempty"`
+	EvidenceFreshUntil     string                  `json:"evidence_fresh_until,omitempty"`
+	EgressIP               string                  `json:"egress_ip,omitempty"`
+	Verdict                evidence.Verdict        `json:"verdict,omitempty"`
+	ErrorCode              string                  `json:"error_code,omitempty"`
+	FinalURL               string                  `json:"final_url,omitempty"`
+	RedirectChain          []string                `json:"redirect_chain,omitempty"`
+	ContentType            string                  `json:"content_type,omitempty"`
+	ContentFingerprint     string                  `json:"content_fingerprint,omitempty"`
+	ExpectedRoutePathID    string                  `json:"expected_route_path_id,omitempty"`
+	ObservedRoutePathID    string                  `json:"observed_route_path_id,omitempty"`
+	NegativeControlMatched bool                    `json:"negative_control_matched,omitempty"`
+}
+
+// EvaluateHTTP retains only redacted metadata and a bounded content digest;
+// response bodies (which may contain service data) never enter diagnostics.
+func (result *Result) EvaluateHTTP(service catalog.Service, observation probecheck.Observation) {
+	assessment := probecheck.Evaluate(service, probecheck.ServiceProbe(service), observation)
+	result.Status, result.Verdict, result.Outcome = assessment.Status, assessment.Verdict, assessment.Outcome
+	result.Detail, result.ErrorCode = assessment.Detail, assessment.ErrorCode
+	result.ContentFingerprint = assessment.ContentFingerprint
+	result.ContentType = observation.ContentType
+	result.FinalURL = probecheck.RedactedURL(observation.FinalURL)
+	result.RedirectChain = make([]string, 0, len(observation.RedirectChain))
+	for _, target := range observation.RedirectChain {
+		result.RedirectChain = append(result.RedirectChain, probecheck.RedactedURL(target))
+	}
+	result.ExpectedRoutePathID = observation.ExpectedRoutePathID
+	result.ObservedRoutePathID = observation.ObservedRoutePathID
+	result.NegativeControlMatched = observation.NegativeControlMatched
 }
 
 // NormalizeEvidence derives the public assurance level from observed facts.
@@ -48,6 +76,16 @@ type Result struct {
 func (result *Result) NormalizeEvidence() {
 	if result == nil {
 		return
+	}
+	if result.Verdict == evidence.VerdictPass && result.Status != "pass" {
+		result.Verdict = evidence.VerdictFromProbe(result.Status, result.HTTPStatus, result.ErrorCode)
+		result.Outcome = evidence.OutcomeFromProbe(result.Status, result.HTTPStatus, result.ErrorCode)
+	}
+	if result.NegativeControlMatched || (result.ExpectedRoutePathID != "" && result.ObservedRoutePathID != "" && result.ExpectedRoutePathID != result.ObservedRoutePathID) || result.Verdict == evidence.VerdictMisrouted {
+		result.RouteConfirmed = false
+		result.Status = "partial"
+		result.Verdict = evidence.VerdictMisrouted
+		result.Outcome = evidence.OutcomeTransportReachable
 	}
 	if result.EvidenceV2 == nil {
 		finished, err := time.Parse(time.RFC3339, result.CheckedAt)
@@ -59,7 +97,17 @@ func (result *Result) NormalizeEvidence() {
 		if result.RouteConfirmed {
 			routePath = "isolated:" + result.Route
 		}
-		outcome := evidence.OutcomeFromProbe(result.Status, result.HTTPStatus, probeErrorCode(result.Detail))
+		errorCode := result.ErrorCode
+		if errorCode == "" {
+			errorCode = probeErrorCode(result.Detail)
+		}
+		if result.Verdict == "" {
+			result.Verdict = evidence.VerdictFromProbe(result.Status, result.HTTPStatus, errorCode)
+		}
+		outcome := result.Outcome
+		if outcome == "" {
+			outcome = evidence.OutcomeFromProbe(result.Status, result.HTTPStatus, errorCode)
+		}
 		confidence := 0.25
 		if outcome == evidence.OutcomeServiceAccepted {
 			confidence = 1
@@ -74,10 +122,26 @@ func (result *Result) NormalizeEvidence() {
 			RoutePathID: routePath, Engine: result.Route, EgressIP: result.EgressIP,
 			Stage: "service", Outcome: outcome, HTTPStatus: result.HTTPStatus,
 			LatencyMS: result.LatencyMS, Confidence: confidence,
-			Source: result.EvidenceSource, ErrorCode: probeErrorCode(result.Detail),
+			Source: result.EvidenceSource, ErrorCode: errorCode,
+			Verdict: result.Verdict, RequestedURL: probecheck.RedactedURL(result.ProbeURL), FinalURL: result.FinalURL,
+			RedirectChain: append([]string(nil), result.RedirectChain...), ContentType: result.ContentType,
+			ContentFingerprint:  result.ContentFingerprint,
+			ExpectedRoutePathID: result.ExpectedRoutePathID, ObservedRoutePathID: result.ObservedRoutePathID,
+			NegativeControlMatched: result.NegativeControlMatched,
 		}
 	}
+	probe := result.EvidenceV2
+	if result.Verdict == evidence.VerdictMisrouted || probe.Verdict == evidence.VerdictMisrouted || probe.NegativeControlMatched || (probe.ExpectedRoutePathID != "" && probe.ObservedRoutePathID != "" && probe.ExpectedRoutePathID != probe.ObservedRoutePathID) {
+		copy := *result.EvidenceV2
+		copy.Verdict = evidence.VerdictMisrouted
+		copy.Outcome = evidence.OutcomeTransportReachable
+		copy.RoutePathID = ""
+		result.EvidenceV2 = &copy
+		result.Status = "partial"
+		result.RouteConfirmed = false
+	}
 	result.Outcome = result.EvidenceV2.Outcome
+	result.Verdict = result.EvidenceV2.Verdict
 	result.EvidenceFreshUntil = result.EvidenceV2.FinishedAt.Add(24 * time.Hour).Format(time.RFC3339)
 	derived := result.EvidenceV2.AssuranceLevel()
 	if result.EvidenceLevel.Valid() && result.EvidenceLevel != evidence.None {
@@ -433,7 +497,7 @@ func (r *Runner) matrix(cat catalog.Catalog, current []Result) []MatrixCell {
 }
 
 func (r *Runner) probe(ctx context.Context, s catalog.Service, probe catalog.Probe) Result {
-	res := Result{ServiceID: s.ID, ServiceName: s.Name, ProbeURL: s.ProbeURL, ScenarioID: probe.ID, ScenarioLabel: probe.Label, ScenarioNeeded: probe.Required, Route: "current", Status: "fail", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	res := Result{ServiceID: s.ID, ServiceName: s.Name, ProbeURL: probecheck.RedactedURL(s.ProbeURL), ScenarioID: probe.ID, ScenarioLabel: probe.Label, ScenarioNeeded: probe.Required, Route: "current", Status: "fail", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
 	if strings.TrimSpace(s.ProbeURL) == "" {
 		res.Status = "not-ready"
 		res.Detail = "service has no probe URL"
@@ -448,17 +512,19 @@ func (r *Runner) probe(ctx context.Context, s catalog.Service, probe catalog.Pro
 	req.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
 	req.Header.Set("Range", "bytes=0-32767")
 	start := time.Now()
-	resp, err := r.Client.Do(req)
+	redirects := []string{}
+	resp, err := probecheck.RecordingClient(r.Client, s, &redirects).Do(req)
 	res.TTFBMS = time.Since(start).Milliseconds()
 	if err != nil {
 		res.LatencyMS = time.Since(start).Milliseconds()
-		res.Detail = short(err.Error())
+		res.Detail = short(probecheck.RedactedError(err))
 		return res
 	}
 	defer resp.Body.Close()
 	res.HTTPStatus = resp.StatusCode
 	readStarted := time.Now()
-	res.BytesRead, err = io.Copy(io.Discard, io.LimitReader(resp.Body, 32768))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, probecheck.MaxBodyBytes))
+	res.BytesRead = int64(len(body))
 	res.ReadMS = time.Since(readStarted).Milliseconds()
 	res.LatencyMS = time.Since(start).Milliseconds()
 	res.StreamStatus = classifyStream(resp, res.BytesRead, err)
@@ -467,20 +533,7 @@ func (r *Runner) probe(ctx context.Context, s catalog.Service, probe catalog.Pro
 		res.Detail = fmt.Sprintf("response stream interrupted after %d bytes: %s", res.BytesRead, short(err.Error()))
 		return res
 	}
-	switch {
-	case resp.StatusCode >= 200 && resp.StatusCode < 400:
-		res.Status = "pass"
-		res.Detail = "HTTP endpoint reachable through the currently applied routing"
-	case resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 407 || resp.StatusCode == 429 || resp.StatusCode == 451:
-		res.Status = "partial"
-		res.Detail = fmt.Sprintf("network path works, but service/policy returned HTTP %d", resp.StatusCode)
-	case resp.StatusCode >= 400 && resp.StatusCode < 500:
-		res.Status = "partial"
-		res.Detail = fmt.Sprintf("HTTP endpoint reached with client error %d", resp.StatusCode)
-	default:
-		res.Status = "fail"
-		res.Detail = fmt.Sprintf("HTTP endpoint returned %d", resp.StatusCode)
-	}
+	res.EvaluateHTTP(s, probecheck.Observation{RequestedURL: s.ProbeURL, FinalURL: probecheck.FinalURL(resp, s.ProbeURL), RedirectChain: redirects, HTTPStatus: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body, BodyTruncated: res.StreamStatus == "sampled"})
 	return res
 }
 
@@ -510,6 +563,7 @@ func serviceProbes(service catalog.Service) []catalog.Probe {
 
 func withProbe(service catalog.Service, probe catalog.Probe) catalog.Service {
 	service.ProbeURL = probe.URL
+	service.Probes = []catalog.Probe{probe}
 	return service
 }
 
@@ -533,13 +587,17 @@ func AggregateScenarios(results []Result) []Result {
 			out = append(out, rows[0])
 			continue
 		}
-		aggregate := rows[0]
+		aggregate := Result{ServiceID: rows[0].ServiceID, ServiceName: rows[0].ServiceName, Route: rows[0].Route, CheckedAt: rows[0].CheckedAt, EvidenceSource: "required-scenarios"}
 		aggregate.ScenarioID = "all"
 		requiredCount := 0
 		for _, row := range rows {
 			if row.ScenarioNeeded {
 				requiredCount++
 			}
+		}
+		allRequired := requiredCount == 0
+		if allRequired {
+			requiredCount = len(rows)
 		}
 		aggregate.ScenarioLabel = fmt.Sprintf("Все обязательные сценарии (%d)", requiredCount)
 		aggregate.ScenarioNeeded = true
@@ -551,9 +609,15 @@ func AggregateScenarios(results []Result) []Result {
 		aggregate.LatencyMS = 0
 		failed := []string{}
 		partial := []string{}
+		var representative *Result
 		for _, row := range rows {
-			if !row.ScenarioNeeded {
+			if !row.ScenarioNeeded && !allRequired {
 				continue
+			}
+			row.NormalizeEvidence()
+			if representative == nil || verdictSeverity(row.Verdict) > verdictSeverity(representative.Verdict) {
+				copy := row
+				representative = &copy
 			}
 			if !row.RouteConfirmed {
 				aggregate.RouteConfirmed = false
@@ -574,6 +638,15 @@ func AggregateScenarios(results []Result) []Result {
 				failed = append(failed, row.ScenarioLabel)
 			}
 		}
+		if representative != nil {
+			aggregate.HTTPStatus = representative.HTTPStatus
+			aggregate.Outcome = representative.Outcome
+			aggregate.Verdict = representative.Verdict
+			aggregate.ErrorCode = representative.ErrorCode
+			aggregate.ExpectedRoutePathID = representative.ExpectedRoutePathID
+			aggregate.ObservedRoutePathID = representative.ObservedRoutePathID
+			aggregate.NegativeControlMatched = representative.NegativeControlMatched
+		}
 		switch {
 		case len(failed) > 0:
 			aggregate.Status = "fail"
@@ -583,12 +656,28 @@ func AggregateScenarios(results []Result) []Result {
 			aggregate.Detail = "Частичный ответ в сценариях: " + strings.Join(partial, ", ")
 		}
 		aggregate.EvidenceV2 = nil
-		aggregate.Outcome = ""
 		aggregate.EvidenceFreshUntil = ""
 		aggregate.NormalizeEvidence()
 		out = append(out, aggregate)
 	}
 	return out
+}
+
+func verdictSeverity(verdict evidence.Verdict) int {
+	switch verdict {
+	case evidence.VerdictMisrouted:
+		return 5
+	case evidence.VerdictBlocked:
+		return 4
+	case evidence.VerdictError:
+		return 3
+	case evidence.VerdictInconclusive:
+		return 2
+	case evidence.VerdictPartial:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func selectServices(cat catalog.Catalog, ids []string) []catalog.Service {

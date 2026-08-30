@@ -1223,10 +1223,8 @@ func probeTunnelViaSOCKS(ctx context.Context, rawURL, address string) error {
 		return err
 	}
 	defer response.Body.Close()
-	if response.StatusCode >= 500 {
-		return fmt.Errorf("HTTP %d", response.StatusCode)
-	}
-	return nil
+	_, err = strictServiceResponse(rawURL, response)
+	return err
 }
 
 func probeCloudflareTraceViaSOCKS(ctx context.Context, address string) (usqueCanaryEvidence, error) {
@@ -1289,7 +1287,7 @@ func socksHTTPGet(ctx context.Context, rawURL, address string) (*http.Response, 
 		return nil, nil, err
 	}
 	request.Header.Set("User-Agent", "RAZVILKA-Proxy-Health/1")
-	response, err := (&http.Client{Transport: transport, Timeout: 15 * time.Second}).Do(request)
+	response, err := serviceProbeClient(&http.Client{Transport: transport, Timeout: 15 * time.Second}, rawURL).Do(request)
 	if err != nil {
 		transport.CloseIdleConnections()
 		return nil, nil, err

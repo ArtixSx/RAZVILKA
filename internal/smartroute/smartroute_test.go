@@ -20,8 +20,8 @@ func TestObserveChoosesConfirmedRouteAndPersists(t *testing.T) {
 	m.now = func() time.Time { return now }
 	decisions, err := m.Observe([]testlab.Result{
 		{ServiceID: "youtube", Route: "direct", Status: "fail", RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)},
-		{ServiceID: "youtube", Route: "usque", Status: "pass", LatencyMS: 40, RouteConfirmed: true, EvidenceSource: "explicit-socks5", CheckedAt: now.Format(time.RFC3339)},
-		{ServiceID: "youtube", Route: "warp-wg", Status: "pass", LatencyMS: 80, RouteConfirmed: false, CheckedAt: now.Format(time.RFC3339)},
+		{ServiceID: "youtube", Route: "usque", Status: "pass", HTTPStatus: 204, LatencyMS: 40, RouteConfirmed: true, EvidenceSource: "explicit-socks5", CheckedAt: now.Format(time.RFC3339)},
+		{ServiceID: "youtube", Route: "warp-wg", Status: "pass", HTTPStatus: 204, LatencyMS: 80, RouteConfirmed: false, CheckedAt: now.Format(time.RFC3339)},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -76,6 +76,31 @@ func TestObserveNeverSelectsPolicyBlockedService(t *testing.T) {
 	}
 }
 
+func TestMisroutedObservationRevokesPreviousSuccess(t *testing.T) {
+	m, _ := New("")
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, _ = m.Observe([]testlab.Result{{ServiceID: "svc", Route: "sing-box", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, CheckedAt: now}})
+	if got := m.Suggest("svc", "direct"); got != "sing-box" {
+		t.Fatalf("initial route=%s", got)
+	}
+	_, _ = m.Observe([]testlab.Result{{ServiceID: "svc", Route: "sing-box", Status: "pass", HTTPStatus: 200, RouteConfirmed: true, CheckedAt: now, ExpectedRoutePathID: "isolated:sing-box", ObservedRoutePathID: "isolated:direct"}})
+	if got := m.Suggest("svc", "direct"); got != "direct" {
+		t.Fatalf("misrouted success stayed armed: %s", got)
+	}
+}
+
+func TestInconclusiveHighScoreCannotHideWorkingCandidate(t *testing.T) {
+	m, _ := New("")
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, _ = m.Observe([]testlab.Result{
+		{ServiceID: "svc", Route: "direct", Status: "pass", RouteConfirmed: true, CheckedAt: now},
+		{ServiceID: "svc", Route: "sing-box", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, CheckedAt: now},
+	})
+	if got := m.Suggest("svc", "nfqws2"); got != "sing-box" {
+		t.Fatalf("inconclusive result hid working route: %s", got)
+	}
+}
+
 func TestHysteresisCooldownAndConfirmedFailover(t *testing.T) {
 	m, err := New("")
 	if err != nil {
@@ -83,8 +108,8 @@ func TestHysteresisCooldownAndConfirmedFailover(t *testing.T) {
 	}
 	now := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
 	m.now = func() time.Time { return now }
-	_, _ = m.Observe([]testlab.Result{{ServiceID: "svc", Route: "usque", Status: "pass", LatencyMS: 20, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
-	decisions, _ := m.Observe([]testlab.Result{{ServiceID: "svc", Route: "direct", Status: "pass", LatencyMS: 10, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
+	_, _ = m.Observe([]testlab.Result{{ServiceID: "svc", Route: "usque", Status: "pass", HTTPStatus: 204, LatencyMS: 20, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
+	decisions, _ := m.Observe([]testlab.Result{{ServiceID: "svc", Route: "direct", Status: "pass", HTTPStatus: 204, LatencyMS: 10, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
 	if decisions[0].Selected != "usque" || decisions[0].Reason != "switch-cooldown-active" {
 		t.Fatalf("cooldown should retain route: %+v", decisions[0])
 	}
@@ -98,7 +123,7 @@ func TestSuggestionExpires(t *testing.T) {
 	m, _ := New("")
 	now := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
 	m.now = func() time.Time { return now }
-	_, _ = m.Observe([]testlab.Result{{ServiceID: "svc", Route: "direct", Status: "pass", RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
+	_, _ = m.Observe([]testlab.Result{{ServiceID: "svc", Route: "direct", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
 	m.now = func() time.Time { return now.Add(25 * time.Hour) }
 	if got := m.Suggest("svc", "warp-wg"); got != "warp-wg" {
 		t.Fatalf("expired evidence must fall back, got %q", got)
@@ -111,7 +136,7 @@ func TestEvidenceIsScopedToCurrentNetworkProfile(t *testing.T) {
 	m.Profile = func() string { return profile }
 	now := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
 	m.now = func() time.Time { return now }
-	_, err := m.Observe([]testlab.Result{{ServiceID: "telegram", Route: "warp-wg", Status: "pass", RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
+	_, err := m.Observe([]testlab.Result{{ServiceID: "telegram", Route: "warp-wg", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339)}})
 	if err != nil {
 		t.Fatal(err)
 	}

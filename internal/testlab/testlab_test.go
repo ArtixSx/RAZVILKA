@@ -10,6 +10,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 )
 
 func TestProbeCurrent(t *testing.T) {
@@ -66,7 +67,7 @@ func TestDecodeRunRequest(t *testing.T) {
 type fakeRouteProber struct{}
 
 func (fakeRouteProber) Probe(_ context.Context, service catalog.Service, route string) Result {
-	return Result{ServiceID: service.ID, ServiceName: service.Name, Route: route, Status: "pass", RouteConfirmed: true, EvidenceSource: "test", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	return Result{ServiceID: service.ID, ServiceName: service.Name, Route: route, Status: "pass", HTTPStatus: 204, RouteConfirmed: true, EvidenceSource: "test", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
 }
 
 type scenarioRouteProber struct{}
@@ -76,7 +77,7 @@ func (scenarioRouteProber) Probe(_ context.Context, service catalog.Service, rou
 	if strings.Contains(service.ProbeURL, "web.example") {
 		status = "fail"
 	}
-	return Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: status, RouteConfirmed: true, EvidenceSource: "scenario-test", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	return Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: status, HTTPStatus: 204, RouteConfirmed: true, EvidenceSource: "scenario-test", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
 }
 
 func TestProbeRoutesStoresConfirmedMatrixEvidence(t *testing.T) {
@@ -157,7 +158,7 @@ func TestAggregateCannotHideBlockedRequiredScenario(t *testing.T) {
 func TestAssessComparisonsRequiresBypassAfterFailedDirectControl(t *testing.T) {
 	results := []Result{
 		{ServiceID: "telegram", ServiceName: "Telegram", Route: "direct", Status: "fail", RouteConfirmed: true},
-		{ServiceID: "telegram", ServiceName: "Telegram", Route: "nfqws2", Status: "pass", RouteConfirmed: true, LatencyMS: 20},
+		{ServiceID: "telegram", ServiceName: "Telegram", Route: "nfqws2", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, LatencyMS: 20},
 	}
 	got := AssessComparisons(results)
 	if len(got) != 1 || got[0].Conclusion != "bypass-required" || got[0].RecommendedRoute != "nfqws2" || got[0].BypassRequired == nil || !*got[0].BypassRequired {
@@ -167,8 +168,8 @@ func TestAssessComparisonsRequiresBypassAfterFailedDirectControl(t *testing.T) {
 
 func TestAssessComparisonsPrefersWorkingDirectControl(t *testing.T) {
 	results := []Result{
-		{ServiceID: "telegram", ServiceName: "Telegram", Route: "direct", Status: "pass", RouteConfirmed: true, LatencyMS: 40},
-		{ServiceID: "telegram", ServiceName: "Telegram", Route: "warp-wg", Status: "pass", RouteConfirmed: true, LatencyMS: 15},
+		{ServiceID: "telegram", ServiceName: "Telegram", Route: "direct", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, LatencyMS: 40},
+		{ServiceID: "telegram", ServiceName: "Telegram", Route: "warp-wg", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, LatencyMS: 15},
 	}
 	got := AssessComparisons(results)
 	if len(got) != 1 || got[0].Conclusion != "direct-sufficient" || got[0].RecommendedRoute != "direct" || got[0].BypassRequired == nil || *got[0].BypassRequired {
@@ -179,10 +180,38 @@ func TestAssessComparisonsPrefersWorkingDirectControl(t *testing.T) {
 func TestAssessComparisonsDoesNotInventUnavailableDirectControl(t *testing.T) {
 	results := []Result{
 		{ServiceID: "telegram", ServiceName: "Telegram", Route: "direct", Status: "not-ready", Detail: "external tunnel present"},
-		{ServiceID: "telegram", ServiceName: "Telegram", Route: "warp-wg", Status: "pass", RouteConfirmed: true},
+		{ServiceID: "telegram", ServiceName: "Telegram", Route: "warp-wg", Status: "pass", HTTPStatus: 204, RouteConfirmed: true},
 	}
 	got := AssessComparisons(results)
 	if len(got) != 1 || got[0].Conclusion != "control-unavailable" || got[0].RecommendedRoute != "warp-wg" || got[0].BypassRequired != nil {
 		t.Fatalf("assessment = %+v", got)
+	}
+}
+
+func TestDeclaredPassWithoutHTTPIsInconclusive(t *testing.T) {
+	result := Result{Route: "sing-box", Status: "pass", RouteConfirmed: true}
+	result.NormalizeEvidence()
+	if result.Verdict != evidence.VerdictInconclusive || result.AssuranceLevel().AtLeast(evidence.Service) {
+		t.Fatalf("listener-only success became service proof: %+v", result)
+	}
+}
+
+func TestDirectLeakCannotBecomeServiceProof(t *testing.T) {
+	result := Result{Route: "sing-box", Status: "pass", HTTPStatus: 200, RouteConfirmed: true}
+	result.EvaluateHTTP(catalog.Service{}, probecheck.Observation{HTTPStatus: 200, ExpectedRoutePathID: "isolated:sing-box", ObservedRoutePathID: "isolated:direct"})
+	result.NormalizeEvidence()
+	if result.Verdict != evidence.VerdictMisrouted || result.RouteConfirmed || result.AssuranceLevel() != evidence.Runtime {
+		t.Fatalf("direct leak was promoted: %+v", result)
+	}
+}
+
+func TestAggregateKeepsBlockedVerdictAfterSuccessfulFirstScenario(t *testing.T) {
+	rows := []Result{
+		{ServiceID: "telegram", Route: "warp-wg", ScenarioID: "site", ScenarioNeeded: true, Status: "pass", HTTPStatus: 200, RouteConfirmed: true, Verdict: evidence.VerdictPass, Outcome: evidence.OutcomeServiceAccepted},
+		{ServiceID: "telegram", Route: "warp-wg", ScenarioID: "web", ScenarioNeeded: true, Status: "partial", HTTPStatus: 200, RouteConfirmed: true, Verdict: evidence.VerdictBlocked, Outcome: evidence.OutcomeServiceBlocked, ErrorCode: "known-block-page"},
+	}
+	got := AggregateScenarios(rows)
+	if len(got) != 1 || got[0].Verdict != evidence.VerdictBlocked || got[0].Outcome != evidence.OutcomeServiceBlocked || got[0].AssuranceLevel() != evidence.Route {
+		t.Fatalf("aggregate hid block page: %+v", got)
 	}
 }

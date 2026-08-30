@@ -25,6 +25,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 )
@@ -51,7 +52,7 @@ func New(configs *engineconfig.Manager) *Manager {
 }
 
 func (m *Manager) Probe(ctx context.Context, service catalog.Service, route string) testlab.Result {
-	result := testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: "not-ready", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	result := testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: probecheck.RedactedURL(service.ProbeURL), Route: route, Status: "not-ready", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
 	if err := validateProbeURL(service.ProbeURL); err != nil {
 		result.Detail = err.Error()
 		return result
@@ -104,7 +105,7 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 	m.nfqwsMu.Lock()
 	defer m.nfqwsMu.Unlock()
 
-	result = testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: "nfqws2", Status: "not-ready", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	result = testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: probecheck.RedactedURL(service.ProbeURL), Route: "nfqws2", Status: "not-ready", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
 	u, err := url.Parse(service.ProbeURL)
 	if err != nil || u.Port() != "" && u.Port() != "443" {
 		result.Detail = "NFQWS2 probe requires a public HTTPS endpoint on port 443"
@@ -189,6 +190,7 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 	queueStillActive := kernelQueueActive(queueNumber)
 	result.RouteConfirmed = counterErr == nil && packets > 0 && queueStillActive
 	if result.RouteConfirmed {
+		result.ObservedRoutePathID = "isolated:nfqws2"
 		result.EvidenceSource = fmt.Sprintf("scoped-nfqueue-chain:%s;queue=%d;packets=%d;destination=%s:443;source-port=%d;process=%s", chain, queueNumber, packets, address, port, processEvidence)
 	} else {
 		result.EvidenceSource = fmt.Sprintf("scoped-nfqueue-unconfirmed:queue=%d;packets=%d;kernel-active=%t", queueNumber, packets, queueStillActive)
@@ -595,7 +597,7 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 	// A configured SOCKS endpoint is not proof by itself. Confirm it only after
 	// the proxy accepted CONNECT and an HTTP response arrived through it.
 	confirmAfterResponse := strings.HasPrefix(evidence, "explicit-socks5:")
-	result := testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: service.ProbeURL, Route: route, Status: "fail", CheckedAt: time.Now().UTC().Format(time.RFC3339), RouteConfirmed: confirmed && !confirmAfterResponse, EvidenceSource: evidence}
+	result := testlab.Result{ServiceID: service.ID, ServiceName: service.Name, ProbeURL: probecheck.RedactedURL(service.ProbeURL), Route: route, Status: "fail", CheckedAt: time.Now().UTC().Format(time.RFC3339), RouteConfirmed: confirmed && !confirmAfterResponse, EvidenceSource: evidence}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, service.ProbeURL, nil)
 	if err != nil {
 		result.Detail = err.Error()
@@ -605,11 +607,12 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 	request.Header.Set("Accept", "text/html,application/json;q=0.9,*/*;q=0.1")
 	request.Header.Set("Range", "bytes=0-32767")
 	start := time.Now()
-	response, err := client.Do(request)
+	redirects := []string{}
+	response, err := probecheck.RecordingClient(client, service, &redirects).Do(request)
 	result.TTFBMS = time.Since(start).Milliseconds()
 	if err != nil {
 		result.LatencyMS = time.Since(start).Milliseconds()
-		result.Detail = shortened(err.Error())
+		result.Detail = shortened(probecheck.RedactedError(err))
 		return result
 	}
 	defer response.Body.Close()
@@ -618,7 +621,8 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 	}
 	result.HTTPStatus = response.StatusCode
 	readStarted := time.Now()
-	result.BytesRead, err = io.Copy(io.Discard, io.LimitReader(response.Body, 32768))
+	body, err := io.ReadAll(io.LimitReader(response.Body, probecheck.MaxBodyBytes))
+	result.BytesRead = int64(len(body))
 	result.ReadMS = time.Since(readStarted).Milliseconds()
 	result.LatencyMS = time.Since(start).Milliseconds()
 	result.StreamStatus = classifyProbeStream(response, result.BytesRead, err)
@@ -626,19 +630,11 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 		result.Detail = fmt.Sprintf("response stream interrupted after %d bytes: %s", result.BytesRead, shortened(err.Error()))
 		return result
 	}
-	switch {
-	case response.StatusCode >= 200 && response.StatusCode < 400:
-		result.Status = "pass"
-		result.Detail = "service endpoint reachable through isolated " + route + " adapter"
-	case response.StatusCode == 401 || response.StatusCode == 403 || response.StatusCode == 407 || response.StatusCode == 429 || response.StatusCode == 451:
-		result.Status = "partial"
-		result.Detail = fmt.Sprintf("route works, but service/policy returned HTTP %d", response.StatusCode)
-	case response.StatusCode >= 400 && response.StatusCode < 500:
-		result.Status = "partial"
-		result.Detail = fmt.Sprintf("route reached service with HTTP %d", response.StatusCode)
-	default:
-		result.Detail = fmt.Sprintf("service returned HTTP %d", response.StatusCode)
+	observedRoute := ""
+	if result.RouteConfirmed {
+		observedRoute = "isolated:" + route
 	}
+	result.EvaluateHTTP(service, probecheck.Observation{RequestedURL: service.ProbeURL, FinalURL: probecheck.FinalURL(response, service.ProbeURL), RedirectChain: redirects, HTTPStatus: response.StatusCode, ContentType: response.Header.Get("Content-Type"), Body: body, BodyTruncated: result.StreamStatus == "sampled", ExpectedRoutePathID: "isolated:" + route, ObservedRoutePathID: observedRoute})
 	return result
 }
 

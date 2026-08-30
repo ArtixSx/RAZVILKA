@@ -23,3 +23,14 @@ func TestValidateServiceProbeScenarios(t *testing.T) {
 		t.Fatal("duplicate probe id must fail validation")
 	}
 }
+
+func TestValidateProbeExpectations(t *testing.T) {
+	for _, expect := range []ProbeExpectation{
+		{StatusCodes: []int{403}}, {RedirectPolicy: "unrestricted"}, {RedirectPolicy: "allowlist"}, {RedirectHosts: []string{"https://example.com/path"}}, {JSONFields: []string{""}},
+	} {
+		service := Service{ID: "test", Name: "Test", Category: "Test", Strategy: []string{"direct"}, Probes: []Probe{{ID: "api", Label: "API", URL: "https://example.com/", Required: true, Expect: expect}}}
+		if err := Validate(Catalog{Services: []Service{service}}); err == nil {
+			t.Fatalf("accepted invalid expectation: %+v", expect)
+		}
+	}
+}

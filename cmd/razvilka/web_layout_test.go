@@ -185,7 +185,7 @@ func TestRouteAndServiceProbeOutcomesAreExplainedSeparately(t *testing.T) {
 		t.Fatal(err)
 	}
 	app, css := string(appData), string(cssData)
-	for _, required := range []string{"probeVerdict", "Маршрут использован, сервис не ответил", "Сервис работает через этот маршрут", "Сам путь трафика проверяется отдельно"} {
+	for _, required := range []string{"probeVerdict", "probeStatusLabel", "MISROUTED", "INCONCLUSIVE", "Ошибка проверки — это не доказательство неработающего обхода", "Маршрут использован, сервис не ответил", "Сервис работает через этот маршрут", "Сам путь трафика проверяется отдельно"} {
 		if !strings.Contains(app, required) {
 			t.Fatalf("probe outcome explanation missing %q", required)
 		}

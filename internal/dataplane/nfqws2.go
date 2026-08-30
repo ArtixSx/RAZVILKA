@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/netip"
 	"os"
@@ -549,16 +548,13 @@ func defaultNFQWS2Probe(ctx context.Context, rawURL string) error {
 		}
 		return nil
 	}}
-	response, err := client.Do(request)
+	response, err := serviceProbeClient(client, rawURL).Do(request)
 	if err != nil {
 		return err
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 2048))
-	if response.StatusCode >= 500 {
-		return fmt.Errorf("HTTP %d", response.StatusCode)
-	}
-	return nil
+	_, err = strictServiceResponse(rawURL, response)
+	return err
 }
 
 func sortedCopy(values []string) []string {

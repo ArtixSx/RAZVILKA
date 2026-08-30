@@ -130,6 +130,15 @@
         "sing-box"
       ],
       "probe_url": "https://www.youtube.com/generate_204",
+      "probes": [
+        {
+          "id": "connectivity",
+          "label": "Доступ к YouTube (не проверка воспроизведения)",
+          "url": "https://www.youtube.com/generate_204",
+          "required": true,
+          "expect": { "status_codes": [204], "redirect_policy": "none" }
+        }
+      ],
       "source_refs": [
         "refilter-domains",
         "v2fly-dlc"

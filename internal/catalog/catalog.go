@@ -32,10 +32,25 @@ type Service struct {
 // service ID, but it can never supply these URLs, which keeps Test Lab from
 // becoming an arbitrary request primitive on the router.
 type Probe struct {
-	ID       string `json:"id"`
-	Label    string `json:"label"`
-	URL      string `json:"url"`
-	Required bool   `json:"required"`
+	ID       string           `json:"id"`
+	Label    string           `json:"label"`
+	URL      string           `json:"url"`
+	Required bool             `json:"required"`
+	Expect   ProbeExpectation `json:"expect,omitempty"`
+}
+
+// ProbeExpectation describes the minimum service semantics that must be
+// observed before a route is called working. Empty expectations intentionally
+// keep a safe web default: final HTTP 2xx on a service-owned host and no known
+// block page.
+type ProbeExpectation struct {
+	StatusCodes    []int    `json:"status_codes,omitempty"`
+	RedirectPolicy string   `json:"redirect_policy,omitempty"` // same-service (default), none, allowlist
+	RedirectHosts  []string `json:"redirect_hosts,omitempty"`
+	ContentTypes   []string `json:"content_types,omitempty"`
+	JSON           bool     `json:"json,omitempty"`
+	JSONFields     []string `json:"json_fields,omitempty"`
+	BodyContains   []string `json:"body_contains,omitempty"`
 }
 
 type Provenance struct {
@@ -113,9 +128,53 @@ func Validate(c Catalog) error {
 			if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
 				return fmt.Errorf("service %s has invalid probe %q URL", s.ID, probe.ID)
 			}
+			if err := validateProbeExpectation(s.ID, probe); err != nil {
+				return err
+			}
 		}
 		if len(s.Probes) > 0 && requiredProbes == 0 {
 			return fmt.Errorf("service %s has no required probe", s.ID)
+		}
+	}
+	return nil
+}
+
+func validateProbeExpectation(serviceID string, probe Probe) error {
+	switch probe.Expect.RedirectPolicy {
+	case "", "same-service", "none", "allowlist":
+	default:
+		return fmt.Errorf("service %s probe %s has invalid redirect policy", serviceID, probe.ID)
+	}
+	if probe.Expect.RedirectPolicy == "allowlist" && len(probe.Expect.RedirectHosts) == 0 {
+		return fmt.Errorf("service %s probe %s redirect allowlist is empty", serviceID, probe.ID)
+	}
+	for _, status := range probe.Expect.StatusCodes {
+		if status < 200 || status > 299 {
+			return fmt.Errorf("service %s probe %s has invalid HTTP status %d", serviceID, probe.ID, status)
+		}
+	}
+	for _, host := range probe.Expect.RedirectHosts {
+		host = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(host)), "*.")
+		if host == "" || strings.ContainsAny(host, " /\\:") || !strings.Contains(host, ".") {
+			return fmt.Errorf("service %s probe %s has invalid redirect host", serviceID, probe.ID)
+		}
+	}
+	for _, contentType := range probe.Expect.ContentTypes {
+		if strings.TrimSpace(contentType) == "" || strings.ContainsAny(contentType, "\r\n") {
+			return fmt.Errorf("service %s probe %s has invalid content type", serviceID, probe.ID)
+		}
+	}
+	for _, field := range probe.Expect.JSONFields {
+		if strings.TrimSpace(field) == "" {
+			return fmt.Errorf("service %s probe %s has empty JSON field predicate", serviceID, probe.ID)
+		}
+	}
+	if len(probe.Expect.JSONFields) > 0 && !probe.Expect.JSON {
+		return fmt.Errorf("service %s probe %s JSON fields require the JSON predicate", serviceID, probe.ID)
+	}
+	for _, marker := range probe.Expect.BodyContains {
+		if strings.TrimSpace(marker) == "" {
+			return fmt.Errorf("service %s probe %s has empty body predicate", serviceID, probe.ID)
 		}
 	}
 	return nil
