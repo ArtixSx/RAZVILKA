@@ -71,6 +71,8 @@ func parseURIOutbound(raw string) (map[string]any, Preview, error) {
 		outbound, preview, err = parseTUIC(u)
 	case "ss":
 		outbound, preview, err = parseShadowsocks(u)
+	case "http", "https":
+		err = errors.New("вставлена ссылка на сайт или подписку; откройте её и вставьте сам ключ vless://, hysteria2://, tuic:// или ss://")
 	default:
 		err = fmt.Errorf("протокол %q пока не поддерживается; используйте VLESS, Hysteria2, TUIC, Shadowsocks или импорт JSON", u.Scheme)
 	}

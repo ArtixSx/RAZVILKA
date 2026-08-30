@@ -78,7 +78,7 @@ func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, err
 	}
 	preview := BundlePreview{Format: format, EngineID: "sing-box", NodeCount: len(nodes), SelectedIndex: selectedIndex, Nodes: nodes, Warnings: warnings}
 	if len(nodes) > 1 {
-		preview.Warnings = append(preview.Warnings, "После импорта активным будет первый узел. Остальные сохранятся в локальном селекторе Sing-box.")
+		preview.Warnings = append(preview.Warnings, "Sing-box локально проверит пул узлов и выберет доступный; выбранный узел получит первый приоритет. Остальные сохранятся для ручного выбора.")
 	}
 	return BundleResult{Preview: preview, Config: config}, nil
 }
@@ -275,7 +275,7 @@ func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, er
 }
 
 func buildBundleConfig(outbounds []map[string]any, selectedIndex int) ([]byte, error) {
-	items := make([]any, 0, len(outbounds)+2)
+	items := make([]any, 0, len(outbounds)+3)
 	if len(outbounds) == 1 {
 		outbounds[0]["tag"] = "proxy"
 		items = append(items, outbounds[0])
@@ -286,7 +286,23 @@ func buildBundleConfig(outbounds []map[string]any, selectedIndex int) ([]byte, e
 			outbound["tag"] = tag
 			tags = append(tags, tag)
 		}
-		items = append(items, map[string]any{"type": "selector", "tag": "proxy", "outbounds": tags, "default": tags[selectedIndex]})
+		// Public subscriptions frequently contain stale endpoints. A plain
+		// selector pins the first node and makes the whole profile look broken.
+		// Keep every node manually selectable, but let Sing-box URLTest choose
+		// from a bounded local pool. The selected node is evaluated first.
+		automaticTags := make([]string, 0, min(len(tags), 16))
+		automaticTags = append(automaticTags, tags[selectedIndex])
+		for index, tag := range tags {
+			if index == selectedIndex || len(automaticTags) >= 16 {
+				continue
+			}
+			automaticTags = append(automaticTags, tag)
+		}
+		selectorTags := append([]string{"auto"}, tags...)
+		items = append(items,
+			map[string]any{"type": "selector", "tag": "proxy", "outbounds": selectorTags, "default": "auto"},
+			map[string]any{"type": "urltest", "tag": "auto", "outbounds": automaticTags, "url": "https://www.gstatic.com/generate_204", "interval": "10m", "tolerance": 80},
+		)
 		for _, outbound := range outbounds {
 			items = append(items, outbound)
 		}

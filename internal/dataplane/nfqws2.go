@@ -176,15 +176,25 @@ func (a *NFQWS2Adapter) Activate(ctx context.Context, _ Plan, root string) error
 	if err := installStaged(filepath.Join(root, "nfqws2.conf.staged"), a.ConfigPath); err != nil {
 		return fmt.Errorf("activate NFQWS2 config: %w", err)
 	}
-	if err := installStaged(filepath.Join(root, "user.list.staged"), a.UserListPath); err != nil {
+	// nfqws2 drops privileges to `nobody` before it opens host/ipset files.
+	// Keeping these generated lists at 0600 makes the init script print
+	// "Started" while the daemon exits immediately with EACCES.
+	if err := installStagedMode(filepath.Join(root, "user.list.staged"), a.UserListPath, 0o644); err != nil {
 		return fmt.Errorf("activate NFQWS2 user list: %w", err)
 	}
-	if err := installStaged(filepath.Join(root, "ipset.list.staged"), a.IPSetListPath); err != nil {
+	if err := installStagedMode(filepath.Join(root, "ipset.list.staged"), a.IPSetListPath, 0o644); err != nil {
 		return fmt.Errorf("activate NFQWS2 ipset list: %w", err)
 	}
-	_, err := a.run(ctx, a.InitPath, "restart")
+	output, err := a.run(ctx, a.InitPath, "restart")
 	if err != nil {
-		return fmt.Errorf("restart NFQWS2: %w", err)
+		return fmt.Errorf("restart NFQWS2: %s", shortOutput(output, err))
+	}
+	// Some Entware init scripts return zero even when nfqws2 failed after
+	// daemonising (for example, unreadable lists). Never report activation as
+	// successful until the process is observable.
+	status, statusErr := a.run(ctx, a.InitPath, "status")
+	if statusErr != nil || !runningOutput(string(status)) {
+		return fmt.Errorf("NFQWS2 did not stay running after restart: %s", shortOutput(status, statusErr))
 	}
 	return nil
 }
@@ -293,17 +303,21 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, _ Plan, root string) error
 	if err := restoreOptional(a.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil {
 		return err
 	}
-	if err := restoreOptional(a.UserListPath, snapshot.UserList, snapshot.UserListExisted); err != nil {
+	if err := restoreOptionalMode(a.UserListPath, snapshot.UserList, snapshot.UserListExisted, 0o644); err != nil {
 		return err
 	}
-	if err := restoreOptional(a.IPSetListPath, snapshot.IPSetList, snapshot.IPSetListExisted); err != nil {
+	if err := restoreOptionalMode(a.IPSetListPath, snapshot.IPSetList, snapshot.IPSetListExisted, 0o644); err != nil {
 		return err
 	}
 	action := "stop"
 	if snapshot.WasRunning {
 		action = "restart"
 	}
-	if _, err := a.run(ctx, a.InitPath, action); err != nil {
+	output, err := a.run(ctx, a.InitPath, action)
+	// Entware's S51nfqws2 returns 1 for an already stopped service. That is the
+	// desired rollback state when the snapshot was not running, so keep rollback
+	// idempotent instead of surfacing a second, misleading failure.
+	if err != nil && !(action == "stop" && !runningOutput(string(output)) && strings.Contains(strings.ToLower(string(output)), "not running")) {
 		return fmt.Errorf("restore NFQWS2 process state: %w", err)
 	}
 	if snapshot.ConfigDraft && a.Configs != nil {
@@ -450,7 +464,22 @@ func installStaged(source, destination string) error {
 	return writeAtomic(destination, data, mode)
 }
 
+func installStagedMode(source, destination string, mode os.FileMode) error {
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		return err
+	}
+	return writeAtomic(destination, data, mode)
+}
+
 func restoreOptional(path string, data []byte, existed bool) error {
+	return restoreOptionalMode(path, data, existed, 0o600)
+}
+
+func restoreOptionalMode(path string, data []byte, existed bool, mode os.FileMode) error {
 	if !existed {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
@@ -460,7 +489,7 @@ func restoreOptional(path string, data []byte, existed bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return writeAtomic(path, data, 0o600)
+	return writeAtomic(path, data, mode)
 }
 
 func runningOutput(output string) bool {

@@ -51,7 +51,7 @@ var (
 	// Release builds override these values through -ldflags. Keeping useful
 	// development defaults prevents an unreleased binary from identifying
 	// itself as the last stable release.
-	Version     = "0.17.0-dev"
+	Version     = "0.18.0-dev"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -1578,9 +1578,9 @@ func (a *App) stagedEngineFilesExcept(engineID, fileID string) []string {
 	return out
 }
 
-// StartBackground runs guarded route diagnostics, DNS policy refresh and WARP
-// recovery. Automatic WARP activation is opt-in and uses the normal
-// transactional dataplane with health checks and rollback.
+// StartBackground runs guarded route diagnostics, DNS policy refresh, WARP
+// recovery and AUTO-route reconciliation. Every automatic activation uses the
+// normal transactional dataplane with canaries, health checks and rollback.
 func (a *App) StartBackground(ctx context.Context) {
 	go func() {
 		timer := time.NewTimer(2 * time.Minute)
@@ -1602,7 +1602,9 @@ func (a *App) StartBackground(ctx context.Context) {
 			}
 			a.backgroundWarpHealth(ctx)
 			if round%2 == 1 {
-				a.backgroundSmartRoute(ctx)
+				if a.backgroundSmartRoute(ctx) {
+					a.backgroundAutopilotApply(ctx)
+				}
 			}
 			select {
 			case <-ctx.Done():
@@ -1645,44 +1647,107 @@ func (a *App) backgroundWarpHealth(parent context.Context) {
 	_, _ = a.processWarpHealth(ctx, evidence)
 }
 
-func (a *App) backgroundSmartRoute(parent context.Context) {
+func (a *App) backgroundSmartRoute(parent context.Context) bool {
 	if a.SmartRoute == nil || a.TestLab == nil || a.RouteProber == nil {
-		return
+		return false
 	}
 	cfg := a.Store.Get()
+	options := a.routeOptionsSnapshot()
 	checked := 0
+	actionable := false
 	for _, service := range a.catalogSnapshot().Services {
 		state := cfg.AppliedServices[service.ID]
 		if !state.Enabled || selectedRoute(state) != "auto" {
 			continue
 		}
-		routes := isolatedCandidates(service.Strategy)
+		current := a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+		routes := isolatedCandidates(service.Strategy, current)
 		if len(routes) == 0 {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(parent, 45*time.Second)
 		results := a.TestLab.ProbeRoutes(ctx, catalog.Catalog{Services: []catalog.Service{service}}, []string{service.ID}, routes, a.RouteProber)
 		cancel()
-		_, _ = a.SmartRoute.Observe(testlab.AggregateScenarios(results))
+		decisions, _ := a.SmartRoute.Observe(testlab.AggregateScenarios(results))
+		for _, decision := range decisions {
+			// Reconcile an already persisted selection too. A previous process may
+			// have saved the decision and restarted before activating it.
+			actionable = actionable || decision.Selected != ""
+		}
 		checked++
-		if checked >= 6 || parent.Err() != nil {
-			return
+		if checked >= 4 || parent.Err() != nil {
+			return actionable
 		}
 	}
+	return actionable
 }
 
-func isolatedCandidates(strategy []string) []string {
+// backgroundAutopilotApply activates a new Smart Route decision only for a
+// clean, already-applied AUTO configuration. It never consumes UI drafts,
+// installs components, changes DNS, or bypasses the normal transactional
+// canary/health/rollback protocol.
+func (a *App) backgroundAutopilotApply(parent context.Context) {
+	if a.Dataplane == nil || a.Store == nil || a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 {
+		return
+	}
+	cfg := a.Store.Get()
+	if cfg.SafeMode {
+		return
+	}
+	live := configForChangeScope(cfg, changeScopeEngine)
+	plan, err := a.buildDataplanePlanForScope(live, a.routeOptionsSnapshot(), changeScopeDevices, "")
+	if err != nil || plan.Noop || !plan.Ready {
+		return
+	}
+	committed, exists, err := a.Dataplane.Committed()
+	if err != nil || !exists || committed.State != "committed" {
+		return
+	}
+	previous := make(map[string]string, len(committed.Routes))
+	for _, route := range committed.Routes {
+		previous[route.ServiceID] = route.Resolved
+	}
+	changed := false
+	for _, route := range plan.Routes {
+		if previous[route.ServiceID] == route.Resolved {
+			continue
+		}
+		// Explicit routes always remain manual. Only a service whose applied
+		// selector is AUTO may be moved by the autopilot.
+		if selectedRoute(cfg.AppliedServices[route.ServiceID]) != "auto" {
+			return
+		}
+		changed = true
+	}
+	if !changed {
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
+	defer cancel()
+	_, _ = a.Dataplane.Apply(ctx, plan, nil)
+}
+
+func isolatedCandidates(strategy []string, current string) []string {
 	// NFQWS2 uses a serialized, destination/source-port scoped temporary chain;
 	// only its exact per-request counter is accepted as Smart Route evidence.
 	supported := map[string]bool{"direct": true, "nfqws2": true, "usque": true, "warp-wg": true, "sing-box": true, "xray": true, "amneziawg": true}
-	routes := []string{"direct"}
-	seen := map[string]bool{"direct": true}
-	for _, route := range strategy {
-		if supported[route] && !seen[route] {
+	routes := make([]string, 0, 3)
+	seen := map[string]bool{}
+	add := func(route string) {
+		if supported[route] && !seen[route] && len(routes) < 3 {
 			routes = append(routes, route)
 			seen[route] = true
 		}
-		if len(routes) == 4 {
+	}
+	// Test the route in use first, retain DIRECT as a control, then try only
+	// one alternative. This keeps the router load bounded while still allowing
+	// confirmed failover.
+	add(current)
+	add("direct")
+	baseline := len(routes)
+	for _, route := range strategy {
+		add(route)
+		if len(routes) > baseline {
 			break
 		}
 	}
@@ -2951,6 +3016,12 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 		advice.Title = "WARP MASQUE подключился, но сервис не ответил"
 		advice.Message = "Сессия с Cloudflare была создана, однако проверочный запрос выбранного сервиса не прошёл через туннель. RAZVILKA вернула прежние маршруты; интернет роутера не изменён."
 		advice.Resolution = "Создайте новую MASQUE-сессию и повторите один раз. Если результат тот же, сеть провайдера блокирует или повреждает трафик WARP — используйте Sing-box/VLESS либо AmneziaWG со своим сервером."
+		advice.Alternatives = []string{"sing-box", "amneziawg", "nfqws2"}
+	} else if strings.Contains(lower, "sing-box") && strings.Contains(lower, "candidate") && strings.Contains(lower, "probe") {
+		advice.Code = "SING_BOX_NODE_UNREACHABLE"
+		advice.Title = "Узел Sing-box не прошёл реальное подключение"
+		advice.Message = "Формат профиля корректен, но изолированный VLESS/TLS/Reality-туннель не смог открыть проверяемый сервис. Рабочая сеть не изменялась, черновик сохранён."
+		advice.Resolution = "Проверка TCP-порта на публичном сайте не доказывает работу ключа. Импортируйте несколько свежих ключей одним списком — Sing-box выберет доступный локально — либо используйте собственный сервер."
 		advice.Alternatives = []string{"sing-box", "amneziawg", "nfqws2"}
 	} else if strings.Contains(lower, "context deadline exceeded") || strings.Contains(lower, "context canceled") {
 		advice.Code = "DATAPLANE_OPERATION_CANCELLED"

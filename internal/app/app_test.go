@@ -223,8 +223,21 @@ func TestProviderProfileImportHonorsExplicitNodeSelection(t *testing.T) {
 		t.Fatalf("import status=%d body=%s", response.Code, response.Body.String())
 	}
 	content, err := configs.ReadExpert("sing-box", "main")
-	if err != nil || !strings.Contains(content.Content, `"default": "node-02"`) {
+	if err != nil || !strings.Contains(content.Content, `"default": "auto"`) || !strings.Contains(content.Content, `"outbounds": [
+        "node-02",
+        "node-01"`) {
 		t.Fatalf("selected node was not staged: %+v err=%v", content, err)
+	}
+}
+
+func TestAutopilotCandidateSetIsBoundedAndKeepsControl(t *testing.T) {
+	routes := isolatedCandidates([]string{"nfqws2", "usque", "sing-box"}, "nfqws2")
+	if got, want := strings.Join(routes, ","), "nfqws2,direct,usque"; got != want {
+		t.Fatalf("unexpected candidate set %q, want %q", got, want)
+	}
+	routes = isolatedCandidates([]string{"nfqws2", "usque"}, "direct")
+	if got, want := strings.Join(routes, ","), "direct,nfqws2"; got != want {
+		t.Fatalf("direct route should add only one alternative: %q, want %q", got, want)
 	}
 }
 
@@ -235,6 +248,13 @@ func TestClassifyWARPMASQUEServiceTimeout(t *testing.T) {
 	}
 	if len(failure.Alternatives) != 3 || !strings.Contains(failure.Resolution, "Sing-box") {
 		t.Fatalf("missing non-WARP alternatives: %+v", failure)
+	}
+}
+
+func TestClassifySingBoxCandidateFailureExplainsPublicKeys(t *testing.T) {
+	failure := classifyApplyFailure(`sing-box candidate probe for Telegram failed: context deadline exceeded`)
+	if failure.Code != "SING_BOX_NODE_UNREACHABLE" || !failure.DraftPreserved || !strings.Contains(failure.Resolution, "несколько свежих ключей") {
+		t.Fatalf("unexpected Sing-box failure advice: %+v", failure)
 	}
 }
 
@@ -254,7 +274,7 @@ func TestClassifyApplyFailureExplainsTimeoutAndRollback(t *testing.T) {
 
 func TestClassifyCanaryFailureSaysLiveRouteWasUntouched(t *testing.T) {
 	failure := classifyApplyExecutionFailure("sing-box candidate probe for Telegram failed", "canary-failed")
-	if failure.Code != "CANARY_FAILED" || !strings.Contains(failure.Message, "не изменялись") || !failure.DraftPreserved || !failure.Retryable {
+	if failure.Code != "SING_BOX_NODE_UNREACHABLE" || !strings.Contains(failure.Message, "не изменялись") || !failure.DraftPreserved || !failure.Retryable {
 		t.Fatalf("unexpected canary advice: %+v", failure)
 	}
 }
@@ -280,7 +300,7 @@ func TestBuildMetadataDoesNotClaimLastStableRelease(t *testing.T) {
 	t.Cleanup(func() {
 		Version, BuildCommit, BuildTime, BuildDirty = previousVersion, previousCommit, previousTime, previousDirty
 	})
-	Version, BuildCommit, BuildTime, BuildDirty = "0.17.0-dev+abc1234", "abc1234", "2026-08-28T12:00:00Z", "true"
+	Version, BuildCommit, BuildTime, BuildDirty = "0.18.0-dev+abc1234", "abc1234", "2026-08-28T12:00:00Z", "true"
 
 	build := CurrentBuildInfo()
 	if build.Version != Version || build.Commit != "abc1234" || build.BuiltAt != "2026-08-28T12:00:00Z" || !build.Dirty || !build.DirtyKnown {

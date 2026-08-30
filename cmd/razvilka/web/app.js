@@ -58,11 +58,12 @@ const state = {
   onboardingStep: 0,
   onboardingAutoEvaluated: false,
   loadIssues: [],
+  currentView: 'overview',
 };
 
 const viewMeta = {
   overview: ['Обзор', 'Главное состояние сервисов, обходов и роутера'],
-  services: ['Сервисы', 'Включите нужный сервис — режим AUTO подберёт доступный обход'],
+  services: ['Сервисы', 'Включите сервис — Автопилот сам сохранит или подберёт подтверждённый обход'],
   connections: ['Соединения', 'Подтверждённый путь реального сетевого трафика'],
   engines: ['Обходы', 'Установите только нужные обходы — маршруты от этого не изменятся'],
   engineconfig: ['Настройка обходов', 'Сохраните черновик, проверьте его и примените вместе с выбранным сервисом'],
@@ -76,7 +77,7 @@ const viewMeta = {
 };
 
 const fallbackLabels = {
-  auto: 'AUTO',
+  auto: 'Автопилот',
   direct: 'DIRECT',
   nfqws2: 'NFQWS2',
   usque: 'WARP · MASQUE',
@@ -254,6 +255,20 @@ function reviewApplyPlan(preview) {
   return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
 }
 
+function needsApplyReview(preview) {
+  const summary = preview.change_summary || {};
+  const transaction = preview.transaction || {};
+  const blockers = (transaction.blockers || []).filter((item) => item.code !== 'SAFE_MODE');
+  if (blockers.length) return true;
+  // The section button is already explicit consent. The server still performs
+  // stage -> validate -> health -> rollback, so a second click for a small
+  // service-only change adds ceremony rather than safety.
+  if (summary.scope === 'services' || summary.scope === 'routing') {
+    return (summary.services || []).length > 8 || (summary.devices || []).length > 0;
+  }
+  return !!summary.network_change || !!summary.working_change;
+}
+
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -265,6 +280,7 @@ function routeOption(id) {
 }
 
 function routeLabel(id) {
+  if (id === 'auto') return 'Автопилот';
   return routeOption(id)?.name || fallbackLabels[id] || id || '—';
 }
 
@@ -275,6 +291,7 @@ function routeAvailable(id) {
 }
 
 function setView(name) {
+  state.currentView = name;
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
   $$('.nav[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   const activeNav = $(`.nav[data-view="${CSS.escape(name)}"]`);
@@ -283,6 +300,7 @@ function setView(name) {
   $('#pageTitle').textContent = meta[0];
   $('#pageSubtitle').textContent = meta[1];
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (state.status && Object.keys(state.status).length) renderStatus();
 }
 
 const detailStatusLabels = {
@@ -833,13 +851,14 @@ function renderStatus() {
   $('#serviceNavCount').textContent = s.enabled_services || 0;
   $('#serviceDraftBar').classList.toggle('show', !!s.services_pending_changes);
   $('#serviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
-  $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить маршруты' : 'Применить маршруты';
+  $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить черновик' : 'Сохранить и проверить';
   $('#deviceDraftBar').classList.toggle('show', !!s.devices_pending_changes);
   $('#deviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#sourceDraftBar').classList.toggle('show', !!s.sources_pending_changes);
   $('#sourceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#applyDeviceChanges').textContent = s.safe_mode ? 'Проверить политики' : 'Применить политики';
-  $('#draftBar').classList.toggle('show', !!s.routing_pending_changes || !!s.engine_pending_changes || engineDrafts > 0);
+  const sectionOwnsDraft = ['services', 'devices', 'engineconfig', 'dns', 'sources'].includes(state.currentView);
+  $('#draftBar').classList.toggle('show', !sectionOwnsDraft && (!!s.routing_pending_changes || !!s.engine_pending_changes || engineDrafts > 0));
   $('#draftBar').classList.toggle('safe-review', !!s.safe_mode);
   const failedApply = !s.safe_mode && !!s.pending_changes && !!s.last_apply_failure;
   $('#draftBar').classList.toggle('apply-failed', failedApply);
@@ -852,6 +871,8 @@ function renderStatus() {
     ? 'WARP WireGuard не получил ответ ни на одном резервном UDP-порту. Проверьте Cloudflare и используйте WARP · MASQUE по TCP/443 либо свой сервер.'
     : failedApply && s.last_apply_failure === 'WARP_MASQUE_SERVICE_TIMEOUT'
     ? 'Cloudflare принял MASQUE-сессию, но сервис не ответил через туннель. После одной смены сессии выберите Sing-box/VLESS или AmneziaWG со своим сервером.'
+    : failedApply && s.last_apply_failure === 'SING_BOX_NODE_UNREACHABLE'
+    ? 'Публичный ключ прошёл проверку формата, но не реальное подключение. Импортируйте несколько свежих ключей одним списком для автоматического локального выбора.'
     : failedApply
     ? 'Новый маршрут не прошёл проверку. Исправьте настройки и повторите либо отмените черновик.'
     : engineDrafts > 0
@@ -1122,7 +1143,8 @@ function routeSelectHTML(service) {
         ? ' · сначала создайте или импортируйте профиль'
         : ' · конфигурация не готова'
       : '';
-    return `<option value="${esc(o.id)}" ${selected} ${disabled}>${esc(o.name || routeLabel(o.id))}${suffix}</option>`;
+    const label = o.id === 'auto' ? 'Автопилот (AUTO)' : (o.name || routeLabel(o.id));
+    return `<option value="${esc(o.id)}" ${selected} ${disabled}>${esc(label)}${suffix}</option>`;
   }).join('')}</select>`;
 }
 
@@ -1170,7 +1192,7 @@ function renderServices() {
       </div>
       <div class="service-control-grid">
         <div><span class="control-label">Желаемый маршрут</span>${routeSelectHTML(s)}</div>
-        <div><span class="control-label">AUTO / фактический план</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
+        <div><span class="control-label">План Автопилота</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
         <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button list-button" data-detail-id="${esc(s.id)}" title="Домены, IP-сети и актуальность источников" aria-label="Показать домены и IP-сети ${esc(s.name)}">Списки</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
       </div>
       ${routeNeedsAction ? `<div class="service-route-warning"><span><b>Маршрут требует действия</b><small>${esc(s.route_issue || 'Обход не установлен. Выберите AUTO / DIRECT или установите компонент.')}</small></span><button class="secondary" type="button" data-route-setup="${esc(s.route)}">Открыть установку</button></div>` : ''}
@@ -1813,7 +1835,7 @@ function renderRemoteProfilePreview() {
   const preview = state.remoteProfilePreview?.preview;
   $('#remoteProfileImportButton').disabled = !preview?.node_count;
   if (!preview) {
-    container.innerHTML = '<span>Обработка локальная. Из JSON/YAML берутся только поддерживаемые узлы; чужие DNS, маршруты, скрипты и панели удаляются.</span>';
+    container.innerHTML = '<span>Обработка локальная. Из JSON/YAML берутся только поддерживаемые узлы; чужие DNS, маршруты, скрипты и панели удаляются. Вставляйте сам ключ vless://… — не адрес страницы сайта.</span>';
     return;
   }
   const nodes = preview.nodes || [];
@@ -1822,7 +1844,7 @@ function renderRemoteProfilePreview() {
   const hidden = nodes.length > 6 ? `<li><b>Ещё ${nodes.length - 6}</b><span>будут сохранены в локальном селекторе</span></li>` : '';
   const warnings = [...(preview.warnings || []), ...nodes.flatMap((node) => node.warnings || [])].map((warning) => `<small>${esc(warning)}</small>`).join('');
 	const selector = `<label class="provider-node-select"><span>Начальный узел</span><select id="remoteProfileNode">${nodes.map((node, index) => `<option value="${index}" ${state.remoteProfileSelectedIndex === index ? 'selected' : ''}>${esc(node.name || `Узел ${index + 1}`)} · ${esc(node.protocol)}</option>`).join('')}</select></label>`;
-  container.innerHTML = `<div class="remote-profile-summary"><b>${Number(preview.node_count)} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')} · ${esc(preview.format || 'профиль')}</b><span>Доступы скрыты; рабочая конфигурация не изменяется</span>${selector}${warnings}</div><ul>${visible}${hidden}</ul>`;
+  container.innerHTML = `<div class="remote-profile-summary"><b>${Number(preview.node_count)} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')} · ${esc(preview.format || 'профиль')}</b><span>Формат принят, но доступность ещё не доказана. Публичные сайты часто проверяют только TCP-порт; реальный VLESS/TLS/Reality handshake RAZVILKA проверит при сохранении маршрута и откатит нерабочий узел.</span>${selector}${warnings}</div><ul>${visible}${hidden}</ul>`;
 	$$('[data-provider-node]').forEach((button) => button.addEventListener('click', () => { state.remoteProfileSelectedIndex = Number(button.dataset.providerNode) || 0; renderRemoteProfilePreview(); }));
 	$('#remoteProfileNode')?.addEventListener('change', (event) => { state.remoteProfileSelectedIndex = Number(event.target.value) || 0; renderRemoteProfilePreview(); });
 }
@@ -1847,8 +1869,6 @@ async function importRemoteProfile() {
   const uri = $('#remoteProfileURI').value.trim();
   const preview = state.remoteProfilePreview?.preview;
   if (!uri || !preview) return;
-	const selected = preview.nodes?.[state.remoteProfileSelectedIndex];
-  if (!await askConfirmation('Создать черновик Sing-box', `${preview.node_count} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')}. Начальным станет «${selected?.name || `Узел ${state.remoteProfileSelectedIndex + 1}`}»; рабочий профиль не изменится до общего Apply.`, 'Создать черновик')) return;
   const button = $('#remoteProfileImportButton');
   button.disabled = true; button.textContent = 'Создаём…';
   try {
@@ -1974,7 +1994,7 @@ function renderSmartRoute() {
     const service = state.services.find((candidate) => candidate.id === id);
     const evidence = item.evidence?.[item.selected_route];
     return `<div class="smart-route-row"><span><b>${esc(service?.name || id)}</b><small>${esc(detailReasonLabels[item.reason] || item.reason || 'подтверждено')}</small></span><i>→</i><strong>${esc(routeLabel(item.selected_route))}</strong><em>${evidence ? `${esc(testStatusLabel(evidence.status))} · ${evidence.latency_ms || 0} мс · ${esc(evidenceOutcomeLabel(evidence.outcome))} · ${esc(evidenceLevelLabel(evidence.evidence_level))}` : '—'}</em></div>`;
-  }).join('') || '<div class="empty-inline">Сначала запустите изолированное сравнение. AUTO пока использует порядок стратегии каталога.</div>';
+  }).join('') || '<div class="empty-inline">Автопилот начнёт с безопасного порядка каталога и будет учитывать только локально подтверждённые проверки.</div>';
 }
 
 function dnsProfileByID(id) {
@@ -2787,7 +2807,7 @@ async function applyDraft(scope = 'all', engineID = '') {
       showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один включённый сервис для этого обхода либо отмените черновик. Рабочие настройки не изменены.`, preview, true);
       return;
     }
-    if (!await reviewApplyPlan(preview)) return;
+    if (needsApplyReview(preview) && !await reviewApplyPlan(preview)) return;
     buttons.forEach((b) => { b.textContent = 'Применение…'; });
     const result = await api(`/api/v1/apply${query}`, { method: 'POST' });
     await refreshCoreAfterEdit();
@@ -2823,7 +2843,7 @@ async function applyDraft(scope = 'all', engineID = '') {
     renderStatus();
     if (scope === 'engine') $('#engineApplyConfig').textContent = 'Проверить и применить';
     if (scope === 'routing' || scope === 'services') {
-      $('#applyServiceChanges').textContent = state.status.safe_mode ? 'Проверить маршруты' : 'Применить маршруты';
+      $('#applyServiceChanges').textContent = state.status.safe_mode ? 'Проверить черновик' : 'Сохранить и проверить';
     }
     if (scope === 'routing' || scope === 'devices') {
       $('#applyDeviceChanges').textContent = state.status.safe_mode ? 'Проверить политики' : 'Применить политики';

@@ -58,6 +58,13 @@ func TestParseURIRejectsMissingSecretsAndUnsupportedSchemes(t *testing.T) {
 	}
 }
 
+func TestParseURIExplainsWebPageInsteadOfKey(t *testing.T) {
+	_, err := ParseURI("https://tiagorrg.github.io/vless-checker/")
+	if err == nil || !strings.Contains(err.Error(), "сам ключ") {
+		t.Fatalf("unexpected page URL error: %v", err)
+	}
+}
+
 func TestParseProfileAcceptsTextAndBase64SubscriptionsWithoutPreviewLeaks(t *testing.T) {
 	const uuid = "123e4567-e89b-12d3-a456-426614174000"
 	subscription := "vless://" + uuid + "@one.example:443?security=tls#One\n" +
@@ -78,8 +85,8 @@ func TestParseProfileAcceptsTextAndBase64SubscriptionsWithoutPreviewLeaks(t *tes
 			if strings.Contains(string(preview), uuid) || strings.Contains(string(preview), "super-secret") {
 				t.Fatalf("bundle preview leaked a credential: %s", preview)
 			}
-			if !strings.Contains(string(result.Config), `"type": "selector"`) || !strings.Contains(string(result.Config), `"default": "node-01"`) {
-				t.Fatalf("multi-node config has no safe selector: %s", result.Config)
+			if !strings.Contains(string(result.Config), `"type": "selector"`) || !strings.Contains(string(result.Config), `"type": "urltest"`) || !strings.Contains(string(result.Config), `"default": "auto"`) {
+				t.Fatalf("multi-node config has no automatic local selector: %s", result.Config)
 			}
 		})
 	}
@@ -92,7 +99,9 @@ func TestParseProfileAllowsExplicitInitialNodeSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Preview.SelectedIndex != 1 || !strings.Contains(string(result.Config), `"default": "node-02"`) {
+	if result.Preview.SelectedIndex != 1 || !strings.Contains(string(result.Config), `"outbounds": [
+        "node-02",
+        "node-01"`) {
 		t.Fatalf("explicit selection was lost: preview=%+v config=%s", result.Preview, result.Config)
 	}
 	for _, invalid := range []int{-1, 2} {

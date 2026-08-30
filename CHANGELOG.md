@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.18.0 — Autopilot and honest route checks
+
+- Fixed NFQWS2 activation on Entware: generated host/IP lists are readable by
+  the unprivileged `nobody` process, and activation now fails if the init script
+  returns success but the daemon immediately exits.
+- Made NFQWS2 rollback idempotent when the saved state is already stopped.
+- Added bounded background Autopilot reconciliation for applied AUTO services.
+  It checks at most four services per cycle and only the current route, DIRECT
+  control and one alternative; explicit routes and pending drafts are never
+  changed automatically.
+- Reduced the Services workflow to one section action. Routine service-only
+  changes no longer open a second review dialog, and global draft controls stay
+  hidden on tabs that own their own changes.
+- Multi-node Sing-box imports now use a bounded local URLTest pool with manual
+  fallback nodes. Public checker pages are rejected in favour of actual share
+  keys, and failures explain that TCP reachability is not a VLESS/TLS/Reality
+  handshake.
+- Verified on Keenetic ARM64: transactional upgrade, NFQWS2 process state,
+  readable runtime lists and YouTube `generate_204` through the committed route.
+
 ## v0.17.0 — Hardware truth and safe canaries
 
 - Hardware testing now detects the official USQUE `nativetun` runtime and

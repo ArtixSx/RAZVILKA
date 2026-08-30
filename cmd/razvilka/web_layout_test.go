@@ -44,13 +44,13 @@ func TestEmbeddedWebAssetsUseCurrentCacheKey(t *testing.T) {
 	}
 	html := string(data)
 	for _, asset := range []string{
-		"/style.css?v=0.17.0",
-		"/v010.css?v=0.17.0",
-		"/v011.css?v=0.17.0",
-		"/v011-theme.css?v=0.17.0",
-		"/v012.css?v=0.17.0",
-		"/app.js?v=0.17.0",
-		"/favicon.ico?v=0.17.0",
+		"/style.css?v=0.18.0",
+		"/v010.css?v=0.18.0",
+		"/v011.css?v=0.18.0",
+		"/v011-theme.css?v=0.18.0",
+		"/v012.css?v=0.18.0",
+		"/app.js?v=0.18.0",
+		"/favicon.ico?v=0.18.0",
 	} {
 		if !strings.Contains(html, asset) {
 			t.Fatalf("cache-busted asset missing %q", asset)
@@ -338,5 +338,26 @@ func TestWebUIRemainsUsableOnPartialFailure(t *testing.T) {
 		if !strings.Contains(css, required) {
 			t.Fatalf("accessibility style missing %q", required)
 		}
+	}
+}
+
+func TestServicesUseOneExplicitApplyWithoutRoutineReviewModal(t *testing.T) {
+	t.Parallel()
+	indexData, err := embedded.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html, app := string(indexData), string(appData)
+	for _, required := range []string{`id="applyServiceChanges"`, "Сохранить и проверить", "function needsApplyReview", "sectionOwnsDraft", "Автопилот (AUTO)"} {
+		if !strings.Contains(html+app, required) {
+			t.Fatalf("streamlined service apply marker missing %q", required)
+		}
+	}
+	if strings.Contains(app, "askConfirmation('Создать черновик Sing-box'") {
+		t.Fatal("draft-only Sing-box import still asks for a redundant confirmation")
 	}
 }

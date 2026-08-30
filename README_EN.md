@@ -32,8 +32,8 @@ The installer verifies the router architecture and release checksum, creates a r
 ## Basic workflow
 
 1. Install the required component from **Bypasses**.
-2. Enable a resource in **Services** and keep `AUTO`, or pin a route manually.
-3. Run **Bypass tests**, review the plan and only then allow live apply.
+2. Enable a resource in **Services** and keep **Autopilot (AUTO)**, or pin a route manually.
+3. Click **Save and verify**. RAZVILKA validates the candidate, applies it transactionally and restores the previous route on failure. The separate test lab remains available for manual diagnostics.
 
 Safe Mode is enabled after installation and prevents unconfirmed firewall, DNS, TUN and policy-routing changes.
 

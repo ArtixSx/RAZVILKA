@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -58,6 +59,15 @@ func TestNFQWS2AdapterManagedListsAndRollback(t *testing.T) {
 	data, _ := os.ReadFile(userPath)
 	if !strings.Contains(string(data), "manual.example") || !strings.Contains(string(data), managedBegin+"\ngooglevideo.com\nyoutube.com\n"+managedEnd) {
 		t.Fatalf("managed user list=%q", data)
+	}
+	for _, path := range []string{userPath, ipsetPath} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); runtime.GOOS != "windows" && got != 0o644 {
+			t.Fatalf("NFQWS2 runtime list %s mode=%#o, want 0644", path, got)
+		}
 	}
 	if err := adapter.Health(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
