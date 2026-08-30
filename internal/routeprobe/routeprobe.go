@@ -25,7 +25,9 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	proof "github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
+	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 )
@@ -95,8 +97,22 @@ func (m *Manager) Probe(ctx context.Context, service catalog.Service, route stri
 		return result
 	}
 	result = probeHTTP(ctx, client, service, route, evidence, confirmed)
-	if confirmed && (result.Status == "pass" || result.Status == "partial") {
+	if result.RouteConfirmed && (result.Status == "pass" || result.Status == "partial") {
 		result.EgressIP = probeEgress(ctx, client)
+	}
+	if strings.HasPrefix(evidence, "explicit-socks5:") {
+		// An HTTP response confirms CONNECT, not who owns the listener or which
+		// outbound served it. Re-check the local passport after the request.
+		passport, passportErr := m.socksPassport(route)
+		if !confirmed || passportErr != nil || !strings.Contains(evidence, ";passport="+passport.ID+";") {
+			code := "route-runtime-changed"
+			if passportErr != nil {
+				code = passportErr.Error()
+			}
+			unconfirmSOCKSResult(&result, code)
+		} else if result.RouteConfirmed {
+			result.ExpectedRoutePathID, result.ObservedRoutePathID = passport.ID, passport.ID
+		}
 	}
 	return result
 }
@@ -416,7 +432,37 @@ func (m *Manager) socksClient(route string) (*http.Client, string, bool, error) 
 		return nil, "", false, err
 	}
 	dialer := socksDialer{ProxyAddress: endpoint, Username: username, Password: password, Timeout: 6 * time.Second}
-	return hardenedClient(dialer.DialContext, m.timeout()), "explicit-socks5:" + route + "@" + endpoint, true, nil
+	passport, proofErr := routeidentity.Verify(filepath.Join(m.DataplaneRoot, route, "runtime"), route, endpoint)
+	source := "explicit-socks5:" + route + "@" + endpoint
+	if proofErr == nil {
+		source += ";passport=" + passport.ID + ";outbound=" + passport.Outbound
+	} else {
+		source += ";unconfirmed=" + proofErr.Error()
+	}
+	return hardenedClient(dialer.DialContext, m.timeout()), source, proofErr == nil, nil
+}
+
+func (m *Manager) socksPassport(route string) (routeidentity.Passport, error) {
+	endpoint, _, _, err := m.socksEndpoint(route)
+	if err != nil {
+		return routeidentity.Passport{}, errors.New("route-listener-unavailable")
+	}
+	return routeidentity.Verify(filepath.Join(m.DataplaneRoot, route, "runtime"), route, endpoint)
+}
+
+func unconfirmSOCKSResult(result *testlab.Result, code string) {
+	result.RouteConfirmed = false
+	result.RouteProofError = code
+	result.ObservedRoutePathID = ""
+	result.EgressIP = ""
+	if result.Status == "pass" {
+		result.Status, result.Verdict = "partial", proof.VerdictInconclusive
+		result.Outcome = proof.OutcomeTransportReachable
+		result.ErrorCode = code
+		result.Detail = "Сервис ответил, но путь через выбранный обход не подтверждён. " + routeidentity.Explanation(code)
+	} else {
+		result.Detail = strings.TrimSpace(result.Detail + " Путь через выбранный обход не подтверждён. " + routeidentity.Explanation(code))
+	}
 }
 
 func (m *Manager) socksEndpoint(route string) (string, string, string, error) {
@@ -617,7 +663,7 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 	}
 	defer response.Body.Close()
 	if confirmAfterResponse {
-		result.RouteConfirmed = true
+		result.RouteConfirmed = confirmed
 	}
 	result.HTTPStatus = response.StatusCode
 	readStarted := time.Now()
@@ -681,7 +727,7 @@ type socksDialer struct {
 	Timeout      time.Duration
 }
 
-func (d socksDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+func (d socksDialer) DialContext(ctx context.Context, network, address string) (resultConn net.Conn, resultErr error) {
 	if network != "tcp" && network != "tcp4" && network != "tcp6" {
 		return nil, errors.New("SOCKS adapter supports TCP only")
 	}
@@ -694,8 +740,26 @@ func (d socksDialer) DialContext(ctx context.Context, network, address string) (
 	defer func() {
 		if failed {
 			_ = connection.Close()
+			if ctx.Err() != nil {
+				resultErr = ctx.Err()
+			}
 		}
 	}()
+	// Dial timeout alone does not bound ReadFull during greeting/auth/CONNECT.
+	// Close on cancellation even when the context has no deadline.
+	handshakeTimeout := d.Timeout
+	if handshakeTimeout <= 0 {
+		handshakeTimeout = 6 * time.Second
+	}
+	deadline := time.Now().Add(handshakeTimeout)
+	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+		deadline = contextDeadline
+	}
+	if err := connection.SetDeadline(deadline); err != nil {
+		return nil, err
+	}
+	stopCancel := context.AfterFunc(ctx, func() { _ = connection.Close() })
+	defer stopCancel()
 	methods := []byte{0x00}
 	if d.Username != "" || d.Password != "" {
 		methods = append(methods, 0x02)
@@ -704,7 +768,10 @@ func (d socksDialer) DialContext(ctx context.Context, network, address string) (
 		return nil, err
 	}
 	reply := make([]byte, 2)
-	if _, err := io.ReadFull(connection, reply); err != nil || reply[0] != 0x05 || reply[1] == 0xff {
+	if _, err := io.ReadFull(connection, reply); err != nil {
+		return nil, fmt.Errorf("SOCKS5 method negotiation: %w", err)
+	}
+	if reply[0] != 0x05 || (reply[1] != 0x00 && reply[1] != 0x02) || (reply[1] == 0x02 && d.Username == "" && d.Password == "") {
 		return nil, errors.New("SOCKS5 method negotiation failed")
 	}
 	if reply[1] == 0x02 {
@@ -718,7 +785,10 @@ func (d socksDialer) DialContext(ctx context.Context, network, address string) (
 		if _, err := connection.Write(request); err != nil {
 			return nil, err
 		}
-		if _, err := io.ReadFull(connection, reply); err != nil || reply[1] != 0x00 {
+		if _, err := io.ReadFull(connection, reply); err != nil {
+			return nil, fmt.Errorf("SOCKS5 authentication: %w", err)
+		}
+		if reply[0] != 0x01 || reply[1] != 0x00 {
 			return nil, errors.New("SOCKS5 authentication failed")
 		}
 	}
@@ -726,7 +796,10 @@ func (d socksDialer) DialContext(ctx context.Context, network, address string) (
 	if err != nil {
 		return nil, err
 	}
-	port, _ := strconv.Atoi(portText)
+	port, err := strconv.Atoi(portText)
+	if err != nil || port < 1 || port > 65535 {
+		return nil, errors.New("invalid SOCKS5 destination port")
+	}
 	request := []byte{0x05, 0x01, 0x00}
 	if ip := net.ParseIP(host); ip != nil {
 		if ipv4 := ip.To4(); ipv4 != nil {
@@ -750,7 +823,10 @@ func (d socksDialer) DialContext(ctx context.Context, network, address string) (
 		return nil, err
 	}
 	header := make([]byte, 4)
-	if _, err := io.ReadFull(connection, header); err != nil || header[0] != 0x05 || header[1] != 0x00 {
+	if _, err := io.ReadFull(connection, header); err != nil {
+		return nil, fmt.Errorf("SOCKS5 CONNECT: %w", err)
+	}
+	if header[0] != 0x05 || header[1] != 0x00 || header[2] != 0x00 {
 		return nil, errors.New("SOCKS5 CONNECT failed")
 	}
 	addressBytes := 0
@@ -769,6 +845,12 @@ func (d socksDialer) DialContext(ctx context.Context, network, address string) (
 		return nil, errors.New("SOCKS5 returned invalid address type")
 	}
 	if _, err := io.CopyN(io.Discard, connection, int64(addressBytes+2)); err != nil {
+		return nil, err
+	}
+	if !stopCancel() || ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err := connection.SetDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
 	failed = false

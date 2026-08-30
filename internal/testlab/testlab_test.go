@@ -33,6 +33,20 @@ func TestProbeCurrent(t *testing.T) {
 	}
 }
 
+func TestRouteProofErrorRevokesAlreadyNormalizedEvidence(t *testing.T) {
+	result := Result{ServiceID: "telegram", Route: "sing-box", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, ObservedRoutePathID: "managed:sing-box:old", CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	result.NormalizeEvidence()
+	if result.EvidenceV2.RoutePathID != "managed:sing-box:old" || result.AssuranceLevel() != evidence.Service {
+		t.Fatalf("missing passport path: %+v", result)
+	}
+	result.RouteProofError = "route-runtime-changed"
+	result.NormalizeEvidence()
+	result.NormalizeEvidence()
+	if result.RouteConfirmed || result.Verdict != evidence.VerdictInconclusive || result.AssuranceLevel() != evidence.Runtime || result.EvidenceV2.RoutePathID != "" {
+		t.Fatalf("stale proof survived: %+v", result)
+	}
+}
+
 func TestProbeCurrentDetectsInterruptedResponseStream(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "32768")

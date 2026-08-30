@@ -96,7 +96,7 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 	for _, result := range results {
 		result.NormalizeEvidence()
 		level := result.AssuranceLevel()
-		if (!level.AtLeast(evidence.Route) && result.Verdict != evidence.VerdictMisrouted) || result.ServiceID == "" || result.Route == "" || !knownStatus(result.Status) {
+		if (!level.AtLeast(evidence.Route) && result.Verdict != evidence.VerdictMisrouted && result.RouteProofError == "") || result.ServiceID == "" || result.Route == "" || !knownStatus(result.Status) {
 			continue
 		}
 		state := services[result.ServiceID]

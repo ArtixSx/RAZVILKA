@@ -768,7 +768,7 @@ func (a *ProxyTunnelAdapter) engineProcessAt(config string, port int, root, proc
 	case "xray":
 		args = []string{"run", "-config", config}
 	}
-	return ProcessSpec{ID: processID, Binary: a.engineBinary(), Args: args, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config}
+	return ProcessSpec{ID: processID, Binary: a.engineBinary(), Args: args, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config, RouteProof: true}
 }
 
 func (a *ProxyTunnelAdapter) transportPath() string {

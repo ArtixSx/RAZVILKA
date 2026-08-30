@@ -87,6 +87,51 @@ func TestFailedSOCKSRequestIsNotRouteConfirmed(t *testing.T) {
 	}
 }
 
+func TestSOCKSHTTPResponseCannotOverrideMissingOwnership(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 204, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(""))}, nil
+	})}
+	result := probeHTTP(context.Background(), client, catalog.Service{ID: "telegram", Name: "Telegram", ProbeURL: "https://telegram.org/"}, "sing-box", "explicit-socks5:sing-box@127.0.0.1:18081", false)
+	if result.RouteConfirmed {
+		t.Fatal("HTTP response promoted unowned SOCKS route")
+	}
+	unconfirmSOCKSResult(&result, "route-receipt-missing")
+	result.NormalizeEvidence()
+	if result.HTTPStatus != 204 || result.Status != "partial" || result.Verdict != evidence.VerdictInconclusive || result.AssuranceLevel() != evidence.Runtime || !strings.Contains(result.Detail, "Сервис ответил") {
+		t.Fatalf("reachable-but-unverified result lost: %+v", result)
+	}
+}
+
+func TestSOCKSPassportFailurePreservesResponseFacts(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 403, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("forbidden"))}, nil
+	})}
+	result := probeHTTP(context.Background(), client, catalog.Service{ID: "test", ProbeURL: "https://example.com/"}, "sing-box", "explicit-socks5:test", true)
+	result.EgressIP = "1.2.3.4"
+	unconfirmSOCKSResult(&result, "route-runtime-changed")
+	result.NormalizeEvidence()
+	if result.HTTPStatus != 403 || result.Verdict != evidence.VerdictBlocked || result.RouteConfirmed || result.EgressIP != "" || result.AssuranceLevel() != evidence.Runtime {
+		t.Fatalf("unsafe or misleading result: %+v", result)
+	}
+}
+
+func TestConfiguredSOCKSWithoutLaunchReceiptIsNotAttested(t *testing.T) {
+	root := t.TempDir()
+	runtimeRoot := filepath.Join(root, "sing-box", "runtime")
+	if err := os.MkdirAll(runtimeRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtimeRoot, "engine.json"), []byte(`{"inbounds":[{"type":"socks","listen":"127.0.0.1","listen_port":18081}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := New(nil)
+	m.DataplaneRoot = root
+	client, source, confirmed, err := m.socksClient("sing-box")
+	if err != nil || client == nil || confirmed || !strings.Contains(source, "route-receipt-missing") {
+		t.Fatalf("source=%s confirmed=%v err=%v", source, confirmed, err)
+	}
+}
+
 func TestIsolatedProbeRejectsBlockPageAndInvalidJSON(t *testing.T) {
 	for _, test := range []struct {
 		body, contentType string
@@ -224,5 +269,90 @@ func TestSocksDialerHandshake(t *testing.T) {
 	_ = connection.Close()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSocksHandshakeHonorsCancellationAndDeadline(t *testing.T) {
+	for _, stage := range []string{"greeting", "auth", "connect", "bound-address"} {
+		for _, mode := range []string{"cancel", "timeout"} {
+			t.Run(stage+"/"+mode, func(t *testing.T) {
+				listener, err := net.Listen("tcp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer listener.Close()
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				stalled := make(chan struct{})
+				serverDone := make(chan struct{})
+				go func() {
+					defer close(serverDone)
+					connection, err := listener.Accept()
+					if err != nil {
+						close(stalled)
+						return
+					}
+					defer connection.Close()
+					_ = connection.SetDeadline(time.Now().Add(2 * time.Second))
+					greeting := make([]byte, 4) // two advertised methods
+					_, _ = io.ReadFull(connection, greeting)
+					switch stage {
+					case "auth":
+						_, _ = connection.Write([]byte{5, 2})
+					case "connect", "bound-address":
+						_, _ = connection.Write([]byte{5, 0})
+						_, _ = io.ReadFull(connection, make([]byte, 10)) // IPv4 CONNECT
+						if stage == "bound-address" {
+							_, _ = connection.Write([]byte{5, 0, 0, 1})
+						}
+					}
+					close(stalled)
+					_, _ = io.Copy(io.Discard, connection)
+				}()
+				timeout := 150 * time.Millisecond
+				if mode == "cancel" {
+					timeout = 5 * time.Second
+				}
+				dialer := socksDialer{ProxyAddress: listener.Addr().String(), Username: "u", Password: "p", Timeout: timeout}
+				done := make(chan error, 1)
+				go func() {
+					conn, err := dialer.DialContext(ctx, "tcp", "93.184.216.34:443")
+					if conn != nil {
+						_ = conn.Close()
+					}
+					done <- err
+				}()
+				select {
+				case <-stalled:
+				case <-time.After(3 * time.Second):
+					t.Fatal("server never reached handshake stage")
+				}
+				if mode == "cancel" {
+					cancel()
+				}
+				select {
+				case err := <-done:
+					if err == nil {
+						t.Fatal("stalled handshake accepted")
+					}
+					if mode == "cancel" && !errors.Is(err, context.Canceled) {
+						t.Fatalf("cancellation lost: %v", err)
+					}
+					if mode == "timeout" {
+						var timeoutErr net.Error
+						if !errors.As(err, &timeoutErr) || !timeoutErr.Timeout() {
+							t.Fatalf("timeout lost: %v", err)
+						}
+					}
+				case <-time.After(time.Second):
+					t.Fatal("handshake ignored deadline/cancellation")
+				}
+				select {
+				case <-serverDone:
+				case <-time.After(time.Second):
+					t.Fatal("connection leaked after failed handshake")
+				}
+			})
+		}
 	}
 }

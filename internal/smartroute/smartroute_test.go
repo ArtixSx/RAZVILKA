@@ -89,6 +89,23 @@ func TestMisroutedObservationRevokesPreviousSuccess(t *testing.T) {
 	}
 }
 
+func TestRouteOwnershipFailureRevokesPreviousSuccess(t *testing.T) {
+	for _, status := range []string{"pass", "fail", "partial"} {
+		t.Run(status, func(t *testing.T) {
+			m, _ := New("")
+			now := time.Now().UTC().Format(time.RFC3339)
+			_, _ = m.Observe([]testlab.Result{{ServiceID: "svc", Route: "sing-box", Status: "pass", HTTPStatus: 204, RouteConfirmed: true, CheckedAt: now}})
+			if got := m.Suggest("svc", "direct"); got != "sing-box" {
+				t.Fatalf("initial=%s", got)
+			}
+			_, _ = m.Observe([]testlab.Result{{ServiceID: "svc", Route: "sing-box", Status: status, HTTPStatus: 200, RouteProofError: "route-runtime-changed", CheckedAt: now}})
+			if got := m.Suggest("svc", "direct"); got != "direct" {
+				t.Fatalf("stale proof used: %s", got)
+			}
+		})
+	}
+}
+
 func TestInconclusiveHighScoreCannotHideWorkingCandidate(t *testing.T) {
 	m, _ := New("")
 	now := time.Now().UTC().Format(time.RFC3339)

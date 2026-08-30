@@ -51,6 +51,7 @@ type Result struct {
 	ExpectedRoutePathID    string                  `json:"expected_route_path_id,omitempty"`
 	ObservedRoutePathID    string                  `json:"observed_route_path_id,omitempty"`
 	NegativeControlMatched bool                    `json:"negative_control_matched,omitempty"`
+	RouteProofError        string                  `json:"route_proof_error,omitempty"`
 }
 
 // EvaluateHTTP retains only redacted metadata and a bounded content digest;
@@ -77,6 +78,14 @@ func (result *Result) NormalizeEvidence() {
 	if result == nil {
 		return
 	}
+	if result.RouteProofError != "" {
+		result.RouteConfirmed = false
+		result.ObservedRoutePathID = ""
+		if result.Status == "pass" {
+			result.Status, result.Verdict = "partial", evidence.VerdictInconclusive
+			result.Outcome = evidence.OutcomeTransportReachable
+		}
+	}
 	if result.Verdict == evidence.VerdictPass && result.Status != "pass" {
 		result.Verdict = evidence.VerdictFromProbe(result.Status, result.HTTPStatus, result.ErrorCode)
 		result.Outcome = evidence.OutcomeFromProbe(result.Status, result.HTTPStatus, result.ErrorCode)
@@ -96,6 +105,9 @@ func (result *Result) NormalizeEvidence() {
 		routePath := ""
 		if result.RouteConfirmed {
 			routePath = "isolated:" + result.Route
+			if result.ObservedRoutePathID != "" {
+				routePath = result.ObservedRoutePathID
+			}
 		}
 		errorCode := result.ErrorCode
 		if errorCode == "" {
@@ -128,6 +140,26 @@ func (result *Result) NormalizeEvidence() {
 			ContentFingerprint:  result.ContentFingerprint,
 			ExpectedRoutePathID: result.ExpectedRoutePathID, ObservedRoutePathID: result.ObservedRoutePathID,
 			NegativeControlMatched: result.NegativeControlMatched,
+			RouteProofError:        result.RouteProofError,
+		}
+	}
+	if result.RouteProofError != "" || result.EvidenceV2.RouteProofError != "" {
+		copy := *result.EvidenceV2
+		if result.RouteProofError != "" {
+			copy.RouteProofError = result.RouteProofError
+		}
+		copy.RoutePathID = ""
+		copy.ObservedRoutePathID = ""
+		if copy.Verdict == evidence.VerdictPass {
+			copy.Verdict, copy.Outcome = evidence.VerdictInconclusive, evidence.OutcomeTransportReachable
+		}
+		result.EvidenceV2 = &copy
+		result.RouteProofError = copy.RouteProofError
+		result.RouteConfirmed = false
+		result.ObservedRoutePathID = ""
+		result.EgressIP = ""
+		if result.Status == "pass" {
+			result.Status = "partial"
 		}
 	}
 	probe := result.EvidenceV2

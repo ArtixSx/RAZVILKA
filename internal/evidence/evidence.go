@@ -94,6 +94,7 @@ type ProbeEvidence struct {
 	ExpectedRoutePathID    string    `json:"expected_route_path_id,omitempty"`
 	ObservedRoutePathID    string    `json:"observed_route_path_id,omitempty"`
 	NegativeControlMatched bool      `json:"negative_control_matched,omitempty"`
+	RouteProofError        string    `json:"route_proof_error,omitempty"`
 }
 
 func (probe ProbeEvidence) Valid() bool {
@@ -118,6 +119,9 @@ func (probe ProbeEvidence) Fresh(now time.Time, ttl time.Duration) bool {
 func (probe ProbeEvidence) AssuranceLevel() Level {
 	if !probe.Valid() {
 		return None
+	}
+	if probe.RouteProofError != "" {
+		return Runtime
 	}
 	isolatedRoute := strings.TrimSpace(probe.RoutePathID) != ""
 	if probe.NegativeControlMatched || (probe.ExpectedRoutePathID != "" && probe.ObservedRoutePathID != "" && probe.ExpectedRoutePathID != probe.ObservedRoutePathID) || probe.Verdict == VerdictMisrouted {

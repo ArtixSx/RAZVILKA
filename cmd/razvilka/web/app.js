@@ -372,6 +372,7 @@ function probeVerdict(result) {
   const routeConfirmed = !!result?.route_confirmed;
   const verdict = String(result?.verdict || result?.evidence_v2?.verdict || '');
   const errorCode = String(result?.error_code || result?.evidence_v2?.error_code || '');
+  if (result?.route_proof_error || result?.evidence_v2?.route_proof_error) return { tone: 'warn', text: 'Путь через выбранный обход не подтверждён — это не означает, что сервис не работает' };
   if (verdict === 'MISROUTED') return { tone: 'fail', text: 'Ответ пришёл через другой маршрут — обход не подтверждён' };
   if (verdict === 'BLOCKED' && errorCode === 'timeout') return { tone: 'warn', text: 'Проверка не дождалась ответа; это ещё не доказывает блокировку' };
   if (verdict === 'BLOCKED' && errorCode.includes('tls')) return { tone: 'warn', text: 'Безопасное TLS-соединение не подтверждено' };
@@ -387,6 +388,7 @@ function probeVerdict(result) {
 }
 
 function probeStatusLabel(result) {
+  if (result?.route_proof_error || result?.evidence_v2?.route_proof_error) return 'Путь не подтверждён';
   const errorCode = String(result?.error_code || result?.evidence_v2?.error_code || '');
   if (result?.verdict === 'BLOCKED' && errorCode === 'timeout') return 'Нет ответа';
   if (result?.verdict === 'BLOCKED' && errorCode.includes('tls')) return 'TLS не подтверждён';

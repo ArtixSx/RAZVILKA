@@ -19,6 +19,17 @@
   inconclusive high-score candidates.
 - Clarified that the YouTube connectivity probe requires HTTP 204 but does not
   prove video playback. These changes still require router acceptance testing.
+- Added managed proxy launch receipts and local route passports: boot/PID start,
+  config/argv digests, executable, network namespace and listening socket owner
+  are checked before and after a SOCKS service probe. Unowned or changed
+  runtimes no longer inherit a successful route result; Smart Route revokes
+  their previous proof and the UI distinguishes missing proof from an outage.
+- Added conservative static-outbound inspection for Sing-box/Xray and managed
+  USQUE. DIRECT exits, local relays, dynamic pools and unverified chains cannot
+  masquerade as a proven remote path. Existing profiles are not rewritten.
+- Bounded every SOCKS handshake stage and closed cancelled connections; failed
+  managed startup now reaps its child and invalidates its launch receipt.
+  Remote egress proof and router acceptance remain outstanding.
 
 ## v0.18.0 — Autopilot and honest route checks
 
