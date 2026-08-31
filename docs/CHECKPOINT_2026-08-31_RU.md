@@ -7,12 +7,24 @@
 - `e5af107`: PR-0.4 — HTTPS/SSRF boundary, source schema 2, TTL, provenance,
   LKG, quarantine, сводка diff и запрет изменения scope автопилотом. В том же
   блоке ограничены endpoints/metrics/logs импортированных proxy-canary.
-- Следом сохранена пассивная основа PR-1.1: Cloudflare Provider model/import/store.
+- `614ceae`: общий бюджет community include, ранний entry limit, отказ от HTML
+  и частичного parsing, redaction ошибок чтения, лимит HTTPS-заголовков.
+- `0298a0b`: пассивная основа PR-1.1 — Cloudflare Provider model/import/store.
   Полная интеграция PR-1.1 не завершена; см. отдельный отчёт.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
+
+## Финальные локальные проверки
+
+Полный `go test ./... -timeout=90s`, `go vet ./...`, синтаксис `app.js` и
+`test-probe-ui.mjs` прошли после всех правок. Все Go-пакеты собраны для Linux
+arm64/mips/mipsle; также скомпилированы provider tests для трёх архитектур и
+dataplane tests для ARM64. Linux-бинарники локально не выполнялись. Файлы сборок
+лежат в игнорируемом `.tmp/truth-safety`, это не опубликованный install bundle.
+Функции отображения проверены автоматически, браузерная визуальная проверка
+в этой работе не выполнялась. Не объявлять новую сборку аппаратно стабильной.
 
 ## Продолжать отсюда
 
