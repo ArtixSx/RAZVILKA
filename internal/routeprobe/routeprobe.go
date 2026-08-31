@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/commandrun"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	proof "github.com/ArtixSx/razvilka/internal/evidence"
@@ -322,7 +323,7 @@ func kernelQueueActive(want int) bool {
 }
 
 func reserveTCPPort() (int, error) {
-	listener, err := net.Listen("tcp4", "0.0.0.0:0")
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
@@ -357,7 +358,7 @@ func findSystemBinary(candidates []string) string {
 }
 
 func runSystemCommand(ctx context.Context, binary string, args ...string) (string, error) {
-	output, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()
+	output, err := commandrun.Output(ctx, 4*time.Second, 64<<10, binary, args...)
 	return shortened(strings.TrimSpace(string(output))), err
 }
 

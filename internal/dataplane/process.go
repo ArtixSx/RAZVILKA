@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 )
 
@@ -44,23 +45,36 @@ func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
 	if controller.Running(spec) {
 		return fmt.Errorf("managed process %s is already running", spec.ID)
 	}
+	if err := os.MkdirAll(spec.Dir, 0o700); err != nil {
+		return err
+	}
+	owned, err := ownedfs.Open(spec.Dir)
+	if err != nil {
+		return err
+	}
+	defer owned.Close()
+	pidName, _ := filepath.Rel(spec.Dir, spec.PIDPath)
+	logName, _ := filepath.Rel(spec.Dir, spec.LogPath)
+	configName, _ := filepath.Rel(spec.Dir, spec.MatchArg)
+	receiptName := pidName + routeidentity.ReceiptSuffix
 	configHash := ""
 	if spec.RouteProof {
-		data, err := os.ReadFile(spec.MatchArg)
+		data, err := owned.ReadLimited(configName, 8<<20)
 		if err != nil {
 			return fmt.Errorf("read managed route config: %w", err)
 		}
 		configHash = routeidentity.Hash(data)
-		_ = os.Remove(spec.PIDPath + routeidentity.ReceiptSuffix)
+		_ = owned.Remove(receiptName)
 	}
-	_ = os.Remove(spec.PIDPath)
-	if err := os.MkdirAll(filepath.Dir(spec.PIDPath), 0o700); err != nil {
-		return err
+	_ = owned.Remove(pidName)
+	for _, name := range []string{pidName, logName} {
+		if parent := filepath.Dir(name); parent != "." {
+			if err := owned.MkdirAll(parent, 0o700); err != nil {
+				return err
+			}
+		}
 	}
-	if err := os.MkdirAll(filepath.Dir(spec.LogPath), 0o700); err != nil {
-		return err
-	}
-	logFile, err := os.OpenFile(spec.LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	logFile, err := owned.OpenFile(logName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -83,11 +97,11 @@ func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
 		_ = command.Process.Kill()
 		_ = command.Wait()
 		if savedPID, err := readManagedPID(spec); err == nil && savedPID == pid {
-			_ = os.Remove(spec.PIDPath)
-			_ = os.Remove(spec.PIDPath + routeidentity.ReceiptSuffix)
+			_ = owned.Remove(pidName)
+			_ = owned.Remove(receiptName)
 		}
 	}()
-	if err := writeAtomic(spec.PIDPath, []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
+	if err := owned.WriteAtomic(pidName, []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
 		_ = command.Process.Kill()
 		_ = logFile.Close()
 		return err
@@ -104,7 +118,7 @@ func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
 				if err != nil {
 					return fmt.Errorf("record managed route identity: %w", err)
 				}
-				if err := writeAtomic(spec.PIDPath+routeidentity.ReceiptSuffix, receipt, 0o600); err != nil {
+				if err := owned.WriteAtomic(receiptName, receipt, 0o600); err != nil {
 					return err
 				}
 			}
@@ -121,7 +135,7 @@ func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
 		case <-time.After(40 * time.Millisecond):
 		}
 	}
-	_ = os.Remove(spec.PIDPath)
+	_ = owned.Remove(pidName)
 	return fmt.Errorf("managed process %s exited during startup", spec.ID)
 }
 
@@ -129,9 +143,21 @@ func (OSProcessController) Stop(ctx context.Context, spec ProcessSpec) error {
 	if err := validateProcessSpec(spec); err != nil {
 		return err
 	}
+	owned, err := ownedfs.Open(spec.Dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer owned.Close()
+	pidName, _ := filepath.Rel(spec.Dir, spec.PIDPath)
 	// Invalidate proof before any stop attempt, including a cancelled stop.
 	if spec.RouteProof {
-		_ = os.Remove(spec.PIDPath + routeidentity.ReceiptSuffix)
+		_ = owned.Remove(pidName + routeidentity.ReceiptSuffix)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	pid, err := readManagedPID(spec)
 	if errors.Is(err, os.ErrNotExist) {
@@ -142,7 +168,7 @@ func (OSProcessController) Stop(ctx context.Context, spec ProcessSpec) error {
 	}
 	if !processMatches(pid, spec) {
 		if !processExists(pid) {
-			_ = os.Remove(spec.PIDPath)
+			_ = owned.Remove(pidName)
 			return nil
 		}
 		return fmt.Errorf("PID %d does not match managed process %s; refusing to signal it", pid, spec.ID)
@@ -155,7 +181,7 @@ func (OSProcessController) Stop(ctx context.Context, spec ProcessSpec) error {
 	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) {
 		if !processMatches(pid, spec) {
-			_ = os.Remove(spec.PIDPath)
+			_ = owned.Remove(pidName)
 			return nil
 		}
 		select {
@@ -165,17 +191,20 @@ func (OSProcessController) Stop(ctx context.Context, spec ProcessSpec) error {
 		}
 	}
 	if !processMatches(pid, spec) {
-		_ = os.Remove(spec.PIDPath)
+		_ = owned.Remove(pidName)
 		return nil
 	}
 	if err := process.Kill(); err != nil {
 		return err
 	}
-	_ = os.Remove(spec.PIDPath)
+	_ = owned.Remove(pidName)
 	return nil
 }
 
 func (OSProcessController) Running(spec ProcessSpec) bool {
+	if validateProcessSpec(spec) != nil {
+		return false
+	}
 	pid, err := readManagedPID(spec)
 	return err == nil && processMatches(pid, spec)
 }
@@ -184,14 +213,46 @@ func validateProcessSpec(spec ProcessSpec) error {
 	if spec.ID == "" || spec.Binary == "" || spec.PIDPath == "" || spec.LogPath == "" || spec.Dir == "" || spec.MatchArg == "" {
 		return errors.New("incomplete managed process specification")
 	}
-	if strings.ContainsAny(spec.ID, `/\\\x00`) {
+	if strings.ContainsAny(spec.ID, "/\\\x00") {
 		return errors.New("invalid managed process id")
+	}
+	if !filepath.IsAbs(spec.Dir) || filepath.Clean(spec.Dir) == filepath.VolumeName(spec.Dir)+string(filepath.Separator) {
+		return errors.New("managed process needs a dedicated absolute directory")
+	}
+	for _, path := range []string{spec.PIDPath, spec.LogPath, spec.MatchArg} {
+		relative, err := filepath.Rel(spec.Dir, path)
+		if err != nil || !filepath.IsAbs(path) || !filepath.IsLocal(relative) || relative == "." {
+			return errors.New("managed process files must stay below its directory")
+		}
+	}
+	if _, err := os.Lstat(spec.Dir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	owned, err := ownedfs.Open(spec.Dir)
+	if err != nil {
+		return err
+	}
+	defer owned.Close()
+	for _, path := range []string{spec.PIDPath, spec.LogPath, spec.MatchArg, spec.PIDPath + routeidentity.ReceiptSuffix} {
+		relative, _ := filepath.Rel(spec.Dir, path)
+		if err := owned.Check(relative); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func readManagedPID(spec ProcessSpec) (int, error) {
-	data, err := os.ReadFile(spec.PIDPath)
+	owned, err := ownedfs.Open(spec.Dir)
+	if err != nil {
+		return 0, err
+	}
+	defer owned.Close()
+	name, err := filepath.Rel(spec.Dir, spec.PIDPath)
+	if err != nil {
+		return 0, err
+	}
+	data, err := owned.ReadLimited(name, 64)
 	if err != nil {
 		return 0, err
 	}

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
 type Manager struct {
@@ -196,7 +197,7 @@ func (m *Manager) CanaryCapable(id string) bool {
 // snapshot, stage, validate and isolated canary. It never calls Activate,
 // Commit or Rollback because the CanaryAdapter contract must leave live state
 // untouched and clean only its temporary resources.
-func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID string) error {
+func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID string) (retErr error) {
 	if m == nil || m.StateRoot == "" {
 		return errors.New("dataplane state root is not configured")
 	}
@@ -212,15 +213,27 @@ func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID strin
 		return err
 	}
 	defer m.endOperation()
-	base := filepath.Join(m.StateRoot, "candidate-probes")
-	if err := os.MkdirAll(base, 0o700); err != nil {
+	if err := os.MkdirAll(m.StateRoot, 0o700); err != nil {
 		return err
 	}
-	root, err := os.MkdirTemp(base, adapterID+"-*")
+	owned, err := ownedfs.Open(m.StateRoot)
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(root)
+	defer owned.Close()
+	if err := owned.MkdirAll("candidate-probes", 0o700); err != nil {
+		return err
+	}
+	relative, err := owned.MkdirTemp("candidate-probes", adapterID+"-")
+	if err != nil {
+		return err
+	}
+	root := filepath.Join(m.StateRoot, relative)
+	defer func() {
+		if err := owned.RemoveAll(relative); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("clean owned candidate files: %w", err))
+		}
+	}()
 	for _, phase := range []struct {
 		name string
 		call func(context.Context, Plan, string) error
@@ -859,29 +872,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 }
 
 func writeAtomic(path string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".latest-plan.tmp-*")
+	parent, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
-		return fmt.Errorf("create dataplane transaction: %w", err)
+		return err
 	}
-	tmpPath := tmp.Name()
-	defer func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-	}()
-	if err := tmp.Chmod(mode); err != nil {
-		return fmt.Errorf("protect dataplane transaction: %w", err)
+	owned, err := ownedfs.Open(parent)
+	if err != nil {
+		return fmt.Errorf("open dataplane transaction directory: %w", err)
 	}
-	if _, err := tmp.Write(data); err != nil {
-		return fmt.Errorf("write dataplane transaction: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		return fmt.Errorf("sync dataplane transaction: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close dataplane transaction: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("commit dataplane transaction: %w", err)
-	}
-	return nil
+	defer owned.Close()
+	return owned.WriteAtomic(filepath.Base(path), data, mode)
 }

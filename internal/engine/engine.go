@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/commandrun"
 )
 
 type Status struct {
@@ -250,7 +252,7 @@ func fileExists(path string) bool {
 func detectVersion(path string) string {
 	for _, arg := range []string{"--version", "version", "-v"} {
 		ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
-		out, err := exec.CommandContext(ctx, path, arg).CombinedOutput()
+		out, err := commandrun.Output(ctx, 1200*time.Millisecond, 32<<10, path, arg)
 		cancel()
 		if err == nil {
 			if line := selectVersionLine(string(out), filepath.Base(path)); line != "" {
@@ -299,7 +301,7 @@ func firstLine(value string) string {
 func initRunning(path string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, path, "status").CombinedOutput()
+	out, err := commandrun.Output(ctx, 3*time.Second, 32<<10, path, "status")
 	return err == nil && statusLooksRunning(string(out))
 }
 
@@ -336,7 +338,7 @@ func detect(id, name, kind string, bins, initScripts []string, desc string) Stat
 		for _, p := range initScripts {
 			if _, err := os.Stat(p); err == nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				out, statusErr := exec.CommandContext(ctx, p, "status").CombinedOutput()
+				out, statusErr := commandrun.Output(ctx, 3*time.Second, 32<<10, p, "status")
 				cancel()
 				if statusErr == nil && statusLooksRunning(string(out)) {
 					running = true
@@ -365,7 +367,7 @@ func processRunning(name string) bool {
 	if processRunningProc(name) {
 		return true
 	}
-	out, err := exec.Command("ps").Output()
+	out, err := commandrun.Output(context.Background(), 1200*time.Millisecond, 1<<20, "ps")
 	if err != nil {
 		return false
 	}

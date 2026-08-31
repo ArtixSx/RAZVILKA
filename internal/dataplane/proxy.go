@@ -1024,6 +1024,9 @@ func readProxySnapshot(root string) (proxySnapshot, error) {
 }
 
 func buildProxyCandidate(engineID string, source []byte, port int) ([]byte, []string, error) {
+	if port < 1024 || port > 65535 {
+		return nil, nil, errors.New("invalid managed candidate port")
+	}
 	var document map[string]any
 	if err := json.Unmarshal(source, &document); err != nil {
 		return nil, nil, fmt.Errorf("invalid %s JSON: %w", engineID, err)
@@ -1051,6 +1054,8 @@ func buildProxyCandidate(engineID string, source []byte, port int) ([]byte, []st
 			return nil, nil, errors.New("Xray configuration has no outbounds")
 		}
 		document["inbounds"] = []any{map[string]any{"tag": "rz-engine-in", "listen": "127.0.0.1", "port": port, "protocol": "socks", "settings": map[string]any{"udp": true}}}
+		// Xray can create an API listener independently of its inbounds.
+		delete(document, "api")
 	default:
 		return nil, nil, fmt.Errorf("unsupported proxy engine %q", engineID)
 	}
@@ -1197,11 +1202,16 @@ func probeSOCKS5(ctx context.Context, address string) error {
 	}
 	defer connection.Close()
 	_ = connection.SetDeadline(time.Now().Add(2 * time.Second))
+	stop := context.AfterFunc(ctx, func() { _ = connection.Close() })
+	defer stop()
 	if _, err := connection.Write([]byte{5, 1, 0}); err != nil {
 		return err
 	}
 	reply := make([]byte, 2)
-	if _, err := connection.Read(reply); err != nil {
+	if _, err := io.ReadFull(connection, reply); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return err
 	}
 	if reply[0] != 5 || reply[1] != 0 {

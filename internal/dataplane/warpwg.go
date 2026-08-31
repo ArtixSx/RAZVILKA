@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/warp"
 )
 
@@ -243,10 +244,15 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err := candidate.ensureCanaryPolicyFree(ctx); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(candidate.StateRoot, 0o700); err != nil {
+	owned, err := ownedfs.Open(root)
+	if err != nil {
 		return err
 	}
-	if err := writeAtomic(candidate.RuntimeConfigPath, []byte(runtimeProfile), 0o600); err != nil {
+	defer owned.Close()
+	if err := owned.MkdirAll("canary", 0o700); err != nil {
+		return err
+	}
+	if err := owned.WriteAtomic(filepath.Join("canary", "candidate.conf"), []byte(runtimeProfile), 0o600); err != nil {
 		return err
 	}
 	defer func() {
@@ -258,9 +264,9 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 				cleanupErr = err
 			}
 		}
-		_ = os.RemoveAll(candidate.StateRoot)
-		if retErr == nil && cleanupErr != nil {
-			retErr = fmt.Errorf("cleanup WARP canary: %w", cleanupErr)
+		cleanupErr = errors.Join(cleanupErr, owned.RemoveAll("canary"))
+		if cleanupErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("cleanup WARP canary: %w", cleanupErr))
 		}
 	}()
 	if err := candidate.startInterface(ctx); err != nil {
