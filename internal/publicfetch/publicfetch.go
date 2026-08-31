@@ -101,6 +101,7 @@ func transport() *http.Transport {
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
 		TLSHandshakeTimeout: 6 * time.Second, ResponseHeaderTimeout: 10 * time.Second,
 		IdleConnTimeout: 30 * time.Second, MaxIdleConns: 8, MaxIdleConnsPerHost: 2,
+		MaxConnsPerHost: 2, MaxResponseHeaderBytes: 64 << 10,
 		ForceAttemptHTTP2: true,
 	}
 }

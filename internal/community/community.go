@@ -2,6 +2,7 @@ package community
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -194,6 +195,11 @@ func (m *Manager) Search(query string, imported func(string) bool) []Summary {
 }
 
 func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Service, refresh bool) (Preview, error) {
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return Preview{}, err
+	}
 	entry, ok := m.entry(id)
 	if !ok {
 		return Preview{}, os.ErrNotExist
@@ -263,6 +269,7 @@ func (m *Manager) fetchDomainTree(ctx context.Context, rootURL string, hash io.W
 	visited := map[string]bool{}
 	domains := map[string]bool{}
 	skipped := 0
+	totalBytes := 0
 	var walk func(string, int) error
 	walk = func(rawURL string, depth int) error {
 		if depth > 8 {
@@ -279,12 +286,19 @@ func (m *Manager) fetchDomainTree(ctx context.Context, rootURL string, hash io.W
 		if err != nil {
 			return err
 		}
+		totalBytes += len(body)
+		if totalBytes > 8<<20 {
+			return errors.New("community include tree exceeds total byte limit")
+		}
 		_, _ = hash.Write([]byte(rawURL))
 		_, _ = hash.Write(body)
 		parsed, includes, count := parseDomainDocument(body)
 		skipped += count
 		for _, domain := range parsed {
 			domains[domain] = true
+			if len(domains) > 2000 {
+				return errors.New("community source exceeds per-service entry limit")
+			}
 		}
 		for _, include := range includes {
 			includeURL, err := resolveDomainInclude(rawURL, include)
@@ -338,7 +352,7 @@ func (m *Manager) entry(id string) (Entry, bool) {
 func (m *Manager) fetch(ctx context.Context, rawURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, publicfetch.SafeError(err)
 	}
 	req.Header.Set("User-Agent", "RAZVILKA/community-catalog")
 	m.mu.RLock()
@@ -349,16 +363,32 @@ func (m *Manager) fetch(ctx context.Context, rawURL string) ([]byte, error) {
 		return nil, publicfetch.SafeError(err)
 	}
 	defer resp.Body.Close()
+	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/html") {
+		return nil, errors.New("community source returned HTML")
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	limited := &io.LimitedReader{R: resp.Body, N: maxSourceBytes + 1}
 	body, err := io.ReadAll(limited)
 	if err != nil {
-		return nil, err
+		return nil, publicfetch.SafeError(err)
 	}
 	if len(body) == 0 || len(body) > maxSourceBytes {
 		return nil, errors.New("source is empty or too large")
+	}
+	prefix := strings.ToLower(strings.TrimSpace(string(body[:min(len(body), 512)])))
+	for _, marker := range []string{"<!doctype html", "<html", "<head", "<body", "<script"} {
+		if strings.HasPrefix(prefix, marker) {
+			return nil, errors.New("community source returned HTML")
+		}
+	}
+	// Scanners below must never return a plausible partial list after a long
+	// line stops parsing. Reject before invoking either parser.
+	for _, line := range bytes.Split(body, []byte{'\n'}) {
+		if len(line) >= 1<<20 {
+			return nil, errors.New("community source line exceeds parsing limit")
+		}
 	}
 	return body, nil
 }
