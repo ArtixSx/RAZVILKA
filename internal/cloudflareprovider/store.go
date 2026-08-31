@@ -1,0 +1,188 @@
+package cloudflareprovider
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"os"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+)
+
+var (
+	ErrStore = errors.New("Cloudflare private store is unavailable or invalid")
+	ErrBusy  = errors.New("Cloudflare private store has another writer; inspect an interrupted import before retrying")
+)
+
+const storeFile = "accounts.private.json"
+const storeLimit = MaxAccounts*MaxImportBytes*2 + 65536
+
+type storedAccount struct {
+	ID         string    `json:"id"`
+	Kind       string    `json:"kind"`
+	Raw        []byte    `json:"raw"`
+	Digest     string    `json:"digest"`
+	ImportedAt time.Time `json:"imported_at"`
+}
+
+type privateDocument struct {
+	Schema   int             `json:"schema"`
+	Owner    string          `json:"owner"`
+	Accounts []storedAccount `json:"accounts"`
+}
+
+// Store owns copies only, not the original wgcf/USQUE files or their runtimes.
+// The directory must be explicitly created by the caller with private access.
+// POSIX 0700/0600 protect at rest; this is not encryption against root/disk access.
+type Store struct {
+	root *ownedfs.Root
+	mu   sync.Mutex
+	gate chan struct{}
+}
+
+func OpenStore(path string) (*Store, error) {
+	info, err := os.Lstat(path)
+	if err != nil || !info.IsDir() || runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		return nil, ErrStore
+	}
+	root, err := ownedfs.Open(path)
+	if err != nil {
+		return nil, ErrStore
+	}
+	s := &Store{root: root, gate: make(chan struct{}, 1)}
+	if _, err := s.load(); err != nil {
+		_ = root.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+func (s *Store) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.root.Close()
+}
+
+func (s *Store) List(ctx context.Context) ([]Account, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	doc, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	views := make([]Account, 0, len(doc.Accounts))
+	for _, record := range doc.Accounts {
+		parsed, err := ParseImport(record.Kind, record.Raw)
+		if err != nil {
+			return nil, ErrStore
+		}
+		views = append(views, accountView(record, parsed))
+	}
+	return views, nil
+}
+
+func accountView(record storedAccount, imported Import) Account {
+	view := imported.Preview()
+	view.ID, view.SecretReference = record.ID, "cloudflare:"+record.ID
+	view.CreatedAt, view.UpdatedAt = record.ImportedAt, record.ImportedAt
+	return view
+}
+
+// ImportSnapshot is idempotent for identical bytes and source kind. Different
+// input creates a new unverified snapshot and never overwrites an active account.
+func (s *Store) ImportSnapshot(ctx context.Context, imported Import) (Account, error) {
+	select {
+	case s.gate <- struct{}{}:
+		defer func() { <-s.gate }()
+	case <-ctx.Done():
+		return Account{}, ctx.Err()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Account{}, err
+	}
+	parsed, err := ParseImport(imported.kind, imported.raw)
+	if err != nil {
+		return Account{}, err
+	}
+	// A second process/store instance must not race the read-modify-write. A
+	// crash leaves a lock for explicit recovery; never delete an unknown lock.
+	lock, err := s.root.OpenFile(".import.lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return Account{}, ErrBusy
+	}
+	_ = lock.Close()
+	defer func() { _ = s.root.Remove(".import.lock") }()
+	doc, err := s.load()
+	if err != nil {
+		return Account{}, err
+	}
+	hash := digest(parsed.raw)
+	for _, record := range doc.Accounts {
+		if record.Kind == parsed.kind && record.Digest == hash {
+			return accountView(record, parsed), nil
+		}
+	}
+	if len(doc.Accounts) >= MaxAccounts {
+		return Account{}, errors.New("Cloudflare snapshot limit reached")
+	}
+	var id [16]byte
+	_, _ = rand.Read(id[:])
+	record := storedAccount{ID: "cf-" + hex.EncodeToString(id[:]), Kind: parsed.kind, Raw: parsed.raw, Digest: hash, ImportedAt: time.Now().UTC()}
+	doc.Accounts = append(doc.Accounts, record)
+	data, err := json.Marshal(doc)
+	if err != nil || len(data) > storeLimit {
+		return Account{}, ErrStore
+	}
+	if err := ctx.Err(); err != nil {
+		return Account{}, err
+	}
+	if s.root.WriteAtomic(storeFile, data, 0o600) != nil {
+		return Account{}, ErrStore
+	}
+	return accountView(record, parsed), nil
+}
+
+func validID(id string) bool {
+	if !strings.HasPrefix(id, "cf-") || len(id) != 35 {
+		return false
+	}
+	b, err := hex.DecodeString(id[3:])
+	return err == nil && len(b) == 16
+}
+
+func (s *Store) load() (privateDocument, error) {
+	doc := privateDocument{Schema: Schema, Owner: "razvilka", Accounts: []storedAccount{}}
+	info, err := s.root.Stat(storeFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return doc, nil
+	}
+	if err != nil || !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		return doc, ErrStore
+	}
+	data, err := s.root.ReadLimited(storeFile, storeLimit)
+	if err != nil || json.Unmarshal(data, &doc) != nil || doc.Schema != Schema || doc.Owner != "razvilka" || len(doc.Accounts) > MaxAccounts {
+		return privateDocument{}, ErrStore
+	}
+	seen := map[string]bool{}
+	for _, record := range doc.Accounts {
+		if !validID(record.ID) || seen[record.ID] || record.ImportedAt.IsZero() || record.ImportedAt.After(time.Now().Add(5*time.Minute)) || record.Digest != digest(record.Raw) {
+			return privateDocument{}, ErrStore
+		}
+		seen[record.ID] = true
+		if _, err := ParseImport(record.Kind, record.Raw); err != nil {
+			return privateDocument{}, ErrStore
+		}
+	}
+	return doc, nil
+}
