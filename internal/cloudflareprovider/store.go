@@ -145,15 +145,17 @@ func (s *Store) lockWrite(ctx context.Context) (func(), error) {
 		release()
 		return nil, err
 	}
-	// A second process/store instance must not race the read-modify-write. A
-	// crash leaves a lock for explicit recovery; never delete an unknown lock.
-	lock, err := s.root.OpenFile(".import.lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	unlock, err := acquireWriterLock(s.root)
 	if err != nil {
 		release()
-		return nil, ErrBusy
+		return nil, err
 	}
-	_ = lock.Close()
-	return func() { _ = s.root.Remove(".import.lock"); release() }, nil
+	if err := ctx.Err(); err != nil {
+		unlock()
+		release()
+		return nil, err
+	}
+	return func() { unlock(); release() }, nil
 }
 
 func (s *Store) commit(ctx context.Context, doc privateDocument) error {

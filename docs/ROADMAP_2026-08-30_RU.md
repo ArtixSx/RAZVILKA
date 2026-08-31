@@ -47,6 +47,12 @@
 6. AmneziaWG compatibility registry и аппаратный canary.
 7. `wgcf` только как явно выбранный import/fallback и compatibility oracle.
 
+Локальный срез 31 августа: модель копий, типизированные legacy imports,
+отдельный зашифрованный архив/API/UI и явное copy-only чтение старых профилей
+реализованы. Добавлен [writer recovery после сбоя процесса](CLOUDFLARE_WRITER_RECOVERY_RU.md)
+без удаления чужих блокировок. Пункт 1 ещё не закрыт полностью: общая транзакция
+backup/recovery, secret access contract, lifecycle ownership и Linux/HIL остаются.
+
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 
 1. Типизированный и fuzz-tested parser VLESS/Reality, затем Trojan/SS.

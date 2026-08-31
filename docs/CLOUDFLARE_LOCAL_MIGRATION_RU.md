@@ -101,6 +101,7 @@ UI хранит только ID/digest. Смена источника, отме�
 
 Это не запуск Linux-only тестов или аппаратная проверка. До стабильного релиза
 нужны Linux/race, Entware/HIL, FIFO/path replacement проверки на Linux и
-reboot/power-loss. Полный ownership работающих транспортов, crash-recovery
-writer и общая транзакция router+provider backup остаются открытыми задачами.
+reboot/power-loss. [Crash-recovery writer нового протокола](CLOUDFLARE_WRITER_RECOVERY_RU.md)
+добавлен следующим локальным блоком без удаления чужих lock. Полный ownership
+работающих транспортов и общая транзакция router+provider backup ещё не завершены.
 PR-1.2 продолжать с локальными ключами/mock registrar, без live registration.

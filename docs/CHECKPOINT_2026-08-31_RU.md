@@ -23,9 +23,12 @@
   API и UI, digest review, атомарное добавление без замены ключей, общий
   незапирающий лимит для шести HTTP-операций архивов. См.
   [перенос копий](CLOUDFLARE_COPY_BACKUP_RU.md). Это не общий restore роутера.
-- Следующий блок PR-1.1: [явное copy-only копирование с роутера](CLOUDFLARE_LOCAL_MIGRATION_RU.md),
+- `2ed5dba`: [явное copy-only копирование с роутера](CLOUDFLARE_LOCAL_MIGRATION_RU.md),
   неизменяемый allowlist источников, digest review, bounded anchored read,
   Linux nonblocking/no-follow open и UI. Исходники/runtime не переходят во владение.
+- Следующий блок PR-1.1: [восстановление writer после сбоя процесса](CLOUDFLARE_WRITER_RECOVERY_RU.md).
+  Постоянный протокольный маркер и системная блокировка Linux/Windows;
+  старые/неизвестные lock не меняются. Настройки и runtime не затронуты.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
@@ -33,7 +36,23 @@
 
 ## Финальные локальные проверки
 
-После правок блока миграции прошли полный `go test ./... -timeout=90s`,
+В блоке writer recovery прошли полный `go test ./... -count=1 -timeout=90s`,
+`go vet ./...` и четыре JS regression suites. Новые `TestWriter*` прошли
+20 повторов на Windows: восемь конкурирующих Store, реальные дочерние процессы
+с принудительным завершением до/после commit, отсутствие потери/дублирования
+копий, сохранность неизвестного lock. После добавления concurrent test повторены
+writer tests, vet и полный `go test -mod=readonly ./...`; `go mod verify` прошёл.
+Linux arm64/mips/mipsle: собраны все пакеты
+и provider test binaries с новым FIFO test, но не выполнены.
+POSIX-права и symlink-тест на Windows пропущены. Полный Linux/race,
+Entware shell regression, HIL и отключение питания не выполнялись.
+Дополнительный `go mod tidy -diff` предложил нормализацию `x/net` и
+зависимостей тестов YAML (`kr/text` и checksums); она не применялась в этом
+блоке. `go.sum` не изменён; `x/sys` той же зафиксированной версии только
+перенесён из indirect в direct для Windows lock adapter. Это отдельная
+проверка модульного графа, не результат выполнения Linux-тестов.
+
+В предыдущем блоке миграции прошли полный `go test ./... -timeout=90s`,
 `go vet ./...`, синтаксис `app.js`/`cloudflare-accounts.js`/`cloudflare-backups.js`,
 `test-probe-ui.mjs`/`test-cloudflare-ui.mjs`/`test-cloudflare-backup-ui.mjs`
 а также syntax/test для `cloudflare-migration.js` и сборка всех Go-пакетов для
@@ -43,23 +62,26 @@ Fuzz импорта (79 409 запусков), provider tests для трёх а
 tests для ARM64 проверялись в предыдущих блоках, не повторялись в этой итерации.
 Linux-бинарники локально не выполнялись. Файлы сборок
 лежат в игнорируемом `.tmp/truth-safety`, это не опубликованный install bundle.
-Раздел миграции проверен в браузере на изолированном loopback-стенде с
+Раздел миграции ранее проверен в браузере на изолированном loopback-стенде с
 вымышленным профилем: preview → copy → list, отсутствующий источник, ширина
 390 px. SHA-256 исходника не изменился. Сценарий архива проверялся предыдущим
 блоком; не повторялся здесь. Стенд остановлен, тестовая вкладка закрыта и размер
-окна возвращён. Это не визуальный аудит всех вкладок и не HIL.
+окна возвращён. В блоке writer UI не менялся и браузер не открывался.
+Это не визуальный аудит всех вкладок и не HIL.
 Не объявлять новую сборку аппаратно стабильной.
 
 ## Продолжать отсюда
 
 1. Перечитать CURRENT_STATUS и отчёты PR-0.3/0.4/Cloudflare foundation, проверить
    `git status` и актуальный log. Не повторять уже завершённые изменения.
-2. Довести PR-1.1: lifecycle ownership, recovery writer и интеграция общего
-   backup/recovery. Явная copy-only миграция добавлена. Типизированные адаптеры,
+2. Довести PR-1.1: общая транзакция router+provider backup/recovery,
+   secret access contract и lifecycle ownership. Recovery writer нового
+   протокола и явная copy-only миграция добавлены локально. Типизированные адаптеры,
    внутренний backup/restore, аутентифицированные passive preview/import/list
    и отдельный encrypted archive API/UI готовы. Общий лимит HTTP-операций
-   архивов реализован; неизвестный writer lock не удалять без доказанного
-   владельца. Общая транзакция router+provider restore остаётся отдельной задачей.
+   архивов реализован; неизвестный, старый пустой или частично созданный writer
+   lock не удалять автоматически. Не подменять реальный power-loss gate тестом
+   завершения процесса; безопасный учёт временных файлов ещё не реализован.
 3. PR-1.2 делать сначала с локальными ключами и mock API. Не включать регистрацию,
    новый DNS, proxy feeds или расширенную автоматику без соответствующих gates.
 4. Перед следующей крупной публикацией — полный Linux CI/race, Entware shell

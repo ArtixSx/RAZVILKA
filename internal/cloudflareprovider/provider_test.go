@@ -124,7 +124,7 @@ func TestStoreAtomicIdempotentSnapshotsAndRedactedRestart(t *testing.T) {
 	}
 	// No runtime files, profiles or registration artifacts are created.
 	files, _ := os.ReadDir(path)
-	if len(files) != 1 || files[0].Name() != storeFile {
+	if len(files) != 2 || files[0].Name() != writerLockFile || files[1].Name() != storeFile {
 		t.Fatalf("unexpected side effects: %v", files)
 	}
 }
