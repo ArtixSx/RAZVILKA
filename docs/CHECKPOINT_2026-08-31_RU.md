@@ -41,16 +41,31 @@
   FileTarget с per-file OS lease/durable CAS, обычные config writers и migration
   на том же протоколе, bounded read, stale-cache guard и uncertain-write fence.
   Typed target/session согласует файл и кэш. App/startup recovery ещё не подключены.
-- Следующий локальный блок: [catalog/devices recovery adapters](REGISTRY_RESTORE_ADAPTERS_RU.md).
+- `deef425`: [catalog/devices recovery adapters](REGISTRY_RESTORE_ADAPTERS_RU.md).
   Обычные writers/undo/discovery на том же per-file OS lease/CAS, typed targets/
   sessions и общий crash test config+catalog+devices. UI сообщает о несохранённом
   discovery. Полный HTTP/startup restore ещё не включён; staging/provider остаются.
+- Следующий локальный блок: [engine staging recovery](ENGINE_DRAFT_RESTORE_RU.md).
+  Все staging writers используют slot leases/CAS, batch откатывает также failed
+  target после возможного rename; StagePrivateWithRollback даёт guarded undo
+  следующей фазе. Typed target/session допускает absent/empty/incomplete before
+  images. Provider только исследован: общая .import.lock и несовпадение лимитов
+  16 МиБ store / 4 МиБ Image / 8 МиБ plan требуют отдельного адаптера.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
 
 ## Финальные локальные проверки
+
+В блоке staging прошли полный `go test ./... -count=1 -timeout=90s`,
+`go vet ./...`, синтаксис app.js и шесть JS suites. Engineconfig tests прошли
+десять повторов, включая реальные дочерние процессы с завершением после prepare,
+каждого target write, rollback и commit. Новая App regression проверяет undo
+успешного staging после последующей ошибки. Все пакеты и engineconfig/App tests
+собраны для Linux arm64/mips/mipsle, не выполнены. Linux-only FIFO/symlink/mode
+tests только скомпилированы. Linux/race, shell/HIL/power-loss и browser visual QA
+не выполнялись; зависимости не менялись.
 
 В блоке catalog/devices adapters прошли полный `go test ./... -count=1 -timeout=90s`,
 `go vet ./...`, синтаксис app.js и шесть JS suites. Catalog/devices tests
@@ -143,12 +158,14 @@ Linux-бинарники локально не выполнялись. Файл�
    и config/customservices/devices.OpenRestoreTarget + restore sessions.
    Их обычные writers, включая discovery и undo, используют ту же per-file
    lease/CAS, но App/main общий журнал ещё не вызывают.
-   Следующий шаг — staging/provider adapters и обычные writers на том же
-   bounded read/durable CAS,
+   Engine staging target/session и ordinary slot writers тоже готовы; есть
+   post-success guarded undo, поэтому staging больше не обязательно последняя
+   компенсируемая фаза. Следующий шаг — provider adapter на его же .import.lock:
+   читать bounded, сравнивать bytes, синхронизировать каталог, заранее проверять
+   лимиты общего журнала (см. ENGINE_DRAFT_RESTORE_RU). Затем
    владение/исключение параллельных мутаций всех API/background/processes,
    подключение startup recovery до загрузки кэшей и изменяющих API, затем общий
-   router+provider restore. Engine staging пока должен быть
-   последним: post-success undo отсутствует. Запрет ProviderSnapshots сохранять.
+   router+provider restore. Запрет ProviderSnapshots сохранять.
    Публичный импорт профиля остаётся на старой компенсации, нужен отдельный аудит.
 3. PR-1.2 делать сначала с локальными ключами и mock API. Не включать регистрацию,
    новый DNS, proxy feeds или расширенную автоматику без соответствующих gates.

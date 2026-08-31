@@ -61,18 +61,25 @@ gap-аудиты сохранены как исторические снимки
 
 ## Локальная разработка после стабильного релиза
 
+Добавлен [адаптер черновиков обходов](ENGINE_DRAFT_RESTORE_RU.md):
+editor/import/discard разделяют per-file lease, пакетный откат учитывает ошибку
+после фактической записи, есть guarded post-success undo. Аварийный тест проверяет
+возврат отсутствующих, пустых и незавершённых draft-файлов. Секретный Content
+исключён из результата batch stage. Provider adapter и общий startup coordinator
+ещё не готовы; новый journal не включён в production import/restart.
+
 Добавлены [адаптеры каталога и устройств](REGISTRY_RESTORE_ADAPTERS_RU.md).
 Обычные writers этих реестров используют per-file OS lease и сравнение исходных
 байтов. Ошибка сохранения discovery больше не скрывается в панели. Аварийный
 тест трёх настоящих хранилищ проверяет recovery до загрузки кэшей и отказ при
 неизвестной внешней правке. Общий App/main restore ещё не включён; следующие —
-staging/provider, coordinator и Linux/HIL.
+provider, coordinator и Linux/HIL.
 
 Добавлен [адаптер конфигурации для журнала](CONFIG_RESTORE_ADAPTER_RU.md).
 Обычные записи config уже используют per-file OS lock и сравнение исходных
 байтов: устаревший Store не затирает новую правку. Настоящее восстановление config
 до загрузки кэша проверено в аварийных тестах. Общий HTTP/startup coordinator
-ещё не подключён; staging/provider и HIL остаются.
+ещё не подключён; provider и HIL остаются.
 
 Добавлена [основа журнала восстановления импорта](PRIVATE_RESTORE_JOURNAL_RU.md):
 before/after, commit decision, повторный откат после сбоя процесса и отказ

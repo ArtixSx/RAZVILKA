@@ -124,7 +124,10 @@ function friendlyErrorMessage(value, status = 0) {
   if (lower === 'engine is installed but not running') return 'Обход установлен, но сейчас не запущен.';
   if (lower.includes('state file changed since it was read')) return 'Настройки изменились в другой операции. Запись остановлена, чтобы не затереть новые данные. Требуется повторная загрузка настроек службой.';
   if (lower.includes('private restore journal is locked')) return 'Настройки сейчас заняты другой операцией. Дождитесь её завершения. Если сообщение остаётся, откройте технические детали.';
-  if (lower.includes('private restore result requires recovery review')) return 'Результат записи настроек не подтверждён. Новые записи остановлены; проверьте восстановление перед продолжением.';
+  if (lower.includes('private restore result requires recovery review')) return 'Результат записи настроек не подтверждён. Проверьте состояние настроек перед повторным сохранением; при необходимости выполните восстановление.';
+  if (lower.includes('engine draft rollback incomplete')) return 'Часть черновиков не удалось восстановить. Рабочие файлы обходов не менялись. Проверьте черновики перед применением.';
+  if (lower.includes('engine draft import failed; original draft files preserved')) return 'Черновики не сохранены. Прежние файлы черновиков сохранены; рабочие настройки обходов не менялись.';
+  if (lower.includes('engine config written, but draft cleanup was not confirmed')) return 'Рабочий файл обхода записан, но удаление его черновика не подтверждено. Проверьте состояние перед повторным применением.';
   if (/[Ѐ-ӿ]/.test(text)) return text;
   if (status === 401) return 'Нужно снова войти в RAZVILKA.';
   if (status === 403) return 'Недостаточно прав для этого действия.';

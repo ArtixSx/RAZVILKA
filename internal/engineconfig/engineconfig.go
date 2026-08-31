@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engine"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 const maxConfigBytes = 2 << 20
@@ -180,10 +182,13 @@ func (m *Manager) readLocked(engineID, fileID string, revealSensitive bool) (Con
 		return Content{}, err
 	}
 	livePath := choosePath(f.Paths)
-	staged := m.stagePath(engineID, fileID)
+	image, err := m.readStageImage(context.Background(), engineID, fileID)
+	if err != nil {
+		return Content{}, err
+	}
 	if f.Sensitive && !revealSensitive {
 		src := "missing"
-		if fileExists(staged) {
+		if image.Exists {
 			src = "staged"
 		} else if fileExists(livePath) {
 			src = "redacted"
@@ -191,8 +196,8 @@ func (m *Manager) readLocked(engineID, fileID string, revealSensitive bool) (Con
 		return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: src, Sensitive: true}, nil
 	}
 	path, src := livePath, "live"
-	if fileExists(staged) {
-		path, src = staged, "staged"
+	if image.Exists {
+		return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: "staged", Content: string(image.Data), SHA256: sum(image.Data), Sensitive: f.Sensitive}, nil
 	} else if !fileExists(livePath) {
 		return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: "missing"}, nil
 	}
@@ -216,11 +221,16 @@ func (m *Manager) Stage(engineID, fileID, content string) (Content, error) {
 	if strings.IndexByte(content, 0) >= 0 {
 		return Content{}, errors.New("NUL byte is not allowed")
 	}
-	path := m.stagePath(engineID, fileID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	target, err := OpenRestoreTarget(m.StageRoot, engineID, fileID)
+	if err != nil {
 		return Content{}, err
 	}
-	if err := writeAtomic(path, []byte(content), 0o600); err != nil {
+	defer target.Close()
+	before, err := target.Read(context.Background())
+	if err != nil {
+		return Content{}, err
+	}
+	if err := target.CompareAndSwap(context.Background(), before, restorejournal.Image{Exists: true, Data: []byte(content)}); err != nil {
 		return Content{}, err
 	}
 	livePath := choosePath(f.Paths)
@@ -290,75 +300,15 @@ func (m *Manager) StagePrivate(items []StageItem) ([]Content, error) {
 }
 
 func (m *Manager) stageValidated(items []StageItem, validate func(string, string, string) Validation) ([]Content, error) {
-	return m.stageValidatedWithIO(items, validate, draftFileIO{write: writeAtomic, remove: os.Remove, mkdir: os.MkdirAll})
+	out, _, err := m.stageBatch(items, validate, nil)
+	return out, err
 }
 
-// Explicit I/O dependencies allow deterministic failure tests at each write
-// and rollback boundary without timing races or changing process-wide hooks.
-type draftFileIO struct {
-	write  func(string, []byte, os.FileMode) error
-	remove func(string) error
-	mkdir  func(string, os.FileMode) error
-}
-
-func (m *Manager) stageValidatedWithIO(items []StageItem, validate func(string, string, string) Validation, files draftFileIO) ([]Content, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	type prior struct {
-		path    string
-		existed bool
-		content []byte
-	}
-	seen := map[string]bool{}
-	previous := make([]prior, 0, len(items))
-	for _, item := range items {
-		key := item.EngineID + "/" + item.FileID
-		if seen[key] {
-			return nil, fmt.Errorf("duplicate engine draft %q", key)
-		}
-		seen[key] = true
-		validation := validate(item.EngineID, item.FileID, item.Content)
-		if !validation.OK {
-			return nil, fmt.Errorf("%s: %s", key, validation.Output)
-		}
-		path := m.stagePath(item.EngineID, item.FileID)
-		old, err := os.ReadFile(path)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-		previous = append(previous, prior{path: path, existed: err == nil, content: old})
-	}
-	restore := func(written int) error {
-		var result error
-		for i := written - 1; i >= 0; i-- {
-			var err error
-			if previous[i].existed {
-				err = files.write(previous[i].path, previous[i].content, 0o600)
-			} else {
-				err = files.remove(previous[i].path)
-				if errors.Is(err, os.ErrNotExist) {
-					err = nil
-				}
-			}
-			if err != nil {
-				result = ErrStageRollback
-			}
-		}
-		return result
-	}
-	out := make([]Content, 0, len(items))
-	for i, item := range items {
-		path := m.stagePath(item.EngineID, item.FileID)
-		if err := files.mkdir(filepath.Dir(path), 0o700); err != nil {
-			return nil, errors.Join(err, restore(i))
-		}
-		if err := files.write(path, []byte(item.Content), 0o600); err != nil {
-			return nil, errors.Join(err, restore(i))
-		}
-		_, file, _ := lookup(item.EngineID, item.FileID)
-		out = append(out, Content{EngineID: item.EngineID, FileID: item.FileID, Path: choosePath(file.Paths), Source: "staged", Content: item.Content, SHA256: sum([]byte(item.Content))})
-	}
-	return out, nil
+// StagePrivateWithRollback returns a guarded undo for a later restore phase.
+// It is in-process compensation, not startup recovery; a durable coordinator
+// must instead keep a RestoreSession and execute its targets through a journal.
+func (m *Manager) StagePrivateWithRollback(items []StageItem) ([]Content, func() error, error) {
+	return m.stageBatch(items, ValidatePrivateContent, nil)
 }
 
 func (m *Manager) Discard(engineID, fileID string) error {
@@ -367,11 +317,16 @@ func (m *Manager) Discard(engineID, fileID string) error {
 	if _, _, err := lookup(engineID, fileID); err != nil {
 		return err
 	}
-	err := os.Remove(m.stagePath(engineID, fileID))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
+	target, err := OpenRestoreTarget(m.StageRoot, engineID, fileID)
+	if err != nil {
+		return err
 	}
-	return err
+	defer target.Close()
+	before, err := target.Read(context.Background())
+	if err != nil {
+		return err
+	}
+	return target.CompareAndSwap(context.Background(), before, restorejournal.Image{})
 }
 
 func (m *Manager) Validate(engineID, fileID string) Validation {
@@ -388,13 +343,20 @@ func (m *Manager) validateLocked(engineID, fileID string) Validation {
 	staged := m.stagePath(engineID, fileID)
 	live := choosePath(f.Paths)
 	path := live
-	if fileExists(staged) {
+	image, err := m.readStageImage(context.Background(), engineID, fileID)
+	if err != nil {
+		return Validation{OK: false, EngineID: engineID, FileID: fileID, Validator: f.Syntax, Output: err.Error()}
+	}
+	if image.Exists {
 		path = staged
 	}
 	if !fileExists(path) {
 		return Validation{OK: false, EngineID: engineID, FileID: fileID, Validator: f.Syntax, Output: "file is missing; import or create a draft first"}
 	}
-	b, err := readLimited(path)
+	b := image.Data
+	if !image.Exists {
+		b, err = readLimited(path)
+	}
 	if err != nil {
 		return Validation{OK: false, EngineID: engineID, FileID: fileID, Validator: f.Syntax, Output: err.Error()}
 	}
@@ -466,6 +428,18 @@ func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) 
 	if safeMode {
 		return "", errors.New("Safe Mode blocks writes to engine configs; draft is preserved")
 	}
+	target, err := OpenRestoreTarget(m.StageRoot, engineID, fileID)
+	if err != nil {
+		return "", err
+	}
+	defer target.Close()
+	image, err := target.Read(context.Background())
+	if err != nil {
+		return "", err
+	}
+	if !image.Exists {
+		return "", errors.New("no staged config to apply")
+	}
 	validation := m.validateLocked(engineID, fileID)
 	if !validation.OK {
 		return "", fmt.Errorf("validation failed: %s", validation.Output)
@@ -491,10 +465,7 @@ func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) 
 			return "", err
 		}
 	}
-	b, err := readLimited(staged)
-	if err != nil {
-		return "", err
-	}
+	b := image.Data
 	mode := os.FileMode(0o600)
 	if !f.Sensitive {
 		if fi, err := os.Stat(dst); err == nil {
@@ -504,7 +475,9 @@ func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) 
 	if err := writeAtomic(dst, b, mode); err != nil {
 		return "", err
 	}
-	_ = os.Remove(staged)
+	if err := target.CompareAndSwap(context.Background(), image, restorejournal.Image{}); err != nil {
+		return dst, errors.New("engine config written, but draft cleanup was not confirmed")
+	}
 	return dst, nil
 }
 
@@ -602,10 +575,26 @@ func readLimited(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if fi.Size() > maxConfigBytes {
+	if !fi.Mode().IsRegular() || fi.Size() > maxConfigBytes {
 		return nil, fmt.Errorf("file too large: %d bytes", fi.Size())
 	}
-	return os.ReadFile(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	actual, err := file.Stat()
+	if err != nil || !actual.Mode().IsRegular() {
+		return nil, errors.New("config is not a regular file")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxConfigBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxConfigBytes {
+		return nil, errors.New("config is too large")
+	}
+	return data, nil
 }
 func sum(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func findBin(candidates []string) string {

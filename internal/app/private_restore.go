@@ -74,12 +74,11 @@ func (a *App) restorePrivateDraft(ctx context.Context, payload privatebackup.Pay
 	for _, file := range payload.EngineFiles {
 		items = append(items, engineconfig.StageItem{EngineID: file.EngineID, FileID: file.FileID, Content: file.Content})
 	}
-	// Engine staging is last: it already rolls its own batch back on failure,
-	// and now reports if that rollback itself failed. No later step may be
-	// appended without adding a guarded undo for successful engine staging.
+	// Staging now provides guarded post-success undo as well. This remains an
+	// in-process transaction until the durable startup coordinator is wired.
 	steps = append(steps, privateRestoreStep{"engine_files", func() (func() error, error) {
-		_, err := a.EngineConfigs.StagePrivate(items)
-		return nil, err
+		_, undo, err := a.EngineConfigs.StagePrivateWithRollback(items)
+		return undo, err
 	}})
 	return runPrivateRestore(ctx, steps)
 }

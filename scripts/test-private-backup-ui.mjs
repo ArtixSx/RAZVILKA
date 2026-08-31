@@ -10,6 +10,9 @@ vm.runInContext(friendly[0], errorsContext);
 assert.match(errorsContext.friendlyErrorMessage('state file changed since it was read', 500), /не затереть/);
 assert.match(errorsContext.friendlyErrorMessage('private restore journal is locked', 500), /заняты другой операцией/);
 assert.match(errorsContext.friendlyErrorMessage('private restore result requires recovery review', 500), /не подтверждён/);
+assert.match(errorsContext.friendlyErrorMessage('engine draft rollback incomplete', 500), /Часть черновиков/);
+assert.match(errorsContext.friendlyErrorMessage('engine draft import failed; original draft files preserved', 500), /Прежние файлы/);
+assert.match(errorsContext.friendlyErrorMessage('engine config written, but draft cleanup was not confirmed', 500), /Рабочий файл обхода записан/);
 const fn = source.match(/async function importPrivateBackup\([^]*?\n}\n/);
 assert.ok(fn, 'real import function must remain testable');
 for (const mode of ['rollback', 'recovery-required', 'disconnect', 'success-refresh-error', 'success', 'cancel']) {

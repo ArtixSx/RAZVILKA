@@ -1,6 +1,6 @@
 // Package restorejournal records a bounded before/after plan before touching
-// targets. It is not wired to the router's live stores yet: adapters must hold
-// exclusive ownership and perform durable compare-and-swap before integration.
+// targets. Journal execution is not wired to application startup/general import
+// yet: adapters must hold exclusive ownership before coordinated integration.
 package restorejournal
 
 import (

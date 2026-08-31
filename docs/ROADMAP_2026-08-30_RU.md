@@ -58,7 +58,8 @@ backup/recovery, secret access contract, lifecycle ownership и Linux/HIL ост
 [первого config adapter](CONFIG_RESTORE_ADAPTER_RU.md) и защита обычных config
 writers выполнены локально. Также готовы [catalog/devices adapters](REGISTRY_RESTORE_ADAPTERS_RU.md)
 с защитой обычных записей и crash test трёх реестров; ошибка сохранения discovery
-показывается в UI. Staging/provider adapters, общее владение изменениями и
+показывается в UI. [Staging adapter и guarded post-success undo](ENGINE_DRAFT_RESTORE_RU.md)
+тоже готовы локально, с process-crash тестами. Provider adapter, общее владение изменениями и
 startup recovery ещё предстоят; общий импорт Provider-архивов остаётся закрытым.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab

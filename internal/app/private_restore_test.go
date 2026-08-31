@@ -61,6 +61,51 @@ func TestPrivateRestoreStepFailureMatrix(t *testing.T) {
 	}
 }
 
+func TestPrivateRestoreCanUndoCompletedEngineStep(t *testing.T) {
+	for _, external := range []bool{false, true} {
+		root := t.TempDir()
+		manager := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backup"))
+		if _, err := manager.Stage("sing-box", "main", "{unfinished"); err != nil {
+			t.Fatal(err)
+		}
+		err := runPrivateRestore(context.Background(), []privateRestoreStep{
+			{"engine_files", func() (func() error, error) {
+				_, undo, err := manager.StagePrivateWithRollback([]engineconfig.StageItem{{EngineID: "sing-box", FileID: "main", Content: `{"synthetic_secret":"imported"}`}})
+				return undo, err
+			}},
+			{"later_phase", func() (func() error, error) {
+				if external {
+					other := engineconfig.New(manager.StageRoot, manager.BackupRoot)
+					if _, err := other.Stage("sing-box", "main", `{"outside":true}`); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return nil, errors.New("synthetic private failure")
+			}},
+		})
+		var failure *privateRestoreFailure
+		if !errors.As(err, &failure) || failure.recoveryRequired != external {
+			t.Fatal("incorrect completed-stage undo result")
+		}
+		content, readErr := manager.ReadExpert("sing-box", "main")
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		expected := "{unfinished"
+		if external {
+			expected = `{"outside":true}`
+		}
+		if content.Content != expected {
+			t.Fatal("undo lost an old or later draft")
+		}
+		rec := httptest.NewRecorder()
+		writePrivateRestoreFailure(rec, err)
+		if strings.Contains(rec.Body.String(), "synthetic") || strings.Contains(rec.Body.String(), root) {
+			t.Fatal("private cause leaked")
+		}
+	}
+}
+
 func TestPrivateRestoreIncompleteUndoAndCancellation(t *testing.T) {
 	for _, mode := range []string{"undo-error", "engine-undo-error", "config-uncertain", "cancel-between", "cancel-after-commit"} {
 		t.Run(mode, func(t *testing.T) {

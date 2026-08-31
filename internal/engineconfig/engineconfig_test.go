@@ -155,7 +155,7 @@ func TestConcurrentStageIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "user-list.draft" {
+	if len(entries) != 2 || !strings.HasPrefix(entries[0].Name(), ".state-") || entries[1].Name() != "user-list.draft" {
 		t.Fatalf("temporary staging files leaked: %+v", entries)
 	}
 }

@@ -1,6 +1,7 @@
 package engineconfig
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 type GuidedOption struct {
@@ -103,6 +106,15 @@ func (m *Manager) StageGuided(engineID, fileID string, values map[string]string)
 			return Content{}, fmt.Errorf("%s: %w", field.Label, err)
 		}
 	}
+	target, err := OpenRestoreTarget(m.StageRoot, engineID, fileID)
+	if err != nil {
+		return Content{}, err
+	}
+	defer target.Close()
+	before, err := target.Read(context.Background())
+	if err != nil {
+		return Content{}, err
+	}
 	b, _, err := m.rawLocked(engineID, fileID)
 	if errors.Is(err, os.ErrNotExist) {
 		switch file.Syntax {
@@ -123,11 +135,7 @@ func (m *Manager) StageGuided(engineID, fileID string, values map[string]string)
 	if len(updated) > maxConfigBytes {
 		return Content{}, errors.New("config is too large")
 	}
-	path := m.stagePath(engineID, fileID)
-	if err := os.MkdirAll(filepathDir(path), 0o700); err != nil {
-		return Content{}, err
-	}
-	if err := writeAtomic(path, updated, 0o600); err != nil {
+	if err := target.CompareAndSwap(context.Background(), before, restorejournal.Image{Exists: true, Data: updated}); err != nil {
 		return Content{}, err
 	}
 	livePath := choosePath(file.Paths)
@@ -141,8 +149,12 @@ func (m *Manager) rawLocked(engineID, fileID string) ([]byte, string, error) {
 	}
 	path := choosePath(file.Paths)
 	source := "live"
-	if staged := m.stagePath(engineID, fileID); fileExists(staged) {
-		path, source = staged, "staged"
+	image, err := m.readStageImage(context.Background(), engineID, fileID)
+	if err != nil {
+		return nil, "", err
+	}
+	if image.Exists {
+		return image.Data, "staged", nil
 	}
 	if !fileExists(path) {
 		return nil, "missing", os.ErrNotExist
@@ -594,13 +606,4 @@ func jsonValue(field GuidedField, value string) any {
 	default:
 		return value
 	}
-}
-
-// filepathDir is kept tiny so guided staging shares the same transaction rules as the expert editor.
-func filepathDir(path string) string {
-	index := strings.LastIndexAny(path, `/\\`)
-	if index < 0 {
-		return "."
-	}
-	return path[:index]
 }
