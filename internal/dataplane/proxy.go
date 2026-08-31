@@ -1046,7 +1046,13 @@ func buildProxyCandidate(engineID string, source []byte, port int) ([]byte, []st
 		if _, ok := document["outbounds"].([]any); !ok {
 			return nil, nil, errors.New("sing-box configuration has no outbounds")
 		}
+		if endpoints, ok := document["endpoints"]; ok && endpoints != nil {
+			if list, valid := endpoints.([]any); !valid || len(list) != 0 {
+				return nil, nil, errors.New("sing-box endpoint objects need a dedicated isolated adapter; import a proxy outbound instead")
+			}
+		}
 		document["inbounds"] = []any{map[string]any{"type": "socks", "tag": "rz-engine-in", "listen": "127.0.0.1", "listen_port": port}}
+		document["log"] = map[string]any{"level": "warn", "timestamp": true}
 		delete(document, "services")
 		delete(document, "experimental")
 	case "xray":
@@ -1054,8 +1060,10 @@ func buildProxyCandidate(engineID string, source []byte, port int) ([]byte, []st
 			return nil, nil, errors.New("Xray configuration has no outbounds")
 		}
 		document["inbounds"] = []any{map[string]any{"tag": "rz-engine-in", "listen": "127.0.0.1", "port": port, "protocol": "socks", "settings": map[string]any{"udp": true}}}
+		document["log"] = map[string]any{"loglevel": "warning", "access": "none"}
 		// Xray can create an API listener independently of its inbounds.
 		delete(document, "api")
+		delete(document, "metrics")
 	default:
 		return nil, nil, fmt.Errorf("unsupported proxy engine %q", engineID)
 	}

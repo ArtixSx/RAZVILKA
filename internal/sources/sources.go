@@ -12,47 +12,62 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 type Source struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Kind        string   `json:"kind"` // domains, cidrs, reference
-	URL         string   `json:"url"`
-	Format      string   `json:"format"` // lines, reference
-	License     string   `json:"license,omitempty"`
-	Enabled     bool     `json:"enabled"`
-	MinEntries  int      `json:"min_entries,omitempty"`
-	MaxBytes    int64    `json:"max_bytes,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Services    []string `json:"services,omitempty"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Kind           string   `json:"kind"` // domains, cidrs, reference
+	URL            string   `json:"url"`
+	Format         string   `json:"format"` // lines, reference
+	License        string   `json:"license,omitempty"`
+	Enabled        bool     `json:"enabled"`
+	MinEntries     int      `json:"min_entries,omitempty"`
+	MaxBytes       int64    `json:"max_bytes,omitempty"`
+	Description    string   `json:"description,omitempty"`
+	Services       []string `json:"services,omitempty"`
+	RedirectHosts  []string `json:"redirect_hosts,omitempty"`
+	TrustTier      string   `json:"trust_tier,omitempty"`
+	TTLHours       int      `json:"ttl_hours,omitempty"`
+	ExpectedSHA256 string   `json:"expected_sha256,omitempty"`
+	MaxEntries     int      `json:"max_entries,omitempty"`
 }
 
 type Registry struct {
+	Schema  int      `json:"schema,omitempty"`
 	Sources []Source `json:"sources"`
 }
 
 type State struct {
-	ID             string    `json:"id"`
-	Name           string    `json:"name"`
-	Kind           string    `json:"kind"`
-	URL            string    `json:"url"`
-	Enabled        bool      `json:"enabled"`
-	AppliedEnabled bool      `json:"applied_enabled"`
-	Dirty          bool      `json:"dirty"`
-	Ready          bool      `json:"ready"`
-	Entries        int       `json:"entries"`
-	SHA256         string    `json:"sha256,omitempty"`
-	UpdatedAt      time.Time `json:"updated_at,omitempty"`
-	LastError      string    `json:"last_error,omitempty"`
-	Description    string    `json:"description,omitempty"`
+	ID             string       `json:"id"`
+	Name           string       `json:"name"`
+	Kind           string       `json:"kind"`
+	URL            string       `json:"url"`
+	Enabled        bool         `json:"enabled"`
+	AppliedEnabled bool         `json:"applied_enabled"`
+	Dirty          bool         `json:"dirty"`
+	Ready          bool         `json:"ready"`
+	Entries        int          `json:"entries"`
+	SHA256         string       `json:"sha256,omitempty"`
+	UpdatedAt      time.Time    `json:"updated_at,omitempty"`
+	LastError      string       `json:"last_error,omitempty"`
+	Description    string       `json:"description,omitempty"`
+	CacheStatus    string       `json:"cache_status,omitempty"`
+	TrustTier      string       `json:"trust_tier,omitempty"`
+	ExpiresAt      time.Time    `json:"expires_at,omitempty"`
+	LastKnownGood  bool         `json:"last_known_good"`
+	LegacyCache    bool         `json:"legacy_cache"`
+	Provenance     *Provenance  `json:"provenance,omitempty"`
+	Diff           *DiffSummary `json:"diff,omitempty"`
 }
 
 type settingsDocument struct {
@@ -63,7 +78,7 @@ type settingsDocument struct {
 
 type Manager struct {
 	mu           sync.RWMutex
-	refreshMu    sync.Mutex
+	refreshGate  chan struct{}
 	clientMu     sync.RWMutex
 	reg          Registry
 	cacheDir     string
@@ -82,10 +97,23 @@ func LoadRegistry(path string) (Registry, error) {
 	if err := json.Unmarshal(b, &r); err != nil {
 		return Registry{}, err
 	}
+	if r.Schema < 0 || r.Schema > 2 {
+		return Registry{}, errors.New("unsupported source registry schema")
+	}
+	// Upgrades preserve the user's registry. Migrate only these exact bundled
+	// legacy release URLs; never grant redirects to arbitrary GitHub sources.
+	if r.Schema < 2 {
+		for i := range r.Sources {
+			src := &r.Sources[i]
+			if len(src.RedirectHosts) == 0 && (src.URL == "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/domains_all.lst" || src.URL == "https://github.com/1andrevich/Re-filter-lists/releases/latest/download/ipsum.lst") {
+				src.RedirectHosts = []string{"release-assets.githubusercontent.com", "objects.githubusercontent.com"}
+			}
+		}
+	}
 	seen := map[string]bool{}
 	for _, s := range r.Sources {
 		if !validSourceID(s.ID) || s.Name == "" || s.Kind == "" || s.URL == "" {
-			return Registry{}, fmt.Errorf("invalid source entry: %+v", s)
+			return Registry{}, errors.New("invalid source entry")
 		}
 		if seen[s.ID] {
 			return Registry{}, fmt.Errorf("duplicate source id %q", s.ID)
@@ -94,9 +122,8 @@ func LoadRegistry(path string) (Registry, error) {
 		if s.Kind != "domains" && s.Kind != "cidrs" && s.Kind != "reference" {
 			return Registry{}, fmt.Errorf("unsupported source kind %q", s.Kind)
 		}
-		u, err := url.Parse(s.URL)
-		if err != nil || u.Scheme != "https" || u.Host == "" {
-			return Registry{}, fmt.Errorf("source %q must use an absolute https URL", s.ID)
+		if err := validateSource(s); err != nil {
+			return Registry{}, fmt.Errorf("source %q: %w", s.ID, err)
 		}
 	}
 	return r, nil
@@ -108,17 +135,18 @@ func NewManager(reg Registry, cacheDir string, settingsPath ...string) *Manager 
 		path = strings.TrimSpace(settingsPath[0])
 	}
 	m := &Manager{
+		refreshGate:  make(chan struct{}, 1),
 		reg:          reg,
 		cacheDir:     cacheDir,
 		settingsPath: path,
 		settings:     settingsDocument{Schema: 1, Draft: map[string]bool{}, Applied: map[string]bool{}},
-		client:       &http.Client{Timeout: 25 * time.Second, CheckRedirect: safeRedirect},
+		client:       publicfetch.NewClient(25 * time.Second),
 		states:       map[string]State{},
 	}
 	for _, s := range reg.Sources {
 		m.settings.Draft[s.ID] = s.Enabled
 		m.settings.Applied[s.ID] = s.Enabled
-		m.states[s.ID] = State{ID: s.ID, Name: s.Name, Kind: s.Kind, URL: s.URL, Enabled: s.Enabled, AppliedEnabled: s.Enabled, Description: s.Description}
+		m.states[s.ID] = State{ID: s.ID, Name: s.Name, Kind: s.Kind, URL: publicfetch.RedactedURL(s.URL), Enabled: s.Enabled, AppliedEnabled: s.Enabled, Description: s.Description, TrustTier: trustTier(s)}
 	}
 	m.loadSettings()
 	m.inspectCache()
@@ -130,29 +158,9 @@ func (m *Manager) SetHTTPClient(c *http.Client) {
 		return
 	}
 	clone := *c
-	clone.CheckRedirect = safeRedirect
 	m.clientMu.Lock()
 	m.client = &clone
 	m.clientMu.Unlock()
-}
-
-func safeRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= 5 {
-		return errors.New("too many source redirects")
-	}
-	if req.URL == nil || !strings.EqualFold(req.URL.Scheme, "https") {
-		return errors.New("source redirect must use https")
-	}
-	host := strings.ToLower(req.URL.Hostname())
-	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") {
-		return errors.New("source redirect has an unsafe host")
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return errors.New("source redirect targets a non-public address")
-		}
-	}
-	return nil
 }
 
 func (m *Manager) List() []State {
@@ -160,6 +168,7 @@ func (m *Manager) List() []State {
 	defer m.mu.RUnlock()
 	out := make([]State, 0, len(m.states))
 	for _, s := range m.states {
+		s = currentState(s, time.Now())
 		s.Enabled = m.settings.Draft[s.ID]
 		s.AppliedEnabled = m.settings.Applied[s.ID]
 		s.Dirty = s.Enabled != s.AppliedEnabled
@@ -230,7 +239,7 @@ func (m *Manager) EntriesForService(serviceID string) (domains, cidrs []string) 
 	m.mu.RLock()
 	sourcesForService := make([]Source, 0)
 	for _, src := range m.reg.Sources {
-		state := m.states[src.ID]
+		state := currentState(m.states[src.ID], time.Now())
 		if !m.settings.Applied[src.ID] || !state.Ready || src.Kind == "reference" || !containsFold(src.Services, serviceID) {
 			continue
 		}
@@ -238,18 +247,11 @@ func (m *Manager) EntriesForService(serviceID string) (domains, cidrs []string) 
 	}
 	m.mu.RUnlock()
 	for _, src := range sourcesForService {
-		max := src.MaxBytes
-		if max <= 0 {
-			max = 8 << 20
-		}
-		body, err := readCacheLimited(filepath.Join(m.cacheDir, src.ID+".lst"), max)
-		if err != nil {
+		cached, err := m.readCache(src)
+		if err != nil || !time.Now().Before(cached.ExpiresAt) {
 			continue
 		}
-		entries, err := validateLines(src.Kind, string(body))
-		if err != nil {
-			continue
-		}
+		entries, _ := validateLines(src.Kind, cached.Content)
 		if src.Kind == "domains" {
 			domains = append(domains, entries...)
 		} else if src.Kind == "cidrs" {
@@ -295,8 +297,15 @@ func (m *Manager) RefreshEnabled(ctx context.Context) []State {
 }
 
 func (m *Manager) Refresh(ctx context.Context, id string) error {
-	m.refreshMu.Lock()
-	defer m.refreshMu.Unlock()
+	select {
+	case m.refreshGate <- struct{}{}:
+		defer func() { <-m.refreshGate }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	var src *Source
 	for i := range m.reg.Sources {
 		if m.reg.Sources[i].ID == id {
@@ -308,7 +317,10 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 		return fmt.Errorf("unknown source %q", id)
 	}
 	if !validSourceID(src.ID) {
-		return m.fail(*src, fmt.Errorf("unsafe source id %q", src.ID))
+		return errors.New("unsafe source id")
+	}
+	if err := validateSource(*src); err != nil {
+		return m.fail(*src, err)
 	}
 	if src.Kind == "reference" {
 		return nil
@@ -318,34 +330,49 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	if max <= 0 {
 		max = 8 << 20
 	}
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src.URL, nil)
 	if err != nil {
-		return m.fail(*src, err)
+		return m.fail(*src, publicfetch.SafeError(err))
 	}
 	// Keep the fetch identity stable and free from a separately maintained
 	// version literal. Build provenance is exposed by the local status API.
 	req.Header.Set("User-Agent", "RAZVILKA/source-hub")
 	m.clientMu.RLock()
-	client := m.client
+	client := publicfetch.WithPolicy(m.client, src.URL, src.RedirectHosts)
 	m.clientMu.RUnlock()
 	resp, err := client.Do(req)
 	if err != nil {
-		return m.fail(*src, err)
+		return m.fail(*src, publicfetch.SafeError(err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return m.fail(*src, fmt.Errorf("http status %d", resp.StatusCode))
 	}
+	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/html") {
+		return m.fail(*src, errors.New("source returned HTML instead of a list"))
+	}
 	lr := &io.LimitedReader{R: resp.Body, N: max + 1}
 	b, err := io.ReadAll(lr)
 	if err != nil {
-		return m.fail(*src, err)
+		return m.fail(*src, publicfetch.SafeError(err))
 	}
 	if int64(len(b)) > max {
 		return m.fail(*src, fmt.Errorf("source exceeds max_bytes=%d", max))
 	}
+	prefix := strings.ToLower(strings.TrimSpace(string(b[:min(len(b), 512)])))
+	for _, marker := range []string{"<!doctype html", "<html", "<head", "<body", "<script"} {
+		if strings.HasPrefix(prefix, marker) {
+			return m.fail(*src, errors.New("source body is HTML, not a list"))
+		}
+	}
+	rawSHA := contentHash(b)
+	if src.ExpectedSHA256 != "" && !strings.EqualFold(src.ExpectedSHA256, rawSHA) {
+		return m.fail(*src, errors.New("source SHA256 does not match its pin"))
+	}
 
-	entries, err := validateLines(src.Kind, string(b))
+	entries, err := validateLinesLimited(src.Kind, string(b), sourceEntryLimit(*src))
 	if err != nil {
 		return m.fail(*src, err)
 	}
@@ -355,18 +382,33 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	normalized := strings.Join(entries, "\n") + "\n"
 	sum := sha256.Sum256([]byte(normalized))
 	digest := hex.EncodeToString(sum[:])
-	if err := os.MkdirAll(m.cacheDir, 0o755); err != nil {
-		return m.fail(*src, err)
+	if err := os.MkdirAll(m.cacheDir, 0o700); err != nil {
+		return m.fail(*src, errors.New("cannot create source cache directory"))
 	}
-	dst := filepath.Join(m.cacheDir, src.ID+".lst")
-	if err := writeAtomic(dst, []byte(normalized), 0o600); err != nil {
-		return m.fail(*src, err)
+	now := time.Now().UTC()
+	finalURL := src.URL
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
+	cached := cacheDocument{Schema: 2, ID: src.ID, Kind: src.Kind, SourceHash: sourceHash(*src), Content: normalized, Entries: len(entries), SHA256: digest, FetchedAt: now, ExpiresAt: now.Add(sourceTTL(*src)), Provenance: Provenance{URL: publicfetch.RedactedURL(src.URL), FinalURL: publicfetch.RedactedURL(finalURL), RawSHA256: rawSHA, TrustTier: trustTier(*src)}}
+	cached.Diff = DiffSummary{Added: len(entries)}
+	if previous, err := m.readCache(*src); err == nil {
+		cached.Diff = cacheDiff(previous, entries)
+	}
+	data, err := json.Marshal(cached)
+	if err != nil {
+		return m.fail(*src, errors.New("cannot encode source cache"))
+	}
+	if err := writeAtomic(filepath.Join(m.cacheDir, src.ID+".cache.json"), data, 0o600); err != nil {
+		return m.fail(*src, errors.New("cannot commit source cache"))
 	}
 
 	m.mu.Lock()
 	draftEnabled := m.settings.Draft[src.ID]
 	appliedEnabled := m.settings.Applied[src.ID]
-	m.states[src.ID] = State{ID: src.ID, Name: src.Name, Kind: src.Kind, URL: src.URL, Enabled: draftEnabled, AppliedEnabled: appliedEnabled, Dirty: draftEnabled != appliedEnabled, Ready: true, Entries: len(entries), SHA256: digest, UpdatedAt: time.Now().UTC(), Description: src.Description}
+	state := stateFromCache(m.states[src.ID], cached)
+	state.Enabled, state.AppliedEnabled, state.Dirty = draftEnabled, appliedEnabled, draftEnabled != appliedEnabled
+	m.states[src.ID] = state
 	m.mu.Unlock()
 	return nil
 }
@@ -423,37 +465,35 @@ func cloneBoolMap(in map[string]bool) map[string]bool {
 }
 
 func (m *Manager) fail(src Source, err error) error {
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
 	m.mu.Lock()
 	st := m.states[src.ID]
 	st.LastError = err.Error()
+	st.LastKnownGood = st.Ready
+	if st.Ready {
+		st.CacheStatus = "last-known-good"
+	} else {
+		st.CacheStatus = "quarantined"
+	}
 	m.states[src.ID] = st
 	m.mu.Unlock()
+	m.writeQuarantine(src, err)
 	return err
 }
 
 func writeAtomic(path string, content []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	parent, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
-	tmpPath := tmp.Name()
-	defer func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-	}()
-	if err := tmp.Chmod(mode); err != nil {
+	root, err := ownedfs.Open(parent)
+	if err != nil {
 		return err
 	}
-	if _, err := tmp.Write(content); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
+	defer root.Close()
+	return root.WriteAtomic(filepath.Base(path), content, mode)
 }
 
 func (m *Manager) inspectCache() {
@@ -461,12 +501,7 @@ func (m *Manager) inspectCache() {
 		if src.Kind == "reference" || !validSourceID(src.ID) {
 			continue
 		}
-		max := src.MaxBytes
-		if max <= 0 {
-			max = 8 << 20
-		}
-		path := filepath.Join(m.cacheDir, src.ID+".lst")
-		b, err := readCacheLimited(path, max)
+		cached, err := m.readCache(src)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
@@ -474,56 +509,28 @@ func (m *Manager) inspectCache() {
 			m.rejectCache(src, err)
 			continue
 		}
-		entries, err := validateLines(src.Kind, string(b))
-		if err == nil && src.MinEntries > 0 && len(entries) < src.MinEntries {
-			err = fmt.Errorf("too few valid entries: %d < %d", len(entries), src.MinEntries)
-		}
-		normalized := strings.Join(entries, "\n") + "\n"
-		if err == nil && string(b) != normalized {
-			err = errors.New("cache is not canonical")
-		}
-		if err != nil {
-			m.rejectCache(src, err)
-			continue
-		}
-		digest := sha256.Sum256([]byte(normalized))
-		info, _ := os.Stat(path)
-		st := m.states[src.ID]
-		st.Ready = true
-		st.Entries = len(entries)
-		st.SHA256 = hex.EncodeToString(digest[:])
-		if info != nil {
-			st.UpdatedAt = info.ModTime().UTC()
-		}
-		m.states[src.ID] = st
+		m.states[src.ID] = stateFromCache(m.states[src.ID], cached)
+		m.inspectQuarantine(src, cached.FetchedAt)
 	}
 }
 
 func (m *Manager) rejectCache(src Source, err error) {
 	st := m.states[src.ID]
 	st.Ready = false
+	var pathError *os.PathError
+	if errors.As(err, &pathError) {
+		err = errors.New("cache file unavailable or unsafe")
+	}
 	st.LastError = "cached source rejected: " + err.Error()
+	st.CacheStatus = "quarantined"
 	m.states[src.ID] = st
 }
 
-func readCacheLimited(path string, max int64) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	reader := &io.LimitedReader{R: f, N: max + 1}
-	b, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(b)) > max {
-		return nil, fmt.Errorf("cached source exceeds max_bytes=%d", max)
-	}
-	return b, nil
+func validateLines(kind, body string) ([]string, error) {
+	return validateLinesLimited(kind, body, 500000)
 }
 
-func validateLines(kind, body string) ([]string, error) {
+func validateLinesLimited(kind, body string, limit int) ([]string, error) {
 	seen := map[string]struct{}{}
 	out := []string{}
 	s := bufio.NewScanner(strings.NewReader(body))
@@ -551,6 +558,9 @@ func validateLines(kind, body string) ([]string, error) {
 		} // quarantine malformed entries instead of poisoning entire list
 		if _, ok := seen[v]; ok {
 			continue
+		}
+		if len(out) >= limit {
+			return nil, errors.New("source exceeds max_entries")
 		}
 		seen[v] = struct{}{}
 		out = append(out, v)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,6 +37,11 @@ import (
 )
 
 type confirmedRouteProber struct{}
+
+type sourceFixtureTransport func(*http.Request) (*http.Response, error)
+
+func (f sourceFixtureTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
 type staleRouteProber struct{ checkedAt string }
 
 type deviceRunner struct{ output string }
@@ -757,9 +763,17 @@ func TestAPIServiceAndHTTPSListRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reg := sources.Registry{Sources: []sources.Source{{ID: "test", Name: "Test", Kind: "domains", URL: upstream.URL, Enabled: true, MinEntries: 2, MaxBytes: 4096}}}
+	reg := sources.Registry{Sources: []sources.Source{{ID: "test", Name: "Test", Kind: "domains", URL: "https://source.example/list", Enabled: true, MinEntries: 2, MaxBytes: 4096}}}
 	sm := sources.NewManager(reg, filepath.Join(tmp, "cache"))
-	sm.SetHTTPClient(upstream.Client())
+	sm.SetHTTPClient(&http.Client{Transport: sourceFixtureTransport(func(req *http.Request) (*http.Response, error) {
+		local := req.Clone(req.Context())
+		local.URL, _ = url.Parse(upstream.URL + req.URL.Path)
+		response, err := upstream.Client().Transport.RoundTrip(local)
+		if response != nil {
+			response.Request = req
+		}
+		return response, err
+	})})
 	cat := catalog.Catalog{Services: []catalog.Service{{ID: "chatgpt", Name: "ChatGPT", Category: "AI", Domains: []string{"chatgpt.com"}, Strategy: []string{"usque"}, ProbeURL: "https://chatgpt.com/"}}}
 	a := &App{Store: store, Catalog: cat, Sources: sm, Start: time.Now(), EffectiveListen: "127.0.0.1:8787"}
 	ts := httptest.NewServer(a.Handler(http.NotFoundHandler()))

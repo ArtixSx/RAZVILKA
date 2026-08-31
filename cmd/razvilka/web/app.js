@@ -2267,13 +2267,35 @@ async function runIsolatedTests() {
 function sourceStateText(s) {
   if (s.kind === 'reference') return ['справочник', ''];
   if (!s.enabled) return ['выключен', ''];
+  if (s.cache_status === 'stale') return ['нужно обновить', 'warn'];
+  if (s.last_known_good && s.ready) return ['предыдущая копия', 'warn'];
+  if (s.legacy_cache && s.ready) return ['нужна сверка', 'warn'];
+  if (s.cache_status === 'quarantined') return ['обновление отклонено', 'warn'];
   if (s.last_error) return ['ошибка', 'bad'];
-  if (s.ready) return ['готов', 'good'];
+  if (s.ready) return ['актуален', 'good'];
   return ['не загружен', ''];
+}
+
+function sourceFreshnessText(s) {
+  if (s.kind === 'reference') return '';
+  if (s.cache_status === 'stale') return 'Срок актуальности истёк. Обновите список перед новой настройкой маршрутов.';
+  if (s.last_known_good && s.ready) return 'Новую загрузку отклонили. Используется предыдущая проверенная копия.';
+  if (s.legacy_cache && s.ready) return 'Список из предыдущей версии. Обновите, чтобы подтвердить источник и срок актуальности.';
+  const expires = new Date(s.expires_at);
+  return s.ready && Number.isFinite(expires.getTime()) && expires.getFullYear() > 2000 ? `Актуален до ${expires.toLocaleString('ru-RU')}` : '';
 }
 
 function sourceKindText(kind) {
   return ({ reference: 'справочный источник', domains: 'доменные имена', cidrs: 'IP-сети', downloadable: 'загружаемый список', local: 'локальный список', community: 'каталог сообщества' })[kind] || kind || 'справочник';
+}
+
+function sourceDiffText(s) {
+  if (s.legacy_cache || !s.diff || s.kind === 'reference') return '';
+  const { added, removed, previous_sha256: previous } = s.diff;
+  if (!Number.isSafeInteger(added) || !Number.isSafeInteger(removed) || added < 0 || removed < 0) return '';
+  if (!previous) return `Первая загрузка: ${added.toLocaleString('ru-RU')} записей`;
+  if (!added && !removed) return 'Состав списка не изменился';
+  return `Изменения списка: +${added.toLocaleString('ru-RU')} / −${removed.toLocaleString('ru-RU')}. Рабочие маршруты автоматически не меняются.`;
 }
 
 function renderSources() {
@@ -2287,7 +2309,7 @@ function renderSources() {
       ? '<span class="source-reference-mark">справочно</span>'
       : `<button class="toggle ${s.enabled ? 'on' : ''}" data-source-toggle="${esc(s.id)}" aria-pressed="${s.enabled ? 'true' : 'false'}" aria-label="${s.enabled ? 'Не использовать' : 'Использовать'} ${esc(s.name)}"><i></i></button><small class="source-applied-state">${s.dirty ? `черновик · сейчас ${s.applied_enabled ? 'включён' : 'выключен'}` : s.applied_enabled ? 'используется' : 'выключен'}</small>`;
     const stateText = s.dirty ? `${text} · выбор изменён` : text;
-    return `<tr class="${s.dirty ? 'source-dirty-row' : ''}"><td><b>${esc(s.name)}</b><div class="source-role">${esc(s.description || 'Проверяемый внешний источник данных.')}</div>${s.url ? `<a class="source-url" href="${esc(s.url)}" target="_blank" rel="noreferrer">Открыть источник ↗</a>` : ''}</td><td><div class="source-choice">${control}</div></td><td>${esc(sourceKindText(s.kind))}</td><td><span class="source-state"><i class="state-dot ${s.dirty ? 'warn' : cls}"></i>${esc(stateText)}</span></td><td>${s.entries ? Number(s.entries).toLocaleString('ru-RU') : '—'}</td><td>${esc(s.last_error || '—')}</td></tr>`;
+    return `<tr class="${s.dirty ? 'source-dirty-row' : ''}"><td><b>${esc(s.name)}</b><div class="source-role">${esc(s.description || 'Проверяемый внешний источник данных.')}</div>${String(s.url || '').startsWith('https://') ? `<a class="source-url" href="${esc(s.url)}" target="_blank" rel="noreferrer">Сайт источника ↗</a>` : ''}</td><td><div class="source-choice">${control}</div></td><td>${esc(sourceKindText(s.kind))}</td><td><span class="source-state"><i class="state-dot ${s.dirty ? 'warn' : cls}"></i>${esc(stateText)}</span></td><td>${s.entries ? Number(s.entries).toLocaleString('ru-RU') : '—'}</td><td>${esc(sourceFreshnessText(s) || s.last_error || '—')}<div class="source-role">${esc(sourceDiffText(s))}</div></td></tr>`;
   }).join('');
   $$('[data-source-toggle]').forEach((button) => button.addEventListener('click', () => setSourceDraft(button.dataset.sourceToggle, button.getAttribute('aria-pressed') !== 'true')));
 }

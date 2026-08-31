@@ -45,6 +45,13 @@ func (r *Root) Close() error { return r.fs.Close() }
 // that runtime; mutations performed here additionally use descriptor anchoring.
 func (r *Root) Check(name string) error { return r.check(name) }
 
+func (r *Root) Stat(name string) (os.FileInfo, error) {
+	if err := r.check(name); err != nil {
+		return nil, err
+	}
+	return r.fs.Stat(name)
+}
+
 func (r *Root) OpenFile(name string, flag int, mode os.FileMode) (*os.File, error) {
 	if err := r.check(name); err != nil {
 		return nil, err

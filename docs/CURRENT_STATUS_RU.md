@@ -31,7 +31,7 @@ gap-аудиты сохранены как исторические снимки
 | WARP WireGuard | Реализовано · CI · Экспериментально | Временный интерфейс, официальный набор портов, cleanup и безопасный отказ | Успешный handshake на поддерживаемой сети, endpoint scoring и LKG |
 | AmneziaWG | Реализовано · CI · Экспериментально | Импорт/валидация и адаптер транзакции | Отдельный аппаратный canary и compatibility registry |
 | DNS | Реализовано · CI · Экспериментально | Типизированный каталог, read-only probe, scoped drafts и negative control | Полный live-adapter с recovery gate |
-| Source Hub | Реализовано · CI | HTTPS-only загрузка, лимиты и атомарный cache | Trust tier, quarantine, TTL, provenance, diff и LKG v2 |
+| Source Hub | База · CI; trust v2 · локально | HTTPS/SSRF boundary, TTL, provenance, quarantine, LKG и сводка diff реализованы локально | Linux/race и HIL нового блока; signatures, полный review diff и scheduling |
 | Автопилот | Реализовано · CI · Экспериментально | Ограниченная сверка применённых AUTO-сервисов; черновики и явные маршруты не меняются | Evidence v2, shadow mode, HIL и защита от flapping |
 | Web UI | Реализовано · CI · Роутер | Локальная service-first панель, Safe Mode, отдельные черновики и данные сборки | Разделение Lite/Pro, модули, i18n и accessibility audit |
 | Другие платформы | Проектирование | Capability-модель описана в roadmap | OpenWrt/GL.iNet/Asuswrt adapters и отдельная HIL-матрица |
@@ -72,9 +72,14 @@ HTTP-классификатор, отрицательные fixtures, защит
 Архив, контрольные суммы и подпись GitHub attestation проверены локально.
 Аппаратная проверка новых изменений остаётся незавершённой.
 
-Следующий локальный блок PR-0.3: ограничения диагностических процессов,
+Локальный блок PR-0.3 (`7d9e6b1`): ограничения диагностических процессов,
 loopback-only проверочные порты, исправление проверки имён Sing-box/Xray,
 защита временных каталогов и записей — [отчёт](PR_0_3_SAFETY_RU.md).
+
+Локальный PR-0.4: защищённая загрузка источников, атомарный receipt, TTL,
+карантин и LKG; автопилот не меняет область маршрута вместе с обновлением
+списка. Подробности и оставшиеся ограничения — [отчёт](PR_0_4_SOURCE_TRUST_RU.md).
+Оба блока на GitHub в ходе этой работы не публиковались.
 
 Область изменения и оставшиеся gates (включая независимый direct-leak control
 для внешних туннелей) описаны в [PR_0_2_GAP_REPORT_RU.md](PR_0_2_GAP_REPORT_RU.md).

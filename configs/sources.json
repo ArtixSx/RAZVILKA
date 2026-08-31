@@ -1,4 +1,5 @@
 {
+  "schema": 2,
   "sources": [
     {
       "id": "rkn-registry",
@@ -11,6 +12,9 @@
     },
     {
       "id": "refilter-domains",
+      "trust_tier": "community",
+      "ttl_hours": 24,
+      "redirect_hosts": ["release-assets.githubusercontent.com", "objects.githubusercontent.com"],
       "name": "Re:filter · домены",
       "kind": "domains",
       "format": "lines",
@@ -23,6 +27,9 @@
     },
     {
       "id": "refilter-cidrs",
+      "trust_tier": "community",
+      "ttl_hours": 24,
+      "redirect_hosts": ["release-assets.githubusercontent.com", "objects.githubusercontent.com"],
       "name": "Re:filter · IP/CIDR",
       "kind": "cidrs",
       "format": "lines",
@@ -35,6 +42,8 @@
     },
     {
       "id": "telegram-cidrs",
+      "trust_tier": "official",
+      "ttl_hours": 24,
       "name": "Telegram · официальные CIDR",
       "kind": "cidrs",
       "format": "lines",

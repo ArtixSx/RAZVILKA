@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 const maxSourceBytes = 2 << 20
@@ -163,11 +164,8 @@ func New(registry Registry) (*Manager, error) {
 	}
 	return &Manager{
 		registry: registry,
-		client: &http.Client{
-			Timeout:       20 * time.Second,
-			CheckRedirect: safeRedirect,
-		},
-		cache: map[string]cachedPreview{},
+		client:   publicfetch.NewClient(20 * time.Second),
+		cache:    map[string]cachedPreview{},
 	}, nil
 }
 
@@ -176,7 +174,6 @@ func (m *Manager) SetHTTPClient(client *http.Client) {
 		return
 	}
 	clone := *client
-	clone.CheckRedirect = safeRedirect
 	m.mu.Lock()
 	m.client = &clone
 	m.mu.Unlock()
@@ -343,13 +340,13 @@ func (m *Manager) fetch(ctx context.Context, rawURL string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "RAZVILKA/0.10.0 community-catalog")
+	req.Header.Set("User-Agent", "RAZVILKA/community-catalog")
 	m.mu.RLock()
-	client := m.client
+	client := publicfetch.WithPolicy(m.client, rawURL, nil)
 	m.mu.RUnlock()
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, publicfetch.SafeError(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -526,7 +523,7 @@ func findConflicts(candidate catalog.Service, existing []catalog.Service) []Conf
 
 func validateSourceURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || !allowedHosts[strings.ToLower(u.Hostname())] {
+	if err != nil || publicfetch.ValidateURL(rawURL) != nil || !allowedHosts[strings.ToLower(u.Hostname())] {
 		return errors.New("source URL is not allowlisted HTTPS")
 	}
 	return nil
@@ -536,16 +533,6 @@ func validatePageURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
 		return errors.New("URL must be absolute HTTPS")
-	}
-	return nil
-}
-
-func safeRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= 5 {
-		return errors.New("too many redirects")
-	}
-	if err := validateSourceURL(req.URL.String()); err != nil {
-		return err
 	}
 	return nil
 }

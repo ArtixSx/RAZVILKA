@@ -31,6 +31,12 @@
 4. Source Hub trust foundation: strict redirect/SSRF, digest, provenance, TTL,
    LKG, quarantine и redaction.
 
+Срез 31 августа: пункты 1–2 опубликованы в `v0.18.1-rc.1`, Linux CI прошёл.
+Пункты 3–4 реализованы локально с автоматическими тестами; новые Linux/race
+и аппаратные gates ещё не пройдены. Полный Source Hub review/scheduling остаётся
+дальнейшей работой. Регистрация аккаунтов и расширение живой автоматики до
+подтверждения безопасности не выполняются.
+
 ## Этап 1 — `v0.19` Unified Cloudflare Provider
 
 1. Provider model и локальное secret state.

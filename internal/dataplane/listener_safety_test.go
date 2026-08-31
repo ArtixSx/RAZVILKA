@@ -12,7 +12,7 @@ import (
 
 func TestCandidateRemovesImportedListeners(t *testing.T) {
 	for _, engine := range []string{"sing-box", "xray"} {
-		data, _, err := buildProxyCandidate(engine, []byte(`{"inbounds":[{"listen":"0.0.0.0"},{"listen":"::"}],"api":{"listen":"0.0.0.0:10085"},"services":[{"type":"ssm-api","listen":"::"}],"experimental":{"clash_api":{"external_controller":"0.0.0.0:9090"}},"outbounds":[]}`), 19080)
+		data, _, err := buildProxyCandidate(engine, []byte(`{"inbounds":[{"listen":"0.0.0.0"},{"listen":"::"}],"api":{"listen":"0.0.0.0:10085"},"metrics":{"listen":"0.0.0.0:11111"},"log":{"output":"/outside/secret","error":"/outside/secret","access":"/outside/secret"},"services":[{"type":"ssm-api","listen":"::"}],"experimental":{"clash_api":{"external_controller":"0.0.0.0:9090"}},"outbounds":[]}`), 19080)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -24,9 +24,16 @@ func TestCandidateRemovesImportedListeners(t *testing.T) {
 		if len(inbounds) != 1 || inbounds[0].(map[string]any)["listen"] != "127.0.0.1" {
 			t.Fatalf("unsafe %s listener: %s", engine, data)
 		}
-		if engine == "xray" && document["api"] != nil || engine == "sing-box" && (document["services"] != nil || document["experimental"] != nil) {
+		if engine == "xray" && (document["api"] != nil || document["metrics"] != nil) || engine == "sing-box" && (document["services"] != nil || document["experimental"] != nil) {
 			t.Fatalf("additional API listener survived: %s", data)
 		}
+		log := document["log"].(map[string]any)
+		if log["output"] != nil || log["error"] != nil || log["access"] == "/outside/secret" {
+			t.Fatal("imported log destination survived")
+		}
+	}
+	if _, _, err := buildProxyCandidate("sing-box", []byte(`{"outbounds":[],"endpoints":[{"type":"wireguard","system":true}]}`), 19080); err == nil {
+		t.Fatal("system endpoint was accepted by proxy-only canary")
 	}
 	for _, port := range []int{-1, 0, 80, 65536} {
 		if _, _, err := buildProxyCandidate("sing-box", []byte(`{"outbounds":[]}`), port); err == nil {

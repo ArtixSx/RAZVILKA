@@ -4,12 +4,31 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 )
+
+type fixtureTransport func(*http.Request) (*http.Response, error)
+
+func (f fixtureTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+// Only the test transport redirects a public fixture identity to its local
+// server. Production SSRF/DNS enforcement is exercised by publicfetch tests.
+func fixtureClient(server *httptest.Server) *http.Client {
+	return &http.Client{Transport: fixtureTransport(func(req *http.Request) (*http.Response, error) {
+		local := req.Clone(req.Context())
+		local.URL, _ = url.Parse(server.URL + req.URL.Path)
+		response, err := server.Client().Transport.RoundTrip(local)
+		if response != nil {
+			response.Request = req
+		}
+		return response, err
+	})}
+}
 
 func TestValidateDomainsRejectsTLDAndDeduplicates(t *testing.T) {
 	got, err := validateLines("domains", "# comment\nexample.com\ncom\nEXAMPLE.com\ninvalid domain\nsub.example.org # x\n")
@@ -44,12 +63,13 @@ func TestRefreshIsAtomicOnBadUpdate(t *testing.T) {
 	}))
 	defer srv.Close()
 	dir := t.TempDir()
-	reg := Registry{Sources: []Source{{ID: "x", Name: "X", Kind: "domains", URL: srv.URL, Enabled: true, MinEntries: 2, MaxBytes: 4096}}}
+	reg := Registry{Sources: []Source{{ID: "x", Name: "X", Kind: "domains", URL: "https://source.example/list", Enabled: true, MinEntries: 2, MaxBytes: 4096}}}
 	m := NewManager(reg, dir)
+	m.SetHTTPClient(fixtureClient(srv))
 	if err := m.Refresh(context.Background(), "x"); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "x.lst")
+	path := filepath.Join(dir, "x.cache.json")
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -72,9 +92,10 @@ func TestMaxBytes(t *testing.T) {
 		_, _ = w.Write([]byte(strings.Repeat("a.example\n", 100)))
 	}))
 	defer srv.Close()
-	reg := Registry{Sources: []Source{{ID: "x", Name: "X", Kind: "domains", URL: srv.URL, Enabled: true, MaxBytes: 20}}}
+	reg := Registry{Sources: []Source{{ID: "x", Name: "X", Kind: "domains", URL: "https://source.example/list", Enabled: true, MaxBytes: 20}}}
 	m := NewManager(reg, t.TempDir())
-	if err := m.Refresh(context.Background(), "x"); err == nil {
+	m.SetHTTPClient(fixtureClient(srv))
+	if err := m.Refresh(context.Background(), "x"); err == nil || !strings.Contains(err.Error(), "max_bytes") {
 		t.Fatal("expected max_bytes error")
 	}
 }
@@ -121,8 +142,9 @@ func TestConcurrentRefreshLeavesOneCanonicalFile(t *testing.T) {
 
 	dir := t.TempDir()
 	m := NewManager(Registry{Sources: []Source{{
-		ID: "x", Name: "X", Kind: "domains", URL: srv.URL, Enabled: true, MinEntries: 2,
+		ID: "x", Name: "X", Kind: "domains", URL: "https://source.example/list", Enabled: true, MinEntries: 2,
 	}}}, dir)
+	m.SetHTTPClient(fixtureClient(srv))
 	const workers = 12
 	var wg sync.WaitGroup
 	errs := make(chan error, workers)
@@ -140,18 +162,18 @@ func TestConcurrentRefreshLeavesOneCanonicalFile(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "x.lst"))
+	cached, err := m.readCache(m.reg.Sources[0])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(b) != "a.example\nb.example\n" {
-		t.Fatalf("non-canonical final cache: %q", b)
+	if cached.Content != "a.example\nb.example\n" {
+		t.Fatalf("non-canonical final cache: %q", cached.Content)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "x.lst" {
+	if len(entries) != 1 || entries[0].Name() != "x.cache.json" {
 		t.Fatalf("temporary cache files leaked: %+v", entries)
 	}
 }
@@ -162,9 +184,9 @@ func TestHTTPSRedirectCannotDowngrade(t *testing.T) {
 	}))
 	defer srv.Close()
 	m := NewManager(Registry{Sources: []Source{{
-		ID: "x", Name: "X", Kind: "domains", URL: srv.URL, Enabled: true,
+		ID: "x", Name: "X", Kind: "domains", URL: "https://source.example/list", Enabled: true,
 	}}}, t.TempDir())
-	m.SetHTTPClient(srv.Client())
+	m.SetHTTPClient(fixtureClient(srv))
 	err := m.Refresh(context.Background(), "x")
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "https") {
 		t.Fatalf("downgrade redirect was not rejected: %v", err)

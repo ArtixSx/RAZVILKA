@@ -1694,6 +1694,17 @@ func (a *App) backgroundAutopilotApply(parent context.Context) {
 	if cfg.SafeMode {
 		return
 	}
+	if a.Sources != nil {
+		var enabledServices []string
+		for id, selection := range cfg.AppliedServices {
+			if selection.Enabled {
+				enabledServices = append(enabledServices, id)
+			}
+		}
+		if !a.Sources.AutomaticUseReady(enabledServices) {
+			return
+		}
+	}
 	live := configForChangeScope(cfg, changeScopeEngine)
 	plan, err := a.buildDataplanePlanForScope(live, a.routeOptionsSnapshot(), changeScopeDevices, "")
 	if err != nil || plan.Noop || !plan.Ready {
@@ -1701,6 +1712,9 @@ func (a *App) backgroundAutopilotApply(parent context.Context) {
 	}
 	committed, exists, err := a.Dataplane.Committed()
 	if err != nil || !exists || committed.State != "committed" {
+		return
+	}
+	if !autopilotTargetsUnchanged(committed.Routes, plan.Routes) {
 		return
 	}
 	previous := make(map[string]string, len(committed.Routes))
@@ -1725,6 +1739,27 @@ func (a *App) backgroundAutopilotApply(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
 	_, _ = a.Dataplane.Apply(ctx, plan, nil)
+}
+
+// Changing a route is not permission to change its destination/device scope.
+// A refreshed source may propose addresses, but only a reviewed manual Apply
+// may adopt that diff. Background failover retains the committed target set.
+func autopilotTargetsUnchanged(previous, next []dataplane.Route) bool {
+	if len(previous) != len(next) {
+		return false
+	}
+	old := make(map[string]dataplane.Route, len(previous))
+	for _, route := range previous {
+		old[route.ServiceID] = route
+	}
+	for _, route := range next {
+		before, ok := old[route.ServiceID]
+		if !ok || !sameStringSet(before.Domains, route.Domains) || !sameStringSet(before.CIDRs, route.CIDRs) || !sameStringSet(before.Sources, route.Sources) || !sameStringSet(before.SourceRefs, route.SourceRefs) || before.ProbeURL != route.ProbeURL {
+			return false
+		}
+		delete(old, route.ServiceID)
+	}
+	return len(old) == 0
 }
 
 func isolatedCandidates(strategy []string, current string) []string {
