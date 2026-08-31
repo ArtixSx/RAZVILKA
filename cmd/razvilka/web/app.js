@@ -657,7 +657,7 @@ async function refreshAll() {
       ['sources', '/api/v1/sources'],
       ['routeOptions', '/api/v1/routes/options'],
       ['connections', '/api/v1/connections?include_closed=true'],
-      ['devices', '/api/v1/devices'],
+      ['devices', '/api/v1/devices?view=status'],
       ['testlab', '/api/v1/testlab'],
       ['engineLab', '/api/v1/engine-lab'],
       ['audit', '/api/v1/audit?limit=40'],
@@ -673,6 +673,7 @@ async function refreshAll() {
     settled.forEach((result, index) => {
       const [key, url] = requests[index];
       if (result.status === 'fulfilled') {
+        if (key === 'devices') { acceptDeviceList(result.value); return; }
         state[key] = key === 'sessions' ? (result.value.sessions || []) : result.value;
         return;
       }
@@ -2352,7 +2353,16 @@ function deviceDisplayName(device) {
   return device.name || device.hostname || device.ips?.[0] || device.id;
 }
 
+function acceptDeviceList(payload) {
+  // Array fallback keeps the panel compatible while a server is being upgraded.
+  state.devices = Array.isArray(payload) ? payload : (payload.devices || []);
+  state.devicePersistenceWarning = Array.isArray(payload) ? '' : (payload.persistence_warning || '');
+}
+
 function renderDevices() {
+  const warning = $('#devicePersistenceWarning');
+  warning.textContent = state.devicePersistenceWarning || '';
+  warning.hidden = !state.devicePersistenceWarning;
   const query = ($('#deviceSearch')?.value || '').trim().toLowerCase();
   const devices = (state.devices || []).filter((device) => {
     if (!query) return true;
@@ -2380,7 +2390,7 @@ async function refreshDevices() {
   const button = $('#refreshDevices');
   button.disabled = true; button.textContent = 'Поиск…';
   try {
-    state.devices = await api('/api/v1/devices');
+    acceptDeviceList(await api('/api/v1/devices?view=status'));
     renderDevices();
   } catch (error) { showDetails({ error: error.message }, 'Устройства не обновлены'); }
   finally { button.disabled = false; button.textContent = 'Найти заново'; }

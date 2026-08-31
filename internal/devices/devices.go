@@ -1,6 +1,7 @@
 package devices
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 const maxDevices = 512
@@ -61,8 +64,10 @@ type Manager struct {
 	ARPPaths   []string
 	LeasePaths []string
 
-	mu      sync.Mutex
-	devices map[string]Device
+	mu             sync.Mutex
+	devices        map[string]Device
+	diskImage      restorejournal.Image
+	writeUncertain bool
 }
 
 func Load(path string) (*Manager, error) {
@@ -71,8 +76,8 @@ func Load(path string) (*Manager, error) {
 		ARPPaths:   []string{"/proc/net/arp"},
 		LeasePaths: []string{"/opt/var/lib/misc/dnsmasq.leases", "/var/lib/misc/dnsmasq.leases", "/tmp/dhcp.leases", "/tmp/ndm/dhcp.leases"},
 	}
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
+	image, err := restorejournal.ReadFileImage(context.Background(), path)
+	if err == nil && !image.Exists {
 		if err := m.saveLocked(); err != nil {
 			return nil, err
 		}
@@ -81,6 +86,15 @@ func Load(path string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	stored, err := decodeDocument(image.Data)
+	if err != nil {
+		return nil, err
+	}
+	m.devices, m.diskImage = stored, image
+	return m, nil
+}
+
+func decodeDocument(data []byte) (map[string]Device, error) {
 	var stored document
 	if err := json.Unmarshal(data, &stored); err != nil {
 		return nil, fmt.Errorf("decode device registry: %w", err)
@@ -88,23 +102,37 @@ func Load(path string) (*Manager, error) {
 	if stored.Schema != 1 || len(stored.Devices) > maxDevices {
 		return nil, errors.New("unsupported or oversized device registry")
 	}
+	result := make(map[string]Device, len(stored.Devices))
 	for id, device := range stored.Devices {
 		if !deviceIDPattern.MatchString(id) {
 			return nil, fmt.Errorf("invalid stored device id %q", id)
 		}
 		device.ID = id
-		device.IPs = normalizeIPs(device.IPs)
-		device.Discovered = false
-		device.State = "offline"
-		m.devices[id] = device
+		device, err := sanitizeStoredDevice(device)
+		if err != nil {
+			return nil, err
+		}
+		result[id] = device
 	}
-	return m, nil
+	return result, nil
 }
 
 func (m *Manager) List(ctx context.Context) []Device {
+	rows, _ := m.ListWithStatus(ctx)
+	return rows
+}
+
+// ListWithStatus reports persistence failures separately from live observations.
+// A failed write must not turn the observed snapshot into confirmed metadata.
+func (m *Manager) ListWithStatus(ctx context.Context) ([]Device, error) {
 	discovered := m.discover(ctx)
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	previous := cloneDevices(m.devices)
+	var saveErr error
+	if m.writeUncertain {
+		saveErr = restorejournal.ErrRecovery
+	}
 	changed := false
 	for id, stored := range m.devices {
 		stored.Discovered = false
@@ -112,6 +140,10 @@ func (m *Manager) List(ctx context.Context) []Device {
 		m.devices[id] = stored
 	}
 	for id, live := range discovered {
+		if _, exists := m.devices[id]; !exists && len(m.devices) >= maxDevices {
+			saveErr = errors.New("device registry limit exceeded")
+			continue
+		}
 		stored := m.devices[id]
 		live.Name, live.Group = stored.Name, stored.Group
 		if live.Hostname == "" {
@@ -126,8 +158,10 @@ func (m *Manager) List(ctx context.Context) []Device {
 		}
 		m.devices[id] = live
 	}
-	if changed {
-		_ = m.saveLocked()
+	if changed && saveErr == nil {
+		if err := m.saveLocked(); err != nil {
+			saveErr = err
+		}
 	}
 	out := make([]Device, 0, len(m.devices))
 	for _, device := range m.devices {
@@ -144,7 +178,10 @@ func (m *Manager) List(ctx context.Context) []Device {
 		}
 		return left < right
 	})
-	return out
+	if saveErr != nil {
+		m.devices = previous
+	}
+	return out, saveErr
 }
 
 func (m *Manager) Update(id, name, group string) (Device, error) {
@@ -235,13 +272,29 @@ func (m *Manager) MergeMetadataWithRollback(input []Device) (func() error, error
 
 func (m *Manager) mergeMetadataLocked(input []Device) error {
 	previous := cloneDevices(m.devices)
+	result, err := mergeMetadata(m.devices, input)
+	if err != nil {
+		return err
+	}
+	m.devices = result
+	if err := m.saveLocked(); err != nil {
+		m.devices = previous
+		return err
+	}
+	return nil
+}
+
+func mergeMetadata(currentDevices map[string]Device, input []Device) (map[string]Device, error) {
+	if len(input) > maxDevices {
+		return nil, errors.New("device registry limit exceeded")
+	}
+	result := cloneDevices(currentDevices)
 	for _, incoming := range input {
 		device, err := sanitizeStoredDevice(incoming)
 		if err != nil {
-			m.devices = previous
-			return err
+			return nil, err
 		}
-		current := m.devices[device.ID]
+		current := result[device.ID]
 		if device.Name != "" {
 			current.Name = device.Name
 		}
@@ -260,17 +313,12 @@ func (m *Manager) mergeMetadataLocked(input []Device) error {
 		current.ID = device.ID
 		current.IPs = normalizeIPs(append(current.IPs, device.IPs...))
 		current.Discovered, current.State, current.LastSeenAt = false, "offline", ""
-		m.devices[device.ID] = current
+		result[device.ID] = current
 	}
-	if len(m.devices) > maxDevices {
-		m.devices = previous
-		return errors.New("device registry limit exceeded")
+	if len(result) > maxDevices {
+		return nil, errors.New("device registry limit exceeded")
 	}
-	if err := m.saveLocked(); err != nil {
-		m.devices = previous
-		return err
-	}
-	return nil
+	return result, nil
 }
 
 // ReplaceAll restores an exact trusted snapshot and is used only for local
@@ -504,42 +552,63 @@ func samePersistentDevice(left, right Device) bool {
 }
 
 func (m *Manager) saveLocked() error {
+	if m.writeUncertain {
+		return restorejournal.ErrRecovery
+	}
 	if strings.TrimSpace(m.Path) == "" {
 		return errors.New("device registry path is empty")
 	}
 	if err := os.MkdirAll(filepath.Dir(m.Path), 0o700); err != nil {
 		return err
 	}
-	stored := make(map[string]Device, len(m.devices))
-	for id, device := range m.devices {
-		device.Discovered = false
-		device.State = "offline"
-		device.LastSeenAt = ""
+	data, err := encodeDocument(m.devices)
+	if err != nil {
+		return err
+	}
+	target, err := restorejournal.OpenFileTarget(m.Path)
+	if err != nil {
+		return err
+	}
+	defer target.Close()
+	return m.persistLocked(target, data)
+}
+
+func encodeDocument(devices map[string]Device) ([]byte, error) {
+	if len(devices) > maxDevices {
+		return nil, errors.New("device registry limit exceeded")
+	}
+	stored := make(map[string]Device, len(devices))
+	for id, device := range devices {
+		if id != device.ID {
+			return nil, errors.New("invalid device registry identity")
+		}
+		device, err := sanitizeStoredDevice(device)
+		if err != nil {
+			return nil, err
+		}
 		stored[id] = device
 	}
 	data, err := json.MarshalIndent(document{Schema: 1, Devices: stored}, "", "  ")
 	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
+}
+
+func (m *Manager) persistLocked(target restorejournal.Target, data []byte) error {
+	after := restorejournal.Image{Exists: true, Data: data}
+	if err := target.CompareAndSwap(context.Background(), m.diskImage, after); err != nil {
+		if errors.Is(err, restorejournal.ErrRecovery) {
+			actual, readErr := target.Read(context.Background())
+			if readErr == nil && actual.Exists == m.diskImage.Exists && bytes.Equal(actual.Data, m.diskImage.Data) {
+				return restorejournal.ErrAborted
+			}
+			m.writeUncertain = true
+		}
 		return err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(m.Path), ".devices.tmp-*")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer func() { _ = temporary.Close(); _ = os.Remove(temporaryPath) }()
-	if err := temporary.Chmod(0o600); err != nil {
-		return err
-	}
-	if _, err := temporary.Write(append(data, '\n')); err != nil {
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	return os.Rename(temporaryPath, m.Path)
+	m.diskImage = restorejournal.Image{Exists: true, Data: append([]byte(nil), data...)}
+	return nil
 }
 
 func findIPCommand() string {

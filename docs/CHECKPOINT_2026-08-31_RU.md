@@ -37,16 +37,31 @@
   Снимки before/after, commit decision, bounded canonical journal, OS lease,
   повторный откат после аварии и защита третьего состояния. Реальные target
   adapters/App/startup ещё не подключены; рабочий импорт не изменился.
-- Следующий локальный блок: [config recovery adapter](CONFIG_RESTORE_ADAPTER_RU.md).
+- `fca9f17`: [config recovery adapter](CONFIG_RESTORE_ADAPTER_RU.md).
   FileTarget с per-file OS lease/durable CAS, обычные config writers и migration
   на том же протоколе, bounded read, stale-cache guard и uncertain-write fence.
   Typed target/session согласует файл и кэш. App/startup recovery ещё не подключены.
+- Следующий локальный блок: [catalog/devices recovery adapters](REGISTRY_RESTORE_ADAPTERS_RU.md).
+  Обычные writers/undo/discovery на том же per-file OS lease/CAS, typed targets/
+  sessions и общий crash test config+catalog+devices. UI сообщает о несохранённом
+  discovery. Полный HTTP/startup restore ещё не включён; staging/provider остаются.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
 
 ## Финальные локальные проверки
+
+В блоке catalog/devices adapters прошли полный `go test ./... -count=1 -timeout=90s`,
+`go vet ./...`, синтаксис app.js и шесть JS suites. Catalog/devices tests
+прошли 10 повторов, App registry recovery/API tests — три. Реальные дочерние
+процессы остановлены после prepare, каждой из трёх записей, во время rollback
+и после commit. Восстановление проверено до Load; внешний неизвестный файл
+блокирует весь откат без перезаписи остальных. Сохранность live/gate полей,
+discovery metadata, отказ stale writers, uncertainty fence и предупреждение
+API/UI проверены. Все Go-пакеты и customservices/devices/App tests собраны для
+Linux arm64/mips/mipsle, не выполнены. Linux/race, Entware shell, HIL,
+power-loss и browser visual QA не выполнялись; dependencies не изменены.
 
 В блоке config adapter прошли полный `go test ./... -count=1 -timeout=90s`,
 `go vet ./...`, синтаксис app.js и пять JS suites. Config/restorejournal прошли
@@ -125,10 +140,11 @@ Linux-бинарники локально не выполнялись. Файл�
    Общий приватный импорт теперь имеет guarded компенсацию в процессе,
    но не межпроцессный guard и не подключённый журнал. Основа журнала готова
    отдельно (`internal/restorejournal`); теперь есть production FileTarget
-   и config.OpenRestoreTarget/Store.BeginRestore. Обычные config writers используют
-   ту же per-file lease/CAS, но App/main общий журнал ещё не вызывают.
-   Следующий шаг — catalog/devices, затем staging/provider adapters и обычные
-   writers на том же bounded read/durable CAS,
+   и config/customservices/devices.OpenRestoreTarget + restore sessions.
+   Их обычные writers, включая discovery и undo, используют ту же per-file
+   lease/CAS, но App/main общий журнал ещё не вызывают.
+   Следующий шаг — staging/provider adapters и обычные writers на том же
+   bounded read/durable CAS,
    владение/исключение параллельных мутаций всех API/background/processes,
    подключение startup recovery до загрузки кэшей и изменяющих API, затем общий
    router+provider restore. Engine staging пока должен быть

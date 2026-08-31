@@ -1,6 +1,8 @@
 package customservices
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 const maxServices = 256
@@ -25,15 +28,17 @@ type document struct {
 }
 
 type Manager struct {
-	mu       sync.RWMutex
-	path     string
-	services []catalog.Service
+	mu             sync.RWMutex
+	path           string
+	services       []catalog.Service
+	diskImage      restorejournal.Image
+	writeUncertain bool
 }
 
 func Load(path string) (*Manager, error) {
 	m := &Manager{path: path}
-	b, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
+	image, err := restorejournal.ReadFileImage(context.Background(), path)
+	if err == nil && !image.Exists {
 		if err := m.saveLocked(); err != nil {
 			return nil, err
 		}
@@ -42,6 +47,15 @@ func Load(path string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	services, err := decodeDocument(image.Data)
+	if err != nil {
+		return nil, err
+	}
+	m.services, m.diskImage = services, image
+	return m, nil
+}
+
+func decodeDocument(b []byte) ([]catalog.Service, error) {
 	var doc document
 	if err := json.Unmarshal(b, &doc); err != nil {
 		return nil, fmt.Errorf("decode custom services: %w", err)
@@ -55,8 +69,7 @@ func Load(path string) (*Manager, error) {
 	if err := catalog.Validate(catalog.Catalog{Services: doc.Services}); err != nil {
 		return nil, err
 	}
-	m.services = clone(doc.Services)
-	return m, nil
+	return clone(doc.Services), nil
 }
 
 func (m *Manager) List() []catalog.Service {
@@ -184,12 +197,20 @@ func (m *Manager) MergeWithRollback(in []catalog.Service, reserved map[string]bo
 }
 
 func (m *Manager) mergeLocked(in []catalog.Service, reserved map[string]bool, allowUpdates bool) ([]catalog.Service, error) {
-	result := clone(m.services)
+	result, err := mergeServices(m.services, in, reserved, allowUpdates)
+	if err != nil {
+		return nil, err
+	}
+	return m.replaceLocked(result)
+}
+
+func mergeServices(current, in []catalog.Service, reserved map[string]bool, allowUpdates bool) ([]catalog.Service, error) {
+	result := clone(current)
 	index := make(map[string]int, len(result))
 	for i := range result {
 		index[result[i].ID] = i
 	}
-	for _, service := range in {
+	for _, service := range clone(in) {
 		if !strings.HasPrefix(service.ID, "custom-") {
 			return nil, fmt.Errorf("service id %q must use custom- prefix", service.ID)
 		}
@@ -213,7 +234,11 @@ func (m *Manager) mergeLocked(in []catalog.Service, reserved map[string]bool, al
 		index[service.ID] = len(result)
 		result = append(result, service)
 	}
-	return m.replaceLocked(result)
+	if err := catalog.Validate(catalog.Catalog{Services: result}); err != nil {
+		return nil, err
+	}
+	sort.Slice(result, func(i, j int) bool { return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name) })
+	return result, nil
 }
 
 // ReplaceAll restores a previously captured custom catalog after a failed
@@ -263,6 +288,9 @@ func (m *Manager) sortLocked() {
 }
 
 func (m *Manager) saveLocked() error {
+	if m.writeUncertain {
+		return restorejournal.ErrRecovery
+	}
 	b, err := json.MarshalIndent(document{Schema: 1, Services: m.services}, "", "  ")
 	if err != nil {
 		return err
@@ -271,25 +299,28 @@ func (m *Manager) saveLocked() error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".custom-services.tmp-*")
+	target, err := restorejournal.OpenFileTarget(m.path)
 	if err != nil {
 		return err
 	}
-	tmpPath := tmp.Name()
-	defer func() { _ = tmp.Close(); _ = os.Remove(tmpPath) }()
-	if err := tmp.Chmod(0o600); err != nil {
+	defer target.Close()
+	return m.persistLocked(target, b)
+}
+
+func (m *Manager) persistLocked(target restorejournal.Target, data []byte) error {
+	after := restorejournal.Image{Exists: true, Data: data}
+	if err := target.CompareAndSwap(context.Background(), m.diskImage, after); err != nil {
+		if errors.Is(err, restorejournal.ErrRecovery) {
+			actual, readErr := target.Read(context.Background())
+			if readErr == nil && actual.Exists == m.diskImage.Exists && bytes.Equal(actual.Data, m.diskImage.Data) {
+				return restorejournal.ErrAborted
+			}
+			m.writeUncertain = true
+		}
 		return err
 	}
-	if _, err := tmp.Write(b); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, m.path)
+	m.diskImage = restorejournal.Image{Exists: true, Data: append([]byte(nil), data...)}
+	return nil
 }
 
 func normalize(s catalog.Service) catalog.Service {

@@ -2424,7 +2424,7 @@ func (a *App) deviceList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.Devices == nil {
-		writeJSON(w, http.StatusOK, []deviceView{})
+		writeDeviceList(w, r, []deviceView{}, nil)
 		return
 	}
 	catalogByID := map[string]catalog.Service{}
@@ -2432,7 +2432,7 @@ func (a *App) deviceList(w http.ResponseWriter, r *http.Request) {
 		catalogByID[service.ID] = service
 	}
 	cfg := a.Store.Get()
-	discovered := a.Devices.List(r.Context())
+	discovered, saveErr := a.Devices.ListWithStatus(r.Context())
 	views := make([]deviceView, 0, len(discovered))
 	for _, device := range discovered {
 		view := deviceView{Device: device, Policies: []devicePolicyView{}}
@@ -2457,7 +2457,21 @@ func (a *App) deviceList(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(view.Policies, func(i, j int) bool { return view.Policies[i].ServiceName < view.Policies[j].ServiceName })
 		views = append(views, view)
 	}
-	writeJSON(w, http.StatusOK, views)
+	writeDeviceList(w, r, views, saveErr)
+}
+
+// Keep the original array contract for API clients. The panel opts into an
+// envelope so a discovery-save failure is visible even for an empty registry.
+func writeDeviceList(w http.ResponseWriter, r *http.Request, views []deviceView, saveErr error) {
+	if r.URL.Query().Get("view") != "status" {
+		writeJSON(w, http.StatusOK, views)
+		return
+	}
+	warning := ""
+	if saveErr != nil {
+		warning = "Сохранение списка устройств не подтверждено. Новые данные, если они есть, показаны временно. Если предупреждение повторяется, проверьте хранилище и восстановление настроек."
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"devices": views, "persistence_warning": warning})
 }
 
 func (a *App) deviceItem(w http.ResponseWriter, r *http.Request) {
