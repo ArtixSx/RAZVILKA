@@ -374,6 +374,20 @@
               <div id="cloudflareCopyList" aria-live="polite">Список загрузится при открытии раздела.</div>
             </section>
           </div>
+          <section class="cloudflare-copy-archives" id="cloudflareLegacy" aria-labelledby="cloudflareLegacyTitle">
+            <h3 id="cloudflareLegacyTitle">Скопировать профиль с роутера</h3>
+            <p>Если USQUE или WARP уже настроен, можно сохранить отдельную копию его файла. Исходный профиль останется на месте; работающий обход не останавливается.</p>
+            <form id="cloudflareLegacyForm" class="cloudflare-copy-form">
+              <label><span>Известное расположение</span><select id="cloudflareLegacySource" disabled><option value="">Откройте раздел для загрузки расположений</option></select></label>
+              <small>Список не означает, что файл найден или обход работает. Читается только выбранный файл, без поиска по всему роутеру.</small>
+              <button id="cloudflareLegacyRefresh" class="secondary" type="button" hidden>Повторить загрузку расположений</button>
+              <button id="cloudflareLegacyPreviewButton" class="secondary" type="submit" disabled>Проверить выбранный профиль</button>
+              <div id="cloudflareLegacyReview" class="cloudflare-copy-result" aria-live="polite">После проверки покажем формат файла. Ключи не передаются в браузер.</div>
+              <button id="cloudflareLegacyCopy" class="primary" type="button" hidden disabled>Сохранить отдельную копию</button>
+              <button id="cloudflareLegacyCancel" class="secondary" type="button" hidden>Отменить</button>
+              <p id="cloudflareLegacyMessage" role="status" aria-live="polite"></p>
+            </form>
+          </section>
           <section class="cloudflare-copy-archives" id="cloudflareArchives" aria-labelledby="cloudflareArchiveTitle">
             <h3 id="cloudflareArchiveTitle">Перенести копии аккаунтов</h3>
             <p>Архив содержит только сохранённые здесь аккаунты. При восстановлении добавляются новые копии; существующие ключи, рабочие профили и маршруты не заменяются.</p>
@@ -478,6 +492,7 @@
 </dialog>
 <script src="/app.js?v=0.18.1"></script>
 <script src="/cloudflare-accounts.js?v=0.18.1"></script>
+<script src="/cloudflare-migration.js?v=0.18.1"></script>
 <script src="/cloudflare-backups.js?v=0.18.1"></script>
 </body>
 </html>

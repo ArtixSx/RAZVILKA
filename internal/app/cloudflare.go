@@ -17,19 +17,7 @@ const cloudflareCopyNotice = "Это только сохранённая коп�
 // ordinary read-only diagnostics are public. A nil gate must fail closed too.
 // A single non-queued operation bounds concurrent parsing/store allocations.
 func (a *App) cloudflareAccess(w http.ResponseWriter, r *http.Request, method string) (func(), bool) {
-	w.Header().Set("Cache-Control", "no-store")
-	if r.Method != method {
-		w.Header().Set("Allow", method)
-		methodNotAllowed(w)
-		return nil, false
-	}
-	if a.Security == nil || !a.Security.Authenticated(r) {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="RAZVILKA"`)
-		http.Error(w, "administrator login is required", http.StatusUnauthorized)
-		return nil, false
-	}
-	if a.Cloudflare == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "Хранилище копий Cloudflare недоступно. Рабочие обходы не затронуты.", "code": "CLOUDFLARE_STORE_UNAVAILABLE"})
+	if !a.cloudflareAuth(w, r, method) {
 		return nil, false
 	}
 	if !a.cloudflareBusy.CompareAndSwap(false, true) {
@@ -38,6 +26,25 @@ func (a *App) cloudflareAccess(w http.ResponseWriter, r *http.Request, method st
 		return nil, false
 	}
 	return func() { a.cloudflareBusy.Store(false) }, true
+}
+
+func (a *App) cloudflareAuth(w http.ResponseWriter, r *http.Request, method string) bool {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != method {
+		w.Header().Set("Allow", method)
+		methodNotAllowed(w)
+		return false
+	}
+	if a.Security == nil || !a.Security.Authenticated(r) {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="RAZVILKA"`)
+		http.Error(w, "administrator login is required", http.StatusUnauthorized)
+		return false
+	}
+	if a.Cloudflare == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "Хранилище копий Cloudflare недоступно. Рабочие обходы не затронуты.", "code": "CLOUDFLARE_STORE_UNAVAILABLE"})
+		return false
+	}
+	return true
 }
 
 func (a *App) cloudflareAccounts(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +141,12 @@ func cloudflareError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusBadRequest, "CLOUDFLARE_IMPORT_INVALID", "Файл не принят. Проверьте выбранный формат и размер (до 256 КиБ); ссылки, неполные и скрытые ключи не подходят."
 	} else if errors.Is(err, cloudflareprovider.ErrBackup) {
 		status, code, message = http.StatusBadRequest, "CLOUDFLARE_BACKUP_INVALID", "Архив не принят. Нужен отдельный архив копий Cloudflare и его пароль (12–256 байт). Для выгрузки сначала сохраните хотя бы одну копию аккаунта."
+	} else if errors.Is(err, cloudflareprovider.ErrLegacyMissing) {
+		status, code, message = http.StatusNotFound, "CLOUDFLARE_LEGACY_MISSING", "Файл в выбранном расположении не найден. Выберите другой вариант или загрузите свой файл с компьютера."
+	} else if errors.Is(err, cloudflareprovider.ErrLegacyChanged) {
+		status, code, message = http.StatusConflict, "CLOUDFLARE_LEGACY_CHANGED", "Исходный файл изменился или проверка устарела. Проверьте его заново. Новая копия не сохранена; исходник не изменён."
+	} else if errors.Is(err, cloudflareprovider.ErrLegacySource) {
+		status, code, message = http.StatusBadRequest, "CLOUDFLARE_LEGACY_UNSAFE", "Расположение недоступно для безопасного чтения. Нужен обычный файл до 256 КиБ без символических ссылок. Исходник не изменён."
 	} else if errors.Is(err, cloudflareprovider.ErrReview) {
 		status, code, message = http.StatusConflict, "CLOUDFLARE_BACKUP_REVIEW", "Сначала проверьте выбранный архив, затем подтвердите добавление копий. Ничего не изменено."
 	} else if errors.Is(err, cloudflareprovider.ErrConflict) {

@@ -15,9 +15,11 @@ if command -v node >/dev/null 2>&1; then
   node --check cmd/razvilka/web/app.js
   node --check cmd/razvilka/web/cloudflare-accounts.js
   node --check cmd/razvilka/web/cloudflare-backups.js
+  node --check cmd/razvilka/web/cloudflare-migration.js
   node scripts/test-probe-ui.mjs
   node scripts/test-cloudflare-ui.mjs
   node scripts/test-cloudflare-backup-ui.mjs
+  node scripts/test-cloudflare-migration-ui.mjs
 fi
 ./build.sh
 sha256sum -c dist/SHA256SUMS

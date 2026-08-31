@@ -159,6 +159,7 @@ type App struct {
 	EffectiveListen string
 	Z2KRoot         string
 
+	CloudflareLegacy  *cloudflareprovider.LegacySources
 	privateBackupBusy atomic.Bool
 }
 
@@ -346,6 +347,9 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)
 	mux.HandleFunc("/api/v1/cloudflare/import/preview", a.cloudflareImportPreview)
 	mux.HandleFunc("/api/v1/cloudflare/import", a.cloudflareImport)
+	mux.HandleFunc("/api/v1/cloudflare/legacy/sources", a.cloudflareLegacySources)
+	mux.HandleFunc("/api/v1/cloudflare/legacy/preview", a.cloudflareLegacyPreview)
+	mux.HandleFunc("/api/v1/cloudflare/legacy/copy", a.cloudflareLegacyCopy)
 	mux.HandleFunc("/api/v1/cloudflare/backups/export", a.cloudflareBackupExport)
 	mux.HandleFunc("/api/v1/cloudflare/backups/preview", a.cloudflareBackupPreview)
 	mux.HandleFunc("/api/v1/cloudflare/backups/restore", a.cloudflareBackupRestore)
