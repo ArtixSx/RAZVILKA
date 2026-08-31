@@ -48,11 +48,15 @@ Fuzz-проверка двух форматов: 1 197 969 выполнений 
 
 ## Не завершено в PR-1.1
 
-1. Типизированные USQUE/wgcf account adapters с golden fixtures и аккуратной
-   миграцией старых форматов (без удаления или передачи владения исходниками).
+Продолжение: [адаптеры старых форматов и зашифрованный backup](CLOUDFLARE_LEGACY_IMPORT_RU.md)
+реализованы локально. Список ниже уточнён после этого блока.
+
+1. Подключение типизированных USQUE/wgcf adapters к явной миграции старых файлов
+   (без удаления или передачи владения исходниками). Внутренние адаптеры готовы.
 2. Модель transport candidates, registration API/DNS evidence и secret access
    contract для будущего регистратора/экспортёров.
-3. Интеграция в приватный backup/recovery и восстановление interrupted import.
+3. Интеграция внутреннего encrypted backup/merge restore в общий recovery;
+   восстановление interrupted import с доказанным владением блокировкой.
 4. Аутентифицированные preview/import/list API и понятный UI; не добавлять
    секреты в обычный status, diagnostics, audit или публичный export.
 5. Linux/race, тесты POSIX-прав и аппаратный gate перед подключением к живым

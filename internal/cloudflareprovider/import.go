@@ -30,6 +30,8 @@ func ParseImport(kind string, data []byte) (Import, error) {
 		err = inspectWireGuard(data, &view)
 	case SourceUSQUE:
 		err = inspectUSQUE(data, &view)
+	case SourceWGCF:
+		err = inspectWGCF(data, &view)
 	default:
 		err = ErrImport
 	}
@@ -40,7 +42,7 @@ func ParseImport(kind string, data []byte) (Import, error) {
 }
 
 // This importer deliberately rejects hooks, duplicate fields/sections and
-// unknown extensions. AWG compatibility and wgcf account TOML are separate work.
+// unknown extensions. AWG compatibility and wgcf account TOML use other adapters.
 func inspectWireGuard(data []byte, view *Account) error {
 	allowed := map[string]bool{
 		"Interface.PrivateKey": true, "Interface.Address": true, "Interface.DNS": true, "Interface.MTU": true,
@@ -86,6 +88,7 @@ func inspectWireGuard(data []byte, view *Account) error {
 		return err
 	}
 	view.HasPrivateKey = true
+	view.Format, view.Transport = "wireguard-v1", "wireguard"
 	view.PublicKeyFingerprint = digest(key.PublicKey().Bytes())
 	view.AssignedAddresses, err = prefixes(fields["Interface.Address"])
 	if err != nil {
@@ -144,35 +147,43 @@ func prefixes(value string) ([]string, error) {
 	return out, nil
 }
 
-func inspectUSQUE(data []byte, view *Account) error {
+func readJSONObject(data []byte) (map[string]json.RawMessage, error) {
 	// Preserve unknown compatibility fields only as private inert bytes. Reject
 	// ambiguous duplicate top-level keys instead of applying JSON last-wins.
 	d := json.NewDecoder(bytes.NewReader(data))
 	start, err := d.Token()
 	if err != nil || start != json.Delim('{') {
-		return ErrImport
+		return nil, ErrImport
 	}
 	fields := map[string]json.RawMessage{}
 	for d.More() {
 		token, err := d.Token()
 		key, ok := token.(string)
 		if err != nil || !ok || len(fields) >= 128 {
-			return ErrImport
+			return nil, ErrImport
 		}
 		if _, exists := fields[key]; exists {
-			return ErrImport
+			return nil, ErrImport
 		}
 		var value json.RawMessage
 		if d.Decode(&value) != nil {
-			return ErrImport
+			return nil, ErrImport
 		}
 		fields[key] = value
 	}
 	if _, err := d.Token(); err != nil {
-		return ErrImport
+		return nil, ErrImport
 	}
 	if _, err := d.Token(); !errors.Is(err, io.EOF) {
-		return ErrImport
+		return nil, ErrImport
+	}
+	return fields, nil
+}
+
+func inspectUSQUE(data []byte, view *Account) error {
+	fields, err := readJSONObject(data)
+	if err != nil {
+		return err
 	}
 	for _, name := range []string{"private_key", "endpoint_pub_key", "id", "access_token"} {
 		var value string
@@ -185,8 +196,14 @@ func inspectUSQUE(data []byte, view *Account) error {
 			return ErrImport
 		}
 	}
-	// Key encoding/API versions vary between USQUE builds. Parsing is not key
-	// validation or registration proof; leave fingerprints/addresses unknown.
+	// Preserve schema-1 opaque archives without upgrading them to runnable
+	// profiles. Known upstream format gets a separate structural classification.
 	view.HasPrivateKey, view.HasAccessToken, view.HasDeviceID = true, true, true
+	view.Format = "opaque-archive"
+	if known, err := parseUSQUEV1(data); err == nil {
+		view.Format, view.Transport = "usque-v1", "masque-usque"
+		view.PublicKeyFingerprint = known.fingerprint
+		view.AssignedAddresses = append([]string(nil), known.addresses...)
+	}
 	return nil
 }

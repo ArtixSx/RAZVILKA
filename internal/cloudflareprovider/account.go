@@ -17,6 +17,7 @@ const (
 	MaxAccounts     = 32
 	SourceWireGuard = "wireguard-profile"
 	SourceUSQUE     = "usque-session"
+	SourceWGCF      = "wgcf-account"
 )
 
 // Account is deliberately separate from the private store document. IDs below
@@ -31,6 +32,9 @@ type Account struct {
 	HasPrivateKey        bool      `json:"has_private_key"`
 	HasAccessToken       bool      `json:"has_access_token"`
 	HasDeviceID          bool      `json:"has_device_id"`
+	Format               string    `json:"format"`
+	Transport            string    `json:"transport,omitempty"`
+	HasLicense           bool      `json:"has_license"`
 	PublicKeyFingerprint string    `json:"public_key_fingerprint,omitempty"`
 	AssignedAddresses    []string  `json:"assigned_addresses,omitempty"`
 	CreatedAt            time.Time `json:"created_at"`

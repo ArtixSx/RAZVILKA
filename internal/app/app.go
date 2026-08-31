@@ -3974,6 +3974,11 @@ func decodePrivateBackup(w http.ResponseWriter, r *http.Request) (privatebackup.
 }
 
 func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackupPreviewResult, error) {
+	// Do not silently discard provider secrets in the legacy router restore.
+	// Provider snapshots currently have their own atomic copy-only restore.
+	if len(payload.ProviderSnapshots) != 0 {
+		return privateBackupPreviewResult{}, errors.New("Резервная копия содержит аккаунты Cloudflare. Их восстановление через общий импорт пока не поддерживается; данные не изменены.")
+	}
 	preview := privateBackupPreviewResult{
 		CreatedAt: payload.CreatedAt, FromVersion: payload.AppVersion, Digest: payload.Digest,
 		Services: len(payload.Services), CustomServices: len(payload.CustomServices), Devices: len(payload.Devices),

@@ -38,17 +38,29 @@ type EngineFile struct {
 	Sensitive bool   `json:"sensitive"`
 }
 
+// ProviderSnapshot belongs only to the encrypted private payload. It is not a
+// status DTO and must never be attached to diagnostic/public exports.
+type ProviderSnapshot struct {
+	Provider   string `json:"provider"`
+	ID         string `json:"id"`
+	SourceKind string `json:"source_kind"`
+	Content    string `json:"content"`
+	SHA256     string `json:"sha256"`
+	ImportedAt string `json:"imported_at"`
+}
+
 type Payload struct {
-	Kind           string                         `json:"kind"`
-	Schema         int                            `json:"schema"`
-	AppVersion     string                         `json:"app_version"`
-	CreatedAt      string                         `json:"created_at"`
-	Services       map[string]config.ServiceState `json:"services"`
-	EngineOrder    []string                       `json:"engine_order"`
-	CustomServices []catalog.Service              `json:"custom_services,omitempty"`
-	EngineFiles    []EngineFile                   `json:"engine_files,omitempty"`
-	Devices        []devices.Device               `json:"devices,omitempty"`
-	Digest         string                         `json:"digest"`
+	Kind              string                         `json:"kind"`
+	Schema            int                            `json:"schema"`
+	AppVersion        string                         `json:"app_version"`
+	CreatedAt         string                         `json:"created_at"`
+	Services          map[string]config.ServiceState `json:"services"`
+	EngineOrder       []string                       `json:"engine_order"`
+	CustomServices    []catalog.Service              `json:"custom_services,omitempty"`
+	EngineFiles       []EngineFile                   `json:"engine_files,omitempty"`
+	ProviderSnapshots []ProviderSnapshot             `json:"provider_snapshots,omitempty"`
+	Devices           []devices.Device               `json:"devices,omitempty"`
+	Digest            string                         `json:"digest"`
 }
 
 type Envelope struct {
@@ -142,6 +154,30 @@ func Validate(payload Payload) error {
 	}
 	if total > MaxPayload {
 		return errors.New("private backup engine data exceeds safety limit")
+	}
+	if len(payload.ProviderSnapshots) > 32 {
+		return errors.New("private backup provider snapshot limit exceeded")
+	}
+	providerIDs := map[string]bool{}
+	for _, snapshot := range payload.ProviderSnapshots {
+		key := snapshot.Provider + "/" + snapshot.ID
+		if snapshot.Provider != "cloudflare" || !validID(snapshot.ID) || providerIDs[key] {
+			return errors.New("invalid or duplicate private provider snapshot")
+		}
+		providerIDs[key] = true
+		if snapshot.SourceKind != "wireguard-profile" && snapshot.SourceKind != "usque-session" && snapshot.SourceKind != "wgcf-account" {
+			return errors.New("unsupported private provider snapshot kind")
+		}
+		if _, err := time.Parse(time.RFC3339Nano, snapshot.ImportedAt); err != nil {
+			return errors.New("invalid provider snapshot timestamp")
+		}
+		if len(snapshot.Content) == 0 || len(snapshot.Content) > 256<<10 || strings.ContainsRune(snapshot.Content, 0) || snapshot.SHA256 != Sum([]byte(snapshot.Content)) {
+			return errors.New("invalid private provider snapshot content or digest")
+		}
+		total += len(snapshot.Content)
+	}
+	if total > MaxPayload {
+		return errors.New("private backup data exceeds safety limit")
 	}
 	if len(payload.Digest) != sha256.Size*2 {
 		return errors.New("private backup digest is missing")
@@ -243,6 +279,10 @@ func validateEnvelope(envelope Envelope) error {
 	}
 	if _, err := time.Parse(time.RFC3339, envelope.CreatedAt); err != nil || len(envelope.AppVersion) == 0 || len(envelope.AppVersion) > 32 {
 		return errors.New("invalid private backup metadata")
+	}
+	// Bound encoded inputs before decoding/allocating or running the KDF.
+	if len(envelope.Salt) > base64.RawStdEncoding.EncodedLen(64) || len(envelope.Nonce) > base64.RawStdEncoding.EncodedLen(12) || len(envelope.Ciphertext) > base64.RawStdEncoding.EncodedLen(MaxEnvelope) {
+		return errors.New("private backup cryptographic fields exceed safety limits")
 	}
 	salt, saltErr := base64.RawStdEncoding.DecodeString(envelope.Salt)
 	nonce, nonceErr := base64.RawStdEncoding.DecodeString(envelope.Nonce)

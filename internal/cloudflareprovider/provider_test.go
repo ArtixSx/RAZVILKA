@@ -229,6 +229,7 @@ func TestStoreRejectsSymlinkAndBroadPermissions(t *testing.T) {
 func FuzzParseImport(f *testing.F) {
 	f.Add(SourceUSQUE, usqueFixture())
 	f.Add(SourceWireGuard, wgFixture())
+	f.Add(SourceWGCF, wgcfFixture())
 	f.Fuzz(func(t *testing.T, kind string, input []byte) {
 		parsed, err := ParseImport(kind, input)
 		if err != nil && !errors.Is(err, ErrImport) {

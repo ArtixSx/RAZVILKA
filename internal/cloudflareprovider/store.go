@@ -100,29 +100,15 @@ func accountView(record storedAccount, imported Import) Account {
 // ImportSnapshot is idempotent for identical bytes and source kind. Different
 // input creates a new unverified snapshot and never overwrites an active account.
 func (s *Store) ImportSnapshot(ctx context.Context, imported Import) (Account, error) {
-	select {
-	case s.gate <- struct{}{}:
-		defer func() { <-s.gate }()
-	case <-ctx.Done():
-		return Account{}, ctx.Err()
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := ctx.Err(); err != nil {
+	release, err := s.lockWrite(ctx)
+	if err != nil {
 		return Account{}, err
 	}
+	defer release()
 	parsed, err := ParseImport(imported.kind, imported.raw)
 	if err != nil {
 		return Account{}, err
 	}
-	// A second process/store instance must not race the read-modify-write. A
-	// crash leaves a lock for explicit recovery; never delete an unknown lock.
-	lock, err := s.root.OpenFile(".import.lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err != nil {
-		return Account{}, ErrBusy
-	}
-	_ = lock.Close()
-	defer func() { _ = s.root.Remove(".import.lock") }()
 	doc, err := s.load()
 	if err != nil {
 		return Account{}, err
@@ -140,17 +126,50 @@ func (s *Store) ImportSnapshot(ctx context.Context, imported Import) (Account, e
 	_, _ = rand.Read(id[:])
 	record := storedAccount{ID: "cf-" + hex.EncodeToString(id[:]), Kind: parsed.kind, Raw: parsed.raw, Digest: hash, ImportedAt: time.Now().UTC()}
 	doc.Accounts = append(doc.Accounts, record)
-	data, err := json.Marshal(doc)
-	if err != nil || len(data) > storeLimit {
-		return Account{}, ErrStore
-	}
-	if err := ctx.Err(); err != nil {
+	if err := s.commit(ctx, doc); err != nil {
 		return Account{}, err
 	}
-	if s.root.WriteAtomic(storeFile, data, 0o600) != nil {
-		return Account{}, ErrStore
-	}
 	return accountView(record, parsed), nil
+}
+
+func (s *Store) lockWrite(ctx context.Context) (func(), error) {
+	select {
+	case s.gate <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	s.mu.Lock()
+	release := func() { s.mu.Unlock(); <-s.gate }
+	if err := ctx.Err(); err != nil {
+		release()
+		return nil, err
+	}
+	// A second process/store instance must not race the read-modify-write. A
+	// crash leaves a lock for explicit recovery; never delete an unknown lock.
+	lock, err := s.root.OpenFile(".import.lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		release()
+		return nil, ErrBusy
+	}
+	_ = lock.Close()
+	return func() { _ = s.root.Remove(".import.lock"); release() }, nil
+}
+
+func (s *Store) commit(ctx context.Context, doc privateDocument) error {
+	if err := validateDocument(doc); err != nil {
+		return err
+	}
+	data, err := json.Marshal(doc)
+	if err != nil || len(data) > storeLimit {
+		return ErrStore
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s.root.WriteAtomic(storeFile, data, 0o600) != nil {
+		return ErrStore
+	}
+	return nil
 }
 
 func validID(id string) bool {
@@ -174,15 +193,25 @@ func (s *Store) load() (privateDocument, error) {
 	if err != nil || json.Unmarshal(data, &doc) != nil || doc.Schema != Schema || doc.Owner != "razvilka" || len(doc.Accounts) > MaxAccounts {
 		return privateDocument{}, ErrStore
 	}
+	if err := validateDocument(doc); err != nil {
+		return privateDocument{}, err
+	}
+	return doc, nil
+}
+
+func validateDocument(doc privateDocument) error {
+	if doc.Schema != Schema || doc.Owner != "razvilka" || len(doc.Accounts) > MaxAccounts {
+		return ErrStore
+	}
 	seen := map[string]bool{}
 	for _, record := range doc.Accounts {
 		if !validID(record.ID) || seen[record.ID] || record.ImportedAt.IsZero() || record.ImportedAt.After(time.Now().Add(5*time.Minute)) || record.Digest != digest(record.Raw) {
-			return privateDocument{}, ErrStore
+			return ErrStore
 		}
 		seen[record.ID] = true
 		if _, err := ParseImport(record.Kind, record.Raw); err != nil {
-			return privateDocument{}, ErrStore
+			return ErrStore
 		}
 	}
-	return doc, nil
+	return nil
 }
