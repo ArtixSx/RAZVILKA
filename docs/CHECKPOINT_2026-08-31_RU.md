@@ -51,18 +51,34 @@
   следующей фазе. Typed target/session допускает absent/empty/incomplete before
   images. Provider только исследован: общая .import.lock и несовпадение лимитов
   16 МиБ store / 4 МиБ Image / 8 МиБ plan требуют отдельного адаптера.
-- Следующий локальный блок: [Cloudflare recovery adapter](CLOUDFLARE_RESTORE_ADAPTER_RU.md).
+- `30a81fa`: [Cloudflare recovery adapter](CLOUDFLARE_RESTORE_ADAPTER_RU.md).
   Target до OpenStore и Store.BeginRestore держат существующую `.import.lock`;
   bounded exact-byte CAS, тот же atomic writer с Linux directory sync, merge
   без регистрации/активации. Отсутствие файла и формат before восстанавливаются
   точно. Store >4 МиБ остаётся доступен standalone, coordinated restore заранее
   отказывает. HTTP различает неподтверждённую запись. Общий coordinator ещё не включён.
+- Следующий локальный блок: [offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md).
+  Пять типов хранилищ в общей bounded транзакции, фиксированный порядок leases,
+  валидация merged catalog, exact recovery до Load. Main и migration используют
+  lifetime gate; чистый запуск не открывает optional targets, `-check` read-only.
+  Offline API закрывается при StartRuntime. Общий HTTP restore не переключён,
+  ProviderSnapshots в нём по-прежнему запрещены.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
 
 ## Финальные локальные проверки
+
+В блоке coordinator прошли полный `go test ./... -count=1 -timeout=90s`,
+`go vet ./...`, синтаксис app.js и шесть JS suites. Новые coordinator/startup
+tests прошли пять повторов. Дочерние процессы убиты после prepare, семи целевых
+записей, в rollback и после завершения. Проверены вторичный экземпляр и обычные
+writers, точное восстановление, отказ от неизвестного состояния без частичного
+отката. Реальный main/server и migration отказали до создания config/credentials
+при испорченном журнале/занятой lease; `-check` не изменяет журнал. Все Go-пакеты
+и новые test binaries собраны для Linux arm64/mips/mipsle, не выполнены.
+Linux/race, shell/HIL/power-loss и browser visual QA не выполнялись.
 
 В блоке provider adapter прошли полный `go test ./... -count=1 -timeout=90s`,
 `go vet ./...`, синтаксис app.js и шесть JS suites. Provider recovery tests
@@ -169,20 +185,24 @@ Linux-бинарники локально не выполнялись. Файл�
    lock не удалять автоматически. Не подменять реальный power-loss gate тестом
    завершения процесса; безопасный учёт временных файлов ещё не реализован.
    Общий приватный импорт теперь имеет guarded компенсацию в процессе,
-   но не межпроцессный guard и не подключённый журнал. Основа журнала готова
+   но ещё не подключённый online-журнал. Основа журнала готова
    отдельно (`internal/restorejournal`); теперь есть production FileTarget
    и config/customservices/devices.OpenRestoreTarget + restore sessions.
    Их обычные writers, включая discovery и undo, используют ту же per-file
-   lease/CAS, но App/main общий журнал ещё не вызывают.
+   lease/CAS. Main уже вызывает recovery до Load, App online ещё не подключён.
    Engine staging target/session и ordinary slot writers тоже готовы; есть
    post-success guarded undo, поэтому staging больше не обязательно последняя
    компенсируемая фаза. Provider adapter на его же .import.lock тоже готов:
    bounded read, exact CAS, directory sync, ранний лимит Image (4 МиБ) без
    снижения standalone storeLimit (см. CLOUDFLARE_RESTORE_ADAPTER_RU).
-   Следующий шаг — coordinator и стабильный порядок leases всех stores,
-   владение/исключение параллельных мутаций всех API/background/processes,
-   подключение startup recovery до загрузки кэшей и изменяющих API, затем общий
-   router+provider restore. Запрет ProviderSnapshots сохранять.
+   Offline coordinator, стабильный порядок leases и startup recovery готовы
+   (см. PRIVATE_RESTORE_COORDINATOR_RU). Следующий шаг — online-владение/исключение
+   параллельных мутаций API/background, Store sessions и синхронизация кэшей.
+   Offline API запрещён после StartRuntime; не подключать его напрямую к HTTP.
+   Lifetime lease действует для новых серверов с общим journal root, но не для
+   старых бинарников/неучаствующих writers. Аудит install/upgrade/rollback должен
+   подтвердить одинаковый layout и сохранение/совместимость приватного журнала.
+   Только затем общий router+provider restore. Запрет ProviderSnapshots в HTTP сохранять.
    Публичный импорт профиля остаётся на старой компенсации, нужен отдельный аудит.
 3. PR-1.2 делать сначала с локальными ключами и mock API. Не включать регистрацию,
    новый DNS, proxy feeds или расширенную автоматику без соответствующих gates.

@@ -61,8 +61,11 @@ writers выполнены локально. Также готовы [catalog/de
 показывается в UI. [Staging adapter и guarded post-success undo](ENGINE_DRAFT_RESTORE_RU.md)
 тоже готовы локально, с process-crash тестами. [Provider adapter](CLOUDFLARE_RESTORE_ADAPTER_RU.md)
 готов локально: та же `.import.lock`, bounded CAS, merge без активации и аварийные
-тесты до OpenStore. Общее владение изменениями и startup recovery ещё предстоят;
-общий импорт Provider-архивов остаётся закрытым.
+тесты до OpenStore. [Offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md)
+реализованы локально: все пять типов хранилищ, порядок leases, восстановление
+до Load/API, lifetime gate и process-crash tests. Общее online-владение изменениями,
+Store cache handover и аудит install/upgrade/rollback ещё предстоят; общий
+HTTP-импорт Provider-архивов остаётся закрытым. Linux/HIL нового блока не пройдены.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 

@@ -1,6 +1,6 @@
 // Package restorejournal records a bounded before/after plan before touching
-// targets. Journal execution is not wired to application startup/general import
-// yet: adapters must hold exclusive ownership before coordinated integration.
+// targets. privaterestore wires typed adapters into offline execution and boot
+// recovery. Online import still requires exclusive API/worker/Store ownership.
 package restorejournal
 
 import (

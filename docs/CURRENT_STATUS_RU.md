@@ -61,39 +61,47 @@ gap-аудиты сохранены как исторические снимки
 
 ## Локальная разработка после стабильного релиза
 
+Добавлен [общий offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md).
+Пять типов хранилищ объединены в ограниченную транзакцию с проверкой всех целей
+до отката. `main` восстанавливает журнал до загрузки config/Store и создания
+токена; второй новый экземпляр исключён lifetime lease. Реальные аварийные
+тесты и пять повторов прошли на Windows; Linux-сборки только скомпилированы.
+HTTP-импорт остаётся на прежней компенсации, ProviderSnapshots в нём запрещены.
+Далее — владение online API/background/Store sessions и аудит upgrade/rollback.
+
 Добавлен [Cloudflare recovery adapter](CLOUDFLARE_RESTORE_ADAPTER_RU.md):
 общая с обычным импортом `.import.lock`, bounded exact-byte CAS, merge без
 активации и явная ошибка неподтверждённой записи. Реальные process-crash tests
 проверяют возврат файла/его отсутствия и защиту последующей правки. Ёмкость
 обычного provider Store сохранена; образ общего журнала ограничен 4 МиБ.
-Следующий шаг — общий coordinator и recovery до загрузки Store/API.
+Он включён в общий offline coordinator и recovery до загрузки Store/API.
 Общий импорт ProviderSnapshots пока закрыт; роутер не менялся.
 
 Добавлен [адаптер черновиков обходов](ENGINE_DRAFT_RESTORE_RU.md):
 editor/import/discard разделяют per-file lease, пакетный откат учитывает ошибку
 после фактической записи, есть guarded post-success undo. Аварийный тест проверяет
 возврат отсутствующих, пустых и незавершённых draft-файлов. Секретный Content
-исключён из результата batch stage. Общий startup coordinator ещё не готов;
-новый journal не включён в production import/restart.
+исключён из результата batch stage. Startup coordinator подключён локально;
+новый journal ещё не используется production HTTP-импортом.
 
 Добавлены [адаптеры каталога и устройств](REGISTRY_RESTORE_ADAPTERS_RU.md).
 Обычные writers этих реестров используют per-file OS lease и сравнение исходных
 байтов. Ошибка сохранения discovery больше не скрывается в панели. Аварийный
 тест трёх настоящих хранилищ проверяет recovery до загрузки кэшей и отказ при
-неизвестной внешней правке. Общий App/main restore ещё не включён; следующие —
-coordinator и Linux/HIL.
+неизвестной внешней правке. Main recovery включён локально; общий online App
+restore, Linux/HIL ещё требуются.
 
 Добавлен [адаптер конфигурации для журнала](CONFIG_RESTORE_ADAPTER_RU.md).
 Обычные записи config уже используют per-file OS lock и сравнение исходных
 байтов: устаревший Store не затирает новую правку. Настоящее восстановление config
-до загрузки кэша проверено в аварийных тестах. Общий HTTP/startup coordinator
-ещё не подключён; общая интеграция и HIL остаются.
+до загрузки кэша проверено в аварийных тестах и включено в main. Общий HTTP
+coordinator и HIL остаются.
 
 Добавлена [основа журнала восстановления импорта](PRIVATE_RESTORE_JOURNAL_RU.md):
 before/after, commit decision, повторный откат после сбоя процесса и отказ
 затирать неизвестное состояние. Реальные аварийные сценарии проверены локально
-на синтетических файлах. Модуль ещё не подключён к App и startup; нужны
-общее владение изменениями и Linux/HIL. Рабочий импорт пока не получил
+на синтетических файлах, затем с реальными адаптерами в offline coordinator.
+Startup подключён; нужны online-владение изменениями и Linux/HIL. UI-импорт пока не получил
 автоматическое восстановление после перезапуска.
 
 Исправлен [откат общего приватного импорта](PRIVATE_BACKUP_GUARDED_RESTORE_RU.md):

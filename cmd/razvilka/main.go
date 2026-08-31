@@ -167,6 +167,16 @@ func main() {
 		return
 	}
 	if *checkOnly || *migrateConfig {
+		if *migrateConfig {
+			privateRecovery, _, err := preparePrivateRecovery(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath)
+			if err != nil {
+				log.Fatal("private draft recovery gate: ", err)
+			}
+			defer privateRecovery.Close()
+			if err := privateRecovery.StartRuntime(); err != nil {
+				log.Fatal("private draft recovery gate: ", err)
+			}
+		}
 		report, err := preflight(*cfgPath, *catalogPath, *sourcesPath, *communityCatalogPath, *migrateConfig)
 		if err != nil {
 			log.Fatal(err)
@@ -179,6 +189,19 @@ func main() {
 		return
 	}
 
+	// Private draft recovery precedes ALL Store loads, token creation and any
+	// runtime initialization. Keep the OS journal lease until server shutdown.
+	privateRecovery, privateOutcome, err := preparePrivateRecovery(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath)
+	if err != nil {
+		log.Fatal("private draft recovery gate: ", err)
+	}
+	defer privateRecovery.Close()
+	if err := privateRecovery.StartRuntime(); err != nil {
+		log.Fatal("private draft recovery gate: ", err)
+	}
+	if privateOutcome != "clean" {
+		log.Print("private draft boot recovery completed; live profiles and routes were not changed")
+	}
 	store, err := config.Load(*cfgPath)
 	if err != nil {
 		log.Fatal(err)
