@@ -29,16 +29,29 @@
 - `8091e1e`: [восстановление writer после сбоя процесса](CLOUDFLARE_WRITER_RECOVERY_RU.md).
   Постоянный протокольный маркер и системная блокировка Linux/Windows;
   старые/неизвестные lock не меняются. Настройки и runtime не затронуты.
-- Следующий локальный блок: [защищённый откат приватного импорта](PRIVATE_BACKUP_GUARDED_RESTORE_RU.md).
+- `fc123d1`: [защищённый откат приватного импорта](PRIVATE_BACKUP_GUARDED_RESTORE_RU.md).
   Снимки до/после под блокировками хранилищ, отказ затирать последующие правки,
   обработка ошибок возврата файлов и понятный результат в UI. Это prerequisite,
   не общий router+provider restore и не durable recovery.
+- Следующий локальный блок: [основа журнала восстановления](PRIVATE_RESTORE_JOURNAL_RU.md).
+  Снимки before/after, commit decision, bounded canonical journal, OS lease,
+  повторный откат после аварии и защита третьего состояния. Реальные target
+  adapters/App/startup ещё не подключены; рабочий импорт не изменился.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
 
 ## Финальные локальные проверки
+
+В блоке restore journal прошли полный `go test ./... -count=1 -timeout=90s`,
+`go vet ./...` и пять JS suites. Пакет restorejournal прошёл 10 повторов на
+Windows, включая настоящие дочерние процессы с принудительным завершением
+после prepare, каждой целевой записи, commit/idle и каждого шага rollback.
+Собраны пакеты и restorejournal/ownedfs/cloudflareprovider/App test binaries
+для Linux arm64/mips/mipsle. Они не выполнялись; Linux-only FIFO/symlink/POSIX
+tests только скомпилированы. Роутер, power-loss, Linux/race, shell regression
+и браузер в этом блоке не проверялись. Runtime панели и dependencies не менялись.
 
 В блоке guarded restore прошли полный `go test ./... -count=1 -timeout=90s`,
 `go vet ./...`, синтаксис `app.js` и пять JS regression suites. Целевые тесты
@@ -96,9 +109,12 @@ Linux-бинарники локально не выполнялись. Файл�
    lock не удалять автоматически. Не подменять реальный power-loss gate тестом
    завершения процесса; безопасный учёт временных файлов ещё не реализован.
    Общий приватный импорт теперь имеет guarded компенсацию в процессе,
-   но не межпроцессный guard и не журнал. Следующий шаг — владение/исключение
-   параллельных мутаций, durable-журнал, startup recovery до изменяющих API,
-   затем общий router+provider restore. Engine staging пока должен быть
+   но не межпроцессный guard и не подключённый журнал. Основа журнала готова
+   отдельно (`internal/restorejournal`), тестовые file targets не адаптеры App.
+   Следующий шаг — production target adapters с bounded read/durable CAS,
+   владение/исключение параллельных мутаций всех API/background/processes,
+   подключение startup recovery до загрузки кэшей и изменяющих API, затем общий
+   router+provider restore. Engine staging пока должен быть
    последним: post-success undo отсутствует. Запрет ProviderSnapshots сохранять.
    Публичный импорт профиля остаётся на старой компенсации, нужен отдельный аудит.
 3. PR-1.2 делать сначала с локальными ключами и mock API. Не включать регистрацию,

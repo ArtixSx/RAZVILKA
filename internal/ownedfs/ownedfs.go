@@ -41,6 +41,18 @@ func Open(path string) (*Root, error) {
 
 func (r *Root) Close() error { return r.fs.Close() }
 
+// Sync flushes the opened directory itself, not a path resolved again from the
+// working directory. Call after an atomic rename when the protocol requires
+// directory-entry durability. Unsupported filesystems/platforms return errors.
+func (r *Root) Sync() error {
+	f, err := r.fs.Open(".")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
+}
+
 // Check is useful before handing paths to a runtime. It is not a sandbox for
 // that runtime; mutations performed here additionally use descriptor anchoring.
 func (r *Root) Check(name string) error { return r.check(name) }
