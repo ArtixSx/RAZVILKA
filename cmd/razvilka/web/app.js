@@ -138,6 +138,7 @@ function captureSetupKey() {
 }
 
 function showAuth(status, message = '') {
+  document.dispatchEvent(new Event('razvilka:auth-required'));
   state.status = status || state.status || {};
   $('#authScreen').hidden = false;
   $('.app-shell').setAttribute('aria-hidden', 'true');
@@ -197,6 +198,7 @@ async function recoverAccount(event) {
 }
 
 async function logout() {
+  document.dispatchEvent(new Event('razvilka:auth-required'));
   try { await api('/api/v1/auth/logout', { method: 'POST' }); } catch (_) { /* session may already be gone */ }
   sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   if (state.stream) { state.stream.close(); state.stream = null; }
@@ -291,6 +293,7 @@ function routeAvailable(id) {
 }
 
 function setView(name) {
+  document.dispatchEvent(new CustomEvent('razvilka:view-change', { detail: name }));
   state.currentView = name;
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
   $$('.nav[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));

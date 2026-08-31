@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="/v011-theme.css?v=0.18.1">
 <link rel="stylesheet" href="/v012.css?v=0.18.1">
 <link rel="stylesheet" href="/usque-doctor.css?v=0.18.1">
+<link rel="stylesheet" href="/cloudflare-accounts.css?v=0.18.1">
 </head>
 <body>
 <svg class="icon-sprite" aria-hidden="true">
@@ -352,6 +353,29 @@
       <article class="panel app-update-panel"><div class="panel-title"><div><span class="eyebrow">ОФИЦИАЛЬНЫЙ РЕЛИЗ</span><h2>Обновление RAZVILKA</h2><p>Проверка выполняется только через официальный GitHub. Обновление не запускается автоматически: сначала сохраните зашифрованную резервную копию и проверьте подлинность релиза на компьютере.</p></div><button class="secondary" id="checkAppUpdate" type="button">Проверить версию</button></div><div id="appUpdateState" class="app-update-state"><div class="community-empty">Нажмите «Проверить версию». Фоновый запрос не выполняется без вашего действия.</div></div></article>
       <article class="panel profile-exchange"><div class="panel-title"><div><span class="eyebrow">ОБМЕН НАСТРОЙКАМИ</span><h2>Поделиться рабочим профилем</h2><p>Сервисы, маршруты, пользовательские списки и несекретные файлы NFQWS2. Приватные ключи WARP, VLESS, WireGuard и пароли исключаются автоматически.</p></div><span class="safe-badge">ПРОВЕРКА → ЧЕРНОВИК</span></div><div class="profile-exchange-grid"><div class="profile-meta"><label><span>Название профиля</span><input id="profileName" maxlength="120" value="Мой профиль RAZVILKA"></label><label><span>Автор (необязательно)</span><input id="profileAuthor" maxlength="120" placeholder="Ник или имя"></label><label><span>Описание</span><textarea id="profileDescription" maxlength="1000" placeholder="Для каких провайдеров и сервисов проверен профиль"></textarea></label><div class="settings-actions"><button class="primary" id="exportProfile" type="button">Скачать безопасный профиль</button><input id="profileImportInput" type="file" aria-label="Выбрать профиль RAZVILKA" accept=".json,application/json" hidden><button class="secondary" id="selectProfileImport" type="button">Выбрать профиль…</button></div></div><div class="profile-preview" id="profilePreview"><div class="community-empty">Выберите JSON-профиль. До подтверждения ничего не попадёт даже в черновик.</div></div></div><div class="profile-import-actions"><button class="primary" id="confirmProfileImport" type="button" disabled>Импортировать в черновик</button></div></article>
       <article class="panel private-backup"><div class="panel-title"><div><span class="eyebrow">ЗАШИФРОВАННАЯ РЕЗЕРВНАЯ КОПИЯ</span><h2>Перенос приватных конфигураций</h2><p>AES-256-GCM + PBKDF2 защищают ключи WARP/WireGuard и конфиги прокси. Пароль архива не сохраняется; логин панели, ключ восстановления и рабочие маршруты в архив не входят.</p></div><span class="safe-badge">ЗАШИФРОВАНО</span></div><div class="private-backup-grid"><div class="private-backup-column"><h3>Создать архив</h3><label><span>Пароль архива · минимум 12 символов</span><input id="privateBackupPassword" type="password" minlength="12" maxlength="256" autocomplete="new-password"></label><label><span>Повторите пароль</span><input id="privateBackupPasswordRepeat" type="password" minlength="12" maxlength="256" autocomplete="new-password"></label><button class="primary" id="exportPrivateBackup" type="button">Скачать зашифрованную копию</button></div><div class="private-backup-column"><h3>Восстановить в черновик</h3><input id="privateBackupImportInput" type="file" aria-label="Выбрать зашифрованную резервную копию" accept=".json,application/json" hidden><button class="secondary" id="selectPrivateBackup" type="button">Выбрать копию…</button><label><span>Пароль выбранного архива</span><input id="privateBackupImportPassword" type="password" minlength="12" maxlength="256" autocomplete="current-password"></label><button class="secondary" id="previewPrivateBackup" type="button" disabled>Расшифровать и проверить</button></div><div class="private-backup-preview" id="privateBackupPreview"><div class="community-empty">Секреты расшифровываются только в памяти роутера. Сначала будет показан безопасный предварительный просмотр.</div></div></div><div class="profile-import-actions"><button class="primary" id="confirmPrivateBackup" type="button" disabled>Импортировать приватные данные в черновик</button></div></article>
+      <details class="panel cloudflare-copies" id="cloudflareCopies">
+        <summary><span><b>Копии аккаунтов Cloudflare</b><small>Расширенная подготовка · пока без подключения обхода</small></span><span class="safe-badge">ТОЛЬКО КОПИИ</span></summary>
+        <div class="cloudflare-copies-body">
+          <p>Сохраните имеющийся файл USQUE, wgcf или WARP/WireGuard отдельно от рабочего обхода. Здесь нет регистрации, проверки связи или изменения маршрутов. Исходный файл остаётся у вас.</p>
+          <p class="cloudflare-copies-note">Копии пока не входят в общую резервную копию выше. Сохраните исходные файлы в надёжном месте. Данные отправляются только в вашу панель RAZVILKA; при доступе по HTTP соединение не зашифровано — используйте доверенную локальную сеть.</p>
+          <div class="cloudflare-copies-grid">
+            <form id="cloudflareCopyForm" class="cloudflare-copy-form">
+              <h3>Добавить копию</h3>
+              <label><span>Тип файла</span><select id="cloudflareCopyKind"><option value="usque-session">USQUE · session.conf (JSON)</option><option value="wgcf-account">wgcf · wgcf-account.toml</option><option value="wireguard-profile">WARP / WireGuard · профиль .conf</option></select></label>
+              <label><span>Файл с компьютера · до 256 КиБ</span><input id="cloudflareCopyFile" type="file" accept=".conf,.json,.toml,application/json,text/plain" required aria-describedby="cloudflareCopyPrivacy"></label>
+              <small id="cloudflareCopyPrivacy">Ключи не отображаются в результате и не сохраняются в хранилище браузера. Не загружайте файлы с замазанными или удалёнными ключами.</small>
+              <button type="submit" class="secondary" id="cloudflareCopyPreviewButton">Проверить файл</button>
+              <div id="cloudflareCopyPreview" class="cloudflare-copy-result" aria-live="polite">Выберите свой файл. До сохранения ничего не записывается на роутер.</div>
+              <button type="button" class="primary" id="cloudflareCopySave" hidden disabled>Сохранить копию аккаунта</button>
+              <p id="cloudflareCopyMessage" role="status" aria-live="polite"></p>
+            </form>
+            <section class="cloudflare-copy-library" aria-labelledby="cloudflareCopyListTitle">
+              <div class="cloudflare-copy-heading"><h3 id="cloudflareCopyListTitle">Сохранённые копии</h3><button type="button" class="secondary" id="cloudflareCopyRefresh">Обновить список</button></div>
+              <div id="cloudflareCopyList" aria-live="polite">Список загрузится при открытии раздела.</div>
+            </section>
+          </div>
+        </div>
+      </details>
       <div class="two-col account-grid">
         <article class="panel"><div class="panel-title"><div><h2>Учётная запись</h2><p>Вход по логину и паролю; ключ восстановления остаётся аварийным способом доступа</p></div></div><div class="account-name"><span>Администратор</span><b id="settingsUsername">admin</b></div><form id="passwordChangeForm" class="password-form"><label><span>Текущий пароль</span><input id="currentPassword" type="password" autocomplete="current-password" required></label><label><span>Новый пароль</span><input id="newPassword" type="password" autocomplete="new-password" minlength="10" required></label><label><span>Повторите новый пароль</span><input id="newPasswordRepeat" type="password" autocomplete="new-password" minlength="10" required></label><button class="primary" type="submit">Сменить пароль</button><small id="passwordChangeMessage"></small></form></article>
         <article class="panel"><div class="panel-title"><div><h2>Активные сеансы</h2><p>Отзовите забытый браузер или оставьте только текущий сеанс</p></div><button class="secondary" id="revokeOtherSessions">Завершить остальные</button></div><div id="sessionList" class="session-list"></div></article>
@@ -429,5 +453,6 @@
   </div>
 </dialog>
 <script src="/app.js?v=0.18.1"></script>
+<script src="/cloudflare-accounts.js?v=0.18.1"></script>
 </body>
 </html>

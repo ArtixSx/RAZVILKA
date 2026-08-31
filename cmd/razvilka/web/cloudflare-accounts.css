@@ -1,0 +1,28 @@
+.cloudflare-copies { margin-top: 18px; }
+.cloudflare-copies > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px; cursor: pointer; }
+.cloudflare-copies > summary small { display: block; margin-top: 6px; color: var(--muted, #9daeb9); }
+.cloudflare-copies > summary:focus-visible { outline: 2px solid #53d88f; outline-offset: -4px; }
+.cloudflare-copies-body { padding: 0 22px 22px; }
+.cloudflare-copies-body > p { line-height: 1.65; max-width: 100ch; }
+.cloudflare-copies-note { padding: 14px; border: 1px solid #566039; border-radius: 10px; color: #d8d4aa; background: #1c2117; }
+.cloudflare-copies-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin-top: 20px; }
+.cloudflare-copy-form { display: flex; flex-direction: column; align-items: stretch; gap: 14px; min-width: 0; }
+.cloudflare-copy-form h3, .cloudflare-copy-heading h3 { margin: 0; }
+.cloudflare-copy-form label { display: flex; flex-direction: column; gap: 8px; }
+.cloudflare-copy-form input, .cloudflare-copy-form select { width: 100%; min-width: 0; min-height: 44px; color: inherit; background: #10171c; border: 1px solid #37434b; border-radius: 8px; padding: 10px; }
+.cloudflare-copy-form small { color: var(--muted, #9daeb9); line-height: 1.5; }
+.cloudflare-copy-form button, .cloudflare-copy-heading button { min-height: 44px; }
+.cloudflare-copy-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.cloudflare-copy-result, .cloudflare-copy-card { border: 1px solid #37434b; border-radius: 10px; background: #10171c; padding: 16px; line-height: 1.6; overflow-wrap: anywhere; }
+.cloudflare-copy-card { margin-top: 12px; }
+.cloudflare-copy-card p { margin: 5px 0; }
+.cloudflare-copy-card small { color: var(--muted, #9daeb9); }
+.cloudflare-copy-state { display: block; color: #d7c484; }
+.cloudflare-copy-error { color: #ffc4c4; }
+.cloudflare-copies [hidden] { display: none !important; }
+@media (max-width: 1000px) { .cloudflare-copies-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) {
+  .cloudflare-copies > summary { align-items: flex-start; flex-direction: column; padding: 16px; }
+  .cloudflare-copies-body { padding: 0 16px 16px; }
+  .cloudflare-copy-heading button { width: 100%; }
+}

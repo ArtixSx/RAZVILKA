@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	ErrStore = errors.New("Cloudflare private store is unavailable or invalid")
-	ErrBusy  = errors.New("Cloudflare private store has another writer; inspect an interrupted import before retrying")
+	ErrStore    = errors.New("Cloudflare private store is unavailable or invalid")
+	ErrBusy     = errors.New("Cloudflare private store has another writer; inspect an interrupted import before retrying")
+	ErrCapacity = errors.New("Cloudflare snapshot limit reached")
 )
 
 const storeFile = "accounts.private.json"
@@ -120,7 +121,7 @@ func (s *Store) ImportSnapshot(ctx context.Context, imported Import) (Account, e
 		}
 	}
 	if len(doc.Accounts) >= MaxAccounts {
-		return Account{}, errors.New("Cloudflare snapshot limit reached")
+		return Account{}, ErrCapacity
 	}
 	var id [16]byte
 	_, _ = rand.Read(id[:])

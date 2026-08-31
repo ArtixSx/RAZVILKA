@@ -83,6 +83,7 @@ func main() {
 	customServicesPath := flag.String("custom-services", defaultCustomServices, "custom services path")
 	communityCatalogPath := flag.String("community-catalog", defaultCommunityCatalog, "allowlisted community catalog path")
 	warpStatePath := flag.String("warp-state", defaultWarpState, "WARP generator state directory")
+	cloudflareStatePath := flag.String("cloudflare-state", getenv("RAZVILKA_CLOUDFLARE_STATE", ""), "private Cloudflare copies directory (default: cloudflare-private beside config)")
 	smartRouteStatePath := flag.String("smart-route-state", defaultSmartRouteState, "Smart Route evidence state path")
 	dataplaneStatePath := flag.String("dataplane-state", defaultDataplaneState, "dataplane transaction journal directory")
 	devicesPath := flag.String("devices", defaultDevices, "local device names and groups path")
@@ -255,7 +256,15 @@ func main() {
 	engineLab.EnablePolicyInspection()
 	usqueDoctor := usquediag.New()
 	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")
+	cloudflareStore, err := openCloudflareStore(*cfgPath, *cloudflareStatePath)
+	if err != nil {
+		// An optional copy store must not prevent established routes from starting.
+		log.Print("Cloudflare account copies disabled: private store unavailable; existing bypasses are unchanged")
+	} else {
+		defer cloudflareStore.Close()
+	}
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
+	a.Cloudflare = cloudflareStore
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)

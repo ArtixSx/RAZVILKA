@@ -14,10 +14,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/auditlog"
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
 	"github.com/ArtixSx/razvilka/internal/community"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
@@ -143,6 +145,8 @@ type App struct {
 	Devices         *devices.Manager
 	DNS             *dnscontrol.Manager
 	Warp            *warp.Manager
+	Cloudflare      *cloudflareprovider.Store
+	cloudflareBusy  atomic.Bool
 	TestLab         *testlab.Runner
 	RouteProber     testlab.RouteProber
 	SmartRoute      *smartroute.Manager
@@ -337,6 +341,9 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
 	mux.HandleFunc("/api/v1/warp/", a.warpAction)
+	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)
+	mux.HandleFunc("/api/v1/cloudflare/import/preview", a.cloudflareImportPreview)
+	mux.HandleFunc("/api/v1/cloudflare/import", a.cloudflareImport)
 	mux.HandleFunc("/api/v1/testlab", a.testLabSnapshot)
 	mux.HandleFunc("/api/v1/testlab/current", a.testLabCurrent)
 	mux.HandleFunc("/api/v1/testlab/routes", a.testLabRoutes)
@@ -4445,6 +4452,10 @@ func methodNotAllowed(w http.ResponseWriter) {
 }
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/cloudflare/") {
+			// Also cover errors produced by authentication before the copy handler.
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
