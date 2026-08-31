@@ -31,6 +31,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
@@ -131,6 +132,7 @@ type applyChangeSummary struct {
 }
 
 type App struct {
+	Operations      operationgate.Gate
 	Store           *config.Store
 	Catalog         catalog.Catalog
 	Sources         *sources.Manager
@@ -401,7 +403,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/sources/discard", a.sourceDiscard)
 	mux.HandleFunc("/api/v1/sources/", a.sourceAction)
 	mux.Handle("/", noStoreUI(static))
-	return securityHeaders(a.auditMiddleware(a.Security.Middleware(mux)))
+	return securityHeaders(a.auditMiddleware(a.Security.Middleware(a.operationMiddleware(mux))))
 }
 
 type auditResponseWriter struct {
@@ -1611,17 +1613,7 @@ func (a *App) StartBackground(ctx context.Context) {
 		round := 0
 		for {
 			round++
-			if a.Dataplane != nil {
-				refreshCtx, refreshCancel := context.WithTimeout(ctx, 90*time.Second)
-				_, _ = a.Dataplane.RefreshCommitted(refreshCtx)
-				refreshCancel()
-			}
-			a.backgroundWarpHealth(ctx)
-			if round%2 == 1 {
-				if a.backgroundSmartRoute(ctx) {
-					a.backgroundAutopilotApply(ctx)
-				}
-			}
+			a.backgroundRound(ctx, round)
 			select {
 			case <-ctx.Done():
 				return

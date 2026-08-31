@@ -317,6 +317,7 @@ func main() {
 		return catalog.Catalog{Services: services}
 	})
 	connectionCollector.Devices = deviceManager
+	connectionCollector.Operations = &a.Operations
 	connectionCollector.LatestPlan = dataplaneManager.Latest
 	connectionCollector.WANInterface = func() string { return systemprobe.Probe().WANInterface }
 	connectionCollector.Start(runtimeContext)

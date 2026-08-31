@@ -57,18 +57,34 @@
   без регистрации/активации. Отсутствие файла и формат before восстанавливаются
   точно. Store >4 МиБ остаётся доступен standalone, coordinated restore заранее
   отказывает. HTTP различает неподтверждённую запись. Общий coordinator ещё не включён.
-- Следующий локальный блок: [offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md).
+- `9a7dcf2`: [offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md).
   Пять типов хранилищ в общей bounded транзакции, фиксированный порядок leases,
   валидация merged catalog, exact recovery до Load. Main и migration используют
   lifetime gate; чистый запуск не открывает optional targets, `-check` read-only.
   Offline API закрывается при StartRuntime. Общий HTTP restore не переключён,
   ProviderSnapshots в нём по-прежнему запрещены.
+- Следующий локальный блок: [online operation gate](PRIVATE_RESTORE_OPERATION_GATE_RU.md).
+  Обычные HTTP (включая GET/discovery), backgroundRound и conntrack разделяют
+  один admission. Импорт исключителен до decode/preview и до завершения; busy
+  означает not_started, не rollback. Аутентификация остаётся до gate; auth/static/
+  GET SSE исключены. Отмена не освобождает незавершённую работу. Internal restore
+  тоже защищён, контекст нельзя использовать повторно после возврата handler;
+  уже принятая restore-подоперация сохраняет владение до закрытия. HTTP всё ещё
+  на старой компенсации, следующий этап — Store sessions + общий online journal.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
 
 ## Финальные локальные проверки
+
+В блоке online admission прошли полный `go test ./... -count=1 -timeout=90s`,
+`go vet ./...`, синтаксис app.js и шесть JS suites. Новые concurrency tests
+gate/App/conntrack прошли десять повторов: shared/exclusive, удержание после
+cancel/раннего возврата handler, panic cleanup, конфликт HTTP reads/writes,
+отказ до начала, successful legacy import, фоновые probe goroutines, отсутствие
+ложного telemetry failure при паузе. Linux arm64/mips/mipsle пакеты и три test
+binaries собраны, не запущены. Linux/race, shell/HIL/power-loss/visual QA не были.
 
 В блоке coordinator прошли полный `go test ./... -count=1 -timeout=90s`,
 `go vet ./...`, синтаксис app.js и шесть JS suites. Новые coordinator/startup
@@ -196,12 +212,16 @@ Linux-бинарники локально не выполнялись. Файл�
    bounded read, exact CAS, directory sync, ранний лимит Image (4 МиБ) без
    снижения standalone storeLimit (см. CLOUDFLARE_RESTORE_ADAPTER_RU).
    Offline coordinator, стабильный порядок leases и startup recovery готовы
-   (см. PRIVATE_RESTORE_COORDINATOR_RU). Следующий шаг — online-владение/исключение
-   параллельных мутаций API/background, Store sessions и синхронизация кэшей.
+   (см. PRIVATE_RESTORE_COORDINATOR_RU). Online admission API/background/conntrack
+   уже подключён (PRIVATE_RESTORE_OPERATION_GATE_RU). Следующий шаг — Store
+   sessions, сверка bindings, online journal и синхронизация кэшей. При recovery
+   required нужна общая защита от дальнейшего Apply/автоматики до восстановления.
    Offline API запрещён после StartRuntime; не подключать его напрямую к HTTP.
    Lifetime lease действует для новых серверов с общим journal root, но не для
    старых бинарников/неучаствующих writers. Аудит install/upgrade/rollback должен
    подтвердить одинаковый layout и сохранение/совместимость приватного журнала.
+   Проверить health/supervisor: временный 409 /status при импорте не должен
+   трактоваться как поломка маршрута и немедленный restart.
    Только затем общий router+provider restore. Запрет ProviderSnapshots в HTTP сохранять.
    Публичный импорт профиля остаётся на старой компенсации, нужен отдельный аудит.
 3. PR-1.2 делать сначала с локальными ключами и mock API. Не включать регистрацию,

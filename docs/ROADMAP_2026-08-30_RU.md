@@ -63,8 +63,9 @@ writers выполнены локально. Также готовы [catalog/de
 готов локально: та же `.import.lock`, bounded CAS, merge без активации и аварийные
 тесты до OpenStore. [Offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md)
 реализованы локально: все пять типов хранилищ, порядок leases, восстановление
-до Load/API, lifetime gate и process-crash tests. Общее online-владение изменениями,
-Store cache handover и аудит install/upgrade/rollback ещё предстоят; общий
+до Load/API, lifetime gate и process-crash tests. [Online admission](PRIVATE_RESTORE_OPERATION_GATE_RU.md)
+подключён к существующему HTTP-импорту, фоновому циклу и conntrack. Session-backed
+online journal, Store cache handover и аудит install/upgrade/rollback ещё предстоят; общий
 HTTP-импорт Provider-архивов остаётся закрытым. Linux/HIL нового блока не пройдены.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab

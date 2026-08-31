@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
@@ -56,6 +57,15 @@ func runPrivateRestore(ctx context.Context, steps []privateRestoreStep) error {
 }
 
 func (a *App) restorePrivateDraft(ctx context.Context, payload privatebackup.Payload) error {
+	release, err := a.privateRestoreAdmission(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	// Revalidate under exclusive admission too, including internal callers.
+	if _, err := a.previewPrivateBackup(payload); err != nil {
+		return &privateRestoreFailure{phase: "preflight"}
+	}
 	if len(payload.ProviderSnapshots) != 0 || a.Store == nil || a.CustomServices == nil || a.EngineConfigs == nil || len(payload.Devices) != 0 && a.Devices == nil {
 		return &privateRestoreFailure{phase: "preflight"}
 	}
@@ -75,7 +85,7 @@ func (a *App) restorePrivateDraft(ctx context.Context, payload privatebackup.Pay
 		items = append(items, engineconfig.StageItem{EngineID: file.EngineID, FileID: file.FileID, Content: file.Content})
 	}
 	// Staging now provides guarded post-success undo as well. This remains an
-	// in-process transaction until the durable startup coordinator is wired.
+	// in-process transaction until the session-backed online coordinator is wired.
 	steps = append(steps, privateRestoreStep{"engine_files", func() (func() error, error) {
 		_, undo, err := a.EngineConfigs.StagePrivateWithRollback(items)
 		return undo, err
@@ -84,6 +94,10 @@ func (a *App) restorePrivateDraft(ctx context.Context, payload privatebackup.Pay
 }
 
 func writePrivateRestoreFailure(w http.ResponseWriter, err error) {
+	if errors.Is(err, operationgate.ErrBusy) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		writeOperationFailure(w, err)
+		return
+	}
 	var failure *privateRestoreFailure
 	if !errors.As(err, &failure) {
 		failure = &privateRestoreFailure{phase: "unknown", recoveryRequired: true}

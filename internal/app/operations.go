@@ -1,0 +1,122 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+)
+
+type operationContextKey struct{}
+type operationScope struct {
+	app       *App
+	exclusive bool
+	mu        sync.Mutex
+	active    bool
+	restoring bool
+	release   func()
+}
+
+func (s *operationScope) closeRequest() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.active = false
+	if !s.restoring {
+		s.release()
+	}
+}
+
+func (s *operationScope) restoreAdmission() (func(), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.exclusive || !s.active || s.restoring {
+		return nil, operationgate.ErrBusy
+	}
+	s.restoring = true
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.restoring = false
+			if !s.active {
+				s.release()
+			}
+		})
+	}, nil
+}
+
+// Protect reads too: GET /devices performs discovery and persists metadata.
+// Current request-owned probe goroutines are joined before handlers return.
+// Any future detached task MUST retain its own admission until all writes and
+// cleanup finish; inheriting the context value does not extend ownership.
+func (a *App) operationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || r.URL.Path == "/api/v1/connections/stream" && r.Method == http.MethodGet {
+			// Auth changes only credentials (not restored); SSE reads only telemetry.
+			// Holding a shared admission for an endless stream would starve restore.
+			next.ServeHTTP(w, r)
+			return
+		}
+		exclusive := r.Method == http.MethodPost && r.URL.Path == "/api/v1/private-backups/import"
+		enter := a.Operations.Enter
+		if exclusive {
+			enter = a.Operations.Exclusive
+		}
+		release, err := enter(r.Context())
+		if err != nil {
+			writeOperationFailure(w, err)
+			return
+		}
+		scope := &operationScope{app: a, exclusive: exclusive, active: true, release: release}
+		defer scope.closeRequest()
+		ctx := context.WithValue(r.Context(), operationContextKey{}, scope)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// Internal callers must enter as well. A request already admitted exclusively
+// reuses its admission instead of trying to acquire the gate twice.
+func (a *App) privateRestoreAdmission(ctx context.Context) (func(), error) {
+	if scope, ok := ctx.Value(operationContextKey{}).(*operationScope); ok && scope.app == a {
+		return scope.restoreAdmission()
+	}
+	return a.Operations.Exclusive(ctx)
+}
+
+func writeOperationFailure(w http.ResponseWriter, err error) {
+	w.Header().Set("Cache-Control", "no-store")
+	code := "OPERATION_CANCELED"
+	message := "Действие отменено до начала. Настройки не изменены."
+	status := http.StatusRequestTimeout
+	if errors.Is(err, operationgate.ErrBusy) {
+		code = "RESTORE_OPERATION_BUSY"
+		message = "Сейчас выполняется другая операция. Дождитесь её завершения и повторите действие. Настройки этим запросом не изменены."
+		status = http.StatusConflict
+		w.Header().Set("Retry-After", "2")
+	}
+	writeJSON(w, status, map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false})
+}
+
+func (a *App) backgroundRound(ctx context.Context, round int) {
+	release, err := a.Operations.Enter(ctx)
+	if err != nil {
+		return // A restore takes precedence; retry at the next scheduled round.
+	}
+	defer release()
+	if a.Dataplane != nil {
+		refreshCtx, refreshCancel := context.WithTimeout(ctx, 90*time.Second)
+		_, _ = a.Dataplane.RefreshCommitted(refreshCtx)
+		refreshCancel()
+	}
+	a.backgroundWarpHealth(ctx)
+	if round%2 == 1 {
+		if a.backgroundSmartRoute(ctx) {
+			a.backgroundAutopilotApply(ctx)
+		}
+	}
+}

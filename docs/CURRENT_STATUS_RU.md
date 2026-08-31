@@ -61,13 +61,21 @@ gap-аудиты сохранены как исторические снимки
 
 ## Локальная разработка после стабильного релиза
 
+Добавлена [общая блокировка операций при приватном импорте](PRIVATE_RESTORE_OPERATION_GATE_RU.md).
+HTTP (включая GET discovery), фоновые проверки и conntrack не пересекаются с
+импортом. Занятая система отказывает до изменений; UI отличает такой отказ от
+неудачного восстановления. Отмена запроса не освобождает ещё работающую операцию.
+Проверки прошли локально, новые concurrency-сценарии — десять повторов.
+Это in-process ownership; HTTP ещё не переведён на общий журнал и Store sessions.
+
 Добавлен [общий offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md).
 Пять типов хранилищ объединены в ограниченную транзакцию с проверкой всех целей
 до отката. `main` восстанавливает журнал до загрузки config/Store и создания
 токена; второй новый экземпляр исключён lifetime lease. Реальные аварийные
 тесты и пять повторов прошли на Windows; Linux-сборки только скомпилированы.
 HTTP-импорт остаётся на прежней компенсации, ProviderSnapshots в нём запрещены.
-Далее — владение online API/background/Store sessions и аудит upgrade/rollback.
+Online API/background admission теперь подключён; далее — Store sessions,
+согласование кэшей, durable online journal и аудит upgrade/rollback.
 
 Добавлен [Cloudflare recovery adapter](CLOUDFLARE_RESTORE_ADAPTER_RU.md):
 общая с обычным импортом `.import.lock`, bounded exact-byte CAS, merge без

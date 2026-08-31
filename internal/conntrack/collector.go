@@ -19,6 +19,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/devices"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/telemetry"
 )
 
@@ -35,6 +36,9 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 }
 
 type Collector struct {
+	// Set before Start. Shared with App so one collection cannot mix imported
+	// and previous config/catalog/device state. No admission is held while idle.
+	Operations     *operationgate.Gate
 	Store          *telemetry.Store
 	Config         *config.Store
 	Catalog        func() catalog.Catalog
@@ -113,6 +117,10 @@ func (c *Collector) collectAndReport(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
 	defer cancel()
 	connections, err := c.Collect(ctx)
+	if errors.Is(err, operationgate.ErrBusy) {
+		// Paused collection is not proof of a broken network. Keep last evidence.
+		return
+	}
 	if err != nil {
 		c.Store.ReplaceActive("kernel-conntrack", nil)
 		c.Store.SetProducer(false, "kernel-conntrack", err.Error())
@@ -125,6 +133,13 @@ func (c *Collector) collectAndReport(parent context.Context) {
 func (c *Collector) Collect(ctx context.Context) ([]telemetry.Connection, error) {
 	if c == nil || c.Store == nil || c.Config == nil || c.Catalog == nil {
 		return nil, errors.New("conntrack collector is not configured")
+	}
+	if c.Operations != nil {
+		release, err := c.Operations.Enter(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
 	}
 	data, source, err := c.readConntrack()
 	if err != nil {

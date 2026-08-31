@@ -15,7 +15,7 @@ assert.match(errorsContext.friendlyErrorMessage('engine draft import failed; ori
 assert.match(errorsContext.friendlyErrorMessage('engine config written, but draft cleanup was not confirmed', 500), /Рабочий файл обхода записан/);
 const fn = source.match(/async function importPrivateBackup\([^]*?\n}\n/);
 assert.ok(fn, 'real import function must remain testable');
-for (const mode of ['rollback', 'recovery-required', 'disconnect', 'success-refresh-error', 'success', 'cancel']) {
+for (const mode of ['busy', 'not-started-canceled', 'rollback', 'recovery-required', 'disconnect', 'success-refresh-error', 'success', 'cancel']) {
   const elements = new Map(['confirmPrivateBackup', 'privateBackupImportPassword', 'previewPrivateBackup', 'privateBackupPreview'].map(id => [id, { disabled: false, value: 'synthetic secret password', textContent: '', innerHTML: '' }]));
   const state = { privateBackupEnvelope: { ciphertext: 'synthetic encrypted archive' }, privateBackupPreview: { valid: true } };
   let requests = 0;
@@ -28,6 +28,7 @@ for (const mode of ['rollback', 'recovery-required', 'disconnect', 'success-refr
       requests++;
       if (mode.startsWith('success')) return { ok: true };
       const error = new Error('synthetic private internal cause');
+      if (mode === 'busy' || mode === 'not-started-canceled') error.payload = { not_started: true, code: mode === 'busy' ? 'RESTORE_OPERATION_BUSY' : 'OPERATION_CANCELED' };
       if (mode === 'rollback') error.payload = { rolled_back: true, recovery_required: false, code: 'PRIVATE_BACKUP_IMPORT_ROLLED_BACK', phase: 'engine_files' };
       if (mode === 'recovery-required') error.payload = { rolled_back: false, recovery_required: true, code: 'PRIVATE_BACKUP_RECOVERY_REQUIRED', phase: 'engine_files' };
       throw error;
@@ -46,6 +47,7 @@ for (const mode of ['rollback', 'recovery-required', 'disconnect', 'success-refr
   assert.equal(elements.get('confirmPrivateBackup').disabled, true);
   assert.equal(elements.get('previewPrivateBackup').disabled, true);
   const text = elements.get('privateBackupPreview').innerHTML;
+  if (mode === 'busy' || mode === 'not-started-canceled') assert.match(text, /Импорт не начат.*Настройки не изменены/);
   if (mode === 'recovery-required') assert.match(text, /не все изменения удалось отменить/);
   if (mode === 'rollback') assert.match(text, /Изменения этой операции отменены/);
   if (mode === 'disconnect') assert.match(text, /Не удалось подтвердить результат/);
