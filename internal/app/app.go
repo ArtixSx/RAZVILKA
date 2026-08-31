@@ -158,6 +158,8 @@ type App struct {
 	Start           time.Time
 	EffectiveListen string
 	Z2KRoot         string
+
+	privateBackupBusy atomic.Bool
 }
 
 type serviceView struct {
@@ -344,6 +346,9 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)
 	mux.HandleFunc("/api/v1/cloudflare/import/preview", a.cloudflareImportPreview)
 	mux.HandleFunc("/api/v1/cloudflare/import", a.cloudflareImport)
+	mux.HandleFunc("/api/v1/cloudflare/backups/export", a.cloudflareBackupExport)
+	mux.HandleFunc("/api/v1/cloudflare/backups/preview", a.cloudflareBackupPreview)
+	mux.HandleFunc("/api/v1/cloudflare/backups/restore", a.cloudflareBackupRestore)
 	mux.HandleFunc("/api/v1/testlab", a.testLabSnapshot)
 	mux.HandleFunc("/api/v1/testlab/current", a.testLabCurrent)
 	mux.HandleFunc("/api/v1/testlab/routes", a.testLabRoutes)
@@ -3820,6 +3825,11 @@ func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	release, ok := a.backupOperation(w)
+	if !ok {
+		return
+	}
+	defer release()
 	if a.EngineConfigs == nil || a.CustomServices == nil {
 		http.Error(w, "private backup managers are disabled", http.StatusServiceUnavailable)
 		return
@@ -3870,6 +3880,11 @@ func (a *App) privateBackupPreview(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	release, ok := a.backupOperation(w)
+	if !ok {
+		return
+	}
+	defer release()
 	payload, err := decodePrivateBackup(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -3888,6 +3903,11 @@ func (a *App) privateBackupImport(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	release, ok := a.backupOperation(w)
+	if !ok {
+		return
+	}
+	defer release()
 	if a.CustomServices == nil || a.EngineConfigs == nil {
 		http.Error(w, "private backup managers are disabled", http.StatusServiceUnavailable)
 		return

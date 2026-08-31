@@ -138,6 +138,7 @@ function cloudflareAccountSummary(account) {
   kind.addEventListener('change', () => clearSelection());
   fileInput.addEventListener('change', () => clearSelection(false));
   el('cloudflareCopyRefresh').addEventListener('click', loadList);
+  document.addEventListener('razvilka:cloudflare-copies-changed', () => { if (root.open) loadList(); });
   root.addEventListener('toggle', () => { if (root.open) loadList(); else resetPrivateView(); });
   document.addEventListener('razvilka:auth-required', resetPrivateView);
   document.addEventListener('razvilka:view-change', (event) => { if (event.detail !== 'settings') resetPrivateView(); });

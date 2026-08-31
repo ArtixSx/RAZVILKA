@@ -132,6 +132,12 @@ func cloudflareError(w http.ResponseWriter, err error) {
 	status, code, message := http.StatusServiceUnavailable, "CLOUDFLARE_STORE_UNAVAILABLE", "Не удалось открыть или сохранить копию Cloudflare. Рабочие обходы не изменены."
 	if errors.Is(err, cloudflareprovider.ErrImport) {
 		status, code, message = http.StatusBadRequest, "CLOUDFLARE_IMPORT_INVALID", "Файл не принят. Проверьте выбранный формат и размер (до 256 КиБ); ссылки, неполные и скрытые ключи не подходят."
+	} else if errors.Is(err, cloudflareprovider.ErrBackup) {
+		status, code, message = http.StatusBadRequest, "CLOUDFLARE_BACKUP_INVALID", "Архив не принят. Нужен отдельный архив копий Cloudflare и его пароль (12–256 байт). Для выгрузки сначала сохраните хотя бы одну копию аккаунта."
+	} else if errors.Is(err, cloudflareprovider.ErrReview) {
+		status, code, message = http.StatusConflict, "CLOUDFLARE_BACKUP_REVIEW", "Сначала проверьте выбранный архив, затем подтвердите добавление копий. Ничего не изменено."
+	} else if errors.Is(err, cloudflareprovider.ErrConflict) {
+		status, code, message = http.StatusConflict, "CLOUDFLARE_BACKUP_CONFLICT", "В архиве и хранилище разные ключи под одним номером копии. Архив целиком отклонён; существующие копии сохранены."
 	} else if errors.Is(err, cloudflareprovider.ErrBusy) {
 		status, code, message = http.StatusConflict, "CLOUDFLARE_STORE_BUSY", "Хранилище занято другой записью или незавершённым импортом. Копии и рабочие обходы не изменены."
 	} else if errors.Is(err, cloudflareprovider.ErrCapacity) {

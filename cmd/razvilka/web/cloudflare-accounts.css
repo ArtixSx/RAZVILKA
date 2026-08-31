@@ -19,6 +19,9 @@
 .cloudflare-copy-card small { color: var(--muted, #9daeb9); }
 .cloudflare-copy-state { display: block; color: #d7c484; }
 .cloudflare-copy-error { color: #ffc4c4; }
+.cloudflare-copy-archives { border-top: 1px solid #37434b; margin-top: 28px; padding-top: 16px; }
+.cloudflare-copy-archives > p { max-width: 100ch; line-height: 1.6; }
+.cloudflare-copy-archives h4 { margin: 0; }
 .cloudflare-copies [hidden] { display: none !important; }
 @media (max-width: 1000px) { .cloudflare-copies-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) {

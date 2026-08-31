@@ -16,6 +16,84 @@ import (
 
 const backupPassword = "synthetic provider backup password"
 
+func TestBackupPreviewAndReviewedRestore(t *testing.T) {
+	ctx := context.Background()
+	source, _ := privateStore(t)
+	parsed, _ := ParseImport(SourceWGCF, wgcfFixture())
+	if _, err := source.ImportSnapshot(ctx, parsed); err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := source.Backup(ctx, backupPassword, "0.18.1-dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, path := privateStore(t)
+	review, err := target.PreviewBackup(ctx, envelope, backupPassword)
+	if err != nil || review.Added != 1 || review.Existing != 0 || review.Total != 1 || len(review.Digest) != 64 {
+		t.Fatalf("preview: %+v %v", review, err)
+	}
+	files, _ := os.ReadDir(path)
+	if len(files) != 0 {
+		t.Fatal("preview wrote files or locks")
+	}
+	for _, digest := range []string{"", strings.Repeat("0", 64)} {
+		if _, err := target.RestoreReviewedBackup(ctx, envelope, backupPassword, digest); !errors.Is(err, ErrReview) {
+			t.Fatalf("review binding: %v", err)
+		}
+	}
+	files, _ = os.ReadDir(path)
+	if len(files) != 0 {
+		t.Fatal("invalid review wrote state")
+	}
+	if _, err := target.RestoreReviewedBackup(ctx, envelope, backupPassword, review.Digest); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(path, storeFile))
+	review, err = target.PreviewBackup(ctx, envelope, backupPassword)
+	if err != nil || review.Added != 0 || review.Existing != 1 {
+		t.Fatalf("existing preview: %+v %v", review, err)
+	}
+	if _, err := target.RestoreReviewedBackup(ctx, envelope, backupPassword, review.Digest); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(filepath.Join(path, storeFile))
+	if !bytes.Equal(before, after) {
+		t.Fatal("idempotent restore rewrote state")
+	}
+	// Conflict introduced after preview must be caught again under writer lock.
+	doc, _ := target.load()
+	doc.Accounts[0].Raw = bytes.ReplaceAll(doc.Accounts[0].Raw, []byte("fixture-private-token"), []byte("changed-private-token"))
+	doc.Accounts[0].Digest = privatebackup.Sum(doc.Accounts[0].Raw)
+	if err := target.commit(ctx, doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := target.RestoreReviewedBackup(ctx, envelope, backupPassword, review.Digest); !errors.Is(err, ErrConflict) {
+		t.Fatalf("changed store: %v", err)
+	}
+	if _, err := target.PreviewBackup(ctx, envelope, backupPassword); !errors.Is(err, ErrConflict) {
+		t.Fatalf("conflict preview: %v", err)
+	}
+}
+
+func TestCloudflareBackupRejectsEmptyRouterArchive(t *testing.T) {
+	s, _ := privateStore(t)
+	ctx := context.Background()
+	if _, err := s.Backup(ctx, backupPassword, "0.18.1-dev"); !errors.Is(err, ErrBackup) {
+		t.Fatalf("empty export: %v", err)
+	}
+	payload := privatebackup.NewPayload("0.18.1-dev")
+	if err := privatebackup.Seal(&payload); err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := privatebackup.Encrypt(payload, backupPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PreviewBackup(ctx, envelope, backupPassword); !errors.Is(err, ErrBackup) {
+		t.Fatalf("empty router backup: %v", err)
+	}
+}
+
 func TestEncryptedSnapshotBackupMergeAndIdempotence(t *testing.T) {
 	ctx := context.Background()
 	source, _ := privateStore(t)
@@ -157,7 +235,10 @@ func TestRestoreRespectsAnotherWriterAndCapacity(t *testing.T) {
 		}
 	}
 	before, _ := os.ReadFile(filepath.Join(path, storeFile))
-	if _, err := target.RestoreBackup(ctx, envelope, backupPassword); err == nil {
+	if _, err := target.PreviewBackup(ctx, envelope, backupPassword); !errors.Is(err, ErrCapacity) {
+		t.Fatalf("capacity preview: %v", err)
+	}
+	if _, err := target.RestoreBackup(ctx, envelope, backupPassword); !errors.Is(err, ErrCapacity) {
 		t.Fatal("capacity exceeded")
 	}
 	after, _ := os.ReadFile(filepath.Join(path, storeFile))

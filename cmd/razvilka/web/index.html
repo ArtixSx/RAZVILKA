@@ -357,7 +357,7 @@
         <summary><span><b>Копии аккаунтов Cloudflare</b><small>Расширенная подготовка · пока без подключения обхода</small></span><span class="safe-badge">ТОЛЬКО КОПИИ</span></summary>
         <div class="cloudflare-copies-body">
           <p>Сохраните имеющийся файл USQUE, wgcf или WARP/WireGuard отдельно от рабочего обхода. Здесь нет регистрации, проверки связи или изменения маршрутов. Исходный файл остаётся у вас.</p>
-          <p class="cloudflare-copies-note">Копии пока не входят в общую резервную копию выше. Сохраните исходные файлы в надёжном месте. Данные отправляются только в вашу панель RAZVILKA; при доступе по HTTP соединение не зашифровано — используйте доверенную локальную сеть.</p>
+          <p class="cloudflare-copies-note">Для этих аккаунтов используется отдельный зашифрованный архив ниже, а не общая резервная копия настроек выше. Сохраните пароль отдельно: восстановить забытый пароль нельзя. Данные отправляются только в вашу панель RAZVILKA; при доступе по HTTP соединение не зашифровано — используйте доверенную локальную сеть.</p>
           <div class="cloudflare-copies-grid">
             <form id="cloudflareCopyForm" class="cloudflare-copy-form">
               <h3>Добавить копию</h3>
@@ -374,6 +374,30 @@
               <div id="cloudflareCopyList" aria-live="polite">Список загрузится при открытии раздела.</div>
             </section>
           </div>
+          <section class="cloudflare-copy-archives" id="cloudflareArchives" aria-labelledby="cloudflareArchiveTitle">
+            <h3 id="cloudflareArchiveTitle">Перенести копии аккаунтов</h3>
+            <p>Архив содержит только сохранённые здесь аккаунты. При восстановлении добавляются новые копии; существующие ключи, рабочие профили и маршруты не заменяются.</p>
+            <div class="cloudflare-copies-grid">
+              <form id="cloudflareArchiveExportForm" class="cloudflare-copy-form">
+                <h4>Скачать архив</h4>
+                <label><span>Придумайте пароль архива</span><input id="cloudflareArchivePassword" type="password" autocomplete="new-password" minlength="12" maxlength="256" required aria-describedby="cloudflareArchivePasswordHint"></label>
+                <small id="cloudflareArchivePasswordHint">Минимум 12 символов, до 256 байт UTF-8. Пароль не сохраняется в панели.</small>
+                <label><span>Повторите пароль архива</span><input id="cloudflareArchiveRepeat" type="password" autocomplete="new-password" required></label>
+                <button id="cloudflareArchiveExport" class="secondary" type="submit">Скачать архив аккаунтов</button>
+                <small>Файл зашифрован. Сохраните его и пароль в надёжном месте, отдельно друг от друга.</small>
+              </form>
+              <form id="cloudflareArchiveImportForm" class="cloudflare-copy-form">
+                <h4>Добавить из архива</h4>
+                <label><span>Архив копий Cloudflare · JSON, до 18 МиБ</span><input id="cloudflareArchiveFile" type="file" accept=".json,application/json" required></label>
+                <label><span>Пароль выбранного архива</span><input id="cloudflareArchiveImportPassword" type="password" autocomplete="off" required></label>
+                <button id="cloudflareArchivePreview" class="secondary" type="submit">Проверить архив</button>
+                <div id="cloudflareArchiveReview" class="cloudflare-copy-result" aria-live="polite">Сначала покажем, сколько копий будет добавлено. Проверка ничего не меняет.</div>
+                <button id="cloudflareArchiveRestore" class="primary" type="button" hidden disabled>Добавить копии</button>
+                <button id="cloudflareArchiveCancel" class="secondary" type="button" hidden>Отменить восстановление</button>
+              </form>
+            </div>
+            <p id="cloudflareArchiveMessage" role="status" aria-live="polite"></p>
+          </section>
         </div>
       </details>
       <div class="two-col account-grid">
@@ -454,5 +478,6 @@
 </dialog>
 <script src="/app.js?v=0.18.1"></script>
 <script src="/cloudflare-accounts.js?v=0.18.1"></script>
+<script src="/cloudflare-backups.js?v=0.18.1"></script>
 </body>
 </html>
