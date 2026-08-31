@@ -64,9 +64,13 @@ writers выполнены локально. Также готовы [catalog/de
 тесты до OpenStore. [Offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md)
 реализованы локально: все пять типов хранилищ, порядок leases, восстановление
 до Load/API, lifetime gate и process-crash tests. [Online admission](PRIVATE_RESTORE_OPERATION_GATE_RU.md)
-подключён к существующему HTTP-импорту, фоновому циклу и conntrack. Session-backed
-online journal, Store cache handover и аудит install/upgrade/rollback ещё предстоят; общий
-HTTP-импорт Provider-архивов остаётся закрытым. Linux/HIL нового блока не пройдены.
+подключён к существующему HTTP-импорту, фоновому циклу и conntrack.
+[Session-backed online journal и cache handover](PRIVATE_RESTORE_ONLINE_RU.md)
+подключены локально: общий HTTP import, проверка bindings, recovery fence,
+process-crash tests и busy health/supervision. Следующий обязательный блок —
+snapshot после исключения writers, сохранение/совместимость private journal
+при upgrade/rollback и Linux/Entware/HIL. Общий HTTP-импорт Provider-архивов
+остаётся закрытым; весь PR-1.1 пока не завершён.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 

@@ -117,7 +117,7 @@ func (c *Collector) collectAndReport(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
 	defer cancel()
 	connections, err := c.Collect(ctx)
-	if errors.Is(err, operationgate.ErrBusy) {
+	if errors.Is(err, operationgate.ErrBusy) || errors.Is(err, operationgate.ErrRecovery) {
 		// Paused collection is not proof of a broken network. Keep last evidence.
 		return
 	}

@@ -33,6 +33,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
+	"github.com/ArtixSx/razvilka/internal/privaterestore"
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
@@ -132,6 +133,7 @@ type applyChangeSummary struct {
 }
 
 type App struct {
+	PrivateRestore  *privaterestore.Coordinator
 	Operations      operationgate.Gate
 	Store           *config.Store
 	Catalog         catalog.Catalog

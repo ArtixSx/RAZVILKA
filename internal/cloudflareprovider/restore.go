@@ -40,6 +40,18 @@ func providerBinding(path string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// RestoreBinding is a lexical startup binding, not an archive-controlled path.
+func RestoreBinding(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", restorejournal.ErrInvalid
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", restorejournal.ErrInvalid
+	}
+	return providerBinding(abs), nil
+}
+
 // OpenRestoreTarget is usable before OpenStore during future startup recovery.
 // It never creates a directory or snapshot. Lock markers are permanent and can
 // be created by preparation. Absent is a valid empty store; empty/corrupt files

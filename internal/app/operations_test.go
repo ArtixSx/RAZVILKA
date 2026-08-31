@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -93,6 +94,51 @@ func TestPrivateImportExcludesHTTPReadsAndWritesUntilCompletion(t *testing.T) {
 		t.Fatal("HTTP import leaked ownership", err)
 	}
 	last()
+}
+
+func TestUncertainOnlineJournalFencesAPIWithoutFallback(t *testing.T) {
+	a, base := privateRestoreTestApp(t)
+	before := a.Store.Get()
+	if err := os.WriteFile(filepath.Join(base, "journal", "restore.private.json"), []byte("corrupt-private-journal-marker"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err := a.restorePrivateDraft(context.Background(), privateRestoreFixture(t))
+	var failed *privateRestoreFailure
+	if !errors.As(err, &failed) || !failed.recoveryRequired {
+		t.Fatal("uncertain journal not fenced", err)
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) || len(a.CustomServices.List()) != 0 {
+		t.Fatal("fell back to unjournaled writes")
+	}
+	handler := a.Handler(http.NotFoundHandler())
+	for _, call := range []struct{ method, path string }{{"GET", "/api/v1/status"}, {"GET", "/api/v1/devices"}, {"POST", "/api/v1/apply"}, {"POST", "/api/v1/private-backups/import"}} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(call.method, call.path, strings.NewReader("{}")))
+		if w.Code != 503 || !strings.Contains(w.Body.String(), `"recovery_required":true`) || w.Header().Get("Retry-After") != "" {
+			t.Fatal("fenced API result", w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), base) || strings.Contains(w.Body.String(), "corrupt-private-journal-marker") {
+			t.Fatal("private journal leaked")
+		}
+	}
+	a.backgroundRound(context.Background(), 1)
+	if !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("fenced worker wrote configuration")
+	}
+}
+
+func TestPrivateImportNeedsStartupCoordinator(t *testing.T) {
+	a, _ := privateRestoreTestApp(t)
+	a.PrivateRestore = nil
+	before := a.Store.Get()
+	err := a.restorePrivateDraft(context.Background(), privateRestoreFixture(t))
+	var failure *privateRestoreFailure
+	if !errors.As(err, &failure) || !failure.notStarted || failure.recoveryRequired {
+		t.Fatal("missing coordinator result", err)
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("missing coordinator fell back")
+	}
 }
 
 type pausedRouteProber struct {

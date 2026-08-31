@@ -33,6 +33,9 @@ func (s *slot) open(ctx context.Context) (managedTarget, error) {
 		return nil, restorejournal.ErrAborted
 	}
 	if s.target == nil {
+		if s.owner.runtimeStarted {
+			return nil, restorejournal.ErrInvalid // Online calls must bind Store sessions.
+		}
 		t, err := s.factory()
 		if err != nil {
 			return nil, err
@@ -80,8 +83,9 @@ type Coordinator struct {
 	acquired                        []*slot
 	closed, blocked, runtimeStarted bool
 	// Package-private crash/failure seams around REAL typed target writes.
-	beforeWrite func(string) error
-	afterWrite  func(string)
+	beforeWrite    func(string) error
+	afterWrite     func(string)
+	beforeHandover func() error
 }
 
 func (*Coordinator) String() string   { return "[private draft recovery coordinator]" }
@@ -148,7 +152,7 @@ func (c *Coordinator) releaseTargets() error {
 
 // StartRuntime irreversibly seals the offline interface. Keep the Coordinator
 // alive until shutdown; it remains the deployment's journal/instance guard.
-// An online importer needs Store sessions + API/worker exclusion, not this API.
+// RestoreOnline additionally requires Store sessions + API/worker exclusion.
 func (c *Coordinator) StartRuntime() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -61,21 +61,31 @@ gap-аудиты сохранены как исторические снимки
 
 ## Локальная разработка после стабильного релиза
 
+Подключён [online-журнал приватного импорта](PRIVATE_RESTORE_ONLINE_RU.md):
+Store sessions проверяют startup bindings, журнал сохраняется до обновления
+кэшей, неопределённый исход закрывает новые API/фоновые операции до recovery.
+HTTP больше не использует прежнюю компенсацию; ProviderSnapshots по-прежнему
+отклоняются. Принудительные process-crash tests и проверки кэшей прошли на Windows.
+Health/S99 отличают временную занятость от ошибки и не требуют restart из-за
+импорта. **До релиза обязательны согласованные upgrade snapshots/rollback с
+private journal и полный Linux/Entware/HIL прогон**; текущие snapshots до stop
+ещё не обеспечивают эту гарантию. Изменения локальные, не новый стабильный релиз.
+
 Добавлена [общая блокировка операций при приватном импорте](PRIVATE_RESTORE_OPERATION_GATE_RU.md).
 HTTP (включая GET discovery), фоновые проверки и conntrack не пересекаются с
 импортом. Занятая система отказывает до изменений; UI отличает такой отказ от
 неудачного восстановления. Отмена запроса не освобождает ещё работающую операцию.
 Проверки прошли локально, новые concurrency-сценарии — десять повторов.
-Это in-process ownership; HTTP ещё не переведён на общий журнал и Store sessions.
+Это in-process ownership; следующий online-блок выше добавил журнал/Store sessions.
 
 Добавлен [общий offline coordinator и startup recovery](PRIVATE_RESTORE_COORDINATOR_RU.md).
 Пять типов хранилищ объединены в ограниченную транзакцию с проверкой всех целей
 до отката. `main` восстанавливает журнал до загрузки config/Store и создания
 токена; второй новый экземпляр исключён lifetime lease. Реальные аварийные
 тесты и пять повторов прошли на Windows; Linux-сборки только скомпилированы.
-HTTP-импорт остаётся на прежней компенсации, ProviderSnapshots в нём запрещены.
-Online API/background admission теперь подключён; далее — Store sessions,
-согласование кэшей, durable online journal и аудит upgrade/rollback.
+HTTP-импорт теперь использует online coordinator, ProviderSnapshots в нём запрещены.
+Admission, Store sessions, согласование кэшей и online journal подключены;
+полный аудит upgrade/rollback остаётся обязательным.
 
 Добавлен [Cloudflare recovery adapter](CLOUDFLARE_RESTORE_ADAPTER_RU.md):
 общая с обычным импортом `.import.lock`, bounded exact-byte CAS, merge без

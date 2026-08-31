@@ -1,6 +1,6 @@
 // Package restorejournal records a bounded before/after plan before touching
-// targets. privaterestore wires typed adapters into offline execution and boot
-// recovery. Online import still requires exclusive API/worker/Store ownership.
+// targets. privaterestore wires typed adapters into online Store sessions and
+// offline boot recovery. Online import also requires exclusive API/worker ownership.
 package restorejournal
 
 import (
@@ -161,6 +161,15 @@ func (j *Journal) Close() error {
 // the full plan before the first target write. This is a recovery protocol, not
 // an isolation guarantee for readers of several target files.
 func (j *Journal) Execute(ctx context.Context, changes map[string]Image) (Outcome, error) {
+	return j.ExecuteWithHandover(ctx, changes, nil)
+}
+
+// ExecuteWithHandover keeps the prepared/committed recovery record until cache
+// handover succeeds. handover is called at most once, after verified success or
+// rollback, before clearing the journal. It may close target sessions; no target
+// is used after it. On other exits the caller must still close sessions and
+// fence runtime operations if the outcome is Blocked. It must not reenter j.
+func (j *Journal) ExecuteWithHandover(ctx context.Context, changes map[string]Image, handover func() error) (Outcome, error) {
 	if !j.mu.TryLock() {
 		return Blocked, ErrBusy
 	}
@@ -209,6 +218,9 @@ func (j *Journal) Execute(ctx context.Context, changes map[string]Image) (Outcom
 		}
 	}
 	if len(doc.Records) == 0 {
+		if handover != nil && handover() != nil {
+			return Blocked, ErrRecovery
+		}
 		return Clean, nil
 	}
 	if ctx.Err() != nil {
@@ -219,10 +231,10 @@ func (j *Journal) Execute(ctx context.Context, changes map[string]Image) (Outcom
 	}
 	for _, entry := range doc.Records {
 		if ctx.Err() != nil {
-			return j.abort()
+			return j.abort(handover)
 		}
 		if err := j.targets[entry.Target].CompareAndSwap(ctx, clone(entry.Before), clone(entry.After)); err != nil {
-			return j.abort()
+			return j.abort(handover)
 		}
 	}
 	// All target writes are complete. Publish the commit decision even if the
@@ -238,16 +250,19 @@ func (j *Journal) Execute(ctx context.Context, changes map[string]Image) (Outcom
 	if err := j.save(doc); err != nil {
 		return Blocked, ErrRecovery
 	}
+	if handover != nil && handover() != nil {
+		return Blocked, ErrRecovery
+	}
 	if err := j.save(j.idle()); err != nil {
 		return Blocked, ErrRecovery
 	}
 	return Applied, nil
 }
 
-func (j *Journal) abort() (Outcome, error) {
+func (j *Journal) abort(handover func() error) (Outcome, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	result, err := j.recover(ctx)
+	result, err := j.recoverWithHandover(ctx, handover)
 	if err != nil {
 		return Blocked, ErrRecovery
 	}
@@ -270,6 +285,10 @@ func (j *Journal) Recover(ctx context.Context) (Outcome, error) {
 }
 
 func (j *Journal) recover(ctx context.Context) (Outcome, error) {
+	return j.recoverWithHandover(ctx, nil)
+}
+
+func (j *Journal) recoverWithHandover(ctx context.Context, handover func() error) (Outcome, error) {
 	doc, err := j.load()
 	if err != nil {
 		return Blocked, err
@@ -320,6 +339,9 @@ func (j *Journal) recover(ctx context.Context) (Outcome, error) {
 		}
 	}
 	if ctx.Err() != nil {
+		return Blocked, ErrRecovery
+	}
+	if handover != nil && handover() != nil {
 		return Blocked, ErrRecovery
 	}
 	if err := j.save(j.idle()); err != nil {

@@ -55,11 +55,8 @@ func OpenFileTarget(path string) (*FileTarget, error) {
 		_ = root.Close()
 		return nil, err
 	}
-	bindingPath := full
-	if runtime.GOOS == "windows" {
-		bindingPath = strings.ToLower(bindingPath)
-	}
-	f := &FileTarget{root: root, name: name, release: release, binding: sum([]byte("state-file-v1\x00" + bindingPath))}
+	binding, _ := FileBinding(full)
+	f := &FileTarget{root: root, name: name, release: release, binding: binding}
 	f.write = func(after Image) error {
 		var err error
 		if after.Exists {
@@ -82,6 +79,19 @@ func OpenFileTarget(path string) (*FileTarget, error) {
 // Binding contains no path. Include it AND the typed adapter's schema/version
 // in the trusted journal scope; never substitute a value from an HTTP request.
 func (f *FileTarget) Binding() string { return f.binding }
+
+// FileBinding computes the trusted lexical destination identity without opening
+// a file or taking a second lease. It does not attest inode/symlink aliases.
+func FileBinding(path string) (string, error) {
+	full, err := targetPath(path)
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "windows" {
+		full = strings.ToLower(full)
+	}
+	return sum([]byte("state-file-v1\x00" + full)), nil
+}
 
 func (f *FileTarget) Close() error {
 	f.mu.Lock()

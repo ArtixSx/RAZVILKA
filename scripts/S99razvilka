@@ -151,16 +151,24 @@ start_process() {
   fi
 
   WAIT=0
+  HEALTH_CODE=1
   while [ "$WAIT" -lt "$HEALTH_RETRIES" ]; do
     if health; then
       clear_failure
       PID="$(running_pid)"
       echo "RAZVILKA healthy on http://$LAN_IP:$PORT/ (pid $PID)"
       return 0
+    else
+      HEALTH_CODE=$?
     fi
     sleep 1
     WAIT=$((WAIT + 1))
   done
+
+  if [ "$HEALTH_CODE" -eq 75 ]; then
+    echo "RAZVILKA is running but private restore is busy; readiness not confirmed. Process kept; check status later." >&2
+    return 75
+  fi
 
   echo "RAZVILKA failed health check; stopping failed process" >&2
   stop_process >/dev/null 2>&1 || true
@@ -174,6 +182,12 @@ status_process() {
     PID="$(running_pid)"
     echo "RAZVILKA healthy on http://$LAN_IP:$PORT/ (pid $PID)"
     return 0
+  else
+    HEALTH_CODE=$?
+  fi
+  if [ "$HEALTH_CODE" -eq 75 ]; then
+    echo "RAZVILKA private restore is busy; readiness temporarily unavailable. Do not restart." >&2
+    return 75
   fi
   PID="$(running_pid 2>/dev/null || true)"
   if [ -n "$PID" ]; then

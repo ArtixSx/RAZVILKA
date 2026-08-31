@@ -10,7 +10,9 @@ fi
 go test ./...
 go test -race ./...
 go vet ./...
-sh -n scripts/*.sh build.sh
+for script in scripts/*.sh scripts/S99razvilka build.sh; do
+  sh -n "$script"
+done
 if command -v node >/dev/null 2>&1; then
   node --check cmd/razvilka/web/app.js
   node --check cmd/razvilka/web/cloudflare-accounts.js
@@ -21,6 +23,8 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-cloudflare-backup-ui.mjs
   node scripts/test-cloudflare-migration-ui.mjs
   node scripts/test-private-backup-ui.mjs
+  node scripts/test-devices-persistence-ui.mjs
+  node scripts/test-restore-busy-supervision.mjs
 fi
 ./build.sh
 sha256sum -c dist/SHA256SUMS

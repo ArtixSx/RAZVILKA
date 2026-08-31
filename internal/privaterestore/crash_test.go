@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,9 +28,12 @@ func TestCoordinatorCrashChild(t *testing.T) {
 		return
 	}
 	base, point := os.Getenv("RAZVILKA_COORD_BASE"), os.Getenv("RAZVILKA_COORD_POINT")
+	checkpoint := point
+	online := strings.HasPrefix(point, "online/")
+	point = strings.TrimPrefix(point, "online/")
 	pause := func(name string) {
 		if name == point {
-			fmt.Println("checkpoint:" + name)
+			fmt.Println("checkpoint:" + checkpoint)
 			_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 			os.Exit(91)
 		}
@@ -54,7 +58,17 @@ func TestCoordinatorCrashChild(t *testing.T) {
 			pause("rollback")
 		}
 	}
-	out, err := c.RestoreOffline(context.Background(), testPayload(t), map[string]bool{"youtube": true})
+	var out restorejournal.Outcome
+	if online {
+		stores := liveStores(t, testLayout(base))
+		if err := c.StartRuntime(); err != nil {
+			t.Fatal(err)
+		}
+		c.beforeHandover = func() error { pause("handover"); return nil }
+		out, err = c.RestoreOnline(context.Background(), testPayload(t), map[string]bool{"youtube": true}, stores)
+	} else {
+		out, err = c.RestoreOffline(context.Background(), testPayload(t), map[string]bool{"youtube": true})
+	}
 	if err == nil && out == restorejournal.Applied {
 		pause("complete")
 	}
@@ -181,6 +195,41 @@ func TestCombinedProcessCrashRecoversBeforeStoreLoad(t *testing.T) {
 			if err := c.StartRuntime(); err != nil {
 				t.Fatal(err)
 			}
+		})
+	}
+}
+
+func TestOnlineProcessCrashRecoversBeforeStoreLoad(t *testing.T) {
+	for _, point := range []string{"prepared", "config", "custom_services", "devices", "draft_nfqws2_user-list", "draft_sing-box_main", "draft_usque_main", "provider_cloudflare", "rollback", "handover", "complete"} {
+		t.Run(point, func(t *testing.T) {
+			layout := seedLayout(t, t.TempDir())
+			want := imagesOnDisk(t, layout)
+			killCoordinatorAt(t, layout, "online/"+point, func() {
+				if point != "complete" {
+					requireWriterExclusion(t, layout)
+				}
+				if point == "handover" || point == "complete" {
+					want = imagesOnDisk(t, layout)
+				}
+			})
+			c, out, err := Open(context.Background(), layout)
+			if err != nil {
+				t.Fatal(out, err)
+			}
+			defer c.Close()
+			expected := restorejournal.RolledBack
+			if point == "handover" {
+				expected = restorejournal.Applied
+			}
+			if point == "complete" {
+				expected = restorejournal.Clean
+			}
+			if out != expected {
+				t.Fatal("wrong boot decision", out, expected)
+			}
+			requireImages(t, layout, want)
+			stores := liveStores(t, layout)
+			requireLiveCaches(t, layout, stores)
 		})
 	}
 }

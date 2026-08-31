@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -99,7 +100,16 @@ func writeOperationFailure(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 		w.Header().Set("Retry-After", "2")
 	}
-	writeJSON(w, status, map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false})
+	recovery := errors.Is(err, operationgate.ErrRecovery)
+	if recovery {
+		code = "PRIVATE_BACKUP_RECOVERY_REQUIRED"
+		message = "После незавершённого восстановления изменения приостановлены. При следующем запуске приложение проверит журнал восстановления. Не удаляйте журнал и не применяйте черновики вручную."
+		status = http.StatusServiceUnavailable
+	}
+	// Identity is cache-independent. Supervisors can recognize a live but busy
+	// process without reading locked Stores or inventing dataplane health.
+	writeJSON(w, status, map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false, "recovery_required": recovery,
+		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid()})
 }
 
 func (a *App) backgroundRound(ctx context.Context, round int) {

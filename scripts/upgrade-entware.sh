@@ -218,6 +218,15 @@ backup_file "$LEGACY_DISABLED" S99artem-flow.razvilka-disabled
 rollback_on_error() {
   CODE="$1"
   trap - EXIT HUP INT TERM
+  if [ "$CODE" -eq 75 ]; then
+    # A verified live PID reported private restore, not a failed new binary.
+    # Do not interrupt it or roll files back under its journal. This is NOT an
+    # accepted healthy upgrade; the user must check status after restore ends.
+    printf '%s\n' "$BACKUP" >"$CURRENT_BACKUP"
+    chmod 600 "$CURRENT_BACKUP"
+    echo "Upgrade readiness not confirmed: private restore is busy. Process kept; check status later. Snapshot: $BACKUP" >&2
+    exit 75
+  fi
   echo "Upgrade failed; restoring $BACKUP" >&2
   sh "$ROLLBACK" "$BACKUP" --auto || echo "Automatic rollback failed; manual intervention required" >&2
   exit "$CODE"
@@ -263,6 +272,9 @@ fi
 stage 3 "Проверяем и при необходимости мигрируем конфигурацию..."
 "$BINDIR/razvilka" -migrate-config \
   -config "$APPDIR/config.json" \
+  -custom-services "$APPDIR/custom-services.json" \
+  -devices "$APPDIR/devices.json" \
+  -stage "$STATEDIR/staging" \
   -catalog "$APPDIR/service-catalog.json" \
   -sources "$APPDIR/sources.json" \
   -community-catalog "$APPDIR/community-catalog.json" >/dev/null

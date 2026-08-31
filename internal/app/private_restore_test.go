@@ -20,6 +20,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
+	"github.com/ArtixSx/razvilka/internal/privaterestore"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -185,7 +186,24 @@ func privateRestoreTestApp(t *testing.T) (*App, string) {
 	if err := registry.MergeMetadata([]devices.Device{{ID: "test-device", Name: "Original"}}); err != nil {
 		t.Fatal(err)
 	}
+	attachTestRestore(t, a, root)
 	return a, root
+}
+
+func attachTestRestore(t *testing.T, a *App, root string) {
+	t.Helper()
+	c, _, err := privaterestore.Open(context.Background(), privaterestore.Layout{
+		Config: filepath.Join(root, "config.json"), CustomServices: filepath.Join(root, "custom.json"), Devices: filepath.Join(root, "devices.json"),
+		StageRoot: a.EngineConfigs.StageRoot, ProviderRoot: filepath.Join(root, "provider"), JournalRoot: filepath.Join(root, "journal"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	if err := c.StartRuntime(); err != nil {
+		t.Fatal(err)
+	}
+	a.PrivateRestore = c
 }
 
 func privateRestoreFixture(t *testing.T) privatebackup.Payload {
@@ -220,7 +238,7 @@ func TestPrivateRestoreHTTPFailedStagingUndoesOnlyItsWrites(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/private-backups/import", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	a.privateBackupImport(w, r)
-	if w.Code != 500 || !strings.Contains(w.Body.String(), "PRIVATE_BACKUP_IMPORT_ROLLED_BACK") {
+	if w.Code != 409 || !strings.Contains(w.Body.String(), "PRIVATE_BACKUP_IMPORT_NOT_STARTED") || strings.Contains(w.Body.String(), `"rolled_back":true`) {
 		t.Fatalf("unexpected failure: %s", w.Body.String())
 	}
 	if w.Header().Get("Cache-Control") != "no-store" || strings.Contains(w.Body.String(), "secret-path-marker") || strings.Contains(w.Body.String(), root) {

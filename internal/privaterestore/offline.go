@@ -7,12 +7,25 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
 	"github.com/ArtixSx/razvilka/internal/config"
-	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
+
+// Offline targets and live Store sessions build the same typed images.
+type configBuilder interface {
+	DraftImage(context.Context, map[string]config.ServiceState) (restorejournal.Image, error)
+}
+type customBuilder interface {
+	MergeImage(context.Context, []catalog.Service, map[string]bool, bool) (restorejournal.Image, error)
+}
+type devicesBuilder interface {
+	MergeImage(context.Context, []devices.Device) (restorejournal.Image, error)
+}
+type draftBuilder interface {
+	Image(string) (restorejournal.Image, error)
+}
 
 // RestoreOffline is an internal pre-Load operation, NOT an HTTP or live restore
 // API. Config/catalog/devices must already exist; it never bootstraps unknown
@@ -69,7 +82,7 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 		return nil, err
 	}
 	changes := map[string]restorejournal.Image{}
-	custom := c.slots["custom_services"].target.(*customservices.RestoreTarget)
+	custom := c.slots["custom_services"].target.(customBuilder)
 	customImage, err := custom.MergeImage(ctx, payload.CustomServices, builtIn, true)
 	if err != nil {
 		return nil, err
@@ -97,17 +110,17 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 		}
 	}
 	changes["custom_services"] = customImage
-	changes["config"], err = c.slots["config"].target.(*config.RestoreTarget).DraftImage(ctx, payload.Services)
+	changes["config"], err = c.slots["config"].target.(configBuilder).DraftImage(ctx, payload.Services)
 	if err != nil {
 		return nil, err
 	}
-	changes["devices"], err = c.slots["devices"].target.(*devices.RestoreTarget).MergeImage(ctx, payload.Devices)
+	changes["devices"], err = c.slots["devices"].target.(devicesBuilder).MergeImage(ctx, payload.Devices)
 	if err != nil {
 		return nil, err
 	}
 	for _, file := range payload.EngineFiles {
 		id := draftID(file.EngineID, file.FileID)
-		changes[id], err = c.slots[id].target.(*engineconfig.RestoreTarget).Image(file.Content)
+		changes[id], err = c.slots[id].target.(draftBuilder).Image(file.Content)
 		if err != nil {
 			return nil, err
 		}

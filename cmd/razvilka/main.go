@@ -127,6 +127,10 @@ func main() {
 	}
 	if *healthURL != "" {
 		version, err := checkHealth(*healthURL, *healthPID, *healthDataplane)
+		if errors.Is(err, errHealthBusy) {
+			log.Print(err)
+			os.Exit(75) // EX_TEMPFAIL: not healthy, but do not restart an active import.
+		}
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -288,6 +292,7 @@ func main() {
 	}
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	a.Cloudflare = cloudflareStore
+	a.PrivateRestore = privateRecovery
 	a.CloudflareLegacy, err = cloudflareLegacySources(*cfgPath, *warpStatePath)
 	if err != nil {
 		log.Print("Cloudflare legacy copy locations disabled; existing bypasses are unchanged")
@@ -527,6 +532,8 @@ func loadCommunityCatalog(path string) (*community.Manager, error) {
 	return nil, err
 }
 
+var errHealthBusy = errors.New("RAZVILKA is busy with private restore; readiness is temporarily unavailable, do not restart")
+
 func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string, error) {
 	client := &http.Client{
 		Timeout: 4 * time.Second,
@@ -544,7 +551,7 @@ func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string,
 		return "", fmt.Errorf("healthcheck request: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
 		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)
 	}
 	var status struct {
@@ -555,6 +562,9 @@ func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string,
 		DataplaneAdapters int    `json:"dataplane_adapters"`
 		DataplaneError    string `json:"dataplane_error"`
 		LiveActive        bool   `json:"live_active"`
+		Code              string `json:"code"`
+		NotStarted        bool   `json:"not_started"`
+		RecoveryRequired  bool   `json:"recovery_required"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&status); err != nil {
 		return "", fmt.Errorf("healthcheck response: %w", err)
@@ -564,6 +574,12 @@ func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string,
 	}
 	if expectedPID > 0 && status.ProcessID != expectedPID {
 		return "", fmt.Errorf("healthcheck process mismatch: got %d, want %d", status.ProcessID, expectedPID)
+	}
+	if resp.StatusCode != http.StatusOK {
+		if status.Code == "RESTORE_OPERATION_BUSY" && status.NotStarted && !status.RecoveryRequired && status.ProcessID > 0 {
+			return "", errHealthBusy
+		}
+		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)
 	}
 	if requireDataplane {
 		if status.DataplaneError != "" || status.DataplaneState == "journal-error" {

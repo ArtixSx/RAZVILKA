@@ -63,7 +63,7 @@
   lifetime gate; чистый запуск не открывает optional targets, `-check` read-only.
   Offline API закрывается при StartRuntime. Общий HTTP restore не переключён,
   ProviderSnapshots в нём по-прежнему запрещены.
-- Следующий локальный блок: [online operation gate](PRIVATE_RESTORE_OPERATION_GATE_RU.md).
+- `b142068`: [online operation gate](PRIVATE_RESTORE_OPERATION_GATE_RU.md).
   Обычные HTTP (включая GET/discovery), backgroundRound и conntrack разделяют
   один admission. Импорт исключителен до decode/preview и до завершения; busy
   означает not_started, не rollback. Аутентификация остаётся до gate; auth/static/
@@ -71,12 +71,26 @@
   тоже защищён, контекст нельзя использовать повторно после возврата handler;
   уже принятая restore-подоперация сохраняет владение до закрытия. HTTP всё ещё
   на старой компенсации, следующий этап — Store sessions + общий online journal.
+- Локально завершён [online import через Store sessions](PRIVATE_RESTORE_ONLINE_RU.md).
+  HTTP использует lifetime journal; bindings сверяются до writes, committed/
+  prepared сохраняется до cache handover. Blocked/panic закрывает admission.
+  Busy health имеет отдельный код 75, S99/upgrade не останавливают импорт только
+  из-за занятости. Migration paths согласованы с startup. Общий provider HTTP
+  import всё ещё закрыт. Следующий блок — install/upgrade/rollback journal audit.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
 
 ## Финальные локальные проверки
+
+В online-журнале прошли полный Go test/vet, шесть JS suites, app.js syntax,
+пять повторов Online/Handover/Fence tests; реальные kills в 11 online-фазах,
+сверка кэшей, rollback, неизвестный image, cache-read failure и panic. Настоящие
+HTTP tests проверяют import и последующий fence без fallback. Ветки S99/upgrade
+healthy/error/busy проверены с заглушками в bundled Git sh, sh syntax прошёл.
+Все пакеты и пять test binaries собраны для Linux arm64/mips/mipsle, не выполнены.
+Полный Linux/race/Entware transaction/HIL/power-loss/browser visual не проводился.
 
 В блоке online admission прошли полный `go test ./... -count=1 -timeout=90s`,
 `go vet ./...`, синтаксис app.js и шесть JS suites. Новые concurrency tests
@@ -200,12 +214,12 @@ Linux-бинарники локально не выполнялись. Файл�
    архивов реализован; неизвестный, старый пустой или частично созданный writer
    lock не удалять автоматически. Не подменять реальный power-loss gate тестом
    завершения процесса; безопасный учёт временных файлов ещё не реализован.
-   Общий приватный импорт теперь имеет guarded компенсацию в процессе,
-   но ещё не подключённый online-журнал. Основа журнала готова
-   отдельно (`internal/restorejournal`); теперь есть production FileTarget
+   Общий приватный HTTP-импорт теперь использует online-журнал, Store sessions,
+   bindings и cache handover; fallback на компенсацию удалён из production.
+   Основа журнала (`internal/restorejournal`) имеет production FileTarget
    и config/customservices/devices.OpenRestoreTarget + restore sessions.
    Их обычные writers, включая discovery и undo, используют ту же per-file
-   lease/CAS. Main уже вызывает recovery до Load, App online ещё не подключён.
+   lease/CAS. Main вызывает recovery до Load; App online тоже подключён.
    Engine staging target/session и ordinary slot writers тоже готовы; есть
    post-success guarded undo, поэтому staging больше не обязательно последняя
    компенсируемая фаза. Provider adapter на его же .import.lock тоже готов:
@@ -213,15 +227,18 @@ Linux-бинарники локально не выполнялись. Файл�
    снижения standalone storeLimit (см. CLOUDFLARE_RESTORE_ADAPTER_RU).
    Offline coordinator, стабильный порядок leases и startup recovery готовы
    (см. PRIVATE_RESTORE_COORDINATOR_RU). Online admission API/background/conntrack
-   уже подключён (PRIVATE_RESTORE_OPERATION_GATE_RU). Следующий шаг — Store
-   sessions, сверка bindings, online journal и синхронизация кэшей. При recovery
-   required нужна общая защита от дальнейшего Apply/автоматики до восстановления.
+   уже подключён (PRIVATE_RESTORE_OPERATION_GATE_RU). Store sessions, bindings,
+   online journal/cache handover и общий recovery fence готовы локально
+   (PRIVATE_RESTORE_ONLINE_RU). Следующий шаг — install/upgrade/rollback:
+   snapshot сейчас делается до stop, rollback не обрабатывает private journal
+   и игнорирует stop failure. Нужны exclusion до snapshot, согласование journal
+   со снимком и проверка совместимости старого бинарника до любой перезаписи.
    Offline API запрещён после StartRuntime; не подключать его напрямую к HTTP.
    Lifetime lease действует для новых серверов с общим journal root, но не для
    старых бинарников/неучаствующих writers. Аудит install/upgrade/rollback должен
    подтвердить одинаковый layout и сохранение/совместимость приватного журнала.
-   Проверить health/supervisor: временный 409 /status при импорте не должен
-   трактоваться как поломка маршрута и немедленный restart.
+   Busy health теперь код 75; S99/upgrade сохраняют процесс без ложного healthy
+   или rollback. Migration paths согласованы. Полный Entware прогон ещё нужен.
    Только затем общий router+provider restore. Запрет ProviderSnapshots в HTTP сохранять.
    Публичный импорт профиля остаётся на старой компенсации, нужен отдельный аудит.
 3. PR-1.2 делать сначала с локальными ключами и mock API. Не включать регистрацию,

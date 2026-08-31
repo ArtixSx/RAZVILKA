@@ -136,6 +136,19 @@ func (t *RestoreTarget) Binding() string {
 	h := sha256.Sum256([]byte("engine-draft-v1\x00" + draftID(t.ref) + "\x00" + t.file.Binding()))
 	return hex.EncodeToString(h[:])
 }
+
+// RestoreBinding uses allowlisted IDs and a trusted startup root, without I/O.
+func RestoreBinding(stageRoot string, ref DraftRef) (string, error) {
+	if _, _, err := lookup(ref.EngineID, ref.FileID); err != nil || strings.TrimSpace(stageRoot) == "" {
+		return "", restorejournal.ErrInvalid
+	}
+	binding, err := restorejournal.FileBinding(filepath.Join(stageRoot, ref.EngineID, ref.FileID+".draft"))
+	if err != nil {
+		return "", err
+	}
+	h := sha256.Sum256([]byte("engine-draft-v1\x00" + draftID(ref) + "\x00" + binding))
+	return hex.EncodeToString(h[:]), nil
+}
 func (t *RestoreTarget) Close() error { return t.file.Close() }
 func (t *RestoreTarget) Read(ctx context.Context) (restorejournal.Image, error) {
 	image, err := t.file.Read(ctx)
@@ -222,12 +235,16 @@ func (m *Manager) beginRestoreLocked(ctx context.Context, refs []DraftRef) (*Res
 	}
 	return s, nil
 }
-func (s *RestoreSession) closeTargets() {
+func (s *RestoreSession) closeTargets() error {
+	var result error
 	for i := len(s.order) - 1; i >= 0; i-- {
 		if t := s.targets[s.order[i]]; t != nil {
-			_ = t.Close()
+			if t.Close() != nil {
+				result = restorejournal.ErrRecovery
+			}
 		}
 	}
+	return result
 }
 func (s *RestoreSession) Close() error {
 	s.mu.Lock()
@@ -236,9 +253,9 @@ func (s *RestoreSession) Close() error {
 		return nil
 	}
 	s.closed = true
-	s.closeTargets()
+	err := s.closeTargets()
 	s.manager.mu.Unlock()
-	return nil
+	return err
 }
 func (s *RestoreSession) Binding() string {
 	s.mu.Lock()
@@ -260,6 +277,19 @@ func (s *RestoreSession) Targets() map[string]restorejournal.Target {
 	if !s.closed {
 		for _, id := range s.order {
 			out[id] = sessionTarget{s: s, id: id}
+		}
+	}
+	return out
+}
+
+// TargetBindings identifies each held slot, not just the aggregate session.
+func (s *RestoreSession) TargetBindings() map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]string{}
+	if !s.closed {
+		for _, id := range s.order {
+			out[id] = s.targets[id].Binding()
 		}
 	}
 	return out

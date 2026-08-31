@@ -1786,7 +1786,9 @@ func TestEncryptedPrivateBackupRestoresSensitiveConfigIntoDraftOnly(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		return &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "youtube", Name: "YouTube"}}}, CustomServices: custom, Devices: deviceManager, EngineConfigs: engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups")), Start: time.Now()}
+		a := &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "youtube", Name: "YouTube"}}}, CustomServices: custom, Devices: deviceManager, EngineConfigs: engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups")), Start: time.Now()}
+		attachTestRestore(t, a, root)
+		return a
 	}
 
 	source := makeApp(filepath.Join(t.TempDir(), "source"))

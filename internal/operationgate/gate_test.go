@@ -47,6 +47,27 @@ func TestSharedExclusiveAndIdempotentRelease(t *testing.T) {
 	last()
 }
 
+func TestFenceSurvivesOwnerReleaseAndCancellation(t *testing.T) {
+	var g Gate
+	ctx, cancel := context.WithCancel(context.Background())
+	owner, err := g.Exclusive(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Fence()
+	g.Fence()
+	cancel()
+	owner()
+	owner()
+	for _, enter := range []func(context.Context) (func(), error){g.Enter, g.Exclusive} {
+		for _, check := range []context.Context{ctx, context.Background()} {
+			if _, err := enter(check); !errors.Is(err, ErrRecovery) {
+				t.Fatal("fenced admission reopened", err)
+			}
+		}
+	}
+}
+
 func TestCancellationDoesNotReleaseAnActiveOperation(t *testing.T) {
 	var g Gate
 	ctx, cancel := context.WithCancel(context.Background())

@@ -35,6 +35,16 @@ func (t *RestoreTarget) Binding() string {
 	hash := sha256.Sum256([]byte("devices-schema-1\x00" + t.file.Binding()))
 	return hex.EncodeToString(hash[:])
 }
+
+// RestoreBinding verifies a session against a trusted startup path, without I/O.
+func RestoreBinding(path string) (string, error) {
+	binding, err := restorejournal.FileBinding(path)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256([]byte("devices-schema-1\x00" + binding))
+	return hex.EncodeToString(hash[:]), nil
+}
 func (t *RestoreTarget) Close() error { return t.file.Close() }
 
 func validRestoreImage(image restorejournal.Image) bool {
@@ -152,7 +162,7 @@ func (s *RestoreSession) MergeImage(ctx context.Context, in []Device) (restorejo
 }
 func (s *RestoreSession) Binding() string { return s.target.Binding() }
 
-func (s *RestoreSession) Close() error {
+func (s *RestoreSession) Close() (result error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -160,7 +170,12 @@ func (s *RestoreSession) Close() error {
 	}
 	s.closed = true
 	defer s.manager.mu.Unlock()
-	defer s.target.Close()
+	defer func() {
+		if s.target.Close() != nil {
+			s.manager.writeUncertain = true
+			result = restorejournal.ErrRecovery
+		}
+	}()
 	image, err := s.target.Read(context.Background())
 	if err != nil {
 		s.manager.writeUncertain = true

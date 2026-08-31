@@ -1,5 +1,5 @@
-// Package privaterestore coordinates offline draft recovery before Store caches,
-// API handlers or runtime workers are started. It never activates routes.
+// Package privaterestore coordinates journaled online draft import and offline
+// boot recovery before Store caches/API/workers start. It never activates routes.
 package privaterestore
 
 import (
