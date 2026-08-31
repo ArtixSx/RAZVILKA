@@ -20,6 +20,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 func TestPrivateRestoreStepFailureMatrix(t *testing.T) {
@@ -61,7 +62,7 @@ func TestPrivateRestoreStepFailureMatrix(t *testing.T) {
 }
 
 func TestPrivateRestoreIncompleteUndoAndCancellation(t *testing.T) {
-	for _, mode := range []string{"undo-error", "engine-undo-error", "cancel-between", "cancel-after-commit"} {
+	for _, mode := range []string{"undo-error", "engine-undo-error", "config-uncertain", "cancel-between", "cancel-after-commit"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -88,6 +89,9 @@ func TestPrivateRestoreIncompleteUndoAndCancellation(t *testing.T) {
 					if mode == "engine-undo-error" {
 						return nil, engineconfig.ErrStageRollback
 					}
+					if mode == "config-uncertain" {
+						return nil, restorejournal.ErrRecovery
+					}
 					return nil, errors.New("write failed")
 				}},
 			})
@@ -101,7 +105,7 @@ func TestPrivateRestoreIncompleteUndoAndCancellation(t *testing.T) {
 			if !errors.As(err, &failure) || undone != 2 {
 				t.Fatal("not all completed steps received undo")
 			}
-			if failure.recoveryRequired != (mode == "undo-error" || mode == "engine-undo-error") {
+			if failure.recoveryRequired != (mode == "undo-error" || mode == "engine-undo-error" || mode == "config-uncertain") {
 				t.Fatal("rollback result is not truthful")
 			}
 			w := httptest.NewRecorder()

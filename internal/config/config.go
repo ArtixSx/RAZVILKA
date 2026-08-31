@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 type ServiceState struct {
@@ -35,9 +39,11 @@ type Config struct {
 }
 
 type Store struct {
-	mu   sync.RWMutex
-	path string
-	cfg  Config
+	mu             sync.RWMutex
+	path           string
+	cfg            Config
+	diskImage      restorejournal.Image
+	writeUncertain bool
 }
 
 type DraftScope string
@@ -54,8 +60,8 @@ func Default() Config {
 
 func Load(path string) (*Store, error) {
 	s := &Store{path: path, cfg: Default()}
-	b, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
+	image, err := restorejournal.ReadFileImage(context.Background(), path)
+	if err == nil && !image.Exists {
 		if err := s.Save(); err != nil {
 			return nil, err
 		}
@@ -64,11 +70,12 @@ func Load(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, _, err := InspectBytes(b)
+	cfg, _, err := InspectBytes(image.Data)
 	if err != nil {
 		return nil, err
 	}
 	s.cfg = cfg
+	s.diskImage = image
 	return s, nil
 }
 
@@ -389,6 +396,9 @@ func (s *Store) Save() error {
 }
 
 func (s *Store) saveLocked() error {
+	if s.writeUncertain {
+		return restorejournal.ErrRecovery
+	}
 	b, err := json.MarshalIndent(s.cfg, "", "  ")
 	if err != nil {
 		return err
@@ -397,30 +407,30 @@ func (s *Store) saveLocked() error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(s.path)+".tmp-*")
+	target, err := restorejournal.OpenFileTarget(s.path)
 	if err != nil {
-		return fmt.Errorf("create config transaction: %w", err)
+		return err
 	}
-	tmpPath := tmp.Name()
-	defer func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-	}()
-	if err := tmp.Chmod(0o600); err != nil {
-		return fmt.Errorf("protect config transaction: %w", err)
+	defer target.Close()
+	return s.persistLocked(target, b)
+}
+
+func (s *Store) persistLocked(target restorejournal.Target, data []byte) error {
+	after := restorejournal.Image{Exists: true, Data: data}
+	if err := target.CompareAndSwap(context.Background(), s.diskImage, after); err != nil {
+		if errors.Is(err, restorejournal.ErrRecovery) {
+			actual, readErr := target.Read(context.Background())
+			if readErr == nil && actual.Exists == s.diskImage.Exists && bytes.Equal(actual.Data, s.diskImage.Data) {
+				// The failed write provably left the old bytes unchanged.
+				return restorejournal.ErrAborted
+			}
+			// Callers restore their old in-memory view on failure. Prevent that
+			// view from overwriting a possibly committed file on the next write.
+			s.writeUncertain = true
+		}
+		return err
 	}
-	if _, err := tmp.Write(b); err != nil {
-		return fmt.Errorf("write config transaction: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		return fmt.Errorf("sync config transaction: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close config transaction: %w", err)
-	}
-	if err := os.Rename(tmpPath, s.path); err != nil {
-		return fmt.Errorf("commit config transaction: %w", err)
-	}
+	s.diskImage = restorejournal.Image{Exists: true, Data: append([]byte(nil), data...)}
 	return nil
 }
 

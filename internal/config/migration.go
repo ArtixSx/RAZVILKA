@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"os"
 	"reflect"
 	"sort"
+
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 const CurrentSchemaVersion = 1
@@ -21,11 +24,14 @@ type MigrationReport struct {
 }
 
 func Inspect(path string) (Config, MigrationReport, error) {
-	b, err := os.ReadFile(path)
+	image, err := restorejournal.ReadFileImage(context.Background(), path)
 	if err != nil {
 		return Config{}, MigrationReport{}, err
 	}
-	return InspectBytes(b)
+	if !image.Exists {
+		return Config{}, MigrationReport{}, os.ErrNotExist
+	}
+	return InspectBytes(image.Data)
 }
 
 func InspectBytes(b []byte) (Config, MigrationReport, error) {
@@ -107,14 +113,21 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 }
 
 func Migrate(path string) (MigrationReport, error) {
-	cfg, report, err := Inspect(path)
+	image, err := restorejournal.ReadFileImage(context.Background(), path)
+	if err != nil {
+		return MigrationReport{}, err
+	}
+	if !image.Exists {
+		return MigrationReport{}, os.ErrNotExist
+	}
+	cfg, report, err := InspectBytes(image.Data)
 	if err != nil {
 		return report, err
 	}
 	if !report.Changed {
 		return report, nil
 	}
-	store := &Store{path: path, cfg: cfg}
+	store := &Store{path: path, cfg: cfg, diskImage: image}
 	if err := store.Save(); err != nil {
 		return report, fmt.Errorf("persist migrated config: %w", err)
 	}

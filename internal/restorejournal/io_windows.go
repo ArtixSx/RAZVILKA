@@ -24,3 +24,7 @@ func lockFile(file *os.File) error {
 // Windows is a process-crash development/test backend only. File Sync and
 // atomic replacement do not establish directory-entry power-loss durability.
 func syncJournalDir(_ *ownedfs.Root) error { return nil }
+
+func openReadOnly(root *ownedfs.Root, name string) (*os.File, error) {
+	return root.OpenFile(name, os.O_RDONLY, 0)
+}

@@ -122,6 +122,9 @@ function friendlyErrorMessage(value, status = 0) {
   if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) return 'Не удалось связаться с RAZVILKA. Проверьте, что служба запущена, и повторите попытку.';
   if (lower === 'engine is not installed') return 'Этот обход не установлен.';
   if (lower === 'engine is installed but not running') return 'Обход установлен, но сейчас не запущен.';
+  if (lower.includes('state file changed since it was read')) return 'Настройки изменились в другой операции. Запись остановлена, чтобы не затереть новые данные. Требуется повторная загрузка настроек службой.';
+  if (lower.includes('private restore journal is locked')) return 'Настройки сейчас заняты другой операцией. Дождитесь её завершения. Если сообщение остаётся, откройте технические детали.';
+  if (lower.includes('private restore result requires recovery review')) return 'Результат записи настроек не подтверждён. Новые записи остановлены; проверьте восстановление перед продолжением.';
   if (/[Ѐ-ӿ]/.test(text)) return text;
   if (status === 401) return 'Нужно снова войти в RAZVILKA.';
   if (status === 403) return 'Недостаточно прав для этого действия.';

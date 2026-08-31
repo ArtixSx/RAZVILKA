@@ -7,6 +7,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 type privateRestoreStep struct {
@@ -29,7 +30,7 @@ func (e *privateRestoreFailure) Error() string { return "private backup import f
 func runPrivateRestore(ctx context.Context, steps []privateRestoreStep) error {
 	undos := make([]func() error, 0, len(steps))
 	fail := func(phase string, cause error) error {
-		incomplete := errors.Is(cause, engineconfig.ErrStageRollback)
+		incomplete := errors.Is(cause, engineconfig.ErrStageRollback) || errors.Is(cause, restorejournal.ErrRecovery)
 		for i := len(undos) - 1; i >= 0; i-- {
 			if err := undos[i](); err != nil {
 				incomplete = true

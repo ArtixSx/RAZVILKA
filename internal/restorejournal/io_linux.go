@@ -21,3 +21,7 @@ func lockFile(file *os.File) error {
 	return syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 }
 func syncJournalDir(root *ownedfs.Root) error { return root.Sync() }
+
+func openReadOnly(root *ownedfs.Root, name string) (*os.File, error) {
+	return root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+}

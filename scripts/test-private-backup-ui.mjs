@@ -3,6 +3,13 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
+const friendly = source.match(/function friendlyErrorMessage\([^]*?\n}\n/);
+assert.ok(friendly);
+const errorsContext = vm.createContext({});
+vm.runInContext(friendly[0], errorsContext);
+assert.match(errorsContext.friendlyErrorMessage('state file changed since it was read', 500), /не затереть/);
+assert.match(errorsContext.friendlyErrorMessage('private restore journal is locked', 500), /заняты другой операцией/);
+assert.match(errorsContext.friendlyErrorMessage('private restore result requires recovery review', 500), /не подтверждён/);
 const fn = source.match(/async function importPrivateBackup\([^]*?\n}\n/);
 assert.ok(fn, 'real import function must remain testable');
 for (const mode of ['rollback', 'recovery-required', 'disconnect', 'success-refresh-error', 'success', 'cancel']) {

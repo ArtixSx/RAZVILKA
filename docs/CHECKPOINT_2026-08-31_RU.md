@@ -33,16 +33,30 @@
   Снимки до/после под блокировками хранилищ, отказ затирать последующие правки,
   обработка ошибок возврата файлов и понятный результат в UI. Это prerequisite,
   не общий router+provider restore и не durable recovery.
-- Следующий локальный блок: [основа журнала восстановления](PRIVATE_RESTORE_JOURNAL_RU.md).
+- `c4eda04`: [основа журнала восстановления](PRIVATE_RESTORE_JOURNAL_RU.md).
   Снимки before/after, commit decision, bounded canonical journal, OS lease,
   повторный откат после аварии и защита третьего состояния. Реальные target
   adapters/App/startup ещё не подключены; рабочий импорт не изменился.
+- Следующий локальный блок: [config recovery adapter](CONFIG_RESTORE_ADAPTER_RU.md).
+  FileTarget с per-file OS lease/durable CAS, обычные config writers и migration
+  на том же протоколе, bounded read, stale-cache guard и uncertain-write fence.
+  Typed target/session согласует файл и кэш. App/startup recovery ещё не подключены.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
 
 ## Финальные локальные проверки
+
+В блоке config adapter прошли полный `go test ./... -count=1 -timeout=90s`,
+`go vet ./...`, синтаксис app.js и пять JS suites. Config/restorejournal прошли
+10 повторов, включая настоящие дочерние процессы с завершением после prepare,
+записи config, во время rollback и после полного commit. Другой процесс не смог
+писать во время сессии. Восстановление выполнено до загрузки кэша Store.
+Go-пакеты и config/restorejournal/App tests собраны для Linux arm64/mips/mipsle,
+не выполнены. Новые Linux-only file target FIFO/symlink/permissions tests также
+только скомпилированы. Linux/race, Entware shell, роутер, power-loss и browser
+visual QA не выполнялись; dependencies не изменены.
 
 В блоке restore journal прошли полный `go test ./... -count=1 -timeout=90s`,
 `go vet ./...` и пять JS suites. Пакет restorejournal прошёл 10 повторов на
@@ -110,8 +124,11 @@ Linux-бинарники локально не выполнялись. Файл�
    завершения процесса; безопасный учёт временных файлов ещё не реализован.
    Общий приватный импорт теперь имеет guarded компенсацию в процессе,
    но не межпроцессный guard и не подключённый журнал. Основа журнала готова
-   отдельно (`internal/restorejournal`), тестовые file targets не адаптеры App.
-   Следующий шаг — production target adapters с bounded read/durable CAS,
+   отдельно (`internal/restorejournal`); теперь есть production FileTarget
+   и config.OpenRestoreTarget/Store.BeginRestore. Обычные config writers используют
+   ту же per-file lease/CAS, но App/main общий журнал ещё не вызывают.
+   Следующий шаг — catalog/devices, затем staging/provider adapters и обычные
+   writers на том же bounded read/durable CAS,
    владение/исключение параллельных мутаций всех API/background/processes,
    подключение startup recovery до загрузки кэшей и изменяющих API, затем общий
    router+provider restore. Engine staging пока должен быть

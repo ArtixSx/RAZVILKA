@@ -80,7 +80,7 @@ func TestMigratePersistsAtomicallyAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "config.json" {
+	if len(entries) != 2 || !strings.HasPrefix(entries[0].Name(), ".state-") || !strings.HasSuffix(entries[0].Name(), ".lock") || entries[1].Name() != "config.json" {
 		t.Fatalf("unexpected migration files: %+v", entries)
 	}
 }

@@ -55,8 +55,9 @@ backup/recovery, secret access contract, lifecycle ownership и Linux/HIL ост
 Подготовительный [guarded rollback общего приватного импорта](PRIVATE_BACKUP_GUARDED_RESTORE_RU.md)
 реализован локально. Следующим блоком добавлена отдельная
 [основа журнала](PRIVATE_RESTORE_JOURNAL_RU.md) с process-crash tests. Подключение
-production target adapters, общего владения изменениями и startup recovery
-ещё предстоит; общий импорт Provider-архивов остаётся закрытым.
+[первого config adapter](CONFIG_RESTORE_ADAPTER_RU.md) и защита обычных config
+writers выполнены локально. Остальные адаптеры, общее владение изменениями и
+startup recovery ещё предстоят; общий импорт Provider-архивов остаётся закрытым.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 
