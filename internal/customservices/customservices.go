@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -148,6 +149,41 @@ func (m *Manager) Has(id string) bool {
 func (m *Manager) Merge(in []catalog.Service, reserved map[string]bool, allowUpdates bool) ([]catalog.Service, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.mergeLocked(in, reserved, allowUpdates)
+}
+
+// MergeWithRollback captures its own before/after state under the same lock.
+// Undo refuses to overwrite a subsequent edit; it is not crash recovery.
+func (m *Manager) MergeWithRollback(in []catalog.Service, reserved map[string]bool, allowUpdates bool) (func() error, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(in) == 0 {
+		return func() error { return nil }, nil
+	}
+	before := clone(m.services)
+	after, err := m.mergeLocked(in, reserved, allowUpdates)
+	if err != nil {
+		return nil, err
+	}
+	used := false
+	return func() error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if used {
+			return nil
+		}
+		if !reflect.DeepEqual(m.services, after) {
+			return errors.New("custom catalog changed after import; rollback refused")
+		}
+		if _, err := m.replaceLocked(before); err != nil {
+			return err
+		}
+		used = true
+		return nil
+	}, nil
+}
+
+func (m *Manager) mergeLocked(in []catalog.Service, reserved map[string]bool, allowUpdates bool) ([]catalog.Service, error) {
 	result := clone(m.services)
 	index := make(map[string]int, len(result))
 	for i := range result {
@@ -348,6 +384,14 @@ func clone(in []catalog.Service) []catalog.Service {
 		out[i].Strategy = append([]string(nil), s.Strategy...)
 		out[i].SourceRefs = append([]string(nil), s.SourceRefs...)
 		out[i].Probes = append([]catalog.Probe(nil), s.Probes...)
+		for j := range out[i].Probes {
+			expect := &out[i].Probes[j].Expect
+			expect.StatusCodes = append([]int(nil), expect.StatusCodes...)
+			expect.RedirectHosts = append([]string(nil), expect.RedirectHosts...)
+			expect.ContentTypes = append([]string(nil), expect.ContentTypes...)
+			expect.JSONFields = append([]string(nil), expect.JSONFields...)
+			expect.BodyContains = append([]string(nil), expect.BodyContains...)
+		}
 		if s.Provenance != nil {
 			p := *s.Provenance
 			out[i].Provenance = &p

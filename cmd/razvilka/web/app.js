@@ -3237,15 +3237,33 @@ async function importPrivateBackup() {
   if (!state.privateBackupEnvelope || !state.privateBackupPreview?.valid) return;
   if (!await askConfirmation('Импортировать приватную резервную копию?', 'Сервисы, устройства и все конфиги обходов, включая ключи, попадут только в черновик. Рабочие маршруты, пароль панели и ключ восстановления не изменятся.', 'Импортировать в черновик')) return;
   const button = $('#confirmPrivateBackup'); button.disabled = true; button.textContent = 'Импорт…';
+  let committed = false;
   try {
     const result = await api('/api/v1/private-backups/import', { method: 'POST', body: JSON.stringify({ envelope: state.privateBackupEnvelope, password: $('#privateBackupImportPassword').value, confirm: 'IMPORT_PRIVATE_BACKUP' }) });
+    committed = true;
     state.privateBackupEnvelope = null; state.privateBackupPreview = null;
     $('#privateBackupImportPassword').value = '';
     $('#previewPrivateBackup').disabled = true;
     $('#privateBackupPreview').innerHTML = '<div class="community-clean">Приватные данные импортированы в черновик. Проверьте конфиги и общий план перед применением.</div>';
     await refreshAll(); await showPlan();
     showDetails(result, 'Приватная резервная копия импортирована');
-  } catch (error) { showDetails({ error: error.message }, 'Импорт резервной копии не выполнен'); }
+  } catch (error) {
+    // A failed/uncertain import invalidates the old preview. Never leave its
+    // password or a one-click retry armed after an incomplete rollback.
+    state.privateBackupEnvelope = null; state.privateBackupPreview = null;
+    $('#privateBackupImportPassword').value = '';
+    $('#previewPrivateBackup').disabled = true;
+    const response = error.payload || {};
+    const message = committed
+      ? 'Импорт выполнен, но панель не удалось обновить. Обновите страницу перед дальнейшими действиями.'
+      : response.recovery_required === true
+        ? 'Восстановление остановлено, и не все изменения удалось отменить. Проверьте черновики перед применением; параллельные правки не перезаписывались откатом.'
+        : response.rolled_back === true
+          ? 'Восстановление не завершено. Изменения этой операции отменены. Для повторной попытки выберите и проверьте архив заново.'
+          : 'Не удалось подтвердить результат восстановления. Обновите страницу и проверьте черновики. Не повторяйте импорт вслепую.';
+    $('#privateBackupPreview').innerHTML = `<div class="community-empty error">${esc(message)}</div>`;
+    showDetails({ error: message, code: response.code || '', phase: response.phase || '' }, committed ? 'Импорт выполнен — обновите панель' : 'Проверьте результат восстановления');
+  }
   finally { button.textContent = 'Импортировать приватные данные в черновик'; button.disabled = !state.privateBackupPreview?.valid; }
 }
 

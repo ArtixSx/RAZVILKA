@@ -20,6 +20,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-cloudflare-ui.mjs
   node scripts/test-cloudflare-backup-ui.mjs
   node scripts/test-cloudflare-migration-ui.mjs
+  node scripts/test-private-backup-ui.mjs
 fi
 ./build.sh
 sha256sum -c dist/SHA256SUMS

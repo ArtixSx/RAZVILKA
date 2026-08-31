@@ -3940,46 +3940,8 @@ func (a *App) privateBackupImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	reserved := a.reservedServiceIDs()
-	previousCustom := a.CustomServices.List()
-	previousDraft := a.Store.Get().Services
-	var previousDevices []devices.Device
-	if a.Devices != nil {
-		previousDevices = a.Devices.Known()
-	}
-	rollback := func(cause error) {
-		customErr := a.CustomServices.ReplaceAll(previousCustom, reserved)
-		configErr := a.Store.ReplaceDraft(previousDraft)
-		var deviceErr error
-		if a.Devices != nil {
-			deviceErr = a.Devices.ReplaceAll(previousDevices)
-		}
-		if customErr != nil || configErr != nil || deviceErr != nil {
-			http.Error(w, fmt.Sprintf("private backup import failed: %v; rollback custom=%v config=%v devices=%v", cause, customErr, configErr, deviceErr), http.StatusInternalServerError)
-			return
-		}
-		http.Error(w, cause.Error(), http.StatusInternalServerError)
-	}
-	if _, err := a.CustomServices.Merge(payload.CustomServices, reserved, true); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
-		return
-	}
-	if a.Devices != nil {
-		if err := a.Devices.MergeMetadata(payload.Devices); err != nil {
-			rollback(err)
-			return
-		}
-	}
-	if err := a.Store.ReplaceDraft(payload.Services); err != nil {
-		rollback(err)
-		return
-	}
-	items := make([]engineconfig.StageItem, 0, len(payload.EngineFiles))
-	for _, file := range payload.EngineFiles {
-		items = append(items, engineconfig.StageItem{EngineID: file.EngineID, FileID: file.FileID, Content: file.Content})
-	}
-	if _, err := a.EngineConfigs.StagePrivate(items); err != nil {
-		rollback(err)
+	if err := a.restorePrivateDraft(r.Context(), payload); err != nil {
+		writePrivateRestoreFailure(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -4009,6 +3971,9 @@ func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackup
 	// Provider snapshots currently have their own atomic copy-only restore.
 	if len(payload.ProviderSnapshots) != 0 {
 		return privateBackupPreviewResult{}, errors.New("Резервная копия содержит аккаунты Cloudflare. Их восстановление через общий импорт пока не поддерживается; данные не изменены.")
+	}
+	if len(payload.Devices) != 0 && a.Devices == nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит устройства, но хранилище устройств недоступно. Восстановление отменено без изменений.")
 	}
 	preview := privateBackupPreviewResult{
 		CreatedAt: payload.CreatedAt, FromVersion: payload.AppVersion, Digest: payload.Digest,

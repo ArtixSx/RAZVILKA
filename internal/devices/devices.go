@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -193,6 +194,46 @@ func (m *Manager) MergeMetadata(input []Device) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.mergeMetadataLocked(input)
+}
+
+// MergeMetadataWithRollback preserves exact in-memory discovery metadata on
+// undo and refuses to overwrite edits/discovery made after this import.
+func (m *Manager) MergeMetadataWithRollback(input []Device) (func() error, error) {
+	if len(input) > maxDevices {
+		return nil, errors.New("device registry limit exceeded")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(input) == 0 {
+		return func() error { return nil }, nil
+	}
+	before := cloneDevices(m.devices)
+	if err := m.mergeMetadataLocked(input); err != nil {
+		return nil, err
+	}
+	after := cloneDevices(m.devices)
+	used := false
+	return func() error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if used {
+			return nil
+		}
+		if !reflect.DeepEqual(cloneDevices(m.devices), after) {
+			return errors.New("device registry changed after import; rollback refused")
+		}
+		m.devices = cloneDevices(before)
+		if err := m.saveLocked(); err != nil {
+			m.devices = cloneDevices(after)
+			return err
+		}
+		used = true
+		return nil
+	}, nil
+}
+
+func (m *Manager) mergeMetadataLocked(input []Device) error {
 	previous := cloneDevices(m.devices)
 	for _, incoming := range input {
 		device, err := sanitizeStoredDevice(incoming)

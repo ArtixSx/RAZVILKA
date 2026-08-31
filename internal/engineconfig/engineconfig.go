@@ -22,6 +22,10 @@ import (
 
 const maxConfigBytes = 2 << 20
 
+// ErrStageRollback means an earlier draft file could not be restored after a
+// later write failed. Callers must not report that all changes were undone.
+var ErrStageRollback = errors.New("engine draft rollback incomplete")
+
 type FileSpec struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
@@ -286,6 +290,18 @@ func (m *Manager) StagePrivate(items []StageItem) ([]Content, error) {
 }
 
 func (m *Manager) stageValidated(items []StageItem, validate func(string, string, string) Validation) ([]Content, error) {
+	return m.stageValidatedWithIO(items, validate, draftFileIO{write: writeAtomic, remove: os.Remove, mkdir: os.MkdirAll})
+}
+
+// Explicit I/O dependencies allow deterministic failure tests at each write
+// and rollback boundary without timing races or changing process-wide hooks.
+type draftFileIO struct {
+	write  func(string, []byte, os.FileMode) error
+	remove func(string) error
+	mkdir  func(string, os.FileMode) error
+}
+
+func (m *Manager) stageValidatedWithIO(items []StageItem, validate func(string, string, string) Validation, files draftFileIO) ([]Content, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	type prior struct {
@@ -312,25 +328,32 @@ func (m *Manager) stageValidated(items []StageItem, validate func(string, string
 		}
 		previous = append(previous, prior{path: path, existed: err == nil, content: old})
 	}
-	restore := func(written int) {
+	restore := func(written int) error {
+		var result error
 		for i := written - 1; i >= 0; i-- {
+			var err error
 			if previous[i].existed {
-				_ = writeAtomic(previous[i].path, previous[i].content, 0o600)
+				err = files.write(previous[i].path, previous[i].content, 0o600)
 			} else {
-				_ = os.Remove(previous[i].path)
+				err = files.remove(previous[i].path)
+				if errors.Is(err, os.ErrNotExist) {
+					err = nil
+				}
+			}
+			if err != nil {
+				result = ErrStageRollback
 			}
 		}
+		return result
 	}
 	out := make([]Content, 0, len(items))
 	for i, item := range items {
 		path := m.stagePath(item.EngineID, item.FileID)
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			restore(i)
-			return nil, err
+		if err := files.mkdir(filepath.Dir(path), 0o700); err != nil {
+			return nil, errors.Join(err, restore(i))
 		}
-		if err := writeAtomic(path, []byte(item.Content), 0o600); err != nil {
-			restore(i)
-			return nil, err
+		if err := files.write(path, []byte(item.Content), 0o600); err != nil {
+			return nil, errors.Join(err, restore(i))
 		}
 		_, file, _ := lookup(item.EngineID, item.FileID)
 		out = append(out, Content{EngineID: item.EngineID, FileID: item.FileID, Path: choosePath(file.Paths), Source: "staged", Content: item.Content, SHA256: sum([]byte(item.Content))})

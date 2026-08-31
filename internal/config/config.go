@@ -160,11 +160,19 @@ func (s *Store) MergeDraft(states map[string]ServiceState) error {
 // ReplaceDraft is used to restore the exact desired state if a multi-store
 // profile import cannot finish. AppliedServices are deliberately untouched.
 func (s *Store) ReplaceDraft(states map[string]ServiceState) error {
+	_, err := s.ReplaceDraftWithRollback(states)
+	return err
+}
+
+// ReplaceDraftWithRollback is a guarded undo for a live multi-store import.
+// A later config change (including Apply or Safe Mode) blocks automatic undo.
+// It deliberately does not claim durable recovery across process termination.
+func (s *Store) ReplaceDraftWithRollback(states map[string]ServiceState) (func() error, error) {
 	normalizedStates := make(map[string]ServiceState, len(states))
 	for id, state := range states {
 		sources, err := NormalizeSources(state.Sources)
 		if err != nil {
-			return fmt.Errorf("service %s: %w", id, err)
+			return nil, fmt.Errorf("service %s: %w", id, err)
 		}
 		state.Sources = sources
 		normalizedStates[id] = normalizeState(state)
@@ -176,9 +184,27 @@ func (s *Store) ReplaceDraft(states map[string]ServiceState) error {
 	s.cfg.Revision++
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
-		return err
+		return nil, err
 	}
-	return nil
+	committed := cloneConfig(s.cfg)
+	used := false
+	return func() error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if used {
+			return nil
+		}
+		if !reflect.DeepEqual(s.cfg, committed) {
+			return errors.New("configuration changed after import; rollback refused")
+		}
+		s.cfg = cloneConfig(previous)
+		if err := s.saveLocked(); err != nil {
+			s.cfg = cloneConfig(committed)
+			return err
+		}
+		used = true
+		return nil
+	}, nil
 }
 
 func (s *Store) DeleteService(id string) error {

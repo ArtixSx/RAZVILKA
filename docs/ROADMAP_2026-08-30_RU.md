@@ -52,6 +52,9 @@
 реализованы. Добавлен [writer recovery после сбоя процесса](CLOUDFLARE_WRITER_RECOVERY_RU.md)
 без удаления чужих блокировок. Пункт 1 ещё не закрыт полностью: общая транзакция
 backup/recovery, secret access contract, lifecycle ownership и Linux/HIL остаются.
+Подготовительный [guarded rollback общего приватного импорта](PRIVATE_BACKUP_GUARDED_RESTORE_RU.md)
+реализован локально. Это защита компенсации в процессе; durable-журнал и
+startup recovery ещё предстоят, общий импорт Provider-архивов остаётся закрытым.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 
