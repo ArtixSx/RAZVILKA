@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 var (
@@ -42,12 +44,29 @@ type privateDocument struct {
 // The directory must be explicitly created by the caller with private access.
 // POSIX 0700/0600 protect at rest; this is not encryption against root/disk access.
 type Store struct {
-	root *ownedfs.Root
-	mu   sync.Mutex
-	gate chan struct{}
+	root    *ownedfs.Root
+	mu      sync.Mutex
+	gate    chan struct{}
+	binding string
 }
 
 func OpenStore(path string) (*Store, error) {
+	root, err := openPrivateRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	s := &Store{root: root, gate: make(chan struct{}, 1), binding: providerBinding(path)}
+	if _, err := s.load(); err != nil {
+		_ = root.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+func openPrivateRoot(path string) (*ownedfs.Root, error) {
+	if !filepath.IsAbs(path) {
+		return nil, ErrStore
+	}
 	info, err := os.Lstat(path)
 	if err != nil || !info.IsDir() || runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		return nil, ErrStore
@@ -56,12 +75,7 @@ func OpenStore(path string) (*Store, error) {
 	if err != nil {
 		return nil, ErrStore
 	}
-	s := &Store{root: root, gate: make(chan struct{}, 1)}
-	if _, err := s.load(); err != nil {
-		_ = root.Close()
-		return nil, err
-	}
-	return s, nil
+	return root, nil
 }
 
 func (s *Store) Close() error {
@@ -76,7 +90,7 @@ func (s *Store) List(ctx context.Context) ([]Account, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	doc, err := s.load()
+	doc, err := s.loadContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +124,7 @@ func (s *Store) ImportSnapshot(ctx context.Context, imported Import) (Account, e
 	if err != nil {
 		return Account{}, err
 	}
-	doc, err := s.load()
+	doc, err := s.loadContext(ctx)
 	if err != nil {
 		return Account{}, err
 	}
@@ -169,10 +183,7 @@ func (s *Store) commit(ctx context.Context, doc privateDocument) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if s.root.WriteAtomic(storeFile, data, 0o600) != nil {
-		return ErrStore
-	}
-	return nil
+	return writeSnapshotImage(s.root, restorejournal.Image{Exists: true, Data: data})
 }
 
 func validID(id string) bool {
@@ -184,19 +195,19 @@ func validID(id string) bool {
 }
 
 func (s *Store) load() (privateDocument, error) {
-	doc := privateDocument{Schema: Schema, Owner: "razvilka", Accounts: []storedAccount{}}
-	info, err := s.root.Stat(storeFile)
-	if errors.Is(err, os.ErrNotExist) {
-		return doc, nil
+	return s.loadContext(context.Background())
+}
+
+func (s *Store) loadContext(ctx context.Context) (privateDocument, error) {
+	image, err := readSnapshotImage(ctx, s.root, storeLimit)
+	if err != nil {
+		return privateDocument{}, err
 	}
-	if err != nil || !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
-		return doc, ErrStore
+	doc, err := snapshotDocument(image, storeLimit)
+	if err != nil {
+		return privateDocument{}, err
 	}
-	data, err := s.root.ReadLimited(storeFile, storeLimit)
-	if err != nil || json.Unmarshal(data, &doc) != nil || doc.Schema != Schema || doc.Owner != "razvilka" || len(doc.Accounts) > MaxAccounts {
-		return privateDocument{}, ErrStore
-	}
-	if err := validateDocument(doc); err != nil {
+	if err := ctx.Err(); err != nil {
 		return privateDocument{}, err
 	}
 	return doc, nil

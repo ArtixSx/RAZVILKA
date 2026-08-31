@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 const cloudflareCopyNotice = "Это только сохранённая копия аккаунта. Регистрация, запуск обхода и изменение маршрутов не выполнялись."
@@ -137,7 +138,11 @@ func decodeCloudflareImport(w http.ResponseWriter, r *http.Request, save bool) (
 
 func cloudflareError(w http.ResponseWriter, err error) {
 	status, code, message := http.StatusServiceUnavailable, "CLOUDFLARE_STORE_UNAVAILABLE", "Не удалось открыть или сохранить копию Cloudflare. Рабочие обходы не изменены."
-	if errors.Is(err, cloudflareprovider.ErrImport) {
+	if errors.Is(err, restorejournal.ErrRecovery) {
+		status, code, message = http.StatusServiceUnavailable, "CLOUDFLARE_STORE_UNCERTAIN", "Не удалось подтвердить сохранение копий Cloudflare. Файл мог уже сохраниться — обновите список перед повторной попыткой. Рабочие профили и маршруты не изменены."
+	} else if errors.Is(err, cloudflareprovider.ErrRestoreCapacity) {
+		status, code, message = http.StatusConflict, "CLOUDFLARE_RESTORE_TOO_LARGE", "Копии Cloudflare превышают лимит общего восстановления: 4 МиБ на файл. Не удаляйте копии для обхода ограничения; требуется отдельный перенос большого хранилища."
+	} else if errors.Is(err, cloudflareprovider.ErrImport) {
 		status, code, message = http.StatusBadRequest, "CLOUDFLARE_IMPORT_INVALID", "Файл не принят. Проверьте выбранный формат и размер (до 256 КиБ); ссылки, неполные и скрытые ключи не подходят."
 	} else if errors.Is(err, cloudflareprovider.ErrBackup) {
 		status, code, message = http.StatusBadRequest, "CLOUDFLARE_BACKUP_INVALID", "Архив не принят. Нужен отдельный архив копий Cloudflare и его пароль (12–256 байт). Для выгрузки сначала сохраните хотя бы одну копию аккаунта."

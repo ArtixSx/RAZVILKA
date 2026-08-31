@@ -28,7 +28,7 @@ func (s *Store) Backup(ctx context.Context, password, version string) (privateba
 		s.mu.Unlock()
 		return privatebackup.Envelope{}, err
 	}
-	doc, err := s.load()
+	doc, err := s.loadContext(ctx)
 	s.mu.Unlock()
 	if err != nil {
 		return privatebackup.Envelope{}, err
@@ -86,18 +86,29 @@ func decodeSnapshotBackup(ctx context.Context, envelope privatebackup.Envelope, 
 	if len(payload.ProviderSnapshots) == 0 || len(payload.Services) != 0 || len(payload.EngineOrder) != 0 || len(payload.EngineFiles) != 0 || len(payload.CustomServices) != 0 || len(payload.Devices) != 0 {
 		return privateDocument{}, "", ErrBackup
 	}
+	restored, err := snapshotsDocument(payload.ProviderSnapshots)
+	if err != nil {
+		return privateDocument{}, "", err
+	}
+	return restored, payload.Digest, nil
+}
+
+func snapshotsDocument(items []privatebackup.ProviderSnapshot) (privateDocument, error) {
+	if len(items) == 0 || len(items) > MaxAccounts {
+		return privateDocument{}, ErrBackup
+	}
 	restored := privateDocument{Schema: Schema, Owner: "razvilka"}
-	for _, item := range payload.ProviderSnapshots {
+	for _, item := range items {
 		at, err := time.Parse(time.RFC3339Nano, item.ImportedAt)
-		if err != nil || item.Provider != "cloudflare" {
-			return privateDocument{}, "", ErrBackup
+		if err != nil || item.Provider != "cloudflare" || len(item.Content) > MaxImportBytes {
+			return privateDocument{}, ErrBackup
 		}
 		restored.Accounts = append(restored.Accounts, storedAccount{ID: item.ID, Kind: item.SourceKind, Raw: []byte(item.Content), Digest: item.SHA256, ImportedAt: at})
 	}
 	if validateDocument(restored) != nil {
-		return privateDocument{}, "", ErrBackup
+		return privateDocument{}, ErrBackup
 	}
-	return restored, payload.Digest, nil
+	return restored, nil
 }
 
 // PreviewBackup validates the whole archive and merge without creating a file
@@ -112,7 +123,7 @@ func (s *Store) PreviewBackup(ctx context.Context, envelope privatebackup.Envelo
 	if err := ctx.Err(); err != nil {
 		return BackupReview{}, err
 	}
-	doc, err := s.load()
+	doc, err := s.loadContext(ctx)
 	if err != nil {
 		return BackupReview{}, err
 	}
@@ -134,7 +145,7 @@ func (s *Store) restoreBackup(ctx context.Context, envelope privatebackup.Envelo
 		return nil, err
 	}
 	defer release()
-	doc, err := s.load()
+	doc, err := s.loadContext(ctx)
 	if err != nil {
 		return nil, err
 	}

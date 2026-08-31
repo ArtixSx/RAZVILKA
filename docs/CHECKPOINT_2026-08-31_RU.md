@@ -45,18 +45,34 @@
   Обычные writers/undo/discovery на том же per-file OS lease/CAS, typed targets/
   sessions и общий crash test config+catalog+devices. UI сообщает о несохранённом
   discovery. Полный HTTP/startup restore ещё не включён; staging/provider остаются.
-- Следующий локальный блок: [engine staging recovery](ENGINE_DRAFT_RESTORE_RU.md).
+- `d1ab62c`: [engine staging recovery](ENGINE_DRAFT_RESTORE_RU.md).
   Все staging writers используют slot leases/CAS, batch откатывает также failed
   target после возможного rename; StagePrivateWithRollback даёт guarded undo
   следующей фазе. Typed target/session допускает absent/empty/incomplete before
   images. Provider только исследован: общая .import.lock и несовпадение лимитов
   16 МиБ store / 4 МиБ Image / 8 МиБ plan требуют отдельного адаптера.
+- Следующий локальный блок: [Cloudflare recovery adapter](CLOUDFLARE_RESTORE_ADAPTER_RU.md).
+  Target до OpenStore и Store.BeginRestore держат существующую `.import.lock`;
+  bounded exact-byte CAS, тот же atomic writer с Linux directory sync, merge
+  без регистрации/активации. Отсутствие файла и формат before восстанавливаются
+  точно. Store >4 МиБ остаётся доступен standalone, coordinated restore заранее
+  отказывает. HTTP различает неподтверждённую запись. Общий coordinator ещё не включён.
 
 В этой работе не было push/release и изменений роутера. Стабильный релиз —
 `v0.18.0`, опубликованный предварительный — `v0.18.1-rc.1`. Его успешный Linux CI
 не следует выдавать за проверку новых локальных commits.
 
 ## Финальные локальные проверки
+
+В блоке provider adapter прошли полный `go test ./... -count=1 -timeout=90s`,
+`go vet ./...`, синтаксис app.js и шесть JS suites. Provider recovery tests
+прошли пять повторов. Дочерние процессы убиты после prepare/rename/undo/commit,
+проверены исходно отсутствующий/существующий файл, внешний конфликт и запрет
+ordinary writer. Recovery выполнен до OpenStore. Проверены no-op/exact undo,
+бюджеты, отмена, освобождение ownership после ошибки, редактирование ошибки HTTP.
+Все пакеты и provider/App test binaries собраны для Linux arm64/mips/mipsle;
+Linux-only FIFO/symlink/mode tests скомпилированы, не выполнены. Linux/race,
+shell/HIL/power-loss и browser visual QA не выполнялись. Зависимости не менялись.
 
 В блоке staging прошли полный `go test ./... -count=1 -timeout=90s`,
 `go vet ./...`, синтаксис app.js и шесть JS suites. Engineconfig tests прошли
@@ -160,9 +176,10 @@ Linux-бинарники локально не выполнялись. Файл�
    lease/CAS, но App/main общий журнал ещё не вызывают.
    Engine staging target/session и ordinary slot writers тоже готовы; есть
    post-success guarded undo, поэтому staging больше не обязательно последняя
-   компенсируемая фаза. Следующий шаг — provider adapter на его же .import.lock:
-   читать bounded, сравнивать bytes, синхронизировать каталог, заранее проверять
-   лимиты общего журнала (см. ENGINE_DRAFT_RESTORE_RU). Затем
+   компенсируемая фаза. Provider adapter на его же .import.lock тоже готов:
+   bounded read, exact CAS, directory sync, ранний лимит Image (4 МиБ) без
+   снижения standalone storeLimit (см. CLOUDFLARE_RESTORE_ADAPTER_RU).
+   Следующий шаг — coordinator и стабильный порядок leases всех stores,
    владение/исключение параллельных мутаций всех API/background/processes,
    подключение startup recovery до загрузки кэшей и изменяющих API, затем общий
    router+provider restore. Запрет ProviderSnapshots сохранять.

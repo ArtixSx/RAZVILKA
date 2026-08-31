@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,10 +16,35 @@ import (
 	"github.com/ArtixSx/razvilka/internal/auditlog"
 	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 	"github.com/ArtixSx/razvilka/internal/security"
 )
 
 const cloudflareTestToken = "0123456789abcdefghijklmnopqrstuvwxyz-ADMIN"
+
+func TestCloudflareUncertainWriteMessage(t *testing.T) {
+	for _, test := range []struct {
+		err            error
+		code, fragment string
+		status         int
+	}{
+		{restorejournal.ErrRecovery, "CLOUDFLARE_STORE_UNCERTAIN", "мог уже сохраниться", http.StatusServiceUnavailable},
+		{cloudflareprovider.ErrRestoreCapacity, "CLOUDFLARE_RESTORE_TOO_LARGE", "4 МиБ", http.StatusConflict},
+	} {
+		w := httptest.NewRecorder()
+		cloudflareError(w, fmt.Errorf("private-token-marker /private/path: %w", test.err))
+		var body map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != test.status || body["code"] != test.code || !strings.Contains(body["error"], test.fragment) {
+			t.Fatalf("incorrect message: %s", w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "private-token-marker") || strings.Contains(w.Body.String(), "/private/path") || strings.Contains(w.Body.String(), "Ничего не изменено") {
+			t.Fatal("misleading or secret error")
+		}
+	}
+}
 
 func cloudflareTestApp(t *testing.T) (*App, string) {
 	t.Helper()
