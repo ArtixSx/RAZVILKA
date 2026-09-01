@@ -80,6 +80,9 @@ private Store и его encrypted backup/restore затем добавлены. 
 API и runtime намеренно отсутствуют до golden fixtures и следующих gates.
 Для будущего изолированного builder добавлен ограниченный tunnel-material
 callback без account credentials; публичный API секретов по-прежнему отсутствует.
+Следующий локальный блок добавляет сам inert WireGuard candidate builder с
+bounded options и secret lease, но без runtime/route/DNS и без заявления о
+handshake. Подробности: [CLOUDFLARE_WIREGUARD_CANDIDATE_RU.md](CLOUDFLARE_WIREGUARD_CANDIDATE_RU.md).
 Контракт: [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md).
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
