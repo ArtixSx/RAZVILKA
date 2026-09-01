@@ -78,6 +78,8 @@ registrar возвращает неподтверждённого кандида
 private key, device ID или access token. Неактивное сохранение кандидата в
 private Store и его encrypted backup/restore затем добавлены. Живой Cloudflare
 API и runtime намеренно отсутствуют до golden fixtures и следующих gates.
+Для будущего изолированного builder добавлен ограниченный tunnel-material
+callback без account credentials; публичный API секретов по-прежнему отсутствует.
 Контракт: [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md).
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab

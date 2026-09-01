@@ -26,11 +26,15 @@ PR-1.2 отделяет локальную криптографию от буд�
   `local-registration` в закрытом Provider Store. Этот kind нельзя подделать
   обычным публичным импортом; он сохраняется в зашифрованном private backup и
   после restore остаётся `registered-unverified`.
+- типизированный внутренний `WithTunnelMaterial` выдаёт будущему изолированному
+  builder только ключи, адреса и endpoints на время callback. Device ID и access
+  token в этот scope не входят; backing-буферы очищаются после возврата, а
+  JSON/логи всегда получают только redacted-маркер.
 
 ## Что намеренно отсутствует
 
 - живой Cloudflare HTTP endpoint и знание его текущей схемы;
-- экспорт WireGuard-конфига;
+- экспорт WireGuard-конфига и transport builder;
 - запуск интерфейса, изменение DNS/firewall/PBR или назначение сервису;
 - AutoPilot и автоматическая ротация.
 
@@ -64,3 +68,8 @@ Cloudflare описывает административные Zero Trust regist
 ARM64 Keenetic: контрольная сумма совпала, положительные/отрицательные сценарии,
 атомарное сохранение и encrypted backup/restore прошли. Тестовый бинарник
 удалён; рабочая RAZVILKA осталась `0.18.0`, сеть и профили не изменялись.
+
+Отдельный набор tunnel-material contract также выполнен на этом ARM64-роутере:
+scope/redaction/очистка ключевых буферов, запрет capability для пассивного
+импорта, cancellation и передача ошибки builder прошли. Временный бинарник
+удалён, рабочий сервис не перезапускался.
