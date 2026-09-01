@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/warp"
@@ -1309,7 +1310,20 @@ func sourceBoundWARPProbe(ctx context.Context, rawURL, source string) error {
 	if err != nil {
 		return err
 	}
-	if request.URL.Hostname() == "www.cloudflare.com" && request.URL.Path == "/cdn-cgi/trace" && !strings.Contains("\n"+string(body)+"\n", "\nwarp=on\n") {
+	if request.URL.Hostname() == "www.cloudflare.com" && request.URL.Path == "/cdn-cgi/trace" {
+		if err := validateWARPTrace(body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateWARPTrace(body []byte) error {
+	trace, err := cloudflareprovider.ParseCloudflareTrace(body)
+	if err != nil {
+		return errors.New("Cloudflare trace response is invalid or ambiguous")
+	}
+	if trace.WARP != "on" {
 		return errors.New("Cloudflare trace did not confirm warp=on")
 	}
 	return nil

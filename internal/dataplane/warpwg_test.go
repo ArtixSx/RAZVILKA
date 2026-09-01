@@ -191,6 +191,22 @@ func TestWARPHandshakeFailureDoesNotExposePeerKey(t *testing.T) {
 	}
 }
 
+func TestWARPTraceRequiresStrictUnambiguousEvidence(t *testing.T) {
+	if err := validateWARPTrace([]byte("ip=8.8.8.8\ncolo=DME\nwarp=on\n")); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range [][]byte{
+		[]byte("<html>warp=on</html>"),
+		[]byte("ip=8.8.8.8\ncolo=DME\nwarp=off\n"),
+		[]byte("ip=8.8.8.8\ncolo=DME\nwarp=off\nwarp=on\n"),
+		[]byte("ip=192.168.1.1\ncolo=DME\nwarp=on\n"),
+	} {
+		if err := validateWARPTrace(body); err == nil {
+			t.Fatalf("invalid trace accepted: %q", body)
+		}
+	}
+}
+
 func TestSanitizeWGQuickProfileRemovesExecutableHooks(t *testing.T) {
 	profile := strings.Replace(testWARPProfile(), "Address = 172.16.0.2/32\n", "Address = 172.16.0.2/32\nPostUp = touch /tmp/unsafe\nDNS = 1.1.1.1\nTable = auto\n", 1)
 	got, err := sanitizeWGQuickProfile(profile)
