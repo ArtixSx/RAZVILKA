@@ -83,6 +83,10 @@ callback без account credentials; публичный API секретов п�
 Следующий локальный блок добавляет сам inert WireGuard candidate builder с
 bounded options и secret lease, но без runtime/route/DNS и без заявления о
 handshake. Подробности: [CLOUDFLARE_WIREGUARD_CANDIDATE_RU.md](CLOUDFLARE_WIREGUARD_CANDIDATE_RU.md).
+Также готов чистый evaluator
+[Endpoint Scanner evidence](CLOUDFLARE_ENDPOINT_SCANNER_EVIDENCE_RU.md), который
+не допускает `verified` без двух полных exact-route попыток. Реальный runner/HIL
+остаётся следующим gate.
 Контракт: [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md).
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab

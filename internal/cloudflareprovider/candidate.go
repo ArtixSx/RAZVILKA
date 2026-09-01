@@ -34,12 +34,14 @@ type CandidateOptions struct {
 type CandidatePreview struct {
 	AccountID           string   `json:"account_id"`
 	Transport           string   `json:"transport"`
+	RoutePathID         string   `json:"route_path_id"`
 	Endpoint            string   `json:"endpoint"`
 	Addresses           []string `json:"addresses"`
 	AllowedIPs          []string `json:"allowed_ips"`
 	MTU                 int      `json:"mtu"`
 	PersistentKeepalive int      `json:"persistent_keepalive"`
 	Verification        string   `json:"verification"`
+	valid               bool
 }
 
 // WireGuardCandidate exists only for the duration of WithWireGuardCandidate.
@@ -159,14 +161,24 @@ func (s *Store) WithWireGuardCandidate(ctx context.Context, accountID string, op
 			preview: CandidatePreview{
 				AccountID: accountID, Transport: "wireguard", Endpoint: material.endpoints[normalized.EndpointIndex].String(),
 				Addresses: addresses, AllowedIPs: []string{"0.0.0.0/0", "::/0"}, MTU: normalized.MTU,
-				PersistentKeepalive: normalized.PersistentKeepalive, Verification: "built-unverified",
+				PersistentKeepalive: normalized.PersistentKeepalive, Verification: "built-unverified", valid: true,
 			},
 			privateKey: material.PrivateKey(), peerPublicKey: material.PeerPublicKey(),
 		}
+		candidate.preview.RoutePathID = candidateRoutePathID(candidate.preview)
 		defer candidate.erase()
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		return consume(ctx, candidate)
 	})
+}
+
+func candidateRoutePathID(candidate CandidatePreview) string {
+	identity := strings.Join([]string{
+		candidate.AccountID, candidate.Transport, candidate.Endpoint,
+		strings.Join(candidate.Addresses, ","), strings.Join(candidate.AllowedIPs, ","),
+		strconv.Itoa(candidate.MTU), strconv.Itoa(candidate.PersistentKeepalive),
+	}, "\x00")
+	return "cloudflare-wg:" + digest([]byte(identity))
 }
