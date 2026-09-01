@@ -113,3 +113,8 @@ Refactor сохранил прежний WARP canary: его source-bound зап
 маршруты. Позитивный exact evidence, blocked service, ambiguous trace и unsafe
 input прошли ARM64 gate; временный тест удалён, установленная `0.18.0` не
 перезапускалась.
+
+Во время подготовки runner исправлен cleanup существующего WARP canary: rule и
+interface теперь удаляются только если текущая попытка доказанно завершила их
+создание. Uncertain start не захватывает появившийся интерфейс. Оба пути прошли
+ARM64 gate без изменения рабочей сети.

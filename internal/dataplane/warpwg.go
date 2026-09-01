@@ -256,11 +256,15 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err := owned.WriteAtomic(filepath.Join("canary", "candidate.conf"), []byte(runtimeProfile), 0o600); err != nil {
 		return err
 	}
+	interfaceStarted, policyInstalled := false, false
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
-		cleanupErr := candidate.cleanupCanaryPolicy(cleanupCtx, source)
-		if candidate.interfaceActive(cleanupCtx) {
+		var cleanupErr error
+		if policyInstalled {
+			cleanupErr = candidate.cleanupCanaryPolicy(cleanupCtx, source)
+		}
+		if interfaceStarted && candidate.interfaceActive(cleanupCtx) {
 			if err := candidate.stopInterface(cleanupCtx); cleanupErr == nil {
 				cleanupErr = err
 			}
@@ -273,9 +277,11 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err := candidate.startInterface(ctx); err != nil {
 		return fmt.Errorf("start temporary WARP interface: %w", err)
 	}
+	interfaceStarted = true
 	if err := candidate.installCanaryPolicy(ctx, source); err != nil {
 		return err
 	}
+	policyInstalled = true
 
 	probe := candidate.CanaryProbe
 	if probe == nil {

@@ -20,6 +20,7 @@ type warpFakeRunner struct {
 	starts                int
 	handshakeAfterRestart bool
 	neverHandshake        bool
+	failStart             bool
 }
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -41,6 +42,9 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 	if name == "ip" && len(args) >= 2 && args[0] == "link" && args[1] == "add" {
 		r.active = true
 		r.starts++
+		if r.failStart {
+			return nil, fmt.Errorf("simulated interface ownership conflict")
+		}
 		return []byte("ok"), nil
 	}
 	if name == "ip" && len(args) >= 2 && args[0] == "link" && args[1] == "delete" {
@@ -63,6 +67,43 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		return []byte(fmt.Sprintf("peer\t%d\n", time.Now().Unix())), nil
 	}
 	return []byte("ok"), nil
+}
+
+func TestWARPCanaryDoesNotDeleteInterfaceWhenStartOwnershipIsUncertain(t *testing.T) {
+	root := t.TempDir()
+	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	if _, err := configs.Stage("warp-wg", "main", testWARPProfile()); err != nil {
+		t.Fatal(err)
+	}
+	runner := &warpFakeRunner{failStart: true}
+	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
+	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", runner
+	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
+		if host == "engage.cloudflareclient.com" {
+			return []netip.Addr{netip.MustParseAddr("162.159.192.1")}, nil
+		}
+		return []netip.Addr{netip.MustParseAddr("198.51.100.20")}, nil
+	}
+	transaction := filepath.Join(root, "transaction")
+	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Stage(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Canary(context.Background(), plan.RoutePlanFor("warp-wg"), transaction); err == nil {
+		t.Fatal("uncertain interface start was accepted")
+	}
+	if !runner.active {
+		t.Fatal("runner deleted an interface it did not prove it started")
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(call, "link delete dev rz-warp-canary") {
+			t.Fatal("foreign/uncertain interface was deleted", runner.calls)
+		}
+	}
 }
 
 func TestWARPCanaryUsesTemporarySourcePolicyAndCleansIt(t *testing.T) {
