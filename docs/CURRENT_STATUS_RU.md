@@ -254,6 +254,13 @@ attempts с per-attempt timeout, jitter, cancellation, immutable identity и
 Контракт orchestrator также прошёл на ARM64 Keenetic, включая позднюю ошибку
 после двух PASS; она не была повышена до `verified`. Временный тест удалён.
 
+Добавлен версионированный
+[официальный каталог WARP endpoints](CLOUDFLARE_ENDPOINT_CATALOG_RU.md), который
+различает consumer/Zero Trust и registrar-issued значения. Он только аннотирует
+кандидата и не выполняет discovery или сетевые изменения.
+Каталог и новый candidate fingerprint прошли на ARM64 Keenetic; временный тест
+удалён, установленная `0.18.0` не перезапускалась.
+
 Порядок дальнейшей разработки находится в
 [ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — проверить
 строгие Evidence на аппаратном baseline и завершить независимое подтверждение

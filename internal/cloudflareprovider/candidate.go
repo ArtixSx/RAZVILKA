@@ -32,15 +32,16 @@ type CandidateOptions struct {
 }
 
 type CandidatePreview struct {
-	AccountID           string   `json:"account_id"`
-	Transport           string   `json:"transport"`
-	RoutePathID         string   `json:"route_path_id"`
-	Endpoint            string   `json:"endpoint"`
-	Addresses           []string `json:"addresses"`
-	AllowedIPs          []string `json:"allowed_ips"`
-	MTU                 int      `json:"mtu"`
-	PersistentKeepalive int      `json:"persistent_keepalive"`
-	Verification        string   `json:"verification"`
+	AccountID           string             `json:"account_id"`
+	Transport           string             `json:"transport"`
+	RoutePathID         string             `json:"route_path_id"`
+	Endpoint            string             `json:"endpoint"`
+	EndpointCatalog     EndpointAssessment `json:"endpoint_catalog"`
+	Addresses           []string           `json:"addresses"`
+	AllowedIPs          []string           `json:"allowed_ips"`
+	MTU                 int                `json:"mtu"`
+	PersistentKeepalive int                `json:"persistent_keepalive"`
+	Verification        string             `json:"verification"`
 	valid               bool
 }
 
@@ -165,6 +166,7 @@ func (s *Store) WithWireGuardCandidate(ctx context.Context, accountID string, op
 			},
 			privateKey: material.PrivateKey(), peerPublicKey: material.PeerPublicKey(),
 		}
+		candidate.preview.EndpointCatalog = ClassifyEndpoint(material.endpoints[normalized.EndpointIndex])
 		candidate.preview.RoutePathID = candidateRoutePathID(candidate.preview)
 		defer candidate.erase()
 		if err := ctx.Err(); err != nil {
@@ -177,6 +179,7 @@ func (s *Store) WithWireGuardCandidate(ctx context.Context, accountID string, op
 func candidateRoutePathID(candidate CandidatePreview) string {
 	identity := strings.Join([]string{
 		candidate.AccountID, candidate.Transport, candidate.Endpoint,
+		candidate.EndpointCatalog.AddressClass, candidate.EndpointCatalog.PortClass, candidate.EndpointCatalog.CatalogVersion,
 		strings.Join(candidate.Addresses, ","), strings.Join(candidate.AllowedIPs, ","),
 		strconv.Itoa(candidate.MTU), strconv.Itoa(candidate.PersistentKeepalive),
 	}, "\x00")

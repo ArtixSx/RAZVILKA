@@ -87,6 +87,9 @@ handshake. Подробности: [CLOUDFLARE_WIREGUARD_CANDIDATE_RU.md](CLOUDF
 [Endpoint Scanner evidence](CLOUDFLARE_ENDPOINT_SCANNER_EVIDENCE_RU.md), который
 не допускает `verified` без двух полных exact-route попыток. Реальный runner/HIL
 остаётся следующим gate.
+Официальные WireGuard ranges/ports вынесены в отдельный версионированный
+[endpoint catalog](CLOUDFLARE_ENDPOINT_CATALOG_RU.md); undocumented registrar
+endpoint не блокируется, но не считается официальным или рекомендуемым.
 Контракт: [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md).
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab

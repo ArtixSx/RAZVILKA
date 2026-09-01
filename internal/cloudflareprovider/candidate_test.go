@@ -35,7 +35,8 @@ func TestWireGuardCandidateIsInertBoundedAndRedacted(t *testing.T) {
 	err := store.WithWireGuardCandidate(context.Background(), account.ID, CandidateOptions{}, func(_ context.Context, candidate WireGuardCandidate) error {
 		retained = candidate
 		view := candidate.Public()
-		if view.AccountID != account.ID || view.Endpoint != "162.159.192.1:2408" || view.MTU != 1280 || view.PersistentKeepalive != 25 || view.Verification != "built-unverified" {
+		if view.AccountID != account.ID || view.Endpoint != "162.159.192.1:2408" || view.MTU != 1280 || view.PersistentKeepalive != 25 || view.Verification != "built-unverified" ||
+			view.EndpointCatalog.AddressClass != EndpointOfficialConsumer || view.EndpointCatalog.PortClass != PortOfficialDefault || !view.EndpointCatalog.Recommended {
 			t.Fatalf("unexpected candidate: %+v", view)
 		}
 		encoded, _ := json.Marshal(candidate)
@@ -82,7 +83,7 @@ func TestWireGuardCandidateOptionsAreBounded(t *testing.T) {
 		}
 	}
 	if err := store.WithWireGuardCandidate(context.Background(), account.ID, CandidateOptions{EndpointIndex: 1, MTU: 1360, PersistentKeepalive: 15}, func(_ context.Context, candidate WireGuardCandidate) error {
-		if candidate.Public().Endpoint != "[2606:4700:d0::1]:2408" || candidate.Public().MTU != 1360 || candidate.Public().PersistentKeepalive != 15 {
+		if candidate.Public().Endpoint != "[2606:4700:d0::1]:2408" || candidate.Public().MTU != 1360 || candidate.Public().PersistentKeepalive != 15 || candidate.Public().EndpointCatalog.Recommended || candidate.Public().EndpointCatalog.AddressClass != EndpointRegistrarIssued {
 			t.Fatal("valid explicit options were not preserved")
 		}
 		return nil
