@@ -3022,14 +3022,39 @@ async function checkUsqueDoctor() {
     const evidencePanel = `<div class="usque-evidence"><div><span>Технический WARP</span><b>${evidence.warp === 'on' || evidence.warp === 'plus' ? `warp=${esc(evidence.warp)}` : 'нет подтверждения'}</b><small>${esc(evidence.transport || 'транспорт не выбран')} · ${esc(evidenceTime)}</small></div><div><span>Выход Cloudflare</span><b>${esc(evidence.colo || 'POP неизвестен')}${evidence.loc ? ` · ${esc(evidence.loc)}` : ''}</b><small>${esc(evidence.egress_ip || 'IP не сохранён')}</small></div><div><span>Выбранный сервис</span><b>${esc(confirmedServices)}</b><small>Проверяется отдельно после WARP</small></div></div>`;
     const routesPanel = routeMatrix.length ? `<div class="usque-route-matrix">${routeMatrix.map((route) => `<span class="${route.dependency_loop ? 'loop' : route.expected ? 'available' : ''}"><b>${esc(route.family)}</b><small>${route.dependency_loop ? `петля через ${esc(route.interface || 'TUN')}` : route.available ? `через ${esc(route.interface || 'системный маршрут')}` : 'маршрут не найден'}</small></span>`).join('')}</div>` : '';
     const metadataPanel = `<div class="usque-metadata"><div><span>Версия пакета</span><b>${esc(versions.package || 'не определена')}</b><small>ядро: ${esc(versions.core || 'отдельно не опубликовано')} · конфиг: ${esc(versions.config || 'не указан')}</small></div><div><span>Окружение</span><b>${esc(environment.architecture || 'архитектура неизвестна')}</b><small>маршруты: ${esc(environment.route_tool || 'утилита не найдена')} · ndmc: ${esc(environment.ndmc_mode || 'не проверен')}</small></div><div><span>Владелец TUN</span><b>${ownership.runtime_owner === 'consistent-with-usque-init' ? 'согласуется со службой USQUE' : 'не подтверждён'}</b><small>${esc(ownership.interface || 'IFACE не задан')} · источник: ${esc(ownership.claimed_by || 'нет')}</small></div></div>`;
-    const repairPanel = repair.summary ? `<details class="transaction-details usque-repair-preview"><summary>Предпросмотр ремонта ndmc · ${esc(repair.status || 'неизвестно')}</summary><div class="usque-doctor-note"><b>${esc(repair.needed ? 'Нужен точечный ремонт' : repair.eligible ? 'Изменения не требуются' : 'Ремонт заблокирован')}</b><p>${esc(repair.summary)}</p><small>Вызовы ndmc: ${esc(repair.ndmc_invocations ?? 0)} · уже изолированы: ${esc(repair.scoped_invocations ?? 0)}. Это только просмотр: файлы и службы не изменены.</small>${(repair.steps || []).length ? `<ol>${repair.steps.map((step) => `<li>${esc(step)}</li>`).join('')}</ol>` : ''}${(repair.blockers || []).length ? `<p class="danger-text">${repair.blockers.map(esc).join(' · ')}</p>` : ''}</div></details>` : '';
+    const repairAction = repair.needed && repair.eligible ? '<div class="usque-repair-actions"><button class="secondary" id="repairUsqueNDMC" type="button">Безопасно исправить ndmc</button><small>USQUE не будет перезапущен автоматически.</small></div>' : '';
+    const repairPanel = repair.summary ? `<details class="transaction-details usque-repair-preview" ${repair.needed ? 'open' : ''}><summary>Ремонт связи с Keenetic · ${esc(repair.status || 'неизвестно')}</summary><div class="usque-doctor-note"><b>${esc(repair.needed ? 'Нужен точечный ремонт' : repair.eligible ? 'Изменения не требуются' : 'Ремонт заблокирован')}</b><p>${esc(repair.summary)}</p><small>Вызовы ndmc: ${esc(repair.ndmc_invocations ?? 0)} · уже изолированы: ${esc(repair.scoped_invocations ?? 0)}. До нажатия кнопки это только просмотр: файлы и службы не изменены.</small>${(repair.steps || []).length ? `<ol>${repair.steps.map((step) => `<li>${esc(step)}</li>`).join('')}</ol>` : ''}${(repair.blockers || []).length ? `<p class="danger-text">${repair.blockers.map(esc).join(' · ')}</p>` : ''}${repairAction}</div></details>` : '';
     const fileRows = Object.entries(files).map(([kind, file]) => `<div><b>${esc({ config: 'Конфигурация', session: 'Сессия', binary: 'Бинарник', init: 'Запуск' }[kind] || kind)}</b><span>${file.present ? `${esc(file.name || 'файл')} · права ${esc(file.mode || 'неизвестны')}${file.owner_uid ? ` · UID ${esc(file.owner_uid)}` : ''}` : 'не найден'}</span><small>${file.modified_at ? new Date(file.modified_at).toLocaleString('ru-RU') : 'дата неизвестна'}${file.sha256 ? ` · SHA-256 ${esc(file.sha256.slice(0, 12))}…` : ''}</small></div>`).join('');
     const filesPanel = `<details class="transaction-details usque-file-facts"><summary>Файлы и резервная копия</summary><div class="usque-file-grid">${fileRows || '<span>Метаданные файлов недоступны.</span>'}${lastBackup.present ? `<div><b>Последняя резервная копия</b><span>${esc(lastBackup.name || 'backup')} · права ${esc(lastBackup.mode || 'неизвестны')}</span><small>${esc(lastBackup.modified_at ? new Date(lastBackup.modified_at).toLocaleString('ru-RU') : '')}${lastBackup.sha256 ? ` · SHA-256 ${esc(lastBackup.sha256.slice(0, 12))}…` : ''}</small></div>` : '<div><b>Резервная копия</b><span>не найдена в известных каталогах</span><small>Doctor ничего не создаёт автоматически</small></div>'}</div></details>`;
     $('#usqueDoctorResult').innerHTML = `<div class="usque-doctor-head"><div><span class="engine-state ${stateClass}">${esc(stateLabel)}</span><h3>${esc(config.transport || 'USQUE')} · ${esc(config.sni || 'SNI по умолчанию')}</h3><p>${esc(config.interface || 'интерфейс не определён')}${report.endpoint_route_interface ? ` · IPv4 endpoint через ${esc(report.endpoint_route_interface)}` : ''}</p></div><small>${esc(report.checked_at ? new Date(report.checked_at).toLocaleString('ru-RU') : '')}</small></div>${metadataPanel}${evidencePanel}${routesPanel}<div class="usque-check-grid">${checks.map((check) => `<div class="usque-check ${esc(check.status)}"><span>${check.status === 'pass' ? '✓' : check.status === 'warning' ? '!' : check.status === 'skipped' ? '–' : '×'}</span><div><b>${esc(check.label)}</b><p>${esc(check.message)}</p>${check.action ? `<small>${esc(check.action)}</small>` : ''}</div></div>`).join('')}</div>${repairPanel}${publicEndpoints.length ? `<details class="transaction-details"><summary>Публичные endpoints (${publicEndpoints.length})</summary><code>${publicEndpoints.map(esc).join('\n')}</code></details>` : ''}${filesPanel}<div class="usque-doctor-note">${esc(report.note || '')} Совпадение init-скрипта и TUN — полезный признак, но не доказательство владельца процесса. Исправный WARP также не считается доказательством доступности Telegram: эти результаты показаны отдельно.</div>`;
+    $('#repairUsqueNDMC')?.addEventListener('click', repairUsqueNDMC);
   } catch (error) {
     $('#usqueDoctorResult').innerHTML = `<div class="community-empty error">Проверка USQUE не выполнена: ${esc(error.message)}</div>`;
   } finally {
     button.disabled = false; button.textContent = 'Проверить снова';
+  }
+}
+
+async function repairUsqueNDMC(event) {
+  const button = event.currentTarget;
+  const confirmed = await askConfirmation(
+    'Исправить связь USQUE с Keenetic?',
+    'RAZVILKA создаст закрытую резервную копию и изменит только однозначные вызовы ndmc. Затем проверит синтаксис и связь с Keenetic; при любой ошибке исходный файл вернётся автоматически. Служба USQUE не перезапускается.',
+    'Создать копию и исправить',
+  );
+  if (!confirmed) return;
+  button.disabled = true;
+  button.textContent = 'Проверяем и исправляем…';
+  try {
+    const result = await api('/api/v1/diagnostics/usque/repair', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: 'REPAIR_USQUE_NDMC' }),
+    });
+    showNotice('success', 'Ремонт USQUE завершён', result.message || 'Изменение проверено; служба USQUE не перезапускалась.', result);
+    await checkUsqueDoctor();
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '', note: 'Рабочая служба USQUE не перезапускалась. При ошибке применяется автоматический откат.' }, 'Ремонт USQUE не выполнен');
+    await checkUsqueDoctor();
   }
 }
 

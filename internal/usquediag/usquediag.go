@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -142,6 +143,7 @@ type Report struct {
 }
 
 type Manager struct {
+	repairMu                sync.Mutex
 	Runner                  Runner
 	HTTP                    HTTPDoer
 	BinaryCandidates        []string
@@ -156,6 +158,8 @@ type Manager struct {
 	IPCandidates            []string
 	RegistrationURL         string
 	EvidencePath            string
+	RepairRoot              string
+	ShellPath               string
 }
 
 func New() *Manager {
@@ -171,6 +175,8 @@ func New() *Manager {
 		IPCandidates:    []string{"/opt/sbin/ip", "/opt/bin/ip", "ip"},
 		RegistrationURL: "https://api.cloudflareclient.com/v0a4471/reg",
 		EvidencePath:    "/opt/var/lib/razvilka/dataplane/usque/evidence.json",
+		RepairRoot:      "/opt/var/lib/razvilka/usque-repair",
+		ShellPath:       "/bin/sh",
 	}
 }
 
@@ -455,6 +461,9 @@ func previewNDMCRepair(initPath, ndmcMode string) RepairPreview {
 			continue
 		}
 		preview.NDMCInvocations++
+		if strings.Contains(line, "NDMC=") || strings.Contains(line, "$NDMC") || !strings.Contains(line, "LD_LIBRARY_PATH=/lib:/usr/lib") && !directNDMCInvocation(raw) {
+			preview.Blockers = append(preview.Blockers, "найден неоднозначный вызов ndmc, который нельзя исправить точечной заменой")
+		}
 		if strings.Contains(line, "LD_LIBRARY_PATH=/lib:/usr/lib") {
 			preview.ScopedInvocations++
 		}

@@ -73,6 +73,10 @@ func main() {
 	defaultAuditLog := getenv("RAZVILKA_AUDIT_LOG", "/opt/var/lib/razvilka/audit/events.jsonl")
 	defaultDNSState := getenv("RAZVILKA_DNS_STATE", "/opt/var/lib/razvilka/dns/state.json")
 	defaultZ2KRoot := getenv("RAZVILKA_Z2K_ROOT", "/opt/zapret2")
+	defaultUSQUEInit := getenv("RAZVILKA_USQUE_INIT", "/opt/etc/init.d/S51usque")
+	defaultUSQUENDMC := getenv("RAZVILKA_USQUE_NDMC", "/bin/ndmc")
+	defaultUSQUEShell := getenv("RAZVILKA_USQUE_SHELL", "/bin/sh")
+	defaultUSQUERepairState := getenv("RAZVILKA_USQUE_REPAIR_STATE", "/opt/var/lib/razvilka/usque-repair")
 	cfgPath := flag.String("config", defaultCfg, "config path")
 	catalogPath := flag.String("catalog", defaultCatalog, "service catalog path")
 	sourcesPath := flag.String("sources", defaultSources, "sources registry path")
@@ -299,6 +303,10 @@ func main() {
 	engineLab.EnablePolicyInspection()
 	usqueDoctor := usquediag.New()
 	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")
+	usqueDoctor.InitPath = defaultUSQUEInit
+	usqueDoctor.NDMCPath = defaultUSQUENDMC
+	usqueDoctor.ShellPath = defaultUSQUEShell
+	usqueDoctor.RepairRoot = defaultUSQUERepairState
 	cloudflareStore, err := openCloudflareStore(*cfgPath, *cloudflareStatePath)
 	if err != nil {
 		// An optional copy store must not prevent established routes from starting.
@@ -315,6 +323,15 @@ func main() {
 	}
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
+	usqueRecoveryContext, cancelUSQUERecovery := context.WithTimeout(runtimeContext, 30*time.Second)
+	usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
+	cancelUSQUERecovery()
+	if usqueRecoveryErr != nil {
+		log.Fatal("USQUE repair recovery gate: unfinished repair requires manual review")
+	}
+	if usqueRecovery != restorejournal.Clean {
+		log.Printf("USQUE repair recovery completed: %s", usqueRecovery)
+	}
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
 	recovery, recoveryErr := dataplaneManager.Recover(recoveryContext)
 	cancelRecovery()

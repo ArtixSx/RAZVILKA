@@ -63,7 +63,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		exclusive := r.Method == http.MethodPost && r.URL.Path == "/api/v1/private-backups/import"
+		exclusive := r.Method == http.MethodPost && (r.URL.Path == "/api/v1/private-backups/import" || r.URL.Path == "/api/v1/diagnostics/usque/repair")
 		enter := a.Operations.Enter
 		if exclusive {
 			enter = a.Operations.Exclusive

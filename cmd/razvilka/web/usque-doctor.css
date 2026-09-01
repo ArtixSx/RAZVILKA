@@ -18,6 +18,8 @@
 .usque-check small { color: #d9c475; }
 .usque-doctor-note { margin-top: 11px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; color: #789084; font-size: 9px; }
 .usque-doctor-result .transaction-details { margin-top: 10px; }
+.usque-repair-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.usque-repair-actions small { color: var(--muted); }
 .usque-evidence { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 9px; }
 .usque-evidence > div { display: flex; flex-direction: column; gap: 3px; padding: 11px; border: 1px solid #24563a; border-radius: 9px; background: #08170f; }
 .usque-evidence span { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }

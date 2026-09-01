@@ -389,6 +389,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/update", a.updateStatus)
 	mux.HandleFunc("/api/v1/diagnostics/domain", a.domainDiagnostic)
 	mux.HandleFunc("/api/v1/diagnostics/usque", a.usqueDiagnostic)
+	mux.HandleFunc("/api/v1/diagnostics/usque/repair", a.usqueRepair)
 	mux.HandleFunc("/api/v1/diagnostics/report", a.diagnosticReport)
 	mux.HandleFunc("/api/v1/config/export", a.configExport)
 	mux.HandleFunc("/api/v1/profiles/export", a.profileExport)
@@ -1309,6 +1310,41 @@ func (a *App) usqueDiagnostic(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	writeJSON(w, http.StatusOK, a.USQUE.Check(ctx))
+}
+
+func (a *App) usqueRepair(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.USQUE == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "USQUE_DIAGNOSTICS_DISABLED", "error": "Диагностика USQUE недоступна; ничего не изменено."})
+		return
+	}
+	var input struct {
+		Confirm string `json:"confirm"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": "INVALID_JSON", "error": "Некорректный запрос; ничего не изменено."})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	result, err := a.USQUE.RepairNDMC(ctx, input.Confirm)
+	if err == nil {
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	status := http.StatusServiceUnavailable
+	code := "USQUE_REPAIR_RECOVERY_REQUIRED"
+	message := "Ремонт не завершён. Изменения приостановлены до безопасного восстановления журнала."
+	switch {
+	case errors.Is(err, usquediag.ErrRepairConfirmation):
+		status, code, message = http.StatusPreconditionRequired, "USQUE_REPAIR_CONFIRMATION_REQUIRED", "Явно подтвердите безопасный ремонт USQUE; ничего не изменено."
+	case errors.Is(err, usquediag.ErrRepairBlocked):
+		status, code, message = http.StatusConflict, "USQUE_REPAIR_BLOCKED", "Точечный ремонт заблокирован: init-скрипт неоднозначен или не прошёл безопасную проверку. Ничего не изменено."
+	}
+	writeJSON(w, status, map[string]any{"ok": false, "code": code, "error": message, "result": result})
 }
 
 func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {

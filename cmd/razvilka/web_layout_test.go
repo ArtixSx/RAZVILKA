@@ -361,3 +361,27 @@ func TestServicesUseOneExplicitApplyWithoutRoutineReviewModal(t *testing.T) {
 		t.Fatal("draft-only Sing-box import still asks for a redundant confirmation")
 	}
 }
+
+func TestUSQUESafeRepairIsExplicitAndDoesNotPromiseRestart(t *testing.T) {
+	t.Parallel()
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexData, err := embedded.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(appData) + string(indexData)
+	for _, required := range []string{
+		"repair.needed && repair.eligible",
+		"Безопасно исправить ndmc",
+		"REPAIR_USQUE_NDMC",
+		"/api/v1/diagnostics/usque/repair",
+		"Служба USQUE не перезапускается",
+	} {
+		if !strings.Contains(content, required) {
+			t.Fatalf("USQUE safe repair guidance missing %q", required)
+		}
+	}
+}
