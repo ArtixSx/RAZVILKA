@@ -38,6 +38,7 @@ type WARPWireGuardAdapter struct {
 	Timeout           time.Duration
 	HandshakeTimeout  time.Duration
 	FallbackPorts     []int
+	NativeOnly        bool
 }
 
 type warpWGSelection struct {
@@ -733,7 +734,7 @@ func (a *WARPWireGuardAdapter) confirmHandshake(ctx context.Context, interfaceNa
 	deadline := time.Now().Add(a.handshakeTimeout())
 	for {
 		output, commandErr := a.run(ctx, a.wg(), "show", interfaceName, "latest-handshakes")
-		if commandErr == nil && latestHandshakeOK(string(output), time.Now()) {
+		if _, ok := latestHandshakeTime(string(output), time.Now()); commandErr == nil && ok {
 			return nil
 		}
 		if time.Now().After(deadline) {
@@ -863,7 +864,7 @@ func (a *WARPWireGuardAdapter) interfaceActive(ctx context.Context) bool {
 }
 
 func (a *WARPWireGuardAdapter) startInterface(ctx context.Context) error {
-	if quick := a.wgQuick(); quick != "" {
+	if quick := a.wgQuick(); !a.NativeOnly && quick != "" {
 		output, err := a.run(ctx, quick, "up", a.RuntimeConfigPath)
 		if err != nil {
 			return fmt.Errorf("wg-quick up: %s", shortOutput(output, err))
@@ -874,7 +875,7 @@ func (a *WARPWireGuardAdapter) startInterface(ctx context.Context) error {
 }
 
 func (a *WARPWireGuardAdapter) stopInterface(ctx context.Context) error {
-	if quick := a.wgQuick(); quick != "" && regularFile(a.RuntimeConfigPath) {
+	if quick := a.wgQuick(); !a.NativeOnly && quick != "" && regularFile(a.RuntimeConfigPath) {
 		if output, err := a.run(ctx, quick, "down", a.RuntimeConfigPath); err == nil {
 			return nil
 		} else if deleteOutput, deleteErr := a.run(ctx, a.ip(), "link", "delete", "dev", a.interfaceName()); deleteErr != nil {
@@ -1172,17 +1173,24 @@ func excludeWGEndpoint(ctx context.Context, prefixes []string, profile string, r
 }
 
 func latestHandshakeOK(output string, now time.Time) bool {
+	_, ok := latestHandshakeTime(output, now)
+	return ok
+}
+
+func latestHandshakeTime(output string, now time.Time) (time.Time, bool) {
+	var latest time.Time
 	for _, line := range strings.Split(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue
 		}
 		seconds, err := strconv.ParseInt(fields[len(fields)-1], 10, 64)
-		if err == nil && seconds > 0 && now.Sub(time.Unix(seconds, 0)) < 5*time.Minute {
-			return true
+		observed := time.Unix(seconds, 0).UTC()
+		if err == nil && seconds > 0 && !observed.After(now.Add(5*time.Second)) && now.Sub(observed) < 5*time.Minute && observed.After(latest) {
+			latest = observed
 		}
 	}
-	return false
+	return latest, !latest.IsZero()
 }
 
 func validateAmneziaProfile(content string) error {

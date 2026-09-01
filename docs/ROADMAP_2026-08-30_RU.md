@@ -96,8 +96,11 @@ TTL/score/cooldown получили непереносимый
 binding, атомарным commit и строгим startup recovery. Журнал прошёл ARM64 gate;
 до появления изолированного runner этот state не подключается к UI или AUTO.
 Для runner готов первый dataplane-слой direct/source-bound trace и strict service
-Evidence; он прошёл ARM64 unit gate, но пока не владеет временным интерфейсом,
-policy rule или cleanup и поэтому не считается реальным scan.
+Evidence. Изолированный runner теперь владеет временным `rz-cf-scan`, table 220,
+source-only policy и cleanup под межпроцессной OS-блокировкой. Platform gate
+прошёл на ARM64 с детерминированными системными адаптерами. Реальный Cloudflare
+handshake/egress/Telegram HIL ещё обязателен; до него runner не подключается к
+UI, AUTO или рабочему Apply.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 

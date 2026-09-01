@@ -288,6 +288,14 @@ client прежнего WARP canary. ARM64 gate пройден без сетев
 Ошибка/гонка во время старта больше не позволяет удалить появившийся чужой или
 неопределённый интерфейс. Позитивный cleanup и uncertain-start прошли ARM64 gate.
 
+Добавлен изолированный Cloudflare Scan runner: owned-интерфейс `rz-cf-scan`,
+отдельная table `220`, source-only rule, приватный одноразовый конфиг,
+межпроцессная OS-блокировка и fail-closed cleanup. Он собирает strict HTTP,
+handshake и MTU evidence, но пока не подключён к UI/AUTO. Полный project test и
+vet прошли; ownership, cleanup failure, lock contention и timestamp validation
+проверены на ARM64 Keenetic без настоящих сетевых мутаций. Следующий gate — live
+кандидат и Cloudflare/Telegram HIL в поддерживаемой сети.
+
 Порядок дальнейшей разработки находится в
 [ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — первый
-изолированный real runner без изменения LAN/default route.
+live scan кандидата без изменения LAN/default route.

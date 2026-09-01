@@ -146,6 +146,10 @@ Evidence v2 → read-only USQUE Doctor v2. Repair USQUE, live DNS и AutoPilot �
   SSH SOCKS — только при явном подтверждении маршрута.
 - [ ] Единый Cloudflare Provider для WARP WireGuard и MASQUE: endpoint scan,
   IPv4/IPv6, MTU, handshake, egress и service probes. WARP остаётся best-effort.
+  - [x] Изолированный WireGuard runner с owned interface/table/source rule,
+    strict HTTP evidence, межпроцессной блокировкой и fail-closed cleanup.
+  - [ ] Live HIL локального кандидата: настоящий handshake, egress, trace и
+    Telegram evidence минимум в двух попытках без изменения LAN/default route.
 - [ ] Мастер восстановления **WARP · MASQUE / USQUE**. Подробный контракт:
   [USQUE_RECOVERY_PLAN_RU.md](USQUE_RECOVERY_PLAN_RU.md). Кратко:
   - отдельно диагностировать DNS регистрации, доступ к Cloudflare API,

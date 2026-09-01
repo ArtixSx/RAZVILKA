@@ -21,10 +21,17 @@ type warpFakeRunner struct {
 	handshakeAfterRestart bool
 	neverHandshake        bool
 	failStart             bool
+	failDelete            bool
 }
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	if name == "ip" && len(args) >= 5 && args[0] == "-o" && args[1] == "link" && args[2] == "show" {
+		if r.active {
+			return []byte("7: rz-cf-scan: <POINTOPOINT,UP> mtu 1280 state UNKNOWN"), nil
+		}
+		return nil, fmt.Errorf("device not found")
+	}
 	if name == "wg-quick" && len(args) > 0 {
 		if args[0] == "up" {
 			r.active = true
@@ -48,6 +55,9 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		return []byte("ok"), nil
 	}
 	if name == "ip" && len(args) >= 2 && args[0] == "link" && args[1] == "delete" {
+		if r.failDelete {
+			return nil, fmt.Errorf("simulated delete failure")
+		}
 		r.active = false
 		return []byte("ok"), nil
 	}
