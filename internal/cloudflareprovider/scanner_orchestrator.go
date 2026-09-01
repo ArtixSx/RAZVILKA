@@ -106,6 +106,28 @@ func (scanner Scanner) ScanReviewedWireGuard(ctx context.Context, profile []byte
 	return scanner.evaluate(attempts, options, err)
 }
 
+// ScanResolvedWireGuard consumes an unexpired in-memory DNS review and pins the
+// selected literal before running. It never resolves the hostname again.
+func (scanner Scanner) ScanResolvedWireGuard(ctx context.Context, profile []byte, review WireGuardEndpointReview, selected string, reviewed bool, options ScanOptions) (ScanReport, error) {
+	if scanner.Runner == nil {
+		return ScanReport{}, ErrScannerOptions
+	}
+	options, err := normalizeScanOptions(options)
+	if err != nil {
+		return ScanReport{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return ScanReport{}, err
+	}
+	var attempts []ScanAttempt
+	err = WithResolvedWireGuardCandidate(ctx, profile, review, selected, reviewed, options.Candidate, func(ctx context.Context, candidate WireGuardCandidate) error {
+		var runErr error
+		attempts, runErr = scanner.runCandidate(ctx, candidate, options)
+		return runErr
+	})
+	return scanner.evaluate(attempts, options, err)
+}
+
 func (scanner Scanner) runCandidate(ctx context.Context, candidate WireGuardCandidate, options ScanOptions) ([]ScanAttempt, error) {
 	attempts := make([]ScanAttempt, 0, options.Attempts)
 	for index := 0; index < options.Attempts; index++ {

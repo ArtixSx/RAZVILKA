@@ -302,6 +302,12 @@ passive copy не получает runtime capability, ключи живут т�
 endpoint/PSK/маршруты и занятый tunnel address отклоняются до старта. Контракт
 прошёл полный test/vet и ARM64 platform gate; live Cloudflare HIL всё ещё нужен.
 
+Hostname endpoint теперь не резолвится скрыто при запуске: отдельный краткоживущий
+DNS-preview показывает публичные IP, пользователь pin-ит один из них, после чего
+Scanner работает только с literal. Mixed private DNS, изменённый профиль,
+истёкший/восстановленный/отредактированный preview и неподтверждённый адрес
+отклоняются. UI этого review ещё не подключён.
+
 Порядок дальнейшей разработки находится в
 [ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — первый
 live scan кандидата без изменения LAN/default route.

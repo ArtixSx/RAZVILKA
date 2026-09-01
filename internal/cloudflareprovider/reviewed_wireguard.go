@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 var ErrReviewedCandidate = errors.New("reviewed WireGuard candidate is unavailable or unsafe")
@@ -96,7 +98,7 @@ func reviewedFullTunnel(values []string) bool {
 }
 
 func safeReviewedEndpoint(address netip.Addr) bool {
-	return address.IsValid() && address.Zone() == "" && address.IsGlobalUnicast() && !address.IsPrivate() && !address.IsLoopback() && !address.IsLinkLocalUnicast() && !address.Is4In6()
+	return publicfetch.PublicAddress(address)
 }
 
 func safeReviewedTunnelAddress(prefix netip.Prefix) bool {

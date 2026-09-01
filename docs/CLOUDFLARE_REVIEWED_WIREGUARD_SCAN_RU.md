@@ -17,10 +17,16 @@
 - bounded MTU/keepalive, которые Scanner всё равно нормализует безопасными
   параметрами кандидата.
 
-Hostname endpoint пока отклоняется: DNS discovery и привязка ответа к текущей
-сети должны стать отдельным проверяемым этапом, а не скрытой догадкой. Также
-отклоняются private/loopback/link-local endpoints, PSK, частичные AllowedIPs,
-NUL, oversized input и отменённая операция.
+Hostname endpoint проходит отдельный DNS-preview. Весь набор ответов отклоняется,
+если содержит хотя бы один private/reserved адрес; остаются не более 16
+уникальных публичных IP. Preview живёт две минуты, связан с digest исходного
+профиля и не восстанавливается из JSON. Пользователь выбирает один адрес, после
+чего Scanner подменяет только `Peer.Endpoint` на IP-literal и больше не вызывает
+DNS во время создания интерфейса. Изменённые display-поля preview не влияют на
+скрытую привязку.
+
+Также отклоняются private/loopback/link-local endpoints, PSK, частичные
+AllowedIPs, NUL, oversized input и отменённая операция.
 
 ## Граница доверия
 
@@ -44,3 +50,8 @@ hostname/private endpoint/PSK/partial route/NUL/oversize и конфликт л�
 адреса. Это unit/platform gate с детерминированными системными адаптерами, не
 live Cloudflare HIL. Установленная версия осталась `0.18.0`; `rz-cf-scan` и table
 `220` после теста отсутствовали, временные бинарники удалены.
+
+Следующий локальный срез добавил DNS-preview и pinned scan hostname-профиля:
+mixed private answer, edited/restored/expired review, изменённый профиль и
+невыбранный адрес fail closed. До UI необходим отдельный понятный экран выбора
+IP и live HIL на реальном профиле.

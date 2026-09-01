@@ -152,8 +152,10 @@ Evidence v2 → read-only USQUE Doctor v2. Repair USQUE, live DNS и AutoPilot �
     Telegram evidence минимум в двух попытках без изменения LAN/default route.
   - [x] Разовый явный scan импортированного IP-literal WARP WireGuard-профиля
     без Store/health/Apply и без автоматического повышения passive copy.
-  - [ ] Безопасно разрешить hostname endpoint через отдельный DNS discovery и
-    pinned public-IP review; затем durable promotion с recovery/rollback.
+  - [x] Безопасно разрешить hostname endpoint через отдельный DNS discovery и
+    краткоживущий pinned public-IP review без повторного lookup при запуске.
+  - [ ] Подключить review к понятному UI; затем durable promotion с
+    recovery/rollback только после live HIL.
 - [ ] Мастер восстановления **WARP · MASQUE / USQUE**. Подробный контракт:
   [USQUE_RECOVERY_PLAN_RU.md](USQUE_RECOVERY_PLAN_RU.md). Кратко:
   - отдельно диагностировать DNS регистрации, доступ к Cloudflare API,

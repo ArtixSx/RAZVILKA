@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -127,5 +128,24 @@ func TestScannerRunsExplicitReviewedWireGuardWithoutStore(t *testing.T) {
 	report, err = scanner.ScanReviewedWireGuard(context.Background(), reviewedWGFixture("162.159.192.1:2408"), false, options)
 	if !errors.Is(err, ErrReviewedCandidate) || report.Verified || len(runner.requests) != before {
 		t.Fatalf("implicit reviewed scan report=%+v calls=%d err=%v", report, len(runner.requests), err)
+	}
+}
+
+func TestScannerRunsPinnedHostnameReviewWithoutSecondLookup(t *testing.T) {
+	now := time.Now().UTC()
+	profile := reviewedWGFixture("engage.cloudflareclient.com:2408")
+	lookups := 0
+	review, err := ReviewWireGuardEndpoint(context.Background(), profile, func(context.Context, string) ([]netip.Addr, error) {
+		lookups++
+		return []netip.Addr{netip.MustParseAddr("162.159.192.1")}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &mockScanRunner{t: t, now: now.Add(-5 * time.Second), cleanup: true}
+	scanner := Scanner{Runner: runner, Now: func() time.Time { return now }, Wait: func(context.Context, time.Duration) error { return nil }}
+	report, err := scanner.ScanResolvedWireGuard(context.Background(), profile, review, "162.159.192.1", true, ScanOptions{ServiceID: "telegram", Attempts: 2, AttemptTimeout: time.Second, EvidenceTTL: time.Minute})
+	if err != nil || !report.Verified || len(runner.requests) != 2 || lookups != 1 || runner.candidateSeen[0].Endpoint != "162.159.192.1:2408" {
+		t.Fatalf("resolved report=%+v requests=%d lookups=%d endpoint=%v err=%v", report, len(runner.requests), lookups, runner.candidateSeen, err)
 	}
 }

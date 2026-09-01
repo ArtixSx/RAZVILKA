@@ -103,8 +103,10 @@ handshake/egress/Telegram HIL ещё обязателен; до него runner 
 UI, AUTO или рабочему Apply.
 Явно выбранный пользователем WireGuard-файл теперь можно передать в тот же
 bounded Scanner как ephemeral candidate без записи в Store/health; passive
-копия сама это право не получает. Перед UI остаются DNS hostname resolution,
-live HIL и отдельный durable promotion/recovery contract.
+копия сама это право не получает. Hostname resolution реализован как
+двухшаговый preview → pinned public
+IP без повторного DNS во время запуска. Перед UI остаются его пользовательское
+представление, live HIL и durable promotion/recovery contract.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 
