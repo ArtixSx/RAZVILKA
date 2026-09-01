@@ -63,43 +63,25 @@ func parseImport(kind string, data []byte, allowLocalCandidate bool) (Import, er
 // This importer deliberately rejects hooks, duplicate fields/sections and
 // unknown extensions. AWG compatibility and wgcf account TOML use other adapters.
 func inspectWireGuard(data []byte, view *Account) error {
-	allowed := map[string]bool{
-		"Interface.PrivateKey": true, "Interface.Address": true, "Interface.DNS": true, "Interface.MTU": true,
-		"Peer.PublicKey": true, "Peer.PresharedKey": true, "Peer.AllowedIPs": true, "Peer.Endpoint": true, "Peer.PersistentKeepalive": true,
-	}
-	fields, sections := map[string]string{}, map[string]bool{}
-	section := ""
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
-			continue
-		}
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			section = strings.TrimSpace(line[1 : len(line)-1])
-			if (section != "Interface" && section != "Peer") || sections[section] {
-				return ErrImport
-			}
-			sections[section] = true
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
-		key = section + "." + strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-		if !ok || !allowed[key] || fields[key] != "" || value == "" {
-			return ErrImport
-		}
-		fields[key] = value
+	fields, err := wireGuardFields(data)
+	if err != nil {
+		return err
 	}
 	private, err := wireGuardKey(fields["Interface.PrivateKey"])
 	if err != nil {
 		return err
 	}
-	if _, err := wireGuardKey(fields["Peer.PublicKey"]); err != nil {
+	defer eraseBytes(private)
+	peer, err := wireGuardKey(fields["Peer.PublicKey"])
+	if err != nil {
 		return err
 	}
+	eraseBytes(peer)
 	if value := fields["Peer.PresharedKey"]; value != "" {
-		if _, err := wireGuardKey(value); err != nil {
-			return err
+		key, keyErr := wireGuardKey(value)
+		eraseBytes(key)
+		if keyErr != nil {
+			return keyErr
 		}
 	}
 	key, err := ecdh.X25519().NewPrivateKey(private)
@@ -134,6 +116,40 @@ func inspectWireGuard(data []byte, view *Account) error {
 		}
 	}
 	return nil
+}
+
+func wireGuardFields(data []byte) (map[string]string, error) {
+	allowed := map[string]bool{
+		"Interface.PrivateKey": true, "Interface.Address": true, "Interface.DNS": true, "Interface.MTU": true,
+		"Peer.PublicKey": true, "Peer.PresharedKey": true, "Peer.AllowedIPs": true, "Peer.Endpoint": true, "Peer.PersistentKeepalive": true,
+	}
+	fields, sections := map[string]string{}, map[string]bool{}
+	section := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section = strings.TrimSpace(line[1 : len(line)-1])
+			if (section != "Interface" && section != "Peer") || sections[section] {
+				return nil, ErrImport
+			}
+			sections[section] = true
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		key = section + "." + strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if !ok || !allowed[key] || fields[key] != "" || value == "" {
+			return nil, ErrImport
+		}
+		fields[key] = value
+	}
+	if !sections["Interface"] || !sections["Peer"] {
+		return nil, ErrImport
+	}
+	return fields, nil
 }
 
 func wireGuardKey(value string) ([]byte, error) {

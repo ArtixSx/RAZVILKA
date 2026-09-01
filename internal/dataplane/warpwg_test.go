@@ -22,6 +22,7 @@ type warpFakeRunner struct {
 	neverHandshake        bool
 	failStart             bool
 	failDelete            bool
+	addressOutput         string
 }
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -31,6 +32,9 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 			return []byte("7: rz-cf-scan: <POINTOPOINT,UP> mtu 1280 state UNKNOWN"), nil
 		}
 		return nil, fmt.Errorf("device not found")
+	}
+	if name == "ip" && len(args) >= 3 && args[0] == "-o" && args[1] == "address" && args[2] == "show" {
+		return []byte(r.addressOutput), nil
 	}
 	if name == "wg-quick" && len(args) > 0 {
 		if args[0] == "up" {

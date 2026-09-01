@@ -110,3 +110,22 @@ func TestScannerBoundsOptionsTimeoutAndRunnerErrors(t *testing.T) {
 		t.Fatal("scan cancellation was hidden", err)
 	}
 }
+
+func TestScannerRunsExplicitReviewedWireGuardWithoutStore(t *testing.T) {
+	now := time.Date(2026, 9, 2, 8, 0, 0, 0, time.UTC)
+	runner := &mockScanRunner{t: t, now: now.Add(-5 * time.Second), cleanup: true}
+	scanner := Scanner{Runner: runner, Now: func() time.Time { return now }, Wait: func(context.Context, time.Duration) error { return nil }}
+	options := ScanOptions{ServiceID: "telegram", Attempts: 2, AttemptTimeout: time.Second, EvidenceTTL: time.Minute}
+	report, err := scanner.ScanReviewedWireGuard(context.Background(), reviewedWGFixture("162.159.192.1:2408"), true, options)
+	if err != nil || !report.Verified || len(runner.requests) != 2 {
+		t.Fatalf("reviewed scan report=%+v calls=%d err=%v", report, len(runner.requests), err)
+	}
+	if runner.candidateSeen[0].Endpoint != "162.159.192.1:2408" {
+		t.Fatal("reviewed candidate identity was not pinned")
+	}
+	before := len(runner.requests)
+	report, err = scanner.ScanReviewedWireGuard(context.Background(), reviewedWGFixture("162.159.192.1:2408"), false, options)
+	if !errors.Is(err, ErrReviewedCandidate) || report.Verified || len(runner.requests) != before {
+		t.Fatalf("implicit reviewed scan report=%+v calls=%d err=%v", report, len(runner.requests), err)
+	}
+}

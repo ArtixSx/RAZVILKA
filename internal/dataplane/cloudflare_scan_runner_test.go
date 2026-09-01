@@ -158,3 +158,18 @@ func TestCloudflareScanRunnerFailsClosedWhenCleanupIsUnconfirmed(t *testing.T) {
 		}
 	})
 }
+
+func TestCloudflareScanRunnerRejectsSourceAddressAlreadyInUse(t *testing.T) {
+	root := t.TempDir()
+	fake := &warpFakeRunner{addressOutput: "5: lan0    inet 172.16.0.2/24 brd 172.16.0.255 scope global lan0\n"}
+	adapter := NewWARPWireGuardAdapter(nil, filepath.Join(root, "adapter"))
+	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", fake
+	service := catalog.Service{ID: "telegram", ProbeURL: "https://service.example/check"}
+	runner := NewCloudflareScanRunner(adapter, filepath.Join(root, "scanner"), []catalog.Service{service})
+	withScanCandidate(t, func(candidate cloudflareprovider.WireGuardCandidate) {
+		attempt, err := runner.RunScanAttempt(context.Background(), candidate, cloudflareprovider.ScanRunRequest{Attempt: 1, ServiceID: "telegram"})
+		if err == nil || fake.active || fake.starts != 0 || !attempt.CleanupConfirmed {
+			t.Fatalf("occupied source reached runtime: attempt=%+v active=%v starts=%d err=%v", attempt, fake.active, fake.starts, err)
+		}
+	})
+}

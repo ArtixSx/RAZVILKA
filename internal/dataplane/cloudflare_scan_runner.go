@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -151,6 +152,9 @@ func (runner *CloudflareScanRunner) RunScanAttempt(ctx context.Context, candidat
 	if err := sandbox.ensureCanaryPolicyFree(ctx); err != nil {
 		return attempt, err
 	}
+	if err := sandbox.ensureScanSourceFree(ctx, source); err != nil {
+		return attempt, err
+	}
 	if err := sandbox.startInterface(ctx); err != nil {
 		return attempt, errors.New("start Cloudflare scan interface")
 	}
@@ -188,6 +192,24 @@ func (runner *CloudflareScanRunner) RunScanAttempt(ctx context.Context, candidat
 	attempt.ConfirmedMTU = mtu
 	attempt.FinishedAt = time.Now().UTC()
 	return attempt, nil
+}
+
+func (adapter *WARPWireGuardAdapter) ensureScanSourceFree(ctx context.Context, source netip.Addr) error {
+	output, err := adapter.run(ctx, adapter.ip(), "-o", "address", "show")
+	if err != nil {
+		return errors.New("inspect Cloudflare scan source address")
+	}
+	fields := strings.Fields(string(output))
+	for index := 0; index+1 < len(fields); index++ {
+		if fields[index] != "inet" && fields[index] != "inet6" {
+			continue
+		}
+		prefix, parseErr := netip.ParsePrefix(fields[index+1])
+		if parseErr == nil && prefix.Addr().Unmap() == source.Unmap() {
+			return errors.New("Cloudflare scan source address is already used")
+		}
+	}
+	return nil
 }
 
 func openCloudflareScanRoot(path string) (*ownedfs.Root, error) {

@@ -296,6 +296,12 @@ vet прошли; ownership, cleanup failure, lock contention и timestamp valid
 проверены на ARM64 Keenetic без настоящих сетевых мутаций. Следующий gate — live
 кандидат и Cloudflare/Telegram HIL в поддерживаемой сети.
 
+Подготовлена [разовая проверка явно выбранного WARP WireGuard-профиля](CLOUDFLARE_REVIEWED_WIREGUARD_SCAN_RU.md):
+passive copy не получает runtime capability, ключи живут только внутри callback,
+а bounded Scanner не сохраняет health и не включает Apply/AUTO. Небезопасные
+endpoint/PSK/маршруты и занятый tunnel address отклоняются до старта. Контракт
+прошёл полный test/vet и ARM64 platform gate; live Cloudflare HIL всё ещё нужен.
+
 Порядок дальнейшей разработки находится в
 [ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — первый
 live scan кандидата без изменения LAN/default route.

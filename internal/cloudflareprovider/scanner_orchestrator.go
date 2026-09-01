@@ -76,35 +76,69 @@ func (scanner Scanner) Scan(ctx context.Context, store *Store, accountID string,
 	}
 	var attempts []ScanAttempt
 	err = store.WithWireGuardCandidate(ctx, accountID, options.Candidate, func(ctx context.Context, candidate WireGuardCandidate) error {
-		for index := 0; index < options.Attempts; index++ {
-			if index > 0 {
-				delay, delayErr := scanner.jitter(options.MaxJitter)
-				if delayErr != nil {
-					return ErrScannerRunner
-				}
-				if waitErr := scanner.wait(ctx, delay); waitErr != nil {
-					return waitErr
-				}
+		var runErr error
+		attempts, runErr = scanner.runCandidate(ctx, candidate, options)
+		return runErr
+	})
+	return scanner.evaluate(attempts, options, err)
+}
+
+// ScanReviewedWireGuard performs the same bounded evidence workflow for one
+// explicitly reviewed profile without adding it to Store or endpoint health.
+// A later durable promotion remains a separate user operation.
+func (scanner Scanner) ScanReviewedWireGuard(ctx context.Context, profile []byte, reviewed bool, options ScanOptions) (ScanReport, error) {
+	if scanner.Runner == nil {
+		return ScanReport{}, ErrScannerOptions
+	}
+	options, err := normalizeScanOptions(options)
+	if err != nil {
+		return ScanReport{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return ScanReport{}, err
+	}
+	var attempts []ScanAttempt
+	err = WithReviewedWireGuardCandidate(ctx, profile, reviewed, options.Candidate, func(ctx context.Context, candidate WireGuardCandidate) error {
+		var runErr error
+		attempts, runErr = scanner.runCandidate(ctx, candidate, options)
+		return runErr
+	})
+	return scanner.evaluate(attempts, options, err)
+}
+
+func (scanner Scanner) runCandidate(ctx context.Context, candidate WireGuardCandidate, options ScanOptions) ([]ScanAttempt, error) {
+	attempts := make([]ScanAttempt, 0, options.Attempts)
+	for index := 0; index < options.Attempts; index++ {
+		if index > 0 {
+			delay, delayErr := scanner.jitter(options.MaxJitter)
+			if delayErr != nil {
+				return attempts, ErrScannerRunner
 			}
-			attemptCtx, cancel := context.WithTimeout(ctx, options.AttemptTimeout)
-			attempt, runErr := scanner.Runner.RunScanAttempt(attemptCtx, candidate, ScanRunRequest{Attempt: index + 1, ServiceID: options.ServiceID})
-			contextErr := attemptCtx.Err()
-			cancel()
-			attempt.Candidate = candidate.Public()
-			attempt.ServiceID = options.ServiceID
-			attempts = append(attempts, attempt)
-			if contextErr != nil {
-				return contextErr
-			}
-			if runErr != nil {
-				return ErrScannerRunner
-			}
-			if !attempt.CleanupConfirmed {
-				break
+			if waitErr := scanner.wait(ctx, delay); waitErr != nil {
+				return attempts, waitErr
 			}
 		}
-		return nil
-	})
+		attemptCtx, cancel := context.WithTimeout(ctx, options.AttemptTimeout)
+		attempt, runErr := scanner.Runner.RunScanAttempt(attemptCtx, candidate, ScanRunRequest{Attempt: index + 1, ServiceID: options.ServiceID})
+		contextErr := attemptCtx.Err()
+		cancel()
+		attempt.Candidate = candidate.Public()
+		attempt.ServiceID = options.ServiceID
+		attempts = append(attempts, attempt)
+		if contextErr != nil {
+			return attempts, contextErr
+		}
+		if runErr != nil {
+			return attempts, ErrScannerRunner
+		}
+		if !attempt.CleanupConfirmed {
+			break
+		}
+	}
+	return attempts, nil
+}
+
+func (scanner Scanner) evaluate(attempts []ScanAttempt, options ScanOptions, err error) (ScanReport, error) {
 	now := scanner.currentTime()
 	report := EvaluateScanReport(attempts, now, options.EvidenceTTL)
 	if err != nil {
