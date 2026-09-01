@@ -91,6 +91,10 @@ handshake. Подробности: [CLOUDFLARE_WIREGUARD_CANDIDATE_RU.md](CLOUDF
 [endpoint catalog](CLOUDFLARE_ENDPOINT_CATALOG_RU.md); undocumented registrar
 endpoint не блокируется, но не считается официальным или рекомендуемым.
 Контракт: [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md).
+TTL/score/cooldown получили непереносимый
+[приватный health journal](CLOUDFLARE_ENDPOINT_HEALTH_JOURNAL_RU.md) с material
+binding, атомарным commit и строгим startup recovery. Журнал прошёл ARM64 gate;
+до появления изолированного runner этот state не подключается к UI или AUTO.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 

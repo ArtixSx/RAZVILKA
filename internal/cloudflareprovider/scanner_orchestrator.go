@@ -105,10 +105,7 @@ func (scanner Scanner) Scan(ctx context.Context, store *Store, accountID string,
 		}
 		return nil
 	})
-	now := time.Now().UTC()
-	if scanner.Now != nil {
-		now = scanner.Now().UTC()
-	}
+	now := scanner.currentTime()
 	report := EvaluateScanReport(attempts, now, options.EvidenceTTL)
 	if err != nil {
 		report.Verified = false
@@ -122,6 +119,30 @@ func (scanner Scanner) Scan(ctx context.Context, store *Store, accountID string,
 		}
 	}
 	return report, err
+}
+
+// ScanAndRecord is the fail-closed operational entrypoint: a successful scan is
+// not selectable after restart until its health state is durably committed.
+// Negative reports are also recorded to preserve cooldown. Invalid setup that
+// produced no internal report is returned without creating journal state.
+func (scanner Scanner) ScanAndRecord(ctx context.Context, store *Store, accountID string, options ScanOptions) (ScanReport, EndpointHealth, error) {
+	report, scanErr := scanner.Scan(ctx, store, accountID, options)
+	if !report.valid {
+		return report, EndpointHealth{}, scanErr
+	}
+	health, recordErr := store.RecordEndpointHealth(ctx, accountID, options.Candidate, report)
+	if recordErr != nil {
+		return report, EndpointHealth{}, recordErr
+	}
+	return report, health, scanErr
+}
+
+func (scanner Scanner) currentTime() time.Time {
+	now := time.Now().UTC()
+	if scanner.Now != nil {
+		now = scanner.Now().UTC()
+	}
+	return now
 }
 
 func (scanner Scanner) jitter(maximum time.Duration) (time.Duration, error) {

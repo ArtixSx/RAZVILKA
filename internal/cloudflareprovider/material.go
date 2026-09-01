@@ -23,6 +23,7 @@ type TunnelMaterial struct {
 	peerPublicKey []byte
 	addresses     []netip.Prefix
 	endpoints     []netip.AddrPort
+	binding       string
 }
 
 // PrivateKey returns an explicit caller-owned copy. Callers that retain it are
@@ -61,6 +62,7 @@ func (material *TunnelMaterial) erase() {
 	}
 	material.addresses = nil
 	material.endpoints = nil
+	material.binding = ""
 }
 
 // WithTunnelMaterial grants a trusted internal callback the minimum secrets
@@ -82,12 +84,14 @@ func (s *Store) WithTunnelMaterial(ctx context.Context, accountID string, consum
 		return err
 	}
 	var raw []byte
+	var binding string
 	found := false
 	for _, record := range doc.Accounts {
 		if record.ID == accountID {
 			found = true
 			if record.Kind == SourceLocalRegistration {
 				raw = append([]byte(nil), record.Raw...)
+				binding = record.Digest
 			}
 			break
 		}
@@ -104,6 +108,7 @@ func (s *Store) WithTunnelMaterial(ctx context.Context, accountID string, consum
 	if err != nil {
 		return ErrStore
 	}
+	material.binding = binding
 	defer material.erase()
 	if err := ctx.Err(); err != nil {
 		return err

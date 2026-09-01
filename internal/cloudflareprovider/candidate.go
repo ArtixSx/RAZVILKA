@@ -42,6 +42,7 @@ type CandidatePreview struct {
 	MTU                 int                `json:"mtu"`
 	PersistentKeepalive int                `json:"persistent_keepalive"`
 	Verification        string             `json:"verification"`
+	materialBinding     string
 	valid               bool
 }
 
@@ -150,24 +151,10 @@ func (s *Store) WithWireGuardCandidate(ctx context.Context, accountID string, op
 		return ErrCandidateInvalid
 	}
 	return s.WithTunnelMaterial(ctx, accountID, func(ctx context.Context, material TunnelMaterial) error {
-		normalized, err := normalizeCandidateOptions(options, len(material.endpoints))
+		candidate, err := wireGuardCandidateFromMaterial(accountID, material, options)
 		if err != nil {
 			return err
 		}
-		addresses := make([]string, 0, len(material.addresses))
-		for _, address := range material.addresses {
-			addresses = append(addresses, address.String())
-		}
-		candidate := WireGuardCandidate{
-			preview: CandidatePreview{
-				AccountID: accountID, Transport: "wireguard", Endpoint: material.endpoints[normalized.EndpointIndex].String(),
-				Addresses: addresses, AllowedIPs: []string{"0.0.0.0/0", "::/0"}, MTU: normalized.MTU,
-				PersistentKeepalive: normalized.PersistentKeepalive, Verification: "built-unverified", valid: true,
-			},
-			privateKey: material.PrivateKey(), peerPublicKey: material.PeerPublicKey(),
-		}
-		candidate.preview.EndpointCatalog = ClassifyEndpoint(material.endpoints[normalized.EndpointIndex])
-		candidate.preview.RoutePathID = candidateRoutePathID(candidate.preview)
 		defer candidate.erase()
 		if err := ctx.Err(); err != nil {
 			return err
@@ -176,9 +163,32 @@ func (s *Store) WithWireGuardCandidate(ctx context.Context, accountID string, op
 	})
 }
 
+func wireGuardCandidateFromMaterial(accountID string, material TunnelMaterial, options CandidateOptions) (WireGuardCandidate, error) {
+	normalized, err := normalizeCandidateOptions(options, len(material.endpoints))
+	if err != nil || !validID(accountID) || material.binding == "" {
+		return WireGuardCandidate{}, ErrCandidateInvalid
+	}
+	addresses := make([]string, 0, len(material.addresses))
+	for _, address := range material.addresses {
+		addresses = append(addresses, address.String())
+	}
+	candidate := WireGuardCandidate{
+		preview: CandidatePreview{
+			AccountID: accountID, Transport: "wireguard", Endpoint: material.endpoints[normalized.EndpointIndex].String(),
+			Addresses: addresses, AllowedIPs: []string{"0.0.0.0/0", "::/0"}, MTU: normalized.MTU,
+			PersistentKeepalive: normalized.PersistentKeepalive, Verification: "built-unverified",
+			materialBinding: material.binding, valid: true,
+		},
+		privateKey: material.PrivateKey(), peerPublicKey: material.PeerPublicKey(),
+	}
+	candidate.preview.EndpointCatalog = ClassifyEndpoint(material.endpoints[normalized.EndpointIndex])
+	candidate.preview.RoutePathID = candidateRoutePathID(candidate.preview)
+	return candidate, nil
+}
+
 func candidateRoutePathID(candidate CandidatePreview) string {
 	identity := strings.Join([]string{
-		candidate.AccountID, candidate.Transport, candidate.Endpoint,
+		candidate.AccountID, candidate.materialBinding, candidate.Transport, candidate.Endpoint,
 		candidate.EndpointCatalog.AddressClass, candidate.EndpointCatalog.PortClass, candidate.EndpointCatalog.CatalogVersion,
 		strings.Join(candidate.Addresses, ","), strings.Join(candidate.AllowedIPs, ","),
 		strconv.Itoa(candidate.MTU), strconv.Itoa(candidate.PersistentKeepalive),

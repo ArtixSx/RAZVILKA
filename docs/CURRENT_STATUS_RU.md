@@ -269,7 +269,14 @@ JSON. Persist/LKG подключатся только вместе с журна
 `1/5/30`, reset после success, forged JSON, changed identity и cleanup zero-score.
 Временный тест удалён; установленная `0.18.0` не перезапускалась.
 
+Добавлен [приватный журнал Endpoint Health](CLOUDFLARE_ENDPOINT_HEALTH_JOURNAL_RU.md):
+bounded schema/generation, строгий decode, account material binding, общий
+Provider writer lock, atomic commit и fail-closed startup при повреждении.
+`ScanAndRecord` сохраняет PASS только после durable commit, а отрицательный scan
+— как cooldown. Health не экспортируется и после restore требует новой проверки.
+Restart/TTL, cooldown, changed identity, forged report, corrupt startup и
+`ScanAndRecord` прошли ARM64 gate; временный тест удалён, `0.18.0` не менялась.
+
 Порядок дальнейшей разработки находится в
-[ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — приватный
-атомарный журнал Scanner для восстановления только непросроченного health без
-переноса trust через публичный JSON.
+[ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — первый
+изолированный real runner без изменения LAN/default route.

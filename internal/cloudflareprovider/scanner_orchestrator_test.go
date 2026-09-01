@@ -67,6 +67,21 @@ func TestScannerStopsAfterCleanupFailure(t *testing.T) {
 	}
 }
 
+func TestScannerScanAndRecordCommitsSelectableHealth(t *testing.T) {
+	now := time.Date(2026, 9, 1, 17, 45, 0, 0, time.UTC)
+	store, account, _ := storedCandidate(t, 42)
+	runner := &mockScanRunner{t: t, now: now.Add(-5 * time.Second), cleanup: true}
+	scanner := Scanner{Runner: runner, Now: func() time.Time { return now }, Wait: func(context.Context, time.Duration) error { return nil }}
+	report, health, err := scanner.ScanAndRecord(context.Background(), store, account.ID, ScanOptions{ServiceID: "telegram", EvidenceTTL: time.Minute})
+	if err != nil || !report.Verified || !health.Selectable(now) || health.RoutePathID != report.RoutePathID {
+		t.Fatalf("scan report=%+v health=%+v err=%v", report, health, err)
+	}
+	loaded, exists, err := store.LoadEndpointHealth(context.Background(), account.ID, CandidateOptions{}, now.Add(time.Second))
+	if err != nil || !exists || !loaded.Selectable(now.Add(time.Second)) {
+		t.Fatalf("stored health=%+v exists=%v err=%v", loaded, exists, err)
+	}
+}
+
 func TestScannerBoundsOptionsTimeoutAndRunnerErrors(t *testing.T) {
 	now := time.Date(2026, 9, 1, 18, 0, 0, 0, time.UTC)
 	store, account, _ := storedCandidate(t, 43)

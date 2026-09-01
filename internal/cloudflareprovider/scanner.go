@@ -157,6 +157,7 @@ type ScanReport struct {
 	ValidUntil  time.Time           `json:"valid_until,omitempty"`
 	Results     []AttemptEvaluation `json:"results"`
 	ReasonCode  string              `json:"reason_code"`
+	evaluatedAt time.Time
 	valid       bool
 }
 
@@ -168,6 +169,7 @@ func EvaluateScanReport(attempts []ScanAttempt, now time.Time, ttl time.Duration
 		return report
 	}
 	report.valid = true
+	report.evaluatedAt = now.UTC()
 	report.RoutePathID = attempts[0].Candidate.RoutePathID
 	oldestFinish := attempts[0].FinishedAt
 	cleanupFailed, identityMismatch := false, false

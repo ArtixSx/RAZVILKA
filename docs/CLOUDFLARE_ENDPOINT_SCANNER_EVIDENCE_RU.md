@@ -84,3 +84,16 @@ Health-тесты прошли на целевом Keenetic ARM64: границ�
 принудительный zero-score при ошибке cleanup. SHA-256 теста совпал; временный
 бинарник удалён. Установленная RAZVILKA осталась `0.18.0`, рабочие маршруты и
 процессы не изменялись.
+
+## Приватный health journal
+
+TTL/score/cooldown теперь можно атомарно сохранить через
+[приватный журнал Endpoint Health](CLOUDFLARE_ENDPOINT_HEALTH_JOURNAL_RU.md).
+Запись принимает только внутренний report, пересобирает candidate из текущего
+account snapshot под общим writer lock и связывает identity с digest материала.
+Публичный JSON, изменённый ключ, endpoint/MTU/keepalive или просроченный TTL не
+восстанавливают selectable state. Журнал намеренно не переносится в backup:
+после restore доказательства собираются заново.
+Журнал и `ScanAndRecord` прошли ARM64 gate на Keenetic, включая restart/TTL,
+cooldown, changed identity и corrupt-state startup. Временный тест удалён,
+рабочая `0.18.0` не перезапускалась.

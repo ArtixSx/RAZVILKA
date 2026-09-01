@@ -60,6 +60,10 @@ func OpenStore(path string) (*Store, error) {
 		_ = root.Close()
 		return nil, err
 	}
+	if _, err := readEndpointHealthDocument(context.Background(), root, time.Now().UTC()); err != nil {
+		_ = root.Close()
+		return nil, err
+	}
 	return s, nil
 }
 
