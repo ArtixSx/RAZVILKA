@@ -95,6 +95,9 @@ TTL/score/cooldown получили непереносимый
 [приватный health journal](CLOUDFLARE_ENDPOINT_HEALTH_JOURNAL_RU.md) с material
 binding, атомарным commit и строгим startup recovery. Журнал прошёл ARM64 gate;
 до появления изолированного runner этот state не подключается к UI или AUTO.
+Для runner готов первый dataplane-слой direct/source-bound trace и strict service
+Evidence; он прошёл ARM64 unit gate, но пока не владеет временным интерфейсом,
+policy rule или cleanup и поэтому не считается реальным scan.
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 

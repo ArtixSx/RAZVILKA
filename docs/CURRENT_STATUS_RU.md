@@ -277,6 +277,12 @@ Provider writer lock, atomic commit и fail-closed startup при поврежд
 Restart/TTL, cooldown, changed identity, forged report, corrupt startup и
 `ScanAndRecord` прошли ARM64 gate; временный тест удалён, `0.18.0` не менялась.
 
+Подготовлен source-bound HTTP-слой будущего Cloudflare runner: независимый direct
+trace, строгий WARP trace и Evidence v2 для exact service route. Он fail-closed
+на blocked/ambiguous/unsafe ответах, не ослабляет TLS и переиспользует защищённый
+client прежнего WARP canary. ARM64 gate пройден без сетевых мутаций; реальный
+временный интерфейс ещё не подключён.
+
 Порядок дальнейшей разработки находится в
 [ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — первый
 изолированный real runner без изменения LAN/default route.

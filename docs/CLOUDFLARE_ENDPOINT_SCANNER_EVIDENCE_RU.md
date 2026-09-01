@@ -97,3 +97,19 @@ account snapshot под общим writer lock и связывает identity с
 Журнал и `ScanAndRecord` прошли ARM64 gate на Keenetic, включая restart/TTL,
 cooldown, changed identity и corrupt-state startup. Временный тест удалён,
 рабочая `0.18.0` не перезапускалась.
+
+## Source-bound HTTP evidence
+
+Добавлен закрытый dataplane-слой будущего runner. Он отдельно получает direct
+trace, затем через IPv4-адрес временного туннеля — WARP trace и строгую сервисную
+проверку. Клиент разрешает только публичные HTTP/HTTPS назначения, сохраняет TLS
+verification, ограничивает redirects/body/timeouts и не использует proxy из
+окружения. Сервисный PASS формирует Evidence v2 с точным candidate RoutePathID и
+egress; `403/451`, redirect, invalid content и request failure остаются ниже
+`service-confirmed`.
+
+Refactor сохранил прежний WARP canary: его source-bound запрос использует тот же
+защищённый client builder. Новый слой пока не создаёт интерфейс и не меняет
+маршруты. Позитивный exact evidence, blocked service, ambiguous trace и unsafe
+input прошли ARM64 gate; временный тест удалён, установленная `0.18.0` не
+перезапускалась.

@@ -1251,9 +1251,33 @@ func sourceBoundWARPProbe(ctx context.Context, rawURL, source string) error {
 	if request.URL.User != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") || request.URL.Hostname() == "" {
 		return errors.New("WARP canary URL must be an absolute HTTP(S) URL without credentials")
 	}
+	client, closeClient, err := newSourceBoundWARPClient(source)
+	if err != nil {
+		return err
+	}
+	defer closeClient()
+	request.Header.Set("User-Agent", "RAZVILKA-WARP-Canary/1")
+	response, err := serviceProbeClient(client, rawURL).Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	body, err := strictServiceResponse(rawURL, response)
+	if err != nil {
+		return err
+	}
+	if request.URL.Hostname() == "www.cloudflare.com" && request.URL.Path == "/cdn-cgi/trace" {
+		if err := validateWARPTrace(body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func newSourceBoundWARPClient(source string) (*http.Client, func(), error) {
 	sourceIP := net.ParseIP(source)
 	if sourceIP == nil || sourceIP.To4() == nil {
-		return errors.New("invalid WARP canary IPv4 source")
+		return nil, nil, errors.New("invalid WARP canary IPv4 source")
 	}
 	dialer := &net.Dialer{Timeout: 8 * time.Second, LocalAddr: &net.TCPAddr{IP: sourceIP.To4()}}
 	transport := &http.Transport{
@@ -1289,7 +1313,6 @@ func sourceBoundWARPProbe(ctx context.Context, rawURL, source string) error {
 		TLSHandshakeTimeout: 8 * time.Second,
 		ForceAttemptHTTP2:   true,
 	}
-	defer transport.CloseIdleConnections()
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   15 * time.Second,
@@ -1300,22 +1323,7 @@ func sourceBoundWARPProbe(ctx context.Context, rawURL, source string) error {
 			return nil
 		},
 	}
-	request.Header.Set("User-Agent", "RAZVILKA-WARP-Canary/1")
-	response, err := serviceProbeClient(client, rawURL).Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	body, err := strictServiceResponse(rawURL, response)
-	if err != nil {
-		return err
-	}
-	if request.URL.Hostname() == "www.cloudflare.com" && request.URL.Path == "/cdn-cgi/trace" {
-		if err := validateWARPTrace(body); err != nil {
-			return err
-		}
-	}
-	return nil
+	return client, transport.CloseIdleConnections, nil
 }
 
 func validateWARPTrace(body []byte) error {
