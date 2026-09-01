@@ -165,7 +165,7 @@ func Validate(payload Payload) error {
 			return errors.New("invalid or duplicate private provider snapshot")
 		}
 		providerIDs[key] = true
-		if snapshot.SourceKind != "wireguard-profile" && snapshot.SourceKind != "usque-session" && snapshot.SourceKind != "wgcf-account" {
+		if snapshot.SourceKind != "wireguard-profile" && snapshot.SourceKind != "usque-session" && snapshot.SourceKind != "wgcf-account" && snapshot.SourceKind != "local-registration" {
 			return errors.New("unsupported private provider snapshot kind")
 		}
 		if _, err := time.Parse(time.RFC3339Nano, snapshot.ImportedAt); err != nil {

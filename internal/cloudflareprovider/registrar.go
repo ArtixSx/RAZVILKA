@@ -20,6 +20,7 @@ const (
 	SourceLocalRegistration = "local-registration"
 	maxRegistrationText     = 1024
 	maxRegistrationItems    = 16
+	registrationTerms       = "cloudflare-client-current"
 )
 
 var (
@@ -111,7 +112,7 @@ func (registrar Registrar) NewCandidate(ctx context.Context, acceptTerms bool) (
 	request := RegistrationRequest{
 		PublicKey:     base64.StdEncoding.EncodeToString(publicBytes),
 		AcceptTerms:   true,
-		TermsRevision: "cloudflare-client-current",
+		TermsRevision: registrationTerms,
 		Locale:        "en_US",
 		Model:         "RAZVILKA",
 	}
@@ -147,6 +148,72 @@ func (registrar Registrar) NewCandidate(ctx context.Context, acceptTerms bool) (
 	return RegistrationCandidate{preview: preview, privateKey: privateBytes, response: cloneRegistrationResponse(response)}, nil
 }
 
+func (candidate RegistrationCandidate) snapshot() (Import, error) {
+	if len(candidate.privateKey) != 32 || validateRegistrationResponse(candidate.response, registrationTerms) != nil {
+		return Import{}, ErrRegistration
+	}
+	raw, err := json.Marshal(localRegistrationSnapshot{
+		Schema: 1, PrivateKey: base64.StdEncoding.EncodeToString(candidate.privateKey),
+		DeviceID: candidate.response.DeviceID, AccessToken: candidate.response.AccessToken,
+		PeerPublicKey: candidate.response.PeerPublicKey, Addresses: append([]string(nil), candidate.response.Addresses...),
+		Endpoints: append([]string(nil), candidate.response.Endpoints...), APISchema: candidate.response.APISchema,
+		TermsRevision: candidate.response.TermsRevision,
+	})
+	if err != nil || len(raw) > MaxImportBytes {
+		return Import{}, ErrRegistration
+	}
+	return parseStoredImport(SourceLocalRegistration, raw)
+}
+
+type localRegistrationSnapshot struct {
+	Schema        int      `json:"schema"`
+	PrivateKey    string   `json:"private_key"`
+	DeviceID      string   `json:"device_id"`
+	AccessToken   string   `json:"access_token"`
+	PeerPublicKey string   `json:"peer_public_key"`
+	Addresses     []string `json:"addresses"`
+	Endpoints     []string `json:"endpoints"`
+	APISchema     string   `json:"api_schema"`
+	TermsRevision string   `json:"terms_revision"`
+}
+
+func inspectLocalRegistration(data []byte, view *Account) error {
+	fields, err := readJSONObject(data)
+	if err != nil || len(fields) != 9 {
+		return ErrImport
+	}
+	for _, name := range []string{"schema", "private_key", "device_id", "access_token", "peer_public_key", "addresses", "endpoints", "api_schema", "terms_revision"} {
+		if _, exists := fields[name]; !exists {
+			return ErrImport
+		}
+	}
+	var snapshot localRegistrationSnapshot
+	if json.Unmarshal(data, &snapshot) != nil || snapshot.Schema != 1 {
+		return ErrImport
+	}
+	privateBytes, err := wireGuardKey(snapshot.PrivateKey)
+	if err != nil {
+		return ErrImport
+	}
+	privateKey, err := ecdh.X25519().NewPrivateKey(privateBytes)
+	if err != nil {
+		return ErrImport
+	}
+	response := RegistrationResponse{
+		DeviceID: snapshot.DeviceID, AccessToken: snapshot.AccessToken,
+		PeerPublicKey: snapshot.PeerPublicKey, Addresses: snapshot.Addresses,
+		Endpoints: snapshot.Endpoints, APISchema: snapshot.APISchema, TermsRevision: snapshot.TermsRevision,
+	}
+	if validateRegistrationResponse(response, registrationTerms) != nil {
+		return ErrImport
+	}
+	view.HasPrivateKey, view.HasAccessToken, view.HasDeviceID = true, true, true
+	view.Format, view.Transport = "cloudflare-registration-v1", "wireguard"
+	view.PublicKeyFingerprint = digest(privateKey.PublicKey().Bytes())
+	view.AssignedAddresses = canonicalRegistrationAddresses(snapshot.Addresses)
+	return nil
+}
+
 func validateRegistrationResponse(response RegistrationResponse, termsRevision string) error {
 	if !boundedSecret(response.DeviceID) || !boundedSecret(response.AccessToken) || response.TermsRevision != termsRevision || !boundedPublicText(response.APISchema) {
 		return ErrRegistration
@@ -161,7 +228,7 @@ func validateRegistrationResponse(response RegistrationResponse, termsRevision s
 	seen := map[string]bool{}
 	for _, endpoint := range response.Endpoints {
 		host, portText, err := net.SplitHostPort(endpoint)
-		if err != nil || seen[endpoint] {
+		if err != nil {
 			return ErrRegistration
 		}
 		address, err := netip.ParseAddr(host)
@@ -169,7 +236,11 @@ func validateRegistrationResponse(response RegistrationResponse, termsRevision s
 		if err != nil || portErr != nil || !address.IsGlobalUnicast() || address.IsPrivate() || port < 1 || port > 65535 {
 			return ErrRegistration
 		}
-		seen[endpoint] = true
+		canonical := net.JoinHostPort(address.String(), strconv.Itoa(port))
+		if endpoint != canonical || seen[canonical] {
+			return ErrRegistration
+		}
+		seen[canonical] = true
 	}
 	return nil
 }

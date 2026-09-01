@@ -99,3 +99,66 @@ func TestRegistrarHonorsCancellationBeforeNetwork(t *testing.T) {
 		t.Fatal("canceled registration reached API", err, mock.calls)
 	}
 }
+
+func TestLocalCandidatePersistsAtomicallyButCannotBeForgedByPublicImport(t *testing.T) {
+	mock := &mockRegistrationAPI{result: validRegistrationResponse()}
+	candidate, err := (Registrar{API: mock, Random: bytes.NewReader(bytes.Repeat([]byte{5}, 64))}).NewCandidate(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := candidate.snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseImport(SourceLocalRegistration, snapshot.raw); !errors.Is(err, ErrImport) {
+		t.Fatal("public import forged a locally generated registration", err)
+	}
+	store, _ := privateStore(t)
+	first, err := store.ImportCandidate(context.Background(), candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.ImportCandidate(context.Background(), candidate)
+	if err != nil || second.ID != first.ID {
+		t.Fatal("candidate persistence is not idempotent", err)
+	}
+	list, err := store.List(context.Background())
+	if err != nil || len(list) != 1 {
+		t.Fatal(err, len(list))
+	}
+	view := list[0]
+	if view.SourceKind != SourceLocalRegistration || view.Ownership != "locally-generated-candidate" || view.Verification != "registered-unverified" || !view.HasPrivateKey || !view.HasDeviceID || !view.HasAccessToken {
+		t.Fatalf("stored candidate was misclassified: %+v", view)
+	}
+	encoded, _ := json.Marshal(list)
+	for _, secret := range []string{base64.StdEncoding.EncodeToString(candidate.privateKey), "private-device-marker", "private-token-marker"} {
+		if strings.Contains(string(encoded), secret) {
+			t.Fatal("stored candidate leaked through List", secret)
+		}
+	}
+}
+
+func TestLocalCandidateEncryptedBackupRoundTripStaysInactive(t *testing.T) {
+	mock := &mockRegistrationAPI{result: validRegistrationResponse()}
+	candidate, err := (Registrar{API: mock, Random: bytes.NewReader(bytes.Repeat([]byte{11}, 64))}).NewCandidate(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, _ := privateStore(t)
+	if _, err := source.ImportCandidate(context.Background(), candidate); err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := source.Backup(context.Background(), "registrar-test-password", "0.18.1-dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination, _ := privateStore(t)
+	review, err := destination.PreviewBackup(context.Background(), envelope, "registrar-test-password")
+	if err != nil || review.Added != 1 {
+		t.Fatal("local candidate backup preview failed", review, err)
+	}
+	restored, err := destination.RestoreReviewedBackup(context.Background(), envelope, "registrar-test-password", review.Digest)
+	if err != nil || len(restored) != 1 || restored[0].SourceKind != SourceLocalRegistration || restored[0].Verification != "registered-unverified" {
+		t.Fatalf("local candidate backup restore=%+v err=%v", restored, err)
+	}
+}

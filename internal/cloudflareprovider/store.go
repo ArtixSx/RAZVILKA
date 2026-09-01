@@ -96,7 +96,7 @@ func (s *Store) List(ctx context.Context) ([]Account, error) {
 	}
 	views := make([]Account, 0, len(doc.Accounts))
 	for _, record := range doc.Accounts {
-		parsed, err := ParseImport(record.Kind, record.Raw)
+		parsed, err := parseStoredImport(record.Kind, record.Raw)
 		if err != nil {
 			return nil, ErrStore
 		}
@@ -120,7 +120,7 @@ func (s *Store) ImportSnapshot(ctx context.Context, imported Import) (Account, e
 		return Account{}, err
 	}
 	defer release()
-	parsed, err := ParseImport(imported.kind, imported.raw)
+	parsed, err := parseStoredImport(imported.kind, imported.raw)
 	if err != nil {
 		return Account{}, err
 	}
@@ -145,6 +145,17 @@ func (s *Store) ImportSnapshot(ctx context.Context, imported Import) (Account, e
 		return Account{}, err
 	}
 	return accountView(record, parsed), nil
+}
+
+// ImportCandidate persists a locally generated registration result as an
+// inactive private snapshot. It never exports the secret, starts a transport or
+// replaces another account. External imports cannot claim this source kind.
+func (s *Store) ImportCandidate(ctx context.Context, candidate RegistrationCandidate) (Account, error) {
+	imported, err := candidate.snapshot()
+	if err != nil {
+		return Account{}, err
+	}
+	return s.ImportSnapshot(ctx, imported)
 }
 
 func (s *Store) lockWrite(ctx context.Context) (func(), error) {
@@ -223,7 +234,7 @@ func validateDocument(doc privateDocument) error {
 			return ErrStore
 		}
 		seen[record.ID] = true
-		if _, err := ParseImport(record.Kind, record.Raw); err != nil {
+		if _, err := parseStoredImport(record.Kind, record.Raw); err != nil {
 			return ErrStore
 		}
 	}

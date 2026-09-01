@@ -22,11 +22,14 @@ PR-1.2 отделяет локальную криптографию от буд�
   private key, device ID и access token;
 - отменённый контекст не вызывает API, а отсутствие явного принятия условий
   блокирует операцию до генерации и сети.
+- проверенный mock-кандидат можно атомарно сохранить как неактивную запись
+  `local-registration` в закрытом Provider Store. Этот kind нельзя подделать
+  обычным публичным импортом; он сохраняется в зашифрованном private backup и
+  после restore остаётся `registered-unverified`.
 
 ## Что намеренно отсутствует
 
 - живой Cloudflare HTTP endpoint и знание его текущей схемы;
-- сохранение кандидата в private Store;
 - экспорт WireGuard-конфига;
 - запуск интерфейса, изменение DNS/firewall/PBR или назначение сервису;
 - AutoPilot и автоматическая ротация.
@@ -34,6 +37,15 @@ PR-1.2 отделяет локальную криптографию от буд�
 Эти части добавляются по очереди: golden fixtures/mock failures → bounded live
 adapter → journaled candidate persistence → Endpoint Scanner → isolated canary.
 Нельзя считать этот блок подтверждением работоспособности WARP у провайдера.
+
+После сверки источников live consumer adapter оставлен закрытым. Схема
+[wgcf](https://github.com/ViRb3/wgcf/blob/master/openapi-spec.yml) основана на
+неофициально исследованном API, а upstream фиксировал случаи, когда регистрация
+начала возвращать `500` после изменения Cloudflare
+([issue #515](https://github.com/ViRb3/wgcf/issues/515)). Официальная документация
+Cloudflare описывает административные Zero Trust registrations, но это не
+обещание стабильности consumer endpoint. Поэтому текущий код знает только mock
+контракт и не отправляет запросы на `api.cloudflareclient.com`.
 
 ## Проверки
 
@@ -44,8 +56,11 @@ adapter → journaled candidate persistence → Endpoint Scanner → isolated ca
   адресов и несовпадающая версия условий;
 - WARP tunnel address в частном диапазоне разрешён как назначенный адрес, но
   endpoint сервера обязан быть публичным global-unicast IP.
+- локальный candidate сохраняется идемпотентно, не может быть создан через
+  публичный `ParseImport`, проходит encrypted backup preview/restore и после
+  восстановления не становится активным.
 
-Тот же набор registrar-тестов кросс-собран и выполнен на ARM64 Keenetic:
-контрольная сумма совпала, все положительные и отрицательные сценарии прошли.
-Тестовый бинарник удалён; рабочая RAZVILKA осталась `0.18.0`, сеть и профили не
-изменялись.
+Полный набор registrar и candidate-store тестов кросс-собран и выполнен на
+ARM64 Keenetic: контрольная сумма совпала, положительные/отрицательные сценарии,
+атомарное сохранение и encrypted backup/restore прошли. Тестовый бинарник
+удалён; рабочая RAZVILKA осталась `0.18.0`, сеть и профили не изменялись.

@@ -37,6 +37,18 @@ func TestProviderSnapshotValidationAndLegacyPayloadEncoding(t *testing.T) {
 	}
 }
 
+func TestLocallyRegisteredCloudflareSnapshotIsPrivateBackupCompatible(t *testing.T) {
+	payload := NewPayload("0.18.1-dev")
+	content := `{"schema":1,"private_key":"private-test-marker"}`
+	payload.ProviderSnapshots = []ProviderSnapshot{{
+		Provider: "cloudflare", ID: "cf-0123456789abcdef0123456789abcdef",
+		SourceKind: "local-registration", Content: content, SHA256: Sum([]byte(content)), ImportedAt: payload.CreatedAt,
+	}}
+	if err := Seal(&payload); err != nil {
+		t.Fatal("local registration snapshot rejected before provider validation", err)
+	}
+}
+
 func TestEnvelopeRejectsOversizedSaltBeforeKDF(t *testing.T) {
 	payload := NewPayload("0.18.1-dev")
 	if err := Seal(&payload); err != nil {

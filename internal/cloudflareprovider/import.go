@@ -20,6 +20,14 @@ var ErrImport = errors.New("invalid or unsupported Cloudflare import; input valu
 // ParseImport is passive: source bytes come from the caller, not a filesystem
 // path or URL. It does not attest that the imported profile belongs to Cloudflare.
 func ParseImport(kind string, data []byte) (Import, error) {
+	return parseImport(kind, data, false)
+}
+
+func parseStoredImport(kind string, data []byte) (Import, error) {
+	return parseImport(kind, data, true)
+}
+
+func parseImport(kind string, data []byte, allowLocalCandidate bool) (Import, error) {
 	if len(data) == 0 || len(data) > MaxImportBytes || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
 		return Import{}, ErrImport
 	}
@@ -28,6 +36,17 @@ func ParseImport(kind string, data []byte) (Import, error) {
 	switch kind {
 	case SourceWireGuard:
 		err = inspectWireGuard(data, &view)
+	case SourceLocalRegistration:
+		if !allowLocalCandidate {
+			err = ErrImport
+			break
+		}
+		err = inspectLocalRegistration(data, &view)
+		if err == nil {
+			view.SourceKind = SourceLocalRegistration
+			view.Ownership = "locally-generated-candidate"
+			view.Verification = "registered-unverified"
+		}
 	case SourceUSQUE:
 		err = inspectUSQUE(data, &view)
 	case SourceWGCF:

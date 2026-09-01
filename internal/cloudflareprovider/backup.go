@@ -179,7 +179,7 @@ func mergeSnapshots(doc, restored privateDocument) (privateDocument, []Account, 
 			doc.Accounts = append(doc.Accounts, record)
 			review.Added++
 		}
-		parsed, _ := ParseImport(record.Kind, record.Raw)
+		parsed, _ := parseStoredImport(record.Kind, record.Raw)
 		views = append(views, accountView(record, parsed))
 	}
 	if len(doc.Accounts) > MaxAccounts {

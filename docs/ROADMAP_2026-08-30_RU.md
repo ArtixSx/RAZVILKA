@@ -75,9 +75,10 @@ snapshot после исключения writers, сохранение/совм�
 Локальное продолжение 1 сентября: добавлен первый слой пункта 2 — X25519-ключ
 создаётся внутри Provider, API-контракт получает только публичный ключ, а mock
 registrar возвращает неподтверждённого кандидата без публичного представления
-private key, device ID или access token. Живой Cloudflare API, сохранение
-кандидата и runtime намеренно не подключены до golden fixtures и следующих
-gates. Контракт: [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md).
+private key, device ID или access token. Неактивное сохранение кандидата в
+private Store и его encrypted backup/restore затем добавлены. Живой Cloudflare
+API и runtime намеренно отсутствуют до golden fixtures и следующих gates.
+Контракт: [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md).
 
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 
