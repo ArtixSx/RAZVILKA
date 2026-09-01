@@ -6,12 +6,57 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestRegistrationDNSKeepsOnlyPublicSummary(t *testing.T) {
+	resolver := func(_ context.Context, network, host string) ([]netip.Addr, error) {
+		if network != "ip" || host != "api.cloudflareclient.com" {
+			t.Fatalf("unexpected lookup %q %q", network, host)
+		}
+		return []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2606:4700:4700::1111")}, nil
+	}
+	result, err := inspectRegistrationDNS(context.Background(), "https://api.cloudflareclient.com/v0a4471/reg", resolver)
+	if err != nil || result.DNSAnswers != 2 || !result.DNSIPv4 || !result.DNSIPv6 || !result.DNSPublicOnly {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	payload, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range []string{"1.1.1.1", "2606:4700:4700::1111"} {
+		if strings.Contains(string(payload), address) {
+			t.Fatalf("DNS address leaked into report: %s", payload)
+		}
+	}
+}
+
+func TestRegistrationDNSRejectsMixedPrivateAnswer(t *testing.T) {
+	resolver := func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("192.168.1.1")}, nil
+	}
+	if _, err := inspectRegistrationDNS(context.Background(), "https://api.cloudflareclient.com/v0a4471/reg", resolver); err == nil {
+		t.Fatal("mixed public/private DNS answers accepted")
+	}
+}
+
+func TestUSQUEBootstrapRejectsInvalidClockAndUsesHardenedClient(t *testing.T) {
+	if clockSane(time.Date(2001, time.January, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatal("invalid router clock accepted")
+	}
+	if !clockSane(time.Date(2026, time.September, 2, 0, 0, 0, 0, time.UTC)) {
+		t.Fatal("current clock rejected")
+	}
+	client, ok := New().HTTP.(*http.Client)
+	if !ok || client.Transport == nil || client.Transport == http.DefaultTransport || client.CheckRedirect == nil {
+		t.Fatalf("USQUE doctor does not use the hardened public-only client: %#v", client)
+	}
+}
 
 type fakeRunner struct{ calls []Command }
 

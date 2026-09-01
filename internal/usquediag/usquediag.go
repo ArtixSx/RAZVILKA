@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 type Command struct {
@@ -121,6 +125,22 @@ type RepairPreview struct {
 	Blockers          []string `json:"blockers,omitempty"`
 }
 
+// BootstrapReadiness contains only non-secret facts needed before a USQUE
+// registration attempt. DNS addresses are deliberately reduced to counts and
+// address families so the diagnostics response cannot become an inventory of
+// the router's resolver results.
+type BootstrapReadiness struct {
+	ClockSane        bool   `json:"clock_sane"`
+	ClockUTC         string `json:"clock_utc,omitempty"`
+	CABundle         bool   `json:"ca_bundle"`
+	CABundleName     string `json:"ca_bundle_name,omitempty"`
+	RegistrationHost string `json:"registration_host,omitempty"`
+	DNSAnswers       int    `json:"dns_answers"`
+	DNSIPv4          bool   `json:"dns_ipv4"`
+	DNSIPv6          bool   `json:"dns_ipv6"`
+	DNSPublicOnly    bool   `json:"dns_public_only"`
+}
+
 type Report struct {
 	OK              bool                        `json:"ok"`
 	State           string                      `json:"state"`
@@ -137,10 +157,13 @@ type Report struct {
 	EndpointRoutes  []EndpointRoute             `json:"endpoint_routes,omitempty"`
 	Evidence        CanaryEvidence              `json:"canary_evidence"`
 	NDMCRepair      RepairPreview               `json:"ndmc_repair_preview"`
+	Bootstrap       BootstrapReadiness          `json:"bootstrap_readiness"`
 	Checks          []Check                     `json:"checks"`
 	Recommendations []string                    `json:"recommendations,omitempty"`
 	Note            string                      `json:"note"`
 }
+
+type ResolverFunc func(context.Context, string, string) ([]netip.Addr, error)
 
 type Manager struct {
 	repairMu                sync.Mutex
@@ -157,6 +180,9 @@ type Manager struct {
 	NDMCPath                string
 	IPCandidates            []string
 	RegistrationURL         string
+	Resolver                ResolverFunc
+	Now                     func() time.Time
+	CACandidates            []string
 	EvidencePath            string
 	RepairRoot              string
 	ShellPath               string
@@ -164,7 +190,7 @@ type Manager struct {
 
 func New() *Manager {
 	return &Manager{
-		Runner: execRunner{}, HTTP: &http.Client{Timeout: 12 * time.Second},
+		Runner: execRunner{}, HTTP: publicfetch.NewClient(12 * time.Second),
 		BinaryCandidates:        []string{"/opt/usr/bin/usque", "/opt/bin/usque"},
 		Architecture:            runtime.GOARCH,
 		FeedPatterns:            []string{"/opt/etc/opkg.conf", "/opt/etc/opkg/*.conf"},
@@ -174,14 +200,26 @@ func New() *Manager {
 		InitPath: "/opt/etc/init.d/S51usque", NDMCPath: "/bin/ndmc",
 		IPCandidates:    []string{"/opt/sbin/ip", "/opt/bin/ip", "ip"},
 		RegistrationURL: "https://api.cloudflareclient.com/v0a4471/reg",
-		EvidencePath:    "/opt/var/lib/razvilka/dataplane/usque/evidence.json",
-		RepairRoot:      "/opt/var/lib/razvilka/usque-repair",
-		ShellPath:       "/bin/sh",
+		Resolver:        net.DefaultResolver.LookupNetIP,
+		Now:             time.Now,
+		CACandidates: []string{
+			"/opt/etc/ssl/certs/ca-certificates.crt",
+			"/etc/ssl/certs/ca-certificates.crt",
+			"/etc/ssl/cert.pem",
+		},
+		EvidencePath: "/opt/var/lib/razvilka/dataplane/usque/evidence.json",
+		RepairRoot:   "/opt/var/lib/razvilka/usque-repair",
+		ShellPath:    "/bin/sh",
 	}
 }
 
 func (m *Manager) Check(ctx context.Context) Report {
-	report := Report{CheckedAt: time.Now().UTC().Format(time.RFC3339), Note: "Проверка ничего не устанавливает, не меняет DNS, маршруты, конфигурацию или сессию USQUE."}
+	now := time.Now()
+	if m.Now != nil {
+		now = m.Now()
+	}
+	now = now.UTC()
+	report := Report{CheckedAt: now.Format(time.RFC3339), Note: "Проверка ничего не устанавливает, не меняет DNS, маршруты, конфигурацию или сессию USQUE."}
 	add := func(id, label, status, message, action string) {
 		report.Checks = append(report.Checks, Check{ID: id, Label: label, Status: status, Message: message, Action: action})
 		if action != "" && (status == "warning" || status == "fail") {
@@ -198,6 +236,52 @@ func (m *Manager) Check(ctx context.Context) Report {
 		add("architecture", "Архитектура", "fail", architecture+" не входит в официальный набор Keenetic-пакетов USQUE.", "Не устанавливайте пакет другой архитектуры; используйте совместимую сборку или другой обход.")
 	}
 	report.Environment.Architecture = architecture
+
+	report.Bootstrap.ClockUTC = now.Format(time.RFC3339)
+	report.Bootstrap.ClockSane = clockSane(now)
+	if report.Bootstrap.ClockSane {
+		add("system-clock", "Системное время", "pass", "Часы роутера находятся в допустимом диапазоне для проверки TLS.", "")
+	} else {
+		add("system-clock", "Системное время", "fail", "Дата или время роутера недостоверны; проверка сертификатов Cloudflare будет ненадёжной.", "Синхронизируйте время роутера через NTP до регистрации или перерегистрации USQUE.")
+	}
+	if len(m.CACandidates) == 0 {
+		add("ca-bundle", "Корневые сертификаты", "skipped", "Список расположений CA не задан; наличие сертификатов не проверялось.", "")
+	} else if caPath := firstFile(m.CACandidates); caPath != "" {
+		report.Bootstrap.CABundle = true
+		report.Bootstrap.CABundleName = filepath.Base(caPath)
+		add("ca-bundle", "Корневые сертификаты", "pass", "Найден локальный набор корневых сертификатов; его содержимое и ключи не выводились.", "")
+	} else {
+		add("ca-bundle", "Корневые сертификаты", "fail", "Набор корневых сертификатов не найден в известных расположениях.", "Установите ca-certificates из Entware до обращения к API Cloudflare.")
+	}
+	registrationURLValid := false
+	if strings.TrimSpace(m.RegistrationURL) == "" {
+		add("registration-url", "API регистрации", "skipped", "Адрес API регистрации не задан; сетевой bootstrap не проверялся.", "")
+	} else if err := publicfetch.ValidateURL(m.RegistrationURL); err != nil {
+		add("registration-url", "API регистрации", "fail", "Адрес API регистрации не является разрешённым публичным HTTPS endpoint.", "Используйте штатный HTTPS endpoint Cloudflare без прокси, учётных данных и нестандартного порта.")
+	} else {
+		registrationURLValid = true
+		parsed, _ := url.Parse(m.RegistrationURL)
+		report.Bootstrap.RegistrationHost = strings.ToLower(parsed.Hostname())
+		add("registration-url", "API регистрации", "pass", "Настроен разрешённый публичный HTTPS endpoint Cloudflare.", "")
+		if m.Resolver == nil {
+			add("registration-dns", "DNS регистрации", "skipped", "Безопасный DNS-resolver не задан; ответы API регистрации не проверялись.", "")
+		} else if dns, err := inspectRegistrationDNS(ctx, m.RegistrationURL, m.Resolver); err != nil {
+			add("registration-dns", "DNS регистрации", "warning", "DNS API регистрации не дал полностью публичный и однозначно проверяемый набор адресов.", "Проверьте системный DNS или выберите проверенный DNS только внутри отдельного кандидата; настройки роутера не менялись.")
+		} else {
+			report.Bootstrap.DNSAnswers = dns.DNSAnswers
+			report.Bootstrap.DNSIPv4 = dns.DNSIPv4
+			report.Bootstrap.DNSIPv6 = dns.DNSIPv6
+			report.Bootstrap.DNSPublicOnly = dns.DNSPublicOnly
+			families := []string{}
+			if dns.DNSIPv4 {
+				families = append(families, "IPv4")
+			}
+			if dns.DNSIPv6 {
+				families = append(families, "IPv6")
+			}
+			add("registration-dns", "DNS регистрации", "pass", fmt.Sprintf("Получено публичных ответов: %d (%s); сами адреса скрыты.", dns.DNSAnswers, strings.Join(families, "+")), "")
+		}
+	}
 
 	feedCount, feedFiles := feedDeclarations(m.FeedPatterns)
 	switch {
@@ -390,20 +474,25 @@ func (m *Manager) Check(ctx context.Context) Report {
 	report.NDMCRepair = previewNDMCRepair(m.InitPath, report.Environment.NDMCMode)
 	switch report.NDMCRepair.Status {
 	case "needed":
-		add("ndmc-init", "Безопасный вызов ndmc", "warning", report.NDMCRepair.Summary, "Просмотрите план ремонта; автоматическое изменение init-скрипта пока не выполняется.")
+		add("ndmc-init", "Безопасный вызов ndmc", "warning", report.NDMCRepair.Summary, "Просмотрите план и явно запустите точечный ремонт с backup, проверкой и автоматическим rollback.")
 	case "blocked":
 		add("ndmc-init", "Безопасный вызов ndmc", "warning", report.NDMCRepair.Summary, "Устраните блокирующие причины до ремонта init-скрипта.")
 	default:
 		add("ndmc-init", "Безопасный вызов ndmc", "pass", report.NDMCRepair.Summary, "")
 	}
 
-	if m.HTTP != nil && m.RegistrationURL != "" {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, m.RegistrationURL, nil)
-		resp, err := m.HTTP.Do(req)
-		if err != nil {
+	if m.HTTP != nil && registrationURLValid {
+		req, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, m.RegistrationURL, nil)
+		if requestErr != nil {
+			add("cloudflare-api", "Cloudflare API", "warning", "Не удалось подготовить безопасную HTTPS-проверку API регистрации.", "Проверьте адрес API; настройки роутера не менялись.")
+		} else if resp, err := m.HTTP.Do(req); err != nil {
 			add("cloudflare-api", "Cloudflare API", "warning", "TLS/HTTPS до API регистрации не подтверждён.", "Проверьте время, CA, DNS и bootstrap NFQWS2 до создания новой сессии.")
+		} else if resp == nil {
+			add("cloudflare-api", "Cloudflare API", "warning", "HTTPS-проверка не вернула корректный ответ.", "Повторите проверку; настройки роутера не менялись.")
 		} else {
-			_ = resp.Body.Close()
+			if resp.Body != nil {
+				_ = resp.Body.Close()
+			}
 			status := "pass"
 			if resp.StatusCode >= 500 {
 				status = "warning"
@@ -434,6 +523,53 @@ func (m *Manager) Check(ctx context.Context) Report {
 		report.Readiness = "READY"
 	}
 	return report
+}
+
+func clockSane(now time.Time) bool {
+	if now.IsZero() {
+		return false
+	}
+	utc := now.UTC()
+	return !utc.Before(time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)) &&
+		utc.Before(time.Date(2100, time.January, 1, 0, 0, 0, 0, time.UTC))
+}
+
+func inspectRegistrationDNS(ctx context.Context, rawURL string, resolver ResolverFunc) (BootstrapReadiness, error) {
+	result := BootstrapReadiness{}
+	if resolver == nil || publicfetch.ValidateURL(rawURL) != nil {
+		return result, publicfetch.ErrURL
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return result, publicfetch.ErrURL
+	}
+	host := strings.ToLower(parsed.Hostname())
+	result.RegistrationHost = host
+	var addresses []netip.Addr
+	if literal, parseErr := netip.ParseAddr(host); parseErr == nil {
+		addresses = []netip.Addr{literal}
+	} else {
+		lookupContext, cancel := context.WithTimeout(ctx, 8*time.Second)
+		defer cancel()
+		addresses, err = resolver(lookupContext, "ip", host)
+		if err != nil {
+			return result, err
+		}
+	}
+	if len(addresses) == 0 || len(addresses) > 32 {
+		return result, publicfetch.ErrAddress
+	}
+	for _, address := range addresses {
+		address = address.Unmap()
+		if !publicfetch.PublicAddress(address) {
+			return result, publicfetch.ErrAddress
+		}
+		result.DNSIPv4 = result.DNSIPv4 || address.Is4()
+		result.DNSIPv6 = result.DNSIPv6 || address.Is6()
+	}
+	result.DNSAnswers = len(addresses)
+	result.DNSPublicOnly = true
+	return result, nil
 }
 
 func previewNDMCRepair(initPath, ndmcMode string) RepairPreview {
