@@ -1,0 +1,97 @@
+package cloudflareprovider
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+)
+
+type mockScanRunner struct {
+	t             *testing.T
+	now           time.Time
+	candidateSeen []CandidatePreview
+	requests      []ScanRunRequest
+	cleanup       bool
+	errAt         int
+	block         bool
+}
+
+func (runner *mockScanRunner) RunScanAttempt(ctx context.Context, candidate WireGuardCandidate, request ScanRunRequest) (ScanAttempt, error) {
+	runner.requests = append(runner.requests, request)
+	runner.candidateSeen = append(runner.candidateSeen, candidate.Public())
+	if runner.block {
+		<-ctx.Done()
+		return ScanAttempt{}, ctx.Err()
+	}
+	attempt := validScanAttempt(runner.t, candidate.Public(), runner.now.Add(time.Duration(request.Attempt)*time.Second))
+	attempt.Candidate = CandidatePreview{RoutePathID: "runner-must-not-control-this"}
+	attempt.ServiceID = "runner-must-not-control-this"
+	attempt.CleanupConfirmed = runner.cleanup
+	if runner.errAt == request.Attempt {
+		return attempt, errors.New("private runner detail")
+	}
+	return attempt, nil
+}
+
+func TestScannerRunsBoundedRepeatedAttemptsAndOwnsIdentity(t *testing.T) {
+	now := time.Date(2026, 9, 1, 17, 0, 0, 0, time.UTC)
+	store, account, _ := storedCandidate(t, 37)
+	runner := &mockScanRunner{t: t, now: now.Add(-5 * time.Second), cleanup: true}
+	waits := []time.Duration{}
+	scanner := Scanner{
+		Runner: runner, Random: bytes.NewReader(bytes.Repeat([]byte{1}, 64)), Now: func() time.Time { return now },
+		Wait: func(_ context.Context, delay time.Duration) error { waits = append(waits, delay); return nil },
+	}
+	report, err := scanner.Scan(context.Background(), store, account.ID, ScanOptions{ServiceID: "telegram", Attempts: 3, EvidenceTTL: time.Minute, AttemptTimeout: time.Second, MaxJitter: time.Second})
+	if err != nil || !report.Verified || report.Passes != 3 || len(runner.requests) != 3 || len(waits) != 2 {
+		t.Fatalf("scan report=%+v requests=%v waits=%v err=%v", report, runner.requests, waits, err)
+	}
+	for index, request := range runner.requests {
+		if request.Attempt != index+1 || request.ServiceID != "telegram" || runner.candidateSeen[index].RoutePathID != report.RoutePathID {
+			t.Fatal("scanner did not bind attempt identity", request, runner.candidateSeen[index])
+		}
+	}
+}
+
+func TestScannerStopsAfterCleanupFailure(t *testing.T) {
+	now := time.Date(2026, 9, 1, 17, 30, 0, 0, time.UTC)
+	store, account, _ := storedCandidate(t, 41)
+	runner := &mockScanRunner{t: t, now: now.Add(-5 * time.Second), cleanup: false}
+	scanner := Scanner{Runner: runner, Now: func() time.Time { return now }}
+	report, err := scanner.Scan(context.Background(), store, account.ID, ScanOptions{ServiceID: "telegram"})
+	if err != nil || report.Verified || report.ReasonCode != "cleanup-unconfirmed" || len(runner.requests) != 1 {
+		t.Fatalf("unsafe cleanup did not stop scan: report=%+v calls=%d err=%v", report, len(runner.requests), err)
+	}
+}
+
+func TestScannerBoundsOptionsTimeoutAndRunnerErrors(t *testing.T) {
+	now := time.Date(2026, 9, 1, 18, 0, 0, 0, time.UTC)
+	store, account, _ := storedCandidate(t, 43)
+	for _, options := range []ScanOptions{
+		{}, {ServiceID: "Telegram"}, {ServiceID: "telegram", Attempts: 4},
+		{ServiceID: "telegram", AttemptTimeout: time.Hour}, {ServiceID: "telegram", EvidenceTTL: 25 * time.Hour},
+	} {
+		if _, err := (Scanner{Runner: &mockScanRunner{t: t}}).Scan(context.Background(), store, account.ID, options); !errors.Is(err, ErrScannerOptions) {
+			t.Fatalf("invalid scan options accepted: %+v err=%v", options, err)
+		}
+	}
+	runner := &mockScanRunner{t: t, now: now.Add(-5 * time.Second), cleanup: true, errAt: 1}
+	report, err := (Scanner{Runner: runner, Now: func() time.Time { return now }}).Scan(context.Background(), store, account.ID, ScanOptions{ServiceID: "telegram"})
+	if !errors.Is(err, ErrScannerRunner) || report.Verified || report.ReasonCode != "runner-failed" || len(runner.requests) != 1 || strings.Contains(err.Error(), "private runner detail") {
+		t.Fatalf("runner error handling report=%+v err=%v", report, err)
+	}
+	lateFailure := &mockScanRunner{t: t, now: now.Add(-5 * time.Second), cleanup: true, errAt: 3}
+	report, err = (Scanner{Runner: lateFailure, Now: func() time.Time { return now }, Wait: func(context.Context, time.Duration) error { return nil }}).Scan(context.Background(), store, account.ID, ScanOptions{ServiceID: "telegram", Attempts: 3})
+	if !errors.Is(err, ErrScannerRunner) || report.Verified || report.ReasonCode != "runner-failed" || report.Passes < 2 {
+		t.Fatalf("late runner error promoted earlier passes: report=%+v err=%v", report, err)
+	}
+	blocking := &mockScanRunner{t: t, block: true}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := (Scanner{Runner: blocking}).Scan(ctx, store, account.ID, ScanOptions{ServiceID: "telegram", AttemptTimeout: time.Second}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("scan cancellation was hidden", err)
+	}
+}

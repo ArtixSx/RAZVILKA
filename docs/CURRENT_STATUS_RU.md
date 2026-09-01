@@ -247,6 +247,12 @@ Evaluator прошёл на ARM64 Keenetic, включая все отрицат
 Строгий trace parser также подключён к прежнему WARP WireGuard canary вместо
 простого поиска `warp=on`; это усиливает существующий Apply, но ещё не заменяет
 полный новый Scanner.
+Для нового Scanner добавлен bounded orchestrator двух-трёх последовательных
+attempts с per-attempt timeout, jitter, cancellation, immutable identity и
+немедленной остановкой после неподтверждённого cleanup. Реальный runner ещё не
+подключён.
+Контракт orchestrator также прошёл на ARM64 Keenetic, включая позднюю ошибку
+после двух PASS; она не была повышена до `verified`. Временный тест удалён.
 
 Порядок дальнейшей разработки находится в
 [ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — проверить

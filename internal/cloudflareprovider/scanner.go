@@ -163,7 +163,7 @@ type ScanReport struct {
 // failure in any attempt is fatal even if the service happened to respond.
 func EvaluateScanReport(attempts []ScanAttempt, now time.Time, ttl time.Duration) ScanReport {
 	report := ScanReport{Attempts: len(attempts), ReasonCode: "insufficient-attempts"}
-	if len(attempts) < MinScanPasses || len(attempts) > MaxScanAttempts {
+	if len(attempts) == 0 || len(attempts) > MaxScanAttempts {
 		return report
 	}
 	report.RoutePathID = attempts[0].Candidate.RoutePathID
@@ -192,6 +192,8 @@ func EvaluateScanReport(attempts []ScanAttempt, now time.Time, ttl time.Duration
 		report.ReasonCode = "candidate-identity-changed"
 	case cleanupFailed:
 		report.ReasonCode = "cleanup-unconfirmed"
+	case len(attempts) < MinScanPasses:
+		report.ReasonCode = "insufficient-attempts"
 	case report.Passes < MinScanPasses:
 		report.ReasonCode = "insufficient-confirmed-attempts"
 	default:
