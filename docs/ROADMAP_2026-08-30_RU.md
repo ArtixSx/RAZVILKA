@@ -72,6 +72,13 @@ snapshot после исключения writers, сохранение/совм�
 при upgrade/rollback и Linux/Entware/HIL. Общий HTTP-импорт Provider-архивов
 остаётся закрытым; весь PR-1.1 пока не завершён.
 
+Локальное продолжение 1 сентября: добавлен первый слой пункта 2 — X25519-ключ
+создаётся внутри Provider, API-контракт получает только публичный ключ, а mock
+registrar возвращает неподтверждённого кандидата без публичного представления
+private key, device ID или access token. Живой Cloudflare API, сохранение
+кандидата и runtime намеренно не подключены до golden fixtures и следующих
+gates. Контракт: [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md).
+
 ## Этап 2 — `v0.20` Proxy Provider и Node Lab
 
 1. Типизированный и fuzz-tested parser VLESS/Reality, затем Trojan/SS.

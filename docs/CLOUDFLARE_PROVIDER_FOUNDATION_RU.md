@@ -66,7 +66,9 @@ Fuzz-проверка двух форматов: 1 197 969 выполнений 
    export ещё не подключён; не добавлять секреты в обычный
    status, diagnostics, audit или публичный export.
 5. Linux/race, тесты POSIX-прав и аппаратный gate перед подключением к живым
-   профилям. PR-1.2 начинается с локальных ключей/mock API, не live registration.
+   профилям. Первый слой PR-1.2 с локальными ключами/mock API теперь реализован
+   в [CLOUDFLARE_LOCAL_REGISTRAR_RU.md](CLOUDFLARE_LOCAL_REGISTRAR_RU.md), но
+   live registration по-прежнему не подключена.
 
 Текущий WARP/USQUE lifecycle сознательно сохранён. Новый модуль пока не является
 «исправленным WARP» и не доказывает доступность Telegram через туннель.
