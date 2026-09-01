@@ -261,7 +261,15 @@ attempts с per-attempt timeout, jitter, cancellation, immutable identity и
 Каталог и новый candidate fingerprint прошли на ARM64 Keenetic; временный тест
 удалён, установленная `0.18.0` не перезапускалась.
 
+Добавлена непостоянная модель endpoint health: Evidence TTL, score, failure
+cooldown `1/5/30` минут, запрет наследовать подтверждение между разными
+candidate identity и невозможность восстановить trusted state из публичного
+JSON. Persist/LKG подключатся только вместе с журналом Scanner.
+Модель endpoint health прошла ARM64 gate на Keenetic: TTL boundary, backoff
+`1/5/30`, reset после success, forged JSON, changed identity и cleanup zero-score.
+Временный тест удалён; установленная `0.18.0` не перезапускалась.
+
 Порядок дальнейшей разработки находится в
-[ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — проверить
-строгие Evidence на аппаратном baseline и завершить независимое подтверждение
-пути до расширения любой автоматики.
+[ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший gate — приватный
+атомарный журнал Scanner для восстановления только непросроченного health без
+переноса trust через публичный JSON.

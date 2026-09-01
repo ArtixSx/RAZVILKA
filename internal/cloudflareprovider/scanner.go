@@ -157,6 +157,7 @@ type ScanReport struct {
 	ValidUntil  time.Time           `json:"valid_until,omitempty"`
 	Results     []AttemptEvaluation `json:"results"`
 	ReasonCode  string              `json:"reason_code"`
+	valid       bool
 }
 
 // EvaluateScanReport requires two independent successful attempts. A cleanup
@@ -166,6 +167,7 @@ func EvaluateScanReport(attempts []ScanAttempt, now time.Time, ttl time.Duration
 	if len(attempts) == 0 || len(attempts) > MaxScanAttempts {
 		return report
 	}
+	report.valid = true
 	report.RoutePathID = attempts[0].Candidate.RoutePathID
 	oldestFinish := attempts[0].FinishedAt
 	cleanupFailed, identityMismatch := false, false
