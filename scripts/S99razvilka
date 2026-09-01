@@ -140,6 +140,7 @@ start_process() {
     -credentials-file "$APPDIR/admin.credentials.json" \
     -custom-services "$APPDIR/custom-services.json" \
 	-devices "$APPDIR/devices.json" \
+    -cloudflare-state "$APPDIR/cloudflare-private" \
     -community-catalog "$APPDIR/community-catalog.json" \
     -warp-state "$STATEDIR/warp" \
 	-smart-route-state "$STATEDIR/smart-route.json" \

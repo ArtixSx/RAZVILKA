@@ -229,16 +229,26 @@ Linux-бинарники локально не выполнялись. Файл�
    (см. PRIVATE_RESTORE_COORDINATOR_RU). Online admission API/background/conntrack
    уже подключён (PRIVATE_RESTORE_OPERATION_GATE_RU). Store sessions, bindings,
    online journal/cache handover и общий recovery fence готовы локально
-   (PRIVATE_RESTORE_ONLINE_RU). Следующий шаг — install/upgrade/rollback:
-   snapshot сейчас делается до stop, rollback не обрабатывает private journal
-   и игнорирует stop failure. Нужны exclusion до snapshot, согласование journal
-   со снимком и проверка совместимости старого бинарника до любой перезаписи.
+   (PRIVATE_RESTORE_ONLINE_RU). Локально закрыт следующий install/upgrade/rollback
+   блок (PRIVATE_RESTORE_UPDATE_PROTOCOL_RU): кандидат имеет отдельный bounded
+   recovery mode без Store/HTTP, stop и journal recovery предшествуют snapshot,
+   staging/provider входят в полный manifest, а journal не копируется. Rollback
+   заранее проверяет снимок, требует успешный stop/recovery и сохраняет старые
+   manifest через skip-политику для неизвестных им private directories.
    Offline API запрещён после StartRuntime; не подключать его напрямую к HTTP.
    Lifetime lease действует для новых серверов с общим journal root, но не для
    старых бинарников/неучаствующих writers. Аудит install/upgrade/rollback должен
    подтвердить одинаковый layout и сохранение/совместимость приватного журнала.
    Busy health теперь код 75; S99/upgrade сохраняют процесс без ложного healthy
-   или rollback. Migration paths согласованы. Полный Entware прогон ещё нужен.
+   или rollback. Boot/migration/recovery paths согласованы. Полный Entware,
+   Linux/race и аппаратный аварийный прогон ещё нужен. Базовый Keenetic ARM64
+   цикл `0.18.0 → 0.18.1-dev → 0.18.0` уже прошёл: обе версии healthy, staging
+   восстановлен byte-for-byte, созданный provider-каталог удалён, idle journal
+   сохранён. Затем на роутере прошёл полный изолированный Entware transaction
+   regression, включая неполный private snapshot, конфликт порта, auto-rollback
+   и uninstall. Повторный fault-run проверил живой PID после stop и corrupt
+   journal: оба отказали до первой записи. Рабочая установка осталась `0.18.0`;
+   тестовые файлы удалены.
    Только затем общий router+provider restore. Запрет ProviderSnapshots в HTTP сохранять.
    Публичный импорт профиля остаётся на старой компенсации, нужен отдельный аудит.
 3. PR-1.2 делать сначала с локальными ключами и mock API. Не включать регистрацию,

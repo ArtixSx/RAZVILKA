@@ -1,6 +1,6 @@
 # Текущий подтверждённый статус RAZVILKA
 
-Обновлено: 31 августа 2026 года<br>
+Обновлено: 1 сентября 2026 года<br>
 Последний проверенный в CI commit: `5d841f4c470f18b807671246a160bf11b86f7713`<br>
 Последний стабильный релиз: [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0)  
 Текущий цикл разработки: `0.18.1-dev` — Truth & Safety
@@ -67,9 +67,17 @@ Store sessions проверяют startup bindings, журнал сохраня�
 HTTP больше не использует прежнюю компенсацию; ProviderSnapshots по-прежнему
 отклоняются. Принудительные process-crash tests и проверки кэшей прошли на Windows.
 Health/S99 отличают временную занятость от ошибки и не требуют restart из-за
-импорта. **До релиза обязательны согласованные upgrade snapshots/rollback с
-private journal и полный Linux/Entware/HIL прогон**; текущие snapshots до stop
-ещё не обеспечивают эту гарантию. Изменения локальные, не новый стабильный релиз.
+импорта. Добавлен [протокол upgrade/rollback](PRIVATE_RESTORE_UPDATE_PROTOCOL_RU.md):
+stop и recovery выполняются до snapshot, staging и Cloudflare private copies
+входят в снимок, manifest завершается последним, а rollback не игнорирует ошибку
+остановки и не заменяет журнал. Windows Go/JS/shell-ветки прошли. На Keenetic
+ARM64 подтверждён цикл `0.18.0 → 0.18.1-dev → 0.18.0`: health обоих запусков,
+точный возврат staging, удаление созданного provider-каталога и сохранение idle
+journal. **До релиза обязательны Linux/race, MIPS/MIPSel и аварийная матрица**.
+Полный изолированный Entware regression на
+том же ARM64 (fresh/update/rollback/conflict/incomplete snapshot/uninstall) тоже
+прошёл; отдельный fault-run подтвердил fail-closed при живом PID после stop и
+повреждённом journal. Изменения локальные, не новый стабильный релиз.
 
 Добавлена [общая блокировка операций при приватном импорте](PRIVATE_RESTORE_OPERATION_GATE_RU.md).
 HTTP (включая GET discovery), фоновые проверки и conntrack не пересекаются с

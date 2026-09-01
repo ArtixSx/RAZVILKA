@@ -32,6 +32,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 	"github.com/ArtixSx/razvilka/internal/routeprobe"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
 	"github.com/ArtixSx/razvilka/internal/security"
@@ -95,6 +96,7 @@ func main() {
 	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
 	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
 	migrateConfig := flag.Bool("migrate-config", false, "validate inputs and atomically migrate config to the current schema without starting the server")
+	recoverPrivateRestore := flag.Bool("recover-private-restore", false, "settle the private restore journal without loading settings or starting the server")
 	healthURL := flag.String("healthcheck", "", "check a running RAZVILKA status URL and exit")
 	healthPID := flag.Int("healthcheck-pid", 0, "require the status response to match this process ID")
 	healthDataplane := flag.Bool("healthcheck-require-dataplane", false, "require a committed non-direct dataplane to have current runtime recovery evidence")
@@ -108,13 +110,13 @@ func main() {
 		return
 	}
 	modes := 0
-	for _, enabled := range []bool{*checkOnly, *migrateConfig, *healthURL != "", *installComponents, *deactivateDataplane} {
+	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane} {
 		if enabled {
 			modes++
 		}
 	}
 	if modes > 1 {
-		log.Fatal("-check, -migrate-config, -healthcheck, -install-components and -deactivate-dataplane are mutually exclusive")
+		log.Fatal("-check, -migrate-config, -recover-private-restore, -healthcheck, -install-components and -deactivate-dataplane are mutually exclusive")
 	}
 	if *healthPID < 0 {
 		log.Fatal("-healthcheck-pid must not be negative")
@@ -135,6 +137,20 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Printf("healthy: %s\n", version)
+		return
+	}
+	if *recoverPrivateRestore {
+		privateRecovery, outcome, err := preparePrivateRecovery(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath)
+		if err != nil {
+			log.Fatal("private draft recovery gate: ", err)
+		}
+		defer privateRecovery.Close()
+		if err := json.NewEncoder(os.Stdout).Encode(struct {
+			OK      bool                   `json:"ok"`
+			Outcome restorejournal.Outcome `json:"outcome"`
+		}{OK: true, Outcome: outcome}); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
 	if *installComponents {

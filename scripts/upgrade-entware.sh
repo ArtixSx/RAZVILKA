@@ -22,6 +22,13 @@ for ARG in "$@"; do
 done
 
 BASE="${RAZVILKA_BASE:-/opt}"
+case "$BASE" in
+  /*) ;;
+  *) echo "RAZVILKA_BASE must be an absolute directory" >&2; exit 1 ;;
+esac
+[ -d "$BASE" ] && [ ! -L "$BASE" ] || { echo "RAZVILKA_BASE is missing or unsafe: $BASE" >&2; exit 1; }
+BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
+[ "$BASE" != / ] || { echo "Refusing to use the filesystem root as RAZVILKA_BASE" >&2; exit 1; }
 APPDIR="$BASE/etc/razvilka"
 CACHEDIR="$BASE/var/cache/razvilka"
 STATEDIR="$BASE/var/lib/razvilka"
@@ -139,15 +146,72 @@ if [ "$MODE" = dry-run ]; then
   exit 0
 fi
 
+present() {
+  if [ -e "$1" ]; then printf '1'; else printf '0'; fi
+}
+
+RAZ_WAS_RUNNING=0
+if [ -x "$RAZ_INIT" ] && command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvilka 2>/dev/null || true)" ]; then
+  RAZ_WAS_RUNNING=1
+fi
+
+BACKUP=""
+SAFE_TO_RESTART=1
+restart_before_snapshot() {
+  CODE="$1"
+  trap - EXIT HUP INT TERM
+  if [ "$SAFE_TO_RESTART" -eq 1 ] && [ "$RAZ_WAS_RUNNING" -eq 1 ] && [ -x "$RAZ_INIT" ]; then
+    RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the previous RAZVILKA process" >&2
+  elif [ "$SAFE_TO_RESTART" -eq 1 ] && [ "$LEGACY_RUNNING_DETECTED" -eq 1 ] && [ -n "$LEGACY_CONTROL" ]; then
+    "$LEGACY_CONTROL" start >/dev/null 2>&1 || echo "Could not restart the previous ARTEM Flow process" >&2
+  elif [ "$SAFE_TO_RESTART" -ne 1 ]; then
+    echo "Private recovery was interrupted or rejected; service remains stopped for safe inspection" >&2
+  fi
+  if [ -n "$BACKUP" ]; then
+    case "$BACKUP" in "$BACKUPROOT"/*) rm -rf "$BACKUP" ;; esac
+  fi
+  exit "$CODE"
+}
+trap 'restart_before_snapshot $?' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+stage 1 "Останавливаем текущую версию, завершаем восстановление и создаём снимок..."
+if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
+  RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop
+fi
+if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_RUNNING_DETECTED" -eq 1 ]; then
+  "$LEGACY_CONTROL" stop
+fi
+
 mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BINDIR" "$INITDIR" "$BACKUPROOT"
+
+# The candidate understands the newest journal format. Settle any interrupted
+# private restore while all writers are stopped, before taking a backup or
+# changing a live file. A corrupt or ambiguous journal stops the upgrade.
+SAFE_TO_RESTART=0
+RECOVERY_OUTPUT="$($BIN_SOURCE -recover-private-restore \
+  -config "$APPDIR/config.json" \
+  -custom-services "$APPDIR/custom-services.json" \
+  -devices "$APPDIR/devices.json" \
+  -stage "$STATEDIR/staging" \
+  -cloudflare-state "$APPDIR/cloudflare-private")"
+printf '%s\n' "$RECOVERY_OUTPUT" | grep -q '"ok":true' || { echo "Private restore recovery did not report success" >&2; false; }
+SAFE_TO_RESTART=1
+
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 BACKUP="$BACKUPROOT/$STAMP"
 mkdir "$BACKUP"
 chmod 700 "$BACKUP"
 
-present() {
-  if [ -e "$1" ]; then printf '1'; else printf '0'; fi
-}
+for FILE in "$BINDIR/razvilka" "$RAZ_INIT" "$APPDIR/config.json" "$APPDIR/service-catalog.json" \
+  "$APPDIR/community-catalog.json" "$APPDIR/sources.json" "$APPDIR/source-state.json" \
+  "$APPDIR/admin.token" "$APPDIR/admin.credentials.json" "$APPDIR/custom-services.json" \
+  "$APPDIR/devices.json" "$LEGACY_INIT" "$LEGACY_DISABLED"; do
+  [ ! -L "$FILE" ] || { echo "Refusing to snapshot symbolic link: $FILE" >&2; false; }
+  [ ! -e "$FILE" ] || [ -f "$FILE" ] || { echo "Snapshot file target has the wrong type: $FILE" >&2; false; }
+done
 
 RAZ_BINARY_PRESENT="$(present "$BINDIR/razvilka")"
 RAZ_INIT_PRESENT="$(present "$RAZ_INIT")"
@@ -161,33 +225,16 @@ CREDENTIALS_PRESENT="$(present "$APPDIR/admin.credentials.json")"
 CUSTOM_SERVICES_PRESENT="$(present "$APPDIR/custom-services.json")"
 DEVICES_PRESENT="$(present "$APPDIR/devices.json")"
 DATAPLANE_STATE_PRESENT="$(present "$STATEDIR/dataplane")"
+STAGING_PRESENT="$(present "$STATEDIR/staging")"
+CLOUDFLARE_PRIVATE_PRESENT="$(present "$APPDIR/cloudflare-private")"
 LEGACY_INIT_PRESENT="$(present "$LEGACY_INIT")"
 LEGACY_DISABLED_PRESENT="$(present "$LEGACY_DISABLED")"
 LEGACY_WAS_RUNNING="$LEGACY_RUNNING_DETECTED"
-RAZ_WAS_RUNNING=0
-if [ -x "$RAZ_INIT" ] && command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvilka 2>/dev/null || true)" ]; then
-  RAZ_WAS_RUNNING=1
-fi
 
-cat >"$BACKUP/manifest" <<EOF
-RAZ_BINARY_PRESENT=$RAZ_BINARY_PRESENT
-RAZ_INIT_PRESENT=$RAZ_INIT_PRESENT
-CONFIG_PRESENT=$CONFIG_PRESENT
-CATALOG_PRESENT=$CATALOG_PRESENT
-COMMUNITY_PRESENT=$COMMUNITY_PRESENT
-SOURCES_PRESENT=$SOURCES_PRESENT
-SOURCE_STATE_PRESENT=$SOURCE_STATE_PRESENT
-TOKEN_PRESENT=$TOKEN_PRESENT
-CREDENTIALS_PRESENT=$CREDENTIALS_PRESENT
-CUSTOM_SERVICES_PRESENT=$CUSTOM_SERVICES_PRESENT
-DEVICES_PRESENT=$DEVICES_PRESENT
-DATAPLANE_STATE_PRESENT=$DATAPLANE_STATE_PRESENT
-LEGACY_INIT_PRESENT=$LEGACY_INIT_PRESENT
-LEGACY_DISABLED_PRESENT=$LEGACY_DISABLED_PRESENT
-LEGACY_WAS_RUNNING=$LEGACY_WAS_RUNNING
-RAZ_WAS_RUNNING=$RAZ_WAS_RUNNING
-EOF
-chmod 600 "$BACKUP/manifest"
+for DIR in "$STATEDIR/dataplane" "$STATEDIR/staging" "$APPDIR/cloudflare-private"; do
+  [ ! -L "$DIR" ] || { echo "Private or runtime directory is unsafe: $DIR" >&2; false; }
+  [ ! -e "$DIR" ] || [ -d "$DIR" ] || { echo "Private or runtime directory has the wrong type: $DIR" >&2; false; }
+done
 
 backup_file() {
   SRC="$1"
@@ -208,12 +255,45 @@ backup_file "$APPDIR/admin.token" admin.token
 backup_file "$APPDIR/admin.credentials.json" admin.credentials.json
 backup_file "$APPDIR/custom-services.json" custom-services.json
 backup_file "$APPDIR/devices.json" devices.json
-if [ "$DATAPLANE_STATE_PRESENT" -eq 1 ]; then
-  mkdir "$BACKUP/dataplane"
-  cp -a "$STATEDIR/dataplane/." "$BACKUP/dataplane/"
-fi
 backup_file "$LEGACY_INIT" S99artem-flow
 backup_file "$LEGACY_DISABLED" S99artem-flow.razvilka-disabled
+
+backup_dir() {
+  PRESENT="$1"
+  SRC="$2"
+  NAME="$3"
+  if [ "$PRESENT" -eq 1 ]; then
+    mkdir "$BACKUP/$NAME"
+    cp -a "$SRC/." "$BACKUP/$NAME/"
+  fi
+}
+backup_dir "$DATAPLANE_STATE_PRESENT" "$STATEDIR/dataplane" dataplane
+backup_dir "$STAGING_PRESENT" "$STATEDIR/staging" staging
+backup_dir "$CLOUDFLARE_PRIVATE_PRESENT" "$APPDIR/cloudflare-private" cloudflare-private
+
+cat >"$BACKUP/manifest.tmp" <<EOF
+PRIVATE_RESTORE_PROTOCOL=1
+RAZ_BINARY_PRESENT=$RAZ_BINARY_PRESENT
+RAZ_INIT_PRESENT=$RAZ_INIT_PRESENT
+CONFIG_PRESENT=$CONFIG_PRESENT
+CATALOG_PRESENT=$CATALOG_PRESENT
+COMMUNITY_PRESENT=$COMMUNITY_PRESENT
+SOURCES_PRESENT=$SOURCES_PRESENT
+SOURCE_STATE_PRESENT=$SOURCE_STATE_PRESENT
+TOKEN_PRESENT=$TOKEN_PRESENT
+CREDENTIALS_PRESENT=$CREDENTIALS_PRESENT
+CUSTOM_SERVICES_PRESENT=$CUSTOM_SERVICES_PRESENT
+DEVICES_PRESENT=$DEVICES_PRESENT
+DATAPLANE_STATE_PRESENT=$DATAPLANE_STATE_PRESENT
+STAGING_PRESENT=$STAGING_PRESENT
+CLOUDFLARE_PRIVATE_PRESENT=$CLOUDFLARE_PRIVATE_PRESENT
+LEGACY_INIT_PRESENT=$LEGACY_INIT_PRESENT
+LEGACY_DISABLED_PRESENT=$LEGACY_DISABLED_PRESENT
+LEGACY_WAS_RUNNING=$LEGACY_WAS_RUNNING
+RAZ_WAS_RUNNING=$RAZ_WAS_RUNNING
+EOF
+chmod 600 "$BACKUP/manifest.tmp"
+mv "$BACKUP/manifest.tmp" "$BACKUP/manifest"
 
 rollback_on_error() {
   CODE="$1"
@@ -235,14 +315,6 @@ trap 'rollback_on_error $?' EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
-
-stage 1 "Останавливаем текущую версию (обычно 10–15 секунд; не прерывайте)..."
-if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
-  "$RAZ_INIT" stop
-fi
-if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_WAS_RUNNING" -eq 1 ]; then
-  "$LEGACY_CONTROL" stop
-fi
 
 stage 2 "Устанавливаем проверенные файлы с безопасными правами..."
 install_atomic() {
@@ -275,6 +347,7 @@ stage 3 "Проверяем и при необходимости мигриру�
   -custom-services "$APPDIR/custom-services.json" \
   -devices "$APPDIR/devices.json" \
   -stage "$STATEDIR/staging" \
+  -cloudflare-state "$APPDIR/cloudflare-private" \
   -catalog "$APPDIR/service-catalog.json" \
   -sources "$APPDIR/sources.json" \
   -community-catalog "$APPDIR/community-catalog.json" >/dev/null

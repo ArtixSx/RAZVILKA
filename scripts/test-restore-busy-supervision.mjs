@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 const shell = process.argv[2] || 'sh';
 const init = readFileSync(new URL('./S99razvilka', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 const upgrade = readFileSync(new URL('./upgrade-entware.sh', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+const rollback = readFileSync(new URL('./rollback-entware.sh', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 function fn(source, name) {
   const start = source.indexOf(`${name}() {\n`);
   assert(start >= 0, name);
@@ -55,8 +56,28 @@ rollback_on_error 75
 
 // Migration and normal boot must bind the same files even with RAZVILKA_BASE.
 const migration = upgrade.slice(upgrade.indexOf('"$BINDIR/razvilka" -migrate-config'), upgrade.indexOf('# Quiesce only'));
-for (const option of ['-config "$APPDIR/config.json"', '-custom-services "$APPDIR/custom-services.json"', '-devices "$APPDIR/devices.json"', '-stage "$STATEDIR/staging"']) {
+for (const option of ['-config "$APPDIR/config.json"', '-custom-services "$APPDIR/custom-services.json"', '-devices "$APPDIR/devices.json"', '-stage "$STATEDIR/staging"', '-cloudflare-state "$APPDIR/cloudflare-private"']) {
   assert(migration.includes(option), option);
   assert(start.includes(option), `boot ${option}`);
 }
-console.log('Restore busy supervision branches and migration layout checks passed');
+
+// Upgrade and rollback must settle the private journal only while the server is
+// stopped, and a backup becomes valid only after all directory images exist.
+const stopAt = upgrade.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+const recoverAt = upgrade.indexOf('$BIN_SOURCE -recover-private-restore');
+const backupAt = upgrade.indexOf('BACKUP="$BACKUPROOT/$STAMP"');
+const manifestAt = upgrade.indexOf('mv "$BACKUP/manifest.tmp" "$BACKUP/manifest"');
+assert(stopAt >= 0 && stopAt < recoverAt && recoverAt < backupAt && backupAt < manifestAt);
+assert(upgrade.includes('STAGING_PRESENT=$STAGING_PRESENT'));
+assert(upgrade.includes('CLOUDFLARE_PRIVATE_PRESENT=$CLOUDFLARE_PRIVATE_PRESENT'));
+
+assert(!rollback.includes('"$RAZ_INIT" stop || true'));
+const rollbackStopAt = rollback.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+const rollbackRecoverAt = rollback.indexOf('"$BINDIR/razvilka" -recover-private-restore');
+const rollbackWriteAt = rollback.indexOf('restore_or_remove "$RAZ_BINARY_PRESENT"');
+assert(rollbackStopAt >= 0 && rollbackStopAt < rollbackRecoverAt && rollbackRecoverAt < rollbackWriteAt);
+assert(rollback.includes('restore_dir "$STAGING_PRESENT" staging "$STATEDIR/staging"'));
+assert(rollback.includes('restore_dir "$CLOUDFLARE_PRIVATE_PRESENT" cloudflare-private "$APPDIR/cloudflare-private"'));
+assert(!rollback.includes('restore_dir "$PRIVATE_RESTORE'));
+
+console.log('Restore busy supervision, private recovery and migration layout checks passed');

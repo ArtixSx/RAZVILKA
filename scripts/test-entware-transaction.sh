@@ -64,11 +64,15 @@ PRIMARY_BACKUP="$(cat "$PRIMARY/var/lib/razvilka/current-backup")"
 [ -d "$PRIMARY_BACKUP" ] || { echo "Primary rollback snapshot is missing" >&2; exit 1; }
 [ "$(ls -ld "$PRIMARY_BACKUP" | awk '{print $1}')" = drwx------ ] || { echo "Snapshot mode is not 700" >&2; exit 1; }
 [ "$(ls -ld "$PRIMARY_BACKUP/manifest" | awk '{print $1}')" = -rw------- ] || { echo "Manifest mode is not 600" >&2; exit 1; }
+grep -q '^PRIVATE_RESTORE_PROTOCOL=1$' "$PRIMARY_BACKUP/manifest" || { echo "Private restore protocol is not recorded" >&2; exit 1; }
 
 # A same-version upgrade must preserve committed adapter metadata that is
 # temporarily removed by controlled dataplane deactivation.
 mkdir -p "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter"
 printf '%s\n' preserved >"$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker"
+mkdir -p "$PRIMARY/var/lib/razvilka/staging/test-private" "$PRIMARY/etc/razvilka/cloudflare-private/test-private"
+printf '%s\n' staged-original >"$PRIMARY/var/lib/razvilka/staging/test-private/marker"
+printf '%s\n' provider-original >"$PRIMARY/etc/razvilka/cloudflare-private/test-private/marker"
 SOURCE_STATE_ORIGINAL='{"schema":1,"draft":{"telegram-cidrs":false},"applied":{"telegram-cidrs":true}}'
 printf '%s\n' "$SOURCE_STATE_ORIGINAL" >"$PRIMARY/etc/razvilka/source-state.json"
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
@@ -82,7 +86,12 @@ RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
   exit 1
 }
 SECOND_BACKUP="$(cat "$PRIMARY/var/lib/razvilka/current-backup")"
+assert_absent "$SECOND_BACKUP/private-restore"
+grep -q '^STAGING_PRESENT=1$' "$SECOND_BACKUP/manifest" || { echo "Staging snapshot was not recorded" >&2; exit 1; }
+grep -q '^CLOUDFLARE_PRIVATE_PRESENT=1$' "$SECOND_BACKUP/manifest" || { echo "Provider snapshot was not recorded" >&2; exit 1; }
 printf '%s\n' '{"schema":1,"draft":{},"applied":{}}' >"$PRIMARY/etc/razvilka/source-state.json"
+printf '%s\n' staged-changed >"$PRIMARY/var/lib/razvilka/staging/test-private/marker"
+printf '%s\n' provider-changed >"$PRIMARY/etc/razvilka/cloudflare-private/test-private/marker"
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$SECOND_BACKUP" >/dev/null
 [ "$(cat "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker")" = preserved ] || {
   echo "Dataplane runtime snapshot was not restored by rollback" >&2
@@ -90,6 +99,14 @@ RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$SECOND_BACKUP" >/de
 }
 [ "$(cat "$PRIMARY/etc/razvilka/source-state.json")" = "$SOURCE_STATE_ORIGINAL" ] || {
   echo "Source selection state was not restored by rollback" >&2
+  exit 1
+}
+[ "$(cat "$PRIMARY/var/lib/razvilka/staging/test-private/marker")" = staged-original ] || {
+  echo "Staging private data was not restored by rollback" >&2
+  exit 1
+}
+[ "$(cat "$PRIMARY/etc/razvilka/cloudflare-private/test-private/marker")" = provider-original ] || {
+  echo "Provider private data was not restored by rollback" >&2
   exit 1
 }
 
@@ -115,6 +132,61 @@ if RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$MALICIOUS" >/dev
   exit 1
 fi
 assert_absent "$MARKER"
+RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" \
+  "$PRIMARY/etc/init.d/S99razvilka" status >/dev/null
+
+# A complete manifest with a missing private directory must be rejected before
+# the running service or any live file is touched.
+INCOMPLETE="$PRIMARY/var/lib/razvilka/update-backups/incomplete-private-test"
+cp -a "$SECOND_BACKUP" "$INCOMPLETE"
+rm -rf "$INCOMPLETE/staging"
+if RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$INCOMPLETE" >/dev/null 2>&1; then
+  echo "Incomplete private snapshot unexpectedly passed validation" >&2
+  exit 1
+fi
+RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" \
+  "$PRIMARY/etc/init.d/S99razvilka" status >/dev/null
+
+# Rollback must not write through a failed stop. A fake daemon acknowledges
+# TERM without sending it; S99 must detect the still-running owned PID and the
+# rollback script must return before restoring any snapshot file.
+FAKE_DAEMON="$TEST_ROOT/fake-stop-daemon"
+cat >"$FAKE_DAEMON" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod 755 "$FAKE_DAEMON"
+LIVE_SOURCE_BEFORE_STOP_TEST="$(cat "$PRIMARY/etc/razvilka/source-state.json")"
+if RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_START_STOP_DAEMON="$FAKE_DAEMON" \
+  "$ROLLBACK" "$SECOND_BACKUP" >/dev/null 2>&1; then
+  echo "Rollback unexpectedly continued after a failed stop" >&2
+  exit 1
+fi
+[ "$(cat "$PRIMARY/etc/razvilka/source-state.json")" = "$LIVE_SOURCE_BEFORE_STOP_TEST" ] || {
+  echo "Rollback wrote files after a failed stop" >&2
+  exit 1
+}
+RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" \
+  "$PRIMARY/etc/init.d/S99razvilka" status >/dev/null
+
+# A corrupt private journal is a hard recovery boundary. With the isolated
+# service stopped, rollback must leave even an intentionally invalid live file
+# untouched until an operator repairs the test-owned journal.
+RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$PRIMARY/etc/init.d/S99razvilka" stop >/dev/null
+mkdir -p "$PRIMARY/etc/razvilka/private-restore"
+printf '%s\n' '{"corrupt-private-journal":' >"$PRIMARY/etc/razvilka/private-restore/restore.private.json"
+printf '%s\n' 'RECOVERY_FAILURE_SENTINEL' >"$PRIMARY/etc/razvilka/source-state.json"
+if RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$SECOND_BACKUP" >/dev/null 2>&1; then
+  echo "Rollback unexpectedly continued through a corrupt private journal" >&2
+  exit 1
+fi
+[ "$(cat "$PRIMARY/etc/razvilka/source-state.json")" = RECOVERY_FAILURE_SENTINEL ] || {
+  echo "Rollback wrote files after private recovery failed" >&2
+  exit 1
+}
+rm -f "$PRIMARY/etc/razvilka/private-restore/restore.private.json"
+printf '%s\n' "$LIVE_SOURCE_BEFORE_STOP_TEST" >"$PRIMARY/etc/razvilka/source-state.json"
+RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$PRIMARY/etc/init.d/S99razvilka" start >/dev/null
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" \
   "$PRIMARY/etc/init.d/S99razvilka" status >/dev/null
 

@@ -3,6 +3,13 @@ set -eu
 umask 077
 
 BASE="${RAZVILKA_BASE:-/opt}"
+case "$BASE" in
+  /*) ;;
+  *) echo "RAZVILKA_BASE must be an absolute directory" >&2; exit 1 ;;
+esac
+[ -d "$BASE" ] && [ ! -L "$BASE" ] || { echo "RAZVILKA_BASE is missing or unsafe: $BASE" >&2; exit 1; }
+BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
+[ "$BASE" != / ] || { echo "Refusing to use the filesystem root as RAZVILKA_BASE" >&2; exit 1; }
 STATEDIR="$BASE/var/lib/razvilka"
 BACKUPROOT="$STATEDIR/update-backups"
 APPDIR="$BASE/etc/razvilka"
@@ -43,6 +50,7 @@ esac
 
 RAZ_BINARY_PRESENT=
 RAZ_INIT_PRESENT=
+PRIVATE_RESTORE_PROTOCOL=0
 CONFIG_PRESENT=
 CATALOG_PRESENT=
 COMMUNITY_PRESENT=0
@@ -53,12 +61,17 @@ CREDENTIALS_PRESENT=0
 CUSTOM_SERVICES_PRESENT=0
 DEVICES_PRESENT=0
 DATAPLANE_STATE_PRESENT=0
+# "skip" keeps old snapshots backward compatible: historical manifests did
+# not include these private mutable directories and must never delete them.
+STAGING_PRESENT=skip
+CLOUDFLARE_PRIVATE_PRESENT=skip
 LEGACY_INIT_PRESENT=
 LEGACY_DISABLED_PRESENT=
 LEGACY_WAS_RUNNING=
 RAZ_WAS_RUNNING=
 while IFS='=' read -r KEY VALUE; do
   case "$KEY" in
+    PRIVATE_RESTORE_PROTOCOL) PRIVATE_RESTORE_PROTOCOL="$VALUE" ;;
     RAZ_BINARY_PRESENT) RAZ_BINARY_PRESENT="$VALUE" ;;
     RAZ_INIT_PRESENT) RAZ_INIT_PRESENT="$VALUE" ;;
     CONFIG_PRESENT) CONFIG_PRESENT="$VALUE" ;;
@@ -71,6 +84,8 @@ while IFS='=' read -r KEY VALUE; do
     CUSTOM_SERVICES_PRESENT) CUSTOM_SERVICES_PRESENT="$VALUE" ;;
     DEVICES_PRESENT) DEVICES_PRESENT="$VALUE" ;;
     DATAPLANE_STATE_PRESENT) DATAPLANE_STATE_PRESENT="$VALUE" ;;
+    STAGING_PRESENT) STAGING_PRESENT="$VALUE" ;;
+    CLOUDFLARE_PRIVATE_PRESENT) CLOUDFLARE_PRIVATE_PRESENT="$VALUE" ;;
     LEGACY_INIT_PRESENT) LEGACY_INIT_PRESENT="$VALUE" ;;
     LEGACY_DISABLED_PRESENT) LEGACY_DISABLED_PRESENT="$VALUE" ;;
     LEGACY_WAS_RUNNING) LEGACY_WAS_RUNNING="$VALUE" ;;
@@ -78,9 +93,52 @@ while IFS='=' read -r KEY VALUE; do
     *) echo "Unknown rollback manifest key: $KEY" >&2; exit 1 ;;
   esac
 done <"$BACKUP/manifest"
-for VALUE in "$RAZ_BINARY_PRESENT" "$RAZ_INIT_PRESENT" "$CONFIG_PRESENT" "$CATALOG_PRESENT" "$COMMUNITY_PRESENT" "$SOURCES_PRESENT" "$SOURCE_STATE_PRESENT" "$TOKEN_PRESENT" "$CREDENTIALS_PRESENT" "$CUSTOM_SERVICES_PRESENT" "$DEVICES_PRESENT" "$DATAPLANE_STATE_PRESENT" "$LEGACY_INIT_PRESENT" "$LEGACY_DISABLED_PRESENT" "$LEGACY_WAS_RUNNING" "$RAZ_WAS_RUNNING"; do
+for VALUE in "$PRIVATE_RESTORE_PROTOCOL" "$RAZ_BINARY_PRESENT" "$RAZ_INIT_PRESENT" "$CONFIG_PRESENT" "$CATALOG_PRESENT" "$COMMUNITY_PRESENT" "$SOURCES_PRESENT" "$SOURCE_STATE_PRESENT" "$TOKEN_PRESENT" "$CREDENTIALS_PRESENT" "$CUSTOM_SERVICES_PRESENT" "$DEVICES_PRESENT" "$DATAPLANE_STATE_PRESENT" "$LEGACY_INIT_PRESENT" "$LEGACY_DISABLED_PRESENT" "$LEGACY_WAS_RUNNING" "$RAZ_WAS_RUNNING"; do
   case "$VALUE" in 0|1) ;; *) echo "Invalid rollback manifest" >&2; exit 1 ;; esac
 done
+for VALUE in "$STAGING_PRESENT" "$CLOUDFLARE_PRIVATE_PRESENT"; do
+  case "$VALUE" in 0|1|skip) ;; *) echo "Invalid rollback manifest" >&2; exit 1 ;; esac
+done
+
+require_snapshot_file() {
+  PRESENT="$1"
+  NAME="$2"
+  if [ "$PRESENT" -eq 1 ]; then
+    [ -f "$BACKUP/$NAME" ] && [ ! -L "$BACKUP/$NAME" ] || { echo "Snapshot file is missing or unsafe: $NAME" >&2; exit 1; }
+  fi
+}
+require_snapshot_dir() {
+  PRESENT="$1"
+  NAME="$2"
+  case "$PRESENT" in
+    1) [ -d "$BACKUP/$NAME" ] && [ ! -L "$BACKUP/$NAME" ] || { echo "Snapshot directory is missing or unsafe: $NAME" >&2; exit 1; } ;;
+    0|skip) ;;
+  esac
+}
+
+require_snapshot_file "$RAZ_BINARY_PRESENT" razvilka.bin
+require_snapshot_file "$RAZ_INIT_PRESENT" S99razvilka
+require_snapshot_file "$CONFIG_PRESENT" config.json
+require_snapshot_file "$CATALOG_PRESENT" service-catalog.json
+require_snapshot_file "$COMMUNITY_PRESENT" community-catalog.json
+require_snapshot_file "$SOURCES_PRESENT" sources.json
+require_snapshot_file "$SOURCE_STATE_PRESENT" source-state.json
+require_snapshot_file "$TOKEN_PRESENT" admin.token
+require_snapshot_file "$CREDENTIALS_PRESENT" admin.credentials.json
+require_snapshot_file "$CUSTOM_SERVICES_PRESENT" custom-services.json
+require_snapshot_file "$DEVICES_PRESENT" devices.json
+require_snapshot_file "$LEGACY_INIT_PRESENT" S99artem-flow
+require_snapshot_file "$LEGACY_DISABLED_PRESENT" S99artem-flow.razvilka-disabled
+require_snapshot_dir "$DATAPLANE_STATE_PRESENT" dataplane
+require_snapshot_dir "$STAGING_PRESENT" staging
+require_snapshot_dir "$CLOUDFLARE_PRIVATE_PRESENT" cloudflare-private
+
+if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
+  [ -f "$BINDIR/razvilka" ] && [ ! -L "$BINDIR/razvilka" ] && [ -x "$BINDIR/razvilka" ] || {
+    echo "Current RAZVILKA binary cannot settle the private restore journal" >&2
+    exit 1
+  }
+fi
 
 if [ "$AUTO" -ne 1 ]; then
   echo "Rollback snapshot: $BACKUP"
@@ -88,7 +146,22 @@ if [ "$AUTO" -ne 1 ]; then
 fi
 
 if [ -x "$RAZ_INIT" ]; then
-  RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop || true
+  RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop
+elif command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvilka 2>/dev/null || true)" ]; then
+  echo "RAZVILKA is running but its init script is unavailable; rollback was not started" >&2
+  exit 1
+fi
+if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
+  RECOVERY_OUTPUT="$("$BINDIR/razvilka" -recover-private-restore \
+    -config "$APPDIR/config.json" \
+    -custom-services "$APPDIR/custom-services.json" \
+    -devices "$APPDIR/devices.json" \
+    -stage "$STATEDIR/staging" \
+    -cloudflare-state "$APPDIR/cloudflare-private")"
+  printf '%s\n' "$RECOVERY_OUTPUT" | grep -q '"ok":true' || {
+    echo "Private restore recovery did not report success; rollback was not started" >&2
+    exit 1
+  }
 fi
 if [ -x "$BINDIR/razvilka" ]; then
   "$BINDIR/razvilka" -deactivate-dataplane \
@@ -126,15 +199,29 @@ restore_or_remove "$CREDENTIALS_PRESENT" admin.credentials.json "$APPDIR/admin.c
 restore_or_remove "$CUSTOM_SERVICES_PRESENT" custom-services.json "$APPDIR/custom-services.json" 600
 restore_or_remove "$DEVICES_PRESENT" devices.json "$APPDIR/devices.json" 600
 
-# Restore the committed runtime metadata removed by the upgrade's controlled
-# deactivation. The target is the fixed dataplane child of the validated base,
-# never a user-provided path.
-rm -rf "$STATEDIR/dataplane"
-if [ "$DATAPLANE_STATE_PRESENT" -eq 1 ]; then
-  [ -d "$BACKUP/dataplane" ] && [ ! -L "$BACKUP/dataplane" ] || { echo "Dataplane snapshot is missing or unsafe" >&2; exit 1; }
-  mkdir -p "$STATEDIR/dataplane"
-  cp -a "$BACKUP/dataplane/." "$STATEDIR/dataplane/"
-fi
+restore_dir() {
+  PRESENT="$1"
+  NAME="$2"
+  TARGET="$3"
+  case "$PRESENT" in
+    skip) return 0 ;;
+  esac
+  case "$TARGET" in
+    "$BASE"/*) ;;
+    *) echo "Refusing unsafe rollback target: $TARGET" >&2; return 1 ;;
+  esac
+  rm -rf "$TARGET"
+  if [ "$PRESENT" -eq 1 ]; then
+    mkdir -p "$TARGET"
+    cp -a "$BACKUP/$NAME/." "$TARGET/"
+  fi
+}
+
+# Restore mutable directory images only after the current journal is idle.
+# The journal itself is deliberately never copied or removed.
+restore_dir "$DATAPLANE_STATE_PRESENT" dataplane "$STATEDIR/dataplane"
+restore_dir "$STAGING_PRESENT" staging "$STATEDIR/staging"
+restore_dir "$CLOUDFLARE_PRIVATE_PRESENT" cloudflare-private "$APPDIR/cloudflare-private"
 
 restore_or_remove "$LEGACY_INIT_PRESENT" S99artem-flow "$LEGACY_INIT" 755
 restore_or_remove "$LEGACY_DISABLED_PRESENT" S99artem-flow.razvilka-disabled "$LEGACY_DISABLED" 755

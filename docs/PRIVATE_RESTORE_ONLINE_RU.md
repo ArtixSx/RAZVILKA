@@ -81,19 +81,14 @@ Browser visual QA не проводился; UI-поведение провер�
 
 ## Следующий обязательный блок перед релизом
 
-1. Upgrade сейчас делает snapshot отдельных файлов **до остановки сервера**.
-   При online restore это может получить несогласованный набор. Нужны остановка/
-   exclusive ownership до snapshot и явная работа с pending private journal.
-   Не решать проблему простым копированием/удалением `.restore.lock`.
-2. Rollback не управляет private journal и не проверяет поддержку протокола
-   старым бинарником; stop failure сейчас допускается. Запретить восстановление
-   поверх активного/неизвестного journal и согласовать snapshot/rollback layout.
-   Idle scope привязан к layout/набору slots: нужна политика совместимости при
-   изменении путей/версий, а не автоматическое удаление recovery evidence.
-3. Прогнать полный Linux/race/Entware цикл: import одновременно с upgrade,
+1. Локально добавлен [согласованный update/rollback-протокол](PRIVATE_RESTORE_UPDATE_PROTOCOL_RU.md):
+   stop и recovery происходят до snapshot; staging/provider включены в снимок;
+   журнал не копируется и не удаляется; manifest создаётся последним. Rollback
+   проверяет новый protocol marker, полный снимок и успешный stop до записи.
+2. Прогнать полный Linux/race/Entware цикл: import одновременно с upgrade,
    process crash до/после commit, неудачный stop, rollback новой/старой версии,
    занятый health, changed layout. Затем аппаратная матрица и power-loss.
-4. Только после этих gates открывать общий router+provider HTTP archive,
+3. Только после этих gates открывать общий router+provider HTTP archive,
    продолжать secret access/lifecycle ownership и новый registrar.
 
 Защита относится к участвующим API/Store writers. Прямой root-доступ, старые

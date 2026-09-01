@@ -128,6 +128,42 @@ func TestReadOnlyCheckDoesNotAcquireOrRepairJournal(t *testing.T) {
 	}
 }
 
+func TestPrivateRecoveryMaintenanceSettlesJournalWithoutLoadingStores(t *testing.T) {
+	base := t.TempDir()
+	output, err := runPrivateRecoveryChild(t, base, "recover-private-restore")
+	if err != nil || !strings.Contains(output, `"ok":true`) || !strings.Contains(output, `"outcome":"clean"`) {
+		t.Fatalf("maintenance recovery failed: %v %s", err, output)
+	}
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "private-restore" {
+		t.Fatalf("maintenance recovery loaded or created application stores: %v", entries)
+	}
+}
+
+func TestPrivateRecoveryMaintenanceFailsClosedOnCorruptJournal(t *testing.T) {
+	base := t.TempDir()
+	journalRoot := filepath.Join(base, "private-restore")
+	if err := os.Mkdir(journalRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	journalPath := filepath.Join(journalRoot, "restore.private.json")
+	marker := []byte(`{"private":"do-not-replace"`)
+	if err := os.WriteFile(journalPath, marker, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err := runPrivateRecoveryChild(t, base, "recover-private-restore")
+	if err == nil || !strings.Contains(output, "private draft recovery gate:") || strings.Contains(output, base) {
+		t.Fatalf("maintenance recovery did not fail safely: %v %s", err, output)
+	}
+	after, readErr := os.ReadFile(journalPath)
+	if readErr != nil || !bytes.Equal(after, marker) {
+		t.Fatal("maintenance recovery replaced corrupt journal")
+	}
+}
+
 func TestCleanGateDoesNotLoadOptionalProviderOrDrafts(t *testing.T) {
 	base := t.TempDir()
 	providerRoot := filepath.Join(base, "cloudflare-private")
