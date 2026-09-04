@@ -13,12 +13,14 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/privaterestore"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
@@ -192,9 +194,13 @@ func privateRestoreTestApp(t *testing.T) (*App, string) {
 
 func attachTestRestore(t *testing.T, a *App, root string) {
 	t.Helper()
+	nodeRoot := ""
+	if a.Nodes != nil {
+		nodeRoot = filepath.Join(root, "nodes")
+	}
 	c, _, err := privaterestore.Open(context.Background(), privaterestore.Layout{
 		Config: filepath.Join(root, "config.json"), CustomServices: filepath.Join(root, "custom.json"), Devices: filepath.Join(root, "devices.json"),
-		StageRoot: a.EngineConfigs.StageRoot, ProviderRoot: filepath.Join(root, "provider"), JournalRoot: filepath.Join(root, "journal"),
+		StageRoot: a.EngineConfigs.StageRoot, ProviderRoot: filepath.Join(root, "provider"), NodeRoot: nodeRoot, JournalRoot: filepath.Join(root, "journal"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -204,6 +210,74 @@ func attachTestRestore(t *testing.T, a *App, root string) {
 		t.Fatal(err)
 	}
 	a.PrivateRestore = c
+}
+
+func privateRestoreNodeApp(t *testing.T, root string) *App {
+	t.Helper()
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	custom, err := customservices.Load(filepath.Join(root, "custom.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := devices.Load(filepath.Join(root, "devices.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeRoot := filepath.Join(root, "nodes")
+	if err := os.Mkdir(nodeRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := nodestore.Open(nodeRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { nodes.Close() })
+	a := &App{Store: store, CustomServices: custom, Devices: registry, Nodes: nodes, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "youtube", Name: "YouTube"}}}, EngineConfigs: engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))}
+	attachTestRestore(t, a, root)
+	return a
+}
+
+func TestEncryptedPrivateBackupRoundTripsNodeStore(t *testing.T) {
+	ctx := context.Background()
+	source := privateRestoreNodeApp(t, filepath.Join(t.TempDir(), "source"))
+	const privateURI = "vless://123e4567-e89b-12d3-a456-426614174000@node.example:443?security=tls&type=ws&path=%2Fprivate"
+	if _, err := source.Nodes.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, privateURI, time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC), time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	exportBody, _ := json.Marshal(map[string]string{"password": "correct horse battery staple"})
+	export := httptest.NewRecorder()
+	source.Handler(http.NotFoundHandler()).ServeHTTP(export, httptest.NewRequest(http.MethodPost, "/api/v1/private-backups/export", bytes.NewReader(exportBody)))
+	if export.Code != http.StatusOK || strings.Contains(export.Body.String(), "node.example") || strings.Contains(export.Body.String(), "123e4567") {
+		t.Fatalf("unsafe node backup response: %d", export.Code)
+	}
+	var envelope privatebackup.Envelope
+	if err := json.Unmarshal(export.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := privatebackup.Decrypt(envelope, "correct horse battery staple")
+	if err != nil || payload.NodeSnapshot == nil {
+		t.Fatal("encrypted backup omitted nodes", err)
+	}
+	target := privateRestoreNodeApp(t, filepath.Join(t.TempDir(), "target"))
+	previewBody, _ := json.Marshal(map[string]any{"envelope": envelope, "password": "correct horse battery staple"})
+	preview := httptest.NewRecorder()
+	target.Handler(http.NotFoundHandler()).ServeHTTP(preview, httptest.NewRequest(http.MethodPost, "/api/v1/private-backups/preview", bytes.NewReader(previewBody)))
+	if preview.Code != http.StatusOK || !strings.Contains(preview.Body.String(), `"nodes":1`) || strings.Contains(preview.Body.String(), "node.example") {
+		t.Fatalf("node preview: %d %s", preview.Code, preview.Body.String())
+	}
+	importBody, _ := json.Marshal(map[string]any{"envelope": envelope, "password": "correct horse battery staple", "confirm": "IMPORT_PRIVATE_BACKUP"})
+	imported := httptest.NewRecorder()
+	target.Handler(http.NotFoundHandler()).ServeHTTP(imported, httptest.NewRequest(http.MethodPost, "/api/v1/private-backups/import", bytes.NewReader(importBody)))
+	if imported.Code != http.StatusOK || !strings.Contains(imported.Body.String(), `"nodes_merged":1`) || strings.Contains(imported.Body.String(), "node.example") {
+		t.Fatalf("node import: %d %s", imported.Code, imported.Body.String())
+	}
+	snapshot, err := target.Nodes.Snapshot(ctx, time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC))
+	if err != nil || len(snapshot.Nodes) != 1 || snapshot.Nodes[0].State != "expired" || snapshot.Nodes[0].Health.State != "not_checked" {
+		t.Fatal("restored nodes were lost or promoted")
+	}
 }
 
 func privateRestoreFixture(t *testing.T) privatebackup.Payload {

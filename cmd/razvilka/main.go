@@ -96,6 +96,7 @@ func main() {
 	strategyLabStatePath := flag.String("strategy-lab-state", defaultStrategyLabState, "NFQWS2 Strategy Lab state path")
 	auditLogPath := flag.String("audit-log", defaultAuditLog, "bounded control-plane audit journal path")
 	dnsStatePath := flag.String("dns-state", defaultDNSState, "DNS profile draft and probe state path")
+	nodeStatePath := flag.String("node-state", getenv("RAZVILKA_NODE_STATE", ""), "private proxy node store directory (default: nodes-private beside config)")
 	z2kRoot := flag.String("z2k-root", defaultZ2KRoot, "read-only z2k migration source root")
 	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
 	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
@@ -144,15 +145,17 @@ func main() {
 		return
 	}
 	if *recoverPrivateRestore {
-		privateRecovery, outcome, err := preparePrivateRecovery(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath)
+		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath)
 		if err != nil {
 			log.Fatal("private draft recovery gate: ", err)
 		}
+		defer legacyRecovery.Close()
 		defer privateRecovery.Close()
 		if err := json.NewEncoder(os.Stdout).Encode(struct {
-			OK      bool                   `json:"ok"`
-			Outcome restorejournal.Outcome `json:"outcome"`
-		}{OK: true, Outcome: outcome}); err != nil {
+			OK            bool                   `json:"ok"`
+			LegacyOutcome restorejournal.Outcome `json:"legacy_outcome"`
+			Outcome       restorejournal.Outcome `json:"outcome"`
+		}{OK: true, LegacyOutcome: legacyOutcome, Outcome: outcome}); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -192,11 +195,15 @@ func main() {
 	}
 	if *checkOnly || *migrateConfig {
 		if *migrateConfig {
-			privateRecovery, _, err := preparePrivateRecovery(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath)
+			legacyRecovery, privateRecovery, _, _, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath)
 			if err != nil {
 				log.Fatal("private draft recovery gate: ", err)
 			}
+			defer legacyRecovery.Close()
 			defer privateRecovery.Close()
+			if err := legacyRecovery.StartRuntime(); err != nil {
+				log.Fatal("private draft recovery gate: ", err)
+			}
 			if err := privateRecovery.StartRuntime(); err != nil {
 				log.Fatal("private draft recovery gate: ", err)
 			}
@@ -215,15 +222,19 @@ func main() {
 
 	// Private draft recovery precedes ALL Store loads, token creation and any
 	// runtime initialization. Keep the OS journal lease until server shutdown.
-	privateRecovery, privateOutcome, err := preparePrivateRecovery(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath)
+	legacyRecovery, privateRecovery, legacyOutcome, privateOutcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath)
 	if err != nil {
 		log.Fatal("private draft recovery gate: ", err)
 	}
+	defer legacyRecovery.Close()
 	defer privateRecovery.Close()
+	if err := legacyRecovery.StartRuntime(); err != nil {
+		log.Fatal("private draft recovery gate: ", err)
+	}
 	if err := privateRecovery.StartRuntime(); err != nil {
 		log.Fatal("private draft recovery gate: ", err)
 	}
-	if privateOutcome != "clean" {
+	if legacyOutcome != "clean" || privateOutcome != "clean" {
 		log.Print("private draft boot recovery completed; live profiles and routes were not changed")
 	}
 	store, err := config.Load(*cfgPath)
@@ -314,8 +325,15 @@ func main() {
 	} else {
 		defer cloudflareStore.Close()
 	}
+	nodeStore, err := openNodeStore(*cfgPath, *nodeStatePath)
+	if err != nil {
+		log.Print("Private node store disabled: existing bypasses are unchanged")
+	} else {
+		defer nodeStore.Close()
+	}
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	a.Cloudflare = cloudflareStore
+	a.Nodes = nodeStore
 	a.PrivateRestore = privateRecovery
 	a.CloudflareLegacy, err = cloudflareLegacySources(*cfgPath, *warpStatePath)
 	if err != nil {

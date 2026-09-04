@@ -209,11 +209,12 @@ JSON/Clash используют согласованную проверку. О�
 stable ID, provenance/TTL, lease и copy-only migration helper. Она пока не
 подключена к startup/API/UI/рабочим маршрутам; health остаётся `not_checked`.
 Добавлен [N1.1b backup/restore lifecycle](NODESTORE_BACKUP_RESTORE_RU.md): узлы
-входят в типизированный зашифрованный payload, восстанавливаются с merge и могут
-участвовать в общей journal-транзакции с rollback/process-crash recovery. Старый
-общий UI-import и узкий Cloudflare restore явно отклоняют смешанный архив, пока
-NodeStore не подключён на startup. Следующий пункт — миграция journal scope,
-startup wiring и N1.2, затем exact-node check.
+входят в типизированный зашифрованный payload, восстанавливаются с merge и
+участвуют в общей journal-транзакции с rollback/process-crash recovery. NodeStore
+подключён к startup и общему export/preview/import; пустое хранилище не создаёт
+документ. Старый и новый журналы имеют раздельные scope и lifetime lease. Узкий
+Cloudflare restore отклоняет смешанный архив. Следующий пункт — N1.2 API/UI узлов,
+затем exact-node check.
 Оставшаяся работа Cloudflare/USQUE ниже сохраняется
 в backlog. [Автообновление публичных источников](PUBLIC_PROVIDER_SOURCES_RU.md)
 добавлено в план как opt-in после этих зависимостей, без скрытой смены маршрута.

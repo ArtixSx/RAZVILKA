@@ -24,7 +24,7 @@ func TestPrivateRecoveryMainChild(t *testing.T) {
 	os.Args = []string{"razvilka"}
 	// Every mutable destination is confined to the fixture even if a future
 	// regression accidentally crosses the early recovery boundary.
-	for _, name := range []string{"config", "catalog", "sources", "cache", "stage", "backups", "token-file", "credentials-file", "custom-services", "community-catalog", "warp-state", "cloudflare-state", "smart-route-state", "dataplane-state", "devices", "metrics-history", "strategy-lab-state", "audit-log", "dns-state", "z2k-root"} {
+	for _, name := range []string{"config", "catalog", "sources", "cache", "stage", "backups", "token-file", "credentials-file", "custom-services", "community-catalog", "warp-state", "cloudflare-state", "smart-route-state", "dataplane-state", "devices", "metrics-history", "strategy-lab-state", "audit-log", "dns-state", "node-state", "z2k-root"} {
 		os.Args = append(os.Args, "-"+name, filepath.Join(base, name))
 	}
 	os.Args = append(os.Args, "-listen", "127.0.0.1:0")
@@ -138,7 +138,7 @@ func TestPrivateRecoveryMaintenanceSettlesJournalWithoutLoadingStores(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "private-restore" {
+	if len(entries) != 2 || entries[0].Name() != "private-restore" || entries[1].Name() != "private-restore-nodes-v1" {
 		t.Fatalf("maintenance recovery loaded or created application stores: %v", entries)
 	}
 }

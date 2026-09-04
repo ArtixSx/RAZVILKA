@@ -19,6 +19,13 @@ type PrivateSnapshot struct {
 	SHA256  string          `json:"sha256"`
 }
 
+// PrivateReview contains counts only. It never exposes node labels, endpoints,
+// source identifiers, credentials or the store identity key.
+type PrivateReview struct {
+	Nodes   int `json:"nodes"`
+	Sources int `json:"sources"`
+}
+
 func (PrivateSnapshot) String() string   { return "[private node snapshot]" }
 func (PrivateSnapshot) GoString() string { return "[private node snapshot]" }
 
@@ -45,6 +52,14 @@ func ValidatePrivateSnapshot(in PrivateSnapshot) error {
 	return err
 }
 
+func ReviewPrivateSnapshot(in PrivateSnapshot) (PrivateReview, error) {
+	if ValidatePrivateSnapshot(in) != nil {
+		return PrivateReview{}, restorejournal.ErrInvalid
+	}
+	doc, _ := decodeImage(restorejournal.Image{Exists: true, Data: in.Content})
+	return PrivateReview{Nodes: len(doc.Nodes), Sources: len(doc.Sources)}, nil
+}
+
 // ExportPrivate is only for an authenticated encrypted backup builder. The
 // caller must never return this plaintext as an API preview or public export.
 func (s *Store) ExportPrivate(ctx context.Context) (PrivateSnapshot, error) {
@@ -65,6 +80,28 @@ func (s *Store) ExportPrivate(ctx context.Context) (PrivateSnapshot, error) {
 	data := bytes.Clone(compact.Bytes())
 	hash := sha256.Sum256(data)
 	return PrivateSnapshot{Content: data, SHA256: hex.EncodeToString(hash[:])}, nil
+}
+
+// ExportPrivateIfPresent distinguishes an empty store from an unavailable one.
+// The returned snapshot is still plaintext secret material and may only be put
+// into the authenticated encrypted backup envelope.
+func (s *Store) ExportPrivateIfPresent(ctx context.Context) (*PrivateSnapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, image, err := s.load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !image.Exists {
+		return nil, nil
+	}
+	var compact bytes.Buffer
+	if json.Compact(&compact, image.Data) != nil {
+		return nil, ErrStore
+	}
+	data := bytes.Clone(compact.Bytes())
+	hash := sha256.Sum256(data)
+	return &PrivateSnapshot{Content: data, SHA256: hex.EncodeToString(hash[:])}, nil
 }
 
 // RestoreBinding is based on trusted deployment configuration, never archive

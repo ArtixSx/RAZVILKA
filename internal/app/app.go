@@ -31,6 +31,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/privaterestore"
@@ -150,6 +151,7 @@ type App struct {
 	DNS             *dnscontrol.Manager
 	Warp            *warp.Manager
 	Cloudflare      *cloudflareprovider.Store
+	Nodes           *nodestore.Store
 	cloudflareBusy  atomic.Bool
 	TestLab         *testlab.Runner
 	RouteProber     testlab.RouteProber
@@ -3903,6 +3905,8 @@ type privateBackupPreviewResult struct {
 	EngineFiles     []engineconfig.Validation `json:"engine_files"`
 	SensitiveFiles  int                       `json:"sensitive_files"`
 	Devices         int                       `json:"devices"`
+	Nodes           int                       `json:"nodes"`
+	NodeSources     int                       `json:"node_sources"`
 	Warnings        []string                  `json:"warnings"`
 	DraftOnly       bool                      `json:"draft_only"`
 	RestoresAccount bool                      `json:"restores_account"`
@@ -3936,6 +3940,14 @@ func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
 	payload.CustomServices = a.CustomServices.List()
 	if a.Devices != nil {
 		payload.Devices = a.Devices.Known()
+	}
+	if a.Nodes != nil {
+		nodes, err := a.Nodes.ExportPrivateIfPresent(r.Context())
+		if err != nil {
+			http.Error(w, "private node store is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		payload.NodeSnapshot = nodes
 	}
 	for _, engineView := range a.EngineConfigs.List() {
 		for _, fileView := range engineView.Files {
@@ -4020,7 +4032,8 @@ func (a *App) privateBackupImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := a.previewPrivateBackup(payload); err != nil {
+	preview, err := a.previewPrivateBackup(payload)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -4032,7 +4045,8 @@ func (a *App) privateBackupImport(w http.ResponseWriter, r *http.Request) {
 		"ok": true, "draft_only": true, "digest": payload.Digest,
 		"services_staged": len(payload.Services), "custom_services_merged": len(payload.CustomServices),
 		"engine_files_staged": len(payload.EngineFiles), "devices_merged": len(payload.Devices),
-		"note": "Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.",
+		"nodes_merged": preview.Nodes,
+		"note":         "Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.",
 	})
 }
 
@@ -4051,8 +4065,8 @@ func decodePrivateBackup(w http.ResponseWriter, r *http.Request) (privatebackup.
 }
 
 func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackupPreviewResult, error) {
-	if payload.NodeSnapshot != nil {
-		return privateBackupPreviewResult{}, errors.New("Архив содержит узлы. Их хранилище ещё не подключено к общему импорту в интерфейсе; восстановление отменено без изменений.")
+	if payload.NodeSnapshot != nil && a.Nodes == nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит узлы, но приватное хранилище узлов недоступно. Восстановление отменено без изменений.")
 	}
 	// Do not silently discard provider secrets in the legacy router restore.
 	// Provider snapshots currently have their own atomic copy-only restore.
@@ -4070,6 +4084,13 @@ func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackup
 	}
 	if err := privatebackup.Validate(payload); err != nil {
 		return preview, err
+	}
+	if payload.NodeSnapshot != nil {
+		review, err := nodestore.ReviewPrivateSnapshot(*payload.NodeSnapshot)
+		if err != nil {
+			return preview, errors.New("invalid private node snapshot")
+		}
+		preview.Nodes, preview.NodeSources = review.Nodes, review.Sources
 	}
 	known := map[string]bool{}
 	for _, service := range a.catalogSnapshot().Services {

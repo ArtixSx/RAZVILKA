@@ -79,8 +79,10 @@ Legacy/root writers и aliases вне протокола FileTarget не счи�
 Подготовлено [типизированное зашифрованное резервное копирование и
 транзакционное восстановление](NODESTORE_BACKUP_RESTORE_RU.md), включая общий
 journal rollback и process-crash recovery. Перед подключением к приложению всё
-ещё нужны Linux test/vet/race, аппаратный gate и явная миграция старого journal
-scope. Затем N1.2 — startup wiring, явный legacy preview/copy, API/UI узлов; N1.3 — exact-node
+ещё нужны Linux test/vet/race и аппаратный gate. Startup wiring и сохранение в
+общем зашифрованном архиве подключены через отдельный versioned journal; старый
+journal сохраняет собственный lifetime lease. Затем N1.2 — явный legacy
+preview/copy и API/UI узлов; N1.3 — exact-node
 health evidence с TTL и привязкой к сети/сервису. Reveal/delete/disable,
 subscription credentials и постоянный retry quarantine пока отсутствуют.
 

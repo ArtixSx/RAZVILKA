@@ -3,8 +3,10 @@ package nodestore
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -20,6 +22,32 @@ func archiveFixture(t *testing.T) PrivateSnapshot {
 		t.Fatal(err)
 	}
 	return a
+}
+
+func TestPrivateReviewAndOptionalEmptyExport(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "nodes")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if exported, err := s.ExportPrivateIfPresent(context.Background()); err != nil || exported != nil {
+		t.Fatalf("empty optional export: %v %v", exported, err)
+	}
+	archive := archiveFixture(t)
+	review, err := ReviewPrivateSnapshot(archive)
+	if err != nil || review.Nodes != 1 || review.Sources != 1 {
+		t.Fatalf("private review: %+v %v", review, err)
+	}
+	encoded, _ := json.Marshal(review)
+	for _, secret := range []string{"fixture.example", "123e4567", "manual"} {
+		if bytes.Contains(encoded, []byte(secret)) {
+			t.Fatal("private review exposed node material")
+		}
+	}
 }
 
 func executeNodes(t *testing.T, target *RestoreTarget, archive PrivateSnapshot) (restorejournal.Outcome, error) {
