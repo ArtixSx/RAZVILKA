@@ -27,6 +27,8 @@ const schema = 4
 
 const endpointProbeTimeout = 5 * time.Second
 
+var errDNSAnswer = errors.New("DNS response failed integrity checks")
+
 type Provider struct {
 	ID                    string        `json:"id"`
 	Name                  string        `json:"name"`
@@ -78,6 +80,30 @@ type ProbeResult struct {
 	DNSSEC    string `json:"dnssec,omitempty"`
 	LatencyMS int64  `json:"latency_ms,omitempty"`
 	Addresses int    `json:"addresses,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// CandidateResolution is a read-only comparison for one hostname through a
+// selected DNS profile. Exact answers are intentionally omitted: the caller
+// only needs to know whether a provider returned public IPv4/IPv6 addresses
+// before a later TLS canary.
+type CandidateResolution struct {
+	ProfileID  string                      `json:"profile_id"`
+	ProviderID string                      `json:"provider_id"`
+	Host       string                      `json:"host"`
+	Ready      bool                        `json:"ready"`
+	Results    []CandidateResolutionResult `json:"results"`
+	Note       string                      `json:"note"`
+}
+
+type CandidateResolutionResult struct {
+	Server    string `json:"server"`
+	Transport string `json:"transport"`
+	Status    string `json:"status"`
+	LatencyMS int64  `json:"latency_ms,omitempty"`
+	Addresses int    `json:"addresses,omitempty"`
+	IPv4      bool   `json:"ipv4"`
+	IPv6      bool   `json:"ipv6"`
 	Error     string `json:"error,omitempty"`
 }
 
@@ -148,6 +174,9 @@ type Manager struct {
 	Path string
 	mu   sync.RWMutex
 	doc  document
+	// candidateExchange is injectable only for deterministic package tests. It
+	// is never loaded from configuration or exposed through the API.
+	candidateExchange func(context.Context, dnsTarget, string, dnsmessage.Type) ([]netip.Addr, error)
 }
 
 func New(path string) (*Manager, error) {
@@ -587,6 +616,135 @@ func (m *Manager) Probe(ctx context.Context, profileID string) ([]ProbeResult, e
 	return results, err
 }
 
+// ResolveCandidate asks an explicitly selected provider for one hostname. It
+// never changes the draft/applied DNS selection, port 53, resolv.conf or any
+// service binding and it does not persist its result as working evidence.
+func (m *Manager) ResolveCandidate(ctx context.Context, profileID, hostname string) (CandidateResolution, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return CandidateResolution{}, err
+	}
+	profile, ok := profileByID(strings.TrimSpace(profileID))
+	if !ok {
+		return CandidateResolution{}, fmt.Errorf("unknown DNS profile %q", profileID)
+	}
+	host, err := normalizeCandidateHostname(hostname)
+	if err != nil {
+		return CandidateResolution{}, err
+	}
+	m.mu.RLock()
+	doc := m.doc
+	exchange := m.candidateExchange
+	m.mu.RUnlock()
+	provider, ok := providerByIDFor(profile.ProviderID, doc)
+	if !ok || !provider.Configured {
+		return CandidateResolution{}, errors.New("выбранный DNS-профиль не настроен")
+	}
+	if !provider.AllowedForUSQUE || provider.Scope == "negative-control" || provider.TrustedLocal {
+		return CandidateResolution{}, errors.New("этот DNS-профиль запрещён для bootstrap USQUE")
+	}
+	targets := make([]dnsTarget, 0, len(provider.Endpoints))
+	for _, endpoint := range provider.Endpoints {
+		if target, supported := endpointProbeTarget(endpoint, provider.TrustedLocal); supported {
+			targets = append(targets, target)
+		}
+	}
+	if len(targets) == 0 || len(targets) > 16 {
+		return CandidateResolution{}, errors.New("у DNS-профиля нет ограниченного набора поддерживаемых endpoint")
+	}
+	if exchange == nil {
+		exchange = exchangeCandidateDNS
+	}
+	result := CandidateResolution{
+		ProfileID: profile.ID, ProviderID: provider.ID, Host: host,
+		Results: make([]CandidateResolutionResult, len(targets)),
+		Note:    "Изолированная DNS-проверка не меняет DNS роутера и ещё не доказывает доступность HTTPS API или успешную регистрацию USQUE.",
+	}
+	var probes sync.WaitGroup
+	limit := make(chan struct{}, 4)
+	probes.Add(len(targets))
+	for index, target := range targets {
+		go func() {
+			defer probes.Done()
+			select {
+			case limit <- struct{}{}:
+				defer func() { <-limit }()
+			case <-ctx.Done():
+				result.Results[index] = CandidateResolutionResult{Server: target.endpoint, Transport: target.transport, Status: "fail", Error: friendlyProbeError(ctx.Err(), endpointProbeTimeout)}
+				return
+			}
+			started := time.Now()
+			addresses := []netip.Addr{}
+			var lastErr error
+			unsafeAnswer := false
+			for _, family := range []dnsmessage.Type{dnsmessage.TypeA, dnsmessage.TypeAAAA} {
+				if ctx.Err() != nil {
+					break
+				}
+				familyAddresses, familyErr := exchange(ctx, target, host, family)
+				if familyErr != nil {
+					unsafeAnswer = unsafeAnswer || errors.Is(familyErr, errDNSAnswer)
+					lastErr = familyErr
+					continue
+				}
+				addresses = append(addresses, familyAddresses...)
+			}
+			item := CandidateResolutionResult{Server: target.endpoint, Transport: target.transport, LatencyMS: time.Since(started).Milliseconds()}
+			if unsafeAnswer || len(addresses) > 64 {
+				item.Status = "fail"
+				item.Error = "Ответ DNS не прошёл проверку целостности; этот endpoint не подходит"
+				result.Results[index] = item
+				return
+			}
+			if len(addresses) == 0 {
+				item.Status = "fail"
+				item.Error = friendlyProbeError(lastErr, endpointProbeTimeout)
+				result.Results[index] = item
+				return
+			}
+			for _, address := range addresses {
+				address = address.Unmap()
+				if !publicDNSAddress(address) {
+					item.Status = "fail"
+					item.Error = "DNS-провайдер вернул локальный, служебный или непубличный адрес"
+					item.IPv4, item.IPv6 = false, false
+					result.Results[index] = item
+					return
+				}
+				item.IPv4 = item.IPv4 || address.Is4()
+				item.IPv6 = item.IPv6 || address.Is6()
+			}
+			item.Status = "pass"
+			item.Addresses = len(addresses)
+			result.Results[index] = item
+		}()
+	}
+	probes.Wait()
+	if err := ctx.Err(); err != nil {
+		return CandidateResolution{}, err
+	}
+	for _, item := range result.Results {
+		result.Ready = result.Ready || item.Status == "pass"
+	}
+	return result, nil
+}
+
+func exchangeCandidateDNS(parent context.Context, target dnsTarget, hostname string, recordType dnsmessage.Type) ([]netip.Addr, error) {
+	ctx, cancel := context.WithTimeout(parent, endpointProbeTimeout)
+	defer cancel()
+	query, err := buildDNSQueryFor(uint16(time.Now().UnixNano()), hostname, recordType)
+	if err != nil {
+		return nil, err
+	}
+	response, err := target.probe(ctx, target.endpoint, query, target.trustedLocal)
+	if err != nil {
+		return nil, err
+	}
+	addresses, _, err := validateDNSAddressResponse(query, response)
+	return addresses, err
+}
+
 type dnsProbe func(context.Context, string, []byte, bool) ([]byte, error)
 
 type dnsTarget struct {
@@ -637,12 +795,27 @@ func probeEndpoint(parent context.Context, transport, endpoint string, probe dns
 }
 
 func buildDNSQuery(id uint16) ([]byte, error) {
+	return buildDNSQueryFor(id, "cloudflare.com", dnsmessage.TypeA)
+}
+
+func buildDNSQueryFor(id uint16, hostname string, recordType dnsmessage.Type) ([]byte, error) {
+	host, err := normalizeCandidateHostname(hostname)
+	if err != nil {
+		return nil, err
+	}
+	if recordType != dnsmessage.TypeA && recordType != dnsmessage.TypeAAAA {
+		return nil, errors.New("unsupported DNS record type")
+	}
 	builder := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: id, RecursionDesired: true})
 	builder.EnableCompression()
 	if err := builder.StartQuestions(); err != nil {
 		return nil, err
 	}
-	if err := builder.Question(dnsmessage.Question{Name: dnsmessage.MustNewName("cloudflare.com."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}); err != nil {
+	name, err := dnsmessage.NewName(host + ".")
+	if err != nil {
+		return nil, errors.New("invalid DNS hostname")
+	}
+	if err := builder.Question(dnsmessage.Question{Name: name, Type: recordType, Class: dnsmessage.ClassINET}); err != nil {
 		return nil, err
 	}
 	if err := builder.StartAdditionals(); err != nil {
@@ -659,40 +832,113 @@ func buildDNSQuery(id uint16) ([]byte, error) {
 }
 
 func validateDNSResponse(query, response []byte) (int, bool, error) {
+	addresses, authenticated, err := validateDNSAddressResponse(query, response)
+	return len(addresses), authenticated, err
+}
+
+func validateDNSAddressResponse(query, response []byte) ([]netip.Addr, bool, error) {
+	if len(response) > 65535 {
+		return nil, false, errDNSAnswer
+	}
 	var queryParser dnsmessage.Parser
 	queryHeader, err := queryParser.Start(query)
 	if err != nil {
-		return 0, false, fmt.Errorf("invalid DNS query: %w", err)
+		return nil, false, fmt.Errorf("invalid DNS query: %w", err)
+	}
+	queryQuestions, err := queryParser.AllQuestions()
+	if err != nil || len(queryQuestions) != 1 {
+		return nil, false, errors.New("DNS query must contain exactly one question")
 	}
 	var parser dnsmessage.Parser
 	header, err := parser.Start(response)
 	if err != nil {
-		return 0, false, fmt.Errorf("invalid DNS response: %w", err)
+		return nil, false, errDNSAnswer
 	}
-	if !header.Response || header.ID != queryHeader.ID {
-		return 0, false, errors.New("DNS response does not match the request")
+	if !header.Response || header.ID != queryHeader.ID || header.Truncated || header.OpCode != 0 {
+		return nil, false, errDNSAnswer
 	}
 	if header.RCode != dnsmessage.RCodeSuccess {
-		return 0, false, fmt.Errorf("DNS server returned %s", header.RCode)
+		return nil, false, fmt.Errorf("DNS server returned %s", header.RCode)
 	}
-	if err := parser.SkipAllQuestions(); err != nil {
-		return 0, false, fmt.Errorf("invalid DNS question section: %w", err)
+	responseQuestions, err := parser.AllQuestions()
+	if err != nil || len(responseQuestions) != 1 || !strings.EqualFold(responseQuestions[0].Name.String(), queryQuestions[0].Name.String()) || responseQuestions[0].Type != queryQuestions[0].Type || responseQuestions[0].Class != queryQuestions[0].Class {
+		return nil, false, errDNSAnswer
 	}
 	answers, err := parser.AllAnswers()
-	if err != nil {
-		return 0, false, fmt.Errorf("invalid DNS answer section: %w", err)
+	if err != nil || len(answers) > 64 {
+		return nil, false, errDNSAnswer
 	}
-	addresses := 0
+	aliases := map[string]string{}
 	for _, answer := range answers {
-		switch answer.Body.(type) {
-		case *dnsmessage.AResource, *dnsmessage.AAAAResource:
-			addresses++
+		if answer.Header.Class != dnsmessage.ClassINET {
+			return nil, false, errDNSAnswer
+		}
+		if cname, ok := answer.Body.(*dnsmessage.CNAMEResource); ok {
+			owner, target := strings.ToLower(answer.Header.Name.String()), strings.ToLower(cname.CNAME.String())
+			if previous, exists := aliases[owner]; exists && previous != target {
+				return nil, false, errDNSAnswer
+			}
+			aliases[owner] = target
 		}
 	}
-	if addresses == 0 {
-		return 0, false, errors.New("DNS response contains no addresses")
+	terminal := strings.ToLower(queryQuestions[0].Name.String())
+	seen := map[string]bool{}
+	for aliases[terminal] != "" {
+		if seen[terminal] || len(seen) >= 16 {
+			return nil, false, errDNSAnswer
+		}
+		seen[terminal] = true
+		terminal = aliases[terminal]
+	}
+	addresses := []netip.Addr{}
+	for _, answer := range answers {
+		switch resource := answer.Body.(type) {
+		case *dnsmessage.AResource:
+			if strings.ToLower(answer.Header.Name.String()) != terminal || queryQuestions[0].Type != dnsmessage.TypeA {
+				return nil, false, errDNSAnswer
+			}
+			if queryQuestions[0].Type == dnsmessage.TypeA {
+				addresses = append(addresses, netip.AddrFrom4(resource.A))
+			}
+		case *dnsmessage.AAAAResource:
+			if strings.ToLower(answer.Header.Name.String()) != terminal || queryQuestions[0].Type != dnsmessage.TypeAAAA {
+				return nil, false, errDNSAnswer
+			}
+			if queryQuestions[0].Type == dnsmessage.TypeAAAA {
+				addresses = append(addresses, netip.AddrFrom16(resource.AAAA))
+			}
+		}
+	}
+	if len(addresses) > 32 {
+		return nil, false, errDNSAnswer
+	}
+	if len(addresses) == 0 {
+		return nil, false, errors.New("DNS response contains no addresses")
 	}
 	return addresses, header.AuthenticData, nil
+}
+
+func normalizeCandidateHostname(raw string) (string, error) {
+	host := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
+	if len(host) == 0 || len(host) > 253 || !strings.Contains(host, ".") {
+		return "", errors.New("нужно указать корректное публичное DNS-имя")
+	}
+	for _, suffix := range []string{".localhost", ".local", ".lan", ".home.arpa"} {
+		if strings.HasSuffix(host, suffix) {
+			return "", errors.New("локальное DNS-имя нельзя использовать для bootstrap")
+		}
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return "", errors.New("нужно указать корректное публичное DNS-имя")
+		}
+		for _, character := range label {
+			if !(character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-') {
+				return "", errors.New("нужно указать корректное публичное DNS-имя")
+			}
+		}
+	}
+	return host, nil
 }
 
 func probeDNSOverUDP(ctx context.Context, endpoint string, query []byte, trustedLocal bool) ([]byte, error) {

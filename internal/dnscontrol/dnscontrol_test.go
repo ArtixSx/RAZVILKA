@@ -366,6 +366,70 @@ func TestDNSQueryAndResponseValidation(t *testing.T) {
 	}
 }
 
+func TestUSQUECandidateDNSIsReadOnlyAndHidesAnswers(t *testing.T) {
+	m, err := New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := json.Marshal(m.Snapshot())
+	m.candidateExchange = func(_ context.Context, _ dnsTarget, host string, recordType dnsmessage.Type) ([]netip.Addr, error) {
+		if host != "api.cloudflareclient.com" {
+			t.Fatalf("unexpected candidate host %q", host)
+		}
+		if recordType == dnsmessage.TypeAAAA {
+			return nil, errors.New("no IPv6 answer")
+		}
+		return []netip.Addr{netip.MustParseAddr("104.16.1.2")}, nil
+	}
+	result, err := m.ResolveCandidate(context.Background(), "private", "api.cloudflareclient.com")
+	if err != nil || !result.Ready || len(result.Results) == 0 {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	for _, item := range result.Results {
+		if item.Status != "pass" || item.Addresses != 1 || !item.IPv4 || item.IPv6 {
+			t.Fatalf("candidate item=%+v", item)
+		}
+	}
+	after, _ := json.Marshal(m.Snapshot())
+	if string(before) != string(after) {
+		t.Fatalf("candidate DNS changed manager state\nbefore=%s\nafter=%s", before, after)
+	}
+	payload, _ := json.Marshal(result)
+	if strings.Contains(string(payload), "104.16.1.2") {
+		t.Fatalf("candidate DNS leaked exact answer: %s", payload)
+	}
+}
+
+func TestUSQUECandidateDNSRejectsBlockedProviderAndPrivateAnswer(t *testing.T) {
+	m, _ := New("")
+	if _, err := m.ResolveCandidate(context.Background(), "flashstart", "api.cloudflareclient.com"); err == nil {
+		t.Fatal("FlashStart was accepted for USQUE bootstrap")
+	}
+	m.candidateExchange = func(context.Context, dnsTarget, string, dnsmessage.Type) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("192.168.1.1")}, nil
+	}
+	result, err := m.ResolveCandidate(context.Background(), "private", "api.cloudflareclient.com")
+	if err != nil || result.Ready {
+		t.Fatalf("private candidate answer accepted: result=%+v err=%v", result, err)
+	}
+	for _, item := range result.Results {
+		if item.Status != "fail" || strings.Contains(item.Error, "192.168.1.1") {
+			t.Fatalf("unsafe candidate result=%+v", item)
+		}
+	}
+}
+
+func TestCandidateHostnameValidation(t *testing.T) {
+	for _, raw := range []string{"", "localhost", "router.lan", "api.cloudflareclient.com/evil", "-bad.example"} {
+		if _, err := normalizeCandidateHostname(raw); err == nil {
+			t.Fatalf("unsafe candidate hostname accepted: %q", raw)
+		}
+	}
+	if host, err := normalizeCandidateHostname("API.CloudflareClient.COM."); err != nil || host != "api.cloudflareclient.com" {
+		t.Fatalf("valid hostname rejected: %q %v", host, err)
+	}
+}
+
 func TestDNSResponseMustMatchQuery(t *testing.T) {
 	query, err := buildDNSQuery(11)
 	if err != nil {

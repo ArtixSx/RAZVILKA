@@ -34,6 +34,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/telemetry"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
+	"github.com/ArtixSx/razvilka/internal/usquediag"
 )
 
 type confirmedRouteProber struct{}
@@ -92,6 +93,25 @@ func TestDNSProfileAPIKeepsChangesDraftOnly(t *testing.T) {
 	a.dnsStatus(status, httptest.NewRequest(http.MethodGet, "/api/v1/dns", nil))
 	if status.Code != http.StatusOK || !strings.Contains(status.Body.String(), `"mode":"preview"`) {
 		t.Fatalf("status=%d body=%s", status.Code, status.Body.String())
+	}
+}
+
+func TestUSQUEDNSCandidateRejectsUnsafeProviderWithoutChangingDNS(t *testing.T) {
+	manager, err := dnscontrol.New(filepath.Join(t.TempDir(), "dns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := json.Marshal(manager.Snapshot())
+	doctor := usquediag.New()
+	a := &App{DNS: manager, USQUE: doctor}
+	response := httptest.NewRecorder()
+	a.usqueDNSCandidate(response, httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/usque/dns-candidate", strings.NewReader(`{"profile_id":"flashstart"}`)))
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"USQUE_DNS_CANDIDATE_REJECTED"`) || !strings.Contains(response.Body.String(), `"draft_preserved":true`) {
+		t.Fatalf("candidate response=%d body=%s", response.Code, response.Body.String())
+	}
+	after, _ := json.Marshal(manager.Snapshot())
+	if string(before) != string(after) {
+		t.Fatalf("rejected USQUE DNS candidate changed DNS state\nbefore=%s\nafter=%s", before, after)
 	}
 }
 

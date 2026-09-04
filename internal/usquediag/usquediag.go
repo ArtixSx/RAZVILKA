@@ -213,6 +213,17 @@ func New() *Manager {
 	}
 }
 
+func (m *Manager) RegistrationHost() (string, error) {
+	if m == nil || publicfetch.ValidateURL(m.RegistrationURL) != nil {
+		return "", publicfetch.ErrURL
+	}
+	parsed, err := url.Parse(m.RegistrationURL)
+	if err != nil || parsed.Hostname() == "" {
+		return "", publicfetch.ErrURL
+	}
+	return strings.ToLower(parsed.Hostname()), nil
+}
+
 func (m *Manager) Check(ctx context.Context) Report {
 	now := time.Now()
 	if m.Now != nil {

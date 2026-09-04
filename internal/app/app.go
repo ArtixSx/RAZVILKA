@@ -389,6 +389,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/update", a.updateStatus)
 	mux.HandleFunc("/api/v1/diagnostics/domain", a.domainDiagnostic)
 	mux.HandleFunc("/api/v1/diagnostics/usque", a.usqueDiagnostic)
+	mux.HandleFunc("/api/v1/diagnostics/usque/dns-candidate", a.usqueDNSCandidate)
 	mux.HandleFunc("/api/v1/diagnostics/usque/repair", a.usqueRepair)
 	mux.HandleFunc("/api/v1/diagnostics/report", a.diagnosticReport)
 	mux.HandleFunc("/api/v1/config/export", a.configExport)
@@ -1310,6 +1311,37 @@ func (a *App) usqueDiagnostic(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	writeJSON(w, http.StatusOK, a.USQUE.Check(ctx))
+}
+
+func (a *App) usqueDNSCandidate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.USQUE == nil || a.DNS == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "USQUE_DNS_CANDIDATE_DISABLED", "error": "Изолированная проверка DNS для USQUE недоступна; настройки не изменены."})
+		return
+	}
+	var input struct {
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": "INVALID_JSON", "error": "Некорректный запрос; настройки не изменены."})
+		return
+	}
+	host, err := a.USQUE.RegistrationHost()
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": "USQUE_REGISTRATION_ENDPOINT_INVALID", "error": "Адрес регистрации USQUE не прошёл безопасную проверку; настройки не изменены."})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	result, err := a.DNS.ResolveCandidate(ctx, input.ProfileID, host)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": "USQUE_DNS_CANDIDATE_REJECTED", "error": err.Error(), "draft_preserved": true})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (a *App) usqueRepair(w http.ResponseWriter, r *http.Request) {

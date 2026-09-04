@@ -385,3 +385,22 @@ func TestUSQUESafeRepairIsExplicitAndDoesNotPromiseRestart(t *testing.T) {
 		}
 	}
 }
+
+func TestUSQUEDNSCandidateExplainsReadOnlyScope(t *testing.T) {
+	t.Parallel()
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(appData)
+	for _, required := range []string{
+		"Проверить другой DNS без применения",
+		"DNS роутера, службы и черновики не изменятся",
+		"/api/v1/diagnostics/usque/dns-candidate",
+		"Он не доказывает TLS, регистрацию, WARP или доступность Telegram",
+	} {
+		if !strings.Contains(content, required) {
+			t.Fatalf("USQUE DNS candidate guidance missing %q", required)
+		}
+	}
+}
