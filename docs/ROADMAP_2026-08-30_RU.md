@@ -21,6 +21,10 @@ provider subscriptions → Effective Route Resolver/NFQWS2 ownership →
 Добавлен [N0.2: частичный импорт](PR_N0_2_PARTIAL_IMPORT_RU.md) с причинами отказов,
 дедупликацией и явным сохранением принятых записей. Persistent quarantine/NodeStore
 ещё не реализованы этим блоком.
+Подготовлена [основа N1.1 — NodeStore](NODESTORE_FOUNDATION_RU.md): атомарный
+приватный документ, локальная идентичность, provenance/TTL и copy-only helper.
+Startup migration, API/UI и health promotion ещё не подключены; реестр пока не
+используется рабочими маршрутами.
 HTTPS/TLS-canary через выбранный DNS для USQUE сохранён в backlog, но не
 смешивается с изменением импортера. Публикация выполняется проверенными
 группами изменений, а не на каждый небольшой локальный коммит.

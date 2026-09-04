@@ -204,8 +204,12 @@ JSON/Clash используют согласованную проверку. О�
 изменения не загружались. Локально добавлен [N0.2](PR_N0_2_PARTIAL_IMPORT_RU.md):
 частичный импорт, причины отказов без ключей, дедупликация, защита старого черновика
 и одна явно подписанная кнопка сохранения принятых узлов. Неподдерживаемые записи
-изолируются в отчёте; постоянного quarantine store ещё нет. Следующий пункт —
-NodeStore и exact-node check. Оставшаяся работа Cloudflare/USQUE ниже сохраняется
+изолируются в отчёте; постоянного retry quarantine ещё нет. Добавлена
+[основа NodeStore N1.1](NODESTORE_FOUNDATION_RU.md): приватное атомарное хранение,
+stable ID, provenance/TTL, lease и copy-only migration helper. Она пока не
+подключена к startup/API/UI/рабочим маршрутам; health остаётся `not_checked`.
+Следующий пункт — lifecycle/backup integration и N1.2, затем exact-node check.
+Оставшаяся работа Cloudflare/USQUE ниже сохраняется
 в backlog. [Автообновление публичных источников](PUBLIC_PROVIDER_SOURCES_RU.md)
 добавлено в план как opt-in после этих зависимостей, без скрытой смены маршрута.
 По разрешению пользователя отдельно проверен импорт 32 публичных ссылок:
@@ -342,4 +346,4 @@ Scanner работает только с literal. Mixed private DNS, измен�
 Порядок дальнейшей разработки находится в
 [ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Ближайший Cloudflare gate —
 первый live scan кандидата без изменения LAN/default route; текущий приоритет
-Proxy Provider — NodeStore после частичного импорта.
+Proxy Provider — подключение основы NodeStore без изменения рабочих маршрутов.
