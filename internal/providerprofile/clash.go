@@ -55,10 +55,15 @@ func parseClashYAML(data []byte) ([]map[string]any, []Preview, string, []string,
 			skipped++
 			continue
 		}
+		if typeName == "vless" {
+			if err := validateClashVLESS(proxy); err != nil {
+				return nil, nil, "", nil, fmt.Errorf("YAML proxy %d: %w", index+1, err)
+			}
+		}
 		source := clashProxyToNative(proxy, typeName)
 		outbound, preview, err := normalizeNativeOutbound(source)
 		if err != nil {
-			return nil, nil, "", nil, fmt.Errorf("YAML proxy %d (%s): %w", index+1, safeProxyName(proxy), err)
+			return nil, nil, "", nil, fmt.Errorf("YAML proxy %d: %w", index+1, err)
 		}
 		outbounds = append(outbounds, outbound)
 		nodes = append(nodes, preview)

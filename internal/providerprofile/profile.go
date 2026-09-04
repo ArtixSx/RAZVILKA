@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -58,7 +59,7 @@ func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, err
 		}
 		outbounds, nodes, format, warnings, err = parseProfileContent(decoded)
 		if err != nil {
-			return BundleResult{}, errors.New("не удалось разобрать закодированную подписку")
+			return BundleResult{}, fmt.Errorf("не удалось разобрать закодированную подписку: %w", err)
 		}
 		format = "base64-" + format
 	}
@@ -146,11 +147,18 @@ func decodeSubscription(raw string) string {
 }
 
 func parseJSONProfile(data []byte) ([]map[string]any, []Preview, string, error) {
+	if err := validateJSONFields(data); err != nil {
+		return nil, nil, "", err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	var document any
 	if err := decoder.Decode(&document); err != nil {
 		return nil, nil, "", errors.New("JSON-профиль повреждён")
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return nil, nil, "", importError("INVALID_PARAMETERS")
 	}
 	var entries []any
 	format := "json"
@@ -221,6 +229,9 @@ func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, er
 	preview := Preview{Name: name, Server: server, Port: port, EngineID: "sing-box"}
 	switch typeName {
 	case "vless":
+		if err := validateNativeVLESS(source); err != nil {
+			return nil, Preview{}, err
+		}
 		uuid := stringField(source, "uuid")
 		if !looksLikeUUID(uuid) {
 			return nil, Preview{}, errors.New("VLESS-узел не содержит корректный UUID")
@@ -257,7 +268,7 @@ func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, er
 		copySanitizedFields(outbound, source)
 		preview.Protocol, preview.Transport, preview.Security = "Shadowsocks", "TCP/UDP", stringField(source, "method")
 	default:
-		return nil, Preview{}, fmt.Errorf("тип outbound %q пока не поддерживается", typeName)
+		return nil, Preview{}, errors.New("тип outbound пока не поддерживается")
 	}
 	if tls, ok := source["tls"].(map[string]any); ok {
 		preview.TLS = boolField(tls, "enabled") || typeName == "hysteria2" || typeName == "tuic"
@@ -271,7 +282,7 @@ func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, er
 	if transport, ok := source["transport"].(map[string]any); ok && stringField(transport, "type") != "" {
 		preview.Transport = stringField(transport, "type")
 	}
-	return outbound, preview, nil
+	return outbound, redactPreview(preview, outbound), nil
 }
 
 func buildBundleConfig(outbounds []map[string]any, selectedIndex int) ([]byte, error) {

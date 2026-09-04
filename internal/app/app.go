@@ -2003,7 +2003,7 @@ func (a *App) providerProfilePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := providerprofile.ParseProfile(input.Profile)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "draft_preserved": true})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -2031,7 +2031,7 @@ func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := providerprofile.ParseProfileWithSelection(input.Profile, input.SelectedIndex)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "draft_preserved": true})
 		return
 	}
 	validation := engineconfig.ValidatePrivateContent("sing-box", "main", string(result.Config))

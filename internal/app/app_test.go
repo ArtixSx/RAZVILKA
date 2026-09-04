@@ -256,6 +256,28 @@ func TestProviderProfileImportHonorsExplicitNodeSelection(t *testing.T) {
 	}
 }
 
+func TestUnsupportedProviderImportPreservesExistingDraft(t *testing.T) {
+	root := t.TempDir()
+	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	a := &App{EngineConfigs: configs}
+	const original = `{"outbounds":[{"type":"direct","tag":"original"}]}`
+	if _, err := configs.Stage("sing-box", "main", original); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]string{"profile": "vless://123e4567-e89b-12d3-a456-426614174000@edge.example:443?type=xhttp", "confirm": "IMPORT_REMOTE_PROFILE"})
+	for _, handler := range []http.HandlerFunc{a.providerProfilePreview, a.providerProfileImport} {
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body)))
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"UNSUPPORTED_TRANSPORT"`) || strings.Contains(response.Body.String(), "123e4567") {
+			t.Fatalf("unexpected response: %s", response.Body.String())
+		}
+	}
+	content, err := configs.ReadExpert("sing-box", "main")
+	if err != nil || content.Content != original {
+		t.Fatal("failed import changed existing draft")
+	}
+}
+
 func TestAutopilotCandidateSetIsBoundedAndKeepsControl(t *testing.T) {
 	routes := isolatedCandidates([]string{"nfqws2", "usque", "sing-box"}, "nfqws2")
 	if got, want := strings.Join(routes, ","), "nfqws2,direct,usque"; got != want {

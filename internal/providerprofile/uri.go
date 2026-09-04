@@ -4,11 +4,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 const MaxURIBytes = 16 << 10
@@ -53,7 +53,7 @@ func parseURIOutbound(raw string) (map[string]any, Preview, error) {
 	if raw == "" {
 		return nil, Preview{}, errors.New("вставьте ссылку профиля")
 	}
-	if len(raw) > MaxURIBytes || strings.ContainsAny(raw, "\r\n\x00") {
+	if len(raw) > MaxURIBytes || !utf8.ValidString(raw) || strings.IndexFunc(raw, func(r rune) bool { return r < 32 || r == 127 }) >= 0 {
 		return nil, Preview{}, errors.New("ссылка слишком длинная или содержит недопустимые символы")
 	}
 	u, err := url.Parse(raw)
@@ -74,13 +74,13 @@ func parseURIOutbound(raw string) (map[string]any, Preview, error) {
 	case "http", "https":
 		err = errors.New("вставлена ссылка на сайт или подписку; откройте её и вставьте сам ключ vless://, hysteria2://, tuic:// или ss://")
 	default:
-		err = fmt.Errorf("протокол %q пока не поддерживается; используйте VLESS, Hysteria2, TUIC, Shadowsocks или импорт JSON", u.Scheme)
+		err = errors.New("протокол пока не поддерживается; используйте VLESS, Hysteria2, TUIC, Shadowsocks или импорт JSON")
 	}
 	if err != nil {
 		return nil, Preview{}, err
 	}
 	preview.EngineID = "sing-box"
-	return outbound, preview, nil
+	return outbound, redactPreview(preview, outbound), nil
 }
 
 func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
@@ -95,7 +95,13 @@ func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
 	if !looksLikeUUID(uuid) {
 		return nil, Preview{}, errors.New("в ссылке VLESS отсутствует корректный UUID")
 	}
-	q := u.Query()
+	q, err := vlessQuery(u)
+	if err != nil {
+		return nil, Preview{}, err
+	}
+	if _, password := u.User.Password(); password || u.Path != "" || u.Opaque != "" {
+		return nil, Preview{}, importError("INVALID_PARAMETERS")
+	}
 	security := strings.ToLower(strings.TrimSpace(q.Get("security")))
 	if security == "" {
 		security = "none"
@@ -104,7 +110,13 @@ func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
 	if transport == "" {
 		transport = "tcp"
 	}
+	if err := validateVLESSModes(transport, security, q.Get("flow"), q.Get("packet_encoding")); err != nil {
+		return nil, Preview{}, err
+	}
 	out := map[string]any{"type": "vless", "tag": "proxy", "server": server, "server_port": port, "uuid": uuid}
+	if q.Has("packet_encoding") {
+		out["packet_encoding"] = q.Get("packet_encoding")
+	}
 	if flow := strings.TrimSpace(q.Get("flow")); flow != "" {
 		out["flow"] = flow
 	}
