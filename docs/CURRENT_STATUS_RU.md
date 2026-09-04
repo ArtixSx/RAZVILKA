@@ -215,6 +215,10 @@ stable ID, provenance/TTL, lease и copy-only migration helper. Она пока 
 документ. Старый и новый журналы имеют раздельные scope и lifetime lease. Узкий
 Cloudflare restore отклоняет смешанный архив. Следующий пункт — N1.2 API/UI узлов,
 затем exact-node check.
+Подготовлена read-only часть N1.2: `/api/v1/nodes` показывает только безопасные
+карточки и счётчики; все записи остаются недоступными для выбора (`selectable=0`).
+URI, endpoint, SNI, UUID, пароли и SecretRef ответ не содержит. Изменяющих API и
+страницы UI ещё нет.
 Оставшаяся работа Cloudflare/USQUE ниже сохраняется
 в backlog. [Автообновление публичных источников](PUBLIC_PROVIDER_SOURCES_RU.md)
 добавлено в план как opt-in после этих зависимостей, без скрытой смены маршрута.

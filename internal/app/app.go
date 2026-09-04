@@ -346,6 +346,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/engine-configs/", a.engineConfigAction)
 	mux.HandleFunc("/api/v1/provider-profiles/preview", a.providerProfilePreview)
 	mux.HandleFunc("/api/v1/provider-profiles/import", a.providerProfileImport)
+	mux.HandleFunc("/api/v1/nodes", a.nodeList)
 	mux.HandleFunc("/api/v1/components", a.componentList)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
