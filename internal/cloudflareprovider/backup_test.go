@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 )
 
@@ -200,6 +202,57 @@ func TestFailedRestoreNeverChangesPrivateStore(t *testing.T) {
 		t.Fatalf("cancel ignored: %v", err)
 	}
 	checkUnchanged()
+}
+
+func TestNarrowCloudflareRestoreCannotSilentlyDropNodes(t *testing.T) {
+	ctx := context.Background()
+	s, path := privateStore(t)
+	parsed, _ := ParseImport(SourceWGCF, wgcfFixture())
+	if _, err := s.ImportSnapshot(ctx, parsed); err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := s.Backup(ctx, backupPassword, "0.18.1-dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := privatebackup.Decrypt(envelope, backupPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeRoot := filepath.Join(t.TempDir(), "nodes")
+	if err := os.Mkdir(nodeRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := nodestore.Open(nodeRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174000@fixture.example:443?security=tls", time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC), time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	nodeSnapshot, err := nodes.ExportPrivate(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := nodes.Close(); err != nil {
+		t.Fatal(err)
+	}
+	payload.NodeSnapshot = &nodeSnapshot
+	if err := privatebackup.Seal(&payload); err != nil {
+		t.Fatal(err)
+	}
+	mixed, err := privatebackup.Encrypt(payload, backupPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(path, storeFile))
+	if _, err := s.RestoreBackup(ctx, mixed, backupPassword); !errors.Is(err, ErrBackup) {
+		t.Fatalf("mixed archive accepted by narrow restore: %v", err)
+	}
+	after, _ := os.ReadFile(filepath.Join(path, storeFile))
+	if !bytes.Equal(before, after) {
+		t.Fatal("rejected mixed archive changed Cloudflare state")
+	}
 }
 
 func TestRestoreRespectsAnotherWriterAndCapacity(t *testing.T) {

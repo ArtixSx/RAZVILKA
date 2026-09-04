@@ -17,6 +17,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/devices"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
 const (
@@ -59,6 +60,7 @@ type Payload struct {
 	CustomServices    []catalog.Service              `json:"custom_services,omitempty"`
 	EngineFiles       []EngineFile                   `json:"engine_files,omitempty"`
 	ProviderSnapshots []ProviderSnapshot             `json:"provider_snapshots,omitempty"`
+	NodeSnapshot      *nodestore.PrivateSnapshot     `json:"node_snapshot,omitempty"`
 	Devices           []devices.Device               `json:"devices,omitempty"`
 	Digest            string                         `json:"digest"`
 }
@@ -178,6 +180,15 @@ func Validate(payload Payload) error {
 	}
 	if total > MaxPayload {
 		return errors.New("private backup data exceeds safety limit")
+	}
+	if payload.NodeSnapshot != nil {
+		if nodestore.ValidatePrivateSnapshot(*payload.NodeSnapshot) != nil {
+			return errors.New("invalid private node snapshot")
+		}
+		total += len(payload.NodeSnapshot.Content)
+		if total > MaxPayload {
+			return errors.New("private backup data exceeds safety limit")
+		}
 	}
 	if len(payload.Digest) != sha256.Size*2 {
 		return errors.New("private backup digest is missing")

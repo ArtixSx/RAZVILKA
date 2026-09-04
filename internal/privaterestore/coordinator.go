@@ -12,6 +12,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -113,6 +114,9 @@ func Open(ctx context.Context, layout Layout) (*Coordinator, restorejournal.Outc
 	add("custom_services", func() (managedTarget, error) { return customservices.OpenRestoreTarget(layout.CustomServices) })
 	add("devices", func() (managedTarget, error) { return devices.OpenRestoreTarget(layout.Devices) })
 	add("provider_cloudflare", func() (managedTarget, error) { return cloudflareprovider.OpenRestoreTarget(layout.ProviderRoot) })
+	if layout.NodeRoot != "" {
+		add("nodes", func() (managedTarget, error) { return nodestore.OpenRestoreTarget(layout.NodeRoot) })
+	}
 	for _, spec := range engineconfig.Specs() {
 		for _, file := range spec.Files {
 			add(draftID(spec.ID, file.ID), func() (managedTarget, error) {

@@ -9,6 +9,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
@@ -22,6 +23,7 @@ type Stores struct {
 	Devices  *devices.Manager
 	Engines  *engineconfig.Manager
 	Provider *cloudflareprovider.Store
+	Nodes    *nodestore.Store
 }
 
 func (Stores) String() string   { return "[private restore stores]" }
@@ -44,6 +46,9 @@ func (c *Coordinator) RestoreOnline(ctx context.Context, payload privatebackup.P
 	}
 	if ctx.Err() != nil {
 		return restorejournal.Clean, restorejournal.ErrAborted
+	}
+	if payload.NodeSnapshot != nil && (stores.Nodes == nil || c.layout.NodeRoot == "") {
+		return restorejournal.Clean, restorejournal.ErrInvalid
 	}
 	refs := make([]engineconfig.DraftRef, 0, len(payload.EngineFiles))
 	for _, file := range payload.EngineFiles {
@@ -134,6 +139,17 @@ func (c *Coordinator) RestoreOnline(ctx context.Context, payload privatebackup.P
 			if err := bind(draftID(ref.EngineID, ref.FileID), target, bindings[localID], want, bindingErr); err != nil {
 				return restorejournal.Clean, err
 			}
+		}
+	}
+	if payload.NodeSnapshot != nil {
+		nodes, err := stores.Nodes.BeginRestore(ctx)
+		if err != nil {
+			return restorejournal.Clean, err
+		}
+		closers = append(closers, nodes.Close)
+		want, bindingErr = nodestore.RestoreBinding(c.layout.NodeRoot)
+		if err := bind("nodes", nodes, nodes.Binding(), want, bindingErr); err != nil {
+			return restorejournal.Clean, err
 		}
 	}
 	if len(payload.ProviderSnapshots) > 0 {

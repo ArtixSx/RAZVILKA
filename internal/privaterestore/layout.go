@@ -22,6 +22,7 @@ type Layout struct {
 	Devices        string
 	StageRoot      string
 	ProviderRoot   string
+	NodeRoot       string // Optional; omitted deployments retain the v1 journal binding.
 	JournalRoot    string
 }
 
@@ -51,8 +52,18 @@ func normalizeLayout(in Layout) (Layout, string, error) {
 		}
 		*p = abs
 	}
+	if out.NodeRoot != "" {
+		abs, err := filepath.Abs(out.NodeRoot)
+		if err != nil || strings.TrimSpace(out.NodeRoot) == "" || abs == filepath.VolumeName(abs)+string(filepath.Separator) {
+			return Layout{}, "", restorejournal.ErrInvalid
+		}
+		out.NodeRoot = abs
+	}
 	files := []string{out.Config, out.CustomServices, out.Devices}
 	dirs := []string{out.StageRoot, out.ProviderRoot, out.JournalRoot}
+	if out.NodeRoot != "" {
+		dirs = append(dirs, out.NodeRoot)
+	}
 	for i, file := range files {
 		for _, other := range files[i+1:] {
 			if inside(file, other) || inside(other, file) {
@@ -75,6 +86,9 @@ func normalizeLayout(in Layout) (Layout, string, error) {
 	// Include the trusted complete slot set and versioned typed adapter contract.
 	// No destinations or binding values are taken from the journal/payload.
 	bindings := []string{"private-draft-coordinator-v1", canonical(out.Config), canonical(out.CustomServices), canonical(out.Devices), canonical(out.StageRoot), canonical(out.ProviderRoot), canonical(out.JournalRoot)}
+	if out.NodeRoot != "" {
+		bindings = append(bindings, "nodestore-schema-1", canonical(out.NodeRoot))
+	}
 	for _, spec := range engineconfig.Specs() {
 		for _, file := range spec.Files {
 			bindings = append(bindings, draftID(spec.ID, file.ID))

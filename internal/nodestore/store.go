@@ -116,6 +116,7 @@ type Store struct {
 	closeTarget func() error
 	closed      bool
 	fenced      bool
+	binding     string
 }
 
 func (*Store) String() string   { return "[private node store]" }
@@ -141,7 +142,13 @@ func Open(path string) (*Store, error) {
 		}
 		return nil, ErrStore
 	}
-	s := &Store{root: root, target: target, closeTarget: target.Close}
+	binding, err := RestoreBinding(path)
+	if err != nil {
+		_ = target.Close()
+		_ = root.Close()
+		return nil, ErrStore
+	}
+	s := &Store{root: root, target: target, closeTarget: target.Close, binding: binding}
 	if _, _, err := s.load(context.Background()); err != nil {
 		_ = s.Close()
 		return nil, err

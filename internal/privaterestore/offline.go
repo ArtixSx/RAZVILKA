@@ -9,6 +9,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
@@ -25,6 +26,9 @@ type devicesBuilder interface {
 }
 type draftBuilder interface {
 	Image(string) (restorejournal.Image, error)
+}
+type nodeBuilder interface {
+	MergeImage(context.Context, nodestore.PrivateSnapshot) (restorejournal.Image, error)
 }
 
 // RestoreOffline is an internal pre-Load operation, NOT an HTTP or live restore
@@ -69,6 +73,12 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 		return nil, restorejournal.ErrInvalid
 	}
 	ids := []string{"config", "custom_services", "devices"}
+	if payload.NodeSnapshot != nil {
+		if c.layout.NodeRoot == "" {
+			return nil, restorejournal.ErrInvalid
+		}
+		ids = append(ids, "nodes")
+	}
 	if len(payload.ProviderSnapshots) > 0 {
 		ids = append(ids, "provider_cloudflare")
 	}
@@ -127,6 +137,12 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 	}
 	if len(payload.ProviderSnapshots) > 0 {
 		changes["provider_cloudflare"], _, err = c.slots["provider_cloudflare"].target.(*cloudflareprovider.RestoreTarget).MergeImage(ctx, payload.ProviderSnapshots)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if payload.NodeSnapshot != nil {
+		changes["nodes"], err = c.slots["nodes"].target.(nodeBuilder).MergeImage(ctx, *payload.NodeSnapshot)
 		if err != nil {
 			return nil, err
 		}

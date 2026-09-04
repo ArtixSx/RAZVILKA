@@ -76,9 +76,11 @@ Legacy/root writers и aliases вне протокола FileTarget не счи�
 - Тестовый бинарник собирается для Linux ARM64, MIPS и MIPSel (softfloat).
   Это компиляция, **не** аппаратное выполнение и не поддержка новой платформы.
 
-Перед подключением: Linux test/vet/race, аппаратный gate и
-подключение к общему private backup/restore writer lifecycle. Затем N1.2 —
-startup wiring, явный legacy preview/copy, API/UI узлов; N1.3 — exact-node
+Подготовлено [типизированное зашифрованное резервное копирование и
+транзакционное восстановление](NODESTORE_BACKUP_RESTORE_RU.md), включая общий
+journal rollback и process-crash recovery. Перед подключением к приложению всё
+ещё нужны Linux test/vet/race, аппаратный gate и явная миграция старого journal
+scope. Затем N1.2 — startup wiring, явный legacy preview/copy, API/UI узлов; N1.3 — exact-node
 health evidence с TTL и привязкой к сети/сервису. Reveal/delete/disable,
 subscription credentials и постоянный retry quarantine пока отсутствуют.
 

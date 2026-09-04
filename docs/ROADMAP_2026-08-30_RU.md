@@ -25,6 +25,11 @@ provider subscriptions → Effective Route Resolver/NFQWS2 ownership →
 приватный документ, локальная идентичность, provenance/TTL и copy-only helper.
 Startup migration, API/UI и health promotion ещё не подключены; реестр пока не
 используется рабочими маршрутами.
+Подготовлен [N1.1b — backup/restore lifecycle](NODESTORE_BACKUP_RESTORE_RU.md):
+типизированный snapshot внутри зашифрованного архива, merge без удаления более
+свежих узлов, общий journal rollback и recovery после смерти процесса. Перед
+startup wiring требуется явная миграция чистого journal scope; UI пока не может
+молча принять архив с узлами.
 HTTPS/TLS-canary через выбранный DNS для USQUE сохранён в backlog, но не
 смешивается с изменением импортера. Публикация выполняется проверенными
 группами изменений, а не на каждый небольшой локальный коммит.

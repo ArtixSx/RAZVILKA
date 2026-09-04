@@ -4051,6 +4051,9 @@ func decodePrivateBackup(w http.ResponseWriter, r *http.Request) (privatebackup.
 }
 
 func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackupPreviewResult, error) {
+	if payload.NodeSnapshot != nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит узлы. Их хранилище ещё не подключено к общему импорту в интерфейсе; восстановление отменено без изменений.")
+	}
 	// Do not silently discard provider secrets in the legacy router restore.
 	// Provider snapshots currently have their own atomic copy-only restore.
 	if len(payload.ProviderSnapshots) != 0 {
