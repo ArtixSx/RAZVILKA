@@ -14,15 +14,16 @@ import (
 const MaxURIBytes = 16 << 10
 
 type Preview struct {
-	Protocol  string   `json:"protocol"`
-	Name      string   `json:"name,omitempty"`
-	Server    string   `json:"server"`
-	Port      int      `json:"port"`
-	TLS       bool     `json:"tls"`
-	Transport string   `json:"transport,omitempty"`
-	Security  string   `json:"security,omitempty"`
-	Warnings  []string `json:"warnings,omitempty"`
-	EngineID  string   `json:"engine_id"`
+	SourceIndex int      `json:"source_index,omitempty"`
+	Protocol    string   `json:"protocol"`
+	Name        string   `json:"name,omitempty"`
+	Server      string   `json:"server"`
+	Port        int      `json:"port"`
+	TLS         bool     `json:"tls"`
+	Transport   string   `json:"transport,omitempty"`
+	Security    string   `json:"security,omitempty"`
+	Warnings    []string `json:"warnings,omitempty"`
+	EngineID    string   `json:"engine_id"`
 }
 
 type Result struct {

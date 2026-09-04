@@ -25,6 +25,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-private-backup-ui.mjs
   node scripts/test-devices-persistence-ui.mjs
   node scripts/test-usque-dns-ui.mjs
+  node scripts/test-provider-import-ui.mjs
   node scripts/test-restore-busy-supervision.mjs
 fi
 ./build.sh

@@ -18,12 +18,14 @@ const (
 )
 
 type BundlePreview struct {
-	Format        string    `json:"format"`
-	EngineID      string    `json:"engine_id"`
-	NodeCount     int       `json:"node_count"`
-	SelectedIndex int       `json:"selected_index"`
-	Nodes         []Preview `json:"nodes"`
-	Warnings      []string  `json:"warnings,omitempty"`
+	Format        string       `json:"format"`
+	EngineID      string       `json:"engine_id"`
+	NodeCount     int          `json:"node_count"`
+	SelectedIndex int          `json:"selected_index"`
+	Nodes         []Preview    `json:"nodes"`
+	Warnings      []string     `json:"warnings,omitempty"`
+	Rejected      []EntryIssue `json:"rejected,omitempty"`
+	Skipped       []EntryIssue `json:"skipped,omitempty"`
 }
 
 type BundleResult struct {
@@ -51,20 +53,28 @@ func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, err
 		return BundleResult{}, errors.New("профиль слишком большой или содержит недопустимые данные")
 	}
 
-	outbounds, nodes, format, warnings, err := parseProfileContent(raw)
+	report := &entryReport{}
+	outbounds, nodes, format, warnings, err := parseProfileContent(raw, report)
+	if err == nil && len(nodes) == 0 {
+		err = report.firstErr
+	}
 	if err != nil {
 		decoded := decodeSubscription(raw)
 		if decoded == "" || decoded == raw {
-			return BundleResult{}, err
+			return BundleResult{Preview: BundlePreview{Rejected: report.rejected, Skipped: report.skipped}}, err
 		}
-		outbounds, nodes, format, warnings, err = parseProfileContent(decoded)
+		report = &entryReport{}
+		outbounds, nodes, format, warnings, err = parseProfileContent(decoded, report)
+		if err == nil && len(nodes) == 0 {
+			err = report.firstErr
+		}
 		if err != nil {
-			return BundleResult{}, fmt.Errorf("не удалось разобрать закодированную подписку: %w", err)
+			return BundleResult{Preview: BundlePreview{Rejected: report.rejected, Skipped: report.skipped}}, fmt.Errorf("не удалось разобрать закодированную подписку: %w", err)
 		}
 		format = "base64-" + format
 	}
 	if len(nodes) == 0 {
-		return BundleResult{}, errors.New("в профиле нет поддерживаемых узлов")
+		return BundleResult{Preview: BundlePreview{Rejected: report.rejected, Skipped: report.skipped}}, errors.New("в профиле нет поддерживаемых узлов")
 	}
 	if len(nodes) > MaxNodes {
 		return BundleResult{}, fmt.Errorf("в профиле %d узлов; допустимо не более %d", len(nodes), MaxNodes)
@@ -78,20 +88,24 @@ func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, err
 		return BundleResult{}, err
 	}
 	preview := BundlePreview{Format: format, EngineID: "sing-box", NodeCount: len(nodes), SelectedIndex: selectedIndex, Nodes: nodes, Warnings: warnings}
+	preview.Rejected, preview.Skipped = report.rejected, report.skipped
+	if len(report.rejected) > 0 {
+		preview.Warnings = append(preview.Warnings, "Часть записей отклонена. В черновик попадут только принятые узлы; проверьте список перед сохранением.")
+	}
 	if len(nodes) > 1 {
 		preview.Warnings = append(preview.Warnings, "Sing-box локально проверит пул узлов и выберет доступный; выбранный узел получит первый приоритет. Остальные сохранятся для ручного выбора.")
 	}
 	return BundleResult{Preview: preview, Config: config}, nil
 }
 
-func parseProfileContent(raw string) ([]map[string]any, []Preview, string, []string, error) {
+func parseProfileContent(raw string, report *entryReport) ([]map[string]any, []Preview, string, []string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
-		outbounds, nodes, format, err := parseJSONProfile([]byte(trimmed))
+		outbounds, nodes, format, err := parseJSONProfile([]byte(trimmed), report)
 		return outbounds, nodes, format, nil, err
 	}
 	if looksLikeClashYAML(trimmed) {
-		return parseClashYAML([]byte(trimmed))
+		return parseClashYAML([]byte(trimmed), report)
 	}
 	lines := subscriptionLines(trimmed)
 	if len(lines) == 0 {
@@ -105,8 +119,13 @@ func parseProfileContent(raw string) ([]map[string]any, []Preview, string, []str
 	for index, line := range lines {
 		outbound, preview, err := parseURIOutbound(line)
 		if err != nil {
-			return nil, nil, "", nil, fmt.Errorf("узел %d: %w", index+1, err)
+			report.reject(index+1, err)
+			continue
 		}
+		if !report.accept(index+1, outbound) {
+			continue
+		}
+		preview.SourceIndex = index + 1
 		outbounds = append(outbounds, outbound)
 		nodes = append(nodes, preview)
 	}
@@ -146,7 +165,7 @@ func decodeSubscription(raw string) string {
 	return ""
 }
 
-func parseJSONProfile(data []byte) ([]map[string]any, []Preview, string, error) {
+func parseJSONProfile(data []byte, report *entryReport) ([]map[string]any, []Preview, string, error) {
 	if err := validateJSONFields(data); err != nil {
 		return nil, nil, "", err
 	}
@@ -184,28 +203,39 @@ func parseJSONProfile(data []byte) ([]map[string]any, []Preview, string, error) 
 
 	outbounds := make([]map[string]any, 0, len(entries))
 	nodes := make([]Preview, 0, len(entries))
-	for _, entry := range entries {
+	for index, entry := range entries {
 		switch value := entry.(type) {
 		case string:
 			outbound, preview, err := parseURIOutbound(value)
 			if err != nil {
-				return nil, nil, "", fmt.Errorf("JSON-ссылка %d: %w", len(nodes)+1, err)
+				report.reject(index+1, err)
+				continue
 			}
+			if !report.accept(index+1, outbound) {
+				continue
+			}
+			preview.SourceIndex = index + 1
 			outbounds = append(outbounds, outbound)
 			nodes = append(nodes, preview)
 		case map[string]any:
 			typeName := strings.ToLower(stringField(value, "type"))
 			if typeName == "direct" || typeName == "block" || typeName == "selector" || typeName == "urltest" {
+				report.skipped = append(report.skipped, EntryIssue{Index: index + 1, Code: "IGNORED_ROUTING_ENTRY", Reason: "Служебное правило источника не импортируется; локальный селектор создаётся заново."})
 				continue
 			}
 			outbound, preview, err := normalizeNativeOutbound(value)
 			if err != nil {
-				return nil, nil, "", fmt.Errorf("JSON-узел %d: %w", len(nodes)+1, err)
+				report.reject(index+1, err)
+				continue
 			}
+			if !report.accept(index+1, outbound) {
+				continue
+			}
+			preview.SourceIndex = index + 1
 			outbounds = append(outbounds, outbound)
 			nodes = append(nodes, preview)
 		default:
-			return nil, nil, "", errors.New("JSON содержит неподдерживаемый элемент")
+			report.reject(index+1, importError("INVALID_PARAMETERS"))
 		}
 		if len(nodes) > MaxNodes {
 			return nil, nil, "", fmt.Errorf("в профиле больше %d поддерживаемых узлов", MaxNodes)

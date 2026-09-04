@@ -13,6 +13,8 @@ type ImportError struct{ Code string }
 
 func (e *ImportError) Error() string {
 	switch e.Code {
+	case "UNSUPPORTED_PROTOCOL":
+		return "Протокол этой записи пока не поддерживается."
 	case "UNSUPPORTED_TRANSPORT":
 		return "Транспорт профиля пока не поддерживается. XHTTP не заменяется на TCP; используйте совместимый профиль TCP, WS, gRPC или HTTP."
 	case "UNSUPPORTED_SECURITY":

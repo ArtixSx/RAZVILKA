@@ -21,7 +21,7 @@ func looksLikeClashYAML(raw string) bool {
 
 // parseClashYAML reads only the proxies list. Rules, DNS, proxy groups,
 // providers, scripts and controller settings never reach the generated config.
-func parseClashYAML(data []byte) ([]map[string]any, []Preview, string, []string, error) {
+func parseClashYAML(data []byte, report *entryReport) ([]map[string]any, []Preview, string, []string, error) {
 	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
 	var document map[string]any
 	if err := decoder.Decode(&document); err != nil {
@@ -44,40 +44,40 @@ func parseClashYAML(data []byte) ([]map[string]any, []Preview, string, []string,
 
 	outbounds := make([]map[string]any, 0, len(entries))
 	nodes := make([]Preview, 0, len(entries))
-	skipped := 0
 	for index, entry := range entries {
 		proxy, ok := entry.(map[string]any)
 		if !ok {
-			return nil, nil, "", nil, fmt.Errorf("YAML proxy %d имеет неподдерживаемую структуру", index+1)
+			report.reject(index+1, importError("INVALID_PARAMETERS"))
+			continue
 		}
 		typeName := canonicalClashType(textValue(proxy["type"]))
 		if typeName == "" {
-			skipped++
+			report.reject(index+1, importError("UNSUPPORTED_PROTOCOL"))
 			continue
 		}
 		if typeName == "vless" {
 			if err := validateClashVLESS(proxy); err != nil {
-				return nil, nil, "", nil, fmt.Errorf("YAML proxy %d: %w", index+1, err)
+				report.reject(index+1, err)
+				continue
 			}
 		}
 		source := clashProxyToNative(proxy, typeName)
 		outbound, preview, err := normalizeNativeOutbound(source)
 		if err != nil {
-			return nil, nil, "", nil, fmt.Errorf("YAML proxy %d: %w", index+1, err)
+			report.reject(index+1, err)
+			continue
 		}
+		if !report.accept(index+1, outbound) {
+			continue
+		}
+		preview.SourceIndex = index + 1
 		outbounds = append(outbounds, outbound)
 		nodes = append(nodes, preview)
 		if len(nodes) > MaxNodes {
 			return nil, nil, "", nil, fmt.Errorf("в YAML больше %d поддерживаемых узлов", MaxNodes)
 		}
 	}
-	if len(nodes) == 0 {
-		return nil, nil, "", nil, errors.New("в YAML нет поддерживаемых VLESS, Hysteria2, TUIC или Shadowsocks proxies")
-	}
 	warnings := []string{"Импортированы только поддерживаемые proxies. DNS, правила, группы, providers, скрипты и внешние панели Clash/Mihomo отброшены."}
-	if skipped > 0 {
-		warnings = append(warnings, fmt.Sprintf("Пропущено неподдерживаемых proxies: %d.", skipped))
-	}
 	return outbounds, nodes, "clash-mihomo-yaml", warnings, nil
 }
 

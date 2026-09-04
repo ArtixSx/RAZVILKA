@@ -48,6 +48,8 @@ const state = {
   profileBundle: null,
   profilePreview: null,
   remoteProfilePreview: null,
+  remoteProfileReviewedInput: '',
+  remoteProfileBusy: false,
   remoteProfileSelectedIndex: 0,
   privateBackupEnvelope: null,
   privateBackupPreview: null,
@@ -1863,7 +1865,9 @@ async function handleEngineImport(event) {
 function renderRemoteProfilePreview() {
   const container = $('#remoteProfilePreview');
   const preview = state.remoteProfilePreview?.preview;
-  $('#remoteProfileImportButton').disabled = !preview?.node_count;
+  const importButton = $('#remoteProfileImportButton');
+  importButton.disabled = state.remoteProfileBusy || !preview?.node_count || state.remoteProfileReviewedInput !== $('#remoteProfileURI').value.trim();
+  if (!state.remoteProfileBusy) importButton.textContent = preview?.rejected?.length && preview.node_count ? `Создать черновик из ${Number(preview.node_count)} принятых` : 'Создать черновик';
   if (!preview) {
     container.innerHTML = '<span>Обработка локальная. Из JSON/YAML берутся только поддерживаемые узлы; чужие DNS, маршруты, скрипты и панели удаляются. Вставляйте сам ключ vless://… — не адрес страницы сайта.</span>';
     return;
@@ -1873,38 +1877,50 @@ function renderRemoteProfilePreview() {
   const visible = nodes.slice(0, 6).map((node, index) => `<li class="${state.remoteProfileSelectedIndex === index ? 'selected' : ''}"><button type="button" data-provider-node="${index}" aria-pressed="${state.remoteProfileSelectedIndex === index}"><i>${state.remoteProfileSelectedIndex === index ? 'ВЫБРАН' : 'ВЫБРАТЬ'}</i><b>${esc(node.name || `Узел ${index + 1}`)}</b><span>${esc(node.protocol)} · ${esc(node.server)}:${Number(node.port) || '—'}${node.transport ? ` · ${esc(node.transport)}` : ''}</span></button></li>`).join('');
   const hidden = nodes.length > 6 ? `<li><b>Ещё ${nodes.length - 6}</b><span>будут сохранены в локальном селекторе</span></li>` : '';
   const warnings = [...(preview.warnings || []), ...nodes.flatMap((node) => node.warnings || [])].map((warning) => `<small>${esc(warning)}</small>`).join('');
-	const selector = `<label class="provider-node-select"><span>Начальный узел</span><select id="remoteProfileNode">${nodes.map((node, index) => `<option value="${index}" ${state.remoteProfileSelectedIndex === index ? 'selected' : ''}>${esc(node.name || `Узел ${index + 1}`)} · ${esc(node.protocol)}</option>`).join('')}</select></label>`;
-  container.innerHTML = `<div class="remote-profile-summary"><b>${Number(preview.node_count)} ${plural(Number(preview.node_count), 'узел', 'узла', 'узлов')} · ${esc(preview.format || 'профиль')}</b><span>Формат принят, но доступность ещё не доказана. Публичные сайты часто проверяют только TCP-порт; реальный VLESS/TLS/Reality handshake RAZVILKA проверит при сохранении маршрута и откатит нерабочий узел.</span>${selector}${warnings}</div><ul>${visible}${hidden}</ul>`;
+	const selector = nodes.length ? `<label class="provider-node-select"><span>Начальный узел</span><select id="remoteProfileNode">${nodes.map((node, index) => `<option value="${index}" ${state.remoteProfileSelectedIndex === index ? 'selected' : ''}>${esc(node.name || `Узел ${index + 1}`)} · ${esc(node.protocol)}</option>`).join('')}</select></label>` : '';
+  const issues = [['Отклонено', preview.rejected || []], ['Пропущено', preview.skipped || []]].filter(([, entries]) => entries.length).map(([label, entries]) => `<details><summary>${label}: ${entries.length} — причины</summary><ul>${entries.map((entry) => `<li><b>Запись ${Number(entry.index)} · ${esc(entry.code)}</b><span>${esc(entry.reason)}</span></li>`).join('')}</ul></details>`).join('');
+  const explanation = nodes.length ? 'Формат принят, но доступность ещё не доказана. Проверка списка не подключает узлы и не меняет маршруты. Доступность нужно проверить из вашей сети перед применением.' : 'Нет подходящих узлов. Черновик не изменён; исправьте отклонённые записи или выберите другой список.';
+  container.innerHTML = `<div class="remote-profile-summary"><b>Принято: ${Number(preview.node_count) || 0} · ${esc(preview.format || 'профиль')}</b><span>${explanation}</span>${selector}${warnings}</div><ul>${visible}${hidden}</ul>${issues}`;
 	$$('[data-provider-node]').forEach((button) => button.addEventListener('click', () => { state.remoteProfileSelectedIndex = Number(button.dataset.providerNode) || 0; renderRemoteProfilePreview(); }));
 	$('#remoteProfileNode')?.addEventListener('change', (event) => { state.remoteProfileSelectedIndex = Number(event.target.value) || 0; renderRemoteProfilePreview(); });
 }
 
 async function previewRemoteProfile() {
+  if (state.remoteProfileBusy) return;
   const uri = $('#remoteProfileURI').value.trim();
   state.remoteProfilePreview = null;
+  state.remoteProfileReviewedInput = '';
 	state.remoteProfileSelectedIndex = 0;
   renderRemoteProfilePreview();
   if (!uri) return;
+  state.remoteProfileBusy = true;
   const button = $('#remoteProfilePreviewButton');
   button.disabled = true; button.textContent = 'Проверяем…';
   try {
-    state.remoteProfilePreview = await api('/api/v1/provider-profiles/preview', { method: 'POST', body: JSON.stringify({ profile: uri }) });
+    const result = await api('/api/v1/provider-profiles/preview', { method: 'POST', body: JSON.stringify({ profile: uri }) });
+    if ($('#remoteProfileURI').value.trim() !== uri) return;
+    state.remoteProfilePreview = result;
+    state.remoteProfileReviewedInput = uri;
     renderRemoteProfilePreview();
   } catch (error) {
+    if ($('#remoteProfileURI').value.trim() !== uri) return;
+    if (error.payload?.preview) state.remoteProfilePreview = { preview: error.payload.preview };
     showDetails({ error: error.message, resolution: 'Поддерживаются URI, текстовые/Base64-подписки, JSON Sing-box и YAML Clash/Mihomo. Проверьте формат, адрес, порт и обязательные ключи.' }, 'Пакет профилей не принят');
-  } finally { button.disabled = false; button.textContent = 'Проверить пакет'; }
+  } finally { state.remoteProfileBusy = false; button.disabled = false; button.textContent = 'Проверить пакет'; renderRemoteProfilePreview(); }
 }
 
 async function importRemoteProfile() {
   const uri = $('#remoteProfileURI').value.trim();
   const preview = state.remoteProfilePreview?.preview;
-  if (!uri || !preview) return;
+  if (state.remoteProfileBusy || !uri || !preview?.node_count || state.remoteProfileReviewedInput !== uri) return;
+  state.remoteProfileBusy = true;
   const button = $('#remoteProfileImportButton');
   button.disabled = true; button.textContent = 'Создаём…';
   try {
-    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ profile: uri, selected_index: state.remoteProfileSelectedIndex, confirm: 'IMPORT_REMOTE_PROFILE' }) });
-    $('#remoteProfileURI').value = '';
+    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ profile: uri, selected_index: state.remoteProfileSelectedIndex, accept_partial: !!preview.rejected?.length, confirm: 'IMPORT_REMOTE_PROFILE' }) });
+    if ($('#remoteProfileURI').value.trim() === uri) $('#remoteProfileURI').value = '';
     state.remoteProfilePreview = null;
+    state.remoteProfileReviewedInput = '';
 		state.remoteProfileSelectedIndex = 0;
     state.engineValidation = result.validation || null;
     await refreshEngineConfigs();
@@ -1913,7 +1929,7 @@ async function importRemoteProfile() {
     showNotice(result.ok ? 'success' : 'review', result.ok ? 'Черновик Sing-box готов' : 'Черновик создан, нужна проверка', result.note, result, true);
   } catch (error) {
     showDetails({ error: error.message, response: error.payload }, 'Профиль не импортирован');
-  } finally { button.disabled = false; button.textContent = 'Создать черновик'; }
+  } finally { state.remoteProfileBusy = false; renderRemoteProfilePreview(); }
 }
 
 async function selectRemoteProfileFile(event) {
@@ -3498,7 +3514,7 @@ function bindEvents() {
   $('#engineImport').addEventListener('click', importEngineFile);
   $('#engineImportInput').addEventListener('change', handleEngineImport);
   $('#engineExport').addEventListener('click', exportEngineFile);
-  $('#remoteProfileURI').addEventListener('input', () => { state.remoteProfilePreview = null; state.remoteProfileSelectedIndex = 0; renderRemoteProfilePreview(); });
+  $('#remoteProfileURI').addEventListener('input', () => { state.remoteProfilePreview = null; state.remoteProfileReviewedInput = ''; state.remoteProfileSelectedIndex = 0; renderRemoteProfilePreview(); });
   $('#remoteProfileFileButton').addEventListener('click', () => $('#remoteProfileFile').click());
   $('#remoteProfileFile').addEventListener('change', selectRemoteProfileFile);
   $('#remoteProfileReveal').addEventListener('click', toggleRemoteProfileVisibility);

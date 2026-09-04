@@ -2003,7 +2003,7 @@ func (a *App) providerProfilePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := providerprofile.ParseProfile(input.Profile)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "draft_preserved": true})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "preview": result.Preview, "draft_preserved": true})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -2031,7 +2031,14 @@ func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := providerprofile.ParseProfileWithSelection(input.Profile, input.SelectedIndex)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "draft_preserved": true})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "preview": result.Preview, "draft_preserved": true})
+		return
+	}
+	if len(result.Preview.Rejected) > 0 && !input.AcceptPartial {
+		writeJSON(w, http.StatusPreconditionRequired, map[string]any{
+			"ok": false, "code": "PARTIAL_IMPORT_CONFIRMATION_REQUIRED", "draft_preserved": true,
+			"error": "Часть записей отклонена. Проверьте список и создайте черновик только из принятых узлов.", "preview": result.Preview,
+		})
 		return
 	}
 	validation := engineconfig.ValidatePrivateContent("sing-box", "main", string(result.Config))
@@ -2057,6 +2064,7 @@ type providerProfileRequest struct {
 	Profile       string `json:"profile"`
 	Confirm       string `json:"confirm"`
 	SelectedIndex int    `json:"selected_index"`
+	AcceptPartial bool   `json:"accept_partial"`
 }
 
 func decodeProviderProfileRequest(w http.ResponseWriter, r *http.Request) (providerProfileRequest, bool) {

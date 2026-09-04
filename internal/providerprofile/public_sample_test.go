@@ -109,7 +109,18 @@ func TestPublicVLESSSamplesParseOnly(t *testing.T) {
 					counts["PARSED_NOT_VERIFIED"]++
 				}
 			}
+			bundle, bundleErr := ParseProfile(strings.Join(candidates, "\n"))
+			if counts["PARSED_NOT_VERIFIED"] > 0 && bundleErr != nil {
+				t.Fatal("mixed sample rejected supported entries (detail suppressed)")
+			}
+			if bundle.Preview.NodeCount+len(bundle.Preview.Skipped)+len(bundle.Preview.Rejected) != len(candidates) {
+				t.Fatal("sample bundle entry accounting mismatch")
+			}
+			if bundleErr != nil && len(bundle.Config) != 0 {
+				t.Fatal("failed sample bundle produced config")
+			}
 			t.Logf("sample=%d; parser results=%v; no proxy connections or writes", len(candidates), counts)
+			t.Logf("bundle accepted=%d rejected=%d skipped=%d; parsed only, not health evidence", bundle.Preview.NodeCount, len(bundle.Preview.Rejected), len(bundle.Preview.Skipped))
 		})
 	}
 }
