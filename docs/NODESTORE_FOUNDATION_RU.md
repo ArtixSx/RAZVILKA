@@ -1,7 +1,8 @@
 # N1.1 — основа приватного хранилища узлов
 
-Локальная разработка, 4 сентября 2026. Это библиотека и тесты, не подключённая
-страница UI, не загрузчик подписок и не новый рабочий маршрут.
+Локальная разработка, обновлено 5 сентября 2026. Это приватное хранилище,
+backup/recovery, безопасный API и read-only страница UI; не загрузчик подписок
+и не новый рабочий маршрут.
 
 ## Реализовано
 
@@ -81,9 +82,10 @@ Legacy/root writers и aliases вне протокола FileTarget не счи�
 journal rollback и process-crash recovery. Перед подключением к приложению всё
 ещё нужны Linux test/vet/race и аппаратный gate. Startup wiring и сохранение в
 общем зашифрованном архиве подключены через отдельный versioned journal; старый
-journal сохраняет собственный lifetime lease. Затем N1.2 — явный legacy
-preview/copy и API/UI узлов; N1.3 — exact-node
-health evidence с TTL и привязкой к сети/сервису. Reveal/delete/disable,
+journal сохраняет собственный lifetime lease. Read-only часть N1.2 добавляет
+страницу списка, поиск и фильтр без раскрытия секретов и без ложного selectable.
+Далее N1.2 — alias/reveal/delete/disable с подтверждением; N1.3 — exact-node
+health evidence с TTL и привязкой к сети/сервису. Изменяющие операции,
 subscription credentials и постоянный retry quarantine пока отсутствуют.
 
 Роутер не изменялся. Публичные feeds не загружались этим блоком; автоматические

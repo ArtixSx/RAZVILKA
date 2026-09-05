@@ -72,6 +72,7 @@
       <button class="nav" data-view="services"><span><svg><use href="#i-grid"/></svg></span><b>Сервисы</b><i id="serviceNavCount">0</i></button>
       <button class="nav" data-view="connections"><span><svg><use href="#i-route"/></svg></span><b>Соединения</b><i id="connectionCounter">0</i></button>
       <button class="nav" data-view="engines"><span><svg><use href="#i-bolt"/></svg></span><b>Обходы</b></button>
+      <button class="nav" data-view="nodes"><span><svg><use href="#i-route"/></svg></span><b>Узлы</b><i id="nodeNavCount">0</i></button>
       <button class="nav" data-view="engineconfig"><span><svg><use href="#i-settings"/></svg></span><b>Настройка обходов</b></button>
       <button class="nav" data-view="devices"><span><svg><use href="#i-device"/></svg></span><b>Устройства</b></button>
       <button class="nav" data-view="dns"><span><svg><use href="#i-dns"/></svg></span><b>DNS</b></button>
@@ -169,6 +170,22 @@
         </div>
         <div class="component-strip" id="componentStrip"></div>
         <div class="component-empty" id="componentEmpty" hidden>В этой категории пока ничего нет.</div>
+      </article>
+    </section>
+
+    <section class="view" id="view-nodes">
+      <article class="panel full-panel">
+        <div class="panel-title sticky-title">
+          <div><h2>Сохранённые узлы</h2><p>Локальный инвентарь импортированных подключений — без паролей, ключей и скрытых параметров</p></div>
+          <div class="filters"><input id="nodeSearch" placeholder="Имя, протокол или транспорт" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="quarantined">Ожидают проверки</option><option value="expired">Истекли</option></select><button class="secondary" id="refreshNodes" type="button">Обновить</button></div>
+        </div>
+        <div class="node-truth-banner" id="nodeTruthBanner" role="status">
+          <div><b>Импорт не означает, что узел работает</b><span>Перед назначением сервису понадобятся проверка протокола, IP выхода и доступности самого сервиса.</span></div>
+          <span class="node-readonly-badge">ТОЛЬКО ПРОСМОТР</span>
+        </div>
+        <div class="node-summary" id="nodeSummary"></div>
+        <div class="node-list" id="nodeList"></div>
+        <div id="nodeEmpty" class="empty-state node-empty"><div class="empty-icon">◇</div><strong>Сохранённых узлов пока нет</strong><span>Импортируйте свой профиль или подписку в настройках Sing-box. Неподдерживаемые записи останутся в отчёте отказов и не попадут сюда.</span></div>
       </article>
     </section>
 

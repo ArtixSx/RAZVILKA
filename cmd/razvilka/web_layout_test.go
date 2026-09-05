@@ -362,6 +362,38 @@ func TestServicesUseOneExplicitApplyWithoutRoutineReviewModal(t *testing.T) {
 	}
 }
 
+func TestNodeInventoryIsVisibleWithoutClaimingRouteReadiness(t *testing.T) {
+	t.Parallel()
+	indexData, err := embedded.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(indexData) + string(appData)
+	for _, required := range []string{
+		`data-view="nodes"`,
+		`id="view-nodes"`,
+		`id="nodeSearch"`,
+		`id="nodeStateFilter"`,
+		`/api/v1/nodes`,
+		`Импорт не означает, что узел работает`,
+		`Проверка: <b>не запускалась</b>`,
+		`Назначенные сервисы: <b>нет</b>`,
+	} {
+		if !strings.Contains(content, required) {
+			t.Fatalf("truthful node inventory marker missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"private_key", "security=tls"} {
+		if strings.Contains(string(indexData), forbidden) {
+			t.Fatalf("node inventory markup contains private or unsupported field %q", forbidden)
+		}
+	}
+}
+
 func TestUSQUESafeRepairIsExplicitAndDoesNotPromiseRestart(t *testing.T) {
 	t.Parallel()
 	appData, err := embedded.ReadFile("web/app.js")

@@ -1,6 +1,6 @@
 # Текущий подтверждённый статус RAZVILKA
 
-Обновлено: 4 сентября 2026 года<br>
+Обновлено: 5 сентября 2026 года<br>
 Последний проверенный в CI commit: `5d841f4c470f18b807671246a160bf11b86f7713`<br>
 Последний стабильный релиз: [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0)  
 Текущий цикл разработки: `0.18.1-dev` — Truth & Safety
@@ -27,6 +27,7 @@ gap-аудиты сохранены как исторические снимки
 | Transaction engine | Реализовано · CI · Роутер | Plan, snapshot, stage, validate, canary, commit/rollback и LKG-журнал | Fault injection во всех commit points |
 | NFQWS2 adapter | Реализовано · CI · Роутер | Запуск, читаемые runtime-списки, проверка фактического процесса и YouTube HTTP `204` | Native ownership стратегий, NFQUEUE lease и event-driven recovery |
 | Sing-box/Xray candidate | Реализовано · CI · частично Роутер | Локальная проверка конфига, loopback proxy-canary, bounded URLTest pool | Полная Evidence v2 и длительная проверка узлов |
+| NodeStore | Основа реализована · локально | Приватное атомарное хранение, backup/recovery, startup wiring, безопасный API и read-only UI | Alias/disable/delete/reveal, exact outbound check, bindings и HIL |
 | WARP MASQUE/USQUE | Реализовано · CI · Экспериментально | Doctor, staged proxy-canary, H2/H3 диагностика и rollback | Единый Cloudflare Provider и HIL транспортов |
 | WARP WireGuard | Реализовано · CI · Экспериментально | Временный интерфейс, официальный набор портов, cleanup и безопасный отказ | Успешный handshake на поддерживаемой сети, endpoint scoring и LKG |
 | AmneziaWG | Реализовано · CI · Экспериментально | Импорт/валидация и адаптер транзакции | Отдельный аппаратный canary и compatibility registry |
@@ -195,7 +196,7 @@ PR-1.1 начат отдельно: [пассивная основа Cloudflare 
 
 ## Следующая работа
 
-Новый приоритет редакции плана от 2026-09-04: безопасность импорта отдельных
+Новый приоритет редакции плана от 2026-09-05: безопасность импорта отдельных
 узлов. Локально реализован [PR-N0.1](PR_N0_1_VLESS_IMPORT_RU.md): неизвестный
 VLESS transport/security/flow/packet encoding отклоняется, XHTTP не превращается
 в TCP, неоднозначные query/JSON и insecure VLESS запрещены. URI/Base64/native
@@ -206,8 +207,9 @@ JSON/Clash используют согласованную проверку. О�
 и одна явно подписанная кнопка сохранения принятых узлов. Неподдерживаемые записи
 изолируются в отчёте; постоянного retry quarantine ещё нет. Добавлена
 [основа NodeStore N1.1](NODESTORE_FOUNDATION_RU.md): приватное атомарное хранение,
-stable ID, provenance/TTL, lease и copy-only migration helper. Она пока не
-подключена к startup/API/UI/рабочим маршрутам; health остаётся `not_checked`.
+stable ID, provenance/TTL, lease и copy-only migration helper. Она подключена к
+startup и безопасному read-only API/UI, но не к рабочим маршрутам; health
+остаётся `not_checked`.
 Добавлен [N1.1b backup/restore lifecycle](NODESTORE_BACKUP_RESTORE_RU.md): узлы
 входят в типизированный зашифрованный payload, восстанавливаются с merge и
 участвуют в общей journal-транзакции с rollback/process-crash recovery. NodeStore
@@ -215,10 +217,12 @@ stable ID, provenance/TTL, lease и copy-only migration helper. Она пока 
 документ. Старый и новый журналы имеют раздельные scope и lifetime lease. Узкий
 Cloudflare restore отклоняет смешанный архив. Следующий пункт — N1.2 API/UI узлов,
 затем exact-node check.
-Подготовлена read-only часть N1.2: `/api/v1/nodes` показывает только безопасные
-карточки и счётчики; все записи остаются недоступными для выбора (`selectable=0`).
-URI, endpoint, SNI, UUID, пароли и SecretRef ответ не содержит. Изменяющих API и
-страницы UI ещё нет.
+Подготовлена read-only часть N1.2: `/api/v1/nodes` и отдельная страница «Узлы»
+показывают только безопасные карточки, источник, срок и счётчики; есть поиск и
+фильтр. Все записи остаются недоступными для выбора (`selectable=0`), UI прямо
+отделяет импорт от проверки работоспособности. URI, endpoint, SNI, UUID, пароли
+и SecretRef ответ и страница не содержат. Изменяющих API alias/disable/delete/
+reveal ещё нет.
 Оставшаяся работа Cloudflare/USQUE ниже сохраняется
 в backlog. [Автообновление публичных источников](PUBLIC_PROVIDER_SOURCES_RU.md)
 добавлено в план как opt-in после этих зависимостей, без скрытой смены маршрута.

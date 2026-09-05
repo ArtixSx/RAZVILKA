@@ -40,6 +40,7 @@ const state = {
   dns: { profiles: [], providers: [], draft: { profile_id: 'automatic' }, applied: { profile_id: 'automatic' }, plan: null },
   sessions: [],
   sources: [],
+  nodes: { available: false, generation: 0, nodes: [], sources: [], counts: {}, note: '' },
   routeOptions: [],
   connections: { connections: [], active: 0, closed: 0, live: false },
   devices: [],
@@ -68,6 +69,7 @@ const viewMeta = {
   services: ['Сервисы', 'Включите сервис — Автопилот сам сохранит или подберёт подтверждённый обход'],
   connections: ['Соединения', 'Подтверждённый путь реального сетевого трафика'],
   engines: ['Обходы', 'Установите только нужные обходы — маршруты от этого не изменятся'],
+  nodes: ['Узлы', 'Сохранённые подключения без секретов и ложных обещаний работоспособности'],
   engineconfig: ['Настройка обходов', 'Сохраните черновик, проверьте его и примените вместе с выбранным сервисом'],
   devices: ['Устройства', 'Назначьте сервисы конкретным клиентам или группам'],
   dns: ['DNS', 'Выберите профиль, проверьте резолверы и подготовьте безопасный черновик'],
@@ -660,6 +662,7 @@ async function refreshAll() {
       ['components', '/api/v1/components'],
       ['warp', '/api/v1/warp'],
       ['sources', '/api/v1/sources'],
+      ['nodes', '/api/v1/nodes'],
       ['routeOptions', '/api/v1/routes/options'],
       ['connections', '/api/v1/connections?include_closed=true'],
       ['devices', '/api/v1/devices?view=status'],
@@ -718,6 +721,7 @@ function renderAll() {
   renderWarpManager();
   renderEngineControl();
   renderSources();
+  renderNodes();
   renderConnections();
   renderDevices();
   renderTestLab();
@@ -2340,6 +2344,70 @@ function renderSources() {
   $$('[data-source-toggle]').forEach((button) => button.addEventListener('click', () => setSourceDraft(button.dataset.sourceToggle, button.getAttribute('aria-pressed') !== 'true')));
 }
 
+function nodeSourceLabel(node) {
+  const kinds = new Set();
+  for (const origin of node?.origins || []) {
+    const source = (state.nodes?.sources || []).find((item) => item.id === origin.source_id);
+    if (source?.kind) kinds.add(({ manual: 'ручной импорт', file: 'локальный файл', subscription: 'подписка', community: 'внешний каталог', legacy: 'перенос старых данных' })[source.kind] || 'локальный источник');
+  }
+  return [...kinds].join(', ') || 'источник не указан';
+}
+
+function nodeExpiryText(node) {
+  const values = (node?.origins || []).map((origin) => new Date(origin.expires_at)).filter((date) => Number.isFinite(date.getTime()) && date.getFullYear() > 2000);
+  if (!values.length) return 'срок не указан';
+  const expiry = new Date(Math.max(...values.map((date) => date.getTime())));
+  return expiry.getTime() <= Date.now() ? `истёк ${expiry.toLocaleString('ru-RU')}` : `актуален до ${expiry.toLocaleString('ru-RU')}`;
+}
+
+function renderNodes() {
+  const payload = state.nodes || {};
+  const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+  const counts = payload.counts || {};
+  const query = ($('#nodeSearch')?.value || '').trim().toLowerCase();
+  const stateFilter = $('#nodeStateFilter')?.value || '';
+  const filtered = nodes.filter((node) => {
+    if (stateFilter && node.state !== stateFilter) return false;
+    if (!query) return true;
+    return [node.name, node.protocol, node.transport, nodeSourceLabel(node)].join(' ').toLowerCase().includes(query);
+  });
+  $('#nodeNavCount').textContent = counts.total || 0;
+  $('#nodeTruthBanner').classList.toggle('unavailable', payload.available === false);
+  $('#nodeTruthBanner').querySelector('div').innerHTML = payload.available === false
+    ? '<b>Хранилище узлов недоступно</b><span>Рабочие маршруты не изменены. Проверьте приватное хранилище в диагностике.</span>'
+    : `<b>Импорт не означает, что узел работает</b><span>${esc(payload.note || 'Все записи ожидают отдельной проверки через роутер.')}</span>`;
+  $('#nodeSummary').innerHTML = `<div><span>Сохранено</span><b>${Number(counts.total || 0)}</b></div><div><span>Ожидают проверки</span><b>${Number(counts.quarantined || 0)}</b></div><div><span>Истекли</span><b>${Number(counts.expired || 0)}</b></div><div><span>Можно назначить</span><b>${Number(counts.selectable || 0)}</b><small>только после точной проверки</small></div>`;
+  $('#nodeList').innerHTML = filtered.map((node) => {
+    const protocol = String(node.protocol || 'unknown').toUpperCase();
+    const transport = node.transport ? String(node.transport).toUpperCase() : 'обычный';
+    const stateLabel = node.state === 'expired' ? 'ИСТЁК' : 'ОЖИДАЕТ ПРОВЕРКИ';
+    const maskedURI = `${protocol}://***${node.port ? `:${Number(node.port)}` : ''}`;
+    return `<article class="node-card ${node.state === 'expired' ? 'expired' : 'quarantined'}">
+      <div class="node-card-head"><div><span class="node-protocol">${esc(protocol)}</span><h3>${esc(node.name || 'Импортированный узел')}</h3></div><span class="node-state">${esc(stateLabel)}</span></div>
+      <code class="node-masked-uri">${esc(maskedURI)}</code>
+      <div class="node-meta"><span>Транспорт <b>${esc(transport)}</b></span><span>TLS <b>${node.tls ? 'да' : 'нет'}</b></span><span>Источник <b>${esc(nodeSourceLabel(node))}</b></span><span>Срок <b>${esc(nodeExpiryText(node))}</b></span></div>
+      <div class="node-card-foot"><span>Назначенные сервисы: <b>нет</b></span><span>Проверка: <b>не запускалась</b></span></div>
+    </article>`;
+  }).join('');
+  $('#nodeEmpty').style.display = filtered.length ? 'none' : 'grid';
+  if (!nodes.length && payload.available !== false) $('#nodeEmpty').querySelector('span').textContent = 'Импортируйте свой профиль или подписку в настройках Sing-box. Секреты останутся в локальном приватном хранилище.';
+}
+
+async function refreshNodes() {
+  const button = $('#refreshNodes');
+  button.disabled = true;
+  button.textContent = 'Обновление…';
+  try {
+    state.nodes = await api('/api/v1/nodes');
+    renderNodes();
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Узлы не обновлены');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Обновить';
+  }
+}
+
 function renderConnections() {
   const payload = state.connections || {};
   const rows = payload.connections || [];
@@ -3408,6 +3476,9 @@ function bindEvents() {
   $('#serviceCategory').addEventListener('change', renderServices);
   $('#connectionFilter').addEventListener('input', renderConnections);
   $('#showClosed').addEventListener('change', renderConnections);
+  $('#nodeSearch').addEventListener('input', renderNodes);
+  $('#nodeStateFilter').addEventListener('change', renderNodes);
+  $('#refreshNodes').addEventListener('click', refreshNodes);
   $('#deviceSearch').addEventListener('input', renderDevices);
   $('#refreshDevices').addEventListener('click', refreshDevices);
   $('#deviceGrid').addEventListener('click', (event) => {
