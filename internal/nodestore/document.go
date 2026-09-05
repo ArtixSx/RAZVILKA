@@ -43,7 +43,7 @@ func extract(config []byte) ([]json.RawMessage, error) {
 }
 
 func validate(doc document) error {
-	if doc.Schema != schema || doc.Owner != "razvilka-nodes" || doc.Generation == 0 || len(doc.IdentityKey) != 32 ||
+	if (doc.Schema != legacySchema && doc.Schema != schema) || doc.Owner != "razvilka-nodes" || doc.Generation == 0 || len(doc.IdentityKey) != 32 ||
 		len(doc.Nodes) == 0 || len(doc.Nodes) > MaxNodes || len(doc.Sources) == 0 || len(doc.Sources) > MaxSources || len(doc.Secrets) != len(doc.Nodes) {
 		return ErrStore
 	}
@@ -72,6 +72,9 @@ func validate(doc document) error {
 	}
 	ids := map[string]bool{}
 	for _, n := range doc.Nodes {
+		if !validAlias(n.Alias) || (doc.Schema == legacySchema && (n.Alias != "" || n.Disabled)) {
+			return ErrStore
+		}
 		material := secrets[n.SecretRef]
 		if material == nil || n.SecretRef != "secret-"+n.ID || n.ID != identity(doc.IdentityKey, material) || ids[n.ID] ||
 			n.AddedAt.IsZero() || len(n.Origins) == 0 || len(n.Origins) > MaxSources {
@@ -124,9 +127,16 @@ func snapshot(doc document, now time.Time) Snapshot {
 				trust = "untrusted"
 			}
 		}
-		out.Nodes = append(out.Nodes, Node{ID: n.ID, Name: "Узел " + n.ID[5:13], Protocol: strings.ToUpper(material.Type),
+		if n.Disabled {
+			state = "disabled"
+		}
+		name := n.Alias
+		if name == "" {
+			name = "Узел " + n.ID[5:13]
+		}
+		out.Nodes = append(out.Nodes, Node{ID: n.ID, Name: name, Protocol: strings.ToUpper(material.Type),
 			Transport: material.Transport.Type, TLS: material.TLS.Enabled, Host: "***", Port: material.Port,
-			State: state, Trust: trust, AddedAt: n.AddedAt, Origins: append([]Origin{}, n.Origins...), Health: Health{State: "not_checked"}})
+			State: state, Trust: trust, AddedAt: n.AddedAt, Origins: append([]Origin{}, n.Origins...), Health: Health{State: "not_checked"}, Disabled: n.Disabled})
 	}
 	return out
 }

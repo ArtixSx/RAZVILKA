@@ -101,6 +101,115 @@ func TestStableIdentityFreshnessAndNoSecretSnapshot(t *testing.T) {
 	}
 }
 
+func TestNodeMetadataRevealAndDeleteAreAtomic(t *testing.T) {
+	s, path := setup(t)
+	first := importGood(t, s)
+	id := first.Nodes[0].ID
+	before := readBytes(t, path)
+	if _, err := s.SetAlias(context.Background(), id, "  padded  ", testTime); !errors.Is(err, ErrAlias) || !bytes.Equal(before, readBytes(t, path)) {
+		t.Fatal("invalid alias changed the store")
+	}
+	aliased, err := s.SetAlias(context.Background(), id, "Домашний резерв", testTime)
+	if err != nil || aliased.Generation != 2 || aliased.Nodes[0].Name != "Домашний резерв" {
+		t.Fatal("alias was not persisted")
+	}
+	unchanged, err := s.SetAlias(context.Background(), id, "Домашний резерв", testTime)
+	if err != nil || unchanged.Generation != 2 {
+		t.Fatal("unchanged alias caused a flash write")
+	}
+	disabled, err := s.SetDisabled(context.Background(), id, true, testTime)
+	if err != nil || disabled.Generation != 3 || !disabled.Nodes[0].Disabled || disabled.Nodes[0].State != "disabled" || disabled.Nodes[0].Health.State != "not_checked" {
+		t.Fatal("disabled node gained readiness or lost metadata")
+	}
+	var borrowed []byte
+	if err := s.WithSecret(context.Background(), id, func(material []byte) error {
+		borrowed = material
+		if !bytes.Contains(material, []byte("123e4567")) || !bytes.Contains(material, []byte("private-host")) {
+			t.Fatal("revealed material is incomplete")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(bytes.Trim(borrowed, "\x00")) != 0 {
+		t.Fatal("temporary secret copy was not cleared")
+	}
+	removed, err := s.Delete(context.Background(), id, testTime)
+	if err != nil || len(removed.Nodes) != 0 || len(removed.Sources) != 0 {
+		t.Fatal("last node was not deleted")
+	}
+	if _, err := os.Stat(filepath.Join(path, fileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("empty private document was not removed")
+	}
+	if _, err := s.Delete(context.Background(), id, testTime); !errors.Is(err, ErrNotFound) {
+		t.Fatal("missing node was not reported")
+	}
+}
+
+func TestSchemaOneLoadsAndMigratesOnExplicitMutation(t *testing.T) {
+	s, path := setup(t)
+	first := importGood(t, s)
+	s.Close()
+	var legacy document
+	if json.Unmarshal(readBytes(t, path), &legacy) != nil {
+		t.Fatal("fixture")
+	}
+	legacy.Schema = legacySchema
+	data, _ := json.Marshal(legacy)
+	if err := os.WriteFile(filepath.Join(path, fileName), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	legacyBytes := readBytes(t, path)
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal("schema 1 did not open")
+	}
+	defer reopened.Close()
+	if _, err := reopened.Snapshot(context.Background(), testTime); err != nil || !bytes.Equal(legacyBytes, readBytes(t, path)) {
+		t.Fatal("read-only schema 1 load caused a migration write")
+	}
+	if _, err := reopened.SetAlias(context.Background(), first.Nodes[0].ID, "После миграции", testTime); err != nil {
+		t.Fatal(err)
+	}
+	var migrated document
+	if json.Unmarshal(readBytes(t, path), &migrated) != nil || migrated.Schema != schema || migrated.Nodes[0].Alias != "После миграции" {
+		t.Fatal("explicit mutation did not persist schema 2")
+	}
+}
+
+func TestUncertainMetadataMutationFencesUntilReopen(t *testing.T) {
+	for _, afterWrite := range []bool{false, true} {
+		t.Run(fmt.Sprint(afterWrite), func(t *testing.T) {
+			s, path := setup(t)
+			first := importGood(t, s)
+			s.target = failingTarget{Target: s.target, afterWrite: afterWrite}
+			if _, err := s.SetAlias(context.Background(), first.Nodes[0].ID, "Новая подпись", testTime); !errors.Is(err, ErrRecovery) {
+				t.Fatal("uncertain metadata write reported success")
+			}
+			if _, err := s.Snapshot(context.Background(), testTime); !errors.Is(err, ErrRecovery) {
+				t.Fatal("fenced store served a snapshot")
+			}
+			s.Close()
+			reopened, err := Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reopened.Close()
+			snapshot, err := reopened.Snapshot(context.Background(), testTime)
+			if err != nil || len(snapshot.Nodes) != 1 {
+				t.Fatal("reopen did not recover a complete image")
+			}
+			want := "Узел " + first.Nodes[0].ID[5:13]
+			if afterWrite {
+				want = "Новая подпись"
+			}
+			if snapshot.Nodes[0].Name != want {
+				t.Fatal("uncertain metadata write left a partial image")
+			}
+		})
+	}
+}
+
 func TestPartialAndInvalidImportPreserveStore(t *testing.T) {
 	s, path := setup(t)
 	importGood(t, s)

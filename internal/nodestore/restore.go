@@ -40,6 +40,9 @@ func decodeImage(image restorejournal.Image) (document, error) {
 	if len(image.Data) == 0 || len(image.Data) > maxBytes || decodeStrict(image.Data, &doc) != nil || validate(doc) != nil {
 		return document{}, restorejournal.ErrInvalid
 	}
+	if doc.Schema == legacySchema {
+		doc.Schema = schema
+	}
 	return doc, nil
 }
 
@@ -114,6 +117,9 @@ func RestoreBinding(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// This string identifies the physical restore target, not the document
+	// schema. Keep it stable so an upgrade can finish or roll back an open v1
+	// journal while the document migrates to schema 2.
 	hash := sha256.Sum256([]byte("nodestore-schema-1\x00" + binding))
 	return hex.EncodeToString(hash[:]), nil
 }
@@ -272,6 +278,12 @@ func mergeDocuments(current, imported document) (document, error) {
 			continue
 		}
 		existing := &current.Nodes[index]
+		if existing.Alias == "" {
+			existing.Alias = node.Alias
+		}
+		// A restore must never silently re-enable a node. Explicit re-enable is
+		// a later authenticated mutation.
+		existing.Disabled = existing.Disabled || node.Disabled
 		if node.AddedAt.Before(existing.AddedAt) {
 			existing.AddedAt = node.AddedAt
 		}

@@ -1870,8 +1870,13 @@ function renderRemoteProfilePreview() {
   const container = $('#remoteProfilePreview');
   const preview = state.remoteProfilePreview?.preview;
   const importButton = $('#remoteProfileImportButton');
+  const storeButton = $('#remoteProfileStoreButton');
   importButton.disabled = state.remoteProfileBusy || !preview?.node_count || state.remoteProfileReviewedInput !== $('#remoteProfileURI').value.trim();
-  if (!state.remoteProfileBusy) importButton.textContent = preview?.rejected?.length && preview.node_count ? `Создать черновик из ${Number(preview.node_count)} принятых` : 'Создать черновик';
+  storeButton.disabled = importButton.disabled;
+  if (!state.remoteProfileBusy) {
+    importButton.textContent = preview?.node_count ? `Черновик Sing-box: 1 выбранный` : 'Создать черновик Sing-box';
+    storeButton.textContent = preview?.node_count ? `Сохранить принятые: ${Number(preview.node_count)}` : 'Сохранить в узлы';
+  }
   if (!preview) {
     container.innerHTML = '<span>Обработка локальная. Из JSON/YAML берутся только поддерживаемые узлы; чужие DNS, маршруты, скрипты и панели удаляются. Вставляйте сам ключ vless://… — не адрес страницы сайта.</span>';
     return;
@@ -1879,7 +1884,7 @@ function renderRemoteProfilePreview() {
   const nodes = preview.nodes || [];
 	if (state.remoteProfileSelectedIndex >= nodes.length) state.remoteProfileSelectedIndex = 0;
   const visible = nodes.slice(0, 6).map((node, index) => `<li class="${state.remoteProfileSelectedIndex === index ? 'selected' : ''}"><button type="button" data-provider-node="${index}" aria-pressed="${state.remoteProfileSelectedIndex === index}"><i>${state.remoteProfileSelectedIndex === index ? 'ВЫБРАН' : 'ВЫБРАТЬ'}</i><b>${esc(node.name || `Узел ${index + 1}`)}</b><span>${esc(node.protocol)} · ${esc(node.server)}:${Number(node.port) || '—'}${node.transport ? ` · ${esc(node.transport)}` : ''}</span></button></li>`).join('');
-  const hidden = nodes.length > 6 ? `<li><b>Ещё ${nodes.length - 6}</b><span>будут сохранены в локальном селекторе</span></li>` : '';
+  const hidden = nodes.length > 6 ? `<li><b>Ещё ${nodes.length - 6}</b><span>доступны для сохранения во вкладке «Узлы»</span></li>` : '';
   const warnings = [...(preview.warnings || []), ...nodes.flatMap((node) => node.warnings || [])].map((warning) => `<small>${esc(warning)}</small>`).join('');
 	const selector = nodes.length ? `<label class="provider-node-select"><span>Начальный узел</span><select id="remoteProfileNode">${nodes.map((node, index) => `<option value="${index}" ${state.remoteProfileSelectedIndex === index ? 'selected' : ''}>${esc(node.name || `Узел ${index + 1}`)} · ${esc(node.protocol)}</option>`).join('')}</select></label>` : '';
   const issues = [['Отклонено', preview.rejected || []], ['Пропущено', preview.skipped || []]].filter(([, entries]) => entries.length).map(([label, entries]) => `<details><summary>${label}: ${entries.length} — причины</summary><ul>${entries.map((entry) => `<li><b>Запись ${Number(entry.index)} · ${esc(entry.code)}</b><span>${esc(entry.reason)}</span></li>`).join('')}</ul></details>`).join('');
@@ -1933,6 +1938,23 @@ async function importRemoteProfile() {
     showNotice(result.ok ? 'success' : 'review', result.ok ? 'Черновик Sing-box готов' : 'Черновик создан, нужна проверка', result.note, result, true);
   } catch (error) {
     showDetails({ error: error.message, response: error.payload }, 'Профиль не импортирован');
+  } finally { state.remoteProfileBusy = false; renderRemoteProfilePreview(); }
+}
+
+async function storeRemoteNodes() {
+  const profile = $('#remoteProfileURI').value.trim();
+  const preview = state.remoteProfilePreview?.preview;
+  if (state.remoteProfileBusy || !profile || !preview?.node_count || state.remoteProfileReviewedInput !== profile) return;
+  state.remoteProfileBusy = true;
+  const button = $('#remoteProfileStoreButton');
+  button.disabled = true;
+  button.textContent = 'Сохраняем…';
+  try {
+    const result = await api('/api/v1/nodes/import', { method: 'POST', body: JSON.stringify({ profile, accept_partial: !!preview.rejected?.length, confirm: 'STORE_REMOTE_NODES' }) });
+    await refreshNodes();
+    showNotice('success', 'Узлы сохранены локально', `${Number(result.accepted_nodes || 0)} ${plural(result.accepted_nodes || 0, 'узел принят', 'узла приняты', 'узлов приняты')}. Всего в хранилище: ${Number(result.total_nodes || 0)}. Они ожидают точной проверки; маршруты не изменены.`, result, true);
+  } catch (error) {
+    showDetails({ error: error.message, response: error.payload }, 'Узлы не сохранены');
   } finally { state.remoteProfileBusy = false; renderRemoteProfilePreview(); }
 }
 
@@ -2376,17 +2398,18 @@ function renderNodes() {
   $('#nodeTruthBanner').querySelector('div').innerHTML = payload.available === false
     ? '<b>Хранилище узлов недоступно</b><span>Рабочие маршруты не изменены. Проверьте приватное хранилище в диагностике.</span>'
     : `<b>Импорт не означает, что узел работает</b><span>${esc(payload.note || 'Все записи ожидают отдельной проверки через роутер.')}</span>`;
-  $('#nodeSummary').innerHTML = `<div><span>Сохранено</span><b>${Number(counts.total || 0)}</b></div><div><span>Ожидают проверки</span><b>${Number(counts.quarantined || 0)}</b></div><div><span>Истекли</span><b>${Number(counts.expired || 0)}</b></div><div><span>Можно назначить</span><b>${Number(counts.selectable || 0)}</b><small>только после точной проверки</small></div>`;
+  $('#nodeSummary').innerHTML = `<div><span>Сохранено</span><b>${Number(counts.total || 0)}</b></div><div><span>Ожидают проверки</span><b>${Number(counts.quarantined || 0)}</b></div><div><span>Отключены</span><b>${Number(counts.disabled || 0)}</b></div><div><span>Истекли</span><b>${Number(counts.expired || 0)}</b></div><div><span>Можно назначить</span><b>${Number(counts.selectable || 0)}</b><small>только после точной проверки</small></div>`;
   $('#nodeList').innerHTML = filtered.map((node) => {
     const protocol = String(node.protocol || 'unknown').toUpperCase();
     const transport = node.transport ? String(node.transport).toUpperCase() : 'обычный';
-    const stateLabel = node.state === 'expired' ? 'ИСТЁК' : 'ОЖИДАЕТ ПРОВЕРКИ';
+    const stateLabel = node.disabled ? 'ОТКЛЮЧЁН' : node.state === 'expired' ? 'ИСТЁК' : 'ОЖИДАЕТ ПРОВЕРКИ';
     const maskedURI = `${protocol}://***${node.port ? `:${Number(node.port)}` : ''}`;
-    return `<article class="node-card ${node.state === 'expired' ? 'expired' : 'quarantined'}">
+    return `<article class="node-card ${node.disabled ? 'disabled' : node.state === 'expired' ? 'expired' : 'quarantined'}">
       <div class="node-card-head"><div><span class="node-protocol">${esc(protocol)}</span><h3>${esc(node.name || 'Импортированный узел')}</h3></div><span class="node-state">${esc(stateLabel)}</span></div>
       <code class="node-masked-uri">${esc(maskedURI)}</code>
       <div class="node-meta"><span>Транспорт <b>${esc(transport)}</b></span><span>TLS <b>${node.tls ? 'да' : 'нет'}</b></span><span>Источник <b>${esc(nodeSourceLabel(node))}</b></span><span>Срок <b>${esc(nodeExpiryText(node))}</b></span></div>
       <div class="node-card-foot"><span>Назначенные сервисы: <b>нет</b></span><span>Проверка: <b>не запускалась</b></span></div>
+      <div class="node-actions"><button class="secondary" type="button" data-node-edit="${esc(node.id)}">Переименовать</button><button class="secondary" type="button" data-node-disable="${esc(node.id)}" data-disabled="${node.disabled ? 'true' : 'false'}">${node.disabled ? 'Включить' : 'Отключить'}</button><button class="secondary" type="button" data-node-reveal="${esc(node.id)}">Показать конфиг</button><button class="danger-button" type="button" data-node-delete="${esc(node.id)}">Удалить</button></div>
     </article>`;
   }).join('');
   $('#nodeEmpty').style.display = filtered.length ? 'none' : 'grid';
@@ -2406,6 +2429,80 @@ async function refreshNodes() {
     button.disabled = false;
     button.textContent = 'Обновить';
   }
+}
+
+function nodeByID(id) {
+  return (state.nodes?.nodes || []).find((node) => node.id === id);
+}
+
+function openNodeEdit(id) {
+  const node = nodeByID(id);
+  if (!node) return;
+  $('#nodeEditID').value = id;
+  $('#nodeEditTitle').textContent = node.name || 'Название узла';
+  $('#nodeEditAlias').value = node.name?.startsWith('Узел ') ? '' : node.name || '';
+  $('#nodeEditDialog').showModal();
+  setTimeout(() => $('#nodeEditAlias').focus(), 0);
+}
+
+async function saveNodeAlias(event) {
+  event.preventDefault();
+  const id = $('#nodeEditID').value;
+  try {
+    await api(`/api/v1/nodes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ alias: $('#nodeEditAlias').value.trim() }) });
+    $('#nodeEditDialog').close();
+    await refreshNodes();
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Название не сохранено'); }
+}
+
+async function toggleNodeDisabled(id, disabled) {
+  const node = nodeByID(id);
+  const next = !disabled;
+  const verb = next ? 'Отключить' : 'Включить';
+  if (!node || !await askConfirmation(`${verb} узел?`, next ? 'Узел останется в локальном хранилище, но будущий подбор не сможет его использовать. Рабочие маршруты сейчас не изменятся.' : 'Узел вернётся только в очередь проверки. Он не станет рабочим и не будет назначен сервисам автоматически.', verb)) return;
+  try {
+    await api(`/api/v1/nodes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ disabled: next }) });
+    await refreshNodes();
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Состояние узла не изменено'); }
+}
+
+function clearNodeReveal() {
+  $('#nodeRevealContent').value = '';
+  $('#nodeRevealFeedback').textContent = '';
+  if ($('#nodeRevealDialog').open) $('#nodeRevealDialog').close();
+}
+
+async function revealNode(id) {
+  const node = nodeByID(id);
+  if (!node || !await askConfirmation('Показать приватную конфигурацию?', 'Она может содержать UUID, пароль и адрес сервера. Показывайте её только на доверенном устройстве; данные не будут записаны в журнал панели.', 'Показать')) return;
+  try {
+    const result = await api(`/api/v1/nodes/${encodeURIComponent(id)}/reveal`, { method: 'POST', body: JSON.stringify({ confirm: 'REVEAL_NODE' }) });
+    $('#nodeRevealTitle').textContent = node.name || 'Конфигурация узла';
+    $('#nodeRevealContent').value = JSON.stringify(result.config, null, 2);
+    $('#nodeRevealDialog').showModal();
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Конфигурация не показана'); }
+}
+
+async function copyRevealedNode() {
+  const field = $('#nodeRevealContent');
+  if (!field.value) return;
+  try {
+    await navigator.clipboard.writeText(field.value);
+    $('#nodeRevealFeedback').textContent = 'Скопировано';
+  } catch (_) {
+    field.select();
+    document.execCommand('copy');
+    $('#nodeRevealFeedback').textContent = 'Скопировано';
+  }
+}
+
+async function deleteNode(id) {
+  const node = nodeByID(id);
+  if (!node || !await askConfirmation('Удалить сохранённый узел?', 'Будут удалены локальная копия и её секрет. Черновик Sing-box и рабочие маршруты не меняются; при повторном импорте узел появится снова.', 'Удалить')) return;
+  try {
+    await api(`/api/v1/nodes/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE_NODE' }) });
+    await refreshNodes();
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Узел не удалён'); }
 }
 
 function renderConnections() {
@@ -3479,6 +3576,24 @@ function bindEvents() {
   $('#nodeSearch').addEventListener('input', renderNodes);
   $('#nodeStateFilter').addEventListener('change', renderNodes);
   $('#refreshNodes').addEventListener('click', refreshNodes);
+  $('#nodeOpenImport').addEventListener('click', async () => { await openEngineConfiguration('sing-box'); switchEngineTab('transfer'); });
+  $('#nodeList').addEventListener('click', (event) => {
+    const edit = event.target.closest('[data-node-edit]');
+    const disable = event.target.closest('[data-node-disable]');
+    const reveal = event.target.closest('[data-node-reveal]');
+    const remove = event.target.closest('[data-node-delete]');
+    if (edit) openNodeEdit(edit.dataset.nodeEdit);
+    else if (disable) toggleNodeDisabled(disable.dataset.nodeDisable, disable.dataset.disabled === 'true');
+    else if (reveal) revealNode(reveal.dataset.nodeReveal);
+    else if (remove) deleteNode(remove.dataset.nodeDelete);
+  });
+  $('#nodeEditForm').addEventListener('submit', saveNodeAlias);
+  $('#nodeEditClose').addEventListener('click', () => $('#nodeEditDialog').close());
+  $('#nodeEditCancel').addEventListener('click', () => $('#nodeEditDialog').close());
+  $('#nodeRevealClose').addEventListener('click', clearNodeReveal);
+  $('#nodeRevealDone').addEventListener('click', clearNodeReveal);
+  $('#nodeRevealCopy').addEventListener('click', copyRevealedNode);
+  $('#nodeRevealDialog').addEventListener('close', () => { $('#nodeRevealContent').value = ''; $('#nodeRevealFeedback').textContent = ''; });
   $('#deviceSearch').addEventListener('input', renderDevices);
   $('#refreshDevices').addEventListener('click', refreshDevices);
   $('#deviceGrid').addEventListener('click', (event) => {
@@ -3590,6 +3705,7 @@ function bindEvents() {
   $('#remoteProfileFile').addEventListener('change', selectRemoteProfileFile);
   $('#remoteProfileReveal').addEventListener('click', toggleRemoteProfileVisibility);
   $('#remoteProfilePreviewButton').addEventListener('click', previewRemoteProfile);
+  $('#remoteProfileStoreButton').addEventListener('click', storeRemoteNodes);
   $('#remoteProfileImportButton').addEventListener('click', importRemoteProfile);
   $('#warpGenerate').addEventListener('click', () => generateWarp(false));
   $('#warpInstallComponent').addEventListener('click', () => openRouteInstallation('warp-wg'));

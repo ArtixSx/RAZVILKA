@@ -27,7 +27,7 @@ gap-аудиты сохранены как исторические снимки
 | Transaction engine | Реализовано · CI · Роутер | Plan, snapshot, stage, validate, canary, commit/rollback и LKG-журнал | Fault injection во всех commit points |
 | NFQWS2 adapter | Реализовано · CI · Роутер | Запуск, читаемые runtime-списки, проверка фактического процесса и YouTube HTTP `204` | Native ownership стратегий, NFQUEUE lease и event-driven recovery |
 | Sing-box/Xray candidate | Реализовано · CI · частично Роутер | Локальная проверка конфига, loopback proxy-canary, bounded URLTest pool | Полная Evidence v2 и длительная проверка узлов |
-| NodeStore | Основа реализована · локально | Приватное атомарное хранение, backup/recovery, startup wiring, безопасный API и read-only UI | Alias/disable/delete/reveal, exact outbound check, bindings и HIL |
+| NodeStore | N1.2 реализован · локально | Приватное атомарное хранение, backup/recovery, startup wiring, импорт, alias/disable/delete и подтверждённый reveal | Exact outbound check, bindings и HIL |
 | WARP MASQUE/USQUE | Реализовано · CI · Экспериментально | Doctor, staged proxy-canary, H2/H3 диагностика и rollback | Единый Cloudflare Provider и HIL транспортов |
 | WARP WireGuard | Реализовано · CI · Экспериментально | Временный интерфейс, официальный набор портов, cleanup и безопасный отказ | Успешный handshake на поддерживаемой сети, endpoint scoring и LKG |
 | AmneziaWG | Реализовано · CI · Экспериментально | Импорт/валидация и адаптер транзакции | Отдельный аппаратный canary и compatibility registry |
@@ -217,12 +217,15 @@ startup и безопасному read-only API/UI, но не к рабочим 
 документ. Старый и новый журналы имеют раздельные scope и lifetime lease. Узкий
 Cloudflare restore отклоняет смешанный архив. Следующий пункт — N1.2 API/UI узлов,
 затем exact-node check.
-Подготовлена read-only часть N1.2: `/api/v1/nodes` и отдельная страница «Узлы»
+Подготовлена N1.2: `/api/v1/nodes` и отдельная страница «Узлы»
 показывают только безопасные карточки, источник, срок и счётчики; есть поиск и
 фильтр. Все записи остаются недоступными для выбора (`selectable=0`), UI прямо
 отделяет импорт от проверки работоспособности. URI, endpoint, SNI, UUID, пароли
-и SecretRef ответ и страница не содержат. Изменяющих API alias/disable/delete/
-reveal ещё нет.
+и SecretRef обычный ответ и страница не содержат. Alias, disable и атомарное
+delete подключены; reveal требует подтверждения, возвращается с `no-store` и
+очищается интерфейсом после закрытия. Отдельная кнопка сохраняет все принятые
+записи в NodeStore, не создавая маршрут и не запуская Sing-box. Схема 1 читается
+без фоновой записи и переходит на schema 2 только при явном изменении.
 Оставшаяся работа Cloudflare/USQUE ниже сохраняется
 в backlog. [Автообновление публичных источников](PUBLIC_PROVIDER_SOURCES_RU.md)
 добавлено в план как opt-in после этих зависимостей, без скрытой смены маршрута.

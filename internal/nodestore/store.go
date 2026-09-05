@@ -14,8 +14,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
@@ -29,15 +32,18 @@ var (
 	ErrPartial  = errors.New("partial node import requires explicit acceptance")
 	ErrCapacity = errors.New("node store capacity reached")
 	ErrRecovery = errors.New("node store commit uncertain; close and inspect before reopening")
+	ErrNotFound = errors.New("node not found")
+	ErrAlias    = errors.New("invalid node alias")
 )
 
 const (
-	fileName   = "nodes.private.json"
-	schema     = 1
-	MaxNodes   = 512
-	MaxSources = 64
-	maxBytes   = 4 << 20
-	maxTTL     = 30 * 24 * time.Hour
+	fileName     = "nodes.private.json"
+	legacySchema = 1
+	schema       = 2
+	MaxNodes     = 512
+	MaxSources   = 64
+	maxBytes     = 4 << 20
+	maxTTL       = 30 * 24 * time.Hour
 )
 
 var sourcePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,47}$`)
@@ -74,6 +80,7 @@ type Node struct {
 	AddedAt   time.Time `json:"added_at"`
 	Origins   []Origin  `json:"origins"`
 	Health    Health    `json:"health"`
+	Disabled  bool      `json:"disabled"`
 }
 
 type Snapshot struct {
@@ -89,6 +96,8 @@ type storedNode struct {
 	SecretRef string    `json:"secret_ref"`
 	AddedAt   time.Time `json:"added_at"`
 	Origins   []Origin  `json:"origins"`
+	Alias     string    `json:"alias,omitempty"`
+	Disabled  bool      `json:"disabled,omitempty"`
 }
 type secret struct {
 	Ref      string          `json:"ref"`
@@ -201,6 +210,11 @@ func (s *Store) load(ctx context.Context) (document, restorejournal.Image, error
 	var doc document
 	if len(image.Data) > maxBytes || decodeStrict(image.Data, &doc) != nil || validate(doc) != nil {
 		return document{}, restorejournal.Image{}, ErrStore
+	}
+	// Schema 1 did not have user-controlled alias/disabled metadata. Upgrade is
+	// in memory and is persisted only by the next explicit mutation/import.
+	if doc.Schema == legacySchema {
+		doc.Schema = schema
 	}
 	return doc, image, nil
 }
@@ -330,6 +344,159 @@ func (s *Store) Snapshot(ctx context.Context, now time.Time) (Snapshot, error) {
 	return snapshot(doc, now.UTC()), nil
 }
 
+// SetAlias changes display metadata only. Identity, secret material, origins,
+// health and any external engine configuration remain unchanged.
+func (s *Store) SetAlias(ctx context.Context, id, alias string, now time.Time) (Snapshot, error) {
+	if !validAlias(alias) {
+		return Snapshot{}, ErrAlias
+	}
+	return s.mutate(ctx, id, now, func(doc *document, index int) (bool, error) {
+		if doc.Nodes[index].Alias == alias {
+			return false, nil
+		}
+		doc.Nodes[index].Alias = alias
+		return true, nil
+	})
+}
+
+// SetDisabled is fail-closed metadata. It never promotes health or edits a
+// runtime; a future binding layer must reject disabled nodes independently.
+func (s *Store) SetDisabled(ctx context.Context, id string, disabled bool, now time.Time) (Snapshot, error) {
+	return s.mutate(ctx, id, now, func(doc *document, index int) (bool, error) {
+		if doc.Nodes[index].Disabled == disabled {
+			return false, nil
+		}
+		doc.Nodes[index].Disabled = disabled
+		return true, nil
+	})
+}
+
+// Delete removes one passive node and its secret atomically. It does not edit
+// Sing-box, service bindings or a live route.
+func (s *Store) Delete(ctx context.Context, id string, now time.Time) (Snapshot, error) {
+	return s.mutate(ctx, id, now, func(doc *document, index int) (bool, error) {
+		ref := doc.Nodes[index].SecretRef
+		doc.Nodes = append(doc.Nodes[:index], doc.Nodes[index+1:]...)
+		for i := range doc.Secrets {
+			if doc.Secrets[i].Ref == ref {
+				doc.Secrets = append(doc.Secrets[:i], doc.Secrets[i+1:]...)
+				break
+			}
+		}
+		used := map[string]bool{}
+		for _, node := range doc.Nodes {
+			for _, origin := range node.Origins {
+				used[origin.SourceID] = true
+			}
+		}
+		kept := doc.Sources[:0]
+		for _, source := range doc.Sources {
+			if used[source.ID] {
+				kept = append(kept, source)
+			}
+		}
+		doc.Sources = kept
+		return true, nil
+	})
+}
+
+// WithSecret grants a bounded in-memory copy to an authenticated caller. The
+// callback must not retain it; the copy is overwritten immediately afterwards.
+func (s *Store) WithSecret(ctx context.Context, id string, use func([]byte) error) error {
+	if use == nil {
+		return ErrStore
+	}
+	s.mu.Lock()
+	doc, _, err := s.load(ctx)
+	if err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	var revealed []byte
+	for _, node := range doc.Nodes {
+		if node.ID != id {
+			continue
+		}
+		for _, material := range doc.Secrets {
+			if material.Ref == node.SecretRef {
+				revealed = append([]byte(nil), material.Outbound...)
+				break
+			}
+		}
+		break
+	}
+	s.mu.Unlock()
+	if revealed == nil {
+		for _, node := range doc.Nodes {
+			if node.ID == id {
+				return ErrStore
+			}
+		}
+		return ErrNotFound
+	}
+	defer clear(revealed)
+	return use(revealed)
+}
+
+func (s *Store) mutate(ctx context.Context, id string, now time.Time, change func(*document, int) (bool, error)) (Snapshot, error) {
+	if now.IsZero() || !validNodeID(id) || change == nil {
+		return Snapshot{}, ErrStore
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	doc, before, err := s.load(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	index := -1
+	for i := range doc.Nodes {
+		if doc.Nodes[i].ID == id {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		return Snapshot{}, ErrNotFound
+	}
+	changed, err := change(&doc, index)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if !changed {
+		return snapshot(doc, now.UTC()), nil
+	}
+	if len(doc.Nodes) == 0 {
+		if err := s.target.CompareAndSwap(ctx, before, restorejournal.Image{}); err != nil {
+			if errors.Is(err, restorejournal.ErrRecovery) {
+				s.fenced = true
+				return Snapshot{}, ErrRecovery
+			}
+			return Snapshot{}, ErrStore
+		}
+		return Snapshot{Nodes: []Node{}, Sources: []Source{}}, nil
+	}
+	if doc.Generation == ^uint64(0) {
+		return Snapshot{}, ErrCapacity
+	}
+	doc.Schema = schema
+	doc.Generation++
+	if validate(doc) != nil {
+		return Snapshot{}, ErrStore
+	}
+	data, err := json.Marshal(doc)
+	if err != nil || len(data) > maxBytes {
+		return Snapshot{}, ErrCapacity
+	}
+	if err := s.target.CompareAndSwap(ctx, before, restorejournal.Image{Exists: true, Data: data}); err != nil {
+		if errors.Is(err, restorejournal.ErrRecovery) {
+			s.fenced = true
+			return Snapshot{}, ErrRecovery
+		}
+		return Snapshot{}, ErrStore
+	}
+	return snapshot(doc, now.UTC()), nil
+}
+
 func identity(key, material []byte) string {
 	h := hmac.New(sha256.New, key)
 	_, _ = h.Write([]byte("razvilka-node-v1\x00"))
@@ -346,4 +513,27 @@ func validSource(s Source) bool {
 		return true
 	}
 	return false
+}
+
+func validNodeID(id string) bool {
+	if len(id) != len("node-")+sha256.Size*2 || !strings.HasPrefix(id, "node-") {
+		return false
+	}
+	_, err := hex.DecodeString(id[len("node-"):])
+	return err == nil
+}
+
+func validAlias(alias string) bool {
+	if alias == "" {
+		return true
+	}
+	if !utf8.ValidString(alias) || utf8.RuneCountInString(alias) > 64 || strings.TrimSpace(alias) != alias {
+		return false
+	}
+	for _, char := range alias {
+		if unicode.IsControl(char) {
+			return false
+		}
+	}
+	return true
 }

@@ -382,6 +382,12 @@ func TestNodeInventoryIsVisibleWithoutClaimingRouteReadiness(t *testing.T) {
 		`Импорт не означает, что узел работает`,
 		`Проверка: <b>не запускалась</b>`,
 		`Назначенные сервисы: <b>нет</b>`,
+		`id="nodeOpenImport"`,
+		`id="nodeEditDialog"`,
+		`id="nodeRevealDialog"`,
+		`STORE_REMOTE_NODES`,
+		`REVEAL_NODE`,
+		`DELETE_NODE`,
 	} {
 		if !strings.Contains(content, required) {
 			t.Fatalf("truthful node inventory marker missing %q", required)

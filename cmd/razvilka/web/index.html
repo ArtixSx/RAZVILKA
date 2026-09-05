@@ -177,7 +177,7 @@
       <article class="panel full-panel">
         <div class="panel-title sticky-title">
           <div><h2>Сохранённые узлы</h2><p>Локальный инвентарь импортированных подключений — без паролей, ключей и скрытых параметров</p></div>
-          <div class="filters"><input id="nodeSearch" placeholder="Имя, протокол или транспорт" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="quarantined">Ожидают проверки</option><option value="expired">Истекли</option></select><button class="secondary" id="refreshNodes" type="button">Обновить</button></div>
+          <div class="filters"><button class="primary" id="nodeOpenImport" type="button">+ Добавить узлы</button><input id="nodeSearch" placeholder="Имя, протокол или транспорт" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="quarantined">Ожидают проверки</option><option value="disabled">Отключены</option><option value="expired">Истекли</option></select><button class="secondary" id="refreshNodes" type="button">Обновить</button></div>
         </div>
         <div class="node-truth-banner" id="nodeTruthBanner" role="status">
           <div><b>Импорт не означает, что узел работает</b><span>Перед назначением сервису понадобятся проверка протокола, IP выхода и доступности самого сервиса.</span></div>
@@ -262,7 +262,7 @@
                 <div class="remote-profile-import" id="remoteProfileImport" hidden>
                   <div><span class="eyebrow">ПРОВАЙДЕРЫ SING-BOX</span><h3>Импортировать узел или подписку</h3><p>Ссылки VLESS/Reality, Hysteria2, TUIC, Shadowsocks, Base64-подписка, JSON Sing-box либо YAML Clash/Mihomo. Секреты не попадут в предпросмотр.</p></div>
                   <label><span>Ссылка, подписка, JSON или YAML</span><textarea class="remote-profile-secret" id="remoteProfileURI" maxlength="262144" rows="4" autocomplete="off" spellcheck="false" placeholder="vless://…&#10;hysteria2://…&#10;или вставьте Base64 / JSON / YAML"></textarea></label>
-                  <div class="remote-profile-actions"><input id="remoteProfileFile" type="file" accept=".txt,.json,.yaml,.yml,text/plain,application/json,application/yaml,text/yaml" hidden><button class="secondary" id="remoteProfileFileButton" type="button">Выбрать файл…</button><button class="secondary" id="remoteProfileReveal" type="button" aria-pressed="false">Показать</button><button class="secondary" id="remoteProfilePreviewButton" type="button">Проверить пакет</button><button class="primary" id="remoteProfileImportButton" type="button" disabled>Создать черновик</button></div>
+                  <div class="remote-profile-actions"><input id="remoteProfileFile" type="file" accept=".txt,.json,.yaml,.yml,text/plain,application/json,application/yaml,text/yaml" hidden><button class="secondary" id="remoteProfileFileButton" type="button">Выбрать файл…</button><button class="secondary" id="remoteProfileReveal" type="button" aria-pressed="false">Показать</button><button class="secondary" id="remoteProfilePreviewButton" type="button">Проверить пакет</button><button class="secondary" id="remoteProfileStoreButton" type="button" disabled>Сохранить в узлы</button><button class="primary" id="remoteProfileImportButton" type="button" disabled>Создать черновик Sing-box</button></div>
                   <div class="remote-profile-preview" id="remoteProfilePreview"><span>Обработка локальная. Из JSON/YAML берутся только поддерживаемые узлы; чужие DNS, маршруты, скрипты и панели удаляются.</span></div>
                 </div>
               </div>
@@ -444,6 +444,18 @@
   </main>
 </div>
 <dialog class="action-dialog" id="actionDialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ</span><h3 id="actionDialogTitle">Подтвердите действие</h3><p id="actionDialogText"></p><div class="dialog-actions"><button class="secondary" value="cancel">Отмена</button><button class="primary" id="actionDialogConfirm" value="confirm">Продолжить</button></div></form></dialog>
+<dialog class="form-dialog" id="nodeEditDialog">
+  <form id="nodeEditForm">
+    <div class="dialog-head"><div><span class="eyebrow">ЛОКАЛЬНОЕ НАЗВАНИЕ</span><h3 id="nodeEditTitle">Название узла</h3><p>Меняется только подпись в RAZVILKA. Адрес, ключи и рабочие маршруты останутся прежними.</p></div><button class="dialog-close" id="nodeEditClose" type="button" aria-label="Закрыть">×</button></div>
+    <input id="nodeEditID" type="hidden"><label><span>Понятное название</span><input id="nodeEditAlias" maxlength="64" autocomplete="off" placeholder="Например, резервный сервер"></label>
+    <div class="dialog-actions"><button class="secondary" id="nodeEditCancel" type="button">Отмена</button><button class="primary" type="submit">Сохранить название</button></div>
+  </form>
+</dialog>
+<dialog class="form-dialog node-reveal-dialog" id="nodeRevealDialog">
+  <div class="dialog-head"><div><span class="eyebrow">ПРИВАТНАЯ КОНФИГУРАЦИЯ</span><h3 id="nodeRevealTitle">Конфигурация узла</h3><p>В тексте могут быть пароль или UUID. Окно очищается после закрытия и не попадает в журнал RAZVILKA.</p></div><button class="dialog-close" id="nodeRevealClose" type="button" aria-label="Закрыть">×</button></div>
+  <textarea id="nodeRevealContent" class="node-reveal-content" readonly autocomplete="off" spellcheck="false"></textarea>
+  <div class="dialog-actions"><span class="save-feedback" id="nodeRevealFeedback" role="status"></span><button class="secondary" id="nodeRevealCopy" type="button">Копировать</button><button class="primary" id="nodeRevealDone" type="button">Готово</button></div>
+</dialog>
 <dialog class="form-dialog apply-review-dialog" id="applyReviewDialog">
   <form method="dialog">
     <div class="dialog-head"><div><span class="eyebrow">ПЕРЕД ПРИМЕНЕНИЕМ</span><h3 id="applyReviewTitle">Проверьте изменения</h3><p id="applyReviewSubtitle">Показываем только то, что относится к выбранной операции.</p></div><button class="dialog-close" value="cancel" aria-label="Закрыть">×</button></div>
