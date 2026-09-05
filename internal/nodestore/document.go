@@ -43,7 +43,7 @@ func extract(config []byte) ([]json.RawMessage, error) {
 }
 
 func validate(doc document) error {
-	if (doc.Schema != legacySchema && doc.Schema != schema) || doc.Owner != "razvilka-nodes" || doc.Generation == 0 || len(doc.IdentityKey) != 32 ||
+	if (doc.Schema != legacySchema && doc.Schema != metadataSchema && doc.Schema != schema) || doc.Owner != "razvilka-nodes" || doc.Generation == 0 || len(doc.IdentityKey) != 32 ||
 		len(doc.Nodes) == 0 || len(doc.Nodes) > MaxNodes || len(doc.Sources) == 0 || len(doc.Sources) > MaxSources || len(doc.Secrets) != len(doc.Nodes) {
 		return ErrStore
 	}
@@ -72,7 +72,7 @@ func validate(doc document) error {
 	}
 	ids := map[string]bool{}
 	for _, n := range doc.Nodes {
-		if !validAlias(n.Alias) || (doc.Schema == legacySchema && (n.Alias != "" || n.Disabled)) {
+		if !validAlias(n.Alias) || (doc.Schema == legacySchema && (n.Alias != "" || n.Disabled || len(n.Checks) != 0)) || (doc.Schema == metadataSchema && len(n.Checks) != 0) {
 			return ErrStore
 		}
 		material := secrets[n.SecretRef]
@@ -89,6 +89,18 @@ func validate(doc document) error {
 				return ErrStore
 			}
 			seen[origin.SourceID] = true
+		}
+		if len(n.Checks) > MaxCheckHistory {
+			return ErrStore
+		}
+		checkIDs := map[string]bool{}
+		lastCheck := time.Time{}
+		for _, check := range n.Checks {
+			if !validCheckRecord(check, n.ID) || checkIDs[check.ProbeID] || !lastCheck.IsZero() && check.CheckedAt.Before(lastCheck) {
+				return ErrStore
+			}
+			checkIDs[check.ProbeID] = true
+			lastCheck = check.CheckedAt
 		}
 	}
 	return nil
@@ -127,6 +139,29 @@ func snapshot(doc document, now time.Time) Snapshot {
 				trust = "untrusted"
 			}
 		}
+		health := Health{State: "not_checked"}
+		if len(n.Checks) > 0 {
+			latest := n.Checks[len(n.Checks)-1]
+			health = Health{
+				State: latest.State, TestLevel: latest.TestLevel, Verdict: latest.Verdict, ServiceID: latest.ServiceID,
+				NetworkProfile: latest.NetworkProfile, CheckedAt: latest.CheckedAt, ExpiresAt: latest.ExpiresAt,
+				LatencyMS: latest.LatencyMS, EgressIP: latest.EgressIP, HTTPStatus: latest.HTTPStatus,
+				ErrorCode: latest.ErrorCode, Message: latest.Message, RoutePathID: latest.RoutePathID,
+				DirectLeak: latest.DirectLeak, History: reverseChecks(n.Checks),
+			}
+			if !now.Before(latest.ExpiresAt) {
+				health.State = "stale"
+				if state != "expired" {
+					state = "stale"
+				}
+			} else if state != "expired" {
+				if latest.State == "available" {
+					state = "available"
+				} else {
+					state = "degraded"
+				}
+			}
+		}
 		if n.Disabled {
 			state = "disabled"
 		}
@@ -136,7 +171,15 @@ func snapshot(doc document, now time.Time) Snapshot {
 		}
 		out.Nodes = append(out.Nodes, Node{ID: n.ID, Name: name, Protocol: strings.ToUpper(material.Type),
 			Transport: material.Transport.Type, TLS: material.TLS.Enabled, Host: "***", Port: material.Port,
-			State: state, Trust: trust, AddedAt: n.AddedAt, Origins: append([]Origin{}, n.Origins...), Health: Health{State: "not_checked"}, Disabled: n.Disabled})
+			State: state, Trust: trust, AddedAt: n.AddedAt, Origins: append([]Origin{}, n.Origins...), Health: health, Disabled: n.Disabled})
+	}
+	return out
+}
+
+func reverseChecks(checks []CheckRecord) []CheckRecord {
+	out := make([]CheckRecord, len(checks))
+	for index := range checks {
+		out[len(checks)-1-index] = checks[index]
 	}
 	return out
 }

@@ -152,6 +152,7 @@ type App struct {
 	Warp            *warp.Manager
 	Cloudflare      *cloudflareprovider.Store
 	Nodes           *nodestore.Store
+	NodeChecker     dataplane.NodeChecker
 	cloudflareBusy  atomic.Bool
 	TestLab         *testlab.Runner
 	RouteProber     testlab.RouteProber

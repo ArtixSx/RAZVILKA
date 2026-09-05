@@ -173,7 +173,104 @@ func TestSchemaOneLoadsAndMigratesOnExplicitMutation(t *testing.T) {
 	}
 	var migrated document
 	if json.Unmarshal(readBytes(t, path), &migrated) != nil || migrated.Schema != schema || migrated.Nodes[0].Alias != "После миграции" {
-		t.Fatal("explicit mutation did not persist schema 2")
+		t.Fatal("explicit mutation did not persist the current schema")
+	}
+}
+
+func TestExactCheckHistoryIsBoundedAndExpires(t *testing.T) {
+	s, path := setup(t)
+	first := importGood(t, s)
+	if _, err := s.Import(context.Background(), manual, good, testTime, 4*time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	id := first.Nodes[0].ID
+	for index := 0; index < MaxCheckHistory+3; index++ {
+		checked := testTime.Add(time.Duration(index+1) * time.Minute)
+		record := CheckRecord{
+			ProbeID: fmt.Sprintf("node-check-%02d", index), ServiceID: "telegram", NetworkProfile: "wan-0123456789ab",
+			RoutePathID: "sing-box:" + id, TestLevel: "service", Verdict: "PASS", State: "available", Stage: "service",
+			CheckedAt: checked, ExpiresAt: checked.Add(time.Hour), LatencyMS: 125, EgressIP: "203.0.113.25", HTTPStatus: 204,
+			Message: "Точный выход и сервис подтверждены.",
+		}
+		if _, err := s.RecordCheck(context.Background(), id, record, checked); err != nil {
+			t.Fatalf("record %d: %v", index, err)
+		}
+	}
+	snapshot, err := s.Snapshot(context.Background(), testTime.Add(24*time.Minute))
+	if err != nil || snapshot.Nodes[0].State != "available" || snapshot.Nodes[0].Health.State != "available" || len(snapshot.Nodes[0].Health.History) != MaxCheckHistory {
+		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
+	}
+	if snapshot.Nodes[0].Health.History[0].ProbeID != "node-check-22" || snapshot.Nodes[0].Health.History[MaxCheckHistory-1].ProbeID != "node-check-03" {
+		t.Fatal("history order or cap is incorrect")
+	}
+	expired, err := s.Snapshot(context.Background(), testTime.Add(2*time.Hour))
+	if err != nil || expired.Nodes[0].State != "stale" || expired.Nodes[0].Health.State != "stale" {
+		t.Fatal("expired evidence remained selectable")
+	}
+	var stored document
+	if json.Unmarshal(readBytes(t, path), &stored) != nil || stored.Schema != schema || len(stored.Nodes[0].Checks) != MaxCheckHistory {
+		t.Fatal("schema 3 check history was not persisted")
+	}
+}
+
+func TestSchemaTwoLoadsReadOnlyAndMigratesWithCheck(t *testing.T) {
+	s, path := setup(t)
+	first := importGood(t, s)
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var old document
+	if json.Unmarshal(readBytes(t, path), &old) != nil {
+		t.Fatal("fixture")
+	}
+	old.Schema = metadataSchema
+	data, _ := json.Marshal(old)
+	if err := os.WriteFile(filepath.Join(path, fileName), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := readBytes(t, path)
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.Snapshot(context.Background(), testTime); err != nil || !bytes.Equal(before, readBytes(t, path)) {
+		t.Fatal("read-only schema 2 migration wrote to flash")
+	}
+	record := CheckRecord{
+		ProbeID: "node-check-migrate", ServiceID: "telegram", NetworkProfile: "network-unknown", RoutePathID: "sing-box:" + first.Nodes[0].ID,
+		TestLevel: "service", Verdict: "PASS", State: "available", Stage: "service", CheckedAt: testTime,
+		ExpiresAt: testTime.Add(time.Hour), EgressIP: "203.0.113.25", HTTPStatus: 204, Message: "Подтверждено.",
+	}
+	if _, err := s.RecordCheck(context.Background(), first.Nodes[0].ID, record, testTime); err != nil {
+		t.Fatal(err)
+	}
+	var current document
+	if json.Unmarshal(readBytes(t, path), &current) != nil || current.Schema != schema || len(current.Nodes[0].Checks) != 1 {
+		t.Fatal("explicit check did not migrate schema 2 to schema 3")
+	}
+}
+
+func TestExactCheckCannotPromoteDisabledNodeOrUnsafeEvidence(t *testing.T) {
+	s, path := setup(t)
+	first := importGood(t, s)
+	id := first.Nodes[0].ID
+	record := CheckRecord{
+		ProbeID: "node-check-safe", ServiceID: "telegram", NetworkProfile: "network-unknown", RoutePathID: "sing-box:" + id,
+		TestLevel: "service", Verdict: "PASS", State: "available", Stage: "service", CheckedAt: testTime,
+		ExpiresAt: testTime.Add(time.Hour), EgressIP: "127.0.0.1", HTTPStatus: 204, Message: "Подтверждено.",
+	}
+	before := readBytes(t, path)
+	if _, err := s.RecordCheck(context.Background(), id, record, testTime); !errors.Is(err, ErrStore) || !bytes.Equal(before, readBytes(t, path)) {
+		t.Fatal("private egress evidence changed the store")
+	}
+	record.EgressIP = "203.0.113.25"
+	if _, err := s.SetDisabled(context.Background(), id, true, testTime); err != nil {
+		t.Fatal(err)
+	}
+	before = readBytes(t, path)
+	if _, err := s.RecordCheck(context.Background(), id, record, testTime); !errors.Is(err, ErrDisabled) || !bytes.Equal(before, readBytes(t, path)) {
+		t.Fatal("check promoted a disabled node")
 	}
 }
 

@@ -108,6 +108,56 @@ func TestArchiveCopyAndMergeKeepIDsAndFreshness(t *testing.T) {
 	}
 }
 
+func TestRestoreMergesExactCheckHistoryWithoutLosingNewerEvidence(t *testing.T) {
+	s, _ := setup(t)
+	first := importGood(t, s)
+	id := first.Nodes[0].ID
+	if _, err := s.Import(context.Background(), manual, good, testTime, 4*time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	record := func(probeID string, checkedAt time.Time, verdict, state string) CheckRecord {
+		return CheckRecord{
+			ProbeID: probeID, ServiceID: "telegram", NetworkProfile: "wan-0123456789ab",
+			RoutePathID: "sing-box:" + id, TestLevel: "service", Verdict: verdict, State: state, Stage: "service",
+			CheckedAt: checkedAt, ExpiresAt: checkedAt.Add(time.Hour), LatencyMS: 125, EgressIP: "203.0.113.25",
+			HTTPStatus: 204, Message: "Точный выход проверен.",
+		}
+	}
+	oldAt := testTime.Add(time.Minute)
+	if _, err := s.RecordCheck(context.Background(), id, record("node-check-old", oldAt, "PASS", "available"), oldAt); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := s.ExportPrivate(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	newAt := testTime.Add(2 * time.Minute)
+	if _, err := s.RecordCheck(context.Background(), id, record("node-check-new", newAt, "BLOCKED", "unavailable"), newAt); err != nil {
+		t.Fatal(err)
+	}
+	session, err := s.BeginRestore(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := executeNodes(t, session, archive); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := s.Snapshot(context.Background(), newAt)
+	if err != nil || len(snapshot.Nodes) != 1 {
+		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
+	}
+	health := snapshot.Nodes[0].Health
+	if snapshot.Nodes[0].State != "degraded" || health.State != "unavailable" || len(health.History) != 2 || health.History[0].ProbeID != "node-check-new" {
+		t.Fatalf("newer check was lost during restore: %+v", health)
+	}
+	if health.History[0].ProbeID != "node-check-new" || health.History[1].ProbeID != "node-check-old" {
+		t.Fatalf("merged history order is wrong: %+v", health.History)
+	}
+}
+
 func TestForeignIdentityAndInvalidArchiveNeverWrite(t *testing.T) {
 	a := archiveFixture(t)
 	s, path := setup(t)

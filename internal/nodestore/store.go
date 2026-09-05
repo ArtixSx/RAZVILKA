@@ -10,10 +10,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -34,16 +36,20 @@ var (
 	ErrRecovery = errors.New("node store commit uncertain; close and inspect before reopening")
 	ErrNotFound = errors.New("node not found")
 	ErrAlias    = errors.New("invalid node alias")
+	ErrDisabled = errors.New("node is disabled")
 )
 
 const (
-	fileName     = "nodes.private.json"
-	legacySchema = 1
-	schema       = 2
-	MaxNodes     = 512
-	MaxSources   = 64
-	maxBytes     = 4 << 20
-	maxTTL       = 30 * 24 * time.Hour
+	fileName        = "nodes.private.json"
+	legacySchema    = 1
+	metadataSchema  = 2
+	schema          = 3
+	MaxNodes        = 512
+	MaxSources      = 64
+	MaxCheckHistory = 20
+	maxBytes        = 4 << 20
+	maxTTL          = 30 * 24 * time.Hour
+	maxCheckTTL     = 24 * time.Hour
 )
 
 var sourcePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,47}$`)
@@ -61,10 +67,44 @@ type Origin struct {
 	ExpiresAt  time.Time `json:"expires_at"`
 }
 
-// Health is a public model, not an authority supplied by a source. This first
-// storage version can only return not_checked; no health promotion API exists.
+// Health is a public model derived only from bounded exact-check records.
 type Health struct {
-	State string `json:"state"`
+	State          string        `json:"state"`
+	TestLevel      string        `json:"test_level,omitempty"`
+	Verdict        string        `json:"verdict,omitempty"`
+	ServiceID      string        `json:"service_id,omitempty"`
+	NetworkProfile string        `json:"network_profile,omitempty"`
+	CheckedAt      time.Time     `json:"checked_at,omitempty"`
+	ExpiresAt      time.Time     `json:"expires_at,omitempty"`
+	LatencyMS      int64         `json:"latency_ms,omitempty"`
+	EgressIP       string        `json:"egress_ip,omitempty"`
+	HTTPStatus     int           `json:"http_status,omitempty"`
+	ErrorCode      string        `json:"error_code,omitempty"`
+	Message        string        `json:"message,omitempty"`
+	RoutePathID    string        `json:"route_path_id,omitempty"`
+	DirectLeak     bool          `json:"direct_leak,omitempty"`
+	History        []CheckRecord `json:"history,omitempty"`
+}
+
+// CheckRecord contains only bounded, redacted observations. Endpoint hosts,
+// credentials, raw errors and direct egress addresses never enter this DTO.
+type CheckRecord struct {
+	ProbeID        string    `json:"probe_id"`
+	ServiceID      string    `json:"service_id"`
+	NetworkProfile string    `json:"network_profile"`
+	RoutePathID    string    `json:"route_path_id"`
+	TestLevel      string    `json:"test_level"`
+	Verdict        string    `json:"verdict"`
+	State          string    `json:"state"`
+	Stage          string    `json:"stage"`
+	CheckedAt      time.Time `json:"checked_at"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	LatencyMS      int64     `json:"latency_ms,omitempty"`
+	EgressIP       string    `json:"egress_ip,omitempty"`
+	HTTPStatus     int       `json:"http_status,omitempty"`
+	ErrorCode      string    `json:"error_code,omitempty"`
+	Message        string    `json:"message,omitempty"`
+	DirectLeak     bool      `json:"direct_leak,omitempty"`
 }
 
 type Node struct {
@@ -92,12 +132,13 @@ type Snapshot struct {
 // Metadata and credentials live in ONE atomic private envelope. SecretRef is
 // internal, never a filesystem path, never an independently written file.
 type storedNode struct {
-	ID        string    `json:"id"`
-	SecretRef string    `json:"secret_ref"`
-	AddedAt   time.Time `json:"added_at"`
-	Origins   []Origin  `json:"origins"`
-	Alias     string    `json:"alias,omitempty"`
-	Disabled  bool      `json:"disabled,omitempty"`
+	ID        string        `json:"id"`
+	SecretRef string        `json:"secret_ref"`
+	AddedAt   time.Time     `json:"added_at"`
+	Origins   []Origin      `json:"origins"`
+	Alias     string        `json:"alias,omitempty"`
+	Disabled  bool          `json:"disabled,omitempty"`
+	Checks    []CheckRecord `json:"checks,omitempty"`
 }
 type secret struct {
 	Ref      string          `json:"ref"`
@@ -211,9 +252,9 @@ func (s *Store) load(ctx context.Context) (document, restorejournal.Image, error
 	if len(image.Data) > maxBytes || decodeStrict(image.Data, &doc) != nil || validate(doc) != nil {
 		return document{}, restorejournal.Image{}, ErrStore
 	}
-	// Schema 1 did not have user-controlled alias/disabled metadata. Upgrade is
+	// Older schemas did not have all current metadata/health fields. Upgrade is
 	// in memory and is persisted only by the next explicit mutation/import.
-	if doc.Schema == legacySchema {
+	if doc.Schema != schema {
 		doc.Schema = schema
 	}
 	return doc, image, nil
@@ -367,6 +408,36 @@ func (s *Store) SetDisabled(ctx context.Context, id string, disabled bool, now t
 			return false, nil
 		}
 		doc.Nodes[index].Disabled = disabled
+		return true, nil
+	})
+}
+
+// RecordCheck appends one redacted exact-outbound result. A disabled node is
+// never promoted by a check that started before it was disabled.
+func (s *Store) RecordCheck(ctx context.Context, id string, record CheckRecord, now time.Time) (Snapshot, error) {
+	if now.IsZero() || !validCheckRecord(record, id) {
+		return Snapshot{}, ErrStore
+	}
+	now = now.UTC()
+	if record.CheckedAt.After(now.Add(time.Minute)) || now.Sub(record.CheckedAt) > 5*time.Minute || !record.ExpiresAt.After(now) {
+		return Snapshot{}, ErrStore
+	}
+	return s.mutate(ctx, id, now, func(doc *document, index int) (bool, error) {
+		if doc.Nodes[index].Disabled {
+			return false, ErrDisabled
+		}
+		checks := append([]CheckRecord(nil), doc.Nodes[index].Checks...)
+		for _, existing := range checks {
+			if existing.ProbeID == record.ProbeID {
+				return false, ErrStore
+			}
+		}
+		checks = append(checks, record)
+		sort.Slice(checks, func(i, j int) bool { return checks[i].CheckedAt.Before(checks[j].CheckedAt) })
+		if len(checks) > MaxCheckHistory {
+			checks = append([]CheckRecord(nil), checks[len(checks)-MaxCheckHistory:]...)
+		}
+		doc.Nodes[index].Checks = checks
 		return true, nil
 	})
 }
@@ -532,6 +603,54 @@ func validAlias(alias string) bool {
 	}
 	for _, char := range alias {
 		if unicode.IsControl(char) {
+			return false
+		}
+	}
+	return true
+}
+
+var checkTokenPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,127}$`)
+
+func validCheckRecord(record CheckRecord, nodeID string) bool {
+	if !checkTokenPattern.MatchString(record.ProbeID) || !sourcePattern.MatchString(record.ServiceID) ||
+		!checkTokenPattern.MatchString(record.NetworkProfile) || record.RoutePathID != "sing-box:"+nodeID ||
+		record.CheckedAt.IsZero() || record.ExpiresAt.IsZero() || !record.ExpiresAt.After(record.CheckedAt) ||
+		record.ExpiresAt.Sub(record.CheckedAt) > maxCheckTTL || record.LatencyMS < 0 || record.LatencyMS > 600_000 ||
+		record.HTTPStatus < 0 || record.HTTPStatus > 599 || len(record.Message) > 240 ||
+		(record.ErrorCode != "" && !checkTokenPattern.MatchString(record.ErrorCode)) {
+		return false
+	}
+	if strings.TrimSpace(record.Message) != record.Message {
+		return false
+	}
+	for _, char := range record.Message {
+		if unicode.IsControl(char) {
+			return false
+		}
+	}
+	switch record.TestLevel {
+	case "dns", "transport", "protocol", "egress", "service":
+	default:
+		return false
+	}
+	switch record.Verdict {
+	case "PASS", "PARTIAL", "BLOCKED", "MISROUTED", "INCONCLUSIVE", "ERROR":
+	default:
+		return false
+	}
+	switch record.State {
+	case "available", "unavailable":
+	default:
+		return false
+	}
+	switch record.Stage {
+	case "dns", "transport", "configuration", "protocol", "route_identity", "egress", "service", "cleanup":
+	default:
+		return false
+	}
+	if record.EgressIP != "" {
+		ip := net.ParseIP(record.EgressIP)
+		if ip == nil || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
 			return false
 		}
 	}

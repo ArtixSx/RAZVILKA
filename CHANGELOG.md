@@ -30,6 +30,17 @@
 - Bounded every SOCKS handshake stage and closed cancelled connections; failed
   managed startup now reaps its child and invalidates its launch receipt.
   Remote egress proof and router acceptance remain outstanding.
+- Added an exact single-node checker for saved Sing-box outbounds. It isolates
+  one node on a loopback-only SOCKS port, pins the resolved public endpoint,
+  verifies process/route ownership, compares proxy and direct egress, and runs
+  a catalog-owned service canary before recording availability.
+- Added bounded node health history with service, network-profile and TTL
+  binding. Direct leaks, protocol-only success, stale evidence, disabled nodes
+  and cleanup failures cannot make a node selectable; private endpoint and
+  credentials remain outside the API.
+- Added a simple node-check dialog and visible last-check status/IP. This stage
+  still does not bind nodes to services or mutate working routes; hardware and
+  Linux race acceptance remain required before release.
 
 ## v0.18.0 — Autopilot and honest route checks
 

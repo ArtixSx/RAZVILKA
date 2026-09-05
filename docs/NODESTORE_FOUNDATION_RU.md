@@ -91,9 +91,10 @@ journal rollback и process-crash recovery. Перед подключением 
 общем зашифрованном архиве подключены через отдельный versioned journal; старый
 journal сохраняет собственный lifetime lease. N1.2 добавляет страницу списка,
 поиск, фильтр, явный импорт, alias/disable/delete и подтверждённый reveal без
-ложного selectable. Далее N1.3 — exact-node health evidence с TTL и привязкой к
-сети/сервису. Subscription credentials и постоянный retry quarantine пока
-отсутствуют.
+ложного selectable. N1.3 exact-node health evidence с TTL и привязкой к
+сети/сервису теперь реализован в [отдельном контракте](EXACT_NODE_CHECKER_RU.md).
+Следующим остаётся N1.4 bindings; subscription credentials и постоянный retry
+quarantine пока отсутствуют.
 
 Роутер не изменялся. Публичные feeds не загружались этим блоком; автоматические
 подписки и переключение маршрутов остаются в [плане](PUBLIC_PROVIDER_SOURCES_RU.md).

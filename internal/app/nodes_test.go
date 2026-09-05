@@ -10,9 +10,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/security"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
+
+type fakeNodeChecker struct {
+	result  dataplane.NodeCheckResult
+	request dataplane.NodeCheckRequest
+	err     error
+}
+
+func (f *fakeNodeChecker) Check(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+	f.request = request
+	return f.result, f.err
+}
+
+func (*fakeNodeChecker) Recover(context.Context) error { return nil }
 
 func TestNodeListIsSanitizedAndReadOnly(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "nodes")
@@ -200,5 +217,86 @@ func TestNodeImportStoresAcceptedEntriesWithoutChangingRoutes(t *testing.T) {
 	snapshot, err := store.Snapshot(context.Background(), time.Now())
 	if err != nil || len(snapshot.Nodes) != 1 || snapshot.Nodes[0].State != "quarantined" || snapshot.Nodes[0].Health.State != "not_checked" {
 		t.Fatal("accepted node was not quarantined")
+	}
+}
+
+func TestNodeExactCheckPersistsOnlySafeEvidence(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "nodes")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := nodestore.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	const privateURI = "vless://123e4567-e89b-12d3-a456-426614174000@private.example:443?security=tls&sni=secret.example"
+	snapshot, err := store.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, privateURI, time.Now(), time.Hour, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snapshot.Nodes[0].ID
+	now := time.Now().UTC()
+	checker := &fakeNodeChecker{result: dataplane.NodeCheckResult{
+		SchemaVersion: 1, ProbeID: "node-check-api", NodeID: id, ServiceID: "telegram", NetworkProfile: systemprobe.DetectWANProfile().ID,
+		RoutePathID: "sing-box:" + id, StartedAt: now.Add(-time.Second), FinishedAt: now, ExpiresAt: now.Add(time.Hour),
+		TestLevel: "service", Stage: "service", Verdict: evidence.VerdictPass, Available: true,
+		EgressIP: "203.0.113.25", HTTPStatus: 204, LatencyMS: 1000, Message: "Узел и сервис подтверждены.",
+	}}
+	a := &App{Nodes: store, NodeChecker: checker, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`))
+	response := httptest.NewRecorder()
+	a.Handler(http.NotFoundHandler()).ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"working_routes_changed":false`) || !strings.Contains(response.Body.String(), `"ok":true`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if checker.request.NodeID != id || checker.request.Service.ID != "telegram" || len(checker.request.Outbound) == 0 {
+		t.Fatalf("checker did not receive the exact private node and catalog service: node=%q service=%q bytes=%d", checker.request.NodeID, checker.request.Service.ID, len(checker.request.Outbound))
+	}
+	listed, err := store.Snapshot(context.Background(), now)
+	if err != nil || listed.Nodes[0].State != "available" || listed.Nodes[0].Health.EgressIP != "203.0.113.25" || listed.Nodes[0].Health.ServiceID != "telegram" {
+		t.Fatalf("snapshot=%+v err=%v", listed, err)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, "nodes.private.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The private document necessarily contains the original outbound once;
+	// safe evidence must not duplicate its endpoint or SNI.
+	if strings.Count(string(raw), "private.example") != 1 || strings.Count(string(raw), "secret.example") != 1 {
+		t.Fatal("private endpoint was copied into persisted evidence")
+	}
+}
+
+func TestNodeCheckRequiresCatalogProbeAndEnabledNode(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "nodes")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := nodestore.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	snapshot, err := store.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174000@node.example:443?security=tls", time.Now(), time.Hour, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snapshot.Nodes[0].ID
+	checker := &fakeNodeChecker{}
+	handler := (&App{Nodes: store, NodeChecker: checker, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "manual", Name: "Manual", Category: "other", Strategy: []string{"sing-box"}}}}}).Handler(http.NotFoundHandler())
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"manual","confirm":"CHECK_NODE"}`)))
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("probe-less service status=%d", response.Code)
+	}
+	if _, err := store.SetDisabled(context.Background(), id, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	handler = (&App{Nodes: store, NodeChecker: checker, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}).Handler(http.NotFoundHandler())
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`)))
+	if response.Code != http.StatusConflict || checker.request.NodeID != "" {
+		t.Fatalf("disabled node status=%d request=%+v", response.Code, checker.request)
 	}
 }

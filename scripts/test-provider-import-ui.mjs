@@ -28,7 +28,7 @@ element('#remoteProfileURI').value = 'reviewed-list';
 handler = async () => ({ preview });
 await context.previewRemoteProfile();
 assert.equal(element('#remoteProfileImportButton').disabled, false);
-assert.match(element('#remoteProfileImportButton').textContent, /из 1 принятых/);
+assert.match(element('#remoteProfileImportButton').textContent, /1 выбранный/);
 assert.match(element('#remoteProfilePreview').innerHTML, /Отклонено: 1/);
 assert.match(element('#remoteProfilePreview').innerHTML, /&lt;unsafe&gt;/);
 assert.doesNotMatch(element('#remoteProfilePreview').innerHTML, /<unsafe>/);

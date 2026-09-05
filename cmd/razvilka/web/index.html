@@ -177,11 +177,11 @@
       <article class="panel full-panel">
         <div class="panel-title sticky-title">
           <div><h2>Сохранённые узлы</h2><p>Локальный инвентарь импортированных подключений — без паролей, ключей и скрытых параметров</p></div>
-          <div class="filters"><button class="primary" id="nodeOpenImport" type="button">+ Добавить узлы</button><input id="nodeSearch" placeholder="Имя, протокол или транспорт" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="quarantined">Ожидают проверки</option><option value="disabled">Отключены</option><option value="expired">Истекли</option></select><button class="secondary" id="refreshNodes" type="button">Обновить</button></div>
+          <div class="filters"><button class="primary" id="nodeOpenImport" type="button">+ Добавить узлы</button><input id="nodeSearch" placeholder="Имя, протокол или транспорт" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="available">Проверены</option><option value="degraded">Не прошли проверку</option><option value="stale">Нужно перепроверить</option><option value="quarantined">Ожидают проверки</option><option value="disabled">Отключены</option><option value="expired">Истекли</option></select><button class="secondary" id="refreshNodes" type="button">Обновить</button></div>
         </div>
         <div class="node-truth-banner" id="nodeTruthBanner" role="status">
           <div><b>Импорт не означает, что узел работает</b><span>Перед назначением сервису понадобятся проверка протокола, IP выхода и доступности самого сервиса.</span></div>
-          <span class="node-readonly-badge">ТОЛЬКО ПРОСМОТР</span>
+          <span class="node-readonly-badge">МАРШРУТЫ НЕ МЕНЯЮТСЯ</span>
         </div>
         <div class="node-summary" id="nodeSummary"></div>
         <div class="node-list" id="nodeList"></div>
@@ -455,6 +455,15 @@
   <div class="dialog-head"><div><span class="eyebrow">ПРИВАТНАЯ КОНФИГУРАЦИЯ</span><h3 id="nodeRevealTitle">Конфигурация узла</h3><p>В тексте могут быть пароль или UUID. Окно очищается после закрытия и не попадает в журнал RAZVILKA.</p></div><button class="dialog-close" id="nodeRevealClose" type="button" aria-label="Закрыть">×</button></div>
   <textarea id="nodeRevealContent" class="node-reveal-content" readonly autocomplete="off" spellcheck="false"></textarea>
   <div class="dialog-actions"><span class="save-feedback" id="nodeRevealFeedback" role="status"></span><button class="secondary" id="nodeRevealCopy" type="button">Копировать</button><button class="primary" id="nodeRevealDone" type="button">Готово</button></div>
+</dialog>
+<dialog class="form-dialog node-check-dialog" id="nodeCheckDialog">
+  <form id="nodeCheckForm">
+    <div class="dialog-head"><div><span class="eyebrow">ТОЧНАЯ ПРОВЕРКА</span><h3 id="nodeCheckTitle">Проверить узел</h3><p>RAZVILKA временно запустит только этот узел, сравнит IP выхода и проверит выбранный сервис. Рабочие маршруты не изменятся.</p></div><button class="dialog-close" id="nodeCheckClose" type="button" aria-label="Закрыть">×</button></div>
+    <input id="nodeCheckID" type="hidden">
+    <label><span>Какой сервис проверить</span><select id="nodeCheckService" required></select><small>Выбирайте сервис, для которого хотите использовать этот узел. Результат действует только в текущей сети и ограниченное время.</small></label>
+    <div class="node-check-steps"><span>1 · DNS и порт</span><span>2 · протокол и ключ</span><span>3 · IP выхода</span><span>4 · сервис</span></div>
+    <div class="dialog-actions"><button class="secondary" id="nodeCheckCancel" type="button">Отмена</button><button class="primary" id="nodeCheckRun" type="submit">Проверить узел</button></div>
+  </form>
 </dialog>
 <dialog class="form-dialog apply-review-dialog" id="applyReviewDialog">
   <form method="dialog">

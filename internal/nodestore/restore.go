@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
@@ -40,7 +41,7 @@ func decodeImage(image restorejournal.Image) (document, error) {
 	if len(image.Data) == 0 || len(image.Data) > maxBytes || decodeStrict(image.Data, &doc) != nil || validate(doc) != nil {
 		return document{}, restorejournal.ErrInvalid
 	}
-	if doc.Schema == legacySchema {
+	if doc.Schema != schema {
 		doc.Schema = schema
 	}
 	return doc, nil
@@ -284,6 +285,7 @@ func mergeDocuments(current, imported document) (document, error) {
 		// A restore must never silently re-enable a node. Explicit re-enable is
 		// a later authenticated mutation.
 		existing.Disabled = existing.Disabled || node.Disabled
+		existing.Checks = mergeChecks(existing.Checks, node.Checks)
 		if node.AddedAt.Before(existing.AddedAt) {
 			existing.AddedAt = node.AddedAt
 		}
@@ -309,6 +311,24 @@ func mergeDocuments(current, imported document) (document, error) {
 		return document{}, ErrCapacity
 	}
 	return current, nil
+}
+
+func mergeChecks(current, imported []CheckRecord) []CheckRecord {
+	byID := make(map[string]CheckRecord, len(current)+len(imported))
+	for _, check := range append(append([]CheckRecord(nil), current...), imported...) {
+		if existing, ok := byID[check.ProbeID]; !ok || check.CheckedAt.After(existing.CheckedAt) {
+			byID[check.ProbeID] = check
+		}
+	}
+	out := make([]CheckRecord, 0, len(byID))
+	for _, check := range byID {
+		out = append(out, check)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CheckedAt.Before(out[j].CheckedAt) })
+	if len(out) > MaxCheckHistory {
+		out = append([]CheckRecord(nil), out[len(out)-MaxCheckHistory:]...)
+	}
+	return out
 }
 
 func (t *RestoreTarget) Close() error {

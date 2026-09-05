@@ -331,9 +331,11 @@ func main() {
 	} else {
 		defer nodeStore.Close()
 	}
+	nodeChecker := dataplane.NewExactNodeChecker(filepath.Join(*dataplaneStatePath, "node-check"))
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	a.Cloudflare = cloudflareStore
 	a.Nodes = nodeStore
+	a.NodeChecker = nodeChecker
 	a.PrivateRestore = privateRecovery
 	a.CloudflareLegacy, err = cloudflareLegacySources(*cfgPath, *warpStatePath)
 	if err != nil {
@@ -341,6 +343,12 @@ func main() {
 	}
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
+	nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
+	if err := nodeChecker.Recover(nodeRecoveryContext); err != nil {
+		log.Print("Exact node checker disabled: temporary runtime cleanup could not be confirmed")
+		a.NodeChecker = nil
+	}
+	cancelNodeRecovery()
 	usqueRecoveryContext, cancelUSQUERecovery := context.WithTimeout(runtimeContext, 30*time.Second)
 	usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
 	cancelUSQUERecovery()

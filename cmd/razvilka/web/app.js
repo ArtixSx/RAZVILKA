@@ -2398,18 +2398,24 @@ function renderNodes() {
   $('#nodeTruthBanner').querySelector('div').innerHTML = payload.available === false
     ? '<b>Хранилище узлов недоступно</b><span>Рабочие маршруты не изменены. Проверьте приватное хранилище в диагностике.</span>'
     : `<b>Импорт не означает, что узел работает</b><span>${esc(payload.note || 'Все записи ожидают отдельной проверки через роутер.')}</span>`;
-  $('#nodeSummary').innerHTML = `<div><span>Сохранено</span><b>${Number(counts.total || 0)}</b></div><div><span>Ожидают проверки</span><b>${Number(counts.quarantined || 0)}</b></div><div><span>Отключены</span><b>${Number(counts.disabled || 0)}</b></div><div><span>Истекли</span><b>${Number(counts.expired || 0)}</b></div><div><span>Можно назначить</span><b>${Number(counts.selectable || 0)}</b><small>только после точной проверки</small></div>`;
+  $('#nodeSummary').innerHTML = `<div><span>Сохранено</span><b>${Number(counts.total || 0)}</b></div><div><span>Проверены</span><b>${Number(counts.verified || 0)}</b><small>для текущей сети и сервиса</small></div><div><span>Не прошли</span><b>${Number(counts.degraded || 0)}</b></div><div><span>Нужно перепроверить</span><b>${Number(counts.stale || 0)}</b></div><div><span>Можно назначить</span><b>${Number(counts.selectable || 0)}</b><small>подключим следующим этапом</small></div>`;
   $('#nodeList').innerHTML = filtered.map((node) => {
     const protocol = String(node.protocol || 'unknown').toUpperCase();
     const transport = node.transport ? String(node.transport).toUpperCase() : 'обычный';
-    const stateLabel = node.disabled ? 'ОТКЛЮЧЁН' : node.state === 'expired' ? 'ИСТЁК' : 'ОЖИДАЕТ ПРОВЕРКИ';
+    const health = node.health || {};
+    const stateLabel = node.disabled ? 'ОТКЛЮЧЁН' : ({ available: 'ПРОВЕРЕН', degraded: 'НЕ ПРОШЁЛ', stale: 'ПЕРЕПРОВЕРИТЬ', expired: 'ИСТЁК', quarantined: 'ОЖИДАЕТ ПРОВЕРКИ' })[node.state] || 'ОЖИДАЕТ ПРОВЕРКИ';
     const maskedURI = `${protocol}://***${node.port ? `:${Number(node.port)}` : ''}`;
-    return `<article class="node-card ${node.disabled ? 'disabled' : node.state === 'expired' ? 'expired' : 'quarantined'}">
+    const checked = health.checked_at ? new Date(health.checked_at) : null;
+    const checkedText = checked && Number.isFinite(checked.getTime()) ? checked.toLocaleString('ru-RU') : 'не запускалась';
+    const serviceName = state.services.find((service) => service.id === health.service_id)?.name || health.service_id || '—';
+    const healthBlock = health.checked_at ? `<div class="node-health"><span>Сервис<b>${esc(serviceName)}</b></span><span>IP через узел<b>${esc(health.egress_ip || 'не подтверждён')}</b></span><span>Уровень проверки<b>${esc(({ dns: 'DNS', transport: 'порт', protocol: 'протокол', egress: 'IP выхода', service: 'сервис' })[health.test_level] || health.test_level || '—')}</b></span><span>Проверено<b>${esc(checkedText)}</b></span>${health.message ? `<span class="node-health-message">${esc(health.message)}</span>` : ''}</div>` : '';
+    return `<article class="node-card ${node.disabled ? 'disabled' : esc(node.state || 'quarantined')}">
       <div class="node-card-head"><div><span class="node-protocol">${esc(protocol)}</span><h3>${esc(node.name || 'Импортированный узел')}</h3></div><span class="node-state">${esc(stateLabel)}</span></div>
       <code class="node-masked-uri">${esc(maskedURI)}</code>
       <div class="node-meta"><span>Транспорт <b>${esc(transport)}</b></span><span>TLS <b>${node.tls ? 'да' : 'нет'}</b></span><span>Источник <b>${esc(nodeSourceLabel(node))}</b></span><span>Срок <b>${esc(nodeExpiryText(node))}</b></span></div>
-      <div class="node-card-foot"><span>Назначенные сервисы: <b>нет</b></span><span>Проверка: <b>не запускалась</b></span></div>
-      <div class="node-actions"><button class="secondary" type="button" data-node-edit="${esc(node.id)}">Переименовать</button><button class="secondary" type="button" data-node-disable="${esc(node.id)}" data-disabled="${node.disabled ? 'true' : 'false'}">${node.disabled ? 'Включить' : 'Отключить'}</button><button class="secondary" type="button" data-node-reveal="${esc(node.id)}">Показать конфиг</button><button class="danger-button" type="button" data-node-delete="${esc(node.id)}">Удалить</button></div>
+      ${healthBlock}
+      <div class="node-card-foot"><span>Назначенные сервисы: <b>нет</b></span><span>Последняя проверка: <b>${esc(checkedText)}</b></span></div>
+      <div class="node-actions"><button class="primary" type="button" data-node-check="${esc(node.id)}" ${node.disabled ? 'disabled' : ''}>Проверить</button><button class="secondary" type="button" data-node-edit="${esc(node.id)}">Переименовать</button><button class="secondary" type="button" data-node-disable="${esc(node.id)}" data-disabled="${node.disabled ? 'true' : 'false'}">${node.disabled ? 'Включить' : 'Отключить'}</button><button class="secondary" type="button" data-node-reveal="${esc(node.id)}">Показать конфиг</button><button class="danger-button" type="button" data-node-delete="${esc(node.id)}">Удалить</button></div>
     </article>`;
   }).join('');
   $('#nodeEmpty').style.display = filtered.length ? 'none' : 'grid';
@@ -2443,6 +2449,39 @@ function openNodeEdit(id) {
   $('#nodeEditAlias').value = node.name?.startsWith('Узел ') ? '' : node.name || '';
   $('#nodeEditDialog').showModal();
   setTimeout(() => $('#nodeEditAlias').focus(), 0);
+}
+
+function openNodeCheck(id) {
+  const node = nodeByID(id);
+  if (!node || node.disabled) return;
+  const services = state.services.filter((service) => service.probe_url || (Array.isArray(service.probes) && service.probes.some((probe) => probe.required && probe.url)));
+  $('#nodeCheckID').value = id;
+  $('#nodeCheckTitle').textContent = `Проверить: ${node.name || 'узел'}`;
+  $('#nodeCheckService').innerHTML = services.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('');
+  $('#nodeCheckRun').disabled = services.length === 0;
+  $('#nodeCheckRun').textContent = services.length ? 'Проверить узел' : 'Нет доступных сценариев';
+  $('#nodeCheckDialog').showModal();
+}
+
+async function runNodeCheck(event) {
+  event.preventDefault();
+  const button = $('#nodeCheckRun');
+  const id = $('#nodeCheckID').value;
+  const serviceID = $('#nodeCheckService').value;
+  if (!id || !serviceID) return;
+  button.disabled = true;
+  button.textContent = 'Проверяем до 45 секунд…';
+  try {
+    const response = await api(`/api/v1/nodes/${encodeURIComponent(id)}/check`, { method: 'POST', body: JSON.stringify({ service_id: serviceID, confirm: 'CHECK_NODE' }) });
+    $('#nodeCheckDialog').close();
+    await refreshNodes();
+    showDetails(response.result || response, response.ok ? 'Узел прошёл точную проверку' : 'Узел не прошёл проверку');
+  } catch (error) {
+    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Проверка узла не завершена');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Проверить узел';
+  }
 }
 
 async function saveNodeAlias(event) {
@@ -3578,11 +3617,13 @@ function bindEvents() {
   $('#refreshNodes').addEventListener('click', refreshNodes);
   $('#nodeOpenImport').addEventListener('click', async () => { await openEngineConfiguration('sing-box'); switchEngineTab('transfer'); });
   $('#nodeList').addEventListener('click', (event) => {
+    const check = event.target.closest('[data-node-check]');
     const edit = event.target.closest('[data-node-edit]');
     const disable = event.target.closest('[data-node-disable]');
     const reveal = event.target.closest('[data-node-reveal]');
     const remove = event.target.closest('[data-node-delete]');
-    if (edit) openNodeEdit(edit.dataset.nodeEdit);
+    if (check) openNodeCheck(check.dataset.nodeCheck);
+    else if (edit) openNodeEdit(edit.dataset.nodeEdit);
     else if (disable) toggleNodeDisabled(disable.dataset.nodeDisable, disable.dataset.disabled === 'true');
     else if (reveal) revealNode(reveal.dataset.nodeReveal);
     else if (remove) deleteNode(remove.dataset.nodeDelete);
@@ -3590,6 +3631,9 @@ function bindEvents() {
   $('#nodeEditForm').addEventListener('submit', saveNodeAlias);
   $('#nodeEditClose').addEventListener('click', () => $('#nodeEditDialog').close());
   $('#nodeEditCancel').addEventListener('click', () => $('#nodeEditDialog').close());
+  $('#nodeCheckForm').addEventListener('submit', runNodeCheck);
+  $('#nodeCheckClose').addEventListener('click', () => $('#nodeCheckDialog').close());
+  $('#nodeCheckCancel').addEventListener('click', () => $('#nodeCheckDialog').close());
   $('#nodeRevealClose').addEventListener('click', clearNodeReveal);
   $('#nodeRevealDone').addEventListener('click', clearNodeReveal);
   $('#nodeRevealCopy').addEventListener('click', copyRevealedNode);

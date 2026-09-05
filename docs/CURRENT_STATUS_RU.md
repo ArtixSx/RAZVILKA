@@ -27,7 +27,7 @@ gap-аудиты сохранены как исторические снимки
 | Transaction engine | Реализовано · CI · Роутер | Plan, snapshot, stage, validate, canary, commit/rollback и LKG-журнал | Fault injection во всех commit points |
 | NFQWS2 adapter | Реализовано · CI · Роутер | Запуск, читаемые runtime-списки, проверка фактического процесса и YouTube HTTP `204` | Native ownership стратегий, NFQUEUE lease и event-driven recovery |
 | Sing-box/Xray candidate | Реализовано · CI · частично Роутер | Локальная проверка конфига, loopback proxy-canary, bounded URLTest pool | Полная Evidence v2 и длительная проверка узлов |
-| NodeStore | N1.2 реализован · локально | Приватное атомарное хранение, backup/recovery, startup wiring, импорт, alias/disable/delete и подтверждённый reveal | Exact outbound check, bindings и HIL |
+| NodeStore | N1.3 реализован · локально | Приватное хранение, управление узлами и exact check: route identity, egress/direct control, сервис, TTL и сеть | Node/service bindings, Linux race и HIL |
 | WARP MASQUE/USQUE | Реализовано · CI · Экспериментально | Doctor, staged proxy-canary, H2/H3 диагностика и rollback | Единый Cloudflare Provider и HIL транспортов |
 | WARP WireGuard | Реализовано · CI · Экспериментально | Временный интерфейс, официальный набор портов, cleanup и безопасный отказ | Успешный handshake на поддерживаемой сети, endpoint scoring и LKG |
 | AmneziaWG | Реализовано · CI · Экспериментально | Импорт/валидация и адаптер транзакции | Отдельный аппаратный canary и compatibility registry |
@@ -215,8 +215,7 @@ startup и безопасному read-only API/UI, но не к рабочим 
 участвуют в общей journal-транзакции с rollback/process-crash recovery. NodeStore
 подключён к startup и общему export/preview/import; пустое хранилище не создаёт
 документ. Старый и новый журналы имеют раздельные scope и lifetime lease. Узкий
-Cloudflare restore отклоняет смешанный архив. Следующий пункт — N1.2 API/UI узлов,
-затем exact-node check.
+Cloudflare restore отклоняет смешанный архив.
 Подготовлена N1.2: `/api/v1/nodes` и отдельная страница «Узлы»
 показывают только безопасные карточки, источник, срок и счётчики; есть поиск и
 фильтр. Все записи остаются недоступными для выбора (`selectable=0`), UI прямо
@@ -225,7 +224,13 @@ Cloudflare restore отклоняет смешанный архив. Следу�
 delete подключены; reveal требует подтверждения, возвращается с `no-store` и
 очищается интерфейсом после закрытия. Отдельная кнопка сохраняет все принятые
 записи в NodeStore, не создавая маршрут и не запуская Sing-box. Схема 1 читается
-без фоновой записи и переходит на schema 2 только при явном изменении.
+без фоновой записи и переходит на актуальную схему только при явном изменении.
+Локально завершён [N1.3 Exact Node Checker](EXACT_NODE_CHECKER_RU.md): отдельный
+Sing-box outbound проверяется через изолированный loopback runtime, закреплённый
+публичный адрес, паспорт процесса, IP выхода, direct-leak control и catalog-owned
+canary выбранного сервиса. Результат хранится с TTL и профилем сети; UI показывает
+IP и понятную стадию. Рабочие маршруты не меняются, `selectable=0` остаётся до
+N1.4 bindings. Linux race и реальный Keenetic HIL ещё не выполнены.
 Оставшаяся работа Cloudflare/USQUE ниже сохраняется
 в backlog. [Автообновление публичных источников](PUBLIC_PROVIDER_SOURCES_RU.md)
 добавлено в план как opt-in после этих зависимостей, без скрытой смены маршрута.
