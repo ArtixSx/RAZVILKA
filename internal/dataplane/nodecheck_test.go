@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +86,26 @@ func TestExactNodeCheckDoesNotPromoteOpenTCPPort(t *testing.T) {
 		if stage.ID == "service" {
 			t.Fatal("service stage ran after failed protocol")
 		}
+	}
+}
+
+func TestExactNodeCheckReturnsOnlyBoundedIdentityDiagnostic(t *testing.T) {
+	checker := fakeExactNodeChecker(t)
+	checker.identity = func(exactNodeSession) (routeidentity.Passport, error) {
+		return routeidentity.Passport{}, errors.New("route-listener-owner-mismatch")
+	}
+	result, err := checker.Check(context.Background(), checkedNodeRequest())
+	if err != nil || result.Available || result.ErrorCode != "node-route-listener-owner-mismatch" {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+
+	checker = fakeExactNodeChecker(t)
+	checker.identity = func(exactNodeSession) (routeidentity.Passport, error) {
+		return routeidentity.Passport{}, errors.New("private endpoint node.example with secret")
+	}
+	result, err = checker.Check(context.Background(), checkedNodeRequest())
+	if err != nil || result.ErrorCode != "node-route-identity-failed" || strings.Contains(result.ErrorCode, "secret") {
+		t.Fatalf("unbounded diagnostic escaped: %+v %v", result, err)
 	}
 }
 

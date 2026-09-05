@@ -27,7 +27,7 @@ gap-аудиты сохранены как исторические снимки
 | Transaction engine | Реализовано · CI · Роутер | Plan, snapshot, stage, validate, canary, commit/rollback и LKG-журнал | Fault injection во всех commit points |
 | NFQWS2 adapter | Реализовано · CI · Роутер | Запуск, читаемые runtime-списки, проверка фактического процесса и YouTube HTTP `204` | Native ownership стратегий, NFQUEUE lease и event-driven recovery |
 | Sing-box/Xray candidate | Реализовано · CI · частично Роутер | Локальная проверка конфига, loopback proxy-canary, bounded URLTest pool | Полная Evidence v2 и длительная проверка узлов |
-| NodeStore | N1.3 реализован · локально | Приватное хранение, управление узлами и exact check: route identity, egress/direct control, сервис, TTL и сеть | Node/service bindings, Linux race и HIL |
+| NodeStore | N1.3 реализован · Роутер | Приватное хранение, управление узлами и exact VLESS check: route identity, egress/direct control, Telegram, TTL и сеть | Node/service bindings, Linux race и HIL Reality/Hysteria2/TUIC |
 | WARP MASQUE/USQUE | Реализовано · CI · Экспериментально | Doctor, staged proxy-canary, H2/H3 диагностика и rollback | Единый Cloudflare Provider и HIL транспортов |
 | WARP WireGuard | Реализовано · CI · Экспериментально | Временный интерфейс, официальный набор портов, cleanup и безопасный отказ | Успешный handshake на поддерживаемой сети, endpoint scoring и LKG |
 | AmneziaWG | Реализовано · CI · Экспериментально | Импорт/валидация и адаптер транзакции | Отдельный аппаратный canary и compatibility registry |
@@ -230,7 +230,10 @@ Sing-box outbound проверяется через изолированный l
 публичный адрес, паспорт процесса, IP выхода, direct-leak control и catalog-owned
 canary выбранного сервиса. Результат хранится с TTL и профилем сети; UI показывает
 IP и понятную стадию. Рабочие маршруты не меняются, `selectable=0` остаётся до
-N1.4 bindings. Linux race и реальный Keenetic HIL ещё не выполнены.
+N1.4 bindings. На Keenetic ARM64 подтверждён полный VLESS → Sing-box → Telegram
+сценарий с отличающимся egress IP и очисткой. Для старого ядра без `ns/net`
+добавлен узкий fail-closed fallback; подробности зафиксированы в отчёте N1.3.
+Linux race и отдельный HIL Reality/Hysteria2/TUIC ещё не выполнены.
 Оставшаяся работа Cloudflare/USQUE ниже сохраняется
 в backlog. [Автообновление публичных источников](PUBLIC_PROVIDER_SOURCES_RU.md)
 добавлено в план как opt-in после этих зависимостей, без скрытой смены маршрута.

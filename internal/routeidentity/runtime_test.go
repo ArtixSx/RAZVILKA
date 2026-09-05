@@ -90,6 +90,25 @@ func TestRuntimePassport(t *testing.T) {
 	}
 }
 
+func TestRuntimePassportSupportsKernelWithoutNetworkNamespaces(t *testing.T) {
+	f := newRuntimeFixture(t)
+	delete(f.links, "/proc/42/ns/net")
+	delete(f.links, "/proc/self/ns/net")
+	passport, err := verify(f.proc, f.root, "sing-box", f.endpoint)
+	if err != nil || passport.ID == "" || passport.Outbound != "vless" {
+		t.Fatalf("passport=%+v err=%v", passport, err)
+	}
+}
+
+func TestNetworkNamespaceFallbackRemainsFailClosed(t *testing.T) {
+	if sameNetworkNamespace("", os.ErrPermission, "", os.ErrPermission) {
+		t.Fatal("permission failures must not be accepted as missing namespace support")
+	}
+	if sameNetworkNamespace("", os.ErrNotExist, "net:[77]", nil) {
+		t.Fatal("partial namespace evidence must not be accepted")
+	}
+}
+
 func TestRuntimePassportRejectsStaleOrUnownedEvidence(t *testing.T) {
 	for _, tt := range []struct {
 		name, want string

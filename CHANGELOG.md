@@ -39,8 +39,13 @@
   and cleanup failures cannot make a node selectable; private endpoint and
   credentials remain outside the API.
 - Added a simple node-check dialog and visible last-check status/IP. This stage
-  still does not bind nodes to services or mutate working routes; hardware and
-  Linux race acceptance remain required before release.
+  still does not bind nodes to services or mutate working routes.
+- Verified the exact VLESS → Sing-box → Telegram path on Keenetic ARM64,
+  including distinct direct/proxy egress, route ownership and cleanup. Route
+  passports now safely support older kernels built without network namespaces
+  only when both procfs namespace entries are absent with `ENOENT`; partial,
+  permission and mismatch failures remain fail-closed. Linux race acceptance
+  and additional Reality/Hysteria2/TUIC fixtures remain required before release.
 
 ## v0.18.0 — Autopilot and honest route checks
 

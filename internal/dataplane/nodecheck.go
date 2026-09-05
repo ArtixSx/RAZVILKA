@@ -234,7 +234,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	passport, err := c.identity(session)
 	if err != nil || passport.Outbound != endpoint.Protocol {
 		result.TestLevel = "protocol"
-		result.fail("route_identity", "node-route-identity-failed", "Не удалось доказать принадлежность временного канала выбранному узлу.")
+		result.fail("route_identity", nodeRouteIdentityErrorCode(err, passport.Outbound, endpoint.Protocol), "Не удалось доказать принадлежность временного канала выбранному узлу.")
 		result.addStage("route_identity", "failed", "Идентичность процесса или конфигурации не подтверждена.", stageStarted, c.currentTime())
 		finish()
 		return result, nil
@@ -314,6 +314,48 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	}
 	finish()
 	return result, resultErr
+}
+
+// nodeRouteIdentityErrorCode preserves only the bounded diagnostic category.
+// It makes hardware-specific procfs incompatibilities actionable without ever
+// exposing process arguments, paths, endpoints or configuration values.
+func nodeRouteIdentityErrorCode(err error, observed, expected string) string {
+	if err == nil {
+		if observed != expected {
+			return "node-route-protocol-mismatch"
+		}
+		return "node-route-identity-failed"
+	}
+	code := err.Error()
+	for _, allowed := range []string{
+		"route-receipt-missing",
+		"route-pid-invalid",
+		"route-process-unavailable",
+		"route-process-stat-invalid",
+		"route-runtime-changed",
+		"route-engine-mismatch",
+		"route-network-namespace-mismatch",
+		"route-command-unverified",
+		"route-config-invalid",
+		"route-outbound-missing",
+		"route-outbound-ambiguous",
+		"route-direct-outbound",
+		"route-rules-unverified",
+		"route-dynamic-config-unverified",
+		"route-chain-unverified",
+		"route-outbound-unsupported",
+		"route-remote-endpoint-unverified",
+		"route-listener-unsupported",
+		"route-listener-unavailable",
+		"route-listener-ambiguous",
+		"route-listener-owner-unavailable",
+		"route-listener-owner-mismatch",
+	} {
+		if code == allowed {
+			return "node-" + allowed
+		}
+	}
+	return "node-route-identity-failed"
 }
 
 func (c *ExactNodeChecker) Recover(ctx context.Context) error {

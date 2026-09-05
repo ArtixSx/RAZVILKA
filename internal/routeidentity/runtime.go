@@ -133,7 +133,7 @@ func verify(proc procReader, root, engine, endpoint string) (Passport, error) {
 	}
 	processNet, netErr := proc.readLink(fmt.Sprintf("/proc/%d/ns/net", pid))
 	probeNet, probeNetErr := proc.readLink("/proc/self/ns/net")
-	if netErr != nil || probeNetErr != nil || processNet == "" || processNet != probeNet {
+	if !sameNetworkNamespace(processNet, netErr, probeNet, probeNetErr) {
 		return passport, errors.New("route-network-namespace-mismatch")
 	}
 	cmd, err := proc.readFile(fmt.Sprintf("/proc/%d/cmdline", pid))
@@ -163,6 +163,18 @@ func verify(proc procReader, root, engine, endpoint string) (Passport, error) {
 	}
 	passport = Passport{ID: "managed:" + engine + ":" + Hash(append(raw, []byte("|"+endpoint+"|"+inode)...)), Outbound: outbound, PID: pid, ConfigHash: saved.ConfigHash}
 	return passport, nil
+}
+
+func sameNetworkNamespace(processNet string, processErr error, probeNet string, probeErr error) bool {
+	if processErr == nil && probeErr == nil {
+		return processNet != "" && processNet == probeNet
+	}
+	// Older Keenetic kernels can be built without network-namespace support;
+	// procfs then exposes mnt but no ns/net entry for either process. ENOENT on
+	// both sides is the only safe fallback: permission and partial failures stay
+	// fail-closed. Without a kernel network namespace facility the managed child
+	// cannot have been moved into a different one.
+	return errors.Is(processErr, os.ErrNotExist) && errors.Is(probeErr, os.ErrNotExist)
 }
 
 func managedArgs(engine, config, endpoint string, args []string) bool {
