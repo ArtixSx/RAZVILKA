@@ -298,6 +298,9 @@ func TestClassifyWARPMASQUEServiceTimeout(t *testing.T) {
 	if len(failure.Alternatives) != 3 || !strings.Contains(failure.Resolution, "Sing-box") {
 		t.Fatalf("missing non-WARP alternatives: %+v", failure)
 	}
+	if !strings.Contains(failure.Message, "могут оставаться запущенными") || !strings.Contains(failure.Resolution, "перезапустите штатную службу") {
+		t.Fatalf("stale USQUE runtime is not explained: %+v", failure)
+	}
 }
 
 func TestClassifySingBoxCandidateFailureExplainsPublicKeys(t *testing.T) {

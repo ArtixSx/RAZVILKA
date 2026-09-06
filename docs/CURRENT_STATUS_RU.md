@@ -72,7 +72,10 @@ NFQWS2 без изменения route behavior. Gap следующего read-o
 USQUE `opkgtun0`. Ошибка выбора RAZVILKA происходила до canary: legacy staging
 USQUE был `0755`, а приватный reader требует `0700`. Каталог исправлен на роутере,
 а startup/upgrade теперь безопасно нормализуют только allowlist каталогов
-RAZVILKA. Повторный managed apply пока не считается пройденным.
+RAZVILKA. Позже процесс и TUN оставались видимыми, но exact-запросы начали
+завершаться timeout; штатный restart вернул Telegram `HTTP 200` и Cloudflare
+`warp=on`. Это подтверждает необходимость exact canary вместо проверки PID.
+Повторный managed apply пока не считается пройденным.
 
 Подключён [online-журнал приватного импорта](PRIVATE_RESTORE_ONLINE_RU.md):
 Store sessions проверяют startup bindings, журнал сохраняется до обновления

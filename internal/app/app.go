@@ -3324,9 +3324,9 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 		(strings.Contains(lower, "usque") && strings.Contains(lower, "candidate") && strings.Contains(lower, "probe")) ||
 		(strings.Contains(lower, "masque") && strings.Contains(lower, "timeout")) {
 		advice.Code = "WARP_MASQUE_SERVICE_TIMEOUT"
-		advice.Title = "WARP MASQUE подключился, но сервис не ответил"
-		advice.Message = "Сессия с Cloudflare была создана, однако проверочный запрос выбранного сервиса не прошёл через туннель. RAZVILKA вернула прежние маршруты; интернет роутера не изменён."
-		advice.Resolution = "Создайте новую MASQUE-сессию и повторите один раз. Если результат тот же, сеть провайдера блокирует или повреждает трафик WARP — используйте Sing-box/VLESS либо AmneziaWG со своим сервером."
+		advice.Title = "USQUE запущен, но туннель не подтвердил сервис"
+		advice.Message = "Процесс и TUN-интерфейс могут оставаться запущенными даже после потери рабочего WARP-канала. Точная проверка выбранного сервиса через изолированный туннель не прошла; RAZVILKA сохранила прежний интернет и черновик."
+		advice.Resolution = "Откройте диагностику USQUE, перезапустите штатную службу и повторите точную проверку сервиса. Если туннель снова быстро перестаёт отвечать, создайте новую MASQUE-сессию; затем используйте Sing-box/VLESS либо AmneziaWG со своим сервером."
 		advice.Alternatives = []string{"sing-box", "amneziawg", "nfqws2"}
 	} else if strings.Contains(lower, "sing-box") && strings.Contains(lower, "candidate") && strings.Contains(lower, "probe") {
 		advice.Code = "SING_BOX_NODE_UNREACHABLE"
