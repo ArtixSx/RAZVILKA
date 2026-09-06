@@ -336,6 +336,20 @@ install_atomic "$CATALOG_SOURCE" "$APPDIR/service-catalog.json" 600
 install_atomic "$COMMUNITY_SOURCE" "$APPDIR/community-catalog.json" 600
 install_atomic "$SOURCES_SOURCE" "$APPDIR/sources.json" 600
 
+# Releases before the private-draft journal created per-engine directories
+# with the process umask (commonly 0755). Current readers intentionally reject
+# those permissions. The backup above retains the original image for rollback;
+# only allowlisted RAZVILKA staging directories are tightened here.
+for DIR in "$STATEDIR/staging" \
+  "$STATEDIR/staging/nfqws2" "$STATEDIR/staging/usque" \
+  "$STATEDIR/staging/warp-wg" "$STATEDIR/staging/sing-box" \
+  "$STATEDIR/staging/xray" "$STATEDIR/staging/amneziawg"; do
+  if [ -e "$DIR" ]; then
+    [ ! -L "$DIR" ] && [ -d "$DIR" ] || { echo "Unsafe engine staging directory: $DIR" >&2; false; }
+    chmod 700 "$DIR"
+  fi
+done
+
 if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_INIT_PRESENT" -eq 1 ]; then
   [ ! -e "$LEGACY_DISABLED" ] || { echo "Legacy disabled init already exists: $LEGACY_DISABLED" >&2; false; }
   mv "$LEGACY_INIT" "$LEGACY_DISABLED"

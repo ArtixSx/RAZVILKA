@@ -145,6 +145,11 @@ func main() {
 		fmt.Printf("healthy: %s\n", version)
 		return
 	}
+	// Older releases could leave per-engine draft directories at 0755. Repair
+	// only the fixed RAZVILKA staging layout before opening recovery targets.
+	if err := engineconfig.NormalizeLegacyStagePermissions(*stagePath); err != nil {
+		log.Fatal("engine staging permission repair: ", err)
+	}
 	if *recoverPrivateRestore {
 		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath)
 		if err != nil {

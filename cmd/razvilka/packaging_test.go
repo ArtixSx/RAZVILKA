@@ -26,6 +26,8 @@ func TestEntwareUpgradeDoesNotRequireArchiveScriptModeBits(t *testing.T) {
 		`[ -r "$ROLLBACK" ]`,
 		`sh "$ROLLBACK" "$BACKUP" --auto`,
 		`install_atomic "$INIT_SOURCE" "$RAZ_INIT" 755`,
+		`"$STATEDIR/staging/usque"`,
+		`chmod 700 "$DIR"`,
 		`stage 1 "Останавливаем текущую версию`,
 		`stage 4 "Сохраняем и отключаем только принадлежащий RAZVILKA dataplane`,
 		`stage 6 "Запускаем новую версию и ждём восстановления маршрутов`,
