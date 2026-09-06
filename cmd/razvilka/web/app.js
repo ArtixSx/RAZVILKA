@@ -19,6 +19,7 @@ const state = {
   engines: [],
   components: [],
   componentFilter: 'all',
+  serviceMode: 'lite',
   warp: {},
   warpPolicyDirty: false,
   engineConfigs: [],
@@ -93,6 +94,13 @@ const fallbackLabels = {
 
 const ADMIN_TOKEN_KEY = 'razvilka.adminToken';
 const ONBOARDING_KEY = 'razvilka.onboarding.v011';
+const SERVICE_MODE_KEY = 'razvilka.services.mode.v1';
+
+try {
+  state.serviceMode = localStorage.getItem(SERVICE_MODE_KEY) === 'pro' ? 'pro' : 'lite';
+} catch (_) {
+  state.serviceMode = 'lite';
+}
 
 async function api(url, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
@@ -481,15 +489,39 @@ function renderServiceListsDetails(value) {
   return `<div class="detail-hero"><span>Списки маршрутизации</span><h4>${esc(value.summary || 'Домены и IP-сети сервиса')}</h4><p>Это адреса, которыми RAZVILKA распознаёт сервис. Они не доказывают, что маршрут уже работает: доступ подтверждается отдельной проверкой.</p></div><section class="detail-section service-list-details"><h4>Домены (${domains.length})</h4>${list(domains, 'Для этого сервиса доменные правила не заданы.')}<h4>IP и CIDR (${cidrs.length})</h4>${list(cidrs, 'IP-сети не заданы: сейчас сервис распознаётся только по доменам. Для полной IP-блокировки понадобится актуальный IP-источник или туннель.')}</section><section class="detail-section"><h4>Актуальность списков</h4><div class="service-source-status">${sourceRows}</div><p class="detail-footnote">${esc(value.list_status || '')}</p></section>${technicalDetails(value)}`;
 }
 
+function renderNFQWS2ServiceDetails(value) {
+  const nfq = value.nfqws2 || {};
+  const ownerTone = nfq.owner === 'external' ? 'fail' : nfq.owner === 'razvilka' ? 'pass' : 'warn';
+  const ownerText = nfq.owner === 'external'
+    ? `${nfq.owner_name || 'Внешний процесс'} управляет NFQUEUE`
+    : nfq.owner === 'razvilka'
+      ? 'RAZVILKA управляет этим экземпляром'
+      : 'Владелец NFQUEUE пока не подтверждён';
+  const unknown = (value) => value && value !== 'unknown' ? value : 'не определено';
+  const recommendation = nfq.recommendation_only
+    ? '<div class="detail-note"><b>Это рекомендация</b><p>Сервис выключен. NFQWS2 не активирован и трафик через него не направляется.</p></div>'
+    : '';
+  const stale = nfq.stale
+    ? '<div class="detail-note warn"><b>Расчёт устарел</b><p>Черновик отличается от применённого состояния. Сначала сохраните и проверьте изменения либо отмените их.</p></div>'
+    : '';
+  return `<div class="detail-hero ${ownerTone}"><span>NFQWS2 · ${esc(value.service_name || '')}</span><h4>${esc(ownerText)}</h4><p>Здесь отдельно показаны выбор, профиль, стратегия и фактическое подтверждение. Расчёт не выдаётся за работающий маршрут.</p></div>${recommendation}${stale}<dl class="detail-kv"><div><dt>Движок</dt><dd>${esc(unknown(nfq.engine))} · ${esc(unknown(nfq.engine_state))}</dd></div><div><dt>Профиль</dt><dd>${esc(unknown(nfq.profile))}</dd></div><div><dt>Стратегия</dt><dd>${esc(unknown(nfq.strategy))}</dd></div><div><dt>Результат выбора</dt><dd>${esc(unknown(nfq.selection_status))}</dd></div><div><dt>Подтверждение</dt><dd>${esc(evidenceLevelLabel(nfq.evidence || 'none'))}${nfq.evidence_status ? ` · ${esc(nfq.evidence_status)}` : ''}</dd></div><div><dt>Владелец</dt><dd>${esc(unknown(nfq.owner_name))} · ${esc(unknown(nfq.ownership_state))}</dd></div></dl>${nfq.owner === 'external' ? '<div class="detail-note warn"><b>Внешний владелец</b><p>RAZVILKA не будет запускать второй NFQWS2 поверх работающего z2k. Импортируйте совместимые стратегии или остановите внешний стек вручную.</p></div>' : ''}<div class="detail-actions"><button class="primary" type="button" data-open-strategy-lab="1">Открыть подбор NFQWS2</button></div>${technicalDetails(value)}`;
+}
+
 function showDetails(value, title = 'Детали') {
   $('#detailsPanel').classList.add('open');
-  $('#details').innerHTML = value?.detail_kind === 'service-lists'
-    ? renderServiceListsDetails(value)
+  $('#details').innerHTML = value?.detail_kind === 'nfqws2-service'
+    ? renderNFQWS2ServiceDetails(value)
+    : value?.detail_kind === 'service-lists'
+      ? renderServiceListsDetails(value)
     : value && typeof value === 'object' && Array.isArray(value.results) && Array.isArray(value.decisions)
       ? renderRouteComparisonDetails(value)
       : renderGenericDetails(value);
   $('.drawer-head h3').textContent = title;
   $('#detailsSubtitle').textContent = 'Краткий итог · технические данные доступны ниже';
+  $('#details [data-open-strategy-lab]')?.addEventListener('click', () => {
+    $('#detailsPanel').classList.remove('open');
+    setView('strategylab');
+  });
 }
 
 function showNotice(kind, title, message, details = null, settings = false) {
@@ -1165,7 +1197,13 @@ async function refreshEngineLab() {
 }
 
 function routeSelectHTML(service) {
-  const options = state.routeOptions.filter((option) => !Array.isArray(option.services) || !option.services.length || option.services.includes(service.id));
+  if (state.serviceMode === 'lite' && !['auto', 'direct'].includes(service.route)) {
+    return `<div class="forced-route-summary"><span>${esc(routeLabel(service.route))}</span><button class="secondary" type="button" data-switch-pro="1">Изменить в расширенном режиме</button></div>`;
+  }
+  const options = state.routeOptions.filter((option) => {
+    if (state.serviceMode === 'lite' && !['auto', 'direct'].includes(option.id)) return false;
+    return !Array.isArray(option.services) || !option.services.length || option.services.includes(service.id);
+  });
   if (service.route && !options.some((o) => o.id === service.route)) {
     options.push({ id: service.route, name: service.route, installed: true, selectable: true, kind: 'custom' });
   }
@@ -1182,6 +1220,31 @@ function routeSelectHTML(service) {
     const label = o.id === 'auto' ? 'Автопилот (AUTO)' : (o.name || routeLabel(o.id));
     return `<option value="${esc(o.id)}" ${selected} ${disabled}>${esc(label)}${suffix}</option>`;
   }).join('')}</select>`;
+}
+
+function setServiceMode(mode) {
+  state.serviceMode = mode === 'pro' ? 'pro' : 'lite';
+  try { localStorage.setItem(SERVICE_MODE_KEY, state.serviceMode); } catch (_) { /* optional preference */ }
+  renderServices();
+}
+
+function serviceStateRoute(entry, fallback, disabledText = 'выключен') {
+  if (!entry?.enabled) return disabledText;
+  return routeLabel(entry.route || fallback || 'auto');
+}
+
+function serviceObservedLabel(service) {
+  const observed = service.observed_state || {};
+  if (!service.applied_state?.enabled && !service.applied_enabled) return 'нет активного маршрута';
+  if (observed.status === 'stale') return 'данные устарели';
+  if (!observed.route) return evidenceLevelLabel(observed.level || service.evidence_level || 'catalog');
+  return `${routeLabel(observed.route)} · ${evidenceLevelLabel(observed.level || service.evidence_level || 'none')}`;
+}
+
+function showNFQWS2Details(id) {
+  const service = state.services.find((item) => item.id === id);
+  if (!service) return;
+  showDetails({ detail_kind: 'nfqws2-service', service_id: service.id, service_name: service.name, nfqws2: service.nfqws2 || {} }, `NFQWS2 · ${service.name}`);
 }
 
 function populateServiceCategories() {
@@ -1202,6 +1265,7 @@ function serviceMatches(service) {
 
 function renderServices() {
   populateServiceCategories();
+  $$('[data-service-mode]').forEach((button) => button.classList.toggle('active', button.dataset.serviceMode === state.serviceMode));
   const visible = state.services.filter(serviceMatches);
   $('#serviceList').innerHTML = visible.map((s) => {
     const plannedAvailable = routeAvailable(s.planned_engine);
@@ -1221,6 +1285,14 @@ function renderServices() {
     const coverageLabel = cidrCount > 0 ? 'ДОМЕНЫ + IP' : 'ТОЛЬКО ДОМЕНЫ';
     const coverageTitle = cidrCount > 0 ? 'Учтены домены и IP-сети приложения' : 'Приложение может обращаться по IP; при полной блокировке лучше туннель';
     const routeNeedsAction = s.route_available === false && s.route !== 'auto' && s.route !== 'direct';
+    const desiredState = s.desired_state || { enabled: s.enabled, route: s.route };
+    const plannedState = s.planned_state || { enabled: s.enabled, route: s.planned_engine, recommendation_only: !s.enabled };
+    const appliedState = s.applied_state || { enabled: s.applied_enabled, route: s.applied_route };
+    const planLabel = plannedState.recommendation_only ? 'Рекомендация при включении' : 'Расчёт Автопилота';
+    const planText = routeLabel(plannedState.route || s.planned_engine);
+    const planControl = s.nfqws2?.relevant && (plannedState.route === 'nfqws2' || s.nfqws2.recommendation_only)
+      ? `<button class="resolved nfqws2-outcome ${resolvedClass}" type="button" data-nfqws2-id="${esc(s.id)}" title="Показать профиль, стратегию, подтверждение и владельца NFQUEUE"><i></i><span>${esc(planText)}</span><small>подробнее</small></button>`
+      : `<div class="resolved ${resolvedClass}"><i></i><span>${esc(planText)}</span></div>`;
     return `<article class="service-card ${s.enabled ? 'enabled' : ''} ${dirty} ${routeNeedsAction ? 'route-action-required' : ''}">
       <div class="service-top">
         <div class="service-id"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><h3>${esc(s.name)}</h3><p>${esc(s.description || '')}</p></div></div>
@@ -1228,9 +1300,10 @@ function renderServices() {
       </div>
       <div class="service-control-grid">
         <div><span class="control-label">Желаемый маршрут</span>${routeSelectHTML(s)}</div>
-        <div><span class="control-label">План Автопилота</span><div class="resolved ${resolvedClass}"><i></i><span>${esc(routeLabel(s.planned_engine))}</span></div></div>
+        <div><span class="control-label">${planLabel}</span>${planControl}${plannedState.recommendation_only ? '<small class="recommendation-copy">Сервис выключен · это только рекомендация</small>' : ''}</div>
         <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button list-button" data-detail-id="${esc(s.id)}" title="Домены, IP-сети и актуальность источников" aria-label="Показать домены и IP-сети ${esc(s.name)}">Списки</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
       </div>
+      <div class="service-truth-grid" aria-label="Состояния маршрута ${esc(s.name)}"><div><span>Выбрано</span><b>${esc(serviceStateRoute(desiredState, s.route))}</b><small>${desiredState.enabled ? 'настройка пользователя' : 'сервис выключен'}</small></div><div class="${plannedState.stale ? 'stale' : ''}"><span>${plannedState.recommendation_only ? 'Рекомендовано' : 'Рассчитано'}</span><b>${esc(planText)}</b><small>${plannedState.stale ? 'черновик не применён' : plannedState.recommendation_only ? 'не активно' : 'готово к проверке'}</small></div><div><span>Применено</span><b>${esc(serviceStateRoute(appliedState, s.applied_route))}</b><small>${appliedState.enabled ? 'рабочая настройка' : 'не включено'}</small></div><div class="${s.observed_state?.status === 'stale' ? 'stale' : ''}"><span>Подтверждено</span><b>${esc(serviceObservedLabel(s))}</b><small>${esc(s.observed_state?.status || s.evidence_status || 'нет проверки')}</small></div></div>
       ${routeNeedsAction ? `<div class="service-route-warning"><span><b>Маршрут требует действия</b><small>${esc(s.route_issue || 'Обход не установлен. Выберите AUTO / DIRECT или установите компонент.')}</small></span><button class="secondary" type="button" data-route-setup="${esc(s.route)}">Открыть установку</button></div>` : ''}
       <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="service-proof-line">${evidenceBadgeHTML(s)}<span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `${esc(draftText)} · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></span></div>
     </article>`;
@@ -1244,6 +1317,8 @@ function renderServices() {
   $$('[data-edit-service]').forEach((button) => button.addEventListener('click', () => openCustomServiceDialog(button.dataset.editService)));
   $$('[data-delete-service]').forEach((button) => button.addEventListener('click', () => deleteCustomService(button.dataset.deleteService)));
   $$('[data-route-setup]').forEach((button) => button.addEventListener('click', () => openRouteInstallation(button.dataset.routeSetup)));
+  $$('[data-nfqws2-id]').forEach((button) => button.addEventListener('click', () => showNFQWS2Details(button.dataset.nfqws2Id)));
+  $$('[data-switch-pro]').forEach((button) => button.addEventListener('click', () => setServiceMode('pro')));
 }
 
 function renderOverviewServices() {
@@ -3667,6 +3742,7 @@ function bindEvents() {
     event.returnValue = '';
   });
   $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+  $$('[data-service-mode]').forEach((button) => button.addEventListener('click', () => setServiceMode(button.dataset.serviceMode)));
   $('#serviceSearch').addEventListener('input', renderServices);
   $('#serviceCategory').addEventListener('change', renderServices);
   $('#connectionFilter').addEventListener('input', renderConnections);

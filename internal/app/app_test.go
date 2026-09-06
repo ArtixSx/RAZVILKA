@@ -21,6 +21,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
@@ -941,6 +942,101 @@ func TestSelectorsAndConnectionsAPI(t *testing.T) {
 	_ = resp.Body.Close()
 	if cp.Active != 1 || len(cp.Connections) != 1 || cp.Connections[0].Route != "nfqws2" {
 		t.Fatalf("unexpected connections: %+v", cp)
+	}
+}
+
+func TestServiceViewKeepsDesiredPlannedAppliedAndObservedSeparate(t *testing.T) {
+	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("video", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyDraft(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("video", config.ServiceState{Enabled: true, Route: "nfqws2"}); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{
+		Store:   store,
+		Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "video", Name: "Video", Category: "Video", Strategy: []string{"nfqws2"}}}},
+		EngineInventory: func() []engine.Status {
+			return []engine.Status{{ID: "nfqws2", Name: "NFQWS2", Installed: true, Configured: true, Running: true}}
+		},
+	}
+	response := httptest.NewRecorder()
+	a.services(response, httptest.NewRequest(http.MethodGet, "/api/v1/services", nil))
+	var views []serviceView
+	if response.Code != http.StatusOK {
+		t.Fatalf("services response=%d body=%s", response.Code, response.Body.String())
+	}
+	if err := json.NewDecoder(response.Body).Decode(&views); err != nil || len(views) != 1 {
+		t.Fatalf("decode services: %v body=%s", err, response.Body.String())
+	}
+	view := views[0]
+	if view.DesiredState.Route != "nfqws2" || view.PlannedState.Route != "nfqws2" || view.AppliedState.Route != "direct" || view.ObservedState.Level != evidence.Catalog {
+		t.Fatalf("four-state contract collapsed: %+v", view)
+	}
+	if !view.PlannedState.Stale || !view.Dirty || !view.NFQWS2.Relevant || view.NFQWS2.Owner != "razvilka" {
+		t.Fatalf("draft/NFQWS2 presentation missing: %+v", view)
+	}
+}
+
+func TestDisabledServiceShowsNFQWS2RecommendationWithoutActivation(t *testing.T) {
+	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("telegram", config.ServiceState{Enabled: false, Route: "nfqws2"}); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{
+		Store:   store,
+		Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "Messaging", Strategy: []string{"nfqws2"}}}},
+		EngineInventory: func() []engine.Status {
+			return []engine.Status{{ID: "nfqws2", Installed: true, Configured: true, Running: true}}
+		},
+	}
+	response := httptest.NewRecorder()
+	a.services(response, httptest.NewRequest(http.MethodGet, "/api/v1/services", nil))
+	var views []serviceView
+	if err := json.NewDecoder(response.Body).Decode(&views); err != nil || len(views) != 1 {
+		t.Fatalf("decode services: %v body=%s", err, response.Body.String())
+	}
+	view := views[0]
+	if view.PlannedState.Enabled || !view.PlannedState.RecommendationOnly || view.AppliedState.Enabled || !view.NFQWS2.Recommendation {
+		t.Fatalf("disabled service looked active: %+v", view)
+	}
+}
+
+func TestServiceNFQWS2PresentationReportsExternalZ2KOwner(t *testing.T) {
+	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateService("video", config.ServiceState{Enabled: false, Route: "nfqws2"}); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{
+		Store:   store,
+		Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "video", Name: "Video", Category: "Video", Strategy: []string{"nfqws2"}}}},
+		EngineInventory: func() []engine.Status {
+			return []engine.Status{
+				{ID: "nfqws2", Installed: true, Configured: true, Running: true},
+				{ID: "z2k", Name: "z2k", Installed: true, Configured: true, Running: true, External: true},
+			}
+		},
+	}
+	response := httptest.NewRecorder()
+	a.services(response, httptest.NewRequest(http.MethodGet, "/api/v1/services", nil))
+	var views []serviceView
+	if err := json.NewDecoder(response.Body).Decode(&views); err != nil || len(views) != 1 {
+		t.Fatalf("decode services: %v body=%s", err, response.Body.String())
+	}
+	if got := views[0].NFQWS2; got.Owner != "external" || got.OwnerName != "z2k" || got.OwnershipState != "external-owner-running" {
+		t.Fatalf("external owner was hidden: %+v", got)
 	}
 }
 

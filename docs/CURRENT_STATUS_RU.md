@@ -28,13 +28,13 @@ gap-аудиты сохранены как исторические снимки
 | NFQWS2 adapter | Реализовано · CI · Роутер | Запуск, читаемые runtime-списки, проверка фактического процесса и YouTube HTTP `204` | Native ownership стратегий, NFQUEUE lease и event-driven recovery |
 | Sing-box/Xray candidate | Реализовано · CI · частично Роутер | Локальная проверка конфига, loopback proxy-canary, bounded URLTest pool | Полная Evidence v2 и длительная проверка узлов |
 | NodeStore | N1.4 реализован локально; N1.3 · Роутер | Приватное хранение, exact service proof, точный узел/группа, LKG/fallback и endpoint-exclusion | N1.4 HIL двух узлов, Linux race и HIL Reality/Hysteria2/TUIC |
-| WARP MASQUE/USQUE | Реализовано · CI · Экспериментально | Doctor, staged proxy-canary, H2/H3 диагностика и rollback | Единый Cloudflare Provider и HIL транспортов |
+| WARP MASQUE/USQUE | Реализовано · CI · Экспериментально | Doctor, staged proxy-canary, H2/H3 диагностика и rollback; Telegram через существующий `opkgtun0` дал `HTTP 200` | Повторный managed apply после исправления legacy staging permissions, единый Cloudflare Provider и HIL транспортов |
 | WARP WireGuard | Реализовано · CI · Экспериментально | Временный интерфейс, официальный набор портов, cleanup и безопасный отказ | Успешный handshake на поддерживаемой сети, endpoint scoring и LKG |
 | AmneziaWG | Реализовано · CI · Экспериментально | Импорт/валидация и адаптер транзакции | Отдельный аппаратный canary и compatibility registry |
 | DNS | Реализовано · CI · Экспериментально | Типизированный каталог, read-only probe, scoped drafts и negative control | Полный live-adapter с recovery gate |
 | Source Hub | База · CI; trust v2 · локально | HTTPS/SSRF boundary, TTL, provenance, quarantine, LKG и сводка diff реализованы локально | Linux/race и HIL нового блока; signatures, полный review diff и scheduling |
 | Автопилот | Реализовано · CI · Экспериментально | Ограниченная сверка применённых AUTO-сервисов; черновики и явные маршруты не меняются | Evidence v2, shadow mode, HIL и защита от flapping |
-| Web UI | Реализовано · CI · Роутер | Локальная service-first панель, Safe Mode, отдельные черновики и данные сборки | Разделение Lite/Pro, модули, i18n и accessibility audit |
+| Web UI | PR-NFQ1 реализован локально; базовая панель · CI · Роутер | Service-first панель, Safe Mode, Lite/Pro и отдельные Desired/Planned/Applied/Observed для сервисов | Аппаратная проверка PR-NFQ1, модули, i18n и accessibility audit |
 | Другие платформы | Проектирование | Capability-модель описана в roadmap | OpenWrt/GL.iNet/Asuswrt adapters и отдельная HIL-матрица |
 
 ## Проверки базового релиза
@@ -61,6 +61,18 @@ gap-аудиты сохранены как исторические снимки
    включать community proxy, менять глобальный DNS или регистрировать аккаунты.
 
 ## Локальная разработка после стабильного релиза
+
+PR-NFQ0 зафиксировал read-only baseline нативного NFQWS2, внешнего z2k и
+отсутствующего движка. PR-NFQ1 локально разделяет выбранное, рассчитанное,
+применённое и подтверждённое состояние, добавляет Lite/Pro и честную панель
+NFQWS2 без изменения route behavior. Gap следующего read-only этапа описан в
+[NFQWS2_PR_NFQ1_GAP_RU.md](NFQWS2_PR_NFQ1_GAP_RU.md).
+
+На эталонном роутере отдельно подтверждён `HTTP 200` Telegram через работающий
+USQUE `opkgtun0`. Ошибка выбора RAZVILKA происходила до canary: legacy staging
+USQUE был `0755`, а приватный reader требует `0700`. Каталог исправлен на роутере,
+а startup/upgrade теперь безопасно нормализуют только allowlist каталогов
+RAZVILKA. Повторный managed apply пока не считается пройденным.
 
 Подключён [online-журнал приватного импорта](PRIVATE_RESTORE_ONLINE_RU.md):
 Store sessions проверяют startup bindings, журнал сохраняется до обновления

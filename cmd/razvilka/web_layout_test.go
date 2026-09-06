@@ -453,3 +453,53 @@ func TestUSQUEDNSCandidateExplainsReadOnlyScope(t *testing.T) {
 		}
 	}
 }
+
+func TestServiceRouteUISeparatesTruthStatesAndKeepsLiteModeSimple(t *testing.T) {
+	t.Parallel()
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexData, err := embedded.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(appData) + string(indexData)
+	for _, required := range []string{
+		`data-service-mode="lite"`,
+		`data-service-mode="pro"`,
+		"Изменить в расширенном режиме",
+		"Рекомендация при включении",
+		"Сервис выключен · это только рекомендация",
+		"service-truth-grid",
+		"Выбрано",
+		"Рассчитано",
+		"Применено",
+		"Подтверждено",
+	} {
+		if !strings.Contains(content, required) {
+			t.Fatalf("service truth UI marker missing %q", required)
+		}
+	}
+}
+
+func TestNFQWS2ServiceResultOpensOwnershipDrawer(t *testing.T) {
+	t.Parallel()
+	appData, err := embedded.ReadFile("web/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(appData)
+	for _, required := range []string{
+		"renderNFQWS2ServiceDetails",
+		"data-nfqws2-id",
+		"Внешний владелец",
+		"RAZVILKA не будет запускать второй NFQWS2",
+		"data-open-strategy-lab",
+		"Открыть подбор NFQWS2",
+	} {
+		if !strings.Contains(content, required) {
+			t.Fatalf("NFQWS2 drawer marker missing %q", required)
+		}
+	}
+}

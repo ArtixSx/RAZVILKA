@@ -134,34 +134,37 @@ type applyChangeSummary struct {
 }
 
 type App struct {
-	PrivateRestore  *privaterestore.Coordinator
-	Operations      operationgate.Gate
-	Store           *config.Store
-	Catalog         catalog.Catalog
-	Sources         *sources.Manager
-	Telemetry       *telemetry.Store
-	EngineConfigs   *engineconfig.Manager
-	EngineLab       *enginelab.Manager
-	StrategyLab     *strategylab.Manager
-	Components      *components.Manager
-	Community       *community.Manager
-	CustomServices  *customservices.Manager
-	Dataplane       *dataplane.Manager
-	Devices         *devices.Manager
-	DNS             *dnscontrol.Manager
-	Warp            *warp.Manager
-	Cloudflare      *cloudflareprovider.Store
-	Nodes           *nodestore.Store
-	NodeChecker     dataplane.NodeChecker
-	cloudflareBusy  atomic.Bool
-	TestLab         *testlab.Runner
-	RouteProber     testlab.RouteProber
-	SmartRoute      *smartroute.Manager
-	Updates         *updatecheck.Manager
-	USQUE           *usquediag.Manager
-	Stats           *routerstats.Sampler
-	Security        *security.Gate
-	Audit           *auditlog.Journal
+	PrivateRestore *privaterestore.Coordinator
+	Operations     operationgate.Gate
+	Store          *config.Store
+	Catalog        catalog.Catalog
+	Sources        *sources.Manager
+	Telemetry      *telemetry.Store
+	EngineConfigs  *engineconfig.Manager
+	EngineLab      *enginelab.Manager
+	StrategyLab    *strategylab.Manager
+	Components     *components.Manager
+	Community      *community.Manager
+	CustomServices *customservices.Manager
+	Dataplane      *dataplane.Manager
+	Devices        *devices.Manager
+	DNS            *dnscontrol.Manager
+	Warp           *warp.Manager
+	Cloudflare     *cloudflareprovider.Store
+	Nodes          *nodestore.Store
+	NodeChecker    dataplane.NodeChecker
+	cloudflareBusy atomic.Bool
+	TestLab        *testlab.Runner
+	RouteProber    testlab.RouteProber
+	SmartRoute     *smartroute.Manager
+	Updates        *updatecheck.Manager
+	USQUE          *usquediag.Manager
+	Stats          *routerstats.Sampler
+	Security       *security.Gate
+	Audit          *auditlog.Journal
+	// EngineInventory is injectable only for deterministic presentation tests.
+	// Production uses the read-only detector and never starts or stops an engine.
+	EngineInventory func() []engine.Status
 	Start           time.Time
 	EffectiveListen string
 	Z2KRoot         string
@@ -172,28 +175,78 @@ type App struct {
 
 type serviceView struct {
 	catalog.Service
-	Custom             bool             `json:"custom"`
-	Enabled            bool             `json:"enabled"`
-	Mode               string           `json:"mode"`
-	Route              string           `json:"route"`
-	Planned            string           `json:"planned_engine"`
-	Applied            bool             `json:"applied_enabled"`
-	AppliedRoute       string           `json:"applied_route"`
-	Sources            []string         `json:"sources,omitempty"`
-	AppliedSources     []string         `json:"applied_sources,omitempty"`
-	Dirty              bool             `json:"dirty"`
-	RouteDirty         bool             `json:"route_dirty"`
-	SourcesDirty       bool             `json:"sources_dirty"`
-	RouteAvailable     bool             `json:"route_available"`
-	RouteIssue         string           `json:"route_issue,omitempty"`
-	EvidenceLevel      evidence.Level   `json:"evidence_level"`
-	EvidenceRoute      string           `json:"evidence_route,omitempty"`
-	EvidenceStatus     string           `json:"evidence_status,omitempty"`
-	EvidenceSource     string           `json:"evidence_source,omitempty"`
-	EvidenceAt         string           `json:"evidence_checked_at,omitempty"`
-	EvidenceOutcome    evidence.Outcome `json:"evidence_outcome,omitempty"`
-	EvidenceProbeID    string           `json:"evidence_probe_id,omitempty"`
-	EvidenceFreshUntil string           `json:"evidence_fresh_until,omitempty"`
+	Custom             bool                      `json:"custom"`
+	Enabled            bool                      `json:"enabled"`
+	Mode               string                    `json:"mode"`
+	Route              string                    `json:"route"`
+	Planned            string                    `json:"planned_engine"`
+	Applied            bool                      `json:"applied_enabled"`
+	AppliedRoute       string                    `json:"applied_route"`
+	Sources            []string                  `json:"sources,omitempty"`
+	AppliedSources     []string                  `json:"applied_sources,omitempty"`
+	Dirty              bool                      `json:"dirty"`
+	RouteDirty         bool                      `json:"route_dirty"`
+	SourcesDirty       bool                      `json:"sources_dirty"`
+	RouteAvailable     bool                      `json:"route_available"`
+	RouteIssue         string                    `json:"route_issue,omitempty"`
+	EvidenceLevel      evidence.Level            `json:"evidence_level"`
+	EvidenceRoute      string                    `json:"evidence_route,omitempty"`
+	EvidenceStatus     string                    `json:"evidence_status,omitempty"`
+	EvidenceSource     string                    `json:"evidence_source,omitempty"`
+	EvidenceAt         string                    `json:"evidence_checked_at,omitempty"`
+	EvidenceOutcome    evidence.Outcome          `json:"evidence_outcome,omitempty"`
+	EvidenceProbeID    string                    `json:"evidence_probe_id,omitempty"`
+	EvidenceFreshUntil string                    `json:"evidence_fresh_until,omitempty"`
+	DesiredState       serviceRouteStateView     `json:"desired_state"`
+	PlannedState       serviceRouteStateView     `json:"planned_state"`
+	AppliedState       serviceRouteStateView     `json:"applied_state"`
+	ObservedState      serviceObservedStateView  `json:"observed_state"`
+	NFQWS2             nfqws2ServicePresentation `json:"nfqws2"`
+}
+
+// serviceRouteStateView keeps intent, calculation and committed state separate.
+// The legacy flat fields above remain for existing clients.
+type serviceRouteStateView struct {
+	Enabled            bool   `json:"enabled"`
+	Route              string `json:"route"`
+	Source             string `json:"source"`
+	RecommendationOnly bool   `json:"recommendation_only,omitempty"`
+	Stale              bool   `json:"stale,omitempty"`
+}
+
+type serviceObservedStateView struct {
+	Route      string           `json:"route,omitempty"`
+	Level      evidence.Level   `json:"level"`
+	Status     string           `json:"status,omitempty"`
+	Source     string           `json:"source,omitempty"`
+	CheckedAt  string           `json:"checked_at,omitempty"`
+	Outcome    evidence.Outcome `json:"outcome,omitempty"`
+	ProbeID    string           `json:"probe_id,omitempty"`
+	FreshUntil string           `json:"fresh_until,omitempty"`
+}
+
+type nfqws2ServicePresentation struct {
+	Relevant        bool           `json:"relevant"`
+	Engine          string         `json:"engine"`
+	EngineState     string         `json:"engine_state"`
+	Owner           string         `json:"owner"`
+	OwnerName       string         `json:"owner_name"`
+	OwnershipState  string         `json:"ownership_state"`
+	Profile         string         `json:"profile"`
+	Strategy        string         `json:"strategy"`
+	StrategyID      string         `json:"strategy_id,omitempty"`
+	SelectionStatus string         `json:"selection_status,omitempty"`
+	Evidence        evidence.Level `json:"evidence"`
+	EvidenceStatus  string         `json:"evidence_status,omitempty"`
+	Recommendation  bool           `json:"recommendation_only"`
+	Stale           bool           `json:"stale"`
+}
+
+type nfqws2StrategyPresentation struct {
+	Profile string
+	Name    string
+	ID      string
+	Status  string
 }
 
 type serviceEvidenceView struct {
@@ -211,6 +264,10 @@ type serviceEvidenceView struct {
 // observations. Desired and planned routes are deliberately absent: selecting
 // an option in the UI must never make that route look proven.
 func (a *App) serviceEvidenceSnapshot(cfg config.Config, services []catalog.Service) map[string]serviceEvidenceView {
+	return a.serviceEvidenceSnapshotWithInventory(cfg, services, a.engineInventorySnapshot())
+}
+
+func (a *App) serviceEvidenceSnapshotWithInventory(cfg config.Config, services []catalog.Service, inventory []engine.Status) map[string]serviceEvidenceView {
 	out := make(map[string]serviceEvidenceView, len(services))
 	for _, service := range services {
 		out[service.ID] = serviceEvidenceView{Level: evidence.Catalog, Status: "catalog-present", Source: "catalog"}
@@ -228,7 +285,7 @@ func (a *App) serviceEvidenceSnapshot(cfg config.Config, services []catalog.Serv
 	}
 
 	engineByID := map[string]engine.Status{}
-	for _, status := range (engine.Detector{}).Inventory() {
+	for _, status := range inventory {
 		engineByID[status.ID] = status
 	}
 	effectiveRoute := map[string]string{}
@@ -320,6 +377,100 @@ func (a *App) serviceEvidenceSnapshot(cfg config.Config, services []catalog.Serv
 		}
 	}
 	return out
+}
+
+func (a *App) engineInventorySnapshot() []engine.Status {
+	if a.EngineInventory != nil {
+		return a.EngineInventory()
+	}
+	return (engine.Detector{}).Inventory()
+}
+
+func (a *App) appliedEffectiveRoutes(cfg config.Config) map[string]string {
+	routes := map[string]string{}
+	if a.Dataplane != nil {
+		if plan, exists, err := a.Dataplane.Committed(); err == nil && exists && plan.State == "committed" && plan.Revision == cfg.AppliedRevision {
+			for _, route := range plan.Routes {
+				routes[route.ServiceID] = route.Resolved
+			}
+		}
+	}
+	return routes
+}
+
+func (a *App) nfqws2StrategySnapshot() map[string]nfqws2StrategyPresentation {
+	out := map[string]nfqws2StrategyPresentation{}
+	if a.StrategyLab == nil {
+		return out
+	}
+	snapshot := a.StrategyLab.Snapshot()
+	candidates := make(map[string]strategylab.Candidate, len(snapshot.Candidates))
+	for _, candidate := range snapshot.Candidates {
+		candidates[candidate.ID] = candidate
+	}
+	for _, selection := range snapshot.Selections {
+		if _, exists := out[selection.ServiceID]; exists {
+			continue
+		}
+		candidate := candidates[selection.CandidateID]
+		profile := strings.Trim(strings.TrimSpace(selection.Protocol)+" / "+strings.TrimSpace(selection.IPFamily), " /")
+		if profile == "" {
+			profile = "unknown"
+		}
+		name := strings.TrimSpace(candidate.Name)
+		if name == "" {
+			name = "unknown"
+		}
+		out[selection.ServiceID] = nfqws2StrategyPresentation{Profile: profile, Name: name, ID: selection.CandidateID, Status: selection.Status}
+	}
+	return out
+}
+
+func nfqws2Presentation(serviceID string, desired, planned string, desiredEnabled bool, applied string, appliedEnabled bool, proof serviceEvidenceView, inventory []engine.Status, strategies map[string]nfqws2StrategyPresentation, dirty bool) nfqws2ServicePresentation {
+	native := engine.Status{ID: "nfqws2"}
+	external := engine.Status{ID: "z2k"}
+	for _, status := range inventory {
+		switch status.ID {
+		case "nfqws2":
+			native = status
+		case "z2k":
+			external = status
+		}
+	}
+	view := nfqws2ServicePresentation{Engine: "NFQWS2", EngineState: "not-installed", Owner: "none", OwnerName: "не определён", OwnershipState: "unowned", Profile: "unknown", Strategy: "unknown", Evidence: evidence.None}
+	if native.Installed {
+		view.EngineState = "installed"
+		view.Owner = "razvilka"
+		view.OwnerName = "RAZVILKA"
+		view.OwnershipState = "native-owner"
+	}
+	if native.Configured {
+		view.EngineState = "configured"
+	}
+	if native.Running {
+		view.EngineState = "running"
+	}
+	if external.Running {
+		view.Owner = "external"
+		view.OwnerName = "z2k"
+		view.OwnershipState = "external-owner-running"
+	}
+	for _, route := range []string{desired, planned, applied, proof.Route} {
+		if dataplane.AdapterID(route) == "nfqws2" {
+			view.Relevant = true
+			break
+		}
+	}
+	if selection, exists := strategies[serviceID]; exists {
+		view.Profile, view.Strategy, view.StrategyID, view.SelectionStatus = selection.Profile, selection.Name, selection.ID, selection.Status
+	}
+	if dataplane.AdapterID(proof.Route) == "nfqws2" {
+		view.Evidence = proof.Level
+		view.EvidenceStatus = proof.Status
+	}
+	view.Recommendation = !desiredEnabled && dataplane.AdapterID(planned) == "nfqws2"
+	view.Stale = proof.Status == "stale" || dirty && (desiredEnabled != appliedEnabled || planned != applied)
+	return view
 }
 
 func (a *App) Handler(static http.Handler) http.Handler {
@@ -2452,7 +2603,10 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 	cfg := a.Store.Get()
 	services := a.catalogSnapshot().Services
 	options := a.routeOptionsSnapshot()
-	observedEvidence := a.serviceEvidenceSnapshot(cfg, services)
+	inventory := a.engineInventorySnapshot()
+	observedEvidence := a.serviceEvidenceSnapshotWithInventory(cfg, services, inventory)
+	effectiveAppliedRoutes := a.appliedEffectiveRoutes(cfg)
+	strategies := a.nfqws2StrategySnapshot()
 	views := make([]serviceView, 0, len(services))
 	for _, s := range services {
 		st := cfg.Services[s.ID]
@@ -2463,6 +2617,10 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 			planned = a.resolveAutoWithOptions(s, cfg.EngineOrder, options)
 		}
 		appliedRoute := selectedRoute(applied)
+		appliedEffectiveRoute := effectiveAppliedRoutes[s.ID]
+		if appliedEffectiveRoute == "" {
+			appliedEffectiveRoute = appliedRoute
+		}
 		routeDirty := st.Enabled != applied.Enabled || selected != appliedRoute
 		sourcesDirty := !stringSlicesEqual(st.Sources, applied.Sources)
 		dirty := routeDirty || sourcesDirty
@@ -2473,7 +2631,17 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		}
 		custom := a.CustomServices != nil && a.CustomServices.Has(s.ID)
 		proof := observedEvidence[s.ID]
-		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil})
+		plannedSource := "forced-route"
+		if selected == "auto" {
+			plannedSource = "autopilot"
+		}
+		plannedStale := dirty && (st.Enabled != applied.Enabled || planned != appliedEffectiveRoute)
+		desiredState := serviceRouteStateView{Enabled: st.Enabled, Route: selected, Source: "user-intent"}
+		plannedState := serviceRouteStateView{Enabled: st.Enabled, Route: planned, Source: plannedSource, RecommendationOnly: !st.Enabled, Stale: plannedStale}
+		appliedState := serviceRouteStateView{Enabled: applied.Enabled, Route: appliedEffectiveRoute, Source: "committed"}
+		observedState := serviceObservedStateView{Route: proof.Route, Level: proof.Level, Status: proof.Status, Source: proof.Source, CheckedAt: proof.CheckedAt, Outcome: proof.Outcome, ProbeID: proof.ProbeID, FreshUntil: proof.FreshUntil}
+		nfqws2 := nfqws2Presentation(s.ID, selected, planned, st.Enabled, appliedEffectiveRoute, applied.Enabled, proof, inventory, strategies, dirty)
+		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil, DesiredState: desiredState, PlannedState: plannedState, AppliedState: appliedState, ObservedState: observedState, NFQWS2: nfqws2})
 	}
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Category == views[j].Category {
