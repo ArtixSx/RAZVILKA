@@ -81,3 +81,22 @@ func TestApplyPolicyIncludesSourceSelector(t *testing.T) {
 		t.Fatalf("source selector missing from calls:\n%s", joined)
 	}
 }
+
+func TestApplyPolicyRoutesPrivateEndpointThroughMainFirst(t *testing.T) {
+	runner := &nfqwsFakeRunner{}
+	state := PolicyState{
+		Interface: "rz-test", Table: 210, PriorityBase: 28000,
+		Prefixes:   []string{"203.0.113.0/24"},
+		Exclusions: []string{"203.0.113.9/32"},
+		Rules:      []PolicyRule{{Destination: "203.0.113.0/24"}},
+	}
+	if err := applyPolicy(context.Background(), runner, "ip", state); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(runner.calls, "\n")
+	exclusion := "rule add priority 28000 to 203.0.113.9/32 lookup main"
+	tunnel := "rule add priority 28001 to 203.0.113.0/24 lookup 210"
+	if !strings.Contains(joined, exclusion) || !strings.Contains(joined, tunnel) || strings.Index(joined, exclusion) > strings.Index(joined, tunnel) {
+		t.Fatalf("endpoint exclusion was not installed before the tunnel rule:\n%s", joined)
+	}
+}

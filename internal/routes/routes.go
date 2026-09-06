@@ -2,7 +2,6 @@ package routes
 
 import (
 	"github.com/ArtixSx/razvilka/internal/engine"
-	"strings"
 )
 
 type Option struct {
@@ -15,6 +14,9 @@ type Option struct {
 	Running     bool   `json:"running"`
 	Selectable  bool   `json:"selectable"`
 	Ready       bool   `json:"ready"`
+	// Services is empty for ordinary engine routes. Node-scoped routes list
+	// the services for which an exact, unexpired canary exists on this WAN.
+	Services []string `json:"services,omitempty"`
 }
 
 func Options() []Option {
@@ -37,35 +39,39 @@ func ValidWithOptions(id string, options []Option) bool {
 	if id == "" {
 		return false
 	}
-	base, _, profiled := strings.Cut(id, ":")
-	// Profile routes are accepted only after a profile registry can prove that
-	// the referenced node exists. Accepting syntactically valid but unresolved
-	// IDs would make AUTO and isolated probes report a route they cannot use.
-	if profiled {
-		return false
-	}
-
-	selectable := false
 	for _, option := range options {
-		if option.ID == base && option.Selectable {
-			selectable = true
-			break
+		if option.ID == id && option.Selectable {
+			return true
 		}
 	}
-	if !selectable {
-		return false
-	}
-	return true
+	// A profiled route is valid only when the registry supplied that exact ID.
+	// Never fall back from sing-box:unknown to the base engine option.
+	return false
 }
 
 func ReadyWithOptions(id string, options []Option) bool {
-	if strings.Contains(id, ":") {
-		return false
-	}
 	for _, option := range options {
 		if option.ID == id {
 			return option.Ready
 		}
+	}
+	return false
+}
+
+func ValidForServiceWithOptions(id, serviceID string, options []Option) bool {
+	for _, option := range options {
+		if option.ID != id || !option.Selectable {
+			continue
+		}
+		if len(option.Services) == 0 {
+			return true
+		}
+		for _, allowed := range option.Services {
+			if allowed == serviceID {
+				return true
+			}
+		}
+		return false
 	}
 	return false
 }

@@ -43,6 +43,10 @@ type PolicyState struct {
 	PriorityBase int          `json:"priority_base"`
 	Prefixes     []string     `json:"prefixes"`
 	Rules        []PolicyRule `json:"rules,omitempty"`
+	// Exclusions are exact public endpoint prefixes routed through main before
+	// the service rules. The private policy file is mode 0600 and is never a
+	// public DTO.
+	Exclusions []string `json:"exclusions,omitempty"`
 }
 
 type PolicyRule struct {
@@ -218,21 +222,38 @@ func applyPolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, sta
 		return errors.New("policy routing command runner is unavailable")
 	}
 	rules := effectivePolicyRules(state)
-	if state.Table < 1 || state.Table > 252 || state.PriorityBase < 1000 || state.Interface == "" || len(rules) > maxPolicyPrefixes {
+	if state.Table < 1 || state.Table > 252 || state.PriorityBase < 1000 || state.Interface == "" || len(rules)+len(state.Exclusions) > maxPolicyPrefixes {
 		return errors.New("invalid policy routing state")
 	}
 	if _, err := runner.Run(ctx, ipCommand, "route", "replace", "default", "dev", state.Interface, "table", fmt.Sprint(state.Table)); err != nil {
 		return fmt.Errorf("create IPv4 policy table: %w", err)
 	}
 	_, _ = runner.Run(ctx, ipCommand, "-6", "route", "replace", "default", "dev", state.Interface, "table", fmt.Sprint(state.Table))
+	addedExclusions := []string{}
+	for index, value := range state.Exclusions {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Exclusions: addedExclusions})
+			return err
+		}
+		args := []string{"rule", "add", "priority", fmt.Sprint(state.PriorityBase + index), "to", prefix.String(), "lookup", "main"}
+		if prefix.Addr().Is6() {
+			args = append([]string{"-6"}, args...)
+		}
+		if _, err := runner.Run(ctx, ipCommand, args...); err != nil {
+			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Exclusions: addedExclusions})
+			return fmt.Errorf("add direct endpoint exclusion: %w", err)
+		}
+		addedExclusions = append(addedExclusions, value)
+	}
 	added := []PolicyRule{}
 	for index, rule := range rules {
 		prefix, err := netip.ParsePrefix(rule.Destination)
 		if err != nil {
-			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Rules: added})
+			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Exclusions: addedExclusions, Rules: added})
 			return err
 		}
-		args := []string{"rule", "add", "priority", fmt.Sprint(state.PriorityBase + index)}
+		args := []string{"rule", "add", "priority", fmt.Sprint(state.PriorityBase + len(state.Exclusions) + index)}
 		if rule.Source != "" {
 			args = append(args, "from", rule.Source)
 		}
@@ -241,7 +262,7 @@ func applyPolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, sta
 			args = append([]string{"-6"}, args...)
 		}
 		if _, err := runner.Run(ctx, ipCommand, args...); err != nil {
-			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Rules: added})
+			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Exclusions: addedExclusions, Rules: added})
 			return fmt.Errorf("add policy rule for %s: %w", prefix, err)
 		}
 		added = append(added, rule)
@@ -254,13 +275,26 @@ func removePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, st
 		return errors.New("policy routing command runner is unavailable")
 	}
 	var firstErr error
+	for index, value := range state.Exclusions {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			continue
+		}
+		args := []string{"rule", "del", "priority", fmt.Sprint(state.PriorityBase + index), "to", prefix.String(), "lookup", "main"}
+		if prefix.Addr().Is6() {
+			args = append([]string{"-6"}, args...)
+		}
+		if _, err := runner.Run(ctx, ipCommand, args...); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
 	rules := effectivePolicyRules(state)
 	for index, rule := range rules {
 		prefix, err := netip.ParsePrefix(rule.Destination)
 		if err != nil {
 			continue
 		}
-		args := []string{"rule", "del", "priority", fmt.Sprint(state.PriorityBase + index)}
+		args := []string{"rule", "del", "priority", fmt.Sprint(state.PriorityBase + len(state.Exclusions) + index)}
 		if rule.Source != "" {
 			args = append(args, "from", rule.Source)
 		}
@@ -284,7 +318,7 @@ func removePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, st
 		}
 		verified = true
 		text := string(output)
-		for index := range rules {
+		for index := 0; index < len(state.Exclusions)+len(rules); index++ {
 			priority := fmt.Sprint(state.PriorityBase + index)
 			if strings.Contains(text, priority+":") || strings.Contains(text, "priority "+priority+" ") {
 				return fmt.Errorf("policy rule priority %s remains after cleanup", priority)
@@ -343,7 +377,7 @@ func effectivePolicyRules(state PolicyState) []PolicyRule {
 }
 
 func samePolicy(left, right PolicyState) bool {
-	return left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right))
+	return left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(left.Exclusions, right.Exclusions) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right))
 }
 
 func replacePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, oldState, newState PolicyState) error {

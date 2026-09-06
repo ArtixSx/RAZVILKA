@@ -177,13 +177,14 @@
       <article class="panel full-panel">
         <div class="panel-title sticky-title">
           <div><h2>Сохранённые узлы</h2><p>Локальный инвентарь импортированных подключений — без паролей, ключей и скрытых параметров</p></div>
-          <div class="filters"><button class="primary" id="nodeOpenImport" type="button">+ Добавить узлы</button><input id="nodeSearch" placeholder="Имя, протокол или транспорт" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="available">Проверены</option><option value="degraded">Не прошли проверку</option><option value="stale">Нужно перепроверить</option><option value="quarantined">Ожидают проверки</option><option value="disabled">Отключены</option><option value="expired">Истекли</option></select><button class="secondary" id="refreshNodes" type="button">Обновить</button></div>
+          <div class="filters"><button class="primary" id="nodeOpenImport" type="button">+ Добавить узлы</button><button class="secondary" id="nodeOpenGroup" type="button">+ Группа</button><input id="nodeSearch" placeholder="Имя, протокол или транспорт" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="available">Проверены</option><option value="degraded">Не прошли проверку</option><option value="stale">Нужно перепроверить</option><option value="quarantined">Ожидают проверки</option><option value="disabled">Отключены</option><option value="expired">Истекли</option></select><button class="secondary" id="refreshNodes" type="button">Обновить</button></div>
         </div>
         <div class="node-truth-banner" id="nodeTruthBanner" role="status">
           <div><b>Импорт не означает, что узел работает</b><span>Перед назначением сервису понадобятся проверка протокола, IP выхода и доступности самого сервиса.</span></div>
           <span class="node-readonly-badge">МАРШРУТЫ НЕ МЕНЯЮТСЯ</span>
         </div>
         <div class="node-summary" id="nodeSummary"></div>
+        <div class="node-group-list" id="nodeGroupList"></div>
         <div class="node-list" id="nodeList"></div>
         <div id="nodeEmpty" class="empty-state node-empty"><div class="empty-icon">◇</div><strong>Сохранённых узлов пока нет</strong><span>Импортируйте свой профиль или подписку в настройках Sing-box. Неподдерживаемые записи останутся в отчёте отказов и не попадут сюда.</span></div>
       </article>
@@ -449,6 +450,20 @@
     <div class="dialog-head"><div><span class="eyebrow">ЛОКАЛЬНОЕ НАЗВАНИЕ</span><h3 id="nodeEditTitle">Название узла</h3><p>Меняется только подпись в RAZVILKA. Адрес, ключи и рабочие маршруты останутся прежними.</p></div><button class="dialog-close" id="nodeEditClose" type="button" aria-label="Закрыть">×</button></div>
     <input id="nodeEditID" type="hidden"><label><span>Понятное название</span><input id="nodeEditAlias" maxlength="64" autocomplete="off" placeholder="Например, резервный сервер"></label>
     <div class="dialog-actions"><button class="secondary" id="nodeEditCancel" type="button">Отмена</button><button class="primary" type="submit">Сохранить название</button></div>
+  </form>
+</dialog>
+<dialog class="form-dialog" id="nodeGroupDialog">
+  <form id="nodeGroupForm">
+    <div class="dialog-head"><div><span class="eyebrow">ГРУППА УЗЛОВ</span><h3 id="nodeGroupTitle">Новая группа</h3><p>Группа доступна сервису только когда хотя бы один её узел прошёл точную проверку именно этого сервиса в текущей сети.</p></div><button class="dialog-close" id="nodeGroupClose" type="button" aria-label="Закрыть">×</button></div>
+    <input id="nodeGroupID" type="hidden">
+    <div class="form-grid compact-form">
+      <label><span>Название</span><input id="nodeGroupName" maxlength="64" required placeholder="Например, Telegram · резерв"></label>
+      <label><span>Режим</span><select id="nodeGroupMode"><option value="fallback">Автоматический резерв</option><option value="manual">Только выбранный узел</option></select><small>Резерв сохраняет последний рабочий узел и переключается лишь после подтверждённого отказа.</small></label>
+      <label><span>Основной узел</span><select id="nodeGroupPreferred"></select></label>
+      <label><span>Защита от частых переключений</span><select id="nodeGroupHold"><option value="600">10 минут</option><option value="1800" selected>30 минут</option><option value="3600">1 час</option><option value="21600">6 часов</option></select></label>
+    </div>
+    <fieldset class="node-group-members"><legend>Узлы группы</legend><div id="nodeGroupMembers"></div></fieldset>
+    <div class="dialog-actions"><button class="secondary" id="nodeGroupCancel" type="button">Отмена</button><button class="primary" type="submit">Сохранить группу</button></div>
   </form>
 </dialog>
 <dialog class="form-dialog node-reveal-dialog" id="nodeRevealDialog">

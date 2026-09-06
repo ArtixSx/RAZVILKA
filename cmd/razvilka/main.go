@@ -32,6 +32,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 	"github.com/ArtixSx/razvilka/internal/routeprobe"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
@@ -330,6 +331,16 @@ func main() {
 		log.Print("Private node store disabled: existing bypasses are unchanged")
 	} else {
 		defer nodeStore.Close()
+		if err := dataplaneManager.ConfigureSingBoxNodeRoutes(func(ctx context.Context, requests []dataplane.NodeRouteRequest, profile string, now time.Time) (dataplane.NodeRouteMaterial, error) {
+			bindings := make([]nodestore.RouteBinding, 0, len(requests))
+			for _, request := range requests {
+				bindings = append(bindings, nodestore.RouteBinding{ServiceID: request.ServiceID, NodeID: request.NodeID, NetworkProfile: profile, Domains: request.Domains, Destinations: request.Destinations})
+			}
+			material, materialErr := nodeStore.MaterializeSingBox(ctx, bindings, now)
+			return dataplane.NodeRouteMaterial{Config: material.Config, EndpointHosts: material.EndpointHosts}, materialErr
+		}, func() string { return systemprobe.DetectWANProfile().ID }); err != nil {
+			log.Print("Node-scoped Sing-box routes disabled: ", err)
+		}
 	}
 	nodeChecker := dataplane.NewExactNodeChecker(filepath.Join(*dataplaneStatePath, "node-check"))
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}

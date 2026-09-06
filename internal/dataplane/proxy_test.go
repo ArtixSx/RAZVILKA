@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -240,12 +241,23 @@ func TestBuildSOCKSTunnelDisablesNewSingBoxDNSOwnership(t *testing.T) {
 	}
 }
 
-func TestRejectEndpointOverlapCatchesBroadCIDR(t *testing.T) {
-	err := rejectEndpointOverlap(context.Background(), []string{"203.0.113.0/24"}, []string{"node.example"}, func(context.Context, string) ([]netip.Addr, error) {
-		return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
-	})
-	if err == nil || !strings.Contains(err.Error(), "self-tunnel") {
-		t.Fatalf("overlap was accepted: %v", err)
+func TestResolveEndpointExclusionsUsesExactPublicPrefixes(t *testing.T) {
+	resolver := func(_ context.Context, host string) ([]netip.Addr, error) {
+		if host == "node.example" {
+			return []netip.Addr{netip.MustParseAddr("203.0.113.9"), netip.MustParseAddr("2001:db8::9")}, nil
+		}
+		return nil, fmt.Errorf("unexpected host")
+	}
+	got, err := resolveEndpointExclusions(context.Background(), []string{"node.example", "198.51.100.7"}, resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"198.51.100.7/32", "2001:db8::9/128", "203.0.113.9/32"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("exclusions=%v want=%v", got, want)
+	}
+	if _, err := resolveEndpointExclusions(context.Background(), []string{"192.168.1.2"}, resolver); err == nil {
+		t.Fatal("private endpoint received a direct exclusion")
 	}
 }
 

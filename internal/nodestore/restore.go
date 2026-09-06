@@ -25,6 +25,7 @@ type PrivateSnapshot struct {
 type PrivateReview struct {
 	Nodes   int `json:"nodes"`
 	Sources int `json:"sources"`
+	Groups  int `json:"groups"`
 }
 
 func (PrivateSnapshot) String() string   { return "[private node snapshot]" }
@@ -61,7 +62,7 @@ func ReviewPrivateSnapshot(in PrivateSnapshot) (PrivateReview, error) {
 		return PrivateReview{}, restorejournal.ErrInvalid
 	}
 	doc, _ := decodeImage(restorejournal.Image{Exists: true, Data: in.Content})
-	return PrivateReview{Nodes: len(doc.Nodes), Sources: len(doc.Sources)}, nil
+	return PrivateReview{Nodes: len(doc.Nodes), Sources: len(doc.Sources), Groups: len(doc.Groups)}, nil
 }
 
 // ExportPrivate is only for an authenticated encrypted backup builder. The
@@ -308,6 +309,19 @@ func mergeDocuments(current, imported document) (document, error) {
 		}
 	}
 	if len(current.Nodes) > MaxNodes || len(current.Sources) > MaxSources {
+		return document{}, ErrCapacity
+	}
+	for _, group := range imported.Groups {
+		existing, found := findGroup(current.Groups, group.ID)
+		if found {
+			if !groupsEqual(existing, group) {
+				return document{}, restorejournal.ErrConflict
+			}
+			continue
+		}
+		current.Groups = append(current.Groups, group)
+	}
+	if len(current.Groups) > MaxGroups {
 		return document{}, ErrCapacity
 	}
 	return current, nil

@@ -37,15 +37,19 @@ var (
 	ErrNotFound = errors.New("node not found")
 	ErrAlias    = errors.New("invalid node alias")
 	ErrDisabled = errors.New("node is disabled")
+	ErrGroup    = errors.New("invalid node group")
+	ErrInUse    = errors.New("node or group is still referenced")
 )
 
 const (
 	fileName        = "nodes.private.json"
 	legacySchema    = 1
 	metadataSchema  = 2
-	schema          = 3
+	healthSchema    = 3
+	schema          = 4
 	MaxNodes        = 512
 	MaxSources      = 64
+	MaxGroups       = 64
 	MaxCheckHistory = 20
 	maxBytes        = 4 << 20
 	maxTTL          = 30 * 24 * time.Hour
@@ -124,9 +128,10 @@ type Node struct {
 }
 
 type Snapshot struct {
-	Generation uint64   `json:"generation"`
-	Sources    []Source `json:"sources"`
-	Nodes      []Node   `json:"nodes"`
+	Generation uint64      `json:"generation"`
+	Sources    []Source    `json:"sources"`
+	Nodes      []Node      `json:"nodes"`
+	Groups     []NodeGroup `json:"groups"`
 }
 
 // Metadata and credentials live in ONE atomic private envelope. SecretRef is
@@ -152,6 +157,7 @@ type document struct {
 	Sources     []Source     `json:"sources"`
 	Nodes       []storedNode `json:"nodes"`
 	Secrets     []secret     `json:"secrets"`
+	Groups      []NodeGroup  `json:"groups,omitempty"`
 }
 
 func (document) String() string   { return "[private node document]" }
@@ -446,6 +452,13 @@ func (s *Store) RecordCheck(ctx context.Context, id string, record CheckRecord, 
 // Sing-box, service bindings or a live route.
 func (s *Store) Delete(ctx context.Context, id string, now time.Time) (Snapshot, error) {
 	return s.mutate(ctx, id, now, func(doc *document, index int) (bool, error) {
+		for _, group := range doc.Groups {
+			for _, member := range group.NodeIDs {
+				if member == id {
+					return false, ErrInUse
+				}
+			}
+		}
 		ref := doc.Nodes[index].SecretRef
 		doc.Nodes = append(doc.Nodes[:index], doc.Nodes[index+1:]...)
 		for i := range doc.Secrets {
@@ -544,7 +557,7 @@ func (s *Store) mutate(ctx context.Context, id string, now time.Time, change fun
 			}
 			return Snapshot{}, ErrStore
 		}
-		return Snapshot{Nodes: []Node{}, Sources: []Source{}}, nil
+		return Snapshot{Nodes: []Node{}, Sources: []Source{}, Groups: []NodeGroup{}}, nil
 	}
 	if doc.Generation == ^uint64(0) {
 		return Snapshot{}, ErrCapacity

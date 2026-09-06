@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
@@ -63,11 +64,96 @@ func (a *App) nodeList(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"available": true, "generation": snapshot.Generation,
-		"nodes": snapshot.Nodes, "sources": snapshot.Sources,
-		"counts":          map[string]int{"total": len(snapshot.Nodes), "quarantined": quarantined, "expired": expired, "disabled": disabled, "verified": verified, "degraded": degraded, "stale": stale, "selectable": 0},
+		"nodes": snapshot.Nodes, "sources": snapshot.Sources, "groups": snapshot.Groups,
+		"counts":          map[string]int{"total": len(snapshot.Nodes), "quarantined": quarantined, "expired": expired, "disabled": disabled, "verified": verified, "degraded": degraded, "stale": stale, "selectable": verified},
 		"network_profile": profile,
-		"note":            "Проверенные узлы пока не назначаются маршрутам: безопасная привязка будет подключена следующим этапом.",
+		"note":            "Узел появляется в выборе маршрута только у того сервиса, который успешно прошёл точную проверку в текущей сети.",
 	})
+}
+
+type nodeGroupRequest struct {
+	Name            string   `json:"name"`
+	Mode            string   `json:"mode"`
+	NodeIDs         []string `json:"node_ids"`
+	PreferredNodeID string   `json:"preferred_node_id"`
+	HoldDownSeconds int      `json:"hold_down_seconds"`
+	Confirm         string   `json:"confirm"`
+}
+
+func (a *App) nodeGroups(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Nodes == nil {
+		http.Error(w, "node store unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var request nodeGroupRequest
+	if !decodeNodeMutation(w, r, &request) {
+		return
+	}
+	if request.Confirm != "CREATE_NODE_GROUP" {
+		http.Error(w, "явно подтвердите создание группы", http.StatusPreconditionRequired)
+		return
+	}
+	group, err := a.Nodes.CreateGroup(r.Context(), request.Name, request.Mode, request.NodeIDs, request.PreferredNodeID, time.Duration(request.HoldDownSeconds)*time.Second, time.Now())
+	if err != nil {
+		writeNodeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "group": group, "working_routes_changed": false})
+}
+
+func (a *App) nodeGroupAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if a.Nodes == nil {
+		http.Error(w, "node store unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/node-groups/"), "/")
+	if id == "" {
+		http.NotFound(w, r)
+		return
+	}
+	var request nodeGroupRequest
+	if !decodeNodeMutation(w, r, &request) {
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		if request.Confirm != "UPDATE_NODE_GROUP" {
+			http.Error(w, "явно подтвердите изменение группы", http.StatusPreconditionRequired)
+			return
+		}
+		if a.routeReferenceExists("sing-box:" + id) {
+			writeNodeError(w, nodestore.ErrInUse)
+			return
+		}
+		group, err := a.Nodes.UpdateGroup(r.Context(), nodestore.NodeGroup{ID: id, Name: request.Name, Mode: request.Mode, NodeIDs: request.NodeIDs, PreferredNodeID: request.PreferredNodeID, HoldDownSeconds: request.HoldDownSeconds}, time.Now())
+		if err != nil {
+			writeNodeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "group": group, "working_routes_changed": false})
+	case http.MethodDelete:
+		if request.Confirm != "DELETE_NODE_GROUP" {
+			http.Error(w, "явно подтвердите удаление группы", http.StatusPreconditionRequired)
+			return
+		}
+		if a.routeReferenceExists("sing-box:" + id) {
+			writeNodeError(w, nodestore.ErrInUse)
+			return
+		}
+		if err := a.Nodes.DeleteGroup(r.Context(), id, time.Now()); err != nil {
+			writeNodeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "working_routes_changed": false})
+	default:
+		methodNotAllowed(w)
+	}
 }
 
 type nodeMutationRequest struct {
@@ -162,6 +248,10 @@ func (a *App) nodeAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "явно подтвердите удаление сохранённого узла", http.StatusPreconditionRequired)
 			return
 		}
+		if a.routeReferenceExists("sing-box:" + id) {
+			writeNodeError(w, nodestore.ErrInUse)
+			return
+		}
 		if _, err := a.Nodes.Delete(r.Context(), id, time.Now()); err != nil {
 			writeNodeError(w, err)
 			return
@@ -170,6 +260,21 @@ func (a *App) nodeAction(w http.ResponseWriter, r *http.Request) {
 	default:
 		methodNotAllowed(w)
 	}
+}
+
+func (a *App) routeReferenceExists(route string) bool {
+	if a.Store == nil {
+		return false
+	}
+	cfg := a.Store.Get()
+	for _, states := range []map[string]config.ServiceState{cfg.Services, cfg.AppliedServices} {
+		for _, state := range states {
+			if selectedRoute(state) == route {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
@@ -321,7 +426,7 @@ func (a *App) nodeImport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func decodeNodeMutation(w http.ResponseWriter, r *http.Request, out *nodeMutationRequest) bool {
+func decodeNodeMutation(w http.ResponseWriter, r *http.Request, out any) bool {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(out) != nil {
@@ -343,6 +448,12 @@ func writeNodeError(w http.ResponseWriter, err error) {
 		http.Error(w, "название должно содержать не более 64 обычных символов", http.StatusBadRequest)
 	case errors.Is(err, nodestore.ErrDisabled):
 		http.Error(w, "сначала включите узел, затем повторите проверку", http.StatusConflict)
+	case errors.Is(err, nodestore.ErrGroup):
+		http.Error(w, "проверьте название, режим, состав и выбранный основной узел группы", http.StatusBadRequest)
+	case errors.Is(err, nodestore.ErrInUse):
+		http.Error(w, "узел или группа ещё используются сервисом либо входят в группу; сначала уберите соответствующее назначение", http.StatusConflict)
+	case errors.Is(err, nodestore.ErrRouteProof):
+		http.Error(w, "для узла нет свежей точной проверки этого сервиса в текущей сети", http.StatusConflict)
 	case errors.Is(err, nodestore.ErrRecovery):
 		http.Error(w, "результат записи не определён; хранилище заблокировано до безопасного восстановления", http.StatusServiceUnavailable)
 	default:

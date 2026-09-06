@@ -108,6 +108,38 @@ func TestArchiveCopyAndMergeKeepIDsAndFreshness(t *testing.T) {
 	}
 }
 
+func TestPrivateRestorePreservesNodeGroups(t *testing.T) {
+	source, _ := setup(t)
+	snapshot := importGood(t, source)
+	group, err := source.CreateGroup(context.Background(), "Основной резерв", "fallback", []string{snapshot.Nodes[0].ID}, snapshot.Nodes[0].ID, 30*time.Minute, testTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, err := source.ExportPrivate(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err := ReviewPrivateSnapshot(archive)
+	if err != nil || review.Groups != 1 {
+		t.Fatalf("review=%+v err=%v", review, err)
+	}
+	targetStore, _ := setup(t)
+	session, err := targetStore.BeginRestore(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := executeNodes(t, session, archive); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := targetStore.Snapshot(context.Background(), testTime)
+	if err != nil || len(restored.Groups) != 1 || restored.Groups[0].ID != group.ID || restored.Groups[0].NodeIDs[0] != snapshot.Nodes[0].ID {
+		t.Fatalf("restored=%+v err=%v", restored.Groups, err)
+	}
+}
+
 func TestRestoreMergesExactCheckHistoryWithoutLosingNewerEvidence(t *testing.T) {
 	s, _ := setup(t)
 	first := importGood(t, s)

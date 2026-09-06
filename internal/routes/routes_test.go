@@ -41,3 +41,17 @@ func TestValidWithOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestProfiledRouteRequiresExactRegistryOptionAndServiceProof(t *testing.T) {
+	id := "sing-box:node-" + strings.Repeat("a", 64)
+	options := []Option{{ID: id, Selectable: true, Ready: true, Services: []string{"telegram"}}}
+	if !ValidWithOptions(id, options) || !ReadyWithOptions(id, options) {
+		t.Fatal("exact registry route was not accepted")
+	}
+	if !ValidForServiceWithOptions(id, "telegram", options) {
+		t.Fatal("service-scoped proof was ignored")
+	}
+	if ValidForServiceWithOptions(id, "youtube", options) || ValidWithOptions("sing-box:node-"+strings.Repeat("b", 64), options) {
+		t.Fatal("registry or service proof was widened")
+	}
+}

@@ -1165,7 +1165,7 @@ async function refreshEngineLab() {
 }
 
 function routeSelectHTML(service) {
-  const options = [...state.routeOptions];
+  const options = state.routeOptions.filter((option) => !Array.isArray(option.services) || !option.services.length || option.services.includes(service.id));
   if (service.route && !options.some((o) => o.id === service.route)) {
     options.push({ id: service.route, name: service.route, installed: true, selectable: true, kind: 'custom' });
   }
@@ -2398,7 +2398,8 @@ function renderNodes() {
   $('#nodeTruthBanner').querySelector('div').innerHTML = payload.available === false
     ? '<b>Хранилище узлов недоступно</b><span>Рабочие маршруты не изменены. Проверьте приватное хранилище в диагностике.</span>'
     : `<b>Импорт не означает, что узел работает</b><span>${esc(payload.note || 'Все записи ожидают отдельной проверки через роутер.')}</span>`;
-  $('#nodeSummary').innerHTML = `<div><span>Сохранено</span><b>${Number(counts.total || 0)}</b></div><div><span>Проверены</span><b>${Number(counts.verified || 0)}</b><small>для текущей сети и сервиса</small></div><div><span>Не прошли</span><b>${Number(counts.degraded || 0)}</b></div><div><span>Нужно перепроверить</span><b>${Number(counts.stale || 0)}</b></div><div><span>Можно назначить</span><b>${Number(counts.selectable || 0)}</b><small>подключим следующим этапом</small></div>`;
+  $('#nodeSummary').innerHTML = `<div><span>Сохранено</span><b>${Number(counts.total || 0)}</b></div><div><span>Проверены</span><b>${Number(counts.verified || 0)}</b><small>для текущей сети и сервиса</small></div><div><span>Не прошли</span><b>${Number(counts.degraded || 0)}</b></div><div><span>Нужно перепроверить</span><b>${Number(counts.stale || 0)}</b></div><div><span>Можно назначить</span><b>${Number(counts.selectable || 0)}</b><small>только проверенным сервисам</small></div>`;
+  renderNodeGroups(Array.isArray(payload.groups) ? payload.groups : [], nodes);
   $('#nodeList').innerHTML = filtered.map((node) => {
     const protocol = String(node.protocol || 'unknown').toUpperCase();
     const transport = node.transport ? String(node.transport).toUpperCase() : 'обычный';
@@ -2408,13 +2409,16 @@ function renderNodes() {
     const checked = health.checked_at ? new Date(health.checked_at) : null;
     const checkedText = checked && Number.isFinite(checked.getTime()) ? checked.toLocaleString('ru-RU') : 'не запускалась';
     const serviceName = state.services.find((service) => service.id === health.service_id)?.name || health.service_id || '—';
+    const directAssignments = state.services.filter((service) => service.enabled && service.route === `sing-box:${node.id}`).map((service) => service.name);
+    const memberGroups = (payload.groups || []).filter((group) => (group.node_ids || []).includes(node.id)).map((group) => group.name);
+    const assignmentText = directAssignments.length ? directAssignments.join(', ') : (memberGroups.length ? `через группы: ${memberGroups.join(', ')}` : 'нет');
     const healthBlock = health.checked_at ? `<div class="node-health"><span>Сервис<b>${esc(serviceName)}</b></span><span>IP через узел<b>${esc(health.egress_ip || 'не подтверждён')}</b></span><span>Уровень проверки<b>${esc(({ dns: 'DNS', transport: 'порт', protocol: 'протокол', egress: 'IP выхода', service: 'сервис' })[health.test_level] || health.test_level || '—')}</b></span><span>Проверено<b>${esc(checkedText)}</b></span>${health.message ? `<span class="node-health-message">${esc(health.message)}</span>` : ''}</div>` : '';
     return `<article class="node-card ${node.disabled ? 'disabled' : esc(node.state || 'quarantined')}">
       <div class="node-card-head"><div><span class="node-protocol">${esc(protocol)}</span><h3>${esc(node.name || 'Импортированный узел')}</h3></div><span class="node-state">${esc(stateLabel)}</span></div>
       <code class="node-masked-uri">${esc(maskedURI)}</code>
       <div class="node-meta"><span>Транспорт <b>${esc(transport)}</b></span><span>TLS <b>${node.tls ? 'да' : 'нет'}</b></span><span>Источник <b>${esc(nodeSourceLabel(node))}</b></span><span>Срок <b>${esc(nodeExpiryText(node))}</b></span></div>
       ${healthBlock}
-      <div class="node-card-foot"><span>Назначенные сервисы: <b>нет</b></span><span>Последняя проверка: <b>${esc(checkedText)}</b></span></div>
+      <div class="node-card-foot"><span>Назначение: <b>${esc(assignmentText)}</b></span><span>Последняя проверка: <b>${esc(checkedText)}</b></span></div>
       <div class="node-actions"><button class="primary" type="button" data-node-check="${esc(node.id)}" ${node.disabled ? 'disabled' : ''}>Проверить</button><button class="secondary" type="button" data-node-edit="${esc(node.id)}">Переименовать</button><button class="secondary" type="button" data-node-disable="${esc(node.id)}" data-disabled="${node.disabled ? 'true' : 'false'}">${node.disabled ? 'Включить' : 'Отключить'}</button><button class="secondary" type="button" data-node-reveal="${esc(node.id)}">Показать конфиг</button><button class="danger-button" type="button" data-node-delete="${esc(node.id)}">Удалить</button></div>
     </article>`;
   }).join('');
@@ -2422,12 +2426,67 @@ function renderNodes() {
   if (!nodes.length && payload.available !== false) $('#nodeEmpty').querySelector('span').textContent = 'Импортируйте свой профиль или подписку в настройках Sing-box. Секреты останутся в локальном приватном хранилище.';
 }
 
+function renderNodeGroups(groups, nodes) {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const optionMap = new Map((state.routeOptions || []).map((option) => [option.id, option]));
+  $('#nodeGroupList').innerHTML = groups.map((group) => {
+    const members = (group.node_ids || []).map((id) => nodeMap.get(id)?.name || 'Удалённый узел');
+    const services = optionMap.get(`sing-box:${group.id}`)?.services || [];
+    const serviceNames = services.map((id) => state.services.find((service) => service.id === id)?.name || id);
+    const assigned = state.services.filter((service) => service.enabled && service.route === `sing-box:${group.id}`).map((service) => service.name);
+    const hint = assigned.length ? `Назначено: ${assigned.join(', ')}` : (serviceNames.length ? `Можно назначить: ${serviceNames.join(', ')}` : 'Сначала проверьте хотя бы один узел для нужного сервиса');
+    return `<article class="node-group-card"><div><span class="node-protocol">${group.mode === 'manual' ? 'РУЧНОЙ' : 'РЕЗЕРВ'}</span><h3>${esc(group.name)}</h3><p>${members.map(esc).join(' → ')}</p><small>${esc(hint)}</small></div><div class="node-actions"><button class="secondary" type="button" data-node-group-edit="${esc(group.id)}">Изменить</button><button class="danger-button" type="button" data-node-group-delete="${esc(group.id)}">Удалить</button></div></article>`;
+  }).join('');
+  $$('[data-node-group-edit]').forEach((button) => button.addEventListener('click', () => openNodeGroup(button.dataset.nodeGroupEdit)));
+  $$('[data-node-group-delete]').forEach((button) => button.addEventListener('click', () => deleteNodeGroup(button.dataset.nodeGroupDelete)));
+}
+
+function openNodeGroup(id = '') {
+  const nodes = (state.nodes?.nodes || []).filter((node) => !node.disabled);
+  if (!nodes.length) return showDetails({ error: 'Сначала добавьте и включите хотя бы один узел.' }, 'Группа не создана');
+  const group = (state.nodes?.groups || []).find((item) => item.id === id);
+  const selected = new Set(group?.node_ids || nodes.slice(0, 1).map((node) => node.id));
+  $('#nodeGroupID').value = group?.id || '';
+  $('#nodeGroupTitle').textContent = group ? `Изменить: ${group.name}` : 'Новая группа';
+  $('#nodeGroupName').value = group?.name || '';
+  $('#nodeGroupMode').value = group?.mode || 'fallback';
+  $('#nodeGroupHold').value = String(group?.hold_down_seconds || 1800);
+  $('#nodeGroupMembers').innerHTML = nodes.map((node) => `<label><input type="checkbox" value="${esc(node.id)}" ${selected.has(node.id) ? 'checked' : ''}><span>${esc(node.name)} · ${esc(node.protocol || '')}</span></label>`).join('');
+  $('#nodeGroupPreferred').innerHTML = nodes.map((node) => `<option value="${esc(node.id)}" ${node.id === (group?.preferred_node_id || [...selected][0]) ? 'selected' : ''}>${esc(node.name)}</option>`).join('');
+  $('#nodeGroupDialog').showModal();
+}
+
+async function saveNodeGroup(event) {
+  event.preventDefault();
+  const id = $('#nodeGroupID').value;
+  const nodeIDs = $$('#nodeGroupMembers input:checked').map((input) => input.value);
+  if (!nodeIDs.length) return showDetails({ error: 'Выберите хотя бы один узел.' }, 'Группа не сохранена');
+  const preferred = nodeIDs.includes($('#nodeGroupPreferred').value) ? $('#nodeGroupPreferred').value : nodeIDs[0];
+  const body = { name: $('#nodeGroupName').value.trim(), mode: $('#nodeGroupMode').value, node_ids: nodeIDs, preferred_node_id: preferred, hold_down_seconds: Number($('#nodeGroupHold').value), confirm: id ? 'UPDATE_NODE_GROUP' : 'CREATE_NODE_GROUP' };
+  try {
+    await api(id ? `/api/v1/node-groups/${encodeURIComponent(id)}` : '/api/v1/node-groups', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    $('#nodeGroupDialog').close();
+    state.routeOptions = await api('/api/v1/routes/options');
+    await refreshNodes();
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Группа не сохранена'); }
+}
+
+async function deleteNodeGroup(id) {
+  const group = (state.nodes?.groups || []).find((item) => item.id === id);
+  if (!group || !await askConfirmation('Удалить группу узлов?', 'Сами узлы останутся. Если группа назначена сервису, сначала выберите для него другой маршрут.', 'Удалить')) return;
+  try {
+    await api(`/api/v1/node-groups/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE_NODE_GROUP' }) });
+    state.routeOptions = await api('/api/v1/routes/options');
+    await refreshNodes();
+  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Группа не удалена'); }
+}
+
 async function refreshNodes() {
   const button = $('#refreshNodes');
   button.disabled = true;
   button.textContent = 'Обновление…';
   try {
-    state.nodes = await api('/api/v1/nodes');
+    [state.nodes, state.routeOptions] = await Promise.all([api('/api/v1/nodes'), api('/api/v1/routes/options')]);
     renderNodes();
   } catch (error) {
     showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Узлы не обновлены');
@@ -3521,7 +3580,7 @@ async function previewPrivateBackup() {
     const preview = await api('/api/v1/private-backups/preview', { method: 'POST', body: JSON.stringify({ envelope, password }) });
     state.privateBackupPreview = preview;
     const warnings = preview.warnings || [];
-    $('#privateBackupPreview').innerHTML = `<div class="private-backup-ok"><span class="engine-state installed">ШИФРОВАНИЕ И ЦЕЛОСТНОСТЬ ПРОВЕРЕНЫ</span><h3>Резервная копия RAZVILKA ${esc(preview.from_version)}</h3><p>${preview.created_at ? new Date(preview.created_at).toLocaleString('ru-RU') : '—'}</p><div class="private-backup-metrics"><div><b>${preview.services || 0}</b><span>сервисов</span></div><div><b>${preview.engine_files?.length || 0}</b><span>конфигов</span></div><div><b>${preview.sensitive_files || 0}</b><span>секретных</span></div><div><b>${preview.custom_services || 0}</b><span>пользовательских</span></div><div><b>${preview.devices || 0}</b><span>устройств</span></div><div><b>черновик</b><span>режим</span></div></div>${warnings.map((warning) => `<div class="private-backup-warning">${esc(warning)}</div>`).join('')}<div class="private-backup-digest">${esc(preview.digest)}</div></div>`;
+    $('#privateBackupPreview').innerHTML = `<div class="private-backup-ok"><span class="engine-state installed">ШИФРОВАНИЕ И ЦЕЛОСТНОСТЬ ПРОВЕРЕНЫ</span><h3>Резервная копия RAZVILKA ${esc(preview.from_version)}</h3><p>${preview.created_at ? new Date(preview.created_at).toLocaleString('ru-RU') : '—'}</p><div class="private-backup-metrics"><div><b>${preview.services || 0}</b><span>сервисов</span></div><div><b>${preview.engine_files?.length || 0}</b><span>конфигов</span></div><div><b>${preview.sensitive_files || 0}</b><span>секретных</span></div><div><b>${preview.custom_services || 0}</b><span>пользовательских</span></div><div><b>${preview.devices || 0}</b><span>устройств</span></div><div><b>${preview.nodes || 0}</b><span>узлов</span></div><div><b>${preview.node_groups || 0}</b><span>групп узлов</span></div><div><b>черновик</b><span>режим</span></div></div>${warnings.map((warning) => `<div class="private-backup-warning">${esc(warning)}</div>`).join('')}<div class="private-backup-digest">${esc(preview.digest)}</div></div>`;
     $('#confirmPrivateBackup').disabled = !preview.valid;
   } catch (error) {
     state.privateBackupPreview = null;
@@ -3616,6 +3675,7 @@ function bindEvents() {
   $('#nodeStateFilter').addEventListener('change', renderNodes);
   $('#refreshNodes').addEventListener('click', refreshNodes);
   $('#nodeOpenImport').addEventListener('click', async () => { await openEngineConfiguration('sing-box'); switchEngineTab('transfer'); });
+  $('#nodeOpenGroup').addEventListener('click', () => openNodeGroup());
   $('#nodeList').addEventListener('click', (event) => {
     const check = event.target.closest('[data-node-check]');
     const edit = event.target.closest('[data-node-edit]');
@@ -3631,6 +3691,9 @@ function bindEvents() {
   $('#nodeEditForm').addEventListener('submit', saveNodeAlias);
   $('#nodeEditClose').addEventListener('click', () => $('#nodeEditDialog').close());
   $('#nodeEditCancel').addEventListener('click', () => $('#nodeEditDialog').close());
+  $('#nodeGroupForm').addEventListener('submit', saveNodeGroup);
+  $('#nodeGroupClose').addEventListener('click', () => $('#nodeGroupDialog').close());
+  $('#nodeGroupCancel').addEventListener('click', () => $('#nodeGroupDialog').close());
   $('#nodeCheckForm').addEventListener('submit', runNodeCheck);
   $('#nodeCheckClose').addEventListener('click', () => $('#nodeCheckDialog').close());
   $('#nodeCheckCancel').addEventListener('click', () => $('#nodeCheckDialog').close());

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -136,6 +137,50 @@ func TestNodeMutationAndConfirmedReveal(t *testing.T) {
 	handler.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/v1/nodes", nil))
 	if strings.Contains(list.Body.String(), "123e4567") || !strings.Contains(list.Body.String(), `"total":0`) {
 		t.Fatal("deleted node remained in list or leaked")
+	}
+}
+
+func TestNodeGroupCRUDKeepsRuntimeAndMembersSafe(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "nodes")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := nodestore.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	snapshot, err := store.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174000@private.example:443?security=tls", time.Now(), time.Hour, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snapshot.Nodes[0].ID
+	handler := (&App{Nodes: store}).Handler(http.NotFoundHandler())
+	create := httptest.NewRecorder()
+	handler.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/v1/node-groups", strings.NewReader(`{"name":"Telegram резерв","mode":"fallback","node_ids":["`+id+`"],"preferred_node_id":"`+id+`","hold_down_seconds":1800,"confirm":"CREATE_NODE_GROUP"}`)))
+	if create.Code != http.StatusCreated || !strings.Contains(create.Body.String(), `"working_routes_changed":false`) || strings.Contains(create.Body.String(), "private.example") {
+		t.Fatalf("create status=%d body=%s", create.Code, create.Body.String())
+	}
+	var created struct {
+		Group nodestore.NodeGroup `json:"group"`
+	}
+	if json.Unmarshal(create.Body.Bytes(), &created) != nil || created.Group.ID == "" {
+		t.Fatal("created group ID is missing")
+	}
+	blocked := httptest.NewRecorder()
+	handler.ServeHTTP(blocked, httptest.NewRequest(http.MethodDelete, "/api/v1/nodes/"+id, strings.NewReader(`{"confirm":"DELETE_NODE"}`)))
+	if blocked.Code != http.StatusConflict {
+		t.Fatalf("group member deletion status=%d body=%s", blocked.Code, blocked.Body.String())
+	}
+	update := httptest.NewRecorder()
+	handler.ServeHTTP(update, httptest.NewRequest(http.MethodPut, "/api/v1/node-groups/"+created.Group.ID, strings.NewReader(`{"name":"Основной узел","mode":"manual","node_ids":["`+id+`"],"preferred_node_id":"`+id+`","hold_down_seconds":600,"confirm":"UPDATE_NODE_GROUP"}`)))
+	if update.Code != http.StatusOK || !strings.Contains(update.Body.String(), `"mode":"manual"`) {
+		t.Fatalf("update status=%d body=%s", update.Code, update.Body.String())
+	}
+	remove := httptest.NewRecorder()
+	handler.ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/v1/node-groups/"+created.Group.ID, strings.NewReader(`{"confirm":"DELETE_NODE_GROUP"}`)))
+	if remove.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", remove.Code, remove.Body.String())
 	}
 }
 

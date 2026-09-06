@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,7 +48,26 @@ type ProxyTunnelAdapter struct {
 	Priority         int
 	Timeout          time.Duration
 	UsqueConfig      string
+	// NodeRoutes is set only for the Sing-box adapter. It resolves exact
+	// registry IDs to transient private material after policy destinations are
+	// known. The callback result is never stored in the public plan or API.
+	NodeRoutes     NodeRouteMaterializer
+	NetworkProfile func() string
 }
+
+type NodeRouteRequest struct {
+	ServiceID    string
+	NodeID       string
+	Domains      []string
+	Destinations []string
+}
+
+type NodeRouteMaterial struct {
+	Config        []byte
+	EndpointHosts []string
+}
+
+type NodeRouteMaterializer func(context.Context, []NodeRouteRequest, string, time.Time) (NodeRouteMaterial, error)
 
 type usqueTransport struct {
 	HTTP2 bool   `json:"http2"`
@@ -167,6 +187,39 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	if snapshot.ConfigDraft {
 		source = snapshot.StagedConfig
 	}
+	privateEndpoints := []string{}
+	if a.ID() == "sing-box" {
+		scoped, unscoped := []Route{}, false
+		for _, route := range plan.Routes {
+			if adapterID(route.Resolved) != a.ID() {
+				continue
+			}
+			if strings.HasPrefix(route.Resolved, "sing-box:node-") {
+				scoped = append(scoped, route)
+			} else {
+				unscoped = true
+			}
+		}
+		if len(scoped) > 0 {
+			if unscoped || a.NodeRoutes == nil || a.NetworkProfile == nil {
+				return errors.New("node-scoped Sing-box route materializer is unavailable")
+			}
+			requests := make([]NodeRouteRequest, 0, len(scoped))
+			for _, route := range scoped {
+				destinations, resolveErr := resolvePolicyPrefixes(ctx, Plan{Routes: []Route{route}}, a.ID(), a.Resolver)
+				if resolveErr != nil {
+					return resolveErr
+				}
+				requests = append(requests, NodeRouteRequest{ServiceID: route.ServiceID, NodeID: strings.TrimPrefix(route.Resolved, "sing-box:"), Domains: append([]string(nil), route.Domains...), Destinations: destinations})
+			}
+			material, materialErr := a.NodeRoutes(ctx, requests, a.NetworkProfile(), time.Now().UTC())
+			if materialErr != nil || len(material.Config) == 0 {
+				return errors.New("node-scoped Sing-box route lost its exact registry proof")
+			}
+			source = material.Config
+			privateEndpoints = material.EndpointHosts
+		}
+	}
 	if len(source) == 0 {
 		return errors.New("engine configuration is empty")
 	}
@@ -181,7 +234,9 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	if len(prefixes) == 0 {
 		return errors.New("proxy route has no destination prefixes")
 	}
-	if err := rejectEndpointOverlap(ctx, prefixes, endpoints, a.Resolver); err != nil {
+	endpoints = sortedUnique(append(endpoints, privateEndpoints...))
+	exclusions, err := resolveEndpointExclusions(ctx, endpoints, a.Resolver)
+	if err != nil {
 		return err
 	}
 	schema, err := a.detectSidecarSchema(ctx)
@@ -192,7 +247,7 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	if err != nil {
 		return err
 	}
-	policy := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules}
+	policy := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
 	policyData, _ := json.MarshalIndent(policy, "", "  ")
 	for _, item := range []struct {
 		path string
@@ -529,10 +584,11 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 	if err := json.Unmarshal(engineConfig, &document); err != nil {
 		return false, err
 	}
-	if err := rejectEndpointOverlap(ctx, prefixes, collectEndpointHosts(document), a.Resolver); err != nil {
+	exclusions, err := resolveEndpointExclusions(ctx, collectEndpointHosts(document), a.Resolver)
+	if err != nil {
 		return false, err
 	}
-	newState := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules}
+	newState := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
 	if samePolicy(oldState, newState) {
 		return false, nil
 	}
@@ -1002,8 +1058,14 @@ func (a *ProxyTunnelAdapter) readStagedPolicy(root string) (PolicyState, error) 
 	if err := json.Unmarshal(data, &state); err != nil {
 		return PolicyState{}, err
 	}
-	if state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || len(effectivePolicyRules(state)) > maxPolicyPrefixes {
+	if state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || len(effectivePolicyRules(state))+len(state.Exclusions) > maxPolicyPrefixes {
 		return PolicyState{}, errors.New("invalid staged proxy policy ownership")
+	}
+	for _, value := range state.Exclusions {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil || !prefix.Addr().IsGlobalUnicast() || prefix.Addr().IsPrivate() || prefix.Addr().IsLoopback() || prefix.Addr().IsLinkLocalUnicast() || prefix.Bits() != prefix.Addr().BitLen() {
+			return PolicyState{}, errors.New("invalid staged endpoint exclusion")
+		}
 	}
 	return state, nil
 }
@@ -1169,37 +1231,38 @@ func collectEndpointHosts(value any) []string {
 	return sortedUnique(out)
 }
 
-func rejectEndpointOverlap(ctx context.Context, prefixes, hosts []string, resolver PrefixResolver) error {
+func resolveEndpointExclusions(ctx context.Context, hosts []string, resolver PrefixResolver) ([]string, error) {
 	if resolver == nil {
 		resolver = func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 		}
 	}
-	parsed := make([]netip.Prefix, 0, len(prefixes))
-	for _, value := range prefixes {
-		prefix, err := netip.ParsePrefix(value)
-		if err != nil {
-			return err
-		}
-		parsed = append(parsed, prefix)
-	}
-	for _, host := range hosts {
+	seen := map[string]bool{}
+	for _, host := range sortedUnique(hosts) {
 		addresses := []netip.Addr{}
 		if address, err := netip.ParseAddr(host); err == nil {
 			addresses = append(addresses, address)
-		} else if resolved, err := resolver(ctx, host); err == nil {
+		} else {
+			resolved, err := resolver(ctx, host)
+			if err != nil || len(resolved) == 0 {
+				return nil, errors.New("proxy endpoint direct exclusion could not be resolved")
+			}
 			addresses = append(addresses, resolved...)
 		}
 		for _, address := range addresses {
 			address = address.Unmap()
-			for _, prefix := range parsed {
-				if prefix.Contains(address) {
-					return fmt.Errorf("proxy endpoint %s overlaps selected service prefix %s; refusing self-tunnel loop", address, prefix)
-				}
+			if !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsMulticast() {
+				return nil, errors.New("proxy endpoint direct exclusion is not a public address")
 			}
+			seen[netip.PrefixFrom(address, address.BitLen()).String()] = true
 		}
 	}
-	return nil
+	out := make([]string, 0, len(seen))
+	for value := range seen {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func probeSOCKS5(ctx context.Context, address string) error {

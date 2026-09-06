@@ -63,7 +63,10 @@ disable/delete и reveal имеют отдельные безопасные ко
 N1.3 Exact Outbound Checker реализован локально и описан в
 [отдельном контракте](EXACT_NODE_CHECKER_RU.md): DNS/transport/protocol,
 route identity, proxy egress, direct-leak control и сервисный canary сохраняются
-с TTL и профилем сети. До N1.4 bindings `selectable=0` остаётся неизменным.
+с TTL и профилем сети. N1.4 node/group bindings также завершён локально и описан
+в [контракте привязок](NODE_SCOPED_ROUTES_RU.md): выбор ограничен exact proof,
+fallback удерживает LKG, endpoint идёт напрямую, а транзакционный отказ возвращает
+рабочий runtime. Перед стабильным релизом остаётся N1.4 HIL двух реальных узлов.
 HTTPS/TLS-canary через выбранный DNS для USQUE сохранён в backlog, но не
 смешивается с изменением импортера. Публикация выполняется проверенными
 группами изменений, а не на каждый небольшой локальный коммит.

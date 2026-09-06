@@ -93,8 +93,9 @@ journal сохраняет собственный lifetime lease. N1.2 доба�
 поиск, фильтр, явный импорт, alias/disable/delete и подтверждённый reveal без
 ложного selectable. N1.3 exact-node health evidence с TTL и привязкой к
 сети/сервису теперь реализован в [отдельном контракте](EXACT_NODE_CHECKER_RU.md).
-Следующим остаётся N1.4 bindings; subscription credentials и постоянный retry
-quarantine пока отсутствуют.
+N1.4 bindings точного узла и группы реализован локально в
+[отдельном контракте](NODE_SCOPED_ROUTES_RU.md); subscription credentials и
+постоянный retry quarantine пока отсутствуют.
 
 Роутер не изменялся. Публичные feeds не загружались этим блоком; автоматические
 подписки и переключение маршрутов остаются в [плане](PUBLIC_PROVIDER_SOURCES_RU.md).

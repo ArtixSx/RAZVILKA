@@ -1,6 +1,6 @@
 # Текущий подтверждённый статус RAZVILKA
 
-Обновлено: 5 сентября 2026 года<br>
+Обновлено: 6 сентября 2026 года<br>
 Последний проверенный в CI commit: `5d841f4c470f18b807671246a160bf11b86f7713`<br>
 Последний стабильный релиз: [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0)  
 Текущий цикл разработки: `0.18.1-dev` — Truth & Safety
@@ -27,7 +27,7 @@ gap-аудиты сохранены как исторические снимки
 | Transaction engine | Реализовано · CI · Роутер | Plan, snapshot, stage, validate, canary, commit/rollback и LKG-журнал | Fault injection во всех commit points |
 | NFQWS2 adapter | Реализовано · CI · Роутер | Запуск, читаемые runtime-списки, проверка фактического процесса и YouTube HTTP `204` | Native ownership стратегий, NFQUEUE lease и event-driven recovery |
 | Sing-box/Xray candidate | Реализовано · CI · частично Роутер | Локальная проверка конфига, loopback proxy-canary, bounded URLTest pool | Полная Evidence v2 и длительная проверка узлов |
-| NodeStore | N1.3 реализован · Роутер | Приватное хранение, управление узлами и exact VLESS check: route identity, egress/direct control, Telegram, TTL и сеть | Node/service bindings, Linux race и HIL Reality/Hysteria2/TUIC |
+| NodeStore | N1.4 реализован локально; N1.3 · Роутер | Приватное хранение, exact service proof, точный узел/группа, LKG/fallback и endpoint-exclusion | N1.4 HIL двух узлов, Linux race и HIL Reality/Hysteria2/TUIC |
 | WARP MASQUE/USQUE | Реализовано · CI · Экспериментально | Doctor, staged proxy-canary, H2/H3 диагностика и rollback | Единый Cloudflare Provider и HIL транспортов |
 | WARP WireGuard | Реализовано · CI · Экспериментально | Временный интерфейс, официальный набор портов, cleanup и безопасный отказ | Успешный handshake на поддерживаемой сети, endpoint scoring и LKG |
 | AmneziaWG | Реализовано · CI · Экспериментально | Импорт/валидация и адаптер транзакции | Отдельный аппаратный canary и compatibility registry |
@@ -229,10 +229,15 @@ delete подключены; reveal требует подтверждения, �
 Sing-box outbound проверяется через изолированный loopback runtime, закреплённый
 публичный адрес, паспорт процесса, IP выхода, direct-leak control и catalog-owned
 canary выбранного сервиса. Результат хранится с TTL и профилем сети; UI показывает
-IP и понятную стадию. Рабочие маршруты не меняются, `selectable=0` остаётся до
-N1.4 bindings. На Keenetic ARM64 подтверждён полный VLESS → Sing-box → Telegram
+IP и понятную стадию. На Keenetic ARM64 подтверждён полный VLESS → Sing-box → Telegram
 сценарий с отличающимся egress IP и очисткой. Для старого ядра без `ns/net`
 добавлен узкий fail-closed fallback; подробности зафиксированы в отчёте N1.3.
+Локально завершён [N1.4](NODE_SCOPED_ROUTES_RU.md): проверенный узел или группа
+появляются только у доказанного сервиса и текущей сети; fallback удерживает
+последний рабочий узел, приватная конфигурация создаётся внутри транзакции, а
+адреса её серверов получают прямые исключения от самозацикливания. Более новый
+отказ отзывает старый PASS. Аппаратная проверка переключения и отката ещё не
+выполнена, поэтому стабильный релиз не публикуется.
 Linux race и отдельный HIL Reality/Hysteria2/TUIC ещё не выполнены.
 Оставшаяся работа Cloudflare/USQUE ниже сохраняется
 в backlog. [Автообновление публичных источников](PUBLIC_PROVIDER_SOURCES_RU.md)

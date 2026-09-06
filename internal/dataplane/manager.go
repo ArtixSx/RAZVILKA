@@ -128,6 +128,23 @@ func New(stateRoot string) *Manager {
 	return &Manager{StateRoot: stateRoot, Adapters: map[string]Adapter{}, operationGate: make(chan struct{}, 1), RollbackTimeout: 45 * time.Second}
 }
 
+// ConfigureSingBoxNodeRoutes attaches the private registry only after both
+// stores completed boot recovery. It does not materialize or mutate a route.
+func (m *Manager) ConfigureSingBoxNodeRoutes(materializer NodeRouteMaterializer, profile func() string) error {
+	if m == nil || materializer == nil || profile == nil {
+		return errors.New("Sing-box node route materializer is unavailable")
+	}
+	m.registryMu.Lock()
+	defer m.registryMu.Unlock()
+	adapter, ok := m.Adapters["sing-box"].(*ProxyTunnelAdapter)
+	if !ok || adapter == nil {
+		return errors.New("Sing-box dataplane adapter is unavailable")
+	}
+	adapter.NodeRoutes = materializer
+	adapter.NetworkProfile = profile
+	return nil
+}
+
 func (m *Manager) beginOperation(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()

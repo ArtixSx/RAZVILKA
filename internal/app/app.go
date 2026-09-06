@@ -350,6 +350,8 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/nodes/import", a.nodeImport)
 	mux.HandleFunc("/api/v1/nodes", a.nodeList)
 	mux.HandleFunc("/api/v1/nodes/", a.nodeAction)
+	mux.HandleFunc("/api/v1/node-groups", a.nodeGroups)
+	mux.HandleFunc("/api/v1/node-groups/", a.nodeGroupAction)
 	mux.HandleFunc("/api/v1/components", a.componentList)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
@@ -2464,7 +2466,7 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		routeDirty := st.Enabled != applied.Enabled || selected != appliedRoute
 		sourcesDirty := !stringSlicesEqual(st.Sources, applied.Sources)
 		dirty := routeDirty || sourcesDirty
-		routeAvailable := routecatalog.ValidWithOptions(selected, options)
+		routeAvailable := routecatalog.ValidForServiceWithOptions(selected, s.ID, options)
 		routeIssue := ""
 		if !routeAvailable {
 			routeIssue = "Выбранный обход больше не доступен. Установите его или выберите AUTO / DIRECT."
@@ -2621,7 +2623,7 @@ func (a *App) service(w http.ResponseWriter, r *http.Request) {
 	if selected == "" {
 		selected = "auto"
 	}
-	if !routecatalog.ValidWithOptions(selected, a.routeOptionsSnapshot()) {
+	if !routecatalog.ValidForServiceWithOptions(selected, id, a.routeOptionsSnapshot()) {
 		current := a.Store.Get().Services[id]
 		// A component can disappear after a route was saved. The user must still
 		// be able to disable that service without first reinstalling the missing
@@ -3227,8 +3229,10 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 	cfg = configForChangeScope(cfg, scope)
 	routes := make([]dataplane.Route, 0)
 	committedRoutes := map[string]string{}
+	committedAt := time.Time{}
 	if a.Dataplane != nil {
 		if committed, exists, err := a.Dataplane.Committed(); err == nil && exists && committed.State == "committed" && committed.Revision == cfg.AppliedRevision {
+			committedAt, _ = time.Parse(time.RFC3339, committed.CreatedAt)
 			for _, route := range committed.Routes {
 				committedRoutes[route.ServiceID] = route.Resolved
 			}
@@ -3240,9 +3244,25 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 		state := cfg.Services[service.ID]
 		if state.Enabled {
 			selected := selectedRoute(state)
+			if (strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-")) && !routecatalog.ValidForServiceWithOptions(selected, service.ID, options) {
+				return dataplane.Plan{}, fmt.Errorf("route %s has no current registry proof for service %s", selected, service.ID)
+			}
 			resolved := selected
 			if selected == "auto" {
 				resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+			} else if strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-") {
+				if a.Nodes == nil {
+					return dataplane.Plan{}, fmt.Errorf("private node registry is unavailable")
+				}
+				previousNode := strings.TrimPrefix(committedRoutes[service.ID], "sing-box:")
+				if !strings.HasPrefix(previousNode, "node-") {
+					previousNode = ""
+				}
+				proof, proofErr := a.Nodes.ResolveRoute(context.Background(), strings.TrimPrefix(selected, "sing-box:"), service.ID, systemprobe.DetectWANProfile().ID, previousNode, committedAt, time.Now())
+				if proofErr != nil {
+					return dataplane.Plan{}, fmt.Errorf("node route has no current exact proof for service %s", service.ID)
+				}
+				resolved = proof.Route
 			}
 			if adapter := dataplane.AdapterID(resolved); adapter != "" && adapter != "direct" {
 				desiredAdapters[adapter] = true
@@ -3285,11 +3305,24 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 	}
 	sort.Strings(retiringAdapters)
 	engines := make([]dataplane.Engine, 0, len(options))
+	nodeScopedSingBox := false
+	for _, route := range routes {
+		if strings.HasPrefix(route.Resolved, "sing-box:node-") {
+			nodeScopedSingBox = true
+		}
+	}
 	for _, option := range options {
 		if option.ID == "auto" || option.ID == "direct" {
 			continue
 		}
-		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: option.Selectable, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
+		if strings.Contains(option.ID, ":") {
+			continue
+		}
+		configured := option.Selectable
+		if option.ID == "sing-box" && nodeScopedSingBox {
+			configured = true
+		}
+		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: configured, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
 	}
 	resourceConflicts := []dataplane.ResourceConflict{}
 	if a.EngineLab != nil {
@@ -3911,6 +3944,7 @@ type privateBackupPreviewResult struct {
 	Devices         int                       `json:"devices"`
 	Nodes           int                       `json:"nodes"`
 	NodeSources     int                       `json:"node_sources"`
+	NodeGroups      int                       `json:"node_groups"`
 	Warnings        []string                  `json:"warnings"`
 	DraftOnly       bool                      `json:"draft_only"`
 	RestoresAccount bool                      `json:"restores_account"`
@@ -4049,8 +4083,8 @@ func (a *App) privateBackupImport(w http.ResponseWriter, r *http.Request) {
 		"ok": true, "draft_only": true, "digest": payload.Digest,
 		"services_staged": len(payload.Services), "custom_services_merged": len(payload.CustomServices),
 		"engine_files_staged": len(payload.EngineFiles), "devices_merged": len(payload.Devices),
-		"nodes_merged": preview.Nodes,
-		"note":         "Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.",
+		"nodes_merged": preview.Nodes, "node_groups_merged": preview.NodeGroups,
+		"note": "Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.",
 	})
 }
 
@@ -4094,7 +4128,7 @@ func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackup
 		if err != nil {
 			return preview, errors.New("invalid private node snapshot")
 		}
-		preview.Nodes, preview.NodeSources = review.Nodes, review.Sources
+		preview.Nodes, preview.NodeSources, preview.NodeGroups = review.Nodes, review.Sources, review.Groups
 	}
 	known := map[string]bool{}
 	for _, service := range a.catalogSnapshot().Services {
@@ -4426,6 +4460,48 @@ func (a *App) routeOptionsSnapshot() []routecatalog.Option {
 			continue
 		}
 		a.prepareRouteOption(&options[i])
+	}
+	if a.Nodes == nil || a.Dataplane == nil || !a.Dataplane.Capable("sing-box") {
+		return options
+	}
+	snapshot, err := a.Nodes.Snapshot(context.Background(), time.Now())
+	if err != nil {
+		return options
+	}
+	profile := systemprobe.DetectWANProfile().ID
+	installed, running := false, false
+	for _, option := range options {
+		if option.ID == "sing-box" {
+			installed, running = option.Installed, option.Running
+			break
+		}
+	}
+	if !installed {
+		return options
+	}
+	for _, node := range snapshot.Nodes {
+		services, routeErr := a.Nodes.RouteServices(context.Background(), node.ID, profile, time.Now())
+		if routeErr != nil || len(services) == 0 || node.Disabled {
+			continue
+		}
+		options = append(options, routecatalog.Option{
+			ID: "sing-box:" + node.ID, Name: "Sing-box · " + node.Name, Kind: "node", Description: "Точно проверенный узел для выбранного сервиса и текущей сети",
+			Installed: true, Configured: true, Running: running, Selectable: true, Ready: true, Services: services,
+		})
+	}
+	for _, group := range snapshot.Groups {
+		services, routeErr := a.Nodes.GroupServices(context.Background(), group.ID, profile, time.Now())
+		if routeErr != nil || len(services) == 0 {
+			continue
+		}
+		mode := "резервная группа"
+		if group.Mode == "manual" {
+			mode = "выбранный узел"
+		}
+		options = append(options, routecatalog.Option{
+			ID: "sing-box:" + group.ID, Name: "Sing-box · " + group.Name, Kind: "node-group", Description: mode + " с возвратом к последнему рабочему узлу",
+			Installed: true, Configured: true, Running: running, Selectable: true, Ready: true, Services: services,
+		})
 	}
 	return options
 }

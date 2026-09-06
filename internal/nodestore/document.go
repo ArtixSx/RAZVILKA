@@ -43,8 +43,8 @@ func extract(config []byte) ([]json.RawMessage, error) {
 }
 
 func validate(doc document) error {
-	if (doc.Schema != legacySchema && doc.Schema != metadataSchema && doc.Schema != schema) || doc.Owner != "razvilka-nodes" || doc.Generation == 0 || len(doc.IdentityKey) != 32 ||
-		len(doc.Nodes) == 0 || len(doc.Nodes) > MaxNodes || len(doc.Sources) == 0 || len(doc.Sources) > MaxSources || len(doc.Secrets) != len(doc.Nodes) {
+	if (doc.Schema != legacySchema && doc.Schema != metadataSchema && doc.Schema != healthSchema && doc.Schema != schema) || doc.Owner != "razvilka-nodes" || doc.Generation == 0 || len(doc.IdentityKey) != 32 ||
+		len(doc.Nodes) == 0 || len(doc.Nodes) > MaxNodes || len(doc.Sources) == 0 || len(doc.Sources) > MaxSources || len(doc.Secrets) != len(doc.Nodes) || len(doc.Groups) > MaxGroups || doc.Schema < schema && len(doc.Groups) != 0 {
 		return ErrStore
 	}
 	sources := map[string]bool{}
@@ -103,11 +103,21 @@ func validate(doc document) error {
 			lastCheck = check.CheckedAt
 		}
 	}
+	groupIDs := map[string]bool{}
+	for _, group := range doc.Groups {
+		if groupIDs[group.ID] || !validGroup(group, ids) {
+			return ErrStore
+		}
+		groupIDs[group.ID] = true
+	}
 	return nil
 }
 
 func snapshot(doc document, now time.Time) Snapshot {
-	out := Snapshot{Generation: doc.Generation, Sources: append([]Source{}, doc.Sources...), Nodes: []Node{}}
+	out := Snapshot{Generation: doc.Generation, Sources: append([]Source{}, doc.Sources...), Nodes: []Node{}, Groups: append([]NodeGroup{}, doc.Groups...)}
+	for index := range out.Groups {
+		out.Groups[index].NodeIDs = append([]string(nil), out.Groups[index].NodeIDs...)
+	}
 	kinds := map[string]string{}
 	for _, s := range doc.Sources {
 		kinds[s.ID] = s.Kind

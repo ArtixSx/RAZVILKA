@@ -381,7 +381,7 @@ func TestNodeInventoryIsVisibleWithoutClaimingRouteReadiness(t *testing.T) {
 		`/api/v1/nodes`,
 		`Импорт не означает, что узел работает`,
 		`Последняя проверка: <b>${esc(checkedText)}</b>`,
-		`Назначенные сервисы: <b>нет</b>`,
+		`Назначение: <b>${esc(assignmentText)}</b>`,
 		`id="nodeOpenImport"`,
 		`id="nodeEditDialog"`,
 		`id="nodeRevealDialog"`,
@@ -394,6 +394,11 @@ func TestNodeInventoryIsVisibleWithoutClaimingRouteReadiness(t *testing.T) {
 		`STORE_REMOTE_NODES`,
 		`REVEAL_NODE`,
 		`DELETE_NODE`,
+		`id="nodeOpenGroup"`,
+		`id="nodeGroupDialog"`,
+		`/api/v1/node-groups`,
+		`CREATE_NODE_GROUP`,
+		`Автоматический резерв`,
 	} {
 		if !strings.Contains(content, required) {
 			t.Fatalf("truthful node inventory marker missing %q", required)
