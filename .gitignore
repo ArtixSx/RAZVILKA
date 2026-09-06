@@ -18,3 +18,6 @@ Thumbs.db
 *.secret
 *.private
 configs/local/
+
+# Hardware-in-the-loop and local browser smoke-test artifacts
+.hil/
