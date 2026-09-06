@@ -1,0 +1,22 @@
+{
+  "id": "z2k",
+  "name": "z2k · Zapret2",
+  "installed": true,
+  "configured": true,
+  "runtime_ready": true,
+  "running": true,
+  "kind": "external",
+  "description": "Внешний владелец NFQUEUE, доступный только для наблюдения и локального импорта",
+  "binary_path": "/opt/zapret2/nfq2/nfqws2",
+  "version": "r-fixture",
+  "architecture": "arm64",
+  "capabilities": ["dpi-desync", "tcp", "udp", "quic", "nfqueue", "external-owner"],
+  "native_check": true,
+  "ownership": {
+    "ports": [],
+    "interfaces": [],
+    "nfqueues": ["external:z2k"]
+  },
+  "external": true,
+  "managed_by": "z2k"
+}

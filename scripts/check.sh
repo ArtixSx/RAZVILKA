@@ -13,6 +13,7 @@ go vet ./...
 for script in scripts/*.sh scripts/S99razvilka build.sh; do
   sh -n "$script"
 done
+sh ./scripts/check-no-z2k-runtime.sh
 if command -v node >/dev/null 2>&1; then
   node --check cmd/razvilka/web/app.js
   node --check cmd/razvilka/web/cloudflare-accounts.js
