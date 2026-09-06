@@ -41,7 +41,11 @@ func awaitOperation(t *testing.T, ch <-chan struct{}) {
 	t.Helper()
 	select {
 	case <-ch:
-	case <-time.After(3 * time.Second):
+	// The full race suite instruments password hashing and every concurrent
+	// package. A three-second wall-clock deadline was flaky on shared CI even
+	// though the request had not failed; keep this bounded but allow race-mode
+	// scheduling overhead before declaring the checkpoint unreachable.
+	case <-time.After(15 * time.Second):
 		t.Fatal("operation did not reach checkpoint")
 	}
 }
