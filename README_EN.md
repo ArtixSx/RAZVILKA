@@ -30,6 +30,11 @@ WARP, reboot and extended testing remain open. See the
 The command below installs latest stable. To test rc.2, download its versioned
 prerelease archive and use the bundled install instructions.
 
+For MIPS, `uname -m = mips` does not distinguish byte order. Use the official
+Entware package for your firmware and confirmed BE/LE architecture. The
+RAZVILKA installer checks the running shell's ELF header before choosing a
+MIPS binary and refuses an unknown result; this is not MIPS hardware acceptance.
+
 ## Install
 
 Enable Entware, connect over SSH as `root`, then run:
