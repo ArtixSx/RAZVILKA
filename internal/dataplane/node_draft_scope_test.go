@@ -10,7 +10,8 @@ import (
 )
 
 func TestExactNodeSnapshotRejectsLegacyDraftAuthorityBeforeAnyWrite(t *testing.T) {
-	configs := engineconfig.New(t.TempDir(), t.TempDir())
+	configRoot := t.TempDir()
+	configs := engineconfig.New(filepath.Join(configRoot, "stage"), filepath.Join(configRoot, "backups"))
 	const draft = "{\n  \"outbounds\": []\n}\n"
 	if _, err := configs.Stage("sing-box", "main", draft); err != nil {
 		t.Fatal(err)

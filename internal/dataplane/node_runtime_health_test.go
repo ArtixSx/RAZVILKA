@@ -76,7 +76,8 @@ func TestCommittedNodeHealthRejectsDeadOwnedProcessesWithoutStartingOrRewriting(
 
 func TestCommittedNodeHealthUsesRefreshedLivePolicyInsteadOfStagedSnapshot(t *testing.T) {
 	m, plan := committedNodeHealthFixture(t)
-	configs := engineconfig.New(t.TempDir(), t.TempDir())
+	configRoot := t.TempDir()
+	configs := engineconfig.New(filepath.Join(configRoot, "stage"), filepath.Join(configRoot, "backups"))
 	a, err := NewProxyTunnelAdapter("sing-box", configs, t.TempDir())
 	if err != nil {
 		t.Fatal(err)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -21,7 +22,17 @@ import (
 
 func genericReviewFixture(t *testing.T) *App {
 	t.Helper()
-	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	root := t.TempDir()
+	// TempDir's numbered child follows the runner umask. Engine staging is
+	// private state and must have its own explicit 0700 directory on Unix.
+	stageRoot := filepath.Join(root, "staging")
+	backupRoot := filepath.Join(root, "backups")
+	for _, path := range []string{stageRoot, backupRoot} {
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store, err := config.Load(filepath.Join(root, "config.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +42,7 @@ func genericReviewFixture(t *testing.T) *App {
 	if err := store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct", Sources: []string{"192.168.1.40/32"}}); err != nil {
 		t.Fatal(err)
 	}
-	return &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Domains: []string{"telegram.org"}}}}, EngineConfigs: engineconfig.New(t.TempDir(), t.TempDir()), DataplaneHost: func() dataplane.HostState { return dataplane.HostState{} }}
+	return &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Domains: []string{"telegram.org"}}}}, EngineConfigs: engineconfig.New(stageRoot, backupRoot), DataplaneHost: func() dataplane.HostState { return dataplane.HostState{} }}
 }
 
 func genericReviewed(t *testing.T, a *App, query string) applyReview {

@@ -133,7 +133,8 @@ func (r *proxyFirewallFake) Run(_ context.Context, name string, args ...string) 
 
 func proxyForwardingFixture(t *testing.T) (*ProxyTunnelAdapter, *proxyFakeRunner, PolicyState) {
 	t.Helper()
-	a, err := NewProxyTunnelAdapter("sing-box", engineconfig.New(t.TempDir(), t.TempDir()), t.TempDir())
+	configRoot := t.TempDir()
+	a, err := NewProxyTunnelAdapter("sing-box", engineconfig.New(filepath.Join(configRoot, "stage"), filepath.Join(configRoot, "backups")), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
