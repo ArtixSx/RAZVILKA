@@ -43,10 +43,17 @@ type PolicyState struct {
 	PriorityBase int          `json:"priority_base"`
 	Prefixes     []string     `json:"prefixes"`
 	Rules        []PolicyRule `json:"rules,omitempty"`
+	// WARP/AWG commit binds cleanup authority to the exact sanitized runtime.
+	// Absent in older states and unrelated proxy policies; absence is not a
+	// license to delete an interface merely because its name matches.
+	RuntimeConfigSHA256 string `json:"runtime_config_sha256,omitempty"`
 	// Exclusions are exact public endpoint prefixes routed through main before
 	// the service rules. The private policy file is mode 0600 and is never a
 	// public DTO.
 	Exclusions []string `json:"exclusions,omitempty"`
+	// Forwarding is the private, exact client/TUN firewall intent. Older state
+	// remains removable, but cannot acquire new forwarding authority implicitly.
+	Forwarding *ProxyForwardingState `json:"forwarding,omitempty"`
 }
 
 type PolicyRule struct {
@@ -332,12 +339,23 @@ func removePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, st
 }
 
 func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	rules := effectivePolicyRules(state)
 	if runner == nil || ipCommand == "" || state.Interface == "" || len(rules) == 0 {
 		return errors.New("policy routing evidence is unavailable")
 	}
+	if state.Forwarding != nil && len(rules) > maxProxyForwardingRules {
+		return errors.New("proxy forwarding route evidence exceeds its safe rule bound")
+	}
 	checked := 0
+	ingresses := map[string]string{}
+	probeSources := map[string]netip.Addr{}
 	for _, rule := range rules {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		prefix, err := netip.ParsePrefix(rule.Destination)
 		if err != nil {
 			return err
@@ -348,21 +366,165 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 			if sourceErr != nil {
 				return sourceErr
 			}
-			args = append(args, "from", source.Addr().String())
+			if source.Addr().Is4In6() || source.Addr().Is4() != prefix.Addr().Is4() {
+				return errors.New("device source and destination families do not match")
+			}
+			sourceAddress := source.Addr()
+			ingress, known := ingresses[source.String()]
+			if !known {
+				if state.Forwarding != nil && source.Bits() != source.Addr().BitLen() {
+					for _, grant := range state.Forwarding.Rules {
+						if grant.Source == source.String() && grant.Destination == rule.Destination {
+							ingress = grant.Ingress
+							break
+						}
+					}
+					if ingress == "" {
+						return errors.New("LAN route probe has no exact forwarding grant")
+					}
+					sourceAddress, sourceErr = policySubnetProbeSource(ctx, runner, ipCommand, source, state.Interface, ingress)
+				} else {
+					ingress, sourceErr = policySourceIngress(ctx, runner, ipCommand, source.Addr(), state.Interface)
+				}
+				if sourceErr != nil {
+					return sourceErr
+				}
+				ingresses[source.String()] = ingress
+				probeSources[source.String()] = sourceAddress
+			} else {
+				sourceAddress = probeSources[source.String()]
+			}
+			args = append(args, "from", sourceAddress.String())
+			if ingress != "" {
+				// Without iif Linux resolves a locally originated packet and
+				// rejects the non-local address of an actual LAN client.
+				args = append(args, "iif", ingress)
+			}
 		}
 		if prefix.Addr().Is6() {
 			args = append([]string{"-6"}, args...)
 		}
 		output, routeErr := runner.Run(ctx, ipCommand, args...)
-		if routeErr != nil || !strings.Contains(string(output), "dev "+state.Interface) {
+		if routeErr != nil || policyNonUnicast(output) || policyRouteDevice(output) != state.Interface {
 			return fmt.Errorf("kernel route evidence for %s does not use %s: %s", prefix, state.Interface, shortOutput(output, routeErr))
 		}
 		checked++
-		if checked >= 4 {
+		// Proxy grants are already bounded: verify every granted pair so an
+		// IPv6 or second-LAN rule cannot hide behind four IPv4 samples.
+		if state.Forwarding == nil && checked >= 4 {
 			break
 		}
 	}
 	return nil
+}
+
+// A reverse lookup is only an ingress hint. For a forwarded source it must
+// agree with one directly connected main-table interface: routed/asymmetric
+// clients need an explicit ingress contract and cannot be inferred from a WAN
+// default or another policy route. Forward lookup still must pick our tunnel.
+func policySourceIngress(ctx context.Context, runner NFQWS2Runner, ipCommand string, source netip.Addr, tunnel string) (string, error) {
+	if !source.IsValid() || source.IsUnspecified() || source.IsMulticast() || source.Is4In6() || source.IsLinkLocalUnicast() {
+		return "", errors.New("device source is not suitable for an ingress probe")
+	}
+	args := []string{"route", "get", source.String()}
+	if source.Is6() {
+		args = append([]string{"-6"}, args...)
+	}
+	output, err := runner.Run(ctx, ipCommand, args...)
+	device := policyRouteDevice(output)
+	if err != nil || device == "" || device == tunnel {
+		return "", errors.New("device source ingress could not be established")
+	}
+	fields := strings.Fields(string(output))
+	if len(fields) > 0 && fields[0] == "local" {
+		return "", nil // A router-owned source uses the local output lookup.
+	}
+	if device == "lo" || policyNonUnicast(output) || policyHasToken(fields, "via") || policyHasToken(fields, "nexthop") {
+		return "", errors.New("device source ingress is not a forwarding interface")
+	}
+	args = []string{"route", "show", "table", "main", "match", netip.PrefixFrom(source, source.BitLen()).String()}
+	if source.Is6() {
+		args = append([]string{"-6"}, args...)
+	}
+	connected, err := runner.Run(ctx, ipCommand, args...)
+	if err != nil || !policyConnectedSource(connected, source, device) {
+		return "", errors.New("device source ingress is not uniquely connected to the main table")
+	}
+	return device, nil
+}
+
+func policyConnectedSource(output []byte, source netip.Addr, device string) bool {
+	if len(output) > 64<<10 {
+		return false
+	}
+	lines := strings.Split(string(output), "\n")
+	if len(lines) > 512 {
+		return false
+	}
+	found := false
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || fields[0] == "default" {
+			continue
+		}
+		if fields[0] == "unicast" {
+			fields = fields[1:]
+		}
+		if len(fields) == 0 {
+			return false
+		}
+		prefix, err := netip.ParsePrefix(fields[0])
+		if err != nil {
+			address, addressErr := netip.ParseAddr(fields[0])
+			if addressErr != nil {
+				return false
+			}
+			prefix = netip.PrefixFrom(address, address.BitLen())
+		}
+		if prefix.Bits() == 0 || !prefix.Contains(source) {
+			continue
+		}
+		if policyHasToken(fields, "via") || policyHasToken(fields, "nexthop") || policyRouteDevice([]byte(line)) != device {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+func policyHasToken(fields []string, wanted string) bool {
+	for _, field := range fields {
+		if field == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func policyNonUnicast(output []byte) bool {
+	fields := strings.Fields(string(output))
+	if len(fields) == 0 {
+		return true
+	}
+	switch fields[0] {
+	case "local", "broadcast", "multicast", "anycast", "blackhole", "unreachable", "prohibit", "throw", "nat":
+		return true
+	}
+	return false
+}
+
+func policyRouteDevice(output []byte) string {
+	fields := strings.Fields(string(output))
+	device := ""
+	for i := 0; i+1 < len(fields); i++ {
+		if fields[i] == "dev" {
+			if device != "" {
+				return ""
+			}
+			device = fields[i+1]
+		}
+	}
+	return device
 }
 
 func effectivePolicyRules(state PolicyState) []PolicyRule {
@@ -377,7 +539,7 @@ func effectivePolicyRules(state PolicyState) []PolicyRule {
 }
 
 func samePolicy(left, right PolicyState) bool {
-	return left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(left.Exclusions, right.Exclusions) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right))
+	return left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(left.Exclusions, right.Exclusions) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right)) && reflect.DeepEqual(left.Forwarding, right.Forwarding)
 }
 
 func replacePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, oldState, newState PolicyState) error {

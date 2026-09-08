@@ -123,7 +123,10 @@ func detectSpec(spec specification) Status {
 	} else if len(spec.binaries) > 0 {
 		running = specProcessRunning(spec, false)
 	}
-	if !running {
+	// Proxy init scripts commonly use pidof and report a short-lived version or
+	// validation command as running. Their status cannot override the argv-aware
+	// process observation used by the inventory.
+	if !running && spec.id != "sing-box" && spec.id != "xray" {
 		for _, p := range spec.initScripts {
 			if fileExists(p) && initRunning(p) {
 				running = true
@@ -375,7 +378,11 @@ func processRunning(name string) bool {
 }
 
 func processRunningProc(name string) bool {
-	entries, err := os.ReadDir("/proc")
+	return processRunningProcAt("/proc", name)
+}
+
+func processRunningProcAt(procRoot, name string) bool {
+	entries, err := os.ReadDir(procRoot)
 	if err != nil {
 		return false
 	}
@@ -386,15 +393,15 @@ func processRunningProc(name string) bool {
 		if _, err := strconv.Atoi(entry.Name()); err != nil {
 			continue
 		}
-		root := filepath.Join("/proc", entry.Name())
-		if b, err := os.ReadFile(filepath.Join(root, "comm")); err == nil && executableName(string(b)) == name {
-			return true
+		root := filepath.Join(procRoot, entry.Name())
+		comm, _ := os.ReadFile(filepath.Join(root, "comm"))
+		cmdline, err := os.ReadFile(filepath.Join(root, "cmdline"))
+		if err != nil || len(cmdline) == 0 {
+			continue
 		}
-		if b, err := os.ReadFile(filepath.Join(root, "cmdline")); err == nil {
-			command, _, _ := strings.Cut(string(b), "\x00")
-			if executableName(command) == name {
-				return true
-			}
+		args := strings.Split(strings.TrimRight(string(cmdline), "\x00"), "\x00")
+		if (executableName(string(comm)) == name || executableName(args[0]) == name) && !diagnosticProxyInvocation(name, args[1:]) {
+			return true
 		}
 	}
 	return false
@@ -457,19 +464,36 @@ func processListHasName(output, name string) bool {
 		if len(fields) == 0 || strings.EqualFold(fields[0], "pid") {
 			continue
 		}
-		for _, field := range fields[1:] {
+		for index, field := range fields[1:] {
 			candidate := executableName(field)
 			isCommand := strings.ContainsAny(field, "/\\") || strings.HasPrefix(field, "[") || candidate == name
 			if !isCommand {
 				continue
 			}
 			if candidate == name {
-				return true
+				if !diagnosticProxyInvocation(name, fields[index+2:]) {
+					return true
+				}
 			}
 			break
 		}
 	}
 	return false
+}
+
+// Diagnostic invocations have the same executable and comm as the daemon.
+// Concurrent version/config checks must never make the UI claim it is serving
+// traffic. Inspect only the leading command, not arbitrary configuration values.
+func diagnosticProxyInvocation(name string, args []string) bool {
+	if (name != "sing-box" && name != "xray") || len(args) == 0 {
+		return false
+	}
+	switch strings.ToLower(args[0]) {
+	case "version", "--version", "-version", "-v", "help", "--help", "-help", "-h", "check", "test", "-test", "format", "generate", "merge", "rule-set", "uuid", "x25519", "tls", "wg", "convert":
+		return true
+	default:
+		return false
+	}
 }
 
 func executableName(value string) string {

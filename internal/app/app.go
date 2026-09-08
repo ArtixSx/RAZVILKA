@@ -36,6 +36,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/privaterestore"
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
 	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
@@ -134,34 +135,44 @@ type applyChangeSummary struct {
 }
 
 type App struct {
-	PrivateRestore *privaterestore.Coordinator
-	Operations     operationgate.Gate
-	Store          *config.Store
-	Catalog        catalog.Catalog
-	Sources        *sources.Manager
-	Telemetry      *telemetry.Store
-	EngineConfigs  *engineconfig.Manager
-	EngineLab      *enginelab.Manager
-	StrategyLab    *strategylab.Manager
-	Components     *components.Manager
-	Community      *community.Manager
-	CustomServices *customservices.Manager
-	Dataplane      *dataplane.Manager
-	Devices        *devices.Manager
-	DNS            *dnscontrol.Manager
-	Warp           *warp.Manager
-	Cloudflare     *cloudflareprovider.Store
-	Nodes          *nodestore.Store
-	NodeChecker    dataplane.NodeChecker
-	cloudflareBusy atomic.Bool
-	TestLab        *testlab.Runner
-	RouteProber    testlab.RouteProber
-	SmartRoute     *smartroute.Manager
-	Updates        *updatecheck.Manager
-	USQUE          *usquediag.Manager
-	Stats          *routerstats.Sampler
-	Security       *security.Gate
-	Audit          *auditlog.Journal
+	PrivateRestore   *privaterestore.Coordinator
+	Operations       operationgate.Gate
+	Store            *config.Store
+	Catalog          catalog.Catalog
+	Sources          *sources.Manager
+	Telemetry        *telemetry.Store
+	EngineConfigs    *engineconfig.Manager
+	EngineLab        *enginelab.Manager
+	StrategyLab      *strategylab.Manager
+	Components       *components.Manager
+	Community        *community.Manager
+	CustomServices   *customservices.Manager
+	Dataplane        *dataplane.Manager
+	Devices          *devices.Manager
+	DNS              *dnscontrol.Manager
+	Warp             *warp.Manager
+	Cloudflare       *cloudflareprovider.Store
+	Nodes            *nodestore.Store
+	NodeChecker      dataplane.NodeChecker
+	NodePinger       dataplane.NodePinger
+	NodeFeeds        *providerfeed.Manager
+	nodeReviews      nodeRouteReviewStore
+	nodeRecovery     nodeRecoveryState
+	nodeChecks       nodeCheckState
+	nodeAutofallback nodeAutofallbackState
+	reconciler       serviceReconciler
+	DataplaneHost    func() dataplane.HostState
+	FreshProfile     func(context.Context) (string, error)
+	cloudflareBusy   atomic.Bool
+	TestLab          *testlab.Runner
+	RouteProber      testlab.RouteProber
+	SmartRoute       *smartroute.Manager
+	Updates          *updatecheck.Manager
+	SelfUpdate       *updatecheck.Updater
+	USQUE            *usquediag.Manager
+	Stats            *routerstats.Sampler
+	Security         *security.Gate
+	Audit            *auditlog.Journal
 	// EngineInventory is injectable only for deterministic presentation tests.
 	// Production uses the read-only detector and never starts or stops an engine.
 	EngineInventory func() []engine.Status
@@ -499,6 +510,18 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/provider-profiles/preview", a.providerProfilePreview)
 	mux.HandleFunc("/api/v1/provider-profiles/import", a.providerProfileImport)
 	mux.HandleFunc("/api/v1/nodes/import", a.nodeImport)
+	mux.HandleFunc("/api/v1/node-checks", a.nodeCheckJobs)
+	mux.HandleFunc("/api/v1/node-checks/current", a.nodeCheckJobCurrent)
+	mux.HandleFunc("/api/v1/node-autofallback", a.nodeAutofallbackStatus)
+	mux.HandleFunc("/api/v1/service-policies", a.servicePolicies)
+	mux.HandleFunc("/api/v1/service-policies/", a.servicePolicyUpdate)
+	mux.HandleFunc("/api/v1/service-control", a.serviceControl)
+	mux.HandleFunc("/api/v1/service-control/jobs", a.serviceControlJobs)
+	mux.HandleFunc("/api/v1/service-control/current", a.serviceControlCurrent)
+	mux.HandleFunc("/api/v1/service-control/runtime", a.serviceControlRuntime)
+	mux.HandleFunc("/api/v1/node-feeds", a.nodeFeedList)
+	mux.HandleFunc("/api/v1/node-feeds/sync", a.nodeFeedSync)
+	mux.HandleFunc("/api/v1/node-feeds/", a.nodeFeedAction)
 	mux.HandleFunc("/api/v1/nodes", a.nodeList)
 	mux.HandleFunc("/api/v1/nodes/", a.nodeAction)
 	mux.HandleFunc("/api/v1/node-groups", a.nodeGroups)
@@ -546,6 +569,9 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/metrics", a.metrics)
 	mux.HandleFunc("/api/v1/settings/safe-mode", a.safeModeSetting)
 	mux.HandleFunc("/api/v1/update", a.updateStatus)
+	mux.HandleFunc("/api/v1/self-update/current", a.selfUpdateCurrent)
+	mux.HandleFunc("/api/v1/self-update/prepare", a.selfUpdatePrepare)
+	mux.HandleFunc("/api/v1/self-update/apply", a.selfUpdateApply)
 	mux.HandleFunc("/api/v1/diagnostics/domain", a.domainDiagnostic)
 	mux.HandleFunc("/api/v1/diagnostics/usque", a.usqueDiagnostic)
 	mux.HandleFunc("/api/v1/diagnostics/usque/dns-candidate", a.usqueDNSCandidate)
@@ -750,6 +776,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	dataplaneError := ""
 	lastApplyFailure := ""
 	liveActive := false
+	nodeRecovery := a.nodeRecoverySnapshot()
 	if a.Dataplane != nil {
 		if runtime, err := a.Dataplane.Status(); err != nil {
 			// The public status endpoint deliberately exposes only a stable error
@@ -770,6 +797,12 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 			} else if appliedPlan != nil && runtime.Execution != nil && runtime.Execution.PlanID == appliedPlan.PlanID {
 				dataplaneRecoveryState = "current-process"
 				liveActive = len(appliedPlan.Adapters) > 0 && runtime.Execution.State == "committed"
+			}
+			if appliedPlan != nil && appliedPlan.RequiresNetworkProof() {
+				if systemprobe.DetectWANProfile().ID != appliedPlan.NetworkProfileID || nodeRecovery.PlanID == appliedPlan.PlanID && nodeRecovery.State != "idle" && nodeRecovery.State != "recovered" {
+					liveActive = false
+					dataplaneRecoveryState = "network-stale"
+				}
 			}
 			if latest.Revision == cfg.Revision && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && (runtime.Execution.State == "rolled-back" || runtime.Execution.State == "canary-failed") {
 				lastApplyFailure = classifyApplyExecutionFailure(runtime.Execution.Error, runtime.Execution.State).Code
@@ -804,6 +837,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"engine_pending_changes":   configDrafts > 0,
 		"dataplane_state":          dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
 		"last_apply_failure":     lastApplyFailure,
+		"node_recovery":          nodeRecovery,
 		"highest_evidence_level": highestEvidence, "evidence_counts": evidenceCounts,
 		"pending_changes": a.Store.Dirty() || configDrafts > 0 || dnsPending || sourcesPending, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
 	})
@@ -1562,6 +1596,22 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		result, err := a.Warp.Generate(ctx, in.AcceptTOS, in.Fresh)
 		if err != nil {
+			if errors.Is(err, warp.ErrEnrollmentPending) {
+				writeJSON(w, http.StatusConflict, map[string]any{
+					"error": "Регистрация WARP не завершена однозначно. Новый запрос регистрации не отправляется.",
+					"code":  "WARP_REGISTRATION_PENDING", "retryable": false,
+					"hint": "Сохранённый ответ Cloudflare можно восстановить локально кнопкой создания профиля. Если ответа нет, требуется разбор незавершённой регистрации; рабочий профиль сохранён.",
+				})
+				return
+			}
+			if errors.Is(err, warp.ErrEnrollmentStore) || errors.Is(err, warp.ErrLegacyGeneratorRequired) {
+				code, message := "WARP_ENROLLMENT_STORE_INVALID", "Локальные данные регистрации WARP требуют проверки. Новая регистрация не отправлена."
+				if errors.Is(err, warp.ErrLegacyGeneratorRequired) {
+					code, message = "WARP_LEGACY_GENERATOR_REQUIRED", "Для существующего аккаунта wgcf установите его генератор либо явно выберите создание нового аккаунта встроенным генератором. Старый аккаунт сохранён."
+				}
+				writeJSON(w, http.StatusConflict, map[string]any{"error": message, "code": code, "retryable": false})
+				return
+			}
 			if errors.Is(err, warp.ErrTermsAcceptanceRequired) {
 				http.Error(w, err.Error(), http.StatusPreconditionRequired)
 				return
@@ -1735,10 +1785,14 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()
-		results := a.TestLab.ProbeRoutes(ctx, a.catalogSnapshot(), ids, []string{"warp-wg"}, a.RouteProber)
+		results, profile, probeErr := a.probeRoutesInCurrentNetwork(ctx, a.catalogSnapshot(), ids, []string{"warp-wg"})
+		if probeErr != nil {
+			http.Error(w, "Сеть изменилась или не определена. Повторите проверку.", http.StatusConflict)
+			return
+		}
 		aggregated := testlab.AggregateScenarios(results)
 		if a.SmartRoute != nil {
-			_, _ = a.SmartRoute.Observe(aggregated)
+			_, _ = a.SmartRoute.ObserveForProfile(profile, aggregated)
 		}
 		evidence := make([]warp.HealthEvidence, 0, len(aggregated))
 		for _, result := range aggregated {
@@ -1759,6 +1813,14 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) processWarpHealth(ctx context.Context, evidence []warp.HealthEvidence) (warp.HealthDecision, error) {
+	if a.Store != nil {
+		c := a.Store.Get().ServiceControl
+		if c.Stopped || c.EffectiveMode() == "manual" {
+			status := a.Warp.Health()
+			status.Eligible, status.Reason = false, "global-manual-or-stopped"
+			return warp.HealthDecision{HealthStatus: status}, nil
+		}
+	}
 	decision, err := a.Warp.ObserveHealth(evidence)
 	if err != nil || !decision.ShouldGenerate {
 		return decision, err
@@ -1772,6 +1834,10 @@ func (a *App) processWarpHealth(ctx context.Context, evidence []warp.HealthEvide
 		return decision, nil
 	}
 	cfg := a.Store.Get()
+	if cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || ctx.Err() != nil {
+		decision.Reason = "fresh-candidate-staged-global-control-blocked-auto-apply"
+		return decision, ctx.Err()
+	}
 	if cfg.SafeMode {
 		decision.Reason = "fresh-candidate-staged-safe-mode-blocked-auto-apply"
 		return decision, nil
@@ -1797,6 +1863,11 @@ func (a *App) processWarpHealth(ctx context.Context, evidence []warp.HealthEvide
 		decision.Reason = "fresh-candidate-staged-transaction-blocked"
 		return decision, nil
 	}
+	binding, err := a.bindApplyReview(ctx, cfg, transaction, changeScopeEngine, "warp-wg")
+	if err != nil {
+		return decision, err
+	}
+	ctx = dataplane.WithReviewGuard(ctx, func(ctx context.Context) error { return binding.guard(a, ctx) })
 	execution, err := a.Dataplane.Apply(ctx, transaction, nil)
 	if err != nil {
 		_ = a.Warp.RecordActivation(false, err.Error())
@@ -1853,6 +1924,12 @@ func (a *App) StartBackground(ctx context.Context) {
 }
 
 func (a *App) backgroundWarpHealth(parent context.Context) {
+	if a.Store != nil {
+		c := a.Store.Get().ServiceControl
+		if c.Stopped || c.EffectiveMode() == "manual" {
+			return
+		}
+	}
 	if a.Warp == nil || a.TestLab == nil || a.RouteProber == nil || !a.Warp.Health().Policy.Enabled {
 		return
 	}
@@ -1872,10 +1949,13 @@ func (a *App) backgroundWarpHealth(parent context.Context) {
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
-	results := a.TestLab.ProbeRoutes(ctx, a.catalogSnapshot(), ids, []string{"warp-wg"}, a.RouteProber)
+	results, profile, probeErr := a.probeRoutesInCurrentNetwork(ctx, a.catalogSnapshot(), ids, []string{"warp-wg"})
+	if probeErr != nil {
+		return
+	}
 	aggregated := testlab.AggregateScenarios(results)
 	if a.SmartRoute != nil {
-		_, _ = a.SmartRoute.Observe(aggregated)
+		_, _ = a.SmartRoute.ObserveForProfile(profile, aggregated)
 	}
 	evidence := make([]warp.HealthEvidence, 0, len(aggregated))
 	for _, result := range aggregated {
@@ -1885,6 +1965,17 @@ func (a *App) backgroundWarpHealth(parent context.Context) {
 }
 
 func (a *App) backgroundSmartRoute(parent context.Context) bool {
+	if a.Store != nil {
+		c := a.Store.Get().ServiceControl
+		if c.Stopped || c.EffectiveMode() == "manual" {
+			return false
+		}
+	}
+	// Generic cross-engine selection has not acquired the new service policy
+	// capability contract. The managed loop uses guarded fallback groups only.
+	if a.managedReconcilerActive() {
+		return false
+	}
 	if a.SmartRoute == nil || a.TestLab == nil || a.RouteProber == nil {
 		return false
 	}
@@ -1903,9 +1994,12 @@ func (a *App) backgroundSmartRoute(parent context.Context) bool {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(parent, 45*time.Second)
-		results := a.TestLab.ProbeRoutes(ctx, catalog.Catalog{Services: []catalog.Service{service}}, []string{service.ID}, routes, a.RouteProber)
+		results, profile, probeErr := a.probeRoutesInCurrentNetwork(ctx, catalog.Catalog{Services: []catalog.Service{service}}, []string{service.ID}, routes)
 		cancel()
-		decisions, _ := a.SmartRoute.Observe(testlab.AggregateScenarios(results))
+		if probeErr != nil {
+			return actionable
+		}
+		decisions, _ := a.SmartRoute.ObserveForProfile(profile, testlab.AggregateScenarios(results))
 		for _, decision := range decisions {
 			// Reconcile an already persisted selection too. A previous process may
 			// have saved the decision and restarted before activating it.
@@ -1924,6 +2018,15 @@ func (a *App) backgroundSmartRoute(parent context.Context) bool {
 // installs components, changes DNS, or bypasses the normal transactional
 // canary/health/rollback protocol.
 func (a *App) backgroundAutopilotApply(parent context.Context) {
+	if a.Store != nil {
+		c := a.Store.Get().ServiceControl
+		if c.Stopped || c.EffectiveMode() == "manual" {
+			return
+		}
+	}
+	if a.managedReconcilerActive() {
+		return
+	}
 	if a.Dataplane == nil || a.Store == nil || a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 {
 		return
 	}
@@ -2341,13 +2444,17 @@ func (a *App) testLabRoutes(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
-	results := a.TestLab.ProbeRoutes(ctx, a.catalogSnapshot(), services, routes, a.RouteProber)
+	results, profile, probeErr := a.probeRoutesInCurrentNetwork(ctx, a.catalogSnapshot(), services, routes)
+	if probeErr != nil {
+		http.Error(w, "Сеть изменилась или не определена. Повторите проверку.", http.StatusConflict)
+		return
+	}
 	aggregated := testlab.AggregateScenarios(results)
 	assessments := testlab.AssessComparisons(results)
 	decisions := []smartroute.Decision{}
 	if a.SmartRoute != nil {
 		var err error
-		decisions, err = a.SmartRoute.Observe(aggregated)
+		decisions, err = a.SmartRoute.ObserveForProfile(profile, aggregated)
 		if err != nil {
 			http.Error(w, "save Smart Route evidence: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -3140,6 +3247,10 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	transaction, err := a.buildDataplanePlanForScope(cfg, options, scope, engineID)
 	if err != nil {
+		if errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
+			http.Error(w, "Сеть изменилась или не определена. Повторите проверку узла и откройте новый план.", http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -3147,6 +3258,11 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	// only when it is byte-for-byte the same input (digest + revision) as the
 	// last committed plan. Drafts and newly selected routes therefore always
 	// start unproven, while the UI can still show proof for the active plan.
+	review, err := a.bindApplyReview(r.Context(), cfg, transaction, scope, engineID)
+	if err != nil {
+		writeApplyReviewChanged(w)
+		return
+	}
 	if a.Dataplane != nil {
 		if committed, exists, committedErr := a.Dataplane.Committed(); committedErr == nil && exists && committed.State == "committed" && committed.Digest == transaction.Digest && committed.Revision == transaction.Revision {
 			transaction.State = committed.State
@@ -3161,6 +3277,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		"note":           "Development build: page-scoped drafts, explicit unavailable routes and persistent component-install verification. Safe Mode remains the default.",
 		"routes":         rows,
 		"transaction":    transaction,
+		"review":         review.review,
 		"change_summary": a.changeSummary(cfg, scope, transaction),
 	})
 }
@@ -3192,6 +3309,10 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
 		return
 	}
+	reviewRequest, validReviewRequest := decodeApplyReview(w, r)
+	if !validReviewRequest {
+		return
+	}
 	if scope == changeScopeAll && !a.Store.Dirty() && len(a.stagedEngineConfigRefs()) == 0 {
 		dnsPending := a.DNS != nil && a.DNS.Dirty()
 		sourcesPending := a.Sources != nil && a.Sources.Dirty()
@@ -3208,10 +3329,30 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 	cfg := a.Store.Get()
 	transaction, err := a.buildDataplanePlanForScope(cfg, a.routeOptionsSnapshot(), scope, engineID)
 	if err != nil {
+		if reviewRequest.Revision != nil {
+			writeApplyReviewChanged(w)
+			return
+		}
+		if errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
+			http.Error(w, "Сеть изменилась или не определена. Повторите проверку узла и откройте новый план.", http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	var review *applyReviewBinding
+	if reviewRequest.Revision != nil {
+		review, err = a.bindApplyReview(r.Context(), cfg, transaction, scope, engineID)
+		if err != nil || review.review.Revision != *reviewRequest.Revision || review.review.Digest != reviewRequest.Digest {
+			writeApplyReviewChanged(w)
+			return
+		}
+	}
 	record := func() bool {
+		if review != nil && review.guard(a, r.Context()) != nil {
+			writeApplyReviewChanged(w)
+			return false
+		}
 		if a.Dataplane == nil {
 			return true
 		}
@@ -3253,6 +3394,9 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		}
 		applyContext, cancelApply := context.WithTimeout(r.Context(), defaultDataplaneApplyTimeout)
 		defer cancelApply()
+		if review != nil {
+			applyContext = dataplane.WithReviewGuard(applyContext, func(ctx context.Context) error { return review.guard(a, ctx) })
+		}
 		var commit func() (func() error, error)
 		switch scope {
 		case changeScopeServices:
@@ -3263,6 +3407,9 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 			commit = nil
 		default:
 			commit = a.Store.ApplyDraftWithRollback
+		}
+		if review != nil && scope != changeScopeEngine {
+			commit = func() (func() error, error) { return review.commit(a, applyContext, scope) }
 		}
 		execution, applyErr := a.Dataplane.Apply(applyContext, transaction, commit)
 		if applyErr != nil {
@@ -3280,18 +3427,26 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var applyErr error
-	switch scope {
-	case changeScopeServices:
-		_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeServices)
-	case changeScopeDevices:
-		_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeDevices)
-	case changeScopeEngine:
-		// Engine drafts are committed by their adapter. A no-op engine plan has
-		// no configuration authority to claim here.
-	default:
-		applyErr = a.Store.ApplyDraft()
+	if review != nil && scope != changeScopeEngine {
+		_, applyErr = review.commit(a, r.Context(), scope)
+	} else {
+		switch scope {
+		case changeScopeServices:
+			_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeServices)
+		case changeScopeDevices:
+			_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeDevices)
+		case changeScopeEngine:
+			// Engine drafts are committed by their adapter. A no-op engine plan has
+			// no configuration authority to claim here.
+		default:
+			applyErr = a.Store.ApplyDraft()
+		}
 	}
 	if applyErr != nil {
+		if errors.Is(applyErr, dataplane.ErrReviewChanged) {
+			writeApplyReviewChanged(w)
+			return
+		}
 		http.Error(w, applyErr.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -3345,6 +3500,14 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 
 func classifyApplyExecutionFailure(message, state string) applyFailureAdvice {
 	advice := classifyApplyFailure(message)
+	if state == "network-stale" {
+		advice.Code = "NETWORK_CHANGED"
+		advice.Title = "Нужна проверка в текущей сети"
+		advice.Message = "Сеть изменилась или не определена. Применение остановлено до изменения рабочего маршрута; черновик сохранён."
+		advice.Resolution = "Дождитесь стабильного подключения, повторите проверку узла и откройте новый план."
+		advice.DraftPreserved, advice.Retryable = true, true
+		return advice
+	}
 	if state != "canary-failed" {
 		return advice
 	}
@@ -3395,6 +3558,7 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 
 func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
 	cfg = configForChangeScope(cfg, scope)
+	networkProfile := ""
 	routes := make([]dataplane.Route, 0)
 	committedRoutes := map[string]string{}
 	committedAt := time.Time{}
@@ -3419,6 +3583,13 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 			if selected == "auto" {
 				resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
 			} else if strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-") {
+				if networkProfile == "" {
+					var profileErr error
+					networkProfile, profileErr = a.freshNetworkProfile(context.Background())
+					if profileErr != nil {
+						return dataplane.Plan{}, profileErr
+					}
+				}
 				if a.Nodes == nil {
 					return dataplane.Plan{}, fmt.Errorf("private node registry is unavailable")
 				}
@@ -3426,7 +3597,7 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 				if !strings.HasPrefix(previousNode, "node-") {
 					previousNode = ""
 				}
-				proof, proofErr := a.Nodes.ResolveRoute(context.Background(), strings.TrimPrefix(selected, "sing-box:"), service.ID, systemprobe.DetectWANProfile().ID, previousNode, committedAt, time.Now())
+				proof, proofErr := a.Nodes.ResolveRoute(context.Background(), strings.TrimPrefix(selected, "sing-box:"), service.ID, networkProfile, previousNode, committedAt, time.Now())
 				if proofErr != nil {
 					return dataplane.Plan{}, fmt.Errorf("node route has no current exact proof for service %s", service.ID)
 				}
@@ -3519,12 +3690,28 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 			}
 		}
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return used[id] })
-	case changeScopeDevices:
+	case changeScopeDevices, changeScopeNode:
 		drafts = nil
 	case changeScopeEngine:
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id == engineID })
 	}
-	return dataplane.Build(dataplane.Input{Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: dataplane.DiscoverHost()})
+	// Exact registry routes materialize their own private runtime configuration.
+	// Applying a service or routing choice grants no authority to install or
+	// discard an unrelated legacy Sing-box editor draft.
+	if nodeScopedSingBox && scope != changeScopeEngine {
+		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id != "sing-box" })
+	}
+	host := dataplane.DiscoverHost()
+	if a.DataplaneHost != nil {
+		host = a.DataplaneHost()
+	}
+	if networkProfile != "" {
+		current, profileErr := a.freshNetworkProfile(context.Background())
+		if profileErr != nil || current != networkProfile {
+			return dataplane.Plan{}, dataplane.ErrExactNodeNetworkChanged
+		}
+	}
+	return dataplane.Build(dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: host})
 }
 
 func configForChangeScope(cfg config.Config, scope changeScope) config.Config {
@@ -3540,7 +3727,7 @@ func configForChangeScope(cfg config.Config, scope changeScope) config.Config {
 	case changeScopeServices:
 		services := clone(cfg.Services)
 		for id, state := range services {
-			state.Sources = append([]string(nil), cfg.AppliedServices[id].Sources...)
+			state.Sources = config.AppliedSources(cfg, id)
 			services[id] = state
 		}
 		cfg.Services = services
@@ -4101,21 +4288,24 @@ func (a *App) profileImport(w http.ResponseWriter, r *http.Request) {
 }
 
 type privateBackupPreviewResult struct {
-	Valid           bool                      `json:"valid"`
-	CreatedAt       string                    `json:"created_at"`
-	FromVersion     string                    `json:"from_version"`
-	Digest          string                    `json:"digest"`
-	Services        int                       `json:"services"`
-	CustomServices  int                       `json:"custom_services"`
-	EngineFiles     []engineconfig.Validation `json:"engine_files"`
-	SensitiveFiles  int                       `json:"sensitive_files"`
-	Devices         int                       `json:"devices"`
-	Nodes           int                       `json:"nodes"`
-	NodeSources     int                       `json:"node_sources"`
-	NodeGroups      int                       `json:"node_groups"`
-	Warnings        []string                  `json:"warnings"`
-	DraftOnly       bool                      `json:"draft_only"`
-	RestoresAccount bool                      `json:"restores_account"`
+	Valid            bool                      `json:"valid"`
+	CreatedAt        string                    `json:"created_at"`
+	FromVersion      string                    `json:"from_version"`
+	Digest           string                    `json:"digest"`
+	Services         int                       `json:"services"`
+	CustomServices   int                       `json:"custom_services"`
+	EngineFiles      []engineconfig.Validation `json:"engine_files"`
+	SensitiveFiles   int                       `json:"sensitive_files"`
+	Devices          int                       `json:"devices"`
+	Nodes            int                       `json:"nodes"`
+	NodeSources      int                       `json:"node_sources"`
+	NodeGroups       int                       `json:"node_groups"`
+	Warnings         []string                  `json:"warnings"`
+	DraftOnly        bool                      `json:"draft_only"`
+	RestoresAccount  bool                      `json:"restores_account"`
+	NativeEnrollment bool                      `json:"native_enrollment"`
+	Subscriptions    int                       `json:"subscriptions"`
+	ServicePolicies  int                       `json:"service_policies"`
 }
 
 func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
@@ -4123,6 +4313,7 @@ func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	release, ok := a.backupOperation(w)
 	if !ok {
 		return
@@ -4142,6 +4333,7 @@ func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
 	payload := privatebackup.NewPayload(Version)
 	configuration := a.Store.Get()
 	payload.Services = configuration.Services
+	payload.ServicePolicies = configuration.ServicePolicies
 	payload.EngineOrder = append([]string(nil), configuration.EngineOrder...)
 	payload.CustomServices = a.CustomServices.List()
 	if a.Devices != nil {
@@ -4155,11 +4347,49 @@ func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
 		}
 		payload.NodeSnapshot = nodes
 	}
+	if a.NodeFeeds != nil {
+		feeds, err := a.NodeFeeds.ExportPrivateIfPresent(r.Context())
+		if err != nil {
+			http.Error(w, "private subscriptions store is unavailable; backup was not created", http.StatusServiceUnavailable)
+			return
+		}
+		payload.SubscriptionSnapshot = feeds
+	}
+	if a.Warp != nil {
+		native, err := a.Warp.ExportNativePrivateIfPresent(r.Context())
+		if err != nil {
+			http.Error(w, "private WARP enrollment is unavailable; backup was not created", http.StatusServiceUnavailable)
+			return
+		}
+		payload.NativeEnrollment = native
+	}
 	for _, engineView := range a.EngineConfigs.List() {
 		for _, fileView := range engineView.Files {
 			content, err := a.EngineConfigs.ReadExpert(engineView.ID, fileView.ID)
-			if err != nil || content.Source == "missing" || content.Content == "" {
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"ok": false, "code": "PRIVATE_BACKUP_ENGINE_UNREADABLE", "engine_id": engineView.ID, "file_id": fileView.ID,
+					"error": fmt.Sprintf("Резервная копия не создана: файл %s/%s недоступен для чтения. Проверьте черновик и доступ к файлу в настройках обхода. Файлы не изменены.", engineView.ID, fileView.ID),
+				})
+				return
+			}
+			if content.Source == "missing" {
 				continue
+			}
+			// The expert editor may retain an unfinished draft. Do not advertise
+			// a restorable encrypted backup that our strict preview must reject.
+			// Validator output can contain private CIDR-list text; return only
+			// allowlisted file identifiers and a fixed repair instruction.
+			if validation := engineconfig.ValidatePrivateContent(engineView.ID, fileView.ID, content.Content); !validation.OK {
+				kind := "файл"
+				if content.Source == "staged" {
+					kind = "незавершённый черновик"
+				}
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+					"ok": false, "code": "PRIVATE_BACKUP_ENGINE_INVALID", "engine_id": engineView.ID, "file_id": fileView.ID, "source": content.Source,
+					"error": fmt.Sprintf("Резервная копия не создана: %s %s/%s не проходит проверку формата. Исправьте его в настройках обхода и повторите экспорт. Файлы не изменены.", kind, engineView.ID, fileView.ID),
+				})
+				return
 			}
 			payload.EngineFiles = append(payload.EngineFiles, privatebackup.EngineFile{
 				EngineID: engineView.ID, FileID: fileView.ID, Content: content.Content,
@@ -4249,10 +4479,11 @@ func (a *App) privateBackupImport(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "draft_only": true, "digest": payload.Digest,
-		"services_staged": len(payload.Services), "custom_services_merged": len(payload.CustomServices),
+		"services_staged": len(payload.Services), "custom_services_merged": len(payload.CustomServices), "service_policies_reviewed": len(payload.ServicePolicies),
 		"engine_files_staged": len(payload.EngineFiles), "devices_merged": len(payload.Devices),
 		"nodes_merged": preview.Nodes, "node_groups_merged": preview.NodeGroups,
-		"note": "Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.",
+		"native_enrollment_retained": preview.NativeEnrollment,
+		"note":                       "Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.",
 	})
 }
 
@@ -4271,6 +4502,12 @@ func decodePrivateBackup(w http.ResponseWriter, r *http.Request) (privatebackup.
 }
 
 func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackupPreviewResult, error) {
+	if payload.SubscriptionSnapshot != nil && (a.NodeFeeds == nil || !a.NodeFeeds.Persistent()) {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит подписки, но их приватное хранилище недоступно. Импорт не начат.")
+	}
+	if payload.NativeEnrollment != nil && a.Warp == nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит регистрацию WARP, но приватное хранилище недоступно. Восстановление отменено без изменений.")
+	}
 	if payload.NodeSnapshot != nil && a.Nodes == nil {
 		return privateBackupPreviewResult{}, errors.New("Архив содержит узлы, но приватное хранилище узлов недоступно. Восстановление отменено без изменений.")
 	}
@@ -4284,12 +4521,27 @@ func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackup
 	}
 	preview := privateBackupPreviewResult{
 		CreatedAt: payload.CreatedAt, FromVersion: payload.AppVersion, Digest: payload.Digest,
-		Services: len(payload.Services), CustomServices: len(payload.CustomServices), Devices: len(payload.Devices),
+		Services: len(payload.Services), CustomServices: len(payload.CustomServices), Devices: len(payload.Devices), ServicePolicies: len(payload.ServicePolicies),
 		Warnings:  []string{"UI login, recovery key and live dataplane are intentionally not restored", "engine_order is preserved in the archive but remains unchanged until schema-aware ordering is available"},
 		DraftOnly: true, RestoresAccount: false,
 	}
 	if err := privatebackup.Validate(payload); err != nil {
 		return preview, err
+	}
+	if payload.NativeEnrollment != nil {
+		preview.NativeEnrollment = true
+		preview.Warnings = append(preview.Warnings, "Регистрация WARP и незавершённые запросы будут сохранены без новой регистрации и запуска туннеля. Конфликт с более новым незавершённым запросом остановит импорт.")
+	}
+	if payload.SubscriptionSnapshot != nil {
+		count, err := providerfeed.ReviewPrivateSnapshot(*payload.SubscriptionSnapshot)
+		if err != nil {
+			return preview, errors.New("invalid subscriptions snapshot")
+		}
+		preview.Subscriptions = count
+		preview.Warnings = append(preview.Warnings, "Новые подписки будут восстановлены с выключенным обновлением. Настройки существующих подписок сохраняются.")
+	}
+	if len(payload.ServicePolicies) > 0 {
+		preview.Warnings = append(preview.Warnings, "Добавленные правила автоподбора будут восстановлены на паузе. Действующие правила этого роутера сохранятся.")
 	}
 	if payload.NodeSnapshot != nil {
 		review, err := nodestore.ReviewPrivateSnapshot(*payload.NodeSnapshot)
@@ -4311,6 +4563,11 @@ func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackup
 	for id := range payload.Services {
 		if !known[id] {
 			return preview, fmt.Errorf("private backup references unknown service %q", id)
+		}
+	}
+	for id := range payload.ServicePolicies {
+		if !known[id] {
+			return preview, errors.New("Правило автоподбора относится к неизвестному сервису. Импорт не начат.")
 		}
 	}
 	for _, file := range payload.EngineFiles {
@@ -4636,7 +4893,10 @@ func (a *App) routeOptionsSnapshot() []routecatalog.Option {
 	if err != nil {
 		return options
 	}
-	profile := systemprobe.DetectWANProfile().ID
+	profile, profileErr := a.freshNetworkProfile(context.Background())
+	if profileErr != nil {
+		return options
+	}
 	installed, running := false, false
 	for _, option := range options {
 		if option.ID == "sing-box" {

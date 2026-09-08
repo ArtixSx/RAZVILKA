@@ -68,3 +68,25 @@ func TestDualRecoveryUsesIndependentLifetimeLeases(t *testing.T) {
 		t.Fatal("node recovery lease was released")
 	}
 }
+
+func TestNativeRecoveryKeepsBothPreviousProtocolLeases(t *testing.T) {
+	root := t.TempDir()
+	args := []string{filepath.Join(root, "config"), filepath.Join(root, "custom"), filepath.Join(root, "devices"), filepath.Join(root, "stage"), filepath.Join(root, "provider"), filepath.Join(root, "nodes"), filepath.Join(root, "warp")}
+	older, current, _, _, err := preparePrivateRecoveries(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer older.Close()
+	defer current.Close()
+	if next, _, err := preparePrivateRecovery(args[0], args[1], args[2], args[3], args[4]); err == nil {
+		next.Close()
+		t.Fatal("legacy protocol lease released")
+	}
+	if next, _, err := prepareNodePrivateRecovery(args[0], args[1], args[2], args[3], args[4], args[5]); err == nil {
+		next.Close()
+		t.Fatal("node protocol lease released")
+	}
+	if _, err := os.Stat(args[6]); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("clean native recovery created enrollment store")
+	}
+}

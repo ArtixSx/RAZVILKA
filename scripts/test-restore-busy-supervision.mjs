@@ -56,10 +56,15 @@ rollback_on_error 75
 
 // Migration and normal boot must bind the same files even with RAZVILKA_BASE.
 const migration = upgrade.slice(upgrade.indexOf('"$BINDIR/razvilka" -migrate-config'), upgrade.indexOf('# Quiesce only'));
-for (const option of ['-config "$APPDIR/config.json"', '-custom-services "$APPDIR/custom-services.json"', '-devices "$APPDIR/devices.json"', '-stage "$STATEDIR/staging"', '-cloudflare-state "$APPDIR/cloudflare-private"']) {
+for (const option of ['-config "$APPDIR/config.json"', '-custom-services "$APPDIR/custom-services.json"', '-devices "$APPDIR/devices.json"', '-stage "$STATEDIR/staging"', '-warp-state "$STATEDIR/warp"', '-cloudflare-state "$APPDIR/cloudflare-private"']) {
   assert(migration.includes(option), option);
   assert(start.includes(option), `boot ${option}`);
 }
+for (const option of ['-node-state "$APPDIR/nodes-private"', '-metrics-history "$STATEDIR/metrics/history.jsonl"', '-strategy-lab-state "$STATEDIR/strategy-lab.json"', '-audit-log "$STATEDIR/audit/events.jsonl"', '-dns-state "$STATEDIR/dns/state.json"']) {
+  assert(start.includes(option), `isolated boot ${option}`);
+}
+assert(start.includes('export RAZVILKA_USQUE_REPAIR_STATE="$STATEDIR/usque-repair"'));
+assert(rollback.includes('-warp-state "$STATEDIR/warp"'));
 
 // Upgrade and rollback must settle the private journal only while the server is
 // stopped, and a backup becomes valid only after all directory images exist.

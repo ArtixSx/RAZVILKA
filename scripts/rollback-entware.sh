@@ -133,6 +133,43 @@ require_snapshot_dir "$DATAPLANE_STATE_PRESENT" dataplane
 require_snapshot_dir "$STAGING_PRESENT" staging
 require_snapshot_dir "$CLOUDFLARE_PRIVATE_PRESENT" cloudflare-private
 
+# Registration requests are monotonic external effects. Keep native WARP state
+# in place, and never start an old binary that cannot see an unresolved request.
+require_native_enrollment_schema() {
+  SUBSCRIPTION_REQUIRED=0
+  for SUBSCRIPTION_STATE in "$APPDIR/subscriptions-private/subscriptions.private.json" \
+    "$APPDIR/private-restore-feeds-v1/restore.private.json"; do
+    if [ -e "$SUBSCRIPTION_STATE" ] || [ -L "$SUBSCRIPTION_STATE" ]; then
+      [ -f "$SUBSCRIPTION_STATE" ] && [ ! -L "$SUBSCRIPTION_STATE" ] || { echo "Private subscription state is unsafe; installation unchanged" >&2; return 1; }
+      SUBSCRIPTION_REQUIRED=1
+    fi
+  done
+  if [ "$SUBSCRIPTION_REQUIRED" -eq 1 ]; then
+    SUBSCRIPTION_SCHEMA="$("$1" -subscription-schema 2>/dev/null)" || { echo "Target binary cannot preserve private subscriptions; installation unchanged" >&2; return 1; }
+    [ "$SUBSCRIPTION_SCHEMA" = 1 ] || { echo "Target binary has an incompatible subscription schema; installation unchanged" >&2; return 1; }
+  fi
+  NATIVE_REQUIRED=0
+  # Empty journal directories exist on every startup. Only files are evidence
+  # of this protocol; a retained restore journal is conservatively included.
+  for NATIVE_STATE in "$STATEDIR/warp/native-enrollment.private.json" \
+    "$STATEDIR/warp/native-enrollment/current.json" "$STATEDIR/warp/native-enrollment/pending.json" \
+    "$APPDIR/private-restore-native-v1/restore.private.json"; do
+    if [ -e "$NATIVE_STATE" ] || [ -L "$NATIVE_STATE" ]; then
+      [ -f "$NATIVE_STATE" ] && [ ! -L "$NATIVE_STATE" ] || { echo "Native WARP state is unsafe; installation unchanged" >&2; return 1; }
+      NATIVE_REQUIRED=1
+    fi
+  done
+  if [ "$NATIVE_REQUIRED" -eq 1 ]; then
+    NATIVE_SCHEMA="$("$1" -native-enrollment-schema 2>/dev/null)" || {
+      echo "Target binary cannot preserve native WARP registration state; installation unchanged" >&2; return 1;
+    }
+    [ "$NATIVE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible native WARP schema; installation unchanged" >&2; return 1; }
+  fi
+}
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then
+  require_native_enrollment_schema "$BACKUP/razvilka.bin"
+fi
+
 if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
   [ -f "$BINDIR/razvilka" ] && [ ! -L "$BINDIR/razvilka" ] && [ -x "$BINDIR/razvilka" ] || {
     echo "Current RAZVILKA binary cannot settle the private restore journal" >&2
@@ -145,10 +182,22 @@ if [ "$AUTO" -ne 1 ]; then
   echo "This will stop the current RAZVILKA process and restore the listed snapshot."
 fi
 
+CURRENT_WAS_RUNNING=0
 if [ -x "$RAZ_INIT" ]; then
+  if RAZVILKA_BASE="$BASE" "$RAZ_INIT" status >/dev/null 2>&1; then
+    CURRENT_WAS_RUNNING=1
+  fi
   RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop
 elif command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvilka 2>/dev/null || true)" ]; then
   echo "RAZVILKA is running but its init script is unavailable; rollback was not started" >&2
+  exit 1
+fi
+# A registration can complete its local checkpoint during graceful shutdown.
+# No files have changed yet, so a compatibility refusal can restart this app.
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && ! require_native_enrollment_schema "$BACKUP/razvilka.bin"; then
+  if [ "$CURRENT_WAS_RUNNING" -eq 1 ]; then
+    RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the unchanged RAZVILKA process" >&2
+  fi
   exit 1
 fi
 if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
@@ -157,11 +206,20 @@ if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
     -custom-services "$APPDIR/custom-services.json" \
     -devices "$APPDIR/devices.json" \
     -stage "$STATEDIR/staging" \
+    -warp-state "$STATEDIR/warp" \
     -cloudflare-state "$APPDIR/cloudflare-private")"
   printf '%s\n' "$RECOVERY_OUTPUT" | grep -q '"ok":true' || {
     echo "Private restore recovery did not report success; rollback was not started" >&2
     exit 1
   }
+fi
+# Settling a pending restore can materialize a native image that was absent
+# before recovery. Recheck before deactivating or replacing the current app.
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && ! require_native_enrollment_schema "$BACKUP/razvilka.bin"; then
+  if [ "$CURRENT_WAS_RUNNING" -eq 1 ]; then
+    RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the unchanged RAZVILKA process" >&2
+  fi
+  exit 1
 fi
 if [ -x "$BINDIR/razvilka" ]; then
   "$BINDIR/razvilka" -deactivate-dataplane \

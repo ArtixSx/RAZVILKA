@@ -147,12 +147,27 @@ func validateVLESSModes(transport, security, flow, packet string) error {
 // Reject ambiguous aliases and malformed query strings before url.Values.Get
 // could silently choose one value or drop a malformed parameter.
 func vlessQuery(u *url.URL) (url.Values, error) {
+	aliases := map[string]string{"serverName": "sni", "publicKey": "pbk", "shortId": "sid", "fingerprint": "fp", "service_name": "serviceName", "packetEncoding": "packet_encoding", "allowInsecure": "insecure"}
+	allowed := strings.Fields("security type flow packet_encoding sni pbk sid fp alpn path host serviceName insecure encryption headerType")
+	clean, err := profileQuery(u, allowed, aliases)
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range []string{"encryption", "headerType"} {
+		if clean.Has(key) && clean.Get(key) != "none" {
+			return nil, importError("INVALID_PARAMETERS")
+		}
+	}
+	return clean, nil
+}
+
+// Every share-URI importer must reject unknown fields and duplicate aliases.
+// Dropping a certificate pin or transport option changes what the user trusted.
+func profileQuery(u *url.URL, allowed []string, aliases map[string]string) (url.Values, error) {
 	q, err := url.ParseQuery(u.RawQuery)
 	if err != nil {
 		return nil, importError("INVALID_PARAMETERS")
 	}
-	aliases := map[string]string{"serverName": "sni", "publicKey": "pbk", "shortId": "sid", "fingerprint": "fp", "service_name": "serviceName", "packetEncoding": "packet_encoding", "allowInsecure": "insecure"}
-	allowed := strings.Fields("security type flow packet_encoding sni pbk sid fp alpn path host serviceName insecure encryption headerType")
 	clean := url.Values{}
 	for key, values := range q {
 		if len(values) != 1 {
@@ -171,12 +186,13 @@ func vlessQuery(u *url.URL) (url.Values, error) {
 		if !known || clean.Has(key) {
 			return nil, importError("INVALID_PARAMETERS")
 		}
-		clean.Set(key, strings.TrimSpace(values[0]))
-	}
-	for _, key := range []string{"encryption", "headerType"} {
-		if clean.Has(key) && clean.Get(key) != "none" {
-			return nil, importError("INVALID_PARAMETERS")
+		// Authentication/obfuscation secrets are not display text: surrounding
+		// whitespace can be part of the actual credential.
+		value := values[0]
+		if key != "obfs-password" {
+			value = strings.TrimSpace(value)
 		}
+		clean.Set(key, value)
 	}
 	if clean.Has("insecure") {
 		switch strings.ToLower(clean.Get("insecure")) {
@@ -188,6 +204,64 @@ func vlessQuery(u *url.URL) (url.Values, error) {
 		}
 	}
 	return clean, nil
+}
+
+func quicQuery(u *url.URL, protocol string) (url.Values, error) {
+	if u.Opaque != "" || u.Path != "" && u.Path != "/" {
+		return nil, importError("INVALID_PARAMETERS")
+	}
+	allowed := strings.Fields("sni alpn insecure")
+	if protocol == "hysteria2" {
+		allowed = append(allowed, "obfs", "obfs-password")
+	} else {
+		allowed = append(allowed, "congestion_control")
+	}
+	q, err := profileQuery(u, allowed, map[string]string{"serverName": "sni", "allowInsecure": "insecure"})
+	if err != nil {
+		return nil, err
+	}
+	if protocol == "hysteria2" && (q.Has("obfs") || q.Has("obfs-password")) {
+		if q.Get("obfs") != "salamander" || q.Get("obfs-password") == "" {
+			return nil, importError("INVALID_PARAMETERS")
+		}
+	}
+	return q, nil
+}
+
+func validateNativeTLS(source map[string]any) error {
+	raw, exists := source["tls"]
+	if !exists {
+		return nil
+	}
+	tls, ok := raw.(map[string]any)
+	if !ok {
+		return importError("INVALID_PARAMETERS")
+	}
+	if _, err := strictBool(tls, "enabled"); err != nil {
+		return err
+	}
+	insecure, err := strictBool(tls, "insecure")
+	if err != nil {
+		return err
+	}
+	if insecure {
+		return importError("INSECURE_TLS")
+	}
+	return nil
+}
+
+func validateClashTLS(proxy map[string]any) error {
+	if _, err := strictBool(proxy, "tls"); err != nil {
+		return err
+	}
+	insecure, err := strictBool(proxy, "skip-cert-verify")
+	if err != nil {
+		return err
+	}
+	if insecure {
+		return importError("INSECURE_TLS")
+	}
+	return nil
 }
 
 func validateClashVLESS(proxy map[string]any) error {

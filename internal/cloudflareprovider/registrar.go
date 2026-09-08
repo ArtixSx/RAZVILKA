@@ -42,8 +42,8 @@ type RegistrationRequest struct {
 
 // RegistrationResponse contains server-issued private account material. Its
 // secret fields are never JSON encoded or exposed through Candidate.Public.
-// A concrete live API adapter will be added only after golden fixtures and
-// hardware gates; the current contract is intended for deterministic mocks.
+// The optional ConsumerRegistrationAPI implements one bounded live request;
+// registration is still not evidence of tunnel or service availability.
 type RegistrationResponse struct {
 	DeviceID      string   `json:"-"`
 	AccessToken   string   `json:"-"`
@@ -62,8 +62,8 @@ type RegistrationAPI interface {
 }
 
 // RegistrationCandidate owns local and server secrets only in memory. Public
-// returns a detached, non-runnable view. Persistence and transport export are
-// intentionally absent from this first registrar block.
+// returns a detached, non-runnable view. ImportCandidate persists only into the
+// private store; a separate candidate scope controls tunnel material export.
 type RegistrationCandidate struct {
 	preview    Account
 	privateKey []byte
@@ -87,6 +87,9 @@ type Registrar struct {
 	API    RegistrationAPI
 	Random io.Reader
 	Now    func() time.Time
+	// CheckpointKey is an optional trusted local durability callback, invoked
+	// before the first remote request. The API adapter never receives this key.
+	CheckpointKey func([]byte) error
 }
 
 func (registrar Registrar) NewCandidate(ctx context.Context, acceptTerms bool) (RegistrationCandidate, error) {
@@ -108,6 +111,15 @@ func (registrar Registrar) NewCandidate(ctx context.Context, acceptTerms bool) (
 		return RegistrationCandidate{}, ErrRegistration
 	}
 	privateBytes := append([]byte(nil), privateKey.Bytes()...)
+	if registrar.CheckpointKey != nil {
+		checkpoint := append([]byte(nil), privateBytes...)
+		err := registrar.CheckpointKey(checkpoint)
+		eraseBytes(checkpoint)
+		if err != nil {
+			eraseBytes(privateBytes)
+			return RegistrationCandidate{}, ErrRegistration
+		}
+	}
 	publicBytes := privateKey.PublicKey().Bytes()
 	request := RegistrationRequest{
 		PublicKey:     base64.StdEncoding.EncodeToString(publicBytes),
@@ -124,12 +136,16 @@ func (registrar Registrar) NewCandidate(ctx context.Context, acceptTerms bool) (
 		if ctx.Err() != nil {
 			return RegistrationCandidate{}, ctx.Err()
 		}
-		return RegistrationCandidate{}, ErrRegistration
+		return RegistrationCandidate{}, safeRegistrationError(err)
 	}
 	now := time.Now().UTC()
 	if registrar.Now != nil {
 		now = registrar.Now().UTC()
 	}
+	return makeRegistrationCandidate(privateBytes, publicBytes, response, now), nil
+}
+
+func makeRegistrationCandidate(privateBytes, publicBytes []byte, response RegistrationResponse, now time.Time) RegistrationCandidate {
 	preview := Account{
 		Provider:             "cloudflare",
 		SourceKind:           SourceLocalRegistration,
@@ -145,7 +161,7 @@ func (registrar Registrar) NewCandidate(ctx context.Context, acceptTerms bool) (
 		CreatedAt:            now,
 		UpdatedAt:            now,
 	}
-	return RegistrationCandidate{preview: preview, privateKey: privateBytes, response: cloneRegistrationResponse(response)}, nil
+	return RegistrationCandidate{preview: preview, privateKey: privateBytes, response: cloneRegistrationResponse(response)}
 }
 
 func (candidate RegistrationCandidate) snapshot() (Import, error) {

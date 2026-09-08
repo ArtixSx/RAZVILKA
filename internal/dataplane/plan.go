@@ -14,6 +14,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
 const SchemaVersion = 1
@@ -67,6 +68,7 @@ type ResourceConflict struct {
 }
 
 type Input struct {
+	NetworkProfileID   string             `json:"network_profile_id,omitempty"`
 	Revision           uint64             `json:"revision"`
 	SafeMode           bool               `json:"safe_mode"`
 	Routes             []Route            `json:"routes"`
@@ -113,6 +115,7 @@ type RouteEvidence struct {
 // It deliberately contains only routes and actions owned by one adapter, so a
 // candidate cannot infer authority over another engine or global router state.
 type RoutePlan struct {
+	NetworkProfileID string             `json:"network_profile_id,omitempty"`
 	SchemaVersion    int                `json:"schema_version"`
 	PlanID           string             `json:"plan_id"`
 	Digest           string             `json:"digest"`
@@ -126,6 +129,7 @@ type RoutePlan struct {
 }
 
 type Plan struct {
+	NetworkProfileID  string             `json:"network_profile_id,omitempty"`
 	SchemaVersion     int                `json:"schema_version"`
 	PlanID            string             `json:"plan_id"`
 	Digest            string             `json:"digest"`
@@ -244,6 +248,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	sum := sha256.Sum256(encoded)
 	digest := hex.EncodeToString(sum[:])
 	plan := Plan{
+		NetworkProfileID:  input.NetworkProfileID,
 		SchemaVersion:     SchemaVersion,
 		PlanID:            "dp-" + digest[:16],
 		Digest:            digest,
@@ -262,6 +267,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		Protocol:          []string{"plan", "snapshot", "stage", "validate", "canary-if-supported", "deactivate-retired", "activate", "health", "commit-or-rollback"},
 		State:             "planned",
 		Note:              "План ничего не изменяет сам по себе. Live Apply разрешается только после проверки установленного обхода, ownership, snapshot, native validation, health и готовности rollback.",
+	}
+	if plan.RequiresNetworkProof() && !systemprobe.ValidWANProfileID(plan.NetworkProfileID) {
+		plan.Blockers = append(plan.Blockers, Blocker{Code: "NETWORK_PROOF_UNAVAILABLE", Adapter: "sing-box", Message: "Текущая сеть не подтверждена для маршрута через узел.", Resolution: "Повторите проверку узла и сформируйте новый план при стабильном подключении."})
 	}
 	if len(input.Routes) > 0 {
 		plan.RequiredEvidence = evidence.Service
@@ -350,6 +358,11 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	}
 	for _, draft := range input.EngineConfigDrafts {
 		engineID := strings.SplitN(draft, "/", 2)[0]
+		if engineID == "sing-box" && plan.RequiresNetworkProof() {
+			plan.Blockers = append(plan.Blockers, Blocker{Code: "NODE_ROUTE_ENGINE_DRAFT", Adapter: engineID,
+				Message:    "Маршрут через выбранный узел не использует общий черновик Sing-box.",
+				Resolution: "Сохранённый черновик остаётся в редакторе. Для его применения нужен сервис с общим маршрутом Sing-box."})
+		}
 		if !adapterSet[engineID] {
 			plan.Blockers = append(plan.Blockers, Blocker{
 				Code:       "ENGINE_DRAFT_UNUSED",
@@ -446,6 +459,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 func (p Plan) RoutePlanFor(adapter string) RoutePlan {
 	adapter = AdapterID(adapter)
 	ir := RoutePlan{
+		NetworkProfileID: p.NetworkProfileID,
 		SchemaVersion:    p.SchemaVersion,
 		PlanID:           p.PlanID,
 		Digest:           p.Digest,
@@ -473,6 +487,23 @@ func (p Plan) RoutePlanFor(adapter string) RoutePlan {
 		}
 	}
 	return ir
+}
+
+// Node proof is tied to one observed network epoch. Legacy journals remain
+// readable, but a missing epoch must never authorize reusing a node route.
+func (p Plan) RequiresNetworkProof() bool { return routesRequireNetworkProof(p.Routes) }
+
+func (p RoutePlan) RequiresNetworkProof() bool { return routesRequireNetworkProof(p.Routes) }
+
+func routesRequireNetworkProof(routes []Route) bool {
+	for _, route := range routes {
+		for _, id := range []string{route.Selected, route.Resolved} {
+			if strings.HasPrefix(id, "sing-box:node-") || strings.HasPrefix(id, "sing-box:group-") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func planUsesEngineDraft(plan Plan, engineID, fileID string) bool {

@@ -15,6 +15,7 @@ for ARG in "$@"; do
     -h|--help)
       echo "Usage: $0 [--dry-run|--apply] [--from-artem-flow] [--starter-pack]"
       echo "Default: install/update only the RAZVILKA UI/control plane."
+      echo "Optional RAZVILKA_ARCH=arm64|amd64|mips|mipsle explicitly selects the target architecture."
       exit 0
       ;;
     *) echo "Unknown option: $ARG" >&2; exit 2 ;;
@@ -50,12 +51,37 @@ LEGACY_DISABLED="$INITDIR/S99artem-flow.razvilka-disabled"
 LEGACY_CONTROL=""
 
 ARCH_RAW="$(uname -m)"
-case "$ARCH_RAW" in
+ARCH_REQUEST="${RAZVILKA_ARCH:-$ARCH_RAW}"
+case "$ARCH_REQUEST" in
   aarch64|arm64) ARCH=arm64 ;;
-  mips) ARCH=mips ;;
+  mips)
+    if [ -n "${RAZVILKA_ARCH:-}" ]; then
+      ARCH=mips
+    else
+      # Linux reports uname=mips for both MIPS32 byte orders. Read the ELF
+      # identity of the running shell, never guess from the kernel name or
+      # execute a candidate binary to discover the architecture.
+      SHELL_IMAGE="/proc/$$/exe"
+      [ -r "$SHELL_IMAGE" ] || SHELL_IMAGE=/bin/sh
+      ELF_HEADER=""
+      if command -v od >/dev/null 2>&1; then
+        ELF_HEADER="$(od -An -t u1 -N 6 "$SHELL_IMAGE" 2>/dev/null)" || ELF_HEADER=""
+      elif command -v busybox >/dev/null 2>&1; then
+        ELF_HEADER="$(busybox od -An -t u1 -N 6 "$SHELL_IMAGE" 2>/dev/null)" || ELF_HEADER=""
+      fi
+      # Collapse only numeric header whitespace. The magic, ELF32 class and
+      # declared byte order must all agree before selecting a binary.
+      ELF_HEADER="$(printf '%s\n' "$ELF_HEADER" | awk '{$1=$1; print}')"
+      case "$ELF_HEADER" in
+        '127 69 76 70 1 1') ARCH=mipsle ;;
+        '127 69 76 70 1 2') ARCH=mips ;;
+        *) echo "Cannot determine MIPS ELF byte order; installation unchanged. Check od availability or explicitly set RAZVILKA_ARCH=mips|mipsle." >&2; exit 1 ;;
+      esac
+    fi
+    ;;
   mipsel|mipsle) ARCH=mipsle ;;
   x86_64|amd64) ARCH=amd64 ;;
-  *) echo "Unsupported architecture: $ARCH_RAW" >&2; exit 1 ;;
+  *) echo "Unsupported architecture: $ARCH_REQUEST" >&2; exit 1 ;;
 esac
 BIN_SOURCE="$HERE/dist/razvilka-linux-$ARCH"
 
@@ -126,9 +152,42 @@ if [ ! -f "$CONFIG_SOURCE" ]; then
   fi
 fi
 
+require_native_enrollment_schema() {
+  SUBSCRIPTION_REQUIRED=0
+  for SUBSCRIPTION_STATE in "$APPDIR/subscriptions-private/subscriptions.private.json" \
+    "$APPDIR/private-restore-feeds-v1/restore.private.json"; do
+    if [ -e "$SUBSCRIPTION_STATE" ] || [ -L "$SUBSCRIPTION_STATE" ]; then
+      [ -f "$SUBSCRIPTION_STATE" ] && [ ! -L "$SUBSCRIPTION_STATE" ] || { echo "Private subscription state is unsafe; installation unchanged" >&2; return 1; }
+      SUBSCRIPTION_REQUIRED=1
+    fi
+  done
+  if [ "$SUBSCRIPTION_REQUIRED" -eq 1 ]; then
+    SUBSCRIPTION_SCHEMA="$("$1" -subscription-schema 2>/dev/null)" || { echo "Target binary cannot preserve private subscriptions; installation unchanged" >&2; return 1; }
+    [ "$SUBSCRIPTION_SCHEMA" = 1 ] || { echo "Target binary has an incompatible subscription schema; installation unchanged" >&2; return 1; }
+  fi
+  NATIVE_REQUIRED=0
+  # Empty journal directories exist on every startup. Only files are evidence
+  # of this protocol; a retained restore journal is conservatively included.
+  for NATIVE_STATE in "$STATEDIR/warp/native-enrollment.private.json" \
+    "$STATEDIR/warp/native-enrollment/current.json" "$STATEDIR/warp/native-enrollment/pending.json" \
+    "$APPDIR/private-restore-native-v1/restore.private.json"; do
+    if [ -e "$NATIVE_STATE" ] || [ -L "$NATIVE_STATE" ]; then
+      [ -f "$NATIVE_STATE" ] && [ ! -L "$NATIVE_STATE" ] || { echo "Native WARP state is unsafe; installation unchanged" >&2; return 1; }
+      NATIVE_REQUIRED=1
+    fi
+  done
+  if [ "$NATIVE_REQUIRED" -eq 1 ]; then
+    NATIVE_SCHEMA="$("$1" -native-enrollment-schema 2>/dev/null)" || {
+      echo "Target binary cannot preserve native WARP registration state; installation unchanged" >&2; return 1;
+    }
+    [ "$NATIVE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible native WARP schema; installation unchanged" >&2; return 1; }
+  fi
+}
+require_native_enrollment_schema "$BIN_SOURCE"
+
 VERSION="$($BIN_SOURCE -version)"
 [ -n "$VERSION" ] || { echo "Candidate did not report a version" >&2; exit 1; }
-CHECK_OUTPUT="$($BIN_SOURCE -check -config "$CONFIG_SOURCE" -catalog "$CATALOG_SOURCE" -sources "$SOURCES_SOURCE" -community-catalog "$COMMUNITY_SOURCE")"
+CHECK_OUTPUT="$($BIN_SOURCE -check -config "$CONFIG_SOURCE" -catalog "$CATALOG_SOURCE" -sources "$SOURCES_SOURCE" -community-catalog "$COMMUNITY_SOURCE" -stage "$STATEDIR/staging" -warp-state "$STATEDIR/warp")"
 printf '%s\n' "$CHECK_OUTPUT" | grep -q '"ok": true' || { echo "Candidate preflight did not report success" >&2; exit 1; }
 
 echo "RAZVILKA transactional preflight"
@@ -185,6 +244,10 @@ if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_RUNNING_DETECTED" -eq 1 ]; then
   "$LEGACY_CONTROL" stop
 fi
 
+# A registration may have checkpointed while the first check was running.
+# Recheck with the application quiescent, before recovery or any replacement.
+require_native_enrollment_schema "$BIN_SOURCE"
+
 mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BINDIR" "$INITDIR" "$BACKUPROOT"
 
 # The candidate understands the newest journal format. Settle any interrupted
@@ -196,6 +259,7 @@ RECOVERY_OUTPUT="$($BIN_SOURCE -recover-private-restore \
   -custom-services "$APPDIR/custom-services.json" \
   -devices "$APPDIR/devices.json" \
   -stage "$STATEDIR/staging" \
+  -warp-state "$STATEDIR/warp" \
   -cloudflare-state "$APPDIR/cloudflare-private")"
 printf '%s\n' "$RECOVERY_OUTPUT" | grep -q '"ok":true' || { echo "Private restore recovery did not report success" >&2; false; }
 SAFE_TO_RESTART=1
@@ -361,6 +425,7 @@ stage 3 "Проверяем и при необходимости мигриру�
   -custom-services "$APPDIR/custom-services.json" \
   -devices "$APPDIR/devices.json" \
   -stage "$STATEDIR/staging" \
+  -warp-state "$STATEDIR/warp" \
   -cloudflare-state "$APPDIR/cloudflare-private" \
   -catalog "$APPDIR/service-catalog.json" \
   -sources "$APPDIR/sources.json" \

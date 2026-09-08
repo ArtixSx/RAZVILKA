@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/netip"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ func fakeExactNodeChecker(t *testing.T) *ExactNodeChecker {
 	t.Helper()
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
 	checker := NewExactNodeChecker(t.TempDir())
+	checker.egressPair = nil // Legacy field fixtures isolate individual checker gates.
 	checker.now = func() time.Time { now = now.Add(time.Millisecond); return now }
 	checker.resolve = func(context.Context, string) ([]netip.Addr, error) {
 		return []netip.Addr{netip.MustParseAddr("203.0.113.8")}, nil
@@ -42,8 +44,13 @@ func fakeExactNodeChecker(t *testing.T) *ExactNodeChecker {
 			Outcome: evidence.OutcomeServiceAccepted, Verdict: evidence.VerdictPass, HTTPStatus: 204,
 		}, nil
 	}
+	baseServiceProof := checker.serviceProbe
+	checker.serviceIPProbe = func(ctx context.Context, address, route, egress string, service catalog.Service, _ netip.Addr) (evidence.ProbeEvidence, error) {
+		return baseServiceProof(ctx, address, route, egress, service)
+	}
 	checker.cleanup = func(context.Context, exactNodeSession) error { return nil }
 	checker.runtimeReady = func() bool { return true }
+	checker.FreshProfile = func(context.Context) (string, error) { return "wan-0123456789ab", nil }
 	return checker
 }
 
@@ -61,7 +68,7 @@ func TestExactNodeCheckConfirmsExactServicePath(t *testing.T) {
 	if err != nil || !result.Available || result.Verdict != evidence.VerdictPass || result.TestLevel != "service" || result.EgressIP != "2001:db8::20" || result.DirectLeak {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	if result.Evidence.NetworkProfile != "wan-0123456789ab" || result.Evidence.AssuranceLevel() != evidence.Service || len(result.Stages) != 7 {
+	if result.Evidence.NetworkProfile != "wan-0123456789ab" || result.Evidence.AssuranceLevel() != evidence.Service || len(result.Stages) != 8 {
 		t.Fatalf("evidence=%+v stages=%+v", result.Evidence, result.Stages)
 	}
 }
@@ -72,6 +79,10 @@ func TestExactNodeCheckRejectsDirectLeak(t *testing.T) {
 	result, err := checker.Check(context.Background(), checkedNodeRequest())
 	if err != nil || result.Available || !result.DirectLeak || result.Verdict != evidence.VerdictMisrouted || result.ErrorCode != "node-direct-leak" || result.TestLevel != "egress" {
 		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil || result.EgressIP != "" || strings.Contains(string(encoded), "2001:db8::20") {
+		t.Fatal("direct egress address escaped into the public check result")
 	}
 }
 
@@ -168,7 +179,7 @@ func TestExactNodeCheckRequiresDirectNegativeControl(t *testing.T) {
 	checker := fakeExactNodeChecker(t)
 	checker.directEgress = func(context.Context) (string, error) { return "", errors.New("direct unavailable") }
 	result, err := checker.Check(context.Background(), checkedNodeRequest())
-	if err != nil || result.Available || result.Verdict != evidence.VerdictInconclusive || result.ErrorCode != "node-direct-control-unavailable" || result.TestLevel != "egress" {
+	if err != nil || result.Available || result.Verdict != evidence.VerdictInconclusive || result.ErrorCode != "node-direct-control-unavailable" || result.TestLevel != "egress" || result.EgressIP != "" {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 }
@@ -201,9 +212,11 @@ func TestExactNodeCheckerSerializesTemporaryRuntime(t *testing.T) {
 	checker := fakeExactNodeChecker(t)
 	entered := make(chan struct{})
 	release := make(chan struct{})
-	checker.resolve = func(context.Context, string) ([]netip.Addr, error) {
-		close(entered)
-		<-release
+	checker.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+		if host == "node.example" {
+			close(entered)
+			<-release
+		}
 		return []netip.Addr{netip.MustParseAddr("203.0.113.8")}, nil
 	}
 	done := make(chan error, 1)
@@ -229,6 +242,51 @@ func TestExactNodeCheckerExplainsMissingRuntime(t *testing.T) {
 	}
 }
 
+func TestExactNodeCheckerRechecksCleanupFenceAfterAcquiringGate(t *testing.T) {
+	checker := fakeExactNodeChecker(t)
+	cleanupEntered := make(chan struct{})
+	releaseCleanup := make(chan struct{})
+	validationEntered := make(chan struct{})
+	releaseValidation := make(chan struct{})
+	var calls atomic.Int32
+	checker.runtimeReady = func() bool {
+		if calls.Add(1) == 2 {
+			close(validationEntered)
+			<-releaseValidation
+		}
+		return true
+	}
+	checker.cleanup = func(context.Context, exactNodeSession) error {
+		select {
+		case <-cleanupEntered:
+		default:
+			close(cleanupEntered)
+		}
+		<-releaseCleanup
+		return errors.New("temporary process still running")
+	}
+	first := make(chan error, 1)
+	go func() {
+		_, err := checker.Check(context.Background(), checkedNodeRequest())
+		first <- err
+	}()
+	<-cleanupEntered
+	second := make(chan error, 1)
+	go func() {
+		_, err := checker.Check(context.Background(), checkedNodeRequest())
+		second <- err
+	}()
+	<-validationEntered
+	close(releaseCleanup)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	close(releaseValidation)
+	if err := <-second; !errors.Is(err, ErrExactNodeUnavailable) {
+		t.Fatalf("request validated before cleanup failure bypassed the fence: %v", err)
+	}
+}
+
 func TestExactNodeCheckerRecoveryClearsCleanupFence(t *testing.T) {
 	checker := fakeExactNodeChecker(t)
 	checker.poisoned.Store(true)
@@ -237,5 +295,101 @@ func TestExactNodeCheckerRecoveryClearsCleanupFence(t *testing.T) {
 	}
 	if result, err := checker.Check(context.Background(), checkedNodeRequest()); err != nil || !result.Available {
 		t.Fatalf("checker did not resume after recovery: %+v %v", result, err)
+	}
+}
+
+func TestExactNodeCheckRejectsUnconfirmedInitialNetwork(t *testing.T) {
+	for _, profile := range []string{"", "network-unknown", "legacy-unscoped", "wan-ffffffffffff"} {
+		t.Run(profile, func(t *testing.T) {
+			checker := fakeExactNodeChecker(t)
+			checker.FreshProfile = func(context.Context) (string, error) { return profile, nil }
+			checker.resolve = func(context.Context, string) ([]netip.Addr, error) {
+				t.Fatal("network mismatch reached node DNS")
+				return nil, nil
+			}
+			if _, err := checker.Check(context.Background(), checkedNodeRequest()); !errors.Is(err, ErrExactNodeNetworkChanged) {
+				t.Fatalf("unconfirmed current epoch accepted: %v", err)
+			}
+		})
+	}
+	checker := fakeExactNodeChecker(t)
+	request := checkedNodeRequest()
+	request.NetworkProfile = "network-unknown"
+	if _, err := checker.Check(context.Background(), request); !errors.Is(err, ErrExactNodeUnavailable) {
+		t.Fatalf("unknown request epoch accepted: %v", err)
+	}
+}
+
+func TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup(t *testing.T) {
+	for _, phase := range []string{"probe", "cleanup", "observation-error"} {
+		t.Run(phase, func(t *testing.T) {
+			checker := fakeExactNodeChecker(t)
+			profile := "wan-0123456789ab"
+			var observationErr error
+			cleaned := false
+			checker.FreshProfile = func(context.Context) (string, error) { return profile, observationErr }
+			originalProbe := checker.serviceProbe
+			checker.serviceProbe = func(ctx context.Context, address, route, egress string, service catalog.Service) (evidence.ProbeEvidence, error) {
+				proof, err := originalProbe(ctx, address, route, egress, service)
+				if phase == "probe" {
+					profile = "wan-ffffffffffff"
+				}
+				return proof, err
+			}
+			checker.cleanup = func(context.Context, exactNodeSession) error {
+				cleaned = true
+				if phase == "cleanup" {
+					profile = "wan-ffffffffffff"
+				} else if phase == "observation-error" {
+					observationErr = errors.New("private WAN details must not escape")
+				}
+				return nil
+			}
+			result, err := checker.Check(context.Background(), checkedNodeRequest())
+			if !errors.Is(err, ErrExactNodeNetworkChanged) || !cleaned || result.Available || result.Verdict == evidence.VerdictPass || result.Evidence.Verdict == evidence.VerdictPass || result.EgressIP != "" || result.Evidence.EgressIP != "" {
+				t.Fatalf("network change retained proof: result=%+v cleaned=%t err=%v", result, cleaned, err)
+			}
+			if result.NetworkProfile != "wan-0123456789ab" || result.Evidence.NetworkProfile != "wan-0123456789ab" {
+				t.Fatal("old observations were relabelled with a new epoch")
+			}
+		})
+	}
+}
+
+func TestExactNodeCheckRechecksNetworkAfterRequestValidation(t *testing.T) {
+	checker := fakeExactNodeChecker(t)
+	profile := "wan-0123456789ab"
+	checker.FreshProfile = func(context.Context) (string, error) { return profile, nil }
+	checker.runtimeReady = func() bool {
+		profile = "wan-ffffffffffff"
+		return true
+	}
+	checker.resolve = func(context.Context, string) ([]netip.Addr, error) {
+		t.Fatal("network changed before the gate but node DNS still ran")
+		return nil, nil
+	}
+	if _, err := checker.Check(context.Background(), checkedNodeRequest()); !errors.Is(err, ErrExactNodeNetworkChanged) {
+		t.Fatalf("network change during request validation was accepted: %v", err)
+	}
+}
+
+func TestExactNodeCheckCancellationDoesNotPromoteProofOrSkipCleanup(t *testing.T) {
+	checker := fakeExactNodeChecker(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	originalProbe := checker.serviceProbe
+	checker.serviceProbe = func(ctx context.Context, address, route, egress string, service catalog.Service) (evidence.ProbeEvidence, error) {
+		proof, err := originalProbe(ctx, address, route, egress, service)
+		cancel()
+		return proof, err
+	}
+	cleaned := false
+	checker.cleanup = func(cleanupCtx context.Context, _ exactNodeSession) error {
+		cleaned = true
+		return cleanupCtx.Err()
+	}
+	result, err := checker.Check(ctx, checkedNodeRequest())
+	if !errors.Is(err, context.Canceled) || !cleaned || checker.poisoned.Load() || result.Available || result.Evidence.Verdict == evidence.VerdictPass {
+		t.Fatalf("cancelled check retained proof or failed cleanup: result=%+v cleaned=%t err=%v", result, cleaned, err)
 	}
 }

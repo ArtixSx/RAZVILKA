@@ -55,13 +55,21 @@ func parseClashYAML(data []byte, report *entryReport) ([]map[string]any, []Previ
 			report.reject(index+1, importError("UNSUPPORTED_PROTOCOL"))
 			continue
 		}
+		if err := validateClashTLS(proxy); err != nil {
+			report.reject(index+1, err)
+			continue
+		}
 		if typeName == "vless" {
 			if err := validateClashVLESS(proxy); err != nil {
 				report.reject(index+1, err)
 				continue
 			}
 		}
-		source := clashProxyToNative(proxy, typeName)
+		source, err := clashProxyToNative(proxy, typeName)
+		if err != nil {
+			report.reject(index+1, err)
+			continue
+		}
 		outbound, preview, err := normalizeNativeOutbound(source)
 		if err != nil {
 			report.reject(index+1, err)
@@ -96,7 +104,7 @@ func canonicalClashType(value string) string {
 	}
 }
 
-func clashProxyToNative(proxy map[string]any, typeName string) map[string]any {
+func clashProxyToNative(proxy map[string]any, typeName string) (map[string]any, error) {
 	source := map[string]any{
 		"type":        typeName,
 		"tag":         textValue(proxy["name"]),
@@ -127,10 +135,14 @@ func clashProxyToNative(proxy map[string]any, typeName string) map[string]any {
 	if tls := clashTLS(proxy, typeName); len(tls) > 0 {
 		source["tls"] = tls
 	}
-	if transport := clashTransport(proxy); len(transport) > 0 {
+	transport, err := clashTransport(proxy)
+	if err != nil {
+		return nil, err
+	}
+	if len(transport) > 0 {
 		source["transport"] = transport
 	}
-	return source
+	return source, nil
 }
 
 func clashTLS(proxy map[string]any, typeName string) map[string]any {
@@ -168,7 +180,7 @@ func clashTLS(proxy map[string]any, typeName string) map[string]any {
 	return tls
 }
 
-func clashTransport(proxy map[string]any) map[string]any {
+func clashTransport(proxy map[string]any) (map[string]any, error) {
 	network := strings.ToLower(textValue(proxy["network"]))
 	switch network {
 	case "ws":
@@ -187,18 +199,101 @@ func clashTransport(proxy map[string]any) map[string]any {
 				}
 			}
 		}
-		return transport
+		return transport, nil
 	case "grpc":
 		transport := map[string]any{"type": "grpc"}
 		if options, ok := proxy["grpc-opts"].(map[string]any); ok {
 			copyClashText(transport, options, "service_name", "grpc-service-name")
 		}
-		return transport
+		return transport, nil
 	case "http", "h2":
-		return map[string]any{"type": "http"}
+		return clashHTTPTransport(proxy, network)
 	default:
-		return nil
+		return nil, nil
 	}
+}
+
+func clashHTTPTransport(proxy map[string]any, network string) (map[string]any, error) {
+	transport := map[string]any{"type": "http"}
+	raw, exists := proxy[network+"-opts"]
+	if !exists {
+		return transport, nil
+	}
+	opts, ok := raw.(map[string]any)
+	if !ok {
+		return nil, importError("INVALID_PARAMETERS")
+	}
+	if network == "h2" {
+		if raw, exists := opts["host"]; exists {
+			hosts, err := clashStringList(raw)
+			if err != nil {
+				return nil, err
+			}
+			transport["host"] = hosts
+		}
+		path, err := strictText(opts, "path")
+		if err != nil {
+			return nil, err
+		}
+		transport["path"] = path
+	} else {
+		method, err := strictText(opts, "method")
+		if err != nil {
+			return nil, err
+		}
+		if method != "" {
+			transport["method"] = method
+		}
+		if raw, exists := opts["path"]; exists {
+			paths, err := clashStringList(raw)
+			// sing-box accepts one HTTP path. Do not silently choose a path
+			// from a provider's randomly selected set.
+			if err != nil || len(paths) > 1 {
+				return nil, importError("INVALID_PARAMETERS")
+			}
+			if len(paths) == 1 {
+				transport["path"] = paths[0]
+			}
+		}
+		if raw, exists := opts["headers"]; exists {
+			headers, ok := raw.(map[string]any)
+			if !ok {
+				return nil, importError("INVALID_PARAMETERS")
+			}
+			clean := map[string]any{}
+			for name, raw := range headers {
+				values, err := clashStringList(raw)
+				if err != nil {
+					return nil, err
+				}
+				if strings.EqualFold(name, "Host") {
+					transport["host"] = values
+				} else {
+					clean[name] = values
+				}
+			}
+			if len(clean) > 0 {
+				transport["headers"] = clean
+			}
+		}
+	}
+	return transport, nil
+}
+
+func clashStringList(raw any) ([]string, error) {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, importError("INVALID_PARAMETERS")
+	}
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		value, ok := item.(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return nil, importError("INVALID_PARAMETERS")
+		}
+		values = append(values, value)
+	}
+	return values, nil
 }
 
 func copyClashText(destination, source map[string]any, destinationKey, sourceKey string) {

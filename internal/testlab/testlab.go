@@ -3,6 +3,7 @@ package testlab
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
 	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
 type Result struct {
@@ -26,6 +28,7 @@ type Result struct {
 	ScenarioLabel          string                  `json:"scenario_label,omitempty"`
 	ScenarioNeeded         bool                    `json:"scenario_required,omitempty"`
 	Route                  string                  `json:"route"`
+	NetworkProfileID       string                  `json:"network_profile_id,omitempty"`
 	Status                 string                  `json:"status"` // pass, partial, fail, not-ready, pending
 	HTTPStatus             int                     `json:"http_status,omitempty"`
 	LatencyMS              int64                   `json:"latency_ms,omitempty"`
@@ -77,6 +80,9 @@ func (result *Result) EvaluateHTTP(service catalog.Service, observation probeche
 func (result *Result) NormalizeEvidence() {
 	if result == nil {
 		return
+	}
+	if result.EvidenceV2 != nil && result.EvidenceV2.NetworkProfile != result.NetworkProfileID && (result.EvidenceV2.NetworkProfile != "" || result.NetworkProfileID != "") {
+		result.RouteProofError = "network-profile-mismatch"
 	}
 	if result.RouteProofError != "" {
 		result.RouteConfirmed = false
@@ -131,7 +137,8 @@ func (result *Result) NormalizeEvidence() {
 			ProbeID:       fmt.Sprintf("%s:%s:%s:%d", result.ServiceID, result.ScenarioID, result.Route, finished.UnixNano()),
 			StartedAt:     started, FinishedAt: finished,
 			Service: result.ServiceID, Subservice: result.ScenarioID,
-			RoutePathID: routePath, Engine: result.Route, EgressIP: result.EgressIP,
+			NetworkProfile: result.NetworkProfileID,
+			RoutePathID:    routePath, Engine: result.Route, EgressIP: result.EgressIP,
 			Stage: "service", Outcome: outcome, HTTPStatus: result.HTTPStatus,
 			LatencyMS: result.LatencyMS, Confidence: confidence,
 			Source: result.EvidenceSource, ErrorCode: errorCode,
@@ -231,8 +238,11 @@ type ComparisonAssessment struct {
 
 type Runner struct {
 	Client *http.Client
-	mu     sync.RWMutex
-	latest map[string]Result
+	// Profile is configured once at startup. A nil callback retains legacy
+	// unscoped history behavior; production must provide a fresh WAN profile.
+	Profile func() string
+	mu      sync.RWMutex
+	latest  map[string]Result
 }
 
 type RouteProber interface {
@@ -297,6 +307,17 @@ func (r *Runner) ProbeCurrent(ctx context.Context, cat catalog.Catalog, ids []st
 }
 
 func (r *Runner) ProbeRoutes(ctx context.Context, cat catalog.Catalog, ids, routes []string, prober RouteProber) []Result {
+	return r.probeRoutes(ctx, cat, ids, routes, prober, true)
+}
+
+// ProbeRoutesUnrecorded runs probes without publishing their observations.
+// The caller must check cancellation and its captured WAN epoch before
+// publishing the returned rows with RecordRoutesForProfile.
+func (r *Runner) ProbeRoutesUnrecorded(ctx context.Context, cat catalog.Catalog, ids, routes []string, prober RouteProber) []Result {
+	return r.probeRoutes(ctx, cat, ids, routes, prober, false)
+}
+
+func (r *Runner) probeRoutes(ctx context.Context, cat catalog.Catalog, ids, routes []string, prober RouteProber, record bool) []Result {
 	selected := selectServices(cat, ids)
 	if len(selected) == 0 || len(routes) == 0 || prober == nil {
 		return []Result{}
@@ -338,12 +359,67 @@ func (r *Runner) ProbeRoutes(ctx context.Context, cat catalog.Catalog, ids, rout
 		}
 		return results[i].ServiceName < results[j].ServiceName
 	})
-	r.mu.Lock()
-	for _, result := range results {
-		r.latest[resultKey(result)] = result
+	if record {
+		r.mu.Lock()
+		for _, result := range results {
+			r.latest[resultKey(result)] = cloneResult(result)
+		}
+		r.mu.Unlock()
 	}
-	r.mu.Unlock()
 	return results
+}
+
+var (
+	ErrUnknownNetworkProfile        = errors.New("route evidence requires a known current WAN profile")
+	ErrNetworkProfileChanged        = errors.New("WAN profile changed before route evidence could be recorded")
+	ErrResultNetworkProfileMismatch = errors.New("route evidence belongs to another WAN profile")
+)
+
+// RecordRoutesForProfile publishes a batch only after the caller has verified
+// the profile captured before probing. Rows already bound to another profile
+// cannot be relabeled. Returned rows and stored history have independent copies.
+func (r *Runner) RecordRoutesForProfile(profile string, results []Result) ([]Result, error) {
+	if !systemprobe.ValidWANProfileID(profile) || r.Profile == nil {
+		return nil, ErrUnknownNetworkProfile
+	}
+	bound := make([]Result, len(results))
+	for i, result := range results {
+		if (result.NetworkProfileID != "" && result.NetworkProfileID != profile) ||
+			(result.EvidenceV2 != nil && result.EvidenceV2.NetworkProfile != "" && result.EvidenceV2.NetworkProfile != profile) {
+			return nil, ErrResultNetworkProfileMismatch
+		}
+		result = cloneResult(result)
+		result.NetworkProfileID = profile
+		if result.EvidenceV2 != nil {
+			result.EvidenceV2.NetworkProfile = profile
+		}
+		result.NormalizeEvidence()
+		bound[i] = result
+	}
+	// Do not hold the history mutex while acquiring a fresh system snapshot.
+	current := r.Profile()
+	if !systemprobe.ValidWANProfileID(current) {
+		return nil, ErrUnknownNetworkProfile
+	}
+	if current != profile {
+		return nil, ErrNetworkProfileChanged
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, result := range bound {
+		r.latest[resultKey(result)] = cloneResult(result)
+	}
+	return bound, nil
+}
+
+func cloneResult(result Result) Result {
+	result.RedirectChain = append([]string(nil), result.RedirectChain...)
+	if result.EvidenceV2 != nil {
+		copy := *result.EvidenceV2
+		copy.RedirectChain = append([]string(nil), copy.RedirectChain...)
+		result.EvidenceV2 = &copy
+	}
+	return result
 }
 
 // AssessComparisons converts raw probe rows into a user-facing control
@@ -460,9 +536,22 @@ func betterCandidate(left, right Result) bool {
 }
 
 func (r *Runner) Snapshot(cat catalog.Catalog) Snapshot {
+	profile := ""
+	if r.Profile != nil {
+		profile = r.Profile()
+	}
 	r.mu.RLock()
 	current := make([]Result, 0, len(r.latest))
 	for _, v := range r.latest {
+		v = cloneResult(v)
+		if r.Profile != nil && v.Route != "current" {
+			switch {
+			case !systemprobe.ValidWANProfileID(profile), !systemprobe.ValidWANProfileID(v.NetworkProfileID):
+				v.RouteProofError = "network-profile-unavailable"
+			case v.NetworkProfileID != profile:
+				v.RouteProofError = "network-profile-changed"
+			}
+		}
 		v.NormalizeEvidence()
 		current = append(current, v)
 	}
@@ -642,11 +731,21 @@ func AggregateScenarios(results []Result) []Result {
 		failed := []string{}
 		partial := []string{}
 		var representative *Result
+		profileSet := false
 		for _, row := range rows {
 			if !row.ScenarioNeeded && !allRequired {
 				continue
 			}
 			row.NormalizeEvidence()
+			if !profileSet {
+				aggregate.NetworkProfileID = row.NetworkProfileID
+				profileSet = true
+			} else if aggregate.NetworkProfileID != row.NetworkProfileID {
+				aggregate.RouteProofError = "network-profile-mismatch"
+			}
+			if row.RouteProofError != "" {
+				aggregate.RouteProofError = row.RouteProofError
+			}
 			if representative == nil || verdictSeverity(row.Verdict) > verdictSeverity(representative.Verdict) {
 				copy := row
 				representative = &copy

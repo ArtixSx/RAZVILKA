@@ -33,27 +33,30 @@ func (nfqws2ExecRunner) Run(ctx context.Context, name string, args ...string) ([
 }
 
 type NFQWS2Adapter struct {
-	ConfigPath    string
-	UserListPath  string
-	IPSetListPath string
-	InitPath      string
-	IPTablesSave  string
-	Runner        NFQWS2Runner
-	Configs       *engineconfig.Manager
-	HealthProbe   func(context.Context, string) error
-	Timeout       time.Duration
+	StateRoot            string
+	ConfigPath           string
+	UserListPath         string
+	IPSetListPath        string
+	InitPath             string
+	IPTablesSave         string
+	Runner               NFQWS2Runner
+	Configs              *engineconfig.Manager
+	HealthProbe          func(context.Context, string) error
+	Timeout              time.Duration
+	activationLeaseReady func() // Deterministic fault injection before the first global write.
 }
 
 type nfqws2Snapshot struct {
-	UserListExisted  bool   `json:"user_list_existed"`
-	UserList         []byte `json:"user_list,omitempty"`
-	IPSetListExisted bool   `json:"ipset_list_existed"`
-	IPSetList        []byte `json:"ipset_list,omitempty"`
-	WasRunning       bool   `json:"was_running"`
-	ConfigExisted    bool   `json:"config_existed"`
-	Config           []byte `json:"config,omitempty"`
-	ConfigDraft      bool   `json:"config_draft"`
-	StagedConfig     []byte `json:"staged_config,omitempty"`
+	Lease            *nfqws2Lease `json:"instance_lease,omitempty"`
+	UserListExisted  bool         `json:"user_list_existed"`
+	UserList         []byte       `json:"user_list,omitempty"`
+	IPSetListExisted bool         `json:"ipset_list_existed"`
+	IPSetList        []byte       `json:"ipset_list,omitempty"`
+	WasRunning       bool         `json:"was_running"`
+	ConfigExisted    bool         `json:"config_existed"`
+	Config           []byte       `json:"config,omitempty"`
+	ConfigDraft      bool         `json:"config_draft"`
+	StagedConfig     []byte       `json:"staged_config,omitempty"`
 }
 
 func NewNFQWS2Adapter() *NFQWS2Adapter {
@@ -69,7 +72,11 @@ func (*NFQWS2Adapter) ID() string { return "nfqws2" }
 func (a *NFQWS2Adapter) Snapshot(ctx context.Context, plan Plan, root string) error {
 	snapshot := nfqws2Snapshot{}
 	var err error
-	snapshot.Config, snapshot.ConfigExisted, err = optionalFile(a.ConfigPath)
+	snapshot.Lease, err = a.readLease()
+	if err != nil {
+		return preflightRefusalError{err}
+	}
+	snapshot.Config, snapshot.ConfigExisted, err = nfqws2Read(a.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("snapshot NFQWS2 config: %w", err)
 	}
@@ -83,11 +90,11 @@ func (a *NFQWS2Adapter) Snapshot(ctx context.Context, plan Plan, root string) er
 			snapshot.StagedConfig = []byte(content.Content)
 		}
 	}
-	snapshot.UserList, snapshot.UserListExisted, err = optionalFile(a.UserListPath)
+	snapshot.UserList, snapshot.UserListExisted, err = nfqws2Read(a.UserListPath)
 	if err != nil {
 		return fmt.Errorf("snapshot NFQWS2 user list: %w", err)
 	}
-	snapshot.IPSetList, snapshot.IPSetListExisted, err = optionalFile(a.IPSetListPath)
+	snapshot.IPSetList, snapshot.IPSetListExisted, err = nfqws2Read(a.IPSetListPath)
 	if err != nil {
 		return fmt.Errorf("snapshot NFQWS2 ipset list: %w", err)
 	}
@@ -142,10 +149,13 @@ func (a *NFQWS2Adapter) Stage(_ context.Context, plan Plan, root string) error {
 			}
 		}
 	}
-	if err := stageManagedFile(a.UserListPath, filepath.Join(root, "user.list.staged"), domains); err != nil {
-		return err
+	if err := a.stageOwnedList(0, filepath.Join(root, "user.list.staged"), domains); err != nil {
+		return preflightRefusalError{err}
 	}
-	return stageManagedFile(a.IPSetListPath, filepath.Join(root, "ipset.list.staged"), cidrs)
+	if err := a.stageOwnedList(1, filepath.Join(root, "ipset.list.staged"), cidrs); err != nil {
+		return preflightRefusalError{err}
+	}
+	return nil
 }
 
 func (a *NFQWS2Adapter) Validate(_ context.Context, _ Plan, root string) error {
@@ -172,6 +182,17 @@ func (a *NFQWS2Adapter) Validate(_ context.Context, _ Plan, root string) error {
 }
 
 func (a *NFQWS2Adapter) Activate(ctx context.Context, _ Plan, root string) error {
+	unlock, err := a.lockResources()
+	if err != nil {
+		return preflightRefusalError{err}
+	}
+	defer unlock()
+	if err := a.prepareActivationLease(root); err != nil {
+		return preflightRefusalError{err}
+	}
+	if a.activationLeaseReady != nil {
+		a.activationLeaseReady()
+	}
 	if err := installStaged(filepath.Join(root, "nfqws2.conf.staged"), a.ConfigPath); err != nil {
 		return fmt.Errorf("activate NFQWS2 config: %w", err)
 	}
@@ -199,6 +220,9 @@ func (a *NFQWS2Adapter) Activate(ctx context.Context, _ Plan, root string) error
 }
 
 func (a *NFQWS2Adapter) Commit(_ context.Context, _ Plan, root string) error {
+	if _, err := a.verifyOwnedLists(false); err != nil {
+		return err
+	}
 	if a.Configs == nil {
 		return nil
 	}
@@ -213,6 +237,9 @@ func (a *NFQWS2Adapter) Commit(_ context.Context, _ Plan, root string) error {
 }
 
 func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, _ string) error {
+	if _, err := a.verifyOwnedLists(false); err != nil {
+		return err
+	}
 	output, err := a.run(ctx, a.InitPath, "status")
 	if err != nil || !runningOutput(string(output)) {
 		return fmt.Errorf("NFQWS2 status is not running: %s", shortOutput(output, err))
@@ -247,6 +274,17 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, _ string) error {
 }
 
 func (a *NFQWS2Adapter) Reconcile(ctx context.Context, plan Plan) error {
+	if _, err := a.verifyOwnedLists(false); err != nil {
+		return err
+	}
+	unlock, err := a.lockResources()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if _, err := a.verifyOwnedLists(false); err != nil {
+		return err
+	}
 	output, err := a.run(ctx, a.InitPath, "status")
 	if err != nil || !runningOutput(string(output)) {
 		if output, err = a.run(ctx, a.InitPath, "restart"); err != nil {
@@ -257,10 +295,36 @@ func (a *NFQWS2Adapter) Reconcile(ctx context.Context, plan Plan) error {
 }
 
 func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
-	changed := false
-	for _, path := range []string{a.UserListPath, a.IPSetListPath} {
-		data, exists, err := optionalFile(path)
+	lease, err := a.readLease()
+	if err != nil || lease == nil {
+		return err // A generic marker or an interface name grants no ownership.
+	}
+	unlock, err := a.lockResources()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	lease, err = a.readLease()
+	if err != nil || lease == nil {
+		return err
+	}
+	if err := a.verifyOwnedRuntime(lease, true); err != nil {
+		return err
+	}
+	type removal struct {
+		path string
+		data []byte
+		mode os.FileMode
+	}
+	removals := []removal{}
+	// Validate every shared resource before the first write. Keep the lease
+	// until reload succeeds so interrupted cleanup can safely be retried.
+	for index, path := range []string{a.UserListPath, a.IPSetListPath} {
+		data, exists, err := nfqws2Read(path)
 		if err != nil {
+			return err
+		}
+		if err := a.checkListOwnership(lease, index, data, true); err != nil {
 			return err
 		}
 		if !exists {
@@ -277,26 +341,39 @@ func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
 		if info, statErr := os.Stat(path); statErr == nil {
 			mode = info.Mode().Perm()
 		}
-		if err := writeAtomic(path, []byte(cleaned), mode); err != nil {
-			return err
-		}
-		changed = true
-	}
-	if !changed {
-		return nil
+		removals = append(removals, removal{path, []byte(cleaned), mode})
 	}
 	if !regularFile(a.InitPath) {
-		return errors.New("NFQWS2 managed lists were cleaned but init script is unavailable for reload")
+		return errors.New("NFQWS2 owned cleanup requires its init script for reload")
+	}
+	for _, removal := range removals {
+		if err := writeAtomic(removal.path, removal.data, removal.mode); err != nil {
+			return err
+		}
 	}
 	if output, err := a.run(ctx, a.InitPath, "restart"); err != nil {
 		return fmt.Errorf("reload NFQWS2 after managed-list cleanup: %s", shortOutput(output, err))
 	}
-	return nil
+	return a.writeLease(nil)
 }
 
 func (a *NFQWS2Adapter) Rollback(ctx context.Context, _ Plan, root string) error {
 	snapshot, err := readNFQWS2Snapshot(root)
 	if err != nil {
+		return err
+	}
+	lease, err := a.readLease()
+	transaction, pathErr := filepath.Abs(root)
+	if err != nil || pathErr != nil || lease == nil || lease.Transaction != transaction {
+		return errors.Join(err, pathErr)
+	}
+	unlock, err := a.lockResources()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	owned, err := a.mayRollback(root, snapshot)
+	if err != nil || !owned {
 		return err
 	}
 	if err := restoreOptional(a.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil {
@@ -324,7 +401,7 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, _ Plan, root string) error
 			return fmt.Errorf("restore NFQWS2 config draft: %w", err)
 		}
 	}
-	return nil
+	return a.writeLease(snapshot.Lease)
 }
 
 func readNFQWS2Snapshot(root string) (nfqws2Snapshot, error) {

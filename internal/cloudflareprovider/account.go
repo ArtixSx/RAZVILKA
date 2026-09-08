@@ -1,6 +1,6 @@
 // Package cloudflareprovider owns passive imported snapshots and locally keyed
-// registration candidates. It has no live registration adapter and never
-// starts runtimes or changes routes by itself.
+// registration candidates, with an explicit bounded consumer registration
+// adapter. It never starts runtimes or changes routes by itself.
 package cloudflareprovider
 
 import (

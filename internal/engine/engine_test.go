@@ -2,6 +2,8 @@ package engine
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -21,6 +23,58 @@ func TestProcessListHasExactName(t *testing.T) {
 	}
 	if !processListHasName("16 root [nfqws2]\n", "nfqws2") {
 		t.Fatal("kernel-style process name was not detected")
+	}
+}
+
+func TestProxyDiagnosticCommandsDoNotCountAsRunning(t *testing.T) {
+	for _, name := range []string{"sing-box", "xray"} {
+		for _, command := range []string{"version", "--version", "-v", "check", "format", "help"} {
+			t.Run(name+"/"+command, func(t *testing.T) {
+				root := t.TempDir()
+				pid := filepath.Join(root, "123")
+				if err := os.Mkdir(pid, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(pid, "comm"), []byte(name+"\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(pid, "cmdline"), []byte("/opt/bin/"+name+"\x00"+command+"\x00"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if processRunningProcAt(root, name) {
+					t.Fatal("diagnostic comm/argv was reported as an active runtime")
+				}
+				if processListHasName("PID USER COMMAND\n123 root /opt/bin/"+name+" "+command+"\n", name) {
+					t.Fatal("ps fallback reported the diagnostic as an active runtime")
+				}
+				// A real daemon is recognized even when its configuration argument
+				// happens to use a word that is also a diagnostic command.
+				if err := os.WriteFile(filepath.Join(pid, "cmdline"), []byte("/opt/bin/"+name+"\x00run\x00-c\x00version\x00"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if !processRunningProcAt(root, name) || !processListHasName("PID USER COMMAND\n123 root /opt/bin/"+name+" run -c version\n", name) {
+					t.Fatal("real runtime was not recognized")
+				}
+			})
+		}
+	}
+}
+
+func TestProxyInitStatusCannotOverrideMissingRuntime(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("init scripts are Unix executables")
+	}
+	path := filepath.Join(t.TempDir(), "init-status")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf 'running\\n'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if !initRunning(path) {
+		t.Fatal("fixture must reproduce an init status false positive")
+	}
+	for _, name := range []string{"sing-box", "xray"} {
+		if detectSpec(specification{id: name, initScripts: []string{path}}).Running {
+			t.Fatalf("%s init status overrode absent process evidence", name)
+		}
 	}
 }
 

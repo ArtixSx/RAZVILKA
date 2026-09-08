@@ -82,12 +82,25 @@ type ScanAttempt struct {
 	Service          evidence.ProbeEvidence `json:"service"`
 	ConfirmedMTU     int                    `json:"confirmed_mtu,omitempty"`
 	CleanupConfirmed bool                   `json:"cleanup_confirmed"`
+	Failure          *ScanFailure           `json:"failure,omitempty"`
 }
 
-type AttemptEvaluation struct {
-	Verified   bool   `json:"verified"`
+// ScanFailure contains fixed diagnostic codes, never raw process output,
+// configuration lines, endpoint errors or credentials.
+type ScanFailure struct {
 	Stage      string `json:"stage"`
 	ReasonCode string `json:"reason_code"`
+	HTTPStatus int    `json:"http_status,omitempty"`
+	SystemCode string `json:"system_code,omitempty"`
+}
+
+func (*ScanFailure) Error() string { return "Cloudflare isolated scan attempt failed" }
+
+type AttemptEvaluation struct {
+	Verified   bool         `json:"verified"`
+	Stage      string       `json:"stage"`
+	ReasonCode string       `json:"reason_code"`
+	Diagnostic *ScanFailure `json:"diagnostic,omitempty"`
 }
 
 // EvaluateScanAttempt accepts no declared status. It derives the result from
@@ -100,6 +113,9 @@ func EvaluateScanAttempt(attempt ScanAttempt, now time.Time, ttl time.Duration) 
 	candidate := attempt.Candidate
 	if !candidate.valid || candidate.Verification != "built-unverified" || candidate.RoutePathID == "" || candidate.RoutePathID != candidateRoutePathID(candidate) {
 		return fail("candidate", "candidate-identity-invalid")
+	}
+	if attempt.Failure != nil {
+		return AttemptEvaluation{Stage: attempt.Failure.Stage, ReasonCode: attempt.Failure.ReasonCode, Diagnostic: attempt.Failure}
 	}
 	if ttl <= 0 || attempt.StartedAt.IsZero() || attempt.FinishedAt.Before(attempt.StartedAt) || attempt.FinishedAt.After(now.Add(time.Minute)) || now.Sub(attempt.FinishedAt) > ttl {
 		return fail("freshness", "attempt-stale-or-invalid")
@@ -154,7 +170,7 @@ type ScanReport struct {
 	Passes      int                 `json:"passes"`
 	Attempts    int                 `json:"attempts"`
 	Score       int                 `json:"score"`
-	ValidUntil  time.Time           `json:"valid_until,omitempty"`
+	ValidUntil  time.Time           `json:"valid_until,omitzero"`
 	Results     []AttemptEvaluation `json:"results"`
 	ReasonCode  string              `json:"reason_code"`
 	evaluatedAt time.Time
@@ -190,7 +206,6 @@ func EvaluateScanReport(attempts []ScanAttempt, now time.Time, ttl time.Duration
 		}
 	}
 	report.Score = report.Passes * 100 / len(attempts)
-	report.ValidUntil = oldestFinish.Add(ttl)
 	switch {
 	case identityMismatch:
 		report.ReasonCode = "candidate-identity-changed"
@@ -202,6 +217,7 @@ func EvaluateScanReport(attempts []ScanAttempt, now time.Time, ttl time.Duration
 		report.ReasonCode = "insufficient-confirmed-attempts"
 	default:
 		report.Verified = true
+		report.ValidUntil = oldestFinish.Add(ttl)
 		report.ReasonCode = "verified"
 	}
 	return report

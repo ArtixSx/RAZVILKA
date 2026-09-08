@@ -9,9 +9,12 @@ import (
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nativeenrollment"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
+	"github.com/ArtixSx/razvilka/internal/warp"
 )
 
 // Stores are trusted live instances, not selected by the imported payload.
@@ -24,6 +27,8 @@ type Stores struct {
 	Engines  *engineconfig.Manager
 	Provider *cloudflareprovider.Store
 	Nodes    *nodestore.Store
+	Warp     *warp.Manager
+	Feeds    *providerfeed.Manager
 }
 
 func (Stores) String() string   { return "[private restore stores]" }
@@ -48,6 +53,12 @@ func (c *Coordinator) RestoreOnline(ctx context.Context, payload privatebackup.P
 		return restorejournal.Clean, restorejournal.ErrAborted
 	}
 	if payload.NodeSnapshot != nil && (stores.Nodes == nil || c.layout.NodeRoot == "") {
+		return restorejournal.Clean, restorejournal.ErrInvalid
+	}
+	if payload.NativeEnrollment != nil && (stores.Warp == nil || c.layout.WarpRoot == "") {
+		return restorejournal.Clean, restorejournal.ErrInvalid
+	}
+	if payload.SubscriptionSnapshot != nil && (stores.Feeds == nil || c.layout.FeedRoot == "") {
 		return restorejournal.Clean, restorejournal.ErrInvalid
 	}
 	refs := make([]engineconfig.DraftRef, 0, len(payload.EngineFiles))
@@ -160,6 +171,28 @@ func (c *Coordinator) RestoreOnline(ctx context.Context, payload privatebackup.P
 		closers = append(closers, provider.Close)
 		want, bindingErr = cloudflareprovider.RestoreBinding(c.layout.ProviderRoot)
 		if err := bind("provider_cloudflare", provider, provider.Binding(), want, bindingErr); err != nil {
+			return restorejournal.Clean, err
+		}
+	}
+	if payload.NativeEnrollment != nil {
+		native, err := stores.Warp.BeginNativeRestore(ctx)
+		if err != nil {
+			return restorejournal.Clean, err
+		}
+		closers = append(closers, native.Close)
+		want, bindingErr = nativeenrollment.Binding(c.layout.WarpRoot)
+		if err := bind("native_warp", native, native.Binding(), want, bindingErr); err != nil {
+			return restorejournal.Clean, err
+		}
+	}
+	if payload.SubscriptionSnapshot != nil {
+		feeds, err := stores.Feeds.BeginRestore(ctx)
+		if err != nil {
+			return restorejournal.Clean, err
+		}
+		closers = append(closers, feeds.Close)
+		want, bindingErr = providerfeed.RestoreBinding(c.layout.FeedRoot)
+		if err := bind("subscriptions", feeds, feeds.Binding(), want, bindingErr); err != nil {
 			return restorejournal.Clean, err
 		}
 	}

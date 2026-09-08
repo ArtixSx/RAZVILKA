@@ -23,6 +23,8 @@ type Layout struct {
 	StageRoot      string
 	ProviderRoot   string
 	NodeRoot       string // Optional; omitted deployments retain the v1 journal binding.
+	WarpRoot       string // Optional native enrollment image; trusted deployment path.
+	FeedRoot       string // Optional private subscriptions image.
 	JournalRoot    string
 }
 
@@ -52,17 +54,25 @@ func normalizeLayout(in Layout) (Layout, string, error) {
 		}
 		*p = abs
 	}
-	if out.NodeRoot != "" {
-		abs, err := filepath.Abs(out.NodeRoot)
-		if err != nil || strings.TrimSpace(out.NodeRoot) == "" || abs == filepath.VolumeName(abs)+string(filepath.Separator) {
-			return Layout{}, "", restorejournal.ErrInvalid
+	for _, root := range []*string{&out.NodeRoot, &out.WarpRoot, &out.FeedRoot} {
+		if *root != "" {
+			abs, err := filepath.Abs(*root)
+			if err != nil || strings.TrimSpace(*root) == "" || abs == filepath.VolumeName(abs)+string(filepath.Separator) {
+				return Layout{}, "", restorejournal.ErrInvalid
+			}
+			*root = abs
 		}
-		out.NodeRoot = abs
 	}
 	files := []string{out.Config, out.CustomServices, out.Devices}
 	dirs := []string{out.StageRoot, out.ProviderRoot, out.JournalRoot}
 	if out.NodeRoot != "" {
 		dirs = append(dirs, out.NodeRoot)
+	}
+	if out.WarpRoot != "" {
+		dirs = append(dirs, out.WarpRoot)
+	}
+	if out.FeedRoot != "" {
+		dirs = append(dirs, out.FeedRoot)
 	}
 	for i, file := range files {
 		for _, other := range files[i+1:] {
@@ -88,6 +98,12 @@ func normalizeLayout(in Layout) (Layout, string, error) {
 	bindings := []string{"private-draft-coordinator-v1", canonical(out.Config), canonical(out.CustomServices), canonical(out.Devices), canonical(out.StageRoot), canonical(out.ProviderRoot), canonical(out.JournalRoot)}
 	if out.NodeRoot != "" {
 		bindings = append(bindings, "nodestore-schema-1", canonical(out.NodeRoot))
+	}
+	if out.WarpRoot != "" {
+		bindings = append(bindings, "native-enrollment-schema-1", canonical(out.WarpRoot))
+	}
+	if out.FeedRoot != "" {
+		bindings = append(bindings, "subscriptions-schema-1", canonical(out.FeedRoot))
 	}
 	for _, spec := range engineconfig.Specs() {
 		for _, file := range spec.Files {

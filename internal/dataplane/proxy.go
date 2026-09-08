@@ -36,11 +36,16 @@ type ProxyTunnelAdapter struct {
 	Probe            func(context.Context, string) error
 	SOCKSProbe       func(context.Context, string) error
 	CanaryProbe      func(context.Context, string, string) error
+	ServiceIPProbe   func(context.Context, string, string, netip.Addr) error
 	CanaryTraceProbe func(context.Context, string) (usqueCanaryEvidence, error)
 	EngineBin        string
 	SidecarBin       string
 	PackageInit      string
 	IP               string
+	IPTables         string
+	IP6Tables        string
+	// LANBridgeMembers returns confirmed Linux bridge ports; nil uses sysfs.
+	LANBridgeMembers func(context.Context, string) ([]string, error)
 	SOCKSPort        int
 	Interface        string
 	TunnelCIDR       string
@@ -51,8 +56,9 @@ type ProxyTunnelAdapter struct {
 	// NodeRoutes is set only for the Sing-box adapter. It resolves exact
 	// registry IDs to transient private material after policy destinations are
 	// known. The callback result is never stored in the public plan or API.
-	NodeRoutes     NodeRouteMaterializer
-	NetworkProfile func() string
+	NodeRoutes   NodeRouteMaterializer
+	FreshProfile func(context.Context) (string, error)
+	bootIdentity func() (string, error)
 }
 
 type NodeRouteRequest struct {
@@ -100,13 +106,15 @@ type proxySnapshot struct {
 	EvidenceExists      bool        `json:"evidence_exists,omitempty"`
 	Policy              PolicyState `json:"policy"`
 	PolicyExists        bool        `json:"policy_exists"`
+	PolicyWasActive     bool        `json:"policy_was_active"`
+	BootID              string      `json:"boot_id,omitempty"`
 	EngineWasRunning    bool        `json:"engine_was_running"`
 	SidecarWasRunning   bool        `json:"sidecar_was_running"`
 	PackageWasRunning   bool        `json:"package_was_running,omitempty"`
 }
 
 func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot string) (*ProxyTunnelAdapter, error) {
-	a := &ProxyTunnelAdapter{EngineID: id, Configs: configs, StateRoot: filepath.Join(stateRoot, id), Runner: nfqws2ExecRunner{}, Processes: OSProcessController{}, SOCKSProbe: probeSOCKS5, UsqueConfig: "/opt/etc/usque/usque.conf"}
+	a := &ProxyTunnelAdapter{EngineID: id, Configs: configs, StateRoot: filepath.Join(stateRoot, id), Runner: nfqws2ExecRunner{}, Processes: OSProcessController{}, SOCKSProbe: probeSOCKS5, UsqueConfig: "/opt/etc/usque/usque.conf", FreshProfile: observeNetworkProfile}
 	switch id {
 	case "usque":
 		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18080, "rz-usque", "172.31.20.1/30", 202, 20000
@@ -125,9 +133,23 @@ func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot s
 
 func (a *ProxyTunnelAdapter) ID() string { return a.EngineID }
 
+func (a *ProxyTunnelAdapter) checkPlanNetwork(ctx context.Context, plan Plan) error {
+	return a.checkRouteNetwork(ctx, plan.RoutePlanFor(a.ID()))
+}
+
+func (a *ProxyTunnelAdapter) checkRouteNetwork(ctx context.Context, plan RoutePlan) error {
+	if a.ID() != "sing-box" || !plan.RequiresNetworkProof() {
+		return nil
+	}
+	return verifyNetworkProfile(ctx, plan.NetworkProfileID, a.FreshProfile)
+}
+
 func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root string) error {
 	if err := a.valid(); err != nil {
 		return err
+	}
+	if a.ID() == "sing-box" && plan.RequiresNetworkProof() && planUsesEngineDraft(plan, a.ID(), "main") {
+		return errors.New("node-scoped Sing-box routes cannot consume the general engine draft")
 	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
@@ -174,11 +196,25 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists, Transport: transport, TransportExists: transportExists, Evidence: evidence, EvidenceExists: evidenceExists,
 		Policy: policy, PolicyExists: policyExists, EngineWasRunning: a.Processes.Running(a.engineProcess()), SidecarWasRunning: a.Processes.Running(a.sidecarProcess()), PackageWasRunning: packageWasRunning,
 	}
+	if boot, bootErr := a.currentBootIdentity(); bootErr == nil {
+		snapshot.BootID = boot
+		// A policy file survives reboot. Only the owned running pair and its
+		// current kernel evidence can grant authority to restore that policy.
+		if policyExists && snapshot.EngineWasRunning && snapshot.SidecarWasRunning && verifyPolicyEvidence(ctx, a.Runner, a.ip(), policy) == nil {
+			snapshot.PolicyWasActive = policy.Forwarding == nil || a.verifyForwarding(ctx, policy) == nil
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	data, _ := json.MarshalIndent(snapshot, "", "  ")
 	return writeAtomic(filepath.Join(root, "snapshot.json"), data, 0o600)
 }
 
 func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) error {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return err
+	}
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
 		return err
@@ -201,7 +237,7 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 			}
 		}
 		if len(scoped) > 0 {
-			if unscoped || a.NodeRoutes == nil || a.NetworkProfile == nil {
+			if unscoped || a.NodeRoutes == nil {
 				return errors.New("node-scoped Sing-box route materializer is unavailable")
 			}
 			requests := make([]NodeRouteRequest, 0, len(scoped))
@@ -212,7 +248,13 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 				}
 				requests = append(requests, NodeRouteRequest{ServiceID: route.ServiceID, NodeID: strings.TrimPrefix(route.Resolved, "sing-box:"), Domains: append([]string(nil), route.Domains...), Destinations: destinations})
 			}
-			material, materialErr := a.NodeRoutes(ctx, requests, a.NetworkProfile(), time.Now().UTC())
+			if err := a.checkPlanNetwork(ctx, plan); err != nil {
+				return err
+			}
+			material, materialErr := a.NodeRoutes(ctx, requests, plan.NetworkProfileID, time.Now().UTC())
+			if err := a.checkPlanNetwork(ctx, plan); err != nil {
+				return err
+			}
 			if materialErr != nil || len(material.Config) == 0 {
 				return errors.New("node-scoped Sing-box route lost its exact registry proof")
 			}
@@ -241,13 +283,19 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	}
 	schema, err := a.detectSidecarSchema(ctx)
 	if err != nil {
-		return err
+		return preflightRefusalError{err}
 	}
 	sidecar, err := buildSOCKSTunnelConfigForSchema(a.Interface, a.TunnelCIDR, a.SOCKSPort, schema)
 	if err != nil {
 		return err
 	}
 	policy := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
+	if err := a.prepareForwarding(ctx, &policy); err != nil {
+		return preflightRefusalError{err}
+	}
+	if err := a.preflightForwarding(ctx, policy); err != nil {
+		return preflightRefusalError{err}
+	}
 	policyData, _ := json.MarshalIndent(policy, "", "  ")
 	for _, item := range []struct {
 		path string
@@ -261,7 +309,7 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 			return err
 		}
 	}
-	return nil
+	return a.checkPlanNetwork(ctx, plan)
 }
 
 func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) error {
@@ -270,8 +318,12 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 	}
 	engineCandidate := filepath.Join(root, "engine.staged.json")
 	sidecarCandidate := filepath.Join(root, "sidecar.staged.json")
-	if _, err := a.readStagedPolicy(root); err != nil {
+	state, err := a.readStagedPolicy(root)
+	if err != nil {
 		return err
+	}
+	if err := a.preflightForwarding(ctx, state); err != nil {
+		return preflightRefusalError{err}
 	}
 	if a.engineBinary() == "" {
 		return fmt.Errorf("%s binary is not installed", a.ID())
@@ -299,7 +351,15 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 // Canary starts only the staged proxy engine on an isolated loopback SOCKS
 // port. It does not stop the working process, create a TUN interface or touch
 // policy routing. The candidate is always removed before Activate can run.
-func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root string) error {
+func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root string) (retErr error) {
+	if err := a.checkRouteNetwork(ctx, plan); err != nil {
+		return err
+	}
+	defer func() {
+		if retErr == nil {
+			retErr = a.checkRouteNetwork(ctx, plan)
+		}
+	}()
 	if err := a.valid(); err != nil {
 		return err
 	}
@@ -414,6 +474,11 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 			}
 			return evidence, fmt.Errorf("candidate probe for %s failed: %w", route.ServiceName, err)
 		}
+		if plan.RequiresNetworkProof() {
+			if err := a.probeNodeServiceIP(ctx, route.ProbeURL, address); err != nil {
+				return evidence, err
+			}
+		}
 		evidence.ConfirmedRoutes = append(evidence.ConfirmedRoutes, route.ServiceName)
 	}
 	if !probed && a.ID() != "usque" {
@@ -427,7 +492,10 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 	return evidence, nil
 }
 
-func (a *ProxyTunnelAdapter) Activate(ctx context.Context, _ Plan, root string) error {
+func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root string) error {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return preflightRefusalError{err}
+	}
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
 		return err
@@ -436,12 +504,20 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, _ Plan, root string) 
 	if err != nil {
 		return err
 	}
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return preflightRefusalError{err}
+	}
+	if err := a.preflightForwarding(ctx, desired); err != nil {
+		return preflightRefusalError{err}
+	}
 	if old, exists, err := a.loadPolicy(); err != nil {
 		return err
 	} else if exists {
-		if err := removePolicy(ctx, a.Runner, a.ip(), old); err != nil {
+		if err := a.removeOwnedPolicy(ctx, old); err != nil {
 			return fmt.Errorf("remove previous %s policy: %w", a.ID(), err)
 		}
+	} else if err := a.removeForwarding(ctx); err != nil {
+		return err
 	}
 	if err := a.stopOwned(ctx); err != nil {
 		return err
@@ -484,10 +560,13 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, _ Plan, root string) 
 	if err := a.waitForInterface(ctx); err != nil {
 		return err
 	}
-	if err := applyPolicy(ctx, a.Runner, a.ip(), desired); err != nil {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
-	return nil
+	if err := a.applyOwnedPolicy(ctx, desired); err != nil {
+		return err
+	}
+	return a.checkPlanNetwork(ctx, plan)
 }
 
 func (a *ProxyTunnelAdapter) Health(ctx context.Context, plan Plan, root string) error {
@@ -499,27 +578,44 @@ func (a *ProxyTunnelAdapter) Health(ctx context.Context, plan Plan, root string)
 }
 
 func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state PolicyState) error {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return err
+	}
 	if !a.Processes.Running(a.engineProcess()) || !a.Processes.Running(a.sidecarProcess()) {
 		return errors.New("managed proxy or TUN sidecar is not running")
 	}
 	if err := a.waitForSOCKS(ctx); err != nil {
 		return err
 	}
+	if err := a.verifyForwarding(ctx, state); err != nil {
+		return err
+	}
 	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), state); err != nil {
 		return err
 	}
 	for _, route := range plan.Routes {
-		if adapterID(route.Resolved) != a.ID() || strings.TrimSpace(route.ProbeURL) == "" || len(route.Sources) > 0 {
+		if adapterID(route.Resolved) != a.ID() || strings.TrimSpace(route.ProbeURL) == "" {
+			continue
+		}
+		if (RoutePlan{Routes: []Route{route}}).RequiresNetworkProof() {
+			if err := a.probeNodeServiceIP(ctx, route.ProbeURL, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
+				return err
+			}
+		}
+		if len(route.Sources) > 0 {
 			continue
 		}
 		if err := a.Probe(ctx, route.ProbeURL); err != nil {
 			return fmt.Errorf("%s probe for %s failed: %w", a.ID(), route.ServiceName, err)
 		}
 	}
-	return nil
+	return a.checkPlanNetwork(ctx, plan)
 }
 
-func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) error {
+func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr error) {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return err
+	}
 	state, exists, err := a.loadPolicy()
 	if err != nil {
 		return err
@@ -527,6 +623,14 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) error {
 	if !exists || !regularFile(a.engineConfigPath()) || !regularFile(a.sidecarConfigPath()) {
 		return fmt.Errorf("committed %s runtime state is missing", a.ID())
 	}
+	restarted := false
+	defer func() {
+		if restarted && (errors.Is(retErr, ErrNetworkChanged) || ctx.Err() != nil) {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.timeout())
+			defer cancel()
+			retErr = errors.Join(retErr, ctx.Err(), a.removeOwnedPolicy(cleanupCtx, state), a.stopOwned(cleanupCtx))
+		}
+	}()
 	// usque-keenetic starts its own nativetun process during installation and
 	// boot. RAZVILKA owns a separate loopback SOCKS process and must not leave
 	// both runtimes competing for the same Cloudflare session.
@@ -536,7 +640,13 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) error {
 	if err := a.healthState(ctx, plan, state); err == nil {
 		return nil
 	}
-	_ = removePolicy(ctx, a.Runner, a.ip(), state)
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return err
+	}
+	restarted = true
+	if err := a.removeOwnedPolicy(ctx, state); err != nil {
+		return err
+	}
 	if err := a.stopOwned(ctx); err != nil {
 		return err
 	}
@@ -555,12 +665,15 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) error {
 		_ = a.stopOwned(ctx)
 		return err
 	}
-	if err := applyPolicy(ctx, a.Runner, a.ip(), state); err != nil {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return err
+	}
+	if err := a.applyOwnedPolicy(ctx, state); err != nil {
 		_ = a.stopOwned(ctx)
 		return err
 	}
 	if err := a.healthState(ctx, plan, state); err != nil {
-		_ = removePolicy(ctx, a.Runner, a.ip(), state)
+		_ = a.removeOwnedPolicy(ctx, state)
 		_ = a.stopOwned(ctx)
 		return err
 	}
@@ -568,6 +681,9 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) error {
 }
 
 func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool, error) {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return false, err
+	}
 	oldState, exists, err := a.loadPolicy()
 	if err != nil || !exists {
 		return false, err
@@ -589,35 +705,48 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 		return false, err
 	}
 	newState := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
-	if samePolicy(oldState, newState) {
-		return false, nil
-	}
-	if err := replacePolicy(ctx, a.Runner, a.ip(), oldState, newState); err != nil {
+	if err := a.prepareForwarding(ctx, &newState); err != nil {
 		return false, err
+	}
+	if samePolicy(oldState, newState) {
+		return false, errors.Join(a.checkPlanNetwork(ctx, plan), a.verifyForwarding(ctx, newState))
+	}
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return false, err
+	}
+	if err := a.replaceOwnedPolicy(ctx, oldState, newState); err != nil {
+		return false, err
+	}
+	rollback := func(cause error) error {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.timeout())
+		defer cancel()
+		oldData, _ := json.MarshalIndent(oldState, "", "  ")
+		return errors.Join(cause, a.replaceOwnedPolicy(rollbackCtx, newState, oldState), writeAtomic(a.policyPath(), oldData, 0o600))
 	}
 	if err := a.healthState(ctx, plan, newState); err != nil {
-		_ = replacePolicy(ctx, a.Runner, a.ip(), newState, oldState)
-		return false, err
+		return false, rollback(err)
 	}
 	data, _ := json.MarshalIndent(newState, "", "  ")
 	if err := writeAtomic(a.policyPath(), data, 0o600); err != nil {
-		_ = replacePolicy(ctx, a.Runner, a.ip(), newState, oldState)
-		return false, err
+		return false, rollback(err)
+	}
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return false, rollback(err)
 	}
 	return true, nil
 }
 
 func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
-	owned := regularFile(a.policyPath()) || regularFile(a.engineConfigPath()) || regularFile(a.sidecarConfigPath()) || regularFile(a.transportPath()) || regularFile(a.engineProcess().PIDPath) || regularFile(a.sidecarProcess().PIDPath)
+	owned := regularFile(a.forwardingPath()) || regularFile(a.policyPath()) || regularFile(a.engineConfigPath()) || regularFile(a.sidecarConfigPath()) || regularFile(a.transportPath()) || regularFile(a.engineProcess().PIDPath) || regularFile(a.sidecarProcess().PIDPath)
 	if !owned {
 		return nil
 	}
-	var firstErr error
+	firstErr := a.removeForwarding(ctx)
 	if state, exists, err := a.loadPolicy(); err != nil {
-		firstErr = err
+		firstErr = errors.Join(firstErr, err)
 	} else if exists {
 		if err := removePolicy(ctx, a.Runner, a.ip(), state); err != nil {
-			firstErr = err
+			firstErr = errors.Join(firstErr, err)
 		}
 	}
 	if err := a.stopOwned(ctx); err != nil && firstErr == nil {
@@ -640,7 +769,10 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 	return firstErr
 }
 
-func (a *ProxyTunnelAdapter) Commit(_ context.Context, _ Plan, root string) error {
+func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string) error {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return err
+	}
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
 		return err
@@ -655,6 +787,9 @@ func (a *ProxyTunnelAdapter) Commit(_ context.Context, _ Plan, root string) erro
 	}
 	state, err := a.readStagedPolicy(root)
 	if err != nil {
+		return err
+	}
+	if err := a.verifyForwarding(ctx, state); err != nil {
 		return err
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
@@ -681,7 +816,7 @@ func (a *ProxyTunnelAdapter) Commit(_ context.Context, _ Plan, root string) erro
 			return err
 		}
 	}
-	return nil
+	return a.checkPlanNetwork(ctx, plan)
 }
 
 func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) error {
@@ -689,10 +824,12 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 	if err != nil {
 		return err
 	}
-	var firstErr error
+	boot, bootErr := a.currentBootIdentity()
+	sameBoot := bootErr == nil && snapshot.BootID != "" && snapshot.BootID == boot
+	firstErr := a.removeForwarding(ctx)
 	if staged, readErr := a.readStagedPolicy(root); readErr == nil {
 		if err := removePolicy(ctx, a.Runner, a.ip(), staged); err != nil {
-			firstErr = err
+			firstErr = errors.Join(firstErr, err)
 		}
 	}
 	if err := a.stopOwned(ctx); err != nil && firstErr == nil {
@@ -710,19 +847,21 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 	if err := restoreOptional(a.evidencePath(), snapshot.Evidence, snapshot.EvidenceExists); err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if snapshot.EngineWasRunning {
+	if sameBoot && snapshot.EngineWasRunning {
 		if err := a.Processes.Start(ctx, a.engineProcess()); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
-	if snapshot.SidecarWasRunning {
+	if sameBoot && snapshot.SidecarWasRunning {
 		if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
 	if snapshot.PolicyExists {
-		if err := applyPolicy(ctx, a.Runner, a.ip(), snapshot.Policy); err != nil && firstErr == nil {
-			firstErr = err
+		if sameBoot && snapshot.PolicyWasActive && snapshot.EngineWasRunning && snapshot.SidecarWasRunning {
+			if err := a.restorePreviousPolicy(ctx, snapshot.Policy); err != nil && firstErr == nil {
+				firstErr = err
+			}
 		}
 		data, _ := json.MarshalIndent(snapshot.Policy, "", "  ")
 		_ = os.MkdirAll(a.StateRoot, 0o700)
@@ -730,20 +869,40 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 	} else {
 		_ = os.Remove(a.policyPath())
 	}
-	if err := restoreOptional(snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil && firstErr == nil {
-		firstErr = err
-	}
 	if snapshot.ConfigDraft {
+		if err := restoreOptional(snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil && firstErr == nil {
+			firstErr = err
+		}
 		if _, err := a.Configs.Stage(a.ID(), "main", string(snapshot.StagedConfig)); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
-	if snapshot.PackageWasRunning {
+	if sameBoot && snapshot.PackageWasRunning {
 		if err := a.startPackageRuntime(ctx); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
 	return firstErr
+}
+
+func (a *ProxyTunnelAdapter) currentBootIdentity() (string, error) {
+	if a.bootIdentity != nil {
+		return a.bootIdentity()
+	}
+	file, err := os.Open("/proc/sys/kernel/random/boot_id")
+	if err != nil {
+		return "", errors.New("kernel boot identity is unavailable")
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, 128))
+	if err != nil || len(data) >= 128 {
+		return "", errors.New("kernel boot identity is unavailable")
+	}
+	value := strings.TrimSpace(string(data))
+	if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`).MatchString(value) {
+		return "", errors.New("kernel boot identity is invalid")
+	}
+	return value, nil
 }
 
 func (a *ProxyTunnelAdapter) valid() error {
@@ -1162,7 +1321,33 @@ func (a *ProxyTunnelAdapter) detectSidecarSchema(ctx context.Context) (singBoxSi
 	if major < 1 || (major == 1 && minor < 8) {
 		return singBoxSidecarSchema{}, fmt.Errorf("sing-box %d.%d is too old for the managed TUN sidecar; version 1.8 or newer is required", major, minor)
 	}
+	// `sing-box check` constructs the inbound without starting its TCP stack.
+	// A build without gVisor can pass that check and fail only after creating
+	// the live TUN. Require the exact build capability while staging instead.
+	if !singBoxHasBuildTag(string(output), "with_gvisor") {
+		return singBoxSidecarSchema{}, errors.New("managed LAN TUN requires sing-box built with with_gvisor; install a gVisor-enabled sing-box build before applying this route")
+	}
 	return singBoxSidecarSchema{modernAddress: major > 1 || minor >= 10, dnsMode: major > 1 || minor >= 14}, nil
+}
+
+func singBoxHasBuildTag(output, required string) bool {
+	seen, matched := false, false
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "Tags:") {
+			continue
+		}
+		if seen {
+			return false
+		}
+		seen = true
+		for _, tag := range strings.Split(strings.TrimPrefix(line, "Tags:"), ",") {
+			if strings.TrimSpace(tag) == required {
+				matched = true
+			}
+		}
+	}
+	return matched
 }
 
 func buildSOCKSTunnelConfigForSchema(iface, cidr string, port int, schema singBoxSidecarSchema) ([]byte, error) {
@@ -1175,8 +1360,12 @@ func buildSOCKSTunnelConfigForSchema(iface, cidr string, port int, schema singBo
 	}
 	inbound := map[string]any{
 		"type": "tun", "tag": "rz-tun-in", "interface_name": iface, "mtu": 1280,
-		"auto_route": false, "strict_route": false, "stack": "system",
+		"auto_route": false, "strict_route": false, "stack": "gvisor",
 	}
+	// Managed LAN traffic needs the full userspace TCP stack. The system (and
+	// mixed TCP) stack reinjects packets into a random local listener, requiring
+	// an INPUT firewall lease we do not own. gVisor support is required; never
+	// silently fall back to that ungranted listener.
 	if schema.modernAddress {
 		inbound["address"] = []string{prefix.String()}
 	} else {

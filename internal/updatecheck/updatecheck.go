@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 const officialRepository = "ArtixSx/RAZVILKA"
@@ -28,6 +30,9 @@ type Result struct {
 	InstallCommand   string `json:"install_command"`
 	VerifyCommand    string `json:"verify_command"`
 	Error            string `json:"error,omitempty"`
+	ReleaseTag       string `json:"release_tag,omitempty"`
+	CanPrepare       bool   `json:"can_prepare"`
+	Verification     string `json:"verification"`
 }
 
 type Manager struct {
@@ -44,12 +49,16 @@ type Manager struct {
 func New(current string) *Manager {
 	return &Manager{
 		Current: current, Endpoint: "https://api.github.com/repos/" + officialRepository + "/releases/latest", TTL: 30 * time.Minute,
-		Client: &http.Client{Timeout: 12 * time.Second, CheckRedirect: func(request *http.Request, _ []*http.Request) error {
-			if request.URL.Scheme != "https" || !strings.EqualFold(request.URL.Hostname(), "api.github.com") {
-				return errors.New("untrusted update-check redirect")
+		Client: func() *http.Client {
+			client := publicfetch.NewClient(12 * time.Second)
+			client.CheckRedirect = func(request *http.Request, _ []*http.Request) error {
+				if request.URL.Scheme != "https" || !strings.EqualFold(request.URL.Hostname(), "api.github.com") {
+					return errors.New("untrusted update-check redirect")
+				}
+				return nil
 			}
-			return nil
-		}},
+			return client
+		}(),
 	}
 }
 
@@ -109,12 +118,22 @@ func (m *Manager) check(parent context.Context, result *Result) error {
 	if err != nil || page.Scheme != "https" || !strings.EqualFold(page.Hostname(), "github.com") || !strings.HasPrefix(page.Path, "/"+officialRepository+"/releases/") {
 		return errors.New("official release link failed validation")
 	}
-	result.LatestVersion, result.ReleaseURL, result.PublishedAt = latest, page.String(), release.PublishedAt
-	result.UpdateAvailable = compareVersions(m.Current, latest) < 0
+	result.LatestVersion, result.ReleaseURL, result.PublishedAt, result.ReleaseTag = latest, page.String(), release.PublishedAt, release.TagName
+	result.UpdateAvailable = CanUpgrade(m.Current, release.TagName)
+	result.CanPrepare = result.UpdateAvailable
+	result.Verification = "github-release-sha256"
 	if result.UpdateAvailable {
 		result.State = "update"
 	} else {
 		result.State = "current"
+		_, pre, recognized := parseComparableVersion(m.Current)
+		if !recognized {
+			result.State = "unrecognized"
+		} else if strings.Contains(strings.ToLower(pre), "dev") || strings.Contains(strings.ToLower(pre), "local") {
+			result.State = "development"
+		} else if compareVersions(m.Current, latest) > 0 {
+			result.State = "ahead"
+		}
 	}
 	return nil
 }

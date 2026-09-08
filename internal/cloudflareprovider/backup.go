@@ -83,7 +83,7 @@ func decodeSnapshotBackup(ctx context.Context, envelope privatebackup.Envelope, 
 	if err := ctx.Err(); err != nil {
 		return privateDocument{}, "", err
 	}
-	if payload.NodeSnapshot != nil || len(payload.ProviderSnapshots) == 0 || len(payload.Services) != 0 || len(payload.EngineOrder) != 0 || len(payload.EngineFiles) != 0 || len(payload.CustomServices) != 0 || len(payload.Devices) != 0 {
+	if payload.NativeEnrollment != nil || payload.NodeSnapshot != nil || len(payload.ProviderSnapshots) == 0 || len(payload.Services) != 0 || len(payload.EngineOrder) != 0 || len(payload.EngineFiles) != 0 || len(payload.CustomServices) != 0 || len(payload.Devices) != 0 {
 		return privateDocument{}, "", ErrBackup
 	}
 	restored, err := snapshotsDocument(payload.ProviderSnapshots)

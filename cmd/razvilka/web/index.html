@@ -17,6 +17,10 @@
 <link rel="stylesheet" href="/v012.css?v=0.18.1">
 <link rel="stylesheet" href="/usque-doctor.css?v=0.18.1">
 <link rel="stylesheet" href="/cloudflare-accounts.css?v=0.18.1">
+<link rel="stylesheet" href="/workspace.css?v=0.18.1-browser">
+<link rel="stylesheet" href="/node-service-ui.css?v=0.18.1-browser">
+<link rel="stylesheet" href="/workspace-controls.css?v=0.18.1-controls">
+<link rel="stylesheet" href="/service-dashboard-ui.css?v=0.18.1-controls">
 </head>
 <body>
 <svg class="icon-sprite" aria-hidden="true">
@@ -65,32 +69,25 @@
 </section>
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.1" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><small id="version">v0.18.1-dev</small></div></div>
+    <div class="brand"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.1" alt=""></div><div><b>RAZ<span>V</span>ILKA</b><button id="appVersionAction" class="app-version-action" type="button" title="Версия и обновления"><span id="version">v0.18.1-dev</span><small id="appVersionStatus">Проверить обновления</small></button></div></div>
     <nav class="nav-list">
-      <button class="nav active" data-view="overview"><span><svg><use href="#i-home"/></svg></span><b>Обзор</b></button>
-      <div class="nav-label">МАРШРУТИЗАЦИЯ</div>
+      <button class="nav active" data-view="overview"><span><svg><use href="#i-home"/></svg></span><b>Главная</b></button>
       <button class="nav" data-view="services"><span><svg><use href="#i-grid"/></svg></span><b>Сервисы</b><i id="serviceNavCount">0</i></button>
-      <button class="nav" data-view="connections"><span><svg><use href="#i-route"/></svg></span><b>Соединения</b><i id="connectionCounter">0</i></button>
-      <button class="nav" data-view="engines"><span><svg><use href="#i-bolt"/></svg></span><b>Обходы</b></button>
-      <button class="nav" data-view="nodes"><span><svg><use href="#i-route"/></svg></span><b>Узлы</b><i id="nodeNavCount">0</i></button>
-      <button class="nav" data-view="engineconfig"><span><svg><use href="#i-settings"/></svg></span><b>Настройка обходов</b></button>
+      <button class="nav" data-view="nodes"><span><svg><use href="#i-route"/></svg></span><b>Подключения</b><i id="nodeNavCount">0</i></button>
+      <button class="nav" data-view="engineconfig"><span><svg><use href="#i-bolt"/></svg></span><b>Обходы</b></button>
       <button class="nav" data-view="devices"><span><svg><use href="#i-device"/></svg></span><b>Устройства</b></button>
-      <button class="nav" data-view="dns"><span><svg><use href="#i-dns"/></svg></span><b>DNS</b></button>
-      <div class="nav-label">ДАННЫЕ</div>
-      <button class="nav" data-view="sources"><span><svg><use href="#i-refresh"/></svg></span><b>Источники</b></button>
-      <button class="nav" data-view="testlab"><span><svg><use href="#i-check"/></svg></span><b>Тест обходов</b></button>
-      <button class="nav" data-view="strategylab" title="Расширенный подбор стратегий NFQWS2"><span><svg><use href="#i-pulse"/></svg></span><b>Подбор NFQWS2</b></button>
-      <button class="nav" data-view="diagnostics"><span><svg><use href="#i-pulse"/></svg></span><b>Диагностика</b></button>
-      <div class="nav-label">СИСТЕМА</div>
-      <button class="nav" data-view="settings"><span><svg><use href="#i-settings"/></svg></span><b>Настройки</b></button>
+      <details class="sidebar-tools" id="sidebarTools"><summary>Дополнительно <span>⌄</span></summary><div>
+        <button class="nav" data-view="diagnostics"><span><svg><use href="#i-pulse"/></svg></span><b>Диагностика</b></button>
+        <button class="nav" data-view="settings"><span><svg><use href="#i-settings"/></svg></span><b>Настройки</b></button>
+      </div></details>
     </nav>
     <a class="telegram-link sidebar-telegram" href="https://t.me/RAZVILKA_UI" target="_blank" rel="noopener noreferrer"><svg><use href="#i-telegram"/></svg><span><b>RAZVILKA UI</b><small>Новости и поддержка</small></span></a>
-    <div class="sidebar-foot"><span class="local-dot"></span><div><b>Работает локально</b><small>Keenetic / Netcraze</small></div></div>
+    <button class="sidebar-foot project-power" id="projectPower" type="button" role="switch" aria-checked="false" disabled><span class="local-dot"></span><span><b id="projectPowerLabel">Проверяем состояние</b><small id="projectPowerHint">Маршруты RAZVILKA</small></span><span class="power-switch" aria-hidden="true"><i></i></span></button>
   </aside>
 
   <main class="main">
     <header class="topbar">
-      <div class="page-title"><h1 id="pageTitle">Обзор</h1><p id="pageSubtitle">Главное состояние сервисов, обходов и роутера</p></div>
+      <div class="page-title"><h1 id="pageTitle">Главная</h1><p id="pageSubtitle">Сервисы, подключения и состояние вашей сети</p></div>
       <div class="top-health-strip" aria-label="Телеметрия роутера">
         <div><span>Работает</span><b id="topUptime">—</b></div>
         <div><span>CPU</span><b id="topCPU">—</b></div>
@@ -99,34 +96,37 @@
       <div class="top-actions">
         <button class="icon-button" id="refreshAll" title="Обновить" aria-label="Обновить"><svg><use href="#i-refresh"/></svg></button>
         <div class="top-mode-control" id="topModeControl">
-          <div class="top-mode-state"><svg><use href="#i-shield"/></svg><span><small id="topModeLabel">Безопасный режим</small><b id="systemText">Подключение…</b></span></div>
-          <button class="top-mode-switch" id="topToggleSafeMode" type="button" role="switch" aria-checked="true" aria-label="Безопасный режим включён" title="Переключить режим применения"><i></i></button>
+          <div class="project-mode-buttons" role="group" aria-label="Режим управления"><button id="projectModeAuto" type="button" aria-pressed="false" disabled>Автопилот</button><button id="projectModeManual" type="button" aria-pressed="false" disabled>Ручная настройка</button></div><small id="systemText" class="project-mode-note">Проверяем режим…</small>
         </div>
         <div class="router-chip" id="listenChip">:8787</div>
         <button class="secondary logout-button" id="logoutButton">Выйти</button>
       </div>
     </header>
+    <nav id="contextNavigation" class="context-navigation" aria-label="Разделы настроек" hidden></nav><span id="connectionCounter" hidden>0</span>
 
     <section class="notice" id="notice" hidden aria-live="polite"><div class="notice-icon"><svg><use href="#i-shield"/></svg></div><div class="notice-copy"><b id="noticeTitle"></b><span id="noticeText"></span></div><div class="notice-actions"><button class="secondary" id="noticeDetails" type="button" hidden>Технические детали</button><button class="secondary" id="noticeSettings" type="button" hidden>Настройки</button><button class="notice-close" id="noticeClose" type="button" aria-label="Закрыть">×</button></div></section>
 
+    <section id="nodeActivityNotice" class="node-activity-notice" role="status" hidden><div><b id="nodeActivityTitle"></b><p id="nodeActivityMessage"></p></div><button class="secondary" id="nodeActivityCancel" type="button">Остановить проверку</button></section>
     <div class="draft-bar" id="draftBar">
       <div><span class="draft-pulse"></span><b id="draftTitle">Есть неподтверждённые изменения</b><small id="draftHint">Сначала проверяем план, затем применяем всё одной операцией</small></div>
       <div class="draft-actions"><button class="secondary" id="discardChanges">Отменить</button><button class="primary" id="applyChanges">Применить</button></div>
     </div>
 
     <section class="view active" id="view-overview">
-      <section class="dashboard-welcome"><div><span class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ RAZVILKA</span><h2>Добро пожаловать в RAZVILKA</h2><p>Умное управление обходами и маршрутами для Keenetic / Netcraze</p></div><div class="welcome-router"><span class="local-dot"></span><div><b id="kpiWan">Интернет-интерфейс определяется…</b><small id="kpiArch">проверка устройства</small></div></div></section>
+      <section class="dashboard-welcome"><div><h2>Ваша сеть</h2><p>Выберите сервисы и проверьте, какой обход они используют.</p><button class="text-button" id="overviewSetupResume" type="button">Быстрая настройка</button></div><div class="welcome-router"><span class="local-dot"></span><div><b id="kpiWan">Интернет-интерфейс определяется…</b><small id="kpiArch">проверка устройства</small></div></div></section>
 
       <section class="concept-kpis">
-        <article class="concept-kpi"><div class="kpi-icon"><svg><use href="#i-shield"/></svg></div><div><small>Состояние системы</small><strong id="kpiState">Безопасный режим</strong><span id="kpiStateSub">рабочие маршруты не изменяются</span></div></article>
-        <article class="concept-kpi"><div class="kpi-icon"><svg><use href="#i-bolt"/></svg></div><div><small>Активные обходы</small><strong id="kpiEngines">0 / 0</strong><span>запущено / установлено</span></div></article>
-        <article class="concept-kpi"><div class="kpi-icon"><svg><use href="#i-grid"/></svg></div><div><small>Выбранные сервисы</small><strong id="kpiServices">0 / 0</strong><span>включено / каталог</span></div></article>
-        <article class="concept-kpi"><div class="kpi-icon"><svg><use href="#i-route"/></svg></div><div><small>Активные соединения</small><strong id="kpiConnections">0</strong><span>только подтверждённые данные</span></div></article>
+        <button class="concept-kpi kpi-link" type="button" data-view="diagnostics"><div class="kpi-icon"><svg><use href="#i-shield"/></svg></div><div><small>Состояние сети ↗</small><strong id="kpiState">Проверяем</strong><span id="kpiStateSub">Открыть диагностику</span></div></button>
+        <button class="concept-kpi kpi-link" type="button" data-view="engineconfig"><div class="kpi-icon"><svg><use href="#i-bolt"/></svg></div><div><small>Обходы ↗</small><strong id="kpiEngines">0 / 0</strong><span>запущено / установлено</span></div></button>
+        <button class="concept-kpi kpi-link" type="button" data-view="services"><div class="kpi-icon"><svg><use href="#i-grid"/></svg></div><div><small>Сервисы ↗</small><strong id="kpiServices">0 / 0</strong><span>выбрано / доступно</span></div></button>
+        <button class="concept-kpi kpi-link" type="button" data-view="connections"><div class="kpi-icon"><svg><use href="#i-route"/></svg></div><div><small>Соединения ↗</small><strong id="kpiConnections">0</strong><span>Посмотреть текущий трафик</span></div></button>
       </section>
 
       <section class="concept-grid">
-        <article class="panel quick-service-panel"><div class="panel-title"><div><h2>Выбор сервисов</h2><p>Включайте нужные ресурсы одним нажатием</p></div><button class="text-button" data-view="services">Весь каталог →</button></div><div class="quick-service-grid" id="overviewQuickServices"></div><div class="panel-bottom-action"><button class="primary" data-view="services">Настроить маршруты сервисов</button></div></article>
+        <article class="panel quick-service-panel"><div class="panel-title"><div><h2>Ваши сервисы</h2><p>Выберите сайты, для которых нужен обход</p></div><button class="text-button" data-view="services">Все сервисы →</button></div><div class="quick-service-tools"><button class="text-button" id="overviewExpandServices" type="button" aria-expanded="false">Развернуть</button><button class="text-button" id="overviewFindWebsite" type="button">Найти по сайту</button></div><div class="quick-service-grid" id="overviewQuickServices"></div></article>
         <article class="panel current-routes-panel"><div class="panel-title"><div><h2>Текущие маршруты</h2><p>Выбранный и фактически применённый обход</p></div><button class="text-button" data-view="connections">Соединения →</button></div><div id="overviewServices" class="overview-services"></div></article>
+      </section>
+      <details class="overview-details"><summary>Компоненты, состояние роутера и инструменты</summary><div class="overview-details-grid">
         <article class="panel bypass-table-panel"><div class="panel-title"><div><h2>Доступные обходы</h2><p>Реальное состояние установленных компонентов</p></div><button class="text-button" data-view="engines">Управление →</button></div><div id="engineCards" class="engine-cards concept-engine-list"></div></article>
         <div class="concept-side-stack">
           <article class="panel router-health-panel"><div class="panel-title"><div><h2>Ресурсы и трафик</h2><p id="trafficWAN">WAN определяется…</p></div><div><b id="routerCapacity" class="capacity-value unknown">Нет данных</b><small id="routerCapacityHint">Ожидаем системные счётчики</small></div></div><div class="router-metrics"><div><span>CPU</span><b id="metricCPU">—</b></div><div><span>RAM</span><b id="metricRAM">—</b></div><div><span>Entware</span><b id="metricDisk">—</b></div><div><span>Температура</span><b id="metricTemp">—</b></div></div><div id="trafficPeriods" class="traffic-periods"></div><div class="traffic-chart-wrap"><div class="traffic-values"><span>↓ <b id="metricDownload">—</b></span><span>↑ <b id="metricUpload">—</b></span></div><svg id="trafficChart" class="traffic-chart" viewBox="0 0 360 76" preserveAspectRatio="none" aria-label="Скорость WAN"></svg><small>Локальные счётчики роутера · сервисам трафик без подтверждения не приписывается</small></div></article>
@@ -134,18 +134,21 @@
           <article class="panel quick-actions-panel"><div class="panel-title"><div><h2>Быстрые действия</h2><p>Самые частые операции</p></div></div><div class="quick-actions"><button class="secondary" id="overviewOnboarding">◇ Мастер настройки</button><button class="secondary" data-view="testlab">✓ Тест маршрутов</button><button class="secondary" id="overviewRefreshComponents">↻ Обновить обходы</button><button class="secondary" data-view="diagnostics">⌁ Диагностика</button><button class="secondary" id="overviewExportConfig">↓ Экспорт настроек</button></div></article>
           <article class="panel source-overview-panel"><div class="panel-title"><div><h2>Каталог и источники</h2><p>Проверенные локальные данные</p></div><button class="text-button" data-view="sources">Открыть →</button></div><div id="sourceOverview" class="source-overview"></div></article>
         </div>
-      </section>
+      </div></details>
     </section>
 
     <section class="view" id="view-services">
       <article class="panel full-panel">
-        <div class="panel-title sticky-title"><div><h2>Сервисы</h2><p>Встроенные, community и ваши ресурсы: домены, IP/CIDR и отдельный маршрут</p></div><div class="filters"><button class="secondary" id="openBypassSetup">+ Установить обход</button><button class="secondary" id="openCommunityCatalog">⌕ Community-каталог</button><button class="primary" id="addCustomService">+ Добавить вручную</button><input id="serviceSearch" placeholder="Поиск сервиса"><select id="serviceCategory"><option value="">Все категории</option></select></div></div>
-        <div class="service-view-toolbar"><div class="selector-legend"><span><i class="legend-dot auto"></i>АВТОПИЛОТ</span><span><i class="legend-dot ok"></i>доступен</span><span><i class="legend-dot dirty"></i>изменён</span><span><i class="legend-dot off"></i>не установлен</span></div><div class="service-mode-switch" role="group" aria-label="Подробность настройки сервисов"><button class="active" type="button" data-service-mode="lite">Простой</button><button type="button" data-service-mode="pro">Расширенный</button></div></div>
+        <div class="panel-title sticky-title"><div><h2>Сервисы</h2><p>Работающий маршрут и проверка доступа. Нажмите на сервис, чтобы изменить настройки.</p></div><div class="filters"><input id="serviceSearch" placeholder="Поиск сервиса" aria-label="Поиск сервиса"><select id="serviceCategory" aria-label="Категория сервисов"><option value="">Все категории</option></select><button class="secondary" id="serviceExpandAll" type="button">Развернуть все</button></div></div>
+        <div class="sd-toolbar"><button class="primary" id="serviceCheckAll" type="button" disabled>Проверить все</button><div class="sd-pick"><select id="serviceAutoPickTarget" aria-label="Сервис для автоподбора"></select><button class="secondary" id="serviceSelectAll" type="button" disabled>Подобрать подключение</button></div><button class="secondary" id="serviceCancelCheck" type="button" hidden>Остановить проверку</button></div>
+        <p class="sd-status" id="serviceCheckStatus" role="status" aria-live="polite">Получаем состояние проверок…</p>
+        <details class="sd-tools" id="serviceWebsiteDiscovery"><summary>Найти сервис по сайту · добавить сервис</summary><div class="sd-tools-body"><form id="serviceWebsiteForm"><label for="serviceWebsiteInput">Адреса сайтов, каждый с новой строки</label><textarea id="serviceWebsiteInput" rows="2" maxlength="24576" placeholder="youtube.com&#10;https://telegram.org" spellcheck="false"></textarea><small>До 12 сайтов. Сопоставляем только введённые имена с локальным каталогом; трафик устройств не просматривается.</small><div class="sd-card-actions"><button class="primary" id="serviceWebsiteFind" type="submit">Найти сервисы</button><button class="secondary" id="serviceWebsiteCancel" type="button" hidden>Остановить поиск</button></div></form><p id="serviceWebsiteStatus" role="status"></p><div id="serviceWebsiteResults"></div><div class="sd-card-actions"><button class="secondary" id="openCommunityCatalog" type="button">Каталог сообщества</button><button class="secondary" id="addCustomService" type="button">Добавить вручную</button><button class="secondary" id="openBypassSetup" type="button">Установить обход</button></div></div></details>
+        <details class="sd-tools"><summary>Автоматическая проверка по расписанию</summary><form class="sd-tools-body" id="serviceScheduleForm"><div class="sd-schedule-row"><label class="check"><input id="serviceScheduleEnabled" type="checkbox">Проверять автоматически</label><label><span class="sr-only">Интервал проверки</span><select id="serviceScheduleInterval"><option value="60">Каждую минуту</option><option value="300">Каждые 5 минут</option><option value="900" selected>Каждые 15 минут</option><option value="3600">Каждый час</option><option value="21600">Каждые 6 часов</option><option value="86400">Каждый день</option></select></label><button class="secondary" id="serviceScheduleSave" type="submit" disabled>Сохранить расписание</button></div><label class="check"><input id="serviceScheduleAll" type="checkbox">Включить в расписание все сервисы из каталога</label><small id="serviceScheduleSelection"></small><small>Проверки выполняются по очереди. Расписание само не меняет маршруты.</small><p id="serviceScheduleNext">Автоматическая проверка выключена.</p></form></details>
         <div class="draft-bar section-draft-bar" id="serviceDraftBar">
           <div><span class="draft-pulse"></span><b>Маршруты сервисов изменены</b><small>Одна кнопка сохранит изменения, проверит выбранные обходы и автоматически вернёт рабочее состояние при ошибке.</small></div>
-          <div class="draft-actions"><button class="secondary" id="discardServiceChanges" type="button">Отменить</button><button class="primary" id="applyServiceChanges" type="button">Сохранить и проверить</button></div>
+          <div class="draft-actions"><button class="secondary" id="discardServiceChanges" type="button">Отменить изменения</button><button class="primary" id="applyServiceChanges" type="button">Проверить и применить</button></div>
         </div>
-        <div id="serviceList" class="service-list"></div>
+        <div id="serviceList" class="sd-list"></div>
       </article>
     </section>
 
@@ -174,36 +177,60 @@
     </section>
 
     <section class="view" id="view-nodes">
-      <article class="panel full-panel">
-        <div class="panel-title sticky-title">
-          <div><h2>Сохранённые узлы</h2><p>Локальный инвентарь импортированных подключений — без паролей, ключей и скрытых параметров</p></div>
-          <div class="filters"><button class="primary" id="nodeOpenImport" type="button">+ Добавить узлы</button><button class="secondary" id="nodeOpenGroup" type="button">+ Группа</button><input id="nodeSearch" placeholder="Имя, протокол или транспорт" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="available">Проверены</option><option value="degraded">Не прошли проверку</option><option value="stale">Нужно перепроверить</option><option value="quarantined">Ожидают проверки</option><option value="disabled">Отключены</option><option value="expired">Истекли</option></select><button class="secondary" id="refreshNodes" type="button">Обновить</button></div>
+      <article class="panel full-panel node-workspace">
+        <div class="node-workspace-head"><div><h2>Ваши подключения</h2><p>Найдите рабочий сервер и выберите, для каких сервисов его использовать.</p></div><button class="primary" id="nodeOpenImport" type="button">+ Добавить подключение</button></div>
+        <div class="node-tabs" role="tablist" aria-label="Каталог подключений">
+          <button type="button" role="tab" aria-selected="true" data-node-tab="all" aria-controls="nodeBrowserContent">Каталог</button>
+          <button type="button" role="tab" aria-selected="false" data-node-tab="services" aria-controls="nodeServiceSelectors">По сервисам</button>
+          <button type="button" role="tab" aria-selected="false" data-node-tab="public">Публичные каталоги</button>
+          <button type="button" role="tab" aria-selected="false" data-node-tab="subscriptions">Подписки</button>
+          <button type="button" role="tab" aria-selected="false" data-node-tab="groups">Автоподбор и группы</button>
         </div>
-        <div class="node-truth-banner" id="nodeTruthBanner" role="status">
-          <div><b>Импорт не означает, что узел работает</b><span>Перед назначением сервису понадобятся проверка протокола, IP выхода и доступности самого сервиса.</span></div>
-          <span class="node-readonly-badge">МАРШРУТЫ НЕ МЕНЯЮТСЯ</span>
-        </div>
+        <div class="node-truth-banner" id="nodeTruthBanner" role="status" hidden><div></div></div>
         <div class="node-summary" id="nodeSummary"></div>
-        <div class="node-group-list" id="nodeGroupList"></div>
+        <section id="nodePublicCatalogs" class="node-public-catalogs" hidden></section>
+        <section class="node-feed-panel" id="nodeSubscriptions" hidden><h3>Подписки на подключения</h3><p>Сохраните источник, чтобы новые подключения появлялись автоматически.</p>
+          <form id="nodeFeedForm" class="node-feed-form">
+            <label><span>Источник</span><select id="nodeFeedPreset"><option value="tiagorrg-vless">VLESS Key Checker</option><option value="goida-vless">Goida VPN · VLESS</option><option value="custom">Своя HTTPS-подписка</option></select></label>
+            <label><span>Подключений из источника</span><input id="nodeFeedLimit" type="number" min="1" max="128" value="64" required></label>
+            <label><span>Название</span><input id="nodeFeedName" maxlength="64" placeholder="Например, личная подписка"></label>
+            <label><span>Обновление</span><select id="nodeFeedInterval"><option value="360">Каждые 6 часов</option><option value="120">Каждые 2 часа</option><option value="60">Каждый час</option><option value="1440">Каждый день</option><option value="0">Вручную</option></select></label>
+            <div id="nodeFeedCustom" hidden><label><span>Адрес подписки</span><input id="nodeFeedURL" type="url" placeholder="https://…" autocomplete="off" spellcheck="false"></label><label><span>Формат</span><select id="nodeFeedFormat"><option value="uri-lines">Ссылки на узлы</option><option value="keys-json">keys.json</option><option value="profile">Профиль Sing-box / Clash</option></select></label></div>
+            <label class="node-feed-partial"><input id="nodeFeedPartial" type="checkbox"><span>Если часть записей не поддерживается, сохранить только принятые</span></label>
+            <button class="primary" id="nodeFeedSync" type="submit">Сохранить и обновить</button><button class="secondary" id="nodeFeedCancel" type="button" hidden>Отменить получение</button>
+          </form><div id="nodeFeedStatus" class="node-flow-status" role="status" aria-live="polite"></div><div id="nodeFeedSources"></div>
+        </section>
+        <section id="nodeServiceSelectors" aria-label="Подключения по сервисам" hidden></section>
+        <section id="nodeGroupsPanel" class="node-groups-panel" hidden><div class="node-section-heading"><div><h3>Резервные подключения</h3><p>Объедините серверы в группу для выбора и замены рабочего подключения.</p></div><button class="secondary" id="nodeOpenGroup" type="button">+ Создать группу</button></div><label class="node-group-service"><span>Для какого сервиса проверить группу</span><select id="nodeGroupCheckService"></select></label><div id="nodeAutopilot"></div><div class="node-group-list" id="nodeGroupList"></div></section>
+        <div id="nodeBrowserContent" class="node-browser-content">
+        <button type="button" id="nodeMobileFilters" class="secondary node-mobile-filters" aria-controls="nodeFilters" aria-expanded="false">Фильтры: страна и источник</button>
+        <aside class="node-browser-sidebar" id="nodeFilters"><h3>Источники</h3><div id="nodeSourceFilters" class="node-source-filters"></div><h3>Страны <small>по данным источника</small></h3><div id="nodeCountryFilters" class="node-country-filters"></div></aside>
+        <div class="node-browser-main">
+        <div class="node-browser-toolbar"><input id="nodeSearch" placeholder="Поиск по имени, стране, протоколу…" aria-label="Поиск узлов"><select id="nodeStateFilter" aria-label="Состояние узлов"><option value="">Все состояния</option><option value="available">Работают</option><option value="degraded">Не работают</option><option value="inconclusive">Не удалось проверить</option><option value="stale">Нужно перепроверить</option><option value="quarantined">Не проверены</option><option value="disabled">Отключены</option><option value="expired">Истекли</option></select><select id="nodeSort" aria-label="Сортировка подключений"><option value="status">Сначала рабочие</option><option value="latency">По задержке</option><option value="name">По названию</option><option value="country">По стране</option></select><button class="icon-button" id="refreshNodes" type="button" title="Обновить список" aria-label="Обновить список подключений"><svg><use href="#i-refresh"/></svg></button></div>
+        <div class="node-batch-toolbar"><label class="node-select-all"><input id="nodeSelectAll" type="checkbox"> Выбрать видимые</label><span id="nodeVisibleCount"></span><button class="text-button" id="nodeClearSelection" type="button" hidden>Снять выбор</button><div class="node-batch-actions"><select id="nodeBrowserService" aria-label="Сервис для проверки"></select><button class="secondary" id="nodePingSelected" type="button">Пинг</button><button class="primary" id="nodeCheckSelected" type="button">Проверить доступ</button></div></div>
+        <p class="node-check-hint">Пинг — время соединения с сервером. Проверка сервиса открывает его веб-страницу через подключение; звонки, приложения и видео требуют отдельной проверки на устройстве. За раз проверяется до 64 подключений. Массовая проверка не меняет маршруты.</p>
+        <div id="nodeBatchStatus" class="node-batch-status" role="status" aria-live="polite" hidden><span id="nodeBatchMessage"></span><progress id="nodeBatchProgress" max="1" value="0"></progress><button class="secondary" id="nodeBatchCancel" type="button">Остановить</button></div>
         <div class="node-list" id="nodeList"></div>
-        <div id="nodeEmpty" class="empty-state node-empty"><div class="empty-icon">◇</div><strong>Сохранённых узлов пока нет</strong><span>Импортируйте свой профиль или подписку в настройках Sing-box. Неподдерживаемые записи останутся в отчёте отказов и не попадут сюда.</span></div>
+        <div id="nodeEmpty" class="empty-state node-empty"><div class="empty-icon">◇</div><strong>Подключений не найдено</strong><span>Добавьте свои ссылки или откройте публичный каталог.</span></div>
+        <div class="node-pagination"><button class="secondary" id="nodePagePrevious" type="button">← Назад</button><span id="nodePageLabel"></span><button class="secondary" id="nodePageNext" type="button">Далее →</button></div>
+        </div></div>
       </article>
     </section>
 
     <section class="view" id="view-engineconfig">
       <article class="panel full-panel">
-        <div class="panel-title sticky-title"><div><h2>Настройка обходов</h2><p>Изменения сначала сохраняются как черновик, затем проверяются и только после этого применяются</p></div><div class="engine-head-actions"><button class="secondary" id="openComponentCatalog" type="button">Установка и обновления</button><span class="safe-badge" id="engineSafeBadge">БЕЗОПАСНЫЙ РЕЖИМ</span></div></div>
+        <div class="panel-title sticky-title"><div><h2>Мои обходы</h2><p>Сначала показаны запущенные обходы. Выберите нужный, чтобы изменить настройки.</p></div><div class="engine-head-actions"><button class="secondary" id="checkEngineVersions" type="button">Проверить версии</button><button class="secondary" id="openComponentCatalog" type="button">Установить обход</button><span class="safe-badge" id="engineSafeBadge">БЕЗОПАСНЫЙ РЕЖИМ</span></div></div>
         <div class="engine-workspace">
           <aside class="engine-control-list" id="engineControlList"></aside>
           <section class="engine-control-main">
             <div class="engine-selected-head" id="engineSelectedHead"></div>
             <section class="engine-draft-dependency" id="engineDraftDependency" hidden>
-              <div><b id="engineDraftDependencyTitle">Черновик ещё не назначен сервису</b><span id="engineDraftDependencyText">Выберите сервис для этого обхода либо удалите ненужный черновик.</span></div>
-              <div><button class="secondary" id="engineDiscardAllDrafts" type="button">Удалить черновик</button><button class="primary" id="engineAssignService" type="button">Назначить сервис</button></div>
+              <div><b id="engineDraftDependencyTitle">Выберите сервис</b><span id="engineDraftDependencyText">Укажите, для какого сервиса и устройств использовать этот обход.</span></div>
+              <div><button class="secondary" id="engineDiscardAllDrafts" type="button">Отменить изменения</button><button class="primary" id="engineAssignService" type="button">Выбрать сервис</button></div>
             </section>
             <section class="warp-manager" id="warpManager" hidden>
               <div class="warp-manager-head"><div><span class="eyebrow">УПРАВЛЕНИЕ WARP</span><h3>Профиль Cloudflare WARP</h3><p>Созданный или загруженный профиль сначала сохраняется как черновик. Рабочий профиль не изменится до общей проверки и применения.</p></div><span class="engine-state" id="warpStateBadge">НЕ НАСТРОЕН</span></div>
-              <div class="warp-install-hint" id="warpInstallHint" hidden><div><b>Сначала установите WARP · WireGuard</b><span>Установка добавит WireGuard и генератор профиля. После неё здесь появятся создание профиля, проверка и назначение сервису.</span></div><button class="primary" id="warpInstallComponent" type="button">Открыть установку</button></div>
+              <div class="warp-install-hint" id="warpInstallHint" hidden><div><b>Для проверки и запуска нужен WireGuard</b><span>Профиль можно создать встроенным генератором уже сейчас. Установите компонент перед проверкой туннеля и применением маршрута.</span></div><button class="primary" id="warpInstallComponent" type="button">Открыть установку</button></div>
               <div class="warp-status-grid"><div><span>Генератор</span><b id="warpGeneratorState">—</b></div><div><span>Аккаунт</span><b id="warpAccountState">—</b></div><div><span>Рабочий профиль</span><b id="warpLiveState">—</b></div><div><span>Черновик профиля</span><b id="warpCandidateState">—</b></div></div>
               <div class="warp-steps" aria-label="Порядок настройки WARP"><div><i>1</i><span><b>Профиль</b><small>создайте или загрузите</small></span></div><div><i>2</i><span><b>Сервис</b><small>назначьте WARP-маршрут</small></span></div><div><i>3</i><span><b>Проверка</b><small>подтвердите доступ</small></span></div><div><i>4</i><span><b>Применение</b><small>с резервной копией и возвратом при ошибке</small></span></div></div>
               <div class="warp-apply-hint" id="warpApplyHint">Профиль-кандидат не меняет интернет сам по себе. Для применения назначьте WARP хотя бы одному включённому сервису.</div>
@@ -243,13 +270,14 @@
                 <div class="editor-file-state" id="engineFileState">—</div>
               </div>
               <div class="guided-editor" id="guidedEditor"><div class="guided-loading">Загрузка понятных параметров…</div></div>
-              <div class="expert-editor" id="expertEditor" hidden><div class="expert-warning"><b>Экспертный режим</b><span>Доступен весь файл, включая секреты. Ошибка может остановить обход; перед применением RAZVILKA проверит черновик и создаст резервную копию.</span></div><textarea id="engineEditor" class="config-editor" spellcheck="false" placeholder="Выберите файл конфигурации"></textarea></div>
+              <div class="expert-editor" id="expertEditor" hidden><div class="expert-warning"><b>Экспертный режим</b><span>Доступен весь файл, включая секреты. Перед применением RAZVILKA проверит изменения и сохранит прежние настройки для возврата.</span></div><textarea id="engineEditor" class="config-editor" spellcheck="false" placeholder="Выберите файл конфигурации"></textarea></div>
               <div class="editor-message" id="engineEditorMessage"></div>
               <div class="editor-actions">
                 <button class="secondary" id="engineReload">Перечитать</button>
-                <button class="secondary" id="engineDiscardDraft">Отменить черновик</button>
-                <button class="secondary" id="engineValidate">Проверить</button>
-                <button class="primary" id="engineSaveDraft">Сохранить черновик</button>
+                <button class="secondary" id="engineDiscardDraft">Отменить изменения</button>
+                <button class="secondary" id="engineValidate">Только проверить</button>
+                <button id="engineSaveDraft" type="button" hidden>Подготовить изменения</button>
+                <button class="secondary" id="engineCancelOperation" type="button" hidden>Остановить</button>
                 <button class="primary" id="engineApplyConfig">Проверить и применить</button>
               </div>
             </div>
@@ -369,7 +397,7 @@
         <article class="panel"><div class="panel-title"><div><h2>Режим применения</h2><p>Безопасный режим разрешает проверку, но не меняет рабочие маршруты</p></div><button class="secondary" id="toggleSafeMode" type="button">Перейти в рабочий режим</button></div><div class="settings-list"><div><span>Текущий режим</span><b id="settingSafeMode">Безопасный</b></div><div><span>Маршруты в черновике</span><b id="settingPending">нет</b></div><div><span>Черновики обходов</span><b id="settingEngineDrafts">0</b></div><div><span>Последнее применение</span><b id="settingApplied">—</b></div><div><span>Версия настроек</span><b id="settingRevision">0 / 0</b></div><div><span>Сборка приложения</span><b id="settingBuild">загружается…</b><small id="settingBuildDetails">версия, commit и дата появятся после подключения</small></div></div></article>
         <article class="panel"><div class="panel-title"><div><h2>Сохранённые изменения</h2><p>Черновик можно проверить, применить или отменить без ручного поиска файлов</p></div></div><div class="settings-actions"><button class="secondary" id="exportConfig">Скачать техническую копию</button><button class="secondary" id="discardSettings">Отменить черновик</button><button class="primary" id="applySettings">Проверить черновик</button></div></article>
       </div>
-      <article class="panel app-update-panel"><div class="panel-title"><div><span class="eyebrow">ОФИЦИАЛЬНЫЙ РЕЛИЗ</span><h2>Обновление RAZVILKA</h2><p>Проверка выполняется только через официальный GitHub. Обновление не запускается автоматически: сначала сохраните зашифрованную резервную копию и проверьте подлинность релиза на компьютере.</p></div><button class="secondary" id="checkAppUpdate" type="button">Проверить версию</button></div><div id="appUpdateState" class="app-update-state"><div class="community-empty">Нажмите «Проверить версию». Фоновый запрос не выполняется без вашего действия.</div></div></article>
+      <article class="panel app-update-panel"><div class="panel-title"><div><span class="eyebrow">ОФИЦИАЛЬНЫЙ РЕЛИЗ</span><h2>Обновление RAZVILKA</h2><p>Панель проверяет версию на официальном GitHub. Вы сможете подготовить обновление, посмотреть результат проверки и запустить установку. При ошибке установки будет выполнен возврат к прежней версии.</p></div><button class="secondary" id="checkAppUpdate" type="button">Проверить версию</button></div><div id="appUpdateState" class="app-update-state"><div class="community-empty">Получаем сведения о версии…</div></div></article>
       <article class="panel profile-exchange"><div class="panel-title"><div><span class="eyebrow">ОБМЕН НАСТРОЙКАМИ</span><h2>Поделиться рабочим профилем</h2><p>Сервисы, маршруты, пользовательские списки и несекретные файлы NFQWS2. Приватные ключи WARP, VLESS, WireGuard и пароли исключаются автоматически.</p></div><span class="safe-badge">ПРОВЕРКА → ЧЕРНОВИК</span></div><div class="profile-exchange-grid"><div class="profile-meta"><label><span>Название профиля</span><input id="profileName" maxlength="120" value="Мой профиль RAZVILKA"></label><label><span>Автор (необязательно)</span><input id="profileAuthor" maxlength="120" placeholder="Ник или имя"></label><label><span>Описание</span><textarea id="profileDescription" maxlength="1000" placeholder="Для каких провайдеров и сервисов проверен профиль"></textarea></label><div class="settings-actions"><button class="primary" id="exportProfile" type="button">Скачать безопасный профиль</button><input id="profileImportInput" type="file" aria-label="Выбрать профиль RAZVILKA" accept=".json,application/json" hidden><button class="secondary" id="selectProfileImport" type="button">Выбрать профиль…</button></div></div><div class="profile-preview" id="profilePreview"><div class="community-empty">Выберите JSON-профиль. До подтверждения ничего не попадёт даже в черновик.</div></div></div><div class="profile-import-actions"><button class="primary" id="confirmProfileImport" type="button" disabled>Импортировать в черновик</button></div></article>
       <article class="panel private-backup"><div class="panel-title"><div><span class="eyebrow">ЗАШИФРОВАННАЯ РЕЗЕРВНАЯ КОПИЯ</span><h2>Перенос приватных конфигураций</h2><p>AES-256-GCM + PBKDF2 защищают ключи WARP/WireGuard и конфиги прокси. Пароль архива не сохраняется; логин панели, ключ восстановления и рабочие маршруты в архив не входят.</p></div><span class="safe-badge">ЗАШИФРОВАНО</span></div><div class="private-backup-grid"><div class="private-backup-column"><h3>Создать архив</h3><label><span>Пароль архива · минимум 12 символов</span><input id="privateBackupPassword" type="password" minlength="12" maxlength="256" autocomplete="new-password"></label><label><span>Повторите пароль</span><input id="privateBackupPasswordRepeat" type="password" minlength="12" maxlength="256" autocomplete="new-password"></label><button class="primary" id="exportPrivateBackup" type="button">Скачать зашифрованную копию</button></div><div class="private-backup-column"><h3>Восстановить в черновик</h3><input id="privateBackupImportInput" type="file" aria-label="Выбрать зашифрованную резервную копию" accept=".json,application/json" hidden><button class="secondary" id="selectPrivateBackup" type="button">Выбрать копию…</button><label><span>Пароль выбранного архива</span><input id="privateBackupImportPassword" type="password" minlength="12" maxlength="256" autocomplete="current-password"></label><button class="secondary" id="previewPrivateBackup" type="button" disabled>Расшифровать и проверить</button></div><div class="private-backup-preview" id="privateBackupPreview"><div class="community-empty">Секреты расшифровываются только в памяти роутера. Сначала будет показан безопасный предварительный просмотр.</div></div></div><div class="profile-import-actions"><button class="primary" id="confirmPrivateBackup" type="button" disabled>Импортировать приватные данные в черновик</button></div></article>
       <details class="panel cloudflare-copies" id="cloudflareCopies">
@@ -473,12 +501,23 @@
 </dialog>
 <dialog class="form-dialog node-check-dialog" id="nodeCheckDialog">
   <form id="nodeCheckForm">
-    <div class="dialog-head"><div><span class="eyebrow">ТОЧНАЯ ПРОВЕРКА</span><h3 id="nodeCheckTitle">Проверить узел</h3><p>RAZVILKA временно запустит только этот узел, сравнит IP выхода и проверит выбранный сервис. Рабочие маршруты не изменятся.</p></div><button class="dialog-close" id="nodeCheckClose" type="button" aria-label="Закрыть">×</button></div>
+    <div class="dialog-head"><div><span class="eyebrow">ПОДКЛЮЧЕНИЕ СЕРВИСА</span><h3 id="nodeCheckTitle">Выбрать подключение</h3><p>Выберите сервис и устройства. RAZVILKA проверит подключение и применит маршрут с возвратом при ошибке. Можно выполнить только проверку.</p></div><button class="dialog-close" id="nodeCheckClose" type="button" aria-label="Закрыть">×</button></div>
     <input id="nodeCheckID" type="hidden">
     <label><span>Какой сервис проверить</span><select id="nodeCheckService" required></select><small>Выбирайте сервис, для которого хотите использовать этот узел. Результат действует только в текущей сети и ограниченное время.</small></label>
+    <label><span>На каких устройствах включить</span><select id="nodeIntentScope"></select></label>
+    <div id="nodeIntentDevices" class="scope-device-list" hidden></div>
+    <details id="nodeIntentAdvanced" hidden><summary>Ввести адреса вручную</summary><label><span>IP или диапазоны, по одному в строке</span><textarea id="nodeIntentSources" rows="3" placeholder="192.168.1.25"></textarea></label></details>
+    <div id="nodeIntentScopeSummary" class="scope-summary" role="status"></div>
     <div class="node-check-steps"><span>1 · DNS и порт</span><span>2 · протокол и ключ</span><span>3 · IP выхода</span><span>4 · сервис</span></div>
-    <div class="dialog-actions"><button class="secondary" id="nodeCheckCancel" type="button">Отмена</button><button class="primary" id="nodeCheckRun" type="submit">Проверить узел</button></div>
+    <div id="nodeCheckResult" class="node-flow-status" role="status" aria-live="polite"></div>
+    <div class="dialog-actions"><button class="secondary" id="nodeCheckCancel" type="button">Отмена</button><button class="secondary" id="nodeCheckRun" type="submit">Только проверить</button><button class="secondary" id="nodeCheckPreview" type="button" hidden>Просмотреть план</button><button class="primary" id="nodeIntentApply" type="button">Проверить и применить</button></div>
   </form>
+</dialog>
+<dialog class="form-dialog node-route-dialog" id="nodeRouteDialog">
+  <div class="dialog-head"><div><span class="eyebrow">ПЕРЕД ПРИМЕНЕНИЕМ</span><h3>Назначить узел сервису</h3><p>Проверьте выбор. Применение начнётся только после нажатия кнопки.</p></div><button class="dialog-close" id="nodeRouteClose" type="button" aria-label="Закрыть">×</button></div>
+  <div id="nodeRouteSummary" class="node-route-summary"></div>
+  <div id="nodeRouteStatus" class="node-flow-status" role="status" aria-live="polite"></div>
+  <div class="dialog-actions"><button class="secondary" id="nodeRouteCancel" type="button">Вернуться</button><button class="primary" id="nodeRouteApply" type="button">Применить маршрут</button></div>
 </dialog>
 <dialog class="form-dialog apply-review-dialog" id="applyReviewDialog">
   <form method="dialog">
@@ -489,7 +528,7 @@
 </dialog>
 <dialog class="onboarding-dialog" id="onboardingDialog">
   <div class="onboarding-shell">
-    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.1" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>До последнего шага безопасный режим не позволит изменить рабочие маршруты.</small></aside>
+    <aside class="onboarding-aside"><div class="brand-glyph"><img src="/razvilka-icon.png?v=0.18.1" alt=""></div><span class="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Настроим доступ без командной строки</h2><p>RAZVILKA установлена отдельно от обходов. Вы сами решаете, что добавить на роутер.</p><ol id="onboardingSteps"></ol><small>Мастер можно закрыть и продолжить с главного экрана.</small></aside>
     <section class="onboarding-main"><button class="dialog-close" id="onboardingClose" type="button" aria-label="Закрыть">×</button><div id="onboardingContent"></div><div class="onboarding-actions"><button class="secondary" id="onboardingBack" type="button">Назад</button><button class="text-button" id="onboardingLater" type="button">Продолжить позже</button><button class="primary" id="onboardingNext" type="button">Далее</button></div></section>
   </div>
 </dialog>
@@ -511,10 +550,12 @@
 </dialog>
 <dialog class="form-dialog" id="serviceScopeDialog">
   <form id="serviceScopeForm">
-    <div class="dialog-head"><div><span class="eyebrow">ПОЛИТИКА УСТРОЙСТВ</span><h3 id="serviceScopeTitle">Кому применять маршрут</h3><p>Пустой список — всем клиентам локальной сети. IP или CIDR ограничивает только этот сервис; основной маршрут роутера не меняется.</p></div><button class="dialog-close" id="serviceScopeClose" type="button" aria-label="Закрыть">×</button></div>
-    <label class="scope-field"><span>IP / CIDR устройств</span><textarea id="serviceScopeSources" placeholder="192.168.1.25&#10;192.168.1.64/28&#10;fd00::25"></textarea><small>По одному адресу или диапазону в строке. IPv4 и IPv6 применяются только к совпадающему семейству адресов сервиса.</small></label>
+    <div class="dialog-head"><div><span class="eyebrow">УСТРОЙСТВА СЕРВИСА</span><h3 id="serviceScopeTitle">Кому применять маршрут</h3><p>Выберите устройства по имени. Изменения вступят в силу после нажатия «Проверить и применить» в разделе «Сервисы» или «Устройства».</p></div><button class="dialog-close" id="serviceScopeClose" type="button" aria-label="Закрыть">×</button></div>
+    <label><span>Область</span><select id="serviceScopeMode"><option value="all">Вся локальная сеть</option><option value="selected">Выбранные устройства</option></select></label>
+    <div id="serviceScopeDevices" class="scope-device-list"></div>
+    <details><summary>Адреса и диапазоны вручную</summary><label class="scope-field"><span>IP / CIDR устройств</span><textarea id="serviceScopeSources" placeholder="192.168.1.25&#10;192.168.1.64/28&#10;fd00::25"></textarea><small>По одному адресу или диапазону в строке. IPv4 и IPv6 применяются только к совпадающему семейству адресов сервиса.</small></label></details>
     <div class="scope-summary" id="serviceScopeSummary"></div>
-    <div class="dialog-actions"><button class="secondary" id="serviceScopeCancel" type="button">Отмена</button><button class="primary" type="submit">Сохранить в черновик</button></div>
+    <div class="dialog-actions"><button class="secondary" id="serviceScopeCancel" type="button">Отмена</button><button class="primary" type="submit">Готово</button></div>
   </form>
 </dialog>
 <dialog class="form-dialog" id="deviceEditDialog">
@@ -531,7 +572,7 @@
     <input id="devicePolicyID" type="hidden">
     <div class="form-grid compact-form"><label><span>Сервис</span><select id="devicePolicyService" required></select></label><label><span>Текущий маршрут · меняется в «Сервисы»</span><select id="devicePolicyRoute" disabled></select><small>Эта вкладка изменяет только список устройств, поэтому другой черновик маршрута не будет применён случайно.</small></label><label class="wide"><span>Область</span><select id="devicePolicyScope"><option value="device">Только это устройство</option><option value="group">Вся его группа</option></select><small>Список IP будет сохранён в черновик. При изменении DHCP обновите область или закрепите адрес на роутере.</small></label></div>
     <div class="device-policy-warning" id="devicePolicyWarning"></div>
-    <div class="dialog-actions"><button class="secondary" id="devicePolicyCancel" type="button">Отмена</button><button class="primary" type="submit">Сохранить в черновик</button></div>
+    <div class="dialog-actions"><button class="secondary" id="devicePolicyCancel" type="button">Отмена</button><button class="primary" type="submit">Готово</button></div>
   </form>
 </dialog>
 <dialog class="form-dialog community-dialog" id="communityCatalogDialog">
@@ -544,7 +585,18 @@
     </div>
   </div>
 </dialog>
-<script src="/app.js?v=0.18.1"></script>
+<dialog id="nodeQuickImportDialog" class="form-dialog"><form id="nodeQuickImportForm" class="auth-form"><div class="dialog-head"><div><h2>Добавить подключения</h2><p>Вставьте VLESS-ссылки, подписку в Base64 или профиль Sing-box / Clash.</p></div><button class="secondary" id="nodeQuickImportClose" type="button" aria-label="Закрыть импорт">×</button></div><label><span>Выбрать файл со ссылками или профилем</span><input id="nodeQuickImportFile" type="file" accept=".txt,.json,.yaml,.yml,text/plain,application/json"></label><label><span>Ссылки или профиль</span><textarea id="nodeQuickImportText" rows="8" spellcheck="false" autocomplete="off" placeholder="vless://…" required></textarea></label><label class="node-feed-partial"><input id="nodeQuickImportPartial" type="checkbox"><span>Если часть записей не поддерживается, добавить только принятые</span></label><p id="nodeQuickImportStatus" class="node-flow-status" role="status"></p><div class="node-actions"><button class="primary" id="nodeQuickImportSubmit" type="submit">Добавить в каталог</button><button class="secondary" id="nodeQuickImportSubscription" type="button">Добавить URL подписки</button></div></form></dialog>
+<dialog class="form-dialog" id="nodeGroupUseDialog"><form id="nodeGroupUseForm"><div class="dialog-head"><div><h3>Использовать группу</h3><p>Сначала выбор сохраняется в настройках сервиса. Примените изменения, чтобы включить резерв.</p></div><button class="dialog-close" id="nodeGroupUseClose" type="button" aria-label="Закрыть выбор группы">×</button></div><input id="nodeGroupUseID" type="hidden"><div class="form-grid compact-form"><label><span>Сервис</span><select id="nodeGroupUseService"></select></label></div><p id="nodeGroupUseStatus" class="node-flow-status" role="status"></p><div class="dialog-actions"><button class="primary" id="nodeGroupUseSave" type="submit">Выбрать для сервиса</button></div></form></dialog>
+<script src="/node-browser.js?v=0.18.1-browser"></script>
+<dialog id="nodePolicyDialog" class="form-dialog"><form id="nodePolicyForm"><div class="dialog-head"><div><h3 id="nodePolicyTitle">Автоподбор</h3><p>Работает на роутере при закрытом браузере. Проверенный текущий узел сохраняется; замена выбирается при подтверждённом отказе.</p></div><button type="button" class="dialog-close" id="nodePolicyClose" aria-label="Закрыть">×</button></div><div id="nodePolicyFields" hidden><label><span>Режим</span><select id="nodePolicyMode"><option value="auto">Автоматически</option><option value="paused">Приостановить автоподбор</option><option value="manual">Только ручной выбор</option></select></label><p id="nodePolicyGroup" class="scope-summary"></p><h4>Разрешённые подключения</h4><div id="nodePolicyMembers" class="scope-device-list"></div><p class="node-check-hint">Разрешение распространяется только на отмеченные подключения и указанные источники. Новые узлы из обновлённой подписки не добавляются в резерв автоматически. Проверяется веб-доступ; при отсутствии рабочего резерва маршрут сохраняется, а панель сообщает о сбое.</p><details><summary>Частота проверок и ограничения</summary><div class="form-grid"><label><span>Проверять каждые, минут</span><input id="nodePolicyInterval" type="number" min="1" max="1440" required></label><label><span>Пауза между заменами, минут</span><input id="nodePolicyHold" type="number" min="1" max="1440" required></label><label><span>Не более замен в час</span><input id="nodePolicyBudget" type="number" min="1" max="60" required></label></div></details></div><p id="nodePolicyStatus" class="node-flow-status" role="status"></p><div class="dialog-actions"><button type="submit" class="primary" id="nodePolicySave" disabled>Применить правило</button></div></form></dialog>
+<script src="/node-policy-ui.js?v=0.18.1-browser"></script>
+<script src="/node-intent-ui.js?v=0.18.1-browser"></script>
+<script src="/node-service-ui.js?v=0.18.1-browser"></script>
+<script src="/node-activity-ui.js?v=0.18.1-browser"></script>
+<script src="/workspace-controls.js?v=0.18.1-controls"></script>
+<script src="/service-dashboard-ui.js?v=0.18.1-controls"></script>
+<script src="/app-update-ui.js?v=0.18.1-controls"></script>
+<script src="/app.js?v=0.18.1-browser"></script>
 <script src="/cloudflare-accounts.js?v=0.18.1"></script>
 <script src="/cloudflare-migration.js?v=0.18.1"></script>
 <script src="/cloudflare-backups.js?v=0.18.1"></script>

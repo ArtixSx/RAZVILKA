@@ -2,14 +2,11 @@ package systemprobe
 
 import (
 	"context"
-	"crypto/sha256"
-	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -76,28 +73,10 @@ func Probe() Snapshot {
 // would be unnecessarily expensive on every metrics interval.
 func DetectWANInterface() string { return DetectWANProfile().WANInterface }
 
-var wanProfileCache struct {
-	sync.Mutex
-	profile WANProfile
-	at      time.Time
-}
-
-// DetectWANProfile returns a privacy-safe identifier for the current uplink.
-// The gateway and source address are used only as local hash input and are
-// never persisted or returned to the Web UI.
+// DetectWANProfile is a cached view for passive displays and traffic metrics.
+// Proof, selection and commit decisions must use FreshWANProfile instead.
 func DetectWANProfile() WANProfile {
-	wanProfileCache.Lock()
-	defer wanProfileCache.Unlock()
-	if !wanProfileCache.at.IsZero() && time.Since(wanProfileCache.at) < 10*time.Second {
-		return wanProfileCache.profile
-	}
-	profile := WANProfile{ID: "network-unknown"}
-	if line := wanRouteLine(); line != "" {
-		profile = networkProfileFromRoute(line)
-	}
-	wanProfileCache.profile = profile
-	wanProfileCache.at = time.Now()
-	return profile
+	return wanEpoch.cached()
 }
 
 func commandExists(name string) bool { _, err := exec.LookPath(name); return err == nil }
@@ -196,41 +175,3 @@ func isExternalTunnelName(dev string) bool {
 }
 
 func wanInterface() string { return DetectWANProfile().WANInterface }
-
-func wanRouteLine() string {
-	candidates := [][]string{{"ip", "route", "get", "1.1.1.1"}, {"/opt/sbin/ip", "route", "get", "1.1.1.1"}, {"/opt/bin/ip", "route", "get", "1.1.1.1"}}
-	for _, c := range candidates {
-		if c[0][0] == '/' && !fileExists(c[0]) {
-			continue
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
-		b, err := exec.CommandContext(ctx, c[0], c[1:]...).Output()
-		cancel()
-		if err != nil {
-			continue
-		}
-		return strings.TrimSpace(string(b))
-	}
-	return ""
-}
-
-func networkProfileFromRoute(line string) WANProfile {
-	fields := strings.Fields(line)
-	values := map[string]string{}
-	for i := 0; i+1 < len(fields); i++ {
-		switch fields[i] {
-		case "dev", "via", "src":
-			values[fields[i]] = fields[i+1]
-		}
-	}
-	dev := strings.TrimSpace(values["dev"])
-	if dev == "" {
-		return WANProfile{ID: "network-unknown"}
-	}
-	identity := dev + "|" + values["via"]
-	if values["via"] == "" {
-		identity += "|" + values["src"]
-	}
-	digest := sha256.Sum256([]byte(identity))
-	return WANProfile{ID: fmt.Sprintf("wan-%x", digest[:6]), WANInterface: dev}
-}

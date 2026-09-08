@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
 	"github.com/ArtixSx/razvilka/internal/evidence"
 )
 
@@ -83,5 +84,27 @@ func TestCloudflareScanHTTPProbeRejectsAmbiguousTraceAndUnsafeInput(t *testing.T
 	}
 	if _, err := probe.observe(context.Background(), "172.16.0.2", "direct", catalog.Service{ID: "Telegram", ProbeURL: "http://127.0.0.1/"}); err == nil {
 		t.Fatal("unsafe scan identity was accepted")
+	}
+}
+
+func TestCloudflareScanTraceStatusKeepsSafeStageDiagnostic(t *testing.T) {
+	failed := &http.Client{Transport: cloudflareRoundTrip(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("private-response-marker")), Request: request}, nil
+	})}
+	for _, stage := range []string{"direct-trace", "tunnel-trace"} {
+		t.Run(stage, func(t *testing.T) {
+			probe := cloudflareScanHTTPProbe{
+				directClient: cloudflareProbeClient("ip=9.9.9.9\ncolo=DME\nwarp=off\n", 200, "ok"), traceURL: "https://trace.example/cdn-cgi/trace",
+				boundClient: func(string) (*http.Client, func(), error) { return failed, func() {}, nil },
+			}
+			if stage == "direct-trace" {
+				probe.directClient = failed
+			}
+			_, err := probe.observe(context.Background(), "172.16.0.2", "cloudflare-wg:route", catalog.Service{ID: "telegram", ProbeURL: "https://service.example/check"})
+			var failure *cloudflareprovider.ScanFailure
+			if !errors.As(err, &failure) || failure.Stage != stage || failure.ReasonCode != "trace-http-status" || failure.HTTPStatus != 403 || strings.Contains(err.Error(), "private-response-marker") {
+				t.Fatalf("trace failure lost safe diagnostic: failure=%+v err=%v", failure, err)
+			}
+		})
 	}
 }

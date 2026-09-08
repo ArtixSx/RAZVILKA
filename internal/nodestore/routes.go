@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
 var ErrRouteProof = errors.New("node route has no current exact service proof")
@@ -36,6 +38,9 @@ func (s *Store) RouteServices(ctx context.Context, nodeID, networkProfile string
 	if !validNodeID(nodeID) || !checkTokenPattern.MatchString(networkProfile) || now.IsZero() {
 		return nil, ErrStore
 	}
+	if !systemprobe.ValidWANProfileID(networkProfile) {
+		return nil, ErrRouteProof
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	doc, _, err := s.load(ctx)
@@ -49,11 +54,11 @@ func (s *Store) RouteServices(ctx context.Context, nodeID, networkProfile string
 	if doc.Nodes[index].Disabled || !originFresh(doc.Nodes[index], now.UTC()) {
 		return []string{}, nil
 	}
-	// Only the newest exact result for a service may grant route authority. An
-	// older PASS must never resurrect a node after a newer FAIL or expiry.
+	// Only the newest exact attempt for a service may grant route authority.
+	// DNS, transport and egress failures also revoke an older service PASS.
 	latest := map[string]CheckRecord{}
 	for _, check := range doc.Nodes[index].Checks {
-		if check.ServiceID != "" && check.NetworkProfile == networkProfile && check.RoutePathID == "sing-box:"+nodeID && check.TestLevel == "service" {
+		if check.ServiceID != "" && check.NetworkProfile == networkProfile && check.RoutePathID == "sing-box:"+nodeID {
 			latest[check.ServiceID] = check
 		}
 	}
@@ -92,7 +97,7 @@ func (s *Store) MaterializeSingBox(ctx context.Context, bindings []RouteBinding,
 	}
 	requested := map[string]storedNode{}
 	for _, binding := range bindings {
-		if !validNodeID(binding.NodeID) || !sourcePattern.MatchString(binding.ServiceID) || !checkTokenPattern.MatchString(binding.NetworkProfile) {
+		if !validNodeID(binding.NodeID) || !sourcePattern.MatchString(binding.ServiceID) || !systemprobe.ValidWANProfileID(binding.NetworkProfile) {
 			return RouteMaterial{}, ErrRouteProof
 		}
 		index := nodeIndex(doc, binding.NodeID)
@@ -189,7 +194,7 @@ func nodeHasRouteProof(node storedNode, binding RouteBinding, now time.Time) boo
 func latestRouteCheck(node storedNode, serviceID, profile string) (CheckRecord, bool) {
 	for index := len(node.Checks) - 1; index >= 0; index-- {
 		check := node.Checks[index]
-		if check.ServiceID == serviceID && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+node.ID && check.TestLevel == "service" {
+		if check.ServiceID == serviceID && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+node.ID {
 			return check, true
 		}
 	}
@@ -197,8 +202,8 @@ func latestRouteCheck(node storedNode, serviceID, profile string) (CheckRecord, 
 }
 
 func routeCheckUsable(check CheckRecord, nodeID, serviceID, profile string, now time.Time) bool {
-	return check.ServiceID == serviceID && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+nodeID &&
-		check.TestLevel == "service" && check.Verdict == "PASS" && check.State == "available" && !check.DirectLeak && now.Before(check.ExpiresAt)
+	return systemprobe.ValidWANProfileID(profile) && check.ServiceID == serviceID && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+nodeID &&
+		check.TestLevel == "service" && check.Verdict == "PASS" && check.State == "available" && !check.DirectLeak && !now.Before(check.CheckedAt) && now.Before(check.ExpiresAt)
 }
 
 func nodeTag(id string) string { return "rz-node-" + id[len("node-"):len("node-")+16] }

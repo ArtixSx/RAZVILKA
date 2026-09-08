@@ -146,6 +146,9 @@ func (scanner Scanner) runCandidate(ctx context.Context, candidate WireGuardCand
 		cancel()
 		attempt.Candidate = candidate.Public()
 		attempt.ServiceID = options.ServiceID
+		if runErr != nil && attempt.Failure == nil {
+			attempt.Failure = &ScanFailure{Stage: "runner", ReasonCode: "runner-failed"}
+		}
 		attempts = append(attempts, attempt)
 		if contextErr != nil {
 			return attempts, contextErr
@@ -165,6 +168,7 @@ func (scanner Scanner) evaluate(attempts []ScanAttempt, options ScanOptions, err
 	report := EvaluateScanReport(attempts, now, options.EvidenceTTL)
 	if err != nil {
 		report.Verified = false
+		report.ValidUntil = time.Time{}
 		switch {
 		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 			report.ReasonCode = "scan-canceled"

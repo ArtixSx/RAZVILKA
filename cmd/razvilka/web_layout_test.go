@@ -109,7 +109,7 @@ func TestWarpSettingsExplainTransactionalApply(t *testing.T) {
 			t.Fatalf("WARP guidance missing %q", required)
 		}
 	}
-	for _, required := range []string{"ENGINE_DRAFT_UNUSED", "warpPolicyDirty", "Сначала назначьте сервис", "компонент не установлен", "сначала создайте или импортируйте профиль", "openRouteInstallation('warp-wg')", "/api/v1/warp/connectivity", "/api/v1/warp/canary", "checkWarpCanary"} {
+	for _, required := range []string{"ENGINE_DRAFT_UNUSED", "warpPolicyDirty", "Выберите сервис для подключения", "компонент не установлен", "сначала создайте или импортируйте профиль", "openRouteInstallation('warp-wg')", "/api/v1/warp/connectivity", "/api/v1/warp/canary", "checkWarpCanary"} {
 		if !strings.Contains(app, required) {
 			t.Fatalf("WARP apply guard missing %q", required)
 		}
@@ -127,12 +127,12 @@ func TestServiceCatalogExposesAddressListsAndSourceFreshness(t *testing.T) {
 		t.Fatalf("read embedded app: %v", err)
 	}
 	html, app := string(indexData), string(appData)
-	for _, required := range []string{`id="openBypassSetup"`, `+ Установить обход`} {
+	for _, required := range []string{`id="openBypassSetup"`, `Установить обход`} {
 		if !strings.Contains(html, required) {
 			t.Fatalf("service setup control missing %q", required)
 		}
 	}
-	for _, required := range []string{"Домены, IP-сети и актуальность источников", "renderServiceListsDetails", "detail_kind: 'service-lists'", "ip_and_cidr", "source_updates", "list_status"} {
+	for _, required := range []string{"Домены и IP-сети сервиса", "Актуальность списков", "renderServiceListsDetails", "detail_kind: 'service-lists'", "ip_and_cidr", "source_updates", "list_status"} {
 		if !strings.Contains(app, required) {
 			t.Fatalf("service address details missing %q", required)
 		}
@@ -243,15 +243,18 @@ func TestBypassViewsAndModeControlStaySeparated(t *testing.T) {
 	for _, required := range []string{
 		`id="view-engines"`,
 		`id="view-engineconfig"`,
-		`data-view="engineconfig"`,
+		`id="contextNavigation"`,
 		`id="topModeControl"`,
-		`id="topToggleSafeMode"`,
+		`id="projectModeAuto"`,
+		`id="projectModeManual"`,
+		`id="projectPower"`,
+		`id="toggleSafeMode"`,
 	} {
 		if !strings.Contains(html, required) {
 			t.Fatalf("usability control missing %q", required)
 		}
 	}
-	for _, duplicate := range []string{`id="topSafeMode"`, `class="status-chip"`} {
+	for _, duplicate := range []string{`id="topSafeMode"`, `id="topToggleSafeMode"`, `class="status-chip"`} {
 		if strings.Contains(html, duplicate) {
 			t.Fatalf("duplicate top status returned: %q", duplicate)
 		}
@@ -352,7 +355,7 @@ func TestServicesUseOneExplicitApplyWithoutRoutineReviewModal(t *testing.T) {
 		t.Fatal(err)
 	}
 	html, app := string(indexData), string(appData)
-	for _, required := range []string{`id="applyServiceChanges"`, "Сохранить и проверить", "function needsApplyReview", "sectionOwnsDraft", "Автопилот (AUTO)"} {
+	for _, required := range []string{`id="applyServiceChanges"`, "Проверить и применить", "function needsApplyReview", "sectionOwnsDraft", "Автопилот (AUTO)"} {
 		if !strings.Contains(html+app, required) {
 			t.Fatalf("streamlined service apply marker missing %q", required)
 		}
@@ -372,16 +375,21 @@ func TestNodeInventoryIsVisibleWithoutClaimingRouteReadiness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	content := string(indexData) + string(appData)
+	browserData, err := embedded.ReadFile("web/node-browser.js")
+	if err != nil {
+		t.Fatalf("read embedded node browser: %v", err)
+	}
+	content := string(indexData) + string(appData) + string(browserData)
 	for _, required := range []string{
 		`data-view="nodes"`,
 		`id="view-nodes"`,
 		`id="nodeSearch"`,
 		`id="nodeStateFilter"`,
 		`/api/v1/nodes`,
-		`Импорт не означает, что узел работает`,
-		`Последняя проверка: <b>${esc(checkedText)}</b>`,
-		`Назначение: <b>${esc(assignmentText)}</b>`,
+		`Пинг — время соединения с сервером`,
+		`nodeServiceHealth`,
+		`nodePassivePing`,
+		`id="nodeBatchCancel"`,
 		`id="nodeOpenImport"`,
 		`id="nodeEditDialog"`,
 		`id="nodeRevealDialog"`,
@@ -389,8 +397,8 @@ func TestNodeInventoryIsVisibleWithoutClaimingRouteReadiness(t *testing.T) {
 		`data-node-check=`,
 		`/check`,
 		`CHECK_NODE`,
-		`IP через узел`,
-		`Рабочие маршруты не изменятся`,
+		`Пинг · TCP`,
+		`Массовая проверка не меняет маршруты`,
 		`STORE_REMOTE_NODES`,
 		`REVEAL_NODE`,
 		`DELETE_NODE`,
@@ -454,9 +462,9 @@ func TestUSQUEDNSCandidateExplainsReadOnlyScope(t *testing.T) {
 	}
 }
 
-func TestServiceRouteUISeparatesTruthStatesAndKeepsLiteModeSimple(t *testing.T) {
+func TestServiceRouteUISeparatesAppliedStateAndExpandableSettings(t *testing.T) {
 	t.Parallel()
-	appData, err := embedded.ReadFile("web/app.js")
+	appData, err := embedded.ReadFile("web/service-dashboard-ui.js")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,16 +474,17 @@ func TestServiceRouteUISeparatesTruthStatesAndKeepsLiteModeSimple(t *testing.T) 
 	}
 	content := string(appData) + string(indexData)
 	for _, required := range []string{
-		`data-service-mode="lite"`,
-		`data-service-mode="pro"`,
-		"Изменить в расширенном режиме",
-		"Рекомендация при включении",
-		"Сервис выключен · это только рекомендация",
-		"service-truth-grid",
-		"Выбрано",
-		"Рассчитано",
-		"Применено",
-		"Подтверждено",
+		"data-sd-expand",
+		"aria-expanded",
+		"sd-details",
+		"Применённый маршрут",
+		"Есть неприменённые изменения",
+		"Рекомендация пока не проверена",
+		"serviceDashboardFresh",
+		"Выбрано: вкл.",
+		"Проверить сервис",
+		"Подобрать подключение",
+		"это не пинг",
 	} {
 		if !strings.Contains(content, required) {
 			t.Fatalf("service truth UI marker missing %q", required)
@@ -489,10 +498,14 @@ func TestNFQWS2ServiceResultOpensOwnershipDrawer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	content := string(appData)
+	dashboard, err := embedded.ReadFile("web/service-dashboard-ui.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(appData) + string(dashboard)
 	for _, required := range []string{
 		"renderNFQWS2ServiceDetails",
-		"data-nfqws2-id",
+		"data-sd-nfqws",
 		"Внешний владелец",
 		"RAZVILKA не будет запускать второй NFQWS2",
 		"data-open-strategy-lab",

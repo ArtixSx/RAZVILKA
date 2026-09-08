@@ -9,14 +9,16 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nativeenrollment"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 // Offline targets and live Store sessions build the same typed images.
 type configBuilder interface {
-	DraftImage(context.Context, map[string]config.ServiceState) (restorejournal.Image, error)
+	DraftImageWithPolicies(context.Context, map[string]config.ServiceState, map[string]config.ServicePolicy) (restorejournal.Image, error)
 }
 type customBuilder interface {
 	MergeImage(context.Context, []catalog.Service, map[string]bool, bool) (restorejournal.Image, error)
@@ -29,6 +31,12 @@ type draftBuilder interface {
 }
 type nodeBuilder interface {
 	MergeImage(context.Context, nodestore.PrivateSnapshot) (restorejournal.Image, error)
+}
+type nativeBuilder interface {
+	MergeImage(context.Context, nativeenrollment.Snapshot) (restorejournal.Image, error)
+}
+type subscriptionBuilder interface {
+	MergeImage(context.Context, providerfeed.PrivateSnapshot) (restorejournal.Image, error)
 }
 
 // RestoreOffline is an internal pre-Load operation, NOT an HTTP or live restore
@@ -73,6 +81,18 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 		return nil, restorejournal.ErrInvalid
 	}
 	ids := []string{"config", "custom_services", "devices"}
+	if payload.SubscriptionSnapshot != nil {
+		if c.layout.FeedRoot == "" {
+			return nil, restorejournal.ErrInvalid
+		}
+		ids = append(ids, "subscriptions")
+	}
+	if payload.NativeEnrollment != nil {
+		if c.layout.WarpRoot == "" {
+			return nil, restorejournal.ErrInvalid
+		}
+		ids = append(ids, "native_warp")
+	}
 	if payload.NodeSnapshot != nil {
 		if c.layout.NodeRoot == "" {
 			return nil, restorejournal.ErrInvalid
@@ -119,8 +139,13 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 			return nil, restorejournal.ErrInvalid
 		}
 	}
+	for id := range payload.ServicePolicies {
+		if !known[id] {
+			return nil, restorejournal.ErrInvalid
+		}
+	}
 	changes["custom_services"] = customImage
-	changes["config"], err = c.slots["config"].target.(configBuilder).DraftImage(ctx, payload.Services)
+	changes["config"], err = c.slots["config"].target.(configBuilder).DraftImageWithPolicies(ctx, payload.Services, payload.ServicePolicies)
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +168,18 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 	}
 	if payload.NodeSnapshot != nil {
 		changes["nodes"], err = c.slots["nodes"].target.(nodeBuilder).MergeImage(ctx, *payload.NodeSnapshot)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if payload.NativeEnrollment != nil {
+		changes["native_warp"], err = c.slots["native_warp"].target.(nativeBuilder).MergeImage(ctx, *payload.NativeEnrollment)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if payload.SubscriptionSnapshot != nil {
+		changes["subscriptions"], err = c.slots["subscriptions"].target.(subscriptionBuilder).MergeImage(ctx, *payload.SubscriptionSnapshot)
 		if err != nil {
 			return nil, err
 		}

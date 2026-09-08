@@ -14,7 +14,36 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
+
+var ErrNetworkChanged = errors.New("network epoch changed or is unavailable; repeat exact node checks")
+
+var ErrReviewChanged = errors.New("reviewed node plan is no longer current")
+
+type reviewGuardKey struct{}
+type reviewCommitAdapterKey struct{}
+
+// WithReviewGuard attaches request-owned review authority to an existing
+// transaction. The guard is never consulted during rollback.
+func WithReviewGuard(ctx context.Context, guard func(context.Context) error) context.Context {
+	return context.WithValue(ctx, reviewGuardKey{}, guard)
+}
+
+// ReviewCommittedAdapter identifies only the successful adapter commit whose
+// postcondition is currently being checked. A review may then permit that
+// adapter to have consumed its own staged files. It grants no rollback waiver.
+func ReviewCommittedAdapter(ctx context.Context) string {
+	id, _ := ctx.Value(reviewCommitAdapterKey{}).(string)
+	return id
+}
+
+// preflightRefusalError is returned only after read-only checks, before the
+// adapter touches live runtime. It grants no exemption once any adapter in the
+// transaction has mutated runtime; that transaction must still roll back.
+type preflightRefusalError struct{ error }
+
+func (err preflightRefusalError) Unwrap() error { return err.error }
 
 type Manager struct {
 	operationOnce   sync.Once
@@ -24,6 +53,7 @@ type Manager struct {
 	StateRoot       string
 	Adapters        map[string]Adapter
 	RollbackTimeout time.Duration
+	FreshProfile    func(context.Context) (string, error)
 }
 
 type Adapter interface {
@@ -105,6 +135,7 @@ type Execution struct {
 }
 
 type PolicyRefresh struct {
+	State     string          `json:"state,omitempty"`
 	PlanID    string          `json:"plan_id,omitempty"`
 	CheckedAt string          `json:"checked_at,omitempty"`
 	Changed   map[string]bool `json:"changed,omitempty"`
@@ -125,12 +156,12 @@ type RuntimeStatus struct {
 }
 
 func New(stateRoot string) *Manager {
-	return &Manager{StateRoot: stateRoot, Adapters: map[string]Adapter{}, operationGate: make(chan struct{}, 1), RollbackTimeout: 45 * time.Second}
+	return &Manager{StateRoot: stateRoot, Adapters: map[string]Adapter{}, operationGate: make(chan struct{}, 1), RollbackTimeout: 45 * time.Second, FreshProfile: observeNetworkProfile}
 }
 
 // ConfigureSingBoxNodeRoutes attaches the private registry only after both
 // stores completed boot recovery. It does not materialize or mutate a route.
-func (m *Manager) ConfigureSingBoxNodeRoutes(materializer NodeRouteMaterializer, profile func() string) error {
+func (m *Manager) ConfigureSingBoxNodeRoutes(materializer NodeRouteMaterializer, profile func(context.Context) (string, error)) error {
 	if m == nil || materializer == nil || profile == nil {
 		return errors.New("Sing-box node route materializer is unavailable")
 	}
@@ -141,7 +172,45 @@ func (m *Manager) ConfigureSingBoxNodeRoutes(materializer NodeRouteMaterializer,
 		return errors.New("Sing-box dataplane adapter is unavailable")
 	}
 	adapter.NodeRoutes = materializer
-	adapter.NetworkProfile = profile
+	adapter.FreshProfile = profile
+	m.FreshProfile = profile
+	return nil
+}
+
+func observeNetworkProfile(ctx context.Context) (string, error) {
+	profile, err := systemprobe.FreshWANProfile(ctx)
+	return profile.ID, err
+}
+
+func verifyNetworkProfile(ctx context.Context, expected string, observe func(context.Context) (string, error)) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !systemprobe.ValidWANProfileID(expected) {
+		return ErrNetworkChanged
+	}
+	if observe == nil {
+		observe = observeNetworkProfile
+	}
+	current, err := observe(ctx)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return contextErr
+	}
+	if err != nil || !systemprobe.ValidWANProfileID(current) || current != expected {
+		return ErrNetworkChanged
+	}
+	return nil
+}
+
+func (m *Manager) checkPlanNetwork(ctx context.Context, plan Plan) error {
+	if plan.RequiresNetworkProof() {
+		if err := verifyNetworkProfile(ctx, plan.NetworkProfileID, m.FreshProfile); err != nil {
+			return err
+		}
+	}
+	if guard, ok := ctx.Value(reviewGuardKey{}).(func(context.Context) error); ok && guard != nil {
+		return guard(ctx)
+	}
 	return nil
 }
 
@@ -187,6 +256,11 @@ func (m *Manager) Register(adapter Adapter) error {
 	if _, exists := m.Adapters[adapter.ID()]; exists {
 		return fmt.Errorf("dataplane adapter %q is already registered", adapter.ID())
 	}
+	if nfqws2, ok := adapter.(*NFQWS2Adapter); ok {
+		if err := nfqws2.bindStateRoot(m.StateRoot); err != nil {
+			return err
+		}
+	}
 	m.Adapters[adapter.ID()] = adapter
 	return nil
 }
@@ -230,6 +304,9 @@ func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID strin
 		return err
 	}
 	defer m.endOperation()
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(m.StateRoot, 0o700); err != nil {
 		return err
 	}
@@ -262,11 +339,14 @@ func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID strin
 		if err := phase.call(ctx, plan, root); err != nil {
 			return fmt.Errorf("%s candidate %s: %w", adapterID, phase.name, err)
 		}
+		if err := m.checkPlanNetwork(ctx, plan); err != nil {
+			return err
+		}
 	}
 	if err := canary.Canary(ctx, plan.RoutePlanFor(adapterID), root); err != nil {
 		return fmt.Errorf("%s isolated canary: %w", adapterID, err)
 	}
-	return nil
+	return m.checkPlanNetwork(ctx, plan)
 }
 
 func (m *Manager) adapter(id string) (Adapter, bool) {
@@ -449,6 +529,18 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		return recovery, nil
 	}
 	recovery.PlanID = plan.PlanID
+	networkStale := func(cause error) (Recovery, error) {
+		recovery.State, recovery.Guarded, recovery.FailureCount = "network-stale", false, 0
+		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "sing-box", State: "network-stale", Detail: cause.Error()})
+		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		if err := m.writeRecoveryLocked(recovery); err != nil {
+			return recovery, errors.Join(cause, err)
+		}
+		return recovery, cause
+	}
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		return networkStale(err)
+	}
 	var previous *Recovery
 	if _, readErr := readOptionalJournal(filepath.Join(m.StateRoot, "latest-recovery.json"), &previous); readErr != nil {
 		return recovery, readErr
@@ -471,6 +563,9 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	recovery.State = "recovering"
 	var firstErr error
 	for _, id := range plan.Adapters {
+		if err := m.checkPlanNetwork(ctx, plan); err != nil {
+			return networkStale(err)
+		}
 		step := RecoveryStep{Adapter: id, State: "failed"}
 		adapter, ok := m.adapter(id)
 		if !ok {
@@ -478,6 +573,9 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		} else if reconciler, ok := adapter.(RuntimeReconciler); !ok {
 			step.Detail = "adapter does not support boot recovery"
 		} else if err := reconciler.Reconcile(ctx, plan); err != nil {
+			if errors.Is(err, ErrNetworkChanged) {
+				return networkStale(err)
+			}
 			step.Detail = err.Error()
 		} else {
 			step.State = "recovered"
@@ -486,6 +584,9 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 			firstErr = fmt.Errorf("recover %s: %s", id, step.Detail)
 		}
 		recovery.Steps = append(recovery.Steps, step)
+	}
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		return networkStale(err)
 	}
 	recovery.State = "recovered"
 	if firstErr != nil {
@@ -547,7 +648,27 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 	}
 	changed := map[string]bool{}
 	var firstErr error
+	writeRefresh := func() error {
+		state := "checked"
+		if errors.Is(firstErr, ErrNetworkChanged) {
+			state = "network-stale"
+		}
+		report := PolicyRefresh{PlanID: plan.PlanID, State: state, CheckedAt: time.Now().UTC().Format(time.RFC3339Nano), Changed: changed}
+		if firstErr != nil {
+			report.Error = firstErr.Error()
+		}
+		data, _ := json.MarshalIndent(report, "", "  ")
+		return writeAtomic(filepath.Join(m.StateRoot, "latest-policy-refresh.json"), data, 0o600)
+	}
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		firstErr = err
+		return changed, errors.Join(err, writeRefresh())
+	}
 	for _, id := range plan.Adapters {
+		if err := m.checkPlanNetwork(ctx, plan); err != nil {
+			firstErr = err
+			break
+		}
 		adapter, ok := m.adapter(id)
 		if !ok {
 			if firstErr == nil {
@@ -561,6 +682,10 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 		}
 		updated, err := refresher.RefreshPolicy(ctx, plan)
 		if err != nil {
+			if errors.Is(err, ErrNetworkChanged) {
+				firstErr = err
+				break
+			}
 			if firstErr == nil {
 				firstErr = fmt.Errorf("refresh %s policy: %w", id, err)
 			}
@@ -568,12 +693,10 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 		}
 		changed[id] = updated
 	}
-	report := map[string]any{"plan_id": plan.PlanID, "checked_at": time.Now().UTC().Format(time.RFC3339Nano), "changed": changed}
-	if firstErr != nil {
-		report["error"] = firstErr.Error()
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		firstErr = err
 	}
-	data, _ := json.MarshalIndent(report, "", "  ")
-	if err := writeAtomic(filepath.Join(m.StateRoot, "latest-policy-refresh.json"), data, 0o600); err != nil && firstErr == nil {
+	if err := writeRefresh(); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	return changed, firstErr
@@ -670,7 +793,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 
 	prepared := make([]Adapter, 0, len(plan.Adapters)+len(plan.RetiringAdapters))
 	var undoCommit func() error
+	liveMutation := false
 	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
+		if phase != "rollback" {
+			if err := m.checkPlanNetwork(runCtx, plan); err != nil {
+				return err
+			}
+		}
 		step := ExecutionStep{Adapter: adapter.ID(), Phase: phase, State: "running", StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		execution.Steps = append(execution.Steps, step)
 		index := len(execution.Steps) - 1
@@ -683,7 +812,22 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			writeExecution()
 			return err
 		}
+		previouslyMutated := liveMutation
+		if phase == "activate" || phase == "deactivate" || phase == "commit-adapter" {
+			liveMutation = true
+		}
 		err := action(runCtx, plan, adapterRoot)
+		var preflight preflightRefusalError
+		if !previouslyMutated && errors.As(err, &preflight) {
+			liveMutation = false
+		}
+		if err == nil && phase != "rollback" {
+			checkCtx := runCtx
+			if phase == "commit-adapter" {
+				checkCtx = context.WithValue(checkCtx, reviewCommitAdapterKey{}, adapter.ID())
+			}
+			err = m.checkPlanNetwork(checkCtx, plan)
+		}
 		execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if err != nil {
 			execution.Steps[index].State = "failed"
@@ -698,6 +842,12 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(ctx), m.rollbackTimeout())
 		defer cancelRollback()
 		execution.Error = cause.Error()
+		if errors.Is(cause, ErrNetworkChanged) || errors.Is(cause, ErrReviewChanged) || errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
+			plan.ObservedEvidence = evidence.None
+			for index := range plan.RouteEvidence {
+				plan.RouteEvidence[index].Observed = evidence.None
+			}
+		}
 		execution.State = "rolling-back"
 		writeExecution()
 		var rollbackErr error
@@ -732,6 +882,10 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	rejectCanary := func(cause error) error {
 		plan.Ready = false
 		plan.State = "canary-failed"
+		plan.ObservedEvidence = evidence.None
+		for index := range plan.RouteEvidence {
+			plan.RouteEvidence[index].Observed = evidence.None
+		}
 		plan.Note = cause.Error()
 		execution.Error = cause.Error()
 		execution.State = "canary-failed"
@@ -740,14 +894,52 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		writeExecution()
 		return cause
 	}
+	rejectNetwork := func(cause error) error {
+		plan.Ready, plan.State = false, "network-stale"
+		plan.ObservedEvidence = evidence.None
+		for index := range plan.RouteEvidence {
+			plan.RouteEvidence[index].Observed = evidence.None
+		}
+		plan.Note = cause.Error()
+		execution.State, execution.Error = "network-stale", cause.Error()
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		_ = m.recordLocked(plan)
+		writeExecution()
+		return cause
+	}
+	fail := func(cause error) error {
+		if !liveMutation {
+			if errors.Is(cause, ErrNetworkChanged) {
+				return rejectNetwork(cause)
+			}
+			if errors.Is(cause, ErrReviewChanged) {
+				return rejectCanary(cause)
+			}
+			var preflight preflightRefusalError
+			if errors.As(cause, &preflight) {
+				return rejectCanary(cause)
+			}
+			if plan.RequiresNetworkProof() && (errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded)) {
+				return rejectCanary(cause)
+			}
+		}
+		return rollback(cause)
+	}
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		return execution, fail(err)
+	}
 
 	if plan.Noop {
 		if commit != nil {
 			var err error
+			liveMutation = true
 			undoCommit, err = commit()
 			if err != nil {
 				return execution, rollback(err)
 			}
+		}
+		if err := m.checkPlanNetwork(ctx, plan); err != nil {
+			return execution, fail(err)
 		}
 		plan.State = "committed"
 		execution.State = "committed"
@@ -780,7 +972,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	for _, adapter := range append(append([]Adapter(nil), retiringAdapters...), adapters...) {
 		if err := run(ctx, adapter, "snapshot", adapter.Snapshot); err != nil {
-			return execution, rollback(err)
+			return execution, fail(err)
 		}
 		prepared = append(prepared, adapter)
 	}
@@ -793,7 +985,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	} {
 		for _, adapter := range adapters {
 			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
-				return execution, rollback(err)
+				return execution, fail(err)
 			}
 		}
 	}
@@ -809,6 +1001,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			// CanaryAdapter owns and removes only its isolated candidate. Calling
 			// the live Rollback method here could unnecessarily interrupt the
 			// still-working process even though Activate has not started.
+			if errors.Is(err, ErrNetworkChanged) {
+				return execution, rejectNetwork(err)
+			}
 			return execution, rejectCanary(err)
 		}
 	}
@@ -817,7 +1012,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if err := run(ctx, adapter, "deactivate", func(runCtx context.Context, _ Plan, _ string) error {
 			return deactivator.Deactivate(runCtx)
 		}); err != nil {
-			return execution, rollback(err)
+			return execution, fail(err)
 		}
 	}
 	for _, phase := range []struct {
@@ -830,16 +1025,23 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	} {
 		for _, adapter := range adapters {
 			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
-				return execution, rollback(err)
+				return execution, fail(err)
 			}
 		}
 	}
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		return execution, fail(err)
+	}
 	if commit != nil {
 		var err error
+		liveMutation = true
 		undoCommit, err = commit()
 		if err != nil {
 			return execution, rollback(fmt.Errorf("commit desired state: %w", err))
 		}
+	}
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		return execution, fail(err)
 	}
 	plan.State = "committed"
 	plan.ObservedEvidence = plan.RequiredEvidence
@@ -881,6 +1083,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	plan.Note = "Dataplane adapters activated, health-checked and committed."
 	execution.State = "committed"
 	execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		return execution, fail(err)
+	}
 	if err := m.recordLocked(plan); err != nil {
 		return execution, rollback(fmt.Errorf("commit dataplane journal: %w", err))
 	}

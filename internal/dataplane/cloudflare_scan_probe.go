@@ -54,7 +54,7 @@ func (probe cloudflareScanHTTPProbe) observe(ctx context.Context, source, routeP
 	}
 	directTrace, err := probe.trace(ctx, probe.directClient)
 	if err != nil {
-		return cloudflareScanProbeFacts{}, err
+		return cloudflareScanProbeFacts{}, cloudflareHTTPFailure("direct-trace", err)
 	}
 	bound, closeBound, err := probe.boundClient(source)
 	if err != nil || bound == nil || closeBound == nil {
@@ -63,7 +63,7 @@ func (probe cloudflareScanHTTPProbe) observe(ctx context.Context, source, routeP
 	defer closeBound()
 	tunnelTrace, err := probe.trace(ctx, bound)
 	if err != nil {
-		return cloudflareScanProbeFacts{}, err
+		return cloudflareScanProbeFacts{}, cloudflareHTTPFailure("tunnel-trace", err)
 	}
 	serviceEvidence, err := probe.service(ctx, bound, routePathID, tunnelTrace.IP, service)
 	if err != nil {
@@ -87,7 +87,7 @@ func (probe cloudflareScanHTTPProbe) trace(ctx context.Context, client *http.Cli
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return cloudflareprovider.TraceEvidence{}, errors.New("Cloudflare trace status is not 200")
+		return cloudflareprovider.TraceEvidence{}, &cloudflareprovider.ScanFailure{ReasonCode: "trace-http-status", HTTPStatus: response.StatusCode}
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, cloudflareprovider.MaxTraceBytes+1))
 	if err != nil || len(body) > cloudflareprovider.MaxTraceBytes {
@@ -98,6 +98,23 @@ func (probe cloudflareScanHTTPProbe) trace(ctx context.Context, client *http.Cli
 		return cloudflareprovider.TraceEvidence{}, errors.New("Cloudflare trace evidence is invalid")
 	}
 	return trace, nil
+}
+
+func cloudflareHTTPFailure(stage string, err error) *cloudflareprovider.ScanFailure {
+	var failure *cloudflareprovider.ScanFailure
+	if errors.As(err, &failure) {
+		copy := *failure
+		copy.Stage = stage
+		return &copy
+	}
+	code := "trace-request-failed"
+	if strings.Contains(err.Error(), "body") {
+		code = "trace-body-invalid"
+	}
+	if strings.Contains(err.Error(), "evidence") {
+		code = "trace-content-invalid"
+	}
+	return &cloudflareprovider.ScanFailure{Stage: stage, ReasonCode: code}
 }
 
 func (probe cloudflareScanHTTPProbe) service(ctx context.Context, client *http.Client, routePathID, egressIP string, service catalog.Service) (evidence.ProbeEvidence, error) {

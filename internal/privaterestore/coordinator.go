@@ -12,7 +12,9 @@ import (
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/devices"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nativeenrollment"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -116,6 +118,12 @@ func Open(ctx context.Context, layout Layout) (*Coordinator, restorejournal.Outc
 	add("provider_cloudflare", func() (managedTarget, error) { return cloudflareprovider.OpenRestoreTarget(layout.ProviderRoot) })
 	if layout.NodeRoot != "" {
 		add("nodes", func() (managedTarget, error) { return nodestore.OpenRestoreTarget(layout.NodeRoot) })
+	}
+	if layout.WarpRoot != "" {
+		add("native_warp", func() (managedTarget, error) { return nativeenrollment.Open(layout.WarpRoot) })
+	}
+	if layout.FeedRoot != "" {
+		add("subscriptions", func() (managedTarget, error) { return providerfeed.OpenRestoreTarget(layout.FeedRoot) })
 	}
 	for _, spec := range engineconfig.Specs() {
 		for _, file := range spec.Files {

@@ -31,7 +31,7 @@ func TestInspectLegacyConfigIsSafeAndReadOnly(t *testing.T) {
 
 func TestInspectRejectsFutureUnknownAndTrailingData(t *testing.T) {
 	tests := []string{
-		`{"schema_version":2,"listen":":8787","services":{},"engine_order":["nfqws2"],"safe_mode":true}`,
+		`{"schema_version":3,"listen":":8787","services":{},"engine_order":["nfqws2"],"safe_mode":true}`,
 		`{"schema_version":1,"listen":":8787","services":{},"engine_order":["nfqws2"],"safe_mode":true,"unexpected":1}`,
 		`{"schema_version":1,"listen":":8787","services":{},"engine_order":["nfqws2"],"safe_mode":true} {}`,
 	}

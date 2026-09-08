@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,21 +17,26 @@ import (
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/security"
-	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
 type fakeNodeChecker struct {
 	result  dataplane.NodeCheckResult
 	request dataplane.NodeCheckRequest
 	err     error
+	onCheck func()
 }
 
 func (f *fakeNodeChecker) Check(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 	f.request = request
+	if f.onCheck != nil {
+		f.onCheck()
+	}
 	return f.result, f.err
 }
 
 func (*fakeNodeChecker) Recover(context.Context) error { return nil }
+
+func stableNodeProfile(context.Context) (string, error) { return "wan-0123456789ab", nil }
 
 func TestNodeListIsSanitizedAndReadOnly(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "nodes")
@@ -283,12 +289,12 @@ func TestNodeExactCheckPersistsOnlySafeEvidence(t *testing.T) {
 	id := snapshot.Nodes[0].ID
 	now := time.Now().UTC()
 	checker := &fakeNodeChecker{result: dataplane.NodeCheckResult{
-		SchemaVersion: 1, ProbeID: "node-check-api", NodeID: id, ServiceID: "telegram", NetworkProfile: systemprobe.DetectWANProfile().ID,
+		SchemaVersion: 1, ProbeID: "node-check-api", NodeID: id, ServiceID: "telegram", NetworkProfile: "wan-0123456789ab",
 		RoutePathID: "sing-box:" + id, StartedAt: now.Add(-time.Second), FinishedAt: now, ExpiresAt: now.Add(time.Hour),
 		TestLevel: "service", Stage: "service", Verdict: evidence.VerdictPass, Available: true,
 		EgressIP: "203.0.113.25", HTTPStatus: 204, LatencyMS: 1000, Message: "Узел и сервис подтверждены.",
 	}}
-	a := &App{Nodes: store, NodeChecker: checker, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
+	a := &App{Nodes: store, NodeChecker: checker, FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`))
 	response := httptest.NewRecorder()
 	a.Handler(http.NotFoundHandler()).ServeHTTP(response, request)
@@ -343,5 +349,61 @@ func TestNodeCheckRequiresCatalogProbeAndEnabledNode(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`)))
 	if response.Code != http.StatusConflict || checker.request.NodeID != "" {
 		t.Fatalf("disabled node status=%d request=%+v", response.Code, checker.request)
+	}
+}
+
+func TestNodeCheckDoesNotPersistProofAcrossNetworkChange(t *testing.T) {
+	for _, scenario := range []string{"initial-unknown", "initial-empty", "changed", "became-unknown", "observation-error"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "nodes")
+			if err := os.Mkdir(root, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			store, err := nodestore.Open(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			now := time.Now().UTC()
+			snapshot, err := store.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174000@node.example:443?security=tls", now, time.Hour, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id := snapshot.Nodes[0].ID
+			profile := "wan-0123456789ab"
+			var observationErr error
+			if scenario == "initial-unknown" {
+				profile = "network-unknown"
+			} else if scenario == "initial-empty" {
+				profile = ""
+			}
+			checker := &fakeNodeChecker{result: dataplane.NodeCheckResult{
+				SchemaVersion: 1, ProbeID: "node-check-network", NodeID: id, ServiceID: "telegram", NetworkProfile: "wan-0123456789ab", RoutePathID: "sing-box:" + id,
+				StartedAt: now, FinishedAt: now, ExpiresAt: now.Add(time.Hour), TestLevel: "service", Stage: "service", Verdict: evidence.VerdictPass, Available: true, Message: "Подтверждено.",
+			}}
+			checker.onCheck = func() {
+				switch scenario {
+				case "changed":
+					profile = "wan-ffffffffffff"
+				case "became-unknown":
+					profile = "network-unknown"
+				case "observation-error":
+					observationErr = errors.New("private WAN details must not escape")
+				}
+			}
+			a := &App{Nodes: store, NodeChecker: checker, FreshProfile: func(context.Context) (string, error) { return profile, observationErr }, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
+			response := httptest.NewRecorder()
+			a.Handler(http.NotFoundHandler()).ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`)))
+			if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "NODE_NETWORK_CHANGED") || strings.Contains(response.Body.String(), "private WAN") {
+				t.Fatalf("unsafe network response: status=%d body=%s", response.Code, response.Body.String())
+			}
+			if strings.HasPrefix(scenario, "initial-") && checker.request.NodeID != "" {
+				t.Fatal("unknown initial network started a node check")
+			}
+			after, err := store.Snapshot(context.Background(), time.Now())
+			if err != nil || after.Generation != snapshot.Generation || len(after.Nodes[0].Health.History) != 0 {
+				t.Fatalf("stale check was persisted: snapshot=%+v err=%v", after, err)
+			}
+		})
 	}
 }

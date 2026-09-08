@@ -101,7 +101,7 @@ func TestScannerBoundsOptionsTimeoutAndRunnerErrors(t *testing.T) {
 	}
 	lateFailure := &mockScanRunner{t: t, now: now.Add(-5 * time.Second), cleanup: true, errAt: 3}
 	report, err = (Scanner{Runner: lateFailure, Now: func() time.Time { return now }, Wait: func(context.Context, time.Duration) error { return nil }}).Scan(context.Background(), store, account.ID, ScanOptions{ServiceID: "telegram", Attempts: 3})
-	if !errors.Is(err, ErrScannerRunner) || report.Verified || report.ReasonCode != "runner-failed" || report.Passes < 2 {
+	if !errors.Is(err, ErrScannerRunner) || report.Verified || !report.ValidUntil.IsZero() || report.ReasonCode != "runner-failed" || report.Passes < 2 {
 		t.Fatalf("late runner error promoted earlier passes: report=%+v err=%v", report, err)
 	}
 	blocking := &mockScanRunner{t: t, block: true}

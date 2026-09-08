@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -33,6 +34,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 	"github.com/ArtixSx/razvilka/internal/routeprobe"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
@@ -109,7 +111,17 @@ func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
 	installComponents := flag.Bool("install-components", false, "install or update recommended bypass components and exit")
 	deactivateDataplane := flag.Bool("deactivate-dataplane", false, "remove only RAZVILKA-owned runtime routes, interfaces and processes, then exit")
+	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
+	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	flag.Parse()
+	if *subscriptionSchema {
+		fmt.Println("1")
+		return
+	}
+	if *nativeEnrollmentSchema {
+		fmt.Println("1")
+		return
+	}
 
 	if *showVersion {
 		fmt.Println(app.Version)
@@ -147,11 +159,13 @@ func main() {
 	}
 	// Older releases could leave per-engine draft directories at 0755. Repair
 	// only the fixed RAZVILKA staging layout before opening recovery targets.
-	if err := engineconfig.NormalizeLegacyStagePermissions(*stagePath); err != nil {
-		log.Fatal("engine staging permission repair: ", err)
+	if !*checkOnly {
+		if err := engineconfig.NormalizeLegacyStagePermissions(*stagePath); err != nil {
+			log.Fatal("engine staging permission repair: ", err)
+		}
 	}
 	if *recoverPrivateRestore {
-		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath)
+		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
 		if err != nil {
 			log.Fatal("private draft recovery gate: ", err)
 		}
@@ -201,7 +215,7 @@ func main() {
 	}
 	if *checkOnly || *migrateConfig {
 		if *migrateConfig {
-			legacyRecovery, privateRecovery, _, _, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath)
+			legacyRecovery, privateRecovery, _, _, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
 			if err != nil {
 				log.Fatal("private draft recovery gate: ", err)
 			}
@@ -228,7 +242,7 @@ func main() {
 
 	// Private draft recovery precedes ALL Store loads, token creation and any
 	// runtime initialization. Keep the OS journal lease until server shutdown.
-	legacyRecovery, privateRecovery, legacyOutcome, privateOutcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath)
+	legacyRecovery, privateRecovery, legacyOutcome, privateOutcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
 	if err != nil {
 		log.Fatal("private draft recovery gate: ", err)
 	}
@@ -299,7 +313,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Smart Route state: %v", err)
 	}
-	smartRouteManager.Profile = func() string { return systemprobe.DetectWANProfile().ID }
+	smartRouteManager.Profile = func() string {
+		profile, err := systemprobe.FreshWANProfile(context.Background())
+		if err != nil {
+			return "network-unknown"
+		}
+		return profile.ID
+	}
 	dnsManager, err := dnscontrol.New(*dnsStatePath)
 	if err != nil {
 		log.Fatalf("DNS profile state: %v", err)
@@ -317,6 +337,7 @@ func main() {
 		log.Printf("router metrics history disabled: %v", err)
 	}
 	engineLab := enginelab.New(engineConfigs)
+	engineLab.OwnsPolicyRule = dataplaneManager.OwnsProxyEndpointExclusion
 	engineLab.EnablePolicyInspection()
 	usqueDoctor := usquediag.New()
 	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")
@@ -343,15 +364,41 @@ func main() {
 			}
 			material, materialErr := nodeStore.MaterializeSingBox(ctx, bindings, now)
 			return dataplane.NodeRouteMaterial{Config: material.Config, EndpointHosts: material.EndpointHosts}, materialErr
-		}, func() string { return systemprobe.DetectWANProfile().ID }); err != nil {
+		}, func(ctx context.Context) (string, error) {
+			profile, err := systemprobe.FreshWANProfile(ctx)
+			return profile.ID, err
+		}); err != nil {
 			log.Print("Node-scoped Sing-box routes disabled: ", err)
 		}
 	}
 	nodeChecker := dataplane.NewExactNodeChecker(filepath.Join(*dataplaneStatePath, "node-check"))
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	a.Cloudflare = cloudflareStore
+	updateExecutable, _ := os.Executable()
+	_, updatePort, _ := net.SplitHostPort(addr)
+	updateNodePath, _ := nodeStorePath(*cfgPath, *nodeStatePath)
+	updateCloudflarePath, _ := cloudflareStorePath(*cfgPath, *cloudflareStatePath)
+	a.SelfUpdate = updatecheck.NewUpdater(app.Version, filepath.Dir(*dataplaneStatePath), updatecheck.Deployment{Executable: updateExecutable, Port: updatePort, Paths: map[string]string{
+		"config": *cfgPath, "catalog": *catalogPath, "sources": *sourcesPath, "community": *communityCatalogPath,
+		"token": *tokenPath, "credentials": *credentialsPath, "custom": *customServicesPath, "devices": *devicesPath,
+		"cloudflare": updateCloudflarePath, "nodes": updateNodePath, "stage": *stagePath, "backups": *backupPath, "warp": *warpStatePath, "dataplane": *dataplaneStatePath,
+	}})
 	a.Nodes = nodeStore
+	if nodeStore != nil {
+		feedRoot, feedPathErr := filepath.Abs(filepath.Join(filepath.Dir(*cfgPath), "subscriptions-private"))
+		if err := os.MkdirAll(feedRoot, 0700); err == nil && feedPathErr == nil {
+			a.NodeFeeds, err = providerfeed.Open(nodeStore, feedRoot)
+			if err == nil {
+				defer a.NodeFeeds.Close()
+			} else {
+				log.Print("Private subscriptions disabled: store unavailable")
+			}
+		} else {
+			log.Print("Private subscriptions disabled: directory unavailable")
+		}
+	}
 	a.NodeChecker = nodeChecker
+	a.TestLab.Profile = smartRouteManager.Profile
 	a.PrivateRestore = privateRecovery
 	a.CloudflareLegacy, err = cloudflareLegacySources(*cfgPath, *warpStatePath)
 	if err != nil {
@@ -359,6 +406,7 @@ func main() {
 	}
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
+	a.StartSelfUpdate(runtimeContext)
 	nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
 	if err := nodeChecker.Recover(nodeRecoveryContext); err != nil {
 		log.Print("Exact node checker disabled: temporary runtime cleanup could not be confirmed")
@@ -377,7 +425,10 @@ func main() {
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
 	recovery, recoveryErr := dataplaneManager.Recover(recoveryContext)
 	cancelRecovery()
-	if recoveryErr != nil {
+	if recovery.State == "network-stale" {
+		log.Print("dataplane boot recovery requires fresh node checks in the current network")
+		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "network-stale", Actor: "system", RemoteIP: "local"})
+	} else if recoveryErr != nil {
 		log.Printf("dataplane boot recovery %s: %v", recovery.State, recoveryErr)
 		if safeErr := store.SetSafeMode(true); safeErr != nil {
 			log.Printf("enable Recovery Safe Mode: %v", safeErr)
@@ -389,7 +440,6 @@ func main() {
 		log.Printf("dataplane boot recovery completed for %s", recovery.PlanID)
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "ok", Actor: "system", RemoteIP: "local"})
 	}
-	a.StartBackground(runtimeContext)
 	statsSampler.Start(runtimeContext)
 	connectionCollector := conntrack.New(telemetryStore, store, func() catalog.Catalog {
 		services := append([]catalog.Service(nil), cat.Services...)
@@ -404,7 +454,14 @@ func main() {
 	log.Println(app.StartupMessage(addr, *cfgPath, *catalogPath))
 	srv := &http.Server{Addr: addr, Handler: a.Handler(http.FileServer(http.FS(sub))), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	serverErrors := make(chan error, 1)
-	go func() { serverErrors <- srv.ListenAndServe() }()
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	a.StartNodeChecks(runtimeContext)
+	a.StartNodeFeeds(runtimeContext)
+	go func() { serverErrors <- srv.Serve(listener) }()
+	a.StartServiceReconciler(runtimeContext)
 	select {
 	case serverErr := <-serverErrors:
 		if !errors.Is(serverErr, http.ErrServerClosed) {
@@ -416,6 +473,26 @@ func main() {
 		if err := srv.Shutdown(shutdownContext); err != nil {
 			log.Printf("HTTP shutdown: %v", err)
 		}
+		nodeShutdownContext, cancelNodeShutdown := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelNodeShutdown()
+		if err := a.WaitServiceReconciler(nodeShutdownContext); err != nil {
+			log.Print("Service automation cleanup did not finish before shutdown")
+		}
+		if err := a.WaitNodeRecovery(nodeShutdownContext); err != nil {
+			log.Print("Applied node recovery cleanup did not finish before shutdown")
+		}
+		if err := a.WaitNodeChecks(nodeShutdownContext); err != nil {
+			log.Print("Node checks cleanup did not finish before shutdown")
+		}
+		if err := a.WaitSelfUpdate(nodeShutdownContext); err != nil {
+			log.Print("Application update preparation cleanup did not finish before shutdown")
+		}
+		if err := a.WaitNodeAutofallback(nodeShutdownContext); err != nil {
+			log.Print("Node autofallback cleanup did not finish before shutdown")
+		}
+		if err := a.WaitNodeFeeds(nodeShutdownContext); err != nil {
+			log.Print("Subscription update cleanup did not finish before shutdown")
+		}
 	}
 }
 
@@ -425,6 +502,11 @@ func runCommand(args []string) (bool, int) {
 	}
 	command := strings.ToLower(strings.TrimSpace(args[0]))
 	switch command {
+	case "self-update-helper":
+		if len(args) != 2 {
+			return true, 2
+		}
+		return true, updatecheck.RunInstallerHelper(args[1])
 	case "version", "v":
 		fmt.Println(app.Version)
 		return true, 0

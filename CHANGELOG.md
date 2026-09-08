@@ -1,7 +1,23 @@
 # Changelog
 
-## 0.18.1-dev — Truth and safety
+## 0.18.1-rc.2 — Service controls, connection browser and guarded recovery
 
+Prerelease for public testing, built from the `0.18.1-dev` source line after
+Release CI. Hardware acceptance remains incomplete; see the
+[release notes](docs/releases/0.18.1-rc.2.md) for the tested scope and limitations.
+Earlier core acceptance below does not certify the final release artifact.
+
+- Added global Autopilot/Manual controls, transactional stop/resume of owned
+  routes, compact service cards, separate TCP/service checks, bounded candidate
+  selection and a persisted router-side check schedule. Client scopes and
+  unrelated pending edits survive stop, resume and failed application.
+- Simplified home/navigation, made overview cards actionable, added website
+  lookup and displayed installed component versions with available upgrades.
+  Proxy version/check processes no longer appear as running bypasses.
+- Added reviewed application updates from official GitHub assets with mandatory
+  digest/architecture/archive validation, restart-spanning write admission and
+  transactional installer handoff. Candidate layouts and untrusted path owners
+  are refused; an actual production upgrade remains a release acceptance gate.
 - Added a canonical development version consumed by local builds and CI, plus
   a release guard that rejects tags which do not match the source version.
 - Added a verified capability matrix and a roadmap rebased on the published
@@ -18,7 +34,7 @@
   successful result. Smart Route revokes observed misrouted evidence and ignores
   inconclusive high-score candidates.
 - Clarified that the YouTube connectivity probe requires HTTP 204 but does not
-  prove video playback. These changes still require router acceptance testing.
+  prove video playback.
 - Added managed proxy launch receipts and local route passports: boot/PID start,
   config/argv digests, executable, network namespace and listening socket owner
   are checked before and after a SOCKS service probe. Unowned or changed
@@ -29,7 +45,6 @@
   masquerade as a proven remote path. Existing profiles are not rewritten.
 - Bounded every SOCKS handshake stage and closed cancelled connections; failed
   managed startup now reaps its child and invalidates its launch receipt.
-  Remote egress proof and router acceptance remain outstanding.
 - Added an exact single-node checker for saved Sing-box outbounds. It isolates
   one node on a loopback-only SOCKS port, pins the resolved public endpoint,
   verifies process/route ownership, compares proxy and direct egress, and runs
@@ -38,14 +53,41 @@
   binding. Direct leaks, protocol-only success, stale evidence, disabled nodes
   and cleanup failures cannot make a node selectable; private endpoint and
   credentials remain outside the API.
-- Added a simple node-check dialog and visible last-check status/IP. This stage
-  still does not bind nodes to services or mutate working routes.
+- Added reviewed single-node route application with a one-use confirmation,
+  fresh exact service proof, preserved client scope and rollback. Group choices
+  are first saved to the service draft and require explicit application.
+- Added a connection browser with country/transport labels, source and status
+  filters, search, selection and pagination. TCP connection time is separate
+  from exact service availability; expired, wrong-network and future results
+  do not remain valid. Background redraws preserve focus and expanded cards.
+- Added five public feed presets and saved private HTTPS subscriptions with
+  opt-in scheduled refresh, cancellation and explicit partial-import consent.
+  Feed updates retain existing nodes and never grant route or service proof.
+- Added bounded automatic replacement only within an explicitly applied
+  fallback group. The current runtime is checked separately from an isolated
+  remote node; failed repair or replacement uses guarded rollback. Pending
+  service drafts and other client scopes are preserved.
+- Kept login, operation status and cancellation available while a detached
+  check owns the configuration stores. UI polling stops on logout and ignores
+  late responses from the previous session.
 - Verified the exact VLESS → Sing-box → Telegram path on Keenetic ARM64,
   including distinct direct/proxy egress, route ownership and cleanup. Route
   passports now safely support older kernels built without network namespaces
   only when both procfs namespace entries are absent with `ENOENT`; partial,
-  permission and mismatch failures remain fail-closed. Linux race acceptance
-  and additional Reality/Hysteria2/TUIC fixtures remain required before release.
+  permission and mismatch failures remain fail-closed.
+- On 8 September, a separate ARM64 core build passed mandatory service-domain
+  and literal public-IPv4 checks with the original TLS/Host, scoped Telegram
+  traffic from the selected PC, a negative client control, application restart
+  and recovery after controlled loss of its owned processes/TUN/policy. Fresh
+  proof was required and the user's original state was restored. This did not
+  reboot the router or disconnect WAN.
+- Preserved native WARP enrollment and pending registration through encrypted
+  backup/restore. Install and downgrade check private-state schema support
+  before replacing a binary. WARP WireGuard remains unconfirmed in the tested
+  network; repeated MASQUE results were mixed.
+- Added the English README and a private-file/link guard to release archives.
+  Builds include ARM64, MIPS and MIPSel/Go `mipsle`; MIPS hardware acceptance
+  remains open. Final candidate HIL and Linux Release CI remain release gates.
 
 ## v0.18.0 — Autopilot and honest route checks
 

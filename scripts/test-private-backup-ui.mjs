@@ -60,4 +60,24 @@ for (const mode of ['busy', 'not-started-canceled', 'rollback', 'recovery-requir
   await context.importPrivateBackup();
   assert.equal(requests, 1, 'stale preview cannot submit again');
 }
-console.log('Private backup import outcome UI checks passed');
+const exportFunction = source.match(/async function exportPrivateBackup\([^]*?\n}\n/);
+assert.ok(exportFunction, 'real export function must remain testable');
+for (const code of ['PRIVATE_BACKUP_ENGINE_INVALID', 'PRIVATE_BACKUP_ENGINE_UNREADABLE', 'UNEXPECTED']) {
+  const elements = new Map(['privateBackupPassword', 'privateBackupPasswordRepeat', 'exportPrivateBackup'].map(id => [id, { value: 'synthetic secret password', disabled: false, textContent: '' }]));
+  const notices = [];
+  let downloads = 0;
+  const context = vm.createContext({
+    $: selector => elements.get(selector.slice(1)),
+    api: async () => { throw Object.assign(new Error('Общая ошибка экспорта'), { payload: { code, error: code === 'UNEXPECTED' ? 'private internal cause' : 'Резервная копия не создана: незавершённый черновик sing-box/main. Исправьте его в настройках обхода.' } }); },
+    downloadJSON: () => downloads++, timestampName: () => 'test',
+    showDetails: body => notices.push(body),
+  });
+  vm.runInContext(exportFunction[0], context);
+  await context.exportPrivateBackup();
+  assert.equal(downloads, 0, 'failed source validation downloaded a backup');
+  assert.equal(elements.get('exportPrivateBackup').disabled, false);
+  if (code === 'UNEXPECTED') assert.equal(notices[0].error, 'Общая ошибка экспорта');
+  else assert.match(notices[0].error, /незавершённый черновик sing-box\/main/);
+  assert.doesNotMatch(JSON.stringify(notices), /private internal cause/);
+}
+console.log('Private backup import outcomes and actionable export refusal UI checks passed');

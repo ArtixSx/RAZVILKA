@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
 const (
@@ -135,7 +136,7 @@ func (s *Store) DeleteGroup(ctx context.Context, id string, now time.Time) error
 // previous node remains selected, preventing latency jitter from causing route
 // churn; it is replaced only after its exact proof expires or fails.
 func (s *Store) ResolveRoute(ctx context.Context, target, serviceID, networkProfile, previousNode string, previousSince, now time.Time) (ResolvedRoute, error) {
-	if !sourcePattern.MatchString(serviceID) || !checkTokenPattern.MatchString(networkProfile) || now.IsZero() {
+	if !sourcePattern.MatchString(serviceID) || !systemprobe.ValidWANProfileID(networkProfile) || now.IsZero() {
 		return ResolvedRoute{}, ErrRouteProof
 	}
 	now = now.UTC()
@@ -200,7 +201,7 @@ func (s *Store) ResolveRoute(ctx context.Context, target, serviceID, networkProf
 }
 
 func (s *Store) GroupServices(ctx context.Context, groupID, profile string, now time.Time) ([]string, error) {
-	if !validGroupID(groupID) || !checkTokenPattern.MatchString(profile) || now.IsZero() {
+	if !validGroupID(groupID) || !systemprobe.ValidWANProfileID(profile) || now.IsZero() {
 		return nil, ErrGroup
 	}
 	snapshot, err := s.Snapshot(ctx, now)
@@ -349,7 +350,7 @@ func serviceAvailableOnPreferred(snapshot Snapshot, group NodeGroup, service, pr
 			continue
 		}
 		for _, check := range node.Health.History {
-			if check.ServiceID == service && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+node.ID && check.TestLevel == "service" {
+			if check.ServiceID == service && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+node.ID {
 				return routeCheckUsable(check, node.ID, service, profile, now)
 			}
 		}

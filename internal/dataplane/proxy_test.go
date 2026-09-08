@@ -39,9 +39,16 @@ type proxyFakeRunner struct {
 	iface          string
 	packageRunning bool
 	packageCalls   []string
+	firewall       *proxyFirewallFake
 }
 
-func (r *proxyFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+func (r *proxyFakeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "iptables" || name == "ip6tables" {
+		if r.firewall == nil {
+			r.firewall = &proxyFirewallFake{}
+		}
+		return r.firewall.Run(ctx, name, args...)
+	}
 	joined := strings.Join(args, " ")
 	if name == "/opt/etc/init.d/S51usque" {
 		r.packageCalls = append(r.packageCalls, joined)
@@ -60,7 +67,10 @@ func (r *proxyFakeRunner) Run(_ context.Context, name string, args ...string) ([
 		}
 	}
 	if name == "sing-box" && joined == "version" {
-		return []byte("sing-box version 1.14.0"), nil
+		return []byte("sing-box version 1.14.0\nTags: with_gvisor\n"), nil
+	}
+	if name == "ip" && (joined == "route show table main default" || joined == "-6 route show table main default") {
+		return []byte("default via 192.0.2.1 dev wan0\n"), nil
 	}
 	if name == "ip" && strings.HasPrefix(joined, "link show dev ") {
 		if r.processes.running["sing-box-tun"] {
@@ -69,7 +79,13 @@ func (r *proxyFakeRunner) Run(_ context.Context, name string, args ...string) ([
 		return nil, fmt.Errorf("device not found")
 	}
 	if name == "ip" && strings.Contains(joined, "route get") {
+		if joined == "route get 192.168.1.25" {
+			return []byte("192.168.1.25 dev br0 src 192.168.1.1"), nil
+		}
 		return []byte("198.51.100.20 dev " + r.iface), nil
+	}
+	if name == "ip" && joined == "route show table main match 192.168.1.25/32" {
+		return []byte("192.168.1.0/24 dev br0 proto kernel scope link src 192.168.1.1"), nil
 	}
 	return []byte("ok"), nil
 }
@@ -276,6 +292,7 @@ func TestProxyAdapterStagesActivatesHealthAndRollsBack(t *testing.T) {
 	runner := &proxyFakeRunner{processes: processes, iface: adapter.Interface}
 	adapter.Processes, adapter.Runner = processes, runner
 	adapter.EngineBin, adapter.SidecarBin, adapter.IP = "sing-box", "sing-box", "ip"
+	adapter.IPTables, adapter.IP6Tables = "iptables", "ip6tables"
 	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
 		if host == "node.example" {
 			return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
@@ -353,6 +370,7 @@ func TestProxyCanaryFailureCleansCandidateAndLeavesRuntimeUntouched(t *testing.T
 	adapter.Processes = processes
 	adapter.Runner = &proxyFakeRunner{processes: processes, iface: adapter.Interface}
 	adapter.EngineBin, adapter.SidecarBin, adapter.IP = "sing-box", "sing-box", "ip"
+	adapter.IPTables, adapter.IP6Tables = "iptables", "ip6tables"
 	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
 		if host == "node.example" {
 			return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
@@ -362,7 +380,7 @@ func TestProxyCanaryFailureCleansCandidateAndLeavesRuntimeUntouched(t *testing.T
 	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
 	adapter.CanaryProbe = func(context.Context, string, string) error { return fmt.Errorf("forced service failure") }
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{EngineDrafts: []string{"sing-box/main"}, Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	plan := Plan{EngineDrafts: []string{"sing-box/main"}, Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Sources: []string{"192.168.1.25/32"}, Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}

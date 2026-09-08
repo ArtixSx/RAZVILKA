@@ -80,11 +80,21 @@ func validRestoreImage(image restorejournal.Image) bool {
 // must perform the full archive/service validation before passing the result
 // to the journal. No applied routes, credentials, listen address or gate change.
 func (t *RestoreTarget) DraftImage(ctx context.Context, states map[string]ServiceState) (restorejournal.Image, error) {
+	return t.DraftImageWithPolicies(ctx, states, nil)
+}
+
+// DraftImageWithPolicies retains every existing local policy. Missing imported
+// policies keep their saved restrictions but acquire no automatic authority:
+// they are paused with a fresh local policy revision until separately enabled.
+func (t *RestoreTarget) DraftImageWithPolicies(ctx context.Context, states map[string]ServiceState, policies map[string]ServicePolicy) (restorejournal.Image, error) {
 	before, err := t.Read(ctx)
 	if err != nil {
 		return restorejournal.Image{}, err
 	}
 	cfg, _, _ := InspectBytes(before.Data)
+	if cfg.Revision == ^uint64(0) || len(policies) > MaxServicePolicies {
+		return restorejournal.Image{}, restorejournal.ErrInvalid
+	}
 	services := make(map[string]ServiceState, len(states))
 	for id, state := range states {
 		sources, err := NormalizeSources(state.Sources)
@@ -95,6 +105,26 @@ func (t *RestoreTarget) DraftImage(ctx context.Context, states map[string]Servic
 		services[id] = normalizeState(state)
 	}
 	cfg.Services = services
+	for id, policy := range policies {
+		if id != policy.ServiceID || policy.Revision == 0 {
+			return restorejournal.Image{}, restorejournal.ErrInvalid
+		}
+		policy, err = NormalizeServicePolicy(policy)
+		if err != nil {
+			return restorejournal.Image{}, restorejournal.ErrInvalid
+		}
+		if _, exists := cfg.ServicePolicies[id]; exists {
+			continue
+		}
+		if cfg.ServicePolicies == nil {
+			cfg.ServicePolicies = map[string]ServicePolicy{}
+		}
+		policy.Enabled, policy.Mode, policy.Revision, policy.LegacyOptIn = false, "paused", 1, false
+		cfg.ServicePolicies[id] = policy
+	}
+	if err := validateServicePolicies(cfg.ServicePolicies); err != nil {
+		return restorejournal.Image{}, restorejournal.ErrInvalid
+	}
 	cfg.Revision++
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil || len(data) > restorejournal.MaxImageBytes {
@@ -168,12 +198,16 @@ func (s *RestoreSession) CompareAndSwap(ctx context.Context, before, after resto
 }
 
 func (s *RestoreSession) DraftImage(ctx context.Context, states map[string]ServiceState) (restorejournal.Image, error) {
+	return s.DraftImageWithPolicies(ctx, states, nil)
+}
+
+func (s *RestoreSession) DraftImageWithPolicies(ctx context.Context, states map[string]ServiceState, policies map[string]ServicePolicy) (restorejournal.Image, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
 		return restorejournal.Image{}, restorejournal.ErrUnavailable
 	}
-	return s.target.DraftImage(ctx, states)
+	return s.target.DraftImageWithPolicies(ctx, states, policies)
 }
 
 func (s *RestoreSession) Binding() string { return s.target.Binding() }

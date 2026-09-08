@@ -41,7 +41,7 @@ func TestNormalizesHistoricalOfficialTagSuffix(t *testing.T) {
 	manager := New("0.9.0")
 	manager.Endpoint, manager.Client = server.URL, server.Client()
 	result := manager.Check(context.Background(), true)
-	if result.State != "current" || result.LatestVersion != "0.5.1" || result.UpdateAvailable {
+	if result.State != "ahead" || result.LatestVersion != "0.5.1" || result.UpdateAvailable {
 		t.Fatalf("unexpected historical tag result: %+v", result)
 	}
 }

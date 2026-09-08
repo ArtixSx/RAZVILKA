@@ -138,8 +138,32 @@ func TestPrivateRecoveryMaintenanceSettlesJournalWithoutLoadingStores(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 2 || entries[0].Name() != "private-restore" || entries[1].Name() != "private-restore-nodes-v1" {
+	if len(entries) != 4 || entries[0].Name() != "private-restore" || entries[1].Name() != "private-restore-feeds-v1" || entries[2].Name() != "private-restore-native-v1" || entries[3].Name() != "private-restore-nodes-v1" {
 		t.Fatalf("maintenance recovery loaded or created application stores: %v", entries)
+	}
+}
+
+func TestNativeSchemaCapabilityDoesNotReadOrCreateAnyStore(t *testing.T) {
+	base := t.TempDir()
+	output, err := runPrivateRecoveryChild(t, base, "native-enrollment-schema")
+	if err != nil || !strings.HasPrefix(output, "1\n") && !strings.HasPrefix(output, "1\r\n") {
+		t.Fatalf("native capability output: %v %q", err, output)
+	}
+	entries, err := os.ReadDir(base)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("native capability initialized application state")
+	}
+}
+
+func TestSubscriptionSchemaCapabilityDoesNotReadOrCreateAnyStore(t *testing.T) {
+	base := t.TempDir()
+	output, err := runPrivateRecoveryChild(t, base, "subscription-schema")
+	if err != nil || !strings.HasPrefix(output, "1\n") && !strings.HasPrefix(output, "1\r\n") {
+		t.Fatalf("subscription capability output: %v %q", err, output)
+	}
+	entries, err := os.ReadDir(base)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("capability check changed stores")
 	}
 }
 

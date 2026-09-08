@@ -103,6 +103,9 @@ type Manager struct {
 	System          func() systemprobe.Snapshot
 	ListeningPorts  func() map[string]string
 	PolicyConflicts func() []Conflict
+	// OwnsPolicyRule consults the configured dataplane's private runtime
+	// journal. It must compare the whole rule; a range/table is not ownership.
+	OwnsPolicyRule func(adapterID string, family int, line string) bool
 }
 
 type capabilitySpec struct {
@@ -145,7 +148,7 @@ func New(configs *engineconfig.Manager) *Manager {
 // and offline tools do not depend on the host running their test suite.
 func (m *Manager) EnablePolicyInspection() {
 	if m != nil {
-		m.PolicyConflicts = discoverPolicyConflicts
+		m.PolicyConflicts = func() []Conflict { return discoverPolicyConflicts(m.OwnsPolicyRule) }
 	}
 }
 
@@ -248,7 +251,7 @@ func (m *Manager) Inspect() Report {
 
 var policyRulePattern = regexp.MustCompile(`^\s*(\d+):.*\b(?:lookup|table)\s+([^\s]+)`)
 
-func discoverPolicyConflicts() []Conflict {
+func discoverPolicyConflicts(owns func(string, int, string) bool) []Conflict {
 	ipCommand := ""
 	for _, candidate := range []string{"/opt/sbin/ip", "/opt/bin/ip"} {
 		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
@@ -279,10 +282,14 @@ func discoverPolicyConflicts() []Conflict {
 		tables[spec.Adapter+"|4"] = run("route", "show", "table", strconv.Itoa(spec.Table))
 		tables[spec.Adapter+"|6"] = run("-6", "route", "show", "table", strconv.Itoa(spec.Table))
 	}
-	return policyConflictsFromState(rules, tables)
+	return policyConflictsFromStateWithOwner(rules, tables, owns)
 }
 
 func policyConflictsFromState(ruleOutputs []string, tableOutputs map[string]string) []Conflict {
+	return policyConflictsFromStateWithOwner(ruleOutputs, tableOutputs, nil)
+}
+
+func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[string]string, owns func(string, int, string) bool) []Conflict {
 	conflicts := []Conflict{}
 	seen := map[string]bool{}
 	appendConflict := func(conflict Conflict) {
@@ -308,6 +315,9 @@ func policyConflictsFromState(ruleOutputs []string, tableOutputs map[string]stri
 			}
 			for _, spec := range dataplane.PolicyOwnershipSpecs() {
 				if priority < spec.PriorityBase || priority > spec.PriorityEnd || match[2] == strconv.Itoa(spec.Table) {
+					continue
+				}
+				if (match[2] == "main" || match[2] == "254") && owns != nil && owns(spec.Adapter, 4+familyIndex*2, line) {
 					continue
 				}
 				appendConflict(Conflict{Kind: "priority", Value: match[1], Engines: []string{spec.Adapter}, SystemUse: family + " lookup/table " + match[2], Blocking: true})

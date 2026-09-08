@@ -14,7 +14,7 @@ import (
 
 const (
 	MaxProfileBytes = 256 << 10
-	MaxNodes        = 64
+	MaxNodes        = 128
 )
 
 type BundlePreview struct {
@@ -245,6 +245,9 @@ func parseJSONProfile(data []byte, report *entryReport) ([]map[string]any, []Pre
 }
 
 func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, error) {
+	if err := validateNativeTLS(source); err != nil {
+		return nil, Preview{}, err
+	}
 	typeName := strings.ToLower(stringField(source, "type"))
 	server := strings.TrimSpace(stringField(source, "server"))
 	port, err := integerField(source, "server_port")

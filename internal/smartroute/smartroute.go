@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 )
 
@@ -19,6 +20,12 @@ const (
 	schema         = 2
 	defaultProfile = "network-unknown"
 	legacyProfile  = "legacy-unscoped"
+)
+
+var (
+	ErrUnscopedObservation   = errors.New("Smart Route observation requires the network profile captured before the probe")
+	ErrUnknownNetworkProfile = errors.New("Smart Route network profile is unknown")
+	ErrNetworkProfileChanged = errors.New("Smart Route network profile changed during the probe")
 )
 
 type Evidence struct {
@@ -71,7 +78,7 @@ type Manager struct {
 	Hysteresis int
 	Cooldown   time.Duration
 	TTL        time.Duration
-	// Profile supplies a privacy-safe identifier for the current WAN network.
+	// Profile supplies a freshly observed privacy-safe current WAN epoch.
 	// Evidence and selections are never reused across different identifiers.
 	Profile func() string
 	now     func() time.Time
@@ -88,13 +95,36 @@ func New(path string) (*Manager, error) {
 }
 
 func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
+	// Preserve the API for callers upgrading from unscoped observations, but do
+	// not infer a probe's starting network from the network at its completion.
+	return nil, ErrUnscopedObservation
+}
+
+// ObserveForProfile accepts results only for the known WAN epoch captured by
+// the caller before probing. A changed or unavailable network grants no route
+// authority and does not alter the persisted history.
+func (m *Manager) ObserveForProfile(expected string, results []testlab.Result) ([]Decision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	services := m.servicesLocked(m.activeProfileLocked())
+	if err := m.checkProfileLocked(expected); err != nil {
+		return nil, err
+	}
+	services := cloneServices(m.doc.Profiles[expected])
 	touched := map[string]bool{}
 	now := m.now().UTC()
 	for _, result := range results {
+		if (result.NetworkProfileID != "" && result.NetworkProfileID != expected) ||
+			(result.EvidenceV2 != nil && result.EvidenceV2.NetworkProfile != "" && result.EvidenceV2.NetworkProfile != expected) {
+			return nil, ErrNetworkProfileChanged
+		}
+		checked, err := time.Parse(time.RFC3339, result.CheckedAt)
+		if err != nil || checked.After(now) {
+			continue
+		}
 		result.NormalizeEvidence()
+		if probe := result.EvidenceV2; probe != nil && (probe.FinishedAt.IsZero() || probe.FinishedAt.After(now) || probe.StartedAt.After(probe.FinishedAt)) {
+			continue
+		}
 		level := result.AssuranceLevel()
 		if (!level.AtLeast(evidence.Route) && result.Verdict != evidence.VerdictMisrouted && result.RouteProofError == "") || result.ServiceID == "" || result.Route == "" || !knownStatus(result.Status) {
 			continue
@@ -103,15 +133,16 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 		if state.Evidence == nil {
 			state.Evidence = map[string]Evidence{}
 		}
-		checked := result.CheckedAt
-		if parsed, err := time.Parse(time.RFC3339, checked); err != nil || parsed.After(now.Add(time.Minute)) {
-			checked = now.Format(time.RFC3339)
+		if previous, ok := state.Evidence[result.Route]; ok {
+			if previousTime, err := time.Parse(time.RFC3339, previous.ConfirmedAt); err == nil && !previousTime.After(now) && previousTime.After(checked) {
+				continue
+			}
 		}
 		probeID := ""
 		if result.EvidenceV2 != nil {
 			probeID = result.EvidenceV2.ProbeID
 		}
-		state.Evidence[result.Route] = Evidence{Route: result.Route, Status: result.Status, LatencyMS: result.LatencyMS, Score: score(result.Route, result.Status, result.LatencyMS), EgressIP: result.EgressIP, Evidence: result.EvidenceSource, Level: level, Outcome: result.Outcome, Verdict: result.Verdict, ProbeID: probeID, FreshUntil: result.EvidenceFreshUntil, ConfirmedAt: checked}
+		state.Evidence[result.Route] = Evidence{Route: result.Route, Status: result.Status, LatencyMS: result.LatencyMS, Score: score(result.Route, result.Status, result.LatencyMS), EgressIP: result.EgressIP, Evidence: result.EvidenceSource, Level: level, Outcome: result.Outcome, Verdict: result.Verdict, ProbeID: probeID, FreshUntil: result.EvidenceFreshUntil, ConfirmedAt: checked.UTC().Format(time.RFC3339Nano)}
 		services[result.ServiceID] = state
 		touched[result.ServiceID] = true
 	}
@@ -125,6 +156,13 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 		decisions = append(decisions, m.evaluateLocked(services, id, now))
 	}
 	if len(touched) > 0 {
+		if err := m.checkProfileLocked(expected); err != nil {
+			return nil, err
+		}
+		if m.doc.Profiles == nil {
+			m.doc.Profiles = map[string]map[string]ServiceState{}
+		}
+		m.doc.Profiles[expected] = services
 		if err := m.saveLocked(); err != nil {
 			return nil, err
 		}
@@ -133,9 +171,13 @@ func (m *Manager) Observe(results []testlab.Result) ([]Decision, error) {
 }
 
 func (m *Manager) Suggest(serviceID, fallback string) string {
+	profile := m.activeProfile()
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	state, ok := m.doc.Profiles[m.activeProfileLocked()][serviceID]
+	if !systemprobe.ValidWANProfileID(profile) {
+		return fallback
+	}
+	state, ok := m.doc.Profiles[profile][serviceID]
 	if !ok || state.SelectedRoute == "" {
 		return fallback
 	}
@@ -147,10 +189,14 @@ func (m *Manager) Suggest(serviceID, fallback string) string {
 }
 
 func (m *Manager) Snapshot() Snapshot {
+	profile := m.activeProfile()
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	profile := m.activeProfileLocked()
-	current := m.doc.Profiles[profile]
+	services := cloneServices(m.doc.Profiles[profile])
+	return Snapshot{Schema: schema, NetworkProfile: profile, KnownProfiles: len(m.doc.Profiles), Hysteresis: m.Hysteresis, CooldownMinute: int(m.Cooldown.Minutes()), EvidenceHours: int(m.TTL.Hours()), Services: services}
+}
+
+func cloneServices(current map[string]ServiceState) map[string]ServiceState {
 	services := make(map[string]ServiceState, len(current))
 	for id, state := range current {
 		copyState := state
@@ -160,7 +206,7 @@ func (m *Manager) Snapshot() Snapshot {
 		}
 		services[id] = copyState
 	}
-	return Snapshot{Schema: schema, NetworkProfile: profile, KnownProfiles: len(m.doc.Profiles), Hysteresis: m.Hysteresis, CooldownMinute: int(m.Cooldown.Minutes()), EvidenceHours: int(m.TTL.Hours()), Services: services}
+	return services
 }
 
 func (m *Manager) evaluateLocked(services map[string]ServiceState, serviceID string, now time.Time) Decision {
@@ -225,7 +271,14 @@ func (m *Manager) evaluateLocked(services map[string]ServiceState, serviceID str
 
 func (m *Manager) expired(confirmed Evidence, now time.Time) bool {
 	checked, err := time.Parse(time.RFC3339, confirmed.ConfirmedAt)
-	return err != nil || now.Sub(checked) > m.TTL
+	if err != nil || checked.After(now) || now.Sub(checked) >= m.TTL {
+		return true
+	}
+	if confirmed.FreshUntil != "" {
+		until, err := time.Parse(time.RFC3339, confirmed.FreshUntil)
+		return err != nil || !now.Before(until)
+	}
+	return false
 }
 
 func score(route, status string, latency int64) int {
@@ -338,25 +391,24 @@ func (m *Manager) saveLocked() error {
 	return os.Chmod(m.Path, 0600)
 }
 
-func (m *Manager) activeProfileLocked() string {
+func (m *Manager) activeProfile() string {
 	if m.Profile == nil {
 		return defaultProfile
 	}
-	profile := strings.TrimSpace(m.Profile())
-	if profile == "" {
+	profile := m.Profile()
+	if strings.TrimSpace(profile) == "" {
 		return defaultProfile
 	}
 	return profile
 }
 
-func (m *Manager) servicesLocked(profile string) map[string]ServiceState {
-	if m.doc.Profiles == nil {
-		m.doc.Profiles = map[string]map[string]ServiceState{}
+func (m *Manager) checkProfileLocked(expected string) error {
+	current := m.activeProfile()
+	if !systemprobe.ValidWANProfileID(expected) || !systemprobe.ValidWANProfileID(current) {
+		return ErrUnknownNetworkProfile
 	}
-	services := m.doc.Profiles[profile]
-	if services == nil {
-		services = map[string]ServiceState{}
-		m.doc.Profiles[profile] = services
+	if current != expected {
+		return ErrNetworkProfileChanged
 	}
-	return services
+	return nil
 }

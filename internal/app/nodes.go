@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,6 +18,29 @@ import (
 )
 
 const nodeImportTTL = 30 * 24 * time.Hour
+
+// All authority-bearing operations must bypass the passive WAN cache.
+func (a *App) freshNetworkProfile(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	var profile string
+	var err error
+	if a.FreshProfile != nil {
+		profile, err = a.FreshProfile(ctx)
+	} else {
+		var observed systemprobe.WANProfile
+		observed, err = systemprobe.FreshWANProfile(ctx)
+		profile = observed.ID
+	}
+	if contextErr := ctx.Err(); contextErr != nil {
+		return "", contextErr
+	}
+	if err != nil || !systemprobe.ValidWANProfileID(profile) {
+		return "", dataplane.ErrExactNodeNetworkChanged
+	}
+	return profile, nil
+}
 
 func (a *App) nodeList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -43,7 +67,7 @@ func (a *App) nodeList(w http.ResponseWriter, r *http.Request) {
 	profile := systemprobe.DetectWANProfile().ID
 	for index := range snapshot.Nodes {
 		node := &snapshot.Nodes[index]
-		if !node.Health.CheckedAt.IsZero() && node.Health.NetworkProfile != "" && node.Health.NetworkProfile != profile && !node.Disabled {
+		if !node.Health.CheckedAt.IsZero() && !node.Disabled && (!systemprobe.ValidWANProfileID(profile) || !systemprobe.ValidWANProfileID(node.Health.NetworkProfile) || node.Health.NetworkProfile != profile) {
 			node.Health.State = "different_network"
 			node.State = "stale"
 			node.Health.Message = "Результат получен в другой сети. Повторите проверку на текущем подключении."
@@ -65,9 +89,12 @@ func (a *App) nodeList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"available": true, "generation": snapshot.Generation,
 		"nodes": snapshot.Nodes, "sources": snapshot.Sources, "groups": snapshot.Groups,
-		"counts":          map[string]int{"total": len(snapshot.Nodes), "quarantined": quarantined, "expired": expired, "disabled": disabled, "verified": verified, "degraded": degraded, "stale": stale, "selectable": verified},
-		"network_profile": profile,
-		"note":            "Узел появляется в выборе маршрута только у того сервиса, который успешно прошёл точную проверку в текущей сети.",
+		"counts":           map[string]int{"total": len(snapshot.Nodes), "quarantined": quarantined, "expired": expired, "disabled": disabled, "verified": verified, "degraded": degraded, "stale": stale, "selectable": verified},
+		"network_profile":  profile,
+		"network_epoch":    systemprobe.NetworkEpochStatus(),
+		"node_recovery":    a.nodeRecoverySnapshot(),
+		"country_metadata": a.NodeFeeds.CountryMetadata(),
+		"note":             "Узел появляется в выборе маршрута только у того сервиса, который успешно прошёл точную проверку в текущей сети.",
 	})
 }
 
@@ -214,6 +241,14 @@ func (a *App) nodeAction(w http.ResponseWriter, r *http.Request) {
 		a.nodeCheck(w, r, id)
 		return
 	}
+	if action == "preview" {
+		a.nodeRoutePreview(w, r, id)
+		return
+	}
+	if action == "apply" {
+		a.nodeRouteApply(w, r, id)
+		return
+	}
 	if action != "" {
 		http.NotFound(w, r)
 		return
@@ -310,36 +345,11 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, "для сервиса нет безопасного контрольного сценария", http.StatusBadRequest)
 		return
 	}
-	snapshot, err := a.Nodes.Snapshot(r.Context(), time.Now())
-	if err != nil {
-		writeNodeError(w, err)
-		return
-	}
-	nodeFound := false
-	for _, node := range snapshot.Nodes {
-		if node.ID != id {
-			continue
-		}
-		nodeFound = true
-		if node.Disabled {
-			writeNodeError(w, nodestore.ErrDisabled)
-			return
-		}
-		break
-	}
-	if !nodeFound {
-		writeNodeError(w, nodestore.ErrNotFound)
-		return
-	}
-	profile := systemprobe.DetectWANProfile().ID
-	var result dataplane.NodeCheckResult
-	err = a.Nodes.WithSecret(r.Context(), id, func(material []byte) error {
-		var checkErr error
-		result, checkErr = a.NodeChecker.Check(r.Context(), dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: service, NetworkProfile: profile})
-		return checkErr
-	})
+	result, _, err := a.checkAndRecordNode(r.Context(), id, service, "", 0)
 	if err != nil {
 		switch {
+		case errors.Is(err, dataplane.ErrExactNodeNetworkChanged):
+			writeNodeNetworkError(w)
 		case errors.Is(err, dataplane.ErrExactNodeBusy):
 			w.Header().Set("Retry-After", "5")
 			writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "error": "Другая точная проверка уже выполняется. Повторите через несколько секунд."})
@@ -352,25 +362,78 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 		}
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": result.Available, "result": result, "working_routes_changed": false})
+}
+
+// Both explicit checks and applied-route recovery use this exact checker and
+// Store path. A recovery supplies its immutable epoch and expected generation;
+// its own RecordCheck is the only permitted generation increment.
+func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog.Service, profile string, generation uint64) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
+	var result dataplane.NodeCheckResult
+	if a.Nodes == nil || a.NodeChecker == nil || !serviceHasNodeProbe(service) {
+		return result, nodestore.Snapshot{}, dataplane.ErrExactNodeUnavailable
+	}
+	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
+	if err != nil {
+		return result, snapshot, err
+	}
+	if generation != 0 && snapshot.Generation != generation {
+		return result, snapshot, dataplane.ErrReviewChanged
+	}
+	found := false
+	for _, node := range snapshot.Nodes {
+		if node.ID == id {
+			found = true
+			if node.Disabled {
+				return result, snapshot, nodestore.ErrDisabled
+			}
+			break
+		}
+	}
+	if !found {
+		return result, snapshot, nodestore.ErrNotFound
+	}
+	current, err := a.freshNetworkProfile(ctx)
+	if err != nil || profile != "" && current != profile {
+		return result, snapshot, dataplane.ErrExactNodeNetworkChanged
+	}
+	profile = current
+	err = a.Nodes.WithSecret(ctx, id, func(material []byte) error {
+		var checkErr error
+		result, checkErr = a.NodeChecker.Check(ctx, dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: service, NetworkProfile: profile})
+		return checkErr
+	})
+	if err != nil {
+		return result, snapshot, err
+	}
 	if result.NodeID != id || result.ServiceID != service.ID || result.NetworkProfile != profile || result.RoutePathID != "sing-box:"+id {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "Проверка вернула несогласованный результат; он не был сохранён."})
-		return
+		return result, snapshot, dataplane.ErrExactNodeUnavailable
+	}
+	if current, err := a.freshNetworkProfile(ctx); err != nil || current != profile {
+		return result, snapshot, dataplane.ErrExactNodeNetworkChanged
+	}
+	latest, err := a.Nodes.Snapshot(ctx, time.Now())
+	if err != nil || latest.Generation != snapshot.Generation {
+		return result, snapshot, dataplane.ErrReviewChanged
 	}
 	state := "unavailable"
 	if result.Available {
 		state = "available"
 	}
-	_, err = a.Nodes.RecordCheck(r.Context(), id, nodestore.CheckRecord{
+	latest, err = a.Nodes.RecordCheck(ctx, id, nodestore.CheckRecord{
 		ProbeID: result.ProbeID, ServiceID: result.ServiceID, NetworkProfile: result.NetworkProfile,
 		RoutePathID: result.RoutePathID, TestLevel: result.TestLevel, Verdict: string(result.Verdict), State: state,
 		Stage: result.Stage, CheckedAt: result.FinishedAt, ExpiresAt: result.ExpiresAt, LatencyMS: result.LatencyMS,
 		EgressIP: result.EgressIP, HTTPStatus: result.HTTPStatus, ErrorCode: result.ErrorCode, Message: result.Message, DirectLeak: result.DirectLeak,
 	}, time.Now())
-	if err != nil {
-		writeNodeError(w, err)
-		return
+	if err == nil && latest.Generation != snapshot.Generation+1 {
+		err = dataplane.ErrReviewChanged
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": result.Available, "result": result, "working_routes_changed": false})
+	return result, latest, err
+}
+
+func writeNodeNetworkError(w http.ResponseWriter) {
+	writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": "NODE_NETWORK_CHANGED", "error": "Сеть изменилась или не подтверждена. Повторите проверку на текущем подключении.", "working_routes_changed": false})
 }
 
 func serviceHasNodeProbe(service catalog.Service) bool {

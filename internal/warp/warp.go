@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
@@ -29,6 +30,9 @@ type Status struct {
 	GeneratorInstalled bool         `json:"generator_installed"`
 	GeneratorPath      string       `json:"generator_path,omitempty"`
 	GeneratorVersion   string       `json:"generator_version,omitempty"`
+	GeneratorKind      string       `json:"generator_kind,omitempty"`
+	RegistrationState  string       `json:"registration_state"`
+	RecoveryAvailable  bool         `json:"recovery_available"`
 	AccountRegistered  bool         `json:"account_registered"`
 	LiveProfile        bool         `json:"live_profile"`
 	LivePath           string       `json:"live_path,omitempty"`
@@ -75,6 +79,7 @@ type Manager struct {
 	mu            sync.Mutex
 	version       string
 	versionAt     time.Time
+	nativeAPI     func(func([]byte) error) cloudflareprovider.RegistrationAPI
 }
 
 func New(root, backupRoot string, configs *engineconfig.Manager) *Manager {
@@ -82,6 +87,11 @@ func New(root, backupRoot string, configs *engineconfig.Manager) *Manager {
 		Root: root, BackupRoot: backupRoot, EngineConfigs: configs, Timeout: 90 * time.Second,
 		BinPaths:     []string{"/opt/bin/wgcf", "/opt/usr/bin/wgcf", "wgcf"},
 		ProfilePaths: []string{"/opt/etc/razvilka/warp/wgcf-profile.conf", "/opt/etc/wireguard/warp.conf"},
+		nativeAPI: func(checkpoint func([]byte) error) cloudflareprovider.RegistrationAPI {
+			api := cloudflareprovider.NewConsumerRegistrationAPI()
+			api.CheckpointResponse = checkpoint
+			return api
+		},
 	}
 }
 
@@ -98,6 +108,11 @@ func (m *Manager) Status(ctx context.Context) Status {
 		status.GeneratorVersion = m.versionLocked(ctx, bin)
 	}
 	status.AccountRegistered = regularFile(m.accountPath())
+	if m.nativeAPI != nil {
+		status.GeneratorInstalled, status.GeneratorKind = true, "native-cloudflare"
+		status.GeneratorPath, status.GeneratorVersion = "", "Встроенный генератор Cloudflare"
+		m.nativeStatusLocked(ctx, &status)
+	}
 	if m.EngineConfigs != nil {
 		for _, engine := range m.EngineConfigs.List() {
 			if engine.ID != "warp-wg" {
@@ -138,9 +153,14 @@ func (m *Manager) Generate(ctx context.Context, acceptTOS, fresh bool) (Result, 
 	if m.EngineConfigs == nil {
 		return Result{}, errors.New("engine config manager is disabled")
 	}
+	// An existing wgcf enrollment remains reusable through its original
+	// generator. Switching enrollment requires an explicit fresh request.
+	if m.nativeAPI != nil && (fresh || !regularFile(m.accountPath()) || m.hasNativeStateLocked()) {
+		return m.generateNativeLocked(ctx, acceptTOS, fresh)
+	}
 	bin := findBinary(m.BinPaths)
 	if bin == "" {
-		return Result{}, errors.New("wgcf is not installed; install the component first")
+		return Result{}, ErrLegacyGeneratorRequired
 	}
 	if err := os.MkdirAll(m.Root, 0o700); err != nil {
 		return Result{}, err

@@ -4,7 +4,10 @@ RAZVILKA is a network control plane. Security issues may affect routing, credent
 
 ## Current status
 
-`v0.10.0` is a release candidate. Safe Mode is the default; explicit Active Apply
+`v0.18.1-rc.2` is a prerelease for public testing; `v0.18.0` remains the latest
+stable-tagged release. The current acceptance scope and open hardware scenarios
+are listed in the [release notes](docs/releases/0.18.1-rc.2.md).
+Safe Mode is the default on a new installation; explicit Active Apply
 uses command-allowlisted transactional adapters, native validation, health
 evidence, reverse rollback and committed-plan boot recovery. Local registration,
 PBKDF2 passwords, revocable sessions, Origin/JSON checks, encrypted private

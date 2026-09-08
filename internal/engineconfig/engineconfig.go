@@ -149,7 +149,9 @@ func (m *Manager) List() []EngineView {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	statuses := map[string]engine.Status{}
-	for _, st := range (engine.Detector{}).All() {
+	// Listing editable files needs live inventory only. Version/init commands
+	// belong to explicit engine diagnostics and must not run on every UI refresh.
+	for _, st := range (engine.Detector{}).Inventory() {
 		statuses[st.ID] = st
 	}
 	out := make([]EngineView, 0, len(Specs()))

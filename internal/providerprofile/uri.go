@@ -151,12 +151,18 @@ func parseHysteria2(u *url.URL) (map[string]any, Preview, error) {
 	if err != nil {
 		return nil, Preview{}, err
 	}
-	password := userSecret(u, false)
+	password := userSecret(u, true)
 	if password == "" {
 		return nil, Preview{}, errors.New("в ссылке Hysteria2 отсутствует пароль")
 	}
-	q := u.Query()
+	q, err := quicQuery(u, "hysteria2")
+	if err != nil {
+		return nil, Preview{}, err
+	}
 	out := map[string]any{"type": "hysteria2", "tag": "proxy", "server": server, "server_port": port, "password": password, "tls": tlsOptions(q, server)}
+	if q.Has("obfs") {
+		out["obfs"] = map[string]any{"type": q.Get("obfs"), "password": q.Get("obfs-password")}
+	}
 	preview := Preview{Protocol: "Hysteria2", Name: profileName(u), Server: server, Port: port, TLS: true, Transport: "QUIC", Security: "TLS"}
 	if insecure(q) {
 		preview.Warnings = append(preview.Warnings, "Проверка сертификата отключена в исходном профиле.")
@@ -177,7 +183,10 @@ func parseTUIC(u *url.URL) (map[string]any, Preview, error) {
 	if !looksLikeUUID(uuid) || !ok || strings.TrimSpace(password) == "" {
 		return nil, Preview{}, errors.New("в ссылке TUIC нужны корректные UUID и пароль")
 	}
-	q := u.Query()
+	q, err := quicQuery(u, "tuic")
+	if err != nil {
+		return nil, Preview{}, err
+	}
 	out := map[string]any{"type": "tuic", "tag": "proxy", "server": server, "server_port": port, "uuid": uuid, "password": password, "tls": tlsOptions(q, server)}
 	if value := strings.TrimSpace(q.Get("congestion_control")); value != "" {
 		out["congestion_control"] = value
@@ -190,7 +199,13 @@ func parseTUIC(u *url.URL) (map[string]any, Preview, error) {
 }
 
 func parseShadowsocks(u *url.URL) (map[string]any, Preview, error) {
-	q := u.Query()
+	if u.Opaque != "" || u.Path != "" && u.Path != "/" {
+		return nil, Preview{}, importError("INVALID_PARAMETERS")
+	}
+	q, err := profileQuery(u, []string{"plugin"}, nil)
+	if err != nil {
+		return nil, Preview{}, err
+	}
 	serverURL := u
 	credential := ""
 	if u.User != nil {
@@ -286,7 +301,11 @@ func transportOptions(q url.Values, kind string) map[string]any {
 		}
 		return transport
 	case "http", "h2":
-		return map[string]any{"type": "http", "path": q.Get("path")}
+		transport := map[string]any{"type": "http", "path": q.Get("path")}
+		if hosts := splitNonEmpty(q.Get("host")); len(hosts) > 0 {
+			transport["host"] = hosts
+		}
+		return transport
 	}
 	return nil
 }

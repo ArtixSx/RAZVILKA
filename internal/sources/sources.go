@@ -631,7 +631,7 @@ func normalizeCIDR(v string) (string, error) {
 		return "", err
 	}
 	p = p.Masked()
-	if !p.Addr().IsGlobalUnicast() || p.Addr().IsPrivate() || p.Addr().IsLoopback() || p.Addr().IsLinkLocalUnicast() || p.Addr().IsLinkLocalMulticast() {
+	if !publicfetch.PublicPrefix(p) {
 		return "", errors.New("not public unicast")
 	}
 	if p.Addr().Is4() && p.Bits() < 8 {

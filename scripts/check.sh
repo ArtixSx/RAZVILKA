@@ -14,8 +14,17 @@ for script in scripts/*.sh scripts/S99razvilka build.sh; do
   sh -n "$script"
 done
 sh ./scripts/check-no-z2k-runtime.sh
+sh ./scripts/test-candidate-isolation.sh
 if command -v node >/dev/null 2>&1; then
   node --check cmd/razvilka/web/app.js
+  node --check cmd/razvilka/web/node-browser.js
+  node --check cmd/razvilka/web/node-intent-ui.js
+  node --check cmd/razvilka/web/node-service-ui.js
+  node --check cmd/razvilka/web/node-policy-ui.js
+  node --check cmd/razvilka/web/node-activity-ui.js
+  node --check cmd/razvilka/web/workspace-controls.js
+  node --check cmd/razvilka/web/service-dashboard-ui.js
+  node --check cmd/razvilka/web/app-update-ui.js
   node --check cmd/razvilka/web/cloudflare-accounts.js
   node --check cmd/razvilka/web/cloudflare-backups.js
   node --check cmd/razvilka/web/cloudflare-migration.js
@@ -27,7 +36,19 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-devices-persistence-ui.mjs
   node scripts/test-usque-dns-ui.mjs
   node scripts/test-provider-import-ui.mjs
+  node scripts/test-node-route-ui.mjs
+  node scripts/test-node-browser-ui.mjs
+  node scripts/test-node-intent-ui.mjs
+  node scripts/test-node-service-ui.mjs
+  node scripts/test-node-policy-ui.mjs
+  node scripts/test-app-update-ui.mjs
+  node scripts/test-workspace-controls-ui.mjs
+  node scripts/test-service-dashboard-ui.mjs
+  node scripts/test-engine-intent-ui.mjs
+  node scripts/test-node-activity-ui.mjs
+  node scripts/test-warp-generation-ui.mjs
   node scripts/test-restore-busy-supervision.mjs
+  node scripts/test-native-enrollment-supervision.mjs
 fi
 ./build.sh
 sha256sum -c dist/SHA256SUMS

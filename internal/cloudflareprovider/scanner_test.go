@@ -139,3 +139,23 @@ func TestScanReportRequiresTwoExactAttemptsAndCleanup(t *testing.T) {
 		t.Fatalf("candidate identity change was ignored: %+v", report)
 	}
 }
+
+func TestFailedAttemptKeepsDiagnosticWithoutInventingExpiry(t *testing.T) {
+	now := time.Date(2026, 9, 6, 16, 0, 0, 0, time.UTC)
+	attempt := ScanAttempt{
+		Candidate: scannerCandidate(t), StartedAt: now.Add(-time.Second), CleanupConfirmed: true,
+		Failure: &ScanFailure{Stage: "interface", ReasonCode: "wireguard-config-rejected", SystemCode: "invalid-argument"},
+	}
+	report := EvaluateScanReport([]ScanAttempt{attempt}, now, 5*time.Minute)
+	if report.Verified || !report.ValidUntil.IsZero() || len(report.Results) != 1 {
+		t.Fatalf("failed attempt acquired validity: %+v", report)
+	}
+	result := report.Results[0]
+	if result.Stage != "interface" || result.ReasonCode != "wireguard-config-rejected" || result.Diagnostic == nil || result.Diagnostic.SystemCode != "invalid-argument" {
+		t.Fatalf("failure was hidden behind freshness: %+v", result)
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil || bytes.Contains(encoded, []byte("valid_until")) || bytes.Contains(encoded, []byte("0001-")) {
+		t.Fatalf("failed report serialized invented expiry: %s err=%v", encoded, err)
+	}
+}

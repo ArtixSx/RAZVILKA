@@ -3,6 +3,7 @@ set -eu
 umask 077
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+sh "$ROOT/scripts/test-installer-architecture.sh"
 UPGRADE="$ROOT/scripts/upgrade-entware.sh"
 ROLLBACK="$ROOT/scripts/rollback-entware.sh"
 UNINSTALL="$ROOT/scripts/uninstall-entware.sh"
@@ -51,9 +52,16 @@ prepare_root "$PRIMARY"
 prepare_root "$CONFLICT"
 prepare_root "$REMOVAL"
 
+# Read-only checks must not repair even legacy staging permissions.
+mkdir -p "$PRIMARY/var/lib/razvilka/staging/sing-box"
+chmod 755 "$PRIMARY/var/lib/razvilka/staging/sing-box"
+
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$UPGRADE" --dry-run >/dev/null
 assert_absent "$PRIMARY/bin/razvilka"
 assert_absent "$PRIMARY/etc/init.d/S99razvilka"
+[ "$(ls -ld "$PRIMARY/var/lib/razvilka/staging/sing-box" | awk '{print $1}')" = drwxr-xr-x ] || {
+  echo "Read-only preflight changed legacy staging permissions" >&2; exit 1;
+}
 
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
   "$UPGRADE" --apply >/dev/null

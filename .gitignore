@@ -17,6 +17,9 @@ Thumbs.db
 # Local secrets / imported engine profiles
 *.secret
 *.private
+*.private.json
+admin.credentials.json
+admin.token
 configs/local/
 
 # Hardware-in-the-loop and local browser smoke-test artifacts

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -170,6 +172,81 @@ func TestCloudflareScanRunnerRejectsSourceAddressAlreadyInUse(t *testing.T) {
 		attempt, err := runner.RunScanAttempt(context.Background(), candidate, cloudflareprovider.ScanRunRequest{Attempt: 1, ServiceID: "telegram"})
 		if err == nil || fake.active || fake.starts != 0 || !attempt.CleanupConfirmed {
 			t.Fatalf("occupied source reached runtime: attempt=%+v active=%v starts=%d err=%v", attempt, fake.active, fake.starts, err)
+		}
+		if attempt.StartedAt.IsZero() || attempt.FinishedAt.IsZero() || attempt.FinishedAt.Before(attempt.StartedAt) || attempt.Failure == nil {
+			t.Fatalf("early failure lost timestamps or diagnostic: %+v", attempt)
+		}
+		result := cloudflareprovider.EvaluateScanAttempt(attempt, time.Now().UTC(), time.Minute)
+		if result.Verified || result.Stage != "ownership" || result.ReasonCode != "source-address-conflict" {
+			t.Fatalf("ownership error was hidden: %+v", result)
+		}
+	})
+}
+
+func TestCloudflareScanDiagnosticsNeverExposeRawCommandOutput(t *testing.T) {
+	diagnostic := describeCloudflareScanFailure("interface", errors.New("wg setconf: private-key-marker endpoint-marker: invalid argument"))
+	if diagnostic.Stage != "interface" || diagnostic.ReasonCode != "wireguard-config-rejected" || diagnostic.SystemCode != "invalid-argument" {
+		t.Fatalf("unexpected safe diagnostic: %+v", diagnostic)
+	}
+	raw, err := json.Marshal(diagnostic)
+	if err != nil || strings.Contains(string(raw), "marker") || strings.Contains(diagnostic.Error(), "marker") {
+		t.Fatal("raw command output leaked into public diagnostics")
+	}
+	for _, failure := range []struct {
+		err  error
+		want string
+	}{{context.Canceled, "cancelled"}, {context.DeadlineExceeded, "timeout"}} {
+		if got := describeCloudflareScanFailure("interface", failure.err); got.ReasonCode != failure.want {
+			t.Fatalf("context failure lost cause: %+v", got)
+		}
+	}
+}
+
+type cancelledCloudflareStart struct {
+	base   *warpFakeRunner
+	cancel context.CancelFunc
+}
+
+func (runner cancelledCloudflareStart) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if name == "wg" && len(args) > 0 && args[0] == "setconf" {
+		runner.cancel()
+		return nil, context.Canceled
+	}
+	return runner.base.Run(ctx, name, args...)
+}
+
+func TestCloudflareScanCleansPartialStartAfterCancellation(t *testing.T) {
+	root := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fake := &warpFakeRunner{}
+	adapter := NewWARPWireGuardAdapter(nil, filepath.Join(root, "adapter"))
+	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", cancelledCloudflareStart{base: fake, cancel: cancel}
+	runner := NewCloudflareScanRunner(adapter, filepath.Join(root, "scanner"), []catalog.Service{{ID: "telegram", ProbeURL: "https://service.example/check"}})
+	withScanCandidate(t, func(candidate cloudflareprovider.WireGuardCandidate) {
+		attempt, err := runner.RunScanAttempt(ctx, candidate, cloudflareprovider.ScanRunRequest{Attempt: 1, ServiceID: "telegram"})
+		if err == nil || fake.starts != 1 || fake.active || !attempt.CleanupConfirmed || attempt.Failure == nil {
+			t.Fatalf("partial interface survived cancellation: attempt=%+v starts=%d active=%v err=%v", attempt, fake.starts, fake.active, err)
+		}
+	})
+}
+
+func TestCloudflareScanFailedCreateNeverDeletesUnownedInterface(t *testing.T) {
+	root := t.TempDir()
+	fake := &warpFakeRunner{failStart: true}
+	adapter := NewWARPWireGuardAdapter(nil, filepath.Join(root, "adapter"))
+	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", fake
+	runner := NewCloudflareScanRunner(adapter, filepath.Join(root, "scanner"), []catalog.Service{{ID: "telegram", ProbeURL: "https://service.example/check"}})
+	withScanCandidate(t, func(candidate cloudflareprovider.WireGuardCandidate) {
+		attempt, err := runner.RunScanAttempt(context.Background(), candidate, cloudflareprovider.ScanRunRequest{Attempt: 1, ServiceID: "telegram"})
+		if err == nil || !fake.active || !attempt.CleanupConfirmed || attempt.Failure == nil || attempt.Failure.ReasonCode != "interface-create-failed" {
+			t.Fatalf("failed create changed ownership: attempt=%+v active=%v err=%v", attempt, fake.active, err)
+		}
+		if strings.Contains(strings.Join(fake.calls, "\n"), "link delete") {
+			t.Fatal("unowned interface was deleted")
 		}
 	})
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
-const CurrentSchemaVersion = 1
+const CurrentSchemaVersion = 2
 
 type MigrationReport struct {
 	FromSchema int      `json:"from_schema"`
@@ -107,6 +107,12 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 	if cfg.AppliedRevision == 0 && len(cfg.AppliedServices) > 0 {
 		cfg.AppliedRevision = cfg.Revision
 		report.add("applied_revision aligned with revision")
+	}
+	if err := validateServicePolicies(cfg.ServicePolicies); err != nil {
+		return Config{}, report, err
+	}
+	if err := validateServiceControl(cfg.ServiceControl); err != nil {
+		return Config{}, report, err
 	}
 	report.normalize()
 	return cfg, report, nil

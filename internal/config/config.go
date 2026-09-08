@@ -26,16 +26,18 @@ type ServiceState struct {
 }
 
 type Config struct {
-	SchemaVersion   int                     `json:"schema_version"`
-	Listen          string                  `json:"listen"`
-	Services        map[string]ServiceState `json:"services"` // desired/draft state
-	AppliedServices map[string]ServiceState `json:"applied_services"`
-	EngineOrder     []string                `json:"engine_order"`
-	SafeMode        bool                    `json:"safe_mode"`
-	CatalogPath     string                  `json:"catalog_path,omitempty"`
-	Revision        uint64                  `json:"revision,omitempty"`
-	AppliedRevision uint64                  `json:"applied_revision,omitempty"`
-	LastAppliedAt   string                  `json:"last_applied_at,omitempty"`
+	SchemaVersion   int                      `json:"schema_version"`
+	Listen          string                   `json:"listen"`
+	Services        map[string]ServiceState  `json:"services"` // desired/draft state
+	AppliedServices map[string]ServiceState  `json:"applied_services"`
+	EngineOrder     []string                 `json:"engine_order"`
+	SafeMode        bool                     `json:"safe_mode"`
+	CatalogPath     string                   `json:"catalog_path,omitempty"`
+	Revision        uint64                   `json:"revision,omitempty"`
+	AppliedRevision uint64                   `json:"applied_revision,omitempty"`
+	LastAppliedAt   string                   `json:"last_applied_at,omitempty"`
+	ServicePolicies map[string]ServicePolicy `json:"service_policies,omitempty"`
+	ServiceControl  ServiceControl           `json:"service_control,omitempty"`
 }
 
 type Store struct {
@@ -82,11 +84,7 @@ func Load(path string) (*Store, error) {
 func (s *Store) Get() Config {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	c := s.cfg
-	c.Services = cloneServices(s.cfg.Services)
-	c.AppliedServices = cloneServices(s.cfg.AppliedServices)
-	c.EngineOrder = append([]string(nil), s.cfg.EngineOrder...)
-	return c
+	return cloneConfig(s.cfg)
 }
 
 func normalizeState(state ServiceState) ServiceState {
@@ -111,6 +109,9 @@ func (s *Store) UpdateService(id string, state ServiceState) error {
 	defer s.mu.Unlock()
 	previous := cloneConfig(s.cfg)
 	s.cfg.Services[id] = state
+	if !reflect.DeepEqual(previous.Services[id], state) {
+		fenceServicePolicy(&s.cfg, id, state.Route, s.cfg.AppliedServices[id].Sources)
+	}
 	s.cfg.Revision++
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
@@ -220,6 +221,7 @@ func (s *Store) DeleteService(id string) error {
 	previous := cloneConfig(s.cfg)
 	delete(s.cfg.Services, id)
 	delete(s.cfg.AppliedServices, id)
+	delete(s.cfg.ServicePolicies, id)
 	s.cfg.Revision++
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
@@ -254,12 +256,32 @@ func (s *Store) ApplyDraftWithRollback() (func() error, error) {
 // Service routing and device/source policies share ServiceState on disk, but
 // they must never be applied implicitly by a button on the other page.
 func (s *Store) ApplyDraftScopeWithRollback(scope DraftScope) (func() error, error) {
+	return s.applyDraftScopeWithRollback(scope, nil)
+}
+
+// ApplyDraftScopeAtRevisionWithRollback binds an explicit plan review to the
+// same locked configuration image that is committed by the transaction.
+func (s *Store) ApplyDraftScopeAtRevisionWithRollback(scope DraftScope, expectedRevision uint64) (func() error, error) {
+	return s.applyDraftScopeWithRollback(scope, &expectedRevision)
+}
+
+func (s *Store) applyDraftScopeWithRollback(scope DraftScope, expectedRevision *uint64) (func() error, error) {
 	if !validDraftScope(scope) {
 		return nil, fmt.Errorf("unknown draft scope %q", scope)
 	}
 	s.mu.Lock()
+	if expectedRevision != nil && s.cfg.Revision != *expectedRevision {
+		s.mu.Unlock()
+		return nil, ErrRevisionChanged
+	}
 	previous := cloneConfig(s.cfg)
 	applyDraftScope(&s.cfg, scope)
+	clearServiceStopAfterManualApply(&s.cfg)
+	for id, state := range s.cfg.AppliedServices {
+		if !reflect.DeepEqual(previous.AppliedServices[id], state) {
+			fenceServicePolicy(&s.cfg, id, state.Route, state.Sources)
+		}
+	}
 	s.cfg.AppliedRevision = s.cfg.Revision
 	s.cfg.LastAppliedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := s.saveLocked(); err != nil {
@@ -348,6 +370,7 @@ func applyDraftScope(cfg *Config, scope DraftScope) {
 			applied.Enabled = desired.Enabled
 			applied.Route = desired.Route
 			applied.Mode = desired.Route
+			applied.Sources = AppliedSources(*cfg, id)
 		case DraftScopeDevices:
 			applied.Sources = append([]string(nil), desired.Sources...)
 		}
@@ -436,9 +459,11 @@ func (s *Store) persistLocked(target restorejournal.Target, data []byte) error {
 
 func cloneConfig(in Config) Config {
 	out := in
+	out.ServiceControl = cloneServiceControl(in.ServiceControl)
 	out.Services = cloneServices(in.Services)
 	out.AppliedServices = cloneServices(in.AppliedServices)
 	out.EngineOrder = append([]string(nil), in.EngineOrder...)
+	out.ServicePolicies = cloneServicePolicies(in.ServicePolicies)
 	return out
 }
 

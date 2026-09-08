@@ -1711,7 +1711,9 @@ func TestIsolatedRouteAPIAddsDirectControlAndFeedsSmartRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := catalog.Catalog{Services: []catalog.Service{{ID: "probe", Name: "Probe", ProbeURL: "https://example.com/", Strategy: []string{"direct"}}}}
-	a := &App{Store: store, Catalog: cat, TestLab: testlab.NewRunner(), RouteProber: confirmedRouteProber{}, SmartRoute: smart, Start: time.Now()}
+	smart.Profile = func() string { return "wan-0123456789ab" }
+	a := &App{Store: store, Catalog: cat, TestLab: testlab.NewRunner(), RouteProber: confirmedRouteProber{}, SmartRoute: smart, FreshProfile: stableNodeProfile, Start: time.Now()}
+	a.TestLab.Profile = smart.Profile
 	ts := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer ts.Close()
 	resp, err := http.Post(ts.URL+"/api/v1/testlab/routes", "application/json", strings.NewReader(`{"services":["probe"],"routes":["nfqws2"]}`))

@@ -544,7 +544,7 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bo
 	if prefixes, err = excludeWGEndpoint(ctx, prefixes, string(profile), a.Resolver); err != nil {
 		return false, err
 	}
-	newState := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules}
+	newState := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules, RuntimeConfigSHA256: oldState.RuntimeConfigSHA256}
 	if samePolicy(oldState, newState) {
 		return false, nil
 	}
@@ -564,18 +564,34 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bo
 }
 
 func (a *WARPWireGuardAdapter) Deactivate(ctx context.Context) error {
-	var firstErr error
-	if state, exists, err := a.loadPolicyState(); err != nil {
-		firstErr = err
-	} else if exists {
-		if err := removePolicy(ctx, a.Runner, a.ip(), state); err != nil {
-			firstErr = err
-		}
+	state, owned, err := a.deactivationOwnership(ctx)
+	if err != nil || !owned {
+		return err
 	}
-	if a.interfaceActive(ctx) {
+	var firstErr error
+	if err := removePolicy(ctx, a.Runner, a.ip(), state); err != nil {
+		firstErr = err
+	}
+	active, err := a.deactivationInterfaceActive(ctx)
+	if err != nil {
+		return errors.Join(firstErr, err)
+	}
+	if active {
 		if err := a.stopInterface(ctx); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("stop %s interface: %w", a.ID(), err)
 		}
+	}
+	if firstErr == nil && active {
+		stillActive, err := a.deactivationInterfaceActive(ctx)
+		if err != nil {
+			firstErr = err
+		} else if stillActive {
+			firstErr = errors.New("WARP interface remains active; ownership files were retained")
+		}
+	}
+	// Keep the only cleanup authority if a stop/removal is unconfirmed.
+	if firstErr != nil {
+		return firstErr
 	}
 	for _, path := range []string{a.statePath(), a.RuntimeConfigPath} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) && firstErr == nil {
@@ -618,6 +634,11 @@ func (a *WARPWireGuardAdapter) Commit(_ context.Context, _ Plan, root string) er
 	if err != nil {
 		return err
 	}
+	runtimeProfile, err := os.ReadFile(a.RuntimeConfigPath)
+	if err != nil {
+		return err
+	}
+	state.RuntimeConfigSHA256 = warpRuntimeDigest(runtimeProfile)
 	data, _ := json.MarshalIndent(state, "", "  ")
 	if err := os.MkdirAll(a.StateRoot, 0o700); err != nil {
 		return err

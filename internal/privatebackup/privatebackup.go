@@ -17,7 +17,9 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/devices"
+	"github.com/ArtixSx/razvilka/internal/nativeenrollment"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
 
 const (
@@ -51,18 +53,21 @@ type ProviderSnapshot struct {
 }
 
 type Payload struct {
-	Kind              string                         `json:"kind"`
-	Schema            int                            `json:"schema"`
-	AppVersion        string                         `json:"app_version"`
-	CreatedAt         string                         `json:"created_at"`
-	Services          map[string]config.ServiceState `json:"services"`
-	EngineOrder       []string                       `json:"engine_order"`
-	CustomServices    []catalog.Service              `json:"custom_services,omitempty"`
-	EngineFiles       []EngineFile                   `json:"engine_files,omitempty"`
-	ProviderSnapshots []ProviderSnapshot             `json:"provider_snapshots,omitempty"`
-	NodeSnapshot      *nodestore.PrivateSnapshot     `json:"node_snapshot,omitempty"`
-	Devices           []devices.Device               `json:"devices,omitempty"`
-	Digest            string                         `json:"digest"`
+	Kind                 string                          `json:"kind"`
+	Schema               int                             `json:"schema"`
+	AppVersion           string                          `json:"app_version"`
+	CreatedAt            string                          `json:"created_at"`
+	Services             map[string]config.ServiceState  `json:"services"`
+	ServicePolicies      map[string]config.ServicePolicy `json:"service_policies,omitempty"`
+	EngineOrder          []string                        `json:"engine_order"`
+	CustomServices       []catalog.Service               `json:"custom_services,omitempty"`
+	EngineFiles          []EngineFile                    `json:"engine_files,omitempty"`
+	ProviderSnapshots    []ProviderSnapshot              `json:"provider_snapshots,omitempty"`
+	NodeSnapshot         *nodestore.PrivateSnapshot      `json:"node_snapshot,omitempty"`
+	NativeEnrollment     *nativeenrollment.Snapshot      `json:"native_enrollment,omitempty"`
+	SubscriptionSnapshot *providerfeed.PrivateSnapshot   `json:"subscription_snapshot,omitempty"`
+	Devices              []devices.Device                `json:"devices,omitempty"`
+	Digest               string                          `json:"digest"`
 }
 
 type Envelope struct {
@@ -118,6 +123,17 @@ func Validate(payload Payload) error {
 		}
 		if !validRoute(firstNonEmpty(state.Route, state.Mode, "auto")) {
 			return fmt.Errorf("service %s has an invalid route", id)
+		}
+	}
+	if len(payload.ServicePolicies) > config.MaxServicePolicies {
+		return errors.New("private backup service policy limit exceeded")
+	}
+	for id, policy := range payload.ServicePolicies {
+		if id != policy.ServiceID || policy.Revision == 0 {
+			return errors.New("invalid private backup service policy")
+		}
+		if _, err := config.NormalizeServicePolicy(policy); err != nil {
+			return errors.New("invalid private backup service policy")
 		}
 	}
 	if len(payload.EngineOrder) > 16 {
@@ -186,6 +202,24 @@ func Validate(payload Payload) error {
 			return errors.New("invalid private node snapshot")
 		}
 		total += len(payload.NodeSnapshot.Content)
+		if total > MaxPayload {
+			return errors.New("private backup data exceeds safety limit")
+		}
+	}
+	if payload.SubscriptionSnapshot != nil {
+		if providerfeed.ValidatePrivateSnapshot(*payload.SubscriptionSnapshot) != nil {
+			return errors.New("invalid private subscriptions snapshot")
+		}
+		total += len(payload.SubscriptionSnapshot.Content)
+		if total > MaxPayload {
+			return errors.New("private backup data exceeds safety limit")
+		}
+	}
+	if payload.NativeEnrollment != nil {
+		if nativeenrollment.ValidateSnapshot(*payload.NativeEnrollment) != nil {
+			return errors.New("invalid private native enrollment snapshot")
+		}
+		total += len(payload.NativeEnrollment.Content)
 		if total > MaxPayload {
 			return errors.New("private backup data exceeds safety limit")
 		}

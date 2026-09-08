@@ -57,20 +57,37 @@ func (s *operationScope) restoreAdmission() (func(), error) {
 // cleanup finish; inheriting the context value does not extend ownership.
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || r.URL.Path == "/api/v1/connections/stream" && r.Method == http.MethodGet {
-			// Auth changes only credentials (not restored); SSE reads only telemetry.
-			// Holding a shared admission for an endless stream would starve restore.
+		updateLocked := a.SelfUpdate != nil && a.SelfUpdate.InstallationLocked()
+		if updateLocked && strings.HasPrefix(r.URL.Path, "/api/v1/auth/") && r.URL.Path != "/api/v1/auth/status" && r.URL.Path != "/api/v1/auth/login" && r.URL.Path != "/api/v1/auth/logout" {
+			a.writeOperationFailure(w, operationgate.ErrBusy)
+			return
+		}
+		if updateLocked && r.URL.Path == "/api/v1/status" && r.Method == http.MethodGet {
 			next.ServeHTTP(w, r)
 			return
 		}
-		exclusive := r.Method == http.MethodPost && (r.URL.Path == "/api/v1/private-backups/import" || r.URL.Path == "/api/v1/diagnostics/usque/repair")
+		a.interruptAutomation(r)
+		nodeJobOwnsAdmission := (r.URL.Path == "/api/v1/node-checks" || r.URL.Path == "/api/v1/service-control/jobs") && r.Method == http.MethodPost
+		nodeJobMemoryOnly := r.URL.Path == "/api/v1/node-checks/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
+		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/node-autofallback" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
+		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/service-control/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
+		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/self-update/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
+		if !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || r.URL.Path == "/api/v1/connections/stream" && r.Method == http.MethodGet || nodeJobOwnsAdmission || nodeJobMemoryOnly {
+			// Auth changes only credentials (not restored); SSE reads only telemetry.
+			// Holding a shared admission for an endless stream would starve restore.
+			// Detached node jobs acquire their own gate before reading stores; their
+			// status/cancel handlers access only memory and remain usable meanwhile.
+			next.ServeHTTP(w, r)
+			return
+		}
+		exclusive := r.Method == http.MethodPost && (r.URL.Path == "/api/v1/apply" || r.URL.Path == "/api/v1/self-update/apply" || r.URL.Path == "/api/v1/service-control/runtime" || r.URL.Path == "/api/v1/private-backups/import" || r.URL.Path == "/api/v1/diagnostics/usque/repair" || strings.HasPrefix(r.URL.Path, "/api/v1/nodes/") && strings.HasSuffix(r.URL.Path, "/apply"))
 		enter := a.Operations.Enter
 		if exclusive {
 			enter = a.Operations.Exclusive
 		}
 		release, err := enter(r.Context())
 		if err != nil {
-			writeOperationFailure(w, err)
+			a.writeOperationFailure(w, err)
 			return
 		}
 		scope := &operationScope{app: a, exclusive: exclusive, active: true, release: release}
@@ -90,6 +107,10 @@ func (a *App) privateRestoreAdmission(ctx context.Context) (func(), error) {
 }
 
 func writeOperationFailure(w http.ResponseWriter, err error) {
+	(&App{}).writeOperationFailure(w, err)
+}
+
+func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 	w.Header().Set("Cache-Control", "no-store")
 	code := "OPERATION_CANCELED"
 	message := "Действие отменено до начала. Настройки не изменены."
@@ -109,7 +130,7 @@ func writeOperationFailure(w http.ResponseWriter, err error) {
 	// Identity is cache-independent. Supervisors can recognize a live but busy
 	// process without reading locked Stores or inventing dataplane health.
 	writeJSON(w, status, map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false, "recovery_required": recovery,
-		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid()})
+		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "node_recovery": a.nodeRecoverySnapshot()})
 }
 
 func (a *App) backgroundRound(ctx context.Context, round int) {
@@ -118,6 +139,9 @@ func (a *App) backgroundRound(ctx context.Context, round int) {
 		return // A restore takes precedence; retry at the next scheduled round.
 	}
 	defer release()
+	if a.Store != nil && a.Store.Get().ServiceControl.Stopped {
+		return
+	}
 	if a.Dataplane != nil {
 		refreshCtx, refreshCancel := context.WithTimeout(ctx, 90*time.Second)
 		_, _ = a.Dataplane.RefreshCommitted(refreshCtx)

@@ -39,6 +39,9 @@ func TestNFQWS2AdapterManagedListsAndRollback(t *testing.T) {
 	}
 	runner := &nfqwsFakeRunner{}
 	adapter := &NFQWS2Adapter{ConfigPath: configPath, InitPath: initPath, UserListPath: userPath, IPSetListPath: ipsetPath, IPTablesSave: iptablesSave, Runner: runner, HealthProbe: func(context.Context, string) error { return nil }}
+	if err := adapter.bindStateRoot(filepath.Join(root, "state")); err != nil {
+		t.Fatal(err)
+	}
 	transaction := filepath.Join(root, "transaction")
 	if err := os.MkdirAll(transaction, 0o700); err != nil {
 		t.Fatal(err)
@@ -57,7 +60,7 @@ func TestNFQWS2AdapterManagedListsAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(userPath)
-	if !strings.Contains(string(data), "manual.example") || !strings.Contains(string(data), managedBegin+"\ngooglevideo.com\nyoutube.com\n"+managedEnd) {
+	if !strings.Contains(string(data), "manual.example") || !strings.Contains(string(data), "\ngooglevideo.com\nyoutube.com\n"+managedEnd) || !strings.Contains(string(data), "# RAZVILKA INSTANCE ") {
 		t.Fatalf("managed user list=%q", data)
 	}
 	for _, path := range []string{userPath, ipsetPath} {
@@ -97,19 +100,35 @@ func TestReplaceManagedBlockRejectsBrokenOwnershipMarkers(t *testing.T) {
 func TestNFQWS2DeactivateRemovesOnlyManagedBlocks(t *testing.T) {
 	root := t.TempDir()
 	initPath := filepath.Join(root, "S51nfqws2")
+	configPath := filepath.Join(root, "nfqws2.conf")
 	userPath := filepath.Join(root, "user.list")
 	ipsetPath := filepath.Join(root, "ipset.list")
 	for path, content := range map[string]string{
-		initPath:  "#!/bin/sh\n",
-		userPath:  "manual.example\n" + managedBegin + "\nmanaged.example\n" + managedEnd + "\n",
-		ipsetPath: managedBegin + "\n203.0.113.0/24\n" + managedEnd + "\n",
+		initPath:   "#!/bin/sh\n",
+		configPath: "ISP_INTERFACE=eth3\n",
+		userPath:   "manual.example\n",
+		ipsetPath:  "",
 	} {
 		if err := os.WriteFile(path, []byte(content), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	runner := &nfqwsFakeRunner{}
-	adapter := &NFQWS2Adapter{InitPath: initPath, UserListPath: userPath, IPSetListPath: ipsetPath, Runner: runner}
+	adapter := &NFQWS2Adapter{ConfigPath: configPath, InitPath: initPath, UserListPath: userPath, IPSetListPath: ipsetPath, Runner: runner}
+	if err := adapter.bindStateRoot(filepath.Join(root, "state")); err != nil {
+		t.Fatal(err)
+	}
+	transaction := filepath.Join(root, "transaction")
+	if err := os.MkdirAll(transaction, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plan := Plan{Routes: []Route{{Resolved: "nfqws2", Domains: []string{"managed.example"}, CIDRs: []string{"203.0.113.0/24"}}}}
+	for _, call := range []func(context.Context, Plan, string) error{adapter.Snapshot, adapter.Stage, adapter.Validate, adapter.Activate} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner.calls = nil
 	if err := adapter.Deactivate(context.Background()); err != nil {
 		t.Fatal(err)
 	}

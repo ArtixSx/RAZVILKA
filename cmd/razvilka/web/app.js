@@ -27,6 +27,9 @@ const state = {
   selectedEngineFile: 'main',
   engineMode: 'guided',
   engineEditorDirty: false,
+  engineEditorVersion: 0,
+  engineEditorEpoch: 0,
+  engineIntent: null,
   engineLoaded: null,
   engineGuided: null,
   engineGuidedLoading: false,
@@ -56,6 +59,7 @@ const state = {
   privateBackupEnvelope: null,
   privateBackupPreview: null,
   appUpdate: null,
+  serviceControl: null,
   scopeService: null,
   noticeDetails: null,
   stream: null,
@@ -66,14 +70,14 @@ const state = {
 };
 
 const viewMeta = {
-  overview: ['Обзор', 'Главное состояние сервисов, обходов и роутера'],
-  services: ['Сервисы', 'Включите сервис — Автопилот сам сохранит или подберёт подтверждённый обход'],
+  overview: ['Главная', 'Сервисы, подключения и состояние вашей сети'],
+  services: ['Сервисы', 'Проверьте доступ, выберите подключение и устройства'],
   connections: ['Соединения', 'Подтверждённый путь реального сетевого трафика'],
-  engines: ['Обходы', 'Установите только нужные обходы — маршруты от этого не изменятся'],
-  nodes: ['Узлы', 'Сохранённые подключения без секретов и ложных обещаний работоспособности'],
-  engineconfig: ['Настройка обходов', 'Сохраните черновик, проверьте его и примените вместе с выбранным сервисом'],
+  engines: ['Установка и обновления', 'Версии и обслуживание компонентов обхода'],
+  nodes: ['Подключения', 'VLESS и VPN: серверы, подписки и проверка доступа'],
+  engineconfig: ['Обходы', 'Активные обходы, версии и настройки подключения'],
   devices: ['Устройства', 'Назначьте сервисы конкретным клиентам или группам'],
-  dns: ['DNS', 'Выберите профиль, проверьте резолверы и подготовьте безопасный черновик'],
+  dns: ['DNS', 'Выберите DNS-серверы и проверьте их доступность'],
   sources: ['Источники', 'Списки доменов и адресов для автоматического распознавания сервисов'],
   testlab: ['Тест обходов', 'Сравните доступность сервиса через установленные обходы'],
   strategylab: ['Подбор NFQWS2', 'Расширенная проверка стратегий для опытных пользователей'],
@@ -173,6 +177,7 @@ function hideAuth() {
   $('.app-shell').removeAttribute('aria-hidden');
   $('#authMessage').textContent = '';
   $('#detailsPanel').classList.remove('open');
+  document.dispatchEvent(new Event('razvilka:auth-restored'));
 }
 
 async function submitSetup(event) {
@@ -220,7 +225,7 @@ async function logout() {
   try { await api('/api/v1/auth/logout', { method: 'POST' }); } catch (_) { /* session may already be gone */ }
   sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   if (state.stream) { state.stream.close(); state.stream = null; }
-  const status = await api('/api/v1/status');
+  const status = await api('/api/v1/auth/status');
   showAuth(status);
 }
 
@@ -301,6 +306,16 @@ function routeOption(id) {
 
 function routeLabel(id) {
   if (id === 'auto') return 'Автопилот';
+  if (typeof id === 'string' && id.startsWith('sing-box:node-')) {
+    const nodeId = id.slice('sing-box:'.length);
+    const node = (state.nodes?.nodes || []).find((item) => item.id === nodeId);
+    return node ? nodeDisplayName(node) : 'Подключение недоступно';
+  }
+  if (typeof id === 'string' && id.startsWith('sing-box:group-')) {
+    const groupId = id.slice('sing-box:'.length);
+    const group = (state.nodes?.groups || []).find((item) => item.id === groupId);
+    return group?.name || `Группа ${groupId.slice('group-'.length, 'group-'.length + 6)}`;
+  }
   return routeOption(id)?.name || fallbackLabels[id] || id || '—';
 }
 
@@ -316,6 +331,7 @@ function setView(name) {
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
   $$('.nav[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   const activeNav = $(`.nav[data-view="${CSS.escape(name)}"]`);
+  renderWorkspaceNavigation(name);
   if (activeNav && window.matchMedia('(max-width: 760px)').matches) activeNav.scrollIntoView({ block: 'nearest', inline: 'center' });
   const meta = viewMeta[name] || [name, ''];
   $('#pageTitle').textContent = meta[0];
@@ -556,7 +572,8 @@ function onboardingNeeded() {
 }
 
 function openOnboarding(force = false) {
-  if (!force && (onboardingDone() || !onboardingNeeded())) return;
+  if (!force && (state.onboardingDeferred || onboardingDone() || !onboardingNeeded())) return;
+  state.onboardingDeferred = false;
   state.onboardingStep = Math.max(0, Math.min(3, state.onboardingStep || 0));
   renderOnboarding();
   if (!$('#onboardingDialog').open) $('#onboardingDialog').showModal();
@@ -564,6 +581,7 @@ function openOnboarding(force = false) {
 
 function closeOnboarding(done = true) {
   if (done) setOnboardingDone();
+  else state.onboardingDeferred = true;
   if ($('#onboardingDialog').open) $('#onboardingDialog').close();
 }
 
@@ -571,7 +589,7 @@ function renderOnboarding() {
   const step = state.onboardingStep;
   const labels = ['Проверка роутера', 'Выбор обхода', 'Выбор сервисов', 'План и запуск'];
   $('#onboardingSteps').innerHTML = labels.map((label, index) => `<li class="${index === step ? 'active' : ''} ${index < step ? 'done' : ''}"><i>${index < step ? '✓' : index + 1}</i><span>${esc(label)}</span></li>`).join('');
-  const components = ['nfqws2', 'usque', 'warp-wg'].map((id) => state.components.find((item) => item.id === id)).filter(Boolean);
+  const components = ['sing-box', 'nfqws2', 'usque', 'warp-wg'].map((id) => state.components.find((item) => item.id === id)).filter(Boolean);
   const preferredIDs = ['youtube', 'discord', 'telegram', 'chatgpt', 'claude', 'gemini', 'twitch', 'instagram', 'facebook', 'reddit', 'tiktok', 'x-twitter'];
   const preferred = preferredIDs.map((id) => state.services.find((item) => item.id === id)).filter(Boolean);
   const services = preferred.length >= 6 ? preferred : state.services.filter((item) => !item.custom).slice(0, 12);
@@ -580,14 +598,14 @@ function renderOnboarding() {
   let content = '';
   if (step === 0) {
     const capacity = state.metrics.capacity || {};
-    content = `<span class="eyebrow">ШАГ 1 ИЗ 4</span><h2>Сначала — безопасная база</h2><p class="onboarding-lead">Панель уже работает, но обходы не устанавливаются скрытно. Проверим, что роутер готов, и сохраним рабочий интернет без изменений.</p><div class="onboarding-checks"><div><i>✓</i><span><b>RAZVILKA запущена</b><small>${esc(state.status.listen || ':8787')} · ${esc(state.system.architecture || state.system.arch || 'архитектура определяется')}</small></span></div><div><i>✓</i><span><b>Безопасный режим включён</b><small>правила сети, DNS, туннели и маршруты не меняются без подтверждения</small></span></div><div><i>${capacity.level && capacity.level !== 'critical' ? '✓' : '·'}</i><span><b>Ресурсы роутера</b><small>${esc((capacity.reasons || []).join(' · ') || 'замеры появятся после нескольких секунд работы')}</small></span></div></div><div class="onboarding-note">Если интернет сейчас работает, мастер не должен его прервать: установка обхода и применение маршрута — разные подтверждаемые операции.</div>`;
+    content = `<span class="eyebrow">ШАГ 1 ИЗ 4</span><h2>Сначала — безопасная база</h2><p class="onboarding-lead">Панель уже работает, но обходы не устанавливаются скрытно. Проверим, что роутер готов, и сохраним рабочий интернет без изменений.</p><div class="onboarding-checks"><div><i>✓</i><span><b>RAZVILKA запущена</b><small>${esc(state.status.listen || ':8787')} · ${esc(state.system.architecture || state.system.arch || 'архитектура определяется')}</small></span></div><div><i>✓</i><span><b>${state.status.safe_mode ? 'Изменения маршрутов заблокированы' : 'Изменение маршрутов разрешено'}</b><small>${state.status.safe_mode ? 'Проверки доступны; применить маршрут можно после снятия блокировки в настройках.' : 'Уже применённые маршруты продолжают работать.'}</small></span></div><div><i>${capacity.level && capacity.level !== 'critical' ? '✓' : '·'}</i><span><b>Ресурсы роутера</b><small>${esc((capacity.reasons || []).join(' · ') || 'замеры появятся после нескольких секунд работы')}</small></span></div></div><div class="onboarding-note">Если интернет сейчас работает, мастер не должен его прервать: установка обхода и применение маршрута — разные подтверждаемые операции.</div>`;
   } else if (step === 1) {
     const unavailable = components.some((component) => !component.installed && !component.available);
-    content = `<span class="eyebrow">ШАГ 2 ИЗ 4</span><h2>Выберите первый обход</h2><p class="onboarding-lead">Начните с одного. Остальные можно установить позже во вкладке «Обходы», когда увидите нагрузку и результаты тестов.</p>${unavailable ? '<div class="onboarding-repository"><span><b>Список пакетов ещё не проверен</b><small>RAZVILKA добавит только известные feed NFQWS2/Usque и выполнит opkg update. Обходы при этом не устанавливаются.</small></span><button class="secondary" data-onboarding-refresh>Проверить доступность</button></div>' : ''}<div class="onboarding-components">${components.map((component) => { const installedText = component.installed ? `Установлен ${component.installed_version || ''}` : (component.available ? `Доступен ${component.available_version || ''}` : 'Сначала проверьте список пакетов'); const action = component.installed ? '<span class="engine-state installed">ГОТОВ</span>' : `<button class="secondary" data-onboarding-component="${esc(component.id)}" ${component.available ? '' : 'disabled'}>Установить</button>`; return `<article class="${component.id === 'nfqws2' ? 'recommended' : ''}">${component.id === 'nfqws2' ? '<em>РЕКОМЕНДУЕМ НАЧАТЬ</em>' : ''}<b>${esc(component.name)}</b><p>${esc(component.description || '')}</p><small>${esc(installedText)}</small>${action}</article>`; }).join('')}</div><div class="onboarding-note">WARP Generator ставится как зависимость только при выборе WARP WireGuard. WARP MASQUE и NFQWS2 можно устанавливать независимо.</div>`;
+    content = `<span class="eyebrow">ШАГ 2 ИЗ 4</span><h2>Выберите первый обход</h2><p class="onboarding-lead">Для VLESS добавьте свои ссылки или подписку, затем выберите сервис и устройства. Другие компоненты доступны в «Настройки → Компоненты».</p>${unavailable ? '<div class="onboarding-repository"><span><b>Список пакетов ещё не проверен</b><small>RAZVILKA добавит только известные feed NFQWS2/Usque и выполнит opkg update. Обходы при этом не устанавливаются.</small></span><button class="secondary" data-onboarding-refresh>Проверить доступность</button></div>' : ''}<div class="onboarding-note"><b>VLESS и публичные каталоги</b><p>Добавьте подключение и проверьте его на своём роутере.</p><button class="primary" type="button" data-onboarding-nodes>Открыть подключения</button></div><div class="onboarding-components">${components.map((component) => { const installedText = component.installed ? `Установлен ${component.installed_version || ''}` : (component.available ? `Доступен ${component.available_version || ''}` : 'Сначала проверьте список пакетов'); const action = component.installed ? '<span class="engine-state installed">ГОТОВ</span>' : `<button class="secondary" data-onboarding-component="${esc(component.id)}" ${component.available ? '' : 'disabled'}>Установить</button>`; return `<article class="${component.id === 'nfqws2' ? 'recommended' : ''}">${component.id === 'nfqws2' ? '<em>РЕКОМЕНДУЕМ НАЧАТЬ</em>' : ''}<b>${esc(component.name)}</b><p>${esc(component.description || '')}</p><small>${esc(installedText)}</small>${action}</article>`; }).join('')}</div><div class="onboarding-note">Созданный профиль WARP или добавленная VLESS-ссылка ещё требуют проверки доступа. Установка компонента сама по себе не включает маршрут.</div>`;
   } else if (step === 2) {
     content = `<span class="eyebrow">ШАГ 3 ИЗ 4</span><h2>Отметьте нужные сервисы</h2><p class="onboarding-lead">Сейчас создаётся только черновик с автоматическим выбором обхода. RAZVILKA ещё ничего не применяет в систему.</p><div class="onboarding-services">${services.map((service) => `<button class="${service.enabled ? 'selected' : ''}" data-onboarding-service="${esc(service.id)}"><span>${esc(service.icon || '◇')}</span><b>${esc(service.name)}</b><i>${service.enabled ? '✓' : '+'}</i></button>`).join('')}</div><div class="onboarding-selection"><b>${enabled.length}</b><span>сервисов выбрано</span></div>`;
   } else {
-    content = `<span class="eyebrow">ШАГ 4 ИЗ 4</span><h2>Проверьте план перед запуском</h2><p class="onboarding-lead">Выбор сохранён в черновике. Сначала RAZVILKA покажет препятствия и создаваемые правила, затем сделает резервную копию. Рабочее применение включается отдельно.</p><div class="onboarding-summary"><div><span>Установленные обходы</span><b>${installed.length ? installed.map((item) => item.name).join(', ') : 'пока нет'}</b></div><div><span>Выбранные сервисы</span><b>${enabled.length ? enabled.map((item) => item.name).slice(0, 6).join(', ') + (enabled.length > 6 ? ` +${enabled.length - 6}` : '') : 'пока нет'}</b></div><div><span>Текущее состояние</span><b>${state.status.safe_mode ? 'Безопасный режим — рабочая сеть не изменена' : 'Рабочее применение разрешено'}</b></div></div><div class="onboarding-note success">Мастер не обещает доступ без теста: после установки обхода откройте план, затем выполните проверку маршрутов.</div>`;
+    content = `<span class="eyebrow">ШАГ 4 ИЗ 4</span><h2>Проверьте план перед запуском</h2><p class="onboarding-lead">Выбор сохранён в черновике. Сначала RAZVILKA покажет препятствия и создаваемые правила, затем сделает резервную копию. Рабочее применение включается отдельно.</p><div class="onboarding-summary"><div><span>Установленные обходы</span><b>${installed.length ? installed.map((item) => item.name).join(', ') : 'пока нет'}</b></div><div><span>Выбранные сервисы</span><b>${enabled.length ? enabled.map((item) => item.name).slice(0, 6).join(', ') + (enabled.length > 6 ? ` +${enabled.length - 6}` : '') : 'пока нет'}</b></div><div><span>Текущее состояние</span><b>${state.status.safe_mode ? 'Изменения маршрутов заблокированы' : 'Рабочее применение разрешено'}</b></div></div><div class="onboarding-note success">Мастер не обещает доступ без теста: после установки обхода откройте план, затем выполните проверку маршрутов.</div>`;
   }
   $('#onboardingContent').innerHTML = content;
   $('#onboardingBack').disabled = step === 0;
@@ -606,6 +624,7 @@ async function onboardingNext() {
 }
 
 async function onboardingAction(event) {
+  if (event.target.closest('[data-onboarding-nodes]')) { closeOnboarding(false); setView('nodes'); setNodeBrowserTab('all'); return; }
   const componentButton = event.target.closest('[data-onboarding-component]');
   const serviceButton = event.target.closest('[data-onboarding-service]');
   const refreshButton = event.target.closest('[data-onboarding-refresh]');
@@ -674,6 +693,19 @@ function yesNo(v) {
 async function refreshAll() {
   $('#systemText').textContent = 'Обновление…';
   try {
+    // Authentication and job memory can be read even while a detached checker
+    // owns the stores. A freshly opened page must still offer login and cancel.
+    const authentication = await api('/api/v1/auth/status');
+    if (authentication.setup_required || !authentication.authenticated) {
+      const status = await api('/api/v1/status').catch(() => ({ ...authentication, auth_required: true }));
+      showAuth(status); $('#systemText').textContent = 'Требуется вход'; return false;
+    }
+    hideAuth();
+    if (await refreshNodeActivity()) {
+      $('#systemText').textContent = 'Проверка подключений';
+      scheduleNodeActivity(1500);
+      return true;
+    }
     const status = await api('/api/v1/status');
     state.status = status;
     // Status is intentionally public so the login/setup screen can show the
@@ -695,6 +727,8 @@ async function refreshAll() {
       ['warp', '/api/v1/warp'],
       ['sources', '/api/v1/sources'],
       ['nodes', '/api/v1/nodes'],
+      ['nodeFeeds', '/api/v1/node-feeds'],
+      ['nodeAutofallback', '/api/v1/node-autofallback'],
       ['routeOptions', '/api/v1/routes/options'],
       ['connections', '/api/v1/connections?include_closed=true'],
       ['devices', '/api/v1/devices?view=status'],
@@ -704,6 +738,7 @@ async function refreshAll() {
       ['strategyLab', '/api/v1/strategy-lab'],
       ['z2kPreview', '/api/v1/migrations/z2k/preview'],
       ['smartRoute', '/api/v1/smart-route'],
+      ['serviceControl', '/api/v1/service-control'],
       ['dns', '/api/v1/dns'],
       ['dnsPlan', '/api/v1/dns/plan'],
       ['sessions', '/api/v1/auth/sessions'],
@@ -713,16 +748,24 @@ async function refreshAll() {
     settled.forEach((result, index) => {
       const [key, url] = requests[index];
       if (result.status === 'fulfilled') {
+        if (key === 'serviceControl') { if (typeof acceptWorkspaceControl === 'function') acceptWorkspaceControl(result.value); else state.serviceControl = result.value; return; }
         if (key === 'devices') { acceptDeviceList(result.value); return; }
         state[key] = key === 'sessions' ? (result.value.sessions || []) : result.value;
         return;
+      }
+      if (result.reason?.payload?.node_recovery?.state === 'revalidating') {
+        status.node_recovery = result.reason.payload.node_recovery;
+        status.live_active = false;
+        status.dataplane_recovery_state = 'network-stale';
+        state.nodes = { ...(state.nodes || {}), node_recovery: status.node_recovery };
       }
       issues.push({ section: key, url, message: result.reason?.message || 'Раздел временно недоступен', technical: result.reason?.technicalMessage || '' });
     });
     state.status = status;
     state.loadIssues = issues;
     renderAll();
-    $('#systemText').textContent = status.safe_mode ? 'Защита включена' : (status.live_active ? 'Маршруты активны' : 'Запись разрешена');
+    if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls();
+    else $('#systemText').textContent = status.safe_mode ? 'Изменения заблокированы' : (status.live_active ? 'Маршруты активны' : 'Маршруты не включены');
     if (issues.length) {
       showNotice('review', 'Часть данных временно недоступна', `${issues.length} ${issues.length === 1 ? 'раздел не загрузился' : 'раздела не загрузились'}. Остальная панель продолжает работать.`, { issues });
     }
@@ -732,6 +775,16 @@ async function refreshAll() {
     }
     return true;
   } catch (error) {
+    if (error.payload?.node_recovery?.state === 'revalidating') {
+      const recovery = error.payload.node_recovery;
+      state.status = { ...(state.status || {}), node_recovery: recovery, live_active: false, dataplane_recovery_state: 'network-stale' };
+      state.nodes = { ...(state.nodes || {}), node_recovery: recovery };
+      renderStatus();
+      renderNodes();
+      $('#systemText').textContent = 'Повторная проверка маршрута';
+      showNotice('review', 'Восстановление применённого маршрута', recovery.message, { node_recovery: recovery });
+      return false;
+    }
     $('#systemText').textContent = 'Ошибка связи';
     if (error.status === 401 || String(error.technicalMessage || '').includes('administrator login is required')) {
       const status = await api('/api/v1/status'); showAuth(status, 'Сессия завершилась. Войдите снова.');
@@ -843,6 +896,7 @@ async function refreshComponents(refresh = true) {
   try {
     state.components = await api(`/api/v1/components${refresh ? '?refresh=true' : ''}`);
     renderComponents();
+    renderEngineControl();
   } catch (error) { showDetails({ error: error.message }, 'Проверка обновлений'); }
   finally { button.disabled = false; button.textContent = 'Проверить обновления'; }
 }
@@ -902,16 +956,12 @@ function renderStatus() {
   $('#settingBuild').title = `${buildState} · ${buildTime}`;
   $('#settingBuildDetails').textContent = `${buildTime} · ${buildState}`;
   $('#listenChip').textContent = s.listen || ':8787';
-  $('#topModeLabel').textContent = s.safe_mode ? 'Безопасный режим' : 'Рабочий режим';
-  $('#systemText').textContent = s.safe_mode ? 'Защита включена' : (s.live_active ? 'Маршруты активны' : 'Запись разрешена');
-  $('#topModeControl').classList.toggle('active-apply', !s.safe_mode);
-  $('#topToggleSafeMode').setAttribute('aria-checked', String(!!s.safe_mode));
-  const modeAction = s.safe_mode ? 'Безопасный режим включён. Перейти в рабочий режим' : 'Рабочий режим включён. Вернуться в безопасный режим';
-  $('#topToggleSafeMode').setAttribute('aria-label', modeAction);
-  $('#topToggleSafeMode').title = modeAction;
+  $('#systemText').textContent = s.safe_mode ? 'Изменения заблокированы' : (s.live_active ? 'Маршруты активны' : 'Маршруты не включены');
+  if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls();
+  if (typeof renderAppVersionStatus === 'function') renderAppVersionStatus();
   $('#topUptime').textContent = formatUptime(s.uptime_seconds);
   $('#kpiState').textContent = s.live_active ? 'Активна' : (s.safe_mode ? 'Безопасный режим' : 'Не применено');
-  $('#kpiStateSub').textContent = s.live_active ? 'маршруты подтверждены' : (s.safe_mode ? 'рабочие маршруты не изменяются' : 'нет подтверждённого применения');
+  $('#kpiStateSub').textContent = s.live_active ? 'конфигурация применена' : (s.safe_mode ? 'рабочие маршруты не изменяются' : 'нет подтверждённого применения');
   $('#kpiEngines').textContent = `${s.engines_running || 0} / ${s.engines_installed || 0}`;
   $('#kpiServices').textContent = `${s.enabled_services || 0} / ${s.catalog_services || 0}`;
   $('#kpiConnections').textContent = s.active_connections || 0;
@@ -919,22 +969,20 @@ function renderStatus() {
   $('#serviceNavCount').textContent = s.enabled_services || 0;
   $('#serviceDraftBar').classList.toggle('show', !!s.services_pending_changes);
   $('#serviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
-  $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить черновик' : 'Сохранить и проверить';
+  $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить изменения' : 'Проверить и применить';
   $('#deviceDraftBar').classList.toggle('show', !!s.devices_pending_changes);
   $('#deviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#sourceDraftBar').classList.toggle('show', !!s.sources_pending_changes);
   $('#sourceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
-  $('#applyDeviceChanges').textContent = s.safe_mode ? 'Проверить политики' : 'Применить политики';
-  const sectionOwnsDraft = ['services', 'devices', 'engineconfig', 'dns', 'sources'].includes(state.currentView);
+  $('#applyDeviceChanges').textContent = s.safe_mode ? 'Проверить изменения' : 'Проверить и применить';
+  const sectionOwnsDraft = ['services', 'devices', 'engineconfig', 'dns', 'sources', 'nodes'].includes(state.currentView);
   $('#draftBar').classList.toggle('show', !sectionOwnsDraft && (!!s.routing_pending_changes || !!s.engine_pending_changes || engineDrafts > 0));
   $('#draftBar').classList.toggle('safe-review', !!s.safe_mode);
   const failedApply = !s.safe_mode && !!s.pending_changes && !!s.last_apply_failure;
   $('#draftBar').classList.toggle('apply-failed', failedApply);
   $('#draftTitle').textContent = failedApply
-    ? 'Применение отменено — интернет восстановлен'
-    : engineDrafts > 0
-    ? `${engineDrafts} ${engineDrafts === 1 ? 'черновик обхода ждёт применения' : 'черновика обходов ждут применения'}`
-    : (s.safe_mode ? 'Изменения сохранены как черновик' : 'Есть неподтверждённые изменения');
+    ? 'Применение не завершено'
+    : 'Изменения ожидают применения';
   $('#draftHint').textContent = failedApply && s.last_apply_failure === 'WARP_WIREGUARD_HANDSHAKE'
     ? 'WARP WireGuard не получил ответ ни на одном резервном UDP-порту. Проверьте Cloudflare и используйте WARP · MASQUE по TCP/443 либо свой сервер.'
     : failedApply && s.last_apply_failure === 'WARP_MASQUE_SERVICE_TIMEOUT'
@@ -942,13 +990,18 @@ function renderStatus() {
     : failedApply && s.last_apply_failure === 'SING_BOX_NODE_UNREACHABLE'
     ? 'Публичный ключ прошёл проверку формата, но не реальное подключение. Импортируйте несколько свежих ключей одним списком для автоматического локального выбора.'
     : failedApply
-    ? 'Новый маршрут не прошёл проверку. Исправьте настройки и повторите либо отмените черновик.'
+    ? 'Новый маршрут не прошёл проверку. Откройте изменённый раздел и проверьте состояние.'
     : engineDrafts > 0
-    ? 'Черновик применяется только вместе с сервисом, назначенным этому обходу'
-    : (s.safe_mode ? 'Безопасный режим проверит план, но не изменит рабочие маршруты' : 'Сначала проверяем план, затем применяем всё одной операцией');
-  $('#applyChanges').textContent = s.safe_mode ? 'Проверить план' : (failedApply ? 'Повторить' : 'Применить');
-  $('#applySettings').textContent = s.safe_mode ? 'Проверить план' : (failedApply ? 'Повторить проверку' : 'Применить черновик');
-  $('#discardChanges').textContent = failedApply ? 'Отменить черновик' : 'Отменить';
+    ? 'Откройте настройки нужного подключения, чтобы проверить и применить его изменения.'
+    : 'Откройте изменённый раздел. Применение затронет только выбранную область.';
+  $('#applyChanges').textContent = 'Открыть изменения';
+  $('#applySettings').textContent = s.safe_mode ? 'Проверить изменения' : (failedApply ? 'Повторить проверку' : 'Проверить и применить');
+  $('#discardChanges').hidden = true;
+}
+
+function openPendingChanges() {
+  const status = state.status || {};
+  setView(status.services_pending_changes ? 'services' : status.devices_pending_changes ? 'devices' : status.sources_pending_changes ? 'sources' : 'engineconfig');
 }
 
 function renderSystem() {
@@ -1264,77 +1317,20 @@ function serviceMatches(service) {
 }
 
 function renderServices() {
-  populateServiceCategories();
-  $$('[data-service-mode]').forEach((button) => button.classList.toggle('active', button.dataset.serviceMode === state.serviceMode));
-  const visible = state.services.filter(serviceMatches);
-  $('#serviceList').innerHTML = visible.map((s) => {
-    const plannedAvailable = routeAvailable(s.planned_engine);
-    const resolvedClass = plannedAvailable ? '' : 'off';
-    const appliedText = s.applied_enabled ? routeLabel(s.applied_route) : 'выключен';
-    const dirty = s.dirty ? 'dirty' : '';
-    const draftText = s.route_dirty && s.sources_dirty
-      ? 'маршрут и область изменены'
-      : s.route_dirty
-      ? 'маршрут изменён'
-      : s.sources_dirty
-      ? 'область устройств изменена'
-      : '';
-    const domainCount = Number((s.domains || []).length);
-    const cidrCount = Number((s.cidrs || []).length);
-    const coverageClass = cidrCount > 0 ? 'full' : 'domains';
-    const coverageLabel = cidrCount > 0 ? 'ДОМЕНЫ + IP' : 'ТОЛЬКО ДОМЕНЫ';
-    const coverageTitle = cidrCount > 0 ? 'Учтены домены и IP-сети приложения' : 'Приложение может обращаться по IP; при полной блокировке лучше туннель';
-    const routeNeedsAction = s.route_available === false && s.route !== 'auto' && s.route !== 'direct';
-    const desiredState = s.desired_state || { enabled: s.enabled, route: s.route };
-    const plannedState = s.planned_state || { enabled: s.enabled, route: s.planned_engine, recommendation_only: !s.enabled };
-    const appliedState = s.applied_state || { enabled: s.applied_enabled, route: s.applied_route };
-    const planLabel = plannedState.recommendation_only ? 'Рекомендация при включении' : 'Расчёт Автопилота';
-    const planText = routeLabel(plannedState.route || s.planned_engine);
-    const planControl = s.nfqws2?.relevant && (plannedState.route === 'nfqws2' || s.nfqws2.recommendation_only)
-      ? `<button class="resolved nfqws2-outcome ${resolvedClass}" type="button" data-nfqws2-id="${esc(s.id)}" title="Показать профиль, стратегию, подтверждение и владельца NFQUEUE"><i></i><span>${esc(planText)}</span><small>подробнее</small></button>`
-      : `<div class="resolved ${resolvedClass}"><i></i><span>${esc(planText)}</span></div>`;
-    return `<article class="service-card ${s.enabled ? 'enabled' : ''} ${dirty} ${routeNeedsAction ? 'route-action-required' : ''}">
-      <div class="service-top">
-        <div class="service-id"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><h3>${esc(s.name)}</h3><p>${esc(s.description || '')}</p></div></div>
-        <button class="toggle ${s.enabled ? 'on' : ''}" data-toggle-id="${esc(s.id)}" aria-label="${s.enabled ? 'Выключить' : 'Включить'} ${esc(s.name)}"><i></i></button>
-      </div>
-      <div class="service-control-grid">
-        <div><span class="control-label">Желаемый маршрут</span>${routeSelectHTML(s)}</div>
-        <div><span class="control-label">${planLabel}</span>${planControl}${plannedState.recommendation_only ? '<small class="recommendation-copy">Сервис выключен · это только рекомендация</small>' : ''}</div>
-        <div class="service-actions"><button class="mini-button ${s.sources?.length ? 'scoped' : ''}" data-scope-id="${esc(s.id)}" title="Устройства" aria-label="Устройства для ${esc(s.name)}">◎</button><button class="mini-button list-button" data-detail-id="${esc(s.id)}" title="Домены, IP-сети и актуальность источников" aria-label="Показать домены и IP-сети ${esc(s.name)}">Списки</button><button class="mini-button" data-test-id="${esc(s.id)}" title="Проверить маршрут" aria-label="Проверить маршрут ${esc(s.name)}">⚡</button>${s.custom ? `<button class="mini-button" data-edit-service="${esc(s.id)}" title="Изменить" aria-label="Изменить ${esc(s.name)}">✎</button><button class="mini-button danger-mini" data-delete-service="${esc(s.id)}" title="Удалить" aria-label="Удалить ${esc(s.name)}">×</button>` : ''}</div>
-      </div>
-      <div class="service-truth-grid" aria-label="Состояния маршрута ${esc(s.name)}"><div><span>Выбрано</span><b>${esc(serviceStateRoute(desiredState, s.route))}</b><small>${desiredState.enabled ? 'настройка пользователя' : 'сервис выключен'}</small></div><div class="${plannedState.stale ? 'stale' : ''}"><span>${plannedState.recommendation_only ? 'Рекомендовано' : 'Рассчитано'}</span><b>${esc(planText)}</b><small>${plannedState.stale ? 'черновик не применён' : plannedState.recommendation_only ? 'не активно' : 'готово к проверке'}</small></div><div><span>Применено</span><b>${esc(serviceStateRoute(appliedState, s.applied_route))}</b><small>${appliedState.enabled ? 'рабочая настройка' : 'не включено'}</small></div><div class="${s.observed_state?.status === 'stale' ? 'stale' : ''}"><span>Подтверждено</span><b>${esc(serviceObservedLabel(s))}</b><small>${esc(s.observed_state?.status || s.evidence_status || 'нет проверки')}</small></div></div>
-      ${routeNeedsAction ? `<div class="service-route-warning"><span><b>Маршрут требует действия</b><small>${esc(s.route_issue || 'Обход не установлен. Выберите AUTO / DIRECT или установите компонент.')}</small></span><button class="secondary" type="button" data-route-setup="${esc(s.route)}">Открыть установку</button></div>` : ''}
-      <div class="service-meta"><span>${esc(s.category || 'Без категории')} · ${domainCount.toLocaleString('ru-RU')} доменов${cidrCount ? ` · ${cidrCount.toLocaleString('ru-RU')} IP-сетей` : ''} · ${s.sources?.length ? `${s.sources.length} областей` : 'вся локальная сеть'} <em class="coverage-badge ${coverageClass}" title="${esc(coverageTitle)}">${coverageLabel}</em></span><span class="service-proof-line">${evidenceBadgeHTML(s)}<span class="${s.dirty ? 'dirty-tag' : 'applied-tag'}">${s.dirty ? `${esc(draftText)} · применено: ${esc(appliedText)}` : `применено: ${esc(appliedText)}`}</span></span></div>
-    </article>`;
-  }).join('') || '<div class="empty-inline">Ничего не найдено</div>';
-
-  $$('[data-toggle-id]').forEach((button) => button.addEventListener('click', () => toggleService(button.dataset.toggleId)));
-  $$('.route-select[data-route-id]').forEach((select) => select.addEventListener('change', () => changeRoute(select.dataset.routeId, select.value)));
-  $$('[data-detail-id]').forEach((button) => button.addEventListener('click', () => showServiceDetails(button.dataset.detailId)));
-  $$('[data-scope-id]').forEach((button) => button.addEventListener('click', () => openServiceScope(button.dataset.scopeId)));
-  $$('[data-test-id]').forEach((button) => button.addEventListener('click', () => showServicePlan(button.dataset.testId)));
-  $$('[data-edit-service]').forEach((button) => button.addEventListener('click', () => openCustomServiceDialog(button.dataset.editService)));
-  $$('[data-delete-service]').forEach((button) => button.addEventListener('click', () => deleteCustomService(button.dataset.deleteService)));
-  $$('[data-route-setup]').forEach((button) => button.addEventListener('click', () => openRouteInstallation(button.dataset.routeSetup)));
-  $$('[data-nfqws2-id]').forEach((button) => button.addEventListener('click', () => showNFQWS2Details(button.dataset.nfqws2Id)));
-  $$('[data-switch-pro]').forEach((button) => button.addEventListener('click', () => setServiceMode('pro')));
+  renderServiceDashboard();
 }
 
 function renderOverviewServices() {
-  const chosen = [...state.services].sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name, 'ru')).slice(0, 7);
+  const chosen = state.services.filter(service => service.enabled || service.applied_enabled || service.route_dirty || service.sources_dirty).sort((a, b) => Number(b.applied_enabled) - Number(a.applied_enabled) || a.name.localeCompare(b.name, 'ru')).slice(0, 7);
   $('#overviewServices').innerHTML = chosen.map((s) => {
-    const desired = s.enabled ? routeLabel(s.route) : 'ВЫКЛ';
-    const planned = s.enabled ? routeLabel(s.planned_engine) : '—';
-    const applied = s.applied_enabled ? routeLabel(s.applied_route) : 'ВЫКЛ';
-    const desiredClass = s.route === 'auto' ? 'auto' : (routeAvailable(s.route) ? 'good' : 'warn');
-    const appliedClass = s.applied_enabled ? 'good' : '';
-    const draftLabel = s.route_dirty && s.sources_dirty ? 'маршрут + область' : s.route_dirty ? 'маршрут' : s.sources_dirty ? 'область' : '';
+    const desired = s.enabled ? routeLabel(s.route) : 'Выключить';
+    const summary = serviceDashboardSummary(s);
+    const applied = summary.route ? routeLabel(summary.route) : summary.label;
+    const pending = s.route_dirty || s.sources_dirty || s.enabled !== s.applied_enabled;
     return `<div class="overview-service">
-      <div class="service-name"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${draftLabel ? ` · черновик: ${draftLabel}` : ''}</small></div></div>
-      <span class="route-pill ${desiredClass}">${esc(desired)}${s.route === 'auto' && s.enabled ? ` → ${esc(planned)}` : ''}</span>
-      <span class="overview-arrow">→</span>
-      <span class="overview-applied"><span class="route-pill ${appliedClass} applied-route">${esc(applied)}</span>${evidenceBadgeHTML(s, true)}</span>
+      <div class="service-name"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${pending ? ' · Ожидают применения' : ''}</small></div></div>
+      <span class="overview-selection">${pending ? `Выбрано: ${esc(desired)}` : ''}</span>
+      <span class="overview-applied" title="${esc(summary.detail)}"><small>Сейчас</small><span class="route-pill ${summary.kind} applied-route">${esc(applied)}</span>${summary.route ? `<small>${esc(summary.label)} · ${esc(summary.pingLabel)}</small>` : ''}</span>
     </div>`;
   }).join('');
 }
@@ -1342,7 +1338,7 @@ function renderOverviewServices() {
 function renderOverviewQuickServices() {
   const container = $('#overviewQuickServices');
   if (!container) return;
-  const chosen = [...state.services].sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name, 'ru')).slice(0, 12);
+  const chosen = [...state.services].sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name, 'ru')).slice(0, typeof workspaceControl !== 'undefined' && workspaceControl.expanded ? state.services.length : 6);
   container.innerHTML = chosen.map((service) => `<button class="quick-service ${service.enabled ? 'enabled' : ''}" data-overview-toggle="${esc(service.id)}"><span class="service-badge">${esc(service.icon || '+')}</span><b>${esc(service.name)}</b><span class="quick-switch ${service.enabled ? 'on' : ''}"><i></i></span></button>`).join('');
   $$('[data-overview-toggle]').forEach((button) => button.addEventListener('click', () => toggleService(button.dataset.overviewToggle)));
 }
@@ -1360,7 +1356,7 @@ function renderReadiness() {
     ['Внешние туннели', !sys.route_contamination, sys.route_contamination ? `обнаружены: ${(sys.external_tunnels || []).join(', ') || 'неизвестный туннель'}` : 'не обнаружены'],
     ['Обходы', installed > 0, installed ? `${installed} установлено` : 'пока чистая среда'],
     ['Источники', operationalSources.length > 0 && sourceReady === operationalSources.length, `${sourceReady} / ${operationalSources.length} включённых списков готовы`],
-    ['Несохранённые изменения', !state.status.pending_changes, state.status.pending_changes ? 'есть черновик' : 'нет'],
+    ['Ожидают применения', !state.status.pending_changes, state.status.pending_changes ? 'есть изменения' : 'нет'],
   ];
   $('#readinessMini').innerHTML = rows.map(([name, ok, detail]) => `<div class="readiness-row"><div><b>${esc(name)}</b><small>${esc(detail)}</small></div><span class="ready-state ${ok ? '' : 'warn'}">${ok ? 'ГОТОВО' : 'ПРОВЕРИТЬ'}</span></div>`).join('');
 }
@@ -1437,31 +1433,31 @@ function renderEngineControl() {
 
   $('#engineSafeBadge').textContent = state.status.safe_mode ? 'БЕЗОПАСНЫЙ РЕЖИМ · ЗАПИСЬ ВЫКЛЮЧЕНА' : 'РАБОЧИЙ РЕЖИМ';
   $('#engineSafeBadge').classList.toggle('active-apply', !state.status.safe_mode);
-  $('#engineControlList').innerHTML = state.engineConfigs.map((e) => {
+  $('#engineControlList').innerHTML = [...state.engineConfigs].sort((a, b) => Number(b.running) - Number(a.running) || Number(b.installed) - Number(a.installed)).map((e) => {
     const [text, cls] = engineStatusText(e);
     const drafts = (e.files || []).filter((f) => f.staged).length;
     return `<button class="engine-control-item ${e.id === state.selectedEngine ? 'active' : ''}" data-engine-id="${esc(e.id)}">
-      <div><b>${esc(e.name)}</b><small>${esc(e.description || '')}</small></div>
-      <div class="engine-control-meta"><span class="engine-state ${cls}">${text}</span>${drafts ? `<span class="draft-count">${drafts} черн.</span>` : ''}</div>
+      <div><b>${esc(e.name)}</b>${typeof engineVersionHTML === 'function' ? engineVersionHTML(e) : ''}<small>${esc(e.description || '')}</small></div>
+      <div class="engine-control-meta"><span class="engine-state ${cls}">${text}</span>${drafts ? `<span class="draft-count">Есть изменения: ${drafts}</span>` : ''}</div>
     </button>`;
   }).join('');
   $$('[data-engine-id]').forEach((b) => b.addEventListener('click', () => selectEngine(b.dataset.engineId)));
 
   const [statusText, statusClass] = engineStatusText(engine);
   const role = engineRoleGuide(engine.id);
-  $('#engineSelectedHead').innerHTML = `<div><h3>${esc(engine.name)}</h3><p>${esc(engine.description || '')}</p>${role ? `<div class="engine-role-guide"><span>ЗАЧЕМ НУЖЕН</span><b>${esc(role.title)}</b><p>${esc(role.text)}</p><small>${esc(role.need)}</small></div>` : ''}</div><div class="engine-selected-meta"><span class="engine-state ${statusClass}">${statusText}</span><span>${(engine.files || []).length} файлов</span></div>`;
+  $('#engineSelectedHead').innerHTML = `<div><h3>${esc(engine.name)} ${typeof engineVersionHTML === 'function' ? engineVersionHTML(engine) : ''}</h3><p>${esc(engine.description || '')}</p>${role ? `<div class="engine-role-guide"><span>ЗАЧЕМ НУЖЕН</span><b>${esc(role.title)}</b><p>${esc(role.text)}</p><small>${esc(role.need)}</small></div>` : ''}</div><div class="engine-selected-meta"><span class="engine-state ${statusClass}">${statusText}</span><span>${(engine.files || []).length} файлов</span>${typeof renderEngineUpdateAction === 'function' ? renderEngineUpdateAction(engine) : ''}</div>`;
 
   const stagedFiles = (engine.files || []).filter((item) => item.staged);
   const assignedServices = state.services.filter((service) => service.enabled && (service.route === engine.id || service.planned_engine === engine.id));
   const dependency = $('#engineDraftDependency');
   dependency.hidden = stagedFiles.length === 0 || assignedServices.length > 0;
   if (!dependency.hidden) {
-    $('#engineDraftDependencyTitle').textContent = `${engine.name}: черновик ещё не назначен сервису`;
-    $('#engineDraftDependencyText').textContent = `Рабочая конфигурация не изменена. Назначьте ${engine.name} хотя бы одному включённому сервису или удалите ${stagedFiles.length === 1 ? 'этот черновик' : `${stagedFiles.length} черновика`}.`;
+    $('#engineDraftDependencyTitle').textContent = `${engine.name}: выберите сервис`;
+    $('#engineDraftDependencyText').textContent = 'Настройки готовы к проверке. Выберите, для какого сервиса и устройств использовать этот обход.';
   }
 
-  $('#engineFileSelect').innerHTML = (engine.files || []).map((f) => `<option value="${esc(f.id)}" ${f.id === state.selectedEngineFile ? 'selected' : ''}>${esc(f.name)}${f.staged ? ' · черновик' : ''}${f.sensitive ? ' · секретный' : ''}</option>`).join('');
-  $('#engineFilesTable').innerHTML = (engine.files || []).map((f) => `<div class="engine-file-row ${f.id === state.selectedEngineFile ? 'active' : ''}" data-engine-file-row="${esc(f.id)}"><div><b>${esc(f.name)}</b><small>${esc(f.description || '')}</small></div><div class="engine-file-meta"><span>${esc(f.syntax)}</span><span>${f.exists ? formatBytes(f.size) : 'нет рабочего файла'}</span>${f.staged ? '<span class="draft-count">ЧЕРНОВИК</span>' : ''}${f.sensitive ? '<span class="secret-tag">СЕКРЕТНЫЙ</span>' : ''}</div><code>${esc(f.path || '—')}</code></div>`).join('');
+  $('#engineFileSelect').innerHTML = (engine.files || []).map((f) => `<option value="${esc(f.id)}" ${f.id === state.selectedEngineFile ? 'selected' : ''}>${esc(f.name)}${f.staged ? ' · есть изменения' : ''}${f.sensitive ? ' · секретный' : ''}</option>`).join('');
+  $('#engineFilesTable').innerHTML = (engine.files || []).map((f) => `<div class="engine-file-row ${f.id === state.selectedEngineFile ? 'active' : ''}" data-engine-file-row="${esc(f.id)}"><div><b>${esc(f.name)}</b><small>${esc(f.description || '')}</small></div><div class="engine-file-meta"><span>${esc(f.syntax)}</span><span>${f.exists ? formatBytes(f.size) : 'нет рабочего файла'}</span>${f.staged ? '<span class="draft-count">ЕСТЬ ИЗМЕНЕНИЯ</span>' : ''}${f.sensitive ? '<span class="secret-tag">СЕКРЕТНЫЙ</span>' : ''}</div><code>${esc(f.path || '—')}</code></div>`).join('');
   $$('[data-engine-file-row]').forEach((row) => row.addEventListener('click', () => selectEngineFile(row.dataset.engineFileRow)));
 
   $('#engineCheckRunning').textContent = engine.running ? 'да' : engine.installed ? 'установлен, но остановлен' : 'нет';
@@ -1480,8 +1476,7 @@ function renderEngineControl() {
   $('#engineImport').disabled = !file;
   $('#engineExport').disabled = !file;
   $('#remoteProfileImport').hidden = engine.id !== 'sing-box' || file?.id !== 'main';
-  $('#engineApplyConfig').disabled = !file?.staged;
-  $('#engineDiscardDraft').disabled = !file?.staged;
+  updateEngineEditorActions();
 
   if (!file) {
     editor.value = '';
@@ -1491,18 +1486,18 @@ function renderEngineControl() {
     return;
   }
 
-  const fileState = [file.exists ? 'РАБОЧИЙ' : 'РАБОЧЕГО ФАЙЛА НЕТ', file.staged ? 'ЧЕРНОВИК' : '', file.sensitive ? 'СЕКРЕТНЫЙ' : '', file.modified_at ? `изменён ${timeAgo(file.modified_at)} назад` : ''].filter(Boolean).join(' · ');
+  const fileState = [file.exists ? 'НАСТРОЕН' : 'НОВЫЕ НАСТРОЙКИ', file.staged ? 'ЕСТЬ ИЗМЕНЕНИЯ' : '', file.sensitive ? 'СЕКРЕТНЫЙ' : '', file.modified_at ? `изменён ${timeAgo(file.modified_at)} назад` : ''].filter(Boolean).join(' · ');
   $('#engineFileState').textContent = fileState;
 
   if (!expert) {
     if (guidedSame) renderGuidedEditor();
-    else if (!state.engineGuidedLoading && !state.engineEditorDirty) void loadEngineGuided();
-    $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть изменения в простых полях. Сохраните черновик.' : (guidedSame ? `Источник: ${state.engineGuided.source || '—'}` : 'Загрузка простых параметров…');
+    else if (!state.engineIntent && !state.engineGuidedLoading && !state.engineEditorDirty) void loadEngineGuided();
+    if (!state.engineIntent) $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть изменения. Нажмите «Проверить и применить».' : guidedSame ? (file.staged ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.') : 'Загрузка параметров…';
   } else {
     editor.placeholder = file.sensitive ? 'Секретный конфиг: не копируйте ключи в чужие сервисы.' : 'Конфигурация / список';
     if (loadedSame && !state.engineEditorDirty) editor.value = state.engineLoaded.content || '';
-    $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть локальные изменения. Нажмите «Сохранить черновик».' : (loadedSame ? `Источник: ${state.engineLoaded.source || '—'}` : 'Загрузка…');
-    if (!loadedSame && !state.engineEditorDirty) void loadEngineFile();
+    if (!state.engineIntent) $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть изменения. Нажмите «Проверить и применить».' : loadedSame ? (file.staged ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.') : 'Загрузка…';
+    if (!state.engineIntent && !loadedSame && !state.engineEditorDirty) void loadEngineFile();
   }
 
   const v = state.engineValidation;
@@ -1517,6 +1512,7 @@ function renderEngineControl() {
     $('#engineCheckNative').textContent = '—';
     $('#engineCheckOutput').textContent = 'Нажмите «Проверить» во вкладке «Конфиг».';
   }
+  updateEngineEditorActions();
 }
 
 function renderWarpManager() {
@@ -1529,16 +1525,19 @@ function renderWarpManager() {
   const component = state.components.find((item) => item.id === 'warp-wg');
   const installed = !!component?.installed;
   $('#warpInstallHint').hidden = installed;
-  $('#warpGeneratorState').textContent = w.generator_installed ? (w.generator_version || 'wgcf установлен') : 'wgcf не установлен';
-  $('#warpAccountState').textContent = w.account_registered ? 'зарегистрирован' : 'нет аккаунта';
+  $('#warpGeneratorState').textContent = w.generator_installed ? (w.generator_version || 'Генератор доступен') : 'Генератор недоступен';
+  const registrationPending = w.registration_state === 'pending-review';
+  const registrationInvalid = w.registration_state === 'local-state-invalid';
+  $('#warpAccountState').textContent = registrationInvalid ? 'Нужна проверка сохранённых данных' : registrationPending ? (w.recovery_available ? 'Есть ответ для восстановления' : 'Исход регистрации не определён') : w.account_registered ? 'зарегистрирован' : 'нет аккаунта';
   $('#warpLiveState').textContent = w.live_profile ? (w.valid ? 'валиден' : 'ошибка профиля') : 'нет';
   $('#warpCandidateState').textContent = w.candidate_staged ? 'черновик готов' : 'нет черновика';
   const badge = $('#warpStateBadge');
   badge.textContent = w.live_profile && w.valid ? 'РАБОЧИЙ ПРОФИЛЬ ГОТОВ' : w.candidate_staged ? 'ЧЕРНОВИК ГОТОВ' : 'НЕ НАСТРОЕН';
   badge.className = `engine-state ${w.live_profile && w.valid ? 'running' : w.candidate_staged ? 'installed' : ''}`;
   $('#warpNote').textContent = w.validation_error || w.note || '';
-  $('#warpGenerate').disabled = !installed || !w.generator_installed;
-  $('#warpRotate').disabled = !installed || !w.generator_installed;
+  $('#warpGenerate').disabled = !w.generator_installed || registrationInvalid || (registrationPending && !w.recovery_available);
+  $('#warpGenerate').textContent = registrationPending && w.recovery_available ? 'Восстановить профиль' : 'Создать профиль';
+  $('#warpRotate').disabled = !w.generator_installed || registrationPending || registrationInvalid;
   $('#warpCheck').disabled = !installed || (!w.candidate_staged && !w.live_profile);
   const canarySelect = $('#warpCanaryService');
   const selectedCanaryService = canarySelect.value || 'telegram';
@@ -1599,10 +1598,11 @@ async function refreshWarp() {
 }
 
 async function generateWarp(fresh) {
-  const needsAcceptance = fresh || !state.warp.account_registered;
+  const recovering = state.warp.registration_state === 'pending-review' && state.warp.recovery_available;
+  const needsAcceptance = !recovering && (fresh || !state.warp.account_registered);
   if (needsAcceptance && !$('#warpAcceptTOS').checked) { showDetails({ message: 'Для нового аккаунта отметьте принятие условий Cloudflare.' }, 'Нужно подтверждение'); return; }
-  const title = fresh ? 'Создать новый аккаунт WARP' : 'Создать профиль WARP';
-  const message = fresh ? 'Текущий аккаунт wgcf будет сохранён в резервной копии. Новый профиль попадёт в черновик и не заменит рабочий автоматически.' : 'wgcf создаст проверенный профиль-кандидат. Рабочий профиль пока не изменится.';
+  const title = recovering ? 'Восстановить профиль WARP' : fresh ? 'Создать новый аккаунт WARP' : 'Создать профиль WARP';
+  const message = recovering ? 'Приложение восстановит профиль из сохранённого ответа Cloudflare без нового запроса регистрации.' : fresh ? 'Предыдущие аккаунты и рабочий профиль сохранятся. Новый аккаунт будет зарегистрирован один раз, а профиль попадёт в черновик для проверки.' : 'Приложение использует сохранённый аккаунт или зарегистрирует новый один раз. Профиль попадёт в черновик для проверки.';
   if (!await askConfirmation(title, message, 'Создать')) return;
   const button = fresh ? $('#warpRotate') : $('#warpGenerate'); button.disabled = true; button.textContent = 'Генерация…';
   try {
@@ -1612,7 +1612,10 @@ async function generateWarp(fresh) {
     showNotice('success', 'Профиль WARP готов', result.message || 'Профиль сохранён как черновик и ещё не меняет рабочий маршрут.', result);
   } catch (error) {
     const payload = error.payload || {};
-    if (payload.code === 'WARP_REGISTRATION_UNAVAILABLE') {
+    if (payload.code === 'WARP_REGISTRATION_PENDING') {
+      await refreshWarp();
+      showNotice('error', 'Регистрацию нужно восстановить', payload.hint || error.message, payload);
+    } else if (payload.code === 'WARP_REGISTRATION_UNAVAILABLE') {
       showNotice('error', 'Cloudflare временно не отвечает', payload.hint || error.message, payload);
     } else {
       showNotice('error', 'Не удалось создать WARP', error.message, { ...payload, technical: error.technicalMessage || '' });
@@ -1726,6 +1729,82 @@ async function runWarpHealthCheck() {
   finally { button.disabled = false; button.textContent = 'Проверить WARP-сервисы'; }
 }
 
+function captureEngineEditorContext() {
+  return { engineID: state.selectedEngine, fileID: state.selectedEngineFile, mode: state.engineMode, version: state.engineEditorVersion || 0, epoch: state.engineEditorEpoch || 0, view: state.currentView };
+}
+
+function engineEditorContextCurrent(context) {
+  return context.engineID === state.selectedEngine && context.fileID === state.selectedEngineFile && context.mode === state.engineMode && context.version === (state.engineEditorVersion || 0) && context.epoch === (state.engineEditorEpoch || 0) && context.view === state.currentView && $('#authScreen')?.hidden !== false;
+}
+
+function engineIntentCurrent(intent) {
+  return state.engineIntent === intent && !intent.controller.signal.aborted && engineEditorContextCurrent(intent);
+}
+
+function updateEngineEditorActions() {
+  const file = selectedEngineFile();
+  const busy = !!state.engineIntent;
+  $('#engineApplyConfig').disabled = busy || !file || (!state.engineEditorDirty && !file.staged);
+  $('#engineDiscardDraft').disabled = busy || !file || (!state.engineEditorDirty && !file.staged);
+  $('#engineCancelOperation').hidden = !busy;
+  $('#engineCancelOperation').disabled = !!state.engineIntent?.controller.signal.aborted;
+  for (const id of ['engineFileSelect', 'engineModeGuided', 'engineModeExpert', 'engineEditor', 'engineSaveDraft', 'engineValidate', 'engineImport', 'engineReload', 'engineAssignService', 'engineDiscardAllDrafts']) $(`#${id}`).disabled = busy || !file;
+  for (const input of $$('[data-guided-field], [data-engine-id]')) input.disabled = busy;
+}
+
+function markEngineEditorDirty() {
+  if (state.engineIntent) return;
+  state.engineEditorDirty = true;
+  state.engineEditorVersion = (state.engineEditorVersion || 0) + 1;
+  state.engineValidation = null;
+  $('#engineEditorMessage').textContent = 'Есть изменения. Нажмите «Проверить и применить».';
+  updateEngineEditorActions();
+}
+
+function invalidateEngineEditorContext() {
+  state.engineEditorEpoch = (state.engineEditorEpoch || 0) + 1;
+  state.engineGuidedRequest = null;
+  state.engineGuidedLoading = false;
+}
+
+function beginEngineIntent() {
+  if (state.engineIntent || !selectedEngineView() || !selectedEngineFile() || $('#authScreen')?.hidden === false) return null;
+  invalidateEngineEditorContext();
+  const intent = { ...captureEngineEditorContext(), controller: new AbortController(), dirty: !!state.engineEditorDirty };
+  intent.body = intent.mode === 'guided' ? { values: Object.fromEntries($$('[data-guided-field]').map(input => [input.dataset.guidedField, input.value])) } : { content: $('#engineEditor').value };
+  state.engineIntent = intent;
+  updateEngineEditorActions();
+  return intent;
+}
+
+function finishEngineIntent(intent) {
+  if (state.engineIntent !== intent) return;
+  state.engineIntent = null;
+  // Release private buffers after completion/cancellation; the editor owns its
+  // current visible values and the backend owns any confirmed staging image.
+  intent.body = null;
+  updateEngineEditorActions();
+  if (engineEditorContextCurrent(intent)) renderEngineControl();
+}
+
+function cancelEngineIntent(clearPrivate = false) {
+  state.engineIntent?.controller.abort();
+  invalidateEngineEditorContext();
+  if (clearPrivate) {
+    if (state.engineIntent) state.engineIntent.body = null;
+    state.engineLoaded = null; state.engineGuided = null; state.engineEditorDirty = false;
+    $('#engineEditor').value = ''; $('#guidedEditor').innerHTML = '';
+  } else if (state.engineIntent) {
+    $('#engineEditorMessage').textContent = 'Останавливаем операцию. Дождитесь завершения проверки или возврата прежних настроек.';
+  }
+  updateEngineEditorActions();
+}
+
+function handleEngineEditorLifecycle(event) {
+  if (event.type === 'razvilka:auth-required') cancelEngineIntent(true);
+  else if (event.detail !== 'engineconfig') cancelEngineIntent();
+}
+
 function renderGuidedEditor() {
   const view = state.engineGuided;
   const container = $('#guidedEditor');
@@ -1755,31 +1834,37 @@ function renderGuidedEditor() {
     return `<label class="guided-field"><span>${esc(field.label)}${field.required ? ' *' : ''}</span>${control}${field.description ? `<small>${esc(field.description)}</small>` : ''}</label>`;
   }).join('')}</div></section>`).join('');
   $$('[data-guided-field]').forEach((input) => {
-    const dirty = () => { state.engineEditorDirty = true; $('#engineEditorMessage').textContent = 'Есть изменения в простых полях. Нажмите «Сохранить черновик».'; };
-    input.addEventListener('input', dirty); input.addEventListener('change', dirty);
+    input.addEventListener('input', markEngineEditorDirty); input.addEventListener('change', markEngineEditorDirty);
   });
   $('#engineSaveDraft').disabled = false;
 }
 
 async function loadEngineGuided(force = false) {
   const engine = selectedEngineView(); const file = selectedEngineFile();
-  if (!engine || !file || (!force && state.engineEditorDirty) || state.engineGuidedLoading) return;
+  if (!engine || !file || state.engineIntent || (!force && state.engineEditorDirty) || state.engineGuidedLoading) return;
+  const context = captureEngineEditorContext();
+  state.engineGuidedRequest = context;
   state.engineGuidedLoading = true;
   try {
-    state.engineGuided = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/guided?file=${encodeURIComponent(file.id)}`);
+    const guided = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/guided?file=${encodeURIComponent(file.id)}`);
+    if (!engineEditorContextCurrent(context) || state.engineGuidedRequest !== context) return;
+    if (guided.engine_id !== engine.id || guided.file_id !== file.id) throw new Error('Ответ относится к другому файлу. Откройте настройки заново.');
+    state.engineGuided = guided;
     state.engineEditorDirty = false;
     renderGuidedEditor();
-    $('#engineEditorMessage').textContent = state.engineGuided.source === 'missing' ? 'Рабочий файл отсутствует. После заполнения будет создан черновик.' : `Источник: ${state.engineGuided.source || '—'}`;
+    $('#engineEditorMessage').textContent = state.engineGuided.source === 'missing' ? 'Заполните параметры и нажмите «Проверить и применить».' : state.engineGuided.source === 'staged' ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.';
   } catch (error) {
+    if (!engineEditorContextCurrent(context)) return;
     $('#guidedEditor').innerHTML = `<div class="guided-empty"><b>Не удалось прочитать параметры</b><span>${esc(error.message)}</span></div>`;
     $('#engineEditorMessage').textContent = `Ошибка: ${error.message}`;
-  } finally { state.engineGuidedLoading = false; }
+  } finally { if (state.engineGuidedRequest === context) { state.engineGuidedLoading = false; state.engineGuidedRequest = null; updateEngineEditorActions(); } }
 }
 
 async function switchEngineMode(mode) {
-  if (mode === state.engineMode) return;
+  if (mode === state.engineMode || state.engineIntent) return;
   if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Сменить режим и потерять локальные изменения?', 'Сменить режим')) return;
   state.engineMode = mode;
+  invalidateEngineEditorContext();
   state.engineEditorDirty = false;
   state.engineLoaded = null;
   state.engineGuided = null;
@@ -1787,8 +1872,10 @@ async function switchEngineMode(mode) {
 }
 
 async function selectEngine(id) {
+  if (state.engineIntent) return;
   if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить обход и потерять локальные изменения редактора?', 'Переключить')) return;
   state.selectedEngine = id;
+  invalidateEngineEditorContext();
   const engine = selectedEngineView();
   state.selectedEngineFile = engine?.files?.[0]?.id || 'main';
   state.engineEditorDirty = false;
@@ -1800,11 +1887,13 @@ async function selectEngine(id) {
 }
 
 async function selectEngineFile(id) {
+  if (state.engineIntent) { $('#engineFileSelect').value = state.selectedEngineFile; return; }
   if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить файл и потерять локальные изменения редактора?', 'Переключить')) {
     $('#engineFileSelect').value = state.selectedEngineFile;
     return;
   }
   state.selectedEngineFile = id;
+  invalidateEngineEditorContext();
   state.engineEditorDirty = false;
   state.engineLoaded = null;
   state.engineGuided = null;
@@ -1816,84 +1905,95 @@ async function selectEngineFile(id) {
 async function loadEngineFile(force = false) {
   const engine = selectedEngineView();
   const file = selectedEngineFile();
-  if (!engine || !file) return;
+  if (!engine || !file || state.engineIntent) return;
   if (!force && state.engineEditorDirty) return;
+  const context = captureEngineEditorContext();
   try {
     const content = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/file?file=${encodeURIComponent(file.id)}&expert=true`);
+    if (!engineEditorContextCurrent(context)) return;
+    if (content.engine_id !== engine.id || content.file_id !== file.id) throw new Error('Ответ относится к другому файлу. Откройте настройки заново.');
     state.engineLoaded = content;
     state.engineEditorDirty = false;
     $('#engineEditor').value = content.content || '';
-    $('#engineEditorMessage').textContent = content.source === 'missing' ? 'Рабочий файл отсутствует. Можно импортировать или создать черновик.' : `Источник: ${content.source}`;
+    $('#engineEditorMessage').textContent = content.source === 'missing' ? 'Введите или загрузите настройки и нажмите «Проверить и применить».' : content.source === 'staged' ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.';
   } catch (error) {
+    if (!engineEditorContextCurrent(context)) return;
     $('#engineEditorMessage').textContent = `Ошибка чтения: ${error.message}`;
   }
 }
 
-async function refreshEngineConfigs() {
-  state.engineConfigs = await api('/api/v1/engine-configs');
-  state.status = await api('/api/v1/status');
+async function refreshEngineConfigs(intent = null) {
+  const context = intent || captureEngineEditorContext();
+  const [configs, status] = await Promise.all([api('/api/v1/engine-configs', { signal: intent?.controller.signal }), api('/api/v1/status', { signal: intent?.controller.signal })]);
+  if (!engineEditorContextCurrent(context) || intent && !engineIntentCurrent(intent)) return false;
+  state.engineConfigs = configs;
+  state.status = status;
   renderStatus();
   renderEngineControl();
+  return true;
 }
 
-async function saveEngineDraft() {
-  const engine = selectedEngineView();
-  const file = selectedEngineFile();
-  if (!engine || !file) return;
-  const button = $('#engineSaveDraft');
-  button.disabled = true;
+async function saveEngineDraft(existingIntent = null) {
+  const intent = existingIntent || beginEngineIntent();
+  if (!intent || !engineIntentCurrent(intent)) return null;
   try {
-    let staged;
-    if (state.engineMode === 'guided') {
-      const values = Object.fromEntries($$('[data-guided-field]').map((input) => [input.dataset.guidedField, input.value]));
-      staged = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/guided?file=${encodeURIComponent(file.id)}`, { method: 'PUT', body: JSON.stringify({ values }) });
-      state.engineGuided = null;
-    } else {
-      staged = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/file?file=${encodeURIComponent(file.id)}`, { method: 'PUT', body: JSON.stringify({ content: $('#engineEditor').value }) });
-    }
+    const action = intent.mode === 'guided' ? 'guided' : 'file';
+    const staged = await api(`/api/v1/engine-configs/${encodeURIComponent(intent.engineID)}/${action}?file=${encodeURIComponent(intent.fileID)}`, { method: 'PUT', signal: intent.controller.signal, body: JSON.stringify(intent.body) });
+    if (!engineIntentCurrent(intent)) return null;
+    if (staged.engine_id !== intent.engineID || staged.file_id !== intent.fileID || staged.source !== 'staged') throw new Error('Сохранение выбранного файла не подтверждено. Применение остановлено.');
+    if (intent.mode === 'guided') state.engineGuided = null;
     state.engineLoaded = staged;
     state.engineEditorDirty = false;
     state.engineValidation = null;
-    await refreshEngineConfigs();
-    $('#engineEditorMessage').textContent = 'Черновик сохранён. Рабочая конфигурация не изменена.';
+    if (!await refreshEngineConfigs(intent) || !engineIntentCurrent(intent)) return null;
+    $('#engineEditorMessage').textContent = 'Изменения подготовлены для проверки. Рабочие настройки пока прежние.';
+    return staged;
   } catch (error) {
-    showDetails({ error: error.message }, 'Не удалось сохранить черновик');
-  } finally { button.disabled = false; }
+    if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Изменения не подготовлены — применение остановлено');
+    return null;
+  } finally { if (!existingIntent) finishEngineIntent(intent); }
 }
 
 async function validateEngineFile() {
-  const engine = selectedEngineView(); const file = selectedEngineFile();
-  if (!engine || !file) return;
-  if (state.engineEditorDirty) {
-    await saveEngineDraft();
-    if (state.engineEditorDirty) return;
-  }
+  const intent = beginEngineIntent();
+  if (!intent) return;
   try {
-    state.engineValidation = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/validate?file=${encodeURIComponent(file.id)}`, { method: 'POST' });
+    if (intent.dirty && !await saveEngineDraft(intent)) return;
+    if (!engineIntentCurrent(intent)) return;
+    const validation = await api(`/api/v1/engine-configs/${encodeURIComponent(intent.engineID)}/validate?file=${encodeURIComponent(intent.fileID)}`, { method: 'POST', signal: intent.controller.signal });
+    if (!engineIntentCurrent(intent)) return;
+    if (validation.engine_id !== intent.engineID || validation.file_id !== intent.fileID) throw new Error('Проверен другой файл. Повторите выбор.');
+    state.engineValidation = validation;
     renderEngineControl();
     switchEngineTab('check');
-  } catch (error) { showDetails({ error: error.message }, 'Ошибка проверки конфигурации'); }
+  } catch (error) { if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Ошибка проверки конфигурации'); }
+  finally { finishEngineIntent(intent); }
 }
 
 async function discardEngineConfigDraft() {
   const engine = selectedEngineView(); const file = selectedEngineFile();
-  if (!engine || !file || !file.staged) return;
+  if (!engine || !file || state.engineIntent) return;
+  const intent = beginEngineIntent();
+  if (!intent) return;
   try {
-    await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/discard?file=${encodeURIComponent(file.id)}`, { method: 'POST' });
+    if (file.staged) await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/discard?file=${encodeURIComponent(file.id)}`, { method: 'POST', signal: intent.controller.signal });
+    if (!engineIntentCurrent(intent)) return;
     state.engineLoaded = null; state.engineGuided = null; state.engineEditorDirty = false; state.engineValidation = null;
-    await refreshEngineConfigs();
-    if (state.engineMode === 'guided') await loadEngineGuided(true); else await loadEngineFile(true);
-  } catch (error) { showDetails({ error: error.message }, 'Не удалось отменить черновик'); }
+    $('#engineEditor').value = '';
+    await refreshEngineConfigs(intent);
+  } catch (error) { if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Не удалось отменить изменения'); }
+  finally { finishEngineIntent(intent); }
 }
 
 async function discardSelectedEngineDrafts() {
   const engine = selectedEngineView();
-  if (!engine || !(engine.files || []).some((file) => file.staged)) return;
-  if (!await askConfirmation('Удалить черновик обхода?', `${engine.name}: будут удалены только неподтверждённые файлы. Рабочая конфигурация останется без изменений.`, 'Удалить черновик')) return;
+  if (state.engineIntent || !engine || !(engine.files || []).some((file) => file.staged)) return;
+  if (!await askConfirmation('Отменить изменения обхода?', `${engine.name}: будут отменены только изменения настроек. Рабочая конфигурация останется прежней.`, 'Отменить изменения')) return;
   await discardDraft('engine', engine.id);
 }
 
 function assignSelectedEngineToService() {
+  if (state.engineIntent) return;
   const engine = selectedEngineView();
   if (!engine) return;
   setView('services');
@@ -1905,39 +2005,56 @@ function assignSelectedEngineToService() {
 }
 
 async function applyEngineConfig() {
-  const engine = selectedEngineView(); const file = selectedEngineFile();
-  if (!engine || !file) return;
+  const engine = selectedEngineView();
+  const intent = beginEngineIntent();
+  if (!intent) return;
   try {
-    if (state.engineEditorDirty) await saveEngineDraft();
-    if (state.status.routing_pending_changes) {
-      showNotice('review', 'Сначала решите изменения сервисов', 'Примените или отмените маршруты на вкладке «Сервисы». Черновик обхода сохранён и не потеряется.', { scope: 'routing' }, true);
-      return;
-    }
-    state.engineValidation = await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/validate?file=${encodeURIComponent(file.id)}`, { method: 'POST' });
+    $('#engineEditorMessage').textContent = 'Подготавливаем выбранные настройки и проверяем их…';
+    if (intent.dirty && !await saveEngineDraft(intent)) return;
+    if (!engineIntentCurrent(intent)) return;
+    const validation = await api(`/api/v1/engine-configs/${encodeURIComponent(intent.engineID)}/validate?file=${encodeURIComponent(intent.fileID)}`, { method: 'POST', signal: intent.controller.signal });
+    if (!engineIntentCurrent(intent)) return;
+    if (validation.engine_id !== intent.engineID || validation.file_id !== intent.fileID) throw new Error('Проверен другой файл. Применение остановлено.');
+    state.engineValidation = validation;
     if (!state.engineValidation.ok) throw new Error(state.engineValidation.output || 'Конфигурация не прошла проверку');
-    await refreshEngineConfigs();
-    const plan = await api(`/api/v1/plan?scope=engine&engine=${encodeURIComponent(engine.id)}`);
+    if (!await refreshEngineConfigs(intent) || !engineIntentCurrent(intent)) return;
+    const plan = await api(`/api/v1/plan?scope=engine&engine=${encodeURIComponent(intent.engineID)}`, { signal: intent.controller.signal });
+    if (!engineIntentCurrent(intent)) return;
     const unused = (plan.transaction?.blockers || []).find((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED' && blocker.adapter === engine.id);
     if (unused) {
-      showNotice('review', `Сначала назначьте сервис обходу ${engine.name}`, unused.resolution || 'Откройте «Сервисы», включите нужный ресурс и выберите этот обход. После этого повторите Apply.', plan, true);
+      showNotice('review', `Выберите сервис для ${engine.name}`, unused.resolution || 'Откройте «Сервисы», выберите этот обход и устройства, затем нажмите «Проверить и применить».', plan, true);
       return;
     }
-    await applyDraft('engine', engine.id);
-  } catch (error) { showDetails({ error: error.message }, 'Конфигурация не подготовлена'); }
+    await applyDraft('engine', intent.engineID, { signal: intent.controller.signal, isCurrent: () => engineIntentCurrent(intent), preview: plan, engineIntent: intent });
+  } catch (error) { if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Настройки не применены'); }
+  finally { finishEngineIntent(intent); }
 }
 
-async function importEngineFile() { const f = selectedEngineFile(); if (!f) return; if (state.engineMode !== 'expert') await switchEngineMode('expert'); if (state.engineMode === 'expert') $('#engineImportInput').click(); }
+async function importEngineFile() { const f = selectedEngineFile(); if (!f || state.engineIntent) return; if (state.engineMode !== 'expert') await switchEngineMode('expert'); if (state.engineMode === 'expert' && !state.engineIntent) $('#engineImportInput').click(); }
+
+async function reloadEngineEditor() {
+  if (state.engineIntent) return;
+  const context = captureEngineEditorContext();
+  if (state.engineEditorDirty && !await askConfirmation('Перечитать настройки', 'Отменить изменения в редакторе и перечитать настройки?', 'Перечитать')) return;
+  if (!engineEditorContextCurrent(context) || state.engineIntent) return;
+  invalidateEngineEditorContext();
+  state.engineEditorDirty = false; state.engineLoaded = null; state.engineGuided = null;
+  if (state.engineMode === 'guided') await loadEngineGuided(true); else await loadEngineFile(true);
+  renderEngineControl();
+}
 
 async function handleEngineImport(event) {
   const picked = event.target.files?.[0]; event.target.value = '';
   const engine = selectedEngineView(); const file = selectedEngineFile();
-  if (!picked || !engine || !file) return;
+  if (!picked || !engine || !file || state.engineIntent) return;
+  const context = captureEngineEditorContext();
   if (picked.size > 2 * 1024 * 1024) { showDetails({ error: 'Файл больше 2 МБ' }, 'Импорт отклонён'); return; }
   try {
     const text = await picked.text();
-    $('#engineEditor').value = text; state.engineEditorDirty = true; switchEngineTab('config'); renderEngineControl();
+    if (!engineEditorContextCurrent(context) || state.engineIntent) return;
+    $('#engineEditor').value = text; markEngineEditorDirty(); switchEngineTab('config'); renderEngineControl();
     $('#engineEditor').value = text; // render keeps loaded text, so restore imported local buffer explicitly.
-    $('#engineEditorMessage').textContent = `Импортирован локально: ${picked.name}. Нажмите «Сохранить черновик».`;
+    $('#engineEditorMessage').textContent = `Файл ${picked.name} открыт. Нажмите «Проверить и применить».`;
   } catch (error) { showDetails({ error: error.message }, 'Ошибка импорта'); }
 }
 
@@ -2457,60 +2574,26 @@ function nodeExpiryText(node) {
   return expiry.getTime() <= Date.now() ? `истёк ${expiry.toLocaleString('ru-RU')}` : `актуален до ${expiry.toLocaleString('ru-RU')}`;
 }
 
+function nodeRecoveryBanner(recovery) {
+  const labels = { revalidating: 'Повторная проверка применённого маршрута', 'network-stale': 'Маршрут ожидает повторной проверки', 'requires-review': 'Восстановление требует вашего внимания', recovered: 'Применённый маршрут восстановлен' };
+  const label = labels[recovery?.state];
+  return label ? `<b>${esc(label)}</b><span>${esc(recovery.message || '')}</span>` : '';
+}
+
 function renderNodes() {
-  const payload = state.nodes || {};
-  const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
-  const counts = payload.counts || {};
-  const query = ($('#nodeSearch')?.value || '').trim().toLowerCase();
-  const stateFilter = $('#nodeStateFilter')?.value || '';
-  const filtered = nodes.filter((node) => {
-    if (stateFilter && node.state !== stateFilter) return false;
-    if (!query) return true;
-    return [node.name, node.protocol, node.transport, nodeSourceLabel(node)].join(' ').toLowerCase().includes(query);
-  });
-  $('#nodeNavCount').textContent = counts.total || 0;
-  $('#nodeTruthBanner').classList.toggle('unavailable', payload.available === false);
-  $('#nodeTruthBanner').querySelector('div').innerHTML = payload.available === false
-    ? '<b>Хранилище узлов недоступно</b><span>Рабочие маршруты не изменены. Проверьте приватное хранилище в диагностике.</span>'
-    : `<b>Импорт не означает, что узел работает</b><span>${esc(payload.note || 'Все записи ожидают отдельной проверки через роутер.')}</span>`;
-  $('#nodeSummary').innerHTML = `<div><span>Сохранено</span><b>${Number(counts.total || 0)}</b></div><div><span>Проверены</span><b>${Number(counts.verified || 0)}</b><small>для текущей сети и сервиса</small></div><div><span>Не прошли</span><b>${Number(counts.degraded || 0)}</b></div><div><span>Нужно перепроверить</span><b>${Number(counts.stale || 0)}</b></div><div><span>Можно назначить</span><b>${Number(counts.selectable || 0)}</b><small>только проверенным сервисам</small></div>`;
-  renderNodeGroups(Array.isArray(payload.groups) ? payload.groups : [], nodes);
-  $('#nodeList').innerHTML = filtered.map((node) => {
-    const protocol = String(node.protocol || 'unknown').toUpperCase();
-    const transport = node.transport ? String(node.transport).toUpperCase() : 'обычный';
-    const health = node.health || {};
-    const stateLabel = node.disabled ? 'ОТКЛЮЧЁН' : ({ available: 'ПРОВЕРЕН', degraded: 'НЕ ПРОШЁЛ', stale: 'ПЕРЕПРОВЕРИТЬ', expired: 'ИСТЁК', quarantined: 'ОЖИДАЕТ ПРОВЕРКИ' })[node.state] || 'ОЖИДАЕТ ПРОВЕРКИ';
-    const maskedURI = `${protocol}://***${node.port ? `:${Number(node.port)}` : ''}`;
-    const checked = health.checked_at ? new Date(health.checked_at) : null;
-    const checkedText = checked && Number.isFinite(checked.getTime()) ? checked.toLocaleString('ru-RU') : 'не запускалась';
-    const serviceName = state.services.find((service) => service.id === health.service_id)?.name || health.service_id || '—';
-    const directAssignments = state.services.filter((service) => service.enabled && service.route === `sing-box:${node.id}`).map((service) => service.name);
-    const memberGroups = (payload.groups || []).filter((group) => (group.node_ids || []).includes(node.id)).map((group) => group.name);
-    const assignmentText = directAssignments.length ? directAssignments.join(', ') : (memberGroups.length ? `через группы: ${memberGroups.join(', ')}` : 'нет');
-    const healthBlock = health.checked_at ? `<div class="node-health"><span>Сервис<b>${esc(serviceName)}</b></span><span>IP через узел<b>${esc(health.egress_ip || 'не подтверждён')}</b></span><span>Уровень проверки<b>${esc(({ dns: 'DNS', transport: 'порт', protocol: 'протокол', egress: 'IP выхода', service: 'сервис' })[health.test_level] || health.test_level || '—')}</b></span><span>Проверено<b>${esc(checkedText)}</b></span>${health.message ? `<span class="node-health-message">${esc(health.message)}</span>` : ''}</div>` : '';
-    return `<article class="node-card ${node.disabled ? 'disabled' : esc(node.state || 'quarantined')}">
-      <div class="node-card-head"><div><span class="node-protocol">${esc(protocol)}</span><h3>${esc(node.name || 'Импортированный узел')}</h3></div><span class="node-state">${esc(stateLabel)}</span></div>
-      <code class="node-masked-uri">${esc(maskedURI)}</code>
-      <div class="node-meta"><span>Транспорт <b>${esc(transport)}</b></span><span>TLS <b>${node.tls ? 'да' : 'нет'}</b></span><span>Источник <b>${esc(nodeSourceLabel(node))}</b></span><span>Срок <b>${esc(nodeExpiryText(node))}</b></span></div>
-      ${healthBlock}
-      <div class="node-card-foot"><span>Назначение: <b>${esc(assignmentText)}</b></span><span>Последняя проверка: <b>${esc(checkedText)}</b></span></div>
-      <div class="node-actions"><button class="primary" type="button" data-node-check="${esc(node.id)}" ${node.disabled ? 'disabled' : ''}>Проверить</button><button class="secondary" type="button" data-node-edit="${esc(node.id)}">Переименовать</button><button class="secondary" type="button" data-node-disable="${esc(node.id)}" data-disabled="${node.disabled ? 'true' : 'false'}">${node.disabled ? 'Включить' : 'Отключить'}</button><button class="secondary" type="button" data-node-reveal="${esc(node.id)}">Показать конфиг</button><button class="danger-button" type="button" data-node-delete="${esc(node.id)}">Удалить</button></div>
-    </article>`;
-  }).join('');
-  $('#nodeEmpty').style.display = filtered.length ? 'none' : 'grid';
-  if (!nodes.length && payload.available !== false) $('#nodeEmpty').querySelector('span').textContent = 'Импортируйте свой профиль или подписку в настройках Sing-box. Секреты останутся в локальном приватном хранилище.';
+  renderNodeBrowser();
 }
 
 function renderNodeGroups(groups, nodes) {
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const optionMap = new Map((state.routeOptions || []).map((option) => [option.id, option]));
   $('#nodeGroupList').innerHTML = groups.map((group) => {
-    const members = (group.node_ids || []).map((id) => nodeMap.get(id)?.name || 'Удалённый узел');
+    const members = (group.node_ids || []).map((id) => nodeMap.has(id) ? nodeDisplayName(nodeMap.get(id)) : 'Удалённый узел');
     const services = optionMap.get(`sing-box:${group.id}`)?.services || [];
     const serviceNames = services.map((id) => state.services.find((service) => service.id === id)?.name || id);
     const assigned = state.services.filter((service) => service.enabled && service.route === `sing-box:${group.id}`).map((service) => service.name);
     const hint = assigned.length ? `Назначено: ${assigned.join(', ')}` : (serviceNames.length ? `Можно назначить: ${serviceNames.join(', ')}` : 'Сначала проверьте хотя бы один узел для нужного сервиса');
-    return `<article class="node-group-card"><div><span class="node-protocol">${group.mode === 'manual' ? 'РУЧНОЙ' : 'РЕЗЕРВ'}</span><h3>${esc(group.name)}</h3><p>${members.map(esc).join(' → ')}</p><small>${esc(hint)}</small></div><div class="node-actions"><button class="secondary" type="button" data-node-group-edit="${esc(group.id)}">Изменить</button><button class="danger-button" type="button" data-node-group-delete="${esc(group.id)}">Удалить</button></div></article>`;
+    return `<article class="node-group-card"><div><span class="node-protocol">${group.mode === 'manual' ? 'Ручной выбор' : 'Автоматическая замена при отказе'}</span><h3>${esc(group.name)}</h3><p>${members.map(esc).join(' · ')}</p><small>${esc(hint)}</small></div><div class="node-actions"><button class="secondary" type="button" data-node-group-check="${esc(group.id)}">Проверить группу</button><button class="primary" type="button" data-node-group-use="${esc(group.id)}" ${services.length ? '' : 'disabled'}>Выбрать для сервиса</button><button class="secondary" type="button" data-node-group-edit="${esc(group.id)}">Изменить</button><button class="danger-button" type="button" data-node-group-delete="${esc(group.id)}">Удалить</button></div></article>`;
   }).join('');
   $$('[data-node-group-edit]').forEach((button) => button.addEventListener('click', () => openNodeGroup(button.dataset.nodeGroupEdit)));
   $$('[data-node-group-delete]').forEach((button) => button.addEventListener('click', () => deleteNodeGroup(button.dataset.nodeGroupDelete)));
@@ -2520,14 +2603,16 @@ function openNodeGroup(id = '') {
   const nodes = (state.nodes?.nodes || []).filter((node) => !node.disabled);
   if (!nodes.length) return showDetails({ error: 'Сначала добавьте и включите хотя бы один узел.' }, 'Группа не создана');
   const group = (state.nodes?.groups || []).find((item) => item.id === id);
-  const selected = new Set(group?.node_ids || nodes.slice(0, 1).map((node) => node.id));
+  const requested = [...nodeBrowser.selected];
+  if (!group && requested.length > 32) return showDetails({ error: 'В резервной группе может быть до 32 подключений. Уменьшите выборку.' }, 'Создание группы');
+  const selected = new Set(group?.node_ids || (requested.length ? requested : nodes.slice(0, 1).map((node) => node.id)));
   $('#nodeGroupID').value = group?.id || '';
   $('#nodeGroupTitle').textContent = group ? `Изменить: ${group.name}` : 'Новая группа';
   $('#nodeGroupName').value = group?.name || '';
   $('#nodeGroupMode').value = group?.mode || 'fallback';
   $('#nodeGroupHold').value = String(group?.hold_down_seconds || 1800);
-  $('#nodeGroupMembers').innerHTML = nodes.map((node) => `<label><input type="checkbox" value="${esc(node.id)}" ${selected.has(node.id) ? 'checked' : ''}><span>${esc(node.name)} · ${esc(node.protocol || '')}</span></label>`).join('');
-  $('#nodeGroupPreferred').innerHTML = nodes.map((node) => `<option value="${esc(node.id)}" ${node.id === (group?.preferred_node_id || [...selected][0]) ? 'selected' : ''}>${esc(node.name)}</option>`).join('');
+  $('#nodeGroupMembers').innerHTML = nodes.map((node) => `<label><input type="checkbox" value="${esc(node.id)}" ${selected.has(node.id) ? 'checked' : ''}><span>${esc(nodeDisplayName(node))} · ${esc(node.protocol || '')}</span></label>`).join('');
+  $('#nodeGroupPreferred').innerHTML = nodes.map((node) => `<option value="${esc(node.id)}" ${node.id === (group?.preferred_node_id || [...selected][0]) ? 'selected' : ''}>${esc(nodeDisplayName(node))}</option>`).join('');
   $('#nodeGroupDialog').showModal();
 }
 
@@ -2536,6 +2621,7 @@ async function saveNodeGroup(event) {
   const id = $('#nodeGroupID').value;
   const nodeIDs = $$('#nodeGroupMembers input:checked').map((input) => input.value);
   if (!nodeIDs.length) return showDetails({ error: 'Выберите хотя бы один узел.' }, 'Группа не сохранена');
+  if (nodeIDs.length > 32) return showDetails({ error: 'В группе может быть до 32 подключений.' }, 'Группа не сохранена');
   const preferred = nodeIDs.includes($('#nodeGroupPreferred').value) ? $('#nodeGroupPreferred').value : nodeIDs[0];
   const body = { name: $('#nodeGroupName').value.trim(), mode: $('#nodeGroupMode').value, node_ids: nodeIDs, preferred_node_id: preferred, hold_down_seconds: Number($('#nodeGroupHold').value), confirm: id ? 'UPDATE_NODE_GROUP' : 'CREATE_NODE_GROUP' };
   try {
@@ -2579,22 +2665,48 @@ function openNodeEdit(id) {
   const node = nodeByID(id);
   if (!node) return;
   $('#nodeEditID').value = id;
-  $('#nodeEditTitle').textContent = node.name || 'Название узла';
+  $('#nodeEditTitle').textContent = nodeDisplayName(node);
   $('#nodeEditAlias').value = node.name?.startsWith('Узел ') ? '' : node.name || '';
   $('#nodeEditDialog').showModal();
   setTimeout(() => $('#nodeEditAlias').focus(), 0);
 }
 
-function openNodeCheck(id) {
+function openNodeCheck(id, serviceHint) {
   const node = nodeByID(id);
-  if (!node || node.disabled) return;
+  if (!node || node.disabled || node.state === 'expired') return;
+  closeNodeCheck();
+  state.nodeFlow = { id, busy: false, controller: null };
   const services = state.services.filter((service) => service.probe_url || (Array.isArray(service.probes) && service.probes.some((probe) => probe.required && probe.url)));
   $('#nodeCheckID').value = id;
-  $('#nodeCheckTitle').textContent = `Проверить: ${node.name || 'узел'}`;
-  $('#nodeCheckService').innerHTML = services.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('');
+  $('#nodeCheckTitle').textContent = nodeDisplayName(node);
+  $('#nodeCheckService').innerHTML = services.map((service) => `<option value="${esc(service.id)}">${esc(nodeServiceScenario(service))}</option>`).join('');
+  const browserService = $('#nodeBrowserService')?.value;
+  const preferredService = services.some(service => service.id === serviceHint) ? serviceHint : services.some(service => service.id === browserService) ? browserService : node.health?.service_id;
+  if (services.some(service => service.id === preferredService)) $('#nodeCheckService').value = preferredService;
   $('#nodeCheckRun').disabled = services.length === 0;
   $('#nodeCheckRun').textContent = services.length ? 'Проверить узел' : 'Нет доступных сценариев';
+  updateNodeCheckSelection();
   $('#nodeCheckDialog').showModal();
+}
+
+function updateNodeCheckSelection() {
+  const serviceID = $('#nodeCheckService').value;
+  const id = $('#nodeCheckID').value;
+  const available = (state.routeOptions || []).some((option) => option.id === `sing-box:${id}` && option.selectable && (option.services || []).includes(serviceID));
+  $('#nodeCheckPreview').hidden = !available;
+  $('#nodeCheckPreview').disabled = false;
+  $('#nodeCheckResult').textContent = available ? 'Для этого сервиса уже есть свежая проверка. Можно повторить её или просмотреть маршрут.' : 'Выберите сервис и запустите проверку.';
+  if (typeof renderNodeIntentScope === 'function') renderNodeIntentScope(true);
+}
+
+function closeNodeCheck() {
+  state.nodeFlow?.controller?.abort();
+  state.nodeFlow = null;
+  $('#nodeCheckDialog').close();
+  $('#nodeCheckService').disabled = false;
+  $('#nodeCheckPreview').hidden = true;
+  $('#nodeCheckResult').textContent = '';
+  if (typeof setNodeIntentBusy === 'function') setNodeIntentBusy(false);
 }
 
 async function runNodeCheck(event) {
@@ -2602,20 +2714,130 @@ async function runNodeCheck(event) {
   const button = $('#nodeCheckRun');
   const id = $('#nodeCheckID').value;
   const serviceID = $('#nodeCheckService').value;
-  if (!id || !serviceID) return;
+  const flow = state.nodeFlow;
+  if (!id || !serviceID || !flow || flow.busy) return;
+  flow.busy = true;
+  flow.controller = new AbortController();
+  $('#nodeCheckService').disabled = true;
+  $('#nodeCheckPreview').hidden = true;
+  $('#nodeCheckResult').textContent = 'Проверяем этот узел для выбранного сервиса…';
   button.disabled = true;
   button.textContent = 'Проверяем до 45 секунд…';
   try {
-    const response = await api(`/api/v1/nodes/${encodeURIComponent(id)}/check`, { method: 'POST', body: JSON.stringify({ service_id: serviceID, confirm: 'CHECK_NODE' }) });
-    $('#nodeCheckDialog').close();
+    const response = await api(`/api/v1/nodes/${encodeURIComponent(id)}/check`, { method: 'POST', signal: flow.controller.signal, body: JSON.stringify({ service_id: serviceID, confirm: 'CHECK_NODE' }) });
+    if (state.nodeFlow !== flow || $('#nodeCheckService').value !== serviceID || $('#nodeCheckID').value !== id) return;
+    const passed = response.ok === true && response.result?.available === true && response.result?.service_id === serviceID && response.result?.node_id === id;
+    $('#nodeCheckResult').textContent = passed ? 'Сервис доступен через этот узел. Просмотрите маршрут перед применением.' : (response.result?.message || 'Узел не прошёл проверку выбранного сервиса. Можно проверить другой узел.');
+    $('#nodeCheckPreview').hidden = !passed;
     await refreshNodes();
-    showDetails(response.result || response, response.ok ? 'Узел прошёл точную проверку' : 'Узел не прошёл проверку');
   } catch (error) {
-    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Проверка узла не завершена');
+    if (state.nodeFlow === flow) $('#nodeCheckResult').textContent = error.name === 'AbortError' ? 'Проверка отменена. Дождитесь очистки временного процесса перед повтором.' : error.message;
   } finally {
-    button.disabled = false;
-    button.textContent = 'Проверить узел';
+    if (state.nodeFlow === flow) {
+      flow.busy = false;
+      flow.controller = null;
+      $('#nodeCheckService').disabled = false;
+      button.disabled = false;
+      button.textContent = 'Повторить проверку';
+    }
   }
+}
+
+async function previewNodeRoute() {
+  const flow = state.nodeFlow;
+  const id = $('#nodeCheckID').value;
+  const serviceID = $('#nodeCheckService').value;
+  if (!flow || flow.busy || !id || !serviceID || state.nodeRouteReview?.busy) return;
+  flow.busy = true;
+  flow.controller = new AbortController();
+  $('#nodeCheckPreview').disabled = true;
+  $('#nodeCheckRun').disabled = true;
+  $('#nodeCheckService').disabled = true;
+  try {
+    const scope = typeof nodeIntentScopeValue === 'function' ? nodeIntentScopeValue() : { mode: 'applied' };
+    if (!scope.mode || scope.mode === 'selected' && !scope.sources?.length) throw new Error('Сначала выберите устройства для подключения.');
+    const response = await api(`/api/v1/nodes/${encodeURIComponent(id)}/preview`, { method: 'POST', signal: flow.controller.signal, body: JSON.stringify({ service_id: serviceID, scope, expected_revision: state.status?.revision }) });
+    if (state.nodeFlow !== flow || $('#nodeCheckService').value !== serviceID || $('#nodeCheckID').value !== id) return;
+    if (response.review?.node_id !== id || response.review?.service_id !== serviceID) throw new Error('Ответ относится к другому выбору. Откройте новый план.');
+    closeNodeRoute();
+    closeNodeCheck();
+    state.nodeRouteReview = { ...response, id, serviceID, busy: false, controller: null };
+    const blockers = (response.transaction?.blockers || []).map((blocker) => `<li>${esc(blocker.message)} ${esc(blocker.resolution || '')}</li>`).join('');
+    $('#nodeRouteSummary').innerHTML = `<dl><div><dt>Сервис</dt><dd>${esc(nodeServiceScenario(state.services.find(service => service.id === serviceID)))}</dd></div><div><dt>Подключение</dt><dd>${esc(nodeByID(id) ? nodeDisplayName(nodeByID(id)) : response.node_name || 'Выбранный узел')}</dd></div><div><dt>Устройства</dt><dd>${esc(response.effective_scope?.summary || 'Обновите просмотр, чтобы получить область устройств')}</dd></div></dl><p>${esc(response.scope_notice || response.note || '')}</p><p>${esc(response.verification || '')}</p>${blockers ? `<ul>${blockers}</ul>` : ''}`;
+    $('#nodeRouteStatus').textContent = response.safe_mode ? 'Включён безопасный режим. Разрешите рабочее применение в настройках, затем откройте новый план.' : response.ready ? 'План готов. Подтверждение действует не более двух минут и только в текущей сети.' : 'Применение пока заблокировано. Устраните причины выше и повторите просмотр.';
+    $('#nodeRouteApply').disabled = !response.ready || !response.review?.review_token;
+    $('#nodeRouteApply').textContent = 'Применить маршрут';
+    $('#nodeRouteCancel').textContent = 'Вернуться';
+    $('#nodeRouteDialog').showModal();
+    const review = state.nodeRouteReview;
+    state.nodeReviewTimer = setTimeout(() => {
+      if (state.nodeRouteReview === review && !review.busy) {
+        $('#nodeRouteApply').disabled = true;
+        $('#nodeRouteStatus').textContent = 'Подтверждение истекло. Вернитесь к узлу и откройте новый план.';
+      }
+    }, Math.max(0, new Date(response.review?.expires_at).getTime() - Date.now()));
+  } catch (error) {
+    if (state.nodeFlow === flow) $('#nodeCheckResult').textContent = error.name === 'AbortError' ? 'Просмотр отменён.' : error.message;
+  } finally {
+    if (state.nodeFlow === flow) {
+      flow.busy = false;
+      flow.controller = null;
+      $('#nodeCheckPreview').disabled = false;
+      $('#nodeCheckRun').disabled = false;
+      $('#nodeCheckService').disabled = false;
+    }
+  }
+}
+
+function closeNodeRoute() {
+  const review = state.nodeRouteReview;
+  if (review?.busy) {
+    review.controller?.abort();
+    review.review = null;
+    $('#nodeRouteApply').disabled = true;
+    $('#nodeRouteStatus').textContent = 'Запрошена отмена. Сервер завершит очистку или откат. Обновите панель, чтобы увидеть итог маршрута.';
+    return;
+  }
+  clearTimeout(state.nodeReviewTimer);
+  state.nodeRouteReview = null;
+  $('#nodeRouteDialog').close();
+  $('#nodeRouteSummary').textContent = '';
+}
+
+async function applyNodeRoute() {
+  const current = state.nodeRouteReview;
+  const review = current?.review;
+  if (!current || current.busy || !current.ready || !review?.review_token || Date.now() >= new Date(review.expires_at).getTime()) return;
+  current.busy = true;
+  current.controller = new AbortController();
+  current.review = null; // One use, including failures and disconnected clients.
+  $('#nodeRouteApply').disabled = true;
+  $('#nodeRouteApply').textContent = 'Проверяем и применяем…';
+  $('#nodeRouteCancel').textContent = 'Отменить операцию';
+  $('#nodeRouteStatus').textContent = 'Сначала выполняется изолированная проверка. Затем маршрут переключится и пройдёт контроль.';
+  try {
+    const response = await api(`/api/v1/nodes/${encodeURIComponent(current.id)}/apply`, { method: 'POST', signal: current.controller.signal, body: JSON.stringify({ service_id: current.serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE' }) });
+    if (state.nodeRouteReview !== current || current.controller.signal.aborted) return;
+    $('#nodeRouteStatus').textContent = response.live_applied === true ? 'Маршрут применён и прошёл проверки. Проверьте сервис на выбранном устройстве.' : 'Применение не подтверждено. Обновите панель перед новым действием.';
+    await refreshAll();
+  } catch (error) {
+    if (state.nodeRouteReview === current) $('#nodeRouteStatus').textContent = error.name === 'AbortError' ? 'Запрос отменён. Сервер завершает очистку или откат; обновите панель для проверки итогового состояния.' : `${error.message} Для повтора откройте новый план.`;
+  } finally {
+    if (state.nodeRouteReview === current) {
+      current.busy = false;
+      current.controller = null;
+      $('#nodeRouteApply').textContent = 'Нужен новый просмотр';
+      $('#nodeRouteCancel').textContent = 'Закрыть';
+    }
+  }
+}
+
+function renderNodeFeeds() {
+  renderNodeSubscriptions();
+}
+
+async function syncNodeFeed(event) {
+  await saveNodeSubscription(event);
 }
 
 async function saveNodeAlias(event) {
@@ -2650,7 +2872,7 @@ async function revealNode(id) {
   if (!node || !await askConfirmation('Показать приватную конфигурацию?', 'Она может содержать UUID, пароль и адрес сервера. Показывайте её только на доверенном устройстве; данные не будут записаны в журнал панели.', 'Показать')) return;
   try {
     const result = await api(`/api/v1/nodes/${encodeURIComponent(id)}/reveal`, { method: 'POST', body: JSON.stringify({ confirm: 'REVEAL_NODE' }) });
-    $('#nodeRevealTitle').textContent = node.name || 'Конфигурация узла';
+    $('#nodeRevealTitle').textContent = nodeDisplayName(node);
     $('#nodeRevealContent').value = JSON.stringify(result.config, null, 2);
     $('#nodeRevealDialog').showModal();
   } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Конфигурация не показана'); }
@@ -2845,7 +3067,7 @@ async function toggleSafeMode() {
     ? 'Новые применения будут только проверяться. Уже работающие маршруты останутся без изменений.'
     : 'Следующее применение сможет изменить правила сети и маршруты. Перед записью RAZVILKA создаст снимок, проверит конфигурацию и вернёт прежнее состояние при ошибке.';
   if (!await askConfirmation(title, message, enable ? 'Включить' : 'Разрешить')) return;
-  const controls = [$('#toggleSafeMode'), $('#topToggleSafeMode')];
+  const controls = [$('#toggleSafeMode')];
   controls.forEach((button) => { button.disabled = true; });
   try {
     await api('/api/v1/settings/safe-mode', { method: 'PUT', body: JSON.stringify({ enabled: enable }) });
@@ -3088,8 +3310,35 @@ function openServiceScope(id) {
   state.scopeService = id;
   $('#serviceScopeTitle').textContent = `${service.name}: устройства`;
   $('#serviceScopeSources').value = (service.sources || []).join('\n');
-  $('#serviceScopeSummary').textContent = service.sources?.length ? `Сейчас маршрут ограничен: ${(service.sources || []).join(', ')}` : 'Сейчас маршрут применяется ко всей локальной сети.';
+  $('#serviceScopeMode').value = service.sources?.length ? 'selected' : 'all';
+  renderServiceScopeDevices();
   $('#serviceScopeDialog').showModal();
+}
+
+function renderServiceScopeDevices() {
+  const sources = $('#serviceScopeSources').value.split(/[\n,]/).map(value => value.trim()).filter(Boolean);
+  const all = $('#serviceScopeMode').value === 'all';
+  $('#serviceScopeDevices').hidden = all;
+  $('#serviceScopeSources').disabled = all;
+  $('#serviceScopeDevices').innerHTML = (state.devices || []).filter(device => device.ips?.length).map(device => {
+    const checked = device.ips.every(ip => sources.includes(ip) || sources.includes(`${ip}/${ip.includes(':') ? 128 : 32}`));
+    return `<label><input type="checkbox" data-service-scope-device="${esc(device.id)}" ${checked ? 'checked' : ''}><span>${esc(deviceDisplayName(device))}<small>${esc([device.group, ...device.ips].filter(Boolean).join(' · '))}</small></span></label>`;
+  }).join('') || '<p>Устройства ещё не обнаружены. Можно ввести адрес вручную.</p>';
+  $('#serviceScopeSummary').textContent = all ? 'После применения будет выбрана вся локальная сеть.' : sources.length ? `После применения будут выбраны: ${nodeScopeText(sources)}.` : 'Отметьте устройство или введите адрес. Пустой выбор не включает всю сеть.';
+}
+
+function changeServiceScopeDevice(event) {
+  const input = event.target.closest('[data-service-scope-device]');
+  const device = input && (state.devices || []).find(item => item.id === input.dataset.serviceScopeDevice);
+  if (!device) return;
+  let sources = $('#serviceScopeSources').value.split(/[\n,]/).map(value => value.trim()).filter(Boolean);
+  for (const ip of device.ips || []) {
+    const canonical = `${ip}/${ip.includes(':') ? 128 : 32}`;
+    if (input.checked) { if (!sources.includes(ip) && !sources.includes(canonical)) sources.push(canonical); }
+    else sources = sources.filter(source => source !== ip && source !== canonical);
+  }
+  $('#serviceScopeSources').value = sources.join('\n');
+  renderServiceScopeDevices();
 }
 
 async function saveServiceScope(event) {
@@ -3097,7 +3346,9 @@ async function saveServiceScope(event) {
   const service = state.services.find((item) => item.id === state.scopeService);
   if (!service) return closeServiceScope();
   const previous = [...(service.sources || [])];
-  service.sources = $('#serviceScopeSources').value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
+  const sources = $('#serviceScopeMode').value === 'all' ? [] : $('#serviceScopeSources').value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
+  if ($('#serviceScopeMode').value !== 'all' && !sources.length) { $('#serviceScopeSummary').textContent = 'Выберите хотя бы одно устройство или явно укажите всю локальную сеть.'; return; }
+  service.sources = sources;
   const button = $('#serviceScopeForm button[type="submit"]');
   button.disabled = true; button.textContent = 'Сохранение…';
   try {
@@ -3109,7 +3360,7 @@ async function saveServiceScope(event) {
     service.sources = previous;
     $('#serviceScopeSummary').textContent = error.message;
   } finally {
-    button.disabled = false; button.textContent = 'Сохранить в черновик';
+    button.disabled = false; button.textContent = 'Готово';
   }
 }
 
@@ -3202,7 +3453,12 @@ async function showServicePlan(id) {
   }
 }
 
-async function applyDraft(scope = 'all', engineID = '') {
+async function applyDraft(scope = 'all', engineID = '', options = {}) {
+  const current = () => !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
+  if (!current()) return null;
+  let awaitingReview = false;
+  const closeCanceledReview = () => { if (awaitingReview && $('#applyReviewDialog').open) $('#applyReviewDialog').close(); };
+  options.signal?.addEventListener('abort', closeCanceledReview, { once: true });
   const buttons = scope === 'routing'
     ? [$('#applyChanges'), $('#applyServiceChanges'), $('#applyDeviceChanges')]
     : scope === 'services'
@@ -3215,36 +3471,52 @@ async function applyDraft(scope = 'all', engineID = '') {
   const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}${engineID ? `&engine=${encodeURIComponent(engineID)}` : ''}`;
   buttons.forEach((b) => { b.disabled = true; b.textContent = 'Проверка…'; });
   try {
-    const preview = await api(`/api/v1/plan${query}`);
+    const preview = options.preview || await api(`/api/v1/plan${query}`, { signal: options.signal });
+    if (!current()) return null;
+    const review = preview.review;
+    if (!Number.isSafeInteger(review?.expected_revision) || typeof review?.reviewed_digest !== 'string' || !review.reviewed_digest) throw new Error('Откройте новый просмотр изменений: подтверждение плана отсутствует.');
     const unusedDrafts = (preview.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
     if (unusedDrafts.length) {
       const names = unusedDrafts.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
-      showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один включённый сервис для этого обхода либо отмените черновик. Рабочие настройки не изменены.`, preview, true);
+      showNotice('review', 'Выберите сервис для подключения', `${names}: выберите хотя бы один включённый сервис для этого обхода либо отмените изменения. Рабочие настройки прежние.`, preview, true);
       return;
     }
-    if (needsApplyReview(preview) && !await reviewApplyPlan(preview)) return;
+    if (needsApplyReview(preview)) {
+      awaitingReview = true;
+      const accepted = await reviewApplyPlan(preview);
+      awaitingReview = false;
+      if (!accepted || !current()) return null;
+    }
+    if (!current()) return null;
     buttons.forEach((b) => { b.textContent = 'Применение…'; });
-    const result = await api(`/api/v1/apply${query}`, { method: 'POST' });
+    const result = await api(`/api/v1/apply${query}`, { method: 'POST', signal: options.signal, body: JSON.stringify({ expected_revision: review.expected_revision, reviewed_digest: review.reviewed_digest }) });
+    if (!current()) return null;
     await refreshCoreAfterEdit();
-    await refreshEngineConfigs();
+    if (!current()) return null;
+    await refreshEngineConfigs(options.engineIntent || null);
+    if (!current()) return null;
     await showPlan();
+    if (!current()) return null;
     if (result.safe_mode && result.reviewed && !result.live_applied) {
-      showNotice('review', 'План проверен — рабочие маршруты не изменены', 'Это нормальная работа безопасного режима. Черновик сохранён; откройте план или явно перейдите в рабочий режим в настройках.', result, true);
+      showNotice('review', 'План проверен — рабочие маршруты не изменены', 'Изменения подготовлены. Чтобы включить их, разрешите применение в настройках и повторите проверку.', result, true);
     } else if (result.live_applied && !result.scope_pending_changes) {
       showNotice('success', 'Настройки применены', result.note || 'Маршруты активированы, проверены и зафиксированы.', result);
     } else if (result.scope_pending_changes) {
-      showNotice('review', 'Часть изменений ещё ждёт применения', 'Проверьте, что каждый черновик обхода назначен хотя бы одному включённому сервису.', result, true);
+      showNotice('review', 'Часть изменений ещё ждёт применения', 'Проверьте, что для каждого изменённого обхода выбран хотя бы один сервис.', result, true);
     } else if (result.pending_changes) {
-      showNotice('success', 'Изменения этого раздела применены', 'В другом разделе остался независимый черновик. Он не мешает текущим маршрутам.', result);
+      showNotice('success', 'Изменения этого раздела применены', 'В другом разделе остались отдельные изменения. Текущие маршруты работают.', result);
     } else {
       showNotice('success', 'Изменения обработаны', result.note || 'Операция завершена.', result);
     }
+    return result;
   } catch (error) {
+	if (!current()) return null;
 	await showPlan();
+	if (!current()) return null;
 	const unused = (error.payload?.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
 	if (unused.length) {
 	  const names = unused.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
-	  showNotice('review', 'Сначала назначьте сервис черновику', `${names}: выберите хотя бы один сервис для этого обхода либо отмените его черновик. Рабочие настройки не изменены.`, error.payload, true);
+	  showNotice('review', 'Выберите сервис для подключения', `${names}: выберите хотя бы один сервис для этого обхода либо отмените изменения. Рабочие настройки прежние.`, error.payload, true);
 	} else {
 	  const failure = error.payload?.failure;
 	  if (failure) {
@@ -3254,14 +3526,13 @@ async function applyDraft(scope = 'all', engineID = '') {
 	  }
 	}
   } finally {
-    buttons.forEach((button) => { button.disabled = false; });
-    renderStatus();
-    if (scope === 'engine') $('#engineApplyConfig').textContent = 'Проверить и применить';
-    if (scope === 'routing' || scope === 'services') {
-      $('#applyServiceChanges').textContent = state.status.safe_mode ? 'Проверить черновик' : 'Сохранить и проверить';
-    }
-    if (scope === 'routing' || scope === 'devices') {
-      $('#applyDeviceChanges').textContent = state.status.safe_mode ? 'Проверить политики' : 'Применить политики';
+    options.signal?.removeEventListener('abort', closeCanceledReview);
+    if (current()) {
+      buttons.forEach((button) => { button.disabled = false; });
+      renderStatus();
+      if (scope === 'engine') $('#engineApplyConfig').textContent = 'Проверить и применить';
+      if (scope === 'routing' || scope === 'services') $('#applyServiceChanges').textContent = state.status.safe_mode ? 'Проверить без применения' : 'Проверить и применить';
+      if (scope === 'routing' || scope === 'devices') $('#applyDeviceChanges').textContent = state.status.safe_mode ? 'Проверить без применения' : 'Проверить и применить';
     }
   }
 }
@@ -3466,6 +3737,7 @@ async function inspectDomain() {
 }
 
 async function showPlan() {
+  if (nodeActivityActive()) return;
   try {
     const plan = await api('/api/v1/plan');
     const tx = plan.transaction || {};
@@ -3507,36 +3779,9 @@ async function downloadDiagnostics() {
   }
 }
 
-async function checkAppUpdate() {
-  const button = $('#checkAppUpdate');
-  button.disabled = true; button.textContent = 'Проверяем…';
-  $('#appUpdateState').innerHTML = '<div class="community-empty">Запрашиваем последний стабильный релиз…</div>';
-  try {
-    state.appUpdate = await api('/api/v1/update?refresh=true');
-    renderAppUpdate();
-  } catch (error) {
-    $('#appUpdateState').innerHTML = `<div class="app-update-error">${esc(error.message)}</div>`;
-  } finally {
-    button.disabled = false; button.textContent = 'Проверить снова';
-  }
-}
+async function checkAppUpdate() { return refreshAppUpdate(true); }
 
-function renderAppUpdate() {
-  const update = state.appUpdate;
-  if (!update) return;
-  if (update.state === 'check-failed') {
-    $('#appUpdateState').innerHTML = `<div class="app-update-error">Не удалось безопасно проверить официальный релиз: ${esc(update.error || 'неизвестная ошибка')}</div>`;
-    return;
-  }
-  const available = Boolean(update.update_available);
-  const label = available ? `Доступно ${update.installed_version} → ${update.latest_version}` : `Установлена актуальная ${update.installed_version}`;
-  $('#appUpdateState').innerHTML = `<div class="app-update-result"><div class="app-update-summary"><div><h3>${esc(label)}</h3><p>Проверено ${esc(update.checked_at ? new Date(update.checked_at).toLocaleString('ru-RU') : '—')}</p></div><span class="app-update-badge ${available ? 'update' : ''}">${available ? 'ЕСТЬ ОБНОВЛЕНИЕ' : 'АКТУАЛЬНО'}</span></div>${available ? `<div class="app-update-commands"><div class="app-update-command"><span>Обновление на роутере</span><code>${esc(update.install_command)}</code><button class="secondary" type="button" data-copy-update="install">Скопировать команду</button></div><div class="app-update-command"><span>Проверка GitHub attestation на компьютере</span><code>${esc(update.verify_command)}</code><button class="secondary" type="button" data-copy-update="verify">Скопировать проверку</button></div></div><div class="app-update-note">Перед обновлением скачайте зашифрованный backup. Команда запускает штатный транзакционный installer с backup, healthcheck и rollback; автоматический запуск из UI намеренно отключён.</div><a class="secondary" href="${esc(update.release_url)}" target="_blank" rel="noopener noreferrer">Открыть официальный релиз</a>` : '<div class="app-update-note">Действий не требуется. Повторная проверка доступна вручную; результат кэшируется на роутере.</div>'}</div>`;
-  $$('[data-copy-update]').forEach((item) => item.addEventListener('click', async () => {
-    const value = item.dataset.copyUpdate === 'verify' ? update.verify_command : update.install_command;
-    try { await navigator.clipboard.writeText(value); item.textContent = 'Скопировано'; }
-    catch (_) { showDetails({ command: value }, 'Скопируйте команду'); }
-  }));
-}
+function renderAppUpdate() { renderAppUpdatePanel(); }
 
 function timestampName() { return new Date().toISOString().replace(/[:.]/g, '-'); }
 
@@ -3623,7 +3868,10 @@ async function exportPrivateBackup() {
     downloadJSON(envelope, `razvilka-private-${timestampName()}.json`);
     $('#privateBackupPassword').value = ''; $('#privateBackupPasswordRepeat').value = '';
     showDetails({ cipher: envelope.cipher, kdf: envelope.kdf, iterations: envelope.iterations, created_at: envelope.created_at }, 'Приватная резервная копия создана');
-  } catch (error) { showDetails({ error: error.message }, 'Резервная копия не создана'); }
+  } catch (error) {
+    const sourceError = ['PRIVATE_BACKUP_ENGINE_INVALID', 'PRIVATE_BACKUP_ENGINE_UNREADABLE'].includes(error.payload?.code) && typeof error.payload?.error === 'string';
+    showDetails({ error: sourceError ? error.payload.error : error.message }, 'Резервная копия не создана');
+  }
   finally { button.disabled = false; button.textContent = 'Скачать зашифрованную копию'; }
 }
 
@@ -3655,7 +3903,7 @@ async function previewPrivateBackup() {
     const preview = await api('/api/v1/private-backups/preview', { method: 'POST', body: JSON.stringify({ envelope, password }) });
     state.privateBackupPreview = preview;
     const warnings = preview.warnings || [];
-    $('#privateBackupPreview').innerHTML = `<div class="private-backup-ok"><span class="engine-state installed">ШИФРОВАНИЕ И ЦЕЛОСТНОСТЬ ПРОВЕРЕНЫ</span><h3>Резервная копия RAZVILKA ${esc(preview.from_version)}</h3><p>${preview.created_at ? new Date(preview.created_at).toLocaleString('ru-RU') : '—'}</p><div class="private-backup-metrics"><div><b>${preview.services || 0}</b><span>сервисов</span></div><div><b>${preview.engine_files?.length || 0}</b><span>конфигов</span></div><div><b>${preview.sensitive_files || 0}</b><span>секретных</span></div><div><b>${preview.custom_services || 0}</b><span>пользовательских</span></div><div><b>${preview.devices || 0}</b><span>устройств</span></div><div><b>${preview.nodes || 0}</b><span>узлов</span></div><div><b>${preview.node_groups || 0}</b><span>групп узлов</span></div><div><b>черновик</b><span>режим</span></div></div>${warnings.map((warning) => `<div class="private-backup-warning">${esc(warning)}</div>`).join('')}<div class="private-backup-digest">${esc(preview.digest)}</div></div>`;
+    $('#privateBackupPreview').innerHTML = `<div class="private-backup-ok"><span class="engine-state installed">ШИФРОВАНИЕ И ЦЕЛОСТНОСТЬ ПРОВЕРЕНЫ</span><h3>Резервная копия RAZVILKA ${esc(preview.from_version)}</h3><p>${preview.created_at ? new Date(preview.created_at).toLocaleString('ru-RU') : '—'}</p><div class="private-backup-metrics"><div><b>${preview.services || 0}</b><span>сервисов</span></div><div><b>${preview.engine_files?.length || 0}</b><span>конфигов</span></div><div><b>${preview.sensitive_files || 0}</b><span>секретных</span></div><div><b>${preview.custom_services || 0}</b><span>пользовательских</span></div><div><b>${preview.devices || 0}</b><span>устройств</span></div><div><b>${preview.nodes || 0}</b><span>узлов</span></div><div><b>${preview.node_groups || 0}</b><span>групп узлов</span></div><div><b>${preview.subscriptions || 0}</b><span>подписок · на паузе</span></div><div><b>черновик</b><span>режим</span></div></div>${warnings.map((warning) => `<div class="private-backup-warning">${esc(warning)}</div>`).join('')}<details><summary>Технические сведения</summary><div class="private-backup-digest">${esc(preview.digest)}</div></details></div>`;
     $('#confirmPrivateBackup').disabled = !preview.valid;
   } catch (error) {
     state.privateBackupPreview = null;
@@ -3675,7 +3923,7 @@ async function importPrivateBackup() {
     state.privateBackupEnvelope = null; state.privateBackupPreview = null;
     $('#privateBackupImportPassword').value = '';
     $('#previewPrivateBackup').disabled = true;
-    $('#privateBackupPreview').innerHTML = '<div class="community-clean">Приватные данные импортированы в черновик. Проверьте конфиги и общий план перед применением.</div>';
+    $('#privateBackupPreview').innerHTML = '<div class="community-clean">Настройки восстановлены в черновик. Подписки поставлены на паузу; возобновите нужные в разделе VLESS и VPN → Подписки. Проверьте устройства и маршруты перед применением.</div>';
     await refreshAll(); await showPlan();
     showDetails(result, 'Приватная резервная копия импортирована');
   } catch (error) {
@@ -3736,6 +3984,10 @@ function startConnectionStream() {
 }
 
 function bindEvents() {
+  bindNodeBrowser();
+  bindServiceDashboard();
+  if (typeof bindWorkspaceControls === 'function') bindWorkspaceControls();
+  if (typeof bindAppUpdateUI === 'function') bindAppUpdateUI();
   window.addEventListener('beforeunload', (event) => {
     if (!state.engineEditorDirty && !state.warpPolicyDirty) return;
     event.preventDefault();
@@ -3750,7 +4002,7 @@ function bindEvents() {
   $('#nodeSearch').addEventListener('input', renderNodes);
   $('#nodeStateFilter').addEventListener('change', renderNodes);
   $('#refreshNodes').addEventListener('click', refreshNodes);
-  $('#nodeOpenImport').addEventListener('click', async () => { await openEngineConfiguration('sing-box'); switchEngineTab('transfer'); });
+  $('#nodeOpenImport').addEventListener('click', openQuickNodeImport);
   $('#nodeOpenGroup').addEventListener('click', () => openNodeGroup());
   $('#nodeList').addEventListener('click', (event) => {
     const check = event.target.closest('[data-node-check]');
@@ -3771,8 +4023,18 @@ function bindEvents() {
   $('#nodeGroupClose').addEventListener('click', () => $('#nodeGroupDialog').close());
   $('#nodeGroupCancel').addEventListener('click', () => $('#nodeGroupDialog').close());
   $('#nodeCheckForm').addEventListener('submit', runNodeCheck);
-  $('#nodeCheckClose').addEventListener('click', () => $('#nodeCheckDialog').close());
-  $('#nodeCheckCancel').addEventListener('click', () => $('#nodeCheckDialog').close());
+  $('#nodeCheckClose').addEventListener('click', closeNodeCheck);
+  $('#nodeCheckCancel').addEventListener('click', closeNodeCheck);
+  $('#nodeCheckDialog').addEventListener('cancel', (event) => { event.preventDefault(); closeNodeCheck(); });
+  $('#nodeCheckService').addEventListener('change', updateNodeCheckSelection);
+  $('#nodeCheckPreview').addEventListener('click', previewNodeRoute);
+  $('#nodeRouteApply').addEventListener('click', applyNodeRoute);
+  $('#nodeRouteClose').addEventListener('click', closeNodeRoute);
+  $('#nodeRouteCancel').addEventListener('click', closeNodeRoute);
+  $('#nodeRouteDialog').addEventListener('cancel', (event) => { event.preventDefault(); closeNodeRoute(); });
+  $('#nodeFeedPreset').addEventListener('change', () => { $('#nodeFeedCustom').hidden = $('#nodeFeedPreset').value !== 'custom'; });
+  $('#nodeFeedForm').addEventListener('submit', syncNodeFeed);
+  $('#nodeFeedCancel').addEventListener('click', () => state.nodeFeedController?.abort());
   $('#nodeRevealClose').addEventListener('click', clearNodeReveal);
   $('#nodeRevealDone').addEventListener('click', clearNodeReveal);
   $('#nodeRevealCopy').addEventListener('click', copyRevealedNode);
@@ -3848,7 +4110,8 @@ function bindEvents() {
   $('#onboardingContent').addEventListener('click', onboardingAction);
   $('#onboardingBack').addEventListener('click', () => { state.onboardingStep = Math.max(0, state.onboardingStep - 1); renderOnboarding(); });
   $('#onboardingNext').addEventListener('click', onboardingNext);
-  $('#onboardingLater').addEventListener('click', () => closeOnboarding(true));
+  $('#onboardingLater').addEventListener('click', () => closeOnboarding(false));
+  $('#overviewSetupResume').addEventListener('click', () => openOnboarding(true));
   $('#onboardingClose').addEventListener('click', () => closeOnboarding(true));
   $('#componentStrip').addEventListener('click', (event) => {
     const config = event.target.closest('.component-config');
@@ -3857,12 +4120,11 @@ function bindEvents() {
     if (button) manageComponent(button.dataset.component, button.dataset.componentAction);
   });
   $('#showPlan').addEventListener('click', showPlan);
-  $('#applyChanges').addEventListener('click', () => applyDraft(state.status.routing_pending_changes ? 'routing' : 'all'));
+  $('#applyChanges').addEventListener('click', openPendingChanges);
   $('#applySettings').addEventListener('click', () => applyDraft('all'));
   $('#applyServiceChanges').addEventListener('click', () => applyDraft('services'));
   $('#applyDeviceChanges').addEventListener('click', () => applyDraft('devices'));
   $('#toggleSafeMode').addEventListener('click', toggleSafeMode);
-  $('#topToggleSafeMode').addEventListener('click', toggleSafeMode);
   $('#discardChanges').addEventListener('click', () => discardDraft(state.status.routing_pending_changes ? 'routing' : 'all'));
   $('#discardSettings').addEventListener('click', () => discardDraft('all'));
   $('#discardServiceChanges').addEventListener('click', () => discardDraft('services'));
@@ -3872,9 +4134,12 @@ function bindEvents() {
   $('#engineFileSelect').addEventListener('change', (e) => selectEngineFile(e.target.value));
   $('#engineModeGuided').addEventListener('click', () => switchEngineMode('guided'));
   $('#engineModeExpert').addEventListener('click', () => switchEngineMode('expert'));
-  $('#engineEditor').addEventListener('input', () => { state.engineEditorDirty = true; $('#engineEditorMessage').textContent = 'Есть локальные изменения. Нажмите «Сохранить черновик».'; });
-  $('#engineReload').addEventListener('click', async () => { if (!state.engineEditorDirty || await askConfirmation('Перечитать конфигурацию', 'Потерять локальные изменения и перечитать файл?', 'Перечитать')) { state.engineEditorDirty = false; state.engineLoaded = null; state.engineGuided = null; if (state.engineMode === 'guided') await loadEngineGuided(true); else await loadEngineFile(true); renderEngineControl(); } });
-  $('#engineSaveDraft').addEventListener('click', saveEngineDraft);
+  $('#engineEditor').addEventListener('input', markEngineEditorDirty);
+  $('#engineReload').addEventListener('click', reloadEngineEditor);
+  $('#engineSaveDraft').addEventListener('click', () => saveEngineDraft());
+  $('#engineCancelOperation').addEventListener('click', () => cancelEngineIntent());
+  document.addEventListener('razvilka:auth-required', handleEngineEditorLifecycle);
+  document.addEventListener('razvilka:view-change', handleEngineEditorLifecycle);
   $('#engineValidate').addEventListener('click', validateEngineFile);
   $('#engineDiscardDraft').addEventListener('click', discardEngineConfigDraft);
   $('#engineDiscardAllDrafts').addEventListener('click', discardSelectedEngineDrafts);

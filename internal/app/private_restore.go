@@ -31,7 +31,7 @@ func (a *App) restorePrivateDraft(ctx context.Context, payload privatebackup.Pay
 	if _, err := a.previewPrivateBackup(payload); err != nil {
 		return &privateRestoreFailure{phase: "preflight", notStarted: true}
 	}
-	if len(payload.ProviderSnapshots) != 0 || a.PrivateRestore == nil || a.Store == nil || a.CustomServices == nil || a.EngineConfigs == nil || a.Devices == nil || payload.NodeSnapshot != nil && a.Nodes == nil {
+	if len(payload.ProviderSnapshots) != 0 || a.PrivateRestore == nil || a.Store == nil || a.CustomServices == nil || a.EngineConfigs == nil || a.Devices == nil || payload.NodeSnapshot != nil && a.Nodes == nil || payload.NativeEnrollment != nil && a.Warp == nil || payload.SubscriptionSnapshot != nil && a.NodeFeeds == nil {
 		return &privateRestoreFailure{phase: "preflight", notStarted: true}
 	}
 	finished := false
@@ -41,7 +41,7 @@ func (a *App) restorePrivateDraft(ctx context.Context, payload privatebackup.Pay
 		} // Unexpected panic: release only a fenced gate.
 	}()
 	out, err := a.PrivateRestore.RestoreOnline(ctx, payload, a.reservedServiceIDs(), privaterestore.Stores{
-		Config: a.Store, Custom: a.CustomServices, Devices: a.Devices, Engines: a.EngineConfigs, Nodes: a.Nodes,
+		Config: a.Store, Custom: a.CustomServices, Devices: a.Devices, Engines: a.EngineConfigs, Nodes: a.Nodes, Warp: a.Warp, Feeds: a.NodeFeeds,
 	})
 	finished = true
 	if out == restorejournal.Blocked {

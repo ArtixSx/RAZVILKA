@@ -232,6 +232,11 @@ func TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner(t *testing.T) 
 	if err != nil || !strings.Contains(string(live), "Endpoint = engage.cloudflareclient.com:500") {
 		t.Fatalf("fallback endpoint was not committed: content=%q err=%v", live, err)
 	}
+	state, exists, err := adapter.loadPolicyState()
+	runtimeProfile, readErr := os.ReadFile(adapter.RuntimeConfigPath)
+	if err != nil || readErr != nil || !exists || state.RuntimeConfigSHA256 != warpRuntimeDigest(runtimeProfile) {
+		t.Fatal("commit did not bind cleanup to the selected runtime profile")
+	}
 }
 
 func TestWARPHandshakeFailureDoesNotExposePeerKey(t *testing.T) {
@@ -368,10 +373,14 @@ func TestWARPDeactivateRemovesOnlyOwnedRuntime(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(adapter.RuntimeConfigPath), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(adapter.RuntimeConfigPath, []byte(testWARPProfile()), 0o600); err != nil {
+	runtimeProfile, err := sanitizeWGQuickProfile(testWARPProfile())
+	if err != nil {
 		t.Fatal(err)
 	}
-	policy := PolicyState{Interface: adapter.Interface, Table: adapter.Table, PriorityBase: adapter.PriorityBase, Prefixes: []string{"198.51.100.20/32"}}
+	if err := os.WriteFile(adapter.RuntimeConfigPath, []byte(runtimeProfile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	policy := PolicyState{Interface: adapter.Interface, Table: adapter.Table, PriorityBase: adapter.PriorityBase, Prefixes: []string{"198.51.100.20/32"}, RuntimeConfigSHA256: warpRuntimeDigest([]byte(runtimeProfile))}
 	data, _ := json.Marshal(policy)
 	if err := os.MkdirAll(adapter.StateRoot, 0o700); err != nil {
 		t.Fatal(err)

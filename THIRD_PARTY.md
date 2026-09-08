@@ -19,6 +19,7 @@ RAZVILKA references the following engines and external datasets. Their own licen
 - Roskomnadzor unified registry — external official point-lookup reference.
 - OpenAI network recommendations — vendor documentation used to maintain the OpenAI service manifest.
 - Telegram CIDR resource — vendor-published network ranges.
+- [Unicode CLDR](https://github.com/unicode-org/cldr-json) — bundled English and Russian country display names, copyright © 2015–2024 Unicode, Inc., under [Unicode License V3](docs/UNICODE_LICENSE.txt). The allowlisted subset is recorded with its source revision in `internal/providerfeed/country_names.go`; it provides publisher-label interpretation, not geolocation.
 
 Before a public packaged release, exact bundled-vs-referenced license obligations must be reviewed for every component included in distribution artifacts.
 

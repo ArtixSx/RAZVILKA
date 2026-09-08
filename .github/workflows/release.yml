@@ -60,7 +60,7 @@ jobs:
           STAGE="RAZVILKA-${VERSION}"
           mkdir -p "$STAGE"
           cp -a \
-            VERSION README.md README_RU.md LAB.md CHANGELOG.md LICENSE SECURITY.md THIRD_PARTY.md \
+            VERSION README.md README_RU.md README_EN.md LAB.md CHANGELOG.md LICENSE SECURITY.md THIRD_PARTY.md \
             configs docs dist scripts "$STAGE"/
           test -x "$STAGE/scripts/install-entware.sh"
           test -x "$STAGE/scripts/upgrade-entware.sh"
@@ -70,11 +70,31 @@ jobs:
           test -x "$STAGE/scripts/test-entware-transaction.sh"
           test -f "$STAGE/configs/config.example.json"
           test -f "$STAGE/docs/MASTER_PLAN_RU.md"
+          test -f "$STAGE/README_EN.md"
           (cd "$STAGE" && sha256sum -c dist/SHA256SUMS)
-          if find "$STAGE" -type f \( -name '*.token' -o -name 'admin.token' \) | grep -q .; then
-            echo "Refusing to package a token file" >&2
-            exit 1
-          fi
+          # Validate the staged tree, not just Git-tracked names: generated
+          # runtime files and links must never enter either release archive.
+          node --input-type=module - "$STAGE" <<'RELEASE_TREE_GUARD'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const root = path.resolve(process.argv[2]);
+          const privateDirectories = new Set(['.hil', '.git', '.ssh', '__pycache__', 'nodes-private', 'native-enrollment', 'configs/local']);
+          const privateName = /(?:\.(?:private|secret)(?:\.|$)|\.(?:token|key|pem|p12|pfx|log|pid|bak|pyc)$|^\.env(?:\.|$)|^admin\.credentials\.json$|^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.|$))/i;
+          function visit(directory) {
+            for (const item of fs.readdirSync(directory, {withFileTypes: true})) {
+              const filename = path.join(directory, item.name);
+              const relative = path.relative(root, filename).split(path.sep).join('/');
+              const stat = fs.lstatSync(filename);
+              if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile()) ||
+                  privateDirectories.has(item.name.toLowerCase()) || privateDirectories.has(relative.toLowerCase()) ||
+                  privateName.test(item.name)) {
+                throw new Error('Refusing unsafe/private release entry: ' + relative);
+              }
+              if (stat.isDirectory()) visit(filename);
+            }
+          }
+          visit(root);
+          RELEASE_TREE_GUARD
           tar -czf "RAZVILKA-${VERSION}-entware.tar.gz" "$STAGE"
           zip -qr "RAZVILKA-${VERSION}-entware.zip" "$STAGE"
           cp "RAZVILKA-${VERSION}-entware.tar.gz" RAZVILKA-entware.tar.gz
