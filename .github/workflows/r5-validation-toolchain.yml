@@ -1,0 +1,45 @@
+name: R5 validation toolchain
+
+on:
+  push:
+    branches: [work/autonomy-r5-validation]
+    paths: [.github/workflows/r5-validation-toolchain.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  toolchain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: c6859b07316d07de3dc1fa243484a96078c5782b
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Download and verify pinned modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          go version
+          go mod download
+          go mod verify
+          mkdir -p "$RUNNER_TEMP/r5-validation"
+          go version > "$RUNNER_TEMP/r5-validation/toolchain.txt"
+          sha256sum go.mod go.sum > "$RUNNER_TEMP/r5-validation/module-inputs.sha256"
+          tar -czf "$RUNNER_TEMP/r5-validation/go.tar.gz" -C "$(go env GOROOT)" .
+          tar -czf "$RUNNER_TEMP/r5-validation/modules.tar.gz" -C "$(go env GOMODCACHE)" .
+          (cd "$RUNNER_TEMP/r5-validation" && sha256sum go.tar.gz modules.tar.gz > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r5-pinned-toolchain
+          path: ${{ runner.temp }}/r5-validation/
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
