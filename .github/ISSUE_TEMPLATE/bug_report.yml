@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible RAZVILKA problem
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste passwords, proxy URIs, private keys, cookies, or router backups.
+  - type: input
+    id: version
+    attributes:
+      label: RAZVILKA version
+      placeholder: v0.18.1-rc.2
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Router / firmware
+      placeholder: Keenetic or Netcraze model and firmware version
+    validations:
+      required: true
+  - type: dropdown
+    id: bypass
+    attributes:
+      label: Обход или раздел
+      options:
+        - Manager / UI
+        - NFQWS2
+        - usque / MASQUE
+        - WARP WireGuard
+        - sing-box
+        - Xray
+        - AmneziaWG
+        - DNS
+        - Other / not sure
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      description: Точная последовательность действий. Не прикладывайте секретные конфиги.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Очищенная диагностика
+      description: Прикладывайте отчёт диагностики RAZVILKA, а не полный конфиг с ключами.

@@ -1,0 +1,5103 @@
+package app
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/auditlog"
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
+	"github.com/ArtixSx/razvilka/internal/community"
+	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/customservices"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/devices"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+	"github.com/ArtixSx/razvilka/internal/engine"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/enginelab"
+	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/privatebackup"
+	"github.com/ArtixSx/razvilka/internal/privaterestore"
+	"github.com/ArtixSx/razvilka/internal/profileexchange"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
+	"github.com/ArtixSx/razvilka/internal/providerprofile"
+	"github.com/ArtixSx/razvilka/internal/routerstats"
+	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
+	"github.com/ArtixSx/razvilka/internal/security"
+	"github.com/ArtixSx/razvilka/internal/smartroute"
+	"github.com/ArtixSx/razvilka/internal/sources"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
+	"github.com/ArtixSx/razvilka/internal/telemetry"
+	"github.com/ArtixSx/razvilka/internal/testlab"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
+	"github.com/ArtixSx/razvilka/internal/usquediag"
+	"github.com/ArtixSx/razvilka/internal/warp"
+	"github.com/ArtixSx/razvilka/internal/z2kimport"
+)
+
+var (
+	// Release builds override these values through -ldflags. Keeping useful
+	// development defaults prevents an unreleased binary from identifying
+	// itself as the last stable release.
+	Version     = "0.18.2-dev"
+	BuildCommit = "unknown"
+	BuildTime   = "unknown"
+	BuildDirty  = "unknown"
+)
+
+type BuildInfo struct {
+	Version    string `json:"version"`
+	Commit     string `json:"commit"`
+	BuiltAt    string `json:"built_at"`
+	Dirty      bool   `json:"dirty"`
+	DirtyKnown bool   `json:"dirty_known"`
+}
+
+func CurrentBuildInfo() BuildInfo {
+	dirty, err := strconv.ParseBool(strings.TrimSpace(BuildDirty))
+	return BuildInfo{
+		Version: Version, Commit: fallbackBuildValue(BuildCommit), BuiltAt: fallbackBuildValue(BuildTime),
+		Dirty: dirty, DirtyKnown: err == nil,
+	}
+}
+
+func fallbackBuildValue(value string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return "unknown"
+}
+
+const defaultDataplaneApplyTimeout = 8 * time.Minute
+
+type applyFailureAdvice struct {
+	Code           string   `json:"code"`
+	Title          string   `json:"title"`
+	Message        string   `json:"message"`
+	Resolution     string   `json:"resolution"`
+	DraftPreserved bool     `json:"draft_preserved"`
+	Retryable      bool     `json:"retryable"`
+	Alternatives   []string `json:"alternatives,omitempty"`
+}
+
+type applyChangeArea struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+type applyServiceChange struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	BeforeEnabled bool   `json:"before_enabled"`
+	AfterEnabled  bool   `json:"after_enabled"`
+	BeforeRoute   string `json:"before_route"`
+	AfterRoute    string `json:"after_route"`
+}
+
+type applyDeviceChange struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	BeforeCount int    `json:"before_count"`
+	AfterCount  int    `json:"after_count"`
+}
+
+type applyChangeSummary struct {
+	Scope             changeScope          `json:"scope"`
+	Included          []applyChangeArea    `json:"included"`
+	Deferred          []applyChangeArea    `json:"deferred"`
+	Services          []applyServiceChange `json:"services"`
+	Devices           []applyDeviceChange  `json:"devices"`
+	EngineDrafts      []string             `json:"engine_drafts"`
+	NetworkChange     bool                 `json:"network_change"`
+	WorkingChange     bool                 `json:"working_change"`
+	Verification      string               `json:"verification"`
+	Rollback          string               `json:"rollback"`
+	IndependentNotice string               `json:"independent_notice,omitempty"`
+}
+
+type App struct {
+	autonomy         autonomyState
+	PrivateRestore   *privaterestore.Coordinator
+	Operations       operationgate.Gate
+	Store            *config.Store
+	Catalog          catalog.Catalog
+	Sources          *sources.Manager
+	Telemetry        *telemetry.Store
+	EngineConfigs    *engineconfig.Manager
+	EngineLab        *enginelab.Manager
+	StrategyLab      *strategylab.Manager
+	Components       *components.Manager
+	Community        *community.Manager
+	CustomServices   *customservices.Manager
+	Dataplane        *dataplane.Manager
+	Devices          *devices.Manager
+	DNS              *dnscontrol.Manager
+	Warp             *warp.Manager
+	Cloudflare       *cloudflareprovider.Store
+	Nodes            *nodestore.Store
+	NodeChecker      dataplane.NodeChecker
+	NodePinger       dataplane.NodePinger
+	NodeFeeds        *providerfeed.Manager
+	nodeReviews      nodeRouteReviewStore
+	nodeRecovery     nodeRecoveryState
+	nodeChecks       nodeCheckState
+	nodeAutofallback nodeAutofallbackState
+	reconciler       serviceReconciler
+	DataplaneHost    func() dataplane.HostState
+	FreshProfile     func(context.Context) (string, error)
+	cloudflareBusy   atomic.Bool
+	TestLab          *testlab.Runner
+	RouteProber      testlab.RouteProber
+	SmartRoute       *smartroute.Manager
+	Updates          *updatecheck.Manager
+	SelfUpdate       *updatecheck.Updater
+	USQUE            *usquediag.Manager
+	Stats            *routerstats.Sampler
+	Security         *security.Gate
+	Audit            *auditlog.Journal
+	// EngineInventory is injectable only for deterministic presentation tests.
+	// Production uses the read-only detector and never starts or stops an engine.
+	EngineInventory func() []engine.Status
+	Start           time.Time
+	EffectiveListen string
+	Z2KRoot         string
+
+	CloudflareLegacy  *cloudflareprovider.LegacySources
+	privateBackupBusy atomic.Bool
+}
+
+type serviceView struct {
+	catalog.Service
+	Custom             bool                      `json:"custom"`
+	Enabled            bool                      `json:"enabled"`
+	Mode               string                    `json:"mode"`
+	Route              string                    `json:"route"`
+	Planned            string                    `json:"planned_engine"`
+	Applied            bool                      `json:"applied_enabled"`
+	AppliedRoute       string                    `json:"applied_route"`
+	Sources            []string                  `json:"sources,omitempty"`
+	AppliedSources     []string                  `json:"applied_sources,omitempty"`
+	Dirty              bool                      `json:"dirty"`
+	RouteDirty         bool                      `json:"route_dirty"`
+	SourcesDirty       bool                      `json:"sources_dirty"`
+	RouteAvailable     bool                      `json:"route_available"`
+	RouteIssue         string                    `json:"route_issue,omitempty"`
+	EvidenceLevel      evidence.Level            `json:"evidence_level"`
+	EvidenceRoute      string                    `json:"evidence_route,omitempty"`
+	EvidenceStatus     string                    `json:"evidence_status,omitempty"`
+	EvidenceSource     string                    `json:"evidence_source,omitempty"`
+	EvidenceAt         string                    `json:"evidence_checked_at,omitempty"`
+	EvidenceOutcome    evidence.Outcome          `json:"evidence_outcome,omitempty"`
+	EvidenceProbeID    string                    `json:"evidence_probe_id,omitempty"`
+	EvidenceFreshUntil string                    `json:"evidence_fresh_until,omitempty"`
+	DesiredState       serviceRouteStateView     `json:"desired_state"`
+	PlannedState       serviceRouteStateView     `json:"planned_state"`
+	AppliedState       serviceRouteStateView     `json:"applied_state"`
+	ObservedState      serviceObservedStateView  `json:"observed_state"`
+	NFQWS2             nfqws2ServicePresentation `json:"nfqws2"`
+}
+
+// serviceRouteStateView keeps intent, calculation and committed state separate.
+// The legacy flat fields above remain for existing clients.
+type serviceRouteStateView struct {
+	Enabled            bool   `json:"enabled"`
+	Route              string `json:"route"`
+	Source             string `json:"source"`
+	RecommendationOnly bool   `json:"recommendation_only,omitempty"`
+	Stale              bool   `json:"stale,omitempty"`
+}
+
+type serviceObservedStateView struct {
+	Route      string           `json:"route,omitempty"`
+	Level      evidence.Level   `json:"level"`
+	Status     string           `json:"status,omitempty"`
+	Source     string           `json:"source,omitempty"`
+	CheckedAt  string           `json:"checked_at,omitempty"`
+	Outcome    evidence.Outcome `json:"outcome,omitempty"`
+	ProbeID    string           `json:"probe_id,omitempty"`
+	FreshUntil string           `json:"fresh_until,omitempty"`
+}
+
+type nfqws2ServicePresentation struct {
+	Relevant        bool           `json:"relevant"`
+	Engine          string         `json:"engine"`
+	EngineState     string         `json:"engine_state"`
+	Owner           string         `json:"owner"`
+	OwnerName       string         `json:"owner_name"`
+	OwnershipState  string         `json:"ownership_state"`
+	Profile         string         `json:"profile"`
+	Strategy        string         `json:"strategy"`
+	StrategyID      string         `json:"strategy_id,omitempty"`
+	SelectionStatus string         `json:"selection_status,omitempty"`
+	Evidence        evidence.Level `json:"evidence"`
+	EvidenceStatus  string         `json:"evidence_status,omitempty"`
+	Recommendation  bool           `json:"recommendation_only"`
+	Stale           bool           `json:"stale"`
+}
+
+type nfqws2StrategyPresentation struct {
+	Profile string
+	Name    string
+	ID      string
+	Status  string
+}
+
+type serviceEvidenceView struct {
+	Level      evidence.Level
+	Route      string
+	Status     string
+	Source     string
+	CheckedAt  string
+	Outcome    evidence.Outcome
+	ProbeID    string
+	FreshUntil string
+}
+
+// serviceEvidenceSnapshot derives assurance only from applied state and
+// observations. Desired and planned routes are deliberately absent: selecting
+// an option in the UI must never make that route look proven.
+func (a *App) serviceEvidenceSnapshot(cfg config.Config, services []catalog.Service) map[string]serviceEvidenceView {
+	return a.serviceEvidenceSnapshotWithInventory(cfg, services, a.engineInventorySnapshot())
+}
+
+func (a *App) serviceEvidenceSnapshotWithInventory(cfg config.Config, services []catalog.Service, inventory []engine.Status) map[string]serviceEvidenceView {
+	out := make(map[string]serviceEvidenceView, len(services))
+	for _, service := range services {
+		out[service.ID] = serviceEvidenceView{Level: evidence.Catalog, Status: "catalog-present", Source: "catalog"}
+	}
+
+	// AUTO is resolved from the last committed journal only. A newly calculated
+	// plan is intent, not evidence of the route currently carrying traffic.
+	committedRoutes := map[string]string{}
+	if a.Dataplane != nil {
+		if plan, exists, err := a.Dataplane.Committed(); err == nil && exists && plan.State == "committed" && plan.Revision == cfg.AppliedRevision {
+			for _, route := range plan.Routes {
+				committedRoutes[route.ServiceID] = route.Resolved
+			}
+		}
+	}
+
+	engineByID := map[string]engine.Status{}
+	for _, status := range inventory {
+		engineByID[status.ID] = status
+	}
+	effectiveRoute := map[string]string{}
+	for serviceID, applied := range cfg.AppliedServices {
+		if !applied.Enabled {
+			continue
+		}
+		route := selectedRoute(applied)
+		if route == "auto" {
+			route = committedRoutes[serviceID]
+		}
+		effectiveRoute[serviceID] = route
+		adapter := dataplane.AdapterID(route)
+		if adapter == "" || adapter == "direct" {
+			continue
+		}
+		status, exists := engineByID[adapter]
+		if !exists {
+			continue
+		}
+		observed := out[serviceID]
+		observed.Route = route
+		if status.Installed && status.Configured {
+			observed.Level = evidence.Stronger(observed.Level, evidence.Configured)
+			observed.Status = "engine-configured"
+			observed.Source = "engine-inventory"
+		}
+		if status.Running {
+			observed.Level = evidence.Stronger(observed.Level, evidence.Runtime)
+			observed.Status = "engine-running"
+			observed.Source = "process-and-interface-inventory"
+		}
+		out[serviceID] = observed
+	}
+
+	if a.TestLab == nil {
+		return out
+	}
+	for _, result := range testlab.AggregateScenarios(a.TestLab.Snapshot(a.catalogSnapshot()).Current) {
+		result.NormalizeEvidence()
+		applied := cfg.AppliedServices[result.ServiceID]
+		if !applied.Enabled {
+			continue
+		}
+		route := effectiveRoute[result.ServiceID]
+		level := result.AssuranceLevel()
+		matchedRoute := result.Route == route && route != ""
+		if result.Route == "current" {
+			// A current-path request proves that the router attempted the request,
+			// but cannot identify which bypass actually carried it.
+			if level.AtLeast(evidence.Runtime) {
+				level = evidence.Runtime
+			}
+		} else if !matchedRoute {
+			continue
+		}
+		observed := out[result.ServiceID]
+		if result.EvidenceV2 != nil && !result.EvidenceV2.Fresh(time.Now().UTC(), 24*time.Hour) {
+			observed.Route = route
+			observed.Status = "stale"
+			observed.Source = result.EvidenceSource
+			observed.CheckedAt = result.CheckedAt
+			observed.Outcome = result.Outcome
+			observed.ProbeID = result.EvidenceV2.ProbeID
+			observed.FreshUntil = result.EvidenceFreshUntil
+			out[result.ServiceID] = observed
+			continue
+		}
+		stronger := evidence.Stronger(observed.Level, level)
+		if stronger != observed.Level || stronger == level && result.CheckedAt >= observed.CheckedAt {
+			observed.Level = stronger
+			observed.Route = route
+			observed.Status = result.Status
+			observed.Source = result.EvidenceSource
+			if observed.Source == "" {
+				if result.Route == "current" {
+					observed.Source = "current-path-probe"
+				} else {
+					observed.Source = "isolated-route-probe"
+				}
+			}
+			observed.CheckedAt = result.CheckedAt
+			observed.Outcome = result.Outcome
+			observed.FreshUntil = result.EvidenceFreshUntil
+			if result.EvidenceV2 != nil {
+				observed.ProbeID = result.EvidenceV2.ProbeID
+			}
+			out[result.ServiceID] = observed
+		}
+	}
+	return out
+}
+
+func (a *App) engineInventorySnapshot() []engine.Status {
+	if a.EngineInventory != nil {
+		return a.EngineInventory()
+	}
+	return (engine.Detector{}).Inventory()
+}
+
+func (a *App) appliedEffectiveRoutes(cfg config.Config) map[string]string {
+	routes := map[string]string{}
+	if a.Dataplane != nil {
+		if plan, exists, err := a.Dataplane.Committed(); err == nil && exists && plan.State == "committed" && plan.Revision == cfg.AppliedRevision {
+			for _, route := range plan.Routes {
+				routes[route.ServiceID] = route.Resolved
+			}
+		}
+	}
+	return routes
+}
+
+func (a *App) nfqws2StrategySnapshot() map[string]nfqws2StrategyPresentation {
+	out := map[string]nfqws2StrategyPresentation{}
+	if a.StrategyLab == nil {
+		return out
+	}
+	snapshot := a.StrategyLab.Snapshot()
+	candidates := make(map[string]strategylab.Candidate, len(snapshot.Candidates))
+	for _, candidate := range snapshot.Candidates {
+		candidates[candidate.ID] = candidate
+	}
+	for _, selection := range snapshot.Selections {
+		if _, exists := out[selection.ServiceID]; exists {
+			continue
+		}
+		candidate := candidates[selection.CandidateID]
+		profile := strings.Trim(strings.TrimSpace(selection.Protocol)+" / "+strings.TrimSpace(selection.IPFamily), " /")
+		if profile == "" {
+			profile = "unknown"
+		}
+		name := strings.TrimSpace(candidate.Name)
+		if name == "" {
+			name = "unknown"
+		}
+		out[selection.ServiceID] = nfqws2StrategyPresentation{Profile: profile, Name: name, ID: selection.CandidateID, Status: selection.Status}
+	}
+	return out
+}
+
+func nfqws2Presentation(serviceID string, desired, planned string, desiredEnabled bool, applied string, appliedEnabled bool, proof serviceEvidenceView, inventory []engine.Status, strategies map[string]nfqws2StrategyPresentation, dirty bool) nfqws2ServicePresentation {
+	native := engine.Status{ID: "nfqws2"}
+	external := engine.Status{ID: "z2k"}
+	for _, status := range inventory {
+		switch status.ID {
+		case "nfqws2":
+			native = status
+		case "z2k":
+			external = status
+		}
+	}
+	view := nfqws2ServicePresentation{Engine: "NFQWS2", EngineState: "not-installed", Owner: "none", OwnerName: "не определён", OwnershipState: "unowned", Profile: "unknown", Strategy: "unknown", Evidence: evidence.None}
+	if native.Installed {
+		view.EngineState = "installed"
+		view.Owner = "razvilka"
+		view.OwnerName = "RAZVILKA"
+		view.OwnershipState = "native-owner"
+	}
+	if native.Configured {
+		view.EngineState = "configured"
+	}
+	if native.Running {
+		view.EngineState = "running"
+	}
+	if external.Running {
+		view.Owner = "external"
+		view.OwnerName = "z2k"
+		view.OwnershipState = "external-owner-running"
+	}
+	for _, route := range []string{desired, planned, applied, proof.Route} {
+		if dataplane.AdapterID(route) == "nfqws2" {
+			view.Relevant = true
+			break
+		}
+	}
+	if selection, exists := strategies[serviceID]; exists {
+		view.Profile, view.Strategy, view.StrategyID, view.SelectionStatus = selection.Profile, selection.Name, selection.ID, selection.Status
+	}
+	if dataplane.AdapterID(proof.Route) == "nfqws2" {
+		view.Evidence = proof.Level
+		view.EvidenceStatus = proof.Status
+	}
+	view.Recommendation = !desiredEnabled && dataplane.AdapterID(planned) == "nfqws2"
+	view.Stale = proof.Status == "stale" || dirty && (desiredEnabled != appliedEnabled || planned != applied)
+	return view
+}
+
+func (a *App) Handler(static http.Handler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/autonomy", a.autonomyAPI)
+	mux.HandleFunc("/api/v1/autonomy/services", a.autonomyEnroll)
+	mux.HandleFunc("/api/v1/autonomy/services/", a.autonomyRemove)
+	mux.HandleFunc("/api/v1/status", a.status)
+	mux.HandleFunc("/api/v1/audit", a.auditSnapshot)
+	mux.HandleFunc("/api/v1/auth/status", a.authStatus)
+	mux.HandleFunc("/api/v1/auth/setup", a.authSetup)
+	mux.HandleFunc("/api/v1/auth/login", a.authLogin)
+	mux.HandleFunc("/api/v1/auth/logout", a.authLogout)
+	mux.HandleFunc("/api/v1/auth/password", a.authPassword)
+	mux.HandleFunc("/api/v1/auth/recover", a.authRecover)
+	mux.HandleFunc("/api/v1/auth/recovery-key/rotate", a.authRecoveryKeyRotate)
+	mux.HandleFunc("/api/v1/auth/sessions", a.authSessions)
+	mux.HandleFunc("/api/v1/auth/sessions/", a.authSessionAction)
+	mux.HandleFunc("/api/v1/engines", a.engines)
+	mux.HandleFunc("/api/v1/engine-lab", a.engineLabReport)
+	mux.HandleFunc("/api/v1/strategy-lab", a.strategyLabSnapshot)
+	mux.HandleFunc("/api/v1/strategy-lab/candidates", a.strategyLabCandidates)
+	mux.HandleFunc("/api/v1/strategy-lab/candidates/", a.strategyLabCandidateAction)
+	mux.HandleFunc("/api/v1/strategy-lab/selections", a.strategyLabSelections)
+	mux.HandleFunc("/api/v1/migrations/z2k/preview", a.z2kMigrationPreview)
+	mux.HandleFunc("/api/v1/migrations/z2k/import-strategies", a.z2kMigrationImportStrategies)
+	mux.HandleFunc("/api/v1/engine-configs", a.engineConfigs)
+	mux.HandleFunc("/api/v1/engine-configs/", a.engineConfigAction)
+	mux.HandleFunc("/api/v1/provider-profiles/preview", a.providerProfilePreview)
+	mux.HandleFunc("/api/v1/provider-profiles/import", a.providerProfileImport)
+	mux.HandleFunc("/api/v1/nodes/import", a.nodeImport)
+	mux.HandleFunc("/api/v1/node-checks", a.nodeCheckJobs)
+	mux.HandleFunc("/api/v1/node-checks/current", a.nodeCheckJobCurrent)
+	mux.HandleFunc("/api/v1/node-autofallback", a.nodeAutofallbackStatus)
+	mux.HandleFunc("/api/v1/service-policies", a.servicePolicies)
+	mux.HandleFunc("/api/v1/service-policies/", a.servicePolicyUpdate)
+	mux.HandleFunc("/api/v1/service-control", a.serviceControl)
+	mux.HandleFunc("/api/v1/service-control/jobs", a.serviceControlJobs)
+	mux.HandleFunc("/api/v1/service-control/current", a.serviceControlCurrent)
+	mux.HandleFunc("/api/v1/service-control/runtime", a.serviceControlRuntime)
+	mux.HandleFunc("/api/v1/node-feeds", a.nodeFeedList)
+	mux.HandleFunc("/api/v1/node-feeds/sync", a.nodeFeedSync)
+	mux.HandleFunc("/api/v1/node-feeds/", a.nodeFeedAction)
+	mux.HandleFunc("/api/v1/nodes", a.nodeList)
+	mux.HandleFunc("/api/v1/nodes/", a.nodeAction)
+	mux.HandleFunc("/api/v1/node-groups", a.nodeGroups)
+	mux.HandleFunc("/api/v1/node-groups/", a.nodeGroupAction)
+	mux.HandleFunc("/api/v1/components", a.componentList)
+	mux.HandleFunc("/api/v1/components/", a.componentAction)
+	mux.HandleFunc("/api/v1/warp", a.warpStatus)
+	mux.HandleFunc("/api/v1/warp/", a.warpAction)
+	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)
+	mux.HandleFunc("/api/v1/cloudflare/import/preview", a.cloudflareImportPreview)
+	mux.HandleFunc("/api/v1/cloudflare/import", a.cloudflareImport)
+	mux.HandleFunc("/api/v1/cloudflare/legacy/sources", a.cloudflareLegacySources)
+	mux.HandleFunc("/api/v1/cloudflare/legacy/preview", a.cloudflareLegacyPreview)
+	mux.HandleFunc("/api/v1/cloudflare/legacy/copy", a.cloudflareLegacyCopy)
+	mux.HandleFunc("/api/v1/cloudflare/backups/export", a.cloudflareBackupExport)
+	mux.HandleFunc("/api/v1/cloudflare/backups/preview", a.cloudflareBackupPreview)
+	mux.HandleFunc("/api/v1/cloudflare/backups/restore", a.cloudflareBackupRestore)
+	mux.HandleFunc("/api/v1/testlab", a.testLabSnapshot)
+	mux.HandleFunc("/api/v1/testlab/current", a.testLabCurrent)
+	mux.HandleFunc("/api/v1/testlab/routes", a.testLabRoutes)
+	mux.HandleFunc("/api/v1/smart-route", a.smartRouteStatus)
+	mux.HandleFunc("/api/v1/dns", a.dnsStatus)
+	mux.HandleFunc("/api/v1/dns/plan", a.dnsPlan)
+	mux.HandleFunc("/api/v1/dns/draft", a.dnsDraft)
+	mux.HandleFunc("/api/v1/dns/service-draft", a.dnsServiceDraft)
+	mux.HandleFunc("/api/v1/dns/nextdns", a.dnsNextDNS)
+	mux.HandleFunc("/api/v1/dns/custom", a.dnsCustom)
+	mux.HandleFunc("/api/v1/dns/test", a.dnsTest)
+	mux.HandleFunc("/api/v1/dns/apply", a.dnsApply)
+	mux.HandleFunc("/api/v1/dns/discard", a.dnsDiscard)
+	mux.HandleFunc("/api/v1/routes/options", a.routeOptions)
+	mux.HandleFunc("/api/v1/services", a.services)
+	mux.HandleFunc("/api/v1/services/", a.service)
+	mux.HandleFunc("/api/v1/devices", a.deviceList)
+	mux.HandleFunc("/api/v1/devices/", a.deviceItem)
+	mux.HandleFunc("/api/v1/custom-services", a.customServiceList)
+	mux.HandleFunc("/api/v1/custom-services/", a.customServiceItem)
+	mux.HandleFunc("/api/v1/community/services", a.communityServices)
+	mux.HandleFunc("/api/v1/community/services/", a.communityServiceAction)
+	mux.HandleFunc("/api/v1/plan", a.plan)
+	mux.HandleFunc("/api/v1/dataplane/status", a.dataplaneStatus)
+	mux.HandleFunc("/api/v1/apply", a.apply)
+	mux.HandleFunc("/api/v1/discard", a.discard)
+	mux.HandleFunc("/api/v1/system", a.systemInfo)
+	mux.HandleFunc("/api/v1/metrics", a.metrics)
+	mux.HandleFunc("/api/v1/settings/safe-mode", a.safeModeSetting)
+	mux.HandleFunc("/api/v1/update", a.updateStatus)
+	mux.HandleFunc("/api/v1/self-update/current", a.selfUpdateCurrent)
+	mux.HandleFunc("/api/v1/self-update/prepare", a.selfUpdatePrepare)
+	mux.HandleFunc("/api/v1/self-update/apply", a.selfUpdateApply)
+	mux.HandleFunc("/api/v1/diagnostics/domain", a.domainDiagnostic)
+	mux.HandleFunc("/api/v1/diagnostics/usque", a.usqueDiagnostic)
+	mux.HandleFunc("/api/v1/diagnostics/usque/dns-candidate", a.usqueDNSCandidate)
+	mux.HandleFunc("/api/v1/diagnostics/usque/repair", a.usqueRepair)
+	mux.HandleFunc("/api/v1/diagnostics/report", a.diagnosticReport)
+	mux.HandleFunc("/api/v1/config/export", a.configExport)
+	mux.HandleFunc("/api/v1/profiles/export", a.profileExport)
+	mux.HandleFunc("/api/v1/profiles/preview", a.profilePreview)
+	mux.HandleFunc("/api/v1/profiles/import", a.profileImport)
+	mux.HandleFunc("/api/v1/private-backups/export", a.privateBackupExport)
+	mux.HandleFunc("/api/v1/private-backups/preview", a.privateBackupPreview)
+	mux.HandleFunc("/api/v1/private-backups/import", a.privateBackupImport)
+	mux.HandleFunc("/api/v1/connections", a.connections)
+	mux.HandleFunc("/api/v1/connections/stream", a.connectionStream)
+	mux.HandleFunc("/api/v1/sources", a.sourceList)
+	mux.HandleFunc("/api/v1/sources/refresh", a.sourceRefreshAll)
+	mux.HandleFunc("/api/v1/sources/apply", a.sourceApply)
+	mux.HandleFunc("/api/v1/sources/discard", a.sourceDiscard)
+	mux.HandleFunc("/api/v1/sources/", a.sourceAction)
+	mux.Handle("/", noStoreUI(static))
+	return securityHeaders(a.auditMiddleware(a.Security.Middleware(a.operationMiddleware(mux))))
+}
+
+type auditResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (writer *auditResponseWriter) WriteHeader(status int) {
+	if writer.status != 0 {
+		return
+	}
+	writer.status = status
+	writer.ResponseWriter.WriteHeader(status)
+}
+
+func (writer *auditResponseWriter) Write(value []byte) (int, error) {
+	if writer.status == 0 {
+		writer.status = http.StatusOK
+	}
+	return writer.ResponseWriter.Write(value)
+}
+
+func (a *App) auditMiddleware(next http.Handler) http.Handler {
+	if a.Audit == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") || r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+		started := time.Now()
+		actor := "anonymous"
+		if a.Security != nil && a.Security.RecoveryAuthenticated(r) {
+			actor = "recovery-key"
+		} else if a.Security != nil && a.Security.Authenticated(r) {
+			actor = a.Security.Username()
+		}
+		writer := &auditResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(writer, r)
+		status := writer.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		outcome := "ok"
+		if status == http.StatusUnauthorized || status == http.StatusForbidden {
+			outcome = "denied"
+		} else if status >= 400 {
+			outcome = "failed"
+		}
+		_ = a.Audit.Append(auditlog.Event{Action: r.Method, Path: boundedAuditPath(r.URL.Path), Outcome: outcome, StatusCode: status, Actor: actor, RemoteIP: requestRemoteIP(r), DurationMS: time.Since(started).Milliseconds()})
+	})
+}
+
+func boundedAuditPath(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 240 {
+		return value[:240]
+	}
+	return value
+}
+
+func requestRemoteIP(request *http.Request) string {
+	if request == nil {
+		return "local"
+	}
+	if address, err := netip.ParseAddrPort(request.RemoteAddr); err == nil {
+		return address.Addr().String()
+	}
+	if address, err := netip.ParseAddr(request.RemoteAddr); err == nil {
+		return address.String()
+	}
+	return "unknown"
+}
+
+func (a *App) auditSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Audit == nil {
+		http.Error(w, "audit journal disabled", http.StatusServiceUnavailable)
+		return
+	}
+	limit := 50
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 500 {
+			http.Error(w, "limit must be between 1 and 500", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+	writeJSON(w, http.StatusOK, a.Audit.Read(limit))
+}
+
+func noStoreUI(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The UI is embedded into the binary and versioned as one unit. Router
+		// browsers are commonly left open for days, so stale HTML must never keep
+		// referencing an older CSS/JS bundle after a transactional upgrade.
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		w.Header().Set("X-RAZVILKA-UI-Version", Version)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (a *App) updateStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Updates == nil {
+		http.Error(w, "application update checker is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	refresh, _ := strconv.ParseBool(r.URL.Query().Get("refresh"))
+	writeJSON(w, http.StatusOK, a.Updates.Check(r.Context(), refresh))
+}
+
+func (a *App) status(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	cfg := a.Store.Get()
+	enabled := 0
+	for _, st := range cfg.Services {
+		if st.Enabled {
+			enabled++
+		}
+	}
+	engines := engine.Visible((engine.Detector{}).All())
+	running, installed := 0, 0
+	for _, e := range engines {
+		if e.Installed {
+			installed++
+		}
+		if e.Running {
+			running++
+		}
+	}
+	readySources, sourceCount, sourceCatalogCount, sourceDownloadable, sourceReferences := 0, 0, 0, 0, 0
+	if a.Sources != nil {
+		ss := a.Sources.List()
+		sourceCatalogCount = len(ss)
+		for _, s := range ss {
+			if s.Kind == "reference" {
+				sourceReferences++
+				continue
+			}
+			sourceDownloadable++
+			if !s.AppliedEnabled {
+				continue
+			}
+			sourceCount++
+			if s.Ready {
+				readySources++
+			}
+		}
+	}
+	activeConnections := 0
+	if a.Telemetry != nil {
+		activeConnections, _ = a.Telemetry.Counts()
+	}
+	configDrafts := 0
+	if a.EngineConfigs != nil {
+		for _, ev := range a.EngineConfigs.List() {
+			for _, fv := range ev.Files {
+				if fv.Staged {
+					configDrafts++
+				}
+			}
+		}
+	}
+	dataplaneState := "never-applied"
+	dataplaneRecoveryState := "not-required"
+	dataplaneAdapters := 0
+	dataplaneError := ""
+	lastApplyFailure := ""
+	liveActive := false
+	nodeRecovery := a.nodeRecoverySnapshot()
+	if a.Dataplane != nil {
+		if runtime, err := a.Dataplane.Status(); err != nil {
+			// The public status endpoint deliberately exposes only a stable error
+			// category: journal errors can contain local filesystem paths.
+			dataplaneState = "journal-error"
+			dataplaneRecoveryState = "failed"
+			dataplaneError = "dataplane journal unavailable"
+		} else if runtime.Exists && runtime.Plan != nil {
+			latest := runtime.Plan
+			dataplaneState = latest.State
+			appliedPlan := runtime.CommittedPlan
+			if appliedPlan != nil {
+				dataplaneAdapters = len(appliedPlan.Adapters)
+			}
+			if appliedPlan != nil && runtime.Recovery != nil && runtime.Recovery.PlanID == appliedPlan.PlanID {
+				dataplaneRecoveryState = runtime.Recovery.State
+				liveActive = len(appliedPlan.Adapters) > 0 && runtime.Recovery.State == "recovered"
+			} else if appliedPlan != nil && runtime.Execution != nil && runtime.Execution.PlanID == appliedPlan.PlanID {
+				dataplaneRecoveryState = "current-process"
+				liveActive = len(appliedPlan.Adapters) > 0 && runtime.Execution.State == "committed"
+			}
+			if appliedPlan != nil && appliedPlan.RequiresNetworkProof() {
+				if systemprobe.DetectWANProfile().ID != appliedPlan.NetworkProfileID || nodeRecovery.PlanID == appliedPlan.PlanID && nodeRecovery.State != "idle" && nodeRecovery.State != "recovered" {
+					liveActive = false
+					dataplaneRecoveryState = "network-stale"
+				}
+			}
+			if latest.Revision == cfg.Revision && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && (runtime.Execution.State == "rolled-back" || runtime.Execution.State == "canary-failed") {
+				lastApplyFailure = classifyApplyExecutionFailure(runtime.Execution.Error, runtime.Execution.State).Code
+			}
+		}
+	}
+	evidenceCounts := map[string]int{}
+	highestEvidence := evidence.None
+	for _, proof := range a.serviceEvidenceSnapshot(cfg, a.catalogSnapshot().Services) {
+		evidenceCounts[string(proof.Level)]++
+		highestEvidence = evidence.Stronger(highestEvidence, proof.Level)
+	}
+	dnsPending := a.DNS != nil && a.DNS.Dirty()
+	sourcesPending := a.Sources != nil && a.Sources.Dirty()
+	build := CurrentBuildInfo()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "safe_mode": cfg.SafeMode,
+		"build_commit": build.Commit, "build_time": build.BuiltAt, "build_dirty": build.Dirty, "build_dirty_known": build.DirtyKnown,
+		"auth_required": a.Security != nil, "authenticated": a.Security != nil && a.Security.Authenticated(r),
+		"setup_required": a.Security != nil && a.Security.SetupRequired(), "username": securityUsername(a.Security),
+		"uptime_seconds": int(time.Since(a.Start).Seconds()), "listen": effectiveListen(a.EffectiveListen, cfg.Listen),
+		"enabled_services": enabled, "catalog_services": len(a.catalogSnapshot().Services),
+		"engines_installed": installed, "engines_running": running,
+		"sources_ready": readySources, "sources_total": sourceCount, "sources_catalog_total": sourceCatalogCount,
+		"sources_downloadable": sourceDownloadable, "sources_reference": sourceReferences,
+		"active_connections": activeConnections, "engine_config_drafts": configDrafts,
+		"routing_pending_changes":  a.Store.Dirty(),
+		"services_pending_changes": a.Store.DirtyScope(config.DraftScopeServices),
+		"devices_pending_changes":  a.Store.DirtyScope(config.DraftScopeDevices),
+		"dns_pending_changes":      dnsPending,
+		"sources_pending_changes":  sourcesPending,
+		"engine_pending_changes":   configDrafts > 0,
+		"dataplane_state":          dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
+		"last_apply_failure":     lastApplyFailure,
+		"node_recovery":          nodeRecovery,
+		"highest_evidence_level": highestEvidence, "evidence_counts": evidenceCounts,
+		"pending_changes": a.Store.Dirty() || configDrafts > 0 || dnsPending || sourcesPending, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
+	})
+}
+
+func (a *App) authStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"authenticated": a.Security != nil && a.Security.Authenticated(r), "using_recovery_key": a.Security != nil && a.Security.RecoveryAuthenticated(r), "setup_required": a.Security != nil && a.Security.SetupRequired(), "username": securityUsername(a.Security)})
+}
+
+func (a *App) authSetup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Security == nil {
+		http.Error(w, "authentication is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var in struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	session, err := a.Security.Setup(in.Username, in.Password, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	security.SetSessionCookie(w, r, session)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "username": strings.TrimSpace(in.Username)})
+}
+
+func (a *App) authLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Security == nil {
+		http.Error(w, "authentication is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var in struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	session, err := a.Security.Login(in.Username, in.Password, r)
+	if err != nil {
+		if errors.Is(err, security.ErrLoginRateLimited) {
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "too many login attempts; try again later", http.StatusTooManyRequests)
+			return
+		}
+		http.Error(w, "invalid username or password", http.StatusUnauthorized)
+		return
+	}
+	security.SetSessionCookie(w, r, session)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "username": strings.TrimSpace(in.Username)})
+}
+
+func (a *App) authPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Security == nil {
+		http.Error(w, "authentication is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var in struct {
+		Current  string `json:"current_password"`
+		Password string `json:"new_password"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	session, err := a.Security.ChangePassword(in.Current, in.Password, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	security.SetSessionCookie(w, r, session)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "all_previous_sessions_revoked": true})
+}
+
+func (a *App) authRecover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Security == nil {
+		http.Error(w, "authentication is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var in struct {
+		Username string `json:"username"`
+		Password string `json:"new_password"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	session, err := a.Security.RecoverPassword(in.Username, in.Password, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	security.SetSessionCookie(w, r, session)
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "username": strings.TrimSpace(in.Username), "all_previous_sessions_revoked": true})
+}
+
+func (a *App) authRecoveryKeyRotate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Security == nil {
+		http.Error(w, "authentication is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var in struct {
+		Current string `json:"current_password"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	token, err := a.Security.RotateRecoveryToken(in.Current)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "recovery_key": token, "recovery_url": fmt.Sprintf("%s://%s/#recovery=%s", scheme, r.Host, token), "shown_once": true})
+}
+
+func (a *App) authSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Security == nil {
+		http.Error(w, "authentication is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": a.Security.Sessions(r)})
+}
+
+func (a *App) authSessionAction(w http.ResponseWriter, r *http.Request) {
+	if a.Security == nil {
+		http.Error(w, "authentication is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	action := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/auth/sessions/"), "/")
+	if action == "revoke-others" {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": a.Security.RevokeOtherSessions(r)})
+		return
+	}
+	if r.Method != http.MethodDelete || action == "" {
+		methodNotAllowed(w)
+		return
+	}
+	if !a.Security.RevokeSession(action) {
+		http.Error(w, "unknown session", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": action})
+}
+
+func (a *App) authLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Security != nil {
+		a.Security.Logout(r)
+	}
+	security.ClearSessionCookie(w, r)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func securityUsername(gate *security.Gate) string {
+	if gate == nil {
+		return ""
+	}
+	return gate.Username()
+}
+
+func (a *App) engines(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, engine.Visible((engine.Detector{}).All()))
+}
+
+func (a *App) engineLabReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.EngineLab == nil {
+		http.Error(w, "engine lab disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.EngineLab.Inspect())
+}
+
+func (a *App) strategyLabSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.StrategyLab == nil {
+		http.Error(w, "Strategy Lab disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.StrategyLab.Snapshot())
+}
+
+func (a *App) strategyLabCandidates(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.StrategyLab == nil {
+		http.Error(w, "Strategy Lab disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		PoolID    string `json:"pool_id"`
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	candidate, err := a.StrategyLab.AddCandidate(input.PoolID, input.Name, input.Arguments, "expert")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, candidate)
+}
+
+func (a *App) strategyLabCandidateAction(w http.ResponseWriter, r *http.Request) {
+	if a.StrategyLab == nil {
+		http.Error(w, "Strategy Lab disabled", http.StatusServiceUnavailable)
+		return
+	}
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/strategy-lab/candidates/"), "/")
+	if r.Method == http.MethodDelete && path != "" && !strings.Contains(path, "/") {
+		if err := a.StrategyLab.DeleteCandidate(path); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "candidate_id": path, "draft_only": true})
+		return
+	}
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	id, action, ok := strings.Cut(path, "/")
+	if !ok || id == "" || action != "validate" && action != "probe" {
+		http.NotFound(w, r)
+		return
+	}
+	if action == "probe" {
+		var input struct {
+			ServiceID string `json:"service_id"`
+			IPFamily  string `json:"ip_family"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&input); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		var service catalog.Service
+		found := false
+		for _, candidate := range a.catalogSnapshot().Services {
+			if candidate.ID == input.ServiceID {
+				service, found = candidate, true
+				break
+			}
+		}
+		if !found || strings.TrimSpace(service.ProbeURL) == "" {
+			http.Error(w, "service is unknown or has no probe URL", http.StatusBadRequest)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 18*time.Second)
+		defer cancel()
+		evidence, err := a.StrategyLab.Probe(ctx, id, strategylab.ProbeTarget{ServiceID: service.ID, ProbeURL: service.ProbeURL, IPFamily: input.IPFamily})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		writeJSON(w, http.StatusOK, evidence)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	candidate, err := a.StrategyLab.Validate(ctx, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, candidate)
+}
+
+func (a *App) strategyLabSelections(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.StrategyLab == nil {
+		http.Error(w, "Strategy Lab disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		Action      string `json:"action"`
+		ServiceID   string `json:"service_id"`
+		Protocol    string `json:"protocol"`
+		IPFamily    string `json:"ip_family"`
+		CandidateID string `json:"candidate_id"`
+		Frozen      bool   `json:"frozen"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if input.Action == "reset" {
+		if err := a.StrategyLab.ResetSelection(input.ServiceID, input.Protocol, input.IPFamily); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "action": "reset"})
+		return
+	}
+	selection, err := a.StrategyLab.Select(input.ServiceID, input.Protocol, input.IPFamily, input.CandidateID, input.Frozen)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	writeJSON(w, http.StatusOK, selection)
+}
+
+func (a *App) z2kMigrationPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	preview, err := (z2kimport.Scanner{Root: a.Z2KRoot}).Scan()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (a *App) z2kMigrationImportStrategies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.StrategyLab == nil {
+		http.Error(w, "Strategy Lab disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		Confirm string `json:"confirm"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if input.Confirm != "IMPORT_Z2K_STRATEGIES" {
+		http.Error(w, "explicit z2k strategy import confirmation is required", http.StatusBadRequest)
+		return
+	}
+	preview, err := (z2kimport.Scanner{Root: a.Z2KRoot}).Scan()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !preview.Found {
+		http.Error(w, "z2k is not installed at the configured read-only path", http.StatusNotFound)
+		return
+	}
+	inputs := make([]strategylab.CandidateInput, 0, len(preview.Strategies))
+	skipped := make([]map[string]any, 0)
+	for _, strategy := range preview.Strategies {
+		if !strategy.Compatible {
+			skipped = append(skipped, map[string]any{"source": strategy.Source, "issues": strategy.Issues})
+			continue
+		}
+		origin := "z2k:" + strings.TrimSpace(preview.Version) + ":" + strategy.Source
+		inputs = append(inputs, strategylab.CandidateInput{PoolID: strategy.PoolID, Name: strategy.Name, Arguments: strategy.Arguments, Origin: origin})
+	}
+	if len(inputs) == 0 {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "z2k has no compatible strategy files", "skipped": skipped, "warnings": preview.Warnings})
+		return
+	}
+	imported, err := a.StrategyLab.AddCandidates(inputs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"ok": true, "draft_only": true, "live_config_changed": false,
+		"imported": imported, "skipped": skipped, "warnings": preview.Warnings,
+		"not_imported": map[string]any{
+			"extra_domains": len(preview.ExtraDomains), "auto_domains": len(preview.AutoDomains),
+			"exclude_domains": len(preview.ExcludeDomains), "exclude_cidrs": len(preview.ExcludeCIDRs), "warp_cidrs": len(preview.WarpCIDRs), "state_rows": preview.StateRows,
+		},
+		"note": "Импортированы только совместимые стратегии-кандидаты. Каждая всё ещё требует нативный NFQWS2 --dry-run и изолированные повторные тесты.",
+	})
+}
+
+func (a *App) componentList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Components == nil {
+		http.Error(w, "component manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
+	defer cancel()
+	views, err := a.Components.List(ctx, r.URL.Query().Get("refresh") == "true")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	runtimes := engine.Detector{}.Inventory()
+	for i := range views {
+		for _, runtime := range runtimes {
+			if views[i].ID != runtime.ID {
+				continue
+			}
+			views[i].Configured = runtime.Configured
+			views[i].Running = runtime.Running
+			views[i].ExternalOwner = runtime.External
+			if runtime.External && runtime.Installed {
+				views[i].Installed = true
+				views[i].State = "external-installed"
+				if runtime.Running {
+					views[i].State = "external-active"
+				}
+			}
+			break
+		}
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
+func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
+	if a.Components == nil {
+		http.Error(w, "component manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/components/"), "/")
+	id, action, ok := strings.Cut(path, "/")
+	if !ok || id == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if action == "plan" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		requested := strings.TrimSpace(r.URL.Query().Get("action"))
+		if requested == "" {
+			requested = "install"
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
+		defer cancel()
+		plan, err := a.Components.Plan(ctx, id, requested, r.URL.Query().Get("refresh") == "true")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		a.enrichComponentPlan(&plan)
+		writeJSON(w, http.StatusOK, plan)
+		return
+	}
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if action != "install" && action != "update" && action != "remove" {
+		http.NotFound(w, r)
+		return
+	}
+	planContext, cancelPlan := context.WithTimeout(r.Context(), 100*time.Second)
+	plan, planErr := a.Components.Plan(planContext, id, action, false)
+	cancelPlan()
+	if planErr != nil {
+		http.Error(w, planErr.Error(), http.StatusBadRequest)
+		return
+	}
+	a.enrichComponentPlan(&plan)
+	if !plan.Ready {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error": "component lifecycle plan is blocked",
+			"code":  "LIFECYCLE_PLAN_BLOCKED",
+			"plan":  plan,
+		})
+		return
+	}
+	if blocker := a.componentRuntimeBlocker(id, action); blocker != nil {
+		writeJSON(w, http.StatusConflict, blocker)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
+	defer cancel()
+	_ = a.Components.RecordOperation(id, action, "running", "Операция запущена; итоговая проверка ещё не завершена")
+	var result components.Result
+	var err error
+	if action == "remove" {
+		result, err = a.Components.Remove(ctx, id)
+	} else {
+		result, err = a.Components.Apply(ctx, id)
+	}
+	if err != nil {
+		_ = a.Components.RecordOperation(id, action, "failed", err.Error())
+		if result.Output != "" {
+			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "output": result.Output})
+		} else {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+		}
+		return
+	}
+	_ = a.Components.RecordOperation(id, action, "succeeded", "Фактическое состояние компонента повторно проверено")
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) enrichComponentPlan(plan *components.Plan) {
+	if plan == nil {
+		return
+	}
+	for _, runtime := range (engine.Detector{}).Inventory() {
+		if runtime.ID != plan.Component {
+			continue
+		}
+		if runtime.Running && (plan.Action == "update" || plan.Action == "remove") {
+			plan.AddBlocker("RUNTIME_ACTIVE", "Обход сейчас активен", "Перенесите зависимые сервисы на другой маршрут, примените изменения и повторите операцию.")
+		}
+		if runtime.External {
+			plan.AddBlocker("EXTERNAL_OWNER", "Обход и его сетевые ресурсы управляются внешним проектом", "Используйте мастер миграции ownership.")
+		}
+		break
+	}
+	if plan.Action == "remove" {
+		desired, applied := a.componentServiceReferences(plan.Component)
+		if len(desired) > 0 || len(applied) > 0 {
+			message := "Компонент используется маршрутами сервисов"
+			if len(applied) > 0 {
+				message += ": " + strings.Join(applied, ", ")
+			} else {
+				message += ": " + strings.Join(desired, ", ")
+			}
+			plan.AddBlocker("SERVICE_DEPENDENCY", message, "Переключите сервисы на другой обход и выполните общий Apply.")
+		}
+	}
+}
+
+func (a *App) componentRuntimeBlocker(id, action string) map[string]any {
+	for _, runtime := range (engine.Detector{}).Inventory() {
+		if runtime.ID != id {
+			continue
+		}
+		if runtime.External {
+			return map[string]any{"error": "component is managed by an external owner; use migration", "component": id, "code": "EXTERNAL_OWNER"}
+		}
+		if runtime.Running && (action == "update" || action == "remove" || action == "install") {
+			return map[string]any{"error": "component runtime is active; move its services to another route and Apply first", "component": id, "running": true, "code": "RUNTIME_ACTIVE"}
+		}
+		break
+	}
+	if action == "remove" {
+		desired, applied := a.componentServiceReferences(id)
+		if len(desired) > 0 || len(applied) > 0 {
+			return map[string]any{"error": "component is referenced by service routes; move them and Apply first", "component": id, "code": "SERVICE_DEPENDENCY", "desired_services": desired, "applied_services": applied}
+		}
+	}
+	return nil
+}
+
+func (a *App) componentServiceReferences(component string) (desired, applied []string) {
+	if a.Store == nil {
+		return nil, nil
+	}
+	cfg := a.Store.Get()
+	for id, state := range cfg.Services {
+		if state.Enabled && routeUsesComponent(state.Route, component) {
+			desired = append(desired, id)
+		}
+	}
+	for id, state := range cfg.AppliedServices {
+		if state.Enabled && routeUsesComponent(state.Route, component) {
+			applied = append(applied, id)
+		}
+	}
+	sort.Strings(desired)
+	sort.Strings(applied)
+	return desired, applied
+}
+
+func routeUsesComponent(route, component string) bool {
+	route = strings.ToLower(strings.TrimSpace(route))
+	component = strings.ToLower(strings.TrimSpace(component))
+	if route == component || strings.HasPrefix(route, component+":") {
+		return true
+	}
+	return component == "usque" && (route == "warp" || route == "warp-masque")
+}
+
+func (a *App) warpStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Warp == nil {
+		http.Error(w, "WARP manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, a.Warp.Status(ctx))
+}
+
+func (a *App) usqueDiagnostic(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.USQUE == nil {
+		http.Error(w, "USQUE diagnostics disabled", http.StatusServiceUnavailable)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, a.USQUE.Check(ctx))
+}
+
+func (a *App) usqueDNSCandidate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.USQUE == nil || a.DNS == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "USQUE_DNS_CANDIDATE_DISABLED", "error": "Изолированная проверка DNS для USQUE недоступна; настройки не изменены."})
+		return
+	}
+	var input struct {
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": "INVALID_JSON", "error": "Некорректный запрос; настройки не изменены."})
+		return
+	}
+	host, err := a.USQUE.RegistrationHost()
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": "USQUE_REGISTRATION_ENDPOINT_INVALID", "error": "Адрес регистрации USQUE не прошёл безопасную проверку; настройки не изменены."})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	result, err := a.DNS.ResolveCandidate(ctx, input.ProfileID, host)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": "USQUE_DNS_CANDIDATE_REJECTED", "error": err.Error(), "draft_preserved": true})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) usqueRepair(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.USQUE == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "USQUE_DIAGNOSTICS_DISABLED", "error": "Диагностика USQUE недоступна; ничего не изменено."})
+		return
+	}
+	var input struct {
+		Confirm string `json:"confirm"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": "INVALID_JSON", "error": "Некорректный запрос; ничего не изменено."})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	result, err := a.USQUE.RepairNDMC(ctx, input.Confirm)
+	if err == nil {
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	status := http.StatusServiceUnavailable
+	code := "USQUE_REPAIR_RECOVERY_REQUIRED"
+	message := "Ремонт не завершён. Изменения приостановлены до безопасного восстановления журнала."
+	switch {
+	case errors.Is(err, usquediag.ErrRepairConfirmation):
+		status, code, message = http.StatusPreconditionRequired, "USQUE_REPAIR_CONFIRMATION_REQUIRED", "Явно подтвердите безопасный ремонт USQUE; ничего не изменено."
+	case errors.Is(err, usquediag.ErrRepairBlocked):
+		status, code, message = http.StatusConflict, "USQUE_REPAIR_BLOCKED", "Точечный ремонт заблокирован: init-скрипт неоднозначен или не прошёл безопасную проверку. Ничего не изменено."
+	}
+	writeJSON(w, status, map[string]any{"ok": false, "code": code, "error": message, "result": result})
+}
+
+func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
+	if a.Warp == nil {
+		http.Error(w, "WARP manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	action := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/warp/"), "/")
+	switch action {
+	case "generate":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		var in struct {
+			AcceptTOS bool `json:"accept_tos"`
+			Fresh     bool `json:"fresh"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+		defer cancel()
+		result, err := a.Warp.Generate(ctx, in.AcceptTOS, in.Fresh)
+		if err != nil {
+			if errors.Is(err, warp.ErrEnrollmentPending) {
+				writeJSON(w, http.StatusConflict, map[string]any{
+					"error": "Регистрация WARP не завершена однозначно. Новый запрос регистрации не отправляется.",
+					"code":  "WARP_REGISTRATION_PENDING", "retryable": false,
+					"hint": "Сохранённый ответ Cloudflare можно восстановить локально кнопкой создания профиля. Если ответа нет, требуется разбор незавершённой регистрации; рабочий профиль сохранён.",
+				})
+				return
+			}
+			if errors.Is(err, warp.ErrEnrollmentStore) || errors.Is(err, warp.ErrLegacyGeneratorRequired) {
+				code, message := "WARP_ENROLLMENT_STORE_INVALID", "Локальные данные регистрации WARP требуют проверки. Новая регистрация не отправлена."
+				if errors.Is(err, warp.ErrLegacyGeneratorRequired) {
+					code, message = "WARP_LEGACY_GENERATOR_REQUIRED", "Для существующего аккаунта wgcf установите его генератор либо явно выберите создание нового аккаунта встроенным генератором. Старый аккаунт сохранён."
+				}
+				writeJSON(w, http.StatusConflict, map[string]any{"error": message, "code": code, "retryable": false})
+				return
+			}
+			if errors.Is(err, warp.ErrTermsAcceptanceRequired) {
+				http.Error(w, err.Error(), http.StatusPreconditionRequired)
+				return
+			}
+			if errors.Is(err, warp.ErrRegistrationEndpointUnavailable) {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"error": "Cloudflare не ответил на регистрацию WARP после трёх попыток.",
+					"code":  "WARP_REGISTRATION_UNAVAILABLE", "retryable": true,
+					"hint": "Проверьте доступ к api.cloudflareclient.com через текущий обход, повторите позже или загрузите готовый WireGuard/WARP-профиль.",
+				})
+				return
+			}
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	case "import":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		var in struct {
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 300<<10)).Decode(&in); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		result, err := a.Warp.Import(in.Content)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	case "check":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		result, err := a.Warp.CheckCandidate()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	case "canary":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		if a.Dataplane == nil || !a.Dataplane.CanaryCapable("warp-wg") {
+			http.Error(w, "WARP isolated canary is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var in struct {
+			ServiceID string `json:"service_id"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		if in.ServiceID == "" {
+			in.ServiceID = "telegram"
+		}
+		var service catalog.Service
+		for _, candidate := range a.catalogSnapshot().Services {
+			if candidate.ID == in.ServiceID {
+				service = candidate
+				break
+			}
+		}
+		if service.ID == "" {
+			http.Error(w, "unknown service", http.StatusNotFound)
+			return
+		}
+		probeURL := service.ProbeURL
+		if probeURL == "" {
+			for _, probe := range service.Probes {
+				if probe.Required && probe.URL != "" {
+					probeURL = probe.URL
+					break
+				}
+			}
+		}
+		if probeURL == "" {
+			http.Error(w, "service has no catalog-owned probe", http.StatusConflict)
+			return
+		}
+		plan := dataplane.Plan{
+			SchemaVersion: dataplane.SchemaVersion,
+			PlanID:        fmt.Sprintf("warp-canary-%d", time.Now().UnixNano()),
+			EngineDrafts:  []string{"warp-wg/main"},
+			Adapters:      []string{"warp-wg"},
+			Routes: []dataplane.Route{{
+				ServiceID: service.ID, ServiceName: service.Name, Selected: "warp-wg", Resolved: "warp-wg",
+				Domains: append([]string(nil), service.Domains...), CIDRs: append([]string(nil), service.CIDRs...),
+				SourceRefs: append([]string(nil), service.SourceRefs...), ProbeURL: probeURL,
+			}},
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 110*time.Second)
+		defer cancel()
+		started := time.Now()
+		if err := a.Dataplane.ProbeCandidate(ctx, plan, "warp-wg"); err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]any{
+				"ok": false, "service_id": service.ID, "service_name": service.Name,
+				"error": err.Error(), "duration_ms": time.Since(started).Milliseconds(),
+				"note": "Временный WARP-интерфейс и его правила удалены. Рабочие маршруты не менялись.",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "service_id": service.ID, "service_name": service.Name,
+			"duration_ms": time.Since(started).Milliseconds(),
+			"message":     "Handshake WARP, Cloudflare trace и выбранный сервис подтверждены через временный интерфейс.",
+			"note":        "Проверка завершена; временный интерфейс удалён. Рабочие маршруты не менялись.",
+		})
+	case "connectivity":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		defer cancel()
+		writeJSON(w, http.StatusOK, a.Warp.CheckConnectivity(ctx))
+	case "profile":
+		if r.Method != http.MethodDelete {
+			methodNotAllowed(w)
+			return
+		}
+		result, err := a.Warp.DeleteProfile(a.Store.Get().SafeMode)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	case "health/policy":
+		if r.Method != http.MethodPut {
+			methodNotAllowed(w)
+			return
+		}
+		var policy warp.HealthPolicy
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&policy); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		status, err := a.Warp.UpdateHealthPolicy(policy)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	case "health/check":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		if a.TestLab == nil || a.RouteProber == nil {
+			http.Error(w, "isolated route probe disabled", http.StatusServiceUnavailable)
+			return
+		}
+		cfg := a.Store.Get()
+		ids := []string{}
+		for id, service := range cfg.AppliedServices {
+			if service.Enabled && selectedRoute(service) == "warp-wg" {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			http.Error(w, "no applied services are assigned to WARP WireGuard", http.StatusConflict)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+		defer cancel()
+		results, profile, probeErr := a.probeRoutesInCurrentNetwork(ctx, a.catalogSnapshot(), ids, []string{"warp-wg"})
+		if probeErr != nil {
+			http.Error(w, "Сеть изменилась или не определена. Повторите проверку.", http.StatusConflict)
+			return
+		}
+		aggregated := testlab.AggregateScenarios(results)
+		if a.SmartRoute != nil {
+			_, _ = a.SmartRoute.ObserveForProfile(profile, aggregated)
+		}
+		evidence := make([]warp.HealthEvidence, 0, len(aggregated))
+		for _, result := range aggregated {
+			evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel()})
+		}
+		decision, err := a.processWarpHealth(ctx, evidence)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"results": results, "health": decision,
+			"note": "Счётчик политики WARP изменяется только при подтверждённой привязке запроса к интерфейсу WARP и маршруту ядра.",
+		})
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (a *App) processWarpHealth(ctx context.Context, evidence []warp.HealthEvidence) (warp.HealthDecision, error) {
+	if a.Store != nil {
+		c := a.Store.Get().ServiceControl
+		if c.Stopped || c.EffectiveMode() == "manual" {
+			status := a.Warp.Health()
+			status.Eligible, status.Reason = false, "global-manual-or-stopped"
+			return warp.HealthDecision{HealthStatus: status}, nil
+		}
+	}
+	decision, err := a.Warp.ObserveHealth(evidence)
+	if err != nil || !decision.ShouldGenerate {
+		return decision, err
+	}
+	if _, err := a.Warp.Generate(ctx, decision.Policy.AcceptTOS, true); err != nil {
+		return decision, fmt.Errorf("automatic WARP candidate generation: %w", err)
+	}
+	decision.ShouldGenerate = false
+	decision.Reason = "fresh-candidate-staged-awaiting-transactional-apply"
+	if !decision.Policy.AutoApplyCandidate {
+		return decision, nil
+	}
+	cfg := a.Store.Get()
+	if cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || ctx.Err() != nil {
+		decision.Reason = "fresh-candidate-staged-global-control-blocked-auto-apply"
+		return decision, ctx.Err()
+	}
+	if cfg.SafeMode {
+		decision.Reason = "fresh-candidate-staged-safe-mode-blocked-auto-apply"
+		return decision, nil
+	}
+	if a.Store.Dirty() {
+		decision.Reason = "fresh-candidate-staged-route-draft-blocked-auto-apply"
+		return decision, nil
+	}
+	if other := a.stagedEngineFilesExcept("warp-wg", "main"); len(other) > 0 {
+		decision.Reason = "fresh-candidate-staged-other-engine-drafts-blocked-auto-apply"
+		return decision, nil
+	}
+	if a.Dataplane == nil {
+		decision.Reason = "fresh-candidate-staged-dataplane-unavailable"
+		return decision, nil
+	}
+	transaction, err := a.buildDataplanePlan(cfg, a.routeOptionsSnapshot())
+	if err != nil {
+		_ = a.Warp.RecordActivation(false, err.Error())
+		return decision, fmt.Errorf("build automatic WARP transaction: %w", err)
+	}
+	if !transaction.Ready || transaction.Noop {
+		decision.Reason = "fresh-candidate-staged-transaction-blocked"
+		return decision, nil
+	}
+	binding, err := a.bindApplyReview(ctx, cfg, transaction, changeScopeEngine, "warp-wg")
+	if err != nil {
+		return decision, err
+	}
+	ctx = dataplane.WithReviewGuard(ctx, func(ctx context.Context) error { return binding.guard(a, ctx) })
+	execution, err := a.Dataplane.Apply(ctx, transaction, nil)
+	if err != nil {
+		_ = a.Warp.RecordActivation(false, err.Error())
+		return decision, fmt.Errorf("automatic WARP transactional apply (%s): %w", execution.State, err)
+	}
+	if err := a.Warp.RecordActivation(true, ""); err != nil {
+		return decision, fmt.Errorf("record automatic WARP activation: %w", err)
+	}
+	decision.Reason = "fresh-profile-activated"
+	return decision, nil
+}
+
+func (a *App) stagedEngineFilesExcept(engineID, fileID string) []string {
+	if a.EngineConfigs == nil {
+		return nil
+	}
+	var out []string
+	for _, engine := range a.EngineConfigs.List() {
+		for _, file := range engine.Files {
+			if file.Staged && (engine.ID != engineID || file.ID != fileID) {
+				out = append(out, engine.ID+"/"+file.ID)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// StartBackground runs guarded route diagnostics, DNS policy refresh, WARP
+// recovery and AUTO-route reconciliation. Every automatic activation uses the
+// normal transactional dataplane with canaries, health checks and rollback.
+func (a *App) StartBackground(ctx context.Context) {
+	go func() {
+		timer := time.NewTimer(2 * time.Minute)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		round := 0
+		for {
+			round++
+			a.backgroundRound(ctx, round)
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+}
+
+func (a *App) backgroundWarpHealth(parent context.Context) {
+	if a.Store != nil {
+		c := a.Store.Get().ServiceControl
+		if c.Stopped || c.EffectiveMode() == "manual" {
+			return
+		}
+	}
+	if a.Warp == nil || a.TestLab == nil || a.RouteProber == nil || !a.Warp.Health().Policy.Enabled {
+		return
+	}
+	cfg := a.Store.Get()
+	ids := make([]string, 0, 12)
+	for id, service := range cfg.AppliedServices {
+		if service.Enabled && selectedRoute(service) == "warp-wg" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) == 0 {
+		return
+	}
+	if len(ids) > 12 {
+		ids = ids[:12]
+	}
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
+	defer cancel()
+	results, profile, probeErr := a.probeRoutesInCurrentNetwork(ctx, a.catalogSnapshot(), ids, []string{"warp-wg"})
+	if probeErr != nil {
+		return
+	}
+	aggregated := testlab.AggregateScenarios(results)
+	if a.SmartRoute != nil {
+		_, _ = a.SmartRoute.ObserveForProfile(profile, aggregated)
+	}
+	evidence := make([]warp.HealthEvidence, 0, len(aggregated))
+	for _, result := range aggregated {
+		evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel()})
+	}
+	_, _ = a.processWarpHealth(ctx, evidence)
+}
+
+func (a *App) backgroundSmartRoute(parent context.Context) bool {
+	if a.Store != nil {
+		c := a.Store.Get().ServiceControl
+		if c.Stopped || c.EffectiveMode() == "manual" {
+			return false
+		}
+	}
+	// Generic cross-engine selection has not acquired the new service policy
+	// capability contract. The managed loop uses guarded fallback groups only.
+	if a.managedReconcilerActive() {
+		return false
+	}
+	if a.SmartRoute == nil || a.TestLab == nil || a.RouteProber == nil {
+		return false
+	}
+	cfg := a.Store.Get()
+	options := a.routeOptionsSnapshot()
+	checked := 0
+	actionable := false
+	for _, service := range a.catalogSnapshot().Services {
+		state := cfg.AppliedServices[service.ID]
+		if !state.Enabled || selectedRoute(state) != "auto" {
+			continue
+		}
+		current := a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+		routes := isolatedCandidates(service.Strategy, current)
+		if len(routes) == 0 {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(parent, 45*time.Second)
+		results, profile, probeErr := a.probeRoutesInCurrentNetwork(ctx, catalog.Catalog{Services: []catalog.Service{service}}, []string{service.ID}, routes)
+		cancel()
+		if probeErr != nil {
+			return actionable
+		}
+		decisions, _ := a.SmartRoute.ObserveForProfile(profile, testlab.AggregateScenarios(results))
+		for _, decision := range decisions {
+			// Reconcile an already persisted selection too. A previous process may
+			// have saved the decision and restarted before activating it.
+			actionable = actionable || decision.Selected != ""
+		}
+		checked++
+		if checked >= 4 || parent.Err() != nil {
+			return actionable
+		}
+	}
+	return actionable
+}
+
+// backgroundAutopilotApply activates a new Smart Route decision only for a
+// clean, already-applied AUTO configuration. It never consumes UI drafts,
+// installs components, changes DNS, or bypasses the normal transactional
+// canary/health/rollback protocol.
+func (a *App) backgroundAutopilotApply(parent context.Context) {
+	if a.Store != nil {
+		c := a.Store.Get().ServiceControl
+		if c.Stopped || c.EffectiveMode() == "manual" {
+			return
+		}
+	}
+	if a.managedReconcilerActive() {
+		return
+	}
+	if a.Dataplane == nil || a.Store == nil || a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 {
+		return
+	}
+	cfg := a.Store.Get()
+	if cfg.SafeMode {
+		return
+	}
+	if a.Sources != nil {
+		var enabledServices []string
+		for id, selection := range cfg.AppliedServices {
+			if selection.Enabled {
+				enabledServices = append(enabledServices, id)
+			}
+		}
+		if !a.Sources.AutomaticUseReady(enabledServices) {
+			return
+		}
+	}
+	live := configForChangeScope(cfg, changeScopeEngine)
+	plan, err := a.buildDataplanePlanForScope(live, a.routeOptionsSnapshot(), changeScopeDevices, "")
+	if err != nil || plan.Noop || !plan.Ready {
+		return
+	}
+	committed, exists, err := a.Dataplane.Committed()
+	if err != nil || !exists || committed.State != "committed" {
+		return
+	}
+	if !autopilotTargetsUnchanged(committed.Routes, plan.Routes) {
+		return
+	}
+	previous := make(map[string]string, len(committed.Routes))
+	for _, route := range committed.Routes {
+		previous[route.ServiceID] = route.Resolved
+	}
+	changed := false
+	for _, route := range plan.Routes {
+		if previous[route.ServiceID] == route.Resolved {
+			continue
+		}
+		// Explicit routes always remain manual. Only a service whose applied
+		// selector is AUTO may be moved by the autopilot.
+		if selectedRoute(cfg.AppliedServices[route.ServiceID]) != "auto" {
+			return
+		}
+		changed = true
+	}
+	if !changed {
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
+	defer cancel()
+	_, _ = a.Dataplane.Apply(ctx, plan, nil)
+}
+
+// Changing a route is not permission to change its destination/device scope.
+// A refreshed source may propose addresses, but only a reviewed manual Apply
+// may adopt that diff. Background failover retains the committed target set.
+func autopilotTargetsUnchanged(previous, next []dataplane.Route) bool {
+	if len(previous) != len(next) {
+		return false
+	}
+	old := make(map[string]dataplane.Route, len(previous))
+	for _, route := range previous {
+		old[route.ServiceID] = route
+	}
+	for _, route := range next {
+		before, ok := old[route.ServiceID]
+		if !ok || !sameStringSet(before.Domains, route.Domains) || !sameStringSet(before.CIDRs, route.CIDRs) || !sameStringSet(before.Sources, route.Sources) || !sameStringSet(before.SourceRefs, route.SourceRefs) || before.ProbeURL != route.ProbeURL {
+			return false
+		}
+		delete(old, route.ServiceID)
+	}
+	return len(old) == 0
+}
+
+func isolatedCandidates(strategy []string, current string) []string {
+	// NFQWS2 uses a serialized, destination/source-port scoped temporary chain;
+	// only its exact per-request counter is accepted as Smart Route evidence.
+	supported := map[string]bool{"direct": true, "nfqws2": true, "usque": true, "warp-wg": true, "sing-box": true, "xray": true, "amneziawg": true}
+	routes := make([]string, 0, 3)
+	seen := map[string]bool{}
+	add := func(route string) {
+		if supported[route] && !seen[route] && len(routes) < 3 {
+			routes = append(routes, route)
+			seen[route] = true
+		}
+	}
+	// Test the route in use first, retain DIRECT as a control, then try only
+	// one alternative. This keeps the router load bounded while still allowing
+	// confirmed failover.
+	add(current)
+	add("direct")
+	baseline := len(routes)
+	for _, route := range strategy {
+		add(route)
+		if len(routes) > baseline {
+			break
+		}
+	}
+	return routes
+}
+
+func (a *App) engineConfigs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.EngineConfigs == nil {
+		http.Error(w, "engine config manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.EngineConfigs.List())
+}
+
+func (a *App) engineConfigAction(w http.ResponseWriter, r *http.Request) {
+	if a.EngineConfigs == nil {
+		http.Error(w, "engine config manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/engine-configs/"), "/")
+	engineID, action, ok := strings.Cut(path, "/")
+	if !ok || engineID == "" || action == "" {
+		http.NotFound(w, r)
+		return
+	}
+	fileID := r.URL.Query().Get("file")
+	if fileID == "" {
+		fileID = "main"
+	}
+	switch action {
+	case "file":
+		switch r.Method {
+		case http.MethodGet:
+			var content engineconfig.Content
+			var err error
+			if r.URL.Query().Get("expert") == "true" {
+				if a.Security == nil || !a.Security.Authenticated(r) {
+					http.Error(w, "authentication required to reveal expert config", http.StatusUnauthorized)
+					return
+				}
+				content, err = a.EngineConfigs.ReadExpert(engineID, fileID)
+			} else {
+				content, err = a.EngineConfigs.Read(engineID, fileID)
+			}
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			writeJSON(w, http.StatusOK, content)
+		case http.MethodPut:
+			var in struct {
+				Content string `json:"content"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&in); err != nil {
+				http.Error(w, "invalid json", http.StatusBadRequest)
+				return
+			}
+			content, err := a.EngineConfigs.Stage(engineID, fileID, in.Content)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, http.StatusOK, content)
+		default:
+			methodNotAllowed(w)
+		}
+	case "guided":
+		switch r.Method {
+		case http.MethodGet:
+			view, err := a.EngineConfigs.Guided(engineID, fileID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, http.StatusOK, view)
+		case http.MethodPut:
+			var in struct {
+				Values map[string]string `json:"values"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256<<10)).Decode(&in); err != nil {
+				http.Error(w, "invalid json", http.StatusBadRequest)
+				return
+			}
+			content, err := a.EngineConfigs.StageGuided(engineID, fileID, in.Values)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, http.StatusOK, content)
+		default:
+			methodNotAllowed(w)
+		}
+	case "validate":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		v := a.EngineConfigs.Validate(engineID, fileID)
+		writeJSON(w, http.StatusOK, v)
+	case "discard":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		if err := a.EngineConfigs.Discard(engineID, fileID); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "engine_id": engineID, "file_id": fileID})
+	case "apply":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"ok":              false,
+			"error":           "Отдельное применение конфигурации отключено: используйте общий транзакционный Apply.",
+			"resolution":      "Назначьте включённый сервис этому обходу, проверьте план и нажмите «Применить» в верхней панели.",
+			"engine_id":       engineID,
+			"file_id":         fileID,
+			"pending_changes": true,
+		})
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (a *App) providerProfilePreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	input, ok := decodeProviderProfileRequest(w, r)
+	if !ok {
+		return
+	}
+	result, err := providerprofile.ParseProfile(input.Profile)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "preview": result.Preview, "draft_preserved": true})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "draft_only": true, "preview": result.Preview,
+		"note": "Ключи и пароли не показываются. Предпросмотр ничего не сохраняет; исходный пакет нормализуется в безопасный конфиг RAZVILKA.",
+	})
+}
+
+func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.EngineConfigs == nil {
+		http.Error(w, "engine config manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	input, ok := decodeProviderProfileRequest(w, r)
+	if !ok {
+		return
+	}
+	if input.Confirm != "IMPORT_REMOTE_PROFILE" {
+		http.Error(w, "явно подтвердите импорт удалённого профиля", http.StatusPreconditionRequired)
+		return
+	}
+	result, err := providerprofile.ParseProfileWithSelection(input.Profile, input.SelectedIndex)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "preview": result.Preview, "draft_preserved": true})
+		return
+	}
+	if len(result.Preview.Rejected) > 0 && !input.AcceptPartial {
+		writeJSON(w, http.StatusPreconditionRequired, map[string]any{
+			"ok": false, "code": "PARTIAL_IMPORT_CONFIRMATION_REQUIRED", "draft_preserved": true,
+			"error": "Часть записей отклонена. Проверьте список и создайте черновик только из принятых узлов.", "preview": result.Preview,
+		})
+		return
+	}
+	validation := engineconfig.ValidatePrivateContent("sing-box", "main", string(result.Config))
+	if !validation.OK {
+		http.Error(w, validation.Output, http.StatusBadRequest)
+		return
+	}
+	draft, err := a.EngineConfigs.Stage("sing-box", "main", string(result.Config))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	native := a.EngineConfigs.Validate("sing-box", "main")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": native.OK, "draft_only": true, "preview": result.Preview,
+		"draft": draft, "validation": native,
+		"note": "Пакет узлов сохранён только в черновик Sing-box. Назначьте сервис, проверьте план и выполните общий Apply.",
+	})
+}
+
+type providerProfileRequest struct {
+	URI           string `json:"uri"`
+	Profile       string `json:"profile"`
+	Confirm       string `json:"confirm"`
+	SelectedIndex int    `json:"selected_index"`
+	AcceptPartial bool   `json:"accept_partial"`
+}
+
+func decodeProviderProfileRequest(w http.ResponseWriter, r *http.Request) (providerProfileRequest, bool) {
+	var input providerProfileRequest
+	reader := http.MaxBytesReader(w, r.Body, 2*providerprofile.MaxProfileBytes+(8<<10))
+	decoder := json.NewDecoder(reader)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "некорректный запрос профиля", http.StatusBadRequest)
+		return providerProfileRequest{}, false
+	}
+	profile := input.Profile
+	if profile == "" {
+		profile = input.URI
+	}
+	input.Profile = profile
+	return input, true
+}
+
+func (a *App) testLabSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.TestLab == nil {
+		http.Error(w, "test lab disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.TestLab.Snapshot(a.catalogSnapshot()))
+}
+
+func (a *App) testLabCurrent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.TestLab == nil {
+		http.Error(w, "test lab disabled", http.StatusServiceUnavailable)
+		return
+	}
+	ids, err := testlab.DecodeRunRequest(r.Body)
+	if err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	results := a.TestLab.ProbeCurrent(ctx, a.catalogSnapshot(), ids)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mode": "current-routing", "safe_mode": a.Store.Get().SafeMode, "results": results,
+		"note": "This probe measures the currently applied routing and is not route-confirmed. Use the isolated route comparison for Smart Route and WARP policy evidence.",
+	})
+}
+
+func (a *App) testLabRoutes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.TestLab == nil || a.RouteProber == nil {
+		http.Error(w, "isolated route probe disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var in struct {
+		Services []string `json:"services"`
+		Routes   []string `json:"routes"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if len(in.Services) == 0 || len(in.Services) > 12 || len(in.Routes) == 0 || len(in.Routes) > 8 {
+		http.Error(w, "select 1..12 services and 1..8 routes", http.StatusBadRequest)
+		return
+	}
+	services := make([]string, 0, len(in.Services))
+	seenServices := map[string]bool{}
+	for _, id := range in.Services {
+		if !a.hasService(id) {
+			http.Error(w, "unknown service: "+id, http.StatusBadRequest)
+			return
+		}
+		if !seenServices[id] {
+			seenServices[id] = true
+			services = append(services, id)
+		}
+	}
+	knownRoutes := map[string]bool{}
+	for _, option := range a.routeOptionsSnapshot() {
+		if option.ID != "auto" {
+			knownRoutes[option.ID] = true
+		}
+	}
+	routes := make([]string, 0, len(in.Routes))
+	seenRoutes := map[string]bool{}
+	for _, route := range in.Routes {
+		if !knownRoutes[route] {
+			http.Error(w, "unknown route: "+route, http.StatusBadRequest)
+			return
+		}
+		if !seenRoutes[route] {
+			seenRoutes[route] = true
+			routes = append(routes, route)
+		}
+	}
+	controlAdded := false
+	if !seenRoutes["direct"] {
+		for _, route := range routes {
+			if route != "direct" {
+				routes = append([]string{"direct"}, routes...)
+				controlAdded = true
+				break
+			}
+		}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	results, profile, probeErr := a.probeRoutesInCurrentNetwork(ctx, a.catalogSnapshot(), services, routes)
+	if probeErr != nil {
+		http.Error(w, "Сеть изменилась или не определена. Повторите проверку.", http.StatusConflict)
+		return
+	}
+	aggregated := testlab.AggregateScenarios(results)
+	assessments := testlab.AssessComparisons(results)
+	decisions := []smartroute.Decision{}
+	if a.SmartRoute != nil {
+		var err error
+		decisions, err = a.SmartRoute.ObserveForProfile(profile, aggregated)
+		if err != nil {
+			http.Error(w, "save Smart Route evidence: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mode": "isolated-route", "safe_mode": a.Store.Get().SafeMode, "results": results, "summary": aggregated, "decisions": decisions, "assessments": assessments, "control_added": controlAdded,
+		"note": "Изолированная проверка не меняет DNS или маршрут по умолчанию. DIRECT добавляется как контроль: только его подтверждённый отказ доказывает необходимость обхода. Для NFQWS2 создаётся временная цепочка только для одного destination/source-port и удаляется после теста; остальные обходы подтверждаются явным SOCKS-транспортом либо привязкой сокета к интерфейсу.",
+	})
+}
+
+func (a *App) smartRouteStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.SmartRoute == nil {
+		http.Error(w, "Smart Route disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.SmartRoute.Snapshot())
+}
+
+func (a *App) dnsStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsPlan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.dnsPlanSnapshot())
+}
+
+func (a *App) dnsPlanSnapshot() dnscontrol.Plan {
+	listener := ""
+	if a.EngineLab != nil {
+		for _, conflict := range a.EngineLab.Inspect().ApplyConflicts([]string{"dns-control"}) {
+			if conflict.Kind == "dns" {
+				listener = conflict.SystemUse
+				break
+			}
+		}
+	}
+	return a.DNS.Plan(listener)
+}
+
+func (a *App) dnsDraft(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if err := a.DNS.SetDraft(input.ProfileID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsServiceDraft(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		ServiceID string `json:"service_id"`
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	found := false
+	for _, service := range a.catalogSnapshot().Services {
+		if service.ID == input.ServiceID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, "unknown service", http.StatusBadRequest)
+		return
+	}
+	if err := a.DNS.SetServiceDraft(input.ServiceID, input.ProfileID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsNextDNS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if err := a.DNS.SetNextDNSProfileID(input.ProfileID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsCustom(w http.ResponseWriter, r *http.Request) {
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		var input dnscontrol.CustomProviderInput
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		if err := a.DNS.SetCustomProvider(input); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	case http.MethodDelete:
+		if err := a.DNS.ClearCustomProvider(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	default:
+		methodNotAllowed(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var input struct {
+		ProfileID string `json:"profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	results, err := a.DNS.Probe(r.Context(), input.ProfileID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "profile_id": input.ProfileID, "results": results, "note": "Проверка отдельно обращается к заявленным UDP, TCP, DoH и DoT endpoint. Она не меняет DNS роутера; DoH/DoT могут использовать системный DNS только для bootstrap имени провайдера и не доказывают отсутствие утечки LAN-клиентов."})
+}
+
+func (a *App) dnsDiscard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if err := a.DNS.Discard(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+}
+
+func (a *App) dnsApply(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.DNS == nil {
+		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
+		return
+	}
+	plan := a.dnsPlanSnapshot()
+	if !plan.Ready {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"ok": false, "code": "DNS_LIVE_ADAPTER_UNAVAILABLE", "draft_preserved": true,
+			"error": "DNS live apply is blocked", "resolution": plan.Recommendation, "plan": plan,
+		})
+		return
+	}
+	if err := a.DNS.Apply(); err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"ok": false, "code": "DNS_LIVE_ADAPTER_UNAVAILABLE", "draft_preserved": true,
+			"error": err.Error(), "resolution": "Оставьте профиль черновиком и используйте проверку до появления платформенного DNS-адаптера.", "plan": plan,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "live_applied": false, "network_changed": false,
+		"note": "Системный DNS подтверждён без изменения настроек роутера.", "plan": plan, "dns": a.DNS.Snapshot(),
+	})
+}
+
+func (a *App) routeOptions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.routeOptionsSnapshot())
+}
+
+func (a *App) services(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	cfg := a.Store.Get()
+	services := a.catalogSnapshot().Services
+	options := a.routeOptionsSnapshot()
+	inventory := a.engineInventorySnapshot()
+	observedEvidence := a.serviceEvidenceSnapshotWithInventory(cfg, services, inventory)
+	effectiveAppliedRoutes := a.appliedEffectiveRoutes(cfg)
+	strategies := a.nfqws2StrategySnapshot()
+	views := make([]serviceView, 0, len(services))
+	for _, s := range services {
+		st := cfg.Services[s.ID]
+		applied := cfg.AppliedServices[s.ID]
+		selected := selectedRoute(st)
+		planned := selected
+		if selected == "auto" {
+			planned = a.resolveAutoWithOptions(s, cfg.EngineOrder, options)
+		}
+		appliedRoute := selectedRoute(applied)
+		appliedEffectiveRoute := effectiveAppliedRoutes[s.ID]
+		if appliedEffectiveRoute == "" {
+			appliedEffectiveRoute = appliedRoute
+		}
+		routeDirty := st.Enabled != applied.Enabled || selected != appliedRoute
+		sourcesDirty := !stringSlicesEqual(st.Sources, applied.Sources)
+		dirty := routeDirty || sourcesDirty
+		routeAvailable := routecatalog.ValidForServiceWithOptions(selected, s.ID, options)
+		routeIssue := ""
+		if !routeAvailable {
+			routeIssue = "Выбранный обход больше не доступен. Установите его или выберите AUTO / DIRECT."
+		}
+		custom := a.CustomServices != nil && a.CustomServices.Has(s.ID)
+		proof := observedEvidence[s.ID]
+		plannedSource := "forced-route"
+		if selected == "auto" {
+			plannedSource = "autopilot"
+		}
+		plannedStale := dirty && (st.Enabled != applied.Enabled || planned != appliedEffectiveRoute)
+		desiredState := serviceRouteStateView{Enabled: st.Enabled, Route: selected, Source: "user-intent"}
+		plannedState := serviceRouteStateView{Enabled: st.Enabled, Route: planned, Source: plannedSource, RecommendationOnly: !st.Enabled, Stale: plannedStale}
+		appliedState := serviceRouteStateView{Enabled: applied.Enabled, Route: appliedEffectiveRoute, Source: "committed"}
+		observedState := serviceObservedStateView{Route: proof.Route, Level: proof.Level, Status: proof.Status, Source: proof.Source, CheckedAt: proof.CheckedAt, Outcome: proof.Outcome, ProbeID: proof.ProbeID, FreshUntil: proof.FreshUntil}
+		nfqws2 := nfqws2Presentation(s.ID, selected, planned, st.Enabled, appliedEffectiveRoute, applied.Enabled, proof, inventory, strategies, dirty)
+		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil, DesiredState: desiredState, PlannedState: plannedState, AppliedState: appliedState, ObservedState: observedState, NFQWS2: nfqws2})
+	}
+	sort.Slice(views, func(i, j int) bool {
+		if views[i].Category == views[j].Category {
+			return views[i].Name < views[j].Name
+		}
+		return views[i].Category < views[j].Category
+	})
+	writeJSON(w, http.StatusOK, views)
+}
+
+type devicePolicyView struct {
+	ServiceID   string `json:"service_id"`
+	ServiceName string `json:"service_name"`
+	Route       string `json:"route"`
+	Scope       string `json:"scope"`
+}
+
+type deviceView struct {
+	devices.Device
+	Policies []devicePolicyView `json:"policies"`
+}
+
+func (a *App) deviceList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Devices == nil {
+		writeDeviceList(w, r, []deviceView{}, nil)
+		return
+	}
+	catalogByID := map[string]catalog.Service{}
+	for _, service := range a.catalogSnapshot().Services {
+		catalogByID[service.ID] = service
+	}
+	cfg := a.Store.Get()
+	discovered, saveErr := a.Devices.ListWithStatus(r.Context())
+	views := make([]deviceView, 0, len(discovered))
+	for _, device := range discovered {
+		view := deviceView{Device: device, Policies: []devicePolicyView{}}
+		for serviceID, state := range cfg.Services {
+			if !state.Enabled {
+				continue
+			}
+			scope := "all-devices"
+			if len(state.Sources) > 0 {
+				if !deviceMatchesSources(device.IPs, state.Sources) {
+					continue
+				}
+				scope = "selected-device"
+			}
+			service := catalogByID[serviceID]
+			name := service.Name
+			if name == "" {
+				name = serviceID
+			}
+			view.Policies = append(view.Policies, devicePolicyView{ServiceID: serviceID, ServiceName: name, Route: selectedRoute(state), Scope: scope})
+		}
+		sort.Slice(view.Policies, func(i, j int) bool { return view.Policies[i].ServiceName < view.Policies[j].ServiceName })
+		views = append(views, view)
+	}
+	writeDeviceList(w, r, views, saveErr)
+}
+
+// Keep the original array contract for API clients. The panel opts into an
+// envelope so a discovery-save failure is visible even for an empty registry.
+func writeDeviceList(w http.ResponseWriter, r *http.Request, views []deviceView, saveErr error) {
+	if r.URL.Query().Get("view") != "status" {
+		writeJSON(w, http.StatusOK, views)
+		return
+	}
+	warning := ""
+	if saveErr != nil {
+		warning = "Сохранение списка устройств не подтверждено. Новые данные, если они есть, показаны временно. Если предупреждение повторяется, проверьте хранилище и восстановление настроек."
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"devices": views, "persistence_warning": warning})
+}
+
+func (a *App) deviceItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Devices == nil {
+		http.Error(w, "device manager disabled", http.StatusServiceUnavailable)
+		return
+	}
+	id, err := url.PathUnescape(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/devices/"), "/"))
+	if err != nil || id == "" {
+		http.Error(w, "invalid device id", http.StatusBadRequest)
+		return
+	}
+	var input struct {
+		Name  string `json:"name"`
+		Group string `json:"group"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	device, err := a.Devices.Update(id, input.Name, input.Group)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, device)
+}
+
+func deviceMatchesSources(ips, sources []string) bool {
+	for _, rawIP := range ips {
+		address, err := netip.ParseAddr(rawIP)
+		if err != nil {
+			continue
+		}
+		address = address.Unmap()
+		for _, rawSource := range sources {
+			if source, err := netip.ParseAddr(rawSource); err == nil && source.Unmap() == address {
+				return true
+			}
+			if prefix, err := netip.ParsePrefix(rawSource); err == nil && prefix.Contains(address) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (a *App) service(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/services/")
+	if id == "" || !a.hasService(id) {
+		http.Error(w, "unknown service", http.StatusNotFound)
+		return
+	}
+	var in config.ServiceState
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	selected := in.Route
+	if selected == "" {
+		selected = in.Mode
+	}
+	if selected == "" {
+		selected = "auto"
+	}
+	if !routecatalog.ValidForServiceWithOptions(selected, id, a.routeOptionsSnapshot()) {
+		current := a.Store.Get().Services[id]
+		// A component can disappear after a route was saved. The user must still
+		// be able to disable that service without first reinstalling the missing
+		// component. Re-enabling or creating a new unavailable assignment remains
+		// blocked and receives a user-facing recovery action.
+		if in.Enabled || selected != selectedRoute(current) {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok": false, "code": "ROUTE_UNAVAILABLE", "route": selected,
+				"error":      "выбранный обход недоступен",
+				"resolution": "Установите этот обход либо выберите AUTO или DIRECT. Выключить сервис можно без переустановки обхода.",
+			})
+			return
+		}
+	}
+	in.Route = selected
+	in.Mode = selected
+	normalizedSources, err := config.NormalizeSources(in.Sources)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	in.Sources = normalizedSources
+	if err := a.Store.UpdateService(id, in); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	warning := ""
+	if !in.Enabled && a.autonomyManaged(r.Context(), id) {
+		if _, err := a.requestAutonomyRemoval(r.Context(), id, false); err != nil {
+			warning = "Не удалось поставить снятие маршрута в очередь. Изменён только черновик."
+		}
+	} else if in.Enabled && selected == "auto" {
+		if err := a.inheritAutonomyService(r.Context(), id); err != nil {
+			warning = "Сервис сохранён, но наследование автоматики не подтверждено."
+		}
+	}
+	a.wakeReconciler()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id, "state": in, "autonomy_warning": warning})
+}
+
+func (a *App) customServiceList(w http.ResponseWriter, r *http.Request) {
+	if a.CustomServices == nil {
+		http.Error(w, "custom services disabled", http.StatusServiceUnavailable)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, a.CustomServices.List())
+	case http.MethodPost:
+		var service catalog.Service
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 512<<10)).Decode(&service); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		reserved := make(map[string]bool, len(a.Catalog.Services))
+		for _, builtIn := range a.Catalog.Services {
+			reserved[builtIn.ID] = true
+		}
+		created, err := a.CustomServices.Create(service, reserved)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := a.inheritAutonomyService(r.Context(), created.ID); err != nil {
+			w.Header().Set("X-RAZVILKA-Autonomy-Warning", "enrollment-not-confirmed")
+		}
+		a.wakeReconciler()
+		writeJSON(w, http.StatusCreated, created)
+	default:
+		methodNotAllowed(w)
+	}
+}
+
+func (a *App) customServiceItem(w http.ResponseWriter, r *http.Request) {
+	if a.CustomServices == nil {
+		http.Error(w, "custom services disabled", http.StatusServiceUnavailable)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/custom-services/"), "/")
+	if id == "" || !a.CustomServices.Has(id) {
+		http.Error(w, "unknown custom service", http.StatusNotFound)
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		var service catalog.Service
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 512<<10)).Decode(&service); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		updated, err := a.CustomServices.Update(id, service)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+	case http.MethodDelete:
+		if a.autonomyManaged(r.Context(), id) {
+			_, err := a.requestAutonomyRemoval(r.Context(), id, true)
+			if err != nil {
+				writeJSON(w, 503, map[string]any{"error": "Запрос удаления не сохранён."})
+				return
+			}
+			a.wakeReconciler()
+			writeJSON(w, 202, map[string]any{"ok": true, "id": id, "pending": true, "live_applied": false})
+			return
+		}
+		if err := a.CustomServices.Delete(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := a.Store.DeleteService(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
+	default:
+		methodNotAllowed(w)
+	}
+}
+
+func (a *App) communityServices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Community == nil {
+		http.Error(w, "community catalog disabled", http.StatusServiceUnavailable)
+		return
+	}
+	imported := func(id string) bool { return a.CustomServices != nil && a.CustomServices.Has(id) }
+	writeJSON(w, http.StatusOK, a.Community.Search(r.URL.Query().Get("q"), imported))
+}
+
+func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
+	if a.Community == nil || a.CustomServices == nil {
+		http.Error(w, "community or custom service catalog disabled", http.StatusServiceUnavailable)
+		return
+	}
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/community/services/"), "/")
+	id, action, ok := strings.Cut(path, "/")
+	if !ok || id == "" {
+		http.NotFound(w, r)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+	switch action {
+	case "preview":
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		preview, err := a.Community.Preview(ctx, id, a.catalogSnapshot().Services, r.URL.Query().Get("refresh") == "true")
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				http.Error(w, "unknown community service", http.StatusNotFound)
+			} else {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, preview)
+	case "import":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		var in struct {
+			AllowConflicts bool `json:"allow_conflicts"`
+			Refresh        bool `json:"refresh"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		preview, err := a.Community.Preview(ctx, id, a.catalogSnapshot().Services, in.Refresh)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		if len(preview.Conflicts) > 0 && !in.AllowConflicts {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "community service conflicts with existing rules", "conflicts": preview.Conflicts})
+			return
+		}
+		reserved := make(map[string]bool, len(a.Catalog.Services))
+		for _, builtIn := range a.Catalog.Services {
+			reserved[builtIn.ID] = true
+		}
+		customID := "custom-" + preview.Service.ID
+		var saved catalog.Service
+		created := !a.CustomServices.Has(customID)
+		if created {
+			saved, err = a.CustomServices.Create(preview.Service, reserved)
+		} else {
+			saved, err = a.CustomServices.Update(customID, preview.Service)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		status := http.StatusOK
+		if created {
+			status = http.StatusCreated
+		}
+		writeJSON(w, status, map[string]any{"service": saved, "provenance": saved.Provenance, "updated": !created, "conflicts_accepted": in.AllowConflicts && len(preview.Conflicts) > 0})
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func selectedRoute(st config.ServiceState) string {
+	if st.Route != "" {
+		return st.Route
+	}
+	if st.Mode != "" {
+		return st.Mode
+	}
+	return "auto"
+}
+
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	a := append([]string(nil), left...)
+	b := append([]string(nil), right...)
+	sort.Strings(a)
+	sort.Strings(b)
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (a *App) changeSummary(cfg config.Config, scope changeScope, transaction dataplane.Plan) applyChangeSummary {
+	servicesIncluded := scope == changeScopeAll || scope == changeScopeRouting || scope == changeScopeServices
+	devicesIncluded := scope == changeScopeAll || scope == changeScopeRouting || scope == changeScopeDevices
+	names := map[string]string{}
+	for _, service := range a.catalogSnapshot().Services {
+		names[service.ID] = service.Name
+	}
+	keys := map[string]bool{}
+	for id := range cfg.Services {
+		keys[id] = true
+	}
+	for id := range cfg.AppliedServices {
+		keys[id] = true
+	}
+	ids := make([]string, 0, len(keys))
+	for id := range keys {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	allServices := make([]applyServiceChange, 0)
+	allDevices := make([]applyDeviceChange, 0)
+	for _, id := range ids {
+		desired := cfg.Services[id]
+		applied := cfg.AppliedServices[id]
+		name := names[id]
+		if name == "" {
+			name = id
+		}
+		desiredRoute := selectedRoute(desired)
+		appliedRoute := selectedRoute(applied)
+		if desired.Enabled != applied.Enabled || desiredRoute != appliedRoute {
+			allServices = append(allServices, applyServiceChange{ID: id, Name: name, BeforeEnabled: applied.Enabled, AfterEnabled: desired.Enabled, BeforeRoute: appliedRoute, AfterRoute: desiredRoute})
+		}
+		if !sameStringSet(desired.Sources, applied.Sources) {
+			allDevices = append(allDevices, applyDeviceChange{ID: id, Name: name, BeforeCount: len(applied.Sources), AfterCount: len(desired.Sources)})
+		}
+	}
+	summary := applyChangeSummary{
+		Scope:         scope,
+		EngineDrafts:  append([]string(nil), transaction.EngineDrafts...),
+		NetworkChange: !transaction.Noop,
+		WorkingChange: !cfg.SafeMode && !transaction.Noop && transaction.Ready,
+		Verification:  "Проверка конфигурации, изолированный canary доступных обходов и контрольный запрос сервиса.",
+		Rollback:      "Перед изменением создаётся снимок; при ошибке проверки рабочее состояние восстанавливается автоматически.",
+	}
+	if transaction.Noop {
+		summary.Verification = "Сетевые правила не меняются; подтверждается только сохранение выбранного состояния."
+		summary.Rollback = "Откат сети не требуется, потому что сетевых изменений нет."
+	} else if cfg.SafeMode {
+		summary.Verification = "Безопасный режим проверит план, но не изменит рабочую сеть."
+		summary.Rollback = "Рабочая сеть не меняется; черновик останется до явного рабочего применения."
+	} else if !transaction.Ready {
+		summary.Verification = "Применение заблокировано, пока не устранены перечисленные причины."
+		summary.Rollback = "Изменения не начнутся, поэтому откат не потребуется."
+	}
+	if servicesIncluded {
+		summary.Services = allServices
+		if len(allServices) > 0 {
+			summary.Included = append(summary.Included, applyChangeArea{ID: "services", Label: "Маршруты сервисов", Count: len(allServices)})
+		}
+	} else if len(allServices) > 0 {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "services", Label: "Маршруты сервисов", Count: len(allServices)})
+	}
+	if devicesIncluded {
+		summary.Devices = allDevices
+		if len(allDevices) > 0 {
+			summary.Included = append(summary.Included, applyChangeArea{ID: "devices", Label: "Области устройств", Count: len(allDevices)})
+		}
+	} else if len(allDevices) > 0 {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "devices", Label: "Области устройств", Count: len(allDevices)})
+	}
+	if len(transaction.EngineDrafts) > 0 {
+		summary.Included = append(summary.Included, applyChangeArea{ID: "engines", Label: "Конфигурации обходов", Count: len(transaction.EngineDrafts)})
+	}
+	includedDrafts := map[string]bool{}
+	for _, ref := range transaction.EngineDrafts {
+		includedDrafts[ref] = true
+	}
+	deferredEngines := 0
+	for _, ref := range a.stagedEngineConfigRefs() {
+		if !includedDrafts[ref] {
+			deferredEngines++
+		}
+	}
+	if deferredEngines > 0 {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "engines", Label: "Другие конфигурации обходов", Count: deferredEngines})
+	}
+	if a.DNS != nil && a.DNS.Dirty() {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "dns", Label: "DNS", Count: 1})
+	}
+	if a.Sources != nil && a.Sources.Dirty() {
+		summary.Deferred = append(summary.Deferred, applyChangeArea{ID: "sources", Label: "Источники данных", Count: 1})
+	}
+	if len(summary.Deferred) > 0 {
+		summary.IndependentNotice = "Отложенные изменения останутся черновиками и не будут применены или отменены этой операцией."
+	}
+	return summary
+}
+
+func effectiveListen(actual, configured string) string {
+	if actual != "" {
+		return actual
+	}
+	return configured
+}
+
+func (a *App) plan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	scope, engineID, scopeErr := changeScopeFromRequest(r)
+	if scopeErr != nil {
+		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
+		return
+	}
+	cfg := a.Store.Get()
+	options := a.routeOptionsSnapshot()
+	var rows []map[string]any
+	for _, s := range a.catalogSnapshot().Services {
+		st := cfg.Services[s.ID]
+		if !st.Enabled {
+			continue
+		}
+		selected := selectedRoute(st)
+		resolved := selected
+		if selected == "auto" {
+			resolved = a.resolveAutoWithOptions(s, cfg.EngineOrder, options)
+		}
+		rows = append(rows, map[string]any{
+			"service": s.Name, "id": s.ID, "selected_route": selected, "engine": resolved,
+			"domains": len(s.Domains), "cidrs": len(s.CIDRs), "source_refs": s.SourceRefs,
+		})
+	}
+	transaction, err := a.buildDataplanePlanForScope(cfg, options, scope, engineID)
+	if err != nil {
+		if errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
+			http.Error(w, "Сеть изменилась или не определена. Повторите проверку узла и откройте новый план.", http.StatusConflict)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// A freshly built plan describes current intent. Reuse observed evidence
+	// only when it is byte-for-byte the same input (digest + revision) as the
+	// last committed plan. Drafts and newly selected routes therefore always
+	// start unproven, while the UI can still show proof for the active plan.
+	review, err := a.bindApplyReview(r.Context(), cfg, transaction, scope, engineID)
+	if err != nil {
+		writeApplyReviewChanged(w)
+		return
+	}
+	if a.Dataplane != nil {
+		if committed, exists, committedErr := a.Dataplane.Committed(); committedErr == nil && exists && committed.State == "committed" && committed.Digest == transaction.Digest && committed.Revision == transaction.Revision {
+			transaction.State = committed.State
+			transaction.ObservedEvidence = committed.ObservedEvidence
+			transaction.EvidenceNote = committed.EvidenceNote
+			transaction.RouteEvidence = append([]dataplane.RouteEvidence(nil), committed.RouteEvidence...)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"safe_mode":      cfg.SafeMode,
+		"scope":          scope,
+		"note":           "Development build: page-scoped drafts, explicit unavailable routes and persistent component-install verification. Safe Mode remains the default.",
+		"routes":         rows,
+		"transaction":    transaction,
+		"review":         review.review,
+		"change_summary": a.changeSummary(cfg, scope, transaction),
+	})
+}
+
+func (a *App) dataplaneStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Dataplane == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"exists": false, "state": "not-configured"})
+		return
+	}
+	status, err := a.Dataplane.Status()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (a *App) apply(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	scope, engineID, scopeErr := changeScopeFromRequest(r)
+	if scopeErr != nil {
+		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
+		return
+	}
+	reviewRequest, validReviewRequest := decodeApplyReview(w, r)
+	if !validReviewRequest {
+		return
+	}
+	if scope == changeScopeAll && !a.Store.Dirty() && len(a.stagedEngineConfigRefs()) == 0 {
+		dnsPending := a.DNS != nil && a.DNS.Dirty()
+		sourcesPending := a.Sources != nil && a.Sources.Dirty()
+		if dnsPending || sourcesPending {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok": false, "code": "CONTEXTUAL_APPLY_REQUIRED", "pending_changes": true,
+				"dns_pending_changes": dnsPending, "sources_pending_changes": sourcesPending,
+				"error":      "Независимые черновики применяются на своих вкладках.",
+				"resolution": "Откройте DNS или Источники и используйте кнопку подтверждения в этой вкладке.",
+			})
+			return
+		}
+	}
+	cfg := a.Store.Get()
+	transaction, err := a.buildDataplanePlanForScope(cfg, a.routeOptionsSnapshot(), scope, engineID)
+	if err != nil {
+		if reviewRequest.Revision != nil {
+			writeApplyReviewChanged(w)
+			return
+		}
+		if errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
+			http.Error(w, "Сеть изменилась или не определена. Повторите проверку узла и откройте новый план.", http.StatusConflict)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var review *applyReviewBinding
+	if reviewRequest.Revision != nil {
+		review, err = a.bindApplyReview(r.Context(), cfg, transaction, scope, engineID)
+		if err != nil || review.review.Revision != *reviewRequest.Revision || review.review.Digest != reviewRequest.Digest {
+			writeApplyReviewChanged(w)
+			return
+		}
+	}
+	record := func() bool {
+		if review != nil && review.guard(a, r.Context()) != nil {
+			writeApplyReviewChanged(w)
+			return false
+		}
+		if a.Dataplane == nil {
+			return true
+		}
+		if err := a.Dataplane.Record(transaction); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return false
+		}
+		return true
+	}
+	// A direct-only plan is an honest no-op and can be committed in Safe Mode.
+	// Any non-direct plan is only reviewed there and remains dirty until a live
+	// transaction has activated and verified every adapter.
+	if cfg.SafeMode && !transaction.Noop {
+		transaction.State = "reviewed"
+		transaction.Note = "План проверен в Safe Mode. Желаемое состояние сохранено, но live-маршруты не изменены."
+		if !record() {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "reviewed": true, "safe_mode": true, "scope": scope, "pending_changes": true, "scope_pending_changes": true, "live_applied": false,
+			"note": transaction.Note, "transaction": transaction,
+		})
+		return
+	}
+	if !cfg.SafeMode && !transaction.Ready {
+		if !record() {
+			return
+		}
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"ok": false, "safe_mode": false, "scope": scope, "pending_changes": true, "scope_pending_changes": true, "live_applied": false,
+			"error": "dataplane transaction is blocked", "transaction": transaction,
+		})
+		return
+	}
+	if !cfg.SafeMode && !transaction.Noop {
+		if a.Dataplane == nil {
+			http.Error(w, "dataplane runtime is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		applyContext, cancelApply := context.WithTimeout(r.Context(), defaultDataplaneApplyTimeout)
+		defer cancelApply()
+		if review != nil {
+			applyContext = dataplane.WithReviewGuard(applyContext, func(ctx context.Context) error { return review.guard(a, ctx) })
+		}
+		var commit func() (func() error, error)
+		switch scope {
+		case changeScopeServices:
+			commit = func() (func() error, error) { return a.Store.ApplyDraftScopeWithRollback(config.DraftScopeServices) }
+		case changeScopeDevices:
+			commit = func() (func() error, error) { return a.Store.ApplyDraftScopeWithRollback(config.DraftScopeDevices) }
+		case changeScopeEngine:
+			commit = nil
+		default:
+			commit = a.Store.ApplyDraftWithRollback
+		}
+		if review != nil && scope != changeScopeEngine {
+			commit = func() (func() error, error) { return review.commit(a, applyContext, scope) }
+		}
+		execution, applyErr := a.Dataplane.Apply(applyContext, transaction, commit)
+		if applyErr != nil {
+			failure := classifyApplyExecutionFailure(applyErr.Error(), execution.State)
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok": false, "safe_mode": false, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "live_applied": false,
+				"error": applyErr.Error(), "note": failure.Message, "failure": failure, "transaction": transaction, "execution": execution,
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "safe_mode": false, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "live_applied": true,
+			"note": "Dataplane activated, health-checked and committed.", "transaction": transaction, "execution": execution,
+		})
+		return
+	}
+	var applyErr error
+	if review != nil && scope != changeScopeEngine {
+		_, applyErr = review.commit(a, r.Context(), scope)
+	} else {
+		switch scope {
+		case changeScopeServices:
+			_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeServices)
+		case changeScopeDevices:
+			_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeDevices)
+		case changeScopeEngine:
+			// Engine drafts are committed by their adapter. A no-op engine plan has
+			// no configuration authority to claim here.
+		default:
+			applyErr = a.Store.ApplyDraft()
+		}
+	}
+	if applyErr != nil {
+		if errors.Is(applyErr, dataplane.ErrReviewChanged) {
+			writeApplyReviewChanged(w)
+			return
+		}
+		http.Error(w, applyErr.Error(), http.StatusInternalServerError)
+		return
+	}
+	cfg = a.Store.Get()
+	note := "Желаемое состояние подтверждено: все выбранные маршруты direct, изменение dataplane не требовалось."
+	liveApplied := transaction.Noop
+	transaction.State = "committed"
+	transaction.Note = note
+	if !record() {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "safe_mode": cfg.SafeMode, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "live_applied": liveApplied, "note": note, "transaction": transaction})
+}
+
+func classifyApplyFailure(message string) applyFailureAdvice {
+	advice := applyFailureAdvice{
+		Code: "DATAPLANE_APPLY_FAILED", Title: "Изменения не применены",
+		Message:        "Проверка нового маршрута не прошла. Рабочая конфигурация автоматически восстановлена, а черновик сохранён.",
+		Resolution:     "Откройте технические детали, исправьте причину и повторите применение либо отмените черновик.",
+		DraftPreserved: true, Retryable: true,
+	}
+	lower := strings.ToLower(message)
+	if strings.Contains(lower, "warp wireguard handshake was not confirmed") || strings.Contains(lower, "warp handshake was not confirmed") {
+		advice.Code = "WARP_WIREGUARD_HANDSHAKE"
+		advice.Title = "WARP WireGuard не подключился"
+		advice.Message = "Cloudflare не подтвердил WireGuard-handshake. RAZVILKA проверила настроенный и резервные UDP-порты, затем безопасно вернула прежний интернет; черновик сохранён."
+		advice.Resolution = "Если повтор не помогает, используйте WARP · MASQUE либо импортируйте отдельный AmneziaWG/VLESS-профиль. Профиль WARP нельзя преобразовать в AmneziaWG без совместимого сервера."
+		advice.Alternatives = []string{"usque", "amneziawg", "sing-box"}
+	} else if strings.Contains(lower, "usque probe") ||
+		(strings.Contains(lower, "usque") && strings.Contains(lower, "candidate") && strings.Contains(lower, "probe")) ||
+		(strings.Contains(lower, "masque") && strings.Contains(lower, "timeout")) {
+		advice.Code = "WARP_MASQUE_SERVICE_TIMEOUT"
+		advice.Title = "USQUE запущен, но туннель не подтвердил сервис"
+		advice.Message = "Процесс и TUN-интерфейс могут оставаться запущенными даже после потери рабочего WARP-канала. Точная проверка выбранного сервиса через изолированный туннель не прошла; RAZVILKA сохранила прежний интернет и черновик."
+		advice.Resolution = "Откройте диагностику USQUE, перезапустите штатную службу и повторите точную проверку сервиса. Если туннель снова быстро перестаёт отвечать, создайте новую MASQUE-сессию; затем используйте Sing-box/VLESS либо AmneziaWG со своим сервером."
+		advice.Alternatives = []string{"sing-box", "amneziawg", "nfqws2"}
+	} else if strings.Contains(lower, "sing-box") && strings.Contains(lower, "candidate") && strings.Contains(lower, "probe") {
+		advice.Code = "SING_BOX_NODE_UNREACHABLE"
+		advice.Title = "Узел Sing-box не прошёл реальное подключение"
+		advice.Message = "Формат профиля корректен, но изолированный VLESS/TLS/Reality-туннель не смог открыть проверяемый сервис. Рабочая сеть не изменялась, черновик сохранён."
+		advice.Resolution = "Проверка TCP-порта на публичном сайте не доказывает работу ключа. Импортируйте несколько свежих ключей одним списком — Sing-box выберет доступный локально — либо используйте собственный сервер."
+		advice.Alternatives = []string{"sing-box", "amneziawg", "nfqws2"}
+	} else if strings.Contains(lower, "context deadline exceeded") || strings.Contains(lower, "context canceled") {
+		advice.Code = "DATAPLANE_OPERATION_CANCELLED"
+		advice.Title = "Применение остановлено по времени"
+		advice.Message = "Операция была отменена или превысила безопасное время ожидания. RAZVILKA запустила rollback в отдельном ограниченном окне; черновик сохранён."
+		advice.Resolution = "Проверьте состояние rollback в диагностике. Если сеть работает, устраните медленный или недоступный обход и повторите Apply; не запускайте вторую операцию одновременно."
+	}
+	return advice
+}
+
+func classifyApplyExecutionFailure(message, state string) applyFailureAdvice {
+	advice := classifyApplyFailure(message)
+	if state == "network-stale" {
+		advice.Code = "NETWORK_CHANGED"
+		advice.Title = "Нужна проверка в текущей сети"
+		advice.Message = "Сеть изменилась или не определена. Применение остановлено до изменения рабочего маршрута; черновик сохранён."
+		advice.Resolution = "Дождитесь стабильного подключения, повторите проверку узла и откройте новый план."
+		advice.DraftPreserved, advice.Retryable = true, true
+		return advice
+	}
+	if state != "canary-failed" {
+		return advice
+	}
+	if advice.Code != "DATAPLANE_APPLY_FAILED" && advice.Code != "DATAPLANE_OPERATION_CANCELLED" {
+		advice.Message += " Проверка выполнялась изолированно: рабочий маршрут и его процессы не изменялись."
+		advice.DraftPreserved = true
+		advice.Retryable = true
+		return advice
+	}
+	advice.Code = "CANARY_FAILED"
+	advice.Title = "Пробный запуск не прошёл"
+	advice.Message = "Новый обход проверен отдельно и отклонён до активации. Рабочий маршрут и его процессы не изменялись, черновик сохранён."
+	advice.Resolution = "Проверьте адрес и ключ узла, доступность транспорта и результат проверки сервиса, затем повторите применение."
+	advice.DraftPreserved = true
+	advice.Retryable = true
+	return advice
+}
+
+func (a *App) buildDataplanePlan(cfg config.Config, options []routecatalog.Option) (dataplane.Plan, error) {
+	return a.buildDataplanePlanForScope(cfg, options, changeScopeAll, "")
+}
+
+type changeScope string
+
+const (
+	changeScopeAll      changeScope = "all"
+	changeScopeRouting  changeScope = "routing"
+	changeScopeServices changeScope = "services"
+	changeScopeDevices  changeScope = "devices"
+	changeScopeEngine   changeScope = "engine"
+)
+
+func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
+	raw := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("scope")))
+	if raw == "" {
+		raw = string(changeScopeAll)
+	}
+	scope := changeScope(raw)
+	if scope != changeScopeAll && scope != changeScopeRouting && scope != changeScopeServices && scope != changeScopeDevices && scope != changeScopeEngine {
+		return "", "", fmt.Errorf("unknown change scope %q", raw)
+	}
+	engineID := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("engine")))
+	if scope == changeScopeEngine && engineID == "" {
+		return "", "", errors.New("engine scope requires engine id")
+	}
+	return scope, engineID, nil
+}
+
+func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
+	cfg = configForChangeScope(cfg, scope)
+	networkProfile := ""
+	routes := make([]dataplane.Route, 0)
+	committedRoutes := map[string]string{}
+	committedAt := time.Time{}
+	if a.Dataplane != nil {
+		if committed, exists, err := a.Dataplane.Committed(); err == nil && exists && committed.State == "committed" && committed.Revision == cfg.AppliedRevision {
+			committedAt, _ = time.Parse(time.RFC3339, committed.CreatedAt)
+			for _, route := range committed.Routes {
+				committedRoutes[route.ServiceID] = route.Resolved
+			}
+		}
+	}
+	desiredAdapters := map[string]bool{}
+	appliedAdapters := map[string]bool{}
+	for _, service := range a.catalogSnapshot().Services {
+		state := cfg.Services[service.ID]
+		if state.Enabled {
+			selected := selectedRoute(state)
+			if (strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-")) && !routecatalog.ValidForServiceWithOptions(selected, service.ID, options) {
+				return dataplane.Plan{}, fmt.Errorf("route %s has no current registry proof for service %s", selected, service.ID)
+			}
+			resolved := selected
+			if selected == "auto" {
+				resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+			} else if strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-") {
+				if networkProfile == "" {
+					var profileErr error
+					networkProfile, profileErr = a.freshNetworkProfile(context.Background())
+					if profileErr != nil {
+						return dataplane.Plan{}, profileErr
+					}
+				}
+				if a.Nodes == nil {
+					return dataplane.Plan{}, fmt.Errorf("private node registry is unavailable")
+				}
+				previousNode := strings.TrimPrefix(committedRoutes[service.ID], "sing-box:")
+				if !strings.HasPrefix(previousNode, "node-") {
+					previousNode = ""
+				}
+				proof, proofErr := a.Nodes.ResolveRoute(context.Background(), strings.TrimPrefix(selected, "sing-box:"), service.ID, networkProfile, previousNode, committedAt, time.Now())
+				if proofErr != nil {
+					return dataplane.Plan{}, fmt.Errorf("node route has no current exact proof for service %s", service.ID)
+				}
+				resolved = proof.Route
+			}
+			if adapter := dataplane.AdapterID(resolved); adapter != "" && adapter != "direct" {
+				desiredAdapters[adapter] = true
+			}
+			applied := cfg.AppliedServices[service.ID]
+			appliedRoute := ""
+			if applied.Enabled {
+				appliedRoute = committedRoutes[service.ID]
+				if appliedRoute == "" {
+					appliedRoute = selectedRoute(applied)
+					if appliedRoute == "auto" {
+						appliedRoute = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+					}
+				}
+			}
+			routes = append(routes, dataplane.Route{
+				ServiceID: service.ID, ServiceName: service.Name, Selected: selected, Resolved: resolved,
+				Domains: service.Domains, CIDRs: service.CIDRs, SourceRefs: service.SourceRefs, Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL, AppliedRoute: appliedRoute,
+			})
+		}
+		applied := cfg.AppliedServices[service.ID]
+		if applied.Enabled {
+			resolved := committedRoutes[service.ID]
+			if resolved == "" {
+				resolved = selectedRoute(applied)
+				if resolved == "auto" {
+					resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+				}
+			}
+			if adapter := dataplane.AdapterID(resolved); adapter != "" && adapter != "direct" {
+				appliedAdapters[adapter] = true
+			}
+		}
+	}
+	retiringAdapters := make([]string, 0)
+	for adapter := range appliedAdapters {
+		if !desiredAdapters[adapter] {
+			retiringAdapters = append(retiringAdapters, adapter)
+		}
+	}
+	sort.Strings(retiringAdapters)
+	engines := make([]dataplane.Engine, 0, len(options))
+	nodeScopedSingBox := false
+	for _, route := range routes {
+		if strings.HasPrefix(route.Resolved, "sing-box:node-") {
+			nodeScopedSingBox = true
+		}
+	}
+	for _, option := range options {
+		if option.ID == "auto" || option.ID == "direct" {
+			continue
+		}
+		if strings.Contains(option.ID, ":") {
+			continue
+		}
+		configured := option.Selectable
+		if option.ID == "sing-box" && nodeScopedSingBox {
+			configured = true
+		}
+		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: configured, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
+	}
+	resourceConflicts := []dataplane.ResourceConflict{}
+	if a.EngineLab != nil {
+		adapterSet := map[string]bool{}
+		for _, route := range routes {
+			if adapter := dataplane.AdapterID(route.Resolved); adapter != "" && adapter != "direct" {
+				adapterSet[adapter] = true
+			}
+		}
+		adapters := make([]string, 0, len(adapterSet))
+		for adapter := range adapterSet {
+			adapters = append(adapters, adapter)
+		}
+		sort.Strings(adapters)
+		for _, conflict := range a.EngineLab.Inspect().ApplyConflicts(adapters) {
+			resourceConflicts = append(resourceConflicts, dataplane.ResourceConflict{Kind: conflict.Kind, Value: conflict.Value, Engines: conflict.Engines, SystemUse: conflict.SystemUse})
+		}
+	}
+	drafts := a.stagedEngineConfigRefs()
+	switch scope {
+	case changeScopeRouting, changeScopeServices:
+		used := map[string]bool{}
+		for _, route := range routes {
+			if adapter := dataplane.AdapterID(route.Resolved); adapter != "" && adapter != "direct" {
+				used[adapter] = true
+			}
+		}
+		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return used[id] })
+	case changeScopeDevices, changeScopeNode:
+		drafts = nil
+	case changeScopeEngine:
+		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id == engineID })
+	}
+	// Exact registry routes materialize their own private runtime configuration.
+	// Applying a service or routing choice grants no authority to install or
+	// discard an unrelated legacy Sing-box editor draft.
+	if nodeScopedSingBox && scope != changeScopeEngine {
+		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id != "sing-box" })
+	}
+	host := dataplane.DiscoverHost()
+	if a.DataplaneHost != nil {
+		host = a.DataplaneHost()
+	}
+	if networkProfile != "" {
+		current, profileErr := a.freshNetworkProfile(context.Background())
+		if profileErr != nil || current != networkProfile {
+			return dataplane.Plan{}, dataplane.ErrExactNodeNetworkChanged
+		}
+	}
+	return dataplane.Build(dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: host})
+}
+
+func configForChangeScope(cfg config.Config, scope changeScope) config.Config {
+	clone := func(states map[string]config.ServiceState) map[string]config.ServiceState {
+		out := make(map[string]config.ServiceState, len(states))
+		for id, state := range states {
+			state.Sources = append([]string(nil), state.Sources...)
+			out[id] = state
+		}
+		return out
+	}
+	switch scope {
+	case changeScopeServices:
+		services := clone(cfg.Services)
+		for id, state := range services {
+			state.Sources = config.AppliedSources(cfg, id)
+			services[id] = state
+		}
+		cfg.Services = services
+	case changeScopeDevices:
+		services := clone(cfg.AppliedServices)
+		for id, desired := range cfg.Services {
+			state := services[id]
+			state.Sources = append([]string(nil), desired.Sources...)
+			services[id] = state
+		}
+		cfg.Services = services
+	case changeScopeEngine:
+		cfg.Services = clone(cfg.AppliedServices)
+	}
+	return cfg
+}
+
+func filterEngineConfigRefs(refs []string, keep func(string) bool) []string {
+	filtered := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		engineID := strings.SplitN(ref, "/", 2)[0]
+		if keep(engineID) {
+			filtered = append(filtered, ref)
+		}
+	}
+	return filtered
+}
+
+func (a *App) stagedEngineConfigRefs() []string {
+	if a.EngineConfigs == nil {
+		return nil
+	}
+	var refs []string
+	for _, engineView := range a.EngineConfigs.List() {
+		for _, fileView := range engineView.Files {
+			if fileView.Staged {
+				refs = append(refs, engineView.ID+"/"+fileView.ID)
+			}
+		}
+	}
+	sort.Strings(refs)
+	return refs
+}
+
+func (a *App) pendingChanges() bool {
+	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 || (a.DNS != nil && a.DNS.Dirty()) || (a.Sources != nil && a.Sources.Dirty())
+}
+
+func (a *App) scopePendingChanges(scope changeScope, engineID string) bool {
+	switch scope {
+	case changeScopeRouting:
+		return a.Store.Dirty()
+	case changeScopeServices:
+		return a.Store.DirtyScope(config.DraftScopeServices)
+	case changeScopeDevices:
+		return a.Store.DirtyScope(config.DraftScopeDevices)
+	case changeScopeEngine:
+		return len(filterEngineConfigRefs(a.stagedEngineConfigRefs(), func(id string) bool { return id == engineID })) > 0
+	default:
+		return a.pendingChanges()
+	}
+}
+
+func (a *App) discard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	scope, engineID, scopeErr := changeScopeFromRequest(r)
+	if scopeErr != nil {
+		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
+		return
+	}
+	if scope != changeScopeEngine {
+		var err error
+		switch scope {
+		case changeScopeServices:
+			err = a.Store.DiscardDraftScope(config.DraftScopeServices)
+		case changeScopeDevices:
+			err = a.Store.DiscardDraftScope(config.DraftScopeDevices)
+		default:
+			err = a.Store.DiscardDraft()
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	discarded := 0
+	if scope == changeScopeRouting || scope == changeScopeServices || scope == changeScopeDevices {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": false, "discarded_engine_drafts": 0})
+		return
+	}
+	if a.EngineConfigs != nil {
+		for _, ref := range a.stagedEngineConfigRefs() {
+			parts := strings.SplitN(ref, "/", 2)
+			if len(parts) != 2 || (scope == changeScopeEngine && parts[0] != engineID) {
+				continue
+			}
+			if a.EngineConfigs.Discard(parts[0], parts[1]) == nil {
+				discarded++
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "scope": scope, "pending_changes": a.pendingChanges(), "scope_pending_changes": a.scopePendingChanges(scope, engineID), "discarded_engine_drafts": discarded})
+}
+
+func (a *App) systemInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, systemprobe.Probe())
+}
+
+func (a *App) metrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Stats == nil {
+		http.Error(w, "router metrics are disabled", http.StatusServiceUnavailable)
+		return
+	}
+	limit := 120
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > routerstats.DefaultHistoryLimit {
+			http.Error(w, "limit must be between 1 and 720", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+	latest := a.Stats.Latest()
+	history := a.Stats.History(limit)
+	if r.URL.Query().Get("period") == "week" {
+		history = a.Stats.PersistentHistory(limit)
+	}
+	trafficNow := latest.Timestamp
+	if trafficNow.IsZero() {
+		trafficNow = time.Now().UTC()
+	}
+	trafficHistory := routerstats.MergeHistory(a.Stats.PersistentHistory(0), a.Stats.History(0))
+	persistent, persistError := a.Stats.PersistenceStatus()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"latest":             latest,
+		"history":            history,
+		"capacity":           routerstats.Assess(latest),
+		"traffic_periods":    routerstats.TrafficPeriods(trafficHistory, trafficNow),
+		"history_persistent": persistent,
+		"history_error":      persistError,
+	})
+}
+
+func (a *App) safeModeSetting(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	var in struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if err := a.Store.SetSafeMode(in.Enabled); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	cfg := a.Store.Get()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "safe_mode": cfg.SafeMode, "revision": cfg.Revision,
+		"note": "Safe Mode controls future live writes. Existing committed dataplane state is unchanged until the next Apply.",
+	})
+}
+
+func (a *App) domainDiagnostic(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	query, address, err := normalizeDiagnosticTarget(r.URL.Query().Get("q"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	cfg := a.Store.Get()
+	options := a.routeOptionsSnapshot()
+	matches := make([]map[string]any, 0)
+	for _, service := range a.catalogSnapshot().Services {
+		matched, rule, specificity := matchServiceTarget(service, query, address)
+		if !matched {
+			continue
+		}
+		state := cfg.Services[service.ID]
+		selected := selectedRoute(state)
+		resolved := selected
+		if selected == "auto" {
+			resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
+		}
+		applied := cfg.AppliedServices[service.ID]
+		matches = append(matches, map[string]any{
+			"service_id": service.ID, "service_name": service.Name, "category": service.Category,
+			"matched_rule": rule, "specificity": specificity, "enabled": state.Enabled,
+			"selected_route": selected, "resolved_route": resolved,
+			"applied_enabled": applied.Enabled, "applied_route": selectedRoute(applied),
+			"source_refs": service.SourceRefs, "custom": strings.HasPrefix(service.ID, "custom-"),
+		})
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		left, _ := matches[i]["specificity"].(int)
+		right, _ := matches[j]["specificity"].(int)
+		if left == right {
+			return matches[i]["service_id"].(string) < matches[j]["service_id"].(string)
+		}
+		return left > right
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query": r.URL.Query().Get("q"), "normalized": query, "is_ip": address.IsValid(), "matches": matches,
+		"conflict": len(matches) > 1, "winner_candidate": firstMatch(matches), "live_route_confirmed": false,
+		"note": "This is a catalog and desired-state explanation. A live route is confirmed only by isolated route evidence or a dataplane adapter.",
+	})
+}
+
+type diagnosticSource struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Ready     bool   `json:"ready"`
+	Entries   int    `json:"entries"`
+	LastError string `json:"last_error,omitempty"`
+}
+
+type diagnosticDataplane struct {
+	Exists            bool           `json:"exists"`
+	PlanID            string         `json:"plan_id,omitempty"`
+	Digest            string         `json:"digest,omitempty"`
+	State             string         `json:"state,omitempty"`
+	Adapters          []string       `json:"adapters,omitempty"`
+	BlockerCodes      []string       `json:"blocker_codes,omitempty"`
+	WarningCodes      []string       `json:"warning_codes,omitempty"`
+	RequiredEvidence  evidence.Level `json:"required_evidence"`
+	ObservedEvidence  evidence.Level `json:"observed_evidence"`
+	CommittedPlanID   string         `json:"committed_plan_id,omitempty"`
+	CommittedState    string         `json:"committed_state,omitempty"`
+	CommittedEvidence evidence.Level `json:"committed_evidence"`
+}
+
+type diagnosticDocument struct {
+	Kind             string               `json:"kind"`
+	Schema           int                  `json:"schema"`
+	AppVersion       string               `json:"app_version"`
+	Build            BuildInfo            `json:"build"`
+	GeneratedAt      string               `json:"generated_at"`
+	System           systemprobe.Snapshot `json:"system"`
+	Engines          []engine.Status      `json:"engines"`
+	Sources          []diagnosticSource   `json:"sources"`
+	Dataplane        diagnosticDataplane  `json:"dataplane"`
+	SafeMode         bool                 `json:"safe_mode"`
+	Revision         uint64               `json:"revision"`
+	AppliedRevision  uint64               `json:"applied_revision"`
+	EnabledServices  int                  `json:"enabled_services"`
+	AppliedServices  int                  `json:"applied_services"`
+	SelectedRoutes   map[string]int       `json:"selected_route_counts"`
+	AppliedRoutes    map[string]int       `json:"applied_route_counts"`
+	HighestEvidence  evidence.Level       `json:"highest_evidence_level"`
+	EvidenceCounts   map[string]int       `json:"evidence_counts"`
+	PrivacyOmissions []string             `json:"privacy_omissions"`
+	Digest           string               `json:"digest"`
+}
+
+func (a *App) diagnosticReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	cfg := a.Store.Get()
+	system := systemprobe.Probe()
+	// Hostnames can identify a household or device. Interface names and
+	// capability flags are sufficient for compatibility analysis.
+	system.Hostname = ""
+	document := diagnosticDocument{
+		Kind: "razvilka-diagnostic", Schema: 2, AppVersion: Version, Build: CurrentBuildInfo(),
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339), System: system,
+		Engines: (engine.Detector{}).All(), SafeMode: cfg.SafeMode,
+		Revision: cfg.Revision, AppliedRevision: cfg.AppliedRevision,
+		Dataplane:      diagnosticDataplane{RequiredEvidence: evidence.None, ObservedEvidence: evidence.None, CommittedEvidence: evidence.None},
+		SelectedRoutes: map[string]int{}, AppliedRoutes: map[string]int{}, HighestEvidence: evidence.None, EvidenceCounts: map[string]int{},
+		PrivacyOmissions: []string{"engine configuration and credentials", "recovery key and UI sessions", "client IP/CIDR scopes", "connection and browsing history", "probe URLs and raw probe responses", "router hostname and public IP addresses"},
+	}
+	for _, state := range cfg.Services {
+		if state.Enabled {
+			document.EnabledServices++
+			document.SelectedRoutes[selectedRoute(state)]++
+		}
+	}
+	for _, state := range cfg.AppliedServices {
+		if state.Enabled {
+			document.AppliedServices++
+			document.AppliedRoutes[selectedRoute(state)]++
+		}
+	}
+	for _, proof := range a.serviceEvidenceSnapshot(cfg, a.catalogSnapshot().Services) {
+		document.EvidenceCounts[string(proof.Level)]++
+		document.HighestEvidence = evidence.Stronger(document.HighestEvidence, proof.Level)
+	}
+	if a.Sources != nil {
+		for _, source := range a.Sources.List() {
+			document.Sources = append(document.Sources, diagnosticSource{ID: source.ID, Kind: source.Kind, Ready: source.Ready, Entries: source.Entries, LastError: source.LastError})
+		}
+	}
+	if a.Dataplane != nil {
+		if plan, exists, err := a.Dataplane.Latest(); err == nil {
+			document.Dataplane.Exists = exists
+			if exists {
+				document.Dataplane.PlanID, document.Dataplane.Digest, document.Dataplane.State = plan.PlanID, plan.Digest, plan.State
+				document.Dataplane.RequiredEvidence, document.Dataplane.ObservedEvidence = plan.RequiredEvidence, plan.ObservedEvidence
+				document.Dataplane.Adapters = append([]string(nil), plan.Adapters...)
+				for _, blocker := range plan.Blockers {
+					document.Dataplane.BlockerCodes = append(document.Dataplane.BlockerCodes, blocker.Code)
+				}
+				for _, warning := range plan.Warnings {
+					document.Dataplane.WarningCodes = append(document.Dataplane.WarningCodes, warning.Code)
+				}
+			}
+		}
+		if committed, exists, err := a.Dataplane.Committed(); err == nil && exists {
+			document.Dataplane.CommittedPlanID = committed.PlanID
+			document.Dataplane.CommittedState = committed.State
+			document.Dataplane.CommittedEvidence = committed.ObservedEvidence
+		}
+	}
+	document.Digest = ""
+	data, err := json.Marshal(document)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	digest := sha256.Sum256(data)
+	document.Digest = hex.EncodeToString(digest[:])
+	w.Header().Set("Content-Disposition", `attachment; filename="razvilka-diagnostic.json"`)
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, document)
+}
+
+func normalizeDiagnosticTarget(raw string) (string, netip.Addr, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || len(raw) > 2048 {
+		return "", netip.Addr{}, errors.New("enter a domain, IP address, or HTTPS URL")
+	}
+	if strings.Contains(raw, "://") {
+		parsed, err := url.Parse(raw)
+		if err != nil || parsed.Hostname() == "" {
+			return "", netip.Addr{}, errors.New("invalid URL")
+		}
+		raw = parsed.Hostname()
+	}
+	raw = strings.ToLower(strings.TrimSuffix(strings.Trim(raw, "[]"), "."))
+	if address, err := netip.ParseAddr(raw); err == nil {
+		return address.String(), address.Unmap(), nil
+	}
+	if len(raw) > 253 || !strings.Contains(raw, ".") || strings.ContainsAny(raw, " /\\@") {
+		return "", netip.Addr{}, errors.New("invalid domain")
+	}
+	for _, label := range strings.Split(raw, ".") {
+		if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return "", netip.Addr{}, errors.New("invalid domain")
+		}
+		for _, char := range label {
+			if char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '-' {
+				continue
+			}
+			return "", netip.Addr{}, errors.New("invalid domain")
+		}
+	}
+	return raw, netip.Addr{}, nil
+}
+
+func matchServiceTarget(service catalog.Service, query string, address netip.Addr) (bool, string, int) {
+	if address.IsValid() {
+		for _, raw := range service.CIDRs {
+			prefix, err := netip.ParsePrefix(raw)
+			if err == nil && prefix.Contains(address) {
+				return true, raw, prefix.Bits()
+			}
+		}
+		return false, "", 0
+	}
+	best := ""
+	for _, domain := range service.Domains {
+		domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+		if query == domain || strings.HasSuffix(query, "."+domain) {
+			if len(domain) > len(best) {
+				best = domain
+			}
+		}
+	}
+	return best != "", best, len(best)
+}
+
+func firstMatch(matches []map[string]any) any {
+	if len(matches) == 0 {
+		return nil
+	}
+	return matches[0]
+}
+
+func (a *App) configExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	cfg := a.Store.Get()
+	writeJSON(w, http.StatusOK, map[string]any{"schema": 1, "version": Version, "config": cfg, "catalog_services": len(a.catalogSnapshot().Services)})
+}
+
+type profilePreviewResult struct {
+	Valid                        bool                       `json:"valid"`
+	Name                         string                     `json:"name"`
+	Author                       string                     `json:"author,omitempty"`
+	Digest                       string                     `json:"digest"`
+	FromVersion                  string                     `json:"from_version"`
+	ServiceChanges               []map[string]any           `json:"service_changes"`
+	CustomAdded                  int                        `json:"custom_added"`
+	CustomUpdated                int                        `json:"custom_updated"`
+	EngineFiles                  []engineconfig.Validation  `json:"engine_files"`
+	Warnings                     []string                   `json:"warnings"`
+	SensitiveOmitted             []profileexchange.Omission `json:"sensitive_omitted,omitempty"`
+	RequiresCustomUpdateApproval bool                       `json:"requires_custom_update_approval"`
+	DraftOnly                    bool                       `json:"draft_only"`
+}
+
+func (a *App) profileExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	bundle := profileexchange.New(Version, r.URL.Query().Get("name"), r.URL.Query().Get("description"), r.URL.Query().Get("author"))
+	cfg := a.Store.Get()
+	for id, state := range cfg.Services {
+		bundle.Services[id] = state
+	}
+	if a.CustomServices != nil {
+		bundle.CustomServices = a.CustomServices.List()
+	}
+	if a.EngineConfigs != nil {
+		for _, engineView := range a.EngineConfigs.List() {
+			for _, fileView := range engineView.Files {
+				if fileView.Sensitive {
+					if fileView.Exists || fileView.Staged {
+						bundle.SensitiveOmitted = append(bundle.SensitiveOmitted, profileexchange.Omission{EngineID: engineView.ID, FileID: fileView.ID, Reason: "secret file is never exported"})
+					}
+					continue
+				}
+				content, err := a.EngineConfigs.Read(engineView.ID, fileView.ID)
+				if err != nil || content.Source == "missing" || content.Content == "" {
+					continue
+				}
+				if looksSensitive(content.Content) {
+					bundle.SensitiveOmitted = append(bundle.SensitiveOmitted, profileexchange.Omission{EngineID: engineView.ID, FileID: fileView.ID, Reason: "possible credential marker detected"})
+					continue
+				}
+				bundle.EngineFiles = append(bundle.EngineFiles, profileexchange.EngineFile{EngineID: engineView.ID, FileID: fileView.ID, Content: content.Content, SHA256: profileexchange.Sum([]byte(content.Content))})
+			}
+		}
+	}
+	if err := profileexchange.Seal(&bundle); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := profileexchange.Validate(bundle); err != nil {
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Disposition", `attachment; filename="razvilka-profile.json"`)
+	writeJSON(w, http.StatusOK, bundle)
+}
+
+func (a *App) profilePreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	bundle, err := decodeProfile(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	preview, err := a.previewProfile(bundle)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (a *App) profileImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.CustomServices == nil || a.EngineConfigs == nil {
+		http.Error(w, "profile import managers are disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var request struct {
+		Bundle             profileexchange.Bundle `json:"bundle"`
+		AllowCustomUpdates bool                   `json:"allow_custom_updates"`
+	}
+	reader := http.MaxBytesReader(w, r.Body, profileexchange.MaxBundleBytes+(1<<20))
+	if err := json.NewDecoder(reader).Decode(&request); err != nil {
+		http.Error(w, "invalid profile import json", http.StatusBadRequest)
+		return
+	}
+	preview, err := a.previewProfile(request.Bundle)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if preview.RequiresCustomUpdateApproval && !request.AllowCustomUpdates {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "profile updates existing custom services; preview and confirm first", "preview": preview})
+		return
+	}
+	reserved := a.reservedServiceIDs()
+	previousCustom := a.CustomServices.List()
+	previousDraft := a.Store.Get().Services
+	if _, err := a.CustomServices.Merge(request.Bundle.CustomServices, reserved, request.AllowCustomUpdates); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	rollback := func(cause error) {
+		customErr := a.CustomServices.ReplaceAll(previousCustom, reserved)
+		configErr := a.Store.ReplaceDraft(previousDraft)
+		if customErr != nil || configErr != nil {
+			http.Error(w, fmt.Sprintf("profile import failed: %v; rollback custom=%v config=%v", cause, customErr, configErr), http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, cause.Error(), http.StatusInternalServerError)
+	}
+	if err := a.Store.MergeDraft(request.Bundle.Services); err != nil {
+		rollback(err)
+		return
+	}
+	items := make([]engineconfig.StageItem, 0, len(request.Bundle.EngineFiles))
+	for _, file := range request.Bundle.EngineFiles {
+		items = append(items, engineconfig.StageItem{EngineID: file.EngineID, FileID: file.FileID, Content: file.Content})
+	}
+	if _, err := a.EngineConfigs.StagePublic(items); err != nil {
+		rollback(err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "draft_only": true, "profile": request.Bundle.Name, "digest": request.Bundle.Digest,
+		"services_staged": len(request.Bundle.Services), "custom_services_staged": len(request.Bundle.CustomServices), "engine_files_staged": len(request.Bundle.EngineFiles),
+		"note": "Profile was imported into draft only. Validate engine drafts and review the route plan before Apply.",
+	})
+}
+
+type privateBackupPreviewResult struct {
+	Valid            bool                      `json:"valid"`
+	CreatedAt        string                    `json:"created_at"`
+	FromVersion      string                    `json:"from_version"`
+	Digest           string                    `json:"digest"`
+	Services         int                       `json:"services"`
+	CustomServices   int                       `json:"custom_services"`
+	EngineFiles      []engineconfig.Validation `json:"engine_files"`
+	SensitiveFiles   int                       `json:"sensitive_files"`
+	Devices          int                       `json:"devices"`
+	Nodes            int                       `json:"nodes"`
+	NodeSources      int                       `json:"node_sources"`
+	NodeGroups       int                       `json:"node_groups"`
+	Warnings         []string                  `json:"warnings"`
+	DraftOnly        bool                      `json:"draft_only"`
+	RestoresAccount  bool                      `json:"restores_account"`
+	NativeEnrollment bool                      `json:"native_enrollment"`
+	Subscriptions    int                       `json:"subscriptions"`
+	ServicePolicies  int                       `json:"service_policies"`
+}
+
+func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	release, ok := a.backupOperation(w)
+	if !ok {
+		return
+	}
+	defer release()
+	if a.EngineConfigs == nil || a.CustomServices == nil {
+		http.Error(w, "private backup managers are disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var request struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&request); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	payload := privatebackup.NewPayload(Version)
+	configuration := a.Store.Get()
+	payload.Services = configuration.Services
+	payload.ServicePolicies = configuration.ServicePolicies
+	payload.EngineOrder = append([]string(nil), configuration.EngineOrder...)
+	payload.CustomServices = a.CustomServices.List()
+	if a.Devices != nil {
+		payload.Devices = a.Devices.Known()
+	}
+	if a.Nodes != nil {
+		nodes, err := a.Nodes.ExportPrivateIfPresent(r.Context())
+		if err != nil {
+			http.Error(w, "private node store is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		payload.NodeSnapshot = nodes
+	}
+	if a.NodeFeeds != nil {
+		feeds, err := a.NodeFeeds.ExportPrivateIfPresent(r.Context())
+		if err != nil {
+			http.Error(w, "private subscriptions store is unavailable; backup was not created", http.StatusServiceUnavailable)
+			return
+		}
+		payload.SubscriptionSnapshot = feeds
+	}
+	if a.Warp != nil {
+		native, err := a.Warp.ExportNativePrivateIfPresent(r.Context())
+		if err != nil {
+			http.Error(w, "private WARP enrollment is unavailable; backup was not created", http.StatusServiceUnavailable)
+			return
+		}
+		payload.NativeEnrollment = native
+	}
+	for _, engineView := range a.EngineConfigs.List() {
+		for _, fileView := range engineView.Files {
+			content, err := a.EngineConfigs.ReadExpert(engineView.ID, fileView.ID)
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"ok": false, "code": "PRIVATE_BACKUP_ENGINE_UNREADABLE", "engine_id": engineView.ID, "file_id": fileView.ID,
+					"error": fmt.Sprintf("Резервная копия не создана: файл %s/%s недоступен для чтения. Проверьте черновик и доступ к файлу в настройках обхода. Файлы не изменены.", engineView.ID, fileView.ID),
+				})
+				return
+			}
+			if content.Source == "missing" {
+				continue
+			}
+			// The expert editor may retain an unfinished draft. Do not advertise
+			// a restorable encrypted backup that our strict preview must reject.
+			// Validator output can contain private CIDR-list text; return only
+			// allowlisted file identifiers and a fixed repair instruction.
+			if validation := engineconfig.ValidatePrivateContent(engineView.ID, fileView.ID, content.Content); !validation.OK {
+				kind := "файл"
+				if content.Source == "staged" {
+					kind = "незавершённый черновик"
+				}
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+					"ok": false, "code": "PRIVATE_BACKUP_ENGINE_INVALID", "engine_id": engineView.ID, "file_id": fileView.ID, "source": content.Source,
+					"error": fmt.Sprintf("Резервная копия не создана: %s %s/%s не проходит проверку формата. Исправьте его в настройках обхода и повторите экспорт. Файлы не изменены.", kind, engineView.ID, fileView.ID),
+				})
+				return
+			}
+			payload.EngineFiles = append(payload.EngineFiles, privatebackup.EngineFile{
+				EngineID: engineView.ID, FileID: fileView.ID, Content: content.Content,
+				SHA256: privatebackup.Sum([]byte(content.Content)), Sensitive: fileView.Sensitive || looksSensitive(content.Content),
+			})
+		}
+	}
+	if err := privatebackup.Seal(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		return
+	}
+	envelope, err := privatebackup.Encrypt(payload, request.Password)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Disposition", `attachment; filename="razvilka-private-backup.json"`)
+	writeJSON(w, http.StatusOK, envelope)
+}
+
+func (a *App) privateBackupPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	release, ok := a.backupOperation(w)
+	if !ok {
+		return
+	}
+	defer release()
+	payload, err := decodePrivateBackup(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	preview, err := a.previewPrivateBackup(payload)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (a *App) privateBackupImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	release, ok := a.backupOperation(w)
+	if !ok {
+		return
+	}
+	defer release()
+	if a.CustomServices == nil || a.EngineConfigs == nil {
+		http.Error(w, "private backup managers are disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var request struct {
+		Envelope privatebackup.Envelope `json:"envelope"`
+		Password string                 `json:"password"`
+		Confirm  string                 `json:"confirm"`
+	}
+	reader := http.MaxBytesReader(w, r.Body, privatebackup.MaxEnvelope*2)
+	if err := json.NewDecoder(reader).Decode(&request); err != nil {
+		http.Error(w, "invalid private backup json", http.StatusBadRequest)
+		return
+	}
+	if request.Confirm != "IMPORT_PRIVATE_BACKUP" {
+		http.Error(w, "explicit private backup confirmation is required", http.StatusBadRequest)
+		return
+	}
+	payload, err := privatebackup.Decrypt(request.Envelope, request.Password)
+	request.Password = ""
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	preview, err := a.previewPrivateBackup(payload)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := a.restorePrivateDraft(r.Context(), payload); err != nil {
+		writePrivateRestoreFailure(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "draft_only": true, "digest": payload.Digest,
+		"services_staged": len(payload.Services), "custom_services_merged": len(payload.CustomServices), "service_policies_reviewed": len(payload.ServicePolicies),
+		"engine_files_staged": len(payload.EngineFiles), "devices_merged": len(payload.Devices),
+		"nodes_merged": preview.Nodes, "node_groups_merged": preview.NodeGroups,
+		"native_enrollment_retained": preview.NativeEnrollment,
+		"note":                       "Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.",
+	})
+}
+
+func decodePrivateBackup(w http.ResponseWriter, r *http.Request) (privatebackup.Payload, error) {
+	var request struct {
+		Envelope privatebackup.Envelope `json:"envelope"`
+		Password string                 `json:"password"`
+	}
+	reader := http.MaxBytesReader(w, r.Body, privatebackup.MaxEnvelope*2)
+	if err := json.NewDecoder(reader).Decode(&request); err != nil {
+		return privatebackup.Payload{}, errors.New("invalid private backup json")
+	}
+	payload, err := privatebackup.Decrypt(request.Envelope, request.Password)
+	request.Password = ""
+	return payload, err
+}
+
+func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackupPreviewResult, error) {
+	if payload.SubscriptionSnapshot != nil && (a.NodeFeeds == nil || !a.NodeFeeds.Persistent()) {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит подписки, но их приватное хранилище недоступно. Импорт не начат.")
+	}
+	if payload.NativeEnrollment != nil && a.Warp == nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит регистрацию WARP, но приватное хранилище недоступно. Восстановление отменено без изменений.")
+	}
+	if payload.NodeSnapshot != nil && a.Nodes == nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит узлы, но приватное хранилище узлов недоступно. Восстановление отменено без изменений.")
+	}
+	// Do not silently discard provider secrets in the legacy router restore.
+	// Provider snapshots currently have their own atomic copy-only restore.
+	if len(payload.ProviderSnapshots) != 0 {
+		return privateBackupPreviewResult{}, errors.New("Резервная копия содержит аккаунты Cloudflare. Их восстановление через общий импорт пока не поддерживается; данные не изменены.")
+	}
+	if len(payload.Devices) != 0 && a.Devices == nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит устройства, но хранилище устройств недоступно. Восстановление отменено без изменений.")
+	}
+	preview := privateBackupPreviewResult{
+		CreatedAt: payload.CreatedAt, FromVersion: payload.AppVersion, Digest: payload.Digest,
+		Services: len(payload.Services), CustomServices: len(payload.CustomServices), Devices: len(payload.Devices), ServicePolicies: len(payload.ServicePolicies),
+		Warnings:  []string{"UI login, recovery key and live dataplane are intentionally not restored", "engine_order is preserved in the archive but remains unchanged until schema-aware ordering is available"},
+		DraftOnly: true, RestoresAccount: false,
+	}
+	if err := privatebackup.Validate(payload); err != nil {
+		return preview, err
+	}
+	if payload.NativeEnrollment != nil {
+		preview.NativeEnrollment = true
+		preview.Warnings = append(preview.Warnings, "Регистрация WARP и незавершённые запросы будут сохранены без новой регистрации и запуска туннеля. Конфликт с более новым незавершённым запросом остановит импорт.")
+	}
+	if payload.SubscriptionSnapshot != nil {
+		count, err := providerfeed.ReviewPrivateSnapshot(*payload.SubscriptionSnapshot)
+		if err != nil {
+			return preview, errors.New("invalid subscriptions snapshot")
+		}
+		preview.Subscriptions = count
+		preview.Warnings = append(preview.Warnings, "Новые подписки будут восстановлены с выключенным обновлением. Настройки существующих подписок сохраняются.")
+	}
+	if len(payload.ServicePolicies) > 0 {
+		preview.Warnings = append(preview.Warnings, "Добавленные правила автоподбора будут восстановлены на паузе. Действующие правила этого роутера сохранятся.")
+	}
+	if payload.NodeSnapshot != nil {
+		review, err := nodestore.ReviewPrivateSnapshot(*payload.NodeSnapshot)
+		if err != nil {
+			return preview, errors.New("invalid private node snapshot")
+		}
+		preview.Nodes, preview.NodeSources, preview.NodeGroups = review.Nodes, review.Sources, review.Groups
+	}
+	known := map[string]bool{}
+	for _, service := range a.catalogSnapshot().Services {
+		known[service.ID] = true
+	}
+	for _, service := range payload.CustomServices {
+		if known[service.ID] && !strings.HasPrefix(service.ID, "custom-") {
+			return preview, fmt.Errorf("private backup custom service %q conflicts with the built-in catalog", service.ID)
+		}
+		known[service.ID] = true
+	}
+	for id := range payload.Services {
+		if !known[id] {
+			return preview, fmt.Errorf("private backup references unknown service %q", id)
+		}
+	}
+	for id := range payload.ServicePolicies {
+		if !known[id] {
+			return preview, errors.New("Правило автоподбора относится к неизвестному сервису. Импорт не начат.")
+		}
+	}
+	for _, file := range payload.EngineFiles {
+		validation := engineconfig.ValidatePrivateContent(file.EngineID, file.FileID, file.Content)
+		preview.EngineFiles = append(preview.EngineFiles, validation)
+		if file.Sensitive {
+			preview.SensitiveFiles++
+		}
+		if !validation.OK {
+			return preview, fmt.Errorf("engine file %s/%s: %s", file.EngineID, file.FileID, validation.Output)
+		}
+	}
+	preview.Valid = true
+	return preview, nil
+}
+
+func decodeProfile(w http.ResponseWriter, r *http.Request) (profileexchange.Bundle, error) {
+	var bundle profileexchange.Bundle
+	reader := http.MaxBytesReader(w, r.Body, profileexchange.MaxBundleBytes+(64<<10))
+	if err := json.NewDecoder(reader).Decode(&bundle); err != nil {
+		return bundle, errors.New("invalid profile json")
+	}
+	return bundle, nil
+}
+
+func (a *App) previewProfile(bundle profileexchange.Bundle) (profilePreviewResult, error) {
+	preview := profilePreviewResult{
+		Name: bundle.Name, Author: bundle.Author, Digest: bundle.Digest, FromVersion: bundle.AppVersion,
+		SensitiveOmitted: bundle.SensitiveOmitted, DraftOnly: true,
+	}
+	if err := profileexchange.Validate(bundle); err != nil {
+		return preview, err
+	}
+	known := map[string]bool{}
+	for _, service := range a.catalogSnapshot().Services {
+		known[service.ID] = true
+	}
+	for _, service := range bundle.CustomServices {
+		known[service.ID] = true
+	}
+	current := a.Store.Get().Services
+	for id, incoming := range bundle.Services {
+		if !known[id] {
+			return preview, fmt.Errorf("profile references unknown service %q", id)
+		}
+		before, existed := current[id]
+		action := "unchanged"
+		if !existed {
+			action = "add"
+		} else if before.Enabled != incoming.Enabled || selectedRoute(before) != selectedRoute(incoming) {
+			action = "change"
+		}
+		preview.ServiceChanges = append(preview.ServiceChanges, map[string]any{
+			"id": id, "action": action, "enabled_before": before.Enabled, "enabled_after": incoming.Enabled,
+			"route_before": selectedRoute(before), "route_after": selectedRoute(incoming),
+		})
+	}
+	sort.Slice(preview.ServiceChanges, func(i, j int) bool {
+		return preview.ServiceChanges[i]["id"].(string) < preview.ServiceChanges[j]["id"].(string)
+	})
+	existingCustom := map[string]bool{}
+	if a.CustomServices != nil {
+		for _, service := range a.CustomServices.List() {
+			existingCustom[service.ID] = true
+		}
+	}
+	for _, service := range bundle.CustomServices {
+		if existingCustom[service.ID] {
+			preview.CustomUpdated++
+			preview.RequiresCustomUpdateApproval = true
+		} else {
+			preview.CustomAdded++
+		}
+	}
+	installed := map[string]bool{}
+	for _, status := range (engine.Detector{}).All() {
+		installed[status.ID] = status.Installed
+	}
+	for _, file := range bundle.EngineFiles {
+		if !engineconfig.PublicFile(file.EngineID, file.FileID) {
+			return preview, fmt.Errorf("engine file %s/%s is not exportable", file.EngineID, file.FileID)
+		}
+		validation := engineconfig.ValidateContent(file.EngineID, file.FileID, file.Content)
+		preview.EngineFiles = append(preview.EngineFiles, validation)
+		if !validation.OK {
+			return preview, fmt.Errorf("engine file %s/%s: %s", file.EngineID, file.FileID, validation.Output)
+		}
+		if !installed[file.EngineID] {
+			preview.Warnings = append(preview.Warnings, fmt.Sprintf("%s is not installed; its draft can be imported but not applied", file.EngineID))
+		}
+	}
+	if len(bundle.SensitiveOmitted) > 0 {
+		preview.Warnings = append(preview.Warnings, fmt.Sprintf("%d sensitive or suspicious engine files were intentionally omitted", len(bundle.SensitiveOmitted)))
+	}
+	preview.Valid = true
+	return preview, nil
+}
+
+func (a *App) reservedServiceIDs() map[string]bool {
+	reserved := make(map[string]bool, len(a.Catalog.Services))
+	for _, builtIn := range a.Catalog.Services {
+		reserved[builtIn.ID] = true
+	}
+	return reserved
+}
+
+func looksSensitive(content string) bool {
+	markers := []string{"password", "passwd", "private_key", "privatekey", "secret", "authorization", "access_token", "api_token", "uuid"}
+	for _, line := range strings.Split(strings.ToLower(content), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		for _, marker := range markers {
+			if strings.Contains(line, marker) && strings.ContainsAny(line, "=:") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (a *App) connections(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	includeClosed, _ := strconv.ParseBool(r.URL.Query().Get("include_closed"))
+	if a.Telemetry == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"connections": []any{}, "live": false, "reason": "telemetry store disabled"})
+		return
+	}
+	active, closed := a.Telemetry.Counts()
+	telemetryStatus := a.Telemetry.Status()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"connections": a.Telemetry.Snapshot(includeClosed), "live": telemetryStatus.Live,
+		"active": active, "closed": closed,
+		"producer": telemetryStatus.Producer, "reason": telemetryStatus.Reason,
+		"note": "Connections appear only when a dataplane adapter publishes real route evidence; RAZVILKA never invents live rows.",
+	})
+}
+
+func (a *App) connectionStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Telemetry == nil {
+		http.Error(w, "telemetry disabled", http.StatusServiceUnavailable)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	ch, cancel := a.Telemetry.Subscribe()
+	defer cancel()
+	send := func() bool {
+		status := a.Telemetry.Status()
+		connections := a.Telemetry.Snapshot(false)
+		payload, err := json.Marshal(map[string]any{"connections": connections, "active": len(connections), "live": status.Live, "producer": status.Producer, "reason": status.Reason})
+		if err != nil {
+			return false
+		}
+		if _, err = fmt.Fprintf(w, "event: connections\ndata: %s\n\n", payload); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	if !send() {
+		return
+	}
+	heartbeat := time.NewTicker(20 * time.Second)
+	defer heartbeat.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case _, ok := <-ch:
+			if !ok || !send() {
+				return
+			}
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+func (a *App) sourceList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Sources == nil {
+		writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	writeJSON(w, http.StatusOK, a.Sources.List())
+}
+
+func (a *App) sourceRefreshAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Sources == nil {
+		http.Error(w, "sources disabled", http.StatusServiceUnavailable)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, a.Sources.RefreshEnabled(ctx))
+}
+
+func (a *App) sourceApply(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Sources == nil {
+		http.Error(w, "sources disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if err := a.Sources.Apply(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "network_changed": false, "sources": a.Sources.List(),
+		"note": "Выбор источников сохранён. Маршруты и обходы не изменялись; включённые списки можно обновить отдельно.",
+	})
+}
+
+func (a *App) sourceDiscard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Sources == nil {
+		http.Error(w, "sources disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if err := a.Sources.Discard(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.Sources.List())
+}
+
+func (a *App) sourceAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Sources == nil {
+		http.Error(w, "sources disabled", http.StatusServiceUnavailable)
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/sources/")
+	id, action, ok := strings.Cut(path, "/")
+	if !ok || id == "" || (action != "refresh" && action != "draft") {
+		http.NotFound(w, r)
+		return
+	}
+	if action == "draft" {
+		var input struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if err := a.Sources.SetDraft(id, input.Enabled); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, a.Sources.List())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+	if err := a.Sources.Refresh(ctx, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	for _, s := range a.Sources.List() {
+		if s.ID == id {
+			writeJSON(w, http.StatusOK, s)
+			return
+		}
+	}
+	http.Error(w, "unknown source", http.StatusNotFound)
+}
+
+func plannedEngine(s catalog.Service, order []string) string {
+	return plannedEngineWithOptions(s, order, routecatalog.Options())
+}
+
+func (a *App) resolveAuto(s catalog.Service, order []string) string {
+	return a.resolveAutoWithOptions(s, order, a.routeOptionsSnapshot())
+}
+
+func (a *App) routeOptionsSnapshot() []routecatalog.Option {
+	options := routecatalog.Options()
+	for i := range options {
+		if options[i].ID == "auto" || options[i].ID == "direct" {
+			continue
+		}
+		a.prepareRouteOption(&options[i])
+	}
+	if a.Nodes == nil || a.Dataplane == nil || !a.Dataplane.Capable("sing-box") {
+		return options
+	}
+	snapshot, err := a.Nodes.Snapshot(context.Background(), time.Now())
+	if err != nil {
+		return options
+	}
+	profile, profileErr := a.freshNetworkProfile(context.Background())
+	if profileErr != nil {
+		return options
+	}
+	installed, running := false, false
+	for _, option := range options {
+		if option.ID == "sing-box" {
+			installed, running = option.Installed, option.Running
+			break
+		}
+	}
+	if !installed {
+		return options
+	}
+	for _, node := range snapshot.Nodes {
+		services, routeErr := a.Nodes.RouteServices(context.Background(), node.ID, profile, time.Now())
+		if routeErr != nil || len(services) == 0 || node.Disabled {
+			continue
+		}
+		options = append(options, routecatalog.Option{
+			ID: "sing-box:" + node.ID, Name: "Sing-box · " + node.Name, Kind: "node", Description: "Точно проверенный узел для выбранного сервиса и текущей сети",
+			Installed: true, Configured: true, Running: running, Selectable: true, Ready: true, Services: services,
+		})
+	}
+	for _, group := range snapshot.Groups {
+		services, routeErr := a.Nodes.GroupServices(context.Background(), group.ID, profile, time.Now())
+		if routeErr != nil || len(services) == 0 {
+			continue
+		}
+		mode := "резервная группа"
+		if group.Mode == "manual" {
+			mode = "выбранный узел"
+		}
+		options = append(options, routecatalog.Option{
+			ID: "sing-box:" + group.ID, Name: "Sing-box · " + group.Name, Kind: "node-group", Description: mode + " с возвратом к последнему рабочему узлу",
+			Installed: true, Configured: true, Running: running, Selectable: true, Ready: true, Services: services,
+		})
+	}
+	return options
+}
+
+func (a *App) prepareRouteOption(option *routecatalog.Option) {
+	if option == nil {
+		return
+	}
+	// A newly generated WARP profile exists only in RAZVILKA's staging area
+	// until the first transactional Apply. The generic engine detector cannot
+	// see that file, so without this bridge the user cannot assign a service
+	// to WARP and Apply reports ENGINE_DRAFT_UNUSED. Keep Ready false until the
+	// tunnel is actually running; this makes the staged route explicitly
+	// selectable without allowing AUTO to pick an untested tunnel.
+	if option.ID == "warp-wg" && option.Installed && !option.Selectable && a.validStagedWARPProfile() {
+		option.Configured = true
+		option.Selectable = true
+	}
+	option.Ready = option.Selectable && a.Dataplane != nil && a.Dataplane.Capable(option.ID)
+	if option.ID == "warp-wg" && !option.Running {
+		option.Ready = false
+	}
+}
+
+func (a *App) validStagedWARPProfile() bool {
+	if a.EngineConfigs == nil {
+		return false
+	}
+	content, err := a.EngineConfigs.ReadExpert("warp-wg", "main")
+	if err != nil || content.Source != "staged" || strings.TrimSpace(content.Content) == "" {
+		return false
+	}
+	return warp.ValidateProfile([]byte(content.Content)) == nil
+}
+
+func (a *App) resolveAutoWithOptions(s catalog.Service, order []string, options []routecatalog.Option) string {
+	fallback := plannedEngineWithOptions(s, order, options)
+	if a.SmartRoute == nil {
+		return fallback
+	}
+	suggested := a.SmartRoute.Suggest(s.ID, fallback)
+	if routecatalog.ReadyWithOptions(suggested, options) {
+		return suggested
+	}
+	return fallback
+}
+
+func plannedEngineWithOptions(s catalog.Service, order []string, options []routecatalog.Option) string {
+	candidates := make([]string, 0, len(s.Strategy)+len(order))
+	candidates = append(candidates, s.Strategy...)
+	candidates = append(candidates, order...)
+	for _, candidate := range candidates {
+		if candidate == "auto" {
+			continue
+		}
+		if routecatalog.ReadyWithOptions(candidate, options) {
+			return candidate
+		}
+	}
+	return "direct"
+}
+func stringSlicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+func (a *App) hasService(id string) bool {
+	for _, s := range a.catalogSnapshot().Services {
+		if s.ID == id {
+			return true
+		}
+	}
+	return false
+}
+func (a *App) catalogSnapshot() catalog.Catalog {
+	services := make([]catalog.Service, 0, len(a.Catalog.Services))
+	services = append(services, a.Catalog.Services...)
+	if a.CustomServices != nil {
+		services = append(services, a.CustomServices.List()...)
+	}
+	if a.Sources != nil {
+		for index := range services {
+			domains, cidrs := a.Sources.EntriesForService(services[index].ID)
+			services[index].Domains = mergeUniqueStrings(services[index].Domains, domains)
+			services[index].CIDRs = mergeUniqueStrings(services[index].CIDRs, cidrs)
+		}
+	}
+	for index := range services {
+		services[index].Probes = append([]catalog.Probe(nil), services[index].Probes...)
+	}
+	return catalog.Catalog{Services: services}
+}
+func mergeUniqueStrings(base, extra []string) []string {
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	out := make([]string, 0, len(base)+len(extra))
+	for _, values := range [][]string{base, extra} {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			out = append(out, value)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+func methodNotAllowed(w http.ResponseWriter) {
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/cloudflare/") {
+			// Also cover errors produced by authentication before the copy handler.
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
+}
+func StartupMessage(addr, cfgPath, catalogPath string) string {
+	return fmt.Sprintf("RAZVILKA %s listening on %s | config=%s | catalog=%s", Version, addr, cfgPath, catalogPath)
+}

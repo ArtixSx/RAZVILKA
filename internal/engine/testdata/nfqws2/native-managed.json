@@ -1,0 +1,22 @@
+{
+  "id": "nfqws2",
+  "name": "NFQWS2",
+  "installed": true,
+  "configured": true,
+  "runtime_ready": true,
+  "running": true,
+  "kind": "dpi",
+  "description": "Локальный обход DPI · без внешнего сервера",
+  "binary_path": "/opt/usr/bin/nfqws2",
+  "version": "github version v1.0.3 fixture",
+  "architecture": "arm64",
+  "capabilities": ["dpi-desync", "tcp", "udp", "nfqueue"],
+  "native_check": true,
+  "ownership": {
+    "ports": [],
+    "interfaces": [],
+    "nfqueues": ["dynamic:config"]
+  },
+  "external": false,
+  "managed_by": "razvilka"
+}

@@ -1,0 +1,154 @@
+# Cloudflare Endpoint Scanner: модель доказательств
+
+1 сентября 2026 года · локальная разработка, без сетевого runner.
+
+Добавлена строгая модель результата будущего Endpoint Scanner. Она исправляет
+главную логическую ошибку старых проверок: отдельный ping, открытый порт,
+handshake, Cloudflare trace или HTTP-ответ больше не могут сами по себе означать
+«WARP работает».
+
+## Одна подтверждённая попытка требует одновременно
+
+1. неизменный fingerprint точного WireGuard candidate;
+2. свежие bounded timestamps и endpoint reachability;
+3. handshake внутри временного окна этой попытки;
+4. валидный публичный egress IP, отличный от direct negative control;
+5. строго разобранный Cloudflare trace с `warp=on`, тем же egress IP и
+   трёхбуквенным `colo`;
+6. свежий Evidence v2 выбранного сервиса с `service-confirmed` и одинаковыми
+   expected/observed/actual route IDs;
+7. подтверждённый MTU именно кандидата;
+8. подтверждённую очистку временного runtime.
+
+Итог `verified` появляется минимум после двух успешных попыток из двух или трёх.
+Любая неподтверждённая очистка блокирует весь отчёт. TTL рассчитывается от самой
+старой попытки, поэтому результат не может оставаться «зелёным» бесконечно.
+
+## Защита от ложного успеха
+
+Тестами отдельно отвергаются: reachability без handshake, совпадение direct и
+tunnel egress, `warp=off`, несовпадающий trace IP, обычный HTTP 200 без точного
+route proof, неверный route ID, redirect, старые данные, неподтверждённый MTU и
+ошибка cleanup. Trace parser ограничивает размер, требует UTF-8, уникальные поля,
+публичный IP и не принимает HTML/portal response.
+
+## Что ещё не реализовано
+
+Изолированный runner уже собран и проверен на целевой ARM64-платформе с
+детерминированными системными адаптерами. Следующий обязательный gate — HIL с
+настоящим локальным кандидатом: реальный handshake, direct/WARP trace и Telegram
+evidence в сети, где Cloudflare WireGuard доступен. До такого PASS UI не должен
+предлагать новый Provider как рабочий маршрут или включать его в AUTO.
+
+## ARM64 gate
+
+Evaluator и trace parser выполнены на целевом Keenetic ARM64. Прошли позитивный
+отчёт `2/2`, все отдельные ложноположительные сценарии, смена candidate identity,
+ошибка cleanup и запрет восстановления внутреннего proof из публичного JSON.
+SHA-256 теста совпал; временный бинарник удалён. Установленная RAZVILKA осталась
+`0.18.0`, сетевые настройки и процессы не изменялись.
+
+Тот же строгий trace parser подключён к существующему транзакционному WARP
+WireGuard canary вместо поиска подстроки. Поддельный HTML, duplicate `warp`,
+private IP и `warp=off` теперь отклоняются до активации рабочего маршрута.
+Этот dataplane-тест отдельно прошёл на ARM64 Keenetic; временный бинарник удалён,
+рабочий сервис не перезапускался.
+
+## Bounded orchestrator
+
+Добавлен управляющий контракт будущего runner: только `2..3` последовательные
+попытки, timeout каждой `1..60` секунд, TTL `1 минута..24 часа` и jitter не более
+двух секунд. Orchestrator сам подставляет immutable candidate/service identity,
+не доверяя этим полям ответа runner. После ошибки cleanup новые попытки не
+запускаются; cancellation и ошибка runner возвращаются без его внутренних
+деталей. Непройденный scan остаётся обычным отрицательным отчётом, а не
+автоматическим Apply.
+
+Orchestrator-тесты прошли на ARM64 Keenetic: три bounded attempts, закрепление
+identity, остановка после cleanup failure, неверные параметры, timeout,
+cancellation и ранняя/поздняя ошибка runner. Даже две уже успешные попытки не
+дают `verified`, если третья завершилась ошибкой. Временный бинарник удалён;
+установленная `0.18.0` не перезапускалась.
+
+## TTL, score и cooldown
+
+Endpoint health теперь выводится только из внутреннего `ScanReport`, который
+нельзя восстановить как trusted из публичного JSON. Успех живёт до Evidence TTL;
+ровно в момент истечения endpoint перестаёт быть selectable. Ошибки дают
+cooldown `1 → 5 → 30` минут, успех сбрасывает счётчик. Cleanup/runner/cancellation
+всегда обнуляют score. Изменённая candidate identity не наследует старый health.
+`recommended` из официального каталога влияет лишь на приоритет показа и не
+заменяет scan evidence.
+
+Health-тесты прошли на целевом Keenetic ARM64: граница TTL, backoff `1/5/30`,
+сброс cooldown после успеха, отказ от forged JSON и изменённой identity, а также
+принудительный zero-score при ошибке cleanup. SHA-256 теста совпал; временный
+бинарник удалён. Установленная RAZVILKA осталась `0.18.0`, рабочие маршруты и
+процессы не изменялись.
+
+## Приватный health journal
+
+TTL/score/cooldown теперь можно атомарно сохранить через
+[приватный журнал Endpoint Health](CLOUDFLARE_ENDPOINT_HEALTH_JOURNAL_RU.md).
+Запись принимает только внутренний report, пересобирает candidate из текущего
+account snapshot под общим writer lock и связывает identity с digest материала.
+Публичный JSON, изменённый ключ, endpoint/MTU/keepalive или просроченный TTL не
+восстанавливают selectable state. Журнал намеренно не переносится в backup:
+после restore доказательства собираются заново.
+Журнал и `ScanAndRecord` прошли ARM64 gate на Keenetic, включая restart/TTL,
+cooldown, changed identity и corrupt-state startup. Временный тест удалён,
+рабочая `0.18.0` не перезапускалась.
+
+## Source-bound HTTP evidence
+
+Добавлен закрытый dataplane-слой будущего runner. Он отдельно получает direct
+trace, затем через IPv4-адрес временного туннеля — WARP trace и строгую сервисную
+проверку. Клиент разрешает только публичные HTTP/HTTPS назначения, сохраняет TLS
+verification, ограничивает redirects/body/timeouts и не использует proxy из
+окружения. Сервисный PASS формирует Evidence v2 с точным candidate RoutePathID и
+egress; `403/451`, redirect, invalid content и request failure остаются ниже
+`service-confirmed`.
+
+Refactor сохранил прежний WARP canary: его source-bound запрос использует тот же
+защищённый client builder. Новый слой пока не создаёт интерфейс и не меняет
+маршруты. Позитивный exact evidence, blocked service, ambiguous trace и unsafe
+input прошли ARM64 gate; временный тест удалён, установленная `0.18.0` не
+перезапускалась.
+
+Во время подготовки runner исправлен cleanup существующего WARP canary: rule и
+interface теперь удаляются только если текущая попытка доказанно завершила их
+создание. Uncertain start не захватывает появившийся интерфейс. Оба пути прошли
+ARM64 gate без изменения рабочей сети.
+
+## Изолированный runner
+
+Добавлен первый настоящий исполнитель одной попытки Scanner. Он использует
+фиксированные owned-ресурсы `rz-cf-scan`, table `220` и priority `18060`, но
+перед стартом требует, чтобы все три были свободны. В отдельную таблицу попадает
+только default route временного интерфейса, а source-only rule относится только
+к адресу `172.16.0.2/32` текущего кандидата. LAN и системный default route не
+переключаются.
+
+Приватный конфиг существует только в каталоге попытки с режимом `0600`, после
+завершения удаляется, а его буфер затирается. Межпроцессная OS-блокировка не
+позволяет двум экземплярам занять один scanner. Неизвестный marker, symlink,
+публичный state root, занятый интерфейс/rule/table и cancellation приводят к
+безопасному отказу.
+
+Runner собирает факты через ранее подготовленный strict HTTP-слой, отдельно
+читает фактический handshake и MTU интерфейса и всегда выполняет cleanup с
+независимым timeout. Если удаление policy/interface или проверка их отсутствия
+не подтверждены, `CleanupConfirmed=false`, попытка возвращает ошибку и не может
+стать PASS. Timestamp handshake из будущего теперь также отклоняется.
+
+На Keenetic ARM64 прошли тесты полного ownership/cleanup, ошибки cleanup,
+межпроцессной блокировки, будущего handshake timestamp и прежнего WARP canary.
+Перед gate интерфейса `rz-cf-scan` и маршрутов table `220` не было; unit runner
+не выполнял реальные системные команды. Установленная RAZVILKA осталась
+`0.18.0`, рабочие процессы и маршруты не перезапускались, временный бинарник
+удалён. Это platform gate, но ещё не live Cloudflare HIL.
+
+Для профиля, который пользователь явно выбрал для разовой проверки, добавлен
+[ephemeral import-контракт](CLOUDFLARE_REVIEWED_WIREGUARD_SCAN_RU.md). Он не
+повышает passive copy до runnable, не записывает health и перед стартом проверяет
+конфликт tunnel address с существующими интерфейсами.

@@ -1,0 +1,281 @@
+package sources
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+)
+
+type fixtureTransport func(*http.Request) (*http.Response, error)
+
+func (f fixtureTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+// Only the test transport redirects a public fixture identity to its local
+// server. Production SSRF/DNS enforcement is exercised by publicfetch tests.
+func fixtureClient(server *httptest.Server) *http.Client {
+	return &http.Client{Transport: fixtureTransport(func(req *http.Request) (*http.Response, error) {
+		local := req.Clone(req.Context())
+		local.URL, _ = url.Parse(server.URL + req.URL.Path)
+		response, err := server.Client().Transport.RoundTrip(local)
+		if response != nil {
+			response.Request = req
+		}
+		return response, err
+	})}
+}
+
+func TestValidateDomainsRejectsTLDAndDeduplicates(t *testing.T) {
+	got, err := validateLines("domains", "# comment\nexample.com\ncom\nEXAMPLE.com\ninvalid domain\nsub.example.org # x\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"example.com", "sub.example.org"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}
+
+func TestValidateCIDRsRejectsPrivateAndDefault(t *testing.T) {
+	got, err := validateLines("cidrs", "0.0.0.0/0\n10.0.0.0/8\n91.108.56.0/22\n2001:b28:f23d::/48\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"2001:b28:f23d::/48", "91.108.56.0/22"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}
+
+func TestRefreshIsAtomicOnBadUpdate(t *testing.T) {
+	good := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if good {
+			_, _ = w.Write([]byte("a.example\nb.example\n"))
+			return
+		}
+		_, _ = w.Write([]byte("com\ninvalid domain\n"))
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	reg := Registry{Sources: []Source{{ID: "x", Name: "X", Kind: "domains", URL: "https://source.example/list", Enabled: true, MinEntries: 2, MaxBytes: 4096}}}
+	m := NewManager(reg, dir)
+	m.SetHTTPClient(fixtureClient(srv))
+	if err := m.Refresh(context.Background(), "x"); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "x.cache.json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	good = false
+	if err := m.Refresh(context.Background(), "x"); err == nil {
+		t.Fatal("expected bad refresh to fail")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("cache changed after failed update: before=%q after=%q", before, after)
+	}
+}
+
+func TestMaxBytes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("a.example\n", 100)))
+	}))
+	defer srv.Close()
+	reg := Registry{Sources: []Source{{ID: "x", Name: "X", Kind: "domains", URL: "https://source.example/list", Enabled: true, MaxBytes: 20}}}
+	m := NewManager(reg, t.TempDir())
+	m.SetHTTPClient(fixtureClient(srv))
+	if err := m.Refresh(context.Background(), "x"); err == nil || !strings.Contains(err.Error(), "max_bytes") {
+		t.Fatal("expected max_bytes error")
+	}
+}
+
+func TestRegistryRejectsNonHTTPS(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "sources.json")
+	if err := os.WriteFile(p, []byte(`{"sources":[{"id":"x","name":"X","kind":"domains","url":"http://example.com/x","enabled":true}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadRegistry(p); err == nil {
+		t.Fatal("expected non-https source to be rejected")
+	}
+}
+
+func TestReferenceSourceIsNotReportedAsReady(t *testing.T) {
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "docs", Name: "Docs", Kind: "reference", URL: "https://example.com/docs", Enabled: true,
+	}}}, t.TempDir())
+	states := m.List()
+	if len(states) != 1 || states[0].Ready {
+		t.Fatalf("reference source must not count as a ready local list: %+v", states)
+	}
+}
+
+func TestTamperedCacheIsRejectedOnStartup(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "x.lst"), []byte("valid.example\ncom\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "x", Name: "X", Kind: "domains", URL: "https://example.com/list", Enabled: true, MinEntries: 1,
+	}}}, dir)
+	states := m.List()
+	if len(states) != 1 || states[0].Ready || !strings.Contains(states[0].LastError, "canonical") {
+		t.Fatalf("tampered cache was trusted: %+v", states)
+	}
+}
+
+func TestConcurrentRefreshLeavesOneCanonicalFile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("b.example\na.example\n"))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "x", Name: "X", Kind: "domains", URL: "https://source.example/list", Enabled: true, MinEntries: 2,
+	}}}, dir)
+	m.SetHTTPClient(fixtureClient(srv))
+	const workers = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- m.Refresh(context.Background(), "x")
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	cached, err := m.readCache(m.reg.Sources[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cached.Content != "a.example\nb.example\n" {
+		t.Fatalf("non-canonical final cache: %q", cached.Content)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "x.cache.json" {
+		t.Fatalf("temporary cache files leaked: %+v", entries)
+	}
+}
+
+func TestHTTPSRedirectCannotDowngrade(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://127.0.0.1/private", http.StatusFound)
+	}))
+	defer srv.Close()
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "x", Name: "X", Kind: "domains", URL: "https://source.example/list", Enabled: true,
+	}}}, t.TempDir())
+	m.SetHTTPClient(fixtureClient(srv))
+	err := m.Refresh(context.Background(), "x")
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "https") {
+		t.Fatalf("downgrade redirect was not rejected: %v", err)
+	}
+}
+
+func TestRegistryRejectsUnsafeSourceID(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "sources.json")
+	if err := os.WriteFile(p, []byte(`{"sources":[{"id":"../escape","name":"X","kind":"domains","url":"https://example.com/x","enabled":true}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadRegistry(p); err == nil {
+		t.Fatal("expected unsafe source id to be rejected")
+	}
+}
+
+func TestEntriesForServiceReturnsOnlyExplicitlyScopedSources(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "telegram.lst"), []byte("149.154.160.0/20\n91.108.56.0/22\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "global.lst"), []byte("8.8.8.0/24\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(Registry{Sources: []Source{
+		{ID: "telegram", Name: "Telegram", Kind: "cidrs", URL: "https://example.com/telegram", Enabled: true, Services: []string{"telegram"}},
+		{ID: "global", Name: "Global", Kind: "cidrs", URL: "https://example.com/global", Enabled: true},
+	}}, dir)
+	_, cidrs := m.EntriesForService("telegram")
+	if got := strings.Join(cidrs, ","); got != "149.154.160.0/20,91.108.56.0/22" {
+		t.Fatalf("unexpected service CIDRs: %s", got)
+	}
+	_, unrelated := m.EntriesForService("youtube")
+	if len(unrelated) != 0 {
+		t.Fatalf("unscoped source leaked into service: %v", unrelated)
+	}
+}
+
+func TestSourceSelectionIsDraftedAppliedAndPersistedIndependently(t *testing.T) {
+	dir := t.TempDir()
+	cacheDir := filepath.Join(dir, "cache")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, "telegram.lst"), []byte("91.108.56.0/22\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reg := Registry{Sources: []Source{{
+		ID: "telegram", Name: "Telegram", Kind: "cidrs", URL: "https://example.com/telegram", Enabled: true, Services: []string{"telegram"},
+	}}}
+	settingsPath := filepath.Join(dir, "source-state.json")
+	m := NewManager(reg, cacheDir, settingsPath)
+	if err := m.SetDraft("telegram", false); err != nil {
+		t.Fatal(err)
+	}
+	states := m.List()
+	if !m.Dirty() || len(states) != 1 || states[0].Enabled || !states[0].AppliedEnabled || !states[0].Dirty {
+		t.Fatalf("draft state is not separated from applied state: %+v", states)
+	}
+	_, beforeApply := m.EntriesForService("telegram")
+	if len(beforeApply) != 1 {
+		t.Fatalf("draft changed active source before apply: %v", beforeApply)
+	}
+	if err := m.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	_, afterApply := m.EntriesForService("telegram")
+	if m.Dirty() || len(afterApply) != 0 {
+		t.Fatalf("applied source selection was not activated: %v", afterApply)
+	}
+	reloaded := NewManager(reg, cacheDir, settingsPath)
+	states = reloaded.List()
+	if len(states) != 1 || states[0].Enabled || states[0].AppliedEnabled || states[0].Dirty {
+		t.Fatalf("source selection was not persisted: %+v", states)
+	}
+}
+
+func TestDiscardSourceSelectionRestoresAppliedState(t *testing.T) {
+	m := NewManager(Registry{Sources: []Source{{
+		ID: "x", Name: "X", Kind: "domains", URL: "https://example.com/x", Enabled: false,
+	}}}, t.TempDir(), filepath.Join(t.TempDir(), "source-state.json"))
+	if err := m.SetDraft("x", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Discard(); err != nil {
+		t.Fatal(err)
+	}
+	states := m.List()
+	if m.Dirty() || len(states) != 1 || states[0].Enabled || states[0].AppliedEnabled {
+		t.Fatalf("discard did not restore applied selection: %+v", states)
+	}
+}

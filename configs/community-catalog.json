@@ -1,0 +1,289 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "id": "netflix",
+      "name": "Netflix",
+      "aliases": ["netflix", "нетфликс", "кино"],
+      "category": "Видео",
+      "icon": "NF",
+      "description": "Netflix web, приложения, API и CDN",
+      "probe_url": "https://www.netflix.com/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/netflix",
+      "cidrs_url": "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/clash/ipcidr/netflix.txt",
+      "provider": "V2Fly + Loyalsoldier GeoIP",
+      "source_page": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT + CC BY-SA 4.0 / GPL-3.0",
+      "access": {"region":"RU","status":"provider-limited","since":"2022-03","note":"Netflix приостановил работу в России; доступность аккаунта и каталога ограничена самим провайдером.","verified_at":"2026-08-14"}
+    },
+    {
+      "id": "steam",
+      "name": "Steam",
+      "aliases": ["steam", "стим", "valve", "dota"],
+      "category": "Игры",
+      "icon": "ST",
+      "description": "Steam Store, Community, обновления, контент и Valve",
+      "probe_url": "https://store.steampowered.com/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/steam",
+      "provider": "V2Fly Domain List Community",
+      "source_page": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT",
+      "access": {"region":"RU","status":"variable","note":"Магазин и платежи могут быть ограничены; доступность игр и CDN зависит от оператора и аккаунта.","verified_at":"2026-08-14"}
+    },
+    {
+      "id": "signal",
+      "name": "Signal",
+      "aliases": ["signal", "сигнал", "messenger"],
+      "category": "Мессенджеры",
+      "icon": "SG",
+      "description": "Signal Messenger и связанные домены",
+      "probe_url": "https://signal.org/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/signal",
+      "provider": "V2Fly Domain List Community",
+      "source_page": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT",
+      "access": {"region":"RU","status":"blocked","since":"2024-08","note":"Доступ к Signal ограничен в России.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id": "telegram-networks",
+      "name": "Telegram · домены и сети",
+      "aliases": ["telegram", "телеграм", "cidr"],
+      "category": "Мессенджеры",
+      "icon": "TG",
+      "description": "Домены V2Fly и официально опубликованные сети Telegram",
+      "probe_url": "https://telegram.org/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/telegram",
+      "cidrs_url": "https://core.telegram.org/resources/cidr.txt",
+      "provider": "V2Fly + Telegram",
+      "source_page": "https://core.telegram.org/resources/cidr.txt",
+      "license": "MIT + official Telegram network data",
+      "access": {"region":"RU","status":"partial","note":"Доступ и отдельные функции могут ограничиваться; домены и официальные сети нужны для раздельной проверки.","evidence_url":"https://core.telegram.org/resources/cidr.txt","verified_at":"2026-08-14"}
+    },
+    {
+      "id": "pinterest",
+      "name": "Pinterest",
+      "aliases": ["pinterest", "пинтерест", "pin"],
+      "category": "Соцсети",
+      "icon": "PI",
+      "description": "Pinterest web, приложения и изображения",
+      "probe_url": "https://www.pinterest.com/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/pinterest",
+      "provider": "V2Fly Domain List Community",
+      "source_page": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT",
+      "access": {"region":"RU","status":"variable","note":"Доступность зависит от провайдера и текущих сетевых ограничений.","verified_at":"2026-08-14"}
+    },
+    {
+      "id": "medium",
+      "name": "Medium",
+      "aliases": ["medium", "медиум", "блоги"],
+      "category": "Публикации",
+      "icon": "MD",
+      "description": "Платформа публикаций Medium",
+      "probe_url": "https://medium.com/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/medium",
+      "provider": "V2Fly Domain List Community",
+      "source_page": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT",
+      "access": {"region":"RU","status":"variable","note":"Сайт или отдельные публикации могут быть недоступны у части провайдеров.","verified_at":"2026-08-14"}
+    },
+    {
+      "id": "proton",
+      "name": "Proton",
+      "aliases": ["proton", "протон", "protonmail", "protonvpn"],
+      "category": "Приватность",
+      "icon": "PR",
+      "description": "Proton Mail, Proton VPN и web-сервисы",
+      "probe_url": "https://proton.me/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/protonmail",
+      "provider": "V2Fly Domain List Community",
+      "source_page": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT",
+      "access": {"region":"RU","status":"variable","note":"Доступность сервисов Proton зависит от продукта, сети и блокировок адресов.","verified_at":"2026-08-14"}
+    },
+    {
+      "id": "soundcloud",
+      "name": "SoundCloud",
+      "aliases": ["soundcloud", "саундклауд", "музыка"],
+      "category": "Музыка",
+      "icon": "SC",
+      "description": "SoundCloud web и медиаконтент",
+      "probe_url": "https://soundcloud.com/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/soundcloud",
+      "provider": "V2Fly Domain List Community",
+      "source_page": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT",
+      "access": {"region":"RU","status":"blocked","note":"Доступ к SoundCloud ограничивался в России; фактическое состояние проверяется локально.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id": "epic-games",
+      "name": "Epic Games",
+      "aliases": ["epic", "эпик", "fortnite", "unreal"],
+      "category": "Игры",
+      "icon": "EG",
+      "description": "Epic Games Store, Fortnite, Unreal Engine и CDN",
+      "probe_url": "https://store.epicgames.com/",
+      "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/epicgames",
+      "provider": "V2Fly Domain List Community",
+      "source_page": "https://github.com/v2fly/domain-list-community",
+      "license": "MIT",
+      "access": {"region":"RU","status":"provider-limited","note":"Покупки и часть сервисов Epic могут быть ограничены для российских аккаунтов.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"youtube","name":"YouTube · полный список","aliases":["youtube","ютуб","видео","замедление"],"category":"Видео","icon":"YT",
+      "description":"YouTube, приложения, API, изображения и video CDN","probe_url":"https://www.youtube.com/generate_204",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/youtube","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"throttled","since":"2024-07","note":"У части российских сетей наблюдается существенное замедление или недоступность видео.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"discord","name":"Discord · полный список","aliases":["discord","дискорд","voice","голос"],"category":"Мессенджеры","icon":"DS",
+      "description":"Discord web, gateway, вложения, voice и CDN","probe_url":"https://discord.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/discord","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"blocked","since":"2024-10","note":"Доступ к Discord ограничен в России.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"facebook","name":"Facebook","aliases":["facebook","фейсбук","meta","fb"],"category":"Соцсети","icon":"FB",
+      "description":"Facebook web, приложения, media и CDN","probe_url":"https://www.facebook.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/facebook","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"blocked","since":"2022-03","note":"Доступ к Facebook ограничен в России.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"instagram","name":"Instagram · полный список","aliases":["instagram","инстаграм","meta","reels"],"category":"Соцсети","icon":"IG",
+      "description":"Instagram web, приложения, изображения и видео","probe_url":"https://www.instagram.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/instagram","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"blocked","since":"2022-03","note":"Доступ к Instagram ограничен в России.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"twitter","name":"X / Twitter · полный список","aliases":["twitter","твиттер","x.com","икс"],"category":"Соцсети","icon":"X",
+      "description":"X/Twitter web, API, media и короткие ссылки","probe_url":"https://x.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/twitter","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"blocked","since":"2022-03","note":"Доступ к X/Twitter ограничен в России.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"linkedin","name":"LinkedIn · полный список","aliases":["linkedin","линкедин","работа"],"category":"Работа","icon":"IN",
+      "description":"LinkedIn web, media и короткие ссылки","probe_url":"https://www.linkedin.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/linkedin","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"blocked","since":"2016-11","note":"Доступ к LinkedIn ограничен в России.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"spotify","name":"Spotify · полный список","aliases":["spotify","спотифай","музыка"],"category":"Музыка","icon":"SP",
+      "description":"Spotify web, приложения, streaming и CDN","probe_url":"https://open.spotify.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/spotify","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","since":"2022-04","note":"Spotify приостановил работу сервиса в России; доступность ограничена провайдером.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"tiktok","name":"TikTok · полный список","aliases":["tiktok","тикток","short video"],"category":"Соцсети","icon":"TT",
+      "description":"TikTok web, приложения, API и media CDN","probe_url":"https://www.tiktok.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/tiktok","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","since":"2022-03","note":"Часть функций и публикация контента ограничены самим сервисом для пользователей из России.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"twitch","name":"Twitch · полный список","aliases":["twitch","твич","стрим"],"category":"Видео","icon":"TW",
+      "description":"Twitch streams, API, вложения и CDN","probe_url":"https://www.twitch.tv/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/twitch","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"variable","note":"Доступность трансляций, чата и отдельных каналов зависит от сети и текущих ограничений.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"whatsapp","name":"WhatsApp · полный список","aliases":["whatsapp","ватсап","звонки"],"category":"Мессенджеры","icon":"WA",
+      "description":"WhatsApp web, приложения и messaging endpoints","probe_url":"https://www.whatsapp.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/whatsapp","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"partial","note":"Доступ и отдельные функции, включая звонки, могут ограничиваться отдельно.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"viber","name":"Viber","aliases":["viber","вайбер","messenger"],"category":"Мессенджеры","icon":"VB",
+      "description":"Viber messenger, media и API","probe_url":"https://www.viber.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/viber","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"blocked","since":"2024-12","note":"Доступ к Viber ограничен в России.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"roblox","name":"Roblox","aliases":["roblox","роблокс","игры"],"category":"Игры","icon":"RB",
+      "description":"Roblox platform, игры, media и CDN","probe_url":"https://www.roblox.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/roblox","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"blocked","note":"Доступ к Roblox ограничен в России; состояние может отличаться по оператору.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"snapchat","name":"Snapchat","aliases":["snapchat","снапчат","snap"],"category":"Соцсети","icon":"SN",
+      "description":"Snapchat web, приложения и media endpoints","probe_url":"https://www.snapchat.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/snap","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"blocked","note":"Доступ к Snapchat ограничивался в России; фактическое состояние проверяется локально.","evidence_url":"https://github.com/runetfreedom/russia-blocked-geosite","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"openai","name":"OpenAI / ChatGPT · полный список","aliases":["openai","chatgpt","чатгпт","ai"],"category":"AI","icon":"AI",
+      "description":"OpenAI, ChatGPT, API, auth и статические ресурсы","probe_url":"https://chatgpt.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/openai","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Регистрация и использование сервиса ограничены самим провайдером для России; доступность требует service-aware проверки.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"anthropic","name":"Anthropic / Claude · полный список","aliases":["anthropic","claude","клод","ai"],"category":"AI","icon":"CL",
+      "description":"Claude web, Anthropic API и статические ресурсы","probe_url":"https://claude.ai/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/anthropic","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Регистрация и использование Claude ограничены самим провайдером для России.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"perplexity","name":"Perplexity · полный список","aliases":["perplexity","перплексити","pplx","ai"],"category":"AI","icon":"PX",
+      "description":"Perplexity web, API и связанные endpoints","probe_url":"https://www.perplexity.ai/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/perplexity","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Доступность функций и аккаунтов зависит от политики сервиса и egress-региона.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"notion","name":"Notion","aliases":["notion","ноушен","заметки"],"category":"Работа","icon":"NO",
+      "description":"Notion workspaces, страницы, media и статические ресурсы","probe_url":"https://www.notion.so/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/notion","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Аккаунты и workspaces могут ограничиваться самим провайдером из-за региональной политики.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"slack","name":"Slack","aliases":["slack","слак","работа","чат"],"category":"Работа","icon":"SL",
+      "description":"Slack workspaces, файлы, сообщения и CDN","probe_url":"https://slack.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/slack","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Коммерческая доступность и отдельные рабочие пространства могут быть ограничены провайдером.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"canva","name":"Canva / Affinity","aliases":["canva","канва","affinity","дизайн"],"category":"Дизайн","icon":"CV",
+      "description":"Canva, Affinity web и связанные статические ресурсы","probe_url":"https://www.canva.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/canva","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"variable","note":"Доступность редактора, media и оплаты зависит от аккаунта, egress-региона и сети.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"adobe","name":"Adobe / Creative Cloud","aliases":["adobe","адоб","photoshop","creative cloud"],"category":"Дизайн","icon":"AD",
+      "description":"Adobe, Creative Cloud, Photoshop, Acrobat и CDN","probe_url":"https://www.adobe.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/adobe","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Продажи, подписки и часть облачных функций ограничены самим провайдером для России.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"playstation","name":"PlayStation Network","aliases":["playstation","psn","плейстейшн","sony"],"category":"Игры","icon":"PS",
+      "description":"PlayStation Network, store и Sony Entertainment Network","probe_url":"https://www.playstation.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/playstation","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Покупки, новые российские аккаунты и часть PSN-функций ограничены провайдером.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"nintendo","name":"Nintendo","aliases":["nintendo","нинтендо","switch","eshop"],"category":"Игры","icon":"NI",
+      "description":"Nintendo, Switch Online, eShop и игровые сервисы","probe_url":"https://www.nintendo.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/nintendo","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"eShop, покупки и часть сетевых услуг ограничены провайдером для России.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"ea","name":"Electronic Arts / EA","aliases":["ea","electronic arts","origin","apex","battlefield"],"category":"Игры","icon":"EA",
+      "description":"EA app, игры, аккаунты, multiplayer и CDN","probe_url":"https://www.ea.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/ea","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Продажи и часть функций EA могут быть ограничены для российских аккаунтов.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"blizzard","name":"Battle.net / Blizzard","aliases":["blizzard","battle.net","близзард","diablo","warcraft"],"category":"Игры","icon":"BZ",
+      "description":"Battle.net, Blizzard games, auth и CDN","probe_url":"https://www.blizzard.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/blizzard","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Покупки, платежи и часть функций ограничены для российских аккаунтов.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"ubisoft","name":"Ubisoft Connect","aliases":["ubisoft","юбисофт","uplay"],"category":"Игры","icon":"UB",
+      "description":"Ubisoft Connect, Uplay, saves и CDN","probe_url":"https://www.ubisoft.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/ubisoft","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"provider-limited","note":"Покупки и отдельные функции Ubisoft могут быть ограничены для России.","verified_at":"2026-08-14"}
+    },
+    {
+      "id":"rockstar","name":"Rockstar Games","aliases":["rockstar","рокстар","gta","social club"],"category":"Игры","icon":"RS",
+      "description":"Rockstar Games Launcher, Social Club и игровые сервисы","probe_url":"https://www.rockstargames.com/",
+      "domains_url":"https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/rockstar","provider":"V2Fly Domain List Community","source_page":"https://github.com/v2fly/domain-list-community","license":"MIT",
+      "access":{"region":"RU","status":"variable","note":"Доступность launcher, авторизации и online-функций зависит от сети и аккаунта.","verified_at":"2026-08-14"}
+    }
+  ]
+}

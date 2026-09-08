@@ -1,0 +1,1558 @@
+package dnscontrol
+
+import (
+	"bytes"
+	"context"
+	"crypto/tls"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"golang.org/x/net/dns/dnsmessage"
+)
+
+const schema = 4
+
+const endpointProbeTimeout = 5 * time.Second
+
+var errDNSAnswer = errors.New("DNS response failed integrity checks")
+
+type Provider struct {
+	ID                    string        `json:"id"`
+	Name                  string        `json:"name"`
+	Description           string        `json:"description"`
+	Servers               []string      `json:"servers,omitempty"`
+	DoH                   string        `json:"doh,omitempty"`
+	DoT                   string        `json:"dot,omitempty"`
+	Filters               []string      `json:"filters,omitempty"`
+	RequiresConfiguration bool          `json:"requires_configuration,omitempty"`
+	Configured            bool          `json:"configured"`
+	ConfigurationHint     string        `json:"configuration_hint,omitempty"`
+	Warnings              []string      `json:"warnings,omitempty"`
+	RecommendedFor        []string      `json:"recommended_for,omitempty"`
+	USQUERegistration     string        `json:"usque_registration,omitempty"`
+	Experimental          bool          `json:"experimental,omitempty"`
+	Scope                 string        `json:"scope,omitempty"`
+	EncryptedOnly         bool          `json:"encrypted_only,omitempty"`
+	AllowedForUSQUE       bool          `json:"allowed_for_usque_bootstrap"`
+	AllowedForAutoPilot   bool          `json:"allowed_for_autopilot"`
+	TrustedLocal          bool          `json:"trusted_local,omitempty"`
+	Endpoints             []DNSEndpoint `json:"endpoints,omitempty"`
+}
+
+type DNSEndpoint struct {
+	Transport    string   `json:"transport"`
+	Address      string   `json:"address,omitempty"`
+	Port         int      `json:"port,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	ServerName   string   `json:"server_name,omitempty"`
+	BootstrapIPs []string `json:"bootstrap_ips,omitempty"`
+	Scope        string   `json:"scope"`
+}
+
+type Profile struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	ProviderID  string `json:"provider_id"`
+}
+
+type Selection struct {
+	ProfileID string `json:"profile_id"`
+}
+
+type ProbeResult struct {
+	Server    string `json:"server"`
+	Transport string `json:"transport"`
+	Status    string `json:"status"`
+	DNSSEC    string `json:"dnssec,omitempty"`
+	LatencyMS int64  `json:"latency_ms,omitempty"`
+	Addresses int    `json:"addresses,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// CandidateResolution is a read-only comparison for one hostname through a
+// selected DNS profile. Exact answers are intentionally omitted: the caller
+// only needs to know whether a provider returned public IPv4/IPv6 addresses
+// before a later TLS canary.
+type CandidateResolution struct {
+	ProfileID  string                      `json:"profile_id"`
+	ProviderID string                      `json:"provider_id"`
+	Host       string                      `json:"host"`
+	Ready      bool                        `json:"ready"`
+	Results    []CandidateResolutionResult `json:"results"`
+	Note       string                      `json:"note"`
+}
+
+type CandidateResolutionResult struct {
+	Server    string `json:"server"`
+	Transport string `json:"transport"`
+	Status    string `json:"status"`
+	LatencyMS int64  `json:"latency_ms,omitempty"`
+	Addresses int    `json:"addresses,omitempty"`
+	IPv4      bool   `json:"ipv4"`
+	IPv6      bool   `json:"ipv6"`
+	Error     string `json:"error,omitempty"`
+}
+
+type Snapshot struct {
+	Schema            int               `json:"schema"`
+	Draft             Selection         `json:"draft"`
+	Applied           Selection         `json:"applied"`
+	Dirty             bool              `json:"dirty"`
+	Providers         []Provider        `json:"providers"`
+	Profiles          []Profile         `json:"profiles"`
+	Mode              string            `json:"mode"`
+	Note              string            `json:"note"`
+	LastProbe         []ProbeResult     `json:"last_probe,omitempty"`
+	ProbedAt          string            `json:"probed_at,omitempty"`
+	ProbeProfileID    string            `json:"probe_profile_id,omitempty"`
+	NextDNSProfileID  string            `json:"nextdns_profile_id,omitempty"`
+	ServiceDrafts     map[string]string `json:"service_drafts"`
+	ServiceApplied    map[string]string `json:"service_applied"`
+	MigrationWarnings []string          `json:"migration_warnings,omitempty"`
+}
+
+type PlanCheck struct {
+	ID      string `json:"id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+type PlanStep struct {
+	Order   int    `json:"order"`
+	Name    string `json:"name"`
+	Summary string `json:"summary"`
+}
+
+type Plan struct {
+	Profile        Profile     `json:"profile"`
+	Provider       Provider    `json:"provider"`
+	Mode           string      `json:"mode"`
+	Listener       string      `json:"listener,omitempty"`
+	Ready          bool        `json:"ready"`
+	Checks         []PlanCheck `json:"checks"`
+	Steps          []PlanStep  `json:"steps"`
+	Recommendation string      `json:"recommendation"`
+}
+
+type document struct {
+	Schema            int               `json:"schema"`
+	Draft             Selection         `json:"draft"`
+	Applied           Selection         `json:"applied"`
+	LastProbe         []ProbeResult     `json:"last_probe,omitempty"`
+	ProbedAt          string            `json:"probed_at,omitempty"`
+	ProbeProfileID    string            `json:"probe_profile_id,omitempty"`
+	NextDNSProfileID  string            `json:"nextdns_profile_id,omitempty"`
+	CustomProvider    *Provider         `json:"custom_provider,omitempty"`
+	ServiceDrafts     map[string]string `json:"service_drafts,omitempty"`
+	ServiceApplied    map[string]string `json:"service_applied,omitempty"`
+	MigrationWarnings []string          `json:"migration_warnings,omitempty"`
+}
+
+type CustomProviderInput struct {
+	Name         string   `json:"name"`
+	Servers      []string `json:"servers"`
+	DoH          string   `json:"doh"`
+	DoT          string   `json:"dot"`
+	TrustedLocal bool     `json:"trusted_local,omitempty"`
+}
+
+type Manager struct {
+	Path string
+	mu   sync.RWMutex
+	doc  document
+	// candidateExchange is injectable only for deterministic package tests. It
+	// is never loaded from configuration or exposed through the API.
+	candidateExchange func(context.Context, dnsTarget, string, dnsmessage.Type) ([]netip.Addr, error)
+}
+
+func New(path string) (*Manager, error) {
+	m := &Manager{Path: path, doc: document{Schema: schema, Draft: Selection{ProfileID: "automatic"}, Applied: Selection{ProfileID: "automatic"}, ServiceDrafts: map[string]string{}, ServiceApplied: map[string]string{}}}
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func Providers() []Provider {
+	providers := []Provider{
+		{ID: "system", Name: "Системный DNS", Description: "DNS из Keenetic или от провайдера.", Filters: []string{"без изменений"}, Configured: true},
+		{ID: "cloudflare", Name: "Cloudflare", Description: "Публичный резолвер без фильтрации.", Servers: []string{"1.1.1.1:53", "1.0.0.1:53"}, DoH: "https://cloudflare-dns.com/dns-query", DoT: "cloudflare-dns.com:853", Filters: []string{"DNSSEC", "без фильтрации"}, Configured: true},
+		{ID: "quad9", Name: "Quad9 Secure", Description: "Защитный DNS с блокировкой опасных доменов.", Servers: []string{"9.9.9.9:53", "149.112.112.112:53"}, DoH: "https://dns.quad9.net/dns-query", DoT: "dns.quad9.net:853", Filters: []string{"DNSSEC", "вредоносные домены"}, Configured: true},
+		{ID: "quad9-unfiltered", Name: "Quad9 без блокировки", Description: "Диагностический Quad9 без threat-blocking.", Servers: []string{"9.9.9.10:53", "149.112.112.10:53"}, DoH: "https://dns10.quad9.net/dns-query", DoT: "dns10.quad9.net:853", Filters: []string{"DNSSEC", "без threat-blocking"}, RecommendedFor: []string{"диагностика", "независимый baseline"}, Configured: true},
+		{ID: "quad9-secure-ecs", Name: "Quad9 Secure + ECS", Description: "Защитный Quad9 с ECS для диагностики CDN.", Servers: []string{"9.9.9.11:53", "149.112.112.11:53"}, DoH: "https://dns11.quad9.net/dns-query", DoT: "dns11.quad9.net:853", Filters: []string{"DNSSEC", "вредоносные домены", "ECS"}, Warnings: []string{"ECS передаёт часть клиентской сети и используется только для явной диагностики CDN."}, Experimental: true, Configured: true},
+		{ID: "quad9-unfiltered-ecs", Name: "Quad9 без блокировки + ECS", Description: "Диагностический Quad9 без threat-blocking, но с ECS.", Servers: []string{"9.9.9.12:53", "149.112.112.12:53"}, DoH: "https://dns12.quad9.net/dns-query", DoT: "dns12.quad9.net:853", Filters: []string{"DNSSEC", "без threat-blocking", "ECS"}, Warnings: []string{"ECS передаёт часть клиентской сети и используется только для явной диагностики CDN."}, Experimental: true, Configured: true},
+		{ID: "controld-unfiltered", Name: "Control D Unfiltered", Description: "Публичный Control D без блокирующих списков.", Servers: []string{"76.76.2.0:53", "76.76.10.0:53"}, DoH: "https://freedns.controld.com/p0", DoT: "p0.freedns.controld.com:853", Filters: []string{"без фильтрации"}, RecommendedFor: []string{"общий DNS", "диагностика"}, Configured: true},
+		{ID: "controld-uncensored", Name: "Control D Uncensored", Description: "Профиль Control D для доменов, ограниченных в отдельных странах.", Servers: []string{"76.76.2.5:53", "76.76.10.5:53"}, DoH: "https://freedns.controld.com/uncensored", DoT: "uncensored.freedns.controld.com:853", Filters: []string{"без блок-листов", "доступ к ограниченным доменам"}, Warnings: []string{"Результат зависит от конкретного домена и сети; это не замена VPN или DPI-обходу."}, RecommendedFor: []string{"сервисный DNS", "диагностика блокировки"}, USQUERegistration: "test-first", Configured: true},
+		{ID: "xbox-dns", Name: "Xbox DNS", Description: "Публичный DNS проекта Xbox DNS для игр и отдельных сервисов.", Servers: []string{"111.88.96.50:53", "111.88.96.51:53"}, DoH: "https://xbox-dns.ru/dns-query", DoT: "xbox-dns.ru:853", Filters: []string{"Smart DNS", "игры"}, Warnings: []string{"Сервис сторонний: перед назначением обязательно проверьте ответы и TLS нужного сайта."}, RecommendedFor: []string{"Xbox", "игровые сервисы"}, USQUERegistration: "unknown", Experimental: true, Configured: true},
+		{ID: "adguard", Name: "AdGuard DNS", Description: "Блокирует рекламу и трекеры.", Servers: []string{"94.140.14.14:53", "94.140.15.15:53"}, DoH: "https://dns.adguard-dns.com/dns-query", DoT: "dns.adguard-dns.com:853", Filters: []string{"реклама", "трекеры"}, Configured: true},
+		{ID: "adguard-family", Name: "AdGuard Family", Description: "Блокирует рекламу, трекеры и взрослый контент.", Servers: []string{"94.140.14.15:53", "94.140.15.16:53"}, DoH: "https://family.adguard-dns.com/dns-query", DoT: "family.adguard-dns.com:853", Filters: []string{"реклама", "трекеры", "семейный"}, Configured: true},
+		{ID: "google", Name: "Google Public DNS", Description: "Публичный DNS без контентной фильтрации.", Servers: []string{"8.8.8.8:53", "8.8.4.4:53"}, DoH: "https://dns.google/dns-query", DoT: "dns.google:853", Filters: []string{"DNSSEC", "без фильтрации"}, Configured: true},
+		{ID: "uncensoreddns", Name: "UncensoredDNS", Description: "Независимый encrypted-only DNS без контентной цензуры.", DoH: "https://anycast.uncensoreddns.org/dns-query", DoT: "anycast.uncensoreddns.org:853", Filters: []string{"без фильтрации", "DNSSEC", "только шифрованный"}, Warnings: []string{"Обычные UDP/TCP-запросы на порту 53 отключены оператором; используйте только DoH, DoT, а в будущем DoQ/DoH3."}, RecommendedFor: []string{"защищённый DNS", "диагностика цензуры"}, USQUERegistration: "test-first", EncryptedOnly: true, Configured: true},
+		{ID: "flashstart", Name: "FlashStart", Description: "Лабораторный фильтрующий DNS для отрицательного контроля.", Servers: []string{"185.236.104.104:53", "185.236.105.105:53"}, Filters: []string{"фильтрация", "Smart DNS", "negative-control"}, Warnings: []string{"Не подходит для регистрации USQUE: возможна подмена API/сертификата.", "Резолвер принимает запросы зарегистрированных клиентов; используйте только в лаборатории и проверяйте TLS исходного сайта."}, RecommendedFor: []string{"отрицательный контроль", "лаборатория"}, USQUERegistration: "blocked", Experimental: true, Configured: true},
+		{ID: "nextdns", Name: "NextDNS", Description: "Персональная фильтрация по вашему профилю NextDNS.", Filters: []string{"настраиваемая фильтрация", "аналитика NextDNS"}, RequiresConfiguration: true, ConfigurationHint: "Укажите шестизначный ID профиля из кабинета NextDNS."},
+		{ID: "custom", Name: "Свой DNS", Description: "Ваш обычный DNS, DoH или DoT endpoint.", Filters: []string{"пользовательский"}, RequiresConfiguration: true, ConfigurationHint: "Укажите хотя бы один DNS, DoH или DoT endpoint."},
+	}
+	for index := range providers {
+		providers[index].Scope = "production"
+		providers[index].AllowedForUSQUE = true
+		providers[index].AllowedForAutoPilot = true
+		switch providers[index].ID {
+		case "system":
+			providers[index].Scope = "system"
+			providers[index].AllowedForUSQUE = false
+			providers[index].AllowedForAutoPilot = false
+		case "xbox-dns", "quad9-secure-ecs", "quad9-unfiltered-ecs":
+			providers[index].Scope = "lab"
+			providers[index].AllowedForAutoPilot = false
+		case "flashstart":
+			providers[index].Scope = "negative-control"
+			providers[index].AllowedForUSQUE = false
+			providers[index].AllowedForAutoPilot = false
+		case "custom":
+			providers[index].Scope = "custom"
+			providers[index].AllowedForUSQUE = false
+			providers[index].AllowedForAutoPilot = false
+		}
+		providers[index] = withTypedEndpoints(providers[index])
+	}
+	return providers
+}
+
+func Profiles() []Profile {
+	return []Profile{
+		{ID: "automatic", Name: "Автоматически", Description: "Оставить DNS под управлением Keenetic и провайдера.", ProviderID: "system"},
+		{ID: "private", Name: "Приватный", Description: "Cloudflare без фильтрации контента.", ProviderID: "cloudflare"},
+		{ID: "security", Name: "Защита", Description: "Блокировать известные вредоносные домены.", ProviderID: "quad9"},
+		{ID: "quad9-unfiltered", Name: "Quad9 · без блокировки", Description: "Независимая диагностика без threat-blocking.", ProviderID: "quad9-unfiltered"},
+		{ID: "quad9-secure-ecs", Name: "Quad9 · Secure + ECS", Description: "Лабораторная проверка CDN с ECS.", ProviderID: "quad9-secure-ecs"},
+		{ID: "quad9-unfiltered-ecs", Name: "Quad9 · без блокировки + ECS", Description: "Лабораторная диагностика CDN без threat-blocking.", ProviderID: "quad9-unfiltered-ecs"},
+		{ID: "controld-unfiltered", Name: "Control D · без фильтрации", Description: "Чистое разрешение доменов через Control D.", ProviderID: "controld-unfiltered"},
+		{ID: "controld-uncensored", Name: "Control D · Uncensored", Description: "Проверить доступ к ограниченным доменам через Control D.", ProviderID: "controld-uncensored"},
+		{ID: "xbox-dns", Name: "Xbox DNS", Description: "Экспериментальный Smart DNS для Xbox и игр.", ProviderID: "xbox-dns"},
+		{ID: "ad-block", Name: "Без рекламы", Description: "Блокировать рекламу и трекеры через AdGuard DNS.", ProviderID: "adguard"},
+		{ID: "family", Name: "Семейный", Description: "Фильтровать рекламу, трекеры и взрослый контент.", ProviderID: "adguard-family"},
+		{ID: "unfiltered", Name: "Без фильтрации", Description: "Google Public DNS без контентной фильтрации.", ProviderID: "google"},
+		{ID: "uncensoreddns", Name: "UncensoredDNS", Description: "Независимый DNS только через DoH/DoT.", ProviderID: "uncensoreddns"},
+		{ID: "flashstart", Name: "FlashStart", Description: "Smart DNS с ограничениями; запрещён для регистрации USQUE.", ProviderID: "flashstart"},
+		{ID: "nextdns", Name: "Мой NextDNS", Description: "Персональные списки, реклама и защита из вашего профиля NextDNS.", ProviderID: "nextdns"},
+		{ID: "custom", Name: "Свой провайдер", Description: "Проверяемый DNS-провайдер, заданный вручную.", ProviderID: "custom"},
+	}
+}
+
+func withTypedEndpoints(provider Provider) Provider {
+	if len(provider.Endpoints) == 0 {
+		for _, server := range provider.Servers {
+			host, portText, err := net.SplitHostPort(server)
+			if err != nil {
+				continue
+			}
+			port, err := strconv.Atoi(portText)
+			if err != nil {
+				continue
+			}
+			provider.Endpoints = append(provider.Endpoints,
+				DNSEndpoint{Transport: "udp", Address: host, Port: port, Scope: provider.Scope},
+				DNSEndpoint{Transport: "tcp", Address: host, Port: port, Scope: provider.Scope},
+			)
+		}
+		if provider.DoT != "" {
+			host, portText, err := net.SplitHostPort(provider.DoT)
+			if err == nil {
+				port, _ := strconv.Atoi(portText)
+				provider.Endpoints = append(provider.Endpoints, DNSEndpoint{Transport: "dot", Address: host, Port: port, ServerName: dnsServerName(host), Scope: provider.Scope})
+			}
+		}
+		if provider.DoH != "" {
+			parsed, err := url.Parse(provider.DoH)
+			if err == nil {
+				port := 443
+				if parsed.Port() != "" {
+					port, _ = strconv.Atoi(parsed.Port())
+				}
+				provider.Endpoints = append(provider.Endpoints, DNSEndpoint{Transport: "doh", Address: parsed.Hostname(), Port: port, URL: provider.DoH, ServerName: dnsServerName(parsed.Hostname()), Scope: provider.Scope})
+			}
+		}
+		if provider.ID == "quad9" {
+			for _, address := range []string{"9.9.9.9", "149.112.112.112"} {
+				provider.Endpoints = append(provider.Endpoints,
+					DNSEndpoint{Transport: "udp", Address: address, Port: 9953, Scope: "diagnostic"},
+					DNSEndpoint{Transport: "tcp", Address: address, Port: 9953, Scope: "diagnostic"},
+				)
+			}
+			provider.Endpoints = append(provider.Endpoints, DNSEndpoint{Transport: "dot", Address: "dns.quad9.net", Port: 8853, ServerName: "dns.quad9.net", Scope: "diagnostic"})
+		}
+	}
+	for index := range provider.Endpoints {
+		if provider.Endpoints[index].Scope == "" {
+			provider.Endpoints[index].Scope = provider.Scope
+		}
+	}
+	return provider
+}
+
+func dnsServerName(host string) string {
+	return strings.ToLower(strings.TrimSuffix(strings.Trim(host, "[]"), "."))
+}
+
+func endpointProbeTarget(endpoint DNSEndpoint, trustedLocal bool) (dnsTarget, bool) {
+	address := ""
+	if endpoint.Address != "" && endpoint.Port > 0 {
+		address = net.JoinHostPort(endpoint.Address, strconv.Itoa(endpoint.Port))
+	}
+	switch strings.ToLower(endpoint.Transport) {
+	case "udp":
+		return dnsTarget{transport: "UDP", endpoint: address, probe: probeDNSOverUDP, trustedLocal: trustedLocal}, address != ""
+	case "tcp":
+		return dnsTarget{transport: "TCP", endpoint: address, probe: probeDNSOverTCP, trustedLocal: trustedLocal}, address != ""
+	case "dot":
+		return dnsTarget{transport: "DoT", endpoint: address, probe: probeDNSOverTLS, trustedLocal: trustedLocal}, address != ""
+	case "doh":
+		return dnsTarget{transport: "DoH", endpoint: endpoint.URL, probe: probeDNSOverHTTPS, trustedLocal: trustedLocal}, endpoint.URL != ""
+	default:
+		return dnsTarget{}, false
+	}
+}
+
+func (m *Manager) Snapshot() Snapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return Snapshot{Schema: schema, Draft: m.doc.Draft, Applied: m.doc.Applied, Dirty: documentDirty(m.doc), Providers: providersFor(m.doc), Profiles: Profiles(), Mode: "preview", Note: "Профиль и привязки сервисов сохранены как черновик. Рабочий DNS роутера не меняется до появления транзакционного адаптера и проверки конфликтов.", LastProbe: append([]ProbeResult(nil), m.doc.LastProbe...), ProbedAt: m.doc.ProbedAt, ProbeProfileID: m.doc.ProbeProfileID, NextDNSProfileID: m.doc.NextDNSProfileID, ServiceDrafts: cloneStringMap(m.doc.ServiceDrafts), ServiceApplied: cloneStringMap(m.doc.ServiceApplied), MigrationWarnings: append([]string(nil), m.doc.MigrationWarnings...)}
+}
+
+func (m *Manager) Dirty() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return documentDirty(m.doc)
+}
+
+func (m *Manager) SetServiceDraft(serviceID, profileID string) error {
+	serviceID = strings.ToLower(strings.TrimSpace(serviceID))
+	profileID = strings.TrimSpace(profileID)
+	if !validServiceID(serviceID) {
+		return errors.New("некорректный идентификатор сервиса")
+	}
+	if profileID != "" && profileID != "inherit" {
+		if _, ok := profileByID(profileID); !ok {
+			return fmt.Errorf("unknown DNS profile %q", profileID)
+		}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := cloneDocument(m.doc)
+	if m.doc.ServiceDrafts == nil {
+		m.doc.ServiceDrafts = map[string]string{}
+	}
+	if profileID == "" || profileID == "inherit" {
+		delete(m.doc.ServiceDrafts, serviceID)
+	} else {
+		m.doc.ServiceDrafts[serviceID] = profileID
+	}
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+// Plan describes the safety contract for the selected DNS profile without
+// changing the router. listener is supplied by Engine Lab and deliberately
+// contains no command that could stop or replace the current resolver.
+func (m *Manager) Plan(listener string) Plan {
+	m.mu.RLock()
+	doc := m.doc
+	m.mu.RUnlock()
+	profile, _ := profileByID(doc.Draft.ProfileID)
+	provider, _ := providerByIDFor(profile.ProviderID, doc)
+	plan := Plan{
+		Profile: profile, Provider: provider, Mode: "preview", Listener: listener,
+		Checks: []PlanCheck{},
+		Steps: []PlanStep{
+			{Order: 1, Name: "Снимок", Summary: "Сохранить только DNS-объекты RAZVILKA и текущий upstream системного резолвера."},
+			{Order: 2, Name: "Проверка", Summary: "Проверить bootstrap, выбранные серверы, DNSSEC и отсутствие циклического маршрута."},
+			{Order: 3, Name: "Подготовка", Summary: "Запустить локальный кандидат на отдельном порту, не занимая рабочий :53."},
+			{Order: 4, Name: "Canary", Summary: "Отправить тестовые запросы только через кандидата и сравнить ответы с контролем."},
+			{Order: 5, Name: "Переключение", Summary: "Изменить upstream штатного DNS атомарно; при ошибке немедленно вернуть снимок."},
+			{Order: 6, Name: "Контроль", Summary: "Проверить DNS с роутера и LAN-клиента, затем зафиксировать или откатить."},
+		},
+		Recommendation: "Live-применение остаётся выключенным, пока не реализован и не проверен адаптер штатного DNS Keenetic/Netcraze.",
+	}
+	if profile.ID == "automatic" {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "profile", Status: "pass", Message: "Системный DNS остаётся без изменений."})
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "ownership", Status: "pass", Message: "RAZVILKA не запрашивает порт 53."})
+		if !stringMapsEqual(doc.ServiceDrafts, doc.ServiceApplied) {
+			plan.Checks = append(plan.Checks, PlanCheck{ID: "service-bindings", Status: "fail", Message: "Привязки DNS к сервисам сохранены как черновик, но DNS-диспетчер ещё не активирован."})
+			plan.Recommendation = "Привязки сервисов сохранены, но применить их можно только после реализации и аппаратной проверки DNS-диспетчера Keenetic."
+			return plan
+		}
+		plan.Recommendation = "Применение не требуется: DNS остаётся под управлением системы."
+		plan.Ready = true
+		return plan
+	}
+	if !provider.Configured {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "configuration", Status: "fail", Message: provider.ConfigurationHint})
+	}
+	passed := 0
+	for _, result := range doc.LastProbe {
+		if result.Status == "pass" {
+			passed++
+		}
+	}
+	if doc.ProbeProfileID != profile.ID || len(doc.LastProbe) == 0 {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "fail", Message: "Сначала проверьте выбранный профиль."})
+	} else if passed == 0 {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "fail", Message: "Ни один транспорт выбранного профиля не ответил."})
+	} else if passed < len(doc.LastProbe) {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "warn", Message: fmt.Sprintf("Доступны %d из %d проверенных транспортов; нужен failover.", passed, len(doc.LastProbe))})
+	} else {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "probe", Status: "pass", Message: "Все заявленные транспорты выбранного профиля ответили."})
+	}
+	if providerHasFilter(provider, "DNSSEC") && doc.ProbeProfileID == profile.ID && len(doc.LastProbe) > 0 {
+		dnssecConfirmed := 0
+		for _, result := range doc.LastProbe {
+			if result.Status == "pass" && (result.DNSSEC == "resolver-reported-ad" || result.DNSSEC == "confirmed") {
+				dnssecConfirmed++
+			}
+		}
+		if dnssecConfirmed > 0 {
+			plan.Checks = append(plan.Checks, PlanCheck{ID: "dnssec", Status: "pass", Message: fmt.Sprintf("Резолвер сообщил AD-флаг на %d транспорт(ах). Это не равно локальной проверке DNSSEC.", dnssecConfirmed)})
+		} else {
+			plan.Checks = append(plan.Checks, PlanCheck{ID: "dnssec", Status: "warn", Message: "Сервер отвечает, но не сообщил AD-флаг. RAZVILKA пока не выполняет локальную криптографическую проверку DNSSEC."})
+		}
+	}
+	if strings.TrimSpace(listener) != "" {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "ownership", Status: "fail", Message: "Порт 53 уже обслуживает " + listener + ". Нужна интеграция через upstream, а не второй DNS-сервер."})
+	} else {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "ownership", Status: "warn", Message: "Локальный DNS-владелец не определён; live-применение без аппаратной проверки запрещено."})
+	}
+	plan.Checks = append(plan.Checks, PlanCheck{ID: "adapter", Status: "fail", Message: "Транзакционный DNS-адаптер этой платформы ещё не активирован."})
+	if len(doc.ServiceDrafts) > 0 {
+		plan.Checks = append(plan.Checks, PlanCheck{ID: "service-bindings", Status: "warn", Message: fmt.Sprintf("Сохранены индивидуальные DNS-профили для %d сервис(ов); они не применены в сеть.", len(doc.ServiceDrafts))})
+	}
+	return plan
+}
+
+func (m *Manager) SetDraft(profileID string) error {
+	profileID = strings.TrimSpace(profileID)
+	if _, ok := profileByID(profileID); !ok {
+		return fmt.Errorf("unknown DNS profile %q", profileID)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.doc
+	m.doc.Draft = Selection{ProfileID: profileID}
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) SetNextDNSProfileID(profileID string) error {
+	profileID = strings.ToLower(strings.TrimSpace(profileID))
+	if profileID != "" && !validNextDNSProfileID(profileID) {
+		return errors.New("ID NextDNS должен состоять ровно из 6 строчных шестнадцатеричных символов")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.doc
+	m.doc.NextDNSProfileID = profileID
+	if m.doc.ProbeProfileID == "nextdns" {
+		m.doc.LastProbe = nil
+		m.doc.ProbedAt = ""
+		m.doc.ProbeProfileID = ""
+	}
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) SetCustomProvider(input CustomProviderInput) error {
+	provider, err := normalizeCustomProvider(input)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.doc
+	m.doc.CustomProvider = &provider
+	m.clearProbeLocked("custom")
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) ClearCustomProvider() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.doc
+	m.doc.CustomProvider = nil
+	m.clearProbeLocked("custom")
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) clearProbeLocked(profileID string) {
+	if m.doc.ProbeProfileID != profileID {
+		return
+	}
+	m.doc.LastProbe = nil
+	m.doc.ProbedAt = ""
+	m.doc.ProbeProfileID = ""
+}
+
+func (m *Manager) Discard() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.doc
+	m.doc.Draft = m.doc.Applied
+	m.doc.ServiceDrafts = cloneStringMap(m.doc.ServiceApplied)
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+// Apply commits only the no-change system profile. Non-system profiles require
+// a platform DNS adapter and must remain drafts until that adapter can perform
+// snapshot, canary, health and rollback on real hardware.
+func (m *Manager) Apply() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !stringMapsEqual(m.doc.ServiceDrafts, m.doc.ServiceApplied) {
+		return errors.New("live per-service DNS adapter is not available; service bindings remain drafts")
+	}
+	if m.doc.Draft.ProfileID != "automatic" {
+		return errors.New("live DNS adapter is not available; the selected profile remains a draft")
+	}
+	previous := m.doc
+	m.doc.Applied = m.doc.Draft
+	if err := m.saveLocked(); err != nil {
+		m.doc = previous
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) Probe(ctx context.Context, profileID string) ([]ProbeResult, error) {
+	profile, ok := profileByID(strings.TrimSpace(profileID))
+	if !ok {
+		return nil, fmt.Errorf("unknown DNS profile %q", profileID)
+	}
+	m.mu.RLock()
+	doc := m.doc
+	m.mu.RUnlock()
+	provider, _ := providerByIDFor(profile.ProviderID, doc)
+	if !provider.Configured {
+		return nil, errors.New(provider.ConfigurationHint)
+	}
+	if provider.ID == "system" {
+		results := []ProbeResult{probeSystem(ctx)}
+		m.mu.Lock()
+		m.doc.LastProbe = append([]ProbeResult(nil), results...)
+		m.doc.ProbedAt = time.Now().UTC().Format(time.RFC3339)
+		m.doc.ProbeProfileID = profile.ID
+		err := m.saveLocked()
+		m.mu.Unlock()
+		return results, err
+	}
+	targets := make([]dnsTarget, 0, len(provider.Endpoints))
+	for _, endpoint := range provider.Endpoints {
+		target, supported := endpointProbeTarget(endpoint, provider.TrustedLocal)
+		if supported {
+			targets = append(targets, target)
+		}
+	}
+	results := make([]ProbeResult, len(targets))
+	var probes sync.WaitGroup
+	limit := make(chan struct{}, 4)
+	probes.Add(len(targets))
+	for index, target := range targets {
+		go func() {
+			defer probes.Done()
+			select {
+			case limit <- struct{}{}:
+				defer func() { <-limit }()
+			case <-ctx.Done():
+				results[index] = ProbeResult{Server: target.endpoint, Transport: target.transport, Status: "fail", Error: friendlyProbeError(ctx.Err(), endpointProbeTimeout)}
+				return
+			}
+			results[index] = probeEndpoint(ctx, target.transport, target.endpoint, target.probe, target.trustedLocal)
+		}()
+	}
+	probes.Wait()
+	m.mu.Lock()
+	currentProvider, _ := providerByIDFor(profile.ProviderID, m.doc)
+	if providerFingerprint(provider) != providerFingerprint(currentProvider) {
+		m.mu.Unlock()
+		return results, errors.New("настройки DNS изменились во время проверки; запустите её повторно")
+	}
+	m.doc.LastProbe = append([]ProbeResult(nil), results...)
+	m.doc.ProbedAt = time.Now().UTC().Format(time.RFC3339)
+	m.doc.ProbeProfileID = profile.ID
+	err := m.saveLocked()
+	m.mu.Unlock()
+	return results, err
+}
+
+// ResolveCandidate asks an explicitly selected provider for one hostname. It
+// never changes the draft/applied DNS selection, port 53, resolv.conf or any
+// service binding and it does not persist its result as working evidence.
+func (m *Manager) ResolveCandidate(ctx context.Context, profileID, hostname string) (CandidateResolution, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return CandidateResolution{}, err
+	}
+	profile, ok := profileByID(strings.TrimSpace(profileID))
+	if !ok {
+		return CandidateResolution{}, fmt.Errorf("unknown DNS profile %q", profileID)
+	}
+	host, err := normalizeCandidateHostname(hostname)
+	if err != nil {
+		return CandidateResolution{}, err
+	}
+	m.mu.RLock()
+	doc := m.doc
+	exchange := m.candidateExchange
+	m.mu.RUnlock()
+	provider, ok := providerByIDFor(profile.ProviderID, doc)
+	if !ok || !provider.Configured {
+		return CandidateResolution{}, errors.New("выбранный DNS-профиль не настроен")
+	}
+	if !provider.AllowedForUSQUE || provider.Scope == "negative-control" || provider.TrustedLocal {
+		return CandidateResolution{}, errors.New("этот DNS-профиль запрещён для bootstrap USQUE")
+	}
+	targets := make([]dnsTarget, 0, len(provider.Endpoints))
+	for _, endpoint := range provider.Endpoints {
+		if target, supported := endpointProbeTarget(endpoint, provider.TrustedLocal); supported {
+			targets = append(targets, target)
+		}
+	}
+	if len(targets) == 0 || len(targets) > 16 {
+		return CandidateResolution{}, errors.New("у DNS-профиля нет ограниченного набора поддерживаемых endpoint")
+	}
+	if exchange == nil {
+		exchange = exchangeCandidateDNS
+	}
+	result := CandidateResolution{
+		ProfileID: profile.ID, ProviderID: provider.ID, Host: host,
+		Results: make([]CandidateResolutionResult, len(targets)),
+		Note:    "Изолированная DNS-проверка не меняет DNS роутера и ещё не доказывает доступность HTTPS API или успешную регистрацию USQUE.",
+	}
+	var probes sync.WaitGroup
+	limit := make(chan struct{}, 4)
+	probes.Add(len(targets))
+	for index, target := range targets {
+		go func() {
+			defer probes.Done()
+			select {
+			case limit <- struct{}{}:
+				defer func() { <-limit }()
+			case <-ctx.Done():
+				result.Results[index] = CandidateResolutionResult{Server: target.endpoint, Transport: target.transport, Status: "fail", Error: friendlyProbeError(ctx.Err(), endpointProbeTimeout)}
+				return
+			}
+			started := time.Now()
+			addresses := []netip.Addr{}
+			var lastErr error
+			unsafeAnswer := false
+			for _, family := range []dnsmessage.Type{dnsmessage.TypeA, dnsmessage.TypeAAAA} {
+				if ctx.Err() != nil {
+					break
+				}
+				familyAddresses, familyErr := exchange(ctx, target, host, family)
+				if familyErr != nil {
+					unsafeAnswer = unsafeAnswer || errors.Is(familyErr, errDNSAnswer)
+					lastErr = familyErr
+					continue
+				}
+				addresses = append(addresses, familyAddresses...)
+			}
+			item := CandidateResolutionResult{Server: target.endpoint, Transport: target.transport, LatencyMS: time.Since(started).Milliseconds()}
+			if unsafeAnswer || len(addresses) > 64 {
+				item.Status = "fail"
+				item.Error = "Ответ DNS не прошёл проверку целостности; этот endpoint не подходит"
+				result.Results[index] = item
+				return
+			}
+			if len(addresses) == 0 {
+				item.Status = "fail"
+				item.Error = friendlyProbeError(lastErr, endpointProbeTimeout)
+				result.Results[index] = item
+				return
+			}
+			for _, address := range addresses {
+				address = address.Unmap()
+				if !publicDNSAddress(address) {
+					item.Status = "fail"
+					item.Error = "DNS-провайдер вернул локальный, служебный или непубличный адрес"
+					item.IPv4, item.IPv6 = false, false
+					result.Results[index] = item
+					return
+				}
+				item.IPv4 = item.IPv4 || address.Is4()
+				item.IPv6 = item.IPv6 || address.Is6()
+			}
+			item.Status = "pass"
+			item.Addresses = len(addresses)
+			result.Results[index] = item
+		}()
+	}
+	probes.Wait()
+	if err := ctx.Err(); err != nil {
+		return CandidateResolution{}, err
+	}
+	for _, item := range result.Results {
+		result.Ready = result.Ready || item.Status == "pass"
+	}
+	return result, nil
+}
+
+func exchangeCandidateDNS(parent context.Context, target dnsTarget, hostname string, recordType dnsmessage.Type) ([]netip.Addr, error) {
+	ctx, cancel := context.WithTimeout(parent, endpointProbeTimeout)
+	defer cancel()
+	query, err := buildDNSQueryFor(uint16(time.Now().UnixNano()), hostname, recordType)
+	if err != nil {
+		return nil, err
+	}
+	response, err := target.probe(ctx, target.endpoint, query, target.trustedLocal)
+	if err != nil {
+		return nil, err
+	}
+	addresses, _, err := validateDNSAddressResponse(query, response)
+	return addresses, err
+}
+
+type dnsProbe func(context.Context, string, []byte, bool) ([]byte, error)
+
+type dnsTarget struct {
+	transport    string
+	endpoint     string
+	probe        dnsProbe
+	trustedLocal bool
+}
+
+func probeSystem(parent context.Context) ProbeResult {
+	ctx, cancel := context.WithTimeout(parent, 4*time.Second)
+	defer cancel()
+	started := time.Now()
+	addresses, err := net.DefaultResolver.LookupHost(ctx, "example.com")
+	result := ProbeResult{Server: "system", Transport: "Системный", LatencyMS: time.Since(started).Milliseconds()}
+	if err != nil {
+		result.Status = "fail"
+		result.Error = friendlyProbeError(err, 4*time.Second)
+		return result
+	}
+	result.Status = "pass"
+	result.Addresses = len(addresses)
+	return result
+}
+
+func probeEndpoint(parent context.Context, transport, endpoint string, probe dnsProbe, trustedLocal bool) ProbeResult {
+	ctx, cancel := context.WithTimeout(parent, endpointProbeTimeout)
+	defer cancel()
+	started := time.Now()
+	query, err := buildDNSQuery(uint16(time.Now().UnixNano()))
+	if err == nil {
+		var response []byte
+		response, err = probe(ctx, endpoint, query, trustedLocal)
+		if err == nil {
+			var addresses int
+			var authenticated bool
+			addresses, authenticated, err = validateDNSResponse(query, response)
+			if err == nil {
+				dnssec := "not-reported"
+				if authenticated {
+					dnssec = "resolver-reported-ad"
+				}
+				return ProbeResult{Server: endpoint, Transport: transport, Status: "pass", DNSSEC: dnssec, LatencyMS: time.Since(started).Milliseconds(), Addresses: addresses}
+			}
+		}
+	}
+	return ProbeResult{Server: endpoint, Transport: transport, Status: "fail", LatencyMS: time.Since(started).Milliseconds(), Error: friendlyProbeError(err, endpointProbeTimeout)}
+}
+
+func buildDNSQuery(id uint16) ([]byte, error) {
+	return buildDNSQueryFor(id, "cloudflare.com", dnsmessage.TypeA)
+}
+
+func buildDNSQueryFor(id uint16, hostname string, recordType dnsmessage.Type) ([]byte, error) {
+	host, err := normalizeCandidateHostname(hostname)
+	if err != nil {
+		return nil, err
+	}
+	if recordType != dnsmessage.TypeA && recordType != dnsmessage.TypeAAAA {
+		return nil, errors.New("unsupported DNS record type")
+	}
+	builder := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: id, RecursionDesired: true})
+	builder.EnableCompression()
+	if err := builder.StartQuestions(); err != nil {
+		return nil, err
+	}
+	name, err := dnsmessage.NewName(host + ".")
+	if err != nil {
+		return nil, errors.New("invalid DNS hostname")
+	}
+	if err := builder.Question(dnsmessage.Question{Name: name, Type: recordType, Class: dnsmessage.ClassINET}); err != nil {
+		return nil, err
+	}
+	if err := builder.StartAdditionals(); err != nil {
+		return nil, err
+	}
+	var ednsHeader dnsmessage.ResourceHeader
+	if err := ednsHeader.SetEDNS0(1232, dnsmessage.RCodeSuccess, true); err != nil {
+		return nil, err
+	}
+	if err := builder.OPTResource(ednsHeader, dnsmessage.OPTResource{}); err != nil {
+		return nil, err
+	}
+	return builder.Finish()
+}
+
+func validateDNSResponse(query, response []byte) (int, bool, error) {
+	addresses, authenticated, err := validateDNSAddressResponse(query, response)
+	return len(addresses), authenticated, err
+}
+
+func validateDNSAddressResponse(query, response []byte) ([]netip.Addr, bool, error) {
+	if len(response) > 65535 {
+		return nil, false, errDNSAnswer
+	}
+	var queryParser dnsmessage.Parser
+	queryHeader, err := queryParser.Start(query)
+	if err != nil {
+		return nil, false, fmt.Errorf("invalid DNS query: %w", err)
+	}
+	queryQuestions, err := queryParser.AllQuestions()
+	if err != nil || len(queryQuestions) != 1 {
+		return nil, false, errors.New("DNS query must contain exactly one question")
+	}
+	var parser dnsmessage.Parser
+	header, err := parser.Start(response)
+	if err != nil {
+		return nil, false, errDNSAnswer
+	}
+	if !header.Response || header.ID != queryHeader.ID || header.Truncated || header.OpCode != 0 {
+		return nil, false, errDNSAnswer
+	}
+	if header.RCode != dnsmessage.RCodeSuccess {
+		return nil, false, fmt.Errorf("DNS server returned %s", header.RCode)
+	}
+	responseQuestions, err := parser.AllQuestions()
+	if err != nil || len(responseQuestions) != 1 || !strings.EqualFold(responseQuestions[0].Name.String(), queryQuestions[0].Name.String()) || responseQuestions[0].Type != queryQuestions[0].Type || responseQuestions[0].Class != queryQuestions[0].Class {
+		return nil, false, errDNSAnswer
+	}
+	answers, err := parser.AllAnswers()
+	if err != nil || len(answers) > 64 {
+		return nil, false, errDNSAnswer
+	}
+	aliases := map[string]string{}
+	for _, answer := range answers {
+		if answer.Header.Class != dnsmessage.ClassINET {
+			return nil, false, errDNSAnswer
+		}
+		if cname, ok := answer.Body.(*dnsmessage.CNAMEResource); ok {
+			owner, target := strings.ToLower(answer.Header.Name.String()), strings.ToLower(cname.CNAME.String())
+			if previous, exists := aliases[owner]; exists && previous != target {
+				return nil, false, errDNSAnswer
+			}
+			aliases[owner] = target
+		}
+	}
+	terminal := strings.ToLower(queryQuestions[0].Name.String())
+	seen := map[string]bool{}
+	for aliases[terminal] != "" {
+		if seen[terminal] || len(seen) >= 16 {
+			return nil, false, errDNSAnswer
+		}
+		seen[terminal] = true
+		terminal = aliases[terminal]
+	}
+	addresses := []netip.Addr{}
+	for _, answer := range answers {
+		switch resource := answer.Body.(type) {
+		case *dnsmessage.AResource:
+			if strings.ToLower(answer.Header.Name.String()) != terminal || queryQuestions[0].Type != dnsmessage.TypeA {
+				return nil, false, errDNSAnswer
+			}
+			if queryQuestions[0].Type == dnsmessage.TypeA {
+				addresses = append(addresses, netip.AddrFrom4(resource.A))
+			}
+		case *dnsmessage.AAAAResource:
+			if strings.ToLower(answer.Header.Name.String()) != terminal || queryQuestions[0].Type != dnsmessage.TypeAAAA {
+				return nil, false, errDNSAnswer
+			}
+			if queryQuestions[0].Type == dnsmessage.TypeAAAA {
+				addresses = append(addresses, netip.AddrFrom16(resource.AAAA))
+			}
+		}
+	}
+	if len(addresses) > 32 {
+		return nil, false, errDNSAnswer
+	}
+	if len(addresses) == 0 {
+		return nil, false, errors.New("DNS response contains no addresses")
+	}
+	return addresses, header.AuthenticData, nil
+}
+
+func normalizeCandidateHostname(raw string) (string, error) {
+	host := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
+	if len(host) == 0 || len(host) > 253 || !strings.Contains(host, ".") {
+		return "", errors.New("нужно указать корректное публичное DNS-имя")
+	}
+	for _, suffix := range []string{".localhost", ".local", ".lan", ".home.arpa"} {
+		if strings.HasSuffix(host, suffix) {
+			return "", errors.New("локальное DNS-имя нельзя использовать для bootstrap")
+		}
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return "", errors.New("нужно указать корректное публичное DNS-имя")
+		}
+		for _, character := range label {
+			if !(character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-') {
+				return "", errors.New("нужно указать корректное публичное DNS-имя")
+			}
+		}
+	}
+	return host, nil
+}
+
+func probeDNSOverUDP(ctx context.Context, endpoint string, query []byte, trustedLocal bool) ([]byte, error) {
+	connection, err := dialDNSContext(ctx, "udp", endpoint, trustedLocal)
+	if err != nil {
+		return nil, err
+	}
+	defer connection.Close()
+	applyContextDeadline(ctx, connection)
+	if _, err := connection.Write(query); err != nil {
+		return nil, err
+	}
+	response := make([]byte, 4096)
+	n, err := connection.Read(response)
+	return response[:n], err
+}
+
+func probeDNSOverTCP(ctx context.Context, endpoint string, query []byte, trustedLocal bool) ([]byte, error) {
+	connection, err := dialDNSContext(ctx, "tcp", endpoint, trustedLocal)
+	if err != nil {
+		return nil, err
+	}
+	defer connection.Close()
+	applyContextDeadline(ctx, connection)
+	return exchangeFramedDNS(connection, query)
+}
+
+func probeDNSOverTLS(ctx context.Context, endpoint string, query []byte, trustedLocal bool) ([]byte, error) {
+	host, _, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DoT endpoint: %w", err)
+	}
+	rawConnection, err := dialDNSContext(ctx, "tcp", endpoint, trustedLocal)
+	if err != nil {
+		return nil, err
+	}
+	connection := tls.Client(rawConnection, dnsTLSConfig(host))
+	defer connection.Close()
+	applyContextDeadline(ctx, connection)
+	if err := connection.HandshakeContext(ctx); err != nil {
+		return nil, err
+	}
+	return exchangeFramedDNS(connection, query)
+}
+
+func dnsTLSConfig(serverName string) *tls.Config {
+	return &tls.Config{MinVersion: tls.VersionTLS12, ServerName: serverName}
+}
+
+func probeDNSOverHTTPS(ctx context.Context, endpoint string, query []byte, trustedLocal bool) ([]byte, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return nil, errors.New("invalid DoH HTTPS endpoint")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(query))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Accept", "application/dns-message")
+	request.Header.Set("Content-Type", "application/dns-message")
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: nil, DisableKeepAlives: true,
+			TLSClientConfig: dnsTLSConfig(""),
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return dialDNSContext(ctx, network, address, trustedLocal)
+			},
+		},
+		CheckRedirect: dohRedirectPolicy(parsed, nil),
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("DoH endpoint returned HTTP %d", response.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(response.Body, 65536))
+}
+
+func dohRedirectPolicy(initial *url.URL, allowedExternalHosts map[string]struct{}) func(*http.Request, []*http.Request) error {
+	initialOrigin := normalizedHTTPSOrigin(initial)
+	return func(request *http.Request, via []*http.Request) error {
+		if len(via) > 2 {
+			return errors.New("DoH endpoint exceeded the two-redirect limit")
+		}
+		if request.URL.Scheme != "https" {
+			return errors.New("DoH endpoint redirected outside HTTPS")
+		}
+		if normalizedHTTPSOrigin(request.URL) == initialOrigin {
+			return nil
+		}
+		if _, allowed := allowedExternalHosts[strings.ToLower(request.URL.Hostname())]; allowed {
+			return nil
+		}
+		return errors.New("DoH endpoint redirected to an untrusted origin")
+	}
+}
+
+func normalizedHTTPSOrigin(endpoint *url.URL) string {
+	port := endpoint.Port()
+	if port == "" {
+		port = "443"
+	}
+	return net.JoinHostPort(strings.ToLower(endpoint.Hostname()), port)
+}
+
+func dialDNSContext(ctx context.Context, network, endpoint string, trustedLocal bool) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DNS endpoint: %w", err)
+	}
+	addresses, err := resolveDNSAddresses(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, address := range addresses {
+		if !trustedLocal && !publicDNSAddress(address) {
+			return nil, fmt.Errorf("DNS endpoint resolved to a local or private address: %s", address)
+		}
+	}
+	var lastErr error
+	for _, address := range addresses {
+		connection, dialErr := (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(address.String(), port))
+		if dialErr == nil {
+			return connection, nil
+		}
+		lastErr = dialErr
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, errors.New("DNS endpoint did not resolve to an address")
+}
+
+func resolveDNSAddresses(ctx context.Context, host string) ([]netip.Addr, error) {
+	if address, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil {
+		return []netip.Addr{address.Unmap()}, nil
+	}
+	addresses, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return nil, fmt.Errorf("resolve DNS endpoint: %w", err)
+	}
+	if len(addresses) == 0 {
+		return nil, errors.New("DNS endpoint did not resolve to an address")
+	}
+	result := make([]netip.Addr, 0, len(addresses))
+	for _, address := range addresses {
+		result = append(result, address.Unmap())
+	}
+	return result, nil
+}
+
+var nonPublicDNSPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("2001:db8::/32"),
+}
+
+func publicDNSAddress(address netip.Addr) bool {
+	address = address.Unmap()
+	if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() || address.IsMulticast() || address.IsUnspecified() {
+		return false
+	}
+	for _, prefix := range nonPublicDNSPrefixes {
+		if prefix.Contains(address) {
+			return false
+		}
+	}
+	return true
+}
+
+func exchangeFramedDNS(connection net.Conn, query []byte) ([]byte, error) {
+	if len(query) > 65535 {
+		return nil, errors.New("DNS query is too large")
+	}
+	frame := make([]byte, len(query)+2)
+	binary.BigEndian.PutUint16(frame[:2], uint16(len(query)))
+	copy(frame[2:], query)
+	if _, err := connection.Write(frame); err != nil {
+		return nil, err
+	}
+	var size [2]byte
+	if _, err := io.ReadFull(connection, size[:]); err != nil {
+		return nil, err
+	}
+	response := make([]byte, int(binary.BigEndian.Uint16(size[:])))
+	_, err := io.ReadFull(connection, response)
+	return response, err
+}
+
+func applyContextDeadline(ctx context.Context, connection net.Conn) {
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = connection.SetDeadline(deadline)
+	}
+}
+
+func friendlyProbeError(err error, timeout time.Duration) string {
+	if err == nil {
+		return "Не удалось получить DNS-ответ"
+	}
+	text := strings.ToLower(err.Error())
+	if errors.Is(err, context.DeadlineExceeded) || strings.Contains(text, "timeout") {
+		seconds := int(timeout.Round(time.Second) / time.Second)
+		return fmt.Sprintf("DNS-сервер не ответил за %d сек.", seconds)
+	}
+	if strings.Contains(text, "refused") {
+		return "DNS-сервер отклонил соединение"
+	}
+	if strings.Contains(text, "certificate") || strings.Contains(text, "tls") {
+		return "Не удалось подтвердить защищённое TLS-соединение"
+	}
+	if strings.Contains(text, "no addresses") {
+		return "DNS-сервер ответил, но не вернул адрес"
+	}
+	if strings.Contains(text, "http") {
+		return "DoH-сервер вернул неожиданный HTTP-ответ"
+	}
+	return "Не удалось получить DNS-ответ"
+}
+
+func profileByID(id string) (Profile, bool) {
+	for _, profile := range Profiles() {
+		if profile.ID == id {
+			return profile, true
+		}
+	}
+	return Profile{}, false
+}
+
+func providerByIDFor(id string, doc document) (Provider, bool) {
+	for _, provider := range providersFor(doc) {
+		if provider.ID == id {
+			return provider, true
+		}
+	}
+	return Provider{}, false
+}
+
+func providersFor(doc document) []Provider {
+	providers := Providers()
+	for index := range providers {
+		switch providers[index].ID {
+		case "nextdns":
+			if validNextDNSProfileID(doc.NextDNSProfileID) {
+				providers[index].Configured = true
+				providers[index].DoH = "https://dns.nextdns.io/" + doc.NextDNSProfileID
+				providers[index].DoT = doc.NextDNSProfileID + ".dns.nextdns.io:853"
+			}
+		case "custom":
+			if doc.CustomProvider != nil {
+				providers[index] = cloneProvider(*doc.CustomProvider)
+			}
+		}
+		providers[index] = withTypedEndpoints(providers[index])
+	}
+	return providers
+}
+
+func normalizeCustomProvider(input CustomProviderInput) (Provider, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		name = "Свой DNS"
+	}
+	if len(name) > 80 || strings.IndexFunc(name, func(character rune) bool { return character < 32 || character == 127 }) >= 0 {
+		return Provider{}, errors.New("название DNS должно быть короче 80 символов и не содержать управляющие символы")
+	}
+	servers := make([]string, 0, len(input.Servers))
+	seen := map[string]bool{}
+	for _, raw := range input.Servers {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		endpoint, err := normalizeDNSEndpoint(raw, "53", input.TrustedLocal)
+		if err != nil {
+			return Provider{}, fmt.Errorf("обычный DNS: %w", err)
+		}
+		if !seen[endpoint] {
+			servers = append(servers, endpoint)
+			seen[endpoint] = true
+		}
+		if len(servers) > 4 {
+			return Provider{}, errors.New("можно указать не больше 4 обычных DNS endpoint")
+		}
+	}
+	doh := strings.TrimSpace(input.DoH)
+	if doh != "" {
+		parsed, err := url.Parse(doh)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || len(doh) > 512 {
+			return Provider{}, errors.New("DoH должен быть HTTPS URL без логина, пароля, query и фрагмента")
+		}
+		if !validDNSHost(parsed.Hostname()) {
+			return Provider{}, errors.New("DoH содержит некорректный IP или DNS-имя")
+		}
+		if address, err := netip.ParseAddr(parsed.Hostname()); err == nil && !input.TrustedLocal && !publicDNSAddress(address) {
+			return Provider{}, errors.New("DoH указывает на локальный или частный адрес; для такого endpoint нужно явно включить trusted local")
+		}
+		if parsed.Port() != "" {
+			port, err := strconv.Atoi(parsed.Port())
+			if err != nil || port < 1 || port > 65535 {
+				return Provider{}, errors.New("порт DoH должен быть числом от 1 до 65535")
+			}
+		}
+		doh = parsed.String()
+	}
+	dot := strings.TrimSpace(input.DoT)
+	if dot != "" {
+		var err error
+		dot, err = normalizeDNSEndpoint(dot, "853", input.TrustedLocal)
+		if err != nil {
+			return Provider{}, fmt.Errorf("DoT: %w", err)
+		}
+	}
+	if len(servers) == 0 && doh == "" && dot == "" {
+		return Provider{}, errors.New("укажите хотя бы один обычный DNS, DoH или DoT endpoint")
+	}
+	scope := "custom"
+	warnings := []string{"Custom DNS не участвует в AutoPilot и USQUE bootstrap без отдельной проверки."}
+	if input.TrustedLocal {
+		scope = "trusted-local"
+		warnings = append(warnings, "Разрешён доступ к локальным адресам. Включайте только для своего DNS в LAN.")
+	}
+	return Provider{ID: "custom", Name: name, Description: "Пользовательский DNS-провайдер, сохранённый локально.", Servers: servers, DoH: doh, DoT: dot, Filters: []string{"пользовательский"}, RequiresConfiguration: true, Configured: true, ConfigurationHint: "Endpoint сохранён локально и должен пройти проверку до применения.", Warnings: warnings, Scope: scope, TrustedLocal: input.TrustedLocal, AllowedForUSQUE: false, AllowedForAutoPilot: false}, nil
+}
+
+func normalizeDNSEndpoint(raw, defaultPort string, trustedLocal bool) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" || len(value) > 255 || strings.ContainsAny(value, "/?#@") {
+		return "", errors.New("ожидается IP или имя хоста с необязательным портом")
+	}
+	host, port, err := net.SplitHostPort(value)
+	if err != nil {
+		if ip := net.ParseIP(value); ip != nil {
+			host, port = ip.String(), defaultPort
+		} else if strings.Count(value, ":") == 0 {
+			host, port = value, defaultPort
+		} else {
+			return "", errors.New("IPv6 с портом нужно записать как [адрес]:порт")
+		}
+	}
+	if !validDNSHost(host) {
+		return "", errors.New("некорректный IP или DNS-имя")
+	}
+	if address, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil && !trustedLocal && !publicDNSAddress(address) {
+		return "", errors.New("локальный или частный адрес запрещён; для своего DNS в LAN нужно явно включить trusted local")
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return "", errors.New("порт должен быть числом от 1 до 65535")
+	}
+	return net.JoinHostPort(strings.TrimSuffix(strings.ToLower(host), "."), port), nil
+}
+
+func validDNSHost(host string) bool {
+	host = strings.TrimSuffix(strings.TrimSpace(host), ".")
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	if host == "" || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') && (character < '0' || character > '9') && character != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func cloneProvider(provider Provider) Provider {
+	provider.Servers = append([]string(nil), provider.Servers...)
+	provider.Filters = append([]string(nil), provider.Filters...)
+	provider.Warnings = append([]string(nil), provider.Warnings...)
+	provider.RecommendedFor = append([]string(nil), provider.RecommendedFor...)
+	provider.Endpoints = append([]DNSEndpoint(nil), provider.Endpoints...)
+	for index := range provider.Endpoints {
+		provider.Endpoints[index].BootstrapIPs = append([]string(nil), provider.Endpoints[index].BootstrapIPs...)
+	}
+	return provider
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	copy := make(map[string]string, len(source))
+	for key, value := range source {
+		copy[key] = value
+	}
+	return copy
+}
+
+func cloneDocument(source document) document {
+	source.ServiceDrafts = cloneStringMap(source.ServiceDrafts)
+	source.ServiceApplied = cloneStringMap(source.ServiceApplied)
+	source.LastProbe = append([]ProbeResult(nil), source.LastProbe...)
+	source.MigrationWarnings = append([]string(nil), source.MigrationWarnings...)
+	if source.CustomProvider != nil {
+		provider := cloneProvider(*source.CustomProvider)
+		source.CustomProvider = &provider
+	}
+	return source
+}
+
+func stringMapsEqual(left, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key, value := range left {
+		if right[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func documentDirty(doc document) bool {
+	return doc.Draft != doc.Applied || !stringMapsEqual(doc.ServiceDrafts, doc.ServiceApplied)
+}
+
+func validServiceID(value string) bool {
+	if value == "" || len(value) > 64 || ((value[0] < 'a' || value[0] > 'z') && (value[0] < '0' || value[0] > '9')) {
+		return false
+	}
+	for _, character := range value {
+		if (character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func providerFingerprint(provider Provider) string {
+	endpoints, _ := json.Marshal(provider.Endpoints)
+	return strings.Join([]string{
+		provider.ID,
+		provider.Name,
+		strings.Join(provider.Servers, ","),
+		provider.DoH,
+		provider.DoT,
+		string(endpoints),
+		provider.Scope,
+		strconv.FormatBool(provider.EncryptedOnly),
+		strconv.FormatBool(provider.AllowedForUSQUE),
+		strconv.FormatBool(provider.AllowedForAutoPilot),
+		strconv.FormatBool(provider.TrustedLocal),
+	}, "\x00")
+}
+
+func providerHasFilter(provider Provider, filter string) bool {
+	for _, candidate := range provider.Filters {
+		if strings.EqualFold(candidate, filter) {
+			return true
+		}
+	}
+	return false
+}
+
+func validNextDNSProfileID(value string) bool {
+	if len(value) != 6 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Manager) load() error {
+	if m.Path == "" {
+		return nil
+	}
+	b, err := os.ReadFile(m.Path)
+	if errors.Is(err, os.ErrNotExist) {
+		return m.saveLocked()
+	}
+	if err != nil {
+		return err
+	}
+	var loaded document
+	if err := json.Unmarshal(b, &loaded); err != nil {
+		return fmt.Errorf("decode DNS state: %w", err)
+	}
+	if loaded.Schema != 1 && loaded.Schema != 2 && loaded.Schema != 3 && loaded.Schema != schema {
+		return fmt.Errorf("unsupported DNS state schema %d", loaded.Schema)
+	}
+	migrated := loaded.Schema != schema
+	loaded.Schema = schema
+	if loaded.ServiceDrafts == nil {
+		loaded.ServiceDrafts = map[string]string{}
+	}
+	if loaded.ServiceApplied == nil {
+		loaded.ServiceApplied = map[string]string{}
+	}
+	for serviceID, profileID := range loaded.ServiceDrafts {
+		if !validServiceID(serviceID) {
+			delete(loaded.ServiceDrafts, serviceID)
+			continue
+		}
+		if _, ok := profileByID(profileID); !ok {
+			delete(loaded.ServiceDrafts, serviceID)
+		}
+	}
+	for serviceID, profileID := range loaded.ServiceApplied {
+		if !validServiceID(serviceID) {
+			delete(loaded.ServiceApplied, serviceID)
+			continue
+		}
+		if _, ok := profileByID(profileID); !ok {
+			delete(loaded.ServiceApplied, serviceID)
+		}
+	}
+	if _, ok := profileByID(loaded.Draft.ProfileID); !ok {
+		loaded.Draft.ProfileID = "automatic"
+	}
+	if _, ok := profileByID(loaded.Applied.ProfileID); !ok {
+		loaded.Applied.ProfileID = "automatic"
+	}
+	if loaded.CustomProvider != nil {
+		normalized, err := normalizeCustomProvider(CustomProviderInput{Name: loaded.CustomProvider.Name, Servers: loaded.CustomProvider.Servers, DoH: loaded.CustomProvider.DoH, DoT: loaded.CustomProvider.DoT, TrustedLocal: loaded.CustomProvider.TrustedLocal})
+		if err != nil {
+			loaded.CustomProvider = nil
+			migrated = true
+		} else {
+			loaded.CustomProvider = &normalized
+		}
+	}
+	for index := range loaded.LastProbe {
+		switch loaded.LastProbe[index].DNSSEC {
+		case "confirmed":
+			loaded.LastProbe[index].DNSSEC = "resolver-reported-ad"
+			migrated = true
+		case "not-confirmed":
+			loaded.LastProbe[index].DNSSEC = "not-reported"
+			migrated = true
+		}
+	}
+	if loaded.ProbeProfileID == "uncensoreddns" && hasPlaintextDNSProbe(loaded.LastProbe) {
+		loaded.LastProbe = nil
+		loaded.ProbedAt = ""
+		loaded.ProbeProfileID = ""
+		loaded.MigrationWarnings = appendUniqueString(loaded.MigrationWarnings, "Устаревшая проверка UncensoredDNS через UDP/TCP 53 удалена: сервис теперь проверяется только через DoH/DoT.")
+		migrated = true
+	}
+	m.doc = loaded
+	if migrated {
+		return m.saveLocked()
+	}
+	return nil
+}
+
+func hasPlaintextDNSProbe(results []ProbeResult) bool {
+	for _, result := range results {
+		if strings.EqualFold(result.Transport, "UDP") || strings.EqualFold(result.Transport, "TCP") {
+			return true
+		}
+	}
+	return false
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
+}
+
+func (m *Manager) saveLocked() error {
+	if m.Path == "" {
+		return nil
+	}
+	m.doc.Schema = schema
+	b, err := json.MarshalIndent(m.doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(m.Path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(dir, ".dns-*.tmp")
+	if err != nil {
+		return err
+	}
+	name := temporary.Name()
+	defer os.Remove(name)
+	if err := temporary.Chmod(0600); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(b); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(name, m.Path); err != nil {
+		return err
+	}
+	return os.Chmod(m.Path, 0600)
+}
