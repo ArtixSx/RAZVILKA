@@ -9,20 +9,26 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
 
 const maxNodeCheckBatch = 64
 
 type nodeCheckJobRequest struct {
-	NodeIDs   []string `json:"node_ids"`
-	ServiceID string   `json:"service_id"`
-	Mode      string   `json:"mode"`
+	NodeIDs   []string              `json:"node_ids"`
+	ServiceID string                `json:"service_id"`
+	Mode      string                `json:"mode"`
+	Feed      *providerfeed.Request `json:"feed,omitempty"`
+	FeedID    string                `json:"feed_id,omitempty"`
+	Limit     int                   `json:"limit,omitempty"`
+	Confirm   string                `json:"confirm,omitempty"`
 }
 
 type nodeCheckItem struct {
@@ -34,10 +40,17 @@ type nodeCheckItem struct {
 	LatencyMS      int64     `json:"latency_ms,omitempty"`
 	DurationMS     int64     `json:"duration_ms,omitempty"`
 	Message        string    `json:"message"`
+	Verdict        string    `json:"verdict,omitempty"`
+	TestLevel      string    `json:"test_level,omitempty"`
+	ErrorCode      string    `json:"error_code,omitempty"`
 }
 
 type nodeCheckJob struct {
 	ID             uint64                 `json:"id"`
+	Phase          string                 `json:"phase"`
+	ErrorCode      string                 `json:"error_code,omitempty"`
+	Skipped        int                    `json:"skipped"`
+	Fetch          *providerfeed.Result   `json:"fetch,omitempty"`
 	Mode           string                 `json:"mode"`
 	ServiceID      string                 `json:"service_id,omitempty"`
 	State          string                 `json:"state"`
@@ -51,6 +64,8 @@ type nodeCheckJob struct {
 }
 
 type nodeCheckState struct {
+	// Test seam is private and fixed before HTTP serving; production always uses NodeFeeds.
+	fetchSource     func(context.Context, nodeCheckJobRequest) (providerfeed.Result, error)
 	mu              sync.Mutex
 	root            context.Context
 	closed          bool
@@ -109,6 +124,12 @@ func (a *App) nodeCheckSnapshot() map[string]any {
 	if a.nodeChecks.job != nil {
 		copy := *a.nodeChecks.job
 		copy.Results = append([]nodeCheckItem{}, copy.Results...)
+		if copy.Fetch != nil {
+			fetch := *copy.Fetch
+			fetch.NodeIDs = append([]string{}, fetch.NodeIDs...)
+			fetch.Issues = nil
+			copy.Fetch = &fetch
+		}
 		copy.ServiceResults = append([]serviceControlResult{}, copy.ServiceResults...)
 		for i := range copy.ServiceResults {
 			copy.ServiceResults[i].Scope.Sources = append([]string{}, copy.ServiceResults[i].Scope.Sources...)
@@ -120,7 +141,7 @@ func (a *App) nodeCheckSnapshot() map[string]any {
 		pings = append(pings, ping)
 	}
 	sort.Slice(pings, func(i, j int) bool { return pings[i].NodeID < pings[j].NodeID })
-	return map[string]any{"job": job, "pings": pings, "working_routes_changed": false}
+	return map[string]any{"job": job, "pings": pings, "working_routes_changed": false, "fetch_and_check": true, "cancel_requires_job_id": true}
 }
 
 func (a *App) nodeCheckJobCurrent(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +149,17 @@ func (a *App) nodeCheckJobCurrent(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 	case http.MethodDelete:
+		requestedID, err := strconv.ParseUint(r.URL.Query().Get("job_id"), 10, 64)
+		if err != nil || requestedID == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Укажите идентификатор проверочной задачи."})
+			return
+		}
 		a.nodeChecks.mu.Lock()
+		if a.nodeChecks.job == nil || a.nodeChecks.job.ID != requestedID {
+			a.nodeChecks.mu.Unlock()
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Задача изменилась. Отмена не выполнена.", "not_started": true})
+			return
+		}
 		if a.nodeChecks.cancel != nil && a.nodeChecks.job != nil {
 			a.nodeChecks.job.State = "canceling"
 			a.nodeChecks.job.Message = "Завершаем текущую проверку и очищаем временные ресурсы."
@@ -155,7 +186,7 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 	var request nodeCheckJobRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF || len(request.NodeIDs) == 0 || len(request.NodeIDs) > maxNodeCheckBatch || request.Mode != "tcp" && request.Mode != "service" {
+	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF || !validNodeCheckJobRequest(request) {
 		http.Error(w, "Выберите от 1 до 64 узлов и тип проверки.", http.StatusBadRequest)
 		return
 	}
@@ -193,6 +224,11 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 	} else {
 		request.ServiceID = ""
 	}
+	fetchLimit, err := a.validateNodeCheckFeed(request)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Источник не прошёл проверку. Настройки и маршруты не изменены."})
+		return
+	}
 	snapshot, err := a.Nodes.Snapshot(r.Context(), time.Now())
 	if err != nil {
 		writeNodeError(w, err)
@@ -226,14 +262,20 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	// Service checks may take up to 45 seconds each. A job has a fixed upper
 	// bound even when an injected or future checker has a larger default.
+	total := len(request.NodeIDs)
+	phase, message := "checking", "Проверяем выбранные узлы."
+	if request.Feed != nil || request.FeedID != "" {
+		total = fetchLimit
+		phase, message = "fetching", "Получаем источник. Маршруты не изменяются."
+	}
 	budget := 5 * time.Minute
 	if request.Mode == "service" {
-		budget = time.Duration(len(request.NodeIDs))*time.Minute + time.Minute
+		budget = time.Duration(total)*time.Minute + time.Minute
 	}
 	ctx, cancel := context.WithTimeout(a.nodeChecks.root, budget)
 	a.nodeChecks.nextID++
 	id := a.nodeChecks.nextID
-	a.nodeChecks.job = &nodeCheckJob{ID: id, Mode: request.Mode, ServiceID: request.ServiceID, State: "running", Total: len(request.NodeIDs), StartedAt: time.Now().UTC(), Message: "Проверяем выбранные узлы.", Results: []nodeCheckItem{}}
+	a.nodeChecks.job = &nodeCheckJob{ID: id, Mode: request.Mode, ServiceID: request.ServiceID, State: "running", Total: total, Phase: phase, StartedAt: time.Now().UTC(), Message: message, Results: []nodeCheckItem{}}
 	a.nodeChecks.cancel = cancel
 	done := make(chan struct{})
 	a.nodeChecks.done = done
@@ -251,7 +293,15 @@ func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done
 	defer close(done)
 	defer release()
 	defer cancel()
-	profile, err := a.freshNetworkProfile(ctx)
+	definition := applyReviewHash(service)
+	var err error
+	if request.Feed != nil || request.FeedID != "" {
+		request.NodeIDs, err = a.fetchNodeCheckCandidates(ctx, id, request)
+	}
+	profile := ""
+	if err == nil {
+		profile, err = a.freshNetworkProfile(ctx)
+	}
 	if err == nil {
 		workers := 1
 		if request.Mode == "tcp" {
@@ -265,6 +315,10 @@ func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done
 				defer joined.Done()
 				for nodeID := range work {
 					if ctx.Err() != nil {
+						return
+					}
+					if request.Mode == "service" && !a.nodeCheckDefinitionCurrent(service.ID, definition) {
+						cancel()
 						return
 					}
 					item := a.runNodeCheckItem(ctx, request.Mode, nodeID, service, profile, pinger)
@@ -308,11 +362,20 @@ func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done
 		job := a.nodeChecks.job
 		finished := time.Now().UTC()
 		job.FinishedAt = &finished
-		job.State, job.Message = "completed", "Проверка завершена."
+		previousMessage := job.Message
+		job.Phase = "finished"
+		job.State, job.Message = "completed", "Проверка завершена. Маршруты не применялись."
 		if ctx.Err() != nil {
 			job.State, job.Message = "canceled", "Проверка остановлена."
 		} else if err != nil {
-			job.State, job.Message = "failed", "Не удалось подтвердить текущую сеть. Повторите проверку."
+			job.State = "failed"
+			if job.ErrorCode != "" {
+				job.Message = previousMessage
+			} else {
+				job.Message = "Не удалось подтвердить текущую сеть. Повторите проверку."
+			}
+		} else if job.Total == 0 {
+			job.Message = "В источнике нет доступных кандидатов для проверки. Прежние узлы сохранены."
 		}
 		a.nodeChecks.cancel = nil
 	}
@@ -328,6 +391,7 @@ func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service cat
 		item.CheckedAt = time.Now().UTC()
 		if err == nil {
 			item.Available, item.DurationMS, item.Message = result.Available, result.LatencyMS, result.Message
+			item.Verdict, item.TestLevel, item.ErrorCode = string(result.Verdict), result.TestLevel, result.ErrorCode
 		} else {
 			item.Message = nodeCheckFailureMessage(err)
 		}

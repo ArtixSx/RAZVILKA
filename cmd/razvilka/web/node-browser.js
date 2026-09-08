@@ -104,14 +104,15 @@ function nodeServiceScenario(service) {
 function nodeServiceHealth(node, serviceID) {
   if (node.disabled) return { label: 'Отключён', kind: 'unknown', state: 'disabled' };
   if (node.state === 'expired') return { label: 'Истёк срок', kind: 'unknown', state: 'expired' };
-  const health = (node.health?.history || []).find(check => check.service_id === serviceID) || (node.health?.service_id === serviceID ? node.health : null);
+  const health = [...(node.health?.history || []), ...(node.health?.service_id ? [node.health] : [])].filter(check => check.service_id === serviceID).sort((a,b)=>Date.parse(b.checked_at)-Date.parse(a.checked_at))[0];
   if (!health || !nodeDate(health.checked_at)) return { label: 'Не проверен', kind: 'unknown', state: 'quarantined' };
   const currentNetwork = state.nodes?.network_profile;
   if (!currentNetwork || health.network_profile !== currentNetwork || Date.parse(health.checked_at) > Date.now() || !nodeDate(health.expires_at) || Date.parse(health.expires_at) <= Date.now()) return { label: 'Перепроверить', kind: 'unknown', state: 'stale', health };
   const works = health.state === 'available' && health.test_level === 'service' && health.verdict === 'PASS' && health.route_path_id === `sing-box:${node.id}` && !health.direct_leak;
   if (works) return { label: 'Работает', kind: 'ok', state: 'available', health };
-  const failed = health.verdict === 'FAIL' || health.direct_leak === true;
-  return { label: failed ? 'Не работает' : 'Не удалось проверить', kind: failed ? 'bad' : 'unknown', state: failed ? 'degraded' : 'inconclusive', health };
+  const failed = ['FAIL','BLOCKED','MISROUTED'].includes(health.verdict) || health.direct_leak === true;
+  if (health.verdict === 'ERROR') return {label:'Ошибка проверки',kind:'warn',state:'inconclusive',health};
+  return { label: failed ? 'Не подходит сервису' : 'Нет однозначного результата', kind: failed ? 'bad' : 'unknown', state: failed ? 'degraded' : 'inconclusive', health };
 }
 
 function nodePassivePing(nodeID) {
@@ -152,7 +153,7 @@ function renderNodeBrowser() {
   const payload = state.nodes || {};
   const nodes = payload.nodes || [];
   for (const id of nodes.map(node => node.id).sort()) if (!nodeBrowser.ordinals.has(id)) nodeBrowser.ordinals.set(id, nodeBrowser.ordinals.size + 1);
-  const nodeIDs = new Set(nodes.filter(nodeCanCheck).map(node => node.id));
+  const nodeIDs = new Set(nodes.map(node => node.id));
   nodeBrowser.selected = new Set([...nodeBrowser.selected].filter(id => nodeIDs.has(id)));
   const selector = $('#nodeBrowserService');
   const previous = selector.value;
@@ -193,7 +194,7 @@ function renderNodeBrowser() {
   $('#nodePageLabel').textContent = `${nodeBrowser.page + 1} / ${pageCount}`;
   $('#nodePagePrevious').disabled = nodeBrowser.page === 0;
   $('#nodePageNext').disabled = nodeBrowser.page >= pageCount - 1;
-  const selectable = visible.filter(nodeCanCheck);
+  const selectable = visible;
   $('#nodeSelectAll').checked = selectable.length > 0 && selectable.every(node => nodeBrowser.selected.has(node.id));
   $('#nodeSelectAll').indeterminate = selectable.some(node => nodeBrowser.selected.has(node.id)) && !$('#nodeSelectAll').checked;
   renderNodeBatchStatus();
@@ -212,7 +213,7 @@ function renderNodeBrowserCard(node, serviceID) {
   const sources = [...new Set((node.origins || []).map(origin => nodeBrowserSourceName(origin.source_id)))].join(', ');
   const assigned = state.services.filter(item => item.enabled && item.route === `sing-box:${node.id}`).map(item => item.name).join(', ');
   return `<article data-node-card="${esc(node.id)}" class="node-card ${nodeCanCheck(node) ? '' : 'disabled'} ${nodeBrowser.selected.has(node.id) ? 'selected' : ''}">
-    <div class="node-card-head"><div class="node-heading"><span class="node-flag" title="${esc(country.name)} · данные источника">${esc(country.flag)}</span><div><h3>${esc(nodeDisplayName(node))}</h3><span class="node-protocol">${esc(String(node.protocol || 'VPN').toUpperCase())} · ${esc(nodeTransportLabel(node))}${node.tls ? ' · TLS' : ''}</span></div></div><input class="node-pick" type="checkbox" data-node-select="${esc(node.id)}" aria-label="Выбрать ${esc(nodeDisplayName(node))}" ${nodeBrowser.selected.has(node.id) ? 'checked' : ''} ${nodeCanCheck(node) ? '' : 'disabled'}></div>
+    <div class="node-card-head"><div class="node-heading"><span class="node-flag" title="${esc(country.name)} · данные источника">${esc(country.flag)}</span><div><h3>${esc(nodeDisplayName(node))}</h3><span class="node-protocol">${esc(String(node.protocol || 'VPN').toUpperCase())} · ${esc(nodeTransportLabel(node))}${node.tls ? ' · TLS' : ''}</span></div></div><button class="icon-button r4-node-trash" type="button" data-r4-delete="${esc(node.id)}" aria-label="Удалить ${esc(nodeDisplayName(node))}" title="Удалить локальную запись"><svg class="ui-icon" aria-hidden="true"><use href="#i-trash"></use></svg></button><input class="node-pick" type="checkbox" data-node-select="${esc(node.id)}" aria-label="Выбрать ${esc(nodeDisplayName(node))}" ${nodeBrowser.selected.has(node.id) ? 'checked' : ''} ></div>
     <div class="node-metrics"><div class="node-metric"><small>${tcp ? 'Пинг · TCP' : 'Задержка · UDP'}</small><b class="${ping?.reachable ? 'ok' : ping ? 'bad' : 'unknown'}">${esc(pingText)}</b></div><div class="node-metric"><small>${esc(nodeServiceScenario(service))}</small><b class="${status.kind}">${esc(status.label)}</b></div></div>
     <div class="node-card-caption"><span>${esc(sources || 'Мои подключения')}</span><span title="Последняя проверка доступа">${esc(nodeTime(health.checked_at))}</span></div>
     <div class="node-actions"><button class="secondary" type="button" data-node-ping="${esc(node.id)}" ${nodeCanCheck(node) && tcp ? '' : 'disabled'}>Пинг</button><button class="primary" type="button" data-node-check="${esc(node.id)}" ${nodeCanCheck(node) ? '' : 'disabled'}>${status.state === 'available' ? 'Подключить' : 'Проверить и подключить'}</button></div>
@@ -257,10 +258,11 @@ function renderNodeBatchStatus() {
   $('#nodePingSelected').textContent = `Пинг · ${tcpCount}`;
   $('#nodeCheckSelected').disabled ||= !count;
   $('#nodePingSelected').disabled ||= !tcpCount;
+  if(typeof renderWorkflowControls==='function')renderWorkflowControls();
   if (!job) return;
   $('#nodeBatchProgress').max = Math.max(1, job.total || 1);
   $('#nodeBatchProgress').value = job.completed || 0;
-  const label = ({ running: 'Проверяем', canceling: 'Останавливаем', completed: 'Проверка завершена', canceled: 'Проверка остановлена', failed: 'Проверка не завершена' })[job.state] || 'Проверка';
+  const label = job.phase === 'fetching' && running ? 'Получаем источник' : ({ running: 'Проверяем', canceling: 'Останавливаем', completed: 'Проверка завершена', canceled: 'Проверка остановлена', failed: 'Проверка не завершена' })[job.state] || 'Проверка';
   const scenario = job.mode === 'service' ? ` · ${nodeServiceScenario(state.services.find(item => item.id === job.service_id))}` : ' · TCP';
   $('#nodeBatchMessage').textContent = `${label}: ${job.completed || 0} / ${job.total || 0}${scenario}${job.message ? ` · ${job.message}` : ''}`;
 }
@@ -297,7 +299,7 @@ async function pollNodeBrowserChecks() {
     try {
       const [response, fallback] = await Promise.all([api('/api/v1/node-checks/current'), api('/api/v1/node-autofallback')]);
       if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
-      nodeBrowser.job = response.job || null; nodeBrowser.pings = response.pings || [];
+      nodeBrowser.job = response.job || null; nodeBrowser.pings = response.pings || [];nodeBrowser.fetchAndCheck=response.fetch_and_check===true;
       state.nodeAutofallback = fallback;
       const running = ['running', 'canceling'].includes(nodeBrowser.job?.state);
       if (running || fallback.active) delay = 1500;
@@ -324,7 +326,7 @@ async function pollNodeBrowserChecks() {
 
 async function cancelNodeBrowserCheck() {
   try {
-    const response = await api('/api/v1/node-checks/current', { method: 'DELETE' });
+    const response = await api('/api/v1/node-checks/current'+(nodeBrowser.job?.id?'?job_id='+encodeURIComponent(nodeBrowser.job.id):''), { method: 'DELETE' });
     nodeBrowser.job = response.job || nodeBrowser.job;
     renderNodeBatchStatus();
   } catch (error) { showDetails({ error: error.message }, 'Проверка не остановлена'); }
@@ -473,7 +475,7 @@ function bindNodeBrowser() {
   $('#nodeCountryFilters').addEventListener('click', event => { const button = event.target.closest('[data-node-country]'); if (button) { nodeBrowser.country = button.dataset.nodeCountry; nodeBrowser.page = 0; renderNodes(); } });
   $('#nodeList').addEventListener('change', event => { if (event.target.matches('[data-node-select]')) { const id = event.target.dataset.nodeSelect; event.target.checked ? nodeBrowser.selected.add(id) : nodeBrowser.selected.delete(id); renderNodes(); } });
   $('#nodeList').addEventListener('click', event => { const button = event.target.closest('[data-node-ping]'); if (button) startNodeBrowserCheck('tcp', [button.dataset.nodePing]); });
-  $('#nodeSelectAll').addEventListener('change', event => { for (const id of nodeBrowser.visible) { if (!nodeCanCheck(nodeByID(id))) continue; event.target.checked ? nodeBrowser.selected.add(id) : nodeBrowser.selected.delete(id); } renderNodes(); });
+  $('#nodeSelectAll').addEventListener('change', event => { for (const id of nodeBrowser.visible) { event.target.checked ? nodeBrowser.selected.add(id) : nodeBrowser.selected.delete(id); } renderNodes(); });
   $('#nodePagePrevious').addEventListener('click', () => { nodeBrowser.page--; renderNodes(); });
   $('#nodePageNext').addEventListener('click', () => { nodeBrowser.page++; renderNodes(); });
   $('#nodePingSelected').addEventListener('click', () => startNodeBrowserCheck('tcp'));

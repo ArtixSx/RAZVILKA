@@ -176,9 +176,15 @@ func (a *App) runAutonomyRemoval(ctx context.Context, p autonomy.Policy, s auton
 		if e != nil {
 			return finish("removal-blocked", "Снятие маршрута не подтверждено; использован общий откат.")
 		}
-	} else if s.DeleteDefinition && base.Services[s.ID].Enabled {
-		// No applied path is allowed to legitimize deleting a newer enabled draft.
-		return finish("manual-change", "Сервис включён в черновике. Подтвердите действие в разделе сервисов.")
+	} else {
+		// Cancel a pending own draft as well as applied routes. The fingerprint
+		// above fences a newer manual edit; this commit touches only this ID.
+		if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
+			return finish("paused", "Разрешение отозвано.")
+		}
+		if _, e := a.Store.ApplyAutonomyRemovalWithRollback(s.ID, s.DeleteDefinition, base.Revision); e != nil {
+			return finish("removal-pending", "Не удалось снять ожидающий выбор. Настройки сохранены.")
+		}
 	}
 	// Catalog removal is deliberately last; failure is safely retried. An
 	// already absent definition after a crash is idempotent when no path remains.

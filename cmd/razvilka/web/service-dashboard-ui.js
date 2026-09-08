@@ -103,12 +103,12 @@ function serviceDashboardCard(service) {
   const timing = serviceDashboardFresh(result) && Number.isFinite(result.latency_ms) ? `Время проверки: ${Math.round(result.latency_ms)} мс` : '';
   const pingNode = serviceDashboardPingNode(service);
   const id = esc(service.id);
-  return `<article class="sd-card ${pending ? 'pending' : ''}" data-sd-card="${id}">
+  return `<article class="sd-card ${pending ? 'pending' : ''} ${open ? 'is-expanded' : ''}" data-sd-card="${id}">
     <div class="sd-card-head"><button class="sd-summary" type="button" data-sd-expand="${id}" data-sd-focus="expand-${id}" aria-expanded="${open}" aria-controls="sd-details-${id}">
       <span class="sd-name"><span class="service-badge">${typeof consoleServiceIcon==='function'?consoleServiceIcon(service):esc(service.icon || '•')}</span><span><b>${esc(service.name)}</b><small>${pending ? 'Есть неприменённые изменения' : esc(service.category || '')}</small></span></span>
       <span class="sd-current"><small>Применённый маршрут</small><b>${esc(summary.route ? routeLabel(summary.route) : 'Не включён')}</b></span>
       <span class="sd-health ${summary.kind}">${summary.label === 'Не включён' ? '' : `<b>${esc(summary.label)}</b>`}<small title="TCP-пинг измеряет соединение с сервером. Доступ к сайту проверяется отдельно.">${esc(summary.pingLabel)}</small></span>
-      <span class="sd-chevron" aria-hidden="true">${open ? '−' : '+'}</span>
+      <span class="sd-chevron" aria-hidden="true"><span class="r41-expand-label">${open ? 'Свернуть' : 'Подробнее'}</span>${open ? '−' : '+'}</span>
     </button><div class="sd-switch"><button type="button" class="toggle ${service.enabled ? 'on' : ''}" role="switch" aria-checked="${!!service.enabled}" aria-label="${service.enabled ? 'Выключить' : 'Включить'} ${esc(service.name)} после применения" data-sd-toggle="${id}" data-sd-focus="toggle-${id}" ${serviceDashboard.edit ? 'disabled' : ''}><i></i></button><small>${service.enabled ? 'Выбрано: вкл.' : 'Выбрано: выкл.'}</small></div></div>
     <div class="sd-details" id="sd-details-${id}" ${open ? '' : 'hidden'}>
       <p class="sd-description">${esc(service.description || '')}</p>

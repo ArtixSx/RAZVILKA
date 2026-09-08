@@ -514,6 +514,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/provider-profiles/preview", a.providerProfilePreview)
 	mux.HandleFunc("/api/v1/provider-profiles/import", a.providerProfileImport)
 	mux.HandleFunc("/api/v1/nodes/import", a.nodeImport)
+	mux.HandleFunc("/api/v1/nodes/delete-batch", a.nodeCleanup)
 	mux.HandleFunc("/api/v1/node-checks", a.nodeCheckJobs)
 	mux.HandleFunc("/api/v1/node-checks/current", a.nodeCheckJobCurrent)
 	mux.HandleFunc("/api/v1/node-autofallback", a.nodeAutofallbackStatus)
@@ -3072,8 +3073,9 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var in struct {
-			AllowConflicts bool `json:"allow_conflicts"`
-			Refresh        bool `json:"refresh"`
+			AllowConflicts bool   `json:"allow_conflicts"`
+			Refresh        bool   `json:"refresh"`
+			ExpectedSHA    string `json:"expected_source_sha256"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
@@ -3082,6 +3084,10 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 		preview, err := a.Community.Preview(ctx, id, a.catalogSnapshot().Services, in.Refresh)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		if in.ExpectedSHA != "" && in.ExpectedSHA != preview.SourceSHA {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Содержимое источника изменилось. Откройте новый предпросмотр.", "not_started": true})
 			return
 		}
 		if len(preview.Conflicts) > 0 && !in.AllowConflicts {

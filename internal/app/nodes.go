@@ -287,6 +287,28 @@ func (a *App) nodeAction(w http.ResponseWriter, r *http.Request) {
 			writeNodeError(w, nodestore.ErrInUse)
 			return
 		}
+		// The legacy single-node action must protect the same autonomous reserves,
+		// suspended routes and rollback references as the batch operation.
+		release, err := a.privateRestoreAdmission(r.Context())
+		if err != nil {
+			a.writeOperationFailure(w, err)
+			return
+		}
+		defer release()
+		snapshot, err := a.Nodes.Snapshot(r.Context(), time.Now())
+		if err != nil {
+			writeNodeError(w, err)
+			return
+		}
+		protected, err := a.protectedCleanupNodes(r.Context(), snapshot)
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "Состояние восстановления не подтверждено. Узел сохранён."})
+			return
+		}
+		if protected[id] != "" {
+			writeNodeError(w, nodestore.ErrInUse)
+			return
+		}
 		if _, err := a.Nodes.Delete(r.Context(), id, time.Now()); err != nil {
 			writeNodeError(w, err)
 			return

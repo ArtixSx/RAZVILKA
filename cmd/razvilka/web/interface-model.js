@@ -61,7 +61,31 @@
     return Number.isFinite(checked) && Number.isFinite(until) && checked <= now && until > now && checked < until;
   }
   function protocol(value) { return ({hy2:'hysteria2',ss:'shadowsocks'})[value] || text(value); }
-  const model = Object.freeze({ category, selectedView, selection, aggregate, filterServices, groupServices, finitePercent, freshEvidence, protocol });
+  function homeSnapshot(services, summaries) {
+    const selected = services.filter(s => s.enabled === true);
+    const counts = aggregate(selected, summaries);
+    const order = { bad: 0, warn: 1, unknown: 2 };
+    const attention = selected.filter(s => summaries[s.id]?.kind !== 'good')
+      .slice().sort((a, b) => (order[summaries[a.id]?.kind] ?? 2) - (order[summaries[b.id]?.kind] ?? 2) || text(a.name).localeCompare(text(b.name), 'ru'));
+    const routes = new Map();
+    let appliedCount = 0;
+    // Include still-applied routes even when a new draft has deselected them.
+    // A draft is not a completed removal; route counts never use desired/plan.
+    for (const s of services) {
+      const applied = s.applied_state || { enabled: s.applied_enabled === true, route: s.applied_route };
+      if (applied.enabled !== true) continue;
+      appliedCount++;
+      const raw = text(applied.route), type = raw === 'direct' ? 'direct'
+        : /^(nfqws2|usque|warp-wg|sing-box|xray|amneziawg)(:|$)/.test(raw) ? raw.split(':')[0]
+        : raw && raw !== 'auto' ? 'other' : 'unknown';
+      routes.set(type, (routes.get(type) || 0) + 1);
+    }
+    return { counts, attention, appliedCount,
+      routes: [...routes].map(([id, count]) => ({ id, count }))
+        .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)),
+    };
+  }
+  const model = Object.freeze({ category, selectedView, selection, aggregate, filterServices, groupServices, finitePercent, freshEvidence, protocol, homeSnapshot });
   root.RazvilkaInterfaceModel = model;
   if (typeof module !== 'undefined' && module.exports) module.exports = model;
 })(typeof globalThis === 'undefined' ? window : globalThis);

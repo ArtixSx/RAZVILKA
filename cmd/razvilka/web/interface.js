@@ -1,12 +1,22 @@
 /* Interface R3. One API/control plane; no simulated transport in production.
    UI grouping is metadata only. Network actions retain server-side consent/CAS. */
 'use strict';
-const interfaceState = { query:'', filter:'selected', layout:'list', category:'', expanded:new Set(), inspector:null, returnFocus:null, busy:false, authEpoch:0, toastTimer:null };
+const interfaceState = { query:'', filter:'selected', layout:interfaceReadLayout(), category:'', expanded:new Set(), inspector:null, returnFocus:null, busy:false, authEpoch:0, authRevoked:false, toastTimer:null };
+// Only a presentation preference is stored locally: no service IDs, keys or policy.
+function interfaceReadLayout() {
+  try { return localStorage.getItem('razvilka.service-layout.v1') === 'list' ? 'list' : 'cards'; }
+  catch (_) { return 'cards'; }
+}
+function interfaceSetLayout(value) {
+  interfaceState.layout = value === 'list' ? 'list' : 'cards';
+  try { localStorage.setItem('razvilka.service-layout.v1', interfaceState.layout); } catch (_) { /* Storage can be unavailable for a local preview. */ }
+  renderInterfaceServices(interfaceSummaries());
+}
 const rim = window.RazvilkaInterfaceModel;
 const interfaceHTMLCache = new WeakMap();
 const interfaceRequests = new Set();
 const interfaceSections = {
-  overview: { title:'Ваша сеть', children:[['overview','Обзор'],['autopilot','Автопилот']] },
+  overview: { title:'Ваша сеть', children:[['overview','Главная'],['autopilot','Автопилот']] },
   services: { title:'Сервисы', children:[['services','Мои сервисы'],['managed','Политики и резерв']] },
   nodes: { title:'Подключения', children:[['nodes','Узлы'],['providers','Каталог источников'],['subscription-settings','Подписки'],['connections','Текущие соединения']] },
   engines: { title:'Обходы', children:[['engines','Все обходы'],['engineconfig','Редактор'],['strategylab','Лаборатория NFQWS2'],['dns','DNS / Smart DNS'],['testlab','Проверки']] },
@@ -14,7 +24,7 @@ const interfaceSections = {
   activity: { title:'Наблюдение', children:[['activity','События'],['diagnostics','Диагностика']] },
   settings: { title:'Настройки', children:[['settings','Общие'],['onboard','Мастер'],['updates','Обновления'],['sources','Списки доменов']] },
 };
-Object.assign(viewMeta, { overview:['Обзор','Сервисы, которые важны вам'], engines:['Обходы','Специализированные инструменты, единое управление'], activity:['События','Решения, проверки и изменения'], providers:['Источники подключений','Выбранные каталоги и личные подписки'] });
+Object.assign(viewMeta, { overview:['Главная','Состояние сети и работа автоматики'], engines:['Обходы','Специализированные инструменты, единое управление'], activity:['События','Решения, проверки и изменения'], providers:['Источники подключений','Выбранные каталоги и личные подписки'] });
 function interfaceHTML(id, html) {
   const el=document.getElementById(id); if(!el || interfaceHTMLCache.get(el) === html)return;
   const focus=document.activeElement?.closest?.('[data-rz-focus]')?.getAttribute('data-rz-focus');
@@ -52,7 +62,7 @@ function interfaceServiceCard(s,summaries,compact=false){
 function interfaceGroupHTML(g,summaries,location){
  const a=g.summary,key=location+':'+g.name,open=interfaceState.expanded.has(key)||!!interfaceState.query;
  const route=a.routes.length>1?'Разные маршруты':a.route?interfaceRouteName(a.route):'Маршруты ещё не назначены';
- const label=a.selected?`Доступны: ${a.good}${a.pending?' · Проверяются: '+a.pending:''}${a.failed?' · Нужна проверка: '+a.failed:''}`:'Выберите нужные сервисы внутри';
+ const label=a.selected?`Доступны: ${a.good}${a.pending?' · Без подтверждения: '+a.pending:''}${a.failed?' · Не прошли: '+a.failed:''}`:'Выберите нужные сервисы внутри';
  return `<details class="ui3-service-group" data-rz-group="${esc(key)}" ${open?'open':''}><summary data-rz-focus="group-${esc(key)}"><span class="ui3-service-icon tone-violet">${ci('sparkles')}</span><span class="ui3-group-heading"><strong>${esc(g.name)}</strong><small>${a.selected} из ${a.total} выбрано · ${esc(route)}</small><small class="ui3-group-health ${esc(a.kind)}">${esc(label)}</small></span><span class="ui3-group-avatars">${g.allMembers.slice(0,3).map(s=>`<span>${consoleServiceIcon(s)}</span>`).join('')}</span><span class="ui3-group-chevron">${ci('chevron')}</span></summary><div class="ui3-group-status"><span class="ui3-status ${esc(a.kind)}"><i></i>${esc(label)}</span><small>Проверка и маршрут — отдельно для каждого</small></div><div class="ui3-group-content"><div class="ui3-group-member-grid">${g.members.map(s=>interfaceServiceCard(s,summaries,true)).join('')}</div><p class="ui3-group-note">Группировка не меняет сеть. Добавляйте и настраивайте участников по отдельности.</p></div></details>`;
 }
 function interfaceCards(services,summaries,where){return rim.groupServices(services,interfaceServices(),summaries).map(g=>g.grouped?interfaceGroupHTML(g,summaries,where):g.members.map(s=>interfaceServiceCard(s,summaries)).join('')).join('');}
@@ -65,25 +75,57 @@ function renderInterfaceNavigation(view=state.currentView||'overview'){
  const sub=$('#interfaceSubnav');sub.hidden=group.children.length<2;
  interfaceHTML('interfaceSubnav',group.children.map(([v,title])=>`<button type="button" data-rz-nav="${esc(v)}" ${v===view?'aria-current="page" class="active"':''}>${esc(title)}</button>`).join(''));
 }
-function renderInterfaceHome(summaries){
- const selected=interfaceServices().filter(s=>s.enabled),a=rim.aggregate(selected,summaries);consoleText('ui3HomeCount',String(a.selected));consoleText('ui3NavCount',String(a.selected));
- const ready=!!state.status?.version,waiting=a.pending+a.failed;
- const title=!ready?'Читаем состояние роутера':!a.selected?'Подключите первый сервис':waiting?'Некоторым сервисам нужна проверка':'Выбранные сервисы доступны';
- const desc=!ready?'Пока нет данных — мы не считаем сеть исправной по умолчанию.':!a.selected?'Добавьте сайт или приложение. Общие разрешения задаются в мастере.':`${a.good} из ${a.selected} имеют актуальное подтверждение. ${a.pending?`${a.pending} ещё не подтверждены. `:''}${a.failed?`${a.failed} не прошли проверку. `:''}Результат относится к проверенному сценарию.`;
- interfaceHTML('ui3HealthBanner',`<span class="ui3-health-icon ${a.kind}">${ci(!ready?'clock':waiting?'activity':a.selected?'shield':'plus')}</span><div><strong>${esc(title)}</strong><p>${esc(desc)}</p></div><button type="button" class="secondary" data-console-navigate="${consoleSnapshot?.policy?.setup_complete?'autopilot':'onboard'}">${consoleSnapshot?.policy?.setup_complete?'Посмотреть автоматику':'Пройти настройку'} ${ci('chevron')}</button>`);
- interfaceHTML('ui3HomeServices',selected.length?interfaceCards(selected,summaries,'home'):interfaceEmpty('Начните со своих сервисов','Не нужно выбирать движок или сервер на первом экране.',`<button type="button" class="primary" data-console-add>Добавить сервис</button>`));
- const attention=selected.filter(s=>summaries[s.id]?.kind!=='good').slice(0,3);
- interfaceHTML('ui3Attention',`<div class="ui3-section-heading"><h3>${waiting?'Нужно внимание':'Всё под наблюдением'}</h3>${ci(waiting?'activity':'check')}</div>${attention.length?attention.map(s=>`<button type="button" class="ui3-attention-item" data-rz-inspect="${esc(s.id)}"><span class="ui3-alert-dot ${esc(summaries[s.id]?.kind)}"></span><span><b>${esc(s.name)}</b><small>${esc(summaries[s.id]?.label||'Не проверен')}</small></span>${ci('chevron')}</button>`).join(''):`<p>${a.selected?'Новых проблем в актуальных сервисных проверках нет.':'Здесь появятся проблемы выбранных сервисов.'}</p>`}`);
- consoleText('ui3RouterName',state.system?.hostname||'Роутер');consoleText('ui3RouterMeta',[state.system?.architecture,state.system?.wan_interface].filter(Boolean).join(' · ')||'Нет сведений о платформе');
- const m=state.metrics?.latest||{},cpu=m.cpu_ready===false?null:rim.finitePercent(m.cpu_percent),ram=rim.finitePercent(m.memory_used_percent);
- interfaceHTML('ui3Resources',[[cpu,'Процессор'],[ram,'Память']].map(([n,label])=>`<div class="ui3-resource"><div><span>${label}</span><b>${n===null?'Нет данных':Math.round(n)+'%'}</b></div><div class="ui3-meter" role="img" aria-label="${label}: ${n===null?'нет данных':Math.round(n)+'%'}"><i style="width:${n===null?0:n}%"></i></div></div>`).join('')+`<div class="ui3-router-temperature"><span>Температура</span><b>${typeof m.temperature_c==='number'&&Number.isFinite(m.temperature_c)?Math.round(m.temperature_c)+' °C':'Нет данных'}</b></div>`);
- const p=consoleSnapshot?.policy,app=p?.application;
- interfaceHTML('ui3Maintenance',`<span class="ui3-maintenance-icon">${ci('clock')}</span><h3>Ночное обслуживание</h3><p>${app&&app.mode!=='off'?`Приложение: ${esc(app.start)}–${esc(app.end)}<br>${esc(p.timezone)}`:'Расписание ещё не включено'}</p><span class="ui3-maintenance-note">${app?.mode==='prepare'?'Проверка и подготовка архива.':'Проверка наличия обновлений.'} Автоматическая установка пока недоступна.</span><button type="button" class="text-button" data-console-navigate="updates">Управлять расписанием ${ci('chevron')}</button>`);
- const events=(state.audit?.events||[]).slice(0,4);
- interfaceHTML('ui3HomeEvents',events.length?events.map(e=>`<div class="ui3-event"><span class="ui3-event-icon">${ci(e.outcome==='ok'?'check':'activity')}</span><div><strong>${esc(consoleAuditTitle(e))}</strong><small>${esc(e.path||'Локальная операция')}</small></div><time>${esc(consoleDate(e.timestamp))}</time></div>`).join(''):interfaceEmpty('Здесь будет история','Решения и изменения появятся после первой операции.'));
+/* Home is a read-only operational summary; Services is the configuration catalog.
+   All actions below navigate to existing, scoped controllers. */
+function interfaceHomeAuto(ready){
+ const snapshot=ready&&!consoleAutonomyError?consoleSnapshot:null,p=snapshot?.policy;
+ const label=!ready?'Данные недоступны':consoleAutonomyError?'Автономность недоступна':interfaceAutoLabel();
+ const enabled=!!p?.setup_complete&&p.enabled&&!snapshot?.stopped&&!snapshot?.manual&&!snapshot?.safe_mode&&!snapshot?.blocked&&!state.status?.safe_mode;
+ const managed=Object.values(snapshot?.services||{}).filter(s=>s.enabled&&!s.removing).length;
+ const lastCheck=nodeActivity.fallback!==null?nodeActivity.checks:nodeBrowser.job;
+ const jobs=[{job:lastCheck,view:'nodes'}, {job:serviceDashboard.control?.job,view:'services'}]
+   .filter(x=>ready&&x.job&&['queued','running','canceling'].includes(x.job.state));
+ const job=jobs[0],fallback=ready&&nodeActivity.fallback?.active===true;
+ const phaseNames={queued:'Ожидает выполнения',fetching:'Получает кандидатов',checking:'Проверяет подключения',finished:'Завершает проверку'};
+ let activity=!p?'Состояние очереди ещё не получено.':!enabled?'Изменения сети выполняются только в пределах действующих разрешений.':'В последнем снимке нет активной ручной проверки. Фоновый цикл выполняется на роутере.';
+ if(fallback)activity='В последнем снимке выполняется проверка резервного маршрута.';
+ if(job){const j=job.job,total=Number.isInteger(j.total)&&j.total>=0?j.total:0,completed=Number.isInteger(j.completed)&&j.completed>=0?Math.min(j.completed,total):0;
+   activity=`${j.state==='canceling'?'Завершение и очистка':phaseNames[j.phase]||phaseNames[j.state]||'Проверка на роутере'}${total?' · '+completed+' из '+total:''}.`;
+ }
+ const seconds=p?.check_seconds;
+ const interval=Number.isFinite(seconds)&&seconds>0?(seconds%60===0?seconds/60+' мин':seconds+' с'):'Не задан';
+ interfaceHTML('r42AutoPanel',`<div class="r42-panel-cap"><span class="ui3-eyebrow">АВТОПИЛОТ</span>${ci('route')}</div><h3>${esc(label)}</h3><p>${esc(consoleAutonomyError||(!p?.setup_complete?'Задайте общие правила один раз в мастере.':enabled?'Следит за разрешёнными сервисами и сохраняет работающий путь.':'Сохранённая политика не означает, что автопереключение сейчас разрешено.'))}</p><div class="r42-auto-facts"><div><strong>${p?managed:'—'}</strong><span>под управлением</span></div><div><strong>${esc(interval)}</strong><span>интервал проверки</span></div></div><div class="r42-job-state ${job||fallback?'has-job':''}">${ci(job||fallback?'activity':'clock')}<span>${esc(activity)}</span></div><button class="text-button" type="button" data-console-navigate="${job?job.view:fallback||p?.setup_complete?'autopilot':'onboard'}" data-rz-focus="home-auto">${job||fallback?'Открыть задачу':p?.setup_complete?'Политика и очередь':'Пройти настройку'} ${ci('chevron')}</button>`);
 }
+function renderInterfaceHome(summaries){
+ const ready=!interfaceState.authRevoked&&!!state.status?.version&&state.status?.authenticated!==false;
+ const services=ready?interfaceServices():[],home=rim.homeSnapshot(services,summaries),a=home.counts;
+ consoleText('ui3HomeCount',String(a.selected));consoleText('ui3NavCount',ready?String(a.selected):'—');
+ const stopped=ready&&(consoleSnapshot?.stopped||state.serviceControl?.runtime_state==='stopped');
+ const title=!ready?'Состояние ещё не получено':stopped?'Маршруты RAZVILKA остановлены':!a.selected?'Добавьте первый сервис':a.failed?'Есть неуспешные проверки':a.pending?'Нужны свежие подтверждения':'Последние проверки пройдены';
+ const desc=!ready?'Ожидаем данные локальной панели. Отсутствие данных не означает, что интернет отключён.':stopped?'Настройки сохранены. Перед возобновлением нужно проверить актуальность маршрутов.':!a.selected?'Список сайтов и приложений настраивается в разделе «Сервисы». Здесь будет сводка их состояния.':'Доступность относится к проверенному сценарию, а не ко всем функциям сайта или приложения.';
+ const tone=!ready||!a.selected||stopped?'unknown':a.failed?'bad':a.pending?'warn':'good';
+ const bars=[['good',a.good],['unknown',a.pending],['bad',a.failed]].map(([kind,count])=>`<i class="${kind}" style="width:${a.selected?100*count/a.selected:0}%"></i>`).join('');
+ interfaceHTML('ui3HealthBanner',`<div class="r42-panel-cap"><span class="ui3-eyebrow">ТЕКУЩЕЕ СОСТОЯНИЕ</span><span class="ui3-status ${tone}">${ci(tone==='good'?'check':'activity')}${ready?'Снимок панели':'Ожидаем данные'}</span></div><h3>${esc(title)}</h3><p>${esc(desc)}</p><div class="r42-health-number"><strong>${ready?a.good:'—'}</strong><span>/ ${ready?a.selected:'—'}<small>сервисов имеют свежее подтверждение</small></span></div><div class="r42-health-bar" role="img" aria-label="${a.good} подтверждено, ${a.pending} без подтверждения, ${a.failed} не прошли проверку">${bars}</div><div class="r42-health-legend">${ready?`<span><i class="good"></i>${a.good} подтверждено</span><span><i class="unknown"></i>${a.pending} без подтверждения</span><span><i class="bad"></i>${a.failed} не прошли</span>`:'<span>Нет данных о сервисных проверках</span>'}</div>`);
+ interfaceHomeAuto(ready);
+ const attention=home.attention.slice(0,3);
+ interfaceHTML('ui3Attention',`<div class="ui3-section-heading"><div><h3>Требует внимания${home.attention.length?` <span class="ui3-count">${home.attention.length}</span>`:''}</h3><p>Только исключения, не полный список сервисов</p></div>${ci('activity')}</div>${attention.length?attention.map(s=>{const h=summaries[s.id]||{};return `<button type="button" class="r42-attention-row" data-rz-inspect="${esc(s.id)}" data-rz-focus="attention-${esc(s.id)}"><span class="r42-state-mark ${esc(h.kind||'unknown')}">${ci(h.kind==='bad'?'activity':'clock')}</span><span class="r42-attention-copy"><b>${esc(s.name)}</b><small>${esc(h.label||'Нет свежей проверки')}</small></span><span class="r42-attention-route">${esc(interfaceRouteName(h.route))}</span>${ci('chevron')}</button>`;}).join(''):`<div class="r42-calm-state">${ci(ready&&a.selected?'shield':'clock')}<div><b>${!ready?'Нет данных для оценки':a.selected?'В актуальных проверках нет проблем':'Наблюдение ещё не настроено'}</b><p>${a.selected?'Полный состав и индивидуальные настройки — в разделе «Сервисы».':'После добавления сервисов здесь появятся их отклонения и причины.'}</p></div></div>`}${attention.length?`<button type="button" class="text-button r42-attention-link" data-r42-services="attention" data-rz-focus="all-attention">${home.attention.length>3?'Все '+home.attention.length+' в разделе «Сервисы»':'Открыть сервисы с отклонениями'} ${ci('chevron')}</button>`:''}`);
+ const routeNames={nfqws2:'Локально · NFQWS2',usque:'WARP · MASQUE','warp-wg':'WARP · WireGuard','sing-box':'Sing-box · прокси',xray:'Xray · прокси',amneziawg:'AmneziaWG',direct:'Прямой путь',other:'Другой маршрут',unknown:'Маршрут не определён'};
+ interfaceHTML('r42RouteDistribution',`<div class="ui3-section-heading"><div><h3>Распределение маршрутов</h3><p>${ready?home.appliedCount+' применённых назначений · не объём трафика':'Число назначений ещё не получено'}</p></div><button class="text-button" data-console-navigate="engines" type="button">Обходы ${ci('chevron')}</button></div>${home.routes.length?home.routes.map((r,i)=>`<div class="r42-route-row"><span class="r42-route-name">${esc(routeNames[r.id])}</span><div class="r42-route-meter" role="img" aria-label="${esc(routeNames[r.id])}: ${r.count} назначений"><i class="route-${i%3}" style="width:${100*r.count/home.appliedCount}%"></i></div><b>${r.count}</b></div>`).join(''):`<p class="r42-inline-empty">${ready?'Применённых маршрутов пока нет. Черновики и рекомендации здесь не учитываются.':'Ждём сведения о применённых маршрутах.'}</p>`}<div class="r42-route-footnote">${ci('layers')}Один путь может обслуживать несколько сервисов. Их проверки остаются независимыми.</div>`);
+ consoleText('ui3RouterName',ready?state.system?.hostname||'Роутер':'Роутер не определён');
+ consoleText('ui3RouterMeta',ready?[state.system?.architecture,state.system?.wan_interface?`WAN: ${state.system.wan_interface}`:''].filter(Boolean).join(' · ')||'Нет сведений о платформе':'Нет снимка');
+ const m=ready?state.metrics?.latest||{}:{},at=Date.parse(m.timestamp||''),metricsFresh=Number.isFinite(at)&&at<=Date.now()&&Date.now()-at<180000;
+ const cpu=metricsFresh&&m.cpu_ready!==false?rim.finitePercent(m.cpu_percent):null,ram=metricsFresh?rim.finitePercent(m.memory_used_percent):null;
+ interfaceHTML('ui3Resources',[[cpu,'Процессор'],[ram,'Память']].map(([n,label])=>`<div class="ui3-resource"><div><span>${label}</span><b>${n===null?'Нет свежих данных':Math.round(n)+'%'}</b></div><div class="ui3-meter" role="img" aria-label="${label}: ${n===null?'нет свежих данных':Math.round(n)+'%'}"><i style="width:${n===null?0:n}%"></i></div></div>`).join('')+`<div class="ui3-router-temperature"><span>Температура</span><b>${metricsFresh&&typeof m.temperature_c==='number'&&Number.isFinite(m.temperature_c)?Math.round(m.temperature_c)+' °C':'Нет свежих данных'}</b></div><p class="r42-resource-note">${metricsFresh?'Последнее измерение: '+esc(consoleDate(m.timestamp)):'Показатели появятся после получения актуального снимка.'}</p>`);
+ const p=ready&&!consoleAutonomyError?consoleSnapshot?.policy:null;
+ const labels={off:'Выключено',check:'Проверка версий',prepare:'Подготовка архива'};
+ interfaceHTML('ui3Maintenance',`<div class="ui3-section-heading"><div><h3>Ближайшее обслуживание</h3><p>${p?esc(p.timezone||'Часовой пояс не задан'):'Расписание ещё не получено'}</p></div>${ci('clock')}</div>${[['application','Приложение'],['components','Обходы']].map(([key,title])=>{const plan=p?.[key],on=plan&&plan.mode!=='off';const next=ready?consoleSnapshot?.[key==='application'?'next_application_window':'next_components_window']:null;const nextTime=Date.parse(next||''),hasNext=on&&Number.isFinite(nextTime)&&nextTime>Date.now();let date='';if(hasNext){try{date=new Date(nextTime).toLocaleString('ru-RU',{timeZone:p.timezone,day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch{date='Время требует уточнения';}}return `<div class="r42-maintenance-row"><span><b>${title}</b><small>${esc(plan?labels[plan.mode]||'Неподдержанный режим':'Не настроено')}</small></span><span>${on?esc(plan.start+'–'+plan.end):'—'}${date?`<small>Следующее: ${esc(date)}</small>`:''}</span></div>`;}).join('')}<p class="r42-resource-note">${p?'Окна проверки и подготовки. Автоустановка в этом кандидате не реализована.':'Окна обслуживания выбираются в мастере.'}</p><button class="text-button" type="button" data-console-navigate="onboard">Изменить расписание ${ci('chevron')}</button>`);
+ const events=ready?(state.audit?.events||[]).slice(0,4):[];
+ interfaceHTML('ui3HomeEvents',events.length?events.map(e=>`<div class="ui3-event"><span class="ui3-event-icon">${ci(e.outcome==='ok'?'check':'activity')}</span><div><strong>${esc(consoleAuditTitle(e))}</strong><small>${e.outcome==='ok'?'Операция завершена':e.outcome==='denied'?'Запрос отклонён':e.outcome==='failed'?'Операция завершилась с ошибкой':'Итог не подтверждён'} · ${esc(e.action||'Действие панели')}</small></div><time>${esc(consoleDate(e.timestamp))}</time></div>`).join(''):`<p class="r42-inline-empty">${ready?'Событий пока нет. Открытие главной страницы не запускает новые проверки.':'Журнал ещё не получен.'}</p>`);
+}
+
 function renderInterfaceServices(summaries){
  $('#ui3ServiceCatalog').classList.toggle('ui3-list-layout',interfaceState.layout==='list');
+ $('#serviceList').classList.toggle('r41-grid',interfaceState.layout!=='list');
  $$('[data-rz-layout]').forEach(e=>{const on=e.dataset.rzLayout===interfaceState.layout;e.classList.toggle('active',on);e.setAttribute('aria-pressed',String(on));});
  const all=interfaceServices(),cats=[...new Set(all.map(rim.category))].sort((a,b)=>a.localeCompare(b,'ru'));
  interfaceHTML('ui3CategoryFilters',[['','Все категории'],...cats.map(c=>[c,c])].map(([v,t])=>`<button type="button" class="${v===interfaceState.category?'active':''}" aria-pressed="${v===interfaceState.category}" data-rz-category="${esc(v)}" data-rz-focus="category-${esc(v)}">${esc(t)}</button>`).join(''));
@@ -104,6 +146,7 @@ function renderInterface(){
  renderInterfaceNavigation();const summary=interfaceSummaries();
  renderInterfaceHome(summary);renderInterfaceServices(summary);renderInterfaceEngines();
  consoleText('ui3SidebarAuto',interfaceAutoLabel());consoleText('ui3TopAuto',interfaceAutoLabel());
+ if(typeof renderWorkflowControls==='function')renderWorkflowControls();
 }
 function interfaceOpenService(id){
  const s=state.services.find(x=>x.id===id);if(!s)return;
@@ -137,8 +180,14 @@ async function interfaceManage(id,enabled,remove=false){
 function interfaceToast(text){consoleText('ui3Toast',text);$('#ui3Toast').hidden=false;clearTimeout(interfaceState.toastTimer);interfaceState.toastTimer=setTimeout(()=>$('#ui3Toast').hidden=true,5500);}
 document.addEventListener('toggle',e=>{if(!e.target.matches?.('[data-rz-group]'))return;const k=e.target.dataset.rzGroup;if(e.target.open)interfaceState.expanded.add(k);else interfaceState.expanded.delete(k);},true);
 document.addEventListener('click',event=>{
- const b=event.target.closest('[data-rz-inspect],[data-rz-nav],[data-rz-category],[data-rz-filter],[data-rz-protocol],[data-rz-close],[data-rz-action],[data-rz-layout]');if(!b)return;
- if(b.hasAttribute('data-rz-layout')){interfaceState.layout=b.dataset.rzLayout==='cards'?'cards':'list';renderInterfaceServices(interfaceSummaries());return;}
+ const b=event.target.closest('[data-r42-services],[data-rz-inspect],[data-rz-nav],[data-rz-category],[data-rz-filter],[data-rz-protocol],[data-rz-close],[data-rz-action],[data-rz-layout]');if(!b)return;
+ if(b.hasAttribute('data-r42-services')){
+  interfaceState.filter=b.dataset.r42Services==='attention'?'attention':'selected';
+  interfaceState.query='';interfaceState.category='';$('#ui3ServiceSearch').value='';
+  consoleNavigate('services');renderInterfaceServices(interfaceSummaries());
+  $('#ui3ServiceSearch').focus({preventScroll:true});return;
+ }
+ if(b.hasAttribute('data-rz-layout')){interfaceSetLayout(b.dataset.rzLayout);return;}
  if(b.dataset.rzInspect){interfaceOpenService(b.dataset.rzInspect);return;}
  if(b.hasAttribute('data-rz-nav')){consoleNavigate(b.dataset.rzNav);return;}
  if(b.hasAttribute('data-rz-category')){interfaceState.category=b.dataset.rzCategory;renderInterfaceServices(interfaceSummaries());return;}
@@ -155,6 +204,7 @@ document.addEventListener('click',event=>{
 });
 $('#ui3ServiceSearch').addEventListener('input',e=>{interfaceState.query=e.target.value;renderInterfaceServices(interfaceSummaries());});
 $('#ui3ServiceDialog').addEventListener('close',()=>{const previous=interfaceState.returnFocus;interfaceState.inspector=null;if(previous?.isConnected)previous.focus({preventScroll:true});});
-document.addEventListener('razvilka:auth-required',()=>{interfaceState.authEpoch++;interfaceState.busy=false;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');});
+document.addEventListener('razvilka:auth-required',()=>{interfaceState.authRevoked=true;interfaceState.authEpoch++;interfaceState.busy=false;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');renderInterfaceHome({});});
+document.addEventListener('razvilka:auth-restored',()=>{interfaceState.authRevoked=false;renderInterfaceHome(interfaceSummaries());});
 // UI polling renders data only; all checks and maintenance remain server jobs.
 renderInterface();

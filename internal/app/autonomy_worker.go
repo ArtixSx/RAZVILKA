@@ -18,7 +18,7 @@ import (
 )
 
 func allowedAutonomyNode(p autonomy.Policy, n nodestore.Node, now time.Time) bool {
-	if n.Disabled || !slices.Contains(p.Protocols, n.Protocol) {
+	if n.Disabled || !slices.Contains(p.Protocols, strings.ToLower(strings.TrimSpace(n.Protocol))) {
 		return false
 	}
 	for _, o := range n.Origins {
@@ -51,8 +51,8 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	if !p.SetupComplete {
 		return
 	}
-	a.autonomyMaintenance(ctx, p, now)
 	if !p.Enabled || ctx.Err() != nil || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || a.Dataplane == nil {
+		a.autonomyMaintenance(ctx, p, now)
 		return
 	}
 	if err = a.autonomyEnsureFeeds(ctx, p); err != nil {
@@ -84,6 +84,7 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	}
 	a.autonomy.mu.Unlock()
 	if chosen == "" {
+		a.autonomyMaintenance(ctx, p, now)
 		return
 	}
 	state.NextCheck = now.Add(time.Duration(p.CheckSeconds) * time.Second)
@@ -208,8 +209,15 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			check, _, err := a.checkAndRecordNode(ctx, currentNode, service, profile, 0)
 			verdict := "INCONCLUSIVE"
 			if err == nil {
-				verdict = string(check.Verdict)
-				healthy = check.Available && verdict == "PASS" && !check.DirectLeak
+				verdict = autonomyNodeObservation(check, time.Now())
+				healthy = verdict == "PASS"
+				if healthy {
+					_, resolveErr := a.Nodes.ResolveRoute(ctx, currentNode, service.ID, profile, "", time.Time{}, time.Now())
+					if resolveErr != nil {
+						healthy = false
+						verdict = "INCONCLUSIVE"
+					}
+				}
 			}
 			r.CheckedAt = time.Now().UTC()
 			replace = r.Observe(currentNode, profile, verdict, time.Now(), time.Duration(p.FailureConfirmSeconds)*time.Second)
@@ -221,6 +229,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 		}
 	}
+	checkedThisRound := map[string]bool{}
 	ready := []string{}
 	if healthy && isNode {
 		ready = append(ready, currentNode)
@@ -244,6 +253,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 				break
 			}
 			check, _, err := a.checkAndRecordNode(ctx, id, service, profile, 0)
+			checkedThisRound[id] = true
 			ready = slices.DeleteFunc(ready, func(v string) bool { return v == id })
 			if err == nil && check.Available && string(check.Verdict) == "PASS" && !check.DirectLeak {
 				ready = append(ready, id)
@@ -276,6 +286,15 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	if len(ready) == 0 {
 		return finish("searching", "Подходящий узел пока не найден. Продолжается ограниченный подбор.")
 	}
+	// A previously cached PASS is not sufficient during a current outage.
+	// Recheck the chosen replacement in this round before changing the route.
+	if !checkedThisRound[ready[0]] {
+		check, _, checkErr := a.checkAndRecordNode(ctx, ready[0], service, profile, 0)
+		if checkErr != nil || autonomyNodeObservation(check, time.Now()) != "PASS" {
+			r.Reserves = slices.DeleteFunc(r.Reserves, func(id string) bool { return id == ready[0] })
+			return finish("searching", "Сохранённый резерв не прошёл новую проверку; прежний маршрут не менялся.")
+		}
+	}
 	if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
 		return finish("rate-limited", "Лимит переключений исчерпан; автоматическое применение отложено.")
 	}
@@ -307,10 +326,15 @@ func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, 
 			continue
 		}
 		r.NormalizeEvidence()
-		if r.Status == "pass" && r.RouteConfirmed && string(r.Verdict) == "PASS" {
+		checkedAt, checkedErr := time.Parse(time.RFC3339, r.CheckedAt)
+		until, untilErr := time.Parse(time.RFC3339, r.EvidenceFreshUntil)
+		fresh := checkedErr == nil && untilErr == nil && !checkedAt.After(time.Now()) && until.After(time.Now())
+		if fresh && r.Status == "pass" && r.RouteConfirmed && string(r.Verdict) == "PASS" {
 			return "PASS"
 		}
-		if r.Status == "fail" && string(r.Verdict) == "FAIL" && r.RouteProofError == "" {
+		// Only an attributed, current service failure can replace a local route.
+		// Missing process/capability or uncertain route evidence is not a FAIL.
+		if fresh && r.Status == "fail" && (string(r.Verdict) == "BLOCKED" || string(r.Verdict) == "ERROR") && r.RouteConfirmed && r.RouteProofError == "" {
 			return "FAIL"
 		}
 	}
@@ -410,4 +434,20 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 	current.DraftFingerprint = autonomyDraftFingerprint(a.Store.Get().Services[s.ID])
 	a.autonomy.doc.Services[s.ID] = current
 	return a.persistAutonomyLocked(context.WithoutCancel(ctx))
+}
+
+// Translate structured checker evidence into the private failure quorum input.
+// Protocol/DNS/runtime/cleanup problems without definite network evidence never
+// count as consecutive service failures. The public verdict is unchanged.
+func autonomyNodeObservation(r dataplane.NodeCheckResult, now time.Time) string {
+	if r.FinishedAt.IsZero() || r.FinishedAt.After(now) || !r.ExpiresAt.After(now) {
+		return "INCONCLUSIVE"
+	}
+	if r.Available && string(r.Verdict) == "PASS" && !r.DirectLeak && r.TestLevel == "service" {
+		return "PASS"
+	}
+	if nodeAutofallbackDefiniteFailure(r) {
+		return "FAIL"
+	}
+	return "INCONCLUSIVE"
 }

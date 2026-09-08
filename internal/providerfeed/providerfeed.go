@@ -224,6 +224,13 @@ func resolve(request Request) (source, error) {
 	return s, nil
 }
 
+// ValidateRequest checks a subscription's shape without performing I/O or
+// persisting credentials. Sync repeats validation before any fetch.
+func ValidateRequest(request Request) error {
+	_, err := resolve(request)
+	return err
+}
+
 func (m *Manager) Sync(parent context.Context, request Request) (Result, error) {
 	s, err := resolve(request)
 	if err != nil || m == nil || m.nodes == nil {
