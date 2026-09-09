@@ -82,6 +82,9 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		exclusive := (r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/nodes/")) || strings.HasPrefix(r.URL.Path, "/api/v1/autonomy/services/") && r.Method == http.MethodDelete || r.URL.Path == "/api/v1/autonomy" && r.Method == http.MethodPut || r.URL.Path == "/api/v1/autonomy/services" && r.Method == http.MethodPost || r.Method == http.MethodPost && (r.URL.Path == "/api/v1/nodes/delete-batch" || r.URL.Path == "/api/v1/apply" || r.URL.Path == "/api/v1/self-update/apply" || r.URL.Path == "/api/v1/service-control/runtime" || r.URL.Path == "/api/v1/private-backups/import" || r.URL.Path == "/api/v1/diagnostics/usque/repair" || strings.HasPrefix(r.URL.Path, "/api/v1/nodes/") && strings.HasSuffix(r.URL.Path, "/apply"))
+		if r.Method != http.MethodGet && (strings.HasPrefix(r.URL.Path, "/api/v1/amneziawg") || strings.HasPrefix(r.URL.Path, "/api/v1/warp/")) {
+			exclusive = true
+		}
 		enter := a.Operations.Enter
 		if exclusive {
 			enter = a.Operations.Exclusive
@@ -135,7 +138,7 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 }
 
 func (a *App) backgroundRound(ctx context.Context, round int) {
-	release, err := a.Operations.Enter(ctx)
+	release, err := a.Operations.Exclusive(ctx)
 	if err != nil {
 		return // A restore takes precedence; retry at the next scheduled round.
 	}

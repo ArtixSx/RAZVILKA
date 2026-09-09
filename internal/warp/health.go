@@ -1,6 +1,7 @@
 package warp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 
 type HealthPolicy struct {
 	Enabled               bool `json:"enabled"`
+	CheckIntervalSeconds  int  `json:"check_interval_seconds,omitempty"`
+	AllowAccountRefresh   bool `json:"allow_account_refresh,omitempty"`
 	AcceptTOS             bool `json:"accept_tos"`
 	AutoGenerateCandidate bool `json:"auto_generate_candidate"`
 	AutoApplyCandidate    bool `json:"auto_apply_candidate"`
@@ -32,6 +35,9 @@ type HealthState struct {
 	LastSuccessfulServices  []string       `json:"last_successful_services,omitempty"`
 	RouteEvidenceConfirmed  bool           `json:"route_evidence_confirmed"`
 	EvidenceLevel           evidence.Level `json:"evidence_level"`
+	Attempts                []string       `json:"registration_attempts,omitempty"`
+	LastFailureRound        string         `json:"last_failure_round,omitempty"`
+	NetworkProfile          string         `json:"network_profile,omitempty"`
 	Rotations               []string       `json:"rotations,omitempty"`
 	LastActivation          string         `json:"last_activation,omitempty"`
 	LastActivationError     string         `json:"last_activation_error,omitempty"`
@@ -49,6 +55,7 @@ type HealthEvidence struct {
 	Status         string
 	RouteConfirmed bool
 	Level          evidence.Level
+	NetworkProfile string
 }
 
 type HealthDecision struct {
@@ -101,8 +108,23 @@ func (m *Manager) ObserveHealth(items []HealthEvidence) (HealthDecision, error) 
 	if err != nil {
 		return HealthDecision{}, err
 	}
-	doc.State.LastChecked = time.Now().UTC().Format(time.RFC3339)
+	now := m.healthClock()
+	doc.State.LastChecked = now.Format(time.RFC3339)
 	failures, successes := []string{}, []string{}
+	profile := ""
+	for _, item := range items {
+		if item.NetworkProfile != "" {
+			if profile != "" && profile != item.NetworkProfile {
+				return HealthDecision{}, errors.New("mixed network evidence")
+			}
+			profile = item.NetworkProfile
+		}
+	}
+	if profile != doc.State.NetworkProfile {
+		doc.State.NetworkProfile = profile
+		doc.State.ConsecutiveFailedRounds = 0
+		doc.State.LastFailureRound = ""
+	}
 	doc.State.EvidenceLevel = evidence.None
 	for _, item := range items {
 		level := item.Level
@@ -133,7 +155,24 @@ func (m *Manager) ObserveHealth(items []HealthEvidence) (HealthDecision, error) 
 		doc.State.ConsecutiveFailedRounds = 0
 	} else if !doc.State.RouteEvidenceConfirmed {
 		doc.State.LastDecision = "waiting-for-confirmed-warp-route-evidence"
+	} else if len(doc.State.LastSuccessfulServices) > 0 {
+		// One real service still works over this tunnel: account-wide regeneration
+		// must not be triggered by another site's refusal.
+		doc.State.ConsecutiveFailedRounds = 0
+		doc.State.LastDecision = "tunnel-works-service-specific-failure"
 	} else if len(doc.State.LastFailedServices) >= doc.Policy.MinFailedServices {
+		previous, _ := time.Parse(time.RFC3339, doc.State.LastFailureRound)
+		if !previous.IsZero() && now.Sub(previous) < 30*time.Second {
+			doc.State.LastDecision = "waiting-for-independent-failure-round"
+			if err := m.saveHealthLocked(doc); err != nil {
+				return HealthDecision{}, err
+			}
+			status := m.healthStatusLocked(doc)
+			status.Eligible = false
+			status.Reason = doc.State.LastDecision
+			return HealthDecision{HealthStatus: status}, nil
+		}
+		doc.State.LastFailureRound = now.Format(time.RFC3339)
 		doc.State.ConsecutiveFailedRounds++
 		doc.State.LastDecision = fmt.Sprintf("failed-round-%d-of-%d", doc.State.ConsecutiveFailedRounds, doc.Policy.FailureThreshold)
 	} else {
@@ -213,7 +252,19 @@ func (m *Manager) healthStatusLocked(doc healthDocument) HealthStatus {
 		status.Reason = "candidate-already-staged"
 		return status
 	}
-	now := time.Now().UTC()
+	now := m.healthClock()
+	attempts := pruneRotations(doc.State.Attempts, now.Add(-24*time.Hour))
+	if len(attempts) >= doc.Policy.MaxRotationsPerDay {
+		status.Reason = "daily-attempt-limit-reached"
+		return status
+	}
+	if len(attempts) > 0 {
+		last, _ := time.Parse(time.RFC3339, attempts[len(attempts)-1])
+		if now.Sub(last) < time.Duration(doc.Policy.CooldownHours)*time.Hour {
+			status.Reason = "attempt-cooldown-active"
+			return status
+		}
+	}
 	rotations := pruneRotations(doc.State.Rotations, now.Add(-24*time.Hour))
 	if len(rotations) >= doc.Policy.MaxRotationsPerDay {
 		status.Reason = "daily-rotation-limit-reached"
@@ -250,7 +301,11 @@ func (m *Manager) hasStagedCandidateLocked() bool {
 
 func (m *Manager) loadHealthLocked() (healthDocument, error) {
 	doc := healthDocument{Schema: 1, Policy: defaultHealthPolicy()}
-	b, err := os.ReadFile(filepath.Join(m.Root, "health-policy.json"))
+	path := filepath.Join(m.Root, "health-policy.json")
+	if fi, err := os.Lstat(path); err == nil && (!fi.Mode().IsRegular() || fi.Size() > 64<<10) {
+		return healthDocument{}, errors.New("invalid health state file")
+	}
+	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return doc, nil
 	}
@@ -266,6 +321,16 @@ func (m *Manager) loadHealthLocked() (healthDocument, error) {
 	if err := validateHealthPolicy(doc.Policy); err != nil {
 		return healthDocument{}, err
 	}
+	if len(doc.State.Attempts) > 32 || len(doc.State.Rotations) > 32 {
+		return healthDocument{}, errors.New("health history exceeds limit")
+	}
+	for _, values := range [][]string{doc.State.Attempts, doc.State.Rotations} {
+		for _, v := range values {
+			if _, err := time.Parse(time.RFC3339, v); err != nil {
+				return healthDocument{}, errors.New("invalid health history")
+			}
+		}
+	}
 	return doc, nil
 }
 
@@ -279,6 +344,12 @@ func (m *Manager) saveHealthLocked(doc healthDocument) error {
 }
 
 func validateHealthPolicy(policy HealthPolicy) error {
+	if policy.CheckIntervalSeconds != 0 && (policy.CheckIntervalSeconds < 60 || policy.CheckIntervalSeconds > 3600) {
+		return errors.New("check_interval_seconds must be 60..3600")
+	}
+	if policy.AllowAccountRefresh && !policy.AutoGenerateCandidate {
+		return errors.New("account refresh requires automatic candidate generation")
+	}
 	if policy.FailureThreshold < 2 || policy.FailureThreshold > 20 {
 		return errors.New("failure_threshold must be 2..20")
 	}
@@ -320,4 +391,73 @@ func unique(values []string) []string {
 		}
 	}
 	return out
+}
+
+func (m *Manager) healthClock() time.Time {
+	if m.healthNow != nil {
+		return m.healthNow().UTC()
+	}
+	return time.Now().UTC()
+}
+
+// CheckInterval is a scheduler hint, not another timer. Old policies migrate
+// to a three-minute interval without changing their opt-in permissions.
+func (p HealthPolicy) CheckInterval() time.Duration {
+	if p.CheckIntervalSeconds == 0 {
+		return 3 * time.Minute
+	}
+	return time.Duration(p.CheckIntervalSeconds) * time.Second
+}
+
+// GenerateAutomatic only stages a candidate. Caller owns exclusive app
+// admission and has already confirmed transport exhaustion plus an independent
+// healthy control path. The attempt is charged BEFORE any remote side effect;
+// failed/uncertain enrollments consume quota and survive process restart.
+func (m *Manager) GenerateAutomatic(ctx context.Context, expected HealthPolicy) (Result, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	doc, err := m.loadHealthLocked()
+	if err != nil {
+		return Result{}, err
+	}
+	if doc.Policy != expected || !doc.Policy.AutoGenerateCandidate || !doc.Policy.AllowAccountRefresh || !m.healthStatusLocked(doc).Eligible {
+		return Result{}, errors.New("automatic registration not authorized or budget exhausted")
+	}
+	if m.EngineConfigs == nil || m.nativeAPI == nil {
+		return Result{}, errors.New("local native generator unavailable")
+	}
+	now := m.healthClock()
+	doc.State.Attempts = append(pruneRotations(doc.State.Attempts, now.Add(-24*time.Hour)), now.Format(time.RFC3339))
+	doc.State.LastDecision = "registration-attempt-reserved"
+	if err := m.saveHealthLocked(doc); err != nil {
+		return Result{}, err
+	}
+	result, err := m.generateNativeLocked(ctx, true, true)
+	if err != nil {
+		_ = m.recordRecoveryLocked("registration-pending-or-failed")
+		return result, err
+	}
+	return result, nil
+}
+
+func (m *Manager) RecordRecovery(reason string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.recordRecoveryLocked(reason)
+}
+func (m *Manager) recordRecoveryLocked(reason string) error {
+	switch reason {
+	case "control-path-unavailable", "transport-exhausted-refresh-disabled", "service-failed-account-kept", "candidate-repair-staged", "candidate-repair-activated", "registration-pending-or-failed", "safe-mode-blocked-recovery", "recovery-network-changed":
+	default:
+		return errors.New("unknown recovery reason")
+	}
+	doc, err := m.loadHealthLocked()
+	if err != nil {
+		return err
+	}
+	doc.State.LastDecision = reason
+	return m.saveHealthLocked(doc)
 }

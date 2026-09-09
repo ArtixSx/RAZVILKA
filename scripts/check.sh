@@ -19,6 +19,8 @@ if command -v node >/dev/null 2>&1; then
   node scripts/build-interface.mjs --check
   node scripts/test-interface-model.mjs
   node scripts/test-interface-contract.mjs
+  node --check cmd/razvilka/web/awg-workspace.js
+  node scripts/test-awg-workspace.mjs
   node --check cmd/razvilka/web/workflow-actions.js
   node --check cmd/razvilka/web/interface.js
   node --check cmd/razvilka/web/interface-model.js

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/evidence"
 
@@ -106,8 +107,11 @@ func TestHealthPolicyRequiresConfirmedEvidenceAndThreshold(t *testing.T) {
 		t.Fatalf("unconfirmed evidence armed policy: %+v", decision)
 	}
 
+	now := time.Now().UTC()
+	m.healthNow = func() time.Time { return now }
 	confirmed := []HealthEvidence{{ServiceID: "one", Status: "fail", RouteConfirmed: true}, {ServiceID: "two", Status: "fail", RouteConfirmed: true}}
 	for round := 1; round <= 3; round++ {
+		now = now.Add(31 * time.Second)
 		decision, err = m.ObserveHealth(confirmed)
 		if err != nil {
 			t.Fatal(err)

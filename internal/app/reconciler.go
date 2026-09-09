@@ -332,10 +332,17 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 	if err != nil {
 		return
 	}
+	legacyInterval := 15 * time.Minute
+	if a.Warp != nil {
+		health := a.Warp.Health()
+		if health.Policy.Enabled {
+			legacyInterval = min(legacyInterval, health.Policy.CheckInterval())
+		}
+	}
 	tasks := []struct {
 		kind     string
 		interval time.Duration
-	}{{"node-recovery", 30 * time.Second}, {"node-fallback", time.Minute}, {"legacy-routes", 15 * time.Minute}, {"feeds", 30 * time.Second}, {"service-checks", time.Duration(max(60, cfg.ServiceControl.Schedule.IntervalSeconds)) * time.Second}}
+	}{{"node-recovery", 30 * time.Second}, {"node-fallback", time.Minute}, {"legacy-routes", legacyInterval}, {"feeds", 30 * time.Second}, {"service-checks", time.Duration(max(60, cfg.ServiceControl.Schedule.IntervalSeconds)) * time.Second}}
 	for _, task := range tasks {
 		if ctx.Err() != nil {
 			return

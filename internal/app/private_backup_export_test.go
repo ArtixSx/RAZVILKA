@@ -22,6 +22,9 @@ func stagePrivateBackupExportFixture(t *testing.T, a *App) int {
 	for _, engine := range engineconfig.Specs() {
 		for _, file := range engine.Files {
 			content := map[string]string{"json": `{}`, "ini": "[Interface]\nPrivateKey = synthetic-private-marker\n", "shell": "#!/bin/sh\nexit 0\n", "list": "fixture.example\n", "cidr-list": "203.0.113.0/24\n"}[file.Syntax]
+			if engine.ID == "amneziawg" {
+				content = awgTestProfile()
+			}
 			if content == "" {
 				t.Fatal("fixture has no known validator")
 			}

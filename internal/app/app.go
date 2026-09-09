@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ArtixSx/razvilka/internal/awgprofile"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -135,45 +136,46 @@ type applyChangeSummary struct {
 }
 
 type App struct {
-	autonomy         autonomyState
-	PrivateRestore   *privaterestore.Coordinator
-	Operations       operationgate.Gate
-	Store            *config.Store
-	Catalog          catalog.Catalog
-	Sources          *sources.Manager
-	Telemetry        *telemetry.Store
-	EngineConfigs    *engineconfig.Manager
-	EngineLab        *enginelab.Manager
-	StrategyLab      *strategylab.Manager
-	Components       *components.Manager
-	Community        *community.Manager
-	CustomServices   *customservices.Manager
-	Dataplane        *dataplane.Manager
-	Devices          *devices.Manager
-	DNS              *dnscontrol.Manager
-	Warp             *warp.Manager
-	Cloudflare       *cloudflareprovider.Store
-	Nodes            *nodestore.Store
-	NodeChecker      dataplane.NodeChecker
-	NodePinger       dataplane.NodePinger
-	NodeFeeds        *providerfeed.Manager
-	nodeReviews      nodeRouteReviewStore
-	nodeRecovery     nodeRecoveryState
-	nodeChecks       nodeCheckState
-	nodeAutofallback nodeAutofallbackState
-	reconciler       serviceReconciler
-	DataplaneHost    func() dataplane.HostState
-	FreshProfile     func(context.Context) (string, error)
-	cloudflareBusy   atomic.Bool
-	TestLab          *testlab.Runner
-	RouteProber      testlab.RouteProber
-	SmartRoute       *smartroute.Manager
-	Updates          *updatecheck.Manager
-	SelfUpdate       *updatecheck.Updater
-	USQUE            *usquediag.Manager
-	Stats            *routerstats.Sampler
-	Security         *security.Gate
-	Audit            *auditlog.Journal
+	autonomy           autonomyState
+	PrivateRestore     *privaterestore.Coordinator
+	Operations         operationgate.Gate
+	Store              *config.Store
+	Catalog            catalog.Catalog
+	Sources            *sources.Manager
+	Telemetry          *telemetry.Store
+	EngineConfigs      *engineconfig.Manager
+	EngineLab          *enginelab.Manager
+	StrategyLab        *strategylab.Manager
+	Components         *components.Manager
+	Community          *community.Manager
+	CustomServices     *customservices.Manager
+	Dataplane          *dataplane.Manager
+	Devices            *devices.Manager
+	DNS                *dnscontrol.Manager
+	Warp               *warp.Manager
+	AWGCapabilityProbe func(context.Context) awgprofile.Capabilities
+	Cloudflare         *cloudflareprovider.Store
+	Nodes              *nodestore.Store
+	NodeChecker        dataplane.NodeChecker
+	NodePinger         dataplane.NodePinger
+	NodeFeeds          *providerfeed.Manager
+	nodeReviews        nodeRouteReviewStore
+	nodeRecovery       nodeRecoveryState
+	nodeChecks         nodeCheckState
+	nodeAutofallback   nodeAutofallbackState
+	reconciler         serviceReconciler
+	DataplaneHost      func() dataplane.HostState
+	FreshProfile       func(context.Context) (string, error)
+	cloudflareBusy     atomic.Bool
+	TestLab            *testlab.Runner
+	RouteProber        testlab.RouteProber
+	SmartRoute         *smartroute.Manager
+	Updates            *updatecheck.Manager
+	SelfUpdate         *updatecheck.Updater
+	USQUE              *usquediag.Manager
+	Stats              *routerstats.Sampler
+	Security           *security.Gate
+	Audit              *auditlog.Journal
 	// EngineInventory is injectable only for deterministic presentation tests.
 	// Production uses the read-only detector and never starts or stops an engine.
 	EngineInventory func() []engine.Status
@@ -533,6 +535,8 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/node-groups/", a.nodeGroupAction)
 	mux.HandleFunc("/api/v1/components", a.componentList)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
+	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
+	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
 	mux.HandleFunc("/api/v1/warp/", a.warpAction)
 	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)
@@ -1801,7 +1805,7 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 		}
 		evidence := make([]warp.HealthEvidence, 0, len(aggregated))
 		for _, result := range aggregated {
-			evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel()})
+			evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel(), NetworkProfile: profile})
 		}
 		decision, err := a.processWarpHealth(ctx, evidence)
 		if err != nil {
@@ -1815,74 +1819,6 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
-}
-
-func (a *App) processWarpHealth(ctx context.Context, evidence []warp.HealthEvidence) (warp.HealthDecision, error) {
-	if a.Store != nil {
-		c := a.Store.Get().ServiceControl
-		if c.Stopped || c.EffectiveMode() == "manual" {
-			status := a.Warp.Health()
-			status.Eligible, status.Reason = false, "global-manual-or-stopped"
-			return warp.HealthDecision{HealthStatus: status}, nil
-		}
-	}
-	decision, err := a.Warp.ObserveHealth(evidence)
-	if err != nil || !decision.ShouldGenerate {
-		return decision, err
-	}
-	if _, err := a.Warp.Generate(ctx, decision.Policy.AcceptTOS, true); err != nil {
-		return decision, fmt.Errorf("automatic WARP candidate generation: %w", err)
-	}
-	decision.ShouldGenerate = false
-	decision.Reason = "fresh-candidate-staged-awaiting-transactional-apply"
-	if !decision.Policy.AutoApplyCandidate {
-		return decision, nil
-	}
-	cfg := a.Store.Get()
-	if cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || ctx.Err() != nil {
-		decision.Reason = "fresh-candidate-staged-global-control-blocked-auto-apply"
-		return decision, ctx.Err()
-	}
-	if cfg.SafeMode {
-		decision.Reason = "fresh-candidate-staged-safe-mode-blocked-auto-apply"
-		return decision, nil
-	}
-	if a.Store.Dirty() {
-		decision.Reason = "fresh-candidate-staged-route-draft-blocked-auto-apply"
-		return decision, nil
-	}
-	if other := a.stagedEngineFilesExcept("warp-wg", "main"); len(other) > 0 {
-		decision.Reason = "fresh-candidate-staged-other-engine-drafts-blocked-auto-apply"
-		return decision, nil
-	}
-	if a.Dataplane == nil {
-		decision.Reason = "fresh-candidate-staged-dataplane-unavailable"
-		return decision, nil
-	}
-	transaction, err := a.buildDataplanePlan(cfg, a.routeOptionsSnapshot())
-	if err != nil {
-		_ = a.Warp.RecordActivation(false, err.Error())
-		return decision, fmt.Errorf("build automatic WARP transaction: %w", err)
-	}
-	if !transaction.Ready || transaction.Noop {
-		decision.Reason = "fresh-candidate-staged-transaction-blocked"
-		return decision, nil
-	}
-	binding, err := a.bindApplyReview(ctx, cfg, transaction, changeScopeEngine, "warp-wg")
-	if err != nil {
-		return decision, err
-	}
-	ctx = dataplane.WithReviewGuard(ctx, func(ctx context.Context) error { return binding.guard(a, ctx) })
-	execution, err := a.Dataplane.Apply(ctx, transaction, nil)
-	if err != nil {
-		_ = a.Warp.RecordActivation(false, err.Error())
-		return decision, fmt.Errorf("automatic WARP transactional apply (%s): %w", execution.State, err)
-	}
-	if err := a.Warp.RecordActivation(true, ""); err != nil {
-		return decision, fmt.Errorf("record automatic WARP activation: %w", err)
-	}
-	decision.Reason = "fresh-profile-activated"
-	return decision, nil
 }
 
 func (a *App) stagedEngineFilesExcept(engineID, fileID string) []string {
@@ -1964,7 +1900,7 @@ func (a *App) backgroundWarpHealth(parent context.Context) {
 	}
 	evidence := make([]warp.HealthEvidence, 0, len(aggregated))
 	for _, result := range aggregated {
-		evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel()})
+		evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel(), NetworkProfile: profile})
 	}
 	_, _ = a.processWarpHealth(ctx, evidence)
 }

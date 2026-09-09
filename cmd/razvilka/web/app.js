@@ -1438,6 +1438,7 @@ function renderEngineControl() {
   const engine = selectedEngineView();
   if (!engine.files.some((f) => f.id === state.selectedEngineFile)) state.selectedEngineFile = engine.files[0]?.id || 'main';
   const file = selectedEngineFile();
+  if(typeof renderAWGWorkspace==='function')renderAWGWorkspace();
   renderWarpManager();
   if(typeof renderConsoleEngine==='function')renderConsoleEngine();
 
@@ -1529,7 +1530,7 @@ function renderEngineControl() {
 function renderWarpManager() {
   const panel = $('#warpManager');
   if (!panel) return;
-  const visible = state.selectedEngine === 'warp-wg';
+  const visible = state.selectedEngine === 'warp-wg' || (state.selectedEngine === 'amneziawg' && state.awgPane === 'warp');
   panel.hidden = !visible;
   if (!visible) return;
   const w = state.warp || {};
@@ -1543,7 +1544,7 @@ function renderWarpManager() {
   $('#warpLiveState').textContent = w.live_profile ? (w.valid ? 'валиден' : 'ошибка профиля') : 'нет';
   $('#warpCandidateState').textContent = w.candidate_staged ? 'черновик готов' : 'нет черновика';
   const badge = $('#warpStateBadge');
-  badge.textContent = w.live_profile && w.valid ? 'РАБОЧИЙ ПРОФИЛЬ ГОТОВ' : w.candidate_staged ? 'ЧЕРНОВИК ГОТОВ' : 'НЕ НАСТРОЕН';
+  badge.textContent = w.live_profile && w.valid ? 'ФОРМАТ ПРОФИЛЯ КОРРЕКТЕН' : w.candidate_staged ? 'ЧЕРНОВИК ГОТОВ' : 'НЕ НАСТРОЕН';
   badge.className = `engine-state ${w.live_profile && w.valid ? 'running' : w.candidate_staged ? 'installed' : ''}`;
   $('#warpNote').textContent = w.validation_error || w.note || '';
   $('#warpGenerate').disabled = !w.generator_installed || registrationInvalid || (registrationPending && !w.recovery_available);
@@ -1561,6 +1562,8 @@ function renderWarpManager() {
   const policy = health.policy || {};
   const healthState = health.state || {};
   if (!state.warpPolicyDirty) {
+    $('#warpHealthInterval').value = policy.check_interval_seconds || 180;
+    $('#warpAllowAccountRefresh').checked = !!policy.allow_account_refresh;
     $('#warpHealthEnabled').value = String(!!policy.enabled);
     $('#warpFailureThreshold').value = policy.failure_threshold || 3;
     $('#warpMinFailedServices').value = policy.min_failed_services || 2;
@@ -1597,6 +1600,20 @@ function renderWarpManager() {
     'fresh-profile-activated': 'Новый WARP-профиль применён и проверен',
     'fresh-profile-activation-failed': 'Новый профиль не прошёл проверку; восстановлен предыдущий',
   };
+  Object.assign(healthReasons, {
+ 'daily-attempt-limit-reached':'Суточный лимит попыток регистрации исчерпан — рабочие ключи сохранены',
+ 'attempt-cooldown-active':'Пауза после попытки регистрации; перезапуск не сбрасывает лимит',
+ 'transport-exhausted-refresh-disabled':'Прежний транспорт не подтверждён; новая регистрация не разрешена',
+ 'tunnel-works-service-specific-failure':'Туннель работает для другого сервиса — аккаунт не меняется',
+ 'service-failed-account-kept':'Отказ веб-сценария, а не подтверждённый отказ аккаунта',
+ 'waiting-for-independent-failure-round':'Повторная проверка слишком близко к предыдущей',
+ 'control-path-unavailable':'Не подтверждён независимый доступ к API; генерация отложена',
+ 'candidate-repair-staged':'Подготовлен кандидат с прежними ключами',
+ 'candidate-repair-activated':'Туннель восстановлен с прежними ключами',
+ 'registration-pending-or-failed':'Регистрация не подтверждена; слепой повтор запрещён',
+ 'safe-mode-blocked-recovery':'Безопасный режим запрещает восстановление с сетевыми изменениями'
+ });
+  $('#warpRecoveryBudget').textContent = `Попыток за сохранённое окно: ${(healthState.registration_attempts||[]).length} · интервал ${policy.check_interval_seconds||180} с · новое устройство ${policy.allow_account_refresh?'разрешено после проверок':'не разрешено'}`;
   const reason = health.reason || healthState.last_decision || 'policy-disabled';
   const assurance = healthState.evidence_level && healthState.evidence_level !== 'none' ? ` · ${evidenceLevelLabel(healthState.evidence_level)}` : '';
   $('#warpHealthReason').textContent = `${healthReasons[reason] || reason.replaceAll('-', ' ')}${assurance}`;
@@ -1710,7 +1727,11 @@ async function saveWarpHealthPolicy() {
     min_failed_services: Number($('#warpMinFailedServices').value),
     cooldown_hours: Number($('#warpCooldownHours').value),
     max_rotations_per_day: Number($('#warpMaxRotations').value),
+    check_interval_seconds: Number($('#warpHealthInterval').value),
+    allow_account_refresh: $('#warpAllowAccountRefresh').checked,
   };
+  if(!Number.isInteger(policy.check_interval_seconds)||policy.check_interval_seconds<60||policy.check_interval_seconds>3600){showDetails({message:'Интервал — от 60 до 3600 секунд.'},'Политика не сохранена');return;}
+  if(policy.allow_account_refresh && !policy.auto_generate_candidate){showDetails({message:'Новая регистрация требует включённого восстановления профиля.'},'Политика не сохранена');return;}
   if (policy.auto_generate_candidate && (!policy.enabled || !policy.accept_tos)) {
     showDetails({ message: 'Автогенерация требует включённой политики и отдельного принятия условий Cloudflare.' }, 'Политика не сохранена');
     return;
@@ -4185,7 +4206,7 @@ function bindEvents() {
   $('#warpDelete').addEventListener('click', deleteWarp);
   $('#warpSaveHealth').addEventListener('click', saveWarpHealthPolicy);
   $('#warpRunHealth').addEventListener('click', runWarpHealthCheck);
-  ['warpHealthEnabled', 'warpFailureThreshold', 'warpMinFailedServices', 'warpCooldownHours', 'warpMaxRotations', 'warpAutoCandidate', 'warpAutoApply', 'warpHealthAcceptTOS'].forEach((id) => {
+  ['warpHealthInterval', 'warpAllowAccountRefresh', 'warpHealthEnabled', 'warpFailureThreshold', 'warpMinFailedServices', 'warpCooldownHours', 'warpMaxRotations', 'warpAutoCandidate', 'warpAutoApply', 'warpHealthAcceptTOS'].forEach((id) => {
     const markWarpPolicyDirty = () => {
       state.warpPolicyDirty = true;
       $('#warpPolicyFeedback').textContent = 'Есть несохранённые изменения';
