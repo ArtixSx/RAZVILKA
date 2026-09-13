@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {readFileSync} from 'node:fs';
+const require=createRequire(import.meta.url),m=require('../cmd/razvilka/web/dns-service-lab.js');let tests=0;
+function test(name,fn){fn();tests++;console.log('PASS',name);}
+const snapshot={profiles:[{id:'xbox-dns',provider_id:'xbox-dns'},{id:'lab',provider_id:'flashstart'},{id:'local',provider_id:'local'},{id:'missing',provider_id:'missing'}],providers:[{id:'xbox-dns',configured:true,doh:'https://xbox-dns.ru/dns-query',kind:'smart-dns-gateway'},{id:'flashstart',configured:true,doh:'https://example.org',scope:'negative-control'},{id:'local',configured:true,doh:'https://example.org',trusted_local:true}]};
+test('only configured public non-negative DoH',()=>assert.deepEqual(m.profilesForLab(snapshot).map(p=>p.id),['xbox-dns']));
+test('empty state',()=>assert.deepEqual(m.profilesForLab(null),[]));
+test('explicit consent request',()=>assert.equal(m.requestFor('youtube',['xbox-dns'],2,true).confirm,'COMPARE_SERVICE_DNS'));
+for(const [name,args] of [ ['no consent',['youtube',['xbox-dns'],1,false]],['no service',['',['xbox-dns'],1,true]],['empty profiles',['youtube',[],1,true]],['duplicates',['youtube',['xbox-dns','xbox-dns'],1,true]],['too many',['youtube',['a','b','c','d'],1,true]],['unsafe revision',['youtube',['a'],NaN,true]],['fraction revision',['youtube',['a'],1.5,true]],['negative revision',['youtube',['a'],-1,true]],['url input',['youtube',['https://example.org'],1,true]],['service injection',['<script>',['a'],1,true]] ])test(name,()=>assert.throws(()=>m.requestFor(...args)));
+const result={service_verified:false,route_verified:false,eligible_for_apply:false,results:[{provider_id:'xbox-dns',family:'ipv4',status:'resolved',addresses:['<svg/onload=alert(1)>']} ]};
+test('DNS result cannot be service PASS',()=>assert.match(m.resultMarkup(result),/не подтверждение/));
+test('escape data',()=>assert.ok(!m.resultMarkup(result).includes('<svg/onload')));
+for(const key of ['service_verified','route_verified','eligible_for_apply'])test('reject claimed '+key,()=>assert.throws(()=>m.resultMarkup({...result,[key]:true})));
+test('missing result',()=>assert.throws(()=>m.resultMarkup({})));
+const html=readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8');
+for(const id of ['dc1Form','dc1Inputs','dc1Service','dc1Profiles','dc1Consent','dc1Results','dc1Submit','dc1Cancel','dc1Status'])test(id+' exists once',()=>assert.equal(html.split('id="'+id+'"').length-1,1));
+test('script integrated',()=>assert.match(html,/src="\/dns-service-lab.js\?v=0\.18\.2-dc1"/));
+test('stylesheet compiled into existing bundle',()=>assert.match(readFileSync(new URL('../cmd/razvilka/web/interface.css',import.meta.url),'utf8'),/\.dc1-lab/));
+const source=readFileSync(new URL('../cmd/razvilka/web/dns-service-lab.js',import.meta.url),'utf8');
+test('no localStorage secrets or independent polling',()=>assert.ok(!/localStorage|setInterval|innerHTML\s*=\s*(response|result)\b/.test(source)));
+console.log(JSON.stringify({tests,status:'passed'}));

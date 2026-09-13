@@ -11,8 +11,8 @@ test('7 primary destinations',()=>assert.equal([...html.matchAll(/data-main-nav=
 test('20 retained views',()=>assert.equal(ids.filter(id=>id.startsWith('view-')).length,20));
 test('one compiled stylesheet',()=>assert.equal([...html.matchAll(/rel="stylesheet"/g)].length,1));
 test('compiled CSS reproducible',()=>assert.equal(read(root+'interface.css'),read(root+'interface-compat.css')+'\n'+read(root+'interface-shell.css')));
-for(const m of html.matchAll(/<script[^>]+src="([^"]+)"/g))test('current asset cache '+m[1],()=>{assert.match(m[1],/\?v=0\.18\.2-awg31$/);assert.ok(read(root+m[1].split('?')[0].replace(/^\//,'')).length>0);});
-for(const f of ['index.html','interface.js','interface-model.js','console-autonomy.js','console.js','awg-workspace.js'])test('no preview transport in '+f,()=>assert.doesNotMatch(read(root+f),/__demoData|__demoRequests|window\.fetch\s*=/));
+for(const m of html.matchAll(/<script[^>]+src="([^"]+)"/g))test('current asset cache '+m[1],()=>{assert.match(m[1],/\?v=0\.18\.2-dc1$/);assert.ok(read(root+m[1].split('?')[0].replace(/^\//,'')).length>0);});
+for(const f of ['index.html','interface.js','interface-model.js','console-autonomy.js','console.js','awg-workspace.js','dns-service-lab.js'])test('no preview transport in '+f,()=>assert.doesNotMatch(read(root+f),/__demoData|__demoRequests|window\.fetch\s*=/));
 test('no external stylesheet/font',()=>assert.doesNotMatch(html,/(?:href|src)="https?:\/\/[^" ]+\.(?:woff2?|ttf|css|js)/));
 test('model never performs requests',()=>assert.doesNotMatch(read(root+'interface-model.js'),/\b(fetch|XMLHttpRequest|setInterval|localStorage|sessionStorage)\s*\(/));
 test('group is not a new route',()=>assert.doesNotMatch(read(root+'interface.js'),/route\s*:\s*['"]ai['"]/));

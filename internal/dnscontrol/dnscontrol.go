@@ -30,26 +30,32 @@ const endpointProbeTimeout = 5 * time.Second
 var errDNSAnswer = errors.New("DNS response failed integrity checks")
 
 type Provider struct {
-	ID                    string        `json:"id"`
-	Name                  string        `json:"name"`
-	Description           string        `json:"description"`
-	Servers               []string      `json:"servers,omitempty"`
-	DoH                   string        `json:"doh,omitempty"`
-	DoT                   string        `json:"dot,omitempty"`
-	Filters               []string      `json:"filters,omitempty"`
-	RequiresConfiguration bool          `json:"requires_configuration,omitempty"`
-	Configured            bool          `json:"configured"`
-	ConfigurationHint     string        `json:"configuration_hint,omitempty"`
-	Warnings              []string      `json:"warnings,omitempty"`
-	RecommendedFor        []string      `json:"recommended_for,omitempty"`
-	USQUERegistration     string        `json:"usque_registration,omitempty"`
-	Experimental          bool          `json:"experimental,omitempty"`
-	Scope                 string        `json:"scope,omitempty"`
-	EncryptedOnly         bool          `json:"encrypted_only,omitempty"`
-	AllowedForUSQUE       bool          `json:"allowed_for_usque_bootstrap"`
-	AllowedForAutoPilot   bool          `json:"allowed_for_autopilot"`
-	TrustedLocal          bool          `json:"trusted_local,omitempty"`
-	Endpoints             []DNSEndpoint `json:"endpoints,omitempty"`
+	Kind                   string        `json:"kind"`
+	Trust                  string        `json:"trust"`
+	DocumentationURL       string        `json:"documentation_url,omitempty"`
+	DocumentationCheckedAt string        `json:"documentation_checked_at,omitempty"`
+	ServiceHints           []string      `json:"service_hints,omitempty"`
+	ServiceHintsVerified   bool          `json:"service_hints_verified"`
+	ID                     string        `json:"id"`
+	Name                   string        `json:"name"`
+	Description            string        `json:"description"`
+	Servers                []string      `json:"servers,omitempty"`
+	DoH                    string        `json:"doh,omitempty"`
+	DoT                    string        `json:"dot,omitempty"`
+	Filters                []string      `json:"filters,omitempty"`
+	RequiresConfiguration  bool          `json:"requires_configuration,omitempty"`
+	Configured             bool          `json:"configured"`
+	ConfigurationHint      string        `json:"configuration_hint,omitempty"`
+	Warnings               []string      `json:"warnings,omitempty"`
+	RecommendedFor         []string      `json:"recommended_for,omitempty"`
+	USQUERegistration      string        `json:"usque_registration,omitempty"`
+	Experimental           bool          `json:"experimental,omitempty"`
+	Scope                  string        `json:"scope,omitempty"`
+	EncryptedOnly          bool          `json:"encrypted_only,omitempty"`
+	AllowedForUSQUE        bool          `json:"allowed_for_usque_bootstrap"`
+	AllowedForAutoPilot    bool          `json:"allowed_for_autopilot"`
+	TrustedLocal           bool          `json:"trusted_local,omitempty"`
+	Endpoints              []DNSEndpoint `json:"endpoints,omitempty"`
 }
 
 type DNSEndpoint struct {
@@ -206,6 +212,7 @@ func Providers() []Provider {
 		{ID: "nextdns", Name: "NextDNS", Description: "Персональная фильтрация по вашему профилю NextDNS.", Filters: []string{"настраиваемая фильтрация", "аналитика NextDNS"}, RequiresConfiguration: true, ConfigurationHint: "Укажите шестизначный ID профиля из кабинета NextDNS."},
 		{ID: "custom", Name: "Свой DNS", Description: "Ваш обычный DNS, DoH или DoT endpoint.", Filters: []string{"пользовательский"}, RequiresConfiguration: true, ConfigurationHint: "Укажите хотя бы один DNS, DoH или DoT endpoint."},
 	}
+	providers = append(providers, communityDNSProviders()...)
 	for index := range providers {
 		providers[index].Scope = "production"
 		providers[index].AllowedForUSQUE = true
@@ -227,6 +234,7 @@ func Providers() []Provider {
 			providers[index].AllowedForUSQUE = false
 			providers[index].AllowedForAutoPilot = false
 		}
+		providers[index] = withProviderMetadata(providers[index])
 		providers[index] = withTypedEndpoints(providers[index])
 	}
 	return providers
@@ -249,6 +257,10 @@ func Profiles() []Profile {
 		{ID: "uncensoreddns", Name: "UncensoredDNS", Description: "Независимый DNS только через DoH/DoT.", ProviderID: "uncensoreddns"},
 		{ID: "flashstart", Name: "FlashStart", Description: "Smart DNS с ограничениями; запрещён для регистрации USQUE.", ProviderID: "flashstart"},
 		{ID: "nextdns", Name: "Мой NextDNS", Description: "Персональные списки, реклама и защита из вашего профиля NextDNS.", ProviderID: "nextdns"},
+		{ID: "malw", Name: "Malw · Smart DNS", Description: "Сторонний DNS: сервисы проверяются локально, не по описанию провайдера.", ProviderID: "malw"},
+		{ID: "comss", Name: "Comss.one · Smart DNS", Description: "Сервисный DNS с фильтрацией: требует отдельной проверки.", ProviderID: "comss"},
+		{ID: "geohide", Name: "GeoHide · шаблон", Description: "Адрес не закреплён: требуется проверенная конфигурация провайдера.", ProviderID: "geohide"},
+		{ID: "controld-redirect", Name: "Control D Redirect · аккаунт", Description: "Не бесплатный resolver: требуется отдельная аккаунтная интеграция.", ProviderID: "controld-redirect"},
 		{ID: "custom", Name: "Свой провайдер", Description: "Проверяемый DNS-провайдер, заданный вручную.", ProviderID: "custom"},
 	}
 }
@@ -1319,6 +1331,7 @@ func validDNSHost(host string) bool {
 }
 
 func cloneProvider(provider Provider) Provider {
+	provider.ServiceHints = append([]string(nil), provider.ServiceHints...)
 	provider.Servers = append([]string(nil), provider.Servers...)
 	provider.Filters = append([]string(nil), provider.Filters...)
 	provider.Warnings = append([]string(nil), provider.Warnings...)
