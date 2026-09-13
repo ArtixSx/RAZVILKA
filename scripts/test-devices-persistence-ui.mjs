@@ -10,7 +10,9 @@ const code = names.map(name => {
   assert.ok(match, name + ' remains testable');
   return match[0];
 }).join('\n');
-assert.match(html, /id="devicePersistenceWarning"[^>]*role="status"[^>]*hidden/);
+const warningTag = html.match(/<[^>]+\bid="devicePersistenceWarning"[^>]*>/)?.[0] || '';
+assert.match(warningTag, /\brole="status"/);
+assert.match(warningTag, /\bhidden(?:\s|=|>)/);
 assert.match(source, /\['devices', '\/api\/v1\/devices\?view=status'\]/);
 
 const elements = new Map(['devicePersistenceWarning', 'deviceSearch', 'deviceGrid', 'deviceEmpty', 'deviceGroupSuggestions', 'refreshDevices'].map(id => [id, { value: '', textContent: '', innerHTML: '', style: {}, hidden: true }]));

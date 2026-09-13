@@ -191,6 +191,9 @@ func (a *App) nodeAutofallbackRound(ctx context.Context, now time.Time) {
 		a.nodeAutofallback.entries = make(map[string]nodeAutofallbackEntry)
 	}
 	for _, route := range previous.Routes {
+		if a.autonomyOwnsService(route.ServiceID) {
+			continue
+		}
 		group, ok := groups[strings.TrimPrefix(route.Selected, "sing-box:")]
 		state := cfg.AppliedServices[route.ServiceID]
 		if !ok || !state.Enabled || selectedRoute(state) != route.Selected || !strings.HasPrefix(route.Resolved, "sing-box:node-") {
@@ -387,6 +390,10 @@ func (a *App) newNodeAutofallbackIntent(ctx context.Context, previous dataplane.
 }
 
 func (a *App) guardNodeAutofallbackBase(ctx context.Context, intent nodeAutofallbackIntent) error {
+	if intent.routeIndex >= 0 && intent.routeIndex < len(intent.base.plan.Routes) && a.autonomyOwnsService(intent.base.plan.Routes[intent.routeIndex].ServiceID) {
+		return dataplane.ErrReviewChanged
+	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}

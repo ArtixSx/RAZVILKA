@@ -101,4 +101,63 @@ run_case amd64 unknown '' amd64
 run_case unsupported unknown '' refuse
 run_case mips unknown invalid refuse
 
+# A release checksum is mandatory even for dry-run. Refusal must happen before
+# the candidate executes, normalization or any live installation directory is
+# created. The recording candidate and init scripts keep these tests isolated.
+CHECKSUM="$BUNDLE/dist/SHA256SUMS"
+CHECKSUM_NAME=razvilka-linux-amd64
+CHECKSUM_HASH="$(sha256sum "$BUNDLE/dist/$CHECKSUM_NAME" | awk '{print $1}')"
+run_checksum_case() {
+  LABEL="$1"
+  EXPECTED="$2"
+  TEST_UNAME=amd64
+  TEST_ELF_HEADER=unknown
+  TEST_OD_FAIL=0
+  RAZVILKA_ARCH=amd64
+  export TEST_UNAME TEST_ELF_HEADER TEST_OD_FAIL RAZVILKA_ARCH
+  rm -f "$TEST_BINARY_CAPTURE"
+  if [ "$EXPECTED" = pass ]; then MODE=--dry-run; else MODE=--apply; fi
+  if RAZVILKA_BASE="$BASE" sh "$BUNDLE/scripts/upgrade-entware.sh" "$MODE" >"$TEST_ROOT/output" 2>&1; then
+    [ "$EXPECTED" = pass ] || { echo "Invalid checksum accepted: $LABEL" >&2; exit 1; }
+    [ "$(wc -l <"$TEST_BINARY_CAPTURE" | tr -d ' ')" = 2 ] || { echo "Expected only candidate version and preflight checks: $LABEL" >&2; exit 1; }
+  else
+    [ "$EXPECTED" = refuse ] || { cat "$TEST_ROOT/output" >&2; echo "Valid checksum refused: $LABEL" >&2; exit 1; }
+    [ ! -e "$TEST_BINARY_CAPTURE" ] || { echo "Unverified candidate was executed: $LABEL" >&2; exit 1; }
+  fi
+  [ ! -e "$BASE/bin" ] && [ ! -e "$BASE/etc" ] && [ ! -e "$BASE/var" ] || { echo "Checksum preflight changed installation: $LABEL" >&2; exit 1; }
+}
+
+rm -f "$CHECKSUM"
+run_checksum_case missing-manifest refuse
+: >"$CHECKSUM"
+run_checksum_case empty-manifest refuse
+printf '%s  razvilka-linux-arm64\n' "$CHECKSUM_HASH" >"$CHECKSUM"
+run_checksum_case missing-current-architecture refuse
+printf '  dist/%s\n' "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case missing-digest refuse
+printf '%s  dist/%s\n' short "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case short-digest refuse
+printf '%s  dist/%s\n' 'gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg' "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case non-hex-digest refuse
+printf '%s  dist/%s\n' '0000000000000000000000000000000000000000000000000000000000000000' "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case wrong-digest refuse
+printf '%s  dist/%s extra\n' "$CHECKSUM_HASH" "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case extra-field refuse
+printf '%s  dist/%s\n%s  %s\n' "$CHECKSUM_HASH" "$CHECKSUM_NAME" "$CHECKSUM_HASH" "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case duplicate-path-spellings refuse
+printf '%s  dist/%s\n  %s\n' "$CHECKSUM_HASH" "$CHECKSUM_NAME" "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case valid-plus-empty-digest refuse
+printf '%s  dist/%s\n%s  dist/%s\n' "$CHECKSUM_HASH" "$CHECKSUM_NAME" wrong "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case valid-plus-invalid-duplicate refuse
+
+printf '%s  dist/%s\n' "$CHECKSUM_HASH" "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case release-relative-path pass
+printf '%s  %s\n' "$CHECKSUM_HASH" "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case legacy-bare-name pass
+printf '%s *dist/%s\n' "$CHECKSUM_HASH" "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case sha256sum-binary-marker pass
+printf '%s  dist/%s\r\n' "$(printf '%s' "$CHECKSUM_HASH" | tr 'a-f' 'A-F')" "$CHECKSUM_NAME" >"$CHECKSUM"
+run_checksum_case uppercase-hex-crlf pass
+
 echo "Installer architecture selection tests: PASS"
+echo "Installer mandatory checksum tests: PASS"

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ArtixSx/razvilka/internal/awgprofile"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -54,10 +55,9 @@ import (
 )
 
 var (
-	// Release builds override these values through -ldflags. Keeping useful
-	// development defaults prevents an unreleased binary from identifying
-	// itself as the last stable release.
-	Version     = "0.18.1-dev"
+	// Builds override provenance through -ldflags. The version default mirrors
+	// canonical VERSION; unknown provenance never claims a verified release build.
+	Version     = "0.18.2-rc.1"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -135,44 +135,47 @@ type applyChangeSummary struct {
 }
 
 type App struct {
-	PrivateRestore   *privaterestore.Coordinator
-	Operations       operationgate.Gate
-	Store            *config.Store
-	Catalog          catalog.Catalog
-	Sources          *sources.Manager
-	Telemetry        *telemetry.Store
-	EngineConfigs    *engineconfig.Manager
-	EngineLab        *enginelab.Manager
-	StrategyLab      *strategylab.Manager
-	Components       *components.Manager
-	Community        *community.Manager
-	CustomServices   *customservices.Manager
-	Dataplane        *dataplane.Manager
-	Devices          *devices.Manager
-	DNS              *dnscontrol.Manager
-	Warp             *warp.Manager
-	Cloudflare       *cloudflareprovider.Store
-	Nodes            *nodestore.Store
-	NodeChecker      dataplane.NodeChecker
-	NodePinger       dataplane.NodePinger
-	NodeFeeds        *providerfeed.Manager
-	nodeReviews      nodeRouteReviewStore
-	nodeRecovery     nodeRecoveryState
-	nodeChecks       nodeCheckState
-	nodeAutofallback nodeAutofallbackState
-	reconciler       serviceReconciler
-	DataplaneHost    func() dataplane.HostState
-	FreshProfile     func(context.Context) (string, error)
-	cloudflareBusy   atomic.Bool
-	TestLab          *testlab.Runner
-	RouteProber      testlab.RouteProber
-	SmartRoute       *smartroute.Manager
-	Updates          *updatecheck.Manager
-	SelfUpdate       *updatecheck.Updater
-	USQUE            *usquediag.Manager
-	Stats            *routerstats.Sampler
-	Security         *security.Gate
-	Audit            *auditlog.Journal
+	autonomy           autonomyState
+	PrivateRestore     *privaterestore.Coordinator
+	Operations         operationgate.Gate
+	Store              *config.Store
+	Catalog            catalog.Catalog
+	Sources            *sources.Manager
+	Telemetry          *telemetry.Store
+	EngineConfigs      *engineconfig.Manager
+	EngineLab          *enginelab.Manager
+	StrategyLab        *strategylab.Manager
+	Components         *components.Manager
+	Community          *community.Manager
+	CustomServices     *customservices.Manager
+	Dataplane          *dataplane.Manager
+	Devices            *devices.Manager
+	DNS                *dnscontrol.Manager
+	dnsServiceComparer serviceDNSComparer
+	Warp               *warp.Manager
+	AWGCapabilityProbe func(context.Context) awgprofile.Capabilities
+	Cloudflare         *cloudflareprovider.Store
+	Nodes              *nodestore.Store
+	NodeChecker        dataplane.NodeChecker
+	NodePinger         dataplane.NodePinger
+	NodeFeeds          *providerfeed.Manager
+	nodeReviews        nodeRouteReviewStore
+	nodeRecovery       nodeRecoveryState
+	nodeChecks         nodeCheckState
+	nodeAutofallback   nodeAutofallbackState
+	reconciler         serviceReconciler
+	DataplaneHost      func() dataplane.HostState
+	FreshProfile       func(context.Context) (string, error)
+	cloudflareBusy     atomic.Bool
+	TestLab            *testlab.Runner
+	RouteProber        testlab.RouteProber
+	SmartRoute         *smartroute.Manager
+	Updates            *updatecheck.Manager
+	SelfUpdate         *updatecheck.Updater
+	USQUE              *usquediag.Manager
+	Stats              *routerstats.Sampler
+	Security           *security.Gate
+	Audit              *auditlog.Journal
 	// EngineInventory is injectable only for deterministic presentation tests.
 	// Production uses the read-only detector and never starts or stops an engine.
 	EngineInventory func() []engine.Status
@@ -486,6 +489,9 @@ func nfqws2Presentation(serviceID string, desired, planned string, desiredEnable
 
 func (a *App) Handler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/autonomy", a.autonomyAPI)
+	mux.HandleFunc("/api/v1/autonomy/services", a.autonomyEnroll)
+	mux.HandleFunc("/api/v1/autonomy/services/", a.autonomyRemove)
 	mux.HandleFunc("/api/v1/status", a.status)
 	mux.HandleFunc("/api/v1/audit", a.auditSnapshot)
 	mux.HandleFunc("/api/v1/auth/status", a.authStatus)
@@ -510,6 +516,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/provider-profiles/preview", a.providerProfilePreview)
 	mux.HandleFunc("/api/v1/provider-profiles/import", a.providerProfileImport)
 	mux.HandleFunc("/api/v1/nodes/import", a.nodeImport)
+	mux.HandleFunc("/api/v1/nodes/delete-batch", a.nodeCleanup)
 	mux.HandleFunc("/api/v1/node-checks", a.nodeCheckJobs)
 	mux.HandleFunc("/api/v1/node-checks/current", a.nodeCheckJobCurrent)
 	mux.HandleFunc("/api/v1/node-autofallback", a.nodeAutofallbackStatus)
@@ -528,6 +535,8 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/node-groups/", a.nodeGroupAction)
 	mux.HandleFunc("/api/v1/components", a.componentList)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
+	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
+	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
 	mux.HandleFunc("/api/v1/warp/", a.warpAction)
 	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)
@@ -550,6 +559,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/dns/nextdns", a.dnsNextDNS)
 	mux.HandleFunc("/api/v1/dns/custom", a.dnsCustom)
 	mux.HandleFunc("/api/v1/dns/test", a.dnsTest)
+	mux.HandleFunc("/api/v1/dns/service-compare", a.dnsServiceCompare)
 	mux.HandleFunc("/api/v1/dns/apply", a.dnsApply)
 	mux.HandleFunc("/api/v1/dns/discard", a.dnsDiscard)
 	mux.HandleFunc("/api/v1/routes/options", a.routeOptions)
@@ -1796,7 +1806,7 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 		}
 		evidence := make([]warp.HealthEvidence, 0, len(aggregated))
 		for _, result := range aggregated {
-			evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel()})
+			evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel(), NetworkProfile: profile})
 		}
 		decision, err := a.processWarpHealth(ctx, evidence)
 		if err != nil {
@@ -1810,74 +1820,6 @@ func (a *App) warpAction(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
-}
-
-func (a *App) processWarpHealth(ctx context.Context, evidence []warp.HealthEvidence) (warp.HealthDecision, error) {
-	if a.Store != nil {
-		c := a.Store.Get().ServiceControl
-		if c.Stopped || c.EffectiveMode() == "manual" {
-			status := a.Warp.Health()
-			status.Eligible, status.Reason = false, "global-manual-or-stopped"
-			return warp.HealthDecision{HealthStatus: status}, nil
-		}
-	}
-	decision, err := a.Warp.ObserveHealth(evidence)
-	if err != nil || !decision.ShouldGenerate {
-		return decision, err
-	}
-	if _, err := a.Warp.Generate(ctx, decision.Policy.AcceptTOS, true); err != nil {
-		return decision, fmt.Errorf("automatic WARP candidate generation: %w", err)
-	}
-	decision.ShouldGenerate = false
-	decision.Reason = "fresh-candidate-staged-awaiting-transactional-apply"
-	if !decision.Policy.AutoApplyCandidate {
-		return decision, nil
-	}
-	cfg := a.Store.Get()
-	if cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || ctx.Err() != nil {
-		decision.Reason = "fresh-candidate-staged-global-control-blocked-auto-apply"
-		return decision, ctx.Err()
-	}
-	if cfg.SafeMode {
-		decision.Reason = "fresh-candidate-staged-safe-mode-blocked-auto-apply"
-		return decision, nil
-	}
-	if a.Store.Dirty() {
-		decision.Reason = "fresh-candidate-staged-route-draft-blocked-auto-apply"
-		return decision, nil
-	}
-	if other := a.stagedEngineFilesExcept("warp-wg", "main"); len(other) > 0 {
-		decision.Reason = "fresh-candidate-staged-other-engine-drafts-blocked-auto-apply"
-		return decision, nil
-	}
-	if a.Dataplane == nil {
-		decision.Reason = "fresh-candidate-staged-dataplane-unavailable"
-		return decision, nil
-	}
-	transaction, err := a.buildDataplanePlan(cfg, a.routeOptionsSnapshot())
-	if err != nil {
-		_ = a.Warp.RecordActivation(false, err.Error())
-		return decision, fmt.Errorf("build automatic WARP transaction: %w", err)
-	}
-	if !transaction.Ready || transaction.Noop {
-		decision.Reason = "fresh-candidate-staged-transaction-blocked"
-		return decision, nil
-	}
-	binding, err := a.bindApplyReview(ctx, cfg, transaction, changeScopeEngine, "warp-wg")
-	if err != nil {
-		return decision, err
-	}
-	ctx = dataplane.WithReviewGuard(ctx, func(ctx context.Context) error { return binding.guard(a, ctx) })
-	execution, err := a.Dataplane.Apply(ctx, transaction, nil)
-	if err != nil {
-		_ = a.Warp.RecordActivation(false, err.Error())
-		return decision, fmt.Errorf("automatic WARP transactional apply (%s): %w", execution.State, err)
-	}
-	if err := a.Warp.RecordActivation(true, ""); err != nil {
-		return decision, fmt.Errorf("record automatic WARP activation: %w", err)
-	}
-	decision.Reason = "fresh-profile-activated"
-	return decision, nil
 }
 
 func (a *App) stagedEngineFilesExcept(engineID, fileID string) []string {
@@ -1959,7 +1901,7 @@ func (a *App) backgroundWarpHealth(parent context.Context) {
 	}
 	evidence := make([]warp.HealthEvidence, 0, len(aggregated))
 	for _, result := range aggregated {
-		evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel()})
+		evidence = append(evidence, warp.HealthEvidence{ServiceID: result.ServiceID, Status: result.Status, RouteConfirmed: result.RouteConfirmed, Level: result.AssuranceLevel(), NetworkProfile: profile})
 	}
 	_, _ = a.processWarpHealth(ctx, evidence)
 }
@@ -2925,7 +2867,18 @@ func (a *App) service(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id, "state": in})
+	warning := ""
+	if !in.Enabled && a.autonomyManaged(r.Context(), id) {
+		if _, err := a.requestAutonomyRemoval(r.Context(), id, false); err != nil {
+			warning = "Не удалось поставить снятие маршрута в очередь. Изменён только черновик."
+		}
+	} else if in.Enabled && selected == "auto" {
+		if err := a.inheritAutonomyService(r.Context(), id); err != nil {
+			warning = "Сервис сохранён, но наследование автоматики не подтверждено."
+		}
+	}
+	a.wakeReconciler()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id, "state": in, "autonomy_warning": warning})
 }
 
 func (a *App) customServiceList(w http.ResponseWriter, r *http.Request) {
@@ -2951,6 +2904,10 @@ func (a *App) customServiceList(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if err := a.inheritAutonomyService(r.Context(), created.ID); err != nil {
+			w.Header().Set("X-RAZVILKA-Autonomy-Warning", "enrollment-not-confirmed")
+		}
+		a.wakeReconciler()
 		writeJSON(w, http.StatusCreated, created)
 	default:
 		methodNotAllowed(w)
@@ -2981,6 +2938,16 @@ func (a *App) customServiceItem(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, updated)
 	case http.MethodDelete:
+		if a.autonomyManaged(r.Context(), id) {
+			_, err := a.requestAutonomyRemoval(r.Context(), id, true)
+			if err != nil {
+				writeJSON(w, 503, map[string]any{"error": "Запрос удаления не сохранён."})
+				return
+			}
+			a.wakeReconciler()
+			writeJSON(w, 202, map[string]any{"ok": true, "id": id, "pending": true, "live_applied": false})
+			return
+		}
 		if err := a.CustomServices.Delete(id); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -3043,8 +3010,9 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var in struct {
-			AllowConflicts bool `json:"allow_conflicts"`
-			Refresh        bool `json:"refresh"`
+			AllowConflicts bool   `json:"allow_conflicts"`
+			Refresh        bool   `json:"refresh"`
+			ExpectedSHA    string `json:"expected_source_sha256"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
@@ -3053,6 +3021,10 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 		preview, err := a.Community.Preview(ctx, id, a.catalogSnapshot().Services, in.Refresh)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		if in.ExpectedSHA != "" && in.ExpectedSHA != preview.SourceSHA {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Содержимое источника изменилось. Откройте новый предпросмотр.", "not_started": true})
 			return
 		}
 		if len(preview.Conflicts) > 0 && !in.AllowConflicts {

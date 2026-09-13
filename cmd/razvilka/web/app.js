@@ -173,11 +173,14 @@ function showAuth(status, message = '') {
 }
 
 function hideAuth() {
+  const restored = $('#authScreen').hidden !== true;
   $('#authScreen').hidden = true;
   $('.app-shell').removeAttribute('aria-hidden');
   $('#authMessage').textContent = '';
-  $('#detailsPanel').classList.remove('open');
-  document.dispatchEvent(new Event('razvilka:auth-restored'));
+  if (restored) {
+    $('#detailsPanel').classList.remove('open');
+    document.dispatchEvent(new Event('razvilka:auth-restored'));
+  }
 }
 
 async function submitSetup(event) {
@@ -326,8 +329,10 @@ function routeAvailable(id) {
 }
 
 function setView(name) {
+  if (!document.getElementById(`view-${name}`)) name = 'overview';
   document.dispatchEvent(new CustomEvent('razvilka:view-change', { detail: name }));
   state.currentView = name;
+  if(typeof consoleViewChanged==='function')consoleViewChanged(name);
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
   $$('.nav[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   const activeNav = $(`.nav[data-view="${CSS.escape(name)}"]`);
@@ -338,6 +343,9 @@ function setView(name) {
   $('#pageSubtitle').textContent = meta[1];
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (state.status && Object.keys(state.status).length) renderStatus();
+  if(typeof renderInterfaceNavigation==='function')renderInterfaceNavigation(name);
+  if(typeof renderInterface==='function')renderInterface();
+  if(name==='engineconfig'){if(state.engineGuidedRequest&&state.engineGuidedRequest.view!==name&&!state.engineIntent)invalidateEngineEditorContext();renderEngineControl();}
 }
 
 const detailStatusLabels = {
@@ -771,7 +779,7 @@ async function refreshAll() {
     }
     if (!state.onboardingAutoEvaluated) {
       state.onboardingAutoEvaluated = true;
-      setTimeout(() => openOnboarding(false), 0);
+      if(typeof consoleInitialSetup==='function')consoleInitialSetup();else setTimeout(() => openOnboarding(false), 0);
     }
     return true;
   } catch (error) {
@@ -815,6 +823,7 @@ function renderAll() {
   renderStrategyLab();
   renderDNS();
   renderSettings();
+  if(typeof renderConsole==='function')renderConsole();
 }
 
 function renderComponents() {
@@ -1309,6 +1318,9 @@ function populateServiceCategories() {
 }
 
 function serviceMatches(service) {
+  const filter=window.RazvilkaConsoleFilters?.service;
+  if(filter==='mine'&&!service.enabled&&!service.applied_enabled)return false;
+  if(filter==='custom'&&!service.custom)return false;
   const q = $('#serviceSearch').value.trim().toLowerCase();
   const category = $('#serviceCategory').value;
   if (category && service.category !== category) return false;
@@ -1328,7 +1340,7 @@ function renderOverviewServices() {
     const applied = summary.route ? routeLabel(summary.route) : summary.label;
     const pending = s.route_dirty || s.sources_dirty || s.enabled !== s.applied_enabled;
     return `<div class="overview-service">
-      <div class="service-name"><div class="service-badge">${esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${pending ? ' · Ожидают применения' : ''}</small></div></div>
+      <div class="service-name"><div class="service-badge">${typeof consoleServiceIcon==='function'?consoleServiceIcon(s):esc(s.icon || 'AF')}</div><div><b>${esc(s.name)}</b><small>${esc(s.category || '')}${pending ? ' · Ожидают применения' : ''}</small></div></div>
       <span class="overview-selection">${pending ? `Выбрано: ${esc(desired)}` : ''}</span>
       <span class="overview-applied" title="${esc(summary.detail)}"><small>Сейчас</small><span class="route-pill ${summary.kind} applied-route">${esc(applied)}</span>${summary.route ? `<small>${esc(summary.label)} · ${esc(summary.pingLabel)}</small>` : ''}</span>
     </div>`;
@@ -1339,7 +1351,7 @@ function renderOverviewQuickServices() {
   const container = $('#overviewQuickServices');
   if (!container) return;
   const chosen = [...state.services].sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name, 'ru')).slice(0, typeof workspaceControl !== 'undefined' && workspaceControl.expanded ? state.services.length : 6);
-  container.innerHTML = chosen.map((service) => `<button class="quick-service ${service.enabled ? 'enabled' : ''}" data-overview-toggle="${esc(service.id)}"><span class="service-badge">${esc(service.icon || '+')}</span><b>${esc(service.name)}</b><span class="quick-switch ${service.enabled ? 'on' : ''}"><i></i></span></button>`).join('');
+  container.innerHTML = chosen.map((service) => `<button class="quick-service ${service.enabled ? 'enabled' : ''}" data-overview-toggle="${esc(service.id)}"><span class="service-badge">${typeof consoleServiceIcon==='function'?consoleServiceIcon(service):esc(service.icon || '+')}</span><b>${esc(service.name)}</b><span class="quick-switch ${service.enabled ? 'on' : ''}"><i></i></span></button>`).join('');
   $$('[data-overview-toggle]').forEach((button) => button.addEventListener('click', () => toggleService(button.dataset.overviewToggle)));
 }
 
@@ -1429,7 +1441,9 @@ function renderEngineControl() {
   const engine = selectedEngineView();
   if (!engine.files.some((f) => f.id === state.selectedEngineFile)) state.selectedEngineFile = engine.files[0]?.id || 'main';
   const file = selectedEngineFile();
+  if(typeof renderAWGWorkspace==='function')renderAWGWorkspace();
   renderWarpManager();
+  if(typeof renderConsoleEngine==='function')renderConsoleEngine();
 
   $('#engineSafeBadge').textContent = state.status.safe_mode ? 'БЕЗОПАСНЫЙ РЕЖИМ · ЗАПИСЬ ВЫКЛЮЧЕНА' : 'РАБОЧИЙ РЕЖИМ';
   $('#engineSafeBadge').classList.toggle('active-apply', !state.status.safe_mode);
@@ -1461,7 +1475,7 @@ function renderEngineControl() {
   $$('[data-engine-file-row]').forEach((row) => row.addEventListener('click', () => selectEngineFile(row.dataset.engineFileRow)));
 
   $('#engineCheckRunning').textContent = engine.running ? 'да' : engine.installed ? 'установлен, но остановлен' : 'нет';
-  $('#engineCheckApply').textContent = state.status.safe_mode ? 'запрещён безопасным режимом' : 'разрешён после проверки';
+  $('#engineCheckApply').textContent = state.status.safe_mode ? 'Safe Mode: изменения запрещены' : 'Проверка не применяет маршрут';
 
   const loadedSame = state.engineLoaded && state.engineLoaded.engine_id === engine.id && state.engineLoaded.file_id === file?.id;
   const guidedSame = state.engineGuided && state.engineGuided.engine_id === engine.id && state.engineGuided.file_id === file?.id;
@@ -1490,7 +1504,7 @@ function renderEngineControl() {
   $('#engineFileState').textContent = fileState;
 
   if (!expert) {
-    if (guidedSame) renderGuidedEditor();
+    if (guidedSame && !state.engineEditorDirty) renderGuidedEditor();
     else if (!state.engineIntent && !state.engineGuidedLoading && !state.engineEditorDirty) void loadEngineGuided();
     if (!state.engineIntent) $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть изменения. Нажмите «Проверить и применить».' : guidedSame ? (file.staged ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.') : 'Загрузка параметров…';
   } else {
@@ -1510,15 +1524,16 @@ function renderEngineControl() {
     $('#engineCheckBasic').textContent = 'не запускалась';
     $('#engineCheckBasic').className = '';
     $('#engineCheckNative').textContent = '—';
-    $('#engineCheckOutput').textContent = 'Нажмите «Проверить» во вкладке «Конфиг».';
+    $('#engineCheckOutput').textContent = 'Здесь появится результат проверки выбранного файла. Нажмите «Проверить конфигурацию».';
   }
   updateEngineEditorActions();
+  if(typeof renderWorkflowControls==='function')renderWorkflowControls();
 }
 
 function renderWarpManager() {
   const panel = $('#warpManager');
   if (!panel) return;
-  const visible = state.selectedEngine === 'warp-wg';
+  const visible = state.selectedEngine === 'warp-wg' || (state.selectedEngine === 'amneziawg' && state.awgPane === 'warp');
   panel.hidden = !visible;
   if (!visible) return;
   const w = state.warp || {};
@@ -1532,7 +1547,7 @@ function renderWarpManager() {
   $('#warpLiveState').textContent = w.live_profile ? (w.valid ? 'валиден' : 'ошибка профиля') : 'нет';
   $('#warpCandidateState').textContent = w.candidate_staged ? 'черновик готов' : 'нет черновика';
   const badge = $('#warpStateBadge');
-  badge.textContent = w.live_profile && w.valid ? 'РАБОЧИЙ ПРОФИЛЬ ГОТОВ' : w.candidate_staged ? 'ЧЕРНОВИК ГОТОВ' : 'НЕ НАСТРОЕН';
+  badge.textContent = w.live_profile && w.valid ? 'ФОРМАТ ПРОФИЛЯ КОРРЕКТЕН' : w.candidate_staged ? 'ЧЕРНОВИК ГОТОВ' : 'НЕ НАСТРОЕН';
   badge.className = `engine-state ${w.live_profile && w.valid ? 'running' : w.candidate_staged ? 'installed' : ''}`;
   $('#warpNote').textContent = w.validation_error || w.note || '';
   $('#warpGenerate').disabled = !w.generator_installed || registrationInvalid || (registrationPending && !w.recovery_available);
@@ -1550,6 +1565,8 @@ function renderWarpManager() {
   const policy = health.policy || {};
   const healthState = health.state || {};
   if (!state.warpPolicyDirty) {
+    $('#warpHealthInterval').value = policy.check_interval_seconds || 180;
+    $('#warpAllowAccountRefresh').checked = !!policy.allow_account_refresh;
     $('#warpHealthEnabled').value = String(!!policy.enabled);
     $('#warpFailureThreshold').value = policy.failure_threshold || 3;
     $('#warpMinFailedServices').value = policy.min_failed_services || 2;
@@ -1586,6 +1603,20 @@ function renderWarpManager() {
     'fresh-profile-activated': 'Новый WARP-профиль применён и проверен',
     'fresh-profile-activation-failed': 'Новый профиль не прошёл проверку; восстановлен предыдущий',
   };
+  Object.assign(healthReasons, {
+ 'daily-attempt-limit-reached':'Суточный лимит попыток регистрации исчерпан — рабочие ключи сохранены',
+ 'attempt-cooldown-active':'Пауза после попытки регистрации; перезапуск не сбрасывает лимит',
+ 'transport-exhausted-refresh-disabled':'Прежний транспорт не подтверждён; новая регистрация не разрешена',
+ 'tunnel-works-service-specific-failure':'Туннель работает для другого сервиса — аккаунт не меняется',
+ 'service-failed-account-kept':'Отказ веб-сценария, а не подтверждённый отказ аккаунта',
+ 'waiting-for-independent-failure-round':'Повторная проверка слишком близко к предыдущей',
+ 'control-path-unavailable':'Не подтверждён независимый доступ к API; генерация отложена',
+ 'candidate-repair-staged':'Подготовлен кандидат с прежними ключами',
+ 'candidate-repair-activated':'Туннель восстановлен с прежними ключами',
+ 'registration-pending-or-failed':'Регистрация не подтверждена; слепой повтор запрещён',
+ 'safe-mode-blocked-recovery':'Безопасный режим запрещает восстановление с сетевыми изменениями'
+ });
+  $('#warpRecoveryBudget').textContent = `Попыток за сохранённое окно: ${(healthState.registration_attempts||[]).length} · интервал ${policy.check_interval_seconds||180} с · новое устройство ${policy.allow_account_refresh?'разрешено после проверок':'не разрешено'}`;
   const reason = health.reason || healthState.last_decision || 'policy-disabled';
   const assurance = healthState.evidence_level && healthState.evidence_level !== 'none' ? ` · ${evidenceLevelLabel(healthState.evidence_level)}` : '';
   $('#warpHealthReason').textContent = `${healthReasons[reason] || reason.replaceAll('-', ' ')}${assurance}`;
@@ -1699,7 +1730,11 @@ async function saveWarpHealthPolicy() {
     min_failed_services: Number($('#warpMinFailedServices').value),
     cooldown_hours: Number($('#warpCooldownHours').value),
     max_rotations_per_day: Number($('#warpMaxRotations').value),
+    check_interval_seconds: Number($('#warpHealthInterval').value),
+    allow_account_refresh: $('#warpAllowAccountRefresh').checked,
   };
+  if(!Number.isInteger(policy.check_interval_seconds)||policy.check_interval_seconds<60||policy.check_interval_seconds>3600){showDetails({message:'Интервал — от 60 до 3600 секунд.'},'Политика не сохранена');return;}
+  if(policy.allow_account_refresh && !policy.auto_generate_candidate){showDetails({message:'Новая регистрация требует включённого восстановления профиля.'},'Политика не сохранена');return;}
   if (policy.auto_generate_candidate && (!policy.enabled || !policy.accept_tos)) {
     showDetails({ message: 'Автогенерация требует включённой политики и отдельного принятия условий Cloudflare.' }, 'Политика не сохранена');
     return;
@@ -1748,7 +1783,7 @@ function updateEngineEditorActions() {
   $('#engineDiscardDraft').disabled = busy || !file || (!state.engineEditorDirty && !file.staged);
   $('#engineCancelOperation').hidden = !busy;
   $('#engineCancelOperation').disabled = !!state.engineIntent?.controller.signal.aborted;
-  for (const id of ['engineFileSelect', 'engineModeGuided', 'engineModeExpert', 'engineEditor', 'engineSaveDraft', 'engineValidate', 'engineImport', 'engineReload', 'engineAssignService', 'engineDiscardAllDrafts']) $(`#${id}`).disabled = busy || !file;
+  for (const id of ['r4Validate', 'engineFileSelect', 'engineModeGuided', 'engineModeExpert', 'engineEditor', 'engineSaveDraft', 'engineValidate', 'engineImport', 'engineReload', 'engineAssignService', 'engineDiscardAllDrafts']) $(`#${id}`).disabled = busy || !file;
   for (const input of $$('[data-guided-field], [data-engine-id]')) input.disabled = busy;
 }
 
@@ -2892,6 +2927,7 @@ async function copyRevealedNode() {
 }
 
 async function deleteNode(id) {
+  if(typeof workflowDelete==='function')return workflowDelete([id],'selected');
   const node = nodeByID(id);
   if (!node || !await askConfirmation('Удалить сохранённый узел?', 'Будут удалены локальная копия и её секрет. Черновик Sing-box и рабочие маршруты не меняются; при повторном импорте узел появится снова.', 'Удалить')) return;
   try {
@@ -2911,13 +2947,13 @@ function renderConnections() {
     return [c.service_name, c.host, c.destination_ip, c.source_name, c.source_ip, c.route, ...(c.chain || [])].join(' ').toLowerCase().includes(q);
   });
 
-  $('#activeConn').textContent = payload.active || 0;
-  $('#closedConn').textContent = payload.closed || 0;
-  $('#connectionCounter').textContent = payload.active || 0;
-  $('#kpiConnections').textContent = payload.active || 0;
+  $('#activeConn').textContent = payload.live ? payload.active || 0 : '—';
+  $('#closedConn').textContent = payload.live ? payload.closed || 0 : '—';
+  $('#connectionCounter').textContent = payload.live ? payload.active || 0 : '—';
+  $('#kpiConnections').textContent = payload.live ? payload.active || 0 : '—';
   $('#telemetryState').textContent = payload.live
     ? ((payload.active || 0) > 0 ? 'данные о маршрутах поступают' : 'источник подключён · активных соединений нет')
-    : friendlyDetail(payload.reason || 'телеметрия недоступна');
+    : 'Наблюдение соединений недоступно. Это не означает отказ обходов.';
   $('#connectionRows').innerHTML = filtered.map((c) => {
     const chainData = c.chain && c.chain.length ? c.chain : [c.service_name || 'Unknown', routeLabel(c.route)];
     const chain = chainData.map((part) => `<span class="chain-node">${esc(part)}</span>`).join('<b class="chain-arrow">→</b>');
@@ -2926,6 +2962,8 @@ function renderConnections() {
     return `<tr class="${c.active ? '' : 'closed-row'}"><td><div class="chain">${chain}</div><small class="evidence">${esc(c.evidence || '')}</small></td><td><b>${esc(host)}</b>${c.destination_port ? `<small>:${esc(c.destination_port)}</small>` : ''}</td><td><span class="protocol">${esc((c.protocol || '—').toUpperCase())}</span></td><td>${esc(source)}</td><td><span class="traffic">↑ ${formatBytes(c.upload)} &nbsp; ↓ ${formatBytes(c.download)}</span></td><td>${timeAgo(c.updated_at || c.started_at)}</td></tr>`;
   }).join('');
   $('#connectionEmpty').style.display = filtered.length ? 'none' : 'grid';
+  $('#connectionEmpty').querySelector('strong').textContent = !payload.live ? 'Источник наблюдения недоступен' : rows.length ? 'Нет совпадений с фильтром' : 'Сейчас нет наблюдаемых соединений';
+  $('#connectionEmpty').querySelector('span').textContent = !payload.live ? 'Роутер не передаёт данные о потоках. Проверить доступ к сервису можно независимо. Подробная причина — в диагностике.' : rows.length ? 'Измените поиск или включите завершённые соединения.' : 'Источник работает. Строки появятся, когда будет наблюдаемый трафик.';
 }
 
 function deviceDisplayName(device) {
@@ -3147,6 +3185,7 @@ async function refreshCoreAfterEdit() {
   renderOverviewServices();
   renderReadiness();
   renderSettings();
+  if(typeof renderConsole==='function')renderConsole();
 }
 
 function openCustomServiceDialog(id = '') {
@@ -3168,24 +3207,26 @@ function openCustomServiceDialog(id = '') {
 function closeCustomServiceDialog() { $('#customServiceDialog').close(); }
 
 async function openCommunityCatalog() {
+  if(workflowState.communityImport){interfaceToast('Дождитесь завершения импорта.');return;}
   state.communityPreview = null;
+  $('#communityPreview').innerHTML='<div class="community-empty">Выберите сервис. Загрузим его домены и покажем изменения до импорта.</div>';
+  $('#r4CommunityStatus').textContent='';
   $('#communityCatalogDialog').showModal();
   $('#communitySearch').value = '';
   await searchCommunityCatalog();
   setTimeout(() => $('#communitySearch').focus(), 0);
 }
 
-function closeCommunityCatalog() { $('#communityCatalogDialog').close(); }
+function closeCommunityCatalog() { $('#communityCatalogDialog').close();workflowState.communitySeq++; }
 
 async function searchCommunityCatalog() {
-  const query = $('#communitySearch').value.trim();
-  $('#communityResults').innerHTML = '<div class="community-empty">Поиск в разрешённом каталоге…</div>';
-  try {
-    state.community = await api(`/api/v1/community/services?q=${encodeURIComponent(query)}`);
-    renderCommunityResults();
-  } catch (error) {
-    $('#communityResults').innerHTML = `<div class="community-empty error">${esc(error.message)}</div>`;
-  }
+  const query=$('#communitySearch').value.trim(),seq=++workflowState.communitySeq,epoch=workflowState.epoch;
+  $('#communityResults').innerHTML='<div class="community-empty">Читаем поддерживаемый каталог…</div>';
+  try{
+    const results=await workflowRequest(`/api/v1/community/services?q=${encodeURIComponent(query)}`);
+    if(!workflowSession(epoch)||seq!==workflowState.communitySeq||!$('#communityCatalogDialog').open)return;
+    state.community=Array.isArray(results)?results:[];renderCommunityResults();
+  }catch(error){if(workflowSession(epoch)&&seq===workflowState.communitySeq)$('#communityResults').innerHTML=`<div class="community-empty error">${esc(workflowError(error))}</div>`;}
 }
 
 function renderCommunityResults() {
@@ -3199,14 +3240,14 @@ function accessLabel(status) {
 }
 
 async function previewCommunityService(id, refresh = false) {
-  $('#communityPreview').innerHTML = '<div class="community-empty">Загрузка и локальная проверка списков…</div>';
-  try {
-    state.communityPreview = await api(`/api/v1/community/services/${encodeURIComponent(id)}/preview${refresh ? '?refresh=true' : ''}`);
-    renderCommunityResults();
-    renderCommunityPreview();
-  } catch (error) {
-    $('#communityPreview').innerHTML = `<div class="community-empty error">Источник не принят: ${esc(error.message)}</div>`;
-  }
+  const seq=++workflowState.communitySeq,epoch=workflowState.epoch;
+  state.communityPreview=null;$('#r4CommunityStatus').textContent='';
+  $('#communityPreview').innerHTML='<div class="community-empty">Получаем и разбираем доменный список. Это не проверка доступности сервиса…</div>';
+  try{
+    const preview=await workflowRequest(`/api/v1/community/services/${encodeURIComponent(id)}/preview${refresh?'?refresh=true':''}`,{},50000);
+    if(!workflowSession(epoch)||seq!==workflowState.communitySeq||!$('#communityCatalogDialog').open)return;
+    state.communityPreview=preview;renderCommunityResults();renderCommunityPreview();
+  }catch(error){if(workflowSession(epoch)&&seq===workflowState.communitySeq)$('#communityPreview').innerHTML=`<div class="community-empty error">Источник не принят: ${esc(workflowError(error))}</div>`;}
 }
 
 function renderCommunityPreview() {
@@ -3222,37 +3263,39 @@ function renderCommunityPreview() {
   const sourceURL = /^https:\/\//.test(entry.source_page || '') ? entry.source_page : '#';
   const evidenceURL = /^https:\/\//.test(entry.access?.evidence_url || '') ? entry.access.evidence_url : '';
   $('#communityPreview').innerHTML = `<div class="community-preview-head"><div class="service-badge">${esc(entry.icon || '+')}</div><div><h4>${esc(entry.name)}</h4><p>${esc(entry.description || '')}</p></div></div>
-    <div class="community-access access-${esc(entry.access?.status || 'catalog')}"><b>${esc(accessLabel(entry.access?.status))}</b><span>${esc(entry.access?.note || 'Доступность необходимо проверить у своего провайдера.')}</span>${evidenceURL ? `<a href="${esc(evidenceURL)}" target="_blank" rel="noreferrer">Основание статуса ↗</a>` : ''}<small>Проверено: ${esc(entry.access?.verified_at || 'не указано')} · регион RU</small></div>
+    <div class="community-access access-${esc(entry.access?.status || 'catalog')}"><b>${esc(accessLabel(entry.access?.status))}</b><span>${esc(entry.access?.note || 'Доступность необходимо проверить у своего провайдера.')}</span>${evidenceURL ? `<a href="${esc(evidenceURL)}" target="_blank" rel="noreferrer">Основание статуса ↗</a>` : ''}<small>Сведения каталога от ${esc(entry.access?.verified_at || 'не указано')} · регион RU</small></div>
     <div class="community-metrics"><div><b>${domains.length}</b><span>доменов</span></div><div><b>${cidrs.length}</b><span>IP/CIDR</span></div><div><b>${preview.skipped || 0}</b><span>пропущено</span></div><div class="${conflicts.length ? 'warn' : ''}"><b>${conflicts.length}</b><span>конфликтов</span></div></div>
     <div class="community-source"><span>Источник</span><b>${esc(entry.provider || '—')}</b><small>Лицензия: ${esc(entry.license || 'не указана')}</small><small>SHA-256: ${esc((preview.source_sha256 || '').slice(0, 16))}… · ${preview.from_cache ? 'cache' : 'загружено сейчас'}</small><a href="${esc(sourceURL)}" target="_blank" rel="noreferrer">Открыть страницу источника ↗</a></div>
     ${conflicts.length ? `<div class="community-conflicts"><b>Совпадения с существующими правилами</b><ul>${conflictRows}</ul>${conflicts.length > 12 ? `<small>И ещё ${conflicts.length - 12}. Импорт возможен только после подтверждения.</small>` : ''}</div>` : '<div class="community-clean">Конфликтов с текущим каталогом не найдено.</div>'}
     <details class="community-data"><summary>Показать данные (${domains.length + cidrs.length})</summary><div><b>Домены</b><pre>${esc(domains.slice(0, 80).join('\n') || '—')}</pre>${domains.length > 80 ? `<small>Показаны первые 80 из ${domains.length}</small>` : ''}<b>IP/CIDR</b><pre>${esc(cidrs.slice(0, 80).join('\n') || '—')}</pre>${cidrs.length > 80 ? `<small>Показаны первые 80 из ${cidrs.length}</small>` : ''}</div></details>
+    ${consoleSnapshot?.policy?.setup_complete&&!imported?'<label class="r4-check"><input type="checkbox" id="r4CommunityManage" checked/><span>После импорта передать сервис Автопилоту с устройствами и разрешениями из мастера. Это отдельная задача проверки и применения.</span></label>':'<p class="r4-note">Импортирует только определение сервиса. Автопилот настраивается отдельно; существующий маршрут не изменяется.</p>'}
     <div class="community-preview-actions"><button class="secondary" data-community-refresh="${esc(entry.id)}" type="button">Обновить preview</button><button class="primary" data-community-import="${esc(entry.id)}" type="button">${imported ? 'Обновить из источника' : 'Добавить в мои сервисы'}</button></div>`;
 }
 
 async function importCommunityService(id) {
-  const preview = state.communityPreview;
-  if (!preview || preview.entry?.id !== id) return;
-  const conflicts = preview.conflicts || [];
-  const imported = state.community.find((item) => item.id === id)?.imported;
-  let allowConflicts = false;
-  if (conflicts.length) {
-    allowConflicts = await askConfirmation('Импортировать с конфликтами?', `${conflicts.length} доменов или сетей уже используются другими сервисами. Они не будут удалены; при активных маршрутах потребуется выбрать приоритет.`, 'Всё равно импортировать');
-    if (!allowConflicts) return;
-  }
-  const button = $(`[data-community-import="${CSS.escape(id)}"]`);
-  if (button) { button.disabled = true; button.textContent = 'Импорт…'; }
-  try {
-    if (imported && !await askConfirmation('Обновить правила сервиса?', 'Домены и сети будут заново загружены из указанного источника. Желаемый маршрут и состояние включения сохранятся.', 'Обновить')) { renderCommunityPreview(); return; }
-    const result = await api(`/api/v1/community/services/${encodeURIComponent(id)}/import`, { method: 'POST', body: JSON.stringify({ allow_conflicts: allowConflicts, refresh: imported }) });
-    await refreshCoreAfterEdit();
-    await searchCommunityCatalog();
-    await previewCommunityService(id);
-    showDetails(result, result.updated ? 'Community-сервис обновлён' : 'Community-сервис добавлен');
-  } catch (error) {
-    showDetails({ error: error.message }, 'Импорт не выполнен');
-    renderCommunityPreview();
-  }
+  const preview=state.communityPreview;if(!preview||preview.entry?.id!==id||workflowState.communityImport)return;
+  if(preview.import_guard!=='source-sha256'){$('#r4CommunityStatus').textContent='Для импорта показанной редакции с проверкой отпечатка нужен backend R4.';return;}
+  if(!/^[a-f0-9]{64}$/.test(preview.source_sha256||'')){$('#r4CommunityStatus').textContent='Не получен отпечаток показанного источника. Повторите предпросмотр.';return;}
+  const epoch=workflowState.epoch,imported=state.community.find(e=>e.id===id)?.imported,manage=$('#r4CommunityManage')?.checked===true;
+  const conflicts=preview.conflicts||[];workflowState.communityImport=true;
+  let saved=null;
+  try{
+    if(conflicts.length&&!await askConfirmation('Импортировать пересекающиеся списки?', `${conflicts.length} записей пересекаются с другими сервисами. Их маршруты не будут заменены.`, 'Импортировать'))return;
+    if(imported&&!await askConfirmation('Обновить определение сервиса?','Показанные домены заменят предыдущую версию. Настройки маршрута сохраняются.','Обновить'))return;
+    if(!workflowSession(epoch)||state.communityPreview!==preview||!$('#communityCatalogDialog').open)return;
+    $('#r4CommunityStatus').textContent='Импортируем показанную редакцию списка…';
+    $$('[data-community-import],[data-community-refresh]').forEach(b=>b.disabled=true);
+    saved=await workflowRequest(`/api/v1/community/services/${encodeURIComponent(id)}/import`,{method:'POST',body:JSON.stringify({allow_conflicts:conflicts.length>0,refresh:false,expected_source_sha256:preview.source_sha256})},50000);
+    if(!saved.service?.id)throw new Error('Backend не подтвердил идентификатор импортированного сервиса.');
+    await refreshCoreAfterEdit();if(!workflowSession(epoch))return;
+    if(manage)await interfaceManage(saved.service.id,true);
+    if(!workflowSession(epoch))return;
+    $('#r4CommunityStatus').textContent=manage?'Определение импортировано. Сервис передан Автопилоту; ожидается реальная проверка, маршрут ещё не подтверждён.':'Определение импортировано. Доступность и маршрут не изменялись.';
+    interfaceToast(manage?'Сервис добавлен и ожидает проверки.':'Сервис добавлен в каталог.');
+    // Keep the preview visible with its immutable digest and disable duplicate import.
+    const entry=state.community.find(e=>e.id===id);if(entry)entry.imported=true;renderCommunityResults();
+  }catch(error){if(workflowSession(epoch))$('#r4CommunityStatus').textContent=(saved?.service?.id?'Сервис уже импортирован, но дальнейшее действие не завершено. ':'Импорт не подтверждён. ')+workflowError(error);}
+  finally{if(workflowSession(epoch)){workflowState.communityImport=false;$$('[data-community-refresh]').forEach(b=>b.disabled=false);if(!saved)$$('[data-community-import]').forEach(b=>b.disabled=false);}}
 }
 
 function splitResourceList(value) {
@@ -4166,7 +4209,7 @@ function bindEvents() {
   $('#warpDelete').addEventListener('click', deleteWarp);
   $('#warpSaveHealth').addEventListener('click', saveWarpHealthPolicy);
   $('#warpRunHealth').addEventListener('click', runWarpHealthCheck);
-  ['warpHealthEnabled', 'warpFailureThreshold', 'warpMinFailedServices', 'warpCooldownHours', 'warpMaxRotations', 'warpAutoCandidate', 'warpAutoApply', 'warpHealthAcceptTOS'].forEach((id) => {
+  ['warpHealthInterval', 'warpAllowAccountRefresh', 'warpHealthEnabled', 'warpFailureThreshold', 'warpMinFailedServices', 'warpCooldownHours', 'warpMaxRotations', 'warpAutoCandidate', 'warpAutoApply', 'warpHealthAcceptTOS'].forEach((id) => {
     const markWarpPolicyDirty = () => {
       state.warpPolicyDirty = true;
       $('#warpPolicyFeedback').textContent = 'Есть несохранённые изменения';

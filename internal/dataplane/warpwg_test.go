@@ -296,7 +296,9 @@ func TestNativeWGConfigSeparatesInterfaceSettingsFromSecrets(t *testing.T) {
 }
 
 func TestAmneziaProfileValidationAndOwnership(t *testing.T) {
+	// Strict AWG parsing rejects all-zero keys; this fixture uses non-secret test bytes.
 	profile := strings.Replace(testWARPProfile(), "Address = 172.16.0.2/32\n", "Address = 172.16.0.2/32\nJc = 4\nJmin = 64\nJmax = 128\nS1 = 0\nS2 = 0\nH1 = 1\nH2 = 2\nH3 = 3\nH4 = 4\n", 1)
+	profile = strings.ReplaceAll(profile, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=")
 	if err := validateAmneziaProfile(profile); err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=name=>readFileSync(new URL('../'+name,import.meta.url),'utf8');
+const root='cmd/razvilka/web/',html=read(root+'index.html');
+const version=read('VERSION').trim();
+const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
+let count=0;function test(name,fn){fn();count++;console.log('PASS '+name);}
+test('unique DOM IDs',()=>assert.equal(new Set(ids).size,ids.length));
+const baseline=JSON.parse(read('scripts/fixtures/interface-ui2-ids.json'));
+test('all inherited controls retain IDs',()=>assert.deepEqual(baseline.filter(id=>!ids.includes(id)),[]));
+test('7 primary destinations',()=>assert.equal([...html.matchAll(/data-main-nav="/g)].length,7));
+test('20 retained views',()=>assert.equal(ids.filter(id=>id.startsWith('view-')).length,20));
+test('one compiled stylesheet',()=>assert.equal([...html.matchAll(/rel="stylesheet"/g)].length,1));
+test('compiled CSS reproducible',()=>assert.equal(read(root+'interface.css'),read(root+'interface-compat.css')+'\n'+read(root+'interface-shell.css')));
+for(const m of html.matchAll(/<script[^>]+src="([^"]+)"/g))test('current asset cache '+m[1],()=>{const asset=new URL(m[1],'https://razvilka.invalid');assert.equal(asset.searchParams.get('v'),version);assert.ok(read(root+asset.pathname.replace(/^\//,'')).length>0);});
+for(const f of ['index.html','interface.js','interface-model.js','console-autonomy.js','console.js','awg-workspace.js','dns-service-lab.js'])test('no preview transport in '+f,()=>assert.doesNotMatch(read(root+f),/__demoData|__demoRequests|window\.fetch\s*=/));
+test('no external stylesheet/font',()=>assert.doesNotMatch(html,/(?:href|src)="https?:\/\/[^" ]+\.(?:woff2?|ttf|css|js)/));
+test('model never performs requests',()=>assert.doesNotMatch(read(root+'interface-model.js'),/\b(fetch|XMLHttpRequest|setInterval|localStorage|sessionStorage)\s*\(/));
+test('group is not a new route',()=>assert.doesNotMatch(read(root+'interface.js'),/route\s*:\s*['"]ai['"]/));
+test('native inspector accessible name',()=>assert.match(html,/<dialog[^>]*aria-labelledby="ui3InspectorTitle"[^>]*id="ui3ServiceDialog"|<dialog[^>]*id="ui3ServiceDialog"[^>]*aria-labelledby="ui3InspectorTitle"/));
+test('retry fenced across authentication epochs',()=>assert.match(read(root+'console-autonomy.js'),/api\(path,method,body,attempt\+1,requestGeneration\)/));
+test('mutation timeout',()=>assert.match(read(root+'interface.js'),/setTimeout\(\(\)=>controller\.abort\(\),20000\)/));
+test('side drawer always clears on session end',()=>assert.match(read(root+'interface.js'),/interfaceRequests\.clear\(\);interfaceCloseInspector\(\);consoleSnapshot=null/));
+console.log(JSON.stringify({suite:'interface-contract',passed:count}));

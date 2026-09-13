@@ -183,7 +183,11 @@ func TestNodeCheckServiceCancelRemainsAvailableAndJoinsCleanup(t *testing.T) {
 	}
 	for _, method := range []string{http.MethodGet, http.MethodDelete} {
 		w := httptest.NewRecorder()
-		a.Handler(http.NotFoundHandler()).ServeHTTP(w, httptest.NewRequest(method, "/api/v1/node-checks/current", nil))
+		path := "/api/v1/node-checks/current"
+		if method == http.MethodDelete {
+			path += fmt.Sprintf("?job_id=%d", a.nodeCheckSnapshot()["job"].(*nodeCheckJob).ID)
+		}
+		a.Handler(http.NotFoundHandler()).ServeHTTP(w, httptest.NewRequest(method, path, nil))
 		if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("status/cancel blocked: %d", w.Code)
 		}

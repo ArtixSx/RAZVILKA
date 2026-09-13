@@ -1,0 +1,1 @@
+'use strict'; const target=({setup:'onboard',services:'managed',sources:'subscription-settings',overview:'autopilot'})[location.hash.slice(1)]||'autopilot';location.replace('/index.html#/'+target);

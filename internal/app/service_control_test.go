@@ -308,3 +308,63 @@ func TestServiceControlPersistedTimerRunsWithoutBrowserInManualMode(t *testing.T
 		t.Fatal("persisted schedule was not resumed")
 	}
 }
+
+func TestServiceControlTimerReceivesBudgetAfterEarlierReconcilerWork(t *testing.T) {
+	for _, parentBudget := range []time.Duration{0, 10 * time.Second} {
+		t.Run(parentBudget.String(), func(t *testing.T) {
+			a, _ := serviceControlFixture(t, 1)
+			mode := "manual"
+			schedule := config.ServiceCheckSchedule{Enabled: true, IntervalSeconds: 300, ServiceIDs: []string{"telegram"}}
+			if err := a.Store.UpdateServiceControl(&mode, &schedule, a.Store.Get().Revision); err != nil {
+				t.Fatal(err)
+			}
+			// Model an earlier serial job taking longer than this timer's budget.
+			// No sleeping is necessary: the round timestamp is intentionally old.
+			roundStarted := time.Now().Add(-10 * time.Minute)
+			initReconcilerFixture(t, a, roundStarted)
+			ctx := context.Background()
+			if parentBudget != 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, parentBudget)
+				defer cancel()
+			}
+			calls := 0
+			var probeDeadline time.Time
+			var probeErr error
+			a.TestLab = testlab.NewRunner()
+			a.TestLab.Profile = func() string { p, _ := stableNodeProfile(context.Background()); return p }
+			a.RouteProber = serviceRouteProbe(func(probeCtx context.Context, service catalog.Service, route string) testlab.Result {
+				calls++
+				probeDeadline, _ = probeCtx.Deadline()
+				probeErr = probeCtx.Err()
+				return testlab.Result{ServiceID: service.ID, ServiceName: service.Name, Route: route, Status: "pass", RouteConfirmed: true, HTTPStatus: 200, CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+			})
+			dispatchStarted := time.Now()
+			a.reconcileRound(ctx, roundStarted)
+			if calls != 1 || probeErr != nil || !probeDeadline.After(dispatchStarted) {
+				t.Fatalf("earlier work starved timer: calls=%d error=%v deadline=%v", calls, probeErr, probeDeadline)
+			}
+			if parentDeadline, ok := ctx.Deadline(); ok && probeDeadline.After(parentDeadline) {
+				t.Fatal("fresh task budget escaped parent deadline")
+			}
+			data, err := os.ReadFile(a.Store.AutomationStatePath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc reconcilerDocument
+			if err = json.Unmarshal(data, &doc); err != nil {
+				t.Fatal(err)
+			}
+			for _, op := range doc.Operations {
+				if op.Kind != "service-checks" {
+					continue
+				}
+				if op.State != "completed" || op.Deadline.Before(dispatchStarted.Add(2*time.Minute)) || op.Deadline.After(time.Now().Add(2*time.Minute)) || op.NextRun.Before(dispatchStarted.Add(300*time.Second)) {
+					t.Fatalf("timer budget/cadence not durably bounded at dispatch: %+v", op)
+				}
+				return
+			}
+			t.Fatal("missing timer journal entry")
+		})
+	}
+}

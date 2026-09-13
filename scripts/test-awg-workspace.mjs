@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=n=>readFileSync(new URL('../'+n,import.meta.url),'utf8');
+const html=read('cmd/razvilka/web/index.html'),js=read('cmd/razvilka/web/awg-workspace.js'),app=read('cmd/razvilka/web/app.js');
+let passed=0;function test(n,f){f();passed++;console.log('PASS '+n);}
+for(const id of ['awgWorkspace','awgProfilePane','awgWarpIntro','awgImportDialog','awgPreviewImport','awgStageImport','awgCanary','awgCanaryService','awgCancelCanary','warpAllowAccountRefresh','warpHealthInterval'])test('visible control '+id,()=>assert.ok(html.includes(`id="${id}"`)));
+test('one generator surface',()=>assert.equal((html.match(/id="warpManager"/g)||[]).length,1));
+test('local API only',()=>{assert.doesNotMatch(js,/fetch\(['"]https?:|iframe|window\.fetch\s*=/);assert.match(js,/\/api\/v1\/amneziawg\/preview/);});
+test('no browser scheduler',()=>assert.doesNotMatch(js,/setInterval\s*\(/));
+test('secret never stored in browser preferences',()=>assert.doesNotMatch(js,/localStorage|sessionStorage/));
+test('preview before stage',()=>assert.match(js,/expected_sha256:intent\.result\.preview\.sha256,base_sha256:intent\.result\.base_sha256/));
+test('staging explicit consent',()=>assert.match(js,/confirm:'STAGE_AWG_PROFILE'/));
+test('explicit bounded canary',()=>{assert.match(js,/confirm:'PROBE_AWG_PROFILE'/);assert.match(js,/125000/);assert.match(js,/probe\?\.abort\(\)/);});
+test('Safe Mode prevents UI probe',()=>assert.match(js,/state\.status\?\.safe_mode/));
+test('cannot silently apply import',()=>assert.match(js,/!result\.staged\|\|result\.live_applied/));
+test('auth clears secret input',()=>assert.match(js,/awgUI\.epoch\+\+[\s\S]*awgImportText'\)\.value=''/));
+test('separate account refresh consent',()=>{assert.match(app,/allow_account_refresh/);assert.match(html,/warpAllowAccountRefresh/);});
+test('dirty editor preserved',()=>assert.match(js,/state\.engineEditorDirty/));
+test('no fake ready',()=>assert.match(js,/!d\?\.syntax_valid/));
+test('proof bound to profile service runtime and time',()=>{assert.match(js,/base_sha256,service/);assert.match(js,/loaded_module_version/);assert.match(js,/Date.now\(\)<awgUI.proof.until/);});
+console.log(JSON.stringify({suite:'awg-workspace-contract',passed}));

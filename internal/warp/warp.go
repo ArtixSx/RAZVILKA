@@ -80,6 +80,7 @@ type Manager struct {
 	version       string
 	versionAt     time.Time
 	nativeAPI     func(func([]byte) error) cloudflareprovider.RegistrationAPI
+	healthNow     func() time.Time // deterministic test clock; not externally configurable
 }
 
 func New(root, backupRoot string, configs *engineconfig.Manager) *Manager {

@@ -22,6 +22,7 @@ function renderNodeActivity() {
   $('#nodeActivityMessage').textContent = active
     ? nodeActivity.canceling ? 'Останавливаем проверку и завершаем очистку…' : batch ? `Готово ${nodeActivity.checks.completed || 0} из ${nodeActivity.checks.total || 0}. Настройки станут доступны после проверки или её остановки.` : 'Изменение маршрутов временно занято. Проверку можно остановить, чтобы перейти к настройкам.'
     : 'Есть минута для изменения настроек. Затем проверки выбранных резервных групп продолжатся.';
+  if (typeof renderInterfaceHome === 'function' && state.currentView === 'overview') renderInterfaceHome(interfaceSummaries());
 }
 
 async function refreshNodeActivity() {

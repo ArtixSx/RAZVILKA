@@ -1,109 +1,88 @@
-<p align="center"><img src="docs/assets/razvilka-banner.png" alt="RAZVILKA routing control center" width="100%"></p>
-
-<p align="center"><strong>Select a service. RAZVILKA verifies available bypasses and helps apply a suitable route safely.</strong></p>
-
-<p align="center"><a href="README.md">Русский</a> · <a href="https://github.com/ArtixSx/RAZVILKA/releases">Releases</a> · <a href="docs/CURRENT_STATUS_RU.md">Verified status</a> · <a href="https://t.me/RAZVILKA_UI">Telegram</a> · <a href="SECURITY.md">Security</a></p>
-
 # RAZVILKA
 
-RAZVILKA is a free local-first routing panel for Keenetic/Netcraze routers with Entware. Enable Telegram, YouTube, Discord, ChatGPT or a custom resource; the panel collects its domains and IP networks, compares available bypasses and prepares a safe apply plan.
+A local control panel for Keenetic/Netcraze routers with Entware. Configure
+services, devices and connections; review and apply routes, manage backups
+and grant bounded Autopilot permissions. The application runs on the router,
+and saved schedules continue when the browser is closed.
 
-Credentials, configurations and diagnostics stay on the router. No RAZVILKA cloud account is required.
+The panel uses the router's LAN address on port **8787**, commonly
+`http://192.168.1.1:8787`. Credentials and private profiles stay locally;
+no RAZVILKA cloud account is required.
 
-> The project is still undergoing hardware testing. Version `1.0.0` is reserved for the multi-router, IPv4/IPv6, reboot, low-memory and recovery release gate.
+[Русский](README.md) · [Downloads](https://github.com/ArtixSx/RAZVILKA/releases) ·
+[Verified status](docs/CURRENT_STATUS_RU.md) · [Security](SECURITY.md)
 
-The stable release is `v0.18.0`. The
-[0.18.1-rc.2 prerelease](docs/releases/0.18.1-rc.2.md) is for public testing:
-a VLESS browser, scheduled subscriptions, fallback groups, persisted Autopilot
-and manual modes, compact service cards, router-side check timers and an app
-update workflow.
+## Candidate status
 
-All 47 Go packages passed local tests and Windows race tests, alongside 21 UI
-tests. The final ARM64 candidate passed mode persistence, checks with the
-browser closed, component status and update refusal tests. Its fresh saved
-VLESS check was INCONCLUSIVE; applied routes stayed empty. A working route and
-A → B failover have not been verified for this release. MIPS/MIPSel hardware,
-WARP, reboot and extended testing remain open. See the
-[release notes](docs/releases/0.18.1-rc.2.md) and
-[verified status](docs/CURRENT_STATUS_RU.md) for the exact boundaries.
+Source for the **`v0.18.2-rc.1` prerelease**, based on reviewed DC1. The latest stable
+release remains [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
+DC1 commit `09730c7` passed the full
+[Linux CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/34779255292).
+For final release CI and hardware validation results, see the
+`VALIDATION_RU.md` asset on the [release page](https://github.com/ArtixSx/RAZVILKA/releases). The earlier candidate's
+results do not certify the final release binary.
 
-The command below installs latest stable. To test rc.2, download its versioned
-prerelease archive and use the bundled install instructions.
+The control plane supports scoped service routes, exact node checks,
+subscriptions, permitted fallback, schedules, encrypted backups and component
+workspaces. Available adapters include NFQWS2, Sing-box/Xray, USQUE, WARP and
+AmneziaWG; actual use depends on installed capabilities and a verified profile.
+Safe Mode is enabled by default. Importing or refreshing a subscription does
+not itself authorize route changes.
 
-For MIPS, `uname -m = mips` does not distinguish byte order. Use the official
-Entware package for your firmware and confirmed BE/LE architecture. The
-RAZVILKA installer checks the running shell's ELF header before choosing a
-MIPS binary and refuses an unknown result; this is not MIPS hardware acceptance.
+DNS comparison currently returns A/AAAA results for a catalog service using
+selected DoH profiles. Combined DNS + route + service proof, scoped DNS Apply
+and automatic pair selection remain **DC2–DC4**. Recipe hints are an offline
+library; cloud catalog downloads and result uploads are not enabled.
 
 ## Install
 
-Enable Entware, connect over SSH as `root`, then run:
+Install the appropriate Entware package for your router and firmware first.
+An ambiguous `uname -m = mips` does not distinguish BE from LE; RAZVILKA checks
+the running shell's ELF identity and refuses an unknown byte order.
+Prepare the tools over SSH as `root`:
+
+```sh
+test -d /opt && command -v opkg
+opkg update
+opkg install curl ca-certificates coreutils-sha256sum tar
+```
+
+**Latest stable** (currently `v0.18.0`):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-The installer verifies the router architecture and release checksum, creates a rollback snapshot, starts the local UI and prints its URL plus a one-time setup key. Only the UI is installed by default; add the required bypasses later from the **Bypasses** page.
+**DC1 candidate**, only **after the tag and assets for `v0.18.2-rc.1` are published**:
 
-## Basic workflow
+```sh
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.1/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.1 sh
+```
 
-1. Install the required component. VLESS uses Sing-box.
-2. Import your profile or fetch candidates from a public subscription.
-3. Check a node against the service you need. Connection time and service
-   health are separate: low latency does not prove that a service works.
-4. Select the service and devices, review the route and apply it. The
-   transaction checks the candidate and verifies the result, with rollback
-   if activation fails.
+Alternatively, extract that release's Entware bundle and run
+`sh scripts/upgrade-entware.sh --dry-run`, then `--apply` after successful
+preflight. The installer verifies SHA256, saves a snapshot and checks startup.
+Keep the printed snapshot path. The default installation adds the panel;
+install the required bypass components separately and set your own login.
 
-Automatic replacement uses an explicitly selected fallback group. A
-subscription refresh only fetches candidates; it does not itself authorize
-traffic switching. Autopilot follows saved permissions for the selected
-Sing-box fallback group and devices. Manual mode is separate from Safe Mode.
-Check timers persist on the router and run with the browser closed; an
-inconclusive check is not reported as a working route.
+## Open the panel
 
-Safe Mode is enabled after installation and prevents unconfirmed firewall, DNS, TUN and policy-routing changes.
+```sh
+/opt/bin/razvilka -version
+/opt/etc/init.d/S99razvilka status
+LAN_IP=$(/opt/etc/init.d/S99razvilka lan-ip)
+/opt/bin/razvilka -healthcheck "http://$LAN_IP:8787/api/v1/status"
+```
 
-## Supported routes
+Open `http://<LAN_IP>:8787` from the LAN and test the intended service.
+Do not expose the panel's port to the internet. A running process, DNS answer
+or reachable TCP port alone does not establish a working service route.
 
-| Bypass | Intended use |
-|---|---|
-| **NFQWS2** | DPI throttling and domain filtering without a remote server |
-| **WARP · MASQUE** | Full IP blocks through Cloudflare MASQUE when the transport is reachable |
-| **WARP · WireGuard** | Free split tunnel after a confirmed handshake |
-| **Sing-box** | VLESS/Reality, Hysteria2, TUIC and Shadowsocks using your server or profile |
-| **Xray** | Alternative VLESS/Reality client |
-| **AmneziaWG** | A compatible AmneziaWG server when ordinary WireGuard is identified by the network |
+Hardware acceptance remains specific to each binary. AWG 3.1/WARP, WAN
+reconnect, reboot, IPv6 HTTPS, low-memory operation and a 24–72 hour soak need
+their own results. ARM64/MIPS/MIPSle/amd64 builds do not certify every device.
+Public nodes can become unavailable after a successful check.
 
-RAZVILKA also includes custom domain/IP/CIDR services, Telegram Web and Core/API scenarios, verified NFQWS2 strategy memory, DNS profiles, device-scoped routes, router resource/traffic metrics, public profile exchange, encrypted private backups and transactional `plan → snapshot → validate → health → commit/rollback`.
-
-Exact node checks verify the protocol, a separate egress, the service hostname
-and its public IPv4 using the original TLS identity. Applied node recovery
-performs a new check after application restart and preserves user drafts.
-Native WARP enrollment supports account reuse and encrypted state backup;
-creating an account does not establish a working tunnel.
-
-Hardware evidence is tracked per build. The current rc.2 candidate passed
-control and timer checks, but its fresh VLESS check was inconclusive and no
-routes were applied. Earlier successful core tests do not establish hardware
-acceptance for this release. Reliable WARP fallback and MIPS/MIPSel hardware
-operation are not claimed.
-
-## App updates
-
-The version button in rc.2 prepares a compatible official stable release.
-After archive and compatibility checks, a separate install action invokes the
-transactional installer with a backup, startup healthcheck and rollback.
-Older stable releases cannot replace newer development builds. Isolated test
-instances and unsafe ownership or paths are refused. SHA256 integrity checking
-is not described as signature verification. An actual production upgrade
-through this button still needs hardware acceptance.
-
-## Recommendations
-
-- Keep the UI on the LAN; do not expose its port to the internet.
-- Keep Safe Mode enabled until diagnostics and route tests pass.
-- Use a confirmed tunnel for full IP blocking; NFQWS2 primarily addresses DPI scenarios.
-- Save a backup before upgrades.
-
-Release notes, compatibility information and downloads live in [GitHub Releases](https://github.com/ArtixSx/RAZVILKA/releases). Support: [@RAZVILKA_UI](https://t.me/RAZVILKA_UI). Issues: [GitHub Issues](https://github.com/ArtixSx/RAZVILKA/issues).
+[DC1 changes and remaining work](docs/DC1_REVIEW_2026-09-13_RU.md) ·
+[Roadmap](docs/ROADMAP_2026-08-30_RU.md) · [Changelog](CHANGELOG.md) ·
+[Issues](https://github.com/ArtixSx/RAZVILKA/issues) · [MIT license](LICENSE)

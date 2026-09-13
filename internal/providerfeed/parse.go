@@ -270,29 +270,30 @@ func keysJSON(data []byte) ([]string, error) {
 	}
 	entries := []string{}
 	group := func(raw json.RawMessage) error {
-		var value struct {
-			Top10 []struct {
-				Key string `json:"key"`
-			} `json:"top10"`
-			Top5 []struct {
-				Key string `json:"key"`
-			} `json:"top5"`
-		}
-		if json.Unmarshal(raw, &value) != nil {
+		var value map[string]json.RawMessage
+		if json.Unmarshal(raw, &value) != nil || !exactSelectionFields(value, "top10", "top5") {
 			return ErrFormat
 		}
-		keys := value.Top10
-		if keys == nil {
-			keys = value.Top5
+		selected, ok := value["top10"]
+		if !ok {
+			selected = value["top5"]
 		}
-		if keys == nil || len(keys) > 64 {
+		var keys []map[string]json.RawMessage
+		if json.Unmarshal(selected, &keys) != nil || keys == nil || len(keys) > 64 {
 			return ErrFormat
 		}
 		for _, row := range keys {
+			if !exactSelectionFields(row, "key") {
+				return ErrFormat
+			}
+			var key string
+			if rawKey, ok := row["key"]; !ok || bytes.Equal(bytes.TrimSpace(rawKey), []byte("null")) || json.Unmarshal(rawKey, &key) != nil {
+				return ErrFormat
+			}
 			if len(entries) >= MaxEntries {
 				return ErrSize
 			}
-			entries = append(entries, row.Key)
+			entries = append(entries, key)
 		}
 		return nil
 	}
@@ -328,6 +329,20 @@ func keysJSON(data []byte) ([]string, error) {
 		return nil, ErrFormat
 	}
 	return entries, nil
+}
+
+// Ignore unrelated publisher metadata, but never let encoding/json's folded
+// struct-field matching turn KEY/TOP10 into credential-selection aliases.
+// Country labels remain case-sensitive data rather than schema field names.
+func exactSelectionFields(fields map[string]json.RawMessage, names ...string) bool {
+	for field := range fields {
+		for _, name := range names {
+			if field != name && strings.EqualFold(field, name) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Reject duplicate keys and unexpectedly deep source objects instead of silently

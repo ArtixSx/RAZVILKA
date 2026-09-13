@@ -106,12 +106,39 @@ require_file "$EXAMPLE_CONFIG"
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum is required" >&2; exit 1; }
 [ -x "$BASE/sbin/start-stop-daemon" ] || { echo "$BASE/sbin/start-stop-daemon is required" >&2; exit 1; }
 
-EXPECTED=""
-if [ -r "$HERE/dist/SHA256SUMS" ]; then
-  EXPECTED="$(awk -v name="razvilka-linux-$ARCH" '$2 == name || $2 == "dist/" name {print $1; exit}' "$HERE/dist/SHA256SUMS")"
-fi
+CHECKSUM_FILE="$HERE/dist/SHA256SUMS"
+[ -f "$CHECKSUM_FILE" ] && [ -r "$CHECKSUM_FILE" ] && [ ! -L "$CHECKSUM_FILE" ] || {
+  echo "A regular readable release checksum manifest is required; installation unchanged" >&2; exit 1;
+}
+# Accept the release-relative and legacy bare names, plus sha256sum's optional
+# binary marker. Do not select the first match: duplicates or malformed entries
+# for this candidate make the manifest ambiguous, even if one digest is valid.
+EXPECTED="$(awk -v name="razvilka-linux-$ARCH" '
+  {
+    sub(/\r$/, "")
+    mentioned = 0
+    for (i = 1; i <= NF; i++) {
+      candidate = $i
+      sub(/^\*/, "", candidate)
+      if (candidate == name || candidate == "dist/" name) mentioned = 1
+    }
+    if (!mentioned) next
+    count++
+    candidate = $2
+    sub(/^\*/, "", candidate)
+    if (NF != 2 || (candidate != name && candidate != "dist/" name) ||
+        length($1) != 64 || $1 !~ /^[0-9a-fA-F]+$/) invalid = 1
+    digest = tolower($1)
+  }
+  END {
+    if (count != 1 || invalid) exit 1
+    print digest
+  }
+' "$CHECKSUM_FILE")" || {
+  echo "Release manifest must contain exactly one valid SHA256 entry for the candidate; installation unchanged" >&2; exit 1;
+}
 ACTUAL="$(sha256sum "$BIN_SOURCE" | awk '{print $1}')"
-if [ -n "$EXPECTED" ] && [ "$ACTUAL" != "$EXPECTED" ]; then
+if [ "$ACTUAL" != "$EXPECTED" ]; then
   echo "Candidate checksum mismatch: expected $EXPECTED, got $ACTUAL" >&2
   exit 1
 fi

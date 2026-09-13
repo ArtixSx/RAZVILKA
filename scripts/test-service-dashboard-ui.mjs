@@ -68,7 +68,7 @@ function fixture() {
   assert.equal(f.context.serviceDashboardSummary(service).label, 'Не проверен');
   assert.doesNotMatch(f.$('#serviceList').innerHTML, /<b>warp<\/b>/, 'calculated WARP became a working route');
   assert.match(f.$('#serviceList').innerHTML, /Рекомендация пока не проверена/);
-  const proof = { service_id: 'youtube', kind: 'check', checked_route: 'nfqws', status: 'pass', available: true, config_revision: 9, valid_until: future(), freshness_verified: true, latency_ms: 2030 };
+  const proof = { service_id: 'youtube', kind: 'check', checked_route: 'nfqws', status: 'pass', available: true, config_revision: 9, checked_at: new Date(Date.now()-1000).toISOString(), valid_until: future(), freshness_verified: true, latency_ms: 2030 };
   f.dashboard.control.results = [proof];
   assert.equal(f.context.serviceDashboardSummary(service).label, 'Сервис доступен');
   assert.equal(f.context.serviceDashboardSummary(service).pingLabel, 'Пинг: —');
@@ -96,7 +96,7 @@ function fixture() {
 {
   const f = fixture(), service = f.state.services[1];
   service.enabled = true; service.route = 'warp'; service.dirty = true;
-  const proof = { service_id: 'telegram', kind: 'check', checked_route: 'direct', applied_route: '', scope_required: true, status: 'pass', available: true, config_revision: 9, valid_until: future(), freshness_verified: true };
+  const proof = { service_id: 'telegram', kind: 'check', checked_route: 'direct', applied_route: '', scope_required: true, status: 'pass', available: true, config_revision: 9, checked_at: new Date(Date.now()-1000).toISOString(), valid_until: future(), freshness_verified: true };
   f.dashboard.control.results = [proof];
   let summary = f.context.serviceDashboardSummary(service);
   assert.equal(summary.route, ''); assert.equal(summary.label, 'Напрямую: доступен');
@@ -188,7 +188,7 @@ for (const event of ['razvilka:auth-required', 'razvilka:view-change']) {
 // evidence or make a recommendation current without the full verified endpoint.
 {
   const f = fixture();
-  f.setHandler(url => { assert.equal(url, '/api/v1/service-control/current'); return { job: { id: 3, mode: 'service-select', state: 'running' }, results: [{ service_id: 'youtube', available: true, status: 'pass', valid_until: future(), freshness_verified: false }], pings: [] }; });
+  f.setHandler(url => { assert.equal(url, '/api/v1/service-control/current'); return { job: { id: 3, mode: 'service-select', state: 'running' }, results: [{ service_id: 'youtube', available: true, status: 'pass', checked_at: new Date(Date.now()-1000).toISOString(), valid_until: future(), freshness_verified: false }], pings: [] }; });
   await f.context.refreshServiceControl();
   assert.equal(f.calls.length, 1);
   assert.equal(f.dashboard.control.results.length, 0);
@@ -255,3 +255,22 @@ for (const event of ['razvilka:auth-required', 'razvilka:view-change']) {
 for (const id of ['serviceCheckAll', 'serviceAutoPickTarget', 'serviceScheduleAll', 'serviceWebsiteInput', 'serviceWebsiteResults']) assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${id} is not unique`);
 assert.match(html, /service-dashboard-ui\.js/);
 console.log('Service dashboard: applied/evidence/ping distinction, focus/details, job identity and cancellation, stale schedule scope, auth/edit fences, and hostname-only confirmed discovery passed');
+
+// R3: an expiry alone cannot prove a check happened; future/missing timestamps
+// must not paint a service green. Group summaries use this same function.
+{
+ const f=fixture(),service=f.state.services[0];
+ service.observed_state={route:'nfqws',level:'service-confirmed',outcome:'service_accepted',checked_at:new Date(Date.now()-1000).toISOString(),fresh_until:future()};
+ assert.equal(f.context.serviceDashboardSummary(service).kind,'good');
+ for(const checked of ['', 'broken', new Date(Date.now()+30000).toISOString()]) {
+  service.observed_state.checked_at=checked;
+  assert.notEqual(f.context.serviceDashboardSummary(service).kind,'good');
+ }
+ const p={kind:'check',service_id:'youtube',status:'pass',available:true,checked_route:'nfqws',config_revision:9,freshness_verified:true,valid_until:future(),checked_at:new Date(Date.now()-1000).toISOString()};
+ f.dashboard.control.results=[p];assert.equal(f.context.serviceDashboardSummary(service).kind,'good');
+ for(const checked_at of ['', 'invalid', new Date(Date.now()+10000).toISOString()]) {
+  f.dashboard.control.results=[{...p,checked_at}];
+  assert.notEqual(f.context.serviceDashboardSummary(service).kind,'good');
+ }
+}
+console.log('R3 service evidence timestamp regression: passed');

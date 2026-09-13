@@ -1,6 +1,9 @@
 package main
 
 import (
+	"net/url"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -43,18 +46,30 @@ func TestEmbeddedWebAssetsUseCurrentCacheKey(t *testing.T) {
 		t.Fatalf("read embedded index: %v", err)
 	}
 	html := string(data)
+	versionData, err := os.ReadFile("../../VERSION")
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := strings.TrimSpace(string(versionData))
 	for _, asset := range []string{
-		"/style.css?v=0.18.1",
-		"/v010.css?v=0.18.1",
-		"/v011.css?v=0.18.1",
-		"/v011-theme.css?v=0.18.1",
-		"/v012.css?v=0.18.1",
-		"/app.js?v=0.18.1",
-		"/favicon.ico?v=0.18.1",
+		"/interface.css?v=" + version,
+		"/interface-model.js?v=" + version,
+		"/interface.js?v=" + version,
+		"/app.js?v=" + version,
+		"/favicon.ico?v=" + version,
 	} {
-		if !strings.Contains(html, asset) {
+		if !strings.Contains(html, asset+`"`) {
 			t.Fatalf("cache-busted asset missing %q", asset)
 		}
+	}
+	for _, match := range regexp.MustCompile(`(?:src|href)="(/[^"?#]+\.(?:js|css|png|ico)(?:\?[^"#]*)?)"`).FindAllStringSubmatch(html, -1) {
+		asset, err := url.Parse(match[1])
+		if err != nil || asset.Query().Get("v") != version {
+			t.Errorf("asset %q must use full VERSION %q", match[1], version)
+		}
+	}
+	if strings.Count(html, `rel="stylesheet"`) != 1 {
+		t.Fatal("router UI must load the one compiled interface stylesheet")
 	}
 }
 

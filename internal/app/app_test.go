@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1238,6 +1239,11 @@ func TestLiveApplyDoesNotAdvanceWhenDataplanePlanIsBlocked(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusConflict {
 		t.Fatalf("status=%d body=%s", response.StatusCode, readTestBody(response))
+	}
+	// Wait for the complete HTTP response, not merely its flushed headers.
+	// The request-owned exclusive admission ends when the handler returns.
+	if _, err := io.Copy(io.Discard, response.Body); err != nil {
+		t.Fatal(err)
 	}
 	if !store.Dirty() || store.Get().AppliedServices["youtube"].Enabled {
 		t.Fatalf("blocked live apply advanced applied state: %+v", store.Get())

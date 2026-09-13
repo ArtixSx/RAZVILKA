@@ -89,7 +89,7 @@ func (a *App) reconcilerSnapshot() map[string]any {
 func (a *App) wakeReconciler() {
 	a.reconciler.mu.Lock()
 	for i := range a.reconciler.doc.Operations {
-		if a.reconciler.doc.Operations[i].Kind == "node-fallback" || a.reconciler.doc.Operations[i].Kind == "service-checks" {
+		if a.reconciler.doc.Operations[i].Kind == "node-fallback" || a.reconciler.doc.Operations[i].Kind == "service-checks" || a.reconciler.doc.Operations[i].Kind == "feeds" {
 			a.reconciler.doc.Operations[i].NextRun = time.Time{}
 		}
 	}
@@ -118,7 +118,7 @@ func (a *App) interruptAutomation(r *http.Request) {
 	}
 	// These handlers own job admission/cancellation. A stale cancel token or a
 	// competing start must not revoke the currently admitted job as a side effect.
-	if r.URL.Path == "/api/v1/service-control/current" || r.URL.Path == "/api/v1/service-control/jobs" || r.URL.Path == "/api/v1/node-checks" {
+	if r.URL.Path == "/api/v1/dns/service-compare" || r.URL.Path == "/api/v1/service-control/current" || r.URL.Path == "/api/v1/service-control/jobs" || r.URL.Path == "/api/v1/node-checks" || r.URL.Path == "/api/v1/node-checks/current" {
 		return
 	}
 	a.reconciler.mu.Lock()
@@ -151,6 +151,7 @@ func (a *App) interruptAutomation(r *http.Request) {
 // production has one scheduling loop for these adapters and feed due events.
 func (a *App) StartServiceReconciler(ctx context.Context) {
 	a.reconciler.once.Do(func() {
+		_ = a.loadAutonomy(ctx)
 		ctx, stop := context.WithCancel(ctx)
 		r := &a.reconciler
 		r.mu.Lock()
@@ -331,10 +332,17 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 	if err != nil {
 		return
 	}
+	legacyInterval := 15 * time.Minute
+	if a.Warp != nil {
+		health := a.Warp.Health()
+		if health.Policy.Enabled {
+			legacyInterval = min(legacyInterval, health.Policy.CheckInterval())
+		}
+	}
 	tasks := []struct {
 		kind     string
 		interval time.Duration
-	}{{"node-recovery", 30 * time.Second}, {"node-fallback", time.Minute}, {"legacy-routes", 15 * time.Minute}, {"feeds", 30 * time.Second}, {"service-checks", time.Duration(max(60, cfg.ServiceControl.Schedule.IntervalSeconds)) * time.Second}}
+	}{{"node-recovery", 30 * time.Second}, {"node-fallback", time.Minute}, {"legacy-routes", legacyInterval}, {"feeds", 30 * time.Second}, {"service-checks", time.Duration(max(60, cfg.ServiceControl.Schedule.IntervalSeconds)) * time.Second}}
 	for _, task := range tasks {
 		if ctx.Err() != nil {
 			return
@@ -372,9 +380,12 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		}
 		op.NodeGeneration = nodeGeneration
 		op.NetworkFingerprint = profile
-		op.Deadline = now.Add(defaultDataplaneApplyTimeout)
+		// Earlier jobs can outlive the round timestamp. Each dispatched job
+		// receives its own bounded budget, still limited by the parent context.
+		dispatchedAt := time.Now()
+		op.Deadline = dispatchedAt.Add(defaultDataplaneApplyTimeout)
 		if task.kind == "service-checks" {
-			op.Deadline = now.Add(time.Duration(len(cfg.ServiceControl.Schedule.ServiceIDs)+1) * time.Minute)
+			op.Deadline = dispatchedAt.Add(time.Duration(len(cfg.ServiceControl.Schedule.ServiceIDs)+1) * time.Minute)
 		}
 		op.Attempts = min(op.Attempts+1, 32)
 		attempt, cancel := context.WithDeadline(ctx, op.Deadline)
@@ -397,6 +408,9 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 			if a.NodeFeeds != nil {
 				a.NodeFeeds.ScheduleDue(now)
 			}
+			// Share the existing due-event and cancellation journal; no sixth
+			// operation kind is written into the rc.2 journal format.
+			a.autonomyRound(attempt, time.Now())
 		case "service-checks":
 			if cfg.ServiceControl.Schedule.Enabled && !cfg.ServiceControl.Stopped {
 				done, startErr := a.startServiceControlJob(attempt, serviceControlJobRequest{Kind: "check", ServiceIDs: cfg.ServiceControl.Schedule.ServiceIDs}, true)
@@ -412,7 +426,7 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		op = &r.doc.Operations[index]
 		op.State = "completed"
 		op.NextRun = now.Add(task.interval)
-		if task.kind == "service-checks" {
+		if task.kind == "service-checks" || task.kind == "feeds" {
 			op.NextRun = time.Now().Add(task.interval)
 		}
 		if attemptErr != nil {

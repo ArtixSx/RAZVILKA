@@ -21,7 +21,8 @@ function serviceDashboardFresh(result) {
   const currentRevision = Math.max(state.status?.revision || 0, state.serviceControl?.config_revision || serviceDashboard.control?.config_revision || 0);
   if (result.config_revision !== currentRevision) return false;
   const until = Date.parse(result.valid_until || result.fresh_until || '');
-  return Number.isFinite(until) && until > Date.now();
+  const checked = Date.parse(result.checked_at || '');
+  return Number.isFinite(checked) && checked <= Date.now() && Number.isFinite(until) && checked < until && until > Date.now();
 }
 
 // Shared with the home page: a calculated AUTO candidate is never an observed
@@ -37,7 +38,9 @@ function serviceDashboardSummary(service) {
   const currentResult = applied.enabled && serviceDashboardFresh(result) && result.kind !== 'select'
     && !result.recommended_node_id && (result.checked_route || result.applied_route) === route;
   const freshObserved = applied.enabled && observed.route === route
-    && observed.status !== 'stale' && Date.parse(observed.fresh_until || '') > Date.now();
+    && observed.status !== 'stale' && Number.isFinite(Date.parse(observed.checked_at || ''))
+    && Date.parse(observed.checked_at) <= Date.now() && Date.parse(observed.checked_at) < Date.parse(observed.fresh_until || '')
+    && Date.parse(observed.fresh_until || '') > Date.now();
   let label = applied.enabled ? 'Не проверен' : 'Не включён';
   let kind = 'unknown';
   let detail = applied.enabled ? 'Маршрут применён; доступ к сервису ещё не подтверждён.' : 'Для сервиса пока нет применённого маршрута.';
@@ -100,12 +103,12 @@ function serviceDashboardCard(service) {
   const timing = serviceDashboardFresh(result) && Number.isFinite(result.latency_ms) ? `Время проверки: ${Math.round(result.latency_ms)} мс` : '';
   const pingNode = serviceDashboardPingNode(service);
   const id = esc(service.id);
-  return `<article class="sd-card ${pending ? 'pending' : ''}" data-sd-card="${id}">
+  return `<article class="sd-card ${pending ? 'pending' : ''} ${open ? 'is-expanded' : ''}" data-sd-card="${id}">
     <div class="sd-card-head"><button class="sd-summary" type="button" data-sd-expand="${id}" data-sd-focus="expand-${id}" aria-expanded="${open}" aria-controls="sd-details-${id}">
-      <span class="sd-name"><span class="service-badge">${esc(service.icon || '•')}</span><span><b>${esc(service.name)}</b><small>${pending ? 'Есть неприменённые изменения' : esc(service.category || '')}</small></span></span>
+      <span class="sd-name"><span class="service-badge">${typeof consoleServiceIcon==='function'?consoleServiceIcon(service):esc(service.icon || '•')}</span><span><b>${esc(service.name)}</b><small>${pending ? 'Есть неприменённые изменения' : esc(service.category || '')}</small></span></span>
       <span class="sd-current"><small>Применённый маршрут</small><b>${esc(summary.route ? routeLabel(summary.route) : 'Не включён')}</b></span>
       <span class="sd-health ${summary.kind}">${summary.label === 'Не включён' ? '' : `<b>${esc(summary.label)}</b>`}<small title="TCP-пинг измеряет соединение с сервером. Доступ к сайту проверяется отдельно.">${esc(summary.pingLabel)}</small></span>
-      <span class="sd-chevron" aria-hidden="true">${open ? '−' : '+'}</span>
+      <span class="sd-chevron" aria-hidden="true"><span class="r41-expand-label">${open ? 'Свернуть' : 'Подробнее'}</span>${open ? '−' : '+'}</span>
     </button><div class="sd-switch"><button type="button" class="toggle ${service.enabled ? 'on' : ''}" role="switch" aria-checked="${!!service.enabled}" aria-label="${service.enabled ? 'Выключить' : 'Включить'} ${esc(service.name)} после применения" data-sd-toggle="${id}" data-sd-focus="toggle-${id}" ${serviceDashboard.edit ? 'disabled' : ''}><i></i></button><small>${service.enabled ? 'Выбрано: вкл.' : 'Выбрано: выкл.'}</small></div></div>
     <div class="sd-details" id="sd-details-${id}" ${open ? '' : 'hidden'}>
       <p class="sd-description">${esc(service.description || '')}</p>
@@ -131,6 +134,7 @@ function renderServiceDashboard() {
     if (key) [...list.querySelectorAll('[data-sd-focus]')].find(element => element.dataset.sdFocus === key)?.focus({ preventScroll: true });
   }
   renderServiceDashboardControl();
+  if(typeof renderInterface==='function')renderInterface();
 }
 
 function serviceDashboardJobActive() {

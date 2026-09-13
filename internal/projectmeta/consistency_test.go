@@ -12,8 +12,38 @@ import (
 
 var (
 	markdownLinkPattern = regexp.MustCompile(`\[[^\]]+\]\(([^)]+)\)`)
-	versionPattern      = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+-dev$`)
+	versionPattern      = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
 )
+
+// VERSION identifies the source release. CI appends its own build metadata,
+// so an embedded +build suffix belongs to build provenance, not this file.
+func validCanonicalVersion(version string) bool {
+	if !versionPattern.MatchString(version) {
+		return false
+	}
+	_, prerelease, present := strings.Cut(version, "-")
+	if present {
+		for _, id := range strings.Split(prerelease, ".") {
+			if len(id) > 1 && id[0] == '0' && strings.Trim(id, "0123456789") == "" {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func TestCanonicalVersionAcceptsStableAndPrerelease(t *testing.T) {
+	for _, version := range []string{"0.0.0", "1.2.3", "0.18.2-dev", "0.18.2-rc.1", "1.0.0-alpha.beta", "1.0.0-0.3.7", "1.0.0-alpha-1", "1.0.0-01a"} {
+		if !validCanonicalVersion(version) {
+			t.Errorf("valid source version rejected: %q", version)
+		}
+	}
+	for _, version := range []string{"", "v1.2.3", "1.2", "01.2.3", "1.02.3", "1.2.03", "1.2.3-", "1.2.3-rc..1", "1.2.3-rc.01", "1.2.3-01", "1.2.3-rc_1", "1.2.3\n", "1.2.3+build"} {
+		if validCanonicalVersion(version) {
+			t.Errorf("invalid canonical source version accepted: %q", version)
+		}
+	}
+}
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
@@ -33,13 +63,12 @@ func readFile(t *testing.T, root, name string) string {
 	return string(data)
 }
 
-func TestCanonicalDevelopmentVersionIsConsistent(t *testing.T) {
+func TestCanonicalVersionIsConsistent(t *testing.T) {
 	root := repositoryRoot(t)
 	version := strings.TrimSpace(readFile(t, root, "VERSION"))
-	if !versionPattern.MatchString(version) {
-		t.Fatalf("VERSION = %q, want a development semantic version such as 0.18.1-dev", version)
+	if !validCanonicalVersion(version) {
+		t.Fatalf("VERSION = %q, want a semantic source version such as 1.0.0, 0.18.2-dev or 0.18.2-rc.1", version)
 	}
-	assetVersion := strings.TrimSuffix(version, "-dev")
 
 	checks := map[string]string{
 		"internal/app/app.go":         `Version     = "` + version + `"`,
@@ -52,8 +81,8 @@ func TestCanonicalDevelopmentVersionIsConsistent(t *testing.T) {
 			t.Errorf("%s does not derive or mirror VERSION; missing %q", name, required)
 		}
 	}
-	if body := readFile(t, root, "cmd/razvilka/web/index.html"); !strings.Contains(body, `app.js?v=`+assetVersion) {
-		t.Errorf("web asset cache key does not match VERSION base %q", assetVersion)
+	if body := readFile(t, root, "cmd/razvilka/web/index.html"); !strings.Contains(body, `app.js?v=`+version+`"`) || !strings.Contains(body, `id="footerVersion">v`+version+`<`) {
+		t.Errorf("web asset cache key or footer fallback does not match full VERSION %q", version)
 	}
 	releaseWorkflow := readFile(t, root, ".github/workflows/release.yml")
 	for _, required := range []string{

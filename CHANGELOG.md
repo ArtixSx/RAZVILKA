@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.18.2-rc.1 — Reviewed DC1 prerelease
+
+The reviewed DC1 source integrates the imported A1/UI2/R3/AWG31 work while
+preserving the earlier main history. Stable `latest` remains `v0.18.0`.
+
+- Integrated router-side Autopilot consent and client scope, persisted checks
+  and subscriptions, and the refreshed local dashboard on port 8787.
+- Hardened live-runtime recovery after isolated node checks, per-job deadlines
+  and cancellation. AWG canaries recheck profile and runtime capabilities.
+- Added bounded DNS A/AAAA wire validation and DNS-only comparison. Combined
+  DNS/route/service proof, scoped DNS application and automatic pair selection
+  remain DC2–DC4. Community recipe hints remain offline and cannot apply routes.
+- Rejected ambiguous signed-catalog and provider-key JSON field aliases without
+  changing the exact signed payload or granting downloaded nodes service proof.
+- Made the selected upgrade binary's SHA-256 entry mandatory and unambiguous
+  before live changes; restored the CSS build entry point and its check mode.
+- Fixed stale session/UI states, theme and asset checks, metrics presentation
+  and mobile/first-run issues documented in the DC1 review.
+
+Source `09730c7` passed the complete
+[Linux CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/34779255292), including
+tests, race detection, vet, frontend checks and four Linux architecture builds.
+The final release artifact has its own validation record: see `VALIDATION_RU.md`
+on the release page. Earlier hardware results do not certify that artifact.
+Hardware failover, WAN reconnect, router reboot, low-memory operation, DNS
+migration/rollback and prolonged autonomy remain separate acceptance scenarios.
+
+See the [DC1 review](docs/DC1_REVIEW_2026-09-13_RU.md) and
+[current status](docs/CURRENT_STATUS_RU.md).
+
+
 ## 0.18.1-rc.2 — Service controls, connection browser and guarded recovery
 
 Prerelease for public testing, built from the `0.18.1-dev` source line after

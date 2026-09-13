@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ArtixSx/razvilka/internal/awgprofile"
 	"io"
 	"net"
 	"os"
@@ -412,6 +413,13 @@ func validateBytes(v Validation, syntax string, data []byte) Validation {
 			v.Output = err.Error()
 		}
 	case "ini":
+		if v.EngineID == "amneziawg" {
+			if _, err := awgprofile.Parse(string(data)); err != nil {
+				v.OK = false
+				v.Output = err.Error()
+			}
+			return v
+		}
 		if !bytes.Contains(data, []byte("[Interface]")) {
 			v.OK = false
 			v.Output = "missing [Interface] section"

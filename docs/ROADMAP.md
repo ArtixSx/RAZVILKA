@@ -1,4 +1,30 @@
-# RAZVILKA roadmap
+# План RAZVILKA
+
+Текущая линия — **`0.18.2-rc.1`**, исправленный DC1. Канонический подробный
+план и критерии приёмки находятся в
+[ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md), подтверждённые результаты —
+в [CURRENT_STATUS_RU.md](CURRENT_STATUS_RU.md).
+
+Ближайшие этапы: проверка и установка точного релизного артефакта; аппаратная
+устойчивость маршрутов и автономного управления; единая проверка DNS + маршрут +
+сервис (DC2); применение DNS к выбранным клиентам (DC3); ограниченный
+автоматический выбор пары (DC4). Облачные подсказки остаются отдельной будущей
+работой; текущий каталог проверяется только офлайн.
+
+Основное управление, подписки и задания на роутере уже реализованы.
+[Отчёт DC1](DC1_REVIEW_2026-09-13_RU.md) описывает исправления, а
+[план DNS/Community](DNS_COMMUNITY_UNIFIED_DC1_RU.md) — незавершённые контракты.
+Итоги проверки финального релизного бинарника смотрите в `VALIDATION_RU.md`
+на [странице выпуска](https://github.com/ArtixSx/RAZVILKA/releases).
+
+<details>
+<summary>Архив выпущенных этапов и прежних релизных условий</summary>
+
+Ниже сохранена история до DC1 review. Слова «current», «remaining» и старые
+версии/хэши относятся к своему срезу и не описывают готовность `0.18.2-rc.1`.
+Полезные технические критерии остаются в силе, пока не подтверждены отдельно.
+
+## История roadmap
 
 > Актуальный подробный план реализации находится в
 > [ROADMAP_2026-08-30_RU.md](ROADMAP_2026-08-30_RU.md). Подтверждённые уровни — в
@@ -154,3 +180,5 @@ Post-1.0 candidates:
 - signed third-party community publisher workflow beyond the attested bundled catalog;
 - optional bounded traffic history and richer protocol-aware TCP/UDP/QUIC decisions;
 - additional engines only when they implement the same ownership/rollback/evidence contract.
+
+</details>

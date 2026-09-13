@@ -16,6 +16,24 @@ done
 sh ./scripts/check-no-z2k-runtime.sh
 sh ./scripts/test-candidate-isolation.sh
 if command -v node >/dev/null 2>&1; then
+  node scripts/build-interface.mjs --check
+  node scripts/test-interface-model.mjs
+  node scripts/test-interface-contract.mjs
+  node scripts/test-interface-home.mjs
+  node --check cmd/razvilka/web/theme.js
+  node scripts/test-theme.mjs
+  node scripts/test-console-autonomy-auth.mjs
+  node --check cmd/razvilka/web/dns-service-lab.js
+  node scripts/test-dns-service-lab.mjs
+  node --check cmd/razvilka/web/awg-workspace.js
+  node scripts/test-awg-workspace.mjs
+  node --check cmd/razvilka/web/workflow-actions.js
+  node --check cmd/razvilka/web/interface.js
+  node --check cmd/razvilka/web/interface-model.js
+  node --check cmd/razvilka/web/console.js
+  node --check cmd/razvilka/web/console-autonomy.js
+  node --check cmd/razvilka/web/autonomy-ui.js
+  node scripts/test-autonomy-ui.mjs
   node --check cmd/razvilka/web/app.js
   node --check cmd/razvilka/web/node-browser.js
   node --check cmd/razvilka/web/node-intent-ui.js

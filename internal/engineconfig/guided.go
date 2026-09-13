@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/ArtixSx/razvilka/internal/awgprofile"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -238,18 +239,34 @@ func wireGuardFields(amnezia bool) []GuidedField {
 		{ID: "Peer.PersistentKeepalive", Label: "Keepalive, сек.", Group: "Пир", Type: "number", Default: "25", Min: 0, Max: 65535},
 	}
 	if amnezia {
+		fields[3].Placeholder = "vpn.example.com:51820"
+		fields[4].Description = "AllowedIPs не разрешает маршрут для всей LAN. Охват задаётся в сервисах RAZVILKA."
 		fields = append(fields,
-			GuidedField{ID: "Interface.Jc", Label: "Jc", Group: "AmneziaWG", Type: "number", Min: 0, Max: 128},
-			GuidedField{ID: "Interface.Jmin", Label: "Jmin", Group: "AmneziaWG", Type: "number", Min: 0, Max: 65535},
-			GuidedField{ID: "Interface.Jmax", Label: "Jmax", Group: "AmneziaWG", Type: "number", Min: 0, Max: 65535},
-			GuidedField{ID: "Interface.S1", Label: "S1", Group: "AmneziaWG", Type: "number", Min: 0, Max: 2147483647},
-			GuidedField{ID: "Interface.S2", Label: "S2", Group: "AmneziaWG", Type: "number", Min: 0, Max: 2147483647},
-			GuidedField{ID: "Interface.H1", Label: "H1", Group: "AmneziaWG", Type: "number", Min: 0, Max: 2147483647},
-			GuidedField{ID: "Interface.H2", Label: "H2", Group: "AmneziaWG", Type: "number", Min: 0, Max: 2147483647},
-			GuidedField{ID: "Interface.H3", Label: "H3", Group: "AmneziaWG", Type: "number", Min: 0, Max: 2147483647},
-			GuidedField{ID: "Interface.H4", Label: "H4", Group: "AmneziaWG", Type: "number", Min: 0, Max: 2147483647},
-		)
+			GuidedField{ID: "Interface.Jc", Label: "Jc", Group: "Junk-пакеты", Type: "number", Min: 0, Max: 128},
+			GuidedField{ID: "Interface.Jmin", Label: "Jmin", Group: "Junk-пакеты", Type: "number", Min: 0, Max: 65535},
+			GuidedField{ID: "Interface.Jmax", Label: "Jmax", Group: "Junk-пакеты", Type: "number", Min: 0, Max: 65535})
+		for n := 1; n <= 4; n++ {
+			k := fmt.Sprintf("S%d", n)
+			fields = append(fields, GuidedField{ID: "Interface." + k, Label: k, Group: "Padding S1–S4", Type: "number", Max: 65535, Description: "При Header Protection необходимо не меньше 12; сверяйте с сервером."})
+		}
+		for n := 1; n <= 4; n++ {
+			k := fmt.Sprintf("H%d", n)
+			fields = append(fields, GuidedField{ID: "Interface." + k, Label: k, Group: "Заголовки H1–H4", Type: "range32", Description: "uint32 или диапазон min-max. Диапазоны не пересекаются."})
+		}
+		for n := 1; n <= 5; n++ {
+			k := fmt.Sprintf("I%d", n)
+			fields = append(fields, GuidedField{ID: "Interface." + k, Label: k, Group: "CPS I1–I5", Type: "cps", Description: "Только CPS-теги. Локальный предел: 4096 байт на пакет; не команда shell."})
+		}
+		for _, k := range []string{"ContentPaddingAddition", "RekeyAfterTime", "RekeyTimeout", "RejectAfterTime", "KeepaliveTimeout", "MaxHandshakeAttempts"} {
+			fields = append(fields, GuidedField{ID: "Interface." + k, Label: k, Group: "AWG 3.x · таймеры и padding", Type: "range16", Description: "uint16 или диапазон min-max; только при поддержке клиента и сервера."})
+		}
+		for _, k := range []string{"RandomTrailers", "DisableCookies"} {
+			fields = append(fields, GuidedField{ID: "Interface." + k, Label: k, Group: "AWG 3.1", Type: "select", Options: []GuidedOption{{"", "Не задан"}, {"on", "Включён (on)"}, {"off", "Выключен (off)"}}, Description: "Не включать произвольно: параметры должны соответствовать удалённому peer."})
+		}
+		// HeaderProtectionKey stays in the private import/expert surface, never in
+		// the ordinary Guided JSON. The workspace reports only its presence.
 	}
+
 	return fields
 }
 
@@ -329,6 +346,10 @@ func validateGuidedValue(field GuidedField, value string) error {
 		return errors.New("неизвестное значение")
 	}
 	switch field.Type {
+	case "range16", "range32", "cps":
+		if err := awgprofile.ValidateField(field.Type, value); err != nil {
+			return errors.New("неверный диапазон или CPS-параметр")
+		}
 	case "number":
 		n, err := strconv.Atoi(value)
 		if err != nil {
