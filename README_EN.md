@@ -14,9 +14,11 @@ no RAZVILKA cloud account is required.
 
 ## Candidate status
 
-Source for the **`v0.18.2-rc.2` prerelease**, based on reviewed DC1.
-`v0.18.2-rc.1` was not published; `rc.2` is intended as the first available DC1
-release after its release checks pass. The latest stable
+Source for the **`v0.18.2-rc.3` prerelease**, based on reviewed DC1.
+The published `v0.18.2-rc.2` revealed a premature upgrade rollback on a router
+with an applied VLESS route: startup validation did not wait for asynchronous
+route recovery. `rc.3` fixes the wait while retaining strict validation.
+See the [rc.3 notes](docs/releases/0.18.2-rc.3.md). The latest stable
 release remains [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
 DC1 commit `09730c7` passed the full
 [Linux CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/34779255292).
@@ -55,10 +57,10 @@ opkg install curl ca-certificates coreutils-sha256sum tar
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-**DC1 candidate**, only **after the tag and assets for `v0.18.2-rc.2` are published**:
+**DC1 candidate**, only **after the tag and assets for `v0.18.2-rc.3` are published**:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.2/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.2 sh
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.3/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.3 sh
 ```
 
 Alternatively, extract that release's Entware bundle and run

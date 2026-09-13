@@ -1,12 +1,35 @@
 # Changelog
 
+## 0.18.2-rc.3 — Wait for applied-route recovery during upgrade
+
+- Wait up to nine minutes for asynchronous recovery of the committed node route
+  before strict startup/dataplane acceptance; one recovery operation is bounded
+  to eight minutes. If the API still confirms a busy private recovery at the
+  deadline, exit with code `75`, leave the process running and report readiness
+  as unconfirmed. This is neither success nor rollback. Once the operation is
+  released, a non-live route follows the normal rollback path.
+- Keep the application version, interface cache keys and installation guidance
+  aligned with the new candidate.
+- Let startup recovery of the already applied node routes reuse the UI updater's
+  exclusive admission. Keep other writers blocked until recovery cleanup joins;
+  a replaced or failed helper cannot keep authorizing work.
+
+The published `v0.18.2-rc.2` passed Release CI, but a real router upgrade with
+an applied VLESS route rolled back because acceptance ran before recovery
+completed. The rollback restored the previous installation. This fix requires
+its own release CI and hardware validation; those results are not inherited.
+See the [rc.3 notes](docs/releases/0.18.2-rc.3.md).
+
+
 ## 0.18.2-rc.2 — Reviewed DC1 prerelease
 
 The reviewed DC1 source integrates the imported A1/UI2/R3/AWG31 work while
 preserving the earlier main history. Stable `latest` remains `v0.18.0`.
 `v0.18.2-rc.1` was not published: its release run stopped at the WARP cancellation
-test. `rc.2` is a new candidate for the first available DC1 release and requires
-its own successful release checks; the existing `rc.1` tag is retained.
+test. `rc.2` was published from `de8bafa` after successful
+[Release CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/34781604595).
+The existing tags and release assets are retained. Its real router upgrade
+exposed the premature recovery check addressed by `rc.3`.
 
 - Integrated router-side Autopilot consent and client scope, persisted checks
   and subscriptions, and the refreshed local dashboard on port 8787.
@@ -25,8 +48,8 @@ its own successful release checks; the existing `rc.1` tag is retained.
 Source `09730c7` passed the complete
 [Linux CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/34779255292), including
 tests, race detection, vet, frontend checks and four Linux architecture builds.
-The final release artifact has its own validation record: see `VALIDATION_RU.md`
-on the release page. Earlier hardware results do not certify that artifact.
+Release CI success did not prove a successful router upgrade: the rc.2 hardware
+attempt restored the previous installation after premature acceptance failed.
 Hardware failover, WAN reconnect, router reboot, low-memory operation, DNS
 migration/rollback and prolonged autonomy remain separate acceptance scenarios.
 

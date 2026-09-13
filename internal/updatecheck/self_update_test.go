@@ -423,3 +423,47 @@ func TestSelfUpdateRestartKeepsAdmissionUntilHelperTerminalAndReaped(t *testing.
 		t.Fatal("completed handoff remained locked")
 	}
 }
+
+func TestSelfUpdateHandoffRemainsLockedUntilReleaseCleanupCompletes(t *testing.T) {
+	u := readyUpdater(t)
+	u.record.Job.State = "completed"
+	u.record.Job.HelperPID = 0
+	if err := u.persistLocked(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u.Start(ctx)
+	entered, finish := make(chan struct{}), make(chan struct{})
+	defer func() {
+		select {
+		case <-finish:
+		default:
+			close(finish)
+		}
+	}()
+	u.RetainHandoff(func() {
+		close(entered)
+		<-finish // The new daemon still joins exact-check/rollback cleanup.
+	})
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("terminal helper did not request release")
+	}
+	if !u.InstallationLocked() {
+		t.Fatal("terminal journal removed installation lock before joined release")
+	}
+	short, stopShort := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	err := u.Wait(short)
+	stopShort()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("wait completed before release cleanup: %v", err)
+	}
+	close(finish)
+	wait, stop := context.WithTimeout(context.Background(), time.Second)
+	defer stop()
+	if err := u.Wait(wait); err != nil || u.InstallationLocked() {
+		t.Fatalf("joined terminal helper retained lock: %v", err)
+	}
+}

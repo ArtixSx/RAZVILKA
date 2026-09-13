@@ -498,14 +498,20 @@ if [ "$DATAPLANE_STATE_PRESENT" -eq 1 ]; then
   cp -a "$BACKUP/dataplane/." "$STATEDIR/dataplane/"
 fi
 
-stage 6 "Запускаем новую версию и ждём восстановления маршрутов (до 130 секунд)..."
+stage 6 "Запускаем новую версию и ждём готовности панели..."
 RAZVILKA_BASE="$BASE" "$RAZ_INIT" clear-guard
-RAZVILKA_BASE="$BASE" "$RAZ_INIT" start
-RAZVILKA_BASE="$BASE" "$RAZ_INIT" status
+START_CODE=0
+RAZVILKA_BASE="$BASE" "$RAZ_INIT" start || START_CODE=$?
+# S99 keeps the supervised process when readiness is temporarily busy. Let the
+# strict bounded check below inspect that exact PID instead of ending here.
+[ "$START_CODE" -eq 0 ] || [ "$START_CODE" -eq 75 ] || exit "$START_CODE"
 RUNNING_PID="$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" pid)"
-stage 7 "Проверяем процесс, HTTP и восстановленный dataplane..."
+# Exact-node recovery starts after the listener and may own admission for up
+# to eight minutes. Only the bounded strict check can accept its live evidence;
+# an extra one-shot `status` here would prematurely reject pending recovery.
+stage 7 "Проверяем процесс и ждём подтверждённого восстановления маршрутов (до 9 минут)..."
 "$BINDIR/razvilka" -healthcheck "http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip):${RAZVILKA_PORT:-8787}/api/v1/status" \
-  -healthcheck-pid "$RUNNING_PID" -healthcheck-require-dataplane >/dev/null
+  -healthcheck-pid "$RUNNING_PID" -healthcheck-require-dataplane -healthcheck-wait 9m >/dev/null
 
 printf '%s\n' "$BACKUP" >"$CURRENT_BACKUP"
 chmod 600 "$CURRENT_BACKUP"

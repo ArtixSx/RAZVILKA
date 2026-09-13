@@ -30,8 +30,9 @@ func TestEntwareUpgradeDoesNotRequireArchiveScriptModeBits(t *testing.T) {
 		`chmod 700 "$DIR"`,
 		`stage 1 "Останавливаем текущую версию`,
 		`stage 4 "Сохраняем и отключаем только принадлежащий RAZVILKA dataplane`,
-		`stage 6 "Запускаем новую версию и ждём восстановления маршрутов`,
-		`stage 7 "Проверяем процесс, HTTP и восстановленный dataplane`,
+		`stage 6 "Запускаем новую версию и ждём готовности панели`,
+		`stage 7 "Проверяем процесс и ждём подтверждённого восстановления маршрутов`,
+		`-healthcheck-pid "$RUNNING_PID" -healthcheck-require-dataplane -healthcheck-wait 9m`,
 	} {
 		if !strings.Contains(upgradeText, required) {
 			t.Fatalf("upgrade script lost archive-mode safeguard %q", required)

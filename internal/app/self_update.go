@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
@@ -140,9 +142,151 @@ func (a *App) StartSelfUpdate(ctx context.Context) {
 				a.Operations.Fence()
 				return
 			}
-			a.SelfUpdate.RetainHandoff(release)
+			// This is startup-owned admission, not an HTTP request's lease.
+			// Only the bounded applied-node recovery worker may borrow it. The
+			// installer cannot release it until that worker's cleanup has joined.
+			job := a.SelfUpdate.Snapshot()
+			handoff := &selfUpdateNodeRecovery{app: a, jobID: job.ID, helperPID: job.HelperPID, current: a.SelfUpdate.Snapshot, done: make(chan struct{})}
+			a.nodeRecovery.mu.Lock()
+			a.nodeRecovery.update = handoff
+			a.nodeRecovery.mu.Unlock()
+			a.SelfUpdate.RetainHandoff(func() {
+				handoff.stopAndWait()
+				release()
+			})
 		}
 	}
+}
+
+// selfUpdateNodeRecovery is an unexported, process-local capability for one
+// startup lease. It cannot be created by a request, restored from JSON or used
+// by the ordinary reconciler. A helper in requires-review never grants it.
+type selfUpdateNodeRecovery struct {
+	mu        sync.Mutex
+	app       *App
+	jobID     string
+	helperPID int
+	// Tests replace only the process-status observation, never recovery proof.
+	current func() updatecheck.Job
+	started bool
+	closing bool
+	cancel  context.CancelFunc
+	done    chan struct{}
+}
+
+type selfUpdateNodeRecoveryKey struct{}
+
+func (h *selfUpdateNodeRecovery) guard(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	active := h.started && !h.closing
+	h.mu.Unlock()
+	if !active || h.app.SelfUpdate == nil || !h.app.SelfUpdate.InstallationLocked() {
+		return errNodeRecoveryReview
+	}
+	job := h.current()
+	if job.ID != h.jobID || job.State != "restarting" || h.helperPID <= 1 || job.HelperPID != h.helperPID {
+		return errNodeRecoveryReview
+	}
+	return ctx.Err()
+}
+
+func (h *selfUpdateNodeRecovery) stopAndWait() {
+	h.mu.Lock()
+	h.closing = true
+	if h.cancel != nil {
+		h.cancel()
+	}
+	if !h.started {
+		h.started = true // Prevent a later listener callback from starting work.
+		close(h.done)
+	}
+	h.mu.Unlock()
+	<-h.done
+}
+
+// StartSelfUpdateNodeRecovery runs only after boot cleanup and the listener are
+// ready, before the general scheduler. The listener's existing read-only update
+// status exemption lets the installer observe evidence without opening writes.
+func (a *App) StartSelfUpdateNodeRecovery(parent context.Context) {
+	a.nodeRecovery.mu.Lock()
+	handoff := a.nodeRecovery.update
+	a.nodeRecovery.mu.Unlock()
+	if handoff == nil {
+		return
+	}
+	handoff.mu.Lock()
+	if handoff.started || handoff.closing {
+		handoff.mu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, defaultDataplaneApplyTimeout)
+	handoff.started, handoff.cancel = true, cancel
+	handoff.mu.Unlock()
+	ctx = context.WithValue(ctx, selfUpdateNodeRecoveryKey{}, handoff)
+	go func() {
+		defer close(handoff.done)
+		defer cancel()
+		// A dead/replaced helper cancels an in-flight check promptly; the
+		// per-phase guard below also fences every transactional write.
+		monitored := make(chan struct{})
+		go func() {
+			defer close(monitored)
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if handoff.guard(ctx) != nil {
+						cancel()
+						return
+					}
+				}
+			}
+		}()
+		defer func() { cancel(); <-monitored }()
+		for handoff.guard(ctx) == nil {
+			a.nodeRecoveryRound(ctx, time.Now())
+			state := a.nodeRecoverySnapshot().State
+			if state == "idle" || state == "recovered" || state == "requires-review" {
+				return
+			}
+			timer := time.NewTimer(30 * time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
+	}()
+}
+
+func (a *App) guardSelfUpdateNodeRecovery(ctx context.Context) error {
+	if handoff, ok := ctx.Value(selfUpdateNodeRecoveryKey{}).(*selfUpdateNodeRecovery); ok {
+		if handoff.app != a {
+			return errNodeRecoveryReview
+		}
+		return handoff.guard(ctx)
+	}
+	return ctx.Err()
+}
+
+func (a *App) nodeRecoveryAdmission(ctx context.Context, exclusive bool) (func(), error) {
+	if _, ok := ctx.Value(selfUpdateNodeRecoveryKey{}).(*selfUpdateNodeRecovery); ok {
+		if err := a.guardSelfUpdateNodeRecovery(ctx); err != nil {
+			return nil, err
+		}
+		return func() {}, nil // Startup lease remains held through joined cleanup.
+	}
+	if exclusive {
+		return a.Operations.Exclusive(ctx)
+	}
+	return a.Operations.Enter(ctx)
 }
 func (a *App) WaitSelfUpdate(ctx context.Context) error {
 	if a.SelfUpdate == nil {

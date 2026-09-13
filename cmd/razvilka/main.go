@@ -108,6 +108,7 @@ func main() {
 	healthURL := flag.String("healthcheck", "", "check a running RAZVILKA status URL and exit")
 	healthPID := flag.Int("healthcheck-pid", 0, "require the status response to match this process ID")
 	healthDataplane := flag.Bool("healthcheck-require-dataplane", false, "require a committed non-direct dataplane to have current runtime recovery evidence")
+	healthWait := flag.Duration("healthcheck-wait", 0, "wait up to this duration for readiness (maximum 10m; busy at timeout exits 75 without restarting)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	installComponents := flag.Bool("install-components", false, "install or update recommended bypass components and exit")
 	deactivateDataplane := flag.Bool("deactivate-dataplane", false, "remove only RAZVILKA-owned runtime routes, interfaces and processes, then exit")
@@ -145,8 +146,14 @@ func main() {
 	if *healthDataplane && *healthURL == "" {
 		log.Fatal("-healthcheck-require-dataplane requires -healthcheck")
 	}
+	if *healthWait < 0 || *healthWait > maxHealthWait {
+		log.Fatal("-healthcheck-wait must be between 0 and 10m")
+	}
+	if *healthWait != 0 && *healthURL == "" {
+		log.Fatal("-healthcheck-wait requires -healthcheck")
+	}
 	if *healthURL != "" {
-		version, err := checkHealth(*healthURL, *healthPID, *healthDataplane)
+		version, err := checkHealthWithWait(*healthURL, *healthPID, *healthDataplane, *healthWait)
 		if errors.Is(err, errHealthBusy) {
 			log.Print(err)
 			os.Exit(75) // EX_TEMPFAIL: not healthy, but do not restart an active import.
@@ -461,6 +468,7 @@ func main() {
 	a.StartNodeChecks(runtimeContext)
 	a.StartNodeFeeds(runtimeContext)
 	go func() { serverErrors <- srv.Serve(listener) }()
+	a.StartSelfUpdateNodeRecovery(runtimeContext)
 	a.StartServiceReconciler(runtimeContext)
 	select {
 	case serverErr := <-serverErrors:
@@ -690,22 +698,83 @@ func loadCommunityCatalog(path string) (*community.Manager, error) {
 }
 
 var errHealthBusy = errors.New("RAZVILKA is busy with private restore; readiness is temporarily unavailable, do not restart")
+var errHealthPending = errors.New("healthcheck committed dataplane has no current runtime evidence")
+var errHealthRequest = errors.New("healthcheck transport is unavailable")
+
+const maxHealthWait = 10 * time.Minute
+
+func checkHealthWithWait(rawURL string, expectedPID int, requireDataplane bool, wait time.Duration) (string, error) {
+	if wait < 0 || wait > maxHealthWait {
+		return "", errors.New("healthcheck wait must be between 0 and 10m")
+	}
+	if wait == 0 {
+		return checkHealth(rawURL, expectedPID, requireDataplane)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), wait)
+	defer cancel()
+	return waitForHealth(ctx, rawURL, expectedPID, requireDataplane, time.Second)
+}
+
+// A busy response identifies the supervised process but cannot disclose which
+// exclusive operation owns admission. Wait for a fresh, complete status; never
+// call a busy response healthy or turn its deadline into a rollback/restart.
+func waitForHealth(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool, interval time.Duration) (string, error) {
+	var last error
+	timedOut := func() (string, error) {
+		if last != nil {
+			return "", fmt.Errorf("healthcheck readiness deadline reached: %w", last)
+		}
+		return "", ctx.Err()
+	}
+	for {
+		if ctx.Err() != nil {
+			return timedOut()
+		}
+		version, err := checkHealthContext(ctx, rawURL, expectedPID, requireDataplane)
+		if err == nil {
+			return version, nil
+		}
+		if errors.Is(err, errHealthBusy) || errors.Is(err, errHealthPending) {
+			last = err
+		} else if !errors.Is(err, errHealthRequest) || last == nil {
+			// Wrong identity/PID, invalid JSON, recovery fences and journal
+			// failures are not readiness transitions and must fail immediately.
+			return "", err
+		}
+		// A request timeout after a genuine busy observation does not prove
+		// that the private operation has ended. Preserve its exit-75 fence.
+		if ctx.Err() != nil {
+			return timedOut()
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return timedOut()
+		case <-timer.C:
+		}
+	}
+}
 
 func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string, error) {
+	return checkHealthContext(context.Background(), rawURL, expectedPID, requireDataplane)
+}
+
+func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool) (string, error) {
 	client := &http.Client{
 		Timeout: 4 * time.Second,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("healthcheck request: %w", err)
 	}
 	req.Header.Set("User-Agent", "RAZVILKA-healthcheck/"+app.Version)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("healthcheck request: %w", err)
+		return "", fmt.Errorf("%w: %w", errHealthRequest, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
@@ -716,14 +785,28 @@ func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string,
 		Version           string `json:"version"`
 		ProcessID         int    `json:"process_id"`
 		DataplaneState    string `json:"dataplane_state"`
-		DataplaneAdapters int    `json:"dataplane_adapters"`
+		DataplaneAdapters *int   `json:"dataplane_adapters"`
 		DataplaneError    string `json:"dataplane_error"`
-		LiveActive        bool   `json:"live_active"`
+		LiveActive        *bool  `json:"live_active"`
 		Code              string `json:"code"`
 		NotStarted        bool   `json:"not_started"`
 		RecoveryRequired  bool   `json:"recovery_required"`
+		NodeRecovery      struct {
+			State string `json:"state"`
+		} `json:"node_recovery"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&status); err != nil {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+	if err != nil {
+		var networkError net.Error
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkError) && networkError.Timeout() {
+			return "", fmt.Errorf("%w: %w", errHealthRequest, err)
+		}
+		return "", fmt.Errorf("healthcheck response: %w", err)
+	}
+	if len(body) > 64<<10 {
+		return "", errors.New("healthcheck response exceeds 64 KiB")
+	}
+	if err := json.Unmarshal(body, &status); err != nil {
 		return "", fmt.Errorf("healthcheck response: %w", err)
 	}
 	if status.Name != "RAZVILKA" || status.Version != app.Version {
@@ -742,8 +825,16 @@ func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string,
 		if status.DataplaneError != "" || status.DataplaneState == "journal-error" {
 			return "", errors.New("healthcheck dataplane journal is unavailable")
 		}
-		if status.DataplaneState == "committed" && status.DataplaneAdapters > 0 && !status.LiveActive {
-			return "", errors.New("healthcheck committed dataplane has no current runtime evidence")
+		if status.DataplaneState == "" || status.DataplaneAdapters == nil || *status.DataplaneAdapters < 0 || status.LiveActive == nil {
+			return "", errors.New("healthcheck response lacks valid dataplane evidence fields")
+		}
+		// adapters describes the committed plan; state may instead describe a
+		// later failed attempt. A rolled-back attempt cannot waive live proof.
+		if *status.DataplaneAdapters > 0 && !*status.LiveActive {
+			if status.NodeRecovery.State == "requires-review" {
+				return "", errors.New("healthcheck applied node recovery requires review")
+			}
+			return "", errHealthPending
 		}
 	}
 	return status.Version, nil

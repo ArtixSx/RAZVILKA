@@ -48,6 +48,104 @@ assert_absent() {
   [ ! -e "$1" ] || { echo "Expected path to be absent: $1" >&2; exit 1; }
 }
 
+# Exercise the production startup/acceptance block and rollback trap together.
+# The health CLI's asynchronous observations are covered by Go HTTP tests; here
+# its exact supervised PID/strict/wait arguments and exit-75 propagation must
+# survive the shell boundary. These fixtures never start a daemon.
+test_upgrade_readiness() {
+  READINESS_ROOT="$TEST_ROOT/readiness"
+  mkdir -p "$READINESS_ROOT"
+  awk '/^rollback_on_error\(\) \{/ {copy=1} copy {print} copy && /^\}$/ {exit}' \
+    "$UPGRADE" >"$READINESS_ROOT/rollback-function.sh"
+  awk '/^stage 6 / {copy=1} copy {print} copy && /-healthcheck-wait/ {exit}' \
+    "$UPGRADE" >"$READINESS_ROOT/startup.sh"
+  grep -q -- '-healthcheck-wait' "$READINESS_ROOT/startup.sh" || {
+    echo "Upgrade has no bounded readiness check" >&2; exit 1;
+  }
+  for READINESS_START_CODE in 0 75 1; do
+  for READINESS_CODE in 0 1 75; do
+    READINESS_CASE="$READINESS_ROOT/$READINESS_START_CODE-$READINESS_CODE"
+    mkdir -p "$READINESS_CASE/bin"
+    cat >"$READINESS_CASE/bin/razvilka" <<'HEALTH_FIXTURE'
+#!/bin/sh
+set -eu
+[ "$#" -eq 7 ] && [ "$1" = -healthcheck ] &&
+  [ "$2" = http://127.0.0.1:8787/api/v1/status ] &&
+  [ "$3" = -healthcheck-pid ] && [ "$4" = 4242 ] &&
+  [ "$5" = -healthcheck-require-dataplane ] &&
+  [ "$6" = -healthcheck-wait ] && [ "$7" = 9m ] || {
+    echo "Upgrade lost exact PID, strict evidence or bounded wait" >&2; exit 98;
+  }
+touch "$READINESS_CASE/health-called"
+exit "$READINESS_CODE"
+HEALTH_FIXTURE
+    cat >"$READINESS_CASE/init" <<'INIT_FIXTURE'
+#!/bin/sh
+set -eu
+case "$1" in
+  clear-guard) : ;;
+  start) touch "$READINESS_CASE/running"; exit "$READINESS_START_CODE" ;;
+  pid) printf '%s\n' 4242 ;;
+  lan-ip) printf '%s\n' 127.0.0.1 ;;
+  *) echo "Unexpected one-shot supervision before readiness" >&2; exit 97 ;;
+esac
+INIT_FIXTURE
+    cat >"$READINESS_CASE/rollback" <<'ROLLBACK_FIXTURE'
+#!/bin/sh
+set -eu
+touch "$READINESS_CASE/rolled-back"
+rm "$READINESS_CASE/running"
+ROLLBACK_FIXTURE
+    chmod 700 "$READINESS_CASE/bin/razvilka" "$READINESS_CASE/init"
+    cat >"$READINESS_CASE/run.sh" <<'STARTUP_FIXTURE'
+#!/bin/sh
+set -eu
+BASE="$READINESS_CASE"
+BINDIR="$BASE/bin"
+RAZ_INIT="$BASE/init"
+ROLLBACK="$BASE/rollback"
+BACKUP=fixture-snapshot
+CURRENT_BACKUP="$BASE/current-backup"
+RAZVILKA_PORT=8787
+stage() { :; }
+. "$READINESS_ROOT/rollback-function.sh"
+trap 'rollback_on_error $?' EXIT
+. "$READINESS_ROOT/startup.sh"
+touch "$BASE/accepted"
+trap - EXIT
+STARTUP_FIXTURE
+    export READINESS_CASE READINESS_CODE READINESS_ROOT READINESS_START_CODE
+    ACTUAL_CODE=0
+    sh "$READINESS_CASE/run.sh" >"$READINESS_CASE/output" 2>&1 || ACTUAL_CODE=$?
+    if [ "$READINESS_START_CODE" -eq 1 ]; then
+      [ "$ACTUAL_CODE" -eq 1 ] && [ -f "$READINESS_CASE/rolled-back" ] || exit 1
+      assert_absent "$READINESS_CASE/accepted"
+      assert_absent "$READINESS_CASE/health-called"
+      assert_absent "$READINESS_CASE/running"
+      continue
+    fi
+    [ "$ACTUAL_CODE" -eq "$READINESS_CODE" ] && [ -f "$READINESS_CASE/health-called" ] || {
+      echo "Upgrade readiness exit contract failed ($READINESS_CODE -> $ACTUAL_CODE)" >&2
+      cat "$READINESS_CASE/output" >&2
+      exit 1
+    }
+    if [ "$READINESS_CODE" -eq 0 ]; then
+      [ -f "$READINESS_CASE/accepted" ] && [ -f "$READINESS_CASE/running" ] || exit 1
+      assert_absent "$READINESS_CASE/rolled-back"
+    elif [ "$READINESS_CODE" -eq 75 ]; then
+      [ -f "$READINESS_CASE/running" ] && [ "$(cat "$READINESS_CASE/current-backup")" = fixture-snapshot ] || exit 1
+      assert_absent "$READINESS_CASE/accepted"
+      assert_absent "$READINESS_CASE/rolled-back"
+    else
+      [ -f "$READINESS_CASE/rolled-back" ] || exit 1
+      assert_absent "$READINESS_CASE/accepted"
+      assert_absent "$READINESS_CASE/running"
+    fi
+  done
+  done
+}
+
+test_upgrade_readiness
 prepare_root "$PRIMARY"
 prepare_root "$CONFLICT"
 prepare_root "$REMOVAL"

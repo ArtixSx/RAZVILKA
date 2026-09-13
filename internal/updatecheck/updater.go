@@ -102,8 +102,8 @@ func (u *Updater) RetainHandoff(release func()) {
 	u.mu.Unlock()
 	go func() {
 		defer close(done)
-		defer release()
 		defer func() { u.mu.Lock(); u.handoffActive = false; u.mu.Unlock() }()
+		defer release() // Joined cleanup still owns installation admission.
 		timer := time.NewTicker(time.Second)
 		defer timer.Stop()
 		for {

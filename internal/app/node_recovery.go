@@ -37,6 +37,7 @@ type nodeRecoveryState struct {
 	key    string
 	status nodeRecoveryStatus
 	done   chan struct{}
+	update *selfUpdateNodeRecovery
 }
 
 func (a *App) nodeRecoverySnapshot() nodeRecoveryStatus {
@@ -101,7 +102,7 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 	if a.Store == nil || a.Dataplane == nil {
 		return
 	}
-	release, err := a.Operations.Enter(ctx)
+	release, err := a.nodeRecoveryAdmission(ctx, false)
 	if err != nil {
 		return
 	}
@@ -150,7 +151,7 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 	}
 	a.nodeRecovery.mu.Unlock()
 	// The recovery re-reads all authority after acquiring this lease.
-	release, err = a.Operations.Exclusive(ctx)
+	release, err = a.nodeRecoveryAdmission(ctx, true)
 	if err != nil {
 		return
 	}
@@ -269,6 +270,9 @@ func (a *App) guardNodeRecoveryIntent(ctx context.Context, intent nodeRecoveryIn
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := a.guardSelfUpdateNodeRecovery(ctx); err != nil {
+		return err
+	}
 	current, err := a.freshNetworkProfile(ctx)
 	if err != nil || current != intent.profile {
 		return dataplane.ErrNetworkChanged
@@ -310,7 +314,7 @@ func (a *App) guardNodeRecoveryIntent(ctx context.Context, intent nodeRecoveryIn
 	// require every enabled list to have a receipt: a never-downloaded list has
 	// contributed no targets, and cannot invalidate the identical committed
 	// catalog scope. Unlike AUTO switching, this path cannot add/drop targets.
-	return ctx.Err()
+	return a.guardSelfUpdateNodeRecovery(ctx)
 }
 
 func nodeRecoveryNodePresent(snapshot nodestore.Snapshot, id string, now time.Time) bool {
