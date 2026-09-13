@@ -1,9 +1,12 @@
 # Changelog
 
-## 0.18.2-rc.1 — Reviewed DC1 prerelease
+## 0.18.2-rc.2 — Reviewed DC1 prerelease
 
 The reviewed DC1 source integrates the imported A1/UI2/R3/AWG31 work while
 preserving the earlier main history. Stable `latest` remains `v0.18.0`.
+`v0.18.2-rc.1` was not published: its release run stopped at the WARP cancellation
+test. `rc.2` is a new candidate for the first available DC1 release and requires
+its own successful release checks; the existing `rc.1` tag is retained.
 
 - Integrated router-side Autopilot consent and client scope, persisted checks
   and subscriptions, and the refreshed local dashboard on port 8787.

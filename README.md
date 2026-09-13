@@ -16,8 +16,10 @@ RAZVILKA не требуется.
 
 ## Версия и проверка
 
-Исходники предварительного выпуска **`v0.18.2-rc.1`** на основе
-исправленного DC1. Стабильный канал `latest` пока остаётся на
+Исходники предварительного выпуска **`v0.18.2-rc.2`** на основе
+исправленного DC1. `v0.18.2-rc.1` не был опубликован; `rc.2` предназначен
+для первого доступного выпуска DC1 после успешной выпускной проверки.
+Стабильный канал `latest` пока остаётся на
 [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
 
 Исходный проверенный DC1 `09730c7` прошёл полный
@@ -70,10 +72,10 @@ curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/boots
 ```
 
 **Кандидат DC1** — следующая команда предназначена для использования **после
-публикации тега и файлов `v0.18.2-rc.1`**. Версия задаётся процессу установщика:
+публикации тега и файлов `v0.18.2-rc.2`**. Версия задаётся процессу установщика:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.1/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.1 sh
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.2/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.2 sh
 ```
 
 Можно скачать и распаковать Entware-архив выбранного выпуска. В его каталоге:
