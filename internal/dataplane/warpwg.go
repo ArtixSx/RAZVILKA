@@ -178,6 +178,10 @@ func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string
 		return errors.New("WARP policy has no service prefixes after endpoint exclusion")
 	}
 	state := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules}
+	initializePolicyLayout(&state)
+	if _, err := kernelRulesForPolicy(state); err != nil {
+		return err
+	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	return writeAtomic(filepath.Join(root, "policy.staged.json"), data, 0o600)
 }
@@ -555,6 +559,7 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bo
 		return false, err
 	}
 	newState := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules, RuntimeConfigSHA256: oldState.RuntimeConfigSHA256}
+	newState.RuleLayout, newState.SharedPriorityBase = oldState.RuleLayout, oldState.SharedPriorityBase
 	if samePolicy(oldState, newState) {
 		return false, nil
 	}
@@ -723,7 +728,7 @@ func (a *WARPWireGuardAdapter) readStagedPolicy(root string) (PolicyState, error
 	if err := json.Unmarshal(data, &state); err != nil {
 		return PolicyState{}, err
 	}
-	if state.Interface != a.interfaceName() || state.Table != a.table() || state.PriorityBase != a.priorityBase() || len(state.Prefixes) == 0 || len(effectivePolicyRules(state)) > maxPolicyPrefixes {
+	if validPolicyLayout(state) != nil || state.Interface != a.interfaceName() || state.Table != a.table() || state.PriorityBase != a.priorityBase() || len(state.Prefixes) == 0 || len(effectivePolicyRules(state)) > maxPolicyPrefixes {
 		return PolicyState{}, errors.New("invalid staged WARP policy ownership")
 	}
 	return state, nil

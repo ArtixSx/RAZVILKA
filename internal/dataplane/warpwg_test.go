@@ -23,10 +23,16 @@ type warpFakeRunner struct {
 	failStart             bool
 	failDelete            bool
 	addressOutput         string
+	policy                policyKernelFake
 }
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	if name == "ip" {
+		if output, handled, err := r.policy.run(args); handled {
+			return output, err
+		}
+	}
 	if name == "ip" && len(args) >= 5 && args[0] == "-o" && args[1] == "link" && args[2] == "show" {
 		if r.active {
 			return []byte("7: rz-cf-scan: <POINTOPOINT,UP> mtu 1280 state UNKNOWN"), nil
@@ -126,7 +132,10 @@ func TestWARPCanaryUsesTemporarySourcePolicyAndCleansIt(t *testing.T) {
 	if _, err := configs.Stage("warp-wg", "main", testWARPProfile()); err != nil {
 		t.Fatal(err)
 	}
-	runner := &warpFakeRunner{}
+	// The source-bound router probe does not claim LAN forwarding readiness.
+	// Firmware fwmark rules must not accidentally subject it to the new LAN
+	// precedence guard, while its own temporary selectors still get removed.
+	runner := &warpFakeRunner{policy: policyKernelFake{foreignIPv4: []string{"100: from all fwmark 0xffffaaa lookup 4096"}}}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
@@ -161,6 +170,9 @@ func TestWARPCanaryUsesTemporarySourcePolicyAndCleansIt(t *testing.T) {
 	}
 	if runner.active {
 		t.Fatal("temporary WARP interface remained active")
+	}
+	if len(runner.policy.entries) != 0 {
+		t.Fatal("temporary WARP policy remained active")
 	}
 	if len(probes) != 2 || probes[0] != "https://www.cloudflare.com/cdn-cgi/trace" || probes[1] != "https://telegram.org/" {
 		t.Fatalf("canary probes=%v", probes)

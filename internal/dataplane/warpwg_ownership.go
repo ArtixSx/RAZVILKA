@@ -52,6 +52,9 @@ func (a *WARPWireGuardAdapter) deactivationOwnership(ctx context.Context) (Polic
 	}
 	// wg-quick derives the interface from the filename. Keep it consistent with
 	// the exact policy identity and reject hooks, automatic routes or DNS changes.
+	if err := validPolicyLayout(state); err != nil {
+		return state, false, errWARPCleanupOwnership
+	}
 	sanitized, err := sanitizeWGQuickProfile(string(runtime))
 	if err != nil || sanitized != string(runtime) || filepath.Base(a.RuntimeConfigPath) != a.interfaceName()+".conf" {
 		return state, false, errWARPCleanupOwnership

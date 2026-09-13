@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.18.2-rc.4 — Scoped policy precedence and current runtime status
+
+Candidate in preparation; its release CI and hardware acceptance are not yet
+confirmed.
+
+- Introduce policy layout 2 with shared adapter slots 60–69, keeping scoped
+  exclusions before the corresponding service rules. Earlier matching firmware
+  mark policies must not silently override an accepted managed route.
+- Bind early exclusions to the selected client scope. Migrate and clean up only
+  exact owned legacy tuples; recorded rollback snapshots retain their original
+  kernel coordinates.
+- Refuse occupied slots, duplicate or unknown selectors, and earlier foreign
+  rules that may intercept the selected traffic. Unrelated rules are preserved.
+- Require current observation of the owned runtime for live status; a historical
+  committed transaction alone no longer certifies the running path.
+
+rc.3 passed SSH installation and application restart. Fresh unmarked client
+connections were observed through its TUN, while the marked-policy case could
+select the previous Keenetic VPN before the old RAZVILKA priorities. A conntrack
+mark alone is not proof of the packet's routing mark. rc.4 must be tested against
+both cases, with a negative client control and unchanged foreign rules.
+See the [rc.4 notes](docs/releases/0.18.2-rc.4.md).
+
+
 ## 0.18.2-rc.3 — Wait for applied-route recovery during upgrade
 
 - Wait up to nine minutes for asynchronous recovery of the committed node route
@@ -16,8 +40,11 @@
 
 The published `v0.18.2-rc.2` passed Release CI, but a real router upgrade with
 an applied VLESS route rolled back because acceptance ran before recovery
-completed. The rollback restored the previous installation. This fix requires
-its own release CI and hardware validation; those results are not inherited.
+completed. The rollback restored the previous installation. rc.3 passed its
+[Release CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/34783345534), SSH
+installation and application restart. Later client-path testing found the
+conditional policy precedence issue described under rc.4; successful unmarked
+TUN traffic does not close the marked-policy case.
 See the [rc.3 notes](docs/releases/0.18.2-rc.3.md).
 
 

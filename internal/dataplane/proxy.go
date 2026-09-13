@@ -293,6 +293,10 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	if err := a.prepareForwarding(ctx, &policy); err != nil {
 		return preflightRefusalError{err}
 	}
+	initializePolicyLayout(&policy)
+	if _, err := kernelRulesForPolicy(policy); err != nil {
+		return preflightRefusalError{err}
+	}
 	if err := a.preflightForwarding(ctx, policy); err != nil {
 		return preflightRefusalError{err}
 	}
@@ -705,6 +709,9 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 		return false, err
 	}
 	newState := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
+	// DNS refresh preserves recorded coordinates. Only a reviewed new Apply
+	// may migrate legacy routing; a crash must not orphan new early rules.
+	newState.RuleLayout, newState.SharedPriorityBase = oldState.RuleLayout, oldState.SharedPriorityBase
 	if err := a.prepareForwarding(ctx, &newState); err != nil {
 		return false, err
 	}
@@ -1206,6 +1213,9 @@ func (a *ProxyTunnelAdapter) loadPolicy() (PolicyState, bool, error) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return PolicyState{}, true, err
 	}
+	if err := validPolicyLayout(state); err != nil {
+		return PolicyState{}, true, err
+	}
 	return state, true, nil
 }
 func (a *ProxyTunnelAdapter) readStagedPolicy(root string) (PolicyState, error) {
@@ -1217,7 +1227,7 @@ func (a *ProxyTunnelAdapter) readStagedPolicy(root string) (PolicyState, error) 
 	if err := json.Unmarshal(data, &state); err != nil {
 		return PolicyState{}, err
 	}
-	if state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || len(effectivePolicyRules(state))+len(state.Exclusions) > maxPolicyPrefixes {
+	if validPolicyLayout(state) != nil || state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || len(effectivePolicyRules(state))+len(state.Exclusions) > maxPolicyPrefixes {
 		return PolicyState{}, errors.New("invalid staged proxy policy ownership")
 	}
 	for _, value := range state.Exclusions {

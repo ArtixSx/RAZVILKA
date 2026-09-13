@@ -18,6 +18,9 @@ type ingressEvidenceRunner struct {
 func (r *ingressEvidenceRunner) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
 	command := strings.Join(args, " ")
 	r.calls = append(r.calls, command)
+	if strings.Contains(command, "rule show") {
+		return []byte("0: from all lookup local\n32766: from all lookup main\n"), nil
+	}
 	if strings.Contains(command, "route show table main match") {
 		return []byte(r.connected), r.connectedErr
 	}
@@ -36,13 +39,13 @@ func TestPolicyEvidenceUsesForwardedDeviceIngress(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runner := &ingressEvidenceRunner{source: tc.reverse, forward: tc.forward, connected: "192.168.1.0/24 dev br0 proto kernel scope link src 192.168.1.1\nfd00::/64 dev br0 proto kernel metric 256"}
-			state := PolicyState{Interface: "rz-sing", Rules: []PolicyRule{{Source: tc.source, Destination: tc.dest}}}
+			state := PolicyState{Interface: "rz-sing", Table: 203, PriorityBase: 22000, Rules: []PolicyRule{{Source: tc.source, Destination: tc.dest}}}
 			if err := verifyPolicyEvidence(context.Background(), runner, "ip", state); err != nil {
 				t.Fatal(err)
 			}
-			wantCalls := 3
+			wantCalls := 4
 			if strings.HasPrefix(tc.name, "router-local") {
-				wantCalls = 2
+				wantCalls = 3
 			}
 			if len(runner.calls) != wantCalls || runner.calls[len(runner.calls)-1] != tc.want {
 				t.Fatalf("calls=%v", runner.calls)
@@ -63,7 +66,7 @@ func TestPolicyEvidenceDoesNotGuessIngressFromRoutedOrAmbiguousSources(t *testin
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runner := &ingressEvidenceRunner{source: tc.reverse, connected: tc.connected, forward: "149.154.160.0 from 192.168.1.40 dev rz-sing table 203"}
-			state := PolicyState{Interface: "rz-sing", Rules: []PolicyRule{{Source: "192.168.1.40/32", Destination: "149.154.160.0/20"}}}
+			state := PolicyState{Interface: "rz-sing", Table: 203, PriorityBase: 22000, Rules: []PolicyRule{{Source: "192.168.1.40/32", Destination: "149.154.160.0/20"}}}
 			if err := verifyPolicyEvidence(context.Background(), runner, "ip", state); err == nil {
 				t.Fatal("unproven ingress produced route evidence")
 			}
@@ -87,7 +90,7 @@ func TestPolicyEvidenceRejectsUnknownIngressAndWrongTunnel(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runner := &ingressEvidenceRunner{source: tc.source, forward: tc.forward, sourceErr: tc.err, connected: "192.168.1.0/24 dev br0 scope link"}
-			state := PolicyState{Interface: "rz-sing", Rules: []PolicyRule{{Source: "192.168.1.40/32", Destination: "149.154.160.0/20"}}}
+			state := PolicyState{Interface: "rz-sing", Table: 203, PriorityBase: 22000, Rules: []PolicyRule{{Source: "192.168.1.40/32", Destination: "149.154.160.0/20"}}}
 			if err := verifyPolicyEvidence(context.Background(), runner, "ip", state); err == nil {
 				t.Fatal("invalid route accepted")
 			}
@@ -96,7 +99,7 @@ func TestPolicyEvidenceRejectsUnknownIngressAndWrongTunnel(t *testing.T) {
 }
 
 func TestPolicyEvidenceChecksFamiliesContextAndCachesConnectedIngress(t *testing.T) {
-	state := PolicyState{Interface: "rz-sing", Rules: []PolicyRule{{Source: "192.168.1.40/32", Destination: "2001:b28:f23d::/48"}}}
+	state := PolicyState{Interface: "rz-sing", Table: 203, PriorityBase: 22000, Rules: []PolicyRule{{Source: "192.168.1.40/32", Destination: "2001:b28:f23d::/48"}}}
 	runner := &ingressEvidenceRunner{source: "192.168.1.40 dev br0", connected: "192.168.1.0/24 dev br0 scope link", forward: "dev rz-sing"}
 	if err := verifyPolicyEvidence(context.Background(), runner, "ip", state); err == nil || len(runner.calls) != 0 {
 		t.Fatal("cross-family probe reached kernel")
@@ -110,12 +113,12 @@ func TestPolicyEvidenceChecksFamiliesContextAndCachesConnectedIngress(t *testing
 	if err := verifyPolicyEvidence(context.Background(), runner, "ip", state); err != nil {
 		t.Fatal(err)
 	}
-	if len(runner.calls) != 4 || runner.calls[1] != "route show table main match 192.168.1.40/32" {
+	if len(runner.calls) != 5 || runner.calls[2] != "route show table main match 192.168.1.40/32" {
 		t.Fatalf("source lookup was not bounded/reused: %v", runner.calls)
 	}
 	runner.calls = nil
 	runner.connectedErr = errors.New("unsupported match")
-	if err := verifyPolicyEvidence(context.Background(), runner, "ip", state); err == nil || len(runner.calls) != 2 {
+	if err := verifyPolicyEvidence(context.Background(), runner, "ip", state); err == nil || len(runner.calls) != 3 {
 		t.Fatal("missing connected-source capability was accepted")
 	}
 }

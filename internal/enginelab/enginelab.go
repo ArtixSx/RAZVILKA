@@ -249,7 +249,10 @@ func (m *Manager) Inspect() Report {
 	return report
 }
 
-var policyRulePattern = regexp.MustCompile(`^\s*(\d+):.*\b(?:lookup|table)\s+([^\s]+)`)
+var (
+	policyPriorityPattern = regexp.MustCompile(`^\s*(\d+):`)
+	policyRulePattern     = regexp.MustCompile(`^\s*(\d+):.*\b(?:lookup|table)\s+([^\s]+)`)
+)
 
 func discoverPolicyConflicts(owns func(string, int, string) bool) []Conflict {
 	ipCommand := ""
@@ -305,15 +308,29 @@ func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[st
 			family = "IPv6"
 		}
 		for _, line := range strings.Split(output, "\n") {
-			match := policyRulePattern.FindStringSubmatch(strings.TrimSpace(line))
-			if len(match) != 3 {
+			priorityMatch := policyPriorityPattern.FindStringSubmatch(line)
+			if len(priorityMatch) != 2 {
 				continue
 			}
-			priority, err := strconv.Atoi(match[1])
+			priority, err := strconv.Atoi(priorityMatch[1])
 			if err != nil {
 				continue
 			}
+			match := policyRulePattern.FindStringSubmatch(strings.TrimSpace(line))
 			for _, spec := range dataplane.PolicyOwnershipSpecs() {
+				if spec.SharedPriorityBase > 0 && priority >= spec.SharedPriorityBase && priority <= spec.SharedPriorityEnd {
+					// Early mark-independent slots outrank firmware policies. Their
+					// table alone never establishes ownership, and even an unknown
+					// action without a lookup (blackhole/goto/etc.) must be reported.
+					if owns != nil && owns(spec.Adapter, 4+familyIndex*2, line) {
+						continue
+					}
+					appendConflict(Conflict{Kind: "priority", Value: priorityMatch[1], Engines: []string{spec.Adapter}, SystemUse: family + ": приоритет занят сторонним или неподтверждённым правилом", Blocking: true})
+					continue
+				}
+				if len(match) != 3 {
+					continue
+				}
 				if priority < spec.PriorityBase || priority > spec.PriorityEnd || match[2] == strconv.Itoa(spec.Table) {
 					continue
 				}

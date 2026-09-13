@@ -53,3 +53,66 @@ func TestPolicyConflictInspectionRecognizesOnlyRegisteredExactExclusion(t *testi
 		}
 	}
 }
+
+func TestSharedPolicyConflictInspectionRequiresExactPrivateRuleTuples(t *testing.T) {
+	root := t.TempDir()
+	manager := dataplane.New(filepath.Join(root, "configured-dataplane"))
+	adapter, err := dataplane.NewProxyTunnelAdapter("sing-box", engineconfig.New(filepath.Join(root, "drafts"), filepath.Join(root, "backups")), filepath.Join(root, "registered-state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	state := dataplane.PolicyState{
+		Interface: "rz-sing", Table: 203, PriorityBase: 22000, RuleLayout: 2, SharedPriorityBase: 64,
+		Prefixes:   []string{"198.51.100.20/32", "2001:db8:2::20/128"},
+		Rules:      []dataplane.PolicyRule{{Source: "192.168.1.40/32", Destination: "198.51.100.20/32"}, {Source: "2001:db8:1::40/128", Destination: "2001:db8:2::20/128"}},
+		Exclusions: []string{"203.0.113.9/32", "2001:db8::9/128"},
+	}
+	if err := os.MkdirAll(adapter.StateRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeState := func(value dataplane.PolicyState) {
+		t.Helper()
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(adapter.StateRoot, "policy.json"), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeState(state)
+	rules := []string{
+		"64: from 192.168.1.40 to 203.0.113.9 lookup main\n65: from 192.168.1.40 to 198.51.100.20 lookup 203",
+		"64: from 2001:db8:1::40 to 2001:db8::9 lookup main\n65: from 2001:db8:1::40 to 2001:db8:2::20 lookup 203",
+	}
+	if conflicts := policyConflictsFromStateWithOwner(rules, nil, manager.OwnsPolicyRule); len(conflicts) != 0 {
+		t.Fatalf("registered shared tuples were not recognized: %+v", conflicts)
+	}
+	for _, foreign := range []string{
+		"65: from 192.168.1.41 to 198.51.100.20 lookup 203",
+		"65: from all to 198.51.100.20 lookup 203",
+		"64: from all to 203.0.113.9 lookup main",
+		"64: from 192.168.1.40 to 203.0.113.10 lookup main",
+		"65: from 192.168.1.40 to 198.51.100.20 fwmark 0xffffaaa lookup 203",
+		"65: from 192.168.1.40 to 198.51.100.20 lookup 203 suppress_prefixlength 0",
+		"65: from all blackhole",
+	} {
+		conflicts := policyConflictsFromStateWithOwner([]string{rules[0] + "\n" + foreign, rules[1]}, nil, manager.OwnsPolicyRule)
+		if len(conflicts) != 1 || !conflicts[0].Blocking {
+			t.Fatalf("foreign early tuple was hidden: %q %+v", foreign, conflicts)
+		}
+	}
+	for _, changed := range []dataplane.PolicyState{
+		{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, RuleLayout: 3, SharedPriorityBase: 64, Prefixes: state.Prefixes, Rules: state.Rules, Exclusions: state.Exclusions},
+		{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, RuleLayout: 2, SharedPriorityBase: 66, Prefixes: state.Prefixes, Rules: state.Rules, Exclusions: state.Exclusions},
+		{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Prefixes: state.Prefixes, Rules: state.Rules, Exclusions: state.Exclusions},
+	} {
+		writeState(changed)
+		if conflicts := policyConflictsFromStateWithOwner(rules, nil, manager.OwnsPolicyRule); len(conflicts) != 4 {
+			t.Fatalf("wrong/legacy layout claimed new early tuples: %+v", conflicts)
+		}
+	}
+}

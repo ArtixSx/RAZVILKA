@@ -61,7 +61,8 @@ func withScanCandidate(t *testing.T, consume func(cloudflareprovider.WireGuardCa
 
 func TestCloudflareScanRunnerOwnsTemporaryInterfacePolicyAndCleanup(t *testing.T) {
 	root := t.TempDir()
-	fake := &warpFakeRunner{}
+	// A router-originated source-bound scan is separate from LAN policy proof.
+	fake := &warpFakeRunner{policy: policyKernelFake{foreignIPv4: []string{"100: from all fwmark 0xffffaaa lookup 4096"}}}
 	adapter := NewWARPWireGuardAdapter(nil, filepath.Join(root, "adapter"))
 	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", fake
 	adapter.HandshakeTimeout = time.Millisecond
@@ -89,6 +90,9 @@ func TestCloudflareScanRunnerOwnsTemporaryInterfacePolicyAndCleanup(t *testing.T
 	entries, err := os.ReadDir(filepath.Join(root, "scanner"))
 	if err != nil || len(entries) != 1 || entries[0].Name() != cloudflareScanLockFile {
 		t.Fatalf("scan secret workspace remained: %v err=%v", entries, err)
+	}
+	if len(fake.policy.entries) != 0 {
+		t.Fatal("temporary Cloudflare scan policy remained active")
 	}
 	joined := strings.Join(fake.calls, "\n")
 	for _, required := range []string{

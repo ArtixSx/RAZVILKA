@@ -57,7 +57,7 @@ import (
 var (
 	// Builds override provenance through -ldflags. The version default mirrors
 	// canonical VERSION; unknown provenance never claims a verified release build.
-	Version     = "0.18.2-rc.3"
+	Version     = "0.18.2-rc.4"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -812,6 +812,15 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 				if systemprobe.DetectWANProfile().ID != appliedPlan.NetworkProfileID || nodeRecovery.PlanID == appliedPlan.PlanID && nodeRecovery.State != "idle" && nodeRecovery.State != "recovered" {
 					liveActive = false
 					dataplaneRecoveryState = "network-stale"
+				}
+			}
+			if liveActive {
+				// A committed journal describes an earlier transaction. Present
+				// processes, forwarding grants and policy precedence must still
+				// match before the panel or installer can call that runtime live.
+				if cfg.ServiceControl.Stopped || appliedPlan.Revision != cfg.AppliedRevision || a.Dataplane.ObserveCommittedRuntime(r.Context(), *appliedPlan) != nil {
+					liveActive = false
+					dataplaneRecoveryState = "runtime-unverified"
 				}
 			}
 			if latest.Revision == cfg.Revision && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && (runtime.Execution.State == "rolled-back" || runtime.Execution.State == "canary-failed") {

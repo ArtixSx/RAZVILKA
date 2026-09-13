@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/netip"
@@ -12,6 +13,75 @@ import (
 type kernelPolicyRule struct {
 	family, priority, table int
 	source, destination     string
+}
+
+// OwnsPolicyRule explains a complete kernel tuple from private recorded state.
+// The adapter table or reserved slot alone never establishes ownership.
+func (m *Manager) OwnsPolicyRule(adapterID string, family int, line string) bool {
+	rule, ok := parseKernelPolicyRule(family, line)
+	if !ok {
+		return false
+	}
+	registered, exists := m.adapter(adapterID)
+	if !exists {
+		return false
+	}
+	var state PolicyState
+	switch adapter := registered.(type) {
+	case *ProxyTunnelAdapter:
+		if adapter == nil || adapter.ID() != adapterID {
+			return false
+		}
+		info, err := os.Lstat(adapter.policyPath())
+		if err != nil || !info.Mode().IsRegular() || info.Size() > 1<<20 {
+			return false
+		}
+		file, err := os.Open(adapter.policyPath())
+		if err != nil {
+			return false
+		}
+		defer file.Close()
+		opened, err := file.Stat()
+		if err != nil || !os.SameFile(info, opened) {
+			return false
+		}
+		data, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+		if err != nil || len(data) > 1<<20 || json.Unmarshal(data, &state) != nil || state.Interface != adapter.Interface || state.Table != adapter.Table || state.PriorityBase != adapter.Priority {
+			return false
+		}
+	case *WARPWireGuardAdapter:
+		if adapter == nil || adapter.ID() != adapterID {
+			return false
+		}
+		var err error
+		state, exists, err = adapter.deactivationOwnership(context.Background())
+		if err != nil || !exists {
+			return false
+		}
+	default:
+		return false
+	}
+	if len(state.Prefixes) == 0 || len(state.Prefixes) > maxPolicyPrefixes {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, value := range state.Exclusions {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil || prefix.Addr().Is4In6() || prefix.Bits() != prefix.Addr().BitLen() || !prefix.Addr().IsGlobalUnicast() || prefix.Addr().IsPrivate() || prefix.String() != value || seen[value] {
+			return false
+		}
+		seen[value] = true
+	}
+	rules, err := kernelRulesForPolicy(state)
+	if err != nil {
+		return false
+	}
+	for _, owned := range rules {
+		if owned == rule {
+			return true
+		}
+	}
+	return false
 }
 
 // OwnsProxyEndpointExclusion is a read-only Engine Lab ownership callback.
@@ -55,7 +125,7 @@ func (m *Manager) OwnsProxyEndpointExclusion(adapterID string, family int, line 
 		return false
 	}
 	var state PolicyState
-	if json.Unmarshal(data, &state) != nil || state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || len(state.Prefixes) > maxPolicyPrefixes || len(effectivePolicyRules(state))+len(state.Exclusions) > maxPolicyPrefixes {
+	if json.Unmarshal(data, &state) != nil || state.RuleLayout != 0 || state.SharedPriorityBase != 0 || state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || len(state.Prefixes) > maxPolicyPrefixes || len(effectivePolicyRules(state))+len(state.Exclusions) > maxPolicyPrefixes {
 		return false
 	}
 	index := rule.priority - state.PriorityBase

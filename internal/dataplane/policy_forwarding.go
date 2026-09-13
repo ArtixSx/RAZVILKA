@@ -175,6 +175,9 @@ func (a *ProxyTunnelAdapter) forwardingWANInterfaces(ctx context.Context, v6 boo
 }
 
 func (a *ProxyTunnelAdapter) validateForwarding(state PolicyState, forwarding *ProxyForwardingState) error {
+	if err := validPolicyLayout(state); err != nil {
+		return err
+	}
 	if forwarding == nil || forwarding.Chain != a.forwardingChain() || len(forwarding.Rules) == 0 || len(forwarding.Rules) > maxProxyForwardingRules || state.Interface != a.Interface || !proxyFirewallInterface.MatchString(state.Interface) {
 		return errors.New("proxy forwarding manifest is missing or has invalid ownership/bounds")
 	}

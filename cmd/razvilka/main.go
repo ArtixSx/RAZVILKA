@@ -344,7 +344,7 @@ func main() {
 		log.Printf("router metrics history disabled: %v", err)
 	}
 	engineLab := enginelab.New(engineConfigs)
-	engineLab.OwnsPolicyRule = dataplaneManager.OwnsProxyEndpointExclusion
+	engineLab.OwnsPolicyRule = dataplaneManager.OwnsPolicyRule
 	engineLab.EnablePolicyInspection()
 	usqueDoctor := usquediag.New()
 	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")

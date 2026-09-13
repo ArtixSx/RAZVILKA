@@ -18,31 +18,37 @@ const maxPolicyPrefixes = 1024
 // transactional tunnel adapter. Engine Lab uses the same source of truth as
 // activation, so preflight cannot silently drift from runtime defaults.
 type PolicyOwnershipSpec struct {
-	Adapter      string
-	Interface    string
-	Table        int
-	PriorityBase int
-	PriorityEnd  int
+	Adapter            string
+	Interface          string
+	Table              int
+	PriorityBase       int
+	PriorityEnd        int
+	SharedPriorityBase int
+	SharedPriorityEnd  int
 }
 
 func PolicyOwnershipSpecs() []PolicyOwnershipSpec {
 	return []PolicyOwnershipSpec{
-		{Adapter: "warp-wg", Interface: "rz-warp", Table: 201, PriorityBase: 18100, PriorityEnd: 18100 + maxPolicyPrefixes - 1},
-		{Adapter: "usque", Interface: "rz-usque", Table: 202, PriorityBase: 20000, PriorityEnd: 20000 + maxPolicyPrefixes - 1},
-		{Adapter: "sing-box", Interface: "rz-sing", Table: 203, PriorityBase: 22000, PriorityEnd: 22000 + maxPolicyPrefixes - 1},
-		{Adapter: "xray", Interface: "rz-xray", Table: 204, PriorityBase: 24000, PriorityEnd: 24000 + maxPolicyPrefixes - 1},
-		{Adapter: "amneziawg", Interface: "rz-awg", Table: 205, PriorityBase: 26000, PriorityEnd: 26000 + maxPolicyPrefixes - 1},
+		{Adapter: "warp-wg", Interface: "rz-warp", Table: 201, PriorityBase: 18100, PriorityEnd: 18100 + maxPolicyPrefixes - 1, SharedPriorityBase: 60, SharedPriorityEnd: 61},
+		{Adapter: "usque", Interface: "rz-usque", Table: 202, PriorityBase: 20000, PriorityEnd: 20000 + maxPolicyPrefixes - 1, SharedPriorityBase: 62, SharedPriorityEnd: 63},
+		{Adapter: "sing-box", Interface: "rz-sing", Table: 203, PriorityBase: 22000, PriorityEnd: 22000 + maxPolicyPrefixes - 1, SharedPriorityBase: 64, SharedPriorityEnd: 65},
+		{Adapter: "xray", Interface: "rz-xray", Table: 204, PriorityBase: 24000, PriorityEnd: 24000 + maxPolicyPrefixes - 1, SharedPriorityBase: 66, SharedPriorityEnd: 67},
+		{Adapter: "amneziawg", Interface: "rz-awg", Table: 205, PriorityBase: 26000, PriorityEnd: 26000 + maxPolicyPrefixes - 1, SharedPriorityBase: 68, SharedPriorityEnd: 69},
 	}
 }
 
 type PrefixResolver func(context.Context, string) ([]netip.Addr, error)
 
 type PolicyState struct {
-	Interface    string       `json:"interface"`
-	Table        int          `json:"table"`
-	PriorityBase int          `json:"priority_base"`
-	Prefixes     []string     `json:"prefixes"`
-	Rules        []PolicyRule `json:"rules,omitempty"`
+	Interface    string `json:"interface"`
+	Table        int    `json:"table"`
+	PriorityBase int    `json:"priority_base"`
+	// Version 2 uses two disjoint early RPDB slots per adapter. PriorityBase
+	// remains the legacy identity; old snapshots retain indexed priorities.
+	RuleLayout         int          `json:"rule_layout,omitempty"`
+	SharedPriorityBase int          `json:"shared_priority_base,omitempty"`
+	Prefixes           []string     `json:"prefixes"`
+	Rules              []PolicyRule `json:"rules,omitempty"`
 	// WARP/AWG commit binds cleanup authority to the exact sanitized runtime.
 	// Absent in older states and unrelated proxy policies; absence is not a
 	// license to delete an interface merely because its name matches.
@@ -225,120 +231,17 @@ func resolvePolicyRules(ctx context.Context, plan Plan, adapter string, resolver
 }
 
 func applyPolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState) error {
-	if runner == nil || ipCommand == "" {
-		return errors.New("policy routing command runner is unavailable")
-	}
-	rules := effectivePolicyRules(state)
-	if state.Table < 1 || state.Table > 252 || state.PriorityBase < 1000 || state.Interface == "" || len(rules)+len(state.Exclusions) > maxPolicyPrefixes {
-		return errors.New("invalid policy routing state")
-	}
-	if _, err := runner.Run(ctx, ipCommand, "route", "replace", "default", "dev", state.Interface, "table", fmt.Sprint(state.Table)); err != nil {
-		return fmt.Errorf("create IPv4 policy table: %w", err)
-	}
-	_, _ = runner.Run(ctx, ipCommand, "-6", "route", "replace", "default", "dev", state.Interface, "table", fmt.Sprint(state.Table))
-	addedExclusions := []string{}
-	for index, value := range state.Exclusions {
-		prefix, err := netip.ParsePrefix(value)
-		if err != nil {
-			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Exclusions: addedExclusions})
-			return err
-		}
-		args := []string{"rule", "add", "priority", fmt.Sprint(state.PriorityBase + index), "to", prefix.String(), "lookup", "main"}
-		if prefix.Addr().Is6() {
-			args = append([]string{"-6"}, args...)
-		}
-		if _, err := runner.Run(ctx, ipCommand, args...); err != nil {
-			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Exclusions: addedExclusions})
-			return fmt.Errorf("add direct endpoint exclusion: %w", err)
-		}
-		addedExclusions = append(addedExclusions, value)
-	}
-	added := []PolicyRule{}
-	for index, rule := range rules {
-		prefix, err := netip.ParsePrefix(rule.Destination)
-		if err != nil {
-			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Exclusions: addedExclusions, Rules: added})
-			return err
-		}
-		args := []string{"rule", "add", "priority", fmt.Sprint(state.PriorityBase + len(state.Exclusions) + index)}
-		if rule.Source != "" {
-			args = append(args, "from", rule.Source)
-		}
-		args = append(args, "to", prefix.String(), "lookup", fmt.Sprint(state.Table))
-		if prefix.Addr().Is6() {
-			args = append([]string{"-6"}, args...)
-		}
-		if _, err := runner.Run(ctx, ipCommand, args...); err != nil {
-			_ = removePolicy(ctx, runner, ipCommand, PolicyState{Interface: state.Interface, Table: state.Table, PriorityBase: state.PriorityBase, Exclusions: addedExclusions, Rules: added})
-			return fmt.Errorf("add policy rule for %s: %w", prefix, err)
-		}
-		added = append(added, rule)
-	}
-	return nil
+	return applyRecordedPolicy(ctx, runner, ipCommand, state)
 }
 
 func removePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState) error {
-	if runner == nil || ipCommand == "" {
-		return errors.New("policy routing command runner is unavailable")
-	}
-	var firstErr error
-	for index, value := range state.Exclusions {
-		prefix, err := netip.ParsePrefix(value)
-		if err != nil {
-			continue
-		}
-		args := []string{"rule", "del", "priority", fmt.Sprint(state.PriorityBase + index), "to", prefix.String(), "lookup", "main"}
-		if prefix.Addr().Is6() {
-			args = append([]string{"-6"}, args...)
-		}
-		if _, err := runner.Run(ctx, ipCommand, args...); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	rules := effectivePolicyRules(state)
-	for index, rule := range rules {
-		prefix, err := netip.ParsePrefix(rule.Destination)
-		if err != nil {
-			continue
-		}
-		args := []string{"rule", "del", "priority", fmt.Sprint(state.PriorityBase + len(state.Exclusions) + index)}
-		if rule.Source != "" {
-			args = append(args, "from", rule.Source)
-		}
-		args = append(args, "to", prefix.String(), "lookup", fmt.Sprint(state.Table))
-		if prefix.Addr().Is6() {
-			args = append([]string{"-6"}, args...)
-		}
-		if _, err := runner.Run(ctx, ipCommand, args...); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	if _, err := runner.Run(ctx, ipCommand, "route", "flush", "table", fmt.Sprint(state.Table)); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	_, _ = runner.Run(ctx, ipCommand, "-6", "route", "flush", "table", fmt.Sprint(state.Table))
-	verified := false
-	for _, familyArgs := range [][]string{{"rule", "show"}, {"-6", "rule", "show"}} {
-		output, err := runner.Run(ctx, ipCommand, familyArgs...)
-		if err != nil {
-			continue
-		}
-		verified = true
-		text := string(output)
-		for index := 0; index < len(state.Exclusions)+len(rules); index++ {
-			priority := fmt.Sprint(state.PriorityBase + index)
-			if strings.Contains(text, priority+":") || strings.Contains(text, "priority "+priority+" ") {
-				return fmt.Errorf("policy rule priority %s remains after cleanup", priority)
-			}
-		}
-	}
-	if verified {
-		return nil
-	}
-	return firstErr
+	return removeRecordedPolicy(ctx, runner, ipCommand, state)
 }
 
 func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState) error {
+	if err := verifyPolicyPrecedence(ctx, runner, ipCommand, state, false); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -539,7 +442,7 @@ func effectivePolicyRules(state PolicyState) []PolicyRule {
 }
 
 func samePolicy(left, right PolicyState) bool {
-	return left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(left.Exclusions, right.Exclusions) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right)) && reflect.DeepEqual(left.Forwarding, right.Forwarding)
+	return left.RuleLayout == right.RuleLayout && left.SharedPriorityBase == right.SharedPriorityBase && left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(left.Exclusions, right.Exclusions) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right)) && reflect.DeepEqual(left.Forwarding, right.Forwarding)
 }
 
 func replacePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, oldState, newState PolicyState) error {

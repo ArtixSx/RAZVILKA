@@ -40,9 +40,15 @@ type proxyFakeRunner struct {
 	packageRunning bool
 	packageCalls   []string
 	firewall       *proxyFirewallFake
+	policy         policyKernelFake
 }
 
 func (r *proxyFakeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "ip" {
+		if output, handled, err := r.policy.run(args); handled {
+			return output, err
+		}
+	}
 	if name == "iptables" || name == "ip6tables" {
 		if r.firewall == nil {
 			r.firewall = &proxyFirewallFake{}

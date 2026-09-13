@@ -14,17 +14,21 @@ no RAZVILKA cloud account is required.
 
 ## Candidate status
 
-Source for the **`v0.18.2-rc.3` prerelease**, based on reviewed DC1.
-The published `v0.18.2-rc.2` revealed a premature upgrade rollback on a router
-with an applied VLESS route: startup validation did not wait for asynchronous
-route recovery. `rc.3` fixes the wait while retaining strict validation.
-See the [rc.3 notes](docs/releases/0.18.2-rc.3.md). The latest stable
-release remains [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
-DC1 commit `09730c7` passed the full
-[Linux CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/34779255292).
-For final release CI and hardware validation results, see the
-`VALIDATION_RU.md` asset on the [release page](https://github.com/ArtixSx/RAZVILKA/releases). The earlier candidate's
-results do not certify the final release binary.
+The **`v0.18.2-rc.4` prerelease is in preparation**, correcting policy-rule
+precedence alongside other VPNs and checking the currently owned runtime.
+Its CI and hardware acceptance are not yet confirmed.
+See the [rc.4 notes](docs/releases/0.18.2-rc.4.md).
+
+The published rc.3 passed installation and application restart. Fresh unmarked
+connections from the selected client were also observed through the TUN.
+However, a matching marked Keenetic rule could select the previous VPN first.
+This is a conditional routing conflict, not a failure of every connection.
+See the [rc.3 warning](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.3).
+
+The latest stable release remains
+[`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
+Each final binary requires its own validation; results are recorded in the
+`VALIDATION_RU.md` asset on the [release page](https://github.com/ArtixSx/RAZVILKA/releases).
 
 The control plane supports scoped service routes, exact node checks,
 subscriptions, permitted fallback, schedules, encrypted backups and component
@@ -57,10 +61,10 @@ opkg install curl ca-certificates coreutils-sha256sum tar
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-**DC1 candidate**, only **after the tag and assets for `v0.18.2-rc.3` are published**:
+**DC1 candidate**, only **after the tag and assets for `v0.18.2-rc.4` are published**:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.3/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.3 sh
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.4/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.4 sh
 ```
 
 Alternatively, extract that release's Entware bundle and run
