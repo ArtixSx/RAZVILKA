@@ -14,21 +14,22 @@ no RAZVILKA cloud account is required.
 
 ## Candidate status
 
-The **`v0.18.2-rc.4` prerelease is in preparation**, correcting policy-rule
-precedence alongside other VPNs and checking the currently owned runtime.
-Its CI and hardware acceptance are not yet confirmed.
-See the [rc.4 notes](docs/releases/0.18.2-rc.4.md).
+[**v0.18.2-rc.4**](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.4)
+is available for public testing. CI and Release CI passed for the exact commit.
+SSH upgrade, application restart and applied VLESS-route recovery were verified
+on Netcraze 6614 (aarch64). Fresh connections from the selected LAN client used
+the TUN both normally and in a separate test with a packet mark. HTTP 200 was
+supported by exact connection-path evidence and TUN counters, not a route query
+alone. See the [validation report and limits](docs/releases/0.18.2-rc.4-validation.md).
 
-The published rc.3 passed installation and application restart. Fresh unmarked
-connections from the selected client were also observed through the TUN.
-However, a matching marked Keenetic rule could select the previous VPN first.
-This is a conditional routing conflict, not a failure of every connection.
+rc.3's normal TUN path worked, but an earlier marked Keenetic policy could select
+the previous VPN. rc.4 was checked in both scenarios; this does not certify
+every third-party policy or ACL.
 See the [rc.3 warning](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.3).
 
 The latest stable release remains
 [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
-Each final binary requires its own validation; results are recorded in the
-`VALIDATION_RU.md` asset on the [release page](https://github.com/ArtixSx/RAZVILKA/releases).
+Pin the candidate version explicitly using the instructions below.
 
 The control plane supports scoped service routes, exact node checks,
 subscriptions, permitted fallback, schedules, encrypted backups and component
@@ -61,7 +62,7 @@ opkg install curl ca-certificates coreutils-sha256sum tar
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-**DC1 candidate**, only **after the tag and assets for `v0.18.2-rc.4` are published**:
+**DC1 prerelease `v0.18.2-rc.4`**:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.4/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.4 sh

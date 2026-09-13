@@ -2,8 +2,10 @@
 
 ## 0.18.2-rc.4 — Scoped policy precedence and current runtime status
 
-Candidate in preparation; its release CI and hardware acceptance are not yet
-confirmed.
+CI and Release CI passed for the exact published commit. SSH upgrade,
+application restart and fresh client TUN paths, including a controlled packet-mark
+case, passed on Netcraze ARM64. See the
+[validation report and limits](docs/releases/0.18.2-rc.4-validation.md).
 
 - Introduce policy layout 2 with shared adapter slots 60–69, keeping scoped
   exclusions before the corresponding service rules. Earlier matching firmware
@@ -19,8 +21,9 @@ confirmed.
 rc.3 passed SSH installation and application restart. Fresh unmarked client
 connections were observed through its TUN, while the marked-policy case could
 select the previous Keenetic VPN before the old RAZVILKA priorities. A conntrack
-mark alone is not proof of the packet's routing mark. rc.4 must be tested against
-both cases, with a negative client control and unchanged foreign rules.
+mark alone is not proof of the packet's routing mark. rc.4 passed both client
+path scenarios. The out-of-scope client check was a synthetic route query;
+a physical second client and the full hardware matrix remain unverified.
 See the [rc.4 notes](docs/releases/0.18.2-rc.4.md).
 
 
