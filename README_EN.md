@@ -1,3 +1,5 @@
+> **DC1 review · 0.18.2-dev.** Reviewed candidate with dark-first UI and fixes for autonomy, DNS, AWG, authentication and update checksums. See [review status and remaining work](docs/DC1_REVIEW_2026-09-13_RU.md). Historical release results below do not establish hardware readiness for this candidate.
+
 > **Local Autonomy A1 source candidate (0.18.2-dev), not a release.** The integrated backend has not been built or hardware-tested. See [A1 scope and validation report](docs/AUTONOMY_A1_RU.md). Historical release/HIL claims below describe the rc.2 baseline, not this candidate.
 
 <p align="center"><img src="docs/assets/razvilka-banner.png" alt="RAZVILKA routing control center" width="100%"></p>

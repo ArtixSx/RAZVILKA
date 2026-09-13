@@ -88,6 +88,25 @@ func TestAWG31MissingOrOldModuleStopsBeforeCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestAWG31RejectsCapabilityFromAnotherCLIWithoutCreatingInterface(t *testing.T) {
+	a := NewAmneziaWGAdapter(nil, t.TempDir())
+	a.RuntimeConfigPath = filepath.Join(t.TempDir(), "profile.conf")
+	if err := os.WriteFile(a.RuntimeConfigPath, []byte(awgNativeFixture()), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &warpFakeRunner{}
+	a.Runner, a.IP, a.WG = runner, "ip", "/custom/old-awg"
+	a.AWGCapabilities = func(context.Context) awgprofile.Capabilities {
+		return awgprofile.Capabilities{Backend: "kernel", ToolPath: "/opt/sbin/awg", ToolVersion: "3.1.0", ModuleLoaded: true, LoadedModuleVersion: "3.1.0"}
+	}
+	if err := a.startNativeInterface(context.Background()); err == nil || len(runner.calls) != 0 {
+		t.Fatal("unverified selected executable received profile or created interface", err)
+	}
+	if _, err := os.Stat(a.RuntimeConfigPath + ".setconf"); !os.IsNotExist(err) {
+		t.Fatal("unverified executable left temporary key file")
+	}
+}
 func TestAWGEndpointPinnedAndRebindingRejected(t *testing.T) {
 	a := NewAmneziaWGAdapter(nil, t.TempDir())
 	p := strings.Replace(awgNativeFixture(), "8.8.4.4:51820", "vpn.example.com:51820", 1)

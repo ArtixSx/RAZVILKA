@@ -115,8 +115,8 @@ function consolePalette(){
 }
 function consoleChooseResult(index){const x=consolePaletteItems[index];if(!x)return;$('#consoleSearchDialog').close();consoleNavigate(x.view||'engineconfig',x.engine);if(x.service){if(typeof interfaceState!=='undefined'){interfaceState.query=x.service;interfaceState.filter='all';interfaceState.category='';$('#ui3ServiceSearch').value=x.service;}$('#serviceSearch').value=x.service;window.RazvilkaConsoleFilters.service='all';renderServices();}}
 function consoleOpenPalette(){$('#consoleSearchDialog').showModal();$('#consoleSearchInput').value='';consolePalette();$('#consoleSearchInput').focus();}
-function consoleSetTheme(theme){document.documentElement.dataset.theme=theme;$('#consoleTheme').innerHTML=ci(theme==='dark'?'sun':'moon');$('#consoleTheme').setAttribute('aria-label',theme==='dark'?'Светлая тема':'Тёмная тема');try{localStorage.setItem('razvilka.interface.theme',theme);}catch{}}
-try{consoleSetTheme(localStorage.getItem('razvilka.interface.theme')==='dark'?'dark':'light');}catch{consoleSetTheme('light');}
+function consoleSetTheme(theme,persist=true){theme=window.RazvilkaTheme.apply(theme,persist);$('#consoleTheme').innerHTML=ci(theme==='dark'?'sun':'moon');$('#consoleTheme').setAttribute('aria-label',theme==='dark'?'Светлая тема':'Тёмная тема');}
+consoleSetTheme(document.documentElement.dataset.theme,false);
 $('#consoleTheme').addEventListener('click',()=>consoleSetTheme(document.documentElement.dataset.theme==='dark'?'light':'dark'));
 $('#consoleMenu').addEventListener('click',()=>{const open=document.body.classList.toggle('console-menu-open');$('#consoleMenuBackdrop').hidden=!open;$('#consoleMenu').setAttribute('aria-expanded',String(open));consoleDrawerInert();if(open)$('#consoleCloseMenu').focus();});
 for(const id of ['consoleCloseMenu','consoleMenuBackdrop'])$('#'+id).addEventListener('click',()=>{document.body.classList.remove('console-menu-open');$('#consoleMenuBackdrop').hidden=true;$('#consoleMenu').setAttribute('aria-expanded','false');consoleDrawerInert();$('#consoleMenu').focus();});

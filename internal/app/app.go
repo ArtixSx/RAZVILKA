@@ -152,6 +152,7 @@ type App struct {
 	Dataplane          *dataplane.Manager
 	Devices            *devices.Manager
 	DNS                *dnscontrol.Manager
+	dnsServiceComparer serviceDNSComparer
 	Warp               *warp.Manager
 	AWGCapabilityProbe func(context.Context) awgprofile.Capabilities
 	Cloudflare         *cloudflareprovider.Store

@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"time"
+	"unicode/utf8"
 )
 
 const MaxCatalogBytes = 256 << 10
@@ -154,13 +155,30 @@ func Verify(data []byte, keys map[string]ed25519.PublicKey, minSequence uint64, 
 }
 
 // Reject duplicate object keys, excessive nesting, trailing values and unknown
-// fields. Signature covers the exact payload bytes, not a reserialized object.
+// fields. Exact field spelling and presence matter: encoding/json otherwise
+// accepts case-insensitive aliases and treats absent/null counts as zero.
+// Signature covers the exact payload bytes, not a reserialized object.
 func decodeStrict(data []byte, dst any) error {
+	if !utf8.Valid(data) {
+		return ErrCatalog
+	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	if err := uniqueValue(d, 0); err != nil {
 		return err
 	}
 	if _, e := d.Token(); e != io.EOF {
+		return ErrCatalog
+	}
+	var shape *catalogJSONShape
+	switch dst.(type) {
+	case *Envelope:
+		shape = envelopeJSONShape
+	case *Document:
+		shape = documentJSONShape
+	default:
+		return ErrCatalog
+	}
+	if validateJSONShape(data, shape) != nil {
 		return ErrCatalog
 	}
 	d = json.NewDecoder(bytes.NewReader(data))
@@ -170,6 +188,77 @@ func decodeStrict(data []byte, dst any) error {
 	}
 	return nil
 }
+
+// A nil child is a scalar whose concrete type is checked by the final typed
+// decode. Arrays must be explicit (including [] when empty); null never means
+// a known zero count or an empty revocation set in a signed snapshot.
+type catalogJSONShape struct {
+	fields   map[string]*catalogJSONShape
+	optional map[string]bool
+	array    bool
+	item     *catalogJSONShape
+}
+
+var recipeJSONShape = &catalogJSONShape{
+	fields: map[string]*catalogJSONShape{
+		"schema": nil, "service_id": nil, "scenario": nil, "provider_id": nil,
+		"traffic_class": nil, "strategy_id": nil, "compatibility_id": nil,
+		"family": nil, "resolution_actor": nil, "dns_request_path": nil,
+	},
+	optional: map[string]bool{"strategy_id": true},
+}
+var aggregateJSONShape = &catalogJSONShape{
+	fields: map[string]*catalogJSONShape{
+		"recipe": recipeJSONShape, "hash": nil, "cohort": nil, "successes": nil,
+		"failures": nil, "installations": nil, "observed_at": nil,
+	},
+	optional: map[string]bool{"cohort": true},
+}
+var documentJSONShape = &catalogJSONShape{fields: map[string]*catalogJSONShape{
+	"schema": nil, "sequence": nil, "issued_at": nil, "expires_at": nil,
+	"recipes": {array: true, item: aggregateJSONShape}, "revoked": {array: true},
+}}
+var envelopeJSONShape = &catalogJSONShape{fields: map[string]*catalogJSONShape{
+	"key_id": nil, "payload": documentJSONShape, "signature": nil,
+}}
+
+func validateJSONShape(data []byte, shape *catalogJSONShape) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return ErrCatalog
+	}
+	if shape == nil {
+		return nil
+	}
+	if shape.array {
+		var items []json.RawMessage
+		if json.Unmarshal(data, &items) != nil {
+			return ErrCatalog
+		}
+		for _, item := range items {
+			if validateJSONShape(item, shape.item) != nil {
+				return ErrCatalog
+			}
+		}
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil {
+		return ErrCatalog
+	}
+	for name, raw := range fields {
+		child, known := shape.fields[name]
+		if !known || validateJSONShape(raw, child) != nil {
+			return ErrCatalog
+		}
+	}
+	for name := range shape.fields {
+		if _, present := fields[name]; !present && !shape.optional[name] {
+			return ErrCatalog
+		}
+	}
+	return nil
+}
+
 func uniqueValue(d *json.Decoder, depth int) error {
 	if depth > 16 {
 		return ErrCatalog

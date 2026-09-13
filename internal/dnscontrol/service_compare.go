@@ -5,12 +5,20 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"net"
 	"net/netip"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
+)
+
+var (
+	ErrServiceDNSInvalid = errors.New("invalid service DNS comparison")
+	ErrServiceDNSChanged = errors.New("service DNS comparison context changed")
 )
 
 // ServiceDNSComparison deliberately cannot authorize Apply or credential rotation.
@@ -43,14 +51,24 @@ type ServiceDNSAnswer struct {
 // UDP53, changes the resolver, or tests a proxy on behalf of the caller.
 // The caller supplies a catalog-owned hostname and holds operation admission.
 func (m *Manager) CompareServiceDNS(ctx context.Context, profiles []string, hostname string) (ServiceDNSComparison, error) {
+	return m.CompareServiceDNSGuarded(ctx, profiles, hostname, nil)
+}
+
+// CompareServiceDNSGuarded rechecks the caller's immutable service/policy
+// context before and after each exchange. It never publishes a completed
+// comparison after cancellation or a changed provider configuration.
+func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []string, hostname string, guard func(context.Context) error) (ServiceDNSComparison, error) {
 	out := ServiceDNSComparison{Results: []ServiceDNSAnswer{}, ResolutionActor: "router", RequestPath: "system-routing-unverified", Note: "Сравнение только DNS A/AAAA по DoH. Адреса назначения, TLS, сервис и путь LAN ещё не проверены. Таймаут DNS не разрешает смену узла или регистрацию WARP."}
 	host, err := normalizeCandidateHostname(hostname)
 	if err != nil {
-		return out, err
+		return out, fmt.Errorf("%w: %s", ErrServiceDNSInvalid, err)
+	}
+	if _, err := netip.ParseAddr(host); err == nil || host == "home.arpa" {
+		return out, ErrServiceDNSInvalid
 	}
 	out.Host = host
 	if len(profiles) < 1 || len(profiles) > 3 {
-		return out, errors.New("выберите от одного до трёх DNS-профилей")
+		return out, ErrServiceDNSInvalid
 	}
 	m.mu.RLock()
 	doc := cloneDocument(m.doc)
@@ -69,16 +87,16 @@ func (m *Manager) CompareServiceDNS(ctx context.Context, profiles []string, host
 	// Validate the entire batch before the FIRST external request.
 	for _, id := range profiles {
 		if seen[id] {
-			return out, errors.New("профили не должны повторяться")
+			return out, ErrServiceDNSInvalid
 		}
 		seen[id] = true
 		p, ok := profileByID(id)
 		if !ok {
-			return out, errors.New("неизвестный DNS-профиль")
+			return out, ErrServiceDNSInvalid
 		}
 		provider, ok := providerByIDFor(p.ProviderID, doc)
 		if !ok || !provider.Configured || provider.Scope == "negative-control" || provider.TrustedLocal || provider.DoH == "" {
-			return out, errors.New("профиль не настроен или не разрешён для публичной DoH-диагностики")
+			return out, ErrServiceDNSInvalid
 		}
 		var target dnsTarget
 		found := false
@@ -93,28 +111,57 @@ func (m *Manager) CompareServiceDNS(ctx context.Context, profiles []string, host
 			}
 		}
 		if !found {
-			return out, errors.New("у профиля нет поддержанного DoH endpoint")
+			return out, ErrServiceDNSInvalid
 		}
 		choices = append(choices, choice{p, provider, target})
 	}
 	ctx, cancel := context.WithTimeout(ctx, 32*time.Second)
 	defer cancel()
+	check := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if guard != nil {
+			if err := guard(ctx); err != nil {
+				return err
+			}
+		}
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		for _, c := range choices {
+			current, ok := providerByIDFor(c.provider.ID, m.doc)
+			if !ok || !reflect.DeepEqual(current, c.provider) {
+				return ErrServiceDNSChanged
+			}
+		}
+		return nil
+	}
 	for _, c := range choices {
 		for _, f := range []struct {
 			name string
 			typ  dnsmessage.Type
 		}{{"ipv4", dnsmessage.TypeA}, {"ipv6", dnsmessage.TypeAAAA}} {
-			if err := ctx.Err(); err != nil {
+			if err := check(); err != nil {
 				return out, err
 			}
 			started := time.Now()
-			addrs, e := exchange(ctx, c.target, host, f.typ)
+			queryCtx, queryCancel := context.WithTimeout(ctx, endpointProbeTimeout)
+			addrs, e := exchange(queryCtx, c.target, host, f.typ)
+			queryCancel()
+			if err := check(); err != nil {
+				return out, err
+			}
+			if errors.Is(e, errDNSNoAddress) {
+				e = nil // Valid NODATA is distinct from an unavailable resolver.
+			}
 			a := ServiceDNSAnswer{ProfileID: c.profile.ID, ProviderID: c.provider.ID, Family: f.name, Transport: "doh", Status: "unknown", Addresses: []string{}, LatencyMS: time.Since(started).Milliseconds()}
 			if e != nil {
 				a.Status = "error"
 				a.ErrorCode = "DNS_QUERY_FAILED"
 				if errors.Is(e, errDNSAnswer) {
 					a.ErrorCode = "DNS_INTEGRITY_FAILED"
+				} else if timeout, ok := e.(net.Error); errors.Is(e, context.DeadlineExceeded) || ok && timeout.Timeout() {
+					a.ErrorCode = "DNS_QUERY_TIMEOUT"
 				}
 			} else {
 				unique := map[netip.Addr]bool{}
@@ -146,7 +193,7 @@ func (m *Manager) CompareServiceDNS(ctx context.Context, profiles []string, host
 			out.Results = append(out.Results, a)
 		}
 	}
-	if err := ctx.Err(); err != nil {
+	if err := check(); err != nil {
 		return out, err
 	}
 	out.CheckedAt = time.Now().UTC().Format(time.RFC3339)

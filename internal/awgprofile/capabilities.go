@@ -28,11 +28,21 @@ type Capabilities struct {
 // Detect performs bounded read-only inspection. It never insmods a .ko or runs
 // a downloaded installer. Installed-on-disk is deliberately not loaded-ready.
 func Detect(ctx context.Context) Capabilities {
+	return detectTools(ctx, []string{"/opt/sbin/awg", "/opt/bin/awg", "/opt/usr/bin/awg", "/usr/bin/awg", "awg"})
+}
+
+// DetectTool checks the exact CLI selected by the adapter, including an
+// explicit installation override. Another installed awg cannot vouch for it.
+func DetectTool(ctx context.Context, tool string) Capabilities {
+	return detectTools(ctx, []string{tool})
+}
+
+func detectTools(ctx context.Context, tools []string) Capabilities {
 	c := Capabilities{Backend: "kernel", Note: "Проверяются загруженный amneziawg и локальный awg. Пакеты и модули не устанавливаются; испытание роутера требуется отдельно."}
 	c.Kernel = readVersion("/proc/sys/kernel/osrelease")
 	c.LoadedModuleVersion = readVersion("/sys/module/amneziawg/version")
 	c.ModuleLoaded = c.LoadedModuleVersion != ""
-	for _, path := range []string{"/opt/sbin/awg", "/opt/bin/awg", "/opt/usr/bin/awg", "/usr/bin/awg", "awg"} {
+	for _, path := range tools {
 		p, e := exec.LookPath(path)
 		if e != nil {
 			continue

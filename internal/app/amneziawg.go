@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -128,8 +129,20 @@ func (a *App) amneziaCanary(w http.ResponseWriter, r *http.Request, q awgRequest
 		writeJSON(w, 400, map[string]any{"error": "Выберите сервис и подтвердите изолированную проверку."})
 		return
 	}
-	if a.Store == nil || a.Store.Get().SafeMode || a.Store.Get().ServiceControl.Stopped {
+	if a.Store == nil {
+		writeJSON(w, 409, map[string]any{"error": "Настройки приложения недоступны."})
+		return
+	}
+	cfg := a.Store.Get()
+	if cfg.SafeMode || cfg.ServiceControl.Stopped {
 		writeJSON(w, 409, map[string]any{"error": "Safe Mode или общая остановка запрещают временные сетевые изменения."})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 110*time.Second)
+	defer cancel()
+	network, err := a.freshNetworkProfile(ctx)
+	if err != nil || network == "" {
+		writeJSON(w, 409, map[string]any{"error": "Текущая сеть не подтверждена. Повторите проверку позже.", "live_applied": false})
 		return
 	}
 	current, err := a.EngineConfigs.ReadExpert("amneziawg", "main")
@@ -142,7 +155,8 @@ func (a *App) amneziaCanary(w http.ResponseWriter, r *http.Request, q awgRequest
 		writeJSON(w, 400, map[string]any{"issue": awgIssue(err)})
 		return
 	}
-	if issues := awgprofile.Check(p.Public(), a.awgInventory(r.Context())); len(issues) > 0 {
+	caps := a.awgInventory(ctx)
+	if issues := awgprofile.Check(p.Public(), caps); len(issues) > 0 {
 		writeJSON(w, 409, map[string]any{"error": "Исполнитель не поддерживает профиль.", "blockers": issues})
 		return
 	}
@@ -150,16 +164,43 @@ func (a *App) amneziaCanary(w http.ResponseWriter, r *http.Request, q awgRequest
 		writeJSON(w, 503, map[string]any{"error": "Изолированный адаптер AmneziaWG недоступен."})
 		return
 	}
+	catalogHash := applyReviewHash(a.catalogSnapshot())
 	plan, err := a.tunnelProbePlan("amneziawg", q.ServiceID, current.Source == "staged")
 	if err != nil {
 		writeJSON(w, 400, map[string]any{"error": err.Error()})
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 110*time.Second)
-	defer cancel()
+	// Each non-live transaction phase must still refer to this exact profile,
+	// service definition, runtime and network. The operation gate serializes
+	// HTTP edits; this guard also fences external changes and canceled intent.
+	guard := func(c context.Context) error {
+		if c.Err() != nil {
+			return c.Err()
+		}
+		if !reflect.DeepEqual(a.Store.Get(), cfg) || applyReviewHash(a.catalogSnapshot()) != catalogHash {
+			return dataplane.ErrReviewChanged
+		}
+		latest, err := a.EngineConfigs.ReadExpert("amneziawg", "main")
+		if err != nil || latest.SHA256 != current.SHA256 || latest.Source != current.Source {
+			return dataplane.ErrReviewChanged
+		}
+		if !reflect.DeepEqual(a.awgInventory(c), caps) {
+			return dataplane.ErrReviewChanged
+		}
+		observed, err := a.freshNetworkProfile(c)
+		if err != nil || observed != network {
+			return dataplane.ErrNetworkChanged
+		}
+		return c.Err()
+	}
+	ctx = dataplane.WithReviewGuard(ctx, guard)
 	started := time.Now()
 	err = a.Dataplane.ProbeCandidate(ctx, plan, "amneziawg")
 	if err != nil {
+		if errors.Is(err, dataplane.ErrReviewChanged) || errors.Is(err, dataplane.ErrNetworkChanged) || errors.Is(err, context.Canceled) {
+			writeJSON(w, 409, map[string]any{"ok": false, "code": "AWG_CANARY_CHANGED", "error": "Профиль, сервис, исполнитель, сеть или разрешения изменились. Повторите проверку актуального состояния.", "live_applied": false})
+			return
+		}
 		writeJSON(w, 502, map[string]any{"ok": false, "code": "AWG_CANARY_FAILED", "error": "Изолированная проверка не подтверждена. Кандидат не применяется; состояние очистки смотрите в диагностике.", "duration_ms": time.Since(started).Milliseconds(), "live_applied": false})
 		return
 	}

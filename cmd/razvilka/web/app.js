@@ -173,11 +173,14 @@ function showAuth(status, message = '') {
 }
 
 function hideAuth() {
+  const restored = $('#authScreen').hidden !== true;
   $('#authScreen').hidden = true;
   $('.app-shell').removeAttribute('aria-hidden');
   $('#authMessage').textContent = '';
-  $('#detailsPanel').classList.remove('open');
-  document.dispatchEvent(new Event('razvilka:auth-restored'));
+  if (restored) {
+    $('#detailsPanel').classList.remove('open');
+    document.dispatchEvent(new Event('razvilka:auth-restored'));
+  }
 }
 
 async function submitSetup(event) {

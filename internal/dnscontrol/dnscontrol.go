@@ -28,6 +28,7 @@ const schema = 4
 const endpointProbeTimeout = 5 * time.Second
 
 var errDNSAnswer = errors.New("DNS response failed integrity checks")
+var errDNSNoAddress = errors.New("DNS response contains no addresses")
 
 type Provider struct {
 	Kind                   string        `json:"kind"`
@@ -880,6 +881,14 @@ func validateDNSAddressResponse(query, response []byte) ([]netip.Addr, bool, err
 	if err != nil || len(answers) > 64 {
 		return nil, false, errDNSAnswer
 	}
+	// Validate the entire message, including sections that do not contribute
+	// addresses. A malformed authority/additional section is not valid NODATA.
+	if _, err := parser.AllAuthorities(); err != nil {
+		return nil, false, errDNSAnswer
+	}
+	if _, err := parser.AllAdditionals(); err != nil {
+		return nil, false, errDNSAnswer
+	}
 	aliases := map[string]string{}
 	for _, answer := range answers {
 		if answer.Header.Class != dnsmessage.ClassINET {
@@ -925,7 +934,7 @@ func validateDNSAddressResponse(query, response []byte) ([]netip.Addr, bool, err
 		return nil, false, errDNSAnswer
 	}
 	if len(addresses) == 0 {
-		return nil, false, errors.New("DNS response contains no addresses")
+		return nil, false, errDNSNoAddress
 	}
 	return addresses, header.AuthenticData, nil
 }
@@ -1207,7 +1216,7 @@ func providersFor(doc document) []Provider {
 			}
 		case "custom":
 			if doc.CustomProvider != nil {
-				providers[index] = cloneProvider(*doc.CustomProvider)
+				providers[index] = withProviderMetadata(cloneProvider(*doc.CustomProvider))
 			}
 		}
 		providers[index] = withTypedEndpoints(providers[index])

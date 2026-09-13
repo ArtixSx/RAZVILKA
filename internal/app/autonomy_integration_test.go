@@ -103,9 +103,10 @@ func TestAutonomyEndToEndAssignmentStickyFailoverAndRollback(t *testing.T) {
 	adapter.calls = nil
 	autonomyTestDue(a, false)
 	a.autonomyRound(context.Background(), time.Now())
-	if r = autonomyTestState(a); r.State != "healthy" || len(adapter.calls) != 0 {
+	if r = autonomyTestState(a); r.State != "healthy" || !reflect.DeepEqual(adapter.calls, []string{"health"}) {
 		t.Fatal("healthy path not sticky", r, adapter.calls)
 	}
+	adapter.calls = nil
 	fail[ids[0]] = true
 	autonomyTestDue(a, false)
 	a.autonomyRound(context.Background(), time.Now())
@@ -158,6 +159,72 @@ func TestAutonomyInconclusiveDoesNotSwitchOrIncreaseFailureQuorum(t *testing.T) 
 	}
 	if r := autonomyTestState(a); r.Failures != 0 || len(adapter.calls) != 0 || !reflect.DeepEqual(before, a.Store.Get()) {
 		t.Fatalf("ambiguity changed route: %+v ids=%v", r, ids)
+	}
+}
+
+func TestAutonomyRepairsOnlySameProvenNodeAfterOwnedRuntimeLoss(t *testing.T) {
+	for _, outcome := range []string{"repaired", "rollback", "manual", "cancel"} {
+		t.Run(outcome, func(t *testing.T) {
+			a, _, adapter := autonomousIntegrationFixture(t)
+			var checked []string
+			a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+				checked = append(checked, request.NodeID)
+				return autofallbackResult(request, true), nil
+			})
+			a.autonomyRound(context.Background(), time.Now())
+			if autonomyTestState(a).State != "applied" {
+				t.Fatal("initial route was not applied")
+			}
+			before := a.Store.Get()
+			original := selectedRoute(before.AppliedServices["my-independent-site"])
+			adapter.calls, checked = nil, nil
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			healthCalls := 0
+			adapter.after = func(phase string) error {
+				if phase != "health" {
+					return nil
+				}
+				healthCalls++
+				if healthCalls == 1 {
+					if outcome == "manual" {
+						mode := "manual"
+						if err := a.Store.UpdateServiceControl(&mode, nil, a.Store.Get().Revision); err != nil {
+							t.Fatal(err)
+						}
+					}
+					if outcome == "cancel" {
+						cancel()
+					}
+					return errors.New("owned process disappeared")
+				}
+				if outcome == "rollback" {
+					return errors.New("replacement runtime failed health")
+				}
+				return nil
+			}
+			autonomyTestDue(a, false)
+			a.autonomyRound(ctx, time.Now())
+			state := autonomyTestState(a)
+			after := a.Store.Get()
+			if len(checked) != 1 || "sing-box:"+checked[0] != original || selectedRoute(after.AppliedServices["my-independent-site"]) != original || !reflect.DeepEqual(before.AppliedServices["my-independent-site"].Sources, after.AppliedServices["my-independent-site"].Sources) || !reflect.DeepEqual(before.Services["youtube"], after.Services["youtube"]) {
+				t.Fatal("runtime repair changed node, client scope, or another draft")
+			}
+			switch outcome {
+			case "repaired":
+				if state.State != "applied" || !slices.Contains(adapter.calls, "activate") || !slices.Contains(adapter.calls, "commit") {
+					t.Fatal("missing guarded repair", state.State, adapter.calls)
+				}
+			case "rollback":
+				if state.State != "apply-refused" || !slices.Contains(adapter.calls, "rollback") || !reflect.DeepEqual(before, after) {
+					t.Fatal("failed repair did not restore exact configuration", state.State, adapter.calls)
+				}
+			default:
+				if state.State != "paused" || !reflect.DeepEqual(adapter.calls, []string{"health"}) {
+					t.Fatal("revoked permission entered repair", state.State, adapter.calls)
+				}
+			}
+		})
 	}
 }
 func TestAutonomyPendingRemovalDisablesOwnDraftWithoutApplyingOtherDrafts(t *testing.T) {

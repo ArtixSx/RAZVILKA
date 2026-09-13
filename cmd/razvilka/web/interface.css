@@ -844,7 +844,7 @@ html{scroll-behavior:smooth}body.console-ui{background:var(--bg);color:var(--tex
  .console-ui .topbar .page-title h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 
-/* R3 — service-first interface. Local system fonts. Light by default.
+/* Service-first interface. Local system fonts. Dark on first visit.
    Compatibility styles are compiled first; this is the single final theme. */
 :root,html[data-theme=light]{--bg:#f5f6f8;--panel:#fff;--panel2:#f8f9fb;--sidebar:#fff;--text:#20303f;--muted:#637080;--line:#e2e7ed;--line2:#c9d2dc;--green:#147568;--green2:#116559;--blue:#356ea4;--violet:#7460b8;--amber:#986617;--red:#c33c51;--soft:#eef2f6;--accent-wash:#e8f3ef;--radius:16px;--shadow:0 4px 20px #27354404;--r3-teal-wash:#e6f3ee;--r3-purple-wash:#f0edfa;--r3-rose-wash:#faedef;--r3-hero:#eaf3f0;color-scheme:light}
 html[data-theme=dark]{--bg:#13191f;--panel:#1b232d;--panel2:#202b36;--sidebar:#18212a;--text:#e7eff5;--muted:#a2b3c1;--line:#303e4b;--line2:#465767;--green:#8cd4be;--green2:#a9e8d5;--blue:#91bce9;--violet:#bbaaf2;--amber:#e6c082;--red:#efa4ae;--soft:#273340;--accent-wash:#254337;--r3-teal-wash:#203e34;--r3-purple-wash:#342d4d;--r3-rose-wash:#452d39;--r3-hero:#203a32;color-scheme:dark}
@@ -1257,3 +1257,78 @@ html[data-theme=dark] .interface-ui .autonomy-zone .wizard-steps button.active i
 .dc1-lab .dc1-actions{display:flex;gap:8px;flex-wrap:wrap}.dc1-lab .dc1-note{font-size:13px;line-height:1.65;opacity:.8}
 #dc1Status{min-height:1.5em;font-size:13px;line-height:1.6}
 @media(max-width:800px){.dc1-lab .dc1-layout{grid-template-columns:1fr;padding:14px}.dc1-answer{grid-template-columns:1fr 1.3fr}.dc1-profiles{max-height:245px}}
+
+/* DC1 review: clearer hierarchy, first-run guidance and accessible home navigation. */
+html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#101923;--text:#edf3f9;--muted:#a6b8ca;--line:#2a3b4d;--line2:#445c74;--green:#74dfbb;--green2:#a2edd3;--blue:#89bfff;--violet:#bdacff;--soft:#203044;--accent-wash:#183b36;--r3-teal-wash:#1a3b37;--r3-purple-wash:#302b4c;--r3-hero:#173733}
+.interface-ui .sidebar{padding-top:25px}
+.interface-ui .brand-glyph{background:var(--accent-wash);border:1px solid color-mix(in srgb,var(--green) 30%,var(--line));border-radius:12px;padding:5px;box-sizing:content-box}
+.interface-ui .brand{gap:12px}
+.interface-ui .nav.active{box-shadow:inset 3px 0 var(--green);font-weight:650}
+.interface-ui .nav{transition:background .15s,color .15s}
+.interface-ui .main{padding-left:32px;padding-right:32px}
+.interface-ui .topbar{margin-left:-32px;margin-right:-32px;padding-left:32px;padding-right:32px;min-height:90px}
+.interface-ui .ui3-subnav{padding-top:18px;padding-bottom:18px}
+.interface-ui .ui3-subnav button{font-size:13px;min-height:40px;border:1px solid transparent}
+.interface-ui .ui3-subnav button.active{border-color:var(--line2);background:var(--panel2)}
+.interface-ui .home-sections{overflow:visible;gap:10px;max-width:640px}
+.interface-ui .home-sections button{display:flex;align-items:center;gap:12px;flex:1;padding:12px 17px;text-align:left;border:1px solid var(--line);border-radius:12px;background:var(--panel);min-width:0}
+.interface-ui .home-sections button>.ui-icon{width:23px;height:23px;color:var(--muted);flex-shrink:0}
+.interface-ui .home-sections button span{font-size:14px;font-weight:650}
+.interface-ui .home-sections button small{font-size:11px;line-height:1.6;font-weight:400;color:var(--muted);display:block}
+.interface-ui .home-sections button.active{background:var(--accent-wash);border-color:var(--green);color:var(--green)}
+.interface-ui .home-sections button.active>.ui-icon{color:var(--green)}
+.interface-ui .home-sections button[data-rz-nav=autopilot].active{background:var(--r3-purple-wash);border-color:var(--violet);color:var(--violet)}
+.interface-ui .home-sections button[data-rz-nav=autopilot]>.ui-icon{color:var(--violet)}
+.interface-ui .r42-home-intro{margin-top:22px;margin-bottom:22px;gap:20px}
+.interface-ui .r42-home-intro h2{font-size:clamp(24px,2.4vw,35px);line-height:1.2;max-width:670px;letter-spacing:-.035em}
+.r42-home-intro .ui3-eyebrow{color:var(--green);font-size:10px}
+.interface-ui .ui3-page-intro p{font-size:14px}
+.interface-ui .r42-health-panel{background:radial-gradient(ellipse at 0 0,color-mix(in srgb,var(--green) 12%,transparent),transparent 80%),var(--panel);border-top:2px solid var(--green)}
+.interface-ui .r42-health-panel[data-state=bad]{border-top-color:var(--red)}
+.interface-ui .r42-health-panel[data-state=warn]{border-top-color:var(--amber)}
+.interface-ui .r42-auto-panel{border-top:2px solid var(--violet);background:radial-gradient(ellipse at 100% 0,color-mix(in srgb,var(--violet) 10%,transparent),transparent 70%),var(--panel)}
+.r42-auto-panel .r42-panel-cap>.ui-icon{color:var(--violet)}
+.r42-auto-panel .ui3-eyebrow{color:var(--violet)}
+.r42-panel-cap .ui3-status{background:transparent;font-size:11px;gap:6px}
+.r42-panel-cap .ui3-status .ui-icon{height:14px;width:14px}
+.interface-ui .r42-health-panel>p,.interface-ui .r42-auto-panel>p{font-size:13px}
+.home-start-steps{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:25px 0 22px}
+.home-start-steps>div{display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 9px;align-content:start}
+.home-start-steps>div>span{grid-row:1/3;font-size:11px;line-height:27px;text-align:center;color:var(--green);background:var(--accent-wash);border:1px solid color-mix(in srgb,var(--green) 25%,var(--line));border-radius:8px;height:28px}
+.home-start-steps b{font-size:13px;line-height:1.5;font-weight:600}
+.home-start-steps small{font-size:12px;line-height:1.65;color:var(--muted)}
+.r42-auto-facts{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin:19px 0 16px}
+.r42-auto-facts strong{font-variant-numeric:tabular-nums;color:var(--text)}
+.r42-auto-facts span,.r42-job-state,.interface-ui .r42-resource-note{font-size:12px}
+.r42-auto-panel .text-button{color:var(--violet);font-size:12px}
+.interface-ui .r42-panel .ui3-section-heading h3{font-size:16px}
+.interface-ui .r42-panel .ui3-section-heading p{font-size:12px}
+.interface-ui .text-button{font-size:12px;min-height:34px}
+.ui3-service-card{border-top:2px solid var(--line2)}
+.ui3-service-card:has(.tone-violet){border-top-color:color-mix(in srgb,var(--violet) 55%,var(--line))}
+.ui3-service-card:has(.tone-rose){border-top-color:color-mix(in srgb,var(--red) 60%,var(--line))}
+.ui3-service-card:has(.ui3-status.good){border-top-color:var(--green)}
+.ui3-service-card .ui3-card-route{background:var(--panel2);padding:9px 11px;border-radius:8px;margin-top:13px;font-size:12px}
+.interface-ui .ui3-service-name h4{font-size:15px}
+.ui3-card-footer>span,.ui3-service-name>span{font-size:11px}
+.ui3-engine-card{border-top:2px solid var(--line2)}
+.ui3-engine-card:has(.engine-mini-icon.violet){border-top-color:var(--violet)}
+.ui3-engine-card:has(.ui3-status.good){border-top-color:var(--green)}
+.interface-ui :is(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.interface-ui:has(#authScreen:not([hidden])) .ui3-mobile-nav{display:none}
+@media(max-width:1100px){.interface-ui .r42-home-intro{align-items:flex-start;flex-direction:column;gap:12px}.interface-ui .r42-home-intro>button{align-self:flex-start}}
+@media(max-width:760px){
+ .interface-ui .main{padding-left:18px;padding-right:18px}
+ .interface-ui .topbar{padding-left:18px;padding-right:18px;margin-left:-18px;margin-right:-18px;min-height:76px}
+ .interface-ui .home-sections{max-width:none;gap:8px}
+ .interface-ui .home-sections button{padding:11px 12px;gap:8px}
+ .interface-ui .home-sections button span{font-size:13px}
+ .interface-ui .home-sections button small{font-size:10px;white-space:normal}
+ .interface-ui .home-sections button>.ui-icon{width:19px;height:19px}
+ .interface-ui .r42-home-intro h2{max-width:460px}
+ .home-start-steps{gap:13px;grid-template-columns:1fr;margin:20px 0}
+ .interface-ui .ui3-catalog-toolbar{align-items:stretch;flex-wrap:wrap}
+ .ui3-catalog-toolbar .ui3-search-field{max-width:none;flex-basis:100%}
+ .ui3-catalog-toolbar .ui3-segmented{max-width:100%;overflow-x:auto}
+}
+@media(prefers-reduced-motion:reduce){.interface-ui *, .interface-ui *::before,.interface-ui *::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}

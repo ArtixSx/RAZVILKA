@@ -380,14 +380,12 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		}
 		op.NodeGeneration = nodeGeneration
 		op.NetworkFingerprint = profile
-		op.Deadline = now.Add(defaultDataplaneApplyTimeout)
-		if task.kind == "feeds" {
-			// Earlier jobs can outlive the round timestamp. Give the autonomous
-			// worker its own bounded, fresh deadline rather than an expired one.
-			op.Deadline = time.Now().Add(defaultDataplaneApplyTimeout)
-		}
+		// Earlier jobs can outlive the round timestamp. Each dispatched job
+		// receives its own bounded budget, still limited by the parent context.
+		dispatchedAt := time.Now()
+		op.Deadline = dispatchedAt.Add(defaultDataplaneApplyTimeout)
 		if task.kind == "service-checks" {
-			op.Deadline = now.Add(time.Duration(len(cfg.ServiceControl.Schedule.ServiceIDs)+1) * time.Minute)
+			op.Deadline = dispatchedAt.Add(time.Duration(len(cfg.ServiceControl.Schedule.ServiceIDs)+1) * time.Minute)
 		}
 		op.Attempts = min(op.Attempts+1, 32)
 		attempt, cancel := context.WithDeadline(ctx, op.Deadline)

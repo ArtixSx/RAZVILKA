@@ -10,6 +10,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/warp"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -143,5 +144,80 @@ func TestSafeModeBlocksWarpAccountSideEffects(t *testing.T) {
 	after := a.Warp.Health()
 	if before.State.LastChecked != after.State.LastChecked || len(after.State.Attempts) != 0 {
 		t.Fatal("Safe Mode wrote recovery state")
+	}
+}
+
+type awgCanaryAdapter struct{ nodeApplyAdapter }
+
+func (*awgCanaryAdapter) ID() string { return "amneziawg" }
+
+func TestAWGCanaryFencesProfileConfigCatalogRuntimeNetworkAndCancellation(t *testing.T) {
+	for _, change := range []string{"none", "profile", "safe-mode", "revision", "catalog", "runtime", "network", "cancel", "after-canary"} {
+		t.Run(change, func(t *testing.T) {
+			a, _ := awgAPITest(t)
+			if err := a.Store.SetSafeMode(false); err != nil {
+				t.Fatal(err)
+			}
+			view, err := a.EngineConfigs.Stage("amneziawg", "main", awgTestProfile())
+			if err != nil {
+				t.Fatal(err)
+			}
+			network, _ := stableNodeProfile(context.Background())
+			a.FreshProfile = func(context.Context) (string, error) { return network, nil }
+			a.Dataplane = dataplane.New(filepath.Join(t.TempDir(), "dataplane"))
+			adapter := &awgCanaryAdapter{}
+			if err := a.Dataplane.Register(adapter); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			adapter.after = func(phase string) error {
+				if change == "after-canary" && phase == "canary" {
+					network = "wan-abcdef012345"
+				}
+				if phase != "stage" {
+					return nil
+				}
+				switch change {
+				case "profile":
+					_, err := a.EngineConfigs.Stage("amneziawg", "main", strings.Replace(awgTestProfile(), "51820", "51821", 1))
+					return err
+				case "safe-mode":
+					return a.Store.SetSafeMode(true)
+				case "revision":
+					mode := "manual"
+					return a.Store.UpdateServiceControl(&mode, nil, a.Store.Get().Revision)
+				case "catalog":
+					a.Catalog.Services[0].ProbeURL = "https://changed.example/"
+				case "runtime":
+					a.AWGCapabilityProbe = func(context.Context) awgprofile.Capabilities { return awgprofile.Capabilities{Backend: "kernel"} }
+				case "network":
+					network = "wan-abcdef012345"
+				case "cancel":
+					cancel()
+				}
+				return nil
+			}
+			request := autonomyRequest("POST", "/api/v1/amneziawg/canary", map[string]any{"service_id": "arbitrary-site", "base_sha256": view.SHA256, "confirm": "PROBE_AWG_PROFILE"}).WithContext(ctx)
+			request.Header.Set("Authorization", "Bearer "+awgAPIToken)
+			request.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			a.Handler(http.NotFoundHandler()).ServeHTTP(w, request)
+			if change == "none" {
+				if w.Code != 200 || !strings.Contains(w.Body.String(), `"ok":true`) {
+					t.Fatal("unchanged isolated proof failed", w.Code, w.Body.String())
+				}
+			} else if w.Code != 409 || !strings.Contains(w.Body.String(), "AWG_CANARY_CHANGED") {
+				t.Fatal("stale isolated proof accepted", change, w.Code, w.Body.String())
+			}
+			calls := strings.Join(adapter.calls, " ")
+			if strings.Contains(calls, "activate") || strings.Contains(calls, "commit") || strings.Contains(calls, "rollback") || change != "none" && change != "after-canary" && strings.Contains(calls, "canary") {
+				t.Fatal("stale canary entered later network phase", change, calls)
+			}
+			entries, err := os.ReadDir(filepath.Join(a.Dataplane.StateRoot, "candidate-probes"))
+			if err != nil || len(entries) != 0 {
+				t.Fatal("candidate files were not cleaned", err)
+			}
+		})
 	}
 }

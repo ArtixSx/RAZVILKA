@@ -49,29 +49,38 @@
   const $$=selector=>Array.from(document.querySelectorAll(selector)).filter(el=>el.closest('[data-autonomy]'));
   let snapshot=null,feeds=null,step=0,editingPolicy=null,dirty=false,loading=false,saving=false;
   let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0;
+  const requests=new Set();
+  function requireGeneration(generation) { if(generation!==authGeneration){const e=new Error('Ответ относится к завершённой сессии.');e.name='AuthGenerationChanged';e.authGeneration=generation;throw e;} }
+  function reportError(e,element=null) { if(e.name==='AuthGenerationChanged'||e.authGeneration!==undefined&&e.authGeneration!==authGeneration)return;if(element)element.textContent=e.message;else notify(e.message,true); }
+  function nextAuthGeneration() { authGeneration++;for(const controller of requests)controller.abort();loading=false;saving=false;adding=false; }
   function notify(message,error=false) { $('notice').textContent=message; $('notice').className=`notice${error?' error':''}`; $('notice').hidden=!message; }
   function formatDate(value,zone) { const n=new Date(value); if(!Number.isFinite(n.getTime())||n.getFullYear()<2000) return 'Ещё нет'; try {return n.toLocaleString('ru-RU',{timeZone:zone||snapshot?.policy.timezone||'UTC',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});} catch {return n.toISOString();} }
   async function api(path,method='GET',body,attempt=0,requestGeneration=authGeneration) {
-    if(requestGeneration!==authGeneration) throw new Error('Сессия изменилась. Повторите действие после входа.');
+    requireGeneration(requestGeneration);
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+    requests.add(controller);
     const headers={Accept:'application/json'};
     let token='';try {token=sessionStorage.getItem('razvilka.adminToken')||'';} catch {}
     if(token) headers.Authorization=`Bearer ${token}`;
     if(body!==undefined) headers['Content-Type']='application/json';
     try {
       const response=await fetch(path,{method,headers,credentials:'same-origin',cache:'no-store',signal:controller.signal,...(body===undefined?{}:{body:JSON.stringify(body)})});
+      requireGeneration(requestGeneration);
       let data;try {data=await response.json();} catch {data={};}
+      requireGeneration(requestGeneration);
       if(!response.ok && response.status===409 && data.not_started===true && data.code==='RESTORE_OPERATION_BUSY' && method!=='GET' && attempt<4) {
         clearTimeout(timer);await new Promise(resolve=>setTimeout(resolve,1500));return api(path,method,body,attempt+1,requestGeneration);
       }
       if(response.status===401 && typeof showAuth==='function') showAuth(null,'Сессия завершилась. Войдите снова.');
       if(!response.ok) {const e=new Error(response.status===401?'Войдите в основную панель.':data.error||`Запрос не выполнен (${response.status}).`);e.status=response.status;throw e;}
-      if(requestGeneration!==authGeneration) throw new Error('Ответ относится к завершённой сессии.');
+      requireGeneration(requestGeneration);
       return data;
     } catch(e) {
-      if(e.name==='AbortError') throw new Error('Ответ не получен. Обновите состояние: запрос мог быть сохранён.');
+      requireGeneration(requestGeneration);
+      if(e.name==='AbortError') e=new Error('Ответ не получен. Обновите состояние: запрос мог быть сохранён.');
+      e.authGeneration=requestGeneration;
       throw e;
-    } finally {clearTimeout(timer);}
+    } finally {clearTimeout(timer);requests.delete(controller);}
   }
   function tab(name) {
     const map={overview:'autopilot',services:'managed',sources:'subscription-settings',setup:'onboard'};
@@ -174,34 +183,38 @@
       if(force) dirty=false;
       $('authRequired').hidden=true;$('workspace').hidden=false;render();return true;
     } catch(e) {
+      if(generation!==authGeneration||e.name==='AuthGenerationChanged')return false;
       if(e.status===401){$('authRequired').hidden=false;$('workspace').hidden=true;}
       $('connectionLabel').textContent=e.status===401?'Требуется вход':'Нет свежего ответа';window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:e.status,message:e.message}}));if(activeTab!=='overview'||window.location.hash.includes('autopilot'))notify(e.status===404?'Для автономного мастера нужен backend A1. Остальные разделы работают с rc.2.':e.message,true);return false;
-    } finally {loading=false;}
+    } finally {if(generation===authGeneration)loading=false;}
   }
   async function readSources() {
     const generation=authGeneration;
-    try {const next=await api('/api/v1/node-feeds');if(generation!==authGeneration)return;feeds=next;if(sourceDirty)return;renderSources();} catch(e){notify(e.message,true);}
+    try {const next=await api('/api/v1/node-feeds');if(generation!==authGeneration)return;feeds=next;if(sourceDirty)return;renderSources();} catch(e){if(generation===authGeneration)reportError(e);}
   }
   function renderSources() {
     const list=feeds?.sources||[];
     $('sourcesList').innerHTML=list.map(s=>`<article class="panel source-card" data-source-id="${escapeHTML(s.source_id)}"><div class="section-title"><h2>${escapeHTML(s.name||s.source_id)}</h2><span class="tag ${s.enabled?'':'neutral'}">${s.enabled?'Таймер включён':'Таймер выключен'}</span></div><code>${escapeHTML(s.source_id)}</code><dl><dt>Последняя попытка</dt><dd>${escapeHTML(formatDate(s.last_attempt_at))}</dd><dt>Успешное получение</dt><dd>${escapeHTML(formatDate(s.last_success_at))}</dd><dt>Следующий запрос</dt><dd>${escapeHTML(formatDate(s.next_refresh_at))}</dd><dt>Последний результат</dt><dd>${escapeHTML(s.status||'Ожидается')} · ${Number(s.imported||0)} записей</dd></dl><form class="source-actions" data-feed-form="${escapeHTML(s.source_id)}"><label><span>Интервал, мин</span><input name="interval" type="number" min="15" max="10080" value="${Number(s.refresh_interval_minutes||60)}" required></label><label><span>Таймер</span><select name="enabled"><option value="true" ${s.enabled?'selected':''}>Включён</option><option value="false" ${!s.enabled?'selected':''}>Выключен</option></select></label><button class="button small" type="submit">Сохранить</button><button class="button small" type="button" data-feed-sync="${escapeHTML(s.source_id)}">Получить сейчас</button></form></article>`).join('')||'<section class="panel empty"><strong>Подписки пока не сохранены</strong>Выбранные в мастере пресеты будут сохранены backend после включения режима. Здесь также можно добавить собственную подписку.</section>';
   }
   async function enroll(id,enabled=true) {
+    const generation=authGeneration;
     if(!snapshot?.policy.setup_complete) throw new Error('Сначала завершите мастер.');
     const old=snapshot.services[id];
     await api('/api/v1/autonomy/services','POST',{service_id:id,enabled,use_defaults:!old,all_lan:old?.all_lan||false,sources:old?.sources||[],expected_revision:snapshot.policy.revision,confirm:'MANAGE_SERVICE'});
+    requireGeneration(generation);
     notify(enabled?'Сервис передан в очередь. Применение ещё не подтверждено.':'Автоподбор сервиса приостановлен; рабочий маршрут сохранён.');await refresh();
   }
   async function saveWizard(event) {
     event.preventDefault();if(saving) return;
+    const generation=authGeneration;
     try {
       if(!$('confirmConsent').checked) throw new Error('Подтвердите источники и область устройств.');
       const p=validatePolicy(policyFromForm());
       if($('releaseSafeMode').checked&&!p.enabled) throw new Error('Не снимайте Safe Mode при выключенной автоматике.');
       saving=true;$('saveWizard').disabled=true;
       await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:$('releaseSafeMode').checked});
-      dirty=false;await refresh(true);notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
-    } catch(e) { $('wizardError').textContent=e.message; } finally {saving=false;$('saveWizard').disabled=false;}
+      requireGeneration(generation);dirty=false;await refresh(true);requireGeneration(generation);notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
+    } catch(e) { reportError(e,$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
   document.addEventListener('click',event=>{
     if(!event.target.closest('[data-autonomy]')) return;
@@ -209,47 +222,53 @@
     if(event.target.closest('[data-open-setup]')){tab('setup');setStep(0);}
     const stepButton=event.target.closest('[data-step]');if(stepButton)setStep(Number(stepButton.dataset.step));
     if(event.target.closest('[data-close-dialog]'))$('addServiceDialog').close();
-    const action=event.target.closest('[data-manage]');if(action) void enroll(action.dataset.manage,action.dataset.enable==='true').catch(e=>notify(e.message,true));
+    const action=event.target.closest('[data-manage]');if(action) void enroll(action.dataset.manage,action.dataset.enable==='true').catch(e=>reportError(e));
     const remove=event.target.closest('[data-remove]');if(remove) void (async()=>{
-      const id=remove.dataset.remove,custom=snapshot.catalog_services.some(s=>s.id===id&&s.custom);
+      const generation=authGeneration,id=remove.dataset.remove,custom=snapshot.catalog_services.some(s=>s.id===id&&s.custom);
       if(!confirm(`Убрать «${serviceName(id)}»? Сначала будут сняты его маршруты. ${custom?'Пользовательская запись удалится после успешного снятия.':'Остальные сервисы останутся без изменений.'}`)) return;
       await api(`/api/v1/autonomy/services/${encodeURIComponent(id)}`,'DELETE',{expected_revision:snapshot.policy.revision,confirm:'REMOVE_SERVICE',delete_definition:custom});
+      requireGeneration(generation);
       notify('Удаление поставлено в очередь. Оно не считается завершённым до снятия маршрута.');await refresh();
-    })().catch(e=>notify(e.message,true));
-    const sync=event.target.closest('[data-feed-sync]');if(sync) void (async()=>{await api(`/api/v1/node-feeds/${encodeURIComponent(sync.dataset.feedSync)}/sync`,'POST',{});notify('Запрос получения поставлен в очередь. Рабочие маршруты не менялись.');await readSources();})().catch(e=>notify(e.message,true));
+    })().catch(e=>reportError(e));
+    const sync=event.target.closest('[data-feed-sync]');if(sync) void (async()=>{const generation=authGeneration;await api(`/api/v1/node-feeds/${encodeURIComponent(sync.dataset.feedSync)}/sync`,'POST',{});requireGeneration(generation);notify('Запрос получения поставлен в очередь. Рабочие маршруты не менялись.');await readSources();})().catch(e=>reportError(e));
   });
   $('wizardForm').addEventListener('input',()=>{dirty=true;});$('wizardForm').addEventListener('change',()=>{dirty=true;$('scopeAddressesLabel').hidden=$('scopeMode').value==='all';if(step===3)renderReview();});
   $('wizardForm').addEventListener('submit',saveWizard);
   $('backStep').addEventListener('click',()=>setStep(step-1));$('nextStep').addEventListener('click',()=>setStep(step+1));
   $('reloadButton').addEventListener('click',()=>{if(!dirty||confirm('Заменить несохранённые поля актуальными настройками роутера?')){sourceDirty=false;void refresh(true);if(activeTab==='sources')void readSources();}});
   $('reloadSources').addEventListener('click',()=>{if(!sourceDirty||confirm('Сбросить несохранённые интервалы подписок?')){sourceDirty=false;void readSources();}});
-  $('pauseButton').addEventListener('click',()=>void(async()=>{const p=clone(snapshot.policy);p.enabled=!p.enabled;await api('/api/v1/autonomy','PUT',{expected_revision:p.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:false});await refresh();notify(p.enabled?'Автоматика разрешена. Safe Mode и общий ручной режим сохраняют свои ограничения.':'Автоматика на паузе; маршруты не удалены.');})().catch(e=>notify(e.message,true)));
+  $('pauseButton').addEventListener('click',()=>void(async()=>{const generation=authGeneration,p=clone(snapshot.policy);p.enabled=!p.enabled;await api('/api/v1/autonomy','PUT',{expected_revision:p.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:false});requireGeneration(generation);await refresh();requireGeneration(generation);notify(p.enabled?'Автоматика разрешена. Safe Mode и общий ручной режим сохраняют свои ограничения.':'Автоматика на паузе; маршруты не удалены.');})().catch(e=>reportError(e)));
   $('serviceSearch').addEventListener('input',()=>{if(snapshot)renderServices();});
-  $('enrollForm').addEventListener('submit',event=>{event.preventDefault();if($('catalogSelect').value)void enroll($('catalogSelect').value).catch(e=>notify(e.message,true));});
+  $('enrollForm').addEventListener('submit',event=>{event.preventDefault();if($('catalogSelect').value)void enroll($('catalogSelect').value).catch(e=>reportError(e));});
   $('openAddService').addEventListener('click',()=>{if(!snapshot?.policy.setup_complete){notify('Завершите мастер перед добавлением сервиса.',true);tab('setup');return;}$('addServiceError').textContent='';$('addServiceDialog').showModal();$('newServiceName').focus();});
-  $('addServiceForm').addEventListener('submit',event=>{event.preventDefault();if(adding)return;adding=true;void(async()=>{
+  $('addServiceForm').addEventListener('submit',event=>{event.preventDefault();if(adding)return;adding=true;const generation=authGeneration;void(async()=>{
     const definition=websiteDefinition($('newServiceName').value,$('newServiceURL').value,$('newServiceCategory').value);
-    const created=await api('/api/v1/custom-services','POST',definition);if(!await refresh()) throw new Error('Сервис создан, но состояние не перечитано. Обновите страницу перед повторным действием.');
+    const created=await api('/api/v1/custom-services','POST',definition);requireGeneration(generation);const refreshed=await refresh();requireGeneration(generation);if(!refreshed) throw new Error('Сервис создан, но состояние не перечитано. Обновите страницу перед повторным действием.');
     // Inheritance may already have enrolled it. An explicit action here supplies
     // the same consent for users who disabled general inheritance.
     if(!snapshot.services[created.id]) await enroll(created.id);
-    $('addServiceDialog').close();$('addServiceForm').reset();if(typeof refreshCoreAfterEdit==='function')await refreshCoreAfterEdit();notify('Сервис добавлен. Начнётся реальная проверка, а не демонстрационный PASS.');await refresh();
-  })().catch(e=>$('addServiceError').textContent=e.message).finally(()=>{adding=false;});});
+    requireGeneration(generation);$('addServiceDialog').close();$('addServiceForm').reset();if(typeof refreshCoreAfterEdit==='function')await refreshCoreAfterEdit();requireGeneration(generation);notify('Сервис добавлен. Начнётся реальная проверка, а не демонстрационный PASS.');await refresh();
+  })().catch(e=>reportError(e,$('addServiceError'))).finally(()=>{if(generation===authGeneration)adding=false;});});
   $('sourcesList').addEventListener('input',()=>{sourceDirty=true;});
   $('sourcesList').addEventListener('submit',event=>{const form=event.target.closest('[data-feed-form]');if(!form)return;event.preventDefault();void(async()=>{
+    const generation=authGeneration;
     const source=feeds.sources.find(s=>s.source_id===form.dataset.feedForm);if(!source)throw new Error('Источник изменился; обновите список.');
     await api(`/api/v1/node-feeds/${encodeURIComponent(source.source_id)}`,'PUT',{revision:source.revision,confirm:'UPDATE_NODE_FEED',enabled:form.elements.enabled.value==='true',refresh_interval_minutes:Number(form.elements.interval.value),accept_partial:!!source.accept_partial,limit:source.limit||32});
+    requireGeneration(generation);
     sourceDirty=false;notify('Интервал подписки сохранён. Применённые узлы не заменялись.');await readSources();
-  })().catch(e=>notify(e.message,true));});
+  })().catch(e=>reportError(e));});
   $('subscriptionForm').addEventListener('submit',event=>{event.preventDefault();void(async()=>{
+    const generation=authGeneration;
     const url=$('subscriptionURL').value.trim();let parsed;try{parsed=new URL(url);}catch{throw new Error('Укажите HTTPS-ссылку подписки.');}
     if(parsed.protocol!=='https:'||parsed.username||parsed.password)throw new Error('Нужна HTTPS-ссылка без логина в адресе.');
     const result=await api('/api/v1/node-feeds','POST',{name:$('subscriptionName').value.trim(),url,format:'uri-lines',enabled:true,refresh_interval_minutes:Number($('subscriptionInterval').value),limit:32,accept_partial:true,confirm:'SAVE_NODE_FEED'});
+    requireGeneration(generation);
     $('subscriptionURL').value='';sourceDirty=false;notify(`Подписка сохранена: ${result.source.source_id}. Добавьте её ID в разрешённые источники мастера.`);await readSources();
-  })().catch(e=>notify(e.message,true));});
+  })().catch(e=>reportError(e));});
   document.addEventListener('razvilka:view-change',event=>{const name=({autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(name==='sources')void readSources();if(name==='setup')setStep(step);void refresh();}});
   window.addEventListener('beforeunload',event=>{if(dirty||sourceDirty){event.preventDefault();event.returnValue='';}});
-  document.addEventListener('razvilka:auth-required',()=>{authGeneration++;snapshot=null;editingPolicy=null;dirty=false;sourceDirty=false;$('subscriptionURL').value='';$('newServiceURL').value='';$('newServiceName').value='';$('pauseButton').disabled=true;if($('addServiceDialog').open)$('addServiceDialog').close();window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:401,message:'Войдите для чтения настроек и управления.'}}));});
+  document.addEventListener('razvilka:auth-required',()=>{nextAuthGeneration();snapshot=null;feeds=null;editingPolicy=null;dirty=false;sourceDirty=false;$('subscriptionURL').value='';$('newServiceURL').value='';$('newServiceName').value='';$('pauseButton').disabled=true;$('authRequired').hidden=false;$('workspace').hidden=true;$('connectionLabel').textContent='Требуется вход';notify('Войдите для чтения настроек и управления.',true);if($('addServiceDialog').open)$('addServiceDialog').close();window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:401,message:'Войдите для чтения настроек и управления.'}}));});
+  document.addEventListener('razvilka:auth-restored',()=>{nextAuthGeneration();notify('');$('wizardError').textContent='';$('addServiceError').textContent='';$('saveWizard').disabled=false;$('authRequired').hidden=true;$('connectionLabel').textContent='Загружаем настройки…';void refresh();if(activeTab==='sources')void readSources();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh();});
   setStep(0);void refresh();
   // This only refreshes displayed metadata. Backend jobs never depend on it.

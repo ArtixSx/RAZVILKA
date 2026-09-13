@@ -229,6 +229,56 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 		}
 	}
+	if healthy && isNode {
+		// The isolated checker proves the remote node, not our live TUN/process.
+		// Autonomy owns this service, so legacy fallback deliberately skips it.
+		// Reuse its committed-runtime check before publishing healthy; repair the
+		// same proven node through the existing transaction if local runtime died.
+		committed, exists, err := a.Dataplane.Committed()
+		if err != nil || !exists || committed.Revision != cfg.AppliedRevision {
+			return finish("requires-review", "Применённый маршрут не подтверждён журналом. Автоматическое восстановление остановлено.")
+		}
+		matched := false
+		for _, route := range committed.Routes {
+			if route.ServiceID == s.ID && route.Resolved == current && route.Selected == selectedRoute(cfg.AppliedServices[s.ID]) && sameNodeRecoveryStrings(route.Sources, cfg.AppliedServices[s.ID].Sources) && nodeRecoveryServiceMatches(route, service) {
+				matched = true
+			}
+		}
+		if !matched {
+			return finish("requires-review", "Область или состав применённого маршрута изменились. Требуется просмотр.")
+		}
+		guard := func(c context.Context) error {
+			if c.Err() != nil {
+				return c.Err()
+			}
+			if !reflect.DeepEqual(a.Store.Get(), cfg) || !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(c) != nil {
+				return dataplane.ErrReviewChanged
+			}
+			latest, ok := a.autonomyService(s.ID)
+			if !ok || autonomyDefinition(latest) != s.Definition {
+				return dataplane.ErrReviewChanged
+			}
+			observed, e := a.freshNetworkProfile(c)
+			if e != nil || observed != profile {
+				return dataplane.ErrNetworkChanged
+			}
+			return nil
+		}
+		if a.Dataplane.CheckCommittedNodeHealth(dataplane.WithReviewGuard(ctx, guard), committed) != nil {
+			if guard(ctx) != nil {
+				return finish("paused", "Проверка маршрута отменена: сеть или разрешения изменились.")
+			}
+			if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
+				return finish("rate-limited", "Работа локального маршрута не подтверждена. Лимит восстановлений исчерпан.")
+			}
+			r.State, r.Message = "applying", "Восстанавливаем прежний проверенный узел без замены подключения."
+			a.autonomyRuntime(s.ID, r)
+			if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, current); err != nil {
+				return finish("apply-refused", "Восстановление прежнего маршрута не подтверждено; использована защита и откат.")
+			}
+			return finish("applied", "Прежний проверенный узел и его область восстановлены через общую транзакцию.")
+		}
+	}
 	checkedThisRound := map[string]bool{}
 	ready := []string{}
 	if healthy && isNode {
