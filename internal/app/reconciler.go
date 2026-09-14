@@ -397,8 +397,10 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 			return
 		}
 		r.mu.Unlock()
+		var forwardingErr error
 		switch task.kind {
 		case "node-recovery":
+			forwardingErr = a.restoreForwardingRound(attempt)
 			a.nodeRecoveryRound(attempt, now)
 		case "node-fallback":
 			a.nodeAutofallbackRound(attempt, now)
@@ -419,7 +421,7 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 				}
 			}
 		}
-		attemptErr := attempt.Err()
+		attemptErr := errors.Join(attempt.Err(), forwardingErr)
 		cancel()
 		r.mu.Lock()
 		r.cancel = nil

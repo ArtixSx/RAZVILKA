@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.2-rc.6 — Restore vanished owned firewall rules
+
+- Restore a fully absent proxy firewall chain from the committed creation lease
+  on the existing background schedule, including an unchanged WAN.
+- Preserve client scope, current ACL precedence, intact tables, processes and
+  pending settings. Partial or foreign rules require review instead of overwrite.
+- Report failed restoration as retry/backoff; clean up only objects created by
+  the failed attempt. See the [release notes](docs/releases/0.18.2-rc.6.md).
+
 ## 0.18.2-rc.5 — Responsive settings and flexible passwords
 
 - Read node route eligibility and public metadata from one storage generation

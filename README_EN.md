@@ -14,12 +14,15 @@ no RAZVILKA cloud account is required.
 
 ## Candidate status
 
-The current candidate is [**v0.18.2-rc.5**](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.5).
-It fixes empty settings and slow service loading with large subscriptions,
-and removes the password minimum length. See the [release notes](docs/releases/0.18.2-rc.5.md).
-Publication requires full CI and four builds. Hardware acceptance of rc.5
-follows installation of the official archive; previous rc.4 results are
-[historical evidence](docs/releases/0.18.2-rc.4-validation.md), not proof of this build.
+The current candidate is [**v0.18.2-rc.6**](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.6).
+It includes the panel, NFQWS2 editor and password fixes from rc.5, and adds
+restoration of fully vanished owned firewall chains. See the
+[release notes](docs/releases/0.18.2-rc.6.md). Full CI and hardware acceptance
+of the official archive are separate requirements.
+
+Continued rc.5 testing found loss of its owned filter chain after initial
+successful checks. See the [rc.5 report](docs/releases/0.18.2-rc.5-validation.md).
+Previous rc.4 results remain [historical evidence](docs/releases/0.18.2-rc.4-validation.md).
 
 The latest stable release remains
 [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
@@ -56,10 +59,10 @@ opkg install curl ca-certificates coreutils-sha256sum tar
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-**DC1 prerelease `v0.18.2-rc.5`**:
+**DC1 prerelease `v0.18.2-rc.6`**:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.5/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.5 sh
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.6/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.6 sh
 ```
 
 Alternatively, extract that release's Entware bundle and run

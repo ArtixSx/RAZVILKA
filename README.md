@@ -16,11 +16,14 @@ RAZVILKA не требуется.
 
 ## Версия и проверка
 
-Текущий кандидат — [**v0.18.2-rc.5**](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.5).
-Исправлены пустые настройки и медленная загрузка сервисов при больших подписках,
-убрана минимальная длина пароля. [Изменения выпуска](docs/releases/0.18.2-rc.5.md).
-Публикация требует полного CI и четырёх сборок; аппаратная приёмка rc.5
-выполняется отдельно после установки официального архива.
+Текущий кандидат — [**v0.18.2-rc.6**](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.6).
+Включает исправления пустых настроек, загрузки сервисов и пароля из rc.5,
+добавляет восстановление полностью исчезнувших собственных правил firewall.
+[Изменения выпуска](docs/releases/0.18.2-rc.6.md). Полный CI и аппаратная
+приёмка официальной сборки выполняются отдельно.
+
+При продолжении испытаний rc.5 обнаружен отказ после потери собственной
+цепочки `filter`. [Результаты и ограничение rc.5](docs/releases/0.18.2-rc.5-validation.md).
 
 У предыдущего rc.4 проверены обновление через SSH, перезапуск и фактический
 TUN-путь выбранного клиента. Его [отчёт](docs/releases/0.18.2-rc.4-validation.md)
@@ -73,10 +76,10 @@ opkg install curl ca-certificates coreutils-sha256sum tar
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-**Тестовый выпуск DC1 `v0.18.2-rc.5`**. Версия задаётся процессу установщика:
+**Тестовый выпуск DC1 `v0.18.2-rc.6`**. Версия задаётся процессу установщика:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.5/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.5 sh
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.6/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.6 sh
 ```
 
 Можно скачать и распаковать Entware-архив выбранного выпуска. В его каталоге:
