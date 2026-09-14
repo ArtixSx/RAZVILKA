@@ -66,8 +66,11 @@ const state = {
   onboardingStep: 0,
   onboardingAutoEvaluated: false,
   loadIssues: [],
+  dataLoad: {},
   currentView: 'overview',
 };
+
+const panelLoad = { generation: 0, request: null, controller: null, retryTimer: null, retryCount: 0 };
 
 const viewMeta = {
   overview: ['Главная', 'Сервисы, подключения и состояние вашей сети'],
@@ -116,7 +119,16 @@ async function api(url, options = {}) {
   const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
   if (token) headers.set('authorization', `Bearer ${token}`);
 
-  const response = await fetch(url, { ...options, method, headers, credentials: 'same-origin' });
+  // A slow read must not leave the panel or an editor loading indefinitely.
+  // Mutations retain their caller's deadline: a timeout must not replay Apply.
+  const controller = method === 'GET' ? new AbortController() : null;
+  let timedOut = false;
+  const abort = () => controller?.abort();
+  if (options.signal?.aborted) abort();
+  options.signal?.addEventListener('abort', abort, { once: true });
+  const timer = controller ? setTimeout(() => { timedOut = true; controller.abort(); }, 20000) : null;
+  try {
+  const response = await fetch(url, { ...options, method, headers, signal: controller?.signal || options.signal, credentials: 'same-origin' });
   if (!response.ok) {
 	const text = (await response.text()).trim();
 	let payload = null;
@@ -128,13 +140,22 @@ async function api(url, options = {}) {
 	error.status = response.status;
 	throw error;
   }
-  return response.json();
+  return await response.json();
+  } catch (error) {
+    if (timedOut) throw Object.assign(new Error('Ответ задерживается. Последние полученные данные сохранены; повторите обновление.'), { code: 'READ_TIMEOUT' });
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', abort);
+  }
 }
 
 function friendlyErrorMessage(value, status = 0) {
   const text = String(value || '').trim();
   const lower = text.toLowerCase();
   if (lower.includes('administrator login is required')) return 'Сессия завершилась. Войдите снова.';
+  if (lower === 'password must not be empty') return 'Введите пароль.';
+  if (lower === 'password must not exceed 256 bytes') return 'Пароль слишком длинный: максимум 256 байт в UTF-8.';
   if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) return 'Не удалось связаться с RAZVILKA. Проверьте, что служба запущена, и повторите попытку.';
   if (lower === 'engine is not installed') return 'Этот обход не установлен.';
   if (lower === 'engine is installed but not running') return 'Обход установлен, но сейчас не запущен.';
@@ -698,33 +719,153 @@ function yesNo(v) {
   return v ? ['есть', 'probe-ok'] : ['нет', 'probe-no'];
 }
 
-async function refreshAll() {
-  $('#systemText').textContent = 'Обновление…';
+function panelSectionState(key, phase, error = null) {
+  state.dataLoad ||= {};
+  const previous = state.dataLoad[key] || {};
+  state.dataLoad[key] = { loaded: previous.loaded === true || phase === 'ready', phase,
+    message: error?.message || '', updatedAt: phase === 'ready' ? Date.now() : previous.updatedAt };
+}
+
+function panelBusy(error) {
+  return error?.status === 409 && (error.payload?.code === 'RESTORE_OPERATION_BUSY' || error.payload?.node_recovery?.state === 'revalidating');
+}
+
+function panelSnapshotCurrent(generation) {
+  return generation === panelLoad.generation && !panelLoad.controller?.signal.aborted;
+}
+
+function schedulePanelRetry(busy = false) {
+  clearTimeout(panelLoad.retryTimer);
+  panelLoad.retryTimer = null;
+  if (document.hidden || $('#authScreen')?.hidden === false || (!busy && panelLoad.retryCount >= 3)) return;
+  if (!busy) panelLoad.retryCount++;
+  panelLoad.retryTimer = setTimeout(() => { panelLoad.retryTimer = null; void refreshAll(true); }, busy ? 5000 : 10000);
+}
+
+function cancelPanelRefresh() {
+  panelLoad.generation++;
+  panelLoad.controller?.abort();
+  panelLoad.controller = null;
+  panelLoad.request = null;
+  clearTimeout(panelLoad.retryTimer);
+  panelLoad.retryTimer = null;
+}
+
+function renderPanelLoad() {
+  const values = Object.values(state.dataLoad || {});
+  const text = values.some(value => value.phase === 'busy') ? 'Настройки заняты. Повторим загрузку автоматически.'
+    : values.some(value => value.phase === 'error') ? 'Часть данных не обновилась. Последние полученные данные сохранены.'
+    : values.some(value => value.phase === 'loading') ? 'Загружаем данные разделов…' : '';
+  if (typeof renderInterface === 'function') renderInterface();
+  if (!state.dataLoad?.engineConfigs?.loaded && typeof renderEngineControl === 'function') renderEngineControl();
+  if ($('#systemText') && text) $('#systemText').textContent = text;
+}
+
+function renderPanelSection(key) {
+  // Publish independent read results immediately, without an all-endpoints barrier.
+  const renderers = {
+    status: () => { renderStatus(); renderSettings(); },
+    system: renderSystem, metrics: renderMetrics,
+    services: () => {
+      renderServices(); renderOverviewQuickServices(); renderOverviewServices(); renderReadiness();
+      if (state.dataLoad.testlab?.loaded) renderTestLab();
+      if (state.dataLoad.warp?.loaded) renderWarpManager();
+      if (state.dataLoad.strategyLab?.loaded) renderStrategyLab();
+      if (state.dataLoad.engineConfigs?.loaded) renderEngineControl();
+      if (state.dataLoad.dns?.loaded) renderDNSServiceBindings();
+    },
+    engines: renderEngines, engineConfigs: renderEngineControl, components: renderComponents,
+    warp: renderWarpManager, sources: renderSources, nodes: renderNodes,
+    nodeFeeds: renderNodes, nodeAutofallback: renderNodes,
+    routeOptions: () => { renderServices(); if (state.dataLoad.testlab?.loaded) renderTestLab(); },
+    connections: renderConnections, devices: renderDevices, testlab: renderTestLab,
+    engineLab: renderEngineLab, audit: renderAudit, strategyLab: renderStrategyLab,
+    z2kPreview: renderStrategyLab, smartRoute: renderStrategyLab,
+    serviceControl: () => { if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls(); },
+    dns: renderDNS, dnsPlan: renderDNSPlan, sessions: renderSettings,
+  };
+  renderers[key]?.();
+  if (typeof renderConsole === 'function') renderConsole();
+  renderPanelLoad();
+}
+
+function acceptPanelSection(key, value) {
+  const arrays = ['services', 'engines', 'engineConfigs', 'components', 'sources', 'routeOptions'];
+  if (arrays.includes(key) && !Array.isArray(value)) throw new Error('Получен неполный список. Последние данные сохранены.');
+  if (value === null || typeof value !== 'object') throw new Error('Получен неполный ответ. Последние данные сохранены.');
+  if (key === 'serviceControl') { if (typeof acceptWorkspaceControl === 'function') acceptWorkspaceControl(value); else state.serviceControl = value; }
+  else if (key === 'devices') acceptDeviceList(value);
+  else state[key] = key === 'sessions' ? (value.sessions || []) : value;
+  panelSectionState(key, 'ready');
+}
+
+async function settlePanelReads(requests, read) {
+  let next = 0;
+  await Promise.allSettled(Array.from({ length: Math.min(4, requests.length) }, async () => {
+    while (next < requests.length) await read(requests[next++]);
+  }));
+}
+
+async function refreshAll(retryFailed = false) {
+  if (panelLoad.request) return panelLoad.request;
+  if (!retryFailed) panelLoad.retryCount = 0;
+  clearTimeout(panelLoad.retryTimer);
+  panelLoad.retryTimer = null;
+  const generation = ++panelLoad.generation;
+  panelLoad.controller = new AbortController();
+  const pending = loadPanelSnapshot(generation, retryFailed);
+  panelLoad.request = pending;
+  try { return await pending; }
+  finally { if (panelLoad.request === pending) { panelLoad.request = null; panelLoad.controller = null; } }
+}
+
+async function refreshAfterMutation() {
+  // Readback cannot join a snapshot admitted before the completed write.
+  // Abort transport and fence late bodies even when cancellation is ignored.
+  cancelPanelRefresh();
+  if ($('#authScreen')?.hidden === false) return false;
+  return refreshAll();
+}
+
+async function loadPanelSnapshot(generation, retryFailed = false) {
+  const issues = [];
+  const options = { signal: panelLoad.controller.signal };
+  const retryKeys = new Set(Object.entries(state.dataLoad || {}).filter(([, value]) => !value.loaded || ['error', 'busy'].includes(value.phase)).map(([key]) => key));
+  for (const key of ['status', 'services', 'engineConfigs']) {
+    if (key === 'status' || !retryFailed || retryKeys.has(key)) panelSectionState(key, 'loading');
+  }
+  renderPanelLoad();
   try {
-    // Authentication and job memory can be read even while a detached checker
-    // owns the stores. A freshly opened page must still offer login and cancel.
-    const authentication = await api('/api/v1/auth/status');
+    const authentication = await api('/api/v1/auth/status', options);
+    if (!panelSnapshotCurrent(generation)) return false;
     if (authentication.setup_required || !authentication.authenticated) {
-      const status = await api('/api/v1/status').catch(() => ({ ...authentication, auth_required: true }));
+      const status = await api('/api/v1/status', options).catch(() => authentication);
+      if (!panelSnapshotCurrent(generation)) return false;
+      state.status = status;
+      renderStatus();
       showAuth(status); $('#systemText').textContent = 'Требуется вход'; return false;
     }
     hideAuth();
-    if (await refreshNodeActivity()) {
-      $('#systemText').textContent = 'Проверка подключений';
-      scheduleNodeActivity(1500);
-      return true;
+    // An auxiliary activity read cannot prevent unrelated sections from loading.
+    try {
+      if (await refreshNodeActivity()) {
+        if (!panelSnapshotCurrent(generation)) return false;
+        for (const key of ['status', 'services', 'engineConfigs']) panelSectionState(key, 'busy');
+        renderPanelLoad(); scheduleNodeActivity(1500); schedulePanelRetry(true);
+        return true;
+      }
+    } catch (error) {
+      if (!panelSnapshotCurrent(generation)) return false;
+      if (error.status === 401) throw error;
+      issues.push({ section: 'activity', message: error.message });
     }
-    const status = await api('/api/v1/status');
-    state.status = status;
-    // Status is intentionally public so the login/setup screen can show the
-    // real build and router mode before an administrator session exists.
-    renderStatus();
+    const status = await api('/api/v1/status', options);
+    if (!panelSnapshotCurrent(generation)) return false;
     if (status.setup_required || (status.auth_required && !status.authenticated)) {
-      showAuth(status);
-      $('#systemText').textContent = 'Требуется вход';
-      return false;
+      showAuth(status); $('#systemText').textContent = 'Требуется вход'; return false;
     }
-    hideAuth();
+    acceptPanelSection('status', status);
+    renderPanelSection('status');
     const requests = [
       ['system', '/api/v1/system'],
       ['metrics', '/api/v1/metrics?limit=120'],
@@ -750,53 +891,60 @@ async function refreshAll() {
       ['dns', '/api/v1/dns'],
       ['dnsPlan', '/api/v1/dns/plan'],
       ['sessions', '/api/v1/auth/sessions'],
-    ];
-    const settled = await Promise.allSettled(requests.map(([, url]) => api(url)));
-    const issues = [];
-    settled.forEach((result, index) => {
-      const [key, url] = requests[index];
-      if (result.status === 'fulfilled') {
-        if (key === 'serviceControl') { if (typeof acceptWorkspaceControl === 'function') acceptWorkspaceControl(result.value); else state.serviceControl = result.value; return; }
-        if (key === 'devices') { acceptDeviceList(result.value); return; }
-        state[key] = key === 'sessions' ? (result.value.sessions || []) : result.value;
-        return;
+    ].filter(([key]) => !retryFailed || retryKeys.has(key) || !state.dataLoad[key]?.loaded);
+    requests.forEach(([key]) => panelSectionState(key, 'loading'));
+    renderPanelLoad();
+    await settlePanelReads(requests, async ([key, url]) => {
+      if (!panelSnapshotCurrent(generation)) return;
+      try {
+        const value = await api(url, options);
+        if (!panelSnapshotCurrent(generation)) return;
+        acceptPanelSection(key, value);
+        renderPanelSection(key);
+      } catch (error) {
+        if (!panelSnapshotCurrent(generation)) return;
+        if (error.status === 401) {
+          cancelPanelRefresh();
+          showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
+          return;
+        }
+        if (error.payload?.node_recovery?.state === 'revalidating') {
+          state.status = { ...state.status, node_recovery: error.payload.node_recovery, live_active: false, dataplane_recovery_state: 'network-stale' };
+        }
+        panelSectionState(key, panelBusy(error) ? 'busy' : 'error', error);
+        issues.push({ section: key, url, message: error.message || 'Раздел временно недоступен', technical: error.technicalMessage || '' });
+        renderPanelLoad();
       }
-      if (result.reason?.payload?.node_recovery?.state === 'revalidating') {
-        status.node_recovery = result.reason.payload.node_recovery;
-        status.live_active = false;
-        status.dataplane_recovery_state = 'network-stale';
-        state.nodes = { ...(state.nodes || {}), node_recovery: status.node_recovery };
-      }
-      issues.push({ section: key, url, message: result.reason?.message || 'Раздел временно недоступен', technical: result.reason?.technicalMessage || '' });
     });
-    state.status = status;
+    if (!panelSnapshotCurrent(generation)) return false;
     state.loadIssues = issues;
-    renderAll();
-    if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls();
-    else $('#systemText').textContent = status.safe_mode ? 'Изменения заблокированы' : (status.live_active ? 'Маршруты активны' : 'Маршруты не включены');
+    renderPanelLoad();
     if (issues.length) {
-      showNotice('review', 'Часть данных временно недоступна', `${issues.length} ${issues.length === 1 ? 'раздел не загрузился' : 'раздела не загрузились'}. Остальная панель продолжает работать.`, { issues });
-    }
-    if (!state.onboardingAutoEvaluated) {
+      const busy = Object.values(state.dataLoad).some(value => value.phase === 'busy');
+      const retry = busy || panelLoad.retryCount < 3;
+      showNotice('review', 'Часть данных временно недоступна', retry ? 'Загруженные разделы доступны. Последние полученные данные сохранены; повторим чтение автоматически.' : 'Загруженные разделы доступны. Автоматические попытки закончились; нажмите «Обновить», чтобы повторить.', { issues });
+      schedulePanelRetry(busy);
+    } else { panelLoad.retryCount = 0; renderStatus(); }
+    if (!state.onboardingAutoEvaluated && state.dataLoad.services?.loaded && state.dataLoad.engineConfigs?.loaded) {
       state.onboardingAutoEvaluated = true;
       if(typeof consoleInitialSetup==='function')consoleInitialSetup();else setTimeout(() => openOnboarding(false), 0);
     }
     return true;
   } catch (error) {
-    if (error.payload?.node_recovery?.state === 'revalidating') {
-      const recovery = error.payload.node_recovery;
-      state.status = { ...(state.status || {}), node_recovery: recovery, live_active: false, dataplane_recovery_state: 'network-stale' };
-      state.nodes = { ...(state.nodes || {}), node_recovery: recovery };
-      renderStatus();
-      renderNodes();
-      $('#systemText').textContent = 'Повторная проверка маршрута';
-      showNotice('review', 'Восстановление применённого маршрута', recovery.message, { node_recovery: recovery });
-      return false;
+    if (!panelSnapshotCurrent(generation)) return false;
+    const busy = panelBusy(error);
+    for (const key of ['status', 'services', 'engineConfigs']) panelSectionState(key, busy ? 'busy' : 'error', error);
+    state.loadIssues = [{ section: 'status', message: error.message }];
+    renderPanelLoad();
+    if (error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
+    else {
+      if (error.payload?.node_recovery?.state === 'revalidating') {
+        state.status = { ...state.status, node_recovery: error.payload.node_recovery, live_active: false, dataplane_recovery_state: 'network-stale' };
+      }
+      showNotice('review', busy ? 'Настройки временно заняты' : 'Данные пока не обновились',
+        busy ? 'Дождитесь завершения операции. Панель повторит чтение автоматически.' : error.message, { response: error.payload });
+      schedulePanelRetry(busy);
     }
-    $('#systemText').textContent = 'Ошибка связи';
-    if (error.status === 401 || String(error.technicalMessage || '').includes('administrator login is required')) {
-      const status = await api('/api/v1/status'); showAuth(status, 'Сессия завершилась. Войдите снова.');
-    } else showDetails({ error: error.message, technical: error.technicalMessage || '', response: error.payload }, 'Не удалось обновить панель');
     return false;
   }
 }
@@ -971,11 +1119,11 @@ function renderStatus() {
   $('#topUptime').textContent = formatUptime(s.uptime_seconds);
   $('#kpiState').textContent = s.live_active ? 'Активна' : (s.safe_mode ? 'Безопасный режим' : 'Не применено');
   $('#kpiStateSub').textContent = s.live_active ? 'конфигурация применена' : (s.safe_mode ? 'рабочие маршруты не изменяются' : 'нет подтверждённого применения');
-  $('#kpiEngines').textContent = `${s.engines_running || 0} / ${s.engines_installed || 0}`;
-  $('#kpiServices').textContent = `${s.enabled_services || 0} / ${s.catalog_services || 0}`;
-  $('#kpiConnections').textContent = s.active_connections || 0;
-  $('#connectionCounter').textContent = s.active_connections || 0;
-  $('#serviceNavCount').textContent = s.enabled_services || 0;
+  $('#kpiEngines').textContent = `${s.engines_running ?? '—'} / ${s.engines_installed ?? '—'}`;
+  $('#kpiServices').textContent = `${s.enabled_services ?? '—'} / ${s.catalog_services ?? '—'}`;
+  $('#kpiConnections').textContent = s.active_connections ?? '—';
+  $('#connectionCounter').textContent = s.active_connections ?? '—';
+  $('#serviceNavCount').textContent = s.enabled_services ?? '—';
   $('#serviceDraftBar').classList.toggle('show', !!s.services_pending_changes);
   $('#serviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить изменения' : 'Проверить и применить';
@@ -1432,8 +1580,12 @@ function engineStatusText(engine) {
 
 function renderEngineControl() {
   if (!state.engineConfigs.length) {
-    $('#engineControlList').innerHTML = '<div class="empty-inline">Нет описаний обходов</div>';
+    const load = state.dataLoad?.engineConfigs;
+    const message = load?.loaded ? 'Нет описаний обходов' : load?.phase === 'busy' ? 'Настройки временно заняты. Повторим загрузку.' : load?.phase === 'error' ? 'Не удалось загрузить настройки. Нажмите «Обновить».' : 'Загружаем настройки обходов…';
+    $('#engineControlList').innerHTML = `<div class="empty-inline">${esc(message)}</div>`;
     $('#engineSelectedHead').innerHTML = '';
+    $('#guidedEditor').innerHTML = `<div class="guided-empty">${esc(message)}</div>`;
+    $('#engineEditorMessage').textContent = message;
     $('#engineDraftDependency').hidden = true;
     return;
   }
@@ -1505,14 +1657,15 @@ function renderEngineControl() {
 
   if (!expert) {
     if (guidedSame && !state.engineEditorDirty) renderGuidedEditor();
-    else if (!state.engineIntent && !state.engineGuidedLoading && !state.engineEditorDirty) void loadEngineGuided();
+    else if (!state.engineIntent && !state.engineGuidedLoading && !state.engineEditorDirty && !state.engineReadError) void loadEngineGuided();
     if (!state.engineIntent) $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть изменения. Нажмите «Проверить и применить».' : guidedSame ? (file.staged ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.') : 'Загрузка параметров…';
   } else {
     editor.placeholder = file.sensitive ? 'Секретный конфиг: не копируйте ключи в чужие сервисы.' : 'Конфигурация / список';
     if (loadedSame && !state.engineEditorDirty) editor.value = state.engineLoaded.content || '';
     if (!state.engineIntent) $('#engineEditorMessage').textContent = state.engineEditorDirty ? 'Есть изменения. Нажмите «Проверить и применить».' : loadedSame ? (file.staged ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.') : 'Загрузка…';
-    if (!state.engineIntent && !loadedSame && !state.engineEditorDirty) void loadEngineFile();
+    if (!state.engineIntent && !loadedSame && !state.engineEditorDirty && !state.engineReadError) void loadEngineFile();
   }
+  if (state.engineReadError && !state.engineIntent) $('#engineEditorMessage').textContent = state.engineReadError + ' Нажмите «Перечитать», чтобы повторить.';
 
   const v = state.engineValidation;
   if (v && v.engine_id === engine.id && v.file_id === file.id) {
@@ -1800,6 +1953,7 @@ function invalidateEngineEditorContext() {
   state.engineEditorEpoch = (state.engineEditorEpoch || 0) + 1;
   state.engineGuidedRequest = null;
   state.engineGuidedLoading = false;
+  state.engineReadError = '';
 }
 
 function beginEngineIntent() {
@@ -1859,9 +2013,14 @@ function renderGuidedEditor() {
     const value = view.values?.[field.id] ?? '';
     let control;
     if ((field.options || []).length) {
-      control = `<select data-guided-field="${esc(field.id)}">${field.options.map((option) => `<option value="${esc(option.value)}" ${option.value === value ? 'selected' : ''}>${esc(option.label)}</option>`).join('')}</select>`;
+      const current = field.options.some(option => option.value === value) ? '' : `<option value="${esc(value)}" selected>${value === '' ? 'Не задано' : `Текущее значение: ${esc(value)}`}</option>`;
+      control = `<select data-guided-field="${esc(field.id)}">${current}${field.options.map((option) => `<option value="${esc(option.value)}" ${option.value === value ? 'selected' : ''}>${esc(option.label)}</option>`).join('')}</select>`;
     } else if (field.type === 'boolean') {
       control = `<select data-guided-field="${esc(field.id)}"><option value="true" ${value === 'true' ? 'selected' : ''}>Включено</option><option value="false" ${value !== 'true' ? 'selected' : ''}>Выключено</option></select>`;
+    } else if (field.type === 'arguments') {
+      // HTML consumes the first newline after <textarea>; supply that newline
+      // separately so leading newlines in the actual strategy remain intact.
+      control = `<textarea data-guided-field="${esc(field.id)}" rows="6" spellcheck="false" placeholder="${esc(field.placeholder || '')}" ${field.required ? 'required' : ''}>\n${esc(value)}</textarea>`;
     } else {
       const type = field.type === 'number' ? 'number' : 'text';
       control = `<input data-guided-field="${esc(field.id)}" type="${type}" value="${esc(value)}" placeholder="${esc(field.placeholder || '')}" ${field.min ? `min="${field.min}"` : ''} ${field.max ? `max="${field.max}"` : ''} ${field.required ? 'required' : ''}>`;
@@ -1885,11 +2044,13 @@ async function loadEngineGuided(force = false) {
     if (!engineEditorContextCurrent(context) || state.engineGuidedRequest !== context) return;
     if (guided.engine_id !== engine.id || guided.file_id !== file.id) throw new Error('Ответ относится к другому файлу. Откройте настройки заново.');
     state.engineGuided = guided;
+    state.engineReadError = '';
     state.engineEditorDirty = false;
     renderGuidedEditor();
     $('#engineEditorMessage').textContent = state.engineGuided.source === 'missing' ? 'Заполните параметры и нажмите «Проверить и применить».' : state.engineGuided.source === 'staged' ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.';
   } catch (error) {
     if (!engineEditorContextCurrent(context)) return;
+    state.engineReadError = error.message;
     $('#guidedEditor').innerHTML = `<div class="guided-empty"><b>Не удалось прочитать параметры</b><span>${esc(error.message)}</span></div>`;
     $('#engineEditorMessage').textContent = `Ошибка: ${error.message}`;
   } finally { if (state.engineGuidedRequest === context) { state.engineGuidedLoading = false; state.engineGuidedRequest = null; updateEngineEditorActions(); } }
@@ -1948,11 +2109,13 @@ async function loadEngineFile(force = false) {
     if (!engineEditorContextCurrent(context)) return;
     if (content.engine_id !== engine.id || content.file_id !== file.id) throw new Error('Ответ относится к другому файлу. Откройте настройки заново.');
     state.engineLoaded = content;
+    state.engineReadError = '';
     state.engineEditorDirty = false;
     $('#engineEditor').value = content.content || '';
     $('#engineEditorMessage').textContent = content.source === 'missing' ? 'Введите или загрузите настройки и нажмите «Проверить и применить».' : content.source === 'staged' ? 'Есть изменения, ожидающие применения.' : 'Показаны текущие настройки.';
   } catch (error) {
     if (!engineEditorContextCurrent(context)) return;
+    state.engineReadError = error.message;
     $('#engineEditorMessage').textContent = `Ошибка чтения: ${error.message}`;
   }
 }
@@ -2073,7 +2236,7 @@ async function reloadEngineEditor() {
   if (state.engineEditorDirty && !await askConfirmation('Перечитать настройки', 'Отменить изменения в редакторе и перечитать настройки?', 'Перечитать')) return;
   if (!engineEditorContextCurrent(context) || state.engineIntent) return;
   invalidateEngineEditorContext();
-  state.engineEditorDirty = false; state.engineLoaded = null; state.engineGuided = null;
+  state.engineEditorDirty = false;
   if (state.engineMode === 'guided') await loadEngineGuided(true); else await loadEngineFile(true);
   renderEngineControl();
 }
@@ -2349,6 +2512,13 @@ function renderDNS() {
   $('#dnsClearNextDNS')?.addEventListener('click', clearNextDNSProfile);
   $('#dnsSaveCustom')?.addEventListener('click', saveCustomDNSProvider);
   $('#dnsClearCustom')?.addEventListener('click', clearCustomDNSProvider);
+  renderDNSServiceBindings();
+  $('#dnsProbeResults').innerHTML = (dns.last_probe || []).map((result) => `<div class="dns-probe-row"><span class="state-dot ${result.status === 'pass' ? 'good' : 'bad'}"></span><div><b><span class="dns-transport">${esc(result.transport || 'DNS')}</span>${esc(result.server)}</b><small>${result.status === 'pass' ? `${Number(result.latency_ms || 0)} мс · адресов: ${Number(result.addresses || 0)} · ${result.dnssec === 'resolver-reported-ad' || result.dnssec === 'confirmed' ? 'резолвер сообщил AD-флаг' : result.dnssec === 'not-reported' || result.dnssec === 'not-confirmed' ? 'AD-флаг не сообщён' : 'AD-флаг не проверялся'}` : esc(result.error || 'нет ответа')}</small></div></div>`).join('') || '<div class="community-empty">Проверка ещё не запускалась.</div>';
+  renderDNSPlan();
+}
+
+function renderDNSServiceBindings() {
+  const dns = state.dns || {};
   const serviceProfiles = (dns.profiles || []).filter((item) => {
     const itemProvider = dnsProviderByID(item.provider_id);
     return item.id !== 'automatic' && (!itemProvider?.requires_configuration || itemProvider?.configured);
@@ -2359,7 +2529,10 @@ function renderDNS() {
     const selectedProfile = serviceDrafts[service.id] || 'inherit';
     return `<label class="dns-service-binding ${selectedProfile !== 'inherit' ? 'changed' : ''}"><span><b>${esc(service.name)}</b><small>${service.enabled ? 'Сервис включён' : 'Сервис выключен'} · рабочий DNS не изменён</small></span><select data-dns-service="${esc(service.id)}" aria-label="DNS для ${esc(service.name)}"><option value="inherit">Наследовать общий DNS</option>${serviceProfiles.map((item) => `<option value="${esc(item.id)}" ${item.id === selectedProfile ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select></label>`;
   }).join('') || '<div class="community-empty">Каталог сервисов временно недоступен.</div>';
-  $('#dnsProbeResults').innerHTML = (dns.last_probe || []).map((result) => `<div class="dns-probe-row"><span class="state-dot ${result.status === 'pass' ? 'good' : 'bad'}"></span><div><b><span class="dns-transport">${esc(result.transport || 'DNS')}</span>${esc(result.server)}</b><small>${result.status === 'pass' ? `${Number(result.latency_ms || 0)} мс · адресов: ${Number(result.addresses || 0)} · ${result.dnssec === 'resolver-reported-ad' || result.dnssec === 'confirmed' ? 'резолвер сообщил AD-флаг' : result.dnssec === 'not-reported' || result.dnssec === 'not-confirmed' ? 'AD-флаг не сообщён' : 'AD-флаг не проверялся'}` : esc(result.error || 'нет ответа')}</small></div></div>`).join('') || '<div class="community-empty">Проверка ещё не запускалась.</div>';
+}
+
+function renderDNSPlan() {
+  const dns = state.dns || {};
 	const plan = state.dnsPlan || dns.plan;
 	$('#dnsPlan').innerHTML = plan ? `<div class="dns-plan-summary ${plan.ready ? 'ready' : 'blocked'}"><div><span>${plan.ready ? 'ГОТОВО' : 'ПРЕДПРОСМОТР'}</span><b>${esc(plan.profile?.name || 'DNS')}</b></div><p>${esc(plan.recommendation || '')}</p></div><div class="dns-plan-checks">${(plan.checks || []).map((check) => `<div class="dns-plan-check ${esc(check.status)}"><i>${check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '×'}</i><span><b>${esc(check.id === 'probe' ? 'Доступность' : check.id === 'ownership' ? 'Владелец DNS' : check.id === 'adapter' ? 'Применение' : check.id === 'configuration' ? 'Настройка' : check.id === 'dnssec' ? 'DNSSEC' : check.id === 'service-bindings' ? 'Привязки сервисов' : 'Профиль')}</b><small>${esc(check.message)}</small></span></div>`).join('')}</div><details class="dns-plan-steps"><summary>Показать этапы безопасного Apply</summary>${(plan.steps || []).map((step) => `<div><i>${Number(step.order)}</i><span><b>${esc(step.name)}</b><small>${esc(step.summary)}</small></span></div>`).join('')}</details>` : '<div class="community-empty">DNS-план временно недоступен.</div>';
   $('#dnsDiscard').disabled = !dns.dirty;
@@ -2854,7 +3027,7 @@ async function applyNodeRoute() {
     const response = await api(`/api/v1/nodes/${encodeURIComponent(current.id)}/apply`, { method: 'POST', signal: current.controller.signal, body: JSON.stringify({ service_id: current.serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE' }) });
     if (state.nodeRouteReview !== current || current.controller.signal.aborted) return;
     $('#nodeRouteStatus').textContent = response.live_applied === true ? 'Маршрут применён и прошёл проверки. Проверьте сервис на выбранном устройстве.' : 'Применение не подтверждено. Обновите панель перед новым действием.';
-    await refreshAll();
+    await refreshAfterMutation();
   } catch (error) {
     if (state.nodeRouteReview === current) $('#nodeRouteStatus').textContent = error.name === 'AbortError' ? 'Запрос отменён. Сервер завершает очистку или откат; обновите панель для проверки итогового состояния.' : `${error.message} Для повтора откройте новый план.`;
   } finally {
@@ -3176,16 +3349,9 @@ async function revokeOtherSessions() {
 }
 
 async function refreshCoreAfterEdit() {
-  const [status, services] = await Promise.all([api('/api/v1/status'), api('/api/v1/services')]);
-  state.status = status;
-  state.services = services;
-  renderStatus();
-  renderServices();
-  renderOverviewQuickServices();
-  renderOverviewServices();
-  renderReadiness();
-  renderSettings();
-  if(typeof renderConsole==='function')renderConsole();
+  // A write can invalidate other sections of an in-flight initial snapshot.
+  // Complete a fresh panel read instead of stranding those canceled sections.
+  return refreshAfterMutation();
 }
 
 function openCustomServiceDialog(id = '') {
@@ -3894,7 +4060,7 @@ async function importProfile() {
     const result = await api('/api/v1/profiles/import', { method: 'POST', body: JSON.stringify({ bundle, allow_custom_updates: allowUpdates }) });
     state.profileBundle = null; state.profilePreview = null;
     $('#profilePreview').innerHTML = '<div class="community-clean">Профиль импортирован в черновик. Проверьте план и файлы обходов перед применением.</div>';
-    await refreshAll(); await showPlan();
+    await refreshAfterMutation(); await showPlan();
     showDetails(result, 'Профиль импортирован');
   } catch (error) { showDetails({ error: error.message }, 'Импорт профиля не выполнен'); renderProfilePreview(); }
   finally { button.textContent = 'Импортировать в черновик'; button.disabled = !state.profilePreview?.valid; }
@@ -3967,7 +4133,7 @@ async function importPrivateBackup() {
     $('#privateBackupImportPassword').value = '';
     $('#previewPrivateBackup').disabled = true;
     $('#privateBackupPreview').innerHTML = '<div class="community-clean">Настройки восстановлены в черновик. Подписки поставлены на паузу; возобновите нужные в разделе VLESS и VPN → Подписки. Проверьте устройства и маршруты перед применением.</div>';
-    await refreshAll(); await showPlan();
+    await refreshAfterMutation(); await showPlan();
     showDetails(result, 'Приватная резервная копия импортирована');
   } catch (error) {
     // A failed/uncertain import invalidates the old preview. Never leave its
@@ -4182,6 +4348,12 @@ function bindEvents() {
   $('#engineSaveDraft').addEventListener('click', () => saveEngineDraft());
   $('#engineCancelOperation').addEventListener('click', () => cancelEngineIntent());
   document.addEventListener('razvilka:auth-required', handleEngineEditorLifecycle);
+  document.addEventListener('razvilka:auth-required', cancelPanelRefresh);
+  document.addEventListener('click', event => { if (event.target.closest?.('[data-panel-refresh]')) void refreshAll(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { clearTimeout(panelLoad.retryTimer); panelLoad.retryTimer = null; }
+    else if ($('#authScreen')?.hidden && state.loadIssues.length) schedulePanelRetry(true);
+  });
   document.addEventListener('razvilka:view-change', handleEngineEditorLifecycle);
   $('#engineValidate').addEventListener('click', validateEngineFile);
   $('#engineDiscardDraft').addEventListener('click', discardEngineConfigDraft);

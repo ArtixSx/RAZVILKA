@@ -25,13 +25,13 @@ import (
 
 const minimumTokenLength = 32
 const (
-	minimumPasswordLength = 10
-	passwordIterations    = 210000
-	sessionLifetime       = 12 * time.Hour
-	sessionCookie         = "razvilka_session"
-	defaultLoginWindow    = 10 * time.Minute
-	defaultLoginLockout   = time.Minute
-	defaultLoginMax       = 5
+	maximumPasswordBytes = 256
+	passwordIterations   = 210000
+	sessionLifetime      = 12 * time.Hour
+	sessionCookie        = "razvilka_session"
+	defaultLoginWindow   = 10 * time.Minute
+	defaultLoginLockout  = time.Minute
+	defaultLoginMax      = 5
 )
 
 var ErrLoginRateLimited = errors.New("too many login attempts")
@@ -151,8 +151,8 @@ func (g *Gate) Setup(username, password string, requests ...*http.Request) (stri
 	if strings.ContainsAny(username, "\r\n\t") {
 		return "", errors.New("username contains invalid characters")
 	}
-	if len(password) < minimumPasswordLength || len(password) > 256 {
-		return "", fmt.Errorf("password must contain %d to 256 characters", minimumPasswordLength)
+	if err := validateNewPassword(password); err != nil {
+		return "", err
 	}
 	salt := make([]byte, 24)
 	if _, err := rand.Read(salt); err != nil {
@@ -203,8 +203,8 @@ func (g *Gate) Login(username, password string, requests ...*http.Request) (stri
 }
 
 func (g *Gate) ChangePassword(current, replacement string, request *http.Request) (string, error) {
-	if len(replacement) < minimumPasswordLength || len(replacement) > 256 {
-		return "", fmt.Errorf("password must contain %d to 256 characters", minimumPasswordLength)
+	if err := validateNewPassword(replacement); err != nil {
+		return "", err
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -243,8 +243,8 @@ func (g *Gate) RecoverPassword(username, replacement string, request *http.Reque
 	if len(username) < 3 || len(username) > 64 || strings.ContainsAny(username, "\r\n\t") {
 		return "", errors.New("username must contain 3 to 64 valid characters")
 	}
-	if len(replacement) < minimumPasswordLength || len(replacement) > 256 {
-		return "", fmt.Errorf("password must contain %d to 256 characters", minimumPasswordLength)
+	if err := validateNewPassword(replacement); err != nil {
+		return "", err
 	}
 	newSalt := make([]byte, 24)
 	if _, err := rand.Read(newSalt); err != nil {
@@ -533,6 +533,18 @@ func publicAPI(path, method string) bool {
 		return true
 	}
 	return path == "/api/v1/auth/login" && method == http.MethodPost
+}
+
+// Passwords are exact user input, including whitespace. The upper byte bound
+// limits request/hash work; there is no minimum length or composition policy.
+func validateNewPassword(password string) error {
+	if password == "" {
+		return errors.New("password must not be empty")
+	}
+	if len(password) > maximumPasswordBytes {
+		return fmt.Errorf("password must not exceed %d bytes", maximumPasswordBytes)
+	}
+	return nil
 }
 
 func validateCredentialRecord(record credentialRecord) error {

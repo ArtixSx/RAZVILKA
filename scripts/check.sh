@@ -64,6 +64,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-service-dashboard-ui.mjs
   node scripts/test-engine-intent-ui.mjs
   node scripts/test-node-activity-ui.mjs
+  node scripts/test-panel-loading-ui.mjs
   node scripts/test-warp-generation-ui.mjs
   node scripts/test-restore-busy-supervision.mjs
   node scripts/test-native-enrollment-supervision.mjs

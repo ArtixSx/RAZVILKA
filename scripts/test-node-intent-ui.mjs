@@ -9,7 +9,7 @@ let fresh = false, handler, refreshed = 0;
 const calls = [];
 const context = vm.createContext({ state, $, $$: () => [], AbortController, Date, Number, JSON, Set, encodeURIComponent,
   nodeByID: id => ({ id }), nodeServiceHealth: () => ({ state: fresh ? 'available' : 'inconclusive' }),
-  api: async (url, options) => { calls.push({ url, options }); return handler(url, options); }, refreshAll: async () => { refreshed++; }, esc: String });
+  api: async (url, options) => { calls.push({ url, options }); return handler(url, options); }, refreshAfterMutation: async () => { refreshed++; }, esc: String });
 vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/node-intent-ui.js', import.meta.url), 'utf8'), context);
 const pass = { ok: true, result: { node_id: 'node-a', service_id: 'telegram', available: true } };
 const preview = { ready: true, scope_selection: 'applied', effective_scope: { mode: 'selected', sources: ['192.168.1.40/32'], summary: '192.168.1.40/32' }, review: { node_id: 'node-a', service_id: 'telegram', revision: 12, generation: 5, review_token: 'one-use-token', reviewed_digest: 'digest', expires_at: new Date(Date.now() + 60000).toISOString() } };

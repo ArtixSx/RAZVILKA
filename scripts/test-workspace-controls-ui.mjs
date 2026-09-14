@@ -9,7 +9,7 @@ let request = async () => ({}), refreshes = 0;
 const context = vm.createContext({ state, $, Number, document: { hidden: false, addEventListener: (name, fn) => events.set(name, fn) },
   api: async (path, options) => { calls.push({ path, options }); return request(path, options); },
   setTimeout: () => 1, clearTimeout() {}, esc: value => String(value ?? '').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
-  setView: name => views.push(name), showNotice: (...args) => notices.push(args), refreshAll: async () => { refreshes++; }, renderOverviewQuickServices() {}, refreshComponents() {}, manageComponent() {} });
+  setView: name => views.push(name), showNotice: (...args) => notices.push(args), refreshAfterMutation: async () => { refreshes++; }, renderOverviewQuickServices() {}, refreshComponents() {}, manageComponent() {} });
 vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/workspace-controls.js', import.meta.url), 'utf8') + '\nthis.control = workspaceControl;', context);
 context.bindWorkspaceControls();
 $('#authScreen').hidden = true;

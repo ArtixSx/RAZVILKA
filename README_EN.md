@@ -14,18 +14,12 @@ no RAZVILKA cloud account is required.
 
 ## Candidate status
 
-[**v0.18.2-rc.4**](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.4)
-is available for public testing. CI and Release CI passed for the exact commit.
-SSH upgrade, application restart and applied VLESS-route recovery were verified
-on Netcraze 6614 (aarch64). Fresh connections from the selected LAN client used
-the TUN both normally and in a separate test with a packet mark. HTTP 200 was
-supported by exact connection-path evidence and TUN counters, not a route query
-alone. See the [validation report and limits](docs/releases/0.18.2-rc.4-validation.md).
-
-rc.3's normal TUN path worked, but an earlier marked Keenetic policy could select
-the previous VPN. rc.4 was checked in both scenarios; this does not certify
-every third-party policy or ACL.
-See the [rc.3 warning](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.3).
+The current candidate is [**v0.18.2-rc.5**](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.5).
+It fixes empty settings and slow service loading with large subscriptions,
+and removes the password minimum length. See the [release notes](docs/releases/0.18.2-rc.5.md).
+Publication requires full CI and four builds. Hardware acceptance of rc.5
+follows installation of the official archive; previous rc.4 results are
+[historical evidence](docs/releases/0.18.2-rc.4-validation.md), not proof of this build.
 
 The latest stable release remains
 [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
@@ -62,10 +56,10 @@ opkg install curl ca-certificates coreutils-sha256sum tar
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-**DC1 prerelease `v0.18.2-rc.4`**:
+**DC1 prerelease `v0.18.2-rc.5`**:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.4/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.4 sh
+curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.5/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.5 sh
 ```
 
 Alternatively, extract that release's Entware bundle and run

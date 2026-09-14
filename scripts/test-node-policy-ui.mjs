@@ -11,7 +11,7 @@ const inventory = { groups: [{ id: 'group-a', name: 'Группа', mode: 'fallb
 const policyData = { config_revision: 17, policies: { telegram: { policy: base, persisted: true, reason: 'Готово' } } };
 const context = vm.createContext({ state: { services: [service] }, $, $$: selector => selector.includes(':checked') ? selected.map(id => ({ dataset: { policyNode: id } })) : [], AbortController, Promise, Set, Number, String, encodeURIComponent, esc: String,
   nodeScopeText: sources => sources.join(', '), nodeDisplayName: node => node.name, nodeBrowserSourceName: id => id,
-  api: async (url, options) => { requests.push({ url, options }); return handler(url, options); }, refreshAll: async () => { refreshed++; } });
+  api: async (url, options) => { requests.push({ url, options }); return handler(url, options); }, refreshAfterMutation: async () => { refreshed++; } });
 vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/node-policy-ui.js', import.meta.url), 'utf8'), context);
 const read = async url => url.endsWith('/services') ? structuredClone([service]) : url.endsWith('/nodes') ? structuredClone(inventory) : structuredClone(policyData);
 handler = read;

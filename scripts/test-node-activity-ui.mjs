@@ -69,8 +69,12 @@ assert.equal(calls.length, afterCancelRequest, 'hidden activity made protected r
 context.document.hidden = false;
 context.hideAuth = () => { $('#authScreen').hidden = true; listeners.get('razvilka:auth-restored')(); };
 const app = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
-const refreshAll = app.match(/async function refreshAll\([^]*?\n}\n/)[0];
-vm.runInContext(refreshAll, context);
+const panelFunctions = ['panelSectionState', 'panelBusy', 'panelSnapshotCurrent', 'schedulePanelRetry', 'settlePanelReads', 'refreshAll', 'loadPanelSnapshot'].map(name => app.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`))[0]).join('\n');
+context.panelLoad = { generation: 0, request: null, controller: null, retryTimer: null, retryCount: 0 };
+context.AbortController = AbortController;
+context.renderPanelLoad = () => {};
+context.renderStatus = () => {};
+vm.runInContext(panelFunctions, context);
 handler = async url => {
   if (url === '/api/v1/auth/status') return { authenticated: true };
   if (url === '/api/v1/node-checks/current') return { job: { mode: 'service', state: 'running', completed: 1, total: 10 } };

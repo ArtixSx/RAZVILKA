@@ -86,7 +86,7 @@ async function runNodeIntent() {
     const applied = await api(`/api/v1/nodes/${encodeURIComponent(id)}/apply`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ service_id: serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE' }) });
     if (!current()) return;
     $('#nodeCheckResult').textContent = applied.live_applied === true ? 'Подключение включено и прошло проверку веб-доступа. Теперь проверьте нужное приложение на выбранном устройстве.' : 'Применение не подтверждено. Обновите панель перед повтором.';
-    await refreshAll();
+    await refreshAfterMutation();
   } catch (error) {
     if (current()) $('#nodeCheckResult').textContent = error.message;
   } finally {

@@ -57,7 +57,7 @@ import (
 var (
 	// Builds override provenance through -ldflags. The version default mirrors
 	// canonical VERSION; unknown provenance never claims a verified release build.
-	Version     = "0.18.2-rc.4"
+	Version     = "0.18.2-rc.5"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -2650,7 +2650,7 @@ func (a *App) routeOptions(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.routeOptionsSnapshot())
+	writeJSON(w, http.StatusOK, a.routeOptionsSnapshotContext(r.Context()))
 }
 
 func (a *App) services(w http.ResponseWriter, r *http.Request) {
@@ -2660,7 +2660,7 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := a.Store.Get()
 	services := a.catalogSnapshot().Services
-	options := a.routeOptionsSnapshot()
+	options := a.routeOptionsSnapshotContext(r.Context())
 	inventory := a.engineInventorySnapshot()
 	observedEvidence := a.serviceEvidenceSnapshotWithInventory(cfg, services, inventory)
 	effectiveAppliedRoutes := a.appliedEffectiveRoutes(cfg)
@@ -4860,6 +4860,10 @@ func (a *App) resolveAuto(s catalog.Service, order []string) string {
 }
 
 func (a *App) routeOptionsSnapshot() []routecatalog.Option {
+	return a.routeOptionsSnapshotContext(context.Background())
+}
+
+func (a *App) routeOptionsSnapshotContext(ctx context.Context) []routecatalog.Option {
 	options := routecatalog.Options()
 	for i := range options {
 		if options[i].ID == "auto" || options[i].ID == "direct" {
@@ -4870,12 +4874,15 @@ func (a *App) routeOptionsSnapshot() []routecatalog.Option {
 	if a.Nodes == nil || a.Dataplane == nil || !a.Dataplane.Capable("sing-box") {
 		return options
 	}
-	snapshot, err := a.Nodes.Snapshot(context.Background(), time.Now())
-	if err != nil {
+	profile, profileErr := a.freshNetworkProfile(ctx)
+	if profileErr != nil {
 		return options
 	}
-	profile, profileErr := a.freshNetworkProfile(context.Background())
-	if profileErr != nil {
+	// Read and validate the private envelope once for the whole selector. A
+	// separate RouteServices load per node made a large subscription quadratic
+	// and could hold the Services response beyond the HTTP write deadline.
+	snapshot, availableServices, err := a.Nodes.RouteSnapshot(ctx, profile, time.Now())
+	if err != nil {
 		return options
 	}
 	installed, running := false, false
@@ -4889,8 +4896,8 @@ func (a *App) routeOptionsSnapshot() []routecatalog.Option {
 		return options
 	}
 	for _, node := range snapshot.Nodes {
-		services, routeErr := a.Nodes.RouteServices(context.Background(), node.ID, profile, time.Now())
-		if routeErr != nil || len(services) == 0 || node.Disabled {
+		services := availableServices[node.ID]
+		if len(services) == 0 || node.Disabled {
 			continue
 		}
 		options = append(options, routecatalog.Option{
@@ -4899,8 +4906,8 @@ func (a *App) routeOptionsSnapshot() []routecatalog.Option {
 		})
 	}
 	for _, group := range snapshot.Groups {
-		services, routeErr := a.Nodes.GroupServices(context.Background(), group.ID, profile, time.Now())
-		if routeErr != nil || len(services) == 0 {
+		services := availableServices[group.ID]
+		if len(services) == 0 {
 			continue
 		}
 		mode := "резервная группа"

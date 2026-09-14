@@ -75,7 +75,8 @@ func (m *Manager) Guided(engineID, fileID string) (GuidedView, error) {
 		return GuidedView{}, err
 	}
 	for _, field := range fields {
-		if values[field.ID] == "" && field.Default != "" {
+		_, present := values[field.ID]
+		if !present || file.Syntax != "shell" && values[field.ID] == "" && field.Default != "" {
 			values[field.ID] = field.Default
 		}
 	}
@@ -103,8 +104,10 @@ func (m *Manager) StageGuided(engineID, fileID string, values map[string]string)
 		if !ok {
 			return Content{}, fmt.Errorf("unknown guided field %q", id)
 		}
-		if err := validateGuidedValue(field, value); err != nil {
-			return Content{}, fmt.Errorf("%s: %w", field.Label, err)
+		if file.Syntax != "shell" {
+			if err := validateGuidedValue(field, value); err != nil {
+				return Content{}, fmt.Errorf("%s: %w", field.Label, err)
+			}
 		}
 	}
 	target, err := OpenRestoreTarget(m.StageRoot, engineID, fileID)
@@ -117,7 +120,8 @@ func (m *Manager) StageGuided(engineID, fileID string, values map[string]string)
 		return Content{}, err
 	}
 	b, _, err := m.rawLocked(engineID, fileID)
-	if errors.Is(err, os.ErrNotExist) {
+	missingSource := errors.Is(err, os.ErrNotExist)
+	if missingSource {
 		switch file.Syntax {
 		case "json":
 			b = []byte("{}\n")
@@ -128,6 +132,20 @@ func (m *Manager) StageGuided(engineID, fileID string, values map[string]string)
 		}
 	} else if err != nil {
 		return Content{}, err
+	}
+	if file.Syntax == "shell" {
+		// A full form includes display defaults for absent assignments.
+		// Do not materialize those defaults, or re-encode explicit empty and
+		// legacy values, when the user only changed another field.
+		values, err = shellGuidedChanges(string(b), fields, values, missingSource)
+		if err != nil {
+			return Content{}, err
+		}
+		for id, value := range values {
+			if err := validateGuidedValue(known[id], value); err != nil {
+				return Content{}, fmt.Errorf("%s: %w", known[id].Label, err)
+			}
+		}
 	}
 	updated, err := encodeGuided(file.Syntax, b, fields, values)
 	if err != nil {
@@ -274,9 +292,14 @@ func decodeGuided(format string, b []byte, fields []GuidedField) (map[string]str
 	values := make(map[string]string, len(fields))
 	switch format {
 	case "shell":
-		parsed := parseShellAssignments(string(b))
+		parsed, err := parseShellAssignments(string(b))
+		if err != nil {
+			return nil, err
+		}
 		for _, field := range fields {
-			values[field.ID] = parsed[field.ID]
+			if value, present := parsed[field.ID]; present {
+				values[field.ID] = value
+			}
 		}
 	case "json":
 		var doc map[string]any
@@ -300,7 +323,8 @@ func decodeGuided(format string, b []byte, fields []GuidedField) (map[string]str
 func encodeGuided(format string, b []byte, fields []GuidedField, values map[string]string) ([]byte, error) {
 	switch format {
 	case "shell":
-		return []byte(updateShellAssignments(string(b), values)), nil
+		updated, err := updateShellAssignments(string(b), values)
+		return []byte(updated), err
 	case "json":
 		var doc map[string]any
 		if len(strings.TrimSpace(string(b))) == 0 {
@@ -327,6 +351,11 @@ func encodeGuided(format string, b []byte, fields []GuidedField, values map[stri
 }
 
 func validateGuidedValue(field GuidedField, value string) error {
+	// Textareas normalize line endings. Strategies remain one quoted shell
+	// value; a newline must never become a separate shell statement.
+	if field.Type == "arguments" {
+		value = strings.ReplaceAll(value, "\r\n", "\n")
+	}
 	value = strings.TrimSpace(value)
 	if value == "" {
 		if field.Required {
@@ -334,7 +363,7 @@ func validateGuidedValue(field GuidedField, value string) error {
 		}
 		return nil
 	}
-	if len(value) > 4096 || strings.ContainsAny(value, "\r\n\x00") {
+	if len(value) > 4096 || strings.ContainsAny(value, "\r\x00") || (field.Type != "arguments" && strings.Contains(value, "\n")) {
 		return errors.New("недопустимые символы")
 	}
 	if len(field.Options) > 0 {
@@ -404,7 +433,7 @@ func validateGuidedValue(field GuidedField, value string) error {
 			return errors.New("ожидается адрес:порт; IPv6 укажите в [скобках]")
 		}
 	case "arguments":
-		if strings.ContainsAny(value, "`;&|<>\r\n") || strings.Contains(value, "$(") || strings.Contains(value, "${") {
+		if strings.ContainsAny(value, "`;&|<>") || !shellNamedReferences(value) {
 			return errors.New("командные подстановки и shell-операторы запрещены; используйте экспертный режим")
 		}
 	default:
@@ -424,67 +453,6 @@ func splitCSV(value string) []string {
 		}
 	}
 	return out
-}
-
-func parseShellAssignments(content string) map[string]string {
-	out := map[string]string{}
-	for _, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		trimmed = strings.TrimPrefix(trimmed, "export ")
-		key, value, ok := strings.Cut(trimmed, "=")
-		if !ok {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		out[key] = unquoteSimple(strings.TrimSpace(value))
-	}
-	return out
-}
-
-func updateShellAssignments(content string, values map[string]string) string {
-	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
-	seen := map[string]bool{}
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		candidate := strings.TrimPrefix(trimmed, "export ")
-		key, _, ok := strings.Cut(candidate, "=")
-		if !ok {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		value, wanted := values[key]
-		if !wanted {
-			continue
-		}
-		prefix := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-		lines[i] = prefix + key + "=" + shellValue(value)
-		seen[key] = true
-	}
-	for key, value := range values {
-		if !seen[key] {
-			lines = append(lines, key+"="+shellValue(value))
-		}
-	}
-	return strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\n"
-}
-
-func shellValue(value string) string {
-	return `"` + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), `"`, `\"`) + `"`
-}
-func unquoteSimple(value string) string {
-	if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
-		value = value[1 : len(value)-1]
-	}
-	return strings.ReplaceAll(strings.ReplaceAll(value, `\"`, `"`), `\\`, `\`)
 }
 
 func parseINI(content string) map[string]string {

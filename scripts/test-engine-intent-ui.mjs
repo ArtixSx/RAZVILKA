@@ -128,3 +128,58 @@ await context.discardEngineConfigDraft();
 assert.equal(state.engineEditorDirty, false, 'local-only changes cannot be canceled');
 assert.equal(calls.some(call => call.url.includes('/discard?')), false, 'canceling local-only editor touched server staging');
 console.log('Engine single-action staging, reviewed file guards, failed-save stop, local editing, cancellation/auth and late-response fences passed');
+
+reset();state.engineEditorDirty=false;state.engineMode='guided';
+const previousGuided={engine_id:'sing-box',file_id:'main',source:'live',values:{server:'last-valid'}};
+state.engineGuided=previousGuided;
+handler=async()=>{throw new Error('read timed out');};
+await context.loadEngineGuided(true);
+assert.equal(state.engineGuided,previousGuided,'failed read erased last valid settings');
+assert.equal(state.engineGuidedLoading,false,'failed read stayed busy forever');
+assert.equal(state.engineReadError,'read timed out');
+assert.match($('#guidedEditor').innerHTML,/Не удалось прочитать/);
+handler=async()=>({...previousGuided,values:{server:'fresh'}});
+await context.loadEngineGuided(true);
+assert.equal(state.engineReadError,'');assert.equal(state.engineGuided.values.server,'fresh');
+console.log('Guided read failure preserves settings, ends loading and supports explicit retry');
+
+// Exercise the real renderer and the actual save payload for multiline NFQWS
+// strategies, including leading newlines and text that resembles HTML.
+reset(); state.engineMode = 'guided';
+const multiline = '\n--filter-tcp=443\n--dpi-desync=fake,multisplit\n--comment="</textarea><script>alert(1)</script>&"';
+const fieldID = 'args" data-injected="yes';
+const controls = [{ dataset: { guidedField: fieldID }, value: multiline, addEventListener() {} }];
+context.$$ = selector => selector === '[data-guided-field]' ? controls : [];
+state.engineGuided = { supported: true, fields: [{ id: fieldID, type: 'arguments', label: 'Strategy', required: true, placeholder: '"<hint>' }], values: { [fieldID]: multiline } };
+for (const name of ['esc', 'renderGuidedEditor']) {
+  const match = source.match(new RegExp(`function ${name}\\([^]*?\\n}\\n`));
+  assert.ok(match, name); vm.runInContext(match[0], context);
+}
+context.renderGuidedEditor();
+const markup = $('#guidedEditor').innerHTML;
+assert.match(markup, /<textarea[^>]*rows="6"[^>]*required>/);
+assert.doesNotMatch(markup, /<input|<script|data-injected="yes/);
+assert.equal((markup.match(/<\/textarea>/g) || []).length, 1, 'strategy escaped out of its control');
+assert.match(markup, /data-guided-field="args&quot; data-injected=&quot;yes"/);
+assert.match(markup, />\n\n--filter-tcp=443\n--dpi-desync=fake,multisplit\n--comment=&quot;&lt;\/textarea&gt;&lt;script&gt;alert\(1\)&lt;\/script&gt;&amp;&quot;<\/textarea>/, 'textarea lost leading/newline text or HTML escaping');
+const multilineIntent = context.beginEngineIntent();
+assert.equal(JSON.parse(JSON.stringify(multilineIntent.body)).values[fieldID], multiline, 'guided save flattened the multiline strategy');
+context.finishEngineIntent(multilineIntent);
+console.log('Guided arguments use escaped multiline textarea and preserve the complete save payload');
+
+for (const value of ['', 'legacy"<&', '$MODE_AUTO']) {
+  reset(); state.engineMode = 'guided';
+  state.engineGuided = { supported: true, fields: [{ id: 'NFQWS_EXTRA_ARGS', type: 'select', options: [{ value: '$MODE_AUTO', label: 'Auto' }, { value: '$MODE_LIST', label: 'List' }] }], values: { NFQWS_EXTRA_ARGS: value } };
+  context.$$ = selector => selector === '[data-guided-field]' ? [{ dataset: { guidedField: 'NFQWS_EXTRA_ARGS' }, value, addEventListener() {} }] : [];
+  context.renderGuidedEditor();
+  const html = $('#guidedEditor').innerHTML;
+  const selected = [...html.matchAll(/<option value="([^"]*)" selected>([^]*?)<\/option>/g)];
+  assert.equal(selected.length, 1, 'browser would choose the first option instead of the original source value');
+  assert.equal(selected[0][1], context.esc(value));
+  assert.equal(selected[0][2], value === '' ? 'Не задано' : value === '$MODE_AUTO' ? 'Auto' : 'Текущее значение: legacy&quot;&lt;&amp;');
+  assert.equal((html.match(/<option /g) || []).length, value === '$MODE_AUTO' ? 2 : 3, 'known enum gained a redundant placeholder');
+  const intent = context.beginEngineIntent();
+  assert.equal(intent.body.values.NFQWS_EXTRA_ARGS, value, 'unchanged enum did not retain its original value');
+  context.finishEngineIntent(intent);
+}
+console.log('Guided empty and unknown enum values remain selected instead of becoming the first option');

@@ -78,7 +78,7 @@ async function saveNodePolicy(event) {
     if (nodePolicyEditor !== editor || editor.controller.signal.aborted) return;
     $('#nodePolicyStatus').textContent = result.reason;
     editor.data = null;
-    await refreshAll();
+    await refreshAfterMutation();
   } catch (error) { if (nodePolicyEditor === editor && !editor.controller.signal.aborted) { $('#nodePolicyStatus').textContent = `${error.message} Закройте правило и откройте заново.`; editor.data = null; } }
   finally { if (nodePolicyEditor === editor) { editor.busy = false; $('#nodePolicySave').disabled = true; $('#nodePolicySave').textContent = 'Откройте правило заново'; } }
 }

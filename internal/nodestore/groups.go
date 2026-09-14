@@ -204,39 +204,15 @@ func (s *Store) GroupServices(ctx context.Context, groupID, profile string, now 
 	if !validGroupID(groupID) || !systemprobe.ValidWANProfileID(profile) || now.IsZero() {
 		return nil, ErrGroup
 	}
-	snapshot, err := s.Snapshot(ctx, now)
+	_, services, err := s.RouteSnapshot(ctx, profile, now)
 	if err != nil {
 		return nil, err
 	}
-	var group NodeGroup
-	found := false
-	for _, candidate := range snapshot.Groups {
-		if candidate.ID == groupID {
-			group, found = candidate, true
-			break
-		}
-	}
+	available, found := services[groupID]
 	if !found {
 		return nil, ErrNotFound
 	}
-	services := map[string]int{}
-	for _, nodeID := range group.NodeIDs {
-		available, routeErr := s.RouteServices(ctx, nodeID, profile, now)
-		if routeErr != nil {
-			continue
-		}
-		for _, service := range available {
-			services[service]++
-		}
-	}
-	out := []string{}
-	for service, count := range services {
-		if group.Mode == "fallback" && count > 0 || group.Mode == "manual" && serviceAvailableOnPreferred(snapshot, group, service, profile, now) {
-			out = append(out, service)
-		}
-	}
-	sort.Strings(out)
-	return out, nil
+	return available, nil
 }
 
 func (s *Store) commitDocument(ctx context.Context, doc *document, before restorejournal.Image) error {
@@ -342,18 +318,4 @@ func groupsEqual(left, right NodeGroup) bool {
 func mustJSON(value any) []byte {
 	data, _ := json.Marshal(value)
 	return data
-}
-
-func serviceAvailableOnPreferred(snapshot Snapshot, group NodeGroup, service, profile string, now time.Time) bool {
-	for _, node := range snapshot.Nodes {
-		if node.ID != group.PreferredNodeID || node.Disabled {
-			continue
-		}
-		for _, check := range node.Health.History {
-			if check.ServiceID == service && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+node.ID {
-				return routeCheckUsable(check, node.ID, service, profile, now)
-			}
-		}
-	}
-	return false
 }

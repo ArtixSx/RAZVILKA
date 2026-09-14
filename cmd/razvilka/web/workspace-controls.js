@@ -74,7 +74,7 @@ async function changeWorkspaceMode(mode) {
     const result = await api('/api/v1/service-control', { method: 'PUT', body: JSON.stringify({ expected_revision: control.config_revision, mode, confirm: 'SAVE_SERVICE_CONTROL' }) });
     if (generation !== workspaceControl.generation) return;
     if (!acceptWorkspaceControl(result.control || result)) await refreshWorkspaceControl();
-    await refreshAll();
+    await refreshAfterMutation();
     if (generation !== workspaceControl.generation) return;
     showNotice('success', mode === 'auto' ? 'Автопилот включён' : 'Ручная настройка', mode === 'auto' ? 'Автоматическая замена разрешена только для настроенных сервисов и выбранного резерва. Правила доступны в карточке сервиса.' : 'Автоматическая замена отключена. Действующие подключения сохранены.');
   } catch (error) {
@@ -98,7 +98,7 @@ async function toggleWorkspaceRuntime() {
     if (generation !== workspaceControl.generation) return;
     if (!result.ok) throw new Error(result.error || 'Изменение не подтверждено. Обновите состояние.');
     acceptWorkspaceControl(result.control);
-    await refreshAll();
+    await refreshAfterMutation();
     if (generation !== workspaceControl.generation) return;
     showNotice('success', action === 'stop' ? 'Маршруты RAZVILKA остановлены' : 'Маршруты RAZVILKA включены', action === 'stop' ? 'Ваши настройки сохранены. Панель остаётся доступна.' : 'Предыдущие сервисы и устройства восстановлены после проверки.');
   } catch (error) {

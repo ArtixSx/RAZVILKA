@@ -34,7 +34,7 @@ for (const mode of ['busy', 'not-started-canceled', 'rollback', 'recovery-requir
       if (mode === 'recovery-fenced') error.payload = { not_started: true, recovery_required: true, code: 'PRIVATE_BACKUP_RECOVERY_REQUIRED' };
       throw error;
     },
-    refreshAll: async () => { if (mode === 'success-refresh-error') throw new Error('refresh failed'); },
+    refreshAfterMutation: async () => { if (mode === 'success-refresh-error') throw new Error('refresh failed'); },
     showPlan: async () => {},
     showDetails: (body, title) => notices.push({ body, title }),
   });

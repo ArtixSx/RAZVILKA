@@ -51,20 +51,26 @@ func (s *Store) RouteServices(ctx context.Context, nodeID, networkProfile string
 	if index < 0 {
 		return nil, ErrNotFound
 	}
-	if doc.Nodes[index].Disabled || !originFresh(doc.Nodes[index], now.UTC()) {
-		return []string{}, nil
+	return routeServicesForNode(doc.Nodes[index], networkProfile, now.UTC()), nil
+}
+
+// All selector APIs use the same private eligibility calculation. Public
+// Health.History is display data and must not grant independent authority.
+func routeServicesForNode(node storedNode, networkProfile string, now time.Time) []string {
+	if node.Disabled || !originFresh(node, now) {
+		return []string{}
 	}
 	// Only the newest exact attempt for a service may grant route authority.
 	// DNS, transport and egress failures also revoke an older service PASS.
 	latest := map[string]CheckRecord{}
-	for _, check := range doc.Nodes[index].Checks {
-		if check.ServiceID != "" && check.NetworkProfile == networkProfile && check.RoutePathID == "sing-box:"+nodeID {
+	for _, check := range node.Checks {
+		if check.ServiceID != "" && check.NetworkProfile == networkProfile && check.RoutePathID == "sing-box:"+node.ID {
 			latest[check.ServiceID] = check
 		}
 	}
 	services := map[string]bool{}
 	for serviceID, check := range latest {
-		if routeCheckUsable(check, nodeID, serviceID, networkProfile, now.UTC()) {
+		if routeCheckUsable(check, node.ID, serviceID, networkProfile, now) {
 			services[serviceID] = true
 		}
 	}
@@ -73,7 +79,7 @@ func (s *Store) RouteServices(ctx context.Context, nodeID, networkProfile string
 		out = append(out, id)
 	}
 	sort.Strings(out)
-	return out, nil
+	return out
 }
 
 // MaterializeSingBox constructs a deterministic, least-authority config from

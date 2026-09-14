@@ -11,7 +11,7 @@ function element(id){
   return elements.get(id);
 }
 const ctx={rim,interfaceState:{authRevoked:false},interfaceHTMLCache:new WeakMap(),state:{status:{version:'test'},system:{},metrics:{},audit:{}},consoleSnapshot:null,consoleAutonomyError:null,services:[],document:{getElementById:element,activeElement:null},$:(id)=>element(id.slice(1)),consoleText(){},ci:()=>'',esc:v=>String(v??'').replaceAll('<','&lt;'),interfaceHomeAuto(){},interfaceServices(){return ctx.services;},interfaceRouteName:r=>r||'Пока не назначен',consoleDate:s=>s,consoleAuditTitle:()=>''};
-vm.createContext(ctx);vm.runInContext(pick('interfaceHTML','interfaceServices')+pick('renderInterfaceHome','renderInterfaceServices'),ctx);
+vm.createContext(ctx);vm.runInContext(pick('interfaceHTML','interfaceServices')+pick('interfaceDataReady','renderInterfaceNavigation')+pick('renderInterfaceHome','renderInterfaceServices'),ctx);
 ctx.renderInterfaceHome({});
 assert.match(element('ui3HealthBanner').html,/Начать настройку/);
 assert.doesNotMatch(element('ui3HealthBanner').html,/r42-health-number/);
@@ -40,3 +40,23 @@ let renders=0;ctx.renderInterfaceServices=()=>{renders++;};ctx.interfaceSummarie
 vm.runInContext(source.slice(source.indexOf('function interfaceResetFilters('),source.indexOf("document.addEventListener('toggle'")),ctx);
 ctx.interfaceResetFilters();assert.equal(ctx.interfaceState.filter,'all');assert.equal(ctx.interfaceState.query,'');assert.equal(ctx.interfaceState.category,'');assert.equal(element('ui3ServiceSearch').value,'');assert.equal(renders,1);
 console.log('PASS home: first run, scoped health, CSP-compatible bars, real zero, absent/stale metrics, auth reset');
+
+// Unknown services/engines are not an empty catalogue or an uninstalled engine.
+ctx.interfaceState.authRevoked=false;ctx.services=[];ctx.state.dataLoad={};
+ctx.consoleText=(id,value)=>{element(id).textContent=value;};
+ctx.state.system={hostname:'Known router'};
+ctx.renderInterfaceHome({});
+assert.equal(element('ui3HomeCount').textContent,'—');
+assert.doesNotMatch(element('ui3HealthBanner').html,/Начать настройку|Добавьте первый сервис/);
+assert.equal(element('ui3RouterName').textContent,'Known router','slow services hid the loaded router snapshot');
+ctx.interfaceEmpty=(title,body,action)=>title+' '+body+' '+action;
+vm.runInContext(pick('renderInterfaceServices','renderInterfaceEngines')+pick('renderInterfaceEngines','renderInterface'),ctx);
+ctx.renderInterfaceServices({});ctx.renderInterfaceEngines();
+assert.match(element('ui3ServiceCatalog').html,/ещё|Получаем данные/);
+assert.doesNotMatch(element('ui3ServiceCatalog').html,/Выберите первый сервис|Ничего не найдено/);
+assert.doesNotMatch(element('ui3EngineGrid').html,/Не установлен/);
+ctx.state.dataLoad.services={loaded:false,phase:'error'};ctx.renderInterfaceServices({});
+assert.match(element('ui3ServiceCatalog').html,/не означает, что настройки отсутствуют/);
+ctx.state.dataLoad.services={loaded:true,phase:'ready'};ctx.renderInterfaceHome({});
+assert.match(element('ui3HealthBanner').html,/Начать настройку/,'confirmed empty catalogue must remain distinct');
+console.log('PASS independent section readiness: unknown counts, honest errors, loaded router and real empty catalogue');

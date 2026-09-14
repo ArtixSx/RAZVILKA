@@ -21,7 +21,7 @@ let timer;
 const context = vm.createContext({ state, $, $$: () => [], AbortController, Date, Number, JSON, encodeURIComponent,
   esc: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
   api: async (url, options) => { calls.push({ url, options }); return handler(url, options); },
-  refreshNodes: async () => {}, refreshAll: async () => {}, setTimeout: fn => { timer = fn; return 1; }, clearTimeout() {},
+  refreshNodes: async () => {}, refreshAfterMutation: async () => {}, setTimeout: fn => { timer = fn; return 1; }, clearTimeout() {},
   nodeDisplayName: node => node.name || 'узел',
 });
 const browserSource = readFileSync(new URL('../cmd/razvilka/web/node-browser.js', import.meta.url), 'utf8');

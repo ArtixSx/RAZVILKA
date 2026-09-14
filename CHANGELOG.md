@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.2-rc.5 — Responsive settings and flexible passwords
+
+- Read node route eligibility and public metadata from one storage generation
+  per selector request, retaining exact service/network/freshness checks.
+- Render independent panel reads as they arrive, bound GET timeouts and retries,
+  preserve prior data, and distinguish unavailable data from empty settings.
+- Preserve complete multiline NFQWS2 assignments and use multiline strategy
+  fields; refuse unsupported shell syntax instead of partially rewriting it.
+- Remove password minimum length for setup, change and recovery. Require only
+  nonempty exact input within the existing 256-byte resource bound.
+- See the [release notes](docs/releases/0.18.2-rc.5.md).
+
 ## 0.18.2-rc.4 — Scoped policy precedence and current runtime status
 
 CI and Release CI passed for the exact published commit. SSH upgrade,
