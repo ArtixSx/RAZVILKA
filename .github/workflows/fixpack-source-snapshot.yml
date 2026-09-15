@@ -1,0 +1,39 @@
+name: Fixpack source snapshot
+on:
+  push:
+    branches: [work/setup-warp-catalog-fixpack-20260915]
+    paths: [.github/workflows/fixpack-source-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SOURCE_COMMIT: cea4b6fec8a3fc807556a045c1c6446fa8932c9d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: cea4b6fec8a3fc807556a045c1c6446fa8932c9d
+          fetch-depth: 0
+      - name: Export immutable source and history
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          mkdir -p "$RUNNER_TEMP/fixpack-inputs"
+          git archive --format=tar.gz --prefix=project/ "$SOURCE_COMMIT" > "$RUNNER_TEMP/fixpack-inputs/rc6-source.tar.gz"
+          git branch fixpack-input "$SOURCE_COMMIT"
+          git bundle create "$RUNNER_TEMP/fixpack-inputs/rc6-history.bundle" fixpack-input
+          git rev-parse HEAD > "$RUNNER_TEMP/fixpack-inputs/COMMIT"
+          git ls-tree -r HEAD > "$RUNNER_TEMP/fixpack-inputs/git-tree.txt"
+          cd "$RUNNER_TEMP/fixpack-inputs"
+          sha256sum rc6-source.tar.gz rc6-history.bundle > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rc6-fixpack-inputs
+          path: ${{ runner.temp }}/fixpack-inputs/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
