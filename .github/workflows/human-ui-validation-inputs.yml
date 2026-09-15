@@ -1,0 +1,51 @@
+name: Human UI validation inputs
+
+on:
+  push:
+    branches: [work/human-ui-20260916]
+    paths: [.github/workflows/human-ui-validation-inputs.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: cea4b6fec8a3fc807556a045c1c6446fa8932c9d
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Export immutable inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/human-ui-inputs"
+          mkdir -p "$out"
+          test "$(git rev-parse HEAD)" = cea4b6fec8a3fc807556a045c1c6446fa8932c9d
+          git archive --format=tar.gz --prefix=RAZVILKA/ HEAD > "$out/source.tar.gz"
+          git branch validation-base HEAD
+          git bundle create "$out/source.bundle" validation-base
+          git ls-tree -r HEAD > "$out/source-tree.txt"
+          go version > "$out/toolchain.txt"
+          go mod download
+          go mod verify
+          sha256sum go.mod go.sum > "$out/module-inputs.sha256"
+          tar -czf "$out/go.tar.gz" -C "$(go env GOROOT)" .
+          tar -czf "$out/modules.tar.gz" -C "$(go env GOMODCACHE)" .
+          (cd "$out" && sha256sum source.tar.gz source.bundle go.tar.gz modules.tar.gz > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: human-ui-rc6-inputs
+          path: ${{ runner.temp }}/human-ui-inputs/
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
