@@ -1,7 +1,7 @@
 /* R4: task-oriented controls using the router's existing checker and catalog.
    No timers execute checks in the browser. No URI or token is persisted here. */
 'use strict';
-const workflowState = { epoch:0, controllers:new Set(), fetchBusy:false, fetchSeq:0, deleteBusy:false, deletion:null, deleteSeq:0, probe:null, lastProbe:null, communitySeq:0, communityImport:false };
+const workflowState = { bulkBusy:false, epoch:0, controllers:new Set(), fetchBusy:false, fetchSeq:0, deleteBusy:false, deletion:null, deleteSeq:0, probe:null, lastProbe:null, communitySeq:0, communityImport:false };
 const workflowViews = ['nodes','providers','engineconfig','services','managed'];
 function workflowSession(epoch){return epoch===workflowState.epoch && $('#authScreen').hidden;}
 async function workflowRequest(path, options={}, milliseconds=25000){
@@ -13,7 +13,7 @@ async function workflowRequest(path, options={}, milliseconds=25000){
 }
 function workflowError(error){
   if(error.name==='AbortError')return 'Ожидание остановлено. Результат записи не подтверждён; обновите состояние перед повтором.';
-  if(error.status===404||error.status===501)return 'Этот backend ещё не содержит необходимую операцию. Нужна сборка R5; фиктивный результат не создаётся.';
+  if(error.status===404||error.status===501)return 'Этот backend ещё не содержит необходимую операцию. Обновите backend; отсутствие операции не подменяется успехом.';
   return error.message || 'Не удалось выполнить действие.';
 }
 function workflowServiceOptions(id,preferred=''){
@@ -24,6 +24,7 @@ function workflowServiceOptions(id,preferred=''){
   if(services.some(s=>s.id===prev))el.value=prev;
 }
 function renderWorkflowControls(){
+  workflowBulkControls();
   for(const id of ['r4ProbeService','r4CatalogService'])workflowServiceOptions(id);
   const engine=typeof selectedEngineView==='function'?selectedEngineView():null;
   const running=['running','canceling'].includes(nodeBrowser.job?.state);
@@ -109,19 +110,21 @@ async function workflowFetch(event){
 }
 async function workflowDelete(ids,mode='selected'){
   if(workflowState.deleteBusy)return;
-  const all=[...new Set(ids)],chosen=all.slice(0,64),seq=++workflowState.deleteSeq,epoch=workflowState.epoch;
-  if(!chosen.length){interfaceToast('Нет записей для удаления.');return;}
+  const isAllVLESS=mode==='all-vless';
+  const all=isAllVLESS?workflowAllVLESS().map(n=>n.id):[...new Set(ids)],chosen=isAllVLESS?[]:all.slice(0,64),seq=++workflowState.deleteSeq,epoch=workflowState.epoch;
+  if(!all.length){interfaceToast('Нет записей для удаления.');return;}
   if(mode==='selected'&&all.length>64){interfaceToast('За один раз удаляется до 64 узлов. Сократите выбор.');return;}
-  const request={node_ids:chosen,generation:state.nodes?.generation,mode,service_id:$('#nodeBrowserService').value,network_profile:state.nodes?.network_profile||'',preview:true,confirm:'DELETE_NODES'};
+  const request=isAllVLESS?{generation:state.nodes?.generation,mode,preview:true,confirm:'DELETE_ALL_VLESS'}:{node_ids:chosen,generation:state.nodes?.generation,mode,service_id:$('#nodeBrowserService').value,network_profile:state.nodes?.network_profile||'',preview:true,confirm:'DELETE_NODES'};
   workflowState.deletion=null;workflowState.deleteBusy=true;$('#r4DeleteCommit').disabled=true;
-  $('#r4DeleteSummary').textContent=`Сверяем ссылки на ${chosen.length} узлов${all.length>64?' из '+all.length+' (первая партия)':''}. Проверяем маршруты, группы, закрепления и резерв.`;
+  $('#r4DeleteSummary').textContent=isAllVLESS?'Предпросмотр ВСЕХ VLESS во всём каталоге. Фильтры и страницы не ограничивают удаление. Проверяем маршруты, группы и резерв.':`Сверяем ссылки на ${chosen.length} узлов${all.length>64?' из '+all.length+' (первая партия)':''}. Проверяем маршруты, группы, закрепления и резерв.`;
   $('#r4DeleteItems').replaceChildren();$('#r4DeleteStatus').textContent='';$('#r4DeleteDialog').showModal();renderWorkflowControls();
   try{
     const result=await workflowRequest('/api/v1/nodes/delete-batch',{method:'POST',body:JSON.stringify(request)});
     if(!workflowSession(epoch)||seq!==workflowState.deleteSeq||!$('#r4DeleteDialog').open)return;
     if(result.preview!==true||!Array.isArray(result.candidates)||!Array.isArray(result.skipped))throw new Error('Backend не вернул проверенный состав удаления.');
+    if(isAllVLESS && (result.scope!=='all-vless'||result.generation!==request.generation||!/^([a-f0-9]{64})$/.test(result.review||'')))throw new Error('Backend не подтвердил весь VLESS-каталог. Удаление не разрешено.');
     workflowState.deletion={request,result,seq};
-    $('#r4DeleteSummary').textContent=`Можно удалить: ${result.candidates.length}. Сохраняем: ${result.skipped.length}.${all.length>64?' Обработаны первые 64 записи текущей выборки.':''}`;
+    $('#r4DeleteSummary').textContent=`${isAllVLESS?'Все VLESS, все источники и страницы. ':''}Можно удалить: ${result.candidates.length}. Сохраняем: ${result.skipped.length}.${!isAllVLESS&&all.length>64?' Обработаны первые 64 записи текущей выборки.':''}${isAllVLESS?' Другие протоколы не затрагиваются. Подписки могут загрузить удалённые ссылки снова.':''}`;
     $('#r4DeleteItems').innerHTML=[...result.candidates.map(n=>({...n,allowed:true})),...result.skipped].map(n=>`<div class="r4-delete-row"><span class="ui3-status ${n.allowed?'warn':'unknown'}">${n.allowed?'Удаление':'Сохранить'}</span><div><b>${esc(n.name||'Узел')}</b><small>${esc(n.reason||'Локальная запись не используется.')}</small></div></div>`).join('');
     $('#r4DeleteCommit').textContent='Удалить '+result.candidates.length+' узлов';$('#r4DeleteCommit').disabled=!result.candidates.length;
   }catch(error){if(workflowSession(epoch)&&seq===workflowState.deleteSeq)$('#r4DeleteStatus').textContent=workflowError(error);}
@@ -132,7 +135,7 @@ async function workflowCommitDelete(){
   const epoch=workflowState.epoch;workflowState.deleteBusy=true;$('#r4DeleteCommit').disabled=true;
   $('#r4DeleteStatus').textContent='Повторно проверяем редакцию, использование и результаты перед удалением…';
   try{
-    const result=await workflowRequest('/api/v1/nodes/delete-batch',{method:'POST',body:JSON.stringify({...intent.request,generation:intent.result.generation,preview:false})});
+    const result=await workflowRequest('/api/v1/nodes/delete-batch',{method:'POST',body:JSON.stringify({...intent.request,generation:intent.result.generation,preview:false,...(intent.request.mode==='all-vless'?{review:intent.result.review}:{})})});
     if(!workflowSession(epoch))return;
     if(!Array.isArray(result.deleted))throw new Error('Состав удалённых записей не подтверждён. Обновите каталог.');
     for(const id of result.deleted)nodeBrowser.selected.delete(id);
@@ -165,8 +168,58 @@ document.addEventListener('razvilka:auth-required',()=>{
   workflowState.epoch++;workflowState.communitySeq++;workflowState.deleteSeq++;workflowState.fetchSeq++;
   for(const c of workflowState.controllers)c.abort();workflowState.controllers.clear();
   workflowState.probe=null;workflowState.lastProbe=null;workflowState.deletion=null;
-  workflowState.fetchBusy=workflowState.deleteBusy=workflowState.communityImport=false;
+  workflowState.bulkBusy=workflowState.fetchBusy=workflowState.deleteBusy=workflowState.communityImport=false;
   $('#r4FetchURL').value='';state.communityPreview=null;$('#communityPreview').replaceChildren();
   for(const id of ['r4FetchDialog','r4DeleteDialog','communityCatalogDialog'])$('#'+id).close();
 });
+// The two catalogue actions deliberately ignore source/search/country/page filters.
+function workflowAllVLESS(){return (state.nodes?.nodes||[]).filter(n=>String(n.protocol||'').trim().toLowerCase()==='vless');}
+function workflowBulkControls(){
+  for(const [id,anchor,kind,handler] of [
+    ['nodeCheckAllVLESS','nodeCheckSelected','primary',workflowCheckAllVLESS],
+    ['nodeDeleteAllVLESS','r4DeleteFailed','danger-button',()=>workflowDelete([],'all-vless')]
+  ]){
+    if(!$('#'+id)&&$('#'+anchor)){
+      const button=document.createElement('button');button.id=id;button.type='button';button.className=kind;
+      button.title='Весь VLESS-каталог: все страницы и источники, независимо от фильтров';
+      button.addEventListener('click',handler);$('#'+anchor).insertAdjacentElement('afterend',button);
+    }
+  }
+  const all=workflowAllVLESS(),eligible=all.filter(nodeCanCheck),running=['running','canceling'].includes(nodeBrowser.job?.state);
+  const check=$('#nodeCheckAllVLESS'),remove=$('#nodeDeleteAllVLESS');
+  if(check){check.textContent=`Проверить все VLESS · ${eligible.length}`;check.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!$('#nodeBrowserService').value||!eligible.length||state.nodes?.available===false;}
+  if(remove){remove.textContent=`Удалить все VLESS… · ${all.length}`;remove.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!all.length||state.nodes?.available===false;}
+  const hint=$('.node-check-hint');
+  if(hint)hint.textContent='Проверка — выбранный веб-сценарий через узел, не только пинг. «Проверить все VLESS» создаёт одну очередь всего каталога, независимо от страниц и фильтров. Отключённые/истёкшие узлы пропускаются. Между узлами ресурс освобождается для восстановления. Обычная выборка ограничена 64 узлами; массовая проверка не применяет маршруты.';
+}
+async function workflowCheckAllVLESS(){
+  if(workflowState.bulkBusy||['running','canceling'].includes(nodeBrowser.job?.state))return;
+  const epoch=workflowState.epoch,serviceID=$('#nodeBrowserService').value;
+  if(!serviceID)return;
+  workflowState.bulkBusy=true;renderWorkflowControls();
+  let submitted=false;
+  try{
+    const status=await workflowRequest('/api/v1/node-checks/current');
+    if(status.all_vless!==true)throw new Error('Нужно обновление backend с массовыми действиями VLESS. Проверка первой страницы не подменяет проверку каталога.');
+    if(['running','canceling'].includes(status.job?.state))throw new Error('На роутере уже выполняется проверка.');
+    const snapshot=await workflowRequest('/api/v1/nodes');
+    const all=(snapshot.nodes||[]).filter(n=>String(n.protocol||'').trim().toLowerCase()==='vless'),eligible=all.filter(nodeCanCheck);
+    if(!eligible.length||!Number.isSafeInteger(snapshot.generation)||snapshot.generation<1)throw new Error('Нет доступных VLESS для проверки. Обновите каталог.');
+    const service=(state.services||[]).find(s=>s.id===serviceID);
+    const yes=await askConfirmation('Проверить все VLESS?',`В очереди: ${eligible.length} из ${all.length} VLESS. Сервис: ${service?.name||serviceID} (веб). Все источники и страницы, фильтры не учитываются. Отключённые и истёкшие записи пропускаются. Состав фиксируется сейчас; новые импорты не добавляются. Проверка продолжится на роутере при закрытом браузере, но перезапуск приложения прервёт эту очередь. Маршруты не изменяются.`,'Проверить все');
+    if(!yes||!workflowSession(epoch))return;
+    submitted=true;
+    const response=await workflowRequest('/api/v1/node-checks',{method:'POST',body:JSON.stringify({scope:'all-vless',generation:snapshot.generation,mode:'service',service_id:serviceID,confirm:'CHECK_ALL_VLESS'})});
+    if(!workflowSession(epoch))return;
+    if(!response.job?.id||response.job.scope!=='all-vless'||response.job.service_id!==serviceID)throw new Error('Создание очереди не подтверждено. Обновите состояние; повторный запуск автоматически не отправляется.');
+    nodeBrowser.job=response.job;renderNodes();scheduleNodeBrowserRefresh(500);
+    interfaceToast('Очередь всех VLESS принята роутером. Отмена — у общего индикатора проверки.');
+  }catch(error){
+    if(workflowSession(epoch)){
+      interfaceToast(workflowError(error));
+      // GET only after a lost reply. Never replay a destructive or long-running POST.
+      if(submitted)try{const current=await workflowRequest('/api/v1/node-checks/current');if(workflowSession(epoch)){nodeBrowser.job=current.job||null;renderNodeBatchStatus();scheduleNodeBrowserRefresh(500);}}catch(_){}
+    }
+  }finally{if(workflowSession(epoch)){workflowState.bulkBusy=false;renderWorkflowControls();}}
+}
 renderWorkflowControls();

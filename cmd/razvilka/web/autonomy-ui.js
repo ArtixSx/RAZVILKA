@@ -22,7 +22,7 @@
     for(const v of p.default_sources) {
       if(!/^[0-9a-fA-F:./]+$/.test(v)||/\/0$/.test(v)||v==='0.0.0.0'||v==='::'||v.startsWith('127.')||v.startsWith('::1/')) throw new Error('Нужны IP-адреса или CIDR устройств; не домены и не 0.0.0.0/0.');
     }
-    if(!Array.isArray(p.source_ids)||p.source_ids.length>32||p.enabled&&!p.source_ids.length||p.source_ids.some(id=>! /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id))) throw new Error('Выберите хотя бы один известный источник для автоматического подбора.');
+    if(!Array.isArray(p.source_ids)||p.source_ids.length>32||p.enabled&&!p.source_ids.length&&!p.preferred_routes?.length||p.source_ids.some(id=>! /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id))) throw new Error('Выберите хотя бы один известный источник для автоматического подбора.');
     if(!Array.isArray(p.protocols)||!p.protocols.length||p.protocols.some(x=>!supportedProtocols.includes(x))) throw new Error('Выберите поддержанные протоколы.');
     if(!Array.isArray(p.preferred_routes)||p.preferred_routes.some(x=>!supportedRoutes.includes(x))) throw new Error('Неизвестный предпочтительный обход.');
     const ranges={check_seconds:[60,3600],reserve_seconds:[60,86400],reserve_target:[1,4],candidates_per_round:[1,4],failure_confirm_seconds:[10,300],max_switches_per_hour:[1,20]};

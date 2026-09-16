@@ -22,13 +22,15 @@ import (
 const maxNodeCheckBatch = 64
 
 type nodeCheckJobRequest struct {
-	NodeIDs   []string              `json:"node_ids"`
-	ServiceID string                `json:"service_id"`
-	Mode      string                `json:"mode"`
-	Feed      *providerfeed.Request `json:"feed,omitempty"`
-	FeedID    string                `json:"feed_id,omitempty"`
-	Limit     int                   `json:"limit,omitempty"`
-	Confirm   string                `json:"confirm,omitempty"`
+	Scope      string                `json:"scope,omitempty"`
+	Generation uint64                `json:"generation,omitempty"`
+	NodeIDs    []string              `json:"node_ids"`
+	ServiceID  string                `json:"service_id"`
+	Mode       string                `json:"mode"`
+	Feed       *providerfeed.Request `json:"feed,omitempty"`
+	FeedID     string                `json:"feed_id,omitempty"`
+	Limit      int                   `json:"limit,omitempty"`
+	Confirm    string                `json:"confirm,omitempty"`
 }
 
 type nodeCheckItem struct {
@@ -46,6 +48,11 @@ type nodeCheckItem struct {
 }
 
 type nodeCheckJob struct {
+	Scope          string                 `json:"scope,omitempty"`
+	Matched        int                    `json:"matched,omitempty"`
+	Passed         int                    `json:"passed"`
+	Failed         int                    `json:"failed"`
+	Inconclusive   int                    `json:"inconclusive"`
 	ID             uint64                 `json:"id"`
 	Phase          string                 `json:"phase"`
 	ErrorCode      string                 `json:"error_code,omitempty"`
@@ -66,6 +73,7 @@ type nodeCheckJob struct {
 type nodeCheckState struct {
 	// Test seam is private and fixed before HTTP serving; production always uses NodeFeeds.
 	fetchSource     func(context.Context, nodeCheckJobRequest) (providerfeed.Result, error)
+	bulkWait        func(context.Context, time.Duration) error // private test seam, fixed before serving
 	mu              sync.Mutex
 	root            context.Context
 	closed          bool
@@ -141,7 +149,7 @@ func (a *App) nodeCheckSnapshot() map[string]any {
 		pings = append(pings, ping)
 	}
 	sort.Slice(pings, func(i, j int) bool { return pings[i].NodeID < pings[j].NodeID })
-	return map[string]any{"job": job, "pings": pings, "working_routes_changed": false, "fetch_and_check": true, "cancel_requires_job_id": true}
+	return map[string]any{"job": job, "pings": pings, "working_routes_changed": false, "fetch_and_check": true, "all_vless": true, "cancel_requires_job_id": true}
 }
 
 func (a *App) nodeCheckJobCurrent(w http.ResponseWriter, r *http.Request) {
@@ -186,8 +194,16 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 	var request nodeCheckJobRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF || !validNodeCheckJobRequest(request) {
+	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF {
 		http.Error(w, "Выберите от 1 до 64 узлов и тип проверки.", http.StatusBadRequest)
+		return
+	}
+	if request.Scope != "" {
+		a.checkAllVLESS(w, r, request)
+		return
+	}
+	if request.Generation != 0 || !validNodeCheckJobRequest(request) {
+		http.Error(w, "Выберите от 1 до 64 узлов или действие для всего VLESS-каталога.", http.StatusBadRequest)
 		return
 	}
 	enter := a.Operations.Enter
@@ -394,6 +410,7 @@ func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service cat
 			item.Verdict, item.TestLevel, item.ErrorCode = string(result.Verdict), result.TestLevel, result.ErrorCode
 		} else {
 			item.Message = nodeCheckFailureMessage(err)
+			item.Verdict, item.TestLevel, item.ErrorCode = "INCONCLUSIVE", "unconfirmed", nodeCheckFailureCode(err)
 		}
 		return item
 	}

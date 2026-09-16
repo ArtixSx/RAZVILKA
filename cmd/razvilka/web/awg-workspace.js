@@ -9,7 +9,7 @@ function awgIssuesHTML(items){return (items||[]).map(x=>`<div class="awg-issue">
 function renderAWGWorkspace(){
  const box=$('#awgWorkspace');if(!box)return;
  const visible=state.selectedEngine==='amneziawg';box.hidden=!visible;
- const warpPane=visible&&state.awgPane==='warp';$('#view-engineconfig').classList.toggle('awg-warp-active',warpPane);
+ const warpPane=false;$('#view-engineconfig').classList.toggle('awg-warp-active',warpPane);
  if(!visible)return;
  $('#awgProfilePane').hidden=warpPane;$('#awgWarpIntro').hidden=!warpPane;
  $('#awgSelectProfile').setAttribute('aria-pressed',String(!warpPane));$('#awgSelectWarp').setAttribute('aria-pressed',String(warpPane));
@@ -37,7 +37,7 @@ async function refreshAWGWorkspace(){
  catch(error){if(awgCurrent(epoch)){awgUI.snapshot=null;awgUI.message=awgMessage(error);}}
  finally{if(awgCurrent(epoch)){awgUI.loading=false;renderAWGWorkspace();}}
 }
-function awgSetPane(pane){state.awgPane=pane;renderAWGWorkspace();renderWarpManager();}
+function awgSetPane(pane){if(pane==='warp'){void selectEngine('warp-wg');return;}state.awgPane='profile';renderAWGWorkspace();renderWarpManager();}
 $('#awgSelectProfile').addEventListener('click',()=>awgSetPane('profile'));
 $('#awgSelectWarp').addEventListener('click',()=>{awgSetPane('warp');void refreshWarp().catch(e=>interfaceToast(workflowError(e)));});
 $('#awgOpenWarpEditor').addEventListener('click',()=>selectEngine('warp-wg'));

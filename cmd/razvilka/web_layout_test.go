@@ -124,7 +124,7 @@ func TestWarpSettingsExplainTransactionalApply(t *testing.T) {
 			t.Fatalf("WARP guidance missing %q", required)
 		}
 	}
-	for _, required := range []string{"ENGINE_DRAFT_UNUSED", "warpPolicyDirty", "Выберите сервис для подключения", "компонент не установлен", "сначала создайте или импортируйте профиль", "openRouteInstallation('warp-wg')", "/api/v1/warp/connectivity", "/api/v1/warp/canary", "checkWarpCanary"} {
+	for _, required := range []string{"ENGINE_DRAFT_UNUSED", "warpPolicyDirty", "Выберите сервис для подключения", "компонент не установлен", "сначала создайте или импортируйте профиль", "openEngineInstallation('warp-wg')", "/api/v1/warp/connectivity", "/api/v1/warp/canary", "checkWarpCanary"} {
 		if !strings.Contains(app, required) {
 			t.Fatalf("WARP apply guard missing %q", required)
 		}

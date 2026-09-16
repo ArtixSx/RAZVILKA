@@ -38,3 +38,12 @@ Before a public packaged release, exact bundled-vs-referenced license obligation
 - Hiddify App — profile/automatic-selection UX reference; no code bundled.
 - 3x-ui — node/traffic/multi-hop operational UX reference; no code bundled.
 - OpenClash and OpenWrt PassWall — router integration/dependency/compatibility references; no code bundled.
+
+## Bundled NFQWS2 starter data (repair.2)
+
+The 278-domain starter snapshot derives from `nfqws/nfqws2-keenetic` at
+`c77226bd384e047a3d97e3ab6f0ad8b46fc3c967`, `etc/nfqws2/lists/user.list`.
+Copyright (c) 2026 nfqws, MIT. The complete notice is retained in
+[docs/NFQWS2_DATA_LICENSE.txt](docs/NFQWS2_DATA_LICENSE.txt) and alongside
+the embedded source data. RAZVILKA groups the data into six services and adds
+local test definitions; it does not bundle or execute that project's installer.

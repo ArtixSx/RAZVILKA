@@ -82,13 +82,14 @@ type Conflict struct {
 }
 
 type Preview struct {
-	Entry     Entry           `json:"entry"`
-	Service   catalog.Service `json:"service"`
-	Conflicts []Conflict      `json:"conflicts"`
-	Skipped   int             `json:"skipped"`
-	SourceSHA string          `json:"source_sha256"`
-	FetchedAt string          `json:"fetched_at"`
-	FromCache bool            `json:"from_cache"`
+	Entry       Entry           `json:"entry"`
+	Service     catalog.Service `json:"service"`
+	Conflicts   []Conflict      `json:"conflicts"`
+	Skipped     int             `json:"skipped"`
+	SourceSHA   string          `json:"source_sha256"`
+	FetchedAt   string          `json:"fetched_at"`
+	FromCache   bool            `json:"from_cache"`
+	ImportGuard string          `json:"import_guard"`
 }
 
 type cachedPreview struct {
@@ -200,6 +201,18 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 	if err := ctx.Err(); err != nil {
 		return Preview{}, err
 	}
+	if strings.HasPrefix(id, "adhoc-") {
+		m.mu.RLock()
+		cached, found := m.cache[id]
+		m.mu.RUnlock()
+		if !found || time.Since(cached.at) < 0 || time.Since(cached.at) >= 10*time.Minute {
+			return Preview{}, ErrPreviewExpired
+		}
+		p := clonePreview(cached.preview)
+		p.FromCache = true
+		p.Conflicts = findConflicts(p.Service, existing)
+		return p, nil
+	}
 	entry, ok := m.entry(id)
 	if !ok {
 		return Preview{}, os.ErrNotExist
@@ -258,7 +271,7 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 	if err := catalog.Validate(catalog.Catalog{Services: []catalog.Service{service}}); err != nil {
 		return Preview{}, fmt.Errorf("community service validation: %w", err)
 	}
-	preview := Preview{Entry: entry, Service: service, Conflicts: findConflicts(service, existing), Skipped: skipped, SourceSHA: digest, FetchedAt: fetchedAt}
+	preview := Preview{Entry: entry, Service: service, Conflicts: findConflicts(service, existing), Skipped: skipped, SourceSHA: digest, FetchedAt: fetchedAt, ImportGuard: "source-sha256"}
 	m.mu.Lock()
 	m.cache[id] = cachedPreview{preview: clonePreview(preview), at: time.Now()}
 	m.mu.Unlock()

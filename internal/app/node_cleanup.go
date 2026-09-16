@@ -26,6 +26,7 @@ type nodeCleanupRequest struct {
 	NetworkProfile string   `json:"network_profile"`
 	Preview        bool     `json:"preview"`
 	Confirm        string   `json:"confirm"`
+	Review         string   `json:"review,omitempty"`
 }
 type nodeCleanupItem struct {
 	NodeID string `json:"node_id"`
@@ -45,8 +46,7 @@ func (a *App) nodeCleanup(w http.ResponseWriter, r *http.Request) {
 	var q nodeCleanupRequest
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
 	dec.DisallowUnknownFields()
-	if dec.Decode(&q) != nil || dec.Decode(&struct{}{}) != io.EOF || len(q.NodeIDs) < 1 || len(q.NodeIDs) > 64 ||
-		q.Mode != "selected" && q.Mode != "failed" || q.Confirm != "DELETE_NODES" || q.Generation == 0 {
+	if dec.Decode(&q) != nil || dec.Decode(&struct{}{}) != io.EOF || !validNodeCleanupRequest(q) {
 		writeJSON(w, 400, map[string]any{"error": "Выберите от 1 до 64 узлов и подтвердите удаление."})
 		return
 	}
@@ -77,6 +77,13 @@ func (a *App) nodeCleanup(w http.ResponseWriter, r *http.Request) {
 	if snapshot.Generation != q.Generation {
 		writeJSON(w, 409, map[string]any{"error": "Каталог изменился. Обновите выборку и повторите предпросмотр.", "not_started": true})
 		return
+	}
+	if q.Mode == "all-vless" {
+		for _, n := range snapshot.Nodes {
+			if strings.EqualFold(strings.TrimSpace(n.Protocol), "vless") {
+				q.NodeIDs = append(q.NodeIDs, n.ID)
+			}
+		}
 	}
 	protected, err := a.protectedCleanupNodes(r.Context(), snapshot)
 	if err != nil {
@@ -118,8 +125,31 @@ func (a *App) nodeCleanup(w http.ResponseWriter, r *http.Request) {
 			candidates = append(candidates, item)
 		}
 	}
+	review := applyReviewHash(struct {
+		Generation          uint64
+		Mode, Catalogue     string
+		Candidates, Skipped []nodeCleanupItem
+	}{snapshot.Generation, q.Mode, applyReviewHash(snapshot.Nodes), candidates, skipped})
 	if q.Preview {
-		writeJSON(w, 200, map[string]any{"preview": true, "generation": snapshot.Generation, "candidates": candidates, "skipped": skipped, "working_routes_changed": false})
+		writeJSON(w, 200, map[string]any{"preview": true, "generation": snapshot.Generation, "candidates": candidates, "skipped": skipped, "working_routes_changed": false, "scope": q.Mode, "review": review, "matched": len(q.NodeIDs)})
+		return
+	}
+	if q.Mode == "all-vless" {
+		if q.Review != review {
+			writeJSON(w, 409, map[string]any{"error": "Состав удаления изменился. Повторите предпросмотр; узлы сохранены.", "not_started": true})
+			return
+		}
+		ids := make([]string, 0, len(candidates))
+		for _, n := range candidates {
+			ids = append(ids, n.NodeID)
+		}
+		if len(ids) > 0 {
+			if _, err := a.Nodes.DeleteBatch(r.Context(), ids, snapshot.Generation, time.Now()); err != nil {
+				writeJSON(w, 409, map[string]any{"error": "Каталог изменился или запись удаления не подтверждена. Обновите состояние и повторите предпросмотр.", "working_routes_changed": false})
+				return
+			}
+		}
+		writeJSON(w, 200, map[string]any{"complete": true, "deleted": ids, "skipped": skipped, "working_routes_changed": false, "note": "Удалены локальные неиспользуемые VLESS. Другие протоколы и маршруты сохранены. Подписка может импортировать эти ссылки снова."})
 		return
 	}
 	deleted := []string{}

@@ -1,3 +1,5 @@
+> **Local test candidate `0.18.2-repair.2`.** See [scope and limitations (RU)](docs/REPAIR2_STATUS_RU.md). Not a published stable release; the historical release results below do not validate this candidate.
+
 # RAZVILKA
 
 A local control panel for Keenetic/Netcraze routers with Entware. Configure

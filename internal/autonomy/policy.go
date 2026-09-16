@@ -132,7 +132,7 @@ func Validate(p Policy) error {
 		}
 		seen[id] = true
 	}
-	if p.Enabled && len(p.SourceIDs) == 0 || p.CheckSeconds < 60 || p.CheckSeconds > 3600 || p.ReserveSeconds < p.CheckSeconds || p.ReserveSeconds > 86400 || p.ReserveTarget < 1 || p.ReserveTarget > 4 || p.CandidatesPerRound < 1 || p.CandidatesPerRound > 4 || p.FailureConfirmSeconds < 10 || p.FailureConfirmSeconds > 300 || p.MaxSwitchesPerHour < 1 || p.MaxSwitchesPerHour > 20 {
+	if p.Enabled && len(p.SourceIDs) == 0 && len(p.PreferredRoutes) == 0 || p.CheckSeconds < 60 || p.CheckSeconds > 3600 || p.ReserveSeconds < p.CheckSeconds || p.ReserveSeconds > 86400 || p.ReserveTarget < 1 || p.ReserveTarget > 4 || p.CandidatesPerRound < 1 || p.CandidatesPerRound > 4 || p.FailureConfirmSeconds < 10 || p.FailureConfirmSeconds > 300 || p.MaxSwitchesPerHour < 1 || p.MaxSwitchesPerHour > 20 {
 		return ErrPolicy
 	}
 	if ValidateWindow(p.Application) != nil || ValidateWindow(p.Components) != nil || p.Components.Mode == "prepare" {

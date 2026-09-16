@@ -51,8 +51,8 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	if !p.SetupComplete {
 		return
 	}
+	a.autonomyMaintenance(ctx, p, now)
 	if !p.Enabled || ctx.Err() != nil || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || a.Dataplane == nil {
-		a.autonomyMaintenance(ctx, p, now)
 		return
 	}
 	if err = a.autonomyEnsureFeeds(ctx, p); err != nil {
@@ -84,7 +84,6 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	}
 	a.autonomy.mu.Unlock()
 	if chosen == "" {
-		a.autonomyMaintenance(ctx, p, now)
 		return
 	}
 	state.NextCheck = now.Add(time.Duration(p.CheckSeconds) * time.Second)
@@ -129,6 +128,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	}
 	if !serviceHasNodeProbe(service) {
 		return finish("unsupported-scenario", "Для сервиса нет безопасной веб-проверки. Доступ не объявляется подтверждённым.")
+	}
+	if catalog.IsNFQWS2Starter(service) && s.ExpectedRoute == "nfqws2" {
+		return a.runNFQWS2Starter(ctx, p, s, r, service, cfg, profile)
 	}
 	current := ""
 	if applied := cfg.AppliedServices[s.ID]; applied.Enabled {
@@ -224,8 +226,12 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			if !healthy && !replace {
 				if verdict == "FAIL" {
 					r.NextCheck = time.Now().Add(time.Duration(p.FailureConfirmSeconds) * time.Second)
+					return finish("unconfirmed", "Требуется повторная проверка текущего узла; маршрут сохранён.")
 				}
-				return finish("unconfirmed", "Требуется повторная проверка текущего узла; маршрут сохранён.")
+				if err != nil || !canExploreUnconfirmedNode(check) {
+					return finish("unconfirmed", "Проверка текущего узла не завершена. Требуется восстановление проверяющего механизма; маршрут сохранён.")
+				}
+				// Preparing an alternative is not permission to switch to it.
 			}
 		}
 	}
@@ -331,7 +337,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		return finish("healthy", "Работающий путь сохранён. Проверенные резервные узлы подготовлены отдельно.")
 	}
 	if !replace {
-		return finish("unconfirmed", "Нет подтверждённого основания менять маршрут.")
+		return finish("unconfirmed", "Текущий путь не подтверждён. Разрешённый резерв проверен отдельно; без основания и свежего доказательства маршрут не меняется.")
 	}
 	if len(ready) == 0 {
 		return finish("searching", "Подходящий узел пока не найден. Продолжается ограниченный подбор.")

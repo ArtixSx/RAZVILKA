@@ -198,6 +198,11 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 				result.Stage = "route_identity"
 				result.ErrorCode = "node-network-changed"
 				result.Message = "Сеть изменилась или не подтверждена. Повторите проверку на текущем подключении."
+				if errors.Is(err, context.DeadlineExceeded) {
+					result.Stage, result.ErrorCode, result.Message = "deadline", "node-check-deadline", "Истекло общее время проверки. Изменение WAN этим не доказано."
+				} else if errors.Is(err, context.Canceled) {
+					result.Stage, result.ErrorCode, result.Message = "canceled", "node-check-canceled", "Проверка отменена; положительный результат не используется."
+				}
 				result.Evidence.ErrorCode = result.ErrorCode
 			}
 			finish()

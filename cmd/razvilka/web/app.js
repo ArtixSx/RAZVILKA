@@ -1059,6 +1059,7 @@ async function refreshComponents(refresh = true) {
 }
 
 async function manageComponent(id, requestedAction) {
+  const epoch=workflowState.epoch;
   const component = state.components.find((c) => c.id === id);
   if (!component) return false;
   const action = requestedAction || (component.update_available ? 'update' : 'install');
@@ -1071,9 +1072,11 @@ async function manageComponent(id, requestedAction) {
   try {
     plan = await api(`/api/v1/components/${encodeURIComponent(id)}/plan?action=${encodeURIComponent(action)}`);
   } catch (error) {
+    if(!workflowSession(epoch))return false;
     showDetails({ error: error.message, response: error.payload }, `${component.name}: план недоступен`);
     return false;
   }
+  if(!workflowSession(epoch))return false;
   if (!plan.ready) {
     showDetails(plan, `${component.name}: действие заблокировано`);
     return false;
@@ -1082,19 +1085,25 @@ async function manageComponent(id, requestedAction) {
     ? 'Будет удалён только пакет/файл, принадлежащий RAZVILKA. Конфликты, активный процесс или зависимые сервисы блокируют действие.'
     : `Источник: ${source}. После установки обход останется выключенным, пока вы явно не назначите сервисы и не выполните общий Apply.`;
   if (!await askConfirmation(`${verb} ${component.name}`, `${operation} План содержит ${plan.steps?.length || 0} проверяемых этапов, фиксирует версии до/после и не включает маршруты автоматически.`, verb)) return false;
+  if(!workflowSession(epoch))return false;
   const buttons = $$(`.component-action[data-component="${CSS.escape(id)}"]`);
   buttons.forEach((button) => { button.disabled = true; button.textContent = 'Выполняется…'; });
   try {
     const result = await api(`/api/v1/components/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' });
+    if(!workflowSession(epoch))return false;
     await refreshComponents(false);
+    if(!workflowSession(epoch))return false;
     const [engines, engineConfigs] = await Promise.all([api('/api/v1/engines'), api('/api/v1/engine-configs')]);
+    if(!workflowSession(epoch))return false;
     Object.assign(state, { engines, engineConfigs });
     renderEngines(); renderEngineControl();
     showNotice('success', `${component.name}: ${action === 'remove' ? 'удаление завершено' : 'установка проверена'}`, action === 'remove' ? 'Компонент удалён и повторная проверка подтвердила результат.' : 'Версия повторно прочитана с роутера, контрольный результат сохранён. Маршруты сервисов пока не менялись.', { plan, result });
     showDetails({ plan, result }, `${component.name}: готово`);
     return true;
   } catch (error) {
+    if(!workflowSession(epoch))return false;
     await refreshComponents(false);
+    if(!workflowSession(epoch))return false;
     showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Причина сохранена в карточке компонента; устраните её и повторите операцию. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
     showDetails({ error: error.message, response: error.payload, plan }, `${component.name}: ошибка`);
     return false;
@@ -1681,12 +1690,13 @@ function renderEngineControl() {
   }
   updateEngineEditorActions();
   if(typeof renderWorkflowControls==='function')renderWorkflowControls();
+  if(typeof renderSetupRepairControls==='function')renderSetupRepairControls();
 }
 
 function renderWarpManager() {
   const panel = $('#warpManager');
   if (!panel) return;
-  const visible = state.selectedEngine === 'warp-wg' || (state.selectedEngine === 'amneziawg' && state.awgPane === 'warp');
+  const visible = state.selectedEngine === 'warp-wg';
   panel.hidden = !visible;
   if (!visible) return;
   const w = state.warp || {};
@@ -2067,9 +2077,17 @@ async function switchEngineMode(mode) {
   renderEngineControl();
 }
 
+function noticeBelongsOnlyToEngine(details, id) {
+  if(!details||!id)return false;
+  if(details.engine_id===id)return true;
+  const blockers=details.transaction?.blockers;
+  return Array.isArray(blockers)&&blockers.length>0&&blockers.every(b=>b.code==='ENGINE_DRAFT_UNUSED'&&b.adapter===id);
+}
+
 async function selectEngine(id) {
   if (state.engineIntent) return;
   if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить обход и потерять локальные изменения редактора?', 'Переключить')) return;
+  if(state.selectedEngine!==id && noticeBelongsOnlyToEngine(state.noticeDetails,state.selectedEngine))hideNotice();
   state.selectedEngine = id;
   invalidateEngineEditorContext();
   const engine = selectedEngineView();
@@ -2080,6 +2098,7 @@ async function selectEngine(id) {
   state.engineValidation = null;
   state.engineMode = 'guided';
   renderEngineControl();
+  if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
 }
 
 async function selectEngineFile(id) {
@@ -3440,7 +3459,7 @@ function renderCommunityPreview() {
 
 async function importCommunityService(id) {
   const preview=state.communityPreview;if(!preview||preview.entry?.id!==id||workflowState.communityImport)return;
-  if(preview.import_guard!=='source-sha256'){$('#r4CommunityStatus').textContent='Для импорта показанной редакции с проверкой отпечатка нужен backend R4.';return;}
+  if(preview.import_guard!=='source-sha256'){$('#r4CommunityStatus').textContent='Сервер не подтвердил защиту импорта. Обновите приложение целиком; показанный список ещё не сохранён.';return;}
   if(!/^[a-f0-9]{64}$/.test(preview.source_sha256||'')){$('#r4CommunityStatus').textContent='Не получен отпечаток показанного источника. Повторите предпросмотр.';return;}
   const epoch=workflowState.epoch,imported=state.community.find(e=>e.id===id)?.imported,manage=$('#r4CommunityManage')?.checked===true;
   const conflicts=preview.conflicts||[];workflowState.communityImport=true;
@@ -4307,7 +4326,7 @@ function bindEvents() {
 	});
   $('#refreshComponents').addEventListener('click', () => refreshComponents(true));
   $('#openEngineConfig').addEventListener('click', () => openEngineConfiguration());
-  $('#openComponentCatalog').addEventListener('click', () => setView('engines'));
+  $('#openComponentCatalog').addEventListener('click', () => void openEngineInstallation(selectedEngineView()?.id));
   $('#componentFilters').addEventListener('click', (event) => {
     const button = event.target.closest('[data-component-filter]');
     if (!button) return;
@@ -4371,7 +4390,7 @@ function bindEvents() {
   $('#remoteProfileStoreButton').addEventListener('click', storeRemoteNodes);
   $('#remoteProfileImportButton').addEventListener('click', importRemoteProfile);
   $('#warpGenerate').addEventListener('click', () => generateWarp(false));
-  $('#warpInstallComponent').addEventListener('click', () => openRouteInstallation('warp-wg'));
+  $('#warpInstallComponent').addEventListener('click', () => void openEngineInstallation('warp-wg'));
   $('#warpRotate').addEventListener('click', () => generateWarp(true));
   $('#warpImport').addEventListener('click', () => $('#warpImportInput').click());
   $('#warpImportInput').addEventListener('change', importWarpFile);

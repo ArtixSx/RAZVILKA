@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ArtixSx/razvilka/internal/awgprofile"
+	"io"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -57,7 +58,7 @@ import (
 var (
 	// Builds override provenance through -ldflags. The version default mirrors
 	// canonical VERSION; unknown provenance never claims a verified release build.
-	Version     = "0.18.2-rc.6"
+	Version     = "0.18.2-repair.2"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -570,6 +571,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/custom-services", a.customServiceList)
 	mux.HandleFunc("/api/v1/custom-services/", a.customServiceItem)
 	mux.HandleFunc("/api/v1/community/services", a.communityServices)
+	mux.HandleFunc("/api/v1/community/source-preview", a.communitySourcePreview)
 	mux.HandleFunc("/api/v1/community/services/", a.communityServiceAction)
 	mux.HandleFunc("/api/v1/plan", a.plan)
 	mux.HandleFunc("/api/v1/dataplane/status", a.dataplaneStatus)
@@ -2985,6 +2987,7 @@ func (a *App) communityServices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if a.Community == nil || a.CustomServices == nil {
 		http.Error(w, "community or custom service catalog disabled", http.StatusServiceUnavailable)
 		return
@@ -3008,7 +3011,7 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, os.ErrNotExist) {
 				http.Error(w, "unknown community service", http.StatusNotFound)
 			} else {
-				http.Error(w, err.Error(), http.StatusBadGateway)
+				writeCommunityFailure(w, err)
 			}
 			return
 		}
@@ -3023,16 +3026,18 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 			Refresh        bool   `json:"refresh"`
 			ExpectedSHA    string `json:"expected_source_sha256"`
 		}
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
-			http.Error(w, "invalid json", http.StatusBadRequest)
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		dec.DisallowUnknownFields()
+		if dec.Decode(&in) != nil || dec.Decode(&struct{}{}) != io.EOF || len(in.ExpectedSHA) != 64 || strings.Trim(in.ExpectedSHA, "0123456789abcdef") != "" {
+			writeJSON(w, 400, map[string]any{"code": "SOURCE_REVIEW_REQUIRED", "error": "Сначала откройте предпросмотр. Для импорта нужен его точный SHA-256.", "not_started": true})
 			return
 		}
 		preview, err := a.Community.Preview(ctx, id, a.catalogSnapshot().Services, in.Refresh)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			writeCommunityFailure(w, err)
 			return
 		}
-		if in.ExpectedSHA != "" && in.ExpectedSHA != preview.SourceSHA {
+		if in.ExpectedSHA != preview.SourceSHA {
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "Содержимое источника изменилось. Откройте новый предпросмотр.", "not_started": true})
 			return
 		}

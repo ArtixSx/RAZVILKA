@@ -14,6 +14,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/onboarding"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
 
@@ -61,13 +62,15 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 			Policy           autonomy.Policy `json:"policy"`
 			Confirm          string          `json:"confirm"`
 			ReleaseSafeMode  bool            `json:"release_safe_mode"`
+			StarterSHA       string          `json:"starter_sha256,omitempty"`
+			InitialServices  []string        `json:"initial_service_ids,omitempty"`
 		}
 		if !decodeAutonomyRequest(w, r, &req) {
 			return
 		}
 		req.Policy.Schema = autonomy.Schema
 		req.Policy.Revision = req.ExpectedRevision + 1
-		if req.ExpectedRevision == ^uint64(0) || req.Confirm != "SAVE_AUTONOMY" || autonomy.Validate(req.Policy) != nil {
+		if len(req.InitialServices) > 0 && req.StarterSHA == "" || req.ExpectedRevision == ^uint64(0) || req.Confirm != "SAVE_AUTONOMY" || autonomy.Validate(req.Policy) != nil {
 			writeJSON(w, 400, map[string]any{"error": "Проверьте часовой пояс, источники, устройства и расписания."})
 			return
 		}
@@ -103,10 +106,21 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		before := a.autonomy.doc.Policy
+		oldServices, oldRuntime := a.autonomy.doc.Services, a.autonomy.doc.Runtime
+		if req.StarterSHA != "" {
+			services, runtime, e := onboarding.Enroll(a.catalogSnapshot(), starterConfigView(a.Store.Get()), before, req.Policy, oldServices, oldRuntime, req.StarterSHA, req.InitialServices)
+			if e != nil {
+				a.autonomy.mu.Unlock()
+				writeJSON(w, 409, map[string]any{"code": "STARTER_REVIEW_CHANGED", "error": "Базовый набор или настройки изменились. Повторите просмотр мастера."})
+				return
+			}
+			a.autonomy.doc.Services, a.autonomy.doc.Runtime = services, runtime
+		}
 		a.autonomy.doc.Policy = autonomy.Clone(req.Policy)
 		err := a.persistAutonomyLocked(r.Context())
 		if err != nil {
 			a.autonomy.doc.Policy = before
+			a.autonomy.doc.Services, a.autonomy.doc.Runtime = oldServices, oldRuntime
 		}
 		a.autonomy.mu.Unlock()
 		if err != nil {
@@ -145,14 +159,14 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 	cfg := a.Store.Get()
 	catalogServices := []map[string]any{}
 	for _, service := range a.catalogSnapshot().Services {
-		catalogServices = append(catalogServices, map[string]any{"id": service.ID, "name": service.Name, "custom": a.CustomServices != nil && a.CustomServices.Has(service.ID)})
+		catalogServices = append(catalogServices, map[string]any{"id": service.ID, "name": service.Name, "custom": a.CustomServices != nil && a.CustomServices.Has(service.ID), "default_nfqws2": catalog.IsNFQWS2Starter(service)})
 	}
 	sort.Slice(catalogServices, func(i, j int) bool { return catalogServices[i]["name"].(string) < catalogServices[j]["name"].(string) })
 	presets := []map[string]any{}
 	for _, preset := range providerfeed.Builtins() {
 		presets = append(presets, map[string]any{"id": "feed-" + preset.ID, "name": preset.Name, "interval_minutes": preset.DefaultRefreshIntervalMinutes})
 	}
-	writeJSON(w, 200, map[string]any{"policy": p, "services": services, "runtime": runtime, "blocked": blocked, "safe_mode": cfg.SafeMode, "manual": cfg.ServiceControl.EffectiveMode() == "manual", "stopped": cfg.ServiceControl.Stopped,
+	writeJSON(w, 200, map[string]any{"policy": p, "starter": onboarding.Starter(a.catalogSnapshot(), starterConfigView(cfg), p, services), "services": services, "runtime": runtime, "blocked": blocked, "safe_mode": cfg.SafeMode, "manual": cfg.ServiceControl.EffectiveMode() == "manual", "stopped": cfg.ServiceControl.Stopped,
 		"catalog_services": catalogServices, "source_presets": presets, "applied_services": cfg.AppliedServices, "server_time": time.Now().UTC(), "next_application_window": autonomy.NextWindow(p.Application, p.Timezone, time.Now()), "next_components_window": autonomy.NextWindow(p.Components, p.Timezone, time.Now()), "maintenance_message": maintenance,
 		"capabilities": map[string]any{"automatic_initial_apply": true, "automatic_reserves": true, "scenario": "web", "source_timers": "saved-router-subscriptions", "automatic_install": false, "component_install": false, "note": "Тестовая реализация. Автоустановка программ закрыта до подписанных выпусков и аппаратно подтверждённого отката. Проверка и подготовка приложения по расписанию работают отдельно."}})
 }

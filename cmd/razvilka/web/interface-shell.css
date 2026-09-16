@@ -486,3 +486,10 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
  .ui3-catalog-toolbar .ui3-segmented{max-width:100%;overflow-x:auto}
 }
 @media(prefers-reduced-motion:reduce){.interface-ui *, .interface-ui *::before,.interface-ui *::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* Repair2: first setup and catalogue input, scoped to existing surfaces. */
+.starter-review,.setup-source{margin:16px 0;padding:16px;border:1px solid var(--line,#314250);border-radius:12px}
+.starter-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:12px 0}
+.starter-items>span,.starter-items>label{padding:10px;border:1px solid var(--line,#314250);border-radius:10px;display:flex;gap:8px;align-items:flex-start}
+.starter-items>span{flex-direction:column}.starter-items small{display:block;opacity:.8}.setup-source input,.setup-source textarea{max-width:100%;box-sizing:border-box;width:100%}
+#communityOwnStatus,#warpPolicyGuide{overflow-wrap:anywhere}#communityOwnForm{margin-top:14px}.setup-source summary{cursor:pointer}

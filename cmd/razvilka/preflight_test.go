@@ -40,7 +40,7 @@ func TestPreflightCheckAndMigrate(t *testing.T) {
 	if checked.Config.FromSchema != 0 || checked.Config.ToSchema != config.CurrentSchemaVersion {
 		t.Fatalf("check schema report = %+v", checked.Config)
 	}
-	if checked.CatalogServices != 16 || checked.Sources != 8 || checked.CommunityEntries != 35 {
+	if checked.CatalogServices != 6 || checked.Sources != 8 || checked.CommunityEntries != 35 {
 		t.Fatalf("catalog=%d sources=%d community=%d", checked.CatalogServices, checked.Sources, checked.CommunityEntries)
 	}
 	unchanged, err := os.ReadFile(configPath)

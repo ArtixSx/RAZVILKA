@@ -26,13 +26,15 @@ type autonomyDocument struct {
 	Maintenance map[string]string           `json:"maintenance"`
 }
 type autonomyState struct {
-	mu                 sync.Mutex
-	loaded             bool
-	blocked            bool
-	path               string
-	image              restorejournal.Image
-	doc                autonomyDocument
-	maintenanceMessage string
+	mu                  sync.Mutex
+	loaded              bool
+	blocked             bool
+	path                string
+	image               restorejournal.Image
+	doc                 autonomyDocument
+	maintenanceMessage  string
+	maintenanceAttempts map[string]maintenanceAttempt
+	maintenanceTestRun  func(context.Context, string, autonomy.Window, bool) (bool, bool, string)
 }
 
 func newAutonomyDocument() autonomyDocument {

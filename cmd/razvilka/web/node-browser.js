@@ -262,9 +262,10 @@ function renderNodeBatchStatus() {
   if (!job) return;
   $('#nodeBatchProgress').max = Math.max(1, job.total || 1);
   $('#nodeBatchProgress').value = job.completed || 0;
-  const label = job.phase === 'fetching' && running ? 'Получаем источник' : ({ running: 'Проверяем', canceling: 'Останавливаем', completed: 'Проверка завершена', canceled: 'Проверка остановлена', failed: 'Проверка не завершена' })[job.state] || 'Проверка';
+  const label = job.scope==='all-vless' && job.phase==='waiting' && running ? 'Очередь ожидает' : job.phase === 'fetching' && running ? 'Получаем источник' : ({ running: 'Проверяем', canceling: 'Останавливаем', completed: 'Проверка завершена', canceled: 'Проверка остановлена', failed: 'Проверка не завершена' })[job.state] || 'Проверка';
   const scenario = job.mode === 'service' ? ` · ${nodeServiceScenario(state.services.find(item => item.id === job.service_id))}` : ' · TCP';
-  $('#nodeBatchMessage').textContent = `${label}: ${job.completed || 0} / ${job.total || 0}${scenario}${job.message ? ` · ${job.message}` : ''}`;
+  const summary=job.scope==='all-vless'?` · Весь VLESS-каталог · подходят: ${job.passed||0} · отказ: ${job.failed||0} · не подтверждены: ${job.inconclusive||0} · пропущено: ${job.skipped||0} · осталось: ${Math.max(0,(job.total||0)-(job.completed||0))}`:'';
+  $('#nodeBatchMessage').textContent = `${label}: ${job.completed || 0} / ${job.total || 0}${scenario}${summary}${job.message ? ` · ${job.message}` : ''}`;
 }
 
 async function startNodeBrowserCheck(mode, explicitIDs) {

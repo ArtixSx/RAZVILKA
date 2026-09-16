@@ -22,7 +22,7 @@
     for(const v of p.default_sources) {
       if(!/^[0-9a-fA-F:./]+$/.test(v)||/\/0$/.test(v)||v==='0.0.0.0'||v==='::'||v.startsWith('127.')||v.startsWith('::1/')) throw new Error('Нужны IP-адреса или CIDR устройств; не домены и не 0.0.0.0/0.');
     }
-    if(!Array.isArray(p.source_ids)||p.source_ids.length>32||p.enabled&&!p.source_ids.length||p.source_ids.some(id=>! /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id))) throw new Error('Выберите хотя бы один известный источник для автоматического подбора.');
+    if(!Array.isArray(p.source_ids)||p.source_ids.length>32||p.enabled&&!p.source_ids.length&&!p.preferred_routes?.length||p.source_ids.some(id=>! /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id))) throw new Error('Выберите хотя бы один известный источник для автоматического подбора.');
     if(!Array.isArray(p.protocols)||!p.protocols.length||p.protocols.some(x=>!supportedProtocols.includes(x))) throw new Error('Выберите поддержанные протоколы.');
     if(!Array.isArray(p.preferred_routes)||p.preferred_routes.some(x=>!supportedRoutes.includes(x))) throw new Error('Неизвестный предпочтительный обход.');
     const ranges={check_seconds:[60,3600],reserve_seconds:[60,86400],reserve_target:[1,4],candidates_per_round:[1,4],failure_confirm_seconds:[10,300],max_switches_per_hour:[1,20]};
@@ -128,6 +128,14 @@
     $('revisionLabel').textContent=`Редакция ${p.revision}`;
     renderReview();
   }
+  function renderStarterReview(){
+    const block=$('starterReview');if(!block)return;
+    const r=snapshot?.starter;block.hidden=!r?.eligible||!!snapshot?.policy?.setup_complete;
+    if(block.hidden)return;
+    $('starterItems').innerHTML=(r.items||[]).map(s=>`<span><b>${escapeHTML(s.name)}</b><small>${Number(s.domains)} доменов · NFQWS2</small></span>`).join('');
+    const selected=new Set($$('input[name="initial-extra"]:checked').map(x=>x.value));
+    $('initialExtras').innerHTML=(snapshot.catalog_services||[]).filter(s=>!s.default_nfqws2&&!snapshot.services[s.id]).map(s=>`<label><input type="checkbox" name="initial-extra" value="${escapeHTML(s.id)}" ${selected.has(s.id)?'checked':''}/><span>${escapeHTML(s.name)}<small>Подбор по разрешениям мастера</small></span></label>`).join('');
+  }
   function renderReview() {
     if(!editingPolicy) return;const p=policyFromForm();
     const rows=[['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · Проверка каталога`],['Часовой пояс',p.timezone]];
@@ -174,7 +182,7 @@
     $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${w.mode==='off'?'Выключено':w.mode==='prepare'?'Подготовка, без установки':'Проверка обновлений'} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
     $('maintenanceMessage').textContent=snapshot.maintenance_message||'Фактический результат появится после обслуживания на роутере.';
     $('connectionLabel').textContent=`Состояние роутера · ${formatDate(snapshot.server_time)}`;
-    renderServices();fillWizard();
+    renderServices();fillWizard();renderStarterReview();
   }
   async function refresh(force=false) {
     if(loading) return;loading=true;const generation=authGeneration;
@@ -212,7 +220,7 @@
       const p=validatePolicy(policyFromForm());
       if($('releaseSafeMode').checked&&!p.enabled) throw new Error('Не снимайте Safe Mode при выключенной автоматике.');
       saving=true;$('saveWizard').disabled=true;
-      await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:$('releaseSafeMode').checked});
+      await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:$('releaseSafeMode').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
       requireGeneration(generation);dirty=false;await refresh(true);requireGeneration(generation);notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
     } catch(e) { reportError(e,$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
@@ -234,6 +242,8 @@
   });
   $('wizardForm').addEventListener('input',()=>{dirty=true;});$('wizardForm').addEventListener('change',()=>{dirty=true;$('scopeAddressesLabel').hidden=$('scopeMode').value==='all';if(step===3)renderReview();});
   $('wizardForm').addEventListener('submit',saveWizard);
+  $('openOptionalCatalog')?.addEventListener('click',()=>{if(typeof openCommunityCatalog==='function')openCommunityCatalog();});
+  document.getElementById('communityCatalogDialog')?.addEventListener('close',()=>void refresh());
   $('backStep').addEventListener('click',()=>setStep(step-1));$('nextStep').addEventListener('click',()=>setStep(step+1));
   $('reloadButton').addEventListener('click',()=>{if(!dirty||confirm('Заменить несохранённые поля актуальными настройками роутера?')){sourceDirty=false;void refresh(true);if(activeTab==='sources')void readSources();}});
   $('reloadSources').addEventListener('click',()=>{if(!sourceDirty||confirm('Сбросить несохранённые интервалы подписок?')){sourceDirty=false;void readSources();}});

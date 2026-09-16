@@ -89,6 +89,9 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			exclusive = true
 		}
 		enter := a.Operations.Enter
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/community/services/") && strings.HasSuffix(r.URL.Path, "/import") {
+			exclusive = true
+		}
 		if exclusive {
 			enter = a.Operations.Exclusive
 		}

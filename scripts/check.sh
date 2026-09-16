@@ -56,6 +56,9 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-provider-import-ui.mjs
   node scripts/test-node-route-ui.mjs
   node scripts/test-node-browser-ui.mjs
+  node scripts/test-node-bulk-ui.mjs
+  node --check cmd/razvilka/web/setup-workflows.js
+  node scripts/test-setup-repair.mjs
   node scripts/test-node-intent-ui.mjs
   node scripts/test-node-service-ui.mjs
   node scripts/test-node-policy-ui.mjs
