@@ -58,7 +58,7 @@ import (
 var (
 	// Builds override provenance through -ldflags. The version default mirrors
 	// canonical VERSION; unknown provenance never claims a verified release build.
-	Version     = "0.18.2-repair.4"
+	Version     = "0.18.2-repair.5"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -490,6 +490,10 @@ func nfqws2Presentation(serviceID string, desired, planned string, desiredEnable
 
 func (a *App) Handler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/extension-lab/mihomo", a.extensionMihomo)
+	mux.HandleFunc("/api/v1/extension-lab/hev", a.extensionHev)
+	mux.HandleFunc("/api/v1/strategy-lab/packs", a.strategyPacks)
+	mux.HandleFunc("/api/v1/strategy-lab/builtin-pack", a.builtinStrategyPack)
 	mux.HandleFunc("/api/v1/nfqws2/setup-mode", a.nfqwsSetupMode)
 	mux.HandleFunc("/api/v1/autonomy", a.autonomyAPI)
 	mux.HandleFunc("/api/v1/autonomy/services", a.autonomyEnroll)

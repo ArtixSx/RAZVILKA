@@ -113,6 +113,11 @@ func (a *App) managedReconcilerActive() bool {
 // can revoke an active automatic intent while that intent owns exclusive access.
 // It never releases the worker's lease or reports the pending manual write saved.
 func (a *App) interruptAutomation(r *http.Request) {
+	// These POST endpoints are pure conversions, not routing/installation intents.
+	if r.URL.Path == "/api/v1/extension-lab/mihomo" || r.URL.Path == "/api/v1/extension-lab/hev" {
+		return
+	}
+
 	if r.Method == http.MethodGet || r.Method == http.MethodHead || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || !strings.HasPrefix(r.URL.Path, "/api/v1/") {
 		return
 	}

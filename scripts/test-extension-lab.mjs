@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {readFileSync} from 'node:fs';
+const require=createRequire(import.meta.url), m=require('../cmd/razvilka/web/extension-lab.js');
+let passed=0;function test(name,fn){fn();passed++;console.log('PASS',name);}
+const source='vless://fixture@example.com:443';
+test('selected node is converted to zero-based index',()=>assert.deepEqual(m.mihomo(source,2,18090).options,{index:1,socks_port:18090}));
+for(const [i,p] of [[0,18090],[1,53],[1,65536],[1.1,18090],[513,18090]])test('reject bad index/port '+i+':'+p,()=>assert.throws(()=>m.mihomo(source,i,p)));
+test('reject absent source',()=>assert.throws(()=>m.mihomo('',1,18090)));
+test('reject oversized content',()=>assert.throws(()=>m.mihomo('a'.repeat(262145),1,18090)));
+test('export requires review',()=>assert.throws(()=>m.mihomo(source,1,18090,'export','')));
+test('export requires exact confirmation operation',()=>assert.equal(m.mihomo(source,1,18090,'export','a'.repeat(64)).confirm,'BUILD_MIHOMO_CONFIG'));
+test('import requires review',()=>assert.throws(()=>m.pack('{}',false,'import','')));
+test('signed flag and review retained',()=>{const q=m.pack('{}',true,'import','a'.repeat(64));assert.equal(q.signed,true);assert.equal(q.confirm,'IMPORT_STRATEGY_CANDIDATES');});
+for(const obj of [null,{}, {live_applied:true},{live_applied:false,service_verified:true},{live_applied:false,native_validated:true}])test('never display earned runtime for passive result '+JSON.stringify(obj),()=>assert.throws(()=>m.safeResult(obj)));
+test('passive result accepted',()=>assert.equal(m.safeResult({live_applied:false}).live_applied,false));
+const html=readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8'),js=readFileSync(new URL('../cmd/razvilka/web/extension-lab.js',import.meta.url),'utf8');
+test('one dialog and all referenced DOM controls exist',()=>{assert.equal((html.match(/id="extensionLabDialog"/g)||[]).length,1);for(const match of js.matchAll(/el\('(ext5[^']+)'\)/g))assert.ok(html.includes(`id="${match[1]}"`),match[1]);});
+test('no independent polling/localStorage/remote requests',()=>{assert.ok(!/localStorage|setInterval|fetch\(/.test(js));assert.ok(js.includes('workflowSession(epoch)'));assert.ok(js.includes('serial'));assert.ok(js.includes('auth-required'));});
+test('passive tools not new routes',()=>{assert.ok(html.includes('data-extension-open="mihomo"'));assert.ok(!html.includes('data-engine-id="mihomo"'));assert.ok(!js.includes('/api/v1/apply'));});
+console.log(JSON.stringify({suite:'extension-lab',passed}));

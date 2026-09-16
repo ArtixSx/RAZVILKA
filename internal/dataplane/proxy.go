@@ -40,10 +40,12 @@ type ProxyTunnelAdapter struct {
 	CanaryTraceProbe func(context.Context, string) (usqueCanaryEvidence, error)
 	EngineBin        string
 	SidecarBin       string
-	PackageInit      string
-	IP               string
-	IPTables         string
-	IP6Tables        string
+	// Fixed for adapter lifetime; empty preserves the original sing-box backend.
+	SidecarKind string
+	PackageInit string
+	IP          string
+	IPTables    string
+	IP6Tables   string
 	// LANBridgeMembers returns confirmed Linux bridge ports; nil uses sysfs.
 	LANBridgeMembers func(context.Context, string) ([]string, error)
 	SOCKSPort        int
@@ -91,6 +93,7 @@ type usqueCanaryEvidence struct {
 }
 
 type proxySnapshot struct {
+	SidecarKind         string      `json:"sidecar_kind,omitempty"`
 	ConfigPath          string      `json:"config_path"`
 	Config              []byte      `json:"config,omitempty"`
 	ConfigExisted       bool        `json:"config_existed"`
@@ -195,7 +198,8 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 		return err
 	}
 	snapshot := proxySnapshot{
-		ConfigPath: view.Path, Config: live, ConfigExisted: liveExists, ConfigDraft: draftExists, StagedConfig: draft,
+		SidecarKind: a.effectiveSidecar(),
+		ConfigPath:  view.Path, Config: live, ConfigExisted: liveExists, ConfigDraft: draftExists, StagedConfig: draft,
 		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists, Transport: transport, TransportExists: transportExists, Evidence: evidence, EvidenceExists: evidenceExists,
 		Policy: policy, PolicyExists: policyExists, EngineWasRunning: a.Processes.Running(a.engineProcess()), SidecarWasRunning: a.Processes.Running(a.sidecarProcess()), PackageWasRunning: packageWasRunning,
 	}
@@ -220,6 +224,9 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	}
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
+		return err
+	}
+	if err := a.checkSnapshotSidecar(snapshot); err != nil {
 		return err
 	}
 	source := snapshot.Config
@@ -284,11 +291,7 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	if err != nil {
 		return err
 	}
-	schema, err := a.detectSidecarSchema(ctx)
-	if err != nil {
-		return preflightRefusalError{err}
-	}
-	sidecar, err := buildSOCKSTunnelConfigForSchema(a.Interface, a.TunnelCIDR, a.SOCKSPort, schema)
+	sidecar, err := a.buildSidecarConfig(ctx)
 	if err != nil {
 		return err
 	}
@@ -336,7 +339,7 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 		return fmt.Errorf("%s binary is not installed", a.ID())
 	}
 	if a.sidecarBinary() == "" {
-		return errors.New("sing-box is required as the managed TUN sidecar")
+		return errors.New("the selected managed TUN sidecar is unavailable")
 	}
 	if a.ID() != "usque" {
 		var args []string
@@ -349,8 +352,8 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 			return fmt.Errorf("%s native validation failed: %s", a.ID(), shortOutput(output, err))
 		}
 	}
-	if output, err := a.run(ctx, a.sidecarBinary(), "check", "-c", sidecarCandidate); err != nil {
-		return fmt.Errorf("sing-box TUN validation failed: %s", shortOutput(output, err))
+	if err := a.validateSidecarConfig(ctx, sidecarCandidate); err != nil {
+		return err
 	}
 	return nil
 }
@@ -505,6 +508,9 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	}
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
+		return err
+	}
+	if err := a.checkSnapshotSidecar(snapshot); err != nil {
 		return err
 	}
 	desired, err := a.readStagedPolicy(root)
@@ -787,6 +793,9 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 	if err != nil {
 		return err
 	}
+	if err := a.checkSnapshotSidecar(snapshot); err != nil {
+		return err
+	}
 	if snapshot.ConfigDraft {
 		if err := installStagedBytes(snapshot.StagedConfig, snapshot.ConfigPath, 0o600); err != nil {
 			return err
@@ -832,6 +841,9 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) error {
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
+		return err
+	}
+	if err := a.checkSnapshotSidecar(snapshot); err != nil {
 		return err
 	}
 	boot, bootErr := a.currentBootIdentity()
@@ -922,7 +934,7 @@ func (a *ProxyTunnelAdapter) valid() error {
 	if a.SOCKSPort < 1024 || a.SOCKSPort > 65535 || a.Table < 1 || a.Table > 252 || a.Priority < 1000 || a.Interface == "" {
 		return errors.New("invalid proxy tunnel ownership settings")
 	}
-	return nil
+	return a.checkSidecarIdentity()
 }
 
 func (a *ProxyTunnelAdapter) runtimeRoot() string { return filepath.Join(a.StateRoot, "runtime") }
@@ -954,6 +966,9 @@ func (a *ProxyTunnelAdapter) engineBinary() string {
 	return ""
 }
 func (a *ProxyTunnelAdapter) sidecarBinary() string {
+	if a.effectiveSidecar() == "hev" {
+		return a.SidecarBin
+	}
 	if a.SidecarBin != "" {
 		return a.SidecarBin
 	}
@@ -1136,7 +1151,11 @@ func (a *ProxyTunnelAdapter) startPackageRuntime(ctx context.Context) error {
 }
 func (a *ProxyTunnelAdapter) sidecarProcess() ProcessSpec {
 	config := a.sidecarConfigPath()
-	return ProcessSpec{ID: a.ID() + "-tun", Binary: a.sidecarBinary(), Args: []string{"run", "-c", config}, Dir: a.runtimeRoot(), PIDPath: filepath.Join(a.runtimeRoot(), "sidecar.pid"), LogPath: filepath.Join(a.runtimeRoot(), "sidecar.log"), MatchArg: config}
+	args := []string{"run", "-c", config}
+	if a.effectiveSidecar() == "hev" {
+		args = []string{config}
+	}
+	return ProcessSpec{ID: a.ID() + "-tun", Binary: a.sidecarBinary(), Args: args, Dir: a.runtimeRoot(), PIDPath: filepath.Join(a.runtimeRoot(), "sidecar.pid"), LogPath: filepath.Join(a.runtimeRoot(), "sidecar.log"), MatchArg: config}
 }
 func (a *ProxyTunnelAdapter) stopOwned(ctx context.Context) error {
 	var firstErr error

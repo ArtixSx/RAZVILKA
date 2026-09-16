@@ -47,6 +47,9 @@ func (m *Manager) ObserveCommittedRuntime(ctx context.Context, expected Plan) er
 }
 
 func (a *ProxyTunnelAdapter) observeOwnedRuntime(ctx context.Context) error {
+	if err := a.checkSidecarIdentity(); err != nil {
+		return err
+	}
 	state, exists, err := a.loadPolicy()
 	if err != nil || !exists || state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || a.Processes == nil {
 		return errors.New("owned proxy policy unavailable")

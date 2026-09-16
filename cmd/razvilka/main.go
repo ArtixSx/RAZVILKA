@@ -96,6 +96,7 @@ func main() {
 	dataplaneStatePath := flag.String("dataplane-state", defaultDataplaneState, "dataplane transaction journal directory")
 	devicesPath := flag.String("devices", defaultDevices, "local device names and groups path")
 	metricsHistoryPath := flag.String("metrics-history", defaultMetricsHistory, "bounded router metrics history path")
+	strategyPackKeys := flag.String("strategy-pack-keys", "", "Owner-provisioned JSON public keys for signed strategy packs (no online sending)")
 	strategyLabStatePath := flag.String("strategy-lab-state", defaultStrategyLabState, "NFQWS2 Strategy Lab state path")
 	auditLogPath := flag.String("audit-log", defaultAuditLog, "bounded control-plane audit journal path")
 	dnsStatePath := flag.String("dns-state", defaultDNSState, "DNS profile draft and probe state path")
@@ -335,6 +336,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Strategy Lab state: %v", err)
 	}
+	strategyLabManager.PackKeys, err = strategylab.LoadPackKeys(*strategyPackKeys)
+	if err != nil {
+		log.Fatal("strategy pack public-key configuration rejected")
+	}
+
 	routeProber := routeprobe.New(engineConfigs)
 	routeProber.DataplaneRoot = *dataplaneStatePath
 	telemetryStore := telemetry.NewStore()

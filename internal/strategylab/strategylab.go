@@ -2,11 +2,13 @@ package strategylab
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 	"math"
 	"os"
 	"os/exec"
@@ -130,10 +132,11 @@ type Selection struct {
 }
 
 type State struct {
-	SchemaVersion int                  `json:"schema_version"`
-	Candidates    map[string]Candidate `json:"candidates"`
-	Evidence      []Evidence           `json:"evidence"`
-	Selections    map[string]Selection `json:"selections"`
+	PackReceipts  map[string]PackReceipt `json:"pack_receipts,omitempty"`
+	SchemaVersion int                    `json:"schema_version"`
+	Candidates    map[string]Candidate   `json:"candidates"`
+	Evidence      []Evidence             `json:"evidence"`
+	Selections    map[string]Selection   `json:"selections"`
 }
 
 type Snapshot struct {
@@ -194,25 +197,34 @@ func (v ExecValidator) Validate(parent context.Context, arguments []string) Vali
 }
 
 type Manager struct {
+	// PackKeys are provisioned by the owner before serving; never accepted from a pack.
+	PackKeys  map[string]ed25519.PublicKey
 	Path      string
 	Validator Validator
 	Executor  ProbeExecutor
 	Resources ResourceInspector
 	Now       func() time.Time
 
-	mu    sync.RWMutex
-	state State
+	mu           sync.RWMutex
+	state        State
+	image        restorejournal.Image
+	writeBlocked bool
 }
 
 func New(path string) (*Manager, error) {
 	m := &Manager{Path: path, Validator: ExecValidator{}, Executor: &SystemProbeExecutor{}, Resources: SystemResourceInspector{}, Now: time.Now, state: emptyState()}
-	data, err := os.ReadFile(path)
+	if path == "" {
+		return m, nil
+	}
+	image, err := restorejournal.ReadFileImage(context.Background(), path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return m, nil
-		}
 		return nil, err
 	}
+	m.image = image
+	if !image.Exists {
+		return m, nil
+	}
+	data := image.Data
 	if err := json.Unmarshal(data, &m.state); err != nil {
 		return nil, fmt.Errorf("decode Strategy Lab state: %w", err)
 	}
@@ -296,7 +308,7 @@ func (m *Manager) Snapshot() Snapshot {
 	return Snapshot{
 		SchemaVersion: SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
 		Candidates: candidates, Evidence: evidence, Summaries: summaries, Selections: selections,
-		Safety: map[string]any{"live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour), "probe_budget": m.resourceBudget()},
+		Safety: map[string]any{"state_write_blocked": m.writeBlocked, "live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour), "probe_budget": m.resourceBudget()},
 	}
 }
 
@@ -788,25 +800,44 @@ func (m *Manager) now() time.Time {
 	return time.Now()
 }
 
-func (m *Manager) saveLocked() error {
+// One descriptor-anchored CAS path for every Strategy Lab writer. Package
+// receipts and candidates cannot be separated by a crash or a stale writer.
+func (m *Manager) saveLocked() (retErr error) {
 	if strings.TrimSpace(m.Path) == "" {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(m.Path), 0o700); err != nil {
+	defer func() {
+		if retErr != nil {
+			// Never publish a mutation that was not confirmed on disk. Uncertain CAS
+			// is fenced until reopen; a root/admin edit is not silently overwritten.
+			previous := emptyState()
+			if m.image.Exists {
+				_ = json.Unmarshal(m.image.Data, &previous)
+			}
+			m.state = previous
+		}
+	}()
+	if m.writeBlocked {
+		return restorejournal.ErrRecovery
+	}
+	if err := os.MkdirAll(filepath.Dir(m.Path), 0700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(m.state, "", "  ")
 	if err != nil {
 		return err
 	}
-	temporary := m.Path + ".tmp"
-	if err := os.WriteFile(temporary, append(data, '\n'), 0o600); err != nil {
+	target, err := restorejournal.OpenFileTarget(m.Path)
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(temporary, m.Path); err != nil {
-		_ = os.Remove(temporary)
+	defer target.Close()
+	after := restorejournal.Image{Exists: true, Data: append(data, '\n')}
+	if err = target.CompareAndSwap(context.Background(), m.image, after); err != nil {
+		m.writeBlocked = true
 		return err
 	}
+	m.image = after
 	return nil
 }
 
