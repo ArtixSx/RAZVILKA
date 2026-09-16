@@ -1,0 +1,62 @@
+name: CONTROL5 pinned USQUE audit
+on:
+  push:
+    branches: [work/control5-usque-audit-20260916]
+    paths: [.github/workflows/control5-usque-audit.yml]
+permissions:
+  contents: read
+jobs:
+  upstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOTOOLCHAIN: local
+      CGO_ENABLED: '0'
+      USQUE_COMMIT: 6aa03fc97d12848dce34eedbd187fb1077b5d1ea
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: Diniboy1123/usque
+          ref: 6aa03fc97d12848dce34eedbd187fb1077b5d1ea
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Pinned source, verified modules and architecture build results
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$USQUE_COMMIT"
+          OUT="$RUNNER_TEMP/usque-audit"
+          mkdir -p "$OUT"
+          git archive --format=tar.gz --prefix=usque/ HEAD > "$OUT/usque-source.tar.gz"
+          go version > "$OUT/toolchain.txt"
+          go mod download > "$OUT/modules.log" 2>&1
+          go mod verify >> "$OUT/modules.log" 2>&1
+          go test ./... > "$OUT/test.log" 2>&1 || echo $? > "$OUT/test.exit"
+          tar -czf "$OUT/modules.tar.gz" -C "$(go env GOMODCACHE)" .
+          for ARCH in amd64 arm64 mips mipsle; do
+            set +e
+            GOOS=linux GOARCH="$ARCH" GOMIPS=softfloat go build -trimpath -ldflags="-s -w" -o "$OUT/usque-linux-$ARCH" . > "$OUT/build-$ARCH.log" 2>&1
+            RC=$?
+            set -e
+            printf '%s\n' "$RC" > "$OUT/build-$ARCH.exit"
+            if [ "$RC" -ne 0 ]; then rm -f "$OUT/usque-linux-$ARCH"; fi
+          done
+          if [ -x "$OUT/usque-linux-amd64" ]; then
+            "$OUT/usque-linux-amd64" version > "$OUT/version.txt"
+            "$OUT/usque-linux-amd64" socks --help > "$OUT/socks-help.txt"
+          fi
+          cp LICENSE.md "$OUT/USQUE-LICENSE.md"
+          git rev-parse HEAD > "$OUT/COMMIT"
+          cd "$OUT"
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: control5-usque-audit
+          path: ${{ runner.temp }}/usque-audit/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
