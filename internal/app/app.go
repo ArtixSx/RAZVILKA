@@ -58,7 +58,7 @@ import (
 var (
 	// Builds override provenance through -ldflags. The version default mirrors
 	// canonical VERSION; unknown provenance never claims a verified release build.
-	Version     = "0.18.2-repair.2"
+	Version     = "0.18.2-repair.4"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -490,6 +490,7 @@ func nfqws2Presentation(serviceID string, desired, planned string, desiredEnable
 
 func (a *App) Handler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/nfqws2/setup-mode", a.nfqwsSetupMode)
 	mux.HandleFunc("/api/v1/autonomy", a.autonomyAPI)
 	mux.HandleFunc("/api/v1/autonomy/services", a.autonomyEnroll)
 	mux.HandleFunc("/api/v1/autonomy/services/", a.autonomyRemove)
@@ -724,7 +725,7 @@ func (a *App) updateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refresh, _ := strconv.ParseBool(r.URL.Query().Get("refresh"))
-	writeJSON(w, http.StatusOK, a.Updates.Check(r.Context(), refresh))
+	writeJSON(w, http.StatusOK, a.Updates.CheckChannel(r.Context(), refresh, a.autonomyPolicy().UpdateChannel))
 }
 
 func (a *App) status(w http.ResponseWriter, r *http.Request) {

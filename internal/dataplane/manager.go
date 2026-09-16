@@ -650,12 +650,26 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 	var firstErr error
 	writeRefresh := func() error {
 		state := "checked"
+		if firstErr != nil {
+			state = "failed"
+		}
+		for _, updated := range changed {
+			if updated && firstErr != nil {
+				state = "partial"
+			}
+		}
 		if errors.Is(firstErr, ErrNetworkChanged) {
 			state = "network-stale"
 		}
+		if errors.Is(firstErr, context.Canceled) {
+			state = "canceled"
+		}
+		if errors.Is(firstErr, context.DeadlineExceeded) {
+			state = "timed-out"
+		}
 		report := PolicyRefresh{PlanID: plan.PlanID, State: state, CheckedAt: time.Now().UTC().Format(time.RFC3339Nano), Changed: changed}
 		if firstErr != nil {
-			report.Error = firstErr.Error()
+			report.Error = "Address refresh did not complete; inspect the owned runtime and retry. Existing configuration was not declared healthy."
 		}
 		data, _ := json.MarshalIndent(report, "", "  ")
 		return writeAtomic(filepath.Join(m.StateRoot, "latest-policy-refresh.json"), data, 0o600)
@@ -680,7 +694,14 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 		if !ok {
 			continue
 		}
-		updated, err := refresher.RefreshPolicy(ctx, plan)
+		callerGuard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
+		updated, err := refresher.RefreshPolicy(WithReviewGuard(ctx, func(c context.Context) error {
+			if c.Err() != nil {
+				return c.Err()
+			}
+			// Keep the child cancellation and the original caller authority.
+			return m.checkPlanNetwork(WithReviewGuard(c, callerGuard), plan)
+		}), plan)
 		if err != nil {
 			if errors.Is(err, ErrNetworkChanged) {
 				firstErr = err

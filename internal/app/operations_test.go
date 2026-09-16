@@ -158,6 +158,9 @@ func (p *pausedRouteProber) Probe(_ context.Context, service catalog.Service, ro
 
 func TestBackgroundRoundPausesForRestoreAndRetainsAdmissionUntilJoined(t *testing.T) {
 	a, base := privateRestoreTestApp(t)
+	if err := a.Store.SetSafeMode(false); err != nil {
+		t.Fatal(err)
+	}
 	a.FreshProfile = stableNodeProfile
 	var err error
 	a.SmartRoute, err = smartroute.New(filepath.Join(base, "smart-route.json"))

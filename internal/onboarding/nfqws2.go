@@ -112,9 +112,32 @@ func Starter(c catalog.Catalog, cfg ConfigView, p autonomy.Policy, managed map[s
 // Enroll joins exactly the reviewed, untouched default definitions to the first
 // setup. Existing desired/applied selections and all other services are retained.
 func Enroll(c catalog.Catalog, cfg ConfigView, old, next autonomy.Policy, managed map[string]autonomy.Service, runtime map[string]autonomy.Runtime, review string, extras []string) (map[string]autonomy.Service, map[string]autonomy.Runtime, error) {
+	return EnrollSelected(c, cfg, old, next, managed, runtime, review, extras, nil)
+}
+
+// nil retains the old full-starter wire contract; an explicit empty selection
+// means enroll none. Selection cannot introduce definitions outside the review.
+func EnrollSelected(c catalog.Catalog, cfg ConfigView, old, next autonomy.Policy, managed map[string]autonomy.Service, runtime map[string]autonomy.Runtime, review string, extras []string, selected *[]string) (map[string]autonomy.Service, map[string]autonomy.Runtime, error) {
 	r := Starter(c, cfg, old, managed)
 	if !r.Eligible || review == "" || review != r.SHA256 || !next.SetupComplete || autonomy.Validate(next) != nil {
 		return nil, nil, ErrStarterChanged
+	}
+	if selected != nil {
+		known := map[string]StarterItem{}
+		for _, i := range r.Items {
+			known[i.ID] = i
+		}
+		retained := []StarterItem{}
+		seen := map[string]bool{}
+		for _, id := range *selected {
+			v, ok := known[id]
+			if !ok || seen[id] {
+				return nil, nil, ErrStarterChanged
+			}
+			seen[id] = true
+			retained = append(retained, v)
+		}
+		r.Items = retained
 	}
 	if len(managed)+len(r.Items)+len(extras) > autonomy.MaxServices {
 		return nil, nil, ErrStarterChanged

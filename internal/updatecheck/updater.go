@@ -33,6 +33,7 @@ type Deployment struct {
 }
 
 type Job struct {
+	Channel        string    `json:"channel,omitempty"`
 	ID             string    `json:"id,omitempty"`
 	State          string    `json:"state"`
 	Stage          string    `json:"stage"`
@@ -214,6 +215,13 @@ func (u *Updater) invalidateRecordLocked() {
 }
 
 func (u *Updater) Prepare(revision uint64, fingerprint string) (Job, error) {
+	return u.PrepareChannel(revision, fingerprint, "stable")
+}
+func (u *Updater) PrepareChannel(revision uint64, fingerprint, channel string) (Job, error) {
+	if !ValidChannel(channel) {
+		return Job{}, ErrReviewChanged
+	}
+	channel = NormalizedChannel(channel)
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	u.readHelperStatusLocked()
@@ -241,7 +249,7 @@ func (u *Updater) Prepare(revision uint64, fingerprint string) (Job, error) {
 	_, _ = rand.Read(random[:])
 	id := hex.EncodeToString(random[:])
 	now := time.Now().UTC()
-	u.record = updateRecord{Owner: updaterOwner, Job: Job{ID: id, State: "preparing", Stage: "metadata", Message: "Проверяем официальный релиз.", StartedAt: now, UpdatedAt: now, CanCancel: true, ConfigRevision: revision, Verification: "github-release-sha256"}, CurrentVersion: u.Current, ConfigFingerprint: fingerprint, ParentPID: os.Getpid(), Deployment: u.Deployment}
+	u.record = updateRecord{Owner: updaterOwner, Job: Job{Channel: channel, ID: id, State: "preparing", Stage: "metadata", Message: "Проверяем официальный релиз.", StartedAt: now, UpdatedAt: now, CanCancel: true, ConfigRevision: revision, Verification: "github-release-sha256"}, CurrentVersion: u.Current, ConfigFingerprint: fingerprint, ParentPID: os.Getpid(), Deployment: u.Deployment}
 	if err := u.createRootLocked(); err != nil {
 		return Job{}, err
 	}
@@ -326,7 +334,10 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 		}
 		close(done)
 	}()
-	release, err := FetchRelease(ctx, u.Client, u.Current, runtime.GOARCH, 0)
+	u.mu.Lock()
+	channel := u.record.Job.Channel
+	u.mu.Unlock()
+	release, err := FetchReleaseChannel(ctx, u.Client, u.Current, runtime.GOARCH, 0, channel)
 	if err != nil {
 		failure = err
 		return
@@ -462,7 +473,7 @@ func (u *Updater) Apply(ctx context.Context, id, token string, revision uint64, 
 	if err := u.eligibility(u.Deployment); err != nil {
 		return cloneJob(r.Job), err
 	}
-	release, err := FetchRelease(ctx, u.Client, u.Current, runtime.GOARCH, r.Job.Release.ID)
+	release, err := FetchReleaseChannel(ctx, u.Client, u.Current, runtime.GOARCH, r.Job.Release.ID, r.Job.Channel)
 	if err != nil || !reflect.DeepEqual(release, *r.Job.Release) {
 		return cloneJob(r.Job), ErrReviewChanged
 	}

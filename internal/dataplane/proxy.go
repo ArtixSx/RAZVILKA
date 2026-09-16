@@ -134,6 +134,9 @@ func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot s
 func (a *ProxyTunnelAdapter) ID() string { return a.EngineID }
 
 func (a *ProxyTunnelAdapter) checkPlanNetwork(ctx context.Context, plan Plan) error {
+	if err := checkAddressRefreshAuthority(ctx); err != nil {
+		return err
+	}
 	return a.checkRouteNetwork(ctx, plan.RoutePlanFor(a.ID()))
 }
 
@@ -692,7 +695,7 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 	if err != nil || !exists {
 		return false, err
 	}
-	prefixes, rules, err := resolvePolicyRules(ctx, plan, a.ID(), a.Resolver)
+	prefixes, rules, err := resolveRefreshPolicyRules(ctx, plan, a.ID(), a.Resolver)
 	if err != nil {
 		return false, err
 	}

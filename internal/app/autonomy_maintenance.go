@@ -32,6 +32,10 @@ func (a *App) autonomyMaintenance(ctx context.Context, p autonomy.Policy, now ti
 			continue
 		}
 		key := slot + ":" + task.window.Mode
+		channel := updatecheck.NormalizedChannel(p.UpdateChannel)
+		if task.name == "application" && channel != "stable" {
+			key += ":" + channel
+		}
 		a.autonomy.mu.Lock()
 		if a.autonomy.blocked || !reflect.DeepEqual(a.autonomy.doc.Policy, p) {
 			a.autonomy.mu.Unlock()
@@ -39,7 +43,7 @@ func (a *App) autonomyMaintenance(ctx context.Context, p autonomy.Policy, now ti
 		}
 		completed := a.autonomy.doc.Maintenance[task.name]
 		// Preserve legacy receipts, whose value consisted only of the slot.
-		if completed == key || completed == slot {
+		if completed == key || completed == slot && (task.name != "application" || channel == "stable") {
 			a.autonomy.mu.Unlock()
 			continue
 		}
@@ -104,9 +108,14 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 		}
 		check, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
-		_, err := a.Components.List(check, true)
+		views, err := a.Components.List(check, true)
 		if err != nil {
 			return false, false, "Каталог компонентов не проверен. Установленные версии не изменены."
+		}
+		for _, view := range views {
+			if view.State == "check-failed" || view.State == "installed-check-failed" {
+				return false, false, "Источник части компонентов недоступен. Существующие версии сохранены; проверка будет повторена."
+			}
 		}
 		return true, false, "Каталог компонентов проверен. Автоматическая установка не включена."
 	}
@@ -117,7 +126,13 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 		current := a.SelfUpdate.Snapshot()
 		switch current.State {
 		case "ready":
-			return true, false, "Архив уже подготовлен. Установка автоматически не запускается."
+			fresh := !current.UpdatedAt.IsZero() && !current.UpdatedAt.After(time.Now()) && time.Since(current.UpdatedAt) < 15*time.Minute
+			if fresh && current.ConfigRevision == a.Store.Get().Revision && updatecheck.NormalizedChannel(current.Channel) == updatecheck.NormalizedChannel(a.autonomyPolicy().UpdateChannel) {
+				return true, false, "Архив подготовлен для текущей редакции и канала. Установка автоматически не запускается."
+			}
+			// The owned old job may be replaced by Prepare, never installed with
+			// stale policy/age merely because yesterday's download was ready.
+
 		case "preparing":
 			return false, true, "Подготовка архива ещё выполняется."
 		case "installing", "restarting", "requires-review":
@@ -126,8 +141,20 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 		if wasPending {
 			return false, false, "Предыдущая подготовка не завершилась успешно. Повтор возможен отдельной ограниченной попыткой."
 		}
+		if a.Updates == nil {
+			return false, false, "Проверка канала обновлений недоступна."
+		}
+		check, cancel := context.WithTimeout(ctx, 30*time.Second)
+		latest := a.Updates.CheckChannel(check, true, a.autonomyPolicy().UpdateChannel)
+		cancel()
+		if latest.State == "check-failed" || latest.MetadataStale {
+			return false, false, "Каталог выпусков не подтверждён. Загрузка отложена."
+		}
+		if !latest.CanPrepare {
+			return true, false, "Новой подходящей версии в выбранном канале нет. Архив повторно не загружался."
+		}
 		cfg := a.Store.Get()
-		job, err := a.SelfUpdate.Prepare(cfg.Revision, updatecheck.ConfigFingerprint(cfg))
+		job, err := a.SelfUpdate.PrepareChannel(cfg.Revision, updatecheck.ConfigFingerprint(cfg), a.autonomyPolicy().UpdateChannel)
 		if err != nil {
 			return false, false, "Подготовка отложена: установщик занят или условия не выполнены."
 		}
@@ -140,7 +167,7 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 	}
 	check, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	result := a.Updates.Check(check, true)
+	result := a.Updates.CheckChannel(check, true, a.autonomyPolicy().UpdateChannel)
 	if check.Err() != nil || result.State == "check-failed" {
 		return false, false, "Проверка версии не завершена."
 	}

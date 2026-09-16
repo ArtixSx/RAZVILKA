@@ -20,6 +20,9 @@ import (
 const officialRepository = "ArtixSx/RAZVILKA"
 
 type Result struct {
+	Channel          string `json:"channel"`
+	MetadataStale    bool   `json:"metadata_stale"`
+	RetryAt          string `json:"retry_at,omitempty"`
 	InstalledVersion string `json:"installed_version"`
 	LatestVersion    string `json:"latest_version,omitempty"`
 	UpdateAvailable  bool   `json:"update_available"`
@@ -44,6 +47,10 @@ type Manager struct {
 	mu       sync.Mutex
 	cached   Result
 	cachedAt time.Time
+	channel  string
+	etag     string
+	lastGood Result
+	retryAt  time.Time
 }
 
 func New(current string) *Manager {
@@ -63,14 +70,50 @@ func New(current string) *Manager {
 }
 
 func (m *Manager) Check(parent context.Context, refresh bool) Result {
+	return m.CheckChannel(parent, refresh, "stable")
+}
+func (m *Manager) CheckChannel(parent context.Context, refresh bool, channel string) Result {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	channel = NormalizedChannel(channel)
+	if !ValidChannel(channel) {
+		return Result{State: "check-failed", Error: "release-channel-invalid", Channel: channel}
+	}
+	if m.channel != channel {
+		m.channel = channel
+		m.cachedAt = time.Time{}
+		m.etag = ""
+		m.lastGood = Result{}
+	}
+	if time.Now().Before(m.retryAt) {
+		result := m.lastGood
+		result.InstalledVersion = m.Current
+		result.Channel = channel
+		result.State = "check-failed"
+		result.Error = "Сервер обновлений запросил паузу. Установленная версия не менялась."
+		result.MetadataStale = true
+		result.UpdateAvailable = false
+		result.CanPrepare = false
+		result.RetryAt = m.retryAt.UTC().Format(time.RFC3339)
+		return result
+	}
 	if !refresh && !m.cachedAt.IsZero() && time.Since(m.cachedAt) < m.ttl() {
 		return m.cached
 	}
-	result := Result{InstalledVersion: m.Current, State: "check-failed", CheckedAt: time.Now().UTC().Format(time.RFC3339), InstallCommand: installCommand(), VerifyCommand: verifyCommand()}
+	result := Result{Channel: channel, InstalledVersion: m.Current, State: "check-failed", CheckedAt: time.Now().UTC().Format(time.RFC3339), InstallCommand: installCommand(), VerifyCommand: verifyCommand()}
 	if err := m.check(parent, &result); err != nil {
-		result.Error = err.Error()
+		result.Error = "Не удалось подтвердить каталог обновлений. Повторите проверку позже."
+		result.MetadataStale = m.lastGood.ReleaseTag != ""
+		result.LatestVersion = m.lastGood.LatestVersion
+		result.ReleaseTag = m.lastGood.ReleaseTag
+		result.ReleaseURL = m.lastGood.ReleaseURL
+		result.CanPrepare = false
+		result.UpdateAvailable = false
+		if !m.retryAt.IsZero() {
+			result.RetryAt = m.retryAt.UTC().Format(time.RFC3339)
+		}
+	} else {
+		m.lastGood = result
 	}
 	m.cached, m.cachedAt = result, time.Now()
 	return result
@@ -80,11 +123,18 @@ func (m *Manager) check(parent context.Context, result *Result) error {
 	if m.Client == nil || strings.TrimSpace(m.Endpoint) == "" {
 		return errors.New("update checker is not configured")
 	}
-	request, err := http.NewRequestWithContext(parent, http.MethodGet, m.Endpoint, nil)
+	endpoint := m.Endpoint
+	if m.channel == "preview" {
+		endpoint = strings.TrimSuffix(m.Endpoint, "/latest") + "?per_page=30"
+	}
+	request, err := http.NewRequestWithContext(parent, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
+	if m.etag != "" {
+		request.Header.Set("If-None-Match", m.etag)
+	}
 	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	request.Header.Set("User-Agent", "RAZVILKA-Update-Check/1")
 	response, err := m.Client.Do(request)
@@ -92,6 +142,19 @@ func (m *Manager) check(parent context.Context, result *Result) error {
 		return fmt.Errorf("check official GitHub release: %w", err)
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusNotModified {
+		if m.etag == "" || m.lastGood.ReleaseTag == "" {
+			return errors.New("unexpected-304")
+		}
+		checked := result.CheckedAt
+		*result = m.lastGood
+		result.CheckedAt = checked
+		result.MetadataStale = false
+		return nil
+	}
+	if response.StatusCode == 429 || response.StatusCode == 503 || response.StatusCode == 403 {
+		m.retryAt = updateRetryAfter(response.Header, time.Now())
+	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("official GitHub release returned HTTP %d", response.StatusCode)
 	}
@@ -102,16 +165,20 @@ func (m *Manager) check(parent context.Context, result *Result) error {
 		Draft       bool   `json:"draft"`
 		Prerelease  bool   `json:"prerelease"`
 	}
-	const maximumMetadataBytes = 256 << 10
+	const maximumMetadataBytes = 2 << 20
 	data, err := io.ReadAll(io.LimitReader(response.Body, maximumMetadataBytes+1))
 	if err != nil || len(data) > maximumMetadataBytes {
 		return errors.New("official release metadata exceeds the size limit")
+	}
+	data, err = selectChannelMetadata(data, m.channel)
+	if err != nil {
+		return err
 	}
 	if err := json.Unmarshal(data, &release); err != nil {
 		return errors.New("invalid official release metadata")
 	}
 	latest, versionOK := normalizeVersion(release.TagName)
-	if release.Draft || release.Prerelease || !versionOK {
+	if release.Draft || (m.channel != "preview" && release.Prerelease) || !versionOK {
 		return errors.New("latest official release metadata is not stable")
 	}
 	page, err := url.Parse(release.HTMLURL)
@@ -119,7 +186,13 @@ func (m *Manager) check(parent context.Context, result *Result) error {
 		return errors.New("official release link failed validation")
 	}
 	result.LatestVersion, result.ReleaseURL, result.PublishedAt, result.ReleaseTag = latest, page.String(), release.PublishedAt, release.TagName
-	result.UpdateAvailable = CanUpgrade(m.Current, release.TagName)
+	if m.channel == "preview" {
+		latest = strings.TrimPrefix(release.TagName, "v")
+		result.LatestVersion = latest
+	}
+	m.etag = safeUpdateETag(response.Header.Get("ETag"))
+	m.retryAt = time.Time{}
+	result.UpdateAvailable = CanUpgradeChannel(m.Current, release.TagName, m.channel)
 	result.CanPrepare = result.UpdateAvailable
 	result.Verification = "github-release-sha256"
 	if result.UpdateAvailable {
@@ -168,10 +241,7 @@ func compareVersions(left, right string) int {
 			if leftPre == "" && rightPre != "" {
 				return 1
 			}
-			if leftPre < rightPre {
-				return -1
-			}
-			return 1
+			return comparePrerelease(leftPre, rightPre)
 		}
 	}
 	a, b := versionPart.FindAllString(strings.TrimPrefix(left, "v"), -1), versionPart.FindAllString(strings.TrimPrefix(right, "v"), -1)
@@ -214,11 +284,19 @@ func parseComparableVersion(value string) ([3]uint64, string, bool) {
 	}
 	var version [3]uint64
 	for index := range version {
+		if len(match[index+1]) > 1 && match[index+1][0] == '0' {
+			return [3]uint64{}, "", false
+		}
 		number, err := strconv.ParseUint(match[index+1], 10, 32)
 		if err != nil {
 			return [3]uint64{}, "", false
 		}
 		version[index] = number
+	}
+	for _, part := range strings.Split(match[4], ".") {
+		if match[4] != "" && (part == "" || allDigits(part) && len(part) > 1 && part[0] == '0') {
+			return [3]uint64{}, "", false
+		}
 	}
 	return version, match[4], true
 }

@@ -9,9 +9,9 @@ let appUpdateSession = 0;
 
 function appUpdateBadge(update) {
   if (!update) return { label: 'Не проверено', kind: '' };
-  if (update.state === 'check-failed') return { label: 'Ошибка проверки', kind: '' };
+  if (update.state === 'check-failed' || update.metadata_stale) return { label: 'Ошибка проверки', kind: '' };
   const checked = Date.parse(update.checked_at || '');
-  if (!Number.isFinite(checked) || Date.now() - checked > 45 * 60 * 1000) return { label: 'Не проверено', kind: '' };
+  if (!Number.isFinite(checked) || checked > Date.now() || Date.now() - checked > 45 * 60 * 1000) return { label: 'Не проверено', kind: '' };
   if (update.update_available && update.can_prepare) return { label: `Доступна ${update.latest_version}`, kind: 'update' };
   if (update.state === 'development') return { label: 'Тестовая сборка', kind: '' };
   if (update.state === 'ahead') return { label: 'Новее релиза', kind: '' };
@@ -58,11 +58,14 @@ function appUpdateSummaryHTML() {
   else if (update?.state === 'development' || update?.state === 'ahead') note = 'Ваша сборка новее опубликованного стабильного релиза. Более старая версия не будет установлена.';
   else if (available) note = 'Сначала скачаем пакет для вашего роутера и проверим возможность установки.';
   else if (badge.kind === 'current') note = 'Установлен последний проверенный стабильный релиз.';
-  return `<div class="app-update-result"><div class="app-update-summary"><div><h3>RAZVILKA ${esc(installed)}</h3><p>${esc(badge.label)}</p></div><span class="app-update-badge ${available ? 'update' : ''}">${esc(available ? update.latest_version : installed)}</span></div><p>${esc(note)}</p>${update?.checked_at ? `<small>Проверено ${esc(new Date(update.checked_at).toLocaleString('ru-RU'))}</small>` : ''}</div>`;
+  const channel=update?.channel==='preview'?'Предварительные и стабильные':'Стабильные';
+  if(update?.channel==='preview')note=note.replaceAll('стабильного релиза','релиза выбранного канала').replaceAll('стабильный релиз','релиз выбранного канала');
+  return `<div class="app-update-result"><p><b>Канал: ${esc(channel)}</b> · меняется в мастере обслуживания</p>${update?.retry_at?`<p>Источник запросил паузу до ${esc(new Date(update.retry_at).toLocaleString('ru-RU'))}. Повтор не обходит это ограничение.</p>`:''}<div class="app-update-summary"><div><h3>RAZVILKA ${esc(installed)}</h3><p>${esc(badge.label)}</p></div><span class="app-update-badge ${available ? 'update' : ''}">${esc(available ? update.latest_version : installed)}</span></div><p>${esc(note)}</p>${update?.checked_at ? `<small>Проверено ${esc(new Date(update.checked_at).toLocaleString('ru-RU'))}</small>` : ''}</div>`;
 }
 
 function renderAppUpdatePanel() {
   renderAppVersionStatus();
+  renderMaintenanceAddresses();
   const settings = $('#appUpdateState');
   if (settings) { settings.innerHTML = `${appUpdateSummaryHTML()}<button class="secondary" type="button" data-open-app-update>Открыть обновление</button>`; settings.querySelector('[data-open-app-update]')?.addEventListener('click', openAppUpdate); }
   renderAppUpdateDialog();
@@ -72,7 +75,7 @@ function ensureAppUpdateDialog() {
   let dialog = $('#appUpdateDialog');
   if (dialog) return dialog;
   dialog = document.createElement('dialog'); dialog.id = 'appUpdateDialog'; dialog.className = 'form-dialog';
-  dialog.innerHTML = '<div class="auth-form"><div class="dialog-head"><div><h2>Обновление приложения</h2><p>Официальные стабильные версии RAZVILKA</p></div><button class="dialog-close" type="button" data-update-close aria-label="Закрыть">×</button></div><div data-update-summary></div><p data-update-progress role="status" aria-live="polite"></p><div data-update-proof></div><div class="dialog-actions"><button class="secondary" type="button" data-update-refresh>Проверить снова</button><button class="secondary" type="button" data-update-cancel hidden>Остановить загрузку</button><button class="primary" type="button" data-update-prepare>Подготовить обновление</button><button class="primary" type="button" data-update-apply hidden>Установить и перезапустить</button></div></div>';
+  dialog.innerHTML = '<div class="auth-form"><div class="dialog-head"><div><h2>Обновление приложения</h2><p>Официальный выбранный канал RAZVILKA</p></div><button class="dialog-close" type="button" data-update-close aria-label="Закрыть">×</button></div><div data-update-summary></div><p data-update-progress role="status" aria-live="polite"></p><div data-update-proof></div><div class="dialog-actions"><button class="secondary" type="button" data-update-refresh>Проверить снова</button><button class="secondary" type="button" data-update-cancel hidden>Остановить загрузку</button><button class="primary" type="button" data-update-prepare>Подготовить обновление</button><button class="primary" type="button" data-update-apply hidden>Установить и перезапустить</button></div></div>';
   document.body.appendChild(dialog);
   dialog.querySelector('[data-update-close]').addEventListener('click', closeAppUpdate);
   dialog.querySelector('[data-update-refresh]').addEventListener('click', () => refreshAppUpdate(true));
@@ -169,4 +172,14 @@ function bindAppUpdateUI() {
   document.addEventListener('razvilka:auth-restored', () => refreshAppUpdate(false));
   document.addEventListener('razvilka:auth-required', () => { appUpdateSession++; appUpdateRead?.controller?.abort(); appUpdateRead = null; appUpdateReadAt = 0; state.appUpdate = null; closeAppUpdate(); renderAppVersionStatus(); });
   renderAppVersionStatus();
+}
+
+function renderMaintenanceAddresses() {
+ const el=$('#maintenanceAddressStatus'); if(!el)return;
+ const refresh=typeof consoleSnapshot==='object'?consoleSnapshot?.address_refresh:null;
+ const refill=typeof consoleSnapshot==='object'?consoleSnapshot?.reserve_refill:null;
+ const labels={checked:'Проверка адресных правил завершена',partial:'Адресные правила обновлены частично',failed:'Обновление адресов не завершено',canceled:'Обновление адресов отменено','timed-out':'Истекло время обновления адресов','network-stale':'Сеть изменилась; адресные правила требуют новой проверки'};
+ const sources={queued:'Пополнение разрешённого источника в очереди',waiting:'Пополнение ожидает паузу источника','no-enabled-source':'Нет включённого разрешённого источника для пополнения'};
+ const when=refresh?.checked_at&&Number.isFinite(Date.parse(refresh.checked_at))?new Date(refresh.checked_at).toLocaleString('ru-RU'):'';
+ el.textContent=(labels[refresh?.state]||'Свежего результата обновления адресных правил ещё нет')+(when?' · '+when:'')+(sources[refill?.state]?' · '+sources[refill.state]:'')+'. Это не подтверждение работы всех сайтов и не обновление ключей.';
 }

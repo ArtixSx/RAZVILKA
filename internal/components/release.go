@@ -294,26 +294,42 @@ func (m *Manager) download(ctx context.Context, rawURL string, limit int64) ([]b
 }
 
 func checksumForAsset(body []byte, assetName string) (string, error) {
+	value := ""
+	count := 0
 	for _, line := range strings.Split(string(body), "\n") {
-		fields := strings.Fields(strings.TrimSpace(line))
+		fields := strings.Fields(line)
 		if len(fields) < 2 || strings.TrimPrefix(fields[len(fields)-1], "*") != assetName {
 			continue
 		}
-		value := strings.ToLower(fields[0])
-		if len(value) != 64 {
-			break
+		count++
+		if len(fields) != 2 || count != 1 {
+			return "", errors.New("ambiguous-component-checksum")
 		}
-		if _, err := hex.DecodeString(value); err == nil {
-			return value, nil
+		value = strings.ToLower(fields[0])
+		decoded, err := hex.DecodeString(value)
+		if err != nil || len(decoded) != 32 {
+			return "", errors.New("invalid-component-checksum")
 		}
 	}
-	return "", fmt.Errorf("checksums.txt has no valid SHA-256 for %s", assetName)
+	if count != 1 {
+		return "", errors.New("missing-component-checksum")
+	}
+	return value, nil
 }
 
 func binaryFromZIP(body []byte, binaryName string) ([]byte, error) {
 	reader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
 		return nil, fmt.Errorf("open release ZIP: %w", err)
+	}
+	count := 0
+	for _, f := range reader.File {
+		if !f.FileInfo().IsDir() && filepath.Base(strings.ReplaceAll(f.Name, "\\", "/")) == binaryName {
+			count++
+		}
+	}
+	if count != 1 {
+		return nil, errors.New("missing-or-ambiguous-component-binary")
 	}
 	for _, file := range reader.File {
 		if file.FileInfo().IsDir() || filepath.Base(strings.ReplaceAll(file.Name, "\\", "/")) != binaryName {

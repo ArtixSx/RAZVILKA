@@ -543,11 +543,14 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 }
 
 func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool, error) {
+	if err := checkAddressRefreshAuthority(ctx); err != nil {
+		return false, err
+	}
 	oldState, exists, err := a.loadPolicyState()
 	if err != nil || !exists {
 		return false, err
 	}
-	prefixes, rules, err := resolvePolicyRules(ctx, plan, a.ID(), a.Resolver)
+	prefixes, rules, err := resolveRefreshPolicyRules(ctx, plan, a.ID(), a.Resolver)
 	if err != nil {
 		return false, err
 	}
@@ -558,6 +561,9 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bo
 	if prefixes, err = excludeWGEndpoint(ctx, prefixes, string(profile), a.Resolver); err != nil {
 		return false, err
 	}
+	if err := checkAddressRefreshAuthority(ctx); err != nil {
+		return false, err
+	}
 	newState := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules, RuntimeConfigSHA256: oldState.RuntimeConfigSHA256}
 	newState.RuleLayout, newState.SharedPriorityBase = oldState.RuleLayout, oldState.SharedPriorityBase
 	if samePolicy(oldState, newState) {
@@ -566,14 +572,21 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bo
 	if err := replacePolicy(ctx, a.Runner, a.ip(), oldState, newState); err != nil {
 		return false, err
 	}
+	rollback := func(cause error) (bool, error) {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		// Exact recorded tuples only. Report any incomplete rollback; never hide it.
+		return false, errors.Join(cause, replacePolicy(cleanup, a.Runner, a.ip(), newState, oldState))
+	}
 	if err := a.healthState(ctx, plan, newState, ""); err != nil {
-		_ = replacePolicy(ctx, a.Runner, a.ip(), newState, oldState)
-		return false, err
+		return rollback(err)
+	}
+	if err := checkAddressRefreshAuthority(ctx); err != nil {
+		return rollback(err)
 	}
 	data, _ := json.MarshalIndent(newState, "", "  ")
 	if err := writeAtomic(a.statePath(), data, 0o600); err != nil {
-		_ = replacePolicy(ctx, a.Runner, a.ip(), newState, oldState)
-		return false, err
+		return rollback(err)
 	}
 	return true, nil
 }

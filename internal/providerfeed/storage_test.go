@@ -89,7 +89,8 @@ func TestPresetRefreshDefaultsOnlyNewSubscriptionsWithoutExplicitInterval(t *tes
 	for _, preset := range Builtins() {
 		want := DefaultRefreshMinutes
 		if preset.ID == "kort0881-ru-sni" {
-			want = 120
+			// Upstream FullAutomatedUpdate.yml publishes every four hours.
+			want = 240
 		}
 		if preset.DefaultRefreshIntervalMinutes != want {
 			t.Fatalf("preset %s refresh default = %d", preset.ID, preset.DefaultRefreshIntervalMinutes)

@@ -63,6 +63,8 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-node-service-ui.mjs
   node scripts/test-node-policy-ui.mjs
   node scripts/test-app-update-ui.mjs
+  node --check cmd/razvilka/web/automation-setup.js
+  node scripts/test-maintenance-ui.mjs
   node scripts/test-workspace-controls-ui.mjs
   node scripts/test-service-dashboard-ui.mjs
   node scripts/test-engine-intent-ui.mjs

@@ -126,7 +126,7 @@ jobs:
             NOTES_OPTION="--notes-file=docs/releases/${VERSION}.md"
           fi
           RELEASE_OPTIONS=(--verify-tag)
-          if [[ "$VERSION" == *-rc.* ]]; then
+          if [[ "$VERSION" == *-* ]]; then
             RELEASE_OPTIONS+=(--prerelease --latest=false)
           fi
           gh release create "$GITHUB_REF_NAME" \

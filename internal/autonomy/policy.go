@@ -28,6 +28,7 @@ type Window struct {
 	Days  []int  `json:"days"` // Sunday = 0. Cross-midnight belongs to its start day.
 }
 type Policy struct {
+	UpdateChannel         string   `json:"update_channel,omitempty"`
 	PreferredRoutes       []string `json:"preferred_routes"`
 	Schema                int      `json:"schema"`
 	Revision              uint64   `json:"revision"`
@@ -94,7 +95,7 @@ func ValidateScope(all bool, values []string) error {
 	return nil
 }
 func Validate(p Policy) error {
-	if p.Schema != Schema || p.Revision == ^uint64(0) || p.Enabled && !p.SetupComplete || p.Timezone == "" || len(p.Timezone) > 96 || p.Timezone == "Local" {
+	if (p.UpdateChannel != "" && p.UpdateChannel != "stable" && p.UpdateChannel != "preview") || p.Schema != Schema || p.Revision == ^uint64(0) || p.Enabled && !p.SetupComplete || p.Timezone == "" || len(p.Timezone) > 96 || p.Timezone == "Local" {
 		return ErrPolicy
 	}
 	if _, e := time.LoadLocation(p.Timezone); e != nil {

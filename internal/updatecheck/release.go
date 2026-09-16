@@ -69,23 +69,38 @@ func OfficialClient(timeout time.Duration) *http.Client {
 // FetchRelease reads only the hard-coded official repository; neither a URL
 // nor an architecture supplied by the browser reaches this boundary.
 func FetchRelease(ctx context.Context, client *http.Client, current, arch string, releaseID int64) (Release, error) {
+	return FetchReleaseChannel(ctx, client, current, arch, releaseID, "stable")
+}
+func FetchReleaseChannel(ctx context.Context, client *http.Client, current, arch string, releaseID int64, channel string) (Release, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	if !supportedArchitecture(arch) {
+	if !supportedArchitecture(arch) || !ValidChannel(channel) {
 		return Release{}, errors.New("unsupported-architecture")
 	}
 	endpoint := "https://api.github.com/repos/" + officialRepository + "/releases/latest"
+	if NormalizedChannel(channel) == "preview" {
+		endpoint = "https://api.github.com/repos/" + officialRepository + "/releases?per_page=30"
+	}
 	if releaseID > 0 {
 		endpoint = fmt.Sprintf("https://api.github.com/repos/%s/releases/%d", officialRepository, releaseID)
 	}
-	data, err := fetchLimited(ctx, client, endpoint, 512<<10)
+	data, err := fetchLimited(ctx, client, endpoint, 2<<20)
 	if err != nil {
 		return Release{}, err
 	}
-	return parseRelease(data, current, arch, releaseID)
+	if releaseID == 0 {
+		data, err = selectChannelMetadata(data, channel)
+		if err != nil {
+			return Release{}, err
+		}
+	}
+	return parseReleaseChannel(data, current, arch, releaseID, channel)
 }
 
 func parseRelease(data []byte, current, arch string, expectedID int64) (Release, error) {
+	return parseReleaseChannel(data, current, arch, expectedID, "stable")
+}
+func parseReleaseChannel(data []byte, current, arch string, expectedID int64, channel string) (Release, error) {
 	var raw struct {
 		ID         int64  `json:"id"`
 		Tag        string `json:"tag_name"`
@@ -102,8 +117,14 @@ func parseRelease(data []byte, current, arch string, expectedID int64) (Release,
 			State  string `json:"state"`
 		} `json:"assets"`
 	}
-	if json.Unmarshal(data, &raw) != nil || raw.ID <= 0 || expectedID > 0 && raw.ID != expectedID || raw.Draft || raw.Prerelease || !CanUpgrade(current, raw.Tag) || !supportedArchitecture(arch) || len(raw.Assets) > 100 {
+	if json.Unmarshal(data, &raw) != nil || raw.ID <= 0 || expectedID > 0 && raw.ID != expectedID || raw.Draft || (NormalizedChannel(channel) != "preview" && raw.Prerelease) || !CanUpgradeChannel(current, raw.Tag, channel) || !supportedArchitecture(arch) || len(raw.Assets) > 100 {
 		return Release{}, errors.New("release-not-an-upgrade")
+	}
+	if NormalizedChannel(channel) == "preview" {
+		_, pre, ok := parseComparableVersion(raw.Tag)
+		if !ok || (pre == "") == raw.Prerelease {
+			return Release{}, errors.New("release-channel-identity-invalid")
+		}
 	}
 	version := strings.TrimPrefix(raw.Tag, "v")
 	page := "https://github.com/" + officialRepository + "/releases/tag/" + raw.Tag

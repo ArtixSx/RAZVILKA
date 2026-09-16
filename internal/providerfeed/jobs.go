@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"time"
 )
 
@@ -234,7 +235,7 @@ func (m *Manager) runJobs(ctx context.Context, admission func(context.Context) (
 					continue
 				}
 			}
-			jobCtx, cancel := context.WithTimeout(ctx, Timeout+5*time.Second)
+			jobCtx, cancel := context.WithTimeout(ctx, 2*time.Minute+Timeout+5*time.Second)
 			entry.view.Status = "running"
 			entry.view.StartedAt = m.now().UTC()
 			entry.cancel = cancel
@@ -243,11 +244,36 @@ func (m *Manager) runJobs(ctx context.Context, admission func(context.Context) (
 			release := func() {}
 			var err error
 			if admission != nil {
-				release, err = admission(jobCtx)
+				// Busy means waiting for another owner, not a failed remote source.
+				for {
+					release, err = admission(jobCtx)
+					if !errors.Is(err, operationgate.ErrBusy) {
+						break
+					}
+					timer := time.NewTimer(200 * time.Millisecond)
+					select {
+					case <-jobCtx.Done():
+						timer.Stop()
+						err = jobCtx.Err()
+					case <-timer.C:
+					}
+					if jobCtx.Err() != nil {
+						break
+					}
+				}
 			}
 			var result Result
 			if err == nil {
-				result, err = m.SyncSaved(jobCtx, sourceID)
+				// Consent may be revoked while this task is waiting for admission.
+				m.mu.Lock()
+				index := m.sourceIndexLocked(sourceID)
+				allowed := index >= 0 && (!entry.view.Scheduled || m.storage.doc.Sources[index].Enabled)
+				m.mu.Unlock()
+				if !allowed {
+					err = context.Canceled
+				} else {
+					result, err = m.SyncSaved(jobCtx, sourceID)
+				}
 				release()
 			}
 			cancel()

@@ -57,7 +57,7 @@ func (a *App) selfUpdatePrepare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := a.Store.Get()
-	job, err := a.SelfUpdate.Prepare(cfg.Revision, updatecheck.ConfigFingerprint(cfg))
+	job, err := a.SelfUpdate.PrepareChannel(cfg.Revision, updatecheck.ConfigFingerprint(cfg), a.autonomyPolicy().UpdateChannel)
 	if err != nil {
 		selfUpdateError(w, err)
 		return
@@ -105,6 +105,10 @@ func (a *App) selfUpdateApply(w http.ResponseWriter, r *http.Request) {
 	}()
 	cfg := a.Store.Get()
 	if cfg.Revision != request.Revision {
+		selfUpdateError(w, updatecheck.ErrReviewChanged)
+		return
+	}
+	if updatecheck.NormalizedChannel(a.SelfUpdate.Snapshot().Channel) != updatecheck.NormalizedChannel(a.autonomyPolicy().UpdateChannel) {
 		selfUpdateError(w, updatecheck.ErrReviewChanged)
 		return
 	}

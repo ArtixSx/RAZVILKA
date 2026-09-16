@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 const maxPolicyPrefixes = 1024
@@ -453,11 +454,11 @@ func replacePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, o
 		return fmt.Errorf("remove old policy: %w", err)
 	}
 	if err := applyPolicy(ctx, runner, ipCommand, newState); err != nil {
-		_ = removePolicy(ctx, runner, ipCommand, newState)
-		if restoreErr := applyPolicy(ctx, runner, ipCommand, oldState); restoreErr != nil {
-			return fmt.Errorf("apply refreshed policy: %w; restore old policy: %v", err, restoreErr)
-		}
-		return fmt.Errorf("apply refreshed policy: %w", err)
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		removeErr := removePolicy(cleanup, runner, ipCommand, newState)
+		restoreErr := applyPolicy(cleanup, runner, ipCommand, oldState)
+		return errors.Join(fmt.Errorf("apply refreshed policy: %w", err), removeErr, restoreErr)
 	}
 	return nil
 }

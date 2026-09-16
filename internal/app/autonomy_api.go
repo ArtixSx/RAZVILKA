@@ -63,6 +63,7 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 			Confirm          string          `json:"confirm"`
 			ReleaseSafeMode  bool            `json:"release_safe_mode"`
 			StarterSHA       string          `json:"starter_sha256,omitempty"`
+			StarterIDs       *[]string       `json:"starter_service_ids,omitempty"`
 			InitialServices  []string        `json:"initial_service_ids,omitempty"`
 		}
 		if !decodeAutonomyRequest(w, r, &req) {
@@ -70,7 +71,7 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Policy.Schema = autonomy.Schema
 		req.Policy.Revision = req.ExpectedRevision + 1
-		if len(req.InitialServices) > 0 && req.StarterSHA == "" || req.ExpectedRevision == ^uint64(0) || req.Confirm != "SAVE_AUTONOMY" || autonomy.Validate(req.Policy) != nil {
+		if (len(req.InitialServices) > 0 || req.StarterIDs != nil) && req.StarterSHA == "" || req.ExpectedRevision == ^uint64(0) || req.Confirm != "SAVE_AUTONOMY" || autonomy.Validate(req.Policy) != nil {
 			writeJSON(w, 400, map[string]any{"error": "Проверьте часовой пояс, источники, устройства и расписания."})
 			return
 		}
@@ -108,7 +109,7 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 		before := a.autonomy.doc.Policy
 		oldServices, oldRuntime := a.autonomy.doc.Services, a.autonomy.doc.Runtime
 		if req.StarterSHA != "" {
-			services, runtime, e := onboarding.Enroll(a.catalogSnapshot(), starterConfigView(a.Store.Get()), before, req.Policy, oldServices, oldRuntime, req.StarterSHA, req.InitialServices)
+			services, runtime, e := onboarding.EnrollSelected(a.catalogSnapshot(), starterConfigView(a.Store.Get()), before, req.Policy, oldServices, oldRuntime, req.StarterSHA, req.InitialServices, req.StarterIDs)
 			if e != nil {
 				a.autonomy.mu.Unlock()
 				writeJSON(w, 409, map[string]any{"code": "STARTER_REVIEW_CHANGED", "error": "Базовый набор или настройки изменились. Повторите просмотр мастера."})
@@ -154,6 +155,7 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 		runtime[id] = s.Clone()
 	}
 	maintenance := a.autonomy.maintenanceMessage
+	refill := a.autonomy.refillState
 	blocked := a.autonomy.blocked
 	a.autonomy.mu.Unlock()
 	cfg := a.Store.Get()
@@ -166,8 +168,17 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 	for _, preset := range providerfeed.Builtins() {
 		presets = append(presets, map[string]any{"id": "feed-" + preset.ID, "name": preset.Name, "interval_minutes": preset.DefaultRefreshIntervalMinutes})
 	}
+	// Expose only bounded scheduling/readback metadata to the authenticated UI.
+	// Never expose old raw refresh errors, destinations or full plan objects here.
+	var addressRefresh map[string]any
+	if a.Dataplane != nil {
+		if status, err := a.Dataplane.Status(); err == nil && status.PolicyRefresh != nil && status.CommittedPlan != nil && status.PolicyRefresh.PlanID == status.CommittedPlan.PlanID {
+			v := status.PolicyRefresh
+			addressRefresh = map[string]any{"state": v.State, "checked_at": v.CheckedAt}
+		}
+	}
 	writeJSON(w, 200, map[string]any{"policy": p, "starter": onboarding.Starter(a.catalogSnapshot(), starterConfigView(cfg), p, services), "services": services, "runtime": runtime, "blocked": blocked, "safe_mode": cfg.SafeMode, "manual": cfg.ServiceControl.EffectiveMode() == "manual", "stopped": cfg.ServiceControl.Stopped,
-		"catalog_services": catalogServices, "source_presets": presets, "applied_services": cfg.AppliedServices, "server_time": time.Now().UTC(), "next_application_window": autonomy.NextWindow(p.Application, p.Timezone, time.Now()), "next_components_window": autonomy.NextWindow(p.Components, p.Timezone, time.Now()), "maintenance_message": maintenance,
+		"catalog_services": catalogServices, "source_presets": presets, "applied_services": cfg.AppliedServices, "server_time": time.Now().UTC(), "next_application_window": autonomy.NextWindow(p.Application, p.Timezone, time.Now()), "next_components_window": autonomy.NextWindow(p.Components, p.Timezone, time.Now()), "maintenance_message": maintenance, "reserve_refill": refill, "address_refresh": addressRefresh,
 		"capabilities": map[string]any{"automatic_initial_apply": true, "automatic_reserves": true, "scenario": "web", "source_timers": "saved-router-subscriptions", "automatic_install": false, "component_install": false, "note": "Тестовая реализация. Автоустановка программ закрыта до подписанных выпусков и аппаратно подтверждённого отката. Проверка и подготовка приложения по расписанию работают отдельно."}})
 }
 

@@ -97,6 +97,9 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		state.NextCheck = time.Now().Add(time.Duration(p.CheckSeconds) * time.Second)
 	}
 	a.autonomyRuntime(chosen, state)
+	// Refill is passive catalogue work, not route selection. A failed current
+	// node cannot cause repeated fetches if the permitted pool is already full.
+	a.autonomyRefill(ctx, p, spec, state)
 }
 
 func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, now time.Time) autonomy.Runtime {

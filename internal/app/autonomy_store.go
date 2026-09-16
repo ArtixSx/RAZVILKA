@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -32,6 +33,7 @@ type autonomyState struct {
 	path                string
 	image               restorejournal.Image
 	doc                 autonomyDocument
+	refillState         providerfeed.RefillDecision
 	maintenanceMessage  string
 	maintenanceAttempts map[string]maintenanceAttempt
 	maintenanceTestRun  func(context.Context, string, autonomy.Window, bool) (bool, bool, string)

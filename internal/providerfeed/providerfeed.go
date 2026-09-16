@@ -39,6 +39,7 @@ var (
 	ErrStore    = errors.New("provider feed candidates could not be saved")
 	ErrNotFound = errors.New("provider feed not found")
 	ErrConflict = errors.New("provider feed changed; refresh before editing")
+	ErrDeferred = errors.New("provider feed retry is deferred")
 	ErrCapacity = errors.New("local node catalog capacity reached")
 )
 
@@ -61,7 +62,7 @@ func Builtins() []Preset {
 		{ID: "goida-vless", Name: "Goida VPN · VLESS", URL: "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror/23.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "upstream collection; local exact check required"},
 		{ID: "goida-extra", Name: "Goida VPN · дополнительный каталог", URL: "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror/6.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "upstream collection; local exact check required"},
 		{ID: "au1rxx-nl", Name: "Free VPN Subscriptions · Нидерланды", URL: "https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/by-country/singbox-NL.json", Format: "profile", License: "see upstream", Verification: "country is a publisher label; local exact check required", CountryCode: "NL"},
-		{ID: "kort0881-ru-sni", Name: "Kort0881 · RU SNI", URL: "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/data/githubmirror/ru-sni/vless.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "publisher SNI selection, not measured location or local availability; local exact check required", DefaultRefreshIntervalMinutes: 120},
+		{ID: "kort0881-ru-sni", Name: "Kort0881 · RU SNI", URL: "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/data/githubmirror/ru-sni/vless.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "publisher SNI selection, not measured location or local availability; local exact check required", DefaultRefreshIntervalMinutes: 240},
 	}
 	for i := range presets {
 		if presets[i].DefaultRefreshIntervalMinutes == 0 {
@@ -98,6 +99,7 @@ type Result struct {
 }
 
 type State struct {
+	RetryAfterAt           time.Time `json:"retry_after_at,omitempty"`
 	SourceID               string    `json:"source_id"`
 	Name                   string    `json:"name"`
 	URL                    string    `json:"url"` // Redacted to origin; no token-bearing path/query.
@@ -263,6 +265,10 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		return Result{}, ErrConflict
 	}
 	previous, exists := m.states[s.id]
+	if m.now().Before(previous.state.RetryAfterAt) {
+		m.mu.Unlock()
+		return Result{SourceID: s.id, Status: "deferred", OriginExpiresAt: previous.state.OriginExpiresAt}, ErrDeferred
+	}
 	if !exists && len(m.states) >= MaxFeeds {
 		m.mu.Unlock()
 		return Result{}, ErrSize
@@ -276,6 +282,26 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 	state := previous.state
 	state.SourceID, state.Name, state.URL, state.Format = s.id, s.name, publicfetch.RedactedURL(s.url), s.format
 	state.LastAttemptAt = m.now().UTC()
+	// Persist a bounded reservation BEFORE fetching. A crash may leave a pending
+	// attempt, but cannot turn it into an immediate restart/retry storm.
+	if m.storage != nil && s.revision != 0 {
+		m.mu.Lock()
+		if !m.currentSourceLocked(s) {
+			m.mu.Unlock()
+			return Result{}, ErrConflict
+		}
+		pending := previous
+		pending.state = state
+		pending.state.Status = "fetching"
+		pending.state.ErrorCode = ""
+		pending.state.NextRefreshAt = state.LastAttemptAt.Add(MinRefreshMinutes * time.Minute)
+		m.states[s.id] = pending
+		err := m.persistLocked(ctx)
+		m.mu.Unlock()
+		if err != nil {
+			return Result{}, ErrStore
+		}
+	}
 	result := Result{SourceID: s.id}
 	finish := func(status string, cause error) (Result, error) {
 		state.Status, state.ErrorCode = status, ErrorCode(cause)
@@ -336,6 +362,10 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		}
 		// Deliberately no Store.Import: 304 extends neither origin TTL nor health.
 		return finish(status, nil)
+	}
+	if response.StatusCode == 429 || response.StatusCode == 503 && !retryAfter(response.Header.Get("Retry-After"), m.now()).IsZero() {
+		state.RetryAfterAt = retryAfter(response.Header.Get("Retry-After"), m.now())
+		return finish("stale", ErrRateLimited)
 	}
 	if response.StatusCode != http.StatusOK {
 		return finish("stale", ErrFetch)
@@ -430,6 +460,7 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 			}
 		}
 	}
+	state.RetryAfterAt = time.Time{}
 	state.LastSuccessAt, state.OriginExpiresAt, state.LastKnownGood, state.Imported = now, now.Add(OriginTTL), true, batch.accepted
 	state.TotalEntries, state.AcceptedEntries, state.Omitted, state.Rejected, state.Duplicates = batch.total, batch.accepted, batch.omitted, batch.rejected, batch.duplicates
 	previous.etag, previous.modified = safeValidator(response.Header.Get("ETag")), safeValidator(response.Header.Get("Last-Modified"))
@@ -449,6 +480,8 @@ func ErrorCode(err error) string {
 		return ""
 	case errors.Is(err, ErrRequest):
 		return "FEED_REQUEST"
+	case errors.Is(err, ErrRateLimited), errors.Is(err, ErrDeferred):
+		return "FEED_RATE_LIMIT"
 	case errors.Is(err, ErrBusy):
 		return "FEED_BUSY"
 	case errors.Is(err, ErrSize):

@@ -150,7 +150,7 @@ func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 	if m.Opkg != "" {
 		installedOut, installedErr := m.run(ctx, "list-installed")
 		availableOut, availableErr := m.run(ctx, "list")
-		if installedErr != nil && availableErr != nil {
+		if installedErr != nil || availableErr != nil {
 			return nil, fmt.Errorf("read opkg catalog: %v; %v", installedErr, availableErr)
 		}
 		installed = parsePackageVersions(string(installedOut))
@@ -218,6 +218,15 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 	visiting[id] = true
 	defer delete(visiting, id)
 	for _, dependency := range spec.Dependencies {
+		dep, known := lookup(dependency)
+		if known && dep.Provider == "github-release" && dep.Binary != "" {
+			// A dependency with our integrity-bound receipt does not need a
+			// second download/update just because its parent is being updated.
+			path := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), dep.Binary)
+			if externalReceiptVersion(path) != "" {
+				continue
+			}
+		}
 		if _, err := m.applyLocked(ctx, dependency, visiting); err != nil {
 			return Result{Component: id, Action: "install"}, fmt.Errorf("install dependency %s: %w", dependency, err)
 		}
@@ -251,13 +260,18 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 			return Result{}, fmt.Errorf("opkg update after repository setup: %w", err)
 		}
 	}
-	out, err := m.run(ctx, "install", spec.Package)
+	command := "install"
+	if beforeVersion != "" {
+		command = "upgrade"
+	}
+	// Never upgrade the global package set. Only the reviewed allowlisted package.
+	out, err := m.run(ctx, command, spec.Package)
 	text := strings.TrimSpace(string(out))
 	if len(text) > 8192 {
 		text = text[len(text)-8192:]
 	}
 	if err != nil {
-		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("opkg install %s: %w", spec.Package, err)
+		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("opkg %s %s: %w", command, spec.Package, err)
 	}
 	after, verifyErr := m.installedPackageVersions(ctx)
 	if verifyErr != nil {
@@ -269,6 +283,11 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 			_, _ = m.run(ctx, "remove", spec.Package)
 		}
 		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("opkg reported success but %s is not installed", spec.Package)
+	}
+	if beforeVersion != "" && compareVersions(afterVersion, beforeVersion) <= 0 {
+		// Exit zero may mean "nothing to upgrade". Never issue a new verified
+		// receipt for unchanged/downgraded bytes; leave the prior receipt intact.
+		return Result{Component: id, Action: action, Output: text}, errors.New("component-update-not-advanced")
 	}
 	receipt := lifecycleReceipt{SchemaVersion: 1, Component: id, Package: spec.Package, Provider: spec.Provider, Action: action, BeforeVersion: beforeVersion, AfterVersion: afterVersion, CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if err := m.writeLifecycleReceipt(receipt); err != nil {
@@ -306,8 +325,13 @@ func (m *Manager) ensureRepository(spec Spec) error {
 	}
 	path := filepath.Join(dir, spec.ID+".conf")
 	content := []byte(fmt.Sprintf("src/gz %s %s\n", spec.Package, spec.Repository))
-	if existing, err := os.ReadFile(path); err == nil && string(existing) == string(content) {
-		return nil
+	if existing, err := os.ReadFile(path); err == nil {
+		if string(existing) == string(content) {
+			return nil
+		}
+		return errors.New("component-repository-file-conflict")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 	tmp, err := os.CreateTemp(dir, ".razvilka-repo-*")
 	if err != nil {

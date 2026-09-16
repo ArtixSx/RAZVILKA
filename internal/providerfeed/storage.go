@@ -337,6 +337,9 @@ func (m *Manager) saveLocked(ctx context.Context, id string, request SaveRequest
 	c := m.states[s.id]
 	if request.Enabled {
 		c.state.NextRefreshAt = m.now().UTC().Add(time.Minute)
+		if c.state.RetryAfterAt.After(c.state.NextRefreshAt) {
+			c.state.NextRefreshAt = c.state.RetryAfterAt
+		}
 	} else {
 		c.state.NextRefreshAt = time.Time{}
 	}
@@ -425,6 +428,9 @@ func (m *Manager) completeSavedLocked(id string, cause error) {
 	delay += time.Duration([]byte(id)[len(id)-1]%30) * time.Second
 	if feed.Enabled {
 		c.state.NextRefreshAt = m.now().UTC().Add(delay)
+		if c.state.RetryAfterAt.After(c.state.NextRefreshAt) {
+			c.state.NextRefreshAt = c.state.RetryAfterAt
+		}
 	} else {
 		c.state.NextRefreshAt = time.Time{}
 	}

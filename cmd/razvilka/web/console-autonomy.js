@@ -100,7 +100,7 @@
   function policyFromForm() {
     if(!editingPolicy) throw new Error('Сначала загрузите настройки роутера.');
     const p=clone(editingPolicy);
-    p.setup_complete=true;p.enabled=$('autonomyEnabled').checked;p.inherit_new_services=$('inheritNew').checked;
+    p.update_channel=$('updateChannel')?.value||'stable';p.setup_complete=true;p.enabled=$('autonomyEnabled').checked;p.inherit_new_services=$('inheritNew').checked;
     p.all_lan=$('scopeMode').value==='all';p.default_sources=p.all_lan?[]:splitValues($('scopeAddresses').value);
     p.timezone=$('timezone').value.trim();p.source_ids=[...new Set([...$$('input[name="source"]:checked').map(el=>el.value),...splitValues($('extraSourceIDs').value)])];
     p.protocols=$$('input[name="protocol"]:checked').map(el=>el.value);p.preferred_routes=$$('input[name="preferred"]:checked').map(el=>el.value);
@@ -115,6 +115,7 @@
     $('scopeMode').value=p.all_lan?'all':'selected';$('scopeAddresses').value=(p.default_sources||[]).join('\n');$('scopeAddressesLabel').hidden=p.all_lan;
     $('inheritNew').checked=p.setup_complete?!!p.inherit_new_services:true;
     $('autonomyEnabled').checked=p.setup_complete?!!p.enabled:true;$('confirmConsent').checked=false;$('releaseSafeMode').checked=false;
+    if($('updateChannel'))$('updateChannel').value=p.update_channel||'stable';
     $('timezone').value=p.setup_complete?p.timezone:(Intl.DateTimeFormat().resolvedOptions().timeZone||p.timezone);
     $('reserveTargetInput').value=p.reserve_target;$('candidateLimit').value=p.candidates_per_round;$('checkInterval').value=p.check_seconds;$('reserveInterval').value=p.reserve_seconds;
     $$('input[name="protocol"]').forEach(el=>el.checked=p.protocols.includes(el.value));$$('input[name="preferred"]').forEach(el=>el.checked=p.preferred_routes.includes(el.value));
@@ -128,17 +129,20 @@
     $('revisionLabel').textContent=`Редакция ${p.revision}`;
     renderReview();
   }
-  function renderStarterReview(){
+  let starterRenderedHash="";
+ function renderStarterReview(){
     const block=$('starterReview');if(!block)return;
     const r=snapshot?.starter;block.hidden=!r?.eligible||!!snapshot?.policy?.setup_complete;
     if(block.hidden)return;
-    $('starterItems').innerHTML=(r.items||[]).map(s=>`<span><b>${escapeHTML(s.name)}</b><small>${Number(s.domains)} доменов · NFQWS2</small></span>`).join('');
+    const selectedStarter=new Set($$('input[name="initial-starter"]:checked').map(x=>x.value));
+    const same=starterRenderedHash===r.sha256;starterRenderedHash=r.sha256;
+    $('starterItems').innerHTML=(r.items||[]).map(s=>`<label><input type="checkbox" name="initial-starter" value="${escapeHTML(s.id)}" ${(!same||selectedStarter.has(s.id))?'checked':''}><span><b>${escapeHTML(s.name)}</b><small>${Number(s.domains)} доменов · NFQWS2</small></span></label>`).join('');
     const selected=new Set($$('input[name="initial-extra"]:checked').map(x=>x.value));
     $('initialExtras').innerHTML=(snapshot.catalog_services||[]).filter(s=>!s.default_nfqws2&&!snapshot.services[s.id]).map(s=>`<label><input type="checkbox" name="initial-extra" value="${escapeHTML(s.id)}" ${selected.has(s.id)?'checked':''}/><span>${escapeHTML(s.name)}<small>Подбор по разрешениям мастера</small></span></label>`).join('');
   }
   function renderReview() {
     if(!editingPolicy) return;const p=policyFromForm();
-    const rows=[['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · Проверка каталога`],['Часовой пояс',p.timezone]];
+    const rows=[['Канал обновлений',p.update_channel==='preview'?'Предварительные и стабильные':'Стабильные'],['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · Проверка каталога`],['Часовой пояс',p.timezone]];
     $('reviewSummary').innerHTML=rows.map(([k,v])=>`<div><span>${escapeHTML(k)}</span><b>${escapeHTML(v)}</b></div>`).join('');
   }
   function serviceName(id) { return (snapshot?.catalog_services||[]).find(s=>s.id===id)?.name||id; }
@@ -220,7 +224,7 @@
       const p=validatePolicy(policyFromForm());
       if($('releaseSafeMode').checked&&!p.enabled) throw new Error('Не снимайте Safe Mode при выключенной автоматике.');
       saving=true;$('saveWizard').disabled=true;
-      await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:$('releaseSafeMode').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
+      await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:$('releaseSafeMode').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
       requireGeneration(generation);dirty=false;await refresh(true);requireGeneration(generation);notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
     } catch(e) { reportError(e,$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
