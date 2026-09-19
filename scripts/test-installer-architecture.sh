@@ -5,6 +5,8 @@ set -eu
 umask 077
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
+NATIVE_LINKS=1
+case "$(uname -s)" in MINGW*|MSYS*) NATIVE_LINKS=0 ;; esac
 TMP_BASE="$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd -P)"
 TEST_ROOT="$(mktemp -d "$TMP_BASE/razvilka-architecture.XXXXXX")"
 cleanup() {
@@ -100,6 +102,14 @@ run_case x86_64 unknown '' amd64
 run_case amd64 unknown '' amd64
 run_case unsupported unknown '' refuse
 run_case mips unknown invalid refuse
+
+if [ "$NATIVE_LINKS" -eq 1 ]; then
+  ORIGINAL_BASE="$BASE"
+  ln -s "$BASE" "$TEST_ROOT/base-link"
+  BASE="$TEST_ROOT/base-link"
+  run_case aarch64 unknown '' arm64
+  BASE="$ORIGINAL_BASE"
+fi
 
 # A release checksum is mandatory even for dry-run. Refusal must happen before
 # the candidate executes, normalization or any live installation directory is

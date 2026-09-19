@@ -1,109 +1,73 @@
+<p align="center">
+  <img src="docs/assets/razvilka-banner.png" alt="RAZVILKA — router connection management" width="960">
+</p>
+
 # RAZVILKA
 
-A local control panel for Keenetic and Netcraze routers with Entware.
-Manage services, connections, bypass components and devices in one place.
-Select the sites and devices you need, verify a connection and apply its route
-manually or allow Autopilot to find a verified fallback. The application and
-saved schedules run on the router when the browser is closed.
-No RAZVILKA cloud account is required.
+**Choose which services use which connection, directly on your router.**
 
-[Русский](README.md) · [Downloads](https://github.com/ArtixSx/RAZVILKA/releases) ·
-[Current status (RU)](docs/CURRENT_STATUS_RU.md) · [Changelog](CHANGELOG.md) ·
-[Report an issue](https://github.com/ArtixSx/RAZVILKA/issues)
+A local web panel for **Keenetic and Netcraze with Entware**. Manage services,
+devices, NFQWS2, WARP and VPN connections in one place. Choose routes manually
+or let Autopilot select verified connections within your settings. The panel
+and saved schedules run on the router without an open browser.
 
-**[RAZVILKA 0.18.5](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.5)** adds an Autopilot wizard and connection browser,
-with improved service checks and recovery after an application restart.
-[Release validation and limitations (RU)](docs/CURRENT_STATUS_RU.md).
-The installation command downloads the published stable release.
+[Download](https://github.com/ArtixSx/RAZVILKA/releases/latest) ·
+[Documentation](docs/README.md) · [Русский](README.md) ·
+[News and support](https://t.me/RAZVILKA_UI)
 
-## Features in the current project
+## Install
 
-- Service routes for selected devices, with checks, explicit application and
-  restoration of previous settings on failure.
-- VLESS, Hysteria2, TUIC and Shadowsocks connections: imports, subscriptions,
-  readable country names, node checks and permitted fallback candidates.
-- NFQWS2, Sing-box/Xray, USQUE, WARP and AmneziaWG workspaces, subject to the
-  capabilities of the installed component and profile.
-- An Autopilot setup wizard with device scope, permitted sources and
-  scheduled checks.
-- Diagnostics, component versions, DNS response comparison and private
-  backups. Dark appearance is the default.
+First install Entware for your router, mount `/opt`, and connect to its Entware
+shell over SSH as `root`. [Entware preparation and detailed instructions](docs/INSTALL_RU.md).
 
-Version 0.18.5 also adds **Mihomo configuration export**, an **experimental HEV profile
-generator**, and **manual import/export of NFQWS2 strategy packs**. Mihomo and
-HEV are not yet available as complete managed routes; generating a file does
-not start them on the router. An imported strategy is a candidate requiring
-separate validation. Automatic software installation is not enabled: scheduled
-maintenance can check versions and prepare an application archive.
-[EXT5 scope and remaining work (RU)](docs/extensions/EXT5_RU.md).
+| Platform | Entware installer | RAZVILKA binary |
+| --- | --- | --- |
+| AArch64 / ARM64 | [aarch64-k3.10](https://bin.entware.net/aarch64-k3.10/installer/aarch64-installer.tar.gz) | `arm64` |
+| MIPS | [mipssf-k3.4](https://bin.entware.net/mipssf-k3.4/installer/mips-installer.tar.gz) | `mips`, soft-float |
+| MIPSel | [mipselsf-k3.4](https://bin.entware.net/mipselsf-k3.4/installer/mipsel-installer.tar.gz) | `mipsle`, soft-float |
 
-## Fresh installation
-
-Install Entware for your router model and firmware first. After clearing a USB
-drive, restore Entware and the `/opt` mount before installing RAZVILKA.
-Run these commands over SSH as `root`:
+Run these **two commands** in the SSH shell:
 
 ```sh
-test -d /opt && command -v opkg
-opkg update
-opkg install curl ca-certificates coreutils-sha256sum tar
+opkg update && opkg install curl ca-certificates ca-bundle
 ```
-
-Install the latest **stable** release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
+mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh
 ```
 
-The installer selects the router architecture, checks SHA256, installs the panel
-and verifies startup. Supported binary targets are `arm64` (aarch64), `mipsle`
-(mipsel), `mips` and `amd64`. Install the required bypass components separately;
-their compatibility also depends on the router model and kernel.
+The installer adds missing basic utilities, selects the architecture, checks
+the stable release checksums, and starts the panel.
 
-## First use of version 0.18.5
+Open **[http://192.168.1.1:8787](http://192.168.1.1:8787)**, or your router's LAN
+address on port `8787`. Use the first-run key or setup link printed by the
+installer to create your login and password. Use the Autopilot wizard
+or configure routes manually. Install the required engine in the bypass section
+and add VLESS or other profiles in the connections section. Routes are enabled
+after configuration and checks.
 
-These steps describe setup for version 0.18.5.
+## Update
 
-1. Open `http://192.168.1.1:8787` from the LAN, substituting your router's LAN
-   address if different. Set your own username and password.
-2. Use the wizard to choose devices, services, available methods and sources.
-   A fresh 0.18.5 catalog contains six NFQWS2 groups; add other services separately.
-3. Configure a bypass component or import a connection, then check it against
-   the intended service.
-4. Apply changes or authorize Autopilot for the selected scope. Safe Mode is
-   enabled by default and requires a separate action to release.
+Run the same installer to update to the latest stable release. It preserves
+settings and creates a rollback snapshot:
 
-A running process, DNS answer or reachable port does not establish that a site
-works through the intended route. Check the result shown for the service itself.
+```sh
+mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh
+```
 
-Read the installed version, panel status and LAN address:
+Check the installed version and service:
 
 ```sh
 /opt/bin/razvilka -version
 /opt/etc/init.d/S99razvilka status
-/opt/etc/init.d/S99razvilka lan-ip
 ```
 
-## Updates and documentation
-
-Published archives are available in [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
-For a manual update, extract the chosen release's Entware archive and run these
-commands from its directory, proceeding to installation only after successful
-preflight:
+## Uninstall
 
 ```sh
-sh scripts/upgrade-entware.sh --dry-run
-sh scripts/upgrade-entware.sh --apply
+mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh --uninstall
 ```
 
-Keep a private backup and the snapshot path printed by the installer for rollback.
-Updates preserve the existing user catalog.
-
-See [current results and limitations (RU)](docs/CURRENT_STATUS_RU.md) and the
-[EXT5 development plan (RU)](docs/extensions/CODEX_EXT5_RU.md). Historical versions
-and test reports are kept in the [Changelog](CHANGELOG.md) and
-[release reports](docs/releases). Results from an older build do not validate
-a newer one; an architecture build does not certify a particular router.
-
-[Security](SECURITY.md) · [News and support](https://t.me/RAZVILKA_UI) ·
-[MIT license](LICENSE)
+This removes the panel, its startup service and its own active routes. Settings,
+connections and backups are retained for reinstalling. Entware and separately
+installed engines remain. [Utilities, manual installation and rollback](docs/INSTALL_RU.md).

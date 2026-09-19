@@ -15,6 +15,8 @@ for script in scripts/*.sh scripts/S99razvilka build.sh; do
 done
 sh ./scripts/check-no-z2k-runtime.sh
 sh ./scripts/test-candidate-isolation.sh
+sh ./scripts/test-bootstrap.sh
+sh ./scripts/test-uninstall-entware.sh
 if command -v node >/dev/null 2>&1; then
   node scripts/build-interface.mjs --check
   node scripts/test-interface-model.mjs

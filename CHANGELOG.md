@@ -2,6 +2,20 @@
 
 The release workflow stages a draft; promotion follows verification of the exact attached router artifacts.
 
+## 0.18.6 — Installation and documentation
+
+- Prepare missing Entware utilities before installing or updating the panel,
+  with one bootstrap for AArch64, MIPS and MIPSel.
+- Separate panel removal from rollback: uninstall no longer reinstalls the
+  previous version. Preserve configuration and snapshots; retain the binary
+  when process shutdown or owned-route cleanup fails.
+- Validate the release archive checksum, paths and entry types before extraction.
+- Replace outdated candidate entry points with a documentation archive and a
+  concise Russian/English README covering purpose, install, update and removal.
+
+[Release notes](docs/releases/0.18.6.md) ·
+[Validation status](docs/CURRENT_STATUS_RU.md).
+
 ## 0.18.5 — 20 September 2026
 
 The release carries the EXT5 features and

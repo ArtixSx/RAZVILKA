@@ -7,9 +7,11 @@ case "$BASE" in
   /*) ;;
   *) echo "RAZVILKA_BASE must be an absolute directory" >&2; exit 1 ;;
 esac
-[ -d "$BASE" ] && [ ! -L "$BASE" ] || { echo "RAZVILKA_BASE is missing or unsafe: $BASE" >&2; exit 1; }
+[ -d "$BASE" ] || { echo "RAZVILKA_BASE is missing: $BASE" >&2; exit 1; }
 BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
 [ "$BASE" != / ] || { echo "Refusing to use the filesystem root as RAZVILKA_BASE" >&2; exit 1; }
+PATH="$BASE/sbin:$BASE/bin:$BASE/usr/sbin:$BASE/usr/bin:$PATH"
+export PATH
 STATEDIR="$BASE/var/lib/razvilka"
 BACKUPROOT="$STATEDIR/update-backups"
 APPDIR="$BASE/etc/razvilka"

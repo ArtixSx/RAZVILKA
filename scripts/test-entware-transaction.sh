@@ -198,7 +198,8 @@ grep -q '^CLOUDFLARE_PRIVATE_PRESENT=1$' "$SECOND_BACKUP/manifest" || { echo "Pr
 printf '%s\n' '{"schema":1,"draft":{},"applied":{}}' >"$PRIMARY/etc/razvilka/source-state.json"
 printf '%s\n' staged-changed >"$PRIMARY/var/lib/razvilka/staging/test-private/marker"
 printf '%s\n' provider-changed >"$PRIMARY/etc/razvilka/cloudflare-private/test-private/marker"
-RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$SECOND_BACKUP" >/dev/null
+ln -s "$PRIMARY" "$TEST_ROOT/primary-link"
+RAZVILKA_BASE="$TEST_ROOT/primary-link" RAZVILKA_PORT="$PORT" "$ROLLBACK" "$SECOND_BACKUP" >/dev/null
 [ "$(cat "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker")" = preserved ] || {
   echo "Dataplane runtime snapshot was not restored by rollback" >&2
   exit 1
@@ -309,17 +310,24 @@ assert_absent "$PRIMARY/bin/razvilka"
 assert_absent "$PRIMARY/etc/init.d/S99razvilka"
 assert_absent "$PRIMARY/etc/razvilka/config.json"
 assert_absent "$PRIMARY/etc/razvilka/community-catalog.json"
-# Uninstall is rollback-aware: a fresh transactional install has a snapshot,
-# so uninstall must restore that snapshot instead of deleting files blindly.
+# Uninstall must remove the current panel even when its latest snapshot has a
+# previous installed version. It keeps settings instead of restoring a snapshot.
+RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
+  "$UPGRADE" --apply >/dev/null
 RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
   "$UPGRADE" --apply >/dev/null
 RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" \
   "$REMOVAL/etc/init.d/S99razvilka" status >/dev/null
+REMOVAL_BACKUP="$(cat "$REMOVAL/var/lib/razvilka/current-backup")"
+[ -f "$REMOVAL_BACKUP/razvilka.bin" ] || { echo "Uninstall fixture has no previous installed binary" >&2; exit 1; }
+CONFIG_BEFORE_REMOVAL="$(sha256sum "$REMOVAL/etc/razvilka/config.json")"
+TOKEN_BEFORE_REMOVAL="$(sha256sum "$REMOVAL/etc/razvilka/admin.token")"
 RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" "$UNINSTALL" >/dev/null
 assert_absent "$REMOVAL/bin/razvilka"
 assert_absent "$REMOVAL/etc/init.d/S99razvilka"
-assert_absent "$REMOVAL/etc/razvilka/config.json"
-assert_absent "$REMOVAL/etc/razvilka/community-catalog.json"
+[ "$CONFIG_BEFORE_REMOVAL" = "$(sha256sum "$REMOVAL/etc/razvilka/config.json")" ] || { echo "Uninstall changed saved settings" >&2; exit 1; }
+[ "$TOKEN_BEFORE_REMOVAL" = "$(sha256sum "$REMOVAL/etc/razvilka/admin.token")" ] || { echo "Uninstall changed saved credentials" >&2; exit 1; }
+[ -f "$REMOVAL/etc/razvilka/community-catalog.json" ] && [ -f "$REMOVAL_BACKUP/razvilka.bin" ] || { echo "Uninstall removed catalogs or rollback data" >&2; exit 1; }
 
 
 trap - EXIT HUP INT TERM
