@@ -11,10 +11,9 @@ No RAZVILKA cloud account is required.
 [Current status (RU)](docs/CURRENT_STATUS_RU.md) · [Changelog](CHANGELOG.md) ·
 [Report an issue](https://github.com/ArtixSx/RAZVILKA/issues)
 
-**RAZVILKA 0.18.5 is a release candidate, updated 20 September 2026.** The candidate
-passed full CI and ARM64 router checks for route application, recovery after an
-application restart, and cleanup. Verification of the exact GitHub Release files
-is still pending; the version is not published. [Results and limitations (RU)](docs/CURRENT_STATUS_RU.md).
+**[RAZVILKA 0.18.5](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.5)** adds an Autopilot wizard and connection browser,
+with improved service checks and recovery after an application restart.
+[Release validation and limitations (RU)](docs/CURRENT_STATUS_RU.md).
 The installation command downloads the published stable release.
 
 ## Features in the current project

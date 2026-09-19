@@ -2,9 +2,9 @@
 
 The release workflow stages a draft; promotion follows verification of the exact attached router artifacts.
 
-## 0.18.5 — Release candidate, 20 September 2026
+## 0.18.5 — 20 September 2026
 
-Not published; exact GitHub Release artifact validation is pending. The candidate carries the EXT5 features and
+The release carries the EXT5 features and
 earlier fixes listed under 0.18.4, with additional recovery corrections:
 
 - Correct compounded node-recovery backoff; reset or wake the schedule when
@@ -14,17 +14,18 @@ earlier fixes listed under 0.18.4, with additional recovery corrections:
 - Remove the stale recovery-success banner after routes have been stopped.
   The current route state remains visible in the global control.
 
-Application package tests, targeted recovery tests and vet passed. Observer
-checks passed on Windows and on router Linux ARM64 (43 passed, two opt-in tests
-skipped). Candidate `c7d92fda4266544151dcf37f9792c021ea704e05` passed
-[full CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/35470186140), ARM64
-route application for one PC, and recovery after an application restart on the
-first attempt. Fresh client HTTPS checks and owned traffic counters passed before
-and after restart. A fresh backup-node service check also passed; candidate A/B
-switching is not claimed. Final Stop/Safe Mode cleanup passed all nine baseline
-and resource checks without rebooting the router. These results do not replace
-verification of the exact release artifacts.
+Exact GitHub files from `39ab4457fe6fc96437b31217b203a136c27a8a0d` passed
+[Release CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/35470707377), both CI
+runs, archive attestation and verification of all ten asset sizes and checksums.
+Standard ARM64 upgrade preserved credentials, settings and eight nodes. Service C
+application and continuous C-to-A switching passed fresh client HTTPS/traffic
+checks for one PC. Fresh restart recovery committed on the first attempt, followed
+by successful client HTTPS and traffic checks. Final Stop/Safe Mode cleanup passed
+all nine baseline and resource checks without a router reboot. Seven verified
+installation staging directories were removed; rollback backups were retained.
+Earlier candidate checks and remaining limitations are recorded separately in the audit.
 
+[Release files](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.5) ·
 [Release notes](docs/releases/0.18.5.md) ·
 [Current validation and remaining work](docs/CURRENT_STATUS_RU.md).
 
