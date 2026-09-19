@@ -11,10 +11,11 @@ No RAZVILKA cloud account is required.
 [Current status (RU)](docs/CURRENT_STATUS_RU.md) · [Changelog](CHANGELOG.md) ·
 [Report an issue](https://github.com/ArtixSx/RAZVILKA/issues)
 
-**RAZVILKA 0.18.5 is in development, updated 20 September 2026.** Restart
-recovery and network diagnostics fixes are included; this version has not
-passed hardware acceptance and is not published. [Verified results from earlier builds (RU)](docs/CURRENT_STATUS_RU.md)
-are documented separately. The installation command downloads the published stable release.
+**RAZVILKA 0.18.5 is a release candidate, updated 20 September 2026.** The candidate
+passed full CI and ARM64 router checks for route application, recovery after an
+application restart, and cleanup. Verification of the exact GitHub Release files
+is still pending; the version is not published. [Results and limitations (RU)](docs/CURRENT_STATUS_RU.md).
+The installation command downloads the published stable release.
 
 ## Features in the current project
 

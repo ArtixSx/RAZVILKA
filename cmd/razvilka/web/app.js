@@ -2802,7 +2802,9 @@ function nodeExpiryText(node) {
 }
 
 function nodeRecoveryBanner(recovery) {
-  const labels = { revalidating: 'Повторная проверка применённого маршрута', 'network-stale': 'Маршрут ожидает повторной проверки', 'requires-review': 'Восстановление требует вашего внимания', recovered: 'Применённый маршрут восстановлен' };
+  // A successful recovery is historical: routes may have been stopped since.
+  // Current running state belongs to the global status, not this alert.
+  const labels = { revalidating: 'Повторная проверка применённого маршрута', 'network-stale': 'Маршрут ожидает повторной проверки', 'requires-review': 'Восстановление требует вашего внимания' };
   const label = labels[recovery?.state];
   return label ? `<b>${esc(label)}</b><span>${esc(recovery.message || '')}</span>` : '';
 }

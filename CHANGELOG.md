@@ -2,21 +2,30 @@
 
 The release workflow stages a draft; promotion follows verification of the exact attached router artifacts.
 
-## 0.18.5 — In development, 20 September 2026
+## 0.18.5 — Release candidate, 20 September 2026
 
-Not published or hardware-validated. The release carries the EXT5 features and
+Not published; exact GitHub Release artifact validation is pending. The candidate carries the EXT5 features and
 earlier fixes listed under 0.18.4, with additional recovery corrections:
 
 - Correct compounded node-recovery backoff; reset or wake the schedule when
   recovery authority changes instead of inheriting the previous node's delay.
 - Improve observer diagnostics and bounded retries of interrupted netlink dumps.
   The cause of the historical intermittent observer resets is still unknown.
+- Remove the stale recovery-success banner after routes have been stopped.
+  The current route state remains visible in the global control.
 
 Application package tests, targeted recovery tests and vet passed. Observer
 checks passed on Windows and on router Linux ARM64 (43 passed, two opt-in tests
-skipped). Combined 0.18.5 CI and hardware acceptance are still pending.
+skipped). Candidate `c7d92fda4266544151dcf37f9792c021ea704e05` passed
+[full CI](https://github.com/ArtixSx/RAZVILKA/actions/runs/35470186140), ARM64
+route application for one PC, and recovery after an application restart on the
+first attempt. Fresh client HTTPS checks and owned traffic counters passed before
+and after restart. A fresh backup-node service check also passed; candidate A/B
+switching is not claimed. Final Stop/Safe Mode cleanup passed all nine baseline
+and resource checks without rebooting the router. These results do not replace
+verification of the exact release artifacts.
 
-[Draft release notes](docs/releases/0.18.5.md) ·
+[Release notes](docs/releases/0.18.5.md) ·
 [Current validation and remaining work](docs/CURRENT_STATUS_RU.md).
 
 ## 0.18.4 — Unpublished tagged build: service setup and connection checks
@@ -24,8 +33,9 @@ skipped). Combined 0.18.5 CI and hardware acceptance are still pending.
 Exact GitHub artifacts at 5fceff8 passed CI, attestation and checksum verification,
 router installation, Discord service checks and manual A/B switching for one PC.
 Subsequent application restart acceptance failed: recovery inherited the old
-node B backoff (six attempts, next run about 16 minutes away). The draft is not
-published. Final Stop/Safe Mode cleanup passed all baseline and resource checks.
+node B backoff (six attempts, next run about 16 minutes away). The unpublished
+draft was backed up and removed; its Git tag remains. Final Stop/Safe Mode cleanup
+passed all baseline and resource checks.
 An intermittent observer reset correctly triggered rollback before a successful
 retry; its cause remains under investigation. Earlier local c7ea788 restart and
 cleanup results are recorded separately. Detailed

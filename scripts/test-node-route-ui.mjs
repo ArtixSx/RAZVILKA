@@ -27,6 +27,7 @@ const context = vm.createContext({ state, $, $$: () => [], AbortController, Date
 const browserSource = readFileSync(new URL('../cmd/razvilka/web/node-browser.js', import.meta.url), 'utf8');
 vm.runInContext(browserSource.match(/function nodeServiceScenario\([^]*?\n}\n/)[0] + functions, context);
 assert.equal(context.nodeRecoveryBanner({ state: 'idle' }), '');
+assert.equal(context.nodeRecoveryBanner({ state: 'recovered', message: 'Применённые маршруты восстановлены' }), '', 'historical recovery must not claim routes are still running');
 assert.match(context.nodeRecoveryBanner({ state: 'revalidating', message: '<untrusted>' }), /Повторная проверка.*&lt;untrusted&gt;/);
 assert.doesNotMatch(context.nodeRecoveryBanner({ state: 'network-stale', message: 'Проверка не завершена' }), /восстановлен/);
 assert.match(context.nodeRecoveryBanner({ state: 'requires-review' }), /требует вашего внимания/);
