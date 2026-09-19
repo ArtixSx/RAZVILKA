@@ -118,6 +118,12 @@ func (m *Manager) Plan(ctx context.Context, id, action string, refresh bool) (Pl
 				if dep.InventoryError != "" || (!dep.Installed && !dep.CanInstall) {
 					plan.AddBlocker("DEPENDENCY_UNAVAILABLE", "Не подтверждена доступность зависимости: "+dep.Name, "Проверьте источники и установку зависимости.")
 				}
+				// applyLocked can reuse a release dependency only with a matching
+				// receipt. A manual binary is visible, but its presence must not
+				// make the parent plan ready for an operation that will be refused.
+				if dep.Provider == "github-release" && dep.Installed && dep.InstalledVersionSource != "receipt" {
+					plan.AddBlocker("UNMANAGED_DEPENDENCY", "Зависимость установлена вне RAZVILKA: "+dep.Name, "Используйте установщик владельца зависимости; нет подтверждённого права заменить её файл.")
+				}
 			}
 		}
 	}

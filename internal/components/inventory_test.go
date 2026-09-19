@@ -248,3 +248,53 @@ func TestManualReleaseFileIsVisibleAndCannotBeReplaced(t *testing.T) {
 		t.Fatal("manual binary changed", err)
 	}
 }
+
+func TestParentPlanRejectsManualReleaseDependencyBeforeConfirmation(t *testing.T) {
+	for _, action := range []string{"install", "update", "remove"} {
+		for _, owned := range []bool{false, true} {
+			name := action + "/manual-wgcf"
+			if owned {
+				name = action + "/receipt-wgcf"
+			}
+			t.Run(name, func(t *testing.T) {
+				r := &fakeRunner{output: map[string]string{
+					"list": "wireguard-tools - 2.0 - available\n",
+				}}
+				if action != "install" {
+					r.output["list-installed"] = "wireguard-tools - 1.0 - installed\n"
+				}
+				m := &Manager{Opkg: "opkg", Runner: r, BinDir: t.TempDir(), Client: offlineReleases()}
+				target := filepath.Join(m.BinDir, "wgcf")
+				binary := []byte("fixture dependency; deliberately not executable")
+				if err := os.WriteFile(target, binary, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if owned {
+					if err := writeExternalReceipt(target, "2.2.32", binary); err != nil {
+						t.Fatal(err)
+					}
+				}
+				plan, err := m.Plan(context.Background(), "warp-wg", action, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				blocked := !owned && action != "remove"
+				if plan.Ready == blocked || hasInventoryIssue(plan, "UNMANAGED_DEPENDENCY") != blocked {
+					t.Fatalf("parent preflight did not match dependency ownership: %+v", plan)
+				}
+				if action != "remove" && !reflect.DeepEqual(plan.Dependencies, []DependencyState{{ID: "wgcf", Installed: true}}) {
+					t.Fatal("installed fact was lost while enforcing ownership", plan.Dependencies)
+				}
+				for _, call := range r.calls {
+					if len(call) < 2 || call[1] != "list" && call[1] != "list-installed" {
+						t.Fatal("preflight mutated the package state", call)
+					}
+				}
+				after, err := os.ReadFile(target)
+				if err != nil || string(after) != string(binary) {
+					t.Fatal("preflight changed dependency bytes", err)
+				}
+			})
+		}
+	}
+}
