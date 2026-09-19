@@ -1347,3 +1347,14 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .ext5-dialog p{line-height:1.65}.ext5-note{border-left:3px solid var(--accent,#7cd8bb);padding:10px 14px;background:var(--surface,#1b2c3a)}.ext5-dialog section[hidden]{display:none!important}
 .ext5-dialog label{display:block;font-size:13px;line-height:1.6}.ext5-dialog textarea{width:100%;box-sizing:border-box;resize:vertical;margin-top:8px}.ext5-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:16px 0}.ext5-fields input{width:100%;box-sizing:border-box;display:block;margin-top:5px}.ext5-check{display:flex!important;gap:8px;align-items:center}.ext5-result{white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;font-size:12px;padding:15px;background:var(--surface,#111c26);border-radius:9px}.ext5-footer{margin-top:20px;border-top:1px solid var(--border,#304456);display:flex;justify-content:space-between;gap:12px;align-items:center}.ext5-candidates{max-height:240px;overflow:auto;margin:12px 0}.ext5-candidates label{display:flex;gap:10px;padding:10px;border-bottom:1px solid var(--border,#304456)}
 @media(max-width:580px){.ext5-dialog{padding:16px}.ext5-fields{grid-template-columns:1fr}.ext5-heading{flex-wrap:wrap}.ext5-footer{display:block}.ext5-actions button{min-height:42px}}
+
+/* Component cards keep package versions, runtime and update checks distinct. */
+.ui3-engine-card .ui3-engine-version{display:block;margin-top:5px;color:var(--muted);font-size:13px;font-weight:500;letter-spacing:0;overflow-wrap:anywhere}
+.ui3-engine-card .ui3-engine-version.has-update{color:var(--amber)}
+.ui3-engine-update,.ui3-engine-operation,.ui3-engine-action-hint{display:block;font-size:11px;line-height:1.6;overflow-wrap:anywhere;color:var(--muted);margin:0 0 12px}
+.ui3-engine-update.failed,.ui3-engine-operation{color:var(--amber)}
+.ui3-engine-update.current{color:var(--green)}
+.ui3-engine-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.interface-ui .ui3-engine-actions button{min-width:0;min-height:40px;padding:8px;font-size:11px;line-height:1.4;white-space:normal;overflow-wrap:anywhere}
+.ui3-engine-actions>button:first-child{grid-column:1/-1}
+.ui3-engine-action-hint{margin:12px 0 0}

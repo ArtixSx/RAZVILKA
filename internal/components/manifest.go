@@ -42,21 +42,27 @@ type PlanStep struct {
 }
 
 type Plan struct {
-	SchemaVersion    int            `json:"schema_version"`
-	Component        string         `json:"component"`
-	Name             string         `json:"name"`
-	Action           string         `json:"action"`
-	Provider         string         `json:"provider"`
-	Package          string         `json:"package,omitempty"`
-	Installed        bool           `json:"installed"`
-	InstalledVersion string         `json:"installed_version,omitempty"`
-	AvailableVersion string         `json:"available_version,omitempty"`
-	Ready            bool           `json:"ready"`
-	Budget           ResourceBudget `json:"resource_budget"`
-	Claims           []Claim        `json:"claims,omitempty"`
-	Steps            []PlanStep     `json:"steps"`
-	Blockers         []PlanIssue    `json:"blockers,omitempty"`
-	Warnings         []PlanIssue    `json:"warnings,omitempty"`
+	SchemaVersion    int               `json:"schema_version"`
+	Component        string            `json:"component"`
+	Name             string            `json:"name"`
+	Action           string            `json:"action"`
+	Provider         string            `json:"provider"`
+	Package          string            `json:"package,omitempty"`
+	Installed        bool              `json:"installed"`
+	InstalledVersion string            `json:"installed_version,omitempty"`
+	AvailableVersion string            `json:"available_version,omitempty"`
+	Ready            bool              `json:"ready"`
+	Budget           ResourceBudget    `json:"resource_budget"`
+	Claims           []Claim           `json:"claims,omitempty"`
+	Steps            []PlanStep        `json:"steps"`
+	Blockers         []PlanIssue       `json:"blockers,omitempty"`
+	Warnings         []PlanIssue       `json:"warnings,omitempty"`
+	Dependencies     []DependencyState `json:"dependencies,omitempty"`
+}
+
+type DependencyState struct {
+	ID        string `json:"id"`
+	Installed bool   `json:"installed"`
 }
 
 func (p *Plan) AddBlocker(code, message, resolution string) {
@@ -105,6 +111,15 @@ func ValidateManifest(specs []Spec) error {
 				return fmt.Errorf("component %s has invalid dependency %q", spec.ID, dependency)
 			}
 		}
+		for _, runtimeDependency := range spec.RuntimeDependencies {
+			found := false
+			for _, dependency := range spec.Dependencies {
+				found = found || dependency == runtimeDependency
+			}
+			if !found {
+				return fmt.Errorf("component %s has runtime dependency %s outside its installation dependencies", spec.ID, runtimeDependency)
+			}
+		}
 	}
 	for _, spec := range specs {
 		for _, dependency := range spec.Dependencies {
@@ -121,9 +136,11 @@ func normalizeManifest(specs []Spec) []Spec {
 	for i := range out {
 		out[i].Capabilities = append([]string(nil), out[i].Capabilities...)
 		out[i].Dependencies = append([]string(nil), out[i].Dependencies...)
+		out[i].RuntimeDependencies = append([]string(nil), out[i].RuntimeDependencies...)
 		out[i].Claims = append([]Claim(nil), out[i].Claims...)
 		sort.Strings(out[i].Capabilities)
 		sort.Strings(out[i].Dependencies)
+		sort.Strings(out[i].RuntimeDependencies)
 	}
 	return out
 }

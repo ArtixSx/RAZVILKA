@@ -32,9 +32,31 @@ const consoleText=(id,text)=>{const el=document.getElementById(id);if(el)el.text
 function consoleDate(value) {const d=new Date(value);return Number.isFinite(d.getTime())&&d.getFullYear()>2000?d.toLocaleString('ru-RU',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}):'Ещё не проверено';}
 function consoleEngineState(id){
  const config=state.engineConfigs?.find(e=>e.id===id),component=state.components?.find(e=>e.id===id),engine=state.engines?.find(e=>e.id===id);
- const running=engine?.running===true||config?.running===true;
- const installed=component?.installed===true||engine?.installed===true||config?.available===true;
- return {config,component,engine,running,installed,label:running?'Процесс запущен':installed?'Готов к настройке':'Не подтверждён',tone:running?'good':'unknown',version:engine?.version||component?.installed_version||config?.version||'Версия не определена'};
+ const running=component?.running===true||engine?.running===true||config?.running===true;
+ const installed=running||component?.installed===true||engine?.installed===true||config?.installed===true;
+ const installedKnown=installed||(!component?.inventory_error&&[component,engine,config].some(e=>typeof e?.installed==='boolean'));
+ const installedVersion=installed?(component?.installed_version||component?.runtime_version||engine?.version||''):'';
+ const availableVersion=component?.available_version||'';
+ return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,label:running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке',tone:running?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
+}
+function consoleEngineUpdateState(info){
+ const c=info.component,load=state.dataLoad?.components;
+ if(state.componentRefreshRequest)return {kind:'checking',text:'Проверяем каталог обновлений…'};
+ if(c?.inventory_error)return {kind:'failed',text:`Не удалось проверить установку: ${c.inventory_error}. Последние данные сохранены.`};
+ if(state.componentCatalogError||c?.catalog_stale||c?.update_check_error||c?.state==='check-failed'||load?.phase==='error'||load?.phase==='busy')return {kind:'failed',text:c?.update_check_error||'Проверка обновлений не удалась. Последние данные сохранены.'};
+ if(!c)return {kind:'unknown',text:'Сведения о пакете ещё не получены.'};
+ if(c.external_owner)return {kind:'external',text:'Внешнее управление: установка и удаление выполняются владельцем компонента.'};
+ if(c.installed_version_source==='runtime'||/^(runtime|platform)-/.test(c.state||''))return {kind:'external',text:'Обнаружен отдельный компонент. Изменение через установщик RAZVILKA не разрешено.'};
+ if(c.provider==='platform')return {kind:'platform',text:'Нужен совместимый пакет для модели и ядра роутера.'};
+ if(c.update_available&&info.availableVersion)return {kind:'update',text:`Доступно обновление ${info.availableVersion}`};
+ if(!info.availableVersion)return {kind:'unknown',text:'Доступная версия неизвестна. Проверьте обновления.'};
+ if(!info.installed)return {kind:'available',text:`Доступна для установки ${info.availableVersion}`};
+ if(!info.installedVersion)return {kind:'unknown',text:`В каталоге ${info.availableVersion}; установленная версия неизвестна.`};
+ return Number.isFinite(Date.parse(c.checked_at||''))?{kind:'current',text:'Обновление не требуется. Проверено: '+consoleDate(c.checked_at)}:{kind:'unknown',text:'Версия из локального каталога. Проверка обновлений ещё не подтверждена.'};
+}
+function consoleEngineVersionLabel(info){
+ const update=consoleEngineUpdateState(info);
+ return info.installedVersion?`${info.installedVersion}${update.kind==='update'?` → ${info.availableVersion}`:''}`:info.version;
 }
 function consoleNavigate(name,engine){
  if(engine){void openEngineConfiguration(engine).then(()=>{renderConsoleEngine();consoleViewChanged('engineconfig');if(typeof renderInterface==='function')renderInterface();}).catch(error=>showNotice('error',error.message));return;}

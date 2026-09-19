@@ -4,12 +4,12 @@ import vm from 'node:vm';
 
 const elements = new Map(), events = new Map();
 const $ = id => { if (!elements.has(id)) elements.set(id, { hidden: false, disabled: false, textContent: '', attributes: {}, handlers: {}, classList: { toggle() {} }, setAttribute(key, value) { this.attributes[key] = value; }, addEventListener(key, fn) { this.handlers[key] = fn; } }); return elements.get(id); };
-const state = { serviceControl: null, components: [] }, calls = [], notices = [], views = [];
+const state = { serviceControl: null, components: [] }, calls = [], notices = [], views = [], details = [];
 let request = async () => ({}), refreshes = 0;
 const context = vm.createContext({ state, $, Number, document: { hidden: false, addEventListener: (name, fn) => events.set(name, fn) },
   api: async (path, options) => { calls.push({ path, options }); return request(path, options); },
   setTimeout: () => 1, clearTimeout() {}, esc: value => String(value ?? '').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
-  setView: name => views.push(name), showNotice: (...args) => notices.push(args), refreshAfterMutation: async () => { refreshes++; }, renderOverviewQuickServices() {}, refreshComponents() {}, manageComponent() {} });
+  setView: name => views.push(name), showNotice: (...args) => notices.push(args), showDetails: (...args) => details.push(args), renderAudit() {}, refreshAfterMutation: async () => { refreshes++; }, renderOverviewQuickServices() {}, refreshComponents() {}, manageComponent() {} });
 vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/workspace-controls.js', import.meta.url), 'utf8') + '\nthis.control = workspaceControl;', context);
 context.bindWorkspaceControls();
 $('#authScreen').hidden = true;
@@ -56,6 +56,31 @@ release({ ...snapshot, config_revision: 13, mode: 'auto' }); await late;
 assert.equal(state.serviceControl, null, 'late completion revived admin state');
 assert.equal(notices.length, noticesBefore, 'late completion displayed success after logout');
 assert.equal($('#projectPower').disabled, true);
+
+events.get('razvilka:auth-restored')();
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 14, runtime_state: 'stopped', safe_mode: true, resume_available: true });
+const countBeforeSafe = calls.length;
+await context.toggleWorkspaceRuntime();
+assert.equal(views.at(-1), 'settings');
+assert.equal(calls.length, countBeforeSafe, 'power silently bypassed safe mode');
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 15, runtime_state: 'running', running: true, safe_mode: true });
+request = async () => ({ ok: true, control: { ...snapshot, config_revision: 16, runtime_state: 'stopped' } });
+await context.toggleWorkspaceRuntime();
+assert.equal(calls.at(-1).path, '/api/v1/service-control/runtime', 'safe mode prevented stopping active routes');
+assert.equal(JSON.parse(calls.at(-1).options.body).action, 'stop');
+
+state.loadIssues = [{ section: 'sources', message: 'Источник недоступен' }];
+request = async () => ({ events: [{ outcome: 'failed', path: '/api/v1/test', status: 502 }] });
+await $('#projectLog').handlers.click();
+assert.equal(details.at(-1)[0].detail_kind, 'project-log');
+assert.equal(details.at(-1)[0].load_issues[0].section, 'sources');
+assert.equal(details.at(-1)[0].audit.events[0].outcome, 'failed');
+request = () => new Promise(resolve => { release = resolve; });
+const lateLog = context.openWorkspaceLog();
+const detailCount = details.length;
+events.get('razvilka:auth-required')();
+release({ events: [{ path: '/private' }] }); await lateLog;
+assert.equal(details.length, detailCount, 'late log opened after logout');
 
 state.components = [{ id: 'sing-box', installed: true, installed_version: '1.10', available_version: '1.11', update_available: true, can_update: true }];
 assert.match(context.engineVersionHTML({ id: 'sing-box', installed: true }), /1\.10[^]*→ 1\.11/);

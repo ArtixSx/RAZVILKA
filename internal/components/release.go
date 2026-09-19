@@ -67,7 +67,20 @@ func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (Vi
 	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
 	installedVersion := externalInstalledVersion(target)
 	view := View{Spec: spec, Installed: installedVersion != "", InstalledVersion: installedVersion}
+	if info, err := os.Lstat(target); err == nil && !info.IsDir() {
+		view.Installed, view.InstalledVersionSource = true, "runtime"
+	}
+	if installedVersion != "" {
+		view.InstalledVersionSource = "runtime"
+		if externalReceiptVersion(target) != "" {
+			view.InstalledVersionSource = "receipt"
+		} else {
+			view.RuntimeVersion = installedVersion
+		}
+	}
 	info, cached := m.external[spec.ID]
+	check := m.releaseChecks[spec.ID]
+	view.CheckedAt, view.UpdateCheckError, view.CatalogStale = check.CheckedAt, check.Error, check.Error != ""
 	if !refresh && !cached {
 		if view.Installed {
 			view.State = "installed-unchecked"
@@ -78,8 +91,19 @@ func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (Vi
 	}
 	if refresh {
 		var err error
-		info, err = m.latestRelease(ctx, spec)
+		var fresh releaseInfo
+		fresh, err = m.latestRelease(ctx, spec)
 		if err != nil {
+			check.Error = "Не удалось проверить выпуск в GitHub. Повторите проверку версий."
+			if m.releaseChecks == nil {
+				m.releaseChecks = map[string]catalogStatus{}
+			}
+			m.releaseChecks[spec.ID] = check
+			view.UpdateCheckError, view.CatalogStale = check.Error, true
+			view.AvailableVersion = info.Version
+			if info.Version != "" {
+				view.AvailableVersionSource = "github-release"
+			}
 			if view.Installed {
 				view.State = "installed-check-failed"
 			} else {
@@ -90,10 +114,20 @@ func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (Vi
 		if m.external == nil {
 			m.external = map[string]releaseInfo{}
 		}
+		info = fresh
 		m.external[spec.ID] = info
+		check = catalogStatus{CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+		if m.releaseChecks == nil {
+			m.releaseChecks = map[string]catalogStatus{}
+		}
+		m.releaseChecks[spec.ID] = check
+		view.CheckedAt, view.UpdateCheckError, view.CatalogStale = check.CheckedAt, "", false
 	}
 	view.Available = info.Version != "" && info.Asset.URL != "" && info.Checksum.URL != ""
 	view.AvailableVersion = info.Version
+	if info.Version != "" {
+		view.AvailableVersionSource = "github-release"
+	}
 	switch {
 	case view.Installed && view.Available && compareVersions(view.InstalledVersion, view.AvailableVersion) < 0:
 		view.State, view.UpdateAvailable = "update", true
@@ -163,6 +197,14 @@ func releaseAssetName(spec Spec, version, architecture string) (string, error) {
 }
 
 func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error) {
+	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
+	if _, err := os.Lstat(target); err == nil {
+		if externalReceiptVersion(target) == "" {
+			return Result{Component: spec.ID, Action: "install"}, errors.New("existing component has no valid RAZVILKA ownership receipt")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Result{Component: spec.ID, Action: "install"}, fmt.Errorf("inspect existing component: %w", err)
+	}
 	if err := m.prepareReceiptDir(); err != nil {
 		return Result{Component: spec.ID, Action: "install"}, err
 	}
@@ -196,7 +238,6 @@ func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error
 	if len(binary) == 0 || len(binary) > maxReleaseAssetBytes {
 		return Result{Component: spec.ID, Action: "install"}, errors.New("release binary is empty or too large")
 	}
-	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
 	beforeVersion := externalInstalledVersion(target)
 	receipt := externalReceiptPath(target)
 	oldBinary, oldErr := os.ReadFile(target)

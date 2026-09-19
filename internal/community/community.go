@@ -237,14 +237,14 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 		var err error
 		domains, count, err = m.fetchDomainTree(ctx, entry.DomainsURL, hash)
 		if err != nil {
-			return Preview{}, fmt.Errorf("domains source: %w", err)
+			return Preview{}, &SourceError{Part: "domains", Err: err}
 		}
 		skipped += count
 	}
 	if entry.CIDRsURL != "" {
 		body, err := m.fetch(ctx, entry.CIDRsURL)
 		if err != nil {
-			return Preview{}, fmt.Errorf("CIDR source: %w", err)
+			return Preview{}, &SourceError{Part: "cidrs", Err: err}
 		}
 		hash.Write([]byte(entry.CIDRsURL))
 		hash.Write(body)

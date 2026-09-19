@@ -55,6 +55,7 @@ TAR
 printf '#!/bin/sh\nexit 1\n' >"$TEST_ROOT/providers/pidof"
 printf '#!/bin/sh\nexit 0\n' >"$TEST_ROOT/providers/ip"
 printf '#!/bin/sh\nexit 99\n' >"$TEST_ROOT/providers/start-stop-daemon"
+printf '#!/bin/sh\nprintf "GNU Wget +https\\n"\n' >"$TEST_ROOT/providers/wget"
 cat >"$TEST_ROOT/providers/curl" <<'CURL'
 #!/bin/sh
 set -eu
@@ -87,13 +88,16 @@ set -eu
 printf '%s\n' "$*" >>"$CASE_ROOT/opkg-called"
 [ "$CASE_NAME" != opkg-failed ] || exit 41
 case "$1" in
-  update) exit 0 ;;
+  update)
+    if [ "$CASE_NAME" = https-bootstrap ] && [ ! -f "$CASE_ROOT/tls-installed" ]; then exit 2; fi
+    exit 0 ;;
   install) shift ;;
   *) echo "Bootstrap attempted a global upgrade or unknown opkg operation" >&2; exit 99 ;;
 esac
 for PACKAGE in "$@"; do
   case "$PACKAGE" in
     curl|tar|gzip) TOOLS="$PACKAGE" ;;
+    wget-ssl) TOOLS=wget; : >"$CASE_ROOT/tls-installed" ;;
     coreutils-sha256sum) TOOLS=sha256sum ;;
     coreutils-mktemp) TOOLS=mktemp ;;
     coreutils-readlink) TOOLS=readlink ;;
@@ -107,7 +111,7 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missing-dependencies uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missing-dependencies https-bootstrap uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   CASE_ROOT="$TEST_ROOT/$CASE_NAME"
   BASE="$CASE_ROOT/base"
@@ -129,8 +133,11 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missin
     rollback) set -- --rollback ;;
     invalid-options) set -- --uninstall --rollback ;;
     missing-dependencies|opkg-failed)
-      for TOOL in curl sha256sum tar gzip mktemp readlink awk od pidof grep ip; do rm "$BASE/bin/$TOOL"; done
+      for TOOL in curl wget sha256sum tar gzip mktemp readlink awk od pidof grep ip; do rm "$BASE/bin/$TOOL"; done
       rm "$BASE/sbin/start-stop-daemon" "$BASE/etc/ssl/certs/ca-certificates.crt"
+      ;;
+    https-bootstrap)
+      printf '#!/bin/sh\nprintf "BusyBox wget HTTP only\\n"\n' >"$BASE/bin/wget"
       ;;
   esac
   cp -R "$TEST_ROOT/source" "$CASE_ROOT/source"
@@ -165,16 +172,19 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missin
   PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$BASE/tmp" \
     "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
   case "$CASE_NAME" in
-    install-*|symlink-base|missing-dependencies|uninstall|rollback)
+    install-*|symlink-base|missing-dependencies|https-bootstrap|uninstall|rollback)
       [ "$CODE" = 0 ] && [ -f "$CASE_ROOT/helper-called" ] || { cat "$CASE_ROOT/output" >&2; echo "Bootstrap failed: $CASE_NAME" >&2; exit 1; }
       EXPECTED=install
       case "$CASE_NAME" in uninstall|rollback) EXPECTED="$CASE_NAME" ;; esac
       [ "$(cat "$CASE_ROOT/helper-called")" = "$EXPECTED-entware.sh:" ] || { echo "Wrong helper/action: $CASE_NAME" >&2; exit 1; }
       if [ "$CASE_NAME" = missing-dependencies ]; then
         [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 2 ] || { echo "Dependencies were not installed in one bounded batch" >&2; exit 1; }
-        for PACKAGE in curl coreutils-sha256sum tar gzip coreutils-mktemp coreutils-readlink busybox ip-full ca-bundle; do
+        for PACKAGE in curl wget-ssl coreutils-sha256sum tar gzip coreutils-mktemp coreutils-readlink busybox ip-full ca-bundle; do
           grep -q " $PACKAGE" "$CASE_ROOT/opkg-called" || { echo "Missing dependency: $PACKAGE" >&2; exit 1; }
         done
+      elif [ "$CASE_NAME" = https-bootstrap ]; then
+        [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 4 ] || { echo "HTTPS bootstrap was not bounded" >&2; exit 1; }
+        [ -f "$CASE_ROOT/tls-installed" ] || { echo "HTTPS downloader was not installed" >&2; exit 1; }
       else
         [ ! -e "$CASE_ROOT/opkg-called" ] || { echo "Complete Entware was modified unnecessarily" >&2; exit 1; }
       fi

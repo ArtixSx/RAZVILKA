@@ -65,10 +65,17 @@ command -v opkg >/dev/null 2>&1 || {
   exit 11
 }
 PACKAGES=""
+NEED_HTTPS_WGET=0
 need_package() {
   case " $PACKAGES " in *" $1 "*) ;; *) PACKAGES="${PACKAGES:+$PACKAGES }$1" ;; esac
 }
 command -v curl >/dev/null 2>&1 || need_package curl
+# opkg uses wget independently from curl. The firmware BusyBox wget may only
+# support HTTP, leaving third-party HTTPS feeds unavailable after installation.
+case "$(wget --version 2>/dev/null || true)" in
+  *+https*) ;;
+  *) need_package wget-ssl; NEED_HTTPS_WGET=1 ;;
+esac
 command -v sha256sum >/dev/null 2>&1 || need_package coreutils-sha256sum
 command -v tar >/dev/null 2>&1 || need_package tar
 command -v gzip >/dev/null 2>&1 || need_package gzip
@@ -86,13 +93,29 @@ if [ ! -r "$BASE/etc/ssl/certs/ca-certificates.crt" ] && [ ! -r "$BASE/etc/ssl/c
 fi
 if [ -n "$PACKAGES" ]; then
   step '1/5' "Устанавливаю недостающие инструменты: $PACKAGES"
-  opkg update
+  if ! opkg update; then
+    if [ "$NEED_HTTPS_WGET" -eq 1 ]; then
+      # Entware's HTTP index may have refreshed while existing HTTPS feeds
+      # failed. Bootstrap only its fixed TLS downloader, then require a clean
+      # refresh; do not silently continue with failed package metadata.
+      warn 'Подготавливаю wget-ssl для HTTPS-каталогов Entware…'
+      opkg install wget-ssl
+      opkg update
+    else
+      echo "Не удалось обновить каталог Entware. Проверьте доступность репозиториев." >&2
+      exit 12
+    fi
+  fi
   # Package names are exclusively the fixed allowlist above. No global upgrade.
   opkg install $PACKAGES
 fi
 for TOOL in curl sha256sum tar gzip mktemp readlink awk od pidof grep ip; do
   command -v "$TOOL" >/dev/null 2>&1 || { echo "Required tool is still unavailable after opkg: $TOOL" >&2; exit 12; }
 done
+case "$(wget --version 2>/dev/null || true)" in
+  *+https*) ;;
+  *) echo "Для HTTPS-каталогов opkg нужен wget-ssl. Проверьте PATH и установку пакета." >&2; exit 12 ;;
+esac
 if [ ! -x "$BASE/sbin/start-stop-daemon" ] || ! ip -4 -o addr show >/dev/null 2>&1; then
   echo "Entware service/IP tools are incomplete; check busybox and ip-full packages." >&2
   exit 12

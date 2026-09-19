@@ -66,6 +66,15 @@ func (m *Manager) Plan(ctx context.Context, id, action string, refresh bool) (Pl
 		AvailableVersion: view.AvailableVersion, Ready: true, Budget: spec.Budget,
 		Claims: append([]Claim(nil), spec.Claims...),
 	}
+	if view.InventoryError != "" {
+		plan.AddBlocker("INVENTORY_CHECK_FAILED", view.InventoryError, "Повторите проверку установленного состояния.")
+	}
+	if action != "remove" && view.CatalogStale {
+		plan.AddBlocker("CATALOG_STALE", view.UpdateCheckError, "Успешно обновите источники перед установкой или обновлением.")
+	}
+	if spec.Provider == "github-release" && view.Installed && view.InstalledVersionSource != "receipt" {
+		plan.AddBlocker("UNMANAGED_RUNTIME", "Файл установлен вне RAZVILKA", "Используйте установщик владельца; нет подтверждённого права заменить или удалить файл.")
+	}
 	if spec.Provider == "platform" {
 		plan.AddBlocker("PLATFORM_INSTALLER_REQUIRED", "Компонент требует совместимый модуль или установщик платформы", "Установите поддерживаемый runtime Keenetic и повторите проверку.")
 	}
@@ -99,7 +108,18 @@ func (m *Manager) Plan(ctx context.Context, id, action string, refresh bool) (Pl
 		plan.Steps = removeSteps(spec)
 	}
 	if len(spec.Dependencies) > 0 && action != "remove" {
-		plan.Warnings = append(plan.Warnings, PlanIssue{Code: "DEPENDENCIES", Message: "Сначала будут проверены зависимости: " + strings.Join(spec.Dependencies, ", ")})
+		plan.Warnings = append(plan.Warnings, PlanIssue{Code: "DEPENDENCIES", Message: "Требуются: " + strings.Join(spec.Dependencies, ", ") + ". Уже установленные зависимости не обновляются автоматически."})
+		for _, depID := range spec.Dependencies {
+			for _, dep := range views {
+				if dep.ID != depID {
+					continue
+				}
+				plan.Dependencies = append(plan.Dependencies, DependencyState{ID: dep.ID, Installed: dep.Installed})
+				if dep.InventoryError != "" || (!dep.Installed && !dep.CanInstall) {
+					plan.AddBlocker("DEPENDENCY_UNAVAILABLE", "Не подтверждена доступность зависимости: "+dep.Name, "Проверьте источники и установку зависимости.")
+				}
+			}
+		}
 	}
 	if id == "sing-box" && action != "remove" {
 		guard, err := m.prepareSingBoxInit(view.Installed)

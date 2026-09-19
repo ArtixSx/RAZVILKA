@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/ArtixSx/razvilka/internal/community"
 	"io"
 	"net/http"
+
+	"github.com/ArtixSx/razvilka/internal/community"
 )
 
 func writeCommunityFailure(w http.ResponseWriter, err error) {
@@ -21,7 +22,17 @@ func writeCommunityFailure(w http.ResponseWriter, err error) {
 	case errors.Is(err, context.Canceled):
 		status, code, message = 408, "SERVICE_SOURCE_CANCELED", "Загрузка отменена. Сервис не импортирован."
 	}
-	writeJSON(w, status, map[string]any{"code": code, "error": message, "not_started": true, "live_applied": false})
+	var sourceErr *community.SourceError
+	part := ""
+	if errors.As(err, &sourceErr) {
+		part = sourceErr.Part
+		if part == "cidrs" {
+			message = "Не удалось загрузить сети IP/CIDR. " + message
+		} else if part == "domains" {
+			message = "Не удалось загрузить домены. " + message
+		}
+	}
+	writeJSON(w, status, map[string]any{"code": code, "error": message, "source_part": part, "not_started": true, "live_applied": false})
 }
 func (a *App) communitySourcePreview(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")

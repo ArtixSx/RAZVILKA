@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const source=fs.readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
+const functions=source.slice(source.indexOf('function showAuth('),source.indexOf('async function submitSetup('));
+const elements=new Map(), published=[];
+const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',classList:{remove(){}},setAttribute(){},removeAttribute(){}});return elements.get(id);};
+const state={authenticated:false,status:{}};
+const ctx=vm.createContext({state,$,document:{dispatchEvent:e=>published.push(e.type)},Event:class{constructor(type){this.type=type;}},sessionStorage:{getItem:()=>''},ADMIN_TOKEN_KEY:'test'});
+vm.runInContext(functions,ctx);
+ctx.hideAuth();
+assert.deepEqual(published,['razvilka:auth-restored'],'saved cookie did not activate polling on initial hidden login screen');
+ctx.hideAuth();
+assert.equal(published.length,1,'periodic status read restarted authentication generation');
+ctx.showAuth({setup_required:false});
+assert.equal(state.authenticated,false);
+ctx.hideAuth();
+assert.deepEqual(published,['razvilka:auth-restored','razvilka:auth-required','razvilka:auth-restored']);
+console.log('Initial cookie session, repeated refresh and re-login lifecycle: PASS');

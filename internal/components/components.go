@@ -18,48 +18,57 @@ import (
 )
 
 type Spec struct {
-	SchemaVersion int            `json:"schema_version"`
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Category      string         `json:"category"`
-	Package       string         `json:"package,omitempty"`
-	Provider      string         `json:"provider"`
-	Repository    string         `json:"repository,omitempty"`
-	Binary        string         `json:"-"`
-	Archive       string         `json:"-"`
-	Description   string         `json:"description"`
-	UseCase       string         `json:"use_case,omitempty"`
-	Requirement   string         `json:"requirement,omitempty"`
-	Recommended   bool           `json:"recommended"`
-	Removable     bool           `json:"removable"`
-	Capabilities  []string       `json:"capabilities,omitempty"`
-	Dependencies  []string       `json:"dependencies,omitempty"`
-	Claims        []Claim        `json:"claims,omitempty"`
-	Budget        ResourceBudget `json:"resource_budget"`
+	SchemaVersion       int            `json:"schema_version"`
+	ID                  string         `json:"id"`
+	Name                string         `json:"name"`
+	Category            string         `json:"category"`
+	Package             string         `json:"package,omitempty"`
+	Provider            string         `json:"provider"`
+	Repository          string         `json:"repository,omitempty"`
+	Binary              string         `json:"-"`
+	Archive             string         `json:"-"`
+	Description         string         `json:"description"`
+	UseCase             string         `json:"use_case,omitempty"`
+	Requirement         string         `json:"requirement,omitempty"`
+	Recommended         bool           `json:"recommended"`
+	Removable           bool           `json:"removable"`
+	Capabilities        []string       `json:"capabilities,omitempty"`
+	Dependencies        []string       `json:"dependencies,omitempty"`
+	RuntimeDependencies []string       `json:"runtime_dependencies,omitempty"`
+	Claims              []Claim        `json:"claims,omitempty"`
+	Budget              ResourceBudget `json:"resource_budget"`
 }
 
 type View struct {
 	Spec
-	InstalledVersion string `json:"installed_version,omitempty"`
-	AvailableVersion string `json:"available_version,omitempty"`
-	Installed        bool   `json:"installed"`
-	Available        bool   `json:"available"`
-	UpdateAvailable  bool   `json:"update_available"`
-	State            string `json:"state"`
-	CanInstall       bool   `json:"can_install"`
-	CanUpdate        bool   `json:"can_update"`
-	CanRemove        bool   `json:"can_remove"`
-	Configured       bool   `json:"configured"`
-	Running          bool   `json:"running"`
-	ExternalOwner    bool   `json:"external_owner"`
-	Verification     string `json:"verification"`
-	LastAction       string `json:"last_action,omitempty"`
-	LastActionAt     string `json:"last_action_at,omitempty"`
-	VerifiedVersion  string `json:"verified_version,omitempty"`
-	OperationStatus  string `json:"operation_status,omitempty"`
-	OperationAction  string `json:"operation_action,omitempty"`
-	OperationAt      string `json:"operation_at,omitempty"`
-	OperationMessage string `json:"operation_message,omitempty"`
+	InstalledVersion       string `json:"installed_version,omitempty"`
+	AvailableVersion       string `json:"available_version,omitempty"`
+	Installed              bool   `json:"installed"`
+	Available              bool   `json:"available"`
+	UpdateAvailable        bool   `json:"update_available"`
+	State                  string `json:"state"`
+	CanInstall             bool   `json:"can_install"`
+	CanUpdate              bool   `json:"can_update"`
+	CanRemove              bool   `json:"can_remove"`
+	Configured             bool   `json:"configured"`
+	Running                bool   `json:"running"`
+	ExternalOwner          bool   `json:"external_owner"`
+	Verification           string `json:"verification"`
+	LastAction             string `json:"last_action,omitempty"`
+	LastActionAt           string `json:"last_action_at,omitempty"`
+	VerifiedVersion        string `json:"verified_version,omitempty"`
+	OperationStatus        string `json:"operation_status,omitempty"`
+	OperationAction        string `json:"operation_action,omitempty"`
+	OperationAt            string `json:"operation_at,omitempty"`
+	OperationMessage       string `json:"operation_message,omitempty"`
+	InstalledVersionSource string `json:"installed_version_source,omitempty"`
+	AvailableVersionSource string `json:"available_version_source,omitempty"`
+	RuntimeVersion         string `json:"runtime_version,omitempty"`
+	CatalogStale           bool   `json:"catalog_stale"`
+	UpdateCheckError       string `json:"update_check_error,omitempty"`
+	InventoryError         string `json:"inventory_error,omitempty"`
+	CheckedAt              string `json:"checked_at,omitempty"`
+	LifecycleBlockReason   string `json:"lifecycle_block_reason,omitempty"`
 }
 
 type Result struct {
@@ -86,17 +95,21 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 }
 
 type Manager struct {
-	Opkg     string
-	RepoDir  string
-	BinDir   string
-	InitDir  string
-	StateDir string
-	Arch     string
-	Client   *http.Client
-	Timeout  time.Duration
-	Runner   Runner
-	external map[string]releaseInfo
-	mu       sync.Mutex
+	Opkg          string
+	RepoDir       string
+	BinDir        string
+	InitDir       string
+	StateDir      string
+	Arch          string
+	Client        *http.Client
+	Timeout       time.Duration
+	Runner        Runner
+	external      map[string]releaseInfo
+	catalog       catalogStatus
+	lastInstalled map[string]string
+	lastAvailable map[string]string
+	releaseChecks map[string]catalogStatus
+	mu            sync.Mutex
 }
 
 func New() *Manager {
@@ -106,9 +119,9 @@ func New() *Manager {
 func Specs() []Spec {
 	specs := []Spec{
 		{SchemaVersion: 1, ID: "nfqws2", Name: "NFQWS2", Category: "local-dpi", Package: "nfqws2-keenetic", Provider: "opkg", Repository: "https://nfqws.github.io/nfqws2-keenetic/all", Description: "Локальный DPI-desync через NFQUEUE", UseCase: "Для DPI-фильтрации, замедления и доменных блокировок без внешнего сервера.", Requirement: "Не помогает, если сеть сервиса полностью заблокирована по IP — тогда нужен туннель.", Recommended: true, Removable: true, Capabilities: []string{"tcp", "udp", "quic", "strategy-lab"}, Claims: []Claim{{Kind: "nfqueue", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 24, FlashMiB: 18, CPUClass: "medium"}},
-		{SchemaVersion: 1, ID: "usque", Name: "WARP · MASQUE", Category: "tunnel", Package: "usque-keenetic", Provider: "opkg", Repository: "https://side-effect-tm.github.io/usque-keenetic/all", Description: "Cloudflare WARP через MASQUE (QUIC/HTTP2)", UseCase: "Туннель для полных IP-блокировок; основной транспорт использует UDP/443, TCP/443 проверяется как запасной.", Requirement: "Нужен доступ к Cloudflare endpoint. Пакет usque-keenetic создаёт собственный nativetun-интерфейс; Sing-box для него не требуется.", Recommended: true, Removable: true, Capabilities: []string{"masque", "quic", "http2", "tun", "split-routing", "nativetun"}, Claims: []Claim{{Kind: "tun", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 32, FlashMiB: 20, CPUClass: "medium"}},
+		{SchemaVersion: 1, ID: "usque", Name: "WARP · MASQUE", Category: "tunnel", Package: "usque-keenetic", Provider: "opkg", Repository: "https://side-effect-tm.github.io/usque-keenetic/all", Description: "Cloudflare WARP через MASQUE (QUIC/HTTP2)", UseCase: "Туннель для полных IP-блокировок; основной транспорт использует UDP/443, TCP/443 проверяется как запасной.", Requirement: "Нужен доступ к Cloudflare endpoint. RAZVILKA запускает USQUE как SOCKS-прокси, а Sing-box с gVisor создаёт отдельный TUN для выбранных сервисов.", Recommended: true, Removable: true, Capabilities: []string{"masque", "quic", "http2", "socks", "tun", "split-routing"}, Dependencies: []string{"sing-box"}, RuntimeDependencies: []string{"sing-box"}, Claims: []Claim{{Kind: "tun", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 32, FlashMiB: 20, CPUClass: "medium"}},
 		{SchemaVersion: 1, ID: "sing-box", Name: "Sing-box · свой сервер", Category: "proxy", Package: "sing-box-go", Provider: "opkg", Description: "Клиент VLESS, Reality, Hysteria2, TUIC и Shadowsocks", UseCase: "Универсальный туннель для сервисов с полной блокировкой, включая TCP, UDP и IP-сети.", Requirement: "Нужен профиль и доступный удалённый сервер. Одна установка Sing-box доступ в интернет не создаёт.", Removable: true, Capabilities: []string{"vless", "reality", "hysteria2", "tuic", "shadowsocks", "tun"}, Claims: []Claim{{Kind: "tun", Value: "managed"}, {Kind: "listen-port", Value: "profile"}}, Budget: ResourceBudget{RAMMiB: 64, FlashMiB: 32, CPUClass: "medium"}},
-		{SchemaVersion: 1, ID: "xray", Name: "Xray · свой сервер", Category: "proxy", Package: "xray", Provider: "opkg", Description: "Клиент Xray и VLESS-транспортов", UseCase: "Альтернативный клиент для собственного VLESS/Reality-сервера.", Requirement: "Нужны параметры удалённого сервера; не является готовым бесплатным туннелем.", Removable: true, Capabilities: []string{"vless", "reality", "proxy"}, Claims: []Claim{{Kind: "listen-port", Value: "profile"}}, Budget: ResourceBudget{RAMMiB: 64, FlashMiB: 38, CPUClass: "medium"}},
+		{SchemaVersion: 1, ID: "xray", Name: "Xray · свой сервер", Category: "proxy", Package: "xray", Provider: "opkg", Description: "Клиент Xray и VLESS-транспортов", UseCase: "Альтернативный клиент для собственного VLESS/Reality-сервера.", Requirement: "Нужен профиль удалённого сервера. Xray работает как SOCKS-прокси; Sing-box с gVisor создаёт отдельный TUN для выбранных сервисов.", Removable: true, Capabilities: []string{"vless", "reality", "proxy"}, Dependencies: []string{"sing-box"}, RuntimeDependencies: []string{"sing-box"}, Claims: []Claim{{Kind: "listen-port", Value: "profile"}}, Budget: ResourceBudget{RAMMiB: 64, FlashMiB: 38, CPUClass: "medium"}},
 		{SchemaVersion: 1, ID: "warp-wg", Name: "WARP · WireGuard", Category: "tunnel", Package: "wireguard-tools", Provider: "opkg", Description: "Cloudflare WARP через WireGuard UDP", UseCase: "Бесплатный split-туннель для выбранных сервисов, когда UDP Cloudflare доступен.", Requirement: "Если handshake не проходит на 2408/500/1701/4500, используйте MASQUE или свой сервер.", Removable: true, Capabilities: []string{"wireguard", "tun", "split-routing"}, Dependencies: []string{"wgcf"}, Claims: []Claim{{Kind: "interface", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 12, FlashMiB: 8, CPUClass: "light"}},
 		{SchemaVersion: 1, ID: "wgcf", Name: "Генератор WARP", Category: "tool", Provider: "github-release", Repository: "https://github.com/ViRb3/wgcf", Binary: "wgcf", Archive: "binary", Description: "Создаёт профиль Cloudflare WARP", UseCase: "Только регистрация аккаунта и генерация ключей для WARP WireGuard.", Requirement: "Это инструмент, а не самостоятельный обход; требуется компонент WARP · WireGuard.", Removable: true, Capabilities: []string{"warp-registration", "wireguard-profile"}, Budget: ResourceBudget{RAMMiB: 8, FlashMiB: 12, CPUClass: "light"}},
 		{SchemaVersion: 1, ID: "amneziawg", Name: "AmneziaWG · свой сервер", Category: "tunnel", Provider: "platform", Repository: "https://github.com/amnezia-vpn/amneziawg-openwrt", Description: "DPI-устойчивый WireGuard-совместимый туннель", UseCase: "Для полной блокировки и сетей, где обычный WireGuard распознаётся или режется.", Requirement: "Нужен совместимый AmneziaWG-сервер и модуль ядра либо userspace runtime.", Capabilities: []string{"amneziawg", "tun", "split-routing"}, Claims: []Claim{{Kind: "interface", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 24, FlashMiB: 16, CPUClass: "medium"}},
@@ -139,34 +152,20 @@ func (m *Manager) InstallRecommended(ctx context.Context) BatchResult {
 func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if refresh && m.Opkg != "" {
-		if err := m.ensureRepositories(); err != nil {
-			return nil, err
-		}
-		if _, err := m.run(ctx, "update"); err != nil {
-			return nil, fmt.Errorf("opkg update: %w", err)
-		}
-	}
-	installed, available := map[string]string{}, map[string]string{}
-	if m.Opkg != "" {
-		installedOut, installedErr := m.run(ctx, "list-installed")
-		availableOut, availableErr := m.run(ctx, "list")
-		if installedErr != nil || availableErr != nil {
-			return nil, fmt.Errorf("read opkg catalog: %v; %v", installedErr, availableErr)
-		}
-		installed = parsePackageVersions(string(installedOut))
-		available = parsePackageVersions(string(availableOut))
-	}
+	installed, available, inventoryError := m.packageInventory(ctx, refresh)
 	views := make([]View, 0, len(Specs()))
 	for _, spec := range Specs() {
 		if spec.Provider == "github-release" {
 			view, err := m.externalView(ctx, spec, refresh)
 			if err != nil {
-				view.State = "check-failed"
+				view.UpdateCheckError = "Не удалось проверить выпуск в GitHub. Повторите проверку версий."
 			}
-			view.CanInstall = !view.Installed && view.Available
-			view.CanUpdate = view.UpdateAvailable
-			view.CanRemove = view.Installed && spec.Removable
+			view.CanInstall = !view.Installed && view.Available && !view.CatalogStale
+			view.CanUpdate = view.UpdateAvailable && !view.CatalogStale && view.InstalledVersionSource == "receipt"
+			view.CanRemove = view.Installed && spec.Removable && view.InstalledVersionSource == "receipt"
+			if view.Installed && view.InstalledVersionSource != "receipt" {
+				view.LifecycleBlockReason = "Файл установлен вне RAZVILKA; управляемая установка и удаление не подтверждены."
+			}
 			m.attachLifecycleVerification(&view)
 			views = append(views, view)
 			continue
@@ -182,7 +181,13 @@ func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 			continue
 		}
 		iv, av := installed[spec.Package], available[spec.Package]
-		v := View{Spec: spec, InstalledVersion: iv, AvailableVersion: av, Installed: iv != "", Available: av != ""}
+		v := View{Spec: spec, InstalledVersion: iv, AvailableVersion: av, Installed: iv != "", Available: av != "", CatalogStale: m.catalog.Error != "", UpdateCheckError: m.catalog.Error, CheckedAt: m.catalog.CheckedAt, InventoryError: inventoryError}
+		if iv != "" {
+			v.InstalledVersionSource = "opkg"
+		}
+		if av != "" {
+			v.AvailableVersionSource = "opkg"
+		}
 		switch {
 		case v.Installed && v.Available && compareVersions(iv, av) < 0:
 			v.State, v.UpdateAvailable = "update", true
@@ -193,9 +198,9 @@ func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 		default:
 			v.State = "unavailable"
 		}
-		v.CanInstall = !v.Installed && v.Available
-		v.CanUpdate = v.UpdateAvailable
-		v.CanRemove = v.Installed && spec.Removable
+		v.CanInstall = !v.Installed && v.Available && !v.CatalogStale && inventoryError == ""
+		v.CanUpdate = v.UpdateAvailable && !v.CatalogStale && inventoryError == ""
+		v.CanRemove = v.Installed && spec.Removable && inventoryError == ""
 		m.attachLifecycleVerification(&v)
 		views = append(views, v)
 	}
@@ -216,10 +221,23 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 	if visiting[id] {
 		return Result{}, fmt.Errorf("component dependency cycle at %s", id)
 	}
+	if spec.Provider == "opkg" && m.catalog.Error != "" {
+		return Result{}, errors.New("component catalog is stale; refresh package sources successfully before installing or updating")
+	}
 	visiting[id] = true
 	defer delete(visiting, id)
 	for _, dependency := range spec.Dependencies {
 		dep, known := lookup(dependency)
+		if known && dep.Provider == "opkg" {
+			installed, err := m.installedPackageVersions(ctx)
+			if err != nil {
+				return Result{Component: id, Action: "install"}, fmt.Errorf("inspect dependency %s: %w", dependency, err)
+			}
+			// Installing a parent must not upgrade or stop an existing shared core.
+			if installed[dep.Package] != "" {
+				continue
+			}
+		}
 		if known && dep.Provider == "github-release" && dep.Binary != "" {
 			// A dependency with our integrity-bound receipt does not need a
 			// second download/update just because its parent is being updated.

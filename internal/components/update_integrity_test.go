@@ -64,10 +64,19 @@ func TestNamedUpgradeMustAdvanceBeforeReceipt(t *testing.T) {
 }
 func TestPartialInventoryNeverInventsMissingOrNewerVersion(t *testing.T) {
 	for _, failed := range []string{"list-installed", "list"} {
-		r := &preciseUpdateRunner{before: "1.13.3", failed: failed}
+		r := &preciseUpdateRunner{before: "1.13.3"}
 		m := &Manager{Opkg: "opkg", Runner: r}
-		if v, e := m.List(context.Background(), false); e == nil || len(v) != 0 {
-			t.Fatal(failed, v, e)
+		if _, err := m.List(context.Background(), false); err != nil {
+			t.Fatal(err)
+		}
+		r.failed = failed
+		views, err := m.List(context.Background(), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v := componentView(t, views, "sing-box")
+		if !v.Installed || v.InstalledVersion != "1.13.3" || v.CanInstall || v.CanUpdate || (failed == "list-installed" && v.InventoryError == "") || (failed == "list" && !v.CatalogStale) {
+			t.Fatal(failed, v)
 		}
 	}
 }

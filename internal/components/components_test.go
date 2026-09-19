@@ -39,7 +39,7 @@ func TestNFQWSInstallCreatesOfficialRepositoryBeforeRefresh(t *testing.T) {
 }
 
 func TestUsqueInstallUsesKeeneticPackageInsteadOfOverwritingManagedBinary(t *testing.T) {
-	r := &fakeRunner{output: map[string]string{"update": "ok", "install": "installed"}}
+	r := &fakeRunner{output: map[string]string{"update": "ok", "install": "installed", "list-installed": "sing-box-go - 1.13.3-2 - existing shared core\n"}}
 	repo := t.TempDir()
 	m := &Manager{Opkg: "/opt/bin/opkg", RepoDir: repo, Runner: r}
 	if _, err := m.Apply(context.Background(), "usque"); err != nil {
@@ -54,6 +54,7 @@ func TestUsqueInstallUsesKeeneticPackageInsteadOfOverwritingManagedBinary(t *tes
 		t.Fatalf("repository=%q want=%q", data, wantRepo)
 	}
 	wantCalls := [][]string{
+		{"/opt/bin/opkg", "list-installed"},
 		{"/opt/bin/opkg", "list-installed"}, {"/opt/bin/opkg", "update"}, {"/opt/bin/opkg", "install", "usque-keenetic"}, {"/opt/bin/opkg", "list-installed"},
 	}
 	if !reflect.DeepEqual(r.calls, wantCalls) {
@@ -61,7 +62,7 @@ func TestUsqueInstallUsesKeeneticPackageInsteadOfOverwritingManagedBinary(t *tes
 	}
 }
 
-func TestUsqueDeclaresHTTP2AndNativeTunWithoutSingBoxDependency(t *testing.T) {
+func TestUsqueDeclaresActualSOCKSAndSingBoxRuntime(t *testing.T) {
 	var usque Spec
 	for _, spec := range Specs() {
 		if spec.ID == "usque" {
@@ -72,19 +73,22 @@ func TestUsqueDeclaresHTTP2AndNativeTunWithoutSingBoxDependency(t *testing.T) {
 	if usque.ID == "" {
 		t.Fatal("usque component is missing")
 	}
-	if len(usque.Dependencies) != 0 {
-		t.Fatalf("USQUE nativetun must not require Sing-box: %v", usque.Dependencies)
+	if !reflect.DeepEqual(usque.Dependencies, []string{"sing-box"}) || !reflect.DeepEqual(usque.RuntimeDependencies, []string{"sing-box"}) {
+		t.Fatalf("USQUE must declare the production Sing-box sidecar: %+v", usque)
 	}
-	hasHTTP2, hasNativeTun := false, false
+	hasHTTP2, hasSOCKS := false, false
 	for _, capability := range usque.Capabilities {
 		if capability == "http2" {
 			hasHTTP2 = true
 		}
 		if capability == "nativetun" {
-			hasNativeTun = true
+			t.Fatal("the managed USQUE adapter does not use nativeTUN")
+		}
+		if capability == "socks" {
+			hasSOCKS = true
 		}
 	}
-	if !hasHTTP2 || !hasNativeTun {
+	if !hasHTTP2 || !hasSOCKS {
 		t.Fatalf("USQUE transport capabilities are incomplete: %v", usque.Capabilities)
 	}
 }

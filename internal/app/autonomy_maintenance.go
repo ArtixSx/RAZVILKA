@@ -113,7 +113,7 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 			return false, false, "Каталог компонентов не проверен. Установленные версии не изменены."
 		}
 		for _, view := range views {
-			if view.State == "check-failed" || view.State == "installed-check-failed" {
+			if view.CatalogStale || view.UpdateCheckError != "" || view.InventoryError != "" || view.State == "check-failed" || view.State == "installed-check-failed" {
 				return false, false, "Источник части компонентов недоступен. Существующие версии сохранены; проверка будет повторена."
 			}
 		}

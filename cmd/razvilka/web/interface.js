@@ -156,12 +156,29 @@ function renderInterfaceServices(summaries){
  interfaceHTML('ui3ServiceCatalog',list.length?interfaceCards(list,summaries,'catalog'):interfaceEmpty(interfaceState.filter==='selected'&&!all.some(s=>s.enabled)?'Выберите первый сервис':'Ничего не найдено',interfaceState.filter==='selected'&&!all.some(s=>s.enabled)?'Откройте каталог и добавьте сайты, которым нужен обход.':'Попробуйте другое название или сбросьте фильтры.',`<button type="button" class="secondary" data-rz-reset-filters>Открыть весь каталог ${ci('chevron')}</button>`));
  $$('[data-rz-filter]').forEach(e=>{const on=e.dataset.rzFilter===interfaceState.filter;e.classList.toggle('active',on);e.setAttribute('aria-pressed',String(on));});
 }
+function interfaceEngineCard(id,meta){
+ const info=consoleEngineState(id),component=info.component,update=consoleEngineUpdateState(info);
+ const used=(state.services||[]).filter(service=>{const applied=serviceDashboardApplied(service);return applied.enabled&&(applied.route===id||applied.route?.startsWith(id+':'));});
+ const busy=!!state.componentOperation||!!state.componentRefreshRequest||component?.operation_status==='running';
+ const stale=['failed','checking'].includes(update.kind);
+ const protectedComponent=component?.lifecycle_block_reason||component?.external_owner||info.running||used.length>0;
+ const lifecycleAllowed=component&&!busy&&!component.inventory_error&&!protectedComponent;
+ const disabledReason=component?.lifecycle_block_reason||(component?.external_owner?'Компонент управляется внешним проектом.':info.running||used.length?'Сначала остановите обход и перенесите зависимые сервисы на другой маршрут.':stale?'Обновите сведения о пакете перед изменением.':busy?'Дождитесь завершения операции.':'Нет разрешения на действие в каталоге компонентов.');
+ const action=(name,label,allowed)=>`<button type="button" class="${name==='remove'?'component-remove':'primary'} component-action" data-component="${esc(id)}" data-component-action="${name}" data-rz-focus="engine-${esc(id)}-${name}" ${allowed?'':`disabled title="${esc(disabledReason)}"`}>${label}</button>`;
+ let actions='';
+ if(!info.installed)actions+=action('install','Установить',lifecycleAllowed&&!stale&&component.can_install===true);
+ else if(component?.update_available)actions+=action('update','Обновить',lifecycleAllowed&&!stale&&component.can_update===true);
+ if(info.installed)actions+=action('remove','Удалить',lifecycleAllowed&&component.can_remove===true);
+ const operation=state.componentOperation?.id===id?state.componentOperation.action:component?.operation_status==='running'?component.operation_action:'';
+ const operationText=operation?({install:'Установка выполняется…',update:'Обновление выполняется…',remove:'Удаление выполняется…'})[operation]||'Операция выполняется…':['failed','interrupted','receipt-error'].includes(component?.operation_status)?'Последняя операция не завершена: '+(component.operation_message||'откройте подробности компонента'):'';
+ return `<article class="ui3-engine-card" data-engine-card="${esc(id)}"><div class="ui3-engine-card-heading"><span class="engine-mini-icon ${meta.tone}">${ci(meta.icon)}</span><span class="ui3-status ${info.tone}"><i></i>${esc(info.label)}</span></div><h3>${esc(meta.name)} <span class="ui3-engine-version ${update.kind==='update'?'has-update':''}">${esc(consoleEngineVersionLabel(info))}</span></h3><span class="ui3-engine-subtitle">${esc(meta.subtitle)}</span><p>${esc(meta.description)}</p><div class="ui3-engine-meta"><span>${info.installed?(info.running?'Процесс запущен':'Процесс не запущен'):info.installedKnown?'Процесс не обнаружен':'Нет данных о процессе'}</span><b>${used.length} сервисов</b></div><small class="ui3-engine-update ${update.kind}" role="status">${esc(update.text)}</small>${operationText?`<small class="ui3-engine-operation" role="status">${esc(operationText)}</small>`:''}<div class="ui3-engine-actions"><button type="button" class="secondary" data-component-refresh="${esc(id)}" data-rz-focus="engine-${esc(id)}-refresh" title="Обновить общий каталог компонентов" ${busy?'disabled':''}>${state.componentRefreshRequest?'Проверяем…':'Проверить обновления'}</button>${actions}<button type="button" class="secondary" data-console-engine="${esc(id)}" data-rz-focus="engine-${esc(id)}-settings">Настройки ${ci('chevron')}</button></div>${protectedComponent&&info.installed?`<small class="ui3-engine-action-hint">${esc(disabledReason)}</small>`:''}</article>`;
+}
 function renderInterfaceEngines(){
- if(!interfaceDataReady('engines') || !interfaceDataReady('engineConfigs')){
+ if(!interfaceDataReady('engines') && !interfaceDataReady('engineConfigs') && !interfaceDataReady('components')){
    interfaceHTML('ui3EngineGrid',interfaceEmpty('Сведения об обходах загружаются',interfaceLoadMessage('engineConfigs'),'<button type="button" class="secondary" data-panel-refresh>Повторить загрузку</button>'));
    return;
  }
- interfaceHTML('ui3EngineGrid',Object.entries(consoleEngineMeta).map(([id,m])=>{const e=consoleEngineState(id),used=(state.services||[]).filter(s=>{const a=serviceDashboardApplied(s);return a.enabled&&(a.route===id||a.route?.startsWith(id+':'));});return `<article class="ui3-engine-card"><div class="ui3-engine-card-heading"><span class="engine-mini-icon ${m.tone}">${ci(m.icon)}</span><span class="ui3-status ${e.running?'good':'unknown'}"><i></i>${e.running?'Процесс запущен':e.installed?'Установлен':'Не установлен'}</span></div><h3>${esc(m.name)}</h3><span class="ui3-engine-subtitle">${esc(m.subtitle)}</span><p>${esc(m.description)}</p><div class="ui3-engine-meta"><span>${esc(e.version)}</span><b>${used.length} сервисов</b></div><button type="button" class="secondary" data-console-engine="${esc(id)}">${e.installed?'Открыть настройки':'Настроить компонент'} ${ci('chevron')}</button></article>`;}).join(''));
+ interfaceHTML('ui3EngineGrid',Object.entries(consoleEngineMeta).map(([id,meta])=>interfaceEngineCard(id,meta)).join(''));
  const id=state.selectedEngine,e=consoleEngineState(id);
  interfaceHTML('ui3EngineContext',Object.entries(consoleEngineMeta).map(([k,m])=>`<button type="button" class="${k===id?'active':''}" data-console-engine="${esc(k)}" ${k===id?'aria-current="page"':''}>${ci(m.icon)}${esc(m.name)}</button>`).join(''));
  const used=state.services.filter(s=>{const a=serviceDashboardApplied(s);return a.enabled&&(a.route===id||a.route?.startsWith(id+':'));});
@@ -210,6 +227,13 @@ function interfaceResetFilters(){
  $('#ui3ServiceSearch').focus({preventScroll:true});
 }
 document.addEventListener('toggle',e=>{if(!e.target.matches?.('[data-rz-group]'))return;const k=e.target.dataset.rzGroup;if(e.target.open)interfaceState.expanded.add(k);else interfaceState.expanded.delete(k);},true);
+function interfaceComponentAction(event){
+ const button=event.target.closest('#ui3EngineGrid [data-component-refresh],#ui3EngineGrid .component-action');
+ if(!button||button.disabled)return;
+ if(button.hasAttribute('data-component-refresh'))void refreshComponents(true);
+ else void manageComponent(button.dataset.component,button.dataset.componentAction);
+}
+document.addEventListener('click',interfaceComponentAction);
 document.addEventListener('click',event=>{
  const b=event.target.closest('[data-r42-services],[data-rz-inspect],[data-rz-nav],[data-rz-category],[data-rz-filter],[data-rz-reset-filters],[data-rz-protocol],[data-rz-close],[data-rz-action],[data-rz-layout]');if(!b)return;
  if(b.hasAttribute('data-rz-reset-filters')){interfaceResetFilters();return;}

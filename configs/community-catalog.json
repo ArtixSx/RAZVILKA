@@ -50,14 +50,14 @@
       "aliases": ["telegram", "телеграм", "cidr"],
       "category": "Мессенджеры",
       "icon": "TG",
-      "description": "Домены V2Fly и официально опубликованные сети Telegram",
+      "description": "Домены V2Fly и сети Telegram из каталога Loyalsoldier: официальный список и данные ASN",
       "probe_url": "https://telegram.org/",
       "domains_url": "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/telegram",
-      "cidrs_url": "https://core.telegram.org/resources/cidr.txt",
-      "provider": "V2Fly + Telegram",
-      "source_page": "https://core.telegram.org/resources/cidr.txt",
-      "license": "MIT + official Telegram network data",
-      "access": {"region":"RU","status":"partial","note":"Доступ и отдельные функции могут ограничиваться; домены и официальные сети нужны для раздельной проверки.","evidence_url":"https://core.telegram.org/resources/cidr.txt","verified_at":"2026-08-14"}
+      "cidrs_url": "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/text/telegram.txt",
+      "provider": "V2Fly + Loyalsoldier GeoIP",
+      "source_page": "https://github.com/Loyalsoldier/geoip",
+      "license": "MIT + CC BY-SA 4.0 / GPL-3.0",
+      "access": {"region":"RU","status":"partial","note":"Доступ и отдельные функции могут ограничиваться; домены и сети нужны для раздельной проверки.","evidence_url":"https://core.telegram.org/resources/cidr.txt","verified_at":"2026-08-14"}
     },
     {
       "id": "pinterest",

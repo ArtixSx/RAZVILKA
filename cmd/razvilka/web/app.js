@@ -12,6 +12,7 @@ const plural = (value, one, few, many) => {
 };
 
 const state = {
+  authenticated: false,
   status: {},
   system: {},
   metrics: { latest: {}, history: [], capacity: {} },
@@ -110,6 +111,7 @@ try {
 }
 
 async function api(url, options = {}) {
+  const { readTimeoutMs, ...fetchOptions } = options;
   const method = String(options.method || 'GET').toUpperCase();
   const headers = new Headers(options.headers || {});
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers.has('content-type')) {
@@ -126,9 +128,10 @@ async function api(url, options = {}) {
   const abort = () => controller?.abort();
   if (options.signal?.aborted) abort();
   options.signal?.addEventListener('abort', abort, { once: true });
-  const timer = controller ? setTimeout(() => { timedOut = true; controller.abort(); }, 20000) : null;
+  const readTimeout = Number.isSafeInteger(readTimeoutMs) ? Math.max(20000, Math.min(110000, readTimeoutMs)) : 20000;
+  const timer = controller ? setTimeout(() => { timedOut = true; controller.abort(); }, readTimeout) : null;
   try {
-  const response = await fetch(url, { ...options, method, headers, signal: controller?.signal || options.signal, credentials: 'same-origin' });
+  const response = await fetch(url, { ...fetchOptions, method, headers, signal: controller?.signal || options.signal, credentials: 'same-origin' });
   if (!response.ok) {
 	const text = (await response.text()).trim();
 	let payload = null;
@@ -181,6 +184,7 @@ function captureSetupKey() {
 }
 
 function showAuth(status, message = '') {
+  state.authenticated = false;
   document.dispatchEvent(new Event('razvilka:auth-required'));
   state.status = status || state.status || {};
   $('#authScreen').hidden = false;
@@ -194,7 +198,10 @@ function showAuth(status, message = '') {
 }
 
 function hideAuth() {
-  const restored = $('#authScreen').hidden !== true;
+  // A saved cookie can authenticate the first load without ever showing the
+  // login screen. Visibility is not an authentication lifecycle signal.
+  const restored = state.authenticated !== true;
+  state.authenticated = true;
   $('#authScreen').hidden = true;
   $('.app-shell').removeAttribute('aria-hidden');
   $('#authMessage').textContent = '';
@@ -258,6 +265,7 @@ function askConfirmation(title, text, action = 'Продолжить') {
   $('#actionDialogTitle').textContent = title;
   $('#actionDialogText').textContent = text;
   $('#actionDialogConfirm').textContent = action;
+  dialog.returnValue = '';
   dialog.showModal();
   return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
 }
@@ -554,7 +562,9 @@ function renderNFQWS2ServiceDetails(value) {
 
 function showDetails(value, title = 'Детали') {
   $('#detailsPanel').classList.add('open');
-  $('#details').innerHTML = value?.detail_kind === 'nfqws2-service'
+  $('#details').innerHTML = value?.detail_kind === 'project-log'
+    ? renderProjectLogDetails(value)
+    : value?.detail_kind === 'nfqws2-service'
     ? renderNFQWS2ServiceDetails(value)
     : value?.detail_kind === 'service-lists'
       ? renderServiceListsDetails(value)
@@ -562,7 +572,7 @@ function showDetails(value, title = 'Детали') {
       ? renderRouteComparisonDetails(value)
       : renderGenericDetails(value);
   $('.drawer-head h3').textContent = title;
-  $('#detailsSubtitle').textContent = 'Краткий итог · технические данные доступны ниже';
+  $('#detailsSubtitle').textContent = value?.detail_kind === 'project-log' ? 'Текущее состояние · причины ошибок · последние действия' : 'Краткий итог · технические данные доступны ниже';
   $('#details [data-open-strategy-lab]')?.addEventListener('click', () => {
     $('#detailsPanel').classList.remove('open');
     setView('strategylab');
@@ -999,18 +1009,23 @@ function renderComponents() {
   $('#componentStrip').innerHTML = visible.map((c) => {
     let version = 'нет в подключённых репозиториях';
     let actions = '';
+    const info = typeof consoleEngineState === 'function' ? consoleEngineState(c.id) : null;
+    const update = info ? consoleEngineUpdateState(info) : null;
+    const stale = c.catalog_stale || c.update_check_error || c.inventory_error || state.componentCatalogError || update?.kind === 'failed';
+    const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running';
+    const unavailable = busy || c.running || c.external_owner;
     if (c.update_available) {
-      version = `${c.installed_version} → ${c.available_version}`;
-      actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="update">Обновить</button>`;
+      version = info ? consoleEngineVersionLabel(info) : `${c.installed_version || 'Версия неизвестна'}${c.available_version ? ` → ${c.available_version}` : ''}`;
+      actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="update" ${c.can_update && !stale && !unavailable ? '' : 'disabled'}>Обновить</button>`;
     } else if (c.installed) {
       version = `установлена ${c.installed_version || '—'}`;
-      actions += '<span class="engine-state installed">АКТУАЛЬНО</span>';
+      actions += `<span class="engine-state installed">${update?.kind === 'current' ? 'АКТУАЛЬНО' : 'УСТАНОВЛЕН'}</span>`;
     } else if (c.available) {
       version = `доступна ${c.available_version || '—'}`;
-      actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="install">Установить</button>`;
+      actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="install" ${c.can_install && !stale && !unavailable ? '' : 'disabled'}>Установить</button>`;
     }
     if (c.installed && state.engineConfigs.some((engine) => engine.id === c.id)) actions += `<button class="mini-button component-config" data-engine-config="${esc(c.id)}">Настроить</button>`;
-    if (c.can_remove && !c.external_owner) actions += `<button class="component-remove component-action" data-component="${esc(c.id)}" data-component-action="remove">Удалить</button>`;
+    if (c.can_remove && !c.external_owner) actions += `<button class="component-remove component-action" data-component="${esc(c.id)}" data-component-action="remove" ${unavailable || c.inventory_error ? 'disabled' : ''}>Удалить</button>`;
     if (c.external_owner) actions = '<span class="external-owner-tag">ВНЕШНЕЕ УПРАВЛЕНИЕ</span>';
     const budget = c.resource_budget || {};
     const budgetText = [budget.ram_mib ? `${budget.ram_mib} МиБ RAM` : '', budget.flash_mib ? `${budget.flash_mib} МиБ flash` : '', budget.cpu_class || ''].filter(Boolean).join(' · ');
@@ -1048,17 +1063,62 @@ function renderComponents() {
 }
 
 async function refreshComponents(refresh = true) {
+  if (state.componentRefreshRequest) return state.componentRefreshRequest;
+  const epoch = workflowState.epoch;
+  if (!workflowSession(epoch)) return false;
   const button = $('#refreshComponents');
   button.disabled = true; button.textContent = 'Проверка…';
-  try {
-    state.components = await api(`/api/v1/components${refresh ? '?refresh=true' : ''}`);
-    renderComponents();
-    renderEngineControl();
-  } catch (error) { showDetails({ error: error.message }, 'Проверка обновлений'); }
-  finally { button.disabled = false; button.textContent = 'Проверить обновления'; }
+  const request = Promise.resolve().then(async () => {
+    try {
+      const components = await api(`/api/v1/components${refresh ? '?refresh=true' : ''}`, refresh ? { readTimeoutMs: 110000 } : {});
+      if (!workflowSession(epoch)) return false;
+      if (!Array.isArray(components)) throw new Error('Получен неполный каталог. Последние данные сохранены.');
+      state.components = components;
+      if (refresh) state.componentCatalogError = '';
+      panelSectionState('components', 'ready');
+      return true;
+    } catch (error) {
+      if (!workflowSession(epoch)) return false;
+      state.componentCatalogError = error.message;
+      panelSectionState('components', panelBusy(error) ? 'busy' : 'error', error);
+      showNotice('error', 'Обновления не проверены', 'Последние сведения об установленных компонентах сохранены. Проверьте доступ к источникам и повторите запрос.', { error: error.message });
+      return false;
+    } finally {
+      if (state.componentRefreshRequest === request) state.componentRefreshRequest = null;
+      if (workflowSession(epoch)) {
+        button.disabled = false; button.textContent = 'Проверить обновления';
+        renderComponents(); renderEngineControl();
+        if (typeof renderConsole === 'function') renderConsole();
+        if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
+      }
+    }
+  });
+  state.componentRefreshRequest = request;
+  if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
+  return request;
 }
 
 async function manageComponent(id, requestedAction) {
+  if (state.componentOperation || state.componentRefreshRequest || !workflowSession(workflowState.epoch)) return false;
+  const component = state.components.find(c => c.id === id);
+  if (!component) return false;
+  const action = requestedAction || (component.update_available ? 'update' : 'install');
+  if (!['install', 'update', 'remove'].includes(action)) return false;
+  const operation = { id, action, epoch: workflowState.epoch };
+  state.componentOperation = operation;
+  $$('.component-action').forEach(button => { button.disabled = true; });
+  if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
+  try { return await manageComponentReviewed(id, action); }
+  finally {
+    if (state.componentOperation === operation) state.componentOperation = null;
+    if (workflowSession(operation.epoch)) {
+      renderComponents();
+      if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
+    }
+  }
+}
+
+async function manageComponentReviewed(id, requestedAction) {
   const epoch=workflowState.epoch;
   const component = state.components.find((c) => c.id === id);
   if (!component) return false;
@@ -1070,7 +1130,7 @@ async function manageComponent(id, requestedAction) {
     : 'официальный GitHub release с обязательной проверкой checksums.txt';
   let plan;
   try {
-    plan = await api(`/api/v1/components/${encodeURIComponent(id)}/plan?action=${encodeURIComponent(action)}`);
+    plan = await api(`/api/v1/components/${encodeURIComponent(id)}/plan?action=${encodeURIComponent(action)}`, { readTimeoutMs: 110000 });
   } catch (error) {
     if(!workflowSession(epoch))return false;
     showDetails({ error: error.message, response: error.payload }, `${component.name}: план недоступен`);
@@ -1091,7 +1151,8 @@ async function manageComponent(id, requestedAction) {
   try {
     const result = await api(`/api/v1/components/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' });
     if(!workflowSession(epoch))return false;
-    await refreshComponents(false);
+    if (result?.ok !== true) throw new Error('Сервер не подтвердил завершение операции с компонентом.');
+    if (!await refreshComponents(false)) throw new Error('Операция отправлена, но повторная проверка состояния не завершена.');
     if(!workflowSession(epoch))return false;
     const [engines, engineConfigs] = await Promise.all([api('/api/v1/engines'), api('/api/v1/engine-configs')]);
     if(!workflowSession(epoch))return false;
@@ -3434,7 +3495,7 @@ async function previewCommunityService(id, refresh = false) {
     const preview=await workflowRequest(`/api/v1/community/services/${encodeURIComponent(id)}/preview${refresh?'?refresh=true':''}`,{},50000);
     if(!workflowSession(epoch)||seq!==workflowState.communitySeq||!$('#communityCatalogDialog').open)return;
     state.communityPreview=preview;renderCommunityResults();renderCommunityPreview();
-  }catch(error){if(workflowSession(epoch)&&seq===workflowState.communitySeq)$('#communityPreview').innerHTML=`<div class="community-empty error">Источник не принят: ${esc(workflowError(error))}</div>`;}
+  }catch(error){if(workflowSession(epoch)&&seq===workflowState.communitySeq)$('#communityPreview').innerHTML=`<div class="community-empty error"><p>Список не загружен: ${esc(workflowError(error))}</p><button class="secondary" data-community-refresh="${esc(id)}" type="button">Повторить загрузку</button></div>`;}
 }
 
 function renderCommunityPreview() {
@@ -3456,7 +3517,7 @@ function renderCommunityPreview() {
     ${conflicts.length ? `<div class="community-conflicts"><b>Совпадения с существующими правилами</b><ul>${conflictRows}</ul>${conflicts.length > 12 ? `<small>И ещё ${conflicts.length - 12}. Импорт возможен только после подтверждения.</small>` : ''}</div>` : '<div class="community-clean">Конфликтов с текущим каталогом не найдено.</div>'}
     <details class="community-data"><summary>Показать данные (${domains.length + cidrs.length})</summary><div><b>Домены</b><pre>${esc(domains.slice(0, 80).join('\n') || '—')}</pre>${domains.length > 80 ? `<small>Показаны первые 80 из ${domains.length}</small>` : ''}<b>IP/CIDR</b><pre>${esc(cidrs.slice(0, 80).join('\n') || '—')}</pre>${cidrs.length > 80 ? `<small>Показаны первые 80 из ${cidrs.length}</small>` : ''}</div></details>
     ${consoleSnapshot?.policy?.setup_complete&&!imported?'<label class="r4-check"><input type="checkbox" id="r4CommunityManage" checked/><span>После импорта передать сервис Автопилоту с устройствами и разрешениями из мастера. Это отдельная задача проверки и применения.</span></label>':'<p class="r4-note">Импортирует только определение сервиса. Автопилот настраивается отдельно; существующий маршрут не изменяется.</p>'}
-    <div class="community-preview-actions"><button class="secondary" data-community-refresh="${esc(entry.id)}" type="button">Обновить preview</button><button class="primary" data-community-import="${esc(entry.id)}" type="button">${imported ? 'Обновить из источника' : 'Добавить в мои сервисы'}</button></div>`;
+    <div class="community-preview-actions"><button class="secondary" data-community-refresh="${esc(entry.id)}" type="button">Обновить список</button><button class="primary" data-community-import="${esc(entry.id)}" type="button">${imported ? 'Обновить из источника' : 'Добавить в мои сервисы'}</button></div>`;
 }
 
 async function importCommunityService(id) {
@@ -4347,8 +4408,9 @@ function bindEvents() {
     const config = event.target.closest('.component-config');
     if (config) { void openEngineConfiguration(config.dataset.engineConfig); return; }
     const button = event.target.closest('.component-action');
-    if (button) manageComponent(button.dataset.component, button.dataset.componentAction);
+    if (button && !button.disabled) manageComponent(button.dataset.component, button.dataset.componentAction);
   });
+  document.addEventListener('razvilka:auth-required', () => { state.componentRefreshRequest = null; state.componentOperation = null; state.componentCatalogError = ''; });
   $('#showPlan').addEventListener('click', showPlan);
   $('#applyChanges').addEventListener('click', openPendingChanges);
   $('#applySettings').addEventListener('click', () => applyDraft('all'));

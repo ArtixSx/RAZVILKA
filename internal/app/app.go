@@ -58,7 +58,7 @@ import (
 var (
 	// Builds override provenance through -ldflags. The version default mirrors
 	// canonical VERSION; unknown provenance never claims a verified release build.
-	Version     = "0.18.6"
+	Version     = "0.18.7"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -1320,22 +1320,12 @@ func (a *App) componentList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	runtimes := engine.Detector{}.Inventory()
+	mergeComponentRuntimes(views, runtimes)
 	for i := range views {
-		for _, runtime := range runtimes {
-			if views[i].ID != runtime.ID {
-				continue
-			}
-			views[i].Configured = runtime.Configured
-			views[i].Running = runtime.Running
-			views[i].ExternalOwner = runtime.External
-			if runtime.External && runtime.Installed {
-				views[i].Installed = true
-				views[i].State = "external-installed"
-				if runtime.Running {
-					views[i].State = "external-active"
-				}
-			}
-			break
+		desired, applied := a.componentServiceReferences(views[i].ID)
+		if len(desired) > 0 || len(applied) > 0 {
+			views[i].CanUpdate, views[i].CanRemove = false, false
+			views[i].LifecycleBlockReason = "Компонент нужен выбранным или применённым маршрутам. Сначала переключите сервисы и примените изменения."
 		}
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -1427,19 +1417,13 @@ func (a *App) enrichComponentPlan(plan *components.Plan) {
 	if plan == nil {
 		return
 	}
-	for _, runtime := range (engine.Detector{}).Inventory() {
-		if runtime.ID != plan.Component {
-			continue
+	enrichComponentRuntimePlan(plan, (engine.Detector{}).Inventory())
+	if plan.Action == "remove" || plan.Action == "update" {
+		if a.Dataplane != nil {
+			if _, _, err := a.Dataplane.Committed(); err != nil {
+				plan.AddBlocker("RUNTIME_STATE_UNKNOWN", "Не удалось проверить применённые маршруты", "Восстановите журнал состояния перед изменением установленного компонента.")
+			}
 		}
-		if runtime.Running && (plan.Action == "update" || plan.Action == "remove") {
-			plan.AddBlocker("RUNTIME_ACTIVE", "Обход сейчас активен", "Перенесите зависимые сервисы на другой маршрут, примените изменения и повторите операцию.")
-		}
-		if runtime.External {
-			plan.AddBlocker("EXTERNAL_OWNER", "Обход и его сетевые ресурсы управляются внешним проектом", "Используйте мастер миграции ownership.")
-		}
-		break
-	}
-	if plan.Action == "remove" {
 		desired, applied := a.componentServiceReferences(plan.Component)
 		if len(desired) > 0 || len(applied) > 0 {
 			message := "Компонент используется маршрутами сервисов"
@@ -1466,7 +1450,12 @@ func (a *App) componentRuntimeBlocker(id, action string) map[string]any {
 		}
 		break
 	}
-	if action == "remove" {
+	if action == "remove" || action == "update" {
+		if a.Dataplane != nil {
+			if _, _, err := a.Dataplane.Committed(); err != nil {
+				return map[string]any{"error": "committed runtime state could not be read", "component": id, "code": "RUNTIME_STATE_UNKNOWN"}
+			}
+		}
 		desired, applied := a.componentServiceReferences(id)
 		if len(desired) > 0 || len(applied) > 0 {
 			return map[string]any{"error": "component is referenced by service routes; move them and Apply first", "component": id, "code": "SERVICE_DEPENDENCY", "desired_services": desired, "applied_services": applied}
@@ -1480,15 +1469,34 @@ func (a *App) componentServiceReferences(component string) (desired, applied []s
 		return nil, nil
 	}
 	cfg := a.Store.Get()
+	desiredRefs, appliedRefs := map[string]bool{}, map[string]bool{}
 	for id, state := range cfg.Services {
-		if state.Enabled && routeUsesComponent(state.Route, component) {
-			desired = append(desired, id)
+		if state.Enabled && routeUsesComponent(selectedRoute(state), component) {
+			desiredRefs[id] = true
 		}
 	}
 	for id, state := range cfg.AppliedServices {
-		if state.Enabled && routeUsesComponent(state.Route, component) {
-			applied = append(applied, id)
+		if state.Enabled && routeUsesComponent(selectedRoute(state), component) {
+			appliedRefs[id] = true
 		}
+	}
+	if a.Dataplane != nil {
+		if committed, exists, err := a.Dataplane.Committed(); err == nil && exists && committed.State == "committed" {
+			for _, route := range committed.Routes {
+				if routeUsesComponent(route.Resolved, component) {
+					appliedRefs[route.ServiceID] = true
+					if state := cfg.Services[route.ServiceID]; state.Enabled && selectedRoute(state) == "auto" {
+						desiredRefs[route.ServiceID] = true
+					}
+				}
+			}
+		}
+	}
+	for id := range desiredRefs {
+		desired = append(desired, id)
+	}
+	for id := range appliedRefs {
+		applied = append(applied, id)
 	}
 	sort.Strings(desired)
 	sort.Strings(applied)
@@ -1496,12 +1504,7 @@ func (a *App) componentServiceReferences(component string) (desired, applied []s
 }
 
 func routeUsesComponent(route, component string) bool {
-	route = strings.ToLower(strings.TrimSpace(route))
-	component = strings.ToLower(strings.TrimSpace(component))
-	if route == component || strings.HasPrefix(route, component+":") {
-		return true
-	}
-	return component == "usque" && (route == "warp" || route == "warp-masque")
+	return components.RuntimeUses(route, component)
 }
 
 func (a *App) warpStatus(w http.ResponseWriter, r *http.Request) {

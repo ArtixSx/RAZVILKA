@@ -311,10 +311,13 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			if ctx.Err() != nil {
 				break
 			}
-			check, _, err := a.checkAndRecordNode(ctx, id, service, profile, 0)
+			check, err := a.checkAutonomyReserve(ctx, p, s, cfg, id, service, profile)
 			checkedThisRound[id] = true
+			if state, message := autonomyReserveCheckStop(ctx, check, err); state != "" {
+				return finish(state, message)
+			}
 			ready = slices.DeleteFunc(ready, func(v string) bool { return v == id })
-			if err == nil && check.Available && string(check.Verdict) == "PASS" && !check.DirectLeak {
+			if autonomyNodeObservation(check, time.Now()) == "PASS" {
 				ready = append(ready, id)
 			}
 		}
@@ -323,7 +326,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	if len(ready) > p.ReserveTarget {
 		ready = ready[:p.ReserveTarget]
 	}
-	r.Reserves = ready
+	r.Reserves = slices.Clone(ready)
 	if ctx.Err() != nil {
 		return finish("paused", "Проверка отменена; рабочий маршрут не меняется.")
 	}
@@ -345,14 +348,36 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	if len(ready) == 0 {
 		return finish("searching", "Подходящий узел пока не найден. Продолжается ограниченный подбор.")
 	}
-	// A previously cached PASS is not sufficient during a current outage.
-	// Recheck the chosen replacement in this round before changing the route.
-	if !checkedThisRound[ready[0]] {
-		check, _, checkErr := a.checkAndRecordNode(ctx, ready[0], service, profile, 0)
-		if checkErr != nil || autonomyNodeObservation(check, time.Now()) != "PASS" {
-			r.Reserves = slices.DeleteFunc(r.Reserves, func(id string) bool { return id == ready[0] })
-			return finish("searching", "Сохранённый резерв не прошёл новую проверку; прежний маршрут не менялся.")
+	// Cached PASS alone cannot replace a failed path. Walk the bounded reserve
+	// list, allowing only a definite candidate failure to advance to its peer.
+	// INCONCLUSIVE and local/network/cleanup failures stop this round instead of
+	// poisoning candidates or probing on top of uncertain temporary resources.
+	chosen := ""
+	checks := len(checkedThisRound)
+	for _, id := range ready {
+		if id == currentNode {
+			continue
 		}
+		if !checkedThisRound[id] {
+			if checks >= p.CandidatesPerRound {
+				break
+			}
+			checks++
+			check, checkErr := a.checkAutonomyReserve(ctx, p, s, cfg, id, service, profile)
+			checkedThisRound[id] = true
+			if state, message := autonomyReserveCheckStop(ctx, check, checkErr); state != "" {
+				return finish(state, message)
+			}
+			if autonomyNodeObservation(check, time.Now()) == "FAIL" {
+				r.Reserves = slices.DeleteFunc(r.Reserves, func(candidate string) bool { return candidate == id })
+				continue
+			}
+		}
+		chosen = id
+		break
+	}
+	if chosen == "" {
+		return finish("searching", "В пределах текущей проверки рабочий резерв не найден. Подбор продолжится; прежний маршрут не менялся.")
 	}
 	if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
 		return finish("rate-limited", "Лимит переключений исчерпан; автоматическое применение отложено.")
@@ -361,8 +386,12 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	r.State = "applying"
 	r.Message = "Подготовлен проверенный узел; выполняется транзакция."
 	a.autonomyRuntime(s.ID, r)
-	if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "sing-box:"+ready[0]); err != nil {
-		return finish("apply-refused", "Изменение не подтверждено. Сохранены защитные проверки и откат.")
+	if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "sing-box:"+chosen); err != nil {
+		// Even a completed rollback does not attribute an untyped adapter error
+		// to this node. Do not try another candidate after Apply until the
+		// dataplane exposes a precise service/node failure contract.
+		state, message := autonomyApplyFailureStatus(err)
+		return finish(state, message)
 	}
 	r.Failures = 0
 	r.FirstFailure = time.Time{}
@@ -471,7 +500,7 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		return err
 	}
 	ctx = dataplane.WithReviewGuard(ctx, guard)
-	_, err = a.Dataplane.Apply(ctx, plan, func() (func() error, error) {
+	execution, err := a.Dataplane.Apply(ctx, plan, func() (func() error, error) {
 		if e := guard(ctx); e != nil {
 			return nil, e
 		}
@@ -482,7 +511,7 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		return undo, e
 	})
 	if err != nil {
-		return err
+		return &autonomyApplyFailure{Execution: execution, Cause: err}
 	}
 	// A crash before this sidecar receipt safely pauses for review; it never
 	// authorizes blind re-application. Dataplane still has its durable journal.
