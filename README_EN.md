@@ -11,8 +11,9 @@ No RAZVILKA cloud account is required.
 [Current status (RU)](docs/CURRENT_STATUS_RU.md) · [Changelog](CHANGELOG.md) ·
 [Report an issue](https://github.com/ArtixSx/RAZVILKA/issues)
 
-**RAZVILKA 0.18.4** provides Autopilot, connection checks, bypass settings
-and local configuration tools. [Verified scenarios and limitations (RU)](docs/CURRENT_STATUS_RU.md)
+**RAZVILKA 0.18.5 is in development, updated 20 September 2026.** Restart
+recovery and network diagnostics fixes are included; this version has not
+passed hardware acceptance and is not published. [Verified results from earlier builds (RU)](docs/CURRENT_STATUS_RU.md)
 are documented separately. The installation command downloads the published stable release.
 
 ## Features in the current project
@@ -28,7 +29,7 @@ are documented separately. The installation command downloads the published stab
 - Diagnostics, component versions, DNS response comparison and private
   backups. Dark appearance is the default.
 
-Version 0.18.4 also adds **Mihomo configuration export**, an **experimental HEV profile
+Version 0.18.5 also adds **Mihomo configuration export**, an **experimental HEV profile
 generator**, and **manual import/export of NFQWS2 strategy packs**. Mihomo and
 HEV are not yet available as complete managed routes; generating a file does
 not start them on the router. An imported strategy is a candidate requiring
@@ -59,14 +60,14 @@ and verifies startup. Supported binary targets are `arm64` (aarch64), `mipsle`
 (mipsel), `mips` and `amd64`. Install the required bypass components separately;
 their compatibility also depends on the router model and kernel.
 
-## First use of version 0.18.4
+## First use of version 0.18.5
 
-These steps describe setup for version 0.18.4.
+These steps describe setup for version 0.18.5.
 
 1. Open `http://192.168.1.1:8787` from the LAN, substituting your router's LAN
    address if different. Set your own username and password.
 2. Use the wizard to choose devices, services, available methods and sources.
-   A fresh 0.18.4 catalog contains six NFQWS2 groups; add other services separately.
+   A fresh 0.18.5 catalog contains six NFQWS2 groups; add other services separately.
 3. Configure a bypass component or import a connection, then check it against
    the intended service.
 4. Apply changes or authorize Autopilot for the selected scope. Safe Mode is

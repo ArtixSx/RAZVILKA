@@ -344,6 +344,14 @@ func (s *linuxEpochSource) event(message epochMessage, interfaces map[uint32]boo
 }
 
 func epochDump(ctx context.Context, kind uint16) ([]epochMessage, error) {
+	return retryEpochDump(ctx, func(ctx context.Context) ([]epochMessage, error) {
+		return epochDumpOnce(ctx, kind)
+	})
+}
+
+// Each retry owns a fresh dump socket. The independent notification socket
+// stays open, so Drain before/after the snapshot still catches underlay ABA.
+func epochDumpOnce(ctx context.Context, kind uint16) ([]epochMessage, error) {
 	fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW|unix.SOCK_NONBLOCK|unix.SOCK_CLOEXEC, unix.NETLINK_ROUTE)
 	if err != nil {
 		return nil, err
@@ -395,17 +403,18 @@ func epochDump(ctx context.Context, kind uint16) ([]epochMessage, error) {
 			return nil, err
 		}
 		for _, message := range messages {
-			if message.seq != 1 || message.flags&unix.NLM_F_DUMP_INTR != 0 {
+			if message.seq != 1 || message.kind == unix.NLMSG_ERROR || message.kind == unix.NLMSG_OVERRUN {
 				return nil, ErrNetworkUnavailable
+			}
+			if message.kind == unix.NLMSG_DONE && len(message.data) >= 4 && binary.NativeEndian.Uint32(message.data[:4]) != 0 {
+				return nil, ErrNetworkUnavailable
+			}
+			if message.flags&unix.NLM_F_DUMP_INTR != 0 {
+				return nil, errEpochDumpInterrupted
 			}
 			switch message.kind {
 			case unix.NLMSG_DONE:
-				if len(message.data) >= 4 && binary.NativeEndian.Uint32(message.data[:4]) != 0 {
-					return nil, ErrNetworkUnavailable
-				}
 				return result, nil
-			case unix.NLMSG_ERROR, unix.NLMSG_OVERRUN:
-				return nil, ErrNetworkUnavailable
 			default:
 				result = append(result, message)
 				if len(result) > 8192 {

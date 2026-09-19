@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -89,8 +90,13 @@ func (a *App) reconcilerSnapshot() map[string]any {
 func (a *App) wakeReconciler() {
 	a.reconciler.mu.Lock()
 	for i := range a.reconciler.doc.Operations {
-		if a.reconciler.doc.Operations[i].Kind == "node-fallback" || a.reconciler.doc.Operations[i].Kind == "service-checks" || a.reconciler.doc.Operations[i].Kind == "feeds" {
+		if a.reconciler.doc.Operations[i].Kind == "node-recovery" || a.reconciler.doc.Operations[i].Kind == "node-fallback" || a.reconciler.doc.Operations[i].Kind == "service-checks" || a.reconciler.doc.Operations[i].Kind == "feeds" {
 			a.reconciler.doc.Operations[i].NextRun = time.Time{}
+		}
+		if a.reconciler.doc.Operations[i].Kind == "node-recovery" && a.reconciler.doc.Operations[i].State != "running" {
+			// This wakes observation only. The applied-plan/epoch recovery
+			// state still owns its bounded probe attempts and retry delays.
+			a.reconciler.doc.Operations[i].Attempts = 0
 		}
 	}
 	wake := a.reconciler.wake
@@ -242,6 +248,7 @@ func (a *App) loadReconcilerLocked(ctx context.Context) error {
 			}
 			if op.Kind == "node-recovery" {
 				op.NextRun = time.Time{}
+				op.Attempts = 0
 			}
 		}
 		for id, checkpoint := range r.doc.Fallback {
@@ -407,6 +414,14 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		case "node-recovery":
 			forwardingErr = a.restoreForwardingRound(attempt)
 			a.nodeRecoveryRound(attempt, now)
+			// A stale committed epoch is the reason to revalidate the exact
+			// applied targets, not a failed scheduler dispatch. Recovery owns
+			// its own bounded retries; do not back off again while it waits.
+			// Match only the plain refusal: a joined cleanup/ownership error
+			// must remain visible as a failed forwarding operation.
+			if forwardingErr == dataplane.ErrNetworkChanged {
+				forwardingErr = nil
+			}
 		case "node-fallback":
 			a.nodeAutofallbackRound(attempt, now)
 		case "legacy-routes":
@@ -440,6 +455,12 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 			op.State = "backoff"
 			op.Reason = "operation-retry"
 			op.NextRun = time.Now().Add(time.Duration(1<<min(op.Attempts-1, 5)) * 30 * time.Second)
+			if task.kind == "node-recovery" {
+				// Keep observing changed applied authority/network promptly,
+				// even when forwarding repair has a persistent real failure.
+				// Exact checks still obey nodeRecoveryRound's per-plan limits.
+				op.NextRun = now.Add(task.interval)
+			}
 		} else {
 			op.Attempts = 0
 		}

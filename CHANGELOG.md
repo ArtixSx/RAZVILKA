@@ -2,12 +2,33 @@
 
 The release workflow stages a draft; promotion follows verification of the exact attached router artifacts.
 
-## 0.18.4 — Service setup, connection checks and configuration tools
+## 0.18.5 — In development, 20 September 2026
 
-Source revision c7ea788 passed full CI and local-build ARM64 router checks:
-Discord service verification, a route scoped to one PC, manual A/B switching,
-application restart and complete removal of owned routes. Final GitHub release
-artifacts still require their own verification before publication. Detailed
+Not published or hardware-validated. The release carries the EXT5 features and
+earlier fixes listed under 0.18.4, with additional recovery corrections:
+
+- Correct compounded node-recovery backoff; reset or wake the schedule when
+  recovery authority changes instead of inheriting the previous node's delay.
+- Improve observer diagnostics and bounded retries of interrupted netlink dumps.
+  The cause of the historical intermittent observer resets is still unknown.
+
+Application package tests, targeted recovery tests and vet passed. Observer
+checks passed on Windows and on router Linux ARM64 (43 passed, two opt-in tests
+skipped). Combined 0.18.5 CI and hardware acceptance are still pending.
+
+[Draft release notes](docs/releases/0.18.5.md) ·
+[Current validation and remaining work](docs/CURRENT_STATUS_RU.md).
+
+## 0.18.4 — Unpublished tagged build: service setup and connection checks
+
+Exact GitHub artifacts at 5fceff8 passed CI, attestation and checksum verification,
+router installation, Discord service checks and manual A/B switching for one PC.
+Subsequent application restart acceptance failed: recovery inherited the old
+node B backoff (six attempts, next run about 16 minutes away). The draft is not
+published. Final Stop/Safe Mode cleanup passed all baseline and resource checks.
+An intermittent observer reset correctly triggered rollback before a successful
+retry; its cause remains under investigation. Earlier local c7ea788 restart and
+cleanup results are recorded separately. Detailed
 [validation and limits](docs/EXT5_REVIEW_2026-09-19_RU.md) are tracked separately
 from the [short release notes](docs/releases/0.18.4.md).
 

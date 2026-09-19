@@ -66,6 +66,8 @@ type NetworkEpochDiagnostic struct {
 	ChangedAt           string `json:"changed_at,omitempty"`
 	ObservedAt          string `json:"observed_at,omitempty"`
 	CallerCancellations uint64 `json:"caller_cancellations"`
+	LastFailureReason   string `json:"last_failure_reason,omitempty"`
+	LastFailureAt       string `json:"last_failure_at,omitempty"`
 }
 
 func NetworkEpochStatus() NetworkEpochDiagnostic { return wanEpoch.diagnostic() }
@@ -92,6 +94,8 @@ type epochDetector struct {
 	lastParts           []string
 	lastReason          string
 	lastChanged         time.Time
+	lastFailureReason   string
+	lastFailureAt       time.Time
 	lastKnown           bool
 	interfaces          map[uint32]bool
 	cache               atomic.Pointer[cachedWAN]
@@ -154,7 +158,11 @@ func (d *epochDetector) fresh(parent context.Context) (WANProfile, error) {
 	phase := "initialization"
 	publish := func(profile WANProfile) {
 		now := d.now()
-		d.cache.Store(&cachedWAN{profile: profile, at: now, diagnostic: NetworkEpochDiagnostic{Generation: d.generation, Reason: d.lastReason, ChangedAt: d.lastChanged.UTC().Format(time.RFC3339Nano), ObservedAt: now.UTC().Format(time.RFC3339Nano)}})
+		diagnostic := NetworkEpochDiagnostic{Generation: d.generation, Reason: d.lastReason, ChangedAt: d.lastChanged.UTC().Format(time.RFC3339Nano), ObservedAt: now.UTC().Format(time.RFC3339Nano), LastFailureReason: d.lastFailureReason}
+		if !d.lastFailureAt.IsZero() {
+			diagnostic.LastFailureAt = d.lastFailureAt.UTC().Format(time.RFC3339Nano)
+		}
+		d.cache.Store(&cachedWAN{profile: profile, at: now, diagnostic: diagnostic})
 	}
 	fail := func(err error) (WANProfile, error) {
 		d.lastKnown = false
@@ -165,6 +173,7 @@ func (d *epochDetector) fresh(parent context.Context) (WANProfile, error) {
 		}
 		profile := WANProfile{ID: "network-unknown"}
 		d.lastReason, d.lastChanged = "observation-failed-"+phase, d.now()
+		d.lastFailureReason, d.lastFailureAt = d.lastReason, d.lastChanged
 		publish(profile)
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return profile, err
