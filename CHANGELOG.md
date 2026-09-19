@@ -18,6 +18,9 @@ checks. ARM64 bootstrap/removal fixtures and the real isolated installation,
 upgrade and rollback cycle passed with the released binary. Updating the installed
 panel preserved settings, credentials and eight nodes. MIPS/MIPSel cross-builds
 passed; physical tests on those architectures remain outstanding.
+Both published README commands subsequently passed on the router, including
+the public GitHub download and checksum verification. Final network cleanup
+passed all nine baseline/resource checks; test staging was removed.
 
 [Release notes](docs/releases/0.18.6.md) ·
 [Validation status](docs/CURRENT_STATUS_RU.md).
