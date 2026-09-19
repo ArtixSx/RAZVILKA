@@ -1,28 +1,56 @@
-# Security Policy
+# Безопасность RAZVILKA
 
-RAZVILKA is a network control plane. Security issues may affect routing, credentials, proxy profiles, or router availability.
+RAZVILKA работает на роутере и управляет сетевыми настройками.
+Проблема безопасности может затронуть доступ в интернет, учётную запись панели
+или сохранённые подключения.
 
-## Current status
+## Версии и подтверждённые проверки
 
-`v0.18.1-rc.2` is a prerelease for public testing; `v0.18.0` remains the latest
-stable-tagged release. The current acceptance scope and open hardware scenarios
-are listed in the [release notes](docs/releases/0.18.1-rc.2.md).
-Safe Mode is the default on a new installation; explicit Active Apply
-uses command-allowlisted transactional adapters, native validation, health
-evidence, reverse rollback and committed-plan boot recovery. Local registration,
-PBKDF2 passwords, revocable sessions, Origin/JSON checks, encrypted private
-backups and privacy-safe diagnostics are implemented.
+Для установки используйте [последний стабильный выпуск](https://github.com/ArtixSx/RAZVILKA/releases/latest).
+Версия исходников указана в [VERSION](VERSION); она сама по себе не подтверждает
+публикацию или аппаратную проверку. Текущий объём испытаний и ограничения находятся
+в [статусе проекта](docs/CURRENT_STATUS_RU.md). Предварительные и исторические
+выпуски не считаются текущими только потому, что сохранился их Git-тег.
 
-Release bundles receive GitHub/Sigstore artifact attestations. `1.0.0` remains
-blocked on the documented cross-architecture, power-loss, low-memory and LAN
-security hardware matrix.
+Новая установка начинается с безопасного режима. Применение маршрутов включает
+проверки и откат при ошибке; результат восстановления зависит от конкретного
+компонента и сети. Это не обещание восстановления при любом отказе.
 
-## Reporting a vulnerability
+## Доступ и личные данные
 
-Please do not publish credentials, private proxy URIs, WireGuard keys, cookies, router backups, or private network topology in a public issue.
+- Панель предназначена для локальной сети; штатный запуск выбирает LAN-адрес.
+  Не открывайте её HTTP-порт напрямую в интернет.
+- При первом входе создаётся отдельная учётная запись RAZVILKA. Общего пароля
+  в дистрибутиве нет; пароль SSH роутера для входа в панель не используется.
+- Пароли хранятся как PBKDF2-SHA256, сеансы ограничены по времени и могут быть
+  отозваны. Запросы изменения проверяют формат JSON и Origin браузера.
+- Экспортируемые приватные копии содержат чувствительные данные и шифруются.
+  Локальные снимки установщика для отката сохраняются на роутере без шифрования.
+  Храните снимки, пароль экспортируемой копии и ключ восстановления вне общедоступных папок.
 
-For now, open a GitHub issue containing only non-sensitive reproduction details and explicitly mark it as a security report. A private reporting channel can be added before the first public stable release.
+Контрольные суммы выпусков проверяются установщиком. Release workflow также
+создаёт GitHub attestations — подтверждения происхождения файлов сборки.
+Сверка SHA256 сама по себе не заменяет проверку происхождения.
+[Правила сборки и выпуска](docs/VERSIONING_RU.md).
 
-## Secrets
+## Сообщить об уязвимости
 
-Never commit real sing-box/Xray proxy credentials, WARP/WireGuard private keys, router passwords, session cookies, or exported production configs.
+Если во вкладке [Security](https://github.com/ArtixSx/RAZVILKA/security)
+доступна форма **Report a vulnerability**, используйте её для закрытого сообщения.
+Если такой формы нет, создайте [Issue](https://github.com/ArtixSx/RAZVILKA/issues)
+с коротким уведомлением о проблеме безопасности и запросом закрытого канала связи.
+До согласования канала не публикуйте подробности, позволяющие атаковать чужую
+установку.
+
+Для разбора пригодятся версия приложения, модель и прошивка роутера,
+условия возникновения и ожидаемый результат. Не прикладывайте пароли,
+приватные VLESS-ссылки, ключи WireGuard/WARP, cookie, полную топологию сети
+или резервные копии рабочего роутера.
+
+## Для разработчиков
+
+Не добавляйте реальные секреты и пользовательские конфигурации в исходники,
+тестовые данные, журналы CI или архивы выпуска. Для тестов используйте
+вымышленные данные. При изменении установки, авторизации или сетевых правил
+проверяйте отрицательные сценарии и сохранность данных, а фактические границы
+проверки отражайте в текущем статусе.

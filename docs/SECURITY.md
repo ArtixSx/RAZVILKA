@@ -15,7 +15,7 @@ RAZVILKA runs locally on a router and may control privileged networking objects.
 
 - Browser input selects allowlisted service/route IDs; it cannot submit shell commands, file paths, executable names or arbitrary probe URLs.
 - Every Active Apply freezes a deterministic plan and runs snapshot, stage, native validation, activation, health and commit under one operation lock.
-- Any failure rolls prepared adapters back in reverse order. Boot recovery acts only on the last committed plan.
+- Failures after live mutation trigger rollback of affected adapters in reverse order. A failed preflight or canary stops before activation. Boot recovery acts only on the last committed plan.
 - Cancellation does not cancel rollback: recovery receives a separate bounded context, and repeated failed boots enter Recovery Safe Mode.
 - Port, interface, NFQUEUE and DNS ownership conflicts are discovered before the corresponding adapter may apply.
 - Runtime files, processes, interfaces, tables and rule priorities are namespaced. Deactivation targets exact recorded RAZVILKA ownership.
@@ -28,8 +28,8 @@ RAZVILKA runs locally on a router and may control privileged networking objects.
 - Public profile export rejects known secret files/content. Private backup uses AES-256-GCM, PBKDF2-HMAC-SHA256, random salt/nonce and an authenticated SHA-256-sealed payload.
 - Diagnostic export omits credentials, config contents, device identity, source scopes, history and public IP data.
 - Release CI publishes checksums and GitHub/Sigstore artifact attestations. `usque-keenetic` is installed through its fixed opkg feed; the external `wgcf` binary requires the checksum shipped in the same official upstream release.
-- The Web UI checks the official RAZVILKA GitHub release only on user request and never executes a root update automatically.
+- Release and component checks can run on the schedule explicitly enabled by the administrator. Unattended installation of the application and components is not implemented; checking or preparing an update does not activate it.
 
 ## Remaining `1.0.0` gate
 
-The code-level controls do not replace LAN penetration, power-loss, low-memory, multi-engine and cross-architecture tests on real Keenetic/Netcraze hardware. See [PRODUCT_GAPS_RU.md](PRODUCT_GAPS_RU.md).
+The code-level controls do not replace LAN penetration, power-loss, low-memory, multi-engine and cross-architecture tests on real Keenetic/Netcraze hardware. See the [current acceptance status](CURRENT_STATUS_RU.md) and [remaining plan](ROADMAP.md).

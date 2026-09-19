@@ -1,0 +1,2092 @@
+{
+  "schema": 1,
+  "title": "Матрица приёмки полной автоматизации RAZVILKA",
+  "audit_date": "2026-09-20",
+  "audited_main": "d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d",
+  "release_source_commit": "39ab4457fe6fc96437b31217b203a136c27a8a0d",
+  "scenario_count": 104,
+  "status": "planned-not-executed",
+  "instructions": "Заполнять result/status отдельно по каждому тесту; planned не является PASS. Существующие успешные регрессии не удалять. Аппаратные результаты других ревизий не переносить.",
+  "scenarios": [
+    {
+      "id": "BOOT-01",
+      "group": "Мастер, права и миграции",
+      "implementation_stage": "PR-01/07",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Чистая установка",
+      "setup_and_action": "Пустое состояние и штатный каталог; пройти мастер только для YouTube/Discord.",
+      "expected_result": "Сохранены ровно выбранные сервисы/устройства; другие определения не включены; нет выдуманного PASS.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "BOOT-02",
+      "group": "Мастер, права и миграции",
+      "implementation_stage": "PR-01/07",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Существующая установка",
+      "setup_and_action": "Обновить систему с личным каталогом, pin, suspended маршрутами и пользовательскими стратегиями.",
+      "expected_result": "Каталоги и явные назначения сохранены; defaults не удаляют и не перезаписывают данные.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "BOOT-03",
+      "group": "Мастер, права и миграции",
+      "implementation_stage": "PR-01/07",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Рестарт после мастера",
+      "setup_and_action": "Сохранить согласия и область, перезапустить процесс до начала Apply.",
+      "expected_result": "Разрешения прочитаны; выполнена свежая оценка, а не повтор устаревшего Apply.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "BOOT-04",
+      "group": "Мастер, права и миграции",
+      "implementation_stage": "PR-01/07",
+      "priority": "P0",
+      "test_level": "browser-integration",
+      "title": "Обновление каталога в мастере",
+      "setup_and_action": "Изменить поля и selection, получить новый каталог с дополнительным сервисом.",
+      "expected_result": "Выбор сохранён, новый сервис выключен, устаревший review отозван, введённые поля не потеряны.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "BOOT-05",
+      "group": "Мастер, права и миграции",
+      "implementation_stage": "PR-01/07",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Сбой между intent и результатом",
+      "setup_and_action": "Прервать процесс на durable границах сохранения и применения.",
+      "expected_result": "После запуска одна согласованная операция; факт commit/rollback восстановлен по журналу.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "BOOT-06",
+      "group": "Мастер, права и миграции",
+      "implementation_stage": "PR-01/07",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Два владельца сервиса",
+      "setup_and_action": "Мигрировать service policy, legacy fallback group и общую autonomy для одного ID.",
+      "expected_result": "Ровно один владелец; конфликты показаны, два worker не управляют одним сервисом.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "BOOT-07",
+      "group": "Мастер, права и миграции",
+      "implementation_stage": "PR-01/07",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Отзыв разрешений",
+      "setup_and_action": "Во время подбора отключить auto или источник, включить Stop/SafeMode.",
+      "expected_result": "Нет нового неразрешённого Apply; допущенная cleanup завершается; причина и следующий шаг видны.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "BOOT-08",
+      "group": "Мастер, права и миграции",
+      "implementation_stage": "PR-01/07",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Добавление и удаление после мастера",
+      "setup_and_action": "Добавить разрешённый дополнительный сервис, затем удалить при работающем общем engine.",
+      "expected_result": "Добавление не требует ручного Apply каждого кандидата; удаление снимает только собственный scope, общий engine других сервисов жив.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FAIL-01",
+      "group": "Отказ и восстановление VLESS",
+      "implementation_stage": "PR-02",
+      "priority": "P0",
+      "test_level": "native-integration",
+      "title": "A отказал, B исправен",
+      "setup_and_action": "Два контролируемых сервера; после stable A отключить его снаружи клиента.",
+      "expected_result": "Повторный атрибутированный отказ; свежий B; scoped Apply/postcheck; новый поток идёт B без браузерного действия.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FAIL-02",
+      "group": "Отказ и восстановление VLESS",
+      "implementation_stage": "PR-02",
+      "priority": "P0",
+      "test_level": "native-integration",
+      "title": "B проходит canary, но ломается на Apply",
+      "setup_and_action": "A недоступен, B детерминированно отвергается на фазе применения, C исправен.",
+      "expected_result": "Rollback B завершён; C получает попытку; B не переизбирается бесконечно и не съедает весь switch budget.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FAIL-03",
+      "group": "Отказ и восстановление VLESS",
+      "implementation_stage": "PR-02",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Общий отказ не портит репутацию B",
+      "setup_and_action": "Сделать недоступным общий исполнитель во время попытки B.",
+      "expected_result": "Отказ классифицирован как component/runtime; B не помечен нерабочим только за общий сбой.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FAIL-04",
+      "group": "Отказ и восстановление VLESS",
+      "implementation_stage": "PR-02",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "INCONCLUSIVE текущего пути",
+      "setup_and_action": "Недоступен контрольный URL при исправном checker и разрешённых альтернативах.",
+      "expected_result": "Разрешено ограниченное исследование; нет замены только по INCONCLUSIVE и нет массовой очистки узлов.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FAIL-05",
+      "group": "Отказ и восстановление VLESS",
+      "implementation_stage": "PR-02",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Ошибка cleanup кандидата",
+      "setup_and_action": "Прервать завершение проверочного процесса или создать потерю владения.",
+      "expected_result": "cleanup-failed важнее timeout/cancel; другие проверки и Apply блокируются до доказанного восстановления.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FAIL-06",
+      "group": "Отказ и восстановление VLESS",
+      "implementation_stage": "PR-02",
+      "priority": "P0",
+      "test_level": "native-integration",
+      "title": "Погиб локальный runtime",
+      "setup_and_action": "Удалённый A исправен, управляемый engine/sidecar остановился.",
+      "expected_result": "Диагноз local-runtime; восстанавливается прежний разрешённый A, а не ненужная замена аккаунта/узла.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FAIL-07",
+      "group": "Отказ и восстановление VLESS",
+      "implementation_stage": "PR-02",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Смена WAN или конфигурации",
+      "setup_and_action": "Получить PASS B, затем изменить epoch, профиль или source scope до commit.",
+      "expected_result": "Старое proof не разрешает Apply; выполняется отмена и безопасная очистка.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FAIL-08",
+      "group": "Отказ и восстановление VLESS",
+      "implementation_stage": "PR-02",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Резерв отсутствует",
+      "setup_and_action": "A недоступен, локально пригодных B/C нет; разрешённый источник позже публикует D.",
+      "expected_result": "Поиск/пополнение продолжаются с бюджетом; D проверен и применён; панель остаётся доступной.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "QUEUE-01",
+      "group": "Очередь, память и наблюдатель",
+      "implementation_stage": "PR-03",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Общий путь selected/all",
+      "setup_and_action": "Запустить обычную выбранную партию и all-vless в двух отдельных испытаниях.",
+      "expected_result": "Обе используют общую семантику: release admission только после cleanup текущего узла; регрессия уже исправленного поведения не возвращается.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "QUEUE-02",
+      "group": "Очередь, память и наблюдатель",
+      "implementation_stage": "PR-03",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Авария во время большой партии",
+      "setup_and_action": "Список 512 записей; сделать аварийную задачу due во время текущей пробы.",
+      "expected_result": "Авария получает следующий безопасный допуск, bulk сохраняет cursor; отсутствует starvation восстановления.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "QUEUE-03",
+      "group": "Очередь, память и наблюдатель",
+      "implementation_stage": "PR-03",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Непрерывно due записи recovery",
+      "setup_and_action": "Моделировать периодические/no-op recovery вместе с bulk и обслуживанием.",
+      "expected_result": "Реальные аварии приоритетны; фиктивная занятость не удерживает bulk/maintenance бесконечно.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "QUEUE-04",
+      "group": "Очередь, память и наблюдатель",
+      "implementation_stage": "PR-03",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Durable resume",
+      "setup_and_action": "Остановить процесс после разных cursor/cleanup границ.",
+      "expected_result": "Job восстанавливается с новым контекстом/проверкой scope и epoch; непроверенный хвост не отмечен успешным.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "QUEUE-05",
+      "group": "Очередь, память и наблюдатель",
+      "implementation_stage": "PR-03",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Идемпотентный старт и отмена",
+      "setup_and_action": "Повторить POST после утраты ответа; послать cancel старого ID после старта нового job.",
+      "expected_result": "Создан один job; старый cancel не отменяет новый; подтверждение идемпотентности сохраняется при restart.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "QUEUE-06",
+      "group": "Очередь, память и наблюдатель",
+      "implementation_stage": "PR-03",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Медленное обслуживание",
+      "setup_and_action": "Метаданные пакетов задерживаются; в это время требуется восстановление.",
+      "expected_result": "Долгий read/fetch не держит exclusive сетевую lease; before-activation guards заново проверяются.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "QUEUE-07",
+      "group": "Очередь, память и наблюдатель",
+      "implementation_stage": "PR-03",
+      "priority": "P0",
+      "test_level": "native-integration",
+      "title": "Прерванный netlink dump",
+      "setup_and_action": "Внести controllable dump interruption и затем настоящую смену сети.",
+      "expected_result": "Есть ограниченный retry и reason; реальная смена epoch не подавлена, unknown не превращён в PASS.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "QUEUE-08",
+      "group": "Очередь, память и наблюдатель",
+      "implementation_stage": "PR-03",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Шторм событий и мало ресурсов",
+      "setup_and_action": "Частые DNS/WAN события, много due сервисов, лимит RAM/FD.",
+      "expected_result": "Ограничены очереди/процессы/записи; таймеры и backoff не обнуляются каждым poll; отражено ожидание ресурса.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FEED-01",
+      "group": "Подписки и каталог узлов",
+      "implementation_stage": "PR-04",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Рабочий 33-й узел",
+      "setup_and_action": "Стабильная выдача: первые32 валидных неработающих, 33-й рабочий, import limit32.",
+      "expected_result": "Ротация ограниченного snapshot доходит до 33-го; limit не убран и вся выдача не грузится в RAM без границ.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FEED-02",
+      "group": "Подписки и каталог узлов",
+      "implementation_stage": "PR-04",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "304 и следующий срез",
+      "setup_and_action": "Сохранить проверенный snapshot и cursor; источник возвращает304.",
+      "expected_result": "Следующий срез доступен локально; 304 не продлевает service proof; повреждённый snapshot не используется.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FEED-03",
+      "group": "Подписки и каталог узлов",
+      "implementation_stage": "PR-04",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Смена порядка и содержимого",
+      "setup_and_action": "Поменять digest/порядок выдачи между порциями.",
+      "expected_result": "Курсор связан с правильным snapshot; нет пропусков из-за старого индекса и нет дублей секретных профилей.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FEED-04",
+      "group": "Подписки и каталог узлов",
+      "implementation_stage": "PR-04",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Retry-After и restart",
+      "setup_and_action": "429/503 с Retry-After; перезапустить приложение.",
+      "expected_result": "Долговечная пауза соблюдена; force не обходит ограничения; UI объясняет время следующего обращения.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FEED-05",
+      "group": "Подписки и каталог узлов",
+      "implementation_stage": "PR-04",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Пустой и недоступный источник",
+      "setup_and_action": "Активный A из источника; вернуть timeout, пустой или резко усечённый ответ.",
+      "expected_result": "Рабочий материал не удалён; свежесть source и право новых применений отличимы; есть bounded retry.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FEED-06",
+      "group": "Подписки и каталог узлов",
+      "implementation_stage": "PR-04",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Явный отзыв",
+      "setup_and_action": "Отключить источник/узел или получить поддержанный явный revoke.",
+      "expected_result": "Отзыв не маскируется grace; никакого нового Apply отозванного профиля; управляемая замена по политике.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FEED-07",
+      "group": "Подписки и каталог узлов",
+      "implementation_stage": "PR-04",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Заполненный NodeStore",
+      "setup_and_action": "Достичь лимита при active, groups, pins, reserves, suspended и rollback refs.",
+      "expected_result": "GC удаляет только допустимые кандидаты; импорт не разрушает protected материал; показан реальный дефицит места.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "FEED-08",
+      "group": "Подписки и каталог узлов",
+      "implementation_stage": "PR-04",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Несколько источников и защита секретов",
+      "setup_and_action": "Первый источник исправен, но даёт бесполезные дубли; второй содержит D, третий имеет token URL.",
+      "expected_result": "Есть справедливый обход источников; D достигается; token/UUID не попадает в публичную диагностику/внешний checker.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "INSTALL-01",
+      "group": "Компоненты и граф исполнения",
+      "implementation_stage": "PR-05",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "USQUE SOCKS без sidecar",
+      "setup_and_action": "Выбрать управляемый USQUE SOCKS на системе без Sing-box.",
+      "expected_result": "Plan показывает и устанавливает только разрешённый нужный sidecar; readiness не обещает работу без зависимости.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "INSTALL-02",
+      "group": "Компоненты и граф исполнения",
+      "implementation_stage": "PR-05",
+      "priority": "P0",
+      "test_level": "native-integration",
+      "title": "USQUE native TUN",
+      "setup_and_action": "Выбрать реализованный native-вариант на поддержанном ядре.",
+      "expected_result": "Нет лишней зависимости от SOCKS-sidecar; интерфейс/маршруты принадлежат RAZVILKA и проверены.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "INSTALL-03",
+      "group": "Компоненты и граф исполнения",
+      "implementation_stage": "PR-05",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Установка после первого согласия",
+      "setup_and_action": "Пустая система; разрешить точный набор необходимых компонентов в мастере.",
+      "expected_result": "Одна durable задача install→configure→check→apply; не требуется переход к неработающей общей вкладке.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "INSTALL-04",
+      "group": "Компоненты и граф исполнения",
+      "implementation_stage": "PR-05",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Штатный Sing-box sample server",
+      "setup_and_action": "Смоделировать успешный и частично неуспешный opkg install с packaged init.",
+      "expected_result": "Сохранена новая проверка владельца, ENABLED=no/sample не стартует; чужой init не изменён.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "INSTALL-05",
+      "group": "Компоненты и граф исполнения",
+      "implementation_stage": "PR-05",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Чужой компонент",
+      "setup_and_action": "Бинарник/init/rules уже принадлежат внешней установке.",
+      "expected_result": "Нет молчаливого takeover или остановки; план объясняет conflict и запрашивает отдельное действие.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "INSTALL-06",
+      "group": "Компоненты и граф исполнения",
+      "implementation_stage": "PR-05",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Нет места и несовместимый ABI",
+      "setup_and_action": "Недостаточный flash/RAM либо непригодный kernel/архитектура.",
+      "expected_result": "Отказ до активации, сохранено рабочее; не выбирается случайный бинарник с похожим именем.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "INSTALL-07",
+      "group": "Компоненты и граф исполнения",
+      "implementation_stage": "PR-05",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Изменилась сеть/политика при install",
+      "setup_and_action": "Загрузка завершилась, но перед активацией отозван consent или сменился config.",
+      "expected_result": "Скачанный файл не создаёт нового разрешения, применение отменено и ресурсы очищены.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "INSTALL-08",
+      "group": "Компоненты и граф исполнения",
+      "implementation_stage": "PR-05",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Версия файла против процесса",
+      "setup_and_action": "Заменить файл на диске при старом работающем процессе.",
+      "expected_result": "UI раздельно показывает installed/running identities; обновление не объявляется завершённым только по файлу.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UPDATE-01",
+      "group": "Доверенные автоматические обновления",
+      "implementation_stage": "PR-06",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Подпись и идентичность артефакта",
+      "setup_and_action": "Неверный signature/hash/architecture либо неоднозначный пакет.",
+      "expected_result": "Ничего из кандидата не исполняется; рабочая версия сохранена, ошибка типизирована.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UPDATE-02",
+      "group": "Доверенные автоматические обновления",
+      "implementation_stage": "PR-06",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Replay, expiry и ротация ключа",
+      "setup_and_action": "Старый sequence, иной digest той же версии, истёкший manifest и разрешённая key rotation.",
+      "expected_result": "Защита от отката сохранена, допустимая ротация проверяется старым trust root.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UPDATE-03",
+      "group": "Доверенные автоматические обновления",
+      "implementation_stage": "PR-06",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Окна и часы",
+      "setup_and_action": "Timezone/DST/полночь, просроченная ночь, clock rollback после boot.",
+      "expected_result": "Нет неожиданной дневной установки; подписанные новые данные не доверяются при недостоверном времени.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UPDATE-04",
+      "group": "Доверенные автоматические обновления",
+      "implementation_stage": "PR-06",
+      "priority": "P0",
+      "test_level": "native-integration",
+      "title": "Не стартует новое приложение",
+      "setup_and_action": "После активации новая RAZVILKA не открывает панель или зависает.",
+      "expected_result": "Независимый trusted helper возвращает полный старый комплект; новая панель не требуется для rollback.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UPDATE-05",
+      "group": "Доверенные автоматические обновления",
+      "implementation_stage": "PR-06",
+      "priority": "P0",
+      "test_level": "native-integration",
+      "title": "Смена зависимости opkg",
+      "setup_and_action": "Обновление engine изменяет зависимую библиотеку и ломает старый компонент.",
+      "expected_result": "Проверенный rollback возвращает совместимый граф, а не только один старый бинарник.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UPDATE-06",
+      "group": "Доверенные автоматические обновления",
+      "implementation_stage": "PR-06",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Crash на каждой фазе",
+      "setup_and_action": "fault injection после snapshot/stage/activate/readback/commit.",
+      "expected_result": "Однозначное восстановление журнала; нет double install или принятия старого proof.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UPDATE-07",
+      "group": "Доверенные автоматические обновления",
+      "implementation_stage": "PR-06",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Карантин неудачного выпуска",
+      "setup_and_action": "Кандидат стабильно проваливает postcheck в нескольких окнах.",
+      "expected_result": "Не устанавливается каждую ночь снова; quarantine digest и причина сохраняются после restart.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UPDATE-08",
+      "group": "Доверенные автоматические обновления",
+      "implementation_stage": "PR-06",
+      "priority": "P0",
+      "test_level": "integration",
+      "title": "Старый backup и личные файлы",
+      "setup_and_action": "Восстановить backup старой версии после более нового trust receipt.",
+      "expected_result": "Не теряется security highwater; личные стратегии/keys/catalog сохранены, несовместимая схема явно блокируется.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "NFQ-01",
+      "group": "Первый запуск и адаптивные стратегии",
+      "implementation_stage": "PR-07/08",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "Мастер заканчивается live-планом",
+      "setup_and_action": "Выбрать два штатных сервиса, client scope и поддержанный режим.",
+      "expected_result": "После одного подтверждения выполняются native validation и разрешённый Apply; не требуется вручную открывать второй редактор.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "NFQ-02",
+      "group": "Первый запуск и адаптивные стратегии",
+      "implementation_stage": "PR-07/08",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "MODE_LIST и MODE_AUTO",
+      "setup_and_action": "Переключить режимы с/без согласия на обнаружение новых доменов.",
+      "expected_result": "Это отдельное разрешение; untouched поля/list/exclude сохранены; MODE_ALL не включается скрыто.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "NFQ-03",
+      "group": "Первый запуск и адаптивные стратегии",
+      "implementation_stage": "PR-07/08",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Свой сайт и общий домен",
+      "setup_and_action": "Добавить сайт, общий домен двух сервисов, потом удалить один сервис.",
+      "expected_result": "Удаляется только ненужный owned слой; общий домен и чужие исключения сохранены.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "NFQ-04",
+      "group": "Первый запуск и адаптивные стратегии",
+      "implementation_stage": "PR-07/08",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "Стратегия A перестала работать",
+      "setup_and_action": "Сеть/исполнитель исправны, сервисный отказ; совместимая B работает.",
+      "expected_result": "Ограниченный подбор, локальный proof, scoped apply/postcheck, сохранение B как LKG.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "NFQ-05",
+      "group": "Первый запуск и адаптивные стратегии",
+      "implementation_stage": "PR-07/08",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "Кандидат B ломает применение",
+      "setup_and_action": "B прошёл canary, затем fail при общей активации.",
+      "expected_result": "Возвращены старые аргументы/resources/rules; не теряются personal стратегии; ошибка не замаскирована PASS.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "NFQ-06",
+      "group": "Первый запуск и адаптивные стратегии",
+      "implementation_stage": "PR-07/08",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Неподдержанная Lua/blob",
+      "setup_and_action": "Пакет с неверной версией/capability/hash ресурса или shell payload.",
+      "expected_result": "Кандидат не исполняется; подпись не обходит локальную валидацию и ограничения.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "NFQ-07",
+      "group": "Первый запуск и адаптивные стратегии",
+      "implementation_stage": "PR-07/08",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Обновление пакета и restart",
+      "setup_and_action": "Обновить stock/community, имея user и frozen LKG.",
+      "expected_result": "Личные данные и активные refs сохранены; порядок стадий не переупорядочен; proof свежести перепроверяется.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "NFQ-08",
+      "group": "Первый запуск и адаптивные стратегии",
+      "implementation_stage": "PR-07/08",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "Discord/YouTube функции",
+      "setup_and_action": "Web доступен, voice/QUIC или видео не работает.",
+      "expected_result": "Отдельные результаты; web PASS не утверждает работоспособность голоса/потока.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "DNS-01",
+      "group": "DNS, адреса и фактический путь",
+      "implementation_stage": "PR-09",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Один необязательный NXDOMAIN",
+      "setup_and_action": "Другие домены поменяли IP, один возвращает подтверждённый NXDOMAIN.",
+      "expected_result": "Обновлены только подтверждённые записи, negativeTTL учтён; весь набор не заморожен одним доменом.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "DNS-02",
+      "group": "DNS, адреса и фактический путь",
+      "implementation_stage": "PR-09",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Временный timeout и grace",
+      "setup_and_action": "Один RR временно не получен, прежний известен.",
+      "expected_result": "Прежнее значение сохраняется только на ограниченный срок с provenance/degraded, не бесконечно.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "DNS-03",
+      "group": "DNS, адреса и фактический путь",
+      "implementation_stage": "PR-09",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "DNS→точный IP→TLS",
+      "setup_and_action": "Два резолвера возвращают разные адреса, исходное имя одно.",
+      "expected_result": "Проверяется именно выбранный IP с исходными SNI/Host и сертификатом, без второго скрытого lookup.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "DNS-04",
+      "group": "DNS, адреса и фактический путь",
+      "implementation_stage": "PR-09",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Непубличный смешанный ответ",
+      "setup_and_action": "DNS возвращает public и private/loopback либо rebinding.",
+      "expected_result": "Для публичного профиля нет применения опасного ответа; private ресурс только отдельной разрешённой политикой.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "DNS-05",
+      "group": "DNS, адреса и фактический путь",
+      "implementation_stage": "PR-09",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "Endpoint изменился",
+      "setup_and_action": "Сменить адрес доменного endpoint; отдельно дать старую ссылку с literal IP.",
+      "expected_result": "Первый заново проверяется; второй не угадывается. UUID/pin смена создаёт новую identity без старого PASS.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "DNS-06",
+      "group": "DNS, адреса и фактический путь",
+      "implementation_stage": "PR-09",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "Кэш и shared domain",
+      "setup_and_action": "Новый DNS применён, клиент ещё использует старый адрес; domain общий двум сервисам.",
+      "expected_result": "Есть pending_cache_convergence и точный readback; общие правила не перетёрты, бесконечных переключений нет.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "DNS-07",
+      "group": "DNS, адреса и фактический путь",
+      "implementation_stage": "PR-09",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Bootstrap loop/private resolver",
+      "setup_and_action": "DNS/подписка завязаны на ещё не поднятый туннель либо private resolver блокируется собственным правилом.",
+      "expected_result": "Граф зависимости/route conflict выявлен до Apply; защищённый трафик не уходит direct скрытно.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "DNS-08",
+      "group": "DNS, адреса и фактический путь",
+      "implementation_stage": "PR-09",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "IPv4/IPv6 и устройства",
+      "setup_and_action": "Один разрешённый клиент, второй исключённый, A и AAAA.",
+      "expected_result": "Фактический DNS+route scope совпадает с consent; нет необъявленного обхода через IPv6.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "USQUE-01",
+      "group": "USQUE, WARP и AmneziaWG",
+      "implementation_stage": "PR-10",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "Оригинальный USQUE отдельно от пакета",
+      "setup_and_action": "Поставить pinned upstream в отдельный owned путь, старый пакет оставить.",
+      "expected_result": "Бинарник не перезаписан молча; исполнение и rollback привязаны к точному hash и CLI.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "USQUE-02",
+      "group": "USQUE, WARP и AmneziaWG",
+      "implementation_stage": "PR-10",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "H3 отказал, H2 передаёт данные",
+      "setup_and_action": "Контролируемая блокировка QUIC при разрешённом H2.",
+      "expected_result": "Проверка, запуск, proof и readback используют один H2 endpoint/args; происходит разрешённое восстановление.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "USQUE-03",
+      "group": "USQUE, WARP и AmneziaWG",
+      "implementation_stage": "PR-10",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "TCP443 открыт, H2 не передаёт",
+      "setup_and_action": "Порт H2 доступен, но туннельный обмен отсутствует.",
+      "expected_result": "Нет PASS по connect; классифицирован транспортный/туннельный отказ.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "USQUE-04",
+      "group": "USQUE, WARP и AmneziaWG",
+      "implementation_stage": "PR-10",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "Неверный ключ сервера",
+      "setup_and_action": "Поменять cert pin/серверный ключ в кандидате.",
+      "expected_result": "Нет insecure fallback; кандидат отвергнут, рабочие ключи и старый путь сохранены.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "USQUE-05",
+      "group": "USQUE, WARP и AmneziaWG",
+      "implementation_stage": "PR-10",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Enroll против register",
+      "setup_and_action": "Обновить параметры существующего аккаунта и отдельно запросить новый.",
+      "expected_result": "Разные операции/разрешения; запись в candidate, не поверх единственного рабочего файла.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "USQUE-06",
+      "group": "USQUE, WARP и AmneziaWG",
+      "implementation_stage": "PR-10",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Неопределённая регистрация и reboot",
+      "setup_and_action": "Cloudflare ответ потерян после запроса, затем перезапуск.",
+      "expected_result": "Попытка учтена до запроса, лимит durable; нет слепой новой регистрации.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "USQUE-07",
+      "group": "USQUE, WARP и AmneziaWG",
+      "implementation_stage": "PR-10",
+      "priority": "P1",
+      "test_level": "integration",
+      "title": "Порог WARP и выбранные черновики",
+      "setup_and_action": "Один реально применённый сервис, в черновике три; порог два.",
+      "expected_result": "Guide и worker используют applied count; порог объяснён, не уменьшен скрытно.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "USQUE-08",
+      "group": "USQUE, WARP и AmneziaWG",
+      "implementation_stage": "PR-10",
+      "priority": "P1",
+      "test_level": "native-integration",
+      "title": "AWG module installed/running",
+      "setup_and_action": "На диске новая версия, загружен старый модуль либо несовместим ABI.",
+      "expected_result": "Неподтверждённые features не включаются; reboot отдельно разрешён; WARP не выдаётся за AWG3 peer.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "MH-01",
+      "group": "Нативные Mihomo и HEV",
+      "implementation_stage": "PR-11",
+      "priority": "P2",
+      "test_level": "native-integration",
+      "title": "Mihomo native validation",
+      "setup_and_action": "Сгенерировать поддержанные VLESS/Reality/WS/gRPC/HY2/TUIC/SS профили.",
+      "expected_result": "Pinned core валидирует их; неподдержанное поле не теряется незаметно.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "MH-02",
+      "group": "Нативные Mihomo и HEV",
+      "implementation_stage": "PR-11",
+      "priority": "P2",
+      "test_level": "native-integration",
+      "title": "Побочные загрузки YAML",
+      "setup_and_action": "Подать чужой YAML с provider/UI/geodata/DNS/controller.",
+      "expected_result": "Нет произвольной сети/скриптов во время validation; используется ограниченная owned-конфигурация.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "MH-03",
+      "group": "Нативные Mihomo и HEV",
+      "implementation_stage": "PR-11",
+      "priority": "P2",
+      "test_level": "native-integration",
+      "title": "Mihomo scoped маршрут",
+      "setup_and_action": "NodeStore узел → Mihomo loopback → общий dataplane → выбранный клиент.",
+      "expected_result": "Протокол/egress/сервис/устройства подтверждены; второе независимое хранилище/URLTest не управляет маршрутом.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "MH-04",
+      "group": "Нативные Mihomo и HEV",
+      "implementation_stage": "PR-11",
+      "priority": "P2",
+      "test_level": "native-integration",
+      "title": "HEV foreground lifecycle",
+      "setup_and_action": "Start/Stop/Cancel при локальном SOCKS и ограниченной конфигурации.",
+      "expected_result": "Процесс и TUN принадлежат job; нет daemon/scripts/mapdns, завершение и очистка подтверждены.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "MH-05",
+      "group": "Нативные Mihomo и HEV",
+      "implementation_stage": "PR-11",
+      "priority": "P2",
+      "test_level": "native-integration",
+      "title": "HEV UDP/MTU",
+      "setup_and_action": "TCP/UDP, SOCKS UDP ASSOCIATE, большие пакеты и разные MTU.",
+      "expected_result": "Реальная передача по нужному пути; нет PASS от локального ICMP echo.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "MH-06",
+      "group": "Нативные Mihomo и HEV",
+      "implementation_stage": "PR-11",
+      "priority": "P2",
+      "test_level": "integration",
+      "title": "Миграция sidecar",
+      "setup_and_action": "Старый snapshot Sing-box, включён HEV и затем сбой.",
+      "expected_result": "Есть явная миграционная транзакция; snapshot не присваивается другому исполнителю без проверки.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "MH-07",
+      "group": "Нативные Mihomo и HEV",
+      "implementation_stage": "PR-11",
+      "priority": "P2",
+      "test_level": "native-integration",
+      "title": "Бюджет памяти и FD",
+      "setup_and_action": "Одинаковые server/profile/client, сравнить старый sidecar и HEV при нагрузке.",
+      "expected_result": "Сохранены измерения ресурсов и reconnect; превосходство не заявляется по одной компиляции.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "MH-08",
+      "group": "Нативные Mihomo и HEV",
+      "implementation_stage": "PR-11",
+      "priority": "P2",
+      "test_level": "integration",
+      "title": "Старые route IDs",
+      "setup_and_action": "Обновить схему engine/node/sidecar при существующих sing-box:node-* назначениях.",
+      "expected_result": "Миграция обратима; старый идентификатор не переносит proof на другой исполнитель.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "COMM-01",
+      "group": "Каталог стратегий и коллективные данные",
+      "implementation_stage": "PR-12",
+      "priority": "P2",
+      "test_level": "integration",
+      "title": "Offline catalogue",
+      "setup_and_action": "Сохранённый LKG, удалённый GitHub/ingest недоступен.",
+      "expected_result": "Рабочие пути не зависят от облака; локальный поиск продолжается с прежними разрешениями.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "COMM-02",
+      "group": "Каталог стратегий и коллективные данные",
+      "implementation_stage": "PR-12",
+      "priority": "P2",
+      "test_level": "integration",
+      "title": "Повреждённая/старая подпись",
+      "setup_and_action": "Подмена bytes, старый sequence, другой digest под тем же номером, expired.",
+      "expected_result": "Пакет отвергнут без исполнения; старый допустимый каталог не уничтожен.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "COMM-03",
+      "group": "Каталог стратегий и коллективные данные",
+      "implementation_stage": "PR-12",
+      "priority": "P2",
+      "test_level": "integration",
+      "title": "Trust после backup rollback",
+      "setup_and_action": "Восстановить старую резервную копию с меньшим highwater.",
+      "expected_result": "Обновление root/highwater не сбрасывается автоматически; новые права не возникают.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "COMM-04",
+      "group": "Каталог стратегий и коллективные данные",
+      "implementation_stage": "PR-12",
+      "priority": "P2",
+      "test_level": "integration",
+      "title": "Личные стратегии и пакет",
+      "setup_and_action": "Новая stock/community версия при изменённой пользователем стратегии.",
+      "expected_result": "User слой не перезаписан; новый вариант candidate, selected/frozen/rollback refs сохранены.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "COMM-05",
+      "group": "Каталог стратегий и коллективные данные",
+      "implementation_stage": "PR-12",
+      "priority": "P2",
+      "test_level": "browser-integration",
+      "title": "Согласия download/upload",
+      "setup_and_action": "Разрешить получение, запретить отправку; потом явно открыть share preview.",
+      "expected_result": "Нет сетевой отправки по общей галочке; пользователь видит точные отправляемые поля.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "COMM-06",
+      "group": "Каталог стратегий и коллективные данные",
+      "implementation_stage": "PR-12",
+      "priority": "P2",
+      "test_level": "integration",
+      "title": "Приватный домен/секрет в отчёте",
+      "setup_and_action": "Пользовательский сервис, token URL, UUID или SNI с личным именем.",
+      "expected_result": "Автоматический публичный отчёт не содержит секретов; ручной экспорт требует просмотра, hash не считается анонимизацией.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "COMM-07",
+      "group": "Каталог стратегий и коллективные данные",
+      "implementation_stage": "PR-12",
+      "priority": "P2",
+      "test_level": "integration",
+      "title": "Накрутка и повтор отчётов",
+      "setup_and_action": "Тысячи дублей от одного клиента/подписанного installation ID.",
+      "expected_result": "Dedup/rate limit работают; popularity не даёт Apply и не доказывает независимость клиентов.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "COMM-08",
+      "group": "Каталог стратегий и коллективные данные",
+      "implementation_stage": "PR-12",
+      "priority": "P2",
+      "test_level": "native-integration",
+      "title": "Рейтинг против local proof",
+      "setup_and_action": "Популярный recipe не проходит локальный тест; редкий LKG работает.",
+      "expected_result": "Здоровый LKG сохранён; рейтинг влияет только на очередь, не заменяет canary.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UI-01",
+      "group": "Интерфейс и реальные API",
+      "implementation_stage": "PR-13",
+      "priority": "P1",
+      "test_level": "browser-integration",
+      "title": "Operational Auto",
+      "setup_and_action": "Сочетания setup/consent/runtime/источник/резерв/blocked.",
+      "expected_result": "Различаются включён, готов, проверяет, ищет, нет резерва, требуется восстановление; нет общей ложной зелёной галочки.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UI-02",
+      "group": "Интерфейс и реальные API",
+      "implementation_stage": "PR-13",
+      "priority": "P1",
+      "test_level": "browser-integration",
+      "title": "Вся партия и удаление",
+      "setup_and_action": "Фильтр/страница скрывают часть каталога; запустить check-all и delete preview.",
+      "expected_result": "Работает полный server snapshot; protected refs и другие протоколы сохранены, счётчики не равны только видимым карточкам.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UI-03",
+      "group": "Интерфейс и реальные API",
+      "implementation_stage": "PR-13",
+      "priority": "P1",
+      "test_level": "browser-integration",
+      "title": "GitHub/file/paste",
+      "setup_and_action": "Ошибка источника, большой файл, новое содержимое, отмена, expired review.",
+      "expected_result": "Нет старого содержимого под новым именем; hash mismatch блокирует запись; файл/текст доступен при отказе GitHub.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UI-04",
+      "group": "Интерфейс и реальные API",
+      "implementation_stage": "PR-13",
+      "priority": "P1",
+      "test_level": "browser-integration",
+      "title": "Установка и обновление кнопками",
+      "setup_and_action": "Компонент отсутствует/установлен/внешний/несовместим, API busy.",
+      "expected_result": "Показаны точный plan/job/причина; кнопка не ограничивается переходом на общий экран.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UI-05",
+      "group": "Интерфейс и реальные API",
+      "implementation_stage": "PR-13",
+      "priority": "P1",
+      "test_level": "browser-integration",
+      "title": "Смена сессии",
+      "setup_and_action": "Поздний401/JSON после logout/login, активная операция другой вкладки.",
+      "expected_result": "Старый ответ не отменяет новую сессию и не повторяет изменение; чувствительные данные очищены.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UI-06",
+      "group": "Интерфейс и реальные API",
+      "implementation_stage": "PR-13",
+      "priority": "P1",
+      "test_level": "browser-integration",
+      "title": "Потерянный ответ записи",
+      "setup_and_action": "POST мог завершиться, ответ оборван.",
+      "expected_result": "UI читает состояние той же операции; не отправляет слепо второй POST.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UI-07",
+      "group": "Интерфейс и реальные API",
+      "implementation_stage": "PR-13",
+      "priority": "P1",
+      "test_level": "browser-integration",
+      "title": "Темы, размеры, ввод",
+      "setup_and_action": "360/768/1440/1920, две темы, длинные имена, клавиатура, периодический refresh.",
+      "expected_result": "Нет horizontal overflow/потери фокуса/черновика; главная и сервисы сохраняют разные назначения; один WARP manager.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "UI-08",
+      "group": "Интерфейс и реальные API",
+      "implementation_stage": "PR-13",
+      "priority": "P1",
+      "test_level": "browser-integration",
+      "title": "Фактическая диагностика",
+      "setup_and_action": "Нет conntrack, stale proof, timeout источника, sample HTML.",
+      "expected_result": "Отсутствие данных не ноль; HTTP200 API не service PASS; адрес/регион помечены по источнику измерения.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "HIL-01",
+      "group": "Аппаратная приёмка и выпуск",
+      "implementation_stage": "PR-14",
+      "priority": "P0",
+      "test_level": "hardware",
+      "title": "Точный релизный артефакт",
+      "setup_and_action": "Установить собранный кандидат штатно; сверить tag/source/hash/размер/runtime.",
+      "expected_result": "Исполняется именно проверяемый artifact; учётные данные, стратегии и источники сохранены.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "HIL-02",
+      "group": "Аппаратная приёмка и выпуск",
+      "implementation_stage": "PR-14",
+      "priority": "P0",
+      "test_level": "hardware",
+      "title": "Failover с закрытой панелью",
+      "setup_and_action": "A работает; закрыть браузер, отключить A, B неисправен при Apply, C исправен.",
+      "expected_result": "Самостоятельное восстановление с метками времени, свежими потоками/counters; не только ручное A/B.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "HIL-03",
+      "group": "Аппаратная приёмка и выпуск",
+      "implementation_stage": "PR-14",
+      "priority": "P0",
+      "test_level": "hardware",
+      "title": "Два физических клиента",
+      "setup_and_action": "Одно устройство включено, другое исключено; две разные сервисные политики.",
+      "expected_result": "Первое действительно использует обход; второе сохраняет baseline, без утечки через IPv6.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "HIL-04",
+      "group": "Аппаратная приёмка и выпуск",
+      "implementation_stage": "PR-14",
+      "priority": "P0",
+      "test_level": "hardware",
+      "title": "Полная перезагрузка и WAN",
+      "setup_and_action": "Реально reboot роутера и отдельно WAN reconnect при разных этапах job.",
+      "expected_result": "Восстановлены допустимые пути/задачи; нет переноса старого proof, двойного процесса или отложенной навсегда очереди.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "HIL-05",
+      "group": "Аппаратная приёмка и выпуск",
+      "implementation_stage": "PR-14",
+      "priority": "P0",
+      "test_level": "hardware",
+      "title": "Потеря собственных firewall объектов",
+      "setup_and_action": "На отдельном стенде удалить только доказанно принадлежащую цепочку; затем проверить partial/foreign.",
+      "expected_result": "Полная loss восстанавливается; чужое/частичное не flush; baseline иных правил/клиентов сохранён.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "HIL-06",
+      "group": "Аппаратная приёмка и выпуск",
+      "implementation_stage": "PR-14",
+      "priority": "P0",
+      "test_level": "hardware",
+      "title": "Неудачное ночное обновление",
+      "setup_and_action": "Контролируемый новый engine/app не проходит startup/postcheck.",
+      "expected_result": "Независимый rollback возвращает рабочий комплект и клиентский доступ, quarantine исключает следующую слепую установку.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "HIL-07",
+      "group": "Аппаратная приёмка и выпуск",
+      "implementation_stage": "PR-14",
+      "priority": "P0",
+      "test_level": "hardware",
+      "title": "MIPS/ARM64 ограничения",
+      "setup_and_action": "Поддержанные модели, memory pressure, UDP/IPv6, много сервисов и источников.",
+      "expected_result": "Ресурсные бюджеты соблюдены; no OOM/FD leak; неподдержанные архитектуры не объявлены проверенными.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    },
+    {
+      "id": "HIL-08",
+      "group": "Аппаратная приёмка и выпуск",
+      "implementation_stage": "PR-14",
+      "priority": "P0",
+      "test_level": "hardware",
+      "title": "Soak24–72часа и финальная очистка",
+      "setup_and_action": "Закрытый браузер, плановые/аварийные события, итоговый Stop/SafeMode.",
+      "expected_result": "Сохранены длительность outage/переключения/RSS/CPU/FD/flash writes; baseline восстановлен, команды снимков имеют exit0.",
+      "status": "planned",
+      "result": null,
+      "executed_at": null,
+      "tested_commit": null,
+      "evidence_required": [
+        "Код теста или команда и фактический exit status",
+        "Точная ревизия и версия окружения",
+        "Очищенные от секретов журнал и проверяемые assertions"
+      ],
+      "note": "Это сценарий будущей приёмки или сохранения регрессии; в данном аудите не выполнялся."
+    }
+  ]
+}

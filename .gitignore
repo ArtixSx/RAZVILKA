@@ -1,6 +1,7 @@
 # Build output
 /dist/*
 !/dist/.gitkeep
+!/dist/README.md
 
 # Local runtime/test state
 *.log

@@ -36,6 +36,7 @@ Entware для перечисленных роутеров. Матрица Entwa
 Быстрая проверка готовности:
 
 ```sh
+export PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:$PATH
 test -d /opt && command -v opkg
 uname -m
 opkg print-architecture
@@ -45,10 +46,11 @@ df -h /opt
 Если `opkg` не найден, завершите настройку Entware. Если появляется только
 приглашение `(config)>`, это другая консоль — подключитесь к SSH-серверу Entware.
 
-## Установка в две команды
+## Установка
 
 ```sh
-opkg update && opkg install curl ca-certificates ca-bundle
+export PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:$PATH
+opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 ```
 
 ```sh
@@ -79,6 +81,7 @@ sh /opt/tmp/razvilka-setup.sh
 | Пакет / инструмент | Зачем нужен |
 | --- | --- |
 | `curl` | HTTPS-загрузка установщика, выпусков и проверка HTTP |
+| `wget-ssl` | Загрузка HTTPS-каталогов через `opkg`, включая NFQWS2 и WARP |
 | `ca-certificates`, `ca-bundle` | Проверка сертификатов HTTPS |
 | `coreutils-sha256sum` | Сверка контрольных сумм |
 | `tar`, `gzip` | Распаковка выпуска и снимки для отката |
@@ -91,7 +94,7 @@ Bootstrap сам подготавливает недостающие базов�
 подготовки окружения:
 
 ```sh
-opkg update && opkg install curl ca-certificates ca-bundle coreutils-sha256sum coreutils-mktemp coreutils-readlink tar gzip busybox ip-full
+opkg update && opkg install curl wget-ssl ca-certificates ca-bundle coreutils-sha256sum coreutils-mktemp coreutils-readlink tar gzip busybox ip-full
 ```
 
 Если нужен обход с правилами iptables и инструмент отсутствует:
@@ -107,14 +110,16 @@ Go для работы панели не обязательны.
 
 ## Обновление
 
-Повторите вторую команду установки. Получится последний стабильный выпуск,
+Повторите скачивание и запуск установщика. Получится последний стабильный выпуск,
 существующие настройки сохранятся. Установщик печатает путь созданного снимка.
 
 Для конкретной версии скачайте bootstrap без запуска и укажите нужный тег:
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh
-RAZVILKA_VERSION=v0.18.6 sh /opt/tmp/razvilka-setup.sh
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.18.7 sh /opt/tmp/razvilka-setup.sh
 ```
 
 Нужен именно опубликованный тег из [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
@@ -180,6 +185,23 @@ sh scripts/rollback-entware.sh /opt/var/lib/razvilka/update-backups/<снимо�
 HTTPS-загрузки проверьте часы роутера и пакеты сертификатов. Если недоступен GitHub,
 воспользуйтесь ручной установкой из проверенного архива. Не отключайте проверку TLS
 в установочной команде.
+
+## Если каталоги пакетов не обновляются
+
+Сообщение `wget: not an http or ftp url` для адреса `https://` означает, что
+`opkg` использует загрузчик без HTTPS. Это возможно после новой установки Entware.
+Когда основной каталог Entware уже получен, установите HTTPS-загрузчик и повторите
+обновление:
+
+```sh
+export PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:$PATH
+opkg install wget-ssl ca-certificates ca-bundle && opkg update
+```
+
+Затем повторите подготовку утилит и установку панели. Если пакет не найден, сначала
+проверьте доступность основного каталога Entware. Текущий установщик тоже распознаёт
+эту ситуацию: добавляет `wget-ssl` и повторяет загрузку каталогов. В панели нажмите
+«Проверить версии»; успешная проверка уберёт отметку об устаревших данных.
 
 ## Границы поддержки
 

@@ -1,0 +1,80 @@
+{
+  "audit_date": "2026-09-20",
+  "repository": "ArtixSx/RAZVILKA",
+  "main_commit": "d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d",
+  "release_tag": "v0.18.5",
+  "release_source_commit": "39ab4457fe6fc96437b31217b203a136c27a8a0d",
+  "annotated_tag_object": "800ee60f4a48ef9ae1d1e8807d09b5b9836437ff",
+  "ext5_base": "3ab717ed9beb6ecb33117a182392466986132482",
+  "compare_ext5_main": {
+    "ahead_by": 8,
+    "behind_by": 0,
+    "ext5_is_ancestor": true
+  },
+  "compare_release_main": {
+    "ahead_by": 1,
+    "production_code_changes": false,
+    "description": "Только документация/README/CHANGELOG"
+  },
+  "checked_ci": [
+    {
+      "run_id": 35470707377,
+      "job_id": 105971028246,
+      "job": "build-release",
+      "conclusion": "success",
+      "evidence_level": "GitHub steps/status read, not a local rerun"
+    },
+    {
+      "run_id": 35471739107,
+      "job_id": 105973798196,
+      "job": "test",
+      "conclusion": "success",
+      "evidence_level": "GitHub steps/status read, not a local rerun"
+    }
+  ],
+  "performed": [
+    "GitHub refs, latest release and annotated tag dereference",
+    "Compare EXT5 to current main and release to main",
+    "Read selected current source files, status and audit documents",
+    "Read historical EXT5 handoff to remove stale tasks",
+    "Inspect current scripts/check.sh",
+    "Create and validate Codex documentation/matrix archive"
+  ],
+  "not_performed": [
+    "Full local current-main Go/race/vet/build tests",
+    "Independent verification of release archive attestation or hashes",
+    "New authenticated browser E2E",
+    "New native external engine traffic tests",
+    "Router changes, HIL or soak test",
+    "Any repository mutation or publication"
+  ],
+  "local_download": {
+    "url": "https://codeload.github.com/ArtixSx/RAZVILKA/tar.gz/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d",
+    "result": "failed",
+    "reason": "Could not resolve host: codeload.github.com"
+  },
+  "hardware_evidence": "По опубликованному CURRENT_STATUS_RU.md: точный39ab445 ARM64 installed, manually C→A, app restart, cleanup. Не новые измерения данного аудита; не доказательство automatic fault-triggered failover/reboot/second physical client/24–72h.",
+  "future_scenarios": {
+    "count": 104,
+    "status": "planned-not-executed"
+  },
+  "important_sources": [
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/docs/CURRENT_STATUS_RU.md",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/docs/EXT5_REVIEW_2026-09-19_RU.md",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/docs/ROADMAP_2026-08-30_RU.md",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/app/autonomy_worker.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/providerfeed/parse.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/app/node_bulk.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/app/reconciler.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/app/autonomy_maintenance.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/app/autonomy_api.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/components/components.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/cmd/razvilka/main.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/dataplane/proxy.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/dataplane/address_refresh.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/internal/app/nfqws2_starter.go",
+    "https://github.com/ArtixSx/RAZVILKA/blob/d8355a92633c28bdd0f9b07e1e5bcf35abab6a6d/scripts/check.sh",
+    "https://github.com/ArtixSx/RAZVILKA/actions/runs/35470707377",
+    "https://github.com/ArtixSx/RAZVILKA/actions/runs/35471739107"
+  ]
+}

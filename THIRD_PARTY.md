@@ -1,5 +1,11 @@
 # Third-party components and data sources
 
+Здесь перечислены сторонние компоненты, источники данных и проекты,
+использованные как ориентиры. Упоминание проекта не означает, что его код
+включён в RAZVILKA: состав и условия указаны ниже. Лицензии и авторство
+сохраняются за их владельцами. Настоящий список не заменяет
+[инструкцию установки](README.md) и [статус совместимости](docs/CURRENT_STATUS_RU.md).
+
 RAZVILKA references the following engines and external datasets. Their own licenses and trademarks remain applicable.
 
 - nfqws2-keenetic / zapret2 — anti-DPI engine/integration.
