@@ -41,7 +41,11 @@ func TestNamedUpgradeMustAdvanceBeforeReceipt(t *testing.T) {
 	for _, version := range []string{"1.14.1", "1.13.3", "1.12.0"} {
 		t.Run(version, func(t *testing.T) {
 			r := &preciseUpdateRunner{before: "1.13.3", after: version}
-			m := &Manager{Opkg: "opkg", RepoDir: t.TempDir(), StateDir: t.TempDir(), Runner: r}
+			initDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(initDir, singBoxInitName), []byte(singBoxInitFixture), 0755); err != nil {
+				t.Fatal(err)
+			}
+			m := &Manager{Opkg: "opkg", RepoDir: t.TempDir(), StateDir: t.TempDir(), InitDir: initDir, Runner: r}
 			result, err := m.Apply(context.Background(), "sing-box")
 			if (err == nil) != (version == "1.14.1") || result.OK != (version == "1.14.1") {
 				t.Fatal(result, err)

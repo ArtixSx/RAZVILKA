@@ -116,7 +116,7 @@ jobs:
             RAZVILKA-entware.tar.gz
             RAZVILKA-entware.tar.gz.sha256
 
-      - name: Publish GitHub Release
+      - name: Prepare draft GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -126,6 +126,9 @@ jobs:
             NOTES_OPTION="--notes-file=docs/releases/${VERSION}.md"
           fi
           RELEASE_OPTIONS=(--verify-tag)
+          # Promote only after the exact attached artifacts pass router checks.
+          # A tag/build alone must not replace the release used by installers.
+          RELEASE_OPTIONS+=(--draft --latest=false)
           if [[ "$VERSION" == *-* ]]; then
             RELEASE_OPTIONS+=(--prerelease --latest=false)
           fi

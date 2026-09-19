@@ -1,16 +1,36 @@
 # Changelog
 
-## Unreleased — EXT5 review
+The release workflow stages a draft; promotion follows verification of the exact attached router artifacts.
 
-- Integrate the REPAIR2/UPDATE4 setup, import, subscription refill and update channels,
-  plus manual strategy packs and passive Mihomo/HEV profiles.
-- Preserve wizard selections, refresh saved settings correctly and prevent stale
-  file content from being previewed under a newly selected filename.
-- Replace technical Mihomo previews with readable summaries and clear stale login messages.
-- Refuse lossy Mihomo exports and invalid server addresses; honor HEV cancellation.
-- Fix strategy signatures, enforce export sizes and validate keys.
-- Yield connection checks to recovery between nodes, retain fatal cleanup diagnostics
-  and prioritize initial recovery. Experimental executors still require hardware testing.
+## 0.18.2 — Service setup, connection checks and configuration tools
+
+Release prepared; publication awaits the remaining router checks. Detailed
+[validation and limits](docs/EXT5_REVIEW_2026-09-19_RU.md) are tracked separately
+from the [short release notes](docs/releases/0.18.2.md).
+
+### Added
+
+- Autopilot setup with selected devices and services, permitted sources,
+  scheduled checks, subscription refill and stable/preview update channels.
+- Connection browsing with readable country names, node and service checks,
+  and selection of permitted fallback candidates.
+- Passive Mihomo configuration export, experimental HEV profile generation
+  and manual import/export of NFQWS2 strategy packs.
+
+### Fixed
+
+- Panel loading, complete multiline NFQWS2 editing and unnecessary password
+  minimum length restrictions.
+- Wizard selections and consent after catalog changes, saved-state readback,
+  stale login messages and stale content during file replacement.
+- Lossy Mihomo conversion, invalid server addresses, strategy signatures,
+  export size checks and signing-key validation.
+- Recovery admission between node checks, fatal cleanup diagnostics and
+  restoration of fully vanished owned firewall chains.
+
+On 19 September 2026, seven old prerelease entries were removed from Releases:
+0.18.1-rc.1/rc.2 and 0.18.2-rc.2 through rc.6. Git tags, source history and stable
+releases were retained. The entries below document those historical revisions.
 
 ## 0.18.2-rc.6 — Restore vanished owned firewall rules
 

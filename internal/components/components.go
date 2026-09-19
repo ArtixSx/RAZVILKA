@@ -89,6 +89,7 @@ type Manager struct {
 	Opkg     string
 	RepoDir  string
 	BinDir   string
+	InitDir  string
 	StateDir string
 	Arch     string
 	Client   *http.Client
@@ -99,7 +100,7 @@ type Manager struct {
 }
 
 func New() *Manager {
-	return &Manager{Opkg: findOpkg(), RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", StateDir: "/opt/var/lib/razvilka/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}}
+	return &Manager{Opkg: findOpkg(), RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", InitDir: "/opt/etc/init.d", StateDir: "/opt/var/lib/razvilka/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}}
 }
 
 func Specs() []Spec {
@@ -252,6 +253,17 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 	if beforeVersion != "" {
 		action = "update"
 	}
+	var singInit *singBoxInitGuard
+	if id == "sing-box" {
+		singInit, err = m.prepareSingBoxInit(beforeVersion != "")
+		if err != nil {
+			return Result{Component: id, Action: action}, fmt.Errorf("sing-box package autostart preflight: %w", err)
+		}
+		defer singInit.root.Close()
+		if err := singInit.checkWritable(); err != nil {
+			return Result{Component: id, Action: action}, fmt.Errorf("sing-box package autostart preflight: %w", err)
+		}
+	}
 	if err := m.ensureRepository(spec); err != nil {
 		return Result{}, err
 	}
@@ -269,6 +281,14 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 	text := strings.TrimSpace(string(out))
 	if len(text) > 8192 {
 		text = text[len(text)-8192:]
+	}
+	if singInit != nil {
+		// opkg may unpack files and still fail (or be canceled). Always disable
+		// a recognized package init before returning; never invoke its stop/start
+		// actions, which could kill unrelated or RAZVILKA-owned core processes.
+		if disableErr := singInit.disable(err == nil); disableErr != nil {
+			return Result{Component: id, Action: action, Output: text}, errors.Join(err, fmt.Errorf("sing-box package autostart could not be disabled: %w; installation is not verified", disableErr))
+		}
 	}
 	if err != nil {
 		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("opkg %s %s: %w", command, spec.Package, err)

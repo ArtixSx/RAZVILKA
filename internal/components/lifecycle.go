@@ -101,6 +101,16 @@ func (m *Manager) Plan(ctx context.Context, id, action string, refresh bool) (Pl
 	if len(spec.Dependencies) > 0 && action != "remove" {
 		plan.Warnings = append(plan.Warnings, PlanIssue{Code: "DEPENDENCIES", Message: "Сначала будут проверены зависимости: " + strings.Join(spec.Dependencies, ", ")})
 	}
+	if id == "sing-box" && action != "remove" {
+		guard, err := m.prepareSingBoxInit(view.Installed)
+		if err != nil {
+			plan.AddBlocker("PACKAGE_AUTOSTART_CONFLICT", "Штатный автозапуск Sing-box нельзя безопасно отключить", "Проверьте каталог init.d и нестандартные скрипты Sing-box. Чужие скрипты и процессы не будут изменены.")
+		} else {
+			guard.root.Close()
+		}
+		plan.Warnings = append(plan.Warnings, PlanIssue{Code: "MANAGED_RUNTIME_ONLY", Message: "Штатный автозапуск Sing-box будет отключён. Проверенные процессы запускает RAZVILKA при применении выбранного маршрута."})
+		plan.Steps[5].Summary = "Отключить штатный автозапуск Sing-box без остановки процессов; повторно проверить файл и установленную версию."
+	}
 	return plan, nil
 }
 

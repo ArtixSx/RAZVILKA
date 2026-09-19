@@ -11,8 +11,9 @@ No RAZVILKA cloud account is required.
 [Current status (RU)](docs/CURRENT_STATUS_RU.md) · [Changelog](CHANGELOG.md) ·
 [Report an issue](https://github.com/ArtixSx/RAZVILKA/issues)
 
-**Source: EXT5, `0.18.2-repair.5`; review is in progress.** This is a candidate,
-not a new stable release. The published stable channel still contains
+**Release `0.18.2`, based on EXT5, is being prepared.** Publication follows
+the remaining router checks; [verified results (RU)](docs/CURRENT_STATUS_RU.md)
+are tracked separately. The published stable channel still contains
 [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
 The installation command below downloads the stable release, not this source tree.
 
@@ -29,7 +30,7 @@ The installation command below downloads the stable release, not this source tre
 - Diagnostics, component versions, DNS response comparison and private
   backups. Dark appearance is the default.
 
-EXT5 also adds **Mihomo configuration export**, an **experimental HEV profile
+Version 0.18.2 also adds **Mihomo configuration export**, an **experimental HEV profile
 generator**, and **manual import/export of NFQWS2 strategy packs**. Mihomo and
 HEV are not yet available as complete managed routes; generating a file does
 not start them on the router. An imported strategy is a candidate requiring
@@ -60,15 +61,15 @@ and verifies startup. Supported binary targets are `arm64` (aarch64), `mipsle`
 (mipsel), `mips` and `amd64`. Install the required bypass components separately;
 their compatibility also depends on the router model and kernel.
 
-## First use of EXT5
+## First use of version 0.18.2
 
-These steps describe the current EXT5 candidate. Refer to the stable release's
-notes for the features included in that version.
+These steps describe the prepared 0.18.2 release. Refer to the published stable
+release's notes for the features included in that version.
 
 1. Open `http://192.168.1.1:8787` from the LAN, substituting your router's LAN
    address if different. Set your own username and password.
 2. Use the wizard to choose devices, services, available methods and sources.
-   A fresh EXT5 catalog contains six NFQWS2 groups; add other services separately.
+   A fresh 0.18.2 catalog contains six NFQWS2 groups; add other services separately.
 3. Configure a bypass component or import a connection, then check it against
    the intended service.
 4. Apply changes or authorize Autopilot for the selected scope. Safe Mode is

@@ -12,8 +12,9 @@ import (
 )
 
 type fakeRunner struct {
-	calls  [][]string
-	output map[string]string
+	calls        [][]string
+	output       map[string]string
+	afterInstall func() error
 }
 
 func TestNFQWSInstallCreatesOfficialRepositoryBeforeRefresh(t *testing.T) {
@@ -144,6 +145,11 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte
 			if installed[args[1]] == "" {
 				f.output["list-installed"] += args[1] + " - 1.0.0 - installed by test\n"
 			}
+			if f.afterInstall != nil {
+				if err := f.afterInstall(); err != nil {
+					return nil, err
+				}
+			}
 		}
 		if len(args) > 1 && key == "remove" {
 			lines := strings.Split(f.output["list-installed"], "\n")
@@ -183,7 +189,11 @@ func TestListVersionsAndUpdate(t *testing.T) {
 
 func TestApplyUsesFixedPackageAllowlist(t *testing.T) {
 	r := &fakeRunner{output: map[string]string{"install": "installed"}}
-	m := &Manager{Opkg: "/opt/bin/opkg", Runner: r}
+	initDir := t.TempDir()
+	r.afterInstall = func() error {
+		return os.WriteFile(filepath.Join(initDir, singBoxInitName), []byte(singBoxInitFixture), 0755)
+	}
+	m := &Manager{Opkg: "/opt/bin/opkg", InitDir: initDir, Runner: r}
 	if _, err := m.Apply(context.Background(), "../../evil"); err == nil {
 		t.Fatal("unknown component accepted")
 	}
