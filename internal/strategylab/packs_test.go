@@ -9,7 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -64,6 +67,139 @@ func TestPackSignedPrettyPayloadAndTamper(t *testing.T) {
 		if _, e := ReviewPack(bad.data, true, bad.keys, packTime); e == nil {
 			t.Fatal("signature accepted")
 		}
+	}
+}
+
+func TestPackSignatureCoversSerializedPayload(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// External JSON producers need not use Go's HTML escaping. Marshaling the
+	// signed envelope must not change the payload bytes after they are signed.
+	for _, name := range []string{"A & B", "<strategy>", "line\u2028separator", "paragraph\u2029separator"} {
+		t.Run(name, func(t *testing.T) {
+			payload := bytes.Replace(testPack(t, 1), []byte("One"), []byte(name), 1)
+			signed, err := SignPack(payload, "owner", priv, packTime)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ReviewPack(signed, true, map[string]ed25519.PublicKey{"owner": pub}, packTime); err != nil {
+				t.Fatalf("signed output cannot be verified: %v", err)
+			}
+		})
+	}
+}
+
+func TestPackExportAndSignRejectOversizeOutput(t *testing.T) {
+	m := packManager(t, "")
+	ids := make([]string, 0, 40)
+	argument := "--lua-desync=fake:host=" + strings.Repeat("a", 950)
+	for i := 0; i < 40; i++ {
+		c, err := m.AddCandidate("tcp-tls", "Strategy "+strconv.Itoa(i), strings.Repeat(argument+" ", 7), "expert")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, c.ID)
+	}
+	if data, err := m.ExportPack(ids); err == nil {
+		t.Fatalf("export returned an unreadable %d-byte pack", len(data))
+	}
+	// An unsigned payload can fit the input budget while its signed envelope
+	// exceeds it. A successful signer must always return verifiable output.
+	var p StrategyPack
+	if err := json.Unmarshal(testPack(t, 1), &p); err != nil {
+		t.Fatal(err)
+	}
+	p.Entries = nil
+	for _, c := range m.Snapshot().Candidates {
+		p.Entries = append(p.Entries, PackEntry{PoolID: c.PoolID, Name: c.Name, Arguments: c.Arguments})
+	}
+	for {
+		data, err := json.Marshal(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(data) <= MaxPackBytes {
+			break
+		}
+		p.Entries = p.Entries[:len(p.Entries)-1]
+	}
+	data, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Spaces within arguments remain valid and survive compacting the JSON.
+	p.Entries[0].Arguments += strings.Repeat(" ", MaxPackBytes-len(data))
+	data, err = json.Marshal(p)
+	if err != nil || len(data) != MaxPackBytes {
+		t.Fatalf("bad boundary fixture: %d %v", len(data), err)
+	}
+	if _, err := ReviewPack(data, false, nil, packTime); err != nil {
+		t.Fatalf("unsigned boundary payload must remain valid: %v", err)
+	}
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signed, err := SignPack(data, "owner", priv, packTime); err == nil {
+		t.Fatalf("signer returned an unreadable %d-byte envelope", len(signed))
+	}
+}
+
+func TestPackSignerRejectsInconsistentPrivateKey(t *testing.T) {
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key[ed25519.SeedSize] ^= 1
+	if _, err := SignPack(testPack(t, 1), "owner", key, packTime); err == nil {
+		t.Fatal("signed with a private key whose public half does not match its seed")
+	}
+}
+
+func TestPackExportRejectsUnusableClock(t *testing.T) {
+	for _, now := range []time.Time{{}, time.Unix(0, 0)} {
+		m := packManager(t, "")
+		v := mustPackImport(t, m, testPack(t, 1), false)
+		m.Now = func() time.Time { return now }
+		if _, err := m.ExportPack(v.CandidateIDs); err == nil {
+			t.Fatalf("export generated an invalid sequence at %s", now)
+		}
+	}
+}
+
+func TestPackConcurrentEquivocationCommitsOneReceipt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "strategies.json")
+	m := packManager(t, path)
+	packs := [][]byte{testPack(t, 3), bytes.Replace(testPack(t, 3), []byte("One"), []byte("Two"), 1)}
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	results := make(chan string, len(packs))
+	for _, data := range packs {
+		r, err := ReviewPack(data, false, nil, packTime)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if _, err := m.ImportPack(data, false, r.SHA256); err == nil {
+				results <- r.SHA256
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	if len(results) != 1 {
+		t.Fatalf("got %d successful imports for conflicting sequence", len(results))
+	}
+	winner := <-results
+	reopened := packManager(t, path)
+	if len(reopened.state.Candidates) != 1 || reopened.state.PackReceipts["personal:test-package"].SHA256 != winner {
+		t.Fatal("candidates and highwater receipt were not committed together")
 	}
 }
 func TestPackDurableHighwaterAndIdempotency(t *testing.T) {
@@ -201,6 +337,14 @@ func TestPackKeyLoaderRejectsUnsafeFiles(t *testing.T) {
 		t.Fatal(e)
 	}
 	keys, e := LoadPackKeys(path)
+	if runtime.GOOS == "windows" {
+		// Windows chmod does not enforce the POSIX owner-only trust policy.
+		// Keep the loader closed instead of relaxing the policy for this test.
+		if e == nil {
+			t.Fatal("accepted a trust file without POSIX write restrictions")
+		}
+		return
+	}
 	if e != nil || !bytes.Equal(keys["owner"], pub) {
 		t.Fatal(e)
 	}

@@ -13,15 +13,19 @@ function snapshot(revision=1){
  return {policy:{revision,enabled:true,setup_complete:true,timezone:'UTC',all_lan:false,default_sources:['192.0.2.1/32'],source_ids:['feed-fixture'],protocols:['vless'],preferred_routes:[],reserve_target:2,candidates_per_round:2,check_seconds:300,reserve_seconds:600,application:window,components:window},services:{},runtime:{},catalog_services:[],source_presets:[],server_time:'2026-09-13T10:00:00Z'};
 }
 function fixture(){
- const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),published=[];
+ const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),published=[],inputs=new Map();
  let timerID=0,authCalls=0;
  function element(id){
   if(!elements.has(id)){const classes=new Set();elements.set(id,{value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,options:[],dataset:{},open:false,events:new Map(),classList:{toggle(){},add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value)},addEventListener(type,fn){this.events.set(type,fn);},setAttribute(){},removeAttribute(){},close(){this.open=false;},showModal(){this.open=true;},focus(){},reset(){}});}
-  return elements.get(id);
+  const result=elements.get(id);
+  if(['a1-starterItems','a1-initialExtras'].includes(id)&&!Object.getOwnPropertyDescriptor(result,'innerHTML').get){
+   let html='';Object.defineProperty(result,'innerHTML',{get:()=>html,set(value){html=value;inputs.set(id,[...value.matchAll(/<input\b([^>]+)>/g)].map(([,attrs])=>({name:/name="([^"]*)"/.exec(attrs)?.[1],value:/value="([^"]*)"/.exec(attrs)?.[1],checked:/\bchecked\b/.test(attrs),closest:()=>({})})));}});
+  }
+  return result;
  }
  function listen(map,type,fn){if(!map.has(type))map.set(type,[]);map.get(type).push(fn);}
  function dispatch(map,event){for(const listener of map.get(event.type)||[])listener(event);}
- const document={hidden:false,getElementById:element,querySelectorAll:()=>[],addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
+ const document={hidden:false,getElementById:element,querySelectorAll:selector=>{const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
  const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
  const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(){},confirm:()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
   setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:()=>++timerID,clearInterval(){},
@@ -30,7 +34,7 @@ function fixture(){
  };
  vm.runInNewContext(source,context);
  vm.runInNewContext(hideAuthSource+'\n'+showAuthSource,context);
- return {requests,timeouts,published,e:id=>element('a1-'+id),authCalls:()=>authCalls,
+ return {requests,timeouts,published,e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
   hideAuth:()=>context.hideAuth(),actualShowAuth:()=>context.actualShowAuth(null,'Войдите снова.'),coreElement:element,
   event:(type,detail)=>document.dispatchEvent({type,detail}),
   respond(index,status,data){requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
@@ -137,6 +141,38 @@ await test('actual logout and login still invalidate the previous mutation and c
  f.respond(3,200,snapshot(3));await flush();f.respond(2,401,{});await flush();
  assert.equal(f.coreElement('authScreen').hidden,true);assert.equal(f.e('notice').textContent,'');
  assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,1);
+});
+
+await test('changed starter definition preserves subset and revokes previous consent',async()=>{
+ const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;
+ initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'one',name:'One',domains:1},{id:'two',name:'Two',domains:2}]};
+ f.respond(0,200,initial);await flush();assert.equal(f.inputs('initial-starter').filter(x=>x.checked).length,2);
+ f.inputs('initial-starter')[1].checked=false;f.e('confirmConsent').checked=true;f.e('wizardForm').events.get('input')();
+ f.event('razvilka:view-change','onboard');
+ const changed=structuredClone(initial);changed.starter.sha256='b'.repeat(64);changed.starter.items.push({id:'three',name:'Three',domains:3});
+ f.respond(1,200,changed);await flush();
+ assert.deepEqual(f.inputs('initial-starter').filter(x=>x.checked).map(x=>x.value),['one']);
+ assert.equal(f.e('confirmConsent').checked,false);assert.match(f.e('wizardError').textContent,/Состав базового набора изменился/);
+});
+
+await test('unchanged starter refresh keeps choice and consent',async()=>{
+ const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'one',name:'One',domains:1},{id:'two',name:'Two',domains:2}]};
+ f.respond(0,200,initial);await flush();f.inputs('initial-starter')[1].checked=false;f.e('confirmConsent').checked=true;f.e('wizardForm').events.get('input')();
+ f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
+ assert.deepEqual(f.inputs('initial-starter').filter(x=>x.checked).map(x=>x.value),['one']);assert.equal(f.e('confirmConsent').checked,true);
+});
+
+await test('forced read waits for earlier poll and then obtains a newer snapshot',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(1));await flush();
+ f.event('razvilka:view-change','onboard');f.click('reloadButton');f.click('reloadButton');assert.equal(f.requests.length,2,'forced reload overlapped poll');
+ f.respond(1,200,snapshot(2));await flush();assert.equal(f.requests.length,3,'forced reload was dropped');
+ f.respond(2,200,snapshot(3));await flush();assert.match(f.e('revisionLabel').textContent,/3/);assert.equal(f.requests.length,3,'repeated clicks queued redundant forced reads');
+});
+
+await test('queued forced read is discarded across authentication change',async()=>{
+ const f=fixture();f.click('reloadButton');f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
+ f.respond(0,200,snapshot(1));await flush();assert.equal(f.requests.length,2,'old-session reload was replayed');
+ f.respond(1,200,snapshot(2));await flush();assert.match(f.e('revisionLabel').textContent,/2/);
 });
 
 console.log(JSON.stringify({status:'passed',tests:passed}));

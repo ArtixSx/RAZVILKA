@@ -262,8 +262,8 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[id] = true
 	}
-	// The handler owns this independent admission; HTTP 202 does not release
-	// it or allow restore/apply to overlap the checker and its cleanup.
+	// HTTP 202 transfers preparation admission to the worker. Service checks
+	// then yield between nodes, while retaining admission through each cleanup.
 	a.nodeChecks.mu.Lock()
 	if a.nodeChecks.closed || a.nodeChecks.root == nil || a.nodeChecks.root.Err() != nil {
 		a.nodeChecks.mu.Unlock()
@@ -307,9 +307,13 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done chan struct{}, release func(), id uint64, request nodeCheckJobRequest, service catalog.Service, pinger dataplane.NodePinger) {
 	defer close(done)
-	defer release()
+	held := true
+	defer func() {
+		if held {
+			release()
+		}
+	}()
 	defer cancel()
-	definition := applyReviewHash(service)
 	var err error
 	if request.Feed != nil || request.FeedID != "" {
 		request.NodeIDs, err = a.fetchNodeCheckCandidates(ctx, id, request)
@@ -317,6 +321,14 @@ func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done
 	profile := ""
 	if err == nil {
 		profile, err = a.freshNetworkProfile(ctx)
+	}
+	if err == nil && request.Mode == "service" {
+		// Source fetching has completed and no temporary checker is running.
+		// Release preparation admission before entering the shared fair queue.
+		release()
+		held = false
+		a.runServiceNodeQueue(ctx, id, request.NodeIDs, service, profile, false)
+		return
 	}
 	if err == nil {
 		workers := 1
@@ -331,10 +343,6 @@ func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done
 				defer joined.Done()
 				for nodeID := range work {
 					if ctx.Err() != nil {
-						return
-					}
-					if request.Mode == "service" && !a.nodeCheckDefinitionCurrent(service.ID, definition) {
-						cancel()
 						return
 					}
 					item := a.runNodeCheckItem(ctx, request.Mode, nodeID, service, profile, pinger)
@@ -411,6 +419,12 @@ func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service cat
 		} else {
 			item.Message = nodeCheckFailureMessage(err)
 			item.Verdict, item.TestLevel, item.ErrorCode = "INCONCLUSIVE", "unconfirmed", nodeCheckFailureCode(err)
+		}
+		// Preserve fatal cleanup even if recording the result also failed.
+		if result.ErrorCode == "node-cleanup-failed" {
+			item.Available = false
+			item.Verdict, item.TestLevel, item.ErrorCode = "INCONCLUSIVE", "unconfirmed", "node-cleanup-failed"
+			item.Message = "Очистка временного процесса не подтверждена. Проверки остановлены до восстановления."
 		}
 		return item
 	}

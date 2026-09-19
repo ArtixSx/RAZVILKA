@@ -155,8 +155,22 @@ func (a *App) bulkRecoveryDue(now time.Time) bool {
 	if now.Before(r.doc.ManualUntil) {
 		return true
 	}
-	for _, op := range r.doc.Operations {
-		if (op.Kind == "node-recovery" || op.Kind == "node-fallback" || op.Kind == "feeds") && (op.State == "running" || !now.Before(op.NextRun)) {
+	for _, kind := range []string{"node-recovery", "node-fallback", "feeds"} {
+		found := false
+		for _, op := range r.doc.Operations {
+			if op.Kind != kind {
+				continue
+			}
+			found = true
+			if op.State == "running" || !now.Before(op.NextRun) {
+				return true
+			}
+			break
+		}
+		// reconcileRound dispatches missing operations on its first round.
+		// Even disabled features receive a completed record and next-run time,
+		// so waiting here cannot reserve priority for a nonexistent operation.
+		if !found {
 			return true
 		}
 	}
@@ -194,9 +208,15 @@ func (a *App) bulkMessage(id uint64, phase, message string) {
 func (a *App) runAllVLESS(ctx context.Context, cancel context.CancelFunc, done chan struct{}, jobID uint64, ids []string, service catalog.Service, profile string) {
 	defer close(done)
 	defer cancel()
-	code, message := "", "Проверка VLESS завершена. Маршруты не применялись."
+	a.runServiceNodeQueue(ctx, jobID, ids, service, profile, true)
+}
+
+// Both selected nodes and the full catalogue share the same recovery priority
+// and cleanup boundary. Each iteration owns its admission until cleanup ends.
+func (a *App) runServiceNodeQueue(ctx context.Context, jobID uint64, ids []string, service catalog.Service, profile string, vlessOnly bool) {
+	code, message := "", "Проверка подключений завершена. Маршруты не применялись."
 	definition := applyReviewHash(service)
-	for _, id := range ids {
+	for index, id := range ids {
 		a.bulkMessage(jobID, "waiting", "Ожидаем ресурс роутера. Восстановление маршрутов имеет приоритет между узлами.")
 		release, err := a.bulkAdmission(ctx)
 		if err != nil {
@@ -229,7 +249,7 @@ func (a *App) runAllVLESS(ctx context.Context, cancel context.CancelFunc, done c
 			}
 			eligible := false
 			for _, n := range s.Nodes {
-				if n.ID == id && strings.EqualFold(strings.TrimSpace(n.Protocol), "vless") && !n.Disabled && n.State != "expired" {
+				if n.ID == id && (!vlessOnly || strings.EqualFold(strings.TrimSpace(n.Protocol), "vless")) && !n.Disabled && n.State != "expired" {
 					eligible = true
 					break
 				}
@@ -239,8 +259,13 @@ func (a *App) runAllVLESS(ctx context.Context, cancel context.CancelFunc, done c
 				skipped = true
 				return
 			}
-			a.bulkMessage(jobID, "checking", "Проверяем один VLESS: протокол, точный выход и выбранный сервис.")
+			a.bulkMessage(jobID, "checking", "Проверяем подключение: протокол, точный выход и выбранный сервис.")
 			item = a.runNodeCheckItem(ctx, "service", id, service, profile, nil)
+			if item.ErrorCode == "node-cleanup-failed" {
+				// A failed cleanup takes precedence over canceled/stale proof.
+				// Preserve it so the user sees why further checks are blocked.
+				return
+			}
 			if !a.nodeCheckDefinitionCurrent(service.ID, definition) {
 				stopCode, stopMessage = "BULK_SERVICE_CHANGED", "Состав сервиса изменился во время проверки."
 				return
@@ -255,7 +280,7 @@ func (a *App) runAllVLESS(ctx context.Context, cancel context.CancelFunc, done c
 			code, message = stopCode, stopMessage
 			break
 		}
-		if ctx.Err() != nil {
+		if ctx.Err() != nil && item.ErrorCode != "node-cleanup-failed" {
 			break
 		}
 		a.nodeChecks.mu.Lock()
@@ -282,8 +307,10 @@ func (a *App) runAllVLESS(ctx context.Context, cancel context.CancelFunc, done c
 			break
 		}
 		// Give queued router work an opportunity without reserving the global gate.
-		if err := a.bulkWait(ctx, time.Second); err != nil {
-			break
+		if index+1 < len(ids) {
+			if err := a.bulkWait(ctx, time.Second); err != nil {
+				break
+			}
 		}
 	}
 	a.nodeChecks.mu.Lock()
@@ -295,7 +322,9 @@ func (a *App) runAllVLESS(ctx context.Context, cancel context.CancelFunc, done c
 		j.State = "completed"
 		j.Message = message
 		j.ErrorCode = code
-		if ctx.Err() != nil {
+		if code == "BULK_CLEANUP_REQUIRED" {
+			j.State = "failed"
+		} else if ctx.Err() != nil {
 			j.State = "canceled"
 			j.Message = "Очередь остановлена. Завершённые результаты сохранены."
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {

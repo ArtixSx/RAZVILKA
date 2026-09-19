@@ -1,53 +1,47 @@
-> **Local test candidate `0.18.2-repair.2`.** See [scope and limitations (RU)](docs/REPAIR2_STATUS_RU.md). Not a published stable release; the historical release results below do not validate this candidate.
-
 # RAZVILKA
 
-A local control panel for Keenetic/Netcraze routers with Entware. Configure
-services, devices and connections; review and apply routes, manage backups
-and grant bounded Autopilot permissions. The application runs on the router,
-and saved schedules continue when the browser is closed.
-
-The panel uses the router's LAN address on port **8787**, commonly
-`http://192.168.1.1:8787`. Credentials and private profiles stay locally;
-no RAZVILKA cloud account is required.
+A local control panel for Keenetic and Netcraze routers with Entware.
+Manage services, connections, bypass components and devices in one place.
+Select the sites and devices you need, verify a connection and apply its route
+manually or allow Autopilot to find a verified fallback. The application and
+saved schedules run on the router when the browser is closed.
+No RAZVILKA cloud account is required.
 
 [Русский](README.md) · [Downloads](https://github.com/ArtixSx/RAZVILKA/releases) ·
-[Verified status](docs/CURRENT_STATUS_RU.md) · [Security](SECURITY.md)
+[Current status (RU)](docs/CURRENT_STATUS_RU.md) · [Changelog](CHANGELOG.md) ·
+[Report an issue](https://github.com/ArtixSx/RAZVILKA/issues)
 
-## Candidate status
-
-The current candidate is [**v0.18.2-rc.6**](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.2-rc.6).
-It includes the panel, NFQWS2 editor and password fixes from rc.5, and adds
-restoration of fully vanished owned firewall chains. See the
-[release notes](docs/releases/0.18.2-rc.6.md). Full CI and hardware acceptance
-of the official archive are separate requirements.
-
-Continued rc.5 testing found loss of its owned filter chain after initial
-successful checks. See the [rc.5 report](docs/releases/0.18.2-rc.5-validation.md).
-Previous rc.4 results remain [historical evidence](docs/releases/0.18.2-rc.4-validation.md).
-
-The latest stable release remains
+**Source: EXT5, `0.18.2-repair.5`; review is in progress.** This is a candidate,
+not a new stable release. The published stable channel still contains
 [`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
-Pin the candidate version explicitly using the instructions below.
+The installation command below downloads the stable release, not this source tree.
 
-The control plane supports scoped service routes, exact node checks,
-subscriptions, permitted fallback, schedules, encrypted backups and component
-workspaces. Available adapters include NFQWS2, Sing-box/Xray, USQUE, WARP and
-AmneziaWG; actual use depends on installed capabilities and a verified profile.
-Safe Mode is enabled by default. Importing or refreshing a subscription does
-not itself authorize route changes.
+## Features in the current project
 
-DNS comparison currently returns A/AAAA results for a catalog service using
-selected DoH profiles. Combined DNS + route + service proof, scoped DNS Apply
-and automatic pair selection remain **DC2–DC4**. Recipe hints are an offline
-library; cloud catalog downloads and result uploads are not enabled.
+- Service routes for selected devices, with checks, explicit application and
+  restoration of previous settings on failure.
+- VLESS, Hysteria2, TUIC and Shadowsocks connections: imports, subscriptions,
+  readable country names, node checks and permitted fallback candidates.
+- NFQWS2, Sing-box/Xray, USQUE, WARP and AmneziaWG workspaces, subject to the
+  capabilities of the installed component and profile.
+- An Autopilot setup wizard with device scope, permitted sources and
+  scheduled checks.
+- Diagnostics, component versions, DNS response comparison and private
+  backups. Dark appearance is the default.
 
-## Install
+EXT5 also adds **Mihomo configuration export**, an **experimental HEV profile
+generator**, and **manual import/export of NFQWS2 strategy packs**. Mihomo and
+HEV are not yet available as complete managed routes; generating a file does
+not start them on the router. An imported strategy is a candidate requiring
+separate validation. Automatic software installation is not enabled: scheduled
+maintenance can check versions and prepare an application archive.
+[EXT5 scope and remaining work (RU)](docs/extensions/EXT5_RU.md).
 
-Install the appropriate Entware package for your router and firmware first.
-An ambiguous `uname -m = mips` does not distinguish BE from LE; RAZVILKA checks
-the running shell's ELF identity and refuses an unknown byte order.
-Prepare the tools over SSH as `root`:
+## Fresh installation
+
+Install Entware for your router model and firmware first. After clearing a USB
+drive, restore Entware and the `/opt` mount before installing RAZVILKA.
+Run these commands over SSH as `root`:
 
 ```sh
 test -d /opt && command -v opkg
@@ -55,42 +49,62 @@ opkg update
 opkg install curl ca-certificates coreutils-sha256sum tar
 ```
 
-**Latest stable** (currently `v0.18.0`):
+Install the latest **stable** release:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh
 ```
 
-**DC1 prerelease `v0.18.2-rc.6`**:
+The installer selects the router architecture, checks SHA256, installs the panel
+and verifies startup. Supported binary targets are `arm64` (aarch64), `mipsle`
+(mipsel), `mips` and `amd64`. Install the required bypass components separately;
+their compatibility also depends on the router model and kernel.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.18.2-rc.6/scripts/bootstrap.sh | RAZVILKA_VERSION=v0.18.2-rc.6 sh
-```
+## First use of EXT5
 
-Alternatively, extract that release's Entware bundle and run
-`sh scripts/upgrade-entware.sh --dry-run`, then `--apply` after successful
-preflight. The installer verifies SHA256, saves a snapshot and checks startup.
-Keep the printed snapshot path. The default installation adds the panel;
-install the required bypass components separately and set your own login.
+These steps describe the current EXT5 candidate. Refer to the stable release's
+notes for the features included in that version.
 
-## Open the panel
+1. Open `http://192.168.1.1:8787` from the LAN, substituting your router's LAN
+   address if different. Set your own username and password.
+2. Use the wizard to choose devices, services, available methods and sources.
+   A fresh EXT5 catalog contains six NFQWS2 groups; add other services separately.
+3. Configure a bypass component or import a connection, then check it against
+   the intended service.
+4. Apply changes or authorize Autopilot for the selected scope. Safe Mode is
+   enabled by default and requires a separate action to release.
+
+A running process, DNS answer or reachable port does not establish that a site
+works through the intended route. Check the result shown for the service itself.
+
+Read the installed version, panel status and LAN address:
 
 ```sh
 /opt/bin/razvilka -version
 /opt/etc/init.d/S99razvilka status
-LAN_IP=$(/opt/etc/init.d/S99razvilka lan-ip)
-/opt/bin/razvilka -healthcheck "http://$LAN_IP:8787/api/v1/status"
+/opt/etc/init.d/S99razvilka lan-ip
 ```
 
-Open `http://<LAN_IP>:8787` from the LAN and test the intended service.
-Do not expose the panel's port to the internet. A running process, DNS answer
-or reachable TCP port alone does not establish a working service route.
+## Updates and documentation
 
-Hardware acceptance remains specific to each binary. AWG 3.1/WARP, WAN
-reconnect, reboot, IPv6 HTTPS, low-memory operation and a 24–72 hour soak need
-their own results. ARM64/MIPS/MIPSle/amd64 builds do not certify every device.
-Public nodes can become unavailable after a successful check.
+Published archives are available in [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
+For a manual update, extract the chosen release's Entware archive and run these
+commands from its directory, proceeding to installation only after successful
+preflight:
 
-[DC1 changes and remaining work](docs/DC1_REVIEW_2026-09-13_RU.md) ·
-[Roadmap](docs/ROADMAP_2026-08-30_RU.md) · [Changelog](CHANGELOG.md) ·
-[Issues](https://github.com/ArtixSx/RAZVILKA/issues) · [MIT license](LICENSE)
+```sh
+sh scripts/upgrade-entware.sh --dry-run
+sh scripts/upgrade-entware.sh --apply
+```
+
+Keep a private backup and the snapshot path printed by the installer for rollback.
+Updates preserve the existing user catalog.
+
+See [current results and limitations (RU)](docs/CURRENT_STATUS_RU.md) and the
+[EXT5 development plan (RU)](docs/extensions/CODEX_EXT5_RU.md). Historical versions
+and test reports are kept in the [Changelog](CHANGELOG.md) and
+[release reports](docs/releases). Results from an older build do not validate
+a newer one; an architecture build does not certify a particular router.
+
+[Security](SECURITY.md) · [News and support](https://t.me/RAZVILKA_UI) ·
+[MIT license](LICENSE)

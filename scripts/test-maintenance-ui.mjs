@@ -13,4 +13,23 @@ ctx.consoleSnapshot.address_refresh={state:'failed',checked_at:new Date().toISOS
 check('failed address status not healthy',()=>{ctx.renderMaintenanceAddresses();assert.match(el.textContent,/не завершено/)});
 check('mode inputs present once',()=>{for(const id of ['auto3NFQRead','auto3NFQMode','auto3DiscoveryConsent','auto3NFQSave'])assert.equal(index.split('id="'+id+'"').length-1,1)});
 check('declaration alone not canary',()=>{const script=fs.readFileSync('cmd/razvilka/web/automation-setup.js','utf8');assert.match(script,/не результат|не доказательство|не подтверждение/)});
+function setupFixture(){
+ const elements=new Map(),listeners=new Map(),requests=[],workflowState={epoch:1};
+ const element=id=>{if(!elements.has(id))elements.set(id,{value:'',checked:false,disabled:false,hidden:false,textContent:'',events:new Map(),addEventListener(type,fn){this.events.set(type,fn);}});return elements.get(id);};
+ const context={AbortController,queueMicrotask,workflowState,state:{status:{revision:1}},document:{getElementById:element,querySelectorAll:()=>[],addEventListener:(type,fn)=>listeners.set(type,fn)},window:{addEventListener(){}},workflowSession:epoch=>epoch===workflowState.epoch,workflowError:e=>e.message,workflowRequest:(path,options)=>new Promise(resolve=>requests.push({path,options,resolve}))};
+ vm.runInNewContext(fs.readFileSync('cmd/razvilka/web/automation-setup.js','utf8'),context);
+ return {element,listeners,requests,workflowState};
+}
+check('NFQWS setup clears expired-session notices after successful login without reading or granting consent',()=>{
+ const f=setupFixture();f.listeners.get('razvilka:auth-required')();assert.equal(f.element('auto3NFQStatus').textContent,'Сеанс завершён.');
+ f.listeners.get('razvilka:auth-restored')();
+ assert.match(f.element('auto3NFQStatus').textContent,/Прочитать конфигурацию/);assert.doesNotMatch(f.element('auto3NativeAdaptive').textContent,/Требуется вход/);assert.doesNotMatch(f.element('auto3ProxySummary').textContent,/Требуется вход/);
+ assert.equal(f.element('auto3NFQRead').disabled,false);assert.equal(f.element('auto3NFQSave').disabled,true);assert.equal(f.element('auto3DiscoveryConsent').checked,false);assert.equal(f.requests.length,0);
+});
+{
+ const f=setupFixture();const read=f.element('auto3NFQRead').events.get('click')();
+ f.workflowState.epoch++;f.listeners.get('razvilka:auth-required')();f.listeners.get('razvilka:auth-restored')();
+ f.requests[0].resolve({available:true,native_adaptive:true,review:'a'.repeat(64),mode:'auto'});await read;
+ check('pre-login NFQWS read cannot restore old review or error after login',()=>{assert.equal(f.requests[0].options.controller.signal.aborted,true);assert.equal(f.element('auto3NFQSave').disabled,true);assert.match(f.element('auto3NFQStatus').textContent,/Прочитать конфигурацию/);assert.equal(f.element('auto3NativeAdaptive').textContent,'Конфигурация ещё не прочитана.');});
+}
 console.log(JSON.stringify({suite:'maintenance-ui',passed:n}));

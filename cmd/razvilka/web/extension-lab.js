@@ -13,20 +13,37 @@ const apiModel={
   if(!['preview','import'].includes(action)||(action==='import'&&!/^[a-f0-9]{64}$/.test(review)))throw new Error('Повторите предпросмотр пакета.');
   return {content,signed:!!signed,action,review,confirm:action==='import'?'IMPORT_STRATEGY_CANDIDATES':''};
  },
- safeResult(reply){if(!reply||reply.live_applied!==false||reply.service_verified===true||reply.native_validated===true)throw new Error('Неизвестный результат сервера. Изменение сети не подтверждено.');return reply;}
+ safeResult(reply){if(!reply||reply.live_applied!==false||reply.service_verified===true||reply.native_validated===true)throw new Error('Неизвестный результат сервера. Изменение сети не подтверждено.');return reply;},
+ mihomoSummary(result){
+  apiModel.safeResult(result);
+  const source=result.source,index=source?.selected_index,node=Number.isSafeInteger(index)&&index>=0?source?.nodes?.[index]:null;
+  if(!node)throw new Error('В ответе нет выбранного подключения. Повторите разбор профиля.');
+  const protocols={vless:'VLESS',hysteria2:'Hysteria2',tuic:'TUIC',ss:'Shadowsocks',shadowsocks:'Shadowsocks'};
+  const transports={tcp:'TCP',ws:'WebSocket',grpc:'gRPC',quic:'QUIC','tcp/udp':'TCP / UDP'};
+  const protocol=protocols[String(result.protocol||node.protocol||'').toLowerCase()]||'Не указан';
+  const transport=transports[String(node.transport||'').toLowerCase()]||(protocol==='Shadowsocks'?'TCP / UDP':protocol==='VLESS'?'TCP':protocol==='Hysteria2'||protocol==='TUIC'?'QUIC':'Не указан');
+  const validPort=port=>Number.isSafeInteger(port)&&port>0&&port<=65535;
+  const server=typeof node.server==='string'&&node.server.length<=253&&/^[a-z0-9.:[\]-]+$/i.test(node.server)?node.server:'';
+  const endpoint=server&&validPort(node.port)?`${server.includes(':')&&!server.startsWith('[')?'['+server+']':server}:${node.port}`:'Не указан';
+  const tls=String(node.security||'').toLowerCase()==='reality'?'TLS + Reality':node.tls===true?'TLS включён':node.tls===false?'TLS выключен':'Не указан';
+  const lines=[`Выбран узел ${index+1} из ${source.nodes.length}`,`Протокол: ${protocol}`,`Сервер: ${endpoint}`,`Транспорт: ${transport}`,`Защита: ${tls}`,`Локальный SOCKS: ${validPort(result.socks_port)?'127.0.0.1:'+result.socks_port:'Не указан'}`,'','Файл подготовлен. Подключение не проверялось и не включено.'];
+  const warnings=[...new Set([...(Array.isArray(source.warnings)?source.warnings:[]),...(Array.isArray(node.warnings)?node.warnings:[])].filter(w=>typeof w==='string'&&w.trim()))];
+  if(warnings.length)lines.push('','Обратите внимание:',...warnings.map(w=>'• '+w));
+  return lines.join('\n');
+ }
 };
 if(typeof module==='object'&&module.exports)module.exports=apiModel;
 root.RazvilkaExtensionLab=apiModel;
 if(typeof document==='undefined')return;
 const el=id=>document.getElementById(id),dialog=el('extensionLabDialog');if(!dialog)return;
-let serial=0,controller=null,mReview='',pReview='';
+let serial=0,controller=null,fileLoading=false,mReview='',pReview='';
 const status=text=>{el('ext5Status').textContent=text;};
-function buttons(){const busy=!!controller;dialog.querySelectorAll('button:not(#ext5Close):not(#ext5Cancel)').forEach(b=>b.disabled=busy);el('ext5MExport').disabled=busy||!mReview;el('ext5PImport').disabled=busy||!pReview;el('ext5Cancel').hidden=!busy;}
-function cancel(){serial++;controller?.abort();controller=null;buttons();}
+function buttons(){const busy=!!controller||fileLoading;dialog.querySelectorAll('button:not(#ext5Close):not(#ext5Cancel)').forEach(b=>b.disabled=busy);el('ext5MExport').disabled=busy||!mReview;el('ext5PImport').disabled=busy||!pReview;el('ext5Cancel').hidden=!busy;}
+function cancel(){serial++;controller?.abort();controller=null;fileLoading=false;buttons();}
 function invalidate(kind){cancel();if(kind==='mihomo'){mReview='';el('ext5MResult').textContent='Ввод изменён. Нужен новый предпросмотр.';}if(kind==='packs'){pReview='';el('ext5PResult').textContent='Пакет изменён. Нужен новый предпросмотр.';}buttons();}
 function clear(){cancel();mReview=pReview='';for(const id of ['ext5MText','ext5MFile','ext5PText','ext5PFile'])el(id).value='';el('ext5PCandidates').replaceChildren();el('ext5MResult').textContent='Нет результата.';el('ext5PResult').textContent='Нет результата.';buttons();}
 function pane(name){if(!['mihomo','hev','packs'].includes(name))return;cancel();for(const id of ['mihomo','hev','packs']){el('ext5Pane'+id[0].toUpperCase()+id.slice(1)).hidden=id!==name;dialog.querySelector(`[data-extension-pane="${id}"]`).setAttribute('aria-pressed',String(id===name));}status('Формирование файлов не включает новый обход.');}
-async function run(path,body,accept){if(controller)return;const epoch=workflowState.epoch,seq=++serial,c=new AbortController();controller=c;buttons();status('Обрабатываем запрос на роутере…');try{const out=await workflowRequest(path,body===null?{controller:c}:{method:'POST',body:JSON.stringify(body),controller:c},30000);if(seq!==serial||!workflowSession(epoch)||!dialog.open)return;accept(out);}catch(error){if(seq===serial&&workflowSession(epoch)&&dialog.open)status(workflowError(error));}finally{if(seq===serial){controller=null;buttons();}}}
+async function run(path,body,accept){if(controller||fileLoading)return;const epoch=workflowState.epoch,seq=++serial,c=new AbortController();controller=c;buttons();status('Обрабатываем запрос на роутере…');try{const out=await workflowRequest(path,body===null?{controller:c}:{method:'POST',body:JSON.stringify(body),controller:c},30000);if(seq!==serial||!workflowSession(epoch)||!dialog.open)return;accept(out);}catch(error){if(seq===serial&&workflowSession(epoch)&&dialog.open)status(workflowError(error));}finally{if(seq===serial){controller=null;buttons();}}}
 function download(text,name){const blob=new Blob([text],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function guarded(fn){try{fn();}catch(error){status(error.message);}}
 document.querySelectorAll('[data-extension-open]').forEach(b=>b.addEventListener('click',()=>{if(!dialog.open)dialog.showModal();pane(b.dataset.extensionOpen);}));
@@ -36,10 +53,10 @@ el('ext5Cancel').addEventListener('click',()=>{cancel();status('Запрос о�
 for(const id of ['ext5MText','ext5MIndex','ext5MPort'])el(id).addEventListener('input',()=>invalidate('mihomo'));
 for(const id of ['ext5PText','ext5PSigned'])el(id).addEventListener('input',()=>invalidate('packs'));
 for(const id of ['ext5HInterface','ext5HAddress','ext5HPort','ext5HMTU','ext5HSessions'])el(id).addEventListener('input',cancel);
-function loadFile(id,target,kind){el(id).addEventListener('change',async()=>{invalidate(kind);const file=el(id).files?.[0],seq=serial,epoch=workflowState.epoch;if(!file)return;if(file.size>262144){status('Файл превышает 256 КиБ.');return;}try{const text=await file.text();if(seq===serial&&workflowSession(epoch)&&dialog.open){el(target).value=text;status('Файл прочитан локально. Выполните предпросмотр.');}}catch{if(seq===serial&&dialog.open)status('Не удалось прочитать файл.');}});}
+function loadFile(id,target,kind){el(id).addEventListener('change',async()=>{invalidate(kind);const file=el(id).files?.[0],seq=serial,epoch=workflowState.epoch;if(!file)return;el(target).value='';if(file.size>262144){status('Файл превышает 256 КиБ.');return;}fileLoading=true;buttons();status('Читаем файл на этом устройстве…');try{const text=await file.text();if(seq===serial&&workflowSession(epoch)&&dialog.open){el(target).value=text;status('Файл прочитан локально. Выполните предпросмотр.');}}catch{if(seq===serial&&workflowSession(epoch)&&dialog.open)status('Не удалось прочитать файл.');}finally{if(seq===serial){fileLoading=false;buttons();}}});}
 loadFile('ext5MFile','ext5MText','mihomo');loadFile('ext5PFile','ext5PText','packs');
 function mBody(action){return apiModel.mihomo(el('ext5MText').value,Number(el('ext5MIndex').value),Number(el('ext5MPort').value),action,mReview);}
-el('ext5MPreview').addEventListener('click',()=>guarded(()=>{mReview='';run('/api/v1/extension-lab/mihomo',mBody('preview'),out=>{apiModel.safeResult(out);apiModel.safeResult(out.result);if(!/^[a-f0-9]{64}$/.test(out.review)||out.result.config)throw new Error('Предпросмотр не прошёл проверку.');mReview=out.review;el('ext5MResult').textContent=JSON.stringify(out.result,null,2);status('Профиль разобран. YAML содержит ключ; скачивание — отдельное действие. Запуск не выполнялся.');});}));
+el('ext5MPreview').addEventListener('click',()=>guarded(()=>{mReview='';run('/api/v1/extension-lab/mihomo',mBody('preview'),out=>{apiModel.safeResult(out);apiModel.safeResult(out.result);if(!/^[a-f0-9]{64}$/.test(out.review)||out.result.config)throw new Error('Предпросмотр не прошёл проверку.');const summary=apiModel.mihomoSummary(out.result);mReview=out.review;el('ext5MResult').textContent=summary;status('Параметры готовы к скачиванию. YAML содержит ключ подключения.');});}));
 el('ext5MExport').addEventListener('click',()=>guarded(()=>run('/api/v1/extension-lab/mihomo',mBody('export'),out=>{apiModel.safeResult(out);apiModel.safeResult(out.result);if(out.review!==mReview||typeof out.result.config!=='string'||!out.result.config)throw new Error('Профиль изменился.');download(out.result.config,'razvilka-mihomo.yaml');status('YAML передан браузеру. Не публикуйте ключ. Нужны нативная проверка и испытание сервиса.');})));
 el('ext5HBuild').addEventListener('click',()=>guarded(()=>run('/api/v1/extension-lab/hev',{options:{interface:el('ext5HInterface').value.trim(),address:el('ext5HAddress').value.trim(),socks_port:Number(el('ext5HPort').value),mtu:Number(el('ext5HMTU').value),max_sessions:Number(el('ext5HSessions').value)},confirm:'BUILD_HEV_CONFIG'},out=>{apiModel.safeResult(out);if(typeof out.config!=='string'||!out.config)throw new Error('Нет профиля.');download(out.config,'razvilka-hev.json');status(out.note);}))); 
 el('ext5PBuiltin').addEventListener('click',()=>{invalidate('packs');run('/api/v1/strategy-lab/builtin-pack',null,out=>{apiModel.safeResult(out);el('ext5PText').value=out.content;el('ext5PSigned').checked=false;status('Встроенные TCP/QUIC-примеры загружены в форму. Проверьте состав перед импортом. Это не подтверждённые рабочие стратегии.');});});

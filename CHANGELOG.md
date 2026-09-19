@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — EXT5 review
+
+- Integrate the REPAIR2/UPDATE4 setup, import, subscription refill and update channels,
+  plus manual strategy packs and passive Mihomo/HEV profiles.
+- Preserve wizard selections, refresh saved settings correctly and prevent stale
+  file content from being previewed under a newly selected filename.
+- Replace technical Mihomo previews with readable summaries and clear stale login messages.
+- Refuse lossy Mihomo exports and invalid server addresses; honor HEV cancellation.
+- Fix strategy signatures, enforce export sizes and validate keys.
+- Yield connection checks to recovery between nodes, retain fatal cleanup diagnostics
+  and prioritize initial recovery. Experimental executors still require hardware testing.
+
 ## 0.18.2-rc.6 — Restore vanished owned firewall rules
 
 - Restore a fully absent proxy firewall chain from the committed creation lease

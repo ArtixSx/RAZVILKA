@@ -296,7 +296,16 @@ func (m *Manager) ExportPack(ids []string) ([]byte, error) {
 	now := m.now().UTC().Truncate(time.Second)
 	canonical, _ := json.Marshal(entries)
 	hash := sha256.Sum256(canonical)
-	return json.MarshalIndent(StrategyPack{Schema: 1, ID: "personal-" + hex.EncodeToString(hash[:8]), Sequence: uint64(now.Unix()), IssuedAt: now, ExpiresAt: now.Add(30 * 24 * time.Hour), CompatibilityID: "nfqws2-zapret-auto-v1", Entries: entries}, "", "  ")
+	data, err := json.MarshalIndent(StrategyPack{Schema: 1, ID: "personal-" + hex.EncodeToString(hash[:8]), Sequence: uint64(now.Unix()), IssuedAt: now, ExpiresAt: now.Add(30 * 24 * time.Hour), CompatibilityID: "nfqws2-zapret-auto-v1", Entries: entries}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	// Export is only successful when the result can be imported, including
+	// its size and clock-derived sequence (a router can boot without its clock).
+	if _, err := ReviewPack(data, false, nil, now); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 // SignPack is an offline publisher primitive. The private key never belongs on
@@ -305,15 +314,26 @@ func SignPack(payload []byte, keyID string, key ed25519.PrivateKey, now time.Tim
 	if !packID.MatchString(keyID) || len(key) != ed25519.PrivateKeySize {
 		return nil, ErrPack
 	}
+	if !key.Equal(ed25519.NewKeyFromSeed(key.Seed())) {
+		return nil, ErrPack
+	}
 	if _, e := ReviewPack(payload, false, nil, now); e != nil {
 		return nil, e
 	}
-	// json.Marshal compacts embedded RawMessage: sign those exact bytes as well.
-	var compact bytes.Buffer
-	if json.Compact(&compact, payload) != nil {
+	// Marshal RawMessage exactly as the enclosing JSON encoder will: it both
+	// compacts and escapes HTML/Unicode separators. Signing merely compacted
+	// input would fail verification after the envelope changes those bytes.
+	canonical, err := json.Marshal(json.RawMessage(payload))
+	if err != nil {
 		return nil, ErrPack
 	}
-	canonical := compact.Bytes()
 	env := SignedPack{KeyID: keyID, Payload: canonical, Signature: ed25519.Sign(key, append([]byte(packDomain), canonical...))}
-	return json.Marshal(env)
+	data, err := json.Marshal(env)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxPackBytes {
+		return nil, ErrPack
+	}
+	return data, nil
 }

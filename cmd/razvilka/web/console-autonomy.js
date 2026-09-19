@@ -48,7 +48,7 @@
   const $=id=>document.getElementById('a1-'+id);
   const $$=selector=>Array.from(document.querySelectorAll(selector)).filter(el=>el.closest('[data-autonomy]'));
   let snapshot=null,feeds=null,step=0,editingPolicy=null,dirty=false,loading=false,saving=false;
-  let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0;
+  let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null;
   const requests=new Set();
   function requireGeneration(generation) { if(generation!==authGeneration){const e=new Error('Ответ относится к завершённой сессии.');e.name='AuthGenerationChanged';e.authGeneration=generation;throw e;} }
   function reportError(e,element=null) { if(e.name==='AuthGenerationChanged'||e.authGeneration!==undefined&&e.authGeneration!==authGeneration)return;if(element)element.textContent=e.message;else notify(e.message,true); }
@@ -135,8 +135,9 @@
     const r=snapshot?.starter;block.hidden=!r?.eligible||!!snapshot?.policy?.setup_complete;
     if(block.hidden)return;
     const selectedStarter=new Set($$('input[name="initial-starter"]:checked').map(x=>x.value));
-    const same=starterRenderedHash===r.sha256;starterRenderedHash=r.sha256;
-    $('starterItems').innerHTML=(r.items||[]).map(s=>`<label><input type="checkbox" name="initial-starter" value="${escapeHTML(s.id)}" ${(!same||selectedStarter.has(s.id))?'checked':''}><span><b>${escapeHTML(s.name)}</b><small>${Number(s.domains)} доменов · NFQWS2</small></span></label>`).join('');
+    const first=!starterRenderedHash,changed=!first&&starterRenderedHash!==r.sha256;starterRenderedHash=r.sha256;
+    $('starterItems').innerHTML=(r.items||[]).map(s=>`<label><input type="checkbox" name="initial-starter" value="${escapeHTML(s.id)}" ${(first||selectedStarter.has(s.id))?'checked':''}><span><b>${escapeHTML(s.name)}</b><small>${Number(s.domains)} доменов · NFQWS2</small></span></label>`).join('');
+    if(changed){$('confirmConsent').checked=false;$('wizardError').textContent='Состав базового набора изменился. Прежний выбор сохранён, новые сервисы выключены. Проверьте состав и подтвердите его снова.';}
     const selected=new Set($$('input[name="initial-extra"]:checked').map(x=>x.value));
     $('initialExtras').innerHTML=(snapshot.catalog_services||[]).filter(s=>!s.default_nfqws2&&!snapshot.services[s.id]).map(s=>`<label><input type="checkbox" name="initial-extra" value="${escapeHTML(s.id)}" ${selected.has(s.id)?'checked':''}/><span>${escapeHTML(s.name)}<small>Подбор по разрешениям мастера</small></span></label>`).join('');
   }
@@ -189,7 +190,12 @@
     renderServices();fillWizard();renderStarterReview();
   }
   async function refresh(force=false) {
-    if(loading) return;loading=true;const generation=authGeneration;
+    const generation=authGeneration;
+    // A read that began before a write cannot serve as its readback. Wait for
+    // the admitted read, then request a new snapshot without overlapping it.
+    if(loading){if(!force)return false;const pending=refreshRequest;await pending;if(generation!==authGeneration)return false;return refreshRequest&&refreshRequest!==pending?refreshRequest:refresh(true);}
+    loading=true;
+    const request=(async()=>{
     try {
       const next=await api('/api/v1/autonomy');if(generation!==authGeneration)return false;snapshot=next;window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
       if(force) dirty=false;
@@ -199,6 +205,9 @@
       if(e.status===401){$('authRequired').hidden=false;$('workspace').hidden=true;}
       $('connectionLabel').textContent=e.status===401?'Требуется вход':'Нет свежего ответа';window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:e.status,message:e.message}}));if(activeTab!=='overview'||window.location.hash.includes('autopilot'))notify(e.status===404?'Для автономного мастера нужен backend A1. Остальные разделы работают с rc.2.':e.message,true);return false;
     } finally {if(generation===authGeneration)loading=false;}
+    })();
+    refreshRequest=request;
+    try{return await request;}finally{if(refreshRequest===request)refreshRequest=null;}
   }
   async function readSources() {
     const generation=authGeneration;
@@ -225,7 +234,7 @@
       if($('releaseSafeMode').checked&&!p.enabled) throw new Error('Не снимайте Safe Mode при выключенной автоматике.');
       saving=true;$('saveWizard').disabled=true;
       await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:$('releaseSafeMode').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
-      requireGeneration(generation);dirty=false;await refresh(true);requireGeneration(generation);notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
+      requireGeneration(generation);const refreshed=await refresh(true);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
     } catch(e) { reportError(e,$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
   document.addEventListener('click',event=>{

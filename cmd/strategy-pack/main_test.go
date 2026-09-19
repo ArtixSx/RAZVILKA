@@ -4,6 +4,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/strategylab"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -19,6 +20,14 @@ func TestOfflineKeySignVerifyAndNoOverwrite(t *testing.T) {
 	}
 	if e := writeNew(in, strategylab.BuiltinPack(time.Now())); e != nil {
 		t.Fatal(e)
+	}
+	if runtime.GOOS == "windows" {
+		// Windows does not expose enforceable POSIX owner-only permissions.
+		// The signer must fail closed; Linux CI covers the successful round trip.
+		if e := execute("sign", in, out, "owner", priv, ""); e == nil {
+			t.Fatal("read private key without POSIX access restrictions")
+		}
+		return
 	}
 	if e := execute("sign", in, out, "owner", priv, ""); e != nil {
 		t.Fatal(e)

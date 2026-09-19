@@ -284,7 +284,8 @@ func TestAllVLESSWaitsForDueRecovery(t *testing.T) {
 	a, _ := newNodeJobTest(t, 1)
 	a.nodeChecks.bulkWait = bulkTestWait
 	a.reconciler.started = true
-	a.reconciler.doc.Operations = []automationOperation{{Kind: "node-recovery", State: "backoff", NextRun: time.Now().Add(-time.Minute)}}
+	a.reconciler.doc.Operations = futureNodeQueueOperations(time.Now())
+	a.reconciler.doc.Operations[0] = automationOperation{Kind: "node-recovery", State: "backoff", NextRun: time.Now().Add(-time.Minute)}
 	var calls atomic.Int32
 	a.NodeChecker = jobNodeChecker(func(ctx context.Context, q dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 		calls.Add(1)

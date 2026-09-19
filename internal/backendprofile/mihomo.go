@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 	"gopkg.in/yaml.v3"
 )
 
@@ -44,6 +45,12 @@ func Mihomo(raw string, options MihomoOptions) (MihomoResult, error) {
 	// No partial acceptance behind an apparently successful conversion.
 	if len(bundle.Preview.Rejected) != 0 {
 		return result, ErrUnsupported
+	}
+	// The general importer deliberately normalizes only its supported subset.
+	// Validate original node options before that normalization can hide a TLS
+	// pin, transport option or other requirement this exporter cannot retain.
+	if err := validateMihomoSource(raw, bundle.Preview.Format); err != nil {
+		return result, err
 	}
 	var doc struct {
 		Outbounds []map[string]any `json:"outbounds"`
@@ -114,8 +121,8 @@ func publicHost(host string) bool {
 	if host == "" || strings.ContainsAny(host, " /\\\x00\r\n") {
 		return false
 	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsGlobalUnicast() && !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast()
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return publicfetch.PublicAddress(ip)
 	}
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
 	for _, suffix := range []string{"localhost", ".localhost", ".local", ".lan", ".internal", ".home.arpa", ".onion"} {
@@ -123,20 +130,54 @@ func publicHost(host string) bool {
 			return false
 		}
 	}
-	return strings.Contains(host, ".")
+	if len(host) > 253 || !strings.Contains(host, ".") {
+		return false
+	}
+	numeric := true
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, c := range label {
+			if c >= 'a' && c <= 'z' || c == '-' {
+				numeric = false
+			} else if c < '0' || c > '9' {
+				return false
+			}
+		}
+	}
+	// Do not let abbreviated or malformed IP literals enter through DNS syntax.
+	return !numeric
 }
 func mihomoNode(src map[string]any) (map[string]any, error) {
-	if !allowed(src, "type", "tag", "server", "server_port", "uuid", "password", "flow", "packet_encoding", "method", "tls", "transport", "obfs", "congestion_control", "udp_relay_mode") {
-		return nil, ErrUnsupported
-	}
 	kind := str(src, "type")
+	fields := []string{"type", "tag", "server", "server_port"}
 	switch kind {
-	case "vless", "hysteria2", "tuic", "shadowsocks":
+	case "vless":
+		fields = append(fields, "uuid", "flow", "packet_encoding", "tls", "transport")
+	case "hysteria2":
+		fields = append(fields, "password", "tls", "obfs")
+	case "tuic":
+		fields = append(fields, "uuid", "password", "tls", "congestion_control", "udp_relay_mode")
+	case "shadowsocks":
+		fields = append(fields, "method", "password")
 	default:
 		return nil, ErrUnsupported
 	}
-	if !publicHost(str(src, "server")) {
+	if !allowed(src, fields...) || !publicHost(str(src, "server")) {
 		return nil, ErrUnsupported
+	}
+	for _, field := range []string{"uuid", "password", "method", "flow", "packet_encoding", "congestion_control", "udp_relay_mode"} {
+		if value, exists := src[field]; exists {
+			if _, ok := value.(string); !ok {
+				return nil, ErrUnsupported
+			}
+		}
+	}
+	if kind == "hysteria2" || kind == "tuic" {
+		if _, exists := src["tls"]; !exists {
+			return nil, ErrUnsupported
+		}
 	}
 	dst := map[string]any{"name": "rz-node", "type": kind, "server": src["server"], "port": src["server_port"], "udp": true}
 	if kind == "shadowsocks" {
@@ -151,7 +192,18 @@ func mihomoNode(src map[string]any) (map[string]any, error) {
 	copyIf(dst, src, "udp_relay_mode", "udp-relay-mode")
 	if raw, ok := src["tls"]; ok {
 		tls, ok := raw.(map[string]any)
-		if !ok || !allowed(tls, "enabled", "server_name", "alpn", "utls", "reality") || tls["enabled"] != true {
+		if !ok || !allowed(tls, "enabled", "server_name", "alpn", "utls", "reality", "insecure") || tls["enabled"] != true {
+			return nil, ErrUnsupported
+		}
+		if insecure, exists := tls["insecure"]; exists && insecure != false {
+			return nil, ErrUnsupported
+		}
+		if sni, exists := tls["server_name"]; exists {
+			if _, ok := sni.(string); !ok {
+				return nil, ErrUnsupported
+			}
+		}
+		if alpn, exists := tls["alpn"]; exists && !stringSequence(alpn) {
 			return nil, ErrUnsupported
 		}
 		if kind == "vless" {
@@ -163,15 +215,20 @@ func mihomoNode(src map[string]any) (map[string]any, error) {
 		copyIf(dst, tls, "alpn", "alpn")
 		if u, ok := tls["utls"]; ok {
 			m, ok := u.(map[string]any)
-			if !ok || !allowed(m, "enabled", "fingerprint") || m["enabled"] != true {
+			if !ok || kind != "vless" || !allowed(m, "enabled", "fingerprint") || m["enabled"] != true || str(m, "fingerprint") == "" {
 				return nil, ErrUnsupported
 			}
 			copyIf(dst, m, "fingerprint", "client-fingerprint")
 		}
 		if r, ok := tls["reality"]; ok {
 			m, ok := r.(map[string]any)
-			if !ok || kind != "vless" || !allowed(m, "enabled", "public_key", "short_id") || m["enabled"] != true {
+			if !ok || kind != "vless" || !allowed(m, "enabled", "public_key", "short_id") || m["enabled"] != true || str(m, "public_key") == "" {
 				return nil, ErrUnsupported
+			}
+			if shortID, exists := m["short_id"]; exists {
+				if _, ok := shortID.(string); !ok {
+					return nil, ErrUnsupported
+				}
 			}
 			v := map[string]any{}
 			copyIf(v, m, "public_key", "public-key")
@@ -181,7 +238,7 @@ func mihomoNode(src map[string]any) (map[string]any, error) {
 	}
 	if raw, ok := src["obfs"]; ok {
 		m, ok := raw.(map[string]any)
-		if !ok || kind != "hysteria2" || !allowed(m, "type", "password") || str(m, "type") != "salamander" {
+		if !ok || kind != "hysteria2" || !allowed(m, "type", "password") || str(m, "type") != "salamander" || str(m, "password") == "" {
 			return nil, ErrUnsupported
 		}
 		dst["obfs"] = "salamander"
@@ -197,6 +254,14 @@ func mihomoNode(src map[string]any) (map[string]any, error) {
 			if !allowed(t, "type", "path", "headers") {
 				return nil, ErrUnsupported
 			}
+			if path, exists := t["path"]; exists {
+				if _, ok := path.(string); !ok {
+					return nil, ErrUnsupported
+				}
+			}
+			if headers, exists := t["headers"]; exists && !stringMapping(headers) {
+				return nil, ErrUnsupported
+			}
 			ws := map[string]any{}
 			copyIf(ws, t, "path", "path")
 			copyIf(ws, t, "headers", "headers")
@@ -205,6 +270,11 @@ func mihomoNode(src map[string]any) (map[string]any, error) {
 		case "grpc":
 			if !allowed(t, "type", "service_name") {
 				return nil, ErrUnsupported
+			}
+			if service, exists := t["service_name"]; exists {
+				if _, ok := service.(string); !ok {
+					return nil, ErrUnsupported
+				}
 			}
 			opts := map[string]any{}
 			copyIf(opts, t, "service_name", "grpc-service-name")

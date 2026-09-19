@@ -12,7 +12,8 @@ import (
 
 func hevFixture(t *testing.T) *ProxyTunnelAdapter {
 	t.Helper()
-	a, e := NewProxyTunnelAdapterWithHev("sing-box", engineconfig.New(t.TempDir(), t.TempDir()), t.TempDir(), "/opt/libexec/razvilka/hev-socks5-tunnel")
+	binary := filepath.Join(t.TempDir(), "hev-socks5-tunnel")
+	a, e := NewProxyTunnelAdapterWithHev("sing-box", engineconfig.New(t.TempDir(), t.TempDir()), t.TempDir(), binary)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -75,6 +76,9 @@ func TestHevRefusesStagedEditsAndCancellation(t *testing.T) {
 	_ = os.WriteFile(p, b, 0600)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+	if _, e := a.buildSidecarConfig(ctx); e == nil {
+		t.Fatal("build ignored cancellation")
+	}
 	if a.validateSidecarConfig(ctx, p) == nil {
 		t.Fatal("cancellation")
 	}

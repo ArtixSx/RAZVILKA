@@ -56,5 +56,6 @@ el('a1-wizardForm').addEventListener('change',summary);
 el('a1-extraSourceIDs').addEventListener('input',summary);
 window.addEventListener('razvilka:autonomy-state',()=>{queueMicrotask(summary);});
 document.addEventListener('razvilka:auth-required',()=>{invalidate();el('auto3NativeAdaptive').textContent='Требуется вход.';el('auto3ProxySummary').textContent='Требуется вход.';status('Сеанс завершён.');});
+document.addEventListener('razvilka:auth-restored',()=>{invalidate();el('auto3NativeAdaptive').textContent='Конфигурация ещё не прочитана.';summary();status('Нажмите «Прочитать конфигурацию», чтобы увидеть доступные режимы NFQWS2.');});
 summary();buttons();
 })(typeof globalThis!=='undefined'?globalThis:this);

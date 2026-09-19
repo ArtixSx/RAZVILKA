@@ -81,6 +81,9 @@ func (a *ProxyTunnelAdapter) hevConfig() ([]byte, error) {
 	return backendprofile.HevJSON(backendprofile.HevOptions{Interface: a.Interface, Address: a.TunnelCIDR, SOCKSPort: a.SOCKSPort, MTU: 1400, MaxSessions: 128})
 }
 func (a *ProxyTunnelAdapter) buildSidecarConfig(ctx context.Context) ([]byte, error) {
+	if e := ctx.Err(); e != nil {
+		return nil, e
+	}
 	if e := a.checkSidecarIdentity(); e != nil {
 		return nil, e
 	}
@@ -94,6 +97,9 @@ func (a *ProxyTunnelAdapter) buildSidecarConfig(ctx context.Context) ([]byte, er
 	return buildSOCKSTunnelConfigForSchema(a.Interface, a.TunnelCIDR, a.SOCKSPort, schema)
 }
 func (a *ProxyTunnelAdapter) validateSidecarConfig(ctx context.Context, path string) error {
+	if e := ctx.Err(); e != nil {
+		return e
+	}
 	if e := a.checkSidecarIdentity(); e != nil {
 		return e
 	}
