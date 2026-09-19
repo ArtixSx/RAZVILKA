@@ -2,11 +2,11 @@
 
 The release workflow stages a draft; promotion follows verification of the exact attached router artifacts.
 
-## 0.18.2 — Service setup, connection checks and configuration tools
+## 0.18.3 — Service setup, connection checks and configuration tools
 
 Release prepared; publication awaits the remaining router checks. Detailed
 [validation and limits](docs/EXT5_REVIEW_2026-09-19_RU.md) are tracked separately
-from the [short release notes](docs/releases/0.18.2.md).
+from the [short release notes](docs/releases/0.18.3.md).
 
 ### Added
 
@@ -27,6 +27,19 @@ from the [short release notes](docs/releases/0.18.2.md).
   export size checks and signing-key validation.
 - Recovery admission between node checks, fatal cleanup diagnostics and
   restoration of fully vanished owned firewall chains.
+- Prevent the stock Sing-box example from starting automatically after package
+  installation or update; preserve external ownership.
+- Fix false service failures when an HTML response exceeds the sample limit
+  and the server ignores Range. JSON validation and blocking checks remain strict.
+
+## 0.18.2 — Unpublished tagged build
+
+The tagged build completed Release CI and exact-artifact router installation,
+but remained a draft after real VLESS checks exposed the large-HTML sampling
+failure described above. It was not published as a stable release. Its Git tag
+is retained unchanged; version 0.18.3 carries the correction. See the
+[historical draft notes](docs/releases/0.18.2.md) and
+[validation report](docs/EXT5_REVIEW_2026-09-19_RU.md).
 
 On 19 September 2026, seven old prerelease entries were removed from Releases:
 0.18.1-rc.1/rc.2 and 0.18.2-rc.2 through rc.6. Git tags, source history and stable

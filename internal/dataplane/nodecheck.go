@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -794,8 +793,8 @@ func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routeP
 		return result, nil
 	}
 	defer response.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(response.Body, probecheck.MaxBodyBytes+1))
-	if readErr != nil || len(body) > probecheck.MaxBodyBytes {
+	body, truncated, readErr := readServiceBodySample(ctx, response)
+	if readErr != nil {
 		result.ErrorCode = "response-body-invalid"
 		return result, nil
 	}
@@ -803,7 +802,7 @@ func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routeP
 	assessment := probecheck.Evaluate(service, probe, probecheck.Observation{
 		RequestedURL: probe.URL, FinalURL: probecheck.FinalURL(response, probe.URL), RedirectChain: redirects,
 		HTTPStatus: response.StatusCode, ContentType: response.Header.Get("Content-Type"), Body: body,
-		BodyTruncated: response.ContentLength > int64(len(body)), ExpectedRoutePathID: routePathID, ObservedRoutePathID: routePathID,
+		BodyTruncated: truncated, ExpectedRoutePathID: routePathID, ObservedRoutePathID: routePathID,
 	})
 	result.HTTPStatus = response.StatusCode
 	result.Outcome, result.Verdict = assessment.Outcome, assessment.Verdict

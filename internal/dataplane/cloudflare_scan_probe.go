@@ -144,15 +144,16 @@ func (probe cloudflareScanHTTPProbe) service(ctx context.Context, client *http.C
 		return result, nil
 	}
 	defer response.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(response.Body, probecheck.MaxBodyBytes+1))
-	if readErr != nil || len(body) > probecheck.MaxBodyBytes {
+	body, truncated, readErr := readServiceBodySample(ctx, response)
+	if readErr != nil {
 		result.ErrorCode = "response-body-invalid"
 		return result, nil
 	}
+	defer clear(body)
 	assessment := probecheck.Evaluate(service, probecheck.ServiceProbe(service), probecheck.Observation{
 		RequestedURL: service.ProbeURL, FinalURL: probecheck.FinalURL(response, service.ProbeURL), RedirectChain: redirects,
 		HTTPStatus: response.StatusCode, ContentType: response.Header.Get("Content-Type"), Body: body,
-		BodyTruncated: response.ContentLength > int64(len(body)), ExpectedRoutePathID: routePathID, ObservedRoutePathID: routePathID,
+		BodyTruncated: truncated, ExpectedRoutePathID: routePathID, ObservedRoutePathID: routePathID,
 	})
 	result.HTTPStatus = response.StatusCode
 	result.Outcome, result.Verdict = assessment.Outcome, assessment.Verdict

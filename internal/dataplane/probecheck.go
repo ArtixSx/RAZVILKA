@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +10,31 @@ import (
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
 )
+
+// A service page may ignore Range and return a large or chunked document.
+// Sample at most MaxBodyBytes, using one lookahead byte to distinguish a
+// complete response from truncation even when Content-Length is absent.
+// The HTTP transport must honor ctx; cancellation and stream errors never
+// become a usable sample. Semantic acceptance remains with probecheck.
+func readServiceBodySample(ctx context.Context, response *http.Response) ([]byte, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, probecheck.MaxBodyBytes+1))
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		clear(body)
+		return nil, false, err
+	}
+	truncated := len(body) > probecheck.MaxBodyBytes || response.ContentLength > int64(len(body))
+	if len(body) > probecheck.MaxBodyBytes {
+		clear(body[probecheck.MaxBodyBytes:])
+		body = body[:probecheck.MaxBodyBytes]
+	}
+	return body, truncated, nil
+}
 
 func serviceProbeClient(client *http.Client, rawURL string) *http.Client {
 	chain := []string{}
