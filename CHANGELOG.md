@@ -4,7 +4,10 @@ The release workflow stages a draft; promotion follows verification of the exact
 
 ## 0.18.4 — Service setup, connection checks and configuration tools
 
-Release prepared; publication awaits the remaining router checks. Detailed
+Source revision c7ea788 passed full CI and local-build ARM64 router checks:
+Discord service verification, a route scoped to one PC, manual A/B switching,
+application restart and complete removal of owned routes. Final GitHub release
+artifacts still require their own verification before publication. Detailed
 [validation and limits](docs/EXT5_REVIEW_2026-09-19_RU.md) are tracked separately
 from the [short release notes](docs/releases/0.18.4.md).
 
@@ -32,20 +35,23 @@ from the [short release notes](docs/releases/0.18.4.md).
 - Fix false service failures when an HTML response exceeds the sample limit
   and the server ignores Range. JSON validation and blocking checks remain strict.
 - Admit bounded CDN answers of up to eight IPv4 addresses while requiring every
-  address to pass; preserve IP-path failure and deadline reports in the node API.
+  address to pass within the overall 45-second budget; persist IP-path failures
+  and return structured timeout/cancellation reports without recording them
+  (`recorded:false`). Diagnostic
+  text bounded to 240 Unicode characters without splitting UTF-8.
 
 ## 0.18.3 — Unpublished tagged build
 
 Exact-artifact router checks exposed a four-address DNS limit that rejected
 Discord's five-address CDN answer, and missing IP-path stages in the node-store
-contract. This build remained a draft. Its tag is retained; 0.18.4 includes the fixes.
+contract. Its unpublished draft was removed; the tag is retained and 0.18.4 includes the fixes.
 
 ## 0.18.2 — Unpublished tagged build
 
 The tagged build completed Release CI and exact-artifact router installation,
 but remained a draft after real VLESS checks exposed the large-HTML sampling
 failure described above. It was not published as a stable release. Its Git tag
-is retained unchanged; version 0.18.3 carries the correction. See the
+is retained unchanged; the unpublished draft was removed. Version 0.18.3 carries the correction. See the
 [historical draft notes](docs/releases/0.18.2.md) and
 [validation report](docs/EXT5_REVIEW_2026-09-19_RU.md).
 

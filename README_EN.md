@@ -11,11 +11,9 @@ No RAZVILKA cloud account is required.
 [Current status (RU)](docs/CURRENT_STATUS_RU.md) · [Changelog](CHANGELOG.md) ·
 [Report an issue](https://github.com/ArtixSx/RAZVILKA/issues)
 
-**Release `0.18.4`, based on EXT5, is being prepared.** Publication follows
-the remaining router checks; [verified results (RU)](docs/CURRENT_STATUS_RU.md)
-are tracked separately. The published stable channel still contains
-[`v0.18.0`](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.18.0).
-The installation command below downloads the stable release, not this source tree.
+**RAZVILKA 0.18.4** provides Autopilot, connection checks, bypass settings
+and local configuration tools. [Verified scenarios and limitations (RU)](docs/CURRENT_STATUS_RU.md)
+are documented separately. The installation command downloads the published stable release.
 
 ## Features in the current project
 
@@ -63,8 +61,7 @@ their compatibility also depends on the router model and kernel.
 
 ## First use of version 0.18.4
 
-These steps describe the prepared 0.18.4 release. Refer to the published stable
-release's notes for the features included in that version.
+These steps describe setup for version 0.18.4.
 
 1. Open `http://192.168.1.1:8787` from the LAN, substituting your router's LAN
    address if different. Set your own username and password.
