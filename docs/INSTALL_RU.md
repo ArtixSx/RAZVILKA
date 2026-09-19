@@ -52,7 +52,10 @@ opkg update && opkg install curl ca-certificates ca-bundle
 ```
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+sh /opt/tmp/razvilka-setup.sh
 ```
 
 Скрипт сначала полностью скачивается; он запускается только при успешной загрузке.
@@ -136,7 +139,10 @@ sh scripts/upgrade-entware.sh --apply
 **Удаление панели** выполняется отдельно от отката:
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh --uninstall
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+sh /opt/tmp/razvilka-setup.sh --uninstall
 ```
 
 Скрипт останавливает панель, убирает её собственные активные маршруты, бинарник

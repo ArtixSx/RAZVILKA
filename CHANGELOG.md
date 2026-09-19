@@ -13,6 +13,12 @@ The release workflow stages a draft; promotion follows verification of the exact
 - Replace outdated candidate entry points with a documentation archive and a
   concise Russian/English README covering purpose, install, update and removal.
 
+The exact `743e14f` release passed CI, provenance and all ten asset checksum/size
+checks. ARM64 bootstrap/removal fixtures and the real isolated installation,
+upgrade and rollback cycle passed with the released binary. Updating the installed
+panel preserved settings, credentials and eight nodes. MIPS/MIPSel cross-builds
+passed; physical tests on those architectures remain outstanding.
+
 [Release notes](docs/releases/0.18.6.md) ·
 [Validation status](docs/CURRENT_STATUS_RU.md).
 

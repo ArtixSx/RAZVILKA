@@ -36,7 +36,10 @@ opkg update && opkg install curl ca-certificates ca-bundle
 Вторая скачивает и запускает установщик:
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+sh /opt/tmp/razvilka-setup.sh
 ```
 
 Установщик добавит недостающие базовые утилиты, выберет архитектуру, проверит
@@ -55,7 +58,10 @@ mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://
 сохранив настройки и создав снимок для отката:
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+sh /opt/tmp/razvilka-setup.sh
 ```
 
 Проверить версию и состояние:
@@ -68,7 +74,10 @@ mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://
 ## Удаление
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh --uninstall
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+sh /opt/tmp/razvilka-setup.sh --uninstall
 ```
 
 Удаляются панель, её автозапуск и собственные активные маршруты. Настройки,

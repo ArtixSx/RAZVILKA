@@ -33,7 +33,10 @@ opkg update && opkg install curl ca-certificates ca-bundle
 ```
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+sh /opt/tmp/razvilka-setup.sh
 ```
 
 The installer adds missing basic utilities, selects the architecture, checks
@@ -52,7 +55,10 @@ Run the same installer to update to the latest stable release. It preserves
 settings and creates a rollback snapshot:
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+sh /opt/tmp/razvilka-setup.sh
 ```
 
 Check the installed version and service:
@@ -65,7 +71,10 @@ Check the installed version and service:
 ## Uninstall
 
 ```sh
-mkdir -p /opt/tmp && curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh && sh /opt/tmp/razvilka-setup.sh --uninstall
+mkdir -p /opt/tmp &&
+curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+sh /opt/tmp/razvilka-setup.sh --uninstall
 ```
 
 This removes the panel, its startup service and its own active routes. Settings,
