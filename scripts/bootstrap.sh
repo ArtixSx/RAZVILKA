@@ -145,7 +145,12 @@ ok 'Контрольная сумма совпала'
 step '4/5' 'Распаковываю релиз во временную папку…'
 # Reject links, special files, path traversal and ambiguous roots before any
 # extraction. Release archives contain only one RAZVILKA directory and files.
-tar -tzf "$BUNDLE" >"$WORKDIR/archive.paths"
+# BusyBox can normalize dangerous ../ or absolute names while listing them,
+# reporting that only on stderr. Never validate its rewritten stdout alone.
+if ! tar -tzf "$BUNDLE" >"$WORKDIR/archive.paths" 2>"$WORKDIR/archive.paths.errors" || [ -s "$WORKDIR/archive.paths.errors" ]; then
+  echo "Release archive path listing failed or reported unsafe normalization" >&2
+  exit 16
+fi
 RELEASE_NAME="$(awk '
   { if (NF != 1 || $0 ~ /\\/ || $0 ~ /^\// || $0 ~ /(^|\/)\.\.?($|\/)/) bad=1
     split($0, p, "/"); if (p[1] !~ /^RAZVILKA-[0-9A-Za-z._+-]+$/) bad=1
@@ -153,7 +158,10 @@ RELEASE_NAME="$(awk '
   }
   END { if (bad || root == "") exit 1; print root }
 ' "$WORKDIR/archive.paths")" || { echo "Unsafe release archive paths" >&2; exit 16; }
-tar -tvzf "$BUNDLE" >"$WORKDIR/archive.types"
+if ! tar -tvzf "$BUNDLE" >"$WORKDIR/archive.types" 2>"$WORKDIR/archive.types.errors" || [ -s "$WORKDIR/archive.types.errors" ]; then
+  echo "Release archive type listing failed or reported warnings" >&2
+  exit 16
+fi
 awk 'substr($0,1,1) != "-" && substr($0,1,1) != "d" {bad=1} END {exit bad}' "$WORKDIR/archive.types" || { echo "Release archive contains links or special files" >&2; exit 16; }
 tar -xzf "$BUNDLE" -C "$WORKDIR"
 HELPER="$WORKDIR/$RELEASE_NAME/scripts/$ACTION-entware.sh"

@@ -29,6 +29,29 @@ for TOOL in sha256sum tar gzip mktemp readlink awk od grep; do
   printf '#!/bin/sh\nexec "%s" "$@"\n' "$REAL_TOOL" >"$TEST_ROOT/providers/$TOOL"
   chmod 700 "$TEST_ROOT/providers/$TOOL"
 done
+REAL_TAR="$(command -v tar)"
+export REAL_TAR
+cat >"$TEST_ROOT/providers/tar" <<'TAR'
+#!/bin/sh
+set -eu
+case "$CASE_NAME:$1" in
+  traversal-warning:-tzf)
+    printf '%s\n' 'RAZVILKA-fixture/traversal'
+    printf '%s\n' "tar: removing leading '../' from member names" >&2
+    exit 0
+    ;;
+  list-failed:-tzf)
+    printf '%s\n' 'RAZVILKA-fixture/'
+    exit 2
+    ;;
+  types-warning:-tvzf)
+    "$REAL_TAR" "$@"
+    printf '%s\n' 'tar: fixture type-list warning' >&2
+    exit 0
+    ;;
+esac
+exec "$REAL_TAR" "$@"
+TAR
 printf '#!/bin/sh\nexit 1\n' >"$TEST_ROOT/providers/pidof"
 printf '#!/bin/sh\nexit 0\n' >"$TEST_ROOT/providers/ip"
 printf '#!/bin/sh\nexit 99\n' >"$TEST_ROOT/providers/start-stop-daemon"
@@ -84,7 +107,7 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missing-dependencies uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal multiple-roots archive-link download-failed opkg-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missing-dependencies uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   CASE_ROOT="$TEST_ROOT/$CASE_NAME"
   BASE="$CASE_ROOT/base"
@@ -115,8 +138,10 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missin
     printf '#!/bin/sh\nprintf old-rollback >"$CASE_ROOT/helper-called"\n' >"$CASE_ROOT/source/RAZVILKA-fixture/scripts/uninstall-entware.sh"
   fi
   if [ "$CASE_NAME" = multiple-roots ]; then mkdir "$CASE_ROOT/source/RAZVILKA-extra"; fi
-  if [ "$CASE_NAME" = traversal ]; then
-    tar -czf "$CASE_ROOT/bundle.tar.gz" --transform='s,^,../,' -C "$CASE_ROOT/source" RAZVILKA-fixture
+  if [ "$CASE_NAME" = traversal ] || [ "$CASE_NAME" = traversal-warning ]; then
+    # A fixed gzip/tar fixture containing ../RAZVILKA-fixture/traversal.
+    # BusyBox tar has no GNU --transform option; retain the same unsafe path.
+    printf '%s' 'H4sIAAAAAAACCu3RuwrCUBCE4X0UXyDJ5kL6lKJVihR2W5ygICLnIj6+J4II1kEE/6+ZZZoptiyrcThM2/1uKObTPSbvqujt5nyws6xDs77rnpl9pmrTvu+lr1utVTYqX5BCNJ/n5T+lS7DZFVeLx9f/BQAAAAAAAAAAAAAAAADw+x7XcVzUACgAAA==' | base64 -d >"$CASE_ROOT/bundle.tar.gz"
   else
     (cd "$CASE_ROOT/source" && tar -czf "$CASE_ROOT/bundle.tar.gz" RAZVILKA-*)
   fi
@@ -156,6 +181,11 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missin
       ;;
     *)
       [ "$CODE" != 0 ] && [ ! -e "$CASE_ROOT/helper-called" ] || { echo "Unsafe bootstrap accepted: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1; }
+      case "$CASE_NAME" in
+        traversal|traversal-warning|list-failed|types-warning)
+          [ "$CODE" = 16 ] || { echo "Fixture did not reach the archive listing refusal: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1; }
+          ;;
+      esac
       ;;
   esac
   [ -z "$(find "$BASE/tmp" -mindepth 1 -print)" ] || { echo "Bootstrap leaked extracted release files: $CASE_NAME" >&2; exit 1; }
