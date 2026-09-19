@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ import (
 func TestNodeServiceIPv4RejectsUnsafeOrUnboundedDNS(t *testing.T) {
 	for _, values := range [][]string{
 		nil, {"127.0.0.1"}, {"93.184.216.34", "192.168.1.1"}, {"93.184.216.34", "fd00::1"}, {"2606:4700::1111"},
-		{"1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "9.9.9.9"},
+		{"1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "9.9.9.9", "9.9.9.10", "9.9.9.11", "9.9.9.12", "9.9.9.13"},
 	} {
 		addresses := make([]netip.Addr, 0, len(values))
 		for _, value := range values {
@@ -25,6 +26,45 @@ func TestNodeServiceIPv4RejectsUnsafeOrUnboundedDNS(t *testing.T) {
 		resolver := func(context.Context, string) ([]netip.Addr, error) { return addresses, nil }
 		if got, err := resolveNodeServiceIPv4(context.Background(), "https://telegram.org/", resolver); err == nil || len(got) > 0 {
 			t.Fatalf("unsafe set %v accepted: %v %v", values, got, err)
+		}
+	}
+}
+
+func TestExactNodeChecksEntireCDNAddressSet(t *testing.T) {
+	for _, count := range []int{5, 8} {
+		for _, failLast := range []bool{false, true} {
+			t.Run(fmt.Sprintf("addresses=%d/failLast=%t", count, failLast), func(t *testing.T) {
+				checker := fakeExactNodeChecker(t)
+				checker.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+					if host == "node.example" {
+						return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+					}
+					addresses := make([]netip.Addr, count)
+					for i := range addresses {
+						addresses[i] = netip.AddrFrom4([4]byte{93, 184, 216, byte(i + 1)})
+					}
+					return addresses, nil
+				}
+				base := checker.serviceIPProbe
+				seen := map[netip.Addr]bool{}
+				checker.serviceIPProbe = func(ctx context.Context, address, route, egress string, service catalog.Service, pinned netip.Addr) (evidence.ProbeEvidence, error) {
+					if seen[pinned] {
+						t.Fatal("duplicate IP probe")
+					}
+					seen[pinned] = true
+					if failLast && len(seen) == count {
+						return evidence.ProbeEvidence{}, errors.New("last CDN destination failed")
+					}
+					return base(ctx, address, route, egress, service, pinned)
+				}
+				result, err := checker.Check(context.Background(), checkedNodeRequest())
+				if err != nil || len(seen) != count || result.Available == failLast {
+					t.Fatalf("incomplete CDN proof: result=%+v checked=%d err=%v", result, len(seen), err)
+				}
+				if failLast && (result.Stage != "service_ip" || result.Verdict == evidence.VerdictPass) {
+					t.Fatalf("last address failure gained route authority: %+v", result)
+				}
+			})
 		}
 	}
 }

@@ -2,11 +2,11 @@
 
 The release workflow stages a draft; promotion follows verification of the exact attached router artifacts.
 
-## 0.18.3 — Service setup, connection checks and configuration tools
+## 0.18.4 — Service setup, connection checks and configuration tools
 
 Release prepared; publication awaits the remaining router checks. Detailed
 [validation and limits](docs/EXT5_REVIEW_2026-09-19_RU.md) are tracked separately
-from the [short release notes](docs/releases/0.18.3.md).
+from the [short release notes](docs/releases/0.18.4.md).
 
 ### Added
 
@@ -31,6 +31,14 @@ from the [short release notes](docs/releases/0.18.3.md).
   installation or update; preserve external ownership.
 - Fix false service failures when an HTML response exceeds the sample limit
   and the server ignores Range. JSON validation and blocking checks remain strict.
+- Admit bounded CDN answers of up to eight IPv4 addresses while requiring every
+  address to pass; preserve IP-path failure and deadline reports in the node API.
+
+## 0.18.3 — Unpublished tagged build
+
+Exact-artifact router checks exposed a four-address DNS limit that rejected
+Discord's five-address CDN answer, and missing IP-path stages in the node-store
+contract. This build remained a draft. Its tag is retained; 0.18.4 includes the fixes.
 
 ## 0.18.2 — Unpublished tagged build
 

@@ -9,7 +9,10 @@ import (
 	"sort"
 )
 
-const maxNodeServiceIPv4 = 4
+// Common CDN-backed services return five or more IPv4 addresses. Keep the
+// complete admitted set bounded without rejecting those ordinary answers.
+// Every address must still pass, within the checker's overall time budget.
+const maxNodeServiceIPv4 = 8
 
 // Resolve locally just as policy compilation does. Never choose one lucky
 // address from a larger set: every admitted IPv4 must pass the literal path.

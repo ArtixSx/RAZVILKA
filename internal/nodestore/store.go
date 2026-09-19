@@ -629,7 +629,7 @@ func validCheckRecord(record CheckRecord, nodeID string) bool {
 		!checkTokenPattern.MatchString(record.NetworkProfile) || record.RoutePathID != "sing-box:"+nodeID ||
 		record.CheckedAt.IsZero() || record.ExpiresAt.IsZero() || !record.ExpiresAt.After(record.CheckedAt) ||
 		record.ExpiresAt.Sub(record.CheckedAt) > maxCheckTTL || record.LatencyMS < 0 || record.LatencyMS > 600_000 ||
-		record.HTTPStatus < 0 || record.HTTPStatus > 599 || len(record.Message) > 240 ||
+		record.HTTPStatus < 0 || record.HTTPStatus > 599 || !utf8.ValidString(record.Message) || utf8.RuneCountInString(record.Message) > 240 ||
 		(record.ErrorCode != "" && !checkTokenPattern.MatchString(record.ErrorCode)) {
 		return false
 	}
@@ -658,6 +658,12 @@ func validCheckRecord(record CheckRecord, nodeID string) bool {
 	}
 	switch record.Stage {
 	case "dns", "transport", "configuration", "protocol", "route_identity", "egress", "service", "cleanup":
+	case "service_ip", "deadline", "canceled":
+		// The checker keeps Stage=service after a successful IP-path proof.
+		// These terminal failure stages must never create route authority.
+		if record.State == "available" || record.Verdict == "PASS" {
+			return false
+		}
 	default:
 		return false
 	}

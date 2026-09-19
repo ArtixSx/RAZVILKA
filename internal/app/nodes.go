@@ -12,6 +12,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
@@ -370,6 +371,31 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 	result, _, err := a.checkAndRecordNode(r.Context(), id, service, "", 0)
 	if err != nil {
 		switch {
+		case result.ErrorCode == "node-cleanup-failed":
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "NODE_CLEANUP_REQUIRED", "error": "Очистка временного процесса не подтверждена. Проверки остановлены до восстановления.", "result": result, "recorded": false, "working_routes_changed": false})
+		case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+			status, code, message := http.StatusGatewayTimeout, "NODE_CHECK_DEADLINE", "Истекло общее время проверки. Повторите проверку узла."
+			if errors.Is(err, context.Canceled) {
+				status, code, message = http.StatusRequestTimeout, "NODE_CHECK_CANCELED", "Проверка отменена. Результат не сохранён."
+			}
+			body := map[string]any{"ok": false, "code": code, "error": message, "recorded": false, "working_routes_changed": false}
+			if result.ProbeID != "" {
+				// An interrupted operation cannot expose a usable proof, including
+				// cancellation between the checker returning and Store validation.
+				result.Available = false
+				result.Verdict = evidence.VerdictInconclusive
+				result.EgressIP = ""
+				result.Stage, result.ErrorCode, result.Message = "deadline", "node-check-deadline", message
+				if errors.Is(err, context.Canceled) {
+					result.Stage, result.ErrorCode = "canceled", "node-check-canceled"
+				}
+				result.Evidence.Verdict = evidence.VerdictInconclusive
+				result.Evidence.Outcome = evidence.OutcomeUnknown
+				result.Evidence.EgressIP = ""
+				result.Evidence.ErrorCode = result.ErrorCode
+				body["result"] = result
+			}
+			writeJSON(w, status, body)
 		case errors.Is(err, dataplane.ErrExactNodeNetworkChanged):
 			writeNodeNetworkError(w)
 		case errors.Is(err, dataplane.ErrExactNodeBusy):
@@ -416,6 +442,9 @@ func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog
 		return result, snapshot, nodestore.ErrNotFound
 	}
 	current, err := a.freshNetworkProfile(ctx)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return result, snapshot, err
+	}
 	if err != nil || profile != "" && current != profile {
 		return result, snapshot, dataplane.ErrExactNodeNetworkChanged
 	}
@@ -431,11 +460,18 @@ func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog
 	if result.NodeID != id || result.ServiceID != service.ID || result.NetworkProfile != profile || result.RoutePathID != "sing-box:"+id {
 		return result, snapshot, dataplane.ErrExactNodeUnavailable
 	}
-	if current, err := a.freshNetworkProfile(ctx); err != nil || current != profile {
+	current, err = a.freshNetworkProfile(ctx)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return result, snapshot, err
+	}
+	if err != nil || current != profile {
 		return result, snapshot, dataplane.ErrExactNodeNetworkChanged
 	}
 	latest, err := a.Nodes.Snapshot(ctx, time.Now())
-	if err != nil || latest.Generation != snapshot.Generation {
+	if err != nil {
+		return result, snapshot, err
+	}
+	if latest.Generation != snapshot.Generation {
 		return result, snapshot, dataplane.ErrReviewChanged
 	}
 	state := "unavailable"
