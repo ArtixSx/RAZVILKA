@@ -34,11 +34,15 @@
   function filterServices(services, { query = '', scope = 'selected', category: wanted = '' } = {}, summaries = {}) {
     const q = text(query).trim().toLocaleLowerCase('ru');
     return services.filter(s => {
-      if (scope === 'selected' && !s.enabled) return false;
+      if (scope === 'selected' && !s.enabled && !s.applied_enabled && !s.applied_state?.enabled && !serviceChanged(s)) return false;
+      if (scope === 'changed' && !serviceChanged(s)) return false;
       if (scope === 'attention' && (!s.enabled || summaries[s.id]?.kind === 'good')) return false;
       if (wanted && category(s) !== wanted) return false;
       return !q || [s.name, category(s), ...(s.domains || [])].map(text).join(' ').toLocaleLowerCase('ru').includes(q);
     });
+  }
+  function serviceChanged(service) {
+    return service.dirty === true || service.route_dirty === true || service.sources_dirty === true;
   }
   function groupServices(services, allServices = services, summaries = {}) {
     const groups = new Map();

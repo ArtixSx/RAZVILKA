@@ -1358,3 +1358,5 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .interface-ui .ui3-engine-actions button{min-width:0;min-height:40px;padding:8px;font-size:11px;line-height:1.4;white-space:normal;overflow-wrap:anywhere}
 .ui3-engine-actions>button:first-child{grid-column:1/-1}
 .ui3-engine-action-hint{margin:12px 0 0}
+
+.interface-ui .pending-service-summary { white-space:pre-line; line-height:1.65; overflow-wrap:anywhere; }

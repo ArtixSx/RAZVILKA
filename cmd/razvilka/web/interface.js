@@ -60,9 +60,9 @@ function interfaceAutoLabel(){const p=consoleSnapshot?.policy;if(!p)return 'На
 function interfaceBadge(summary){return `<span class="ui3-status ${esc(summary.kind||'unknown')}"><i></i>${esc(summary.label||'Не проверен')}</span>`;}
 function interfaceServiceCard(s,summaries,compact=false){
  const h=summaries[s.id]||{}, managed=consoleSnapshot?.services?.[s.id];
- const auto=managed?managed.enabled?'Автопилот':'Автоподбор на паузе':s.enabled?'Индивидуальная настройка':'Не добавлен';
+ const auto=managed?managed.enabled?'Автопилот':'Автоподбор на паузе':s.enabled?'Индивидуальная настройка':s.applied_enabled?'Ожидает выключения':'Не добавлен';
  const pending=s.dirty===true||s.enabled!==!!serviceDashboardApplied(s).enabled;
- return `<article class="ui3-service-card ${compact?'compact':''} ${s.enabled?'':'not-selected'}" data-rz-card="${esc(s.id)}"><div class="ui3-service-card-top"><span class="ui3-service-icon tone-${esc(rim.category(s)==='ИИ-сервисы'?'violet':s.id==='youtube'?'rose':'teal')}">${consoleServiceIcon(s)}</span><div class="ui3-service-name"><h4>${esc(s.name)}</h4><span>${esc(compact?auto:rim.category(s))}</span></div><button type="button" class="ui3-more" data-rz-inspect="${esc(s.id)}" data-rz-focus="${compact?'child':'card'}-${esc(s.id)}" aria-label="Подробности: ${esc(s.name)}">${ci('chevron')}</button></div><div class="ui3-card-state">${interfaceBadge(h)}${pending?`<span class="ui3-pending-dot" title="Есть неприменённые изменения">${managed&&!s.dirty?'В очереди':'Есть изменения'}</span>`:''}</div><div class="ui3-card-route"><span>Сейчас</span><b title="${esc(interfaceRouteName(h.route))}">${esc(interfaceRouteName(h.route))}</b></div>${compact?'':`<div class="ui3-card-footer"><span>${esc(auto)}</span><button type="button" class="text-button" data-rz-inspect="${esc(s.id)}">${s.enabled?'Управлять':'Добавить'} ${ci('chevron')}</button></div>`}</article>`;
+ return `<article class="ui3-service-card ${compact?'compact':''} ${s.enabled?'':'not-selected'}" data-rz-card="${esc(s.id)}"><div class="ui3-service-card-top"><span class="ui3-service-icon tone-${esc(rim.category(s)==='ИИ-сервисы'?'violet':s.id==='youtube'?'rose':'teal')}">${consoleServiceIcon(s)}</span><div class="ui3-service-name"><h4>${esc(s.name)}</h4><span>${esc(compact?auto:rim.category(s))}</span></div><button type="button" class="ui3-more" data-rz-inspect="${esc(s.id)}" data-rz-focus="${compact?'child':'card'}-${esc(s.id)}" aria-label="Подробности: ${esc(s.name)}">${ci('chevron')}</button></div><div class="ui3-card-state">${interfaceBadge(h)}${pending?`<span class="ui3-pending-dot" title="Есть неприменённые изменения">${managed&&!s.dirty?'В очереди':'Есть изменения'}</span>`:''}</div><div class="ui3-card-route"><span>Сейчас</span><b title="${esc(interfaceRouteName(h.route))}">${esc(interfaceRouteName(h.route))}</b></div>${compact?'':`<div class="ui3-card-footer"><span>${esc(auto)}</span><button type="button" class="text-button" data-rz-inspect="${esc(s.id)}">${s.enabled||s.applied_enabled||pending?'Управлять':'Добавить'} ${ci('chevron')}</button></div>`}</article>`;
 }
 function interfaceGroupHTML(g,summaries,location){
  const a=g.summary,key=location+':'+g.name,open=interfaceState.expanded.has(key)||!!interfaceState.query;
@@ -155,6 +155,14 @@ function renderInterfaceServices(summaries){
  if(['error','busy','loading'].includes(state.dataLoad?.services?.phase)) consoleText('ui3CatalogSummary',`${list.length} сервисов · последние полученные данные. ${interfaceLoadMessage('services')}`);
  interfaceHTML('ui3ServiceCatalog',list.length?interfaceCards(list,summaries,'catalog'):interfaceEmpty(interfaceState.filter==='selected'&&!all.some(s=>s.enabled)?'Выберите первый сервис':'Ничего не найдено',interfaceState.filter==='selected'&&!all.some(s=>s.enabled)?'Откройте каталог и добавьте сайты, которым нужен обход.':'Попробуйте другое название или сбросьте фильтры.',`<button type="button" class="secondary" data-rz-reset-filters>Открыть весь каталог ${ci('chevron')}</button>`));
  $$('[data-rz-filter]').forEach(e=>{const on=e.dataset.rzFilter===interfaceState.filter;e.classList.toggle('active',on);e.setAttribute('aria-pressed',String(on));});
+}
+function interfaceOpenServiceChanges(){
+ interfaceState.filter='changed';interfaceState.query='';interfaceState.category='';
+ $('#ui3ServiceSearch').value='';
+ setView('services');
+ renderInterfaceServices(interfaceSummaries());
+ $('#serviceDraftBar').scrollIntoView({block:'center',behavior:'smooth'});
+ $('#applyServiceChanges').focus({preventScroll:true});
 }
 function interfaceEngineCard(id,meta){
  const info=consoleEngineState(id),component=info.component,update=consoleEngineUpdateState(info);

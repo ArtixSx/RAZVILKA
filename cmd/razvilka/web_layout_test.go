@@ -370,7 +370,7 @@ func TestServicesUseOneExplicitApplyWithoutRoutineReviewModal(t *testing.T) {
 		t.Fatal(err)
 	}
 	html, app := string(indexData), string(appData)
-	for _, required := range []string{`id="applyServiceChanges"`, "Проверить и применить", "function needsApplyReview", "sectionOwnsDraft", "Автопилот (AUTO)"} {
+	for _, required := range []string{`id="applyServiceChanges"`, "Проверить и применить", "function needsApplyReview", "pendingChangeViews", "Автопилот (AUTO)"} {
 		if !strings.Contains(html+app, required) {
 			t.Fatalf("streamlined service apply marker missing %q", required)
 		}

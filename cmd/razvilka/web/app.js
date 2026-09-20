@@ -1196,14 +1196,15 @@ function renderStatus() {
   $('#serviceNavCount').textContent = s.enabled_services ?? '—';
   $('#serviceDraftBar').classList.toggle('show', !!s.services_pending_changes);
   $('#serviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
+  renderPendingServiceChanges();
   $('#applyServiceChanges').textContent = s.safe_mode ? 'Проверить изменения' : 'Проверить и применить';
   $('#deviceDraftBar').classList.toggle('show', !!s.devices_pending_changes);
   $('#deviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#sourceDraftBar').classList.toggle('show', !!s.sources_pending_changes);
   $('#sourceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#applyDeviceChanges').textContent = s.safe_mode ? 'Проверить изменения' : 'Проверить и применить';
-  const sectionOwnsDraft = ['services', 'devices', 'engineconfig', 'dns', 'sources', 'nodes'].includes(state.currentView);
-  $('#draftBar').classList.toggle('show', !sectionOwnsDraft && (!!s.routing_pending_changes || !!s.engine_pending_changes || engineDrafts > 0));
+  const pendingViews = pendingChangeViews(s);
+  $('#draftBar').classList.toggle('show', pendingViews.some(view => view !== state.currentView));
   $('#draftBar').classList.toggle('safe-review', !!s.safe_mode);
   const failedApply = !s.safe_mode && !!s.pending_changes && !!s.last_apply_failure;
   $('#draftBar').classList.toggle('apply-failed', failedApply);
@@ -1227,8 +1228,38 @@ function renderStatus() {
 }
 
 function openPendingChanges() {
-  const status = state.status || {};
-  setView(status.services_pending_changes ? 'services' : status.devices_pending_changes ? 'devices' : status.sources_pending_changes ? 'sources' : 'engineconfig');
+  const views = pendingChangeViews(state.status || {});
+  const view = views.find(name => name !== state.currentView) || views[0];
+  if (!view) {
+    showNotice('info', 'Изменений для применения нет', 'Все полученные настройки уже применены.');
+    return;
+  }
+  if (view === 'services' && typeof interfaceOpenServiceChanges === 'function') {
+    interfaceOpenServiceChanges();
+    return;
+  }
+  setView(view);
+  const target = $({ devices: '#deviceDraftBar', sources: '#sourceDraftBar', dns: '#view-dns', engineconfig: '#view-engineconfig' }[view]);
+  target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function pendingChangeViews(status) {
+  const views = [];
+  if (status.services_pending_changes) views.push('services');
+  if (status.devices_pending_changes) views.push('devices');
+  if (status.sources_pending_changes) views.push('sources');
+  if (status.dns_pending_changes) views.push('dns');
+  if (status.engine_pending_changes || Number(status.engine_config_drafts || 0) > 0) views.push('engineconfig');
+  return views;
+}
+
+function renderPendingServiceChanges() {
+  const changed = (state.services || []).filter(service => service.route_dirty || service.enabled !== !!service.applied_enabled);
+  $('#serviceChangeSummary').textContent = changed.length ? changed.map(service => {
+    const before = service.applied_enabled ? routeLabel(service.applied_route) : 'Выключен';
+    const after = service.enabled ? routeLabel(service.route) : 'Выключен';
+    return `${service.name}: ${before} → ${after}${!service.enabled && !service.applied_enabled ? `; сохранённый маршрут: ${routeLabel(service.route)}` : ''}`;
+  }).join('\n') : 'Получаем состав изменений сервисов…';
 }
 
 function renderSystem() {
@@ -1547,6 +1578,7 @@ function serviceMatches(service) {
 }
 
 function renderServices() {
+  renderPendingServiceChanges();
   renderServiceDashboard();
 }
 

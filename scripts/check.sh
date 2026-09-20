@@ -20,6 +20,7 @@ sh ./scripts/test-uninstall-entware.sh
 if command -v node >/dev/null 2>&1; then
   node scripts/build-interface.mjs --check
   node scripts/test-interface-model.mjs
+  node scripts/test-pending-changes-ui.mjs
   node scripts/test-interface-contract.mjs
   node scripts/test-interface-home.mjs
   node scripts/test-component-cards-ui.mjs
