@@ -7,15 +7,29 @@ import (
 	"time"
 )
 
+// A scoped proxy inspection reads the forwarding lease, firewall attachments
+// and every admitted source/destination route. On routers this can exceed two
+// seconds even with healthy processes; retain a bound without truncating that
+// proof or replacing it with a PID/journal-only check.
+const runtimePresenceTimeout = 8 * time.Second
+
 // ObserveCommittedRuntime proves present owned runtime, not service reachability.
 // Bounded read-only inspection never probes services, switches an endpoint,
 // starts a process, repairs state or changes kernel rules.
-func (m *Manager) ObserveCommittedRuntime(ctx context.Context, expected Plan) error {
+func (m *Manager) ObserveCommittedRuntime(ctx context.Context, expected Plan) (retErr error) {
 	if m == nil || expected.State != "committed" || len(expected.Routes) == 0 {
 		return ErrReviewChanged
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, runtimePresenceTimeout)
 	defer cancel()
+	defer func() {
+		// Command runners can return only an exit status (or a higher-level
+		// ownership error) after cancellation. Preserve the actual observation
+		// timeout so consumers do not misreport it as absent/broken runtime.
+		if err := ctx.Err(); err != nil {
+			retErr = err
+		}
+	}()
 	if err := m.beginOperation(ctx); err != nil {
 		return err
 	}

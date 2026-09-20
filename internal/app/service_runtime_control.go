@@ -51,7 +51,7 @@ func (a *App) serviceControlRuntime(w http.ResponseWriter, r *http.Request) {
 	stop := request.Action == "stop"
 	if stop == cfg.ServiceControl.Stopped {
 		if stop {
-			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "live_applied": false, "control": a.serviceControlView()})
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "live_applied": false, "control": a.serviceControlView(r.Context())})
 			return
 		}
 		fail("SERVICE_RUNTIME_UNCONFIGURED", "Выберите сервис и проверьте подключение. Сохранённого маршрута для включения пока нет.")
@@ -178,5 +178,5 @@ func (a *App) serviceControlRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.wakeReconciler()
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "live_applied": true, "execution": execution, "control": a.serviceControlView()})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "live_applied": true, "execution": execution, "control": a.serviceControlView(r.Context())})
 }

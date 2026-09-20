@@ -52,7 +52,7 @@ function renderProjectLogDetails(value) {
   const control = data.control && typeof data.control === 'object' ? data.control : {};
   const ready = Number.isSafeInteger(control.config_revision);
   const runtime = !ready || control.runtime_state === 'unknown' ? 'Состояние не получено' : control.running === true ? 'Обходы включены' : control.runtime_state === 'stopped' ? 'Обходы выключены' : 'Нужна настройка';
-  if (!ready || control.runtime_state === 'unknown') problems.push({ name: 'Управление проектом', message: 'Состояние обходов не подтверждено. Обновите данные панели.' });
+  if (!ready || control.runtime_state === 'unknown') problems.push({ name: 'Управление проектом', message: String(control.runtime_issue?.message || 'Состояние обходов не подтверждено. Обновите данные панели.') });
   const uniqueProblems = problems.filter((item, index) => problems.findIndex(other => other.name === item.name && other.message === item.message) === index);
   const allEvents = records(audit.events).sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0));
   const events = allEvents.slice(0, 40);

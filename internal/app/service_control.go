@@ -67,13 +67,13 @@ func (a *App) serviceControlMemory() map[string]any {
 	return view
 }
 
-func (a *App) serviceControlView() map[string]any {
+func (a *App) serviceControlView(ctx context.Context) map[string]any {
 	cfg := a.Store.Get()
 	c := cfg.ServiceControl
 	view := a.serviceControlMemory()
-	observeCtx, stopObserve := context.WithTimeout(context.Background(), 3*time.Second)
-	defer stopObserve()
-	profile, profileErr := a.freshNetworkProfile(observeCtx)
+	freshnessCtx, stopFreshness := context.WithTimeout(ctx, 3*time.Second)
+	profile, profileErr := a.freshNetworkProfile(freshnessCtx)
+	stopFreshness()
 	serviceHashes := map[string]string{}
 	for _, service := range a.catalogSnapshot().Services {
 		serviceHashes[service.ID] = applyReviewHash(service)
@@ -85,19 +85,25 @@ func (a *App) serviceControlView() map[string]any {
 	}
 	state := "unconfigured"
 	canStop := false
+	var runtimeErr error
 	if c.Stopped {
 		state = "stopped"
 	} else {
 		for _, applied := range cfg.AppliedServices {
 			if applied.Enabled {
 				state = "unknown"
+				runtimeErr = dataplane.ErrReviewChanged
 				break
 			}
 		}
 		if state == "unknown" && a.Dataplane != nil {
 			if committed, ok, err := a.Dataplane.Committed(); err == nil && ok && committed.State == "committed" && committed.Revision == cfg.AppliedRevision && len(committed.Routes) > 0 {
 				canStop = true
-				if a.Dataplane.ObserveCommittedRuntime(observeCtx, committed) == nil {
+				// Result freshness and actual owned runtime each have their own
+				// bounded observation. A slow WAN sample must not spend the
+				// runtime's inspection budget; caller cancellation still applies.
+				runtimeErr = a.Dataplane.ObserveCommittedRuntime(ctx, committed)
+				if runtimeErr == nil {
 					state = "running"
 				}
 			}
@@ -118,10 +124,29 @@ func (a *App) serviceControlView() map[string]any {
 	view["config_revision"], view["mode"] = cfg.Revision, c.EffectiveMode()
 	view["runtime_state"], view["running"] = state, state == "running"
 	view["can_stop"] = canStop
+	if state == "unknown" {
+		view["runtime_issue"] = serviceRuntimeIssue(runtimeErr)
+	}
 	view["resume_available"], view["safe_mode"] = c.Stopped && len(c.SuspendedRoutes) > 0, cfg.SafeMode
 	view["schedule"] = map[string]any{"enabled": c.Schedule.Enabled, "interval_seconds": interval, "service_ids": append([]string{}, c.Schedule.ServiceIDs...), "next_check_at": next}
 	view["notice"] = "Автопилот использует только разрешённые правила сервисов. Ручной режим останавливает автоматическую замену; проверки по таймеру продолжаются."
 	return view
+}
+
+func serviceRuntimeIssue(err error) map[string]string {
+	code, message := "UNAVAILABLE", "Не удалось подтвердить процессы и правила маршрутов. Повторите проверку состояния."
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		code, message = "TIMEOUT", "Проверка состояния не завершилась вовремя. Работа обхода пока не подтверждена; повторите проверку."
+	case errors.Is(err, context.Canceled):
+		code, message = "CANCELED", "Проверка состояния отменена. Повторите проверку."
+	case errors.Is(err, dataplane.ErrNetworkChanged):
+		code, message = "NETWORK_CHANGED", "Сеть изменилась или временно недоступна. Нужна свежая проверка маршрута."
+	case errors.Is(err, dataplane.ErrReviewChanged):
+		code, message = "CONFIGURATION_CHANGED", "Текущие настройки и применённые маршруты не совпадают. Обновите состояние."
+	}
+	// Never expose raw command output: it can contain private route addresses.
+	return map[string]string{"code": code, "message": message}
 }
 
 func (a *App) serviceControl(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +157,7 @@ func (a *App) serviceControl(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, a.serviceControlView())
+		writeJSON(w, http.StatusOK, a.serviceControlView(r.Context()))
 	case http.MethodPut:
 		var request struct {
 			ExpectedRevision uint64                       `json:"expected_revision"`
@@ -164,7 +189,7 @@ func (a *App) serviceControl(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.wakeReconciler()
-		writeJSON(w, http.StatusOK, a.serviceControlView())
+		writeJSON(w, http.StatusOK, a.serviceControlView(r.Context()))
 	default:
 		methodNotAllowed(w)
 	}

@@ -119,7 +119,7 @@ Go для работы панели не обязательны.
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
   https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.18.8 sh /opt/tmp/razvilka-setup.sh
+RAZVILKA_VERSION=v0.18.9 sh /opt/tmp/razvilka-setup.sh
 ```
 
 Нужен именно опубликованный тег из [Releases](https://github.com/ArtixSx/RAZVILKA/releases).

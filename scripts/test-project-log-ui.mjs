@@ -21,6 +21,12 @@ assert.doesNotMatch(out, /Операция завершена|Что требу�
 assert.match(visible({ ...healthy, control: { ...healthy.control, running: false, runtime_state: 'stopped', safe_mode: true, mode: 'manual' } }), /Обходы выключены[\s\S]*Ручная настройка[\s\S]*применение маршрутов запрещено/);
 assert.match(visible({ ...healthy, control: { ...healthy.control, runtime_state: 'unknown' } }), /Состояние не получено/);
 assert.doesNotMatch(visible({ ...healthy, control: { ...healthy.control, runtime_state: 'unknown' } }), /Обходы включены/);
+out = visible({ ...healthy, control: { ...healthy.control, running: false, runtime_state: 'unknown', runtime_issue: { code: 'TIMEOUT', message: 'Проверка состояния не завершилась вовремя.' } } });
+assert.match(out, /Проверка состояния не завершилась вовремя/);
+assert.doesNotMatch(out, /Обходы включены/);
+out = visible({ ...healthy, control: { runtime_state: 'unknown', runtime_issue: { message: '<script>unsafe()</script>' } } });
+assert.doesNotMatch(out, /<script>/);
+assert.match(out, /&lt;script&gt;/);
 
 out = visible({ ...healthy, load_issues: [{ section: 'engineConfigs', message: 'Настройки не загрузились' }], component_issues: [{ id: 'Sing-box', message: 'Источник пакетов недоступен' }], last_action_error: 'Маршрут не подтверждён' });
 for (const text of ['Есть сообщения, требующие внимания', 'Настройки обходов', 'Настройки не загрузились', 'Обход: Sing-box', 'Источник пакетов недоступен', 'Маршрут не подтверждён']) assert.ok(out.includes(text), text);

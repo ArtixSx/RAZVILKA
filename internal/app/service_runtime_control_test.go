@@ -62,7 +62,7 @@ func TestServiceRuntimeStopResumeExactScopePreservesPendingAndUnownedAdapters(t 
 	if err := a.Dataplane.Register(other); err != nil {
 		t.Fatal(err)
 	}
-	view := a.serviceControlView()
+	view := a.serviceControlView(context.Background())
 	if view["runtime_state"] != "unknown" || view["can_stop"] != true || view["running"] != false {
 		t.Fatal("committed journal falsely proved live fake runtime")
 	}

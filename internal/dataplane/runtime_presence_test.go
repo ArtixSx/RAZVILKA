@@ -8,9 +8,73 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
+
+type runtimePresenceDelayedRunner struct {
+	NFQWS2Runner
+	delay time.Duration
+	done  bool
+}
+
+func (r *runtimePresenceDelayedRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if !r.done {
+		r.done = true
+		timer := time.NewTimer(r.delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			// OS command wrappers may replace the context error with exit status.
+			return nil, errors.New("command killed")
+		case <-timer.C:
+		}
+	}
+	return r.NFQWS2Runner.Run(ctx, name, args...)
+}
+
+func TestRuntimePresenceScopedProxyAllowsCompleteReadOnlyInspection(t *testing.T) {
+	f := newForwardingRepairFixture(t)
+	f.a.Runner = &runtimePresenceDelayedRunner{NFQWS2Runner: f.a.Runner, delay: 2100 * time.Millisecond}
+	if err := f.m.ObserveCommittedRuntime(context.Background(), f.plan); err != nil {
+		t.Fatalf("working scoped runtime lost its presence proof at the old two-second limit: %v", err)
+	}
+	f.unchangedPrivateRuntime(t)
+	requireOnlyFirewallReads(t, f.firewall)
+}
+
+func TestRuntimePresencePreservesCallerDeadlineAndCancellation(t *testing.T) {
+	for _, canceled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "deadline", true: "canceled"}[canceled], func(t *testing.T) {
+			f := newForwardingRepairFixture(t)
+			f.a.Runner = &runtimePresenceDelayedRunner{NFQWS2Runner: f.a.Runner, delay: time.Second}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+			defer cancel()
+			want := context.DeadlineExceeded
+			if canceled {
+				timer := time.AfterFunc(10*time.Millisecond, cancel)
+				defer timer.Stop()
+				want = context.Canceled
+			}
+			if err := f.m.ObserveCommittedRuntime(ctx, f.plan); !errors.Is(err, want) {
+				t.Fatalf("command wrapper hid caller termination: got %v, want %v", err, want)
+			}
+			f.unchangedPrivateRuntime(t)
+			requireOnlyFirewallReads(t, f.firewall)
+		})
+	}
+}
+
+func TestRuntimePresenceStillRequiresEveryOwnedScopedRule(t *testing.T) {
+	f := newForwardingRepairFixture(t)
+	eraseForwardingTable(f.firewall, "iptables", "filter", f.state.Forwarding.Chain)
+	if err := f.m.ObserveCommittedRuntime(context.Background(), f.plan); err == nil {
+		t.Fatal("running processes and a journal hid missing scoped firewall rules")
+	}
+	f.unchangedPrivateRuntime(t)
+	requireOnlyFirewallReads(t, f.firewall)
+}
 
 func TestRuntimePresenceNeverAcceptsJournalWithDeadOwnedProxy(t *testing.T) {
 	m, plan := committedNodeHealthFixture(t)

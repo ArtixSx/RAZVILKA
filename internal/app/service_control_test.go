@@ -70,19 +70,19 @@ func TestServiceControlSelectChecksBoundedCandidatesAndOnlyRecommends(t *testing
 	if !reflect.DeepEqual(before, a.Store.Get()) {
 		t.Fatal("recommendation applied or rewrote pending")
 	}
-	view := a.serviceControlView()
+	view := a.serviceControlView(context.Background())
 	current := view["results"].([]serviceControlResult)[0]
 	if current.Stale || !current.FreshnessVerified {
 		t.Fatal("fresh completion was not validated")
 	}
 	original := a.Catalog.Services[0].ProbeURL
 	a.Catalog.Services[0].ProbeURL = "https://telegram.org/different"
-	if !a.serviceControlView()["results"].([]serviceControlResult)[0].Stale {
+	if !a.serviceControlView(context.Background())["results"].([]serviceControlResult)[0].Stale {
 		t.Fatal("changed service probe retained a fresh PASS")
 	}
 	a.Catalog.Services[0].ProbeURL = original
 	_ = a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "auto", Sources: []string{"192.168.1.40/32"}})
-	if !a.serviceControlView()["results"].([]serviceControlResult)[0].Stale {
+	if !a.serviceControlView(context.Background())["results"].([]serviceControlResult)[0].Stale {
 		t.Fatal("changed config retained fresh badge")
 	}
 }
