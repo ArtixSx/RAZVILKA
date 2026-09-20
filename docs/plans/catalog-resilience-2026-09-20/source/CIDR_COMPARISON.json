@@ -1,0 +1,11 @@
+{
+  "checked_date": "2026-09-20",
+  "kind": "local_set_comparison_of_retrieved_source_data_not_network_probe",
+  "official_count": 14,
+  "loyalsoldier_and_metacubex_count": 12,
+  "official_canonical_count": 11,
+  "added_coverage_in_community": [
+    "95.161.64.0/20"
+  ],
+  "missing_coverage_in_community": []
+}

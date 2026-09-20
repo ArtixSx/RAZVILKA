@@ -1,0 +1,49 @@
+{
+  "status": "read_only_snapshots_and_codex_task_not_application_update",
+  "date": "2026-09-20",
+  "audited_razvilka_commit": "245e78a63038d287465337fbd6c2c4ebd7edbf3c",
+  "sources": [
+    {
+      "file": "Telegram_V2Fly_domains.txt",
+      "url": "https://github.com/v2fly/domain-list-community/blob/master/data/telegram",
+      "git_blob_sha1": "aed880e37775c67556c4975ffebaf6c6681862bf",
+      "entries": 21,
+      "format": "domain-suffix-lines",
+      "license_file": "LICENSE_V2Fly.txt",
+      "coverage_note": "Source includes related ecosystem domains, not only the messaging app. Inspect before importing.",
+      "sha256": "24a2d026dbf3a09a8ca893420a40adbad70328978df0100d9c63abecdbf01b5d"
+    },
+    {
+      "file": "Telegram_official_CIDRs.txt",
+      "url": "https://core.telegram.org/resources/cidr.txt",
+      "entries": 14,
+      "format": "cidr-lines",
+      "transcription": "Values from the fetched text response, normalized LF and final newline. No cryptographic signature from Telegram claimed.",
+      "sha256": "3ecd072cedf72eceee6961b18a51e37f905d5ce4a656a5d24cf5fea63e6ec651"
+    }
+  ],
+  "comparison_sources": [
+    {
+      "url": "https://github.com/Loyalsoldier/geoip/blob/release/text/telegram.txt",
+      "git_blob_sha1": "b2e4a09a0c7fc80d62acecb185f27e82f0570df5"
+    },
+    {
+      "url": "https://github.com/MetaCubeX/meta-rules-dat/blob/meta/geo/geoip/telegram.list",
+      "git_blob_sha1": "c480679a86fb9bc916ac5a919dc16dfc550808bf"
+    }
+  ],
+  "code_changes": false,
+  "router_tested": false,
+  "gateway_health_checked": false,
+  "checksum_note": "SHA-256 below is integrity of this package, not an upstream publisher signature.",
+  "additional_retrieved_sources": [
+    {
+      "url": "https://github.com/MetaCubeX/meta-rules-dat/blob/meta/geo/geosite/telegram.list",
+      "git_blob_sha1": "3f6c9b6fe3c71a0f175c3fc62a2b37f6c88654b5"
+    },
+    {
+      "url": "https://github.com/blackmatrix7/ios_rule_script/blob/master/rule/Clash/Telegram/Telegram.list",
+      "git_blob_sha1": "d02438efbaa8f6e10cb84361dc4eb63f9b21ae31"
+    }
+  ]
+}
