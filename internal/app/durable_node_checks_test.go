@@ -296,6 +296,10 @@ func TestDurableNodeChangesAndFailedCleanupStopBatch(t *testing.T) {
 				if j.State != "interrupted" {
 					t.Fatal(j)
 				}
+			} else if mode == "network" {
+				if j.State != "queued" || j.Cursor != 1 || j.CheckEpochStart != 1 || j.CheckNetwork != "" || j.Attempts != 1 {
+					t.Fatal("network did not schedule a fresh bounded retry", j)
+				}
 			} else if j.State != "failed" {
 				t.Fatal(j)
 			}

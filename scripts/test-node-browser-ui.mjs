@@ -48,6 +48,10 @@ assert.doesNotMatch($('#nodeBatchMessage').textContent,/подходят: 0|от
 context.browser.job.result_state='current-process';context.browser.job.passed=5;
 context.renderNodeBatchStatus();
 assert.match($('#nodeBatchMessage').textContent,/подходят: 5/);
+context.browser.job = {mode:'service',scope:'all-vless',state:'completed',total:64,completed:64,passed:2,earlier_network_completed:21};
+context.renderNodeBatchStatus();
+assert.match($('#nodeBatchMessage').textContent,/В прежней сети: 21 \(устарели\)/);
+assert.match($('#nodeBatchMessage').textContent,/подходят: 2/);
 for (const [mode, label] of [['tcp','TCP'],['service-check','Проверка сервисов'],['service-select','Подбор подключений']]) {
   context.browser.job = {mode,state:'completed',total:1,completed:1};
   context.renderNodeBatchStatus();

@@ -288,6 +288,8 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 	}
 	a.nodeChecks.job = job
 	job.Completed, job.State, job.Phase, job.FinishedAt = r.durableCursor, "running", "checking", nil
+	job.network = out.network
+	job.EarlierNetworkCompleted = r.durableEpochStart
 	job.Message = "Проверяем подключение. Между узлами очередь уступает восстановлению маршрутов."
 	a.nodeChecks.cancel, a.nodeChecks.done = cancel, done
 	a.nodeChecks.mu.Unlock()
@@ -400,4 +402,18 @@ func (a *App) nodeBatchMemoryResults() map[uint64]nodeCheckJob {
 		results[id] = copy
 	}
 	return results
+}
+
+// The checker has joined cleanup before this runs. An old HTTP snapshot may
+// still exist, so its epoch must also match the journal when merging results.
+func (a *App) discardNodeBatchResults(id uint64, nodeIDs []string) {
+	a.nodeChecks.mu.Lock()
+	defer a.nodeChecks.mu.Unlock()
+	delete(a.nodeChecks.batchResults, id)
+	if a.nodeChecks.job != nil && a.nodeChecks.job.ID == id {
+		a.nodeChecks.job = nil
+	}
+	for _, nodeID := range nodeIDs {
+		delete(a.nodeChecks.pings, nodeID)
+	}
 }

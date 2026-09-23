@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
@@ -50,6 +52,7 @@ type durableServiceJob struct {
 	NodeCode        string                   `json:"node_code,omitempty"`
 	NodeReview      *durableNodeReview       `json:"node_review,omitempty"`
 	CheckNetwork    string                   `json:"check_network,omitempty"`
+	CheckEpochStart int                      `json:"check_epoch_start,omitempty"`
 }
 
 func (j durableServiceJob) terminal() bool {
@@ -103,7 +106,11 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
 	if j.Request.Kind == "node-check" {
 		p.Mode, p.Total = j.Request.NodeCheckMode, len(j.Request.NodeIDs)
-		if j.Cursor > 0 {
+		p.EarlierNetworkCompleted = j.CheckEpochStart
+		if !j.terminal() && j.Reason == "network-unconfirmed" {
+			p.Message = fmt.Sprintf("Состояние сети изменилось или не подтверждено. Прежние результаты больше не подтверждают доступность; после паузы повторим текущий узел и продолжим список. Повтор %d из 2.", j.Attempts)
+		}
+		if j.Cursor > j.CheckEpochStart {
 			p.ResultState = "not-retained"
 		}
 		if j.State == "failed" {
@@ -117,6 +124,9 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		}
 		if j.State == "completed" {
 			p.Message = "Проверка подключений завершена. Маршруты не применялись; результаты имеют ограниченный срок."
+			if j.CheckEpochStart > 0 {
+				p.Message = "Список проверен. После смены сети часть результатов устарела; для выбора подключения нужны свежие проверки. Маршруты не применялись."
+			}
 		}
 	}
 	if j.Request.Kind == "dns-compare" && validDurableDNSRequest(j.Request) {
@@ -134,6 +144,9 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 	}
 	ids, keys := map[uint64]bool{}, map[string]bool{}
 	for _, j := range jobs {
+		if j.CheckEpochStart < 0 || j.CheckEpochStart > j.Cursor || j.CheckEpochStart != 0 && j.Request.Kind != "node-check" {
+			return restorejournal.ErrInvalid
+		}
 		if j.CheckNetwork != "" && (j.Request.Kind != "node-check" || !validJobHash(j.CheckNetwork)) {
 			return restorejournal.ErrInvalid
 		}
@@ -230,6 +243,7 @@ func recoverDurableServiceJobs(doc *reconcilerDocument, now time.Time) {
 			continue
 		}
 		j.Cursor = 0 // Previous-process results do not prove the current network.
+		j.CheckEpochStart = 0
 		j.CheckNetwork = ""
 		if j.CancelRequested {
 			finishDurableJob(j, "canceled", "canceled", now)
@@ -458,7 +472,7 @@ func (a *App) addDurableServiceJobs(view map[string]any) {
 	var pending, latest *nodeCheckJob
 	for _, j := range r.doc.Jobs {
 		p := j.presentation()
-		if current, ok := observations[j.ID]; ok && j.Request.Kind == "node-check" {
+		if current, ok := observations[j.ID]; ok && j.Request.Kind == "node-check" && current.network != "" && current.network == j.CheckNetwork {
 			p.ResultState = "current-process"
 			p.Results = slices.Clone(current.Results)
 			p.Passed, p.Failed, p.Inconclusive, p.Skipped = current.Passed, current.Failed, current.Inconclusive, current.Skipped
@@ -615,6 +629,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	request := j.Request
 	request.durableID, request.intentHash = j.ID, j.IntentHash
 	request.durableCursor = j.Cursor
+	request.durableEpochStart = j.CheckEpochStart
 	nodeReview := j.NodeReview // Immutable copy allocated during acceptance.
 	checkNetwork := j.CheckNetwork
 	r.mu.Unlock()
@@ -671,6 +686,19 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		finishDurableJob(j, "canceled", "canceled", time.Now())
 	} else if ctx.Err() != nil {
 		j.State, j.Phase, j.Reason = "interrupted", "waiting", "interrupted"
+	} else if request.Kind == "node-check" && errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
+		// Joined read-only work may resume the same frozen selection. Completed
+		// old-epoch observations become historical, never current PASS. Retry
+		// only the interrupted item; three attempts per item and job expiry
+		// bound the work. No route application is replayed by this branch.
+		j.CheckEpochStart, j.CheckNetwork = j.Cursor, ""
+		a.discardNodeBatchResults(j.ID, request.NodeIDs)
+		if j.Attempts < 3 {
+			j.State, j.Phase, j.Reason = "queued", "waiting", "network-unconfirmed"
+			j.NotBefore = time.Now().Add(time.Duration(1<<uint(j.Attempts-1)) * 30 * time.Second)
+		} else {
+			finishDurableJob(j, "failed", "network-unconfirmed", time.Now())
+		}
 	} else if err != nil {
 		if request.Kind == "dns-compare" {
 			_, j.DNSCode, _ = dnsCompareFailure(err)
@@ -689,10 +717,11 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	} else if request.Kind == "node-check" {
 		j.Cursor++
 		j.CheckNetwork = nodeBatch.network
+		j.Reason = ""
 		if j.Cursor < len(request.NodeIDs) {
 			j.State, j.Phase = "queued", "waiting"
 			j.NotBefore = time.Now().Add(time.Second)
-			j.Attempts--
+			j.Attempts = 0 // Next item receives its own bounded retry budget.
 		} else {
 			finishDurableJob(j, "completed", "", time.Now())
 		}

@@ -60,6 +60,7 @@ type serviceControlJobRequest struct {
 	durableID          uint64
 	intentHash         string
 	durableCursor      int
+	durableEpochStart  int
 }
 
 func (a *App) serviceControlMemory() map[string]any {
