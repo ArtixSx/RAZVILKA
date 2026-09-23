@@ -75,6 +75,7 @@ function forgetToken(body){
 }
 function controls(){
  const busy=!!active||!!pendingJob;
+ el('dc1Submit').textContent=el('dc1VerifyService')?.checked?'Проверить DNS и сайт':'Сравнить DNS-ответы';
  el('dc1Inputs').disabled=busy;el('dc1Submit').disabled=busy||!state.services?.length||!state.dns;
  el('dc1Cancel').hidden=!pendingJob;el('dc1Cancel').disabled=cancelBusy||pendingJob?.state==='canceling';
 }

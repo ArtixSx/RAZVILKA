@@ -119,4 +119,11 @@ for(const revision of [undefined,3]){
  assert.equal(f.requests.length,0,'reconciliation never resubmits the job');
  tests++;console.log('PASS result arriving before current status '+revision);
 }
+{
+ const f=browserFixture();
+ f.context.acceptDNSLabJobs({durable_jobs:[{...dnsJob,dns_request:{...body,verify_service:true},state:'running'}]});
+ assert.equal(f.e('dc1Submit').textContent,'Проверить DNS и сайт');
+ f.context.showAuth();assert.equal(f.e('dc1Submit').textContent,'Сравнить DNS-ответы');
+ tests++;console.log('PASS restored HTTPS option restores submit label and logout resets it');
+}
 console.log(JSON.stringify({tests,status:'passed'}));
