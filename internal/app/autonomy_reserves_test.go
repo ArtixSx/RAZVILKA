@@ -65,6 +65,43 @@ func autonomyConfirmFailure(t *testing.T, a *App, ctx context.Context) {
 	a.autonomyRound(ctx, time.Now())
 }
 
+func TestAutonomyReserveTargetDoesNotCountAnotherKeyForSameServer(t *testing.T) {
+	a, ids, adapter := autonomousIntegrationFixture(t)
+	a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		return autofallbackResult(request, true), nil
+	})
+	a.autonomyRound(context.Background(), time.Now())
+	before := a.Store.Get()
+	if autonomyTestState(a).State != "applied" {
+		t.Fatal("primary was not applied")
+	}
+	snapshot, err := a.Nodes.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174009@reserve.example:8443?security=tls#Another", time.Now(), time.Hour, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Nodes) != len(ids)+1 {
+		t.Fatal("duplicate-server fixture missing")
+	}
+	a.autonomy.mu.Lock()
+	a.autonomy.doc.Policy.ReserveTarget = 3
+	a.autonomy.doc.Policy.CandidatesPerRound = 3
+	err = a.persistAutonomyLocked(context.Background())
+	a.autonomy.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter.calls = nil
+	autonomyTestDue(a, false)
+	a.autonomyRound(context.Background(), time.Now())
+	r := autonomyTestState(a)
+	if r.State != "healthy" || len(r.Reserves) != 2 || !strings.Contains(r.Message, "ещё не заполнен") {
+		t.Fatal("duplicate server filled reserve target", r)
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) || !reflect.DeepEqual(adapter.calls, []string{"health"}) {
+		t.Fatal("diversity replaced healthy route", adapter.calls)
+	}
+}
+
 func TestAutonomyReservesDefiniteFailureContinuesToFreshPeer(t *testing.T) {
 	a, ids, adapter := autonomyThreeReserveFixture(t)
 	before := a.Store.Get()

@@ -301,6 +301,10 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			ready = append(ready, id)
 		}
 	}
+	ready, e = a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
+	if e != nil {
+		return finish("catalog-unavailable", "Не удалось сопоставить резервные подключения. Маршрут сохранён.")
+	}
 	// Revisit reserves at their own interval, even when their proof has not yet
 	// expired. Walk through all candidates, not only the first rows of a feed.
 	needRefresh := !time.Now().Before(r.ReserveCheckedAt.Add(time.Duration(p.ReserveSeconds) * time.Second))
@@ -323,8 +327,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		}
 		r.ReserveCheckedAt = time.Now().UTC()
 	}
-	if len(ready) > p.ReserveTarget {
-		ready = ready[:p.ReserveTarget]
+	ready, e = a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
+	if e != nil {
+		return finish("catalog-unavailable", "Не удалось сопоставить резервные подключения. Маршрут сохранён.")
 	}
 	r.Reserves = slices.Clone(ready)
 	if ctx.Err() != nil {
