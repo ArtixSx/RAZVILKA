@@ -307,9 +307,13 @@ function clearNodeCheckRequest() {
   try { sessionStorage.removeItem('razvilka.node-check-request'); } catch (_) {}
 }
 async function submitSelectedNodeCheck(request, options = {}) {
+  return submitNodeCheckRequest(request, options);
+}
+async function submitNodeCheckRequest(request, options = {}) {
   const expected_revision = state.status?.revision;
   if (!Number.isSafeInteger(expected_revision) || expected_revision < 0) throw new Error('Обновите состояние роутера перед проверкой подключений.');
-  const intent = { ...request, node_ids: [...request.node_ids].sort(), expected_revision };
+  const intent = { ...request, expected_revision };
+  if (request.node_ids) intent.node_ids = [...request.node_ids].sort();
   const signature = JSON.stringify(intent);
   let pending = nodeCheckPendingRequest;
   try { pending ||= JSON.parse(sessionStorage.getItem('razvilka.node-check-request') || 'null'); } catch (_) {}

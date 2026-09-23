@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -10,8 +11,26 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
+
+type nodeCatalogCheckSpec struct {
+	Generation uint64 `json:"generation"`
+	Matched    int    `json:"matched"`
+}
+
+var errNodeCatalogChanged = errors.New("node catalogue changed before acceptance")
+
+// Catalogue references are resolved exactly once at admission. Retries compare
+// the original selector, not health updates or later additions to the catalogue.
+func durableRequestFingerprint(r serviceControlJobRequest) string {
+	if r.Kind == "node-check" && r.NodeCatalog != nil {
+		r.NodeIDs = nil
+		r.NodeCatalog = &nodeCatalogCheckSpec{Generation: r.NodeCatalog.Generation}
+	}
+	return applyReviewHash(r)
+}
 
 func durableJobTotal(r serviceControlJobRequest) int {
 	if r.Kind == "node-check" {
@@ -23,7 +42,23 @@ func durableJobTotal(r serviceControlJobRequest) int {
 // Only frozen references enter the existing reconciler. Source URLs, node
 // credentials and previously successful results are never replayable jobs.
 func validDurableNodeCheck(r serviceControlJobRequest) bool {
-	if r.ExpectedRevision == nil || r.NodeApply != nil || r.DNS != nil || len(r.NodeIDs) == 0 || len(r.NodeIDs) > maxNodeCheckBatch {
+	limit := maxNodeCheckBatch
+	if r.NodeCatalog != nil {
+		limit = nodestore.MaxNodes
+		if r.NodeCheckMode != "service" || r.NodeCatalog.Generation == 0 {
+			return false
+		}
+		if r.resolveNodeCatalog {
+			if len(r.NodeIDs) != 0 || r.NodeCatalog.Matched != 0 {
+				return false
+			}
+		} else if r.NodeCatalog.Matched < len(r.NodeIDs) || r.NodeCatalog.Matched > limit {
+			return false
+		}
+	} else if r.resolveNodeCatalog {
+		return false
+	}
+	if r.ExpectedRevision == nil || r.NodeApply != nil || r.DNS != nil || (len(r.NodeIDs) == 0 && !r.resolveNodeCatalog) || len(r.NodeIDs) > limit {
 		return false
 	}
 	if r.NodeCheckMode == "service" {
@@ -43,7 +78,7 @@ func validDurableNodeCheck(r serviceControlJobRequest) bool {
 	return true
 }
 
-func (a *App) validateDurableNodeCheckSelection(ctx context.Context, r serviceControlJobRequest, services []catalog.Service) error {
+func (a *App) validateDurableNodeCheckSelection(ctx context.Context, r *serviceControlJobRequest, services []catalog.Service) error {
 	if a.Nodes == nil || r.NodeCheckMode == "service" && (a.NodeChecker == nil || len(services) != 1 || !serviceHasNodeProbe(services[0])) {
 		return errServiceControlRequest
 	}
@@ -53,6 +88,16 @@ func (a *App) validateDurableNodeCheckSelection(ctx context.Context, r serviceCo
 	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
 	if err != nil {
 		return err
+	}
+	if r.resolveNodeCatalog {
+		if snapshot.Generation != r.NodeCatalog.Generation {
+			return errNodeCatalogChanged
+		}
+		r.NodeIDs, r.NodeCatalog.Matched = allVLESSNodes(snapshot)
+		r.resolveNodeCatalog = false
+		if !validDurableNodeCheck(*r) {
+			return errServiceControlRequest
+		}
 	}
 	eligible := map[string]bool{}
 	for _, node := range snapshot.Nodes {
@@ -68,6 +113,10 @@ func (a *App) validateDurableNodeCheckSelection(ctx context.Context, r serviceCo
 
 func (a *App) acceptDurableNodeChecks(w http.ResponseWriter, r *http.Request, q nodeCheckJobRequest) {
 	request := serviceControlJobRequest{Kind: "node-check", NodeCheckMode: q.Mode, NodeIDs: q.NodeIDs, ExpectedRevision: q.ExpectedRevision, IdempotencyKey: q.IdempotencyKey}
+	if q.Scope == allVLESSScope {
+		request.NodeCatalog = &nodeCatalogCheckSpec{Generation: q.Generation}
+		request.resolveNodeCatalog = true
+	}
 	if q.Mode == "service" {
 		request.ServiceIDs = []string{q.ServiceID}
 	}
@@ -85,6 +134,7 @@ func (a *App) nodeCheckCurrentView() map[string]any {
 	view := a.nodeCheckSnapshot()
 	a.addDurableServiceJobs(view)
 	view["durable_selected_checks"] = true
+	view["durable_all_vless"] = true
 	return view
 }
 
@@ -144,12 +194,18 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 	}
 	job := a.nodeChecks.job
 	if job == nil || job.ID != r.durableID {
+		job = a.nodeChecks.batchResults[r.durableID]
+	}
+	if job == nil {
 		job = &nodeCheckJob{ID: r.durableID, Mode: r.NodeCheckMode, Total: len(r.NodeIDs), StartedAt: time.Now().UTC(), Results: []nodeCheckItem{}}
 		if len(r.ServiceIDs) == 1 {
 			job.ServiceID = r.ServiceIDs[0]
 		}
-		a.nodeChecks.job = job
+		if r.NodeCatalog != nil {
+			job.Scope, job.Matched, job.Skipped = allVLESSScope, r.NodeCatalog.Matched, r.NodeCatalog.Matched-len(r.NodeIDs)
+		}
 	}
+	a.nodeChecks.job = job
 	job.Completed, job.State, job.Phase, job.FinishedAt = r.durableCursor, "running", "checking", nil
 	job.Message = "Проверяем подключение. Между узлами очередь уступает восстановлению маршрутов."
 	a.nodeChecks.cancel, a.nodeChecks.done = cancel, done
@@ -173,7 +229,7 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 	}
 	eligible := false
 	for _, node := range snapshot.Nodes {
-		if node.ID == id && !node.Disabled && node.State != "expired" {
+		if node.ID == id && !node.Disabled && node.State != "expired" && (r.NodeCatalog == nil || strings.EqualFold(strings.TrimSpace(node.Protocol), "vless")) {
 			eligible = true
 			break
 		}
@@ -221,6 +277,19 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		default:
 			job.Inconclusive++
 		}
+		if a.nodeChecks.batchResults == nil {
+			a.nodeChecks.batchResults = map[uint64]*nodeCheckJob{}
+		}
+		a.nodeChecks.batchResults[job.ID] = job
+		if len(a.nodeChecks.batchResults) > 4 {
+			var oldest *nodeCheckJob
+			for id, candidate := range a.nodeChecks.batchResults {
+				if id != job.ID && (oldest == nil || candidate.StartedAt.Before(oldest.StartedAt)) {
+					oldest = candidate
+				}
+			}
+			delete(a.nodeChecks.batchResults, oldest.ID)
+		}
 		if r.NodeCheckMode == "tcp" {
 			if a.nodeChecks.pings == nil {
 				a.nodeChecks.pings = map[string]nodeCheckItem{}
@@ -238,4 +307,16 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		}
 	}
 	return out, nil
+}
+
+func (a *App) nodeBatchMemoryResults() map[uint64]nodeCheckJob {
+	a.nodeChecks.mu.Lock()
+	defer a.nodeChecks.mu.Unlock()
+	results := make(map[uint64]nodeCheckJob, len(a.nodeChecks.batchResults))
+	for id, job := range a.nodeChecks.batchResults {
+		copy := *job
+		copy.Results = slices.Clone(job.Results)
+		results[id] = copy
+	}
+	return results
 }

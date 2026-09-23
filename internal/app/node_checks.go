@@ -88,6 +88,7 @@ type nodeCheckState struct {
 	pings           map[string]nodeCheckItem
 	serviceResults  map[string]serviceControlResult
 	serviceAttempts map[string]time.Time
+	batchResults    map[uint64]*nodeCheckJob // bounded process-local observations, never replayed from disk
 }
 
 // StartNodeChecks attaches detached checks to application lifetime. Call before

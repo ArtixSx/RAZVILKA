@@ -281,27 +281,23 @@ func TestAllVLESSStopsOnNetworkChange(t *testing.T) {
 	}
 }
 func TestAllVLESSWaitsForDueRecovery(t *testing.T) {
-	a, _ := newNodeJobTest(t, 1)
-	a.nodeChecks.bulkWait = bulkTestWait
-	a.reconciler.started = true
-	a.reconciler.doc.Operations = futureNodeQueueOperations(time.Now())
+	a, _ := durableNodeFixture(t, 1)
 	a.reconciler.doc.Operations[0] = automationOperation{Kind: "node-recovery", State: "backoff", NextRun: time.Now().Add(-time.Minute)}
 	var calls atomic.Int32
 	a.NodeChecker = jobNodeChecker(func(ctx context.Context, q dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 		calls.Add(1)
 		return bulkTestResult(q), nil
 	})
-	if w := postBulkTest(t, a, allBulkRequest(t, a)); w.Code != 202 {
-		t.Fatal(w.Code)
-	}
-	time.Sleep(25 * time.Millisecond)
+	id := enqueueNodeFixture(t, a, durableCatalogRequest(t, a))
+	a.runDurableServiceJob(context.Background(), time.Now())
 	if calls.Load() != 0 {
 		t.Fatal("bulk overtook pending recovery")
 	}
 	a.reconciler.mu.Lock()
 	a.reconciler.doc.Operations[0].NextRun = time.Now().Add(time.Minute)
 	a.reconciler.mu.Unlock()
-	if j := awaitBulk(t, a); j.Completed != 1 {
+	a.runDurableServiceJob(context.Background(), time.Now())
+	if j := durableJobAt(t, a, id); j.Cursor != 1 || j.State != "completed" {
 		t.Fatal(j)
 	}
 }

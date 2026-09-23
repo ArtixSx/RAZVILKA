@@ -45,19 +45,21 @@ type serviceControlResult struct {
 }
 
 type serviceControlJobRequest struct {
-	IdempotencyKey   string             `json:"idempotency_key,omitempty"`
-	ExpectedRevision *uint64            `json:"expected_revision,omitempty"`
-	Kind             string             `json:"kind"`
-	ServiceIDs       []string           `json:"service_ids"`
-	NodeIDs          []string           `json:"node_ids,omitempty"`
-	DNS              *serviceDNSJobSpec `json:"dns,omitempty"`
-	NodeApply        *nodeApplyJobSpec  `json:"node_apply,omitempty"`
-	NodeCheckMode    string             `json:"node_check_mode,omitempty"`
-	nodeReviewToken  string
-	nodeReviewOwner  [32]byte
-	durableID        uint64
-	intentHash       string
-	durableCursor    int
+	IdempotencyKey     string                `json:"idempotency_key,omitempty"`
+	ExpectedRevision   *uint64               `json:"expected_revision,omitempty"`
+	Kind               string                `json:"kind"`
+	ServiceIDs         []string              `json:"service_ids"`
+	NodeIDs            []string              `json:"node_ids,omitempty"`
+	DNS                *serviceDNSJobSpec    `json:"dns,omitempty"`
+	NodeApply          *nodeApplyJobSpec     `json:"node_apply,omitempty"`
+	NodeCheckMode      string                `json:"node_check_mode,omitempty"`
+	NodeCatalog        *nodeCatalogCheckSpec `json:"node_catalog,omitempty"`
+	resolveNodeCatalog bool
+	nodeReviewToken    string
+	nodeReviewOwner    [32]byte
+	durableID          uint64
+	intentHash         string
+	durableCursor      int
 }
 
 func (a *App) serviceControlMemory() map[string]any {

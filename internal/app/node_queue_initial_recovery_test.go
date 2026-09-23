@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,14 +59,18 @@ func TestServiceQueuesWaitForInitialReconcilerWithDisabledFeatures(t *testing.T)
 			if err := a.loadReconcilerLocked(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			if scope == "selected" {
+			{
 				calls := 0
 				a.NodeChecker = jobNodeChecker(func(ctx context.Context, q dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 					calls++
 					return bulkTestResult(q), nil
 				})
 				revision := a.Store.Get().Revision
-				id := enqueueNodeFixture(t, a, nodeCheckJobRequest{NodeIDs: ids, Mode: "service", ServiceID: "telegram", ExpectedRevision: &revision, IdempotencyKey: "initial-selected-durable"})
+				request := nodeCheckJobRequest{NodeIDs: ids, Mode: "service", ServiceID: "telegram", ExpectedRevision: &revision, IdempotencyKey: "initial-selected-durable"}
+				if scope == "all-vless" {
+					request = durableCatalogRequest(t, a)
+				}
+				id := enqueueNodeFixture(t, a, request)
 				if a.runDurableServiceJob(context.Background(), time.Now()) || calls != 0 {
 					t.Fatal("queue overtook initial recovery")
 				}
@@ -80,49 +82,6 @@ func TestServiceQueuesWaitForInitialReconcilerWithDisabledFeatures(t *testing.T)
 				if j := durableJobAt(t, a, id); j.State != "completed" || j.Cursor != 1 || calls != 1 {
 					t.Fatal("durable queue did not resume", j)
 				}
-				return
-			}
-			waiting, resume := make(chan struct{}), make(chan struct{})
-			var once sync.Once
-			a.nodeChecks.bulkWait = func(ctx context.Context, _ time.Duration) error {
-				once.Do(func() { close(waiting) })
-				select {
-				case <-resume:
-					return nil
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-			var calls atomic.Int32
-			a.NodeChecker = jobNodeChecker(func(ctx context.Context, q dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
-				calls.Add(1)
-				return bulkTestResult(q), nil
-			})
-			if scope == "all-vless" {
-				if w := postBulkTest(t, a, allBulkRequest(t, a)); w.Code != 202 {
-					t.Fatal(w.Code, w.Body.String())
-				}
-			} else if w := postNodeJob(t, a, ids, "service"); w.Code != 202 {
-				t.Fatal(w.Code, w.Body.String())
-			}
-			select {
-			case <-waiting:
-			case <-time.After(3 * time.Second):
-				t.Fatal("queue overtook the initial recovery round")
-			}
-			if calls.Load() != 0 {
-				t.Fatal("checker ran before initial recovery")
-			}
-			// Run the real coordinator with disabled features: every operation
-			// must still get a future schedule and release the waiting queue.
-			a.reconcileRound(context.Background(), time.Now())
-			if len(a.reconciler.doc.Operations) != 5 || a.bulkRecoveryDue(time.Now()) {
-				t.Fatal("disabled operations left the queue waiting indefinitely")
-			}
-			close(resume)
-			j := joinNodeJob(t, a)
-			if j.State != "completed" || j.Completed != 1 || calls.Load() != 1 {
-				t.Fatalf("queue did not resume after initial recovery: %+v", j)
 			}
 		})
 	}

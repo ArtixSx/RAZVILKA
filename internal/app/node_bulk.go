@@ -53,6 +53,10 @@ func (a *App) checkAllVLESS(w http.ResponseWriter, r *http.Request, q nodeCheckJ
 		writeJSON(w, 400, map[string]any{"error": "Выберите сервис и явно подтвердите проверку всего VLESS-каталога."})
 		return
 	}
+	if a.managedReconcilerActive() || q.IdempotencyKey != "" || q.ExpectedRevision != nil {
+		a.acceptDurableNodeChecks(w, r, q)
+		return
+	}
 	if a.Nodes == nil || a.NodeChecker == nil {
 		writeJSON(w, 503, map[string]any{"error": "Хранилище или точная проверка недоступны."})
 		return

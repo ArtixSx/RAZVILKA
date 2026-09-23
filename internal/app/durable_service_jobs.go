@@ -103,6 +103,9 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
 	if j.Request.Kind == "node-check" {
 		p.Mode, p.Total = j.Request.NodeCheckMode, len(j.Request.NodeIDs)
+		if c := j.Request.NodeCatalog; c != nil {
+			p.Scope, p.Matched, p.Skipped = allVLESSScope, c.Matched, c.Matched-len(j.Request.NodeIDs)
+		}
 		if len(j.Request.ServiceIDs) == 1 {
 			p.ServiceID = j.Request.ServiceIDs[0]
 		}
@@ -161,7 +164,7 @@ func validDurableRequest(r serviceControlJobRequest) bool {
 	if r.Kind == "node-check" {
 		return validDurableNodeCheck(r)
 	}
-	if r.NodeCheckMode != "" {
+	if r.NodeCheckMode != "" || r.NodeCatalog != nil || r.resolveNodeCatalog {
 		return false
 	}
 	if r.Kind == "node-apply" {
@@ -251,7 +254,11 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		copied := *request.NodeApply
 		request.NodeApply = &copied
 	}
-	fingerprint := applyReviewHash(request)
+	if request.NodeCatalog != nil {
+		copied := *request.NodeCatalog
+		request.NodeCatalog = &copied
+	}
+	fingerprint := durableRequestFingerprint(request)
 	r := &a.reconciler
 	lookup := func() (durableServiceJob, bool, error) {
 		if !r.started || r.path == "" || r.blocked {
@@ -333,7 +340,7 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		}
 		intent = durableServiceIntentHash(cfg, services)
 		if request.Kind == "node-check" {
-			err = a.validateDurableNodeCheckSelection(ctx, request, services)
+			err = a.validateDurableNodeCheckSelection(ctx, &request, services)
 			if err != nil {
 				release()
 				return durableServiceJob{}, err
@@ -436,6 +443,7 @@ func durableQueueHasSpace(doc reconcilerDocument, stop bool) bool {
 }
 
 func (a *App) addDurableServiceJobs(view map[string]any) {
+	observations := a.nodeBatchMemoryResults()
 	r := &a.reconciler
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -443,7 +451,7 @@ func (a *App) addDurableServiceJobs(view map[string]any) {
 	var pending, latest *nodeCheckJob
 	for _, j := range r.doc.Jobs {
 		p := j.presentation()
-		if current, _ := view["job"].(*nodeCheckJob); current != nil && current.ID == j.ID && j.Request.Kind == "node-check" {
+		if current, ok := observations[j.ID]; ok && j.Request.Kind == "node-check" {
 			p.Results = slices.Clone(current.Results)
 			p.Passed, p.Failed, p.Inconclusive, p.Skipped = current.Passed, current.Failed, current.Inconclusive, current.Skipped
 		}
@@ -750,6 +758,8 @@ func (a *App) writeDurableJobFailure(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusConflict, "JOB_KEY_CONFLICT", "Этот запрос уже принят с другими параметрами. Обновите состояние."
 	case errors.Is(err, errDurableQueueFull):
 		status, code, message = http.StatusTooManyRequests, "JOB_QUEUE_FULL", "Очередь заполнена. Дождитесь завершения или отмените ненужные задания."
+	case errors.Is(err, errNodeCatalogChanged):
+		status, code, message = http.StatusConflict, "NODE_CATALOG_CHANGED", "Каталог изменился. Обновите его перед запуском проверки."
 	case errors.Is(err, config.ErrRevisionChanged):
 		status, code, message = http.StatusConflict, "SERVICE_CONTROL_CHANGED", "Настройки изменились. Обновите состояние перед проверкой."
 	case errors.Is(err, errNodeJobReview):
