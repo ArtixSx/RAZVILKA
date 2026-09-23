@@ -89,7 +89,8 @@ func (a *App) nodeList(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"available": true, "generation": snapshot.Generation,
-		"nodes": snapshot.Nodes, "sources": snapshot.Sources, "groups": snapshot.Groups,
+		"check_catalog_digest": allVLESSCheckDigest(snapshot),
+		"nodes":                snapshot.Nodes, "sources": snapshot.Sources, "groups": snapshot.Groups,
 		"counts":           map[string]int{"total": len(snapshot.Nodes), "quarantined": quarantined, "expired": expired, "disabled": disabled, "verified": verified, "degraded": degraded, "stale": stale, "selectable": verified},
 		"network_profile":  profile,
 		"network_epoch":    systemprobe.NetworkEpochStatus(),

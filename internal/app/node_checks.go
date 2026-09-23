@@ -26,6 +26,7 @@ type nodeCheckJobRequest struct {
 	ExpectedRevision *uint64               `json:"expected_revision,omitempty"`
 	Scope            string                `json:"scope,omitempty"`
 	Generation       uint64                `json:"generation,omitempty"`
+	CatalogDigest    string                `json:"catalog_digest,omitempty"`
 	NodeIDs          []string              `json:"node_ids"`
 	ServiceID        string                `json:"service_id"`
 	Mode             string                `json:"mode"`
@@ -216,7 +217,7 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 		a.checkAllVLESS(w, r, request)
 		return
 	}
-	if request.Generation != 0 || !validNodeCheckJobRequest(request) {
+	if request.Generation != 0 || request.CatalogDigest != "" || !validNodeCheckJobRequest(request) {
 		http.Error(w, "Выберите от 1 до 64 узлов или действие для всего VLESS-каталога.", http.StatusBadRequest)
 		return
 	}

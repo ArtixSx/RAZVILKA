@@ -160,8 +160,18 @@ func (s *Store) Close(id string) {
 	s.mu.Unlock()
 }
 
-func (s *Store) Snapshot(includeClosed bool) []Connection {
+type Readout struct {
+	Status
+	Active      int
+	Closed      int
+	Connections []Connection
+}
+
+// Readout pairs rows, counters and producer state from the same observation.
+// It performs no discovery, adapter access or filesystem work.
+func (s *Store) Readout(includeClosed bool) Readout {
 	s.mu.RLock()
+	value := Readout{Status: Status{s.live, s.producer, s.reason}, Active: len(s.active), Closed: len(s.closed)}
 	out := make([]Connection, 0, len(s.active)+len(s.closed))
 	for _, c := range s.active {
 		c.Chain = append([]string(nil), c.Chain...)
@@ -180,7 +190,12 @@ func (s *Store) Snapshot(includeClosed bool) []Connection {
 		}
 		return out[i].UpdatedAt.After(out[j].UpdatedAt)
 	})
-	return out
+	value.Connections = out
+	return value
+}
+
+func (s *Store) Snapshot(includeClosed bool) []Connection {
+	return s.Readout(includeClosed).Connections
 }
 
 func (s *Store) Counts() (active, closed int) {

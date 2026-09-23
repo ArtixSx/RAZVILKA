@@ -216,7 +216,8 @@ async function workflowCheckAllVLESS(){
     const yes=await askConfirmation('Проверить все VLESS?',`${retained?'Показан ранее полученный список. Перед приёмом роутер проверит его актуальность; задание дождётся освобождения сети. ':''}В очереди: ${eligible.length} из ${all.length} VLESS. Сервис: ${service?.name||serviceID} (веб). Все источники и страницы, фильтры не учитываются. Отключённые и истёкшие записи пропускаются. Состав фиксируется при приёме; новые импорты не добавляются. Задание сохранится на роутере. После перезапуска тот же список проверяется заново для текущей сети. Маршруты не изменяются.`,'Проверить все');
     if(!yes||!workflowSession(epoch))return;
     submitted=true;
-    const response=await submitNodeCheckRequest({scope:'all-vless',generation:snapshot.generation,mode:'service',service_id:serviceID,confirm:'CHECK_ALL_VLESS'});
+    const selection=/^[a-f0-9]{64}$/.test(snapshot.check_catalog_digest||'')?{catalog_digest:snapshot.check_catalog_digest}:{};
+    const response=await submitNodeCheckRequest({scope:'all-vless',generation:snapshot.generation,...selection,mode:'service',service_id:serviceID,confirm:'CHECK_ALL_VLESS'});
     if(!workflowSession(epoch))return;
     if(!response.job?.id||response.job.scope!=='all-vless'||response.job.service_id!==serviceID)throw new Error('Создание очереди не подтверждено. Обновите состояние; повторный запуск автоматически не отправляется.');
     nodeBrowser.job=response.job;renderNodes();scheduleNodeBrowserRefresh(500);

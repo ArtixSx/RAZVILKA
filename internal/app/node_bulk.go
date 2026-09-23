@@ -28,7 +28,25 @@ func validNodeCleanupRequest(q nodeCleanupRequest) bool {
 }
 
 func validAllVLESSRequest(q nodeCheckJobRequest) bool {
-	return q.Scope == allVLESSScope && q.Generation > 0 && q.Mode == "service" && q.ServiceID != "" && len(q.NodeIDs) == 0 && q.Feed == nil && q.FeedID == "" && q.Limit == 0 && q.Confirm == "CHECK_ALL_VLESS"
+	return q.Scope == allVLESSScope && q.Generation > 0 && (q.CatalogDigest == "" || validJobHash(q.CatalogDigest)) && q.Mode == "service" && q.ServiceID != "" && len(q.NodeIDs) == 0 && q.Feed == nil && q.FeedID == "" && q.Limit == 0 && q.Confirm == "CHECK_ALL_VLESS"
+}
+
+// Identity of the exact eligible selection, independent of health writes,
+// display aliases and unrelated protocols. Never reused for deletion or Apply.
+func allVLESSCheckDigest(snapshot nodestore.Snapshot) string {
+	ids, matched := allVLESSNodes(snapshot)
+	return applyReviewHash(struct {
+		Scope   string
+		IDs     []string
+		Matched int
+	}{allVLESSScope, ids, matched})
+}
+
+func matchesNodeCheckCatalog(snapshot nodestore.Snapshot, generation uint64, digest string) bool {
+	if digest != "" {
+		return validJobHash(digest) && digest == allVLESSCheckDigest(snapshot)
+	}
+	return snapshot.Generation == generation
 }
 
 func allVLESSNodes(s nodestore.Snapshot) (ids []string, matched int) {
@@ -72,7 +90,7 @@ func (a *App) checkAllVLESS(w http.ResponseWriter, r *http.Request, q nodeCheckJ
 		writeNodeError(w, err)
 		return
 	}
-	if snapshot.Generation != q.Generation {
+	if !matchesNodeCheckCatalog(snapshot, q.Generation, q.CatalogDigest) {
 		writeJSON(w, 409, map[string]any{"error": "Каталог изменился. Обновите его перед запуском.", "not_started": true})
 		return
 	}

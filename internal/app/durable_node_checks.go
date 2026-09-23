@@ -16,8 +16,9 @@ import (
 )
 
 type nodeCatalogCheckSpec struct {
-	Generation uint64 `json:"generation"`
-	Matched    int    `json:"matched"`
+	Generation      uint64 `json:"generation"`
+	Matched         int    `json:"matched"`
+	SelectionDigest string `json:"selection_digest,omitempty"`
 }
 
 var errNodeCatalogChanged = errors.New("node catalogue changed before acceptance")
@@ -27,7 +28,11 @@ var errNodeCatalogChanged = errors.New("node catalogue changed before acceptance
 func durableRequestFingerprint(r serviceControlJobRequest) string {
 	if r.Kind == "node-check" && r.NodeCatalog != nil {
 		r.NodeIDs = nil
-		r.NodeCatalog = &nodeCatalogCheckSpec{Generation: r.NodeCatalog.Generation}
+		selector := &nodeCatalogCheckSpec{Generation: r.NodeCatalog.Generation, SelectionDigest: r.NodeCatalog.SelectionDigest}
+		if selector.SelectionDigest != "" {
+			selector.Generation = 0
+		}
+		r.NodeCatalog = selector
 	}
 	return applyReviewHash(r)
 }
@@ -45,7 +50,7 @@ func validDurableNodeCheck(r serviceControlJobRequest) bool {
 	limit := maxNodeCheckBatch
 	if r.NodeCatalog != nil {
 		limit = nodestore.MaxNodes
-		if r.NodeCheckMode != "service" || r.NodeCatalog.Generation == 0 {
+		if r.NodeCheckMode != "service" || r.NodeCatalog.Generation == 0 || r.NodeCatalog.SelectionDigest != "" && !validJobHash(r.NodeCatalog.SelectionDigest) {
 			return false
 		}
 		if r.resolveNodeCatalog {
@@ -90,7 +95,7 @@ func (a *App) validateDurableNodeCheckSelection(ctx context.Context, r *serviceC
 		return err
 	}
 	if r.resolveNodeCatalog {
-		if snapshot.Generation != r.NodeCatalog.Generation {
+		if !matchesNodeCheckCatalog(snapshot, r.NodeCatalog.Generation, r.NodeCatalog.SelectionDigest) {
 			return errNodeCatalogChanged
 		}
 		r.NodeIDs, r.NodeCatalog.Matched = allVLESSNodes(snapshot)
@@ -157,7 +162,7 @@ func (a *App) prepareDurableNodeCheck(ctx context.Context, request *serviceContr
 func (a *App) acceptDurableNodeChecks(w http.ResponseWriter, r *http.Request, q nodeCheckJobRequest) {
 	request := serviceControlJobRequest{Kind: "node-check", NodeCheckMode: q.Mode, NodeIDs: q.NodeIDs, ExpectedRevision: q.ExpectedRevision, IdempotencyKey: q.IdempotencyKey}
 	if q.Scope == allVLESSScope {
-		request.NodeCatalog = &nodeCatalogCheckSpec{Generation: q.Generation}
+		request.NodeCatalog = &nodeCatalogCheckSpec{Generation: q.Generation, SelectionDigest: q.CatalogDigest}
 		request.resolveNodeCatalog = true
 	}
 	if q.Mode == "service" {

@@ -323,6 +323,37 @@ func (s *Sampler) PersistenceStatus() (enabled bool, lastError string) {
 	return s.persistPath != "", s.persistError
 }
 
+// Readout copies one coherent observation. Collection and history persistence
+// happen outside this mutex; HTTP readers never sample the router or read disk.
+type Readout struct {
+	Latest           Snapshot
+	History          []Snapshot
+	TrafficHistory   []Snapshot
+	Persistent       bool
+	PersistenceError string
+}
+
+func (s *Sampler) Readout(limit int, week bool) Readout {
+	if s == nil {
+		return Readout{}
+	}
+	s.mu.RLock()
+	out := Readout{Latest: s.latest, Persistent: s.persistPath != "", PersistenceError: s.persistError}
+	history := s.history
+	if week {
+		history = s.persisted
+	}
+	if limit <= 0 || limit > len(history) {
+		limit = len(history)
+	}
+	out.History = append([]Snapshot{}, history[len(history)-limit:]...)
+	recent := append([]Snapshot{}, s.history...)
+	persisted := append([]Snapshot{}, s.persisted...)
+	s.mu.RUnlock()
+	out.TrafficHistory = MergeHistory(persisted, recent)
+	return out
+}
+
 func (s *Sampler) persistEvery() time.Duration {
 	if s.PersistEvery <= 0 {
 		return 5 * time.Minute

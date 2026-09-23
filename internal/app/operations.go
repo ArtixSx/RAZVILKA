@@ -61,8 +61,8 @@ func (s *operationScope) restoreAdmission() (func(), error) {
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Security.Middleware remains outside this middleware. Only this
-		// memory-only endpoint bypasses admission, never runtime Store reads.
-		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelInventoryPath || r.URL.Path == panelAuditPath {
+		// memory-only endpoints bypass admission, never runtime Store reads.
+		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelInventoryPath || r.URL.Path == panelAuditPath || r.URL.Path == "/api/v1/metrics" || r.URL.Path == "/api/v1/connections" {
 			// The general security middleware allows diagnostic reads before
 			// account setup. Admission metadata is private even in that state.
 			if a.Security == nil || !a.Security.Authenticated(r) {
@@ -70,7 +70,11 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 				http.Error(w, "administrator login is required", http.StatusUnauthorized)
 				return
 			}
-			if r.URL.Path == panelAuditPath {
+			if r.URL.Path == "/api/v1/metrics" {
+				a.metrics(w, r)
+			} else if r.URL.Path == "/api/v1/connections" {
+				a.connections(w, r)
+			} else if r.URL.Path == panelAuditPath {
 				a.panelAudit(w, r)
 			} else if r.URL.Path == panelSnapshotPath {
 				a.panelSnapshot(w, r)

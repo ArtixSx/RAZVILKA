@@ -904,12 +904,17 @@ func TestSelectorsAndConnectionsAPI(t *testing.T) {
 	cat := catalog.Catalog{Services: []catalog.Service{{ID: "youtube", Name: "YouTube", Category: "Video", Domains: []string{"youtube.com"}, Strategy: []string{"nfqws2"}}}}
 	tele := telemetry.NewStore()
 	tele.Upsert(telemetry.Connection{ID: "c1", ServiceID: "youtube", ServiceName: "YouTube", Host: "googlevideo.com", Protocol: "tcp", SourceIP: "192.168.1.10", Route: "nfqws2", Chain: []string{"YouTube", "NFQWS2"}, Upload: 10, Download: 20})
-	a := &App{Store: store, Catalog: cat, Telemetry: tele, Start: time.Now()}
+	gate, err := security.NewGate(panelTestToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, Catalog: cat, Telemetry: tele, Start: time.Now(), Security: gate}
 	ts := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer ts.Close()
 
 	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/services/youtube", strings.NewReader(`{"enabled":true,"route":"direct"}`))
 	req.Header.Set("content-type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+panelTestToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -919,7 +924,9 @@ func TestSelectorsAndConnectionsAPI(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	resp, err = http.Get(ts.URL + "/api/v1/services")
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/api/v1/services", nil)
+	req.Header.Set("Authorization", "Bearer "+panelTestToken)
+	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -932,7 +939,9 @@ func TestSelectorsAndConnectionsAPI(t *testing.T) {
 		t.Fatalf("unexpected selector view: %+v", views)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/v1/connections")
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/api/v1/connections", nil)
+	req.Header.Set("Authorization", "Bearer "+panelTestToken)
+	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

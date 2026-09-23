@@ -3879,6 +3879,7 @@ func (a *App) systemInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) metrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
 		return
@@ -3896,24 +3897,19 @@ func (a *App) metrics(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	latest := a.Stats.Latest()
-	history := a.Stats.History(limit)
-	if r.URL.Query().Get("period") == "week" {
-		history = a.Stats.PersistentHistory(limit)
-	}
+	observation := a.Stats.Readout(limit, r.URL.Query().Get("period") == "week")
+	latest, history := observation.Latest, observation.History
 	trafficNow := latest.Timestamp
 	if trafficNow.IsZero() {
 		trafficNow = time.Now().UTC()
 	}
-	trafficHistory := routerstats.MergeHistory(a.Stats.PersistentHistory(0), a.Stats.History(0))
-	persistent, persistError := a.Stats.PersistenceStatus()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"latest":             latest,
 		"history":            history,
 		"capacity":           routerstats.Assess(latest),
-		"traffic_periods":    routerstats.TrafficPeriods(trafficHistory, trafficNow),
-		"history_persistent": persistent,
-		"history_error":      persistError,
+		"traffic_periods":    routerstats.TrafficPeriods(observation.TrafficHistory, trafficNow),
+		"history_persistent": observation.Persistent,
+		"history_error":      observation.PersistenceError,
 	})
 }
 
@@ -4726,6 +4722,7 @@ func looksSensitive(content string) bool {
 }
 
 func (a *App) connections(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
 		return
@@ -4735,12 +4732,11 @@ func (a *App) connections(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"connections": []any{}, "live": false, "reason": "telemetry store disabled"})
 		return
 	}
-	active, closed := a.Telemetry.Counts()
-	telemetryStatus := a.Telemetry.Status()
+	observation := a.Telemetry.Readout(includeClosed)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"connections": a.Telemetry.Snapshot(includeClosed), "live": telemetryStatus.Live,
-		"active": active, "closed": closed,
-		"producer": telemetryStatus.Producer, "reason": telemetryStatus.Reason,
+		"connections": observation.Connections, "live": observation.Live,
+		"active": observation.Active, "closed": observation.Closed,
+		"producer": observation.Producer, "reason": observation.Reason,
 		"note": "Connections appear only when a dataplane adapter publishes real route evidence; RAZVILKA never invents live rows.",
 	})
 }
@@ -4765,9 +4761,8 @@ func (a *App) connectionStream(w http.ResponseWriter, r *http.Request) {
 	ch, cancel := a.Telemetry.Subscribe()
 	defer cancel()
 	send := func() bool {
-		status := a.Telemetry.Status()
-		connections := a.Telemetry.Snapshot(false)
-		payload, err := json.Marshal(map[string]any{"connections": connections, "active": len(connections), "live": status.Live, "producer": status.Producer, "reason": status.Reason})
+		observation := a.Telemetry.Readout(false)
+		payload, err := json.Marshal(map[string]any{"connections": observation.Connections, "active": observation.Active, "live": observation.Live, "producer": observation.Producer, "reason": observation.Reason})
 		if err != nil {
 			return false
 		}
