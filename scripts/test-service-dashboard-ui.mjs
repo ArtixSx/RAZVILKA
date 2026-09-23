@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 
 const source = readFileSync(new URL('../cmd/razvilka/web/service-dashboard-ui.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../cmd/razvilka/web/index.html', import.meta.url), 'utf8');
@@ -40,7 +41,9 @@ function fixture() {
   state.serviceControl = { config_revision: 9, schedule: { enabled: false, interval_seconds: 300, service_ids: ['youtube'] }, results: [], job: null };
   let handler = async () => { throw new Error('Unexpected API call'); };
   const dispatch = (name, detail) => { for (const fn of listeners.get(name) || []) fn({ detail }); };
+  const session = new Map();
   const context = vm.createContext({ state, $, document, URL, Set, Date, Number, Math, JSON, Promise, AbortController,
+    crypto: webcrypto, sessionStorage: { getItem: key => session.get(key) || null, setItem: (key, value) => session.set(key, value), removeItem: key => session.delete(key) },
     Option: function(text, value) { this.text = text; this.value = value; },
     setTimeout(fn) { timers.set(++timerID, fn); return timerID; }, clearTimeout(id) { timers.delete(id); }, queueMicrotask,
     esc: value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
@@ -163,7 +166,10 @@ function fixture() {
   const first = f.context.serviceDashboardStart('check', ['youtube']);
   await f.context.serviceDashboardStart('select', ['telegram']);
   assert.equal(f.calls.length, 1);
-  assert.deepEqual(JSON.parse(f.calls[0].body), { kind: 'check', service_ids: ['youtube'], expected_revision: 9 });
+  const payload = JSON.parse(f.calls[0].body);
+  assert.match(payload.idempotency_key, /^[a-f0-9]{32}$/);
+  delete payload.idempotency_key;
+  assert.deepEqual(payload, { kind: 'check', service_ids: ['youtube'], expected_revision: 9 });
   pending.resolve({ job: { id: 17, state: 'running', mode: 'service-check' } }); await first;
   assert.equal(f.context.serviceDashboardJobActive(), true);
   assert.equal(f.$('#serviceCheckAll').disabled, true);
@@ -174,6 +180,27 @@ function fixture() {
   cancel.resolve({}); await cancellation;
   assert.equal(f.dashboard.control.job.id, 18);
   assert.equal(f.calls.filter(call => call.method === 'DELETE').length, 1, 'cancel retried against a replacement job');
+}
+// A lost POST response retains its token across reload; an acknowledged job or
+// logout clears it. An interrupted server task is still active, never a new POST.
+{
+  const f = fixture();
+  f.setHandler(() => { throw new Error('response lost'); });
+  await f.context.serviceDashboardStart('check', ['youtube']);
+  const first = JSON.parse(f.calls.at(-1).body).idempotency_key;
+  f.dashboard.pendingRequest = null; // reload, sessionStorage remains
+  await f.context.serviceDashboardStart('check', ['youtube']);
+  assert.equal(JSON.parse(f.calls.at(-1).body).idempotency_key, first);
+  f.setHandler(() => ({ job: { id: 54, state: 'queued', mode: 'service-check' } }));
+  await f.context.serviceDashboardStart('check', ['youtube']);
+  assert.equal(JSON.parse(f.calls.at(-1).body).idempotency_key, first);
+  assert.equal(f.dashboard.pendingRequest, null);
+  f.dashboard.control.job.state = 'interrupted';
+  assert.equal(f.context.serviceDashboardJobActive(), true);
+  f.context.serviceDashboardRequestToken('private reference');
+  f.dispatch('razvilka:auth-required');
+  assert.equal(f.dashboard.pendingRequest, null);
+  assert.equal(f.context.sessionStorage.getItem('razvilka.service-job-request'), null);
 }
 for (const event of ['razvilka:auth-required', 'razvilka:view-change']) {
   const f = fixture(), pending = deferred(); f.setHandler(() => pending.promise);

@@ -6,6 +6,7 @@ const serviceDashboard = {
   control: null, expanded: new Set(), epoch: 0, read: null, poll: null,
   operation: null, edit: null, scheduleDirty: false, scheduleRevision: null, scheduleServiceIDs: [],
   lookup: null, lookupResults: [], authenticated: true, message: '',
+  pendingRequest: null,
 };
 
 function serviceDashboardApplied(service) {
@@ -138,7 +139,7 @@ function renderServiceDashboard() {
 }
 
 function serviceDashboardJobActive() {
-  return ['queued', 'running', 'canceling', 'cancelling'].includes(serviceDashboard.control?.job?.state);
+  return ['queued', 'running', 'canceling', 'cancelling', 'interrupted'].includes(serviceDashboard.control?.job?.state);
 }
 
 function serviceDashboardServiceIDs() {
@@ -225,6 +226,26 @@ async function refreshServiceControl() {
   } finally { if (serviceDashboard.read === controller) serviceDashboard.read = null; }
 }
 
+// Retain one uncertain request across a lost response/reload. Only references
+// and a random token are stored locally; the server remains the authority.
+function serviceDashboardRequestToken(signature) {
+  let pending = serviceDashboard.pendingRequest;
+  try { pending ||= JSON.parse(sessionStorage.getItem('razvilka.service-job-request') || 'null'); } catch (_) {}
+  if (!pending || pending.signature !== signature || !/^[a-f0-9]{32}$/.test(pending.key) || !Number.isFinite(pending.at) || Date.now() - pending.at >= 86400000 || Date.now() < pending.at) {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    pending = { signature, key: Array.from(bytes, x => x.toString(16).padStart(2, '0')).join(''), at: Date.now() };
+  }
+  serviceDashboard.pendingRequest = pending;
+  try { sessionStorage.setItem('razvilka.service-job-request', JSON.stringify(pending)); } catch (_) {}
+  return pending.key;
+}
+
+function clearServiceDashboardRequestToken() {
+  serviceDashboard.pendingRequest = null;
+  try { sessionStorage.removeItem('razvilka.service-job-request'); } catch (_) {}
+}
+
 async function serviceDashboardStart(kind, serviceIDs) {
   if (serviceDashboard.operation || serviceDashboardJobActive() || !serviceDashboard.authenticated) return;
   const ids = [...new Set(serviceIDs)].filter(id => state.services.some(service => service.id === id));
@@ -236,14 +257,20 @@ async function serviceDashboardStart(kind, serviceIDs) {
   serviceDashboard.message = 'Запускаем проверку…';
   renderServiceDashboard();
   try {
-    const response = await api('/api/v1/service-control/jobs', { method: 'POST', signal: operation.controller.signal, body: JSON.stringify({ kind, service_ids: ids, expected_revision: revision }) });
+    const intent = { kind, service_ids: ids, expected_revision: revision };
+    const idempotency_key = serviceDashboardRequestToken(JSON.stringify(intent));
+    const response = await api('/api/v1/service-control/jobs', { method: 'POST', signal: operation.controller.signal, body: JSON.stringify({ ...intent, idempotency_key }) });
     if (!serviceDashboardCurrent(operation)) return;
+    clearServiceDashboardRequestToken();
     const job = response.job || response;
     serviceDashboard.control = { ...serviceDashboard.control, job };
     if (state.serviceControl) state.serviceControl = { ...state.serviceControl, job };
     serviceDashboard.message = '';
   } catch (error) {
-    if (serviceDashboardCurrent(operation)) serviceDashboard.message = error.message;
+    if (serviceDashboardCurrent(operation)) {
+      if (error.status >= 400 && error.status < 500) clearServiceDashboardRequestToken();
+      serviceDashboard.message = error.message;
+    }
   } finally {
     if (serviceDashboard.operation === operation) { serviceDashboard.operation = null; renderServiceDashboard(); }
   }
@@ -489,6 +516,6 @@ function bindServiceDashboard() {
     }
   });
   document.addEventListener('razvilka:view-change', event => { serviceDashboardLifecycle(); if (event.detail === 'services') startServiceDashboardPolling(); });
-  document.addEventListener('razvilka:auth-required', () => { serviceDashboard.authenticated = false; serviceDashboardLifecycle(true); });
+  document.addEventListener('razvilka:auth-required', () => { serviceDashboard.authenticated = false; clearServiceDashboardRequestToken(); serviceDashboardLifecycle(true); });
   document.addEventListener('razvilka:auth-restored', () => { serviceDashboard.authenticated = true; if (state.currentView === 'services') startServiceDashboardPolling(); });
 }

@@ -52,19 +52,21 @@ type reconcilerDocument struct {
 	Operations  []automationOperation         `json:"operations"`
 	Fallback    map[string]fallbackCheckpoint `json:"fallback"`
 	ManualUntil time.Time                     `json:"manual_until"`
+	Jobs        []durableServiceJob           `json:"jobs,omitempty"`
 }
 type serviceReconciler struct {
-	mu      sync.Mutex
-	once    sync.Once
-	doc     reconcilerDocument
-	image   restorejournal.Image
-	path    string
-	started bool
-	blocked bool
-	cancel  context.CancelFunc
-	stop    context.CancelFunc
-	wake    chan struct{}
-	done    chan struct{}
+	mu          sync.Mutex
+	once        sync.Once
+	doc         reconcilerDocument
+	image       restorejournal.Image
+	path        string
+	started     bool
+	blocked     bool
+	cancel      context.CancelFunc
+	activeJobID uint64
+	stop        context.CancelFunc
+	wake        chan struct{}
+	done        chan struct{}
 }
 
 func automationConfigFingerprint(cfg config.Config) string {
@@ -239,6 +241,7 @@ func (a *App) loadReconcilerLocked(ctx context.Context) error {
 		}
 		// Boot recovery has already reconciled the dataplane journal. Do not
 		// replay saved work or restore cached Healthy/PASS in a new network epoch.
+		recoverDurableServiceJobs(&r.doc, time.Now())
 		for i := range r.doc.Operations {
 			op := &r.doc.Operations[i]
 			if op.State == "running" {
@@ -274,6 +277,9 @@ func (a *App) loadReconcilerLocked(ctx context.Context) error {
 }
 
 func validateReconcilerDocument(d reconcilerDocument) error {
+	if err := validateDurableServiceJobs(d.Jobs); err != nil {
+		return err
+	}
 	if d.Schema != 1 || d.Owner != reconcilerOwner || d.Sequence == ^uint64(0) || len(d.Operations) > 5 || len(d.Fallback) > config.MaxServicePolicies {
 		return restorejournal.ErrInvalid
 	}
@@ -320,6 +326,9 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 	r.mu.Lock()
 	blocked := r.blocked || now.Before(r.doc.ManualUntil)
 	due := len(r.doc.Operations) < 5
+	for _, job := range r.doc.Jobs {
+		due = due || !job.terminal() && !now.Before(job.NotBefore)
+	}
 	for _, op := range r.doc.Operations {
 		due = due || !now.Before(op.NextRun)
 	}
@@ -357,6 +366,11 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 	}{{"node-recovery", 30 * time.Second}, {"node-fallback", time.Minute}, {"legacy-routes", legacyInterval}, {"feeds", 30 * time.Second}, {"service-checks", time.Duration(max(60, cfg.ServiceControl.Schedule.IntervalSeconds)) * time.Second}}
 	for _, task := range tasks {
 		if ctx.Err() != nil {
+			return
+		}
+		// Cleanup/manual Stop can interrupt admission. Existing path recovery
+		// runs before queued observations; they share this scheduler and checker.
+		if task.kind == "node-fallback" && a.runDurableServiceJob(ctx, time.Now()) {
 			return
 		}
 		r.mu.Lock()

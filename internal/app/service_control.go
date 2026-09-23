@@ -45,10 +45,13 @@ type serviceControlResult struct {
 }
 
 type serviceControlJobRequest struct {
+	IdempotencyKey   string   `json:"idempotency_key,omitempty"`
 	ExpectedRevision *uint64  `json:"expected_revision,omitempty"`
 	Kind             string   `json:"kind"`
 	ServiceIDs       []string `json:"service_ids"`
 	NodeIDs          []string `json:"node_ids,omitempty"`
+	durableID        uint64
+	intentHash       string
 }
 
 func (a *App) serviceControlMemory() map[string]any {
@@ -64,6 +67,7 @@ func (a *App) serviceControlMemory() map[string]any {
 	a.nodeChecks.mu.Unlock()
 	sort.Slice(results, func(i, j int) bool { return results[i].ServiceID < results[j].ServiceID })
 	view["results"] = results
+	a.addDurableServiceJobs(view)
 	return view
 }
 
@@ -213,6 +217,14 @@ func (a *App) serviceControlCurrent(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Укажите номер отменяемой проверки.", http.StatusBadRequest)
 			return
 		}
+		if handled, err := a.cancelDurableServiceJob(r.Context(), id); handled {
+			if err != nil {
+				a.writeDurableJobFailure(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, a.serviceControlMemory())
+			return
+		}
 		a.nodeChecks.mu.Lock()
 		if a.nodeChecks.job == nil || a.nodeChecks.job.ID != id {
 			a.nodeChecks.mu.Unlock()
@@ -243,6 +255,15 @@ func (a *App) serviceControlJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.ExpectedRevision == nil {
 		http.Error(w, "Обновите список сервисов перед проверкой.", http.StatusBadRequest)
+		return
+	}
+	if request.IdempotencyKey != "" {
+		job, err := a.enqueueDurableServiceJob(r.Context(), request)
+		if err != nil {
+			a.writeDurableJobFailure(w, err)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{"job": job.presentation(), "persistent": true})
 		return
 	}
 	if _, err := a.startServiceControlJob(r.Context(), request, false); err != nil {
@@ -297,6 +318,9 @@ func (a *App) startServiceControlJob(ctx context.Context, request serviceControl
 		}
 	}
 	cfg := a.Store.Get()
+	if request.intentHash != "" && request.intentHash != durableServiceIntentHash(cfg, services) {
+		return nil, config.ErrRevisionChanged
+	}
 	if request.ExpectedRevision != nil && cfg.Revision != *request.ExpectedRevision {
 		return nil, config.ErrRevisionChanged
 	}
@@ -353,7 +377,7 @@ func (a *App) startServiceControlJob(ctx context.Context, request serviceControl
 		return nil, operationgate.ErrBusy
 	}
 	parent := a.nodeChecks.root
-	if scheduled {
+	if scheduled || request.durableID != 0 {
 		parent = ctx
 	}
 	budget := 5 * time.Minute
@@ -363,6 +387,9 @@ func (a *App) startServiceControlJob(ctx context.Context, request serviceControl
 	jobCtx, cancel := context.WithTimeout(parent, budget)
 	a.nodeChecks.nextID++
 	id := a.nodeChecks.nextID
+	if request.durableID != 0 {
+		id = request.durableID
+	}
 	a.nodeChecks.job = &nodeCheckJob{ID: id, Mode: "service-" + request.Kind, State: "running", Total: len(services), StartedAt: time.Now().UTC(), Message: "Проверяем выбранные сервисы. Маршруты сохраняются.", Results: []nodeCheckItem{}, ServiceResults: []serviceControlResult{}}
 	a.nodeChecks.cancel = cancel
 	done := make(chan struct{})
