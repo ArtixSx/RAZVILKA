@@ -313,6 +313,9 @@ func withTypedEndpoints(provider Provider) Provider {
 		if provider.Endpoints[index].Scope == "" {
 			provider.Endpoints[index].Scope = provider.Scope
 		}
+		if provider.Endpoints[index].Transport == "doh" {
+			provider.Endpoints[index].BootstrapIPs = dohBootstrapIPs(provider.ID, provider.Endpoints[index].URL)
+		}
 	}
 	return provider
 }
@@ -334,7 +337,11 @@ func endpointProbeTarget(endpoint DNSEndpoint, trustedLocal bool) (dnsTarget, bo
 	case "dot":
 		return dnsTarget{transport: "DoT", endpoint: address, probe: probeDNSOverTLS, trustedLocal: trustedLocal}, address != ""
 	case "doh":
-		return dnsTarget{transport: "DoH", endpoint: endpoint.URL, probe: probeDNSOverHTTPS, trustedLocal: trustedLocal}, endpoint.URL != ""
+		pins := append([]string(nil), endpoint.BootstrapIPs...)
+		probe := func(ctx context.Context, url string, query []byte, local bool) ([]byte, error) {
+			return probeDNSOverHTTPSBootstrap(ctx, url, query, local, pins)
+		}
+		return dnsTarget{transport: "DoH", endpoint: endpoint.URL, probe: probe, trustedLocal: trustedLocal}, endpoint.URL != ""
 	default:
 		return dnsTarget{}, false
 	}
@@ -1010,10 +1017,19 @@ func dnsTLSConfig(serverName string) *tls.Config {
 }
 
 func probeDNSOverHTTPS(ctx context.Context, endpoint string, query []byte, trustedLocal bool) ([]byte, error) {
+	return probeDNSOverHTTPSBootstrap(ctx, endpoint, query, trustedLocal, nil)
+}
+
+func probeDNSOverHTTPSBootstrap(ctx context.Context, endpoint string, query []byte, trustedLocal bool, pins []string) ([]byte, error) {
 	parsed, err := url.Parse(endpoint)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 		return nil, errors.New("invalid DoH HTTPS endpoint")
 	}
+	transport, err := dohTransport(parsed, pins, trustedLocal)
+	if err != nil {
+		return nil, err
+	}
+	defer transport.CloseIdleConnections()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(query))
 	if err != nil {
 		return nil, err
@@ -1021,13 +1037,7 @@ func probeDNSOverHTTPS(ctx context.Context, endpoint string, query []byte, trust
 	request.Header.Set("Accept", "application/dns-message")
 	request.Header.Set("Content-Type", "application/dns-message")
 	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy: nil, DisableKeepAlives: true,
-			TLSClientConfig: dnsTLSConfig(""),
-			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-				return dialDNSContext(ctx, network, address, trustedLocal)
-			},
-		},
+		Transport:     transport,
 		CheckRedirect: dohRedirectPolicy(parsed, nil),
 	}
 	response, err := client.Do(request)
@@ -1036,7 +1046,7 @@ func probeDNSOverHTTPS(ctx context.Context, endpoint string, query []byte, trust
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("DoH endpoint returned HTTP %d", response.StatusCode)
+		return nil, dohStatusError(response.StatusCode)
 	}
 	return io.ReadAll(io.LimitReader(response.Body, 65536))
 }

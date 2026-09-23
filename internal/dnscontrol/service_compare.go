@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net"
 	"net/netip"
 	"reflect"
 	"sort"
@@ -169,12 +168,7 @@ func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []strin
 			a.DNSSEC = "not-reported"
 			if e != nil {
 				a.Status = "error"
-				a.ErrorCode = "DNS_QUERY_FAILED"
-				if errors.Is(e, errDNSAnswer) {
-					a.ErrorCode = "DNS_INTEGRITY_FAILED"
-				} else if timeout, ok := e.(net.Error); errors.Is(e, context.DeadlineExceeded) || ok && timeout.Timeout() {
-					a.ErrorCode = "DNS_QUERY_TIMEOUT"
-				}
+				a.ErrorCode = serviceDNSErrorCode(e)
 			} else {
 				unique := map[netip.Addr]bool{}
 				unsafe := len(addrs) > 64
