@@ -380,11 +380,11 @@ func (m *Manager) recordLocked(plan Plan) error {
 	if err := os.MkdirAll(m.StateRoot, 0o700); err != nil {
 		return fmt.Errorf("create dataplane state: %w", err)
 	}
-	if err := writeAtomic(filepath.Join(m.StateRoot, "latest-plan.json"), data, 0o600); err != nil {
+	if err := writeDataplaneJournal(filepath.Join(m.StateRoot, "latest-plan.json"), data); err != nil {
 		return err
 	}
 	if plan.State == "committed" {
-		if err := writeAtomic(filepath.Join(m.StateRoot, "latest-committed-plan.json"), data, 0o600); err != nil {
+		if err := writeDataplaneJournal(filepath.Join(m.StateRoot, "latest-committed-plan.json"), data); err != nil {
 			return fmt.Errorf("record committed dataplane plan: %w", err)
 		}
 	}
@@ -519,6 +519,11 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	}
 	defer m.endOperation()
 	recovery := Recovery{State: "skipped", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []RecoveryStep{}}
+	if err := m.checkExecutionRecovery(); err != nil {
+		recovery.State, recovery.Guarded = "journal-recovery-required", true
+		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return recovery, errors.Join(err, executionJournalError(m.writeRecoveryLocked(recovery)))
+	}
 	plan, exists, err := m.committedLocked()
 	if err != nil {
 		return recovery, err
@@ -798,22 +803,31 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	if !plan.Ready {
 		return execution, errors.New("dataplane plan is blocked")
 	}
-	if err := os.MkdirAll(m.StateRoot, 0o700); err != nil {
+	if err := m.checkExecutionRecovery(); err != nil {
+		execution.State, execution.Error = "journal-failed", err.Error()
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return execution, err
 	}
 	transactionRoot := filepath.Join(m.StateRoot, "transactions", plan.PlanID)
-	if err := os.MkdirAll(transactionRoot, 0o700); err != nil {
-		return execution, fmt.Errorf("create dataplane transaction: %w", err)
+	if err := m.prepareExecutionRoot(transactionRoot); err != nil {
+		execution.State, execution.Error = "journal-failed", err.Error()
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return execution, err
 	}
-	writeExecution := func() {
-		data, _ := json.MarshalIndent(execution, "", "  ")
-		_ = writeAtomic(filepath.Join(transactionRoot, "execution.json"), data, 0o600)
-		_ = writeAtomic(filepath.Join(m.StateRoot, "latest-execution.json"), data, 0o600)
+	writeExecution := func() error { return m.writeExecution(transactionRoot, execution) }
+	restoreCommitted, journalErr := m.preserveCommittedJournal()
+	if journalErr == nil {
+		journalErr = writeExecution()
 	}
-	writeExecution()
+	if journalErr != nil {
+		execution.State, execution.Error = "journal-failed", journalErr.Error()
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return execution, journalErr
+	}
 
 	prepared := make([]Adapter, 0, len(plan.Adapters)+len(plan.RetiringAdapters))
 	var undoCommit func() error
+	commitPublicationAttempted := false
 	liveMutation := false
 	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
 		if phase != "rollback" {
@@ -824,14 +838,18 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		step := ExecutionStep{Adapter: adapter.ID(), Phase: phase, State: "running", StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		execution.Steps = append(execution.Steps, step)
 		index := len(execution.Steps) - 1
-		writeExecution()
+		journalErr := writeExecution()
+		if journalErr != nil && phase != "rollback" {
+			execution.Steps[index].State, execution.Steps[index].Detail = "failed", journalErr.Error()
+			execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			return journalErr
+		}
 		adapterRoot := filepath.Join(transactionRoot, adapter.ID())
-		if err := os.MkdirAll(adapterRoot, 0o700); err != nil {
+		if err := os.MkdirAll(adapterRoot, 0o700); err != nil && phase != "rollback" {
 			execution.Steps[index].State = "failed"
 			execution.Steps[index].Detail = err.Error()
 			execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-			writeExecution()
-			return err
+			return errors.Join(err, writeExecution())
 		}
 		previouslyMutated := liveMutation
 		if phase == "activate" || phase == "deactivate" || phase == "commit-adapter" {
@@ -856,32 +874,31 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		} else {
 			execution.Steps[index].State = "passed"
 		}
-		writeExecution()
-		return err
+		return errors.Join(err, journalErr, writeExecution())
 	}
 	rollback := func(cause error) error {
 		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(ctx), m.rollbackTimeout())
 		defer cancelRollback()
 		execution.Error = cause.Error()
-		if errors.Is(cause, ErrNetworkChanged) || errors.Is(cause, ErrReviewChanged) || errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
-			plan.ObservedEvidence = evidence.None
-			for index := range plan.RouteEvidence {
-				plan.RouteEvidence[index].Observed = evidence.None
-			}
+		plan.ObservedEvidence = evidence.None
+		for index := range plan.RouteEvidence {
+			plan.RouteEvidence[index].Observed = evidence.None
 		}
 		execution.State = "rolling-back"
-		writeExecution()
-		var rollbackErr error
+		rollbackErr := writeExecution()
 		for i := len(prepared) - 1; i >= 0; i-- {
 			adapter := prepared[i]
-			if err := run(rollbackCtx, adapter, "rollback", adapter.Rollback); err != nil && rollbackErr == nil {
-				rollbackErr = err
+			if err := run(rollbackCtx, adapter, "rollback", adapter.Rollback); err != nil {
+				rollbackErr = errors.Join(rollbackErr, err)
 			}
 		}
 		if undoCommit != nil {
-			if err := undoCommit(); err != nil && rollbackErr == nil {
-				rollbackErr = fmt.Errorf("restore desired state: %w", err)
+			if err := undoCommit(); err != nil {
+				rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore desired state: %w", err))
 			}
+		}
+		if commitPublicationAttempted {
+			rollbackErr = errors.Join(rollbackErr, restoreCommitted())
 		}
 		plan.Ready = false
 		plan.State = "rolled-back"
@@ -893,10 +910,18 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		plan.Note = execution.Error
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		_ = m.recordLocked(plan)
-		writeExecution()
+		finalErr := errors.Join(executionJournalError(m.recordLocked(plan)), writeExecution())
+		if finalErr != nil {
+			rollbackErr = errors.Join(rollbackErr, finalErr)
+			execution.State, plan.State = "rollback-failed", "rollback-failed"
+			execution.Error += "; persist rollback: " + finalErr.Error()
+			plan.Note = execution.Error
+			// Best effort to correct whichever record remains writable. The
+			// first failure still prevents a success result or another Apply.
+			rollbackErr = errors.Join(rollbackErr, executionJournalError(m.recordLocked(plan)), writeExecution())
+		}
 		if rollbackErr != nil {
-			return fmt.Errorf("%w; rollback failed: %v", cause, rollbackErr)
+			return errors.Join(cause, fmt.Errorf("rollback failed: %w", rollbackErr))
 		}
 		return cause
 	}
@@ -911,9 +936,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.Error = cause.Error()
 		execution.State = "canary-failed"
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		_ = m.recordLocked(plan)
-		writeExecution()
-		return cause
+		return errors.Join(cause, executionJournalError(m.recordLocked(plan)), writeExecution())
 	}
 	rejectNetwork := func(cause error) error {
 		plan.Ready, plan.State = false, "network-stale"
@@ -924,9 +947,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		plan.Note = cause.Error()
 		execution.State, execution.Error = "network-stale", cause.Error()
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		_ = m.recordLocked(plan)
-		writeExecution()
-		return cause
+		return errors.Join(cause, executionJournalError(m.recordLocked(plan)), writeExecution())
 	}
 	fail := func(cause error) error {
 		if !liveMutation {
@@ -949,6 +970,22 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
 		return execution, fail(err)
 	}
+	finishCommit := func() error {
+		execution.State = "committing"
+		if err := writeExecution(); err != nil {
+			return rollback(err)
+		}
+		commitPublicationAttempted = true
+		if err := m.recordLocked(plan); err != nil {
+			return rollback(executionJournalError(err))
+		}
+		execution.State = "committed"
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		if err := writeExecution(); err != nil {
+			return rollback(err)
+		}
+		return nil
+	}
 
 	if plan.Noop {
 		if commit != nil {
@@ -963,13 +1000,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			return execution, fail(err)
 		}
 		plan.State = "committed"
-		execution.State = "committed"
-		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		if err := m.recordLocked(plan); err != nil {
-			return execution, err
-		}
-		writeExecution()
-		return execution, nil
+		err := finishCommit()
+		return execution, err
 	}
 
 	retiringAdapters := make([]Adapter, 0, len(plan.RetiringAdapters))
@@ -1102,16 +1134,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		plan.EvidenceNote = "Все адаптеры активированы, а обязательные health-check сервисов через назначенные маршруты завершились успешно."
 	}
 	plan.Note = "Dataplane adapters activated, health-checked and committed."
-	execution.State = "committed"
-	execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
 		return execution, fail(err)
 	}
-	if err := m.recordLocked(plan); err != nil {
-		return execution, rollback(fmt.Errorf("commit dataplane journal: %w", err))
-	}
-	writeExecution()
-	return execution, nil
+	err := finishCommit()
+	return execution, err
 }
 
 func writeAtomic(path string, data []byte, mode os.FileMode) error {

@@ -438,6 +438,11 @@ func main() {
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
 	recovery, recoveryErr := dataplaneManager.Recover(recoveryContext)
 	cancelRecovery()
+	if errors.Is(recoveryErr, dataplane.ErrExecutionJournal) {
+		// Keep the panel readable, but do not let a restart reopen admission
+		// after an unfinished or inconsistently recorded network transaction.
+		a.Operations.Fence()
+	}
 	if recovery.State == "network-stale" {
 		log.Print("dataplane boot recovery requires fresh node checks in the current network")
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "network-stale", Actor: "system", RemoteIP: "local"})

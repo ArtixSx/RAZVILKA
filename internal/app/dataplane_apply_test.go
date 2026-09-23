@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -11,6 +13,21 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
+
+func TestApplicationFencesJournalFailureBeforeAnyLiveChange(t *testing.T) {
+	a := &App{Dataplane: dataplane.New(t.TempDir())}
+	if err := os.Mkdir(filepath.Join(a.Dataplane.StateRoot, "latest-execution.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plan := dataplane.Plan{SchemaVersion: dataplane.SchemaVersion, PlanID: "dp-journal", Digest: strings.Repeat("a", 64), Ready: true, Noop: true}
+	execution, err := a.applyDataplane(context.Background(), plan, func() (func() error, error) {
+		t.Fatal("unrecorded application")
+		return nil, nil
+	})
+	if !errors.Is(err, dataplane.ErrExecutionJournal) || execution.State != "journal-failed" || !a.Operations.Snapshot().Fenced {
+		t.Fatal(execution, err, a.Operations.Snapshot())
+	}
+}
 
 func TestApplicationFenceWaitsForRollbackAndProtectsNextCaller(t *testing.T) {
 	for _, failed := range []bool{false, true} {

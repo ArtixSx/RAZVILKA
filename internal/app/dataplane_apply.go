@@ -20,7 +20,7 @@ func (a *App) applyDataplane(ctx context.Context, plan dataplane.Plan, commit fu
 		return dataplane.Execution{}, errors.New("dataplane is unavailable")
 	}
 	execution, err := a.Dataplane.Apply(ctx, plan, commit)
-	if execution.State == "rollback-failed" {
+	if execution.State == "rollback-failed" || errors.Is(err, dataplane.ErrExecutionJournal) {
 		a.Operations.Fence()
 	}
 	return execution, err
