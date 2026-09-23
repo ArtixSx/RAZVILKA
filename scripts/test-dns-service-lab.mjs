@@ -8,6 +8,8 @@ const snapshot={profiles:[{id:'xbox-dns',provider_id:'xbox-dns'},{id:'lab',provi
 test('only configured public non-negative DoH',()=>assert.deepEqual(m.profilesForLab(snapshot).map(p=>p.id),['xbox-dns']));
 test('empty state',()=>assert.deepEqual(m.profilesForLab(null),[]));
 test('explicit consent request',()=>assert.equal(m.requestFor('youtube',['xbox-dns'],2,true).confirm,'COMPARE_SERVICE_DNS'));
+test('HTTPS has explicit intent',()=>assert.equal(m.requestFor('youtube',['xbox-dns'],2,true,true).confirm,'COMPARE_SERVICE_DNS_AND_HTTPS'));
+test('HTTPS limits DNS shortlist to two',()=>assert.throws(()=>m.requestFor('youtube',['a','b','c'],2,true,true)));
 for(const [name,args] of [ ['no consent',['youtube',['xbox-dns'],1,false]],['no service',['',['xbox-dns'],1,true]],['empty profiles',['youtube',[],1,true]],['duplicates',['youtube',['xbox-dns','xbox-dns'],1,true]],['too many',['youtube',['a','b','c','d'],1,true]],['unsafe revision',['youtube',['a'],NaN,true]],['fraction revision',['youtube',['a'],1.5,true]],['negative revision',['youtube',['a'],-1,true]],['url input',['youtube',['https://example.org'],1,true]],['service injection',['<script>',['a'],1,true]] ])test(name,()=>assert.throws(()=>m.requestFor(...args)));
 const result={service_verified:false,route_verified:false,eligible_for_apply:false,results:[{provider_id:'xbox-dns',family:'ipv4',status:'resolved',addresses:['<svg/onload=alert(1)>']} ]};
 test('DNS result cannot be service PASS',()=>assert.match(m.resultMarkup(result),/не подтверждение/));
@@ -23,6 +25,12 @@ test('reject missing backend revision',()=>assert.throws(()=>m.acceptResponse({.
 test('reject partial profile batch',()=>assert.throws(()=>m.acceptResponse({...response,result:{...response.result,results:response.result.results.slice(0,1)}},body,4)));
 test('reject duplicate family hiding missing answer',()=>assert.throws(()=>m.acceptResponse({...response,result:{...response.result,results:[response.result.results[0],response.result.results[0]]}},body,4)));
 test('reject substituted profile',()=>assert.throws(()=>m.acceptResponse({...response,result:{...response.result,results:response.result.results.map(row=>({...row,profile_id:'other'}))}},body,4)));
+const addressRow={profile_id:'private',family:'ipv4',status:'resolved',addresses:['1.1.1.1','8.8.8.8'],answer_fingerprint:'sha256:fixture'};
+const check={profile_id:'private',family:'ipv4',answer_fingerprint:'sha256:fixture',address_count:2,result:{address:'1.1.1.1',application_path:'system-routing-unverified',route_verified:false,service_verified:true,tls_verified:true,status:'pass',tcp_ms:3,tls_ms:5,ttfb_ms:9}};
+test('HTTPS proves only its address',()=>assert.match(m.addressChecksMarkup([check],[addressRow]),/1 из 2 адресов/));
+for(const [name,change] of [['substituted address',c=>c.result.address='8.8.8.8'],['missing TLS',c=>c.result.tls_verified=false],['invented route',c=>c.result.route_verified=true],['different DNS generation',c=>c.answer_fingerprint='other'],['unmeasured count',c=>c.address_count=1]])test('reject '+name,()=>{const c=structuredClone(check);change(c);assert.throws(()=>m.addressChecksMarkup([c],[addressRow]));});
+test('missing HTTPS observation is not success',()=>assert.throws(()=>m.addressChecksMarkup([],[addressRow])));
+test('expired answer explained',()=>assert.match(m.addressChecksMarkup([{...check,result:{...check.result,service_verified:false,status:'not-checked',error_code:'DNS_ANSWER_EXPIRED'}}],[addressRow]),/Срок DNS-ответа истёк/));
 const html=readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8');
 for(const id of ['dc1Form','dc1Inputs','dc1Service','dc1Profiles','dc1Consent','dc1Results','dc1Submit','dc1Cancel','dc1Status'])test(id+' exists once',()=>assert.equal(html.split('id="'+id+'"').length-1,1));
 test('script integrated with the interface cache version',()=>{

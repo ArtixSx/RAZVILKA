@@ -44,6 +44,12 @@ type ServiceDNSAnswer struct {
 	AnswerFingerprint string   `json:"answer_fingerprint,omitempty"`
 	LatencyMS         int64    `json:"latency_ms"`
 	ErrorCode         string   `json:"error_code,omitempty"`
+	ResolverKind      string   `json:"resolver_kind"`
+	CNAMEChain        []string `json:"cname_chain,omitempty"`
+	TTLSeconds        *uint32  `json:"ttl_seconds,omitempty"`
+	ObservedAt        string   `json:"observed_at,omitempty"`
+	ExpiresAt         string   `json:"expires_at,omitempty"`
+	DNSSEC            string   `json:"dnssec"`
 }
 
 // CompareServiceDNS reuses the existing strict DoH and DNS wire validator. It
@@ -74,9 +80,6 @@ func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []strin
 	doc := cloneDocument(m.doc)
 	exchange := m.candidateExchange
 	m.mu.RUnlock()
-	if exchange == nil {
-		exchange = exchangeCandidateDNS
-	}
 	type choice struct {
 		profile  Profile
 		provider Provider
@@ -146,7 +149,14 @@ func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []strin
 			}
 			started := time.Now()
 			queryCtx, queryCancel := context.WithTimeout(ctx, endpointProbeTimeout)
-			addrs, e := exchange(queryCtx, c.target, host, f.typ)
+			var details AnswerDetails
+			var e error
+			if exchange == nil {
+				details, e = exchangeCandidateDNSDetailed(queryCtx, c.target, host, f.typ)
+			} else {
+				details.Addresses, e = exchange(queryCtx, c.target, host, f.typ)
+			}
+			addrs := details.Addresses
 			queryCancel()
 			if err := check(); err != nil {
 				return out, err
@@ -155,6 +165,8 @@ func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []strin
 				e = nil // Valid NODATA is distinct from an unavailable resolver.
 			}
 			a := ServiceDNSAnswer{ProfileID: c.profile.ID, ProviderID: c.provider.ID, Family: f.name, Transport: "doh", Status: "unknown", Addresses: []string{}, LatencyMS: time.Since(started).Milliseconds()}
+			a.ResolverKind = c.provider.Kind
+			a.DNSSEC = "not-reported"
 			if e != nil {
 				a.Status = "error"
 				a.ErrorCode = "DNS_QUERY_FAILED"
@@ -178,6 +190,15 @@ func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []strin
 					a.Status = "rejected"
 					a.ErrorCode = "DNS_UNSAFE_ANSWER"
 				} else {
+					a.CNAMEChain = details.CNAMEChain
+					a.TTLSeconds = details.TTLSeconds
+					a.ObservedAt = started.UTC().Format(time.RFC3339Nano)
+					if details.TTLSeconds != nil {
+						a.ExpiresAt = started.Add(time.Duration(*details.TTLSeconds) * time.Second).UTC().Format(time.RFC3339Nano)
+					}
+					if details.ResolverReportedAD {
+						a.DNSSEC = "resolver-reported-ad"
+					}
 					for ip := range unique {
 						a.Addresses = append(a.Addresses, ip.String())
 					}

@@ -40,6 +40,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
+	"github.com/ArtixSx/razvilka/internal/routeprobe"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
 	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
 	"github.com/ArtixSx/razvilka/internal/security"
@@ -154,6 +155,7 @@ type App struct {
 	Devices            *devices.Manager
 	DNS                *dnscontrol.Manager
 	dnsServiceComparer serviceDNSComparer
+	dnsAddressProbe    func(context.Context, catalog.Service, netip.Addr) routeprobe.DNSAddressResult
 	Warp               *warp.Manager
 	AWGCapabilityProbe func(context.Context) awgprofile.Capabilities
 	Cloudflare         *cloudflareprovider.Store
