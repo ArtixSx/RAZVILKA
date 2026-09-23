@@ -72,6 +72,7 @@ const state = {
 };
 
 const panelLoad = { generation: 0, request: null, controller: null, retryTimer: null, retryCount: 0 };
+let inventoryRead = null;
 
 const viewMeta = {
   overview: ['Главная', 'Сервисы, подключения и состояние вашей сети'],
@@ -895,6 +896,42 @@ function inventoryObservationStale() {
   const value = state.inventoryObservation;
   return !!value && (value.retained || value.localObservedBefore < (state.inventoryInvalidatedAt || 0)
     || value.ageMS + Math.max(0, Date.now() - value.receivedAt) >= 60000);
+}
+
+function cancelPanelInventoryRefresh() {
+  inventoryRead?.controller.abort();
+  inventoryRead = null;
+}
+
+function refreshPanelInventory() {
+  if (!state.authenticated || document.hidden || state.inventoryUnsupported || panelLoad.request) return Promise.resolve(false);
+  if (inventoryRead) return inventoryRead.promise;
+  const ticket = { generation: panelLoad.generation, controller: new AbortController(), promise: null };
+  inventoryRead = ticket;
+  const current = () => inventoryRead === ticket && state.authenticated && !document.hidden && panelSnapshotCurrent(ticket.generation);
+  ticket.promise = Promise.resolve().then(async () => {
+    try {
+      const started = Date.now();
+      const value = await api('/api/v1/panel/inventory', { signal: ticket.controller.signal, readTimeoutMs: 3000 });
+      if (!current()) return false;
+      acceptPanelInventory(value, started);
+      return true;
+    } catch (error) {
+      if (!current()) return false;
+      if (error.status === 401) { cancelPanelRefresh(); showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.'); return false; }
+      if (error.status === 404) state.inventoryUnsupported = true;
+      panelSectionState('inventory', panelBusy(error) ? 'busy' : 'error', error);
+      return false;
+    } finally {
+      if (current()) {
+        // Metadata-only renderers: periodic observation must not redraw forms
+        // or lose a partially edited profile/service/DNS field.
+        try { renderComponents(); renderEngines(); renderSystem(); if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines(); } catch (_) { /* Independent from polling lifetime. */ }
+      }
+      if (inventoryRead === ticket) inventoryRead = null;
+    }
+  });
+  return ticket.promise;
 }
 
 async function settlePanelReads(requests, read) {

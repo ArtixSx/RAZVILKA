@@ -131,7 +131,11 @@
   const monitor = createController({
     request: (options) => api('/api/v1/panel/availability', options),
     isVisible: visible,
-    publish: render,
+    publish: (value) => {
+      render(value);
+      // Reuse this bounded, visibility-aware heartbeat; no second timer.
+      if (value?.kind === 'responding' && typeof refreshPanelInventory === 'function') void refreshPanelInventory();
+    },
     onAuthRequired: () => showAuth({ auth_required: true, authenticated: false }, 'Сессия завершилась. Войдите снова.'),
   });
   document.addEventListener('razvilka:auth-restored', monitor.start);

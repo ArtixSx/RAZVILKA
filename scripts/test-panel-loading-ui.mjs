@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
-const names=['panelSectionState','panelBusy','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
+const names=['panelSectionState','panelBusy','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','refreshPanelInventory','cancelPanelInventoryRefresh','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
 const extract=name=>{const match=source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
@@ -14,7 +14,7 @@ function fixture(){
  const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
  const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',value:'',classList:{toggle(){}}});return elements.get(id);};
  const api=async(url,options={})=>{calls.push({url,options});return handler(url,options);};
- const context={state,panelLoad,$,AbortController,Date,console,document:{hidden:false},
+ const context={state,panelLoad,inventoryRead:null,$,AbortController,Date,console,document:{hidden:false},
  setTimeout(fn,ms){const id=++timer;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},
  api,hideAuth(){$('#authScreen').hidden=true;},showAuth(){$('#authScreen').hidden=false;context.cancelPanelRefresh();},
  refreshNodeActivity:async()=>{if(activityError)throw activityError;return activity;},scheduleNodeActivity(){},
@@ -38,6 +38,20 @@ function fixture(){
 }
 let count=0;
 async function test(name,fn){await fn();count++;console.log('PASS',name);}
+
+await test('inventory heartbeat shares a flight, fences logout and never redraws editable forms',async()=>{
+ const f=fixture();f.state.authenticated=true;
+ const pending=deferred();f.handler(()=>pending.promise);
+ const first=f.context.refreshPanelInventory(),second=f.context.refreshPanelInventory();
+ assert.equal(first,second);await flush();assert.equal(f.calls.length,1);
+ pending.resolve(f.normal('/api/v1/panel/inventory'));assert.equal(await first,true);
+ assert(f.renders.includes('renderComponents'));assert(!f.renders.includes('renderEngineControl'));assert(!f.renders.includes('renderDNS'));
+ const late=deferred();f.handler(()=>late.promise);const request=f.context.refreshPanelInventory();await flush();
+ f.state.authenticated=false;f.context.cancelPanelInventoryRefresh();f.state.components=[];
+ const value=f.normal('/api/v1/panel/inventory');value.data.components=[{id:'private',installed:true}];late.resolve(value);
+ assert.equal(await request,false);assert.equal(f.state.components.length,0);
+ const calls=f.calls.length;f.state.authenticated=true;f.context.document.hidden=true;await f.context.refreshPanelInventory();assert.equal(f.calls.length,calls);
+});
 
 await test('inventory reads memory endpoint, stamps age and rejects pre-write data without comparing clocks',async()=>{
  const f=fixture();await f.context.refreshAll();

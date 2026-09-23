@@ -81,6 +81,8 @@ function renderSavedPanelSnapshot() {
 document.addEventListener('razvilka:auth-required', () => {
   state.savedPanel = null;
   state.inventoryObservation = null; state.inventoryInvalidatedAt = 0;
+  state.inventoryUnsupported = false;
+  if (typeof cancelPanelInventoryRefresh === 'function') cancelPanelInventoryRefresh();
   state.components = []; state.engines = []; state.engineConfigs = []; state.system = {};
   // Clear protected presentation and freshness markers before the next login.
   state.services = []; state.sources = []; state.devices = [];
