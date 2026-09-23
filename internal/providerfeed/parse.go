@@ -18,6 +18,7 @@ type batch struct {
 	raw                                     string
 	accepted, rejected, duplicates, omitted int
 	total                                   int
+	nextCursor, snapshotEntries             int
 	materials                               []json.RawMessage
 	countries                               []string
 	issues                                  []providerprofile.EntryIssue
@@ -27,11 +28,20 @@ func (batch) String() string   { return "[private feed batch]" }
 func (batch) GoString() string { return "[private feed batch]" }
 
 func parse(ctx context.Context, data []byte, format string, limit int) (batch, error) {
+	return parseWindow(ctx, data, format, limit, 0)
+}
+
+// Cursor counts source entries, including rejected/control entries. It is tied
+// to the exact response digest, never to a publisher's display names or order.
+func parseWindow(ctx context.Context, data []byte, format string, limit, cursor int) (batch, error) {
+	if cursor < 0 || cursor > MaxEntries || limit < 1 || limit > MaxCandidates {
+		return batch{}, ErrRequest
+	}
 	if len(data) > MaxBytes || !utf8.Valid(data) || strings.ContainsRune(string(data), '\x00') {
 		return batch{}, ErrSize
 	}
 	if format == "profile" {
-		if parsed, handled, err := parseJSONFeed(ctx, data, limit); handled {
+		if parsed, handled, err := parseJSONFeedWindow(ctx, data, limit, cursor); handled {
 			return parsed, err
 		}
 		parsed, err := providerprofile.ParseProfile(string(data))
@@ -45,7 +55,10 @@ func parse(ctx context.Context, data []byte, format string, limit int) (batch, e
 			return batch{}, ErrFormat
 		}
 		selected := make([]json.RawMessage, 0, min(limit, parsed.Preview.NodeCount))
-		b := batch{}
+		if cursor > parsed.Preview.NodeCount {
+			return batch{}, ErrRequest
+		}
+		b := batch{snapshotEntries: parsed.Preview.NodeCount, nextCursor: cursor}
 		previewIndex := 0
 		for _, raw := range profile.Outbounds {
 			var outbound struct {
@@ -56,7 +69,7 @@ func parse(ctx context.Context, data []byte, format string, limit int) (batch, e
 			}
 			switch outbound.Type {
 			case "vless", "hysteria2", "tuic", "shadowsocks":
-				if len(selected) < limit {
+				if previewIndex >= cursor && len(selected) < limit {
 					selected = append(selected, raw)
 					material, err := canonicalOutbound(raw)
 					if err != nil {
@@ -64,11 +77,12 @@ func parse(ctx context.Context, data []byte, format string, limit int) (batch, e
 					}
 					b.materials = append(b.materials, material)
 					b.countries = append(b.countries, inferCountry(parsed.Preview.Nodes[previewIndex].Name))
+					b.nextCursor = previewIndex + 1
 				}
 				previewIndex++
 			}
 		}
-		if len(selected) == 0 {
+		if len(selected) == 0 && cursor != parsed.Preview.NodeCount {
 			return batch{}, ErrFormat
 		}
 		raw, err := json.Marshal(selected)
@@ -88,10 +102,14 @@ func parse(ctx context.Context, data []byte, format string, limit int) (batch, e
 	if err != nil {
 		return batch{}, err
 	}
-	b := batch{total: len(entries)}
+	if cursor > len(entries) {
+		return batch{}, ErrRequest
+	}
+	b := batch{total: len(entries), snapshotEntries: len(entries), nextCursor: cursor}
 	seen := map[[32]byte]bool{}
 	accepted := []string{}
-	for index, entry := range entries {
+	for index := cursor; index < len(entries); index++ {
+		entry := entries[index]
 		if err := ctx.Err(); err != nil {
 			return b, err
 		}
@@ -99,6 +117,7 @@ func parse(ctx context.Context, data []byte, format string, limit int) (batch, e
 			b.omitted = len(entries) - index
 			break
 		}
+		b.nextCursor = index + 1
 		parsed, err := providerprofile.ParseURI(entry)
 		if err != nil {
 			b.rejected++
@@ -125,7 +144,7 @@ func parse(ctx context.Context, data []byte, format string, limit int) (batch, e
 		b.materials = append(b.materials, canonical)
 		b.countries = append(b.countries, inferCountry(parsed.Preview.Name))
 	}
-	if len(accepted) == 0 {
+	if len(accepted) == 0 && cursor != len(entries) {
 		return b, ErrFormat
 	}
 	b.raw = strings.Join(accepted, "\n")
@@ -140,6 +159,9 @@ func parse(ctx context.Context, data []byte, format string, limit int) (batch, e
 // retained candidate limit is applied. Unselected raw configuration never
 // enters nodestore or a local engine configuration.
 func parseJSONFeed(ctx context.Context, data []byte, limit int) (batch, bool, error) {
+	return parseJSONFeedWindow(ctx, data, limit, 0)
+}
+func parseJSONFeedWindow(ctx context.Context, data []byte, limit, cursor int) (batch, bool, error) {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 || trimmed[0] != '[' && trimmed[0] != '{' {
 		return batch{}, false, nil
@@ -168,10 +190,14 @@ func parseJSONFeed(ctx context.Context, data []byte, limit int) (batch, bool, er
 	if len(entries) == 0 || len(entries) > MaxEntries {
 		return batch{}, true, ErrSize
 	}
-	b := batch{total: len(entries)}
+	if cursor > len(entries) {
+		return batch{}, true, ErrRequest
+	}
+	b := batch{total: len(entries), snapshotEntries: len(entries), nextCursor: cursor}
 	seen := map[[32]byte]bool{}
 	selected := []json.RawMessage{}
-	for index, entry := range entries {
+	for index := cursor; index < len(entries); index++ {
+		entry := entries[index]
 		if err := ctx.Err(); err != nil {
 			return b, true, err
 		}
@@ -179,6 +205,7 @@ func parseJSONFeed(ctx context.Context, data []byte, limit int) (batch, bool, er
 			b.omitted += len(entries) - index
 			break
 		}
+		b.nextCursor = index + 1
 		var kind struct {
 			Type string `json:"type"`
 		}
@@ -215,7 +242,7 @@ func parseJSONFeed(ctx context.Context, data []byte, limit int) (batch, bool, er
 		b.materials = append(b.materials, material)
 		b.countries = append(b.countries, inferCountry(parsed.Preview.Nodes[0].Name))
 	}
-	if len(selected) == 0 {
+	if len(selected) == 0 && cursor != len(entries) {
 		return b, true, ErrFormat
 	}
 	raw, err := json.Marshal(selected)

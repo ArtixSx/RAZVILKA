@@ -59,7 +59,7 @@ const model={profilesForLab,requestFor,resultMarkup,acceptResponse,addressChecks
 if(typeof module!=='undefined'&&module.exports)module.exports=model;
 root.RazvilkaDNSLabModel=model;
 if(typeof document==='undefined'||!document.getElementById('dc1Form'))return;
-const el=id=>document.getElementById(id);let active=null,pendingJob=null,lastJob='',serviceKey='',profileKey='',resultRevision=null,savedRequest=null,cancelBusy=false;
+const el=id=>document.getElementById(id);let active=null,pendingJob=null,lastJob='',serviceKey='',profileKey='',resultRevision=null,savedRequest=null,cancelBusy=false,lastControl=null;
 function tokenFor(body){
  const signature=JSON.stringify(body);let saved=savedRequest;
  try{saved||=JSON.parse(sessionStorage.getItem('razvilka.dns-request')||'null');}catch(_){}
@@ -90,20 +90,27 @@ function render(){
  const available=profilesForLab(state.dns),key=JSON.stringify(available.map(p=>[p.id,p.name,p.kind]));
  const markup=available.map(p=>`<label class="dc1-provider"><input type="checkbox" name="profile" value="${escape(p.id)}" ${checked.has(p.id)?'checked':''}><span><b>${escape(p.name)}</b><small>${p.kind==='smart-dns-gateway'?'Smart DNS · сторонний шлюз':'DNS-резолвер'} · только после локальной проверки</small></span></label>`).join('');
  if(profileKey!==key){profileKey=key;el('dc1Profiles').innerHTML=markup;}
+ if(lastControl)root.acceptDNSLabJobs(lastControl);
  controls();
 }
 const oldRenderDNS=renderDNS;
 renderDNS=function(){oldRenderDNS();render();};
+// Login starts independent reads. A completed job can arrive before status,
+// services or DNS profiles; reconsider it when those observations arrive.
+if(typeof renderStatus==='function'){const previous=renderStatus;renderStatus=function(...args){previous.apply(this,args);render();};}
+if(typeof renderDNSServiceBindings==='function'){const previous=renderDNSServiceBindings;renderDNSServiceBindings=function(...args){previous.apply(this,args);render();};}
 function clear(){resultRevision=null;el('dc1Results').replaceChildren();el('dc1Status').textContent='';}
 el('dc1Service').addEventListener('change',clear);el('dc1Profiles').addEventListener('change',clear);
 el('dc1VerifyService')?.addEventListener('change',()=>{clear();el('dc1Submit').textContent=el('dc1VerifyService').checked?'Проверить DNS и сайт':'Сравнить DNS-ответы';});
 // Status uses the panel's shared reader. Opening this page never submits a job.
 root.acceptDNSLabJobs=function(control){
+ lastControl=control;
  const jobs=(control?.durable_jobs||[]).filter(j=>j.mode==='service-dns-compare');
  const job=(pendingJob&&jobs.find(j=>j.id===pendingJob.id))||jobs.find(j=>pendingStates.includes(j.state))||jobs.at(-1);
  if(!job)return !!pendingJob;
  let body;try{body=requestFromJob(job);}catch(error){el('dc1Status').textContent=error.message;return !!pendingJob;}
- const signature=JSON.stringify([job.id,job.state,job.error_code,!!job.dns_result]);
+ const revision=Number(state.status?.revision);
+ const signature=JSON.stringify([job.id,job.state,job.error_code,!!job.dns_result,Number.isSafeInteger(revision)?revision:null,serviceKey,profileKey]);
  if(active)return pendingStates.includes(job.state)||!!pendingJob;
  if(signature===lastJob)return !!pendingJob;
  lastJob=signature;clear();pendingJob=pendingStates.includes(job.state)?job:null;
@@ -115,7 +122,8 @@ root.acceptDNSLabJobs=function(control){
   forgetToken(body);
   if(job.state==='completed'){
    if(!job.dns_result)el('dc1Status').textContent='Проверка была завершена, но её подробности уже недоступны. Повторите для текущей сети.';
-   else try{el('dc1Results').innerHTML=acceptResponse(job.dns_result,body,Number(state.status?.revision));resultRevision=body.config_revision;
+   else if(!Number.isSafeInteger(revision))el('dc1Status').textContent='Проверка завершена. Получаем текущее состояние настроек…';
+   else try{el('dc1Results').innerHTML=acceptResponse(job.dns_result,body,revision);resultRevision=body.config_revision;
     el('dc1Status').textContent='Проверка завершена: '+String(job.dns_result.result?.checked_at||job.finished_at||'время не получено')+'. Это результат на момент проверки. Маршруты не менялись.';
    }catch(error){el('dc1Status').textContent=error.message;}
   }
@@ -147,6 +155,12 @@ el('dc1Form').addEventListener('submit',async event=>{
  finally{if(active===op){active=null;if(workflowSession(op.epoch)){controls();refreshJobs();}}}
 });
 const oldAuth=showAuth;
-showAuth=function(...args){active?.controller.abort();active=null;pendingJob=null;lastJob='';cancelBusy=false;clear();controls();el('dc1Consent').checked=false;return oldAuth.apply(this,args);};
+showAuth=function(...args){
+ active?.controller.abort();active=null;pendingJob=null;lastJob='';lastControl=null;cancelBusy=false;clear();
+ serviceKey=profileKey='';el('dc1Service').replaceChildren();el('dc1Profiles').replaceChildren();
+ el('dc1Service').value='';el('dc1Consent').checked=false;if(el('dc1VerifyService'))el('dc1VerifyService').checked=false;
+ savedRequest=null;try{sessionStorage.removeItem('razvilka.dns-request');}catch(_){}
+ controls();el('dc1Submit').disabled=true;return oldAuth.apply(this,args);
+};
 render();
 })(typeof globalThis!=='undefined'?globalThis:this);

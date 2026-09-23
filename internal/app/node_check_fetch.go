@@ -114,8 +114,8 @@ func (a *App) fetchNodeCheckCandidates(ctx context.Context, jobID uint64, reques
 	return ids, err
 }
 
-// 304 cannot renew any origin or PASS. Recheck the still-valid cached members
-// of THIS source; do not silently include unrelated nodes from another feed.
+// A paged 304 names the next exact batch. Only legacy imports without snapshot
+// metadata fall back to still-valid cached members of this source.
 func fetchedCheckNodeIDs(result providerfeed.Result, snapshot nodestore.Snapshot, limit int) ([]string, int) {
 	wanted := map[string]bool{}
 	for _, id := range result.NodeIDs {
@@ -125,7 +125,7 @@ func fetchedCheckNodeIDs(result providerfeed.Result, snapshot nodestore.Snapshot
 	skipped := 0
 	for _, node := range snapshot.Nodes {
 		match := wanted[node.ID]
-		if result.NotModified {
+		if result.NotModified && result.SnapshotEntries == 0 {
 			match = false
 			for _, origin := range node.Origins {
 				if origin.SourceID == result.SourceID && origin.ExpiresAt.After(time.Now()) && !origin.ReceivedAt.After(time.Now()) {

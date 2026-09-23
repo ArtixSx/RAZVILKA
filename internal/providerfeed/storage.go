@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
@@ -49,10 +50,11 @@ type subscription struct {
 	Failures               int     `json:"failures"`
 }
 type persistedState struct {
-	State    State  `json:"state"`
-	Identity string `json:"identity,omitempty"`
-	ETag     string `json:"etag,omitempty"`
-	Modified string `json:"modified,omitempty"`
+	Snapshot *feedSnapshot `json:"snapshot,omitempty"`
+	State    State         `json:"state"`
+	Identity string        `json:"identity,omitempty"`
+	ETag     string        `json:"etag,omitempty"`
+	Modified string        `json:"modified,omitempty"`
 }
 type document struct {
 	Schema    int               `json:"schema"`
@@ -67,6 +69,7 @@ func (document) String() string   { return "[private subscriptions document]" }
 func (document) GoString() string { return "[private subscriptions document]" }
 
 type storage struct {
+	blobs  *ownedfs.Root
 	target *restorejournal.FileTarget
 	doc    document
 	image  restorejournal.Image
@@ -91,10 +94,16 @@ func Open(nodes *nodestore.Store, path string) (*Manager, error) {
 	if err != nil {
 		return nil, ErrStore
 	}
+	blobs, err := ownedfs.Open(path)
+	if err != nil {
+		target.Close()
+		return nil, ErrStore
+	}
 	m := New(nodes)
-	m.storage = &storage{target: target, path: path}
+	m.storage = &storage{target: target, path: path, blobs: blobs}
 	if err := m.reloadLocked(context.Background()); err != nil {
 		target.Close()
+		blobs.Close()
 		return nil, err
 	}
 	return m, nil
@@ -109,7 +118,7 @@ func (m *Manager) Close() error {
 	}
 	m.closed = true
 	if m.storage != nil {
-		return m.storage.target.Close()
+		return errors.Join(m.storage.target.Close(), m.storage.blobs.Close())
 	}
 	return nil
 }
@@ -147,6 +156,9 @@ func decodeDocument(image restorejournal.Image) (document, error) {
 		seen[feed.ID] = true
 	}
 	for _, cached := range doc.States {
+		if !validSnapshot(cached.Snapshot) {
+			return document{}, ErrStore
+		}
 		state := cached.State
 		if !seen[state.SourceID] || cached.ETag != safeValidator(cached.ETag) || cached.Modified != safeValidator(cached.Modified) || len(cached.Identity) > 80 || state.Imported < 0 || state.Imported > MaxCandidates || len(state.Name) > 256 || len(state.URL) > 512 || len(state.Status) > 32 || len(state.ErrorCode) > 32 {
 			return document{}, ErrStore
@@ -171,7 +183,7 @@ func (m *Manager) reloadLocked(ctx context.Context) error {
 	m.storage.doc, m.storage.image = doc, image
 	m.states = map[string]cache{}
 	for _, c := range doc.States {
-		m.states[c.State.SourceID] = cache{state: c.State, identity: c.Identity, etag: c.ETag, modified: c.Modified}
+		m.states[c.State.SourceID] = cache{state: c.State, identity: c.Identity, etag: c.ETag, modified: c.Modified, snapshot: c.Snapshot}
 	}
 	for _, feed := range doc.Sources {
 		m.decorateSavedLocked(feed)
@@ -192,7 +204,7 @@ func (m *Manager) persistLocked(ctx context.Context) error {
 	for _, feed := range doc.Sources {
 		m.decorateSavedLocked(feed)
 		c := m.states[feed.ID]
-		doc.States = append(doc.States, persistedState{State: c.state, Identity: c.identity, ETag: c.etag, Modified: c.modified})
+		doc.States = append(doc.States, persistedState{State: c.state, Identity: c.identity, ETag: c.etag, Modified: c.modified, Snapshot: c.snapshot})
 	}
 	data, err := json.Marshal(doc)
 	if err != nil || len(data) > MaxStorageBytes {
@@ -372,6 +384,9 @@ func (m *Manager) Delete(ctx context.Context, id string, revision uint64) error 
 	err := m.persistLocked(ctx)
 	if err != nil && !m.fenced {
 		undo()
+	}
+	if err == nil {
+		_ = m.pruneSnapshotsLocked()
 	}
 	return err
 }

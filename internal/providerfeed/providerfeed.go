@@ -84,6 +84,8 @@ func (Request) String() string   { return "[private provider feed request]" }
 func (Request) GoString() string { return "[private provider feed request]" }
 
 type Result struct {
+	Cursor          int                          `json:"cursor,omitempty"`
+	SnapshotEntries int                          `json:"snapshot_entries,omitempty"`
 	SourceID        string                       `json:"source_id"`
 	Status          string                       `json:"status"`
 	Imported        int                          `json:"imported"`
@@ -99,6 +101,8 @@ type Result struct {
 }
 
 type State struct {
+	Cursor                 int       `json:"cursor,omitempty"`
+	SnapshotEntries        int       `json:"snapshot_entries,omitempty"`
 	RetryAfterAt           time.Time `json:"retry_after_at,omitempty"`
 	SourceID               string    `json:"source_id"`
 	Name                   string    `json:"name"`
@@ -133,6 +137,7 @@ type source struct {
 	revision                              uint64
 }
 type cache struct {
+	snapshot                 *feedSnapshot
 	state                    State
 	identity, etag, modified string
 }
@@ -277,6 +282,17 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		// A wider selection needs a complete body, but a failed attempt must
 		// still report the previously imported passive candidates as retained.
 		previous.etag, previous.modified = "", ""
+		previous.snapshot = nil
+	}
+	useSnapshot := m.storage != nil && s.revision != 0
+	var cachedBody []byte
+	if useSnapshot {
+		if previous.snapshot != nil && !m.now().Before(previous.snapshot.FetchedAt) && m.now().Before(previous.snapshot.ExpiresAt) {
+			cachedBody, _ = m.readSnapshotLocked(s.id, previous.snapshot)
+		}
+		if len(cachedBody) == 0 {
+			previous.etag, previous.modified = "", ""
+		}
 	}
 	m.mu.Unlock()
 	state := previous.state
@@ -303,6 +319,10 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		}
 	}
 	result := Result{SourceID: s.id}
+	if previous.snapshot != nil {
+		result.Cursor = previous.snapshot.Cursor
+		result.SnapshotEntries = previous.snapshot.Entries
+	}
 	finish := func(status string, cause error) (Result, error) {
 		state.Status, state.ErrorCode = status, ErrorCode(cause)
 		result.Status, result.OriginExpiresAt = status, state.OriginExpiresAt
@@ -320,6 +340,9 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 			if err := m.persistLocked(context.WithoutCancel(parent)); err != nil {
 				return result, ErrStore
 			}
+			// Cleanup is restricted to verified immutable cache files not named
+			// by the committed document. Failure cannot invalidate this commit.
+			_ = m.pruneSnapshotsLocked()
 		}
 		return result, cause
 	}
@@ -351,6 +374,7 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		return finish("stale", ErrFetch)
 	}
 	defer response.Body.Close()
+	var raw []byte
 	if response.StatusCode == http.StatusNotModified {
 		if !conditionalSent {
 			return finish("failed", ErrFetch)
@@ -360,30 +384,44 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		if !m.now().Before(state.OriginExpiresAt) {
 			status = "stale"
 		}
-		// Deliberately no Store.Import: 304 extends neither origin TTL nor health.
-		return finish(status, nil)
+		// An unvisited page may be imported using the ORIGINAL expiry. Existing
+		// health and origins are never refreshed just because the server sent 304.
+		if !useSnapshot || len(cachedBody) == 0 || previous.snapshot.Cursor >= previous.snapshot.Entries || status == "stale" {
+			return finish(status, nil)
+		}
+		raw = cachedBody
 	}
 	if response.StatusCode == 429 || response.StatusCode == 503 && !retryAfter(response.Header.Get("Retry-After"), m.now()).IsZero() {
 		state.RetryAfterAt = retryAfter(response.Header.Get("Retry-After"), m.now())
 		return finish("stale", ErrRateLimited)
 	}
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNotModified {
 		return finish("stale", ErrFetch)
 	}
 	if response.ContentLength > MaxBytes {
 		return finish("stale", ErrSize)
 	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, MaxBytes+1))
-	if err != nil {
-		if ctx.Err() != nil {
-			return finish("stale", ctx.Err())
+	if raw == nil {
+		raw, err = io.ReadAll(io.LimitReader(response.Body, MaxBytes+1))
+		if err != nil {
+			if ctx.Err() != nil {
+				return finish("stale", ctx.Err())
+			}
+			return finish("stale", ErrFetch)
 		}
-		return finish("stale", ErrFetch)
 	}
 	if len(raw) > MaxBytes {
 		return finish("stale", ErrSize)
 	}
-	batch, err := parse(ctx, raw, s.format, s.limit)
+	cursor := 0
+	digest := snapshotDigest(raw)
+	if useSnapshot && len(cachedBody) > 0 && previous.snapshot != nil && previous.snapshot.Digest == digest {
+		cursor = previous.snapshot.Cursor
+	}
+	if response.StatusCode == http.StatusOK && previous.snapshot != nil && cursor >= previous.snapshot.Entries {
+		cursor = 0
+	}
+	batch, err := parseWindow(ctx, raw, s.format, s.limit, cursor)
 	result.Rejected, result.Duplicates, result.Omitted, result.Issues = batch.rejected, batch.duplicates, batch.omitted, batch.issues
 	result.TotalEntries, result.AcceptedEntries = batch.total, batch.accepted
 	if err != nil {
@@ -396,6 +434,19 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		return finish("stale", err)
 	}
 	now := m.now().UTC()
+	expiresAt := now.Add(OriginTTL)
+	var nextSnapshot *feedSnapshot
+	if useSnapshot {
+		nextSnapshot = &feedSnapshot{Digest: digest, Size: len(raw), Entries: batch.snapshotEntries, Cursor: batch.nextCursor, FetchedAt: now, ExpiresAt: expiresAt}
+		if result.NotModified {
+			nextSnapshot.FetchedAt = previous.snapshot.FetchedAt
+			nextSnapshot.ExpiresAt = previous.snapshot.ExpiresAt
+			expiresAt = nextSnapshot.ExpiresAt
+		}
+		if !now.Before(expiresAt) || now.Before(nextSnapshot.FetchedAt) {
+			return finish("stale", ErrDeferred)
+		}
+	}
 	// Keep subscription edits and deletion from racing the import after its
 	// network response. This lock is bounded local I/O, never network work.
 	m.mu.Lock()
@@ -403,12 +454,22 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		m.mu.Unlock()
 		return result, ErrConflict
 	}
-	snapshot, err := m.nodes.Import(ctx, nodestore.Source{ID: s.id, Kind: s.kind}, batch.raw, now, OriginTTL, false)
-	if err == nil && m.storage != nil {
+	if nextSnapshot != nil {
+		if err := m.writeSnapshotLocked(ctx, s.id, nextSnapshot, raw); err != nil {
+			m.mu.Unlock()
+			return finish("stale", err)
+		}
+	}
+	snapshot, err := m.nodes.Import(ctx, nodestore.Source{ID: s.id, Kind: s.kind}, batch.raw, now, expiresAt.Sub(now), false)
+	var importedIDs []string
+	if err == nil {
 		ids, metadataErr := m.nodes.MatchImportedMaterials(ctx, batch.materials)
 		if metadataErr != nil {
 			err = metadataErr
 		} else {
+			importedIDs = ids
+		}
+		if metadataErr == nil && m.storage != nil {
 			if m.storage.doc.Countries == nil {
 				m.storage.doc.Countries = map[string]string{}
 			}
@@ -452,18 +513,21 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		return finish("stale", ErrStore)
 	}
 	result.Imported = batch.accepted
-	for _, node := range snapshot.Nodes {
-		for _, origin := range node.Origins {
-			if origin.SourceID == s.id && origin.ReceivedAt.Equal(now) {
-				result.NodeIDs = append(result.NodeIDs, node.ID)
-				break
-			}
-		}
-	}
+	result.NodeIDs = importedIDs
 	state.RetryAfterAt = time.Time{}
-	state.LastSuccessAt, state.OriginExpiresAt, state.LastKnownGood, state.Imported = now, now.Add(OriginTTL), true, batch.accepted
+	if !result.NotModified {
+		state.LastSuccessAt = now
+	}
+	state.OriginExpiresAt, state.LastKnownGood, state.Imported = expiresAt, true, batch.accepted
 	state.TotalEntries, state.AcceptedEntries, state.Omitted, state.Rejected, state.Duplicates = batch.total, batch.accepted, batch.omitted, batch.rejected, batch.duplicates
-	previous.etag, previous.modified = safeValidator(response.Header.Get("ETag")), safeValidator(response.Header.Get("Last-Modified"))
+	if nextSnapshot != nil {
+		previous.snapshot = nextSnapshot
+		result.Cursor, state.Cursor = nextSnapshot.Cursor, nextSnapshot.Cursor
+		result.SnapshotEntries, state.SnapshotEntries = nextSnapshot.Entries, nextSnapshot.Entries
+	}
+	if !result.NotModified {
+		previous.etag, previous.modified = safeValidator(response.Header.Get("ETag")), safeValidator(response.Header.Get("Last-Modified"))
+	}
 	return finish("synced", nil)
 }
 

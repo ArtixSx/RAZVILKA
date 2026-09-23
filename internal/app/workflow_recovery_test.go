@@ -50,6 +50,24 @@ func TestFetched304ChecksOnlySameSourceWithoutCreatingFreshness(t *testing.T) {
 		t.Fatal(ids)
 	}
 }
+func TestFetched304SnapshotChecksNewPageInsteadOfOldPrefix(t *testing.T) {
+	now := time.Now()
+	var nodes []nodestore.Node
+	for i := range 40 {
+		nodes = append(nodes, nodestore.Node{ID: fmt.Sprint(i), Origins: []nodestore.Origin{{SourceID: "a", ReceivedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}}})
+	}
+	result := providerfeed.Result{SourceID: "a", NotModified: true, Cursor: 40, SnapshotEntries: 40, NodeIDs: []string{"32", "33", "34", "35", "36", "37", "38", "39"}}
+	ids, _ := fetchedCheckNodeIDs(result, nodestore.Snapshot{Nodes: nodes}, 32)
+	if !slices.Equal(ids, result.NodeIDs) {
+		t.Fatal("304 repeated the prefix", ids)
+	}
+	result.NodeIDs = nil
+	ids, _ = fetchedCheckNodeIDs(result, nodestore.Snapshot{Nodes: nodes}, 32)
+	if len(ids) != 0 {
+		t.Fatal("exhausted snapshot restarted checks", ids)
+	}
+}
+
 func TestNodeCancelWrongIDCannotCancelAnotherOperation(t *testing.T) {
 	a, ids := newNodeJobTest(t, 1)
 	entered := make(chan struct{})

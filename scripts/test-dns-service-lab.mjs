@@ -102,9 +102,21 @@ for(const mode of ['success','cancel','logout','changed-revision','missing-resul
  const f=browserFixture(),pending=f.submit();f.context.showAuth();
  f.resolve({persistent:true,job:dnsJob});await pending;
  assert.equal(f.e('dc1Results').innerHTML,'');assert.equal(f.e('dc1Status').textContent,'');
+ assert.equal(f.e('dc1Service').innerHTML,'');assert.equal(f.e('dc1Service').value,'');assert.equal(f.e('dc1Profiles').innerHTML,'');
  assert.equal(f.requests.length,1,'logout must not send cancel');
  f.context.acceptDNSLabJobs({durable_jobs:[{...dnsJob,state:'completed',dns_result:response}]});
  assert.ok(f.e('dc1Results').innerHTML.length>0,'next authenticated shared refresh retrieves router result');
  tests++;console.log('PASS logout ignores late ACK; next login restores result without POST');
+}
+for(const revision of [undefined,3]){
+ const f=browserFixture();f.context.state.status.revision=revision;
+ const control={durable_jobs:[{...dnsJob,state:'completed',dns_result:response}]};
+ f.context.acceptDNSLabJobs(control);
+ assert.equal(f.e('dc1Results').innerHTML,'','an absent/older status cannot authorize results');
+ if(revision===undefined)assert.match(f.e('dc1Status').textContent,/Получаем текущее состояние/);
+ f.context.state.status.revision=4;f.context.renderDNS();
+ assert.match(f.e('dc1Results').innerHTML,/DNS-ответы/,'later status must reconsider the same completed job');
+ assert.equal(f.requests.length,0,'reconciliation never resubmits the job');
+ tests++;console.log('PASS result arriving before current status '+revision);
 }
 console.log(JSON.stringify({tests,status:'passed'}));
