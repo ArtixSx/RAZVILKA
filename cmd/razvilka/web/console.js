@@ -32,16 +32,18 @@ const consoleText=(id,text)=>{const el=document.getElementById(id);if(el)el.text
 function consoleDate(value) {const d=new Date(value);return Number.isFinite(d.getTime())&&d.getFullYear()>2000?d.toLocaleString('ru-RU',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}):'Ещё не проверено';}
 function consoleEngineState(id){
  const config=state.engineConfigs?.find(e=>e.id===id),component=state.components?.find(e=>e.id===id),engine=state.engines?.find(e=>e.id===id);
+ const observationStale=typeof inventoryObservationStale==='function'&&inventoryObservationStale();
  const running=component?.running===true||engine?.running===true||config?.running===true;
  const installed=running||component?.installed===true||engine?.installed===true||config?.installed===true;
  const installedKnown=installed||(!component?.inventory_error&&[component,engine,config].some(e=>typeof e?.installed==='boolean'));
  const installedVersion=installed?(component?.installed_version||component?.runtime_version||engine?.version||''):'';
  const availableVersion=component?.available_version||'';
- return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,label:running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке',tone:running?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
+ return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,observationStale,label:observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке',tone:running&&!observationStale?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
 }
 function consoleEngineUpdateState(info){
  const c=info.component,load=state.dataLoad?.components;
  if(state.componentRefreshRequest)return {kind:'checking',text:'Проверяем каталог обновлений…'};
+ if(info.observationStale)return {kind:'failed',text:'Состояние обновляется. Последнее наблюдение: '+consoleDate(state.inventoryObservation?.observedAt)};
  if(c?.inventory_error)return {kind:'failed',text:`Не удалось проверить установку: ${c.inventory_error}. Последние данные сохранены.`};
  if(state.componentCatalogError||c?.catalog_stale||c?.update_check_error||c?.state==='check-failed'||load?.phase==='error'||load?.phase==='busy')return {kind:'failed',text:c?.update_check_error||'Проверка обновлений не удалась. Последние данные сохранены.'};
  if(!c)return {kind:'unknown',text:'Сведения о пакете ещё не получены.'};

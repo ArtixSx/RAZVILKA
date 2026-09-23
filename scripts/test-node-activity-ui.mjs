@@ -69,14 +69,14 @@ assert.equal(calls.length, afterCancelRequest, 'hidden activity made protected r
 context.document.hidden = false;
 context.hideAuth = () => { $('#authScreen').hidden = true; listeners.get('razvilka:auth-restored')(); };
 const app = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
-const panelFunctions = ['panelSectionState', 'panelBusy', 'panelSnapshotCurrent', 'schedulePanelRetry', 'settlePanelReads', 'refreshAll', 'loadPanelSnapshot'].map(name => app.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`))[0]).join('\n');
+const panelFunctions = ['panelSectionState', 'panelBusy', 'panelSnapshotCurrent', 'schedulePanelRetry', 'settlePanelReads', 'refreshAll', 'loadPanelSnapshot', 'acceptPanelInventory'].map(name => app.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`))[0]).join('\n');
 context.panelLoad = { generation: 0, request: null, controller: null, retryTimer: null, retryCount: 0 };
 context.AbortController = AbortController;
 context.renderPanelLoad = () => {};
 context.renderStatus = () => {};
 context.showNotice = () => {};
 context.renderPanelSection = () => {};
-context.acceptPanelSection = (key, value) => { state[key] = value; state.dataLoad[key] = { loaded: true, phase: 'loaded' }; };
+context.acceptPanelSection = (key, value, started) => { if(key==='inventory'){context.acceptPanelInventory(value,started);return;} state[key] = value; state.dataLoad[key] = { loaded: true, phase: 'loaded' }; };
 const activitySchedules = [];
 context.scheduleNodeActivity = delay => activitySchedules.push(delay);
 vm.runInContext(panelFunctions, context);
@@ -84,7 +84,7 @@ handler = async url => {
   if (url === '/api/v1/auth/status') return { authenticated: true };
   if (url === '/api/v1/node-checks/current') return { job: { mode: 'service', state: 'running', completed: 1, total: 10 } };
   if (url === '/api/v1/node-autofallback') return { active: false };
-  if (url === '/api/v1/system') return { hostname: 'router-fixture' };
+  if (url === '/api/v1/panel/inventory') return {schema:1,dataplane:'not-checked',state:'available',instance_id:'a'.repeat(32),revision:1,data_age_ms:0,max_age_seconds:300,observed_at:new Date().toISOString(),data:{components:[],engines:[],system:{hostname:'router-fixture'}}};
   throw Object.assign(new Error('busy'), { status: 409, payload: { code: 'RESTORE_OPERATION_BUSY' } });
 };
 const beforeBootstrap = calls.length;

@@ -152,6 +152,23 @@ func (m *Manager) InstallRecommended(ctx context.Context) BatchResult {
 func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.listLocked(ctx, refresh)
+}
+
+// Observe performs local inventory only. An installer owns the same mutex;
+// passive observation must yield immediately rather than queue behind it.
+func (m *Manager) Observe(ctx context.Context) ([]View, error) {
+	if !m.mu.TryLock() {
+		return nil, errors.New("component operation is active")
+	}
+	defer m.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return m.listLocked(ctx, false)
+}
+
+func (m *Manager) listLocked(ctx context.Context, refresh bool) ([]View, error) {
 	installed, available, inventoryError := m.packageInventory(ctx, refresh)
 	views := make([]View, 0, len(Specs()))
 	for _, spec := range Specs() {

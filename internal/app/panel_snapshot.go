@@ -79,11 +79,13 @@ type panelSavedPublication struct {
 }
 
 type panelSnapshotState struct {
-	once    sync.Once
-	latest  atomic.Pointer[panelSavedPublication]
-	wake    chan struct{}
-	done    chan struct{}
-	started bool // set before serving HTTP; lifecycle methods must not race startup
+	once          sync.Once
+	latest        atomic.Pointer[panelSavedPublication]
+	inventory     atomic.Pointer[panelInventoryPublication]
+	inventoryWake chan struct{}
+	wake          chan struct{}
+	done          chan struct{}
+	started       bool // set before serving HTTP; lifecycle methods must not race startup
 }
 
 type panelSnapshotResponse struct {
@@ -110,6 +112,7 @@ func (a *App) StartPanelSnapshots(ctx context.Context) {
 	a.panelSnapshots.once.Do(func() {
 		p := &a.panelSnapshots
 		p.wake, p.done, p.started = make(chan struct{}, 1), make(chan struct{}), true
+		p.inventoryWake = make(chan struct{}, 1)
 		var id [16]byte
 		if _, err := rand.Read(id[:]); err != nil {
 			close(p.done)
@@ -117,8 +120,14 @@ func (a *App) StartPanelSnapshots(ctx context.Context) {
 		}
 		instance := hex.EncodeToString(id[:])
 		a.publishPanelSnapshot(ctx, instance, time.Now())
+		inventoryDone := make(chan struct{})
+		go func() {
+			defer close(inventoryDone)
+			a.runPanelInventory(ctx, instance)
+		}()
 		go func() {
 			defer close(p.done)
+			defer func() { <-inventoryDone }()
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for {
@@ -142,6 +151,10 @@ func (a *App) wakePanelSnapshot() {
 	case a.panelSnapshots.wake <- struct{}{}:
 	default:
 	}
+	select {
+	case a.panelSnapshots.inventoryWake <- struct{}{}:
+	default:
+	}
 }
 
 func (a *App) WaitPanelSnapshots(ctx context.Context) error {
@@ -157,7 +170,7 @@ func (a *App) WaitPanelSnapshots(ctx context.Context) error {
 }
 
 func (a *App) publishPanelSnapshot(ctx context.Context, instance string, now time.Time) bool {
-	release, err := a.Operations.Exclusive(ctx)
+	release, err := a.Operations.ObserveExclusive(ctx, nil)
 	if err != nil {
 		return false
 	}

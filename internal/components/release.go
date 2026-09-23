@@ -65,7 +65,7 @@ func trustedReleaseHost(host string) bool {
 
 func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (View, error) {
 	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
-	installedVersion := externalInstalledVersion(target)
+	installedVersion := externalInstalledVersionContext(ctx, target)
 	view := View{Spec: spec, Installed: installedVersion != "", InstalledVersion: installedVersion}
 	if info, err := os.Lstat(target); err == nil && !info.IsDir() {
 		view.Installed, view.InstalledVersionSource = true, "runtime"
@@ -431,6 +431,9 @@ func installReleaseBinary(target string, data []byte) error {
 }
 
 func externalInstalledVersion(path string) string {
+	return externalInstalledVersionContext(context.Background(), path)
+}
+func externalInstalledVersionContext(ctx context.Context, path string) string {
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
 		return ""
@@ -438,7 +441,7 @@ func externalInstalledVersion(path string) string {
 	if version := externalReceiptVersion(path); version != "" {
 		return version
 	}
-	if version := externalReportedVersion(path); version != "" {
+	if version := externalReportedVersionContext(ctx, path); version != "" {
 		return version
 	}
 	return ""
@@ -449,8 +452,14 @@ func externalInstalledVersion(path string) string {
 func InstalledReleaseVersion(path string) string { return externalInstalledVersion(path) }
 
 func externalReportedVersion(path string) string {
+	return externalReportedVersionContext(context.Background(), path)
+}
+func externalReportedVersionContext(parent context.Context, path string) string {
 	for _, args := range [][]string{{"--version"}, {"version"}, {"-v"}} {
-		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+		if parent.Err() != nil {
+			return ""
+		}
+		ctx, cancel := context.WithTimeout(parent, 1500*time.Millisecond)
 		output, commandErr := exec.CommandContext(ctx, path, args...).CombinedOutput()
 		cancel()
 		if commandErr != nil {

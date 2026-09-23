@@ -825,6 +825,7 @@ function renderPanelSection(key) {
   const renderers = {
     status: () => { renderStatus(); renderSettings(); },
     system: renderSystem, metrics: renderMetrics,
+    inventory: () => { renderSystem(); renderEngines(); renderComponents(); },
     services: () => {
       renderServices(); renderOverviewQuickServices(); renderOverviewServices(); renderReadiness();
       if (state.dataLoad.testlab?.loaded) renderTestLab();
@@ -848,7 +849,8 @@ function renderPanelSection(key) {
   renderPanelLoad();
 }
 
-function acceptPanelSection(key, value) {
+function acceptPanelSection(key, value, requestStartedAt) {
+  if (key === 'inventory') { acceptPanelInventory(value, requestStartedAt); return; }
   const arrays = ['services', 'engines', 'engineConfigs', 'components', 'sources', 'routeOptions'];
   if (arrays.includes(key) && !Array.isArray(value)) throw new Error('Получен неполный список. Последние данные сохранены.');
   if (value === null || typeof value !== 'object') throw new Error('Получен неполный ответ. Последние данные сохранены.');
@@ -856,6 +858,43 @@ function acceptPanelSection(key, value) {
   else if (key === 'devices') acceptDeviceList(value);
   else state[key] = key === 'sessions' ? (value.sessions || []) : value;
   panelSectionState(key, 'ready');
+}
+
+function acceptPanelInventory(value, requestStartedAt = Date.now()) {
+  if (value?.schema !== 1 || value.dataplane !== 'not-checked'
+    || !['empty', 'available', 'retained', 'expired'].includes(value.state)
+    || !Number.isSafeInteger(value.revision) || value.revision < 0
+    || !Number.isFinite(value.data_age_ms) || value.data_age_ms < 0
+    || value.max_age_seconds !== 300) throw new Error('Сведения о компонентах получены не полностью.');
+  const previous = state.inventoryObservation;
+  if (previous?.instance === value.instance_id && previous.revision > value.revision) return;
+  const observed = Date.parse(value.observed_at);
+  if (!value.data || !Number.isFinite(observed) || value.data_age_ms >= 300000
+    || !['available', 'retained'].includes(value.state)
+    || requestStartedAt - value.data_age_ms < (state.inventoryInvalidatedAt || 0)) {
+    throw Object.assign(new Error('Новые сведения о компонентах ещё собираются. Последние данные сохранены.'), { payload: { code: 'RESTORE_OPERATION_BUSY' } });
+  }
+  if (typeof value.instance_id !== 'string' || value.instance_id.length !== 32
+    || !Array.isArray(value.data.components) || value.data.components.length > 64
+    || !Array.isArray(value.data.engines) || value.data.engines.length > 64
+    || !value.data.system || typeof value.data.system !== 'object'
+    || value.data.components.some(c => typeof c.id !== 'string' || typeof c.installed !== 'boolean')
+    || value.data.engines.some(c => typeof c.id !== 'string' || typeof c.installed !== 'boolean')) {
+    throw new Error('Сведения о компонентах получены не полностью.');
+  }
+  state.inventoryObservation = { instance: value.instance_id, revision: value.revision,
+    observedAt: value.observed_at, receivedAt: Date.now(), ageMS: value.data_age_ms,
+    localObservedBefore: requestStartedAt - value.data_age_ms, retained: value.state === 'retained' };
+  state.components = value.data.components;
+  state.engines = value.data.engines;
+  state.system = value.data.system;
+  for (const key of ['components', 'engines', 'system', 'inventory']) panelSectionState(key, 'ready');
+}
+
+function inventoryObservationStale() {
+  const value = state.inventoryObservation;
+  return !!value && (value.retained || value.localObservedBefore < (state.inventoryInvalidatedAt || 0)
+    || value.ageMS + Math.max(0, Date.now() - value.receivedAt) >= 60000);
 }
 
 async function settlePanelReads(requests, read) {
@@ -882,6 +921,7 @@ async function refreshAfterMutation() {
   // Readback cannot join a snapshot admitted before the completed write.
   // Abort transport and fence late bodies even when cancellation is ignored.
   cancelPanelRefresh();
+  state.inventoryInvalidatedAt = Date.now();
   if ($('#authScreen')?.hidden === false) return false;
   return refreshAll();
 }
@@ -913,12 +953,10 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     scheduleNodeActivity(0);
     const requests = [
       ['status', '/api/v1/status'],
-      ['system', '/api/v1/system'],
+      ['inventory', '/api/v1/panel/inventory'],
       ['metrics', '/api/v1/metrics?limit=120'],
       ['services', '/api/v1/services'],
-      ['engines', '/api/v1/engines'],
       ['engineConfigs', '/api/v1/engine-configs'],
-      ['components', '/api/v1/components'],
       ['warp', '/api/v1/warp'],
       ['sources', '/api/v1/sources'],
       ['nodes', '/api/v1/nodes'],
@@ -943,13 +981,14 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     await settlePanelReads(requests, async ([key, url]) => {
       if (!panelSnapshotCurrent(generation)) return;
       try {
+        const requestStartedAt = Date.now();
         const value = await api(url, options);
         if (!panelSnapshotCurrent(generation)) return;
         if (key === 'status' && (value?.setup_required || (value?.auth_required && !value?.authenticated))) {
           cancelPanelRefresh();
           showAuth(value); $('#systemText').textContent = 'Требуется вход'; return;
         }
-        acceptPanelSection(key, value);
+        acceptPanelSection(key, value, requestStartedAt);
         renderPanelSection(key);
       } catch (error) {
         if (!panelSnapshotCurrent(generation)) return;
@@ -1055,7 +1094,7 @@ function renderComponents() {
     const update = info ? consoleEngineUpdateState(info) : null;
     const stale = c.catalog_stale || c.update_check_error || c.inventory_error || state.componentCatalogError || update?.kind === 'failed';
     const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running';
-    const unavailable = busy || c.running || c.external_owner;
+    const unavailable = busy || c.running || c.external_owner || inventoryObservationStale();
     if (c.update_available) {
       version = info ? consoleEngineVersionLabel(info) : `${c.installed_version || 'Версия неизвестна'}${c.available_version ? ` → ${c.available_version}` : ''}`;
       actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="update" ${c.can_update && !stale && !unavailable ? '' : 'disabled'}>Обновить</button>`;
@@ -1112,10 +1151,18 @@ async function refreshComponents(refresh = true) {
   button.disabled = true; button.textContent = 'Проверка…';
   const request = Promise.resolve().then(async () => {
     try {
-      const components = await api(`/api/v1/components${refresh ? '?refresh=true' : ''}`, refresh ? { readTimeoutMs: 110000 } : {});
+      if (!refresh) {
+        const requestStartedAt = Date.now();
+        const observation = await api('/api/v1/panel/inventory');
+        if (!workflowSession(epoch)) return false;
+        acceptPanelInventory(observation, requestStartedAt);
+        return true;
+      }
+      const components = await api('/api/v1/components?refresh=true', { readTimeoutMs: 110000 });
       if (!workflowSession(epoch)) return false;
       if (!Array.isArray(components)) throw new Error('Получен неполный каталог. Последние данные сохранены.');
       state.components = components;
+      state.inventoryInvalidatedAt = Date.now();
       if (refresh) state.componentCatalogError = '';
       panelSectionState('components', 'ready');
       return true;

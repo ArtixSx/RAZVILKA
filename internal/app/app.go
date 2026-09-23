@@ -1313,6 +1313,9 @@ func (a *App) componentList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "component manager disabled", http.StatusServiceUnavailable)
 		return
 	}
+	if r.URL.Query().Get("refresh") == "true" {
+		defer a.wakePanelSnapshot()
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 	defer cancel()
 	views, err := a.Components.List(ctx, r.URL.Query().Get("refresh") == "true")

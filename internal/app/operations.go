@@ -62,7 +62,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Security.Middleware remains outside this middleware. Only this
 		// memory-only endpoint bypasses admission, never runtime Store reads.
-		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath {
+		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelInventoryPath {
 			// The general security middleware allows diagnostic reads before
 			// account setup. Admission metadata is private even in that state.
 			if a.Security == nil || !a.Security.Authenticated(r) {
@@ -72,6 +72,8 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			}
 			if r.URL.Path == panelSnapshotPath {
 				a.panelSnapshot(w, r)
+			} else if r.URL.Path == panelInventoryPath {
+				a.panelInventory(w, r)
 			} else {
 				panelhealth.Handler(&a.Operations).ServeHTTP(w, r)
 			}

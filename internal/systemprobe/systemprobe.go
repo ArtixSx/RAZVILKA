@@ -40,11 +40,17 @@ type Snapshot struct {
 }
 
 func Probe() Snapshot {
+	return ProbeContext(context.Background())
+}
+
+// ProbeContext is a local capability observation; it neither changes routes nor
+// probes a remote endpoint. Its commands share the collector's deadline.
+func ProbeContext(ctx context.Context) Snapshot {
 	s := Snapshot{Architecture: runtime.GOARCH}
 	if h, err := os.Hostname(); err == nil {
 		s.Hostname = h
 	}
-	s.Kernel = commandOutput("uname", "-r")
+	s.Kernel = commandOutputContext(ctx, "uname", "-r")
 	s.MemTotalKB, s.MemAvailableKB = memory()
 	if st, err := os.Stat("/opt"); err == nil && st.IsDir() {
 		s.OptReady = true
@@ -63,7 +69,7 @@ func Probe() Snapshot {
 	profile := DetectWANProfile()
 	s.WANInterface = profile.WANInterface
 	s.NetworkProfileID = profile.ID
-	s.ExternalTunnels = externalTunnels()
+	s.ExternalTunnels = externalTunnelsContext(ctx)
 	s.RouteContamination = len(s.ExternalTunnels) > 0
 	return s
 }
@@ -82,7 +88,10 @@ func DetectWANProfile() WANProfile {
 func commandExists(name string) bool { _, err := exec.LookPath(name); return err == nil }
 func fileExists(path string) bool    { st, err := os.Stat(path); return err == nil && !st.IsDir() }
 func commandOutput(name string, args ...string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
+	return commandOutputContext(context.Background(), name, args...)
+}
+func commandOutputContext(parent context.Context, name string, args ...string) string {
+	ctx, cancel := context.WithTimeout(parent, 900*time.Millisecond)
 	defer cancel()
 	b, err := exec.CommandContext(ctx, name, args...).Output()
 	if err != nil {
@@ -127,12 +136,15 @@ func kernelFeatureAvailable(feature string, paths ...string) bool {
 	return false
 }
 func externalTunnels() []string {
+	return externalTunnelsContext(context.Background())
+}
+func externalTunnelsContext(parent context.Context) []string {
 	cmds := [][]string{{"ip", "route", "show"}, {"/opt/sbin/ip", "route", "show"}, {"/opt/bin/ip", "route", "show"}}
 	for _, c := range cmds {
 		if c[0][0] == '/' && !fileExists(c[0]) {
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
+		ctx, cancel := context.WithTimeout(parent, 1200*time.Millisecond)
 		b, err := exec.CommandContext(ctx, c[0], c[1:]...).Output()
 		cancel()
 		if err != nil {

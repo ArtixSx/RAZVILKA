@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
-const names=['panelSectionState','panelBusy','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
+const names=['panelSectionState','panelBusy','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
 const extract=name=>{const match=source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
@@ -27,6 +27,7 @@ function fixture(){
    if(url==='/api/v1/auth/status')return {authenticated:true};
    if(url==='/api/v1/status')return {version:'fixture',authenticated:true,revision:34};
    if(url==='/api/v1/services')return [{id:'telegram',name:'Telegram',enabled:true}];
+   if(url==='/api/v1/panel/inventory')return {schema:1,dataplane:'not-checked',state:'available',revision:1,instance_id:'a'.repeat(32),data_age_ms:0,max_age_seconds:300,observed_at:new Date().toISOString(),data:{components:[],engines:[],system:{}}};
    return arrays.has(url)?[]:{};
  };
  handler=normal;
@@ -37,6 +38,39 @@ function fixture(){
 }
 let count=0;
 async function test(name,fn){await fn();count++;console.log('PASS',name);}
+
+await test('inventory reads memory endpoint, stamps age and rejects pre-write data without comparing clocks',async()=>{
+ const f=fixture();await f.context.refreshAll();
+ assert(!f.calls.some(c=>['/api/v1/engines','/api/v1/system','/api/v1/components'].includes(c.url)));
+ const value=f.normal('/api/v1/panel/inventory');
+ value.observed_at='2020-01-01T00:00:00Z'; // Deliberately different router clock.
+ value.data.components=[{id:'usque',installed:true,installed_version:'1.0.1',available_version:'1.0.3',checked_at:'2019-12-31T00:00:00Z'}];
+ value.revision=2;
+ f.state.inventoryInvalidatedAt=1000;
+ f.context.acceptPanelInventory(value,1100);
+ assert.equal(f.state.components[0].installed_version,'1.0.1');
+ assert.equal(f.state.components[0].checked_at,'2019-12-31T00:00:00Z','local observation refreshed upstream check time');
+ assert.equal(f.context.inventoryObservationStale(),false);
+ const previous=f.state.components;
+ value.data_age_ms=200;
+ assert.throws(()=>f.context.acceptPanelInventory(value,1100),/ещё собираются/);
+ assert.equal(f.state.components,previous);
+ f.state.inventoryInvalidatedAt=0;
+ value.state='retained';value.data_age_ms=2000;
+ f.context.acceptPanelInventory(value,Date.now());
+ assert.equal(f.context.inventoryObservationStale(),true);
+ f.state.inventoryObservation.retained=false;f.state.inventoryObservation.ageMS=60000;
+ assert.equal(f.context.inventoryObservationStale(),true);
+});
+
+await test('empty expired and invalid inventory never turn unavailable into uninstalled',async()=>{
+ const f=fixture();await f.context.refreshAll();
+ f.state.components=[{id:'usque',installed:true}];const previous=f.state.components;
+ for(const change of [{state:'expired',data:undefined},{state:'empty',data:undefined},{data:{components:null,engines:[],system:{}}}]) {
+   assert.throws(()=>f.context.acceptPanelInventory({...f.normal('/api/v1/panel/inventory'),...change}));
+   assert.equal(f.state.components,previous);
+ }
+});
 
 await test('slow services cannot hold settings, engine metadata or other completed reads',async()=>{
  const f=fixture(),slow=deferred();f.handler(url=>url==='/api/v1/services'?slow.promise:f.normal(url));
@@ -131,7 +165,7 @@ await test('activity cannot gate reads; a busy section retries without suppressi
  const f=fixture();f.activity(true);
  f.handler(url=>{if(url==='/api/v1/services')throw Object.assign(new Error('busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});return f.normal(url);});
  await f.context.refreshAll();
- assert(f.calls.some(c=>c.url==='/api/v1/system'));assert.equal(f.state.dataLoad.services.phase,'busy');
+ assert(f.calls.some(c=>c.url==='/api/v1/panel/inventory'));assert.equal(f.state.dataLoad.services.phase,'busy');
  assert.equal(f.state.dataLoad.system.loaded,true);assert.equal(f.state.dataLoad.engines.loaded,true);
  f.handler(f.normal);f.retry();await flush();await flush();assert.equal(f.state.services.length,1);
 });
@@ -145,7 +179,7 @@ await test('late pre-logout read cannot restore protected data or schedule retri
 
 await test('section 401 cancels sibling reads and opens login without stale responses',async()=>{
  const f=fixture(),slow=deferred();
- f.handler(url=>url==='/api/v1/services'?Promise.reject(Object.assign(new Error('login'),{status:401})):url==='/api/v1/engines'?slow.promise:f.normal(url));
+ f.handler(url=>url==='/api/v1/services'?Promise.reject(Object.assign(new Error('login'),{status:401})):url==='/api/v1/panel/inventory'?slow.promise:f.normal(url));
  const refresh=f.context.refreshAll();await flush();slow.resolve([{id:'private-old-result'}]);await refresh;
  assert.equal(f.$('#authScreen').hidden,false);assert.equal(f.state.engines,undefined);assert.equal(f.timers.size,0);
 });

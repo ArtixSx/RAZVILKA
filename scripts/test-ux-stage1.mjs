@@ -10,7 +10,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const results=[];
 async function test(name,fn){let timer;try{await Promise.race([fn(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('test deadline')),4000);})]);results.push({name,status:'passed'});console.log('PASS',name);}catch(e){results.push({name,status:'failed',error:e.message});console.error('FAIL',name,e.stack);}finally{clearTimeout(timer);}}
-const helpers=['panelSectionState','panelBusy','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','settlePanelReads','refreshAll','refreshAfterMutation','loadPanelSnapshot'];
+const helpers=['panelSectionState','panelBusy','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','settlePanelReads','refreshAll','refreshAfterMutation','loadPanelSnapshot'];
 const renderNames=['renderStatus','renderSettings','renderSystem','renderMetrics','renderServices','renderOverviewQuickServices','renderOverviewServices','renderReadiness','renderEngines','renderEngineControl','renderComponents','renderWarpManager','renderSources','renderNodes','renderConnections','renderDevices','renderTestLab','renderEngineLab','renderAudit','renderStrategyLab','renderDNS','renderDNSPlan','renderDNSServiceBindings'];
 function fixture(){
  const els=new Map(),calls=[],renders=[],timers=new Map();let serial=0,handler;
@@ -25,7 +25,7 @@ function fixture(){
  ctx.api=async(url,opt={})=>{calls.push({url,opt});return handler(url,opt);};
  vm.createContext(ctx);vm.runInContext(helpers.map(extract).join('\n'),ctx);
  const arrays=new Set(['/api/v1/services','/api/v1/engines','/api/v1/engine-configs','/api/v1/components','/api/v1/sources','/api/v1/routes/options']);
- const normal=url=>url==='/api/v1/auth/status'?{authenticated:true}:url==='/api/v1/status'?{authenticated:true,version:'test',revision:2}:url==='/api/v1/services'?[{id:'telegram'}]:arrays.has(url)?[]:{};
+ const normal=url=>url==='/api/v1/auth/status'?{authenticated:true}:url==='/api/v1/status'?{authenticated:true,version:'test',revision:2}:url==='/api/v1/services'?[{id:'telegram'}]:url==='/api/v1/panel/inventory'?{schema:1,dataplane:'not-checked',state:'available',instance_id:'a'.repeat(32),revision:1,data_age_ms:0,max_age_seconds:300,observed_at:new Date().toISOString(),data:{components:[],engines:[],system:{}}}:arrays.has(url)?[]:{};
  handler=normal;
  return {ctx,state,panelLoad,calls,renders,timers,$,normal,handler:fn=>handler=fn};
 }
