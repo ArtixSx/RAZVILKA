@@ -1,6 +1,37 @@
 'use strict';
 
-const workspaceControl = { generation: 0, busy: false, readBusy: false, pending: null, timer: null, expanded: false, authenticated: false, lastError: '' };
+const workspaceControl = { generation: 0, busy: false, readBusy: false, pending: null, timer: null, expanded: false, authenticated: false, lastError: '', runtimeJob: null, runtimeRequest: null };
+
+function workspaceRuntimeToken(intent) {
+  const signature = JSON.stringify(intent);
+  let saved = workspaceControl.runtimeRequest;
+  try { saved ||= JSON.parse(sessionStorage.getItem('razvilka.runtime-request') || 'null'); } catch (_) {}
+  if (!saved || saved.signature !== signature || !/^[a-f0-9]{32}$/.test(saved.key) || !Number.isFinite(saved.at) || Date.now() < saved.at || Date.now() - saved.at >= 86400000) {
+    const bytes = new Uint8Array(16); globalThis.crypto.getRandomValues(bytes);
+    saved = { signature, key: Array.from(bytes, x => x.toString(16).padStart(2, '0')).join(''), at: Date.now() };
+  }
+  workspaceControl.runtimeRequest = saved;
+  try { sessionStorage.setItem('razvilka.runtime-request', JSON.stringify(saved)); } catch (_) {}
+  return saved.key;
+}
+
+function clearWorkspaceRuntimeToken() {
+  workspaceControl.runtimeRequest = null;
+  try { sessionStorage.removeItem('razvilka.runtime-request'); } catch (_) {}
+}
+
+function acceptWorkspaceRuntimeJobs(control) {
+  const jobs = (control?.durable_jobs || []).filter(job => ['service-stop', 'service-resume'].includes(job.mode));
+  const active = jobs.find(job => ['queued', 'running', 'canceling', 'interrupted'].includes(job.state));
+  const previous = workspaceControl.runtimeJob;
+  const finished = previous && jobs.find(job => job.id === previous.id && ['completed', 'failed', 'canceled'].includes(job.state));
+  workspaceControl.runtimeJob = active || null;
+  if (finished) {
+    workspaceControl.lastError = finished.state === 'failed' ? finished.message : '';
+    showNotice(finished.state === 'completed' ? 'success' : 'review', finished.state === 'completed' ? 'Переключение завершено' : 'Проверьте состояние проекта', finished.message);
+  }
+  return !!active;
+}
 
 function workspaceControlVisible() { return workspaceControl.authenticated && $('#authScreen').hidden && !document.hidden; }
 
@@ -9,6 +40,7 @@ function acceptWorkspaceControl(control) {
   const current = state.serviceControl;
   if (current && control.config_revision < current.config_revision) return false;
   state.serviceControl = control;
+  acceptWorkspaceRuntimeJobs(control);
   workspaceControl.readBusy = false;
   renderWorkspaceControls();
   return true;
@@ -19,18 +51,18 @@ function renderWorkspaceControls() {
   const ready = workspaceControl.authenticated && !!control && Number.isSafeInteger(control.config_revision);
   for (const [id, mode] of [['#projectModeAuto', 'auto'], ['#projectModeManual', 'manual']]) {
     const button = $(id);
-    button.disabled = !ready || workspaceControl.busy || workspaceControl.readBusy;
+    button.disabled = !ready || workspaceControl.busy || workspaceControl.readBusy || !!workspaceControl.runtimeJob;
     button.setAttribute('aria-pressed', String(ready && control.mode === mode));
   }
   const power = $('#projectPower');
   const running = ready && control.running === true;
   const canStop = ready && (running || control.can_stop === true);
-  power.disabled = !ready || workspaceControl.busy || workspaceControl.readBusy || (control.runtime_state === 'unknown' && !canStop);
+  power.disabled = !ready || workspaceControl.busy || !!workspaceControl.runtimeJob || (workspaceControl.readBusy && !canStop) || (control.runtime_state === 'unknown' && !canStop);
   power.setAttribute('aria-checked', String(canStop));
   power.classList.toggle('running', running);
   power.classList.toggle('unknown', !ready || control.runtime_state === 'unknown');
-  $('#projectPowerLabel').textContent = workspaceControl.busy ? 'Выполняется…' : !ready ? 'Состояние не получено' : control.runtime_state === 'unknown' ? 'Нужна проверка' : running ? 'Проект включён' : control.runtime_state === 'stopped' ? 'Проект выключен' : 'Нужна настройка';
-  $('#projectPowerHint').textContent = workspaceControl.readBusy ? 'Дождитесь завершения проверки' : !ready ? 'Откройте лог или обновите' : control.safe_mode ? 'Безопасный режим · открыть настройки' : canStop ? 'Нажмите, чтобы выключить' : control?.resume_available ? 'Нажмите, чтобы включить' : 'Выбрать и включить сервисы';
+  $('#projectPowerLabel').textContent = workspaceControl.runtimeJob ? (workspaceControl.runtimeJob.mode === 'service-stop' ? 'Останавливаем…' : 'Включаем…') : workspaceControl.busy ? 'Выполняется…' : !ready ? 'Состояние не получено' : control.runtime_state === 'unknown' ? 'Нужна проверка' : running ? 'Проект включён' : control.runtime_state === 'stopped' ? 'Проект выключен' : 'Нужна настройка';
+  $('#projectPowerHint').textContent = workspaceControl.runtimeJob ? 'Задание сохранено на роутере' : workspaceControl.readBusy && canStop ? 'Можно поставить остановку в очередь' : workspaceControl.readBusy ? 'Дождитесь завершения проверки' : !ready ? 'Откройте лог или обновите' : control.safe_mode ? 'Безопасный режим · открыть настройки' : canStop ? 'Нажмите, чтобы выключить' : control?.resume_available ? 'Нажмите, чтобы включить' : 'Выбрать и включить сервисы';
   power.setAttribute('aria-label', canStop ? 'Остановить маршруты RAZVILKA' : 'Включить маршруты RAZVILKA');
   if (ready) $('#systemText').textContent = workspaceControl.readBusy ? 'Выполняется проверка или изменение' : control.safe_mode ? 'Применение заблокировано в настройках' : control.mode === 'manual' ? 'Подключения меняете вы' : 'Автозамена по правилам сервисов';
 }
@@ -39,7 +71,14 @@ async function refreshWorkspaceControl() {
   if (!workspaceControlVisible()) return false;
   if (workspaceControl.pending) return workspaceControl.pending;
   const generation = workspaceControl.generation;
-  const pending = api('/api/v1/service-control').then(control => {
+  const pending = (async () => {
+    if (workspaceControl.runtimeJob || workspaceControl.readBusy) {
+      const memory = await api('/api/v1/service-control/current');
+      if (generation !== workspaceControl.generation || !workspaceControlVisible()) return null;
+      if (acceptWorkspaceRuntimeJobs(memory)) { renderWorkspaceControls(); return null; }
+    }
+    return api('/api/v1/service-control');
+  })().then(control => {
     if (generation !== workspaceControl.generation || !workspaceControlVisible()) return false;
     return acceptWorkspaceControl(control);
   }).catch(error => {
@@ -61,7 +100,7 @@ function scheduleWorkspaceControl(delay = 15000) {
     const generation = workspaceControl.generation;
     try { await refreshWorkspaceControl(); }
     catch (error) { if (generation === workspaceControl.generation) { workspaceControl.lastError = error.message; state.serviceControl = null; renderWorkspaceControls(); } }
-    finally { if (generation === workspaceControl.generation) scheduleWorkspaceControl(workspaceControl.readBusy ? 3000 : 15000); }
+    finally { if (generation === workspaceControl.generation) scheduleWorkspaceControl(workspaceControl.readBusy || workspaceControl.runtimeJob ? 3000 : 15000); }
   }, delay);
 }
 
@@ -84,7 +123,7 @@ async function changeWorkspaceMode(mode) {
 
 async function toggleWorkspaceRuntime() {
   const control = state.serviceControl;
-  if (!workspaceControlVisible() || workspaceControl.busy || workspaceControl.readBusy || !control || (control.runtime_state === 'unknown' && !control.can_stop)) return;
+  if (!workspaceControlVisible() || workspaceControl.busy || workspaceControl.runtimeJob || !control || (workspaceControl.readBusy && !control.running && !control.can_stop) || (control.runtime_state === 'unknown' && !control.can_stop)) return;
   if (control.safe_mode && !control.running && !control.can_stop) {
     setView('settings');
     showNotice('review', 'Включён безопасный режим', 'Отключите безопасный режим в настройках, затем включите проект. Сохранённые маршруты пройдут проверку перед запуском.');
@@ -99,8 +138,18 @@ async function toggleWorkspaceRuntime() {
   const action = control.running || control.can_stop ? 'stop' : 'resume';
   workspaceControl.busy = true; renderWorkspaceControls();
   try {
-    const result = await api('/api/v1/service-control/runtime', { method: 'POST', body: JSON.stringify({ expected_revision: control.config_revision, action, confirm: action === 'stop' ? 'STOP_OWNED_ROUTES' : 'RESUME_OWNED_ROUTES' }) });
+    const intent = { expected_revision: control.config_revision, action, confirm: action === 'stop' ? 'STOP_OWNED_ROUTES' : 'RESUME_OWNED_ROUTES' };
+    const result = await api('/api/v1/service-control/runtime', { method: 'POST', body: JSON.stringify({ ...intent, idempotency_key: workspaceRuntimeToken(intent) }) });
     if (generation !== workspaceControl.generation) return;
+    clearWorkspaceRuntimeToken();
+    if (result.persistent && result.job) {
+      workspaceControl.runtimeJob = result.job;
+      acceptWorkspaceRuntimeJobs({ durable_jobs: [result.job] });
+      if (workspaceControl.runtimeJob) showNotice('review', 'Задание принято', result.job.message || 'Переключение сохранено на роутере. Браузер можно закрыть.');
+      workspaceControl.lastError = '';
+      scheduleWorkspaceControl(1000);
+      return;
+    }
     if (!result.ok) throw new Error(result.error || 'Изменение не подтверждено. Обновите состояние.');
     workspaceControl.lastError = '';
     acceptWorkspaceControl(result.control);
@@ -108,7 +157,7 @@ async function toggleWorkspaceRuntime() {
     if (generation !== workspaceControl.generation) return;
     showNotice('success', action === 'stop' ? 'Маршруты RAZVILKA остановлены' : 'Маршруты RAZVILKA включены', action === 'stop' ? 'Ваши настройки сохранены. Панель остаётся доступна.' : 'Предыдущие сервисы и устройства восстановлены после проверки.');
   } catch (error) {
-    if (generation === workspaceControl.generation) { workspaceControl.lastError = error.message; showNotice('error', 'Переключение не завершено', error.message); await refreshWorkspaceControl().catch(() => {}); }
+    if (generation === workspaceControl.generation) { if (error.status >= 400 && error.status < 500) clearWorkspaceRuntimeToken(); workspaceControl.lastError = error.message; showNotice('error', 'Переключение не завершено', error.message); await refreshWorkspaceControl().catch(() => {}); }
   } finally { if (generation === workspaceControl.generation) { workspaceControl.busy = false; renderWorkspaceControls(); } }
 }
 
@@ -132,10 +181,14 @@ async function openWorkspaceLog() {
   if (!workspaceControlVisible()) return;
   const generation = workspaceControl.generation;
   setView('activity');
+  let jobs = null, jobsError = '';
   try {
-    const audit = await api('/api/v1/audit?limit=40');
+    const [audit, memory] = await Promise.allSettled([api('/api/v1/audit?limit=40'), api('/api/v1/service-control/current')]);
     if (generation !== workspaceControl.generation || !workspaceControlVisible()) return;
-    state.audit = audit;
+    if (memory.status === 'fulfilled') jobs = memory.value.durable_jobs || [];
+    else jobsError = memory.reason?.message || 'Не удалось получить очередь заданий.';
+    if (audit.status !== 'fulfilled') throw audit.reason;
+    state.audit = audit.value;
     renderAudit();
   } catch (error) {
     if (generation !== workspaceControl.generation) return;
@@ -146,6 +199,7 @@ async function openWorkspaceLog() {
   showDetails({
     detail_kind: 'project-log',
     control: state.serviceControl,
+    jobs, jobs_error: jobsError,
     load_issues: (state.loadIssues || []).map(issue => ({section: issue.section, message: issue.message || 'Не удалось получить данные'})),
     audit: state.audit,
     component_issues: (state.components || []).filter(item => item.update_check_error || item.inventory_error).map(item => ({id:item.name || item.id, message:item.inventory_error || item.update_check_error})),
@@ -174,6 +228,7 @@ function bindWorkspaceControls() {
   });
   document.addEventListener('razvilka:auth-required', () => {
     workspaceControl.authenticated = false; workspaceControl.generation++; workspaceControl.busy = false; workspaceControl.readBusy = false; workspaceControl.lastError = '';
+    workspaceControl.runtimeJob = null; clearWorkspaceRuntimeToken();
     clearTimeout(workspaceControl.timer); workspaceControl.pending = null; state.serviceControl = null; renderWorkspaceControls();
   });
   document.addEventListener('razvilka:auth-restored', () => { if (!workspaceControl.authenticated) { workspaceControl.authenticated = true; scheduleWorkspaceControl(0); } });

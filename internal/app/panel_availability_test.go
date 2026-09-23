@@ -86,7 +86,11 @@ func TestPanelAvailabilityRealHTTPAuthAndAdmission(t *testing.T) {
 	client := &http.Client{Timeout: 2 * time.Second}
 	request := func(method, path string, authenticated bool) (int, string) {
 		t.Helper()
-		r, err := http.NewRequest(method, server.URL+path, strings.NewReader(`{}`))
+		body := `{}`
+		if path == "/api/v1/service-control/runtime" {
+			body = `{"action":"stop","confirm":"STOP_OWNED_ROUTES","expected_revision":1}`
+		}
+		r, err := http.NewRequest(method, server.URL+path, strings.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,11 +103,11 @@ func TestPanelAvailabilityRealHTTPAuthAndAdmission(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer response.Body.Close()
-		body, err := io.ReadAll(response.Body)
+		data, err := io.ReadAll(response.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return response.StatusCode, string(body)
+		return response.StatusCode, string(data)
 	}
 	for _, fenced := range []bool{false, true} {
 		if fenced {

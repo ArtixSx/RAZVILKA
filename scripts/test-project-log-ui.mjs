@@ -67,6 +67,18 @@ out = visible({ ...healthy, audit: { available: true, events: Array.from({ lengt
 assert.equal((out.match(/<article /g) || []).length, 40);
 assert.match(out, /Показаны 40 последних записей/);
 
+out = visible({ ...healthy, jobs: [
+  { id: 1, mode: 'service-stop', state: 'queued', message: 'Ждём очистки' },
+  { id: 2, mode: 'service-resume', state: 'failed', message: 'Настройки изменились', finished_at: '2026-09-23T12:00:00Z' },
+  { id: 3, mode: 'service-check', state: 'completed', message: payload },
+] });
+assert.match(out, /Задания на роутере/);
+assert.match(out, /Остановка проекта/); assert.match(out, /В очереди/);
+assert.match(out, /Включение проекта/); assert.match(out, /Настройки изменились/);
+assert.doesNotMatch(out, /<img|Invalid Date/);
+out = visible({ ...healthy, jobs: Array.from({ length: 64 }, () => ({ mode: 'service-stop', state: 'completed', message: 'done' })) });
+assert.equal((out.match(/<article /g) || []).length, 12, 'job history is bounded');
+
 const slice = (start, end) => {
   const from = app.indexOf(start), to = app.indexOf(end, from + start.length);
   assert.ok(from >= 0 && to > from);

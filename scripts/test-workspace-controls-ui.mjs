@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 
 const elements = new Map(), events = new Map();
 const $ = id => { if (!elements.has(id)) elements.set(id, { hidden: false, disabled: false, textContent: '', attributes: {}, handlers: {}, classList: { toggle() {} }, setAttribute(key, value) { this.attributes[key] = value; }, addEventListener(key, fn) { this.handlers[key] = fn; } }); return elements.get(id); };
 const state = { serviceControl: null, components: [] }, calls = [], notices = [], views = [], details = [];
 let request = async () => ({}), refreshes = 0;
+const storage = new Map();
 const context = vm.createContext({ state, $, Number, document: { hidden: false, addEventListener: (name, fn) => events.set(name, fn) },
+  crypto: webcrypto, Uint8Array, Date, sessionStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
   api: async (path, options) => { calls.push({ path, options }); return request(path, options); },
   setTimeout: () => 1, clearTimeout() {}, esc: value => String(value ?? '').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
   setView: name => views.push(name), showNotice: (...args) => notices.push(args), showDetails: (...args) => details.push(args), renderAudit() {}, refreshAfterMutation: async () => { refreshes++; }, renderOverviewQuickServices() {}, refreshComponents() {}, manageComponent() {} });
@@ -35,7 +38,12 @@ request = async path => { if (path.endsWith('/runtime')) throw new Error('busy')
 await context.toggleWorkspaceRuntime();
 assert.equal(state.serviceControl.running, true, 'refused stop displayed stopped');
 const stop = calls.find(call => call.path.endsWith('/runtime'));
-assert.deepEqual(JSON.parse(stop.options.body), { expected_revision: 12, action: 'stop', confirm: 'STOP_OWNED_ROUTES' });
+const stopBody = JSON.parse(stop.options.body);
+assert.match(stopBody.idempotency_key, /^[a-f0-9]{32}$/);
+assert.deepEqual({ ...stopBody, idempotency_key: undefined }, { expected_revision: 12, action: 'stop', confirm: 'STOP_OWNED_ROUTES', idempotency_key: undefined });
+context.control.runtimeRequest = null; // Lost response and reloaded script retains the same token.
+await context.toggleWorkspaceRuntime();
+assert.equal(JSON.parse(calls.filter(call => call.path.endsWith('/runtime')).at(-1).options.body).idempotency_key, stopBody.idempotency_key);
 
 const beforeBusy = state.serviceControl;
 request = async () => { throw Object.assign(new Error('checking'), { status: 409 }); };
@@ -75,12 +83,46 @@ await $('#projectLog').handlers.click();
 assert.equal(details.at(-1)[0].detail_kind, 'project-log');
 assert.equal(details.at(-1)[0].load_issues[0].section, 'sources');
 assert.equal(details.at(-1)[0].audit.events[0].outcome, 'failed');
-request = () => new Promise(resolve => { release = resolve; });
+request = path => path.includes('/audit') ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ durable_jobs: [] });
 const lateLog = context.openWorkspaceLog();
 const detailCount = details.length;
 events.get('razvilka:auth-required')();
 release({ events: [{ path: '/private' }] }); await lateLog;
 assert.equal(details.length, detailCount, 'late log opened after logout');
+
+events.get('razvilka:auth-restored')();
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 20, running: true, runtime_state: 'running', can_stop: true });
+context.control.readBusy = true;
+context.renderWorkspaceControls();
+assert.equal($('#projectPower').disabled, false, 'busy check blocked queuing Stop');
+const queued = { id: 321, mode: 'service-stop', state: 'queued', message: 'saved' };
+request = async path => path.endsWith('/runtime') ? { persistent: true, job: queued } : { durable_jobs: [queued] };
+await context.toggleWorkspaceRuntime();
+assert.equal(context.control.runtimeJob.id, 321);
+assert.equal(state.serviceControl.running, true, '202 falsely proved Stop committed');
+assert.equal($('#projectPowerLabel').textContent, 'Останавливаем…');
+assert.equal($('#projectPower').disabled, true);
+assert.equal(storage.has('razvilka.runtime-request'), false, 'acknowledged token retained');
+const queuedCalls = calls.length;
+await context.toggleWorkspaceRuntime();
+assert.equal(calls.length, queuedCalls, 'accepted Stop duplicated');
+await context.refreshWorkspaceControl();
+assert.equal(calls.at(-1).path, '/api/v1/service-control/current', 'queued job polled a blocked Store');
+request = async path => path.endsWith('/current') ? { durable_jobs: [{ ...queued, state: 'completed', message: 'stopped' }] } : { ...snapshot, config_revision: 21, running: false, runtime_state: 'stopped', durable_jobs: [] };
+await context.refreshWorkspaceControl();
+assert.equal(state.serviceControl.runtime_state, 'stopped');
+assert.equal(context.control.runtimeJob, null);
+assert.equal(notices.at(-1)[0], 'success');
+// Reload discovers an accepted server job without a browser-local ACK.
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 21, durable_jobs: [{ ...queued, id: 322, mode: 'service-resume' }] });
+assert.equal($('#projectPowerLabel').textContent, 'Включаем…');
+request = () => new Promise(resolve => { release = resolve; });
+const lateJob = context.refreshWorkspaceControl();
+events.get('razvilka:auth-required')();
+const beforeLateJob = notices.length;
+release({ durable_jobs: [{ ...queued, id: 322, state: 'completed' }] }); await lateJob;
+assert.equal(context.control.runtimeJob, null);
+assert.equal(notices.length, beforeLateJob, 'private job appeared after logout');
 
 state.components = [{ id: 'sing-box', installed: true, installed_version: '1.10', available_version: '1.11', update_available: true, can_update: true }];
 assert.match(context.engineVersionHTML({ id: 'sing-box', installed: true }), /1\.10[^]*→ 1\.11/);

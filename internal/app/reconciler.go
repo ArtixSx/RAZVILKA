@@ -132,7 +132,7 @@ func (a *App) interruptAutomation(r *http.Request) {
 	}
 	// These handlers own job admission/cancellation. A stale cancel token or a
 	// competing start must not revoke the currently admitted job as a side effect.
-	if r.URL.Path == "/api/v1/community/source-preview" || r.URL.Path == "/api/v1/dns/service-compare" || r.URL.Path == "/api/v1/service-control/current" || r.URL.Path == "/api/v1/service-control/jobs" || r.URL.Path == "/api/v1/node-checks" || r.URL.Path == "/api/v1/node-checks/current" {
+	if r.URL.Path == "/api/v1/community/source-preview" || r.URL.Path == "/api/v1/dns/service-compare" || r.URL.Path == "/api/v1/service-control/current" || r.URL.Path == "/api/v1/service-control/jobs" || r.URL.Path == "/api/v1/service-control/runtime" || r.URL.Path == "/api/v1/node-checks" || r.URL.Path == "/api/v1/node-checks/current" {
 		return
 	}
 	a.reconciler.mu.Lock()
@@ -323,6 +323,11 @@ func (a *App) persistReconcilerLocked(ctx context.Context) error {
 }
 
 func (a *App) reconcileRound(ctx context.Context, now time.Time) {
+	// Stop needs neither DNS nor a node inventory. Join any previous cleanup,
+	// then dispatch it before background recovery can reactivate an owned path.
+	if a.hasDueRuntimeStop(now) && a.runDurableServiceJob(ctx, now) {
+		return
+	}
 	r := &a.reconciler
 	r.mu.Lock()
 	blocked := r.blocked || now.Before(r.doc.ManualUntil)

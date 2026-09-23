@@ -258,6 +258,10 @@ func (a *App) serviceControlJobs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Обновите список сервисов перед проверкой.", http.StatusBadRequest)
 		return
 	}
+	if request.Kind != "check" && request.Kind != "select" {
+		http.Error(w, "Выберите проверку или подбор подключения.", http.StatusBadRequest)
+		return
+	}
 	if request.IdempotencyKey != "" {
 		job, err := a.enqueueDurableServiceJob(r.Context(), request)
 		if err != nil {

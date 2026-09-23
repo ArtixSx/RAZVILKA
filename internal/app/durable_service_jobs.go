@@ -44,6 +44,7 @@ type durableServiceJob struct {
 	Cursor          int                      `json:"cursor"`
 	CancelRequested bool                     `json:"cancel_requested"`
 	CleanupOutcome  string                   `json:"cleanup_outcome"`
+	RuntimeCode     string                   `json:"runtime_code,omitempty"`
 }
 
 func (j durableServiceJob) terminal() bool {
@@ -66,8 +67,19 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 	case "canceled":
 		message = "Задание отменено."
 	}
+	total, completed, code := len(j.Request.ServiceIDs), j.Cursor, j.Reason
+	if isRuntimeJob(j.Request.Kind) {
+		total = 1
+		if j.State == "completed" {
+			completed = 1
+		}
+		message = runtimeJobMessage(j)
+		if j.RuntimeCode != "" {
+			code = j.RuntimeCode
+		}
+	}
 	return &nodeCheckJob{ID: j.ID, Mode: "service-" + j.Request.Kind, State: j.State, Phase: j.Phase,
-		ErrorCode: j.Reason, Total: len(j.Request.ServiceIDs), Completed: j.Cursor,
+		ErrorCode: code, Total: total, Completed: completed,
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
 }
 
@@ -79,6 +91,9 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 	}
 	ids, keys := map[uint64]bool{}, map[string]bool{}
 	for _, j := range jobs {
+		if !validRuntimeJobCode(j.RuntimeCode) || j.RuntimeCode != "" && !isRuntimeJob(j.Request.Kind) {
+			return restorejournal.ErrInvalid
+		}
 		if j.ID == 0 || j.ID >= 1<<49 || ids[j.ID] || keys[j.KeyHash] || !validJobHash(j.KeyHash) || !validJobHash(j.RequestHash) || !validJobHash(j.IntentHash) || j.Request.IdempotencyKey != "" || !validDurableRequest(j.Request) || j.Attempts < 0 || j.Attempts > 3 || j.Cursor < 0 || j.Cursor > len(j.Request.ServiceIDs) || j.CreatedAt.IsZero() || !j.ExpiresAt.After(j.CreatedAt) || j.ExpiresAt.Sub(j.CreatedAt) > 24*time.Hour {
 			return restorejournal.ErrInvalid
 		}
@@ -100,6 +115,9 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 }
 
 func validDurableRequest(r serviceControlJobRequest) bool {
+	if isRuntimeJob(r.Kind) {
+		return r.ExpectedRevision != nil && len(r.ServiceIDs) == 0 && len(r.NodeIDs) == 0
+	}
 	if r.ExpectedRevision == nil || len(r.ServiceIDs) == 0 || len(r.ServiceIDs) > config.MaxScheduledServices || len(r.NodeIDs) > 3 || r.Kind != "check" && r.Kind != "select" || r.Kind == "check" && len(r.NodeIDs) != 0 || r.Kind == "select" && len(r.ServiceIDs) > 12 {
 		return false
 	}
@@ -194,35 +212,54 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	if found {
 		return job, err
 	} // A retry must succeed even while its job owns admission.
-	release, err := a.Operations.Exclusive(ctx)
-	if err != nil {
-		return durableServiceJob{}, err
-	}
-	if a.Store == nil {
-		release()
-		return durableServiceJob{}, errServiceControlRequest
-	}
-	cfg := a.Store.Get()
-	services := []catalog.Service{}
-	cat := a.catalogSnapshot()
-	for _, id := range request.ServiceIDs {
-		for _, service := range cat.Services {
-			if service.ID == id {
-				services = append(services, service)
-				break
+	intent := fingerprint
+	if isRuntimeJob(request.Kind) {
+		// The immutable intent is exactly action + expected revision, not a
+		// partially applied Store snapshot. The executor validates that revision
+		// and its committed route scope after admission. No Store reads here.
+		if a.Operations.Snapshot().Fenced {
+			return durableServiceJob{}, operationgate.ErrRecovery
+		}
+		if a.SelfUpdate != nil && a.SelfUpdate.InstallationLocked() {
+			return durableServiceJob{}, operationgate.ErrBusy
+		}
+	} else {
+		release, err := a.Operations.Exclusive(ctx)
+		if err != nil {
+			return durableServiceJob{}, err
+		}
+		if a.Store == nil {
+			release()
+			return durableServiceJob{}, errServiceControlRequest
+		}
+		cfg := a.Store.Get()
+		services := []catalog.Service{}
+		cat := a.catalogSnapshot()
+		for _, id := range request.ServiceIDs {
+			for _, service := range cat.Services {
+				if service.ID == id {
+					services = append(services, service)
+					break
+				}
 			}
 		}
-	}
-	intent := durableServiceIntentHash(cfg, services)
-	release()
-	if cfg.Revision != *request.ExpectedRevision {
-		return durableServiceJob{}, config.ErrRevisionChanged
-	}
-	if len(services) != len(request.ServiceIDs) {
-		return durableServiceJob{}, errServiceControlRequest
+		intent = durableServiceIntentHash(cfg, services)
+		release()
+		if cfg.Revision != *request.ExpectedRevision {
+			return durableServiceJob{}, config.ErrRevisionChanged
+		}
+		if len(services) != len(request.ServiceIDs) {
+			return durableServiceJob{}, errServiceControlRequest
+		}
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	acceptedStop := false
+	defer func() {
+		r.mu.Unlock()
+		if acceptedStop {
+			a.preemptForRuntimeStop(job.ID)
+		}
+	}()
 	if job, found, err = lookup(); found {
 		return job, err
 	}
@@ -237,7 +274,13 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 			retained = append(retained, j)
 		}
 	}
-	if len(retained) >= maxDurableServiceJobs || pending >= 16 {
+	// Reserve admission for one manual Stop even when bulk observations fill
+	// the queue. Existing retained keys are never evicted early for this slot.
+	capacity, pendingCapacity := maxDurableServiceJobs-1, 15
+	if request.Kind == "stop" {
+		capacity, pendingCapacity = maxDurableServiceJobs, 16
+	}
+	if len(retained) >= capacity || pending >= pendingCapacity {
 		return durableServiceJob{}, errDurableQueueFull
 	}
 	var seed [8]byte
@@ -258,6 +301,7 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		r.doc.Jobs = previous
 		return durableServiceJob{}, err
 	}
+	acceptedStop = request.Kind == "stop"
 	select {
 	case r.wake <- struct{}{}:
 	default:
@@ -336,11 +380,22 @@ func (a *App) cancelDurableServiceJob(ctx context.Context, id uint64) (bool, err
 func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	r := &a.reconciler
 	r.mu.Lock()
-	if !r.started || r.blocked || now.Before(r.doc.ManualUntil) || ctx.Err() != nil {
+	if !r.started || r.blocked || ctx.Err() != nil {
 		r.mu.Unlock()
 		return false
 	}
-	if r.durableBurst >= 3 {
+	stopIndex := -1
+	for i, job := range r.doc.Jobs {
+		if job.Request.Kind == "stop" && (job.State == "queued" || job.State == "interrupted") && !now.Before(job.NotBefore) {
+			stopIndex = i
+			break
+		}
+	}
+	if stopIndex < 0 && now.Before(r.doc.ManualUntil) {
+		r.mu.Unlock()
+		return false
+	}
+	if stopIndex < 0 && r.durableBurst >= 3 {
 		r.durableBurst = 0
 		r.mu.Unlock()
 		return false // Give due maintenance/refill tasks a bounded opportunity.
@@ -351,6 +406,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 			index = i
 			break
 		}
+	}
+	if stopIndex >= 0 {
+		index = stopIndex
 	}
 	if index < 0 {
 		r.mu.Unlock()
@@ -368,6 +426,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		return true
 	}
 	budget := 5 * time.Minute
+	if isRuntimeJob(j.Request.Kind) {
+		budget = defaultDataplaneApplyTimeout
+	}
 	if j.Request.Kind == "check" {
 		budget = time.Duration(len(j.Request.ServiceIDs)+1) * time.Minute
 	}
@@ -388,9 +449,16 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	request.durableID, request.intentHash = j.ID, j.IntentHash
 	request.durableCursor = j.Cursor
 	r.mu.Unlock()
-	done, err := a.startServiceControlJob(attempt, request, false)
-	if err == nil {
-		<-done
+	var err error
+	var runtimeOutcome serviceRuntimeOutcome
+	if isRuntimeJob(request.Kind) {
+		runtimeOutcome, err = a.runDurableRuntimeJob(attempt, request)
+	} else {
+		var done <-chan struct{}
+		done, err = a.startServiceControlJob(attempt, request, false)
+		if err == nil {
+			<-done
+		}
 	} // Includes cleanup and lease release; never detach a second owner.
 	cancel()
 	r.mu.Lock()
@@ -418,6 +486,10 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	} else if a.Operations.Snapshot().Fenced {
 		finishDurableJob(j, "failed", "cleanup-unverified", time.Now())
 		j.CleanupOutcome = "unverified"
+	} else if isRuntimeJob(request.Kind) && err == nil && runtimeOutcome.Code == "" {
+		// A cancel can race the final commit. Successful committed state is
+		// never reported as canceled (and never replayed just to obtain an ACK).
+		finishDurableJob(j, "completed", "", time.Now())
 	} else if j.CancelRequested {
 		finishDurableJob(j, "canceled", "canceled", time.Now())
 	} else if ctx.Err() != nil {
@@ -428,6 +500,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 			reason = "settings-changed"
 		}
 		finishDurableJob(j, "failed", reason, time.Now())
+	} else if isRuntimeJob(request.Kind) {
+		j.RuntimeCode = runtimeOutcome.Code
+		finishDurableJob(j, "failed", "check-failed", time.Now())
 	} else {
 		a.nodeChecks.mu.Lock()
 		worker := a.nodeChecks.job
@@ -451,7 +526,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	persistCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer stop()
 	_ = a.persistReconcilerLocked(persistCtx)
-	if !errors.Is(err, operationgate.ErrBusy) {
+	if !errors.Is(err, operationgate.ErrBusy) && request.Kind != "stop" {
 		r.durableBurst++
 	}
 	return err == nil || !errors.Is(err, operationgate.ErrBusy)
