@@ -36,7 +36,7 @@ type Runner interface {
 type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+	return runBoundedDeviceCommand(ctx, name, args...)
 }
 
 type Device struct {
