@@ -59,22 +59,28 @@ func (a *App) communitySourcePreview(w http.ResponseWriter, r *http.Request) {
 		writeCommunityFailure(w, community.ErrCustomSource)
 		return
 	}
-	if a.Store.Get().Revision != *in.ExpectedRevision {
+	prepared, err := a.beginCommunityPreparation(r)
+	if err != nil {
+		a.writeCommunityPreparationFailure(w, err)
+		return
+	}
+	defer prepared.close()
+	if prepared.revision != *in.ExpectedRevision {
 		writeJSON(w, 409, map[string]any{"error": "Настройки изменились. Обновите страницу."})
 		return
 	}
-	preview, err := a.Community.PreviewCustom(r.Context(), in.CustomSource, a.catalogSnapshot().Services)
+	ctx, cancel := communityPreparationContext(r)
+	defer cancel()
+	preview, err := prepared.manager.PreviewCustom(ctx, in.CustomSource, prepared.services)
 	if err != nil {
 		writeCommunityFailure(w, err)
 		return
 	}
-	if !a.Security.Authenticated(r) {
-		writeJSON(w, 401, map[string]any{"error": "Сеанс завершён."})
+	release, err := a.finishCommunityPreparation(ctx, r, prepared, false)
+	if err != nil {
+		a.writeCommunityPreparationFailure(w, err)
 		return
 	}
-	if a.Store.Get().Revision != *in.ExpectedRevision {
-		writeJSON(w, 409, map[string]any{"error": "Настройки изменились во время разбора."})
-		return
-	}
+	defer release()
 	writeJSON(w, 200, preview)
 }

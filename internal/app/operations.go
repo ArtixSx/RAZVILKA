@@ -95,7 +95,8 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/service-control/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/autonomy" && r.Method == http.MethodGet
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/self-update/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
-		if !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || r.URL.Path == "/api/v1/connections/stream" && r.Method == http.MethodGet || nodeJobOwnsAdmission || nodeJobMemoryOnly {
+		communityOwnsAdmission := r.URL.Path == "/api/v1/community/source-preview" && r.Method == http.MethodPost || strings.HasPrefix(r.URL.Path, "/api/v1/community/services/") && (r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/preview") || r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/import"))
+		if !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || r.URL.Path == "/api/v1/connections/stream" && r.Method == http.MethodGet || nodeJobOwnsAdmission || nodeJobMemoryOnly || communityOwnsAdmission {
 			// Auth changes only credentials (not restored); SSE reads only telemetry.
 			// Holding a shared admission for an endless stream would starve restore.
 			// Detached node jobs acquire their own gate before reading stores; their

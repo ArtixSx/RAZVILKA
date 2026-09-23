@@ -137,49 +137,50 @@ type applyChangeSummary struct {
 }
 
 type App struct {
-	panelSnapshots     panelSnapshotState
-	autonomy           autonomyState
-	PrivateRestore     *privaterestore.Coordinator
-	Operations         operationgate.Gate
-	Store              *config.Store
-	Catalog            catalog.Catalog
-	Sources            *sources.Manager
-	Telemetry          *telemetry.Store
-	EngineConfigs      *engineconfig.Manager
-	EngineLab          *enginelab.Manager
-	StrategyLab        *strategylab.Manager
-	Components         *components.Manager
-	Community          *community.Manager
-	CustomServices     *customservices.Manager
-	Dataplane          *dataplane.Manager
-	Devices            *devices.Manager
-	DNS                *dnscontrol.Manager
-	dnsServiceComparer serviceDNSComparer
-	dnsAddressProbe    func(context.Context, catalog.Service, netip.Addr) routeprobe.DNSAddressResult
-	Warp               *warp.Manager
-	AWGCapabilityProbe func(context.Context) awgprofile.Capabilities
-	Cloudflare         *cloudflareprovider.Store
-	Nodes              *nodestore.Store
-	NodeChecker        dataplane.NodeChecker
-	NodePinger         dataplane.NodePinger
-	NodeFeeds          *providerfeed.Manager
-	nodeReviews        nodeRouteReviewStore
-	nodeRecovery       nodeRecoveryState
-	nodeChecks         nodeCheckState
-	nodeAutofallback   nodeAutofallbackState
-	reconciler         serviceReconciler
-	DataplaneHost      func() dataplane.HostState
-	FreshProfile       func(context.Context) (string, error)
-	cloudflareBusy     atomic.Bool
-	TestLab            *testlab.Runner
-	RouteProber        testlab.RouteProber
-	SmartRoute         *smartroute.Manager
-	Updates            *updatecheck.Manager
-	SelfUpdate         *updatecheck.Updater
-	USQUE              *usquediag.Manager
-	Stats              *routerstats.Sampler
-	Security           *security.Gate
-	Audit              *auditlog.Journal
+	communityPreparationCount atomic.Int32
+	panelSnapshots            panelSnapshotState
+	autonomy                  autonomyState
+	PrivateRestore            *privaterestore.Coordinator
+	Operations                operationgate.Gate
+	Store                     *config.Store
+	Catalog                   catalog.Catalog
+	Sources                   *sources.Manager
+	Telemetry                 *telemetry.Store
+	EngineConfigs             *engineconfig.Manager
+	EngineLab                 *enginelab.Manager
+	StrategyLab               *strategylab.Manager
+	Components                *components.Manager
+	Community                 *community.Manager
+	CustomServices            *customservices.Manager
+	Dataplane                 *dataplane.Manager
+	Devices                   *devices.Manager
+	DNS                       *dnscontrol.Manager
+	dnsServiceComparer        serviceDNSComparer
+	dnsAddressProbe           func(context.Context, catalog.Service, netip.Addr) routeprobe.DNSAddressResult
+	Warp                      *warp.Manager
+	AWGCapabilityProbe        func(context.Context) awgprofile.Capabilities
+	Cloudflare                *cloudflareprovider.Store
+	Nodes                     *nodestore.Store
+	NodeChecker               dataplane.NodeChecker
+	NodePinger                dataplane.NodePinger
+	NodeFeeds                 *providerfeed.Manager
+	nodeReviews               nodeRouteReviewStore
+	nodeRecovery              nodeRecoveryState
+	nodeChecks                nodeCheckState
+	nodeAutofallback          nodeAutofallbackState
+	reconciler                serviceReconciler
+	DataplaneHost             func() dataplane.HostState
+	FreshProfile              func(context.Context) (string, error)
+	cloudflareBusy            atomic.Bool
+	TestLab                   *testlab.Runner
+	RouteProber               testlab.RouteProber
+	SmartRoute                *smartroute.Manager
+	Updates                   *updatecheck.Manager
+	SelfUpdate                *updatecheck.Updater
+	USQUE                     *usquediag.Manager
+	Stats                     *routerstats.Sampler
+	Security                  *security.Gate
+	Audit                     *auditlog.Journal
 	// EngineInventory is injectable only for deterministic presentation tests.
 	// Production uses the read-only detector and never starts or stops an engine.
 	EngineInventory func() []engine.Status
@@ -3012,7 +3013,7 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	ctx, cancel := communityPreparationContext(r)
 	defer cancel()
 	switch action {
 	case "preview":
@@ -3020,7 +3021,13 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w)
 			return
 		}
-		preview, err := a.Community.Preview(ctx, id, a.catalogSnapshot().Services, r.URL.Query().Get("refresh") == "true")
+		prepared, err := a.beginCommunityPreparation(r)
+		if err != nil {
+			a.writeCommunityPreparationFailure(w, err)
+			return
+		}
+		defer prepared.close()
+		preview, err := prepared.manager.Preview(ctx, id, prepared.services, r.URL.Query().Get("refresh") == "true")
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				http.Error(w, "unknown community service", http.StatusNotFound)
@@ -3029,6 +3036,12 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		release, err := a.finishCommunityPreparation(ctx, r, prepared, false)
+		if err != nil {
+			a.writeCommunityPreparationFailure(w, err)
+			return
+		}
+		defer release()
 		writeJSON(w, http.StatusOK, preview)
 	case "import":
 		if r.Method != http.MethodPost {
@@ -3046,11 +3059,23 @@ func (a *App) communityServiceAction(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 400, map[string]any{"code": "SOURCE_REVIEW_REQUIRED", "error": "Сначала откройте предпросмотр. Для импорта нужен его точный SHA-256.", "not_started": true})
 			return
 		}
-		preview, err := a.Community.Preview(ctx, id, a.catalogSnapshot().Services, in.Refresh)
+		prepared, err := a.beginCommunityPreparation(r)
+		if err != nil {
+			a.writeCommunityPreparationFailure(w, err)
+			return
+		}
+		defer prepared.close()
+		preview, err := prepared.manager.Preview(ctx, id, prepared.services, in.Refresh)
 		if err != nil {
 			writeCommunityFailure(w, err)
 			return
 		}
+		release, err := a.finishCommunityPreparation(ctx, r, prepared, true)
+		if err != nil {
+			a.writeCommunityPreparationFailure(w, err)
+			return
+		}
+		defer func() { release(); a.wakePanelSnapshot() }()
 		if in.ExpectedSHA != preview.SourceSHA {
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "Содержимое источника изменилось. Откройте новый предпросмотр.", "not_started": true})
 			return
