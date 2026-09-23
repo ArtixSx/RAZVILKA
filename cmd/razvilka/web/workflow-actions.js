@@ -202,11 +202,18 @@ async function workflowCheckAllVLESS(){
     const status=await workflowRequest('/api/v1/node-checks/current');
     if(status.durable_all_vless!==true)throw new Error('Обновите RAZVILKA для сохраняемой проверки всего VLESS-каталога.');
     if(['queued','interrupted','running','canceling'].includes(status.job?.state))throw new Error('На роутере уже выполняется проверка.');
-    const snapshot=await workflowRequest('/api/v1/nodes');
+    let snapshot,retained=false;
+    try{snapshot=await workflowRequest('/api/v1/nodes');}
+    catch(error){
+      // A busy worker must not prevent read-only queue admission. The server
+      // compares this exact catalogue generation before freezing any IDs.
+      if(error.status!==409||error.payload?.code!=='RESTORE_OPERATION_BUSY'||!Array.isArray(state.nodes?.nodes)||state.nodes.available===false||!Number.isSafeInteger(state.nodes.generation)||state.nodes.generation<1)throw error;
+      snapshot=state.nodes;retained=true;
+    }
     const all=(snapshot.nodes||[]).filter(n=>String(n.protocol||'').trim().toLowerCase()==='vless'),eligible=all.filter(nodeCanCheck);
     if(!eligible.length||!Number.isSafeInteger(snapshot.generation)||snapshot.generation<1)throw new Error('Нет доступных VLESS для проверки. Обновите каталог.');
     const service=(state.services||[]).find(s=>s.id===serviceID);
-    const yes=await askConfirmation('Проверить все VLESS?',`В очереди: ${eligible.length} из ${all.length} VLESS. Сервис: ${service?.name||serviceID} (веб). Все источники и страницы, фильтры не учитываются. Отключённые и истёкшие записи пропускаются. Состав фиксируется сейчас; новые импорты не добавляются. Задание сохранится на роутере. После перезапуска тот же список проверяется заново для текущей сети. Маршруты не изменяются.`,'Проверить все');
+    const yes=await askConfirmation('Проверить все VLESS?',`${retained?'Показан ранее полученный список. Перед приёмом роутер проверит его актуальность; задание дождётся освобождения сети. ':''}В очереди: ${eligible.length} из ${all.length} VLESS. Сервис: ${service?.name||serviceID} (веб). Все источники и страницы, фильтры не учитываются. Отключённые и истёкшие записи пропускаются. Состав фиксируется при приёме; новые импорты не добавляются. Задание сохранится на роутере. После перезапуска тот же список проверяется заново для текущей сети. Маршруты не изменяются.`,'Проверить все');
     if(!yes||!workflowSession(epoch))return;
     submitted=true;
     const response=await submitNodeCheckRequest({scope:'all-vless',generation:snapshot.generation,mode:'service',service_id:serviceID,confirm:'CHECK_ALL_VLESS'});
