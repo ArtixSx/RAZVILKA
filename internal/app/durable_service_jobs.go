@@ -103,6 +103,9 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
 	if j.Request.Kind == "node-check" {
 		p.Mode, p.Total = j.Request.NodeCheckMode, len(j.Request.NodeIDs)
+		if j.State == "failed" {
+			p.Message = durableNodeCheckFailureMessage(j.Reason)
+		}
 		if c := j.Request.NodeCatalog; c != nil {
 			p.Scope, p.Matched, p.Skipped = allVLESSScope, c.Matched, c.Matched-len(j.Request.NodeIDs)
 		}
@@ -143,7 +146,7 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 		if j.ID == 0 || j.ID >= 1<<49 || ids[j.ID] || keys[j.KeyHash] || !validJobHash(j.KeyHash) || !validJobHash(j.RequestHash) || !validJobHash(j.IntentHash) || j.Request.IdempotencyKey != "" || !validDurableRequest(j.Request) || j.Attempts < 0 || j.Attempts > 3 || j.Cursor < 0 || j.Cursor > durableJobTotal(j.Request) || j.CreatedAt.IsZero() || !j.ExpiresAt.After(j.CreatedAt) || j.ExpiresAt.Sub(j.CreatedAt) > 24*time.Hour {
 			return restorejournal.ErrInvalid
 		}
-		if !slices.Contains([]string{"queued", "running", "canceling", "interrupted", "completed", "failed", "canceled"}, j.State) || !slices.Contains([]string{"waiting", "checking", "cleanup", "done"}, j.Phase) || !slices.Contains([]string{"", "accepted", "startup-reconcile", "settings-changed", "expired", "attempt-limit", "check-failed", "canceled", "cleanup-unverified", "interrupted"}, j.Reason) || !slices.Contains([]string{"not-started", "pending", "joined", "startup-recovered", "unverified"}, j.CleanupOutcome) {
+		if !slices.Contains([]string{"queued", "running", "canceling", "interrupted", "completed", "failed", "canceled"}, j.State) || !slices.Contains([]string{"waiting", "checking", "cleanup", "done"}, j.Phase) || !slices.Contains([]string{"", "accepted", "startup-reconcile", "settings-changed", "expired", "attempt-limit", "check-failed", "canceled", "cleanup-unverified", "interrupted", "check-timeout", "network-unconfirmed", "node-store-unavailable"}, j.Reason) || !slices.Contains([]string{"not-started", "pending", "joined", "startup-recovered", "unverified"}, j.CleanupOutcome) {
 			return restorejournal.ErrInvalid
 		}
 		ids[j.ID], keys[j.KeyHash] = true, true
@@ -668,6 +671,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 			_, j.DNSCode, _ = dnsCompareFailure(err)
 		}
 		reason := "check-failed"
+		if request.Kind == "node-check" {
+			reason = durableNodeCheckFailure(err)
+		}
 		if errors.Is(err, config.ErrRevisionChanged) {
 			reason = "settings-changed"
 		}

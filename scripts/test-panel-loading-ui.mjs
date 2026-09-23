@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
-const names=['panelSectionState','panelBusy','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','refreshPanelInventory','cancelPanelInventoryRefresh','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
+const names=['panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','refreshPanelInventory','cancelPanelInventoryRefresh','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
 const extract=name=>{const match=source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
@@ -18,7 +18,7 @@ function fixture(){
  setTimeout(fn,ms){const id=++timer;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},
  api,hideAuth(){$('#authScreen').hidden=true;},showAuth(){$('#authScreen').hidden=false;context.cancelPanelRefresh();},
  refreshNodeActivity:async()=>{if(activityError)throw activityError;return activity;},scheduleNodeActivity(){},
- showNotice:(...args)=>notices.push(args),consoleInitialSetup(){},acceptDeviceList:v=>{state.devices=v;},
+ showNotice:(...args)=>{notices.push(args);state.noticeDetails=args[3];$('#notice').hidden=false;},hideNotice(){state.noticeDetails=null;$('#notice').hidden=true;},consoleInitialSetup(){},acceptDeviceList:v=>{state.devices=v;},
  };
  for(const name of ['renderStatus','renderSettings','renderSystem','renderMetrics','renderServices','renderOverviewQuickServices','renderOverviewServices','renderReadiness','renderEngines','renderEngineControl','renderComponents','renderWarpManager','renderSources','renderNodes','renderConnections','renderDevices','renderTestLab','renderEngineLab','renderAudit','renderStrategyLab','renderDNS','renderDNSPlan','renderDNSServiceBindings'])context[name]=()=>renders.push(name);
  vm.createContext(context);vm.runInContext(names.map(extract).join('\n'),context);
@@ -84,6 +84,39 @@ await test('empty expired and invalid inventory never turn unavailable into unin
    assert.throws(()=>f.context.acceptPanelInventory({...f.normal('/api/v1/panel/inventory'),...change}));
    assert.equal(f.state.components,previous);
  }
+});
+
+await test('pending inventory keeps retrying and its notice clears when the heartbeat recovers',async()=>{
+ const f=fixture();f.state.authenticated=true;let pending=true;
+ f.handler(url=>url==='/api/v1/panel/inventory'&&pending?{...f.normal(url),state:'empty',data:undefined}:f.normal(url));
+ await f.context.refreshAll();
+ assert.equal(f.state.dataLoad.inventory.phase,'busy');
+ assert.equal(f.notices.at(-1)[1],'Сведения обновляются');
+ assert.equal(f.state.noticeDetails.issues[0].busy,true);
+ f.panelLoad.retryCount=3;f.retry();await flush();await flush();
+ assert([...f.timers.values()].some(value=>value.ms===5000),'pending observation exhausted the failure retry budget');
+ pending=false;assert.equal(await f.context.refreshPanelInventory(),true);
+ assert.equal(f.$('#notice').hidden,true);assert.equal(f.state.noticeDetails,null);
+ assert.equal(f.state.loadIssues.length,0);
+});
+
+await test('recovery removes only resolved sections and never dismisses a newer action notice',async()=>{
+ const f=fixture();f.state.authenticated=true;
+ f.handler(url=>{if(url==='/api/v1/services'||url==='/api/v1/panel/inventory')throw new Error('read failed');return f.normal(url);});
+ await f.context.refreshAll();assert.equal(f.state.noticeDetails.issues.length,2);
+ f.handler(f.normal);await f.context.refreshPanelInventory();
+ assert.equal(f.state.noticeDetails.issues.length,1);assert.equal(f.state.noticeDetails.issues[0].section,'services');
+ const action={error:'Apply failed'};f.context.showNotice('error','Ошибка применения','Сеть не изменена',action);
+ await f.context.refreshAll(true);
+ assert.equal(f.state.noticeDetails,action);assert.equal(f.$('#notice').hidden,false);
+});
+
+await test('loading details explain each pending section without a successful operation claim',async()=>{
+ const f=fixture();f.context.esc=value=>String(value).replaceAll('<','&lt;');f.context.technicalDetails=()=>'';
+ vm.runInContext(extract('renderGenericDetails'),f.context);
+ const html=f.context.renderGenericDetails({detail_kind:'panel-load',issues:[{section:'inventory',busy:true,message:'Ожидание <данных>'}]});
+ assert.match(html,/Ожидаем свежие сведения/);assert.match(html,/Компоненты/);assert.match(html,/&lt;данных>/);
+ assert.doesNotMatch(html,/Операция завершена|detail-hero pass/);
 });
 
 await test('slow services cannot hold settings, engine metadata or other completed reads',async()=>{

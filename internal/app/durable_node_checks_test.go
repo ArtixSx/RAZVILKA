@@ -243,6 +243,19 @@ func TestDurableNodeChangesAndFailedCleanupStopBatch(t *testing.T) {
 			if mode == "cleanup" && (!a.Operations.Snapshot().Fenced || j.CleanupOutcome != "unverified") {
 				t.Fatal("cleanup failure not fenced", j)
 			}
+			if mode == "network" {
+				if j.Reason != "network-unconfirmed" || !strings.Contains(j.presentation().Message, "сети") {
+					t.Fatal("network failure lost its explanation", j)
+				}
+				raw, e := os.ReadFile(a.Store.AutomationStatePath())
+				if e != nil {
+					t.Fatal(e)
+				}
+				var saved reconcilerDocument
+				if json.Unmarshal(raw, &saved) != nil || validateDurableServiceJobs(saved.Jobs) != nil {
+					t.Fatal("reason does not survive journal read")
+				}
+			}
 		})
 	}
 }

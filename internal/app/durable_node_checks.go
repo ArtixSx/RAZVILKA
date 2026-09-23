@@ -140,6 +140,39 @@ func (a *App) nodeCheckCurrentView() map[string]any {
 
 type durableNodeCheckResult struct{ network string }
 
+func durableNodeCheckFailure(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "check-timeout"
+	case errors.Is(err, dataplane.ErrExactNodeNetworkChanged):
+		return "network-unconfirmed"
+	case errors.Is(err, config.ErrRevisionChanged), errors.Is(err, dataplane.ErrReviewChanged):
+		return "settings-changed"
+	case errors.Is(err, nodestore.ErrStore), errors.Is(err, nodestore.ErrRecovery):
+		return "node-store-unavailable"
+	case errors.Is(err, context.Canceled):
+		return "interrupted"
+	default:
+		return "check-failed"
+	}
+}
+
+func durableNodeCheckFailureMessage(reason string) string {
+	switch reason {
+	case "network-unconfirmed":
+		return "Проверка остановлена: прежнее состояние сети больше не подтверждено. Результаты относятся к прежней сети; запустите новую проверку."
+	case "check-timeout":
+		return "Проверка остановлена по таймауту. Временные ресурсы освобождены; оставшиеся подключения не проверены."
+	case "node-store-unavailable":
+		return "Проверка остановлена: не удалось прочитать хранилище подключений. Откройте журнал и проверьте накопитель."
+	case "settings-changed":
+		return "Проверка остановлена: изменились настройки или определение сервиса. Запустите новую проверку."
+	case "cleanup-unverified":
+		return "Очистка временного подключения не подтверждена. Новые сетевые действия заблокированы; откройте журнал."
+	}
+	return "Проверка не завершена. Оставшиеся подключения не проверены; рабочие маршруты не изменены."
+}
+
 // One node per reconciler turn: route recovery and Stop get the next turn.
 // The lease stays owned until the checker has joined all temporary cleanup.
 func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobRequest, network string) (out durableNodeCheckResult, err error) {

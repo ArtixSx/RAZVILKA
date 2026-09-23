@@ -564,6 +564,11 @@ function renderRouteComparisonDetails(value) {
 function renderGenericDetails(value) {
   if (typeof value === 'string') return `<div class="detail-hero"><span>Сообщение</span><p>${esc(value)}</p></div>${technicalDetails(value)}`;
   if (!value || typeof value !== 'object') return `<div class="detail-empty">Нет дополнительных данных.</div>${technicalDetails(value)}`;
+  if (value.detail_kind === 'panel-load' && Array.isArray(value.issues)) {
+    const busy = value.issues.length > 0 && value.issues.every(issue => issue.busy);
+    const sections = { inventory: 'Компоненты', services: 'Сервисы', engineConfigs: 'Настройки обходов', nodes: 'Подключения', dns: 'DNS', status: 'Состояние проекта' };
+    return `<div class="detail-hero warn"><span>Загрузка данных</span><h4>${busy ? 'Ожидаем свежие сведения' : 'Часть данных не загрузилась'}</h4><p>Последние полученные данные сохранены. Состояние подключения проверяется отдельно.</p></div><div class="detail-section">${value.issues.map(issue => `<div class="detail-note"><b>${esc(sections[issue.section] || issue.section || 'Раздел панели')}</b><p>${esc(issue.message || 'Повторите чтение данных.')}</p></div>`).join('')}</div>${technicalDetails(value)}`;
+  }
   const headline = value.error || value.message || value.note || (value.ok === false ? 'Действие не выполнено' : 'Операция завершена');
   const primitive = Object.entries(value).filter(([, item]) => item == null || ['string', 'number', 'boolean'].includes(typeof item)).slice(0, 10);
   return `<div class="detail-hero ${value.error || value.ok === false ? 'fail' : 'pass'}"><span>${value.error ? 'Ошибка' : 'Результат'}</span><h4>${esc(headline)}</h4></div>${primitive.length ? `<dl class="detail-kv">${primitive.map(([key, item]) => `<div><dt>${esc(key.replaceAll('_', ' '))}</dt><dd>${esc(typeof item === 'boolean' ? (item ? 'да' : 'нет') : item)}</dd></div>`).join('')}</dl>` : ''}${technicalDetails(value)}`;
@@ -780,6 +785,21 @@ function panelBusy(error) {
   return error?.status === 409 && (error.payload?.code === 'RESTORE_OPERATION_BUSY' || error.payload?.node_recovery?.state === 'revalidating');
 }
 
+function refreshPanelLoadNotice(show = false) {
+  const owned = state.noticeDetails?.detail_kind === 'panel-load';
+  const issues = (state.loadIssues || []).filter(issue => state.dataLoad?.[issue.section]?.phase !== 'ready');
+  state.loadIssues = issues;
+  if (!issues.length) { if (owned) hideNotice(); return; }
+  if (!show && !owned) return;
+  const busy = issues.every(issue => issue.busy);
+  if (busy && state.dataLoad.services?.savedInstance) { if (owned) hideNotice(); return; }
+  const retry = busy || panelLoad.retryCount < 3;
+  showNotice('review', busy ? 'Сведения обновляются' : 'Часть данных временно недоступна',
+    retry ? 'Загруженные разделы доступны. Последние полученные данные сохранены; повторим чтение автоматически.'
+      : 'Загруженные разделы доступны. Автоматические попытки закончились; нажмите «Обновить», чтобы повторить.',
+    { detail_kind: 'panel-load', issues });
+}
+
 function panelSnapshotCurrent(generation) {
   return generation === panelLoad.generation && !panelLoad.controller?.signal.aborted;
 }
@@ -819,6 +839,7 @@ function renderPanelLoad() {
     : Object.keys(state.uiRenderIssues).length ? 'Один из виджетов не обновился. Навигация и остальные разделы доступны.'
     : values.some(value => value.phase === 'loading') ? 'Загружаем данные разделов…' : '';
   if ($('#systemText') && text) $('#systemText').textContent = text;
+  refreshPanelLoadNotice();
 }
 
 function renderPanelSection(key) {
@@ -873,7 +894,7 @@ function acceptPanelInventory(value, requestStartedAt = Date.now()) {
   if (!value.data || !Number.isFinite(observed) || value.data_age_ms >= 300000
     || !['available', 'retained'].includes(value.state)
     || requestStartedAt - value.data_age_ms < (state.inventoryInvalidatedAt || 0)) {
-    throw Object.assign(new Error('Новые сведения о компонентах ещё собираются. Последние данные сохранены.'), { payload: { code: 'RESTORE_OPERATION_BUSY' } });
+    throw Object.assign(new Error('Новые сведения о компонентах ещё собираются. Последние данные сохранены.'), { status: 409, payload: { code: 'RESTORE_OPERATION_BUSY' } });
   }
   if (typeof value.instance_id !== 'string' || value.instance_id.length !== 32
     || !Array.isArray(value.data.components) || value.data.components.length > 64
@@ -927,6 +948,7 @@ function refreshPanelInventory() {
         // Metadata-only renderers: periodic observation must not redraw forms
         // or lose a partially edited profile/service/DNS field.
         try { renderComponents(); renderEngines(); renderSystem(); if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines(); } catch (_) { /* Independent from polling lifetime. */ }
+        refreshPanelLoadNotice();
       }
       if (inventoryRead === ticket) inventoryRead = null;
     }
@@ -1047,10 +1069,9 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     renderPanelLoad();
     if (issues.length) {
       const busy = Object.values(state.dataLoad).some(value => value.phase === 'busy');
-      const retry = busy || panelLoad.retryCount < 3;
       // Availability and the saved-image notice already explain an operation
       // in progress. Keep a separate warning only for additional failures.
-      if (!state.dataLoad.services?.savedInstance || issues.some(issue => !issue.busy)) showNotice('review', 'Часть данных временно недоступна', retry ? 'Загруженные разделы доступны. Последние полученные данные сохранены; повторим чтение автоматически.' : 'Загруженные разделы доступны. Автоматические попытки закончились; нажмите «Обновить», чтобы повторить.', { issues });
+      refreshPanelLoadNotice(true);
       schedulePanelRetry(busy);
     } else { panelLoad.retryCount = 0; }
     if (!state.onboardingAutoEvaluated && state.dataLoad.services?.loaded && state.dataLoad.engineConfigs?.loaded) {
