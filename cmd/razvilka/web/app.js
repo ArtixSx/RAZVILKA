@@ -801,12 +801,14 @@ function cancelPanelRefresh() {
 }
 
 function renderPanelLoad() {
-  const values = Object.values(state.dataLoad || {});
   state.uiRenderIssues ||= {};
   const render = (key, action) => {
     try { action(); delete state.uiRenderIssues[key]; }
     catch (_) { state.uiRenderIssues[key] = 'Не удалось обновить виджет. Последние данные сохранены.'; }
   };
+  render('panel-snapshot', () => { if (typeof renderSavedPanelSnapshot === 'function') renderSavedPanelSnapshot(); });
+  render('panel-settings-mode', () => { if (typeof renderSettingsMode === 'function') renderSettingsMode(); });
+  const values = Object.values(state.dataLoad || {});
   render('panel-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
   render('panel-engine', () => {
     if (!state.dataLoad?.engineConfigs?.loaded && typeof renderEngineControl === 'function') renderEngineControl();
@@ -905,6 +907,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
       showAuth(status); $('#systemText').textContent = 'Требуется вход'; return false;
     }
     hideAuth();
+    if (typeof loadSavedPanelSnapshot === 'function') void loadSavedPanelSnapshot(generation, options);
     // This already has its own single-flight scheduler and auth epoch.
     // Never await it here: a slow job-status endpoint is an isolated failure.
     scheduleNodeActivity(0);
@@ -959,7 +962,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
           state.status = { ...state.status, node_recovery: error.payload.node_recovery, live_active: false, dataplane_recovery_state: 'network-stale' };
         }
         panelSectionState(key, panelBusy(error) ? 'busy' : 'error', error);
-        issues.push({ section: key, url, message: error.message || 'Раздел временно недоступен', technical: error.technicalMessage || '' });
+        issues.push({ section: key, url, busy: panelBusy(error), message: error.message || 'Раздел временно недоступен', technical: error.technicalMessage || '' });
         renderPanelLoad();
       }
     });
@@ -969,7 +972,9 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     if (issues.length) {
       const busy = Object.values(state.dataLoad).some(value => value.phase === 'busy');
       const retry = busy || panelLoad.retryCount < 3;
-      showNotice('review', 'Часть данных временно недоступна', retry ? 'Загруженные разделы доступны. Последние полученные данные сохранены; повторим чтение автоматически.' : 'Загруженные разделы доступны. Автоматические попытки закончились; нажмите «Обновить», чтобы повторить.', { issues });
+      // Availability and the saved-image notice already explain an operation
+      // in progress. Keep a separate warning only for additional failures.
+      if (!state.dataLoad.services?.savedInstance || issues.some(issue => !issue.busy)) showNotice('review', 'Часть данных временно недоступна', retry ? 'Загруженные разделы доступны. Последние полученные данные сохранены; повторим чтение автоматически.' : 'Загруженные разделы доступны. Автоматические попытки закончились; нажмите «Обновить», чтобы повторить.', { issues });
       schedulePanelRetry(busy);
     } else { panelLoad.retryCount = 0; }
     if (!state.onboardingAutoEvaluated && state.dataLoad.services?.loaded && state.dataLoad.engineConfigs?.loaded) {
@@ -3409,21 +3414,29 @@ async function saveDevicePolicy(event) {
   } catch (error) { showDetails({ error: error.message }, 'Политика не сохранена'); }
 }
 
+function renderSettingsMode() {
+  const s = state.status || {};
+  const known = typeof s.safe_mode === 'boolean' && !['loading', 'busy', 'error'].includes(state.dataLoad?.status?.phase);
+  $('#settingSafeMode').textContent = !known ? 'Состояние уточняется' : s.safe_mode ? 'Безопасный' : 'Рабочий';
+  $('#settingSafeMode').className = known && !s.safe_mode ? 'active-apply' : '';
+  $('#toggleSafeMode').disabled = !known;
+  $('#toggleSafeMode').textContent = !known ? 'Ожидаем состояние' : s.safe_mode ? 'Перейти в рабочий режим' : 'Включить безопасный режим';
+  $('#settingPending').textContent = !known ? '—' : s.pending_changes ? 'есть' : 'нет';
+  $('#settingEngineDrafts').textContent = known ? s.engine_config_drafts ?? '—' : '—';
+  $('#settingApplied').textContent = known && s.last_applied_at ? new Date(s.last_applied_at).toLocaleString('ru-RU') : '—';
+  $('#settingRevision').textContent = known ? `${s.revision ?? '—'} / ${s.applied_revision ?? '—'}` : '—';
+}
+
 function renderSettings() {
   const s = state.status || {};
-  $('#settingSafeMode').textContent = s.safe_mode ? 'Безопасный' : 'Рабочий';
-  $('#settingSafeMode').className = s.safe_mode ? '' : 'active-apply';
-  $('#toggleSafeMode').textContent = s.safe_mode ? 'Перейти в рабочий режим' : 'Включить безопасный режим';
-  $('#settingPending').textContent = s.pending_changes ? 'есть' : 'нет';
-  $('#settingEngineDrafts').textContent = s.engine_config_drafts || 0;
-  $('#settingApplied').textContent = s.last_applied_at ? new Date(s.last_applied_at).toLocaleString('ru-RU') : '—';
-  $('#settingRevision').textContent = `${s.revision || 0} / ${s.applied_revision || 0}`;
+  renderSettingsMode();
 	$('#settingsUsername').textContent = s.username || 'admin';
 	$('#sessionList').innerHTML = (state.sessions || []).map((session) => `<div class="session-row ${session.current ? 'current' : ''}"><div><b>${session.current ? 'Текущий браузер' : esc(session.remote_ip || 'Неизвестный адрес')}</b><span>${esc(session.user_agent || 'Клиент API')}</span><small>Активность: ${timeAgo(session.last_seen_at)} · до ${session.expires_at ? new Date(session.expires_at).toLocaleString('ru-RU') : '—'}</small></div>${session.current ? '<em>ТЕКУЩИЙ</em>' : `<button class="secondary revoke-session" data-session-id="${esc(session.id)}">Завершить</button>`}</div>`).join('') || '<div class="empty-inline">Нет активных сеансов</div>';
 	$$('.revoke-session').forEach((button) => button.addEventListener('click', () => revokeSession(button.dataset.sessionId)));
 }
 
 async function toggleSafeMode() {
+  if (typeof state.status?.safe_mode !== 'boolean' || ['loading', 'busy', 'error'].includes(state.dataLoad?.status?.phase)) return;
   const enable = !state.status.safe_mode;
   const title = enable ? 'Включить безопасный режим' : 'Перейти в рабочий режим';
   const message = enable
@@ -3436,7 +3449,7 @@ async function toggleSafeMode() {
     await api('/api/v1/settings/safe-mode', { method: 'PUT', body: JSON.stringify({ enabled: enable }) });
     await refreshCoreAfterEdit();
   } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Режим не изменён'); }
-  finally { controls.forEach((button) => { button.disabled = false; }); }
+  finally { renderSettingsMode(); }
 }
 
 async function refreshSessions() {

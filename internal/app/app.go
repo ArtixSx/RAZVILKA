@@ -136,6 +136,7 @@ type applyChangeSummary struct {
 }
 
 type App struct {
+	panelSnapshots     panelSnapshotState
 	autonomy           autonomyState
 	PrivateRestore     *privaterestore.Coordinator
 	Operations         operationgate.Gate
@@ -5058,7 +5059,7 @@ func methodNotAllowed(w http.ResponseWriter) {
 }
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/v1/cloudflare/") {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/cloudflare/") || strings.HasPrefix(r.URL.Path, "/api/v1/panel/") {
 			// Also cover errors produced by authentication before the copy handler.
 			w.Header().Set("Cache-Control", "no-store")
 		}

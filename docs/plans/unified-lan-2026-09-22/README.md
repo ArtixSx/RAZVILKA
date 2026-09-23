@@ -12,6 +12,7 @@
 | --- | --- |
 | Порядок работы | [План проекта](../../ROADMAP.md) |
 | Что перенесено и проверено | [Отчёт перехода](INTAKE_RU.md) |
+| Сохранённые данные во время операции | [Рабочий шаг U1 и оставшиеся задачи](U1_PROGRESS_RU.md) |
 | Полный план U0–U8, E1 и D1 | [MASTER_PLAN_RU.md](source/docs/MASTER_PLAN_RU.md) |
 | Исходное задание | [CODEX_TASK_RU.md](source/CODEX_TASK_RU.md) |
 | Главная и сервисы | [Контракт интерфейса](source/docs/UX_CONTRACT_RU.md) |

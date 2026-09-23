@@ -80,6 +80,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-engine-intent-ui.mjs
   node scripts/test-node-activity-ui.mjs
   node scripts/test-panel-loading-ui.mjs
+  node scripts/test-panel-snapshot-ui.mjs
   node scripts/test-ux-stage1.mjs
   node scripts/test-bundle-integration.mjs
   node scripts/test-warp-generation-ui.mjs

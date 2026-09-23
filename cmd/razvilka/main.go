@@ -472,6 +472,7 @@ func main() {
 		log.Fatal(err)
 	}
 	a.StartNodeChecks(runtimeContext)
+	a.StartPanelSnapshots(runtimeContext)
 	a.StartNodeFeeds(runtimeContext)
 	go func() { serverErrors <- srv.Serve(listener) }()
 	a.StartSelfUpdateNodeRecovery(runtimeContext)
@@ -489,6 +490,9 @@ func main() {
 		}
 		nodeShutdownContext, cancelNodeShutdown := context.WithTimeout(context.Background(), time.Minute)
 		defer cancelNodeShutdown()
+		if err := a.WaitPanelSnapshots(nodeShutdownContext); err != nil {
+			log.Print("Panel snapshot publisher did not finish before shutdown")
+		}
 		if err := a.WaitServiceReconciler(nodeShutdownContext); err != nil {
 			log.Print("Service automation cleanup did not finish before shutdown")
 		}

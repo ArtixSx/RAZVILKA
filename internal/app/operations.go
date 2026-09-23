@@ -62,7 +62,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Security.Middleware remains outside this middleware. Only this
 		// memory-only endpoint bypasses admission, never runtime Store reads.
-		if r.URL.Path == panelhealth.Path {
+		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath {
 			// The general security middleware allows diagnostic reads before
 			// account setup. Admission metadata is private even in that state.
 			if a.Security == nil || !a.Security.Authenticated(r) {
@@ -70,7 +70,11 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 				http.Error(w, "administrator login is required", http.StatusUnauthorized)
 				return
 			}
-			panelhealth.Handler(&a.Operations).ServeHTTP(w, r)
+			if r.URL.Path == panelSnapshotPath {
+				a.panelSnapshot(w, r)
+			} else {
+				panelhealth.Handler(&a.Operations).ServeHTTP(w, r)
+			}
 			return
 		}
 		updateLocked := a.SelfUpdate != nil && a.SelfUpdate.InstallationLocked()
@@ -120,7 +124,12 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		scope := &operationScope{app: a, exclusive: exclusive, active: true, release: release}
-		defer scope.closeRequest()
+		defer func() {
+			scope.closeRequest()
+			if r.Method != http.MethodGet && r.Method != http.MethodHead {
+				a.wakePanelSnapshot()
+			}
+		}()
 		ctx := context.WithValue(r.Context(), operationContextKey{}, scope)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
