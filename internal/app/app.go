@@ -2046,7 +2046,7 @@ func (a *App) backgroundAutopilotApply(parent context.Context) {
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
-	_, _ = a.Dataplane.Apply(ctx, plan, nil)
+	_, _ = a.applyDataplane(ctx, plan, nil)
 }
 
 // Changing a route is not permission to change its destination/device scope.
@@ -3441,7 +3441,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		if review != nil && scope != changeScopeEngine {
 			commit = func() (func() error, error) { return review.commit(a, applyContext, scope) }
 		}
-		execution, applyErr := a.Dataplane.Apply(applyContext, transaction, commit)
+		execution, applyErr := a.applyDataplane(applyContext, transaction, commit)
 		if applyErr != nil {
 			failure := classifyApplyExecutionFailure(applyErr.Error(), execution.State)
 			writeJSON(w, http.StatusConflict, map[string]any{

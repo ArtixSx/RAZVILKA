@@ -621,7 +621,7 @@ func (a *App) applyNodeAutofallback(ctx context.Context, now time.Time, intent n
 	}
 	a.setNodeAutofallbackEntry(entry)
 	ctx = dataplane.WithReviewGuard(ctx, func(ctx context.Context) error { return a.guardNodeAutofallback(ctx, intent, true) })
-	execution, err := a.Dataplane.Apply(ctx, plan, nil)
+	execution, err := a.applyDataplane(ctx, plan, nil)
 	if err != nil || execution.State != "committed" {
 		return nodeAutofallbackFailure(entry, err, execution.State)
 	}

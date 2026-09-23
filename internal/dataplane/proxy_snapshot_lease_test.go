@@ -121,3 +121,37 @@ func TestProxyRollbackRestoresOnlySameBootActivePolicy(t *testing.T) {
 		})
 	}
 }
+
+func TestProxyRollbackDoesNotHidePolicyJournalFailure(t *testing.T) {
+	for _, existed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "remove-candidate", true: "restore-previous"}[existed], func(t *testing.T) {
+			a, _, old := proxyForwardingFixture(t)
+			a.bootIdentity = func() (string, error) { return "boot-A", nil }
+			root := t.TempDir()
+			snapshot := proxySnapshot{ConfigPath: filepath.Join(root, "engine.json"), Policy: old, PolicyExists: existed, BootID: "boot-A"}
+			data, err := json.Marshal(snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "snapshot.json"), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			// A nonempty directory at the exact owned file path reproduces a
+			// durable write/removal failure on Windows and Linux without chmod.
+			if err := os.MkdirAll(a.policyPath(), 0700); err != nil {
+				t.Fatal(err)
+			}
+			marker := filepath.Join(a.policyPath(), "untouched")
+			if err := os.WriteFile(marker, []byte("keep"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			err = a.Rollback(context.Background(), Plan{}, root)
+			if err == nil || !strings.Contains(err.Error(), "policy journal") {
+				t.Fatal("false rollback success", err)
+			}
+			if data, err := os.ReadFile(marker); err != nil || string(data) != "keep" {
+				t.Fatal("rollback deleted unexpected contents", err)
+			}
+		})
+	}
+}

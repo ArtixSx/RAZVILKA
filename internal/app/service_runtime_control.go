@@ -188,7 +188,7 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 		}
 		return nil
 	})
-	execution, err := a.Dataplane.Apply(ctx, plan, func() (func() error, error) {
+	execution, err := a.applyDataplane(ctx, plan, func() (func() error, error) {
 		if err := binding.guard(a, ctx); err != nil {
 			return nil, err
 		}

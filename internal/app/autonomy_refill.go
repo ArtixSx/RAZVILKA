@@ -11,7 +11,7 @@ import (
 // Called with the worker's exclusive admission. Source enablement and persisted
 // Retry-After are checked again by the single providerfeed worker before I/O.
 func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime) {
-	if ctx.Err() != nil || a.NodeFeeds == nil || a.Store == nil || !a.autonomyConsent(p, s) {
+	if ctx.Err() != nil || a.Operations.Snapshot().Fenced || a.NodeFeeds == nil || a.Store == nil || !a.autonomyConsent(p, s) {
 		return
 	}
 	cfg := a.Store.Get()

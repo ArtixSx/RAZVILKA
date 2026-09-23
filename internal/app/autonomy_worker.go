@@ -505,7 +505,7 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		return err
 	}
 	ctx = dataplane.WithReviewGuard(ctx, guard)
-	execution, err := a.Dataplane.Apply(ctx, plan, func() (func() error, error) {
+	execution, err := a.applyDataplane(ctx, plan, func() (func() error, error) {
 		if e := guard(ctx); e != nil {
 			return nil, e
 		}

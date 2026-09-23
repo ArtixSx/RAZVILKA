@@ -405,7 +405,7 @@ func (a *App) executeNodeRoute(parent context.Context, review nodeRouteReview) s
 		return a.nodeReviewProof(ctx, review, revision)
 	}
 	ctx = dataplane.WithReviewGuard(ctx, guard)
-	execution, err := a.Dataplane.Apply(ctx, plan, func() (func() error, error) {
+	execution, err := a.applyDataplane(ctx, plan, func() (func() error, error) {
 		if err := guard(ctx); err != nil {
 			return nil, err
 		}
@@ -425,11 +425,6 @@ func (a *App) executeNodeRoute(parent context.Context, review nodeRouteReview) s
 		return undo, err
 	})
 	if err != nil {
-		if execution.State == "rollback-failed" {
-			// No later queued action may run on unverified cleanup. Startup owns
-			// recovery of the existing transaction journal before reopening writes.
-			a.Operations.Fence()
-		}
 		failure := classifyApplyExecutionFailure(err.Error(), execution.State)
 		return serviceRuntimeOutcome{Code: "NODE_APPLY_FAILED", Message: failure.Message, Failure: &failure, Execution: &execution}
 	}

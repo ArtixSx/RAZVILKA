@@ -268,12 +268,17 @@ func TestAutonomyReservesApplyFailureStopsEvenAfterRollback(t *testing.T) {
 				t.Fatal("unattributed Apply failure penalized B")
 			}
 			if outcome == "rollback-failed" {
+				if !a.Operations.Snapshot().Fenced {
+					t.Fatal("failed automatic rollback left other application paths admitted")
+				}
 				adapter.calls, checked = nil, nil
 				autonomyTestDue(a, false)
 				a.autonomyRound(context.Background(), time.Now())
 				if autonomyTestState(a).State != "requires-review" || len(adapter.calls) != 0 || len(checked) != 0 {
 					t.Fatal("incomplete rollback did not block the next round")
 				}
+			} else if a.Operations.Snapshot().Fenced {
+				t.Fatal("completed rollback unnecessarily fenced the application")
 			}
 		})
 	}

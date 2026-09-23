@@ -163,7 +163,7 @@ func (a *App) runAutonomyRemoval(ctx context.Context, p autonomy.Policy, s auton
 		if e = guard(ctx); e != nil {
 			return finish("removal-blocked", "Разрешение или настройки изменились.")
 		}
-		_, e = a.Dataplane.Apply(dataplane.WithReviewGuard(ctx, guard), plan, func() (func() error, error) {
+		_, e = a.applyDataplane(dataplane.WithReviewGuard(ctx, guard), plan, func() (func() error, error) {
 			if e := guard(ctx); e != nil {
 				return nil, e
 			}

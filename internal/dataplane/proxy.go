@@ -886,10 +886,13 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 			}
 		}
 		data, _ := json.MarshalIndent(snapshot.Policy, "", "  ")
-		_ = os.MkdirAll(a.StateRoot, 0o700)
-		_ = writeAtomic(a.policyPath(), data, 0o600)
+		if err := restoreOptional(a.policyPath(), data, true); err != nil {
+			firstErr = errors.Join(firstErr, fmt.Errorf("restore previous proxy policy journal: %w", err))
+		}
 	} else {
-		_ = os.Remove(a.policyPath())
+		if err := restoreOptional(a.policyPath(), nil, false); err != nil {
+			firstErr = errors.Join(firstErr, fmt.Errorf("remove candidate proxy policy journal: %w", err))
+		}
 	}
 	if snapshot.ConfigDraft {
 		if err := restoreOptional(snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil && firstErr == nil {

@@ -166,7 +166,7 @@ func (a *App) processWarpHealth(ctx context.Context, items []warp.HealthEvidence
 		return binding.guard(a, c)
 	}
 	ctx = dataplane.WithReviewGuard(ctx, guard)
-	execution, err := a.Dataplane.Apply(ctx, transaction, nil)
+	execution, err := a.applyDataplane(ctx, transaction, nil)
 	if err != nil {
 		_ = a.Warp.RecordActivation(false, "transaction-failed")
 		return decision, fmt.Errorf("WARP recovery transaction failed (%s); candidate and rollback state retained", execution.State)

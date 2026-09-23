@@ -222,7 +222,7 @@ func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, 
 	ctx = dataplane.WithReviewGuard(ctx, func(ctx context.Context) error { return a.guardNodeRecoveryIntent(ctx, intent, true) })
 	// Configuration intent is unchanged. In particular, do not call the node
 	// selection commit, which would overwrite a desired draft and bump revision.
-	return a.Dataplane.Apply(ctx, plan, nil)
+	return a.applyDataplane(ctx, plan, nil)
 }
 
 func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, profile string) (nodeRecoveryIntent, error) {
