@@ -275,6 +275,10 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 				}
 				before := slices.Clone(j.KeyAliases)
 				j.KeyAliases = append(slices.Clone(j.KeyAliases), key)
+				if !durableQueueHasSpace(r.doc, j.Request.Kind == "stop") {
+					j.KeyAliases = before
+					return durableServiceJob{}, true, errDurableQueueFull
+				}
 				if err := a.persistReconcilerLocked(ctx); err != nil {
 					j.KeyAliases = before
 					return durableServiceJob{}, true, err
@@ -393,6 +397,11 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	}
 	job = durableServiceJob{ID: id, KeyHash: key, RequestHash: fingerprint, IntentHash: intent, Request: request,
 		State: "queued", Phase: "waiting", Reason: "accepted", CreatedAt: now, ExpiresAt: now.Add(24 * time.Hour), CleanupOutcome: "not-started", NodeReview: nodeReview}
+	proposed := r.doc
+	proposed.Jobs = append(retained, job)
+	if !durableQueueHasSpace(proposed, request.Kind == "stop") {
+		return durableServiceJob{}, errDurableQueueFull
+	}
 	previous := r.doc.Jobs
 	previousManualUntil := r.doc.ManualUntil
 	if nodeReview != nil {
@@ -413,6 +422,17 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	default:
 	}
 	return job, nil
+}
+
+// Account for bytes before mutating the journal, in addition to job counts.
+// Keep room for running/cleanup timestamps, terminal outcomes and manual Stop.
+func durableQueueHasSpace(doc reconcilerDocument, stop bool) bool {
+	reserve := 32 << 10
+	if stop {
+		reserve = 16 << 10
+	}
+	raw, err := json.Marshal(doc)
+	return err == nil && len(raw) <= maxReconcilerBytes-reserve
 }
 
 func (a *App) addDurableServiceJobs(view map[string]any) {

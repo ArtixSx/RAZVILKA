@@ -305,3 +305,41 @@ func TestDurableNodeFailedJournalNeverAcknowledgesCompletion(t *testing.T) {
 		t.Fatal("clean checker retained lease")
 	}
 }
+
+func TestDurableNodeQueueByteLimitPreservesStopAndExistingJobs(t *testing.T) {
+	a, request := durableNodeFixture(t, 64)
+	accepted := 0
+	for i := 0; i < maxDurableServiceJobs; i++ {
+		request.IdempotencyKey = fmt.Sprintf("capacity-node-check-%04d", i)
+		w := controlRequest(a, "POST", "/api/v1/node-checks", request)
+		if w.Code == 429 {
+			if !strings.Contains(w.Body.String(), "JOB_QUEUE_FULL") || a.reconciler.blocked {
+				t.Fatal("normal queue capacity blocked recovery", w.Body.String())
+			}
+			break
+		}
+		if w.Code != 202 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		accepted++
+		j := &a.reconciler.doc.Jobs[len(a.reconciler.doc.Jobs)-1]
+		finishDurableJob(j, "completed", "", time.Now())
+		if err := a.persistReconcilerLocked(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if accepted == 0 || accepted >= maxDurableServiceJobs-1 {
+		t.Fatal("byte bound was not exercised", accepted)
+	}
+	stop, err := a.enqueueDurableServiceJob(context.Background(), serviceControlJobRequest{Kind: "stop", ExpectedRevision: request.ExpectedRevision, IdempotencyKey: "stop-after-node-queue-full"})
+	if err != nil || stop.State != "queued" || a.reconciler.blocked {
+		t.Fatal("no reserved Stop admission", err, stop)
+	}
+	data, err := os.ReadFile(a.Store.AutomationStatePath())
+	if err != nil || len(data) >= maxReconcilerBytes {
+		t.Fatal("journal exceeded limit", len(data), err)
+	}
+	if len(a.reconciler.doc.Jobs) != accepted+1 {
+		t.Fatal("existing identities evicted")
+	}
+}
