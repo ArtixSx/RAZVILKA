@@ -1,5 +1,14 @@
 'use strict';
 
+// The page and drawer share request semantics: HTTP 202 is acceptance,
+// never evidence that the queued router transaction completed.
+function renderProjectAuditRow(event) {
+  const result = projectLogEventResult(event);
+  const tone = result.tone === 'fail' ? 'failed' : result.tone === 'pass' ? 'ok' : 'pending';
+  const duration = Number(event.duration_ms);
+  return `<div class="audit-row ${tone}"><span class="audit-outcome" title="${esc(result.detail || '')}">${esc(result.label)}</span><div><b>${esc(projectLogAction(event))}</b><code>${esc(event.path || '—')}</code></div><small>${esc(event.actor || 'локально')} · ${esc(event.remote_ip || '—')} · ${esc(timeAgo(event.timestamp))}</small><em>${Number.isFinite(duration) && duration >= 0 ? duration : '—'} мс</em></div>`;
+}
+
 function projectLogSectionName(key) {
   return ({ status: 'Состояние проекта', activity: 'События', system: 'Роутер', metrics: 'Нагрузка роутера', services: 'Сервисы', engines: 'Обходы', engineConfigs: 'Настройки обходов', components: 'Установка и обновления', warp: 'WARP', sources: 'Списки сервисов', nodes: 'Подключения', nodeFeeds: 'Подписки', nodeAutofallback: 'Резерв подключений', routeOptions: 'Доступные маршруты', connections: 'Соединения', devices: 'Устройства', testlab: 'Проверки', engineLab: 'Проверка обходов', audit: 'Журнал действий', strategyLab: 'Стратегии NFQWS2', z2kPreview: 'Импорт стратегий', smartRoute: 'Подбор маршрутов', serviceControl: 'Управление проектом', dns: 'DNS', dnsPlan: 'Изменения DNS', sessions: 'Сеансы входа' })[key] || String(key || 'Раздел панели');
 }
@@ -49,6 +58,7 @@ function renderProjectLogDetails(value) {
   if (data.last_action_error) problems.push({ name: 'Последняя ошибка управления', message: String(data.last_action_error) });
   if (data.jobs_error) problems.push({ name: 'Задания роутера', message: String(data.jobs_error) });
   const audit = data.audit && typeof data.audit === 'object' ? data.audit : {};
+  if (audit.memory_only === true && audit.history_complete === false) problems.push({ name: 'История журнала', message: 'Показаны действия текущего запуска. Предыдущую историю пока не удалось прочитать.' });
   if (audit.available !== true || audit.last_error) problems.push({ name: 'Журнал действий', message: String(audit.last_error || 'Актуальный журнал не получен. Доступная история может быть неполной.') });
   const control = data.control && typeof data.control === 'object' ? data.control : {};
   const ready = Number.isSafeInteger(control.config_revision);

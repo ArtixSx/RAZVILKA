@@ -80,6 +80,7 @@ assert.equal(JSON.parse(calls.at(-1).options.body).action, 'stop');
 state.loadIssues = [{ section: 'sources', message: 'Источник недоступен' }];
 request = async () => ({ events: [{ outcome: 'failed', path: '/api/v1/test', status: 502 }] });
 await $('#projectLog').handlers.click();
+assert(calls.some(call => call.path === '/api/v1/audit/current?limit=40'), 'log waited for admission to read disk history');
 assert.equal(details.at(-1)[0].detail_kind, 'project-log');
 assert.equal(details.at(-1)[0].load_issues[0].section, 'sources');
 assert.equal(details.at(-1)[0].audit.events[0].outcome, 'failed');

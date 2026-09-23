@@ -7,7 +7,7 @@ const app = read('cmd/razvilka/web/app.js');
 const source = read('cmd/razvilka/web/project-log.js');
 const html = read('cmd/razvilka/web/index.html');
 const esc = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
-const context = vm.createContext({ esc, technicalDetails: value => `<details class="technical-details"><pre>${esc(JSON.stringify(value))}</pre></details>` });
+const context = vm.createContext({ esc, timeAgo: () => 'сейчас', technicalDetails: value => `<details class="technical-details"><pre>${esc(JSON.stringify(value))}</pre></details>` });
 vm.runInContext(source, context);
 const healthy = { detail_kind: 'project-log', control: { config_revision: 2, runtime_state: 'running', running: true, safe_mode: false, mode: 'auto' }, audit: { available: true, events: [] } };
 const render = value => context.renderProjectLogDetails(value);
@@ -39,6 +39,11 @@ assert.doesNotMatch(out, /Записанных действий пока нет/
 
 const failed = { timestamp: '2026-09-20T13:01:00Z', path: '/api/v1/components/usque/update', action: 'POST', outcome: 'failed', status_code: 502 };
 const accepted = { timestamp: '2026-09-20T13:02:00Z', path: '/api/v1/node-checks', action: 'POST', outcome: 'ok', status_code: 202, duration_ms: 23 };
+assert.match(context.renderProjectAuditRow(accepted), /Принято в работу/);
+assert.doesNotMatch(context.renderProjectAuditRow(accepted), /audit-row ok|выполнено/);
+assert.match(context.renderProjectAuditRow(failed), /audit-row failed/);
+assert.doesNotMatch(context.renderProjectAuditRow({ ...accepted, actor: '<script>x</script>' }), /<script>/);
+assert.match(visible({ ...healthy, audit: { available: true, memory_only: true, history_complete: false, events: [] } }), /Предыдущую историю пока не удалось прочитать/);
 const logged = { ...healthy, audit: { available: true, events: [failed, accepted] } };
 out = visible(logged);
 assert.match(out, /В последних действиях есть ошибки/);

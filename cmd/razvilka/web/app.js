@@ -1004,7 +1004,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
       ['devices', '/api/v1/devices?view=status'],
       ['testlab', '/api/v1/testlab'],
       ['engineLab', '/api/v1/engine-lab'],
-      ['audit', '/api/v1/audit?limit=40'],
+      ['audit', '/api/v1/audit/current?limit=40'],
       ['strategyLab', '/api/v1/strategy-lab'],
       ['z2kPreview', '/api/v1/migrations/z2k/preview'],
       ['smartRoute', '/api/v1/smart-route'],
@@ -1507,9 +1507,7 @@ function renderAudit() {
   const target = $('#auditRows');
   if (!target) return;
   const events = state.audit?.events || [];
-  const actionLabels = { POST: 'Запуск', PUT: 'Изменение', PATCH: 'Изменение', DELETE: 'Удаление' };
-  const outcomeLabels = { ok: 'выполнено', failed: 'ошибка', denied: 'отклонено' };
-  target.innerHTML = events.map((event) => `<div class="audit-row ${esc(event.outcome || '')}"><span class="audit-outcome">${esc(outcomeLabels[event.outcome] || event.outcome || '—')}</span><div><b>${esc(actionLabels[event.action] || event.action || 'Действие')}</b><code>${esc(event.path || '—')}</code></div><small>${esc(event.actor || 'локально')} · ${esc(event.remote_ip || '—')} · ${esc(timeAgo(event.timestamp))}</small><em>${Number(event.duration_ms || 0)} мс</em></div>`).join('') || `<div class="community-empty">${state.audit?.available === false && state.audit?.last_error ? esc(state.audit.last_error) : 'Действий пока нет.'}</div>`;
+  target.innerHTML = events.map(renderProjectAuditRow).join('') || `<div class="community-empty">${state.audit?.available === false && state.audit?.last_error ? esc(state.audit.last_error) : 'Действий пока нет.'}</div>`;
 }
 
 function renderStrategyLab() {

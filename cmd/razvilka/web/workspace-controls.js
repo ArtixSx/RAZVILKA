@@ -183,7 +183,7 @@ async function openWorkspaceLog() {
   setView('activity');
   let jobs = null, jobsError = '';
   try {
-    const [audit, memory] = await Promise.allSettled([api('/api/v1/audit?limit=40'), api('/api/v1/service-control/current')]);
+    const [audit, memory] = await Promise.allSettled([api('/api/v1/audit/current?limit=40'), api('/api/v1/service-control/current')]);
     if (generation !== workspaceControl.generation || !workspaceControlVisible()) return;
     if (memory.status === 'fulfilled') jobs = memory.value.durable_jobs || [];
     else jobsError = memory.reason?.message || 'Не удалось получить очередь заданий.';
