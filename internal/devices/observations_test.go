@@ -122,6 +122,7 @@ func TestObserveBindingsInvalidInterfacesAndCancellationDoNoIO(t *testing.T) {
 	}
 	m.Runner = observationRunner(func(ctx context.Context, _ string, _ ...string) ([]byte, error) { cancel(); return nil, ctx.Err() })
 	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
 	if _, err := m.ObserveBindings(ctx, []string{"br0"}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
