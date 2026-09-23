@@ -47,6 +47,8 @@ type durableServiceJob struct {
 	CleanupOutcome  string                   `json:"cleanup_outcome"`
 	RuntimeCode     string                   `json:"runtime_code,omitempty"`
 	DNSCode         string                   `json:"dns_code,omitempty"`
+	NodeCode        string                   `json:"node_code,omitempty"`
+	NodeReview      *durableNodeReview       `json:"node_review,omitempty"`
 }
 
 func (j durableServiceJob) terminal() bool {
@@ -86,6 +88,15 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 			code = j.RuntimeCode
 		}
 	}
+	if j.Request.Kind == "node-apply" {
+		total, completed, message = 1, 0, nodeApplyJobMessage(j)
+		if j.State == "completed" {
+			completed = 1
+		}
+		if j.NodeCode != "" {
+			code = j.NodeCode
+		}
+	}
 	p := &nodeCheckJob{ID: j.ID, Mode: "service-" + j.Request.Kind, State: j.State, Phase: j.Phase,
 		ErrorCode: code, Total: total, Completed: completed,
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
@@ -104,6 +115,9 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 	}
 	ids, keys := map[uint64]bool{}, map[string]bool{}
 	for _, j := range jobs {
+		if !validDurableNodeReview(j) {
+			return restorejournal.ErrInvalid
+		}
 		if !validDNSJobCode(j.DNSCode) || j.DNSCode != "" && j.Request.Kind != "dns-compare" {
 			return restorejournal.ErrInvalid
 		}
@@ -131,6 +145,12 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 }
 
 func validDurableRequest(r serviceControlJobRequest) bool {
+	if r.Kind == "node-apply" {
+		return validDurableNodeApply(r)
+	}
+	if r.NodeApply != nil {
+		return false
+	}
 	if r.Kind == "dns-compare" {
 		return validDurableDNSRequest(r)
 	}
@@ -174,6 +194,13 @@ func recoverDurableServiceJobs(doc *reconcilerDocument, now time.Time) {
 		if j.terminal() {
 			continue
 		}
+		if j.Request.Kind == "node-apply" {
+			// Startup transaction recovery owns any unfinished rollback. A saved
+			// review is not permission to replay activation in a new process.
+			finishDurableJob(j, "failed", "startup-reconcile", now)
+			j.NodeCode, j.CleanupOutcome = "NODE_REVIEW_CHANGED", "startup-recovered"
+			continue
+		}
 		j.Cursor = 0 // Previous-process results do not prove the current network.
 		if j.CancelRequested {
 			finishDurableJob(j, "canceled", "canceled", now)
@@ -191,12 +218,18 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		return durableServiceJob{}, errServiceControlRequest
 	}
 	key := applyReviewHash(request.IdempotencyKey)
+	nodeToken, nodeOwner := request.nodeReviewToken, request.nodeReviewOwner
+	request.nodeReviewToken, request.nodeReviewOwner = "", [32]byte{}
 	request.IdempotencyKey = ""
 	revision := *request.ExpectedRevision
 	request.ExpectedRevision = &revision
 	request.ServiceIDs, request.NodeIDs = slices.Clone(request.ServiceIDs), slices.Clone(request.NodeIDs)
 	if request.DNS != nil {
 		request.DNS = &serviceDNSJobSpec{ProfileIDs: slices.Clone(request.DNS.ProfileIDs), VerifyService: request.DNS.VerifyService}
+	}
+	if request.NodeApply != nil {
+		copied := *request.NodeApply
+		request.NodeApply = &copied
 	}
 	fingerprint := applyReviewHash(request)
 	r := &a.reconciler
@@ -238,6 +271,7 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		return job, err
 	} // A retry must succeed even while its job owns admission.
 	intent := fingerprint
+	var nodeReview *durableNodeReview
 	if isRuntimeJob(request.Kind) {
 		// The immutable intent is exactly action + expected revision, not a
 		// partially applied Store snapshot. The executor validates that revision
@@ -256,6 +290,15 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		if a.Store == nil {
 			release()
 			return durableServiceJob{}, errServiceControlRequest
+		}
+		if request.Kind == "node-apply" {
+			// Retain admission through durable acceptance and token consumption.
+			defer release()
+			release = func() {}
+			nodeReview, err = a.prepareDurableNodeApply(ctx, request, nodeToken, nodeOwner)
+			if err != nil {
+				return durableServiceJob{}, err
+			}
 		}
 		cfg := a.Store.Get()
 		services := []catalog.Service{}
@@ -326,12 +369,20 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		}
 	}
 	job = durableServiceJob{ID: id, KeyHash: key, RequestHash: fingerprint, IntentHash: intent, Request: request,
-		State: "queued", Phase: "waiting", Reason: "accepted", CreatedAt: now, ExpiresAt: now.Add(24 * time.Hour), CleanupOutcome: "not-started"}
+		State: "queued", Phase: "waiting", Reason: "accepted", CreatedAt: now, ExpiresAt: now.Add(24 * time.Hour), CleanupOutcome: "not-started", NodeReview: nodeReview}
 	previous := r.doc.Jobs
+	previousManualUntil := r.doc.ManualUntil
+	if nodeReview != nil {
+		r.doc.ManualUntil = time.Time{}
+	} // This reviewed manual action is now accepted.
 	r.doc.Jobs = append(retained, job)
 	if err = a.persistReconcilerLocked(ctx); err != nil {
 		r.doc.Jobs = previous
+		r.doc.ManualUntil = previousManualUntil
 		return durableServiceJob{}, err
+	}
+	if nodeReview != nil {
+		a.nodeReviews.take(nodeToken, nodeOwner, now)
 	}
 	acceptedStop = request.Kind == "stop"
 	select {
@@ -461,7 +512,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		return true
 	}
 	budget := 5 * time.Minute
-	if isRuntimeJob(j.Request.Kind) {
+	if isRuntimeJob(j.Request.Kind) || j.Request.Kind == "node-apply" {
 		budget = defaultDataplaneApplyTimeout
 	}
 	if j.Request.Kind == "check" {
@@ -486,12 +537,15 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	request := j.Request
 	request.durableID, request.intentHash = j.ID, j.IntentHash
 	request.durableCursor = j.Cursor
+	nodeReview := j.NodeReview // Immutable copy allocated during acceptance.
 	r.mu.Unlock()
 	var err error
 	var runtimeOutcome serviceRuntimeOutcome
 	var dnsResult *serviceDNSCompareOutput
 	if isRuntimeJob(request.Kind) {
 		runtimeOutcome, err = a.runDurableRuntimeJob(attempt, request)
+	} else if request.Kind == "node-apply" {
+		runtimeOutcome, err = a.runDurableNodeApply(attempt, request, nodeReview)
 	} else if request.Kind == "dns-compare" {
 		dnsResult, err = a.runDurableDNSJob(attempt, request)
 	} else {
@@ -527,7 +581,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	} else if a.Operations.Snapshot().Fenced {
 		finishDurableJob(j, "failed", "cleanup-unverified", time.Now())
 		j.CleanupOutcome = "unverified"
-	} else if isRuntimeJob(request.Kind) && err == nil && runtimeOutcome.Code == "" {
+	} else if (isRuntimeJob(request.Kind) || request.Kind == "node-apply") && err == nil && runtimeOutcome.Code == "" {
 		// A cancel can race the final commit. Successful committed state is
 		// never reported as canceled (and never replayed just to obtain an ACK).
 		finishDurableJob(j, "completed", "", time.Now())
@@ -549,6 +603,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		finishDurableJob(j, "completed", "", time.Now())
 	} else if isRuntimeJob(request.Kind) {
 		j.RuntimeCode = runtimeOutcome.Code
+		finishDurableJob(j, "failed", "check-failed", time.Now())
+	} else if request.Kind == "node-apply" {
+		j.NodeCode = runtimeOutcome.Code
 		finishDurableJob(j, "failed", "check-failed", time.Now())
 	} else {
 		a.nodeChecks.mu.Lock()
@@ -619,6 +676,8 @@ func (a *App) writeDurableJobFailure(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusTooManyRequests, "JOB_QUEUE_FULL", "Очередь заполнена. Дождитесь завершения или отмените ненужные задания."
 	case errors.Is(err, config.ErrRevisionChanged):
 		status, code, message = http.StatusConflict, "SERVICE_CONTROL_CHANGED", "Настройки изменились. Обновите состояние перед проверкой."
+	case errors.Is(err, errNodeJobReview):
+		status, code, message = http.StatusConflict, "NODE_REVIEW_CHANGED", "Подтверждение устарело или относится к другому выбору. Откройте новый план."
 	case errors.Is(err, errServiceControlRequest):
 		status, code, message = http.StatusBadRequest, "JOB_REQUEST_INVALID", "Проверьте сервисы и параметры задания."
 	}

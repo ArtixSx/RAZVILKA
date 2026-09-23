@@ -83,7 +83,10 @@ async function runNodeIntent() {
     if (preview.scope_selection !== scope.mode || !preview.effective_scope || JSON.stringify(nodeIntentCanonicalSources(preview.effective_scope.sources)) !== JSON.stringify(intent.sources)) throw new Error('Область устройств отличается от показанной. Просмотрите план перед применением.');
     if (!preview.ready || !review.review_token || !Number.isFinite(Date.parse(review.expires_at)) || Date.parse(review.expires_at) <= Date.now()) throw new Error((preview.transaction?.blockers || []).map(item => item.message).join(' · ') || 'Маршрут пока нельзя применить. Проверьте настройки и повторите.');
     $('#nodeCheckResult').textContent = `Применяем для: ${nodeScopeText(preview.effective_scope.sources)}. Проверяем маршрут; при ошибке вернём предыдущий.`;
-    const applied = await api(`/api/v1/nodes/${encodeURIComponent(id)}/apply`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ service_id: serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE' }) });
+    $('#nodeCheckCancel').textContent = 'Закрыть';
+    let applied = await api(`/api/v1/nodes/${encodeURIComponent(id)}/apply`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ service_id: serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE', idempotency_key: `node-apply-${review.review_token}` }) });
+    if (!current()) return;
+    applied = await waitNodeApplyJob(applied, controller.signal, message => { if (current()) $('#nodeCheckResult').textContent = message; });
     if (!current()) return;
     $('#nodeCheckResult').textContent = applied.live_applied === true ? 'Подключение включено и прошло проверку веб-доступа. Теперь проверьте нужное приложение на выбранном устройстве.' : 'Применение не подтверждено. Обновите панель перед повтором.';
     await refreshAfterMutation();

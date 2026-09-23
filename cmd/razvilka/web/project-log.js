@@ -84,7 +84,7 @@ function renderProjectLogDetails(value) {
   }).join('');
   const jobs = records(data.jobs ?? control.durable_jobs).slice(-12).reverse();
   const jobHTML = jobs.length ? `<section class="detail-section"><h4>Задания на роутере</h4><p class="detail-footnote">Завершение действия показано отдельно от ответа на запрос. Оно не заменяет проверку доступности сервиса.</p>${jobs.map(job => {
-    const name = ({ 'service-stop': 'Остановка проекта', 'service-resume': 'Включение проекта', 'service-check': 'Проверка сервисов', 'service-select': 'Подбор подключения', 'service-dns-compare': 'Проверка DNS и сайта' })[job.mode] || 'Задание';
+    const name = ({ 'service-stop': 'Остановка проекта', 'service-resume': 'Включение проекта', 'service-check': 'Проверка сервисов', 'service-select': 'Подбор подключения', 'service-dns-compare': 'Проверка DNS и сайта', 'service-node-apply': 'Применение подключения' })[job.mode] || 'Задание';
     const status = ({ queued: 'В очереди', running: 'Выполняется', canceling: 'Завершаем очистку', interrupted: 'Проверяем после перезапуска', completed: 'Завершено', failed: 'Не выполнено', canceled: 'Отменено' })[job.state] || 'Нет подтверждения';
     const timestamp = Date.parse(job.finished_at || job.started_at || '');
     const time = Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString('ru-RU') : 'Время не указано';

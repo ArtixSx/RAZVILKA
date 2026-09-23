@@ -93,6 +93,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		a.interruptAutomation(r)
 		nodeJobOwnsAdmission := (r.URL.Path == "/api/v1/node-checks" || r.URL.Path == "/api/v1/service-control/jobs" || r.URL.Path == "/api/v1/service-control/runtime") && r.Method == http.MethodPost
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || r.URL.Path == "/api/v1/dns/service-compare" && r.Method == http.MethodPost
+		nodeJobOwnsAdmission = nodeJobOwnsAdmission || isNodeApplyPath(r)
 		nodeJobMemoryOnly := r.URL.Path == "/api/v1/node-checks/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/node-autofallback" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/service-control/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)

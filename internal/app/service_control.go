@@ -51,6 +51,9 @@ type serviceControlJobRequest struct {
 	ServiceIDs       []string           `json:"service_ids"`
 	NodeIDs          []string           `json:"node_ids,omitempty"`
 	DNS              *serviceDNSJobSpec `json:"dns,omitempty"`
+	NodeApply        *nodeApplyJobSpec  `json:"node_apply,omitempty"`
+	nodeReviewToken  string
+	nodeReviewOwner  [32]byte
 	durableID        uint64
 	intentHash       string
 	durableCursor    int

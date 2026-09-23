@@ -157,7 +157,7 @@ function renderServiceDashboardControl() {
   $('#serviceCancelCheck').disabled = !!serviceDashboard.operation;
   const stoppedNote = state.serviceControl?.runtime_state === 'stopped' ? 'Маршруты остановлены. Проверка не включает их; применение включит выбранные сервисы после проверки. ' : '';
   $('#serviceCheckStatus').textContent = stoppedNote + (serviceDashboard.message || (serviceDashboardJobActive()
-    ? `Идёт ${job.mode === 'service-select' ? 'подбор подключений' : 'проверка'}${Number.isFinite(job.completed) && Number.isFinite(job.total) ? `: ${job.completed} из ${job.total}` : ''}. Маршруты не изменяются.`
+    ? (['service-node-apply', 'service-stop', 'service-resume'].includes(job.mode) ? job.message || 'Выполняется переключение маршрутов.' : `Идёт ${job.mode === 'service-select' ? 'подбор подключений' : 'проверка'}${Number.isFinite(job.completed) && Number.isFinite(job.total) ? `: ${job.completed} из ${job.total}` : ''}. Маршруты не изменяются.`)
     : control ? 'Проверка подтверждает веб-доступ. Подбор предлагает подключение; применение и устройства вы выбираете отдельно.' : 'Получаем состояние проверок…'));
   const schedule = control?.schedule;
   if (schedule && !serviceDashboard.scheduleDirty) {

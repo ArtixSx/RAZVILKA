@@ -268,6 +268,32 @@ func nodeApplyBody(review nodeRouteReview) map[string]any {
 	return map[string]any{"service_id": review.ServiceID, "review_token": review.Token, "reviewed_digest": review.Digest, "revision": review.Revision, "generation": review.Generation, "confirm": "APPLY_NODE_ROUTE"}
 }
 
+func TestNodePreviewNamesUnconfirmedRetainedServiceWithoutConsumingDrafts(t *testing.T) {
+	a, id, adapter := nodeApplyFixture(t)
+	if err := a.Store.UpdateService("youtube", config.ServiceState{Enabled: true, Route: "sing-box:" + id}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Store.ApplyDraft(); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Store.UpdateService("youtube", config.ServiceState{Enabled: false, Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
+	before := a.Store.Get()
+	w := nodeRouteRequest(a, id, "preview", map[string]any{"service_id": "telegram"}, "owner-a", context.Background())
+	if w.Code != 409 || !strings.Contains(w.Body.String(), `"code":"NODE_ROUTE_DEPENDENCY"`) || !strings.Contains(w.Body.String(), `"service_id":"youtube"`) || !strings.Contains(w.Body.String(), "YouTube") {
+		t.Fatalf("missing actionable dependency: %d %s", w.Code, w.Body.String())
+	}
+	if len(adapter.calls) != 0 || !reflect.DeepEqual(before, a.Store.Get()) || len(a.nodeReviews.reviews) != 0 {
+		t.Fatal("failed preview applied or consumed an unrelated draft")
+	}
+	for _, secret := range []string{id, "private.example", "123e4567", "vless://"} {
+		if strings.Contains(w.Body.String(), secret) {
+			t.Fatal("dependency response leaked private connection details")
+		}
+	}
+}
+
 func TestNodeReviewedApplyCommitsOnlySelectedRoute(t *testing.T) {
 	a, id, adapter := nodeApplyFixture(t)
 	before := a.Store.Get()

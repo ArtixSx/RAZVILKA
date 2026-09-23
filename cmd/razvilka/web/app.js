@@ -3273,8 +3273,6 @@ function closeNodeRoute() {
     review.controller?.abort();
     review.review = null;
     $('#nodeRouteApply').disabled = true;
-    $('#nodeRouteStatus').textContent = 'Запрошена отмена. Сервер завершит очистку или откат. Обновите панель, чтобы увидеть итог маршрута.';
-    return;
   }
   clearTimeout(state.nodeReviewTimer);
   state.nodeRouteReview = null;
@@ -3291,15 +3289,17 @@ async function applyNodeRoute() {
   current.review = null; // One use, including failures and disconnected clients.
   $('#nodeRouteApply').disabled = true;
   $('#nodeRouteApply').textContent = 'Проверяем и применяем…';
-  $('#nodeRouteCancel').textContent = 'Отменить операцию';
-  $('#nodeRouteStatus').textContent = 'Сначала выполняется изолированная проверка. Затем маршрут переключится и пройдёт контроль.';
+  $('#nodeRouteCancel').textContent = 'Закрыть';
+  $('#nodeRouteStatus').textContent = 'Сохраняем применение на роутере. Закрытие окна не отменяет принятое задание; отмена доступна в разделе «Сервисы».';
   try {
-    const response = await api(`/api/v1/nodes/${encodeURIComponent(current.id)}/apply`, { method: 'POST', signal: current.controller.signal, body: JSON.stringify({ service_id: current.serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE' }) });
+    let response = await api(`/api/v1/nodes/${encodeURIComponent(current.id)}/apply`, { method: 'POST', signal: current.controller.signal, body: JSON.stringify({ service_id: current.serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE', idempotency_key: `node-apply-${review.review_token}` }) });
+    if (state.nodeRouteReview !== current || current.controller.signal.aborted) return;
+    response = await waitNodeApplyJob(response, current.controller.signal, message => { if (state.nodeRouteReview === current) $('#nodeRouteStatus').textContent = message; });
     if (state.nodeRouteReview !== current || current.controller.signal.aborted) return;
     $('#nodeRouteStatus').textContent = response.live_applied === true ? 'Маршрут применён и прошёл проверки. Проверьте сервис на выбранном устройстве.' : 'Применение не подтверждено. Обновите панель перед новым действием.';
     await refreshAfterMutation();
   } catch (error) {
-    if (state.nodeRouteReview === current) $('#nodeRouteStatus').textContent = error.name === 'AbortError' ? 'Запрос отменён. Сервер завершает очистку или откат; обновите панель для проверки итогового состояния.' : `${error.message} Для повтора откройте новый план.`;
+    if (state.nodeRouteReview === current) $('#nodeRouteStatus').textContent = `${error.message} Проверьте задание в разделе «Сервисы» или откройте лог перед повторным применением.`;
   } finally {
     if (state.nodeRouteReview === current) {
       current.busy = false;
@@ -3308,6 +3308,33 @@ async function applyNodeRoute() {
       $('#nodeRouteCancel').textContent = 'Закрыть';
     }
   }
+}
+
+// Poll only the accepted identity. Closing/logging out stops observation, not
+// the server-owned transaction. Canceling a job remains an explicit DELETE.
+async function waitNodeApplyJob(response, signal, progress) {
+  if (response.persistent !== true) return response; // Older server compatibility.
+  const id = response.job?.id;
+  if (!Number.isSafeInteger(id) || response.job.mode !== 'service-node-apply') throw new Error('Сохранение применения не подтверждено.');
+  let job = response.job;
+  const deadline = Date.now() + 6 * 60 * 1000;
+  while (!signal.aborted) {
+    progress(job.message || 'Применение выполняется на роутере. Окно можно закрыть.');
+    if (job.state === 'completed') return { live_applied: true };
+    if (['failed', 'canceled'].includes(job.state)) throw new Error(job.message || 'Применение не завершено.');
+    if (Date.now() >= deadline) throw new Error('Задание ещё выполняется; его состояние доступно в разделе «Сервисы».');
+    await new Promise(resolve => {
+      const done = () => { clearTimeout(timer); signal.removeEventListener('abort', done); resolve(); };
+      const timer = setTimeout(done, 1000);
+      signal.addEventListener('abort', done, { once: true });
+    });
+    if (signal.aborted) break;
+    const control = await api('/api/v1/service-control/current', { signal });
+    if (signal.aborted) break;
+    job = (control.durable_jobs || []).find(item => item.id === id);
+    if (!job || job.mode !== 'service-node-apply') throw new Error('Результат задания сейчас недоступен. Откройте лог и обновите состояние.');
+  }
+  return { live_applied: false };
 }
 
 function renderNodeFeeds() {

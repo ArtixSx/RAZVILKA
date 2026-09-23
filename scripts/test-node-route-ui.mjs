@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
-const names = ['nodeByID', 'openNodeCheck', 'updateNodeCheckSelection', 'closeNodeCheck', 'runNodeCheck', 'previewNodeRoute', 'closeNodeRoute', 'applyNodeRoute', 'nodeRecoveryBanner'];
+const names = ['nodeByID', 'openNodeCheck', 'updateNodeCheckSelection', 'closeNodeCheck', 'runNodeCheck', 'previewNodeRoute', 'closeNodeRoute', 'applyNodeRoute', 'waitNodeApplyJob', 'nodeRecoveryBanner'];
 const functions = names.map(name => {
   const match = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));
   assert.ok(match, name);
@@ -77,7 +77,7 @@ assert.match($('#nodeRouteSummary').innerHTML, /&lt;private&gt;/);
 assert.doesNotMatch($('#nodeRouteSummary').innerHTML, /Name <private>/);
 handler = (url, options) => {
   assert.equal(url, '/api/v1/nodes/node-a/apply');
-  assert.deepEqual(JSON.parse(options.body), { service_id: 'telegram', review_token: 'token', reviewed_digest: 'digest', revision: 7, generation: 4, confirm: 'APPLY_NODE_ROUTE' });
+  assert.deepEqual(JSON.parse(options.body), { service_id: 'telegram', review_token: 'token', reviewed_digest: 'digest', revision: 7, generation: 4, confirm: 'APPLY_NODE_ROUTE', idempotency_key: 'node-apply-token' });
   return new Promise(resolve => { finish = resolve; });
 };
 const beforeApply = calls.length;
@@ -89,7 +89,8 @@ assert.equal(calls.at(-1).options.signal.aborted, true);
 finish({ live_applied: true });
 await applying;
 assert.doesNotMatch($('#nodeRouteStatus').textContent, /Маршрут применён/);
-assert.equal(state.nodeRouteReview.review, null, 'cancellation retained reusable review');
+assert.equal(state.nodeRouteReview, null, 'closed window retained private review');
+assert.equal($('#nodeRouteDialog').open, false);
 
 context.closeNodeRoute();
 begin();

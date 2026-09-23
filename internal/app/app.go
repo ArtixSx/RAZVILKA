@@ -3607,7 +3607,7 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 		if state.Enabled {
 			selected := selectedRoute(state)
 			if (strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-")) && !routecatalog.ValidForServiceWithOptions(selected, service.ID, options) {
-				return dataplane.Plan{}, fmt.Errorf("route %s has no current registry proof for service %s", selected, service.ID)
+				return dataplane.Plan{}, &routePlanDependencyError{ServiceID: service.ID, Name: service.Name}
 			}
 			resolved := selected
 			if selected == "auto" {
@@ -3629,7 +3629,7 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 				}
 				proof, proofErr := a.Nodes.ResolveRoute(context.Background(), strings.TrimPrefix(selected, "sing-box:"), service.ID, networkProfile, previousNode, committedAt, time.Now())
 				if proofErr != nil {
-					return dataplane.Plan{}, fmt.Errorf("node route has no current exact proof for service %s", service.ID)
+					return dataplane.Plan{}, &routePlanDependencyError{ServiceID: service.ID, Name: service.Name}
 				}
 				resolved = proof.Route
 			}

@@ -269,7 +269,7 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 	}
 	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForScope(cfg, request.ServiceID, id, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
 	if err != nil {
-		writeNodeApplyError(w, "NODE_REVIEW_CHANGED", "План недоступен. Проверьте узел и действующие маршруты, затем повторите просмотр.")
+		writeNodePlanFailure(w, err)
 		return
 	}
 	if plan.NetworkProfileID != profile || a.nodeReviewProof(r.Context(), review, cfg.Revision) != nil {
@@ -308,6 +308,16 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 	})
 }
 
+type nodeApplyRequest struct {
+	Token          string `json:"review_token"`
+	Digest         string `json:"reviewed_digest"`
+	Revision       uint64 `json:"revision"`
+	Generation     uint64 `json:"generation"`
+	ServiceID      string `json:"service_id"`
+	Confirm        string `json:"confirm"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+}
+
 func (a *App) nodeRouteApply(w http.ResponseWriter, r *http.Request, id string) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -317,14 +327,7 @@ func (a *App) nodeRouteApply(w http.ResponseWriter, r *http.Request, id string) 
 		writeNodeApplyError(w, "NODE_APPLY_UNAVAILABLE", "Применение узлов сейчас недоступно.")
 		return
 	}
-	var request struct {
-		Token      string `json:"review_token"`
-		Digest     string `json:"reviewed_digest"`
-		Revision   uint64 `json:"revision"`
-		Generation uint64 `json:"generation"`
-		ServiceID  string `json:"service_id"`
-		Confirm    string `json:"confirm"`
-	}
+	var request nodeApplyRequest
 	if !decodeNodeMutation(w, r, &request) {
 		return
 	}
@@ -332,27 +335,62 @@ func (a *App) nodeRouteApply(w http.ResponseWriter, r *http.Request, id string) 
 		writeNodeApplyError(w, "NODE_REVIEW_REQUIRED", "Просмотрите маршрут и явно подтвердите применение.")
 		return
 	}
+	if request.IdempotencyKey != "" {
+		job, err := a.enqueueDurableServiceJob(r.Context(), serviceControlJobRequest{
+			Kind: "node-apply", ServiceIDs: []string{request.ServiceID}, NodeIDs: []string{id},
+			ExpectedRevision: &request.Revision, IdempotencyKey: request.IdempotencyKey,
+			NodeApply:       &nodeApplyJobSpec{Digest: request.Digest, Generation: request.Generation},
+			nodeReviewToken: request.Token, nodeReviewOwner: nodeReviewOwner(r),
+		})
+		if err != nil {
+			a.writeDurableJobFailure(w, err)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{"job": job.presentation(), "persistent": true})
+		return
+	}
+	// Legacy callers retain synchronous behavior; both paths own their admission.
+	release, err := a.Operations.Exclusive(r.Context())
+	if err != nil {
+		a.writeOperationFailure(w, err)
+		return
+	}
+	defer release()
 	review, ok := a.nodeReviews.take(request.Token, nodeReviewOwner(r), time.Now())
 	if !ok || review.NodeID != id || review.ServiceID != request.ServiceID || review.Digest != request.Digest || review.Revision != request.Revision || review.Generation != request.Generation {
 		writeNodeApplyError(w, "NODE_REVIEW_CHANGED", "Подтверждение устарело или относится к другому выбору. Откройте новый план.")
 		return
 	}
+	outcome := a.executeNodeRoute(r.Context(), review)
+	if outcome.Code != "" {
+		writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": outcome.Code, "live_applied": false, "error": outcome.Message, "failure": outcome.Failure, "execution": outcome.Execution, "review_required": true})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "live_applied": true, "service_id": review.ServiceID, "node_id": id, "execution": outcome.Execution, "pending_changes": a.pendingChanges(), "note": "Сервис включён через выбранный узел. Рабочий маршрут прошёл контрольную проверку."})
+}
+
+// Caller owns admission until the existing transaction's rollback/cleanup joins.
+func (a *App) executeNodeRoute(parent context.Context, review nodeRouteReview) serviceRuntimeOutcome {
+	fail := func(code, message string) serviceRuntimeOutcome {
+		return serviceRuntimeOutcome{Code: code, Message: message}
+	}
 	cfg := a.Store.Get()
-	profile, err := a.freshNetworkProfile(r.Context())
+	profile, err := a.freshNetworkProfile(parent)
 	if err != nil || profile != review.NetworkProfile {
-		writeNodeNetworkError(w)
-		return
+		return fail("NODE_NETWORK_CHANGED", "Сеть изменилась. Проверьте подключение и откройте новый план.")
 	}
-	if cfg.SafeMode || a.nodeReviewProof(r.Context(), review, cfg.Revision) != nil || cfg.Revision != review.Revision {
-		writeNodeApplyError(w, "NODE_REVIEW_CHANGED", "Настройки, узлы или срок проверки изменились. Проверьте узел и откройте новый план.")
-		return
+	if cfg.SafeMode || a.nodeReviewProof(parent, review, cfg.Revision) != nil || cfg.Revision != review.Revision {
+		return fail("NODE_REVIEW_CHANGED", "Настройки, узлы или срок проверки изменились. Проверьте узел и откройте новый план.")
 	}
-	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForScope(cfg, review.ServiceID, id, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
+	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForScope(cfg, review.ServiceID, review.NodeID, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
 	if err != nil || !plan.Ready || plan.Digest != review.Digest || plan.NetworkProfileID != review.NetworkProfile {
-		writeNodeApplyError(w, "NODE_REVIEW_CHANGED", "Состав или условия маршрута изменились. Откройте новый план.")
-		return
+		var dependency *routePlanDependencyError
+		if errors.As(err, &dependency) {
+			return fail("NODE_ROUTE_DEPENDENCY", dependency.Error())
+		}
+		return fail("NODE_REVIEW_CHANGED", "Состав или условия маршрута изменились. Откройте новый план.")
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), defaultDataplaneApplyTimeout)
+	ctx, cancel := context.WithTimeout(parent, defaultDataplaneApplyTimeout)
 	defer cancel()
 	committed := false
 	guard := func(ctx context.Context) error {
@@ -370,9 +408,9 @@ func (a *App) nodeRouteApply(w http.ResponseWriter, r *http.Request, id string) 
 		var undo func() error
 		var err error
 		if review.ScopeSelection == "applied" {
-			undo, err = a.Store.ApplyNodeRouteWithRollback(review.ServiceID, "sing-box:"+id, review.Revision)
+			undo, err = a.Store.ApplyNodeRouteWithRollback(review.ServiceID, "sing-box:"+review.NodeID, review.Revision)
 		} else {
-			undo, err = a.Store.ApplyNodeRouteScopeWithRollback(review.ServiceID, "sing-box:"+id, review.scopeSources, review.Revision)
+			undo, err = a.Store.ApplyNodeRouteScopeWithRollback(review.ServiceID, "sing-box:"+review.NodeID, review.scopeSources, review.Revision)
 		}
 		if errors.Is(err, config.ErrRevisionChanged) {
 			return nil, dataplane.ErrReviewChanged
@@ -383,11 +421,15 @@ func (a *App) nodeRouteApply(w http.ResponseWriter, r *http.Request, id string) 
 		return undo, err
 	})
 	if err != nil {
+		if execution.State == "rollback-failed" {
+			// No later queued action may run on unverified cleanup. Startup owns
+			// recovery of the existing transaction journal before reopening writes.
+			a.Operations.Fence()
+		}
 		failure := classifyApplyExecutionFailure(err.Error(), execution.State)
-		writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": "NODE_APPLY_FAILED", "live_applied": false, "error": failure.Message, "failure": failure, "execution": execution, "review_required": true})
-		return
+		return serviceRuntimeOutcome{Code: "NODE_APPLY_FAILED", Message: failure.Message, Failure: &failure, Execution: &execution}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "live_applied": true, "service_id": review.ServiceID, "node_id": id, "execution": execution, "pending_changes": a.pendingChanges(), "note": "Сервис включён через выбранный узел. Рабочий маршрут прошёл контрольную проверку."})
+	return serviceRuntimeOutcome{LiveApplied: true, Execution: &execution}
 }
 
 func writeNodeApplyError(w http.ResponseWriter, code, message string) {
