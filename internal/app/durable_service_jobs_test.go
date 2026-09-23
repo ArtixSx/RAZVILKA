@@ -267,3 +267,45 @@ func TestDurableServiceBusyYieldDoesNotSpendAttemptAndQueueIsBounded(t *testing.
 		t.Fatal("invalid document")
 	}
 }
+
+func TestDurableServiceBatchesReleaseLeaseAndYieldToMaintenance(t *testing.T) {
+	a, request := durableFixture(t)
+	request.ServiceIDs = []string{"telegram", "youtube", "discord", "gemini"}
+	for _, id := range request.ServiceIDs[1:] {
+		definition := a.Catalog.Services[0]
+		definition.ID, definition.Name = id, id
+		a.Catalog.Services = append(a.Catalog.Services, definition)
+	}
+	var calls atomic.Int32
+	a.NodeChecker = jobNodeChecker(func(ctx context.Context, req dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		calls.Add(1)
+		return autofallbackResult(req, true), nil
+	})
+	j, err := a.enqueueDurableServiceJob(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if !a.runDurableServiceJob(context.Background(), time.Now().Add(time.Minute)) {
+			t.Fatal("missing batch")
+		}
+		got := durableJobAt(t, a, j.ID)
+		if got.State != "queued" || got.Cursor != i+1 || got.Attempts != 0 || calls.Load() != int32(i+1) {
+			t.Fatal("unbounded batch", got)
+		}
+		release, err := a.Operations.Exclusive(context.Background())
+		if err != nil {
+			t.Fatal("batch retained admission")
+		}
+		release()
+	}
+	if a.runDurableServiceJob(context.Background(), time.Now().Add(time.Minute)) || calls.Load() != 3 {
+		t.Fatal("maintenance starved")
+	}
+	if !a.runDurableServiceJob(context.Background(), time.Now().Add(time.Minute)) {
+		t.Fatal("remaining batch missing")
+	}
+	if got := durableJobAt(t, a, j.ID); got.State != "completed" || got.Cursor != 4 || calls.Load() != 4 {
+		t.Fatal(got)
+	}
+}

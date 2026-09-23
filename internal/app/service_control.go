@@ -52,6 +52,7 @@ type serviceControlJobRequest struct {
 	NodeIDs          []string `json:"node_ids,omitempty"`
 	durableID        uint64
 	intentHash       string
+	durableCursor    int
 }
 
 func (a *App) serviceControlMemory() map[string]any {
@@ -390,7 +391,7 @@ func (a *App) startServiceControlJob(ctx context.Context, request serviceControl
 	if request.durableID != 0 {
 		id = request.durableID
 	}
-	a.nodeChecks.job = &nodeCheckJob{ID: id, Mode: "service-" + request.Kind, State: "running", Total: len(services), StartedAt: time.Now().UTC(), Message: "Проверяем выбранные сервисы. Маршруты сохраняются.", Results: []nodeCheckItem{}, ServiceResults: []serviceControlResult{}}
+	a.nodeChecks.job = &nodeCheckJob{ID: id, Mode: "service-" + request.Kind, State: "running", Total: len(services), Completed: request.durableCursor, StartedAt: time.Now().UTC(), Message: "Проверяем выбранные сервисы. Маршруты сохраняются.", Results: []nodeCheckItem{}, ServiceResults: []serviceControlResult{}}
 	a.nodeChecks.cancel = cancel
 	done := make(chan struct{})
 	a.nodeChecks.done = done
@@ -406,7 +407,7 @@ func (a *App) runServiceControlJob(ctx context.Context, cancel context.CancelFun
 	defer cancel()
 	profile, err := a.freshNetworkProfile(ctx)
 	catHash := applyReviewHash(a.catalogSnapshot())
-	for _, service := range services {
+	for _, service := range services[request.durableCursor:] {
 		if err != nil || ctx.Err() != nil {
 			break
 		}
@@ -509,6 +510,9 @@ func (a *App) runServiceControlJob(ctx context.Context, cancel context.CancelFun
 			a.nodeChecks.serviceResults[result.ServiceID] = result
 		}
 		a.nodeChecks.mu.Unlock()
+		if request.durableID != 0 {
+			break // One service per durable dispatch; repair gets the next turn.
+		}
 	}
 	// Every checker/prober has returned and joined cleanup. Publish terminal
 	// state only after releasing admission, so its follow-up GET can read stores.
@@ -523,6 +527,9 @@ func (a *App) runServiceControlJob(ctx context.Context, cancel context.CancelFun
 			job.State, job.Message = "canceled", "Проверка остановлена; временные ресурсы очищены."
 		} else if err != nil {
 			job.State, job.Message = "failed", "Сеть или настройки изменились. Повторите проверку."
+		} else if request.durableID != 0 && job.Completed < job.Total {
+			job.State, job.Phase, job.FinishedAt = "queued", "waiting", nil
+			job.Message = "Часть сервисов проверена. Продолжим после приоритетных задач."
 		}
 		a.nodeChecks.cancel = nil
 	}

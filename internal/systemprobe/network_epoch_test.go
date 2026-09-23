@@ -51,6 +51,31 @@ func detectorForTest(source *fakeEpochSource) *epochDetector {
 	return newEpochDetector(func(context.Context) (epochSource, error) { return source, nil }, bytes.NewReader([]byte("12345678")), time.Now)
 }
 
+func TestEpochFailureDetailIsBoundedAndSurvivesObserverRestart(t *testing.T) {
+	source := &fakeEpochSource{state: fakeEpochSnapshot()}
+	d := detectorForTest(source)
+	first, err := d.fresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.drainErr = epochObservationFailure{"dns-watch-replaced", errors.New("private resolver body")}
+	if _, err := d.fresh(context.Background()); !errors.Is(err, ErrNetworkUnavailable) {
+		t.Fatal(err)
+	}
+	detail := d.diagnostic()
+	if detail.LastFailureDetail != "dns-watch-replaced" || detail.ObserverRestarts != 1 {
+		t.Fatal(detail)
+	}
+	source.drainErr = nil
+	again, err := d.fresh(context.Background())
+	if err != nil || again.ID == first.ID || d.diagnostic().ObserverRestarts != 2 || d.diagnostic().LastFailureDetail != "dns-watch-replaced" {
+		t.Fatal("observer restart lost cause or revived old proof")
+	}
+	if epochFailureDetail(errors.New("secret")) != "observation-unavailable" {
+		t.Fatal("raw error disclosure")
+	}
+}
+
 func TestEpochFreshBypassesPassiveCacheAndTracksAllSnapshotParts(t *testing.T) {
 	for _, changedPart := range []string{"source", "ipv6-default", "ipv6-address", "dns", "carrier"} {
 		t.Run(changedPart, func(t *testing.T) {

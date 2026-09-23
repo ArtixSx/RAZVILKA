@@ -234,25 +234,29 @@ func (s *linuxEpochSource) Drain(ctx context.Context, interfaces map[uint32]bool
 			continue
 		}
 		if err != nil {
-			return false, err
+			code := "netlink-receive"
+			if errors.Is(err, unix.ENOBUFS) {
+				code = "netlink-overflow"
+			}
+			return false, epochObservationFailure{code, err}
 		}
 		from, ok := sender.(*unix.SockaddrNetlink)
 		if n == 0 || flags&unix.MSG_TRUNC != 0 || !ok || from.Pid != 0 {
-			return false, ErrNetworkUnavailable
+			return false, epochObservationFailure{"netlink-datagram-invalid", ErrNetworkUnavailable}
 		}
 		bytesRead += n
 		messages, err := epochMessages(buffer[:n], binary.NativeEndian)
 		if err != nil {
-			return false, err
+			return false, epochObservationFailure{"netlink-framing", err}
 		}
 		messagesRead += len(messages)
 		if bytesRead > epochMaxDumpBytes || messagesRead > 8192 {
-			return false, ErrNetworkUnavailable
+			return false, epochObservationFailure{"netlink-event-budget", ErrNetworkUnavailable}
 		}
 		for _, message := range messages {
 			relevant, err := s.event(message, interfaces)
 			if err != nil {
-				return false, err
+				return false, epochObservationFailure{"netlink-event-invalid", err}
 			}
 			changed = changed || relevant
 			if relevant {
@@ -523,25 +527,31 @@ func (s *linuxEpochSource) drainDNS(ctx context.Context) (bool, error) {
 			continue
 		}
 		if err != nil || n == 0 {
-			return false, ErrNetworkUnavailable
+			return false, epochObservationFailure{"dns-watch-read", ErrNetworkUnavailable}
 		}
 		bytesRead += n
 		if bytesRead > 256<<10 {
-			return false, ErrNetworkUnavailable
+			return false, epochObservationFailure{"dns-event-budget", ErrNetworkUnavailable}
 		}
 		for data := buffer[:n]; len(data) > 0; {
 			if len(data) < 16 {
-				return false, ErrNetworkUnavailable
+				return false, epochObservationFailure{"dns-event-framing", ErrNetworkUnavailable}
 			}
 			wd := int(int32(binary.NativeEndian.Uint32(data[:4])))
 			mask := binary.NativeEndian.Uint32(data[4:8])
 			size := uint64(binary.NativeEndian.Uint32(data[12:16]))
-			if size > uint64(len(data)-16) || mask&(unix.IN_Q_OVERFLOW|unix.IN_IGNORED|unix.IN_UNMOUNT|unix.IN_DELETE_SELF|unix.IN_MOVE_SELF) != 0 {
-				return false, ErrNetworkUnavailable
+			if size > uint64(len(data)-16) {
+				return false, epochObservationFailure{"dns-event-framing", ErrNetworkUnavailable}
+			}
+			if mask&unix.IN_Q_OVERFLOW != 0 {
+				return false, epochObservationFailure{"dns-watch-overflow", ErrNetworkUnavailable}
+			}
+			if mask&(unix.IN_IGNORED|unix.IN_UNMOUNT|unix.IN_DELETE_SELF|unix.IN_MOVE_SELF) != 0 {
+				return false, epochObservationFailure{"dns-watch-replaced", ErrNetworkUnavailable}
 			}
 			watch := s.watches[wd]
 			if watch == nil {
-				return false, ErrNetworkUnavailable
+				return false, epochObservationFailure{"dns-watch-unknown", ErrNetworkUnavailable}
 			}
 			name := strings.TrimRight(string(data[16:16+size]), "\x00")
 			if !watch.directory || watch.names[name] {

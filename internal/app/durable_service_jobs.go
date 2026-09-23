@@ -134,6 +134,7 @@ func recoverDurableServiceJobs(doc *reconcilerDocument, now time.Time) {
 		if j.terminal() {
 			continue
 		}
+		j.Cursor = 0 // Previous-process results do not prove the current network.
 		if j.CancelRequested {
 			finishDurableJob(j, "canceled", "canceled", now)
 			j.CleanupOutcome = "startup-recovered"
@@ -339,6 +340,11 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		r.mu.Unlock()
 		return false
 	}
+	if r.durableBurst >= 3 {
+		r.durableBurst = 0
+		r.mu.Unlock()
+		return false // Give due maintenance/refill tasks a bounded opportunity.
+	}
 	index := -1
 	for i, j := range r.doc.Jobs {
 		if (j.State == "queued" || j.State == "interrupted") && !now.Before(j.NotBefore) {
@@ -380,6 +386,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	}
 	request := j.Request
 	request.durableID, request.intentHash = j.ID, j.IntentHash
+	request.durableCursor = j.Cursor
 	r.mu.Unlock()
 	done, err := a.startServiceControlJob(attempt, request, false)
 	if err == nil {
@@ -429,7 +436,11 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 			state, j.Cursor = worker.State, worker.Completed
 		}
 		a.nodeChecks.mu.Unlock()
-		if state == "completed" {
+		if state == "queued" {
+			j.State, j.Phase = "queued", "waiting"
+			j.NotBefore = time.Now().Add(time.Second)
+			j.Attempts-- // A successful bounded batch is not a failed retry.
+		} else if state == "completed" {
 			finishDurableJob(j, "completed", "", time.Now())
 		} else if state == "canceled" {
 			finishDurableJob(j, "canceled", "canceled", time.Now())
@@ -440,6 +451,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	persistCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer stop()
 	_ = a.persistReconcilerLocked(persistCtx)
+	if !errors.Is(err, operationgate.ErrBusy) {
+		r.durableBurst++
+	}
 	return err == nil || !errors.Is(err, operationgate.ErrBusy)
 }
 

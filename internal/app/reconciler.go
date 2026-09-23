@@ -55,18 +55,19 @@ type reconcilerDocument struct {
 	Jobs        []durableServiceJob           `json:"jobs,omitempty"`
 }
 type serviceReconciler struct {
-	mu          sync.Mutex
-	once        sync.Once
-	doc         reconcilerDocument
-	image       restorejournal.Image
-	path        string
-	started     bool
-	blocked     bool
-	cancel      context.CancelFunc
-	activeJobID uint64
-	stop        context.CancelFunc
-	wake        chan struct{}
-	done        chan struct{}
+	mu           sync.Mutex
+	once         sync.Once
+	doc          reconcilerDocument
+	image        restorejournal.Image
+	path         string
+	started      bool
+	blocked      bool
+	cancel       context.CancelFunc
+	activeJobID  uint64
+	durableBurst int
+	stop         context.CancelFunc
+	wake         chan struct{}
+	done         chan struct{}
 }
 
 func automationConfigFingerprint(cfg config.Config) string {

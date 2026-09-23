@@ -68,6 +68,8 @@ type NetworkEpochDiagnostic struct {
 	CallerCancellations uint64 `json:"caller_cancellations"`
 	LastFailureReason   string `json:"last_failure_reason,omitempty"`
 	LastFailureAt       string `json:"last_failure_at,omitempty"`
+	LastFailureDetail   string `json:"last_failure_detail,omitempty"`
+	ObserverRestarts    uint64 `json:"observer_restarts"`
 }
 
 func NetworkEpochStatus() NetworkEpochDiagnostic { return wanEpoch.diagnostic() }
@@ -96,6 +98,8 @@ type epochDetector struct {
 	lastChanged         time.Time
 	lastFailureReason   string
 	lastFailureAt       time.Time
+	lastFailureDetail   string
+	observerRestarts    uint64
 	lastKnown           bool
 	interfaces          map[uint32]bool
 	cache               atomic.Pointer[cachedWAN]
@@ -158,7 +162,7 @@ func (d *epochDetector) fresh(parent context.Context) (WANProfile, error) {
 	phase := "initialization"
 	publish := func(profile WANProfile) {
 		now := d.now()
-		diagnostic := NetworkEpochDiagnostic{Generation: d.generation, Reason: d.lastReason, ChangedAt: d.lastChanged.UTC().Format(time.RFC3339Nano), ObservedAt: now.UTC().Format(time.RFC3339Nano), LastFailureReason: d.lastFailureReason}
+		diagnostic := NetworkEpochDiagnostic{Generation: d.generation, Reason: d.lastReason, ChangedAt: d.lastChanged.UTC().Format(time.RFC3339Nano), ObservedAt: now.UTC().Format(time.RFC3339Nano), LastFailureReason: d.lastFailureReason, LastFailureDetail: d.lastFailureDetail, ObserverRestarts: d.observerRestarts}
 		if !d.lastFailureAt.IsZero() {
 			diagnostic.LastFailureAt = d.lastFailureAt.UTC().Format(time.RFC3339Nano)
 		}
@@ -174,6 +178,7 @@ func (d *epochDetector) fresh(parent context.Context) (WANProfile, error) {
 		profile := WANProfile{ID: "network-unknown"}
 		d.lastReason, d.lastChanged = "observation-failed-"+phase, d.now()
 		d.lastFailureReason, d.lastFailureAt = d.lastReason, d.lastChanged
+		d.lastFailureDetail = epochFailureDetail(err)
 		publish(profile)
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return profile, err
@@ -192,6 +197,7 @@ func (d *epochDetector) fresh(parent context.Context) (WANProfile, error) {
 	}
 	if d.source == nil {
 		phase = "observer-start"
+		d.observerRestarts++
 		var err error
 		d.source, err = d.factory(ctx)
 		if err != nil || d.source == nil {
@@ -265,6 +271,29 @@ func (d *epochDetector) fresh(parent context.Context) (WANProfile, error) {
 		return WANProfile{ID: "network-unknown"}, err
 	}
 	return profile, nil
+}
+
+// Fixed categories retain the cause of a lost observation without publishing
+// addresses, filenames, DNS contents, kernel packets or arbitrary error text.
+type epochObservationFailure struct {
+	code  string
+	cause error
+}
+
+func (e epochObservationFailure) Error() string { return e.code }
+func (e epochObservationFailure) Unwrap() error { return e.cause }
+func epochFailureDetail(err error) string {
+	var failure epochObservationFailure
+	if errors.As(err, &failure) {
+		return failure.code
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "deadline"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "canceled"
+	}
+	return "observation-unavailable"
 }
 
 func snapshotChangeReason(previous, current []string) string {
