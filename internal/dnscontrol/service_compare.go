@@ -34,21 +34,24 @@ type ServiceDNSComparison struct {
 	Note             string             `json:"note"`
 }
 type ServiceDNSAnswer struct {
-	ProfileID         string   `json:"profile_id"`
-	ProviderID        string   `json:"provider_id"`
-	Family            string   `json:"family"`
-	Transport         string   `json:"transport"`
-	Status            string   `json:"status"`
-	Addresses         []string `json:"addresses"`
-	AnswerFingerprint string   `json:"answer_fingerprint,omitempty"`
-	LatencyMS         int64    `json:"latency_ms"`
-	ErrorCode         string   `json:"error_code,omitempty"`
-	ResolverKind      string   `json:"resolver_kind"`
-	CNAMEChain        []string `json:"cname_chain,omitempty"`
-	TTLSeconds        *uint32  `json:"ttl_seconds,omitempty"`
-	ObservedAt        string   `json:"observed_at,omitempty"`
-	ExpiresAt         string   `json:"expires_at,omitempty"`
-	DNSSEC            string   `json:"dnssec"`
+	ProfileID          string   `json:"profile_id"`
+	ProviderID         string   `json:"provider_id"`
+	Family             string   `json:"family"`
+	Transport          string   `json:"transport"`
+	Status             string   `json:"status"`
+	Addresses          []string `json:"addresses"`
+	AnswerFingerprint  string   `json:"answer_fingerprint,omitempty"`
+	LatencyMS          int64    `json:"latency_ms"`
+	ErrorCode          string   `json:"error_code,omitempty"`
+	ResolverKind       string   `json:"resolver_kind"`
+	CNAMEChain         []string `json:"cname_chain,omitempty"`
+	TTLSeconds         *uint32  `json:"ttl_seconds,omitempty"`
+	NegativeKind       string   `json:"negative_kind,omitempty"`
+	NegativeTTLSeconds *uint32  `json:"negative_ttl_seconds,omitempty"`
+	NegativeExpiresAt  string   `json:"negative_expires_at,omitempty"`
+	ObservedAt         string   `json:"observed_at,omitempty"`
+	ExpiresAt          string   `json:"expires_at,omitempty"`
+	DNSSEC             string   `json:"dnssec"`
 }
 
 // CompareServiceDNS reuses the existing strict DoH and DNS wire validator. It
@@ -160,8 +163,13 @@ func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []strin
 			if err := check(); err != nil {
 				return out, err
 			}
-			if errors.Is(e, errDNSNoAddress) {
-				e = nil // Valid NODATA is distinct from an unavailable resolver.
+			if errors.Is(e, errDNSNoAddress) || errors.Is(e, errDNSNameError) {
+				if errors.Is(e, errDNSNameError) {
+					details.NegativeKind = "nxdomain"
+				} else {
+					details.NegativeKind = "nodata"
+				}
+				e = nil // Negative DNS answers are not an unavailable resolver.
 			}
 			a := ServiceDNSAnswer{ProfileID: c.profile.ID, ProviderID: c.provider.ID, Family: f.name, Transport: "doh", Status: "unknown", Addresses: []string{}, LatencyMS: time.Since(started).Milliseconds()}
 			a.ResolverKind = c.provider.Kind
@@ -186,7 +194,12 @@ func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []strin
 				} else {
 					a.CNAMEChain = details.CNAMEChain
 					a.TTLSeconds = details.TTLSeconds
+					a.NegativeKind = details.NegativeKind
+					a.NegativeTTLSeconds = details.NegativeTTLSeconds
 					a.ObservedAt = started.UTC().Format(time.RFC3339Nano)
+					if details.NegativeTTLSeconds != nil {
+						a.NegativeExpiresAt = started.Add(time.Duration(*details.NegativeTTLSeconds) * time.Second).UTC().Format(time.RFC3339Nano)
+					}
 					if details.TTLSeconds != nil {
 						a.ExpiresAt = started.Add(time.Duration(*details.TTLSeconds) * time.Second).UTC().Format(time.RFC3339Nano)
 					}
@@ -198,6 +211,9 @@ func (m *Manager) CompareServiceDNSGuarded(ctx context.Context, profiles []strin
 					}
 					sort.Strings(a.Addresses)
 					a.Status = "no-address"
+					if details.NegativeKind == "nxdomain" {
+						a.Status = "nxdomain"
+					}
 					if len(a.Addresses) > 0 {
 						a.Status = "resolved"
 						sum := sha256.Sum256([]byte(strings.Join(a.Addresses, "\n")))

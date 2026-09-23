@@ -17,6 +17,8 @@ type AnswerDetails struct {
 	Addresses          []netip.Addr
 	CNAMEChain         []string
 	TTLSeconds         *uint32
+	NegativeKind       string
+	NegativeTTLSeconds *uint32
 	ResolverReportedAD bool
 }
 
@@ -44,7 +46,7 @@ func exchangeCandidateDNSDetailed(parent context.Context, target dnsTarget, host
 
 func dnsAnswerDetails(query, response []byte) (AnswerDetails, error) {
 	addresses, ad, err := validateDNSAddressResponse(query, response)
-	if err != nil && !errors.Is(err, errDNSNoAddress) {
+	if err != nil && !errors.Is(err, errDNSNoAddress) && !errors.Is(err, errDNSNameError) {
 		return AnswerDetails{}, err
 	}
 	// Integrity, question, family, terminal alias and size were checked by the
@@ -54,9 +56,6 @@ func dnsAnswerDetails(query, response []byte) (AnswerDetails, error) {
 		return AnswerDetails{}, errDNSAnswer
 	}
 	out := AnswerDetails{Addresses: addresses, ResolverReportedAD: ad}
-	if errors.Is(err, errDNSNoAddress) {
-		return out, err
-	} // no fabricated negative TTL
 	type alias struct {
 		target string
 		ttl    uint32
@@ -79,6 +78,14 @@ func dnsAnswerDetails(query, response []byte) (AnswerDetails, error) {
 		terminal = step.target
 		out.CNAMEChain = append(out.CNAMEChain, strings.TrimSuffix(terminal, "."))
 	}
+	if err != nil {
+		out.NegativeKind = "nodata"
+		if errors.Is(err, errDNSNameError) {
+			out.NegativeKind = "nxdomain"
+		}
+		out.NegativeTTLSeconds = negativeAnswerTTL(message.Authorities, terminal, minimum)
+		return out, err
+	}
 	for _, rr := range message.Answers {
 		if strings.ToLower(rr.Header.Name.String()) == terminal && rr.Header.Type == message.Questions[0].Type {
 			minimum = min(minimum, effectiveDNSTTL(rr.Header.TTL))
@@ -86,4 +93,33 @@ func dnsAnswerDetails(query, response []byte) (AnswerDetails, error) {
 	}
 	out.TTLSeconds = &minimum // zero is meaningful: do not reuse it later
 	return out, nil
+}
+
+// RFC 2308 sections 3/5: only an authority SOA covering the final alias can
+// supply a negative lifetime. Do not invent one for an empty reply/referral.
+// The result describes this original-name lookup, so its alias TTL also bounds
+// reuse. Ambiguous zones/classes fail closed for caching, without claiming the
+// remote resolver is unreachable. AD remains only the resolver's statement.
+func negativeAnswerTTL(authorities []dnsmessage.Resource, terminal string, aliasTTL uint32) *uint32 {
+	var zone string
+	var ttl *uint32
+	for _, rr := range authorities {
+		soa, ok := rr.Body.(*dnsmessage.SOAResource)
+		if !ok {
+			continue
+		}
+		owner := strings.ToLower(rr.Header.Name.String())
+		if owner != "." && terminal != owner && !strings.HasSuffix(terminal, "."+owner) {
+			continue
+		}
+		if rr.Header.Class != dnsmessage.ClassINET || zone != "" && zone != owner {
+			return nil
+		}
+		zone = owner
+		value := min(effectiveDNSTTL(rr.Header.TTL), effectiveDNSTTL(soa.MinTTL), aliasTTL)
+		if ttl == nil || value < *ttl {
+			ttl = &value
+		}
+	}
+	return ttl
 }

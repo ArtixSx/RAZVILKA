@@ -93,7 +93,7 @@ func TestServiceDNSComparisonValidatesEntireBatchBeforeNetwork(t *testing.T) {
 }
 
 func TestServiceDNSComparisonValidatesRealHTTPSReplies(t *testing.T) {
-	for _, mode := range []string{"addresses", "nodata", "wrong-id", "wrong-question", "private-address", "broken-authority", "broken-additional"} {
+	for _, mode := range []string{"addresses", "nodata", "nxdomain", "wrong-id", "wrong-question", "private-address", "broken-authority", "broken-additional"} {
 		t.Run(mode, func(t *testing.T) {
 			var requests atomic.Int32
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +106,10 @@ func TestServiceDNSComparisonValidatesRealHTTPSReplies(t *testing.T) {
 				}
 				q := query.Questions[0]
 				reply := dnsmessage.Message{Header: dnsmessage.Header{ID: query.ID, Response: true}, Questions: query.Questions}
-				if mode != "nodata" {
+				if mode == "nxdomain" {
+					reply.RCode = dnsmessage.RCodeNameError
+				}
+				if mode != "nodata" && mode != "nxdomain" {
 					rr := dnsmessage.Resource{Header: dnsmessage.ResourceHeader{Name: q.Name, Type: q.Type, Class: q.Class, TTL: 30}}
 					if q.Type == dnsmessage.TypeA {
 						address := [4]byte{1, 1, 1, 1}
@@ -160,6 +163,8 @@ func TestServiceDNSComparisonValidatesRealHTTPSReplies(t *testing.T) {
 				want = "resolved"
 			case "nodata":
 				want = "no-address"
+			case "nxdomain":
+				want = "nxdomain"
 			case "private-address":
 				want = "rejected"
 			}

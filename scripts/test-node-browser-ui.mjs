@@ -114,6 +114,25 @@ assert.equal(context.browser.job.state, 'completed');
 assert.equal(calls.length, 6);
 assert.ok(calls.every(call => !call.url.includes('/apply')));
 
+// Metadata contention cannot turn a completed check into a failed check.
+for (const failureStatus of [409,503]) {
+ const prior=state.nodes;
+ handler=async url=>{
+  if (url==='/api/v1/nodes') throw Object.assign(Error('metadata busy'),{status:failureStatus,payload:{code:'RESTORE_OPERATION_BUSY'}});
+  if (url==='/api/v1/node-feeds') return {...state.nodeFeeds,revision:failureStatus};
+  return readAPI(url);
+ };
+ await context.pollNodeBrowserChecks();
+ assert.equal(context.browser.job.state,'completed');
+ assert.equal(state.nodes,prior,'failed registry read cleared retained nodes');
+ assert.equal(state.nodeFeeds.revision,failureStatus,'unrelated successful read discarded');
+ assert.doesNotMatch($('#nodeBatchMessage').textContent,/Не удалось обновить проверку/);
+ assert.equal($('#nodeBrowserReadNotice').hidden,false);
+ if(failureStatus===409)assert.match($('#nodeBrowserReadNotice').textContent,/после текущей операции/);
+}
+handler=async url=>readAPI(url);await context.pollNodeBrowserChecks();
+assert.equal($('#nodeBrowserReadNotice').hidden,true,'notice survived successful refresh');
+
 // Saved private URL is cleared; only the source identifier is used for refresh.
 $('#nodeFeedPreset').value = 'custom'; $('#nodeFeedURL').value = 'https://example.org/sub?token=private';
 $('#nodeFeedName').value = 'Личная'; $('#nodeFeedInterval').value = '360'; $('#nodeFeedLimit').value = '64'; $('#nodeFeedPartial').checked = true;

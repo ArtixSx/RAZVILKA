@@ -23,6 +23,8 @@ function stopNodeBrowserRefresh(clearSession = false) {
     nodeBrowser.authRequired = true;
     nodeBrowser.job = null;
     nodeBrowser.pings = [];
+    $('#nodeBrowserReadNotice').textContent = '';
+    $('#nodeBrowserReadNotice').hidden = true;
     $('#nodeFeedURL').value = '';
     $('#nodeQuickImportText').value = '';
     $('#nodeQuickImportDialog').close();
@@ -308,11 +310,26 @@ async function pollNodeBrowserChecks() {
       state.nodeAutofallback = fallback;
       const running = ['running', 'canceling'].includes(nodeBrowser.job?.state);
       if (running || fallback.active) delay = 1500;
+      $('#nodeBrowserReadNotice').hidden = true;
+      $('#nodeBrowserReadNotice').textContent = '';
       // A service checker owns exclusive admission until cleanup completes.
       if (!fallback.active && (!running || nodeBrowser.job.mode !== 'service')) {
-        const [nodes, routes, feeds] = await Promise.all([api('/api/v1/nodes'), api('/api/v1/routes/options'), api('/api/v1/node-feeds')]);
+        const reads = await Promise.allSettled([api('/api/v1/nodes'), api('/api/v1/routes/options'), api('/api/v1/node-feeds')]);
         if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
-        state.nodes = nodes; state.routeOptions = routes; state.nodeFeeds = feeds;
+        const failed = reads.filter(row => row.status === 'rejected');
+        const unauthorized = failed.find(row => row.reason?.status === 401);
+        if (unauthorized) throw unauthorized.reason;
+        // Failure of catalog metadata must not overwrite an accepted job's
+        // progress. Keep prior data for failed parts; expiry still advances.
+        ['nodes','routeOptions','nodeFeeds'].forEach((key,index) => {
+          if (reads[index].status === 'fulfilled') state[key] = reads[index].value;
+        });
+        if (failed.length) {
+          const busy = failed.every(row => row.reason?.status === 409 && row.reason?.payload?.code === 'RESTORE_OPERATION_BUSY');
+          $('#nodeBrowserReadNotice').textContent = busy ? 'Список подключений обновится после текущей операции. Состояние задания показано отдельно.' : 'Часть списка подключений не обновилась. Сохранённые данные показаны до следующей попытки.';
+          $('#nodeBrowserReadNotice').hidden = false;
+          delay = 4000;
+        }
       }
       renderNodes();
     } catch (error) {

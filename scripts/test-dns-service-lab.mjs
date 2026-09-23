@@ -15,6 +15,11 @@ for(const [name,args] of [ ['no consent',['youtube',['xbox-dns'],1,false]],['no 
 const result={service_verified:false,route_verified:false,eligible_for_apply:false,results:[{provider_id:'xbox-dns',family:'ipv4',status:'resolved',addresses:['<svg/onload=alert(1)>']} ]};
 test('DNS result cannot be service PASS',()=>assert.match(m.resultMarkup(result),/не подтверждение/));
 test('escape data',()=>assert.ok(!m.resultMarkup(result).includes('<svg/onload')));
+test('NXDOMAIN is a DNS answer, not a connection error',()=>{
+ const html=m.resultMarkup({...result,results:[{status:'nxdomain',negative_kind:'nxdomain',negative_ttl_seconds:30,addresses:[]}]});
+ assert.match(html,/Домен не существует по ответу DNS/);assert.match(html,/Срок отрицательного ответа: 30 с/);assert.ok(!html.includes('Запрос не завершён'));
+});
+test('no fabricated negative lifetime without SOA',()=>assert.ok(!m.resultMarkup({...result,results:[{status:'no-address',negative_kind:'nodata',addresses:[]}]}).includes('Срок отрицательного')));
 test('explain local resolver failure without blaming the site',()=>assert.match(m.resultMarkup({...result,results:[{status:'error',addresses:[],error_code:'DNS_BOOTSTRAP_FAILED'}]}),/Локальный DNS не смог найти адрес провайдера/));
 for(const key of ['service_verified','route_verified','eligible_for_apply'])test('reject claimed '+key,()=>assert.throws(()=>m.resultMarkup({...result,[key]:true})));
 test('missing result',()=>assert.throws(()=>m.resultMarkup({})));

@@ -119,3 +119,17 @@ func TestDNSAddressComparisonStopsAfterCanceledProbe(t *testing.T) {
 		t.Fatal("partial canceled result published", checks, err, calls)
 	}
 }
+
+func TestDNSNegativeAnswersDoNotStartHTTPSProbe(t *testing.T) {
+	a := &App{}
+	a.dnsAddressProbe = func(context.Context, catalog.Service, netip.Addr) routeprobe.DNSAddressResult {
+		t.Fatal("negative DNS answer started a connection")
+		return routeprobe.DNSAddressResult{}
+	}
+	for _, status := range []string{"nxdomain", "no-address", "error"} {
+		checks, err := a.compareDNSAddresses(context.Background(), catalog.Service{}, dnscontrol.ServiceDNSComparison{Results: []dnscontrol.ServiceDNSAnswer{{Status: status}}}, func(c context.Context) error { return c.Err() })
+		if err != nil || len(checks) != 0 {
+			t.Fatal(status, checks, err)
+		}
+	}
+}

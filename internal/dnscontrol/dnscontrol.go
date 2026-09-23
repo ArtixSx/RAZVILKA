@@ -29,6 +29,7 @@ const endpointProbeTimeout = 5 * time.Second
 
 var errDNSAnswer = errors.New("DNS response failed integrity checks")
 var errDNSNoAddress = errors.New("DNS response contains no addresses")
+var errDNSNameError = errors.New("DNS response reports a nonexistent name")
 
 type Provider struct {
 	Kind                   string        `json:"kind"`
@@ -877,9 +878,6 @@ func validateDNSAddressResponse(query, response []byte) ([]netip.Addr, bool, err
 	if !header.Response || header.ID != queryHeader.ID || header.Truncated || header.OpCode != 0 {
 		return nil, false, errDNSAnswer
 	}
-	if header.RCode != dnsmessage.RCodeSuccess {
-		return nil, false, fmt.Errorf("DNS server returned %s", header.RCode)
-	}
 	responseQuestions, err := parser.AllQuestions()
 	if err != nil || len(responseQuestions) != 1 || !strings.EqualFold(responseQuestions[0].Name.String(), queryQuestions[0].Name.String()) || responseQuestions[0].Type != queryQuestions[0].Type || responseQuestions[0].Class != queryQuestions[0].Class {
 		return nil, false, errDNSAnswer
@@ -895,6 +893,11 @@ func validateDNSAddressResponse(query, response []byte) ([]netip.Addr, bool, err
 	}
 	if _, err := parser.AllAdditionals(); err != nil {
 		return nil, false, errDNSAnswer
+	}
+	// Even negative/error replies must match the entire query and be well formed.
+	// NXDOMAIN is a DNS result, not a transport failure or a usable address.
+	if header.RCode != dnsmessage.RCodeSuccess && header.RCode != dnsmessage.RCodeNameError {
+		return nil, false, fmt.Errorf("DNS server returned %s", header.RCode)
 	}
 	aliases := map[string]string{}
 	for _, answer := range answers {
@@ -940,8 +943,14 @@ func validateDNSAddressResponse(query, response []byte) ([]netip.Addr, bool, err
 	if len(addresses) > 32 {
 		return nil, false, errDNSAnswer
 	}
+	if header.RCode == dnsmessage.RCodeNameError {
+		if len(addresses) != 0 {
+			return nil, false, errDNSAnswer
+		}
+		return nil, header.AuthenticData, errDNSNameError
+	}
 	if len(addresses) == 0 {
-		return nil, false, errDNSNoAddress
+		return nil, header.AuthenticData, errDNSNoAddress
 	}
 	return addresses, header.AuthenticData, nil
 }
