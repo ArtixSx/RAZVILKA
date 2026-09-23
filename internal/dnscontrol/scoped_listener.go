@@ -30,6 +30,7 @@ func (r *ScopedDNSResolver) Serve(ctx context.Context, udp *net.UDPConn, tcp *ne
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer r.cache.clear()
 	defer udp.Close()
 	defer tcp.Close()
 	var workers sync.WaitGroup

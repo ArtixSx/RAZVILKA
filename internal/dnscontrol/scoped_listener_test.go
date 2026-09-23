@@ -21,18 +21,28 @@ func scopedSockets(t *testing.T, address string) (*net.UDPConn, *net.TCPListener
 	if err != nil {
 		t.Fatal(err)
 	}
-	tcp, err := net.ListenTCP("tcp", a)
-	if err != nil {
-		t.Fatal(err)
+	// The ephemeral TCP and UDP namespaces differ (including Windows reserved
+	// ranges). Reserve UDP first and retry a collision only when the caller
+	// requested port zero. An explicit native-canary port must never be changed.
+	for attempt := 0; attempt < 16; attempt++ {
+		udp, listenErr := net.ListenUDP("udp", &net.UDPAddr{IP: a.IP, Port: a.Port})
+		if listenErr != nil {
+			t.Fatal(listenErr)
+		}
+		actual := udp.LocalAddr().(*net.UDPAddr)
+		tcp, listenErr := net.ListenTCP("tcp", &net.TCPAddr{IP: actual.IP, Port: actual.Port})
+		if listenErr == nil {
+			t.Cleanup(func() { _ = tcp.Close(); _ = udp.Close() })
+			return udp, tcp
+		}
+		_ = udp.Close()
+		err = listenErr
+		if a.Port != 0 {
+			break
+		}
 	}
-	t.Cleanup(func() { _ = tcp.Close() })
-	actual := tcp.Addr().(*net.TCPAddr)
-	udp, err := net.ListenUDP("udp", &net.UDPAddr{IP: actual.IP, Port: actual.Port})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = udp.Close() })
-	return udp, tcp
+	t.Fatal(err)
+	return nil, nil
 }
 
 func scopedTCPReply(t *testing.T, conn net.Conn, query []byte) dnsmessage.Message {
@@ -98,7 +108,7 @@ func TestScopedListenerUDPTruncationTCPFramingRefusalAndShutdown(t *testing.T) {
 		t.Fatal(full)
 	}
 	denied := scopedTCPReply(t, connection, scopedQuery(t, "other.example", dnsmessage.TypeA))
-	if denied.RCode != dnsmessage.RCodeRefused || calls.Load() != 2 {
+	if denied.RCode != dnsmessage.RCodeRefused || calls.Load() != 1 {
 		t.Fatal("scope widened", denied, calls.Load())
 	}
 	// A partial frame stays idle; shutdown must join it without waiting for
@@ -238,10 +248,20 @@ func TestScopedDNSLiveClientCanary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var upstream atomic.Uint64
+	for key, choice := range r.choices {
+		exchange := choice.target.detailedDoH
+		choice.target.detailedDoH = func(ctx context.Context, endpoint string, query []byte, trusted bool) (dohResponse, error) {
+			upstream.Add(1)
+			return exchange(ctx, endpoint, query, trusted)
+		}
+		r.choices[key] = choice
+	}
 	udp, tcp := scopedSockets(t, os.Getenv("RAZVILKA_TEST_DNS_LISTEN"))
 	t.Log("scoped DNS canary listening", tcp.Addr().String())
 	if err := r.Serve(ctx, udp, tcp); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
 	t.Log("scoped DNS canary sockets and workers closed")
+	t.Logf("scoped DNS canary upstream exchanges: %d; retained entries: %d", upstream.Load(), len(r.cache.entries))
 }

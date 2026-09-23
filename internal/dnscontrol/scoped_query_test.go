@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/netip"
 	"testing"
+	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
 )
@@ -22,6 +23,8 @@ func scopedFixture(t *testing.T) (*ScopedDNSResolver, scopedDNSKey) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	now := time.Now()
+	r.cache.now = func() time.Time { return now }
 	return r, scopedDNSKey{client, "example.com"}
 }
 
@@ -68,6 +71,7 @@ func scopedPack(t *testing.T, m dnsmessage.Message) []byte {
 }
 
 func scopedExchange(r *ScopedDNSResolver, key scopedDNSKey, fn func(context.Context, []byte) (dohResponse, error)) {
+	r.cache.clear() // this helper replaces the test's upstream identity
 	choice := r.choices[key]
 	choice.target.detailedDoH = func(ctx context.Context, _ string, q []byte, _ bool) (dohResponse, error) { return fn(ctx, q) }
 	r.choices[key] = choice

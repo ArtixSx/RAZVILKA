@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"reflect"
 	"strings"
+	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
 )
@@ -40,6 +41,7 @@ type ScopedDNSResolver struct {
 	manager *Manager
 	choices map[scopedDNSKey]scopedDNSChoice
 	guard   func(context.Context) error
+	cache   scopedAnswerCache
 }
 
 func (m *Manager) NewScopedDNSResolver(bindings []ClientDNSBinding, guard func(context.Context) error) (*ScopedDNSResolver, error) {
@@ -90,7 +92,7 @@ func (m *Manager) NewScopedDNSResolver(bindings []ClientDNSBinding, guard func(c
 // Resolve forwards the original client flags, question and EDNS DO bit. It
 // preserves authenticated DNS data rather than synthesizing A/AAAA records.
 // Unknown types/options are explicitly refused by this first scoped executor.
-func (r *ScopedDNSResolver) Resolve(ctx context.Context, client netip.Addr, query []byte) ([]byte, error) {
+func (r *ScopedDNSResolver) Resolve(ctx context.Context, client netip.Addr, query []byte) (_ []byte, resultErr error) {
 	message, _, err := scopedDNSQuestion(query)
 	if err != nil {
 		return nil, err
@@ -100,31 +102,31 @@ func (r *ScopedDNSResolver) Resolve(ctx context.Context, client netip.Addr, quer
 	if !ok {
 		return nil, ErrScopedDNS
 	}
-	check := func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := r.guard(ctx); err != nil {
-			return err
-		}
-		r.manager.mu.RLock()
-		current, exists := providerByIDFor(choice.provider.ID, r.manager.doc)
-		r.manager.mu.RUnlock()
-		if !exists || !reflect.DeepEqual(current, choice.provider) {
-			return ErrServiceDNSChanged
-		}
-		return nil
-	}
-	if err := check(); err != nil {
+	if err := r.check(ctx, choice); err != nil {
 		return nil, err
 	}
+	cacheKey, identity := scopedAnswerIdentity(key, message, query)
+	ticket, started, cached := r.cache.begin(cacheKey, identity, message.ID)
+	if cached != nil {
+		if err := r.check(ctx, choice); err != nil {
+			return nil, err
+		}
+		return cached, nil
+	}
+	// Record a failure without extending the previous answer's expiry/grace.
+	var accepted bool
+	defer func() {
+		if !accepted {
+			r.cache.fail(cacheKey, ticket, resultErr)
+		}
+	}()
 	bounded, cancel := context.WithTimeout(ctx, endpointProbeTimeout)
 	defer cancel()
 	response, err := choice.target.detailedDoH(bounded, choice.target.endpoint, query, false)
 	if err != nil {
 		return nil, err
 	}
-	if err := check(); err != nil {
+	if err = r.check(ctx, choice); err != nil {
 		return nil, err
 	}
 	_, _, err = validateDNSAddressResponse(query, response.wire)
@@ -156,7 +158,53 @@ func (r *ScopedDNSResolver) Resolve(ctx context.Context, client netip.Addr, quer
 			}
 		}
 	}
-	return ageDNSWire(response.wire, response.age, negative)
+	wire, err := ageDNSWire(response.wire, response.age, negative)
+	if err != nil {
+		return nil, err
+	}
+	// The client and ledger use the same capped lifetime. Header-only edits
+	// preserve signed RDATA and never modify the EDNS flags.
+	limit := scopedCacheTTL
+	if negative {
+		limit = scopedNegativeTTL
+	}
+	offsets, err := dnsWireTTLOffsets(wire)
+	if err != nil {
+		return nil, err
+	}
+	for _, offset := range offsets {
+		ttl := binary.BigEndian.Uint32(wire[offset:])
+		binary.BigEndian.PutUint32(wire[offset:], min(ttl, uint32(limit/time.Second)))
+	}
+	details, err := dnsAnswerDetails(query, wire)
+	if err != nil && !scopedNegative(err) {
+		return nil, err
+	}
+	if err = r.check(ctx, choice); err != nil {
+		return nil, err
+	}
+	r.cache.accept(cacheKey, identity, ticket, started, wire, details)
+	accepted = true
+	elapsed := max(time.Duration(0), r.cache.clock().Sub(started))
+	return ageDNSWire(wire, uint64((elapsed+time.Second-1)/time.Second), negative)
+}
+
+func (r *ScopedDNSResolver) check(ctx context.Context, choice scopedDNSChoice) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := r.guard(ctx); err != nil {
+		r.cache.clear()
+		return err
+	}
+	r.manager.mu.RLock()
+	current, exists := providerByIDFor(choice.provider.ID, r.manager.doc)
+	r.manager.mu.RUnlock()
+	if !exists || !reflect.DeepEqual(current, choice.provider) {
+		r.cache.clear()
+		return ErrServiceDNSChanged
+	}
+	return nil
 }
 
 func scopedDNSQuestion(wire []byte) (dnsmessage.Message, int, error) {
