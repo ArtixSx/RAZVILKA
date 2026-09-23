@@ -3555,6 +3555,11 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 }
 
 func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
+	// The versioned LAN intent is preserved, but must not be silently ignored
+	// by legacy adapters before the unified scope/DNS executor is integrated.
+	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil {
+		return dataplane.Plan{}, errors.New("NETWORK_POLICY_EXECUTOR_REQUIRED: единые исключения LAN требуют совместного исполнителя маршрутов и DNS; прежний путь сохранён")
+	}
 	cfg = configForChangeScope(cfg, scope)
 	networkProfile := ""
 	routes := make([]dataplane.Route, 0)
