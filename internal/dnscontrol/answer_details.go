@@ -37,11 +37,24 @@ func exchangeCandidateDNSDetailed(parent context.Context, target dnsTarget, host
 	if err != nil {
 		return AnswerDetails{}, err
 	}
-	response, err := target.probe(ctx, target.endpoint, query, target.trustedLocal)
+	var response []byte
+	var age uint64
+	if target.detailedDoH != nil {
+		var httpResponse dohResponse
+		httpResponse, err = target.detailedDoH(ctx, target.endpoint, query, target.trustedLocal)
+		response, age = httpResponse.wire, httpResponse.age
+	} else {
+		response, err = target.probe(ctx, target.endpoint, query, target.trustedLocal)
+	}
 	if err != nil {
 		return AnswerDetails{}, err
 	}
-	return dnsAnswerDetails(query, response)
+	details, err := dnsAnswerDetails(query, response)
+	// RFC 8484 section 5.1: cached HTTP age consumes positive AND negative
+	// DNS lifetimes. Saturate at zero; an expired reply grants no new proof.
+	details.TTLSeconds = remainingDNSTTL(details.TTLSeconds, age)
+	details.NegativeTTLSeconds = remainingDNSTTL(details.NegativeTTLSeconds, age)
+	return details, err
 }
 
 func dnsAnswerDetails(query, response []byte) (AnswerDetails, error) {
