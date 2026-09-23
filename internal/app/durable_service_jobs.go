@@ -49,6 +49,7 @@ type durableServiceJob struct {
 	DNSCode         string                   `json:"dns_code,omitempty"`
 	NodeCode        string                   `json:"node_code,omitempty"`
 	NodeReview      *durableNodeReview       `json:"node_review,omitempty"`
+	CheckNetwork    string                   `json:"check_network,omitempty"`
 }
 
 func (j durableServiceJob) terminal() bool {
@@ -100,6 +101,15 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 	p := &nodeCheckJob{ID: j.ID, Mode: "service-" + j.Request.Kind, State: j.State, Phase: j.Phase,
 		ErrorCode: code, Total: total, Completed: completed,
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
+	if j.Request.Kind == "node-check" {
+		p.Mode, p.Total = j.Request.NodeCheckMode, len(j.Request.NodeIDs)
+		if len(j.Request.ServiceIDs) == 1 {
+			p.ServiceID = j.Request.ServiceIDs[0]
+		}
+		if j.State == "completed" {
+			p.Message = "Проверка подключений завершена. Маршруты не применялись; результаты имеют ограниченный срок."
+		}
+	}
 	if j.Request.Kind == "dns-compare" && validDurableDNSRequest(j.Request) {
 		revision := *j.Request.ExpectedRevision
 		p.DNSRequest = &serviceDNSCompareRequest{ServiceID: j.Request.ServiceIDs[0], ProfileIDs: slices.Clone(j.Request.DNS.ProfileIDs), ConfigRevision: &revision, VerifyService: j.Request.DNS.VerifyService}
@@ -115,6 +125,9 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 	}
 	ids, keys := map[uint64]bool{}, map[string]bool{}
 	for _, j := range jobs {
+		if j.CheckNetwork != "" && (j.Request.Kind != "node-check" || !validJobHash(j.CheckNetwork)) {
+			return restorejournal.ErrInvalid
+		}
 		if !validDurableNodeReview(j) {
 			return restorejournal.ErrInvalid
 		}
@@ -124,7 +137,7 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 		if !validRuntimeJobCode(j.RuntimeCode) || j.RuntimeCode != "" && !isRuntimeJob(j.Request.Kind) {
 			return restorejournal.ErrInvalid
 		}
-		if j.ID == 0 || j.ID >= 1<<49 || ids[j.ID] || keys[j.KeyHash] || !validJobHash(j.KeyHash) || !validJobHash(j.RequestHash) || !validJobHash(j.IntentHash) || j.Request.IdempotencyKey != "" || !validDurableRequest(j.Request) || j.Attempts < 0 || j.Attempts > 3 || j.Cursor < 0 || j.Cursor > len(j.Request.ServiceIDs) || j.CreatedAt.IsZero() || !j.ExpiresAt.After(j.CreatedAt) || j.ExpiresAt.Sub(j.CreatedAt) > 24*time.Hour {
+		if j.ID == 0 || j.ID >= 1<<49 || ids[j.ID] || keys[j.KeyHash] || !validJobHash(j.KeyHash) || !validJobHash(j.RequestHash) || !validJobHash(j.IntentHash) || j.Request.IdempotencyKey != "" || !validDurableRequest(j.Request) || j.Attempts < 0 || j.Attempts > 3 || j.Cursor < 0 || j.Cursor > durableJobTotal(j.Request) || j.CreatedAt.IsZero() || !j.ExpiresAt.After(j.CreatedAt) || j.ExpiresAt.Sub(j.CreatedAt) > 24*time.Hour {
 			return restorejournal.ErrInvalid
 		}
 		if !slices.Contains([]string{"queued", "running", "canceling", "interrupted", "completed", "failed", "canceled"}, j.State) || !slices.Contains([]string{"waiting", "checking", "cleanup", "done"}, j.Phase) || !slices.Contains([]string{"", "accepted", "startup-reconcile", "settings-changed", "expired", "attempt-limit", "check-failed", "canceled", "cleanup-unverified", "interrupted"}, j.Reason) || !slices.Contains([]string{"not-started", "pending", "joined", "startup-recovered", "unverified"}, j.CleanupOutcome) {
@@ -145,6 +158,12 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 }
 
 func validDurableRequest(r serviceControlJobRequest) bool {
+	if r.Kind == "node-check" {
+		return validDurableNodeCheck(r)
+	}
+	if r.NodeCheckMode != "" {
+		return false
+	}
 	if r.Kind == "node-apply" {
 		return validDurableNodeApply(r)
 	}
@@ -202,6 +221,7 @@ func recoverDurableServiceJobs(doc *reconcilerDocument, now time.Time) {
 			continue
 		}
 		j.Cursor = 0 // Previous-process results do not prove the current network.
+		j.CheckNetwork = ""
 		if j.CancelRequested {
 			finishDurableJob(j, "canceled", "canceled", now)
 			j.CleanupOutcome = "startup-recovered"
@@ -308,6 +328,13 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 			}
 		}
 		intent = durableServiceIntentHash(cfg, services)
+		if request.Kind == "node-check" {
+			err = a.validateDurableNodeCheckSelection(ctx, request, services)
+			if err != nil {
+				release()
+				return durableServiceJob{}, err
+			}
+		}
 		if request.Kind == "dns-compare" {
 			intent, err = a.durableDNSIntentHash(cfg, services, request.DNS)
 			if err != nil {
@@ -396,6 +423,10 @@ func (a *App) addDurableServiceJobs(view map[string]any) {
 	var pending, latest *nodeCheckJob
 	for _, j := range r.doc.Jobs {
 		p := j.presentation()
+		if current, _ := view["job"].(*nodeCheckJob); current != nil && current.ID == j.ID && j.Request.Kind == "node-check" {
+			p.Results = slices.Clone(current.Results)
+			p.Passed, p.Failed, p.Inconclusive, p.Skipped = current.Passed, current.Failed, current.Inconclusive, current.Skipped
+		}
 		if j.Request.Kind == "dns-compare" && j.State == "completed" {
 			p.DNSResult = slices.Clone(r.dnsResults[j.ID])
 		}
@@ -406,14 +437,23 @@ func (a *App) addDurableServiceJobs(view map[string]any) {
 		}
 	}
 	view["durable_jobs"] = jobs
+	view["queue_blocked"] = r.blocked
 	current, _ := view["job"].(*nodeCheckJob)
 	if current != nil && (current.State == "running" || current.State == "canceling") {
 		return
 	}
 	if pending != nil {
 		view["job"] = pending
-	} else if latest != nil && (current == nil || current.ID != latest.ID && latest.StartedAt.After(current.StartedAt)) {
+	} else if latest != nil && (current == nil || current.ID == latest.ID || latest.StartedAt.After(current.StartedAt)) {
 		view["job"] = latest
+	}
+	if r.blocked {
+		if current, _ := view["job"].(*nodeCheckJob); current != nil {
+			copy := *current
+			copy.State, copy.ErrorCode = "failed", "JOB_STORAGE_UNAVAILABLE"
+			copy.Message = "Сохранённое состояние очереди не подтверждено. Новые задания приостановлены; откройте журнал. Результат запуска не выдан за сохранённый."
+			view["job"] = &copy
+		}
 	}
 }
 
@@ -484,6 +524,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	}
 	index := -1
 	for i, j := range r.doc.Jobs {
+		if j.Request.Kind == "node-check" && a.bulkRecoveryDueLocked(now) {
+			continue
+		}
 		if (j.State == "queued" || j.State == "interrupted") && !now.Before(j.NotBefore) {
 			index = i
 			break
@@ -517,6 +560,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	if j.Request.Kind == "dns-compare" {
 		budget = 75 * time.Second
 	}
+	if j.Request.Kind == "node-check" {
+		budget = 75 * time.Second
+	}
 	j.State, j.Phase, j.CleanupOutcome = "running", "checking", "pending"
 	j.Deadline = minTime(now.Add(budget), j.ExpiresAt)
 	j.Attempts++
@@ -534,16 +580,20 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	request.durableID, request.intentHash = j.ID, j.IntentHash
 	request.durableCursor = j.Cursor
 	nodeReview := j.NodeReview // Immutable copy allocated during acceptance.
+	checkNetwork := j.CheckNetwork
 	r.mu.Unlock()
 	var err error
 	var runtimeOutcome serviceRuntimeOutcome
 	var dnsResult *serviceDNSCompareOutput
+	var nodeBatch durableNodeCheckResult
 	if isRuntimeJob(request.Kind) {
 		runtimeOutcome, err = a.runDurableRuntimeJob(attempt, request)
 	} else if request.Kind == "node-apply" {
 		runtimeOutcome, err = a.runDurableNodeApply(attempt, request, nodeReview)
 	} else if request.Kind == "dns-compare" {
 		dnsResult, err = a.runDurableDNSJob(attempt, request)
+	} else if request.Kind == "node-check" {
+		nodeBatch, err = a.runDurableNodeCheck(attempt, request, checkNetwork)
 	} else {
 		var done <-chan struct{}
 		done, err = a.startServiceControlJob(attempt, request, false)
@@ -597,6 +647,16 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	} else if request.Kind == "dns-compare" {
 		j.Cursor = 1
 		finishDurableJob(j, "completed", "", time.Now())
+	} else if request.Kind == "node-check" {
+		j.Cursor++
+		j.CheckNetwork = nodeBatch.network
+		if j.Cursor < len(request.NodeIDs) {
+			j.State, j.Phase = "queued", "waiting"
+			j.NotBefore = time.Now().Add(time.Second)
+			j.Attempts--
+		} else {
+			finishDurableJob(j, "completed", "", time.Now())
+		}
 	} else if isRuntimeJob(request.Kind) {
 		j.RuntimeCode = runtimeOutcome.Code
 		finishDurableJob(j, "failed", "check-failed", time.Now())

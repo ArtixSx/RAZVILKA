@@ -22,15 +22,17 @@ import (
 const maxNodeCheckBatch = 64
 
 type nodeCheckJobRequest struct {
-	Scope      string                `json:"scope,omitempty"`
-	Generation uint64                `json:"generation,omitempty"`
-	NodeIDs    []string              `json:"node_ids"`
-	ServiceID  string                `json:"service_id"`
-	Mode       string                `json:"mode"`
-	Feed       *providerfeed.Request `json:"feed,omitempty"`
-	FeedID     string                `json:"feed_id,omitempty"`
-	Limit      int                   `json:"limit,omitempty"`
-	Confirm    string                `json:"confirm,omitempty"`
+	IdempotencyKey   string                `json:"idempotency_key,omitempty"`
+	ExpectedRevision *uint64               `json:"expected_revision,omitempty"`
+	Scope            string                `json:"scope,omitempty"`
+	Generation       uint64                `json:"generation,omitempty"`
+	NodeIDs          []string              `json:"node_ids"`
+	ServiceID        string                `json:"service_id"`
+	Mode             string                `json:"mode"`
+	Feed             *providerfeed.Request `json:"feed,omitempty"`
+	FeedID           string                `json:"feed_id,omitempty"`
+	Limit            int                   `json:"limit,omitempty"`
+	Confirm          string                `json:"confirm,omitempty"`
 }
 
 type nodeCheckItem struct {
@@ -164,6 +166,14 @@ func (a *App) nodeCheckJobCurrent(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Укажите идентификатор проверочной задачи."})
 			return
 		}
+		if found, err := a.cancelDurableServiceJob(r.Context(), requestedID); found || err != nil {
+			if err != nil {
+				a.writeDurableJobFailure(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, a.nodeCheckCurrentView())
+			return
+		}
 		a.nodeChecks.mu.Lock()
 		if a.nodeChecks.job == nil || a.nodeChecks.job.ID != requestedID {
 			a.nodeChecks.mu.Unlock()
@@ -180,7 +190,7 @@ func (a *App) nodeCheckJobCurrent(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.nodeCheckSnapshot())
+	writeJSON(w, http.StatusOK, a.nodeCheckCurrentView())
 }
 
 func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
@@ -206,6 +216,10 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.Generation != 0 || !validNodeCheckJobRequest(request) {
 		http.Error(w, "Выберите от 1 до 64 узлов или действие для всего VLESS-каталога.", http.StatusBadRequest)
+		return
+	}
+	if request.Feed == nil && request.FeedID == "" && (a.managedReconcilerActive() || request.IdempotencyKey != "" || request.ExpectedRevision != nil) {
+		a.acceptDurableNodeChecks(w, r, request)
 		return
 	}
 	enter := a.Operations.Enter

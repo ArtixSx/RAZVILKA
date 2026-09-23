@@ -61,6 +61,27 @@ func TestServiceQueuesWaitForInitialReconcilerWithDisabledFeatures(t *testing.T)
 			if err := a.loadReconcilerLocked(context.Background()); err != nil {
 				t.Fatal(err)
 			}
+			if scope == "selected" {
+				calls := 0
+				a.NodeChecker = jobNodeChecker(func(ctx context.Context, q dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+					calls++
+					return bulkTestResult(q), nil
+				})
+				revision := a.Store.Get().Revision
+				id := enqueueNodeFixture(t, a, nodeCheckJobRequest{NodeIDs: ids, Mode: "service", ServiceID: "telegram", ExpectedRevision: &revision, IdempotencyKey: "initial-selected-durable"})
+				if a.runDurableServiceJob(context.Background(), time.Now()) || calls != 0 {
+					t.Fatal("queue overtook initial recovery")
+				}
+				a.reconcileRound(context.Background(), time.Now())
+				if len(a.reconciler.doc.Operations) != 5 || a.bulkRecoveryDue(time.Now()) {
+					t.Fatal("disabled operations retained priority")
+				}
+				a.reconcileRound(context.Background(), time.Now())
+				if j := durableJobAt(t, a, id); j.State != "completed" || j.Cursor != 1 || calls != 1 {
+					t.Fatal("durable queue did not resume", j)
+				}
+				return
+			}
 			waiting, resume := make(chan struct{}), make(chan struct{})
 			var once sync.Once
 			a.nodeChecks.bulkWait = func(ctx context.Context, _ time.Duration) error {

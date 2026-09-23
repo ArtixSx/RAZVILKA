@@ -148,6 +148,10 @@ func (a *App) bulkWait(ctx context.Context, delay time.Duration) error {
 func (a *App) bulkRecoveryDue(now time.Time) bool {
 	a.reconciler.mu.Lock()
 	defer a.reconciler.mu.Unlock()
+	return a.bulkRecoveryDueLocked(now)
+}
+
+func (a *App) bulkRecoveryDueLocked(now time.Time) bool {
 	r := &a.reconciler
 	if !r.started || r.blocked {
 		return false

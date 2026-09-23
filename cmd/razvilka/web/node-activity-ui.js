@@ -8,7 +8,7 @@ function nodeActivityVisible() {
 }
 
 function nodeActivityActive() {
-  return Boolean(nodeActivity.fallback?.active || (nodeActivity.checks?.mode === 'service' && ['running', 'canceling'].includes(nodeActivity.checks.state)));
+  return Boolean(nodeActivity.fallback?.active || (nodeActivity.checks?.mode === 'service' && ['queued', 'interrupted', 'running', 'canceling'].includes(nodeActivity.checks.state)));
 }
 
 function renderNodeActivity() {
@@ -17,7 +17,7 @@ function renderNodeActivity() {
   $('#nodeActivityNotice').hidden = !active && !paused;
   $('#nodeActivityCancel').hidden = !active;
   $('#nodeActivityCancel').disabled = nodeActivity.canceling;
-  const batch = nodeActivity.checks?.mode === 'service' && ['running', 'canceling'].includes(nodeActivity.checks.state);
+  const batch = nodeActivity.checks?.mode === 'service' && ['queued', 'interrupted', 'running', 'canceling'].includes(nodeActivity.checks.state);
   $('#nodeActivityTitle').textContent = active ? batch ? 'Проверяем подключения' : 'Проверяем резервный маршрут' : 'Автопроверка приостановлена';
   $('#nodeActivityMessage').textContent = active
     ? nodeActivity.canceling ? 'Останавливаем проверку и завершаем очистку…' : batch ? `Готово ${nodeActivity.checks.completed || 0} из ${nodeActivity.checks.total || 0}. Настройки станут доступны после проверки или её остановки.` : 'Изменение маршрутов временно занято. Проверку можно остановить, чтобы перейти к настройкам.'
@@ -74,7 +74,7 @@ async function cancelNodeActivity() {
   nodeActivity.canceling = true;
   renderNodeActivity();
   try {
-    const endpoint = nodeActivity.fallback?.active ? '/api/v1/node-autofallback' : '/api/v1/node-checks/current';
+    const endpoint = nodeActivity.fallback?.active ? '/api/v1/node-autofallback' : '/api/v1/node-checks/current?job_id='+encodeURIComponent(nodeActivity.checks.id);
     await api(endpoint, { method: 'DELETE' });
     if (generation !== nodeActivity.generation || !nodeActivityVisible()) return;
     await refreshNodeActivity();

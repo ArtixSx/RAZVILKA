@@ -27,7 +27,7 @@ function renderWorkflowControls(){
   workflowBulkControls();
   for(const id of ['r4ProbeService','r4CatalogService'])workflowServiceOptions(id);
   const engine=typeof selectedEngineView==='function'?selectedEngineView():null;
-  const running=['running','canceling'].includes(nodeBrowser.job?.state);
+  const running=['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state);
   const job=nodeBrowser.job;
   if($('#r4JobResults')){
     $('#r4JobResults').innerHTML=job?.mode==='service'?(job.results||[]).slice(-8).map(r=>`<div><b>${esc(nodeByID(r.node_id)?.name||'Узел · '+String(r.node_id||'').slice(-8))}</b><span>${esc(r.verdict||'Нет результата')}</span><small>${esc(r.message||'Проверка не завершена.')}</small></div>`).join(''):'';
@@ -77,7 +77,7 @@ async function workflowRunProbe(){
   finally{if(workflowState.probe===test)workflowState.probe=null;if(workflowSession(epoch))renderWorkflowControls();}
 }
 function workflowOpenFetch(preset='',url=''){
-  if(workflowState.fetchBusy||['running','canceling'].includes(nodeBrowser.job?.state)){interfaceToast('Дождитесь текущей проверки или остановите её.');return;}
+  if(workflowState.fetchBusy||['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state)){interfaceToast('Дождитесь текущей проверки или остановите её.');return;}
   workflowServiceOptions('r4FetchService',state.currentView==='providers'?$('#r4CatalogService').value:$('#nodeBrowserService').value);
   const el=$('#r4FetchSource'),presets=state.nodeFeeds?.presets||[],saved=(state.nodeFeeds?.sources||[]).filter(s=>s.saved);
   el.innerHTML=presets.map(s=>`<option value="preset:${esc(s.id)}">${esc(s.name)}</option>`).join('')+saved.map(s=>`<option value="saved:${esc(s.source_id)}">Моя подписка · ${esc(s.name)}</option>`).join('')+'<option value="custom">Свой HTTPS-адрес</option>';
@@ -98,7 +98,7 @@ async function workflowFetch(event){
   try{
     const status=await workflowRequest('/api/v1/node-checks/current');
     if(status.fetch_and_check!==true)throw new Error('Backend не поддерживает «Загрузить и проверить». Установите проверенную сборку R5. Отдельная загрузка не выдаётся за сетевую проверку.');
-    if(['running','canceling'].includes(status.job?.state))throw new Error('На роутере уже выполняется проверка. Дождитесь завершения.');
+    if(['queued','interrupted','running','canceling'].includes(status.job?.state))throw new Error('На роутере уже выполняется проверка. Дождитесь завершения.');
     const result=await workflowRequest('/api/v1/node-checks',{method:'POST',body:JSON.stringify(body)});
     if(!workflowSession(epoch))return;
     if(!result.job?.id)throw new Error('Роутер не подтвердил создание задачи. Проверьте её состояние перед повтором.');
@@ -185,7 +185,7 @@ function workflowBulkControls(){
       button.addEventListener('click',handler);$('#'+anchor).insertAdjacentElement('afterend',button);
     }
   }
-  const all=workflowAllVLESS(),eligible=all.filter(nodeCanCheck),running=['running','canceling'].includes(nodeBrowser.job?.state);
+  const all=workflowAllVLESS(),eligible=all.filter(nodeCanCheck),running=['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state);
   const check=$('#nodeCheckAllVLESS'),remove=$('#nodeDeleteAllVLESS');
   if(check){check.textContent=`Проверить все VLESS · ${eligible.length}`;check.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!$('#nodeBrowserService').value||!eligible.length||state.nodes?.available===false;}
   if(remove){remove.textContent=`Удалить все VLESS… · ${all.length}`;remove.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!all.length||state.nodes?.available===false;}
@@ -193,7 +193,7 @@ function workflowBulkControls(){
   if(hint)hint.textContent='Проверка — выбранный веб-сценарий через узел, не только пинг. «Проверить все VLESS» создаёт одну очередь всего каталога, независимо от страниц и фильтров. Отключённые/истёкшие узлы пропускаются. Между узлами ресурс освобождается для восстановления. Обычная выборка ограничена 64 узлами; массовая проверка не применяет маршруты.';
 }
 async function workflowCheckAllVLESS(){
-  if(workflowState.bulkBusy||['running','canceling'].includes(nodeBrowser.job?.state))return;
+  if(workflowState.bulkBusy||['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state))return;
   const epoch=workflowState.epoch,serviceID=$('#nodeBrowserService').value;
   if(!serviceID)return;
   workflowState.bulkBusy=true;renderWorkflowControls();
@@ -201,7 +201,7 @@ async function workflowCheckAllVLESS(){
   try{
     const status=await workflowRequest('/api/v1/node-checks/current');
     if(status.all_vless!==true)throw new Error('Нужно обновление backend с массовыми действиями VLESS. Проверка первой страницы не подменяет проверку каталога.');
-    if(['running','canceling'].includes(status.job?.state))throw new Error('На роутере уже выполняется проверка.');
+    if(['queued','interrupted','running','canceling'].includes(status.job?.state))throw new Error('На роутере уже выполняется проверка.');
     const snapshot=await workflowRequest('/api/v1/nodes');
     const all=(snapshot.nodes||[]).filter(n=>String(n.protocol||'').trim().toLowerCase()==='vless'),eligible=all.filter(nodeCanCheck);
     if(!eligible.length||!Number.isSafeInteger(snapshot.generation)||snapshot.generation<1)throw new Error('Нет доступных VLESS для проверки. Обновите каталог.');

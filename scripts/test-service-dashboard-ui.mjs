@@ -58,6 +58,8 @@ function fixture() {
     renderStatus() {}, renderOverviewQuickServices() {}, renderOverviewServices() {}, renderReadiness() {}, renderSettings() {},
   });
   vm.runInContext(source, context);
+  const nodeSource = readFileSync(new URL('../cmd/razvilka/web/node-browser.js', import.meta.url), 'utf8');
+  vm.runInContext(nodeSource.slice(nodeSource.indexOf('let nodeCheckPendingRequest'),nodeSource.indexOf('async function pollNodeBrowserChecks')),context);
   const dashboard = vm.runInContext('serviceDashboard', context);
   context.bindServiceDashboard(); context.renderServiceDashboard();
   const click = (id, data) => $(id).listeners.click({ target: { closest(selector) { if (selector === 'button') return { dataset: data, disabled: false }; const key = selector.slice(6, -1).replace(/-([a-z])/g, (_, ch) => ch.toUpperCase()); return data[key] !== undefined ? { dataset: data } : null; } } });
@@ -132,7 +134,9 @@ function fixture() {
   f.setHandler(() => ({ job: { id: 2, mode: 'tcp', state: 'running' } }));
   await f.context.serviceDashboardPing('youtube');
   assert.equal(f.calls[0].url, '/api/v1/node-checks');
-  assert.deepEqual(JSON.parse(f.calls[0].body), { node_ids: ['node-a'], mode: 'tcp' });
+  const body = JSON.parse(f.calls[0].body);
+  assert.match(body.idempotency_key,/^[a-f0-9]{32}$/);
+  assert.deepEqual({ ...body, idempotency_key: undefined }, { node_ids: ['node-a'], mode: 'tcp', expected_revision: 9, idempotency_key: undefined });
   assert.equal(f.$('#serviceCancelCheck').hidden, true, 'service cancellation should not cancel a different job type');
   assert.notEqual(f.context.serviceDashboardSummary(service).label, 'Сервис доступен');
   f.context.nodePassivePing = () => ({ reachable: true, latency_ms: 42 });

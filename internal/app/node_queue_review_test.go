@@ -73,40 +73,27 @@ func TestSelectedNodeQueueChecksNonVLESSAndYieldsToRecovery(t *testing.T) {
 	if nonVLESS == "" {
 		t.Fatal("missing non-VLESS fixture")
 	}
-	a.reconciler.started = true
+	withBulkConfig(t, a)
+	initReconcilerFixture(t, a, time.Now())
 	a.reconciler.doc.Operations = futureNodeQueueOperations(time.Now())
 	a.reconciler.doc.Operations[0] = automationOperation{Kind: "node-recovery", State: "backoff", NextRun: time.Now().Add(-time.Minute)}
-	waiting := make(chan struct{})
-	var once sync.Once
-	a.nodeChecks.bulkWait = func(ctx context.Context, d time.Duration) error {
-		once.Do(func() { close(waiting) })
-		return bulkTestWait(ctx, d)
-	}
-	var calls atomic.Int32
+	calls := 0
 	a.NodeChecker = jobNodeChecker(func(ctx context.Context, q dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
-		calls.Add(1)
+		calls++
 		return bulkTestResult(q), nil
 	})
-	if w := postNodeJob(t, a, []string{nonVLESS}, "service"); w.Code != 202 {
-		t.Fatal(w.Code, w.Body.String())
-	}
-	select {
-	case <-waiting:
-	case <-time.After(3 * time.Second):
-		t.Fatal("queue did not defer to recovery")
-	}
-	if calls.Load() != 0 {
+	revision := a.Store.Get().Revision
+	id := enqueueNodeFixture(t, a, nodeCheckJobRequest{NodeIDs: []string{nonVLESS}, Mode: "service", ServiceID: "telegram", ExpectedRevision: &revision, IdempotencyKey: "non-vless-selected-durable"})
+	if a.runDurableServiceJob(context.Background(), time.Now()) || calls != 0 {
 		t.Fatal("selected node overtook due recovery")
 	}
-	a.reconciler.mu.Lock()
 	a.reconciler.doc.Operations[0].NextRun = time.Now().Add(time.Minute)
-	a.reconciler.mu.Unlock()
-	j := joinNodeJob(t, a)
-	if j.State != "completed" || j.Completed != 1 || j.Skipped != 0 || calls.Load() != 1 {
-		t.Fatalf("selected non-VLESS silently skipped: %+v", j)
+	a.runDurableServiceJob(context.Background(), time.Now())
+	j := a.nodeCheckCurrentView()["job"].(*nodeCheckJob)
+	if j.ID != id || j.State != "completed" || j.Completed != 1 || j.Skipped != 0 || calls != 1 {
+		t.Fatalf("selected non-VLESS skipped: %+v", j)
 	}
 }
-
 func TestServiceQueuesStopAfterUnrecordedCleanupFailure(t *testing.T) {
 	for _, all := range []bool{false, true} {
 		t.Run(map[bool]string{false: "selected", true: "all-vless"}[all], func(t *testing.T) {

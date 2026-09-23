@@ -285,7 +285,7 @@ async function serviceDashboardPing(serviceID) {
   serviceDashboard.message = 'Измеряем TCP-пинг сервера. Это отдельная проверка соединения, без смены маршрута.';
   renderServiceDashboard();
   try {
-    const response = await api('/api/v1/node-checks', { method: 'POST', signal: operation.controller.signal, body: JSON.stringify({ node_ids: [node.id], mode: 'tcp' }) });
+    const response = await submitSelectedNodeCheck({ node_ids: [node.id], mode: 'tcp' }, { signal: operation.controller.signal });
     if (!serviceDashboardCurrent(operation)) return;
     serviceDashboard.control = { ...serviceDashboard.control, job: response.job };
     if (state.serviceControl) state.serviceControl = { ...state.serviceControl, job: response.job };

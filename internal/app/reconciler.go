@@ -300,8 +300,13 @@ func validateReconcilerDocument(d reconcilerDocument) error {
 	return nil
 }
 
-func (a *App) persistReconcilerLocked(ctx context.Context) error {
+func (a *App) persistReconcilerLocked(ctx context.Context) (err error) {
 	r := &a.reconciler
+	defer func() {
+		if err != nil {
+			r.blocked = true
+		}
+	}()
 	if r.path == "" {
 		return nil
 	}

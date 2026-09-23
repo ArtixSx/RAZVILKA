@@ -20,6 +20,7 @@ function stopNodeBrowserRefresh(clearSession = false) {
   for (const timer of nodeBrowser.feedTimers.values()) clearTimeout(timer);
   nodeBrowser.feedTimers.clear();
   if (clearSession) {
+	clearNodeCheckRequest();
     nodeBrowser.authRequired = true;
     nodeBrowser.job = null;
     nodeBrowser.pings = [];
@@ -246,7 +247,7 @@ function renderNodeCatalogs() {
 
 function renderNodeBatchStatus() {
   const job = nodeBrowser.job;
-  const running = ['running', 'canceling'].includes(job?.state);
+  const running = ['queued', 'interrupted', 'running', 'canceling'].includes(job?.state);
   $('#nodeBatchStatus').hidden = !job;
   $('#nodeBatchCancel').hidden = !running;
   $('#nodeBatchCancel').disabled = job?.state === 'canceling';
@@ -264,7 +265,7 @@ function renderNodeBatchStatus() {
   if (!job) return;
   $('#nodeBatchProgress').max = Math.max(1, job.total || 1);
   $('#nodeBatchProgress').value = job.completed || 0;
-  const label = job.scope==='all-vless' && job.phase==='waiting' && running ? 'Очередь ожидает' : job.phase === 'fetching' && running ? 'Получаем источник' : ({ running: 'Проверяем', canceling: 'Останавливаем', completed: 'Проверка завершена', canceled: 'Проверка остановлена', failed: 'Проверка не завершена' })[job.state] || 'Проверка';
+  const label = job.scope==='all-vless' && job.phase==='waiting' && running ? 'Очередь ожидает' : job.phase === 'fetching' && running ? 'Получаем источник' : ({ queued: 'В очереди', interrupted: 'Восстанавливаем проверку', running: 'Проверяем', canceling: 'Останавливаем', completed: 'Проверка завершена', canceled: 'Проверка остановлена', failed: 'Проверка не завершена' })[job.state] || 'Проверка';
   const scenario = job.mode === 'service' ? ` · ${nodeServiceScenario(state.services.find(item => item.id === job.service_id))}`
     : job.mode === 'tcp' ? ' · TCP'
     : job.mode === 'service-check' ? ' · Проверка сервисов'
@@ -275,23 +276,57 @@ function renderNodeBatchStatus() {
 }
 
 async function startNodeBrowserCheck(mode, explicitIDs) {
-  if (['running', 'canceling'].includes(nodeBrowser.job?.state)) return;
+  if (['queued', 'interrupted', 'running', 'canceling'].includes(nodeBrowser.job?.state)) return;
   const nodes = state.nodes?.nodes || [];
   const selected = explicitIDs || (nodeBrowser.selected.size ? [...nodeBrowser.selected] : nodeBrowser.visible);
   const ids = selected.filter(id => nodes.some(node => node.id === id && nodeCanCheck(node) && (mode !== 'tcp' || nodeSupportsTCPPing(node))));
   if (!ids.length && mode === 'tcp' && selected.some(id => nodes.some(node => node.id === id && nodeCanCheck(node) && !nodeSupportsTCPPing(node)))) return showDetails({ message: 'Эти подключения используют UDP. Нажмите «Проверить доступ», чтобы проверить их через выбранный сервис.' }, 'Проверка UDP-подключений');
   if (!ids.length) return showDetails({ error: 'Выберите подключения для проверки.' }, 'Проверка подключений');
   if (ids.length > 64) return showDetails({ error: 'За один раз можно проверить до 64 подключений. Уменьшите выборку.' }, 'Проверка подключений');
+  const epoch = nodeBrowser.epoch;
   try {
     // Mark locally before awaiting to reject double clicks.
     nodeBrowser.job = { state: 'running', total: ids.length, completed: 0 };
     renderNodeBatchStatus();
-    const response = await api('/api/v1/node-checks', { method: 'POST', body: JSON.stringify({ node_ids: ids, mode, service_id: mode === 'service' ? $('#nodeBrowserService').value : '' }) });
+    const response = await submitSelectedNodeCheck({ node_ids: ids, mode, service_id: mode === 'service' ? $('#nodeBrowserService').value : '' });
+    if (epoch !== nodeBrowser.epoch || nodeBrowser.authRequired) return;
     nodeBrowser.job = response.job; nodeBrowser.pings = response.pings || nodeBrowser.pings;
     await pollNodeBrowserChecks();
   } catch (error) {
+    if (epoch !== nodeBrowser.epoch || nodeBrowser.authRequired) return;
     nodeBrowser.job = { state: 'failed', total: ids.length, completed: 0, message: error.message };
     renderNodeBatchStatus();
+  }
+}
+
+// Retry a lost response with the same intent, including after a page reload.
+// This storage contains references only; logout clears it with other UI state.
+let nodeCheckPendingRequest = null;
+function clearNodeCheckRequest() {
+  nodeCheckPendingRequest = null;
+  try { sessionStorage.removeItem('razvilka.node-check-request'); } catch (_) {}
+}
+async function submitSelectedNodeCheck(request, options = {}) {
+  const expected_revision = state.status?.revision;
+  if (!Number.isSafeInteger(expected_revision) || expected_revision < 0) throw new Error('Обновите состояние роутера перед проверкой подключений.');
+  const intent = { ...request, node_ids: [...request.node_ids].sort(), expected_revision };
+  const signature = JSON.stringify(intent);
+  let pending = nodeCheckPendingRequest;
+  try { pending ||= JSON.parse(sessionStorage.getItem('razvilka.node-check-request') || 'null'); } catch (_) {}
+  if (!pending || pending.signature !== signature || !/^[a-f0-9]{32}$/.test(pending.key) || !Number.isFinite(pending.at) || Date.now() < pending.at || Date.now()-pending.at >= 86400000) {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    pending = { signature, key: Array.from(bytes, x => x.toString(16).padStart(2,'0')).join(''), at: Date.now() };
+  }
+  nodeCheckPendingRequest = pending;
+  try { sessionStorage.setItem('razvilka.node-check-request', JSON.stringify(pending)); } catch (_) {}
+  try {
+    const response = await api('/api/v1/node-checks', { ...options, method: 'POST', body: JSON.stringify({ ...intent, idempotency_key: pending.key }) });
+    if (nodeCheckPendingRequest === pending) clearNodeCheckRequest();
+    return response;
+  } catch (error) {
+    if (nodeCheckPendingRequest === pending && error.status >= 400 && error.status < 500) clearNodeCheckRequest();
+    throw error;
   }
 }
 
@@ -308,7 +343,7 @@ async function pollNodeBrowserChecks() {
       if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
       nodeBrowser.job = response.job || null; nodeBrowser.pings = response.pings || [];nodeBrowser.fetchAndCheck=response.fetch_and_check===true;
       state.nodeAutofallback = fallback;
-      const running = ['running', 'canceling'].includes(nodeBrowser.job?.state);
+      const running = ['queued', 'interrupted', 'running', 'canceling'].includes(nodeBrowser.job?.state);
       if (running || fallback.active) delay = 1500;
       $('#nodeBrowserReadNotice').hidden = true;
       $('#nodeBrowserReadNotice').textContent = '';

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 
 const source = readFileSync(new URL('../cmd/razvilka/web/node-browser.js', import.meta.url), 'utf8');
 const elements = new Map();
@@ -15,6 +16,8 @@ class TestDate extends Date { constructor(...args) { super(...(args.length ? arg
 const fresh = service => ({ service_id: service, network_profile: profile, route_path_id: 'sing-box:node-bbbbbb', verdict: 'PASS', state: 'available', test_level: 'service', checked_at: new Date(now - 1000).toISOString(), expires_at: new Date(now + 60000).toISOString() });
 const state = { services: [{ id: 'telegram', name: 'Telegram', probe_url: 'https://telegram.org' }, { id: 'youtube', name: 'YouTube', probe_url: 'https://youtube.com' }], nodes: { available: true, network_profile: profile, nodes: [], sources: [{ id: 'feed', kind: 'community' }, { id: 'manual', kind: 'manual' }], country_metadata: {}, groups: [] }, nodeFeeds: { available: true, sources: [{ source_id: 'feed', name: 'Каталог' }], presets: [{ id: 'public', name: 'Публичный каталог' }] } };
 const calls = [];
+state.status = { revision: 9 };
+const session = new Map();
 let handler = async () => ({});
 let scheduled;
 const document = { hidden: false, activeElement: null, getElementById: id => $(`#${id}`), addEventListener() {} };
@@ -23,6 +26,7 @@ state.currentView = 'nodes';
 $('#authScreen').hidden = true;
 const esc = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 const context = vm.createContext({ state, $, $$: selector => domQueries.get(selector) || [], Date: TestDate, document, Intl, JSON, Set, Map, Number, String, encodeURIComponent, esc,
+  crypto: webcrypto, sessionStorage: { getItem: key => session.get(key) || null, setItem: (key,value) => session.set(key,value), removeItem: key => session.delete(key) },
   api: async (url, options) => { calls.push({ url, options }); return handler(url, options); },
   nodeExpiryText: () => 'Актуален', nodeRecoveryBanner: () => '', renderNodeGroups() {},
   refreshNodes: async () => {}, askConfirmation: async () => true, showDetails() {},
@@ -98,7 +102,9 @@ handler = () => new Promise(resolve => { finish = resolve; });
 const start = context.startNodeBrowserCheck('tcp');
 await context.startNodeBrowserCheck('tcp');
 assert.equal(calls.length, 1);
-assert.deepEqual(JSON.parse(calls[0].options.body), { node_ids: ['node-aaaaaa'], mode: 'tcp', service_id: '' });
+const acceptedBody = JSON.parse(calls[0].options.body);
+assert.match(acceptedBody.idempotency_key,/^[a-f0-9]{32}$/);
+assert.deepEqual({ ...acceptedBody, idempotency_key: undefined }, { node_ids: ['node-aaaaaa'], mode: 'tcp', service_id: '', expected_revision: 9, idempotency_key: undefined });
 const readAPI = url => {
   if (url === '/api/v1/nodes') return state.nodes;
   if (url === '/api/v1/routes/options') return [];
@@ -262,4 +268,35 @@ document.hidden = true;
 await context.pollNodeBrowserChecks();
 assert.equal(calls.length, beforeLogout + 2, 'hidden document refreshed in the background');
 
-console.log('Node browser filtering, proof expiry, transport labels, focus, polling, logout and subscriptions passed');
+// Lost POST response and reload reuse identity, rather than starting another job.
+document.hidden = false;
+context.browser.authRequired = false;
+context.browser.job = null;
+const checkIntent = {node_ids:['node-aaaaaa'], mode:'tcp', service_id:''};
+let lostBody;
+handler = async (_url,options) => { lostBody=JSON.parse(options.body); throw new Error('response lost'); };
+await assert.rejects(context.submitSelectedNodeCheck(checkIntent),/response lost/);
+vm.runInContext('nodeCheckPendingRequest = null',context); // reload retains sessionStorage only
+handler = async (_url,options) => { assert.equal(JSON.parse(options.body).idempotency_key,lostBody.idempotency_key); return {job:{id:42,state:'completed'}}; };
+assert.equal((await context.submitSelectedNodeCheck(checkIntent)).job.id,42);
+assert.equal(session.has('razvilka.node-check-request'),false);
+for (const phase of ['queued','interrupted']) {
+ context.browser.job={id:42,state:phase,mode:'service',total:2,completed:1};
+ context.renderNodeBatchStatus();
+ assert.equal($('#nodeBatchCancel').hidden,false,'saved pending job cannot be canceled');
+ const prior=calls.length;
+ await context.startNodeBrowserCheck('tcp',['node-aaaaaa']);
+ assert.equal(calls.length,prior,'waiting job allowed duplicate click');
+}
+context.browser.job=null;
+let finishSubmit;
+handler=()=>new Promise(resolve=>{finishSubmit=resolve;});
+const submitting=context.startNodeBrowserCheck('tcp',['node-aaaaaa']);
+const beforeSubmitLogout=calls.length;
+context.stopNodeBrowserRefresh(true);
+finishSubmit({job:{id:43,state:'queued'},pings:[]});
+await submitting;
+assert.equal(context.browser.job,null,'late POST response restored logged-out state');
+assert.equal(calls.length,beforeSubmitLogout,'late POST initiated polling');
+assert.equal(session.has('razvilka.node-check-request'),false);
+console.log('Node browser filtering, proof expiry, transport labels, focus, polling, logout, durable retries and subscriptions passed');

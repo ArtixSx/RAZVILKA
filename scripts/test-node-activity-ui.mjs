@@ -27,7 +27,7 @@ listeners.get('razvilka:auth-restored')();
 handler = async url => url.endsWith('/node-autofallback') ? { active: false } : { job: { id: 3, mode: 'service', state: 'running', total: 4, completed: 2 } };
 assert.equal(await context.refreshNodeActivity(), true);
 await context.cancelNodeActivity();
-assert.ok(calls.some(call => call.url === '/api/v1/node-checks/current' && call.options?.method === 'DELETE'));
+assert.ok(calls.some(call => call.url === '/api/v1/node-checks/current?job_id=3' && call.options?.method === 'DELETE'));
 
 context.resetNodeActivity();
 listeners.get('razvilka:auth-restored')();
