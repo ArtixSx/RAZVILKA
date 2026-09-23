@@ -48,26 +48,28 @@ type nodeCheckItem struct {
 }
 
 type nodeCheckJob struct {
-	Scope          string                 `json:"scope,omitempty"`
-	Matched        int                    `json:"matched,omitempty"`
-	Passed         int                    `json:"passed"`
-	Failed         int                    `json:"failed"`
-	Inconclusive   int                    `json:"inconclusive"`
-	ID             uint64                 `json:"id"`
-	Phase          string                 `json:"phase"`
-	ErrorCode      string                 `json:"error_code,omitempty"`
-	Skipped        int                    `json:"skipped"`
-	Fetch          *providerfeed.Result   `json:"fetch,omitempty"`
-	Mode           string                 `json:"mode"`
-	ServiceID      string                 `json:"service_id,omitempty"`
-	State          string                 `json:"state"`
-	Total          int                    `json:"total"`
-	Completed      int                    `json:"completed"`
-	StartedAt      time.Time              `json:"started_at"`
-	FinishedAt     *time.Time             `json:"finished_at,omitempty"`
-	Message        string                 `json:"message"`
-	Results        []nodeCheckItem        `json:"results"`
-	ServiceResults []serviceControlResult `json:"service_results,omitempty"`
+	Scope          string                    `json:"scope,omitempty"`
+	Matched        int                       `json:"matched,omitempty"`
+	Passed         int                       `json:"passed"`
+	Failed         int                       `json:"failed"`
+	Inconclusive   int                       `json:"inconclusive"`
+	ID             uint64                    `json:"id"`
+	Phase          string                    `json:"phase"`
+	ErrorCode      string                    `json:"error_code,omitempty"`
+	Skipped        int                       `json:"skipped"`
+	Fetch          *providerfeed.Result      `json:"fetch,omitempty"`
+	Mode           string                    `json:"mode"`
+	ServiceID      string                    `json:"service_id,omitempty"`
+	State          string                    `json:"state"`
+	Total          int                       `json:"total"`
+	Completed      int                       `json:"completed"`
+	StartedAt      time.Time                 `json:"started_at"`
+	FinishedAt     *time.Time                `json:"finished_at,omitempty"`
+	Message        string                    `json:"message"`
+	Results        []nodeCheckItem           `json:"results"`
+	ServiceResults []serviceControlResult    `json:"service_results,omitempty"`
+	DNSResult      json.RawMessage           `json:"dns_result,omitempty"`
+	DNSRequest     *serviceDNSCompareRequest `json:"dns_request,omitempty"`
 }
 
 type nodeCheckState struct {

@@ -1,4 +1,4 @@
-/* DC1: read-only service DNS comparison; no background scheduler or auto-apply. */
+/* Read-only DNS diagnostics in the router's existing durable job queue. */
 (function(root){
 'use strict';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -48,13 +48,39 @@ function acceptResponse(response,body,revision){
  }
  return resultMarkup(response.result)+(body.verify_service?addressChecksMarkup(response.address_checks,rows):'');
 }
-const model={profilesForLab,requestFor,resultMarkup,acceptResponse,addressChecksMarkup};
+const pendingStates=['queued','running','canceling','interrupted'];
+function requestFromJob(job){
+ if(job?.mode!=='service-dns-compare'||!Number.isSafeInteger(job.id)||job.id<1||![...pendingStates,'completed','failed','canceled'].includes(job.state))throw Error('Не получено корректное состояние DNS-проверки.');
+ const q=job.dns_request;
+ return requestFor(q?.service_id,q?.profile_ids,q?.config_revision,true,q?.verify_service===true);
+}
+function sameRequest(a,b){return a.service_id===b.service_id&&a.config_revision===b.config_revision&&!!a.verify_service===!!b.verify_service&&JSON.stringify(a.profile_ids)===JSON.stringify(b.profile_ids);}
+const model={profilesForLab,requestFor,resultMarkup,acceptResponse,addressChecksMarkup,requestFromJob,sameRequest};
 if(typeof module!=='undefined'&&module.exports)module.exports=model;
 root.RazvilkaDNSLabModel=model;
 if(typeof document==='undefined'||!document.getElementById('dc1Form'))return;
-const el=id=>document.getElementById(id);let active=null,serviceKey='',profileKey='',resultRevision=null;
+const el=id=>document.getElementById(id);let active=null,pendingJob=null,lastJob='',serviceKey='',profileKey='',resultRevision=null,savedRequest=null,cancelBusy=false;
+function tokenFor(body){
+ const signature=JSON.stringify(body);let saved=savedRequest;
+ try{saved||=JSON.parse(sessionStorage.getItem('razvilka.dns-request')||'null');}catch(_){}
+ if(!saved||saved.signature!==signature||!/^[a-f0-9]{32}$/.test(saved.key)||!Number.isFinite(saved.at)||Date.now()<saved.at||Date.now()-saved.at>=86400000){
+  const bytes=new Uint8Array(16);root.crypto.getRandomValues(bytes);
+  saved={signature,key:Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join(''),at:Date.now()};
+ }
+ savedRequest=saved;try{sessionStorage.setItem('razvilka.dns-request',JSON.stringify(saved));}catch(_){}return saved.key;
+}
+function forgetToken(body){
+ if(savedRequest?.signature!==JSON.stringify(body))return;
+ savedRequest=null;try{sessionStorage.removeItem('razvilka.dns-request');}catch(_){}
+}
+function controls(){
+ const busy=!!active||!!pendingJob;
+ el('dc1Inputs').disabled=busy;el('dc1Submit').disabled=busy||!state.services?.length||!state.dns;
+ el('dc1Cancel').hidden=!pendingJob;el('dc1Cancel').disabled=cancelBusy||pendingJob?.state==='canceling';
+}
+function refreshJobs(){if(typeof scheduleWorkspaceControl==='function')scheduleWorkspaceControl(0);}
 function render(){
- if(active)return;
+ if(active||pendingJob){controls();return;}
  if(resultRevision!==null&&resultRevision!==Number(state.status?.revision)){clear();el('dc1Status').textContent='Настройки изменились. Для текущего состояния повторите сравнение DNS.';}
  const services=(state.services||[]).filter(s=>s.probe_url||(s.probes||[]).some(p=>p.required&&p.url));
  const selected=el('dc1Service').value;
@@ -64,30 +90,63 @@ function render(){
  const available=profilesForLab(state.dns),key=JSON.stringify(available.map(p=>[p.id,p.name,p.kind]));
  const markup=available.map(p=>`<label class="dc1-provider"><input type="checkbox" name="profile" value="${escape(p.id)}" ${checked.has(p.id)?'checked':''}><span><b>${escape(p.name)}</b><small>${p.kind==='smart-dns-gateway'?'Smart DNS · сторонний шлюз':'DNS-резолвер'} · только после локальной проверки</small></span></label>`).join('');
  if(profileKey!==key){profileKey=key;el('dc1Profiles').innerHTML=markup;}
- el('dc1Submit').disabled=!services.length||!state.dns;
+ controls();
 }
 const oldRenderDNS=renderDNS;
 renderDNS=function(){oldRenderDNS();render();};
 function clear(){resultRevision=null;el('dc1Results').replaceChildren();el('dc1Status').textContent='';}
 el('dc1Service').addEventListener('change',clear);el('dc1Profiles').addEventListener('change',clear);
 el('dc1VerifyService')?.addEventListener('change',()=>{clear();el('dc1Submit').textContent=el('dc1VerifyService').checked?'Проверить DNS и сайт':'Сравнить DNS-ответы';});
-el('dc1Cancel').addEventListener('click',()=>{if(active){active.controller.abort();el('dc1Status').textContent='Сравнение отменено. Завершённого результата нет.';}});
+// Status uses the panel's shared reader. Opening this page never submits a job.
+root.acceptDNSLabJobs=function(control){
+ const jobs=(control?.durable_jobs||[]).filter(j=>j.mode==='service-dns-compare');
+ const job=(pendingJob&&jobs.find(j=>j.id===pendingJob.id))||jobs.find(j=>pendingStates.includes(j.state))||jobs.at(-1);
+ if(!job)return !!pendingJob;
+ let body;try{body=requestFromJob(job);}catch(error){el('dc1Status').textContent=error.message;return !!pendingJob;}
+ const signature=JSON.stringify([job.id,job.state,job.error_code,!!job.dns_result]);
+ if(active)return pendingStates.includes(job.state)||!!pendingJob;
+ if(signature===lastJob)return !!pendingJob;
+ lastJob=signature;clear();pendingJob=pendingStates.includes(job.state)?job:null;
+ el('dc1Service').value=body.service_id;
+ for(const input of el('dc1Profiles').querySelectorAll('input'))input.checked=body.profile_ids.includes(input.value);
+ if(el('dc1VerifyService'))el('dc1VerifyService').checked=!!body.verify_service;
+ el('dc1Status').textContent=job.message||'Состояние проверки получено.';
+ if(!pendingJob){
+  forgetToken(body);
+  if(job.state==='completed'){
+   if(!job.dns_result)el('dc1Status').textContent='Проверка была завершена, но её подробности уже недоступны. Повторите для текущей сети.';
+   else try{el('dc1Results').innerHTML=acceptResponse(job.dns_result,body,Number(state.status?.revision));resultRevision=body.config_revision;
+    el('dc1Status').textContent='Проверка завершена: '+String(job.dns_result.result?.checked_at||job.finished_at||'время не получено')+'. Это результат на момент проверки. Маршруты не менялись.';
+   }catch(error){el('dc1Status').textContent=error.message;}
+  }
+ }
+ controls();return !!pendingJob;
+};
+el('dc1Cancel').addEventListener('click',async()=>{
+ if(!pendingJob||cancelBusy)return;
+ const id=pendingJob.id,epoch=workflowState.epoch;cancelBusy=true;controls();
+ try{
+  const response=await workflowRequest('/api/v1/service-control/current?job_id='+id,{method:'DELETE'},12000);
+  if(!workflowSession(epoch))return;
+  root.acceptDNSLabJobs(response);
+ }catch(error){if(workflowSession(epoch))el('dc1Status').textContent='Отмена не подтверждена: '+workflowError(error);}
+ finally{if(workflowSession(epoch)){cancelBusy=false;controls();refreshJobs();}}
+});
 el('dc1Form').addEventListener('submit',async event=>{
- event.preventDefault();if(active)return;
+ event.preventDefault();if(active||pendingJob)return;
  let body;try{body=requestFor(el('dc1Service').value,[...el('dc1Profiles').querySelectorAll('input:checked')].map(i=>i.value),Number(state.status?.revision),el('dc1Consent').checked,el('dc1VerifyService')?.checked===true);}catch(error){el('dc1Status').textContent=error.message;return;}
  const op={controller:new AbortController(),epoch:workflowState.epoch};active=op;
- clear();el('dc1Status').textContent=body.verify_service?'Проверяем DNS, сертификат и ответ сайта. До 70 секунд…':'Сравниваем DNS на роутере. До 32 секунд, без изменения маршрутов…';
- el('dc1Submit').disabled=true;el('dc1Inputs').disabled=true;el('dc1Cancel').hidden=false;
+ clear();el('dc1Status').textContent='Сохраняем DNS-проверку на роутере…';controls();
  try{
-  const response=await workflowRequest('/api/v1/dns/service-compare',{method:'POST',controller:op.controller,body:JSON.stringify(body)},body.verify_service?75000:38000);
+  const response=await workflowRequest('/api/v1/dns/service-compare',{method:'POST',controller:op.controller,body:JSON.stringify({...body,idempotency_key:tokenFor(body)})},12000);
   if(op.controller.signal.aborted||!workflowSession(op.epoch))return;
-  el('dc1Results').innerHTML=acceptResponse(response,body,Number(state.status?.revision));
-  resultRevision=body.config_revision;
-  el('dc1Status').textContent='DNS-сравнение завершено. Рабочие DNS, маршруты и аккаунты не менялись.';
- }catch(error){if(workflowSession(op.epoch))el('dc1Status').textContent=error.name==='AbortError'?'Сравнение отменено или истекло время ожидания. Успех не подтверждён.':workflowError(error);}
- finally{if(active===op){active=null;el('dc1Inputs').disabled=false;el('dc1Cancel').hidden=true;if(workflowSession(op.epoch))render();}}
+  if(response.persistent!==true||!sameRequest(requestFromJob(response.job),body))throw Error('Сохранение задания не подтверждено. Обновите состояние.');
+  pendingJob=response.job;lastJob='';
+  el('dc1Status').textContent='Задание сохранено на роутере. Вкладку можно закрыть; результат появится здесь после проверки.';
+ }catch(error){if(workflowSession(op.epoch))el('dc1Status').textContent='Ответ не получен: '+workflowError(error)+'. Проверьте состояние; повторный запрос не создаст копию задания.';}
+ finally{if(active===op){active=null;if(workflowSession(op.epoch)){controls();refreshJobs();}}}
 });
 const oldAuth=showAuth;
-showAuth=function(...args){active?.controller.abort();clear();el('dc1Consent').checked=false;return oldAuth.apply(this,args);};
+showAuth=function(...args){active?.controller.abort();active=null;pendingJob=null;lastJob='';cancelBusy=false;clear();controls();el('dc1Consent').checked=false;return oldAuth.apply(this,args);};
 render();
 })(typeof globalThis!=='undefined'?globalThis:this);

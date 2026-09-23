@@ -65,6 +65,7 @@ type serviceReconciler struct {
 	cancel       context.CancelFunc
 	activeJobID  uint64
 	durableBurst int
+	dnsResults   map[uint64]json.RawMessage // Bounded diagnostics, never persisted/replayed proof.
 	stop         context.CancelFunc
 	wake         chan struct{}
 	done         chan struct{}

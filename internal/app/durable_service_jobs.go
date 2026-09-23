@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -45,6 +46,7 @@ type durableServiceJob struct {
 	CancelRequested bool                     `json:"cancel_requested"`
 	CleanupOutcome  string                   `json:"cleanup_outcome"`
 	RuntimeCode     string                   `json:"runtime_code,omitempty"`
+	DNSCode         string                   `json:"dns_code,omitempty"`
 }
 
 func (j durableServiceJob) terminal() bool {
@@ -68,6 +70,12 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		message = "Задание отменено."
 	}
 	total, completed, code := len(j.Request.ServiceIDs), j.Cursor, j.Reason
+	if j.Request.Kind == "dns-compare" {
+		message = dnsJobMessage(j)
+		if j.DNSCode != "" {
+			code = j.DNSCode
+		}
+	}
 	if isRuntimeJob(j.Request.Kind) {
 		total = 1
 		if j.State == "completed" {
@@ -78,9 +86,14 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 			code = j.RuntimeCode
 		}
 	}
-	return &nodeCheckJob{ID: j.ID, Mode: "service-" + j.Request.Kind, State: j.State, Phase: j.Phase,
+	p := &nodeCheckJob{ID: j.ID, Mode: "service-" + j.Request.Kind, State: j.State, Phase: j.Phase,
 		ErrorCode: code, Total: total, Completed: completed,
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
+	if j.Request.Kind == "dns-compare" && validDurableDNSRequest(j.Request) {
+		revision := *j.Request.ExpectedRevision
+		p.DNSRequest = &serviceDNSCompareRequest{ServiceID: j.Request.ServiceIDs[0], ProfileIDs: slices.Clone(j.Request.DNS.ProfileIDs), ConfigRevision: &revision, VerifyService: j.Request.DNS.VerifyService}
+	}
+	return p
 }
 
 func validJobHash(s string) bool { return len(s) == 64 && strings.Trim(s, "0123456789abcdef") == "" }
@@ -91,6 +104,9 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 	}
 	ids, keys := map[uint64]bool{}, map[string]bool{}
 	for _, j := range jobs {
+		if !validDNSJobCode(j.DNSCode) || j.DNSCode != "" && j.Request.Kind != "dns-compare" {
+			return restorejournal.ErrInvalid
+		}
 		if !validRuntimeJobCode(j.RuntimeCode) || j.RuntimeCode != "" && !isRuntimeJob(j.Request.Kind) {
 			return restorejournal.ErrInvalid
 		}
@@ -115,6 +131,12 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 }
 
 func validDurableRequest(r serviceControlJobRequest) bool {
+	if r.Kind == "dns-compare" {
+		return validDurableDNSRequest(r)
+	}
+	if r.DNS != nil {
+		return false
+	}
 	if isRuntimeJob(r.Kind) {
 		return r.ExpectedRevision != nil && len(r.ServiceIDs) == 0 && len(r.NodeIDs) == 0
 	}
@@ -173,6 +195,9 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	revision := *request.ExpectedRevision
 	request.ExpectedRevision = &revision
 	request.ServiceIDs, request.NodeIDs = slices.Clone(request.ServiceIDs), slices.Clone(request.NodeIDs)
+	if request.DNS != nil {
+		request.DNS = &serviceDNSJobSpec{ProfileIDs: slices.Clone(request.DNS.ProfileIDs), VerifyService: request.DNS.VerifyService}
+	}
 	fingerprint := applyReviewHash(request)
 	r := &a.reconciler
 	lookup := func() (durableServiceJob, bool, error) {
@@ -244,6 +269,13 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 			}
 		}
 		intent = durableServiceIntentHash(cfg, services)
+		if request.Kind == "dns-compare" {
+			intent, err = a.durableDNSIntentHash(cfg, services, request.DNS)
+			if err != nil {
+				release()
+				return durableServiceJob{}, err
+			}
+		}
 		release()
 		if cfg.Revision != *request.ExpectedRevision {
 			return durableServiceJob{}, config.ErrRevisionChanged
@@ -317,6 +349,9 @@ func (a *App) addDurableServiceJobs(view map[string]any) {
 	var pending, latest *nodeCheckJob
 	for _, j := range r.doc.Jobs {
 		p := j.presentation()
+		if j.Request.Kind == "dns-compare" && j.State == "completed" {
+			p.DNSResult = slices.Clone(r.dnsResults[j.ID])
+		}
 		jobs = append(jobs, p)
 		latest = p
 		if !j.terminal() && pending == nil {
@@ -432,6 +467,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	if j.Request.Kind == "check" {
 		budget = time.Duration(len(j.Request.ServiceIDs)+1) * time.Minute
 	}
+	if j.Request.Kind == "dns-compare" {
+		budget = 75 * time.Second
+	}
 	j.State, j.Phase, j.CleanupOutcome = "running", "checking", "pending"
 	j.Deadline = minTime(now.Add(budget), j.ExpiresAt)
 	j.Attempts++
@@ -451,8 +489,11 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	r.mu.Unlock()
 	var err error
 	var runtimeOutcome serviceRuntimeOutcome
+	var dnsResult *serviceDNSCompareOutput
 	if isRuntimeJob(request.Kind) {
 		runtimeOutcome, err = a.runDurableRuntimeJob(attempt, request)
+	} else if request.Kind == "dns-compare" {
+		dnsResult, err = a.runDurableDNSJob(attempt, request)
 	} else {
 		var done <-chan struct{}
 		done, err = a.startServiceControlJob(attempt, request, false)
@@ -495,11 +536,17 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	} else if ctx.Err() != nil {
 		j.State, j.Phase, j.Reason = "interrupted", "waiting", "interrupted"
 	} else if err != nil {
+		if request.Kind == "dns-compare" {
+			_, j.DNSCode, _ = dnsCompareFailure(err)
+		}
 		reason := "check-failed"
 		if errors.Is(err, config.ErrRevisionChanged) {
 			reason = "settings-changed"
 		}
 		finishDurableJob(j, "failed", reason, time.Now())
+	} else if request.Kind == "dns-compare" {
+		j.Cursor = 1
+		finishDurableJob(j, "completed", "", time.Now())
 	} else if isRuntimeJob(request.Kind) {
 		j.RuntimeCode = runtimeOutcome.Code
 		finishDurableJob(j, "failed", "check-failed", time.Now())
@@ -525,7 +572,28 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	}
 	persistCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer stop()
-	_ = a.persistReconcilerLocked(persistCtx)
+	persistErr := a.persistReconcilerLocked(persistCtx)
+	if persistErr == nil && j.State == "completed" && dnsResult != nil {
+		if raw, e := json.Marshal(dnsResult); e == nil && len(raw) <= 64<<10 {
+			if r.dnsResults == nil {
+				r.dnsResults = map[uint64]json.RawMessage{}
+			}
+			// Keep at most four recent results; accepted job history stays intact.
+			keep := map[uint64]bool{j.ID: true}
+			for i := len(r.doc.Jobs) - 1; i >= 0 && len(keep) < 4; i-- {
+				id := r.doc.Jobs[i].ID
+				if _, ok := r.dnsResults[id]; ok {
+					keep[id] = true
+				}
+			}
+			for id := range r.dnsResults {
+				if !keep[id] {
+					delete(r.dnsResults, id)
+				}
+			}
+			r.dnsResults[j.ID] = raw
+		}
+	}
 	if !errors.Is(err, operationgate.ErrBusy) && request.Kind != "stop" {
 		r.durableBurst++
 	}

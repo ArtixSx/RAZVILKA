@@ -21,6 +21,7 @@ function clearWorkspaceRuntimeToken() {
 }
 
 function acceptWorkspaceRuntimeJobs(control) {
+  workspaceControl.dnsJobPending = typeof acceptDNSLabJobs === 'function' && acceptDNSLabJobs(control);
   const jobs = (control?.durable_jobs || []).filter(job => ['service-stop', 'service-resume'].includes(job.mode));
   const active = jobs.find(job => ['queued', 'running', 'canceling', 'interrupted'].includes(job.state));
   const previous = workspaceControl.runtimeJob;
@@ -30,7 +31,7 @@ function acceptWorkspaceRuntimeJobs(control) {
     workspaceControl.lastError = finished.state === 'failed' ? finished.message : '';
     showNotice(finished.state === 'completed' ? 'success' : 'review', finished.state === 'completed' ? 'Переключение завершено' : 'Проверьте состояние проекта', finished.message);
   }
-  return !!active;
+  return !!active || workspaceControl.dnsJobPending;
 }
 
 function workspaceControlVisible() { return workspaceControl.authenticated && $('#authScreen').hidden && !document.hidden; }
@@ -72,7 +73,7 @@ async function refreshWorkspaceControl() {
   if (workspaceControl.pending) return workspaceControl.pending;
   const generation = workspaceControl.generation;
   const pending = (async () => {
-    if (workspaceControl.runtimeJob || workspaceControl.readBusy) {
+    if (workspaceControl.runtimeJob || workspaceControl.readBusy || workspaceControl.dnsJobPending) {
       const memory = await api('/api/v1/service-control/current');
       if (generation !== workspaceControl.generation || !workspaceControlVisible()) return null;
       if (acceptWorkspaceRuntimeJobs(memory)) { renderWorkspaceControls(); return null; }
@@ -100,7 +101,7 @@ function scheduleWorkspaceControl(delay = 15000) {
     const generation = workspaceControl.generation;
     try { await refreshWorkspaceControl(); }
     catch (error) { if (generation === workspaceControl.generation) { workspaceControl.lastError = error.message; state.serviceControl = null; renderWorkspaceControls(); } }
-    finally { if (generation === workspaceControl.generation) scheduleWorkspaceControl(workspaceControl.readBusy || workspaceControl.runtimeJob ? 3000 : 15000); }
+    finally { if (generation === workspaceControl.generation) scheduleWorkspaceControl(workspaceControl.readBusy || workspaceControl.runtimeJob || workspaceControl.dnsJobPending ? 3000 : 15000); }
   }, delay);
 }
 
@@ -228,7 +229,7 @@ function bindWorkspaceControls() {
   });
   document.addEventListener('razvilka:auth-required', () => {
     workspaceControl.authenticated = false; workspaceControl.generation++; workspaceControl.busy = false; workspaceControl.readBusy = false; workspaceControl.lastError = '';
-    workspaceControl.runtimeJob = null; clearWorkspaceRuntimeToken();
+    workspaceControl.runtimeJob = null; workspaceControl.dnsJobPending = false; clearWorkspaceRuntimeToken();
     clearTimeout(workspaceControl.timer); workspaceControl.pending = null; state.serviceControl = null; renderWorkspaceControls();
   });
   document.addEventListener('razvilka:auth-restored', () => { if (!workspaceControl.authenticated) { workspaceControl.authenticated = true; scheduleWorkspaceControl(0); } });

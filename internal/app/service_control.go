@@ -45,11 +45,12 @@ type serviceControlResult struct {
 }
 
 type serviceControlJobRequest struct {
-	IdempotencyKey   string   `json:"idempotency_key,omitempty"`
-	ExpectedRevision *uint64  `json:"expected_revision,omitempty"`
-	Kind             string   `json:"kind"`
-	ServiceIDs       []string `json:"service_ids"`
-	NodeIDs          []string `json:"node_ids,omitempty"`
+	IdempotencyKey   string             `json:"idempotency_key,omitempty"`
+	ExpectedRevision *uint64            `json:"expected_revision,omitempty"`
+	Kind             string             `json:"kind"`
+	ServiceIDs       []string           `json:"service_ids"`
+	NodeIDs          []string           `json:"node_ids,omitempty"`
+	DNS              *serviceDNSJobSpec `json:"dns,omitempty"`
 	durableID        uint64
 	intentHash       string
 	durableCursor    int

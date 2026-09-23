@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {webcrypto} from 'node:crypto';
 const require=createRequire(import.meta.url),m=require('../cmd/razvilka/web/dns-service-lab.js');let tests=0;
 function test(name,fn){fn();tests++;console.log('PASS',name);}
 const snapshot={profiles:[{id:'xbox-dns',provider_id:'xbox-dns'},{id:'lab',provider_id:'flashstart'},{id:'local',provider_id:'local'},{id:'missing',provider_id:'missing'}],providers:[{id:'xbox-dns',configured:true,doh:'https://xbox-dns.ru/dns-query',kind:'smart-dns-gateway'},{id:'flashstart',configured:true,doh:'https://example.org',scope:'negative-control'},{id:'local',configured:true,doh:'https://example.org',trusted_local:true}]};
@@ -41,31 +42,69 @@ test('script integrated with the interface cache version',()=>{
 });
 test('stylesheet compiled into existing bundle',()=>assert.match(readFileSync(new URL('../cmd/razvilka/web/interface.css',import.meta.url),'utf8'),/\.dc1-lab/));
 const source=readFileSync(new URL('../cmd/razvilka/web/dns-service-lab.js',import.meta.url),'utf8');
-test('no localStorage secrets or independent polling',()=>assert.ok(!/localStorage|setInterval|innerHTML\s*=\s*(response|result)\b/.test(source)));
+test('no independent polling or raw result HTML',()=>assert.ok(!/localStorage|setInterval|setTimeout|innerHTML\s*=\s*(response|result)\b/.test(source)));
 function browserFixture(){
- const elements=new Map(),checked=[{value:'private'}];
- for(const id of ['dc1Form','dc1Inputs','dc1Service','dc1Profiles','dc1Consent','dc1Results','dc1Submit','dc1Cancel','dc1Status'])elements.set(id,{value:id==='dc1Service'?'youtube':'',checked:id==='dc1Consent',innerHTML:'',textContent:'',disabled:false,hidden:false,events:{},addEventListener(type,fn){this.events[type]=fn;},querySelectorAll(){return checked;},replaceChildren(){this.innerHTML='';}});
- let resolve;
- const context={AbortController,console,document:{getElementById:id=>elements.get(id)},state:{status:{revision:4},services:[{id:'youtube',name:'YouTube',probe_url:'https://www.youtube.com/'}],dns:{profiles:[{id:'private',name:'Приватный',provider_id:'cloudflare'}],providers:[{id:'cloudflare',configured:true,doh:'https://cloudflare-dns.com/dns-query'}]}},workflowState:{epoch:1},renderDNS(){},showAuth(){context.workflowState.epoch++;},workflowSession:epoch=>epoch===context.workflowState.epoch,workflowError:error=>error.message,workflowRequest:()=>new Promise(r=>{resolve=r;})};
+ const elements=new Map(),checked=[{value:'private',checked:true}],requests=[],storage=new Map();
+ for(const id of ['dc1Form','dc1Inputs','dc1Service','dc1Profiles','dc1Consent','dc1VerifyService','dc1Results','dc1Submit','dc1Cancel','dc1Status'])elements.set(id,{value:id==='dc1Service'?'youtube':'',checked:id==='dc1Consent',innerHTML:'',textContent:'',disabled:false,hidden:false,events:{},addEventListener(type,fn){this.events[type]=fn;},querySelectorAll(selector){return selector==='input:checked'?checked.filter(x=>x.checked):checked;},replaceChildren(){this.innerHTML='';}});
+ let resolve,reject,refreshes=0;
+ const context={AbortController,console,crypto:webcrypto,sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},document:{getElementById:id=>elements.get(id)},state:{status:{revision:4},services:[{id:'youtube',name:'YouTube',probe_url:'https://www.youtube.com/'}],dns:{profiles:[{id:'private',name:'Приватный',provider_id:'cloudflare'}],providers:[{id:'cloudflare',configured:true,doh:'https://cloudflare-dns.com/dns-query'}]}},workflowState:{epoch:1},renderDNS(){},showAuth(){context.workflowState.epoch++;},workflowSession:epoch=>epoch===context.workflowState.epoch,workflowError:error=>error.message,scheduleWorkspaceControl(){refreshes++;},workflowRequest:(path,options)=>{requests.push({path,...options});return new Promise((yes,no)=>{resolve=yes;reject=no;});}};
  vm.runInNewContext(source,context);
- return {context,e:id=>elements.get(id),resolve:value=>resolve(value),submit:()=>elements.get('dc1Form').events.submit({preventDefault(){}})};
+ return {context,requests,refreshes:()=>refreshes,e:id=>elements.get(id),resolve:value=>resolve(value),reject:error=>reject(error),submit:()=>elements.get('dc1Form').events.submit({preventDefault(){}})};
 }
-for(const mode of ['success','cancel','logout','changed-revision']){
+const dnsJob={id:42,mode:'service-dns-compare',state:'queued',dns_request:body,message:'Задание сохранено на роутере'};
+test('job descriptor binds its request',()=>assert.deepEqual(m.requestFromJob(dnsJob),body));
+test('runtime action cannot be interpreted as DNS',()=>assert.throws(()=>m.requestFromJob({...dnsJob,mode:'service-stop'})));
+for(const mode of ['success','cancel','logout','changed-revision','missing-result','malformed-result']){
  const f=browserFixture(),pending=f.submit();
  assert.equal(f.e('dc1Inputs').disabled,true);
- if(mode==='cancel')f.e('dc1Cancel').events.click();
+ assert.equal(f.e('dc1Cancel').hidden,true);
+ f.resolve({persistent:true,job:dnsJob});await pending;
+ assert.equal(f.e('dc1Results').innerHTML,'');
+ assert.equal(f.e('dc1Inputs').disabled,true,'202 is not completed');
+ assert.match(f.e('dc1Status').textContent,/Вкладку можно закрыть/);
+ f.context.acceptDNSLabJobs({durable_jobs:[{...dnsJob,state:'running'}]});
+ let cancel;
+ if(mode==='cancel'){
+  cancel=f.e('dc1Cancel').events.click();
+  assert.equal(f.requests.at(-1).method,'DELETE');
+  assert.match(f.requests.at(-1).path,/job_id=42$/);
+  f.resolve({durable_jobs:[{...dnsJob,state:'canceling'}]});await cancel;
+  assert.equal(f.e('dc1Inputs').disabled,true,'cancel request must join router cleanup');
+ }
  if(mode==='logout')f.context.showAuth();
  if(mode==='changed-revision')f.context.state.status.revision=5;
- // Deliberately resolve after abort: a late transport response is not success.
- f.resolve(response);await pending;
+ const result=mode==='missing-result'?undefined:mode==='malformed-result'?{...response,service_id:'different'}:response;
+ if(mode!=='logout')f.context.acceptDNSLabJobs({durable_jobs:[{...dnsJob,state:mode==='cancel'?'canceled':'completed',message:'Проверка отменена.',dns_result:result}]});
  assert.equal(f.e('dc1Inputs').disabled,false);
  assert.equal(f.e('dc1Results').innerHTML.length>0,mode==='success');
  if(mode==='success'){
   f.context.state.status.revision=5;f.context.renderDNS();
   assert.equal(f.e('dc1Results').innerHTML,'');
- } else if(mode==='cancel')assert.match(f.e('dc1Status').textContent,/отменено/);
+ } else if(mode==='cancel')assert.match(f.e('dc1Status').textContent,/отменена/);
  else if(mode==='logout')assert.equal(f.e('dc1Status').textContent,'');
- else assert.match(f.e('dc1Status').textContent,/Настройки изменились/);
+ else if(mode==='changed-revision')assert.match(f.e('dc1Status').textContent,/Настройки изменились/);
+ else if(mode==='missing-result')assert.match(f.e('dc1Status').textContent,/подробности уже недоступны/);
+ else assert.match(f.e('dc1Status').textContent,/не соответствует/);
  tests++;console.log('PASS async browser '+mode);
+}
+{
+ const f=browserFixture(),first=f.submit();
+ f.reject(Error('connection lost'));await first;
+ const key=JSON.parse(f.requests[0].body).idempotency_key;
+ const retry=f.submit();assert.equal(JSON.parse(f.requests[1].body).idempotency_key,key);
+ f.resolve({persistent:true,job:dnsJob});await retry;
+ f.context.acceptDNSLabJobs({durable_jobs:[{...dnsJob,state:'completed',dns_result:response}]});
+ const next=f.submit();assert.notEqual(JSON.parse(f.requests[2].body).idempotency_key,key);
+ f.resolve({persistent:true,job:{...dnsJob,id:43}});await next;
+ tests++;console.log('PASS lost reply reuses token; completed observation allows new comparison');
+}
+{
+ const f=browserFixture(),pending=f.submit();f.context.showAuth();
+ f.resolve({persistent:true,job:dnsJob});await pending;
+ assert.equal(f.e('dc1Results').innerHTML,'');assert.equal(f.e('dc1Status').textContent,'');
+ assert.equal(f.requests.length,1,'logout must not send cancel');
+ f.context.acceptDNSLabJobs({durable_jobs:[{...dnsJob,state:'completed',dns_result:response}]});
+ assert.ok(f.e('dc1Results').innerHTML.length>0,'next authenticated shared refresh retrieves router result');
+ tests++;console.log('PASS logout ignores late ACK; next login restores result without POST');
 }
 console.log(JSON.stringify({tests,status:'passed'}));
