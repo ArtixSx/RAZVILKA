@@ -272,7 +272,12 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	} // A retry must succeed even while its job owns admission.
 	intent := fingerprint
 	var nodeReview *durableNodeReview
-	if isRuntimeJob(request.Kind) {
+	if request.Kind == "node-apply" {
+		nodeReview, intent, err = a.prepareDurableNodeApply(ctx, request, nodeToken, nodeOwner)
+		if err != nil {
+			return durableServiceJob{}, err
+		}
+	} else if isRuntimeJob(request.Kind) {
 		// The immutable intent is exactly action + expected revision, not a
 		// partially applied Store snapshot. The executor validates that revision
 		// and its committed route scope after admission. No Store reads here.
@@ -290,15 +295,6 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		if a.Store == nil {
 			release()
 			return durableServiceJob{}, errServiceControlRequest
-		}
-		if request.Kind == "node-apply" {
-			// Retain admission through durable acceptance and token consumption.
-			defer release()
-			release = func() {}
-			nodeReview, err = a.prepareDurableNodeApply(ctx, request, nodeToken, nodeOwner)
-			if err != nil {
-				return durableServiceJob{}, err
-			}
 		}
 		cfg := a.Store.Get()
 		services := []catalog.Service{}

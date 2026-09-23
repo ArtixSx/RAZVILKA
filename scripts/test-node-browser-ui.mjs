@@ -37,6 +37,16 @@ state.nodes.country_metadata = { 'node-aaaaaa': { country_code: 'NL', country_so
 $('#nodeBrowserService').value = 'telegram';
 context.renderNodes();
 assert.equal(calls.length, 0, 'rendering started network work');
+for (const [mode, label] of [['tcp','TCP'],['service-check','Проверка сервисов'],['service-select','Подбор подключений']]) {
+  context.browser.job = {mode,state:'completed',total:1,completed:1};
+  context.renderNodeBatchStatus();
+  assert.ok($('#nodeBatchMessage').textContent.includes(label));
+  if (mode !== 'tcp') assert.doesNotMatch($('#nodeBatchMessage').textContent,/TCP/,'a service job was labeled as a TCP ping');
+}
+context.browser.job = {state:'failed',total:1,completed:0};
+context.renderNodeBatchStatus();
+assert.doesNotMatch($('#nodeBatchMessage').textContent,/TCP/,'unknown failed operation invented a test type');
+context.browser.job = null;
 assert.match($('#nodeList').innerHTML, /Нидерланды/);
 assert.match($('#nodeList').innerHTML, /Работает/);
 assert.match($('#nodeList').innerHTML, /Пинг · TCP/);

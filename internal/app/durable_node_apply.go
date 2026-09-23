@@ -54,23 +54,27 @@ func validDurableNodeReview(j durableServiceJob) bool {
 	return err == nil && slices.Equal(sources, v.Sources)
 }
 
-// Called under exclusive admission. The token is consumed only after the
-// accepted intent is durable; storage failure leaves the reviewed action usable.
-func (a *App) prepareDurableNodeApply(ctx context.Context, r serviceControlJobRequest, token string, owner [32]byte) (*durableNodeReview, error) {
+// Acceptance reads only the bounded, owner-bound preview in memory. A busy
+// network transaction must not prevent queuing an already reviewed intent.
+// It grants no permission to execute: the worker rechecks every binding after
+// admission. The token is consumed only after the intent is durable.
+func (a *App) prepareDurableNodeApply(ctx context.Context, r serviceControlJobRequest, token string, owner [32]byte) (*durableNodeReview, string, error) {
+	if ctx.Err() != nil {
+		return nil, "", ctx.Err()
+	}
+	if a.Operations.Snapshot().Fenced {
+		return nil, "", operationgate.ErrRecovery
+	}
 	if a.SelfUpdate != nil && a.SelfUpdate.InstallationLocked() {
-		return nil, operationgate.ErrBusy
+		return nil, "", operationgate.ErrBusy
 	}
 	a.nodeReviews.mu.Lock()
 	review, ok := a.nodeReviews.reviews[token]
 	a.nodeReviews.mu.Unlock()
-	if !ok || review.owner != owner || review.NodeID != r.NodeIDs[0] || review.ServiceID != r.ServiceIDs[0] || review.Revision != *r.ExpectedRevision || review.Generation != r.NodeApply.Generation || review.Digest != r.NodeApply.Digest || a.nodeReviewProof(ctx, review, review.Revision) != nil {
-		return nil, errNodeJobReview
+	if !ok || review.owner != owner || review.NodeID != r.NodeIDs[0] || review.ServiceID != r.ServiceIDs[0] || review.Revision != *r.ExpectedRevision || review.Generation != r.NodeApply.Generation || review.Digest != r.NodeApply.Digest || !validJobHash(review.intentHash) || !time.Now().Before(review.ExpiresAt) {
+		return nil, "", errNodeJobReview
 	}
-	profile, err := a.freshNetworkProfile(ctx)
-	if err != nil || profile != review.NetworkProfile {
-		return nil, errNodeJobReview
-	}
-	return &durableNodeReview{NetworkProfile: review.NetworkProfile, ExpiresAt: review.ExpiresAt, ScopeSelection: review.ScopeSelection, Sources: slices.Clone(review.scopeSources)}, nil
+	return &durableNodeReview{NetworkProfile: review.NetworkProfile, ExpiresAt: review.ExpiresAt, ScopeSelection: review.ScopeSelection, Sources: slices.Clone(review.scopeSources)}, review.intentHash, nil
 }
 
 func (a *App) runDurableNodeApply(ctx context.Context, r serviceControlJobRequest, saved *durableNodeReview) (serviceRuntimeOutcome, error) {

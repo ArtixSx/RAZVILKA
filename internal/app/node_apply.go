@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
@@ -86,6 +87,7 @@ type nodeRouteReview struct {
 	ExpiresAt      time.Time `json:"expires_at"`
 	ScopeSelection string    `json:"scope_selection"`
 	scopeSources   []string
+	intentHash     string // Private immutable config/definition binding from preview.
 	owner          [32]byte
 }
 
@@ -213,9 +215,11 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	name := ""
+	var reviewedServices []catalog.Service
 	for _, service := range a.catalogSnapshot().Services {
 		if service.ID == request.ServiceID && serviceHasNodeProbe(service) {
 			name = service.Name
+			reviewedServices = append(reviewedServices, service)
 			break
 		}
 	}
@@ -258,7 +262,7 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 		writeNodeError(w, err)
 		return
 	}
-	review := nodeRouteReview{Revision: cfg.Revision, Generation: snapshot.Generation, NodeID: id, ServiceID: request.ServiceID, NetworkProfile: profile, ExpiresAt: time.Now().Add(nodeReviewTTL), ScopeSelection: scopeMode, scopeSources: append([]string(nil), scopeSources...), owner: nodeReviewOwner(r)}
+	review := nodeRouteReview{Revision: cfg.Revision, Generation: snapshot.Generation, NodeID: id, ServiceID: request.ServiceID, NetworkProfile: profile, ExpiresAt: time.Now().Add(nodeReviewTTL), ScopeSelection: scopeMode, scopeSources: append([]string(nil), scopeSources...), owner: nodeReviewOwner(r), intentHash: durableServiceIntentHash(cfg, reviewedServices)}
 	for _, check := range node.Health.History {
 		if check.ServiceID == request.ServiceID && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+id {
 			if check.ExpiresAt.Before(review.ExpiresAt) {

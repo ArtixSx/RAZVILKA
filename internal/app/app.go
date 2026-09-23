@@ -3272,6 +3272,11 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	transaction, err := a.buildDataplanePlanForScope(cfg, options, scope, engineID)
 	if err != nil {
+		var dependency *routePlanDependencyError
+		if errors.As(err, &dependency) {
+			writeNodePlanFailure(w, err)
+			return
+		}
 		if errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
 			http.Error(w, "Сеть изменилась или не определена. Повторите проверку узла и откройте новый план.", http.StatusConflict)
 			return

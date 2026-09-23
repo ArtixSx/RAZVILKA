@@ -95,6 +95,50 @@ func TestDurableNodeApplyLostResponseTwoWindowsAndClosedRequest(t *testing.T) {
 	}
 }
 
+func TestDurableNodeApplyAcceptsReviewedIntentWhileNetworkIsBusy(t *testing.T) {
+	for _, changed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unchanged", true: "changed-before-acceptance"}[changed], func(t *testing.T) {
+			a, id, adapter := nodeApplyFixture(t)
+			initReconcilerFixture(t, a, time.Now())
+			review := reviewedNode(t, a, id)
+			release, err := a.Operations.Exclusive(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer release()
+			if changed {
+				if err = a.Store.SetSafeMode(true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			profile := a.FreshProfile
+			a.FreshProfile = func(context.Context) (string, error) {
+				t.Fatal("acceptance probed a partially applied network")
+				return "", nil
+			}
+			job := durableNodeAccept(t, a, id, review, "node-queue-during-cleanup")
+			a.FreshProfile = profile
+			if job.State != "queued" || len(adapter.calls) != 0 {
+				t.Fatal("acceptance changed runtime", job)
+			}
+			a.runDurableServiceJob(context.Background(), time.Now())
+			if waiting := durableJobAt(t, a, job.ID); waiting.Attempts != 0 || waiting.State != "queued" || len(adapter.calls) != 0 {
+				t.Fatal("busy gate used attempt or activated", waiting)
+			}
+			release()
+			a.runDurableServiceJob(context.Background(), time.Now().Add(10*time.Second))
+			got := durableJobAt(t, a, job.ID)
+			if changed {
+				if got.State != "failed" || got.NodeCode != "NODE_REVIEW_CHANGED" || len(adapter.calls) != 0 {
+					t.Fatal("queued stale intent activated", got)
+				}
+			} else if got.State != "completed" {
+				t.Fatal("queued intent did not finish", got)
+			}
+		})
+	}
+}
+
 func TestDurableNodeApplyCancelJoinsRollbackAndOldCancelDoesNotAffectNext(t *testing.T) {
 	a, id, adapter := nodeApplyFixture(t)
 	initReconcilerFixture(t, a, time.Now())

@@ -65,6 +65,22 @@ func genericApply(a *App, query string, review any) *httptest.ResponseRecorder {
 	return w
 }
 
+func TestGenericPlanNamesUnconfirmedDependencyAsConflict(t *testing.T) {
+	a, id, adapter := nodeApplyFixture(t)
+	if err := a.Store.UpdateService("youtube", config.ServiceState{Enabled: true, Route: "sing-box:" + id}); err != nil {
+		t.Fatal(err)
+	}
+	before := a.Store.Get()
+	w := httptest.NewRecorder()
+	a.plan(w, httptest.NewRequest(http.MethodGet, "/api/v1/plan?scope=services", nil))
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `"code":"NODE_ROUTE_DEPENDENCY"`) || !strings.Contains(w.Body.String(), `"service_id":"youtube"`) || strings.Contains(w.Body.String(), id) {
+		t.Fatalf("not an actionable conflict: %d %s", w.Code, w.Body.String())
+	}
+	if len(adapter.calls) != 0 || !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("preview changed state")
+	}
+}
+
 func TestGenericApplyReviewRejectsChangedRevisionContentAndScopeWithoutMutation(t *testing.T) {
 	for _, change := range []string{"revision", "content", "scope", "catalog", "correct", "legacy"} {
 		t.Run(change, func(t *testing.T) {
