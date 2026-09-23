@@ -4742,6 +4742,11 @@ func (a *App) connections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) connectionStream(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if a.Security == nil || !a.Security.Authenticated(r) {
+		http.Error(w, "administrator login is required", http.StatusUnauthorized)
+		return
+	}
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
 		return
@@ -4756,11 +4761,15 @@ func (a *App) connectionStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	ch, cancel := a.Telemetry.Subscribe()
 	defer cancel()
 	send := func() bool {
+		// A stream outlives its initial HTTP admission. Logout, session
+		// revocation and expiry must prevent the next private observation.
+		if !a.Security.Authenticated(r) {
+			return false
+		}
 		observation := a.Telemetry.Readout(false)
 		payload, err := json.Marshal(map[string]any{"connections": observation.Connections, "active": observation.Active, "live": observation.Live, "producer": observation.Producer, "reason": observation.Reason})
 		if err != nil {
@@ -4786,6 +4795,9 @@ func (a *App) connectionStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-heartbeat.C:
+			if !a.Security.Authenticated(r) {
+				return
+			}
 			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
 				return
 			}

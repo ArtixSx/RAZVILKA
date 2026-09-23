@@ -4483,20 +4483,42 @@ async function importPrivateBackup() {
   finally { button.textContent = 'Импортировать приватные данные в черновик'; button.disabled = !state.privateBackupPreview?.valid; }
 }
 
+const connectionObservation = { epoch: 0, request: 0 };
+
+function clearConnectionObservation() {
+  connectionObservation.epoch++;
+  state.authenticated = false;
+  if (state.stream) state.stream.close();
+  state.stream = null;
+  state.connections = { connections: [], active: 0, closed: 0, live: false, producer: '', reason: 'Требуется вход' };
+  renderConnections();
+}
+
+document.addEventListener('razvilka:auth-required', clearConnectionObservation);
+
 async function refreshConnections() {
+  if (state.authenticated !== true) return;
+  const epoch = connectionObservation.epoch, request = ++connectionObservation.request;
+  const current = () => state.authenticated === true && connectionObservation.epoch === epoch && connectionObservation.request === request;
   try {
-    state.connections = await api('/api/v1/connections?include_closed=true');
+    const value = await api('/api/v1/connections?include_closed=true');
+    if (!current()) return;
+    state.connections = value;
     renderConnections();
-  } catch (_) {
+  } catch (error) {
+    if (current() && error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
     // SSE or next refresh will recover. Do not spam the UI on transient failures.
   }
 }
 
 function startConnectionStream() {
-  if (!window.EventSource || state.stream) return;
+  if (state.authenticated !== true || !window.EventSource || state.stream) return;
+  const epoch = connectionObservation.epoch;
   const stream = new EventSource('/api/v1/connections/stream');
   state.stream = stream;
+  const current = () => state.authenticated === true && connectionObservation.epoch === epoch && state.stream === stream;
   stream.addEventListener('connections', (event) => {
+    if (!current()) return;
     try {
       const payload = JSON.parse(event.data);
       const live = Array.isArray(payload) ? payload : (payload.connections || []);
@@ -4514,6 +4536,7 @@ function startConnectionStream() {
     }
   });
   stream.onerror = () => {
+    if (!current()) return;
     $('#telemetryState').textContent = 'соединение восстанавливается…';
   };
 }
