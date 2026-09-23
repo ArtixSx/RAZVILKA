@@ -58,10 +58,7 @@ func (s *Store) SelectReserveIDs(ctx context.Context, ordered []string, limit in
 		if json.Unmarshal(secrets[node.SecretRef], &material) != nil || material.Server == "" {
 			return nil, ErrStore
 		}
-		server := strings.ToLower(strings.TrimSuffix(material.Server, "."))
-		if ip, err := netip.ParseAddr(server); err == nil {
-			server = ip.Unmap().String()
-		}
+		server := reserveServerIdentity(material.Server)
 		c := candidate{id: id, server: server, protocol: material.Type, transport: material.Transport.Type}
 		for _, origin := range node.Origins {
 			c.sources = append(c.sources, origin.SourceID)
@@ -109,4 +106,12 @@ func (s *Store) SelectReserveIDs(ctx context.Context, ordered []string, limit in
 		}
 	}
 	return selected, nil
+}
+
+func reserveServerIdentity(server string) string {
+	server = strings.ToLower(strings.TrimSuffix(server, "."))
+	if ip, err := netip.ParseAddr(server); err == nil {
+		return ip.Unmap().String()
+	}
+	return server
 }

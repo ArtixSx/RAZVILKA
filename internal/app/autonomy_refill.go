@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"time"
+
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/catalog"
 )
@@ -26,10 +28,18 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 		return
 	}
 	// A poisoned exact checker cannot be repaired by downloading more URLs.
-	if a.NodeChecker == nil {
+	if a.NodeChecker == nil || a.Nodes == nil {
 		return
 	}
-	decision, err := a.NodeFeeds.RequestRefill(ctx, p.SourceIDs)
+	profile, err := a.freshNetworkProfile(ctx)
+	if err != nil {
+		return
+	}
+	useful, err := a.Nodes.SourceUtility(ctx, p.SourceIDs, p.Protocols, s.ID, profile, time.Now())
+	if err != nil {
+		return
+	}
+	decision, err := a.NodeFeeds.RequestRefillRanked(ctx, p.SourceIDs, useful)
 	if err != nil {
 		return
 	}
