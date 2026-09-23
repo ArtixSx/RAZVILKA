@@ -1364,9 +1364,40 @@ function openPendingChanges() {
     interfaceOpenServiceChanges();
     return;
   }
+  if (view === 'engineconfig') {
+    void openPendingEngineChanges().catch(error => showNotice('error', 'Не удалось открыть изменения', error.message));
+    return;
+  }
   setView(view);
   const target = $({ devices: '#deviceDraftBar', sources: '#sourceDraftBar', dns: '#view-dns', engineconfig: '#view-engineconfig' }[view]);
   target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+async function openPendingEngineChanges() {
+  const changed = (state.engineConfigs || []).filter(engine => (engine.files || []).some(file => file.staged));
+  const engine = changed.find(item => item.id === state.selectedEngine) || changed[0];
+  if (!engine) {
+    setView('engineconfig');
+    showNotice('info', 'Получаем состав изменений', 'Обновите состояние панели, чтобы открыть изменённый файл.');
+    return;
+  }
+  if (state.engineIntent) {
+    showNotice('info', 'Настройки проверяются', 'Дождитесь завершения текущей операции.');
+    return;
+  }
+  const file = engine.files.find(item => item.staged);
+  if (state.selectedEngine !== engine.id) {
+    await selectEngine(engine.id);
+    if (state.selectedEngine !== engine.id) return; // The user kept an unsaved editor.
+  }
+  if (state.selectedEngineFile !== file.id) {
+    await selectEngineFile(file.id);
+    if (state.selectedEngineFile !== file.id) return;
+  }
+  setView('engineconfig');
+  switchEngineTab('config');
+  $('#engineFileSelect')?.focus();
+  $('#view-engineconfig')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function pendingChangeViews(status) {

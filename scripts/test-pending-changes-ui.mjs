@@ -56,6 +56,18 @@ assert.equal(state.currentView, 'devices', 'the remaining device changes must no
 state.status = { dns_pending_changes: true }; ctx.openPendingChanges(); assert.equal(state.currentView, 'dns');
 state.status = { sources_pending_changes: true }; ctx.openPendingChanges(); assert.equal(state.currentView, 'sources');
 state.status = {}; ctx.openPendingChanges(); assert.match(events.at(-1)[1], /Изменений для применения нет/);
+state.engineConfigs = [{id:'nfqws2',files:[{id:'main',staged:false},{id:'user-list',staged:true}]},{id:'xray',files:[{id:'main',staged:true}]}];
+state.selectedEngine='nfqws2';state.selectedEngineFile='main';
+ctx.selectEngine=async id=>{state.selectedEngine=id;};
+ctx.selectEngineFile=async id=>{state.selectedEngineFile=id;};
+ctx.switchEngineTab=name=>{state.engineTab=name;};
+await ctx.openPendingEngineChanges();
+assert.equal(state.currentView,'engineconfig');assert.equal(state.selectedEngineFile,'user-list');assert.equal(state.engineTab,'config');
+assert.equal(element('#engineFileSelect').focused,true);
+state.selectedEngine='unmodified';state.selectedEngineFile='main';ctx.selectEngine=async()=>{};
+await ctx.openPendingEngineChanges();assert.equal(state.selectedEngine,'unmodified');assert.equal(state.selectedEngineFile,'main','cancel must keep the edited file');
+state.selectedEngine='nfqws2';state.engineIntent={};await ctx.openPendingEngineChanges();assert.equal(state.selectedEngineFile,'main','busy operation keeps its context');state.engineIntent=null;
+state.engineConfigs=[];await ctx.openPendingEngineChanges();assert.match(events.at(-1)[1],/Получаем состав изменений/);
 assert.equal(html.indexOf('id="serviceDraftBar"') < html.indexOf('id="ui3ServiceExpert"'), true, 'apply controls must be outside the collapsed advanced section');
 assert.equal((html.match(/id="serviceDraftBar"/g) || []).length, 1);
 assert.match(html, /data-rz-filter="changed"/);
