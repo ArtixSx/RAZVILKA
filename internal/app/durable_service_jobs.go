@@ -103,6 +103,9 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
 	if j.Request.Kind == "node-check" {
 		p.Mode, p.Total = j.Request.NodeCheckMode, len(j.Request.NodeIDs)
+		if j.Cursor > 0 {
+			p.ResultState = "not-retained"
+		}
 		if j.State == "failed" {
 			p.Message = durableNodeCheckFailureMessage(j.Reason)
 		}
@@ -306,7 +309,12 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	} // A retry must succeed even while its job owns admission.
 	intent := fingerprint
 	var nodeReview *durableNodeReview
-	if request.Kind == "node-apply" {
+	if request.Kind == "node-check" {
+		intent, err = a.prepareDurableNodeCheck(ctx, &request)
+		if err != nil {
+			return durableServiceJob{}, err
+		}
+	} else if request.Kind == "node-apply" {
 		nodeReview, intent, err = a.prepareDurableNodeApply(ctx, request, nodeToken, nodeOwner)
 		if err != nil {
 			return durableServiceJob{}, err
@@ -342,13 +350,6 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 			}
 		}
 		intent = durableServiceIntentHash(cfg, services)
-		if request.Kind == "node-check" {
-			err = a.validateDurableNodeCheckSelection(ctx, &request, services)
-			if err != nil {
-				release()
-				return durableServiceJob{}, err
-			}
-		}
 		if request.Kind == "dns-compare" {
 			intent, err = a.durableDNSIntentHash(cfg, services, request.DNS)
 			if err != nil {
@@ -374,6 +375,9 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	}()
 	if job, found, err = lookup(); found {
 		return job, err
+	}
+	if request.Kind == "node-check" && a.Operations.Snapshot().Fenced {
+		return durableServiceJob{}, operationgate.ErrRecovery
 	}
 	now := time.Now().UTC()
 	retained := make([]durableServiceJob, 0, len(r.doc.Jobs)+1)
@@ -455,6 +459,7 @@ func (a *App) addDurableServiceJobs(view map[string]any) {
 	for _, j := range r.doc.Jobs {
 		p := j.presentation()
 		if current, ok := observations[j.ID]; ok && j.Request.Kind == "node-check" {
+			p.ResultState = "current-process"
 			p.Results = slices.Clone(current.Results)
 			p.Passed, p.Failed, p.Inconclusive, p.Skipped = current.Passed, current.Failed, current.Inconclusive, current.Skipped
 		}

@@ -215,7 +215,7 @@ func TestDurableBatchObservationsBoundedAcrossJobs(t *testing.T) {
 		t.Fatal("old details not evicted")
 	}
 	for _, job := range a.nodeCheckCurrentView()["durable_jobs"].([]*nodeCheckJob) {
-		if job.ID == first && (job.Passed != 0 || len(job.Results) != 0) {
+		if job.ID == first && (job.Passed != 0 || len(job.Results) != 0 || job.ResultState != "not-retained") {
 			t.Fatal("evicted details invented from durable record")
 		}
 	}

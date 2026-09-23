@@ -46,6 +46,65 @@ func enqueueNodeFixture(t *testing.T, a *App, request nodeCheckJobRequest) uint6
 	return response.Job.ID
 }
 
+func TestDurableNodeAdmissionQueuesDuringAnotherOperationWithoutStartingIO(t *testing.T) {
+	for _, catalog := range []bool{false, true} {
+		t.Run(fmt.Sprint(catalog), func(t *testing.T) {
+			a, q := durableNodeFixture(t, 2)
+			if catalog {
+				q = durableCatalogRequest(t, a)
+			}
+			var calls atomic.Int32
+			a.NodeChecker = jobNodeChecker(func(ctx context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+				calls.Add(1)
+				return autofallbackResult(request, true), nil
+			})
+			release, err := a.Operations.Exclusive(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			id := enqueueNodeFixture(t, a, q)
+			a.runDurableServiceJob(context.Background(), time.Now())
+			if j := durableJobAt(t, a, id); j.State != "queued" || j.Cursor != 0 || j.Attempts != 0 || calls.Load() != 0 {
+				t.Fatal("queue crossed another owner's lease", j)
+			}
+			release()
+			a.runDurableServiceJob(context.Background(), time.Now().Add(6*time.Second))
+			if j := durableJobAt(t, a, id); j.Cursor != 1 || calls.Load() != 1 {
+				t.Fatal("queued check did not resume", j)
+			}
+		})
+	}
+}
+
+func TestDurableNodeQueuedAdmissionDoesNotAuthorizeChangedSettingsOrFencedRecovery(t *testing.T) {
+	a, q := durableNodeFixture(t, 1)
+	release, err := a.Operations.Exclusive(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := enqueueNodeFixture(t, a, q)
+	if err := a.Store.SetSafeMode(!a.Store.Get().SafeMode); err != nil {
+		t.Fatal(err)
+	}
+	release()
+	a.NodeChecker = jobNodeChecker(func(context.Context, dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		t.Error("stale queued intent reached network")
+		return dataplane.NodeCheckResult{}, nil
+	})
+	a.runDurableServiceJob(context.Background(), time.Now())
+	if j := durableJobAt(t, a, id); j.State != "failed" || j.Reason != "settings-changed" {
+		t.Fatal(j)
+	}
+	a.Operations.Fence()
+	q.IdempotencyKey = "fenced-new-node-job"
+	revision := a.Store.Get().Revision
+	q.ExpectedRevision = &revision
+	w := controlRequest(a, "POST", "/api/v1/node-checks", q)
+	if w.Code == 202 || len(a.reconciler.doc.Jobs) != 1 {
+		t.Fatal("recovery fence admitted new work", w.Code)
+	}
+}
+
 func TestDurableNodeBatchYieldsRetainsIdentityAndNoSecrets(t *testing.T) {
 	a, request := durableNodeFixture(t, 2)
 	before := a.Store.Get()

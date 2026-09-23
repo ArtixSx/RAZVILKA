@@ -111,6 +111,49 @@ func (a *App) validateDurableNodeCheckSelection(ctx context.Context, r *serviceC
 	return nil
 }
 
+// Enqueue only freezes read-only intent. It must not compete with a running
+// service probe for network admission. The existing worker acquires the lease
+// and revalidates all references/revision/definitions before its first IO.
+func (a *App) prepareDurableNodeCheck(ctx context.Context, request *serviceControlJobRequest) (string, error) {
+	if a.Store == nil {
+		return "", errServiceControlRequest
+	}
+	if a.Operations.Snapshot().Fenced {
+		return "", operationgate.ErrRecovery
+	}
+	if a.SelfUpdate != nil && a.SelfUpdate.InstallationLocked() {
+		return "", operationgate.ErrBusy
+	}
+	cfg := a.Store.Get()
+	if cfg.Revision != *request.ExpectedRevision {
+		return "", config.ErrRevisionChanged
+	}
+	services := []catalog.Service{}
+	for _, service := range a.catalogSnapshot().Services {
+		if len(request.ServiceIDs) == 1 && service.ID == request.ServiceIDs[0] {
+			services = append(services, service)
+			break
+		}
+	}
+	if len(services) != len(request.ServiceIDs) {
+		return "", errServiceControlRequest
+	}
+	if err := a.validateDurableNodeCheckSelection(ctx, request, services); err != nil {
+		return "", err
+	}
+	intent := durableServiceIntentHash(cfg, services)
+	if current := a.Store.Get(); current.Revision != cfg.Revision || durableServiceIntentHash(current, services) != intent || len(services) == 1 && !a.nodeCheckDefinitionCurrent(services[0].ID, applyReviewHash(services[0])) {
+		return "", config.ErrRevisionChanged
+	}
+	if a.Operations.Snapshot().Fenced {
+		return "", operationgate.ErrRecovery
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return intent, nil
+}
+
 func (a *App) acceptDurableNodeChecks(w http.ResponseWriter, r *http.Request, q nodeCheckJobRequest) {
 	request := serviceControlJobRequest{Kind: "node-check", NodeCheckMode: q.Mode, NodeIDs: q.NodeIDs, ExpectedRevision: q.ExpectedRevision, IdempotencyKey: q.IdempotencyKey}
 	if q.Scope == allVLESSScope {

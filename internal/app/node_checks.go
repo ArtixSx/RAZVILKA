@@ -51,6 +51,7 @@ type nodeCheckItem struct {
 
 type nodeCheckJob struct {
 	Scope          string                    `json:"scope,omitempty"`
+	ResultState    string                    `json:"result_state,omitempty"`
 	Matched        int                       `json:"matched,omitempty"`
 	Passed         int                       `json:"passed"`
 	Failed         int                       `json:"failed"`

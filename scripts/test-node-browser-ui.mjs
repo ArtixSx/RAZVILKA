@@ -41,6 +41,13 @@ state.nodes.country_metadata = { 'node-aaaaaa': { country_code: 'NL', country_so
 $('#nodeBrowserService').value = 'telegram';
 context.renderNodes();
 assert.equal(calls.length, 0, 'rendering started network work');
+context.browser.job = {mode:'service',scope:'all-vless',state:'failed',total:64,completed:21,result_state:'not-retained'};
+context.renderNodeBatchStatus();
+assert.match($('#nodeBatchMessage').textContent,/Подробные результаты прежнего запуска не сохранены/);
+assert.doesNotMatch($('#nodeBatchMessage').textContent,/подходят: 0|отказ: 0/);
+context.browser.job.result_state='current-process';context.browser.job.passed=5;
+context.renderNodeBatchStatus();
+assert.match($('#nodeBatchMessage').textContent,/подходят: 5/);
 for (const [mode, label] of [['tcp','TCP'],['service-check','Проверка сервисов'],['service-select','Подбор подключений']]) {
   context.browser.job = {mode,state:'completed',total:1,completed:1};
   context.renderNodeBatchStatus();
