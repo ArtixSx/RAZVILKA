@@ -82,8 +82,12 @@ await test('fallback card has no action able to apply incomplete state', async (
   const context = { esc: s => String(s).replaceAll('<', '&lt;'), consoleServiceIcon: () => 'TG',
     rim: { category: () => 'Связь' }, interfaceRouteName: s => s };
   vm.createContext(context); vm.runInContext(fn, context);
-  const card = context.interfaceServiceCard({ presentation_only: true, id: 'tg', name: '<img>', enabled: false, route: 'auto', sources: [] }, {});
+  // Membership in Autopilot may make selectedView.enabled true; that must not
+  // replace the actual saved desired switch displayed inside the card.
+  const card = context.interfaceServiceCard({ presentation_only: true, id: 'tg', name: '<img>', enabled: true,
+    desired_state: { enabled: false }, route: 'auto', sources: [] }, {});
   assert.match(card, /&lt;img>/); assert.doesNotMatch(card, /<button|data-r5-add|data-rz-action/);
+  assert.match(card, /Выключен/);
 });
 await test('unknown and busy settings do not claim working mode or enable a toggle', async () => {
   const app = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
