@@ -453,6 +453,9 @@ func main() {
 		log.Printf("dataplane boot recovery completed for %s", recovery.PlanID)
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "ok", Actor: "system", RemoteIP: "local"})
 	}
+	// Publish the initial settings before collectors/automation can take
+	// admission for a long first operation. Recovery above has already finished.
+	a.StartPanelSnapshots(runtimeContext)
 	statsSampler.Start(runtimeContext)
 	connectionCollector := conntrack.New(telemetryStore, store, func() catalog.Catalog {
 		services := append([]catalog.Service(nil), cat.Services...)
@@ -472,7 +475,6 @@ func main() {
 		log.Fatal(err)
 	}
 	a.StartNodeChecks(runtimeContext)
-	a.StartPanelSnapshots(runtimeContext)
 	a.StartNodeFeeds(runtimeContext)
 	go func() { serverErrors <- srv.Serve(listener) }()
 	a.StartSelfUpdateNodeRecovery(runtimeContext)
