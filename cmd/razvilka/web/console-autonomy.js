@@ -41,7 +41,44 @@
     return {name,category,domains:[host],strategy:['auto'],probe_url:`https://${host}/`,description:'Пользовательский сервис. Автоматическая базовая веб-проверка.',icon:'◇'};
   }
   const stateLabels={pending:'Ожидает проверки',checking:'Проверяется',healthy:'Проверен',applied:'Применён',searching:'Подбор резерва',unconfirmed:'Нет однозначного результата',paused:'На паузе', 'manual-change':'Ручное изменение', 'network-unknown':'Сеть не определена', 'apply-refused':'Применение отклонено', 'rate-limited':'Лимит переключений', 'requires-review':'Нужна проверка журнала', 'scope-pending':'Область ещё не применена', 'origin-expired':'Истёк источник', 'definition-changed':'Состав изменился', 'unsupported-scenario':'Нет подходящего теста', 'checker-unavailable':'Проверяющий модуль недоступен', 'catalog-unavailable':'Каталог недоступен', 'removal-pending':'Снятие маршрута в очереди', 'removal-blocked':'Снятие приостановлено',removed:'Удалён'};
-  const model={validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels};
+  function policyConsentRequired(previous, next, releaseSafeMode = false) {
+    // Fail closed on first setup, new authority or unknown changed fields.
+    // This is presentation only: server validation, revision/CAS, ownership
+    // and the explicit SAVE_AUTONOMY request remain authoritative.
+    if (releaseSafeMode || !previous?.setup_complete || !next?.setup_complete) return true;
+    const before = JSON.parse(JSON.stringify(previous));
+    const after = JSON.parse(JSON.stringify(next));
+    const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    for (const field of ['source_ids', 'protocols', 'preferred_routes']) {
+      if (!Array.isArray(before[field]) || !Array.isArray(after[field])) return true;
+      if (after[field].some(value => !before[field].includes(value))) return true;
+      delete before[field]; delete after[field];
+    }
+    // A CIDR change is not guessed to be a subset in the browser. It still
+    // needs review; only a harmless reordering of the same scope is ignored.
+    if (before.all_lan !== after.all_lan) return true;
+    if (!Array.isArray(before.default_sources) || !Array.isArray(after.default_sources)) return true;
+    if (!equal([...before.default_sources].sort(), [...after.default_sources].sort())) return true;
+    delete before.default_sources; delete after.default_sources;
+    if (!before.inherit_new_services && after.inherit_new_services) return true;
+    delete before.inherit_new_services; delete after.inherit_new_services;
+    for (const field of ['application', 'components']) {
+      const modes = field === 'application' ? ['off', 'check', 'prepare'] : ['off', 'check'];
+      const oldWindow = before[field], newWindow = after[field];
+      if (!oldWindow || !newWindow || modes.indexOf(oldWindow.mode) < 0 || modes.indexOf(newWindow.mode) < 0) return true;
+      if (modes.indexOf(newWindow.mode) > modes.indexOf(oldWindow.mode)) return true;
+      const rest = value => Object.fromEntries(Object.entries(value).filter(([key]) => !['mode', 'start', 'end', 'days'].includes(key)));
+      if (!equal(rest(oldWindow), rest(newWindow))) return true;
+      delete before[field]; delete after[field];
+    }
+    // Bounded tuning and pausing/resuming the existing policy do not expand
+    // permitted devices, sources or transports. Limits are checked by server.
+    for (const field of ['revision', 'enabled', 'timezone', 'check_seconds', 'reserve_seconds', 'reserve_target', 'candidates_per_round', 'failure_confirm_seconds', 'max_switches_per_hour']) {
+      delete before[field]; delete after[field];
+    }
+    return !equal(before, after);
+  }
+  const model={validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired};
   if(typeof module==='object'&&module.exports) module.exports=model;
   root.RazvilkaAutonomyModel=model;
   if(typeof document==='undefined') return;
@@ -49,6 +86,7 @@
   const $$=selector=>Array.from(document.querySelectorAll(selector)).filter(el=>el.closest('[data-autonomy]'));
   let snapshot=null,feeds=null,step=0,editingPolicy=null,dirty=false,loading=false,saving=false;
   let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null;
+  let consentReviewFingerprint = '';
   const requests=new Set();
   function requireGeneration(generation) { if(generation!==authGeneration){const e=new Error('Ответ относится к завершённой сессии.');e.name='AuthGenerationChanged';e.authGeneration=generation;throw e;} }
   function reportError(e,element=null) { if(e.name==='AuthGenerationChanged'||e.authGeneration!==undefined&&e.authGeneration!==authGeneration)return;if(element)element.textContent=e.message;else notify(e.message,true); }
@@ -143,6 +181,16 @@
   }
   function renderReview() {
     if(!editingPolicy) return;const p=policyFromForm();
+    const releaseSafeMode = $('releaseSafeMode').checked;
+    const consentNeeded = policyConsentRequired(editingPolicy, p, releaseSafeMode);
+    const fingerprint = JSON.stringify([p, releaseSafeMode, snapshot?.starter?.sha256,
+      $$('input[name="initial-starter"]:checked').map(x => x.value).sort(),
+      $$('input[name="initial-extra"]:checked').map(x => x.value).sort()]);
+    if (consentReviewFingerprint !== fingerprint) $('confirmConsent').checked = false;
+    consentReviewFingerprint = fingerprint;
+    const consentLabel = $('confirmConsent').closest('label');
+    if (consentLabel) consentLabel.hidden = !consentNeeded;
+    if (!consentNeeded) $('confirmConsent').checked = false;
     const rows=[['Канал обновлений',p.update_channel==='preview'?'Предварительные и стабильные':'Стабильные'],['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · Проверка каталога`],['Часовой пояс',p.timezone]];
     $('reviewSummary').innerHTML=rows.map(([k,v])=>`<div><span>${escapeHTML(k)}</span><b>${escapeHTML(v)}</b></div>`).join('');
   }
@@ -229,8 +277,10 @@
     event.preventDefault();if(saving) return;
     const generation=authGeneration;
     try {
-      if(!$('confirmConsent').checked) throw new Error('Подтвердите источники и область устройств.');
       const p=validatePolicy(policyFromForm());
+      // Editing after an earlier approval invalidates that approval.
+      renderReview();
+      if(policyConsentRequired(editingPolicy,p,$('releaseSafeMode').checked)&&!$('confirmConsent').checked) throw new Error('Подтвердите новые разрешения: источники, способы подключения или область устройств.');
       if($('releaseSafeMode').checked&&!p.enabled) throw new Error('Не снимайте Safe Mode при выключенной автоматике.');
       saving=true;$('saveWizard').disabled=true;
       await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:$('releaseSafeMode').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});

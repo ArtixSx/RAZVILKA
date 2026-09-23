@@ -91,8 +91,13 @@ assert.ok(html.indexOf('/project-log.js?') < html.indexOf('/app.js?'), 'renderer
 assert.ok(html.includes('/project-log.js?v=' + read('VERSION').trim()), 'renderer asset must use the current release version');
 
 // Escape on a reused confirmation dialog must never repeat an earlier approval.
-const dialog = { returnValue: 'confirm', showModal() {}, addEventListener(name, listener) { assert.equal(name, 'close'); this.closeListener = listener; } };
-const confirmation = vm.createContext({ $: selector => selector === '#actionDialog' ? dialog : { textContent: '' } });
+const dialog = Object.assign(new EventTarget(), {
+  returnValue: 'confirm', open: false,
+  showModal() { this.open = true; },
+  closeListener() { this.open = false; this.dispatchEvent(new Event('close')); },
+  close(value = '') { this.returnValue = value; this.closeListener(); }
+});
+const confirmation = vm.createContext({ document: new EventTarget(), $: selector => selector === '#actionDialog' ? dialog : { textContent: '' } });
 vm.runInContext(slice('function askConfirmation(', 'function applyStateText('), confirmation);
 const confirmed = confirmation.askConfirmation('Удаление', 'Проверить', 'Удалить');
 assert.equal(dialog.returnValue, '');

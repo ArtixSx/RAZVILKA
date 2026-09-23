@@ -23,6 +23,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-pending-changes-ui.mjs
   node scripts/test-interface-contract.mjs
   node scripts/test-interface-home.mjs
+  node scripts/test-inspector-focus.mjs
   node scripts/test-component-cards-ui.mjs
   node --check cmd/razvilka/web/project-log.js
   node scripts/test-project-log-ui.mjs
@@ -79,6 +80,8 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-engine-intent-ui.mjs
   node scripts/test-node-activity-ui.mjs
   node scripts/test-panel-loading-ui.mjs
+  node scripts/test-ux-stage1.mjs
+  node scripts/test-bundle-integration.mjs
   node scripts/test-warp-generation-ui.mjs
   node scripts/test-restore-busy-supervision.mjs
   node scripts/test-native-enrollment-supervision.mjs

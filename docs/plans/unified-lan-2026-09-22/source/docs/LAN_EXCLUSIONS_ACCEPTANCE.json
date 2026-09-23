@@ -1,0 +1,640 @@
+{
+  "schema": 1,
+  "stage": "E1",
+  "date": "2026-09-22",
+  "kind": "planned_acceptance_not_execution_report",
+  "cases": [
+    {
+      "id": "LE-001",
+      "title": "lan_except не включает весь интернет",
+      "setup": "Сохранить lan_except с selected_services.",
+      "expected": "Неизвестные назначения остаются на исходном пути; только выбранные сервисы получают обход.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-002",
+      "title": "Новый клиент наследует домашний профиль",
+      "setup": "В принятом домашнем сегменте подключён новый не исключённый клиент.",
+      "expected": "Наследование без нового мастера; гостевой scope не расширяется.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE7"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-003",
+      "title": "Гостевой сегмент не наследуется",
+      "setup": "Добавить guest-сегмент после сохранения домашнего профиля.",
+      "expected": "Guest не включён до отдельного разрешения.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE7"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-004",
+      "title": "Трафик самого роутера отделён",
+      "setup": "Включить lan_except, вызвать служебную загрузку/регистрацию.",
+      "expected": "Выбранный ранее служебный путь не подменён клиентским catch-all.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-005",
+      "title": "Исключение одного устройства",
+      "setup": "Два клиента, один исключить во время работы.",
+      "expected": "Новые потоки исключённого клиента не используют owned NFQ/proxy/Smart DNS; второй сохраняет работу.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1",
+        "LE7"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-006",
+      "title": "Смена DHCP-адреса",
+      "setup": "Исключённый клиент получил новый IPv4.",
+      "expected": "Исключение следует за подтверждённой identity, не только за старым IP.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE4"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-007",
+      "title": "Повторная выдача IPv4",
+      "setup": "Старый IPv4 исключённого клиента получил другой клиент.",
+      "expected": "Устаревшая адресная запись не переносит исключение на другого клиента.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE4"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-008",
+      "title": "IPv6 и prefix renewal",
+      "setup": "Исключённый клиент использует новые IPv6 адреса после смены префикса.",
+      "expected": "Поддержанное сопоставление исключает его IPv6; неподдержанное не выдаёт полную гарантию.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE4"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-009",
+      "title": "Изменение private MAC",
+      "setup": "Клиент подключился с неизвестным новым MAC.",
+      "expected": "Не выдумывать прежнюю identity по имени; объяснить режим наследования и ограничения.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE4",
+        "LE5"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-010",
+      "title": "Устройство временно не наблюдается",
+      "setup": "Известное исключённое устройство уснуло/исчезло из текущего списка.",
+      "expected": "Запись исключения сохраняется; не расширять scope и не стирать ручное правило.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-011",
+      "title": "Пропавшая native policy",
+      "setup": "Политика, использованная исполнителем, удалена/переименована.",
+      "expected": "Нет перехода к all LAN; новый план затронутой области отклонён, панель доступна.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-012",
+      "title": "Неопределённая идентичность сегмента",
+      "setup": "Меняется интерфейс/bridge, совпадает старое имя.",
+      "expected": "Требуется подтверждённая identity, не wildcard всех приватных сетей.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE7"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-013",
+      "title": "Глобальное исключение сильнее назначения сервиса",
+      "setup": "Для исключённого устройства сервис имеет явный proxy pin.",
+      "expected": "Сервис не включает обработку исключённого устройства.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-014",
+      "title": "Индивидуальный scope только сужает",
+      "setup": "Глобально разрешён home; сервис содержит иной CIDR.",
+      "expected": "Пересечение, а не объединение; чужой сегмент не включается.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-015",
+      "title": "Старые selected-настройки после миграции",
+      "setup": "Обновить установку с двумя выбранными адресами.",
+      "expected": "Не переключать на lan_except, не включать RU-каталог скрыто.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-016",
+      "title": "Ручной direct против автоматического подбора",
+      "setup": "Общий автопилот пытается подобрать путь для ручного исключения.",
+      "expected": "Ручное без обхода сохраняется; не выполнять proxy probes без разрешения.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-017",
+      "title": "Обход поверх авто-RU",
+      "setup": "Российский сервис явно получил bypass override.",
+      "expected": "Auto-RU не отменяет override и последующие обновления его не стирают.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE2"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-018",
+      "title": "Два противоположных обязательных правила",
+      "setup": "Одна область содержит mandatory direct и mandatory tunnel.",
+      "expected": "Новый конфликтующий план не применяется; явное объяснение без случайного приоритета.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-019",
+      "title": "Не-.ru домен российского сервиса",
+      "setup": "Curated vendor snapshot содержит сервис с доменом .com.",
+      "expected": "Он учитывается по составу списка, не только по TLD.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE2"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-020",
+      "title": "Неявный broad TLD из category-ru",
+      "setup": "Curated importer встречает include:tld-ru.",
+      "expected": "Не маскировать его под per-service список; отклонить/разделить широкую область.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE2",
+        "LE3"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-021",
+      "title": "Optional зоны выключены",
+      "setup": "Посторонний *.ru домен не входит в curated профиль.",
+      "expected": "Он не получает auto-RU только из имени зоны; следует обычной политике.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE3"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-022",
+      "title": "Optional зоны включены явно",
+      "setup": "Пользователь выбрал ровно ru/рф/su.",
+      "expected": "Правильное suffix/IDNA сопоставление; остальные TLD из upstream не добавляются.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE3"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-023",
+      "title": "Граница имени, IDNA и URL-path",
+      "setup": "Ввести mixed case, trailing dot, IDN, example.ru.attacker.test и HTTPS URL с путём.",
+      "expected": "Нормализация без расширения на похожий домен; объясняется доменная, не URL-path область.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE8"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-024",
+      "title": "Точное правило не становится suffix",
+      "setup": "Импортировать full:host.example и domain:zone.example.",
+      "expected": "Различие сохраняется до исполнителя либо сообщается неподдержанный тип.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE8"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-025",
+      "title": "Российский IP не означает российский сервис",
+      "setup": "Иностранный сервис имеет адрес, классифицированный как RU.",
+      "expected": "Без opt-in GeoIP нет автоматического direct-исключения.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE6"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-026",
+      "title": "Общий CDN-адрес",
+      "setup": "RU/direct и explicit proxy имена делят один IP одного клиента.",
+      "expected": "Domain-aware исполнение или точный конфликт; никакого общего direct IP-set.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE6"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-027",
+      "title": "Имя назначения недоступно",
+      "setup": "Поток по IP literal/private DNS/закрытому имени.",
+      "expected": "Не выдавать догадку за совпадение списка; следовать согласованному unknown-mode.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE6",
+        "LE8"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-028",
+      "title": "Разные DNS views двух клиентов",
+      "setup": "Один телефон использует Smart DNS, ноутбук исключён.",
+      "expected": "Ответ gateway не попадает из общего кэша к исключённому клиенту.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-029",
+      "title": "Отсутствует per-client DNS capability",
+      "setup": "Исполнитель видит только запросы общего stub.",
+      "expected": "Не обещать device-scoped Smart DNS; отказ именно комбинации без глобального сбоя.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-030",
+      "title": "Ручное исключение при аварии direct",
+      "setup": "Базовый путь недоступен для исключённого сайта.",
+      "expected": "Показать недоступность; без скрытого fallback на proxy.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-031",
+      "title": "Источник недоступен при старте",
+      "setup": "После reboot GitHub не отвечает.",
+      "expected": "Загружается принятый persistent snapshot с возрастом, не пустой список.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE2"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-032",
+      "title": "Пустая выдача/ошибка JSON",
+      "setup": "Обновление вернуло пустые, чрезмерные или повреждённые данные.",
+      "expected": "Кандидат отвергнут; прежние effective исключения сохранены.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE2"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-033",
+      "title": "Вредоносное расширение списков",
+      "setup": "В каталоге появляются /0, broad CDN или неожиданный TLD.",
+      "expected": "Не авторизуется обычным узким catalog update; проверка/отказ кандидата.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE3",
+        "LE6"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-034",
+      "title": "Автоматическое штатное обновление",
+      "setup": "При разрешённом RU-каталоге появился небольшой допустимый набор записей.",
+      "expected": "Стадия проверки/применения без отдельных подтверждений каждой строки; manual override сохраняется.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE2"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-035",
+      "title": "304 и версия принятого снимка",
+      "setup": "Источник возвращает Not Modified; локальный snapshot повреждён.",
+      "expected": "304 не признаётся наличием данных; bounded refetch, без уничтожения действующего материала.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE2"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-036",
+      "title": "Потерян ответ сохранения",
+      "setup": "Двойной клик/повтор запроса после таймаута.",
+      "expected": "Одно задание по identity; не повторять сеть вслепую, подтвердить фактический результат.",
+      "required_levels": [
+        "unit",
+        "real_http_integration"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-037",
+      "title": "Авария в применении исключений",
+      "setup": "Остановить процесс между DNS/rules/commit на изолированном стенде.",
+      "expected": "Startup сверяет журнал и owned ресурсы, восстанавливает согласованную версию.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE1"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-038",
+      "title": "Старые соединения после исключения",
+      "setup": "Активная долгая передача уже идёт через proxy, меняется исключение.",
+      "expected": "Статус convergence до завершения scoped миграции; не заявлять мгновенный direct.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE6"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-039",
+      "title": "Чужой VPN/фильтр и панель",
+      "setup": "Есть собственная политика Keenetic/AdGuard и VPN на клиенте.",
+      "expected": "Не удалять чужие настройки; UI не обещает global direct; доступность панели сохраняется.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil"
+      ],
+      "source_ids": [
+        "LE7"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "LE-040",
+      "title": "Длительная работа all-except с резервом",
+      "setup": "Закрытый браузер; A отказал, B не применился, C работает, позже D; два сегмента и исключённый клиент.",
+      "expected": "Прежний A/B/C/D тест сохраняется; исключения и DNS views переживают failover/обновление; bounded ресурсы в 24/72h.",
+      "required_levels": [
+        "real_http_integration",
+        "native_engine",
+        "router_client_hil",
+        "soak_24_72h"
+      ],
+      "source_ids": [
+        "LE1",
+        "LE7"
+      ],
+      "status": "planned",
+      "result": null
+    }
+  ]
+}

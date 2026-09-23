@@ -1,0 +1,134 @@
+{
+  "audit_date": "2026-09-22",
+  "sources": [
+    {
+      "name": "RAZVILKA current main",
+      "url": "https://github.com/ArtixSx/RAZVILKA/tree/c3722365dcbcee8e1c5e5909aabbbf907e457a22",
+      "revision_or_blob": "c3722365dcbcee8e1c5e5909aabbbf907e457a22",
+      "scope": "GitHub connector branch + relevant files; not a complete local checkout"
+    },
+    {
+      "name": "Original automation plan",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/c3722365dcbcee8e1c5e5909aabbbf907e457a22/docs/plans/automation-2026-09-20/AUDIT_AND_IMPLEMENTATION_RU.md",
+      "revision_or_blob": "067d7b4c1c68fdb704fdac0da1f426f8ae07054e",
+      "scope": "15 stages, 104 PLANNED acceptance cases in associated matrix; updated findings distinguished"
+    },
+    {
+      "name": "Catalog resilience plan",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/c3722365dcbcee8e1c5e5909aabbbf907e457a22/docs/plans/catalog-resilience-2026-09-20/README.md",
+      "revision_or_blob": "5eace185d6a7efcd9d80e546cd517a4211595def",
+      "scope": "20 PLANNED cases; complete README read"
+    },
+    {
+      "name": "Current community adapter",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/c3722365dcbcee8e1c5e5909aabbbf907e457a22/internal/community/community.go",
+      "revision_or_blob": "93ea6d627d35686d6c9efae2a033df17436bd7e6",
+      "scope": "1..128 registry, separate parts, preview cache/budgets; relevant code read"
+    },
+    {
+      "name": "HydraRoute Neo",
+      "url": "https://github.com/Ground-Zerro/HydraRoute/blob/984ec135dbc3e9fb54e0c8c63a0e2fd829538772/Neo/README.md",
+      "revision_or_blob": "984ec135dbc3e9fb54e0c8c63a0e2fd829538772",
+      "scope": "HRweb catalog/source import; domain/full semantic notes"
+    },
+    {
+      "name": "Geo-Aggregator README",
+      "url": "https://github.com/Ground-Zerro/Geo-Aggregator/blob/7d9696419648a99bfa4d4d8ccb725d092622b3c7/README.md",
+      "revision_or_blob": "7d9696419648a99bfa4d4d8ccb725d092622b3c7",
+      "scope": "19 categories/312 curated records, larger raw tag index; upstream statement"
+    },
+    {
+      "name": "Geo-Aggregator catalog sample",
+      "url": "https://github.com/Ground-Zerro/Geo-Aggregator/blob/7d9696419648a99bfa4d4d8ccb725d092622b3c7/db/catalog.json",
+      "revision_or_blob": "383c6c10d1302efbca06f175f4b6f4623ac089d5",
+      "scope": "First 155 source lines read. Full feed not executed through candidate"
+    },
+    {
+      "name": "Geo-Aggregator Telegram list",
+      "url": "https://github.com/Ground-Zerro/Geo-Aggregator/blob/7d9696419648a99bfa4d4d8ccb725d092622b3c7/source2/telegram.txt",
+      "revision_or_blob": "0ab5f66f41541ca3cbed6dd29c0ec1f9d9effb3b",
+      "scope": "Full connector body read; 12 CIDR +21 domains; not a live network test"
+    },
+    {
+      "name": "Geo normalization code",
+      "url": "https://github.com/Ground-Zerro/Geo-Aggregator/blob/7d9696419648a99bfa4d4d8ccb725d092622b3c7/scripts/main.go",
+      "revision_or_blob": "7d9696419648a99bfa4d4d8ccb725d092622b3c7",
+      "scope": "Relevant prefixRE/normalization search matches, not full code audit"
+    },
+    {
+      "name": "Hydra Launcher official docs",
+      "url": "https://docs.hydralauncher.gg/documentation/11/download-sources-11",
+      "revision_or_blob": null,
+      "scope": "Official indexed summary describes JSON game-file sources; parsed body incomplete; markdown endpoint 404"
+    },
+    {
+      "name": "Hydra Launcher official FAQ",
+      "url": "https://github.com/hydralauncher/hydra/wiki/FAQ",
+      "revision_or_blob": null,
+      "scope": "Official community download sources and title matching caveat"
+    },
+    {
+      "name": "Xbox DNS official service description",
+      "url": "https://xbox-dns.ru/",
+      "checked_at": "2026-09-22",
+      "scope": "Smart DNS gateway and published endpoints. Operator claims; no on-router reachability or privacy audit.",
+      "network_test_performed": false
+    },
+    {
+      "name": "Xray Freedom",
+      "url": "https://xtls.github.io/en/config/outbounds/freedom.html",
+      "checked_at": "2026-09-22",
+      "scope": "Direct outbound is relative to Xray host; exact config from screenshot not obtained.",
+      "network_test_performed": false
+    },
+    {
+      "name": "Xray DNS",
+      "url": "https://xtls.github.io/en/config/dns.html",
+      "checked_at": "2026-09-22",
+      "scope": "Per-domain DNS and resolution/fallback semantics. Engine version must be verified before implementation.",
+      "network_test_performed": false
+    },
+    {
+      "name": "Cloudflare WARP modes",
+      "url": "https://developers.cloudflare.com/warp-client/warp-modes/",
+      "checked_at": "2026-09-22",
+      "scope": "DNS-only is distinct from traffic tunnel; no local benchmark.",
+      "network_test_performed": false
+    },
+    {
+      "name": "Google Public DNS ECS",
+      "url": "https://developers.google.com/speed/public-dns/docs/ecs",
+      "checked_at": "2026-09-22",
+      "scope": "CDN geo-located answers may depend on DNS/ECS.",
+      "network_test_performed": false
+    },
+    {
+      "name": "Telegram dcOption",
+      "url": "https://core.telegram.org/constructor/dcOption",
+      "checked_at": "2026-09-22",
+      "scope": "IP address and media_only fields; no application traffic experiment.",
+      "network_test_performed": false
+    },
+    {
+      "name": "RAZVILKA Smart DNS provider metadata",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/c3722365dcbcee8e1c5e5909aabbbf907e457a22/internal/dnscontrol/provider_metadata.go",
+      "checked_at": "2026-09-22",
+      "scope": "Full file read through GitHub connector. Smart DNS lab/false autopilot.",
+      "network_test_performed": false
+    },
+    {
+      "name": "RAZVILKA historical DC1 DNS plan",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/c3722365dcbcee8e1c5e5909aabbbf907e457a22/docs/DNS_COMMUNITY_UNIFIED_DC1_RU.md",
+      "checked_at": "2026-09-22",
+      "scope": "Sections covering DNS actor, query path, app path, executor and bounded pair selection; historical, not runtime proof.",
+      "network_test_performed": false
+    }
+  ],
+  "unread_shared_chats": [
+    "https://chatgpt.com/s/cx_6ab18b4b82a48191bfe7b78dd3d0684f",
+    "https://chatgpt.com/s/cx_6ab18b6736bc819188275e2579b8e2c0"
+  ],
+  "external_research_index": "EXTERNAL_SOURCES.json",
+  "external_research_review_date": "2026-09-22",
+  "external_research_note": "Separate product/version scope and first-person reports; see source registry limitations. No runtime testing implied."
+}

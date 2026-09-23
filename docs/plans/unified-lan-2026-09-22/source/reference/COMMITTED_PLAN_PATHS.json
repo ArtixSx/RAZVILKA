@@ -1,0 +1,10 @@
+{
+  "base_commit": "c3722365dcbcee8e1c5e5909aabbbf907e457a22",
+  "paths": [
+    "docs/plans/automation-2026-09-20/AUDIT_AND_IMPLEMENTATION_RU.md",
+    "docs/plans/automation-2026-09-20/ACCEPTANCE_MATRIX.json",
+    "docs/plans/catalog-resilience-2026-09-20/README.md",
+    "docs/plans/catalog-resilience-2026-09-20/source/CODEX_CATALOG_RESILIENCE_RU.md"
+  ],
+  "note": "These committed source plans should be read in the Codex checkout. Current archive includes their reconciled master plan/crosswalk, not a fictitious full downloaded copy."
+}

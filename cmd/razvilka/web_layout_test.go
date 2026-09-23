@@ -102,7 +102,7 @@ func TestLoginScreenRendersPublicRuntimeStatus(t *testing.T) {
 		t.Fatal("public status assignment is missing")
 	}
 	renderIndex := strings.Index(app[statusIndex:], "renderStatus();")
-	authIndex := strings.Index(app[statusIndex:], "if (status.setup_required")
+	authIndex := strings.Index(app[statusIndex:], "showAuth(status)")
 	if renderIndex < 0 || authIndex < 0 || renderIndex > authIndex {
 		t.Fatal("public runtime status must render before the login/setup early return")
 	}

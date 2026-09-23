@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/panelhealth"
 )
 
 type operationContextKey struct{}
@@ -59,6 +60,19 @@ func (s *operationScope) restoreAdmission() (func(), error) {
 // cleanup finish; inheriting the context value does not extend ownership.
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Security.Middleware remains outside this middleware. Only this
+		// memory-only endpoint bypasses admission, never runtime Store reads.
+		if r.URL.Path == panelhealth.Path {
+			// The general security middleware allows diagnostic reads before
+			// account setup. Admission metadata is private even in that state.
+			if a.Security == nil || !a.Security.Authenticated(r) {
+				w.Header().Set("Cache-Control", "no-store")
+				http.Error(w, "administrator login is required", http.StatusUnauthorized)
+				return
+			}
+			panelhealth.Handler(&a.Operations).ServeHTTP(w, r)
+			return
+		}
 		updateLocked := a.SelfUpdate != nil && a.SelfUpdate.InstallationLocked()
 		if updateLocked && strings.HasPrefix(r.URL.Path, "/api/v1/auth/") && r.URL.Path != "/api/v1/auth/status" && r.URL.Path != "/api/v1/auth/login" && r.URL.Path != "/api/v1/auth/logout" {
 			a.writeOperationFailure(w, operationgate.ErrBusy)

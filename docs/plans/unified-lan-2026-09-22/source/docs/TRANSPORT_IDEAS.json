@@ -1,0 +1,460 @@
+{
+  "schema": 1,
+  "date": "2026-09-22",
+  "classification": "Implementation proposals, not executable recipes or measured recommendations.",
+  "ideas": [
+    {
+      "id": "R01",
+      "title": "Ненайденная политика NFQWS2 не расширяет LAN-область",
+      "priority": "P0",
+      "stage": "U0/U5",
+      "source_ids": [
+        "E12"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/dataplane/nfqws2*",
+        "internal/onboarding",
+        "internal/config"
+      ],
+      "proposed_change": "Fail-closed планирование области и readback после изменения политики; без all-LAN fallback.",
+      "acceptance_ids": [
+        "EXP-019",
+        "EXP-020"
+      ]
+    },
+    {
+      "id": "R02",
+      "title": "Диагностика видимости пакетов при offload",
+      "priority": "P0",
+      "stage": "U3/U5",
+      "source_ids": [
+        "E12",
+        "E13"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/systemprobe",
+        "internal/dataplane/nfqws2*",
+        "internal/strategylab"
+      ],
+      "proposed_change": "Сначала наблюдение; затем opt-in узкий capability-specific эксперимент с rollback и измерением нагрузки.",
+      "acceptance_ids": [
+        "EXP-021",
+        "EXP-022",
+        "EXP-023",
+        "EXP-024"
+      ]
+    },
+    {
+      "id": "R03",
+      "title": "Экспорт WARP без повторной регистрации",
+      "priority": "P0",
+      "stage": "U2/U6",
+      "source_ids": [
+        "E04",
+        "E08"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/warp",
+        "internal/cloudflareprovider",
+        "internal/awgprofile"
+      ],
+      "proposed_change": "Разделить Account/Enrollment/ExecutionSpec/Materialization, выполнять экспорт локально.",
+      "acceptance_ids": [
+        "EXP-001",
+        "EXP-002",
+        "EXP-003"
+      ]
+    },
+    {
+      "id": "R04",
+      "title": "Неопределённый исход enrollment и постоянные лимиты",
+      "priority": "P0",
+      "stage": "U2/U6",
+      "source_ids": [
+        "E01",
+        "E05"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/cloudflareprovider",
+        "internal/app/reconciler.go",
+        "internal/warp"
+      ],
+      "proposed_change": "Записывать попытку до запроса, readback где возможен, не делать ложную идемпотентность upstream.",
+      "acceptance_ids": [
+        "EXP-004",
+        "EXP-005",
+        "EXP-013"
+      ]
+    },
+    {
+      "id": "R05",
+      "title": "WARP endpoint registry по протоколу и аккаунту",
+      "priority": "P1",
+      "stage": "U3/U6",
+      "source_ids": [
+        "E01",
+        "E03",
+        "E06"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/warp",
+        "internal/usquediag",
+        "internal/components"
+      ],
+      "proposed_change": "Не объединять WG/H2/H3 пулы; полезность оценивать сервисом, не одной геометкой или ping.",
+      "acceptance_ids": [
+        "EXP-006",
+        "EXP-007",
+        "EXP-008"
+      ]
+    },
+    {
+      "id": "R06",
+      "title": "USQUE HTTP/2 как проверяемый резерв",
+      "priority": "P1",
+      "stage": "U3/U6",
+      "source_ids": [
+        "E06"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/dataplane/proxy.go",
+        "internal/usquediag",
+        "internal/components"
+      ],
+      "proposed_change": "Версионная capability, отдельные endpoint/pin, сквозная проба и транзакция.",
+      "acceptance_ids": [
+        "EXP-009",
+        "EXP-010",
+        "EXP-011",
+        "EXP-012"
+      ]
+    },
+    {
+      "id": "R07",
+      "title": "USQUE native и TCP-only L4 не смешиваются",
+      "priority": "P1",
+      "stage": "U6",
+      "source_ids": [
+        "E05",
+        "E26"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "cmd/razvilka/main.go",
+        "internal/dataplane",
+        "internal/components"
+      ],
+      "proposed_change": "Сравнить native с текущим sidecar; L4 только для TCP-сценария, loopback listeners, сохранённый прежний путь.",
+      "acceptance_ids": [
+        "EXP-014",
+        "EXP-015",
+        "EXP-016"
+      ]
+    },
+    {
+      "id": "R08",
+      "title": "Hooks как события единственного координатора",
+      "priority": "P0",
+      "stage": "U2/U3",
+      "source_ids": [
+        "E05"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/app/reconciler.go",
+        "internal/dataplane",
+        "internal/commandrun"
+      ],
+      "proposed_change": "Generation/jobID, bounded helper, дедупликация, независимая очистка при завершении и crash.",
+      "acceptance_ids": [
+        "EXP-017",
+        "EXP-018"
+      ]
+    },
+    {
+      "id": "R09",
+      "title": "MTU определяется по фактическому пути",
+      "priority": "P1",
+      "stage": "U3/U6",
+      "source_ids": [
+        "E02",
+        "E26"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/routeprobe",
+        "internal/testlab",
+        "internal/dataplane"
+      ],
+      "proposed_change": "Разделить outer MTU/inner MTU/MSS; bounded probe, не новый register при stall больших передач.",
+      "acceptance_ids": [
+        "EXP-029",
+        "EXP-030",
+        "EXP-031"
+      ]
+    },
+    {
+      "id": "R10",
+      "title": "Keepalive по задаче простоя/NAT",
+      "priority": "P1",
+      "stage": "U6",
+      "source_ids": [
+        "E04"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/warp",
+        "internal/engineconfig"
+      ],
+      "proposed_change": "Оставить проверенный режим, не ставить 25 всем; тест idle/reconnect, ресурсный бюджет.",
+      "acceptance_ids": [
+        "EXP-032"
+      ]
+    },
+    {
+      "id": "R11",
+      "title": "AWG совместимость на уровне полей",
+      "priority": "P1",
+      "stage": "U6",
+      "source_ids": [
+        "E09",
+        "E10"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/awgprofile",
+        "internal/backendprofile",
+        "internal/engineconfig"
+      ],
+      "proposed_change": "Разрешать только испытанный client-only subset со standard WARP; peer-required поля требуют согласованного сервера.",
+      "acceptance_ids": [
+        "EXP-041",
+        "EXP-042"
+      ]
+    },
+    {
+      "id": "R12",
+      "title": "Безопасная миграция собственного AWG сервера",
+      "priority": "P1",
+      "stage": "U7",
+      "source_ids": [
+        "E11"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/updatecheck",
+        "docs/server-profile migration",
+        "internal/awgprofile"
+      ],
+      "proposed_change": "Не превращать удаление peers в unattended update. Явная серверная операция, снимок и обратимость.",
+      "acceptance_ids": [
+        "EXP-043"
+      ]
+    },
+    {
+      "id": "R13",
+      "title": "Рецепты NFQWS2 сверяются по точной сборке",
+      "priority": "P1",
+      "stage": "U5",
+      "source_ids": [
+        "E12",
+        "E15"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/strategylab",
+        "internal/engineconfig",
+        "internal/recipehints"
+      ],
+      "proposed_change": "Версии, порядок стадий, Lua/assets hashes и capabilities; форумная строка только candidate.",
+      "acceptance_ids": [
+        "EXP-025",
+        "EXP-026"
+      ]
+    },
+    {
+      "id": "R14",
+      "title": "Клиентские сценарии вместо одного GET",
+      "priority": "P1",
+      "stage": "U3/U5/U8",
+      "source_ids": [
+        "E14",
+        "E15",
+        "E17",
+        "E28",
+        "E29"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/testlab",
+        "internal/evidence",
+        "internal/catalog",
+        "router test harness"
+      ],
+      "proposed_change": "Web/media/voice и разные TLS/QUIC клиенты имеют собственные результаты и дату.",
+      "acceptance_ids": [
+        "EXP-027",
+        "EXP-028",
+        "EXP-047"
+      ]
+    },
+    {
+      "id": "R15",
+      "title": "Server baseline и собственный HTTP/CDN вариант",
+      "priority": "P2",
+      "stage": "U6/U8",
+      "source_ids": [
+        "E18",
+        "E19",
+        "E21",
+        "E22"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "docs/server profiles",
+        "internal/backendprofile",
+        "internal/nodestore"
+      ],
+      "proposed_change": "Сравнить TCP REALITY и при необходимости XHTTP; не внедрять второй панельный runtime.",
+      "acceptance_ids": [
+        "EXP-035",
+        "EXP-036"
+      ]
+    },
+    {
+      "id": "R16",
+      "title": "Раздельные TCP и QUIC congestion настройки",
+      "priority": "P2",
+      "stage": "U6/U8",
+      "source_ids": [
+        "E20",
+        "E23",
+        "E24",
+        "E25"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "resource profiles",
+        "internal/testlab",
+        "docs/server profiles"
+      ],
+      "proposed_change": "A/B измерения с ограниченным трафиком; не глобальный sysctl bundle и не завышенный Brutal bandwidth.",
+      "acceptance_ids": [
+        "EXP-037",
+        "EXP-038"
+      ]
+    },
+    {
+      "id": "R17",
+      "title": "Capability-specific GSO/буферы/sidecar",
+      "priority": "P1",
+      "stage": "U6",
+      "source_ids": [
+        "E24",
+        "E26",
+        "E27"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/systemprobe",
+        "internal/components",
+        "internal/dataplane"
+      ],
+      "proposed_change": "Отсутствующая оптимизация даёт корректный fallback; старая платформа не обещает функции нового ядра.",
+      "acceptance_ids": [
+        "EXP-033",
+        "EXP-034"
+      ]
+    },
+    {
+      "id": "R18",
+      "title": "DNS не расширяет выбор сервисов",
+      "priority": "P0",
+      "stage": "D1",
+      "source_ids": [
+        "E08",
+        "E30"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/dnscontrol",
+        "internal/backendprofile",
+        "internal/dataplane"
+      ],
+      "proposed_change": "Несовместимость представлять явно; точный согласованный scope и отдельный bootstrap.",
+      "acceptance_ids": [
+        "EXP-044",
+        "EXP-045"
+      ]
+    },
+    {
+      "id": "R19",
+      "title": "Удалённый DNS, VPS egress и административный путь",
+      "priority": "P1",
+      "stage": "D1/U6",
+      "source_ids": [
+        "E01",
+        "E03",
+        "E18",
+        "E28"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/dnscontrol",
+        "internal/routeprobe",
+        "docs/server profiles"
+      ],
+      "proposed_change": "Resolver actor/query path/data path раздельно; WARP на VPS для сервиса не должен перекрыть SSH/control path.",
+      "acceptance_ids": [
+        "EXP-039",
+        "EXP-046"
+      ]
+    },
+    {
+      "id": "R20",
+      "title": "Резерв действительно независим и не гоняется за ping",
+      "priority": "P1",
+      "stage": "U3/U4",
+      "source_ids": [
+        "E03",
+        "E16"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "internal/autonomy",
+        "internal/nodestore",
+        "internal/providerfeed"
+      ],
+      "proposed_change": "Отличать новый ярлык от другого отказного домена; отказ сайта при up-интерфейсе запускает правильную проверку.",
+      "acceptance_ids": [
+        "EXP-040"
+      ]
+    },
+    {
+      "id": "R21",
+      "title": "Новые идеи не должны усложнять панель",
+      "priority": "P0",
+      "stage": "U1/U2",
+      "source_ids": [
+        "E07",
+        "E14",
+        "E16"
+      ],
+      "implementation_status": "researched_not_implemented",
+      "target_paths_or_areas": [
+        "cmd/razvilka/web",
+        "internal/app"
+      ],
+      "proposed_change": "Одна задача, краткий статус и подробности; обычные retries в рамках сохранённых прав без повторных модальных окон.",
+      "acceptance_ids": [
+        "EXP-048"
+      ]
+    }
+  ]
+}

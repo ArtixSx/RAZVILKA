@@ -1360,3 +1360,115 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .ui3-engine-action-hint{margin:12px 0 0}
 
 .interface-ui .pending-service-summary { white-space:pre-line; line-height:1.65; overflow-wrap:anywhere; }
+
+/* Task-oriented UI, Stage 2. Uses the existing theme, no external assets. */
+.interface-ui .ui3-subnav[hidden],.interface-ui [hidden].r5-catalog-tools{display:none!important}
+.interface-ui .ui3-auto-chip[role=status]{cursor:default;max-width:250px;white-space:normal;height:auto;min-height:36px}
+.interface-ui .r5-location{color:var(--muted);font-size:14px;padding:6px 0}
+.interface-ui .r5-home{display:grid;gap:20px;margin:24px 0}
+.interface-ui .r5-home #r42AutoPanel{padding:26px;background:var(--panel);border:1px solid var(--line);border-radius:16px}
+.interface-ui .r5-home #r42AutoPanel[data-state=good]{background:var(--accent-wash);border-color:var(--green)}
+.interface-ui .r5-home #r42AutoPanel[data-state=warn]{border-color:var(--amber)}
+.interface-ui .r5-auto-heading{display:flex;align-items:center;justify-content:space-between;gap:24px}
+.interface-ui .r5-auto-heading>div{min-width:0;max-width:800px}
+.interface-ui .r5-auto-heading h2{font-size:26px;line-height:1.25;margin:7px 0 10px;letter-spacing:-.025em}
+.interface-ui .r5-auto-heading p{font-size:15px;line-height:1.6;margin:0;color:var(--muted)}
+.interface-ui .r5-auto-heading>button{flex-shrink:0}
+.interface-ui .r5-auto-activity{display:flex;align-items:center;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid var(--line);font-size:14px}
+.interface-ui .r5-auto-activity>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.interface-ui .r5-auto-activity>small{color:var(--muted);font-size:13px}
+.interface-ui .r5-home #ui3HealthBanner{padding:20px 24px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.interface-ui .r5-counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.interface-ui .r5-counts>div{display:flex;align-items:center;gap:14px;min-width:0}
+.interface-ui .r5-counts strong{font-size:30px;font-weight:650;line-height:1.2}
+.interface-ui .r5-counts span{font-size:14px;line-height:1.4;color:var(--muted)}
+.interface-ui .r5-caption{font-size:13px;line-height:1.6;color:var(--muted);margin:14px 0 0}
+.interface-ui .r5-home-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.interface-ui .r5-home-grid .r42-panel{padding:22px;min-height:0}
+.interface-ui .r5-home .ui3-section-heading h3{font-size:17px}
+.interface-ui .r5-home p{overflow-wrap:anywhere}
+.interface-ui .r5-attention-row{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent;color:var(--text);padding:15px 0;gap:16px}
+.interface-ui .r5-attention-row b,.interface-ui .r5-attention-row small{display:block;line-height:1.5}
+.interface-ui .r5-attention-row b{font-size:15px}
+.interface-ui .r5-attention-row small{font-size:13px;color:var(--muted);margin-top:3px}
+.interface-ui .r5-attention-row>span:last-child{display:flex;gap:5px;align-items:center;font-size:13px;color:var(--green);flex-shrink:0}
+.interface-ui .r5-home-services>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
+.interface-ui .r5-home-services b{font-size:15px;overflow-wrap:anywhere}
+.interface-ui .r5-system-info{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:15px 20px}
+.interface-ui .r5-system-info>summary{font-size:14px;cursor:pointer;min-height:28px}
+.interface-ui .r5-system-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:20px 0}
+.interface-ui .r5-resource{display:flex;justify-content:space-between;gap:20px;margin:10px 0;font-size:14px}
+.interface-ui .r5-catalog-tools{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0 0 20px;padding:15px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.interface-ui .r5-catalog-tools p{flex:1;margin:0;font-size:14px;color:var(--muted)}
+.interface-ui .r5-service-card .ui3-service-name h4{font-size:18px}
+.interface-ui .r5-service-card .ui3-service-name>span{font-size:13px}
+.interface-ui .r5-service-card .ui3-status,.interface-ui .r5-home .ui3-status{font-size:14px}
+.interface-ui .r5-service-card .ui3-card-route{display:block;font-size:14px;margin:10px 0 18px}
+.interface-ui .r5-service-card .ui3-card-route b{display:block;white-space:normal;overflow-wrap:anywhere;margin-top:3px}
+.interface-ui .r5-service-card .ui3-card-route>span{font-size:12px}
+.interface-ui .r5-service-description{font-size:13px;line-height:1.5;color:var(--muted);margin:10px 0}
+.interface-ui .r5-service-card .ui3-card-footer>small{font-size:12px;line-height:1.4;color:var(--muted);min-width:0}
+.interface-ui .r5-service-card .ui3-card-footer button{min-height:42px;font-size:14px;flex-shrink:0}
+.interface-ui .r5-service-group .ui3-group-heading strong{font-size:18px}
+.interface-ui .r5-service-group .ui3-group-heading small{font-size:13px}
+.interface-ui .r5-setting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.interface-ui .r5-setting-task{display:flex;align-items:center;gap:14px;text-align:left;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);padding:20px;box-shadow:none}
+.interface-ui .r5-setting-task>span{flex:1;min-width:0}
+.interface-ui .r5-setting-task b{display:block;font-size:17px;margin-bottom:6px;line-height:1.35}
+.interface-ui .r5-setting-task small{display:block;font-size:14px;line-height:1.5;color:var(--muted)}
+.interface-ui .r5-setting-task>.ui-icon{color:var(--green);width:22px;flex-shrink:0}
+.interface-ui .r5-advanced{margin:18px 0;border-top:1px solid var(--line);padding:16px 0 0}
+.interface-ui .r5-advanced summary{cursor:pointer;font-size:15px;min-height:30px;font-weight:600}
+.interface-ui .r5-advanced p{font-size:14px;line-height:1.6}
+.interface-ui .r5-advanced button{margin:8px 10px 8px 0}
+.interface-ui .r5-domains{display:flex;gap:8px;flex-wrap:wrap;max-height:200px;overflow:auto}
+.interface-ui .r5-domains code{font-size:12px;overflow-wrap:anywhere}
+.interface-ui #r5InspectorStatus .ui3-status{font-size:16px}
+.interface-ui #r5InspectorDetail{font-size:15px;line-height:1.6}
+.interface-ui .r5-services-intro h2{font-size:26px}
+.interface-ui .r5-services-intro p{font-size:15px}
+.interface-ui .r5-services-intro>button{font-size:14px}
+.interface-ui .r5-home button:focus-visible,.interface-ui .r5-service-card button:focus-visible,.interface-ui .r5-setting-task:focus-visible,.interface-ui .r5-advanced summary:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+@media(max-width:1000px){.interface-ui .r5-auto-heading{align-items:flex-start;flex-direction:column}.interface-ui .r5-counts>div{flex-direction:column;align-items:flex-start;gap:6px}}
+@media(max-width:700px){.interface-ui .r5-home{gap:14px}.interface-ui .r5-home-grid,.interface-ui .r5-system-grid,.interface-ui .r5-setting-grid{grid-template-columns:1fr}.interface-ui .r5-auto-heading h2{font-size:23px}.interface-ui .r5-home #r42AutoPanel{padding:20px}.interface-ui .r5-auto-activity{align-items:flex-start;flex-wrap:wrap}.interface-ui .r5-auto-activity>small{width:100%;padding-left:28px}.interface-ui .r5-counts{gap:10px}.interface-ui .r5-counts strong{font-size:25px}.interface-ui .r5-counts span{font-size:12px}.interface-ui .r5-services-intro{align-items:flex-start;flex-direction:column}.interface-ui .r5-setting-task{padding:17px}.interface-ui .r5-setting-task small{font-size:13px}.interface-ui .r5-service-card .ui3-card-footer{flex-wrap:wrap}.interface-ui .r5-service-card .ui3-card-footer button{margin-left:auto}}
+.interface-ui .r5-service-group .ui3-group-member-grid{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}
+.interface-ui .ui3-list-layout .r5-service-group .ui3-group-member-grid{grid-template-columns:1fr}
+
+.interface-ui #r5ServiceFilters[hidden]{display:none!important}
+
+/* In-flow status: never an overlay, pointer blocker or optimistic route badge. */
+.panel-availability {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #394555);
+  border-radius: 12px;
+  background: var(--surface, #18212d);
+  color: var(--text, #edf2f7);
+  font: inherit;
+  line-height: 1.45;
+}
+.panel-availability[hidden] { display: none; }
+.panel-availability > div { min-width: 0; }
+.panel-availability span { display: block; overflow-wrap: anywhere; }
+.panel-availability small { display: block; opacity: .7; margin-top: 3px; }
+.panel-availability button {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.panel-availability button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.panel-availability[data-state="recovery-required"],
+.panel-availability[data-state="unreachable"] { border-color: var(--warning, #bf9539); }
+@media (max-width: 520px) {
+  .panel-availability { align-items: flex-start; flex-wrap: wrap; padding: 12px; }
+}

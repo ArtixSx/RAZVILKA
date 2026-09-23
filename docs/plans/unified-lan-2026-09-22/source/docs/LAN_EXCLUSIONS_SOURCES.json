@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "reviewed_on": "2026-09-22",
+  "sources": [
+    {
+      "id": "LE1",
+      "title": "RAZVILKA autonomy policy",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/c3722365dcbcee8e1c5e5909aabbbf907e457a22/internal/autonomy/policy.go",
+      "evidence_type": "repository_source",
+      "observation": "AllLAN/DefaultSources и per-service scope уже существуют; единую отрицательную область предстоит реализовать.",
+      "limitations": "Проверена структура данного файла, не весь runtime.",
+      "accessed_on": "2026-09-22",
+      "commit": "c3722365dcbcee8e1c5e5909aabbbf907e457a22",
+      "git_blob": "fde3edec0a27b4d9057d15e1521bb46814b00315"
+    },
+    {
+      "id": "LE2",
+      "title": "V2Fly category-ru",
+      "url": "https://github.com/v2fly/domain-list-community/blob/master/data/category-ru",
+      "evidence_type": "upstream_data",
+      "observation": "Содержит include:tld-ru и per-service includes; есть пояснение об охвате всех *.ru.",
+      "limitations": "Динамическая ветка; не список гарантированно доступных ресурсов, не узкий allowlist.",
+      "accessed_on": "2026-09-22",
+      "git_blob": "1d0332f661d6d7d7b8eef1608fc116d4f6d06fd3"
+    },
+    {
+      "id": "LE3",
+      "title": "V2Fly tld-ru",
+      "url": "https://github.com/v2fly/domain-list-community/blob/master/data/tld-ru",
+      "evidence_type": "upstream_data",
+      "observation": "Содержит ru, su, moscow, tatar и IDN TLD.",
+      "limitations": "Более широкий охват, чем три зоны .ru/.рф/.su; не импортировать молча.",
+      "accessed_on": "2026-09-22",
+      "git_blob": "b2fb3fc8be62619f32f746cdda5bb32e18175324"
+    },
+    {
+      "id": "LE4",
+      "title": "Keenetic: managing clients with random MAC addresses",
+      "url": "https://support.keenetic.com/peak/kn-2710/en/14191-managing-clients-with-random-mac-addresses.html",
+      "evidence_type": "operator_documentation",
+      "observation": "Случайные MAC влияют на регистрацию и политику устройств.",
+      "limitations": "Документация конкретной продуктовой ветки, не проверка устройства пользователя.",
+      "accessed_on": "2026-09-22"
+    },
+    {
+      "id": "LE5",
+      "title": "Apple: private Wi-Fi addresses",
+      "url": "https://support.apple.com/ru-ru/102509",
+      "evidence_type": "manufacturer_documentation",
+      "observation": "Private MAC может меняться; доступны режимы поведения адреса.",
+      "limitations": "Поведение зависит от ОС и сети. Не рекомендация отключать приватность глобально.",
+      "accessed_on": "2026-09-22"
+    },
+    {
+      "id": "LE6",
+      "title": "Cloudflare DNS proxy status",
+      "url": "https://developers.cloudflare.com/dns/proxy-status/",
+      "evidence_type": "operator_documentation",
+      "observation": "Proxied DNS возвращает shared anycast IP вместо адреса origin.",
+      "limitations": "Обосновывает риск IP-only классификации, не тест RAZVILKA.",
+      "accessed_on": "2026-09-22"
+    },
+    {
+      "id": "LE7",
+      "title": "Keenetic: device connection policies",
+      "url": "https://support.keenetic.com/peak/kn-2710/en/26776-internet-access-for-specific-devices-via-different-connections.html",
+      "evidence_type": "operator_documentation",
+      "observation": "Политики подключения могут назначаться устройствам/сегментам.",
+      "limitations": "Требуется проверка реальных возможностей прошивки и совместимости с Entware.",
+      "accessed_on": "2026-09-22"
+    },
+    {
+      "id": "LE8",
+      "title": "V2Fly domain-list format",
+      "url": "https://github.com/v2fly/domain-list-community",
+      "evidence_type": "upstream_documentation",
+      "observation": "full/domain/include/attributes имеют разную семантику; категоризация не доказывает необходимость bypass.",
+      "limitations": "Нельзя превращать все записи в suffix, не учитывая формат.",
+      "accessed_on": "2026-09-22"
+    }
+  ]
+}

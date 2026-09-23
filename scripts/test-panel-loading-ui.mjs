@@ -127,12 +127,13 @@ await test('auxiliary activity read failure does not block core loading',async()
  assert.equal(f.state.services.length,1);assert(f.renders.includes('renderSettings'));
 });
 
-await test('confirmed busy keeps old snapshots and retries automatically after initial entry',async()=>{
- const f=fixture();f.activity(true);await f.context.refreshAll();
- assert.deepEqual(f.calls.map(c=>c.url),['/api/v1/auth/status']);assert.equal(f.state.dataLoad.services.phase,'busy');
- f.activity(false);f.retry();await flush();await flush();assert.equal(f.state.services.length,1);
- assert.equal(f.state.dataLoad.system.loaded,true,'busy first entry forgot unloaded sections');
- assert.equal(f.state.dataLoad.engines.loaded,true);
+await test('activity cannot gate reads; a busy section retries without suppressing unrelated sections',async()=>{
+ const f=fixture();f.activity(true);
+ f.handler(url=>{if(url==='/api/v1/services')throw Object.assign(new Error('busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});return f.normal(url);});
+ await f.context.refreshAll();
+ assert(f.calls.some(c=>c.url==='/api/v1/system'));assert.equal(f.state.dataLoad.services.phase,'busy');
+ assert.equal(f.state.dataLoad.system.loaded,true);assert.equal(f.state.dataLoad.engines.loaded,true);
+ f.handler(f.normal);f.retry();await flush();await flush();assert.equal(f.state.services.length,1);
 });
 
 await test('late pre-logout read cannot restore protected data or schedule retries',async()=>{

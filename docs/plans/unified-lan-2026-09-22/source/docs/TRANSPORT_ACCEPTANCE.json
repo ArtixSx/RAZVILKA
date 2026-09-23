@@ -1,0 +1,873 @@
+{
+  "schema": 1,
+  "date": "2026-09-22",
+  "all_cases_initially_planned": true,
+  "not_equivalent_to": [
+    "48 passed tests",
+    "full RAZVILKA CI",
+    "current endpoint health",
+    "hardware acceptance"
+  ],
+  "evidence_requirements": [
+    "exact source and binary identities",
+    "platform/version",
+    "scope",
+    "commands and exit codes",
+    "before/after owned resources",
+    "no private keys in reports"
+  ],
+  "cases": [
+    {
+      "id": "EXP-001",
+      "idea_id": "R03",
+      "title": "Повторный экспорт",
+      "setup": "Есть пригодная WG-регистрация; дважды экспортировать разные поддержанные форматы.",
+      "expected": "Ключ/account ID не меняются, счётчик внешних регистраций ноль; форматы валидны.",
+      "source_ids": [
+        "E04",
+        "E08"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-002",
+      "idea_id": "R03",
+      "title": "Изменение DNS/MTU",
+      "setup": "Менять только разрешённые локальные параметры сохранённого профиля.",
+      "expected": "Новый ExecutionSpec, но не новый KeyRef/AccountRef; старый active snapshot доступен для возврата.",
+      "source_ids": [
+        "E04",
+        "E08"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-003",
+      "idea_id": "R03",
+      "title": "Утрачен или повреждён private material",
+      "setup": "Сохранена запись аккаунта без пригодного ключа.",
+      "expected": "Не считать профиль проверенным; не создавать новый аккаунт скрыто; допустимые пути восстановления описаны.",
+      "source_ids": [
+        "E04",
+        "E08"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-004",
+      "idea_id": "R04",
+      "title": "Потерян register response",
+      "setup": "Тестовый API создал устройство и оборвал ответ.",
+      "expected": "Job enrollment-uncertain, повтор клика не создаёт второе устройство; readback используется только если поддержан.",
+      "source_ids": [
+        "E01",
+        "E05"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-005",
+      "idea_id": "R04",
+      "title": "429 и reboot",
+      "setup": "Тестовый API возвращает Retry-After, затем процесс перезапускается.",
+      "expected": "Пауза и счётчик попыток сохранены; HTTP polling не обнуляет ограничения.",
+      "source_ids": [
+        "E01",
+        "E05"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-006",
+      "idea_id": "R05",
+      "title": "Смешанные пулы",
+      "setup": "В реестре WG, consumer H3 и Zero Trust H2 адреса.",
+      "expected": "Несовместимые кандидаты не пробуются как эквивалентные; результат хранит product/transport identity.",
+      "source_ids": [
+        "E01",
+        "E03",
+        "E06"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-007",
+      "idea_id": "R05",
+      "title": "Малый ping, непригодный сервис",
+      "setup": "Кандидат A быстрее TCP, но целевой сервис отклоняет выход; B проходит.",
+      "expected": "A не выбирается по ping/стране, B допускается только со свежим результатом.",
+      "source_ids": [
+        "E01",
+        "E03",
+        "E06"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-008",
+      "idea_id": "R05",
+      "title": "Неисправен bootstrap",
+      "setup": "Действующий tunnel отказал, загрузчик endpoint по ошибке направлен через него.",
+      "expected": "Петля распознана; разрешённый служебный путь отдельный; пользовательский restricted трафик не выпускается direct.",
+      "source_ids": [
+        "E01",
+        "E03",
+        "E06"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-009",
+      "idea_id": "R06",
+      "title": "H3 отказал, H2 проходит",
+      "setup": "На собственном стенде UDP пути недоступен, проверенный H2 путь передаёт данные.",
+      "expected": "H2 может примениться после scoped probe, identity/readback и общей транзакции без отключения TLS.",
+      "source_ids": [
+        "E06"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-010",
+      "idea_id": "R06",
+      "title": "TCP открыт, туннеля нет",
+      "setup": "На H2 endpoint открыт TCP/443, но протокольная авторизация не проходит.",
+      "expected": "Нет PASS; не выводить успешный туннель из port-open.",
+      "source_ids": [
+        "E06"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-011",
+      "idea_id": "R06",
+      "title": "H2 неправильный pin",
+      "setup": "Правильный endpoint, несовпадающая серверная identity.",
+      "expected": "Кандидат отклонён, insecure не включается, прежний профиль сохранён.",
+      "source_ids": [
+        "E06"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-012",
+      "idea_id": "R06",
+      "title": "Неизвестный H2 IPv6",
+      "setup": "Реестр не содержит проверенного endpoint_h2_v6.",
+      "expected": "IPv6 не выдуман; применён только разрешённый поддержанный вариант либо показано ограничение.",
+      "source_ids": [
+        "E06"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-013",
+      "idea_id": "R04",
+      "title": "Переключение режима требует enrollment",
+      "setup": "Тестовый API требует обновить режим и выделенные адреса.",
+      "expected": "До запроса снимок/receipt, readback обновляет точные поля, неудача не затирает единственный рабочий материал.",
+      "source_ids": [
+        "E01",
+        "E05"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-014",
+      "idea_id": "R07",
+      "title": "Native TUN вместо sidecar",
+      "setup": "Один аккаунт и сервис сравниваются в обоих реальных режимах.",
+      "expected": "Координатор владеет routes/DNS; TCP/UDP проверяются; снижение ресурсов не заявляется без замеров.",
+      "source_ids": [
+        "E05",
+        "E26"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-015",
+      "idea_id": "R07",
+      "title": "L4 для UDP сервиса",
+      "setup": "Выбрать TCP-only L4 для сценария, требующего UDP.",
+      "expected": "Capability mismatch до применения, без ложного успеха по веб-пробе.",
+      "source_ids": [
+        "E05",
+        "E26"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-016",
+      "idea_id": "R07",
+      "title": "Архитектура и listener",
+      "setup": "Загрузить совместимый бинарник на целевую архитектуру, проверить явный bind.",
+      "expected": "Нет неподтверждённого статуса для MIPS; внутренний SOCKS не открыт на всех интерфейсах.",
+      "source_ids": [
+        "E05",
+        "E26"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-017",
+      "idea_id": "R08",
+      "title": "Повторные события и старый disconnect",
+      "setup": "После нового connect приходит событие от прежнего запуска.",
+      "expected": "События привязаны к generation, старое не снимает новый маршрут; очередь ограничена.",
+      "source_ids": [
+        "E05"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-018",
+      "idea_id": "R08",
+      "title": "Crash без disconnect hook",
+      "setup": "Остановить собственный процесс до события; тестовый helper зависает.",
+      "expected": "Супервизор очищает owned ресурсы; helper ограничен, нет утечки процессов и бесконечного ожидания.",
+      "source_ids": [
+        "E05"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-019",
+      "idea_id": "R01",
+      "title": "Отсутствует именованная политика",
+      "setup": "До применения удалить тестовую политику устройств.",
+      "expected": "Нет расширения на весь LAN; блокируется только изменение с конкретной причиной.",
+      "source_ids": [
+        "E12"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-020",
+      "idea_id": "R01",
+      "title": "Изменена область во время применения",
+      "setup": "Область или системный policy ID меняются между preview и commit.",
+      "expected": "CAS/guard запрещает прежнее применение; excluded клиент не начинает обход.",
+      "source_ids": [
+        "E12"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-021",
+      "idea_id": "R02",
+      "title": "Скрытые обратные пакеты",
+      "setup": "На поддержанном тестовом PPE-устройстве наблюдать исходный/повторный/ответный поток.",
+      "expected": "Зафиксировано, что видит NFQWS2; до доказательства нет утверждения, что причина именно offload.",
+      "source_ids": [
+        "E12",
+        "E13"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-022",
+      "idea_id": "R02",
+      "title": "Узкое исключение ускорения",
+      "setup": "Применить разрешённый per-flow эксперимент только к тестовому сервису/устройству.",
+      "expected": "Видимость и результат измерены; unrelated ускорение и throughput не выключены глобально.",
+      "source_ids": [
+        "E12",
+        "E13"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-023",
+      "idea_id": "R02",
+      "title": "Нет PPE/connskip",
+      "setup": "Та же задача на платформе без целевых capabilities.",
+      "expected": "Неприменимая команда не выполняется; обычный runtime и панель доступны.",
+      "source_ids": [
+        "E12",
+        "E13"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-024",
+      "idea_id": "R02",
+      "title": "Прошивка перезаписала таблицы",
+      "setup": "На тестовом роутере вызвать штатное WAN/netfilter событие.",
+      "expected": "Идемпотентно восстановлены только собственные правила без дубликатов и удаления чужих.",
+      "source_ids": [
+        "E12",
+        "E13"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-025",
+      "idea_id": "R13",
+      "title": "Исторический рецепт",
+      "setup": "Передать строку с отсутствующим CLI/Lua feature в candidate registry.",
+      "expected": "Отказ в совместимости до запуска; не заменять неизвестный параметр похожим.",
+      "source_ids": [
+        "E12",
+        "E15"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-026",
+      "idea_id": "R13",
+      "title": "Семантический порядок",
+      "setup": "Рецепты с одинаковыми параметрами, но другим порядком стадий.",
+      "expected": "Не схлопываются в один hash, сохраняют порядок; user/vendor слои не перезаписываются.",
+      "source_ids": [
+        "E12",
+        "E15"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-027",
+      "idea_id": "R14",
+      "title": "TLS/браузер/QUIC",
+      "setup": "Контрольный TLS1.2 pass, другой клиент/TLS1.3/QUIC и связанные домены ещё не проверены.",
+      "expected": "PASS ограничен фактическим сценарием; web/video/voice не объединены.",
+      "source_ids": [
+        "E14",
+        "E15",
+        "E17",
+        "E28",
+        "E29"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-028",
+      "idea_id": "R14",
+      "title": "Широкая CDN и общий домен",
+      "setup": "Два сервиса используют часть общей зоны, третий независим.",
+      "expected": "Добавление/удаление не перехватывает всю CDN и не ломает references другого сервиса.",
+      "source_ids": [
+        "E14",
+        "E15",
+        "E17",
+        "E28",
+        "E29"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-029",
+      "idea_id": "R09",
+      "title": "Короткий ответ проходит, большой поток зависает",
+      "setup": "Собственный стенд с ограниченным MTU и контролируемыми потоками.",
+      "expected": "Раздельно диагностированы размер внешнего пути/внутренний MTU; аккаунт не пересоздан.",
+      "source_ids": [
+        "E02",
+        "E26"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-030",
+      "idea_id": "R09",
+      "title": "Заблокирован ICMP",
+      "setup": "Контролируемый PMTUD-сценарий без ICMP ответов.",
+      "expected": "Нет ложного однозначного диагноза; ограниченная альтернативная проверка и безопасный прежний путь.",
+      "source_ids": [
+        "E02",
+        "E26"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-031",
+      "idea_id": "R09",
+      "title": "Размеры IPv4/IPv6",
+      "setup": "Повторить профиль с обеими внешними семьями адресов.",
+      "expected": "Не копируется внутренний MTU из требования к внешнему пакету; проверено заданное покрытие.",
+      "source_ids": [
+        "E02",
+        "E26"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-032",
+      "idea_id": "R10",
+      "title": "NAT и простой",
+      "setup": "Собственный NAT стенд, без и с согласованным keepalive.",
+      "expected": "Измерено восстановление после простоя; значение не изменяет остальные интерфейсы или ключи.",
+      "source_ids": [
+        "E04"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-033",
+      "idea_id": "R17",
+      "title": "Старое ядро и отсутствие GSO",
+      "setup": "Запуск на legacy ядре/стенде с отсутствующей оптимизацией.",
+      "expected": "Корректный fallback; способность core не выдумана по документации latest.",
+      "source_ids": [
+        "E24",
+        "E26",
+        "E27"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-034",
+      "idea_id": "R17",
+      "title": "Перегрузка буферов/CPU",
+      "setup": "Нагрузить тестовый путь в заранее согласованном лимите.",
+      "expected": "Drops/CPU/RSS наблюдаемы; исследование уступает управлению панелью, глобальные sysctl не переписаны.",
+      "source_ids": [
+        "E24",
+        "E26",
+        "E27"
+      ],
+      "required_levels": [
+        "hardware",
+        "soak"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-035",
+      "idea_id": "R15",
+      "title": "Проверенный TCP серверный профиль",
+      "setup": "Свой сервер, точные версии клиента/сервера, корректный REALITY target и параметры.",
+      "expected": "Полный service test и fallback-policy, нет открытого admin/controller endpoint.",
+      "source_ids": [
+        "E18",
+        "E19",
+        "E21",
+        "E22"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-036",
+      "idea_id": "R15",
+      "title": "XHTTP и HTTP-посредник",
+      "setup": "Собственный разрешённый reverse proxy/CDN, разные поддержанные HTTP участки.",
+      "expected": "Проверяются mode/лимиты/реальный путь; HTTP200 промежуточной страницы не признаётся сервисом.",
+      "source_ids": [
+        "E18",
+        "E19",
+        "E21",
+        "E22"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-037",
+      "idea_id": "R16",
+      "title": "TCP BBR/CUBIC A/B",
+      "setup": "Один контролируемый сервер и TCP маршрут, алгоритмы действительно доступны.",
+      "expected": "Сравнение под нагрузкой и возврат параметров, без утверждения об изменении QUIC.",
+      "source_ids": [
+        "E20",
+        "E23",
+        "E24",
+        "E25"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-038",
+      "idea_id": "R16",
+      "title": "Brutal bandwidth завышен",
+      "setup": "На собственном стенде лимит канала ниже заданного bandwidth.",
+      "expected": "Обнаружена деградация, недопустимый профиль не выбран по редкому пиковому прогону.",
+      "source_ids": [
+        "E20",
+        "E23",
+        "E24",
+        "E25"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-039",
+      "idea_id": "R19",
+      "title": "WARP на VPS и управление",
+      "setup": "Только выбранный тестовый сервис использует дополнительный выход VPS.",
+      "expected": "Сохранены SSH/admin/служебные маршруты; DNS actor и проверенный выход записаны.",
+      "source_ids": [
+        "E01",
+        "E03",
+        "E18",
+        "E28"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-040",
+      "idea_id": "R20",
+      "title": "Один сервер с разными именами",
+      "setup": "Подписка содержит несколько алиасов одного upstream, затем действительно другой провайдер.",
+      "expected": "Разные имена не считаются независимым резервом; метод независимости отражён явно.",
+      "source_ids": [
+        "E03",
+        "E16"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-041",
+      "idea_id": "R11",
+      "title": "WARP-compatible AWG subset",
+      "setup": "Точный клиент и стандартный WARP-peer, только заявленные совместимые поля.",
+      "expected": "Требуется native/wire проверка; до неё статус candidate, не весь AWG3.1 совместим.",
+      "source_ids": [
+        "E09",
+        "E10"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-042",
+      "idea_id": "R11",
+      "title": "Peer-required AWG поле",
+      "setup": "Включить header protection/иной несовместимый peer-required режим для standard WG.",
+      "expected": "Отказ на materialization/capability этапе, без повреждения текущего профиля.",
+      "source_ids": [
+        "E09",
+        "E10"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-043",
+      "idea_id": "R12",
+      "title": "AWG миграция удаляет peers",
+      "setup": "Тестовый сервер со старыми пользователями; миграционная процедура переустановки.",
+      "expected": "План показывает последствия, требует разрешённой обратимой миграции; это не обычное ночное обновление.",
+      "source_ids": [
+        "E11"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-044",
+      "idea_id": "R18",
+      "title": "Community DNS и selectedServices",
+      "setup": "Указаны один сервис и один клиент, выбран Smart DNS.",
+      "expected": "Сохранены ровно эти ограничения; несовместимость не меняет silently siteMode=all.",
+      "source_ids": [
+        "E08",
+        "E30"
+      ],
+      "required_levels": [
+        "unit",
+        "integration"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-045",
+      "idea_id": "R18",
+      "title": "AllowedIPs и реальное применение",
+      "setup": "Одинаковый /0 в управляемом peer и в экспорте самостоятельного клиента.",
+      "expected": "Область определяется фактическим executor; экспорт не обещает split, если клиент ставит default route.",
+      "source_ids": [
+        "E08",
+        "E30"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-046",
+      "idea_id": "R19",
+      "title": "Разрешение имени на удалённом сервере",
+      "setup": "Прокси получает домен, DNS на роутере меняется отдельно.",
+      "expected": "Проба не объявляется проверкой этого resolver; путь разрешения установлен или отмечен uncontrolled.",
+      "source_ids": [
+        "E01",
+        "E03",
+        "E18",
+        "E28"
+      ],
+      "required_levels": [
+        "integration",
+        "native"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-047",
+      "idea_id": "R14",
+      "title": "Telegram media по IP",
+      "setup": "Согласованный клиентский тест медиа дата-центра; веб Telegram также проверен.",
+      "expected": "Web proof не заменяет media; нет сбора чужих файлов, токенов или пользовательской истории.",
+      "source_ids": [
+        "E14",
+        "E15",
+        "E17",
+        "E28",
+        "E29"
+      ],
+      "required_levels": [
+        "integration",
+        "native",
+        "hardware"
+      ],
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "EXP-048",
+      "idea_id": "R21",
+      "title": "UI во время восстановления",
+      "setup": "Закрывать/открывать браузер, повторять кнопку задачи, давать source/engine failure.",
+      "expected": "Один job, сохранённые права, доступная панель, понятная стадия; обычные retries без новых диалогов.",
+      "source_ids": [
+        "E07",
+        "E14",
+        "E16"
+      ],
+      "required_levels": [
+        "hardware",
+        "soak"
+      ],
+      "status": "planned",
+      "result": null
+    }
+  ]
+}

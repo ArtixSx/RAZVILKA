@@ -128,7 +128,7 @@ async function api(url, options = {}) {
   const abort = () => controller?.abort();
   if (options.signal?.aborted) abort();
   options.signal?.addEventListener('abort', abort, { once: true });
-  const readTimeout = Number.isSafeInteger(readTimeoutMs) ? Math.max(20000, Math.min(110000, readTimeoutMs)) : 20000;
+  const readTimeout = Number.isSafeInteger(readTimeoutMs) ? Math.max(250, Math.min(110000, readTimeoutMs)) : 20000;
   const timer = controller ? setTimeout(() => { timedOut = true; controller.abort(); }, readTimeout) : null;
   try {
   const response = await fetch(url, { ...fetchOptions, method, headers, signal: controller?.signal || options.signal, credentials: 'same-origin' });
@@ -262,12 +262,39 @@ async function logout() {
 
 function askConfirmation(title, text, action = 'Продолжить') {
   const dialog = $('#actionDialog');
-  $('#actionDialogTitle').textContent = title;
-  $('#actionDialogText').textContent = text;
-  $('#actionDialogConfirm').textContent = action;
-  dialog.returnValue = '';
-  dialog.showModal();
-  return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+  // Do not attach two approvals to the same close event. A second click is
+  // declined, not queued: its context may be stale when the first action ends.
+  if (!dialog || dialog.open || askConfirmation.pending) return Promise.resolve(false);
+  askConfirmation.pending = true;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (approved) => {
+      if (settled) return;
+      settled = true;
+      dialog.removeEventListener('close', onClose);
+      dialog.removeEventListener('cancel', onCancel);
+      document.removeEventListener('razvilka:auth-required', onAuthRequired);
+      askConfirmation.pending = false;
+      resolve(approved);
+    };
+    const onClose = () => finish(dialog.returnValue === 'confirm');
+    const onCancel = () => finish(false);
+    const onAuthRequired = () => {
+      dialog.returnValue = '';
+      if (dialog.open) dialog.close('');
+      finish(false);
+    };
+    dialog.addEventListener('close', onClose);
+    dialog.addEventListener('cancel', onCancel);
+    document.addEventListener('razvilka:auth-required', onAuthRequired);
+    try {
+      $('#actionDialogTitle').textContent = title;
+      $('#actionDialogText').textContent = text;
+      $('#actionDialogConfirm').textContent = action;
+      dialog.returnValue = '';
+      dialog.showModal();
+    } catch (_) { finish(false); }
+  });
 }
 
 function applyStateText(enabled, route) {
@@ -358,23 +385,35 @@ function routeAvailable(id) {
 }
 
 function setView(name) {
-  if (!document.getElementById(`view-${name}`)) name = 'overview';
-  document.dispatchEvent(new CustomEvent('razvilka:view-change', { detail: name }));
+  if (typeof name !== 'string' || !document.getElementById(`view-${name}`)) name = 'overview';
+  // Navigation is local. A broken status/engine widget must not strand the
+  // user on its page, submit a write, or silently discard an editor's draft.
+  state.uiRenderIssues ||= {};
+  const render = (key, action) => {
+    try { action(); delete state.uiRenderIssues[key]; }
+    catch (_) { state.uiRenderIssues[key] = 'Не удалось обновить виджет. Остальные разделы доступны.'; }
+  };
+  render('navigation-event', () => document.dispatchEvent(new CustomEvent('razvilka:view-change', { detail: name })));
   state.currentView = name;
-  if(typeof consoleViewChanged==='function')consoleViewChanged(name);
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
   $$('.nav[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
-  const activeNav = $(`.nav[data-view="${CSS.escape(name)}"]`);
-  renderWorkspaceNavigation(name);
-  if (activeNav && window.matchMedia('(max-width: 760px)').matches) activeNav.scrollIntoView({ block: 'nearest', inline: 'center' });
   const meta = viewMeta[name] || [name, ''];
   $('#pageTitle').textContent = meta[0];
   $('#pageSubtitle').textContent = meta[1];
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  if (state.status && Object.keys(state.status).length) renderStatus();
-  if(typeof renderInterfaceNavigation==='function')renderInterfaceNavigation(name);
-  if(typeof renderInterface==='function')renderInterface();
-  if(name==='engineconfig'){if(state.engineGuidedRequest&&state.engineGuidedRequest.view!==name&&!state.engineIntent)invalidateEngineEditorContext();renderEngineControl();}
+  render('navigation-console', () => { if (typeof consoleViewChanged === 'function') consoleViewChanged(name); });
+  render('navigation-workspace', () => renderWorkspaceNavigation(name));
+  render('navigation-scroll', () => {
+    const activeNav = $(`.nav[data-view="${CSS.escape(name)}"]`);
+    if (activeNav && window.matchMedia('(max-width: 760px)').matches) activeNav.scrollIntoView({ block: 'nearest', inline: 'center' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  render('navigation-status', () => { if (state.status && Object.keys(state.status).length) renderStatus(); });
+  render('navigation-tabs', () => { if (typeof renderInterfaceNavigation === 'function') renderInterfaceNavigation(name); });
+  render('navigation-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
+  if (name === 'engineconfig') render('navigation-engine', () => {
+    if (state.engineGuidedRequest && state.engineGuidedRequest.view !== name && !state.engineIntent) invalidateEngineEditorContext();
+    renderEngineControl();
+  });
 }
 
 const detailStatusLabels = {
@@ -763,11 +802,19 @@ function cancelPanelRefresh() {
 
 function renderPanelLoad() {
   const values = Object.values(state.dataLoad || {});
-  const text = values.some(value => value.phase === 'busy') ? 'Настройки заняты. Повторим загрузку автоматически.'
+  state.uiRenderIssues ||= {};
+  const render = (key, action) => {
+    try { action(); delete state.uiRenderIssues[key]; }
+    catch (_) { state.uiRenderIssues[key] = 'Не удалось обновить виджет. Последние данные сохранены.'; }
+  };
+  render('panel-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
+  render('panel-engine', () => {
+    if (!state.dataLoad?.engineConfigs?.loaded && typeof renderEngineControl === 'function') renderEngineControl();
+  });
+  const text = values.some(value => value.phase === 'busy') ? 'Выполняется операция. Разделы можно открывать; данные обновятся автоматически.'
     : values.some(value => value.phase === 'error') ? 'Часть данных не обновилась. Последние полученные данные сохранены.'
+    : Object.keys(state.uiRenderIssues).length ? 'Один из виджетов не обновился. Навигация и остальные разделы доступны.'
     : values.some(value => value.phase === 'loading') ? 'Загружаем данные разделов…' : '';
-  if (typeof renderInterface === 'function') renderInterface();
-  if (!state.dataLoad?.engineConfigs?.loaded && typeof renderEngineControl === 'function') renderEngineControl();
   if ($('#systemText') && text) $('#systemText').textContent = text;
 }
 
@@ -846,37 +893,23 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
   }
   renderPanelLoad();
   try {
+    // Authentication is the only prerequisite. A runtime status or a probe
+    // job is not an authentication decision and must not gate the whole UI.
     const authentication = await api('/api/v1/auth/status', options);
     if (!panelSnapshotCurrent(generation)) return false;
     if (authentication.setup_required || !authentication.authenticated) {
       const status = await api('/api/v1/status', options).catch(() => authentication);
       if (!panelSnapshotCurrent(generation)) return false;
       state.status = status;
-      renderStatus();
+      try { renderStatus(); } catch (_) { /* Login must survive a failed widget. */ }
       showAuth(status); $('#systemText').textContent = 'Требуется вход'; return false;
     }
     hideAuth();
-    // An auxiliary activity read cannot prevent unrelated sections from loading.
-    try {
-      if (await refreshNodeActivity()) {
-        if (!panelSnapshotCurrent(generation)) return false;
-        for (const key of ['status', 'services', 'engineConfigs']) panelSectionState(key, 'busy');
-        renderPanelLoad(); scheduleNodeActivity(1500); schedulePanelRetry(true);
-        return true;
-      }
-    } catch (error) {
-      if (!panelSnapshotCurrent(generation)) return false;
-      if (error.status === 401) throw error;
-      issues.push({ section: 'activity', message: error.message });
-    }
-    const status = await api('/api/v1/status', options);
-    if (!panelSnapshotCurrent(generation)) return false;
-    if (status.setup_required || (status.auth_required && !status.authenticated)) {
-      showAuth(status); $('#systemText').textContent = 'Требуется вход'; return false;
-    }
-    acceptPanelSection('status', status);
-    renderPanelSection('status');
+    // This already has its own single-flight scheduler and auth epoch.
+    // Never await it here: a slow job-status endpoint is an isolated failure.
+    scheduleNodeActivity(0);
     const requests = [
+      ['status', '/api/v1/status'],
       ['system', '/api/v1/system'],
       ['metrics', '/api/v1/metrics?limit=120'],
       ['services', '/api/v1/services'],
@@ -901,7 +934,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
       ['dns', '/api/v1/dns'],
       ['dnsPlan', '/api/v1/dns/plan'],
       ['sessions', '/api/v1/auth/sessions'],
-    ].filter(([key]) => !retryFailed || retryKeys.has(key) || !state.dataLoad[key]?.loaded);
+    ].filter(([key]) => key === 'status' || !retryFailed || retryKeys.has(key) || !state.dataLoad[key]?.loaded);
     requests.forEach(([key]) => panelSectionState(key, 'loading'));
     renderPanelLoad();
     await settlePanelReads(requests, async ([key, url]) => {
@@ -909,6 +942,10 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
       try {
         const value = await api(url, options);
         if (!panelSnapshotCurrent(generation)) return;
+        if (key === 'status' && (value?.setup_required || (value?.auth_required && !value?.authenticated))) {
+          cancelPanelRefresh();
+          showAuth(value); $('#systemText').textContent = 'Требуется вход'; return;
+        }
         acceptPanelSection(key, value);
         renderPanelSection(key);
       } catch (error) {
@@ -934,7 +971,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
       const retry = busy || panelLoad.retryCount < 3;
       showNotice('review', 'Часть данных временно недоступна', retry ? 'Загруженные разделы доступны. Последние полученные данные сохранены; повторим чтение автоматически.' : 'Загруженные разделы доступны. Автоматические попытки закончились; нажмите «Обновить», чтобы повторить.', { issues });
       schedulePanelRetry(busy);
-    } else { panelLoad.retryCount = 0; renderStatus(); }
+    } else { panelLoad.retryCount = 0; }
     if (!state.onboardingAutoEvaluated && state.dataLoad.services?.loaded && state.dataLoad.engineConfigs?.loaded) {
       state.onboardingAutoEvaluated = true;
       if(typeof consoleInitialSetup==='function')consoleInitialSetup();else setTimeout(() => openOnboarding(false), 0);
@@ -942,17 +979,17 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     return true;
   } catch (error) {
     if (!panelSnapshotCurrent(generation)) return false;
+    // This is an authentication/bootstrap failure, NOT a failed service list.
+    // Keep independent snapshots and never fabricate empty configuration.
     const busy = panelBusy(error);
-    for (const key of ['status', 'services', 'engineConfigs']) panelSectionState(key, busy ? 'busy' : 'error', error);
-    state.loadIssues = [{ section: 'status', message: error.message }];
+    for (const key of ['status', 'services', 'engineConfigs']) {
+      if (state.dataLoad[key]?.phase === 'loading') panelSectionState(key, busy ? 'busy' : 'error', error);
+    }
+    state.loadIssues = [{ section: 'authentication', message: error.message }];
     renderPanelLoad();
     if (error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
     else {
-      if (error.payload?.node_recovery?.state === 'revalidating') {
-        state.status = { ...state.status, node_recovery: error.payload.node_recovery, live_active: false, dataplane_recovery_state: 'network-stale' };
-      }
-      showNotice('review', busy ? 'Настройки временно заняты' : 'Данные пока не обновились',
-        busy ? 'Дождитесь завершения операции. Панель повторит чтение автоматически.' : error.message, { response: error.payload });
+      showNotice('review', 'Данные пока не обновились', error.message, { response: error.payload });
       schedulePanelRetry(busy);
     }
     return false;
@@ -1432,7 +1469,8 @@ async function updateStrategyMemory(button, reset = false) {
 }
 
 async function importZ2KStrategies() {
-  if (!await askConfirmation('Импортировать совместимые внешние стратегии?', 'Источник останется только для чтения. В подбор NFQWS2 попадут непроверенные кандидаты; рабочие NFQUEUE, конфиги и маршруты не изменятся.', 'Импортировать в черновик')) return;
+  // The explicit import button is sufficient for staging unverified candidates.
+  // Server validation and the separate live-apply boundary are unchanged.
   const button = $('#importZ2KStrategies');
   button.disabled = true; button.textContent = 'Импорт…';
   try {

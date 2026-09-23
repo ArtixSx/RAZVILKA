@@ -1,0 +1,36 @@
+/* In-flow status: never an overlay, pointer blocker or optimistic route badge. */
+.panel-availability {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #394555);
+  border-radius: 12px;
+  background: var(--surface, #18212d);
+  color: var(--text, #edf2f7);
+  font: inherit;
+  line-height: 1.45;
+}
+.panel-availability[hidden] { display: none; }
+.panel-availability > div { min-width: 0; }
+.panel-availability span { display: block; overflow-wrap: anywhere; }
+.panel-availability small { display: block; opacity: .7; margin-top: 3px; }
+.panel-availability button {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.panel-availability button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.panel-availability[data-state="recovery-required"],
+.panel-availability[data-state="unreachable"] { border-color: var(--warning, #bf9539); }
+@media (max-width: 520px) {
+  .panel-availability { align-items: flex-start; flex-wrap: wrap; padding: 12px; }
+}

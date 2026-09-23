@@ -1,0 +1,125 @@
+[
+  {
+    "feature": "UI state/confirmation/independent loading",
+    "status": "source_patch_prepared",
+    "evidence": "isolated tests passed; whole app pending"
+  },
+  {
+    "feature": "Task-based main/service/settings UI",
+    "status": "source_patch_prepared",
+    "evidence": "component Chromium passed; full CSS+HTTP pending"
+  },
+  {
+    "feature": "Single source applier",
+    "status": "source_patch_prepared",
+    "evidence": "unit/synthetic filesystem and exact strings; full checkout preflight pending"
+  },
+  {
+    "feature": "Geo-Aggregator parser",
+    "status": "candidate_only",
+    "evidence": "unit/race/fuzz passed; not registered or fetching"
+  },
+  {
+    "feature": "Persistent local-first service library",
+    "status": "planned",
+    "evidence": "not implemented in this bundle"
+  },
+  {
+    "feature": "Durable user jobs and independently readable snapshots",
+    "status": "planned",
+    "evidence": "finish existing backend, no second daemon"
+  },
+  {
+    "feature": "A→B failure→rollback→C plus D refill",
+    "status": "planned",
+    "evidence": "not claimed passing"
+  },
+  {
+    "feature": "Observer automatic recovery",
+    "status": "planned",
+    "evidence": "hardware/real-network investigation needed"
+  },
+  {
+    "feature": "NFQWS2 adaptation",
+    "status": "planned",
+    "evidence": "existing ready-path apply is not adaptation"
+  },
+  {
+    "feature": "Unattended signed updates",
+    "status": "planned",
+    "evidence": "check/prepare not install"
+  },
+  {
+    "feature": "Native Mihomo/HEV",
+    "status": "planned_opt_in",
+    "evidence": "forms do not prove native route"
+  },
+  {
+    "feature": "Router HIL 24/72h",
+    "status": "not_run",
+    "evidence": "requires exact binary and authorization"
+  },
+  {
+    "feature": "DNS+route exact scoped executor and automatic recovery (D1)",
+    "status": "planned_not_implemented_in_bundle",
+    "priority": "early_after_U1_U2",
+    "evidence": "Source and primary documentation review on 2026-09-22; no runtime probe"
+  },
+  {
+    "feature": "Xbox/other Smart DNS eligible for approved autopilot candidates",
+    "status": "planned_current_upstream_lab_only",
+    "priority": "D1",
+    "evidence": "provider_metadata.go c3722365 sets AllowedForAutoPilot=false; no flag-only bypass supplied"
+  },
+  {
+    "feature": "WARP account reuse, pure export and durable enrollment outcome",
+    "status": "researched_not_implemented_in_this_amendment",
+    "evidence": "Primary documentation/source code and scoped user reports reviewed; runtime measurements not performed.",
+    "reference": "docs/EXTERNAL_RESEARCH_RU.md"
+  },
+  {
+    "feature": "USQUE H2/native executor comparison and bounded hook events",
+    "status": "researched_not_implemented_in_this_amendment",
+    "evidence": "Primary documentation/source code and scoped user reports reviewed; runtime measurements not performed.",
+    "reference": "docs/EXTERNAL_RESEARCH_RU.md"
+  },
+  {
+    "feature": "NFQWS2 device-policy fail-closed and offload packet visibility",
+    "status": "researched_not_implemented_in_this_amendment",
+    "evidence": "Primary documentation/source code and scoped user reports reviewed; runtime measurements not performed.",
+    "reference": "docs/EXTERNAL_RESEARCH_RU.md"
+  },
+  {
+    "feature": "Field-level AWG/WARP compatibility and peer-safe migration",
+    "status": "researched_not_implemented_in_this_amendment",
+    "evidence": "Primary documentation/source code and scoped user reports reviewed; runtime measurements not performed.",
+    "reference": "docs/EXTERNAL_RESEARCH_RU.md"
+  },
+  {
+    "feature": "Measured TCP/QUIC/MTU server and router profiles",
+    "status": "researched_not_implemented_in_this_amendment",
+    "evidence": "Primary documentation/source code and scoped user reports reviewed; runtime measurements not performed.",
+    "reference": "docs/EXTERNAL_RESEARCH_RU.md"
+  },
+  {
+    "feature": "LAN except excluded devices with stable identity and scope migration",
+    "status": "planned_not_implemented_in_this_amendment",
+    "priority": "E1_with_U1_U2_D1",
+    "reference": "docs/LAN_EXCLUSIONS_RU.md",
+    "evidence": "Code/data/primary documentation review only; 40 LE acceptance cases planned, no runtime implementation or new network tests."
+  },
+  {
+    "feature": "Unified hard/manual site exclusions across NFQWS2, proxy and DNS",
+    "status": "planned_not_implemented_in_this_amendment",
+    "priority": "E1_with_U1_U2_D1",
+    "reference": "docs/LAN_EXCLUSIONS_RU.md",
+    "evidence": "Code/data/primary documentation review only; 40 LE acceptance cases planned, no runtime implementation or new network tests."
+  },
+  {
+    "feature": "Automatic curated Russian direct catalogue with explicit overrides and optional TLD scope",
+    "status": "planned_not_implemented_in_this_amendment",
+    "priority": "E1_with_U1_U2_D1",
+    "reference": "docs/LAN_EXCLUSIONS_RU.md",
+    "evidence": "Code/data/primary documentation review only; 40 LE acceptance cases planned, no runtime implementation or new network tests."
+  }
+]

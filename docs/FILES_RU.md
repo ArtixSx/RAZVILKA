@@ -23,6 +23,7 @@
 | [docs/README.md](README.md) | Содержание документации |
 | [CURRENT_STATUS_RU.md](CURRENT_STATUS_RU.md) | Что действительно проверено и какие ограничения остаются |
 | [ROADMAP.md](ROADMAP.md) | Что планируется доработать |
+| [Единый план](plans/unified-lan-2026-09-22/README.md) | Действующая переработка интерфейса, автоматики, DNS и домашней сети |
 | [CHANGELOG.md](../CHANGELOG.md) | Что добавлено и исправлено по версиям |
 | [VERSION](../VERSION) | Номер версии исходников; правила описаны в [Версиях](VERSIONING_RU.md) |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Как сообщить об ошибке и предложить исправление |
