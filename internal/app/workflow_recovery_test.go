@@ -190,6 +190,11 @@ func TestFetchThenCheckRunsAfterBrowserRequestEnds(t *testing.T) {
 	if a.nodeCheckSnapshot()["job"].(*nodeCheckJob).Phase != "fetching" {
 		t.Fatal("fetch phase not visible")
 	}
+	intervening, err := a.Operations.Exclusive(context.Background())
+	if err != nil {
+		t.Fatal("feed fetch retained exclusive application admission", err)
+	}
+	defer intervening()
 	closeBrowser()
 	select {
 	case <-checked:
@@ -197,6 +202,7 @@ func TestFetchThenCheckRunsAfterBrowserRequestEnds(t *testing.T) {
 	default:
 	}
 	close(proceed)
+	intervening()
 	job := joinNodeJob(t, a)
 	if job.State != "completed" || job.Total != 1 || job.Completed != 1 || len(job.Results) != 1 || !job.Results[0].Available || job.Results[0].Verdict != "PASS" {
 		t.Fatalf("unexpected result: %+v", job)
@@ -237,6 +243,11 @@ func TestCancelDuringSourceFetchDoesNotStartChecker(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	<-entered
+	intervening, err := a.Operations.Exclusive(context.Background())
+	if err != nil {
+		t.Fatal("cannot operate while source fetch is waiting", err)
+	}
+	defer intervening()
 	id := a.nodeCheckSnapshot()["job"].(*nodeCheckJob).ID
 	w = httptest.NewRecorder()
 	a.nodeCheckJobCurrent(w, httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/node-checks/current?job_id=%d", id), nil))

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
@@ -153,6 +154,9 @@ type Manager struct {
 	closed  bool
 	fenced  bool
 	jobs    jobState
+	// Incremented even for a restore that later rolls back: a prepared response
+	// must not overwrite a restored image with the same subscription revision.
+	restoreGeneration uint64
 }
 
 func (*Manager) String() string   { return "[private provider feed manager]" }
@@ -175,6 +179,11 @@ func (m *Manager) List() []State {
 				s.JobID = job.view.ID
 				break
 			}
+		}
+		if s.Status == "fetching" && s.JobID == "" && len(m.gate) == 0 {
+			// An interrupted attempt retains its durable retry reservation. This
+			// is only a display projection, not a write outside operation admission.
+			s.Status, s.ErrorCode = "interrupted", "FEED_INTERRUPTED"
 		}
 		if !s.OriginExpiresAt.IsZero() && !now.Before(s.OriginExpiresAt) {
 			s.Status = "stale"
@@ -239,6 +248,10 @@ func ValidateRequest(request Request) error {
 }
 
 func (m *Manager) Sync(parent context.Context, request Request) (Result, error) {
+	return m.syncRequest(parent, request, nil)
+}
+
+func (m *Manager) syncRequest(parent context.Context, request Request, admission *syncAdmission) (Result, error) {
 	s, err := resolve(request)
 	if err != nil || m == nil || m.nodes == nil {
 		return Result{}, ErrRequest
@@ -247,12 +260,16 @@ func (m *Manager) Sync(parent context.Context, request Request) (Result, error) 
 	saved := m.sourceIndexLocked(s.id) >= 0
 	m.mu.Unlock()
 	if saved {
-		return m.SyncSaved(parent, s.id)
+		return m.syncSaved(parent, s.id, admission)
 	}
-	return m.sync(parent, s, request.AcceptPartial)
+	return m.syncAdmitted(parent, s, request.AcceptPartial, admission)
 }
 
 func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Result, error) {
+	return m.syncAdmitted(parent, s, acceptPartial, nil)
+}
+
+func (m *Manager) syncAdmitted(parent context.Context, s source, acceptPartial bool, admission *syncAdmission) (Result, error) {
 	ctx, cancel := context.WithTimeout(parent, Timeout)
 	defer cancel()
 	select {
@@ -270,6 +287,7 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		return Result{}, ErrConflict
 	}
 	previous, exists := m.states[s.id]
+	restoreGeneration := m.restoreGeneration
 	if m.now().Before(previous.state.RetryAfterAt) {
 		m.mu.Unlock()
 		return Result{SourceID: s.id, Status: "deferred", OriginExpiresAt: previous.state.OriginExpiresAt}, ErrDeferred
@@ -302,7 +320,7 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 	// attempt, but cannot turn it into an immediate restart/retry storm.
 	if m.storage != nil && s.revision != 0 {
 		m.mu.Lock()
-		if !m.currentSourceLocked(s) {
+		if m.closed || m.fenced || m.restoreGeneration != restoreGeneration || !m.currentSourceLocked(s) {
 			m.mu.Unlock()
 			return Result{}, ErrConflict
 		}
@@ -329,7 +347,7 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		previous.state, previous.identity = state, s.identity
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		if !m.currentSourceLocked(s) {
+		if m.closed || m.fenced || m.restoreGeneration != restoreGeneration || !m.currentSourceLocked(s) {
 			return result, ErrConflict
 		}
 		m.states[s.id] = previous
@@ -346,98 +364,121 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		}
 		return result, cause
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.url, nil)
-	if err != nil {
-		return finish("failed", ErrRequest)
-	}
-	req.Header.Set("Accept", "text/plain, application/json, application/octet-stream")
-	req.Header.Set("User-Agent", "RAZVILKA/providerfeed")
-	// Same exact URL+format only. Never send these validators to a new source.
-	conditionalSent := previous.state.LastKnownGood && m.now().Before(previous.state.OriginExpiresAt) && (previous.etag != "" || previous.modified != "")
-	if conditionalSent {
-		if previous.etag != "" {
-			req.Header.Set("If-None-Match", previous.etag)
-		}
-		if previous.modified != "" {
-			req.Header.Set("If-Modified-Since", previous.modified)
-		}
-	}
-	client := publicfetch.WithPolicy(m.client, s.url, nil)
-	// Subscription tokens may occur in paths: reject even same-origin redirects
-	// instead of allowing an upstream to steer a credential-bearing request.
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return publicfetch.ErrRedirect }
-	response, err := client.Do(req)
-	if err != nil {
-		if ctx.Err() != nil {
-			return finish("stale", ctx.Err())
-		}
-		return finish("stale", ErrFetch)
-	}
-	defer response.Body.Close()
+	var response *http.Response
 	var raw []byte
-	if response.StatusCode == http.StatusNotModified {
-		if !conditionalSent {
-			return finish("failed", ErrFetch)
+	var parsed batch
+	var digest string
+	// The body is fully closed before reacquiring application admission. The
+	// download deadline does not spend the import's separate admission budget.
+	admission.release()
+	status, fetchErr := func() (string, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.url, nil)
+		if err != nil {
+			return "failed", ErrRequest
 		}
-		result.NotModified = true
-		status := "not_modified"
-		if !m.now().Before(state.OriginExpiresAt) {
-			status = "stale"
+		req.Header.Set("Accept", "text/plain, application/json, application/octet-stream")
+		req.Header.Set("User-Agent", "RAZVILKA/providerfeed")
+		// Same exact URL+format only. Never send these validators to a new source.
+		conditionalSent := previous.state.LastKnownGood && m.now().Before(previous.state.OriginExpiresAt) && (previous.etag != "" || previous.modified != "")
+		if conditionalSent {
+			if previous.etag != "" {
+				req.Header.Set("If-None-Match", previous.etag)
+			}
+			if previous.modified != "" {
+				req.Header.Set("If-Modified-Since", previous.modified)
+			}
 		}
-		// An unvisited page may be imported using the ORIGINAL expiry. Existing
-		// health and origins are never refreshed just because the server sent 304.
-		if !useSnapshot || len(cachedBody) == 0 || previous.snapshot.Cursor >= previous.snapshot.Entries || status == "stale" {
-			return finish(status, nil)
-		}
-		raw = cachedBody
-	}
-	if response.StatusCode == 429 || response.StatusCode == 503 && !retryAfter(response.Header.Get("Retry-After"), m.now()).IsZero() {
-		state.RetryAfterAt = retryAfter(response.Header.Get("Retry-After"), m.now())
-		return finish("stale", ErrRateLimited)
-	}
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNotModified {
-		return finish("stale", ErrFetch)
-	}
-	if response.ContentLength > MaxBytes {
-		return finish("stale", ErrSize)
-	}
-	if raw == nil {
-		raw, err = io.ReadAll(io.LimitReader(response.Body, MaxBytes+1))
+		client := publicfetch.WithPolicy(m.client, s.url, nil)
+		// Subscription tokens may occur in paths: reject even same-origin redirects
+		// instead of allowing an upstream to steer a credential-bearing request.
+		client.CheckRedirect = func(*http.Request, []*http.Request) error { return publicfetch.ErrRedirect }
+		response, err = client.Do(req)
 		if err != nil {
 			if ctx.Err() != nil {
-				return finish("stale", ctx.Err())
+				return "stale", ctx.Err()
 			}
-			return finish("stale", ErrFetch)
+			return "stale", ErrFetch
 		}
+		defer response.Body.Close()
+		if response.StatusCode == http.StatusNotModified {
+			if !conditionalSent {
+				return "failed", ErrFetch
+			}
+			result.NotModified = true
+			status := "not_modified"
+			if !m.now().Before(state.OriginExpiresAt) {
+				status = "stale"
+			}
+			// An unvisited page may be imported using the ORIGINAL expiry. Existing
+			// health and origins are never refreshed just because the server sent 304.
+			if !useSnapshot || len(cachedBody) == 0 || previous.snapshot.Cursor >= previous.snapshot.Entries || status == "stale" {
+				return status, nil
+			}
+			raw = cachedBody
+		}
+		if response.StatusCode == 429 || response.StatusCode == 503 && !retryAfter(response.Header.Get("Retry-After"), m.now()).IsZero() {
+			state.RetryAfterAt = retryAfter(response.Header.Get("Retry-After"), m.now())
+			return "stale", ErrRateLimited
+		}
+		if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNotModified {
+			return "stale", ErrFetch
+		}
+		if response.ContentLength > MaxBytes {
+			return "stale", ErrSize
+		}
+		if raw == nil {
+			raw, err = io.ReadAll(io.LimitReader(response.Body, MaxBytes+1))
+			if err != nil {
+				if ctx.Err() != nil {
+					return "stale", ctx.Err()
+				}
+				return "stale", ErrFetch
+			}
+		}
+		if len(raw) > MaxBytes {
+			return "stale", ErrSize
+		}
+		cursor := 0
+		digest = snapshotDigest(raw)
+		if useSnapshot && len(cachedBody) > 0 && previous.snapshot != nil && previous.snapshot.Digest == digest {
+			cursor = previous.snapshot.Cursor
+		}
+		if response.StatusCode == http.StatusOK && previous.snapshot != nil && cursor >= previous.snapshot.Entries {
+			cursor = 0
+		}
+		parsed, err = parseWindow(ctx, raw, s.format, s.limit, cursor)
+		result.Rejected, result.Duplicates, result.Omitted, result.Issues = parsed.rejected, parsed.duplicates, parsed.omitted, parsed.issues
+		result.TotalEntries, result.AcceptedEntries = parsed.total, parsed.accepted
+		if err != nil {
+			return "stale", err
+		}
+		if parsed.rejected > 0 && !acceptPartial {
+			return "needs_acceptance", ErrPartial
+		}
+		if err := ctx.Err(); err != nil {
+			return "stale", err
+		}
+		return "", nil
+	}()
+	cancel()
+	fetchedAt := m.now().UTC()
+	if err := admission.acquire(parent); err != nil {
+		// The pre-fetch reservation survives. No import, cursor change, failure
+		// penalty or detached write is allowed without a fresh admission.
+		return result, err
 	}
-	if len(raw) > MaxBytes {
-		return finish("stale", ErrSize)
-	}
-	cursor := 0
-	digest := snapshotDigest(raw)
-	if useSnapshot && len(cachedBody) > 0 && previous.snapshot != nil && previous.snapshot.Digest == digest {
-		cursor = previous.snapshot.Cursor
-	}
-	if response.StatusCode == http.StatusOK && previous.snapshot != nil && cursor >= previous.snapshot.Entries {
-		cursor = 0
-	}
-	batch, err := parseWindow(ctx, raw, s.format, s.limit, cursor)
-	result.Rejected, result.Duplicates, result.Omitted, result.Issues = batch.rejected, batch.duplicates, batch.omitted, batch.issues
-	result.TotalEntries, result.AcceptedEntries = batch.total, batch.accepted
-	if err != nil {
-		return finish("stale", err)
-	}
-	if batch.rejected > 0 && !acceptPartial {
-		return finish("needs_acceptance", ErrPartial)
+	ctx = parent
+	if status != "" {
+		return finish(status, fetchErr)
 	}
 	if err := ctx.Err(); err != nil {
-		return finish("stale", err)
+		return result, err
 	}
 	now := m.now().UTC()
-	expiresAt := now.Add(OriginTTL)
+	expiresAt := fetchedAt.Add(OriginTTL)
 	var nextSnapshot *feedSnapshot
 	if useSnapshot {
-		nextSnapshot = &feedSnapshot{Digest: digest, Size: len(raw), Entries: batch.snapshotEntries, Cursor: batch.nextCursor, FetchedAt: now, ExpiresAt: expiresAt}
+		nextSnapshot = &feedSnapshot{Digest: digest, Size: len(raw), Entries: parsed.snapshotEntries, Cursor: parsed.nextCursor, FetchedAt: fetchedAt, ExpiresAt: expiresAt}
 		if result.NotModified {
 			nextSnapshot.FetchedAt = previous.snapshot.FetchedAt
 			nextSnapshot.ExpiresAt = previous.snapshot.ExpiresAt
@@ -450,7 +491,7 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 	// Keep subscription edits and deletion from racing the import after its
 	// network response. This lock is bounded local I/O, never network work.
 	m.mu.Lock()
-	if m.closed || m.fenced || !m.currentSourceLocked(s) {
+	if m.closed || m.fenced || m.restoreGeneration != restoreGeneration || !m.currentSourceLocked(s) {
 		m.mu.Unlock()
 		return result, ErrConflict
 	}
@@ -460,10 +501,10 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 			return finish("stale", err)
 		}
 	}
-	snapshot, err := m.nodes.Import(ctx, nodestore.Source{ID: s.id, Kind: s.kind}, batch.raw, now, expiresAt.Sub(now), false)
+	snapshot, err := m.nodes.Import(ctx, nodestore.Source{ID: s.id, Kind: s.kind}, parsed.raw, now, expiresAt.Sub(now), false)
 	var importedIDs []string
 	if err == nil {
-		ids, metadataErr := m.nodes.MatchImportedMaterials(ctx, batch.materials)
+		ids, metadataErr := m.nodes.MatchImportedMaterials(ctx, parsed.materials)
 		if metadataErr != nil {
 			err = metadataErr
 		} else {
@@ -487,7 +528,7 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 				}
 			}
 			for i, id := range ids {
-				country := batch.countries[i]
+				country := parsed.countries[i]
 				if country == "" {
 					// Only an explicit built-in country collection can supply a
 					// publisher label when its individual tags omit geography.
@@ -512,14 +553,14 @@ func (m *Manager) sync(parent context.Context, s source, acceptPartial bool) (Re
 		}
 		return finish("stale", ErrStore)
 	}
-	result.Imported = batch.accepted
+	result.Imported = parsed.accepted
 	result.NodeIDs = importedIDs
 	state.RetryAfterAt = time.Time{}
 	if !result.NotModified {
-		state.LastSuccessAt = now
+		state.LastSuccessAt = fetchedAt
 	}
-	state.OriginExpiresAt, state.LastKnownGood, state.Imported = expiresAt, true, batch.accepted
-	state.TotalEntries, state.AcceptedEntries, state.Omitted, state.Rejected, state.Duplicates = batch.total, batch.accepted, batch.omitted, batch.rejected, batch.duplicates
+	state.OriginExpiresAt, state.LastKnownGood, state.Imported = expiresAt, true, parsed.accepted
+	state.TotalEntries, state.AcceptedEntries, state.Omitted, state.Rejected, state.Duplicates = parsed.total, parsed.accepted, parsed.omitted, parsed.rejected, parsed.duplicates
 	if nextSnapshot != nil {
 		previous.snapshot = nextSnapshot
 		result.Cursor, state.Cursor = nextSnapshot.Cursor, nextSnapshot.Cursor
@@ -548,6 +589,8 @@ func ErrorCode(err error) string {
 		return "FEED_RATE_LIMIT"
 	case errors.Is(err, ErrBusy):
 		return "FEED_BUSY"
+	case errors.Is(err, operationgate.ErrRecovery):
+		return "FEED_RECOVERY"
 	case errors.Is(err, ErrSize):
 		return "FEED_LIMIT"
 	case errors.Is(err, ErrFormat):

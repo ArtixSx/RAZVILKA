@@ -59,17 +59,18 @@ func (a *App) nodeCheckDefinitionCurrent(id, expected string) bool {
 	return false
 }
 
-// Both Sync and SyncSaved use the existing bounded HTTPS client and NodeStore.
-// No second importer, checker, schedule, or route writer is introduced here.
+// Called without application admission. The existing importer owns short store
+// leases, leaving the bounded download outside the gate. The snapshot phase
+// takes a fresh lease, yielding to recovery before the first engine check.
 func (a *App) fetchNodeCheckCandidates(ctx context.Context, jobID uint64, request nodeCheckJobRequest) ([]string, error) {
 	var result providerfeed.Result
 	var err error
 	if a.nodeChecks.fetchSource != nil {
 		result, err = a.nodeChecks.fetchSource(ctx, request)
 	} else if request.Feed != nil {
-		result, err = a.NodeFeeds.Sync(ctx, *request.Feed)
+		result, err = a.NodeFeeds.SyncWithAdmission(ctx, *request.Feed, a.Operations.Enter)
 	} else {
-		result, err = a.NodeFeeds.SyncSaved(ctx, request.FeedID)
+		result, err = a.NodeFeeds.SyncSavedWithAdmission(ctx, request.FeedID, a.Operations.Enter)
 	}
 	result.Issues = nil
 	if err == nil && ctx.Err() != nil {
@@ -77,6 +78,13 @@ func (a *App) fetchNodeCheckCandidates(ctx context.Context, jobID uint64, reques
 	}
 	var ids []string
 	skipped := 0
+	if err == nil {
+		var release func()
+		release, err = a.bulkAdmission(ctx)
+		if err == nil {
+			defer release()
+		}
+	}
 	if err == nil {
 		var snapshot nodestore.Snapshot
 		snapshot, err = a.Nodes.Snapshot(ctx, time.Now())

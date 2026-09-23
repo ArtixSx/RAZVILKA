@@ -254,7 +254,7 @@ func (m *Manager) sourceIndexLocked(id string) int {
 }
 func (m *Manager) currentSourceLocked(s source) bool {
 	if s.revision == 0 {
-		return true
+		return m.sourceIndexLocked(s.id) < 0
 	}
 	i := m.sourceIndexLocked(s.id)
 	return i >= 0 && m.storage.doc.Sources[i].Revision == s.revision
@@ -404,6 +404,10 @@ func (m *Manager) Saved(id string) (State, error) {
 }
 
 func (m *Manager) SyncSaved(ctx context.Context, id string) (Result, error) {
+	return m.syncSaved(ctx, id, nil)
+}
+
+func (m *Manager) syncSaved(ctx context.Context, id string, admission *syncAdmission) (Result, error) {
 	m.mu.Lock()
 	i := m.sourceIndexLocked(id)
 	if m.closed || m.fenced || i < 0 || m.nodes == nil {
@@ -417,7 +421,7 @@ func (m *Manager) SyncSaved(ctx context.Context, id string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return m.sync(ctx, s, feed.Request.AcceptPartial)
+	return m.syncAdmitted(ctx, s, feed.Request.AcceptPartial, admission)
 }
 
 func (m *Manager) completeSavedLocked(id string, cause error) {

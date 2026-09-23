@@ -119,6 +119,7 @@ func (m *Manager) BeginRestore(ctx context.Context) (*RestoreTarget, error) {
 		m.mu.Unlock()
 		return nil, err
 	}
+	m.restoreGeneration++
 	return &RestoreTarget{manager: m, binding: binding}, nil
 }
 func (t *RestoreTarget) Read(ctx context.Context) (restorejournal.Image, error) {

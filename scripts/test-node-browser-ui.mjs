@@ -120,6 +120,12 @@ assert.ok(calls.every(call => !call.url.includes('undefined')));
 assert.doesNotMatch($('#nodeFeedSources').innerHTML + $('#nodeFeedStatus').textContent, /token=private/);
 assert.ok(calls.every(call => !call.url.includes('/apply')), 'saving a subscription applied a route');
 
+state.nodeFeeds.sources = [{ source_id: 'stopped', saved: true, status: 'interrupted', imported: 32, cursor: 39, snapshot_entries: 71 }];
+context.renderNodeSubscriptions();
+assert.match($('#nodeFeedSources').innerHTML, /Обновление прервано — прежние подключения сохранены/);
+assert.match($('#nodeFeedSources').innerHTML, /Просмотрено 39 из 71/);
+assert.doesNotMatch($('#nodeFeedSources').innerHTML, /data-feed-cancel/);
+
 state.nodeFeeds.sources = [{ source_id: 'partial', saved: true, status: 'needs_acceptance', revision: 7, name: 'Каталог', enabled: false, limit: 16, refresh_interval_minutes: 60 }];
 context.renderNodeSubscriptions();
 assert.match($('#nodeFeedSources').innerHTML, /data-feed-accept="partial"/);

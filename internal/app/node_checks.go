@@ -318,7 +318,15 @@ func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done
 	defer cancel()
 	var err error
 	if request.Feed != nil || request.FeedID != "" {
+		// No engine exists yet. The feed importer owns its own short store
+		// admissions and must not inherit this exclusive preparation lease.
+		release()
+		held = false
 		request.NodeIDs, err = a.fetchNodeCheckCandidates(ctx, id, request)
+		if err == nil {
+			release, err = a.bulkAdmission(ctx)
+			held = err == nil
+		}
 	}
 	profile := ""
 	if err == nil {

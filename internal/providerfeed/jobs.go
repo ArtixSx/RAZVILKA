@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"time"
 )
 
@@ -43,7 +42,8 @@ func (m *Manager) Start(ctx context.Context, admission func(context.Context) (fu
 }
 
 // StartManaged keeps the bounded worker but delegates periodic due decisions
-// to the application reconciler. Manual refreshes still wake this same queue.
+// to the application reconciler. Network preparation releases admission; import
+// and metadata commits reacquire it. Manual refreshes wake this same queue.
 func (m *Manager) StartManaged(ctx context.Context, admission func(context.Context) (func(), error)) {
 	m.start(ctx, admission, true)
 }
@@ -241,27 +241,8 @@ func (m *Manager) runJobs(ctx context.Context, admission func(context.Context) (
 			entry.cancel = cancel
 			sourceID := entry.view.SourceID
 			m.mu.Unlock()
-			release := func() {}
-			var err error
-			if admission != nil {
-				// Busy means waiting for another owner, not a failed remote source.
-				for {
-					release, err = admission(jobCtx)
-					if !errors.Is(err, operationgate.ErrBusy) {
-						break
-					}
-					timer := time.NewTimer(200 * time.Millisecond)
-					select {
-					case <-jobCtx.Done():
-						timer.Stop()
-						err = jobCtx.Err()
-					case <-timer.C:
-					}
-					if jobCtx.Err() != nil {
-						break
-					}
-				}
-			}
+			lease := &syncAdmission{enter: admission}
+			err := lease.acquire(jobCtx)
 			var result Result
 			if err == nil {
 				// Consent may be revoked while this task is waiting for admission.
@@ -272,10 +253,14 @@ func (m *Manager) runJobs(ctx context.Context, admission func(context.Context) (
 				if !allowed {
 					err = context.Canceled
 				} else {
-					result, err = m.SyncSaved(jobCtx, sourceID)
+					if managed {
+						result, err = m.syncSaved(jobCtx, sourceID, lease)
+					} else {
+						result, err = m.SyncSaved(jobCtx, sourceID)
+					}
 				}
-				release()
 			}
+			lease.release()
 			cancel()
 			m.mu.Lock()
 			entry.cancel = nil
