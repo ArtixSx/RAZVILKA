@@ -17,10 +17,13 @@ func (a *ScopedDNSAdapter) appliedSettings(spec *ScopedDNSPlan) error {
 	return a.DNS.VerifyServiceSelection(first.ServiceID, first.ProfileID)
 }
 
-func scopedDNSSettingsTargets(previous *scopedDNSState, next *ScopedDNSPlan) map[string]string {
+func scopedDNSSettingsTargets(previous *scopedDNSState, next *ScopedDNSPlan, suspend bool) map[string]string {
 	targets := map[string]string{}
 	if previous != nil && previous.DNS != nil && len(previous.DNS.Bindings) > 0 {
 		targets[previous.DNS.Bindings[0].ServiceID] = ""
+		if suspend {
+			targets[previous.DNS.Bindings[0].ServiceID] = previous.DNS.Bindings[0].ProfileID
+		}
 	}
 	if next != nil && len(next.Bindings) > 0 {
 		targets[next.Bindings[0].ServiceID] = next.Bindings[0].ProfileID
@@ -28,11 +31,11 @@ func scopedDNSSettingsTargets(previous *scopedDNSState, next *ScopedDNSPlan) map
 	return targets
 }
 
-func (a *ScopedDNSAdapter) reviewSettings(previous *scopedDNSState, next *ScopedDNSPlan) ([]dnscontrol.ServiceSelectionReceipt, error) {
+func (a *ScopedDNSAdapter) reviewSettings(previous *scopedDNSState, next *ScopedDNSPlan, suspend bool) ([]dnscontrol.ServiceSelectionReceipt, error) {
 	if a.DNS == nil {
 		return nil, dnscontrol.ErrServiceDNSChanged
 	}
-	targets := scopedDNSSettingsTargets(previous, next)
+	targets := scopedDNSSettingsTargets(previous, next, suspend)
 	ids := make([]string, 0, len(targets))
 	for id := range targets {
 		ids = append(ids, id)
@@ -60,12 +63,12 @@ func (a *ScopedDNSAdapter) commitSettings(ctx context.Context, p Plan, root stri
 	if err != nil {
 		return err
 	}
-	if err := validateScopedSettingsSnapshot(s, p.DNS); err != nil {
+	if err := validateScopedSettingsSnapshot(s, p.DNS, p.SuspendDNS); err != nil {
 		return err
 	}
 	// Recheck all settings before writing any, then each compare-and-swap
 	// rechecks under the DNS manager lock. Partial writes use the SAME snapshot.
-	current, err := a.reviewSettings(s.State, p.DNS)
+	current, err := a.reviewSettings(s.State, p.DNS, p.SuspendDNS)
 	if err != nil || !reflect.DeepEqual(current, s.Settings) {
 		return dnscontrol.ErrServiceDNSChanged
 	}
@@ -80,8 +83,8 @@ func (a *ScopedDNSAdapter) commitSettings(ctx context.Context, p Plan, root stri
 	return ctx.Err()
 }
 
-func validateScopedSettingsSnapshot(s scopedDNSSnapshot, next *ScopedDNSPlan) error {
-	targets := scopedDNSSettingsTargets(s.State, next)
+func validateScopedSettingsSnapshot(s scopedDNSSnapshot, next *ScopedDNSPlan, suspend bool) error {
+	targets := scopedDNSSettingsTargets(s.State, next, suspend)
 	if len(targets) != len(s.Settings) {
 		return ErrReviewChanged
 	}

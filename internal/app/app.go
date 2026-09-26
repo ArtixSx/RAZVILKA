@@ -3601,6 +3601,10 @@ func (a *App) buildDataplanePlanForRequest(cfg config.Config, options []routecat
 }
 
 func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
+	return a.buildDataplanePlanWithDNS(cfg, options, scope, engineID, nil)
+}
+
+func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string, dnsChange *scopedDNSChange) (dataplane.Plan, error) {
 	// The versioned LAN intent is preserved, but must not be silently ignored
 	// by legacy adapters before the unified scope/DNS executor is integrated.
 	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil {
@@ -3611,11 +3615,20 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 	routes := make([]dataplane.Route, 0)
 	committedRoutes := map[string]string{}
 	committedAt := time.Time{}
+	var previousDNSPlan *dataplane.Plan
 	if a.Dataplane != nil {
-		if committed, exists, err := a.Dataplane.Committed(); err == nil && exists && committed.State == "committed" && committed.Revision == cfg.AppliedRevision {
-			committedAt, _ = time.Parse(time.RFC3339, committed.CreatedAt)
-			for _, route := range committed.Routes {
-				committedRoutes[route.ServiceID] = route.Resolved
+		if committed, exists, err := a.Dataplane.Committed(); err == nil && exists && committed.State == "committed" {
+			if committed.DNS != nil || committed.SuspendDNS {
+				if committed.Revision != cfg.AppliedRevision {
+					return dataplane.Plan{}, errScopedDNSReview
+				}
+				previousDNSPlan = &committed
+			}
+			if committed.Revision == cfg.AppliedRevision {
+				committedAt, _ = time.Parse(time.RFC3339, committed.CreatedAt)
+				for _, route := range committed.Routes {
+					committedRoutes[route.ServiceID] = route.Resolved
+				}
 			}
 		}
 	}
@@ -3760,7 +3773,11 @@ func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatal
 			return dataplane.Plan{}, dataplane.ErrExactNodeNetworkChanged
 		}
 	}
-	return dataplane.Build(dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: host})
+	input := dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: host}
+	if err := a.composeScopedDNS(cfg, previousDNSPlan, &input, dnsChange); err != nil {
+		return dataplane.Plan{}, err
+	}
+	return dataplane.Build(input)
 }
 
 func configForChangeScope(cfg config.Config, scope changeScope) config.Config {

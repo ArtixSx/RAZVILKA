@@ -34,12 +34,15 @@ func (m *Manager) ReviewServiceSelection(serviceID, target string) (ServiceSelec
 
 func serviceSelectionReview(doc document, serviceID, target string) (ServiceSelectionReview, error) {
 	r := ServiceSelectionReview{ServiceID: serviceID, Draft: doc.ServiceDrafts[serviceID], Applied: doc.ServiceApplied[serviceID], Target: target, Revision: doc.ServiceRevisions[serviceID]}
-	if !validServiceID(serviceID) || doc.Applied.ProfileID != "automatic" || doc.Draft.ProfileID != "automatic" || target != "" && target != r.Draft && target != r.Applied {
+	if !validServiceID(serviceID) || doc.Applied.ProfileID != "automatic" || target != "" && target != r.Draft && target != r.Applied {
 		return r, ErrServiceDNSChanged
 	}
 	if target != "" {
 		var err error
-		r.ProfileIdentity, err = scopedProfileIdentity(doc, target)
+		// Stop may preserve a configured choice even if its credentials were
+		// removed in the editor. Eligibility is checked by the runtime adapter
+		// before activation; retaining settings must not prevent cleanup.
+		r.ProfileIdentity, err = profileDefinitionIdentity(doc, target, target != r.Applied)
 		if err != nil {
 			return r, err
 		}

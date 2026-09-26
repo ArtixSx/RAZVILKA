@@ -123,7 +123,7 @@ func (a *ScopedDNSAdapter) Snapshot(ctx context.Context, p Plan, root string) er
 			return err
 		}
 	}
-	settings, err := a.reviewSettings(state, p.DNS)
+	settings, err := a.reviewSettings(state, p.DNS, p.SuspendDNS)
 	if err != nil {
 		return preflightRefusalError{err}
 	}
@@ -433,7 +433,7 @@ func (a *ScopedDNSAdapter) Rollback(ctx context.Context, p Plan, root string) er
 	if err != nil {
 		return err
 	}
-	if err := validateScopedSettingsSnapshot(s, p.DNS); err != nil {
+	if err := validateScopedSettingsSnapshot(s, p.DNS, p.SuspendDNS); err != nil {
 		return err
 	}
 	if err := a.stopLocked(ctx); err != nil {
@@ -461,7 +461,7 @@ func (a *ScopedDNSAdapter) VerifyRollback(ctx context.Context, p Plan, root stri
 	if err != nil {
 		return false, err
 	}
-	if err := validateScopedSettingsSnapshot(s, p.DNS); err != nil {
+	if err := validateScopedSettingsSnapshot(s, p.DNS, p.SuspendDNS); err != nil {
 		return false, err
 	}
 	current, err := a.readState(a.statePath())

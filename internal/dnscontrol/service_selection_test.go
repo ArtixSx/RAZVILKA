@@ -83,7 +83,7 @@ func TestServiceSelectionChangedDraftProviderAndGlobalDNSRefuse(t *testing.T) {
 			case "draft":
 				_ = m.SetServiceDraft("example", "security")
 			case "global":
-				_ = m.SetDraft("private")
+				m.doc.Applied = Selection{ProfileID: "private"}
 			case "provider":
 				r.ProfileIdentity = "stale"
 			case "revision":
@@ -99,6 +99,37 @@ func TestServiceSelectionChangedDraftProviderAndGlobalDNSRefuse(t *testing.T) {
 				t.Fatal("refusal mutated settings")
 			}
 		})
+	}
+}
+
+func TestServiceSelectionRetainAllowsUnrelatedDraftAndUnavailableProvider(t *testing.T) {
+	m := serviceSelectionFixture(t)
+	if err := m.SetDraft("security"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetNextDNSProfileID("abcdef"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetServiceDraft("example", "nextdns"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.CommitServiceSelection(selectionReview(t, m, "nextdns")); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetNextDNSProfileID(""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.ScopedProfileIdentity("nextdns"); err == nil {
+		t.Fatal("fixture provider still eligible")
+	}
+	if err := m.CommitServiceSelection(selectionReview(t, m, "nextdns")); err != nil {
+		t.Fatal("retention blocked cleanup", err)
+	}
+	if m.Snapshot().Draft.ProfileID != "security" {
+		t.Fatal("unrelated global DNS draft consumed")
+	}
+	if err := m.CommitServiceSelection(selectionReview(t, m, "")); err != nil {
+		t.Fatal("invalid provider blocked removal", err)
 	}
 }
 

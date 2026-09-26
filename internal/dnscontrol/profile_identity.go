@@ -16,12 +16,16 @@ func (m *Manager) ScopedProfileIdentity(id string) (string, error) {
 }
 
 func scopedProfileIdentity(doc document, id string) (string, error) {
+	return profileDefinitionIdentity(doc, id, true)
+}
+
+func profileDefinitionIdentity(doc document, id string, requireScoped bool) (string, error) {
 	p, ok := profileByID(id)
 	if !ok {
 		return "", ErrScopedDNS
 	}
 	v, ok := providerByIDFor(p.ProviderID, doc)
-	if !ok || !v.Configured || v.Scope != "production" || v.Experimental || v.TrustedLocal || v.DoH == "" {
+	if !ok || requireScoped && (!v.Configured || v.Scope != "production" || v.Experimental || v.TrustedLocal || v.DoH == "") {
 		return "", ErrScopedDNS
 	}
 	data, err := json.Marshal(struct {

@@ -2,7 +2,10 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -15,13 +18,49 @@ type dnsReviewAdapter struct {
 	*nodeApplyAdapter
 	dns    *dnscontrol.Manager
 	review dnscontrol.ServiceSelectionReview
+	active *dataplane.Plan
+	before *dataplane.Plan
 }
 
 func (a *dnsReviewAdapter) ID() string                           { return "dns-scoped" }
-func (a *dnsReviewAdapter) Deactivate(ctx context.Context) error { return ctx.Err() }
+func (a *dnsReviewAdapter) Deactivate(ctx context.Context) error { a.active = nil; return ctx.Err() }
+func (a *dnsReviewAdapter) Snapshot(ctx context.Context, p dataplane.Plan, root string) error {
+	a.before = a.active
+	id, target := "", ""
+	var state any
+	if a.before != nil {
+		id = a.before.DNS.Bindings[0].ServiceID
+		if p.SuspendDNS {
+			target = a.before.DNS.Bindings[0].ProfileID
+		}
+		state = map[string]any{"network": a.before.NetworkProfileID, "dns": a.before.DNS, "routes": a.before.Routes}
+	}
+	if p.DNS != nil {
+		id, target = p.DNS.Bindings[0].ServiceID, p.DNS.Bindings[0].ProfileID
+	}
+	var err error
+	a.review, err = a.dns.ReviewServiceSelection(id, target)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(map[string]any{"state": state, "active": a.before != nil, "settings": []dnscontrol.ServiceSelectionReceipt{a.review.Receipt()}})
+	if err != nil {
+		return err
+	}
+	if err = os.WriteFile(filepath.Join(root, "snapshot.json"), data, 0600); err != nil {
+		return err
+	}
+	return a.nodeApplyAdapter.Snapshot(ctx, p, root)
+}
 func (a *dnsReviewAdapter) Commit(ctx context.Context, p dataplane.Plan, root string) error {
 	if err := a.dns.CommitServiceSelection(a.review); err != nil {
 		return err
+	}
+	if p.DNS != nil {
+		copy := p
+		a.active = &copy
+	} else {
+		a.active = nil
 	}
 	return a.nodeApplyAdapter.Commit(ctx, p, root)
 }
@@ -29,6 +68,7 @@ func (a *dnsReviewAdapter) CommitRetirement(ctx context.Context, p dataplane.Pla
 	return a.Commit(ctx, p, root)
 }
 func (a *dnsReviewAdapter) Rollback(ctx context.Context, p dataplane.Plan, root string) error {
+	a.active = a.before
 	return errors.Join(a.dns.RestoreServiceSelection(a.review.Receipt()), a.nodeApplyAdapter.Rollback(ctx, p, root))
 }
 func (a *dnsReviewAdapter) VerifyRollback(context.Context, dataplane.Plan, string) (bool, error) {

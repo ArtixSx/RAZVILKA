@@ -109,6 +109,9 @@ func (a *App) bindApplyReview(ctx context.Context, cfg config.Config, plan datap
 			if exists && previous.DNS != nil {
 				for _, binding := range previous.DNS.Bindings {
 					targets[binding.ServiceID] = ""
+					if plan.SuspendDNS {
+						targets[binding.ServiceID] = binding.ProfileID
+					}
 				}
 			}
 		}

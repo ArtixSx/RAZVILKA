@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/netip"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -74,6 +75,9 @@ func validateScopedDNSPlan(p *ScopedDNSPlan, routes []Route) error {
 	if !probeBound {
 		return errors.New("scoped DNS probe hostname is not bound to the chosen resolver")
 	}
+	if len(seen) != len(service.Domains) {
+		return errors.New("scoped DNS policy must cover the current exact service domains; review changed definitions")
+	}
 	return nil
 }
 
@@ -94,6 +98,18 @@ func (m *Manager) checkScopedDNSContinuation(p Plan) error {
 	}
 	if exists && old.DNS != nil && p.DNS == nil && !slices.Contains(p.RetiringAdapters, scopedDNSAdapterID) {
 		return errors.New("existing scoped DNS must be retained or explicitly retired")
+	}
+	if p.SuspendDNS && (!exists || old.DNS == nil || p.DNS != nil || len(p.Routes) != 0 || !slices.Contains(p.RetiringAdapters, scopedDNSAdapterID)) {
+		return errors.New("DNS suspension has no matching active policy")
+	}
+	if exists && old.SuspendDNS {
+		saved, err := m.SuspendedDNS(old)
+		if err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(saved, p.DNS) {
+			return errors.New("suspended DNS must resume its exact saved policy before replacement")
+		}
 	}
 	return nil
 }
