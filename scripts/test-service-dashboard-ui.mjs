@@ -207,7 +207,8 @@ function fixture() {
   assert.equal(f.context.sessionStorage.getItem('razvilka.service-job-request'), null);
 }
 for (const event of ['razvilka:auth-required', 'razvilka:view-change']) {
-  const f = fixture(), pending = deferred(); f.setHandler(() => pending.promise);
+  const f = fixture(), pending = deferred();
+  f.setHandler((url, options) => options.method === 'POST' ? pending.promise : url.endsWith('/current') ? { job: null } : f.state.serviceControl);
   const request = f.context.serviceDashboardStart('select', ['youtube']);
   f.dispatch(event, 'overview'); pending.resolve({ job: { id: 17, state: 'running', mode: 'service-select' } }); await request;
   assert.equal(f.dashboard.operation, null);
@@ -291,7 +292,7 @@ console.log('Service dashboard: applied/evidence/ping distinction, focus/details
 // must not paint a service green. Group summaries use this same function.
 {
  const f=fixture(),service=f.state.services[0];
- service.observed_state={route:'nfqws',level:'service-confirmed',outcome:'service_accepted',checked_at:new Date(Date.now()-1000).toISOString(),fresh_until:future()};
+ service.observed_state={route:'nfqws',status:'pass',level:'service-confirmed',outcome:'service_accepted',checked_at:new Date(Date.now()-1000).toISOString(),fresh_until:future()};
  assert.equal(f.context.serviceDashboardSummary(service).kind,'good');
  for(const checked of ['', 'broken', new Date(Date.now()+30000).toISOString()]) {
   service.observed_state.checked_at=checked;
@@ -305,3 +306,67 @@ console.log('Service dashboard: applied/evidence/ping distinction, focus/details
  }
 }
 console.log('R3 service evidence timestamp regression: passed');
+
+// Manual checks and autonomous observations are ordered by the time of the
+// actual probe. Neither old success nor old failure can hide a newer result.
+{
+ const f=fixture(), s=f.state.services[0], now=Date.now();
+ const proof={kind:'check',service_id:s.id,status:'pass',available:true,checked_route:'nfqws',config_revision:9,freshness_verified:true,valid_until:future(),checked_at:new Date(now-10000).toISOString()};
+ f.dashboard.control.results=[proof];
+ const observed={route:'nfqws',status:'pass',level:'service-confirmed',outcome:'service_accepted',checked_at:new Date(now-1000).toISOString(),fresh_until:future()};
+ for(const change of [{status:'fail',outcome:'transport_error',level:'runtime'}, {status:'inconclusive',level:'runtime'}, {status:'partial'}, {status:undefined}]) {
+  s.observed_state={...observed,...change};
+  assert.notEqual(f.context.serviceDashboardSummary(s).kind,'good',JSON.stringify(change));
+ }
+ f.dashboard.control.results=[{...proof,status:'fail',available:false}]; s.observed_state=observed;
+ assert.equal(f.context.serviceDashboardSummary(s).kind,'good','new autonomous success lost to old manual failure');
+ f.dashboard.control.results=[{...proof,status:'fail',available:false,checked_at:new Date(now-500).toISOString()}];
+ assert.equal(f.context.serviceDashboardSummary(s).kind,'bad','new manual failure lost to old autonomous success');
+ s.presentation_only=true;
+ assert.equal(f.context.serviceDashboardSummary(s).kind,'unknown','saved settings reused a live health result');
+}
+
+function serviceReadFixture() {
+ const f=fixture(); f.context.panelLoad={generation:1,request:null};
+ f.context.panelSnapshotCurrent=n=>n===f.context.panelLoad.generation;
+ f.state.dataLoad={services:{updatedAt:0,phase:'ready'}};
+ f.context.acceptPanelSection=(key,rows)=>{ assert.equal(key,'services');assert(Array.isArray(rows));f.state.services=rows;f.state.dataLoad.services={updatedAt:Date.now(),phase:'ready'}; };
+ f.context.renderPanelSection=()=>{};f.context.renderPanelLoad=()=>{};
+ f.context.panelBusy=e=>e.status===409;
+ f.context.panelSectionState=(key,phase)=>{f.state.dataLoad[key].phase=phase;};
+ return f;
+}
+{
+ const f=serviceReadFixture(); const updated=[{...f.state.services[0],name:'Updated proof'}];
+ f.setHandler(url=>url.endsWith('/current')?{job:null}:url.endsWith('/services')?updated:f.state.serviceControl);
+ f.state.currentView='overview'; await f.context.refreshServiceControl();
+ assert.equal(f.state.services,updated); assert.equal(f.calls.filter(c=>c.url.endsWith('/services')).length,1);
+ await f.context.refreshServiceControl();
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/services')).length,1,'service list reread inside 30-second interval');
+ const before=f.calls.length;f.document.hidden=true;await f.context.refreshServiceControl();assert.equal(f.calls.length,before);
+}
+for(const invalidate of ['new-generation','logout','full-read','edit']) {
+ const f=serviceReadFixture(), pending=deferred(), original=f.state.services;
+ f.setHandler(url=>url.endsWith('/current')?{job:null}:url.endsWith('/services')?pending.promise:f.state.serviceControl);
+ const read=f.context.refreshServiceControl();await flush();assert(f.calls.some(c=>c.url.endsWith('/services')));
+ if(invalidate==='new-generation')f.context.panelLoad.generation++;
+ if(invalidate==='logout')f.dispatch('razvilka:auth-required');
+ if(invalidate==='full-read')f.context.panelLoad.request=Promise.resolve();
+ if(invalidate==='edit')f.dashboard.edit={};
+ pending.resolve([{id:'late'}]);await read;assert.equal(f.state.services,original,invalidate);
+}
+{
+ const f=serviceReadFixture(), original=f.state.services;
+ f.setHandler(url=>{if(url.endsWith('/services'))throw Object.assign(Error('busy'),{status:409});return url.endsWith('/current')?{job:null}:f.state.serviceControl;});
+ await f.context.refreshServiceControl();assert.equal(f.state.services,original);assert.equal(f.state.dataLoad.services.phase,'busy');
+}
+{
+ const f=fixture();f.state.currentView='overview';
+ f.setHandler(url=>url.endsWith('/current')?{job:null}:f.state.serviceControl);
+ f.dispatch('razvilka:view-change','overview');await flush();assert.equal(f.calls.length,2);
+ const tick=[...f.timers.values()][0];f.timers.clear();await tick();assert.equal(f.calls.length,4);
+ f.document.hidden=true;f.dispatch('visibilitychange');assert.equal(f.timers.size,0);
+ const count=f.calls.length;await tick();assert.equal(f.calls.length,count);
+ f.document.hidden=false;f.dispatch('visibilitychange');await flush();assert.equal(f.calls.length,count+2);
+}
+console.log('Autonomous observations: latest result, home polling, bounded reads, visibility and mutation fences passed');

@@ -30,6 +30,7 @@ function serviceDashboardFresh(result) {
 // route. TCP reachability alone never becomes a service PASS.
 function serviceDashboardSummary(service) {
   const applied = serviceDashboardApplied(service);
+  if (service.presentation_only) return { route: applied.enabled ? applied.route : '', label: 'Нет свежих данных', kind: 'unknown', detail: 'Сохранены настройки; текущая доступность ещё проверяется.', pingLabel: 'Пинг: —' };
   const result = serviceDashboardResult(service);
   const directResult = !applied.enabled && serviceDashboardFresh(result) && result.kind === 'check'
     && result.checked_route === 'direct' && !result.applied_route && !result.recommended_node_id;
@@ -49,7 +50,7 @@ function serviceDashboardSummary(service) {
     label = result.status === 'pass' && result.available === true ? 'Напрямую: доступен' : result.status === 'fail' ? 'Напрямую: недоступен' : 'Напрямую: результат неясен';
     kind = result.status === 'pass' && result.available === true ? 'good' : result.status === 'fail' ? 'bad' : 'warn';
     detail = 'Проверка прямого веб-доступа выполнена с роутера. Обход не включён; неприменённые настройки эта проверка не подтверждает.';
-  } else if (currentResult) {
+  } else if (currentResult && (!freshObserved || Date.parse(result.checked_at) >= Date.parse(observed.checked_at))) {
     if (result.status === 'pass' && result.available === true) {
       label = 'Сервис доступен'; kind = 'good';
     } else if (result.status === 'fail') {
@@ -58,8 +59,14 @@ function serviceDashboardSummary(service) {
       label = result.status === 'not-ready' ? 'Нужна настройка' : 'Результат неясен'; kind = 'warn';
     }
     detail = result.message || detail;
-  } else if (freshObserved && observed.level === 'service-confirmed' && observed.outcome === 'service_accepted') {
-    label = 'Сервис доступен'; kind = 'good'; detail = 'Есть свежая проверка сервиса через применённый маршрут.';
+  } else if (freshObserved) {
+    // A newer inconclusive/failed probe must supersede an earlier manual PASS.
+    // Only explicit service proof may promote availability, never a process.
+    if (observed.status === 'pass' && observed.level === 'service-confirmed' && observed.outcome === 'service_accepted') {
+      label = 'Сервис доступен'; kind = 'good'; detail = 'Есть свежая проверка сервиса через применённый маршрут.';
+    } else {
+      label = 'Нужна новая проверка'; kind = 'warn'; detail = 'Последняя проверка не подтвердила доступ через применённый маршрут.';
+    }
   } else if (applied.enabled && (result || observed.checked_at)) {
     label = 'Нужна новая проверка';
   }
@@ -192,20 +199,23 @@ function serviceDashboardCurrent(operation) {
 }
 
 async function refreshServiceControl() {
-  if (!serviceDashboard.authenticated || serviceDashboard.read) return;
+  if (!serviceDashboard.authenticated || serviceDashboard.read || document.hidden || serviceDashboard.edit) return;
   const controller = new AbortController();
   const epoch = serviceDashboard.epoch;
+  const generation = typeof panelLoad === 'undefined' ? null : panelLoad.generation;
+  const current = () => !controller.signal.aborted && epoch === serviceDashboard.epoch
+    && !serviceDashboard.edit && (generation === null || panelSnapshotCurrent(generation));
   serviceDashboard.read = controller;
   try {
     const memory = await api('/api/v1/service-control/current', { signal: controller.signal });
-    if (controller.signal.aborted || epoch !== serviceDashboard.epoch) return;
+    if (!current()) return;
     const priorJob = serviceDashboard.control?.job;
     serviceDashboard.control = { ...serviceDashboard.control, job: memory.job || null };
     if (state.serviceControl) state.serviceControl = { ...state.serviceControl, job: memory.job || null };
     if (typeof nodeBrowser !== 'undefined' && Array.isArray(memory.pings)) nodeBrowser.pings = memory.pings;
     if (serviceDashboardJobActive()) { renderServiceDashboard(); return; }
     const control = await api('/api/v1/service-control', { signal: controller.signal });
-    if (controller.signal.aborted || epoch !== serviceDashboard.epoch) return;
+    if (!current()) return;
     if (typeof acceptWorkspaceControl === 'function') acceptWorkspaceControl(control);
     else state.serviceControl = control;
     serviceDashboard.control = state.serviceControl || control;
@@ -213,13 +223,36 @@ async function refreshServiceControl() {
       // A checked candidate must exist in the current inventory before its
       // explicit review action is offered. These reads happen after cleanup.
       const nodes = await api('/api/v1/nodes', { signal: controller.signal });
-      if (controller.signal.aborted || epoch !== serviceDashboard.epoch) return;
+      if (!current()) return;
       state.nodes = nodes;
+    }
+    // Autopilot route probes live in the service observations, not in a manual
+    // check job. Refresh that view too, without reloading the whole panel or
+    // launching a probe. Do not race a full read or a completed user mutation.
+    if (typeof acceptPanelSection === 'function' && !panelLoad.request
+      && Date.now() - (state.dataLoad?.services?.updatedAt || 0) >= 30000) {
+      const startedAt = Date.now();
+      try {
+        const services = await api('/api/v1/services', { signal: controller.signal, readTimeoutMs: 10000 });
+        if (!current() || panelLoad.request) return;
+        acceptPanelSection('services', services, startedAt);
+        renderPanelSection('services');
+      } catch (error) {
+        if (!current()) return;
+        if (error.status === 401) throw error;
+        panelSectionState('services', panelBusy(error) ? 'busy' : 'error', error);
+        renderPanelLoad();
+      }
     }
     if (serviceDashboard.message.startsWith('Не удалось получить состояние:')) serviceDashboard.message = '';
     renderServiceDashboard();
   } catch (error) {
-    if (!controller.signal.aborted && epoch === serviceDashboard.epoch) {
+    if (current()) {
+      if (error.status === 401 && typeof showAuth === 'function') {
+        cancelPanelRefresh();
+        showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.');
+        return;
+      }
       serviceDashboard.message = `Не удалось получить состояние: ${error.message}`;
       renderServiceDashboardControl();
     }
@@ -345,6 +378,7 @@ async function serviceDashboardEdit(serviceID, changes) {
   if (!service || serviceDashboard.edit || !serviceDashboard.authenticated) return;
   const snapshot = { enabled: !!service.enabled, route: service.route, sources: [...(service.sources || [])], ...changes };
   const edit = { epoch: serviceDashboard.epoch, controller: new AbortController() };
+  serviceDashboard.read?.abort();
   serviceDashboard.edit = edit;
   renderServiceDashboard();
   try {
@@ -443,10 +477,10 @@ function startServiceDashboardPolling() {
   if (!serviceDashboard.authenticated) return;
   refreshServiceControl();
   const tick = async () => {
-    if (!serviceDashboard.authenticated || state.currentView !== 'services') return;
+    if (!serviceDashboard.authenticated || document.hidden || !['services', 'overview'].includes(state.currentView)) return;
     const epoch = serviceDashboard.epoch;
     await refreshServiceControl();
-    if (epoch === serviceDashboard.epoch && serviceDashboard.authenticated && state.currentView === 'services') serviceDashboard.poll = setTimeout(tick, serviceDashboardJobActive() ? 1500 : 10000);
+    if (epoch === serviceDashboard.epoch && serviceDashboard.authenticated && !document.hidden && ['services', 'overview'].includes(state.currentView)) serviceDashboard.poll = setTimeout(tick, serviceDashboardJobActive() ? 1500 : 10000);
   };
   serviceDashboard.poll = setTimeout(tick, 1500);
 }
@@ -515,7 +549,12 @@ function bindServiceDashboard() {
       $('#customServiceProbe').value = `https://${result.host}/`;
     }
   });
-  document.addEventListener('razvilka:view-change', event => { serviceDashboardLifecycle(); if (event.detail === 'services') startServiceDashboardPolling(); });
+  document.addEventListener('razvilka:view-change', event => { serviceDashboardLifecycle(); if (['services', 'overview'].includes(event.detail)) startServiceDashboardPolling(); });
   document.addEventListener('razvilka:auth-required', () => { serviceDashboard.authenticated = false; clearServiceDashboardRequestToken(); serviceDashboardLifecycle(true); });
-  document.addEventListener('razvilka:auth-restored', () => { serviceDashboard.authenticated = true; if (state.currentView === 'services') startServiceDashboardPolling(); });
+  document.addEventListener('razvilka:auth-restored', () => { serviceDashboard.authenticated = true; if (['services', 'overview'].includes(state.currentView)) startServiceDashboardPolling(); });
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(serviceDashboard.poll); serviceDashboard.poll = null;
+    if (document.hidden) serviceDashboard.read?.abort();
+    else if (['services', 'overview'].includes(state.currentView)) startServiceDashboardPolling();
+  });
 }

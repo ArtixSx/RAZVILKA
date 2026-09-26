@@ -112,7 +112,7 @@
     const changed=serviceChanged(s)||(typeof s.enabled==='boolean'&&typeof applied.enabled==='boolean'&&s.enabled!==applied.enabled);
     const member=s.enabled===true||!!managed||applied.enabled===true||changed;
     const result={member,changed,applied:applied.enabled===true,route:applied.enabled===true?text(applied.route):'',control:managed?managed.enabled?'Автоподбор включён':'Автоподбор на паузе':'Ручная настройка',kind:'unknown',actionable:false,label:'Не добавлен',detail:'Добавьте сервис, чтобы настроить доступ.'};
-    if(!available)return {...result,label:'Нет свежих данных',detail:'Последние настройки сохранены. Работа сервиса сейчас не подтверждена.'};
+    if(!available||s.presentation_only)return {...result,label:'Нет свежих данных',detail:'Последние настройки сохранены. Работа сервиса сейчас не подтверждена.'};
     if(!member)return result;
     if(managed?.removing)return {...result,kind:'warn',label:'Отключение в очереди',detail:'Отключение ещё не завершено. Действующее подключение может сохраняться.'};
     if(changed){result.pendingLabel='Есть неприменённые изменения';result.actionable=true;}
@@ -124,7 +124,7 @@
     if(result.applied&&summary.kind==='good'&&matched)return {...result,kind:'good',label:'Работает',detail:'Доступ подтверждён для проверенного сценария. Другие функции приложения могут требовать отдельной проверки.'};
     if(summary.kind==='bad'&&matched)return {...result,kind:'bad',actionable:result.actionable||!progressing,label:'Проверка не пройдена',detail:text(summary.detail)||'Откройте сервис, чтобы посмотреть причину.'};
     if(blocked)return {...result,kind:'warn',label:blockers[runtime.state],detail:text(runtime.message)||'Откройте причину. Остальные сервисы продолжают управляться отдельно.'};
-    if(progressing){const labels={checking:'Проверяется',applying:'Подключение применяется',searching:'Подбирается подключение',pending:'Ожидает настройки'};return {...result,kind:'warn',actionable:changed,label:labels[runtime.state],detail:text(runtime.message)||'Дождитесь результата задачи на роутере.'};}
+    if(progressing){const labels={checking:'Проверяется',applying:'Подключение применяется',searching:'Подбирается подключение',pending:result.applied?'Ожидает проверки':'Ожидает настройки'};return {...result,kind:'warn',actionable:changed,label:labels[runtime.state],detail:text(runtime.message)||'Дождитесь результата задачи на роутере.'};}
     if(!result.applied)return {...result,label:managed?.enabled?'Ожидает настройки':changed||s.enabled?'Ожидает применения':'Подключение не назначено',detail:managed?.enabled?'Сервис добавлен в автопилот. Применение подключения ещё не подтверждено.':'Настройки и применённое подключение показываются отдельно.'};
     return {...result,kind:'warn',actionable:changed,label:'Нужна проверка',detail:matched?text(summary.detail)||'Подключение назначено, но свежего подтверждения доступа нет.':'Результат не подтверждает это подключение. Дождитесь новой проверки.'};
   }
