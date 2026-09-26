@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -68,6 +69,7 @@ type ResourceConflict struct {
 }
 
 type Input struct {
+	DNS                *ScopedDNSPlan     `json:"scoped_dns,omitempty"`
 	NetworkProfileID   string             `json:"network_profile_id,omitempty"`
 	Revision           uint64             `json:"revision"`
 	SafeMode           bool               `json:"safe_mode"`
@@ -129,6 +131,7 @@ type RoutePlan struct {
 }
 
 type Plan struct {
+	DNS               *ScopedDNSPlan     `json:"scoped_dns,omitempty"`
 	NetworkProfileID  string             `json:"network_profile_id,omitempty"`
 	SchemaVersion     int                `json:"schema_version"`
 	PlanID            string             `json:"plan_id"`
@@ -237,6 +240,9 @@ func Build(input Input) (Plan, error) {
 }
 
 func BuildAt(input Input, now time.Time) (Plan, error) {
+	if err := validateScopedDNSPlan(input.DNS, input.Routes); err != nil {
+		return Plan{}, err
+	}
 	if now.IsZero() {
 		return Plan{}, errors.New("plan time is required")
 	}
@@ -248,6 +254,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	sum := sha256.Sum256(encoded)
 	digest := hex.EncodeToString(sum[:])
 	plan := Plan{
+		DNS:               input.DNS,
 		NetworkProfileID:  input.NetworkProfileID,
 		SchemaVersion:     SchemaVersion,
 		PlanID:            "dp-" + digest[:16],
@@ -269,7 +276,11 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		Note:              "План ничего не изменяет сам по себе. Live Apply разрешается только после проверки установленного обхода, ownership, snapshot, native validation, health и готовности rollback.",
 	}
 	if plan.RequiresNetworkProof() && !systemprobe.ValidWANProfileID(plan.NetworkProfileID) {
-		plan.Blockers = append(plan.Blockers, Blocker{Code: "NETWORK_PROOF_UNAVAILABLE", Adapter: "sing-box", Message: "Текущая сеть не подтверждена для маршрута через узел.", Resolution: "Повторите проверку узла и сформируйте новый план при стабильном подключении."})
+		adapter := "sing-box"
+		if plan.DNS != nil {
+			adapter = scopedDNSAdapterID
+		}
+		plan.Blockers = append(plan.Blockers, Blocker{Code: "NETWORK_PROOF_UNAVAILABLE", Adapter: adapter, Message: "Текущая сеть не подтверждена для выбранного подключения.", Resolution: "Повторите проверку подключения и сформируйте новый план при стабильной сети."})
 	}
 	if len(input.Routes) > 0 {
 		plan.RequiredEvidence = evidence.Service
@@ -283,6 +294,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		engineByID[item.ID] = item
 	}
 	adapterSet := map[string]bool{}
+	if input.DNS != nil {
+		adapterSet[scopedDNSAdapterID] = true
+	}
 	for _, route := range input.Routes {
 		adapter := adapterID(route.Resolved)
 		if adapter == "" {
@@ -299,7 +313,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	sort.Strings(plan.Adapters)
 	retiring := plan.RetiringAdapters[:0]
 	for _, adapter := range plan.RetiringAdapters {
-		adapter = adapterID(adapter)
+		if adapter != scopedDNSAdapterID {
+			adapter = adapterID(adapter)
+		}
 		if adapter == "" || adapter == "direct" || adapterSet[adapter] {
 			continue
 		}
@@ -491,7 +507,7 @@ func (p Plan) RoutePlanFor(adapter string) RoutePlan {
 
 // Node proof is tied to one observed network epoch. Legacy journals remain
 // readable, but a missing epoch must never authorize reusing a node route.
-func (p Plan) RequiresNetworkProof() bool { return routesRequireNetworkProof(p.Routes) }
+func (p Plan) RequiresNetworkProof() bool { return p.DNS != nil || routesRequireNetworkProof(p.Routes) }
 
 func (p RoutePlan) RequiresNetworkProof() bool { return routesRequireNetworkProof(p.Routes) }
 
@@ -624,9 +640,27 @@ func adapterID(route string) string {
 func AdapterID(route string) string { return adapterID(route) }
 
 func canonicalize(input *Input) {
+	if input.DNS != nil {
+		copyDNS := *input.DNS
+		copyDNS.Bindings = append([]ScopedDNSBinding(nil), input.DNS.Bindings...)
+		copyDNS.Probe.Expect.StatusCodes = slices.Clone(copyDNS.Probe.Expect.StatusCodes)
+		copyDNS.Probe.Expect.RedirectHosts = slices.Clone(copyDNS.Probe.Expect.RedirectHosts)
+		copyDNS.Probe.Expect.ContentTypes = slices.Clone(copyDNS.Probe.Expect.ContentTypes)
+		copyDNS.Probe.Expect.JSONFields = slices.Clone(copyDNS.Probe.Expect.JSONFields)
+		copyDNS.Probe.Expect.BodyContains = slices.Clone(copyDNS.Probe.Expect.BodyContains)
+		sort.Slice(copyDNS.Bindings, func(i, j int) bool {
+			l, r := copyDNS.Bindings[i], copyDNS.Bindings[j]
+			return l.Client+"\x00"+l.Domain < r.Client+"\x00"+r.Domain
+		})
+		input.DNS = &copyDNS
+	}
 	input.EngineConfigDrafts = sortedUnique(input.EngineConfigDrafts)
 	retiring := make([]string, 0, len(input.RetiringAdapters))
 	for _, value := range input.RetiringAdapters {
+		if value == scopedDNSAdapterID {
+			retiring = append(retiring, value)
+			continue
+		}
 		if adapter := adapterID(value); adapter != "" && adapter != "direct" {
 			retiring = append(retiring, adapter)
 		}

@@ -38,10 +38,11 @@ type scopedDNSChoice struct {
 // The same existing Manager, provider catalogue and strict HTTPS transport are
 // used by the diagnostic and future transactional client paths.
 type ScopedDNSResolver struct {
-	manager *Manager
-	choices map[scopedDNSKey]scopedDNSChoice
-	guard   func(context.Context) error
-	cache   scopedAnswerCache
+	manager  *Manager
+	choices  map[scopedDNSKey]scopedDNSChoice
+	guard    func(context.Context) error
+	cache    scopedAnswerCache
+	baseline func(context.Context, []byte) ([]byte, error)
 }
 
 func (m *Manager) NewScopedDNSResolver(bindings []ClientDNSBinding, guard func(context.Context) error) (*ScopedDNSResolver, error) {

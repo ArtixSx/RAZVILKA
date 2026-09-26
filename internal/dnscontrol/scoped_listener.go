@@ -148,11 +148,7 @@ func (r *ScopedDNSResolver) hasClient(client netip.Addr) bool {
 }
 
 func (r *ScopedDNSResolver) scopedReply(ctx context.Context, client netip.Addr, query []byte, udp bool) []byte {
-	_, size, err := scopedDNSQuestion(query)
-	if err != nil {
-		return scopedDNSFailure(query, dnsmessage.RCodeRefused, false)
-	}
-	reply, err := r.Resolve(ctx, client, query)
+	reply, size, err := r.resolveClient(ctx, client, query)
 	if err != nil {
 		code := dnsmessage.RCodeServerFailure
 		if errors.Is(err, ErrScopedDNS) {

@@ -812,6 +812,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	if !plan.Ready {
 		return execution, errors.New("dataplane plan is blocked")
 	}
+	if err := m.checkScopedDNSContinuation(plan); err != nil {
+		execution.State, execution.Error = "rejected", err.Error()
+		if errors.Is(err, ErrExecutionJournal) {
+			execution.State = "journal-failed"
+		}
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return execution, err
+	}
 	if err := m.checkExecutionRecovery(); err != nil {
 		execution.State, execution.Error = "journal-failed", err.Error()
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
