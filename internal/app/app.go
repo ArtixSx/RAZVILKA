@@ -3270,7 +3270,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 			"domains": len(s.Domains), "cidrs": len(s.CIDRs), "source_refs": s.SourceRefs,
 		})
 	}
-	transaction, err := a.buildDataplanePlanForScope(cfg, options, scope, engineID)
+	transaction, err := a.buildDataplanePlanForRequest(cfg, options, scope, engineID, r)
 	if err != nil {
 		var dependency *routePlanDependencyError
 		if errors.As(err, &dependency) {
@@ -3357,7 +3357,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg := a.Store.Get()
-	transaction, err := a.buildDataplanePlanForScope(cfg, a.routeOptionsSnapshot(), scope, engineID)
+	transaction, err := a.buildDataplanePlanForRequest(cfg, a.routeOptionsSnapshot(), scope, engineID, r)
 	if err != nil {
 		if reviewRequest.Revision != nil {
 			writeApplyReviewChanged(w)
@@ -3583,7 +3583,21 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 	if scope == changeScopeEngine && engineID == "" {
 		return "", "", errors.New("engine scope requires engine id")
 	}
+	draftMode, present := r.URL.Query()["engine_drafts"]
+	if present && (len(draftMode) != 1 || draftMode[0] != "preserve" || scope != changeScopeServices) {
+		return "", "", errors.New("engine_drafts=preserve is supported only for service routes")
+	}
 	return scope, engineID, nil
+}
+
+// Recovery can apply reviewed service choices without consuming an engine
+// editor draft. The device boundary still comes from the applied/stopped
+// snapshot; the normal review digest binds the resulting no-draft plan.
+func (a *App) buildDataplanePlanForRequest(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string, r *http.Request) (dataplane.Plan, error) {
+	if scope == changeScopeServices && r.URL.Query().Get("engine_drafts") == "preserve" {
+		return a.buildDataplanePlanForScope(configForChangeScope(cfg, scope), options, changeScopeNode, "")
+	}
+	return a.buildDataplanePlanForScope(cfg, options, scope, engineID)
 }
 
 func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
