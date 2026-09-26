@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 20
     env:
       GOTOOLCHAIN: local
+      # Intermediate router work uses AArch64; release/default checks keep all targets.
+      RAZVILKA_BUILD_TARGETS: ${{ (github.ref == 'refs/heads/review/unified-lan-20260923' || github.head_ref == 'review/unified-lan-20260923') && 'arm64' || 'all' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

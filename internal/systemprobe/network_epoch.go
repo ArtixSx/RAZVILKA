@@ -106,7 +106,7 @@ type epochDetector struct {
 	callerCancellations atomic.Uint64
 }
 
-var wanEpoch = newEpochDetector(newPlatformEpochSource, rand.Reader, time.Now)
+var wanEpoch = newEpochDetector(newBufferedPlatformEpochSource, rand.Reader, time.Now)
 
 func validEpochDNSConfig(data []byte) bool {
 	servers := 0

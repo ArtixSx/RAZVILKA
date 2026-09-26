@@ -23,8 +23,18 @@ build(){
       go build -trimpath -ldflags="$LDFLAGS" -o "dist/razvilka-linux-$2" ./cmd/razvilka
   fi
 }
-build amd64 amd64
-build arm64 arm64
-build mips mips softfloat
-build mipsle mipsle softfloat
-sha256sum dist/razvilka-linux-* > dist/SHA256SUMS
+case "${RAZVILKA_BUILD_TARGETS:-all}" in
+  arm64)
+    build arm64 arm64
+    sha256sum dist/razvilka-linux-arm64 > dist/SHA256SUMS
+    ;;
+  all)
+    build amd64 amd64
+    build arm64 arm64
+    build mips mips softfloat
+    build mipsle mipsle softfloat
+    sha256sum dist/razvilka-linux-amd64 dist/razvilka-linux-arm64 \
+      dist/razvilka-linux-mips dist/razvilka-linux-mipsle > dist/SHA256SUMS
+    ;;
+  *) echo "RAZVILKA_BUILD_TARGETS must be arm64 or all" >&2; exit 1 ;;
+esac
