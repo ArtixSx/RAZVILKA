@@ -87,9 +87,9 @@ func (a *App) validateDurableNodeCheckSelection(ctx context.Context, r *serviceC
 	if a.Nodes == nil || r.NodeCheckMode == "service" && (a.NodeChecker == nil || len(services) != 1 || !serviceHasNodeProbe(services[0])) {
 		return errServiceControlRequest
 	}
-	if a.Store.Get().ServiceControl.Stopped {
-		return config.ErrRevisionChanged
-	}
+	// Stopping live routes must not prevent checking a replacement. These
+	// temporary probes never resume routing. A new Stop/revision still revokes
+	// an in-flight batch through the immutable intent checked by the worker.
 	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
 	if err != nil {
 		return err
@@ -246,7 +246,7 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		}
 	}
 	cfg := a.Store.Get()
-	if cfg.Revision != *r.ExpectedRevision || cfg.ServiceControl.Stopped || r.intentHash != durableServiceIntentHash(cfg, services) {
+	if cfg.Revision != *r.ExpectedRevision || r.intentHash != durableServiceIntentHash(cfg, services) {
 		return out, config.ErrRevisionChanged
 	}
 	if r.NodeCheckMode == "service" && (a.NodeChecker == nil || len(services) != 1 || !serviceHasNodeProbe(services[0])) {

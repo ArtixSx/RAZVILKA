@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
@@ -44,6 +45,39 @@ func enqueueNodeFixture(t *testing.T, a *App, request nodeCheckJobRequest) uint6
 		t.Fatalf("accept: %d %s", w.Code, w.Body.String())
 	}
 	return response.Job.ID
+}
+
+func TestDurableNodeCheckWhileRoutesStoppedDoesNotResumeThem(t *testing.T) {
+	a, q := durableNodeFixture(t, 1)
+	cfg := a.Store.Get()
+	// Use a real persisted stopped snapshot; probes must preserve it exactly.
+	cfg.ServiceControl.Stopped = true
+	cfg.AppliedServices = map[string]config.ServiceState{}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	a.Store, err = config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := a.Store.Get()
+	id := enqueueNodeFixture(t, a, q)
+	a.runDurableServiceJob(context.Background(), time.Now())
+	if j := durableJobAt(t, a, id); j.State != "completed" || j.Cursor != 1 {
+		t.Fatal(j)
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) || !a.Store.Get().ServiceControl.Stopped {
+		t.Fatal("probe resumed routes or changed settings")
+	}
+	view := a.nodeCheckCurrentView()["job"].(*nodeCheckJob)
+	if view.Passed != 1 {
+		t.Fatal("stopped route prevented temporary probe", view)
+	}
 }
 
 func TestDurableNodeAdmissionQueuesDuringAnotherOperationWithoutStartingIO(t *testing.T) {
