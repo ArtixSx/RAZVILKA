@@ -51,6 +51,8 @@ for ARG in "$@"; do
       echo "Default: install/update the panel. --uninstall removes panel/owned routes and keeps data."
       echo "--rollback explicitly restores the last pre-update snapshot."
       echo "Optional environment: RAZVILKA_VERSION=v<release-tag> (or latest)"
+      echo "Architecture override: RAZVILKA_ARCH=arm64|mips|mipsle (mipsel is also accepted)"
+      echo "Example: RAZVILKA_ARCH=mipsle sh /opt/tmp/razvilka-setup.sh"
       exit 0
       ;;
     *) echo "Unknown option: $ARG" >&2; exit 2 ;;
@@ -81,7 +83,7 @@ command -v tar >/dev/null 2>&1 || need_package tar
 command -v gzip >/dev/null 2>&1 || need_package gzip
 command -v mktemp >/dev/null 2>&1 || need_package coreutils-mktemp
 command -v readlink >/dev/null 2>&1 || need_package coreutils-readlink
-for TOOL in awk od pidof grep; do
+for TOOL in awk dd od pidof grep; do
   command -v "$TOOL" >/dev/null 2>&1 || need_package busybox
 done
 [ -x "$BASE/sbin/start-stop-daemon" ] || need_package busybox
@@ -109,7 +111,7 @@ if [ -n "$PACKAGES" ]; then
   # Package names are exclusively the fixed allowlist above. No global upgrade.
   opkg install $PACKAGES
 fi
-for TOOL in curl sha256sum tar gzip mktemp readlink awk od pidof grep ip; do
+for TOOL in curl sha256sum tar gzip mktemp readlink awk dd od pidof grep ip; do
   command -v "$TOOL" >/dev/null 2>&1 || { echo "Required tool is still unavailable after opkg: $TOOL" >&2; exit 12; }
 done
 case "$(wget --version 2>/dev/null || true)" in
@@ -120,7 +122,8 @@ if [ ! -x "$BASE/sbin/start-stop-daemon" ] || ! ip -4 -o addr show >/dev/null 2>
   echo "Entware service/IP tools are incomplete; check busybox and ip-full packages." >&2
   exit 12
 fi
-ok "Entware готов; архитектура: $(uname -m)"
+ok "Entware готов; платформа ядра: $(uname -m)"
+echo 'Точную архитектуру сборки, включая MIPS/MIPSel, проверит установщик из архива.'
 
 if [ "$VERSION" = latest ]; then
   DOWNLOAD_BASE="https://github.com/$REPOSITORY/releases/latest/download"

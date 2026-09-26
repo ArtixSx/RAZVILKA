@@ -23,7 +23,7 @@ for TOOL in cat chmod cp mkdir rm mv uname sh; do
 done
 printf '#!/bin/sh\nprintf "0\\n"\n' >"$TEST_ROOT/essential/id"
 chmod 700 "$TEST_ROOT/essential/id"
-for TOOL in sha256sum tar gzip mktemp readlink awk od grep; do
+for TOOL in sha256sum tar gzip mktemp readlink awk dd od grep; do
   REAL_TOOL="$(command -v "$TOOL")"
   [ -n "$REAL_TOOL" ] || { echo "Bootstrap test needs host $TOOL" >&2; exit 1; }
   printf '#!/bin/sh\nexec "%s" "$@"\n' "$REAL_TOOL" >"$TEST_ROOT/providers/$TOOL"
@@ -80,6 +80,7 @@ for ACTION in install uninstall rollback; do
 #!/bin/sh
 # RAZVILKA_UNINSTALL_PRESERVES_DATA=1
 printf '%s\n' "${0##*/}:$*" >"$CASE_ROOT/helper-called"
+printf '%s\n' "${RAZVILKA_ARCH:-}" >"$CASE_ROOT/helper-architecture"
 HELPER
 done
 cat >"$TEST_ROOT/essential/opkg" <<'OPKG'
@@ -101,7 +102,7 @@ for PACKAGE in "$@"; do
     coreutils-sha256sum) TOOLS=sha256sum ;;
     coreutils-mktemp) TOOLS=mktemp ;;
     coreutils-readlink) TOOLS=readlink ;;
-    busybox) TOOLS='awk od pidof grep'; "$REAL_CP" "$PROVIDERS/start-stop-daemon" "$RAZVILKA_BASE/sbin/start-stop-daemon" ;;
+    busybox) TOOLS='awk dd od pidof grep'; "$REAL_CP" "$PROVIDERS/start-stop-daemon" "$RAZVILKA_BASE/sbin/start-stop-daemon" ;;
     ip-full) TOOLS=ip ;;
     ca-bundle) TOOLS=; "$REAL_MKDIR" -p "$RAZVILKA_BASE/etc/ssl/certs"; printf ca >"$RAZVILKA_BASE/etc/ssl/certs/ca-certificates.crt" ;;
     *) echo "Unexpected dependency: $PACKAGE" >&2; exit 98 ;;
@@ -111,7 +112,7 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missing-dependencies https-bootstrap uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel symlink-base missing-dependencies https-bootstrap uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   CASE_ROOT="$TEST_ROOT/$CASE_NAME"
   BASE="$CASE_ROOT/base"
@@ -122,7 +123,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missin
   set --
   case "$CASE_NAME" in
     install-aarch64) ARCH=aarch64 ;;
-    install-mips) ARCH=mips ;;
+    install-mips|install-explicit-mipsel) ARCH=mips ;;
     install-mipsel) ARCH=mipsel ;;
     *) ARCH=aarch64 ;;
   esac
@@ -133,7 +134,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missin
     rollback) set -- --rollback ;;
     invalid-options) set -- --uninstall --rollback ;;
     missing-dependencies|opkg-failed)
-      for TOOL in curl wget sha256sum tar gzip mktemp readlink awk od pidof grep ip; do rm "$BASE/bin/$TOOL"; done
+      for TOOL in curl wget sha256sum tar gzip mktemp readlink awk dd od pidof grep ip; do rm "$BASE/bin/$TOOL"; done
       rm "$BASE/sbin/start-stop-daemon" "$BASE/etc/ssl/certs/ca-certificates.crt"
       ;;
     https-bootstrap)
@@ -169,7 +170,9 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missin
     ln -s "$BASE" "$RUN_BASE"
   fi
   CODE=0
-  PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$BASE/tmp" \
+  ARCH_OVERRIDE=""
+  [ "$CASE_NAME" != install-explicit-mipsel ] || ARCH_OVERRIDE=mipsle
+  PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$BASE/tmp" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
     "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
   case "$CASE_NAME" in
     install-*|symlink-base|missing-dependencies|https-bootstrap|uninstall|rollback)
@@ -177,6 +180,10 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel symlink-base missin
       EXPECTED=install
       case "$CASE_NAME" in uninstall|rollback) EXPECTED="$CASE_NAME" ;; esac
       [ "$(cat "$CASE_ROOT/helper-called")" = "$EXPECTED-entware.sh:" ] || { echo "Wrong helper/action: $CASE_NAME" >&2; exit 1; }
+      [ "$(cat "$CASE_ROOT/helper-architecture")" = "$ARCH_OVERRIDE" ] || { echo "Architecture override was lost before the release helper" >&2; exit 1; }
+      if [ "$ARCH" = mips ]; then
+        grep -q 'платформа ядра: mips' "$CASE_ROOT/output" || { echo "Kernel identity is mislabeled as selected architecture" >&2; exit 1; }
+      fi
       if [ "$CASE_NAME" = missing-dependencies ]; then
         [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 2 ] || { echo "Dependencies were not installed in one bounded batch" >&2; exit 1; }
         for PACKAGE in curl wget-ssl coreutils-sha256sum tar gzip coreutils-mktemp coreutils-readlink busybox ip-full ca-bundle; do

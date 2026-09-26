@@ -66,18 +66,31 @@ case "$ARCH_REQUEST" in
       SHELL_IMAGE="/proc/$$/exe"
       [ -r "$SHELL_IMAGE" ] || SHELL_IMAGE=/bin/sh
       ELF_HEADER=""
-      if command -v od >/dev/null 2>&1; then
-        ELF_HEADER="$(od -An -t u1 -N 6 "$SHELL_IMAGE" 2>/dev/null)" || ELF_HEADER=""
-      elif command -v busybox >/dev/null 2>&1; then
-        ELF_HEADER="$(busybox od -An -t u1 -N 6 "$SHELL_IMAGE" 2>/dev/null)" || ELF_HEADER=""
+      # Entware's compact BusyBox od has -b, but not -A, -t or -N. Bound
+      # the read with dd, then inspect six individual octal bytes; do not
+      # interpret a native-width word whose byte order is itself unknown.
+      if command -v dd >/dev/null 2>&1 && command -v od >/dev/null 2>&1; then
+        ELF_HEADER="$(dd if="$SHELL_IMAGE" bs=6 count=1 2>/dev/null | od -b 2>/dev/null)" || ELF_HEADER=""
       fi
-      # Collapse only numeric header whitespace. The magic, ELF32 class and
-      # declared byte order must all agree before selecting a binary.
-      ELF_HEADER="$(printf '%s\n' "$ELF_HEADER" | awk '{$1=$1; print}')"
+      if [ -z "$ELF_HEADER" ] && command -v busybox >/dev/null 2>&1; then
+        ELF_HEADER="$(busybox dd if="$SHELL_IMAGE" bs=6 count=1 2>/dev/null | busybox od -b 2>/dev/null)" || ELF_HEADER=""
+      fi
+      # Require the complete bounded dump, including its final byte count.
+      # A short/failed read, script or ELF64 image must not select MIPS32.
+      ELF_HEADER="$(printf '%s\n' "$ELF_HEADER" | awk '
+        NR == 1 && NF == 7 && $1 == "0000000" {header=$2 " " $3 " " $4 " " $5 " " $6 " " $7}
+        NR == 2 && NF == 1 && $1 == "0000006" {complete=1}
+        END {if (NR == 2 && complete) print header}
+      ')"
       case "$ELF_HEADER" in
-        '127 69 76 70 1 1') ARCH=mipsle ;;
-        '127 69 76 70 1 2') ARCH=mips ;;
-        *) echo "Cannot determine MIPS ELF byte order; installation unchanged. Check od availability or explicitly set RAZVILKA_ARCH=mips|mipsle." >&2; exit 1 ;;
+        '177 105 114 106 001 001') ARCH=mipsle ;;
+        '177 105 114 106 001 002') ARCH=mips ;;
+        *)
+          echo "Не удалось определить порядок байтов MIPS. Установка не изменена." >&2
+          echo "Проверьте dd и od. Если архитектура известна, укажите её перед sh:" >&2
+          echo "  RAZVILKA_ARCH=mipsle sh /opt/tmp/razvilka-setup.sh  # Entware mipselsf-k3.4" >&2
+          echo "  RAZVILKA_ARCH=mips sh /opt/tmp/razvilka-setup.sh    # Entware mipssf-k3.4" >&2
+          exit 1 ;;
       esac
     fi
     ;;
@@ -85,6 +98,7 @@ case "$ARCH_REQUEST" in
   x86_64|amd64) ARCH=amd64 ;;
   *) echo "Unsupported architecture: $ARCH_REQUEST" >&2; exit 1 ;;
 esac
+echo "Архитектура сборки RAZVILKA: $ARCH"
 BIN_SOURCE="$HERE/dist/razvilka-linux-$ARCH"
 
 require_file() {

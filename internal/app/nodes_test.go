@@ -82,6 +82,45 @@ func TestNodeListUnavailableAndMethodBoundary(t *testing.T) {
 	}
 }
 
+func TestNodeListNetworkChangeDoesNotReviveExpiredSource(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "nodes")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := nodestore.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	now := time.Now().UTC()
+	snap, err := store.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174000@private.example:443?security=tls", now.Add(-2*time.Hour), time.Hour, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snap.Nodes[0].ID
+	_, err = store.RecordCheck(context.Background(), id, nodestore.CheckRecord{
+		ProbeID: "expired-source-health", ServiceID: "discord", NetworkProfile: "old-network",
+		RoutePathID: "sing-box:" + id, CheckedAt: now, ExpiresAt: now.Add(time.Minute),
+		State: "unavailable", TestLevel: "transport", Stage: "transport", Verdict: "ERROR",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Nodes: store}
+	w := httptest.NewRecorder()
+	a.Handler(http.NotFoundHandler()).ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/nodes", nil))
+	var response struct {
+		Nodes  []nodestore.Node `json:"nodes"`
+		Counts map[string]int   `json:"counts"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &response) != nil || len(response.Nodes) != 1 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if response.Nodes[0].State != "expired" || response.Nodes[0].Health.State != "different_network" || response.Counts["expired"] != 1 || response.Counts["stale"] != 0 {
+		t.Fatal("network warning made an expired source selectable", w.Body.String())
+	}
+}
+
 func TestNodeMutationAndConfirmedReveal(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "nodes")
 	if err := os.Mkdir(root, 0o700); err != nil {

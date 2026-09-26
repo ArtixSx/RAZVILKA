@@ -70,7 +70,11 @@ func (a *App) nodeList(w http.ResponseWriter, r *http.Request) {
 		node := &snapshot.Nodes[index]
 		if !node.Health.CheckedAt.IsZero() && !node.Disabled && (!systemprobe.ValidWANProfileID(profile) || !systemprobe.ValidWANProfileID(node.Health.NetworkProfile) || node.Health.NetworkProfile != profile) {
 			node.Health.State = "different_network"
-			node.State = "stale"
+			// A network change invalidates health, not the source expiry. Keep
+			// the catalogue selection consistent with durable job admission.
+			if node.State != "expired" {
+				node.State = "stale"
+			}
 			node.Health.Message = "Результат получен в другой сети. Повторите проверку на текущем подключении."
 		}
 		if node.Disabled {

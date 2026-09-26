@@ -8,6 +8,9 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 NATIVE_LINKS=1
 case "$(uname -s)" in MINGW*|MSYS*) NATIVE_LINKS=0 ;; esac
 TMP_BASE="$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd -P)"
+REAL_OD="$(command -v od)"
+REAL_DD="$(command -v dd)"
+export REAL_OD REAL_DD
 TEST_ROOT="$(mktemp -d "$TMP_BASE/razvilka-architecture.XXXXXX")"
 cleanup() {
   case "$TEST_ROOT" in
@@ -36,12 +39,26 @@ printf '%s\n' "$TEST_UNAME"
 EOF
 cat >"$TEST_ROOT/mocks/od" <<'EOF'
 #!/bin/sh
-[ "$1 $2 $3 $4 $5" = '-An -t u1 -N 6' ] || exit 99
+# Reproduce compact BusyBox: reject the former -A/-t/-N invocation.
+[ "$#" = 1 ] && [ "$1" = '-b' ] || exit 99
 printf 'read\n' >>"$TEST_OD_CAPTURE"
+if [ "${TEST_REAL_READER:-0}" = 1 ]; then exec "$REAL_OD" "$@"; fi
+cat >/dev/null
 [ "${TEST_OD_FAIL:-0}" = 0 ] || exit 1
-printf '%s\n' "$TEST_ELF_HEADER"
+printf '%s\n' "$TEST_ELF_HEADER" | awk '
+  NF {printf "0000000"; for (i=1; i<=NF; i++) printf " %03o", $i; printf "\n%07o\n", NF}
+'
 EOF
-chmod 700 "$TEST_ROOT/mocks/uname" "$TEST_ROOT/mocks/od"
+cat >"$TEST_ROOT/mocks/dd" <<'EOF'
+#!/bin/sh
+if [ "${TEST_REAL_READER:-0}" = 1 ]; then
+  [ "$2 $3" = 'bs=6 count=1' ] || exit 99
+  printf '%s\n' "$TEST_ELF_HEADER" | awk '{for (i=1; i<=NF; i++) printf "%c", $i}'
+else
+  exec "$REAL_DD" "$@"
+fi
+EOF
+chmod 700 "$TEST_ROOT/mocks/uname" "$TEST_ROOT/mocks/od" "$TEST_ROOT/mocks/dd"
 for ARCH in amd64 arm64 mips mipsle; do
   cat >"$BUNDLE/dist/razvilka-linux-$ARCH" <<'EOF'
 #!/bin/sh
@@ -90,6 +107,8 @@ run_case mips '127 69 76 70 1 0' '' refuse
 run_case mips '127 69 76 70 2 1' '' refuse
 run_case mips '0 69 76 70 1 1' '' refuse
 run_case mips '' '' refuse
+run_case mips '127 69 76 70 1' '' refuse
+run_case mips '127 69 76 70 1 1 0' '' refuse
 run_case mips '127 69 76 70 1 1' '' refuse 1
 run_case mips unknown mipsle mipsle
 run_case mips '127 69 76 70 1 1' mips mips
@@ -102,6 +121,17 @@ run_case x86_64 unknown '' amd64
 run_case amd64 unknown '' amd64
 run_case unsupported unknown '' refuse
 run_case mips unknown invalid refuse
+
+# Actual host od (compact BusyBox on router CI), with binary ELF fixtures.
+TEST_REAL_READER=1
+export TEST_REAL_READER
+run_case mips '127 69 76 70 1 1' '' mipsle
+run_case mips '127 69 76 70 1 2' '' mips
+run_case mips '127 69 76 70 2 1' '' refuse
+run_case mips '127 69 76 70 1' '' refuse
+run_case mips '127 69 76 70 1 0' '' refuse
+run_case mips '35 33 47 98 105 110' '' refuse
+TEST_REAL_READER=0
 
 if [ "$NATIVE_LINKS" -eq 1 ]; then
   ORIGINAL_BASE="$BASE"
