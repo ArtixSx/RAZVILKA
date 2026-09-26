@@ -15,6 +15,7 @@ function projectLogSectionName(key) {
 
 function projectLogAction(event) {
   const path = String(event.path || '').split('?')[0];
+  if (event.action === 'SCHEDULE' && path.startsWith('/runtime/scheduler/')) return 'Фоновые проверки остановлены';
   const component = path.match(/^\/api\/v1\/components\/([^/]+)\/(install|update|remove)$/);
   if (component) {
     const name = ({ nfqws2: 'NFQWS2', usque: 'WARP · MASQUE', 'sing-box': 'Sing-box', xray: 'Xray', amneziawg: 'AmneziaWG' })[component[1]] || component[1];
@@ -39,6 +40,17 @@ function projectLogAction(event) {
 }
 
 function projectLogEventResult(event) {
+  if (event.action === 'SCHEDULE' && event.outcome === 'failed') {
+    const reason = String(event.path || '').replace(/^\/runtime\/scheduler\//, '');
+    const reasons = {
+      'journal-changed': 'Журнал расписания изменён другим действием. Автоматика остановлена, чтобы не повторить устаревшие команды.',
+      'writer-busy': 'Не удалось получить доступ к записи журнала расписания. Проверьте параллельное восстановление и хранилище.',
+      'journal-invalid': 'Журнал расписания повреждён или имеет неподдерживаемый формат. Нужна проверка журнала.',
+      'write-unconfirmed': 'Запись журнала расписания не подтверждена. Автоматика остановлена до проверки хранилища.',
+      'storage-unavailable': 'Хранилище журнала расписания недоступно. Проверьте подключение накопителя и свободное место.',
+    };
+    return { label: 'Автоматика остановлена', tone: 'fail', detail: reasons[reason] || 'Расписание остановлено; причина требует проверки.' };
+  }
   const code = Number(event.status_code);
   const denied = event.outcome === 'denied' || code === 401 || code === 403;
   if (denied || event.outcome === 'failed' || code >= 400) {

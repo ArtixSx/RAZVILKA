@@ -86,6 +86,14 @@ type RuntimeDeactivator interface {
 	Deactivate(context.Context) error
 }
 
+// RollbackVerifier reads back the restored local runtime after ALL adapters
+// and configuration have been rolled back. true certifies the exact recorded
+// resources, not service availability or a LAN-client request. Unsupported
+// legacy states return false, nil and cannot authorize trying another candidate.
+type RollbackVerifier interface {
+	VerifyRollback(context.Context, Plan, string) (bool, error)
+}
+
 type DeactivationStep struct {
 	Adapter string `json:"adapter"`
 	State   string `json:"state"`
@@ -125,13 +133,14 @@ type ExecutionStep struct {
 }
 
 type Execution struct {
-	PlanID     string          `json:"plan_id"`
-	Digest     string          `json:"digest"`
-	State      string          `json:"state"`
-	StartedAt  string          `json:"started_at"`
-	FinishedAt string          `json:"finished_at,omitempty"`
-	Steps      []ExecutionStep `json:"steps"`
-	Error      string          `json:"error,omitempty"`
+	PlanID           string          `json:"plan_id"`
+	Digest           string          `json:"digest"`
+	State            string          `json:"state"`
+	StartedAt        string          `json:"started_at"`
+	FinishedAt       string          `json:"finished_at,omitempty"`
+	Steps            []ExecutionStep `json:"steps"`
+	Error            string          `json:"error,omitempty"`
+	RollbackVerified bool            `json:"rollback_verified,omitempty"`
 }
 
 type PolicyRefresh struct {
@@ -830,7 +839,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	commitPublicationAttempted := false
 	liveMutation := false
 	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
-		if phase != "rollback" {
+		restoring := phase == "rollback" || phase == "verify-rollback"
+		if !restoring {
 			if err := m.checkPlanNetwork(runCtx, plan); err != nil {
 				return err
 			}
@@ -839,13 +849,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.Steps = append(execution.Steps, step)
 		index := len(execution.Steps) - 1
 		journalErr := writeExecution()
-		if journalErr != nil && phase != "rollback" {
+		if journalErr != nil && !restoring {
 			execution.Steps[index].State, execution.Steps[index].Detail = "failed", journalErr.Error()
 			execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			return journalErr
 		}
 		adapterRoot := filepath.Join(transactionRoot, adapter.ID())
-		if err := os.MkdirAll(adapterRoot, 0o700); err != nil && phase != "rollback" {
+		if err := os.MkdirAll(adapterRoot, 0o700); err != nil && !restoring {
 			execution.Steps[index].State = "failed"
 			execution.Steps[index].Detail = err.Error()
 			execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -860,7 +870,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if !previouslyMutated && errors.As(err, &preflight) {
 			liveMutation = false
 		}
-		if err == nil && phase != "rollback" {
+		if err == nil && !restoring {
 			checkCtx := runCtx
 			if phase == "commit-adapter" {
 				checkCtx = context.WithValue(checkCtx, reviewCommitAdapterKey{}, adapter.ID())
@@ -900,6 +910,27 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if commitPublicationAttempted {
 			rollbackErr = errors.Join(rollbackErr, restoreCommitted())
 		}
+		verified := liveMutation && len(prepared) > 0 && rollbackErr == nil
+		// Readback must follow the complete reverse restoration, including
+		// desired-state undo. Never reuse the failed candidate's review guard.
+		for _, adapter := range prepared {
+			verifier, ok := adapter.(RollbackVerifier)
+			if !ok {
+				verified = false
+				continue
+			}
+			var confirmed bool
+			err := run(rollbackCtx, adapter, "verify-rollback", func(c context.Context, p Plan, root string) error {
+				var err error
+				confirmed, err = verifier.VerifyRollback(c, p, root)
+				return errors.Join(err, c.Err())
+			})
+			if err != nil {
+				rollbackErr = errors.Join(rollbackErr, err)
+			}
+			verified = verified && confirmed && err == nil
+		}
+		execution.RollbackVerified = verified
 		plan.Ready = false
 		plan.State = "rolled-back"
 		execution.State = "rolled-back"
@@ -912,6 +943,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		finalErr := errors.Join(executionJournalError(m.recordLocked(plan)), writeExecution())
 		if finalErr != nil {
+			execution.RollbackVerified = false
 			rollbackErr = errors.Join(rollbackErr, finalErr)
 			execution.State, plan.State = "rollback-failed", "rollback-failed"
 			execution.Error += "; persist rollback: " + finalErr.Error()

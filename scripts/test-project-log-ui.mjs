@@ -57,6 +57,14 @@ assert.equal(context.projectLogEventResult({ outcome: 'failed', status_code: 202
 assert.equal(context.projectLogEventResult({ outcome: 'denied', status_code: 403 }).label, 'Доступ отклонён');
 assert.equal(context.projectLogEventResult({ outcome: 'unknown', status_code: 200 }).label, 'Результат не указан');
 assert.equal(context.projectLogAction({ path: '/api/v1/service-control/runtime' }), 'Включение или остановка обходов');
+for (const reason of ['journal-changed', 'writer-busy', 'journal-invalid', 'write-unconfirmed', 'storage-unavailable']) {
+  const event = { action: 'SCHEDULE', path: '/runtime/scheduler/' + reason, outcome: 'failed' };
+  assert.equal(context.projectLogAction(event), 'Фоновые проверки остановлены');
+  const result = context.projectLogEventResult(event);
+  assert.equal(result.tone, 'fail');
+  assert.equal(result.label, 'Автоматика остановлена');
+  assert.doesNotMatch(result.detail, /Причина.*не записана/);
+}
 
 const payload = '<img src=x onerror="alert(1)">';
 out = render({ ...healthy, load_issues: [{ section: payload, message: payload }], component_issues: [{ id: payload, message: payload }], last_action_error: payload, audit: { available: false, last_error: payload, events: [{ path: `/api/v1/components/${payload}/remove`, action: payload, outcome: payload, timestamp: payload, status_code: payload, duration_ms: payload }] } });

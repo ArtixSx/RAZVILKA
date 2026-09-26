@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/auditlog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
@@ -62,6 +63,7 @@ type serviceReconciler struct {
 	path         string
 	started      bool
 	blocked      bool
+	blockedCode  string
 	cancel       context.CancelFunc
 	activeJobID  uint64
 	durableBurst int
@@ -88,7 +90,7 @@ func (a *App) reconcilerSnapshot() map[string]any {
 		state = "blocked"
 	}
 	ops := append([]automationOperation{}, a.reconciler.doc.Operations...)
-	return map[string]any{"state": state, "operations": ops, "manual_until": a.reconciler.doc.ManualUntil, "persistent": a.reconciler.path != "", "note": "Очередь использует существующие проверки и транзакции. Незавершённое действие после запуска оценивается заново."}
+	return map[string]any{"state": state, "error_code": a.reconciler.blockedCode, "operations": ops, "manual_until": a.reconciler.doc.ManualUntil, "persistent": a.reconciler.path != "", "note": "Очередь использует существующие проверки и транзакции. Незавершённое действие после запуска оценивается заново."}
 }
 
 func (a *App) wakeReconciler() {
@@ -175,11 +177,11 @@ func (a *App) StartServiceReconciler(ctx context.Context) {
 		r.done = make(chan struct{})
 		r.wake = make(chan struct{}, 1)
 		if a.Store == nil {
-			r.blocked = true
+			a.blockReconcilerLocked(restorejournal.ErrUnavailable)
 		} else {
 			r.path = a.Store.AutomationStatePath()
-			if a.loadReconcilerLocked(ctx) != nil {
-				r.blocked = true
+			if err := a.loadReconcilerLocked(ctx); err != nil {
+				a.blockReconcilerLocked(err)
 				r.doc = reconcilerDocument{Schema: 1, Owner: reconcilerOwner, Fallback: map[string]fallbackCheckpoint{}}
 			}
 		}
@@ -302,9 +304,15 @@ func validateReconcilerDocument(d reconcilerDocument) error {
 
 func (a *App) persistReconcilerLocked(ctx context.Context) (err error) {
 	r := &a.reconciler
+	if ctx.Err() != nil {
+		return restorejournal.ErrAborted // No file was opened or changed.
+	}
 	defer func() {
-		if err != nil {
-			r.blocked = true
+		// ErrAborted is issued only before the write. An ordinary cancellation
+		// must not permanently disable every scheduled task. All ambiguous I/O,
+		// writer conflicts and validation failures remain fenced.
+		if err != nil && !(errors.Is(err, restorejournal.ErrAborted) && ctx.Err() != nil) {
+			a.blockReconcilerLocked(err)
 		}
 	}()
 	if r.path == "" {
@@ -321,11 +329,34 @@ func (a *App) persistReconcilerLocked(ctx context.Context) (err error) {
 	defer target.Close()
 	after := restorejournal.Image{Exists: true, Data: data}
 	if err = target.CompareAndSwap(ctx, r.image, after); err != nil {
-		r.blocked = true
 		return err
 	}
 	r.image = after
 	return nil
+}
+
+// Publish only fixed reason codes, never raw paths, journal data or credentials.
+// Called with the reconciler lock held; one event per blocked transition.
+func (a *App) blockReconcilerLocked(err error) {
+	r := &a.reconciler
+	if r.blocked {
+		return
+	}
+	r.blocked = true
+	r.blockedCode = "storage-unavailable"
+	switch {
+	case errors.Is(err, restorejournal.ErrConflict):
+		r.blockedCode = "journal-changed"
+	case errors.Is(err, restorejournal.ErrBusy):
+		r.blockedCode = "writer-busy"
+	case errors.Is(err, restorejournal.ErrInvalid):
+		r.blockedCode = "journal-invalid"
+	case errors.Is(err, restorejournal.ErrRecovery):
+		r.blockedCode = "write-unconfirmed"
+	}
+	if a.Audit != nil {
+		_ = a.Audit.Append(auditlog.Event{Action: "SCHEDULE", Path: "/runtime/scheduler/" + r.blockedCode, Outcome: "failed", Actor: "router", RemoteIP: "local"})
+	}
 }
 
 func (a *App) reconcileRound(ctx context.Context, now time.Time) {
