@@ -29,7 +29,7 @@ func newBufferedPlatformEpochSource(ctx context.Context) (epochSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newBufferedEpochSource(source, 250*time.Millisecond), nil
+	return newBufferedEpochSource(source, 100*time.Millisecond), nil
 }
 
 func newBufferedEpochSource(source epochSource, interval time.Duration) *bufferedEpochSource {

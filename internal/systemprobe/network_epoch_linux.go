@@ -19,6 +19,7 @@ import (
 )
 
 const epochMaxDumpBytes = 1 << 20
+const epochReceiveBufferBytes = 2 << 20
 
 type dnsEpochWatch struct {
 	directory bool
@@ -33,6 +34,7 @@ type linuxEpochSource struct {
 	addresses        map[string]bool
 	routes           map[string]bool
 	lastReason       string
+	receiveBuffer    [64 << 10]byte
 }
 
 func (s *linuxEpochSource) ChangeReason() string {
@@ -59,7 +61,10 @@ func newPlatformEpochSource(ctx context.Context) (epochSource, error) {
 	}
 	// Do not enable NETLINK_NO_ENOBUFS: losing notifications must break proof
 	// continuity, even if the next snapshot happens to look identical.
-	if err = unix.SetsockoptInt(s.netlink, unix.SOL_SOCKET, unix.SO_RCVBUF, 256<<10); err != nil {
+	// Route batches can arrive faster than the reader runs, including while a
+	// full snapshot holds its lock. Request a bounded socket-local burst buffer;
+	// respect the host's rmem_max and never change a system-wide kernel setting.
+	if err = unix.SetsockoptInt(s.netlink, unix.SOL_SOCKET, unix.SO_RCVBUF, epochReceiveBufferBytes); err != nil {
 		s.Close()
 		return nil, err
 	}
@@ -220,7 +225,7 @@ func (s *linuxEpochSource) Snapshot(ctx context.Context) (epochSnapshot, error) 
 
 func (s *linuxEpochSource) Drain(ctx context.Context, interfaces map[uint32]bool) (bool, error) {
 	changed := false
-	buffer := make([]byte, 64<<10)
+	buffer := s.receiveBuffer[:]
 	bytesRead, messagesRead := 0, 0
 	for {
 		if err := ctx.Err(); err != nil {
