@@ -9,11 +9,13 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 )
 
 type applyReview struct {
@@ -40,6 +42,8 @@ type applyReviewBinding struct {
 	routes            []dataplane.Route
 	profile           string
 	drafts            []applyReviewDraft
+	dnsProfiles       map[string]string
+	dnsSelections     []dnscontrol.ServiceSelectionReview
 	committedAdapters map[string]bool
 }
 
@@ -74,7 +78,58 @@ func decodeApplyReview(w http.ResponseWriter, r *http.Request) (applyReviewReque
 }
 
 func (a *App) bindApplyReview(ctx context.Context, cfg config.Config, plan dataplane.Plan, scope changeScope, engineID string) (*applyReviewBinding, error) {
-	b := &applyReviewBinding{cfg: cfg, catalogHash: applyReviewHash(a.catalogSnapshot()), nodes: plan.RequiresNetworkProof(), routes: plan.Routes, profile: plan.NetworkProfileID, committedAdapters: map[string]bool{}}
+	b := &applyReviewBinding{cfg: cfg, catalogHash: applyReviewHash(a.catalogSnapshot()), routes: plan.Routes, profile: plan.NetworkProfileID, committedAdapters: map[string]bool{}}
+	// Network authority also covers scoped DNS. Only exact registry routes
+	// require node credentials/generation; a DNS-only plan has no node owner.
+	for _, route := range plan.Routes {
+		b.nodes = b.nodes || strings.HasPrefix(route.Resolved, "sing-box:node-")
+	}
+	if plan.DNS != nil {
+		b.dnsProfiles = map[string]string{}
+		for _, binding := range plan.DNS.Bindings {
+			if previous, ok := b.dnsProfiles[binding.ProfileID]; ok && previous != binding.ProfileDigest {
+				return nil, dataplane.ErrReviewChanged
+			}
+			b.dnsProfiles[binding.ProfileID] = binding.ProfileDigest
+		}
+		if len(b.dnsProfiles) == 0 {
+			return nil, dataplane.ErrReviewChanged
+		}
+	}
+	if plan.DNS != nil || slices.Contains(plan.RetiringAdapters, "dns-scoped") {
+		if a.DNS == nil {
+			return nil, dataplane.ErrReviewChanged
+		}
+		targets := map[string]string{}
+		if a.Dataplane != nil {
+			previous, exists, err := a.Dataplane.Committed()
+			if err != nil {
+				return nil, err
+			}
+			if exists && previous.DNS != nil {
+				for _, binding := range previous.DNS.Bindings {
+					targets[binding.ServiceID] = ""
+				}
+			}
+		}
+		if plan.DNS != nil {
+			for _, binding := range plan.DNS.Bindings {
+				targets[binding.ServiceID] = binding.ProfileID
+			}
+		}
+		ids := make([]string, 0, len(targets))
+		for id := range targets {
+			ids = append(ids, id)
+		}
+		slices.Sort(ids)
+		for _, id := range ids {
+			review, err := a.DNS.ReviewServiceSelection(id, targets[id])
+			if err != nil {
+				return nil, dataplane.ErrReviewChanged
+			}
+			b.dnsSelections = append(b.dnsSelections, review)
+		}
+	}
 	if b.nodes {
 		if a.Nodes == nil {
 			return nil, dataplane.ErrReviewChanged
@@ -101,7 +156,8 @@ func (a *App) bindApplyReview(ctx context.Context, cfg config.Config, plan datap
 		Engine, Plan, Config, Catalog string
 		Generation                    uint64
 		Drafts                        []applyReviewDraft
-	}{scope, engineID, plan.Digest, applyReviewHash(cfg), b.catalogHash, b.generation, b.drafts})}
+		DNS                           []dnscontrol.ServiceSelectionReview
+	}{scope, engineID, plan.Digest, applyReviewHash(cfg), b.catalogHash, b.generation, b.drafts, b.dnsSelections})}
 	if err := b.guard(a, ctx); err != nil {
 		return nil, err
 	}
@@ -115,7 +171,34 @@ func (b *applyReviewBinding) guard(a *App, ctx context.Context) error {
 	if !reflect.DeepEqual(a.Store.Get(), b.cfg) || applyReviewHash(a.catalogSnapshot()) != b.catalogHash {
 		return dataplane.ErrReviewChanged
 	}
+	committing := dataplane.ReviewCommittedAdapter(ctx)
+	for profile, digest := range b.dnsProfiles {
+		if a.DNS == nil {
+			return dataplane.ErrReviewChanged
+		}
+		current, err := a.DNS.ScopedProfileIdentity(profile)
+		if err != nil || current != digest {
+			return dataplane.ErrReviewChanged
+		}
+	}
+	for _, review := range b.dnsSelections {
+		if a.DNS == nil {
+			return dataplane.ErrReviewChanged
+		}
+		var err error
+		if b.committedAdapters["dns-scoped"] || committing == "dns-scoped" {
+			err = a.DNS.CheckCommittedServiceSelection(review.Receipt())
+		} else {
+			err = a.DNS.CheckServiceSelection(review)
+		}
+		if err != nil {
+			return dataplane.ErrReviewChanged
+		}
+	}
 	if b.nodes {
+		if a.Nodes == nil {
+			return dataplane.ErrReviewChanged
+		}
 		snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
 		if err != nil || snapshot.Generation != b.generation {
 			return dataplane.ErrReviewChanged
@@ -130,7 +213,6 @@ func (b *applyReviewBinding) guard(a *App, ctx context.Context) error {
 			}
 		}
 	}
-	committing := dataplane.ReviewCommittedAdapter(ctx)
 	for _, draft := range b.drafts {
 		parts := strings.SplitN(draft.Ref, "/", 2)
 		view, err := a.EngineConfigs.ReadExpert(parts[0], parts[1])

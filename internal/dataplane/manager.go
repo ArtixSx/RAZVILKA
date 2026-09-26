@@ -86,6 +86,12 @@ type RuntimeDeactivator interface {
 	Deactivate(context.Context) error
 }
 
+// RetirementCommitter finalizes settings only after the whole replacement
+// plan passed health. Its original snapshot remains available for rollback.
+type RetirementCommitter interface {
+	CommitRetirement(context.Context, Plan, string) error
+}
+
 // RollbackVerifier reads back the restored local runtime after ALL adapters
 // and configuration have been rolled back. true certifies the exact recorded
 // resources, not service availability or a LAN-client request. Unsupported
@@ -530,22 +536,49 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	recovery := Recovery{State: "skipped", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []RecoveryStep{}}
 	if err := m.checkExecutionRecovery(); err != nil {
 		recovery.State, recovery.Guarded = "journal-recovery-required", true
+		steps, cleanupErr := m.revokeUnverifiedDNS(ctx)
+		recovery.Steps = append(recovery.Steps, steps...)
 		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		return recovery, errors.Join(err, executionJournalError(m.writeRecoveryLocked(recovery)))
+		return recovery, errors.Join(err, cleanupErr, executionJournalError(m.writeRecoveryLocked(recovery)))
 	}
 	plan, exists, err := m.committedLocked()
 	if err != nil {
-		return recovery, err
+		recovery.State, recovery.Guarded = "journal-recovery-required", true
+		steps, cleanupErr := m.revokeUnverifiedDNS(ctx)
+		recovery.Steps = append(recovery.Steps, steps...)
+		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return recovery, errors.Join(executionJournalError(err), cleanupErr, executionJournalError(m.writeRecoveryLocked(recovery)))
 	}
 	if !exists || plan.State != "committed" || plan.SafeMode || plan.Noop {
+		steps, cleanupErr := m.revokeUnverifiedDNS(ctx)
+		recovery.Steps = append(recovery.Steps, steps...)
+		if cleanupErr != nil {
+			recovery.State, recovery.Guarded = "safe-mode", true
+		}
 		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		_ = m.writeRecoveryLocked(recovery)
-		return recovery, nil
+		return recovery, errors.Join(cleanupErr, executionJournalError(m.writeRecoveryLocked(recovery)))
+	}
+	if plan.DNS == nil {
+		steps, cleanupErr := m.revokeUnverifiedDNS(ctx)
+		recovery.Steps = append(recovery.Steps, steps...)
+		if cleanupErr != nil {
+			recovery.State, recovery.Guarded = "safe-mode", true
+			recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			return recovery, errors.Join(cleanupErr, executionJournalError(m.writeRecoveryLocked(recovery)))
+		}
 	}
 	recovery.PlanID = plan.PlanID
 	networkStale := func(cause error) (Recovery, error) {
 		recovery.State, recovery.Guarded, recovery.FailureCount = "network-stale", false, 0
-		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "sing-box", State: "network-stale", Detail: cause.Error()})
+		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "network", State: "network-stale", Detail: cause.Error()})
+		if errors.Is(cause, ErrNetworkChanged) {
+			steps, cleanupErr := m.revokeUnverifiedDNS(ctx)
+			recovery.Steps = append(recovery.Steps, steps...)
+			if cleanupErr != nil {
+				recovery.State, recovery.Guarded, recovery.FailureCount = "safe-mode", true, 1
+				cause = errors.Join(cause, cleanupErr)
+			}
+		}
 		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if err := m.writeRecoveryLocked(recovery); err != nil {
 			return recovery, errors.Join(cause, err)
@@ -1124,6 +1157,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
 		return execution, fail(err)
+	}
+	for _, adapter := range retiringAdapters {
+		if committer, ok := adapter.(RetirementCommitter); ok {
+			if err := run(ctx, adapter, "commit-adapter", committer.CommitRetirement); err != nil {
+				return execution, fail(err)
+			}
+		}
 	}
 	if commit != nil {
 		var err error

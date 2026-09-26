@@ -99,8 +99,11 @@ func (f *dnsFirewallFixture) Run(ctx context.Context, _ string, args ...string) 
 
 func scopedAdapterFixture(t *testing.T) (*Manager, *ScopedDNSAdapter, *dnsFirewallFixture, Input) {
 	t.Helper()
-	dns, err := dnscontrol.New("")
+	dns, err := dnscontrol.New(filepath.Join(t.TempDir(), "dns.json"))
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dns.SetServiceDraft("web", "private"); err != nil {
 		t.Fatal(err)
 	}
 	id, err := dns.ScopedProfileIdentity("private")
@@ -144,6 +147,9 @@ func TestScopedDNSTransactionCommitsAndRemovesOnlyOwnedRules(t *testing.T) {
 	})
 	if err != nil || e.State != "committed" || !committed || len(f.rules) != 3 {
 		t.Fatalf("apply: %+v %v", e, err)
+	}
+	if err := a.DNS.VerifyServiceSelection("web", "private"); err != nil {
+		t.Fatal("settings not committed with runtime", err)
 	}
 	if saved, _, _ := m.Committed(); saved.RouteEvidence[0].Observed != "none" {
 		t.Fatal("DNS process success was promoted to client proof")
@@ -195,6 +201,9 @@ func TestScopedDNSReplacementRestoresPreviousPolicy(t *testing.T) {
 	before := a.live.state
 	in.Revision++
 	in.DNS.Bindings[0].ProfileID = "unfiltered"
+	if err := a.DNS.SetServiceDraft("web", "unfiltered"); err != nil {
+		t.Fatal(err)
+	}
 	id, err := a.DNS.ScopedProfileIdentity("unfiltered")
 	if err != nil {
 		t.Fatal(err)
@@ -213,6 +222,9 @@ func TestScopedDNSReplacementRestoresPreviousPolicy(t *testing.T) {
 	}
 	if saved, _, _ := m.Committed(); saved.Digest != p.Digest {
 		t.Fatal("previous commit lost")
+	}
+	if a.DNS.VerifyServiceSelection("web", "private") != nil || a.DNS.Snapshot().ServiceDrafts["web"] != "unfiltered" {
+		t.Fatal("replacement rollback lost old DNS or new draft")
 	}
 }
 

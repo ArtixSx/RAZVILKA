@@ -12,11 +12,15 @@ import (
 func (m *Manager) ScopedProfileIdentity(id string) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return scopedProfileIdentity(m.doc, id)
+}
+
+func scopedProfileIdentity(doc document, id string) (string, error) {
 	p, ok := profileByID(id)
 	if !ok {
 		return "", ErrScopedDNS
 	}
-	v, ok := providerByIDFor(p.ProviderID, m.doc)
+	v, ok := providerByIDFor(p.ProviderID, doc)
 	if !ok || !v.Configured || v.Scope != "production" || v.Experimental || v.TrustedLocal || v.DoH == "" {
 		return "", ErrScopedDNS
 	}

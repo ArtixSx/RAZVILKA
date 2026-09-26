@@ -17,8 +17,49 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
+
+func TestDNSApplyReviewDoesNotRequireNodeRegistryAndBindsProvider(t *testing.T) {
+	a := genericReviewFixture(t)
+	a.DNS, _ = dnscontrol.New("")
+	if err := a.DNS.SetServiceDraft("telegram", "private"); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := a.DNS.ScopedProfileIdentity("private")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := dataplane.Plan{Digest: "dns-plan", NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{{ServiceID: "telegram", Resolved: "direct"}}, DNS: &dataplane.ScopedDNSPlan{Bindings: []dataplane.ScopedDNSBinding{{ServiceID: "telegram", ProfileID: "private", ProfileDigest: digest}}}}
+	if !plan.RequiresNetworkProof() {
+		t.Fatal("DNS lost network guard")
+	}
+	b, err := a.bindApplyReview(context.Background(), a.Store.Get(), plan, changeScopeServices, "")
+	if err != nil || b.nodes {
+		t.Fatalf("DNS-only review required node registry: %v", err)
+	}
+	if err := b.guard(a, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Caller changes cannot mutate the review's immutable profile binding.
+	plan.DNS.Bindings[0].ProfileDigest = "changed"
+	if err := b.guard(a, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.bindApplyReview(context.Background(), a.Store.Get(), plan, changeScopeServices, ""); !errors.Is(err, dataplane.ErrReviewChanged) {
+		t.Fatalf("stale provider accepted: %v", err)
+	}
+	a.DNS = nil
+	if err := b.guard(a, context.Background()); !errors.Is(err, dataplane.ErrReviewChanged) {
+		t.Fatalf("missing DNS accepted: %v", err)
+	}
+	plan.DNS = nil
+	plan.Routes[0].Resolved = "sing-box:node-test"
+	if _, err := a.bindApplyReview(context.Background(), a.Store.Get(), plan, changeScopeServices, ""); !errors.Is(err, dataplane.ErrReviewChanged) {
+		t.Fatalf("missing node registry accepted: %v", err)
+	}
+}
 
 func genericReviewFixture(t *testing.T) *App {
 	t.Helper()

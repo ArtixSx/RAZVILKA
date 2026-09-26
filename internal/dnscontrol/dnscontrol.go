@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/netip"
@@ -23,7 +24,7 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 )
 
-const schema = 4
+const schema = 5
 
 const endpointProbeTimeout = 5 * time.Second
 
@@ -167,6 +168,7 @@ type document struct {
 	CustomProvider    *Provider         `json:"custom_provider,omitempty"`
 	ServiceDrafts     map[string]string `json:"service_drafts,omitempty"`
 	ServiceApplied    map[string]string `json:"service_applied,omitempty"`
+	ServiceRevisions  map[string]uint64 `json:"service_revisions,omitempty"`
 	MigrationWarnings []string          `json:"migration_warnings,omitempty"`
 }
 
@@ -1388,6 +1390,7 @@ func cloneStringMap(source map[string]string) map[string]string {
 func cloneDocument(source document) document {
 	source.ServiceDrafts = cloneStringMap(source.ServiceDrafts)
 	source.ServiceApplied = cloneStringMap(source.ServiceApplied)
+	source.ServiceRevisions = maps.Clone(source.ServiceRevisions)
 	source.LastProbe = append([]ProbeResult(nil), source.LastProbe...)
 	source.MigrationWarnings = append([]string(nil), source.MigrationWarnings...)
 	if source.CustomProvider != nil {
@@ -1478,7 +1481,7 @@ func (m *Manager) load() error {
 	if err := json.Unmarshal(b, &loaded); err != nil {
 		return fmt.Errorf("decode DNS state: %w", err)
 	}
-	if loaded.Schema != 1 && loaded.Schema != 2 && loaded.Schema != 3 && loaded.Schema != schema {
+	if loaded.Schema < 1 || loaded.Schema > schema {
 		return fmt.Errorf("unsupported DNS state schema %d", loaded.Schema)
 	}
 	migrated := loaded.Schema != schema
@@ -1488,6 +1491,11 @@ func (m *Manager) load() error {
 	}
 	if loaded.ServiceApplied == nil {
 		loaded.ServiceApplied = map[string]string{}
+	}
+	for serviceID := range loaded.ServiceRevisions {
+		if !validServiceID(serviceID) {
+			return errors.New("invalid DNS service revision")
+		}
 	}
 	for serviceID, profileID := range loaded.ServiceDrafts {
 		if !validServiceID(serviceID) {
@@ -1601,5 +1609,7 @@ func (m *Manager) saveLocked() error {
 	if err := os.Rename(name, m.Path); err != nil {
 		return err
 	}
-	return os.Chmod(m.Path, 0600)
+	// The private temporary file already has its final permissions. Nothing
+	// that can fail may follow rename: callers restore their memory on error.
+	return nil
 }

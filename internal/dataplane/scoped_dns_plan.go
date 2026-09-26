@@ -57,8 +57,8 @@ func validateScopedDNSPlan(p *ScopedDNSPlan, routes []Route) error {
 	}
 	probeBound := false
 	for _, b := range p.Bindings {
-		if b.Client != p.Bindings[0].Client || b.ServiceID != p.Bindings[0].ServiceID {
-			return errors.New("first scoped DNS executor supports one service and one client per policy")
+		if b.Client != p.Bindings[0].Client || b.ServiceID != p.Bindings[0].ServiceID || b.ProfileID != p.Bindings[0].ProfileID {
+			return errors.New("first scoped DNS executor supports one service, profile and client per policy")
 		}
 		ip, err := netip.ParseAddr(b.Client)
 		domain, domainErr := config.PolicyDomain(b.Domain)

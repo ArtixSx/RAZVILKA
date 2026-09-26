@@ -48,8 +48,9 @@ type scopedDNSState struct {
 }
 
 type scopedDNSSnapshot struct {
-	State  *scopedDNSState `json:"state"`
-	Active bool            `json:"active"`
+	State    *scopedDNSState                      `json:"state"`
+	Active   bool                                 `json:"active"`
+	Settings []dnscontrol.ServiceSelectionReceipt `json:"settings"`
 }
 
 func NewScopedDNSAdapter(lifetime context.Context, manager *dnscontrol.Manager, stateRoot string) *ScopedDNSAdapter {
@@ -118,8 +119,15 @@ func (a *ScopedDNSAdapter) Snapshot(ctx context.Context, p Plan, root string) er
 		if err := a.readbackRules(ctx, state.DNS, true); err != nil {
 			return err
 		}
+		if err := a.appliedSettings(state.DNS); err != nil {
+			return err
+		}
 	}
-	return writeScopedDNSFile(filepath.Join(root, "snapshot.json"), scopedDNSSnapshot{state, active})
+	settings, err := a.reviewSettings(state, p.DNS)
+	if err != nil {
+		return preflightRefusalError{err}
+	}
+	return writeScopedDNSFile(filepath.Join(root, "snapshot.json"), scopedDNSSnapshot{State: state, Active: active, Settings: settings})
 }
 
 func (a *ScopedDNSAdapter) Stage(ctx context.Context, p Plan, root string) error {
@@ -284,7 +292,26 @@ func (a *ScopedDNSAdapter) Commit(ctx context.Context, p Plan, root string) erro
 	if !dnsSessionAlive(a.live) || s == nil || !sameScopedDNSState(*s, scopedDNSState{p.NetworkProfileID, p.DNS, p.Routes}) {
 		return ErrReviewChanged
 	}
-	return a.readbackRules(ctx, p.DNS, true)
+	if err := a.readbackRules(ctx, p.DNS, true); err != nil {
+		return err
+	}
+	return a.commitSettings(ctx, p, root)
+}
+
+func (a *ScopedDNSAdapter) CommitRetirement(ctx context.Context, p Plan, root string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if p.DNS != nil {
+		return ErrReviewChanged
+	}
+	state, err := a.readState(a.statePath())
+	if err != nil {
+		return err
+	}
+	if state != nil || a.live != nil {
+		return errors.New("scoped DNS retirement is incomplete")
+	}
+	return a.commitSettings(ctx, p, root)
 }
 
 func sameScopedDNSState(left, right scopedDNSState) bool {
@@ -304,6 +331,9 @@ func (a *ScopedDNSAdapter) observeOwnedRuntime(ctx context.Context) error {
 	if s == nil || !dnsSessionAlive(a.live) || !sameScopedDNSState(*s, a.live.state) {
 		return errors.New("scoped DNS runtime is unavailable")
 	}
+	if err := a.appliedSettings(s.DNS); err != nil {
+		return err
+	}
 	if err := a.validate(ctx, Plan{DNS: s.DNS, Routes: s.Routes, NetworkProfileID: s.Network}); err != nil {
 		return err
 	}
@@ -317,6 +347,9 @@ func (a *ScopedDNSAdapter) Reconcile(ctx context.Context, p Plan) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if err := a.validate(ctx, p); err != nil {
+		return err
+	}
+	if err := a.appliedSettings(p.DNS); err != nil {
 		return err
 	}
 	s, err := a.readState(a.statePath())
@@ -387,7 +420,7 @@ func (a *ScopedDNSAdapter) snapshot(root string) (scopedDNSSnapshot, error) {
 	if err != nil {
 		return s, err
 	}
-	if json.Unmarshal(data, &s) != nil || s.State != nil && (s.State.DNS == nil || validateScopedDNSPlan(s.State.DNS, s.State.Routes) != nil) || s.Active != (s.State != nil) {
+	if json.Unmarshal(data, &s) != nil || s.State != nil && (s.State.DNS == nil || validateScopedDNSPlan(s.State.DNS, s.State.Routes) != nil) || s.Active != (s.State != nil) || len(s.Settings) < 1 || len(s.Settings) > 2 {
 		return s, errors.New("invalid scoped DNS snapshot")
 	}
 	return s, nil
@@ -400,8 +433,16 @@ func (a *ScopedDNSAdapter) Rollback(ctx context.Context, p Plan, root string) er
 	if err != nil {
 		return err
 	}
+	if err := validateScopedSettingsSnapshot(s, p.DNS); err != nil {
+		return err
+	}
 	if err := a.stopLocked(ctx); err != nil {
 		return err
+	}
+	for i := len(s.Settings) - 1; i >= 0; i-- {
+		if err := a.DNS.RestoreServiceSelection(s.Settings[i]); err != nil {
+			return err
+		}
 	}
 	if s.Active {
 		// Restoring stale bindings would silently authorize a new network.
@@ -420,12 +461,20 @@ func (a *ScopedDNSAdapter) VerifyRollback(ctx context.Context, p Plan, root stri
 	if err != nil {
 		return false, err
 	}
+	if err := validateScopedSettingsSnapshot(s, p.DNS); err != nil {
+		return false, err
+	}
 	current, err := a.readState(a.statePath())
 	if err != nil {
 		return false, err
 	}
 	if !reflect.DeepEqual(s.State, current) || s.Active != dnsSessionAlive(a.live) {
 		return false, errors.New("scoped DNS rollback readback differs")
+	}
+	for _, receipt := range s.Settings {
+		if err := a.DNS.VerifyServiceSelection(receipt.Review.ServiceID, receipt.Review.Applied); err != nil {
+			return false, err
+		}
 	}
 	if s.Active {
 		return true, a.readbackRules(ctx, s.State.DNS, true)
