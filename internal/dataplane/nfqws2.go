@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/netip"
 	"os"
@@ -264,7 +265,7 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, _ string) error {
 			continue
 		}
 		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
-		err := probe(probeCtx, route.ProbeURL)
+		err := probeNFQWS2Health(probeCtx, route.ProbeURL, probe)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("%s health probe: %w", route.ServiceName, err)
@@ -632,6 +633,31 @@ func defaultNFQWS2Probe(ctx context.Context, rawURL string) error {
 	defer response.Body.Close()
 	_, err = strictServiceResponse(rawURL, response)
 	return err
+}
+
+// Some router resolvers allow only one second and one DNS attempt. A single
+// transient lookup failure after activation should get one retry within the
+// original health budget. No retry for HTTP, TLS, ownership or NXDOMAIN errors.
+func probeNFQWS2Health(ctx context.Context, rawURL string, probe func(context.Context, string) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	err := probe(ctx, rawURL)
+	var dnsErr *net.DNSError
+	if err == nil || !errors.As(err, &dnsErr) || dnsErr.IsNotFound || (!dnsErr.IsTimeout && !dnsErr.IsTemporary) {
+		return err
+	}
+	timer := time.NewTimer(250 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return probe(ctx, rawURL)
 }
 
 func sortedCopy(values []string) []string {
