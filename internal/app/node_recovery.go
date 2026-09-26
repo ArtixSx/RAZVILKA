@@ -197,6 +197,9 @@ func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, 
 		if err := a.guardNodeRecoveryIntent(ctx, intent, false); err != nil {
 			return dataplane.Execution{}, err
 		}
+		if route.Resolved == "nfqws2" {
+			continue // The full transaction still validates and checks NFQWS2.
+		}
 		result, snapshot, err := a.checkAndRecordNode(ctx, strings.TrimPrefix(route.Resolved, "sing-box:"), intent.services[index], profile, intent.generation)
 		if err != nil {
 			return dataplane.Execution{}, err
@@ -228,10 +231,11 @@ func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, 
 func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, profile string) (nodeRecoveryIntent, error) {
 	intent := nodeRecoveryIntent{config: a.Store.Get(), plan: previous, profile: profile}
 	if a.Nodes == nil || a.NodeChecker == nil || intent.config.SafeMode || previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop || previous.Revision != intent.config.AppliedRevision ||
-		len(previous.Routes) == 0 || len(previous.Routes) > maxNodeRecoveryRoutes || len(previous.Adapters) != 1 || previous.Adapters[0] != "sing-box" {
+		len(previous.Routes) == 0 || len(previous.Routes) > maxNodeRecoveryRoutes || !nodeRecoveryAdaptersSupported(previous) {
 		return intent, errNodeRecoveryReview
 	}
-	// The MVP never silently recovers a subset of a mixed plan.
+	// Recover the entire applied plan, including unchanged NFQWS2 routes.
+	// Other mixed adapters still require a reviewed plan; never drop a subset.
 	services := map[string]catalog.Service{}
 	for _, service := range a.catalogSnapshot().Services {
 		services[service.ID] = service
@@ -240,11 +244,11 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 	for _, route := range previous.Routes {
 		state := intent.config.AppliedServices[route.ServiceID]
 		service, ok := services[route.ServiceID]
-		if !ok || seen[route.ServiceID] || !state.Enabled || selectedRoute(state) != route.Selected || !strings.HasPrefix(route.Resolved, "sing-box:node-") ||
+		if !ok || seen[route.ServiceID] || !state.Enabled || selectedRoute(state) != route.Selected ||
 			!sameNodeRecoveryStrings(state.Sources, route.Sources) || !nodeRecoveryServiceMatches(route, service) || !serviceHasNodeProbe(service) {
 			return intent, errNodeRecoveryReview
 		}
-		if route.Selected != route.Resolved && route.Selected != "auto" && !strings.HasPrefix(route.Selected, "sing-box:group-") {
+		if route.Selected != route.Resolved && route.Selected != "auto" && !(route.Resolved != "nfqws2" && strings.HasPrefix(route.Selected, "sing-box:group-")) {
 			return intent, errNodeRecoveryReview
 		}
 		seen[route.ServiceID] = true
@@ -264,6 +268,30 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 		return intent, err
 	}
 	return intent, nil
+}
+
+func nodeRecoveryAdaptersSupported(plan dataplane.Plan) bool {
+	used := map[string]bool{}
+	for _, route := range plan.Routes {
+		switch {
+		case strings.HasPrefix(route.Resolved, "sing-box:node-"):
+			used["sing-box"] = true
+		case route.Resolved == "nfqws2":
+			used["nfqws2"] = true
+		default:
+			return false
+		}
+	}
+	if !used["sing-box"] || len(plan.Adapters) != len(used) {
+		return false
+	}
+	for _, id := range plan.Adapters {
+		if !used[id] {
+			return false
+		}
+		delete(used, id)
+	}
+	return len(used) == 0
 }
 
 func (a *App) guardNodeRecoveryIntent(ctx context.Context, intent nodeRecoveryIntent, proofs bool) error {
@@ -297,6 +325,9 @@ func (a *App) guardNodeRecoveryIntent(ctx context.Context, intent nodeRecoveryIn
 		service, ok := services[route.ServiceID]
 		if !ok || !nodeRecoveryServiceMatches(route, service) || !reflect.DeepEqual(service.Probes, intent.services[index].Probes) {
 			return errNodeRecoveryReview
+		}
+		if route.Resolved == "nfqws2" {
+			continue
 		}
 		nodeID := strings.TrimPrefix(route.Resolved, "sing-box:")
 		if !nodeRecoveryNodePresent(snapshot, nodeID, time.Now()) || !nodeRecoverySelectorOwns(snapshot, route.Selected, nodeID) {
@@ -370,15 +401,15 @@ func nodeRecoveryServiceMatches(route dataplane.Route, service catalog.Service) 
 }
 
 func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, error) {
-	var engine dataplane.Engine
+	var engines []dataplane.Engine
 	for _, option := range a.nodeRouteOptions() {
-		if option.ID == "sing-box" {
-			engine = dataplane.Engine{ID: "sing-box", Installed: option.Installed, Configured: true, Running: option.Running, Activatable: a.Dataplane.Capable("sing-box"), Canary: a.Dataplane.CanaryCapable("sing-box")}
+		if slices.Contains(intent.plan.Adapters, option.ID) {
+			engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: option.ID == "sing-box" || option.Configured, Running: option.Running, Activatable: a.Dataplane.Capable(option.ID), Canary: a.Dataplane.CanaryCapable(option.ID)})
 		}
 	}
 	conflicts := []dataplane.ResourceConflict{}
 	if a.EngineLab != nil {
-		for _, conflict := range a.EngineLab.Inspect().ApplyConflicts([]string{"sing-box"}) {
+		for _, conflict := range a.EngineLab.Inspect().ApplyConflicts(intent.plan.Adapters) {
 			conflicts = append(conflicts, dataplane.ResourceConflict{Kind: conflict.Kind, Value: conflict.Value, Engines: conflict.Engines, SystemUse: conflict.SystemUse})
 		}
 	}
@@ -389,5 +420,5 @@ func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, 
 	// Copy exact applied targets; do not resolve AUTO/group or load any draft.
 	routes := append([]dataplane.Route(nil), intent.plan.Routes...)
 	return dataplane.Build(dataplane.Input{NetworkProfileID: intent.profile, Revision: intent.config.AppliedRevision, SafeMode: intent.config.SafeMode,
-		Routes: routes, Engines: []dataplane.Engine{engine}, ResourceConflicts: conflicts, Host: host})
+		Routes: routes, Engines: engines, ResourceConflicts: conflicts, Host: host})
 }
