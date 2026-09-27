@@ -350,6 +350,7 @@
   document.addEventListener('razvilka:auth-required',()=>{nextAuthGeneration();snapshot=null;feeds=null;editingPolicy=null;dirty=false;sourceDirty=false;$('subscriptionURL').value='';$('newServiceURL').value='';$('newServiceName').value='';$('pauseButton').disabled=true;$('authRequired').hidden=false;$('workspace').hidden=true;$('connectionLabel').textContent='Требуется вход';notify('Войдите для чтения настроек и управления.',true);if($('addServiceDialog').open)$('addServiceDialog').close();window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:401,message:'Войдите для чтения настроек и управления.'}}));});
   document.addEventListener('razvilka:auth-restored',()=>{nextAuthGeneration();notify('');$('wizardError').textContent='';$('addServiceError').textContent='';$('saveWizard').disabled=false;$('authRequired').hidden=true;$('connectionLabel').textContent='Загружаем настройки…';void refresh();if(activeTab==='sources')void readSources();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh();});
+  document.addEventListener('razvilka:source-consent-changed',()=>{void refresh();});
   setStep(0);void refresh();
   // This only refreshes displayed metadata. Backend jobs never depend on it.
   poll=setInterval(()=>{if(!document.hidden&&!loading&&['autopilot','managed','onboard','overview','updates'].includes(state.currentView))void refresh();},15000);

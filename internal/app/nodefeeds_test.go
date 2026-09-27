@@ -53,7 +53,8 @@ func TestSavedNodeFeedAPIKeepsURLsPrivateAndChecksRevisionWithoutFetching(t *tes
 		t.Fatal(err)
 	}
 	defer feeds.Close()
-	a := &App{NodeFeeds: feeds}
+	a := autonomyAPIFixture(t)
+	a.NodeFeeds = feeds
 	body := `{"url":"https://feed.example.org/private-path-token?secret=query-token","name":"Подписка","enabled":true,"limit":128,"confirm":"SAVE_NODE_FEED"}`
 	w := httptest.NewRecorder()
 	a.nodeFeedList(w, httptest.NewRequest(http.MethodPost, "/api/v1/node-feeds", strings.NewReader(body)))

@@ -20,12 +20,14 @@ state.status = { revision: 9 };
 const session = new Map();
 let handler = async () => ({});
 let scheduled;
-const document = { hidden: false, activeElement: null, getElementById: id => $(`#${id}`), addEventListener() {} };
+const dispatched = [];
+const document = { hidden: false, activeElement: null, getElementById: id => $(`#${id}`), addEventListener() {}, dispatchEvent(event) { dispatched.push(event.type); } };
 const domQueries = new Map();
 state.currentView = 'nodes';
 $('#authScreen').hidden = true;
 const esc = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 const context = vm.createContext({ state, $, $$: selector => domQueries.get(selector) || [], Date: TestDate, document, Intl, JSON, Set, Map, Number, String, encodeURIComponent, esc,
+  CustomEvent: class { constructor(type) { this.type=type; } },
   crypto: webcrypto, sessionStorage: { getItem: key => session.get(key) || null, setItem: (key,value) => session.set(key,value), removeItem: key => session.delete(key) },
   api: async (url, options) => { calls.push({ url, options }); return handler(url, options); },
   nodeExpiryText: () => 'Актуален', nodeRecoveryBanner: () => '', renderNodeGroups() {},
@@ -310,4 +312,21 @@ await submitting;
 assert.equal(context.browser.job,null,'late POST response restored logged-out state');
 assert.equal(calls.length,beforeSubmitLogout,'late POST initiated polling');
 assert.equal(session.has('razvilka.node-check-request'),false);
-console.log('Node browser filtering, proof expiry, transport labels, focus, polling, logout, durable retries and subscriptions passed');
+context.browser.authRequired=false;context.browser.viewActive=true;$('#authScreen').hidden=true;
+state.nodeFeeds={sources:[{source_id:'removed',revision:7}]};
+handler=async (url,options)=>options?.method==='DELETE'?{ok:true,autonomy_paused:true}:{sources:[]};
+await context.changeNodeSubscription('removed',true);
+assert.ok(dispatched.includes('razvilka:source-consent-changed'));
+assert.match($('#nodeFeedStatus').textContent,/Автопилот на паузе/);
+state.nodeFeeds={sources:[{source_id:'late-delete',revision:8}]};
+let finishDelete;
+handler=()=>new Promise(resolve=>{finishDelete=resolve;});
+const deleting=context.changeNodeSubscription('late-delete',true);
+for(let turn=0;turn<8;turn++)await Promise.resolve();
+assert.equal(typeof finishDelete,'function');
+const deleteCalls=calls.length;
+context.stopNodeBrowserRefresh(true);state.nodeFeeds={sources:[]};
+finishDelete({ok:true});await deleting;
+assert.equal(calls.length,deleteCalls,'late delete started private reload after logout');
+assert.equal(state.nodeFeeds.sources.length,0);
+console.log('Node browser filtering, proof expiry, transport labels, focus, polling, logout, durable retries and subscription removal passed');

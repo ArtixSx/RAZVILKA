@@ -466,13 +466,22 @@ async function pollNodeFeedJob(id) {
 
 async function changeNodeSubscription(id, remove) {
   const source = (state.nodeFeeds?.sources || []).find(item => item.source_id === id);
-  if (!source) return;
-  if (remove && !await askConfirmation('Удалить подписку?', 'Обновление остановится. Уже полученные подключения останутся в каталоге.', 'Удалить подписку')) return;
+  if (!source || !nodeBrowserActive()) return;
+  const epoch = nodeBrowser.epoch;
+  if (remove && !await askConfirmation('Удалить подписку?', 'Источник будет исключён из автоподбора, его обновление остановится. Полученные подключения и действующие маршруты сохранятся. Если это последний разрешённый источник и других обходов нет, автопилот встанет на паузу.', 'Удалить подписку')) return;
+  if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
   try {
     const body = remove ? { revision: source.revision, confirm: 'DELETE_NODE_FEED' } : { revision: source.revision, name: source.name, enabled: !source.enabled, refresh_interval_minutes: source.refresh_interval_minutes || 360, limit: source.limit || 64, accept_partial: Boolean(source.accept_partial), confirm: 'UPDATE_NODE_FEED' };
-    await api(`/api/v1/node-feeds/${encodeURIComponent(id)}`, { method: remove ? 'DELETE' : 'PUT', body: JSON.stringify(body) });
-    state.nodeFeeds = await api('/api/v1/node-feeds'); renderNodes();
-  } catch (error) { $('#nodeFeedStatus').textContent = error.message; }
+    const result = await api(`/api/v1/node-feeds/${encodeURIComponent(id)}`, { method: remove ? 'DELETE' : 'PUT', body: JSON.stringify(body) });
+    if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
+    if (remove) document.dispatchEvent(new CustomEvent('razvilka:source-consent-changed'));
+    const feeds = await api('/api/v1/node-feeds');
+    if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
+    state.nodeFeeds = feeds; renderNodes();
+    if (remove) $('#nodeFeedStatus').textContent = result.autonomy_paused
+      ? 'Подписка удалена. Автопилот на паузе: разрешённых источников и обходов больше нет. Действующие маршруты сохранены.'
+      : 'Подписка удалена. Источник больше не используется автопилотом. Полученные подключения и действующие маршруты сохранены.';
+  } catch (error) { if (epoch === nodeBrowser.epoch && nodeBrowserActive()) $('#nodeFeedStatus').textContent = error.message; }
 }
 
 async function cancelNodeSubscriptionJob(id) {

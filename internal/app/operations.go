@@ -117,6 +117,11 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/nfqws2/setup-mode" {
 			exclusive = true
 		}
+		// Subscription removal also withdraws autonomy permission. Serialize it
+		// with policy saves, automatic re-creation, imports and manual Apply.
+		if r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/node-feeds/") && !strings.Contains(strings.TrimPrefix(r.URL.Path, "/api/v1/node-feeds/"), "/") {
+			exclusive = true
+		}
 		if r.Method != http.MethodGet && (strings.HasPrefix(r.URL.Path, "/api/v1/amneziawg") || strings.HasPrefix(r.URL.Path, "/api/v1/warp/")) {
 			exclusive = true
 		}

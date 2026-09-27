@@ -148,11 +148,30 @@ func (a *App) nodeFeedAction(w http.ResponseWriter, r *http.Request) {
 			writeFeedError(w, providerfeed.ErrRequest)
 			return
 		}
-		if err := a.NodeFeeds.Delete(r.Context(), parts[0], req.Revision); err != nil {
+		current, err := a.NodeFeeds.Saved(parts[0])
+		if err != nil {
 			writeFeedError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "working_routes_changed": false, "nodes_retained": true})
+		if current.Revision != req.Revision {
+			writeFeedError(w, providerfeed.ErrConflict)
+			return
+		}
+		withdrawn, paused, err := a.withdrawAutonomySource(r.Context(), parts[0])
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "AUTONOMY_SOURCE_REVOKE_FAILED", "error": "Не удалось подтвердить отзыв источника у автопилота. Подписка сохранена; проверьте журнал автоматики.", "working_routes_changed": false})
+			return
+		}
+		if err := a.NodeFeeds.Delete(r.Context(), parts[0], req.Revision); err != nil {
+			if withdrawn {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "FEED_DELETE_AFTER_REVOKE_FAILED", "error": "Источник исключён из автоподбора, но удаление подписки не подтверждено. Обновите список и повторите удаление.", "working_routes_changed": false, "autonomy_source_removed": true, "autonomy_paused": paused})
+			} else {
+				writeFeedError(w, err)
+			}
+			return
+		}
+		a.wakeReconciler()
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "working_routes_changed": false, "nodes_retained": true, "autonomy_source_removed": withdrawn, "autonomy_paused": paused})
 	default:
 		methodNotAllowed(w)
 	}
