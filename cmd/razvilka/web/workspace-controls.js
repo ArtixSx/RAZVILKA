@@ -50,12 +50,29 @@ function acceptWorkspaceControl(control) {
   return true;
 }
 
+function workspaceRuntimeControl() {
+  if (state.serviceControl) return state.serviceControl;
+  // A retained settings image cannot authorize Resume or prove a live path.
+  // It can supply Stop's CAS revision; the server still rechecks that revision
+  // and owns cancellation, cleanup and the final stopped state.
+  const saved = state.savedPanel, value = saved?.value, cfg = value?.data?.config;
+  const age = value?.data_age_ms + Math.max(0, Date.now() - saved?.receivedAt);
+  if (!workspaceControlVisible() || value?.schema !== 1 || value.dataplane !== 'not-checked'
+    || !['available', 'retained'].includes(value.state) || !Number.isFinite(age) || age < 0
+    || !Number.isFinite(value.max_age_seconds) || value.max_age_seconds <= 0 || value.max_age_seconds > 900
+    || age >= value.max_age_seconds * 1000 || !Number.isSafeInteger(cfg?.revision) || cfg.revision < 1
+    || cfg.stopped !== false || !Array.isArray(value.data?.services)
+    || !value.data.services.some(s => s.applied?.enabled === true)) return null;
+  return { config_revision: cfg.revision, mode: cfg.mode, safe_mode: cfg.safe_mode === true,
+    runtime_state: 'unknown', running: false, can_stop: true, resume_available: false, presentation_only: true };
+}
+
 function renderWorkspaceControls() {
-  const control = state.serviceControl;
+  const control = workspaceRuntimeControl();
   const ready = workspaceControl.authenticated && !!control && Number.isSafeInteger(control.config_revision);
   for (const [id, mode] of [['#projectModeAuto', 'auto'], ['#projectModeManual', 'manual']]) {
     const button = $(id);
-    button.disabled = !ready || workspaceControl.busy || workspaceControl.readBusy || !!workspaceControl.runtimeJob;
+    button.disabled = !ready || control.presentation_only || workspaceControl.busy || workspaceControl.readBusy || !!workspaceControl.runtimeJob;
     button.setAttribute('aria-pressed', String(ready && control.mode === mode));
   }
   const power = $('#projectPower');
@@ -126,7 +143,7 @@ async function changeWorkspaceMode(mode) {
 }
 
 async function toggleWorkspaceRuntime() {
-  const control = state.serviceControl;
+  const control = workspaceRuntimeControl();
   if (!workspaceControlVisible() || workspaceControl.busy || workspaceControl.runtimeJob || !control || (workspaceControl.readBusy && !control.running && !control.can_stop) || (control.runtime_state === 'unknown' && !control.can_stop)) return;
   if (control.safe_mode && !control.running && !control.can_stop) {
     setView('settings');
@@ -233,7 +250,7 @@ function bindWorkspaceControls() {
   document.addEventListener('razvilka:auth-required', () => {
     workspaceControl.authenticated = false; workspaceControl.generation++; workspaceControl.busy = false; workspaceControl.readBusy = false; workspaceControl.lastError = '';
     workspaceControl.runtimeJob = null; workspaceControl.dnsJobPending = false; clearWorkspaceRuntimeToken();
-    clearTimeout(workspaceControl.timer); workspaceControl.pending = null; state.serviceControl = null; renderWorkspaceControls();
+    clearTimeout(workspaceControl.timer); workspaceControl.pending = null; state.serviceControl = null; state.savedPanel = null; renderWorkspaceControls();
   });
   document.addEventListener('razvilka:auth-restored', () => { if (!workspaceControl.authenticated) { workspaceControl.authenticated = true; scheduleWorkspaceControl(0); } });
   document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(workspaceControl.timer); else scheduleWorkspaceControl(0); });

@@ -886,8 +886,15 @@ func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string,
 }
 
 func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool) (string, error) {
+	requestTimeout := 4 * time.Second
+	if requireDataplane {
+		// Runtime ownership inspection itself has an eight-second bound.
+		// The HTTP client must allow it to finish, while the parent still owns
+		// the overall readiness deadline and cancellation.
+		requestTimeout = 12 * time.Second
+	}
 	client := &http.Client{
-		Timeout: 4 * time.Second,
+		Timeout: requestTimeout,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

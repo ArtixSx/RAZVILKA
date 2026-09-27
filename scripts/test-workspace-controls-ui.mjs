@@ -125,6 +125,45 @@ release({ durable_jobs: [{ ...queued, id: 322, state: 'completed' }] }); await l
 assert.equal(context.control.runtimeJob, null);
 assert.equal(notices.length, beforeLateJob, 'private job appeared after logout');
 
+// A first login during recovery has no previous full /service-control read.
+// A protected retained snapshot may supply only a revision-fenced Stop intent.
+events.get('razvilka:auth-restored')();
+context.control.readBusy = true;
+state.savedPanel = { receivedAt: Date.now(), value: { schema: 1, state: 'retained', dataplane: 'not-checked',
+  data_age_ms: 30000, max_age_seconds: 900,
+  data: { config: { revision: 25, stopped: false, safe_mode: false, mode: 'auto' }, services: [{ applied: { enabled: true } }] } } };
+context.renderWorkspaceControls();
+assert.equal($('#projectPower').disabled, false, 'first busy login could not queue Stop');
+assert.equal($('#projectPowerLabel').textContent, 'Нужна проверка', 'retained data claimed a working route');
+assert.equal($('#projectPower').attributes['aria-label'], 'Остановить маршруты RAZVILKA');
+assert.equal($('#projectModeManual').disabled, true, 'retained data authorized a mode change');
+const beforeSavedMode = calls.length;
+await context.changeWorkspaceMode('manual');
+assert.equal(calls.length, beforeSavedMode);
+request = async path => path.endsWith('/runtime') ? { persistent: true, job: { ...queued, id: 323 } } : { durable_jobs: [] };
+await context.toggleWorkspaceRuntime();
+const firstLoginStop = JSON.parse(calls.at(-1).options.body);
+assert.equal(firstLoginStop.action, 'stop');
+assert.equal(firstLoginStop.expected_revision, 25);
+assert.equal(state.serviceControl, null, 'retained presentation was promoted to live control');
+assert.equal(context.control.runtimeJob.id, 323);
+context.control.runtimeJob = null;
+for (const invalid of ['expired', 'stopped', 'empty-services', 'old-age']) {
+  const saved = state.savedPanel;
+  state.savedPanel = JSON.parse(JSON.stringify(saved));
+  if (invalid === 'expired') state.savedPanel.value.state = 'expired';
+  if (invalid === 'stopped') state.savedPanel.value.data.config.stopped = true;
+  if (invalid === 'empty-services') state.savedPanel.value.data.services = [];
+  if (invalid === 'old-age') state.savedPanel.value.data_age_ms = 900000;
+  context.renderWorkspaceControls();
+  assert.equal($('#projectPower').disabled, true, `${invalid} supplied routing authority`);
+  const before = calls.length; await context.toggleWorkspaceRuntime(); assert.equal(calls.length, before);
+  state.savedPanel = saved;
+}
+events.get('razvilka:auth-required')();
+assert.equal(state.savedPanel, null, 'logout retained Stop revision');
+assert.equal($('#projectPower').disabled, true);
+
 state.components = [{ id: 'sing-box', installed: true, installed_version: '1.10', available_version: '1.11', update_available: true, can_update: true }];
 assert.match(context.engineVersionHTML({ id: 'sing-box', installed: true }), /1\.10[^]*→ 1\.11/);
 state.components[0].update_available = false;

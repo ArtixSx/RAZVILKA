@@ -77,6 +77,7 @@ function renderSavedPanelSnapshot() {
       ? `Сохранённые настройки · ${Math.floor(age / 1000)} сек назад. Просмотр доступен; управление вернётся после обновления состояния. Это не результат проверки подключения.`
       : !usable ? 'Свежий снимок настроек пока недоступен. Это не означает, что сервисы удалены.' : '';
   }
+  if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls();
 }
 
 document.addEventListener('razvilka:auth-required', () => {

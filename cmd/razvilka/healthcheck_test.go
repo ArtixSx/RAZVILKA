@@ -278,6 +278,32 @@ func TestCheckHealthWithWaitDeadlineRejectsUnresponsiveServer(t *testing.T) {
 	}
 }
 
+func TestStrictHealthAllowsBoundedRuntimeInspectionAfterBusy(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprintf(w, `{"name":"RAZVILKA","version":%q,"process_id":1234,"code":"RESTORE_OPERATION_BUSY","not_started":true}`, app.Version)
+			return
+		}
+		timer := time.NewTimer(4250 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-r.Context().Done():
+			return
+		case <-timer.C:
+		}
+		fmt.Fprintf(w, `{"name":"RAZVILKA","version":%q,"process_id":1234,"dataplane_state":"committed","dataplane_adapters":2,"live_active":true}`, app.Version)
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	version, err := waitForHealth(ctx, server.URL, 1234, true, time.Millisecond)
+	if err != nil || version != app.Version || calls.Load() != 2 {
+		t.Fatalf("bounded runtime inspection was repeatedly canceled by HTTP: version=%q calls=%d err=%v", version, calls.Load(), err)
+	}
+}
+
 func TestStrictHealthRequiresCompleteBoundedSingleStatus(t *testing.T) {
 	valid := fmt.Sprintf(`{"name":"RAZVILKA","version":%q,"process_id":1234,"dataplane_state":"never-applied","dataplane_adapters":0,"live_active":false}`, app.Version)
 	for _, tc := range []struct{ name, body string }{
