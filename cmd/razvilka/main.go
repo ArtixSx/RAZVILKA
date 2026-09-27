@@ -121,6 +121,7 @@ func main() {
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
+	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
 	flag.Parse()
 	if *subscriptionSchema {
 		fmt.Println("1")
@@ -136,7 +137,7 @@ func main() {
 		return
 	}
 	modes := 0
-	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != "", *checkDNSState} {
+	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != "", *checkDNSState, *checkAutonomyState} {
 		if enabled {
 			modes++
 		}
@@ -150,6 +151,13 @@ func main() {
 	if *checkDNSState {
 		if err := dnscontrol.CheckState(*dnsStatePath); err != nil {
 			log.Fatal("DNS state is not compatible with this version")
+		}
+		fmt.Println(`{"ok":true}`)
+		return
+	}
+	if *checkAutonomyState {
+		if err := app.CheckAutonomyState(*cfgPath + ".automation.json.autonomy.json"); err != nil {
+			log.Fatal("Autonomy state is not compatible with this version")
 		}
 		fmt.Println(`{"ok":true}`)
 		return

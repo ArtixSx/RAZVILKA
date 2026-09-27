@@ -19,6 +19,7 @@ sh ./scripts/test-bootstrap.sh
 sh ./scripts/test-build-targets.sh
 sh ./scripts/test-uninstall-entware.sh
 sh ./scripts/test-dns-rollback.sh
+sh ./scripts/test-autonomy-rollback.sh
 if command -v node >/dev/null 2>&1; then
   node scripts/build-interface.mjs --check
   node scripts/test-interface-model.mjs

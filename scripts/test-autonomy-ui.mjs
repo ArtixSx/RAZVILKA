@@ -22,4 +22,13 @@ test('safe escaping',()=>assert.equal(escapeHTML('<img src=x onerror="bad">'), '
 test('deduplicates user selection',()=>assert.deepEqual(splitValues('a,b; a\n c'),['a','b','c']));
 test('strict minutes',()=>assert.equal(minutes('02:55'),175));
 test('invalid minute',()=>assert.equal(minutes('24:00'),-1));
+for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+ const {candidateCooldownText}=require('../cmd/razvilka/web/'+file);
+ const now=Date.parse('2026-09-27T01:00:00Z');
+ const failure={code:'http-403',observed_at:new Date(now-60000).toISOString(),until:new Date(now+240000).toISOString()};
+ test(`${file} explains scoped cooldown`,()=>assert.match(candidateCooldownText({candidate_failures:[failure]},now),/1.*403\/451.*4 мин/));
+ for(const [name,change] of [['expired',{until:new Date(now).toISOString()}],['future',{observed_at:new Date(now+1000).toISOString()}],['unbounded',{until:new Date(now+600000).toISOString()}],['partial',{code:'http-429'}]]) {
+  test(`${file} hides ${name} cooldown`,()=>assert.equal(candidateCooldownText({candidate_failures:[{...failure,...change}]},now),''));
+ }
+}
 console.log(`AUTONOMY_UI_PURE_TESTS=${count}`);

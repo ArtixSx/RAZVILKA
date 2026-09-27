@@ -117,7 +117,19 @@ func scopedAdapterFixture(t *testing.T) (*Manager, *ScopedDNSAdapter, *dnsFirewa
 	a.ScopeCheck = func(ctx context.Context, _ ScopedDNSPlan) error { return ctx.Err() }
 	a.HealthProbe = func(ctx context.Context, _ *dnscontrol.ScopedDNSResolver, _ Plan) error { return ctx.Err() }
 	a.listen = func(netip.AddrPort) (*net.UDPConn, *net.TCPListener, error) {
-		return listenScopedDNS(netip.MustParseAddrPort("127.0.0.1:0"))
+		// The OS chooses a UDP port without reserving its TCP counterpart.
+		// Windows can allocate a UDP port excluded for TCP. Retry only ephemeral
+		// fixture allocation; production never substitutes the configured port.
+		var err error
+		for attempt := 0; attempt < 8; attempt++ {
+			var udp *net.UDPConn
+			var tcp *net.TCPListener
+			udp, tcp, err = listenScopedDNS(netip.MustParseAddrPort("127.0.0.1:0"))
+			if err == nil {
+				return udp, tcp, nil
+			}
+		}
+		return nil, nil, err
 	}
 	f := &dnsFirewallFixture{}
 	a.Runner = f

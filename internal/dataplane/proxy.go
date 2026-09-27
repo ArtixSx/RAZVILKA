@@ -590,10 +590,7 @@ func (a *ProxyTunnelAdapter) Health(ctx context.Context, plan Plan, root string)
 	return a.healthState(ctx, plan, state)
 }
 
-func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state PolicyState) error {
-	if err := a.checkPlanNetwork(ctx, plan); err != nil {
-		return err
-	}
+func (a *ProxyTunnelAdapter) verifyHealthRuntime(ctx context.Context, state PolicyState) error {
 	if !a.Processes.Running(a.engineProcess()) || !a.Processes.Running(a.sidecarProcess()) {
 		return errors.New("managed proxy or TUN sidecar is not running")
 	}
@@ -606,13 +603,23 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), state); err != nil {
 		return err
 	}
+	return ctx.Err()
+}
+
+func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state PolicyState) error {
+	if err := a.checkPlanNetwork(ctx, plan); err != nil {
+		return err
+	}
+	if err := a.verifyHealthRuntime(ctx, state); err != nil {
+		return err
+	}
 	for _, route := range plan.Routes {
 		if adapterID(route.Resolved) != a.ID() || strings.TrimSpace(route.ProbeURL) == "" {
 			continue
 		}
 		if (RoutePlan{Routes: []Route{route}}).RequiresNetworkProof() {
 			if err := a.probeNodeServiceIP(ctx, route.ProbeURL, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
-				return err
+				return a.attributeCandidateFailure(ctx, plan, route, state, err)
 			}
 		}
 		if len(route.Sources) > 0 {

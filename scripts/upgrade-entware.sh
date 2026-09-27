@@ -196,6 +196,12 @@ if [ ! -f "$CONFIG_SOURCE" ]; then
 fi
 
 require_native_enrollment_schema() {
+	if [ -e "$APPDIR/config.json.automation.json.autonomy.json" ] || [ -L "$APPDIR/config.json.automation.json.autonomy.json" ]; then
+	  AUTONOMY_COMPATIBILITY="$("$1" -check-autonomy-state -config "$APPDIR/config.json" 2>/dev/null)" || {
+	    echo "Target version cannot read the current autonomy state; installation unchanged" >&2; return 1;
+	  }
+	  [ "$AUTONOMY_COMPATIBILITY" = '{"ok":true}' ] || { echo "Autonomy compatibility not confirmed" >&2; return 1; }
+	fi
   SUBSCRIPTION_REQUIRED=0
   for SUBSCRIPTION_STATE in "$APPDIR/subscriptions-private/subscriptions.private.json" \
     "$APPDIR/private-restore-feeds-v1/restore.private.json"; do
@@ -315,7 +321,7 @@ chmod 700 "$BACKUP"
 for FILE in "$BINDIR/razvilka" "$RAZ_INIT" "$APPDIR/config.json" "$APPDIR/service-catalog.json" \
   "$APPDIR/community-catalog.json" "$APPDIR/sources.json" "$APPDIR/source-state.json" \
   "$APPDIR/admin.token" "$APPDIR/admin.credentials.json" "$APPDIR/custom-services.json" \
-  "$APPDIR/devices.json" "$STATEDIR/dns/state.json" "$LEGACY_INIT" "$LEGACY_DISABLED"; do
+  "$APPDIR/devices.json" "$APPDIR/config.json.automation.json.autonomy.json" "$STATEDIR/dns/state.json" "$LEGACY_INIT" "$LEGACY_DISABLED"; do
   [ ! -L "$FILE" ] || { echo "Refusing to snapshot symbolic link: $FILE" >&2; false; }
   [ ! -e "$FILE" ] || [ -f "$FILE" ] || { echo "Snapshot file target has the wrong type: $FILE" >&2; false; }
 done
@@ -333,6 +339,7 @@ CUSTOM_SERVICES_PRESENT="$(present "$APPDIR/custom-services.json")"
 DEVICES_PRESENT="$(present "$APPDIR/devices.json")"
 DATAPLANE_STATE_PRESENT="$(present "$STATEDIR/dataplane")"
 DNS_STATE_PRESENT="$(present "$STATEDIR/dns/state.json")"
+AUTONOMY_STATE_PRESENT="$(present "$APPDIR/config.json.automation.json.autonomy.json")"
 STAGING_PRESENT="$(present "$STATEDIR/staging")"
 CLOUDFLARE_PRIVATE_PRESENT="$(present "$APPDIR/cloudflare-private")"
 LEGACY_INIT_PRESENT="$(present "$LEGACY_INIT")"
@@ -364,6 +371,7 @@ backup_file "$APPDIR/admin.credentials.json" admin.credentials.json
 backup_file "$APPDIR/custom-services.json" custom-services.json
 backup_file "$APPDIR/devices.json" devices.json
 backup_file "$STATEDIR/dns/state.json" dns-state.json
+backup_file "$APPDIR/config.json.automation.json.autonomy.json" autonomy-state.json
 backup_file "$LEGACY_INIT" S99artem-flow
 backup_file "$LEGACY_DISABLED" S99artem-flow.razvilka-disabled
 
@@ -395,6 +403,7 @@ CUSTOM_SERVICES_PRESENT=$CUSTOM_SERVICES_PRESENT
 DEVICES_PRESENT=$DEVICES_PRESENT
 DATAPLANE_STATE_PRESENT=$DATAPLANE_STATE_PRESENT
 DNS_STATE_PRESENT=$DNS_STATE_PRESENT
+AUTONOMY_STATE_PRESENT=$AUTONOMY_STATE_PRESENT
 STAGING_PRESENT=$STAGING_PRESENT
 CLOUDFLARE_PRIVATE_PRESENT=$CLOUDFLARE_PRIVATE_PRESENT
 LEGACY_INIT_PRESENT=$LEGACY_INIT_PRESENT

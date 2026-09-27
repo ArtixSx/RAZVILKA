@@ -40,7 +40,13 @@
     return {name,category:'other',domains:[host],strategy:['auto'],probe_url:`https://${host}/`,description:'Пользовательский сервис. Автоматическая базовая веб-проверка.',icon:'◇'};
   }
   const stateLabels={pending:'Ожидает проверки',checking:'Проверяется',healthy:'Проверен',applied:'Применён',searching:'Подбор резерва',unconfirmed:'Нет однозначного результата',paused:'На паузе', 'manual-change':'Ручное изменение', 'network-unknown':'Сеть не определена', 'apply-refused':'Применение отклонено', 'rate-limited':'Лимит переключений', 'requires-review':'Нужна проверка журнала', 'scope-pending':'Область ещё не применена', 'origin-expired':'Истёк источник', 'definition-changed':'Состав изменился', 'unsupported-scenario':'Нет подходящего теста', 'checker-unavailable':'Проверяющий модуль недоступен', 'catalog-unavailable':'Каталог недоступен', 'removal-pending':'Снятие маршрута в очереди', 'removal-blocked':'Снятие приостановлено',removed:'Удалён'};
-  const model={validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels};
+  function candidateCooldownText(runtime, now=Date.now()) {
+    const entries=(Array.isArray(runtime?.candidate_failures)?runtime.candidate_failures:[]).filter(f=>['http-403','http-451'].includes(f.code)&&Date.parse(f.observed_at)<=now&&Date.parse(f.until)>now&&Date.parse(f.until)-Date.parse(f.observed_at)<=300000);
+    if(!entries.length) return '';
+    const seconds=Math.ceil((Math.min(...entries.map(f=>Date.parse(f.until)))-now)/1000);
+    return `Отложено подключений: ${entries.length}. Сервис вернул HTTP 403/451; новая проверка возможна через ${Math.ceil(seconds/60)} мин.`;
+  }
+  const model={validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,candidateCooldownText};
   if(typeof module==='object'&&module.exports) module.exports=model;
   root.RazvilkaAutonomyModel=model;
   if(typeof document==='undefined') return;
@@ -129,7 +135,8 @@
     const short=route.startsWith('sing-box:node-')?`Sing-box · ${route.slice(9,24)}…`:route;
     const count=Array.isArray(r.reserves)?r.reserves.length:0;
     const enabledHint=snapshot.policy.enabled?'':' · общая автоматика на паузе';
-    return `<article class="service-card"><span class="service-icon">${escapeHTML(serviceName(id).slice(0,1).toUpperCase())}</span><div class="service-main"><b>${escapeHTML(serviceName(id))}</b><p>${escapeHTML(r.message||'Нет результата проверки.')}${escapeHTML(enabledHint)}</p><div class="service-route">${escapeHTML(short)}</div><span class="service-meta">${s.all_lan?'Вся локальная сеть':`${s.sources.length} адреса / сети`} · резерв ${count}/${snapshot.policy.reserve_target} · ${escapeHTML(formatDate(r.checked_at))}</span></div><span class="tag ${kind}">${escapeHTML(label)}</span>${compact?'':`<div class="service-actions"><button class="button small" type="button" data-manage="${escapeHTML(id)}" data-enable="${!s.enabled}" ${s.removing?'disabled':''}>${s.enabled?'Пауза':'Возобновить'}</button><button class="button small danger" type="button" data-remove="${escapeHTML(id)}" ${s.removing?'disabled':''}>${s.removing?'Снимается…':'Убрать сервис'}</button></div>`}</article>`;
+    const cooldown=candidateCooldownText(r);
+    return `<article class="service-card"><span class="service-icon">${escapeHTML(serviceName(id).slice(0,1).toUpperCase())}</span><div class="service-main"><b>${escapeHTML(serviceName(id))}</b><p>${escapeHTML(r.message||'Нет результата проверки.')}${escapeHTML(enabledHint)}</p>${cooldown?`<p class="service-meta">${escapeHTML(cooldown)}</p>`:""}<div class="service-route">${escapeHTML(short)}</div><span class="service-meta">${s.all_lan?'Вся локальная сеть':`${s.sources.length} адреса / сети`} · резерв ${count}/${snapshot.policy.reserve_target} · ${escapeHTML(formatDate(r.checked_at))}</span></div><span class="tag ${kind}">${escapeHTML(label)}</span>${compact?'':`<div class="service-actions"><button class="button small" type="button" data-manage="${escapeHTML(id)}" data-enable="${!s.enabled}" ${s.removing?'disabled':''}>${s.enabled?'Пауза':'Возобновить'}</button><button class="button small danger" type="button" data-remove="${escapeHTML(id)}" ${s.removing?'disabled':''}>${s.removing?'Снимается…':'Убрать сервис'}</button></div>`}</article>`;
   }
   function renderServices() {
     const items=Object.entries(snapshot.services||{}),q=$('serviceSearch').value.trim().toLocaleLowerCase('ru');

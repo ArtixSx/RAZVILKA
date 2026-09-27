@@ -87,6 +87,12 @@ func (a *ProxyTunnelAdapter) probeNodeServiceIP(ctx context.Context, rawURL, add
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			// Preserve only the bounded semantic result from our HTTPS evaluator.
+			// Transport diagnostics can contain endpoints and are not attribution.
+			var response *serviceResponseError
+			if errors.As(err, &response) {
+				return response
+			}
 			return errors.New("node service IP path unsupported or unavailable; repeat an exact IP-path check")
 		}
 	}

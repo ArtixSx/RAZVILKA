@@ -8,19 +8,20 @@ import (
 // Runtime never authorizes a route or replaces NodeStore proof. On restart the
 // adapter resets NextCheck and health/failure confirmation, but retains budgets.
 type Runtime struct {
-	State            string      `json:"state"`
-	Message          string      `json:"message"`
-	NextCheck        time.Time   `json:"next_check"`
-	CheckedAt        time.Time   `json:"checked_at"`
-	ReserveCheckedAt time.Time   `json:"reserve_checked_at"`
-	Failures         int         `json:"failures"`
-	FailureNode      string      `json:"failure_node,omitempty"`
-	Network          string      `json:"network,omitempty"`
-	FirstFailure     time.Time   `json:"first_failure,omitempty"`
-	LastFailure      time.Time   `json:"last_failure,omitempty"`
-	Cursor           int         `json:"cursor"`
-	Reserves         []string    `json:"reserves"`
-	Switches         []time.Time `json:"switches"`
+	State             string             `json:"state"`
+	Message           string             `json:"message"`
+	NextCheck         time.Time          `json:"next_check"`
+	CheckedAt         time.Time          `json:"checked_at"`
+	ReserveCheckedAt  time.Time          `json:"reserve_checked_at"`
+	Failures          int                `json:"failures"`
+	FailureNode       string             `json:"failure_node,omitempty"`
+	Network           string             `json:"network,omitempty"`
+	FirstFailure      time.Time          `json:"first_failure,omitempty"`
+	LastFailure       time.Time          `json:"last_failure,omitempty"`
+	Cursor            int                `json:"cursor"`
+	Reserves          []string           `json:"reserves"`
+	Switches          []time.Time        `json:"switches"`
+	CandidateFailures []CandidateFailure `json:"candidate_failures,omitempty"`
 }
 
 func (r *Runtime) Observe(node, network, verdict string, now time.Time, gap time.Duration) bool {
@@ -73,6 +74,7 @@ func (r *Runtime) ReserveSwitch(now time.Time, limit int) bool {
 func (r Runtime) Clone() Runtime {
 	r.Reserves = slices.Clone(r.Reserves)
 	r.Switches = slices.Clone(r.Switches)
+	r.CandidateFailures = slices.Clone(r.CandidateFailures)
 	return r
 }
 func CandidateBatch(ids []string, current string, cursor, limit int) ([]string, int) {

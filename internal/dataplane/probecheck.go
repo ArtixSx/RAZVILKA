@@ -41,6 +41,13 @@ func serviceProbeClient(client *http.Client, rawURL string) *http.Client {
 	return probecheck.RecordingClient(client, catalog.Service{ProbeURL: rawURL}, &chain)
 }
 
+type serviceResponseError struct {
+	code   string
+	detail string
+}
+
+func (e *serviceResponseError) Error() string { return e.detail }
+
 // Candidate health must reject policy errors and block pages too. A TCP/SOCKS
 // listener is checked separately and cannot substitute for this service test.
 func strictServiceResponse(rawURL string, response *http.Response) ([]byte, error) {
@@ -63,7 +70,7 @@ func strictServiceResponse(rawURL string, response *http.Response) ([]byte, erro
 		BodyTruncated: len(body) >= probecheck.MaxBodyBytes || response.ContentLength > int64(len(body)),
 	})
 	if assessment.Verdict != evidence.VerdictPass {
-		return nil, fmt.Errorf("%s (%s): %s", assessment.Verdict, assessment.ErrorCode, assessment.Detail)
+		return nil, &serviceResponseError{code: assessment.ErrorCode, detail: fmt.Sprintf("%s (%s): %s", assessment.Verdict, assessment.ErrorCode, assessment.Detail)}
 	}
 	return body, nil
 }

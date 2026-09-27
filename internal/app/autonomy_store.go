@@ -58,6 +58,17 @@ func decodeAutonomy(data []byte) (autonomyDocument, error) {
 		}
 	}
 	for id, r := range d.Runtime {
+		if len(r.CandidateFailures) > 4 {
+			return d, restorejournal.ErrInvalid
+		}
+		for _, f := range r.CandidateFailures {
+			if len(f.NodeID) != 69 || !strings.HasPrefix(f.NodeID, "node-") || strings.Trim(f.NodeID[5:], "0123456789abcdef") != "" ||
+				len(f.Network) == 0 || len(f.Network) > 128 || len(f.Definition) != 64 || strings.Trim(f.Definition, "0123456789abcdef") != "" ||
+				len(f.Scope) != 64 || strings.Trim(f.Scope, "0123456789abcdef") != "" || len(f.PlanID) == 0 || len(f.PlanID) > 128 ||
+				(f.Code != "http-403" && f.Code != "http-451") || f.ObservedAt.IsZero() || !f.Until.After(f.ObservedAt) || f.Until.After(f.ObservedAt.Add(5*time.Minute)) {
+				return d, restorejournal.ErrInvalid
+			}
+		}
 		if _, ok := d.Services[id]; !ok || len(r.State) > 64 || len(r.Message) > 512 || len(r.Reserves) > 4 || len(r.Switches) > 20 || r.Cursor < 0 || r.Cursor > 1000000 || r.Failures < 0 || r.Failures > 2 || len(r.Network) > 128 {
 			return d, restorejournal.ErrInvalid
 		}

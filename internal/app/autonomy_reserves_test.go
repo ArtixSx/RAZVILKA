@@ -229,9 +229,9 @@ func TestAutonomyReservesCandidateBudgetDefersCWithoutRetryingFailedB(t *testing
 	}
 }
 
-// F03's Apply-failure -> C case intentionally remains closed. A successful
-// rollback alone cannot distinguish a bad B from a shared engine/service
-// failure. These cases pin that boundary until dataplane adds attribution.
+// Untyped Apply errors remain closed even with rollback. Only the separate
+// exact candidate-service contract can authorize continuation; diagnostic
+// strings and a shared engine failure never satisfy that contract.
 func TestAutonomyReservesApplyFailureStopsEvenAfterRollback(t *testing.T) {
 	for _, outcome := range []string{"rolled-back", "rollback-failed", "network", "ownership", "global-engine"} {
 		t.Run(outcome, func(t *testing.T) {

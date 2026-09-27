@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
@@ -12,17 +13,67 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
-// Keep the transaction result with its cause. In particular, rolled-back is
-// not permission to continue: Execution identifies an adapter/phase, but not
-// the failed service/node or whether a shared engine caused the failure.
-// Never derive attribution by matching the diagnostic error text.
+// Keep the exact attempted plan and transaction result with their typed cause.
+// rolled-back alone never grants permission to continue.
 type autonomyApplyFailure struct {
+	Plan      dataplane.Plan
 	Execution dataplane.Execution
 	Cause     error
 }
 
 func (e *autonomyApplyFailure) Error() string { return "autonomous application was not confirmed" }
 func (e *autonomyApplyFailure) Unwrap() error { return e.Cause }
+
+// Accept only a definite candidate service rejection during live Health,
+// followed by verified rollback of every adapter and an unchanged config.
+// The caller holds the same exclusive operation throughout B -> rollback -> C.
+func (a *App) autonomyCandidateFailure(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, profile, id string, err error) (autonomy.CandidateFailure, bool) {
+	var failed *autonomyApplyFailure
+	var cause *dataplane.CandidateServiceFailure
+	if ctx.Err() != nil || !errors.As(err, &failed) || !errors.As(err, &cause) ||
+		errors.Is(err, dataplane.ErrNetworkChanged) || errors.Is(err, dataplane.ErrReviewChanged) ||
+		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		failed.Execution.State != "rolled-back" || !failed.Execution.RollbackVerified ||
+		failed.Execution.PlanID != failed.Plan.PlanID || failed.Execution.Digest != failed.Plan.Digest ||
+		failed.Plan.NetworkProfileID != profile || !reflect.DeepEqual(a.Store.Get(), base) ||
+		!a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
+		return autonomy.CandidateFailure{}, false
+	}
+	failures := 0
+	for _, step := range failed.Execution.Steps {
+		if step.State == "failed" {
+			if step.Adapter != "sing-box" || step.Phase != "health" {
+				return autonomy.CandidateFailure{}, false
+			}
+			failures++
+		}
+	}
+	if failures != 1 {
+		return autonomy.CandidateFailure{}, false
+	}
+	status, statusErr := a.Dataplane.Status()
+	if statusErr != nil || status.Execution == nil || !reflect.DeepEqual(*status.Execution, failed.Execution) {
+		return autonomy.CandidateFailure{}, false
+	}
+	service, ok := a.autonomyService(s.ID)
+	if !ok || autonomyDefinition(service) != s.Definition {
+		return autonomy.CandidateFailure{}, false
+	}
+	observed, networkErr := a.freshNetworkProfile(ctx)
+	if networkErr != nil || observed != profile {
+		return autonomy.CandidateFailure{}, false
+	}
+	for _, route := range failed.Plan.Routes {
+		if route.ServiceID == s.ID && route.Resolved == "sing-box:"+id &&
+			sameNodeRecoveryStrings(route.Sources, s.Sources) && nodeRecoveryServiceMatches(route, service) &&
+			cause.Matches(failed.Plan, route, time.Now()) {
+			return autonomy.CandidateFailure{NodeID: strings.TrimPrefix(route.Resolved, "sing-box:"),
+				Network: profile, Definition: s.Definition, Scope: autonomy.ScopeFingerprint(s.Sources),
+				PlanID: failed.Plan.PlanID, Code: cause.Code, ObservedAt: cause.ObservedAt}, true
+		}
+	}
+	return autonomy.CandidateFailure{}, false
+}
 
 func (a *App) checkAutonomyReserve(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, id string, service catalog.Service, profile string) (dataplane.NodeCheckResult, error) {
 	guard := func() error {
