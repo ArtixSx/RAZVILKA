@@ -95,9 +95,13 @@ func (a *App) reconcilerSnapshot() map[string]any {
 
 func (a *App) wakeReconciler() {
 	a.reconciler.mu.Lock()
+	now := time.Now()
 	for i := range a.reconciler.doc.Operations {
 		if a.reconciler.doc.Operations[i].Kind == "node-recovery" || a.reconciler.doc.Operations[i].Kind == "node-fallback" || a.reconciler.doc.Operations[i].Kind == "service-checks" || a.reconciler.doc.Operations[i].Kind == "feeds" {
-			a.reconciler.doc.Operations[i].NextRun = time.Time{}
+			// Repeated wakeups must not erase how long due work has waited.
+			if at := a.reconciler.doc.Operations[i].NextRun; at.IsZero() || at.After(now) {
+				a.reconciler.doc.Operations[i].NextRun = now
+			}
 		}
 		if a.reconciler.doc.Operations[i].Kind == "node-recovery" && a.reconciler.doc.Operations[i].State != "running" {
 			// This wakes observation only. The applied-plan/epoch recovery
@@ -406,17 +410,35 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 			legacyInterval = min(legacyInterval, health.Policy.CheckInterval())
 		}
 	}
-	tasks := []struct {
-		kind     string
-		interval time.Duration
-	}{{"node-recovery", 30 * time.Second}, {"node-fallback", time.Minute}, {"legacy-routes", legacyInterval}, {"feeds", 30 * time.Second}, {"service-checks", time.Duration(max(60, cfg.ServiceControl.Schedule.IntervalSeconds)) * time.Second}}
+	tasks := []reconcilerTask{{"node-recovery", 30 * time.Second}, {"node-fallback", time.Minute}, {"legacy-routes", legacyInterval}, {"feeds", 30 * time.Second}, {"service-checks", time.Duration(max(60, cfg.ServiceControl.Schedule.IntervalSeconds)) * time.Second}}
+	r.mu.Lock()
+	// Establish a durable due time even for a task that has never run. Otherwise
+	// continuous recovery could prevent an uninitialized task from ever aging.
+	initialized := false
+	for _, task := range tasks {
+		index := slices.IndexFunc(r.doc.Operations, func(op automationOperation) bool { return op.Kind == task.kind })
+		if index < 0 {
+			r.doc.Operations = append(r.doc.Operations, automationOperation{Kind: task.kind, State: "completed", Reason: "scheduled", ConfigFingerprint: automationConfigFingerprint(cfg), NextRun: now})
+			initialized = true
+		} else if r.doc.Operations[index].NextRun.IsZero() {
+			r.doc.Operations[index].NextRun = now
+			initialized = true
+		}
+	}
+	if initialized && a.persistReconcilerLocked(ctx) != nil {
+		r.mu.Unlock()
+		return
+	}
+	tasks = orderedReconcilerTasks(tasks, r.doc.Operations, now)
+	r.mu.Unlock()
+	dispatchStarted := time.Now()
 	for _, task := range tasks {
 		if ctx.Err() != nil {
 			return
 		}
 		// Cleanup/manual Stop can interrupt admission. Existing path recovery
 		// runs before queued observations; they share this scheduler and checker.
-		if task.kind == "node-fallback" && a.runDurableServiceJob(ctx, time.Now()) {
+		if (task.kind != "node-recovery" || a.hasDueRuntimeStop(time.Now())) && a.runDurableServiceJob(ctx, time.Now()) {
 			return
 		}
 		r.mu.Lock()
@@ -508,6 +530,11 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		op = &r.doc.Operations[index]
 		op.State = "completed"
 		op.NextRun = now.Add(task.interval)
+		if elapsed := time.Since(dispatchStarted); elapsed >= reconcilerDispatchQuantum {
+			// A long operation must not already be due again when it finishes.
+			// Preserve the caller's scheduling clock while accounting for work.
+			op.NextRun = now.Add(elapsed).Add(task.interval)
+		}
 		if task.kind == "service-checks" || task.kind == "feeds" {
 			op.NextRun = time.Now().Add(task.interval)
 		}
@@ -520,6 +547,9 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 				// even when forwarding repair has a persistent real failure.
 				// Exact checks still obey nodeRecoveryRound's per-plan limits.
 				op.NextRun = now.Add(task.interval)
+				if elapsed := time.Since(dispatchStarted); elapsed >= reconcilerDispatchQuantum {
+					op.NextRun = now.Add(elapsed).Add(task.interval)
+				}
 			}
 		} else {
 			op.Attempts = 0
@@ -542,6 +572,11 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		}
 		_ = a.persistReconcilerLocked(context.WithoutCancel(ctx))
 		r.mu.Unlock()
+		if time.Since(dispatchStarted) >= reconcilerDispatchQuantum {
+			// Re-read current intent and priority before another potentially long
+			// task. No gate is released early and no active cleanup is abandoned.
+			return
+		}
 	}
 }
 

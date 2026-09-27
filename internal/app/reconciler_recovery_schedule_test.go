@@ -162,7 +162,7 @@ func TestReconcilerRecoveryWakeDoesNotEraseExactCheckBackoff(t *testing.T) {
 	a.reconcileRound(context.Background(), now)
 	want := a.nodeRecoverySnapshot()
 	a.wakeReconciler()
-	if op := recoveryScheduleOperation(t, a); !op.NextRun.IsZero() || op.Attempts != 0 {
+	if op := recoveryScheduleOperation(t, a); op.NextRun.After(time.Now()) || op.Attempts != 0 {
 		t.Fatalf("settings change did not wake recovery observation: %+v", op)
 	}
 	a.reconcileRound(context.Background(), now.Add(time.Second))
