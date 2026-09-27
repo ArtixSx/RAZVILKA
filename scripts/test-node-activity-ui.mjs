@@ -9,8 +9,8 @@ const listeners = new Map();
 const calls = [];
 let handler;
 const state = {};
-const context = vm.createContext({ $, state, Date, Boolean, Promise, setTimeout: () => 1, clearTimeout() {},
-  document: { hidden: false, getElementById: id => $(`#${id}`), addEventListener: (name, callback) => listeners.set(name, callback) },
+const context = vm.createContext({ $, state, Date, Boolean, Promise, CustomEvent:class{constructor(type){this.type=type;}}, setTimeout: () => 1, clearTimeout() {},
+  document: { hidden: false, getElementById: id => $(`#${id}`), addEventListener: (name, callback) => listeners.set(name, callback), dispatchEvent: event => listeners.get(event.type)?.(event) },
   api: async (url, options) => { calls.push({ url, options }); return handler(url, options); }, refreshAll: async () => {}, showAuth() {},
 });
 vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/node-activity-ui.js', import.meta.url), 'utf8'), context);

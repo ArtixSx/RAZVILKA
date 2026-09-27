@@ -8,13 +8,13 @@ const extract=name=>{const match=source.match(new RegExp(`(?:async )?function ${
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
 function fixture(){
- const elements=new Map(),calls=[],renders=[],timers=new Map(),notices=[];
+ const elements=new Map(),calls=[],renders=[],timers=new Map(),notices=[],events=[];
  let timer=0,activity=false,activityError=null,handler;
  const state={status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
  const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
  const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',value:'',classList:{toggle(){}}});return elements.get(id);};
  const api=async(url,options={})=>{calls.push({url,options});return handler(url,options);};
- const context={state,panelLoad,inventoryRead:null,$,AbortController,Date,console,document:{hidden:false},
+ const context={state,panelLoad,inventoryRead:null,$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent:event=>events.push(event.type)},
  setTimeout(fn,ms){const id=++timer;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},
  api,hideAuth(){$('#authScreen').hidden=true;},showAuth(){$('#authScreen').hidden=false;context.cancelPanelRefresh();},
  refreshNodeActivity:async()=>{if(activityError)throw activityError;return activity;},scheduleNodeActivity(){},
@@ -31,13 +31,20 @@ function fixture(){
    return arrays.has(url)?[]:{};
  };
  handler=normal;
- return {context,state,panelLoad,calls,renders,timers,notices,$,normal,
+ return {context,state,panelLoad,calls,renders,timers,notices,events,$,normal,
    handler:fn=>{handler=fn;},activity:value=>{activity=value;},activityError:value=>{activityError=value;},
    retry(){const item=[...timers.values()].find(value=>value.ms===10000||value.ms===5000);assert(item,'retry missing');timers.clear();item.fn();},
  };
 }
 let count=0;
 async function test(name,fn){await fn();count++;console.log('PASS',name);}
+
+await test('general refresh requests protected auxiliary data only after authentication',async()=>{
+ const f=fixture();f.context.document.hidden=true;await f.context.refreshAll();
+ assert.deepEqual(f.events,['razvilka:panel-refresh']);
+ const loggedOut=fixture();loggedOut.handler(url=>url==='/api/v1/auth/status'?{authenticated:false}:loggedOut.normal(url));
+ await loggedOut.context.refreshAll();assert.deepEqual(loggedOut.events,[]);
+});
 
 await test('inventory heartbeat shares a flight, fences logout and never redraws editable forms',async()=>{
  const f=fixture();f.state.authenticated=true;

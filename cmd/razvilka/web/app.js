@@ -1006,6 +1006,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
       showAuth(status); $('#systemText').textContent = 'Требуется вход'; return false;
     }
     hideAuth();
+    document.dispatchEvent(new CustomEvent('razvilka:panel-refresh'));
     if (typeof loadSavedPanelSnapshot === 'function') void loadSavedPanelSnapshot(generation, options);
     // This already has its own single-flight scheduler and auth epoch.
     // Never await it here: a slow job-status endpoint is an isolated failure.

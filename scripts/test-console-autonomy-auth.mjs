@@ -217,4 +217,26 @@ await test('login during worker operation shows saved permissions with stale sta
  assert.match(f.e('connectionLabel').textContent,/Последние настройки/);
 });
 
+await test('home navigation and panel refresh retry an unavailable publication without replacing edits',async()=>{
+ const f=fixture();f.respond(0,200,{state:'expired'});await flush();
+ f.event('razvilka:view-change','overview');assert.equal(f.requests.length,2);
+ assert.equal(f.requests[1].path,'/api/v1/panel/autonomy');
+ f.event('razvilka:panel-refresh');assert.equal(f.requests.length,2,'refresh overlapped the admitted read');
+ f.respond(1,200,snapshot(1));await flush();
+ assert.equal(f.published.at(-1).type,'razvilka:autonomy-state');
+ f.e('scopeAddresses').value='192.168.1.77/32';f.e('wizardForm').events.get('input')();
+ f.event('razvilka:panel-refresh');assert.equal(f.requests[2].path,'/api/v1/panel/autonomy');
+ const changed=snapshot(2);changed.policy.default_sources=['192.168.1.88/32'];f.respond(2,200,changed);await flush();
+ assert.equal(f.e('scopeAddresses').value,'192.168.1.77/32');
+ assert.equal(f.e('workspace').hidden,false);
+});
+
+await test('logout fences a late read started by the general refresh button',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(1));await flush();
+ f.event('razvilka:panel-refresh');assert.equal(f.requests.length,2);
+ f.event('razvilka:auth-required');f.respond(1,200,snapshot(2));await flush();
+ assert.equal(f.e('workspace').hidden,true);
+ assert.equal(f.published.filter(x=>x.type==='razvilka:autonomy-state').length,1);
+});
+
 console.log(JSON.stringify({status:'passed',tests:passed}));

@@ -359,7 +359,10 @@
     requireGeneration(generation);
     $('subscriptionURL').value='';sourceDirty=false;notify(`Подписка сохранена: ${result.source.source_id}. Добавьте её ID в разрешённые источники мастера.`);await readSources();
   })().catch(e=>reportError(e));});
-  document.addEventListener('razvilka:view-change',event=>{const name=({autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(name==='sources')void readSources();if(name==='setup')setStep(step);void refresh();}});
+  document.addEventListener('razvilka:view-change',event=>{const name=({overview:'overview',autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(name==='sources')void readSources();if(name==='setup')setStep(step);void refresh();}});
+  // Explicit refresh works in background tabs too. Read only the protected
+  // publication, coalesce with an in-flight read and keep unfinished form edits.
+  document.addEventListener('razvilka:panel-refresh',()=>{void refresh();});
   window.addEventListener('beforeunload',event=>{if(dirty||sourceDirty){event.preventDefault();event.returnValue='';}});
   document.addEventListener('razvilka:auth-required',()=>{nextAuthGeneration();snapshot=null;presentationFresh=false;feeds=null;editingPolicy=null;dirty=false;sourceDirty=false;$('subscriptionURL').value='';$('newServiceURL').value='';$('newServiceName').value='';$('pauseButton').disabled=true;$('authRequired').hidden=false;$('workspace').hidden=true;$('connectionLabel').textContent='Требуется вход';notify('Войдите для чтения настроек и управления.',true);if($('addServiceDialog').open)$('addServiceDialog').close();window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:401,message:'Войдите для чтения настроек и управления.'}}));});
   document.addEventListener('razvilka:auth-restored',()=>{nextAuthGeneration();notify('');$('wizardError').textContent='';$('addServiceError').textContent='';$('saveWizard').disabled=false;$('authRequired').hidden=true;$('connectionLabel').textContent='Загружаем настройки…';void refresh();if(activeTab==='sources')void readSources();});

@@ -17,7 +17,7 @@ function fixture(){
  const state={authenticated:true,status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
  const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
  const $=key=>{if(!els.has(key))els.set(key,{hidden:true,value:'',textContent:'',classList:{toggle(){}}});return els.get(key);};
- const ctx={state,panelLoad,$,AbortController,Date,console,document:{hidden:false},
+ const ctx={state,panelLoad,$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent(){}},
  setTimeout(fn,ms){timers.set(++serial,{fn,ms});return serial;},clearTimeout(id){timers.delete(id);},
  hideAuth(){state.authenticated=true;$('#authScreen').hidden=true;},showAuth(){state.authenticated=false;$('#authScreen').hidden=false;ctx.cancelPanelRefresh();},
  refreshNodeActivity:async()=>false,scheduleNodeActivity(){},showNotice(){},consoleInitialSetup(){},acceptDeviceList:v=>state.devices=v};
