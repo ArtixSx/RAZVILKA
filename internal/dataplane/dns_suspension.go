@@ -29,12 +29,12 @@ func (m *Manager) SuspendedDNS(expected Plan) (*ScopedDNSPlan, error) {
 		return nil, err
 	}
 	var saved scopedDNSSnapshot
-	if json.Unmarshal(data, &saved) != nil || !saved.Active || saved.State == nil || saved.State.DNS == nil || validateScopedDNSPlan(saved.State.DNS, saved.State.Routes) != nil || validateScopedSettingsSnapshot(saved, nil, true) != nil {
+	if json.Unmarshal(data, &saved) != nil || !validScopedDNSSnapshotState(saved) || saved.settingsScope() == nil || validateScopedSettingsSnapshot(saved, nil, true) != nil {
 		return nil, errors.New("suspended DNS snapshot is invalid")
 	}
 	current, exists, err = m.Committed()
 	if err != nil || !exists || !reflect.DeepEqual(current, expected) {
 		return nil, ErrReviewChanged
 	}
-	return saved.State.DNS, nil
+	return saved.settingsScope().DNS, nil
 }

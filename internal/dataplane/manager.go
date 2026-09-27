@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1097,7 +1098,19 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		adapters = append(adapters, adapter)
 	}
 	for _, adapter := range append(append([]Adapter(nil), retiringAdapters...), adapters...) {
-		if err := run(ctx, adapter, "snapshot", adapter.Snapshot); err != nil {
+		snapshot := adapter.Snapshot
+		if owner, ok := adapter.(interface {
+			snapshotRetiring(context.Context, Plan, Plan, string) error
+		}); ok && slices.Contains(plan.RetiringAdapters, adapter.ID()) {
+			previous, exists, err := m.committedLocked()
+			if err != nil || !exists {
+				return execution, fail(errors.Join(err, ErrReviewChanged))
+			}
+			snapshot = func(c context.Context, p Plan, root string) error {
+				return owner.snapshotRetiring(c, p, previous, root)
+			}
+		}
+		if err := run(ctx, adapter, "snapshot", snapshot); err != nil {
 			return execution, fail(err)
 		}
 		prepared = append(prepared, adapter)

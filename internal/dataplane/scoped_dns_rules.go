@@ -47,7 +47,21 @@ func (a *ScopedDNSAdapter) firewall(ctx context.Context, args ...string) ([]byte
 	}
 	bounded, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	return a.Runner.Run(bounded, a.IPTables, append([]string{"-t", "nat"}, args...)...)
+	for attempt := 0; ; attempt++ {
+		data, err := a.Runner.Run(bounded, a.IPTables, append([]string{"-t", "nat"}, args...)...)
+		// Older Entware iptables has no portable timed -w option. Retry only
+		// its explicit pre-mutation lock refusal, never an ambiguous error.
+		if err == nil || attempt >= 7 || !strings.Contains(string(data), "holding the xtables lock") {
+			return data, errors.Join(err, bounded.Err())
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 50 * time.Millisecond)
+		select {
+		case <-bounded.Done():
+			timer.Stop()
+			return nil, bounded.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 type dnsRulePresence struct{ chain, target, jump bool }

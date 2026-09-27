@@ -16,18 +16,33 @@ import (
 
 type dnsReviewAdapter struct {
 	*nodeApplyAdapter
-	dns    *dnscontrol.Manager
-	review dnscontrol.ServiceSelectionReview
-	active *dataplane.Plan
-	before *dataplane.Plan
+	dns      *dnscontrol.Manager
+	review   dnscontrol.ServiceSelectionReview
+	active   *dataplane.Plan
+	before   *dataplane.Plan
+	inactive *dataplane.Plan
 }
 
-func (a *dnsReviewAdapter) ID() string                           { return "dns-scoped" }
-func (a *dnsReviewAdapter) Deactivate(ctx context.Context) error { a.active = nil; return ctx.Err() }
+func (a *dnsReviewAdapter) ID() string { return "dns-scoped" }
+func (a *dnsReviewAdapter) Deactivate(ctx context.Context) error {
+	if a.active != nil {
+		a.inactive = a.active
+	}
+	a.active = nil
+	return ctx.Err()
+}
 func (a *dnsReviewAdapter) Snapshot(ctx context.Context, p dataplane.Plan, root string) error {
 	a.before = a.active
 	id, target := "", ""
 	var state any
+	var configured any
+	if a.before == nil && p.DNS == nil && a.inactive != nil {
+		id = a.inactive.DNS.Bindings[0].ServiceID
+		if p.SuspendDNS {
+			target = a.inactive.DNS.Bindings[0].ProfileID
+		}
+		configured = map[string]any{"network": a.inactive.NetworkProfileID, "dns": a.inactive.DNS, "routes": a.inactive.Routes}
+	}
 	if a.before != nil {
 		id = a.before.DNS.Bindings[0].ServiceID
 		if p.SuspendDNS {
@@ -43,7 +58,7 @@ func (a *dnsReviewAdapter) Snapshot(ctx context.Context, p dataplane.Plan, root 
 	if err != nil {
 		return err
 	}
-	data, err := json.Marshal(map[string]any{"state": state, "active": a.before != nil, "settings": []dnscontrol.ServiceSelectionReceipt{a.review.Receipt()}})
+	data, err := json.Marshal(map[string]any{"state": state, "configured": configured, "active": a.before != nil, "settings": []dnscontrol.ServiceSelectionReceipt{a.review.Receipt()}})
 	if err != nil {
 		return err
 	}

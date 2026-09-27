@@ -68,7 +68,7 @@ func (a *ScopedDNSAdapter) commitSettings(ctx context.Context, p Plan, root stri
 	}
 	// Recheck all settings before writing any, then each compare-and-swap
 	// rechecks under the DNS manager lock. Partial writes use the SAME snapshot.
-	current, err := a.reviewSettings(s.State, p.DNS, p.SuspendDNS)
+	current, err := a.reviewSettings(s.settingsScope(), p.DNS, p.SuspendDNS)
 	if err != nil || !reflect.DeepEqual(current, s.Settings) {
 		return dnscontrol.ErrServiceDNSChanged
 	}
@@ -84,7 +84,8 @@ func (a *ScopedDNSAdapter) commitSettings(ctx context.Context, p Plan, root stri
 }
 
 func validateScopedSettingsSnapshot(s scopedDNSSnapshot, next *ScopedDNSPlan, suspend bool) error {
-	targets := scopedDNSSettingsTargets(s.State, next, suspend)
+	scope := s.settingsScope()
+	targets := scopedDNSSettingsTargets(scope, next, suspend)
 	if len(targets) != len(s.Settings) {
 		return ErrReviewChanged
 	}
@@ -94,7 +95,7 @@ func validateScopedSettingsSnapshot(s scopedDNSSnapshot, next *ScopedDNSPlan, su
 		if !exists || target != r.Target || receipt != r.Receipt() {
 			return ErrReviewChanged
 		}
-		if s.State != nil && s.State.DNS.Bindings[0].ServiceID == r.ServiceID && s.State.DNS.Bindings[0].ProfileID != r.Applied {
+		if scope != nil && scope.DNS.Bindings[0].ServiceID == r.ServiceID && scope.DNS.Bindings[0].ProfileID != r.Applied {
 			return ErrReviewChanged
 		}
 		delete(targets, r.ServiceID)

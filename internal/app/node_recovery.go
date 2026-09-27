@@ -116,11 +116,22 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 		return
 	}
 	profile, profileErr := a.freshNetworkProfile(ctx)
+	dnsRuntimeMissing := false
+	if plan.DNS != nil && profileErr == nil && profile == plan.NetworkProfileID {
+		// A bounded inspection timeout is unknown, not evidence of a dead
+		// listener. Keep the manager's full budget for mixed route ownership.
+		observeErr := a.Dataplane.ObserveCommittedRuntime(ctx, plan)
+		if errors.Is(observeErr, context.DeadlineExceeded) || errors.Is(observeErr, context.Canceled) {
+			release()
+			return
+		}
+		dnsRuntimeMissing = observeErr != nil
+	}
 	release()
 	if ctx.Err() != nil {
 		return
 	}
-	if profileErr == nil && profile == plan.NetworkProfileID {
+	if profileErr == nil && profile == plan.NetworkProfileID && !dnsRuntimeMissing {
 		status := a.nodeRecoverySnapshot()
 		if status.PlanID != plan.PlanID || status.State != "recovered" {
 			a.setNodeRecoveryStatus(nodeRecoveryStatus{State: "idle", PlanID: plan.PlanID})
@@ -128,12 +139,31 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 		return // Existing runtime authority is unchanged; TTL is checked on writes.
 	}
 	if profileErr != nil {
+		if plan.DNS != nil {
+			status := a.nodeRecoverySnapshot()
+			if status.PlanID == plan.PlanID && status.State == "network-stale" && now.Before(status.NextAttemptAt) {
+				return
+			}
+			if release, err := a.nodeRecoveryAdmission(ctx, true); err == nil {
+				cleanupErr := a.Dataplane.PrepareDNSRecovery(ctx, plan)
+				release()
+				if cleanupErr != nil && !errors.Is(cleanupErr, dataplane.ErrReviewChanged) && !errors.Is(cleanupErr, context.Canceled) {
+					a.Operations.Fence()
+					a.setNodeRecoveryStatus(nodeRecoveryStatus{State: "requires-review", PlanID: plan.PlanID, Message: "Не удалось подтвердить снятие DNS-перенаправлений. Откройте журнал перед следующим применением."})
+					return
+				}
+			}
+		}
 		status := a.nodeRecoverySnapshot()
 		if status.PlanID != plan.PlanID {
 			status = nodeRecoveryStatus{PlanID: plan.PlanID}
 		}
 		if status.State != "requires-review" {
 			status.State, status.Message = "network-stale", "Сеть пока не подтверждена. Применённый маршрут не переключается; проверка повторится автоматически."
+			if plan.DNS != nil {
+				status.NextAttemptAt = now.Add(time.Minute)
+				status.Message = "Сеть пока не подтверждена. DNS-путь не включается; сохранённый профиль будет проверен повторно."
+			}
 		}
 		a.setNodeRecoveryStatus(status)
 		return
@@ -166,6 +196,13 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 	if err == nil {
 		status.State, status.PlanID = "recovered", execution.PlanID
 		status.Message = "Применённые маршруты повторно проверены и восстановлены. Проверьте сервис на выбранном устройстве."
+		if plan.DNS != nil {
+			status.Attempt = 0
+			status.NextAttemptAt = now.Add(time.Minute)
+			a.nodeRecovery.mu.Lock()
+			a.nodeRecovery.key = execution.PlanID + "/" + profile
+			a.nodeRecovery.mu.Unlock()
+		}
 	} else if errors.Is(err, errNodeRecoveryReview) || status.Attempt >= maxNodeRecoveryAttempts || execution.State == "rollback-failed" {
 		status.State = "requires-review"
 		status.Message = "Автоматическое восстановление не подтверждено. Проверьте применённые узлы и просмотрите маршрут; другой узел автоматически не выбирается."
@@ -183,12 +220,21 @@ type nodeRecoveryIntent struct {
 	services   []catalog.Service
 	generation uint64
 	profile    string
+	nodes      bool
 }
 
 // Caller owns Operations.Exclusive for checks, writes and all cleanup. The
 // prior committed configuration authorizes ONLY the identical applied targets;
 // fresh exact proofs authorize execution in the new network epoch.
 func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, profile string) (dataplane.Execution, error) {
+	if previous.DNS != nil {
+		if err := a.Dataplane.PrepareDNSRecovery(ctx, previous); err != nil {
+			if !errors.Is(err, dataplane.ErrReviewChanged) && !errors.Is(err, context.Canceled) {
+				a.Operations.Fence()
+			}
+			return dataplane.Execution{}, err
+		}
+	}
 	intent, err := a.nodeRecoveryIntent(ctx, previous, profile)
 	if err != nil {
 		return dataplane.Execution{}, err
@@ -197,7 +243,7 @@ func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, 
 		if err := a.guardNodeRecoveryIntent(ctx, intent, false); err != nil {
 			return dataplane.Execution{}, err
 		}
-		if route.Resolved == "nfqws2" {
+		if !strings.HasPrefix(route.Resolved, "sing-box:node-") {
 			continue // The full transaction still validates and checks NFQWS2.
 		}
 		result, snapshot, err := a.checkAndRecordNode(ctx, strings.TrimPrefix(route.Resolved, "sing-box:"), intent.services[index], profile, intent.generation)
@@ -230,7 +276,10 @@ func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, 
 
 func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, profile string) (nodeRecoveryIntent, error) {
 	intent := nodeRecoveryIntent{config: a.Store.Get(), plan: previous, profile: profile}
-	if a.Nodes == nil || a.NodeChecker == nil || intent.config.SafeMode || previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop || previous.Revision != intent.config.AppliedRevision ||
+	for _, route := range previous.Routes {
+		intent.nodes = intent.nodes || strings.HasPrefix(route.Resolved, "sing-box:node-")
+	}
+	if intent.nodes && (a.Nodes == nil || a.NodeChecker == nil) || intent.config.SafeMode || intent.config.ServiceControl.Stopped || previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop || previous.Revision != intent.config.AppliedRevision ||
 		len(previous.Routes) == 0 || len(previous.Routes) > maxNodeRecoveryRoutes || !nodeRecoveryAdaptersSupported(previous) {
 		return intent, errNodeRecoveryReview
 	}
@@ -259,11 +308,13 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 			return intent, errNodeRecoveryReview
 		}
 	}
-	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
-	if err != nil {
-		return intent, err
+	if intent.nodes {
+		snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
+		if err != nil {
+			return intent, err
+		}
+		intent.generation = snapshot.Generation
 	}
-	intent.generation = snapshot.Generation
 	if err := a.guardNodeRecoveryIntent(ctx, intent, false); err != nil {
 		return intent, err
 	}
@@ -272,17 +323,21 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 
 func nodeRecoveryAdaptersSupported(plan dataplane.Plan) bool {
 	used := map[string]bool{}
+	if plan.DNS != nil {
+		used["dns-scoped"] = true
+	}
 	for _, route := range plan.Routes {
 		switch {
 		case strings.HasPrefix(route.Resolved, "sing-box:node-"):
 			used["sing-box"] = true
 		case route.Resolved == "nfqws2":
 			used["nfqws2"] = true
+		case route.Resolved == "direct" && plan.DNS != nil:
 		default:
 			return false
 		}
 	}
-	if !used["sing-box"] || len(plan.Adapters) != len(used) {
+	if !used["sing-box"] && !used["dns-scoped"] || len(plan.Adapters) != len(used) {
 		return false
 	}
 	for _, id := range plan.Adapters {
@@ -317,16 +372,34 @@ func (a *App) guardNodeRecoveryIntent(ctx context.Context, intent nodeRecoveryIn
 	for _, service := range a.catalogSnapshot().Services {
 		services[service.ID] = service
 	}
-	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
-	if err != nil || snapshot.Generation != intent.generation {
-		return dataplane.ErrReviewChanged
+	var snapshot nodestore.Snapshot
+	if intent.nodes {
+		if a.Nodes == nil {
+			return dataplane.ErrReviewChanged
+		}
+		snapshot, err = a.Nodes.Snapshot(ctx, time.Now())
+		if err != nil || snapshot.Generation != intent.generation {
+			return dataplane.ErrReviewChanged
+		}
+	}
+	if spec := intent.plan.DNS; spec != nil {
+		if a.DNS == nil || len(spec.Bindings) == 0 {
+			return errNodeRecoveryReview
+		}
+		for _, binding := range spec.Bindings {
+			identity, err := a.DNS.ScopedProfileIdentity(binding.ProfileID)
+			service, exists := services[binding.ServiceID]
+			if err != nil || identity != binding.ProfileDigest || !exists || !scopedDNSScenarioMatches(service, spec.Probe) || a.DNS.VerifyServiceSelection(binding.ServiceID, binding.ProfileID) != nil {
+				return errNodeRecoveryReview
+			}
+		}
 	}
 	for index, route := range intent.plan.Routes {
 		service, ok := services[route.ServiceID]
 		if !ok || !nodeRecoveryServiceMatches(route, service) || !reflect.DeepEqual(service.Probes, intent.services[index].Probes) {
 			return errNodeRecoveryReview
 		}
-		if route.Resolved == "nfqws2" {
+		if !strings.HasPrefix(route.Resolved, "sing-box:node-") {
 			continue
 		}
 		nodeID := strings.TrimPrefix(route.Resolved, "sing-box:")
@@ -402,6 +475,10 @@ func nodeRecoveryServiceMatches(route dataplane.Route, service catalog.Service) 
 
 func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, error) {
 	var engines []dataplane.Engine
+	if intent.plan.DNS != nil {
+		capable := a.Dataplane != nil && a.Dataplane.Capable("dns-scoped")
+		engines = append(engines, dataplane.Engine{ID: "dns-scoped", Installed: capable, Configured: true, Activatable: capable})
+	}
 	for _, option := range a.nodeRouteOptions() {
 		if slices.Contains(intent.plan.Adapters, option.ID) {
 			engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: option.ID == "sing-box" || option.Configured, Running: option.Running, Activatable: a.Dataplane.Capable(option.ID), Canary: a.Dataplane.CanaryCapable(option.ID)})
@@ -419,6 +496,6 @@ func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, 
 	}
 	// Copy exact applied targets; do not resolve AUTO/group or load any draft.
 	routes := append([]dataplane.Route(nil), intent.plan.Routes...)
-	return dataplane.Build(dataplane.Input{NetworkProfileID: intent.profile, Revision: intent.config.AppliedRevision, SafeMode: intent.config.SafeMode,
+	return dataplane.Build(dataplane.Input{DNS: intent.plan.DNS, NetworkProfileID: intent.profile, Revision: intent.config.AppliedRevision, SafeMode: intent.config.SafeMode,
 		Routes: routes, Engines: engines, ResourceConflicts: conflicts, Host: host})
 }

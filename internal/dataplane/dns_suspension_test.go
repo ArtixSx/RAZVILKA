@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,6 +58,78 @@ func TestScopedDNSSuspendResumePreservesSavedPolicyAndPendingDraft(t *testing.T)
 	}
 	if _, err := m.SuspendedDNS(saved); err == nil {
 		t.Fatal("old stopped snapshot can replay after resume")
+	}
+}
+
+func TestScopedDNSStopAfterRecoveryCleanupKeepsResumeAndRollbackIntent(t *testing.T) {
+	for _, action := range []string{"stop-resume", "remove", "failed-stop"} {
+		t.Run(action, func(t *testing.T) {
+			m, a, f, in := scopedAdapterFixture(t)
+			p, _ := Build(in)
+			if _, err := m.Apply(context.Background(), p, nil); err != nil {
+				t.Fatal(err)
+			}
+			old, _, _ := m.Committed()
+			if err := m.PrepareDNSRecovery(context.Background(), old); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.DNS.SetServiceDraft("web", "unfiltered"); err != nil {
+				t.Fatal(err)
+			}
+			routes := in.Routes
+			in.Revision++
+			in.DNS = nil
+			in.Routes = nil
+			in.SuspendDNS = action != "remove"
+			in.RetiringAdapters = []string{a.ID()}
+			stop, err := Build(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var commit func() (func() error, error)
+			if action == "failed-stop" {
+				commit = func() (func() error, error) { return nil, errors.New("injected settings failure") }
+			}
+			e, err := m.Apply(context.Background(), stop, commit)
+			if len(f.rules) != 0 || a.live != nil {
+				t.Fatal("stop resurrected dead listener")
+			}
+			if action == "failed-stop" {
+				if err == nil || e.State != "rolled-back" || !e.RollbackVerified || a.DNS.VerifyServiceSelection("web", "private") != nil {
+					t.Fatal("failed Stop lost saved profile", err, e)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal("Stop refused after recovery cleanup", err)
+			}
+			if action == "remove" {
+				if a.DNS.VerifyServiceSelection("web", "") != nil {
+					t.Fatal("removal left applied choice")
+				}
+				return
+			}
+			saved, _, _ := m.Committed()
+			spec, err := m.SuspendedDNS(saved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			in.Revision++
+			in.DNS = spec
+			in.Routes = routes
+			in.SuspendDNS = false
+			in.RetiringAdapters = nil
+			resume, err := Build(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := m.Apply(context.Background(), resume, nil); err != nil {
+				t.Fatal("resume after inactive Stop", err)
+			}
+			if len(f.rules) != 2 || a.live == nil || a.DNS.Snapshot().ServiceDrafts["web"] != "unfiltered" {
+				t.Fatal("resume lost runtime or draft")
+			}
+		})
 	}
 }
 

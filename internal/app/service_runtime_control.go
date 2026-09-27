@@ -188,6 +188,19 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 		}
 		return nil
 	})
+	if stop && current.DNS != nil {
+		if err := a.Dataplane.ObserveCommittedRuntime(ctx, current); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				return fail("SERVICE_RUNTIME_CHANGED", "Проверка состояния не завершена. Повторите выключение.")
+			}
+			if err := a.Dataplane.PrepareDNSRecovery(ctx, current); err != nil {
+				if !errors.Is(err, dataplane.ErrReviewChanged) {
+					a.Operations.Fence()
+				}
+				return fail("SERVICE_RUNTIME_FAILED", "Не удалось завершить очистку DNS. Откройте журнал; настройки сохранены.")
+			}
+		}
+	}
 	execution, err := a.applyDataplane(ctx, plan, func() (func() error, error) {
 		if err := binding.guard(a, ctx); err != nil {
 			return nil, err
