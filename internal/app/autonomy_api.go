@@ -143,6 +143,12 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		a.wakeReconciler()
 	}
+	writeJSON(w, 200, a.autonomyView(time.Now()))
+}
+
+// Called only by an admitted readback or the background presentation collector.
+// HTTP panel polling must never call this file-backed collector directly.
+func (a *App) autonomyView(now time.Time) map[string]any {
 	a.autonomy.mu.Lock()
 	p := autonomy.Clone(a.autonomy.doc.Policy)
 	services := map[string]autonomy.Service{}
@@ -159,8 +165,9 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 	blocked := a.autonomy.blocked
 	a.autonomy.mu.Unlock()
 	cfg := a.Store.Get()
+	definitions := a.catalogSnapshot()
 	catalogServices := []map[string]any{}
-	for _, service := range a.catalogSnapshot().Services {
+	for _, service := range definitions.Services {
 		catalogServices = append(catalogServices, map[string]any{"id": service.ID, "name": service.Name, "custom": a.CustomServices != nil && a.CustomServices.Has(service.ID), "default_nfqws2": catalog.IsNFQWS2Starter(service)})
 	}
 	sort.Slice(catalogServices, func(i, j int) bool { return catalogServices[i]["name"].(string) < catalogServices[j]["name"].(string) })
@@ -177,9 +184,9 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 			addressRefresh = map[string]any{"state": v.State, "checked_at": v.CheckedAt}
 		}
 	}
-	writeJSON(w, 200, map[string]any{"policy": p, "starter": onboarding.Starter(a.catalogSnapshot(), starterConfigView(cfg), p, services), "services": services, "runtime": runtime, "blocked": blocked, "safe_mode": cfg.SafeMode, "manual": cfg.ServiceControl.EffectiveMode() == "manual", "stopped": cfg.ServiceControl.Stopped,
-		"catalog_services": catalogServices, "source_presets": presets, "applied_services": cfg.AppliedServices, "server_time": time.Now().UTC(), "next_application_window": autonomy.NextWindow(p.Application, p.Timezone, time.Now()), "next_components_window": autonomy.NextWindow(p.Components, p.Timezone, time.Now()), "maintenance_message": maintenance, "reserve_refill": refill, "address_refresh": addressRefresh,
-		"capabilities": map[string]any{"automatic_initial_apply": true, "automatic_reserves": true, "scenario": "web", "source_timers": "saved-router-subscriptions", "automatic_install": false, "component_install": false, "note": "Тестовая реализация. Автоустановка программ закрыта до подписанных выпусков и аппаратно подтверждённого отката. Проверка и подготовка приложения по расписанию работают отдельно."}})
+	return map[string]any{"policy": p, "starter": onboarding.Starter(definitions, starterConfigView(cfg), p, services), "services": services, "runtime": runtime, "blocked": blocked, "safe_mode": cfg.SafeMode, "manual": cfg.ServiceControl.EffectiveMode() == "manual", "stopped": cfg.ServiceControl.Stopped,
+		"catalog_services": catalogServices, "source_presets": presets, "applied_services": cfg.AppliedServices, "server_time": now.UTC(), "next_application_window": autonomy.NextWindow(p.Application, p.Timezone, now), "next_components_window": autonomy.NextWindow(p.Components, p.Timezone, now), "maintenance_message": maintenance, "reserve_refill": refill, "address_refresh": addressRefresh,
+		"capabilities": map[string]any{"automatic_initial_apply": true, "automatic_reserves": true, "scenario": "web", "source_timers": "saved-router-subscriptions", "automatic_install": false, "component_install": false, "note": "Тестовая реализация. Автоустановка программ закрыта до подписанных выпусков и аппаратно подтверждённого отката. Проверка и подготовка приложения по расписанию работают отдельно."}}
 }
 
 func (a *App) autonomyEnroll(w http.ResponseWriter, r *http.Request) {

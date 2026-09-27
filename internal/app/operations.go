@@ -62,7 +62,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Security.Middleware remains outside this middleware. Only this
 		// memory-only endpoints bypass admission, never runtime Store reads.
-		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelInventoryPath || r.URL.Path == panelAuditPath || r.URL.Path == "/api/v1/metrics" || r.URL.Path == "/api/v1/connections" {
+		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelInventoryPath || r.URL.Path == panelAutonomyPath || r.URL.Path == panelAuditPath || r.URL.Path == "/api/v1/metrics" || r.URL.Path == "/api/v1/connections" {
 			// The general security middleware allows diagnostic reads before
 			// account setup. Admission metadata is private even in that state.
 			if a.Security == nil || !a.Security.Authenticated(r) {
@@ -78,6 +78,8 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 				a.panelAudit(w, r)
 			} else if r.URL.Path == panelSnapshotPath {
 				a.panelSnapshot(w, r)
+			} else if r.URL.Path == panelAutonomyPath {
+				a.panelAutonomy(w, r)
 			} else if r.URL.Path == panelInventoryPath {
 				a.panelInventory(w, r)
 			} else {
@@ -102,7 +104,6 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		nodeJobMemoryOnly := r.URL.Path == "/api/v1/node-checks/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/node-autofallback" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/service-control/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
-		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/autonomy" && r.Method == http.MethodGet
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/self-update/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
 		communityOwnsAdmission := r.URL.Path == "/api/v1/community/source-preview" && r.Method == http.MethodPost || strings.HasPrefix(r.URL.Path, "/api/v1/community/services/") && (r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/preview") || r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/import"))
 		if !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || r.URL.Path == "/api/v1/connections/stream" && r.Method == http.MethodGet || nodeJobOwnsAdmission || nodeJobMemoryOnly || communityOwnsAdmission {

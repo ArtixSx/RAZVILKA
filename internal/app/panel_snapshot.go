@@ -83,6 +83,8 @@ type panelSavedPublication struct {
 type panelSnapshotState struct {
 	once          sync.Once
 	latest        atomic.Pointer[panelSavedPublication]
+	autonomy      atomic.Pointer[panelAutonomyPublication]
+	autonomyWake  chan struct{}
 	inventory     atomic.Pointer[panelInventoryPublication]
 	inventoryWake chan struct{}
 	wake          chan struct{}
@@ -115,6 +117,7 @@ func (a *App) StartPanelSnapshots(ctx context.Context) {
 		p := &a.panelSnapshots
 		p.wake, p.done, p.started = make(chan struct{}, 1), make(chan struct{}), true
 		p.inventoryWake = make(chan struct{}, 1)
+		p.autonomyWake = make(chan struct{}, 1)
 		var id [16]byte
 		if _, err := rand.Read(id[:]); err != nil {
 			close(p.done)
@@ -122,6 +125,11 @@ func (a *App) StartPanelSnapshots(ctx context.Context) {
 		}
 		instance := hex.EncodeToString(id[:])
 		a.publishPanelSnapshot(ctx, instance, time.Now())
+		autonomyDone := make(chan struct{})
+		go func() {
+			defer close(autonomyDone)
+			a.runPanelAutonomy(ctx, instance)
+		}()
 		inventoryDone := make(chan struct{})
 		go func() {
 			defer close(inventoryDone)
@@ -129,7 +137,7 @@ func (a *App) StartPanelSnapshots(ctx context.Context) {
 		}()
 		go func() {
 			defer close(p.done)
-			defer func() { <-inventoryDone }()
+			defer func() { <-inventoryDone; <-autonomyDone }()
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for {
@@ -151,6 +159,10 @@ func (a *App) wakePanelSnapshot() {
 	}
 	select {
 	case a.panelSnapshots.wake <- struct{}{}:
+	default:
+	}
+	select {
+	case a.panelSnapshots.autonomyWake <- struct{}{}:
 	default:
 	}
 	select {

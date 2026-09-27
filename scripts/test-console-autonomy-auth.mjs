@@ -38,7 +38,7 @@ function fixture(){
  return {requests,timeouts,published,e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
   hideAuth:()=>context.hideAuth(),actualShowAuth:()=>context.actualShowAuth(null,'Войдите снова.'),coreElement:element,
   event:(type,detail)=>document.dispatchEvent({type,detail}),
-  respond(index,status,data){requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
+  respond(index,status,data){if(requests[index].path==='/api/v1/panel/autonomy'&&status===200&&data?.policy)data={schema:1,instance_id:'a'.repeat(32),revision:data.policy.revision||1,observed_at:data.server_time,data_age_ms:0,state:'available',dataplane:'not-checked',data};requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
   delayedBody(index,status){const body=deferred();requests[index].resolve({status,ok:status>=200&&status<300,json:()=>body.promise});return body;},
   click(id){element('a1-'+id).events.get('click')({preventDefault(){}});},
   runRetry(){const entry=[...timeouts.entries()].find(([,value])=>value.ms===1500);assert.ok(entry,'retry timer missing');timeouts.delete(entry[0]);entry[1].fn();}
@@ -87,7 +87,7 @@ await test('late source failure cannot replace a post-login notice or source sta
  const oldSource=f.requests.findIndex(request=>request.path==='/api/v1/node-feeds');assert.notEqual(oldSource,-1);
  f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
  const latestSource=f.requests.findLastIndex(request=>request.path==='/api/v1/node-feeds');
- const latestState=f.requests.findLastIndex(request=>request.path==='/api/v1/autonomy');
+ const latestState=f.requests.findLastIndex(request=>request.path==='/api/v1/panel/autonomy');
  f.respond(latestSource,200,{sources:[]});f.respond(latestState,200,snapshot(2));await flush();
  f.requests[oldSource].reject(new Error('obsolete-source-error'));await flush();
  assert.equal(f.e('notice').textContent,'');assert.match(f.e('sourcesList').innerHTML,/Подписки пока не сохранены/);
@@ -174,6 +174,32 @@ await test('queued forced read is discarded across authentication change',async(
  const f=fixture();f.click('reloadButton');f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
  f.respond(0,200,snapshot(1));await flush();assert.equal(f.requests.length,2,'old-session reload was replayed');
  f.respond(1,200,snapshot(2));await flush();assert.match(f.e('revisionLabel').textContent,/2/);
+});
+
+await test('ordinary polling uses published snapshot and retained data cannot report enabled',async()=>{
+ const f=fixture();assert.equal(f.requests[0].path,'/api/v1/panel/autonomy');f.respond(0,200,snapshot(1));await flush();
+ f.event('razvilka:view-change','onboard');
+ f.respond(1,200,{schema:1,instance_id:'a'.repeat(32),revision:2,state:'retained',dataplane:'not-checked',data_age_ms:10,observed_at:'2026-09-13T10:00:01Z',data:snapshot(1)});await flush();
+ assert.equal(f.e('heroState').textContent,'Состояние обновляется');assert.equal(f.e('healthyCount').textContent,'—');
+ assert.equal(f.e('pauseButton').disabled,false,'pause must remain available during a long operation');
+ assert.equal(f.published.at(-1).type,'razvilka:autonomy-error');
+});
+
+await test('poll preceding completed write cannot overwrite its direct readback',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(1));await flush();f.click('pauseButton');
+ f.respond(1,200,{});await flush();assert.equal(f.requests[2].path,'/api/v1/autonomy');
+ const changed=snapshot(2);changed.policy.enabled=false;changed.server_time='2026-09-13T10:00:02Z';
+ f.respond(2,200,changed);await flush();f.event('razvilka:view-change','onboard');
+ f.respond(3,200,snapshot(1));await flush();
+ assert.match(f.e('revisionLabel').textContent,/2/);assert.equal(f.e('pauseButton').textContent,'Возобновить автоматику');
+});
+
+await test('expired or malformed publication never starts an unprotected live fallback',async()=>{
+ for(const response of [{state:'expired'},{schema:1,state:'available',data:snapshot()},{}]) {
+  const f=fixture();f.respond(0,200,response);await flush();
+  assert.equal(f.requests.length,1);assert.equal(f.published.filter(x=>x.type==='razvilka:autonomy-state').length,0);
+  assert.equal(f.e('connectionLabel').textContent,'Нет свежего ответа');
+ }
 });
 
 console.log(JSON.stringify({status:'passed',tests:passed}));
