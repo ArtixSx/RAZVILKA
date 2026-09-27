@@ -538,7 +538,7 @@ func main() {
 	connectionCollector.WANInterface = func() string { return systemprobe.Probe().WANInterface }
 	connectionCollector.Start(runtimeContext)
 	log.Println(app.StartupMessage(addr, *cfgPath, *catalogPath))
-	srv := &http.Server{Addr: addr, Handler: a.Handler(http.FileServer(http.FS(sub))), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+	srv := newPanelHTTPServer(runtimeContext, addr, a.Handler(http.FileServer(http.FS(sub))))
 	serverErrors := make(chan error, 1)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -555,13 +555,14 @@ func main() {
 			log.Fatal(serverErr)
 		}
 	case <-runtimeContext.Done():
-		shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+		// One total grace period fits the init script's 75-second stop budget.
+		// HTTP mutations get time for rollback, not just detached workers.
+		shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 70*time.Second)
 		defer cancelShutdown()
 		if err := srv.Shutdown(shutdownContext); err != nil {
 			log.Printf("HTTP shutdown: %v", err)
 		}
-		nodeShutdownContext, cancelNodeShutdown := context.WithTimeout(context.Background(), time.Minute)
-		defer cancelNodeShutdown()
+		nodeShutdownContext := shutdownContext
 		if err := a.WaitPanelSnapshots(nodeShutdownContext); err != nil {
 			log.Print("Panel snapshot publisher did not finish before shutdown")
 		}

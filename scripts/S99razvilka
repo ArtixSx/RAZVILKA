@@ -105,7 +105,7 @@ stop_process() {
 
   "$DAEMON" -K -p "$PIDFILE" -x "$BINARY" -s TERM >/dev/null 2>&1 || kill "$PID"
   WAIT=0
-  # HTTP drains for ten seconds; node recovery then joins bounded rollback.
+  # Canceled HTTP handlers and workers share a 70-second cleanup/rollback budget.
   while kill -0 "$PID" 2>/dev/null && [ "$WAIT" -lt 75 ]; do
     sleep 1
     WAIT=$((WAIT + 1))

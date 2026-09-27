@@ -784,6 +784,11 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 			}
 		}
 	}
+	if firstErr != nil {
+		// Keep the identity/configuration needed to retry an incomplete cleanup.
+		// In particular a failed firewall read is not evidence of removed rules.
+		return firstErr
+	}
 	for _, path := range []string{a.policyPath(), a.engineConfigPath(), a.sidecarConfigPath(), a.transportPath(), a.engineProcess().PIDPath, a.sidecarProcess().PIDPath} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) && firstErr == nil {
 			firstErr = err

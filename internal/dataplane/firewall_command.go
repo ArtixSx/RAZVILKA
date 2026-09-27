@@ -17,13 +17,22 @@ func isIPTablesCommand(binary string) bool {
 }
 
 // Older Entware iptables does not have a portable timed -w option. Retry
-// ONLY its explicit lock refusal before mutation, within one shared deadline.
+// ONLY its explicit lock refusal before mutation, within a three-second window.
 // An exit code alone, partial output or an ambiguous write failure is not retryable.
 func runFirewallCommand(ctx context.Context, runner NFQWS2Runner, binary string, args ...string) ([]byte, error) {
-	bounded, cancel := context.WithTimeout(ctx, 3*time.Second)
+	// Do not confuse the lock retry budget with the command deadline. Reading
+	// a large firmware ruleset can take longer than three seconds under load.
+	// The caller's shorter deadline always wins; the first command remains bounded.
+	bounded, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
+	retry, cancelRetry := context.WithTimeout(bounded, 3*time.Second)
+	defer cancelRetry()
 	for attempt := 0; ; attempt++ {
-		data, err := runner.Run(bounded, binary, args...)
+		attemptContext := bounded
+		if attempt > 0 {
+			attemptContext = retry
+		}
+		data, err := runner.Run(attemptContext, binary, args...)
 		// Preserve an acknowledged write if cancellation races with its return.
 		// The owner must record the new rule before its later cancellation check,
 		// otherwise cleanup could mistake a created chain for an absent one.
@@ -35,13 +44,13 @@ func runFirewallCommand(ctx context.Context, runner NFQWS2Runner, binary string,
 			if err != nil && busy {
 				err = errors.Join(errors.New("firewall lock remained busy"), err)
 			}
-			return data, errors.Join(err, bounded.Err())
+			return data, errors.Join(err, attemptContext.Err())
 		}
 		timer := time.NewTimer(time.Duration(attempt+1) * 50 * time.Millisecond)
 		select {
-		case <-bounded.Done():
+		case <-retry.Done():
 			timer.Stop()
-			return nil, bounded.Err()
+			return nil, retry.Err()
 		case <-timer.C:
 		}
 	}

@@ -151,6 +151,46 @@ func proxyForwardingFixture(t *testing.T) (*ProxyTunnelAdapter, *proxyFakeRunner
 	return a, r, state
 }
 
+func TestProxyIncompleteDeactivateRetainsIdentityForRetry(t *testing.T) {
+	a, runner, state := proxyForwardingFixture(t)
+	a.Processes = runner.processes
+	if err := a.applyOwnedPolicy(context.Background(), state); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(a.runtimeRoot(), 0700); err != nil {
+		t.Fatal(err)
+	}
+	policy, _ := json.Marshal(state)
+	files := map[string][]byte{a.policyPath(): policy, a.engineConfigPath(): []byte(`{"saved":"engine"}`), a.sidecarConfigPath(): []byte(`{"saved":"sidecar"}`)}
+	for name, data := range files {
+		if err := os.WriteFile(name, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner.firewall.fail = func(command string) bool { return command == "iptables -t filter -S" }
+	if err := a.Deactivate(context.Background()); err == nil {
+		t.Fatal("failed read reported complete cleanup")
+	}
+	for name, want := range files {
+		data, err := os.ReadFile(name)
+		if err != nil || string(data) != string(want) {
+			t.Fatal("retry identity removed", name, err)
+		}
+	}
+	if _, exists, err := a.readForwardingLease(); err != nil || !exists {
+		t.Fatal("uncleaned rules lost ownership", err)
+	}
+	runner.firewall.fail = nil
+	if err := a.Deactivate(context.Background()); err != nil {
+		t.Fatal("retry failed", err)
+	}
+	for name := range files {
+		if _, err := os.Stat(name); !os.IsNotExist(err) {
+			t.Fatal("confirmed cleanup retained runtime", name, err)
+		}
+	}
+}
+
 func TestProxyForwardingPreservesACLAndSourceThenRemovesOnlyOwnRules(t *testing.T) {
 	a, r, state := proxyForwardingFixture(t)
 	ctx := context.Background()
