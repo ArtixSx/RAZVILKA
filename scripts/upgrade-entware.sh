@@ -315,7 +315,7 @@ chmod 700 "$BACKUP"
 for FILE in "$BINDIR/razvilka" "$RAZ_INIT" "$APPDIR/config.json" "$APPDIR/service-catalog.json" \
   "$APPDIR/community-catalog.json" "$APPDIR/sources.json" "$APPDIR/source-state.json" \
   "$APPDIR/admin.token" "$APPDIR/admin.credentials.json" "$APPDIR/custom-services.json" \
-  "$APPDIR/devices.json" "$LEGACY_INIT" "$LEGACY_DISABLED"; do
+  "$APPDIR/devices.json" "$STATEDIR/dns/state.json" "$LEGACY_INIT" "$LEGACY_DISABLED"; do
   [ ! -L "$FILE" ] || { echo "Refusing to snapshot symbolic link: $FILE" >&2; false; }
   [ ! -e "$FILE" ] || [ -f "$FILE" ] || { echo "Snapshot file target has the wrong type: $FILE" >&2; false; }
 done
@@ -332,13 +332,14 @@ CREDENTIALS_PRESENT="$(present "$APPDIR/admin.credentials.json")"
 CUSTOM_SERVICES_PRESENT="$(present "$APPDIR/custom-services.json")"
 DEVICES_PRESENT="$(present "$APPDIR/devices.json")"
 DATAPLANE_STATE_PRESENT="$(present "$STATEDIR/dataplane")"
+DNS_STATE_PRESENT="$(present "$STATEDIR/dns/state.json")"
 STAGING_PRESENT="$(present "$STATEDIR/staging")"
 CLOUDFLARE_PRIVATE_PRESENT="$(present "$APPDIR/cloudflare-private")"
 LEGACY_INIT_PRESENT="$(present "$LEGACY_INIT")"
 LEGACY_DISABLED_PRESENT="$(present "$LEGACY_DISABLED")"
 LEGACY_WAS_RUNNING="$LEGACY_RUNNING_DETECTED"
 
-for DIR in "$STATEDIR/dataplane" "$STATEDIR/staging" "$APPDIR/cloudflare-private"; do
+for DIR in "$STATEDIR/dataplane" "$STATEDIR/staging" "$STATEDIR/dns" "$APPDIR/cloudflare-private"; do
   [ ! -L "$DIR" ] || { echo "Private or runtime directory is unsafe: $DIR" >&2; false; }
   [ ! -e "$DIR" ] || [ -d "$DIR" ] || { echo "Private or runtime directory has the wrong type: $DIR" >&2; false; }
 done
@@ -362,6 +363,7 @@ backup_file "$APPDIR/admin.token" admin.token
 backup_file "$APPDIR/admin.credentials.json" admin.credentials.json
 backup_file "$APPDIR/custom-services.json" custom-services.json
 backup_file "$APPDIR/devices.json" devices.json
+backup_file "$STATEDIR/dns/state.json" dns-state.json
 backup_file "$LEGACY_INIT" S99artem-flow
 backup_file "$LEGACY_DISABLED" S99artem-flow.razvilka-disabled
 
@@ -392,6 +394,7 @@ CREDENTIALS_PRESENT=$CREDENTIALS_PRESENT
 CUSTOM_SERVICES_PRESENT=$CUSTOM_SERVICES_PRESENT
 DEVICES_PRESENT=$DEVICES_PRESENT
 DATAPLANE_STATE_PRESENT=$DATAPLANE_STATE_PRESENT
+DNS_STATE_PRESENT=$DNS_STATE_PRESENT
 STAGING_PRESENT=$STAGING_PRESENT
 CLOUDFLARE_PRIVATE_PRESENT=$CLOUDFLARE_PRIVATE_PRESENT
 LEGACY_INIT_PRESENT=$LEGACY_INIT_PRESENT

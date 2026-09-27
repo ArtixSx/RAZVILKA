@@ -120,6 +120,7 @@ func main() {
 	retryRollbackDigest := flag.String("retry-rollback-digest", "", "reviewed digest required with retry-rollback-plan")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
+	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
 	flag.Parse()
 	if *subscriptionSchema {
 		fmt.Println("1")
@@ -135,16 +136,23 @@ func main() {
 		return
 	}
 	modes := 0
-	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != ""} {
+	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != "", *checkDNSState} {
 		if enabled {
 			modes++
 		}
 	}
 	if modes > 1 {
-		log.Fatal("-check, -migrate-config, -recover-private-restore, -healthcheck, -install-components and -deactivate-dataplane are mutually exclusive")
+		log.Fatal("check, migration, recovery, health, installation and deactivation modes are mutually exclusive")
 	}
 	if (*retryRollbackPlan == "") != (*retryRollbackDigest == "") {
 		log.Fatal("rollback recovery requires both plan and digest")
+	}
+	if *checkDNSState {
+		if err := dnscontrol.CheckState(*dnsStatePath); err != nil {
+			log.Fatal("DNS state is not compatible with this version")
+		}
+		fmt.Println(`{"ok":true}`)
+		return
 	}
 	if *healthPID < 0 {
 		log.Fatal("-healthcheck-pid must not be negative")
@@ -443,6 +451,7 @@ func main() {
 		"config": *cfgPath, "catalog": *catalogPath, "sources": *sourcesPath, "community": *communityCatalogPath,
 		"token": *tokenPath, "credentials": *credentialsPath, "custom": *customServicesPath, "devices": *devicesPath,
 		"cloudflare": updateCloudflarePath, "nodes": updateNodePath, "stage": *stagePath, "backups": *backupPath, "warp": *warpStatePath, "dataplane": *dataplaneStatePath,
+		"dns": *dnsStatePath,
 	}})
 	a.Nodes = nodeStore
 	if nodeStore != nil {

@@ -103,7 +103,7 @@ func checkUpdateSpace(directory string, archiveBytes int64) error {
 	}
 	backupBytes := int64(0)
 	entries := 0
-	for _, directory := range []string{"/opt/etc/razvilka", "/opt/var/lib/razvilka/dataplane", "/opt/var/lib/razvilka/staging"} {
+	for _, directory := range []string{"/opt/etc/razvilka", "/opt/var/lib/razvilka/dataplane", "/opt/var/lib/razvilka/staging", "/opt/var/lib/razvilka/dns"} {
 		err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, err error) error {
 			if errors.Is(err, os.ErrNotExist) {
 				return nil

@@ -356,7 +356,7 @@ func endpointProbeTarget(endpoint DNSEndpoint, trustedLocal bool) (dnsTarget, bo
 func (m *Manager) Snapshot() Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return Snapshot{Schema: schema, Draft: m.doc.Draft, Applied: m.doc.Applied, Dirty: documentDirty(m.doc), Providers: providersFor(m.doc), Profiles: Profiles(), Mode: "preview", Note: "Профиль и привязки сервисов сохранены как черновик. Рабочий DNS роутера не меняется до появления транзакционного адаптера и проверки конфликтов.", LastProbe: append([]ProbeResult(nil), m.doc.LastProbe...), ProbedAt: m.doc.ProbedAt, ProbeProfileID: m.doc.ProbeProfileID, NextDNSProfileID: m.doc.NextDNSProfileID, ServiceDrafts: cloneStringMap(m.doc.ServiceDrafts), ServiceApplied: cloneStringMap(m.doc.ServiceApplied), MigrationWarnings: append([]string(nil), m.doc.MigrationWarnings...)}
+	return Snapshot{Schema: schema, Draft: m.doc.Draft, Applied: m.doc.Applied, Dirty: documentDirty(m.doc), Providers: providersFor(m.doc), Profiles: Profiles(), Mode: "preview", Note: "Сохранение профиля само по себе не меняет DNS. Для одного сервиса и устройства используйте «Отдельный DNS»: сначала просмотр изменений, затем проверка и применение. Общий DNS сети здесь не переключается.", LastProbe: append([]ProbeResult(nil), m.doc.LastProbe...), ProbedAt: m.doc.ProbedAt, ProbeProfileID: m.doc.ProbeProfileID, NextDNSProfileID: m.doc.NextDNSProfileID, ServiceDrafts: cloneStringMap(m.doc.ServiceDrafts), ServiceApplied: cloneStringMap(m.doc.ServiceApplied), MigrationWarnings: append([]string(nil), m.doc.MigrationWarnings...)}
 }
 
 func (m *Manager) Dirty() bool {
@@ -1467,11 +1467,34 @@ func validNextDNSProfileID(value string) bool {
 }
 
 func (m *Manager) load() error {
+	return m.loadState(true)
+}
+
+// CheckState verifies that this binary can read an existing DNS image without
+// creating directories, changing a schema, or rewriting saved selections.
+func CheckState(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() > 8<<20 {
+		return errors.New("DNS state is not a bounded regular file")
+	}
+	return (&Manager{Path: path}).loadState(false)
+}
+
+func (m *Manager) loadState(rewrite bool) error {
 	if m.Path == "" {
 		return nil
 	}
 	b, err := os.ReadFile(m.Path)
 	if errors.Is(err, os.ErrNotExist) {
+		if !rewrite {
+			return nil
+		}
 		return m.saveLocked()
 	}
 	if err != nil {
@@ -1548,7 +1571,7 @@ func (m *Manager) load() error {
 		migrated = true
 	}
 	m.doc = loaded
-	if migrated {
+	if migrated && rewrite {
 		return m.saveLocked()
 	}
 	return nil

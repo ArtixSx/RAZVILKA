@@ -19,6 +19,10 @@ test('saved policy never means working',()=>assert.match(m.configuredText(view),
 test('stopped policy is visible',()=>assert.match(m.configuredText({...view,state:'stopped'}),/выключен/));
 const job={id:7,mode:'service-dns-apply',state:'queued',service_id:'telegram',dns_apply_action:'apply',message:'Задание сохранено'};
 test('validate public job identity',()=>assert.ok(m.validJob(job)));
+test('completed job is history, not current health',()=>{
+ const text=m.jobText({...job,state:'completed',message:'DNS применён и проверен с роутера'});
+ assert.match(text,/Последнее задание/);assert.match(text,/Текущее состояние показано выше/);assert.doesNotMatch(text,/применён и проверен/);
+});
 test('reject different action',()=>assert.ok(!m.validJob({...job,dns_apply_action:'reset'})));
 const source=readFileSync(new URL('../cmd/razvilka/web/dns-scoped.js',import.meta.url),'utf8');
 const ids=['dnsScopedForm','dnsScopedFields','dnsScopedService','dnsScopedProfile','dnsScopedListener','dnsScopedIngress','dnsScopedCurrent','dnsScopedEligibility','dnsScopedPreview','dnsScopedRemove','dnsScopedConfirm','dnsScopedCancel','dnsScopedReview','dnsScopedStatus'];

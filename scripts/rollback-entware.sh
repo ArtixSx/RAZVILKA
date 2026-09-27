@@ -63,6 +63,7 @@ CREDENTIALS_PRESENT=0
 CUSTOM_SERVICES_PRESENT=0
 DEVICES_PRESENT=0
 DATAPLANE_STATE_PRESENT=0
+DNS_STATE_PRESENT=skip
 # "skip" keeps old snapshots backward compatible: historical manifests did
 # not include these private mutable directories and must never delete them.
 STAGING_PRESENT=skip
@@ -86,6 +87,7 @@ while IFS='=' read -r KEY VALUE; do
     CUSTOM_SERVICES_PRESENT) CUSTOM_SERVICES_PRESENT="$VALUE" ;;
     DEVICES_PRESENT) DEVICES_PRESENT="$VALUE" ;;
     DATAPLANE_STATE_PRESENT) DATAPLANE_STATE_PRESENT="$VALUE" ;;
+    DNS_STATE_PRESENT) DNS_STATE_PRESENT="$VALUE" ;;
     STAGING_PRESENT) STAGING_PRESENT="$VALUE" ;;
     CLOUDFLARE_PRIVATE_PRESENT) CLOUDFLARE_PRIVATE_PRESENT="$VALUE" ;;
     LEGACY_INIT_PRESENT) LEGACY_INIT_PRESENT="$VALUE" ;;
@@ -98,7 +100,7 @@ done <"$BACKUP/manifest"
 for VALUE in "$PRIVATE_RESTORE_PROTOCOL" "$RAZ_BINARY_PRESENT" "$RAZ_INIT_PRESENT" "$CONFIG_PRESENT" "$CATALOG_PRESENT" "$COMMUNITY_PRESENT" "$SOURCES_PRESENT" "$SOURCE_STATE_PRESENT" "$TOKEN_PRESENT" "$CREDENTIALS_PRESENT" "$CUSTOM_SERVICES_PRESENT" "$DEVICES_PRESENT" "$DATAPLANE_STATE_PRESENT" "$LEGACY_INIT_PRESENT" "$LEGACY_DISABLED_PRESENT" "$LEGACY_WAS_RUNNING" "$RAZ_WAS_RUNNING"; do
   case "$VALUE" in 0|1) ;; *) echo "Invalid rollback manifest" >&2; exit 1 ;; esac
 done
-for VALUE in "$STAGING_PRESENT" "$CLOUDFLARE_PRIVATE_PRESENT"; do
+for VALUE in "$STAGING_PRESENT" "$CLOUDFLARE_PRIVATE_PRESENT" "$DNS_STATE_PRESENT"; do
   case "$VALUE" in 0|1|skip) ;; *) echo "Invalid rollback manifest" >&2; exit 1 ;; esac
 done
 
@@ -134,10 +136,33 @@ require_snapshot_file "$LEGACY_DISABLED_PRESENT" S99artem-flow.razvilka-disabled
 require_snapshot_dir "$DATAPLANE_STATE_PRESENT" dataplane
 require_snapshot_dir "$STAGING_PRESENT" staging
 require_snapshot_dir "$CLOUDFLARE_PRIVATE_PRESENT" cloudflare-private
+if [ "$DNS_STATE_PRESENT" != skip ]; then
+  require_snapshot_file "$DNS_STATE_PRESENT" dns-state.json
+fi
+  # Inspect before stopping anything. DNS state must never be restored through
+  # a substituted directory or a symbolic link to another application's data.
+  for DIR in "$STATEDIR" "$STATEDIR/dns"; do
+    [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || {
+      echo "DNS rollback directory is unsafe" >&2; exit 1;
+    }
+  done
+  [ ! -L "$STATEDIR/dns/state.json" ] && { [ ! -e "$STATEDIR/dns/state.json" ] || [ -f "$STATEDIR/dns/state.json" ]; } || {
+    echo "DNS rollback file is unsafe" >&2; exit 1;
+  }
 
 # Registration requests are monotonic external effects. Keep native WARP state
 # in place, and never start an old binary that cannot see an unresolved request.
 require_native_enrollment_schema() {
+  if [ "${DNS_STATE_PRESENT:-skip}" = skip ] && { [ -e "$STATEDIR/dns/state.json" ] || [ -L "$STATEDIR/dns/state.json" ]; }; then
+    # A historical snapshot has no paired DNS image. Only the target binary
+    # can confirm that the retained state is readable, without migrating it.
+    DNS_COMPATIBILITY="$("$1" -check-dns-state -dns-state "$STATEDIR/dns/state.json" 2>/dev/null)" || {
+      echo "Snapshot has no DNS copy and the previous version cannot confirm compatibility; installation unchanged" >&2; return 1;
+    }
+    [ "$DNS_COMPATIBILITY" = '{"ok":true}' ] || {
+      echo "Previous version did not confirm DNS compatibility; installation unchanged" >&2; return 1;
+    }
+  fi
   SUBSCRIPTION_REQUIRED=0
   for SUBSCRIPTION_STATE in "$APPDIR/subscriptions-private/subscriptions.private.json" \
     "$APPDIR/private-restore-feeds-v1/restore.private.json"; do
@@ -282,6 +307,10 @@ restore_dir() {
 restore_dir "$DATAPLANE_STATE_PRESENT" dataplane "$STATEDIR/dataplane"
 restore_dir "$STAGING_PRESENT" staging "$STATEDIR/staging"
 restore_dir "$CLOUDFLARE_PRIVATE_PRESENT" cloudflare-private "$APPDIR/cloudflare-private"
+if [ "$DNS_STATE_PRESENT" != skip ]; then
+  mkdir -p "$STATEDIR/dns"
+  restore_or_remove "$DNS_STATE_PRESENT" dns-state.json "$STATEDIR/dns/state.json" 600
+fi
 
 restore_or_remove "$LEGACY_INIT_PRESENT" S99artem-flow "$LEGACY_INIT" 755
 restore_or_remove "$LEGACY_DISABLED_PRESENT" S99artem-flow.razvilka-disabled "$LEGACY_DISABLED" 755

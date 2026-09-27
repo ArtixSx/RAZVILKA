@@ -45,6 +45,7 @@ func ProductionPaths() map[string]string {
 		"config": "/opt/etc/razvilka/config.json", "catalog": "/opt/etc/razvilka/service-catalog.json", "sources": "/opt/etc/razvilka/sources.json", "community": "/opt/etc/razvilka/community-catalog.json",
 		"token": "/opt/etc/razvilka/admin.token", "credentials": "/opt/etc/razvilka/admin.credentials.json", "custom": "/opt/etc/razvilka/custom-services.json", "devices": "/opt/etc/razvilka/devices.json",
 		"cloudflare": "/opt/etc/razvilka/cloudflare-private", "nodes": "/opt/etc/razvilka/nodes-private", "stage": "/opt/var/lib/razvilka/staging", "backups": "/opt/var/lib/razvilka/backups", "warp": "/opt/var/lib/razvilka/warp", "dataplane": "/opt/var/lib/razvilka/dataplane",
+		"dns": "/opt/var/lib/razvilka/dns/state.json",
 	}
 }
 

@@ -18,6 +18,7 @@ sh ./scripts/test-candidate-isolation.sh
 sh ./scripts/test-bootstrap.sh
 sh ./scripts/test-build-targets.sh
 sh ./scripts/test-uninstall-entware.sh
+sh ./scripts/test-dns-rollback.sh
 if command -v node >/dev/null 2>&1; then
   node scripts/build-interface.mjs --check
   node scripts/test-interface-model.mjs
@@ -35,6 +36,8 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-connection-session-ui.mjs
   node --check cmd/razvilka/web/dns-service-lab.js
   node scripts/test-dns-service-lab.mjs
+  node --check cmd/razvilka/web/dns-scoped.js
+  node scripts/test-dns-scoped.mjs
   node --check cmd/razvilka/web/awg-workspace.js
   node scripts/test-awg-workspace.mjs
   node --check cmd/razvilka/web/workflow-actions.js

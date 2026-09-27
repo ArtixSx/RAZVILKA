@@ -36,7 +36,11 @@ function configuredText(view,names={}){
  if(!view.service_id)return 'Отдельный DNS пока не настроен.';
  return `${names[view.service_id]||view.service_id} · ${names[view.profile_id]||view.profile_id} · ${view.client}. ${view.state==='stopped'?'Сохранён, проект выключен.':'Настройка применена. Доступность сервиса проверяется отдельно.'}`;
 }
-const model={requestFor,acceptReview,validJob,configuredText};
+function jobText(job){
+ if(job.state==='completed')return `Последнее задание DNS: ${job.dns_apply_action==='remove'?'удаление привязки':'применение'} завершено. Текущее состояние показано выше.`;
+ return job.message||'Состояние задания обновлено.';
+}
+const model={requestFor,acceptReview,validJob,configuredText,jobText};
 if(typeof module!=='undefined'&&module.exports)module.exports=model;
 root.RazvilkaScopedDNSModel=model;
 if(typeof document==='undefined'||!document.getElementById('dnsScopedForm'))return;
@@ -94,7 +98,7 @@ root.acceptDNSApplyJobs=function(control){
  // the user has just reviewed. Running work from another tab still wins.
  if(review&&!job&&!pending.includes(current.state)){lastJob=signature;return false;}
  const wasPending=!!job;lastJob=signature;job=pending.includes(current.state)?current:null;
- clearReview();el('dnsScopedStatus').textContent=current.message||'Состояние задания обновлено.';
+ clearReview();el('dnsScopedStatus').textContent=jobText(current);
  if(!job&&(wasPending||current.state==='completed'))void reloadDNS(workflowState.epoch);
  controls();return !!job;
 };
