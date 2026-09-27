@@ -78,7 +78,7 @@ address on port `8787`. The installer prints the actual address.
 1. Use the first-run key or setup link to create your login and password.
    Keep the recovery key somewhere safe.
 2. Use the Autopilot wizard to choose services and devices, or configure them manually.
-3. Install the required component in the bypass section and add VLESS or another
+3. Install the required component through component settings and add VLESS or another
    profile in the connections section.
 4. Check access to the selected service and apply its route. Safe Mode is enabled
    on a fresh installation; enabling routes requires a separate action.
