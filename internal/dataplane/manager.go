@@ -859,6 +859,21 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return execution, err
 	}
+	// Resolve a stopped DNS snapshot before publishing this transaction's
+	// unfinished journal. SuspendedDNS deliberately refuses unfinished work.
+	var discardedDNSPrior *Plan
+	if plan.DiscardDNS {
+		previous, exists, err := m.committedLocked()
+		if err != nil || !exists {
+			return execution, errors.Join(err, ErrReviewChanged)
+		}
+		saved, err := m.suspendedDNSState(previous)
+		if err != nil {
+			return execution, err
+		}
+		previous.DNS, previous.Routes, previous.NetworkProfileID = saved.DNS, saved.Routes, saved.Network
+		discardedDNSPrior = &previous
+	}
 	transactionRoot := filepath.Join(m.StateRoot, "transactions", plan.PlanID)
 	if err := m.prepareExecutionRoot(transactionRoot); err != nil {
 		execution.State, execution.Error = "journal-failed", err.Error()
@@ -1105,6 +1120,12 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			previous, exists, err := m.committedLocked()
 			if err != nil || !exists {
 				return execution, fail(errors.Join(err, ErrReviewChanged))
+			}
+			if previous.SuspendDNS && plan.DiscardDNS {
+				if discardedDNSPrior == nil {
+					return execution, fail(ErrReviewChanged)
+				}
+				previous = *discardedDNSPrior
 			}
 			snapshot = func(c context.Context, p Plan, root string) error {
 				return owner.snapshotRetiring(c, p, previous, root)

@@ -570,6 +570,8 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/dns/custom", a.dnsCustom)
 	mux.HandleFunc("/api/v1/dns/test", a.dnsTest)
 	mux.HandleFunc("/api/v1/dns/service-compare", a.dnsServiceCompare)
+	mux.HandleFunc("/api/v1/dns/scoped/preview", a.scopedDNSApplyHTTP)
+	mux.HandleFunc("/api/v1/dns/scoped/apply", a.scopedDNSApplyHTTP)
 	mux.HandleFunc("/api/v1/dns/apply", a.dnsApply)
 	mux.HandleFunc("/api/v1/dns/discard", a.dnsDiscard)
 	mux.HandleFunc("/api/v1/routes/options", a.routeOptions)

@@ -51,6 +51,7 @@ type serviceControlJobRequest struct {
 	ServiceIDs         []string              `json:"service_ids"`
 	NodeIDs            []string              `json:"node_ids,omitempty"`
 	DNS                *serviceDNSJobSpec    `json:"dns,omitempty"`
+	DNSApply           *scopedDNSApplySpec   `json:"dns_apply,omitempty"`
 	NodeApply          *nodeApplyJobSpec     `json:"node_apply,omitempty"`
 	NodeCheckMode      string                `json:"node_check_mode,omitempty"`
 	NodeCatalog        *nodeCatalogCheckSpec `json:"node_catalog,omitempty"`

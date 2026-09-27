@@ -19,10 +19,11 @@ type scopedDNSChange struct {
 	Policy   *dataplane.ScopedDNSPlan
 	Suspend  bool
 	Resume   bool
+	Discard  bool
 }
 
 func (a *App) composeScopedDNS(cfg config.Config, previous *dataplane.Plan, in *dataplane.Input, change *scopedDNSChange) error {
-	if previous != nil && previous.SuspendDNS && (change == nil || !change.Resume) {
+	if previous != nil && previous.SuspendDNS && (change == nil || !change.Resume && !change.Discard) {
 		// Replacing the stopped journal would lose the sole scope snapshot.
 		// A reviewed resume owns that transition; editor drafts remain editable.
 		return errScopedDNSReview
@@ -32,7 +33,14 @@ func (a *App) composeScopedDNS(cfg config.Config, previous *dataplane.Plan, in *
 		policy = previous.DNS
 	}
 	if change != nil {
-		if change.Suspend {
+		if change.Discard {
+			if !change.Explicit || change.Policy != nil || !cfg.ServiceControl.Stopped || previous == nil || !previous.SuspendDNS || len(in.Routes) != 0 {
+				return errScopedDNSReview
+			}
+			in.DiscardDNS = true
+			in.RetiringAdapters = append(in.RetiringAdapters, "dns-scoped")
+			policy = nil
+		} else if change.Suspend {
 			if len(in.Routes) != 0 {
 				return errScopedDNSReview
 			}

@@ -102,12 +102,15 @@ func (m *Manager) checkScopedDNSContinuation(p Plan) error {
 	if p.SuspendDNS && (!exists || old.DNS == nil || p.DNS != nil || len(p.Routes) != 0 || !slices.Contains(p.RetiringAdapters, scopedDNSAdapterID)) {
 		return errors.New("DNS suspension has no matching active policy")
 	}
+	if p.DiscardDNS && (!exists || !old.SuspendDNS || p.SuspendDNS || p.DNS != nil || len(p.Routes) != 0 || !slices.Contains(p.RetiringAdapters, scopedDNSAdapterID)) {
+		return errors.New("discard DNS does not match a stopped policy")
+	}
 	if exists && old.SuspendDNS {
 		saved, err := m.SuspendedDNS(old)
 		if err != nil {
 			return err
 		}
-		if !reflect.DeepEqual(saved, p.DNS) {
+		if !p.DiscardDNS && !reflect.DeepEqual(saved, p.DNS) {
 			return errors.New("suspended DNS must resume its exact saved policy before replacement")
 		}
 	}

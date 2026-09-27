@@ -71,6 +71,11 @@ func (a *App) preemptForRuntimeStop(acceptedID uint64) {
 		r.cancel()
 	}
 	r.mu.Unlock()
+	a.nodeRecovery.mu.Lock()
+	if a.nodeRecovery.cancel != nil {
+		a.nodeRecovery.cancel()
+	}
+	a.nodeRecovery.mu.Unlock()
 	a.nodeAutofallback.mu.Lock()
 	if a.nodeAutofallback.attemptCancel != nil {
 		a.nodeAutofallback.attemptCancel()

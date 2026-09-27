@@ -9,6 +9,8 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 func TestDNSRecoveryNewEpochWithoutNodeRegistryPreservesPendingChanges(t *testing.T) {
@@ -46,6 +48,50 @@ func TestDNSRecoveryNewEpochWithoutNodeRegistryPreservesPendingChanges(t *testin
 	if got := a.nodeRecoverySnapshot(); got != status {
 		t.Fatalf("repair ignored cooldown: %+v", got)
 	}
+}
+
+func TestDNSRecoveryYieldsToAcceptedStopAfterJoinedRollback(t *testing.T) {
+	a := dnsRuntimeFixture(t)
+	initReconcilerFixture(t, a, time.Now())
+	a.FreshProfile = func(context.Context) (string, error) { return recoveryProfile, nil }
+	a.Dataplane.FreshProfile = a.FreshProfile
+	adapter := a.Dataplane.Adapters["dns-scoped"].(*dnsReviewAdapter)
+	entered, cleaning, allowCleanup, done := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
+	// Block the adapter in Health with the actual operation context.
+	wrapped := &dnsCancelAdapter{dnsReviewAdapter: adapter, entered: entered, cleaning: cleaning, allowCleanup: allowCleanup}
+	a.Dataplane.Adapters["dns-scoped"] = wrapped
+	go func() { a.nodeRecoveryRound(context.Background(), time.Now()); close(done) }()
+	awaitOperation(t, entered)
+	job := durableRuntimeAccept(t, a, "stop", "stop-during-dns-recovery", a.Store.Get().Revision)
+	awaitOperation(t, cleaning)
+	if release, err := a.Operations.Exclusive(context.Background()); !errors.Is(err, operationgate.ErrBusy) {
+		if release != nil {
+			release()
+		}
+		t.Fatal("cleanup released recovery admission early", err)
+	}
+	close(allowCleanup)
+	awaitOperation(t, done)
+	a.runDurableServiceJob(context.Background(), time.Now())
+	if durableJobAt(t, a, job.ID).State != "completed" || !a.Store.Get().ServiceControl.Stopped {
+		t.Fatal("accepted Stop not completed after recovery cleanup")
+	}
+}
+
+type dnsCancelAdapter struct {
+	*dnsReviewAdapter
+	entered, cleaning, allowCleanup chan struct{}
+}
+
+func (a *dnsCancelAdapter) Health(ctx context.Context, _ dataplane.Plan, _ string) error {
+	close(a.entered)
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (a *dnsCancelAdapter) Rollback(ctx context.Context, p dataplane.Plan, root string) error {
+	close(a.cleaning)
+	<-a.allowCleanup
+	return a.dnsReviewAdapter.Rollback(ctx, p, root)
 }
 
 func TestDNSRecoveryRefusesChangedAuthorityAndPreservesAppliedChoice(t *testing.T) {

@@ -49,6 +49,7 @@ type durableServiceJob struct {
 	CleanupOutcome  string                   `json:"cleanup_outcome"`
 	RuntimeCode     string                   `json:"runtime_code,omitempty"`
 	DNSCode         string                   `json:"dns_code,omitempty"`
+	DNSApplyCode    string                   `json:"dns_apply_code,omitempty"`
 	NodeCode        string                   `json:"node_code,omitempty"`
 	NodeReview      *durableNodeReview       `json:"node_review,omitempty"`
 	CheckNetwork    string                   `json:"check_network,omitempty"`
@@ -99,6 +100,15 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		}
 		if j.NodeCode != "" {
 			code = j.NodeCode
+		}
+	}
+	if j.Request.Kind == "dns-apply" {
+		total, completed, message = 1, 0, dnsApplyJobMessage(j)
+		if j.State == "completed" {
+			completed = 1
+		}
+		if j.DNSApplyCode != "" {
+			code = j.DNSApplyCode
 		}
 	}
 	p := &nodeCheckJob{ID: j.ID, Mode: "service-" + j.Request.Kind, State: j.State, Phase: j.Phase,
@@ -156,6 +166,9 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 		if !validDNSJobCode(j.DNSCode) || j.DNSCode != "" && j.Request.Kind != "dns-compare" {
 			return restorejournal.ErrInvalid
 		}
+		if !validDNSApplyCode(j.DNSApplyCode) || j.DNSApplyCode != "" && j.Request.Kind != "dns-apply" {
+			return restorejournal.ErrInvalid
+		}
 		if !validRuntimeJobCode(j.RuntimeCode) || j.RuntimeCode != "" && !isRuntimeJob(j.Request.Kind) {
 			return restorejournal.ErrInvalid
 		}
@@ -180,10 +193,19 @@ func validateDurableServiceJobs(jobs []durableServiceJob) error {
 }
 
 func validDurableRequest(r serviceControlJobRequest) bool {
+	if r.DNSApply != nil && r.Kind != "dns-apply" {
+		return false
+	}
 	if r.Kind == "node-check" {
 		return validDurableNodeCheck(r)
 	}
 	if r.NodeCheckMode != "" || r.NodeCatalog != nil || r.resolveNodeCatalog {
+		return false
+	}
+	if r.Kind == "dns-apply" {
+		return validDurableDNSApply(r)
+	}
+	if r.DNSApply != nil {
 		return false
 	}
 	if r.Kind == "node-apply" {
@@ -242,6 +264,11 @@ func recoverDurableServiceJobs(doc *reconcilerDocument, now time.Time) {
 			j.NodeCode, j.CleanupOutcome = "NODE_REVIEW_CHANGED", "startup-recovered"
 			continue
 		}
+		if j.Request.Kind == "dns-apply" {
+			finishDurableJob(j, "failed", "startup-reconcile", now)
+			j.DNSApplyCode, j.CleanupOutcome = "DNS_APPLY_CHANGED", "startup-recovered"
+			continue
+		}
 		j.Cursor = 0 // Previous-process results do not prove the current network.
 		j.CheckEpochStart = 0
 		j.CheckNetwork = ""
@@ -269,6 +296,10 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	request.ServiceIDs, request.NodeIDs = slices.Clone(request.ServiceIDs), slices.Clone(request.NodeIDs)
 	if request.DNS != nil {
 		request.DNS = &serviceDNSJobSpec{ProfileIDs: slices.Clone(request.DNS.ProfileIDs), VerifyService: request.DNS.VerifyService}
+	}
+	if request.DNSApply != nil {
+		copied := *request.DNSApply
+		request.DNSApply = &copied
 	}
 	if request.NodeApply != nil {
 		copied := *request.NodeApply
@@ -333,7 +364,7 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		if err != nil {
 			return durableServiceJob{}, err
 		}
-	} else if isRuntimeJob(request.Kind) {
+	} else if isRuntimeJob(request.Kind) || request.Kind == "dns-apply" {
 		// The immutable intent is exactly action + expected revision, not a
 		// partially applied Store snapshot. The executor validates that revision
 		// and its committed route scope after admission. No Store reads here.
@@ -432,7 +463,7 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 	}
 	previous := r.doc.Jobs
 	previousManualUntil := r.doc.ManualUntil
-	if nodeReview != nil {
+	if nodeReview != nil || request.Kind == "dns-apply" {
 		r.doc.ManualUntil = time.Time{}
 	} // This reviewed manual action is now accepted.
 	r.doc.Jobs = append(retained, job)
@@ -601,7 +632,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		return true
 	}
 	budget := 5 * time.Minute
-	if isRuntimeJob(j.Request.Kind) || j.Request.Kind == "node-apply" {
+	if isRuntimeJob(j.Request.Kind) || j.Request.Kind == "node-apply" || j.Request.Kind == "dns-apply" {
 		budget = defaultDataplaneApplyTimeout
 	}
 	if j.Request.Kind == "check" {
@@ -641,6 +672,8 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		runtimeOutcome, err = a.runDurableRuntimeJob(attempt, request)
 	} else if request.Kind == "node-apply" {
 		runtimeOutcome, err = a.runDurableNodeApply(attempt, request, nodeReview)
+	} else if request.Kind == "dns-apply" {
+		runtimeOutcome, err = a.runDurableDNSApply(attempt, request)
 	} else if request.Kind == "dns-compare" {
 		dnsResult, err = a.runDurableDNSJob(attempt, request)
 	} else if request.Kind == "node-check" {
@@ -678,7 +711,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	} else if a.Operations.Snapshot().Fenced {
 		finishDurableJob(j, "failed", "cleanup-unverified", time.Now())
 		j.CleanupOutcome = "unverified"
-	} else if (isRuntimeJob(request.Kind) || request.Kind == "node-apply") && err == nil && runtimeOutcome.Code == "" {
+	} else if (isRuntimeJob(request.Kind) || request.Kind == "node-apply" || request.Kind == "dns-apply") && err == nil && runtimeOutcome.Code == "" {
 		// A cancel can race the final commit. Successful committed state is
 		// never reported as canceled (and never replayed just to obtain an ACK).
 		finishDurableJob(j, "completed", "", time.Now())
@@ -730,6 +763,9 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		finishDurableJob(j, "failed", "check-failed", time.Now())
 	} else if request.Kind == "node-apply" {
 		j.NodeCode = runtimeOutcome.Code
+		finishDurableJob(j, "failed", "check-failed", time.Now())
+	} else if request.Kind == "dns-apply" {
+		j.DNSApplyCode = runtimeOutcome.Code
 		finishDurableJob(j, "failed", "check-failed", time.Now())
 	} else {
 		a.nodeChecks.mu.Lock()

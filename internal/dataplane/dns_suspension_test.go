@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,6 +59,71 @@ func TestScopedDNSSuspendResumePreservesSavedPolicyAndPendingDraft(t *testing.T)
 	}
 	if _, err := m.SuspendedDNS(saved); err == nil {
 		t.Fatal("old stopped snapshot can replay after resume")
+	}
+}
+
+func TestScopedDNSDiscardStoppedBindingWithoutStartingIt(t *testing.T) {
+	for _, failCommit := range []bool{false, true} {
+		t.Run(fmt.Sprint(failCommit), func(t *testing.T) {
+			m, a, f, in := scopedAdapterFixture(t)
+			p, _ := Build(in)
+			if _, err := m.Apply(context.Background(), p, nil); err != nil {
+				t.Fatal(err)
+			}
+			in.Revision++
+			in.DNS = nil
+			in.Routes = nil
+			in.SuspendDNS = true
+			in.RetiringAdapters = []string{a.ID()}
+			stop, _ := Build(in)
+			if _, err := m.Apply(context.Background(), stop, nil); err != nil {
+				t.Fatal(err)
+			}
+			saved, _, _ := m.Committed()
+			if err := a.DNS.SetServiceDraft("web", "unfiltered"); err != nil {
+				t.Fatal(err)
+			}
+			in.Revision++
+			in.SuspendDNS = false
+			in.DiscardDNS = true
+			remove, err := Build(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var commit func() (func() error, error)
+			if failCommit {
+				commit = func() (func() error, error) { return nil, errors.New("injected removal failure") }
+			}
+			e, err := m.Apply(context.Background(), remove, commit)
+			if len(f.rules) != 0 || a.live != nil || a.DNS.Snapshot().ServiceDrafts["web"] != "unfiltered" {
+				t.Fatal("discard activated runtime or consumed draft")
+			}
+			if failCommit {
+				if err == nil || !e.RollbackVerified || a.DNS.VerifyServiceSelection("web", "private") != nil {
+					t.Fatal("failed removal lost saved choice", err)
+				}
+				if _, err := m.SuspendedDNS(saved); err != nil {
+					t.Fatal("failed removal lost resumable snapshot", err)
+				}
+				return
+			}
+			if err != nil || a.DNS.VerifyServiceSelection("web", "") != nil {
+				t.Fatal("discard failed", err)
+			}
+			if _, err := m.SuspendedDNS(saved); err == nil {
+				t.Fatal("removed DNS can be replayed")
+			}
+			in.Revision++
+			in.DiscardDNS = false
+			in.RetiringAdapters = nil
+			next, err := Build(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := m.Apply(context.Background(), next, nil); err != nil {
+				t.Fatal("removed DNS still blocks later plans", err)
+			}
+		})
 	}
 }
 

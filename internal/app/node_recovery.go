@@ -38,6 +38,7 @@ type nodeRecoveryState struct {
 	status nodeRecoveryStatus
 	done   chan struct{}
 	update *selfUpdateNodeRecovery
+	cancel context.CancelFunc
 }
 
 func (a *App) nodeRecoverySnapshot() nodeRecoveryStatus {
@@ -100,6 +101,9 @@ func (a *App) WaitNodeRecovery(ctx context.Context) error {
 // needs exclusive admission. Busy user operations are never interrupted.
 func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 	if a.Store == nil || a.Dataplane == nil {
+		return
+	}
+	if a.hasDueRuntimeStop(now) {
 		return
 	}
 	release, err := a.nodeRecoveryAdmission(ctx, false)
@@ -190,8 +194,18 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 		Message: "Повторно проверяются только уже применённые узлы и сервисы. Черновики сохраняются."}
 	a.setNodeRecoveryStatus(status)
 	attemptCtx, cancel := context.WithTimeout(ctx, defaultDataplaneApplyTimeout)
+	a.nodeRecovery.mu.Lock()
+	a.nodeRecovery.cancel = cancel
+	a.nodeRecovery.mu.Unlock()
+	// A Stop may have been accepted between admission and publishing cancel.
+	if a.hasDueRuntimeStop(time.Now()) {
+		cancel()
+	}
 	execution, err := a.recoverAppliedNodes(attemptCtx, plan, profile)
 	cancel()
+	a.nodeRecovery.mu.Lock()
+	a.nodeRecovery.cancel = nil
+	a.nodeRecovery.mu.Unlock()
 	status.Stage = ""
 	if err == nil {
 		status.State, status.PlanID = "recovered", execution.PlanID

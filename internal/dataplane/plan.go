@@ -71,6 +71,7 @@ type ResourceConflict struct {
 type Input struct {
 	DNS                *ScopedDNSPlan     `json:"scoped_dns,omitempty"`
 	SuspendDNS         bool               `json:"suspend_dns,omitempty"`
+	DiscardDNS         bool               `json:"discard_dns,omitempty"`
 	NetworkProfileID   string             `json:"network_profile_id,omitempty"`
 	Revision           uint64             `json:"revision"`
 	SafeMode           bool               `json:"safe_mode"`
@@ -134,6 +135,7 @@ type RoutePlan struct {
 type Plan struct {
 	DNS               *ScopedDNSPlan     `json:"scoped_dns,omitempty"`
 	SuspendDNS        bool               `json:"suspend_dns,omitempty"`
+	DiscardDNS        bool               `json:"discard_dns,omitempty"`
 	NetworkProfileID  string             `json:"network_profile_id,omitempty"`
 	SchemaVersion     int                `json:"schema_version"`
 	PlanID            string             `json:"plan_id"`
@@ -245,6 +247,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	if input.SuspendDNS && (input.DNS != nil || len(input.Routes) != 0 || !slices.Contains(input.RetiringAdapters, scopedDNSAdapterID)) {
 		return Plan{}, errors.New("DNS suspension requires a complete owned runtime stop")
 	}
+	if input.DiscardDNS && (input.DNS != nil || input.SuspendDNS || len(input.Routes) != 0 || !slices.Contains(input.RetiringAdapters, scopedDNSAdapterID)) {
+		return Plan{}, errors.New("discarding stopped DNS requires an explicit empty retirement plan")
+	}
 	if err := validateScopedDNSPlan(input.DNS, input.Routes); err != nil {
 		return Plan{}, err
 	}
@@ -261,6 +266,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	plan := Plan{
 		DNS:               input.DNS,
 		SuspendDNS:        input.SuspendDNS,
+		DiscardDNS:        input.DiscardDNS,
 		NetworkProfileID:  input.NetworkProfileID,
 		SchemaVersion:     SchemaVersion,
 		PlanID:            "dp-" + digest[:16],

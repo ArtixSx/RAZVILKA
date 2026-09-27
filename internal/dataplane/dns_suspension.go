@@ -14,6 +14,14 @@ import (
 // the service definition/scope and build a fresh network-bound plan; this is
 // saved intent, never a successful current probe or permission to activate.
 func (m *Manager) SuspendedDNS(expected Plan) (*ScopedDNSPlan, error) {
+	state, err := m.suspendedDNSState(expected)
+	if err != nil {
+		return nil, err
+	}
+	return state.DNS, nil
+}
+
+func (m *Manager) suspendedDNSState(expected Plan) (*scopedDNSState, error) {
 	if !expected.SuspendDNS || expected.DNS != nil || len(expected.Routes) != 0 || expected.State != "committed" || !slices.Contains(expected.RetiringAdapters, scopedDNSAdapterID) || len(expected.PlanID) != 19 || !strings.HasPrefix(expected.PlanID, "dp-") || strings.Trim(expected.PlanID[3:], "0123456789abcdef") != "" {
 		return nil, errors.New("no committed DNS suspension")
 	}
@@ -36,5 +44,5 @@ func (m *Manager) SuspendedDNS(expected Plan) (*ScopedDNSPlan, error) {
 	if err != nil || !exists || !reflect.DeepEqual(current, expected) {
 		return nil, ErrReviewChanged
 	}
-	return saved.settingsScope().DNS, nil
+	return saved.settingsScope(), nil
 }
