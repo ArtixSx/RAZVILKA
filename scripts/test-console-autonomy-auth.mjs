@@ -202,4 +202,12 @@ await test('expired or malformed publication never starts an unprotected live fa
  }
 });
 
+await test('source removal readback preserves unsaved wizard fields',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(1));await flush();
+ f.e('scopeAddresses').value='192.168.1.77/32';f.e('wizardForm').events.get('input')();
+ f.event('razvilka:source-consent-changed');assert.equal(f.requests[1].path,'/api/v1/autonomy');
+ const changed=snapshot(2);changed.policy.default_sources=['192.168.1.88/32'];f.respond(1,200,changed);await flush();
+ assert.equal(f.e('scopeAddresses').value,'192.168.1.77/32','background readback discarded local work');
+});
+
 console.log(JSON.stringify({status:'passed',tests:passed}));

@@ -248,21 +248,21 @@
     $('connectionLabel').textContent=`Состояние роутера · ${formatDate(snapshot.server_time)}`;
     renderServices();fillWizard();renderStarterReview();
   }
-  async function refresh(force=false) {
+  async function refresh(force=false, live=force) {
     const generation=authGeneration;
     // A read that began before a write cannot serve as its readback. Wait for
     // the admitted read, then request a new snapshot without overlapping it.
-    if(loading){if(!force)return false;const pending=refreshRequest;await pending;if(generation!==authGeneration)return false;return refreshRequest&&refreshRequest!==pending?refreshRequest:refresh(true);}
+    if(loading){if(!force&&!live)return false;const pending=refreshRequest;await pending;if(generation!==authGeneration)return false;return refreshRequest&&refreshRequest!==pending?refreshRequest:refresh(force,live);}
     loading=true;
     const request=(async()=>{
     try {
-      const value=await api(force?'/api/v1/autonomy':'/api/v1/panel/autonomy');if(generation!==authGeneration)return false;
-      const next=force?value:panelAutonomyData(value);
+      const value=await api(live?'/api/v1/autonomy':'/api/v1/panel/autonomy');if(generation!==authGeneration)return false;
+      const next=live?value:panelAutonomyData(value);
       // A cached poll begun before a mutation/readback must not undo its result.
       // A new process has its own publication instance and resets this ordering.
       const sameInstance=!snapshot?.observation || !next.observation || snapshot.observation.instance_id===next.observation.instance_id;
-      if(!force && sameInstance && Date.parse(next.server_time)<Date.parse(snapshot?.server_time))return false;
-      if(force && snapshot?.observation)next.observation={...snapshot.observation,observed_at:next.server_time};
+      if(!live && sameInstance && Date.parse(next.server_time)<Date.parse(snapshot?.server_time))return false;
+      if(live && snapshot?.observation)next.observation={...snapshot.observation,observed_at:next.server_time};
       snapshot=next;presentationFresh=true;window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
       if(force) dirty=false;
       $('authRequired').hidden=true;$('workspace').hidden=false;render();return true;
@@ -290,7 +290,7 @@
     const old=snapshot.services[id];
     await api('/api/v1/autonomy/services','POST',{service_id:id,enabled,use_defaults:!old,all_lan:old?.all_lan||false,sources:old?.sources||[],expected_revision:snapshot.policy.revision,confirm:'MANAGE_SERVICE'});
     requireGeneration(generation);
-    notify(enabled?'Сервис передан в очередь. Применение ещё не подтверждено.':'Автоподбор сервиса приостановлен; рабочий маршрут сохранён.');await refresh(true);
+    notify(enabled?'Сервис передан в очередь. Применение ещё не подтверждено.':'Автоподбор сервиса приостановлен; рабочий маршрут сохранён.');await refresh(false,true);
   }
   async function saveWizard(event) {
     event.preventDefault();if(saving) return;
@@ -319,7 +319,7 @@
       if(!confirm(`Убрать «${serviceName(id)}»? Сначала будут сняты его маршруты. ${custom?'Пользовательская запись удалится после успешного снятия.':'Остальные сервисы останутся без изменений.'}`)) return;
       await api(`/api/v1/autonomy/services/${encodeURIComponent(id)}`,'DELETE',{expected_revision:snapshot.policy.revision,confirm:'REMOVE_SERVICE',delete_definition:custom});
       requireGeneration(generation);
-      notify('Удаление поставлено в очередь. Оно не считается завершённым до снятия маршрута.');await refresh(true);
+      notify('Удаление поставлено в очередь. Оно не считается завершённым до снятия маршрута.');await refresh(false,true);
     })().catch(e=>reportError(e));
     const sync=event.target.closest('[data-feed-sync]');if(sync) void (async()=>{const generation=authGeneration;await api(`/api/v1/node-feeds/${encodeURIComponent(sync.dataset.feedSync)}/sync`,'POST',{});requireGeneration(generation);notify('Запрос получения поставлен в очередь. Рабочие маршруты не менялись.');await readSources();})().catch(e=>reportError(e));
   });
@@ -330,17 +330,17 @@
   $('backStep').addEventListener('click',()=>setStep(step-1));$('nextStep').addEventListener('click',()=>setStep(step+1));
   $('reloadButton').addEventListener('click',()=>{if(!dirty||confirm('Заменить несохранённые поля актуальными настройками роутера?')){sourceDirty=false;void refresh(true);if(activeTab==='sources')void readSources();}});
   $('reloadSources').addEventListener('click',()=>{if(!sourceDirty||confirm('Сбросить несохранённые интервалы подписок?')){sourceDirty=false;void readSources();}});
-  $('pauseButton').addEventListener('click',()=>void(async()=>{const generation=authGeneration,p=clone(snapshot.policy);p.enabled=!p.enabled;await api('/api/v1/autonomy','PUT',{expected_revision:p.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:false});requireGeneration(generation);await refresh(true);requireGeneration(generation);notify(p.enabled?'Автоматика разрешена. Safe Mode и общий ручной режим сохраняют свои ограничения.':'Автоматика на паузе; маршруты не удалены.');})().catch(e=>reportError(e)));
+  $('pauseButton').addEventListener('click',()=>void(async()=>{const generation=authGeneration,p=clone(snapshot.policy);p.enabled=!p.enabled;await api('/api/v1/autonomy','PUT',{expected_revision:p.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:false});requireGeneration(generation);await refresh(false,true);requireGeneration(generation);notify(p.enabled?'Автоматика разрешена. Safe Mode и общий ручной режим сохраняют свои ограничения.':'Автоматика на паузе; маршруты не удалены.');})().catch(e=>reportError(e)));
   $('serviceSearch').addEventListener('input',()=>{if(snapshot)renderServices();});
   $('enrollForm').addEventListener('submit',event=>{event.preventDefault();if($('catalogSelect').value)void enroll($('catalogSelect').value).catch(e=>reportError(e));});
   $('openAddService').addEventListener('click',()=>{if(!snapshot?.policy.setup_complete){notify('Завершите мастер перед добавлением сервиса.',true);tab('setup');return;}$('addServiceError').textContent='';$('addServiceDialog').showModal();$('newServiceName').focus();});
   $('addServiceForm').addEventListener('submit',event=>{event.preventDefault();if(adding)return;adding=true;const generation=authGeneration;void(async()=>{
     const definition=websiteDefinition($('newServiceName').value,$('newServiceURL').value,$('newServiceCategory').value);
-    const created=await api('/api/v1/custom-services','POST',definition);requireGeneration(generation);const refreshed=await refresh(true);requireGeneration(generation);if(!refreshed) throw new Error('Сервис создан, но состояние не перечитано. Обновите страницу перед повторным действием.');
+    const created=await api('/api/v1/custom-services','POST',definition);requireGeneration(generation);const refreshed=await refresh(false,true);requireGeneration(generation);if(!refreshed) throw new Error('Сервис создан, но состояние не перечитано. Обновите страницу перед повторным действием.');
     // Inheritance may already have enrolled it. An explicit action here supplies
     // the same consent for users who disabled general inheritance.
     if(!snapshot.services[created.id]) await enroll(created.id);
-    requireGeneration(generation);$('addServiceDialog').close();$('addServiceForm').reset();if(typeof refreshCoreAfterEdit==='function')await refreshCoreAfterEdit();requireGeneration(generation);notify('Сервис добавлен. Начнётся реальная проверка, а не демонстрационный PASS.');await refresh(true);
+    requireGeneration(generation);$('addServiceDialog').close();$('addServiceForm').reset();if(typeof refreshCoreAfterEdit==='function')await refreshCoreAfterEdit();requireGeneration(generation);notify('Сервис добавлен. Начнётся реальная проверка, а не демонстрационный PASS.');await refresh(false,true);
   })().catch(e=>reportError(e,$('addServiceError'))).finally(()=>{if(generation===authGeneration)adding=false;});});
   $('sourcesList').addEventListener('input',()=>{sourceDirty=true;});
   $('sourcesList').addEventListener('submit',event=>{const form=event.target.closest('[data-feed-form]');if(!form)return;event.preventDefault();void(async()=>{
@@ -363,7 +363,7 @@
   document.addEventListener('razvilka:auth-required',()=>{nextAuthGeneration();snapshot=null;presentationFresh=false;feeds=null;editingPolicy=null;dirty=false;sourceDirty=false;$('subscriptionURL').value='';$('newServiceURL').value='';$('newServiceName').value='';$('pauseButton').disabled=true;$('authRequired').hidden=false;$('workspace').hidden=true;$('connectionLabel').textContent='Требуется вход';notify('Войдите для чтения настроек и управления.',true);if($('addServiceDialog').open)$('addServiceDialog').close();window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:401,message:'Войдите для чтения настроек и управления.'}}));});
   document.addEventListener('razvilka:auth-restored',()=>{nextAuthGeneration();notify('');$('wizardError').textContent='';$('addServiceError').textContent='';$('saveWizard').disabled=false;$('authRequired').hidden=true;$('connectionLabel').textContent='Загружаем настройки…';void refresh();if(activeTab==='sources')void readSources();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh();});
-  document.addEventListener('razvilka:source-consent-changed',()=>{void refresh(true);});
+  document.addEventListener('razvilka:source-consent-changed',()=>{void refresh(false,true);});
   setStep(0);void refresh();
   // This only refreshes displayed metadata. Backend jobs never depend on it.
   poll=setInterval(()=>{if(!document.hidden&&!loading&&['autopilot','managed','onboard','overview','updates'].includes(state.currentView))void refresh();},15000);
