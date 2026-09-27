@@ -32,7 +32,7 @@ try {
     }
     const run = (body, expected) => {
       const result = spawnSync(process.argv[2] || 'sh', ['-s'], {
-        input: `set -eu\nSTATEDIR=${quote(root.replaceAll('\\', '/'))}\nAPPDIR="$STATEDIR/config"\n${gate}\n${body}\n`,
+        input: `set -eu\nSTATEDIR=${quote(root.replaceAll('\\', '/'))}\nAPPDIR="$STATEDIR/config"\nAUTONOMY_STATE_PRESENT=skip\n${gate}\n${body}\n`,
         encoding: 'utf8', timeout: 5000,
       });
       assert.ifError(result.error);

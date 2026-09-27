@@ -20,10 +20,9 @@ schedules run on the router without an open browser.
 | --- | --- |
 | Home and Autopilot | View network state and choose services, devices and permitted connections |
 | Services | Assign a route to a site or application, check access and apply changes |
-| Connections | Import VLESS and other profiles, refresh subscriptions and select nodes by country and check results |
-| Bypasses | Install and configure the required NFQWS2, WARP, Sing-box or other components |
+| Connections | Import VLESS and other profiles, refresh subscriptions, select nodes by country and check results, and open bypass settings |
 | Devices | Restrict a route to selected devices |
-| Events and settings | Review errors, component versions and backups |
+| Events and settings | Review errors, install and update components, manage access and backups |
 
 Autopilot operates within your settings. Access depends on the node, provider
 and router capabilities; a running process alone does not establish a working
