@@ -144,7 +144,7 @@ func TestReconcilerRecoveryNewAuthorityDoesNotInheritPriorRetryDelay(t *testing.
 			checker.fail = false
 			a.reconcileRound(context.Background(), now.Add(90*time.Second))
 			current, _, err := a.Dataplane.Committed()
-			if err != nil || a.nodeRecoverySnapshot().State != "recovered" || a.nodeRecoverySnapshot().Attempt != 1 || len(checker.requests) != 3 || current.NetworkProfileID != profile || len(adapter.calls) == 0 {
+			if err != nil || a.nodeRecoverySnapshot().State != "recovered" || a.nodeRecoverySnapshot().Attempt != 0 || len(checker.requests) != 3 || current.NetworkProfileID != profile || len(adapter.calls) == 0 {
 				t.Fatalf("new authority waited for the old task: status=%+v checks=%d err=%v", a.nodeRecoverySnapshot(), len(checker.requests), err)
 			}
 			if !reflect.DeepEqual(current.Routes, previous.Routes) {

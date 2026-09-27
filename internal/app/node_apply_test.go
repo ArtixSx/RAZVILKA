@@ -21,8 +21,16 @@ import (
 )
 
 type nodeApplyAdapter struct {
-	calls []string
-	after func(string) error
+	calls   []string
+	after   func(string) error
+	observe func(context.Context) error
+}
+
+func (a *nodeApplyAdapter) ObserveOwnedRuntime(ctx context.Context) error {
+	if a.observe != nil {
+		return a.observe(ctx)
+	}
+	return ctx.Err()
 }
 
 func (a *nodeApplyAdapter) ID() string { return "sing-box" }

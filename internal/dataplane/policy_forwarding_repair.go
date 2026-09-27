@@ -96,7 +96,7 @@ func (m *Manager) RestoreCommittedForwarding(ctx context.Context, expected Plan)
 		if err := r.verifyEnvironment(ctx, expected); err != nil {
 			return nil, err
 		}
-		if err := r.adapter.observeOwnedRuntime(ctx); err != nil {
+		if err := r.adapter.ObserveOwnedRuntime(ctx); err != nil {
 			return nil, err
 		}
 	}

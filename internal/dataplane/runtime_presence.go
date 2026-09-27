@@ -13,6 +13,12 @@ import (
 // proof or replacing it with a PID/journal-only check.
 const runtimePresenceTimeout = 8 * time.Second
 
+// RuntimeObserver reports owned processes and rules without changing them.
+// The manager still verifies the committed plan and network on both sides.
+type RuntimeObserver interface {
+	ObserveOwnedRuntime(context.Context) error
+}
+
 // ObserveCommittedRuntime proves present owned runtime, not service reachability.
 // Bounded read-only inspection never probes services, switches an endpoint,
 // starts a process, repairs state or changes kernel rules.
@@ -49,18 +55,18 @@ func (m *Manager) ObserveCommittedRuntime(ctx context.Context, expected Plan) (r
 		if !exists {
 			return errors.New("owned runtime adapter unavailable")
 		}
-		observer, ok := registered.(interface{ observeOwnedRuntime(context.Context) error })
+		observer, ok := registered.(RuntimeObserver)
 		if !ok {
 			return errors.New("owned runtime observation unavailable")
 		}
-		if err := observer.observeOwnedRuntime(ctx); err != nil {
+		if err := observer.ObserveOwnedRuntime(ctx); err != nil {
 			return err
 		}
 	}
 	return verify()
 }
 
-func (a *ProxyTunnelAdapter) observeOwnedRuntime(ctx context.Context) error {
+func (a *ProxyTunnelAdapter) ObserveOwnedRuntime(ctx context.Context) error {
 	if err := a.checkSidecarIdentity(); err != nil {
 		return err
 	}
@@ -77,7 +83,7 @@ func (a *ProxyTunnelAdapter) observeOwnedRuntime(ctx context.Context) error {
 	return verifyPolicyEvidence(ctx, a.Runner, a.ip(), state)
 }
 
-func (a *WARPWireGuardAdapter) observeOwnedRuntime(ctx context.Context) error {
+func (a *WARPWireGuardAdapter) ObserveOwnedRuntime(ctx context.Context) error {
 	state, exists, err := a.deactivationOwnership(ctx)
 	if err != nil || !exists {
 		return errors.New("owned WireGuard policy unavailable")
@@ -89,7 +95,7 @@ func (a *WARPWireGuardAdapter) observeOwnedRuntime(ctx context.Context) error {
 	return verifyPolicyEvidence(ctx, a.Runner, a.ip(), state)
 }
 
-func (a *NFQWS2Adapter) observeOwnedRuntime(ctx context.Context) error {
+func (a *NFQWS2Adapter) ObserveOwnedRuntime(ctx context.Context) error {
 	lease, err := a.verifyOwnedLists(false)
 	if err != nil || lease == nil {
 		return errors.New("owned NFQWS2 policy unavailable")

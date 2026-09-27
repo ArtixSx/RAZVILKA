@@ -29,6 +29,8 @@ type nodeRecoveryStatus struct {
 	Attempt       int       `json:"attempt"`
 	NextAttemptAt time.Time `json:"next_attempt_at,omitempty"`
 	Message       string    `json:"message"`
+	Reason        string    `json:"reason,omitempty"`
+	FailedStage   string    `json:"failed_stage,omitempty"`
 }
 
 type nodeRecoveryState struct {
@@ -120,8 +122,8 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 		return
 	}
 	profile, profileErr := a.freshNetworkProfile(ctx)
-	dnsRuntimeMissing := false
-	if plan.DNS != nil && profileErr == nil && profile == plan.NetworkProfileID {
+	runtimeMissing := false
+	if profileErr == nil && profile == plan.NetworkProfileID {
 		// A bounded inspection timeout is unknown, not evidence of a dead
 		// listener. Keep the manager's full budget for mixed route ownership.
 		observeErr := a.Dataplane.ObserveCommittedRuntime(ctx, plan)
@@ -129,18 +131,18 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 			release()
 			return
 		}
-		dnsRuntimeMissing = observeErr != nil
+		runtimeMissing = observeErr != nil
 	}
 	release()
 	if ctx.Err() != nil {
 		return
 	}
-	if profileErr == nil && profile == plan.NetworkProfileID && !dnsRuntimeMissing {
+	if profileErr == nil && profile == plan.NetworkProfileID && !runtimeMissing {
 		status := a.nodeRecoverySnapshot()
 		if status.PlanID != plan.PlanID || status.State != "recovered" {
 			a.setNodeRecoveryStatus(nodeRecoveryStatus{State: "idle", PlanID: plan.PlanID})
 		}
-		return // Existing runtime authority is unchanged; TTL is checked on writes.
+		return // Network identity alone cannot prove an owned process still exists.
 	}
 	if profileErr != nil {
 		if plan.DNS != nil {
@@ -202,6 +204,10 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 		cancel()
 	}
 	execution, err := a.recoverAppliedNodes(attemptCtx, plan, profile)
+	if err != nil {
+		status.Reason = nodeRecoveryReason(err, execution)
+		status.FailedStage = a.nodeRecoverySnapshot().Stage
+	}
 	cancel()
 	a.nodeRecovery.mu.Lock()
 	a.nodeRecovery.cancel = nil
@@ -210,13 +216,11 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 	if err == nil {
 		status.State, status.PlanID = "recovered", execution.PlanID
 		status.Message = "Применённые маршруты повторно проверены и восстановлены. Проверьте сервис на выбранном устройстве."
-		if plan.DNS != nil {
-			status.Attempt = 0
-			status.NextAttemptAt = now.Add(time.Minute)
-			a.nodeRecovery.mu.Lock()
-			a.nodeRecovery.key = execution.PlanID + "/" + profile
-			a.nodeRecovery.mu.Unlock()
-		}
+		status.Attempt = 0
+		status.NextAttemptAt = time.Now().Add(time.Minute)
+		a.nodeRecovery.mu.Lock()
+		a.nodeRecovery.key = execution.PlanID + "/" + profile
+		a.nodeRecovery.mu.Unlock()
 	} else if errors.Is(err, errNodeRecoveryReview) || status.Attempt >= maxNodeRecoveryAttempts || execution.State == "rollback-failed" {
 		status.State = "requires-review"
 		status.Message = "Автоматическое восстановление не подтверждено. Проверьте применённые узлы и просмотрите маршрут; другой узел автоматически не выбирается."
@@ -226,6 +230,33 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 		status.Message = "Повторная проверка не завершена. Сохранившийся маршрут не считается подтверждённым; будет ограниченная повторная попытка."
 	}
 	a.setNodeRecoveryStatus(status)
+}
+
+// Public status deliberately contains fixed categories, never checker output,
+// profile material, hostnames or a command's raw error string.
+func nodeRecoveryReason(err error, execution dataplane.Execution) string {
+	switch {
+	case execution.State == "rollback-failed", errors.Is(err, dataplane.ErrExecutionJournal):
+		return "cleanup-unconfirmed"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline"
+	case errors.Is(err, dataplane.ErrNetworkChanged), errors.Is(err, dataplane.ErrExactNodeNetworkChanged):
+		return "network-unconfirmed"
+	case errors.Is(err, errNodeRecoveryReview), errors.Is(err, dataplane.ErrReviewChanged):
+		return "authority-changed"
+	case errors.Is(err, dataplane.ErrExactNodeBusy):
+		return "checker-busy"
+	case errors.Is(err, dataplane.ErrExactNodeRuntime):
+		return "runtime-unavailable"
+	case errors.Is(err, dataplane.ErrExactNodeUnavailable):
+		return "checker-unavailable"
+	case errors.Is(err, nodestore.ErrRouteProof):
+		return "service-unconfirmed"
+	default:
+		return "operation-unconfirmed"
+	}
 }
 
 type nodeRecoveryIntent struct {

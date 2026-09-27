@@ -31,6 +31,8 @@ assert.equal(context.nodeRecoveryBanner({ state: 'recovered', message: 'Прим
 assert.match(context.nodeRecoveryBanner({ state: 'revalidating', message: '<untrusted>' }), /Повторная проверка.*&lt;untrusted&gt;/);
 assert.doesNotMatch(context.nodeRecoveryBanner({ state: 'network-stale', message: 'Проверка не завершена' }), /восстановлен/);
 assert.match(context.nodeRecoveryBanner({ state: 'requires-review' }), /требует вашего внимания/);
+assert.match(context.nodeRecoveryBanner({ state: 'network-stale', reason: 'service-unconfirmed' }), /не подтвердило доступ/);
+assert.doesNotMatch(context.nodeRecoveryBanner({ state: 'requires-review', reason: '<private-profile>' }), /private-profile/);
 // An explicit browser service wins over an unrelated historical node check.
 state.services.push({ id: 'youtube', name: 'YouTube', probe_url: 'https://youtube.com' });
 state.nodes.nodes[0].health = { service_id: 'telegram' };

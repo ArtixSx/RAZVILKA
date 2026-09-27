@@ -3079,7 +3079,9 @@ function nodeRecoveryBanner(recovery) {
   // Current running state belongs to the global status, not this alert.
   const labels = { revalidating: 'Повторная проверка применённого маршрута', 'network-stale': 'Маршрут ожидает повторной проверки', 'requires-review': 'Восстановление требует вашего внимания' };
   const label = labels[recovery?.state];
-  return label ? `<b>${esc(label)}</b><span>${esc(recovery.message || '')}</span>` : '';
+  const reasons = { 'cleanup-unconfirmed': 'Не подтверждён возврат прежнего состояния.', canceled: 'Проверка отменена.', deadline: 'Истекло время проверки.', 'network-unconfirmed': 'Изменилось подключение к интернету или его состояние неизвестно.', 'authority-changed': 'Настройки или разрешения изменились.', 'checker-busy': 'Проверяющий процесс занят.', 'runtime-unavailable': 'Не готов компонент подключения.', 'checker-unavailable': 'Проверка подключения сейчас недоступна.', 'service-unconfirmed': 'Сохранённое подключение не подтвердило доступ к сервису.', 'operation-unconfirmed': 'Операция не завершилась.' };
+  const detail = reasons[recovery?.reason];
+  return label ? `<b>${esc(label)}</b><span>${esc(recovery.message || '')}</span>${detail ? `<small>${esc(detail)}</small>` : ''}` : '';
 }
 
 function renderNodes() {

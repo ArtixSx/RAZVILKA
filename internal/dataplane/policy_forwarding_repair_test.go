@@ -128,7 +128,7 @@ func TestRestoreCommittedForwardingWholeFilterLossPreservesNATAndProcesses(t *te
 	f := newForwardingRepairFixture(t)
 	nat := firewallImage(t, f.firewall.table("iptables", "nat"))
 	eraseForwardingTable(f.firewall, "iptables", "filter", f.state.Forwarding.Chain)
-	if err := f.a.observeOwnedRuntime(context.Background()); err == nil {
+	if err := f.a.ObserveOwnedRuntime(context.Background()); err == nil {
 		t.Fatal("missing filter was falsely live")
 	}
 	restored, err := f.m.RestoreCommittedForwarding(context.Background(), f.plan)
@@ -143,7 +143,7 @@ func TestRestoreCommittedForwardingWholeFilterLossPreservesNATAndProcesses(t *te
 			t.Fatal("restoration mutated intact NAT")
 		}
 	}
-	if err := f.a.observeOwnedRuntime(context.Background()); err != nil {
+	if err := f.a.ObserveOwnedRuntime(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	f.unchangedPrivateRuntime(t)

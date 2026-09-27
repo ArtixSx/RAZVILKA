@@ -350,7 +350,7 @@ func sameScopedDNSState(left, right scopedDNSState) bool {
 }
 
 // Readback only: this never issues an upstream query or repairs a rule.
-func (a *ScopedDNSAdapter) observeOwnedRuntime(ctx context.Context) error {
+func (a *ScopedDNSAdapter) ObserveOwnedRuntime(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	s, err := a.readState(a.statePath())
