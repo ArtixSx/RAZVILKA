@@ -606,16 +606,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		r.mu.Unlock()
 		return false // Give due maintenance/refill tasks a bounded opportunity.
 	}
-	index := -1
-	for i, j := range r.doc.Jobs {
-		if j.Request.Kind == "node-check" && a.bulkRecoveryDueLocked(now) {
-			continue
-		}
-		if (j.State == "queued" || j.State == "interrupted") && !now.Before(j.NotBefore) {
-			index = i
-			break
-		}
-	}
+	index := selectDurableServiceJob(r.doc.Jobs, now, a.bulkRecoveryDueLocked(now))
 	if stopIndex >= 0 {
 		index = stopIndex
 	}

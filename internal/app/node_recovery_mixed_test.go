@@ -17,7 +17,8 @@ import (
 
 type recoveryNFQWSAdapter struct{ nodeApplyAdapter }
 
-func (*recoveryNFQWSAdapter) ID() string { return "nfqws2" }
+func (*recoveryNFQWSAdapter) ID() string                                    { return "nfqws2" }
+func (*recoveryNFQWSAdapter) ObserveOwnedRuntime(ctx context.Context) error { return ctx.Err() }
 
 func mixedNodeRecoveryFixture(t *testing.T) (*App, *nodeApplyAdapter, *recoveryNFQWSAdapter, *recoveryChecker, dataplane.Plan) {
 	t.Helper()
