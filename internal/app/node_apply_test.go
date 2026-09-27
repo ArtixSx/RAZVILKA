@@ -26,13 +26,6 @@ type nodeApplyAdapter struct {
 	observe func(context.Context) error
 }
 
-func (a *nodeApplyAdapter) ObserveOwnedRuntime(ctx context.Context) error {
-	if a.observe != nil {
-		return a.observe(ctx)
-	}
-	return ctx.Err()
-}
-
 func (a *nodeApplyAdapter) ID() string { return "sing-box" }
 func (a *nodeApplyAdapter) phase(name string) error {
 	a.calls = append(a.calls, name)

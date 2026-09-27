@@ -25,6 +25,17 @@ import (
 
 const recoveryProfile = "wan-222222222222"
 
+// Only recovery fixtures explicitly model a running owned process. The generic
+// transaction fake still cannot turn a past committed journal into live proof.
+type observedNodeApplyAdapter struct{ *nodeApplyAdapter }
+
+func (a *observedNodeApplyAdapter) ObserveOwnedRuntime(ctx context.Context) error {
+	if a.observe != nil {
+		return a.observe(ctx)
+	}
+	return ctx.Err()
+}
+
 type recoveryChecker struct {
 	requests []dataplane.NodeCheckRequest
 	hook     func(context.Context, dataplane.NodeCheckRequest)
@@ -72,6 +83,7 @@ func nodeRecoveryFixture(t *testing.T) (*App, string, *nodeApplyAdapter, *recove
 		t.Fatal("no committed fixture")
 	}
 	adapter.calls = nil
+	a.Dataplane.Adapters["sing-box"] = &observedNodeApplyAdapter{adapter}
 	a.FreshProfile = func(context.Context) (string, error) { return recoveryProfile, nil }
 	a.Dataplane.FreshProfile = a.FreshProfile
 	checker := &recoveryChecker{}
