@@ -10,6 +10,18 @@ import (
 const panelAutonomyPath = "/api/v1/panel/autonomy"
 const panelAutonomyLifetime = 2 * time.Minute
 
+// PreparePanelAutonomy reads permissions after boot recovery, before workers
+// can own admission for their first long check. It never starts automation or
+// creates consent. A fenced recovery must not reload uncertain state.
+func (a *App) PreparePanelAutonomy(ctx context.Context) error {
+	release, err := a.Operations.Exclusive(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return a.loadAutonomy(ctx)
+}
+
 type panelAutonomyPublication struct {
 	InstanceID string
 	Revision   uint64

@@ -210,4 +210,11 @@ await test('source removal readback preserves unsaved wizard fields',async()=>{
  assert.equal(f.e('scopeAddresses').value,'192.168.1.77/32','background readback discarded local work');
 });
 
+await test('login during worker operation shows saved permissions with stale status',async()=>{
+ const f=fixture();f.respond(0,200,{schema:1,instance_id:'b'.repeat(32),revision:1,state:'retained',dataplane:'not-checked',data_age_ms:5000,observed_at:'2026-09-13T10:00:00Z',data:snapshot(1)});await flush();
+ assert.equal(f.e('workspace').hidden,false);assert.equal(f.e('heroState').textContent,'Состояние обновляется');
+ assert.equal(f.e('scopeAddresses').value,'192.0.2.1/32');assert.equal(f.e('pauseButton').disabled,false);
+ assert.match(f.e('connectionLabel').textContent,/Последние настройки/);
+});
+
 console.log(JSON.stringify({status:'passed',tests:passed}));

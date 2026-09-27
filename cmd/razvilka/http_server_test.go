@@ -72,13 +72,6 @@ func TestPanelServerShutdownWaitsForHandlerCleanupAfterCancellation(t *testing.T
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cleanup, finish := make(chan struct{}), make(chan struct{})
-	defer func() {
-		select {
-		case <-finish:
-		default:
-			close(finish)
-		}
-	}()
 	server := httptest.NewUnstartedServer(nil)
 	server.Config = newPanelHTTPServer(ctx, "", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -88,7 +81,15 @@ func TestPanelServerShutdownWaitsForHandlerCleanupAfterCancellation(t *testing.T
 		<-finish
 	}))
 	server.Start()
-	defer server.Close()
+	defer func() {
+		select {
+		case <-finish:
+		default:
+			close(finish)
+		}
+		server.Close()
+	}()
+
 	response, err := server.Client().Get(server.URL)
 	if err != nil {
 		t.Fatal(err)

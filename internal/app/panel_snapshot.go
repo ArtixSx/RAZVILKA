@@ -125,6 +125,9 @@ func (a *App) StartPanelSnapshots(ctx context.Context) {
 		}
 		instance := hex.EncodeToString(id[:])
 		a.publishPanelSnapshot(ctx, instance, time.Now())
+		// Prepared after boot recovery; this read-only collection still validates
+		// admission generation and does its file reads outside the short lease.
+		a.collectPanelAutonomy(ctx, instance, a.localPanelAutonomy)
 		autonomyDone := make(chan struct{})
 		go func() {
 			defer close(autonomyDone)

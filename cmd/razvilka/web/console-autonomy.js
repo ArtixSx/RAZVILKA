@@ -85,8 +85,8 @@
     return `Отложено подключений: ${entries.length}. Сервис вернул HTTP 403/451; новая проверка возможна через ${Math.ceil(seconds/60)} мин.`;
   }
   function panelAutonomyData(value) {
-    if(value?.schema!==1 || !/^[a-f0-9]{32}$/.test(value.instance_id||'') || !Number.isSafeInteger(value.revision) || value.revision<1 || value.dataplane!=='not-checked' || value.state!=='available' || !Number.isFinite(value.data_age_ms) || value.data_age_ms<0 || value.data_age_ms>=15000 || !value.data?.policy || !Number.isFinite(Date.parse(value.observed_at))) throw new Error('Состояние автопилота обновляется. Последние настройки сохранены; дождитесь свежего снимка.');
-    return {...value.data,observation:{instance_id:value.instance_id,revision:value.revision,observed_at:value.observed_at,data_age_ms:value.data_age_ms}};
+    if(value?.schema!==1 || !/^[a-f0-9]{32}$/.test(value.instance_id||'') || !Number.isSafeInteger(value.revision) || value.revision<1 || value.dataplane!=='not-checked' || !['available','retained'].includes(value.state) || !Number.isFinite(value.data_age_ms) || value.data_age_ms<0 || value.data_age_ms>=120000 || value.state==='available'&&value.data_age_ms>=15000 || !value.data?.policy || !Number.isFinite(Date.parse(value.observed_at))) throw new Error('Состояние автопилота обновляется. Последние настройки сохранены; дождитесь свежего снимка.');
+    return {...value.data,observation:{state:value.state,instance_id:value.instance_id,revision:value.revision,observed_at:value.observed_at,data_age_ms:value.data_age_ms}};
   }
   const model={validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData};
   if(typeof module==='object'&&module.exports) module.exports=model;
@@ -245,7 +245,7 @@
     $('reserveTarget').textContent=p.reserve_target;$('sourceCount').textContent=p.source_ids.length;
     $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${w.mode==='off'?'Выключено':w.mode==='prepare'?'Подготовка, без установки':'Проверка обновлений'} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
     $('maintenanceMessage').textContent=snapshot.maintenance_message||'Фактический результат появится после обслуживания на роутере.';
-    $('connectionLabel').textContent=`Состояние роутера · ${formatDate(snapshot.server_time)}`;
+    $('connectionLabel').textContent=`${presentationFresh?'Состояние роутера':'Последние настройки'} · ${formatDate(snapshot.server_time)}`;
     renderServices();fillWizard();renderStarterReview();
   }
   async function refresh(force=false, live=force) {
@@ -261,9 +261,10 @@
       // A cached poll begun before a mutation/readback must not undo its result.
       // A new process has its own publication instance and resets this ordering.
       const sameInstance=!snapshot?.observation || !next.observation || snapshot.observation.instance_id===next.observation.instance_id;
-      if(!live && sameInstance && Date.parse(next.server_time)<Date.parse(snapshot?.server_time))return false;
-      if(live && snapshot?.observation)next.observation={...snapshot.observation,observed_at:next.server_time};
-      snapshot=next;presentationFresh=true;window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
+      if(!live && sameInstance && Date.parse(next.server_time)<Date.parse(snapshot?.server_time)){if(next.observation.state==='retained')throw new Error('Нужны свежие данные автопилота.');return false;}
+      if(live && snapshot?.observation)next.observation={...snapshot.observation,state:'available',observed_at:next.server_time};
+      snapshot=next;presentationFresh=next.observation?.state!=='retained';window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
+      if(!presentationFresh)window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{message:'Показаны последние настройки. Состояние обновляется.'}}));
       if(force) dirty=false;
       $('authRequired').hidden=true;$('workspace').hidden=false;render();return true;
     } catch(e) {

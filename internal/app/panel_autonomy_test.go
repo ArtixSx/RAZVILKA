@@ -6,10 +6,56 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestPanelAutonomyPreparedBeforeFirstWorkerWithoutNewConsent(t *testing.T) {
+	a := autonomyAPIFixture(t)
+	before := a.Store.Get()
+	if err := a.PreparePanelAutonomy(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) || a.autonomyPolicy().Enabled {
+		t.Fatal("presentation changed consent")
+	}
+	if _, err := os.Stat(a.Store.AutomationStatePath() + ".autonomy.json"); !os.IsNotExist(err) {
+		t.Fatal("presentation created a sidecar", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.StartPanelSnapshots(ctx)
+	initial := a.panelAutonomyAt(time.Now())
+	if initial.State != "available" || len(initial.Data) == 0 {
+		cancel()
+		t.Fatal("initial policy not published before workers")
+	}
+	release, err := a.Operations.Exclusive(context.Background())
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	defer release()
+	retained := a.panelAutonomyAt(time.Now())
+	if retained.State != "retained" || string(retained.Data) != string(initial.Data) {
+		t.Fatal("worker hid saved permissions")
+	}
+	cancel()
+	release()
+	stop, end := context.WithTimeout(context.Background(), time.Second)
+	defer end()
+	if err := a.WaitPanelSnapshots(stop); err != nil {
+		t.Fatal(err)
+	}
+	b := autonomyAPIFixture(t)
+	b.Operations.Fence()
+	if b.PreparePanelAutonomy(context.Background()) == nil || b.autonomy.loaded {
+		t.Fatal("fenced recovery reloaded permissions")
+	}
+}
 
 func TestPanelAutonomyReadDoesNotInitializeSidecars(t *testing.T) {
 	a := autonomyAPIFixture(t)

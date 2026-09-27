@@ -525,6 +525,9 @@ func main() {
 	}
 	// Publish the initial settings before collectors/automation can take
 	// admission for a long first operation. Recovery above has already finished.
+	if err := a.PreparePanelAutonomy(runtimeContext); err != nil {
+		log.Print("Autopilot permissions are unavailable after boot recovery; panel remains available")
+	}
 	a.StartPanelSnapshots(runtimeContext)
 	statsSampler.Start(runtimeContext)
 	connectionCollector := conntrack.New(telemetryStore, store, func() catalog.Catalog {
