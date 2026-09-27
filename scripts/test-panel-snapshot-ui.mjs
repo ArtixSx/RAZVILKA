@@ -15,7 +15,8 @@ function fixture() {
     renderPanelLoad: () => context.renderSavedPanelSnapshot(),
     renderMetrics() {}, api: async () => snapshot(),
   };
-  for (const id of ['panelSavedNotice', 'ui3ServiceCatalog', 'ui3HomeServices', 'serviceList', 'ui3InspectorContent']) elements.set('#' + id, { hidden: true, textContent: 'protected' });
+  for (const id of ['panelSavedNotice', 'ui3ServiceCatalog', 'ui3HomeServices', 'serviceList', 'ui3InspectorContent', 'details', 'auditRows', 'ui3HomeEvents', 'deviceGrid']) elements.set('#' + id, { hidden: true, textContent: 'protected' });
+  elements.set('#detailsPanel', { open: true, classList: { remove() { elements.get('#detailsPanel').open = false; } } });
   vm.createContext(context); vm.runInContext(source, context);
   return { context, state, elements, listeners };
 }
@@ -62,12 +63,18 @@ await test('expired images stop supplying cards even after a later busy error cl
 });
 await test('logout clears saved private presentation and fences delayed HTTP body', async () => {
   const f = fixture(); await f.context.loadSavedPanelSnapshot(1, {});
+  f.state.audit = { available: true, events: [{ actor: 'private-user', path: '/private-history' }] };
+  f.state.noticeDetails = { privateResult: 'previous-operation' };
   let resolve; f.context.api = () => new Promise(r => resolve = r);
   const pending = f.context.loadSavedPanelSnapshot(1, {});
   f.context.cancelPanelRefresh(); f.context.showAuth(); resolve(snapshot(2)); await pending;
   assert.equal(f.state.savedPanel, null); assert.equal(f.state.services.length, 0);
   assert.equal(f.elements.get('#ui3ServiceCatalog').textContent, '');
   assert.equal(f.elements.get('#panelSavedNotice').hidden, true);
+  assert.equal(f.state.audit.events.length, 0); assert.equal(f.state.audit.available, false);
+  assert.equal(f.state.noticeDetails, null);
+  assert.equal(f.elements.get('#detailsPanel').open, false);
+  for (const id of ['details', 'auditRows', 'ui3HomeEvents', 'deviceGrid']) assert.equal(f.elements.get('#' + id).textContent, '', id + ' retained private presentation');
 });
 await test('snapshot 401 revokes the session but a timeout never erases valid settings', async () => {
   const f = fixture(); await f.context.loadSavedPanelSnapshot(1, {});

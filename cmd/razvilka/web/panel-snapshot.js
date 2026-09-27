@@ -88,11 +88,14 @@ document.addEventListener('razvilka:auth-required', () => {
   state.components = []; state.engines = []; state.engineConfigs = []; state.system = {};
   // Clear protected presentation and freshness markers before the next login.
   state.services = []; state.sources = []; state.devices = [];
+  state.audit = { events: [], available: false };
+  state.noticeDetails = null;
   state.nodes = { available: false, nodes: [], sources: [], counts: {} };
   state.dataLoad = {};
   const banner = $('#panelSavedNotice');
   if (banner) { banner.hidden = true; banner.textContent = ''; }
-  for (const id of ['ui3ServiceCatalog', 'ui3HomeServices', 'serviceList', 'ui3InspectorContent']) {
+  $('#detailsPanel')?.classList.remove('open');
+  for (const id of ['ui3ServiceCatalog', 'ui3HomeServices', 'serviceList', 'ui3InspectorContent', 'details', 'auditRows', 'ui3HomeEvents', 'deviceGrid']) {
     const element = document.getElementById(id);
     if (element) element.textContent = '';
   }
