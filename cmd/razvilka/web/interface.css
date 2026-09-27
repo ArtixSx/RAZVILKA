@@ -1472,3 +1472,8 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 @media (max-width: 520px) {
   .panel-availability { align-items: flex-start; flex-wrap: wrap; padding: 12px; }
 }
+
+/* Individual DNS: keep the action scope visible before confirmation. */
+.dns-scoped-fields{border:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.dns-scoped-fields label{display:grid;gap:8px}.dns-scoped-fields details{grid-column:1/-1}.dns-scoped-fields details label{margin-top:12px}.dns-scoped-review:not(:empty){padding:16px;border:1px solid var(--border);border-radius:12px;overflow-wrap:anywhere}#dnsScopedStatus{padding:0 20px 12px;overflow-wrap:anywhere}#dnsScopedForm{padding:0 20px}#dnsScopedPanel>.dc1-actions{padding:0 20px}.dns-scoped-review{margin:16px 20px}@media(max-width:640px){.dns-scoped-fields{grid-template-columns:1fr}}
+
+#dnsScopedPanel{margin-bottom:20px}#dnsScopedForm{padding-top:16px}.dns-scoped-review:empty{display:none}

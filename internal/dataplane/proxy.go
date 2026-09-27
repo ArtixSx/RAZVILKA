@@ -1176,6 +1176,9 @@ func (a *ProxyTunnelAdapter) run(parent context.Context, name string, args ...st
 	}
 	ctx, cancel := context.WithTimeout(parent, a.timeout())
 	defer cancel()
+	if isIPTablesCommand(name) {
+		return runFirewallCommand(ctx, a.Runner, name, args...)
+	}
 	output, err := a.Runner.Run(ctx, name, args...)
 	if ctx.Err() == context.DeadlineExceeded {
 		return output, errors.New("proxy command timed out")

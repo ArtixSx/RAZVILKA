@@ -143,6 +143,9 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		revision := *j.Request.ExpectedRevision
 		p.DNSRequest = &serviceDNSCompareRequest{ServiceID: j.Request.ServiceIDs[0], ProfileIDs: slices.Clone(j.Request.DNS.ProfileIDs), ConfigRevision: &revision, VerifyService: j.Request.DNS.VerifyService}
 	}
+	if j.Request.Kind == "dns-apply" && validDurableDNSApply(j.Request) {
+		p.ServiceID, p.DNSApplyAction = j.Request.ServiceIDs[0], j.Request.DNSApply.Action
+	}
 	return p
 }
 

@@ -8,6 +8,24 @@ import (
 	"time"
 )
 
+// CloseScopedDNS stops the in-process listener only after its owned redirects
+// are removed. It serializes with an apply or its rollback during shutdown.
+// Saved policy remains available for fresh verification after restart.
+func (m *Manager) CloseScopedDNS(ctx context.Context) error {
+	if err := m.beginOperation(ctx); err != nil {
+		return err
+	}
+	defer m.endOperation()
+	adapter, exists := m.adapter(scopedDNSAdapterID)
+	if !exists {
+		return nil
+	}
+	if owner, ok := adapter.(RuntimeDeactivator); ok {
+		return owner.Deactivate(ctx)
+	}
+	return errors.New("scoped DNS runtime cleanup is unavailable")
+}
+
 // PrepareDNSRecovery releases only the DNS runtime of the still-current
 // committed plan. A later Apply must obtain fresh authority and check health.
 // The application's existing exclusive lease spans BOTH calls and cleanup.

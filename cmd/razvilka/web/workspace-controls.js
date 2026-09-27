@@ -21,7 +21,9 @@ function clearWorkspaceRuntimeToken() {
 }
 
 function acceptWorkspaceRuntimeJobs(control) {
-  workspaceControl.dnsJobPending = typeof acceptDNSLabJobs === 'function' && acceptDNSLabJobs(control);
+  const comparingDNS = typeof acceptDNSLabJobs === 'function' && acceptDNSLabJobs(control);
+  const applyingDNS = typeof acceptDNSApplyJobs === 'function' && acceptDNSApplyJobs(control);
+  workspaceControl.dnsJobPending = comparingDNS || applyingDNS;
   const jobs = (control?.durable_jobs || []).filter(job => ['service-stop', 'service-resume'].includes(job.mode));
   const active = jobs.find(job => ['queued', 'running', 'canceling', 'interrupted'].includes(job.state));
   const previous = workspaceControl.runtimeJob;
@@ -30,6 +32,7 @@ function acceptWorkspaceRuntimeJobs(control) {
   if (finished) {
     workspaceControl.lastError = finished.state === 'failed' ? finished.message : '';
     showNotice(finished.state === 'completed' ? 'success' : 'review', finished.state === 'completed' ? 'Переключение завершено' : 'Проверьте состояние проекта', finished.message);
+    if (typeof refreshScopedDNS === 'function') refreshScopedDNS();
   }
   return !!active || workspaceControl.dnsJobPending;
 }

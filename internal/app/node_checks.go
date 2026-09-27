@@ -76,6 +76,7 @@ type nodeCheckJob struct {
 	ServiceResults          []serviceControlResult    `json:"service_results,omitempty"`
 	DNSResult               json.RawMessage           `json:"dns_result,omitempty"`
 	DNSRequest              *serviceDNSCompareRequest `json:"dns_request,omitempty"`
+	DNSApplyAction          string                    `json:"dns_apply_action,omitempty"`
 }
 
 type nodeCheckState struct {

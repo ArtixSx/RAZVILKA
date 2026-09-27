@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
@@ -15,6 +16,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -113,6 +116,8 @@ func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
 	installComponents := flag.Bool("install-components", false, "install or update recommended bypass components and exit")
 	deactivateDataplane := flag.Bool("deactivate-dataplane", false, "remove only RAZVILKA-owned runtime routes, interfaces and processes, then exit")
+	retryRollbackPlan := flag.String("retry-rollback-plan", "", "retry an intact failed rollback for this exact plan, while the panel is stopped")
+	retryRollbackDigest := flag.String("retry-rollback-digest", "", "reviewed digest required with retry-rollback-plan")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	flag.Parse()
@@ -130,13 +135,16 @@ func main() {
 		return
 	}
 	modes := 0
-	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane} {
+	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != ""} {
 		if enabled {
 			modes++
 		}
 	}
 	if modes > 1 {
 		log.Fatal("-check, -migrate-config, -recover-private-restore, -healthcheck, -install-components and -deactivate-dataplane are mutually exclusive")
+	}
+	if (*retryRollbackPlan == "") != (*retryRollbackDigest == "") {
+		log.Fatal("rollback recovery requires both plan and digest")
 	}
 	if *healthPID < 0 {
 		log.Fatal("-healthcheck-pid must not be negative")
@@ -206,6 +214,10 @@ func main() {
 		engineConfigs := engineconfig.New(*stagePath, *backupPath)
 		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineConfigs)
 		if err != nil {
+			log.Fatal(err)
+		}
+		// Runtime removal must also know DNS ownership when settings are absent.
+		if err := registerScopedDNS(dataplaneManager, nil); err != nil {
 			log.Fatal(err)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -328,10 +340,46 @@ func main() {
 		}
 		return profile.ID
 	}
+	// This narrow recovery cannot contain DNS. Do not open or migrate its
+	// settings before returning to the previously installed application.
+	if *retryRollbackPlan != "" {
+		baseline, err := os.ReadFile(*cfgPath)
+		if err != nil {
+			log.Fatal("rollback settings unavailable")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := dataplaneManager.RetryFailedRollback(ctx, *retryRollbackPlan, *retryRollbackDigest, func(previous dataplane.Plan) error {
+			current, readErr := os.ReadFile(*cfgPath)
+			if readErr != nil || !bytes.Equal(baseline, current) || !rollbackAppliedSettingsMatch(store.Get(), previous) {
+				return errors.New("applied settings changed or do not match the previous plan")
+			}
+			return nil
+		})
+		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
+			log.Fatal(encodeErr)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	dnsManager, err := dnscontrol.New(*dnsStatePath)
 	if err != nil {
 		log.Fatalf("DNS profile state: %v", err)
 	}
+	if err := registerScopedDNS(dataplaneManager, dnsManager); err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		// Unlike external proxy daemons, this DNS listener dies with the panel.
+		// Keep it alive through worker rollback, then remove DNAT before closing.
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := dataplaneManager.CloseScopedDNS(ctx); err != nil {
+			log.Print("DNS shutdown cleanup could not be confirmed; startup recovery is required")
+		}
+	}()
 	strategyLabManager, err := strategylab.New(*strategyLabStatePath)
 	if err != nil {
 		log.Fatalf("Strategy Lab state: %v", err)
@@ -638,6 +686,45 @@ func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*data
 		}
 	}
 	return manager, nil
+}
+
+func registerScopedDNS(manager *dataplane.Manager, dns *dnscontrol.Manager) error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	adapter := dataplane.NewScopedDNSAdapter(context.Background(), dns, manager.StateRoot)
+	adapter.ScopeCheck, adapter.HealthProbe = adapter.CheckLAN, adapter.ProbeDirect
+	return manager.Register(adapter)
+}
+
+func rollbackAppliedSettingsMatch(cfg config.Config, previous dataplane.Plan) bool {
+	if cfg.ServiceControl.Stopped || cfg.SafeMode || cfg.AppliedRevision != previous.Revision || cfg.AppliedNetworkPolicy != nil {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, route := range previous.Routes {
+		state := cfg.AppliedServices[route.ServiceID]
+		selected := state.Route
+		if selected == "" {
+			selected = state.Mode
+		}
+		if selected == "" {
+			selected = "auto"
+		}
+		left, right := slices.Clone(state.Sources), slices.Clone(route.Sources)
+		slices.Sort(left)
+		slices.Sort(right)
+		if !state.Enabled || seen[route.ServiceID] || selected != route.Selected || !slices.Equal(left, right) {
+			return false
+		}
+		seen[route.ServiceID] = true
+	}
+	for id, state := range cfg.AppliedServices {
+		if state.Enabled && !seen[id] {
+			return false
+		}
+	}
+	return len(seen) > 0
 }
 
 type preflightReport struct {

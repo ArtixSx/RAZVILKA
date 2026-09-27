@@ -2813,10 +2813,13 @@ function renderDNSServiceBindings() {
     return item.id !== 'automatic' && (!itemProvider?.requires_configuration || itemProvider?.configured);
   });
   const serviceDrafts = dns.service_drafts || {};
+  const serviceApplied = dns.service_applied || {};
   const services = [...(state.services || [])].sort((left, right) => Number(right.enabled) - Number(left.enabled) || left.name.localeCompare(right.name, 'ru'));
   $('#dnsServiceBindings').innerHTML = services.map((service) => {
     const selectedProfile = serviceDrafts[service.id] || 'inherit';
-    return `<label class="dns-service-binding ${selectedProfile !== 'inherit' ? 'changed' : ''}"><span><b>${esc(service.name)}</b><small>${service.enabled ? 'Сервис включён' : 'Сервис выключен'} · рабочий DNS не изменён</small></span><select data-dns-service="${esc(service.id)}" aria-label="DNS для ${esc(service.name)}"><option value="inherit">Наследовать общий DNS</option>${serviceProfiles.map((item) => `<option value="${esc(item.id)}" ${item.id === selectedProfile ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select></label>`;
+    const appliedProfile = serviceApplied[service.id] || 'inherit';
+    const current = appliedProfile === 'inherit' ? 'Отдельный DNS не применён' : 'Сохранён: ' + (dnsProfileByID(appliedProfile)?.name || appliedProfile);
+    return `<label class="dns-service-binding ${selectedProfile !== appliedProfile ? 'changed' : ''}"><span><b>${esc(service.name)}</b><small>${esc(current)}${selectedProfile !== appliedProfile ? ' · есть изменения' : ''}</small></span><select data-dns-service="${esc(service.id)}" aria-label="DNS для ${esc(service.name)}"><option value="inherit">Наследовать общий DNS</option>${serviceProfiles.map((item) => `<option value="${esc(item.id)}" ${item.id === selectedProfile ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select></label>`;
   }).join('') || '<div class="community-empty">Каталог сервисов временно недоступен.</div>';
 }
 

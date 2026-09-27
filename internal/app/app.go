@@ -2457,7 +2457,7 @@ func (a *App) dnsStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DNS control disabled", http.StatusServiceUnavailable)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+	writeJSON(w, http.StatusOK, a.dnsPanelSnapshot(r))
 }
 
 func (a *App) dnsPlan(w http.ResponseWriter, r *http.Request) {
@@ -2505,7 +2505,7 @@ func (a *App) dnsDraft(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+	writeJSON(w, http.StatusOK, a.dnsPanelSnapshot(r))
 }
 
 func (a *App) dnsServiceDraft(w http.ResponseWriter, r *http.Request) {
@@ -2540,7 +2540,7 @@ func (a *App) dnsServiceDraft(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+	writeJSON(w, http.StatusOK, a.dnsPanelSnapshot(r))
 }
 
 func (a *App) dnsNextDNS(w http.ResponseWriter, r *http.Request) {
@@ -2563,7 +2563,7 @@ func (a *App) dnsNextDNS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+	writeJSON(w, http.StatusOK, a.dnsPanelSnapshot(r))
 }
 
 func (a *App) dnsCustom(w http.ResponseWriter, r *http.Request) {
@@ -2591,7 +2591,7 @@ func (a *App) dnsCustom(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+	writeJSON(w, http.StatusOK, a.dnsPanelSnapshot(r))
 }
 
 func (a *App) dnsTest(w http.ResponseWriter, r *http.Request) {
@@ -2631,7 +2631,7 @@ func (a *App) dnsDiscard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.DNS.Snapshot())
+	writeJSON(w, http.StatusOK, a.dnsPanelSnapshot(r))
 }
 
 func (a *App) dnsApply(w http.ResponseWriter, r *http.Request) {
@@ -2660,7 +2660,7 @@ func (a *App) dnsApply(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "live_applied": false, "network_changed": false,
-		"note": "Системный DNS подтверждён без изменения настроек роутера.", "plan": plan, "dns": a.DNS.Snapshot(),
+		"note": "Системный DNS подтверждён без изменения настроек роутера.", "plan": plan, "dns": a.dnsPanelSnapshot(r),
 	})
 }
 

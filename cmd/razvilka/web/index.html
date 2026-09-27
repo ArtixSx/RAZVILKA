@@ -342,6 +342,12 @@ hysteria2://…
 </article>
 </section>
 <section class="view" id="view-dns">
+<article class="panel dc1-lab" id="dnsScopedPanel">
+<div class="panel-title"><div><span class="eyebrow">УСТРОЙСТВО И СЕРВИС</span><h2>Отдельный DNS</h2><p id="dnsScopedCurrent" role="status">Загружаем сохранённую настройку…</p></div><a class="secondary" href="#/services">Выбрать сервисы</a></div>
+<form id="dnsScopedForm"><fieldset id="dnsScopedFields" class="dns-scoped-fields"><label>Сервис и устройство<select id="dnsScopedService" required></select></label><label>DNS-профиль<select id="dnsScopedProfile" required></select></label><details><summary>Адрес роутера и интерфейс</summary><label>Адрес DNS-обработчика<input id="dnsScopedListener" placeholder="192.168.1.1:10553" maxlength="22" required></label><label>Домашний интерфейс<input id="dnsScopedIngress" placeholder="br0" maxlength="15" required></label><small>Определяются по адресу панели. При применении роутер проверит принадлежность домашней сети.</small></details></fieldset>
+<p id="dnsScopedEligibility" class="dc1-note"></p><div class="dc1-actions"><button id="dnsScopedPreview" class="secondary" type="submit">Посмотреть изменения</button><button id="dnsScopedRemove" class="secondary" type="button">Удалить привязку</button></div></form>
+<p id="dnsScopedReview" class="dns-scoped-review"></p><div class="dc1-actions"><button id="dnsScopedConfirm" class="primary" type="button" hidden>Проверить и применить</button><button id="dnsScopedCancel" class="secondary" type="button" hidden>Отменить задание</button></div><p id="dnsScopedStatus" role="status" aria-live="polite"></p>
+</article>
 <article class="panel dc1-lab" id="dnsServiceLab">
 <div class="panel-title"><div><span class="eyebrow">DNS ДЛЯ КОНКРЕТНОГО СЕРВИСА</span><h2>Проверка DNS для сервиса</h2><p>Обычный DNS и Smart DNS разделены. Выберите сервис и до трёх разрешённых провайдеров.</p></div><span class="safe-badge">ДИАГНОСТИКА · DC1</span></div>
 <div class="dc1-layout"><form id="dc1Form"><fieldset id="dc1Inputs"><label for="dc1Service">Сервис</label><select id="dc1Service" required></select><div class="dc1-profiles" id="dc1Profiles"></div><label class="dc1-consent"><input id="dc1Consent" type="checkbox" required><span>Разрешаю передать домен выбранного сервиса этим DNS по DoH через текущий системный маршрут. Это не проверка через выбранный VLESS и не гарантия анонимности.</span></label><label class="dc1-consent"><input id="dc1VerifyService" type="checkbox"><span>Проверить также сертификат и ответ сайта через полученные адреса. С роутера, через текущее подключение; до двух DNS-профилей.</span></label></fieldset><div class="dc1-actions"><button class="primary" type="submit" id="dc1Submit">Сравнить DNS-ответы</button><button class="secondary" type="button" id="dc1Cancel" hidden>Отменить</button></div><p id="dc1Status" role="status" aria-live="polite"></p></form>
@@ -350,7 +356,7 @@ hysteria2://…
 <details class="ui3-expert-disclosure" id="dc1ExpertSettings"><summary>Профили DNS и подробные настройки <span>Адреса, назначения и план применения</span></summary>
 <article class="panel dns-intro">
 <div class="panel-title"><div><span class="eyebrow">DNS CONTROL</span><h2>Как обрабатывать доменные имена</h2><p>Выберите понятный профиль и сначала проверьте его с роутера. Черновик не меняет рабочий DNS, DHCP или настройки клиентов.</p></div><span class="safe-badge">ПРЕДПРОСМОТР</span></div>
-<div class="dns-safety-note"><svg><use href="#i-shield"></use></svg><div><b>Безопасное внедрение по этапам</b><span>RAZVILKA уже обнаруживает владельца порта 53 и строит план snapshot → canary → rollback. Рабочее применение включится только после отдельной аппаратной проверки интеграции с DNS Keenetic/Netcraze.</span></div></div>
+<div class="dns-safety-note"><svg><use href="#i-shield"></use></svg><div><b>Безопасное внедрение по этапам</b><span>RAZVILKA уже обнаруживает владельца порта 53 и строит план snapshot → canary → rollback. Для одного устройства и прямого подключения доступен блок «Отдельный DNS». Изменение общего DNS домашней сети пока не подключено.</span></div></div>
 </article>
 <article class="panel">
 <div class="panel-title"><div><h2>Готовые профили</h2><p>DNS-фильтрация не убирает встроенную рекламу YouTube и не заменяет обход IP/SNI-блокировки.</p></div><div class="dns-actions"><button class="secondary" id="dnsDiscard" type="button">Сбросить черновик</button><button class="secondary" id="dnsTest" type="button">Проверить выбранный</button><button class="primary" id="dnsApply" type="button">Применить DNS</button></div></div>
@@ -361,7 +367,7 @@ hysteria2://…
 <article class="panel"><div class="panel-title"><div><h2>Выбранный провайдер</h2><p>Адреса и поддерживаемые защищённые транспорты</p></div></div><div class="dns-provider-detail" id="dnsProvider"><div class="community-empty">Выберите профиль.</div></div></article>
 <article class="panel"><div class="panel-title"><div><h2>Последняя проверка</h2><p>Отдельная проверка обычного DNS, TCP, DoH и DoT с роутера</p></div></div><div class="dns-probe-results" id="dnsProbeResults"><div class="community-empty">Проверка ещё не запускалась.</div></div></article>
 </div>
-<article class="panel dns-service-panel"><div class="panel-title"><div><span class="eyebrow">РАЗДЕЛЬНЫЙ DNS</span><h2>DNS для отдельных сервисов</h2><p>Можно подготовить индивидуальный профиль для Telegram, Xbox и других сервисов. Это только черновик: до появления проверенного DNS-диспетчера Keenetic трафик не переключается.</p></div><span class="safe-badge">ЧЕРНОВИК</span></div><div class="dns-service-bindings" id="dnsServiceBindings"><div class="community-empty">Загружаем каталог сервисов…</div></div></article>
+<article class="panel dns-service-panel"><div class="panel-title"><div><span class="eyebrow">РАЗДЕЛЬНЫЙ DNS</span><h2>DNS для отдельных сервисов</h2><p>Здесь сохраняется выбор профиля. Проверка и применение для устройства находятся в блоке «Отдельный DNS» выше.</p></div><span class="safe-badge">ЧЕРНОВИК</span></div><div class="dns-service-bindings" id="dnsServiceBindings"><div class="community-empty">Загружаем каталог сервисов…</div></div></article>
 <article class="panel"><div class="panel-title"><div><h2>План безопасного применения</h2><p>Показывает обязательные проверки и текущий блокер; сам план ничего не меняет.</p></div></div><div class="dns-plan" id="dnsPlan"><div class="community-empty">Строим DNS-план…</div></div></article>
 </details>
 </section>
@@ -682,6 +688,6 @@ fd00::25"></textarea><small>По одному адресу или диапазо
 </section>
 <div class="ext5-footer"><p id="ext5Status" role="status" aria-live="polite">Выберите действие.</p><button type="button" class="secondary" id="ext5Cancel" hidden>Отменить запрос</button></div>
 </dialog>
-<script src="/setup-workflows.js?v=0.18.10"></script><script src="/dns-service-lab.js?v=0.18.10"></script><script src="/automation-setup.js?v=0.18.10"></script><script src="/extension-lab.js?v=0.18.10"></script><script src="/panel-availability.js?v=0.18.10" defer></script>
+<script src="/setup-workflows.js?v=0.18.10"></script><script src="/dns-service-lab.js?v=0.18.10"></script><script src="/dns-scoped.js?v=0.18.10"></script><script src="/automation-setup.js?v=0.18.10"></script><script src="/extension-lab.js?v=0.18.10"></script><script src="/panel-availability.js?v=0.18.10" defer></script>
 </body>
 </html>
