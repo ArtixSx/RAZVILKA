@@ -206,6 +206,7 @@ type serviceView struct {
 	Dirty              bool                      `json:"dirty"`
 	RouteDirty         bool                      `json:"route_dirty"`
 	SourcesDirty       bool                      `json:"sources_dirty"`
+	Suspended          bool                      `json:"suspended"`
 	RouteAvailable     bool                      `json:"route_available"`
 	RouteIssue         string                    `json:"route_issue,omitempty"`
 	EvidenceLevel      evidence.Level            `json:"evidence_level"`
@@ -2685,9 +2686,11 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 	effectiveAppliedRoutes := a.appliedEffectiveRoutes(cfg)
 	strategies := a.nfqws2StrategySnapshot()
 	views := make([]serviceView, 0, len(services))
+	baseline := config.ServiceDraftBaseline(cfg)
 	for _, s := range services {
 		st := cfg.Services[s.ID]
 		applied := cfg.AppliedServices[s.ID]
+		saved := baseline[s.ID]
 		selected := selectedRoute(st)
 		planned := selected
 		if selected == "auto" {
@@ -2698,8 +2701,8 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		if appliedEffectiveRoute == "" {
 			appliedEffectiveRoute = appliedRoute
 		}
-		routeDirty := st.Enabled != applied.Enabled || selected != appliedRoute
-		sourcesDirty := !stringSlicesEqual(st.Sources, applied.Sources)
+		routeDirty := st.Enabled != saved.Enabled || selected != selectedRoute(saved)
+		sourcesDirty := !stringSlicesEqual(st.Sources, saved.Sources)
 		dirty := routeDirty || sourcesDirty
 		routeAvailable := routecatalog.ValidForServiceWithOptions(selected, s.ID, options)
 		routeIssue := ""
@@ -2718,7 +2721,7 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		appliedState := serviceRouteStateView{Enabled: applied.Enabled, Route: appliedEffectiveRoute, Source: "committed"}
 		observedState := serviceObservedStateView{Route: proof.Route, Level: proof.Level, Status: proof.Status, Source: proof.Source, CheckedAt: proof.CheckedAt, Outcome: proof.Outcome, ProbeID: proof.ProbeID, FreshUntil: proof.FreshUntil}
 		nfqws2 := nfqws2Presentation(s.ID, selected, planned, st.Enabled, appliedEffectiveRoute, applied.Enabled, proof, inventory, strategies, dirty)
-		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil, DesiredState: desiredState, PlannedState: plannedState, AppliedState: appliedState, ObservedState: observedState, NFQWS2: nfqws2})
+		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, Suspended: cfg.ServiceControl.Stopped && saved.Enabled, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil, DesiredState: desiredState, PlannedState: plannedState, AppliedState: appliedState, ObservedState: observedState, NFQWS2: nfqws2})
 	}
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Category == views[j].Category {

@@ -59,6 +59,7 @@ function renderSavedPanelSnapshot() {
       sources: s.sources || [], applied_sources: s.applied_sources || [],
       desired_state: s.desired, applied_state: s.applied,
       dirty: s.route_dirty || s.sources_dirty, route_dirty: s.route_dirty, sources_dirty: s.sources_dirty,
+      suspended: s.suspended === true,
       evidence_level: 'none', evidence_status: 'unknown', presentation_only: true,
     }));
     state.dataLoad.services = { loaded: true, phase: 'busy', savedRevision: value.revision,

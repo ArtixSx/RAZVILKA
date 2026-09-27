@@ -338,12 +338,13 @@ func validDraftScope(scope DraftScope) bool {
 }
 
 func draftScopeDirty(cfg Config, scope DraftScope) bool {
+	baseline := ServiceDraftBaseline(cfg)
 	if scope == DraftScopeAll {
-		return !reflect.DeepEqual(cfg.Services, cfg.AppliedServices)
+		return !reflect.DeepEqual(cfg.Services, baseline)
 	}
-	for id := range serviceKeys(cfg.Services, cfg.AppliedServices) {
+	for id := range serviceKeys(cfg.Services, baseline) {
 		desired := normalizeState(cfg.Services[id])
-		applied := normalizeState(cfg.AppliedServices[id])
+		applied := normalizeState(baseline[id])
 		switch scope {
 		case DraftScopeServices:
 			if desired.Enabled != applied.Enabled || desired.Route != applied.Route {
@@ -382,14 +383,15 @@ func applyDraftScope(cfg *Config, scope DraftScope) {
 }
 
 func discardDraftScope(cfg *Config, scope DraftScope) {
+	baseline := ServiceDraftBaseline(*cfg)
 	if scope == DraftScopeAll {
-		cfg.Services = cloneServices(cfg.AppliedServices)
+		cfg.Services = baseline
 		return
 	}
 	next := cloneServices(cfg.Services)
-	for id := range serviceKeys(cfg.Services, cfg.AppliedServices) {
+	for id := range serviceKeys(cfg.Services, baseline) {
 		desired := normalizeState(next[id])
-		applied := normalizeState(cfg.AppliedServices[id])
+		applied := normalizeState(baseline[id])
 		switch scope {
 		case DraftScopeServices:
 			desired.Enabled = applied.Enabled

@@ -109,13 +109,14 @@
   function humanService(s, summary = {}, managed = null, runtime = {}, available = true) {
     s=s&&typeof s==='object'?s:{};summary=summary&&typeof summary==='object'?summary:{};runtime=runtime&&typeof runtime==='object'?runtime:{};
     const applied=appliedView(s);
-    const changed=serviceChanged(s)||(typeof s.enabled==='boolean'&&typeof applied.enabled==='boolean'&&s.enabled!==applied.enabled);
+    const changed=serviceChanged(s)||(!s.suspended&&typeof s.dirty!=='boolean'&&typeof s.enabled==='boolean'&&typeof applied.enabled==='boolean'&&s.enabled!==applied.enabled);
     const member=s.enabled===true||!!managed||applied.enabled===true||changed;
     const result={member,changed,applied:applied.enabled===true,route:applied.enabled===true?text(applied.route):'',control:managed?managed.enabled?'Автоподбор включён':'Автоподбор на паузе':'Ручная настройка',kind:'unknown',actionable:false,label:'Не добавлен',detail:'Добавьте сервис, чтобы настроить доступ.'};
     if(!available||s.presentation_only)return {...result,label:'Нет свежих данных',detail:'Последние настройки сохранены. Работа сервиса сейчас не подтверждена.'};
     if(!member)return result;
     if(managed?.removing)return {...result,kind:'warn',label:'Отключение в очереди',detail:'Отключение ещё не завершено. Действующее подключение может сохраняться.'};
     if(changed){result.pendingLabel='Есть неприменённые изменения';result.actionable=true;}
+    if(s.suspended===true&&!result.applied)return {...result,label:'Остановлен',detail:'Настройки сохранены. Включите проект общей кнопкой.'};
     const blockers={'requires-review':'Нужно восстановление журнала','definition-changed':'Изменился состав сервиса','manual-change':'Есть ручное изменение','checker-unavailable':'Проверка временно недоступна','catalog-unavailable':'Источник подключений недоступен','component-unavailable':'Нужный компонент не готов','unsupported-scenario':'Для этого сценария нет проверки','apply-refused':'Применение не завершено','removal-blocked':'Снятие подключения приостановлено'};
     const blocked=managed?.enabled&&Object.hasOwn(blockers,runtime.state);
     if(blocked){result.actionable=true;result.pendingLabel=result.pendingLabel||blockers[runtime.state];}

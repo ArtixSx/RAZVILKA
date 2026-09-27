@@ -71,6 +71,50 @@ func TestPanelSnapshotPublicationAndExpiry(t *testing.T) {
 	}
 }
 
+func TestStoppedServicePresentationKeepsSavedSelectionWithoutLiveProof(t *testing.T) {
+	a := savedPanelFixture(t)
+	if err := a.Store.SetSafeMode(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Store.ApplyDraft(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Store.CommitServiceRuntime(true, map[string]string{"telegram": "direct"}, a.Store.Get().Revision); err != nil {
+		t.Fatal(err)
+	}
+	for _, edited := range []bool{false, true} {
+		if edited {
+			if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: false, Route: "direct", Sources: []string{"192.168.1.41/32"}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		response := httptest.NewRecorder()
+		a.services(response, httptest.NewRequest("GET", "/api/v1/services", nil))
+		var services []serviceView
+		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &services) != nil || len(services) != 1 {
+			t.Fatal(response.Body.String())
+		}
+		view := services[0]
+		if !view.Suspended || view.Applied || view.AppliedState.Enabled || view.Dirty != edited || view.RouteDirty != edited || view.SourcesDirty != edited {
+			t.Fatalf("incorrect live view %+v", view)
+		}
+		if !a.publishPanelSnapshot(context.Background(), strings.Repeat("a", 32), time.Now()) {
+			t.Fatal("snapshot unavailable")
+		}
+		var saved panelSavedData
+		if json.Unmarshal(a.panelSnapshotAt(time.Now()).Data, &saved) != nil || len(saved.Services) != 1 {
+			t.Fatal("snapshot missing services")
+		}
+		row := saved.Services[0]
+		if !row.Suspended || row.Applied.Enabled || row.RouteDirty != edited || row.SourcesDirty != edited {
+			t.Fatalf("incorrect saved view %+v", row)
+		}
+		if !a.Store.Get().ServiceControl.Stopped || len(a.Store.Get().AppliedServices) != 0 {
+			t.Fatal("presentation resumed project")
+		}
+	}
+}
+
 func TestPanelSnapshotRealHTTPBusyRecoveryAuth(t *testing.T) {
 	a := savedPanelFixture(t)
 	now := time.Now()

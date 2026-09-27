@@ -11,6 +11,23 @@ const model = createRequire(import.meta.url)('../cmd/razvilka/web/interface-mode
 const discord = { id: 'discord', name: 'Discord', enabled: false, applied_enabled: true,
   route: 'auto', applied_route: 'sing-box:node', dirty: true, route_dirty: true, sources_dirty: true };
 const untouched = { id: 'other', name: 'Other', enabled: false, applied_enabled: false };
+const suspended = { id:'saved', enabled:true, applied_enabled:false, suspended:true, dirty:false, route_dirty:false, sources_dirty:false };
+const oldProof = { kind:'good', route:'direct' };
+let stoppedView = model.humanService(suspended, oldProof, {enabled:true}, {state:'searching'});
+assert.equal(stoppedView.label, 'Остановлен');
+assert.equal(stoppedView.changed, false);
+assert.equal(stoppedView.actionable, false);
+assert.equal(stoppedView.applied, false);
+assert.notEqual(stoppedView.kind, 'good');
+assert.equal(model.humanCounts([suspended],{saved:oldProof}).attention, 0);
+assert.equal(model.filterServices([suspended],{scope:'changed'}).length,0);
+for (const edit of [{dirty:true},{route_dirty:true},{sources_dirty:true}]) {
+  stoppedView = model.humanService({...suspended,...edit},oldProof);
+  assert.equal(stoppedView.label,'Остановлен');
+  assert.equal(stoppedView.changed,true);
+  assert.equal(stoppedView.actionable,true);
+}
+assert.equal(model.humanService({...suspended,presentation_only:true},oldProof).label,'Нет свежих данных');
 assert.deepEqual(model.filterServices([discord, untouched], { scope: 'selected' }).map(s => s.id), ['discord']);
 assert.deepEqual(model.filterServices([discord, untouched], { scope: 'changed' }).map(s => s.id), ['discord']);
 assert.deepEqual(model.filterServices([{ ...discord, dirty: false, route_dirty: false, sources_dirty: false }], { scope: 'selected' }).map(s => s.id), ['discord']);

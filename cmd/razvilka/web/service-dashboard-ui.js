@@ -107,7 +107,8 @@ function serviceDashboardCard(service) {
   const result = serviceDashboardResult(service);
   const busy = !!serviceDashboard.operation || serviceDashboardJobActive();
   const scope = applied.enabled ? nodeScopeText(service.applied_sources || []) : 'Ещё не назначены';
-  const pending = service.dirty || service.enabled !== applied.enabled;
+  const pending = service.dirty === true || service.route_dirty === true || service.sources_dirty === true
+    || (!service.suspended && typeof service.dirty !== 'boolean' && service.enabled !== applied.enabled);
   const timing = serviceDashboardFresh(result) && Number.isFinite(result.latency_ms) ? `Время проверки: ${Math.round(result.latency_ms)} мс` : '';
   const pingNode = serviceDashboardPingNode(service);
   const id = esc(service.id);

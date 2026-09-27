@@ -60,6 +60,16 @@ func AppliedSources(cfg Config, id string) []string {
 	return slices.Clone(cfg.AppliedServices[id].Sources)
 }
 
+// ServiceDraftBaseline is the last saved selection for comparing or discarding
+// editor changes. While stopped it is not a live route or permission to resume.
+// Return a detached copy so callers cannot mutate the resume snapshot.
+func ServiceDraftBaseline(cfg Config) map[string]ServiceState {
+	if cfg.ServiceControl.Stopped {
+		return cloneServices(cfg.ServiceControl.SuspendedServices)
+	}
+	return cloneServices(cfg.AppliedServices)
+}
+
 func cloneServiceControl(c ServiceControl) ServiceControl {
 	c.Schedule.ServiceIDs = slices.Clone(c.Schedule.ServiceIDs)
 	if c.SuspendedServices != nil {

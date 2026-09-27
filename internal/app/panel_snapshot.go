@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
 )
@@ -34,6 +35,7 @@ type panelSavedService struct {
 	AppliedSources []string              `json:"applied_sources"`
 	RouteDirty     bool                  `json:"route_dirty"`
 	SourcesDirty   bool                  `json:"sources_dirty"`
+	Suspended      bool                  `json:"suspended"`
 }
 
 type panelSavedConfig struct {
@@ -193,15 +195,18 @@ func (a *App) publishPanelSnapshot(ctx context.Context, instance string, now tim
 	if len(definitions) > 512 {
 		return false
 	}
+	baseline := config.ServiceDraftBaseline(cfg)
 	for _, service := range definitions {
 		desired, applied := cfg.Services[service.ID], cfg.AppliedServices[service.ID]
+		saved := baseline[service.ID]
 		data.Services = append(data.Services, panelSavedService{
 			ID: service.ID, Name: service.Name, Category: service.Category, Custom: custom[service.ID],
 			Desired: serviceRouteStateView{Enabled: desired.Enabled, Route: selectedRoute(desired), Source: "saved-settings"},
 			Applied: serviceRouteStateView{Enabled: applied.Enabled, Route: selectedRoute(applied), Source: "saved-settings"},
 			Sources: slices.Clone(desired.Sources), AppliedSources: slices.Clone(applied.Sources),
-			RouteDirty:   desired.Enabled != applied.Enabled || selectedRoute(desired) != selectedRoute(applied),
-			SourcesDirty: !stringSlicesEqual(desired.Sources, applied.Sources),
+			RouteDirty:   desired.Enabled != saved.Enabled || selectedRoute(desired) != selectedRoute(saved),
+			SourcesDirty: !stringSlicesEqual(desired.Sources, saved.Sources),
+			Suspended:    cfg.ServiceControl.Stopped && saved.Enabled,
 		})
 	}
 	sort.Slice(data.Services, func(i, j int) bool { return data.Services[i].ID < data.Services[j].ID })
