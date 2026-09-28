@@ -1,10 +1,14 @@
 package app
 
-import "context"
+import (
+	"context"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+)
 
 func (a *App) StartNodeFeeds(ctx context.Context) {
 	if a.NodeFeeds != nil {
-		a.NodeFeeds.StartManaged(ctx, a.Operations.Enter)
+		a.NodeFeeds.StartManaged(operationgate.WithLabel(ctx, "обновление подписок"), a.Operations.Enter)
 	}
 }
 func (a *App) WaitNodeFeeds(ctx context.Context) error {

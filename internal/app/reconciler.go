@@ -17,6 +17,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/auditlog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -137,7 +138,7 @@ func (a *App) interruptAutomation(r *http.Request) {
 		return
 	}
 
-	if r.Method == http.MethodGet || r.Method == http.MethodHead || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || !strings.HasPrefix(r.URL.Path, "/api/v1/") {
+	if !operatorIntent(r) || strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || !strings.HasPrefix(r.URL.Path, "/api/v1/") {
 		return
 	}
 	// These handlers own job admission/cancellation. A stale cancel token or a
@@ -482,7 +483,7 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 			op.Deadline = dispatchedAt.Add(time.Duration(len(cfg.ServiceControl.Schedule.ServiceIDs)+1) * time.Minute)
 		}
 		op.Attempts = min(op.Attempts+1, 32)
-		attempt, cancel := context.WithDeadline(ctx, op.Deadline)
+		attempt, cancel := context.WithDeadline(operationgate.WithLabel(ctx, jobOperationLabel(task.kind)), op.Deadline)
 		r.cancel = cancel
 		if err = a.persistReconcilerLocked(ctx); err != nil {
 			cancel()

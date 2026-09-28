@@ -187,6 +187,9 @@ type App struct {
 	Start           time.Time
 	EffectiveListen string
 	Z2KRoot         string
+	// AdmissionPatience lets a panel request wait for a busy operation gate
+	// instead of failing at once. Zero keeps the immediate refusal.
+	AdmissionPatience time.Duration
 
 	CloudflareLegacy  *cloudflareprovider.LegacySources
 	privateBackupBusy atomic.Bool

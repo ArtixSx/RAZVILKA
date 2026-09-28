@@ -62,20 +62,31 @@ test_upgrade_readiness() {
   grep -q -- '-healthcheck-wait' "$READINESS_ROOT/startup.sh" || {
     echo "Upgrade has no bounded readiness check" >&2; exit 1;
   }
+  for READINESS_PRIOR in 1 0; do
   for READINESS_START_CODE in 0 75 1; do
   for READINESS_CODE in 0 1 75; do
-    READINESS_CASE="$READINESS_ROOT/$READINESS_START_CODE-$READINESS_CODE"
+    READINESS_CASE="$READINESS_ROOT/$READINESS_PRIOR-$READINESS_START_CODE-$READINESS_CODE"
     mkdir -p "$READINESS_CASE/bin"
     cat >"$READINESS_CASE/bin/razvilka" <<'HEALTH_FIXTURE'
 #!/bin/sh
 set -eu
-[ "$#" -eq 7 ] && [ "$1" = -healthcheck ] &&
-  [ "$2" = http://127.0.0.1:8787/api/v1/status ] &&
-  [ "$3" = -healthcheck-pid ] && [ "$4" = 4242 ] &&
-  [ "$5" = -healthcheck-require-dataplane ] &&
-  [ "$6" = -healthcheck-wait ] && [ "$7" = 9m ] || {
-    echo "Upgrade lost exact PID, strict evidence or bounded wait" >&2; exit 98;
-  }
+# Route evidence is required exactly when the previous version confirmed it.
+if [ "$READINESS_PRIOR" -eq 1 ]; then
+  [ "$#" -eq 7 ] && [ "$1" = -healthcheck ] &&
+    [ "$2" = http://127.0.0.1:8787/api/v1/status ] &&
+    [ "$3" = -healthcheck-pid ] && [ "$4" = 4242 ] &&
+    [ "$5" = -healthcheck-require-dataplane ] &&
+    [ "$6" = -healthcheck-wait ] && [ "$7" = 9m ] || {
+      echo "Upgrade lost exact PID, strict evidence or bounded wait" >&2; exit 98;
+    }
+else
+  [ "$#" -eq 6 ] && [ "$1" = -healthcheck ] &&
+    [ "$2" = http://127.0.0.1:8787/api/v1/status ] &&
+    [ "$3" = -healthcheck-pid ] && [ "$4" = 4242 ] &&
+    [ "$5" = -healthcheck-wait ] && [ "$6" = 9m ] || {
+      echo "Upgrade without prior route evidence lost exact PID or bounded wait" >&2; exit 98;
+    }
+fi
 touch "$READINESS_CASE/health-called"
 exit "$READINESS_CODE"
 HEALTH_FIXTURE
@@ -107,6 +118,7 @@ ROLLBACK="$BASE/rollback"
 BACKUP=fixture-snapshot
 CURRENT_BACKUP="$BASE/current-backup"
 RAZVILKA_PORT=8787
+PRIOR_ROUTES_CONFIRMED=$READINESS_PRIOR
 stage() { :; }
 . "$READINESS_ROOT/rollback-function.sh"
 trap 'rollback_on_error $?' EXIT
@@ -114,7 +126,7 @@ trap 'rollback_on_error $?' EXIT
 touch "$BASE/accepted"
 trap - EXIT
 STARTUP_FIXTURE
-    export READINESS_CASE READINESS_CODE READINESS_ROOT READINESS_START_CODE
+    export READINESS_CASE READINESS_CODE READINESS_ROOT READINESS_START_CODE READINESS_PRIOR
     ACTUAL_CODE=0
     sh "$READINESS_CASE/run.sh" >"$READINESS_CASE/output" 2>&1 || ACTUAL_CODE=$?
     if [ "$READINESS_START_CODE" -eq 1 ]; then
@@ -143,9 +155,42 @@ STARTUP_FIXTURE
     fi
   done
   done
+  done
+}
+
+# The strict route check is relaxed only when the previous process answered
+# its own health check but could not confirm routes.
+test_prior_route_evidence() {
+  PRIOR_ROOT="$TEST_ROOT/prior-evidence"
+  mkdir -p "$PRIOR_ROOT"
+  awk '/^PRIOR_ROUTES_CONFIRMED=1$/ {copy=1} copy {print} copy && /^fi$/ {exit}'     "$UPGRADE" >"$PRIOR_ROOT/probe.sh"
+  grep -q -- '-healthcheck-require-dataplane' "$PRIOR_ROOT/probe.sh" || {
+    echo "Upgrade has no prior route evidence probe" >&2; exit 1;
+  }
+  for PRIOR_MODE in live not-live down; do
+    PRIOR_CASE="$PRIOR_ROOT/$PRIOR_MODE"
+    mkdir -p "$PRIOR_CASE/bin"
+    cat >"$PRIOR_CASE/bin/razvilka" <<PRIOR_FIXTURE
+#!/bin/sh
+case "$PRIOR_MODE" in
+  live) exit 0 ;;
+  down) exit 1 ;;
+  not-live) for a in "\$@"; do [ "\$a" = -healthcheck-require-dataplane ] && exit 1; done; exit 0 ;;
+esac
+PRIOR_FIXTURE
+    printf '#!/bin/sh\ncase "$1" in pid) echo 4242 ;; lan-ip) echo 127.0.0.1 ;; esac\n' >"$PRIOR_CASE/init"
+    chmod 700 "$PRIOR_CASE/bin/razvilka" "$PRIOR_CASE/init"
+    RESULT="$(BASE="$PRIOR_CASE" BINDIR="$PRIOR_CASE/bin" RAZ_INIT="$PRIOR_CASE/init" RAZ_WAS_RUNNING=1       sh -c '. "$1" >/dev/null; printf %s "$PRIOR_ROUTES_CONFIRMED"' sh "$PRIOR_ROOT/probe.sh")"
+    EXPECTED=1
+    [ "$PRIOR_MODE" != not-live ] || EXPECTED=0
+    [ "$RESULT" = "$EXPECTED" ] || {
+      echo "Prior route evidence $PRIOR_MODE -> $RESULT, want $EXPECTED" >&2; exit 1;
+    }
+  done
 }
 
 test_upgrade_readiness
+test_prior_route_evidence
 prepare_root "$PRIMARY"
 prepare_root "$CONFLICT"
 prepare_root "$REMOVAL"

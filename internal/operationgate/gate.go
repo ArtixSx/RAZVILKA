@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 )
 
 var ErrBusy = errors.New("application operations are busy")
@@ -35,6 +36,50 @@ type Gate struct {
 	fenced     bool
 	reason     error // why the gate is fenced; the first reason is kept
 	generation uint64
+	holders    map[uint64]holder // admitted operations, for the busy explanation
+	nextHolder uint64
+}
+
+// holder describes one admitted operation. It is presentation only: it grants
+// nothing and is never used to decide admission.
+type holder struct {
+	label     string
+	since     time.Time
+	exclusive bool
+}
+
+type labelKey struct{}
+
+// WithLabel names the operation that ctx will enter the gate for, in words an
+// operator understands. The label is shown when another request is refused as
+// busy; it must not contain addresses, keys or other private data.
+func WithLabel(ctx context.Context, label string) context.Context {
+	return context.WithValue(ctx, labelKey{}, label)
+}
+
+func labelOf(ctx context.Context) string {
+	label, _ := ctx.Value(labelKey{}).(string)
+	return label
+}
+
+// Holder reports the operation that currently makes the gate busy: the
+// exclusive holder, otherwise the longest-running labeled shared one.
+func (g *Gate) Holder() (label string, since time.Time, ok bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.holderLocked()
+}
+
+func (g *Gate) holderLocked() (label string, since time.Time, ok bool) {
+	for _, h := range g.holders {
+		if h.exclusive {
+			return h.label, h.since, true
+		}
+		if h.label != "" && (!ok || h.since.Before(since)) {
+			label, since, ok = h.label, h.since, true
+		}
+	}
+	return label, since, ok
 }
 
 func (*Gate) String() string   { return "[application operation gate]" }
@@ -104,6 +149,12 @@ func (g *Gate) enterAfter(ctx context.Context, exclusive bool, generation *uint6
 		g.generation++
 	}
 	g.exclusive = exclusive
+	if g.holders == nil {
+		g.holders = map[uint64]holder{}
+	}
+	g.nextHolder++
+	id := g.nextHolder
+	g.holders[id] = holder{label: labelOf(ctx), since: time.Now(), exclusive: exclusive}
 	var once sync.Once
 	return func() {
 		once.Do(func() {
@@ -113,6 +164,7 @@ func (g *Gate) enterAfter(ctx context.Context, exclusive bool, generation *uint6
 			if exclusive {
 				g.exclusive = false
 			}
+			delete(g.holders, id)
 		})
 	}, nil
 }

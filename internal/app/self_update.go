@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
@@ -138,6 +139,7 @@ func selfUpdateError(w http.ResponseWriter, err error) {
 }
 
 func (a *App) StartSelfUpdate(ctx context.Context) {
+	ctx = operationgate.WithLabel(ctx, "обновление RAZVILKA")
 	if a.SelfUpdate != nil {
 		a.SelfUpdate.Start(ctx)
 		if a.SelfUpdate.StartupPending() {

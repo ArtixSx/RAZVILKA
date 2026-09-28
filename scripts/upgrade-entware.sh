@@ -263,6 +263,21 @@ if [ -x "$RAZ_INIT" ] && command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvi
   RAZ_WAS_RUNNING=1
 fi
 
+# Stage 7 must not demand route evidence the running version could not give
+# either. Relax it only when the previous process answered its own health
+# check but could not confirm routes (for example, nodes await fresh checks
+# after recovery). Any other outcome keeps the strict route check.
+PRIOR_ROUTES_CONFIRMED=1
+if [ "$RAZ_WAS_RUNNING" -eq 1 ] && [ -x "$BINDIR/razvilka" ]; then
+  PRIOR_PID="$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" pid 2>/dev/null || true)"
+  PRIOR_URL="http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip 2>/dev/null || true):${RAZVILKA_PORT:-8787}/api/v1/status"
+  if [ -n "$PRIOR_PID" ] && "$BINDIR/razvilka" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" >/dev/null 2>&1 &&
+    ! "$BINDIR/razvilka" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-require-dataplane >/dev/null 2>&1; then
+    PRIOR_ROUTES_CONFIRMED=0
+    echo "Маршруты не подтверждены в текущей версии; после обновления будет проверена только работа панели."
+  fi
+fi
+
 BACKUP=""
 SAFE_TO_RESTART=1
 restart_before_snapshot() {
@@ -537,9 +552,18 @@ RUNNING_PID="$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" pid)"
 # Exact-node recovery starts after the listener and may own admission for up
 # to eight minutes. Only the bounded strict check can accept its live evidence;
 # an extra one-shot `status` here would prematurely reject pending recovery.
-stage 7 "Проверяем процесс и ждём подтверждённого восстановления маршрутов (до 9 минут)..."
+if [ "${PRIOR_ROUTES_CONFIRMED:-1}" -eq 1 ]; then
+  stage 7 "Проверяем процесс и ждём подтверждённого восстановления маршрутов (до 9 минут)..."
+  ROUTE_EVIDENCE=-healthcheck-require-dataplane
+else
+  stage 7 "Проверяем процесс; маршруты не были подтверждены и до обновления..."
+  ROUTE_EVIDENCE=""
+fi
 "$BINDIR/razvilka" -healthcheck "http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip):${RAZVILKA_PORT:-8787}/api/v1/status" \
-  -healthcheck-pid "$RUNNING_PID" -healthcheck-require-dataplane -healthcheck-wait 9m >/dev/null
+  -healthcheck-pid "$RUNNING_PID" ${ROUTE_EVIDENCE:+"$ROUTE_EVIDENCE"} -healthcheck-wait 9m >/dev/null
+if [ -z "$ROUTE_EVIDENCE" ]; then
+  echo "Панель обновлена. Маршруты не были подтверждены и до обновления: проверьте подключения и примените сервисы в панели."
+fi
 
 printf '%s\n' "$BACKUP" >"$CURRENT_BACKUP"
 chmod 600 "$CURRENT_BACKUP"

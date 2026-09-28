@@ -37,6 +37,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 	"github.com/ArtixSx/razvilka/internal/routeprobe"
@@ -488,6 +489,9 @@ func main() {
 	}
 	nodeChecker := dataplane.NewExactNodeChecker(filepath.Join(*dataplaneStatePath, "node-check"))
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
+	// Panel actions wait briefly for background work instead of failing with
+	// "busy" at once; the operation holding the gate is named if they still fail.
+	a.AdmissionPatience = 20 * time.Second
 	a.Cloudflare = cloudflareStore
 	updateExecutable, _ := os.Executable()
 	_, updatePort, _ := net.SplitHostPort(addr)
@@ -577,7 +581,7 @@ func main() {
 	connectionCollector.Operations = &a.Operations
 	connectionCollector.LatestPlan = dataplaneManager.Latest
 	connectionCollector.WANInterface = func() string { return systemprobe.Probe().WANInterface }
-	connectionCollector.Start(runtimeContext)
+	connectionCollector.Start(operationgate.WithLabel(runtimeContext, "сбор активных соединений"))
 	log.Println(app.StartupMessage(addr, *cfgPath, *catalogPath))
 	srv := newPanelHTTPServer(runtimeContext, addr, a.Handler(http.FileServer(http.FS(sub))))
 	serverErrors := make(chan error, 1)

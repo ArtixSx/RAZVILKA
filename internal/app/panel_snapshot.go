@@ -113,6 +113,7 @@ type panelSnapshotResponse struct {
 // lease. It never waits for a worker, downloads lists, probes engines, resolves
 // DNS or reads a transaction journal. Busy/recovery leaves the old image intact.
 func (a *App) StartPanelSnapshots(ctx context.Context) {
+	ctx = operationgate.WithLabel(ctx, "обновление данных панели")
 	a.panelSnapshots.once.Do(func() {
 		p := &a.panelSnapshots
 		p.wake, p.done, p.started = make(chan struct{}, 1), make(chan struct{}), true

@@ -15,7 +15,12 @@
     if (value.kind === 'unsupported') return 'Быстрая диагностика недоступна. Сервер и интерфейс должны быть обновлены вместе.';
     if (value.kind === 'unreachable') return 'Панель не ответила на быструю проверку. Последние данные сохранены; это не доказывает остановку обходов.';
     if (value.admission?.state === 'recovery-required') return 'Панель отвечает. Изменения приостановлены до восстановления журнала; обычное применение не снимет эту защиту.';
-    if (value.admission?.state === 'busy') return 'Панель отвечает. Выполняется операция; можно переходить между разделами. Изменение маршрутов временно занято.';
+    if (value.admission?.state === 'busy') {
+      // The server names the running operation in fixed words; no timer text,
+      // so the live region does not change on every heartbeat.
+      const operation = typeof value.admission.operation === 'string' && value.admission.operation ? `Сейчас выполняется: ${value.admission.operation}.` : 'Выполняется операция.';
+      return `Панель отвечает. ${operation} Можно переходить между разделами; действия подождут её завершения.`;
+    }
     return 'Панель отвечает. Доступность сервисов и работа обходов проверяются отдельно.';
   }
 

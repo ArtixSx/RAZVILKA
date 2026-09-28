@@ -159,3 +159,40 @@ func TestFenceReasonDistinguishesJournalRecovery(t *testing.T) {
 		t.Fatalf("snapshot = %+v", s)
 	}
 }
+
+func TestHolderNamesTheBusyOperation(t *testing.T) {
+	var g Gate
+	if _, _, ok := g.Holder(); ok {
+		t.Fatal("idle gate reported a holder")
+	}
+	shared, err := g.Enter(WithLabel(context.Background(), "Сбор соединений"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	unnamed, err := g.Enter(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if label, _, ok := g.Holder(); !ok || label != "Сбор соединений" {
+		t.Fatalf("shared holder = %q %v", label, ok)
+	}
+	if s := g.Snapshot(); s.Operation != "Сбор соединений" || s.State != "shared" {
+		t.Fatalf("snapshot = %+v", s)
+	}
+	shared()
+	unnamed()
+	exclusive, err := g.Exclusive(WithLabel(context.Background(), "Автопилот"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Enter(context.Background()); !errors.Is(err, ErrBusy) {
+		t.Fatal("exclusive admission was shared", err)
+	}
+	if label, _, ok := g.Holder(); !ok || label != "Автопилот" {
+		t.Fatalf("exclusive holder = %q %v", label, ok)
+	}
+	exclusive()
+	if s := g.Snapshot(); s.Operation != "" || s.State != "idle" {
+		t.Fatalf("released holder still shown: %+v", s)
+	}
+}

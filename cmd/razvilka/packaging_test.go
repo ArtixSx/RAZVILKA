@@ -32,7 +32,11 @@ func TestEntwareUpgradeDoesNotRequireArchiveScriptModeBits(t *testing.T) {
 		`stage 4 "Сохраняем и отключаем только принадлежащий RAZVILKA dataplane`,
 		`stage 6 "Запускаем новую версию и ждём готовности панели`,
 		`stage 7 "Проверяем процесс и ждём подтверждённого восстановления маршрутов`,
-		`-healthcheck-pid "$RUNNING_PID" -healthcheck-require-dataplane -healthcheck-wait 9m`,
+		// Strict route evidence stays the default; it is relaxed only when the
+		// previous version answered but could not confirm routes either.
+		`PRIOR_ROUTES_CONFIRMED=1`,
+		`ROUTE_EVIDENCE=-healthcheck-require-dataplane`,
+		`-healthcheck-pid "$RUNNING_PID" ${ROUTE_EVIDENCE:+"$ROUTE_EVIDENCE"} -healthcheck-wait 9m`,
 	} {
 		if !strings.Contains(upgradeText, required) {
 			t.Fatalf("upgrade script lost archive-mode safeguard %q", required)

@@ -641,7 +641,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	j.State, j.Phase, j.CleanupOutcome = "running", "checking", "pending"
 	j.Deadline = minTime(now.Add(budget), j.ExpiresAt)
 	j.Attempts++
-	attempt, cancel := context.WithDeadline(ctx, j.Deadline)
+	attempt, cancel := context.WithDeadline(operationgate.WithLabel(ctx, jobOperationLabel(j.Request.Kind)), j.Deadline)
 	r.cancel = cancel
 	r.activeJobID = j.ID
 	if err := a.persistReconcilerLocked(ctx); err != nil {

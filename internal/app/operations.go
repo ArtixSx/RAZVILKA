@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"net/http"
 	"os"
@@ -133,7 +134,11 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if exclusive {
 			enter = a.Operations.Exclusive
 		}
-		release, err := enter(r.Context())
+		labeled := operationgate.WithLabel(r.Context(), requestOperationLabel(r))
+		release, err := enter(labeled)
+		if errors.Is(err, operationgate.ErrBusy) {
+			release, err = waitForAdmission(labeled, enter, a.admissionPatience(r))
+		}
 		if err != nil {
 			a.writeOperationFailure(w, err)
 			return
@@ -145,7 +150,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 				a.wakePanelSnapshot()
 			}
 		}()
-		ctx := context.WithValue(r.Context(), operationContextKey{}, scope)
+		ctx := context.WithValue(labeled, operationContextKey{}, scope)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -168,11 +173,17 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 	code := "OPERATION_CANCELED"
 	message := "Действие отменено до начала. Настройки не изменены."
 	status := http.StatusRequestTimeout
+	var holder map[string]any
 	if errors.Is(err, operationgate.ErrBusy) {
 		code = "RESTORE_OPERATION_BUSY"
 		message = "Сейчас выполняется другая операция. Дождитесь её завершения и повторите действие. Настройки этим запросом не изменены."
 		status = http.StatusConflict
 		w.Header().Set("Retry-After", "2")
+		if label, since, ok := a.Operations.Holder(); ok && label != "" {
+			elapsed := int64(time.Since(since) / time.Second)
+			message = fmt.Sprintf("Сейчас выполняется: %s (%s). Дождитесь её завершения и повторите действие. Настройки этим запросом не изменены.", label, operationAge(elapsed))
+			holder = map[string]any{"label": label, "seconds": elapsed}
+		}
 	}
 	recovery := errors.Is(err, operationgate.ErrRecovery)
 	if recovery {
@@ -187,8 +198,133 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 	}
 	// Identity is cache-independent. Supervisors can recognize a live but busy
 	// process without reading locked Stores or inventing dataplane health.
-	writeJSON(w, status, map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false, "recovery_required": recovery,
-		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "node_recovery": a.nodeRecoverySnapshot()})
+	body := map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false, "recovery_required": recovery,
+		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "node_recovery": a.nodeRecoverySnapshot()}
+	if holder != nil {
+		body["operation"] = holder
+	}
+	writeJSON(w, status, body)
+}
+
+func operationAge(seconds int64) string {
+	if seconds < 60 {
+		return fmt.Sprintf("идёт %d с", max(seconds, 1))
+	}
+	return fmt.Sprintf("идёт %d мин", seconds/60)
+}
+
+// operatorIntent reports a request the operator started with a click. Beyond
+// mutations, the plan previews behind "Установить"/"Применить" are GET but
+// still express intent; periodic panel reads are not.
+func operatorIntent(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return true
+	}
+	return r.URL.Path == "/api/v1/plan" || strings.HasPrefix(r.URL.Path, "/api/v1/components/") && strings.HasSuffix(r.URL.Path, "/plan")
+}
+
+// admissionPatience bounds how long a panel request waits for a busy gate.
+// Reads only ride over short observations; an operator action interrupts
+// automation and waits for its cleanup. The status endpoint never waits:
+// supervisors must see RESTORE_OPERATION_BUSY promptly.
+func (a *App) admissionPatience(r *http.Request) time.Duration {
+	if a.AdmissionPatience <= 0 || r.URL.Path == "/api/v1/status" {
+		return 0
+	}
+	if operatorIntent(r) {
+		return a.AdmissionPatience
+	}
+	return min(a.AdmissionPatience, 2*time.Second)
+}
+
+// waitForAdmission retries a busy admission until patience runs out. The gate
+// itself never queues; this only spares the operator an immediate refusal.
+func waitForAdmission(ctx context.Context, enter func(context.Context) (func(), error), patience time.Duration) (func(), error) {
+	if patience <= 0 {
+		return nil, operationgate.ErrBusy
+	}
+	deadline := time.NewTimer(patience)
+	defer deadline.Stop()
+	retry := time.NewTicker(100 * time.Millisecond)
+	defer retry.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline.C:
+			return nil, operationgate.ErrBusy
+		case <-retry.C:
+			if release, err := enter(ctx); !errors.Is(err, operationgate.ErrBusy) {
+				return release, err
+			}
+		}
+	}
+}
+
+// requestOperationLabel names a panel request for the busy explanation, by
+// section only: never IDs, addresses or other request data.
+func requestOperationLabel(r *http.Request) string {
+	path := r.URL.Path
+	switch {
+	case strings.HasPrefix(path, "/api/v1/components/"):
+		return "установка или обновление компонента"
+	case path == "/api/v1/apply" || path == "/api/v1/plan":
+		return "проверка и применение изменений"
+	case strings.HasPrefix(path, "/api/v1/node-checks"):
+		return "проверка подключений"
+	case strings.HasPrefix(path, "/api/v1/nodes") || strings.HasPrefix(path, "/api/v1/node-"):
+		return "изменение подключений"
+	case strings.HasPrefix(path, "/api/v1/service-control"):
+		return "управление сервисами"
+	case strings.HasPrefix(path, "/api/v1/dns"):
+		return "настройка DNS"
+	case strings.HasPrefix(path, "/api/v1/autonomy"):
+		return "настройки автопилота"
+	case strings.HasPrefix(path, "/api/v1/private-backups"):
+		return "восстановление резервной копии"
+	case strings.HasPrefix(path, "/api/v1/self-update"):
+		return "обновление RAZVILKA"
+	case strings.HasPrefix(path, "/api/v1/warp") || strings.HasPrefix(path, "/api/v1/amneziawg") || strings.HasPrefix(path, "/api/v1/cloudflare"):
+		return "настройка туннеля"
+	case strings.HasPrefix(path, "/api/v1/sources") || strings.HasPrefix(path, "/api/v1/community"):
+		return "обновление списков"
+	}
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return "чтение данных панели"
+	}
+	return "действие в панели"
+}
+
+// jobOperationLabel names queued jobs and scheduled tasks for the same
+// explanation, again with fixed words only.
+func jobOperationLabel(kind string) string {
+	switch kind {
+	case "check", "service-checks":
+		return "проверка сервисов"
+	case "select":
+		return "подбор подключения для сервиса"
+	case "node-check":
+		return "проверка подключений"
+	case "node-apply":
+		return "применение подключения"
+	case "dns-apply":
+		return "применение DNS"
+	case "dns-compare":
+		return "сравнение DNS"
+	case "stop":
+		return "остановка обходов"
+	case "resume":
+		return "запуск обходов"
+	case "node-recovery":
+		return "восстановление подключений"
+	case "node-fallback":
+		return "поиск резервного подключения"
+	case "legacy-routes":
+		return "обновление адресов маршрутов"
+	case "feeds":
+		return "автопилот: проверка сервисов и подписок"
+	}
+	return "фоновая операция"
 }
 
 func (a *App) backgroundRound(ctx context.Context, round int) {
