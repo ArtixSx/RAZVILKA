@@ -172,6 +172,8 @@ start_process() {
     else
       HEALTH_CODE=$?
     fi
+    # A fenced network journal survives restarts; waiting will not clear it.
+    [ "$HEALTH_CODE" -ne 76 ] || break
     sleep 1
     WAIT=$((WAIT + 1))
   done
@@ -179,6 +181,10 @@ start_process() {
   if [ "$HEALTH_CODE" -eq 75 ]; then
     echo "RAZVILKA is running but private restore is busy; readiness not confirmed. Process kept; check status later." >&2
     return 75
+  fi
+  if [ "$HEALTH_CODE" -eq 76 ]; then
+    echo "RAZVILKA is running, but its network transaction journal requires recovery review. Process kept so the panel stays reachable; a restart will not clear this." >&2
+    return 76
   fi
 
   echo "RAZVILKA failed health check; stopping failed process" >&2
@@ -199,6 +205,10 @@ status_process() {
   if [ "$HEALTH_CODE" -eq 75 ]; then
     echo "RAZVILKA private restore is busy; readiness temporarily unavailable. Do not restart." >&2
     return 75
+  fi
+  if [ "$HEALTH_CODE" -eq 76 ]; then
+    echo "RAZVILKA network transaction journal requires recovery review; the panel stays reachable. Do not restart." >&2
+    return 76
   fi
   PID="$(running_pid 2>/dev/null || true)"
   if [ -n "$PID" ]; then

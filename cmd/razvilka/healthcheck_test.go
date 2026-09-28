@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -33,8 +34,34 @@ func TestCheckHealthDistinguishesRealRestoreBusyFromFailure(t *testing.T) {
 		t.Fatal("wrong PID accepted")
 	}
 	a.Operations.Fence()
-	if _, err := checkHealth(server.URL+"/api/v1/status", 0, false); errors.Is(err, errHealthBusy) || err == nil {
-		t.Fatal("recovery required mistaken for temporary busy")
+	if _, err := checkHealth(server.URL+"/api/v1/status", 0, false); errors.Is(err, errHealthBusy) || errors.Is(err, errHealthRecovery) || err == nil {
+		t.Fatal("private restore fence mistaken for busy or journal recovery", err)
+	}
+}
+
+// A journal fence survives restarts, so the supervisor must keep the process
+// (exit 76) instead of killing the only reachable panel in a loop.
+func TestCheckHealthReportsJournalFenceSeparately(t *testing.T) {
+	a := &app.App{}
+	a.Operations.FenceJournal()
+	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer server.Close()
+	for _, strict := range []bool{false, true} {
+		version, err := checkHealth(server.URL+"/api/v1/status", os.Getpid(), strict)
+		if !errors.Is(err, errHealthRecovery) || errors.Is(err, errHealthBusy) || version != "" {
+			t.Fatal("journal fence was not reported as recovery", version, err)
+		}
+	}
+	if _, err := checkHealth(server.URL+"/api/v1/status", 999999, false); errors.Is(err, errHealthRecovery) || err == nil {
+		t.Fatal("journal fence accepted for a different process", err)
+	}
+	forged := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprint(w, `{"name":"RAZVILKA","version":"0.0.0-other","process_id":1234,"code":"DATAPLANE_RECOVERY_REQUIRED","not_started":true,"recovery_required":true}`)
+	}))
+	defer forged.Close()
+	if _, err := checkHealth(forged.URL, 1234, false); errors.Is(err, errHealthRecovery) || err == nil {
+		t.Fatal("foreign version accepted as journal recovery", err)
 	}
 }
 

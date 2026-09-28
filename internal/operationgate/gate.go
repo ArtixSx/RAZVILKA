@@ -13,6 +13,18 @@ var ErrBusy = errors.New("application operations are busy")
 var ErrRecovery = errors.New("application operations require private restore recovery")
 var ErrChanged = errors.New("application operations changed during observation")
 
+// ErrJournalRecovery is the fence reason when startup found an unfinished or
+// unverified network transaction. It matches ErrRecovery, but unlike a private
+// restore a restart does not settle it: an operator must review the journal.
+var ErrJournalRecovery error = journalRecoveryError{}
+
+type journalRecoveryError struct{}
+
+func (journalRecoveryError) Error() string {
+	return "application operations require network transaction journal recovery"
+}
+func (journalRecoveryError) Is(target error) bool { return target == ErrRecovery }
+
 // Gate's zero value is ready to use. Do not copy after first use. Ordinary
 // operations may overlap; an exclusive operation starts only when none are
 // active. Admission never queues, cancels a worker or forcibly releases it.
@@ -21,6 +33,7 @@ type Gate struct {
 	active     uint64
 	exclusive  bool
 	fenced     bool
+	reason     error // why the gate is fenced; the first reason is kept
 	generation uint64
 }
 
@@ -33,9 +46,18 @@ func (g *Gate) Exclusive(ctx context.Context) (func(), error) { return g.enter(c
 // Fence permanently refuses new admissions on this instance. Call while still
 // owning exclusive admission after an uncertain restore. Only a fresh startup,
 // after durable journal recovery and Store reload, can create a new open Gate.
-func (g *Gate) Fence() {
+func (g *Gate) Fence() { g.fence(ErrRecovery) }
+
+// FenceJournal fences like Fence and records that the network transaction
+// journal, not a private restore, requires review.
+func (g *Gate) FenceJournal() { g.fence(ErrJournalRecovery) }
+
+func (g *Gate) fence(reason error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if !g.fenced {
+		g.reason = reason
+	}
 	g.fenced = true
 }
 
@@ -66,7 +88,7 @@ func (g *Gate) enterAfter(ctx context.Context, exclusive bool, generation *uint6
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.fenced {
-		return nil, ErrRecovery
+		return nil, g.reason
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

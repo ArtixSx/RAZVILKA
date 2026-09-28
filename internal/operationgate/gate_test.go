@@ -141,3 +141,21 @@ func TestParallelAdmissionNeverOverlapsExclusive(t *testing.T) {
 	}
 	release()
 }
+
+func TestFenceReasonDistinguishesJournalRecovery(t *testing.T) {
+	var private, journal Gate
+	private.Fence()
+	journal.FenceJournal()
+	journal.Fence() // the first reason is kept
+	if _, err := private.Enter(context.Background()); !errors.Is(err, ErrRecovery) || errors.Is(err, ErrJournalRecovery) {
+		t.Fatalf("private restore fence = %v", err)
+	}
+	for _, enter := range []func(context.Context) (func(), error){journal.Enter, journal.Exclusive} {
+		if _, err := enter(context.Background()); !errors.Is(err, ErrRecovery) || !errors.Is(err, ErrJournalRecovery) {
+			t.Fatalf("journal fence = %v", err)
+		}
+	}
+	if s := journal.Snapshot(); !s.Fenced || s.State != "recovery-required" {
+		t.Fatalf("snapshot = %+v", s)
+	}
+}

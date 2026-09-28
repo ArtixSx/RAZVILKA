@@ -183,6 +183,10 @@ func main() {
 			log.Print(err)
 			os.Exit(75) // EX_TEMPFAIL: not healthy, but do not restart an active import.
 		}
+		if errors.Is(err, errHealthRecovery) {
+			log.Print(err)
+			os.Exit(76) // Not healthy; keep the process so its panel stays reachable.
+		}
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -506,7 +510,7 @@ func main() {
 	if errors.Is(recoveryErr, dataplane.ErrExecutionJournal) {
 		// Keep the panel readable, but do not let a restart reopen admission
 		// after an unfinished or inconsistently recorded network transaction.
-		a.Operations.Fence()
+		a.Operations.FenceJournal()
 	}
 	if recovery.State == "network-stale" {
 		log.Print("dataplane boot recovery requires fresh node checks in the current network")
@@ -825,6 +829,7 @@ func loadCommunityCatalog(path string) (*community.Manager, error) {
 var errHealthBusy = errors.New("RAZVILKA is busy with private restore; readiness is temporarily unavailable, do not restart")
 var errHealthPending = errors.New("healthcheck committed dataplane has no current runtime evidence")
 var errHealthRequest = errors.New("healthcheck transport is unavailable")
+var errHealthRecovery = errors.New("RAZVILKA is running with a fenced network transaction journal; review is required and a restart will not settle it")
 
 const maxHealthWait = 10 * time.Minute
 
@@ -909,7 +914,7 @@ func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, req
 		return "", fmt.Errorf("%w: %w", errHealthRequest, err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusServiceUnavailable {
 		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)
 	}
 	var status struct {
@@ -939,6 +944,9 @@ func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, req
 		return "", errors.New("healthcheck response exceeds 64 KiB")
 	}
 	if err := json.Unmarshal(body, &status); err != nil {
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)
+		}
 		return "", fmt.Errorf("healthcheck response: %w", err)
 	}
 	if status.Name != "RAZVILKA" || status.Version != app.Version {
@@ -950,6 +958,11 @@ func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, req
 	if resp.StatusCode != http.StatusOK {
 		if status.Code == "RESTORE_OPERATION_BUSY" && status.NotStarted && !status.RecoveryRequired && status.ProcessID > 0 {
 			return "", errHealthBusy
+		}
+		// A private restore fence is settled by the next start, so it stays an
+		// ordinary failure. A journal fence survives restarts: report it apart.
+		if resp.StatusCode == http.StatusServiceUnavailable && status.Code == "DATAPLANE_RECOVERY_REQUIRED" && status.NotStarted && status.RecoveryRequired && status.ProcessID > 0 {
+			return "", errHealthRecovery
 		}
 		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)
 	}

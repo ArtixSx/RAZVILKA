@@ -28,7 +28,7 @@ const start = fn(init, 'start_process');
 const wait = start.indexOf('\n  WAIT=0\n');
 assert(wait >= 0);
 const startHealth = `start_process() {${start.slice(wait)}`;
-for (const mode of [0, 1, 75]) {
+for (const mode of [0, 1, 75, 76]) {
   const stubs = `
 HEALTH_RETRIES=1
 LAN_IP=127.0.0.1
@@ -39,10 +39,10 @@ running_pid() { printf '1234'; }
 detect_lan_ip() { printf '127.0.0.1'; }
 clear_failure() { :; }
 record_failure() { printf 'recorded-failure\\n'; }
-stop_process() { ${mode === 75 ? "echo UNEXPECTED_STOP >&2" : ':'}; }
+stop_process() { ${mode === 75 || mode === 76 ? "echo UNEXPECTED_STOP >&2" : ':'}; }
 `;
-  run(`${stubs}\n${startHealth}\nstart_process`, mode, mode === 75 ? /Process kept/ : mode === 0 ? /healthy/ : /recorded-failure/);
-  run(`${stubs}\n${fn(init, 'status_process')}\nstatus_process`, mode, mode === 75 ? /Do not restart/ : mode === 0 ? /healthy/ : /health check failed/);
+  run(`${stubs}\n${startHealth}\nstart_process`, mode, mode === 75 ? /Process kept/ : mode === 76 ? /journal requires recovery review\. Process kept/ : mode === 0 ? /healthy/ : /recorded-failure/);
+  run(`${stubs}\n${fn(init, 'status_process')}\nstatus_process`, mode, mode >= 75 ? /Do not restart/ : mode === 0 ? /healthy/ : /health check failed/);
 }
 run(`
 BACKUP=synthetic-snapshot

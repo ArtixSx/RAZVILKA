@@ -179,6 +179,11 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 		code = "PRIVATE_BACKUP_RECOVERY_REQUIRED"
 		message = "После незавершённого восстановления изменения приостановлены. При следующем запуске приложение проверит журнал восстановления. Не удаляйте журнал и не применяйте черновики вручную."
 		status = http.StatusServiceUnavailable
+		if errors.Is(err, operationgate.ErrJournalRecovery) {
+			// A restart does not settle this fence; supervisors keep the process.
+			code = "DATAPLANE_RECOVERY_REQUIRED"
+			message = "Предыдущая сетевая транзакция завершилась без подтверждённого отката. Изменения приостановлены до проверки журнала маршрутов; перезапуск этого не исправит. Не удаляйте журнал вручную."
+		}
 	}
 	// Identity is cache-independent. Supervisors can recognize a live but busy
 	// process without reading locked Stores or inventing dataplane health.
