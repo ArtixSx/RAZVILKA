@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ArtixSx/razvilka/internal/commandrun"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
@@ -526,7 +525,13 @@ func listeningPorts() map[string]string {
 		} else if _, err := exec.LookPath(command[0]); err != nil {
 			continue
 		}
-		output, err := commandrun.Output(context.Background(), 3*time.Second, 1<<20, command[0], command[1:]...)
+		// Only stdout is parsed: any "host:port" text on stderr would read as a
+		// listener. The deadline keeps a hung ss/netstat from stalling Inspect.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+		cmd.WaitDelay = 100 * time.Millisecond
+		output, err := cmd.Output()
+		cancel()
 		if err != nil {
 			continue
 		}
