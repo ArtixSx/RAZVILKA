@@ -118,6 +118,9 @@ func main() {
 	deactivateDataplane := flag.Bool("deactivate-dataplane", false, "remove only RAZVILKA-owned runtime routes, interfaces and processes, then exit")
 	retryRollbackPlan := flag.String("retry-rollback-plan", "", "retry an intact failed rollback for this exact plan, while the panel is stopped")
 	retryRollbackDigest := flag.String("retry-rollback-digest", "", "reviewed digest required with retry-rollback-plan")
+	closeRollbackPlan := flag.String("close-rollback-plan", "", "close an intact failed rollback that can no longer be retried (for example after a reboot) by deactivating its owned runtime, while the panel is stopped")
+	closeRollbackDigest := flag.String("close-rollback-digest", "", "reviewed digest required with close-rollback-plan")
+	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
@@ -137,7 +140,7 @@ func main() {
 		return
 	}
 	modes := 0
-	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != "", *checkDNSState, *checkAutonomyState} {
+	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != "", *closeRollbackPlan != "", *adoptNFQWS2Init, *checkDNSState, *checkAutonomyState} {
 		if enabled {
 			modes++
 		}
@@ -145,7 +148,7 @@ func main() {
 	if modes > 1 {
 		log.Fatal("check, migration, recovery, health, installation and deactivation modes are mutually exclusive")
 	}
-	if (*retryRollbackPlan == "") != (*retryRollbackDigest == "") {
+	if (*retryRollbackPlan == "") != (*retryRollbackDigest == "") || (*closeRollbackPlan == "") != (*closeRollbackDigest == "") {
 		log.Fatal("rollback recovery requires both plan and digest")
 	}
 	if *checkDNSState {
@@ -250,6 +253,27 @@ func main() {
 		}
 		if deactivateErr != nil {
 			log.Fatal(deactivateErr)
+		}
+		return
+	}
+	if *adoptNFQWS2Init {
+		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineconfig.New(*stagePath, *backupPath))
+		if err != nil {
+			log.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		previous, adopted, err := dataplaneManager.AdoptNFQWS2PackageInit(ctx, "")
+		if err != nil {
+			log.Fatal("adopt NFQWS2 init: ", err)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(struct {
+			OK       bool   `json:"ok"`
+			Changed  bool   `json:"changed"`
+			Previous string `json:"previous_init_hash"`
+			Adopted  string `json:"init_hash"`
+		}{OK: true, Changed: previous != adopted, Previous: previous, Adopted: adopted}); err != nil {
+			log.Fatal(err)
 		}
 		return
 	}
@@ -362,20 +386,26 @@ func main() {
 	}
 	// This narrow recovery cannot contain DNS. Do not open or migrate its
 	// settings before returning to the previously installed application.
-	if *retryRollbackPlan != "" {
+	if *retryRollbackPlan != "" || *closeRollbackPlan != "" {
 		baseline, err := os.ReadFile(*cfgPath)
 		if err != nil {
 			log.Fatal("rollback settings unavailable")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		result, err := dataplaneManager.RetryFailedRollback(ctx, *retryRollbackPlan, *retryRollbackDigest, func(previous dataplane.Plan) error {
+		guard := func(previous dataplane.Plan) error {
 			current, readErr := os.ReadFile(*cfgPath)
 			if readErr != nil || !bytes.Equal(baseline, current) || !rollbackAppliedSettingsMatch(store.Get(), previous) {
 				return errors.New("applied settings changed or do not match the previous plan")
 			}
 			return nil
-		})
+		}
+		var result dataplane.Execution
+		if *retryRollbackPlan != "" {
+			result, err = dataplaneManager.RetryFailedRollback(ctx, *retryRollbackPlan, *retryRollbackDigest, guard)
+		} else {
+			result, err = dataplaneManager.CloseFailedRollback(ctx, *closeRollbackPlan, *closeRollbackDigest, guard)
+		}
 		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
 			log.Fatal(encodeErr)
 		}
