@@ -187,6 +187,12 @@ func WindowKey(w Window, timezone string, now time.Time) (string, bool) {
 	if e != nil {
 		return "", false
 	}
+	return windowKeyIn(w, loc, now)
+}
+
+// windowKeyIn expects a validated window. LoadLocation parses zone data on
+// every call, so loops resolve the location once and call this directly.
+func windowKeyIn(w Window, loc *time.Location, now time.Time) (string, bool) {
 	n := now.In(loc)
 	start, _ := Minute(w.Start)
 	end, _ := Minute(w.End)
@@ -213,12 +219,16 @@ func WindowKey(w Window, timezone string, now time.Time) (string, bool) {
 // NextWindow walks real minutes, so DST gaps/overlaps follow the same rule as
 // dispatch. It is used by the UI, not a high-frequency data-plane loop.
 func NextWindow(w Window, timezone string, now time.Time) time.Time {
-	if ValidateWindow(w) != nil || w.Mode == "off" {
+	if ValidateWindow(w) != nil || w.Mode == "off" || now.IsZero() {
+		return time.Time{}
+	}
+	loc, e := time.LoadLocation(timezone)
+	if e != nil {
 		return time.Time{}
 	}
 	n := now.Truncate(time.Minute)
 	for i := 0; i < 8*24*60; i++ {
-		if _, ok := WindowKey(w, timezone, n); ok {
+		if _, ok := windowKeyIn(w, loc, n); ok {
 			return n
 		}
 		n = n.Add(time.Minute)
