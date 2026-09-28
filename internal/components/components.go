@@ -108,6 +108,7 @@ type Manager struct {
 	catalog       catalogStatus
 	lastInstalled map[string]string
 	lastAvailable map[string]string
+	availableAt   time.Time // when lastAvailable was read; zero after opkg update
 	releaseChecks map[string]catalogStatus
 	mu            sync.Mutex
 }
@@ -152,7 +153,7 @@ func (m *Manager) InstallRecommended(ctx context.Context) BatchResult {
 func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.listLocked(ctx, refresh)
+	return m.listLocked(ctx, refresh, false)
 }
 
 // Observe performs local inventory only. An installer owns the same mutex;
@@ -165,11 +166,11 @@ func (m *Manager) Observe(ctx context.Context) ([]View, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return m.listLocked(ctx, false)
+	return m.listLocked(ctx, false, true)
 }
 
-func (m *Manager) listLocked(ctx context.Context, refresh bool) ([]View, error) {
-	installed, available, inventoryError := m.packageInventory(ctx, refresh)
+func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View, error) {
+	installed, available, inventoryError := m.packageInventory(ctx, refresh, passive)
 	views := make([]View, 0, len(Specs()))
 	for _, spec := range Specs() {
 		if spec.Provider == "github-release" {
@@ -453,6 +454,9 @@ func (m *Manager) run(parent context.Context, args ...string) ([]byte, error) {
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
+	if len(args) > 0 && args[0] == "update" {
+		m.availableAt = time.Time{} // package lists change; re-read the catalog
+	}
 	out, err := m.Runner.Run(ctx, m.Opkg, args...)
 	if ctx.Err() == context.DeadlineExceeded {
 		return out, fmt.Errorf("timed out after %s", timeout)

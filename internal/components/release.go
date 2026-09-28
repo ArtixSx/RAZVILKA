@@ -65,14 +65,14 @@ func trustedReleaseHost(host string) bool {
 
 func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (View, error) {
 	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
-	installedVersion := externalInstalledVersionContext(ctx, target)
+	installedVersion, fromReceipt := externalVersionContext(ctx, target)
 	view := View{Spec: spec, Installed: installedVersion != "", InstalledVersion: installedVersion}
 	if info, err := os.Lstat(target); err == nil && !info.IsDir() {
 		view.Installed, view.InstalledVersionSource = true, "runtime"
 	}
 	if installedVersion != "" {
 		view.InstalledVersionSource = "runtime"
-		if externalReceiptVersion(target) != "" {
+		if fromReceipt {
 			view.InstalledVersionSource = "receipt"
 		} else {
 			view.RuntimeVersion = installedVersion
@@ -434,17 +434,22 @@ func externalInstalledVersion(path string) string {
 	return externalInstalledVersionContext(context.Background(), path)
 }
 func externalInstalledVersionContext(ctx context.Context, path string) string {
+	version, _ := externalVersionContext(ctx, path)
+	return version
+}
+
+// externalVersionContext also reports whether an integrity-bound receipt, not
+// the executable's own output, supplied the version, so callers need not hash
+// the binary a second time.
+func externalVersionContext(ctx context.Context, path string) (string, bool) {
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
-		return ""
+		return "", false
 	}
 	if version := externalReceiptVersion(path); version != "" {
-		return version
+		return version, true
 	}
-	if version := externalReportedVersionContext(ctx, path); version != "" {
-		return version
-	}
-	return ""
+	return externalReportedVersionContext(ctx, path), false
 }
 
 // InstalledReleaseVersion returns a version only when the executable reports
@@ -548,12 +553,17 @@ func externalReceiptVersion(target string) string {
 	if !externalVersionValuePattern.MatchString(receipt.Version) || len(receipt.SHA256) != 64 {
 		return ""
 	}
-	binary, err := os.ReadFile(target)
+	// Stream the hash: periodic observation must not hold a whole binary in RAM.
+	binary, err := os.Open(target)
 	if err != nil {
 		return ""
 	}
-	sum := sha256.Sum256(binary)
-	if !strings.EqualFold(hex.EncodeToString(sum[:]), receipt.SHA256) {
+	defer binary.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, binary); err != nil {
+		return ""
+	}
+	if !strings.EqualFold(hex.EncodeToString(hash.Sum(nil)), receipt.SHA256) {
 		return ""
 	}
 	return receipt.Version

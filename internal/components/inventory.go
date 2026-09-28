@@ -8,12 +8,17 @@ import (
 
 // catalogStatus records successful source refreshes, not reads of an old local
 // package index. A failed refresh remains stale until another refresh succeeds.
+// passiveCatalogTTL bounds how long periodic observation reuses the parsed
+// `opkg list` output. Available versions change only with `opkg update`, which
+// invalidates the cache; explicit List calls always read the catalog.
+const passiveCatalogTTL = 10 * time.Minute
+
 type catalogStatus struct {
 	CheckedAt string
 	Error     string
 }
 
-func (m *Manager) packageInventory(ctx context.Context, refresh bool) (installed, available map[string]string, inventoryError string) {
+func (m *Manager) packageInventory(ctx context.Context, refresh, passive bool) (installed, available map[string]string, inventoryError string) {
 	installed, available = m.lastInstalled, m.lastAvailable
 	if m.Opkg == "" {
 		return installed, available, ""
@@ -36,13 +41,16 @@ func (m *Manager) packageInventory(ctx context.Context, refresh bool) (installed
 			refreshed = true
 		}
 	}
+	if passive && !refresh && m.lastAvailable != nil && !m.availableAt.IsZero() && time.Since(m.availableAt) < passiveCatalogTTL {
+		return installed, available, inventoryError
+	}
 	if out, err := m.run(ctx, "list"); err != nil {
 		if m.catalog.Error == "" {
 			m.catalog.Error = "Не удалось прочитать каталог версий. Обновите источники пакетов и повторите проверку."
 		}
 	} else {
 		available = parsePackageVersions(string(out))
-		m.lastAvailable = available
+		m.lastAvailable, m.availableAt = available, time.Now()
 		if refreshed {
 			m.catalog = catalogStatus{CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		}
