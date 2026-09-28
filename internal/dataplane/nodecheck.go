@@ -34,6 +34,8 @@ var (
 
 const exactNodeSchema = 1
 
+var exactNodeIDPattern = regexp.MustCompile(`^node-[0-9a-f]{64}$`)
+
 type NodeCheckRequest struct {
 	NodeID         string
 	Outbound       []byte
@@ -471,7 +473,7 @@ func (c *ExactNodeChecker) validRequest(request NodeCheckRequest) error {
 	if !c.runtimeReady() {
 		return ErrExactNodeRuntime
 	}
-	if !regexp.MustCompile(`^node-[0-9a-f]{64}$`).MatchString(request.NodeID) || len(request.Outbound) == 0 || request.Service.ID == "" || selectedNodeProbe(request.Service).URL == "" || !systemprobe.ValidWANProfileID(request.NetworkProfile) {
+	if !exactNodeIDPattern.MatchString(request.NodeID) || len(request.Outbound) == 0 || request.Service.ID == "" || selectedNodeProbe(request.Service).URL == "" || !systemprobe.ValidWANProfileID(request.NetworkProfile) {
 		return ErrExactNodeUnavailable
 	}
 	if !filepath.IsAbs(c.StateRoot) || filepath.Clean(c.StateRoot) == filepath.VolumeName(c.StateRoot)+string(filepath.Separator) || c.Port < 1024 || c.Port > 65535 {

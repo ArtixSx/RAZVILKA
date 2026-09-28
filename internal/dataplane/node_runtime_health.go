@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/netip"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"time"
 )
@@ -18,7 +17,7 @@ import (
 func (m *Manager) CheckCommittedNodeHealth(ctx context.Context, expected Plan) error {
 	if m == nil || m.StateRoot == "" || expected.State != "committed" || expected.SafeMode || !expected.Ready || expected.Noop ||
 		!slices.Contains(expected.Adapters, "sing-box") || !expected.RequiresNetworkProof() ||
-		!regexp.MustCompile(`^dp-[0-9a-f]{16}$`).MatchString(expected.PlanID) {
+		!validPlanID(expected.PlanID) {
 		return ErrReviewChanged
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

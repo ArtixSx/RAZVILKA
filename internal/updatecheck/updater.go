@@ -24,7 +24,10 @@ const productionUpdateRoot = "/opt/var/lib/razvilka/self-update"
 var ErrBusy = errors.New("self-update-busy")
 var ErrReviewChanged = errors.New("self-update-review-changed")
 var ErrHandoffUncertain = errors.New("self-update-handoff-uncertain")
-var jobIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
+var (
+	jobIDPattern     = regexp.MustCompile(`^[a-f0-9]{32}$`)
+	errorCodePattern = regexp.MustCompile(`^[a-z][a-z0-9-]+$`)
+)
 
 type Deployment struct {
 	Paths      map[string]string `json:"paths"`
@@ -524,7 +527,7 @@ func safeUpdateCode(err error) string {
 		return "prepare-timeout"
 	}
 	code := err.Error()
-	if len(code) < 80 && regexp.MustCompile(`^[a-z][a-z0-9-]+$`).MatchString(code) {
+	if len(code) < 80 && errorCodePattern.MatchString(code) {
 		return code
 	}
 	return "update-verification-failed"

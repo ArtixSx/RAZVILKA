@@ -655,7 +655,11 @@ func (execRunner) Run(ctx context.Context, command Command) ([]byte, error) {
 	return cmd.CombinedOutput()
 }
 
-var safeName = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
+var (
+	safeName    = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
+	coloPattern = regexp.MustCompile(`^[A-Z0-9]{3}$`)
+	locPattern  = regexp.MustCompile(`^[A-Z]{2}$`)
+)
 
 func readSafeConfig(path string) (SafeConfig, error) {
 	b, err := os.ReadFile(path)
@@ -734,10 +738,10 @@ func readCanaryEvidence(path string) (CanaryEvidence, error) {
 	if evidence.Warp != "on" && evidence.Warp != "plus" && evidence.Warp != "off" {
 		evidence.Warp = "unknown"
 	}
-	if !regexp.MustCompile(`^[A-Z0-9]{3}$`).MatchString(evidence.Colo) {
+	if !coloPattern.MatchString(evidence.Colo) {
 		evidence.Colo = ""
 	}
-	if !regexp.MustCompile(`^[A-Z]{2}$`).MatchString(evidence.Loc) {
+	if !locPattern.MatchString(evidence.Loc) {
 		evidence.Loc = ""
 	}
 	if net.ParseIP(evidence.EgressIP) == nil {

@@ -936,7 +936,7 @@ func (a *ProxyTunnelAdapter) currentBootIdentity() (string, error) {
 		return "", errors.New("kernel boot identity is unavailable")
 	}
 	value := strings.TrimSpace(string(data))
-	if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`).MatchString(value) {
+	if !kernelBootIDPattern.MatchString(value) {
 		return "", errors.New("kernel boot identity is invalid")
 	}
 	return value, nil
@@ -1065,6 +1065,12 @@ func (a *ProxyTunnelAdapter) stagedUsqueTransport(root string) (usqueTransport, 
 	}
 	return transport, nil
 }
+
+var (
+	kernelBootIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	traceColoPattern    = regexp.MustCompile(`^[A-Z0-9]{3}$`)
+	traceLocPattern     = regexp.MustCompile(`^[A-Z]{2}$`)
+)
 
 var safeSNI = regexp.MustCompile(`(?i)^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 
@@ -1575,10 +1581,10 @@ func parseCloudflareTrace(body string) (usqueCanaryEvidence, error) {
 		}
 	}
 	evidence := usqueCanaryEvidence{Warp: strings.ToLower(values["warp"])}
-	if value := strings.ToUpper(values["colo"]); regexp.MustCompile(`^[A-Z0-9]{3}$`).MatchString(value) {
+	if value := strings.ToUpper(values["colo"]); traceColoPattern.MatchString(value) {
 		evidence.Colo = value
 	}
-	if value := strings.ToUpper(values["loc"]); regexp.MustCompile(`^[A-Z]{2}$`).MatchString(value) {
+	if value := strings.ToUpper(values["loc"]); traceLocPattern.MatchString(value) {
 		evidence.Loc = value
 	}
 	if value := values["ip"]; net.ParseIP(value) != nil {
