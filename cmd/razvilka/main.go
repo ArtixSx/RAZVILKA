@@ -393,9 +393,13 @@ func main() {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		settingsMatch := rollbackAppliedSettingsMatch
+		if *closeRollbackPlan != "" {
+			settingsMatch = closeRollbackSettingsMatch
+		}
 		guard := func(previous dataplane.Plan) error {
 			current, readErr := os.ReadFile(*cfgPath)
-			if readErr != nil || !bytes.Equal(baseline, current) || !rollbackAppliedSettingsMatch(store.Get(), previous) {
+			if readErr != nil || !bytes.Equal(baseline, current) || !settingsMatch(store.Get(), previous) {
 				return errors.New("applied settings changed or do not match the previous plan")
 			}
 			return nil
@@ -780,6 +784,15 @@ func rollbackAppliedSettingsMatch(cfg config.Config, previous dataplane.Plan) bo
 		}
 	}
 	return len(seen) > 0
+}
+
+// closeRollbackSettingsMatch is rollbackAppliedSettingsMatch without the Safe
+// Mode refusal. Closing only deactivates owned runtime, which
+// -deactivate-dataplane also does in Safe Mode, and a fenced boot enables Safe
+// Mode itself. Closing leaves Safe Mode enabled for the operator to clear.
+func closeRollbackSettingsMatch(cfg config.Config, previous dataplane.Plan) bool {
+	cfg.SafeMode = false
+	return rollbackAppliedSettingsMatch(cfg, previous)
 }
 
 type preflightReport struct {
