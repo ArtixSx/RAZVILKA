@@ -3,6 +3,7 @@ package routerstats
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -110,6 +111,49 @@ func TestPersistentHistoryIsRateLimitedReloadedAndBounded(t *testing.T) {
 	loaded := reloaded.PersistentHistory(10)
 	if len(loaded) != 2 || !loaded[1].Timestamp.Equal(now) {
 		t.Fatalf("unexpected reloaded history: %+v", loaded)
+	}
+}
+
+func TestPersistentHistoryCompactsWithSlackInsteadOfEveryWrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	now := time.Unix(100, 0).UTC()
+	lines := func() int {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Count(string(data), "\n")
+	}
+	s := New(Collector{Now: func() time.Time { return now }})
+	s.PersistLimit = 4 // slack 1: the file may hold 5 lines before compaction
+	if err := s.EnablePersistence(path); err != nil {
+		t.Fatal(err)
+	}
+	want := []int{1, 2, 3, 4, 5, 4, 5, 4}
+	for i, expected := range want {
+		s.Sample()
+		if got := lines(); got != expected {
+			t.Fatalf("persist %d: file lines=%d, want %d", i+1, got, expected)
+		}
+		if got := len(s.PersistentHistory(0)); got != min(i+1, 4) {
+			t.Fatalf("persist %d: memory history=%d", i+1, got)
+		}
+		now = now.Add(5 * time.Minute)
+	}
+	s.Sample() // file grows to 5 lines
+
+	reloaded := New(Collector{Now: func() time.Time { return now }})
+	reloaded.PersistLimit = 4
+	if err := reloaded.EnablePersistence(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(reloaded.PersistentHistory(0)); got != 4 {
+		t.Fatalf("reloaded history=%d", got)
+	}
+	now = now.Add(5 * time.Minute)
+	reloaded.Sample() // 6 lines counted from the existing file: compact
+	if got := lines(); got != 4 {
+		t.Fatalf("reload ignored existing file lines: %d", got)
 	}
 }
 

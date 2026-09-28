@@ -156,6 +156,17 @@ func (c *Collector) Collect(ctx context.Context) ([]telemetry.Connection, error)
 	}
 	flows := parseFlows(string(data))
 	out := make([]telemetry.Connection, 0, len(flows))
+	// Parallel connections of one client to one server share a kernel route.
+	// Ask the kernel once per pair in this pass instead of once per flow.
+	type routeKey struct {
+		source, destination netip.Addr
+		route               string
+	}
+	type routeResult struct {
+		device, evidence string
+		ok               bool
+	}
+	verified := map[routeKey]routeResult{}
 	for _, item := range flows {
 		match, route, ok := c.classify(configuration, item.Source, item.Destination)
 		if !ok || route == "nfqws2" {
@@ -163,10 +174,16 @@ func (c *Collector) Collect(ctx context.Context) ([]telemetry.Connection, error)
 			// global conntrack table cannot correlate that counter to one row.
 			continue
 		}
-		device, evidence, ok := c.verifyRoute(ctx, item.Source, item.Destination, route, wanInterface)
-		if !ok {
+		key := routeKey{item.Source, item.Destination, route}
+		result, cached := verified[key]
+		if !cached {
+			result.device, result.evidence, result.ok = c.verifyRoute(ctx, item.Source, item.Destination, route, wanInterface)
+			verified[key] = result
+		}
+		if !result.ok {
 			continue
 		}
+		device, evidence := result.device, result.evidence
 		identity := strings.Join([]string{item.Protocol, item.Source.String(), item.SourcePort, item.Destination.String(), item.DestinationPort}, "|")
 		digest := sha256.Sum256([]byte(identity))
 		sourceName := deviceNames[item.Source.Unmap().String()]
@@ -370,7 +387,7 @@ func (c *Collector) deviceNames() map[string]string {
 
 func parseFlows(text string) []flow {
 	out := []flow{}
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.Lines(text) {
 		fields := strings.Fields(line)
 		protocol := ""
 		for _, field := range fields {

@@ -64,6 +64,53 @@ func TestCollectorPublishesOnlyKernelConfirmedServiceRoute(t *testing.T) {
 	}
 }
 
+type countingRunner struct {
+	output string
+	calls  *int
+}
+
+func (runner countingRunner) Run(context.Context, string, ...string) ([]byte, error) {
+	*runner.calls++
+	return []byte(runner.output), nil
+}
+
+func TestCollectorAsksKernelOncePerClientServerPair(t *testing.T) {
+	root := t.TempDir()
+	conntrackPath := filepath.Join(root, "nf_conntrack")
+	flows := "ipv4 2 tcp 6 100 ESTABLISHED src=192.168.1.25 dst=203.0.113.10 sport=55555 dport=443 packets=10 bytes=1200 src=203.0.113.10 dst=198.51.100.2 sport=443 dport=55555 packets=8 bytes=900 [ASSURED]\n" +
+		"ipv4 2 tcp 6 100 ESTABLISHED src=192.168.1.25 dst=203.0.113.10 sport=55556 dport=443 packets=10 bytes=1200 src=203.0.113.10 dst=198.51.100.2 sport=443 dport=55556 packets=8 bytes=900 [ASSURED]\n" +
+		"ipv4 2 tcp 6 100 ESTABLISHED src=192.168.1.26 dst=203.0.113.10 sport=55557 dport=443 packets=10 bytes=1200 src=203.0.113.10 dst=198.51.100.2 sport=443 dport=55557 packets=8 bytes=900 [ASSURED]\n"
+	if err := os.WriteFile(conntrackPath, []byte(flows), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configuration, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := configuration.UpdateService("video", config.ServiceState{Enabled: true, Route: "warp-wg", Sources: []string{"192.168.1.25", "192.168.1.26"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := configuration.ApplyDraft(); err != nil {
+		t.Fatal(err)
+	}
+	collector := New(telemetry.NewStore(), configuration, func() catalog.Catalog {
+		return catalog.Catalog{Services: []catalog.Service{{ID: "video", Name: "Video", CIDRs: []string{"203.0.113.10/32"}}}}
+	})
+	calls := 0
+	collector.ConntrackPaths = []string{conntrackPath}
+	collector.IPCommand = "ip"
+	collector.Runner = countingRunner{output: "203.0.113.10 dev rz-warp table 201\n", calls: &calls}
+	collector.Resolver = func(context.Context, string) ([]netip.Addr, error) { return nil, nil }
+	collector.ResolveTimeout = time.Second
+	connections, err := collector.Collect(context.Background())
+	if err != nil || len(connections) != 3 {
+		t.Fatalf("connections=%+v err=%v", connections, err)
+	}
+	if calls != 2 {
+		t.Fatalf("route lookups=%d, want one per client/server pair (2)", calls)
+	}
+}
+
 func TestStoreReplaceActiveKeepsStartAndClosesMissing(t *testing.T) {
 	store := telemetry.NewStore()
 	store.ReplaceActive("test", []telemetry.Connection{{ID: "one", Route: "direct"}})

@@ -176,6 +176,7 @@ type Sampler struct {
 	lastRaw      Raw
 	persistPath  string
 	persisted    []Snapshot
+	fileEntries  int // lines in the history file, compacted with slack
 	lastPersist  time.Time
 	persistError string
 }
@@ -192,13 +193,14 @@ func (s *Sampler) EnablePersistence(path string) error {
 	if path == "" {
 		return errors.New("metrics history path is empty")
 	}
-	loaded, err := readPersistentHistory(path, s.persistLimit())
+	loaded, lines, err := readPersistentHistory(path, s.persistLimit())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	s.mu.Lock()
 	s.persistPath = path
 	s.persisted = loaded
+	s.fileEntries = lines
 	if len(loaded) > 0 {
 		s.lastPersist = loaded[len(loaded)-1].Timestamp
 	}
@@ -257,10 +259,18 @@ func (s *Sampler) Sample() Snapshot {
 		s.persisted = append(s.persisted, snapshot)
 		persistLimit := s.persistLimit()
 		if len(s.persisted) > persistLimit {
-			s.persisted = append([]Snapshot(nil), s.persisted[len(s.persisted)-persistLimit:]...)
-			rewrite = true
+			copy(s.persisted, s.persisted[len(s.persisted)-persistLimit:])
+			s.persisted = s.persisted[:persistLimit]
 		}
-		persisted = append([]Snapshot(nil), s.persisted...)
+		// Appending one line is cheap; rewriting the whole file is not. Let the
+		// file run past the limit by a slack margin so a full history does not
+		// rewrite and fsync every entry on each persist (flash wear on routers).
+		s.fileEntries++
+		if s.fileEntries > persistLimit+persistSlack(persistLimit) {
+			rewrite = true
+			persisted = append([]Snapshot(nil), s.persisted...)
+			s.fileEntries = len(persisted)
+		}
 	}
 	s.mu.Unlock()
 	if persist {
@@ -268,6 +278,11 @@ func (s *Sampler) Sample() Snapshot {
 		s.mu.Lock()
 		if err != nil {
 			s.persistError = err.Error()
+			if rewrite {
+				// The old file is still in place; compact again next time.
+				limit := s.persistLimit()
+				s.fileEntries = max(s.fileEntries, limit+persistSlack(limit))
+			}
 		} else {
 			s.persistError = ""
 		}
@@ -368,16 +383,24 @@ func (s *Sampler) persistLimit() int {
 	return s.PersistLimit
 }
 
-func readPersistentHistory(path string, limit int) ([]Snapshot, error) {
+func persistSlack(limit int) int {
+	return max(limit/4, 1)
+}
+
+// readPersistentHistory returns the newest limit entries and the number of
+// lines in the file, so compaction accounts for entries beyond the limit.
+func readPersistentHistory(path string, limit int) ([]Snapshot, int, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer file.Close()
 	entries := make([]Snapshot, 0, limit)
+	lines := 0
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 4096), 1<<20)
 	for scanner.Scan() {
+		lines++
 		var snapshot Snapshot
 		if err := json.Unmarshal(scanner.Bytes(), &snapshot); err != nil || snapshot.Timestamp.IsZero() {
 			continue
@@ -389,9 +412,9 @@ func readPersistentHistory(path string, limit int) ([]Snapshot, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read metrics history: %w", err)
+		return nil, 0, fmt.Errorf("read metrics history: %w", err)
 	}
-	return entries, nil
+	return entries, lines, nil
 }
 
 func appendPersistentSnapshot(path string, snapshot Snapshot, rewrite bool, history []Snapshot) error {
