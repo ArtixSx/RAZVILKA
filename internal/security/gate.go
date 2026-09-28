@@ -490,7 +490,15 @@ func (g *Gate) RecoveryAuthenticated(r *http.Request) bool {
 
 func (g *Gate) Middleware(next http.Handler) http.Handler {
 	if g == nil {
-		return next
+		// A missing gate must never expose the control API. The UI shell stays
+		// reachable so the operator sees the failure instead of a blank page.
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				http.Error(w, "administrator access control is not configured", http.StatusServiceUnavailable)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/api/") {

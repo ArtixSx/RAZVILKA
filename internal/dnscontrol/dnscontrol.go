@@ -1056,9 +1056,11 @@ func probeDNSOverHTTPSDetailed(ctx context.Context, endpoint string, query []byt
 	}
 	request.Header.Set("Accept", "application/dns-message")
 	request.Header.Set("Content-Type", "application/dns-message")
+	// Callers bound ctx; Timeout still caps a caller that forgets to.
 	client := &http.Client{
 		Transport:     transport,
 		CheckRedirect: dohRedirectPolicy(parsed, nil),
+		Timeout:       2 * endpointProbeTimeout,
 	}
 	response, err := client.Do(request)
 	if err != nil {

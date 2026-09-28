@@ -54,7 +54,7 @@ func rollbackRetryFixture(t *testing.T) (*Manager, *rollbackVerifierFake, Plan, 
 }
 
 func TestRollbackRetryRequiresExactPreCommitFailureAndMatchingSettings(t *testing.T) {
-	for _, mode := range []string{"pass", "digest", "different-plan", "guard", "missing-journal", "mismatch", "config-commit", "unconfirmed", "retry-failed", "interrupted-retry", "canceled"} {
+	for _, mode := range []string{"pass", "digest", "different-plan", "guard", "missing-journal", "mismatch", "config-commit", "unconfirmed", "retry-failed", "interrupted-retry", "canceled", "foreign-adapter"} {
 		t.Run(mode, func(t *testing.T) {
 			m, adapter, p, e := rollbackRetryFixture(t)
 			root := filepath.Join(m.StateRoot, "transactions", p.PlanID)
@@ -101,6 +101,17 @@ func TestRollbackRetryRequiresExactPreCommitFailureAndMatchingSettings(t *testin
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
+			case "foreign-adapter":
+				// Same adapter count, different adapter: the journal must not
+				// authorize rolling back a runtime the plan never owned.
+				previous, _, _ := m.Committed()
+				previous.Adapters, p.Adapters = []string{"nfqws2"}, []string{"nfqws2"}
+				if err := m.Record(previous); err != nil {
+					t.Fatal(err)
+				}
+				if err := m.Record(p); err != nil {
+					t.Fatal(err)
+				}
 			}
 			result, err := m.RetryFailedRollback(ctx, id, digest, guard)
 			if mode == "pass" || mode == "interrupted-retry" {

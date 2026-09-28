@@ -198,6 +198,31 @@ func TestConfiguredGateProtectsReadAPI(t *testing.T) {
 	}
 }
 
+func TestNilGateFailsClosedForAPI(t *testing.T) {
+	var gate *Gate
+	called := false
+	handler := gate.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for _, request := range []*http.Request{
+		httptest.NewRequest(http.MethodGet, "http://router.local/api/v1/system", nil),
+		httptest.NewRequest(http.MethodGet, "http://router.local/api/v1/status", nil),
+		httptest.NewRequest(http.MethodPost, "http://router.local/api/v1/apply", strings.NewReader("{}")),
+	} {
+		result := httptest.NewRecorder()
+		handler.ServeHTTP(result, request)
+		if result.Code != http.StatusServiceUnavailable || called {
+			t.Fatalf("%s %s = %d, called=%v", request.Method, request.URL.Path, result.Code, called)
+		}
+	}
+	ui := httptest.NewRecorder()
+	handler.ServeHTTP(ui, httptest.NewRequest(http.MethodGet, "http://router.local/", nil))
+	if ui.Code != http.StatusNoContent || !called {
+		t.Fatalf("ui = %d, called=%v", ui.Code, called)
+	}
+}
+
 func TestLoginRateLimitIsPerClientAndExpires(t *testing.T) {
 	gate, err := NewGate(testToken)
 	if err != nil {

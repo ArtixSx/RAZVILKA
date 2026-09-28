@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"strings"
 )
 
 // SuspendedDNS reads the exact policy saved by the successful Stop transaction.
@@ -22,7 +21,7 @@ func (m *Manager) SuspendedDNS(expected Plan) (*ScopedDNSPlan, error) {
 }
 
 func (m *Manager) suspendedDNSState(expected Plan) (*scopedDNSState, error) {
-	if !expected.SuspendDNS || expected.DNS != nil || len(expected.Routes) != 0 || expected.State != "committed" || !slices.Contains(expected.RetiringAdapters, scopedDNSAdapterID) || len(expected.PlanID) != 19 || !strings.HasPrefix(expected.PlanID, "dp-") || strings.Trim(expected.PlanID[3:], "0123456789abcdef") != "" {
+	if !expected.SuspendDNS || expected.DNS != nil || len(expected.Routes) != 0 || expected.State != "committed" || !slices.Contains(expected.RetiringAdapters, scopedDNSAdapterID) || !validPlanID(expected.PlanID) {
 		return nil, errors.New("no committed DNS suspension")
 	}
 	if err := m.checkExecutionRecovery(); err != nil {

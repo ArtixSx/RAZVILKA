@@ -19,7 +19,7 @@ func (m *Manager) RetryFailedRollback(ctx context.Context, planID, digest string
 	refuse := func() (Execution, error) {
 		return Execution{}, executionJournalError(errors.New("rollback retry requires matching reviewed journals and applied settings"))
 	}
-	if guard == nil || len(planID) != 19 || !strings.HasPrefix(planID, "dp-") || strings.Trim(planID[3:], "0123456789abcdef") != "" || len(digest) != 64 || strings.Trim(digest, "0123456789abcdef") != "" {
+	if guard == nil || !validPlanID(planID) || !validPlanDigest(digest) {
 		return refuse()
 	}
 	if err := m.beginOperation(ctx); err != nil {
@@ -62,7 +62,7 @@ func (m *Manager) RetryFailedRollback(ctx context.Context, planID, digest string
 		}
 		if step.Phase == "snapshot" {
 			adapter, exists := m.adapter(step.Adapter)
-			if !exists || seen[step.Adapter] || !slices.Contains([]string{"nfqws2", "sing-box"}, step.Adapter) || step.State != "passed" {
+			if !exists || seen[step.Adapter] || !slices.Contains([]string{"nfqws2", "sing-box"}, step.Adapter) || !slices.Contains(plan.Adapters, step.Adapter) || step.State != "passed" {
 				return refuse()
 			}
 			if _, ok := adapter.(RollbackVerifier); !ok {
@@ -146,4 +146,13 @@ func (m *Manager) RetryFailedRollback(ctx context.Context, planID, digest string
 		return execution, fmt.Errorf("rollback retry failed: %w", failure)
 	}
 	return execution, nil
+}
+
+// validPlanID matches the "dp-" + 16 lowercase hex form produced by BuildAt.
+func validPlanID(id string) bool {
+	return len(id) == 19 && strings.HasPrefix(id, "dp-") && strings.Trim(id[3:], "0123456789abcdef") == ""
+}
+
+func validPlanDigest(digest string) bool {
+	return len(digest) == 64 && strings.Trim(digest, "0123456789abcdef") == ""
 }
