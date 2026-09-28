@@ -179,8 +179,7 @@ func (a *App) autonomyView(now time.Time) map[string]any {
 	// Never expose old raw refresh errors, destinations or full plan objects here.
 	var addressRefresh map[string]any
 	if a.Dataplane != nil {
-		if status, err := a.Dataplane.Status(); err == nil && status.PolicyRefresh != nil && status.CommittedPlan != nil && status.PolicyRefresh.PlanID == status.CommittedPlan.PlanID {
-			v := status.PolicyRefresh
+		if v, err := a.Dataplane.CommittedPolicyRefresh(); err == nil && v != nil {
 			addressRefresh = map[string]any{"state": v.State, "checked_at": v.CheckedAt}
 		}
 	}

@@ -467,6 +467,52 @@ func (m *Manager) Status() (RuntimeStatus, error) {
 	return status, nil
 }
 
+// CommittedPolicyRefresh returns the latest address refresh only when it
+// belongs to the committed plan. Unlike Status it decodes just the plan
+// identity, so a frequent reader does not parse every route list.
+func (m *Manager) CommittedPolicyRefresh() (*PolicyRefresh, error) {
+	if m == nil || m.StateRoot == "" {
+		return nil, nil
+	}
+	var refresh *PolicyRefresh
+	if found, err := readOptionalJournal(filepath.Join(m.StateRoot, "latest-policy-refresh.json"), &refresh); err != nil || !found {
+		return nil, err
+	}
+	m.journalMu.RLock()
+	defer m.journalMu.RUnlock()
+	committed, found, err := readPlanIdentity(filepath.Join(m.StateRoot, "latest-committed-plan.json"))
+	if err == nil && !found {
+		// Same pre-v0.15 fallback as committedLocked.
+		committed, found, err = readPlanIdentity(filepath.Join(m.StateRoot, "latest-plan.json"))
+		found = found && committed.State == "committed"
+	}
+	if err != nil || !found || refresh.PlanID != committed.PlanID {
+		return nil, err
+	}
+	return refresh, nil
+}
+
+type planIdentity struct {
+	SchemaVersion int    `json:"schema_version"`
+	PlanID        string `json:"plan_id"`
+	Digest        string `json:"digest"`
+	State         string `json:"state"`
+}
+
+// readPlanIdentity applies readPlanJournal's validity rule without
+// materializing routes, actions or evidence.
+func readPlanIdentity(path string) (planIdentity, bool, error) {
+	var identity *planIdentity
+	found, err := readOptionalJournal(path, &identity)
+	if err != nil || !found {
+		return planIdentity{}, false, err
+	}
+	if identity.SchemaVersion != SchemaVersion || identity.PlanID == "" || identity.Digest == "" {
+		return planIdentity{}, false, errors.New("invalid dataplane plan journal")
+	}
+	return *identity, true, nil
+}
+
 func readOptionalJournal[T any](path string, target **T) (bool, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
