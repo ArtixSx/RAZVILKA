@@ -243,7 +243,13 @@ func decodeStrict(data []byte, out any) error {
 	if _, err := d.Token(); err != io.EOF {
 		return ErrStore
 	}
-	d = json.NewDecoder(bytes.NewReader(data))
+	return decodeKnownFields(data, out)
+}
+
+// decodeKnownFields is the typed half of decodeStrict, without its
+// duplicate-key walk.
+func decodeKnownFields(data []byte, out any) error {
+	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
 	if d.Decode(out) != nil {
 		return ErrStore

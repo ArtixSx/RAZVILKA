@@ -173,6 +173,11 @@ type Store struct {
 	closed      bool
 	fenced      bool
 	binding     string
+	// validated is the digest of the last file image that passed the
+	// duplicate-key walk and validate. Both are pure functions of the bytes,
+	// so an identical image skips them; it is still read and decoded afresh.
+	validated    [sha256.Size]byte
+	hasValidated bool
 }
 
 func (*Store) String() string   { return "[private node store]" }
@@ -255,8 +260,21 @@ func (s *Store) load(ctx context.Context) (document, restorejournal.Image, error
 		return document{Schema: schema, Owner: "razvilka-nodes"}, image, nil
 	}
 	var doc document
-	if len(image.Data) > maxBytes || decodeStrict(image.Data, &doc) != nil || validate(doc) != nil {
+	if len(image.Data) > maxBytes {
 		return document{}, restorejournal.Image{}, ErrStore
+	}
+	// Periodic readers (the reconciler every round) reload this file; do not
+	// re-parse every stored profile when its bytes are unchanged.
+	sum := sha256.Sum256(image.Data)
+	if s.hasValidated && sum == s.validated {
+		if decodeKnownFields(image.Data, &doc) != nil {
+			return document{}, restorejournal.Image{}, ErrStore
+		}
+	} else {
+		if decodeStrict(image.Data, &doc) != nil || validate(doc) != nil {
+			return document{}, restorejournal.Image{}, ErrStore
+		}
+		s.validated, s.hasValidated = sum, true
 	}
 	// Older schemas did not have all current metadata/health fields. Upgrade is
 	// in memory and is persisted only by the next explicit mutation/import.
