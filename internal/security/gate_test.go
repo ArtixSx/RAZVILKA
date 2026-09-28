@@ -2,6 +2,7 @@ package security
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -251,6 +252,45 @@ func TestLoginRateLimitIsPerClientAndExpires(t *testing.T) {
 	now = now.Add(31 * time.Second)
 	if _, err := gate.Login("admin", "correct-horse-battery-staple", request); err != nil {
 		t.Fatalf("login after lockout: %v", err)
+	}
+}
+
+func TestExpiredLoginAttemptsAndSessionsArePruned(t *testing.T) {
+	gate, err := NewGate(testToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gate.ConfigureCredentials(filepath.Join(t.TempDir(), "credentials.json")); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
+	gate.now = func() time.Time { return now }
+	if _, err := gate.Setup("admin", "correct-horse-battery-staple"); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "http://router.local/api/v1/auth/login", nil)
+	for i := range 20 {
+		request.RemoteAddr = fmt.Sprintf("[2001:db8::%x]:443", i+1)
+		if _, err := gate.Login("admin", "wrong-password", request); err == nil {
+			t.Fatal("wrong password accepted")
+		}
+	}
+	if got := len(gate.loginAttempts); got != 20 {
+		t.Fatalf("attempts=%d", got)
+	}
+	now = now.Add(sessionLifetime + time.Second)
+	request.RemoteAddr = "[2001:db8::ffff]:443"
+	if _, err := gate.Login("admin", "wrong-password", request); err == nil {
+		t.Fatal("wrong password accepted")
+	}
+	if got := len(gate.loginAttempts); got != 1 {
+		t.Fatalf("stale attempts kept: %d", got)
+	}
+	if _, err := gate.Login("admin", "correct-horse-battery-staple", request); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(gate.sessions); got != 1 {
+		t.Fatalf("expired setup session kept: %d", got)
 	}
 }
 

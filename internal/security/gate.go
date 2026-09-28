@@ -646,11 +646,23 @@ func (g *Gate) newSessionLocked(request *http.Request) (string, error) {
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	hash := sha256.Sum256([]byte(token))
 	now := g.now()
+	for old, session := range g.sessions {
+		if now.After(session.ExpiresAt) {
+			delete(g.sessions, old)
+		}
+	}
 	g.sessions[hash] = sessionRecord{ID: fmt.Sprintf("%x", hash[:8]), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(sessionLifetime), RemoteIP: requestIP(request), UserAgent: boundedUserAgent(request)}
 	return token, nil
 }
 
 func (g *Gate) recordLoginFailureLocked(key string, now time.Time) {
+	// Without pruning, failures from many client addresses (an IPv6 prefix
+	// rotates cheaply) would accumulate for the whole process lifetime.
+	for other, attempt := range g.loginAttempts {
+		if now.Sub(attempt.FirstAt) > g.loginWindow && !now.Before(attempt.LockedUntil) {
+			delete(g.loginAttempts, other)
+		}
+	}
 	attempt := g.loginAttempts[key]
 	if attempt.FirstAt.IsZero() || now.Sub(attempt.FirstAt) > g.loginWindow {
 		attempt = loginAttempt{FirstAt: now}
