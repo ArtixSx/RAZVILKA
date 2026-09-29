@@ -132,11 +132,12 @@ function interfaceHomeServicesHTML(members,fresh){
  if(!members.length)return heading+'<p>Здесь будут выбранные вами сайты и приложения, а не список технических движков.</p>';
  const sorted=interfaceHomeOrder(members),problems=sorted.filter(h=>h.kind!=='good');
  const shown=sorted.slice(0,Math.max(8,problems.length)),hidden=sorted.length-shown.length;
- const tally=fresh?[[sorted.filter(h=>h.kind==='good').length,'работают','good'],[sorted.filter(h=>h.progress).length,'в работе автопилота','progress'],[sorted.filter(h=>h.kind==='bad').length,'не работают','bad'],[sorted.filter(h=>h.kind!=='good'&&h.kind!=='bad'&&!h.progress).length,'без подтверждения','warn']].filter(([n])=>n>0):[];
+ const works=n=>n%10===1&&n%100!==11?'работает':'работают';
+ const tally=fresh?[[sorted.filter(h=>h.kind==='good').length,works,'good'],[sorted.filter(h=>h.progress).length,()=>'в работе автопилота','progress'],[sorted.filter(h=>h.kind==='bad').length,n=>'не '+works(n),'bad'],[sorted.filter(h=>h.kind!=='good'&&h.kind!=='bad'&&!h.progress).length,()=>'без подтверждения','warn']].filter(([n])=>n>0):[];
  const kind=h=>h.progress?'progress':h.kind||'unknown';
  const line=h=>h.kind==='good'?(h.route?interfaceRouteName(h.route):''):(h.detail||(h.route?interfaceRouteName(h.route):''));
  const row=h=>`<button type="button" class="r5-home-service" data-kind="${esc(kind(h))}" data-rz-inspect="${esc(h.service.id)}"><span class="r5-home-service-text"><b>${esc(h.service.name)}</b>${line(h)?`<small>${esc(line(h))}</small>`:''}</span>${interfaceBadge({...h,kind:kind(h)})}</button>`;
- return `${heading}${tally.length?`<div class="r5-home-tally">${tally.map(([n,label,k])=>`<span data-kind="${k}"><b>${n}</b> ${label}</span>`).join('')}</div>`:''}<div class="r5-home-services">${shown.map(row).join('')}</div>${hidden>0?`<button type="button" class="text-button r5-home-more" data-r42-services="selected">Ещё ${hidden} работают ${ci('chevron')}</button>`:''}`;
+ return `${heading}${tally.length?`<div class="r5-home-tally">${tally.map(([n,label,k])=>`<span data-kind="${k}"><b>${n}</b> ${label(n)}</span>`).join('')}</div>`:''}<div class="r5-home-services">${shown.map(row).join('')}</div>${hidden>0?`<button type="button" class="text-button r5-home-more" data-r42-services="selected">Ещё ${hidden} ${works(hidden)} ${ci('chevron')}</button>`:''}`;
 }
 
 function renderInterfaceHome(summaries){
