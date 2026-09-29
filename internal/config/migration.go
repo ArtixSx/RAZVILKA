@@ -114,7 +114,7 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 	if err := validateServiceControl(cfg.ServiceControl); err != nil {
 		return Config{}, report, err
 	}
-	if ValidateNetworkPolicy(cfg.NetworkPolicy) != nil || ValidateNetworkPolicy(cfg.AppliedNetworkPolicy) != nil {
+	if ValidateNetworkPolicy(cfg.NetworkPolicy) != nil || ValidateAppliedNetworkPolicy(cfg.AppliedNetworkPolicy) != nil {
 		return Config{}, report, ErrNetworkPolicy
 	}
 	report.normalize()

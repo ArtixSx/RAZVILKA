@@ -42,7 +42,7 @@ func TestNetworkPolicyValidationSeparatesClientsAndTraffic(t *testing.T) {
 		{"all networks", func(p *NetworkPolicy) { p.Clients.ExcludedCIDRs = []string{"0.0.0.0/0"} }, false},
 		{"noncanonical CIDR", func(p *NetworkPolicy) { p.Clients.ExcludedCIDRs = []string{"192.168.1.1/24"} }, false},
 		{"IPv6 exclusion", func(p *NetworkPolicy) { p.Clients.ExcludedCIDRs = []string{"fd00:1::/64"} }, true},
-		{"future schema", func(p *NetworkPolicy) { p.Schema++ }, false},
+		{"future schema", func(p *NetworkPolicy) { p.Schema = 3 }, false},
 		{"no revision", func(p *NetworkPolicy) { p.Revision = 0 }, false},
 		{"unapproved TLD", func(p *NetworkPolicy) { p.Russian.BroadTLDs = []string{"ru"} }, false},
 		{"unapproved updates", func(p *NetworkPolicy) { p.Russian.AutoUpdateAllowed = true }, false},

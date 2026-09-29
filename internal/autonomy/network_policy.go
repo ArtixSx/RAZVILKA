@@ -44,9 +44,14 @@ type TrafficQuestion struct {
 	ServiceSources       []string
 	ExplicitBypass       bool // explicit override, never inferred from ServiceSelected
 	ProtectedDestination bool
+	// Schema 2: whether the applied default executor carries this traffic
+	// class (TCP/UDP, IPv4/IPv6, QUIC...). "supported", "unsupported" or
+	// "unknown"; empty is unknown and never becomes a supported path.
+	DefaultCoverage string
 }
 type NetworkDecision struct {
-	Action         string `json:"action"` // base, bypass, or unavailable; no access proof
+	Action         string `json:"action"`           // base, bypass, blocked or unavailable; no access proof
+	Target         string `json:"target,omitempty"` // service or default path of a bypass decision
 	Reason         string `json:"reason_code"`
 	RuleID         string `json:"rule_id,omitempty"`
 	RuleRevision   uint64 `json:"rule_revision,omitempty"`
@@ -216,8 +221,13 @@ func DecideNetworkPolicy(p *config.NetworkPolicy, observation ScopeObservation, 
 			}
 		}
 		if !inherited {
-			d.Action, d.Reason = "base", "SERVICE_SCOPE_MISMATCH"
-			return d
+			if p.Schema < 2 || p.Traffic.Mode != "all_except" {
+				d.Action, d.Reason = "base", "SERVICE_SCOPE_MISMATCH"
+				return d
+			}
+			// All-internet: an override for other clients does not apply to
+			// this one; it continues through exclusions to the default path.
+			q.ServiceSelected = false
 		}
 	}
 	var direct, bypass, mandatoryBypass *config.NetworkRule
@@ -248,12 +258,11 @@ func DecideNetworkPolicy(p *config.NetworkPolicy, observation ScopeObservation, 
 		return d
 	}
 	if bypass != nil {
-		d.Action, d.Reason, d.RuleID, d.RuleRevision = "bypass", "MANUAL_BYPASS_OVERRIDE", bypass.ID, bypass.Revision
-		return d
+		d.RuleID, d.RuleRevision = bypass.ID, bypass.Revision
+		return routeDecision(p, q, d, "MANUAL_BYPASS_OVERRIDE")
 	}
 	if q.ExplicitBypass {
-		d.Action, d.Reason = "bypass", "MANUAL_BYPASS_OVERRIDE"
-		return d
+		return routeDecision(p, q, d, "MANUAL_BYPASS_OVERRIDE")
 	}
 	if p.Russian.Enabled {
 		match := q.ServiceID != "" && slices.Contains(p.Russian.ServiceIDs, q.ServiceID)
@@ -265,9 +274,49 @@ func DecideNetworkPolicy(p *config.NetworkPolicy, observation ScopeObservation, 
 			return d
 		}
 	}
+	if p.Schema >= 2 {
+		if q.ServiceSelected {
+			return routeDecision(p, q, d, "SERVICE_OVERRIDE")
+		}
+		if p.Traffic.Mode == "all_except" {
+			return routeDecision(p, q, d, "DEFAULT_POLICY")
+		}
+		d.Action, d.Reason = "base", "UNSELECTED_DESTINATION"
+		return d
+	}
 	d.Action, d.Reason = "base", "UNSELECTED_DESTINATION"
 	if q.ServiceSelected || p.Traffic.Mode == "all_except" {
 		d.Action, d.Reason = "bypass", "DEFAULT_POLICY"
+		d.Target = "default"
+		if q.ServiceSelected {
+			d.Target = "service"
+		}
+	}
+	return d
+}
+
+// routeDecision sends a managed destination to its service override or to
+// the default path. In schema 2 the default path must cover the traffic
+// class; otherwise the policy's explicit Unavailable outcome applies and the
+// class never falls through to an implicit DIRECT.
+func routeDecision(p *config.NetworkPolicy, q TrafficQuestion, d NetworkDecision, reason string) NetworkDecision {
+	d.Action, d.Reason = "bypass", reason
+	switch {
+	case q.ServiceSelected:
+		d.Target = "service"
+	case p.Traffic.Mode == "all_except":
+		d.Target = "default"
+	}
+	if p.Schema < 2 || d.Target != "default" || q.DefaultCoverage == "supported" {
+		return d
+	}
+	switch p.Traffic.Unavailable {
+	case "base":
+		d.Action, d.Reason = "base", "DEFAULT_CLASS_BASE"
+	case "block":
+		d.Action, d.Reason = "blocked", "DEFAULT_CLASS_BLOCKED"
+	default:
+		d.Action, d.Reason = "unavailable", "DEFAULT_CLASS_UNAVAILABLE"
 	}
 	return d
 }

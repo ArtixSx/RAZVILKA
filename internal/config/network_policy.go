@@ -13,6 +13,12 @@ import (
 // NetworkPolicy separates client membership from traffic selection. Nil keeps
 // the existing per-service scope unchanged; it is never migrated from AllLAN.
 // This is intent, not packet classification or a permission to use an adapter.
+//
+// Schema 1 keeps the original selected-services semantics. Schema 2 is the
+// all-internet contract: services are overrides on top of a default path for
+// the rest of the internet of participating clients, DefaultRoute may be the
+// "auto" intent, and Unavailable may block the managed traffic. A binary that
+// only knows schema 1 rejects schema 2; rollback restores the prior config.
 type NetworkPolicy struct {
 	Schema   int               `json:"schema"`
 	Revision uint64            `json:"revision"`
@@ -32,11 +38,25 @@ type ClientScope struct {
 }
 
 type TrafficSelection struct {
-	Mode                string `json:"mode"` // selected_services or separately allowed all_except
-	DefaultRoute        string `json:"default_route,omitempty"`
+	Mode                string `json:"mode"`                    // selected_services or separately allowed all_except
+	DefaultRoute        string `json:"default_route,omitempty"` // schema 2 also: auto (intent only)
 	AllExceptAllowed    bool   `json:"all_except_allowed"`
 	AutoHostlistAllowed bool   `json:"auto_hostlist_allowed"`
-	Unavailable         string `json:"unavailable"` // retain or base
+	Unavailable         string `json:"unavailable"` // retain or base; schema 2 also: block
+}
+
+// DefaultRouteAuto asks the autopilot to choose the default path. It is never
+// an executable route: an applied policy records the concrete executor.
+const DefaultRouteAuto = "auto"
+
+func validDefaultRoute(route string, schema int) bool {
+	switch route {
+	case "usque", "warp-wg", "xray":
+		return true
+	case "amneziawg", DefaultRouteAuto:
+		return schema >= 2
+	}
+	return strings.HasPrefix(route, "sing-box:node-") && policyIdentifier.MatchString(route[len("sing-box:"):])
 }
 
 type NetworkRule struct {
@@ -117,7 +137,7 @@ func ValidateNetworkPolicy(p *NetworkPolicy) error {
 	if p == nil {
 		return nil
 	}
-	if p.Schema != 1 || p.Revision == 0 || p.Revision == ^uint64(0) {
+	if p.Schema != 1 && p.Schema != 2 || p.Revision == 0 || p.Revision == ^uint64(0) {
 		return ErrNetworkPolicy
 	}
 	s := p.Clients
@@ -135,14 +155,18 @@ func ValidateNetworkPolicy(p *NetworkPolicy) error {
 		seenCIDR[value] = true
 	}
 	t := p.Traffic
-	if !slices.Contains([]string{"selected_services", "all_except"}, t.Mode) || !slices.Contains([]string{"retain", "base"}, t.Unavailable) {
+	unavailable := []string{"retain", "base"}
+	if p.Schema >= 2 {
+		unavailable = append(unavailable, "block")
+	}
+	if !slices.Contains([]string{"selected_services", "all_except"}, t.Mode) || !slices.Contains(unavailable, t.Unavailable) {
 		return ErrNetworkPolicy
 	}
 	if t.Mode == "selected_services" && (t.DefaultRoute != "" || t.AllExceptAllowed) {
 		return ErrNetworkPolicy
 	}
 	if t.Mode == "all_except" {
-		if !t.AllExceptAllowed || !(t.DefaultRoute == "usque" || t.DefaultRoute == "warp-wg" || t.DefaultRoute == "xray" || strings.HasPrefix(t.DefaultRoute, "sing-box:node-") && policyIdentifier.MatchString(t.DefaultRoute[len("sing-box:"):])) {
+		if !t.AllExceptAllowed || !validDefaultRoute(t.DefaultRoute, p.Schema) {
 			return ErrNetworkPolicy
 		}
 	}
@@ -198,6 +222,18 @@ func ValidateNetworkPolicy(p *NetworkPolicy) error {
 			return ErrNetworkPolicy
 		}
 		seen[tld] = true
+	}
+	return nil
+}
+
+// ValidateAppliedNetworkPolicy also requires a concrete default executor: the
+// "auto" intent is resolved before apply and never stored as applied state.
+func ValidateAppliedNetworkPolicy(p *NetworkPolicy) error {
+	if err := ValidateNetworkPolicy(p); err != nil {
+		return err
+	}
+	if p != nil && p.Traffic.DefaultRoute == DefaultRouteAuto {
+		return ErrNetworkPolicy
 	}
 	return nil
 }
