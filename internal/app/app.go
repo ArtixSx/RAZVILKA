@@ -504,6 +504,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/strategy-lab/packs", a.strategyPacks)
 	mux.HandleFunc("/api/v1/strategy-lab/builtin-pack", a.builtinStrategyPack)
 	mux.HandleFunc("/api/v1/nfqws2/setup-mode", a.nfqwsSetupMode)
+	mux.HandleFunc("/api/v1/nfqws2/discord-repair", a.nfqwsDiscordRepair)
 	mux.HandleFunc("/api/v1/autonomy", a.autonomyAPI)
 	mux.HandleFunc("/api/v1/autonomy/services", a.autonomyEnroll)
 	mux.HandleFunc("/api/v1/autonomy/services/", a.autonomyRemove)

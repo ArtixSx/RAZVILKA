@@ -11,8 +11,12 @@ func TestRepair2StarterExactlySixStockGroups(t *testing.T) {
 	if len(c.Services) != 6 || Validate(c) != nil {
 		t.Fatal("invalid default catalogue")
 	}
+	// RAZVILKA's documented Discord supplement (data README); everything else
+	// must remain the 278 upstream domains.
+	supplement := map[string]bool{"discordstatus.com": true, "discordapp.io": true, "discord-attachments-uploads-prd.storage.googleapis.com": true,
+		"airhornbot.com": true, "airhorn.solutions": true, "bigbeans.solutions": true, "watchanimeattheoffice.com": true, "hammerandchisel.ssl.zendesk.com": true}
 	seen := map[string]bool{}
-	total := 0
+	total, upstream := 0, 0
 	for _, s := range c.Services {
 		if !IsNFQWS2Starter(s) || len(s.Strategy) != 1 || s.Strategy[0] != "nfqws2" {
 			t.Fatal("non-NFQ default")
@@ -23,10 +27,17 @@ func TestRepair2StarterExactlySixStockGroups(t *testing.T) {
 			}
 			seen[d] = true
 			total++
+			if supplement[d] {
+				if s.ID != "discord" {
+					t.Fatal("supplement outside Discord", d)
+				}
+				continue
+			}
+			upstream++
 		}
 	}
-	if total != 278 {
-		t.Fatal("stock membership changed", total)
+	if upstream != 278 || total != 278+len(supplement) {
+		t.Fatal("stock membership changed", upstream, total)
 	}
 	b, e := os.ReadFile("../../configs/service-catalog.json")
 	if e != nil || !bytes.Equal(b, nfqws2StarterJSON) {

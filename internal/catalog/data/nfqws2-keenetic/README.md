@@ -11,6 +11,13 @@ This directory contains RAZVILKA's grouping of the upstream domain list, not an 
 - Upstream MIT notice: LICENSE in this directory.
 
 Group labels, probes, and the intended NFQWS2 route are RAZVILKA additions.
+The Discord group additionally contains eight RAZVILKA-added domains that are
+not part of the upstream file: `discordstatus.com`, `discordapp.io`,
+`discord-attachments-uploads-prd.storage.googleapis.com` (file uploads),
+`airhornbot.com`, `airhorn.solutions`, `bigbeans.solutions`,
+`watchanimeattheoffice.com` and `hammerandchisel.ssl.zendesk.com`. They follow
+the Discord TCP host list used by the zapret2/z2k installer; the upstream
+counts above describe the upstream file only.
 The common CDN/Google domains cover more than a single application. These are not assertions that all affected applications or features are verified.
 No upstream `auto.list`, `exclude.list`, kernel module, init script or IP set is installed or overwritten by this snapshot.
 `configs/service-catalog.json` must remain byte-identical to `catalog.json` here; tests enforce that relationship.

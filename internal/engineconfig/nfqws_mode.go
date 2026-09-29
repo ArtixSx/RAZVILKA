@@ -21,6 +21,8 @@ type NFQWSModeView struct {
 	CanAuto        bool   `json:"can_auto"`
 	NativeAdaptive bool   `json:"native_adaptive"`
 	DraftOnly      bool   `json:"draft_only"`
+	// DiscordVoice: a UDP profile detects Discord and its voice ports are queued.
+	DiscordVoice bool `json:"discord_voice"`
 }
 
 func nfqwsModeView(raw []byte, source string) (NFQWSModeView, error) {
@@ -47,6 +49,7 @@ func nfqwsModeView(raw []byte, source string) (NFQWSModeView, error) {
 	v.Review = sum(append([]byte(source+"\x00"), raw...))
 	args := fields["NFQWS_ARGS"] + "\n" + fields["NFQWS_ARGS_UDP"]
 	v.NativeAdaptive = strings.Contains(args, "--lua-desync=circular:") || strings.Contains(args, "--lua-desync=autocircular:")
+	v.DiscordVoice = discordVoiceCovered(fields)
 	return v, nil
 }
 func (m *Manager) NFQWSMode() (NFQWSModeView, error) {

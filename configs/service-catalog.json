@@ -210,7 +210,7 @@
       "name": "Discord",
       "category": "Мессенджеры",
       "icon": "DS",
-      "description": "Штатный список nfqws2-keenetic. Назначение по умолчанию: NFQWS2.",
+      "description": "Штатный список nfqws2-keenetic и 8 доменов-дополнений RAZVILKA (загрузка файлов, статус, служебные домены Discord). Назначение по умолчанию: NFQWS2.",
       "domains": [
         "dis.gd",
         "discord.co",
@@ -234,7 +234,15 @@
         "discord.app",
         "discord.status",
         "discordcdn.com",
-        "discordsez.com"
+        "discordsez.com",
+        "discordstatus.com",
+        "discordapp.io",
+        "discord-attachments-uploads-prd.storage.googleapis.com",
+        "airhornbot.com",
+        "airhorn.solutions",
+        "bigbeans.solutions",
+        "watchanimeattheoffice.com",
+        "hammerandchisel.ssl.zendesk.com"
       ],
       "strategy": [
         "nfqws2"

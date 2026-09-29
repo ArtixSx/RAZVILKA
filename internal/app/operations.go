@@ -116,7 +116,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		exclusive := (r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/nodes/")) || strings.HasPrefix(r.URL.Path, "/api/v1/autonomy/services/") && r.Method == http.MethodDelete || r.URL.Path == "/api/v1/autonomy" && r.Method == http.MethodPut || r.URL.Path == "/api/v1/autonomy/services" && r.Method == http.MethodPost || r.Method == http.MethodPost && (r.URL.Path == "/api/v1/nodes/delete-batch" || r.URL.Path == "/api/v1/apply" || r.URL.Path == "/api/v1/self-update/apply" || r.URL.Path == "/api/v1/service-control/runtime" || r.URL.Path == "/api/v1/private-backups/import" || r.URL.Path == "/api/v1/diagnostics/usque/repair" || strings.HasPrefix(r.URL.Path, "/api/v1/nodes/") && strings.HasSuffix(r.URL.Path, "/apply"))
-		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/nfqws2/setup-mode" {
+		if r.Method == http.MethodPut && (r.URL.Path == "/api/v1/nfqws2/setup-mode" || r.URL.Path == "/api/v1/nfqws2/discord-repair") {
 			exclusive = true
 		}
 		// Subscription removal also withdraws autonomy permission. Serialize it

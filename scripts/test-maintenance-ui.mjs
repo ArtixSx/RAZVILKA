@@ -32,4 +32,23 @@ check('NFQWS setup clears expired-session notices after successful login without
  f.requests[0].resolve({available:true,native_adaptive:true,review:'a'.repeat(64),mode:'auto'});await read;
  check('pre-login NFQWS read cannot restore old review or error after login',()=>{assert.equal(f.requests[0].options.controller.signal.aborted,true);assert.equal(f.element('auto3NFQSave').disabled,true);assert.match(f.element('auto3NFQStatus').textContent,/Прочитать конфигурацию/);assert.equal(f.element('auto3NativeAdaptive').textContent,'Конфигурация ещё не прочитана.');});
 }
+{
+ const model=vm.runInNewContext(fs.readFileSync('cmd/razvilka/web/automation-setup.js','utf8')+';RazvilkaAutomationSetup',{});
+ const review='b'.repeat(64);
+ check('Discord repair request requires a fresh reviewed configuration',()=>{
+  assert.throws(()=>model.discordRepairRequest({available:true,review:'x'},1));
+  assert.throws(()=>model.discordRepairRequest({available:true,review,discord_voice:true},1),/уже есть/);
+  assert.deepEqual(JSON.parse(JSON.stringify(model.discordRepairRequest({available:true,review,discord_voice:false},4))),{review,config_revision:4,confirm:'STAGE_DISCORD_REPAIR'});
+  assert.match(model.discordRepairText({available:true,discord_voice:false}),/профиля нет/);
+  assert.match(model.discordRepairText({available:true,discord_voice:true}),/профиль есть/);
+ });
+ const f=setupFixture();const read=f.element('auto3NFQRead').events.get('click')();
+ f.requests[0].resolve({available:true,review,mode:'auto',discord_voice:false});await read;
+ check('Discord repair button stages through its own endpoint',()=>{
+  assert.equal(f.element('auto3DiscordRepairAdd').disabled,false);
+  f.element('auto3DiscordRepairAdd').events.get('click')();
+  const last=f.requests.at(-1);assert.equal(last.path,'/api/v1/nfqws2/discord-repair');
+  assert.equal(JSON.parse(last.options.body).confirm,'STAGE_DISCORD_REPAIR');
+ });
+}
 console.log(JSON.stringify({suite:'maintenance-ui',passed:n}));

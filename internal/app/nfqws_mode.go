@@ -58,3 +58,46 @@ func (a *App) nfqwsSetupMode(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{"mode": v, "live_applied": false})
 }
+
+// nfqwsDiscordRepair stages the Discord voice repair into the NFQWS2 draft
+// ("additional strategies") when the reviewed configuration lacks it. The
+// ordinary reviewed Apply validates and activates the draft.
+func (a *App) nfqwsDiscordRepair(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if a.EngineConfigs == nil || a.Store == nil {
+		writeJSON(w, 503, map[string]any{"error": "Редактор конфигурации недоступен."})
+		return
+	}
+	if r.Method != http.MethodPut {
+		methodNotAllowed(w)
+		return
+	}
+	var q struct {
+		Review   string  `json:"review"`
+		Revision *uint64 `json:"config_revision"`
+		Confirm  string  `json:"confirm"`
+	}
+	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	d.DisallowUnknownFields()
+	if d.Decode(&q) != nil || d.Decode(&struct{}{}) != io.EOF || q.Revision == nil || q.Confirm != "STAGE_DISCORD_REPAIR" {
+		writeJSON(w, 400, map[string]any{"error": "Подтвердите добавление ремонта Discord."})
+		return
+	}
+	if a.Store.Get().Revision != *q.Revision {
+		writeJSON(w, 409, map[string]any{"error": "Настройки изменились. Перечитайте конфигурацию."})
+		return
+	}
+	v, e := a.EngineConfigs.StageNFQWSDiscordRepair(r.Context(), q.Review)
+	if e != nil {
+		code, message := 400, "Ремонт Discord не добавлен: конфигурация нестандартная или изменилась. Перечитайте её."
+		switch {
+		case errors.Is(e, engineconfig.ErrNFQWSModeChanged):
+			code = 409
+		case errors.Is(e, engineconfig.ErrDiscordRepairPorts):
+			message = "Ремонт Discord не добавлен: в списке UDP-портов NFQWS2 нет места для портов голоса (предел iptables — 15). Объедините порты в диапазоны в редакторе."
+		}
+		writeJSON(w, code, map[string]any{"error": message, "live_applied": false})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"mode": v, "live_applied": false})
+}
