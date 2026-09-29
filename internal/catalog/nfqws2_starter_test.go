@@ -40,10 +40,11 @@ func TestRepair2StarterExactlySixStockGroups(t *testing.T) {
 	if len(c.Services) != 6 || Validate(c) != nil {
 		t.Fatal("invalid default catalogue")
 	}
-	// RAZVILKA's documented Discord supplement (data README); everything else
-	// must be exactly the upstream host list of the snapshot.
-	supplement := map[string]bool{"discordstatus.com": true, "discordapp.io": true, "discord-attachments-uploads-prd.storage.googleapis.com": true,
-		"airhornbot.com": true, "airhorn.solutions": true, "bigbeans.solutions": true, "watchanimeattheoffice.com": true, "hammerandchisel.ssl.zendesk.com": true}
+	// RAZVILKA's documented supplements (data README); everything else must
+	// be exactly the upstream host list of the snapshot.
+	supplement := map[string]string{"discordstatus.com": "discord", "discordapp.io": "discord", "discord-attachments-uploads-prd.storage.googleapis.com": "discord",
+		"airhornbot.com": "discord", "airhorn.solutions": "discord", "bigbeans.solutions": "discord", "watchanimeattheoffice.com": "discord", "hammerandchisel.ssl.zendesk.com": "discord",
+		"auth.riotgames.com": "riotgames", "authenticate.riotgames.com": "riotgames"}
 	seen := map[string]bool{}
 	total, upstream := 0, 0
 	for _, s := range c.Services {
@@ -56,9 +57,9 @@ func TestRepair2StarterExactlySixStockGroups(t *testing.T) {
 			}
 			seen[d] = true
 			total++
-			if supplement[d] {
-				if s.ID != "discord" {
-					t.Fatal("supplement outside Discord", d)
+			if owner, ok := supplement[d]; ok {
+				if s.ID != owner {
+					t.Fatal("supplement outside its service", d)
 				}
 				continue
 			}

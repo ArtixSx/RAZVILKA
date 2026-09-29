@@ -20,6 +20,10 @@ not part of the upstream file: `discordstatus.com`, `discordapp.io`,
 `watchanimeattheoffice.com` and `hammerandchisel.ssl.zendesk.com`. They follow
 the Discord TCP host list used by the zapret2/z2k installer; the upstream
 counts above describe the upstream file only.
+The Riot Games group additionally contains `auth.riotgames.com` and
+`authenticate.riotgames.com`, also RAZVILKA additions: every page of
+`account.riotgames.com` redirects to its sign-in on those hosts, so with the
+single upstream domain the web check could never be confirmed through NFQWS2.
 The common CDN/Google domains cover more than a single application. These are not assertions that all affected applications or features are verified.
 No upstream `auto.list`, `exclude.list`, kernel module, init script or IP set is installed or overwritten by this snapshot; the copies in `upstream/` are test references only.
 `configs/service-catalog.json` must remain byte-identical to `catalog.json` here; tests enforce that relationship.

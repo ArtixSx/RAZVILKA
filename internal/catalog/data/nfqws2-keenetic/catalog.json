@@ -357,7 +357,9 @@
       "icon": "RI",
       "description": "Штатный список nfqws2-keenetic. Назначение по умолчанию: NFQWS2.",
       "domains": [
-        "account.riotgames.com"
+        "account.riotgames.com",
+        "auth.riotgames.com",
+        "authenticate.riotgames.com"
       ],
       "strategy": [
         "nfqws2"
