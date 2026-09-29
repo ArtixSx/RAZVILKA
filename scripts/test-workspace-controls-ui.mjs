@@ -169,4 +169,17 @@ assert.match(context.engineVersionHTML({ id: 'sing-box', installed: true }), /1\
 state.components[0].update_available = false;
 assert.doesNotMatch(context.engineVersionHTML({ id: 'sing-box', installed: true }), /→/);
 assert.match(context.engineVersionHTML({ id: 'unknown', installed: true }), /Версия не определена/);
-console.log('Workspace controls: exact revision, no implicit routes, double-click/refusal/logout guards and factual versions passed');
+// Concurrent pollers share one service-control read; a finished read is not reused.
+{
+  let finishRead;
+  const before = calls.length;
+  request = () => new Promise(resolve => { finishRead = resolve; });
+  const first = context.readServiceControl(), second = context.readServiceControl();
+  assert.equal(calls.length, before + 1, 'concurrent service-control reads were not shared');
+  finishRead({ ...snapshot, config_revision: 20 });
+  assert.deepEqual(await first, await second);
+  request = async () => ({ ...snapshot, config_revision: 21 });
+  assert.equal((await context.readServiceControl()).config_revision, 21, 'finished read was reused');
+  assert.equal(calls.length, before + 2);
+}
+console.log('Workspace controls: exact revision, no implicit routes, double-click/refusal/logout guards, shared reads and factual versions passed');

@@ -2,6 +2,19 @@
 
 const workspaceControl = { generation: 0, busy: false, readBusy: false, pending: null, timer: null, expanded: false, authenticated: false, lastError: '', runtimeJob: null, runtimeRequest: null };
 
+// The workspace control and the service dashboard poll service-control on
+// their own timers. A read already in flight serves both; a finished read is
+// never reused, so an operation gate (HTTP 409) is seen at once.
+const serviceControlReads = { promise: null };
+function readServiceControl() {
+  if (serviceControlReads.promise) return serviceControlReads.promise;
+  const promise = api('/api/v1/service-control').finally(() => { if (serviceControlReads.promise === promise) serviceControlReads.promise = null; });
+  serviceControlReads.promise = promise;
+  return promise;
+}
+// A read started before a mutation must not answer for the state after it.
+function forgetServiceControlRead() { serviceControlReads.promise = null; }
+
 function workspaceRuntimeToken(intent) {
   const signature = JSON.stringify(intent);
   let saved = workspaceControl.runtimeRequest;
@@ -102,7 +115,7 @@ async function refreshWorkspaceControl() {
       if (generation !== workspaceControl.generation || !workspaceControlVisible()) return null;
       if (acceptWorkspaceRuntimeJobs(memory)) { renderWorkspaceControls(); return null; }
     }
-    return api('/api/v1/service-control');
+    return readServiceControl();
   })().then(control => {
     if (generation !== workspaceControl.generation || !workspaceControlVisible()) return false;
     return acceptWorkspaceControl(control);
@@ -135,7 +148,8 @@ async function changeWorkspaceMode(mode) {
   const generation = workspaceControl.generation;
   workspaceControl.busy = true; renderWorkspaceControls();
   try {
-    const result = await api('/api/v1/service-control', { method: 'PUT', body: JSON.stringify({ expected_revision: control.config_revision, mode, confirm: 'SAVE_SERVICE_CONTROL' }) });
+    forgetServiceControlRead();
+    const result = await api('/api/v1/service-control', { method: 'PUT', body: JSON.stringify({ expected_revision: control.config_revision, mode, confirm: 'SAVE_SERVICE_CONTROL' }) }).finally(forgetServiceControlRead);
     if (generation !== workspaceControl.generation) return;
     if (!acceptWorkspaceControl(result.control || result)) await refreshWorkspaceControl();
     await refreshAfterMutation();
@@ -164,7 +178,8 @@ async function toggleWorkspaceRuntime() {
   workspaceControl.busy = true; renderWorkspaceControls();
   try {
     const intent = { expected_revision: control.config_revision, action, confirm: action === 'stop' ? 'STOP_OWNED_ROUTES' : 'RESUME_OWNED_ROUTES' };
-    const result = await api('/api/v1/service-control/runtime', { method: 'POST', body: JSON.stringify({ ...intent, idempotency_key: workspaceRuntimeToken(intent) }) });
+    forgetServiceControlRead();
+    const result = await api('/api/v1/service-control/runtime', { method: 'POST', body: JSON.stringify({ ...intent, idempotency_key: workspaceRuntimeToken(intent) }) }).finally(forgetServiceControlRead);
     if (generation !== workspaceControl.generation) return;
     clearWorkspaceRuntimeToken();
     if (result.persistent && result.job) {

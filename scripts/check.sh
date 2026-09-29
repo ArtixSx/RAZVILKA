@@ -27,6 +27,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-interface-contract.mjs
   node scripts/test-interface-home.mjs
   node scripts/test-inspector-focus.mjs
+  node scripts/test-inspector-controls-ui.mjs
   node scripts/test-component-cards-ui.mjs
   node --check cmd/razvilka/web/project-log.js
   node scripts/test-project-log-ui.mjs

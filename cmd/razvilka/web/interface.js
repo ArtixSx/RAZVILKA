@@ -71,7 +71,7 @@ function interfaceServiceCard(s,summaries,compact=false){
  const action=h.member
    ?`<button type="button" class="secondary" data-rz-inspect="${esc(s.id)}" data-rz-focus="service-${esc(s.id)}">Открыть</button>`
    :`<button type="button" class="primary" data-r5-add="${esc(s.id)}" data-rz-focus="service-${esc(s.id)}" ${interfaceState.busy?'disabled':''}>${ready?'Добавить':'Начать настройку'}</button>`;
- return `<article class="ui3-service-card r5-service-card ${h.member?'':'not-selected'}" data-rz-card="${esc(s.id)}"><div class="ui3-service-card-top"><span class="ui3-service-icon tone-${rim.category(s)==='ИИ-сервисы'?'violet':s.id==='youtube'?'rose':'teal'}">${consoleServiceIcon(s)}</span><div class="ui3-service-name"><h4>${esc(s.name)}</h4><span>${esc(rim.category(s))}</span></div></div><div class="ui3-card-state">${interfaceBadge(h)}${h.pendingLabel?`<span class="ui3-pending-dot">${esc(h.pendingLabel)}</span>`:''}</div><p class="r5-service-description">${esc(h.member?h.control:'Доступ по выбранным правилам автопилота')}</p><div class="ui3-card-route"><span>Подключение</span><b>${esc(h.route?interfaceRouteName(h.route):'Пока не назначено')}</b></div><div class="ui3-card-footer"><small>${h.applied?'Настройки применены':'Применение не подтверждено'}</small>${action}</div></article>`;
+ return `<article class="ui3-service-card r5-service-card ${h.member?'':'not-selected'}" data-rz-card="${esc(s.id)}"><div class="ui3-service-card-top"><span class="ui3-service-icon tone-${rim.category(s)==='ИИ-сервисы'?'violet':s.id==='youtube'?'rose':'teal'}">${consoleServiceIcon(s)}</span><div class="ui3-service-name"><h4>${esc(s.name)}</h4><span>${esc(rim.category(s))}</span></div></div><div class="ui3-card-state">${interfaceBadge(h)}${h.pendingLabel&&h.pendingLabel!==h.label?`<span class="ui3-pending-dot">${esc(h.pendingLabel)}</span>`:''}</div><p class="r5-service-description">${esc(h.member?h.control:'Доступ по выбранным правилам автопилота')}</p><div class="ui3-card-route"><span>Подключение</span><b>${esc(h.route?interfaceRouteName(h.route):'Пока не назначено')}</b></div><div class="ui3-card-footer"><small>${h.applied?'Настройки применены':'Применение не подтверждено'}</small>${action}</div></article>`;
 }
 
 function interfaceGroupHTML(g,summaries,location){
@@ -352,7 +352,7 @@ document.addEventListener('click',event=>{
   if(action==='setup'){interfaceCloseInspector();setView('onboard');return;}
   if(action==='check'){void interfaceCheckService(id);return;}
   interfaceState.busy=true;b.disabled=true;
-  void interfaceManage(id,action==='manage',action==='remove').catch(e=>consoleText('ui3InspectorMessage',e.message)).finally(()=>{interfaceState.busy=false;if(b.isConnected)b.disabled=false;});
+  void interfaceManage(id,action==='manage'||action==='confirm-definition',action==='remove').catch(e=>consoleText('ui3InspectorMessage',e.message)).finally(()=>{interfaceState.busy=false;if(b.isConnected)b.disabled=false;});
  }
 });
 $('#ui3ServiceSearch').addEventListener('input',e=>{interfaceState.query=e.target.value;renderInterfaceServices(interfaceSummaries());});
@@ -385,7 +385,10 @@ function interfaceInspectorControls(service){
  if(!setup)return '<button type="button" class="secondary" data-rz-action="setup">Настроить автопилот</button>';
  if(managed?.removing)return '<span role="status">Снятие подключения уже в очереди.</span>';
  const disabled=interfaceState.busy?' disabled':'';
- return `<button type="button" class="secondary" data-rz-action="${managed?.enabled?'pause':'manage'}" data-rz-focus="inspector-control-${esc(service.id)}"${disabled}>${managed?.enabled?'Пауза автоподбора':managed?'Возобновить автоподбор':'Включить автоподбор'}</button>`;
+ // The autopilot stops on a changed service definition until it is confirmed;
+ // confirming re-saves the same devices with the definition shown now.
+ const confirm=managed?.enabled&&consoleSnapshot?.runtime?.[service.id]?.state==='definition-changed'?`<button type="button" class="primary" data-rz-action="confirm-definition"${disabled}>Подтвердить новый состав</button>`:'';
+ return `${confirm}<button type="button" class="secondary" data-rz-action="${managed?.enabled?'pause':'manage'}" data-rz-focus="inspector-control-${esc(service.id)}"${disabled}>${managed?.enabled?'Пауза автоподбора':managed?'Возобновить автоподбор':'Включить автоподбор'}</button>`;
 }
 
 // UI polling renders data only; all checks and maintenance remain server jobs.

@@ -215,7 +215,7 @@ async function refreshServiceControl() {
     if (state.serviceControl) state.serviceControl = { ...state.serviceControl, job: memory.job || null };
     if (typeof nodeBrowser !== 'undefined' && Array.isArray(memory.pings)) nodeBrowser.pings = memory.pings;
     if (serviceDashboardJobActive()) { renderServiceDashboard(); return; }
-    const control = await api('/api/v1/service-control', { signal: controller.signal });
+    const control = await (typeof readServiceControl === 'function' ? readServiceControl() : api('/api/v1/service-control', { signal: controller.signal }));
     if (!current()) return;
     if (typeof acceptWorkspaceControl === 'function') acceptWorkspaceControl(control);
     else state.serviceControl = control;
@@ -358,6 +358,7 @@ async function serviceDashboardSaveSchedule(event) {
   renderServiceDashboardControl();
   try {
     const control = await api('/api/v1/service-control', { method: 'PUT', signal: operation.controller.signal, body: JSON.stringify({ expected_revision: serviceDashboard.scheduleRevision, schedule, confirm: 'SAVE_SERVICE_CONTROL' }) });
+    if (typeof forgetServiceControlRead === 'function') forgetServiceControlRead();
     if (!serviceDashboardCurrent(operation)) return;
     if (typeof acceptWorkspaceControl === 'function') acceptWorkspaceControl(control);
     else state.serviceControl = control;
