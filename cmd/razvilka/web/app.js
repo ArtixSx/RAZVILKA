@@ -3494,6 +3494,15 @@ function acceptDeviceList(payload) {
   state.devicePersistenceWarning = Array.isArray(payload) ? '' : (payload.persistence_warning || '');
 }
 
+// A device can report dozens of temporary IPv6 addresses; show the first few
+// and keep the rest one click away so the card stays readable.
+function deviceAddressesHTML(ips) {
+  if (!ips.length) return '<span>IP пока неизвестен</span>';
+  const visible = ips.slice(0, 4).map((ip) => `<code>${esc(ip)}</code>`).join('');
+  if (ips.length <= 4) return visible;
+  return `${visible}<details class="device-more-addresses"><summary>Ещё ${ips.length - 4} адрес(ов)</summary>${ips.slice(4).map((ip) => `<code>${esc(ip)}</code>`).join('')}</details>`;
+}
+
 function renderDevices() {
   const warning = $('#devicePersistenceWarning');
   warning.textContent = state.devicePersistenceWarning || '';
@@ -3510,7 +3519,7 @@ function renderDevices() {
     const policyPreview = selected.slice(0, 4).map((policy) => `<span>${esc(policy.service_name)} → ${esc(routeLabel(policy.route))}</span>`).join('');
     return `<article class="device-card ${device.discovered ? 'online' : 'offline'}">
       <div class="device-card-head"><div class="device-icon">${esc((deviceDisplayName(device)[0] || '?').toUpperCase())}</div><div><h3>${esc(deviceDisplayName(device))}</h3><p>${esc(device.hostname && device.name ? device.hostname : device.mac || 'MAC не определён')}</p></div><span class="device-state"><i></i>${device.discovered ? 'В СЕТИ' : 'ОФЛАЙН'}</span></div>
-      <div class="device-addresses">${(device.ips || []).map((ip) => `<code>${esc(ip)}</code>`).join('') || '<span>IP пока неизвестен</span>'}</div>
+      <div class="device-addresses">${deviceAddressesHTML(device.ips || [])}</div>
       <div class="device-meta"><span>Интерфейс <b>${esc(device.interface || '—')}</b></span><span>Группа <b>${esc(device.group || 'без группы')}</b></span><span>Свои политики <b>${selected.length}</b></span><span>Общие сервисы <b>${global.length}</b></span></div>
       <div class="device-policy-preview">${policyPreview || '<span>Индивидуальных областей пока нет</span>'}${selected.length > 4 ? `<small>+ ещё ${selected.length - 4}</small>` : ''}</div>
       <div class="device-actions"><button class="secondary device-edit" data-device-id="${esc(device.id)}" type="button">Имя и группа</button><button class="primary device-policy" data-device-id="${esc(device.id)}" type="button" ${(device.ips || []).length ? '' : 'disabled'}>Назначить сервис</button></div>
