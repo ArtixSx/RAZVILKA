@@ -140,6 +140,10 @@ func Specs() []EngineSpec {
 			Files: []FileSpec{{ID: "main", Name: "config.json", Kind: "secret-config", Syntax: "json", Paths: []string{"/opt/etc/xray/config.json", "/opt/etc/xray.json"}, Sensitive: true, Description: "Основной JSON-конфиг Xray; может содержать UUID, пароли и ключи"}},
 		},
 		{
+			ID: "wireguard", Name: "WireGuard · свой сервер", Description: "Обычный WireGuard к вашему серверу; не WARP и не AmneziaWG",
+			Files: []FileSpec{{ID: "main", Name: "WireGuard", Kind: "secret-config", Syntax: "ini", Paths: []string{"/opt/etc/razvilka/wireguard/client.conf"}, Sensitive: true, Description: "Клиентский профиль .conf с приватным ключом; команды PreUp/PostUp и несколько peers не принимаются"}},
+		},
+		{
 			ID: "amneziawg", Name: "AmneziaWG", Description: "Устойчивый к DPI туннель на основе WireGuard",
 			Files: []FileSpec{{ID: "main", Name: "AmneziaWG", Kind: "secret-config", Syntax: "ini", Paths: []string{"/opt/etc/amnezia/amneziawg.conf", "/opt/etc/wireguard/awg.conf"}, Sensitive: true, Description: "Содержит ключи; чтение из UI скрыто до появления авторизации"}},
 		},
@@ -413,6 +417,13 @@ func validateBytes(v Validation, syntax string, data []byte) Validation {
 			v.Output = err.Error()
 		}
 	case "ini":
+		if v.EngineID == "wireguard" {
+			if _, err := awgprofile.ParsePlainWireGuard(string(data)); err != nil {
+				v.OK = false
+				v.Output = err.Error()
+			}
+			return v
+		}
 		if v.EngineID == "amneziawg" {
 			if _, err := awgprofile.Parse(string(data)); err != nil {
 				v.OK = false

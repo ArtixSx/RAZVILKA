@@ -2080,7 +2080,7 @@ func autopilotTargetsUnchanged(previous, next []dataplane.Route) bool {
 func isolatedCandidates(strategy []string, current string) []string {
 	// NFQWS2 uses a serialized, destination/source-port scoped temporary chain;
 	// only its exact per-request counter is accepted as Smart Route evidence.
-	supported := map[string]bool{"direct": true, "nfqws2": true, "usque": true, "warp-wg": true, "sing-box": true, "xray": true, "amneziawg": true}
+	supported := map[string]bool{"direct": true, "nfqws2": true, "usque": true, "warp-wg": true, "sing-box": true, "xray": true, "amneziawg": true, "wireguard": true}
 	routes := make([]string, 0, 3)
 	seen := map[string]bool{}
 	add := func(route string) {

@@ -86,7 +86,7 @@ func NormalizeServicePolicy(p ServicePolicy) (ServicePolicy, error) {
 			case 0:
 				valid = validPolicyNode(value)
 			case 1:
-				valid = slices.Contains([]string{"sing-box", "nfqws2", "warp-wg", "usque", "amneziawg", "xray", "dns", "relay"}, value)
+				valid = slices.Contains([]string{"sing-box", "nfqws2", "warp-wg", "usque", "amneziawg", "wireguard", "xray", "dns", "relay"}, value)
 			case 3:
 				valid = slices.Contains([]string{"manual", "file", "subscription", "community", "legacy"}, value)
 			}

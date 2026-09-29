@@ -17,14 +17,14 @@ func TestAllInternetDefaultRouteIntentAndAppliedIdentity(t *testing.T) {
 	if err := ValidateAppliedNetworkPolicy(allInternetPolicy()); err == nil {
 		t.Fatal("auto intent stored as applied state")
 	}
-	for _, route := range []string{"xray", "amneziawg", "usque", "warp-wg", "sing-box:node-abc"} {
+	for _, route := range []string{"xray", "amneziawg", "wireguard", "usque", "warp-wg", "sing-box:node-abc"} {
 		p := allInternetPolicy()
 		p.Traffic.DefaultRoute = route
 		if err := ValidateAppliedNetworkPolicy(p); err != nil {
 			t.Fatalf("%s: %v", route, err)
 		}
 	}
-	for _, route := range []string{"", "nfqws2", "direct", "sing-box:group-abc", "wireguard"} {
+	for _, route := range []string{"", "nfqws2", "direct", "sing-box:group-abc", "wireguard:other"} {
 		p := allInternetPolicy()
 		p.Traffic.DefaultRoute = route
 		if ValidateNetworkPolicy(p) == nil {

@@ -122,3 +122,29 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+// W01: an ordinary WireGuard profile uses the same strict parser but rejects
+// every AmneziaWG-specific field instead of dropping it.
+func TestParsePlainWireGuard(t *testing.T) {
+	p, err := ParsePlainWireGuard(profileText("MTU = 1380\nDNS = 1.1.1.1"))
+	if err != nil || p.Public().Version != "wg" || p.Public().MTU != 1380 {
+		t.Fatalf("plain profile refused: %v %+v", err, p.Public())
+	}
+	for name, extra := range map[string]string{
+		"junk":      "Jc = 4\nJmin = 40\nJmax = 70",
+		"headers":   "H1 = 10\nH2 = 20\nH3 = 30\nH4 = 40",
+		"cps":       "I1 = <b 0xabcd>",
+		"awg3":      advanced(),
+		"hook":      "PostUp = iptables -F",
+		"save":      "SaveConfig = true",
+		"unknown":   "FwMark = 51820",
+		"duplicate": "MTU = 1380\nMTU = 1400",
+	} {
+		if _, err := ParsePlainWireGuard(profileText(extra)); err == nil {
+			t.Fatalf("%s accepted as plain WireGuard", name)
+		}
+	}
+	if _, err := ParsePlainWireGuard(profileText("") + "\n[Peer]\nPublicKey = " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("d", 32))) + "\nEndpoint = b.example.com:51820\nAllowedIPs = 0.0.0.0/0\n"); err == nil {
+		t.Fatal("second peer silently accepted or dropped")
+	}
+}

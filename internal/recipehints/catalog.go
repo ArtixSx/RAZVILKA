@@ -40,7 +40,7 @@ func (r Recipe) Validate() error {
 	if r.Schema != 1 || !ident.MatchString(r.ServiceID) || !ident.MatchString(r.Scenario) || !ident.MatchString(r.ProviderID) || !ident.MatchString(r.CompatibilityID) {
 		return ErrCatalog
 	}
-	if !member(r.TrafficClass, "direct", "nfqws2", "warp-wg", "usque", "amneziawg", "sing-box", "xray", "smart-dns") {
+	if !member(r.TrafficClass, "direct", "nfqws2", "warp-wg", "usque", "amneziawg", "wireguard", "sing-box", "xray", "smart-dns") {
 		return ErrCatalog
 	}
 	if r.TrafficClass == "nfqws2" {

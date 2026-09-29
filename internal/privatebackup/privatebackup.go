@@ -393,7 +393,7 @@ func firstNonEmpty(values ...string) string {
 
 func validRoute(route string) bool {
 	switch route {
-	case "auto", "direct", "nfqws2", "usque", "warp-wg", "sing-box", "xray", "amneziawg":
+	case "auto", "direct", "nfqws2", "usque", "warp-wg", "sing-box", "xray", "amneziawg", "wireguard":
 		return true
 	default:
 		return false

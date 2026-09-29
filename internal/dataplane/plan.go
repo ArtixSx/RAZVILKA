@@ -445,7 +445,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		case "usque":
 			addProxyTunnelPreflight(&plan, adapter, input.Host)
 			plan.Warnings = append(plan.Warnings, Warning{Code: "USERSPACE_MEMORY", Adapter: adapter, Message: "SOCKS/MASQUE работает в userspace; перед автозапуском нужен контроль RAM и изолированный health probe."})
-		case "warp-wg", "amneziawg":
+		case "warp-wg", "amneziawg", "wireguard":
 			if !input.Host.IPCommand {
 				plan.Blockers = append(plan.Blockers, Blocker{Code: "IP_COMMAND_MISSING", Adapter: adapter, Message: "Команда ip не найдена", Resolution: "Установите ip-full/iproute2 через Entware."})
 			}
@@ -556,7 +556,7 @@ func addAdapterActions(plan *Plan, adapter string, canary bool, order *int) {
 	case "usque":
 		appendAction("stage", "candidate", "/opt/var/lib/razvilka/dataplane/usque", "Запустить candidate SOCKS/TUN рядом с рабочим профилем.", true)
 		appendAction("validate", "route", "MASQUE endpoint", "Закрепить bootstrap route и подтвердить handshake/egress.", true)
-	case "warp-wg", "amneziawg":
+	case "warp-wg", "amneziawg", "wireguard":
 		appendAction("stage", "candidate", "/opt/var/lib/razvilka/dataplane/"+adapter, "Создать отдельный candidate interface без замены live-профиля.", true)
 		appendAction("validate", "handshake", adapter+" endpoint", "Проверить handshake, egress и сервисные probes.", true)
 	case "sing-box", "xray":
@@ -571,7 +571,7 @@ func addAdapterActions(plan *Plan, adapter string, canary bool, order *int) {
 		appendAction("activate", "netfilter", "RAZVILKA-owned chain/set", "Подключить собственную цепочку атомарно, не удаляя чужие правила.", true)
 	case "usque":
 		appendAction("activate", "policy-route", "RAZVILKA-owned table", "Подключить только выбранные сервисные сети.", true)
-	case "warp-wg", "amneziawg":
+	case "warp-wg", "amneziawg", "wireguard":
 		appendAction("activate", "policy-route", "RAZVILKA-owned table", "Переключить сервисные правила на подтверждённый interface.", true)
 	case "sing-box", "xray":
 		appendAction("activate", "policy-route", "RAZVILKA-owned table", "Подключить service policy после защиты от self-proxy loop.", true)
@@ -638,6 +638,8 @@ func adapterID(route string) string {
 		return "warp-wg"
 	case route == "amneziawg" || strings.HasPrefix(route, "amneziawg:"):
 		return "amneziawg"
+	case route == "wireguard" || strings.HasPrefix(route, "wireguard:"):
+		return "wireguard"
 	case route == "xray" || strings.HasPrefix(route, "xray:"):
 		return "xray"
 	case route == "sing-box" || strings.HasPrefix(route, "sing-box:"):

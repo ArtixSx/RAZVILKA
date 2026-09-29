@@ -66,7 +66,7 @@ func (m *Manager) Probe(ctx context.Context, service catalog.Service, route stri
 			result.Detail = "engine is not installed"
 			return result
 		}
-		if !status.Running && route != "warp-wg" && route != "amneziawg" {
+		if !status.Running && route != "warp-wg" && route != "amneziawg" && route != "wireguard" {
 			result.Detail = "engine is installed but not running"
 			return result
 		}
@@ -86,7 +86,7 @@ func (m *Manager) Probe(ctx context.Context, service catalog.Service, route stri
 		}
 	case "sing-box", "xray":
 		client, evidence, confirmed, err = m.socksClient(route)
-	case "warp-wg", "amneziawg":
+	case "warp-wg", "amneziawg", "wireguard":
 		client, evidence, confirmed, err = m.interfaceClient(route, service.ProbeURL)
 	case "nfqws2":
 		return m.probeNFQWS(ctx, service)

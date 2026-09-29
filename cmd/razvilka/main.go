@@ -748,6 +748,7 @@ func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*data
 	for _, adapter := range []dataplane.Adapter{
 		dataplane.NewWARPWireGuardAdapter(configs, stateRoot),
 		dataplane.NewAmneziaWGAdapter(configs, stateRoot),
+		dataplane.NewWireGuardAdapter(configs, stateRoot),
 	} {
 		if err := manager.Register(adapter); err != nil {
 			return nil, fmt.Errorf("register %s dataplane adapter: %w", adapter.ID(), err)

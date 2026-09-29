@@ -237,6 +237,22 @@ func Parse(text string) (Profile, error) {
 	view.SHA256 = hex.EncodeToString(sum[:])
 	return Profile{view, config}, nil
 }
+
+// ParsePlainWireGuard accepts an ordinary WireGuard client profile: the same
+// strict parser (no hooks, one peer, canonical keys), but no AmneziaWG
+// obfuscation, header protection or 3.x fields. A profile that needs them
+// belongs to the AmneziaWG engine; nothing is dropped silently.
+func ParsePlainWireGuard(text string) (Profile, error) {
+	p, err := Parse(text)
+	if err != nil {
+		return Profile{}, err
+	}
+	if p.preview.Version != "wg" || p.preview.HasHeaderProtection || len(p.preview.RequiredFeatures) > 0 {
+		return Profile{}, invalid("WG_AMNEZIA_FIELDS", "", "Профиль содержит параметры AmneziaWG. Используйте движок AmneziaWG или удалите эти параметры на сервере и в профиле.")
+	}
+	return p, nil
+}
+
 func contains(items []string, x string) bool {
 	for _, s := range items {
 		if s == x {

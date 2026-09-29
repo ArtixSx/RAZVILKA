@@ -194,7 +194,7 @@ func validPortableRoute(id string) bool {
 		{ID: "auto", Selectable: true}, {ID: "direct", Selectable: true},
 		{ID: "nfqws2", Selectable: true}, {ID: "usque", Selectable: true},
 		{ID: "warp-wg", Selectable: true}, {ID: "sing-box", Selectable: true},
-		{ID: "xray", Selectable: true}, {ID: "amneziawg", Selectable: true},
+		{ID: "xray", Selectable: true}, {ID: "amneziawg", Selectable: true}, {ID: "wireguard", Selectable: true},
 	}
 	return routecatalog.ValidWithOptions(id, options)
 }

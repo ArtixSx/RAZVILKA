@@ -53,7 +53,7 @@ func validDefaultRoute(route string, schema int) bool {
 	switch route {
 	case "usque", "warp-wg", "xray":
 		return true
-	case "amneziawg", DefaultRouteAuto:
+	case "amneziawg", "wireguard", DefaultRouteAuto:
 		return schema >= 2
 	}
 	return strings.HasPrefix(route, "sing-box:node-") && policyIdentifier.MatchString(route[len("sing-box:"):])

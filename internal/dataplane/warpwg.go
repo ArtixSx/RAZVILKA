@@ -92,6 +92,18 @@ func NewAmneziaWGAdapter(configs *engineconfig.Manager, stateRoot string) *WARPW
 	}
 }
 
+// NewWireGuardAdapter manages an ordinary WireGuard client profile of the
+// owner's own server. It shares the WARP/AWG lifecycle but needs no Cloudflare
+// registration, never switches to WARP fallback ports and probes connectivity
+// by handshake and the selected services, not by a Cloudflare endpoint.
+func NewWireGuardAdapter(configs *engineconfig.Manager, stateRoot string) *WARPWireGuardAdapter {
+	runtimeRoot := filepath.Join(stateRoot, "runtime", "wireguard")
+	return &WARPWireGuardAdapter{
+		EngineID: "wireguard", Configs: configs, StateRoot: runtimeRoot, RuntimeConfigPath: filepath.Join(runtimeRoot, "rz-wg.conf"),
+		Interface: "rz-wg", Table: 206, PriorityBase: 28000, Runner: nfqws2ExecRunner{}, Timeout: 25 * time.Second,
+	}
+}
+
 func (a *WARPWireGuardAdapter) ID() string {
 	if a.EngineID == "" {
 		return "warp-wg"
@@ -149,6 +161,17 @@ func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string
 	profileText := string(profile)
 	if err := warp.ValidateProfile(profile); err != nil {
 		return err
+	}
+	if a.ID() == "wireguard" {
+		if _, err := awgprofile.ParsePlainWireGuard(profileText); err != nil {
+			return err
+		}
+		// The endpoint exclusion and the tunnel must use one resolved address;
+		// otherwise wg could resolve the name again to a different target.
+		profileText, err = a.pinAWGEndpoint(ctx, profileText)
+		if err != nil {
+			return fmt.Errorf("WireGuard server address: %w; a server inside the local network is not supported yet, use a public address or DNS name", err)
+		}
 	}
 	if a.ID() == "amneziawg" {
 		if err := validateAmneziaProfile(profileText); err != nil {
@@ -244,8 +267,11 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 
 	candidate := *a
 	candidate.Interface = "rz-warp-canary"
-	if a.ID() == "amneziawg" {
+	switch a.ID() {
+	case "amneziawg":
 		candidate.Interface = "rz-awg-canary"
+	case "wireguard":
+		candidate.Interface = "rz-wg-canary"
 	}
 	candidate.StateRoot = filepath.Join(root, "canary")
 	candidate.RuntimeConfigPath = filepath.Join(candidate.StateRoot, "candidate.conf")
@@ -298,7 +324,7 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	probe := candidate.CanaryProbe
 	if probe == nil {
 		probe = sourceBoundWARPProbe
-		if a.ID() == "amneziawg" {
+		if a.ID() == "amneziawg" || a.ID() == "wireguard" {
 			probe = sourceBoundAWGProbe
 		}
 	}
@@ -315,9 +341,14 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 				continue
 			}
 		}
-		probeCtx, cancel := context.WithTimeout(ctx, candidate.timeout())
-		probeErr := probe(probeCtx, "https://www.cloudflare.com/cdn-cgi/trace", source.String())
-		cancel()
+		var probeErr error
+		// An own WireGuard server must not depend on Cloudflare reachability:
+		// its tunnel is confirmed by handshake, services are probed below.
+		if a.ID() != "wireguard" {
+			probeCtx, cancel := context.WithTimeout(ctx, candidate.timeout())
+			probeErr = probe(probeCtx, "https://www.cloudflare.com/cdn-cgi/trace", source.String())
+			cancel()
+		}
 		if probeErr != nil || candidate.confirmHandshake(ctx, candidate.interfaceName()) != nil {
 			continue
 		}

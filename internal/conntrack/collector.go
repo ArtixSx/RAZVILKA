@@ -355,7 +355,7 @@ func (c *Collector) verifyRoute(ctx context.Context, source, destination netip.A
 	if device == "" {
 		return "", "", false
 	}
-	expected := map[string]string{"usque": "rz-usque", "sing-box": "rz-sing", "xray": "rz-xray", "warp-wg": "rz-warp", "amneziawg": "rz-awg"}[route]
+	expected := map[string]string{"usque": "rz-usque", "sing-box": "rz-sing", "xray": "rz-xray", "warp-wg": "rz-warp", "amneziawg": "rz-awg", "wireguard": "rz-wg"}[route]
 	if route == "direct" {
 		if wanInterface == "" || device != wanInterface {
 			return device, "", false

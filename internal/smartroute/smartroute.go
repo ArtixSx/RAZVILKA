@@ -283,7 +283,7 @@ func (m *Manager) expired(confirmed Evidence, now time.Time) bool {
 
 func score(route, status string, latency int64) int {
 	base := map[string]int{"pass": 100, "partial": 62, "fail": 0}[status]
-	cost := map[string]int{"direct": 0, "nfqws2": 3, "usque": 6, "warp-wg": 9, "sing-box": 11, "xray": 11, "amneziawg": 9}[route]
+	cost := map[string]int{"direct": 0, "nfqws2": 3, "usque": 6, "warp-wg": 9, "sing-box": 11, "xray": 11, "amneziawg": 9, "wireguard": 9}[route]
 	penalty := int(latency / 100)
 	if penalty > 30 {
 		penalty = 30

@@ -117,12 +117,13 @@ type capabilitySpec struct {
 }
 
 var capabilities = map[string]capabilitySpec{
-	"nfqws2":   {Schema: "native-shell", ProbeMode: "wan-bound-unconfirmed", NeedsNFQ: true, NeedsIP: true},
-	"z2k":      {Schema: "external-read-only", ProbeMode: "external-nfqueue-owner", NeedsNFQ: true, NeedsIP: true},
-	"usque":    {Schema: "native-json", ProbeMode: "local-socks", NeedsIP: true},
-	"warp-wg":  {Schema: "wireguard-ini", ProbeMode: "source-address-bound", NeedsTUN: true, NeedsIP: true},
-	"sing-box": {Schema: "native-json", ProbeMode: "local-socks-or-tun", NeedsIP: true},
-	"xray":     {Schema: "native-json", ProbeMode: "local-socks", NeedsIP: true},
+	"nfqws2":    {Schema: "native-shell", ProbeMode: "wan-bound-unconfirmed", NeedsNFQ: true, NeedsIP: true},
+	"z2k":       {Schema: "external-read-only", ProbeMode: "external-nfqueue-owner", NeedsNFQ: true, NeedsIP: true},
+	"usque":     {Schema: "native-json", ProbeMode: "local-socks", NeedsIP: true},
+	"warp-wg":   {Schema: "wireguard-ini", ProbeMode: "source-address-bound", NeedsTUN: true, NeedsIP: true},
+	"sing-box":  {Schema: "native-json", ProbeMode: "local-socks-or-tun", NeedsIP: true},
+	"xray":      {Schema: "native-json", ProbeMode: "local-socks", NeedsIP: true},
+	"wireguard": {Schema: "wireguard-ini", ProbeMode: "source-address-bound", NeedsTUN: true, NeedsIP: true},
 	"amneziawg": {Schema: "wireguard-ini", ProbeMode: "source-address-bound", NeedsTUN: true,
 		NeedsIP: true},
 }

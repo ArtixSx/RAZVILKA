@@ -99,6 +99,7 @@ const fallbackLabels = {
   'sing-box': 'Sing-box',
   xray: 'Xray',
   amneziawg: 'AmneziaWG',
+  wireguard: 'WireGuard',
 };
 
 const ADMIN_TOKEN_KEY = 'razvilka.adminToken';
@@ -657,7 +658,7 @@ function setOnboardingDone() {
 }
 
 function onboardingNeeded() {
-  const managed = new Set(['nfqws2', 'usque', 'warp-wg', 'sing-box', 'xray', 'amneziawg']);
+  const managed = new Set(['nfqws2', 'usque', 'warp-wg', 'sing-box', 'xray', 'amneziawg', 'wireguard']);
   const hasBypass = state.components.some((component) => managed.has(component.id) && component.installed);
   const hasServices = state.services.some((service) => service.enabled);
   return !hasBypass && !hasServices;

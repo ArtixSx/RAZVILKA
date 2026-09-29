@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -22,8 +23,12 @@ func stagePrivateBackupExportFixture(t *testing.T, a *App) int {
 	for _, engine := range engineconfig.Specs() {
 		for _, file := range engine.Files {
 			content := map[string]string{"json": `{}`, "ini": "[Interface]\nPrivateKey = synthetic-private-marker\n", "shell": "#!/bin/sh\nexit 0\n", "list": "fixture.example\n", "cidr-list": "203.0.113.0/24\n"}[file.Syntax]
-			if engine.ID == "amneziawg" {
+			switch engine.ID {
+			case "amneziawg":
 				content = awgTestProfile()
+			case "wireguard":
+				// Own-server WireGuard validates the profile strictly as well.
+				content = plainWireGuardTestProfile()
 			}
 			if content == "" {
 				t.Fatal("fixture has no known validator")
@@ -35,6 +40,11 @@ func stagePrivateBackupExportFixture(t *testing.T, a *App) int {
 		}
 	}
 	return count
+}
+
+func plainWireGuardTestProfile() string {
+	k := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("w", 32)))
+	return "[Interface]\nPrivateKey = " + k + "\nAddress = 10.66.0.2/32\n[Peer]\nPublicKey = " + k + "\nEndpoint = vpn.example.com:51820\nAllowedIPs = 0.0.0.0/0\n"
 }
 
 func requestPrivateBackupExport(a *App) *httptest.ResponseRecorder {

@@ -59,6 +59,7 @@ func specifications() []specification {
 		{id: "warp-wg", name: "WARP · WireGuard", kind: "warp", binaries: []string{"/opt/bin/wg", "/opt/usr/bin/wg", "/usr/bin/wg"}, binaryNames: []string{"wg"}, files: []string{"/opt/etc/razvilka/warp/wgcf-profile.conf", "/opt/etc/wireguard/warp.conf"}, description: "Резервный WARP транспорт через WireGuard профиль", capabilities: []string{"wireguard", "udp", "tun"}, ownership: Ownership{Interfaces: []string{"dynamic:config"}}},
 		{id: "sing-box", name: "Sing-box · свой сервер", kind: "proxy", binaries: []string{"/opt/bin/sing-box", "/opt/usr/bin/sing-box", "/usr/bin/sing-box"}, binaryNames: []string{"sing-box"}, files: []string{"/opt/etc/sing-box/config.json", "/opt/etc/singbox/config.json", "/opt/etc/sing-box.json"}, initScripts: []string{"/opt/etc/init.d/S99sing-box", "/opt/etc/init.d/S51sing-box"}, description: "Универсальный клиент VLESS / Reality / Hysteria2 / TUIC / Shadowsocks; без удалённого профиля доступ не создаёт", capabilities: []string{"proxy", "tun", "tcp", "udp", "native-check"}, nativeCheck: true, ownership: Ownership{Ports: []string{"dynamic:config"}, Interfaces: []string{"dynamic:config"}}},
 		{id: "xray", name: "Xray", kind: "proxy", binaries: []string{"/opt/bin/xray", "/opt/usr/bin/xray", "/usr/bin/xray"}, binaryNames: []string{"xray"}, files: []string{"/opt/etc/xray/config.json", "/opt/etc/xray.json"}, initScripts: []string{"/opt/etc/init.d/S99xray", "/opt/etc/init.d/S51xray"}, description: "Дополнительные Xray транспорты", capabilities: []string{"proxy", "tcp", "udp", "native-check"}, nativeCheck: true, ownership: Ownership{Ports: []string{"dynamic:config"}}},
+		{id: "wireguard", name: "WireGuard · свой сервер", kind: "vpn", binaries: []string{"/opt/bin/wg", "/opt/usr/bin/wg", "/usr/bin/wg"}, binaryNames: []string{"wg"}, files: []string{"/opt/etc/razvilka/wireguard/client.conf"}, description: "Обычный WireGuard к вашему серверу, без регистрации Cloudflare", capabilities: []string{"wireguard", "udp", "tun"}, ownership: Ownership{Interfaces: []string{"dynamic:config"}}},
 		{id: "amneziawg", name: "AmneziaWG", kind: "vpn", binaries: []string{"/opt/sbin/awg", "/opt/bin/awg", "/opt/bin/awg-quick", "/opt/usr/bin/awg", "/usr/bin/awg"}, binaryNames: []string{"awg", "awg-quick"}, files: []string{"/opt/etc/amnezia/amneziawg.conf", "/opt/etc/wireguard/awg.conf"}, description: "Опциональный AmneziaWG туннель", capabilities: []string{"wireguard", "udp", "tun"}, ownership: Ownership{Interfaces: []string{"dynamic:config"}}},
 	}
 }
@@ -99,7 +100,7 @@ func (Detector) Inventory() []Status {
 		installed := path != ""
 		configured := anyFile(spec.files)
 		running := false
-		if spec.id == "warp-wg" || spec.id == "amneziawg" {
+		if spec.id == "warp-wg" || spec.id == "amneziawg" || spec.id == "wireguard" {
 			running = tunnelActive(spec.files)
 		} else if len(spec.binaries) > 0 {
 			running = specProcessRunning(spec, true)
@@ -118,7 +119,7 @@ func detectSpec(spec specification) Status {
 	installed := path != ""
 	configured := anyFile(spec.files)
 	running := false
-	if spec.id == "warp-wg" || spec.id == "amneziawg" {
+	if spec.id == "warp-wg" || spec.id == "amneziawg" || spec.id == "wireguard" {
 		running = tunnelActive(spec.files)
 	} else if len(spec.binaries) > 0 {
 		running = specProcessRunning(spec, false)

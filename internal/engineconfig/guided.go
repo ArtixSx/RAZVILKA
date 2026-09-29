@@ -218,6 +218,11 @@ func guidedFields(engineID, fileID string) []GuidedField {
 		return wireGuardFields(false)
 	case "amneziawg":
 		return wireGuardFields(true)
+	case "wireguard":
+		fields := wireGuardFields(false)
+		fields[3].Placeholder = "vpn.example.com:51820"
+		fields[4].Description = "AllowedIPs выбирает peer, но не разрешает маршрут для всей LAN. Охват задаётся в сервисах RAZVILKA."
+		return fields
 	case "sing-box":
 		return []GuidedField{
 			{ID: "log.level", Label: "Уровень логов", Group: "Диагностика", Type: "select", Default: "warn", Options: []GuidedOption{{"warn", "Предупреждения"}, {"info", "Информация"}, {"debug", "Отладка"}, {"error", "Только ошибки"}}},

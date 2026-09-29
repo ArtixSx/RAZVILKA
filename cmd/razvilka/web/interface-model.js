@@ -80,7 +80,7 @@
       if (applied.enabled !== true) continue;
       appliedCount++;
       const raw = text(applied.route), type = raw === 'direct' ? 'direct'
-        : /^(nfqws2|usque|warp-wg|sing-box|xray|amneziawg)(:|$)/.test(raw) ? raw.split(':')[0]
+        : /^(nfqws2|usque|warp-wg|sing-box|xray|amneziawg|wireguard)(:|$)/.test(raw) ? raw.split(':')[0]
         : raw && raw !== 'auto' ? 'other' : 'unknown';
       routes.set(type, (routes.get(type) || 0) + 1);
     }

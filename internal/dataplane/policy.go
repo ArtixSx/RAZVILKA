@@ -35,6 +35,7 @@ func PolicyOwnershipSpecs() []PolicyOwnershipSpec {
 		{Adapter: "sing-box", Interface: "rz-sing", Table: 203, PriorityBase: 22000, PriorityEnd: 22000 + maxPolicyPrefixes - 1, SharedPriorityBase: 64, SharedPriorityEnd: 65},
 		{Adapter: "xray", Interface: "rz-xray", Table: 204, PriorityBase: 24000, PriorityEnd: 24000 + maxPolicyPrefixes - 1, SharedPriorityBase: 66, SharedPriorityEnd: 67},
 		{Adapter: "amneziawg", Interface: "rz-awg", Table: 205, PriorityBase: 26000, PriorityEnd: 26000 + maxPolicyPrefixes - 1, SharedPriorityBase: 68, SharedPriorityEnd: 69},
+		{Adapter: "wireguard", Interface: "rz-wg", Table: 206, PriorityBase: 28000, PriorityEnd: 28000 + maxPolicyPrefixes - 1, SharedPriorityBase: 70, SharedPriorityEnd: 71},
 	}
 }
 
