@@ -224,8 +224,23 @@ printf '%s\n' staged-original >"$PRIMARY/var/lib/razvilka/staging/test-private/m
 printf '%s\n' provider-original >"$PRIMARY/etc/razvilka/cloudflare-private/test-private/marker"
 SOURCE_STATE_ORIGINAL='{"schema":1,"draft":{"telegram-cidrs":false},"applied":{"telegram-cidrs":true}}'
 printf '%s\n' "$SOURCE_STATE_ORIGINAL" >"$PRIMARY/etc/razvilka/source-state.json"
+# Retention: only the newest update snapshots are kept; foreign entries and
+# symbolic links inside update-backups are never removed.
+BACKUPS="$PRIMARY/var/lib/razvilka/update-backups"
+for OLD in 20000101T000001Z-1 20000101T000002Z-2 20000101T000003Z-3 20000101T000004Z-4 20000101T000005Z-5; do
+  mkdir -m 700 "$BACKUPS/$OLD"
+done
+mkdir -m 700 "$BACKUPS/manual-keep"
+mkdir -m 700 "$TEST_ROOT/outside-backup"
+ln -s "$TEST_ROOT/outside-backup" "$BACKUPS/19990101T000000Z-9"
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
   "$UPGRADE" --apply --without-components >/dev/null
+[ -d "$PRIMARY_BACKUP" ] && [ -d "$BACKUPS/20000101T000005Z-5" ] && [ -d "$BACKUPS/20000101T000003Z-3" ] || { echo "Retention removed a recent snapshot" >&2; exit 1; }
+assert_absent "$BACKUPS/20000101T000002Z-2"
+assert_absent "$BACKUPS/20000101T000001Z-1"
+[ -d "$BACKUPS/manual-keep" ] && [ -L "$BACKUPS/19990101T000000Z-9" ] && [ -d "$TEST_ROOT/outside-backup" ] || { echo "Retention removed a foreign entry" >&2; exit 1; }
+rmdir "$BACKUPS/manual-keep"
+rm "$BACKUPS/19990101T000000Z-9"
 [ "$(cat "$PRIMARY/var/lib/razvilka/dataplane/runtime/test-adapter/ownership.marker")" = preserved ] || {
   echo "Dataplane runtime snapshot was not restored after upgrade" >&2
   exit 1

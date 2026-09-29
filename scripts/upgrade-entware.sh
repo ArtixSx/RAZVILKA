@@ -373,6 +373,22 @@ for DIR in "$STATEDIR/dataplane" "$STATEDIR/staging" "$STATEDIR/dns" "$APPDIR/cl
   [ ! -e "$DIR" ] || [ -d "$DIR" ] || { echo "Private or runtime directory has the wrong type: $DIR" >&2; false; }
 done
 
+# Each update snapshot holds the previous binary and private state (about
+# 50 MB), so keep only the newest ones. The snapshot of this update is always
+# kept; only real directories named by this script are removed.
+prune_update_backups() {
+  KEEP="${RAZVILKA_KEEP_UPDATE_BACKUPS:-5}"
+  case "$KEEP" in ''|*[!0-9]*) KEEP=5 ;; esac
+  [ "$KEEP" -ge 2 ] || KEEP=2
+  PRUNED=0
+  for OLD in $(ls -1 "$BACKUPROOT" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{6}Z-[0-9]+$' | sort -r | tail -n +"$((KEEP + 1))"); do
+    [ "$BACKUPROOT/$OLD" != "$BACKUP" ] || continue
+    [ -d "$BACKUPROOT/$OLD" ] && [ ! -L "$BACKUPROOT/$OLD" ] || continue
+    rm -rf "${BACKUPROOT:?}/$OLD" && PRUNED=$((PRUNED + 1))
+  done
+  [ "$PRUNED" -eq 0 ] || echo "Удалены старые снимки обновлений: $PRUNED (хранятся последние $KEEP)."
+}
+
 backup_file() {
   SRC="$1"
   NAME="$2"
@@ -575,6 +591,7 @@ fi
 printf '%s\n' "$BACKUP" >"$CURRENT_BACKUP"
 chmod 600 "$CURRENT_BACKUP"
 trap - EXIT HUP INT TERM
+prune_update_backups || echo "Старые снимки обновлений не удалось очистить; обновление завершено." >&2
 
 LAN_IP="$(ip -4 -o addr show br0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
 [ -n "$LAN_IP" ] || LAN_IP="127.0.0.1"
