@@ -71,4 +71,14 @@ assert.match(element('#remoteProfilePreview').innerHTML, /Нет подходя�
 assert.match(element('#remoteProfilePreview').innerHTML, /Отклонено: 1/);
 assert.equal(element('#remoteProfileImportButton').disabled, true);
 assert.equal(state.remoteProfileBusy, false);
+// Xray engine page compiles one selected node; requests name the engine.
+state.selectedEngine = 'xray';
+element('#remoteProfileURI').value = 'xray-link';
+const seen = [];
+handler = async (url, options) => { seen.push(JSON.parse(options.body)); return url.endsWith('/preview') ? { preview } : { ok: true }; };
+await context.previewRemoteProfile();
+assert.match(element('#remoteProfileImportButton').textContent, /Черновик Xray: 1 выбранный/);
+await context.importRemoteProfile();
+assert.deepEqual(seen.map(body => body.engine), ['xray', 'xray'], 'Xray page imported into another engine');
+state.selectedEngine = 'sing-box';
 console.log('Partial provider import UI checks passed');

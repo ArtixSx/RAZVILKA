@@ -2238,6 +2238,18 @@ func (a *App) providerProfilePreview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if input.Engine == "xray" {
+		result, err := providerprofile.ParseXrayProfile(input.Profile, input.SelectedIndex)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "preview": result.Preview, "draft_preserved": true})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "draft_only": true, "preview": result.Preview,
+			"note": "Ключи не показываются. Предпросмотр ничего не сохраняет; для Xray собирается один управляемый выход без маршрутизации и API из источника.",
+		})
+		return
+	}
 	result, err := providerprofile.ParseProfile(input.Profile)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "preview": result.Preview, "draft_preserved": true})
@@ -2264,6 +2276,10 @@ func (a *App) providerProfileImport(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.Confirm != "IMPORT_REMOTE_PROFILE" {
 		http.Error(w, "явно подтвердите импорт удалённого профиля", http.StatusPreconditionRequired)
+		return
+	}
+	if input.Engine == "xray" {
+		a.importXrayProfile(w, input)
 		return
 	}
 	result, err := providerprofile.ParseProfileWithSelection(input.Profile, input.SelectedIndex)
@@ -2302,6 +2318,35 @@ type providerProfileRequest struct {
 	Confirm       string `json:"confirm"`
 	SelectedIndex int    `json:"selected_index"`
 	AcceptPartial bool   `json:"accept_partial"`
+	// Engine is sing-box (default, the whole node pool) or xray (one node
+	// compiled into the managed Xray draft).
+	Engine string `json:"engine"`
+}
+
+// importXrayProfile stages a compiled single-exit Xray draft. Import is not
+// Apply: the draft is validated natively and waits for a reviewed plan.
+func (a *App) importXrayProfile(w http.ResponseWriter, input providerProfileRequest) {
+	result, err := providerprofile.ParseXrayProfile(input.Profile, input.SelectedIndex)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": err.Error(), "preview": result.Preview, "draft_preserved": true})
+		return
+	}
+	validation := engineconfig.ValidatePrivateContent("xray", "main", string(result.Config))
+	if !validation.OK {
+		http.Error(w, validation.Output, http.StatusBadRequest)
+		return
+	}
+	draft, err := a.EngineConfigs.Stage("xray", "main", string(result.Config))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	native := a.EngineConfigs.Validate("xray", "main")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": native.OK, "draft_only": true, "preview": result.Preview,
+		"draft": draft, "validation": native,
+		"note": "Профиль сохранён только в черновик Xray. Назначьте сервис, проверьте план и выполните общий Apply.",
+	})
 }
 
 func decodeProviderProfileRequest(w http.ResponseWriter, r *http.Request) (providerProfileRequest, bool) {
@@ -2318,6 +2363,13 @@ func decodeProviderProfileRequest(w http.ResponseWriter, r *http.Request) (provi
 		profile = input.URI
 	}
 	input.Profile = profile
+	if input.Engine == "" {
+		input.Engine = "sing-box"
+	}
+	if input.Engine != "sing-box" && input.Engine != "xray" {
+		http.Error(w, "профиль можно импортировать только для Sing-box или Xray", http.StatusBadRequest)
+		return providerProfileRequest{}, false
+	}
 	return input, true
 }
 

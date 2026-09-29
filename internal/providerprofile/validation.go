@@ -23,6 +23,8 @@ func (e *ImportError) Error() string {
 		return "Неподдерживаемый flow VLESS или несовместимое сочетание flow, защиты и транспорта."
 	case "UNSUPPORTED_PACKET_ENCODING":
 		return "Неподдерживаемый формат UDP-пакетов VLESS."
+	case "XRAY_UNSUPPORTED_PROFILE":
+		return "Для Xray пока поддерживается VLESS с REALITY или TLS поверх TCP (RAW), с flow xtls-rprx-vision или без него. Этот профиль можно использовать через Sing-box."
 	case "INSECURE_TLS":
 		return "Импорт с отключённой проверкой сертификата запрещён. Нужен профиль с корректной проверкой TLS."
 	default:

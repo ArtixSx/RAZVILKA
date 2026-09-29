@@ -1929,7 +1929,7 @@ function renderEngineControl() {
   $('#engineSaveDraft').disabled = !file;
   $('#engineImport').disabled = !file;
   $('#engineExport').disabled = !file;
-  $('#remoteProfileImport').hidden = engine.id !== 'sing-box' || file?.id !== 'main';
+  $('#remoteProfileImport').hidden = !['sing-box', 'xray'].includes(engine.id) || file?.id !== 'main';
   updateEngineEditorActions();
 
   if (!file) {
@@ -2566,7 +2566,9 @@ function renderRemoteProfilePreview() {
   importButton.disabled = state.remoteProfileBusy || !preview?.node_count || state.remoteProfileReviewedInput !== $('#remoteProfileURI').value.trim();
   storeButton.disabled = importButton.disabled;
   if (!state.remoteProfileBusy) {
-    importButton.textContent = preview?.node_count ? `Черновик Sing-box: 1 выбранный` : 'Создать черновик Sing-box';
+    // Xray compiles one selected VLESS node; Sing-box keeps the node pool.
+    const engineName = state.selectedEngine === 'xray' ? 'Xray' : 'Sing-box';
+    importButton.textContent = preview?.node_count ? `Черновик ${engineName}: 1 выбранный` : `Создать черновик ${engineName}`;
     storeButton.textContent = preview?.node_count ? `Сохранить принятые: ${Number(preview.node_count)}` : 'Сохранить в узлы';
   }
   if (!preview) {
@@ -2598,7 +2600,8 @@ async function previewRemoteProfile() {
   const button = $('#remoteProfilePreviewButton');
   button.disabled = true; button.textContent = 'Проверяем…';
   try {
-    const result = await api('/api/v1/provider-profiles/preview', { method: 'POST', body: JSON.stringify({ profile: uri }) });
+    const engine = state.selectedEngine === 'xray' ? 'xray' : 'sing-box';
+    const result = await api('/api/v1/provider-profiles/preview', { method: 'POST', body: JSON.stringify({ profile: uri, engine }) });
     if ($('#remoteProfileURI').value.trim() !== uri) return;
     state.remoteProfilePreview = result;
     state.remoteProfileReviewedInput = uri;
@@ -2618,7 +2621,8 @@ async function importRemoteProfile() {
   const button = $('#remoteProfileImportButton');
   button.disabled = true; button.textContent = 'Создаём…';
   try {
-    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ profile: uri, selected_index: state.remoteProfileSelectedIndex, accept_partial: !!preview.rejected?.length, confirm: 'IMPORT_REMOTE_PROFILE' }) });
+    const engine = state.selectedEngine === 'xray' ? 'xray' : 'sing-box';
+    const result = await api('/api/v1/provider-profiles/import', { method: 'POST', body: JSON.stringify({ profile: uri, engine, selected_index: state.remoteProfileSelectedIndex, accept_partial: !!preview.rejected?.length, confirm: 'IMPORT_REMOTE_PROFILE' }) });
     if ($('#remoteProfileURI').value.trim() === uri) $('#remoteProfileURI').value = '';
     state.remoteProfilePreview = null;
     state.remoteProfileReviewedInput = '';
@@ -2627,7 +2631,7 @@ async function importRemoteProfile() {
     await refreshEngineConfigs();
     renderRemoteProfilePreview();
     switchEngineTab('check');
-    showNotice(result.ok ? 'success' : 'review', result.ok ? 'Черновик Sing-box готов' : 'Черновик создан, нужна проверка', result.note, result, true);
+    showNotice(result.ok ? 'success' : 'review', result.ok ? `Черновик ${engine === 'xray' ? 'Xray' : 'Sing-box'} готов` : 'Черновик создан, нужна проверка', result.note, result, true);
   } catch (error) {
     showDetails({ error: error.message, response: error.payload }, 'Профиль не импортирован');
   } finally { state.remoteProfileBusy = false; renderRemoteProfilePreview(); }
