@@ -4046,7 +4046,7 @@ async function checkRetainedNodeRoute(service, dependency, signal) {
   const passed = response?.ok === true && response.result?.available === true && response.result?.service_id === service.id && response.result?.node_id === nodeID;
   if (!passed) {
     const reason = response?.result?.message ? ` ${response.result.message}` : '';
-    const failure = new Error(`Узел сервиса «${service.name}» не прошёл проверку в текущей сети.${reason} Выберите для сервиса другой узел или выключите его, затем повторите применение. Остальные изменения сохранены.`);
+    const failure = new Error(`Узел сервиса «${service.name}» не прошёл проверку в текущей сети.${reason} Выберите для сервиса другой узел или NFQWS2 либо выключите его, затем повторите применение. Остальные изменения сохранены.`);
     failure.payload = { ...dependency, cause: 'check-failed' };
     throw failure;
   }

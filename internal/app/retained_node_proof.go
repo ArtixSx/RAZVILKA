@@ -85,7 +85,7 @@ func autonomyRouteDependency(err error, r *autonomy.Runtime) (string, string, bo
 	r.RefundSwitch()
 	message := "Применение ждёт сервис «" + dependency.Name + "»: "
 	if dependency.Cause == "node-unavailable" {
-		message += "его узел недоступен. Выберите для него другой узел или выключите его."
+		message += "его узел недоступен. Сервисы из списка NFQWS2 автопилот сам вернёт на штатный NFQWS2; для остальных выберите другой узел или NFQWS2 либо выключите сервис."
 	} else {
 		message += "его узел не прошёл повторную проверку в текущей сети. Проверьте этот узел или выберите другой."
 	}

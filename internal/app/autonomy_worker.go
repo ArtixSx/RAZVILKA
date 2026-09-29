@@ -116,7 +116,13 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	}
 	cfg := a.Store.Get()
 	if autonomyDraftFingerprint(cfg.Services[s.ID]) != s.DraftFingerprint {
-		return finish("manual-change", "Обнаружено ручное изменение сервиса. Автоматическое применение приостановлено.")
+		adopted := false
+		if nfqws2StandardDraft(service, s, cfg.Services[s.ID]) {
+			s, adopted = a.adoptNFQWS2StandardDraft(ctx, p, s, cfg.Services[s.ID])
+		}
+		if !adopted {
+			return finish("manual-change", "Обнаружено ручное изменение сервиса. Автоматическое применение приостановлено.")
+		}
 	}
 	if !a.autonomyConsent(p, s) || ctx.Err() != nil {
 		return finish("paused", "Разрешение отозвано или действие отменено.")
@@ -197,6 +203,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	snapshot, e := a.Nodes.Snapshot(ctx, time.Now())
 	if e != nil {
 		return finish("catalog-unavailable", "Каталог подключений недоступен.")
+	}
+	if isNode && nfqws2StandardScope(service, s) && !nodeRecoveryNodePresent(snapshot, currentNode, time.Now()) && a.nfqws2RouteReady() {
+		return a.returnToNFQWS2Standard(ctx, p, s, r, service, cfg, profile)
 	}
 	eligible := map[string]nodestore.Node{}
 	ids := []string{}
