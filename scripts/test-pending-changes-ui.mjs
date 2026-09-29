@@ -36,7 +36,7 @@ assert.equal(blockedView.label, 'Работает');
 assert.equal(blockedView.actionable, true);
 assert.equal(blockedView.pendingDetail, 'Применение ждёт сервис «Discord»: его узел недоступен.');
 assert.match(blockedView.detail, /автопилот не завершил применение: Применение ждёт сервис «Discord»/);
-assert.match(ui, /esc\(h\.pendingDetail\|\|h\.pendingLabel\|\|h\.label\)/, 'attention row hides the blocker');
+assert.match(ui, /esc\(action\?h\.pendingDetail\|\|h\.pendingLabel\|\|h\.label:/, 'attention row hides the blocker');
 assert.deepEqual(model.filterServices([discord, untouched], { scope: 'selected' }).map(s => s.id), ['discord']);
 assert.deepEqual(model.filterServices([discord, untouched], { scope: 'changed' }).map(s => s.id), ['discord']);
 assert.deepEqual(model.filterServices([{ ...discord, dirty: false, route_dirty: false, sources_dirty: false }], { scope: 'selected' }).map(s => s.id), ['discord']);

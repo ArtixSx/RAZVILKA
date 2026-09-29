@@ -121,6 +121,24 @@ function interfaceHomeAuto(ready){
  $('#r42AutoPanel').dataset.state=auto.tone;
 }
 
+// Problems first: a failed check, then work the autopilot is doing, then
+// other unconfirmed states; working services last.
+function interfaceHomeOrder(rows){
+ const rank=h=>h.kind==='bad'?0:h.progress?1:h.kind==='warn'?2:h.kind==='good'?4:3;
+ return rows.slice().sort((a,b)=>rank(a)-rank(b)||String(a.service.name||'').localeCompare(String(b.service.name||''),'ru'));
+}
+function interfaceHomeServicesHTML(members,fresh){
+ const heading=`<div class="ui3-section-heading"><h3>Ваши сервисы</h3><button type="button" class="text-button" data-r42-services="selected">Все сервисы ${ci('chevron')}</button></div>`;
+ if(!members.length)return heading+'<p>Здесь будут выбранные вами сайты и приложения, а не список технических движков.</p>';
+ const sorted=interfaceHomeOrder(members),problems=sorted.filter(h=>h.kind!=='good');
+ const shown=sorted.slice(0,Math.max(8,problems.length)),hidden=sorted.length-shown.length;
+ const tally=fresh?[[sorted.filter(h=>h.kind==='good').length,'работают','good'],[sorted.filter(h=>h.progress).length,'в работе автопилота','progress'],[sorted.filter(h=>h.kind==='bad').length,'не работают','bad'],[sorted.filter(h=>h.kind!=='good'&&h.kind!=='bad'&&!h.progress).length,'без подтверждения','warn']].filter(([n])=>n>0):[];
+ const kind=h=>h.progress?'progress':h.kind||'unknown';
+ const line=h=>h.kind==='good'?(h.route?interfaceRouteName(h.route):''):(h.detail||(h.route?interfaceRouteName(h.route):''));
+ const row=h=>`<button type="button" class="r5-home-service" data-kind="${esc(kind(h))}" data-rz-inspect="${esc(h.service.id)}"><span class="r5-home-service-text"><b>${esc(h.service.name)}</b>${line(h)?`<small>${esc(line(h))}</small>`:''}</span>${interfaceBadge({...h,kind:kind(h)})}</button>`;
+ return `${heading}${tally.length?`<div class="r5-home-tally">${tally.map(([n,label,k])=>`<span data-kind="${k}"><b>${n}</b> ${label}</span>`).join('')}</div>`:''}<div class="r5-home-services">${shown.map(row).join('')}</div>${hidden>0?`<button type="button" class="text-button r5-home-more" data-r42-services="selected">Ещё ${hidden} работают ${ci('chevron')}</button>`:''}`;
+}
+
 function renderInterfaceHome(summaries){
  const ready=!interfaceState.authRevoked&&state.authenticated===true;
  const loaded=ready&&interfaceDataReady('services');
@@ -131,9 +149,12 @@ function renderInterfaceHome(summaries){
  interfaceHomeAuto(ready);
  interfaceHTML('ui3HealthBanner',`<div class="r5-counts"><div><strong>${loaded?counts.selected:'—'}</strong><span>Добавлено сервисов</span></div><div><strong>${fresh?counts.good:'—'}</strong><span>Работают по проверке</span></div><div><strong>${fresh?counts.unconfirmed:'—'}</strong><span>Без подтверждения</span></div></div><p class="r5-caption">${!loaded?'Получаем сведения о сервисах.':!fresh?'Показан последний список. Свежая доступность пока неизвестна.':counts.selected?'Проверяется конкретный сценарий, а не все функции приложения.':'Сервисы пока не добавлены. Начните с настройки автопилота.'}</p>`);
  const attention=counts.rows.filter(s=>s.member&&s.actionable).slice(0,3);
- interfaceHTML('ui3Attention',`<div class="ui3-section-heading"><h3>Что требует внимания</h3>${ci('activity')}</div>${!fresh?'<p>Нет свежих данных для оценки. Это не означает, что подключения не работают.</p>':attention.length?attention.map(h=>`<button type="button" class="r5-attention-row" data-rz-inspect="${esc(h.service.id)}"><span><b>${esc(h.service.name)}</b><small>${esc(h.pendingDetail||h.pendingLabel||h.label)}</small></span><span>Разобраться ${ci('chevron')}</span></button>`).join(''):`<p>${counts.selected?counts.unconfirmed?'Для части сервисов ещё нет свежего результата. Это само по себе не означает сбой.':'В последних проверках проблем не обнаружено.':'После добавления сервисов здесь появятся проблемы, требующие вашего участия.'}</p>`}`);
- const rows=counts.rows.filter(s=>s.member).slice(0,6);
- interfaceHTML('r42RouteDistribution',`<div class="ui3-section-heading"><h3>Ваши сервисы</h3><button type="button" class="text-button" data-r42-services="selected">Все сервисы ${ci('chevron')}</button></div>${rows.length?`<div class="r5-home-services">${rows.map(h=>`<div><b>${esc(h.service.name)}</b>${interfaceBadge(h)}</div>`).join('')}</div>`:'<p>Здесь будут выбранные вами сайты и приложения, а не список технических движков.</p>'}`);
+ // Without a decision for the owner, still name the services without a
+ // confirmed result and what the autopilot is doing with them.
+ const waiting=attention.length?[]:interfaceHomeOrder(counts.rows.filter(s=>s.member&&s.kind!=='good')).slice(0,3);
+ const attentionRow=(h,action)=>`<button type="button" class="r5-attention-row" data-rz-inspect="${esc(h.service.id)}"><span><b>${esc(h.service.name)}</b><small>${esc(action?h.pendingDetail||h.pendingLabel||h.label:`${h.label}. ${h.detail||''}`.trim())}</small></span><span>${action?'Разобраться':'Подробнее'} ${ci('chevron')}</span></button>`;
+ interfaceHTML('ui3Attention',`<div class="ui3-section-heading"><h3>Что требует внимания</h3>${ci('activity')}</div>${!fresh?'<p>Нет свежих данных для оценки. Это не означает, что подключения не работают.</p>':attention.length?attention.map(h=>attentionRow(h,true)).join(''):waiting.length?`<p class="r5-caption r5-attention-note">Вашего участия не требуется: автопилот занимается этим сам.</p>${waiting.map(h=>attentionRow(h,false)).join('')}`:`<p>${counts.selected?'В последних проверках проблем не обнаружено.':'После добавления сервисов здесь появятся проблемы, требующие вашего участия.'}</p>`}`);
+ interfaceHTML('r42RouteDistribution',interfaceHomeServicesHTML(counts.rows.filter(s=>s.member),fresh));
  consoleText('ui3RouterName',ready?state.system?.hostname||'Роутер':'Нет сведений');
  consoleText('ui3RouterMeta',ready?state.system?.architecture||'Платформа не определена':'');
  const m=ready?state.metrics?.latest||{}:{},at=Date.parse(m.timestamp||''),recent=Number.isFinite(at)&&at<=Date.now()&&Date.now()-at<180000;
