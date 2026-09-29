@@ -37,6 +37,7 @@ type autonomyState struct {
 	maintenanceMessage  string
 	maintenanceAttempts map[string]maintenanceAttempt
 	maintenanceTestRun  func(context.Context, string, autonomy.Window, bool) (bool, bool, string)
+	feedPruneAt         time.Time
 }
 
 func newAutonomyDocument() autonomyDocument {

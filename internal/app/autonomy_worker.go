@@ -52,6 +52,9 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		return
 	}
 	a.autonomyMaintenance(ctx, p, now)
+	if !cfg.SafeMode {
+		_, _ = a.pruneExpiredFeedNodes(ctx, now)
+	}
 	if !p.Enabled || ctx.Err() != nil || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || a.Dataplane == nil {
 		return
 	}
