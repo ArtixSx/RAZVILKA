@@ -114,16 +114,23 @@ func TestComponentSidecarProtectionIncludesDesiredAppliedAndResolvedAuto(t *test
 	if !reflect.DeepEqual(desired, []string{"automatic", "desired-warp"}) || !reflect.DeepEqual(applied, []string{"applied-xray", "automatic"}) {
 		t.Fatal(desired, applied)
 	}
+	p := components.Plan{Component: "sing-box", Action: "remove", Ready: true, Installed: true}
+	a.enrichComponentPlan(&p)
+	if p.Ready || !hasComponentBlocker(p, "SERVICE_DEPENDENCY") {
+		t.Fatal(p)
+	}
 	for _, action := range []string{"update", "remove"} {
-		p := components.Plan{Component: "sing-box", Action: action, Ready: true, Installed: true}
-		a.enrichComponentPlan(&p)
-		if p.Ready || !hasComponentBlocker(p, "SERVICE_DEPENDENCY") {
-			t.Fatal(p)
-		}
 		blocker := a.componentRuntimeBlocker("sing-box", action)
 		if blocker == nil || blocker["code"] != "SERVICE_DEPENDENCY" {
 			t.Fatal(blocker)
 		}
+	}
+	// An in-use update is checked on the committed routes and rolled back
+	// instead of requiring the dependent services to move away.
+	p = components.Plan{Component: "sing-box", Action: "update", Ready: true, Installed: true}
+	a.enrichComponentPlan(&p)
+	if hasComponentBlocker(p, "SERVICE_DEPENDENCY") {
+		t.Fatal(p)
 	}
 	if desired, applied := a.componentServiceReferences("nfqws2"); len(desired) != 0 || len(applied) != 0 {
 		t.Fatal(desired, applied)

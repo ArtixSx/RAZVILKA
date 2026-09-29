@@ -4,25 +4,43 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
-// managedComponentUpdate updates NFQWS2 while its routes stay in use (plan
-// M01). The check requires the user's configuration to survive the package
-// change, adopts the package's new init into the ownership lease, and asks
-// the service and any routes that were live before to be live afterwards.
+// managedComponentUpdate updates a component while its routes stay in use
+// (plan M01). For NFQWS2 the check requires the user's configuration to survive
+// the package change, adopts the package's new init into the ownership lease,
+// and asks the service and any routes that were live before to be live
+// afterwards. Proxy engines are checked in an isolated canary instead.
 func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id string) {
 	if a.Dataplane == nil {
 		http.Error(w, "dataplane manager is unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Minute)
 	defer cancel()
-	check, err := a.nfqws2UpdateCheck(ctx)
+	var check func(context.Context) error
+	var err error
+	success := "Новая версия проверена при работающих маршрутах"
+	if id == "nfqws2" {
+		check, err = a.nfqws2UpdateCheck(ctx)
+	} else {
+		var adapters []string
+		check, adapters, err = a.proxyUpdateCheck(ctx, id)
+		if errors.Is(err, errProxyPrecheck) {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Маршруты этого обхода не проходят изолированную проверку и на текущей версии, поэтому обновление с проверкой сейчас невозможно. Проверьте подключения сервисов, затем повторите обновление.", "component": id, "code": "MANAGED_UPDATE_PRECHECK_FAILED"})
+			return
+		}
+		if len(adapters) > 0 {
+			success = "Новая версия проверена изолированно на действующих маршрутах. Работающие процессы перейдут на неё при следующем применении или перезапуске."
+		}
+	}
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": err.Error(), "component": id, "code": "RUNTIME_STATE_UNKNOWN"})
 		return
@@ -38,8 +56,51 @@ func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id 
 		writeJSON(w, code, map[string]any{"error": err.Error(), "output": result.Output, "component": id})
 		return
 	}
-	_ = a.Components.RecordOperation(id, "update", "succeeded", "Новая версия проверена при работающих маршрутах")
+	_ = a.Components.RecordOperation(id, "update", "succeeded", success)
+	result.Output += "\n" + success
 	writeJSON(w, http.StatusOK, result)
+}
+
+// managedProxyAdapters lists the committed adapters whose runtime uses the
+// component's binary: Sing-box is also the TUN sidecar of Xray and USQUE.
+var managedProxyAdapters = map[string][]string{
+	"sing-box": {"sing-box", "xray", "usque"},
+	"xray":     {"xray"},
+	"usque":    {"usque"},
+}
+
+var errProxyPrecheck = errors.New("committed routes do not pass the isolated check with the installed version")
+
+// proxyUpdateCheck proves a proxy engine update on the committed routes
+// without touching them: running processes keep the binary they started with,
+// and the new one is staged, natively validated and started in the isolated
+// canary. The same check must pass with the installed version first, so a
+// failure after the package change is attributed to the new version.
+func (a *App) proxyUpdateCheck(ctx context.Context, id string) (func(context.Context) error, []string, error) {
+	committed, exists, err := a.Dataplane.Committed()
+	if err != nil {
+		return nil, nil, err
+	}
+	var adapters []string
+	if exists && committed.State == "committed" && !committed.SafeMode && !committed.Noop {
+		for _, adapter := range managedProxyAdapters[id] {
+			if slices.Contains(committed.Adapters, adapter) {
+				adapters = append(adapters, adapter)
+			}
+		}
+	}
+	check := func(ctx context.Context) error {
+		for _, adapter := range adapters {
+			if err := a.Dataplane.ProbeCandidate(ctx, committed, adapter); err != nil {
+				return fmt.Errorf("isolated check of %s routes failed: %w", adapter, err)
+			}
+		}
+		return nil
+	}
+	if err := check(ctx); err != nil {
+		return nil, adapters, fmt.Errorf("%w: %w", errProxyPrecheck, err)
+	}
+	return check, adapters, nil
 }
 
 func (a *App) nfqws2UpdateCheck(ctx context.Context) (func(context.Context) error, error) {

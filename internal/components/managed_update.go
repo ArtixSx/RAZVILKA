@@ -15,7 +15,7 @@ import (
 
 // managedUpdateComponents may be updated while their routes are in use: the
 // update is checked by the caller and rolled back to a cached copy on failure.
-var managedUpdateComponents = map[string]bool{"nfqws2": true}
+var managedUpdateComponents = map[string]bool{"nfqws2": true, "sing-box": true, "xray": true, "usque": true}
 
 // ManagedUpdateSupported reports whether id uses the checked in-use update.
 func ManagedUpdateSupported(id string) bool { return managedUpdateComponents[id] }
