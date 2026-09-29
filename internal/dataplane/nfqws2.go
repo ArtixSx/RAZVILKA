@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	managedBegin = "# BEGIN RAZVILKA MANAGED"
-	managedEnd   = "# END RAZVILKA MANAGED"
+	managedBegin = engineconfig.ManagedListBegin
+	managedEnd   = engineconfig.ManagedListEnd
 )
 
 type NFQWS2Runner interface {

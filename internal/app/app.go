@@ -795,7 +795,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	if a.EngineConfigs != nil {
 		for _, ev := range a.EngineConfigs.List() {
 			for _, fv := range ev.Files {
-				if fv.Staged {
+				if fv.Staged && !fv.Unchanged {
 					configDrafts++
 				}
 			}
@@ -3929,7 +3929,9 @@ func (a *App) stagedEngineConfigRefs() []string {
 	var refs []string
 	for _, engineView := range a.EngineConfigs.List() {
 		for _, fileView := range engineView.Files {
-			if fileView.Staged {
+			// A draft identical to the live file changes nothing; it neither
+			// keeps changes pending nor joins a plan.
+			if fileView.Staged && !fileView.Unchanged {
 				refs = append(refs, engineView.ID+"/"+fileView.ID)
 			}
 		}

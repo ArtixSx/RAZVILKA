@@ -47,16 +47,19 @@ type EngineSpec struct {
 }
 
 type FileView struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Kind        string `json:"kind"`
-	Syntax      string `json:"syntax"`
-	Path        string `json:"path"`
-	Exists      bool   `json:"exists"`
-	Size        int64  `json:"size"`
-	ModifiedAt  string `json:"modified_at,omitempty"`
-	Sensitive   bool   `json:"sensitive"`
-	Staged      bool   `json:"staged"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	Syntax     string `json:"syntax"`
+	Path       string `json:"path"`
+	Exists     bool   `json:"exists"`
+	Size       int64  `json:"size"`
+	ModifiedAt string `json:"modified_at,omitempty"`
+	Sensitive  bool   `json:"sensitive"`
+	Staged     bool   `json:"staged"`
+	// Unchanged: the draft equals the live file apart from the RAZVILKA
+	// managed block (rewritten on every apply) and trailing line breaks.
+	Unchanged   bool   `json:"unchanged,omitempty"`
 	StagedAt    string `json:"staged_at,omitempty"`
 	SHA256      string `json:"sha256,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -519,8 +522,36 @@ func (m *Manager) fileView(engineID string, f FileSpec) FileView {
 	if fi, err := os.Stat(stage); err == nil && !fi.IsDir() {
 		v.Staged = true
 		v.StagedAt = fi.ModTime().UTC().Format(time.RFC3339)
+		if v.Exists && fi.Size() <= maxConfigBytes {
+			draft, draftErr := readLimited(stage)
+			live, liveErr := readLimited(path)
+			v.Unchanged = draftErr == nil && liveErr == nil && unchangedDraft(draft, live)
+		}
 	}
 	return v
+}
+
+// ManagedListBegin and ManagedListEnd delimit the lines RAZVILKA maintains in
+// an NFQWS2 host list; the dataplane adapter rewrites that block on apply.
+const (
+	ManagedListBegin = "# BEGIN RAZVILKA MANAGED"
+	ManagedListEnd   = "# END RAZVILKA MANAGED"
+)
+
+// unchangedDraft reports whether saving the draft would change nothing. The
+// panel edits the owner's part of a host list, so a save without edits drops
+// the managed block; such a draft must not keep "changes are waiting".
+func unchangedDraft(draft, live []byte) bool {
+	return comparableConfig(string(draft)) == comparableConfig(string(live))
+}
+
+func comparableConfig(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	start, end := strings.Index(s, ManagedListBegin), strings.Index(s, ManagedListEnd)
+	if start >= 0 && end > start && strings.Count(s, ManagedListBegin) == 1 && strings.Count(s, ManagedListEnd) == 1 {
+		s = s[:start] + s[end+len(ManagedListEnd):]
+	}
+	return strings.TrimRight(s, "\n")
 }
 
 func lookup(engineID, fileID string) (EngineSpec, FileSpec, error) {
