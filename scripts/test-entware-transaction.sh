@@ -173,7 +173,7 @@ test_prior_route_evidence() {
     mkdir -p "$PRIOR_CASE/bin"
     cat >"$PRIOR_CASE/candidate" <<PRIOR_FIXTURE
 #!/bin/sh
-[ "\$*" = "-healthcheck http://127.0.0.1:8787/api/v1/status -healthcheck-pid 4242 -healthcheck-prior -healthcheck-wait 30s" ] || exit 99
+[ "\$*" = "-healthcheck http://127.0.0.1:8787/api/v1/status -healthcheck-pid 4242 -healthcheck-prior -healthcheck-wait 3m" ] || exit 99
 exit $PRIOR_CODE
 PRIOR_FIXTURE
     printf '#!/bin/sh\ncase "$1" in pid) echo 4242 ;; lan-ip) echo 127.0.0.1 ;; esac\n' >"$PRIOR_CASE/init"

@@ -904,6 +904,7 @@ const (
 )
 
 func classifyPriorRoutes(ctx context.Context, rawURL string, expectedPID int, interval time.Duration) (int, string, error) {
+	busy := false
 	for {
 		_, err := checkHealthIdentity(ctx, rawURL, expectedPID, true, "")
 		switch {
@@ -913,8 +914,16 @@ func classifyPriorRoutes(ctx context.Context, rawURL string, expectedPID int, in
 			return priorRoutesDegraded, "degraded", err
 		case errors.Is(err, errHealthRecovery):
 			return priorRoutesFenced, "fenced", err
-		case !errors.Is(err, errHealthBusy):
+		case errors.Is(err, errHealthBusy):
+			busy = true
+		case busy && errors.Is(err, errHealthRequest):
+			// A request cut short after a genuine busy answer does not
+			// prove the operation ended; it stays busy, never unknown.
+		default:
 			return priorRoutesUnknown, "unknown", err
+		}
+		if ctx.Err() != nil {
+			return priorRoutesBusy, "busy", err
 		}
 		timer := time.NewTimer(interval)
 		select {

@@ -273,7 +273,7 @@ if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
   PRIOR_URL="http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip 2>/dev/null || true):${RAZVILKA_PORT:-8787}/api/v1/status"
   PRIOR_STATE=1
   if [ -n "$PRIOR_PID" ]; then
-    "$BIN_SOURCE" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-prior -healthcheck-wait 30s >/dev/null 2>&1 && PRIOR_STATE=0 || PRIOR_STATE=$?
+    "$BIN_SOURCE" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-prior -healthcheck-wait 3m >/dev/null 2>&1 && PRIOR_STATE=0 || PRIOR_STATE=$?
   fi
   case "$PRIOR_STATE" in
     0) ;;

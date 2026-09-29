@@ -86,7 +86,9 @@ function renderWorkspaceControls() {
   $('#projectPowerHint').textContent = workspaceControl.runtimeJob ? 'Задание сохранено на роутере' : workspaceControl.readBusy && canStop ? 'Можно поставить остановку в очередь' : workspaceControl.readBusy ? 'Дождитесь завершения проверки' : !ready ? 'Откройте лог или обновите' : control.safe_mode ? 'Безопасный режим · открыть настройки' : canStop ? 'Нажмите, чтобы выключить' : control.runtime_state === 'unknown' ? 'Примените изменения, чтобы подтвердить' : control?.resume_available ? 'Нажмите, чтобы включить' : 'Выбрать и включить сервисы';
   power.setAttribute('aria-label', canStop ? 'Остановить маршруты RAZVILKA' : 'Включить маршруты RAZVILKA');
   // The project is on; only the live routes are unconfirmed. Name the reason.
-  power.title = ready && control.runtime_state === 'unknown' ? control.runtime_issue?.message || 'Маршруты ещё не подтверждены в текущей сети.' : '';
+  const recovery = state.status?.node_recovery;
+  const recoveryNote = ['requires-review', 'network-stale', 'revalidating'].includes(recovery?.state) ? recovery.message : '';
+  power.title = ready && control.runtime_state === 'unknown' ? recoveryNote || control.runtime_issue?.message || 'Маршруты ещё не подтверждены в текущей сети.' : '';
   if (ready) $('#systemText').textContent = workspaceControl.readBusy ? 'Выполняется проверка или изменение' : control.safe_mode ? 'Применение заблокировано в настройках' : control.mode === 'manual' ? 'Подключения меняете вы' : 'Автозамена по правилам сервисов';
 }
 
