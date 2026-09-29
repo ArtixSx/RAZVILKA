@@ -581,6 +581,11 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	}
 	defer m.endOperation()
 	recovery := Recovery{State: "skipped", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []RecoveryStep{}}
+	if settled, err := m.settleCommittedPublication(); err != nil {
+		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "journal", State: "failed", Detail: "The interrupted commit could not be completed in the journal."})
+	} else if settled {
+		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "journal", State: "settled", Detail: "An interrupted commit was completed: its plan had been published and every step had passed."})
+	}
 	if err := m.checkExecutionRecovery(); err != nil {
 		recovery.State, recovery.Guarded = "journal-recovery-required", true
 		steps, cleanupErr := m.revokeUnverifiedDNS(ctx)

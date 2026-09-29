@@ -63,6 +63,61 @@ func (m *Manager) checkExecutionRecovery() error {
 	return nil
 }
 
+// settleCommittedPublication completes the one provable interruption of a
+// commit. finishCommit writes "committing" to both execution records, then
+// publishes the committed plan (latest and boot copies), then writes
+// "committed" to the transaction record and to the latest record. If power is
+// lost after the plan publication, every adapter step has passed and both plan
+// files name this execution's plan as committed: only the final records are
+// missing, so they are completed. Anything else (plan not published or only
+// partly, a failed or unfinished step, records of different executions) stays
+// fenced for review. It reports whether the records were completed.
+func (m *Manager) settleCommittedPublication() (bool, error) {
+	var latest, transaction *Execution
+	exists, err := readOptionalJournal(filepath.Join(m.StateRoot, "latest-execution.json"), &latest)
+	if err != nil || !exists || latest == nil || latest.State != "committing" || !validExecutionPlanID(latest.PlanID) {
+		return false, nil
+	}
+	exists, err = readOptionalJournal(filepath.Join(m.StateRoot, "transactions", latest.PlanID, "execution.json"), &transaction)
+	if err != nil || !exists || transaction == nil || transaction.PlanID != latest.PlanID || transaction.Digest != latest.Digest || transaction.StartedAt != latest.StartedAt || latest.Digest == "" {
+		return false, nil
+	}
+	if !reflect.DeepEqual(transaction.Steps, latest.Steps) || len(latest.Steps) == 0 {
+		return false, nil
+	}
+	for _, step := range latest.Steps {
+		if step.State != "passed" || step.FinishedAt == "" {
+			return false, nil
+		}
+	}
+	settled := *latest
+	switch transaction.State {
+	case "committing":
+		settled.State, settled.FinishedAt = "committed", time.Now().UTC().Format(time.RFC3339Nano)
+	case "committed":
+		if _, err := time.Parse(time.RFC3339Nano, transaction.FinishedAt); err != nil {
+			return false, nil
+		}
+		settled = *transaction
+	default:
+		return false, nil
+	}
+	for _, name := range []string{"latest-plan.json", "latest-committed-plan.json"} {
+		plan, found, err := readPlanJournal(filepath.Join(m.StateRoot, name))
+		if err != nil || !found || plan.State != "committed" || plan.PlanID != latest.PlanID || plan.Digest != latest.Digest {
+			return false, nil
+		}
+	}
+	if err := m.writeExecution(filepath.Join(m.StateRoot, "transactions", latest.PlanID), settled); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func validExecutionPlanID(id string) bool {
+	return id != "" && filepath.IsLocal(id) && filepath.Base(id) == id && !strings.ContainsAny(id, "/\\:")
+}
+
 func (m *Manager) writeExecution(root string, execution Execution) error {
 	data, err := json.MarshalIndent(execution, "", "  ")
 	if err != nil {
