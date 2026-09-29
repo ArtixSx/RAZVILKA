@@ -275,24 +275,100 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, _ string) error {
 }
 
 func (a *NFQWS2Adapter) Reconcile(ctx context.Context, plan Plan) error {
-	if _, err := a.verifyOwnedLists(false); err != nil {
-		return err
-	}
 	unlock, err := a.lockResources()
 	if err != nil {
 		return err
 	}
 	defer unlock()
+	restored, err := a.restoreDeactivatedBlocks(plan)
+	if err != nil {
+		return err
+	}
 	if _, err := a.verifyOwnedLists(false); err != nil {
 		return err
 	}
 	output, err := a.run(ctx, a.InitPath, "status")
-	if err != nil || !runningOutput(string(output)) {
+	if restored || err != nil || !runningOutput(string(output)) {
 		if output, err = a.run(ctx, a.InitPath, "restart"); err != nil {
 			return fmt.Errorf("restart committed NFQWS2: %s", shortOutput(output, err))
 		}
 	}
 	return a.Health(ctx, plan, "")
+}
+
+// nfqws2PlanValues are the domains and networks of the adapter's routes, as
+// Stage writes them into the managed blocks.
+func nfqws2PlanValues(plan Plan, id string) ([]string, []string) {
+	domains, cidrs := []string{}, []string{}
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) != id {
+			continue
+		}
+		domains = append(domains, route.Domains...)
+		cidrs = append(cidrs, route.CIDRs...)
+	}
+	return sortedUnique(domains), sortedUnique(cidrs)
+}
+
+// restoreDeactivatedBlocks puts back the managed blocks that a controlled
+// deactivation removed. The installer quiesces the dataplane before replacing
+// the binary and then restores the committed journal and the ownership lease,
+// but not the shared lists: boot recovery used to find no block and enter
+// Recovery Safe Mode. A block is written back only if the configuration and
+// init still match the lease and the block rendered from the committed plan
+// hashes exactly to the block the lease recorded; anything else still fails.
+func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
+	lease, err := a.readLease()
+	if err != nil || lease == nil {
+		return false, err
+	}
+	owner, err := a.owner()
+	if err != nil {
+		return false, err
+	}
+	domains, cidrs := nfqws2PlanValues(plan, a.ID())
+	type write struct {
+		path string
+		data []byte
+		mode os.FileMode
+	}
+	var writes []write
+	for index, values := range [][]string{domains, cidrs} {
+		path := []string{a.UserListPath, a.IPSetListPath}[index]
+		data, exists, err := nfqws2Read(path)
+		if err != nil {
+			return false, err
+		}
+		block, err := nfqws2Block(data)
+		if err != nil || len(block) > 0 || !exists {
+			continue // present or unreadable: the ownership check decides
+		}
+		merged, err := replaceManagedBlock(string(data), append([]string{"# RAZVILKA INSTANCE " + owner}, values...))
+		if err != nil {
+			return false, err
+		}
+		rendered, err := nfqws2Block([]byte(merged))
+		if err != nil || nfqws2Hash(rendered) != lease.Lists[index].BlockHash {
+			return false, errors.New("the NFQWS2 managed block of the committed plan cannot be proven; review is required")
+		}
+		mode := os.FileMode(0o644)
+		if info, statErr := os.Stat(path); statErr == nil {
+			mode = info.Mode().Perm()
+		}
+		writes = append(writes, write{path, []byte(merged), mode})
+	}
+	if len(writes) == 0 {
+		return false, nil
+	}
+	if err := a.verifyOwnedRuntime(lease, false); err != nil {
+		return false, err
+	}
+	for _, w := range writes {
+		if err := writeAtomic(w.path, w.data, w.mode); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
