@@ -57,6 +57,8 @@ assert.equal(context.projectLogEventResult({ outcome: 'failed', status_code: 202
 assert.equal(context.projectLogEventResult({ outcome: 'denied', status_code: 403 }).label, 'Доступ отклонён');
 assert.equal(context.projectLogEventResult({ outcome: 'unknown', status_code: 200 }).label, 'Результат не указан');
 assert.equal(context.projectLogAction({ path: '/api/v1/service-control/runtime' }), 'Включение или остановка обходов');
+assert.equal(context.projectLogAction({ action: 'BOOT_RECOVERY', path: 'dataplane' }), 'Восстановление маршрутов после запуска');
+assert.equal(context.projectLogAction({ action: 'PUT', path: '/api/v1/settings/safe-mode' }), 'Изменение безопасного режима');
 for (const reason of ['journal-changed', 'writer-busy', 'journal-invalid', 'write-unconfirmed', 'storage-unavailable']) {
   const event = { action: 'SCHEDULE', path: '/runtime/scheduler/' + reason, outcome: 'failed' };
   assert.equal(context.projectLogAction(event), 'Фоновые проверки остановлены');

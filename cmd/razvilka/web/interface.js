@@ -143,7 +143,7 @@ function renderInterfaceHome(summaries){
  const p=ready&&!consoleAutonomyError&&consoleSnapshot?.policy?.setup_complete?consoleSnapshot.policy:null;
  interfaceHTML('ui3Maintenance',`<h3>Обслуживание</h3><p>${p?'В этой версии доступны проверка обновлений и подготовка архива. Установка запускается вручную.':'Расписание выбирается при настройке автопилота. До завершения мастера оно не считается настроенным.'}</p><button class="text-button" type="button" data-rz-nav="updates">Обновления ${ci('chevron')}</button>`);
  const events=ready&&Array.isArray(state.audit?.events)?state.audit.events.slice(0,3):[];
- interfaceHTML('ui3HomeEvents',events.length?events.map(e=>{const result=typeof projectLogEventResult==='function'?projectLogEventResult(e):{label:'Результат не уточнён'};return `<div class="ui3-event"><div><strong>${esc(consoleAuditTitle(e))}</strong><small>${esc(result.label)}</small></div><time>${esc(consoleDate(e.timestamp))}</time></div>`;}).join(''):'<p class="r5-caption">Действия появятся после настройки. Принятое задание не равно завершённому.</p>');
+ interfaceHTML('ui3HomeEvents',events.length?events.map(e=>{const result=typeof projectLogEventResult==='function'?projectLogEventResult(e):{label:'Результат не уточнён'};const title=typeof projectLogAction==='function'?projectLogAction(e)+(e.outcome==='failed'?' · ошибка':e.outcome==='denied'?' · отказ':''):consoleAuditTitle(e);return `<div class="ui3-event"><div><strong>${esc(title)}</strong><small>${esc(result.label)}</small></div><time>${esc(consoleDate(e.timestamp))}</time></div>`;}).join(''):'<p class="r5-caption">Действия появятся после настройки. Принятое задание не равно завершённому.</p>');
 }
 
 function renderInterfaceServices(summaries){

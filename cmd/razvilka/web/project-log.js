@@ -16,6 +16,7 @@ function projectLogSectionName(key) {
 function projectLogAction(event) {
   const path = String(event.path || '').split('?')[0];
   if (event.action === 'SCHEDULE' && path.startsWith('/runtime/scheduler/')) return 'Фоновые проверки остановлены';
+  if (event.action === 'BOOT_RECOVERY') return 'Восстановление маршрутов после запуска';
   const component = path.match(/^\/api\/v1\/components\/([^/]+)\/(install|update|remove)$/);
   if (component) {
     const name = ({ nfqws2: 'NFQWS2', usque: 'WARP · MASQUE', 'sing-box': 'Sing-box', xray: 'Xray', amneziawg: 'AmneziaWG' })[component[1]] || component[1];
