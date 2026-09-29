@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"reflect"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
@@ -50,12 +52,25 @@ func (a *App) adoptNFQWS2StandardDraft(ctx context.Context, p autonomy.Policy, s
 
 // adoptReviewedDefinition accepts a new definition of a service from the
 // reviewed NFQWS2 list shipped with RAZVILKA (for example, extra Discord
-// domains in an update). Other definitions still require confirmation.
+// domains in an update) or a refresh of a service imported from the
+// allowlisted community catalogue. Other definitions still require
+// confirmation.
 func (a *App) adoptReviewedDefinition(ctx context.Context, p autonomy.Policy, s autonomy.Service, service catalog.Service) (autonomy.Service, bool) {
-	if !catalog.IsNFQWS2Starter(service) {
+	if !catalog.IsNFQWS2Starter(service) && !communityImported(service) {
 		return s, false
 	}
 	return a.updateAutonomyService(ctx, p, s, func(next *autonomy.Service) { next.Definition = autonomyDefinition(service) })
+}
+
+// communityImported reports a service imported from the community catalogue.
+// Its refresh (preview with the exact source SHA-256, then import) replaces the
+// domains and networks of the same catalogue entry; the owner's scope, route
+// choice and consent stay in the autopilot record.
+func communityImported(service catalog.Service) bool {
+	p := service.Provenance
+	return p != nil && p.EntryID != "" && service.ID == "custom-"+p.EntryID && service.ProbeURL != "" &&
+		slices.Equal(service.SourceRefs, []string{"community:" + p.EntryID}) &&
+		len(p.SHA256) == 64 && strings.Trim(p.SHA256, "0123456789abcdef") == ""
 }
 
 // updateAutonomyService changes the saved autopilot record only if it is still

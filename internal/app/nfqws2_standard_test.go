@@ -293,3 +293,46 @@ func TestNodeRecoveryStatusOfSupersededPlanIsCleared(t *testing.T) {
 		})
 	}
 }
+
+func communityTelegram(cidrs []string, fetched string) catalog.Service {
+	return catalog.Service{ID: "custom-telegram-networks", Name: "Telegram · домены и сети", Category: "Мессенджеры", Icon: "TG",
+		Domains: []string{"telegram.org", "t.me"}, CIDRs: cidrs, Strategy: []string{"auto"}, ProbeURL: "https://telegram.org/",
+		SourceRefs: []string{"community:telegram-networks"},
+		Provenance: &catalog.Provenance{Provider: "V2Fly + Loyalsoldier GeoIP", EntryID: "telegram-networks", URL: "https://github.com/Loyalsoldier/geoip", SHA256: strings.Repeat("ab", 32), FetchedAt: fetched}}
+}
+
+// A refresh from the community catalogue (as the owner did on the router)
+// must not stop the autopilot: the same node is applied to the new networks.
+func TestAutopilotAdoptsCommunityRefresh(t *testing.T) {
+	previous := communityTelegram([]string{"149.154.160.0/20"}, "2026-09-29T13:00:00Z")
+	updated := communityTelegram([]string{"149.154.160.0/20", "91.108.4.0/22"}, "2026-09-29T20:27:57Z")
+	updated.Provenance.SHA256 = strings.Repeat("cd", 32)
+	a, node, adapter := nfqws2StandardFixture(t, previous)
+	a.Catalog.Services = []catalog.Service{updated}
+	standardDue(a, updated.ID)
+	a.autonomyRound(context.Background(), time.Now())
+	r := standardRuntime(a, updated.ID)
+	committed, _, err := a.Dataplane.Committed()
+	if err != nil || r.State != "applied" || !slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("community refresh not applied: %+v calls=%v err=%v", r, adapter.calls, err)
+	}
+	if !committedServiceCurrent(committed, updated) || selectedRoute(a.Store.Get().AppliedServices[updated.ID]) != "sing-box:"+node {
+		t.Fatalf("route not refreshed with the same node: %+v", committed.Routes)
+	}
+}
+
+// Without the community catalogue origin a changed service still needs the
+// owner's confirmation.
+func TestAutopilotAsksToConfirmEditedCustomService(t *testing.T) {
+	previous := communityTelegram([]string{"149.154.160.0/20"}, "2026-09-29T13:00:00Z")
+	previous.ID, previous.Provenance, previous.SourceRefs = "custom-telegram-own", nil, nil
+	changed := previous
+	changed.CIDRs = []string{"149.154.160.0/20", "91.108.4.0/22"}
+	a, _, adapter := nfqws2StandardFixture(t, previous)
+	a.Catalog.Services = []catalog.Service{changed}
+	standardDue(a, changed.ID)
+	a.autonomyRound(context.Background(), time.Now())
+	if r := standardRuntime(a, changed.ID); r.State != "definition-changed" || len(adapter.calls) != 0 {
+		t.Fatalf("edited service accepted: %+v %v", r, adapter.calls)
+	}
+}
