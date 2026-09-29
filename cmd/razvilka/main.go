@@ -974,10 +974,14 @@ func waitForHealth(ctx context.Context, rawURL string, expectedPID int, requireD
 		}
 		if errors.Is(err, errHealthBusy) || errors.Is(err, errHealthPending) {
 			last = err
-		} else if !errors.Is(err, errHealthRequest) || last == nil {
+		} else if !errors.Is(err, errHealthRequest) {
 			// Wrong identity/PID, invalid JSON, recovery fences and journal
 			// failures are not readiness transitions and must fail immediately.
 			return "", err
+		} else if last == nil {
+			// A cut or slow request proves nothing either way. Retry within the
+			// bounded wait; at its deadline this remains a failure (rollback).
+			last = err
 		}
 		// A request timeout after a genuine busy observation does not prove
 		// that the private operation has ended. Preserve its exit-75 fence.
@@ -1005,13 +1009,10 @@ func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, req
 // An empty expectedVersion accepts a RAZVILKA process of any release; the
 // installer classifies the previous version before replacing it.
 func checkHealthIdentity(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool, expectedVersion string) (string, error) {
-	requestTimeout := 4 * time.Second
-	if requireDataplane {
-		// Runtime ownership inspection itself has an eight-second bound.
-		// The HTTP client must allow it to finish, while the parent still owns
-		// the overall readiness deadline and cancellation.
-		requestTimeout = 12 * time.Second
-	}
+	// The status handler inspects owned runtime with its own eight-second
+	// bound for every caller, not only the strict check. The client must let
+	// it finish; the parent still owns the overall deadline and cancellation.
+	requestTimeout := 12 * time.Second
 	client := &http.Client{
 		Timeout: requestTimeout,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {

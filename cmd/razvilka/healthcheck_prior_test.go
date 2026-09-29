@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/app"
 )
 
 // G01: the installer relaxes the final route check only for an identified
@@ -53,5 +56,42 @@ func TestPriorRouteClassificationIsTyped(t *testing.T) {
 	unreachable.Close()
 	if code, _, _ := classifyPriorRoutes(context.Background(), unreachable.URL, 1234, time.Millisecond); code != priorRoutesUnknown {
 		t.Fatalf("no response classified as %d", code)
+	}
+}
+
+// A cut request right after start proves nothing: the bounded wait retries
+// it instead of rolling back an upgrade whose panel then answers correctly.
+func TestWaitForHealthRetriesTransportFailureBeforeFirstAnswer(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) == 1 {
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err == nil {
+				conn.Close()
+			}
+			return
+		}
+		fmt.Fprintf(w, `{"name":"RAZVILKA","version":%q,"process_id":1234,"dataplane_state":"rolled-back","dataplane_adapters":2,"live_active":false}`, app.Version)
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	version, err := waitForHealth(ctx, server.URL, 1234, false, time.Millisecond)
+	if err != nil || version != app.Version || requests.Load() != 2 {
+		t.Fatalf("transient transport failure rolled back a healthy panel: version=%q requests=%d err=%v", version, requests.Load(), err)
+	}
+	// Identity failures after a transport failure still fail immediately.
+	requests.Store(0)
+	wrong := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) == 1 {
+			conn, _, _ := w.(http.Hijacker).Hijack()
+			conn.Close()
+			return
+		}
+		fmt.Fprint(w, `{"name":"RAZVILKA","version":"different","process_id":1234}`)
+	}))
+	defer wrong.Close()
+	if _, err := waitForHealth(ctx, wrong.URL, 1234, false, time.Millisecond); err == nil || requests.Load() != 2 || ctx.Err() != nil {
+		t.Fatalf("identity mismatch retried: requests=%d err=%v", requests.Load(), err)
 	}
 }
