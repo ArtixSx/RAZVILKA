@@ -218,6 +218,10 @@ html[data-theme=dark] .interface-ui .autonomy-zone .wizard-steps button.active i
 .interface-ui #view-connections .empty-state { min-height:0; padding:26px 18px; }
 .interface-ui #view-connections .connections-table { width:100%; }
 .interface-ui #view-settings > .two-col { grid-column:1/-1; }
+/* The settings view is a two-column grid for its panels; the introduction,
+   the task tiles, the advanced disclosure and section headings span it, so
+   they no longer pair up side by side with squeezed text. */
+.interface-ui #view-settings > .ui3-page-intro, .interface-ui #view-settings > .r5-setting-grid, .interface-ui #view-settings > .r5-advanced, .interface-ui #view-settings > h2 { grid-column:1/-1; }
 .interface-ui #view-settings > .panel, .interface-ui #view-settings > details { align-self:start; min-width:0; }
 .interface-ui #view-settings > .two-col > .panel { min-width:0; }
 .interface-ui .ui3-diagnostic-resources { min-height:0; }
