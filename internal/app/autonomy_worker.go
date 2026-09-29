@@ -344,6 +344,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			ready = append(ready, id)
 		}
 	}
+	keep := ""
+	if healthy && isNode {
+		keep = currentNode
+	}
+	ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now())
 	ready, e = a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
 	if e != nil {
 		return finish("catalog-unavailable", "Не удалось сопоставить резервные подключения. Маршрут сохранён.")
@@ -369,7 +374,12 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 		}
 		r.ReserveCheckedAt = time.Now().UTC()
+		// Rank again with the checks recorded in this round.
+		if fresh, err := a.Nodes.Snapshot(ctx, time.Now()); err == nil {
+			snapshot = fresh
+		}
 	}
+	ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now())
 	ready, e = a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
 	if e != nil {
 		return finish("catalog-unavailable", "Не удалось сопоставить резервные подключения. Маршрут сохранён.")
