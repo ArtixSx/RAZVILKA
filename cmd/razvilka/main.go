@@ -114,6 +114,7 @@ func main() {
 	healthPID := flag.Int("healthcheck-pid", 0, "require the status response to match this process ID")
 	healthDataplane := flag.Bool("healthcheck-require-dataplane", false, "require a committed non-direct dataplane to have current runtime recovery evidence")
 	healthWait := flag.Duration("healthcheck-wait", 0, "wait up to this duration for readiness (maximum 10m; busy at timeout exits 75 without restarting)")
+	healthPrior := flag.Bool("healthcheck-prior", false, "classify the routes of a running process of any release before an upgrade (exit 0 confirmed, 10 known degradation, 75 busy, 76 fenced journal, 1 unknown)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	installComponents := flag.Bool("install-components", false, "install or update recommended bypass components and exit")
 	deactivateDataplane := flag.Bool("deactivate-dataplane", false, "remove only RAZVILKA-owned runtime routes, interfaces and processes, then exit")
@@ -180,6 +181,19 @@ func main() {
 	}
 	if *healthWait != 0 && *healthURL == "" {
 		log.Fatal("-healthcheck-wait requires -healthcheck")
+	}
+	if *healthPrior {
+		if *healthURL == "" || *healthPID <= 0 || *healthDataplane {
+			log.Fatal("-healthcheck-prior requires -healthcheck and -healthcheck-pid, without -healthcheck-require-dataplane")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), *healthWait)
+		code, label, err := classifyPriorRoutes(ctx, *healthURL, *healthPID, time.Second)
+		cancel()
+		if err != nil {
+			log.Print(err)
+		}
+		fmt.Printf("prior-routes: %s\n", label)
+		os.Exit(code)
 	}
 	if *healthURL != "" {
 		version, err := checkHealthWithWait(*healthURL, *healthPID, *healthDataplane, *healthWait)
@@ -875,6 +889,43 @@ func loadCommunityCatalog(path string) (*community.Manager, error) {
 
 var errHealthBusy = errors.New("RAZVILKA is busy with private restore; readiness is temporarily unavailable, do not restart")
 var errHealthPending = errors.New("healthcheck committed dataplane has no current runtime evidence")
+var errHealthNodeReview = errors.New("healthcheck applied node recovery requires review")
+
+// Exit codes of -healthcheck-prior. The installer runs the NEW binary against
+// the previous process and relaxes the final route check only for a known
+// degradation of an identified process. Busy, fenced, unreachable, wrong or
+// ambiguous answers keep the strict route check.
+const (
+	priorRoutesConfirmed = 0
+	priorRoutesUnknown   = 1
+	priorRoutesDegraded  = 10
+	priorRoutesBusy      = 75
+	priorRoutesFenced    = 76
+)
+
+func classifyPriorRoutes(ctx context.Context, rawURL string, expectedPID int, interval time.Duration) (int, string, error) {
+	for {
+		_, err := checkHealthIdentity(ctx, rawURL, expectedPID, true, "")
+		switch {
+		case err == nil:
+			return priorRoutesConfirmed, "confirmed", nil
+		case errors.Is(err, errHealthPending), errors.Is(err, errHealthNodeReview):
+			return priorRoutesDegraded, "degraded", err
+		case errors.Is(err, errHealthRecovery):
+			return priorRoutesFenced, "fenced", err
+		case !errors.Is(err, errHealthBusy):
+			return priorRoutesUnknown, "unknown", err
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return priorRoutesBusy, "busy", err
+		case <-timer.C:
+		}
+	}
+}
+
 var errHealthRequest = errors.New("healthcheck transport is unavailable")
 var errHealthRecovery = errors.New("RAZVILKA is running with a fenced network transaction journal; review is required and a restart will not settle it")
 
@@ -938,6 +989,12 @@ func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string,
 }
 
 func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool) (string, error) {
+	return checkHealthIdentity(ctx, rawURL, expectedPID, requireDataplane, app.Version)
+}
+
+// An empty expectedVersion accepts a RAZVILKA process of any release; the
+// installer classifies the previous version before replacing it.
+func checkHealthIdentity(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool, expectedVersion string) (string, error) {
 	requestTimeout := 4 * time.Second
 	if requireDataplane {
 		// Runtime ownership inspection itself has an eight-second bound.
@@ -996,7 +1053,7 @@ func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, req
 		}
 		return "", fmt.Errorf("healthcheck response: %w", err)
 	}
-	if status.Name != "RAZVILKA" || status.Version != app.Version {
+	if status.Name != "RAZVILKA" || status.Version == "" || expectedVersion != "" && status.Version != expectedVersion {
 		return "", fmt.Errorf("healthcheck identity mismatch: got %q %q", status.Name, status.Version)
 	}
 	if expectedPID > 0 && status.ProcessID != expectedPID {
@@ -1024,7 +1081,7 @@ func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, req
 		// later failed attempt. A rolled-back attempt cannot waive live proof.
 		if *status.DataplaneAdapters > 0 && !*status.LiveActive {
 			if status.NodeRecovery.State == "requires-review" {
-				return "", errors.New("healthcheck applied node recovery requires review")
+				return "", errHealthNodeReview
 			}
 			return "", errHealthPending
 		}

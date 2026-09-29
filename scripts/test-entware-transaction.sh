@@ -158,33 +158,31 @@ STARTUP_FIXTURE
   done
 }
 
-# The strict route check is relaxed only when the previous process answered
-# its own health check but could not confirm routes.
+# The candidate binary classifies the previous process. Only a known
+# degradation (exit 10) relaxes the strict route check; busy, fenced, down,
+# wrong identity and any other code keep it.
 test_prior_route_evidence() {
   PRIOR_ROOT="$TEST_ROOT/prior-evidence"
   mkdir -p "$PRIOR_ROOT"
   awk '/^PRIOR_ROUTES_CONFIRMED=1$/ {copy=1} copy {print} copy && /^fi$/ {exit}'     "$UPGRADE" >"$PRIOR_ROOT/probe.sh"
-  grep -q -- '-healthcheck-require-dataplane' "$PRIOR_ROOT/probe.sh" || {
-    echo "Upgrade has no prior route evidence probe" >&2; exit 1;
+  grep -q -- '-healthcheck-prior' "$PRIOR_ROOT/probe.sh" || {
+    echo "Upgrade has no prior route classification" >&2; exit 1;
   }
-  for PRIOR_MODE in live not-live down; do
-    PRIOR_CASE="$PRIOR_ROOT/$PRIOR_MODE"
+  for PRIOR_CODE in 0 10 75 76 1 2 98; do
+    PRIOR_CASE="$PRIOR_ROOT/$PRIOR_CODE"
     mkdir -p "$PRIOR_CASE/bin"
-    cat >"$PRIOR_CASE/bin/razvilka" <<PRIOR_FIXTURE
+    cat >"$PRIOR_CASE/candidate" <<PRIOR_FIXTURE
 #!/bin/sh
-case "$PRIOR_MODE" in
-  live) exit 0 ;;
-  down) exit 1 ;;
-  not-live) for a in "\$@"; do [ "\$a" = -healthcheck-require-dataplane ] && exit 1; done; exit 0 ;;
-esac
+[ "\$*" = "-healthcheck http://127.0.0.1:8787/api/v1/status -healthcheck-pid 4242 -healthcheck-prior -healthcheck-wait 30s" ] || exit 99
+exit $PRIOR_CODE
 PRIOR_FIXTURE
     printf '#!/bin/sh\ncase "$1" in pid) echo 4242 ;; lan-ip) echo 127.0.0.1 ;; esac\n' >"$PRIOR_CASE/init"
-    chmod 700 "$PRIOR_CASE/bin/razvilka" "$PRIOR_CASE/init"
-    RESULT="$(BASE="$PRIOR_CASE" BINDIR="$PRIOR_CASE/bin" RAZ_INIT="$PRIOR_CASE/init" RAZ_WAS_RUNNING=1       sh -c '. "$1" >/dev/null; printf %s "$PRIOR_ROUTES_CONFIRMED"' sh "$PRIOR_ROOT/probe.sh")"
+    chmod 700 "$PRIOR_CASE/candidate" "$PRIOR_CASE/init"
+    RESULT="$(BASE="$PRIOR_CASE" BINDIR="$PRIOR_CASE/bin" BIN_SOURCE="$PRIOR_CASE/candidate" RAZ_INIT="$PRIOR_CASE/init" RAZ_WAS_RUNNING=1       sh -c 'set -eu; . "$1" >/dev/null; printf %s "$PRIOR_ROUTES_CONFIRMED"' sh "$PRIOR_ROOT/probe.sh")"
     EXPECTED=1
-    [ "$PRIOR_MODE" != not-live ] || EXPECTED=0
+    [ "$PRIOR_CODE" -ne 10 ] || EXPECTED=0
     [ "$RESULT" = "$EXPECTED" ] || {
-      echo "Prior route evidence $PRIOR_MODE -> $RESULT, want $EXPECTED" >&2; exit 1;
+      echo "Prior route classification $PRIOR_CODE -> $RESULT, want $EXPECTED" >&2; exit 1;
     }
   done
 }

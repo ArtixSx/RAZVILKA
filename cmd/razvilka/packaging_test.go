@@ -35,6 +35,7 @@ func TestEntwareUpgradeDoesNotRequireArchiveScriptModeBits(t *testing.T) {
 		// Strict route evidence stays the default; it is relaxed only when the
 		// previous version answered but could not confirm routes either.
 		`PRIOR_ROUTES_CONFIRMED=1`,
+		`"$BIN_SOURCE" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-prior -healthcheck-wait 30s`,
 		`ROUTE_EVIDENCE=-healthcheck-require-dataplane`,
 		`-healthcheck-pid "$RUNNING_PID" ${ROUTE_EVIDENCE:+"$ROUTE_EVIDENCE"} -healthcheck-wait 9m`,
 	} {

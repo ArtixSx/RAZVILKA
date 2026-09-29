@@ -264,18 +264,25 @@ if [ -x "$RAZ_INIT" ] && command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvi
 fi
 
 # Stage 7 must not demand route evidence the running version could not give
-# either. Relax it only when the previous process answered its own health
-# check but could not confirm routes (for example, nodes await fresh checks
-# after recovery). Any other outcome keeps the strict route check.
+# either. The candidate classifies the previous process (any release): only
+# exit 10, an identified process whose committed routes are not live, relaxes
+# the final check. Busy (75), fenced (76), unreachable or unknown keep it.
 PRIOR_ROUTES_CONFIRMED=1
-if [ "$RAZ_WAS_RUNNING" -eq 1 ] && [ -x "$BINDIR/razvilka" ]; then
+if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
   PRIOR_PID="$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" pid 2>/dev/null || true)"
   PRIOR_URL="http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip 2>/dev/null || true):${RAZVILKA_PORT:-8787}/api/v1/status"
-  if [ -n "$PRIOR_PID" ] && "$BINDIR/razvilka" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" >/dev/null 2>&1 &&
-    ! "$BINDIR/razvilka" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-require-dataplane >/dev/null 2>&1; then
-    PRIOR_ROUTES_CONFIRMED=0
-    echo "Маршруты не подтверждены в текущей версии; после обновления будет проверена только работа панели."
+  PRIOR_STATE=1
+  if [ -n "$PRIOR_PID" ]; then
+    "$BIN_SOURCE" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-prior -healthcheck-wait 30s >/dev/null 2>&1 && PRIOR_STATE=0 || PRIOR_STATE=$?
   fi
+  case "$PRIOR_STATE" in
+    0) ;;
+    10)
+      PRIOR_ROUTES_CONFIRMED=0
+      echo "Маршруты не подтверждены в текущей версии; после обновления будет проверена только работа панели."
+      ;;
+    *) echo "Состояние маршрутов текущей версии не определено (код $PRIOR_STATE); после обновления маршруты будут проверены полностью." ;;
+  esac
 fi
 
 BACKUP=""
