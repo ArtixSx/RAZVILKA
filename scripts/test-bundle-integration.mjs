@@ -8,6 +8,6 @@ assert(html.includes('/panel-availability.js?v='+version));
 assert(!html.includes('href="/panel-availability.css"'));
 assert(html.includes('data-rz-filter="changed"'),'contextual unsaved change filter');
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(ids.length,new Set(ids).size,'unique IDs');
-assert.equal([...html.matchAll(/data-main-nav="/g)].length,6);
+assert.equal([...html.matchAll(/data-main-nav="/g)].length,7);
 const calls=read('scripts/check.sh');for(const test of ['test-ux-stage1.mjs','test-bundle-integration.mjs'])assert(calls.includes(test));
 console.log('PASS unified build contract: assets, CSS, pending controls, navigation and CI wiring');

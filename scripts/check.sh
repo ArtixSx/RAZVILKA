@@ -69,6 +69,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-private-backup-ui.mjs
   node scripts/test-devices-persistence-ui.mjs
   node scripts/test-device-addresses-ui.mjs
+  node scripts/test-exclusions-ui.mjs
   node scripts/test-usque-dns-ui.mjs
   node scripts/test-provider-import-ui.mjs
   node scripts/test-node-route-ui.mjs

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
 
@@ -100,4 +101,15 @@ func (a *App) nfqwsDiscordRepair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"mode": v, "live_applied": false})
+}
+
+// nfqwsExclusions lists the package's default exclusions, so the panel can
+// show which entries of exclude.list the owner added or removed.
+func (a *App) nfqwsExclusions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"stock": catalog.NFQWS2StockExclusions(), "package_version": "1.3.1"})
 }

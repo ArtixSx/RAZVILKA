@@ -144,6 +144,7 @@
     services:{title:'Сервисы',children:[['services','Сервисы'],['managed','Подробности автоподбора']]},
     nodes:{title:'Подключения',children:[['nodes','Мои подключения'],['providers','Добавить из источника'],['subscription-settings','Обновление подписок'],['connections','Текущий трафик']]},
     devices:{title:'Устройства',children:[['devices','Устройства и группы']]},
+    exclusions:{title:'Исключения',children:[['exclusions','Сайты и устройства без обхода']]},
     activity:{title:'События',children:[['activity','События']]},
     settings:{title:'Настройки',children:[['settings','Все настройки'],['onboard','Правила автопилота'],['autopilot','Подробности автоматики'],['engines','Способы обхода'],['engineconfig','Настройки обхода'],['updates','Обновления'],['diagnostics','Диагностика'],['dns','DNS'],['sources','Списки сайтов'],['strategylab','Подбор стратегий NFQWS2'],['testlab','Проверки подключений']]}
   });

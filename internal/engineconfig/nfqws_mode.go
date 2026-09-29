@@ -23,6 +23,37 @@ type NFQWSModeView struct {
 	DraftOnly      bool   `json:"draft_only"`
 	// DiscordVoice: a UDP profile detects Discord and its voice ports are queued.
 	DiscordVoice bool `json:"discord_voice"`
+	// PolicyName/PolicyExclude: the Keenetic access policy of the (draft)
+	// configuration. With PolicyExclude, devices in that policy bypass NFQWS2;
+	// otherwise only they are processed, if the policy exists.
+	PolicyName    string `json:"policy_name"`
+	PolicyExclude bool   `json:"policy_exclude"`
+	// PolicyRuntime: what the running service resolved at its last start.
+	PolicyRuntime *NFQWSPolicyRuntime `json:"policy_runtime,omitempty"`
+}
+
+// NFQWSPolicyRuntime is read from nfqws2.conf.run, which the package's init
+// writes at start: an empty mark means no Keenetic policy by that name was
+// found, so every device is processed.
+type NFQWSPolicyRuntime struct {
+	Name    string `json:"name"`
+	Exclude bool   `json:"exclude"`
+	Found   bool   `json:"found"`
+}
+
+func nfqwsPolicyRuntime(path string) *NFQWSPolicyRuntime {
+	data, err := os.ReadFile(path + ".run")
+	if err != nil || len(data) > maxConfigBytes {
+		return nil
+	}
+	fields, err := parseShellAssignments(string(data))
+	if err != nil {
+		return nil
+	}
+	if _, ok := fields["POLICY_NAME"]; !ok {
+		return nil
+	}
+	return &NFQWSPolicyRuntime{Name: fields["POLICY_NAME"], Exclude: strings.TrimSpace(fields["POLICY_EXCLUDE"]) != "" && strings.TrimSpace(fields["POLICY_EXCLUDE"]) != "0", Found: strings.TrimSpace(fields["POLICY_MARK"]) != ""}
 }
 
 func nfqwsModeView(raw []byte, source string) (NFQWSModeView, error) {
@@ -50,6 +81,8 @@ func nfqwsModeView(raw []byte, source string) (NFQWSModeView, error) {
 	args := fields["NFQWS_ARGS"] + "\n" + fields["NFQWS_ARGS_UDP"]
 	v.NativeAdaptive = strings.Contains(args, "--lua-desync=circular:") || strings.Contains(args, "--lua-desync=autocircular:")
 	v.DiscordVoice = discordVoiceCovered(fields)
+	v.PolicyName = fields["POLICY_NAME"]
+	v.PolicyExclude = strings.TrimSpace(fields["POLICY_EXCLUDE"]) != "" && strings.TrimSpace(fields["POLICY_EXCLUDE"]) != "0"
 	return v, nil
 }
 func (m *Manager) NFQWSMode() (NFQWSModeView, error) {
@@ -62,7 +95,13 @@ func (m *Manager) NFQWSMode() (NFQWSModeView, error) {
 	if err != nil {
 		return NFQWSModeView{}, err
 	}
-	return nfqwsModeView(raw, source)
+	v, err := nfqwsModeView(raw, source)
+	if err == nil {
+		if _, file, lookupErr := lookup("nfqws2", "main"); lookupErr == nil {
+			v.PolicyRuntime = nfqwsPolicyRuntime(choosePath(file.Paths))
+		}
+	}
+	return v, err
 }
 
 // StageNFQWSMode changes one reviewed assignment in the private draft. All

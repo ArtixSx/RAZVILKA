@@ -103,3 +103,16 @@ func TestRepair2StarterExactlySixStockGroups(t *testing.T) {
 		t.Fatal("mutable shared data")
 	}
 }
+
+func TestNFQWS2StockExclusionsMatchSnapshot(t *testing.T) {
+	stock := NFQWS2StockExclusions()
+	want := upstreamList(t, "exclude.list")
+	if len(stock) != len(want) || len(stock) == 0 {
+		t.Fatal("stock exclusions differ from the snapshot", len(stock), len(want))
+	}
+	for _, d := range stock {
+		if !want[d] {
+			t.Fatal("unexpected stock exclusion", d)
+		}
+	}
+}

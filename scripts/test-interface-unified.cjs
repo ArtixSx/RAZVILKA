@@ -21,7 +21,7 @@ function fixture(){
  return {c,state,$,calls,notices,elements};
 }
 (async()=>{
-await test('primary destinations have six unique owners',()=>{assert.equal(Object.keys(model.taskSections).length,6);const all=Object.values(model.taskSections).flatMap(s=>s.children.map(x=>x[0]));assert.equal(all.length,new Set(all).size);assert.equal(model.navigation('engines').owner,'settings');});
+await test('primary destinations have seven unique owners',()=>{assert.equal(Object.keys(model.taskSections).length,7);const all=Object.values(model.taskSections).flatMap(s=>s.children.map(x=>x[0]));assert.equal(all.length,new Set(all).size);assert.equal(model.navigation('engines').owner,'settings');});
 await test('healthy and changed remains healthy with a separate actionable change',()=>{const h=model.humanService({...service,dirty:true},good);assert.equal(h.kind,'good');assert(h.actionable);assert.match(h.pendingLabel,/изменения/);assert.equal(model.filterServices([service],{scope:'attention'},{youtube:h}).length,1);});
 await test('routine missing proof does not become manual intervention',()=>{const h=model.humanService(service,{kind:'unknown',route:'nfqws2'});assert.notEqual(h.kind,'good');assert.equal(h.actionable,false);});
 await test('unbound good summary without route is not service proof',()=>assert.notEqual(model.humanService(service,{kind:'good'}).kind,'good'));
