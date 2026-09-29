@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -16,6 +17,78 @@ const passiveCatalogTTL = 10 * time.Minute
 type catalogStatus struct {
 	CheckedAt string
 	Error     string
+	// FailedFeeds are the package-list URLs opkg reported as not downloaded.
+	// An Error without attributed feeds marks every opkg component stale.
+	FailedFeeds []string
+}
+
+var failedFeedPattern = regexp.MustCompile(`Failed to download the package list from (\S+)`)
+
+// failedFeeds returns the feed base URLs named in opkg update output.
+func failedFeeds(output []byte) []string {
+	seen := map[string]bool{}
+	var feeds []string
+	for _, match := range failedFeedPattern.FindAllStringSubmatch(string(output), -1) {
+		feed := strings.TrimSuffix(strings.TrimSuffix(match[1], "/Packages.gz"), "/")
+		if feed != "" && !seen[feed] {
+			seen[feed] = true
+			feeds = append(feeds, feed)
+		}
+	}
+	return feeds
+}
+
+// feedStale reports whether this component's own package source failed the
+// last refresh. One unreachable third-party source must not hide updates of
+// components that come from sources which refreshed successfully.
+func (c catalogStatus) feedStale(spec Spec) bool {
+	if c.Error == "" {
+		return false
+	}
+	if len(c.FailedFeeds) == 0 {
+		return true
+	}
+	own := strings.TrimSuffix(spec.Repository, "/")
+	for _, failed := range c.FailedFeeds {
+		if own != "" {
+			if failed == own {
+				return true
+			}
+			continue
+		}
+		// Entware packages: any failed feed that is not a declared third-party
+		// repository is a base Entware source.
+		thirdParty := false
+		for _, other := range Specs() {
+			if other.Repository != "" && strings.TrimSuffix(other.Repository, "/") == failed {
+				thirdParty = true
+				break
+			}
+		}
+		if !thirdParty {
+			return true
+		}
+	}
+	return false
+}
+
+// refreshPackageLists runs opkg update, retrying once: router DNS resolvers
+// commonly time out on the first lookup of a feed host.
+func (m *Manager) refreshPackageLists(ctx context.Context) ([]byte, error) {
+	out, err := m.run(ctx, "update")
+	if err == nil || ctx.Err() != nil {
+		return out, err
+	}
+	if m.retryDelay > 0 {
+		timer := time.NewTimer(m.retryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return out, err
+		case <-timer.C:
+		}
+	}
+	return m.run(ctx, "update")
 }
 
 func (m *Manager) packageInventory(ctx context.Context, refresh, passive bool) (installed, available map[string]string, inventoryError string) {
@@ -35,8 +108,13 @@ func (m *Manager) packageInventory(ctx context.Context, refresh, passive bool) (
 	if refresh {
 		if err := m.ensureRepositories(); err != nil {
 			m.catalog.Error = "Не удалось подготовить источники пакетов. Проверьте настройки Entware и повторите проверку версий."
-		} else if out, err := m.run(ctx, "update"); err != nil {
+		} else if out, err := m.refreshPackageLists(ctx); err != nil {
 			m.catalog.Error = packageRefreshError(out)
+			m.catalog.FailedFeeds = failedFeeds(out)
+			if len(m.catalog.FailedFeeds) > 0 {
+				// Attributed partial failure: other sources did refresh.
+				m.catalog.CheckedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			}
 		} else {
 			refreshed = true
 		}

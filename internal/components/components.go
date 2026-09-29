@@ -109,12 +109,13 @@ type Manager struct {
 	lastInstalled map[string]string
 	lastAvailable map[string]string
 	availableAt   time.Time // when lastAvailable was read; zero after opkg update
+	retryDelay    time.Duration
 	releaseChecks map[string]catalogStatus
 	mu            sync.Mutex
 }
 
 func New() *Manager {
-	return &Manager{Opkg: findOpkg(), RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", InitDir: "/opt/etc/init.d", StateDir: "/opt/var/lib/razvilka/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}}
+	return &Manager{Opkg: findOpkg(), RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", InitDir: "/opt/etc/init.d", StateDir: "/opt/var/lib/razvilka/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}, retryDelay: 2 * time.Second}
 }
 
 func Specs() []Spec {
@@ -200,7 +201,12 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 			continue
 		}
 		iv, av := installed[spec.Package], available[spec.Package]
-		v := View{Spec: spec, InstalledVersion: iv, AvailableVersion: av, Installed: iv != "", Available: av != "", CatalogStale: m.catalog.Error != "", UpdateCheckError: m.catalog.Error, CheckedAt: m.catalog.CheckedAt, InventoryError: inventoryError}
+		stale := m.catalog.feedStale(spec)
+		checkError := ""
+		if stale {
+			checkError = m.catalog.Error
+		}
+		v := View{Spec: spec, InstalledVersion: iv, AvailableVersion: av, Installed: iv != "", Available: av != "", CatalogStale: stale, UpdateCheckError: checkError, CheckedAt: m.catalog.CheckedAt, InventoryError: inventoryError}
 		if iv != "" {
 			v.InstalledVersionSource = "opkg"
 		}
@@ -240,7 +246,7 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 	if visiting[id] {
 		return Result{}, fmt.Errorf("component dependency cycle at %s", id)
 	}
-	if spec.Provider == "opkg" && m.catalog.Error != "" {
+	if spec.Provider == "opkg" && m.catalog.feedStale(spec) {
 		return Result{}, errors.New("component catalog is stale; refresh package sources successfully before installing or updating")
 	}
 	visiting[id] = true
@@ -305,8 +311,12 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 		return Result{}, err
 	}
 	if spec.Repository != "" {
-		if _, err := m.run(ctx, "update"); err != nil {
-			return Result{}, fmt.Errorf("opkg update after repository setup: %w", err)
+		if out, err := m.refreshPackageLists(ctx); err != nil {
+			// Proceed only when opkg attributed the failure to other sources.
+			status := catalogStatus{Error: packageRefreshError(out), FailedFeeds: failedFeeds(out)}
+			if status.feedStale(spec) {
+				return Result{}, fmt.Errorf("opkg update after repository setup: %w", err)
+			}
 		}
 	}
 	command := "install"
