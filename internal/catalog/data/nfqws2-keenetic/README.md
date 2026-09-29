@@ -11,6 +11,8 @@ This directory contains RAZVILKA's grouping of the upstream domain list, not an 
 - Upstream MIT notice: LICENSE in this directory.
 
 Group labels, probes, and the intended NFQWS2 route are RAZVILKA additions.
+The common group is probed at `www.cloudflarestatus.com`: the apex `cloudflarestatus.com`
+is blocked by IP in Russia, so no local DPI bypass could ever pass that check.
 The Discord group additionally contains eight RAZVILKA-added domains that are
 not part of the upstream file: `discordstatus.com`, `discordapp.io`,
 `discord-attachments-uploads-prd.storage.googleapis.com` (file uploads),

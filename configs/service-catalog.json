@@ -417,7 +417,7 @@
       "strategy": [
         "nfqws2"
       ],
-      "probe_url": "https://cloudflarestatus.com/",
+      "probe_url": "https://www.cloudflarestatus.com/",
       "source_refs": [
         "nfqws2-keenetic-stock"
       ],
