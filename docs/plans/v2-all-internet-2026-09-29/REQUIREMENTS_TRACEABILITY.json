@@ -1,0 +1,1527 @@
+{
+  "schema_version": 1,
+  "plan_revision": "V2-ALL-INTERNET-2026-09-29",
+  "repository": "ArtixSx/RAZVILKA",
+  "reviewed_head": "46ba8761cc0a374ddfbbf82adf6253762c3a0040",
+  "functional_release": "0.18.15",
+  "artifact_kind": "planning_only",
+  "actual_project_test_runs_in_this_session": false,
+  "requirements": [
+    {
+      "id": "REQ-01",
+      "requirement": "Весь интернет согласованных домашних клиентов — основной режим новой установки",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G03",
+        "X02",
+        "E01",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "X02-T01",
+        "X02-T02",
+        "X02-T03",
+        "X02-T04",
+        "X02-T05",
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-02",
+      "requirement": "Выбранные сервисы — overrides/наблюдение, не allowlist охвата",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G03",
+        "F01",
+        "UX01",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "F01-T01",
+        "F01-T02",
+        "F01-T03",
+        "F01-T04",
+        "F01-T05",
+        "F01-T06",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-03",
+      "requirement": "Незнакомые сайты и прямые IP автоматически используют общий путь",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G03",
+        "X02",
+        "W02",
+        "A02",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "X02-T01",
+        "X02-T02",
+        "X02-T03",
+        "X02-T04",
+        "X02-T05",
+        "W02-T01",
+        "W02-T02",
+        "W02-T03",
+        "W02-T04",
+        "W02-T05",
+        "A02-T01",
+        "A02-T02",
+        "A02-T03",
+        "A02-T04",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-04",
+      "requirement": "Ноль выбранных сервисов не выключает общий интернет",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G03",
+        "UX01",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-05",
+      "requirement": "Промах service scope либо удаление override возвращает общий путь",
+      "basis": "S1 S9",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G03",
+        "E01",
+        "UX01",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-06",
+      "requirement": "Устройство исключается одной политикой из всех bypass и managed DNS",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "E01",
+        "E02",
+        "D01",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06",
+        "E02-T01",
+        "E02-T02",
+        "E02-T03",
+        "E02-T04",
+        "E02-T05",
+        "E02-T06",
+        "D01-T01",
+        "D01-T02",
+        "D01-T03",
+        "D01-T04",
+        "D01-T05",
+        "D01-T06",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-07",
+      "requirement": "Российские ресурсы автоматически direct, независимо от selection",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "E02",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "E02-T01",
+        "E02-T02",
+        "E02-T03",
+        "E02-T04",
+        "E02-T05",
+        "E02-T06",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-08",
+      "requirement": "Ручные site exceptions/overrides приоритетны и сохраняются",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G03",
+        "E02",
+        "D02",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "E02-T01",
+        "E02-T02",
+        "E02-T03",
+        "E02-T04",
+        "E02-T05",
+        "E02-T06",
+        "D02-T01",
+        "D02-T02",
+        "D02-T03",
+        "D02-T04",
+        "D02-T05",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-09",
+      "requirement": "Broad TLD/GeoIP — отдельные явно разрешённые опции",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "E02"
+      ],
+      "acceptance_ids": [
+        "E02-T01",
+        "E02-T02",
+        "E02-T03",
+        "E02-T04",
+        "E02-T05",
+        "E02-T06"
+      ]
+    },
+    {
+      "id": "REQ-10",
+      "requirement": "Общий и индивидуальные пути имеют независимые health/reserves",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "F01",
+        "F02",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "F01-T01",
+        "F01-T02",
+        "F01-T03",
+        "F01-T04",
+        "F01-T05",
+        "F01-T06",
+        "F02-T01",
+        "F02-T02",
+        "F02-T03",
+        "F02-T04",
+        "F02-T05",
+        "F02-T06",
+        "F02-T07",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-11",
+      "requirement": "Все обычные действия внутри принятой политики без повторных модалок",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "F01",
+        "UX01"
+      ],
+      "acceptance_ids": [
+        "F01-T01",
+        "F01-T02",
+        "F01-T03",
+        "F01-T04",
+        "F01-T05",
+        "F01-T06",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07"
+      ]
+    },
+    {
+      "id": "REQ-12",
+      "requirement": "Начальный приоритет Xray, затем generic WG, затем AWG",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "X01",
+        "X02",
+        "X03",
+        "W01",
+        "W02",
+        "W03",
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "acceptance_ids": [
+        "X01-T01",
+        "X01-T02",
+        "X01-T03",
+        "X01-T04",
+        "X01-T05",
+        "X02-T01",
+        "X02-T02",
+        "X02-T03",
+        "X02-T04",
+        "X02-T05",
+        "X03-T01",
+        "X03-T02",
+        "X03-T03",
+        "X03-T04",
+        "W01-T01",
+        "W01-T02",
+        "W01-T03",
+        "W01-T04",
+        "W01-T05",
+        "W02-T01",
+        "W02-T02",
+        "W02-T03",
+        "W02-T04",
+        "W02-T05",
+        "W03-T01",
+        "W03-T02",
+        "W03-T03",
+        "W03-T04",
+        "A01-T01",
+        "A01-T02",
+        "A01-T03",
+        "A01-T04",
+        "A01-T05",
+        "A02-T01",
+        "A02-T02",
+        "A02-T03",
+        "A02-T04",
+        "A03-T01",
+        "A03-T02",
+        "A03-T03",
+        "A03-T04"
+      ]
+    },
+    {
+      "id": "REQ-13",
+      "requirement": "Xray полный import/compiler/native/lifecycle, не только редактор",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "X01",
+        "X02",
+        "X03"
+      ],
+      "acceptance_ids": [
+        "X01-T01",
+        "X01-T02",
+        "X01-T03",
+        "X01-T04",
+        "X01-T05",
+        "X02-T01",
+        "X02-T02",
+        "X02-T03",
+        "X02-T04",
+        "X02-T05",
+        "X03-T01",
+        "X03-T02",
+        "X03-T03",
+        "X03-T04"
+      ]
+    },
+    {
+      "id": "REQ-14",
+      "requirement": "Generic WG без Cloudflare, безопасный conf и несколько профилей",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "W01",
+        "W02",
+        "W03"
+      ],
+      "acceptance_ids": [
+        "W01-T01",
+        "W01-T02",
+        "W01-T03",
+        "W01-T04",
+        "W01-T05",
+        "W02-T01",
+        "W02-T02",
+        "W02-T03",
+        "W02-T04",
+        "W02-T05",
+        "W03-T01",
+        "W03-T02",
+        "W03-T03",
+        "W03-T04"
+      ]
+    },
+    {
+      "id": "REQ-15",
+      "requirement": "AWG совместимая доставка и фактический peer/tool/module",
+      "basis": "S1 S14 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "acceptance_ids": [
+        "A01-T01",
+        "A01-T02",
+        "A01-T03",
+        "A01-T04",
+        "A01-T05",
+        "A02-T01",
+        "A02-T02",
+        "A02-T03",
+        "A02-T04",
+        "A03-T01",
+        "A03-T02",
+        "A03-T03",
+        "A03-T04"
+      ]
+    },
+    {
+      "id": "REQ-16",
+      "requirement": "Go/core/queue/NodeStore сохранить, не переписывать на другой язык",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G00",
+        "G03",
+        "F01"
+      ],
+      "acceptance_ids": [
+        "G00-T01",
+        "G00-T02",
+        "G00-T03",
+        "G00-T04",
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "F01-T01",
+        "F01-T02",
+        "F01-T03",
+        "F01-T04",
+        "F01-T05",
+        "F01-T06"
+      ]
+    },
+    {
+      "id": "REQ-17",
+      "requirement": "Один network owner, чужие интерфейсы не захватывать",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G02",
+        "X03",
+        "W03",
+        "A01",
+        "E01"
+      ],
+      "acceptance_ids": [
+        "G02-T01",
+        "G02-T02",
+        "G02-T03",
+        "G02-T04",
+        "G02-T05",
+        "X03-T01",
+        "X03-T02",
+        "X03-T03",
+        "X03-T04",
+        "W03-T01",
+        "W03-T02",
+        "W03-T03",
+        "W03-T04",
+        "A01-T01",
+        "A01-T02",
+        "A01-T03",
+        "A01-T04",
+        "A01-T05",
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06"
+      ]
+    },
+    {
+      "id": "REQ-18",
+      "requirement": "Панель отвечает при отказе обходов и journal fence",
+      "basis": "S1 S3 S4",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G02",
+        "UX01",
+        "R02"
+      ],
+      "acceptance_ids": [
+        "G02-T01",
+        "G02-T02",
+        "G02-T03",
+        "G02-T04",
+        "G02-T05",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07",
+        "R02-T01",
+        "R02-T02",
+        "R02-T03",
+        "R02-T04",
+        "R02-T05"
+      ]
+    },
+    {
+      "id": "REQ-19",
+      "requirement": "Durable jobs, idempotency, browser independence, Stop priority",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "F01",
+        "R02"
+      ],
+      "acceptance_ids": [
+        "F01-T01",
+        "F01-T02",
+        "F01-T03",
+        "F01-T04",
+        "F01-T05",
+        "F01-T06",
+        "R02-T01",
+        "R02-T02",
+        "R02-T03",
+        "R02-T04",
+        "R02-T05"
+      ]
+    },
+    {
+      "id": "REQ-20",
+      "requirement": "Исторические installer/journal замечания проверить без ослабления безопасности",
+      "basis": "S7 S10",
+      "kind": "audit_followup",
+      "tasks": [
+        "G01",
+        "G02"
+      ],
+      "acceptance_ids": [
+        "G01-T01",
+        "G01-T02",
+        "G01-T03",
+        "G01-T04",
+        "G01-T05",
+        "G02-T01",
+        "G02-T02",
+        "G02-T03",
+        "G02-T04",
+        "G02-T05"
+      ]
+    },
+    {
+      "id": "REQ-21",
+      "requirement": "A→B failed Apply→safe rollback→C и refill D",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "F02",
+        "C02",
+        "H02"
+      ],
+      "acceptance_ids": [
+        "F02-T01",
+        "F02-T02",
+        "F02-T03",
+        "F02-T04",
+        "F02-T05",
+        "F02-T06",
+        "F02-T07",
+        "C02-T01",
+        "C02-T02",
+        "C02-T03",
+        "C02-T04",
+        "C02-T05",
+        "C02-T06",
+        "C02-T07",
+        "H02-T01",
+        "H02-T02",
+        "H02-T03",
+        "H02-T04"
+      ]
+    },
+    {
+      "id": "REQ-22",
+      "requirement": "Одна transaction для DNS/route/scope, cached state не PASS",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "D01",
+        "D02"
+      ],
+      "acceptance_ids": [
+        "D01-T01",
+        "D01-T02",
+        "D01-T03",
+        "D01-T04",
+        "D01-T05",
+        "D01-T06",
+        "D02-T01",
+        "D02-T02",
+        "D02-T03",
+        "D02-T04",
+        "D02-T05"
+      ]
+    },
+    {
+      "id": "REQ-23",
+      "requirement": "DNS/Smart DNS полноценные кандидаты с resolver/gateway distinction",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "D01",
+        "D02"
+      ],
+      "acceptance_ids": [
+        "D01-T01",
+        "D01-T02",
+        "D01-T03",
+        "D01-T04",
+        "D01-T05",
+        "D01-T06",
+        "D02-T01",
+        "D02-T02",
+        "D02-T03",
+        "D02-T04",
+        "D02-T05"
+      ]
+    },
+    {
+      "id": "REQ-24",
+      "requirement": "Address ledger, TTL/family/cache и shared-IP conflicts",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "D02",
+        "E02"
+      ],
+      "acceptance_ids": [
+        "E02-T01",
+        "E02-T02",
+        "E02-T03",
+        "E02-T04",
+        "E02-T05",
+        "E02-T06",
+        "D02-T01",
+        "D02-T02",
+        "D02-T03",
+        "D02-T04",
+        "D02-T05"
+      ]
+    },
+    {
+      "id": "REQ-25",
+      "requirement": "Каталог локальный, multi-source, определения domain/CIDR",
+      "basis": "S1 S16",
+      "kind": "owner_requirement",
+      "tasks": [
+        "C01"
+      ],
+      "acceptance_ids": [
+        "C01-T01",
+        "C01-T02",
+        "C01-T03",
+        "C01-T04",
+        "C01-T05",
+        "C01-T06"
+      ]
+    },
+    {
+      "id": "REQ-26",
+      "requirement": "VLESS несколько ключей, проверить все, удалить selected/dead/all",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "C02",
+        "UX01"
+      ],
+      "acceptance_ids": [
+        "C02-T01",
+        "C02-T02",
+        "C02-T03",
+        "C02-T04",
+        "C02-T05",
+        "C02-T06",
+        "C02-T07",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07"
+      ]
+    },
+    {
+      "id": "REQ-27",
+      "requirement": "Заполнение резервов автоматически и 33-й узел за пределом первой партии",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "C02",
+        "F02"
+      ],
+      "acceptance_ids": [
+        "F02-T01",
+        "F02-T02",
+        "F02-T03",
+        "F02-T04",
+        "F02-T05",
+        "F02-T06",
+        "F02-T07",
+        "C02-T01",
+        "C02-T02",
+        "C02-T03",
+        "C02-T04",
+        "C02-T05",
+        "C02-T06",
+        "C02-T07"
+      ]
+    },
+    {
+      "id": "REQ-28",
+      "requirement": "NFQWS2 native без z2k runtime зависимости",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "N01",
+        "N02"
+      ],
+      "acceptance_ids": [
+        "N01-T01",
+        "N01-T02",
+        "N01-T03",
+        "N01-T04",
+        "N01-T05",
+        "N02-T01",
+        "N02-T02",
+        "N02-T03",
+        "N02-T04",
+        "N02-T05",
+        "N02-T06"
+      ]
+    },
+    {
+      "id": "REQ-29",
+      "requirement": "NFQWS2 packet visibility/offload прежде strategy search",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "N01"
+      ],
+      "acceptance_ids": [
+        "N01-T01",
+        "N01-T02",
+        "N01-T03",
+        "N01-T04",
+        "N01-T05"
+      ]
+    },
+    {
+      "id": "REQ-30",
+      "requirement": "Auto-hostlist отдельно от auto-strategy; media/voice пробы",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "N01",
+        "N02"
+      ],
+      "acceptance_ids": [
+        "N01-T01",
+        "N01-T02",
+        "N01-T03",
+        "N01-T04",
+        "N01-T05",
+        "N02-T01",
+        "N02-T02",
+        "N02-T03",
+        "N02-T04",
+        "N02-T05",
+        "N02-T06"
+      ]
+    },
+    {
+      "id": "REQ-31",
+      "requirement": "Личные стратегии/lists/keys/staged changes переживают updates",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "N02",
+        "M01",
+        "M02"
+      ],
+      "acceptance_ids": [
+        "N02-T01",
+        "N02-T02",
+        "N02-T03",
+        "N02-T04",
+        "N02-T05",
+        "N02-T06",
+        "M01-T01",
+        "M01-T02",
+        "M01-T03",
+        "M01-T04",
+        "M02-T01",
+        "M02-T02",
+        "M02-T03",
+        "M02-T04",
+        "M02-T05",
+        "M02-T06"
+      ]
+    },
+    {
+      "id": "REQ-32",
+      "requirement": "WARP один workspace, enrollment не повторяется при export/DNS",
+      "basis": "S1 S16",
+      "kind": "owner_requirement",
+      "tasks": [
+        "T01",
+        "UX01"
+      ],
+      "acceptance_ids": [
+        "T01-T01",
+        "T01-T02",
+        "T01-T03",
+        "T01-T04",
+        "T01-T05",
+        "T01-T06",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07"
+      ]
+    },
+    {
+      "id": "REQ-33",
+      "requirement": "WARP bounded endpoints/unknown POST, без массовой регистрации",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "T01"
+      ],
+      "acceptance_ids": [
+        "T01-T01",
+        "T01-T02",
+        "T01-T03",
+        "T01-T04",
+        "T01-T05",
+        "T01-T06"
+      ]
+    },
+    {
+      "id": "REQ-34",
+      "requirement": "USQUE управляемая поставка, H3/H2/native TUN по факту",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "T02"
+      ],
+      "acceptance_ids": [
+        "T02-T01",
+        "T02-T02",
+        "T02-T03",
+        "T02-T04",
+        "T02-T05"
+      ]
+    },
+    {
+      "id": "REQ-35",
+      "requirement": "Внешние генераторы/конвертеры только candidate, не обязательная инфраструктура",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "T01",
+        "C02",
+        "L02"
+      ],
+      "acceptance_ids": [
+        "C02-T01",
+        "C02-T02",
+        "C02-T03",
+        "C02-T04",
+        "C02-T05",
+        "C02-T06",
+        "C02-T07",
+        "T01-T01",
+        "T01-T02",
+        "T01-T03",
+        "T01-T04",
+        "T01-T05",
+        "T01-T06",
+        "L02-T01",
+        "L02-T02",
+        "L02-T03",
+        "L02-T04"
+      ]
+    },
+    {
+      "id": "REQ-36",
+      "requirement": "Mihomo production при реализации, HEV measured optional",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "B01",
+        "B02"
+      ],
+      "acceptance_ids": [
+        "B01-T01",
+        "B01-T02",
+        "B01-T03",
+        "B01-T04",
+        "B02-T01",
+        "B02-T02",
+        "B02-T03",
+        "B02-T04"
+      ]
+    },
+    {
+      "id": "REQ-37",
+      "requirement": "Главная: автопилот и общий интернет прежде ресурсов",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "UX01"
+      ],
+      "acceptance_ids": [
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07"
+      ]
+    },
+    {
+      "id": "REQ-38",
+      "requirement": "Понятные карточки, одна add flow, settings без поиска терминов",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "UX01",
+        "C01"
+      ],
+      "acceptance_ids": [
+        "C01-T01",
+        "C01-T02",
+        "C01-T03",
+        "C01-T04",
+        "C01-T05",
+        "C01-T06",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07"
+      ]
+    },
+    {
+      "id": "REQ-39",
+      "requirement": "AI группировка не объединяет routes/proofs/permissions",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "UX01"
+      ],
+      "acceptance_ids": [
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07"
+      ]
+    },
+    {
+      "id": "REQ-40",
+      "requirement": "Pause/Stop/remove override/site direct различаются",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "F01",
+        "UX01"
+      ],
+      "acceptance_ids": [
+        "F01-T01",
+        "F01-T02",
+        "F01-T03",
+        "F01-T04",
+        "F01-T05",
+        "F01-T06",
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07"
+      ]
+    },
+    {
+      "id": "REQ-41",
+      "requirement": "Слабые роутеры — больше времени/порции вместо урезания",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "R02"
+      ],
+      "acceptance_ids": [
+        "R02-T01",
+        "R02-T02",
+        "R02-T03",
+        "R02-T04",
+        "R02-T05"
+      ]
+    },
+    {
+      "id": "REQ-42",
+      "requirement": "NDM events и observer recovery без второго controller",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "R01"
+      ],
+      "acceptance_ids": [
+        "R01-T01",
+        "R01-T02",
+        "R01-T03",
+        "R01-T04"
+      ]
+    },
+    {
+      "id": "REQ-43",
+      "requirement": "Deep diagnostics по причине, не смена всего подряд",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "R01",
+        "F02"
+      ],
+      "acceptance_ids": [
+        "F02-T01",
+        "F02-T02",
+        "F02-T03",
+        "F02-T04",
+        "F02-T05",
+        "F02-T06",
+        "F02-T07",
+        "R01-T01",
+        "R01-T02",
+        "R01-T03",
+        "R01-T04"
+      ]
+    },
+    {
+      "id": "REQ-44",
+      "requirement": "Управляемое обновление используемого NFQWS2 и других components",
+      "basis": "S1 S3",
+      "kind": "owner_requirement",
+      "tasks": [
+        "M01"
+      ],
+      "acceptance_ids": [
+        "M01-T01",
+        "M01-T02",
+        "M01-T03",
+        "M01-T04"
+      ]
+    },
+    {
+      "id": "REQ-45",
+      "requirement": "Ночное окно, дни/timezone, отдельные permissions app/engine/list/DNS",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "M02"
+      ],
+      "acceptance_ids": [
+        "M02-T01",
+        "M02-T02",
+        "M02-T03",
+        "M02-T04",
+        "M02-T05",
+        "M02-T06"
+      ]
+    },
+    {
+      "id": "REQ-46",
+      "requirement": "Независимый rollback, bad-release quarantine, защищённый retention",
+      "basis": "S1 S3 S7",
+      "kind": "owner_requirement",
+      "tasks": [
+        "M02",
+        "G02"
+      ],
+      "acceptance_ids": [
+        "G02-T01",
+        "G02-T02",
+        "G02-T03",
+        "G02-T04",
+        "G02-T05",
+        "M02-T01",
+        "M02-T02",
+        "M02-T03",
+        "M02-T04",
+        "M02-T05",
+        "M02-T06"
+      ]
+    },
+    {
+      "id": "REQ-47",
+      "requirement": "Community с provider/city hints, opt-in и privacy",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "L01"
+      ],
+      "acceptance_ids": [
+        "L01-T01",
+        "L01-T02",
+        "L01-T03",
+        "L01-T04"
+      ]
+    },
+    {
+      "id": "REQ-48",
+      "requirement": "Радар сайтов/форумов/репозиториев, не blind code copy",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "L01",
+        "L02",
+        "C01",
+        "T01"
+      ],
+      "acceptance_ids": [
+        "C01-T01",
+        "C01-T02",
+        "C01-T03",
+        "C01-T04",
+        "C01-T05",
+        "C01-T06",
+        "T01-T01",
+        "T01-T02",
+        "T01-T03",
+        "T01-T04",
+        "T01-T05",
+        "T01-T06",
+        "L01-T01",
+        "L01-T02",
+        "L01-T03",
+        "L01-T04",
+        "L02-T01",
+        "L02-T02",
+        "L02-T03",
+        "L02-T04"
+      ]
+    },
+    {
+      "id": "REQ-49",
+      "requirement": "Серверные профили/сложные цепочки отдельно, не mandatory new VPS",
+      "basis": "S1 S15",
+      "kind": "owner_requirement",
+      "tasks": [
+        "L02"
+      ],
+      "acceptance_ids": [
+        "L02-T01",
+        "L02-T02",
+        "L02-T03",
+        "L02-T04"
+      ]
+    },
+    {
+      "id": "REQ-50",
+      "requirement": "Legacy миграция без скрытого расширения scope/trust",
+      "basis": "S1",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G03",
+        "E01",
+        "M02"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06",
+        "M02-T01",
+        "M02-T02",
+        "M02-T03",
+        "M02-T04",
+        "M02-T05",
+        "M02-T06"
+      ]
+    },
+    {
+      "id": "REQ-51",
+      "requirement": "IPv6/UDP/unknown protocols не выходят direct по молчанию",
+      "basis": "S1",
+      "kind": "derived_design_requirement",
+      "tasks": [
+        "G03",
+        "D02",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "D02-T01",
+        "D02-T02",
+        "D02-T03",
+        "D02-T04",
+        "D02-T05",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-52",
+      "requirement": "Protected management/bootstrap/local traffic сохранён",
+      "basis": "S1 S2",
+      "kind": "derived_design_requirement",
+      "tasks": [
+        "E01",
+        "W02",
+        "T01",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "W02-T01",
+        "W02-T02",
+        "W02-T03",
+        "W02-T04",
+        "W02-T05",
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06",
+        "T01-T01",
+        "T01-T02",
+        "T01-T03",
+        "T01-T04",
+        "T01-T05",
+        "T01-T06",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-53",
+      "requirement": "Default references защищены при удалении/обновлении/Stop",
+      "basis": "S1",
+      "kind": "derived_design_requirement",
+      "tasks": [
+        "X03",
+        "E01",
+        "C02",
+        "M01"
+      ],
+      "acceptance_ids": [
+        "X03-T01",
+        "X03-T02",
+        "X03-T03",
+        "X03-T04",
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06",
+        "C02-T01",
+        "C02-T02",
+        "C02-T03",
+        "C02-T04",
+        "C02-T05",
+        "C02-T06",
+        "C02-T07",
+        "M01-T01",
+        "M01-T02",
+        "M01-T03",
+        "M01-T04"
+      ]
+    },
+    {
+      "id": "REQ-54",
+      "requirement": "Session transition после смены пути не global conntrack flush",
+      "basis": "S1",
+      "kind": "derived_design_requirement",
+      "tasks": [
+        "E01",
+        "H01"
+      ],
+      "acceptance_ids": [
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ]
+    },
+    {
+      "id": "REQ-55",
+      "requirement": "Explicit outage base/block policy и новые права не inferred",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G03",
+        "F01",
+        "F02"
+      ],
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06",
+        "F01-T01",
+        "F01-T02",
+        "F01-T03",
+        "F01-T04",
+        "F01-T05",
+        "F01-T06",
+        "F02-T01",
+        "F02-T02",
+        "F02-T03",
+        "F02-T04",
+        "F02-T05",
+        "F02-T06",
+        "F02-T07"
+      ]
+    },
+    {
+      "id": "REQ-56",
+      "requirement": "Сборка/CI/native/physical/soak не смешиваются",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "G00",
+        "H01",
+        "H02"
+      ],
+      "acceptance_ids": [
+        "G00-T01",
+        "G00-T02",
+        "G00-T03",
+        "G00-T04",
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05",
+        "H02-T01",
+        "H02-T02",
+        "H02-T03",
+        "H02-T04"
+      ]
+    },
+    {
+      "id": "REQ-57",
+      "requirement": "Два клиента, ARM64 затем MIPS/MIPSel и отдельный OpenWrt",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "H01",
+        "L02"
+      ],
+      "acceptance_ids": [
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05",
+        "L02-T01",
+        "L02-T02",
+        "L02-T03",
+        "L02-T04"
+      ]
+    },
+    {
+      "id": "REQ-58",
+      "requirement": "24/72h browser-closed испытания и измерения всей цепочки",
+      "basis": "S1 S2",
+      "kind": "owner_requirement",
+      "tasks": [
+        "H02",
+        "R02"
+      ],
+      "acceptance_ids": [
+        "R02-T01",
+        "R02-T02",
+        "R02-T03",
+        "R02-T04",
+        "R02-T05",
+        "H02-T01",
+        "H02-T02",
+        "H02-T03",
+        "H02-T04"
+      ]
+    }
+  ]
+}

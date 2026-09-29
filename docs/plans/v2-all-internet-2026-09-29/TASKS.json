@@ -1,0 +1,1110 @@
+{
+  "schema_version": 1,
+  "plan_revision": "V2-ALL-INTERNET-2026-09-29",
+  "repository": "ArtixSx/RAZVILKA",
+  "reviewed_head": "46ba8761cc0a374ddfbbf82adf6253762c3a0040",
+  "functional_release": "0.18.15",
+  "artifact_kind": "planning_only",
+  "actual_project_test_runs_in_this_session": false,
+  "tasks": [
+    {
+      "id": "G00",
+      "title": "Сверка базы и единая точка задания",
+      "depends_on": [],
+      "candidate_code_areas": [
+        "docs/CURRENT_STATUS_RU.md",
+        "docs/ROADMAP.md",
+        "docs/BRANCHES_RU.md",
+        "AGENTS.md",
+        "CLAUDE.md"
+      ],
+      "goal": "Зафиксировать actual checkout, ветки и подтверждённые возможности; перенести последний default без утраты уже выполненного.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "G00-T01",
+        "G00-T02",
+        "G00-T03",
+        "G00-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "G01",
+      "title": "Различимые исходы установщика",
+      "depends_on": [
+        "G00"
+      ],
+      "candidate_code_areas": [
+        "scripts/upgrade-entware.sh",
+        "cmd/razvilka/main.go",
+        "installer tests"
+      ],
+      "goal": "Разрешить ремонт известной деградации без ослабления проверок при неизвестном исходе.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "G01-T01",
+        "G01-T02",
+        "G01-T03",
+        "G01-T04",
+        "G01-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "G02",
+      "title": "Восстановление журнала и минимальная защита",
+      "depends_on": [
+        "G00"
+      ],
+      "candidate_code_areas": [
+        "internal/dataplane/rollback_retry.go",
+        "internal/dataplane/execution_journal.go",
+        "internal/security",
+        "recovery tests"
+      ],
+      "goal": "Воспроизвести прежние edge cases; ограничить историю без потери возможности repair; сохранить panel-alive fence.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "G02-T01",
+        "G02-T02",
+        "G02-T03",
+        "G02-T04",
+        "G02-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "G03",
+      "title": "Общий путь: модель и семантика до движков",
+      "depends_on": [
+        "G00"
+      ],
+      "candidate_code_areas": [
+        "internal/config/network_policy.go",
+        "internal/autonomy/network_policy.go",
+        "schema/backup tests"
+      ],
+      "goal": "Расширить существующие policy/types под default Auto/pin и независимые service overrides, без новых контроллеров.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "G03-T01",
+        "G03-T02",
+        "G03-T03",
+        "G03-T04",
+        "G03-T05",
+        "G03-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "X01",
+      "title": "Xray: профиль, compiler, зависимости",
+      "depends_on": [
+        "G03"
+      ],
+      "candidate_code_areas": [
+        "internal/providerprofile",
+        "internal/engineconfig",
+        "internal/components",
+        "internal/routeidentity"
+      ],
+      "goal": "Завершить безопасный VLESS REALITY RAW/TCP import/compiler, затем поддержанные транспорты.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "X01-T01",
+        "X01-T02",
+        "X01-T03",
+        "X01-T04",
+        "X01-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "X02",
+      "title": "Xray: реальный общий и индивидуальный путь",
+      "depends_on": [
+        "G01",
+        "G02",
+        "X01"
+      ],
+      "candidate_code_areas": [
+        "internal/dataplane/proxy.go",
+        "owned rules",
+        "route probes",
+        "Xray UI"
+      ],
+      "goal": "Существующий managed runtime/sidecar должен обеспечивать default и scoped overrides в общем lifecycle.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "X02-T01",
+        "X02-T02",
+        "X02-T03",
+        "X02-T04",
+        "X02-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "X03",
+      "title": "Xray: отказ, повторный запуск и references",
+      "depends_on": [
+        "X02"
+      ],
+      "candidate_code_areas": [
+        "Xray/sidecar recovery",
+        "runtime identity",
+        "reference accounting"
+      ],
+      "goal": "Закончить manual lifecycle и зафиксировать отдельный аппаратный уровень, не блокируя подготовку WG.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "X03-T01",
+        "X03-T02",
+        "X03-T03",
+        "X03-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "W01",
+      "title": "Generic WG: отдельная модель и общий core",
+      "depends_on": [
+        "X02"
+      ],
+      "candidate_code_areas": [
+        "internal/dataplane/warpwg.go",
+        "WG profile parser",
+        "engine registry"
+      ],
+      "goal": "Создать wireguard kind без Cloudflare-зависимости, выделив только действительно общую механику.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "W01-T01",
+        "W01-T02",
+        "W01-T03",
+        "W01-T04",
+        "W01-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "W02",
+      "title": "WG: endpoint, scoped/general runtime",
+      "depends_on": [
+        "W01",
+        "G01",
+        "G02"
+      ],
+      "candidate_code_areas": [
+        "WG runtime",
+        "endpoint routing",
+        "common policy compiler"
+      ],
+      "goal": "Связать peer configuration и explicit policy; испытать обычный сервер и default.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "W02-T01",
+        "W02-T02",
+        "W02-T03",
+        "W02-T04",
+        "W02-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "W03",
+      "title": "WG: несколько профилей и восстановление",
+      "depends_on": [
+        "W02"
+      ],
+      "candidate_code_areas": [
+        "WG profiles",
+        "reservoir",
+        "runtime refs",
+        "HIL instructions"
+      ],
+      "goal": "Сохранённые независимые primary/reserve профили, client proof и безопасный rollback.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "W03-T01",
+        "W03-T02",
+        "W03-T03",
+        "W03-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "A01",
+      "title": "AWG: фактическая совместимость и trusted delivery",
+      "depends_on": [
+        "W02"
+      ],
+      "candidate_code_areas": [
+        "internal/awgprofile",
+        "components manifest",
+        "platform capabilities"
+      ],
+      "goal": "Поддержать проверяемые tool/module/userspace/profile/server наборы вместо универсального ярлыка версии.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "A01-T01",
+        "A01-T02",
+        "A01-T03",
+        "A01-T04",
+        "A01-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "A02",
+      "title": "AWG: изолированный и общий runtime",
+      "depends_on": [
+        "A01",
+        "G01",
+        "G02"
+      ],
+      "candidate_code_areas": [
+        "AWG adapter",
+        "owned kernel/userspace runtime",
+        "policy compiler"
+      ],
+      "goal": "Оригинальный совместимый профиль должен пройти тот же ручной цикл и default routing.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "A02-T01",
+        "A02-T02",
+        "A02-T03",
+        "A02-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "A03",
+      "title": "AWG: безопасность восстановления",
+      "depends_on": [
+        "A02"
+      ],
+      "candidate_code_areas": [
+        "AWG recovery",
+        "module rollback",
+        "platform HIL"
+      ],
+      "goal": "Проверить известное аппаратное сочетание и отрицательные сценарии без ложных гарантий от kernel failure.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "A03-T01",
+        "A03-T02",
+        "A03-T03",
+        "A03-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "F01",
+      "title": "Один scheduler для default и service targets",
+      "depends_on": [
+        "X02",
+        "W02",
+        "A02",
+        "G03"
+      ],
+      "candidate_code_areas": [
+        "internal/app/durable_*",
+        "autonomy_worker",
+        "EffectivePath",
+        "evidence"
+      ],
+      "goal": "Общие resource budgets и queue, независимые пути/проверки/default policy. No browser scheduler.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "F01-T01",
+        "F01-T02",
+        "F01-T03",
+        "F01-T04",
+        "F01-T05",
+        "F01-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "F02",
+      "title": "Default/service failover и причины отказа",
+      "depends_on": [
+        "F01",
+        "G02"
+      ],
+      "candidate_code_areas": [
+        "autonomy recovery",
+        "typed failures",
+        "LKG/learning"
+      ],
+      "goal": "Завершить A→B failed Apply→C и пополнение резервов; исправный путь не переключать ради ping.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "F02-T01",
+        "F02-T02",
+        "F02-T03",
+        "F02-T04",
+        "F02-T05",
+        "F02-T06",
+        "F02-T07"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "E01",
+      "title": "Исполнение membership и flow transitions",
+      "depends_on": [
+        "F01",
+        "G03"
+      ],
+      "candidate_code_areas": [
+        "devices",
+        "platform scope compiler",
+        "dataplane",
+        "network policy"
+      ],
+      "goal": "Весь интернет в согласованной домашней области, единые исключения и безопасные переходы.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "E01-T01",
+        "E01-T02",
+        "E01-T03",
+        "E01-T04",
+        "E01-T05",
+        "E01-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "E02",
+      "title": "Автоматические российские и ручные исключения",
+      "depends_on": [
+        "E01"
+      ],
+      "candidate_code_areas": [
+        "Russian catalog adapter",
+        "network rules",
+        "conflict UI"
+      ],
+      "goal": "Курируемые auto exclusions независимо от выбранности сервисов; manual overrides сохраняются.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "E02-T01",
+        "E02-T02",
+        "E02-T03",
+        "E02-T04",
+        "E02-T05",
+        "E02-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "D01",
+      "title": "Общий DNS и service-specific joint transaction",
+      "depends_on": [
+        "E01",
+        "F01"
+      ],
+      "candidate_code_areas": [
+        "dnscontrol",
+        "scoped DNS adapter",
+        "D1 app handlers"
+      ],
+      "goal": "Развить D1 до default+service DNS/route scope с атомарным планом и единым rollback.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "D01-T01",
+        "D01-T02",
+        "D01-T03",
+        "D01-T04",
+        "D01-T05",
+        "D01-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "D02",
+      "title": "Address ledger, неизвестные имена и privacy",
+      "depends_on": [
+        "D01",
+        "E02"
+      ],
+      "candidate_code_areas": [
+        "DNS ledger",
+        "domain-aware routing",
+        "classification capabilities"
+      ],
+      "goal": "Границы DNS/имени не должны создавать implicit DIRECT для остального интернета.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "D02-T01",
+        "D02-T02",
+        "D02-T03",
+        "D02-T04",
+        "D02-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "C01",
+      "title": "Локальная библиотека сервисов, источники",
+      "depends_on": [
+        "G03"
+      ],
+      "candidate_code_areas": [
+        "community",
+        "sources",
+        "catalog adapters",
+        "services UI"
+      ],
+      "goal": "Каталог индивидуальных правил/исключений не нужен для охвата незнакомого интернета.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "C01-T01",
+        "C01-T02",
+        "C01-T03",
+        "C01-T04",
+        "C01-T05",
+        "C01-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "C02",
+      "title": "Узлы, подписки, bulk и пополнение",
+      "depends_on": [
+        "F01",
+        "C01"
+      ],
+      "candidate_code_areas": [
+        "nodestore",
+        "providerfeed",
+        "node UI",
+        "refill"
+      ],
+      "goal": "Автоматический поиск разрешённого резерва плюс нормальные bulk действия на всём наборе.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "C02-T01",
+        "C02-T02",
+        "C02-T03",
+        "C02-T04",
+        "C02-T05",
+        "C02-T06",
+        "C02-T07"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "N01",
+      "title": "NFQWS2 packet visibility и ownership",
+      "depends_on": [
+        "E01"
+      ],
+      "candidate_code_areas": [
+        "NFQWS2 adapter",
+        "StrategyLab",
+        "platform diagnostics"
+      ],
+      "goal": "Установить реальную видимость протоколов прежде новых рецептов.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "N01-T01",
+        "N01-T02",
+        "N01-T03",
+        "N01-T04",
+        "N01-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "N02",
+      "title": "NFQWS2 адаптивные стратегии",
+      "depends_on": [
+        "N01",
+        "C01",
+        "F02"
+      ],
+      "candidate_code_areas": [
+        "strategylab",
+        "recipehints",
+        "native profiles",
+        "media harness"
+      ],
+      "goal": "Bounded strategy search с памятью и проверкой media/voice, без перебора всего подряд.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "N02-T01",
+        "N02-T02",
+        "N02-T03",
+        "N02-T04",
+        "N02-T05",
+        "N02-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "T01",
+      "title": "WARP lifecycle и локальные exporter/provider",
+      "depends_on": [
+        "W02",
+        "F01",
+        "C02"
+      ],
+      "candidate_code_areas": [
+        "nativeenrollment",
+        "cloudflareprovider",
+        "warp",
+        "exporters"
+      ],
+      "goal": "Enrollment, WG/MASQUE secrets, профиль, endpoint, export и Apply раздельны.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "T01-T01",
+        "T01-T02",
+        "T01-T03",
+        "T01-T04",
+        "T01-T05",
+        "T01-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "T02",
+      "title": "USQUE H3/H2 и независимое восстановление",
+      "depends_on": [
+        "F01",
+        "T01"
+      ],
+      "candidate_code_areas": [
+        "USQUE adapter",
+        "managed distribution",
+        "transport candidates"
+      ],
+      "goal": "Закончить текущую topology и поддержанный HTTP/2 резерв, не отключая проверку сервера.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "T02-T01",
+        "T02-T02",
+        "T02-T03",
+        "T02-T04",
+        "T02-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "B01",
+      "title": "Mihomo: runtime при доказанной необходимости",
+      "depends_on": [
+        "F01",
+        "E01",
+        "D01"
+      ],
+      "candidate_code_areas": [
+        "Mihomo exporter/runtime",
+        "components",
+        "engineconfig"
+      ],
+      "goal": "Отличать exporter/lab от production executor с общим scope и lifecycle.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "B01-T01",
+        "B01-T02",
+        "B01-T03",
+        "B01-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "B02",
+      "title": "HEV: заменяемый sidecar",
+      "depends_on": [
+        "B01"
+      ],
+      "candidate_code_areas": [
+        "hev_sidecar",
+        "runtime supervisor",
+        "benchmark harness"
+      ],
+      "goal": "Сравнить sidecar по ресурсам и сетевым возможностям, оставить optional при отсутствии выигрыша.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "B02-T01",
+        "B02-T02",
+        "B02-T03",
+        "B02-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "UX01",
+      "title": "Общее подключение на главной и понятные действия",
+      "depends_on": [
+        "G03",
+        "F01"
+      ],
+      "candidate_code_areas": [
+        "cmd/razvilka/web",
+        "panel snapshots",
+        "UI tests"
+      ],
+      "goal": "Убрать терминологические ловушки и дублирующие переходы, без переписывания всей панели.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "UX01-T01",
+        "UX01-T02",
+        "UX01-T03",
+        "UX01-T04",
+        "UX01-T05",
+        "UX01-T06",
+        "UX01-T07"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "R01",
+      "title": "Сеть: NDM/observer и deep diagnostics",
+      "depends_on": [
+        "F02"
+      ],
+      "candidate_code_areas": [
+        "systemprobe",
+        "NDM bridge",
+        "diagnostics",
+        "route preview"
+      ],
+      "goal": "Восстанавливать наблюдение и нужный слой без массового рестарта всего.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "R01-T01",
+        "R01-T02",
+        "R01-T03",
+        "R01-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "R02",
+      "title": "Слабые роутеры: общие бюджеты и порции",
+      "depends_on": [
+        "F01"
+      ],
+      "candidate_code_areas": [
+        "resource manager",
+        "all candidate jobs",
+        "metrics"
+      ],
+      "goal": "Сохранить функционал с меньшей concurrency/более длинными ограниченными сроками и checkpoints.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "R02-T01",
+        "R02-T02",
+        "R02-T03",
+        "R02-T04",
+        "R02-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "M01",
+      "title": "Обновление активных компонентов",
+      "depends_on": [
+        "F02",
+        "E01",
+        "D01"
+      ],
+      "candidate_code_areas": [
+        "components lifecycle",
+        "NFQWS2 adoption",
+        "runtime refs"
+      ],
+      "goal": "Компонент обновляется управляемо, а не вынуждает пользователя вручную ломать ownership.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "M01-T01",
+        "M01-T02",
+        "M01-T03",
+        "M01-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "M02",
+      "title": "Unattended update и защищённый retention",
+      "depends_on": [
+        "M01",
+        "G01",
+        "G02"
+      ],
+      "candidate_code_areas": [
+        "updater",
+        "backup/restore",
+        "migrations",
+        "scheduler"
+      ],
+      "goal": "Окно обслуживания, trusted staged release и независимый rollback с живыми ссылками.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "M02-T01",
+        "M02-T02",
+        "M02-T03",
+        "M02-T04",
+        "M02-T05",
+        "M02-T06"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "H01",
+      "title": "Сквозная приёмка глобального режима",
+      "depends_on": [
+        "X02",
+        "W02",
+        "A02",
+        "F02",
+        "E02",
+        "D02",
+        "C02",
+        "UX01"
+      ],
+      "candidate_code_areas": [
+        "HIL harness",
+        "release evidence matrix"
+      ],
+      "goal": "Доказать основной продуктовый сценарий на двух реальных клиентах и совместимых платформах.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "H01-T01",
+        "H01-T02",
+        "H01-T03",
+        "H01-T04",
+        "H01-T05"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "H02",
+      "title": "Soak, точный выпуск и отчёт",
+      "depends_on": [
+        "H01",
+        "N02",
+        "T01",
+        "T02",
+        "M02",
+        "R01",
+        "R02"
+      ],
+      "candidate_code_areas": [
+        "soak harness",
+        "release process",
+        "docs"
+      ],
+      "goal": "24/72 часа с браузером закрытым, отказами и честным уровнем покрытия.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "H02-T01",
+        "H02-T02",
+        "H02-T03",
+        "H02-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "L01",
+      "title": "Community и privacy",
+      "depends_on": [
+        "C01",
+        "N02"
+      ],
+      "candidate_code_areas": [
+        "recipe sharing",
+        "public schema",
+        "optional hub"
+      ],
+      "goal": "Рабочие рецепты и cohort hints без обязательного cloud и без секретов.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "L01-T01",
+        "L01-T02",
+        "L01-T03",
+        "L01-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    },
+    {
+      "id": "L02",
+      "title": "Документация, платформы и сложные цепочки",
+      "depends_on": [
+        "H01"
+      ],
+      "candidate_code_areas": [
+        "platform adapters",
+        "docs site",
+        "server profiles",
+        "optional integration"
+      ],
+      "goal": "Сохранить дальнейшие идеи без задержки первых работающих путей.",
+      "status": "planned",
+      "verification": {
+        "unit": "not_run",
+        "integration": "not_run",
+        "native": "not_run",
+        "hardware": {},
+        "soak": "not_run"
+      },
+      "acceptance_ids": [
+        "L02-T01",
+        "L02-T02",
+        "L02-T03",
+        "L02-T04"
+      ],
+      "implementation_notes": "Сначала сопоставить с actual HEAD. Пути — точки поиска, не команда создать дубликат. Отсутствие hardware evidence не запрещает независимую программную подготовку."
+    }
+  ]
+}

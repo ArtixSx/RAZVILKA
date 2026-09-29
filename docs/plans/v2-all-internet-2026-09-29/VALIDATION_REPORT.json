@@ -1,0 +1,129 @@
+{
+  "plan_revision": "V2-ALL-INTERNET-2026-09-29",
+  "kind": "document_structure_only",
+  "task_count": 36,
+  "acceptance_count": 183,
+  "requirement_count": 58,
+  "master_section_count": 26,
+  "checks": [
+    {
+      "check": "Unique task IDs",
+      "result": "passed"
+    },
+    {
+      "check": "Unique acceptance IDs",
+      "result": "passed"
+    },
+    {
+      "check": "Unique requirement IDs",
+      "result": "passed"
+    },
+    {
+      "check": "All dependencies resolve",
+      "result": "passed"
+    },
+    {
+      "check": "Dependency DAG is acyclic",
+      "result": "passed"
+    },
+    {
+      "check": "Every task has acceptance cases",
+      "result": "passed"
+    },
+    {
+      "check": "Every case references a task",
+      "result": "passed"
+    },
+    {
+      "check": "Every requirement resolves to tasks and cases",
+      "result": "passed"
+    },
+    {
+      "check": "Every task covered by requirements",
+      "result": "passed"
+    },
+    {
+      "check": "All program scenarios not_run",
+      "result": "passed"
+    },
+    {
+      "check": "All task execution states planned",
+      "result": "passed"
+    },
+    {
+      "check": "No project test run claimed by metadata",
+      "result": "passed"
+    },
+    {
+      "check": "Master includes 26 sections",
+      "result": "passed"
+    },
+    {
+      "check": "Global scope is explicit",
+      "result": "passed"
+    },
+    {
+      "check": "Legacy service-only default paragraph removed",
+      "result": "passed"
+    },
+    {
+      "check": "No unconditional public endpoint rejection",
+      "result": "passed"
+    },
+    {
+      "check": "No unknown current API examples advertised as live schema",
+      "result": "passed"
+    },
+    {
+      "check": "Lost-response and frozen consent retained",
+      "result": "passed"
+    },
+    {
+      "check": "Default reference and session transition requirements present",
+      "result": "passed"
+    },
+    {
+      "check": "Required artifact exists: MASTER_PLAN_V2_RU.md",
+      "result": "passed"
+    },
+    {
+      "check": "Required artifact exists: GLOBAL_POLICY_SPEC_RU.md",
+      "result": "passed"
+    },
+    {
+      "check": "Required artifact exists: DECISIONS_CROSSWALK_RU.md",
+      "result": "passed"
+    },
+    {
+      "check": "Required artifact exists: TASKS.json",
+      "result": "passed"
+    },
+    {
+      "check": "Required artifact exists: ACCEPTANCE_MATRIX.json",
+      "result": "passed"
+    },
+    {
+      "check": "Required artifact exists: REQUIREMENTS_TRACEABILITY.json",
+      "result": "passed"
+    },
+    {
+      "check": "Required artifact exists: RESEARCH_RADAR_RU.md",
+      "result": "passed"
+    },
+    {
+      "check": "Required artifact exists: SOURCES_AND_BASELINE_RU.md",
+      "result": "passed"
+    },
+    {
+      "check": "Balanced fenced code blocks",
+      "result": "passed"
+    }
+  ],
+  "passed": 28,
+  "failed": 0,
+  "project_tests_run": false,
+  "native_tests_run": false,
+  "hardware_tests_run": false,
+  "scope_note": "Проверены документы, связи и формат. Результаты программы, новые HIL и прежние стенды не выполнялись.",
+  "sources_read": "Текущий GitHub HEAD/status/NetworkPolicy/решающая функция/участок installer, сохранённые планы, предоставленный отчёт; ограниченные официальные web docs."
+}
