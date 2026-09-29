@@ -1,10 +1,39 @@
 package catalog
 
 import (
+	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
+	"strings"
 	"testing"
 )
+
+// upstreamList reads a copy of an nfqws2-keenetic list kept with the snapshot.
+func upstreamList(t *testing.T, name string) map[string]bool {
+	t.Helper()
+	data, err := os.ReadFile("data/nfqws2-keenetic/upstream/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name == "user.list" {
+		sum := sha256.Sum256(data)
+		for _, s := range NFQWS2Starter().Services {
+			if s.Provenance == nil || s.Provenance.SHA256 != hex.EncodeToString(sum[:]) {
+				t.Fatal("recorded upstream digest differs from the kept copy", s.ID)
+			}
+		}
+	}
+	domains := map[string]bool{}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		if line := strings.TrimSpace(scanner.Text()); line != "" && !strings.HasPrefix(line, "#") {
+			domains[strings.ToLower(line)] = true
+		}
+	}
+	return domains
+}
 
 func TestRepair2StarterExactlySixStockGroups(t *testing.T) {
 	c := NFQWS2Starter()
@@ -12,7 +41,7 @@ func TestRepair2StarterExactlySixStockGroups(t *testing.T) {
 		t.Fatal("invalid default catalogue")
 	}
 	// RAZVILKA's documented Discord supplement (data README); everything else
-	// must remain the 278 upstream domains.
+	// must be exactly the upstream host list of the snapshot.
 	supplement := map[string]bool{"discordstatus.com": true, "discordapp.io": true, "discord-attachments-uploads-prd.storage.googleapis.com": true,
 		"airhornbot.com": true, "airhorn.solutions": true, "bigbeans.solutions": true, "watchanimeattheoffice.com": true, "hammerandchisel.ssl.zendesk.com": true}
 	seen := map[string]bool{}
@@ -36,8 +65,30 @@ func TestRepair2StarterExactlySixStockGroups(t *testing.T) {
 			upstream++
 		}
 	}
-	if upstream != 278 || total != 278+len(supplement) {
-		t.Fatal("stock membership changed", upstream, total)
+	hostList := upstreamList(t, "user.list")
+	if upstream != len(hostList) || total != len(hostList)+len(supplement) {
+		t.Fatal("stock membership changed", upstream, total, len(hostList))
+	}
+	for d := range hostList {
+		if !seen[d] {
+			t.Fatal("upstream domain missing from the catalogue", d)
+		}
+	}
+	// A domain the package excludes is never processed by NFQWS2, so listing
+	// it under an NFQWS2 service would be misleading (1.3.1 moved Roblox's
+	// main domains to the exclude list).
+	excluded := upstreamList(t, "exclude.list")
+	for d := range seen {
+		for suffix := d; ; {
+			if excluded[suffix] {
+				t.Fatal("catalogue domain is excluded by the package", d)
+			}
+			dot := strings.IndexByte(suffix, '.')
+			if dot < 0 {
+				break
+			}
+			suffix = suffix[dot+1:]
+		}
 	}
 	b, e := os.ReadFile("../../configs/service-catalog.json")
 	if e != nil || !bytes.Equal(b, nfqws2StarterJSON) {

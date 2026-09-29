@@ -199,10 +199,10 @@
       "provenance": {
         "provider": "nfqws2-keenetic-stock",
         "entry_id": "youtube",
-        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/c77226bd384e047a3d97e3ab6f0ad8b46fc3c967/etc/nfqws2/lists/user.list",
+        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/077f9af6068cd3380527085ca351b503a2dcf926/etc/nfqws2/lists/user.list",
         "license": "MIT",
-        "sha256": "974016ffc0b0cef05fbb05718f12b721104a72b3fa7261a814d596974dc339cc",
-        "fetched_at": "2026-09-15T00:00:00Z"
+        "sha256": "681d1278de09bbfef7d743de089c6e30bf7d52b82c91f03e91a0b595c5e76bb0",
+        "fetched_at": "2026-09-29T00:00:00Z"
       }
     },
     {
@@ -255,10 +255,10 @@
       "provenance": {
         "provider": "nfqws2-keenetic-stock",
         "entry_id": "discord",
-        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/c77226bd384e047a3d97e3ab6f0ad8b46fc3c967/etc/nfqws2/lists/user.list",
+        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/077f9af6068cd3380527085ca351b503a2dcf926/etc/nfqws2/lists/user.list",
         "license": "MIT",
-        "sha256": "974016ffc0b0cef05fbb05718f12b721104a72b3fa7261a814d596974dc339cc",
-        "fetched_at": "2026-09-15T00:00:00Z"
+        "sha256": "681d1278de09bbfef7d743de089c6e30bf7d52b82c91f03e91a0b595c5e76bb0",
+        "fetched_at": "2026-09-29T00:00:00Z"
       }
     },
     {
@@ -290,10 +290,10 @@
       "provenance": {
         "provider": "nfqws2-keenetic-stock",
         "entry_id": "speedtest",
-        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/c77226bd384e047a3d97e3ab6f0ad8b46fc3c967/etc/nfqws2/lists/user.list",
+        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/077f9af6068cd3380527085ca351b503a2dcf926/etc/nfqws2/lists/user.list",
         "license": "MIT",
-        "sha256": "974016ffc0b0cef05fbb05718f12b721104a72b3fa7261a814d596974dc339cc",
-        "fetched_at": "2026-09-15T00:00:00Z"
+        "sha256": "681d1278de09bbfef7d743de089c6e30bf7d52b82c91f03e91a0b595c5e76bb0",
+        "fetched_at": "2026-09-29T00:00:00Z"
       }
     },
     {
@@ -303,13 +303,8 @@
       "icon": "RB",
       "description": "Штатный список nfqws2-keenetic. Назначение по умолчанию: NFQWS2.",
       "domains": [
-        "roblox.com",
-        "robloxcdn.com",
         "rbxcdn.com",
         "rblx.com",
-        "robloxapp.com",
-        "robloxgames.com",
-        "robloxlabs.com",
         "rbx.com",
         "rbxlabs.com",
         "rbxcdn.xyz",
@@ -349,10 +344,10 @@
       "provenance": {
         "provider": "nfqws2-keenetic-stock",
         "entry_id": "roblox",
-        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/c77226bd384e047a3d97e3ab6f0ad8b46fc3c967/etc/nfqws2/lists/user.list",
+        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/077f9af6068cd3380527085ca351b503a2dcf926/etc/nfqws2/lists/user.list",
         "license": "MIT",
-        "sha256": "974016ffc0b0cef05fbb05718f12b721104a72b3fa7261a814d596974dc339cc",
-        "fetched_at": "2026-09-15T00:00:00Z"
+        "sha256": "681d1278de09bbfef7d743de089c6e30bf7d52b82c91f03e91a0b595c5e76bb0",
+        "fetched_at": "2026-09-29T00:00:00Z"
       }
     },
     {
@@ -375,10 +370,10 @@
       "provenance": {
         "provider": "nfqws2-keenetic-stock",
         "entry_id": "riotgames",
-        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/c77226bd384e047a3d97e3ab6f0ad8b46fc3c967/etc/nfqws2/lists/user.list",
+        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/077f9af6068cd3380527085ca351b503a2dcf926/etc/nfqws2/lists/user.list",
         "license": "MIT",
-        "sha256": "974016ffc0b0cef05fbb05718f12b721104a72b3fa7261a814d596974dc339cc",
-        "fetched_at": "2026-09-15T00:00:00Z"
+        "sha256": "681d1278de09bbfef7d743de089c6e30bf7d52b82c91f03e91a0b595c5e76bb0",
+        "fetched_at": "2026-09-29T00:00:00Z"
       }
     },
     {
@@ -430,10 +425,10 @@
       "provenance": {
         "provider": "nfqws2-keenetic-stock",
         "entry_id": "nfqws2-common",
-        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/c77226bd384e047a3d97e3ab6f0ad8b46fc3c967/etc/nfqws2/lists/user.list",
+        "url": "https://github.com/nfqws/nfqws2-keenetic/blob/077f9af6068cd3380527085ca351b503a2dcf926/etc/nfqws2/lists/user.list",
         "license": "MIT",
-        "sha256": "974016ffc0b0cef05fbb05718f12b721104a72b3fa7261a814d596974dc339cc",
-        "fetched_at": "2026-09-15T00:00:00Z"
+        "sha256": "681d1278de09bbfef7d743de089c6e30bf7d52b82c91f03e91a0b595c5e76bb0",
+        "fetched_at": "2026-09-29T00:00:00Z"
       }
     }
   ]
