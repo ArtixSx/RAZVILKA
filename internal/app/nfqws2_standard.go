@@ -8,6 +8,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
 // NFQWS2 is the standard route of the services from the reviewed
@@ -33,20 +34,50 @@ func nfqws2StandardDraft(service catalog.Service, s autonomy.Service, draft conf
 // autopilot's expectation, so the pending change is applied by the scoped
 // autopilot transaction instead of pausing automation as a manual change.
 func (a *App) adoptNFQWS2StandardDraft(ctx context.Context, p autonomy.Policy, s autonomy.Service, draft config.ServiceState) (autonomy.Service, bool) {
+	return a.updateAutonomyService(ctx, p, s, func(next *autonomy.Service) {
+		next.ExpectedRoute = "nfqws2"
+		next.DraftFingerprint = autonomyDraftFingerprint(draft)
+	})
+}
+
+// adoptReviewedDefinition accepts a new definition of a service from the
+// reviewed NFQWS2 list shipped with RAZVILKA (for example, extra Discord
+// domains in an update). Other definitions still require confirmation.
+func (a *App) adoptReviewedDefinition(ctx context.Context, p autonomy.Policy, s autonomy.Service, service catalog.Service) (autonomy.Service, bool) {
+	if !catalog.IsNFQWS2Starter(service) {
+		return s, false
+	}
+	return a.updateAutonomyService(ctx, p, s, func(next *autonomy.Service) { next.Definition = autonomyDefinition(service) })
+}
+
+// updateAutonomyService changes the saved autopilot record only if it is still
+// exactly the record this round started with.
+func (a *App) updateAutonomyService(ctx context.Context, p autonomy.Policy, s autonomy.Service, change func(*autonomy.Service)) (autonomy.Service, bool) {
 	a.autonomy.mu.Lock()
 	defer a.autonomy.mu.Unlock()
 	current, ok := a.autonomy.doc.Services[s.ID]
 	if a.autonomy.blocked || a.autonomy.doc.Policy.Revision != p.Revision || !ok || !reflect.DeepEqual(current, s) {
 		return s, false
 	}
-	current.ExpectedRoute = "nfqws2"
-	current.DraftFingerprint = autonomyDraftFingerprint(draft)
+	current.Sources = append([]string(nil), current.Sources...)
+	change(&current)
 	a.autonomy.doc.Services[s.ID] = current
 	if a.persistAutonomyLocked(context.WithoutCancel(ctx)) != nil {
 		a.autonomy.doc.Services[s.ID] = s
 		return s, false
 	}
 	return current, true
+}
+
+// committedServiceCurrent reports whether the committed route of the service
+// was applied with its current definition (domains, networks, probe).
+func committedServiceCurrent(plan dataplane.Plan, service catalog.Service) bool {
+	for _, route := range plan.Routes {
+		if route.ServiceID == service.ID {
+			return nodeRecoveryServiceMatches(route, service)
+		}
+	}
+	return false
 }
 
 func (a *App) nfqws2RouteReady() bool {

@@ -112,7 +112,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		return finish("removed", "Сервис удалён из каталога; автоматические изменения остановлены.")
 	}
 	if autonomyDefinition(service) != s.Definition {
-		return finish("definition-changed", "Состав сервиса изменился. Повторно подтвердите его область и проверки.")
+		adopted := false
+		s, adopted = a.adoptReviewedDefinition(ctx, p, s, service)
+		if !adopted {
+			return finish("definition-changed", "Состав сервиса изменился. Повторно подтвердите его область и проверки.")
+		}
 	}
 	cfg := a.Store.Get()
 	if autonomyDraftFingerprint(cfg.Services[s.ID]) != s.DraftFingerprint {
@@ -262,11 +266,29 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		if err != nil || !exists || committed.Revision != cfg.AppliedRevision {
 			return finish("requires-review", "Применённый маршрут не подтверждён журналом. Автоматическое восстановление остановлено.")
 		}
-		matched := false
+		matched, outdated := false, false
 		for _, route := range committed.Routes {
-			if route.ServiceID == s.ID && route.Resolved == current && route.Selected == selectedRoute(cfg.AppliedServices[s.ID]) && sameNodeRecoveryStrings(route.Sources, cfg.AppliedServices[s.ID].Sources) && nodeRecoveryServiceMatches(route, service) {
-				matched = true
+			if route.ServiceID == s.ID && route.Resolved == current && route.Selected == selectedRoute(cfg.AppliedServices[s.ID]) && sameNodeRecoveryStrings(route.Sources, cfg.AppliedServices[s.ID].Sources) {
+				matched = nodeRecoveryServiceMatches(route, service)
+				outdated = !matched
 			}
+		}
+		if outdated {
+			// The consented definition changed after this route was applied (the
+			// record's definition equals the current one). Apply the same node,
+			// proven in this round, to the current definition.
+			if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
+				return finish("rate-limited", "Состав сервиса обновился. Лимит применений исчерпан; прежний маршрут сохранён.")
+			}
+			r.State, r.Message = "applying", "Состав сервиса обновился. Применяем тот же проверенный узел к новому составу."
+			a.autonomyRuntime(s.ID, r)
+			if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, current); err != nil {
+				if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
+					return finish(state, message)
+				}
+				return finish("apply-refused", "Обновлённый состав сервиса не подтверждён после применения; использована защита и откат.")
+			}
+			return finish("applied", "Состав сервиса обновился: тот же проверенный узел применён к новому составу.")
 		}
 		if !matched {
 			return finish("requires-review", "Область или состав применённого маршрута изменились. Требуется просмотр.")

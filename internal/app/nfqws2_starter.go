@@ -37,9 +37,14 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 	if ctx.Err() != nil || !a.autonomyConsent(p, s) || !reflect.DeepEqual(a.Store.Get(), cfg) {
 		return finish("paused", "Проверка отменена или изменились настройки. Сеть не изменена.")
 	}
+	outdated := false
 	if !returning && applied.Enabled && sameNodeRecoveryStrings(applied.Sources, s.Sources) {
 		if plan, exists, err := a.Dataplane.Committed(); err == nil && exists && plan.State == "committed" && plan.Revision == cfg.AppliedRevision && a.Dataplane.ObserveCommittedRuntime(ctx, plan) == nil {
-			return finish("healthy", "Веб-сценарий и действующий NFQWS2 подтверждены. Штатное назначение сохранено.")
+			// A RAZVILKA update may extend the reviewed list: apply NFQWS2
+			// again so the new domains reach its list, then report healthy.
+			if outdated = !committedServiceCurrent(plan, service); !outdated {
+				return finish("healthy", "Веб-сценарий и действующий NFQWS2 подтверждены. Штатное назначение сохранено.")
+			}
 		}
 	}
 	if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
@@ -48,6 +53,8 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 	r.State, r.Message = "applying", "Проверен NFQWS2. Применяем только этот сервис и выбранные устройства."
 	if returning {
 		r.Message = "Применяем ваш возврат сервиса на штатный NFQWS2."
+	} else if outdated {
+		r.Message = "Состав сервиса обновился. Применяем NFQWS2 к новому составу."
 	}
 	a.autonomyRuntime(s.ID, r)
 	if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "nfqws2"); err != nil {
@@ -61,6 +68,9 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 			return finish("applied", "Ваш возврат на штатный NFQWS2 применён. Веб-проверка через NFQWS2 пока не подтверждена; назначение сохранено.")
 		}
 		return finish("applied", "Ваш возврат на штатный NFQWS2 применён и проверен.")
+	}
+	if outdated {
+		return finish("applied", "Состав сервиса обновился: NFQWS2 применён к новому составу.")
 	}
 	return finish("applied", "NFQWS2 применён через общую транзакцию. Проверка остальных функций сервиса выполняется отдельно.")
 }

@@ -217,3 +217,44 @@ func TestAutopilotDeviceScopeDoesNotReturnToNFQWS2(t *testing.T) {
 		t.Fatalf("device-scoped service widened to NFQWS2: %q %+v", route, standardRuntime(a, "discord"))
 	}
 }
+
+// A RAZVILKA update extends the reviewed list (as 0.18.19 did for Discord).
+// The autopilot accepts the shipped definition and applies the same proven
+// node to it instead of stopping with "definition changed".
+func TestAutopilotAdoptsReviewedDefinitionUpdate(t *testing.T) {
+	updated := starterService(t, "discord")
+	previous := updated
+	previous.Domains = append([]string(nil), updated.Domains[:len(updated.Domains)-3]...)
+	a, node, adapter := nfqws2StandardFixture(t, previous)
+	a.Catalog.Services = []catalog.Service{updated}
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	r := standardRuntime(a, "discord")
+	committed, _, err := a.Dataplane.Committed()
+	if err != nil || r.State != "applied" || !strings.Contains(r.Message, "Состав сервиса обновился") || !slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("reviewed update not applied: %+v calls=%v err=%v", r, adapter.calls, err)
+	}
+	if !committedServiceCurrent(committed, a.catalogSnapshot().Services[0]) || selectedRoute(a.Store.Get().AppliedServices["discord"]) != "sing-box:"+node {
+		t.Fatalf("route not refreshed with the same node: %+v", committed.Routes)
+	}
+	adapter.calls = nil
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	if r = standardRuntime(a, "discord"); r.State != "healthy" || slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("refreshed route applied again: %+v %v", r, adapter.calls)
+	}
+}
+
+// Definitions outside the shipped reviewed list still require confirmation.
+func TestAutopilotStillAsksToConfirmOtherDefinitionChanges(t *testing.T) {
+	previous := starterService(t, "discord")
+	changed := previous
+	changed.Domains = append(append([]string(nil), previous.Domains...), "unreviewed.example")
+	a, _, adapter := nfqws2StandardFixture(t, previous)
+	a.Catalog.Services = []catalog.Service{changed}
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	if r := standardRuntime(a, "discord"); r.State != "definition-changed" || len(adapter.calls) != 0 {
+		t.Fatalf("unreviewed definition accepted: %+v %v", r, adapter.calls)
+	}
+}
