@@ -24,6 +24,9 @@ The Riot Games group additionally contains `auth.riotgames.com` and
 `authenticate.riotgames.com`, also RAZVILKA additions: every page of
 `account.riotgames.com` redirects to its sign-in on those hosts, so with the
 single upstream domain the web check could never be confirmed through NFQWS2.
+The group is probed at `authenticate.riotgames.com`, which answers without a
+redirect: the isolated NFQWS2 probe is pinned to one address and source port and
+cannot follow a redirect to another host.
 The common CDN/Google domains cover more than a single application. These are not assertions that all affected applications or features are verified.
 No upstream `auto.list`, `exclude.list`, kernel module, init script or IP set is installed or overwritten by this snapshot; the copies in `upstream/` are test references only.
 `configs/service-catalog.json` must remain byte-identical to `catalog.json` here; tests enforce that relationship.

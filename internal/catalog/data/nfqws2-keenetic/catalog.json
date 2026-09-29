@@ -364,7 +364,7 @@
       "strategy": [
         "nfqws2"
       ],
-      "probe_url": "https://account.riotgames.com/",
+      "probe_url": "https://authenticate.riotgames.com/",
       "source_refs": [
         "nfqws2-keenetic-stock"
       ],
