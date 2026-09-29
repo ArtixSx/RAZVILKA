@@ -51,6 +51,9 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 	r.State, r.Message = "applying", "Проверен NFQWS2. Применяем только этот сервис и выбранные устройства."
 	a.autonomyRuntime(s.ID, r)
 	if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "nfqws2"); err != nil {
+		if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
+			return finish(state, message)
+		}
 		return finish("apply-refused", "NFQWS2 не удалось подтвердить после применения. Использована штатная защита и откат.")
 	}
 	return finish("applied", "NFQWS2 применён через общую транзакцию. Проверка остальных функций сервиса выполняется отдельно.")

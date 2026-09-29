@@ -82,9 +82,11 @@ function renderWorkspaceControls() {
   power.setAttribute('aria-checked', String(canStop));
   power.classList.toggle('running', running);
   power.classList.toggle('unknown', !ready || control.runtime_state === 'unknown');
-  $('#projectPowerLabel').textContent = workspaceControl.runtimeJob ? (workspaceControl.runtimeJob.mode === 'service-stop' ? 'Останавливаем…' : 'Включаем…') : workspaceControl.busy ? 'Выполняется…' : !ready ? 'Состояние не получено' : control.runtime_state === 'unknown' ? 'Нужна проверка' : running ? 'Проект включён' : control.runtime_state === 'stopped' ? 'Проект выключен' : 'Нужна настройка';
-  $('#projectPowerHint').textContent = workspaceControl.runtimeJob ? 'Задание сохранено на роутере' : workspaceControl.readBusy && canStop ? 'Можно поставить остановку в очередь' : workspaceControl.readBusy ? 'Дождитесь завершения проверки' : !ready ? 'Откройте лог или обновите' : control.safe_mode ? 'Безопасный режим · открыть настройки' : canStop ? 'Нажмите, чтобы выключить' : control?.resume_available ? 'Нажмите, чтобы включить' : 'Выбрать и включить сервисы';
+  $('#projectPowerLabel').textContent = workspaceControl.runtimeJob ? (workspaceControl.runtimeJob.mode === 'service-stop' ? 'Останавливаем…' : 'Включаем…') : workspaceControl.busy ? 'Выполняется…' : !ready ? 'Состояние не получено' : control.runtime_state === 'unknown' ? (canStop ? 'Включён · маршруты не подтверждены' : 'Включён · ждёт применения') : running ? 'Проект включён' : control.runtime_state === 'stopped' ? 'Проект выключен' : 'Нужна настройка';
+  $('#projectPowerHint').textContent = workspaceControl.runtimeJob ? 'Задание сохранено на роутере' : workspaceControl.readBusy && canStop ? 'Можно поставить остановку в очередь' : workspaceControl.readBusy ? 'Дождитесь завершения проверки' : !ready ? 'Откройте лог или обновите' : control.safe_mode ? 'Безопасный режим · открыть настройки' : canStop ? 'Нажмите, чтобы выключить' : control.runtime_state === 'unknown' ? 'Примените изменения, чтобы подтвердить' : control?.resume_available ? 'Нажмите, чтобы включить' : 'Выбрать и включить сервисы';
   power.setAttribute('aria-label', canStop ? 'Остановить маршруты RAZVILKA' : 'Включить маршруты RAZVILKA');
+  // The project is on; only the live routes are unconfirmed. Name the reason.
+  power.title = ready && control.runtime_state === 'unknown' ? control.runtime_issue?.message || 'Маршруты ещё не подтверждены в текущей сети.' : '';
   if (ready) $('#systemText').textContent = workspaceControl.readBusy ? 'Выполняется проверка или изменение' : control.safe_mode ? 'Применение заблокировано в настройках' : control.mode === 'manual' ? 'Подключения меняете вы' : 'Автозамена по правилам сервисов';
 }
 

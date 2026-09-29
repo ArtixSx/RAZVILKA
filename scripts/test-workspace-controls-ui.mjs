@@ -134,7 +134,7 @@ state.savedPanel = { receivedAt: Date.now(), value: { schema: 1, state: 'retaine
   data: { config: { revision: 25, stopped: false, safe_mode: false, mode: 'auto' }, services: [{ applied: { enabled: true } }] } } };
 context.renderWorkspaceControls();
 assert.equal($('#projectPower').disabled, false, 'first busy login could not queue Stop');
-assert.equal($('#projectPowerLabel').textContent, 'Нужна проверка', 'retained data claimed a working route');
+assert.equal($('#projectPowerLabel').textContent, 'Включён · маршруты не подтверждены', 'retained data claimed a working route');
 assert.equal($('#projectPower').attributes['aria-label'], 'Остановить маршруты RAZVILKA');
 assert.equal($('#projectModeManual').disabled, true, 'retained data authorized a mode change');
 const beforeSavedMode = calls.length;

@@ -302,18 +302,50 @@ func TestAppliedNodeRecoveryBusyAndBoundedRetries(t *testing.T) {
 	release()
 	checker.fail = true
 	start := time.Now()
-	for index := 0; index < 6; index++ {
+	for index := 0; index < 5; index++ {
 		a.nodeRecoveryRound(context.Background(), start.Add(time.Duration(index)*10*time.Minute))
 	}
-	if len(checker.requests) != maxNodeRecoveryAttempts || len(adapter.calls) != 0 || a.nodeRecoverySnapshot().State != "requires-review" {
-		t.Fatalf("unbounded retry: %+v checks=%d", a.nodeRecoverySnapshot(), len(checker.requests))
+	status := a.nodeRecoverySnapshot()
+	if len(checker.requests) != maxNodeRecoveryAttempts || len(adapter.calls) != 0 || status.State != "requires-review" || status.Reason != "service-unconfirmed" ||
+		!status.NextAttemptAt.Equal(start.Add(20*time.Minute+nodeRecoveryReviewRetry)) {
+		t.Fatalf("unbounded retry: %+v checks=%d", status, len(checker.requests))
 	}
 	a.FreshProfile = func(context.Context) (string, error) { return "", errors.New("private-network-error") }
-	a.nodeRecoveryRound(context.Background(), start.Add(time.Hour))
+	a.nodeRecoveryRound(context.Background(), start.Add(45*time.Minute))
 	a.FreshProfile = func(context.Context) (string, error) { return recoveryProfile, nil }
-	a.nodeRecoveryRound(context.Background(), start.Add(2*time.Hour))
-	if len(checker.requests) != maxNodeRecoveryAttempts {
+	a.nodeRecoveryRound(context.Background(), start.Add(49*time.Minute))
+	if len(checker.requests) != maxNodeRecoveryAttempts || a.nodeRecoverySnapshot().State != "requires-review" {
 		t.Fatal("unknown observation reset retry bound")
+	}
+	// The identical applied plan is retried at a slow pace, one attempt at a time.
+	a.nodeRecoveryRound(context.Background(), start.Add(50*time.Minute))
+	a.nodeRecoveryRound(context.Background(), start.Add(50*time.Minute+30*time.Second))
+	if status := a.nodeRecoverySnapshot(); len(checker.requests) != maxNodeRecoveryAttempts+1 || status.State != "network-stale" || status.Attempt != 1 || len(adapter.calls) != 0 {
+		t.Fatalf("slow retry: %+v checks=%d", status, len(checker.requests))
+	}
+}
+
+func TestAppliedNodeRecoveryNamesUnavailableNodeAndCleanupStaysFenced(t *testing.T) {
+	a, id, _, checker, _ := nodeRecoveryFixture(t)
+	if _, err := a.Nodes.SetDisabled(context.Background(), id, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	a.nodeRecoveryRound(context.Background(), now)
+	status := a.nodeRecoverySnapshot()
+	if status.State != "requires-review" || status.Reason != "node-unavailable" || status.ServiceID != "telegram" || len(checker.requests) != 0 ||
+		!strings.Contains(status.Message, "Telegram") || !status.NextAttemptAt.Equal(now.Add(nodeRecoveryReviewRetry)) || strings.Contains(status.Message, id) {
+		t.Fatalf("unnamed refusal: %+v", status)
+	}
+	if _, err := a.Nodes.SetDisabled(context.Background(), id, false, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	a.nodeRecoveryRound(context.Background(), now.Add(nodeRecoveryReviewRetry))
+	if status := a.nodeRecoverySnapshot(); status.State != "recovered" || len(checker.requests) != 1 {
+		t.Fatalf("restored node was not recovered: %+v", status)
+	}
+	if got := nodeRecoveryReason(errors.New("x"), dataplane.Execution{State: "rollback-failed"}); got != "cleanup-unconfirmed" {
+		t.Fatal(got)
 	}
 }
 

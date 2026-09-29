@@ -71,6 +71,13 @@ func (r *Runtime) ReserveSwitch(now time.Time, limit int) bool {
 	r.Switches = append(r.Switches, now)
 	return true
 }
+
+// RefundSwitch returns the latest reservation when no transaction started.
+func (r *Runtime) RefundSwitch() {
+	if n := len(r.Switches); n > 0 {
+		r.Switches = r.Switches[:n-1]
+	}
+}
 func (r Runtime) Clone() Runtime {
 	r.Reserves = slices.Clone(r.Reserves)
 	r.Switches = slices.Clone(r.Switches)

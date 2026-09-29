@@ -59,7 +59,7 @@ import (
 var (
 	// Builds override provenance through -ldflags. The version default mirrors
 	// canonical VERSION; unknown provenance never claims a verified release build.
-	Version     = "0.18.15"
+	Version     = "0.18.16"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"
@@ -168,6 +168,7 @@ type App struct {
 	nodeRecovery              nodeRecoveryState
 	nodeChecks                nodeCheckState
 	nodeAutofallback          nodeAutofallbackState
+	retainedProofs            retainedProofState
 	reconciler                serviceReconciler
 	DataplaneHost             func() dataplane.HostState
 	FreshProfile              func(context.Context) (string, error)
@@ -3647,7 +3648,7 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 		if state.Enabled {
 			selected := selectedRoute(state)
 			if (strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-")) && !routecatalog.ValidForServiceWithOptions(selected, service.ID, options) {
-				return dataplane.Plan{}, &routePlanDependencyError{ServiceID: service.ID, Name: service.Name}
+				return dataplane.Plan{}, a.routePlanDependency(cfg, service, selected, committedRoutes[service.ID])
 			}
 			resolved := selected
 			if selected == "auto" {
@@ -3669,7 +3670,7 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 				}
 				proof, proofErr := a.Nodes.ResolveRoute(context.Background(), strings.TrimPrefix(selected, "sing-box:"), service.ID, networkProfile, previousNode, committedAt, time.Now())
 				if proofErr != nil {
-					return dataplane.Plan{}, &routePlanDependencyError{ServiceID: service.ID, Name: service.Name}
+					return dataplane.Plan{}, a.routePlanDependency(cfg, service, selected, committedRoutes[service.ID])
 				}
 				resolved = proof.Route
 			}

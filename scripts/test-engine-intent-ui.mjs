@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
-const names = ['captureEngineEditorContext', 'engineEditorContextCurrent', 'engineIntentCurrent', 'updateEngineEditorActions', 'markEngineEditorDirty', 'invalidateEngineEditorContext', 'beginEngineIntent', 'finishEngineIntent', 'cancelEngineIntent', 'handleEngineEditorLifecycle', 'saveEngineDraft', 'applyEngineConfig', 'applyDraft', 'validateEngineFile', 'loadEngineFile', 'loadEngineGuided', 'selectEngine', 'selectEngineFile', 'switchEngineMode', 'handleEngineImport', 'discardEngineConfigDraft', 'refreshEngineConfigs'];
+const names = ['captureEngineEditorContext', 'engineEditorContextCurrent', 'engineIntentCurrent', 'updateEngineEditorActions', 'markEngineEditorDirty', 'invalidateEngineEditorContext', 'beginEngineIntent', 'finishEngineIntent', 'cancelEngineIntent', 'handleEngineEditorLifecycle', 'saveEngineDraft', 'applyEngineConfig', 'applyDraft', 'planWithRetainedNodeCheck', 'retainedNodeDependency', 'checkRetainedNodeRoute', 'showRouteDependencyNotice', 'validateEngineFile', 'loadEngineFile', 'loadEngineGuided', 'selectEngine', 'selectEngineFile', 'switchEngineMode', 'handleEngineImport', 'discardEngineConfigDraft', 'refreshEngineConfigs'];
 const functions = names.map(name => {
   const match = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));
   assert.ok(match, name); return match[0];
@@ -28,7 +28,7 @@ const context = vm.createContext({ state, $, $$: selector => selector === '[data
   renderStatus() {}, renderEngineControl() {}, renderGuidedEditor() {}, switchEngineTab() {},
   refreshCoreAfterEdit: async () => {}, showPlan: async () => {}, needsApplyReview: () => true,
   reviewApplyPlan: async value => reviewHandler(value), askConfirmation: async () => true, fallbackLabels: {},
-  showNotice: (...args) => messages.push(args), showDetails: (...args) => messages.push(args),
+  showNotice: (...args) => messages.push(args), showDetails: (...args) => messages.push(args), hideNotice() {},
 });
 vm.runInContext(functions, context);
 const normal = async (url, options) => {
@@ -72,6 +72,39 @@ for (const failAt of ['save', 'refresh', 'validation', 'identity', 'review-missi
   assert.equal(appliedCalls().length, 0, `${failAt} failure applied an older staged configuration`);
   if (failAt === 'save' || failAt === 'identity') assert.equal(calls.length, 1, 'failed save continued to validation');
 }
+
+// An applied node route of another service blocks the plan in a new network:
+// the panel re-checks only that node, then continues the same reviewed apply.
+for (const checkPasses of [true, false]) {
+  reset(); staged = true; state.engineConfigs = configs();
+  state.services = [{ id: 'discord', name: 'Discord', enabled: true, route: 'sing-box:node-abc', applied_enabled: true, applied_route: 'sing-box:node-abc' }];
+  let blocked = true;
+  handler = async (url, options) => {
+    if (url.startsWith('/api/v1/plan?') && blocked) {
+      throw Object.assign(new Error('dependency'), { payload: { code: 'NODE_ROUTE_DEPENDENCY', service_id: 'discord', retained: true, cause: 'check-required' } });
+    }
+    if (url === '/api/v1/nodes/node-abc/check') {
+      blocked = !checkPasses;
+      return { ok: true, result: { available: checkPasses, service_id: 'discord', node_id: 'node-abc', message: checkPasses ? '' : 'Нет ответа.' } };
+    }
+    return normal(url, options);
+  };
+  await context.applyEngineConfig();
+  const checks = calls.filter(call => call.url === '/api/v1/nodes/node-abc/check');
+  assert.equal(checks.length, 1, 'retained node was not checked exactly once');
+  assert.deepEqual(JSON.parse(checks[0].options.body), { service_id: 'discord', confirm: 'CHECK_NODE' });
+  assert.equal(appliedCalls().length, checkPasses ? 1 : 0, 'retained check outcome did not gate apply');
+  if (!checkPasses) assert.ok(messages.some(args => String(args[1]).includes('Discord') && args[5]?.label), 'failed check hid the blocking service');
+}
+reset(); staged = true; state.engineConfigs = configs();
+handler = async (url, options) => {
+  if (url.startsWith('/api/v1/plan?')) throw Object.assign(new Error('dependency'), { payload: { code: 'NODE_ROUTE_DEPENDENCY', service_id: 'discord', retained: false, cause: 'check-required' } });
+  return normal(url, options);
+};
+await context.applyEngineConfig();
+assert.equal(calls.filter(call => call.url.includes('/nodes/')).length, 0, 'an unapplied node selection was checked without review');
+assert.equal(appliedCalls().length, 0);
+state.services = [];
 
 reset(); state.engineMode = 'guided';
 await context.applyEngineConfig();

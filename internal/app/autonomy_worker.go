@@ -182,6 +182,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 				}
 				a.autonomyRuntime(s.ID, r)
 				if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, route); err != nil {
+					if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
+						return finish(state, message)
+					}
 					return finish("apply-refused", "Применение локального обхода не подтверждено; выполнена защита/откат.")
 				}
 				return finish("applied", "Подходящий обход применён через общую транзакцию.")
@@ -286,6 +289,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			r.State, r.Message = "applying", "Восстанавливаем прежний проверенный узел без замены подключения."
 			a.autonomyRuntime(s.ID, r)
 			if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, current); err != nil {
+				if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
+					return finish(state, message)
+				}
 				return finish("apply-refused", "Восстановление прежнего маршрута не подтверждено; использована защита и откат.")
 			}
 			return finish("applied", "Прежний проверенный узел и его область восстановлены через общую транзакцию.")
@@ -406,6 +412,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 				}
 				continue
 			}
+			if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
+				return finish(state, message)
+			}
 			state, message := autonomyApplyFailureStatus(err)
 			return finish(state, message)
 		}
@@ -456,7 +465,11 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 	state.Route = route
 	state.Mode = route
 	hypothetical.Services[s.ID] = state
-	plan, err := a.buildDataplanePlanForScope(hypothetical, a.nodeRouteOptions(), changeScopeNode, "")
+	plan, err := a.buildPlanReprovingRetained(ctx, hypothetical, profile)
+	var dependency *routePlanDependencyError
+	if errors.As(err, &dependency) {
+		return dependency
+	}
 	if err != nil || !plan.Ready {
 		return errors.New("autonomous plan not ready")
 	}

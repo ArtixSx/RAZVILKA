@@ -624,20 +624,28 @@ function showDetails(value, title = 'Детали') {
   });
 }
 
-function showNotice(kind, title, message, details = null, settings = false) {
+function showNotice(kind, title, message, details = null, settings = false, action = null) {
   const notice = $('#notice');
   notice.hidden = false;
   notice.className = `notice ${kind || 'success'}`;
   $('#noticeTitle').textContent = title;
   $('#noticeText').textContent = message;
   state.noticeDetails = details;
+  state.noticeAction = typeof action?.run === 'function' ? action : null;
   $('#noticeDetails').hidden = details == null;
   $('#noticeSettings').hidden = !settings;
+  const button = $('#noticeAction');
+  if (button) {
+    button.hidden = !state.noticeAction;
+    button.textContent = state.noticeAction?.label || '';
+  }
 }
 
 function hideNotice() {
   $('#notice').hidden = true;
   state.noticeDetails = null;
+  state.noticeAction = null;
+  if ($('#noticeAction')) $('#noticeAction').hidden = true;
 }
 
 function onboardingDone() {
@@ -2506,7 +2514,7 @@ async function applyEngineConfig() {
     state.engineValidation = validation;
     if (!state.engineValidation.ok) throw new Error(state.engineValidation.output || 'Конфигурация не прошла проверку');
     if (!await refreshEngineConfigs(intent) || !engineIntentCurrent(intent)) return;
-    const plan = await api(`/api/v1/plan?scope=engine&engine=${encodeURIComponent(intent.engineID)}`, { signal: intent.controller.signal });
+    const plan = await planWithRetainedNodeCheck(`?scope=engine&engine=${encodeURIComponent(intent.engineID)}`, { signal: intent.controller.signal, isCurrent: () => engineIntentCurrent(intent) });
     if (!engineIntentCurrent(intent)) return;
     const unused = (plan.transaction?.blockers || []).find((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED' && blocker.adapter === engine.id);
     if (unused) {
@@ -2514,7 +2522,11 @@ async function applyEngineConfig() {
       return;
     }
     await applyDraft('engine', intent.engineID, { signal: intent.controller.signal, isCurrent: () => engineIntentCurrent(intent), preview: plan, engineIntent: intent });
-  } catch (error) { if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Настройки не применены'); }
+  } catch (error) {
+    if (!engineIntentCurrent(intent)) return;
+    if (error.payload?.code === 'NODE_ROUTE_DEPENDENCY') showRouteDependencyNotice(error);
+    else showDetails({ error: error.message }, 'Настройки не применены');
+  }
   finally { finishEngineIntent(intent); }
 }
 
@@ -3080,7 +3092,7 @@ function nodeRecoveryBanner(recovery) {
   // Current running state belongs to the global status, not this alert.
   const labels = { revalidating: 'Повторная проверка применённого маршрута', 'network-stale': 'Маршрут ожидает повторной проверки', 'requires-review': 'Восстановление требует вашего внимания' };
   const label = labels[recovery?.state];
-  const reasons = { 'cleanup-unconfirmed': 'Не подтверждён возврат прежнего состояния.', canceled: 'Проверка отменена.', deadline: 'Истекло время проверки.', 'network-unconfirmed': 'Изменилось подключение к интернету или его состояние неизвестно.', 'authority-changed': 'Настройки или разрешения изменились.', 'checker-busy': 'Проверяющий процесс занят.', 'runtime-unavailable': 'Не готов компонент подключения.', 'checker-unavailable': 'Проверка подключения сейчас недоступна.', 'service-unconfirmed': 'Сохранённое подключение не подтвердило доступ к сервису.', 'operation-unconfirmed': 'Операция не завершилась.' };
+  const reasons = { 'cleanup-unconfirmed': 'Не подтверждён возврат прежнего состояния.', canceled: 'Проверка отменена.', deadline: 'Истекло время проверки.', 'network-unconfirmed': 'Изменилось подключение к интернету или его состояние неизвестно.', 'authority-changed': 'Настройки или разрешения изменились.', 'checker-busy': 'Проверяющий процесс занят.', 'runtime-unavailable': 'Не готов компонент подключения.', 'checker-unavailable': 'Проверка подключения сейчас недоступна.', 'service-unconfirmed': 'Сохранённое подключение не подтвердило доступ к сервису.', 'operation-unconfirmed': 'Операция не завершилась.', 'node-unavailable': 'Узел недоступен: подписка устарела, узел отключён или удалён. Выберите другой узел для сервиса.', 'scope-changed': 'Применённые настройки или состав сервиса изменились; примените изменения заново.', 'settings-changed': 'Включён безопасный режим или маршруты остановлены.', 'unsupported-plan': 'Этот план нельзя восстановить автоматически; примените изменения вручную.', 'plan-blocked': 'Обходы ещё не готовы к восстановлению; попытка повторится.' };
   const detail = reasons[recovery?.reason];
   return label ? `<b>${esc(label)}</b><span>${esc(recovery.message || '')}</span>${detail ? `<small>${esc(detail)}</small>` : ''}` : '';
 }
@@ -3994,6 +4006,61 @@ async function showServicePlan(id) {
   }
 }
 
+// A route applied earlier needs a fresh node check after a network change or
+// once its evidence expires. The check changes no route; the plan is requested
+// again only after it passes. An unapplied selection still needs its own review.
+async function planWithRetainedNodeCheck(query, options = {}) {
+  const checked = new Set();
+  for (;;) {
+    try {
+      return await api(`/api/v1/plan${query}`, { signal: options.signal });
+    } catch (error) {
+      const service = retainedNodeDependency(error);
+      if (!service || checked.has(service.id) || checked.size >= 8 || (options.isCurrent && !options.isCurrent())) throw error;
+      checked.add(service.id);
+      await checkRetainedNodeRoute(service, error.payload, options.signal);
+    }
+  }
+}
+
+function retainedNodeDependency(error) {
+  const dependency = error?.payload?.code === 'NODE_ROUTE_DEPENDENCY' ? error.payload : null;
+  const service = dependency ? (state.services || []).find((item) => item.id === dependency.service_id) : null;
+  const route = String(service?.applied_route || '');
+  return dependency?.retained === true && dependency.cause === 'check-required' && service?.applied_enabled === true && route.startsWith('sing-box:node-') && route === service.route ? service : null;
+}
+
+async function checkRetainedNodeRoute(service, dependency, signal) {
+  const nodeID = service.applied_route.slice('sing-box:'.length);
+  showNotice('info', `Проверяем подключение «${service.name}»`, 'Маршрут этого сервиса уже применён, но в текущей сети его узел ещё не проверен. Проверка займёт до 45 секунд, затем применение продолжится автоматически.');
+  const response = await api(`/api/v1/nodes/${encodeURIComponent(nodeID)}/check`, { method: 'POST', signal, body: JSON.stringify({ service_id: service.id, confirm: 'CHECK_NODE' }) });
+  const passed = response?.ok === true && response.result?.available === true && response.result?.service_id === service.id && response.result?.node_id === nodeID;
+  if (!passed) {
+    const reason = response?.result?.message ? ` ${response.result.message}` : '';
+    const failure = new Error(`Узел сервиса «${service.name}» не прошёл проверку в текущей сети.${reason} Выберите для сервиса другой узел или выключите его, затем повторите применение. Остальные изменения сохранены.`);
+    failure.payload = { ...dependency, cause: 'check-failed' };
+    throw failure;
+  }
+  hideNotice();
+}
+
+// Name the service that blocks Apply and open its connection choice directly.
+function showRouteDependencyNotice(error) {
+  const id = error.payload?.service_id;
+  const name = (state.services || []).find((item) => item.id === id)?.name || 'другой сервис';
+  showNotice('error', `Применение ждёт «${name}»`, error.message, error.payload, false, id ? { label: `Открыть «${name}»`, run: () => openNodeServiceSection(id) } : null);
+}
+
+function openNodeServiceSection(id) {
+  setView('nodes');
+  if (typeof nodeServiceView !== 'undefined') {
+    nodeServiceView.added.add(id);
+    nodeServiceView.open.add(id);
+  }
+  if (typeof setNodeBrowserTab === 'function') setNodeBrowserTab('services');
+  requestAnimationFrame(() => document.querySelector(`details[data-node-service="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+}
+
 async function applyDraft(scope = 'all', engineID = '', options = {}) {
   const current = () => !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
   if (!current()) return null;
@@ -4012,7 +4079,7 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
   const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}${engineID ? `&engine=${encodeURIComponent(engineID)}` : ''}`;
   buttons.forEach((b) => { b.disabled = true; b.textContent = 'Проверка…'; });
   try {
-    const preview = options.preview || await api(`/api/v1/plan${query}`, { signal: options.signal });
+    const preview = options.preview || await planWithRetainedNodeCheck(query, { signal: options.signal, isCurrent: current });
     if (!current()) return null;
     const review = preview.review;
     if (!Number.isSafeInteger(review?.expected_revision) || typeof review?.reviewed_digest !== 'string' || !review.reviewed_digest) throw new Error('Откройте новый просмотр изменений: подтверждение плана отсутствует.');
@@ -4060,7 +4127,9 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
 	  showNotice('review', 'Выберите сервис для подключения', `${names}: выберите хотя бы один сервис для этого обхода либо отмените изменения. Рабочие настройки прежние.`, error.payload, true);
 	} else {
 	  const failure = error.payload?.failure;
-	  if (failure) {
+	  if (error.payload?.code === 'NODE_ROUTE_DEPENDENCY') {
+	    showRouteDependencyNotice(error);
+	  } else if (failure) {
 	    showNotice('error', failure.title || 'Изменения не применены', `${failure.message || error.message} ${failure.resolution || ''}`.trim(), error.payload, true);
 	  } else {
 	    showNotice('error', 'Применение заблокировано', error.payload?.note || error.message, error.payload || { error: error.message }, true);
@@ -4757,6 +4826,7 @@ function bindEvents() {
   $('#noticeClose').addEventListener('click', hideNotice);
   $('#noticeDetails').addEventListener('click', () => { if (state.noticeDetails != null) showDetails(state.noticeDetails, 'Технические детали'); });
   $('#noticeSettings').addEventListener('click', () => setView('settings'));
+  $('#noticeAction')?.addEventListener('click', () => { const action = state.noticeAction; if (!action) return; hideNotice(); action.run(); });
   $('#setupForm').addEventListener('submit', submitSetup);
   $('#loginForm').addEventListener('submit', submitLogin);
   $('#recoveryResetForm').addEventListener('submit', recoverAccount);

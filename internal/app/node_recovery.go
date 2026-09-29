@@ -21,6 +21,27 @@ const maxNodeRecoveryAttempts = 3
 
 var errNodeRecoveryReview = errors.Join(dataplane.ErrReviewChanged, errors.New("applied node recovery requires review"))
 
+// Recovery re-applies only the identical committed plan after fresh checks, so
+// a refused attempt is repeated at a slow pace instead of never. Unconfirmed
+// cleanup stays fenced until the operator reviews it.
+const nodeRecoveryReviewRetry = 30 * time.Minute
+
+// A fixed category and the affected service explain why the applied plan was
+// not recovered. It never carries node material or checker output.
+type nodeRecoveryBlock struct {
+	reason    string
+	serviceID string
+}
+
+func (e *nodeRecoveryBlock) Error() string { return errNodeRecoveryReview.Error() + ": " + e.reason }
+func (e *nodeRecoveryBlock) Is(target error) bool {
+	return target == errNodeRecoveryReview || target == dataplane.ErrReviewChanged
+}
+
+func recoveryBlock(reason, serviceID string) error {
+	return &nodeRecoveryBlock{reason: reason, serviceID: serviceID}
+}
+
 // This DTO contains no node material, probe output, endpoint or raw errors.
 type nodeRecoveryStatus struct {
 	State         string    `json:"state"`
@@ -30,6 +51,7 @@ type nodeRecoveryStatus struct {
 	NextAttemptAt time.Time `json:"next_attempt_at,omitempty"`
 	Message       string    `json:"message"`
 	Reason        string    `json:"reason,omitempty"`
+	ServiceID     string    `json:"service_id,omitempty"`
 	FailedStage   string    `json:"failed_stage,omitempty"`
 }
 
@@ -181,7 +203,10 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 		a.nodeRecovery.status = nodeRecoveryStatus{PlanID: plan.PlanID}
 	}
 	status := a.nodeRecovery.status
-	if status.Attempt >= maxNodeRecoveryAttempts || status.State == "requires-review" || now.Before(status.NextAttemptAt) {
+	retry := status.State == "requires-review" && !status.NextAttemptAt.IsZero() && !now.Before(status.NextAttemptAt)
+	if retry {
+		status.Attempt = 0
+	} else if status.Attempt >= maxNodeRecoveryAttempts || status.State == "requires-review" || now.Before(status.NextAttemptAt) {
 		a.nodeRecovery.mu.Unlock()
 		return
 	}
@@ -207,6 +232,10 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 	if err != nil {
 		status.Reason = nodeRecoveryReason(err, execution)
 		status.FailedStage = a.nodeRecoverySnapshot().Stage
+		var block *nodeRecoveryBlock
+		if errors.As(err, &block) {
+			status.ServiceID = block.serviceID
+		}
 	}
 	cancel()
 	a.nodeRecovery.mu.Lock()
@@ -223,7 +252,11 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 		a.nodeRecovery.mu.Unlock()
 	} else if errors.Is(err, errNodeRecoveryReview) || status.Attempt >= maxNodeRecoveryAttempts || execution.State == "rollback-failed" {
 		status.State = "requires-review"
-		status.Message = "Автоматическое восстановление не подтверждено. Проверьте применённые узлы и просмотрите маршрут; другой узел автоматически не выбирается."
+		status.Message = a.nodeRecoveryReviewMessage(status)
+		if status.Reason != "cleanup-unconfirmed" {
+			status.NextAttemptAt = now.Add(nodeRecoveryReviewRetry)
+			status.Message += " Повторная попытка — через 30 минут; другой узел автоматически не выбирается."
+		}
 	} else {
 		status.State = "network-stale"
 		status.NextAttemptAt = now.Add(time.Duration(status.Attempt*status.Attempt) * time.Minute)
@@ -244,6 +277,10 @@ func nodeRecoveryReason(err error, execution dataplane.Execution) string {
 		return "deadline"
 	case errors.Is(err, dataplane.ErrNetworkChanged), errors.Is(err, dataplane.ErrExactNodeNetworkChanged):
 		return "network-unconfirmed"
+	case errors.As(err, new(*nodeRecoveryBlock)):
+		var block *nodeRecoveryBlock
+		errors.As(err, &block)
+		return block.reason
 	case errors.Is(err, errNodeRecoveryReview), errors.Is(err, dataplane.ErrReviewChanged):
 		return "authority-changed"
 	case errors.Is(err, dataplane.ErrExactNodeBusy):
@@ -308,7 +345,7 @@ func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, 
 		return dataplane.Execution{}, err
 	}
 	if !plan.Ready {
-		return dataplane.Execution{}, errNodeRecoveryReview
+		return dataplane.Execution{}, recoveryBlock("plan-blocked", "")
 	}
 	status := a.nodeRecoverySnapshot()
 	status.Stage = "transaction"
@@ -324,9 +361,14 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 	for _, route := range previous.Routes {
 		intent.nodes = intent.nodes || strings.HasPrefix(route.Resolved, "sing-box:node-")
 	}
-	if intent.nodes && (a.Nodes == nil || a.NodeChecker == nil) || intent.config.SafeMode || intent.config.ServiceControl.Stopped || previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop || previous.Revision != intent.config.AppliedRevision ||
-		len(previous.Routes) == 0 || len(previous.Routes) > maxNodeRecoveryRoutes || !nodeRecoveryAdaptersSupported(previous) {
-		return intent, errNodeRecoveryReview
+	if intent.config.SafeMode || intent.config.ServiceControl.Stopped {
+		return intent, recoveryBlock("settings-changed", "")
+	}
+	if previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop || previous.Revision != intent.config.AppliedRevision {
+		return intent, recoveryBlock("scope-changed", "")
+	}
+	if intent.nodes && (a.Nodes == nil || a.NodeChecker == nil) || len(previous.Routes) == 0 || len(previous.Routes) > maxNodeRecoveryRoutes || !nodeRecoveryAdaptersSupported(previous) {
+		return intent, recoveryBlock("unsupported-plan", "")
 	}
 	// Recover the entire applied plan, including unchanged NFQWS2 routes.
 	// Other mixed adapters still require a reviewed plan; never drop a subset.
@@ -339,18 +381,18 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 		state := intent.config.AppliedServices[route.ServiceID]
 		service, ok := services[route.ServiceID]
 		if !ok || seen[route.ServiceID] || !state.Enabled || selectedRoute(state) != route.Selected ||
-			!sameNodeRecoveryStrings(state.Sources, route.Sources) || !nodeRecoveryServiceMatches(route, service) || !serviceHasNodeProbe(service) {
-			return intent, errNodeRecoveryReview
+			!sameNodeRecoveryStrings(state.Sources, route.Sources) || !nodeRecoveryServiceMatches(route, service) {
+			return intent, recoveryBlock("scope-changed", route.ServiceID)
 		}
-		if route.Selected != route.Resolved && route.Selected != "auto" && !(route.Resolved != "nfqws2" && strings.HasPrefix(route.Selected, "sing-box:group-")) {
-			return intent, errNodeRecoveryReview
+		if !serviceHasNodeProbe(service) || route.Selected != route.Resolved && route.Selected != "auto" && !(route.Resolved != "nfqws2" && strings.HasPrefix(route.Selected, "sing-box:group-")) {
+			return intent, recoveryBlock("unsupported-plan", route.ServiceID)
 		}
 		seen[route.ServiceID] = true
 		intent.services = append(intent.services, service)
 	}
 	for id, service := range intent.config.AppliedServices {
 		if service.Enabled && !seen[id] {
-			return intent, errNodeRecoveryReview
+			return intent, recoveryBlock("scope-changed", id)
 		}
 	}
 	if intent.nodes {
@@ -429,27 +471,27 @@ func (a *App) guardNodeRecoveryIntent(ctx context.Context, intent nodeRecoveryIn
 	}
 	if spec := intent.plan.DNS; spec != nil {
 		if a.DNS == nil || len(spec.Bindings) == 0 {
-			return errNodeRecoveryReview
+			return recoveryBlock("unsupported-plan", "")
 		}
 		for _, binding := range spec.Bindings {
 			identity, err := a.DNS.ScopedProfileIdentity(binding.ProfileID)
 			service, exists := services[binding.ServiceID]
 			if err != nil || identity != binding.ProfileDigest || !exists || !scopedDNSScenarioMatches(service, spec.Probe) || a.DNS.VerifyServiceSelection(binding.ServiceID, binding.ProfileID) != nil {
-				return errNodeRecoveryReview
+				return recoveryBlock("scope-changed", binding.ServiceID)
 			}
 		}
 	}
 	for index, route := range intent.plan.Routes {
 		service, ok := services[route.ServiceID]
 		if !ok || !nodeRecoveryServiceMatches(route, service) || !reflect.DeepEqual(service.Probes, intent.services[index].Probes) {
-			return errNodeRecoveryReview
+			return recoveryBlock("scope-changed", route.ServiceID)
 		}
 		if !strings.HasPrefix(route.Resolved, "sing-box:node-") {
 			continue
 		}
 		nodeID := strings.TrimPrefix(route.Resolved, "sing-box:")
 		if !nodeRecoveryNodePresent(snapshot, nodeID, time.Now()) || !nodeRecoverySelectorOwns(snapshot, route.Selected, nodeID) {
-			return errNodeRecoveryReview
+			return recoveryBlock("node-unavailable", route.ServiceID)
 		}
 		if proofs {
 			proof, err := a.Nodes.ResolveRoute(ctx, nodeID, route.ServiceID, intent.profile, "", time.Time{}, time.Now())
@@ -516,6 +558,28 @@ func sortedRecoveryStrings(values []string) []string {
 func nodeRecoveryServiceMatches(route dataplane.Route, service catalog.Service) bool {
 	return route.ServiceID == service.ID && route.ProbeURL == service.ProbeURL && sameNodeRecoveryStrings(route.Domains, service.Domains) &&
 		sameNodeRecoveryStrings(route.CIDRs, service.CIDRs) && sameNodeRecoveryStrings(route.SourceRefs, service.SourceRefs)
+}
+
+// The message names the category and service; the fixed reason stays in Reason.
+func (a *App) nodeRecoveryReviewMessage(status nodeRecoveryStatus) string {
+	texts := map[string]string{
+		"node-unavailable":    "узел применённого маршрута недоступен: подписка устарела, узел отключён или удалён.",
+		"scope-changed":       "применённые настройки или состав сервиса изменились после последнего применения.",
+		"settings-changed":    "включён безопасный режим или маршруты остановлены.",
+		"unsupported-plan":    "этот применённый план нельзя восстановить автоматически.",
+		"plan-blocked":        "план восстановления не прошёл проверку готовности обходов.",
+		"service-unconfirmed": "сохранённый узел не подтвердил доступ к сервису.",
+		"cleanup-unconfirmed": "не подтверждён возврат прежнего состояния. Откройте журнал перед следующим применением.",
+	}
+	text, ok := texts[status.Reason]
+	if !ok {
+		text = "повторная проверка применённых узлов не завершилась."
+	}
+	subject := "Автоматическое восстановление не подтверждено"
+	if service, found := a.autonomyService(status.ServiceID); found && status.ServiceID != "" {
+		subject += " (сервис «" + service.Name + "»)"
+	}
+	return subject + ": " + text
 }
 
 func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, error) {
