@@ -258,3 +258,12 @@ func TestAutopilotStillAsksToConfirmOtherDefinitionChanges(t *testing.T) {
 		t.Fatalf("unreviewed definition accepted: %+v %v", r, adapter.calls)
 	}
 }
+
+func TestStandardRouteOnlyForReviewedNFQWS2List(t *testing.T) {
+	discord := starterService(t, "discord")
+	changed := discord
+	changed.Domains = append(append([]string(nil), discord.Domains...), "unreviewed.example")
+	if standardRoute(discord) != "nfqws2" || standardRoute(changed) != "" || standardRoute(catalog.Service{ID: "my-site"}) != "" {
+		t.Fatal("standard route offered outside the reviewed NFQWS2 list")
+	}
+}

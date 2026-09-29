@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
-const names = ['captureEngineEditorContext', 'engineEditorContextCurrent', 'engineIntentCurrent', 'updateEngineEditorActions', 'markEngineEditorDirty', 'invalidateEngineEditorContext', 'beginEngineIntent', 'finishEngineIntent', 'cancelEngineIntent', 'handleEngineEditorLifecycle', 'saveEngineDraft', 'applyEngineConfig', 'applyDraft', 'planWithRetainedNodeCheck', 'retainedNodeDependency', 'checkRetainedNodeRoute', 'showRouteDependencyNotice', 'validateEngineFile', 'loadEngineFile', 'loadEngineGuided', 'selectEngine', 'selectEngineFile', 'switchEngineMode', 'handleEngineImport', 'discardEngineConfigDraft', 'refreshEngineConfigs'];
+const names = ['captureEngineEditorContext', 'engineEditorContextCurrent', 'engineIntentCurrent', 'updateEngineEditorActions', 'markEngineEditorDirty', 'invalidateEngineEditorContext', 'beginEngineIntent', 'finishEngineIntent', 'cancelEngineIntent', 'handleEngineEditorLifecycle', 'saveEngineDraft', 'applyEngineConfig', 'applyDraft', 'planWithRetainedNodeCheck', 'retainedNodeDependency', 'checkRetainedNodeRoute', 'showRouteDependencyNotice', 'returnServiceToNFQWS2', 'validateEngineFile', 'loadEngineFile', 'loadEngineGuided', 'selectEngine', 'selectEngineFile', 'switchEngineMode', 'handleEngineImport', 'discardEngineConfigDraft', 'refreshEngineConfigs'];
 const functions = names.map(name => {
   const match = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));
   assert.ok(match, name); return match[0];
@@ -104,6 +104,21 @@ handler = async (url, options) => {
 await context.applyEngineConfig();
 assert.equal(calls.filter(call => call.url.includes('/nodes/')).length, 0, 'an unapplied node selection was checked without review');
 assert.equal(appliedCalls().length, 0);
+
+// A service of the NFQWS2 list whose node is gone is offered its standard route.
+reset(); messages.length = 0;
+state.services = [{ id: 'discord', name: 'Discord', standard_route: 'nfqws2', route: 'sing-box:node-a', applied_route: 'sing-box:node-a', applied_enabled: true }];
+context.showRouteDependencyNotice(Object.assign(new Error('dependency'), { payload: { code: 'NODE_ROUTE_DEPENDENCY', service_id: 'discord', retained: true, cause: 'node-unavailable' } }));
+const standardAction = messages.at(-1)[5];
+assert.equal(standardAction.label, 'Вернуть «Discord» на NFQWS2');
+handler = normal;
+await standardAction.run();
+const restored = calls.find(call => call.url === '/api/v1/services/discord');
+assert.deepEqual(JSON.parse(restored.options.body), { enabled: true, route: 'nfqws2', sources: [] });
+assert.equal(appliedCalls().length, 0, 'returning to NFQWS2 applied without the owner');
+state.services = [{ id: 'telegram', name: 'Telegram', route: 'sing-box:node-a' }];
+context.showRouteDependencyNotice(Object.assign(new Error('dependency'), { payload: { code: 'NODE_ROUTE_DEPENDENCY', service_id: 'telegram', retained: true, cause: 'node-unavailable' } }));
+assert.equal(messages.at(-1)[5].label, 'Открыть «Telegram»', 'a service outside the NFQWS2 list was moved to NFQWS2');
 state.services = [];
 
 reset(); state.engineMode = 'guided';

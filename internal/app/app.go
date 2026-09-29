@@ -226,6 +226,8 @@ type serviceView struct {
 	AppliedState       serviceRouteStateView     `json:"applied_state"`
 	ObservedState      serviceObservedStateView  `json:"observed_state"`
 	NFQWS2             nfqws2ServicePresentation `json:"nfqws2"`
+	// StandardRoute is NFQWS2 for the services of its reviewed list.
+	StandardRoute string `json:"standard_route,omitempty"`
 }
 
 // serviceRouteStateView keeps intent, calculation and committed state separate.
@@ -2800,7 +2802,7 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		appliedState := serviceRouteStateView{Enabled: applied.Enabled, Route: appliedEffectiveRoute, Source: "committed"}
 		observedState := serviceObservedStateView{Route: proof.Route, Level: proof.Level, Status: proof.Status, Source: proof.Source, CheckedAt: proof.CheckedAt, Outcome: proof.Outcome, ProbeID: proof.ProbeID, FreshUntil: proof.FreshUntil}
 		nfqws2 := nfqws2Presentation(s.ID, selected, planned, st.Enabled, appliedEffectiveRoute, applied.Enabled, proof, inventory, strategies, dirty)
-		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, Suspended: cfg.ServiceControl.Stopped && saved.Enabled, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil, DesiredState: desiredState, PlannedState: plannedState, AppliedState: appliedState, ObservedState: observedState, NFQWS2: nfqws2})
+		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, Suspended: cfg.ServiceControl.Stopped && saved.Enabled, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil, DesiredState: desiredState, PlannedState: plannedState, AppliedState: appliedState, ObservedState: observedState, NFQWS2: nfqws2, StandardRoute: standardRoute(s)})
 	}
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Category == views[j].Category {

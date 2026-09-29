@@ -4054,10 +4054,24 @@ async function checkRetainedNodeRoute(service, dependency, signal) {
 }
 
 // Name the service that blocks Apply and open its connection choice directly.
+// A service of the NFQWS2 list whose node is gone returns to NFQWS2 instead.
 function showRouteDependencyNotice(error) {
   const id = error.payload?.service_id;
-  const name = (state.services || []).find((item) => item.id === id)?.name || 'другой сервис';
-  showNotice('error', `Применение ждёт «${name}»`, error.message, error.payload, false, id ? { label: `Открыть «${name}»`, run: () => openNodeServiceSection(id) } : null);
+  const service = (state.services || []).find((item) => item.id === id);
+  const name = service?.name || 'другой сервис';
+  let action = id ? { label: `Открыть «${name}»`, run: () => openNodeServiceSection(id) } : null;
+  if (service?.standard_route === 'nfqws2' && error.payload?.cause === 'node-unavailable') action = { label: `Вернуть «${name}» на NFQWS2`, run: () => returnServiceToNFQWS2(service) };
+  showNotice('error', `Применение ждёт «${name}»`, error.message, error.payload, false, action);
+}
+
+// NFQWS2 is the standard route of the services from its reviewed list. It
+// cannot be limited to devices, so the service returns to it for the whole LAN.
+async function returnServiceToNFQWS2(service) {
+  try {
+    await api(`/api/v1/services/${encodeURIComponent(service.id)}`, { method: 'PUT', body: JSON.stringify({ enabled: true, route: 'nfqws2', sources: [] }) });
+    await refreshCoreAfterEdit();
+    showNotice('info', `«${service.name}» возвращён на NFQWS2`, 'Изменение сохранено в черновике для всей сети. Нажмите «Применить»; включённый автопилот применит его сам.');
+  } catch (error) { showDetails({ error: error.message }, 'Сервис не изменён'); }
 }
 
 function openNodeServiceSection(id) {

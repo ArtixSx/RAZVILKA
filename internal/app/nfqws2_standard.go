@@ -19,6 +19,14 @@ import (
 // NFQWS2 cannot be limited to selected devices, so this applies only to an
 // autopilot scope of the whole LAN.
 
+// standardRoute is the route a service returns to when its choice fails.
+func standardRoute(service catalog.Service) string {
+	if catalog.IsNFQWS2Starter(service) {
+		return "nfqws2"
+	}
+	return ""
+}
+
 // nfqws2StandardScope reports whether the service may use its standard route.
 func nfqws2StandardScope(service catalog.Service, s autonomy.Service) bool {
 	return catalog.IsNFQWS2Starter(service) && len(s.Sources) == 0
