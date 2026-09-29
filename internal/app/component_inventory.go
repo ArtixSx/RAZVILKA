@@ -62,7 +62,7 @@ func enrichComponentRuntimePlan(plan *components.Plan, runtimes []engine.Status)
 		if runtime.ID != plan.Component {
 			continue
 		}
-		if runtime.Running {
+		if runtime.Running && !(plan.Action == "update" && components.ManagedUpdateSupported(plan.Component)) {
 			plan.AddBlocker("RUNTIME_ACTIVE", "Обход сейчас активен", "Перенесите зависимые сервисы на другой маршрут, примените изменения и повторите операцию.")
 		}
 		if runtime.External {

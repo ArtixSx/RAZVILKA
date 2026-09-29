@@ -97,6 +97,12 @@ func (m *Manager) Plan(ctx context.Context, id, action string, refresh bool) (Pl
 		if !view.UpdateAvailable {
 			plan.AddBlocker("NO_UPDATE", "Новая версия компонента не обнаружена", "Обновите каталог позже.")
 		}
+		if view.ManagedUpdate {
+			plan.Warnings = append(plan.Warnings, PlanIssue{Code: "MANAGED_UPDATE", Message: "Обновление выполняется при работающих маршрутах: конфигурация пакета сохраняется, после обновления проверяется работа, при сбое устанавливается прежняя версия."})
+			if view.Installed && !view.RollbackReady {
+				plan.AddBlocker("ROLLBACK_PACKAGE_MISSING", "Нет сохранённой копии установленной версии для отката", "Нажмите «Проверить версии», пока установленная версия есть в источнике: RAZVILKA сохранит копию.")
+			}
+		}
 		plan.Steps = installSteps(spec, true)
 	case "remove":
 		if !spec.Removable {

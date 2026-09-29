@@ -69,6 +69,11 @@ type View struct {
 	InventoryError         string `json:"inventory_error,omitempty"`
 	CheckedAt              string `json:"checked_at,omitempty"`
 	LifecycleBlockReason   string `json:"lifecycle_block_reason,omitempty"`
+	// ManagedUpdate: the component can be updated while its routes are in use,
+	// with a check and rollback; RollbackReady: a copy of the installed
+	// version is cached for that rollback.
+	ManagedUpdate bool `json:"managed_update"`
+	RollbackReady bool `json:"rollback_ready"`
 }
 
 type Result struct {
@@ -84,6 +89,8 @@ type BatchResult struct {
 	Errors  []string `json:"errors,omitempty"`
 }
 
+var errUpdateNotAdvanced = errors.New("component-update-not-advanced")
+
 type Runner interface {
 	Run(context.Context, string, ...string) ([]byte, error)
 }
@@ -97,6 +104,7 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 type Manager struct {
 	Opkg          string
 	RepoDir       string
+	InfoDir       string // opkg package metadata; default /opt/lib/opkg/info
 	BinDir        string
 	InitDir       string
 	StateDir      string
@@ -226,6 +234,10 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 		v.CanInstall = !v.Installed && v.Available && !v.CatalogStale && inventoryError == ""
 		v.CanUpdate = v.UpdateAvailable && !v.CatalogStale && inventoryError == ""
 		v.CanRemove = v.Installed && spec.Removable && inventoryError == ""
+		if managedUpdateComponents[spec.ID] {
+			v.ManagedUpdate = true
+			v.RollbackReady = m.rollbackPackage(spec, iv) != ""
+		}
 		m.attachLifecycleVerification(&v)
 		views = append(views, v)
 	}
@@ -354,7 +366,7 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 	if beforeVersion != "" && compareVersions(afterVersion, beforeVersion) <= 0 {
 		// Exit zero may mean "nothing to upgrade". Never issue a new verified
 		// receipt for unchanged/downgraded bytes; leave the prior receipt intact.
-		return Result{Component: id, Action: action, Output: text}, errors.New("component-update-not-advanced")
+		return Result{Component: id, Action: action, Output: text}, errUpdateNotAdvanced
 	}
 	receipt := lifecycleReceipt{SchemaVersion: 1, Component: id, Package: spec.Package, Provider: spec.Provider, Action: action, BeforeVersion: beforeVersion, AfterVersion: afterVersion, CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if err := m.writeLifecycleReceipt(receipt); err != nil {

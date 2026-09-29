@@ -1329,17 +1329,30 @@ func (a *App) componentList(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 	defer cancel()
-	views, err := a.Components.List(ctx, r.URL.Query().Get("refresh") == "true")
+	refresh := r.URL.Query().Get("refresh") == "true"
+	views, err := a.Components.List(ctx, refresh)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
+	}
+	if refresh {
+		// While the installed version is still offered, keep a copy for the
+		// rollback of a later in-use update.
+		a.cacheManagedRollbackPackages(ctx)
+		if again, err := a.Components.List(ctx, false); err == nil {
+			views = again
+		}
 	}
 	runtimes := engine.Detector{}.Inventory()
 	mergeComponentRuntimes(views, runtimes)
 	for i := range views {
 		desired, applied := a.componentServiceReferences(views[i].ID)
 		if len(desired) > 0 || len(applied) > 0 {
-			views[i].CanUpdate, views[i].CanRemove = false, false
+			views[i].CanRemove = false
+			if views[i].ManagedUpdate {
+				continue // updated in place with a check and rollback
+			}
+			views[i].CanUpdate = false
 			views[i].LifecycleBlockReason = "Компонент нужен выбранным или применённым маршрутам. Сначала переключите сервисы и примените изменения."
 		}
 	}
@@ -1401,6 +1414,10 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if action == "update" && components.ManagedUpdateSupported(id) {
+		a.managedComponentUpdate(w, r, id)
+		return
+	}
 	if blocker := a.componentRuntimeBlocker(id, action); blocker != nil {
 		writeJSON(w, http.StatusConflict, blocker)
 		return
@@ -1440,6 +1457,11 @@ func (a *App) enrichComponentPlan(plan *components.Plan) {
 			}
 		}
 		desired, applied := a.componentServiceReferences(plan.Component)
+		if plan.Action == "update" && components.ManagedUpdateSupported(plan.Component) {
+			// A checked in-use update keeps the routes; a failed check rolls
+			// the package back instead of requiring services to move away.
+			desired, applied = nil, nil
+		}
 		if len(desired) > 0 || len(applied) > 0 {
 			message := "Компонент используется маршрутами сервисов"
 			if len(applied) > 0 {

@@ -188,11 +188,14 @@ function interfaceEngineCard(id,meta){
  const stale=['failed','checking'].includes(update.kind);
  const protectedComponent=component?.lifecycle_block_reason||component?.external_owner||info.running||used.length>0;
  const lifecycleAllowed=component&&!busy&&!component.inventory_error&&!protectedComponent&&!info.observationStale;
- const disabledReason=component?.lifecycle_block_reason||(component?.external_owner?'Компонент управляется внешним проектом.':info.running||used.length?'Сначала остановите обход и перенесите зависимые сервисы на другой маршрут.':stale?'Обновите сведения о пакете перед изменением.':busy?'Дождитесь завершения операции.':'Нет разрешения на действие в каталоге компонентов.');
+ // NFQWS2 is updated while its routes run: checked on the router and rolled back on failure.
+ const managedUpdate=component?.managed_update===true&&!component.external_owner&&!component.lifecycle_block_reason;
+ const updateAllowed=managedUpdate?component&&!busy&&!component.inventory_error&&!info.observationStale&&component.rollback_ready===true:lifecycleAllowed;
+ const disabledReason=managedUpdate&&component.update_available&&!component.rollback_ready?'Нажмите «Проверить версии»: RAZVILKA сохранит копию текущей версии для отката.':component?.lifecycle_block_reason||(component?.external_owner?'Компонент управляется внешним проектом.':info.running||used.length?'Сначала остановите обход и перенесите зависимые сервисы на другой маршрут.':stale?'Обновите сведения о пакете перед изменением.':busy?'Дождитесь завершения операции.':'Нет разрешения на действие в каталоге компонентов.');
  const action=(name,label,allowed)=>`<button type="button" class="${name==='remove'?'component-remove':'primary'} component-action" data-component="${esc(id)}" data-component-action="${name}" data-rz-focus="engine-${esc(id)}-${name}" ${allowed?'':`disabled title="${esc(disabledReason)}"`}>${label}</button>`;
  let actions='';
  if(!info.installed)actions+=action('install','Установить',lifecycleAllowed&&!stale&&component.can_install===true);
- else if(component?.update_available)actions+=action('update','Обновить',lifecycleAllowed&&!stale&&component.can_update===true);
+ else if(component?.update_available)actions+=action('update',managedUpdate?'Обновить с проверкой':'Обновить',updateAllowed&&!stale&&component.can_update===true);
  if(info.installed)actions+=action('remove','Удалить',lifecycleAllowed&&component.can_remove===true);
  const operation=state.componentOperation?.id===id?state.componentOperation.action:component?.operation_status==='running'?component.operation_action:'';
  const operationText=operation?({install:'Установка выполняется…',update:'Обновление выполняется…',remove:'Удаление выполняется…'})[operation]||'Операция выполняется…':['failed','interrupted','receipt-error'].includes(component?.operation_status)?'Последняя операция не завершена: '+(component.operation_message||'откройте подробности компонента'):'';

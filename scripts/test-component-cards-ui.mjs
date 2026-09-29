@@ -33,8 +33,23 @@ assert.doesNotMatch(card(), /→|Обновление не требуется/);
 assert.match(card(), /data-component-action="update"[^>]*disabled/);
 assert.doesNotMatch(card(), /data-component-action="remove"[^>]*disabled/, 'catalog failure must not prevent a permitted removal');
 
+// NFQWS2: updated in place while running and used by routes, only with a
+// cached rollback copy; its removal stays protected.
+{
+  const nfq = {...base, id:'nfqws2', running:true, managed_update:true, rollback_ready:true};
+  model.consoleEngineMeta.nfqws2 = meta;
+  state.components = [nfq]; state.engines = [{id:'nfqws2', installed:true, running:true}];
+  state.services = [{applied_state:{enabled:true, route:'nfqws2'}}];
+  const nfqCard = () => model.interfaceEngineCard('nfqws2', meta);
+  assert.match(nfqCard(), /data-component-action="update"(?![^>]*disabled)[^>]*>Обновить с проверкой/);
+  assert.match(nfqCard(), /data-component-action="remove"[^>]*disabled/);
+  state.components = [{...nfq, rollback_ready:false}];
+  assert.match(nfqCard(), /data-component-action="update"[^>]*disabled[^>]*Проверить версии/);
+  state.components = [{...base}]; state.engines = [{id:'usque', installed:true, version:'different runtime output'}]; state.services = [];
+}
 state.components[0] = {...base, running:true};
 assert.match(card(), /Процесс запущен/);
+assert.match(card(), /data-component-action="update"[^>]*disabled/, 'unmanaged running component must not update in place');
 assert.match(card(), /data-component-action="remove"[^>]*disabled/);
 state.components[0] = {...base};
 state.services = [{applied_state:{enabled:true, route:'usque'}}];

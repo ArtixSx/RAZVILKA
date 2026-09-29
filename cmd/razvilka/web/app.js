@@ -1163,9 +1163,13 @@ function renderComponents() {
     const stale = c.catalog_stale || c.update_check_error || c.inventory_error || state.componentCatalogError || update?.kind === 'failed';
     const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running';
     const unavailable = busy || c.running || c.external_owner || inventoryObservationStale();
+    // A managed component (NFQWS2) is updated in place while its routes run:
+    // the server checks the result and restores the previous version on failure.
+    const updateBlocked = busy || (c.running && !c.managed_update) || c.external_owner || inventoryObservationStale();
     if (c.update_available) {
       version = info ? consoleEngineVersionLabel(info) : `${c.installed_version || 'Версия неизвестна'}${c.available_version ? ` → ${c.available_version}` : ''}`;
-      actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="update" ${c.can_update && !stale && !unavailable ? '' : 'disabled'}>Обновить</button>`;
+      const managedTitle = c.managed_update ? (c.rollback_ready ? ' title="Обновление при работающих маршрутах: проверка и автоматический откат"' : ' title="Сначала нажмите «Проверить версии»: RAZVILKA сохранит копию текущей версии для отката"') : '';
+      actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="update"${managedTitle} ${c.can_update && !stale && !updateBlocked && (!c.managed_update || c.rollback_ready) ? '' : 'disabled'}>Обновить</button>`;
     } else if (c.installed) {
       version = `установлена ${c.installed_version || '—'}`;
       actions += `<span class="engine-state installed">${update?.kind === 'current' ? 'АКТУАЛЬНО' : 'УСТАНОВЛЕН'}</span>`;

@@ -14,6 +14,10 @@ import (
 // nfqws2-keenetic package, including the init script NFQWS2Adapter runs.
 const DefaultNFQWS2PackageList = "/opt/lib/opkg/info/nfqws2-keenetic.list"
 
+// ErrNFQWS2NotOwned: RAZVILKA holds no NFQWS2 ownership lease, so a changed
+// package init needs no adoption; the next Apply records the current one.
+var ErrNFQWS2NotOwned = errors.New("NFQWS2 is not owned by this instance; there is no init to adopt")
+
 // AdoptPackageInit records a replaced NFQWS2 init script in the ownership
 // lease after an operator upgraded the nfqws2-keenetic package outside
 // RAZVILKA. Upgrading the package replaces S51nfqws2, and until the new script
@@ -38,7 +42,7 @@ func (a *NFQWS2Adapter) AdoptPackageInit(packageList string) (previous, adopted 
 		return "", "", err
 	}
 	if lease == nil {
-		return "", "", errors.New("NFQWS2 is not owned by this instance; there is no init to adopt")
+		return "", "", ErrNFQWS2NotOwned
 	}
 	config, _, err := nfqws2Read(a.ConfigPath)
 	if err != nil {
@@ -121,4 +125,24 @@ func packageListsPath(list, path string) (bool, error) {
 		}
 	}
 	return false, scanner.Err()
+}
+
+// NFQWS2ServiceState reports the package service status and the current
+// configuration bytes. A managed component update compares them before and
+// after the package change; neither call changes the runtime.
+func (m *Manager) NFQWS2ServiceState(ctx context.Context) (running bool, config []byte, err error) {
+	adapter, _ := m.adapter("nfqws2")
+	nfqws2, ok := adapter.(*NFQWS2Adapter)
+	if !ok {
+		return false, nil, errors.New("NFQWS2 adapter is not registered")
+	}
+	config, _, err = nfqws2Read(nfqws2.ConfigPath)
+	if err != nil {
+		return false, nil, err
+	}
+	if nfqws2.Runner == nil || !regularFile(nfqws2.InitPath) {
+		return false, config, nil
+	}
+	output, statusErr := nfqws2.run(ctx, nfqws2.InitPath, "status")
+	return statusErr == nil && runningOutput(string(output)), config, nil
 }
