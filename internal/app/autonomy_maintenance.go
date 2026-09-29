@@ -117,6 +117,9 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 				return false, false, "Источник части компонентов недоступен. Существующие версии сохранены; проверка будет повторена."
 			}
 		}
+		// While each installed version is still offered, keep its copy for the
+		// rollback of a later in-use update.
+		a.cacheManagedRollbackPackages(check)
 		return true, false, "Каталог компонентов проверен. Автоматическая установка не включена."
 	}
 	if w.Mode == "prepare" {

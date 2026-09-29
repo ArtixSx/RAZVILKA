@@ -127,9 +127,16 @@ func TestComponentSidecarProtectionIncludesDesiredAppliedAndResolvedAuto(t *test
 	}
 	// An in-use update is checked on the committed routes and rolled back
 	// instead of requiring the dependent services to move away.
-	p = components.Plan{Component: "sing-box", Action: "update", Ready: true, Installed: true}
+	p = components.Plan{Component: "sing-box", Action: "update", Ready: true, Installed: true, InstalledVersion: "1.13.3-2"}
 	a.enrichComponentPlan(&p)
-	if hasComponentBlocker(p, "SERVICE_DEPENDENCY") {
+	if hasComponentBlocker(p, "SERVICE_DEPENDENCY") || !hasComponentBlocker(p, "ROLLBACK_PACKAGE_MISSING") {
+		t.Fatal(p)
+	}
+	// An unused component is updated plainly: sources usually keep only the
+	// newest version, so a rollback copy must not be required there.
+	p = components.Plan{Component: "nfqws2", Action: "update", Ready: true, Installed: true, InstalledVersion: "1.3.1"}
+	a.enrichComponentPlan(&p)
+	if !p.Ready || hasComponentBlocker(p, "ROLLBACK_PACKAGE_MISSING") || len(p.Warnings) != 0 || a.managedUpdateInUse("nfqws2") || !a.managedUpdateInUse("sing-box") {
 		t.Fatal(p)
 	}
 	if desired, applied := a.componentServiceReferences("nfqws2"); len(desired) != 0 || len(applied) != 0 {

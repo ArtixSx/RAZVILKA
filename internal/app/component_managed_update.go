@@ -11,6 +11,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/engine"
 )
 
 // managedComponentUpdate updates a component while its routes stay in use
@@ -61,12 +62,35 @@ func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id 
 	writeJSON(w, http.StatusOK, result)
 }
 
+// managedUpdateInUse reports whether an update goes through the checked in-use
+// path: the component supports it and its runtime runs or routes reference
+// it. An unused component is updated plainly and needs no rollback copy;
+// package sources usually keep only the newest version, so requiring a copy
+// there would block updates for good.
+func (a *App) managedUpdateInUse(id string) bool {
+	if !components.ManagedUpdateSupported(id) {
+		return false
+	}
+	if desired, applied := a.componentServiceReferences(id); len(desired) > 0 || len(applied) > 0 {
+		return true
+	}
+	for _, runtime := range (engine.Detector{}).Inventory() {
+		if runtime.ID == id && runtime.Running {
+			return true
+		}
+	}
+	return false
+}
+
 // managedProxyAdapters lists the committed adapters whose runtime uses the
-// component's binary: Sing-box is also the TUN sidecar of Xray and USQUE.
+// component's binary: Sing-box is also the TUN sidecar of Xray and USQUE, and
+// both WireGuard components share the wireguard-tools package.
 var managedProxyAdapters = map[string][]string{
-	"sing-box": {"sing-box", "xray", "usque"},
-	"xray":     {"xray"},
-	"usque":    {"usque"},
+	"sing-box":  {"sing-box", "xray", "usque"},
+	"xray":      {"xray"},
+	"usque":     {"usque"},
+	"warp-wg":   {"warp-wg", "wireguard"},
+	"wireguard": {"warp-wg", "wireguard"},
 }
 
 var errProxyPrecheck = errors.New("committed routes do not pass the isolated check with the installed version")

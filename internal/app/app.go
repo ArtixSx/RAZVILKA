@@ -1349,7 +1349,12 @@ func (a *App) componentList(w http.ResponseWriter, r *http.Request) {
 	mergeComponentRuntimes(views, runtimes)
 	for i := range views {
 		desired, applied := a.componentServiceReferences(views[i].ID)
-		if len(desired) > 0 || len(applied) > 0 {
+		referenced := len(desired) > 0 || len(applied) > 0
+		if views[i].ManagedUpdate && !referenced && !views[i].Running {
+			// Not in use: an ordinary update, no rollback copy required.
+			views[i].ManagedUpdate = false
+		}
+		if referenced {
 			views[i].CanRemove = false
 			if views[i].ManagedUpdate {
 				continue // updated in place with a check and rollback
@@ -1416,7 +1421,7 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if action == "update" && components.ManagedUpdateSupported(id) {
+	if action == "update" && a.managedUpdateInUse(id) {
 		a.managedComponentUpdate(w, r, id)
 		return
 	}
@@ -1444,6 +1449,11 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = a.Components.RecordOperation(id, action, "succeeded", "Фактическое состояние компонента повторно проверено")
+	if action != "remove" && components.ManagedUpdateSupported(id) {
+		// The version just installed is the one the source offers now; keep
+		// its copy for the rollback of a later in-use update.
+		_, _ = a.Components.CacheRollbackPackage(ctx, id)
+	}
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -1459,9 +1469,13 @@ func (a *App) enrichComponentPlan(plan *components.Plan) {
 			}
 		}
 		desired, applied := a.componentServiceReferences(plan.Component)
-		if plan.Action == "update" && components.ManagedUpdateSupported(plan.Component) {
+		if plan.Action == "update" && a.managedUpdateInUse(plan.Component) {
 			// A checked in-use update keeps the routes; a failed check rolls
 			// the package back instead of requiring services to move away.
+			plan.Warnings = append(plan.Warnings, components.PlanIssue{Code: "MANAGED_UPDATE", Message: "Обновление выполняется при работающих маршрутах: конфигурация пакета сохраняется, после обновления проверяется работа, при сбое устанавливается прежняя версия."})
+			if plan.Installed && (a.Components == nil || !a.Components.RollbackCached(plan.Component, plan.InstalledVersion)) {
+				plan.AddBlocker("ROLLBACK_PACKAGE_MISSING", "Нет сохранённой копии установленной версии для отката", "Нажмите «Проверить версии»: если источник ещё предлагает установленную версию, RAZVILKA сохранит её копию. Если остался только новый выпуск, остановите обход или переведите его сервисы на другой, обновите компонент и верните сервисы.")
+			}
 			desired, applied = nil, nil
 		}
 		if len(desired) > 0 || len(applied) > 0 {

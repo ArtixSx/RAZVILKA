@@ -38,10 +38,12 @@ func TestProxyUpdateCheckUsesIsolatedCanaryOnCommittedRoutes(t *testing.T) {
 	if _, _, err = a.proxyUpdateCheck(context.Background(), "sing-box"); !errors.Is(err, errProxyPrecheck) {
 		t.Fatalf("precheck failure not reported: %v", err)
 	}
-	// Xray is not used by the committed routes: nothing to prove.
-	adapter.calls = nil
-	check, adapters, err = a.proxyUpdateCheck(context.Background(), "xray")
-	if err != nil || len(adapters) != 0 || check(context.Background()) != nil || len(adapter.calls) != 0 {
-		t.Fatalf("unused engine: %v %v %v", adapters, err, adapter.calls)
+	// Xray and WireGuard are not used by the committed routes: nothing to prove.
+	for _, id := range []string{"xray", "wireguard", "warp-wg"} {
+		adapter.calls = nil
+		check, adapters, err = a.proxyUpdateCheck(context.Background(), id)
+		if err != nil || len(adapters) != 0 || check(context.Background()) != nil || len(adapter.calls) != 0 {
+			t.Fatalf("unused engine %s: %v %v %v", id, adapters, err, adapter.calls)
+		}
 	}
 }

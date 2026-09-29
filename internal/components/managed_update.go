@@ -15,7 +15,7 @@ import (
 
 // managedUpdateComponents may be updated while their routes are in use: the
 // update is checked by the caller and rolled back to a cached copy on failure.
-var managedUpdateComponents = map[string]bool{"nfqws2": true, "sing-box": true, "xray": true, "usque": true}
+var managedUpdateComponents = map[string]bool{"nfqws2": true, "sing-box": true, "xray": true, "usque": true, "warp-wg": true, "wireguard": true}
 
 // ManagedUpdateSupported reports whether id uses the checked in-use update.
 func ManagedUpdateSupported(id string) bool { return managedUpdateComponents[id] }
@@ -45,6 +45,13 @@ func (m *Manager) rollbackDir() string {
 }
 
 func (m *Manager) infoDir() string { return defaultValue(m.InfoDir, "/opt/lib/opkg/info") }
+
+// RollbackCached reports whether a copy of this version of a managed-update
+// component is kept for rollback.
+func (m *Manager) RollbackCached(id, version string) bool {
+	spec, ok := lookup(id)
+	return ok && managedUpdateComponents[id] && m.rollbackPackage(spec, version) != ""
+}
 
 // rollbackPackage returns the cached package file of exactly this version.
 func (m *Manager) rollbackPackage(spec Spec, version string) string {
