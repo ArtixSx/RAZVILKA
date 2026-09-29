@@ -28,6 +28,15 @@ for (const edit of [{dirty:true},{route_dirty:true},{sources_dirty:true}]) {
   assert.equal(stoppedView.actionable,true);
 }
 assert.equal(model.humanService({...suspended,presentation_only:true},oldProof).label,'Нет свежих данных');
+// A passing service check and an unfinished autopilot apply are both shown,
+// and the attention row names the real blocker instead of a generic label.
+const youtube = { id:'youtube', enabled:true, applied_enabled:true, route:'nfqws2', applied_route:'nfqws2', dirty:false, route_dirty:false, sources_dirty:false };
+const blockedView = model.humanService(youtube, { kind:'good', route:'nfqws2' }, { enabled:true }, { state:'apply-refused', message:'Применение ждёт сервис «Discord»: его узел недоступен.' });
+assert.equal(blockedView.label, 'Работает');
+assert.equal(blockedView.actionable, true);
+assert.equal(blockedView.pendingDetail, 'Применение ждёт сервис «Discord»: его узел недоступен.');
+assert.match(blockedView.detail, /автопилот не завершил применение: Применение ждёт сервис «Discord»/);
+assert.match(ui, /esc\(h\.pendingDetail\|\|h\.pendingLabel\|\|h\.label\)/, 'attention row hides the blocker');
 assert.deepEqual(model.filterServices([discord, untouched], { scope: 'selected' }).map(s => s.id), ['discord']);
 assert.deepEqual(model.filterServices([discord, untouched], { scope: 'changed' }).map(s => s.id), ['discord']);
 assert.deepEqual(model.filterServices([{ ...discord, dirty: false, route_dirty: false, sources_dirty: false }], { scope: 'selected' }).map(s => s.id), ['discord']);

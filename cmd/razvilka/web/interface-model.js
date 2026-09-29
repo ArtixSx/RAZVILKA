@@ -119,10 +119,12 @@
     if(s.suspended===true&&!result.applied)return {...result,label:'Остановлен',detail:'Настройки сохранены. Включите проект общей кнопкой.'};
     const blockers={'requires-review':'Нужно восстановление журнала','definition-changed':'Изменился состав сервиса','manual-change':'Есть ручное изменение','checker-unavailable':'Проверка временно недоступна','catalog-unavailable':'Источник подключений недоступен','component-unavailable':'Нужный компонент не готов','unsupported-scenario':'Для этого сценария нет проверки','apply-refused':'Применение не завершено','removal-blocked':'Снятие подключения приостановлено'};
     const blocked=managed?.enabled&&Object.hasOwn(blockers,runtime.state);
-    if(blocked){result.actionable=true;result.pendingLabel=result.pendingLabel||blockers[runtime.state];}
+    // The autopilot's own message names the real blocker (for example, another
+    // service whose route prevents the shared transaction).
+    if(blocked){result.actionable=true;result.pendingLabel=result.pendingLabel||blockers[runtime.state];result.pendingDetail=text(runtime.message);}
     const progressing=['checking','applying','searching','pending'].includes(runtime.state)&&managed?.enabled===true;
     const matched=typeof summary.route==='string'&&summary.route!==''&&summary.route===result.route;
-    if(result.applied&&summary.kind==='good'&&matched)return {...result,kind:'good',label:'Работает',detail:'Доступ подтверждён для проверенного сценария. Другие функции приложения могут требовать отдельной проверки.'};
+    if(result.applied&&summary.kind==='good'&&matched)return {...result,kind:'good',label:'Работает',detail:blocked?`Проверка сервиса прошла, но автопилот не завершил применение: ${text(runtime.message)||blockers[runtime.state]}`:'Доступ подтверждён для проверенного сценария. Другие функции приложения могут требовать отдельной проверки.'};
     if(summary.kind==='bad'&&matched)return {...result,kind:'bad',actionable:result.actionable||!progressing,label:'Проверка не пройдена',detail:text(summary.detail)||'Откройте сервис, чтобы посмотреть причину.'};
     if(blocked)return {...result,kind:'warn',label:blockers[runtime.state],detail:text(runtime.message)||'Откройте причину. Остальные сервисы продолжают управляться отдельно.'};
     if(progressing){const labels={checking:'Проверяется',applying:'Подключение применяется',searching:'Подбирается подключение',pending:result.applied?'Ожидает проверки':'Ожидает настройки'};return {...result,kind:'warn',actionable:changed,label:labels[runtime.state],detail:text(runtime.message)||'Дождитесь результата задачи на роутере.'};}
