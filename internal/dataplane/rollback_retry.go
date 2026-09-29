@@ -121,7 +121,7 @@ type failedRollback struct {
 func (m *Manager) reviewFailedRollback(planID, digest string) (failedRollback, bool) {
 	var latest, transaction *Execution
 	found, err := readOptionalJournal(filepath.Join(m.StateRoot, "latest-execution.json"), &latest)
-	if err != nil || !found || latest == nil || latest.State != "rollback-failed" || latest.PlanID != planID || latest.Digest != digest || latest.FinishedAt == "" || len(latest.Steps) > 96 {
+	if err != nil || !found || latest == nil || latest.State != "rollback-failed" || latest.PlanID != planID || latest.Digest != digest || latest.FinishedAt == "" || len(latest.Steps) > maxRecoveryJournalSteps {
 		return failedRollback{}, false
 	}
 	root := filepath.Join(m.StateRoot, "transactions", planID)
@@ -191,6 +191,53 @@ func rollbackRecoveryPhase(phase string) (recovery, resumable bool) {
 
 type recoveryStepRunner func(adapter Adapter, phase string, action func(context.Context, Plan, string) error)
 
+// A reviewed record is refused above maxRecoveryJournalSteps. Each later
+// recovery attempt appends steps and an error note, so repeated failures used
+// to exceed the bound and permanently prevent recovery after the cause was
+// fixed. The original transaction and its first rollback are never rewritten;
+// only the oldest later-recovery steps are compacted, leaving room for one
+// more attempt.
+const (
+	maxRecoveryJournalSteps = 96
+	recoveryAttemptReserve  = 16
+	maxRecoveryJournalError = 4096
+)
+
+func compactRecoveryHistory(steps []ExecutionStep, limit int) ([]ExecutionStep, int) {
+	if len(steps) <= limit {
+		return steps, 0
+	}
+	later := []int{}
+	for index, step := range steps {
+		if _, resumable := rollbackRecoveryPhase(step.Phase); resumable {
+			later = append(later, index)
+		}
+	}
+	drop := min(len(steps)-limit, len(later))
+	removed := map[int]bool{}
+	for _, index := range later[:drop] {
+		removed[index] = true
+	}
+	kept := make([]ExecutionStep, 0, len(steps)-drop)
+	for index, step := range steps {
+		if !removed[index] {
+			kept = append(kept, step)
+		}
+	}
+	return kept, drop
+}
+
+// boundRecoveryError keeps the original failure and the latest notes.
+func boundRecoveryError(text string) string {
+	if len(text) <= maxRecoveryJournalError {
+		return text
+	}
+	const marker = "; ... earlier recovery notes compacted ...; "
+	head := maxRecoveryJournalError / 4
+	tail := maxRecoveryJournalError - head - len(marker)
+	return strings.ToValidUTF8(text[:head], "") + marker + strings.ToValidUTF8(text[len(text)-tail:], "")
+}
+
 // runFailedRollbackRecovery journals each step before and after it runs and
 // records the outcome. succeed marks the result only when every step and the
 // final guard passed; otherwise the record stays rollback-failed.
@@ -208,6 +255,11 @@ func (m *Manager) runFailedRollbackRecovery(ctx context.Context, reviewed failed
 			execution.Steps[i].Detail = "Earlier recovery was interrupted before its outcome could be confirmed."
 			execution.Steps[i].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		}
+	}
+	var compacted int
+	execution.Steps, compacted = compactRecoveryHistory(execution.Steps, maxRecoveryJournalSteps-recoveryAttemptReserve)
+	if compacted > 0 {
+		execution.Error += fmt.Sprintf("; %d earlier recovery steps compacted", compacted)
 	}
 	recovery, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.rollbackTimeout())
 	defer cancel()
@@ -234,6 +286,7 @@ func (m *Manager) runFailedRollbackRecovery(ctx context.Context, reviewed failed
 	} else {
 		execution.Error += "; " + label + ": " + failure.Error()
 	}
+	execution.Error = boundRecoveryError(execution.Error)
 	if err := errors.Join(m.recordLocked(plan), m.writeExecution(root, execution)); err != nil {
 		execution.State, plan.State = "rollback-failed", "rollback-failed"
 		execution.RollbackVerified = false
