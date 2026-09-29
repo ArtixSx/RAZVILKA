@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	xnetproxy "golang.org/x/net/proxy"
 )
 
@@ -1341,6 +1342,17 @@ func buildProxyCandidate(engineID string, source []byte, port int) ([]byte, []st
 		// Xray can create an API listener independently of its inbounds.
 		delete(document, "api")
 		delete(document, "metrics")
+		// Xray sends unmatched traffic to its first outbound. A managed route
+		// must reach one static remote exit: an imported freedom/blackhole,
+		// routing rules, balancers or chains could silently turn the service
+		// route into a direct connection, which the canary cannot tell apart.
+		normalized, err := json.Marshal(document)
+		if err != nil {
+			return nil, nil, err
+		}
+		if _, err := routeidentity.ConfigOutbound("xray", normalized); err != nil {
+			return nil, nil, fmt.Errorf("xray configuration is not a single remote exit (%s): %s", err, routeidentity.Explanation(err.Error()))
+		}
 	default:
 		return nil, nil, fmt.Errorf("unsupported proxy engine %q", engineID)
 	}

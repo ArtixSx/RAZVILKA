@@ -5,6 +5,8 @@ func Explanation(code string) string {
 	switch code {
 	case "route-receipt-missing":
 		return "Нет записи управляемого запуска. Сторонний или ранее запущенный процесс не перезапускается автоматически; повторная проверка пути доступна после его запуска через RAZVILKA новой версии."
+	case "route-outbound-missing", "route-remote-endpoint-unverified":
+		return "В конфигурации нет однозначного удалённого выхода с публичным адресом сервера. Импортируйте профиль узла заново."
 	case "route-direct-outbound":
 		return "В профиле выбран выход напрямую (DIRECT), а не удалённый обход. Выберите удалённый узел."
 	case "route-rules-unverified", "route-dynamic-config-unverified", "route-chain-unverified", "route-outbound-unsupported":

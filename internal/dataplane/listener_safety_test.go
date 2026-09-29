@@ -10,9 +10,21 @@ import (
 	"time"
 )
 
+const xrayRemoteExit = `{"tag":"proxy","protocol":"vless","settings":{"vnext":[{"address":"edge.example","port":443,"users":[{"id":"123e4567-e89b-12d3-a456-426614174000","encryption":"none"}]}]}}`
+
 func TestCandidateRemovesImportedListeners(t *testing.T) {
 	for _, engine := range []string{"sing-box", "xray"} {
-		data, _, err := buildProxyCandidate(engine, []byte(`{"inbounds":[{"listen":"0.0.0.0"},{"listen":"::"}],"api":{"listen":"0.0.0.0:10085"},"metrics":{"listen":"0.0.0.0:11111"},"log":{"output":"/outside/secret","error":"/outside/secret","access":"/outside/secret"},"services":[{"type":"ssm-api","listen":"::"}],"experimental":{"clash_api":{"external_controller":"0.0.0.0:9090"}},"outbounds":[]}`), 19080)
+		outbounds := "[]"
+		if engine == "xray" {
+			outbounds = "[" + xrayRemoteExit + "]"
+		}
+		// Sing-box-only control objects are stripped for Sing-box; for Xray
+		// they are not part of the format and would be refused as dynamic.
+		singBoxOnly := `"services":[{"type":"ssm-api","listen":"::"}],"experimental":{"clash_api":{"external_controller":"0.0.0.0:9090"}},`
+		if engine == "xray" {
+			singBoxOnly = ""
+		}
+		data, _, err := buildProxyCandidate(engine, []byte(`{"inbounds":[{"listen":"0.0.0.0"},{"listen":"::"}],"api":{"listen":"0.0.0.0:10085"},"metrics":{"listen":"0.0.0.0:11111"},"log":{"output":"/outside/secret","error":"/outside/secret","access":"/outside/secret"},`+singBoxOnly+`"outbounds":`+outbounds+`}`), 19080)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -82,5 +94,28 @@ func TestSOCKSReadinessHandlesSplitGreetingAndCancellation(t *testing.T) {
 		if time.Since(started) > time.Second {
 			t.Fatal("cancelled readiness check did not close connection promptly")
 		}
+	}
+}
+
+// X02: Xray sends unmatched traffic to its first outbound. A managed service
+// route must reach one static remote exit; anything that could turn it into a
+// direct connection is refused before staging, not discovered by a canary.
+func TestXrayCandidateRequiresSingleRemoteExit(t *testing.T) {
+	freedom := `{"tag":"direct","protocol":"freedom"}`
+	for name, source := range map[string]string{
+		"freedom first":    `{"outbounds":[` + freedom + `,` + xrayRemoteExit + `]}`,
+		"routing rules":    `{"outbounds":[` + xrayRemoteExit + `,` + freedom + `],"routing":{"rules":[{"type":"field","domain":["geosite:ru"],"outboundTag":"direct"}]}}`,
+		"balancer":         `{"outbounds":[` + xrayRemoteExit + `],"routing":{"balancers":[{"tag":"b","selector":["proxy"]}]}}`,
+		"dialer chain":     `{"outbounds":[{"tag":"proxy","protocol":"vless","settings":{"vnext":[{"address":"edge.example","port":443,"users":[{"id":"123e4567-e89b-12d3-a456-426614174000"}]}]},"streamSettings":{"sockopt":{"dialerProxy":"other"}}}]}`,
+		"private endpoint": `{"outbounds":[{"tag":"proxy","protocol":"vless","settings":{"vnext":[{"address":"192.168.1.10","port":443,"users":[{"id":"123e4567-e89b-12d3-a456-426614174000"}]}]}}]}`,
+		"no outbound":      `{"outbounds":[]}`,
+	} {
+		if _, _, err := buildProxyCandidate("xray", []byte(source), 19080); err == nil {
+			t.Fatalf("%s accepted as a managed Xray route", name)
+		}
+	}
+	// An unused DIRECT entry after the remote exit is allowed.
+	if _, _, err := buildProxyCandidate("xray", []byte(`{"outbounds":[`+xrayRemoteExit+`,`+freedom+`]}`), 19080); err != nil {
+		t.Fatalf("remote exit with unused direct refused: %v", err)
 	}
 }
