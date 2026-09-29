@@ -3,9 +3,10 @@ package dataplane
 import (
 	"context"
 	"errors"
-	"net"
 	"net/netip"
 	"sync/atomic"
+
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 )
 
 // Used at mutation boundaries after potentially slow resolution/health probes.
@@ -27,7 +28,7 @@ func checkAddressRefreshAuthority(ctx context.Context) error {
 func resolveRefreshPolicyRules(ctx context.Context, plan Plan, id string, resolver PrefixResolver) ([]string, []PolicyRule, error) {
 	if resolver == nil {
 		resolver = func(c context.Context, h string) ([]netip.Addr, error) {
-			return net.DefaultResolver.LookupNetIP(c, "ip", h)
+			return netresolve.LookupNetIP(c, "ip", h)
 		}
 	}
 	var incomplete atomic.Bool

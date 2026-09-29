@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 	xnetproxy "golang.org/x/net/proxy"
 )
@@ -226,7 +227,7 @@ func (p nodeEgressHTTP) pin(ctx context.Context, endpoint nodeEgressEndpoint) (n
 	origin, _ := url.Parse(endpoint.url)
 	resolve := p.resolve
 	if resolve == nil {
-		resolve = net.DefaultResolver.LookupNetIP
+		resolve = netresolve.LookupNetIP
 	}
 	addresses, err := resolve(ctx, "ip", origin.Hostname())
 	if err != nil || len(addresses) == 0 || len(addresses) > 16 {

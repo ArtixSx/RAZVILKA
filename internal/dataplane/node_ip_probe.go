@@ -3,10 +3,11 @@ package dataplane
 import (
 	"context"
 	"errors"
-	"net"
 	"net/netip"
 	"net/url"
 	"sort"
+
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 )
 
 // Common CDN-backed services return five or more IPv4 addresses. Keep the
@@ -26,7 +27,7 @@ func resolveNodeServiceIPv4(ctx context.Context, rawURL string, resolver PrefixR
 	}
 	if resolver == nil {
 		resolver = func(ctx context.Context, host string) ([]netip.Addr, error) {
-			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+			return netresolve.LookupNetIP(ctx, "ip", host)
 		}
 	}
 	addresses, err := resolver(ctx, target.Hostname())

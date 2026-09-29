@@ -27,6 +27,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	proof "github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
@@ -220,7 +221,7 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 }
 
 func resolvePublicIPv4(ctx context.Context, host string) (netip.Addr, error) {
-	addresses, err := net.DefaultResolver.LookupNetIP(ctx, "ip4", host)
+	addresses, err := netresolve.LookupNetIP(ctx, "ip4", host)
 	if err != nil {
 		return netip.Addr{}, fmt.Errorf("resolve NFQWS2 probe destination: %w", err)
 	}
@@ -613,7 +614,7 @@ func safeDialNetwork(dial func(context.Context, string, string) (net.Conn, error
 		if err != nil {
 			return nil, err
 		}
-		resolved, err := net.DefaultResolver.LookupNetIP(ctx, lookupNetwork, host)
+		resolved, err := netresolve.LookupNetIP(ctx, lookupNetwork, host)
 		if err != nil {
 			return nil, fmt.Errorf("resolve probe destination: %w", err)
 		}

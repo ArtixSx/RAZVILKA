@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
@@ -200,7 +201,7 @@ func New() *Manager {
 		InitPath: "/opt/etc/init.d/S51usque", NDMCPath: "/bin/ndmc",
 		IPCandidates:    []string{"/opt/sbin/ip", "/opt/bin/ip", "ip"},
 		RegistrationURL: "https://api.cloudflareclient.com/v0a4471/reg",
-		Resolver:        net.DefaultResolver.LookupNetIP,
+		Resolver:        netresolve.LookupNetIP,
 		Now:             time.Now,
 		CACandidates: []string{
 			"/opt/etc/ssl/certs/ca-certificates.crt",

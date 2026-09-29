@@ -18,6 +18,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/awgprofile"
 	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/warp"
 )
@@ -1259,7 +1260,7 @@ func excludeWGEndpoint(ctx context.Context, prefixes []string, profile string, r
 	} else {
 		if resolver == nil {
 			resolver = func(ctx context.Context, host string) ([]netip.Addr, error) {
-				return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+				return netresolve.LookupNetIP(ctx, "ip", host)
 			}
 		}
 		resolved, err := resolver(ctx, host)

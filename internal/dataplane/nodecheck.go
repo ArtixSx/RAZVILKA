@@ -20,6 +20,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
@@ -613,7 +614,7 @@ func (c *ExactNodeChecker) resolveHost(ctx context.Context, host string) ([]neti
 	if address, err := netip.ParseAddr(host); err == nil {
 		return []netip.Addr{address}, nil
 	}
-	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	return netresolve.LookupNetIP(ctx, "ip", host)
 }
 
 func (c *ExactNodeChecker) transportPrefilter(ctx context.Context, endpoint exactNodeEndpoint, addresses []netip.Addr) (bool, error) {

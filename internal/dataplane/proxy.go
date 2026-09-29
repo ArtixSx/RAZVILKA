@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	xnetproxy "golang.org/x/net/proxy"
 )
@@ -1491,7 +1492,7 @@ func collectEndpointHosts(value any) []string {
 func resolveEndpointExclusions(ctx context.Context, hosts []string, resolver PrefixResolver) ([]string, error) {
 	if resolver == nil {
 		resolver = func(ctx context.Context, host string) ([]netip.Addr, error) {
-			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+			return netresolve.LookupNetIP(ctx, "ip", host)
 		}
 	}
 	seen := map[string]bool{}

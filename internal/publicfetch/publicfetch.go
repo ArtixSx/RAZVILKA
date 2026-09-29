@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 )
 
 var (
@@ -120,7 +122,7 @@ func transport() *http.Transport {
 		Proxy: nil,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			dialer := &net.Dialer{Timeout: 6 * time.Second, KeepAlive: 30 * time.Second}
-			return resolveAndDial(ctx, network, address, net.DefaultResolver.LookupNetIP, dialer.DialContext)
+			return resolveAndDial(ctx, network, address, netresolve.LookupNetIP, dialer.DialContext)
 		},
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
 		TLSHandshakeTimeout: 6 * time.Second, ResponseHeaderTimeout: 10 * time.Second,

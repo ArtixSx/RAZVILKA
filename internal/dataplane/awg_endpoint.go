@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
@@ -29,7 +30,7 @@ func (a *WARPWireGuardAdapter) pinAWGEndpoint(ctx context.Context, content strin
 		resolver := a.Resolver
 		if resolver == nil {
 			resolver = func(ctx context.Context, host string) ([]netip.Addr, error) {
-				return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+				return netresolve.LookupNetIP(ctx, "ip", host)
 			}
 		}
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

@@ -24,6 +24,8 @@ import (
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
+
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 )
 
 const strategyQueueNumber = 64610
@@ -272,7 +274,7 @@ func resolvePublicAddress(ctx context.Context, host, family string) (netip.Addr,
 	if family == "ipv6" {
 		network = "ip6"
 	}
-	addresses, err := net.DefaultResolver.LookupNetIP(ctx, network, host)
+	addresses, err := netresolve.LookupNetIP(ctx, network, host)
 	if err != nil {
 		return netip.Addr{}, err
 	}

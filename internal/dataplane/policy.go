@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/netip"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 )
 
 const maxPolicyPrefixes = 1024
@@ -72,7 +73,7 @@ type PolicyRule struct {
 func resolvePolicyPrefixes(ctx context.Context, plan Plan, adapter string, resolver PrefixResolver) ([]string, error) {
 	if resolver == nil {
 		resolver = func(ctx context.Context, domain string) ([]netip.Addr, error) {
-			return net.DefaultResolver.LookupNetIP(ctx, "ip", domain)
+			return netresolve.LookupNetIP(ctx, "ip", domain)
 		}
 	}
 	prefixes := map[string]bool{}

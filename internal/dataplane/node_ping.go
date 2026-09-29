@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
@@ -29,7 +30,7 @@ type TCPNodePinger struct {
 
 func NewTCPNodePinger() *TCPNodePinger {
 	dialer := &net.Dialer{Timeout: 3 * time.Second}
-	return &TCPNodePinger{resolve: net.DefaultResolver.LookupNetIP, dial: dialer.DialContext}
+	return &TCPNodePinger{resolve: netresolve.LookupNetIP, dial: dialer.DialContext}
 }
 
 func (p *TCPNodePinger) Ping(ctx context.Context, outbound []byte) NodePingResult {
