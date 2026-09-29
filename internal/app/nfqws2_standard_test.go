@@ -267,3 +267,29 @@ func TestStandardRouteOnlyForReviewedNFQWS2List(t *testing.T) {
 		t.Fatal("standard route offered outside the reviewed NFQWS2 list")
 	}
 }
+
+// Once the service returned to NFQWS2 and the new plan has no node routes,
+// the node recovery status of the earlier plan must not keep claiming that
+// the router needs review (seen on the owner's router after the return).
+func TestNodeRecoveryStatusOfSupersededPlanIsCleared(t *testing.T) {
+	for reason, keep := range map[string]bool{"scope-changed": false, "node-unavailable": false, "cleanup-unconfirmed": true} {
+		t.Run(reason, func(t *testing.T) {
+			a, node, _ := nfqws2StandardFixture(t, starterService(t, "discord"))
+			before, _, _ := a.Dataplane.Committed()
+			a.setNodeRecoveryStatus(nodeRecoveryStatus{State: "requires-review", PlanID: before.PlanID, Reason: reason, ServiceID: "discord"})
+			if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			standardDue(a, "discord")
+			a.autonomyRound(context.Background(), time.Now())
+			if selectedRoute(a.Store.Get().AppliedServices["discord"]) != "nfqws2" {
+				t.Fatal("fixture did not return to NFQWS2")
+			}
+			a.nodeRecoveryRound(context.Background(), time.Now())
+			status := a.nodeRecoverySnapshot()
+			if cleared := status.State == "idle" && status.Reason == ""; cleared == keep {
+				t.Fatalf("status=%+v", status)
+			}
+		})
+	}
+}

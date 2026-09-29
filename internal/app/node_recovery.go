@@ -75,6 +75,20 @@ func (a *App) nodeRecoverySnapshot() nodeRecoveryStatus {
 	return status
 }
 
+// clearSupersededNodeRecovery drops the status of an earlier plan once a plan
+// without node routes (or none) is committed: its message no longer describes
+// the router. An unconfirmed cleanup keeps its message until its own repair.
+func (a *App) clearSupersededNodeRecovery(planID string) {
+	a.nodeRecovery.mu.Lock()
+	defer a.nodeRecovery.mu.Unlock()
+	status := a.nodeRecovery.status
+	if status.PlanID == "" || status.PlanID == planID || status.Reason == "cleanup-unconfirmed" {
+		return
+	}
+	a.nodeRecovery.status = nodeRecoveryStatus{State: "idle", PlanID: planID}
+	a.nodeRecovery.key = ""
+}
+
 func (a *App) setNodeRecoveryStatus(status nodeRecoveryStatus) {
 	a.nodeRecovery.mu.Lock()
 	a.nodeRecovery.status = status
@@ -141,6 +155,9 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 	}
 	if planErr != nil || !exists || !plan.RequiresNetworkProof() {
 		release()
+		if planErr == nil {
+			a.clearSupersededNodeRecovery(plan.PlanID)
+		}
 		return
 	}
 	profile, profileErr := a.freshNetworkProfile(ctx)
