@@ -27,6 +27,7 @@ RAZVILKA references the following engines and external datasets. Their own licen
 - Telegram CIDR resource — vendor-published network ranges.
 - [Unicode CLDR](https://github.com/unicode-org/cldr-json) — bundled English and Russian country display names, copyright © 2015–2024 Unicode, Inc., under [Unicode License V3](docs/UNICODE_LICENSE.txt). The allowlisted subset is recorded with its source revision in `internal/providerfeed/country_names.go`; it provides publisher-label interpretation, not geolocation.
 
+- [Geo-Aggregator](https://github.com/Ground-Zerro/Geo-Aggregator) — GPL-3.0 catalogue of services by category (the source HydraRoute imports from), aggregating v2fly, Loyalsoldier, runetfreedom, itdoginfo, antifilter and b4geoip data. The panel reads its index and a service list only when the owner searches or previews; nothing is bundled.
 - [flag-icons](https://github.com/lipis/flag-icons) 7.5.0 — MIT, copyright (c) 2013 Panayiotis Lipiridis. A subset of 4:3 country flags is bundled in `cmd/razvilka/web/ui-icons.js`; flags with a coat of arms are simplified to their field for small sizes.
 - [Simple Icons](https://github.com/simple-icons/simple-icons) 16.33.0 — CC0-1.0 icon data. A subset of brand marks is bundled in `cmd/razvilka/web/ui-icons.js` only to identify services; the trademarks belong to their owners. Marks withdrawn from Simple Icons are not used.
 

@@ -51,6 +51,8 @@ type Entry struct {
 	ProbeURL    string   `json:"probe_url,omitempty"`
 	DomainsURL  string   `json:"domains_url,omitempty"`
 	CIDRsURL    string   `json:"cidrs_url,omitempty"`
+	ListURL     string   `json:"list_url,omitempty"` // domains and networks in one list
+	Catalog     string   `json:"catalog,omitempty"`  // "" curated, "geo-aggregator"
 	Provider    string   `json:"provider"`
 	SourcePage  string   `json:"source_page"`
 	License     string   `json:"license,omitempty"`
@@ -102,6 +104,8 @@ type Manager struct {
 	client   *http.Client
 	mu       sync.RWMutex
 	cache    map[string]cachedPreview
+	geo      []Entry
+	geoAt    time.Time
 }
 
 func Load(path string) (*Manager, error) {
@@ -184,7 +188,7 @@ func (m *Manager) SetHTTPClient(client *http.Client) {
 func (m *Manager) Search(query string, imported func(string) bool) []Summary {
 	query = strings.ToLower(strings.TrimSpace(query))
 	result := make([]Summary, 0, len(m.registry.Entries))
-	for _, entry := range m.registry.Entries {
+	for _, entry := range append(append([]Entry(nil), m.registry.Entries...), m.geoEntries()...) {
 		haystack := strings.ToLower(strings.Join(append([]string{entry.ID, entry.Name, entry.Category, entry.Description, entry.Access.Status, entry.Access.Note}, entry.Aliases...), " "))
 		if query != "" && !strings.Contains(haystack, query) {
 			continue
@@ -252,8 +256,26 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 		cidrs, count = parseCIDRs(body)
 		skipped += count
 	}
+	if entry.ListURL != "" {
+		body, err := m.fetch(ctx, entry.ListURL)
+		if err != nil {
+			return Preview{}, &SourceError{Part: "list", Err: err}
+		}
+		hash.Write([]byte(entry.ListURL))
+		hash.Write(body)
+		domainLines, cidrLines := splitMixedList(body)
+		var count int
+		domains, count = parseDomains(domainLines)
+		skipped += count
+		cidrs, count = parseCIDRs(cidrLines)
+		skipped += count
+	}
 	if len(domains) == 0 && len(cidrs) == 0 {
 		return Preview{}, errors.New("community source contains no supported domains or CIDRs")
+	}
+	probeURL := entry.ProbeURL
+	if probeURL == "" {
+		probeURL = derivedProbeURL(entry.ID, domains)
 	}
 	if len(domains) > 2000 || len(cidrs) > 2000 {
 		return Preview{}, errors.New("community source exceeds per-service entry limit")
@@ -263,7 +285,7 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 	service := catalog.Service{
 		ID: entry.ID, Name: entry.Name, Category: entry.Category, Icon: entry.Icon,
 		Description: entry.Description, Domains: domains, CIDRs: cidrs,
-		Strategy: []string{"auto"}, ProbeURL: entry.ProbeURL,
+		Strategy: []string{"auto"}, ProbeURL: probeURL,
 		SourceRefs: []string{"community:" + entry.ID},
 		Note:       "Импортировано из проверенного community-каталога. Статус доступа: " + entry.Access.Note + " Перед применением проверьте список и возможные конфликты.",
 		Provenance: &catalog.Provenance{Provider: entry.Provider, EntryID: entry.ID, URL: entry.SourcePage, License: entry.License, SHA256: digest, FetchedAt: fetchedAt},
@@ -355,6 +377,11 @@ func resolveDomainInclude(currentURL, include string) (string, error) {
 
 func (m *Manager) entry(id string) (Entry, bool) {
 	for _, entry := range m.registry.Entries {
+		if entry.ID == id {
+			return entry, true
+		}
+	}
+	for _, entry := range m.geoEntries() {
 		if entry.ID == id {
 			return entry, true
 		}

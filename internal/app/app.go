@@ -3099,6 +3099,11 @@ func (a *App) communityServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	imported := func(id string) bool { return a.CustomServices != nil && a.CustomServices.Has(id) }
+	// The wider Geo-Aggregator catalogue is optional: on a failure the curated
+	// catalogue is still shown.
+	refresh, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	_ = a.Community.RefreshGeoAggregator(refresh)
+	cancel()
 	writeJSON(w, http.StatusOK, a.Community.Search(r.URL.Query().Get("q"), imported))
 }
 

@@ -3760,8 +3760,15 @@ async function searchCommunityCatalog() {
 
 function renderCommunityResults() {
   $('#communityResults').innerHTML = state.community.map((entry) => `<button class="community-result ${state.communityPreview?.entry?.id === entry.id ? 'active' : ''}" data-community-id="${esc(entry.id)}" type="button">
-    <span class="service-badge">${esc(entry.icon || '+')}</span><span><b>${esc(entry.name)}</b><small>${esc(entry.category)} · ${esc(accessLabel(entry.access?.status))}</small></span><i class="${entry.imported ? 'imported' : ''}">${entry.imported ? 'ДОБАВЛЕН' : 'PREVIEW'}</i>
+    <span class="service-badge">${communityEntryIcon(entry)}</span><span><b>${esc(entry.name)}</b><small>${esc(entry.category)} · ${esc(entry.catalog === 'geo-aggregator' ? 'Geo-Aggregator' : accessLabel(entry.access?.status))}</small></span><i class="${entry.imported ? 'imported' : ''}">${entry.imported ? 'ДОБАВЛЕН' : 'PREVIEW'}</i>
   </button>`).join('') || '<div class="community-empty">Ничего не найдено. Можно добавить сервис вручную.</div>';
+}
+
+// Catalogue icon slug when we bundle it, else the brand recognised by name.
+function communityEntryIcon(entry) {
+  const icons = globalThis.RazvilkaIcons;
+  const slug = icons && (icons.brandSlugs.includes(entry.icon) ? entry.icon : icons.brandFor({ id: String(entry.id || '').replace(/^ga-/, ''), name: entry.name }));
+  return slug ? icons.brandSVG(slug, entry.name) : esc(/^[A-Za-z0-9]{1,3}$/.test(entry.icon || '') ? entry.icon : String(entry.name || '+').slice(0, 2));
 }
 
 function accessLabel(status) {

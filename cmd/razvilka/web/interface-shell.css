@@ -687,3 +687,4 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .interface-ui .node-flag .flag-icon{width:28px;height:21px;vertical-align:0}
 .interface-ui .ui3-service-icon .brand-icon{width:20px;height:20px}
 .interface-ui .brand-icon{display:inline-block;width:1.2em;height:1.2em;flex-shrink:0;vertical-align:-.2em}
+.interface-ui .service-badge{display:grid;place-items:center}.interface-ui .service-badge .brand-icon{width:18px;height:18px}
