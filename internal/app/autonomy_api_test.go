@@ -34,7 +34,7 @@ func saveAutonomyFixturePolicy(t *testing.T, a *App) autonomy.Policy {
 	p.Enabled = true
 	p.SetupComplete = true
 	p.DefaultSources = []string{"192.168.1.50/32"}
-	p.SourceIDs = []string{"feed-goida-extra"}
+	p.SourceIDs = []string{"feed-kort0881-ru-sni"}
 	p.InheritNewServices = true
 	w := httptest.NewRecorder()
 	a.autonomyAPI(w, autonomyRequest("PUT", "/api/v1/autonomy", map[string]any{"expected_revision": 0, "policy": p, "confirm": "SAVE_AUTONOMY", "release_safe_mode": false}))
@@ -101,7 +101,7 @@ func TestAutonomyRejectsUnknownSourceAndInstallMode(t *testing.T) {
 			p.SetupComplete = true
 			p.Enabled = true
 			p.AllLAN = true
-			p.SourceIDs = []string{"feed-goida-extra"}
+			p.SourceIDs = []string{"feed-kort0881-ru-sni"}
 			if what == "source" {
 				p.SourceIDs = []string{"not-in-registry"}
 			} else {

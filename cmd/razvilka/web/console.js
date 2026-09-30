@@ -114,7 +114,6 @@ function renderConsoleProviders(){
  const presets=state.nodeFeeds?.presets||[];
  const entries=[
   {name:'Kort0881',tag:'VLESS · каталог РФ',text:'Выборка публичных подключений. Расположение и доступность проверяются отдельно.',url:'https://github.com/kort0881/vpn-vless-configs-russia',key:'kort',icon:'route',tone:'mint'},
-  {name:'Goida VPN',tag:'Несколько протоколов',text:'Коллекция подписок. Выбирайте ограниченный срез, а не тысячи проверок сразу.',url:'https://avencores.github.io/goida-vpn-site/',key:'goida-extra',icon:'layers',tone:'violet'},
   {name:'VLESS Key Checker',tag:'Каталог подключений',text:'Результат издателя — подсказка. Нужна точная проверка выбранного сервиса.',url:'https://tiagorrg.github.io/vless-checker/',key:'tiagorrg',icon:'shield',tone:'blue'},
   {name:'igareck',tag:'Смешанная подписка',text:'Коллекция разных протоколов. Неподдержанные параметры не должны отбрасываться молча.',url:'https://github.com/igareck/vpn-configs-for-russia',feedURL:'https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_SS%2BAll_RUS.txt',key:'igareck',icon:'wifi',tone:'blue'},
  {name:'Epodonios',tag:'Пакет Sub1',text:'Небольшой пакет вместо загрузки всей коллекции. Каждый узел требует локальной проверки.',url:'https://github.com/Epodonios/v2ray-configs',feedURL:'https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Sub1.txt',key:'epodonios',icon:'server',tone:'rose'},

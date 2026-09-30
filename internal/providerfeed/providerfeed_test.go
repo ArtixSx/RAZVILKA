@@ -152,7 +152,7 @@ func Test304AndFailedFetchPreserveNodeTTLHealthAndPrivateBytes(t *testing.T) {
 func Test200RefreshPreservesExactHealthAndRemovedNodes(t *testing.T) {
 	m, store, _ := testManager(t)
 	setResponse(m, 200, goodURI, nil)
-	req := Request{PresetID: "goida-vless"}
+	req := Request{PresetID: "kort0881-ru-sni"}
 	first, err := m.Sync(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +184,7 @@ func TestPartialImportNeedsExplicitAcceptanceAndNeverStoresRejectedEntries(t *te
 	m, store, _ := testManager(t)
 	bad := strings.Replace(goodURI, "security=tls", "security=tls&allowInsecure=1", 1)
 	setResponse(m, 200, bad+"\n"+goodURI, nil)
-	req := Request{PresetID: "goida-vless"}
+	req := Request{PresetID: "kort0881-ru-sni"}
 	result, err := m.Sync(context.Background(), req)
 	if !errors.Is(err, ErrPartial) || result.Rejected != 1 {
 		t.Fatal("partial import was not explicit")
@@ -261,19 +261,19 @@ func TestFetchBoundaryRejectsBadURLsRedirectsAndOversizeWithoutSecrets(t *testin
 func TestFeedGateCancellationAndStateCapacity(t *testing.T) {
 	m, _, _ := testManager(t)
 	m.gate <- struct{}{}
-	if _, err := m.Sync(context.Background(), Request{PresetID: "goida-vless"}); !errors.Is(err, ErrBusy) {
+	if _, err := m.Sync(context.Background(), Request{PresetID: "kort0881-ru-sni"}); !errors.Is(err, ErrBusy) {
 		t.Fatal("parallel sync accepted")
 	}
 	<-m.gate
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := m.Sync(ctx, Request{PresetID: "goida-vless"}); !errors.Is(err, context.Canceled) {
+	if _, err := m.Sync(ctx, Request{PresetID: "kort0881-ru-sni"}); !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled sync accepted")
 	}
 	for i := 0; i < MaxFeeds; i++ {
 		m.states[fmt.Sprint(i)] = cache{}
 	}
-	if _, err := m.Sync(context.Background(), Request{PresetID: "goida-vless"}); !errors.Is(err, ErrSize) {
+	if _, err := m.Sync(context.Background(), Request{PresetID: "kort0881-ru-sni"}); !errors.Is(err, ErrSize) {
 		t.Fatal("unbounded feed registry")
 	}
 }
@@ -311,7 +311,7 @@ func TestStoreFailureDoesNotAdvertiseSuccessOrRememberValidators(t *testing.T) {
 	m, store, _ := testManager(t)
 	_ = store.Close()
 	setResponse(m, 200, goodURI, http.Header{"Etag": []string{`"etag"`}})
-	result, err := m.Sync(context.Background(), Request{PresetID: "goida-vless"})
+	result, err := m.Sync(context.Background(), Request{PresetID: "kort0881-ru-sni"})
 	if !errors.Is(err, ErrStore) || result.Imported != 0 || m.List()[0].LastKnownGood {
 		t.Fatal("failed commit advertised success")
 	}
@@ -319,5 +319,27 @@ func TestStoreFailureDoesNotAdvertiseSuccessOrRememberValidators(t *testing.T) {
 		if entry.etag != "" {
 			t.Fatal("failed import remembered validators")
 		}
+	}
+}
+
+// A retired preset keeps saved subscriptions valid but is neither offered
+// nor fetched.
+func TestRetiredPresetIsNotOfferedOrFetched(t *testing.T) {
+	m, _, _ := testManager(t)
+	fetched := false
+	m.client = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		fetched = true
+		return nil, errors.New("unexpected fetch")
+	})}
+	if _, err := m.Sync(context.Background(), Request{PresetID: "goida-vless"}); !errors.Is(err, ErrNotFound) || fetched {
+		t.Fatalf("retired preset fetched: %v %v", err, fetched)
+	}
+	for _, p := range ActiveBuiltins() {
+		if strings.HasPrefix(p.ID, "goida") {
+			t.Fatal("retired preset offered")
+		}
+	}
+	if err := ValidateRequest(Request{PresetID: "goida-extra"}); err != nil {
+		t.Fatal("saved retired subscription no longer resolves")
 	}
 }

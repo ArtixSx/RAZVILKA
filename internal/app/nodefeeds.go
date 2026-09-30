@@ -25,7 +25,7 @@ func (a *App) nodeFeedList(w http.ResponseWriter, r *http.Request) {
 	if a.NodeFeeds != nil {
 		states = a.NodeFeeds.List()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"available": a.NodeFeeds != nil, "presets": providerfeed.Builtins(), "sources": states, "max_candidates": providerfeed.MaxCandidates, "max_feeds": providerfeed.MaxFeeds, "persistent": a.NodeFeeds.Persistent(), "scheduled": a.NodeFeeds != nil && a.NodeFeeds.Scheduling()})
+	writeJSON(w, http.StatusOK, map[string]any{"available": a.NodeFeeds != nil, "presets": providerfeed.ActiveBuiltins(), "sources": states, "max_candidates": providerfeed.MaxCandidates, "max_feeds": providerfeed.MaxFeeds, "persistent": a.NodeFeeds.Persistent(), "scheduled": a.NodeFeeds != nil && a.NodeFeeds.Scheduling()})
 }
 
 func decodeFeedRequest(w http.ResponseWriter, r *http.Request, out any) bool {

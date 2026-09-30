@@ -53,6 +53,9 @@ type Preset struct {
 	Verification                  string `json:"verification"`
 	CountryCode                   string `json:"country_code,omitempty"`
 	DefaultRefreshIntervalMinutes int    `json:"default_refresh_interval_minutes"`
+	// Retired presets stay resolvable, so saved subscriptions remain valid,
+	// but they are no longer offered or fetched.
+	Retired string `json:"retired,omitempty"`
 }
 
 // These are links, not redistributed node credentials or copied site code.
@@ -60,8 +63,8 @@ type Preset struct {
 func Builtins() []Preset {
 	presets := []Preset{
 		{ID: "tiagorrg-vless", Name: "VLESS Key Checker", URL: "https://tiagorrg.github.io/vless-checker/keys.json", Format: "keys-json", License: "MIT", Verification: "upstream TCP only; local exact check required"},
-		{ID: "goida-vless", Name: "Goida VPN · VLESS", URL: "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror/23.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "upstream collection; local exact check required"},
-		{ID: "goida-extra", Name: "Goida VPN · дополнительный каталог", URL: "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror/6.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "upstream collection; local exact check required"},
+		{ID: "goida-vless", Name: "Goida VPN · VLESS", URL: "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror/23.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "upstream collection; local exact check required", Retired: "Исходный репозиторий удалён с GitHub (ответ 404 с 29.09.2026). Источник больше не загружается; выберите другой."},
+		{ID: "goida-extra", Name: "Goida VPN · дополнительный каталог", URL: "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror/6.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "upstream collection; local exact check required", Retired: "Исходный репозиторий удалён с GitHub (ответ 404 с 29.09.2026). Источник больше не загружается; выберите другой."},
 		{ID: "au1rxx-nl", Name: "Free VPN Subscriptions · Нидерланды", URL: "https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/by-country/singbox-NL.json", Format: "profile", License: "see upstream", Verification: "country is a publisher label; local exact check required", CountryCode: "NL"},
 		{ID: "kort0881-ru-sni", Name: "Kort0881 · RU SNI", URL: "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/data/githubmirror/ru-sni/vless.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "publisher SNI selection, not measured location or local availability; local exact check required", DefaultRefreshIntervalMinutes: 240},
 	}
@@ -71,6 +74,17 @@ func Builtins() []Preset {
 		}
 	}
 	return presets
+}
+
+// ActiveBuiltins lists the presets that may be chosen and fetched.
+func ActiveBuiltins() []Preset {
+	active := []Preset{}
+	for _, p := range Builtins() {
+		if p.Retired == "" {
+			active = append(active, p)
+		}
+	}
+	return active
 }
 
 type Request struct {
@@ -136,6 +150,7 @@ type source struct {
 	country                               string
 	limit                                 int
 	revision                              uint64
+	retired                               bool
 }
 type cache struct {
 	snapshot                 *feedSnapshot
@@ -214,6 +229,7 @@ func resolve(request Request) (source, error) {
 				s.url = p.URL
 				s.format = p.Format
 				s.kind = "community"
+				s.retired = p.Retired != ""
 				if validCountry(p.CountryCode) {
 					s.country = p.CountryCode
 				}
@@ -372,6 +388,9 @@ func (m *Manager) syncAdmitted(parent context.Context, s source, acceptPartial b
 	// download deadline does not spend the import's separate admission budget.
 	admission.release()
 	status, fetchErr := func() (string, error) {
+		if s.retired {
+			return "stale", ErrNotFound
+		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.url, nil)
 		if err != nil {
 			return "failed", ErrRequest

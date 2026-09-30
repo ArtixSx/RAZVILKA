@@ -173,7 +173,11 @@ func (a *App) autonomyView(now time.Time) map[string]any {
 	sort.Slice(catalogServices, func(i, j int) bool { return catalogServices[i]["name"].(string) < catalogServices[j]["name"].(string) })
 	presets := []map[string]any{}
 	for _, preset := range providerfeed.Builtins() {
-		presets = append(presets, map[string]any{"id": "feed-" + preset.ID, "name": preset.Name, "interval_minutes": preset.DefaultRefreshIntervalMinutes})
+		// A retired source is shown only while the saved policy still names it.
+		if preset.Retired != "" && !slices.Contains(p.SourceIDs, "feed-"+preset.ID) {
+			continue
+		}
+		presets = append(presets, map[string]any{"id": "feed-" + preset.ID, "name": preset.Name, "interval_minutes": preset.DefaultRefreshIntervalMinutes, "retired": preset.Retired})
 	}
 	// Expose only bounded scheduling/readback metadata to the authenticated UI.
 	// Never expose old raw refresh errors, destinations or full plan objects here.
@@ -264,7 +268,7 @@ func (a *App) autonomyEnsureFeeds(ctx context.Context, p autonomy.Policy) error 
 	for _, s := range a.NodeFeeds.List() {
 		existing[s.SourceID] = true
 	}
-	for _, preset := range providerfeed.Builtins() {
+	for _, preset := range providerfeed.ActiveBuiltins() {
 		id := "feed-" + preset.ID
 		if !slices.Contains(p.SourceIDs, id) || existing[id] {
 			continue

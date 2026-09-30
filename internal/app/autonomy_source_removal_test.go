@@ -32,7 +32,7 @@ func sourceRemovalFixture(t *testing.T) (*App, providerfeed.State, string) {
 	if err := a.autonomyEnsureFeeds(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
-	s, err := feeds.Saved("feed-goida-extra")
+	s, err := feeds.Saved("feed-kort0881-ru-sni")
 	if err != nil {
 		t.Fatal(err)
 	}
