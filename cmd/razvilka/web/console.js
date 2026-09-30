@@ -168,7 +168,7 @@ window.addEventListener('razvilka:autonomy-error',e=>{consoleAutonomyAvailabilit
 window.addEventListener('hashchange',consoleRouteHash);
 renderConsole();
 
-function consoleServiceIcon(service){const icons=globalThis.RazvilkaIcons,brand=icons?.brandFor(service);if(brand)return icons.brandSVG(brand,service.name);const map={telegram:'telegram',youtube:'youtube',discord:'discord',instagram:'instagram',chatgpt:'ai',claude:'claude',gemini:'ai',perplexity:'ai',github:'github',twitch:'stream',netflix:'stream'};return map[service.id]?`<svg class="ui-icon service-logo service-${esc(service.id)}" aria-hidden="true"><use href="#i-service-${map[service.id]}"/></svg>`:esc(service.icon||service.name?.slice(0,2)||'•');}
+function consoleServiceIcon(service){const icons=globalThis.RazvilkaIcons,brand=icons?.brandFor(service);if(brand)return icons.brandSVG(brand,service.name);if(service.id==='nfqws2-common')return '<svg class="ui-icon service-logo" aria-hidden="true"><use href="#i-layers"/></svg>';const map={telegram:'telegram',youtube:'youtube',discord:'discord',instagram:'instagram',chatgpt:'ai',claude:'claude',gemini:'ai',perplexity:'ai',github:'github',twitch:'stream',netflix:'stream'};return map[service.id]?`<svg class="ui-icon service-logo service-${esc(service.id)}" aria-hidden="true"><use href="#i-service-${map[service.id]}"/></svg>`:esc(service.icon||service.name?.slice(0,2)||'•');}
 
 function consoleAutonomyAvailability(available,message=''){$$('.console-autonomy-availability').forEach(el=>{el.hidden=available;el.textContent=message;});$$('[data-autonomy] form input,[data-autonomy] form select,[data-autonomy] form textarea,[data-autonomy] form button,#a1-pauseButton,[data-manage],[data-remove],[data-feed-sync]').forEach(el=>el.disabled=!available);}
 
