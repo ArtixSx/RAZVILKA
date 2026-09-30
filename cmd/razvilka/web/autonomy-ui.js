@@ -3,7 +3,8 @@
 (function(root) {
   'use strict';
   const supportedProtocols = ['vless','hysteria2','tuic','shadowsocks'];
-  const supportedRoutes = ['nfqws2','usque','warp-wg'];
+  const supportedRoutes = ['nfqws2','usque','warp-wg','amneziawg','wireguard','sing-box','xray'];
+  const routeLabels = {nfqws2:'NFQWS2',usque:'WARP · MASQUE','warp-wg':'WARP · WireGuard',amneziawg:'AmneziaWG',wireguard:'WireGuard · свой сервер','sing-box':'Sing-box · свой сервер',xray:'Xray · свой сервер'};
   const dayLabels = [[1,'Пн'],[2,'Вт'],[3,'Ср'],[4,'Чт'],[5,'Пт'],[6,'Сб'],[0,'Вс']];
   const clone = v => JSON.parse(JSON.stringify(v));
   const escapeHTML = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -124,7 +125,7 @@
   }
   function renderReview() {
     if(!editingPolicy) return;const p=policyFromForm();
-    const rows=[['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='install'?'Устанавливает сама, с откатом':p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · ${p.components.mode==='install'?'Обновляет сама, с проверкой и откатом':'Проверка каталога'}`],['Часовой пояс',p.timezone]];
+    const rows=[['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.map(id=>routeLabels[id]||id).join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='install'?'Устанавливает сама, с откатом':p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · ${p.components.mode==='install'?'Обновляет сама, с проверкой и откатом':'Проверка каталога'}`],['Часовой пояс',p.timezone]];
     $('reviewSummary').innerHTML=rows.map(([k,v])=>`<div><span>${escapeHTML(k)}</span><b>${escapeHTML(v)}</b></div>`).join('');
   }
   function serviceName(id) { return (snapshot?.catalog_services||[]).find(s=>s.id===id)?.name||id; }

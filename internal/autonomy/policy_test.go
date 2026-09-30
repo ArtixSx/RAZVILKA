@@ -50,6 +50,8 @@ func TestPolicyValidation(t *testing.T) {
 		{"no_empty_protocol", func(p *Policy) { p.Protocols = nil }, false},
 		{"no_unsupported_preferred", func(p *Policy) { p.PreferredRoutes = []string{"custom-shell"} }, false},
 		{"no_duplicate_preferred", func(p *Policy) { p.PreferredRoutes = []string{"usque", "usque"} }, false},
+		{"own_servers_preferred", func(p *Policy) { p.PreferredRoutes = []string{"amneziawg", "wireguard", "sing-box", "xray"} }, true},
+		{"no_node_route_preferred", func(p *Policy) { p.PreferredRoutes = []string{"sing-box:node-abc"} }, false},
 		{"auto_install", func(p *Policy) { p.Application.Mode = "install" }, true},
 		{"component_install", func(p *Policy) { p.Components.Mode = "install" }, true},
 		{"no_unknown_mode", func(p *Policy) { p.Application.Mode = "upgrade" }, false},

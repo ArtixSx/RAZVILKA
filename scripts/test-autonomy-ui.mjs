@@ -31,4 +31,14 @@ for(const file of ['autonomy-ui.js','console-autonomy.js']) {
   test(`${file} hides ${name} cooldown`,()=>assert.equal(candidateCooldownText({candidate_failures:[{...failure,...change}]},now),''));
  }
 }
+{
+ const fs=require('node:fs');
+ const all=['nfqws2','usque','warp-wg','amneziawg','wireguard','sing-box','xray'];
+ const html=fs.readFileSync('cmd/razvilka/web/index.html','utf8');
+ for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+  const {validatePolicy:validate}=require('../cmd/razvilka/web/'+file);
+  test(`${file} accepts every local route with a probe`,()=>{const p=policy();p.preferred_routes=all;assert.deepEqual(validate(p).preferred_routes,all);});
+ }
+ test('every local route can be chosen before node selection',()=>{for(const id of all)assert.equal(html.split(`name="preferred" type="checkbox" value="${id}"`).length-1,1,id);});
+}
 console.log(`AUTONOMY_UI_PURE_TESTS=${count}`);

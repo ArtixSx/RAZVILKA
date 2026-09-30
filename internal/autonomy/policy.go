@@ -62,8 +62,13 @@ type Service struct {
 	ExpectedRoute    string   `json:"expected_route"` // fences subsequent manual changes
 }
 
+// PreferredRouteIDs are the local routes the autopilot may try, in this
+// order, before it selects a node: every engine with an isolated route probe.
+// A route that is not installed, configured and running is skipped.
+var PreferredRouteIDs = []string{"nfqws2", "usque", "warp-wg", "amneziawg", "wireguard", "sing-box", "xray"}
+
 func Default() Policy {
-	return Policy{PreferredRoutes: []string{"nfqws2", "usque", "warp-wg"}, Schema: Schema, Timezone: "UTC", Protocols: []string{"vless", "hysteria2", "tuic", "shadowsocks"},
+	return Policy{PreferredRoutes: slices.Clone(PreferredRouteIDs), Schema: Schema, Timezone: "UTC", Protocols: []string{"vless", "hysteria2", "tuic", "shadowsocks"},
 		SourceIDs: []string{}, DefaultSources: []string{}, CheckSeconds: 120, ReserveSeconds: 300, ReserveTarget: 3, CandidatesPerRound: 2,
 		FailureConfirmSeconds: 20, MaxSwitchesPerHour: 6,
 		Application: Window{Mode: "install", Start: "03:00", End: "04:00", Days: []int{0, 1, 2, 3, 4, 5, 6}},
@@ -109,12 +114,12 @@ func Validate(p Policy) error {
 	if len(p.SourceIDs) > MaxSources || len(p.Protocols) == 0 || len(p.Protocols) > 4 {
 		return ErrPolicy
 	}
-	if len(p.PreferredRoutes) > 3 {
+	if len(p.PreferredRoutes) > len(PreferredRouteIDs) {
 		return ErrPolicy
 	}
 	routes := map[string]bool{}
 	for _, r := range p.PreferredRoutes {
-		if !slices.Contains([]string{"nfqws2", "usque", "warp-wg"}, r) || routes[r] {
+		if !slices.Contains(PreferredRouteIDs, r) || routes[r] {
 			return ErrPolicy
 		}
 		routes[r] = true
