@@ -138,3 +138,35 @@ func TestNFQWS2RollbackDoesNotInventUnprovenBlocks(t *testing.T) {
 		t.Fatalf("unproven block written: %q", data)
 	}
 }
+
+// The owner's router: the 0.19.2 rollback already restored the snapshot and
+// its lease without the block. Retrying it with a fixed program must put the
+// block back although the lease no longer names this transaction.
+func TestNFQWS2RetriedRollbackRestoresBlocksTheLeaseRecords(t *testing.T) {
+	a, _, plan, applied := upgradeFixture(t)
+	transaction := t.TempDir()
+	for _, call := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate, a.Activate} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The first rollback cannot prove the block (as 0.19.2 did not try).
+	other := Plan{Routes: []Route{{Resolved: "nfqws2", Domains: []string{"other.example"}}}}
+	if err := a.Rollback(context.Background(), other, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.VerifyRollback(context.Background(), plan, transaction); err == nil {
+		t.Fatal("rollback without the committed block verified")
+	}
+	if err := a.Rollback(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	for index, data := range readNFQWS2Files(t, a) {
+		if string(data) != string(applied[index]) {
+			t.Fatalf("retry did not restore resource %d: %q", index, data)
+		}
+	}
+	if confirmed, err := a.VerifyRollback(context.Background(), plan, transaction); err != nil || !confirmed {
+		t.Fatalf("retried rollback not confirmed: %v %v", confirmed, err)
+	}
+}

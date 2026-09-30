@@ -13,7 +13,9 @@ func TestCloseFailedRollbackDeactivatesBeforeClearingTheFence(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			m, adapter, p, _ := rollbackRetryFixture(t)
 			// After a reboot the recorded runtime cannot be matched again.
-			adapter.verify = func(context.Context) (bool, error) { return false, nil }
+			adapter.verify = func(context.Context) (bool, error) {
+				return false, errors.New("restored proxy processes differ from snapshot")
+			}
 			if _, err := m.RetryFailedRollback(context.Background(), p.PlanID, p.Digest, func(Plan) error { return nil }); err == nil {
 				t.Fatal("fixture did not reproduce an unretryable rollback")
 			}

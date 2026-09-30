@@ -44,7 +44,7 @@ func TestCloseRollbackSettingsIgnoreOnlySafeMode(t *testing.T) {
 	p := dataplane.Plan{Revision: 4, Routes: []dataplane.Route{{ServiceID: "discord", Selected: "sing-box:private", Sources: []string{"192.168.1.40/32"}}}}
 	cfg := config.Config{Revision: 5, AppliedRevision: 4, SafeMode: true, AppliedServices: map[string]config.ServiceState{"discord": {Enabled: true, Route: "sing-box:private", Sources: []string{"192.168.1.40/32"}}}}
 	if rollbackAppliedSettingsMatch(cfg, p) || !closeRollbackSettingsMatch(cfg, p) {
-		t.Fatal("close must accept the Safe Mode a fenced boot enabled, retry must not")
+		t.Fatal("explicit recovery must accept the Safe Mode a fenced boot enabled; the panel's own check must not")
 	}
 	if !cfg.SafeMode {
 		t.Fatal("close check changed the caller's settings")

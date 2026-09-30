@@ -408,10 +408,10 @@ func main() {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		settingsMatch := rollbackAppliedSettingsMatch
-		if *closeRollbackPlan != "" {
-			settingsMatch = closeRollbackSettingsMatch
-		}
+		// Every start with an unrecovered journal enables Recovery Safe Mode
+		// and fences the panel, so Safe Mode cannot be cleared first: both
+		// explicit recovery modes accept it and leave it enabled.
+		settingsMatch := closeRollbackSettingsMatch
 		guard := func(previous dataplane.Plan) error {
 			current, readErr := os.ReadFile(*cfgPath)
 			if readErr != nil || !bytes.Equal(baseline, current) || !settingsMatch(store.Get(), previous) {
@@ -806,9 +806,12 @@ func rollbackAppliedSettingsMatch(cfg config.Config, previous dataplane.Plan) bo
 }
 
 // closeRollbackSettingsMatch is rollbackAppliedSettingsMatch without the Safe
-// Mode refusal. Closing only deactivates owned runtime, which
-// -deactivate-dataplane also does in Safe Mode, and a fenced boot enables Safe
-// Mode itself. Closing leaves Safe Mode enabled for the operator to clear.
+// Mode refusal, for the explicit recovery modes run while the panel is
+// stopped. A fenced boot enables Safe Mode itself and the fence then blocks
+// clearing it, so requiring it off made a retry impossible after any restart
+// (0.19.2 on the owner's router). Closing only deactivates owned runtime;
+// retrying restores the snapshot and verifies it strictly. Both leave Safe
+// Mode enabled for the operator to clear.
 func closeRollbackSettingsMatch(cfg config.Config, previous dataplane.Plan) bool {
 	cfg.SafeMode = false
 	return rollbackAppliedSettingsMatch(cfg, previous)

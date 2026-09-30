@@ -114,8 +114,10 @@ func TestRollbackRetryRequiresExactPreCommitFailureAndMatchingSettings(t *testin
 				}
 			}
 			result, err := m.RetryFailedRollback(ctx, id, digest, guard)
-			if mode == "pass" || mode == "interrupted-retry" {
-				if err != nil || result.State != "rolled-back" || !result.RollbackVerified || !adapter.rollback {
+			if mode == "pass" || mode == "interrupted-retry" || mode == "unconfirmed" {
+				// An exact restoration without a live receipt closes the journal
+				// as Apply does, unverified.
+				if err != nil || result.State != "rolled-back" || result.RollbackVerified != (mode != "unconfirmed") || !adapter.rollback {
 					t.Fatal(result, err)
 				}
 				if err := m.checkExecutionRecovery(); err != nil {
@@ -129,7 +131,7 @@ func TestRollbackRetryRequiresExactPreCommitFailureAndMatchingSettings(t *testin
 				if err == nil {
 					t.Fatal("unsafe success", result)
 				}
-				if mode != "unconfirmed" && mode != "retry-failed" && len(adapter.calls) > 0 {
+				if mode != "retry-failed" && len(adapter.calls) > 0 {
 					t.Fatal("mutation before guard", adapter.calls)
 				}
 				if err := m.checkExecutionRecovery(); err == nil {

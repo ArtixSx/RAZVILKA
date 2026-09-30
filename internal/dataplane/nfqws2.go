@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -310,13 +311,6 @@ func nfqws2PlanValues(plan Plan, id string) ([]string, []string) {
 	return sortedUnique(domains), sortedUnique(cidrs)
 }
 
-// restoreDeactivatedBlocks puts back the managed blocks that a controlled
-// deactivation removed. The installer quiesces the dataplane before replacing
-// the binary and then restores the committed journal and the ownership lease,
-// but not the shared lists: boot recovery used to find no block and enter
-// Recovery Safe Mode. A block is written back only if the configuration and
-// init still match the lease and the block rendered from the committed plan
-// hashes exactly to the block the lease recorded; anything else still fails.
 // leaseBlockRestoration renders a list without its managed block back with
 // the block of these values, if that block hashes exactly to the lease's.
 func leaseBlockRestoration(data []byte, values []string, owner, hash string) ([]byte, bool) {
@@ -331,6 +325,13 @@ func leaseBlockRestoration(data []byte, values []string, owner, hash string) ([]
 	return []byte(merged), true
 }
 
+// restoreDeactivatedBlocks puts back the managed blocks that a controlled
+// deactivation removed. The installer quiesces the dataplane before replacing
+// the binary and then restores the committed journal and the ownership lease,
+// but not the shared lists: boot recovery used to find no block and enter
+// Recovery Safe Mode. A block is written back only if the configuration and
+// init still match the lease and the block rendered from the committed plan
+// hashes exactly to the block the lease recorded; anything else still fails.
 func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 	lease, err := a.readLease()
 	if err != nil || lease == nil {
@@ -451,8 +452,16 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) er
 	}
 	lease, err := a.readLease()
 	transaction, pathErr := filepath.Abs(root)
-	if err != nil || pathErr != nil || lease == nil || lease.Transaction != transaction {
+	if err != nil || pathErr != nil || lease == nil {
 		return errors.Join(err, pathErr)
+	}
+	if lease.Transaction != transaction {
+		if reflect.DeepEqual(lease, snapshot.Lease) {
+			// Already rolled back: a retry after a rollback that could not put
+			// back the block its lease records (0.19.2).
+			return a.restoreRolledBackBlocks(ctx, plan, snapshot)
+		}
+		return nil
 	}
 	unlock, err := a.lockResources()
 	if err != nil {
@@ -495,12 +504,31 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) er
 	// boot recovery put them back snapshots lists without the block its lease
 	// records. Restoring that literally leaves the runtime incomplete and the
 	// rollback unverifiable; put back exactly the block the lease proves.
+	return a.restartWithRestoredBlocks(ctx, plan, snapshot)
+}
+
+// restartWithRestoredBlocks puts back the block the restored lease proves
+// for the plan, if the lists lack it, and restarts a running service. An
+// unproven block is left to rollback verification, which reports it.
+func (a *NFQWS2Adapter) restartWithRestoredBlocks(ctx context.Context, plan Plan, snapshot nfqws2Snapshot) error {
 	if restored, err := a.restoreDeactivatedBlocks(plan); err == nil && restored && snapshot.WasRunning {
 		if output, err := a.run(ctx, a.InitPath, "restart"); err != nil {
 			return fmt.Errorf("restart NFQWS2 with restored lists: %s", shortOutput(output, err))
 		}
 	}
 	return nil
+}
+
+func (a *NFQWS2Adapter) restoreRolledBackBlocks(ctx context.Context, plan Plan, snapshot nfqws2Snapshot) error {
+	unlock, err := a.lockResources()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if lease, err := a.readLease(); err != nil || !reflect.DeepEqual(lease, snapshot.Lease) {
+		return err
+	}
+	return a.restartWithRestoredBlocks(ctx, plan, snapshot)
 }
 
 func readNFQWS2Snapshot(root string) (nfqws2Snapshot, error) {

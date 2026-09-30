@@ -38,6 +38,11 @@ func (m *Manager) RetryFailedRollback(ctx context.Context, planID, digest string
 	if err := guard(reviewed.previous); err != nil {
 		return refuse()
 	}
+	// As in Apply, an exact restoration without a live receipt (a runtime the
+	// snapshot recorded as stopped, for example after a boot that waited for
+	// node checks) ends rolled-back but unverified; any difference fails.
+	// Requiring a receipt made such a journal impossible to recover (0.19.2).
+	confirmedAll := true
 	return m.runFailedRollbackRecovery(ctx, reviewed, guard, "retry rollback", "rollback retry failed", func(run recoveryStepRunner) {
 		prepared := reviewed.prepared
 		for i := len(prepared) - 1; i >= 0; i-- {
@@ -46,15 +51,17 @@ func (m *Manager) RetryFailedRollback(ctx context.Context, planID, digest string
 		for _, adapter := range prepared {
 			run(adapter, "retry-verify-rollback", func(c context.Context, p Plan, path string) error {
 				confirmed, err := adapter.(RollbackVerifier).VerifyRollback(c, p, path)
-				if !confirmed {
-					err = errors.Join(err, errors.New("restored runtime is not confirmed"))
-				}
+				confirmedAll = confirmedAll && confirmed && err == nil
 				return errors.Join(err, c.Err())
 			})
 		}
 	}, func(execution *Execution, plan *Plan) {
-		execution.RollbackVerified = true
+		execution.RollbackVerified = confirmedAll
 		plan.Note = "The recorded rollback was retried and its owned runtime was verified. Service access still requires a fresh check."
+		if !confirmedAll {
+			execution.Error += "; retried rollback restored the recorded state exactly, without a live receipt"
+			plan.Note = "The recorded rollback was retried and restored exactly, but the recorded runtime was not live, so it is not verified. Recover and check the committed plan again before claiming service access."
+		}
 	})
 }
 
