@@ -115,13 +115,57 @@ func TestLinuxEpochEventsTrackUnderlayWithoutNameExemptions(t *testing.T) {
 	if changed, err := s.event(epochTestLink(order), interfaces); err != nil || !changed {
 		t.Fatal("WAN return to same state was ignored")
 	}
+	// Keenetic re-applies an unchanged main default within microseconds,
+	// together with its policy tables: that refresh is the same underlay.
+	clock := time.Unix(1_800_000_000, 0)
+	s.now = func() time.Time { return clock }
 	removed := epochTestRoute(order, 2)
 	removed.kind = unix.RTM_DELROUTE
-	if changed, err := s.event(removed, interfaces); err != nil || !changed {
+	if changed, err := s.event(removed, interfaces); err != nil || changed {
+		t.Fatal("route re-apply counted at deletion")
+	}
+	if changed, err := s.event(epochTestRoute(order, 2), interfaces); err != nil || changed || s.settleRoutes(clock) {
+		t.Fatal("identical default re-applied within the window started a new epoch")
+	}
+	// A default that stays away for the whole window is a change, and so is
+	// its later return.
+	if changed, err := s.event(removed, interfaces); err != nil || changed {
+		t.Fatal("route deletion counted before its window")
+	}
+	clock = clock.Add(epochRouteReapplyWindow)
+	if !s.settleRoutes(clock) {
 		t.Fatal("default route deletion was ignored")
 	}
 	if changed, err := s.event(epochTestRoute(order, 2), interfaces); err != nil || !changed {
 		t.Fatal("default route return was ignored")
+	}
+	// A return after the window without a drain in between also counts.
+	if changed, err := s.event(removed, interfaces); err != nil || changed {
+		t.Fatal("route deletion counted before its window")
+	}
+	clock = clock.Add(3 * time.Second)
+	if changed, err := s.event(epochTestRoute(order, 2), interfaces); err != nil || !changed {
+		t.Fatal("late identical return reused the epoch")
+	}
+	// A WAN link event during the re-apply is not a refresh.
+	if changed, err := s.event(removed, interfaces); err != nil || changed {
+		t.Fatal("route deletion counted before its window")
+	}
+	if changed, err := s.event(down, interfaces); err != nil || !changed {
+		t.Fatal("WAN down event was ignored")
+	}
+	if changed, err := s.event(epochTestRoute(order, 2), interfaces); err != nil || !changed {
+		t.Fatal("default returned after a link change reused the epoch")
+	}
+	if changed, err := s.event(epochTestLink(order), interfaces); err != nil || !changed {
+		t.Fatal("WAN return to same state was ignored")
+	}
+	// Deleting a default this observer never saw breaks continuity at once.
+	unknown := epochTestRoute(order, 4)
+	unknown.kind = unix.RTM_DELROUTE
+	order.PutUint32(unknown.data[16:20], 77)
+	if changed, err := s.event(unknown, interfaces); err != nil || !changed {
+		t.Fatal("unknown default deletion was ignored")
 	}
 	// A newly installed main default must be seen even when its interface is
 	// not in the previous WAN set; no name or reserved interface ID exempts it.
@@ -187,13 +231,26 @@ func TestNetworkEpochLinuxNamespaceChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// An identical immediate re-apply (as Keenetic does) keeps the epoch.
 	run("-4", "route", "del", "default", "dev", "lo")
+	run("-4", "route", "add", "default", "dev", "lo")
+	reapplied, err := FreshWANProfile(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ValidWANProfileID(first.ID) || reapplied.ID != first.ID {
+		t.Fatal("identical default re-apply started a new epoch")
+	}
+	// A default that stays away beyond the window is a new epoch even when
+	// it returns identical.
+	run("-4", "route", "del", "default", "dev", "lo")
+	time.Sleep(epochRouteReapplyWindow + 500*time.Millisecond)
 	run("-4", "route", "add", "default", "dev", "lo")
 	second, err := FreshWANProfile(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ValidWANProfileID(first.ID) || !ValidWANProfileID(second.ID) || first.ID == second.ID {
+	if !ValidWANProfileID(second.ID) || first.ID == second.ID {
 		t.Fatal("default route ABA reused original session")
 	}
 	t.Log("NET1_NAMESPACE_ABA_PASS")

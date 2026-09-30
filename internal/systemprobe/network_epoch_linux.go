@@ -14,12 +14,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
 
 const epochMaxDumpBytes = 1 << 20
 const epochReceiveBufferBytes = 2 << 20
+
+// Keenetic periodically re-applies its routes: the main default is deleted
+// and re-added unchanged within a fraction of a millisecond, together with
+// its policy tables (observed every few minutes on the owner's router). An
+// identical default restored within this window, with no link or address
+// event, is the same underlay. A default that stays away longer, returns
+// different, or comes with a link/address change still starts a new epoch.
+const epochRouteReapplyWindow = 2 * time.Second
 
 type dnsEpochWatch struct {
 	directory bool
@@ -33,8 +42,30 @@ type linuxEpochSource struct {
 	links            map[uint32]string
 	addresses        map[string]bool
 	routes           map[string]bool
+	pendingRoutes    map[string]time.Time // deleted defaults awaiting an identical return
+	now              func() time.Time
 	lastReason       string
 	receiveBuffer    [64 << 10]byte
+}
+
+func (s *linuxEpochSource) clock() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
+}
+
+// settleRoutes reports deleted defaults that did not return identically
+// within the re-apply window; they now count as an underlay change.
+func (s *linuxEpochSource) settleRoutes(now time.Time) bool {
+	changed := false
+	for canonical, deleted := range s.pendingRoutes {
+		if now.Sub(deleted) >= epochRouteReapplyWindow || now.Before(deleted) {
+			delete(s.pendingRoutes, canonical)
+			changed = true
+		}
+	}
+	return changed
 }
 
 func (s *linuxEpochSource) ChangeReason() string {
@@ -220,6 +251,13 @@ func (s *linuxEpochSource) Snapshot(ctx context.Context) (epochSnapshot, error) 
 		result.parts = append(result.parts, value)
 	}
 	s.links, s.addresses, s.routes = linkStates, addresses, routes
+	// A default present in the full dump has returned. One still absent keeps
+	// waiting for its window; the next drain settles it.
+	for canonical := range s.pendingRoutes {
+		if routes[canonical] {
+			delete(s.pendingRoutes, canonical)
+		}
+	}
 	return result, nil
 }
 
@@ -276,6 +314,10 @@ func (s *linuxEpochSource) Drain(ctx context.Context, interfaces map[uint32]bool
 			}
 		}
 	}
+	if s.settleRoutes(s.clock()) {
+		changed = true
+		s.lastReason = "underlay-default-route-event"
+	}
 	dnsChanged, err := s.drainDNS(ctx)
 	if dnsChanged {
 		s.lastReason = "dns-file-event"
@@ -284,6 +326,16 @@ func (s *linuxEpochSource) Drain(ctx context.Context, interfaces map[uint32]bool
 }
 
 func (s *linuxEpochSource) event(message epochMessage, interfaces map[uint32]bool) (bool, error) {
+	relevant, err := s.observeEvent(message, interfaces)
+	// A link or address change during a route re-apply is not the harmless
+	// refresh: the deleted default no longer counts as merely re-applied.
+	if relevant && message.kind != unix.RTM_NEWROUTE && message.kind != unix.RTM_DELROUTE {
+		clear(s.pendingRoutes)
+	}
+	return relevant, err
+}
+
+func (s *linuxEpochSource) observeEvent(message epochMessage, interfaces map[uint32]bool) (bool, error) {
 	switch message.kind {
 	case unix.NLMSG_ERROR, unix.NLMSG_OVERRUN:
 		return false, ErrNetworkUnavailable
@@ -339,8 +391,24 @@ func (s *linuxEpochSource) event(message epochMessage, interfaces map[uint32]boo
 			return false, nil
 		}
 		if message.kind == unix.RTM_DELROUTE {
+			if !s.routes[route.canonical] {
+				return true, nil
+			}
 			delete(s.routes, route.canonical)
-			return true, nil
+			if s.pendingRoutes == nil {
+				s.pendingRoutes = map[string]time.Time{}
+			}
+			s.pendingRoutes[route.canonical] = s.clock()
+			return false, nil
+		}
+		if deleted, pending := s.pendingRoutes[route.canonical]; pending {
+			delete(s.pendingRoutes, route.canonical)
+			if s.routes == nil {
+				s.routes = map[string]bool{}
+			}
+			s.routes[route.canonical] = true
+			now := s.clock()
+			return now.Before(deleted) || now.Sub(deleted) >= epochRouteReapplyWindow, nil
 		}
 		old := s.routes[route.canonical]
 		if s.routes == nil {
