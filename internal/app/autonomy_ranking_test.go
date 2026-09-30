@@ -79,3 +79,26 @@ func TestUncheckedAutonomyCandidatesCountsOnlyPermittedUnchecked(t *testing.T) {
 		t.Fatalf("unchecked %d, want 3", got)
 	}
 }
+
+// Candidates of a source that served the service come first, unchecked
+// before already failed; a large weak source cannot take every round.
+func TestOrderAutonomyCandidatesPrefersProvenSources(t *testing.T) {
+	now := time.Now()
+	origin := func(n nodestore.Node, source string) nodestore.Node {
+		n.Origins = []nodestore.Origin{{SourceID: source, ReceivedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}}
+		return n
+	}
+	snapshot := nodestore.Snapshot{Nodes: []nodestore.Node{
+		origin(rankedNode("node-a1", now, "fast"), "good"),
+		origin(rankedNode("node-a2", now), "good"),
+		origin(rankedNode("node-a3", now, "fail"), "good"),
+		origin(rankedNode("node-b1", now, "fail", "fail"), "weak"),
+		origin(rankedNode("node-b2", now), "weak"),
+		origin(rankedNode("node-b3", now), "weak"),
+	}}
+	got := orderAutonomyCandidates(snapshot, []string{"node-b3", "node-b2", "node-b1", "node-a3", "node-a2", "node-a1"}, "telegram", "wan-1", now)
+	want := []string{"node-a2", "node-a1", "node-a3", "node-b2", "node-b3", "node-b1"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("order %v, want %v", got, want)
+	}
+}

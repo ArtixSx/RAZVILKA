@@ -92,3 +92,52 @@ func rankAutonomyNodes(snapshot nodestore.Snapshot, ids []string, keep, serviceI
 	})
 	return ranked
 }
+
+// orderAutonomyCandidates decides which candidates the bounded rounds check
+// first: nodes from sources that served this service better in this network
+// during the last day, then nodes without a check, then by ID. A weak source
+// with many nodes can no longer occupy every round ahead of a good one.
+func orderAutonomyCandidates(snapshot nodestore.Snapshot, ids []string, serviceID, profile string, now time.Time) []string {
+	nodes := map[string]nodestore.Node{}
+	for _, n := range snapshot.Nodes {
+		nodes[n.ID] = n
+	}
+	sources := map[string]*autonomyStability{}
+	for _, n := range snapshot.Nodes {
+		stability := nodeStability(n, serviceID, profile, now)
+		for _, o := range n.Origins {
+			total := sources[o.SourceID]
+			if total == nil {
+				total = &autonomyStability{}
+				sources[o.SourceID] = total
+			}
+			total.passes += stability.passes
+			total.failures += stability.failures
+		}
+	}
+	best := func(id string) autonomyStability {
+		var result autonomyStability
+		for i, o := range nodes[id].Origins {
+			if s := sources[o.SourceID]; s != nil && (i == 0 || s.more(result)) {
+				result = autonomyStability{passes: s.passes, failures: s.failures}
+			}
+		}
+		return result
+	}
+	checked := func(id string) bool {
+		s := nodeStability(nodes[id], serviceID, profile, now)
+		return s.passes+s.failures > 0
+	}
+	ordered := append([]string(nil), ids...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		a, b := ordered[i], ordered[j]
+		if sa, sb := best(a), best(b); sa.more(sb) || sb.more(sa) {
+			return sa.more(sb)
+		}
+		if ca, cb := checked(a), checked(b); ca != cb {
+			return !ca
+		}
+		return a < b
+	})
+	return ordered
+}

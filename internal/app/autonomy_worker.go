@@ -225,7 +225,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 		}
 	}
-	sort.Strings(ids)
+	ids = orderAutonomyCandidates(snapshot, ids, s.ID, profile, time.Now())
 	if isNode {
 		if _, ok := eligible[currentNode]; !ok {
 			// No new authority is created for a disabled/revoked/expired node. Search
