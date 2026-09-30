@@ -235,6 +235,12 @@ func TestSavedRefreshRestartKeeps304PassiveAndOnlyAllowlistedCountryMetadata(t *
 }
 
 func TestCountryCollectionPresetMetadataPersistsWithoutInferringFromCustomURL(t *testing.T) {
+	// No shipped preset carries a country now; exercise the mechanism with one.
+	saved := builtinPresets
+	builtinPresets = append(append([]Preset(nil), saved...), Preset{ID: "au1rxx-nl", Name: "Free VPN Subscriptions · Нидерланды", URL: "https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/by-country/singbox-NL.json", Format: "profile", License: "see upstream", Verification: "country is a publisher label; local exact check required", CountryCode: "NL"})
+	removed := removedPresets
+	removedPresets = map[string]bool{}
+	t.Cleanup(func() { builtinPresets, removedPresets = saved, removed })
 	profile := `[{"type":"vless","tag":"vless-1104257579","server":"node.example.org","server_port":443,"uuid":"11111111-1111-4111-8111-111111111111","tls":{"enabled":true,"server_name":"node.example.org"}}]`
 	for _, builtin := range []bool{true, false} {
 		t.Run(fmt.Sprintf("builtin=%t", builtin), func(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 const goodURI = "vless://11111111-1111-4111-8111-111111111111@node.example.org:443?security=tls&type=tcp#private-label"
@@ -322,24 +323,29 @@ func TestStoreFailureDoesNotAdvertiseSuccessOrRememberValidators(t *testing.T) {
 	}
 }
 
-// A retired preset keeps saved subscriptions valid but is neither offered
-// nor fetched.
-func TestRetiredPresetIsNotOfferedOrFetched(t *testing.T) {
-	m, _, _ := testManager(t)
-	fetched := false
-	m.client = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-		fetched = true
-		return nil, errors.New("unexpected fetch")
-	})}
-	if _, err := m.Sync(context.Background(), Request{PresetID: "goida-vless"}); !errors.Is(err, ErrNotFound) || fetched {
-		t.Fatalf("retired preset fetched: %v %v", err, fetched)
-	}
-	for _, p := range ActiveBuiltins() {
-		if strings.HasPrefix(p.ID, "goida") {
-			t.Fatal("retired preset offered")
+// A saved subscription of a withdrawn preset is dropped when the store loads;
+// the store itself and the other subscriptions stay valid.
+func TestRemovedPresetSubscriptionIsDroppedOnLoad(t *testing.T) {
+	for id := range removedPresets {
+		if ValidateRequest(Request{PresetID: id}) == nil {
+			t.Fatalf("removed preset %s still resolves", id)
+		}
+		for _, p := range Builtins() {
+			if p.ID == id {
+				t.Fatalf("removed preset %s offered", id)
+			}
 		}
 	}
-	if err := ValidateRequest(Request{PresetID: "goida-extra"}); err != nil {
-		t.Fatal("saved retired subscription no longer resolves")
+	kept := subscription{ID: "feed-kort0881-ru-sni", Request: Request{PresetID: "kort0881-ru-sni", Limit: 32}, Name: "Kort0881", Enabled: true, RefreshIntervalMinutes: 240, Revision: 1}
+	dropped := subscription{ID: "feed-goida-vless", Request: Request{PresetID: "goida-vless", Limit: 32}, Name: "Goida", Enabled: true, RefreshIntervalMinutes: 360, Revision: 1}
+	doc := document{Schema: 1, Owner: "razvilka-subscriptions", Revision: 1, Sources: []subscription{kept, dropped},
+		States: []persistedState{{State: State{SourceID: kept.ID}}, {State: State{SourceID: dropped.ID}}}}
+	data, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := decodeDocument(restorejournal.Image{Exists: true, Data: data})
+	if err != nil || len(loaded.Sources) != 1 || loaded.Sources[0].ID != kept.ID || len(loaded.States) != 1 || loaded.States[0].State.SourceID != kept.ID {
+		t.Fatalf("removed preset not dropped: %+v %v", loaded.Sources, err)
 	}
 }

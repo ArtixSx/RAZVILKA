@@ -16,8 +16,8 @@ import (
 func TestNodeFeedHandlersAreExplicitBoundedAndRedacted(t *testing.T) {
 	a := &App{NodeFeeds: providerfeed.New(nil)}
 	for _, body := range []string{
-		`{"preset_id":"goida-vless"}`,
-		`{"preset_id":"goida-vless","confirm":"SYNC_NODE_FEED","extra":"private-token"}`,
+		`{"preset_id":"kort0881-ru-sni"}`,
+		`{"preset_id":"kort0881-ru-sni","confirm":"SYNC_NODE_FEED","extra":"private-token"}`,
 		`{"url":"https://example.org/private-token","confirm":"SYNC_NODE_FEED"} {}`,
 		`{"url":"` + strings.Repeat("x", 9000) + `","confirm":"SYNC_NODE_FEED"}`,
 	} {
@@ -39,7 +39,7 @@ func TestNodeFeedHandlersAreExplicitBoundedAndRedacted(t *testing.T) {
 	}
 	a.NodeFeeds = nil
 	w = httptest.NewRecorder()
-	a.nodeFeedSync(w, httptest.NewRequest(http.MethodPost, "/api/v1/node-feeds/sync", strings.NewReader(`{"preset_id":"goida-vless","confirm":"SYNC_NODE_FEED"}`)))
+	a.nodeFeedSync(w, httptest.NewRequest(http.MethodPost, "/api/v1/node-feeds/sync", strings.NewReader(`{"preset_id":"kort0881-ru-sni","confirm":"SYNC_NODE_FEED"}`)))
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatal("unavailable registry accepted sync")
 	}

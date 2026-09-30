@@ -19,7 +19,7 @@ import (
 
 func TestFetchAndCheckRequestRequiresExactBoundedConsent(t *testing.T) {
 	for _, q := range []nodeCheckJobRequest{
-		{Mode: "service", ServiceID: "x", Feed: &providerfeed.Request{PresetID: "goida-vless"}},
+		{Mode: "service", ServiceID: "x", Feed: &providerfeed.Request{PresetID: "kort0881-ru-sni"}},
 		{Mode: "tcp", ServiceID: "x", Feed: &providerfeed.Request{}, Confirm: "FETCH_AND_CHECK_NODES"},
 		{Mode: "service", Feed: &providerfeed.Request{}, Confirm: "FETCH_AND_CHECK_NODES"},
 		{Mode: "service", ServiceID: "x", Feed: &providerfeed.Request{}, NodeIDs: []string{"n"}, Confirm: "FETCH_AND_CHECK_NODES"},
@@ -180,7 +180,7 @@ func TestFetchThenCheckRunsAfterBrowserRequestEnds(t *testing.T) {
 		return autofallbackResult(r, true), nil
 	})
 	reqContext, closeBrowser := context.WithCancel(context.Background())
-	b, _ := json.Marshal(nodeCheckJobRequest{Mode: "service", ServiceID: "telegram", Confirm: "FETCH_AND_CHECK_NODES", Feed: &providerfeed.Request{PresetID: "goida-vless", Limit: 12}})
+	b, _ := json.Marshal(nodeCheckJobRequest{Mode: "service", ServiceID: "telegram", Confirm: "FETCH_AND_CHECK_NODES", Feed: &providerfeed.Request{PresetID: "kort0881-ru-sni", Limit: 12}})
 	w := httptest.NewRecorder()
 	a.Handler(http.NotFoundHandler()).ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/node-checks", strings.NewReader(string(b))).WithContext(reqContext))
 	if w.Code != 202 {
@@ -236,7 +236,7 @@ func TestCancelDuringSourceFetchDoesNotStartChecker(t *testing.T) {
 		t.Error("checker started after canceled source")
 		return dataplane.NodeCheckResult{}, nil
 	})
-	b, _ := json.Marshal(nodeCheckJobRequest{Mode: "service", ServiceID: "telegram", Confirm: "FETCH_AND_CHECK_NODES", Feed: &providerfeed.Request{PresetID: "goida-vless", Limit: 12}})
+	b, _ := json.Marshal(nodeCheckJobRequest{Mode: "service", ServiceID: "telegram", Confirm: "FETCH_AND_CHECK_NODES", Feed: &providerfeed.Request{PresetID: "kort0881-ru-sni", Limit: 12}})
 	w := httptest.NewRecorder()
 	a.nodeCheckJobs(w, httptest.NewRequest("POST", "/api/v1/node-checks", strings.NewReader(string(b))))
 	if w.Code != 202 {

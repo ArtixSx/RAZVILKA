@@ -113,7 +113,7 @@
     $('reserveTargetInput').value=p.reserve_target;$('candidateLimit').value=p.candidates_per_round;$('checkInterval').value=p.check_seconds;$('reserveInterval').value=p.reserve_seconds;
     $$('input[name="protocol"]').forEach(el=>el.checked=p.protocols.includes(el.value));$$('input[name="preferred"]').forEach(el=>el.checked=p.preferred_routes.includes(el.value));
     const presets=snapshot.source_presets||[];
-    $('wizardSources').innerHTML=presets.map(s=>`<label><input type="checkbox" name="source" value="${escapeHTML(s.id)}" ${p.source_ids.includes(s.id)?'checked':''}><span>${escapeHTML(s.name)}<small>${s.retired?`Источник закрыт: ${escapeHTML(s.retired)}`:`Пресет: ${Number(s.interval_minutes)} мин · проверка на вашем роутере`}</small></span></label>`).join('');
+    $('wizardSources').innerHTML=presets.map(s=>`<label><input type="checkbox" name="source" value="${escapeHTML(s.id)}" ${p.source_ids.includes(s.id)?'checked':''}><span>${escapeHTML(s.name)}<small>Пресет: ${Number(s.interval_minutes)} мин · проверка на вашем роутере</small></span></label>`).join('');
     $('extraSourceIDs').value=p.source_ids.filter(id=>!presets.some(s=>s.id===id)).join(', ');
     for(const [prefix,w] of [['app',p.application],['engine',p.components]]) {
       $(`${prefix}UpdateMode`).value=w.mode;$(`${prefix}WindowStart`).value=w.start;$(`${prefix}WindowEnd`).value=w.end;

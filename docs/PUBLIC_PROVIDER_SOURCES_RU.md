@@ -14,14 +14,13 @@
 | igareck · VLESS Reality для белых списков | `igareck-reality-mobile` | [Vless-Reality-White-Lists-Rus-Mobile.txt](https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt), строки URI |
 | igareck · VLESS для России | `igareck-black-vless` | [BLACK_VLESS_RUS.txt](https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt), строки URI |
 | VLESS Key Checker | `tiagorrg-vless` | [keys.json](https://tiagorrg.github.io/vless-checker/keys.json), JSON ключей |
-| Free VPN Subscriptions · Нидерланды | `au1rxx-nl` | [singbox-NL.json](https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/by-country/singbox-NL.json), профиль sing-box |
 | Kort0881 · RU SNI | `kort0881-ru-sni` | [vless.txt](https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/data/githubmirror/ru-sni/vless.txt), строки URI |
-| Goida VPN · VLESS | `goida-vless` | закрыт: репозиторий удалён (404 с 29.09.2026) |
-| Goida VPN · дополнительный каталог | `goida-extra` | закрыт: репозиторий удалён (404 с 29.09.2026) |
 
-Закрытый шаблон остаётся разрешимым, чтобы сохранённые подписки и правила
-Автопилота не ломались, но его нельзя выбрать заново, Автопилот его не
-добавляет, а загрузка сразу завершается «не найдено» без обращения в сеть.
+Удалены нерабочие шаблоны: Goida VPN · VLESS и дополнительный каталог
+(`goida-vless`, `goida-extra` — репозиторий удалён, 404 с 29.09.2026) и Free
+VPN Subscriptions · Нидерланды (`au1rxx-nl` — ни одного рабочего узла с
+роутера владельца). Сохранённые подписки на них отбрасываются при загрузке
+списка подписок; остальные подписки и правила Автопилота не затрагиваются.
 
 Пользователь сохраняет выбранный шаблон или собственную HTTPS-подписку,
 загружает список, проверяет узлы из своей сети и назначает проверенный узел
@@ -202,15 +201,19 @@ Telegram по имени и по IP-адресу. Keenetic, ARM64, домашн�
 | Источник | Проверено | Подключились | Интернет | Telegram |
 | --- | --- | --- | --- | --- |
 | cyb-portal CP-005 «VLESS Reality Mobile» (копия igareck `Vless-Reality-White-Lists-Rus-Mobile`) | 30 | 30 | 23 | 21 |
+| igareck `BLACK_VLESS_RUS_mobile` | 40 | 23 | 20 | 16 |
 | igareck `BLACK_VLESS_RUS` | 40 | 21 | 17 | 14 |
 | cyb-portal CP-002 «VLESS Black All RU» (копия igareck `BLACK_VLESS_RUS`) | 30 | 16 | 13 | 12 |
 | cyb-portal CP-003 «VLESS Black Mobile RU» | 30 | 16 | 13 | 11 |
 | VLESS Key Checker (`tiagorrg-vless`) | 30 | 16 | 5 | 4 |
+| v2nodes, все страны (личная подписка) | 17 | 11 | 3 | 3 |
 | Kort0881 · RU SNI | 30 | 17 | 2 | 2 |
-| Free VPN Subscriptions · Нидерланды | 30 | 2 | 1 | 0 |
+| Free VPN Subscriptions · Нидерланды (удалён) | 30 | 2 | 1 | 0 |
+| Kort0881 `clean/hysteria2` | 20 | 19 | 0 | 0 |
 
 Выгрузки cyb-portal часто отвечали с задержкой или обрывались; первоисточник
 на GitHub загружается надёжнее, поэтому в шаблоны добавлены списки igareck.
+Epodonios `Sub1` больше лимита загрузчика (1 МиБ).
 Подписка v2nodes разрешена условиями сайта только для личного некоммерческого
 использования — её можно добавить своей подпиской, но не шаблоном.
 

@@ -139,6 +139,7 @@ func decodeDocument(image restorejournal.Image) (document, error) {
 	if decoder.Decode(&doc) != nil || doc.Schema != 1 || doc.Owner != "razvilka-subscriptions" || doc.Revision == 0 || len(doc.Sources) > MaxFeeds || len(doc.States) != len(doc.Sources) {
 		return document{}, ErrStore
 	}
+	dropRemovedPresets(&doc)
 	seen := map[string]bool{}
 	if len(doc.Countries) > nodestore.MaxNodes {
 		return document{}, ErrStore
@@ -482,3 +483,27 @@ func (m *Manager) Due(now time.Time) []string {
 // redacted is kept separate from private saved material so callers cannot
 // accidentally serialize a request while constructing a public state.
 func redacted(raw string) string { return publicfetch.RedactedURL(raw) }
+
+// dropRemovedPresets forgets saved subscriptions of withdrawn presets and
+// their state. Nodes they imported stay in the catalogue until they expire.
+func dropRemovedPresets(doc *document) {
+	removed := map[string]bool{}
+	sources := doc.Sources[:0]
+	for _, feed := range doc.Sources {
+		if removedPresets[feed.Request.PresetID] {
+			removed[feed.ID] = true
+			continue
+		}
+		sources = append(sources, feed)
+	}
+	if len(removed) == 0 {
+		return
+	}
+	states := doc.States[:0]
+	for _, state := range doc.States {
+		if !removed[state.State.SourceID] {
+			states = append(states, state)
+		}
+	}
+	doc.Sources, doc.States = sources, states
+}
