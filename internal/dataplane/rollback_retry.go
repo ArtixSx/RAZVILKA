@@ -65,6 +65,22 @@ func (m *Manager) RetryFailedRollback(ctx context.Context, planID, digest string
 	})
 }
 
+// RetryLatestFailedRollback retries the latest execution if it is
+// rollback-failed, with every check of RetryFailedRollback, and reports
+// whether there was one. Startup uses it so that such a journal does not
+// need a person with SSH.
+func (m *Manager) RetryLatestFailedRollback(ctx context.Context, guard func(Plan) error) (Execution, bool, error) {
+	latest, found, err := m.Latest()
+	if err != nil || !found || latest.State != "rollback-failed" {
+		return Execution{}, false, err
+	}
+	result, err := m.RetryFailedRollback(ctx, latest.PlanID, latest.Digest, guard)
+	if result.PlanID == "" {
+		result.PlanID = latest.PlanID
+	}
+	return result, true, err
+}
+
 // CloseFailedRollback ends a rollback-failed record that can no longer be
 // retried, typically after a reboot removed the processes and interfaces its
 // snapshot recorded, so VerifyRollback cannot match them again. It accepts the

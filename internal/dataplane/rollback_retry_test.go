@@ -141,3 +141,32 @@ func TestRollbackRetryRequiresExactPreCommitFailureAndMatchingSettings(t *testin
 		})
 	}
 }
+
+// Startup retries the latest failed rollback without a person: an exact
+// restoration closes the journal, anything else keeps the fence.
+func TestRetryLatestFailedRollbackAtStartup(t *testing.T) {
+	clean := New(t.TempDir())
+	if _, attempted, err := clean.RetryLatestFailedRollback(context.Background(), func(Plan) error { return nil }); attempted || err != nil {
+		t.Fatal("retried without a failed rollback", attempted, err)
+	}
+	for _, mode := range []string{"pass", "mismatch"} {
+		t.Run(mode, func(t *testing.T) {
+			m, adapter, p, _ := rollbackRetryFixture(t)
+			if mode == "mismatch" {
+				adapter.verify = func(context.Context) (bool, error) {
+					return false, errors.New("restored proxy processes differ from snapshot")
+				}
+			}
+			result, attempted, err := m.RetryLatestFailedRollback(context.Background(), func(Plan) error { return nil })
+			if !attempted || result.PlanID != p.PlanID {
+				t.Fatal("failed rollback not retried", attempted, result.PlanID)
+			}
+			if mode == "pass" && (err != nil || result.State != "rolled-back" || m.checkExecutionRecovery() != nil) {
+				t.Fatal("exact restoration did not close the journal", result, err)
+			}
+			if mode == "mismatch" && (err == nil || m.checkExecutionRecovery() == nil) {
+				t.Fatal("mismatch closed the journal", result, err)
+			}
+		})
+	}
+}

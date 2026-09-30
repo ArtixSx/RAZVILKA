@@ -402,23 +402,12 @@ func main() {
 	// This narrow recovery cannot contain DNS. Do not open or migrate its
 	// settings before returning to the previously installed application.
 	if *retryRollbackPlan != "" || *closeRollbackPlan != "" {
-		baseline, err := os.ReadFile(*cfgPath)
+		guard, err := rollbackRecoveryGuard(*cfgPath, store)
 		if err != nil {
 			log.Fatal("rollback settings unavailable")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		// Every start with an unrecovered journal enables Recovery Safe Mode
-		// and fences the panel, so Safe Mode cannot be cleared first: both
-		// explicit recovery modes accept it and leave it enabled.
-		settingsMatch := closeRollbackSettingsMatch
-		guard := func(previous dataplane.Plan) error {
-			current, readErr := os.ReadFile(*cfgPath)
-			if readErr != nil || !bytes.Equal(baseline, current) || !settingsMatch(store.Get(), previous) {
-				return errors.New("applied settings changed or do not match the previous plan")
-			}
-			return nil
-		}
 		var result dataplane.Execution
 		if *retryRollbackPlan != "" {
 			result, err = dataplaneManager.RetryFailedRollback(ctx, *retryRollbackPlan, *retryRollbackDigest, guard)
@@ -556,6 +545,7 @@ func main() {
 	if usqueRecovery != restorejournal.Clean {
 		log.Printf("USQUE repair recovery completed: %s", usqueRecovery)
 	}
+	retryFailedRollbackAtStart(runtimeContext, dataplaneManager, *cfgPath, store, a.Audit)
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
 	recovery, recoveryErr := dataplaneManager.Recover(recoveryContext)
 	cancelRecovery()
@@ -803,6 +793,54 @@ func rollbackAppliedSettingsMatch(cfg config.Config, previous dataplane.Plan) bo
 		}
 	}
 	return len(seen) > 0
+}
+
+// rollbackRecoveryGuard binds a rollback recovery to the settings on disk
+// now: they must stay unchanged and still describe the previous plan. Every
+// start with an unrecovered journal enables Recovery Safe Mode and fences the
+// panel, so Safe Mode cannot be cleared first; recovery accepts it and leaves
+// it enabled.
+func rollbackRecoveryGuard(cfgPath string, store *config.Store) (func(dataplane.Plan) error, error) {
+	baseline, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return nil, err
+	}
+	return func(previous dataplane.Plan) error {
+		current, readErr := os.ReadFile(cfgPath)
+		if readErr != nil || !bytes.Equal(baseline, current) || !closeRollbackSettingsMatch(store.Get(), previous) {
+			return errors.New("applied settings changed or do not match the previous plan")
+		}
+		return nil
+	}, nil
+}
+
+// retryFailedRollbackAtStart retries a rollback that could not be verified
+// once per start, with the checks of -retry-rollback-plan: only an exact
+// restoration of the recorded state closes the journal, and a plan outside
+// that narrow recovery is refused untouched. Otherwise the journal fence and
+// Recovery Safe Mode apply as before. Without it every such journal needed a
+// person with SSH (0.19.2 on the owner's router).
+func retryFailedRollbackAtStart(ctx context.Context, manager *dataplane.Manager, cfgPath string, store *config.Store, audit *auditlog.Journal) {
+	guard, err := rollbackRecoveryGuard(cfgPath, store)
+	if err != nil {
+		return
+	}
+	retryContext, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	result, attempted, err := manager.RetryLatestFailedRollback(retryContext, guard)
+	if !attempted {
+		return
+	}
+	outcome := "ok"
+	if err != nil {
+		outcome = "failed"
+		log.Printf("automatic retry of failed rollback %s did not close it; journal review is required", result.PlanID)
+	} else {
+		log.Printf("failed rollback %s retried and closed at startup", result.PlanID)
+	}
+	if audit != nil {
+		_ = audit.Append(auditlog.Event{Action: "ROLLBACK_RETRY", Path: "dataplane", Outcome: outcome, Actor: "system", RemoteIP: "local"})
+	}
 }
 
 // closeRollbackSettingsMatch is rollbackAppliedSettingsMatch without the Safe
