@@ -105,7 +105,7 @@ func TestAutonomyRejectsUnknownSourceAndInstallMode(t *testing.T) {
 			if what == "source" {
 				p.SourceIDs = []string{"not-in-registry"}
 			} else {
-				p.Application.Mode = "install"
+				p.Application.Mode = "upgrade"
 			}
 			w := httptest.NewRecorder()
 			a.autonomyAPI(w, autonomyRequest("PUT", "/api/v1/autonomy", map[string]any{"expected_revision": 0, "policy": p, "confirm": "SAVE_AUTONOMY"}))

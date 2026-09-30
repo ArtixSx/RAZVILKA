@@ -7,7 +7,7 @@ check('stale metadata never offers prepare',()=>assert.notEqual(ctx.appUpdateBad
 state.appUpdate={channel:'preview',state:'ahead',installed_version:'0.18.2-rc.10',checked_at:new Date().toISOString()};
 check('explicit channel in summary',()=>assert.match(ctx.appUpdateSummaryHTML(),/Предварительные и стабильные/));
 check('stable is wizard default',()=>assert.match(index,/<select id="a1-updateChannel"><option value="stable">/));
-check('no implicit auto install',()=>assert.doesNotMatch(index,/<option value="install">/));
+check('auto install is an explicit, explained window mode',()=>{assert.match(index,/<option value="install">Устанавливать сама, с откатом при сбое<\/option>/);assert.match(index,/<option value="install">Обновлять сама, с проверкой и откатом<\/option>/);assert.match(index,/возвращает прежнюю версию, и эту версию сам больше не ставит/);});
 check('no address result stays unknown',()=>{ctx.renderMaintenanceAddresses();assert.match(el.textContent,/ещё нет/)});
 ctx.consoleSnapshot.address_refresh={state:'failed',checked_at:new Date().toISOString()};
 check('failed address status not healthy',()=>{ctx.renderMaintenanceAddresses();assert.match(el.textContent,/не завершено/)});

@@ -13,6 +13,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 const autonomyOwner = "razvilka-autonomy-v1"
@@ -38,6 +39,7 @@ type autonomyState struct {
 	maintenanceAttempts map[string]maintenanceAttempt
 	maintenanceTestRun  func(context.Context, string, autonomy.Window, bool) (bool, bool, string)
 	feedPruneAt         time.Time
+	autoInstall         *updatecheck.Job // a prepared package the round installs
 }
 
 func newAutonomyDocument() autonomyDocument {

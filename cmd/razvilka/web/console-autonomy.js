@@ -10,7 +10,7 @@
   const splitValues = v => [...new Set(String(v || '').split(/[\s,;]+/).filter(Boolean))];
   function minutes(text) { if(!/^\d{2}:\d{2}$/.test(text)) return -1; const [h,m]=text.split(':').map(Number); return h<24&&m<60 ? h*60+m : -1; }
   function validateWindow(w, component=false) {
-    if(!w || !['off','check',...(component?[]:['prepare'])].includes(w.mode)) throw new Error('Автоустановка не поддерживается этой версией. Выберите проверку или подготовку.');
+    if(!w || !['off','check','install',...(component?[]:['prepare'])].includes(w.mode)) throw new Error('Неизвестный режим окна обслуживания.');
     if(minutes(w.start)<0||minutes(w.end)<0||w.start===w.end) throw new Error('Укажите разные корректные границы окна обслуживания.');
     if(!Array.isArray(w.days)||!w.days.length||w.days.some(d=>!Number.isInteger(d)||d<0||d>6)||new Set(w.days).size!==w.days.length) throw new Error('Выберите дни обслуживания.');
   }
@@ -63,7 +63,7 @@
     if (!before.inherit_new_services && after.inherit_new_services) return true;
     delete before.inherit_new_services; delete after.inherit_new_services;
     for (const field of ['application', 'components']) {
-      const modes = field === 'application' ? ['off', 'check', 'prepare'] : ['off', 'check'];
+      const modes = field === 'application' ? ['off', 'check', 'prepare', 'install'] : ['off', 'check', 'install'];
       const oldWindow = before[field], newWindow = after[field];
       if (!oldWindow || !newWindow || modes.indexOf(oldWindow.mode) < 0 || modes.indexOf(newWindow.mode) < 0) return true;
       if (modes.indexOf(newWindow.mode) > modes.indexOf(oldWindow.mode)) return true;
@@ -201,7 +201,7 @@
     const consentLabel = $('confirmConsent').closest('label');
     if (consentLabel) consentLabel.hidden = !consentNeeded;
     if (!consentNeeded) $('confirmConsent').checked = false;
-    const rows=[['Канал обновлений',p.update_channel==='preview'?'Предварительные и стабильные':'Стабильные'],['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · Проверка каталога`],['Часовой пояс',p.timezone]];
+    const rows=[['Канал обновлений',p.update_channel==='preview'?'Предварительные и стабильные':'Стабильные'],['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='install'?'Устанавливает сама, с откатом':p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · ${p.components.mode==='install'?'Обновляет сама, с проверкой и откатом':'Проверка каталога'}`],['Часовой пояс',p.timezone]];
     $('reviewSummary').innerHTML=rows.map(([k,v])=>`<div><span>${escapeHTML(k)}</span><b>${escapeHTML(v)}</b></div>`).join('');
   }
   function serviceName(id) { return (snapshot?.catalog_services||[]).find(s=>s.id===id)?.name||id; }
@@ -243,7 +243,7 @@
     $('managedCount').textContent=items.length;
     $('healthyCount').textContent=!presentationFresh?'—':Object.entries(snapshot.services||{}).filter(([id,s])=>s.enabled&&serviceProof(id)?.kind==='good').length;
     $('reserveTarget').textContent=p.reserve_target;$('sourceCount').textContent=p.source_ids.length;
-    $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${w.mode==='off'?'Выключено':w.mode==='prepare'?'Подготовка, без установки':'Проверка обновлений'} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
+    $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${w.mode==='off'?'Выключено':w.mode==='install'?'Установка сама, с откатом':w.mode==='prepare'?'Подготовка, без установки':'Проверка обновлений'} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
     $('maintenanceMessage').textContent=snapshot.maintenance_message||'Фактический результат появится после обслуживания на роутере.';
     $('connectionLabel').textContent=`${presentationFresh?'Состояние роутера':'Последние настройки'} · ${formatDate(snapshot.server_time)}`;
     renderServices();fillWizard();renderStarterReview();

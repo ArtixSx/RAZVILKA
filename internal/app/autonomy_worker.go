@@ -42,7 +42,12 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	if err != nil {
 		return
 	}
-	defer release()
+	retained := false
+	defer func() {
+		if !retained {
+			release()
+		}
+	}()
 	if a.loadAutonomy(ctx) != nil || a.Store == nil {
 		return
 	}
@@ -52,6 +57,12 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		return
 	}
 	a.autonomyMaintenance(ctx, p, now)
+	if a.runAutoInstall(ctx, p) {
+		// The installer stops this process; until then nothing else runs.
+		a.SelfUpdate.RetainHandoff(release)
+		retained = true
+		return
+	}
 	if !cfg.SafeMode {
 		_, _ = a.pruneExpiredFeedNodes(ctx, now)
 	}

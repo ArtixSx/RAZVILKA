@@ -22,7 +22,7 @@ var ErrPolicy = errors.New("invalid autonomy policy")
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 
 type Window struct {
-	Mode  string `json:"mode"` // off, check, prepare; automatic install is NOT enabled.
+	Mode  string `json:"mode"` // off, check, prepare, install (updates itself with rollback)
 	Start string `json:"start"`
 	End   string `json:"end"`
 	Days  []int  `json:"days"` // Sunday = 0. Cross-midnight belongs to its start day.
@@ -66,8 +66,8 @@ func Default() Policy {
 	return Policy{PreferredRoutes: []string{"nfqws2", "usque", "warp-wg"}, Schema: Schema, Timezone: "UTC", Protocols: []string{"vless", "hysteria2", "tuic", "shadowsocks"},
 		SourceIDs: []string{}, DefaultSources: []string{}, CheckSeconds: 120, ReserveSeconds: 300, ReserveTarget: 3, CandidatesPerRound: 2,
 		FailureConfirmSeconds: 20, MaxSwitchesPerHour: 6,
-		Application: Window{Mode: "check", Start: "03:00", End: "04:00", Days: []int{0, 1, 2, 3, 4, 5, 6}},
-		Components:  Window{Mode: "check", Start: "04:00", End: "05:00", Days: []int{0, 1, 2, 3, 4, 5, 6}}}
+		Application: Window{Mode: "install", Start: "03:00", End: "04:00", Days: []int{0, 1, 2, 3, 4, 5, 6}},
+		Components:  Window{Mode: "install", Start: "04:00", End: "05:00", Days: []int{0, 1, 2, 3, 4, 5, 6}}}
 }
 func ValidID(id string) bool { return identifier.MatchString(id) }
 func ValidateScope(all bool, values []string) error {
@@ -164,7 +164,7 @@ func Minute(s string) (int, error) {
 func ValidateWindow(w Window) error {
 	a, e := Minute(w.Start)
 	b, f := Minute(w.End)
-	if e != nil || f != nil || a == b || len(w.Days) == 0 || len(w.Days) > 7 || !slices.Contains([]string{"off", "check", "prepare"}, w.Mode) {
+	if e != nil || f != nil || a == b || len(w.Days) == 0 || len(w.Days) > 7 || !slices.Contains([]string{"off", "check", "prepare", "install"}, w.Mode) {
 		return ErrPolicy
 	}
 	seen := map[int]bool{}
