@@ -1528,3 +1528,8 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .interface-ui .exclusion-message { padding:12px 14px; border:1px solid var(--line); border-radius:9px; background:var(--panel2); font-size:13px; }
 @media(max-width:1000px){ .interface-ui .exclusion-grid { grid-template-columns:1fr; } }
 @media(max-width:760px){ .interface-ui .exclusion-add, .interface-ui .exclusion-apply { flex-direction:column; align-items:stretch; } }
+/* Bundled flags and brand marks (ui-icons.js) */
+.interface-ui .flag-icon{display:inline-block;width:1.34em;height:1em;flex-shrink:0;vertical-align:-.14em;border-radius:2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--text) 16%,transparent)}
+.interface-ui .node-flag .flag-icon{width:28px;height:21px;vertical-align:0}
+.interface-ui .ui3-service-icon .brand-icon{width:20px;height:20px}
+.interface-ui .brand-icon{display:inline-block;width:1.2em;height:1.2em;flex-shrink:0;vertical-align:-.2em}

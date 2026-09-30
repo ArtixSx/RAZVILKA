@@ -65,6 +65,11 @@ function nodeCountry(node) {
   return { code, name, flag: [...code].map(char => String.fromCodePoint(127397 + char.charCodeAt(0))).join('') };
 }
 
+// Windows shows regional-indicator emoji as two letters; prefer the bundled flag.
+function nodeFlagHTML(country) {
+  return globalThis.RazvilkaIcons?.flag(country.code, country.name) || esc(country.flag);
+}
+
 function nodeCanCheck(node) {
   return Boolean(node && !node.disabled && node.state !== 'expired');
 }
@@ -216,7 +221,7 @@ function renderNodeBrowserCard(node, serviceID) {
   const sources = [...new Set((node.origins || []).map(origin => nodeBrowserSourceName(origin.source_id)))].join(', ');
   const assigned = state.services.filter(item => item.enabled && item.route === `sing-box:${node.id}`).map(item => item.name).join(', ');
   return `<article data-node-card="${esc(node.id)}" class="node-card ${nodeCanCheck(node) ? '' : 'disabled'} ${nodeBrowser.selected.has(node.id) ? 'selected' : ''}">
-    <div class="node-card-head"><div class="node-heading"><span class="node-flag" title="${esc(country.name)} · данные источника">${esc(country.flag)}</span><div><h3>${esc(nodeDisplayName(node))}</h3><span class="node-protocol">${esc(String(node.protocol || 'VPN').toUpperCase())} · ${esc(nodeTransportLabel(node))}${node.tls ? ' · TLS' : ''}</span></div></div><button class="icon-button r4-node-trash" type="button" data-r4-delete="${esc(node.id)}" aria-label="Удалить ${esc(nodeDisplayName(node))}" title="Удалить локальную запись"><svg class="ui-icon" aria-hidden="true"><use href="#i-trash"></use></svg></button><input class="node-pick" type="checkbox" data-node-select="${esc(node.id)}" aria-label="Выбрать ${esc(nodeDisplayName(node))}" ${nodeBrowser.selected.has(node.id) ? 'checked' : ''} ></div>
+    <div class="node-card-head"><div class="node-heading"><span class="node-flag" title="${esc(country.name)} · данные источника">${nodeFlagHTML(country)}</span><div><h3>${esc(nodeDisplayName(node))}</h3><span class="node-protocol">${esc(String(node.protocol || 'VPN').toUpperCase())} · ${esc(nodeTransportLabel(node))}${node.tls ? ' · TLS' : ''}</span></div></div><button class="icon-button r4-node-trash" type="button" data-r4-delete="${esc(node.id)}" aria-label="Удалить ${esc(nodeDisplayName(node))}" title="Удалить локальную запись"><svg class="ui-icon" aria-hidden="true"><use href="#i-trash"></use></svg></button><input class="node-pick" type="checkbox" data-node-select="${esc(node.id)}" aria-label="Выбрать ${esc(nodeDisplayName(node))}" ${nodeBrowser.selected.has(node.id) ? 'checked' : ''} ></div>
     <div class="node-metrics"><div class="node-metric"><small>${tcp ? 'Пинг · TCP' : 'Задержка · UDP'}</small><b class="${ping?.reachable ? 'ok' : ping ? 'bad' : 'unknown'}">${esc(pingText)}</b></div><div class="node-metric"><small>${esc(nodeServiceScenario(service))}</small><b class="${status.kind}">${esc(status.label)}</b></div></div>
     <div class="node-card-caption"><span>${esc(sources || 'Мои подключения')}</span><span title="Последняя проверка доступа">${esc(nodeTime(health.checked_at))}</span></div>
     <div class="node-actions"><button class="secondary" type="button" data-node-ping="${esc(node.id)}" ${nodeCanCheck(node) && tcp ? '' : 'disabled'}>Пинг</button><button class="primary" type="button" data-node-check="${esc(node.id)}" ${nodeCanCheck(node) ? '' : 'disabled'}>${status.state === 'available' ? 'Подключить' : 'Проверить и подключить'}</button></div>
@@ -229,7 +234,7 @@ function renderNodeBrowserFilters(nodes) {
   $('#nodeSourceFilters').innerHTML = `<button type="button" data-node-source="" class="${!nodeBrowser.source ? 'active' : ''}">Все источники <small>${nodes.length}</small></button>` + sources.map(source => `<button type="button" data-node-source="${esc(source.id)}" class="${nodeBrowser.source === source.id ? 'active' : ''}">${esc(nodeBrowserSourceName(source.id))}<small>${nodes.filter(node => (node.origins || []).some(origin => origin.source_id === source.id)).length}</small></button>`).join('');
   const countries = new Map();
   for (const node of nodes) { const country = nodeCountry(node); const key = country.code || 'unknown'; const existing = countries.get(key); countries.set(key, { ...country, count: (existing?.count || 0) + 1 }); }
-  $('#nodeCountryFilters').innerHTML = `<button type="button" data-node-country="" class="${!nodeBrowser.country ? 'active' : ''}">Все страны <small>${nodes.length}</small></button>` + [...countries].sort((a, b) => a[1].name.localeCompare(b[1].name, 'ru')).map(([code, country]) => `<button type="button" data-node-country="${esc(code)}" class="${nodeBrowser.country === code ? 'active' : ''}"><span>${esc(country.flag)} ${esc(country.name)}</span><small>${country.count}</small></button>`).join('');
+  $('#nodeCountryFilters').innerHTML = `<button type="button" data-node-country="" class="${!nodeBrowser.country ? 'active' : ''}">Все страны <small>${nodes.length}</small></button>` + [...countries].sort((a, b) => a[1].name.localeCompare(b[1].name, 'ru')).map(([code, country]) => `<button type="button" data-node-country="${esc(code)}" class="${nodeBrowser.country === code ? 'active' : ''}"><span>${nodeFlagHTML(country)} ${esc(country.name)}</span><small>${country.count}</small></button>`).join('');
 }
 
 function setNodeBrowserTab(tab) {
