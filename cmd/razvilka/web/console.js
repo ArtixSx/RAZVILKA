@@ -164,7 +164,7 @@ document.addEventListener('click',async e=>{
  }catch(error){showNotice('error',error.message);}
 });
 window.addEventListener('razvilka:autonomy-state',e=>{consoleAutonomyAvailability(true); consoleSnapshot=e.detail;consoleAutonomyError='';renderConsole();});
-window.addEventListener('razvilka:autonomy-error',e=>{consoleAutonomyAvailability(false,e.detail.status===404?'Этот backend не содержит A1. Подключения и ручные настройки доступны; автономный мастер требует сборки A1.':e.detail.message); consoleAutonomyError=e.detail.message;if(e.detail.status===401||e.detail.status===404)consoleSnapshot=null;renderConsole();});
+window.addEventListener('razvilka:autonomy-error',e=>{if(e.detail.retained&&consoleSnapshot){consoleAutonomyError='';renderConsole();return;}consoleAutonomyAvailability(false,e.detail.status===404?'Этот backend не содержит A1. Подключения и ручные настройки доступны; автономный мастер требует сборки A1.':e.detail.message); consoleAutonomyError=e.detail.message;if(e.detail.status===401||e.detail.status===404)consoleSnapshot=null;renderConsole();});
 window.addEventListener('hashchange',consoleRouteHash);
 renderConsole();
 

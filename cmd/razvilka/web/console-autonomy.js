@@ -264,7 +264,7 @@
       if(!live && sameInstance && Date.parse(next.server_time)<Date.parse(snapshot?.server_time)){if(next.observation.state==='retained')throw new Error('Нужны свежие данные автопилота.');return false;}
       if(live && snapshot?.observation)next.observation={...snapshot.observation,state:'available',observed_at:next.server_time};
       snapshot=next;presentationFresh=next.observation?.state!=='retained';window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
-      if(!presentationFresh)window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{message:'Показаны последние настройки. Состояние обновляется.'}}));
+      if(!presentationFresh)window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{retained:true,message:'Показаны последние настройки. Состояние обновляется.'}}));
       if(force) dirty=false;
       $('authRequired').hidden=true;$('workspace').hidden=false;render();return true;
     } catch(e) {

@@ -1534,3 +1534,15 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .interface-ui .ui3-service-icon .brand-icon{width:20px;height:20px}
 .interface-ui .brand-icon{display:inline-block;width:1.2em;height:1.2em;flex-shrink:0;vertical-align:-.2em}
 .interface-ui .service-badge{display:grid;place-items:center}.interface-ui .service-badge .brand-icon{width:18px;height:18px}
+/* Services: the catalogue entry is the main way to add a service */
+.interface-ui .r5-catalog-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:stretch;padding:0;border:0;background:transparent}
+.interface-ui .r5-catalog-cta{display:flex;align-items:center;gap:16px;padding:18px 20px;border:1px solid color-mix(in srgb,var(--green) 45%,var(--line));border-radius:12px;background:color-mix(in srgb,var(--green) 9%,var(--panel))}
+.interface-ui .r5-catalog-cta>div{flex:1;min-width:0}
+.interface-ui .r5-catalog-cta b{display:block;font-size:16px;margin-bottom:4px}
+.interface-ui .r5-catalog-cta p{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
+.interface-ui .r5-catalog-cta-icon{display:grid;place-items:center;width:44px;height:44px;flex-shrink:0;border-radius:11px;color:var(--green);background:var(--accent-wash)}
+.interface-ui .r5-catalog-cta-icon .ui-icon{width:24px;height:24px}
+.interface-ui .r5-catalog-cta .primary{flex-shrink:0;min-height:42px}
+.interface-ui .r5-catalog-own{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.interface-ui .r5-catalog-own p{margin:0;font-size:13px;color:var(--muted)}
+@media(max-width:760px){.interface-ui .r5-catalog-tools{grid-template-columns:1fr}.interface-ui .r5-catalog-cta{flex-wrap:wrap}.interface-ui .r5-catalog-cta .primary{width:100%}}
