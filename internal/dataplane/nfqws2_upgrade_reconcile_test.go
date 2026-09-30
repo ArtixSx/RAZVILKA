@@ -81,3 +81,60 @@ func TestNFQWS2ReconcileRefusesUnprovenBlocks(t *testing.T) {
 		})
 	}
 }
+
+// Regression for the 0.19.2 installation on the owner's router: a node
+// transaction started after the installer removed the blocks (boot recovery
+// was waiting for node proof) snapshotted lists without the block its lease
+// records. Its rollback restored that literally and the verification failed
+// ("NFQWS2 managed block is missing or malformed"), leaving rollback-failed.
+func TestNFQWS2RollbackRestoresBlocksTheLeaseRecords(t *testing.T) {
+	a, _, plan, applied := upgradeFixture(t)
+	transaction := t.TempDir()
+	for _, call := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate, a.Activate} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := a.Rollback(context.Background(), plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	for index, data := range readNFQWS2Files(t, a) {
+		if string(data) != string(applied[index]) {
+			t.Fatalf("resource %d not restored to the committed state:\n%s", index, data)
+		}
+	}
+	if confirmed, err := a.VerifyRollback(context.Background(), plan, transaction); err != nil || !confirmed {
+		t.Fatalf("restored committed block not confirmed by rollback verification: %v %v", confirmed, err)
+	}
+	// Another plan's block is not what the lease records.
+	other := Plan{Routes: []Route{{Resolved: "nfqws2", Domains: []string{"other.example"}}}}
+	if _, err := a.VerifyRollback(context.Background(), other, transaction); err == nil {
+		t.Fatal("block of another plan accepted by rollback verification")
+	}
+	// Anything but the recorded block is still rejected.
+	if err := os.WriteFile(a.UserListPath, append(applied[1], []byte("extra.example\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.VerifyRollback(context.Background(), plan, transaction); err == nil {
+		t.Fatal("changed list accepted by rollback verification")
+	}
+}
+
+// Rollback of a transaction whose plan does not match the lease leaves the
+// snapshot as it was: the block cannot be proven.
+func TestNFQWS2RollbackDoesNotInventUnprovenBlocks(t *testing.T) {
+	a, _, plan, _ := upgradeFixture(t)
+	transaction := t.TempDir()
+	for _, call := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate, a.Activate} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	other := Plan{Routes: []Route{{Resolved: "nfqws2", Domains: []string{"other.example"}}}}
+	if err := a.Rollback(context.Background(), other, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(a.UserListPath); strings.Contains(string(data), managedBegin) {
+		t.Fatalf("unproven block written: %q", data)
+	}
+}

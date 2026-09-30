@@ -249,9 +249,11 @@ func TestStaleNodeRecoveryAndRefreshPreserveRuntimeAndHistory(t *testing.T) {
 			if changed, err := manager.RefreshCommitted(context.Background()); !errors.Is(err, ErrNetworkChanged) || len(changed) != 0 {
 				t.Fatalf("stale plan refreshed policy: changed=%v err=%v", changed, err)
 			}
+			// The node runtime waits for fresh node checks; an adapter without
+			// node routes (NFQWS2) is restored at once on every boot.
 			status, err := manager.Status()
-			if err != nil || status.PolicyRefresh == nil || status.PolicyRefresh.State != "network-stale" || len(node.calls) != 0 || len(other.calls) != 0 {
-				t.Fatalf("stale recovery touched runtime or lost status: node=%v other=%v status=%+v err=%v", node.calls, other.calls, status.PolicyRefresh, err)
+			if err != nil || status.PolicyRefresh == nil || status.PolicyRefresh.State != "network-stale" || len(node.calls) != 0 || strings.Join(other.calls, ",") != "reconcile,reconcile" {
+				t.Fatalf("stale recovery touched the node runtime, skipped NFQWS2 or lost status: node=%v other=%v status=%+v err=%v", node.calls, other.calls, status.PolicyRefresh, err)
 			}
 			after, err := os.ReadFile(filepath.Join(manager.StateRoot, "latest-committed-plan.json"))
 			if err != nil || !bytes.Equal(before, after) {

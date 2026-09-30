@@ -218,6 +218,45 @@ func verifyNetworkProfile(ctx context.Context, expected string, observe func(con
 	return nil
 }
 
+// adapterNeedsNetworkProof reports whether an adapter serves node routes or
+// the scoped DNS of the plan, whose proof is bound to a network epoch.
+func adapterNeedsNetworkProof(plan Plan, id string) bool {
+	if plan.DNS != nil && id == scopedDNSAdapterID {
+		return true
+	}
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) == id && routesRequireNetworkProof([]Route{route}) {
+			return true
+		}
+	}
+	return false
+}
+
+// reconcileNetworkIndependent restores the adapters of a network-stale plan
+// that do not need network proof. Failures are recorded; the plan stays
+// network-stale until node recovery proves and applies it again.
+func (m *Manager) reconcileNetworkIndependent(ctx context.Context, plan Plan) []RecoveryStep {
+	var steps []RecoveryStep
+	for _, id := range plan.Adapters {
+		if adapterNeedsNetworkProof(plan, id) || ctx.Err() != nil {
+			continue
+		}
+		step := RecoveryStep{Adapter: id, State: "failed"}
+		adapter, ok := m.adapter(id)
+		if !ok {
+			step.Detail = "adapter is not registered"
+		} else if reconciler, ok := adapter.(RuntimeReconciler); !ok {
+			step.Detail = "adapter does not support boot recovery"
+		} else if err := reconciler.Reconcile(ctx, plan); err != nil {
+			step.Detail = err.Error()
+		} else {
+			step.State = "recovered"
+		}
+		steps = append(steps, step)
+	}
+	return steps
+}
+
 func (m *Manager) checkPlanNetwork(ctx context.Context, plan Plan) error {
 	if plan.RequiresNetworkProof() {
 		if err := verifyNetworkProfile(ctx, plan.NetworkProfileID, m.FreshProfile); err != nil {
@@ -638,6 +677,13 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		return recovery, cause
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		// Every new process observes a new network epoch, so a plan with node
+		// routes waits for fresh node checks after any restart. Adapters without
+		// such routes (NFQWS2) do not depend on that proof: restore them now.
+		// Otherwise their services stay without the lists the installer removes
+		// while it replaces the program, and a later node transaction snapshots
+		// and "restores" that incomplete state.
+		recovery.Steps = append(recovery.Steps, m.reconcileNetworkIndependent(ctx, plan)...)
 		return networkStale(err)
 	}
 	var previous *Recovery

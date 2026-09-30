@@ -317,6 +317,20 @@ func nfqws2PlanValues(plan Plan, id string) ([]string, []string) {
 // Recovery Safe Mode. A block is written back only if the configuration and
 // init still match the lease and the block rendered from the committed plan
 // hashes exactly to the block the lease recorded; anything else still fails.
+// leaseBlockRestoration renders a list without its managed block back with
+// the block of these values, if that block hashes exactly to the lease's.
+func leaseBlockRestoration(data []byte, values []string, owner, hash string) ([]byte, bool) {
+	merged, err := replaceManagedBlock(string(data), append([]string{"# RAZVILKA INSTANCE " + owner}, values...))
+	if err != nil {
+		return nil, false
+	}
+	rendered, err := nfqws2Block([]byte(merged))
+	if err != nil || nfqws2Hash(rendered) != hash {
+		return nil, false
+	}
+	return []byte(merged), true
+}
+
 func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 	lease, err := a.readLease()
 	if err != nil || lease == nil {
@@ -343,12 +357,8 @@ func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 		if err != nil || len(block) > 0 || !exists {
 			continue // present or unreadable: the ownership check decides
 		}
-		merged, err := replaceManagedBlock(string(data), append([]string{"# RAZVILKA INSTANCE " + owner}, values...))
-		if err != nil {
-			return false, err
-		}
-		rendered, err := nfqws2Block([]byte(merged))
-		if err != nil || nfqws2Hash(rendered) != lease.Lists[index].BlockHash {
+		merged, ok := leaseBlockRestoration(data, values, owner, lease.Lists[index].BlockHash)
+		if !ok {
 			return false, errors.New("the NFQWS2 managed block of the committed plan cannot be proven; review is required")
 		}
 		mode := os.FileMode(0o644)
@@ -434,7 +444,7 @@ func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
 	return a.writeLease(nil)
 }
 
-func (a *NFQWS2Adapter) Rollback(ctx context.Context, _ Plan, root string) error {
+func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) error {
 	snapshot, err := readNFQWS2Snapshot(root)
 	if err != nil {
 		return err
@@ -478,7 +488,19 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, _ Plan, root string) error
 			return fmt.Errorf("restore NFQWS2 config draft: %w", err)
 		}
 	}
-	return a.writeLease(snapshot.Lease)
+	if err := a.writeLease(snapshot.Lease); err != nil {
+		return err
+	}
+	// A transaction started after the installer removed the blocks and before
+	// boot recovery put them back snapshots lists without the block its lease
+	// records. Restoring that literally leaves the runtime incomplete and the
+	// rollback unverifiable; put back exactly the block the lease proves.
+	if restored, err := a.restoreDeactivatedBlocks(plan); err == nil && restored && snapshot.WasRunning {
+		if output, err := a.run(ctx, a.InitPath, "restart"); err != nil {
+			return fmt.Errorf("restart NFQWS2 with restored lists: %s", shortOutput(output, err))
+		}
+	}
+	return nil
 }
 
 func readNFQWS2Snapshot(root string) (nfqws2Snapshot, error) {

@@ -13,7 +13,7 @@ import (
 
 // VerifyRollback only observes the restored instance. It never restarts a
 // process, consumes a draft, or treats a web probe as proof of rollback.
-func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, _ Plan, root string) (bool, error) {
+func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root string) (bool, error) {
 	snapshot, err := readNFQWS2Snapshot(root)
 	if err != nil {
 		return false, err
@@ -27,17 +27,35 @@ func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, _ Plan, root string)
 	if err != nil || !reflect.DeepEqual(lease, snapshot.Lease) {
 		return false, errors.New("NFQWS2 rollback ownership differs from its snapshot")
 	}
-	for _, file := range []struct {
+	domains, cidrs := nfqws2PlanValues(plan, a.ID())
+	owner, ownerErr := a.owner()
+	for index, file := range []struct {
 		path   string
 		data   []byte
 		exists bool
+		values []string
 	}{
-		{a.ConfigPath, snapshot.Config, snapshot.ConfigExisted},
-		{a.UserListPath, snapshot.UserList, snapshot.UserListExisted},
-		{a.IPSetListPath, snapshot.IPSetList, snapshot.IPSetListExisted},
+		{a.ConfigPath, snapshot.Config, snapshot.ConfigExisted, nil},
+		{a.UserListPath, snapshot.UserList, snapshot.UserListExisted, domains},
+		{a.IPSetListPath, snapshot.IPSetList, snapshot.IPSetListExisted, cidrs},
 	} {
 		data, exists, err := nfqws2Read(file.path)
-		if err != nil || exists != file.exists || !bytes.Equal(data, file.data) {
+		if err != nil || exists != file.exists {
+			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+		}
+		if bytes.Equal(data, file.data) {
+			continue
+		}
+		// Rollback may have put back the block the snapshot lacked and its
+		// lease records (see Rollback); accept exactly that and nothing else.
+		if index == 0 || lease == nil || ownerErr != nil || len(lease.Lists) < index {
+			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+		}
+		if block, blockErr := nfqws2Block(file.data); blockErr != nil || len(block) > 0 {
+			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+		}
+		restored, ok := leaseBlockRestoration(file.data, file.values, owner, lease.Lists[index-1].BlockHash)
+		if !ok || !bytes.Equal(data, restored) {
 			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
 		}
 	}
