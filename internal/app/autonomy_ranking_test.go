@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
@@ -54,5 +55,27 @@ func TestRankAutonomyNodesPrefersStableThenFast(t *testing.T) {
 	got = rankAutonomyNodes(snapshot, ids, "node-a", "telegram", "wan-1", now)
 	if got[0] != "node-a" || got[1] != "node-c" {
 		t.Fatalf("current node displaced: %v", got)
+	}
+}
+
+func TestUncheckedAutonomyCandidatesCountsOnlyPermittedUnchecked(t *testing.T) {
+	now := time.Now()
+	p := autonomy.Default()
+	p.SourceIDs = []string{"feed"}
+	origin := []nodestore.Origin{{SourceID: "feed", ReceivedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}}
+	fresh := func(id string) nodestore.Node {
+		return nodestore.Node{ID: id, Protocol: "VLESS", Origins: origin}
+	}
+	checked := rankedNode("node-c", now, "fail")
+	checked.Protocol, checked.Origins = "VLESS", origin
+	otherService := rankedNode("node-o", now, "other-service")
+	otherService.Protocol, otherService.Origins = "VLESS", origin
+	expired := fresh("node-x")
+	expired.Origins = []nodestore.Origin{{SourceID: "feed", ReceivedAt: now.Add(-48 * time.Hour), ExpiresAt: now.Add(-24 * time.Hour)}}
+	foreign := fresh("node-f")
+	foreign.Origins = []nodestore.Origin{{SourceID: "other", ReceivedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}}
+	snapshot := nodestore.Snapshot{Nodes: []nodestore.Node{fresh("node-1"), fresh("node-2"), checked, otherService, expired, foreign}}
+	if got := uncheckedAutonomyCandidates(snapshot, p, "telegram", "wan-1", now); got != 3 {
+		t.Fatalf("unchecked %d, want 3", got)
 	}
 }

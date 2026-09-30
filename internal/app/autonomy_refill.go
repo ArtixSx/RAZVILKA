@@ -6,6 +6,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
 // Called with the worker's exclusive admission. Source enablement and persisted
@@ -35,6 +36,12 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 	if err != nil {
 		return
 	}
+	// Candidates are checked a few per round. Fetching more while many wait
+	// only fills the bounded catalogue with records nobody has checked.
+	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
+	if err != nil || uncheckedAutonomyCandidates(snapshot, p, s.ID, profile, time.Now()) >= autonomyRefillBacklog {
+		return
+	}
 	useful, err := a.Nodes.SourceUtility(ctx, p.SourceIDs, p.Protocols, s.ID, profile, time.Now())
 	if err != nil {
 		return
@@ -54,3 +61,28 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 
 // Bind automatic IP refresh to immutable applied intent; passive catalogue
 // imports never provide permission to replace selected credentials or servers.
+
+// About half an hour of work at the default pace of two checks per round.
+const autonomyRefillBacklog = 32
+
+// uncheckedAutonomyCandidates counts permitted candidates without any check
+// of this service in this network.
+func uncheckedAutonomyCandidates(snapshot nodestore.Snapshot, p autonomy.Policy, serviceID, profile string, now time.Time) int {
+	count := 0
+	for _, n := range snapshot.Nodes {
+		if !allowedAutonomyNode(p, n, now) {
+			continue
+		}
+		checked := false
+		for _, c := range n.Health.History {
+			if c.ServiceID == serviceID && c.NetworkProfile == profile {
+				checked = true
+				break
+			}
+		}
+		if !checked {
+			count++
+		}
+	}
+	return count
+}

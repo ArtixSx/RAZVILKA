@@ -137,3 +137,38 @@ func TestPruneExpiredFeedNodesWaitsForPressureGraceAndInterval(t *testing.T) {
 		t.Fatalf("grace not respected: %d %v", removed, err)
 	}
 }
+
+func recordNodeCheck(t *testing.T, nodes *nodestore.Store, id, verdict, code string, at time.Time) {
+	t.Helper()
+	record := nodestore.CheckRecord{ProbeID: fmt.Sprintf("probe-%d", at.UnixNano()), ServiceID: "telegram", NetworkProfile: "wan-0123456789ab", RoutePathID: "sing-box:" + id,
+		TestLevel: "transport", Verdict: verdict, State: "unavailable", Stage: "transport", ErrorCode: code, CheckedAt: at, ExpiresAt: at.Add(time.Hour)}
+	if verdict == "PASS" {
+		record.TestLevel, record.State, record.Stage = "service", "available", "service"
+	}
+	if _, err := nodes.RecordCheck(context.Background(), id, record, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Fresh candidates that could not connect or reach the internet are removed
+// under pressure; a node with a success on record or a service-level failure
+// is kept.
+func TestPruneFailedFeedCandidatesUnderPressure(t *testing.T) {
+	a, nodes, now := nodeCapacityFixture(t)
+	ctx := context.Background()
+	ids := importFeedWindows(t, nodes, nodestore.Source{ID: "feed-new", Kind: "community"}, "new", 400, now.Add(-time.Hour))
+	for i, id := range ids[:10] {
+		recordNodeCheck(t, nodes, id, "ERROR", []string{"node-transport-failed", "node-egress-failed"}[i%2], now.Add(-30*time.Minute))
+	}
+	recordNodeCheck(t, nodes, ids[10], "PASS", "", now.Add(-40*time.Minute))
+	recordNodeCheck(t, nodes, ids[10], "ERROR", "node-transport-failed", now.Add(-20*time.Minute))
+	recordNodeCheck(t, nodes, ids[11], "ERROR", "node-service-probe-failed", now.Add(-20*time.Minute))
+	removed, err := a.pruneExpiredFeedNodes(ctx, now)
+	if err != nil || removed != 10 {
+		t.Fatalf("removed %d: %v", removed, err)
+	}
+	after, err := nodes.Snapshot(ctx, now)
+	if err != nil || len(after.Nodes) != 390 {
+		t.Fatalf("kept %d: %v", len(after.Nodes), err)
+	}
+}
