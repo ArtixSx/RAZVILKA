@@ -110,6 +110,11 @@ func main() {
 		log.Printf("%s: %d candidates (total %d, rejected %d)", name, len(result.NodeIDs), result.TotalEntries, result.Rejected)
 		for _, id := range result.NodeIDs {
 			started := time.Now()
+			// The network epoch may change between checks; each check binds
+			// to the epoch observed right before it.
+			if fresh, err := checker.FreshProfile(ctx); err == nil {
+				profile = fresh
+			}
 			var check dataplane.NodeCheckResult
 			err := store.WithSecret(ctx, id, func(material []byte) error {
 				var checkErr error

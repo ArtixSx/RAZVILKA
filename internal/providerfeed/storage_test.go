@@ -88,9 +88,13 @@ func TestSavedSubscriptionIsDurableWithoutFetchAndPublicViewsNeverContainTokens(
 func TestPresetRefreshDefaultsOnlyNewSubscriptionsWithoutExplicitInterval(t *testing.T) {
 	for _, preset := range Builtins() {
 		want := DefaultRefreshMinutes
-		if preset.ID == "kort0881-ru-sni" {
+		switch preset.ID {
+		case "kort0881-ru-sni":
 			// Upstream FullAutomatedUpdate.yml publishes every four hours.
 			want = 240
+		case "igareck-reality-mobile", "igareck-black-vless":
+			// Upstream commits these lists about every 90 minutes (29–30.09.2026).
+			want = 120
 		}
 		if preset.DefaultRefreshIntervalMinutes != want {
 			t.Fatalf("preset %s refresh default = %d", preset.ID, preset.DefaultRefreshIntervalMinutes)

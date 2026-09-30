@@ -7,15 +7,21 @@
 [CURRENT_STATUS_RU.md](CURRENT_STATUS_RU.md); наличие источника не означает,
 что его узлы работают из любой сети.
 
-## Пять встроенных шаблонов
+## Встроенные шаблоны
 
 | Название | Идентификатор шаблона | Выгрузка / формат |
 | --- | --- | --- |
+| igareck · VLESS Reality для белых списков | `igareck-reality-mobile` | [Vless-Reality-White-Lists-Rus-Mobile.txt](https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt), строки URI |
+| igareck · VLESS для России | `igareck-black-vless` | [BLACK_VLESS_RUS.txt](https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt), строки URI |
 | VLESS Key Checker | `tiagorrg-vless` | [keys.json](https://tiagorrg.github.io/vless-checker/keys.json), JSON ключей |
-| Goida VPN · VLESS | `goida-vless` | [23.txt](https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror/23.txt), строки URI |
-| Goida VPN · дополнительный каталог | `goida-extra` | [6.txt](https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/main/githubmirror/6.txt), строки URI |
 | Free VPN Subscriptions · Нидерланды | `au1rxx-nl` | [singbox-NL.json](https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/by-country/singbox-NL.json), профиль sing-box |
 | Kort0881 · RU SNI | `kort0881-ru-sni` | [vless.txt](https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/data/githubmirror/ru-sni/vless.txt), строки URI |
+| Goida VPN · VLESS | `goida-vless` | закрыт: репозиторий удалён (404 с 29.09.2026) |
+| Goida VPN · дополнительный каталог | `goida-extra` | закрыт: репозиторий удалён (404 с 29.09.2026) |
+
+Закрытый шаблон остаётся разрешимым, чтобы сохранённые подписки и правила
+Автопилота не ломались, но его нельзя выбрать заново, Автопилот его не
+добавляет, а загрузка сразу завершается «не найдено» без обращения в сеть.
 
 Пользователь сохраняет выбранный шаблон или собственную HTTPS-подписку,
 загружает список, проверяет узлы из своей сети и назначает проверенный узел
@@ -43,11 +49,16 @@ URL пользовательской подписки сокращён до HTTP
 строгой проверки и дедупликации. При наличии отклонённых записей импорт требует
 явного принятия допустимой части. Неподдерживаемый транспорт не подменяется
 другим, а чужие DNS, firewall, inbounds, маршруты и команды не импортируются.
-При заполнении каталога возвращается `FEED_CAPACITY`; узлы не удаляются
-автоматически для освобождения места.
+При заполнении каталога возвращается `FEED_CAPACITY`. Автопилот при
+заполнении на три четверти сам удаляет записи только из подписок, без ссылок
+из настроек, групп, резервов и журнала: просроченные больше часа назад и те,
+чья последняя проверка не смогла подключиться к узлу или выйти через него в
+интернет (одна успешная проверка узел сохраняет). Пока ждут проверки 32 и
+более кандидата, Автопилот новую порцию не запрашивает.
 
 Для включённой подписки интервал по умолчанию — 6 часов, для нового шаблона
-Kort0881 · RU SNI — 2 часа. Сохранённый пользовательский интервал не заменяется
+Kort0881 · RU SNI — 4 часа, для шаблонов igareck — 2 часа (по частоте
+обновления источников). Сохранённый пользовательский интервал не заменяется
 шаблонным; API публикует `default_refresh_interval_minutes`. Допустимы значения
 от 15 минут до 7 дней. Первое обновление после сохранения назначается примерно
 через минуту. Один рабочий процесс выполняет загрузки последовательно, с
@@ -180,6 +191,28 @@ README источника заявляет обновление каждые 15 
 RAZVILKA сохраняет подпись страны `NL` с атрибуцией `publisher`; произвольный URL
 или имя подписки не получают такую атрибуцию автоматически. Это подпись автора
 каталога, а не результат измерения геолокации.
+
+## Сравнение источников с роутера владельца (30.09.2026)
+
+Инструмент `cmd/nodeeval` прогоняет первые узлы источника через ту же точную
+проверку, что и Автопилот: подключение к узлу → выход в интернет через него →
+Telegram по имени и по IP-адресу. Keenetic, ARM64, домашний проводной
+интернет; утро 30.09.2026. Одно измерение одной сети — не обещание для других.
+
+| Источник | Проверено | Подключились | Интернет | Telegram |
+| --- | --- | --- | --- | --- |
+| cyb-portal CP-005 «VLESS Reality Mobile» (копия igareck `Vless-Reality-White-Lists-Rus-Mobile`) | 30 | 30 | 23 | 21 |
+| igareck `BLACK_VLESS_RUS` | 40 | 21 | 17 | 14 |
+| cyb-portal CP-002 «VLESS Black All RU» (копия igareck `BLACK_VLESS_RUS`) | 30 | 16 | 13 | 12 |
+| cyb-portal CP-003 «VLESS Black Mobile RU» | 30 | 16 | 13 | 11 |
+| VLESS Key Checker (`tiagorrg-vless`) | 30 | 16 | 5 | 4 |
+| Kort0881 · RU SNI | 30 | 17 | 2 | 2 |
+| Free VPN Subscriptions · Нидерланды | 30 | 2 | 1 | 0 |
+
+Выгрузки cyb-portal часто отвечали с задержкой или обрывались; первоисточник
+на GitHub загружается надёжнее, поэтому в шаблоны добавлены списки igareck.
+Подписка v2nodes разрешена условиями сайта только для личного некоммерческого
+использования — её можно добавить своей подпиской, но не шаблоном.
 
 ## Границы результата
 

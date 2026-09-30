@@ -115,7 +115,7 @@ function renderConsoleProviders(){
  const entries=[
   {name:'Kort0881',tag:'VLESS · каталог РФ',text:'Выборка публичных подключений. Расположение и доступность проверяются отдельно.',url:'https://github.com/kort0881/vpn-vless-configs-russia',key:'kort',icon:'route',tone:'mint'},
   {name:'VLESS Key Checker',tag:'Каталог подключений',text:'Результат издателя — подсказка. Нужна точная проверка выбранного сервиса.',url:'https://tiagorrg.github.io/vless-checker/',key:'tiagorrg',icon:'shield',tone:'blue'},
-  {name:'igareck',tag:'Смешанная подписка',text:'Коллекция разных протоколов. Неподдержанные параметры не должны отбрасываться молча.',url:'https://github.com/igareck/vpn-configs-for-russia',feedURL:'https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_SS%2BAll_RUS.txt',key:'igareck',icon:'wifi',tone:'blue'},
+  {name:'igareck',tag:'VLESS Reality · белые списки',text:'Лучший результат проверки с роутера: большинство узлов открыли Telegram. Каждый узел всё равно проверяется у вас.',url:'https://github.com/igareck/vpn-configs-for-russia',key:'igareck-reality',icon:'wifi',tone:'blue'},
  {name:'Epodonios',tag:'Пакет Sub1',text:'Небольшой пакет вместо загрузки всей коллекции. Каждый узел требует локальной проверки.',url:'https://github.com/Epodonios/v2ray-configs',feedURL:'https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Sub1.txt',key:'epodonios',icon:'server',tone:'rose'},
  {name:'Личная подписка',tag:'Ваш источник',text:'Приватный HTTPS-адрес сохраняется на роутере. Новые ссылки не включают маршрут сами.',key:'own',icon:'lock',tone:'amber'}
  ];
