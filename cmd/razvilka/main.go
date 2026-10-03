@@ -133,6 +133,9 @@ func main() {
 	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
 	nodeHistoryReadVersion := flag.Bool("node-history-read-version", false, "print the supported exact node history read capability and exit")
+	checkNodeHistory := flag.Bool("check-node-history-state", false, "check retained node history compatibility without changing files and exit")
+	nodeHistoryConfigRoot := flag.String("node-history-config-root", "/opt/etc/razvilka", "absolute trusted retained node history config root")
+	nodeHistoryStateRoot := flag.String("node-history-state-root", "/opt/var/lib/razvilka", "absolute trusted retained node history state root")
 	componentUpdateSchema := flag.Bool("component-update-schema", false, "print the supported durable component update schema and exit")
 	selfUpdateSchema := flag.Bool("self-update-schema", false, "print the supported application replacement capability and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
@@ -141,6 +144,16 @@ func main() {
 	flag.Parse()
 	if *nodeHistoryReadVersion {
 		fmt.Println(nodestore.ExactHistoryReadVersion)
+		return
+	}
+	if *checkNodeHistory {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if checkNodeHistoryState(ctx, *nodeHistoryConfigRoot, *nodeHistoryStateRoot, nodestore.ExactHistoryReadVersion) != nil {
+			log.Print(errNodeHistoryState)
+			os.Exit(1)
+		}
+		fmt.Println(`{"ok":true}`)
 		return
 	}
 	if *selfUpdateSchema {
