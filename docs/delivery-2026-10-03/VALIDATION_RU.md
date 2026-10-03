@@ -95,3 +95,21 @@ Native fixtures не закрывают полный LAN executor, TUN selected/
 WG endpoint checkpoint `0357f4e` добавляет точные rule/host-route, mark, DNS lease/WAN revalidation и cleanup/rollback. Callback владения host-route подключён к Engine Lab в `367ef14`. Его native endpoint lifecycle и crash window ещё открыты; полный отчёт — D04_D05_NET_CHECKPOINT_RU.md. Отдельно не доказана доступность прежнего live WireGuard после candidate с тем же peer/key: remote Noise/endpoint state может измениться. Этот сценарий явно передан следующему NET чату и не скрывается перезапуском fixture.
 
 Итоговый `check-linux-06` на `367ef14dc67750f6fb141e346f6d3508c492f01e` завершился **RC 0**, `RAZVILKA checks: OK`: штатный Go 1.26.5, go mod verify, обычные и race тесты всех пакетов, vet, UI/shell проверки, сборки Linux amd64/arm64/mips/mipsle с SHA-256, установка/обновление/откат/удаление в изолированном тестовом корне. Три fixture-регрессии предыдущего прогона устранены. Это проверенная общая база для чатов 6.1 sol; перечисленные функциональные и аппаратные ограничения остаются открытыми.
+
+## Интеграция первых пяти чатов Sol
+
+`check-linux-07` на `99ac304778f881bab24692f9d87f880d41da4d09`: **RC 0**, `RAZVILKA checks: OK`. Проверены Go 1.26.5/mod verify, обычные/race тесты всех пакетов, vet, UI/shell (включая новые auth actions и self-update receipt gates), все четыре Linux-сборки и SHA-256, изолированный Entware install/update/rollback/remove. Новый self-update модуль пока не подключён к реальному пути обновления: прохождение тестов не закрывает D11 и не разрешает установку промежуточной копии.
+
+`native-round-05` на той же базе имеет **общий RC 1**:
+
+| Проверка | Фактический результат |
+|---|---|
+| WG CandidateIsolation | PASS IPv4/IPv6: kernel WG, TCP/UDP, live после успешного и неуспешного отдельного кандидата; одинаковая client identity отвергается до создания canary |
+| WG EndpointLifecycle | FAIL: IPv4 probe timeout, следующий IPv6 — неоднозначный WAN; NET получил журнал, семьи стенда затем разделены, добавлены снимки ядра для диагностики |
+| Xray ExactNode / StoreConfigSyntax | PASS native Xray 26.3.27 TLS и REALITY, hostname/IP, остановка/возврат сервера, неверный UUID, kill/recovery клиента и компиляция engine-aware store material |
+| PolicyCleanupPreservesForeignRoutes | PASS настоящее ядро IPv4/IPv6, foreign host routes сохранены, чужой protocol отвергнут; создание чужого default ещё требует исправления CORE |
+| ComponentInstalledExecutableAcceptanceUsesKernelIdentity | PASS настоящий дочерний процесс и `/proc` inode, устаревший исполняемый файл не принимается за обновлённый |
+
+Для native opkg собрана отдельная тестовая копия OpenWrt `80503d94e356476250adaf1f669ee955ec26de76` (revision из Entware), libubox `1aa36ee774c8db4d7a396903e0d2e1fb79ee8bf1`, в пользовательском каталоге Ubuntu. Системная база пакетов и роутер не использованы. `native-opkg-01` выявил неверное размещение compile-time lock внутри offline-root; среда исправлена. `native-opkg-02` выявил несовместимый формат синтетического IPK (`Malformed package file`); OPS получил дефект fixture. Успешного реального package update/rollback пока нет.
+
+Readonly проверка Netcraze: Linux `4.9-ndm-5 aarch64`, opkg той же revision `80503d94`, `/proc/self/ns` содержит только `mnt`; PID namespace и cgroup interface отсутствуют. Обязательный PID-namespace supervisor здесь непригоден. OPS/CORE получили аппаратное ограничение до внедрения; нужна поддерживаемая supervision с доказательством завершения потомков. `/proc` scan без durable receipt не превращает unknown в успех. Настройки и установленная версия роутера этой проверкой не изменены.
