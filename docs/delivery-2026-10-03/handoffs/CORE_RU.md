@@ -120,6 +120,8 @@ Real HTTP regression checks: terminal journal with interrupted operation settlem
 
 # D11: exact OPS adapter contract — WIP, 2026-10-03
 
+04.10.2026 independent authority checkpoint: `internal/operationgate/self_update_stop*.go` реализует persistent installation/epoch + Stop receipt вне rollback images; общий kernel lock сериализует revocation с bounded effect begin. Readonly absence ничего не создаёт, missing/corrupt/foreign marker и incomplete current/intent блокируют запуск. Exact Stop retry после interrupted publication сохраняет epoch; другой ID/revision не переписывает receipt; Initialize не очищает Stop. Подтверждение cleanup требует двух свежих trusted наблюдений и не возвращает running authority. Windows unit tests/vet RC0; Linux cross-process lock/crash tests добавлены, native execution остаётся координатору. HTTP + actual OPS supervised consumer ещё не подключены; production capability0 сохраняется, D11 не закрыт. Подробный фактический API и ограничения — CORE_SELF_UPDATE_STOP_CONTRACT_RU.md.
+
 CORE wiring сейчас собирается в `internal/app/self_update_files.go`; этот раздел опубликован заранее для OPS. Реализация OPS в `internal/updatecheck` **не импортирует app**: все сигнатуры используют примитивы и существующий `selfupdatejournal.File`. CORE будет потребителем, а не вторым самостоятельным installer. Конструктор OPS ожидается `updatecheck.NewSelfUpdateFileAdapter()`, возвращающий concrete type, реализующий:
 
 ```go

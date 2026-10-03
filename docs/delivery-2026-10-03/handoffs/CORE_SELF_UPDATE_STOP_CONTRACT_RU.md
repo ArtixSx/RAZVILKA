@@ -1,5 +1,7 @@
 # CORE → OPS: durable Stop outside the frozen application files
 
+04.10.2026 checkpoint: module реализован в `internal/operationgate/self_update_stop*.go`; Windows unit tests и vet проходят. Linux native tests добавлены, здесь только кросс-компиляция; координатор выполняет native acceptance. HTTP/OPS consumers ещё подключаются, end-to-end Stop PASS не заявлен. Ниже прежнее проектное описание уточняется фактически существующим API: schema1; поля Owner, InstallationID, Sequence, TransactionID, ConfigRevision, State, Stopped, Digest. Ready имеет epoch1, Stop повышает epoch; явный `InitializeSelfUpdateControl(ctx, root)` разрешён только trusted Prepare и не сбрасывает Stop. `WithSelfUpdateEffectAdmission` уже реализован с общим коротким kernel lock. Отсутствующий marker в существующем root не восстанавливается для запуска/Initialize/Stop; неполный ledger требует review. `ErrSelfUpdateStopChanged` отличает identity/epoch/revision mismatch от повреждения journal. Windows проверяет process interruption, не Linux power-loss durability.
+
 04.10.2026. Конкретный контракт для передачи координатором OPS. Это следующий сопряжённый module/consumer, **не уже выполненный Stop PASS**. CORE владеет `internal/operationgate/self_update_stop.go`, app HTTP/admission и exact runtime cleanup orchestration. OPS потребляет readonly guard в actual supervised helper/startup/Authority/Run/Live/Finish; не пишет параллельный Stop ledger. Existing operationgate Guard/Fence используется для admission; его память сама по себе не durable Stop.
 
 ## Общий нейтральный API CORE
