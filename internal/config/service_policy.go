@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
 const ServicePolicySchema = 1
@@ -236,8 +238,7 @@ func fenceServicePolicy(cfg *Config, id, route string, sources []string) {
 		p.Revision++
 	}
 	p.PinnedNodeID = ""
-	if strings.HasPrefix(route, "sing-box:node-") {
-		node := strings.TrimPrefix(route, "sing-box:")
+	if _, node, exact := routekind.ParseNodeRoute(route); exact && strings.HasPrefix(node, "node-") {
 		if slices.Contains(p.AllowedNodeIDs, node) {
 			p.PinnedNodeID = node
 		}

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,27 @@ import (
 	"sync"
 	"testing"
 )
+
+func TestConfigLoadExistingRecoveryNeverCreatesOrRewrites(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if _, err := LoadExisting(path); !os.IsNotExist(err) {
+		t.Fatal("missing recovery settings admitted", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("recovery created defaults", err)
+	}
+	data := []byte(`{"schema_version":1,"listen":":8787","safe_mode":true,"services":{},"engine_order":["nfqws2"]}`)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadExisting(path); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(after, data) {
+		t.Fatal("recovery rewrote installed configuration", err)
+	}
+}
 
 func TestDraftApplyDiscard(t *testing.T) {
 	s, err := Load(filepath.Join(t.TempDir(), "config.json"))

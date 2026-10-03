@@ -22,6 +22,9 @@ type componentAdmission struct {
 // Journal reads are bounded and do not take the component manager's mutex.
 func (a *App) InitializeComponentRecoveryGate() error {
 	return a.Operations.SetGuard(func(ctx context.Context) error {
+		if err := a.selfUpdateFileGuard(ctx); err != nil {
+			return err
+		}
 		if a.Components == nil {
 			return nil
 		}

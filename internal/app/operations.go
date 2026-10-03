@@ -61,7 +61,7 @@ func (s *operationScope) restoreAdmission() (func(), error) {
 // cleanup finish; inheriting the context value does not extend ownership.
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/components/recovery" {
+		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" {
 			// Recovery owns exact inspection/repair admission behind auth and CSRF.
 			next.ServeHTTP(w, r)
 			return
@@ -94,7 +94,8 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		updateLocked := a.SelfUpdate != nil && a.SelfUpdate.InstallationLocked()
-		if updateLocked && strings.HasPrefix(r.URL.Path, "/api/v1/auth/") && r.URL.Path != "/api/v1/auth/status" && r.URL.Path != "/api/v1/auth/login" && r.URL.Path != "/api/v1/auth/logout" {
+		updatePending := updateLocked || a.PendingSelfUpdateRecovery()
+		if updatePending && strings.HasPrefix(r.URL.Path, "/api/v1/auth/") && r.URL.Path != "/api/v1/auth/status" && r.URL.Path != "/api/v1/auth/login" && r.URL.Path != "/api/v1/auth/logout" {
 			a.writeOperationFailure(w, operationgate.ErrBusy)
 			return
 		}
@@ -199,6 +200,10 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 		code, status = "COMPONENT_RECOVERY_REQUIRED", http.StatusServiceUnavailable
 		message = "Обновление компонента ещё не подтверждено рабочим процессом. Прежняя версия сохранена. Откройте журнал обновления; повторная установка автоматически не запускается."
 	}
+	if errors.Is(err, errSelfUpdateRecovery) {
+		code, status = "SELF_UPDATE_RECOVERY_REQUIRED", http.StatusServiceUnavailable
+		message = "Обновление приложения требует проверки сохранённой транзакции. Автоматические изменения приостановлены; повтор установщика не запускается."
+	}
 	if recovery {
 		code = "PRIVATE_BACKUP_RECOVERY_REQUIRED"
 		message = "После незавершённого восстановления изменения приостановлены. При следующем запуске приложение проверит журнал восстановления. Не удаляйте журнал и не применяйте черновики вручную."
@@ -213,7 +218,7 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 	// process without reading locked Stores or inventing dataplane health.
 	body := map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false, "recovery_required": recovery,
 		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "node_recovery": a.nodeRecoverySnapshot()}
-	if errors.Is(err, errComponentRecovery) {
+	if errors.Is(err, errComponentRecovery) || errors.Is(err, errSelfUpdateRecovery) {
 		body["recovery_required"] = true
 	}
 	if holder != nil {
