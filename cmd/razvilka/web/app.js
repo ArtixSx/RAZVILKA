@@ -186,7 +186,40 @@ function captureSetupKey() {
   history.replaceState(null, '', `${location.pathname}${location.search}`);
 }
 
+function renderAuthBusy() {
+  const busy = !!state.authAction;
+  $$('#authScreen button, #authScreen input, #logoutButton').forEach(element => { element.disabled = busy; });
+}
+
+function invalidateAuthAction() {
+  state.authGeneration = (state.authGeneration || 0) + 1;
+  state.authAction = null;
+  renderAuthBusy();
+}
+
+function beginAuthAction() {
+  if (state.authAction) return null;
+  const action = { generation: state.authGeneration || 0 };
+  state.authAction = action;
+  renderAuthBusy();
+  return action;
+}
+
+function authActionCurrent(action) {
+  return state.authAction === action && action.generation === (state.authGeneration || 0);
+}
+
+function finishAuthAction(action) {
+  if (!authActionCurrent(action)) return;
+  state.authAction = null;
+  renderAuthBusy();
+}
+
 function showAuth(status, message = '') {
+  // Also fence authentication responses, which do not use interfaceRequest.
+  state.authGeneration = (state.authGeneration || 0) + 1;
+  state.authAction = null;
+  if (typeof renderAuthBusy === 'function') renderAuthBusy();
   state.authenticated = false;
   document.dispatchEvent(new Event('razvilka:auth-required'));
   state.status = status || state.status || {};
@@ -195,6 +228,7 @@ function showAuth(status, message = '') {
   $('#authSetupPanel').hidden = !setup;
   $('#authLoginPanel').hidden = setup;
   $('#authMessage').textContent = message;
+  const logoutRetry = $('#authLogoutRetry'); if (logoutRetry) logoutRetry.hidden = true;
   if (setup) $('#setupToken').value = sessionStorage.getItem(ADMIN_TOKEN_KEY) || '';
   else $('#loginUsername').value = state.status.username || 'admin';
   const authPanel = $(setup ? '#authSetupPanel' : '#authLoginPanel');
@@ -223,51 +257,97 @@ function hideAuth() {
 
 async function submitSetup(event) {
   event.preventDefault();
+  if (state.authAction) return;
   const token = $('#setupToken').value.trim();
   const username = $('#setupUsername').value.trim();
   const password = $('#setupPassword').value;
   if (password !== $('#setupPasswordRepeat').value) { $('#authMessage').textContent = 'Пароли не совпадают.'; return; }
+  const action = beginAuthAction(); if (!action) return;
   sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
   try {
     await api('/api/v1/auth/setup', { method: 'POST', body: JSON.stringify({ username, password }) });
+    if (!authActionCurrent(action)) return;
     sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     $('#setupPassword').value = ''; $('#setupPasswordRepeat').value = '';
-    hideAuth(); await refreshAll(); await showPlan(); startConnectionStream();
-  } catch (error) { $('#authMessage').textContent = error.message; }
+    hideAuth(); await refreshAll(); if (!authActionCurrent(action) || !state.authenticated) return;
+    await showPlan(); if (authActionCurrent(action) && state.authenticated) startConnectionStream();
+  } catch (error) { if (authActionCurrent(action)) $('#authMessage').textContent = error.message; }
+  finally { finishAuthAction(action); }
 }
 
 async function submitLogin(event) {
   event.preventDefault();
+  const action = beginAuthAction(); if (!action) return;
   sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   try {
     await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ username: $('#loginUsername').value.trim(), password: $('#loginPassword').value }) });
-    $('#loginPassword').value = ''; hideAuth(); await refreshAll(); await showPlan(); startConnectionStream();
-  } catch (error) { $('#authMessage').textContent = 'Неверный логин или пароль.'; }
+    if (!authActionCurrent(action)) return;
+    $('#loginPassword').value = ''; hideAuth(); await refreshAll(); if (!authActionCurrent(action) || !state.authenticated) return;
+    await showPlan(); if (authActionCurrent(action) && state.authenticated) startConnectionStream();
+  } catch (error) { if (authActionCurrent(action)) $('#authMessage').textContent = error.status === 401 ? 'Неверный логин или пароль.' : error.message; }
+  finally { finishAuthAction(action); }
 }
 
 async function recoverAccount(event) {
   event.preventDefault();
+  if (state.authAction) return;
   const token = $('#recoveryToken').value.trim();
   const username = $('#recoveryUsername').value.trim();
   const password = $('#recoveryPassword').value;
   if (!token) { $('#authMessage').textContent = 'Введите recovery key.'; return; }
   if (password !== $('#recoveryPasswordRepeat').value) { $('#authMessage').textContent = 'Новые пароли не совпадают.'; return; }
+  const action = beginAuthAction(); if (!action) return;
   sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
   try {
     await api('/api/v1/auth/recover', { method: 'POST', body: JSON.stringify({ username, new_password: password }) });
+    if (!authActionCurrent(action)) return;
     sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     $('#recoveryToken').value = ''; $('#recoveryPassword').value = ''; $('#recoveryPasswordRepeat').value = '';
-    hideAuth(); await refreshAll(); await showPlan(); startConnectionStream();
-  } catch (error) { $('#authMessage').textContent = error.message; }
+    hideAuth(); await refreshAll(); if (!authActionCurrent(action) || !state.authenticated) return;
+    await showPlan(); if (authActionCurrent(action) && state.authenticated) startConnectionStream();
+  } catch (error) { if (authActionCurrent(action)) $('#authMessage').textContent = error.message; }
+  finally { finishAuthAction(action); }
 }
 
 async function logout() {
-  document.dispatchEvent(new Event('razvilka:auth-required'));
-  try { await api('/api/v1/auth/logout', { method: 'POST' }); } catch (_) { /* session may already be gone */ }
+  if (state.authAction) return;
+  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
   sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   if (state.stream) { state.stream.close(); state.stream = null; }
-  const status = await api('/api/v1/auth/status');
-  showAuth(status);
+  const status = { setup_required: false, authenticated: false, username: state.status?.username };
+  showAuth(status, 'Выходим из учётной записи…');
+  const action = beginAuthAction();
+  let confirmed = false;
+  try {
+    await api('/api/v1/auth/logout', { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {} });
+    confirmed = true;
+  } catch (_) { /* Keep the local session closed even if logout is unknown. */ }
+  if (!authActionCurrent(action)) return;
+  try {
+    const next = await api('/api/v1/auth/status');
+    if (!authActionCurrent(action)) return;
+    showAuth({ ...next, authenticated: false }, next.authenticated ? 'Выход не подтверждён сервером. Повторите выход перед уходом с устройства.' : '');
+    if (next.authenticated && $('#authLogoutRetry')) $('#authLogoutRetry').hidden = false;
+  } catch (_) {
+    if (!authActionCurrent(action)) return;
+    showAuth(status, confirmed ? 'Вы вышли. Состояние сервера пока не прочитано; можно войти снова.' : 'Выход не подтверждён сервером. Повторите выход перед уходом с устройства.');
+    if (!confirmed && $('#authLogoutRetry')) $('#authLogoutRetry').hidden = false;
+  } finally { finishAuthAction(action); }
+}
+
+async function useRecoveryKey() {
+  const token = $('#recoveryToken').value.trim();
+  if (!token) return;
+  const action = beginAuthAction(); if (!action) return;
+  sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+  try {
+    const restored = await refreshAll();
+    if (!authActionCurrent(action)) return;
+    if (restored && state.authenticated) {
+      hideAuth(); await showPlan(); if (authActionCurrent(action) && state.authenticated) startConnectionStream();
+    } else $('#authMessage').textContent = 'Recovery key не принят.';
+  } catch (error) { if (authActionCurrent(action)) $('#authMessage').textContent = error.message; }
+  finally { finishAuthAction(action); }
 }
 
 function askConfirmation(title, text, action = 'Продолжить') {
@@ -4847,6 +4927,7 @@ function bindEvents() {
   $('#engineCancelOperation').addEventListener('click', () => cancelEngineIntent());
   document.addEventListener('razvilka:auth-required', handleEngineEditorLifecycle);
   document.addEventListener('razvilka:auth-required', cancelPanelRefresh);
+  document.addEventListener('razvilka:auth-required', invalidateAuthAction);
   document.addEventListener('click', event => { if (event.target.closest?.('[data-panel-refresh]')) void refreshAll(); });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { clearTimeout(panelLoad.retryTimer); panelLoad.retryTimer = null; }
@@ -4904,13 +4985,8 @@ function bindEvents() {
   $('#loginForm').addEventListener('submit', submitLogin);
   $('#recoveryResetForm').addEventListener('submit', recoverAccount);
   $('#logoutButton').addEventListener('click', logout);
-  $('#useRecovery').addEventListener('click', async () => {
-    const token = $('#recoveryToken').value.trim();
-    if (!token) return;
-    sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
-    if (await refreshAll()) { hideAuth(); await showPlan(); startConnectionStream(); }
-    else $('#authMessage').textContent = 'Recovery key не принят.';
-  });
+  $('#authLogoutRetry')?.addEventListener('click', logout);
+  $('#useRecovery').addEventListener('click', useRecoveryKey);
   $('#exportProfile').addEventListener('click', exportProfile);
   $('#selectProfileImport').addEventListener('click', () => $('#profileImportInput').click());
   $('#profileImportInput').addEventListener('change', selectProfileFile);

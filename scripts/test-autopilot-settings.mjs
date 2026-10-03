@@ -27,6 +27,8 @@ function fixture(){
     edit(){element('autoQuickCheck').value='180';element('autoQuickForm').events.input();},
     submit:()=>element('autoQuickForm').events.submit({preventDefault(){}}),
     reload:()=>element('a1-reloadButton').events.click(),
+    visibleReload:()=>element('autoQuickRefresh').events.click(),
+    globalReload:()=>element('refreshAll').events.click(),
     logout:()=>documentListeners.get('razvilka:auth-required')(),
     leave(){const event={prevented:false,preventDefault(){this.prevented=true;}};listeners.get('beforeunload')?.(event);return event;}
   };
@@ -159,4 +161,26 @@ await asyncTest('process change while reconciling cannot unlock an unknown write
   assert.equal(f.element('autoQuickSave').disabled,false);assert.equal(f.leave().prevented,false);
   assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,1);
 });
+for(const button of ['visibleReload','globalReload'])await asyncTest(button+' reconciles unknown writes without replay',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(Object.assign(new Error('server response lost'),{status:500}));await save;
+  assert.match(f.element('autoQuickMessage').textContent,/Обновить состояние/);
+  const reload=f[button]();await f[button]();assert.equal(f.requests.length,2);
+  assert.equal(f.element('autoQuickRefresh').disabled,true);
+  f.requests[1].resolve(f.snapshot(13));await reload;
+  assert.equal(f.element('autoQuickCheck').value,'180');assert.equal(f.element('autoQuickSave').disabled,true);
+  assert.equal(f.element('autoQuickRefresh').disabled,false);
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickSave').disabled,false);
+  assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,1);
+});
+
+await asyncTest('visible read updates a CAS-conflicted policy while keeping draft',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(Object.assign(new Error('revision conflict'),{status:409}));await save;
+  await f.globalReload();assert.equal(f.requests.length,1,'global refresh added an unnecessary live policy read');
+  const reload=f.visibleReload();f.requests[1].resolve(f.snapshot(13));await reload;
+  assert.equal(f.element('autoQuickCheck').value,'180');assert.equal(f.element('autoQuickSave').disabled,true);
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickCheck').value,300);
+});
+
 console.log(JSON.stringify({suite:'autopilot-settings',tests:total}));
