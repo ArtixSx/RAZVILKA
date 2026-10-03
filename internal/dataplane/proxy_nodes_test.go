@@ -27,11 +27,19 @@ type scopedXrayFixture struct {
 	identity  int
 }
 
+func privateScopedXrayFixtureDir(t *testing.T) string {
+	t.Helper()
+	path := t.TempDir()
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func scopedXrayTestFixture(t *testing.T) *scopedXrayFixture {
 	t.Helper()
 	ctx := context.Background()
-	nodesRoot := t.TempDir()
-	_ = os.Chmod(nodesRoot, 0700)
+	nodesRoot := privateScopedXrayFixtureDir(t)
 	store, err := nodestore.Open(nodesRoot)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +63,7 @@ func scopedXrayTestFixture(t *testing.T) *scopedXrayFixture {
 		material, err := store.MaterializeXray(ctx, bindings, now)
 		return NodeRouteMaterial{EngineID: material.EngineID, Config: material.Config, EndpointHosts: material.EndpointHosts}, err
 	}
-	a, err := NewScopedXrayTunnelAdapter(engineconfig.New(t.TempDir(), t.TempDir()), t.TempDir(), materializer)
+	a, err := NewScopedXrayTunnelAdapter(engineconfig.New(privateScopedXrayFixtureDir(t), privateScopedXrayFixtureDir(t)), privateScopedXrayFixtureDir(t), materializer)
 	if err != nil {
 		t.Fatal(err)
 	}
