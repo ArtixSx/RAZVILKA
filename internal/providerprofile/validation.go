@@ -267,12 +267,33 @@ func validateClashTLS(proxy map[string]any) error {
 }
 
 func validateClashVLESS(proxy map[string]any) error {
+	if err := onlyProfileFields(proxy, "type name server port uuid flow packet-encoding tls network servername sni client-fingerprint alpn skip-cert-verify reality-opts ws-opts grpc-opts http-opts h2-opts"); err != nil {
+		return err
+	}
+	if raw, exists := proxy["alpn"]; exists {
+		if _, err := strictStringList(raw); err != nil {
+			return err
+		}
+	}
+	if raw, exists := proxy["reality-opts"]; exists {
+		m, ok := raw.(map[string]any)
+		if !ok || onlyProfileFields(m, "public-key short-id") != nil {
+			return importError("INVALID_PARAMETERS")
+		}
+	}
 	transport, err := strictText(proxy, "network")
 	if err != nil {
 		return err
 	}
 	if transport == "" {
 		transport = "tcp"
+	}
+	if transport == "tcp" {
+		for _, key := range []string{"ws-opts", "grpc-opts", "http-opts", "h2-opts"} {
+			if _, exists := proxy[key]; exists {
+				return importError("INVALID_PARAMETERS")
+			}
+		}
 	}
 	flow, err := strictText(proxy, "flow")
 	if err != nil {
@@ -336,6 +357,9 @@ func strictBool(m map[string]any, key string) (bool, error) {
 }
 
 func validateNativeVLESS(source map[string]any) error {
+	if err := validateVLESSFields(source); err != nil {
+		return err
+	}
 	flow, err := strictText(source, "flow")
 	if err != nil {
 		return err

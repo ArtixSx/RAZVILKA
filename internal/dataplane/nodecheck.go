@@ -29,7 +29,8 @@ import (
 var (
 	ErrExactNodeBusy           = errors.New("exact node checker is busy")
 	ErrExactNodeUnavailable    = errors.New("exact node checker is unavailable")
-	ErrExactNodeRuntime        = errors.New("sing-box runtime is unavailable")
+	ErrExactNodeRuntime        = errors.New("exact node runtime is unavailable")
+	ErrExactNodeUnsupported    = errors.New("exact node profile is unsupported by this runtime")
 	ErrExactNodeNetworkChanged = errors.New("exact node network epoch changed or is unavailable")
 )
 
@@ -118,6 +119,7 @@ const MaxExactNodeSlots = 4
 // StateRoot/slot-N on Port+N. A non-blocking gate of free slots prevents
 // port/process collisions with itself.
 type ExactNodeChecker struct {
+	engine         string
 	StateRoot      string
 	Binary         string
 	Port           int
@@ -190,7 +192,7 @@ func (c *ExactNodeChecker) newResult(request NodeCheckRequest) NodeCheckResult {
 	return NodeCheckResult{
 		SchemaVersion: exactNodeSchema, ProbeID: newNodeProbeID(), NodeID: request.NodeID,
 		ServiceID: request.Service.ID, NetworkProfile: request.NetworkProfile,
-		RoutePathID: "sing-box:" + request.NodeID, StartedAt: c.currentTime(), TestLevel: "dns",
+		RoutePathID: c.EngineID() + ":" + request.NodeID, StartedAt: c.currentTime(), TestLevel: "dns",
 		Stage: "dns", Verdict: evidence.VerdictError, Message: "Проверка не завершена.",
 		DirectControl: "not_run", Stages: []NodeCheckStage{},
 	}
@@ -344,7 +346,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	}()
 	if err != nil {
 		result.TestLevel = "protocol"
-		result.fail("configuration", "node-runtime-config-rejected", "Sing-box отклонил изолированную конфигурацию узла.")
+		result.fail("configuration", "node-runtime-config-rejected", "Движок отклонил изолированную конфигурацию узла.")
 		result.addStage("configuration", "failed", "Изолированная конфигурация не принята.", stageStarted, c.currentTime())
 		finish()
 		return result, nil
@@ -369,6 +371,22 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		return result, nil
 	}
 	result.addStage("route_identity", "passed", "Процесс, конфигурация и локальный канал принадлежат этой проверке.", stageStarted, c.currentTime())
+	// The receipt is checked again after the network probes, before cleanup.
+	// A process restart or config replacement must invalidate earlier replies.
+	defer func() {
+		after, err := c.identity(session)
+		if err != nil || after != passport {
+			result.Available = false
+			result.Verdict = evidence.VerdictInconclusive
+			result.EgressIP = ""
+			result.Evidence.Verdict = evidence.VerdictInconclusive
+			result.Evidence.Outcome = evidence.OutcomeUnknown
+			result.Evidence.EgressIP = ""
+			result.fail("route_identity", "node-route-runtime-changed", "Временный процесс или профиль изменился во время проверки; результат не используется.")
+			result.Evidence.ErrorCode = result.ErrorCode
+			finish()
+		}
+	}()
 
 	stageStarted = c.currentTime()
 	var directIP, proxyIP string
@@ -574,6 +592,11 @@ func (c *ExactNodeChecker) validRequest(request NodeCheckRequest) error {
 	if !c.runtimeReady() {
 		return ErrExactNodeRuntime
 	}
+	if c.EngineID() == "xray" {
+		if _, err := exactXrayProfile(request.Outbound); err != nil {
+			return ErrExactNodeUnsupported
+		}
+	}
 	if !exactNodeIDPattern.MatchString(request.NodeID) || len(request.Outbound) == 0 || request.Service.ID == "" || selectedNodeProbe(request.Service).URL == "" || !systemprobe.ValidWANProfileID(request.NetworkProfile) {
 		return ErrExactNodeUnavailable
 	}
@@ -738,7 +761,8 @@ func (c *ExactNodeChecker) binary() string {
 	if c.Binary != "" {
 		return c.Binary
 	}
-	for _, candidate := range []string{"/opt/bin/sing-box", "/opt/usr/bin/sing-box", "sing-box"} {
+	engine := c.EngineID()
+	for _, candidate := range []string{"/opt/bin/" + engine, "/opt/usr/bin/" + engine, engine} {
 		if strings.Contains(candidate, "/") {
 			if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0 {
 				return candidate
@@ -753,18 +777,25 @@ func (c *ExactNodeChecker) binary() string {
 }
 
 func (c *ExactNodeChecker) session(slot int) exactNodeSession {
-	root, id := c.StateRoot, "node-check-sing-box"
+	root, id := c.StateRoot, "node-check-"+c.EngineID()
 	if slot > 0 {
 		root, id = filepath.Join(c.StateRoot, "slot-"+strconv.Itoa(slot)), id+"-"+strconv.Itoa(slot)
 	}
 	config := filepath.Join(root, "engine.json")
+	configFlag := "-c"
+	if c.EngineID() == "xray" {
+		configFlag = "-config"
+	}
 	return exactNodeSession{
 		Root: root, Address: net.JoinHostPort("127.0.0.1", strconv.Itoa(c.Port+slot)), Port: c.Port + slot,
-		Spec: ProcessSpec{ID: id, Binary: c.binary(), Args: []string{"run", "-c", config}, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config, RouteProof: true},
+		Spec: ProcessSpec{ID: id, Binary: c.binary(), Args: []string{"run", configFlag, config}, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config, RouteProof: true},
 	}
 }
 
 func (c *ExactNodeChecker) prepareSession(ctx context.Context, session exactNodeSession, request NodeCheckRequest, endpoint exactNodeEndpoint) (exactNodeSession, error) {
+	if c.EngineID() == "xray" {
+		return c.prepareXraySession(ctx, session, request, endpoint)
+	}
 	if session.Spec.Binary == "" {
 		return session, errors.New("sing-box missing")
 	}
@@ -851,7 +882,7 @@ func (c *ExactNodeChecker) startSession(ctx context.Context, session exactNodeSe
 }
 
 func (c *ExactNodeChecker) verifyIdentity(session exactNodeSession) (routeidentity.Passport, error) {
-	return routeidentity.Verify(session.Root, "sing-box", session.Address)
+	return routeidentity.Verify(session.Root, c.EngineID(), session.Address)
 }
 
 func (c *ExactNodeChecker) directTrace(ctx context.Context) (string, error) {
@@ -888,7 +919,7 @@ func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routeP
 	finished := c.currentTime()
 	result := evidence.ProbeEvidence{
 		SchemaVersion: evidence.ProbeSchemaVersion, ProbeID: newNodeProbeID(), StartedAt: started, FinishedAt: finished,
-		NetworkProfile: "", Service: service.ID, RoutePathID: routePathID, Engine: "sing-box", Outbound: routePathID,
+		NetworkProfile: "", Service: service.ID, RoutePathID: routePathID, Engine: c.EngineID(), Outbound: routePathID,
 		EgressIP: egressIP, Stage: "service", Outcome: evidence.OutcomeUnknown, Verdict: evidence.VerdictError,
 		RequestedURL: probecheck.RedactedURL(probe.URL), ExpectedRoutePathID: routePathID, ObservedRoutePathID: routePathID,
 		Source: "exact-node-check",

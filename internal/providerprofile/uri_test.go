@@ -116,7 +116,7 @@ func TestParseProfileNormalizesSingBoxJSONAndDropsUnmanagedSections(t *testing.T
   "inbounds": [{"type":"mixed","listen":"0.0.0.0","listen_port":1080}],
   "experimental": {"clash_api":{"external_controller":"0.0.0.0:9090"}},
   "outbounds": [
-	    {"type":"vless","tag":"Home","server":"edge.example","server_port":443,"uuid":"123e4567-e89b-12d3-a456-426614174000","tls":{"enabled":true,"server_name":"front.example","certificate_path":"/opt/etc/private.pem"}},
+	    {"type":"vless","tag":"Home","server":"edge.example","server_port":443,"uuid":"123e4567-e89b-12d3-a456-426614174000","tls":{"enabled":true,"server_name":"front.example"}},
     {"type":"direct","tag":"direct"}
   ]
 }`

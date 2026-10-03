@@ -122,7 +122,7 @@ func FuzzVLESSModesFailClosed(f *testing.F) {
 			return
 		}
 		switch strings.ToLower(strings.TrimSpace(mode)) {
-		case "", "tcp", "ws", "websocket", "grpc", "http", "h2":
+		case "", "tcp", "raw", "ws", "websocket", "grpc", "http", "h2":
 		default:
 			t.Fatal("unsupported transport accepted")
 		}

@@ -1,9 +1,11 @@
 package providerprofile
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -100,6 +102,14 @@ func selectedBundleOutbound(config []byte, selectedIndex, nodes int) (map[string
 // VLESSProfileFromOutbound reads a VLESS outbound already rebuilt by this
 // package's strict parsers. Any other protocol is not a VLESS profile.
 func VLESSProfileFromOutbound(out map[string]any) (VLESSProfile, error) {
+	if validateNativeVLESS(out) != nil || validateNativeTLS(out) != nil {
+		return VLESSProfile{}, errXrayProfile
+	}
+	// These engine-specific settings cannot be projected into the canonical
+	// profile. Reject before conversion, even when the native importer keeps them.
+	if _, exists := out["multiplex"]; exists {
+		return VLESSProfile{}, errXrayProfile
+	}
 	text := func(m map[string]any, key string) string {
 		value, _ := m[key].(string)
 		return value
@@ -126,8 +136,17 @@ func VLESSProfileFromOutbound(out map[string]any) (VLESSProfile, error) {
 		}
 		p.Security = "tls"
 		p.ServerName = text(tls, "server_name")
+		if p.ServerName == "" {
+			p.ServerName = p.Server
+		}
 		p.Insecure, _ = tls["insecure"].(bool)
-		p.ALPN = stringList(tls["alpn"])
+		if value, exists := tls["alpn"]; exists {
+			var err error
+			p.ALPN, err = strictStringList(value)
+			if err != nil {
+				return VLESSProfile{}, errXrayProfile
+			}
+		}
 		if utls := object(tls, "utls"); boolField(utls, "enabled") {
 			p.Fingerprint = text(utls, "fingerprint")
 		}
@@ -138,15 +157,9 @@ func VLESSProfileFromOutbound(out map[string]any) (VLESSProfile, error) {
 		}
 	}
 	if transport := object(out, "transport"); transport != nil {
-		p.Transport = text(transport, "type")
-		p.Path = text(transport, "path")
-		p.ServiceName = text(transport, "service_name")
-		if headers := object(transport, "headers"); headers != nil {
-			p.Host = text(headers, "Host")
-		}
-		if hosts := stringList(transport["host"]); len(hosts) > 0 {
-			p.Host = strings.Join(hosts, ",")
-		}
+		// Other transports need canonical representations of every header,
+		// timeout and option before an engine compiler can accept them.
+		return VLESSProfile{}, errXrayProfile
 	}
 	if p.Server == "" || !looksLikeUUID(p.UUID) {
 		return VLESSProfile{}, errXrayProfile
@@ -154,12 +167,31 @@ func VLESSProfileFromOutbound(out map[string]any) (VLESSProfile, error) {
 	return p, nil
 }
 
+// VLESSProfileFromJSON accepts one canonical native outbound, with bounded
+// size and duplicate-field rejection. It never imports routing or controllers.
+func VLESSProfileFromJSON(raw []byte) (VLESSProfile, error) {
+	if len(raw) == 0 || len(raw) > MaxProfileBytes || validateJSONFields(raw) != nil {
+		return VLESSProfile{}, errXrayProfile
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var out map[string]any
+	if decoder.Decode(&out) != nil || out == nil {
+		return VLESSProfile{}, errXrayProfile
+	}
+	var trailing any
+	if decoder.Decode(&trailing) != io.EOF {
+		return VLESSProfile{}, errXrayProfile
+	}
+	return VLESSProfileFromOutbound(out)
+}
+
 // CompileXrayConfig supports VLESS + REALITY or TLS over RAW/TCP, with the
 // optional xtls-rprx-vision flow. Other transports are separate, later sets.
 // The managed engine adds its own loopback inbound and log settings; the only
 // outbound is the remote exit, so no imported DIRECT can become the default.
 func CompileXrayConfig(p VLESSProfile) ([]byte, []string, error) {
-	if p.Transport != "tcp" || p.Security != "reality" && p.Security != "tls" || p.Insecure {
+	if p.Transport != "tcp" || p.Security != "reality" && p.Security != "tls" || p.Insecure || p.Path != "" || p.Host != "" || p.ServiceName != "" {
 		return nil, nil, errXrayProfile
 	}
 	if p.Flow != "" && p.Flow != "xtls-rprx-vision" || p.PacketEncoding != "" && p.PacketEncoding != "xudp" {
@@ -216,6 +248,9 @@ func CompileXrayConfig(p VLESSProfile) ([]byte, []string, error) {
 
 func jsonPort(value any) (int, bool) {
 	switch number := value.(type) {
+	case json.Number:
+		port, err := number.Int64()
+		return int(port), err == nil && port >= 1 && port <= 65535
 	case float64:
 		if number == float64(int(number)) {
 			return int(number), number >= 1 && number <= 65535

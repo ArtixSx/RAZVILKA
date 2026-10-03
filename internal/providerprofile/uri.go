@@ -111,6 +111,12 @@ func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
 	if transport == "" {
 		transport = "tcp"
 	}
+	if transport == "raw" {
+		transport = "tcp"
+	}
+	if transport == "tcp" && (q.Has("path") || q.Has("host") || q.Has("serviceName")) {
+		return nil, Preview{}, importError("INVALID_PARAMETERS")
+	}
 	if err := validateVLESSModes(transport, security, q.Get("flow"), q.Get("packet_encoding")); err != nil {
 		return nil, Preview{}, err
 	}
