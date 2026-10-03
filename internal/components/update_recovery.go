@@ -23,13 +23,16 @@ func updateModeMatches(actual, expected os.FileMode) bool {
 type ManagedRecoveryRequest struct {
 	TransactionID           string
 	Component               string
-	Action                  string // rollback, accept-live, abandon-prepared, verify-rollback
+	Action                  string // rollback, accept-live, accept-installed-idle, abandon-prepared, verify-rollback
 	AllowUnknownRollback    bool   // explicit one-time compensation, never upgrade replay
 	ExternalRepairConfirmed bool   // operator inspected interrupted rollback and all package scripts have stopped
 	// QuiescenceCheck is supplied by trusted application wiring, never JSON.
 	// Unknown outcomes require independent proof that opkg and its package
 	// scripts have stopped. Version/configuration equality cannot provide it.
 	QuiescenceCheck func(context.Context) error `json:"-"`
+	// InactivityCheck independently proves no configured/committed runtime or
+	// component process is using the package. Only used by installed-idle.
+	InactivityCheck func(context.Context) error `json:"-"`
 	SafeMode        bool
 	Stopped         bool
 }
@@ -80,6 +83,37 @@ func (m *Manager) RecoverManagedUpdate(ctx context.Context, request ManagedRecov
 		return result, err
 	}
 	switch request.Action {
+	case "accept-installed-idle":
+		if doc.Phase != UpdateAwaitingLive || doc.AfterVersion == "" || !doc.CandidateSnapshot || request.QuiescenceCheck == nil || request.InactivityCheck == nil {
+			return result, ErrUpdatePending
+		}
+		observe := func() error {
+			if err := tx.authority(ctx, guard); err != nil {
+				return err
+			}
+			if err := request.QuiescenceCheck(ctx); err != nil {
+				return err
+			}
+			if err := request.InactivityCheck(ctx); err != nil {
+				return err
+			}
+			return tx.verifyCandidate(ctx)
+		}
+		if err := observe(); err != nil {
+			return result, err
+		}
+		// Independent observations on both sides of version/config verification.
+		if err := observe(); err != nil {
+			return result, err
+		}
+		if err := tx.authority(ctx, guard); err != nil {
+			return result, err
+		}
+		if err := tx.finish("update", UpdateAcceptedIdle, doc.AfterVersion); err != nil {
+			return result, err
+		}
+		result.OK, result.InstalledIdleAccepted = true, true
+		return result, nil
 	case "abandon-prepared":
 		if doc.Phase != UpdatePrepared {
 			return result, ErrUpdateUnknown
@@ -220,7 +254,7 @@ func (tx *updateTransaction) rollback(ctx context.Context, guard, check func(con
 		if err := tx.fault("before:rollback-command"); err != nil {
 			return result, err
 		}
-		out, err := tx.manager.run(ctx, "install", "--force-downgrade", "--force-reinstall", rollback)
+		out, err := tx.runPackage(ctx, "rollback", "install", "--force-downgrade", "--force-reinstall", rollback)
 		result.Output = boundedOutput(out)
 		if faultErr := tx.fault("after:rollback-command"); faultErr != nil {
 			return result, faultErr
@@ -260,6 +294,10 @@ func (tx *updateTransaction) rollback(ctx context.Context, guard, check func(con
 	}
 	if err := tx.verifyRollback(ctx); err != nil {
 		return result, err
+	}
+	if check == nil {
+		result.TransactionID, result.PendingRollbackAcceptance = tx.doc.TransactionID, true
+		return result, ErrUpdatePending
 	}
 	if err := check(ctx); err != nil {
 		return result, err
