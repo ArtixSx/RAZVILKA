@@ -570,13 +570,24 @@ func TestCanceledNodeRecoveryCleansOnlyRuntimeItRestarted(t *testing.T) {
 }
 
 func TestNodeRollbackDoesNotWriteAnUnchangedGlobalEngineConfig(t *testing.T) {
-	adapter, _, _ := networkCleanupProxy(t)
+	adapter, processes, _ := networkCleanupProxy(t)
 	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	processes.running["sing-box-engine"], processes.running["sing-box-tun"] = true, true
+	if err := adapter.Snapshot(context.Background(), Plan{}, root); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := readProxySnapshot(root)
+	if err != nil || !snapshot.PolicyWasActive || !snapshot.PolicyTracked {
+		t.Fatal("fixture did not snapshot the acknowledged active policy", err)
+	}
 	global := filepath.Join(t.TempDir(), "global-engine.json")
 	if err := os.WriteFile(global, []byte("new external config"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	snapshot := proxySnapshot{ConfigPath: global, Config: []byte("old config at snapshot"), ConfigExisted: true, ConfigDraft: false}
+	snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted, snapshot.ConfigDraft = global, []byte("old config at snapshot"), true, false
 	data, _ := json.Marshal(snapshot)
 	if err := os.WriteFile(filepath.Join(root, "snapshot.json"), data, 0o600); err != nil {
 		t.Fatal(err)
