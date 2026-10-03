@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {settings,readOnlyDecision,requestSummary,metricDelta,fixtureMatches} from './measure-ui-http-browser.mjs';
+import {settings,readOnlyDecision,requestSummary,metricDelta,fixtureMatches,measurementAssert,failureDiagnostic} from './measure-ui-http-browser.mjs';
 const origin='http://127.0.0.1:18851',env={RAZVILKA_PERF_URL:origin,RAZVILKA_PERF_PROFILE:'empty',RAZVILKA_PERF_CHROME:'browser',RAZVILKA_PERF_SESSION:'session.json'};
 let passed=0;function test(name,action){action();passed++;console.log('PASS '+name);}
 test('mutation fence applies even to login, probes, Stop, recovery and Apply',()=>{
@@ -44,5 +44,22 @@ test('LAN discovery and device policies are observations outside the user librar
   assert(fixtureMatches('empty',discovered));assert(!fixtureMatches('loaded',discovered));
   assert(fixtureMatches('empty',{...discovered,device_policy_assignments:3,discovery_unknown_devices:2}));
   assert(fixtureMatches('loaded',{...discovered,nodes:4}));assert(!fixtureMatches('empty',{...discovered,nodes:4}));
+});
+test('own checks retain a fixed code/message and only known navigation IDs',()=>{
+  let error;try{measurementAssert(false,'navigation_changed',{expected_view:'overview',observed_view:'updates',view_transitions:[{view:'overview',at_ms:0},{view:'updates',at_ms:16.7}]});}catch(value){error=value;}
+  const result=failureDiagnostic(error,'rapid-tabs-return-home');
+  assert.equal(result.diagnostic_code,'navigation_changed');assert.equal(result.message,'Navigation did not retain the requested view');
+  assert.equal(result.expected_view,'overview');assert.equal(result.observed_view,'updates');assert.equal(result.code,'ERR_ASSERTION');
+  assert.deepEqual(result.view_transitions,[{view:'overview',at_ms:0},{view:'updates',at_ms:17}]);
+  try{measurementAssert(false,'navigation_changed',{expected_view:'private-token',observed_view:'<private DOM>',view_transitions:[{view:'private-token',at_ms:7,secret:'private-token'},{view:'nodes',at_ms:'private-token'}]});}catch(value){error=value;}
+  const redacted=failureDiagnostic(error,'rapid-tabs-return-home');assert.equal(redacted.expected_view,'unknown');assert.equal(redacted.observed_view,'unknown');
+  assert(!JSON.stringify(redacted).includes('private'));
+  assert.deepEqual(redacted.view_transitions,[{view:'unknown',at_ms:7}]);
+});
+test('foreign exceptions cannot publish DOM, credentials, stacks or spoofed assertion metadata',()=>{
+  const error=Object.assign(new Error('password=private-secret <private DOM>'),{code:'private-secret',diagnostic_code:'navigation_changed',actual:'private-secret',expected:'private-secret'});
+  const report=failureDiagnostic(error,'rapid-tabs-return-home');assert.equal(report.diagnostic_code,'unclassified');assert.equal(report.code,null);
+  assert(!JSON.stringify(report).includes('private-secret'));assert(!Object.hasOwn(report,'stack'));assert(!Object.hasOwn(report,'actual'));
+  assert.equal(failureDiagnostic(new assert.AssertionError({message:'Navigation did not retain the requested view'}),'rapid-tabs-return-home').diagnostic_code,'unclassified');
 });
 console.log(JSON.stringify({suite:'ui-http-perf-boundaries',passed}));
