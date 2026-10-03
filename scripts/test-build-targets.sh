@@ -47,6 +47,48 @@ grep -q '^linux arm64 ' "$BUILD_LOG"
 [ "$(wc -l < dist/SHA256SUMS | tr -d ' ')" = 1 ]
 grep -q 'dist/razvilka-linux-arm64$' dist/SHA256SUMS
 sha256sum -c dist/SHA256SUMS
+# Development composition must rebuild both binaries and exclude stale MIPS.
+: > "$BUILD_LOG"
+RAZVILKA_BUILD_TARGETS=arm64+amd64 sh ./build.sh
+printf 'linux arm64 \nlinux amd64 \n' > "$WORK/expected.log"
+cmp "$WORK/expected.log" "$BUILD_LOG"
+[ "$(wc -l < dist/SHA256SUMS | tr -d ' ')" = 2 ]
+grep -q 'dist/razvilka-linux-arm64$' dist/SHA256SUMS
+grep -q 'dist/razvilka-linux-amd64$' dist/SHA256SUMS
+sha256sum -c dist/SHA256SUMS
+# Exercise the production check composition without running Go or daemons.
+mkdir -p scripts
+awk '/^# Build the native executable required/ {copy=1} copy {print}' \
+  "$ROOT/scripts/check.sh" > "$WORK/project/check-build.sh"
+cat > "$WORK/bin/uname" <<'FAKE_UNAME'
+#!/bin/sh
+case "$1" in
+  -s) printf '%s\n' "$TEST_SYSTEM" ;;
+  -m) printf '%s\n' "$TEST_MACHINE" ;;
+  *) exit 1 ;;
+esac
+FAKE_UNAME
+cat > scripts/test-entware-transaction.sh <<'FAKE_TRANSACTION'
+#!/bin/sh
+set -eu
+printf 'transaction\n' >> "$BUILD_LOG"
+FAKE_TRANSACTION
+chmod 700 "$WORK/bin/uname" ./build.sh
+for scenario in linux-amd64 linux-arm64 other-amd64 default; do
+  : > "$BUILD_LOG"
+  TEST_SYSTEM=Linux TEST_MACHINE=x86_64 RAZVILKA_BUILD_TARGETS=arm64
+  case "$scenario" in
+    linux-amd64) printf 'linux arm64 \nlinux amd64 \n' > "$WORK/expected.log" ;;
+    linux-arm64) TEST_MACHINE=aarch64; printf 'linux arm64 \n' > "$WORK/expected.log" ;;
+    other-amd64) TEST_SYSTEM=Other; printf 'linux arm64 \n' > "$WORK/expected.log" ;;
+    default) unset RAZVILKA_BUILD_TARGETS
+      printf 'linux amd64 \nlinux arm64 \nlinux mips softfloat\nlinux mipsle softfloat\n' > "$WORK/expected.log" ;;
+  esac
+  export TEST_SYSTEM TEST_MACHINE RAZVILKA_BUILD_TARGETS
+  printf 'transaction\n' >> "$WORK/expected.log"
+  sh ./check-build.sh
+  cmp "$WORK/expected.log" "$BUILD_LOG"
+done
 : > "$BUILD_LOG"
 if RAZVILKA_BUILD_TARGETS=unknown sh ./build.sh >/dev/null 2>&1; then
   echo 'Invalid build target was accepted' >&2
