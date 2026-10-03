@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +51,7 @@ func TestProxyRollbackRestoresOnlySameBootActivePolicy(t *testing.T) {
 					}
 				}
 			}
-			transaction := t.TempDir()
+			transaction := privateScopedXrayFixtureDir(t)
 			if err := a.Snapshot(ctx, Plan{}, transaction); err != nil {
 				t.Fatal(err)
 			}
@@ -72,11 +73,17 @@ func TestProxyRollbackRestoresOnlySameBootActivePolicy(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := a.installForwarding(ctx, desired); err != nil {
-				t.Fatal(err)
-			}
 			staged, _ := json.Marshal(desired)
 			if err := os.WriteFile(filepath.Join(transaction, "policy.staged.json"), staged, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.prepareCandidatePolicy(transaction, desired); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.beginCandidatePolicy(transaction, desired); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.applyCandidatePolicy(ctx, desired, transaction); err != nil {
 				t.Fatal(err)
 			}
 			r.processes.running["sing-box-engine"] = true
@@ -100,7 +107,12 @@ func TestProxyRollbackRestoresOnlySameBootActivePolicy(t *testing.T) {
 				}
 				return base.Run(ctx, name, args...)
 			})
-			if err := a.Rollback(ctx, Plan{}, transaction); err != nil {
+			if err := a.Rollback(ctx, Plan{}, transaction); tc.reboot {
+				if !errors.Is(err, ErrProxyPolicyUnknown) || addedRules != 0 {
+					t.Fatal("old-boot addition receipt replayed", err, addedRules)
+				}
+				return
+			} else if err != nil {
 				t.Fatal(err)
 			}
 			if (addedRules > 0) != tc.wantPolicy || regularFile(a.forwardingPath()) != tc.wantPolicy {

@@ -77,11 +77,21 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root st
 	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), policy); err != nil {
 		return false, err
 	}
+	if err := a.verifyCommittedReceipt(ctx, policy); err != nil {
+		return false, err
+	}
 	staged, err := a.readStagedPolicy(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil // No complete candidate journal: do not grant a receipt.
 	}
 	if err != nil {
+		return false, err
+	}
+	addition, err := a.readCandidatePolicyReceipt(root, staged)
+	if err != nil || addition.Phase != "restored" && addition.Phase != "prepared" {
+		return false, ErrProxyPolicyUnknown
+	}
+	if err := a.verifyCandidateReceipt(ctx, root, staged, false); err != nil {
 		return false, err
 	}
 	if err := a.verifyCandidateRemoved(ctx, policy, staged); err != nil {
