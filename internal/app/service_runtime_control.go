@@ -33,6 +33,13 @@ func (a *App) serviceControlRuntime(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Подтвердите включение или остановку маршрутов проекта.", http.StatusBadRequest)
 		return
 	}
+	if a.PendingSelfUpdateRecovery() {
+		// Normal runtime control commits config. A retained replacement may
+		// accept only frozen old/new images; durable Stop revocation belongs
+		// in its separate receipt, before this ordinary commit path.
+		a.writeOperationFailure(w, errSelfUpdateRecovery)
+		return
+	}
 	if request.IdempotencyKey != "" {
 		job, err := a.enqueueDurableServiceJob(r.Context(), serviceControlJobRequest{Kind: request.Action, ExpectedRevision: &request.ExpectedRevision, IdempotencyKey: request.IdempotencyKey})
 		if err != nil {

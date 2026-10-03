@@ -181,6 +181,7 @@ type App struct {
 	SmartRoute                *smartroute.Manager
 	Updates                   *updatecheck.Manager
 	SelfUpdate                *updatecheck.Updater
+	SelfUpdateFiles           *SelfUpdateFiles
 	USQUE                     *usquediag.Manager
 	Stats                     *routerstats.Sampler
 	Security                  *security.Gate
@@ -606,6 +607,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/settings/safe-mode", a.safeModeSetting)
 	mux.HandleFunc("/api/v1/update", a.updateStatus)
 	mux.HandleFunc("/api/v1/self-update/current", a.selfUpdateCurrent)
+	mux.HandleFunc("/api/v1/self-update/recovery", a.selfUpdateRecovery)
 	mux.HandleFunc("/api/v1/self-update/prepare", a.selfUpdatePrepare)
 	mux.HandleFunc("/api/v1/self-update/apply", a.selfUpdateApply)
 	mux.HandleFunc("/api/v1/diagnostics/domain", a.domainDiagnostic)
