@@ -90,6 +90,34 @@ func (m *Manager) NewScopedDNSResolver(bindings []ClientDNSBinding, guard func(c
 	return r, nil
 }
 
+// MatchClientQuery reports selection only, never scope or default authority.
+// A caller may compose an explicitly authorized default after a valid NoMatch;
+// a selected provider/epoch/guard failure remains an error, not a miss.
+func (r *ScopedDNSResolver) MatchClientQuery(ctx context.Context, client netip.Addr, query []byte) (bool, error) {
+	if r == nil || r.guard == nil || !client.IsValid() || client.Zone() != "" {
+		return false, ErrScopedDNS
+	}
+	message, _, err := scopedDNSQuestion(query)
+	if err != nil {
+		return false, err
+	}
+	host := strings.ToLower(strings.TrimSuffix(message.Questions[0].Name.String(), "."))
+	choice, matched := r.choices[scopedDNSKey{client: client.Unmap(), host: host}]
+	if err := ctx.Err(); err != nil {
+		return matched, err
+	}
+	if err := r.guard(ctx); err != nil {
+		return matched, err
+	}
+	if !matched {
+		return false, nil
+	}
+	if err := r.check(ctx, choice); err != nil {
+		return true, err
+	}
+	return true, ctx.Err()
+}
+
 // Resolve forwards the original client flags, question and EDNS DO bit. It
 // preserves authenticated DNS data rather than synthesizing A/AAAA records.
 // Unknown types/options are explicitly refused by this first scoped executor.
