@@ -1,5 +1,11 @@
 # CORE — первая порция D11, 03.10.2026
 
+## Finished: negative default dependency check, 04.10.2026
+
+`dataplane.AssertPolicyDefaultUnreferenced(ctx, runner, ip, state, family) error` — read-only negative check для существующего VLESS/NET receipt, не право на удаление. Вызывается до durable default cleanup intent и повторно после него перед syscall. Любой оставшийся selector этой family на таблицу, неизвестная/символическая RPDB grammar или failed read удерживает default. Bounded reader и единственный общий parser сохранены; foreign rule не удаляется. Точный WG endpoint selector из immutable `state.WireGuardEndpoint` допускается только после свежего полного host-pin + exact rule readback существующим NET observer: такой /32|/128 путь не зависит от default. Нет нового Store/receipt/scheduler. Unknown прочие firmware selectors пока консервативно удерживают default; native совместимость не заявлена.
+
+Адресные tests `PolicyDefaultDependency` RC0 0.161s: обе family, own/foreign/late table dependency, known different table, unknown grammar/aliases/negation/read failure/cancel, exact WG pin versus missing/foreign host tuple/remaining service selector; check не делает mutations. VLESS вставляет consumer в свой backend отдельным finished SHA, CORE его не правит. Common D07 iif/mark WIP в этот helper checkpoint не входит.
+
 ## Готово для UI: явные component directories (следующая порция)
 
 Base этой маленькой порции: `99ac304778f881bab24692f9d87f880d41da4d09`, получен `git merge --ff-only`; предыдущая история CORE сохранена. Изменены только `cmd/razvilka/main.go`, сопутствующий `component_paths_test.go` и этот отчёт. Порция готова для отдельного переноса UI; self-update интеграция начнётся следующим коммитом.
