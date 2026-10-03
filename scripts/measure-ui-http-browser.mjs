@@ -58,8 +58,9 @@ export function metricDelta(before,after){
 }
 
 export function fixtureMatches(profile,counts){
-  if(!counts||Object.values(counts).some(value=>!Number.isSafeInteger(value)||value<0))return false;
-  const populated=counts.nodes+counts.groups+counts.enabled_services+counts.applied_services+counts.devices>0;
+  const required=['nodes','groups','catalog_services','enabled_services','applied_services'];
+  if(!counts||required.some(key=>!Number.isSafeInteger(counts[key])||counts[key]<0))return false;
+  const populated=counts.nodes+counts.groups+counts.enabled_services+counts.applied_services>0;
   return profile==='empty'?!populated:profile==='loaded'&&populated;
 }
 
@@ -67,7 +68,7 @@ async function run(config){
   const {chromium}=createRequire(import.meta.url)('playwright');
   const local=config.output||join(fileURLToPath(new URL('../',import.meta.url)),'.review-local');
   mkdirSync(local,{recursive:true});const directory=mkdtempSync(join(local,'ui-perf-'));writeFileSync(join(directory,'.gitignore'),'*\n');
-  const report={schema:1,started_at:new Date().toISOString(),origin:config.origin,fixture:{declared:config.profile,verified:false},
+  const report={schema:1,started_at:new Date().toISOString(),origin:config.origin,fixture:{declared:config.profile,verified:false,definition:'user library: nodes, groups, enabled/applied services; devices and installed inventory are separate observations'},
     environment:{node:process.version,platform:process.platform,arch:process.arch,browser:null},
     configuration:{viewport:{width:1280,height:900},dwell_ms:config.dwellMs,idle_ms:config.idleMs,timeout_ms:config.timeoutMs,browser_cache:'disabled by the request safety fence'},
     boundaries:{server:'existing HTTP only',device_cpu_rss:'not collected; coordinator measures separately',native_acceptance:false,
@@ -170,8 +171,12 @@ async function run(config){
     const nodes=await read('/api/v1/nodes'),services=await read('/api/v1/services'),devices=await read('/api/v1/devices?view=status');
     const list=(value,key)=>{assert(Object.hasOwn(value,key)&&(value[key]===null||Array.isArray(value[key])),'Incomplete fixture metadata');return value[key]||[];};
     assert(Array.isArray(services),'Incomplete service metadata');
+    const deviceList=Array.isArray(devices)?devices:list(devices,'devices');
     report.fixture.counts={nodes:list(nodes,'nodes').length,groups:list(nodes,'groups').length,catalog_services:services.length,
-      enabled_services:services.filter(service=>service.enabled===true).length,applied_services:services.filter(service=>service.applied_enabled===true).length,devices:(Array.isArray(devices)?devices:list(devices,'devices')).length};
+      enabled_services:services.filter(service=>service.enabled===true).length,applied_services:services.filter(service=>service.applied_enabled===true).length,devices:deviceList.length,
+      discovered_devices:deviceList.filter(device=>device.discovered===true).length,not_discovered_devices:deviceList.filter(device=>device.discovered===false).length,
+      discovery_unknown_devices:deviceList.filter(device=>typeof device.discovered!=='boolean').length,
+      device_policy_assignments:deviceList.every(device=>Object.hasOwn(device,'policies')&&(device.policies===null||Array.isArray(device.policies)))?deviceList.reduce((sum,device)=>sum+(device.policies?.length||0),0):null};
     report.fixture.verified=fixtureMatches(config.profile,report.fixture.counts);
     assert(report.fixture.verified,'Declared empty/loaded fixture does not match observed data');
     guard();assert.equal(report.browser_errors.length,0,'Uncaught browser error during measurements');

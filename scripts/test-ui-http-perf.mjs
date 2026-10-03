@@ -34,4 +34,10 @@ test('stock catalog is not a loaded fixture and unread metadata is not empty',()
   assert(fixtureMatches('empty',empty));assert(!fixtureMatches('loaded',empty));assert(!fixtureMatches('empty',null));assert(!fixtureMatches('empty',{...empty,nodes:null}));
   assert(fixtureMatches('loaded',{...empty,nodes:83}));assert(!fixtureMatches('empty',{...empty,enabled_services:1}));
 });
+test('LAN discovery and device policies are observations outside the user library',()=>{
+  const discovered={nodes:0,groups:0,catalog_services:6,enabled_services:0,applied_services:0,devices:12,discovered_devices:12,device_policy_assignments:0};
+  assert(fixtureMatches('empty',discovered));assert(!fixtureMatches('loaded',discovered));
+  assert(fixtureMatches('empty',{...discovered,device_policy_assignments:3,discovery_unknown_devices:2}));
+  assert(fixtureMatches('loaded',{...discovered,nodes:4}));assert(!fixtureMatches('empty',{...discovered,nodes:4}));
+});
 console.log(JSON.stringify({suite:'ui-http-perf-boundaries',passed}));
