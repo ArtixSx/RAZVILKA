@@ -1273,7 +1273,8 @@ function renderComponents() {
     const info = typeof consoleEngineState === 'function' ? consoleEngineState(c.id) : null;
     const update = info ? consoleEngineUpdateState(info) : null;
     const stale = c.catalog_stale || c.update_check_error || c.inventory_error || state.componentCatalogError || update?.kind === 'failed';
-    const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running';
+    const recoveryBlocked = typeof componentRecoveryFence === 'function' && componentRecoveryFence();
+    const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running' || recoveryBlocked;
     const unavailable = busy || c.running || c.external_owner || inventoryObservationStale();
     // A managed component (NFQWS2) is updated in place while its routes run:
     // the server checks the result and restores the previous version on failure.
@@ -1373,6 +1374,10 @@ async function refreshComponents(refresh = true) {
 
 async function manageComponent(id, requestedAction) {
   if (state.componentOperation || state.componentRefreshRequest || !workflowSession(workflowState.epoch)) return false;
+  if (typeof componentRecoveryFence === 'function' && componentRecoveryFence()) {
+    showNotice('review', 'Прочитайте журнал обновления', 'Новые изменения компонентов доступны после свежего чтения и завершения восстановления.');
+    return false;
+  }
   const component = state.components.find(c => c.id === id);
   if (!component) return false;
   const action = requestedAction || (component.update_available ? 'update' : 'install');
@@ -1427,6 +1432,11 @@ async function manageComponentReviewed(id, requestedAction) {
     const result = await api(`/api/v1/components/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' });
     if(!workflowSession(epoch))return false;
     if (result?.ok !== true) throw new Error('Сервер не подтвердил завершение операции с компонентом.');
+    if (result.pending_live_acceptance === true) {
+      if (typeof componentUpdatePending === 'function') componentUpdatePending();
+      showNotice('review', `${component.name}: принятие версии ожидается`, 'Пакет установлен и проверен отдельно. Рабочий процесс ещё не подтвердил новую версию; прежняя версия сохранена. Откройте журнал на карточке компонента.', { plan, result });
+      return true;
+    }
     if (!await refreshComponents(false)) throw new Error('Операция отправлена, но повторная проверка состояния не завершена.');
     if(!workflowSession(epoch))return false;
     const [engines, engineConfigs] = await Promise.all([api('/api/v1/engines'), api('/api/v1/engine-configs')]);
@@ -1440,7 +1450,8 @@ async function manageComponentReviewed(id, requestedAction) {
     if(!workflowSession(epoch))return false;
     await refreshComponents(false);
     if(!workflowSession(epoch))return false;
-    showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Причина сохранена в карточке компонента; устраните её и повторите операцию. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
+    if (typeof componentUpdatePending === 'function') componentUpdatePending();
+    showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Прочитайте журнал обновления перед новым действием. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
     showDetails({ error: error.message, response: error.payload, plan }, `${component.name}: ошибка`);
     return false;
   }

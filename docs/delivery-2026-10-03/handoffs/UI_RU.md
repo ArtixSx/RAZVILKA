@@ -87,3 +87,24 @@ $env:RAZVILKA_UI_CHROME='C:/Program Files/Google/Chrome/Application/chrome.exe'
 - Настоящий backend policy CAS/commit, backend 500 при записи, SSE-disconnect серверной реализации остаются непроверенными этой порцией. Контролируемые ответы не закрывают их.
 - Общий Linux check/race/cross-build/install gate новой порции, CPU/RSS/render-cost/ARM64, native engines, реальный LAN/DNS и аппаратная матрица выполняются координатором; здесь не запускались.
 - D12 card workflow/version/pending/recovery не начинался. После review этой порции можно согласовать следующую вертикаль и реальные recovery endpoints CORE.
+
+## Вторая порция: D12 matching component recovery
+
+Продолжение после review и fast-forward до интеграции `99ac304778f881bab24692f9d87f880d41da4d09`.
+Добавлен `component-recovery-ui.js`; изменены только owned web assets, CSS bundle и UI-тесты.
+
+- В разделах Обходы/настройка движка/Обновления показывается реальный GET `/api/v1/components/recovery`: причина, transaction, before/after versions, revision. Login и Home не запускают этот GET; переходы запускают только чтение, single-flight и auth/view epochs сохранены.
+- Поддержаны существующие matching POST `accept-live`, known `rollback`, `verify-rollback` для awaiting-rollback-acceptance, `abandon-prepared`. Перед POST отдельный review и повторная проверка текущей UI revision/SafeMode/Stop; JSON содержит только exact transaction/component/expected_revision/confirm/action. Сервер остаётся единственным владельцем полномочий и live proof.
+- `upgrade-started`/`rollback-started` не имеют кнопки force, operator boolean или повторной команды. Повреждённый/неизвестный журнал закрывает действия, но причина и повторное чтение доступны. Ошибки POST, включая 409 и transport 500, не повторяются; требуется явное чтение.
+- `accepted` в GET само по себе не доказывает live acceptance. Положительная отметка версии допускается только после matching `accept-live` POST с `live_accepted=true` и независимого GET той же terminal transaction. Это принятие версии в момент операции, не PASS конкретного сервиса. Процесс без такого доказательства имеет нейтральный статус.
+- Update с `pending_live_acceptance=true` больше не проходит через прежнюю ветку «установка проверена/готово». Показывается ожидание принятия и сохранённый LKG. Legacy IDs/URLs/API сохранены; install/update/remove закрыты, пока recovery не прочитан или pending.
+
+Проверки: `test-component-recovery-ui.mjs` — **11/11**, `test-component-cards-ui.mjs` — RC 0 с новыми проверками process-only и pending update; `node --check component-recovery-ui.js`, `build-interface.mjs`, `git diff --check` — RC 0. `go test ./cmd/razvilka -count=1` — RC 0. Общий выбранный Node-прогон: **78/79**, единственный RC 1 — `test-native-opkg-runner.mjs`, `spawnSync sh ENOENT`; адресный повтор с `C:/Program Files/Git/bin` в PATH — **RC 0 (stubs only)**. Лог `.review-local/frontend-d12-recovery.log` сохраняет первый RC 1. Новый UI test ещё не добавлен в shared `check.sh`: это запрос координатору.
+
+Точные контрактные запросы:
+
+- CORE/OPS: after matching durable settlement синхронизировать operation receipt (сейчас pending update записывает `operation_status=running`, а recovery не обновляет его явно). UI не снимает это состояние самостоятельно; сообщает о расхождении terminal journal/operation mark и сохраняет запрет package actions. Это может оставить обычные кнопки disabled после успешного repair до исправления владельцем.
+- OPS/CORE: для нового `accept-installed-idle` предоставить exact action, допустимые phases, response acceptance и retained receipt/GET field. Текущий UI не отправляет ещё не реализованное действие и не превращает installed-idle в live.
+- CORE: желательно публиковать current Stop/SafeMode/action capabilities в recovery GET вместе с revision. Сейчас UI использует имеющийся status и известный service-control Stop; неизвестные/изменённые полномочия повторно проверяет существующий серверный guard. Нового API не выдумано.
+
+На момент этой UI-порции native runtime/recovery и browser POST recovery не выдаются за проверенные: unit transport явно synthetic. Принятый координатором path fix `0a3a25b3859658d4686ca200df85c079e894a796` будет объединён следующим шагом для настоящего policy HTTP/PUT/CAS без `--policy-transport`. Self-update wiring, полный card workflow, массовые подключения/AI и удаление legacy-дублей остаются дальнейшими D12 шагами.
