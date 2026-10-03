@@ -34,6 +34,7 @@ func TestNativePolicyCleanupPreservesForeignRoutes(t *testing.T) {
 		}
 		return string(out)
 	}
+	run("link", "set", "lo", "up")
 	run("link", "add", "rz-sing", "type", "dummy")
 	t.Cleanup(func() { run("link", "delete", "rz-sing") })
 	run("link", "set", "rz-sing", "up")
