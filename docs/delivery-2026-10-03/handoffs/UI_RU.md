@@ -165,3 +165,11 @@ OPS WIP контракт прочитан по указанию координа
 Абсолютный каталог: `C:/Projects/RAZVILKA/worktrees/sol-ui/.review-local/ui-http-RGI8GP/`. Данные намеренно пустые тестовые; журнал-заготовка recovery по-прежнему явно описан как fixture. `errors=[]`, `configUnchanged=true`, Safe Mode включён. Скриншоты не включены в Git.
 
 Node selected gate **79/79**, лог `.review-local/frontend-d12-mobile.log`; `go build`, `go test ./cmd/razvilka -count=1`, `go vet ./cmd/razvilka` — RC 0. Shared gate, backend и чужие файлы не редактировались. Следующая вертикаль по указанию координатора: полный card workflow, массовые подключения/AI и legacy-дубли; новый idle action ждёт принятой реализации CORE/OPS.
+
+## Независимый порт browser harness
+
+По просьбе координатора добавлен `RAZVILKA_UI_PORT`, default **18851**, проверенный целый порт **1024…65535**. Один `listen` используется для origin, server startup и TCP occupancy check. Занятый TCP порт отклоняется до запуска сервера/браузера, даже если слушатель не отвечает HTTP. В result.json записаны origin/port. Координатор может задать **18852**, не пересекаясь с UI стендом на default 18851.
+
+Проверены отказ для `0`, `65536`, `abc`, `18852x`, пустого значения и занятый собственным одноразовым TCP listener **18851**; RC 0 проверяющего сценария. Порт 18852 не занимался исполнителем. Полный default browser **13/13, RC 0**, `.review-local/ui-http-QWvip7/result.json`, origin `http://127.0.0.1:18851`, `errors=[]`, config unchanged. Syntax и diff-check RC 0.
+
+Перед этим объединён принятый CORE settlement commit `dc17f55` обычным merge `4cbb71f`; собственный backend не редактировался. Новый сервер собран из этой базы. Новая idle action ещё не включена.

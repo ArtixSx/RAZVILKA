@@ -3,6 +3,7 @@
 // component-path fence blocks autonomy. Without it, policy tests require backend.
 // Build first, then set RAZVILKA_UI_BINARY, RAZVILKA_UI_CHROME and NODE_PATH
 // (pointing at an installed playwright). No downloads or shared runtime state.
+// RAZVILKA_UI_PORT selects an isolated unprivileged port; default 18851.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {spawn} from 'node:child_process';
@@ -11,21 +12,29 @@ import {readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, unlinkS
 import {resolve, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as delay} from 'node:timers/promises';
+import {connect} from 'node:net';
 
 assert.equal(process.platform, 'win32', 'Linux native isolation belongs to the coordinator; this runner is Windows-only');
 assert(process.env.RAZVILKA_UI_BINARY && process.env.RAZVILKA_UI_CHROME, 'Supply a built binary and installed Chromium executable');
+const portText=process.env.RAZVILKA_UI_PORT ?? '18851';
+assert(/^[1-9]\d{0,4}$/.test(portText) && Number(portText)>=1024 && Number(portText)<=65535,'RAZVILKA_UI_PORT must be an integer from 1024 to 65535');
+const port=Number(portText),listen='127.0.0.1:'+port,origin='http://'+listen;
 const {chromium} = createRequire(import.meta.url)('playwright');
 const root = fileURLToPath(new URL('../', import.meta.url));
 const local = join(root, '.review-local');
 mkdirSync(local, {recursive:true});
 const run = mkdtempSync(join(local, 'ui-http-'));
 writeFileSync(join(run, '.gitignore'), '*\n');
-const origin = 'http://127.0.0.1:18851';
 const policyTransport = process.argv.includes('--policy-transport');
 const authOnly = process.argv.includes('--auth-only');
 const policyBoundary = policyTransport ? 'controlled policy transport' : 'real HTTP';
-try {await fetch(origin+'/api/v1/auth/status', {signal:AbortSignal.timeout(1000)});throw new Error('18851 already occupied');}
-catch(error) {if(error.message==='18851 already occupied')throw error;}
+const occupied=await new Promise((resolve,reject)=>{
+  const socket=connect({host:'127.0.0.1',port});
+  socket.once('connect',()=>{socket.destroy();resolve(true);});
+  socket.once('error',error=>{socket.destroy();if(error.code==='ECONNREFUSED')resolve(false);else reject(error);});
+  socket.setTimeout(1000,()=>{socket.destroy();reject(new Error('Cannot inspect '+listen));});
+});
+assert(!occupied,listen+' already occupied');
 const paths = {'config':'config.json','catalog':'service-catalog.json','sources':'sources.json','community-catalog':'community-catalog.json',
   'cache':'cache','stage':'stage','backups':'backups','token-file':'admin.token','credentials-file':'admin.credentials.json',
   'custom-services':'custom.json','warp-state':'warp','cloudflare-state':'cloudflare','smart-route-state':'smart-route.json',
@@ -39,7 +48,7 @@ const hashConfig = () => createHash('sha256').update(readFileSync(join(run,'conf
 const configBefore = hashConfig();
 const env = {...process.env, GOMAXPROCS:'2', GOFLAGS:'-p=2', RAZVILKA_USQUE_INIT:join(run,'absent-init'),
   RAZVILKA_USQUE_NDMC:join(run,'absent-ndmc'), RAZVILKA_USQUE_SHELL:join(run,'absent-shell'), RAZVILKA_USQUE_REPAIR_STATE:join(run,'usque-repair')};
-const server = spawn(resolve(process.env.RAZVILKA_UI_BINARY), ['-listen','127.0.0.1:18851',...Object.entries(paths).flatMap(([flag,path])=>['-'+flag,join(run,path)])], {cwd:run, env, windowsHide:true, stdio:['ignore','pipe','pipe']});
+const server = spawn(resolve(process.env.RAZVILKA_UI_BINARY), ['-listen',listen,...Object.entries(paths).flatMap(([flag,path])=>['-'+flag,join(run,path)])], {cwd:run, env, windowsHide:true, stdio:['ignore','pipe','pipe']});
 let serverLog = '';
 server.stdout.on('data', chunk=>{serverLog+=chunk;});server.stderr.on('data', chunk=>{serverLog+=chunk;});
 let browser, context, page, browserVersion;
@@ -357,6 +366,6 @@ try {
   server.kill();
   await Promise.race([new Promise(r=>server.once('exit',r)),delay(5000)]);
   writeFileSync(join(run,'server.log'),serverLog);
-  writeFileSync(join(run,'result.json'),JSON.stringify({browserVersion,policyTransport,authOnly,results,errors,requests,screenshots,configUnchanged:hashConfig()===configBefore},null,2));
+  writeFileSync(join(run,'result.json'),JSON.stringify({browserVersion,origin,port,policyTransport,authOnly,results,errors,requests,screenshots,configUnchanged:hashConfig()===configBefore},null,2));
   console.log('Local artifacts: '+run);
 }
