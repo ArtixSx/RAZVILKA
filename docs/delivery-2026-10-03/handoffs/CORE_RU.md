@@ -1,5 +1,15 @@
 # CORE — первая порция D11, 03.10.2026
 
+## Готово для UI: явные component directories (следующая порция)
+
+Base этой маленькой порции: `99ac304778f881bab24692f9d87f880d41da4d09`, получен `git merge --ff-only`; предыдущая история CORE сохранена. Изменены только `cmd/razvilka/main.go`, сопутствующий `component_paths_test.go` и этот отчёт. Порция готова для отдельного переноса UI; self-update интеграция начнётся следующим коммитом.
+
+Штатный запуск и `-install-components` теперь принимают явные абсолютные `-component-state`, `-component-bin`, `-component-init`, `-component-repo`, `-component-info`. Соответствующие environment: `RAZVILKA_COMPONENT_STATE`, `RAZVILKA_COMPONENT_BIN`, `RAZVILKA_COMPONENT_INIT`, `RAZVILKA_COMPONENT_REPO`, `RAZVILKA_COMPONENT_INFO`; read-only `components`/`component plan` также учитывают environment. UI runner может добавить flags к своему `paths` либо environment к своему `env`; менять UI-файл CORE не стал.
+
+Никакого автоматического переноса journals вслед за config, Windows fallback или eager directory creation: Linux defaults остались `/opt/var/lib/razvilka/components`, `/opt/bin`, `/opt/etc/init.d`, `/opt/etc/opkg`, `/opt/lib/opkg/info`. Относительный override отвергается. Symlink/ownership/read errors по-прежнему проверяет ownedfs; retained corrupt/pending journal не скрывается нормализацией пути.
+
+Go1.26.5, GOTOOLCHAIN=local, GOMAXPROCS=2, GOFLAGS=-p=2: `go test ./cmd/razvilka -run 'TestComponentExplicit' -count=1` RC0; `go vet ./cmd/razvilka` RC0; `git diff --check` RC0. Регрессия на настоящем локальном HTTP проверяет StateDir из env, все пять каталогов, отсутствие writes при чтении и сохранение 503/write-admission fence после corrupt retained journal. Production `/opt` не использован/не изменён. Полный browser policy/CAS без synthetic transport выполняет UI после переноса, здесь unverified. Бинарники/секреты/логи не коммитятся.
+
 Base: `52eee92c28af1b9ad3c789f2ee2c3ffc43a0e175` (code `367ef14` + docs), ветка `sol/core-20261003`, только `C:/Projects/RAZVILKA/worktrees/sol-core`. Один исполнитель, без дополнительных чатов/агентов. Исходное дерево было чистым. Общие стенды, VM, роутер, порты и публикации не изменялись. Production go.mod/go.sum/VERSION сохранены.
 
 **Статус: законченный HTTP-путь matching recovery и исправление routing managed updates; D11 целиком НЕ закрыт.** Нельзя выпускать эту порцию как готовое обновление рабочего приложения. Ниже перечислены конкретные блокеры, которые невозможно честно устранить подменой live доказательства или редактированием файлов OPS/VLESS/NET без согласования.
@@ -56,3 +66,38 @@ HTTP tests запускают настоящий `httptest.Server` и штатн
 - Настоящие opkg fault boundaries, accepted NFQWS/proxy/WG live runtime, package-script supervision/orphans, concurrent external opkg, live adoption/restart/reboot, physical power cut, Linux durability, HIL/soak не выполнены этим чатом.
 - Копия Linux test binary в `%TEMP%` — локальный артефакт сборки, не поставка. Секретов, бинарников и частных логов в коммите нет.
 - D11 в целом, D07/D08 и HIL остаются открытыми. Следующая крупная вертикаль не начата; ожидается review координатора и принятие контрактов выше.
+# Policy default admission: common primitive ready for review
+
+03.10.2026. `applyRecordedPolicy` now inspects **both** complete IPv4/IPv6 tables before any mutation. Every existing default is refused, including a different dev, identical-looking pre-existing tuple, foreign proto/metric, duplicate, blackhole/unrecognized syntax. Endpoint host/prefix pins remain allowed. Uses exact `route add` with boot protocol/explicit family metric, never replace; IPv6 failure propagates. Reads both families again before selectors, refusing a late coexisting default. Partial cleanup receives only successfully added rules/families; EEXIST on a concurrent identical-looking IPv6 tuple never grants authority to delete it. Existing cleanup also shares bounded table reads and recognizes the two exact iproute2 absent-FIB diagnostics; other failed reads remain unknown.
+
+Unit coverage: foreign defaults in either family/no writes/both reads, IPv6 read failure/no writes, IPv6 add failure/removal of owned IPv4 only, concurrent identical IPv6 occupant survives, second selector failure removes only first selector and created defaults. Full `go test ./internal/dataplane -count=1` RC0 (47.861s); after final shared-reader refinement addressed `go test ./internal/dataplane -run 'Policy|Early|Legacy' -count=1` RC0 and vet RC0. Linux/amd64 `go test -c` RC0, output only in TEMP. Native **not run here**: `TestNativePolicyApplyPreservesDefaultOccupants`, requires RAZVILKA_POLICY_NETNS=1 and only loopback, covers real foreign-default preservation, injected IPv6 refusal with actual IPv4 cleanup, and actual EEXIST with identical-looking concurrent IPv6 tuple. Root owns its isolated namespace execution; no router/network/shared port touched.
+
+**Before D03/D07 end-to-end HIL** also review adapter compensation: proxy.go Rollback865–869 and warpwg.go Rollback771–790 still call removePolicy with full staged intent after activation failure; that is not the successful-addition subset used inside this primitive. In particular a later broad adapter compensation can infer route ownership from a staged intent without knowing that the earlier add failed. Proxy/WG owners must consume a durable addition receipt (or preserve/fence unknown staged cleanup) before claiming whole-manager concurrency safety. CORE did not edit their owned adapter files. This commit closes the reported overwrite/ignored-error/partial-cleanup bugs **inside applyRecordedPolicy**, and does not claim full D03/D07 or native acceptance.
+
+# D11/D12: completed component operation settlement — ready for review
+
+03.10.2026. Matching component repair now durably finishes the UI operation receipt after the package journal settles: accepted → succeeded, rollback/abandon → failed with a concrete verified outcome. Receipt includes matching transaction ID. Uses bounded ownedfs reads and atomic write + Linux directory fsync; no change in `internal/components` ownership. Terminal journal, operation receipt and scheduler checkpoint remain separate durable writes. A fresh matching HTTP request can finish the latter two only if legacy running receipt predates terminal journal (or explicit matching ID); a newer operation is preserved. A fully settled duplicate returns409; no package command or live acceptance callback replay.
+
+Real HTTP regression checks: terminal journal with interrupted operation settlement; finishing it and rejecting the next duplicate; successful repair makes operation_status readable as succeeded in a fresh Manager. `go test ./internal/app -run 'Component.*(HTTP|Recovery)|ComponentJournal|ComponentScheduled' -count=1` RC0, `go vet ./internal/app` RC0, `git diff --check` RC0 (Windows Go1.26.5, usual GOMAXPROCS=2/GOFLAGS=-p=2/GOTOOLCHAIN=local). Linux fsync path requires coordinator's native run. Independent accept-installed-idle and OPS supervision wiring follow after their commit. D11 overall is open.
+
+# D11: exact OPS adapter contract — WIP, 2026-10-03
+
+CORE wiring сейчас собирается в `internal/app/self_update_files.go`; этот раздел опубликован заранее для OPS. Реализация OPS в `internal/updatecheck` **не импортирует app**: все сигнатуры используют примитивы и существующий `selfupdatejournal.File`. CORE будет потребителем, а не вторым самостоятельным installer. Конструктор OPS ожидается `updatecheck.NewSelfUpdateFileAdapter()`, возвращающий concrete type, реализующий:
+
+```go
+Ready(context.Context, string /* jobID */) error
+Review(context.Context, string /* jobID */) (uint64 /* revision */, string /* staged migrated config SHA256 */, []selfupdatejournal.File, error)
+Authority(context.Context, string /* jobID */, uint64 /* revision */) error
+Quiescence(context.Context, string /* jobID */) error
+Run(context.Context, string /* jobID */, string /* fixed command */) error
+Observe(context.Context, string /* jobID */, string /* unknown fixed command */) error
+Live(context.Context, string /* jobID */, bool /* rollback */) error
+Startup(context.Context, string /* jobID */, int /* exact helper PID */) error
+Finish(context.Context, string /* jobID */, bool /* rollback */) error
+```
+
+`Ready` проверяет возможность **нового** reviewed handoff ещё до Apply (без запуска эффектов). `Review` читает только exact retained helper job, проверенный release manifest и staged config: миграция в отдельный staged файл и фиксация SHA выполняются **до Prepare**. После Prepare новый digest не меняется; никакой third image. Для recovery возвращает прежнюю immutable review, а не хеширует заново произвольный live config. Authority повторно сверяет helper/file ID, revision, Stop/SafeMode и направление config old/new. `Startup` требует связанного ID обоих journals, exact boot/start/executable helper identity и допустимой supervised startup command, а не просто существующего PID. Quiescence/Observe требуют durable supervision + kernel wait evidence; `/proc` scan, PGID, setsid и ручной bool не заменяют их. Historical unknown без supervision остаётся fenced. PID namespace не требуется; подтверждённый на Netcraze subreaper — допустимая baseline. `Finish` вызывается **после terminal file journal**: проверяет exact ID/direction, retained image integrity, actual installed hashes/modes и independent fresh live evidence, только затем durably settles helper receipt. После crash между journals повтор Finish допустим, команды и файловая замена не повторяются.
+
+Фиксированные действия CORE: `prepare`, `install`, `restore`, `accept-live`, `accept-rollback`, `resolve-unknown`; Execute допускает только `stop-old-panel`, `start-candidate-panel`, `stop-candidate-panel`, `start-rollback-panel`. OPS может предложить необходимые дополнительные **разные** имена до подключения shell, не передавать shell text/argv/paths из HTTP. `Execute` нынешнего journal допустим только после Install/Restore: если stop требуется до replacement, нужен согласованный журналируемый порядок или расширение OPS phase machine; нельзя выполнить stop вне ledger и затем заявить его покрытым. Mutable/private directories остаются отдельным restore protocol.
+
+Планируемый CLI: `self-update-files <action> <jobID> <expected_revision>` (fixed production roots, без path/callback arguments); read-only `self-update-files current`. Matching HTTP: `/api/v1/self-update/recovery`, POST только ID/action/expected_revision/confirm, auth+CSRF+exact exclusive admission. CORE revalidates Store CAS/Stop/SafeMode в каждом callback. Missing OPS provider блокирует изменение, включая manual/scheduled Apply; legacy helper не должен обходить этот provider. Schema=1 будет объявлена только вместе с реальными retained helper/file startup/CLI fences. Этот WIP **не готов к установке** и D11 не закрывает.
