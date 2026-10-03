@@ -1,5 +1,15 @@
 # CORE — первая порция D11, 03.10.2026
 
+## Готово для UI: явные component directories (следующая порция)
+
+Base этой маленькой порции: `99ac304778f881bab24692f9d87f880d41da4d09`, получен `git merge --ff-only`; предыдущая история CORE сохранена. Изменены только `cmd/razvilka/main.go`, сопутствующий `component_paths_test.go` и этот отчёт. Порция готова для отдельного переноса UI; self-update интеграция начнётся следующим коммитом.
+
+Штатный запуск и `-install-components` теперь принимают явные абсолютные `-component-state`, `-component-bin`, `-component-init`, `-component-repo`, `-component-info`. Соответствующие environment: `RAZVILKA_COMPONENT_STATE`, `RAZVILKA_COMPONENT_BIN`, `RAZVILKA_COMPONENT_INIT`, `RAZVILKA_COMPONENT_REPO`, `RAZVILKA_COMPONENT_INFO`; read-only `components`/`component plan` также учитывают environment. UI runner может добавить flags к своему `paths` либо environment к своему `env`; менять UI-файл CORE не стал.
+
+Никакого автоматического переноса journals вслед за config, Windows fallback или eager directory creation: Linux defaults остались `/opt/var/lib/razvilka/components`, `/opt/bin`, `/opt/etc/init.d`, `/opt/etc/opkg`, `/opt/lib/opkg/info`. Относительный override отвергается. Symlink/ownership/read errors по-прежнему проверяет ownedfs; retained corrupt/pending journal не скрывается нормализацией пути.
+
+Go1.26.5, GOTOOLCHAIN=local, GOMAXPROCS=2, GOFLAGS=-p=2: `go test ./cmd/razvilka -run 'TestComponentExplicit' -count=1` RC0; `go vet ./cmd/razvilka` RC0; `git diff --check` RC0. Регрессия на настоящем локальном HTTP проверяет StateDir из env, все пять каталогов, отсутствие writes при чтении и сохранение 503/write-admission fence после corrupt retained journal. Production `/opt` не использован/не изменён. Полный browser policy/CAS без synthetic transport выполняет UI после переноса, здесь unverified. Бинарники/секреты/логи не коммитятся.
+
 Base: `52eee92c28af1b9ad3c789f2ee2c3ffc43a0e175` (code `367ef14` + docs), ветка `sol/core-20261003`, только `C:/Projects/RAZVILKA/worktrees/sol-core`. Один исполнитель, без дополнительных чатов/агентов. Исходное дерево было чистым. Общие стенды, VM, роутер, порты и публикации не изменялись. Production go.mod/go.sum/VERSION сохранены.
 
 **Статус: законченный HTTP-путь matching recovery и исправление routing managed updates; D11 целиком НЕ закрыт.** Нельзя выпускать эту порцию как готовое обновление рабочего приложения. Ниже перечислены конкретные блокеры, которые невозможно честно устранить подменой live доказательства или редактированием файлов OPS/VLESS/NET без согласования.
