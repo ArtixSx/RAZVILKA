@@ -6,6 +6,7 @@ const consoleEngineMeta = {
   'warp-wg': {name:'WARP · WireGuard',icon:'shield',tone:'blue',subtitle:'WireGuard-транспорт',description:'Профиль Cloudflare, handshake и маршруты. Проверяйте доступность в вашей сети.',action:'Проверить маршрут',target:'testlab'},
   'sing-box': {name:'Sing-box',icon:'layers',tone:'violet',subtitle:'Прокси и маршрутизация',description:'Проверенные подключения, профиль движка и резервные группы. Один каталог для всех сервисов.',action:'Подключения',target:'nodes'},
   'xray': {name:'Xray',icon:'route',tone:'blue',subtitle:'Альтернативный прокси-клиент',description:'Редактор профиля и нативная проверка конфигурации перед применением.',action:'Импорт профиля',target:'engineconfig'},
+  'wireguard': {name:'WireGuard',icon:'shield',tone:'blue',subtitle:'Свой сервер',description:'Импорт .conf, проверка туннеля и управление маршрутом. Без регистрации Cloudflare.',action:'Настроить профиль',target:'engineconfig'},
   'amneziawg': {name:'AmneziaWG',icon:'lock',tone:'rose',subtitle:'Туннель к вашему серверу',description:'Совместимость формата, профиль, состояние и проверка маршрута. Версия протокола имеет значение.',action:'Проверить маршрут',target:'testlab'}
 };
 Object.assign(viewMeta, {
@@ -19,7 +20,7 @@ Object.assign(viewMeta, {
   onboard:['Первичная настройка','Устройства, доверенные источники и окна обслуживания'],
   updates:['Обновления','Приложение, компоненты и безопасное обслуживание'],
   activity:['Журнал','История операций и результатов проверок'],
-  engines:['Компоненты','Установка, версии и совместимость обходов'],
+  engines:['Обходы','Установить, настроить и проверить — из одной карточки'],
   devices:['Устройства','Имена, группы и область действия маршрутов'],
   diagnostics:['Диагностика','Причина сбоя, возможности системы и отчёт'],
   dns:['DNS / Smart DNS','Разрешение имён и согласование с маршрутами'],
@@ -94,19 +95,13 @@ function renderConsoleEngine(){
 function renderConsole(){
  const services=state.services||[],enabled=services.filter(s=>s.enabled||s.applied_enabled);
  consoleText('consoleServiceCount',enabled.length);
- const ribbon=$('#consoleEngineRibbon');
- ribbon.innerHTML=Object.entries(consoleEngineMeta).map(([id,m])=>{const e=consoleEngineState(id);return `<button class="engine-ribbon-item ${m.tone}" type="button" data-console-engine="${esc(id)}"><span class="engine-mini-icon">${ci(m.icon)}</span><span><strong>${esc(m.name)}</strong><small><i class="status-dot ${e.running?'good':''}"></i>${esc(e.label)}</small></span>${ci('chevron')}</button>`;}).join('');
- const summary=$('#consoleAutonomySummary');
- if(consoleSnapshot?.policy){const p=consoleSnapshot.policy,r=Object.values(consoleSnapshot.runtime||{}),active=consoleSnapshot.services||{};const healthy=r.filter(x=>['healthy','applied'].includes(x.state)).length;const attention=r.filter(x=>!['healthy','applied','paused'].includes(x.state)).length;
- summary.innerHTML=`<div class="auto-orbit">${ci(p.enabled?'route':'pause')}</div><div><strong>${!p.setup_complete?'Нужна начальная настройка':consoleSnapshot.safe_mode?'Safe Mode':consoleSnapshot.stopped?'Маршруты остановлены':consoleSnapshot.manual?'Ручное управление':p.enabled?'Автопилот включён':'Автопилот на паузе'}</strong><p>${Object.keys(active).length} в управлении · ${healthy} проверено${attention?` · ${attention} ожидают результата`:''}</p></div><button class="text-button" type="button" data-console-navigate="${p.setup_complete?'autopilot':'onboard'}">${p.setup_complete?'Политика и резерв':'Пройти настройку'} ${ci('chevron')}</button>`;
- }else{summary.innerHTML=`<div class="auto-orbit">${ci('route')}</div><div><strong>${consoleAutonomyError?'Автономность недоступна':'Загружаем политику'}</strong><p>${esc(consoleAutonomyError||'Читаем сохранённые разрешения роутера.')}</p></div><button class="text-button" type="button" data-console-navigate="onboard">Первичная настройка ${ci('chevron')}</button>`;}
- const audit=state.audit?.events||[];
- $('#consoleRecentActions').innerHTML=audit.length?audit.slice(0,4).map(e=>`<div class="recent-action"><span class="recent-symbol ${e.outcome==='ok'?'good':'warn'}">${ci(e.outcome==='ok'?'check':'clock')}</span><div><strong>${esc(consoleAuditTitle(e))}</strong><small>${esc(e.path||'Локальная операция')}</small></div><time>${esc(consoleDate(e.timestamp))}</time></div>`).join(''):'<div class="empty-inline">История появится после первой операции. Проверки и изменения не скрываются.</div>';
- renderConsoleProviders();renderConsoleUpdates();
+ // Legacy overview remains only for compatible event bindings. Do not rebuild
+ // hidden ribbons, history and provider forms for each independent GET.
+ if(state.currentView==='providers'){renderConsoleProviders();$('#nodeSubscriptions').hidden=false;$('#nodePublicCatalogs').hidden=false;}
+ if(state.currentView==='updates')renderConsoleUpdates();
  if(state.currentView==='engineconfig')renderConsoleEngine();
- if(state.currentView==='providers'){$('#nodeSubscriptions').hidden=false;$('#nodePublicCatalogs').hidden=false;}
- consoleFilterAudit();
- if(!consoleInitialized&&state.services.length)consoleRouteHash();
+ if(state.currentView==='activity')consoleFilterAudit();
+ if(!consoleInitialized&&services.length)consoleRouteHash();
  if(typeof renderInterface==='function')renderInterface();
 }
 function consoleAuditTitle(e){const kind=(e.path||'').includes('check')?'Проверка подключения':(e.path||'').includes('feed')?'Обновление подписки':(e.path||'').includes('autonomy')?'Политика Автопилота':(e.path||'').includes('apply')?'Применение маршрута':(e.path||'').includes('device')?'Настройка устройства':'Операция панели';return kind+(e.outcome==='failed'?' · ошибка':e.outcome==='denied'?' · отказ':'');}
@@ -115,7 +110,7 @@ function renderConsoleProviders(){
  const entries=[
   {name:'Kort0881',tag:'VLESS · каталог РФ',text:'Выборка публичных подключений. Расположение и доступность проверяются отдельно.',url:'https://github.com/kort0881/vpn-vless-configs-russia',key:'kort',icon:'route',tone:'mint'},
   {name:'VLESS Key Checker',tag:'Каталог подключений',text:'Результат издателя — подсказка. Нужна точная проверка выбранного сервиса.',url:'https://tiagorrg.github.io/vless-checker/',key:'tiagorrg',icon:'shield',tone:'blue'},
-  {name:'igareck',tag:'VLESS Reality · белые списки',text:'Лучший результат проверки с роутера: большинство узлов открыли Telegram. Каждый узел всё равно проверяется у вас.',url:'https://github.com/igareck/vpn-configs-for-russia',key:'igareck-reality',icon:'wifi',tone:'blue'},
+  {name:'igareck',tag:'VLESS Reality · белые списки',text:'Подписки VLESS Reality. Доступность и задержка каждого узла проверяются на вашем подключении.',url:'https://github.com/igareck/vpn-configs-for-russia',key:'igareck-reality',icon:'wifi',tone:'blue'},
  {name:'Epodonios',tag:'Пакет Sub1',text:'Небольшой пакет вместо загрузки всей коллекции. Каждый узел требует локальной проверки.',url:'https://github.com/Epodonios/v2ray-configs',feedURL:'https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Sub1.txt',key:'epodonios',icon:'server',tone:'rose'},
  {name:'Личная подписка',tag:'Ваш источник',text:'Приватный HTTPS-адрес сохраняется на роутере. Новые ссылки не включают маршрут сами.',key:'own',icon:'lock',tone:'amber'}
  ];

@@ -223,10 +223,10 @@ func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeChec
 		return endpoint, false
 	}
 	result.addStage("dns", "passed", "Адрес узла определён без раскрытия в интерфейсе.", stageStarted, c.currentTime())
-	endpoint.Pinned = addresses[0].Unmap()
-
 	stageStarted = c.currentTime()
-	checked, err := c.dialTransport(ctx, endpoint, addresses)
+	selected, err := c.selectEndpoint(ctx, endpoint, addresses)
+	endpoint.Pinned = selected.Address
+	checked := selected.Checked
 	if err != nil {
 		result.TestLevel = "transport"
 		result.fail("transport", "node-transport-failed", "Транспорт до узла недоступен.")
@@ -236,6 +236,9 @@ func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeChec
 	}
 	result.TestLevel = "transport"
 	if checked {
+		if selected.TCPConnectMS != nil {
+			result.Stages = append(result.Stages, NodeCheckStage{ID: "tcp_connect", Status: "passed", Message: "TCP до закреплённого адреса сервера; не проверка ключа.", Duration: *selected.TCPConnectMS})
+		}
 		result.addStage("transport", "passed", "Предварительное соединение установлено; это ещё не доказывает работу ключа.", stageStarted, c.currentTime())
 	} else {
 		result.addStage("transport", "skipped", "Для UDP-протокола отдельный TCP-тест неприменим; проверяется реальный обмен.", stageStarted, c.currentTime())
@@ -414,6 +417,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		result.Verdict = evidence.VerdictInconclusive
 		result.fail("egress", "node-direct-control-unavailable", "IP через узел получен, но прямой контроль недоступен; точный выход не подтверждён.")
 		result.addStage("egress", "failed", "Без прямого контрольного IP нельзя исключить утечку маршрута.", stageStarted, c.currentTime())
+		c.probeRestrictedDiagnostic(ctx, &result, session.Address, proxyIP, request.Service)
 		finish()
 		return result, nil
 	}

@@ -15,14 +15,14 @@ import (
 // the running version and newer ones are not affected.
 func TestAutoInstallSkipsRolledBackVersion(t *testing.T) {
 	a := &App{}
-	a.autonomy.doc.Maintenance = map[string]string{autoInstallReceipt: "9.9.9"}
+	a.autonomy.doc.Maintenance = map[string]string{autoInstallReceipt: autoInstallAttemptPrefix + "9.9.9"}
 	if !a.autoInstallFailed("9.9.9") {
 		t.Fatal("rolled-back version would be installed again")
 	}
 	if a.autoInstallFailed("9.9.10") || a.autoInstallFailed("") {
 		t.Fatal("newer version blocked")
 	}
-	a.autonomy.doc.Maintenance[autoInstallReceipt] = Version
+	a.autonomy.doc.Maintenance[autoInstallReceipt] = autoInstallAttemptPrefix + Version
 	if a.autoInstallFailed(Version) {
 		t.Fatal("successfully installed version reported as failed")
 	}
@@ -70,12 +70,12 @@ func TestAutoUpdateComponentsSummary(t *testing.T) {
 		{Spec: components.Spec{ID: "sing-box", Name: "Sing-box"}, Installed: true, CanUpdate: false},
 		{Spec: components.Spec{ID: "xray", Name: "Xray"}, Installed: false, CanUpdate: true},
 	}
-	if got := a.autoUpdateComponents(context.Background(), views); got != "Каталог компонентов проверен. Обновлений нет." {
+	if got := a.autoUpdateComponents(context.Background(), views); got != "Менеджер компонентов или настройки недоступны." {
 		t.Fatalf("summary %q", got)
 	}
-	// Without a component manager the update fails and the old version stays.
+	// Missing manager refuses work before IO; it does not prove any installed version.
 	views = append(views, components.View{Spec: components.Spec{ID: "nfqws2", Name: "NFQWS2"}, Installed: true, CanUpdate: true})
-	if got := a.autoUpdateComponents(context.Background(), views); !strings.Contains(got, "Не обновлено (прежние версии сохранены): NFQWS2") {
+	if got := a.autoUpdateComponents(context.Background(), views); !strings.Contains(got, "недоступны") || strings.Contains(got, "прежние версии сохранены") {
 		t.Fatalf("summary %q", got)
 	}
 }

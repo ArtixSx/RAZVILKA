@@ -216,20 +216,20 @@ func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(conte
 	defer m.mu.Unlock()
 	spec, ok := lookup(id)
 	if !ok || !managedUpdateComponents[id] || check == nil {
-		return Result{}, fmt.Errorf("component %s has no managed update", id)
+		return Result{}, NoMutation(fmt.Errorf("component %s has no managed update", id))
 	}
 	installed, err := m.installedPackageVersions(ctx)
 	if err != nil {
-		return Result{Component: id, Action: "update"}, err
+		return Result{Component: id, Action: "update"}, NoMutation(err)
 	}
 	before := installed[spec.Package]
 	rollback := m.rollbackPackage(spec, before)
 	if before == "" || rollback == "" {
-		return Result{Component: id, Action: "update"}, ErrRollbackPackageMissing
+		return Result{Component: id, Action: "update"}, NoMutation(ErrRollbackPackageMissing)
 	}
 	conffiles, err := m.snapshotConffiles(spec)
 	if err != nil {
-		return Result{Component: id, Action: "update"}, fmt.Errorf("snapshot package configuration: %w", err)
+		return Result{Component: id, Action: "update"}, NoMutation(fmt.Errorf("snapshot package configuration: %w", err))
 	}
 	result, updateErr := m.applyLocked(ctx, id, map[string]bool{})
 	if updateErr != nil && errors.Is(updateErr, errUpdateNotAdvanced) {
@@ -268,9 +268,9 @@ func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(conte
 		_ = m.writeLifecycleReceipt(receipt)
 		result.OK = false
 		result.Output += "\n" + boundedOutput(out)
-		return result, fmt.Errorf("update was rolled back to %s: %w", before, cause)
+		return result, &UpdateFailure{Outcome: ErrRollbackVerified, Version: before, Cause: cause}
 	}
-	return Result{Component: id, Action: "update", Output: boundedOutput(out)}, fmt.Errorf("update failed and rollback is not confirmed: %w", errors.Join(cause, rollbackErr))
+	return Result{Component: id, Action: "update", Output: boundedOutput(out)}, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: errors.Join(cause, rollbackErr)}
 }
 
 func defaultDuration(value, fallback time.Duration) time.Duration {

@@ -3,16 +3,17 @@ package config
 import (
 	"errors"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
 // ApplyAutonomyRouteWithRollback is the commit callback of the ordinary
 // dataplane transaction, never an API endpoint. The App must hold exclusive
 // admission, consent and fresh exact proof. It changes one service only.
 func (s *Store) ApplyAutonomyRouteWithRollback(id, route string, sources []string, revision uint64) (func() error, error) {
-	valid := slices.Contains([]string{"nfqws2", "usque", "warp-wg"}, route)
+	valid := routekind.IsExecutor(route)
 	if strings.HasPrefix(route, "sing-box:node-") {
 		node := strings.TrimPrefix(route, "sing-box:")
 		valid = validPolicyNode(node)

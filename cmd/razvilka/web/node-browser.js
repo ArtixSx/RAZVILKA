@@ -1,7 +1,47 @@
 'use strict';
 
+// BEGIN NODE MEASUREMENT MODEL — diagnostic only, no route authority.
+const nodeMeasurementModel = (() => {
+  const date = value => { const n = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(n) ? n : null; };
+  const number = value => Number.isSafeInteger(value) && value >= 0 && value <= 600000 ? value : null;
+  function freshRecord(record, now) {
+    const at = date(record?.checked_at), end = date(record?.expires_at);
+    return at !== null && end !== null && at <= now && end > now && end > at && end - at <= 86400000;
+  }
+  function latestCheck(node, service, network) {
+    return [...(node?.health?.history || [])].filter(c => c.service_id === service && c.network_profile === network && c.route_path_id === `sing-box:${node.id}`)
+      .sort((a, b) => (date(b.checked_at) ?? -Infinity) - (date(a.checked_at) ?? -Infinity))[0] || null;
+  }
+  function measurement(node, service, network, records, now = Date.now()) {
+    if (!node || node.disabled || node.state === 'expired' || !service || !network || !Array.isArray(records)) return null;
+    const check = latestCheck(node, service, network);
+    if (!check?.probe_id || !freshRecord(check, now)) return null;
+    const m = records.find(r => r?.version === 1 && r.node_id === node.id && r.service_id === service && r.network_profile === network && r.route_path_id === check.route_path_id && r.probe_id === check.probe_id && date(r.checked_at) === date(check.checked_at) && date(r.expires_at) <= date(check.expires_at) && freshRecord(r, now));
+    if (!m) return null;
+    return { ...m, tcp_connect_ms: number(m.tcp_connect_ms),
+      proxy_response_ms: check.verdict === 'PASS' && check.test_level === 'service' && check.state === 'available' && !check.direct_leak ? number(m.proxy_response_ms) : null,
+      total_check_ms: number(m.total_check_ms) };
+  }
+  function tcp(nodeID, network, pings, m, now = Date.now()) {
+    const candidates = (Array.isArray(pings) ? pings : []).filter(p => p.node_id === nodeID && p.network_profile === network && date(p.checked_at) !== null && date(p.checked_at) <= now && now - date(p.checked_at) < 600000 && (p.reachable === false || p.reachable === true && number(p.latency_ms) !== null));
+    if (m && number(m.tcp_connect_ms) !== null && now - date(m.checked_at) < 600000) candidates.push({ node_id: nodeID, network_profile: network, checked_at: m.checked_at, reachable: true, latency_ms: m.tcp_connect_ms });
+    candidates.sort((a,b) => date(b.checked_at)-date(a.checked_at));
+    return candidates[0] || null;
+  }
+  function label(value) { const n=number(value); return n===null?'—':n===0?'<1 мс':`${n} мс`; }
+  async function readStatus(api) {
+    const results=await Promise.allSettled([api('/api/v1/node-checks/current'), api('/api/v1/node-autofallback')]);
+    const unauthorized=results.find(r=>r.status==='rejected'&&r.reason?.status===401);
+    if(unauthorized) throw unauthorized.reason;
+    if(results[0].status==='rejected') throw results[0].reason;
+    return {response:results[0].value, fallback:results[1].status==='fulfilled'?results[1].value:null, partial:results[1].status==='rejected'};
+  }
+  return Object.freeze({measurement,tcp,label,readStatus});
+})();
+// END NODE MEASUREMENT MODEL
+
 // Passive browser state never grants permission to change a route.
-const nodeBrowser = { tab: 'all', source: '', country: '', page: 0, pageSize: 24, selected: new Set(), visible: [], pings: [], job: null, timer: null, feedTimers: new Map(), viewActive: null, epoch: 0, polling: null, authRequired: false, ordinals: new Map() };
+const nodeBrowser = { tab: 'all', source: '', country: '', page: 0, pageSize: 24, selected: new Set(), visible: [], pings: [], measurements: [], job: null, timer: null, feedTimers: new Map(), viewActive: null, epoch: 0, polling: null, authRequired: false, ordinals: new Map() };
 
 function nodeBrowserActive() {
   return !nodeBrowser.authRequired && (nodeBrowser.viewActive ?? ['nodes','providers'].includes(state.currentView)) && $('#authScreen').hidden && !document.hidden;
@@ -24,6 +64,7 @@ function stopNodeBrowserRefresh(clearSession = false) {
     nodeBrowser.authRequired = true;
     nodeBrowser.job = null;
     nodeBrowser.pings = [];
+    nodeBrowser.measurements = [];
     $('#nodeBrowserReadNotice').textContent = '';
     $('#nodeBrowserReadNotice').hidden = true;
     $('#nodeFeedURL').value = '';
@@ -123,10 +164,14 @@ function nodeServiceHealth(node, serviceID) {
   return { label: failed ? 'Не подходит сервису' : 'Нет однозначного результата', kind: failed ? 'bad' : 'unknown', state: failed ? 'degraded' : 'inconclusive', health };
 }
 
+function nodeMeasurement(node, serviceID) {
+  return nodeMeasurementModel.measurement(node, serviceID, state.nodes?.network_profile, nodeBrowser.measurements);
+}
+
 function nodePassivePing(nodeID) {
-  const ping = nodeBrowser.pings.find(item => item.node_id === nodeID);
-  if (!ping || ping.network_profile !== state.nodes?.network_profile || !nodeDate(ping.checked_at) || Date.parse(ping.checked_at) > Date.now() || Date.now() - Date.parse(ping.checked_at) >= 10 * 60 * 1000) return null;
-  return ping;
+  const node = (state.nodes?.nodes || []).find(item => item.id === nodeID);
+  const measurement = nodeMeasurement(node, $('#nodeBrowserService')?.value || '');
+  return nodeMeasurementModel.tcp(nodeID, state.nodes?.network_profile, nodeBrowser.pings, measurement);
 }
 
 function nodeFilteredList() {
@@ -216,16 +261,18 @@ function renderNodeBrowserCard(node, serviceID) {
   const status = nodeServiceHealth(node, serviceID);
   const tcp = nodeSupportsTCPPing(node);
   const ping = tcp ? nodePassivePing(node.id) : null;
-  const pingText = !tcp ? 'Через сервис' : !ping ? '—' : ping.reachable ? `${Math.max(1, Number(ping.latency_ms) || 0)} мс` : 'Нет ответа';
+  const pingText = !tcp ? 'Не применяется' : !ping ? '—' : ping.reachable ? nodeMeasurementModel.label(ping.latency_ms) : 'Нет ответа';
+  const measurement = nodeMeasurement(node, serviceID);
+  const responseText = nodeMeasurementModel.label(measurement?.proxy_response_ms);
   const health = status.health || node.health || {};
   const sources = [...new Set((node.origins || []).map(origin => nodeBrowserSourceName(origin.source_id)))].join(', ');
   const assigned = state.services.filter(item => item.enabled && item.route === `sing-box:${node.id}`).map(item => item.name).join(', ');
   return `<article data-node-card="${esc(node.id)}" class="node-card ${nodeCanCheck(node) ? '' : 'disabled'} ${nodeBrowser.selected.has(node.id) ? 'selected' : ''}">
     <div class="node-card-head"><div class="node-heading"><span class="node-flag" title="${esc(country.name)} · данные источника">${nodeFlagHTML(country)}</span><div><h3>${esc(nodeDisplayName(node))}</h3><span class="node-protocol">${esc(String(node.protocol || 'VPN').toUpperCase())} · ${esc(nodeTransportLabel(node))}${node.tls ? ' · TLS' : ''}</span></div></div><button class="icon-button r4-node-trash" type="button" data-r4-delete="${esc(node.id)}" aria-label="Удалить ${esc(nodeDisplayName(node))}" title="Удалить локальную запись"><svg class="ui-icon" aria-hidden="true"><use href="#i-trash"></use></svg></button><input class="node-pick" type="checkbox" data-node-select="${esc(node.id)}" aria-label="Выбрать ${esc(nodeDisplayName(node))}" ${nodeBrowser.selected.has(node.id) ? 'checked' : ''} ></div>
-    <div class="node-metrics"><div class="node-metric"><small>${tcp ? 'Пинг · TCP' : 'Задержка · UDP'}</small><b class="${ping?.reachable ? 'ok' : ping ? 'bad' : 'unknown'}">${esc(pingText)}</b></div><div class="node-metric"><small>${esc(nodeServiceScenario(service))}</small><b class="${status.kind}">${esc(status.label)}</b></div></div>
+    <div class="node-metrics"><div class="node-metric"><small>${tcp ? 'TCP до сервера' : 'TCP для UDP-узла'}</small><b class="${ping?.reachable ? 'ok' : ping ? 'bad' : 'unknown'}">${esc(pingText)}</b></div><div class="node-metric"><small title="Защищённый запрос через узел до заголовков ответа; не ICMP-пинг и не запуск ядра">Ответ через узел</small><b class="${measurement?.proxy_response_ms != null ? 'ok' : 'unknown'}">${esc(responseText)}</b></div><div class="node-metric"><small>${esc(nodeServiceScenario(service))}</small><b class="${status.kind}">${esc(status.label)}</b></div></div>
     <div class="node-card-caption"><span>${esc(sources || 'Мои подключения')}</span><span title="Последняя проверка доступа">${esc(nodeTime(health.checked_at))}</span></div>
     <div class="node-actions"><button class="secondary" type="button" data-node-ping="${esc(node.id)}" ${nodeCanCheck(node) && tcp ? '' : 'disabled'}>Пинг</button><button class="primary" type="button" data-node-check="${esc(node.id)}" ${nodeCanCheck(node) ? '' : 'disabled'}>${status.state === 'available' ? 'Подключить' : 'Проверить и подключить'}</button></div>
-    <details><summary>Подробнее</summary><div class="node-card-details"><dl><div><dt>Источник</dt><dd>${esc(sources)}</dd></div><div><dt>Назначено</dt><dd>${esc(assigned || 'Не назначено')}</dd></div><div><dt>Страна</dt><dd>${esc(country.name)}</dd></div><div><dt>Последняя проверка</dt><dd>${esc(nodeTime(health.checked_at))}</dd></div><div><dt>Проверка заняла</dt><dd>${health.latency_ms > 0 ? `${(health.latency_ms / 1000).toFixed(1)} с` : '—'}</dd></div></dl><p>${esc(nodeExpiryText(node))}</p>${health.message && nodeDate(health.checked_at) ? `<p>${esc(health.message)}</p>` : ''}<div class="node-detail-actions"><button class="secondary" type="button" data-node-edit="${esc(node.id)}">Переименовать</button><button class="secondary" type="button" data-node-disable="${esc(node.id)}" data-disabled="${node.disabled ? 'true' : 'false'}">${node.disabled ? 'Включить' : 'Отключить'}</button><button class="secondary" type="button" data-node-reveal="${esc(node.id)}">Конфигурация</button><button class="danger-button" type="button" data-node-delete="${esc(node.id)}">Удалить</button></div></div></details>
+    <details><summary>Подробнее</summary><div class="node-card-details"><dl><div><dt>Источник</dt><dd>${esc(sources)}</dd></div><div><dt>Назначено</dt><dd>${esc(assigned || 'Не назначено')}</dd></div><div><dt>Страна</dt><dd>${esc(country.name)}</dd></div><div><dt>Последняя проверка</dt><dd>${esc(nodeTime(health.checked_at))}</dd></div><div><dt>Вся проверка (не пинг)</dt><dd>${health.latency_ms > 0 ? `${(health.latency_ms / 1000).toFixed(1)} с` : '—'}</dd></div></dl><p>${esc(nodeExpiryText(node))}</p>${health.message && nodeDate(health.checked_at) ? `<p>${esc(health.message)}</p>` : ''}<div class="node-detail-actions"><button class="secondary" type="button" data-node-edit="${esc(node.id)}">Переименовать</button><button class="secondary" type="button" data-node-disable="${esc(node.id)}" data-disabled="${node.disabled ? 'true' : 'false'}">${node.disabled ? 'Включить' : 'Отключить'}</button><button class="secondary" type="button" data-node-reveal="${esc(node.id)}">Конфигурация</button><button class="danger-button" type="button" data-node-delete="${esc(node.id)}">Удалить</button></div></div></details>
   </article>`;
 }
 
@@ -297,7 +344,7 @@ async function startNodeBrowserCheck(mode, explicitIDs) {
     renderNodeBatchStatus();
     const response = await submitSelectedNodeCheck({ node_ids: ids, mode, service_id: mode === 'service' ? $('#nodeBrowserService').value : '' });
     if (epoch !== nodeBrowser.epoch || nodeBrowser.authRequired) return;
-    nodeBrowser.job = response.job; nodeBrowser.pings = response.pings || nodeBrowser.pings;
+    nodeBrowser.job = response.job; nodeBrowser.pings = response.pings || nodeBrowser.pings; nodeBrowser.measurements = response.node_measurements || [];
     await pollNodeBrowserChecks();
   } catch (error) {
     if (epoch !== nodeBrowser.epoch || nodeBrowser.authRequired) return;
@@ -350,14 +397,15 @@ async function pollNodeBrowserChecks() {
   nodeBrowser.polling = (async () => {
     let delay = 15000;
     try {
-      const [response, fallback] = await Promise.all([api('/api/v1/node-checks/current'), api('/api/v1/node-autofallback')]);
+      const reading = await nodeMeasurementModel.readStatus(api);
+      const response = reading.response, fallback = reading.fallback || {};
       if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
-      nodeBrowser.job = response.job || null; nodeBrowser.pings = response.pings || [];nodeBrowser.fetchAndCheck=response.fetch_and_check===true;
-      state.nodeAutofallback = fallback;
+      nodeBrowser.job = response.job || null; nodeBrowser.pings = response.pings || [];nodeBrowser.fetchAndCheck=response.fetch_and_check===true; nodeBrowser.measurements = response.node_measurements || [];
+      if (reading.fallback) state.nodeAutofallback = fallback;
       const running = ['queued', 'interrupted', 'running', 'canceling'].includes(nodeBrowser.job?.state);
       if (running || fallback.active) delay = 1500;
-      $('#nodeBrowserReadNotice').hidden = true;
-      $('#nodeBrowserReadNotice').textContent = '';
+      $('#nodeBrowserReadNotice').hidden = !reading.partial;
+      $('#nodeBrowserReadNotice').textContent = reading.partial ? 'Состояние резервирования временно недоступно. Результаты проверки подключений показаны отдельно.' : '';
       // A service checker owns exclusive admission until cleanup completes.
       if (!fallback.active && (!running || nodeBrowser.job.mode !== 'service')) {
         const reads = await Promise.allSettled([api('/api/v1/nodes'), api('/api/v1/routes/options'), api('/api/v1/node-feeds')]);

@@ -8,7 +8,7 @@ let count=0;function test(name,fn){fn();count++;console.log('PASS '+name);}
 test('unique DOM IDs',()=>assert.equal(new Set(ids).size,ids.length));
 const baseline=JSON.parse(read('scripts/fixtures/interface-ui2-ids.json'));
 test('all inherited controls retain IDs',()=>assert.deepEqual(baseline.filter(id=>!ids.includes(id)),[]));
-test('7 primary destinations',()=>assert.equal([...html.matchAll(/data-main-nav="/g)].length,7));
+test('8 primary destinations',()=>assert.equal([...html.matchAll(/data-main-nav="/g)].length,8));
 test('21 retained views',()=>assert.equal(ids.filter(id=>id.startsWith('view-')).length,21));
 test('one compiled stylesheet',()=>assert.equal([...html.matchAll(/rel="stylesheet"/g)].length,1));
 test('compiled CSS reproducible',()=>assert.equal(read(root+'interface.css'),read(root+'interface-compat.css')+'\n'+read(root+'interface-shell.css')));

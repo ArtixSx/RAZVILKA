@@ -1546,3 +1546,55 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .interface-ui .r5-catalog-own{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
 .interface-ui .r5-catalog-own p{margin:0;font-size:13px;color:var(--muted)}
 @media(max-width:760px){.interface-ui .r5-catalog-tools{grid-template-columns:1fr}.interface-ui .r5-catalog-cta{flex-wrap:wrap}.interface-ui .r5-catalog-cta .primary{width:100%}}
+
+/* 2026-10-03: compact, task-oriented navigation and policy controls. */
+.ui7-engine-summary { margin:24px 0; }
+.ui7-section-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
+.ui7-section-heading h2 { margin:0; font-size:18px; }
+.ui7-engine-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(225px,1fr)); gap:12px; }
+.ui7-engine { padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+.ui7-engine header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.ui7-engine h3 { margin:0; font-size:15px; }
+.ui7-engine p { margin:12px 0 0; color:var(--muted); font-size:13px; line-height:1.5; }
+.ui7-engine button { margin-top:14px; }
+.ui7-auto-settings { padding:22px; margin:20px 0; border:1px solid var(--line); border-radius:16px; background:var(--panel); }
+.ui7-auto-settings h2 { margin:0 0 8px; font-size:18px; }
+.ui7-auto-settings p { color:var(--muted); line-height:1.6; }
+.ui7-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
+.ui7-form-grid label { display:flex; flex-direction:column; gap:8px; color:var(--text); font-size:14px; }
+.ui7-form-grid input { width:100%; min-height:42px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--text); }
+.ui7-form-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.ui7-form-actions small { margin-left:auto; color:var(--muted); }
+.ui7-recovery-tools { margin-top:18px; color:var(--muted); }
+.ui7-recovery-tools summary { cursor:pointer; }
+#view-autopilot .hero { padding:24px; min-height:0; }
+#view-autopilot .hero h1,#view-autopilot .hero h2 { font-size:clamp(24px,3vw,34px); line-height:1.2; }
+#view-autopilot .hero p { max-width:72ch; }
+#view-autopilot .route-stack[hidden],#view-autopilot .contract-strip[hidden] { display:none!important; }
+@media (max-width:600px) {
+ .ui7-form-grid { grid-template-columns:1fr; gap:12px; }
+ .ui7-auto-settings { padding:16px; }
+ .ui7-form-actions small { width:100%; margin-left:0; }
+ .ui7-engine-grid { grid-template-columns:1fr; }
+ .ui7-section-heading { flex-wrap:wrap; }
+}
+.ui7-engine-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0 0 12px; }
+.interface-ui .ui7-engine-row { display:flex; text-align:left; gap:10px; align-items:center; min-height:85px; width:100%; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--text); box-shadow:none; }
+.ui7-engine-row>span:nth-child(2){flex:1;min-width:0;}
+.ui7-engine-row b{display:block;font-size:13px;}
+.ui7-engine-row small{display:block;font-size:10px;color:var(--muted);line-height:1.5;overflow-wrap:anywhere;}
+.ui7-engine-count{text-align:right;max-width:95px;}
+.ui7-engine-count b{font-size:20px;line-height:1.2;}
+.ui7-engine-row>.ui-icon{width:12px;flex-shrink:0;color:var(--muted);}
+.ui7-engine-row:hover{border-color:var(--green);}
+.interface-ui #view-autopilot .hero{margin-top:16px;}
+.interface-ui .ui7-auto-settings input:focus-visible{outline:2px solid var(--green);outline-offset:2px;}
+@media(max-width:1100px){.ui7-engine-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:600px){.ui7-engine-summary{grid-template-columns:1fr;}.ui7-engine-row{min-height:76px;}}
+
+.interface-ui #view-autopilot .hero{display:block;padding:24px;}
+.ui7-control-details{margin:8px 0 12px;color:var(--muted);font-size:12px;}
+.ui7-control-details summary{cursor:pointer;}
+.ui7-control-details .top-mode-control{margin:10px 0;}
+.interface-ui #view-autopilot .hero-copy{max-width:none;}
+.interface-ui #view-autopilot .two-col{gap:16px;}

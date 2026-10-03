@@ -4,6 +4,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
@@ -13,34 +14,42 @@ const autonomyStabilityWindow = 24 * time.Hour
 
 type autonomyStability struct {
 	passes, failures int
+	attempted        bool
 	latencyMS        int64 // median of passing checks; 0 when unknown
 }
 
 // nodeStability summarises the recorded service checks of one node. A PASS
-// is a service-level success without a direct leak; BLOCKED, MISROUTED,
-// PARTIAL and ERROR count as failures. INCONCLUSIVE results are ignored.
+// is a service-level success without a direct leak. Only attributed service
+// rejections count as failures. Unknown/local/cleanup errors do not poison a
+// node or its sources. Legacy LatencyMS is lifecycle time, never network RTT.
 func nodeStability(n nodestore.Node, serviceID, profile string, now time.Time) autonomyStability {
 	var result autonomyStability
-	latencies := []int64{}
+	seen := map[string]bool{}
 	for _, c := range n.Health.History {
 		if c.ServiceID != serviceID || c.NetworkProfile != profile || c.RoutePathID != "sing-box:"+n.ID || c.CheckedAt.After(now) || now.Sub(c.CheckedAt) > autonomyStabilityWindow {
 			continue
+		}
+		if c.ProbeID != "" {
+			if seen[c.ProbeID] {
+				continue
+			}
+			seen[c.ProbeID] = true
+		}
+		switch c.Verdict {
+		case "PASS", "BLOCKED", "MISROUTED", "PARTIAL", "ERROR":
+			result.attempted = true
 		}
 		switch c.Verdict {
 		case "PASS":
 			if c.TestLevel == "service" && !c.DirectLeak {
 				result.passes++
-				if c.LatencyMS > 0 {
-					latencies = append(latencies, c.LatencyMS)
-				}
+
 			}
-		case "BLOCKED", "MISROUTED", "PARTIAL", "ERROR":
-			result.failures++
+		default:
+			if nodequality.ServiceFailure(c.Verdict, c.TestLevel, c.Stage, c.ErrorCode, c.DirectLeak) {
+				result.failures++
+			}
 		}
-	}
-	if len(latencies) > 0 {
-		sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
-		result.latencyMS = latencies[len(latencies)/2]
 	}
 	return result
 }
@@ -67,14 +76,37 @@ func (a autonomyStability) more(b autonomyStability) bool {
 // this network, so the most stable node becomes the primary and the first
 // reserve to try. A healthy current node (keep) always stays first: a more
 // stable reserve is not a reason to switch a working path.
-func rankAutonomyNodes(snapshot nodestore.Snapshot, ids []string, keep, serviceID, profile string, now time.Time) []string {
+func rankAutonomyNodes(snapshot nodestore.Snapshot, ids []string, keep, serviceID, profile string, now time.Time, measurements ...nodequality.Observation) []string {
 	nodes := map[string]nodestore.Node{}
 	for _, n := range snapshot.Nodes {
 		nodes[n.ID] = n
 	}
 	score := map[string]autonomyStability{}
+	// Index once: avoid nodes × observations × history on small routers.
+	measuredByNode := map[string]nodequality.Observation{}
+	for _, m := range measurements {
+		if m.ServiceID != serviceID || m.NetworkProfile != profile || !m.Valid(now) || !now.Before(m.ExpiresAt) {
+			continue
+		}
+		old, exists := measuredByNode[m.NodeID]
+		if !exists || m.CheckedAt.After(old.CheckedAt) {
+			measuredByNode[m.NodeID] = m
+		}
+	}
 	for _, id := range ids {
-		score[id] = nodeStability(nodes[id], serviceID, profile, now)
+		value := nodeStability(nodes[id], serviceID, profile, now)
+		if m, exists := measuredByNode[id]; exists {
+			for _, c := range nodes[id].Health.History {
+				if c.Verdict != "PASS" || c.State != "available" || c.TestLevel != "service" || c.DirectLeak || c.ServiceID != serviceID || c.NetworkProfile != profile || c.RoutePathID != "sing-box:"+id || !now.Before(c.ExpiresAt) || m.ExpiresAt.After(c.ExpiresAt) {
+					continue
+				}
+				if ms, ok := nodequality.ResponseMS(m, id, serviceID, profile, "sing-box:"+id, c.ProbeID, now); ok && m.CheckedAt.Equal(c.CheckedAt) {
+					value.latencyMS = max(1, ms)
+					break
+				}
+			}
+		}
+		score[id] = value
 	}
 	ranked := append([]string(nil), ids...)
 	sort.SliceStable(ranked, func(i, j int) bool {
@@ -103,9 +135,16 @@ func orderAutonomyCandidates(snapshot nodestore.Snapshot, ids []string, serviceI
 		nodes[n.ID] = n
 	}
 	sources := map[string]*autonomyStability{}
+	attempted := map[string]bool{}
 	for _, n := range snapshot.Nodes {
 		stability := nodeStability(n, serviceID, profile, now)
+		attempted[n.ID] = stability.attempted
+		seenOrigins := map[string]bool{}
 		for _, o := range n.Origins {
+			if seenOrigins[o.SourceID] {
+				continue
+			}
+			seenOrigins[o.SourceID] = true
 			total := sources[o.SourceID]
 			if total == nil {
 				total = &autonomyStability{}
@@ -124,10 +163,7 @@ func orderAutonomyCandidates(snapshot nodestore.Snapshot, ids []string, serviceI
 		}
 		return result
 	}
-	checked := func(id string) bool {
-		s := nodeStability(nodes[id], serviceID, profile, now)
-		return s.passes+s.failures > 0
-	}
+	checked := func(id string) bool { return attempted[id] }
 	ordered := append([]string(nil), ids...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		a, b := ordered[i], ordered[j]

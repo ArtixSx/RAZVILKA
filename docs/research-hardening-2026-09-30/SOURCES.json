@@ -1,0 +1,266 @@
+{
+  "schema": 1,
+  "sources": [
+    {
+      "id": "E01",
+      "project": "WireGuard",
+      "url": "https://www.wireguard.com/quickstart/",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation",
+      "use": "Authorized traffic before handshake; preserve optional keepalive",
+      "limitations": "No live WireGuard/native tests here"
+    },
+    {
+      "id": "E02",
+      "project": "keenetic-entware-extras",
+      "url": "https://github.com/0xkee/keenetic-entware-extras/blob/master/webui/lua/api-utils.lua",
+      "reviewed_at": "2026-09-30",
+      "read_level": "source code: complete file",
+      "use": "Single producer/stale fallback pattern adapted independently to Go catalogue",
+      "limitations": "No foreign Lua, daemon or permissive JSON-first-character check copied",
+      "blob_sha": "940bc4e79d65cf242b2c742b1ed983d9ff77d58b"
+    },
+    {
+      "id": "E03",
+      "project": "keenetic-entware-extras",
+      "url": "https://github.com/0xkee/keenetic-entware-extras/blob/master/net-check/scripts/lib/batch.sh",
+      "reviewed_at": "2026-09-30",
+      "read_level": "source code: complete file",
+      "use": "Conservative MemAvailable -> MemFree fallback",
+      "limitations": "Foreign CPU thresholds and +1 batch boost not copied",
+      "blob_sha": "1a2182b3d4e6301de2f1fdd8bb27079b48d3eb61"
+    },
+    {
+      "id": "E04",
+      "project": "mwan3",
+      "url": "https://github.com/openwrt/packages/blob/openwrt-24.10/net/mwan3/files/usr/sbin/mwan3track",
+      "reviewed_at": "2026-09-30",
+      "read_level": "source code: inspected first 180 lines",
+      "use": "State transitions and source/interface/family-aware probes retained as design tasks",
+      "limitations": "Not full mwan3 audit; OpenWrt wiki browser verification blocked; no OpenWrt code installed",
+      "blob_sha": "478f4f0e35f9bbf95b9a6dfa7c165a02fa0de662"
+    },
+    {
+      "id": "E05",
+      "project": "SmartDNS",
+      "url": "https://pymumu.github.io/smartdns/en/config/cache/",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation",
+      "use": "Persistent checkpoints and freshness separation adapted to catalogue",
+      "limitations": "No DNS daemon integration or TTL extension"
+    },
+    {
+      "id": "E06",
+      "project": "Mender",
+      "url": "https://docs.mender.io/orchestrate-updates/standalone-mode",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official search result/documentation excerpt",
+      "use": "Pending update must be resolved before new update mutation",
+      "limitations": "A later open failed; no Mender code copied or executed"
+    },
+    {
+      "id": "E07",
+      "project": "RAUC",
+      "url": "https://rauc.readthedocs.io/en/latest/using.html",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation/search result",
+      "use": "Installed vs booted/accepted states and retention until acceptance",
+      "limitations": "No RAUC installation or A/B router conversion"
+    },
+    {
+      "id": "E08",
+      "project": "HEV",
+      "url": "https://github.com/heiher/hev-socks5-tunnel",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official README/config documentation",
+      "use": "Local ICMP echo is not remote path proof; resource limits need measurements",
+      "limitations": "No benchmark/runtime comparison performed"
+    },
+    {
+      "id": "E09",
+      "project": "Mihomo MASQUE",
+      "url": "https://wiki.metacubex.one/en/config/proxies/masque/",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation",
+      "use": "QUIC/H2/L4 capabilities; ECDSA server identity; remote DNS location",
+      "limitations": "No account registration; no arbitrary WG/MASQUE key interchange"
+    },
+    {
+      "id": "E10",
+      "project": "Mihomo provider checks",
+      "url": "https://wiki.metacubex.one/en/config/proxy-providers/",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation/search",
+      "use": "Lazy and bounded health checks as future reserve-budget design",
+      "limitations": "No new Mihomo lifecycle implementation"
+    },
+    {
+      "id": "E11",
+      "project": "sing-box URLTest",
+      "url": "https://sing-box.sagernet.org/configuration/outbound/urltest/",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation",
+      "use": "Tolerance/idle settings and existing-flow implications",
+      "limitations": "Not equated with strict LKG-first failover"
+    },
+    {
+      "id": "E12",
+      "project": "USQUE",
+      "url": "https://github.com/Diniboy1123/usque",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official README",
+      "use": "Native TUN routing ownership; L4 scope; hook cleanup limitations",
+      "limitations": "No native binaries or H3/H2 tunnel trial"
+    },
+    {
+      "id": "E13",
+      "project": "USQUE H2",
+      "url": "https://github.com/Diniboy1123/usque/wiki/HTTP-2-support",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation/search result",
+      "use": "Separate H2 endpoints/identity; no copied magic endpoint fallback",
+      "limitations": "No live endpoint availability claim"
+    },
+    {
+      "id": "E14",
+      "project": "Xray",
+      "url": "https://xtls.github.io/en/config/transport.html",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation",
+      "use": "Versioned profile/transport fixtures; preserve existing sidecar until verified",
+      "limitations": "No blind latest-schema migration or broad transport support claim"
+    },
+    {
+      "id": "E15",
+      "project": "AmneziaWG",
+      "url": "https://docs.amnezia.org/documentation/amnezia-wg/",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation",
+      "use": "Field-level client/server compatibility; tools/module/wire format distinct",
+      "limitations": "No assumption that name AWG3.1 proves all fields or WARP compatibility"
+    },
+    {
+      "id": "E16",
+      "project": "quic-go",
+      "url": "https://quic-go.net/docs/quic/optimizations/",
+      "reviewed_at": "2026-09-30",
+      "read_level": "official documentation",
+      "use": "Kernel-sensitive GSO/buffer/PMTU experiments",
+      "limitations": "No global sysctl or router performance claims"
+    },
+    {
+      "id": "E17",
+      "project": "WayHop",
+      "url": "https://github.com/awadak3davra/wayhop",
+      "reviewed_at": "2026-09-30",
+      "read_level": "README/search excerpts",
+      "use": "Reversible apply and layered capability checks as reference",
+      "limitations": "Not full source audit; fallback group not assumed strict priority"
+    },
+    {
+      "id": "E18",
+      "project": "Tachyon",
+      "url": "https://github.com/Dushnilin/tachyon",
+      "reviewed_at": "2026-09-30",
+      "read_level": "README/search excerpts",
+      "use": "Bounded fuzzer/watchdog/snapshots radar",
+      "limitations": "README claims not treated as HIL evidence; no code copied"
+    },
+    {
+      "id": "E19",
+      "project": "z2k",
+      "url": "https://github.com/necronicle/z2k/tree/z2k-enhanced",
+      "reviewed_at": "2026-09-30",
+      "read_level": "README/search excerpts",
+      "use": "Scenario-specific strategies and preserved user lists",
+      "limitations": "No upstream strategies applied or live effectiveness claim"
+    },
+    {
+      "id": "E20",
+      "project": "CyberPortal generator",
+      "url": "https://warp-gen.cyb-portal.org/warp-generator",
+      "reviewed_at": "2026-09-30",
+      "read_level": "provider page/search result",
+      "use": "Format UX and candidate provider reference",
+      "limitations": "Deployed source not audited; generator API not called; no keys/accounts generated"
+    },
+    {
+      "id": "E21",
+      "project": "SmartDNS issue",
+      "url": "https://github.com/pymumu/smartdns/issues/2416",
+      "reviewed_at": "2026-09-30",
+      "read_level": "user report/search result",
+      "use": "Additional cold-cache/expiry hypothesis only",
+      "limitations": "Not reproduced; not claimed as defect of RAZVILKA"
+    },
+    {
+      "id": "E22",
+      "project": "mwan3 issue",
+      "url": "https://github.com/openwrt/packages/issues/29714",
+      "reviewed_at": "2026-09-30",
+      "read_level": "user report/search result",
+      "use": "Reboot/CPU/reconnect-storm test hypothesis",
+      "limitations": "Not reproduced; not universal upstream defect claim"
+    },
+    {
+      "id": "R01",
+      "project": "RAZVILKA",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/internal/config/autonomy_route.go",
+      "reviewed_at": "2026-09-30",
+      "read_level": "exact pinned source file/targeted ranges",
+      "use": "Baseline for real edits",
+      "limitations": "Not a full repository/runtime test",
+      "blob_sha": "4803144db3699d915fa1f14d1e215bfdceb20c36"
+    },
+    {
+      "id": "R02",
+      "project": "RAZVILKA",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/internal/app/autonomy_store.go",
+      "reviewed_at": "2026-09-30",
+      "read_level": "exact pinned source file/targeted ranges",
+      "use": "Baseline for real edits",
+      "limitations": "Not a full repository/runtime test",
+      "blob_sha": "faa7eefc172cbb0fed8c2833b28ae06382bdd434"
+    },
+    {
+      "id": "R03",
+      "project": "RAZVILKA",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/internal/app/autonomy_maintenance.go",
+      "reviewed_at": "2026-09-30",
+      "read_level": "exact pinned source file/targeted ranges",
+      "use": "Baseline for real edits",
+      "limitations": "Not a full repository/runtime test",
+      "blob_sha": "af0f48f3b36f551e94e57a0570827148ec1aeba9"
+    },
+    {
+      "id": "R04",
+      "project": "RAZVILKA",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/internal/dataplane/warpwg.go",
+      "reviewed_at": "2026-09-30",
+      "read_level": "exact pinned source file/targeted ranges",
+      "use": "Baseline for real edits",
+      "limitations": "Not a full repository/runtime test",
+      "blob_sha": "af9d96fd5fd0c7ae7b624c503e4164cee482daa5"
+    },
+    {
+      "id": "R05",
+      "project": "RAZVILKA",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/internal/community/geoaggregator.go",
+      "reviewed_at": "2026-09-30",
+      "read_level": "exact pinned source file/targeted ranges",
+      "use": "Baseline for real edits",
+      "limitations": "Not a full repository/runtime test",
+      "blob_sha": "79b12fb6fa8cc614fb0bab729be9dafadb50ba88"
+    },
+    {
+      "id": "R06",
+      "project": "RAZVILKA",
+      "url": "https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/internal/strategylab/resources.go",
+      "reviewed_at": "2026-09-30",
+      "read_level": "exact pinned source file/targeted ranges",
+      "use": "Baseline for real edits",
+      "limitations": "Not a full repository/runtime test",
+      "blob_sha": "a609bf57f130d7ec4d0aae91c88c6bf76ea94573"
+    }
+  ]
+}

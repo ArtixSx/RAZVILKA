@@ -57,6 +57,9 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		return
 	}
 	a.autonomyMaintenance(ctx, p, now)
+	if a.componentMaintenancePending() {
+		return
+	}
 	if a.runAutoInstall(ctx, p) {
 		// The installer stops this process; until then nothing else runs.
 		a.SelfUpdate.RetainHandoff(release)
@@ -359,7 +362,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	if healthy && isNode {
 		keep = currentNode
 	}
-	ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now())
+	ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now(), a.nodeMeasurements()...)
 	ready, e = a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
 	if e != nil {
 		return finish("catalog-unavailable", "Не удалось сопоставить резервные подключения. Маршрут сохранён.")
@@ -368,8 +371,8 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	// expired. Walk through all candidates, not only the first rows of a feed.
 	needRefresh := !time.Now().Before(r.ReserveCheckedAt.Add(time.Duration(p.ReserveSeconds) * time.Second))
 	shortlist, next := autonomy.CandidateBatch(ids, currentNode, r.Cursor, p.CandidatesPerRound)
-	r.Cursor = next
-	if len(ready) < p.ReserveTarget || needRefresh {
+	if refillBeforeApply(healthy, replace, len(ready), p.ReserveTarget, needRefresh) {
+		r.Cursor = next
 		for _, id := range shortlist {
 			if ctx.Err() != nil {
 				break
@@ -390,7 +393,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			snapshot = fresh
 		}
 	}
-	ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now())
+	ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now(), a.nodeMeasurements()...)
 	ready, e = a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
 	if e != nil {
 		return finish("catalog-unavailable", "Не удалось сопоставить резервные подключения. Маршрут сохранён.")

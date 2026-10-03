@@ -45,7 +45,7 @@ function interfaceSummaries() {
 function interfaceRouteName(route) {
   if(!route)return 'Пока не назначен';
   if(route==='direct')return 'Прямое подключение';
-  if(route.startsWith('sing-box:')){const id=route.slice(9);const node=(state.nodes?.nodes||[]).find(n=>n.id===id);if(node)return typeof nodeDisplayName==='function'?nodeDisplayName(node):node.name||'Узел Sing-box';}
+  if(route.startsWith('sing-box:')){const id=route.slice(9);const node=(state.nodes?.nodes||[]).find(n=>n.id===id);if(node)return typeof nodeDisplayName==='function'?nodeDisplayName(node):node.name||'Узел Sing-box';return 'Подключение Sing-box';}
   return routeLabel(route);
 }
 function interfaceAutoLabel(){
@@ -98,12 +98,9 @@ function renderInterfaceNavigation(view=state.currentView||'overview'){
  consoleText('pageTitle',nav.pageTitle);
  const sub=$('#interfaceSubnav');
  if(nav.owner==='settings'&&view!=='settings'){
-   sub.hidden=false;
-   interfaceHTML('interfaceSubnav',`<button type="button" data-rz-nav="settings">← Все настройки</button><span class="r5-location">${esc(nav.pageTitle)}</span>`);
- }else if(nav.owner==='services'&&view==='managed'){
-   sub.hidden=false;interfaceHTML('interfaceSubnav','<button type="button" data-rz-nav="services">← Мои сервисы</button><span class="r5-location">Подробности автоподбора</span>');
+   sub.hidden=false;interfaceHTML('interfaceSubnav',`<button type="button" data-rz-nav="settings">← Настройки</button><span class="r5-location">${esc(nav.pageTitle)}</span>`);
  }else{
-   sub.hidden=nav.owner!=='nodes';
+   sub.hidden=group.children.length<2;
    if(!sub.hidden)interfaceHTML('interfaceSubnav',group.children.map(([id,label])=>`<button type="button" data-rz-nav="${esc(id)}" ${id===view?'aria-current="page" class="active"':''}>${esc(label)}</button>`).join(''));
  }
 }
@@ -140,6 +137,13 @@ function interfaceHomeServicesHTML(members,fresh){
  return `${heading}${tally.length?`<div class="r5-home-tally">${tally.map(([n,label,k])=>`<span data-kind="${k}"><b>${n}</b> ${label(n)}</span>`).join('')}</div>`:''}<div class="r5-home-services">${shown.map(row).join('')}</div>${hidden>0?`<button type="button" class="text-button r5-home-more" data-r42-services="selected">Ещё ${hidden} ${works(hidden)} ${ci('chevron')}</button>`:''}`;
 }
 
+function renderHomeEngineSummary(summaries,loaded,fresh){
+ const usage=rim.engineUsage(loaded?state.services:[],fresh?summaries:{});
+ const known=state.authenticated===true&&interfaceDataReady('inventory');
+ const rows=Object.entries(consoleEngineMeta).filter(([id])=>known||usage[id]);
+ interfaceHTML('ui7HomeEngines',`<div class="ui3-section-heading"><h3>Обходы и сервисы</h3><button type="button" class="text-button" data-rz-nav="engines">Управление ${ci('chevron')}</button></div>${!known?'<p class="r5-caption">Сведения о компонентах ещё загружаются. Это не означает, что обходы остановлены.</p>':''}<div class="ui7-engine-summary">${rows.map(([id,meta])=>{const info=consoleEngineState(id),n=usage[id]||{assigned:0,verified:0};return `<button class="ui7-engine-row" type="button" data-console-engine="${esc(id)}"><span class="engine-mini-icon ${meta.tone}">${ci(meta.icon)}</span><span><b>${esc(meta.name)}</b><small>${esc(info.label)}</small></span><span class="ui7-engine-count"><b>${loaded?n.assigned:'—'}</b><small>назначено${fresh&&n.assigned?` · ${n.verified} проверено`:''}</small></span>${ci('chevron')}</button>`;}).join('')}</div><p class="r5-caption">Считаются применённые назначения. Запущенный процесс сам по себе не подтверждает доступ.</p>`);
+}
+
 function renderInterfaceHome(summaries){
  const ready=!interfaceState.authRevoked&&state.authenticated===true;
  const loaded=ready&&interfaceDataReady('services');
@@ -148,6 +152,7 @@ function renderInterfaceHome(summaries){
  const counts=rim.humanCounts(list,summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'?consoleSnapshot?.runtime||{}:{},fresh);
  consoleText('ui3HomeCount',loaded?counts.selected:'—');consoleText('ui3NavCount',loaded?counts.selected:'—');
  interfaceHomeAuto(ready);
+ renderHomeEngineSummary(summaries,loaded,fresh);
  interfaceHTML('ui3HealthBanner',`<div class="r5-counts"><div><strong>${loaded?counts.selected:'—'}</strong><span>Добавлено сервисов</span></div><div><strong>${fresh?counts.good:'—'}</strong><span>Работают по проверке</span></div><div><strong>${fresh?counts.unconfirmed:'—'}</strong><span>Без подтверждения</span></div></div><p class="r5-caption">${!loaded?'Получаем сведения о сервисах.':!fresh?'Показан последний список. Свежая доступность пока неизвестна.':counts.selected?'Проверяется конкретный сценарий, а не все функции приложения.':'Сервисы пока не добавлены. Начните с настройки автопилота.'}</p>`);
  const attention=counts.rows.filter(s=>s.member&&s.actionable).slice(0,3);
  // Without a decision for the owner, still name the services without a
@@ -163,7 +168,7 @@ function renderInterfaceHome(summaries){
  const ram=recent&&Number.isFinite(m.memory_total_bytes)&&m.memory_total_bytes>0?rim.finitePercent(m.memory_used_percent):null;
  interfaceHTML('ui3Resources',[[cpu,'Процессор'],[ram,'Память']].map(([v,label])=>`<div class="r5-resource"><span>${label}</span><b>${v===null?'Нет свежих данных':Math.round(v)+'%'}</b></div>`).join(''));
  const p=ready&&!consoleAutonomyError&&consoleSnapshot?.policy?.setup_complete?consoleSnapshot.policy:null;
- interfaceHTML('ui3Maintenance',`<h3>Обслуживание</h3><p>${p?'В этой версии доступны проверка обновлений и подготовка архива. Установка запускается вручную.':'Расписание выбирается при настройке автопилота. До завершения мастера оно не считается настроенным.'}</p><button class="text-button" type="button" data-rz-nav="updates">Обновления ${ci('chevron')}</button>`);
+ interfaceHTML('ui3Maintenance',`<h3>Обслуживание</h3><p>${p?`Приложение: ${p.application?.mode==='install'?'автоустановка':p.application?.mode==='prepare'?'подготовка':p.application?.mode==='check'?'проверка':'выключено'}. Компоненты: ${p.components?.mode==='install'?'автообновление':p.components?.mode==='check'?'проверка':'выключено'}. Результаты проверяются отдельно.`:'Расписание выбирается при настройке автопилота. До завершения мастера оно не считается настроенным.'}</p><button class="text-button" type="button" data-rz-nav="updates">Обновления ${ci('chevron')}</button>`);
  const events=ready&&Array.isArray(state.audit?.events)?state.audit.events.slice(0,3):[];
  interfaceHTML('ui3HomeEvents',events.length?events.map(e=>{const result=typeof projectLogEventResult==='function'?projectLogEventResult(e):{label:'Результат не уточнён'};const title=typeof projectLogAction==='function'?projectLogAction(e)+(e.outcome==='failed'?' · ошибка':e.outcome==='denied'?' · отказ':''):consoleAuditTitle(e);return `<div class="ui3-event"><div><strong>${esc(title)}</strong><small>${esc(result.label)}</small></div><time>${esc(consoleDate(e.timestamp))}</time></div>`;}).join(''):'<p class="r5-caption">Действия появятся после настройки. Принятое задание не равно завершённому.</p>');
 }
@@ -216,7 +221,7 @@ function interfaceEngineCard(id,meta){
  const disabledReason=managedUpdate&&component.update_available&&!component.rollback_ready?'Нажмите «Проверить версии»: RAZVILKA сохранит копию текущей версии для отката.':component?.lifecycle_block_reason||(component?.external_owner?'Компонент управляется внешним проектом.':info.running||used.length?'Сначала остановите обход и перенесите зависимые сервисы на другой маршрут.':stale?'Обновите сведения о пакете перед изменением.':busy?'Дождитесь завершения операции.':'Нет разрешения на действие в каталоге компонентов.');
  const action=(name,label,allowed)=>`<button type="button" class="${name==='remove'?'component-remove':'primary'} component-action" data-component="${esc(id)}" data-component-action="${name}" data-rz-focus="engine-${esc(id)}-${name}" ${allowed?'':`disabled title="${esc(disabledReason)}"`}>${label}</button>`;
  let actions='';
- if(!info.installed)actions+=action('install','Установить',lifecycleAllowed&&!stale&&component.can_install===true);
+ if(!info.installed)actions+=action('install','Установить',lifecycleAllowed&&!stale&&component?.can_install===true);
  else if(component?.update_available)actions+=action('update',managedUpdate?'Обновить с проверкой':'Обновить',updateAllowed&&!stale&&component.can_update===true);
  if(info.installed)actions+=action('remove','Удалить',lifecycleAllowed&&component.can_remove===true);
  const operation=state.componentOperation?.id===id?state.componentOperation.action:component?.operation_status==='running'?component.operation_action:'';
@@ -241,7 +246,13 @@ function renderInterfaceSettings(){
 
 function renderInterface(){
  // A failed widget cannot retain a UI operation lock or hide other sections.
- const calls=[['navigation',()=>renderInterfaceNavigation()],['home',()=>renderInterfaceHome(interfaceSummaries())],['services',()=>renderInterfaceServices(interfaceSummaries())],['engines',()=>renderInterfaceEngines()],['settings',()=>renderInterfaceSettings()],['inspector',()=>interfaceUpdateInspector()],['auto-labels',()=>{consoleText('ui3SidebarAuto',interfaceAutoLabel());consoleText('ui3TopAuto',interfaceAutoLabel());}],['workflow',()=>{if(typeof renderWorkflowControls==='function')renderWorkflowControls();}]];
+ const view=state.currentView||'overview';
+ const calls=[['navigation',()=>renderInterfaceNavigation()],['auto-labels',()=>{consoleText('ui3SidebarAuto',interfaceAutoLabel());consoleText('ui3TopAuto',interfaceAutoLabel());}],['workflow',()=>{if(typeof renderWorkflowControls==='function')renderWorkflowControls();}]];
+ if(view==='overview')calls.push(['home',()=>renderInterfaceHome(interfaceSummaries())]);
+ if(view==='services')calls.push(['services',()=>renderInterfaceServices(interfaceSummaries())]);
+ if(view==='engines'||view==='engineconfig')calls.push(['engines',()=>renderInterfaceEngines()]);
+ if(view==='settings')calls.push(['settings',()=>renderInterfaceSettings()]);
+ if(interfaceState.inspector)calls.push(['inspector',()=>interfaceUpdateInspector()]);
  for(const [name,render] of calls)interfaceSafeRender('interface-'+name,render);
 }
 

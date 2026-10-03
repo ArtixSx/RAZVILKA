@@ -15,6 +15,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
@@ -90,6 +91,7 @@ type nodeCheckState struct {
 	job             *nodeCheckJob
 	cancel          context.CancelFunc
 	done            chan struct{}
+	measurements    *nodequality.Cache
 	pings           map[string]nodeCheckItem
 	serviceResults  map[string]serviceControlResult
 	serviceAttempts map[string]time.Time
@@ -159,7 +161,7 @@ func (a *App) nodeCheckSnapshot() map[string]any {
 		pings = append(pings, ping)
 	}
 	sort.Slice(pings, func(i, j int) bool { return pings[i].NodeID < pings[j].NodeID })
-	return map[string]any{"job": job, "pings": pings, "working_routes_changed": false, "fetch_and_check": true, "all_vless": true, "cancel_requires_job_id": true}
+	return map[string]any{"job": job, "pings": pings, "node_measurements": a.nodeChecks.measurements.Snapshot(time.Now().UTC()), "working_routes_changed": false, "fetch_and_check": true, "all_vless": true, "cancel_requires_job_id": true}
 }
 
 func (a *App) nodeCheckJobCurrent(w http.ResponseWriter, r *http.Request) {

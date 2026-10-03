@@ -1,0 +1,163 @@
+{
+  "schema": 1,
+  "base": "817783493f0c2784ccc70aa73868cd64e9437634",
+  "tasks": [
+    {
+      "id": "D00",
+      "owner": "INTEGRATOR",
+      "depends_on": [],
+      "title": "Полная Go1.26.5 интеграция и CI",
+      "scope": "Сопоставить присланную базу/более новый HEAD. go mod verify; sh scripts/check.sh; проверить API structs/adapters без test doubles. Никакого downgrade production go.mod.",
+      "status": "not_run"
+    },
+    {
+      "id": "D01",
+      "owner": "UI",
+      "depends_on": [
+        "D00"
+      ],
+      "title": "Настоящий HTTP/login/CSP и ленивые чтения",
+      "scope": "Браузер с реальным приложением: auth/CSRF/logout, скрытые вкладки, быстрые переходы, повторные клики, 401/409/500, dirty forms. Измерить число запросов, render-cost, CPU на ARM64.",
+      "status": "not_run"
+    },
+    {
+      "id": "D02",
+      "owner": "VLESS",
+      "depends_on": [
+        "D00"
+      ],
+      "title": "Per-node Xray и канонический VLESS",
+      "scope": "Сохранить обязательные поля и доказательства; настоящий RAW/TCP Reality, compiler capabilities; XHTTP отдельным проверяемым подэтапом, не lossy conversion.",
+      "status": "not_run"
+    },
+    {
+      "id": "D03",
+      "owner": "VLESS",
+      "depends_on": [
+        "D02"
+      ],
+      "title": "Xray end-to-end",
+      "scope": "Native server/client локально, затем selected/control client, endpoint changes, kill proxy/sidecar, app/router restart, rollback. SOCKS probe не доказывает TUN.",
+      "status": "not_run"
+    },
+    {
+      "id": "D04",
+      "owner": "NET",
+      "depends_on": [
+        "D00"
+      ],
+      "title": "WG candidate isolation и холодный старт",
+      "scope": "Handshake с инициирующим трафиком; реальное попадание в временный интерфейс при одинаковых Address; Sources не удаляются; keepalive optional; TCP/UDP IPv4/IPv6.",
+      "status": "not_run"
+    },
+    {
+      "id": "D05",
+      "owner": "NET",
+      "depends_on": [
+        "D04"
+      ],
+      "title": "WG профили и резервы",
+      "scope": "Отдельный engine не WARP, strict conf, hooks rejected, несколько профилей, hostname TTL, endpoint route pin, Stop/WAN/reboot/rollback.",
+      "status": "not_run"
+    },
+    {
+      "id": "D06",
+      "owner": "NET",
+      "depends_on": [
+        "D05"
+      ],
+      "title": "AWG production",
+      "scope": "Проверенные module/CLI/kernel/ABI/backend и сервер, readback без секретов, сохранение foreign owners, wrong module safe reject, reboot authority отдельно.",
+      "status": "not_run"
+    },
+    {
+      "id": "D07",
+      "owner": "INTEGRATOR",
+      "depends_on": [
+        "D03",
+        "D05"
+      ],
+      "title": "Общий default и service executor",
+      "scope": "NetworkPolicy all-except + per-service overrides. Нет сервисов/неизвестный сайт/прямой IP всё равно использует default. Scope mismatch продолжает default, удаление override не DIRECT. Вводить по capabilities, не снимать guard заранее.",
+      "status": "not_run"
+    },
+    {
+      "id": "D08",
+      "owner": "NET",
+      "depends_on": [
+        "D07"
+      ],
+      "title": "Согласованный LAN/DNS/RU exclusions",
+      "scope": "Исключённые устройства вне всех owned обходов и service DNS. Guest opt-in. Bootstrap DAG, IPv6/UDP policy, CNAME/TTL, shared CDN, existing connections scoped, не flush всего LAN.",
+      "status": "not_run"
+    },
+    {
+      "id": "D09",
+      "owner": "NET",
+      "depends_on": [
+        "D00"
+      ],
+      "title": "Адаптивный NFQWS2",
+      "scope": "Явно отделить preferred/only/manual. Локальный bounded подбор на compatible Lua/assets с visibility; packet success не media/voice. Разрешённый VLESS fallback; пользовательские стратегии сохраняются.",
+      "status": "not_run"
+    },
+    {
+      "id": "D10",
+      "owner": "VLESS",
+      "depends_on": [
+        "D02"
+      ],
+      "title": "Холодный first-usable и справедливый refill",
+      "scope": "Не ждать весь резерв для первого пригодного пути, но сохранить B apply-fail→verified rollback→C. igareck и другие approved feeds, cursor32/33, shared publisher mirrors, reserve diversity, no poisoning checker errors.",
+      "status": "not_run"
+    },
+    {
+      "id": "D11",
+      "owner": "OPS",
+      "depends_on": [
+        "D00"
+      ],
+      "title": "Crash-safe обновления",
+      "scope": "Полный persistent package/config journal и независимый recover. Хранить прежний LKG до live acceptance нового runtime. Unknown→stop, matching repair, SafeMode/Stop, downgrade старым бинарником pending receipts. Test power cut before/after every phase.",
+      "status": "not_run"
+    },
+    {
+      "id": "D12",
+      "owner": "UI",
+      "depends_on": [
+        "D01"
+      ],
+      "title": "Один рабочий путь во всех разделах",
+      "scope": "Установка/профиль/проверка/применение на карточке; per-engine подтверждения прогресса; массовые VLESSоперации; раскрываемая AI группа; меньше legacy дубликатов. Не ломать URL/ID/API; получить профиль открытой вкладки и настоящий замер weak router.",
+      "status": "not_run"
+    },
+    {
+      "id": "D13",
+      "owner": "OPS",
+      "depends_on": [
+        "D00"
+      ],
+      "title": "WARP/USQUE и источники",
+      "scope": "Регистрация != export/DNS/endpoint. Unknown enrollment не mint-again. H2/H3 отдельно, pins/environment/UDP capability, mirror TTL/provenance, read-only offline каталог. Mihomo/HEV experimental до native benefit.",
+      "status": "not_run"
+    },
+    {
+      "id": "D14",
+      "owner": "QA",
+      "depends_on": [
+        "D03",
+        "D05",
+        "D06",
+        "D08",
+        "D09",
+        "D10",
+        "D11",
+        "D12",
+        "D13"
+      ],
+      "title": "Аппаратная матрица и длительная работа",
+      "scope": "Два реальных клиента, Keenetic ARM64, MIPS/MIPSel отдельно от cross-build; при возможности OpenWrt отдельно. 24h/72h browser-closed; WAN, OOM/disk, process kill, real media/voice/game; no false PASS.",
+      "status": "not_run"
+    }
+  ]
+}

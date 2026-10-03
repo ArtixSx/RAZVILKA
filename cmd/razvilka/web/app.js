@@ -413,6 +413,7 @@ function setView(name) {
   render('navigation-status', () => { if (state.status && Object.keys(state.status).length) renderStatus(); });
   render('navigation-tabs', () => { if (typeof renderInterfaceNavigation === 'function') renderInterfaceNavigation(name); });
   render('navigation-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
+  if (typeof queueMicrotask === 'function') queueMicrotask(() => { if (state.currentView === name) refreshPanelView(name); });
   if (name === 'engineconfig') render('navigation-engine', () => {
     if (state.engineGuidedRequest && state.engineGuidedRequest.view !== name && !state.engineIntent) invalidateEngineEditorContext();
     renderEngineControl();
@@ -797,7 +798,7 @@ function panelBusy(error) {
 
 function refreshPanelLoadNotice(show = false) {
   const owned = state.noticeDetails?.detail_kind === 'panel-load';
-  const issues = (state.loadIssues || []).filter(issue => state.dataLoad?.[issue.section]?.phase !== 'ready');
+  const issues = (state.loadIssues || []).filter(issue => (issue.section === 'authentication' || panelViewKeys().includes(issue.section)) && state.dataLoad?.[issue.section]?.phase !== 'ready');
   state.loadIssues = issues;
   if (!issues.length) { if (owned) hideNotice(); return; }
   if (!show && !owned) return;
@@ -839,10 +840,10 @@ function renderPanelLoad() {
   };
   render('panel-snapshot', () => { if (typeof renderSavedPanelSnapshot === 'function') renderSavedPanelSnapshot(); });
   render('panel-settings-mode', () => { if (typeof renderSettingsMode === 'function') renderSettingsMode(); });
-  const values = Object.values(state.dataLoad || {});
+  const values = panelViewKeys().map(key => state.dataLoad?.[key]).filter(Boolean);
   render('panel-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
   render('panel-engine', () => {
-    if (!state.dataLoad?.engineConfigs?.loaded && typeof renderEngineControl === 'function') renderEngineControl();
+    if (state.currentView === 'engineconfig' && !state.dataLoad?.engineConfigs?.loaded && typeof renderEngineControl === 'function') renderEngineControl();
   });
   const text = values.some(value => value.phase === 'busy') ? 'Выполняется операция. Разделы можно открывать; данные обновятся автоматически.'
     : values.some(value => value.phase === 'error') ? 'Часть данных не обновилась. Последние полученные данные сохранены.'
@@ -855,28 +856,29 @@ function renderPanelLoad() {
 function renderPanelSection(key) {
   // Publish independent read results immediately, without an all-endpoints barrier.
   const renderers = {
-    status: () => { renderStatus(); renderSettings(); },
+    status: () => { renderStatus(); if (state.currentView === 'settings') renderSettings(); },
     system: renderSystem, metrics: renderMetrics,
     inventory: () => { renderSystem(); renderEngines(); renderComponents(); },
     services: () => {
-      renderServices(); renderOverviewQuickServices(); renderOverviewServices(); renderReadiness();
-      if (state.dataLoad.testlab?.loaded) renderTestLab();
-      if (state.dataLoad.warp?.loaded) renderWarpManager();
-      if (state.dataLoad.strategyLab?.loaded) renderStrategyLab();
-      if (state.dataLoad.engineConfigs?.loaded) renderEngineControl();
-      if (state.dataLoad.dns?.loaded) renderDNSServiceBindings();
+      if (state.currentView === 'services') renderServices();
+      if (state.currentView === 'overview') { renderOverviewQuickServices(); renderOverviewServices(); renderReadiness(); }
+      if (state.currentView === 'testlab' && state.dataLoad.testlab?.loaded) renderTestLab();
+      if (state.currentView === 'engineconfig' && state.dataLoad.warp?.loaded) renderWarpManager();
+      if (state.currentView === 'strategylab' && state.dataLoad.strategyLab?.loaded) renderStrategyLab();
+      if (state.currentView === 'engineconfig' && state.dataLoad.engineConfigs?.loaded) renderEngineControl();
+      if (state.currentView === 'dns' && state.dataLoad.dns?.loaded) renderDNSServiceBindings();
     },
     engines: renderEngines, engineConfigs: renderEngineControl, components: renderComponents,
     warp: renderWarpManager, sources: renderSources, nodes: renderNodes,
     nodeFeeds: renderNodes, nodeAutofallback: renderNodes,
-    routeOptions: () => { renderServices(); if (state.dataLoad.testlab?.loaded) renderTestLab(); },
+    routeOptions: () => { renderServices(); if (state.currentView === 'testlab' && state.dataLoad.testlab?.loaded) renderTestLab(); },
     connections: renderConnections, devices: renderDevices, testlab: renderTestLab,
     engineLab: renderEngineLab, audit: renderAudit, strategyLab: renderStrategyLab,
     z2kPreview: renderStrategyLab, smartRoute: renderStrategyLab,
     serviceControl: () => { if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls(); },
     dns: renderDNS, dnsPlan: renderDNSPlan, sessions: renderSettings,
   };
-  renderers[key]?.();
+  if (panelViewKeys().includes(key)) renderers[key]?.();
   if (typeof renderConsole === 'function') renderConsole();
   renderPanelLoad();
 }
@@ -966,6 +968,52 @@ function refreshPanelInventory() {
   return ticket.promise;
 }
 
+// Read only the active workspace. A tab visit never grants write authority.
+function panelViewKeys(view = state.currentView || 'overview') {
+  const groups = {
+    overview: ['status','inventory','services','metrics','audit','serviceControl'],
+    autopilot: ['status','inventory','services','serviceControl'],
+    services: ['status','inventory','services','routeOptions','nodes'],
+    nodes: ['status','inventory','services','nodes','nodeFeeds','routeOptions'],
+    providers: ['status','inventory','services','nodeFeeds','nodes'],
+    'subscription-settings': ['status','nodeFeeds'],
+    engines: ['status','inventory','services','engineConfigs'],
+    engineconfig: ['status','inventory','services','engineConfigs','routeOptions','nodes','warp'],
+    devices: ['status','devices','services'], exclusions: ['status','devices','services'],
+    activity: ['status','audit'], settings: ['status','sessions'],
+    dns: ['status','services','dns','dnsPlan'],
+    strategylab: ['status','inventory','services','strategyLab','z2kPreview','smartRoute'],
+    testlab: ['status','inventory','services','testlab','routeOptions'],
+    diagnostics: ['status','inventory','services','metrics','engineLab','testlab','audit'],
+    onboard: ['status','inventory','services','nodeFeeds','devices','engineConfigs'],
+    managed: ['status','services','nodes','routeOptions'],
+    updates: ['status','inventory','serviceControl'],
+    connections: ['status','connections','devices'], sources: ['status','sources','services']
+  };
+  return groups[view] || groups.overview;
+}
+
+function panelViewRequests(view = state.currentView || 'overview') {
+  const paths = {
+    status:'/api/v1/status', inventory:'/api/v1/panel/inventory',
+    metrics:'/api/v1/metrics?limit=120', services:'/api/v1/services', engineConfigs:'/api/v1/engine-configs',
+    warp:'/api/v1/warp', sources:'/api/v1/sources', nodes:'/api/v1/nodes', nodeFeeds:'/api/v1/node-feeds',
+    nodeAutofallback:'/api/v1/node-autofallback', routeOptions:'/api/v1/routes/options',
+    connections:'/api/v1/connections?include_closed=true', devices:'/api/v1/devices?view=status',
+    testlab:'/api/v1/testlab', engineLab:'/api/v1/engine-lab', audit:'/api/v1/audit/current?limit=40',
+    strategyLab:'/api/v1/strategy-lab', z2kPreview:'/api/v1/migrations/z2k/preview', smartRoute:'/api/v1/smart-route',
+    serviceControl:'/api/v1/service-control', dns:'/api/v1/dns', dnsPlan:'/api/v1/dns/plan', sessions:'/api/v1/auth/sessions'
+  };
+  return panelViewKeys(view).map(key => [key, paths[key]]);
+}
+
+function refreshPanelView(name) {
+  if (!state.authenticated || name !== state.currentView) return;
+  // Cancel only read transports; mutations have separate lifetimes/epochs.
+  cancelPanelRefresh();
+  void refreshAll();
+}
+
 async function settlePanelReads(requests, read) {
   let next = 0;
   await Promise.allSettled(Array.from({ length: Math.min(4, requests.length) }, async () => {
@@ -999,7 +1047,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
   const issues = [];
   const options = { signal: panelLoad.controller.signal };
   const retryKeys = new Set(Object.entries(state.dataLoad || {}).filter(([, value]) => !value.loaded || ['error', 'busy'].includes(value.phase)).map(([key]) => key));
-  for (const key of ['status', 'services', 'engineConfigs']) {
+  for (const key of panelViewKeys()) {
     if (key === 'status' || !retryFailed || retryKeys.has(key)) panelSectionState(key, 'loading');
   }
   renderPanelLoad();
@@ -1021,31 +1069,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     // This already has its own single-flight scheduler and auth epoch.
     // Never await it here: a slow job-status endpoint is an isolated failure.
     scheduleNodeActivity(0);
-    const requests = [
-      ['status', '/api/v1/status'],
-      ['inventory', '/api/v1/panel/inventory'],
-      ['metrics', '/api/v1/metrics?limit=120'],
-      ['services', '/api/v1/services'],
-      ['engineConfigs', '/api/v1/engine-configs'],
-      ['warp', '/api/v1/warp'],
-      ['sources', '/api/v1/sources'],
-      ['nodes', '/api/v1/nodes'],
-      ['nodeFeeds', '/api/v1/node-feeds'],
-      ['nodeAutofallback', '/api/v1/node-autofallback'],
-      ['routeOptions', '/api/v1/routes/options'],
-      ['connections', '/api/v1/connections?include_closed=true'],
-      ['devices', '/api/v1/devices?view=status'],
-      ['testlab', '/api/v1/testlab'],
-      ['engineLab', '/api/v1/engine-lab'],
-      ['audit', '/api/v1/audit/current?limit=40'],
-      ['strategyLab', '/api/v1/strategy-lab'],
-      ['z2kPreview', '/api/v1/migrations/z2k/preview'],
-      ['smartRoute', '/api/v1/smart-route'],
-      ['serviceControl', '/api/v1/service-control'],
-      ['dns', '/api/v1/dns'],
-      ['dnsPlan', '/api/v1/dns/plan'],
-      ['sessions', '/api/v1/auth/sessions'],
-    ].filter(([key]) => key === 'status' || !retryFailed || retryKeys.has(key) || !state.dataLoad[key]?.loaded);
+    const requests = panelViewRequests().filter(([key]) => key === 'status' || !retryFailed || retryKeys.has(key) || !state.dataLoad[key]?.loaded);
     requests.forEach(([key]) => panelSectionState(key, 'loading'));
     renderPanelLoad();
     await settlePanelReads(requests, async ([key, url]) => {
@@ -1079,13 +1103,13 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     state.loadIssues = issues;
     renderPanelLoad();
     if (issues.length) {
-      const busy = Object.values(state.dataLoad).some(value => value.phase === 'busy');
+      const busy = panelViewKeys().some(key => state.dataLoad[key]?.phase === 'busy');
       // Availability and the saved-image notice already explain an operation
       // in progress. Keep a separate warning only for additional failures.
       refreshPanelLoadNotice(true);
       schedulePanelRetry(busy);
     } else { panelLoad.retryCount = 0; }
-    if (!state.onboardingAutoEvaluated && state.dataLoad.services?.loaded && state.dataLoad.engineConfigs?.loaded) {
+    if (!state.onboardingAutoEvaluated && state.dataLoad.services?.loaded) {
       state.onboardingAutoEvaluated = true;
       if(typeof consoleInitialSetup==='function')consoleInitialSetup();else setTimeout(() => openOnboarding(false), 0);
     }
@@ -1095,7 +1119,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     // This is an authentication/bootstrap failure, NOT a failed service list.
     // Keep independent snapshots and never fabricate empty configuration.
     const busy = panelBusy(error);
-    for (const key of ['status', 'services', 'engineConfigs']) {
+    for (const key of panelViewKeys()) {
       if (state.dataLoad[key]?.phase === 'loading') panelSectionState(key, busy ? 'busy' : 'error', error);
     }
     state.loadIssues = [{ section: 'authentication', message: error.message }];
@@ -1306,7 +1330,9 @@ async function manageComponentReviewed(id, requestedAction) {
   const operation = action === 'remove'
     ? 'Будет удалён только пакет/файл, принадлежащий RAZVILKA. Конфликты, активный процесс или зависимые сервисы блокируют действие.'
     : `Источник: ${source}. После установки обход останется выключенным, пока вы явно не назначите сервисы и не выполните общий Apply.`;
-  if (!await askConfirmation(`${verb} ${component.name}`, `${operation} План содержит ${plan.steps?.length || 0} проверяемых этапов, фиксирует версии до/после и не включает маршруты автоматически.`, verb)) return false;
+  // The explicit Install click is consent for the reviewed package, not for routing.
+  // Updating active runtimes and deletion retain their separate impact review.
+  if (action !== 'install' && !await askConfirmation(`${verb} ${component.name}`, `${operation} План содержит ${plan.steps?.length || 0} проверяемых этапов, фиксирует версии до/после и не включает маршруты автоматически.`, verb)) return false;
   if(!workflowSession(epoch))return false;
   const buttons = $$(`.component-action[data-component="${CSS.escape(id)}"]`);
   buttons.forEach((button) => { button.disabled = true; button.textContent = 'Выполняется…'; });

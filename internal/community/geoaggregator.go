@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/netip"
 	"regexp"
 	"slices"
@@ -56,7 +57,7 @@ type geoCatalog struct {
 func geoEntries(body []byte) ([]Entry, error) {
 	var index geoCatalog
 	decoder := json.NewDecoder(bytes.NewReader(body))
-	if err := decoder.Decode(&index); err != nil || index.Version != 1 || index.Base != geoAggregatorBase || len(index.Services) == 0 || len(index.Services) > maxGeoServices {
+	if err := decoder.Decode(&index); err != nil || len(body) > maxSourceBytes || decoder.Decode(new(any)) != io.EOF || index.Version != 1 || index.Base != geoAggregatorBase || len(index.Services) == 0 || len(index.Services) > maxGeoServices {
 		return nil, errors.New("Geo-Aggregator catalogue has an unexpected shape")
 	}
 	categories := map[string]string{}
@@ -99,24 +100,7 @@ func geoEntries(body []byte) ([]Entry, error) {
 // RefreshGeoAggregator reloads the index when it is older than its TTL. A
 // failure keeps the previous index; the curated catalogue always remains.
 func (m *Manager) RefreshGeoAggregator(ctx context.Context) error {
-	m.mu.RLock()
-	fresh := !m.geoAt.IsZero() && time.Since(m.geoAt) >= 0 && time.Since(m.geoAt) < geoAggregatorTTL
-	m.mu.RUnlock()
-	if fresh {
-		return nil
-	}
-	body, err := m.fetch(ctx, geoAggregatorCatalog)
-	if err != nil {
-		return err
-	}
-	entries, err := geoEntries(body)
-	if err != nil {
-		return err
-	}
-	m.mu.Lock()
-	m.geo, m.geoAt = entries, time.Now()
-	m.mu.Unlock()
-	return nil
+	return m.refreshGeoCheckpoint(ctx)
 }
 
 func (m *Manager) geoEntries() []Entry {

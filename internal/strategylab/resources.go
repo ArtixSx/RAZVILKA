@@ -69,18 +69,30 @@ func (s SystemResourceInspector) Inspect() ResourceBudget {
 }
 
 func parseMemory(raw string) (total, available uint64) {
+	var free uint64
+	hasAvailable := false
 	for _, line := range strings.Split(raw, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue
 		}
-		value, _ := strconv.ParseUint(fields[1], 10, 64)
+		value, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
 		switch strings.TrimSuffix(fields[0], ":") {
 		case "MemTotal":
 			total = value
 		case "MemAvailable":
-			available = value
+			available, hasAvailable = value, true
+		case "MemFree":
+			free = value
 		}
+	}
+	// MemFree is a conservative lower bound on old kernels. An explicitly
+	// observed MemAvailable=0 remains zero: never turn memory pressure into PASS.
+	if !hasAvailable {
+		available = free
 	}
 	return
 }

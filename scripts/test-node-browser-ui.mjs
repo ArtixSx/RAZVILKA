@@ -66,7 +66,7 @@ assert.doesNotMatch($('#nodeBatchMessage').textContent,/TCP/,'unknown failed ope
 context.browser.job = null;
 assert.match($('#nodeList').innerHTML, /Нидерланды/);
 assert.match($('#nodeList').innerHTML, /Работает/);
-assert.match($('#nodeList').innerHTML, /Пинг · TCP/);
+assert.match($('#nodeList').innerHTML, /TCP до сервера/);
 assert.equal(context.nodeServiceHealth(state.nodes.nodes[1], 'youtube').state, 'quarantined', 'Telegram proof leaked to YouTube');
 for (const checked_at of [undefined, '', 'bad', '0001-01-01T00:00:00Z']) {
   state.nodes.nodes[0].health = { checked_at, message: '<private-label>' };
@@ -104,7 +104,7 @@ assert.equal(context.browser.selected.has(expired.id), true, 'expired nodes rema
 assert.equal(context.nodeCanCheck(expired), false);
 const udp = { ...node('node-dddddd'), protocol: 'hysteria2' };
 assert.equal(context.nodeSupportsTCPPing(udp), false);
-assert.match(context.renderNodeBrowserCard(udp, 'telegram'), /Через сервис/);
+assert.match(context.renderNodeBrowserCard(udp, 'telegram'), /Не применяется/);
 assert.match(context.renderNodeBrowserCard(udp, 'telegram'), /data-node-ping="node-dddddd" disabled/);
 assert.match(context.renderNodeBrowserCard(expired, 'telegram'), /data-node-ping="node-cccccc" disabled/);
 

@@ -22,7 +22,7 @@
 | [README_RU.md](../README_RU.md) | Короткий переход к русской документации |
 | [docs/README.md](README.md) | Содержание документации |
 | [CURRENT_STATUS_RU.md](CURRENT_STATUS_RU.md) | Какие исходники сохранены и что ещё не перепроверено |
-| [ROADMAP.md](ROADMAP.md) | Прежний план отменён; новый ожидается |
+| [ROADMAP.md](ROADMAP.md) | Очередь интеграции и проверки новой поставки D00–D14 |
 | [CHANGELOG.md](../CHANGELOG.md) | Что добавлено и исправлено по версиям |
 | [VERSION](../VERSION) | Номер версии исходников; правила описаны в [Версиях](VERSIONING_RU.md) |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Как сообщить об ошибке и предложить исправление |

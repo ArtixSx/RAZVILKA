@@ -25,8 +25,14 @@ var lookup = net.DefaultResolver.LookupNetIP
 func LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error) {
 	var err error
 	for attempt := 1; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		var addresses []netip.Addr
 		addresses, err = lookup(ctx, network, host)
+		if cancelled := ctx.Err(); cancelled != nil {
+			return nil, cancelled
+		}
 		if err == nil || attempt == attempts || !retryable(err) || ctx.Err() != nil {
 			return addresses, err
 		}
@@ -34,7 +40,7 @@ func LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return nil, err
+			return nil, ctx.Err()
 		case <-timer.C:
 		}
 	}

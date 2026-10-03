@@ -100,12 +100,17 @@ type cachedPreview struct {
 }
 
 type Manager struct {
-	registry Registry
-	client   *http.Client
-	mu       sync.RWMutex
-	cache    map[string]cachedPreview
-	geo      []Entry
-	geoAt    time.Time
+	registry       Registry
+	client         *http.Client
+	mu             sync.RWMutex
+	cache          map[string]cachedPreview
+	geo            []Entry
+	geoAt          time.Time
+	geoCacheDir    string
+	geoRefreshGate chan struct{}
+	geoRefreshing  bool
+	geoRetryAfter  time.Time
+	geoError       string
 }
 
 func Load(path string) (*Manager, error) {
@@ -117,7 +122,12 @@ func Load(path string) (*Manager, error) {
 	if err := json.Unmarshal(b, &registry); err != nil {
 		return nil, fmt.Errorf("decode community catalog: %w", err)
 	}
-	return New(registry)
+	m, err := New(registry)
+	if err != nil {
+		return nil, err
+	}
+	m.loadGeoCheckpoint(path)
+	return m, nil
 }
 
 func New(registry Registry) (*Manager, error) {

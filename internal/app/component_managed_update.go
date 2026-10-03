@@ -20,21 +20,37 @@ import (
 // and asks the service and any routes that were live before to be live
 // afterwards. Proxy engines are checked in an isolated canary instead.
 // updateComponent updates one installed component outside an HTTP request.
-func (a *App) updateComponent(ctx context.Context, id string) error {
+func (a *App) updateComponent(ctx context.Context, id string, guards ...func(context.Context) error) error {
+	checkAuthority := func() error {
+		if err := ctx.Err(); err != nil {
+			return components.NoMutation(err)
+		}
+		for _, guard := range guards {
+			if guard != nil {
+				if err := guard(ctx); err != nil {
+					return components.NoMutation(err)
+				}
+			}
+		}
+		return nil
+	}
+	if err := checkAuthority(); err != nil {
+		return err
+	}
 	if a.Components == nil {
-		return errors.New("component manager disabled")
+		return components.NoMutation(errors.New("component manager disabled"))
 	}
 	plan, err := a.Components.Plan(ctx, id, "update", false)
 	if err != nil {
-		return err
+		return components.NoMutation(err)
 	}
 	a.enrichComponentPlan(&plan)
 	if !plan.Ready {
-		return errors.New("component lifecycle plan is blocked")
+		return components.NoMutation(errors.New("component lifecycle plan is blocked"))
 	}
 	if a.managedUpdateInUse(id) {
 		if a.Dataplane == nil {
-			return errors.New("dataplane manager is unavailable")
+			return components.NoMutation(errors.New("dataplane manager is unavailable"))
 		}
 		var check func(context.Context) error
 		success := "Новая версия проверена при работающих маршрутах (ночное обслуживание)"
@@ -46,6 +62,9 @@ func (a *App) updateComponent(ctx context.Context, id string) error {
 		if err != nil {
 			return err
 		}
+		if err := checkAuthority(); err != nil {
+			return err
+		}
 		_ = a.Components.RecordOperation(id, "update", "running", "Ночное обслуживание: обновление с проверкой и откатом")
 		if _, err = a.Components.ManagedUpdate(ctx, id, check); err != nil {
 			_ = a.Components.RecordOperation(id, "update", "failed", err.Error())
@@ -55,7 +74,10 @@ func (a *App) updateComponent(ctx context.Context, id string) error {
 		return nil
 	}
 	if blocker := a.componentRuntimeBlocker(id, "update"); blocker != nil {
-		return errors.New("component runtime blocks the update")
+		return components.NoMutation(errors.New("component runtime blocks the update"))
+	}
+	if err := checkAuthority(); err != nil {
+		return err
 	}
 	_ = a.Components.RecordOperation(id, "update", "running", "Ночное обслуживание: обновление")
 	if _, err = a.Components.Apply(ctx, id); err != nil {
@@ -98,6 +120,11 @@ func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id 
 	}
 	_ = a.Components.RecordOperation(id, "update", "running", "Обновление при работающих маршрутах: проверка и откат подготовлены")
 	result, err := a.Components.ManagedUpdate(ctx, id, check)
+	if err == nil || errors.Is(err, components.ErrRollbackVerified) {
+		if clearErr := a.finishMatchingComponentMaintenance(ctx, id); clearErr != nil {
+			err = errors.Join(err, clearErr)
+		}
+	}
 	if err != nil {
 		code := http.StatusBadGateway
 		if errors.Is(err, components.ErrRollbackPackageMissing) {

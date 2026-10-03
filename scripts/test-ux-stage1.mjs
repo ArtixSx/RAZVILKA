@@ -10,11 +10,11 @@ const flush=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const results=[];
 async function test(name,fn){let timer;try{await Promise.race([fn(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('test deadline')),4000);})]);results.push({name,status:'passed'});console.log('PASS',name);}catch(e){results.push({name,status:'failed',error:e.message});console.error('FAIL',name,e.stack);}finally{clearTimeout(timer);}}
-const helpers=['panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','settlePanelReads','refreshAll','refreshAfterMutation','loadPanelSnapshot'];
+const helpers=['panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','settlePanelReads','refreshAll','refreshAfterMutation','loadPanelSnapshot'];
 const renderNames=['renderStatus','renderSettings','renderSystem','renderMetrics','renderServices','renderOverviewQuickServices','renderOverviewServices','renderReadiness','renderEngines','renderEngineControl','renderComponents','renderWarpManager','renderSources','renderNodes','renderConnections','renderDevices','renderTestLab','renderEngineLab','renderAudit','renderStrategyLab','renderDNS','renderDNSPlan','renderDNSServiceBindings'];
 function fixture(){
  const els=new Map(),calls=[],renders=[],timers=new Map();let serial=0,handler;
- const state={authenticated:true,status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
+ const state={currentView:'engineconfig',authenticated:true,status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
  const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
  const $=key=>{if(!els.has(key))els.set(key,{hidden:true,value:'',textContent:'',classList:{toggle(){}}});return els.get(key);};
  const ctx={state,panelLoad,$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent(){}},

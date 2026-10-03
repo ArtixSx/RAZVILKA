@@ -192,7 +192,8 @@
   }
   function renderReview() {
     if(!editingPolicy) return;const p=policyFromForm();
-    const releaseSafeMode = $('releaseSafeMode').checked;
+    // One explicit wizard consent covers activation; opening a page never writes.
+    const releaseSafeMode = p.enabled && !snapshot?.blocked && !!(snapshot?.safe_mode || snapshot?.manual);
     const consentNeeded = policyConsentRequired(editingPolicy, p, releaseSafeMode);
     const fingerprint = JSON.stringify([p, releaseSafeMode, snapshot?.starter?.sha256,
       $$('input[name="initial-starter"]:checked').map(x => x.value).sort(),
@@ -238,8 +239,8 @@
     const active=presentationFresh&&p.enabled&&!snapshot.safe_mode&&!snapshot.manual&&!snapshot.stopped&&!snapshot.blocked;
     $('heroState').textContent=!presentationFresh?'Состояние обновляется':!p.setup_complete?'Нужна первоначальная настройка':active?'Автономный режим разрешён':'Автоматические изменения приостановлены';
     $('heroDot').classList.toggle('inactive',!active);
-    $('heroTitle').textContent=!presentationFresh?'Нужны свежие данные':!p.setup_complete?'Один мастер. Дальше — сервисы.':active?'Проверяем. Сохраняем. Восстанавливаем.':'Сеть не меняется без разрешения';
-    $('heroDescription').textContent=!presentationFresh?'Показаны последние сохранённые настройки. Текущее состояние автопилота ещё не подтверждено.':!p.setup_complete?'Выберите устройства, источники и расписания. Подбор начнётся после сохранения вашего согласия.':snapshot.safe_mode?'Safe Mode запрещает применение маршрутов. Снять его можно отдельным согласием в мастере.':snapshot.stopped?'Собственные маршруты остановлены в основной панели. Мастер не снимает эту остановку автоматически.':snapshot.manual?'В основной панели включена ручная настройка. Автоматическое применение приостановлено.':!p.enabled?'Пауза останавливает автоматические изменения, но не удаляет применённые маршруты.':'Для каждого сервиса сохраняется пригодный путь. Новые кандидаты получают разрешение только после точной проверки.';
+    $('heroTitle').textContent=!presentationFresh?'Нужны свежие данные':!p.setup_complete?'Настройте автопилот':active?'Автопилот работает':'Автопилот приостановлен';
+    $('heroDescription').textContent=!presentationFresh?'Показаны последние сохранённые настройки. Текущее состояние автопилота ещё не подтверждено.':!p.setup_complete?'Выберите устройства, источники и расписания. Подбор начнётся после сохранения вашего согласия.':snapshot.safe_mode?'Автоматическое применение ещё не разрешено. Откройте «Область и разрешения» и сохраните выбранные условия запуска.':snapshot.stopped?'Собственные маршруты остановлены в основной панели. Мастер не снимает эту остановку автоматически.':snapshot.manual?'В основной панели включена ручная настройка. Автоматическое применение приостановлено.':!p.enabled?'Пауза останавливает автоматические изменения, но не удаляет применённые маршруты.':'Для каждого сервиса сохраняется пригодный путь. Новые кандидаты получают разрешение только после точной проверки.';
     $('pauseButton').disabled=!p.setup_complete||(!presentationFresh&&!p.enabled);$('pauseButton').textContent=p.enabled?'Пауза автоматики':'Возобновить автоматику';
     $('managedCount').textContent=items.length;
     $('healthyCount').textContent=!presentationFresh?'—':Object.entries(snapshot.services||{}).filter(([id,s])=>s.enabled&&serviceProof(id)?.kind==='good').length;
@@ -247,7 +248,9 @@
     $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${w.mode==='off'?'Выключено':w.mode==='install'?'Установка сама, с откатом':w.mode==='prepare'?'Подготовка, без установки':'Проверка обновлений'} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
     $('maintenanceMessage').textContent=snapshot.maintenance_message||'Фактический результат появится после обслуживания на роутере.';
     $('connectionLabel').textContent=`${presentationFresh?'Состояние роутера':'Последние настройки'} · ${formatDate(snapshot.server_time)}`;
-    renderServices();fillWizard();renderStarterReview();
+    // Never rebuild hidden editors on every observation.
+    if (activeTab==='services' || activeTab==='overview') renderServices();
+    if (activeTab==='setup' || !editingPolicy) {fillWizard();renderStarterReview();}
   }
   async function refresh(force=false, live=force) {
     const generation=authGeneration;
@@ -302,10 +305,10 @@
       const p=validatePolicy(policyFromForm());
       // Editing after an earlier approval invalidates that approval.
       renderReview();
-      if(policyConsentRequired(editingPolicy,p,$('releaseSafeMode').checked)&&!$('confirmConsent').checked) throw new Error('Подтвердите новые разрешения: источники, способы подключения или область устройств.');
-      if($('releaseSafeMode').checked&&!p.enabled) throw new Error('Не снимайте Safe Mode при выключенной автоматике.');
+      const releaseRequested=p.enabled&&!snapshot?.blocked&&!!(snapshot?.safe_mode||snapshot?.manual);
+      if(policyConsentRequired(editingPolicy,p,releaseRequested)&&!$('confirmConsent').checked) throw new Error('Подтвердите новые разрешения: источники, способы подключения или область устройств.');
       saving=true;$('saveWizard').disabled=true;
-      await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:$('releaseSafeMode').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
+      await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:releaseRequested&&$('confirmConsent').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
       requireGeneration(generation);const refreshed=await refresh(true);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
     } catch(e) { reportError(e,$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
@@ -360,7 +363,7 @@
     requireGeneration(generation);
     $('subscriptionURL').value='';sourceDirty=false;notify(`Подписка сохранена: ${result.source.source_id}. Добавьте её ID в разрешённые источники мастера.`);await readSources();
   })().catch(e=>reportError(e));});
-  document.addEventListener('razvilka:view-change',event=>{const name=({overview:'overview',autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(name==='sources')void readSources();if(name==='setup')setStep(step);void refresh();}});
+  document.addEventListener('razvilka:view-change',event=>{const name=({overview:'overview',autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(name==='sources')void readSources();if(name==='setup'){fillWizard();renderStarterReview();setStep(step);}void refresh();}});
   // Explicit refresh works in background tabs too. Read only the protected
   // publication, coalesce with an in-flight read and keep unfinished form edits.
   document.addEventListener('razvilka:panel-refresh',()=>{void refresh();});

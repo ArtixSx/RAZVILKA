@@ -96,12 +96,12 @@
     if (!available || !snapshot?.policy) return make('unknown','Состояние автопилота не получено','Панель пока не получила актуальные данные. Это не означает, что подключения остановлены.','Обновить состояние','refresh');
     const p = snapshot.policy;
     if (snapshot.blocked) return make('recovery','Автопилоту нужно восстановление','Изменения приостановлены. Сначала проверьте причину; существующее подключение не считается отключённым.','Посмотреть причину','diagnostics','warn');
-    if (!p.setup_complete) return make('setup','Автопилот ещё не настроен','Выберите устройства и разрешённые способы подключения один раз. Уже настроенные вручную сервисы останутся без изменений.','Настроить автопилот','onboard');
-    if (snapshot.safe_mode || status.safe_mode) return make('safe','Изменение сети запрещено','Автопилот не может применять подключения, пока включена защита сети.','Открыть настройки защиты','settings','warn');
+    if (!p.setup_complete) return make('setup','Автопилот ещё не настроен','Выберите устройства и разрешённые способы подключения один раз. Уже настроенные вручную сервисы останутся без изменений.','Настроить автопилот','autopilot');
+    if (snapshot.safe_mode || status.safe_mode) return make('safe','Изменение сети запрещено','Автопилот не может применять подключения, пока включена защита сети.','Открыть восстановление','diagnostics','warn');
     if (snapshot.stopped) return make('stopped','Подключения RAZVILKA остановлены','Настройки сохранены. Возобновление подключений и пауза автоподбора — разные действия.','Открыть управление','settings','warn');
     if (snapshot.manual) return make('manual','Выбран ручной режим','Вы сами назначаете подключения. Для автоматического подбора измените режим управления.','Изменить режим','settings');
-    if (!p.enabled) return make('paused','Автопилот на паузе','Автоподбор приостановлен. Уже применённые подключения этим действием не отключаются.','Настроить автопилот','onboard');
-    return make('enabled','Автопилот включён','Подбирает и проверяет разрешённые подключения. Результат для каждого сервиса показан отдельно.','Настройки автопилота','onboard','good');
+    if (!p.enabled) return make('paused','Автопилот на паузе','Автоподбор приостановлен. Уже применённые подключения этим действием не отключаются.','Настроить автопилот','autopilot');
+    return make('enabled','Автопилот включён','Подбирает и проверяет разрешённые подключения. Результат для каждого сервиса показан отдельно.','Настройки автопилота','autopilot','good');
   }
   function appliedView(s) {
     return s?.applied_state || {enabled:s?.applied_enabled === true,route:s?.applied_route,sources:s?.applied_sources};
@@ -138,21 +138,34 @@
     return {rows,selected:selected.length,good:selected.filter(s=>s.kind==='good').length,
       attention:selected.filter(s=>s.actionable).length,unconfirmed:selected.filter(s=>s.kind!=='good').length,changed:selected.filter(s=>s.changed).length};
   }
+  function engineUsage(services, summaries = {}) {
+    const counts = {};
+    for (const service of services || []) {
+      const applied = appliedView(service);
+      if (applied.enabled !== true || !text(applied.route) || applied.route === 'auto') continue;
+      const id = applied.route.split(':')[0];
+      const row = counts[id] ||= {assigned:0, verified:0};
+      row.assigned++;
+      if (summaries[service.id]?.kind === 'good' && summaries[service.id]?.route === applied.route) row.verified++;
+    }
+    return counts;
+  }
   // Exactly one navigation owner for each route, including legacy deep links.
   const taskSections = Object.freeze({
     overview:{title:'Главная',children:[['overview','Главная']]},
-    services:{title:'Сервисы',children:[['services','Сервисы'],['managed','Подробности автоподбора']]},
-    nodes:{title:'Подключения',children:[['nodes','Мои подключения'],['providers','Добавить из источника'],['subscription-settings','Обновление подписок'],['connections','Текущий трафик']]},
-    devices:{title:'Устройства',children:[['devices','Устройства и группы']]},
-    exclusions:{title:'Исключения',children:[['exclusions','Сайты и устройства без обхода']]},
+    autopilot:{title:'Автопилот',children:[['autopilot','Автопилот'],['managed','Сервисы автопилота'],['onboard','Область и разрешения']]},
+    services:{title:'Сервисы',children:[['services','Мои сервисы']]},
+    nodes:{title:'Подключения',children:[['nodes','Мои подключения'],['providers','Источники'],['subscription-settings','Расписания подписок'],['connections','Трафик']]},
+    engines:{title:'Обходы',children:[['engines','Обходы'],['engineconfig','Настройка обхода']]},
+    devices:{title:'Устройства',children:[['devices','Домашняя сеть'],['exclusions','Исключения устройств и сайтов']]},
     activity:{title:'События',children:[['activity','События']]},
-    settings:{title:'Настройки',children:[['settings','Все настройки'],['onboard','Правила автопилота'],['autopilot','Подробности автоматики'],['engines','Способы обхода'],['engineconfig','Настройки обхода'],['updates','Обновления'],['diagnostics','Диагностика'],['dns','DNS'],['sources','Списки сайтов'],['strategylab','Подбор стратегий NFQWS2'],['testlab','Проверки подключений']]}
+    settings:{title:'Настройки',children:[['settings','Настройки'],['updates','Обновления'],['diagnostics','Диагностика'],['dns','DNS'],['sources','Списки сайтов'],['strategylab','Стратегии NFQWS2'],['testlab','Проверки подключений']]}
   });
   const settingsTasks = Object.freeze([
-    {target:'onboard',title:'Автопилот',detail:'Устройства, разрешённые способы подключения, интервалы и резерв.',icon:'route'},
-    {target:'engines',title:'Способы обхода',detail:'Установка и настройка NFQWS2, WARP, Sing-box и других компонентов.',icon:'layers'},
-    {target:'updates',title:'Обновления',detail:'Версия программы, обновления компонентов и результаты обслуживания.',icon:'download'},
-    {target:'diagnostics',title:'Проблемы с подключением',detail:'Что мешает работе и какие действия уже выполнены.',icon:'activity'}
+    {target:'autopilot',title:'Автопилот',detail:'Проверки, резерв и разрешённые способы подключения.',icon:'route'},
+    {target:'dns',title:'DNS',detail:'Разрешение имён и правила для отдельных сервисов.',icon:'globe'},
+    {target:'updates',title:'Обновления',detail:'Программа, компоненты и окно обслуживания.',icon:'download'},
+    {target:'diagnostics',title:'Диагностика',detail:'Причины отказов и восстановление.',icon:'activity'}
   ]);
   function navigation(view = 'overview') {
     for (const [owner,section] of Object.entries(taskSections)) {
@@ -162,7 +175,7 @@
     return {owner:'overview',title:'Главная',pageTitle:'Главная'};
   }
 
-  const model = Object.freeze({ category, selectedView, selection, aggregate, filterServices, groupServices, finitePercent, freshEvidence, protocol, homeSnapshot, humanAuto, appliedView, humanService, humanCounts, taskSections, settingsTasks, navigation });
+  const model = Object.freeze({ category, selectedView, selection, aggregate, filterServices, groupServices, finitePercent, freshEvidence, protocol, homeSnapshot, humanAuto, appliedView, humanService, humanCounts, taskSections, settingsTasks, navigation, engineUsage });
   root.RazvilkaInterfaceModel = model;
   if (typeof module !== 'undefined' && module.exports) module.exports = model;
 })(typeof globalThis === 'undefined' ? window : globalThis);

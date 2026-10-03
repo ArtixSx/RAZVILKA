@@ -1,0 +1,849 @@
+{
+  "schema": 1,
+  "base": "817783493f0c2784ccc70aa73868cd64e9437634",
+  "executed_isolated_tests": [
+    {
+      "test": "TestAdapterUnknownStopsAndPersistsCheckpoint",
+      "package": "internal/app",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestAdapterSuccessClearsOnlyOwnReceipt",
+      "package": "internal/app",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestAdapterVerifiedRollbackIsNotWholeSuccess",
+      "package": "internal/app",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestAdapterModeGuardPreventsEffects",
+      "package": "internal/app",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestAdapterFailedPersistenceNeverStartsPackage",
+      "package": "internal/app",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestAdapterMatchingManualProofClearsButOtherCannot",
+      "package": "internal/app",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestAdapterReceiptFitsOriginalSchema",
+      "package": "internal/app",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestRoundTripKeepsOriginalTimeAndBytes",
+      "package": "internal/catalogsnapshot",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestRejectsCorruptionOriginFutureAndExpired",
+      "package": "internal/catalogsnapshot",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestSizeLimitsAndZeroTime",
+      "package": "internal/catalogsnapshot",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchUpdateOutcomeSurvivesWrapping",
+      "package": "internal/components",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchEveryPreferredExecutorCommitsAndUndoes",
+      "package": "internal/config",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchCommitUnknownAndIntentRejected",
+      "package": "internal/config",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchCommitStillHonorsSafetyAndRevision",
+      "package": "internal/config",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestUnknownRollbackStopsBatchAndRetainsReceipt",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestVerifiedRollbackIsNotFalseSuccess",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestFailedIntentDoesNotStartMutation",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestFailedReceiptStopsFollowingMutation",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestWindowGuardRecheckedForEveryComponent",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestSharedPackageUpdatedOnce",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestErrorCannotMasqueradeAsUpdated",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestCancelledBeforeBatchHasNoWrites",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestNotStartedCanContinueButNotCompleteWindow",
+      "package": "internal/maintenancebatch",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchCancelledBeforeLookup",
+      "package": "internal/netresolve",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchCancelledLateSuccessNotEvidence",
+      "package": "internal/netresolve",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchCancellationNotPreviousDNSTimeout",
+      "package": "internal/netresolve",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchRetriesBoundedAndNotFoundNotRetried",
+      "package": "internal/netresolve",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestRegistryMembership",
+      "package": "internal/routekind",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestRegistryRejectsNonCanonicalIDs",
+      "package": "internal/routekind",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestRegistryCannotBeMutatedThroughCopy",
+      "package": "internal/routekind",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchMemoryFallbackForOldKernels",
+      "package": "internal/strategylab",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestResearchFallbackDoesNotRelaxOOMGuard",
+      "package": "internal/strategylab",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestColdWireGuardSendsBeforeHandshake",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestGenericAndAWGHaveNoProviderDependency",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestWarpStillRequiresProviderTrace",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestHandshakeIsNotServiceSuccess",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestHandshakeFailurePreservesBothCauses",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestCandidateAllServicesCheckedAndDeduplicated",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestCandidateCancellationStopsWork",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestCandidateNoSafeServiceRefusesBeforeIO",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    },
+    {
+      "test": "TestCandidateTimeoutNotSuccess",
+      "package": "internal/tunnelcheck",
+      "result": "passed",
+      "scope": "isolated production module/function; App/config use model/IO doubles where documented"
+    }
+  ],
+  "remaining_scenarios": [
+    {
+      "id": "H01-T01",
+      "task": "H01",
+      "scenario": "Xray Store+reload+undo",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H01-T02",
+      "task": "H01",
+      "scenario": "WG Store+reload+undo",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H01-T03",
+      "task": "H01",
+      "scenario": "AWG Store+reload+undo",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H01-T04",
+      "task": "H01",
+      "scenario": "Sing-box generic Store+reload+undo",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H01-T05",
+      "task": "H01",
+      "scenario": "Exact NodeStore proof remains required",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H01-T06",
+      "task": "H01",
+      "scenario": "Unknown executor refused",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T01",
+      "task": "H02",
+      "scenario": "WG cold peer with keepalive off",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T02",
+      "task": "H02",
+      "scenario": "WG exactly one scoped client route",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T03",
+      "task": "H02",
+      "scenario": "WG mixed scoped/unscoped canary",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T04",
+      "task": "H02",
+      "scenario": "AWG canary without Cloudflare dependency",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T05",
+      "task": "H02",
+      "scenario": "WARP trace still mandatory",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T06",
+      "task": "H02",
+      "scenario": "Denied HTTP is not handshake success",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T07",
+      "task": "H02",
+      "scenario": "Partial start/cleanup failure fences next step",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T08",
+      "task": "H02",
+      "scenario": "Same tunnel address live/candidate path isolation",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H02-T09",
+      "task": "H02",
+      "scenario": "IPv6-only explicit support/refusal",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T01",
+      "task": "H03",
+      "scenario": "Actual decodeAutonomy preserves two-key receipt",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T02",
+      "task": "H03",
+      "scenario": "Definite handoff refusal restores prior receipt",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T03",
+      "task": "H03",
+      "scenario": "Unknown handoff not replayed after boot",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T04",
+      "task": "H03",
+      "scenario": "Failed component rollback stops next Xray update",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T05",
+      "task": "H03",
+      "scenario": "SafeMode/Stop before and during preflight",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T06",
+      "task": "H03",
+      "scenario": "Window closes before next mutation",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T07",
+      "task": "H03",
+      "scenario": "Shared wireguard-tools package updated once",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T08",
+      "task": "H03",
+      "scenario": "Downgrade refuses unknown pending semantics",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T09",
+      "task": "H03",
+      "scenario": "Manual repair clears matching receipt only",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H03-T10",
+      "task": "H03",
+      "scenario": "Read-only check cannot erase unresolved attempt",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H04-T01",
+      "task": "H04",
+      "scenario": "GA reload offline with original timestamp",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H04-T02",
+      "task": "H04",
+      "scenario": "Stale index/refresh error does not delete curated or accepted definitions",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H04-T03",
+      "task": "H04",
+      "scenario": "Corrupt source/schema/trailing JSON rejected",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H04-T04",
+      "task": "H04",
+      "scenario": "Many tabs one in-flight fetch",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H04-T05",
+      "task": "H04",
+      "scenario": "Disk full/checkpoint Sync failure visible",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H04-T06",
+      "task": "H04",
+      "scenario": "No source controls executable icon/HTML",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H04-T07",
+      "task": "H04",
+      "scenario": "API shows index age and last error",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H06-T01",
+      "task": "H06",
+      "scenario": "Real Xray REALITY RAW/TCP native validation",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H06-T02",
+      "task": "H06",
+      "scenario": "TLS peer certificate verification negative control",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H06-T03",
+      "task": "H06",
+      "scenario": "Proxy success but sidecar missing failure",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H06-T04",
+      "task": "H06",
+      "scenario": "Selected client via Xray, control client base",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H06-T05",
+      "task": "H06",
+      "scenario": "Kill Xray/kill sidecar",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H06-T06",
+      "task": "H06",
+      "scenario": "WAN change and router reboot",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H06-T07",
+      "task": "H06",
+      "scenario": "Bad profile rollback",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H07-T01",
+      "task": "H07",
+      "scenario": "Multiple WG profiles independent key refs",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H07-T02",
+      "task": "H07",
+      "scenario": "Endpoint DNS/TTL/family refresh",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H07-T03",
+      "task": "H07",
+      "scenario": "Idle/NAT recovery",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H07-T04",
+      "task": "H07",
+      "scenario": "MTU large-transfer test",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H07-T05",
+      "task": "H07",
+      "scenario": "Owner-authorized private peer vs feed SSRF",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H07-T06",
+      "task": "H07",
+      "scenario": "AllowedIPs not implicit all-LAN authority",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H08-T01",
+      "task": "H08",
+      "scenario": "Correct AWG module/tool/profile peer",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H08-T02",
+      "task": "H08",
+      "scenario": "Wrong ABI/vermagic rejected before load",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H08-T03",
+      "task": "H08",
+      "scenario": "Foreign interface prevents unload",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H08-T04",
+      "task": "H08",
+      "scenario": "WG-to-AWG conversion rejects server-dependent incompatibility",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H08-T05",
+      "task": "H08",
+      "scenario": "AWG TCP/UDP path and reboot",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T01",
+      "task": "H10",
+      "scenario": "Unknown website outside catalogue",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T02",
+      "task": "H10",
+      "scenario": "Literal IP and zero service overrides",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T03",
+      "task": "H10",
+      "scenario": "Client outside service scope inherits default",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T04",
+      "task": "H10",
+      "scenario": "Removing override inherits default",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T05",
+      "task": "H10",
+      "scenario": "Excluded device and base DNS",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T06",
+      "task": "H10",
+      "scenario": "Russian unselected service direct",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T07",
+      "task": "H10",
+      "scenario": "Manual bypass overrides auto RU",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T08",
+      "task": "H10",
+      "scenario": "Shared CDN opposing rules",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T09",
+      "task": "H10",
+      "scenario": "IPv6/QUIC unsupported class policy",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T10",
+      "task": "H10",
+      "scenario": "DoH/ECH app path limits honest",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T11",
+      "task": "H10",
+      "scenario": "Existing TCP/UDP sessions after scope change",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H10-T12",
+      "task": "H10",
+      "scenario": "LAN UI/SSH/DHCP/ND not captured",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H11-T01",
+      "task": "H11",
+      "scenario": "Powerloss before/after each package journal write",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H11-T02",
+      "task": "H11",
+      "scenario": "New sidecar fails only after activation",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H11-T03",
+      "task": "H11",
+      "scenario": "Old package retained until known-good new runtime",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H11-T04",
+      "task": "H11",
+      "scenario": "Package install scripts affect other runtimes",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H11-T05",
+      "task": "H11",
+      "scenario": "Full disk and rollback failure",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H11-T06",
+      "task": "H11",
+      "scenario": "Independent updater survives panel crash",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H12-T01",
+      "task": "H12",
+      "scenario": "YouTube web vs video/CDN/QUIC",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H12-T02",
+      "task": "H12",
+      "scenario": "Discord web vs voice/media",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H12-T03",
+      "task": "H12",
+      "scenario": "Telegram website vs DC/IP/media",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H12-T04",
+      "task": "H12",
+      "scenario": "AI web/login/API predicates",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H12-T05",
+      "task": "H12",
+      "scenario": "Game login vs UDP match session",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H12-T06",
+      "task": "H12",
+      "scenario": "32 bad and33rd usable node",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H12-T07",
+      "task": "H12",
+      "scenario": "304/429/503/reorder/reboot/full store",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H12-T08",
+      "task": "H12",
+      "scenario": "Active/manual/reserve/rollback refs retained by GC",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H14-T01",
+      "task": "H14",
+      "scenario": "WARP export/DNS/endpoint does not re-register",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H14-T02",
+      "task": "H14",
+      "scenario": "Unknown registration POST not blindly repeated",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H14-T03",
+      "task": "H14",
+      "scenario": "USQUE H2 certificate and endpoint identity",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H14-T04",
+      "task": "H14",
+      "scenario": "MASQUE H3-L4 refuses UDP coverage",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H14-T05",
+      "task": "H14",
+      "scenario": "HEV local ICMP replies with dead proxy cannot prove egress",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H16-T01",
+      "task": "H16",
+      "scenario": "Two physical clients on AArch64",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H16-T02",
+      "task": "H16",
+      "scenario": "Physical MIPS and MIPSel",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H16-T03",
+      "task": "H16",
+      "scenario": "24h with browser closed and faults",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    },
+    {
+      "id": "H16-T04",
+      "task": "H16",
+      "scenario": "72h total-chain resource measurements",
+      "result": "not_run",
+      "level": "integration/native/HIL as applicable; no inference from unit tests"
+    }
+  ]
+}

@@ -3,14 +3,14 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
-const names=['panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','refreshPanelInventory','cancelPanelInventoryRefresh','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
+const names=['panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','refreshPanelInventory','cancelPanelInventoryRefresh','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
 const extract=name=>{const match=source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
 function fixture(){
  const elements=new Map(),calls=[],renders=[],timers=new Map(),notices=[],events=[];
  let timer=0,activity=false,activityError=null,handler;
- const state={status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
+ const state={currentView:'engineconfig',status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
  const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
  const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',value:'',classList:{toggle(){}}});return elements.get(id);};
  const api=async(url,options={})=>{calls.push({url,options});return handler(url,options);};
@@ -129,7 +129,7 @@ await test('loading details explain each pending section without a successful op
 await test('slow services cannot hold settings, engine metadata or other completed reads',async()=>{
  const f=fixture(),slow=deferred();f.handler(url=>url==='/api/v1/services'?slow.promise:f.normal(url));
  const refresh=f.context.refreshAll();await flush();await flush();
- assert(f.renders.includes('renderSettings'));assert(f.renders.includes('renderSystem'));assert(f.renders.includes('renderEngineControl'));
+ assert(!f.renders.includes('renderSettings'),'hidden settings stayed untouched');assert(f.renders.includes('renderSystem'));assert(f.renders.includes('renderEngineControl'));
  assert.equal(f.state.dataLoad.services.loaded,false);assert.equal(f.state.dataLoad.engineConfigs.loaded,true);
  slow.resolve(f.normal('/api/v1/services'));assert.equal(await refresh,true);assert.equal(f.state.services.length,1);
 });
@@ -182,18 +182,20 @@ await test('public runtime metadata renders before the unauthenticated early ret
  assert.equal(f.$('#authScreen').hidden,false);
 });
 
-await test('late service catalogue updates dependent lists without replacing the DNS provider form',async()=>{
- const f=fixture(),slow=deferred(),counts={dns:[],bindings:[],testlab:[],warp:[],strategy:[],engine:[]};
+await test('late services refresh only the active dependent UI without replacing DNS provider inputs',async()=>{
+ for(const [view,wanted] of [['dns','bindings'],['testlab','testlab'],['strategylab','strategy'],['engineconfig','engine']]) {
+ const f=fixture(),slow=deferred(),counts={dns:[],bindings:[],testlab:[],warp:[],strategy:[],engine:[]};f.state.currentView=view;
  for(const [key,name] of Object.entries({dns:'renderDNS',bindings:'renderDNSServiceBindings',testlab:'renderTestLab',warp:'renderWarpManager',strategy:'renderStrategyLab',engine:'renderEngineControl'}))f.context[name]=()=>counts[key].push(f.state.services.length);
  f.handler(url=>url==='/api/v1/services'?slow.promise:f.normal(url));
- const refresh=f.context.refreshAll();await flush();await flush();
- slow.resolve(f.normal('/api/v1/services'));await refresh;
- for(const key of ['bindings','testlab','warp','strategy','engine'])assert.equal(counts[key].at(-1),1,key);
- assert.deepEqual(counts.dns,[0],'service arrival rerendered the editable DNS provider');
+ const refresh=f.context.refreshAll();await flush();await flush();slow.resolve(f.normal('/api/v1/services'));await refresh;
+ assert.equal(counts[wanted].at(-1),1,view);
+ if(view==='dns')assert.deepEqual(counts.dns,[0],'service arrival replaced editable DNS provider');
+ if(view!=='engineconfig')assert.equal(counts.engine.length,0,'hidden engine editor redrawn');
+ }
 });
 
 await test('late route options refresh the already rendered test matrix',async()=>{
- const f=fixture(),slow=deferred(),counts=[];
+ const f=fixture(),slow=deferred(),counts=[];f.state.currentView='testlab';
  f.context.renderTestLab=()=>counts.push(f.state.routeOptions?.length||0);
  f.handler(url=>url==='/api/v1/routes/options'?slow.promise:f.normal(url));
  const refresh=f.context.refreshAll();await flush();await flush();
@@ -201,7 +203,7 @@ await test('late route options refresh the already rendered test matrix',async()
 });
 
 await test('late DNS plan only redraws plan/actions and preserves typed provider fields',async()=>{
- const f=fixture();f.context.esc=String;vm.runInContext(extract('renderDNSPlan'),f.context);
+ const f=fixture();f.state.currentView='dns';f.context.esc=String;vm.runInContext(extract('renderDNSPlan'),f.context);
  f.state.dns={dirty:true};f.state.dnsPlan={ready:false,recommendation:'fixture plan',checks:[],steps:[]};
  f.$('#dnsCustomName').value='unsaved DNS';f.$('#dnsNextDNSID').value='unsaved ID';
  f.context.renderDNS=()=>{f.$('#dnsCustomName').value='';f.$('#dnsNextDNSID').value='';};
@@ -212,7 +214,7 @@ await test('late DNS plan only redraws plan/actions and preserves typed provider
 
 await test('auxiliary activity read failure does not block core loading',async()=>{
  const f=fixture();f.activityError(new Error('activity failed'));await f.context.refreshAll();
- assert.equal(f.state.services.length,1);assert(f.renders.includes('renderSettings'));
+ assert.equal(f.state.services.length,1);assert(!f.renders.includes('renderSettings'),'hidden settings stayed untouched');
 });
 
 await test('activity cannot gate reads; a busy section retries without suppressing unrelated sections',async()=>{

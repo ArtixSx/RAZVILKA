@@ -27,6 +27,8 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-pending-changes-ui.mjs
   node scripts/test-interface-contract.mjs
   node scripts/test-interface-home.mjs
+  node scripts/test-autopilot-settings.mjs
+  node scripts/test-active-panel.mjs
   node scripts/test-inspector-focus.mjs
   node scripts/test-inspector-controls-ui.mjs
   node scripts/test-component-cards-ui.mjs
@@ -53,6 +55,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-autonomy-ui.mjs
   node --check cmd/razvilka/web/app.js
   node --check cmd/razvilka/web/node-browser.js
+  node scripts/test-node-measurements-ui.mjs
   node --check cmd/razvilka/web/node-intent-ui.js
   node --check cmd/razvilka/web/node-service-ui.js
   node --check cmd/razvilka/web/node-policy-ui.js

@@ -13,7 +13,7 @@ const code = names.map(name => {
 const warningTag = html.match(/<[^>]+\bid="devicePersistenceWarning"[^>]*>/)?.[0] || '';
 assert.match(warningTag, /\brole="status"/);
 assert.match(warningTag, /\bhidden(?:\s|=|>)/);
-assert.match(source, /\['devices', '\/api\/v1\/devices\?view=status'\]/);
+assert.match(source, /devices:\s*'\/api\/v1\/devices\?view=status'/);
 
 const elements = new Map(['devicePersistenceWarning', 'deviceSearch', 'deviceGrid', 'deviceEmpty', 'deviceGroupSuggestions', 'refreshDevices'].map(id => [id, { value: '', textContent: '', innerHTML: '', style: {}, hidden: true }]));
 const state = {};

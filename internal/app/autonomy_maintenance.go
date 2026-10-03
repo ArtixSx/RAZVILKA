@@ -20,7 +20,8 @@ import (
 
 // A version whose automatic installation was rolled back is not installed
 // again automatically; the next newer version is.
-const autoInstallReceipt = "application-install"
+const autoInstallReceipt = "application"
+const autoInstallAttemptPrefix = "install-attempt:"
 
 type maintenanceAttempt struct {
 	Key      string
@@ -33,6 +34,12 @@ type maintenanceAttempt struct {
 // Caller holds the common exclusive operation admission. This is dispatched
 // before ordinary service work, not only when the service queue happens to empty.
 func (a *App) autonomyMaintenance(ctx context.Context, p autonomy.Policy, now time.Time) {
+	if a.componentMaintenancePending() {
+		a.autonomy.mu.Lock()
+		a.autonomy.maintenanceMessage = "Незавершённое обновление компонента: автоматическое обслуживание ждёт проверки результата."
+		a.autonomy.mu.Unlock()
+		return
+	}
 	for _, task := range []struct {
 		name   string
 		window autonomy.Window
@@ -85,6 +92,13 @@ func (a *App) autonomyMaintenance(ctx context.Context, p autonomy.Policy, now ti
 			a.autonomy.mu.Unlock()
 			return
 		}
+		if done && task.name == "application" {
+			attempt := a.autonomy.doc.Maintenance[autoInstallReceipt]
+			if strings.HasPrefix(attempt, autoInstallAttemptPrefix) && strings.TrimPrefix(attempt, autoInstallAttemptPrefix) != Version {
+				done = false
+				message = "Проверка завершена; запись незавершённой передачи установщику сохранена."
+			}
+		}
 		if done {
 			old := a.autonomy.doc.Maintenance[task.name]
 			a.autonomy.doc.Maintenance[task.name] = key
@@ -133,7 +147,8 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 		if w.Mode != "install" {
 			return true, false, "Каталог компонентов проверен. Автоматическая установка не включена."
 		}
-		return true, false, a.autoUpdateComponents(ctx, views)
+		result := a.runAutomaticComponentBatch(ctx, views)
+		return result.Complete, false, result.Message
 	}
 	if w.Mode == "prepare" || w.Mode == "install" {
 		if a.SelfUpdate == nil || a.Store == nil {
@@ -145,6 +160,9 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 			fresh := !current.UpdatedAt.IsZero() && !current.UpdatedAt.After(time.Now()) && time.Since(current.UpdatedAt) < 15*time.Minute
 			if fresh && current.ConfigRevision == a.Store.Get().Revision && updatecheck.NormalizedChannel(current.Channel) == updatecheck.NormalizedChannel(a.autonomyPolicy().UpdateChannel) {
 				if w.Mode == "install" {
+					if current.Release == nil || a.autoInstallFailed(current.Release.Version) {
+						return false, false, "Предыдущая передача этого выпуска установщику требует подтверждения; повтор не запущен."
+					}
 					a.autonomy.mu.Lock()
 					job := current
 					a.autonomy.autoInstall = &job
@@ -173,11 +191,14 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 		if latest.State == "check-failed" || latest.MetadataStale {
 			return false, false, "Каталог выпусков не подтверждён. Загрузка отложена."
 		}
+		if w.Mode == "install" && a.autoInstallFailed(latest.LatestVersion) {
+			return false, false, "Предыдущая передача этого выпуска установщику требует подтверждения; повтор не запущен."
+		}
 		if !latest.CanPrepare {
 			return true, false, "Новой подходящей версии в выбранном канале нет. Архив повторно не загружался."
 		}
 		if w.Mode == "install" && a.autoInstallFailed(latest.LatestVersion) {
-			return true, false, "Версия " + latest.LatestVersion + " не установилась автоматически, прежняя сохранена. Установится следующая версия; эту можно поставить вручную."
+			return false, false, "Версия " + latest.LatestVersion + " уже передавалась установщику; повтор остановлен до подтверждения результата или появления новой версии."
 		}
 		cfg := a.Store.Get()
 		job, err := a.SelfUpdate.PrepareChannel(cfg.Revision, updatecheck.ConfigFingerprint(cfg), a.autonomyPolicy().UpdateChannel)
@@ -200,14 +221,14 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 	return true, false, "Версия проверена. Автоматическая установка пока закрыта."
 }
 
-// autoInstallFailed reports that this version was handed to the installer
-// automatically before and this process still runs another version: the
-// installer rolled it back.
+// autoInstallFailed blocks replay of an attempted version while another
+// version runs. The receipt alone is NOT proof of a successful rollback;
+// a definitive pre-handoff refusal restores the old receipt in runAutoInstall.
 func (a *App) autoInstallFailed(version string) bool {
 	a.autonomy.mu.Lock()
 	defer a.autonomy.mu.Unlock()
 	attempted := a.autonomy.doc.Maintenance[autoInstallReceipt]
-	return version != "" && attempted == version && Version != version
+	return version != "" && strings.HasPrefix(attempted, autoInstallAttemptPrefix) && strings.TrimPrefix(attempted, autoInstallAttemptPrefix) == version && Version != version
 }
 
 // autoInstallAllowed reports whether a prepared package may be installed now:
@@ -231,7 +252,8 @@ func (a *App) runAutoInstall(ctx context.Context, p autonomy.Policy) bool {
 		return false
 	}
 	cfg := a.Store.Get()
-	if !autoInstallAllowed(*job, cfg, a.Store.Dirty(), p) || a.autoInstallFailed(job.Release.Version) {
+	_, windowOpen := autonomy.WindowKey(p.Application, p.Timezone, time.Now())
+	if !windowOpen || p.Application.Mode != "install" || a.componentMaintenancePending() || !autoInstallAllowed(*job, cfg, a.Store.Dirty(), p) || len(autoInstallAttemptPrefix)+len(job.Release.Version) > 64 || job.Release.Version == "" || a.autoInstallFailed(job.Release.Version) {
 		return false
 	}
 	// Record the attempt before the handoff: after a rollback the old process
@@ -242,7 +264,7 @@ func (a *App) runAutoInstall(ctx context.Context, p autonomy.Policy) bool {
 		return false
 	}
 	old, had := a.autonomy.doc.Maintenance[autoInstallReceipt]
-	a.autonomy.doc.Maintenance[autoInstallReceipt] = job.Release.Version
+	a.autonomy.doc.Maintenance[autoInstallReceipt] = autoInstallAttemptPrefix + job.Release.Version
 	if err := a.persistAutonomyLocked(ctx); err != nil {
 		if had {
 			a.autonomy.doc.Maintenance[autoInstallReceipt] = old
@@ -256,6 +278,18 @@ func (a *App) runAutoInstall(ctx context.Context, p autonomy.Policy) bool {
 	started, err := a.SelfUpdate.Apply(ctx, job.ID, job.ReviewToken, cfg.Revision, updatecheck.ConfigFingerprint(cfg))
 	if err != nil && !errors.Is(err, updatecheck.ErrHandoffUncertain) {
 		a.autonomy.mu.Lock()
+		// A definite refusal happened before ownership was handed over.
+		// Restore the old receipt only if this is still our exact attempt.
+		if a.autonomy.doc.Maintenance[autoInstallReceipt] == autoInstallAttemptPrefix+job.Release.Version {
+			if had {
+				a.autonomy.doc.Maintenance[autoInstallReceipt] = old
+			} else {
+				delete(a.autonomy.doc.Maintenance, autoInstallReceipt)
+			}
+			receiptCtx, receiptCancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+			_ = a.persistAutonomyLocked(receiptCtx)
+			receiptCancel()
+		}
 		a.autonomy.maintenanceMessage = "Автоматическая установка " + job.Release.Version + " не запущена: " + started.Message
 		a.autonomy.mu.Unlock()
 		return false
@@ -270,30 +304,5 @@ func (a *App) runAutoInstall(ctx context.Context, p autonomy.Policy) bool {
 // package, the way the panel's "Update" does: with an isolated check and a
 // rollback while routes use it, plainly otherwise.
 func (a *App) autoUpdateComponents(ctx context.Context, views []components.View) string {
-	updated, failed := []string{}, []string{}
-	for _, view := range views {
-		if ctx.Err() != nil {
-			break
-		}
-		if !view.Installed || !view.CanUpdate || view.ExternalOwner {
-			continue
-		}
-		update, cancel := context.WithTimeout(ctx, 7*time.Minute)
-		err := a.updateComponent(update, view.ID)
-		cancel()
-		if err != nil {
-			failed = append(failed, view.Name)
-		} else {
-			updated = append(updated, view.Name)
-		}
-	}
-	switch {
-	case len(updated) == 0 && len(failed) == 0:
-		return "Каталог компонентов проверен. Обновлений нет."
-	case len(failed) == 0:
-		return "Обновлено: " + strings.Join(updated, ", ") + "."
-	case len(updated) == 0:
-		return "Не обновлено (прежние версии сохранены): " + strings.Join(failed, ", ") + "."
-	}
-	return "Обновлено: " + strings.Join(updated, ", ") + ". Не обновлено (прежние версии сохранены): " + strings.Join(failed, ", ") + "."
+	return a.runAutomaticComponentBatch(ctx, views).Message
 }

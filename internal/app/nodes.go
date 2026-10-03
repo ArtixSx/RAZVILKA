@@ -537,6 +537,9 @@ func (a *App) runAndRecordNode(ctx context.Context, id string, service catalog.S
 	if err == nil && latest.Generation != before+1 {
 		err = dataplane.ErrReviewChanged
 	}
+	if err == nil {
+		a.rememberNodeMeasurement(result)
+	}
 	return result, latest, err
 }
 

@@ -329,63 +329,7 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 			probe = sourceBoundAWGProbe
 		}
 	}
-	ports, err := candidate.warpEndpointPorts()
-	if err != nil {
-		return err
-	}
-	attempted := make([]int, 0, len(ports))
-	connected := false
-	for index, port := range ports {
-		attempted = append(attempted, port)
-		if index > 0 {
-			if _, err := candidate.switchEndpointPort(ctx, port); err != nil {
-				continue
-			}
-		}
-		var probeErr error
-		// An own WireGuard server must not depend on Cloudflare reachability:
-		// its tunnel is confirmed by handshake, services are probed below.
-		if a.ID() != "wireguard" {
-			probeCtx, cancel := context.WithTimeout(ctx, candidate.timeout())
-			probeErr = probe(probeCtx, "https://www.cloudflare.com/cdn-cgi/trace", source.String())
-			cancel()
-		}
-		if probeErr != nil || candidate.confirmHandshake(ctx, candidate.interfaceName()) != nil {
-			continue
-		}
-		connected = true
-		if index > 0 {
-			endpoint, endpointErr := wgEndpoint(string(mustRead(candidate.RuntimeConfigPath)))
-			if endpointErr != nil {
-				return endpointErr
-			}
-			selection, _ := json.Marshal(warpWGSelection{Endpoint: endpoint})
-			if err := writeAtomic(filepath.Join(root, "selected-endpoint.json"), selection, 0o600); err != nil {
-				return err
-			}
-		}
-		break
-	}
-	if !connected {
-		return WARPHandshakeError{Ports: attempted}
-	}
-	checked := 0
-	for _, route := range plan.Routes {
-		if adapterID(route.Resolved) != a.ID() || route.ProbeURL == "" || len(route.Sources) > 0 {
-			continue
-		}
-		probeCtx, cancel := context.WithTimeout(ctx, candidate.timeout())
-		err := probe(probeCtx, route.ProbeURL, source.String())
-		cancel()
-		if err != nil {
-			return fmt.Errorf("%s WARP canary probe: %w", route.ServiceName, err)
-		}
-		checked++
-	}
-	if checked == 0 {
-		return errors.New("WARP canary has no safe service probe without device scope")
-	}
-	return nil
+	return candidate.probeCanaryServices(ctx, plan, root, probe, source.String())
 }
 
 func firstIPv4TunnelAddress(addresses []string) (netip.Addr, error) {
