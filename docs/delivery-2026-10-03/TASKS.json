@@ -8,7 +8,7 @@
       "depends_on": [],
       "title": "Полная Go1.26.5 интеграция и CI",
       "scope": "Сопоставить присланную базу/более новый HEAD. go mod verify; sh scripts/check.sh; проверить API structs/adapters без test doubles. Никакого downgrade production go.mod.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D01",

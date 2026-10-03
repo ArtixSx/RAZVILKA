@@ -20,9 +20,10 @@ const checkedNodeID = "node-0123456789abcdef0123456789abcdef0123456789abcdef0123
 func fakeExactNodeChecker(t *testing.T) *ExactNodeChecker {
 	t.Helper()
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	var clockTicks atomic.Int64
 	checker := NewExactNodeChecker(t.TempDir())
 	checker.egressPair = nil // Legacy field fixtures isolate individual checker gates.
-	checker.now = func() time.Time { now = now.Add(time.Millisecond); return now }
+	checker.now = func() time.Time { return now.Add(time.Duration(clockTicks.Add(1)) * time.Millisecond) }
 	checker.resolve = func(context.Context, string) ([]netip.Addr, error) {
 		return []netip.Addr{netip.MustParseAddr("203.0.113.8")}, nil
 	}
@@ -37,9 +38,10 @@ func fakeExactNodeChecker(t *testing.T) *ExactNodeChecker {
 	checker.directEgress = func(context.Context) (string, error) { return "198.51.100.10", nil }
 	checker.proxyEgress = func(context.Context, string) (string, error) { return "2001:db8::20", nil }
 	checker.serviceProbe = func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error) {
+		probeTime := checker.now()
 		return evidence.ProbeEvidence{
-			SchemaVersion: evidence.ProbeSchemaVersion, ProbeID: "service-proof", StartedAt: now,
-			FinishedAt: now.Add(time.Millisecond), Service: "telegram", RoutePathID: "sing-box:" + checkedNodeID,
+			SchemaVersion: evidence.ProbeSchemaVersion, ProbeID: "service-proof", StartedAt: probeTime,
+			FinishedAt: probeTime.Add(time.Millisecond), Service: "telegram", RoutePathID: "sing-box:" + checkedNodeID,
 			ExpectedRoutePathID: "sing-box:" + checkedNodeID, ObservedRoutePathID: "sing-box:" + checkedNodeID,
 			Outcome: evidence.OutcomeServiceAccepted, Verdict: evidence.VerdictPass, HTTPStatus: 204,
 		}, nil
