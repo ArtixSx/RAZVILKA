@@ -8,7 +8,7 @@
       "depends_on": [],
       "title": "Полная Go1.26.5 интеграция и CI",
       "scope": "Сопоставить присланную базу/более новый HEAD. go mod verify; sh scripts/check.sh; проверить API structs/adapters без test doubles. Никакого downgrade production go.mod.",
-      "status": "in_progress"
+      "status": "completed"
     },
     {
       "id": "D01",
@@ -18,7 +18,7 @@
       ],
       "title": "Настоящий HTTP/login/CSP и ленивые чтения",
       "scope": "Браузер с реальным приложением: auth/CSRF/logout, скрытые вкладки, быстрые переходы, повторные клики, 401/409/500, dirty forms. Измерить число запросов, render-cost, CPU на ARM64.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D02",
@@ -28,7 +28,7 @@
       ],
       "title": "Per-node Xray и канонический VLESS",
       "scope": "Сохранить обязательные поля и доказательства; настоящий RAW/TCP Reality, compiler capabilities; XHTTP отдельным проверяемым подэтапом, не lossy conversion.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D03",
@@ -119,7 +119,7 @@
       ],
       "title": "Crash-safe обновления",
       "scope": "Полный persistent package/config journal и независимый recover. Хранить прежний LKG до live acceptance нового runtime. Unknown→stop, matching repair, SafeMode/Stop, downgrade старым бинарником pending receipts. Test power cut before/after every phase.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D12",
@@ -129,7 +129,7 @@
       ],
       "title": "Один рабочий путь во всех разделах",
       "scope": "Установка/профиль/проверка/применение на карточке; per-engine подтверждения прогресса; массовые VLESSоперации; раскрываемая AI группа; меньше legacy дубликатов. Не ломать URL/ID/API; получить профиль открытой вкладки и настоящий замер weak router.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D13",
