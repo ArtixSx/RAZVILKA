@@ -66,3 +66,30 @@ HTTP tests запускают настоящий `httptest.Server` и штатн
 - Настоящие opkg fault boundaries, accepted NFQWS/proxy/WG live runtime, package-script supervision/orphans, concurrent external opkg, live adoption/restart/reboot, physical power cut, Linux durability, HIL/soak не выполнены этим чатом.
 - Копия Linux test binary в `%TEMP%` — локальный артефакт сборки, не поставка. Секретов, бинарников и частных логов в коммите нет.
 - D11 в целом, D07/D08 и HIL остаются открытыми. Следующая крупная вертикаль не начата; ожидается review координатора и принятие контрактов выше.
+# D11/D12: completed component operation settlement — ready for review
+
+03.10.2026. Matching component repair now durably finishes the UI operation receipt after the package journal settles: accepted → succeeded, rollback/abandon → failed with a concrete verified outcome. Receipt includes matching transaction ID. Uses bounded ownedfs reads and atomic write + Linux directory fsync; no change in `internal/components` ownership. Terminal journal, operation receipt and scheduler checkpoint remain separate durable writes. A fresh matching HTTP request can finish the latter two only if legacy running receipt predates terminal journal (or explicit matching ID); a newer operation is preserved. A fully settled duplicate returns409; no package command or live acceptance callback replay.
+
+Real HTTP regression checks: terminal journal with interrupted operation settlement; finishing it and rejecting the next duplicate; successful repair makes operation_status readable as succeeded in a fresh Manager. `go test ./internal/app -run 'Component.*(HTTP|Recovery)|ComponentJournal|ComponentScheduled' -count=1` RC0, `go vet ./internal/app` RC0, `git diff --check` RC0 (Windows Go1.26.5, usual GOMAXPROCS=2/GOFLAGS=-p=2/GOTOOLCHAIN=local). Linux fsync path requires coordinator's native run. Independent accept-installed-idle and OPS supervision wiring follow after their commit. D11 overall is open.
+
+# D11: exact OPS adapter contract — WIP, 2026-10-03
+
+CORE wiring сейчас собирается в `internal/app/self_update_files.go`; этот раздел опубликован заранее для OPS. Реализация OPS в `internal/updatecheck` **не импортирует app**: все сигнатуры используют примитивы и существующий `selfupdatejournal.File`. CORE будет потребителем, а не вторым самостоятельным installer. Конструктор OPS ожидается `updatecheck.NewSelfUpdateFileAdapter()`, возвращающий concrete type, реализующий:
+
+```go
+Ready(context.Context, string /* jobID */) error
+Review(context.Context, string /* jobID */) (uint64 /* revision */, string /* staged migrated config SHA256 */, []selfupdatejournal.File, error)
+Authority(context.Context, string /* jobID */, uint64 /* revision */) error
+Quiescence(context.Context, string /* jobID */) error
+Run(context.Context, string /* jobID */, string /* fixed command */) error
+Observe(context.Context, string /* jobID */, string /* unknown fixed command */) error
+Live(context.Context, string /* jobID */, bool /* rollback */) error
+Startup(context.Context, string /* jobID */, int /* exact helper PID */) error
+Finish(context.Context, string /* jobID */, bool /* rollback */) error
+```
+
+`Ready` проверяет возможность **нового** reviewed handoff ещё до Apply (без запуска эффектов). `Review` читает только exact retained helper job, проверенный release manifest и staged config: миграция в отдельный staged файл и фиксация SHA выполняются **до Prepare**. После Prepare новый digest не меняется; никакой third image. Для recovery возвращает прежнюю immutable review, а не хеширует заново произвольный live config. Authority повторно сверяет helper/file ID, revision, Stop/SafeMode и направление config old/new. `Startup` требует связанного ID обоих journals, exact boot/start/executable helper identity и допустимой supervised startup command, а не просто существующего PID. Quiescence/Observe требуют durable supervision + kernel wait evidence; `/proc` scan, PGID, setsid и ручной bool не заменяют их. Historical unknown без supervision остаётся fenced. PID namespace не требуется; подтверждённый на Netcraze subreaper — допустимая baseline. `Finish` вызывается **после terminal file journal**: проверяет exact ID/direction, retained image integrity, actual installed hashes/modes и independent fresh live evidence, только затем durably settles helper receipt. После crash между journals повтор Finish допустим, команды и файловая замена не повторяются.
+
+Фиксированные действия CORE: `prepare`, `install`, `restore`, `accept-live`, `accept-rollback`, `resolve-unknown`; Execute допускает только `stop-old-panel`, `start-candidate-panel`, `stop-candidate-panel`, `start-rollback-panel`. OPS может предложить необходимые дополнительные **разные** имена до подключения shell, не передавать shell text/argv/paths из HTTP. `Execute` нынешнего journal допустим только после Install/Restore: если stop требуется до replacement, нужен согласованный журналируемый порядок или расширение OPS phase machine; нельзя выполнить stop вне ledger и затем заявить его покрытым. Mutable/private directories остаются отдельным restore protocol.
+
+Планируемый CLI: `self-update-files <action> <jobID> <expected_revision>` (fixed production roots, без path/callback arguments); read-only `self-update-files current`. Matching HTTP: `/api/v1/self-update/recovery`, POST только ID/action/expected_revision/confirm, auth+CSRF+exact exclusive admission. CORE revalidates Store CAS/Stop/SafeMode в каждом callback. Missing OPS provider блокирует изменение, включая manual/scheduled Apply; legacy helper не должен обходить этот provider. Schema=1 будет объявлена только вместе с реальными retained helper/file startup/CLI fences. Этот WIP **не готов к установке** и D11 не закрывает.
