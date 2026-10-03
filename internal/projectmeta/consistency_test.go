@@ -108,7 +108,10 @@ func TestCurrentDocumentationLocalLinksExist(t *testing.T) {
 		"README_EN.md",
 		"SECURITY.md",
 		"docs/CURRENT_STATUS_RU.md",
-		"docs/ROADMAP_2026-08-30_RU.md",
+		"docs/ROADMAP.md",
+		"docs/README.md",
+		"docs/FILES_RU.md",
+		"CONTRIBUTING.md",
 		"docs/VERSIONING_RU.md",
 	}
 	for _, name := range current {

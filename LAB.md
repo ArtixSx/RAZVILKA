@@ -46,5 +46,5 @@ service and client-path check.
 The current published hardware report covers ARM64. Physical MIPS/MIPSel,
 multi-client, reboot/WAN, IPv6/UDP and endurance checks remain separate tasks.
 
-[Historical v0.0.8 lab notes](docs/archive/LAB_v0.0.8.md) ·
+[Historical v0.0.8 lab notes](https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/docs/archive/LAB_v0.0.8.md) ·
 [Full installation guide](docs/INSTALL_RU.md)

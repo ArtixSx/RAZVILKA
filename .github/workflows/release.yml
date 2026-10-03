@@ -69,7 +69,7 @@ jobs:
           test -x "$STAGE/scripts/S99razvilka"
           test -x "$STAGE/scripts/test-entware-transaction.sh"
           test -f "$STAGE/configs/config.example.json"
-          test -f "$STAGE/docs/MASTER_PLAN_RU.md"
+          test -f "$STAGE/docs/INSTALL_RU.md"
           test -f "$STAGE/README_EN.md"
           (cd "$STAGE" && sha256sum -c dist/SHA256SUMS)
           # Validate the staged tree, not just Git-tracked names: generated

@@ -180,7 +180,7 @@ passed all baseline and resource checks.
 An intermittent observer reset correctly triggered rollback before a successful
 retry; its cause remains under investigation. Earlier local c7ea788 restart and
 cleanup results are recorded separately. Detailed
-[validation and limits](docs/EXT5_REVIEW_2026-09-19_RU.md) are tracked separately
+[validation and limits](https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/docs/EXT5_REVIEW_2026-09-19_RU.md) are tracked separately
 from the [short release notes](docs/releases/0.18.4.md).
 
 ### Added
@@ -225,7 +225,7 @@ but remained a draft after real VLESS checks exposed the large-HTML sampling
 failure described above. It was not published as a stable release. Its Git tag
 is retained unchanged; the unpublished draft was removed. Version 0.18.3 carries the correction. See the
 [historical draft notes](docs/releases/0.18.2.md) and
-[validation report](docs/EXT5_REVIEW_2026-09-19_RU.md).
+[validation report](https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/docs/EXT5_REVIEW_2026-09-19_RU.md).
 
 On 19 September 2026, seven old prerelease entries were removed from Releases:
 0.18.1-rc.1/rc.2 and 0.18.2-rc.2 through rc.6. Git tags, source history and stable
@@ -335,7 +335,7 @@ attempt restored the previous installation after premature acceptance failed.
 Hardware failover, WAN reconnect, router reboot, low-memory operation, DNS
 migration/rollback and prolonged autonomy remain separate acceptance scenarios.
 
-See the [DC1 review](docs/DC1_REVIEW_2026-09-13_RU.md) and
+See the [DC1 review](https://github.com/ArtixSx/RAZVILKA/blob/817783493f0c2784ccc70aa73868cd64e9437634/docs/DC1_REVIEW_2026-09-13_RU.md) and
 [current status](docs/CURRENT_STATUS_RU.md).
 
 
