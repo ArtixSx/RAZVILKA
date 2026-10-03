@@ -25,6 +25,40 @@ import (
 
 type updateTransport func(*http.Request) (*http.Response, error)
 
+func TestSelfUpdateUnknownPersistedPhaseKeepsStartupFence(t *testing.T) {
+	u := readyUpdater(t)
+	u.record.Job.State = "unknown-future-phase"
+	if err := u.persistLocked(); err != nil {
+		t.Fatal(err)
+	}
+	fresh := NewUpdater(u.Current, filepath.Dir(u.Directory), u.Deployment)
+	fresh.eligibility = func(Deployment) error { t.Fatal("invalid receipt reached deployment eligibility"); return nil }
+	if !fresh.StartupPending() {
+		t.Fatal("unknown state lost the startup fence")
+	}
+	if job, err := fresh.Prepare(1, "fingerprint"); !errors.Is(err, ErrBusy) || job.State != "requires-review" {
+		t.Fatalf("unknown receipt overwritten: %+v %v", job, err)
+	}
+}
+
+func TestSelfUpdateUnsafeRootKeepsStartupFenceWithoutMemory(t *testing.T) {
+	state := t.TempDir()
+	if err := os.WriteFile(filepath.Join(state, "self-update"), []byte("not a directory"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	u := NewUpdater("0.19.3", state, Deployment{})
+	if !u.StartupPending() || u.Snapshot().Code != "update-record-invalid" {
+		t.Fatal("unsafe root silently became idle after restart")
+	}
+}
+
+func TestSelfUpdateMissingRootIsIdle(t *testing.T) {
+	u := NewUpdater("0.19.3", t.TempDir(), Deployment{})
+	if u.StartupPending() || u.Snapshot().State != "idle" {
+		t.Fatal("clean installation requires recovery")
+	}
+}
+
 func (f updateTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 func updateResponse(body []byte) *http.Response {
 	return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(body)), ContentLength: int64(len(body)), Header: make(http.Header)}
