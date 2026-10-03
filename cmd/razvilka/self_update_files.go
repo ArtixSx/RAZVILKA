@@ -41,9 +41,16 @@ func selfUpdateDefaultPath(path string) string {
 	return absolute
 }
 
-func configuredSelfUpdateFiles(installation, files, helper string) (*app.SelfUpdateFiles, error) {
-	defaults := []string{"/opt", "/opt/var/lib/razvilka/self-update-files", "/opt/var/lib/razvilka/self-update"}
-	values := []string{installation, files, helper}
+func configuredSelfUpdateFiles(installation, files, helper string, control ...string) (*app.SelfUpdateFiles, error) {
+	if len(control) > 1 {
+		return nil, errors.New("one fixed control authority root required")
+	}
+	controlRoot := ""
+	if len(control) == 1 {
+		controlRoot = control[0]
+	}
+	defaults := []string{"/opt", "/opt/var/lib/razvilka/self-update-files", "/opt/var/lib/razvilka/self-update", "/opt/var/lib/razvilka/self-update-stop"}
+	values := []string{installation, files, helper, controlRoot}
 	for i, value := range values {
 		if strings.TrimSpace(value) != value {
 			return nil, errors.New("self update roots must not contain surrounding whitespace")
@@ -56,9 +63,18 @@ func configuredSelfUpdateFiles(installation, files, helper string) (*app.SelfUpd
 		}
 		values[i] = filepath.Clean(value)
 	}
+	for _, mutable := range []string{values[1], values[2]} {
+		controlPath, retainedPath := values[3], mutable
+		if runtime.GOOS == "windows" {
+			controlPath, retainedPath = strings.ToLower(controlPath), strings.ToLower(retainedPath)
+		}
+		if controlPath == retainedPath || strings.HasPrefix(controlPath, retainedPath+string(filepath.Separator)) || strings.HasPrefix(retainedPath, controlPath+string(filepath.Separator)) {
+			return nil, errors.New("control authority must be outside file/helper journal trees")
+		}
+	}
 	u := updatecheck.NewUpdater(app.Version, filepath.Dir(values[2]), updatecheck.Deployment{})
 	u.Directory = values[2]
-	return &app.SelfUpdateFiles{Installation: values[0], Directory: values[1], Helper: u, Adapter: nativeSelfUpdateFileAdapter()}, nil
+	return &app.SelfUpdateFiles{Installation: values[0], Directory: values[1], ControlRoot: values[3], Helper: u, Adapter: nativeSelfUpdateFileAdapter()}, nil
 }
 
 func productionSelfUpdateFiles() (*app.SelfUpdateFiles, error) {
@@ -66,7 +82,7 @@ func productionSelfUpdateFiles() (*app.SelfUpdateFiles, error) {
 }
 
 func selfUpdatePendingFromEnv() bool {
-	f, err := configuredSelfUpdateFiles(os.Getenv("RAZVILKA_SELF_UPDATE_INSTALLATION"), os.Getenv("RAZVILKA_SELF_UPDATE_FILE_STATE"), os.Getenv("RAZVILKA_SELF_UPDATE_HELPER_STATE"))
+	f, err := configuredSelfUpdateFiles(os.Getenv("RAZVILKA_SELF_UPDATE_INSTALLATION"), os.Getenv("RAZVILKA_SELF_UPDATE_FILE_STATE"), os.Getenv("RAZVILKA_SELF_UPDATE_HELPER_STATE"), os.Getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE"))
 	return err != nil || f.Pending()
 }
 
@@ -270,7 +286,7 @@ func selfUpdateRecoveryHandler(a *app.App) (http.Handler, error) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			switch r.URL.Path {
-			case "/api/v1/auth/status", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/self-update/current", "/api/v1/self-update/recovery", "/api/v1/components/recovery", "/api/v1/status":
+			case "/api/v1/auth/status", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/self-update/current", "/api/v1/self-update/recovery", "/api/v1/components/recovery", "/api/v1/status", "/api/v1/service-control/runtime":
 			default:
 				w.Header().Set("Cache-Control", "no-store")
 				http.Error(w, "self update recovery required", http.StatusServiceUnavailable)

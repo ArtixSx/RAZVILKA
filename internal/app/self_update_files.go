@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
@@ -85,7 +86,9 @@ func (f *SelfUpdateFiles) RunHelper(ctx context.Context, id string, guard selfup
 type SelfUpdateFiles struct {
 	Installation string
 	Directory    string
-	Adapter      SelfUpdateFileAdapter
+	// Fixed trusted startup root, independent of all application/private images.
+	ControlRoot string
+	Adapter     SelfUpdateFileAdapter
 	// Helper is the read-only retained helper receipt reader. Its directory is
 	// explicit and independent of configuration/dataplane location overrides.
 	Helper *updatecheck.Updater
@@ -164,6 +167,9 @@ func (f *SelfUpdateFiles) Ready(ctx context.Context, id string) error {
 	if f == nil || f.Adapter == nil || !selfUpdateID.MatchString(id) {
 		return errSelfUpdateRecovery
 	}
+	if err := f.controlAuthority(ctx, true); err != nil {
+		return err
+	}
 	r, present, err := f.Current()
 	if err != nil {
 		return err
@@ -193,6 +199,9 @@ func (f *SelfUpdateFiles) Ready(ctx context.Context, id string) error {
 func (f *SelfUpdateFiles) Pending() bool {
 	if f == nil {
 		return false
+	}
+	if f.controlPending() {
+		return true
 	}
 	r, present, err := f.Current()
 	if err != nil || present && r.Pending() || f.Helper != nil && f.Helper.StartupPending() {
@@ -224,6 +233,9 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 		return selfupdatejournal.ErrMismatch
 	}
 	authority := func(c context.Context) error {
+		if err := f.controlAuthority(c, action == "prepare"); err != nil {
+			return err
+		}
 		if err := guard(c); err != nil {
 			return err
 		}
@@ -259,6 +271,11 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 		}
 		if len(files) != len(wanted) {
 			return errors.New("complete six-file installation required before Prepare")
+		}
+		if f.ControlRoot != "" {
+			if _, err := operationgate.InitializeSelfUpdateControl(ctx, f.ControlRoot); err != nil {
+				return err
+			}
 		}
 		// Create only the fixed journal child of an already-owned parent. Do
 		// not repair an existing unsafe directory or delete retained images.
@@ -376,6 +393,12 @@ func (a *App) PendingSelfUpdateRecovery() bool {
 }
 
 func (a *App) selfUpdateFileGuard(ctx context.Context) error {
+	if err := a.SelfUpdateFiles.controlAuthority(ctx, true); err != nil {
+		if scope, ok := ctx.Value(selfUpdateFileAdmissionKey{}).(selfUpdateFileAdmission); ok && scope.inspect {
+			return nil
+		}
+		return errSelfUpdateRecovery
+	}
 	if !a.PendingSelfUpdateRecovery() {
 		return nil
 	}
@@ -409,6 +432,9 @@ func (a *App) selfUpdateStartupAllowed(ctx context.Context, jobID string, helper
 func (f *SelfUpdateFiles) StartupAllowed(ctx context.Context, jobID string, helperPID int) error {
 	if f == nil {
 		return errSelfUpdateRecovery
+	}
+	if err := f.controlAuthority(ctx, false); err != nil {
+		return err
 	}
 	r, present, err := f.Current()
 	if err != nil || !present || !r.Pending() || r.ID != jobID || helperPID <= 1 || f.Adapter == nil {

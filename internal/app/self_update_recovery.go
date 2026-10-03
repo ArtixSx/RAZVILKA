@@ -33,9 +33,10 @@ func (a *App) selfUpdateRecovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
+		control := a.SelfUpdateFiles.controlView(r.Context())
 		state, present, err := a.SelfUpdateFiles.Current()
 		if err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"code": "SELF_UPDATE_JOURNAL_UNAVAILABLE", "recovery_required": true, "error": "Журнал обновления приложения не читается. Сохраните журнал и прежнюю версию для проверки."})
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"code": "SELF_UPDATE_JOURNAL_UNAVAILABLE", "recovery_required": true, "control": control, "error": "Журнал обновления приложения не читается. Сохраните журнал и прежнюю версию для проверки."})
 			return
 		}
 		var revision uint64
@@ -44,7 +45,7 @@ func (a *App) selfUpdateRecovery(w http.ResponseWriter, r *http.Request) {
 		}
 		// Inspection reads bounded journals only and remains available while
 		// the installer owns admission. It never invokes the adapter or repairs.
-		writeJSON(w, http.StatusOK, map[string]any{"recovery_required": a.PendingSelfUpdateRecovery(), "present": present, "transaction": state, "revision": revision, "adapter_available": a.SelfUpdateFiles.Adapter != nil})
+		writeJSON(w, http.StatusOK, map[string]any{"recovery_required": a.PendingSelfUpdateRecovery(), "present": present, "transaction": state, "revision": revision, "control": control, "adapter_available": a.SelfUpdateFiles.Adapter != nil})
 		return
 	}
 	if r.Method != http.MethodPost {
