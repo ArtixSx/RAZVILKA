@@ -29,7 +29,9 @@ func (r nativeOpkgRunner) Run(ctx context.Context, name string, args ...string) 
 		return nil, fmt.Errorf("unsafe native opkg test root")
 	}
 	prefix := []string{"--conf", r.config, "--offline-root", r.root, "--force-postinstall"}
-	return exec.CommandContext(ctx, name, append(prefix, args...)...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, name, append(prefix, args...)...)
+	cmd.Env = append(os.Environ(), "RAZVILKA_EXPECTED_OFFLINE_ROOT="+r.root)
+	return cmd.CombinedOutput()
 }
 
 func TestNativeOpkgManagedUpdateJournal(t *testing.T) {
@@ -164,10 +166,16 @@ func nativeFixturePackage(t *testing.T, directory, version string) string {
 		for _, path := range names {
 			data := entries[path]
 			mode := int64(0o644)
+			kind := byte(tar.TypeReg)
+			if strings.HasSuffix(path, "/") {
+				kind = tar.TypeDir
+				mode = 0755
+				data = ""
+			}
 			if path == "./postinst" {
 				mode = 0o755
 			}
-			if err := tw.WriteHeader(&tar.Header{Name: path, Mode: mode, Size: int64(len(data)), Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}); err != nil {
+			if err := tw.WriteHeader(&tar.Header{Name: path, Mode: mode, Size: int64(len(data)), Typeflag: kind, Format: tar.FormatUSTAR}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := tw.Write([]byte(data)); err != nil {
@@ -185,9 +193,11 @@ func nativeFixturePackage(t *testing.T, directory, version string) string {
 		}
 	}
 	control := fmt.Sprintf("Package: nfqws2-keenetic\nVersion: %s\nArchitecture: all\nMaintainer: RAZVILKA test\nDescription: isolated native journal fixture\n", version)
-	postinst := "#!/bin/sh\nset -eu\n[ -n \"${IPKG_INSTROOT:-}\" ] && [ \"$IPKG_INSTROOT\" != / ] || exit 99\nprintf 'MIGRATED BY NATIVE PACKAGE\\n' > \"$IPKG_INSTROOT/etc/nfqws2.conf\"\n"
+	// opkg-lede 80503d94 exports PKG_ROOT (not IPKG_INSTROOT). Bind it to
+	// the independently supplied test root before the first postinst write.
+	postinst := "#!/bin/sh\nset -eu\nROOT=\"${PKG_ROOT:-}\"\ncase \"$ROOT\" in /*) ;; *) exit 99 ;; esac\nROOT=\"${ROOT%/}\"\n[ -n \"$ROOT\" ] && [ \"$ROOT\" != / ] && [ \"$ROOT\" = \"${RAZVILKA_EXPECTED_OFFLINE_ROOT:-}\" ] || exit 99\nprintf 'MIGRATED BY NATIVE PACKAGE\\n' > \"$ROOT/etc/nfqws2.conf\"\n"
 	writeTar("control.tar.gz", map[string]string{"./control": control, "./conffiles": "/etc/nfqws2.conf\n", "./postinst": postinst})
-	writeTar("data.tar.gz", map[string]string{"./etc/nfqws2.conf": "FACTORY CONFIG\n"})
+	writeTar("data.tar.gz", map[string]string{"./etc/": "", "./etc/nfqws2.conf": "FACTORY CONFIG\n"})
 	if err := os.WriteFile(filepath.Join(build, "debian-binary"), []byte("2.0\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -268,10 +278,10 @@ func TestNativeFixtureEntwareGzipTarContainer(t *testing.T) {
 		}
 		gz.Close()
 		if name == "control.tar.gz" {
-			if !strings.Contains(string(found["./control"]), "Package: nfqws2-keenetic\nVersion: 1.0.0\n") || !strings.Contains(string(found["./postinst"]), "IPKG_INSTROOT") || !strings.Contains(string(found["./postinst"]), "MIGRATED BY NATIVE PACKAGE") {
+			if !strings.Contains(string(found["./control"]), "Package: nfqws2-keenetic\nVersion: 1.0.0\n") || !strings.Contains(string(found["./postinst"]), "PKG_ROOT") || !strings.Contains(string(found["./postinst"]), "RAZVILKA_EXPECTED_OFFLINE_ROOT") || !strings.Contains(string(found["./postinst"]), "MIGRATED BY NATIVE PACKAGE") {
 				t.Fatal("control/postinst evidence removed")
 			}
-		} else if string(found["./etc/nfqws2.conf"]) != "FACTORY CONFIG\n" {
+		} else if _, dirPresent := found["./etc/"]; !dirPresent || string(found["./etc/nfqws2.conf"]) != "FACTORY CONFIG\n" {
 			t.Fatal("missing native data")
 		}
 	}
