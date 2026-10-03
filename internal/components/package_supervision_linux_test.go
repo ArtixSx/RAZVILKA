@@ -67,7 +67,11 @@ func TestPackageDetachedFixture(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(path, "ready"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 		os.Exit(84)
 	}
-	for until := time.Now().Add(8 * time.Second); time.Now().Before(until); {
+	watchdog := 8 * time.Second
+	if stage == "hung" {
+		watchdog = 2 * time.Minute
+	}
+	for until := time.Now().Add(watchdog); time.Now().Before(until); {
 		if _, err := os.Stat(filepath.Join(path, "release")); err == nil && stage != "hung" {
 			_ = os.WriteFile(filepath.Join(path, "done"), nil, 0600)
 			os.Exit(0)
@@ -123,7 +127,7 @@ func TestPackageSupervisorHungChildDeadline(t *testing.T) {
 	runner := fixtureSupervisedRunner(path)
 	runner.supervisorEnv = append(runner.supervisorEnv, "RAZVILKA_DETACHED_STAGE=fork-hung", "RAZVILKA_DETACHED_ROOT="+path)
 	started := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
@@ -133,6 +137,7 @@ func TestPackageSupervisorHungChildDeadline(t *testing.T) {
 	for {
 		if _, err := os.Stat(filepath.Join(path, "ready")); err == nil {
 			t.Logf("hung child ready after %s", time.Since(started))
+			cancel() // Cancel only after an actual hung detached child exists.
 			break
 		}
 		select {
@@ -166,6 +171,42 @@ func TestPackageSupervisorHungChildDeadline(t *testing.T) {
 			t.Fatalf("hung child not durably reaped: phase=%s child=%d reaped=%d ECHILD=%v cancelled=%v exit=%d receipt_error=%v elapsed=%s", r.State, r.ChildPID, r.Reaped, r.WaitECHILD, r.Cancelled, r.ExitCode, e, time.Since(started))
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestPackageSupervisorPreStartCancellation(t *testing.T) {
+	m, _, _ := prepareJournalFixture(t)
+	tx, err := m.lockUpdateJournal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.close()
+	spec, _ := lookup("nfqws2")
+	images, err := m.snapshotConffiles(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Runner = execRunner{}
+	if err := tx.prepare(spec, "1.3.1", m.rollbackPackage(spec, "1.3.1"), images); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.phase(UpdateStarted); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(m.updateJournalDir(), tx.doc.TransactionID)
+	root, err := ownedfs.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	cancel()
+	_, err = fixtureSupervisedRunner(path).runSupervised(ctx, os.Args[0], []string{"-test.run=^TestPackageDetachedFixture$"}, packageSupervision{Schema: 1, TransactionID: tx.doc.TransactionID, Component: "nfqws2", Action: "upgrade", Containment: packageContainment, State: "intent"}, root, path)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("cancelled context reached spawn", err)
+	}
+	if _, err := root.Stat("upgrade.command.json"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("pre-start cancellation created command", err)
 	}
 }
 
