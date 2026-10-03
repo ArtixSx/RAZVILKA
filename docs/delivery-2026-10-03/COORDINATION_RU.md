@@ -35,3 +35,9 @@ D00 завершён: сохранены локальные изменения �
 - UI: recovery и единый workflow D12; настоящий policy HTTP/браузерный тест после path fix, без synthetic transport.
 
 Координатор выполняет Linux/race, native Xray/WG/kernel/package испытания и принимает небольшие коммиты. До подключения recovery/самообновления промежуточная сборка не устанавливается на рабочий роутер. Рабочие чаты не запускают общие live-окна.
+
+## Уточнение владельца общего журнала сетевых правил
+
+После согласования с CORE новый `internal/dataplane/policy_addition_receipt*.go` (реализация и новые unit/fault/native tests) передан VLESS. Контракт — [CORE_POLICY_ADDITION_CONTRACT_RU.md](handoffs/CORE_POLICY_ADDITION_CONTRACT_RU.md). CORE подтвердил, что этот модуль не начинал и параллельно его не пишет; существующие policy mutation/kernel helpers, manager/app/config и D07 остаются у CORE. Новые необходимые изменения этих файлов согласуются с владельцем.
+
+VLESS реализует один общий протокол для proxy и WG, затем подключает proxy. NET использует тот же API для WG. Отдельные парсеры и переписывание legacy `route replace` в каждом адаптере не нужны: исправленный общий primitive `b3bc486` уже принят и проверен настоящим ядром. Такая передача освобождает CORE для self-update и app wiring, сохраняя одного автора каждого общего файла. Координатор проверяет реальные crash/foreign-owner сценарии отдельно от unit тестов.
