@@ -47,7 +47,7 @@ CORE остаётся единственным владельцем незави
 ```go
 // begin only admits the bounded start syscall of this exact effect.
 // It does not run/wait opkg, fsync a payload, acquire a Store or call this API.
-func WithSelfUpdateEffectAdmission(ctx context.Context, root, transactionID string,
+func WithSelfUpdateEffectAdmission(ctx context.Context, root, transactionID, expectedInstallationID string,
     expectedSequence uint64, effectID string, begin func() error) error
 ```
 

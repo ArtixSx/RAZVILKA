@@ -439,11 +439,11 @@ func CheckSelfUpdateStop(ctx context.Context, path, id string) error {
 // begin admits only a bounded Start syscall, never Wait/opkg/payload fsync.
 // Stop and actual begin share this control lock. Already admitted trees must
 // observe the newer epoch and cancel/join through their exact owner supervisor.
-func WithSelfUpdateEffectAdmission(ctx context.Context, path, id string, sequence uint64, effectID string, begin func() error) error {
+func WithSelfUpdateEffectAdmission(ctx context.Context, path, id, installationID string, sequence uint64, effectID string, begin func() error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !controlHex(id, 32) || sequence == 0 || begin == nil || len(effectID) == 0 || len(effectID) > 64 {
+	if !controlHex(id, 32) || !controlHex(installationID, 32) || sequence == 0 || begin == nil || len(effectID) == 0 || len(effectID) > 64 {
 		return ErrSelfUpdateStopChanged
 	}
 	for _, c := range effectID {
@@ -472,7 +472,7 @@ func WithSelfUpdateEffectAdmission(ctx context.Context, path, id string, sequenc
 	if r.Stopped {
 		return ErrSelfUpdateStopped
 	}
-	if r.Sequence != sequence {
+	if r.InstallationID != installationID || r.Sequence != sequence {
 		return ErrSelfUpdateStopChanged
 	}
 	if ctx.Err() != nil {
