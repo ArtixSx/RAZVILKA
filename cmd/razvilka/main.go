@@ -105,6 +105,11 @@ func main() {
 	auditLogPath := flag.String("audit-log", defaultAuditLog, "bounded control-plane audit journal path")
 	dnsStatePath := flag.String("dns-state", defaultDNSState, "DNS profile draft and probe state path")
 	nodeStatePath := flag.String("node-state", getenv("RAZVILKA_NODE_STATE", ""), "private proxy node store directory (default: nodes-private beside config)")
+	componentState := flag.String("component-state", getenv("RAZVILKA_COMPONENT_STATE", ""), "explicit absolute component journal/receipt directory (default: /opt/var/lib/razvilka/components)")
+	componentBin := flag.String("component-bin", getenv("RAZVILKA_COMPONENT_BIN", ""), "explicit absolute managed component binary directory (default: /opt/bin)")
+	componentInit := flag.String("component-init", getenv("RAZVILKA_COMPONENT_INIT", ""), "explicit absolute component init directory (default: /opt/etc/init.d)")
+	componentRepo := flag.String("component-repo", getenv("RAZVILKA_COMPONENT_REPO", ""), "explicit absolute component repository directory (default: /opt/etc/opkg)")
+	componentInfo := flag.String("component-info", getenv("RAZVILKA_COMPONENT_INFO", ""), "explicit absolute component conffile metadata directory (default: /opt/lib/opkg/info)")
 	z2kRoot := flag.String("z2k-root", defaultZ2KRoot, "read-only z2k migration source root")
 	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
 	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
@@ -240,9 +245,13 @@ func main() {
 		return
 	}
 	if *installComponents {
+		manager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 		defer cancel()
-		report := components.New().InstallRecommended(ctx)
+		report := manager.InstallRecommended(ctx)
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(report); err != nil {
@@ -497,7 +506,11 @@ func main() {
 		}
 	}
 	nodeChecker := dataplane.NewExactNodeChecker(filepath.Join(*dataplaneStatePath, "node-check"))
-	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
+	componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+	if err != nil {
+		log.Fatal(err)
+	}
+	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: componentManager, Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	// Panel actions wait briefly for background work instead of failing with
 	// "busy" at once; the operation holding the gate is named if they still fail.
 	a.AdmissionPatience = 20 * time.Second
@@ -704,7 +717,12 @@ func runCommand(args []string) (bool, int) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		views, err := components.New().List(ctx, refresh)
+		manager, err := componentsFromEnv()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return true, 3
+		}
+		views, err := manager.List(ctx, refresh)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return true, 3
@@ -722,7 +740,12 @@ func runCommand(args []string) (bool, int) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		plan, err := components.New().Plan(ctx, args[2], args[3], refresh)
+		manager, err := componentsFromEnv()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return true, 3
+		}
+		plan, err := manager.Plan(ctx, args[2], args[3], refresh)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return true, 3
@@ -735,6 +758,31 @@ func runCommand(args []string) (bool, int) {
 		fmt.Fprintf(os.Stderr, "unknown command %q; run 'razvilka help'\n", args[0])
 		return true, 2
 	}
+}
+
+func componentsFromEnv() (*components.Manager, error) {
+	return configuredComponents(os.Getenv("RAZVILKA_COMPONENT_STATE"), os.Getenv("RAZVILKA_COMPONENT_BIN"), os.Getenv("RAZVILKA_COMPONENT_INIT"), os.Getenv("RAZVILKA_COMPONENT_REPO"), os.Getenv("RAZVILKA_COMPONENT_INFO"))
+}
+
+// Overrides are explicit; config relocation never relocates retained journals.
+// Do not create paths or normalize/resolve links here: ownedfs remains the gate.
+func configuredComponents(state, bin, init, repo, info string) (*components.Manager, error) {
+	m := components.New()
+	for _, item := range []struct {
+		name, value string
+		target      *string
+	}{
+		{"state", state, &m.StateDir}, {"bin", bin, &m.BinDir}, {"init", init, &m.InitDir}, {"repo", repo, &m.RepoDir}, {"info", info, &m.InfoDir},
+	} {
+		if item.value == "" {
+			continue
+		}
+		if !filepath.IsAbs(item.value) || strings.TrimSpace(item.value) != item.value {
+			return nil, fmt.Errorf("component-%s requires an explicit absolute directory", item.name)
+		}
+		*item.target = item.value
+	}
+	return m, nil
 }
 
 func writeCommandJSON(value any) int {
