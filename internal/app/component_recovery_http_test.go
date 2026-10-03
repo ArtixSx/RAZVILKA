@@ -282,9 +282,56 @@ func TestComponentRecoveryRealHTTPMatchingAuthorityAndAcceptance(t *testing.T) {
 	if code, data := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 200 || a.PendingComponentRecovery() {
 		t.Fatalf("matching acceptance %d %s", code, data)
 	}
+	data, err := os.ReadFile(filepath.Join(a.Components.StateDir, "operations", "nfqws2.json"))
+	var operation componentRecoveryOperation
+	if err != nil || json.Unmarshal(data, &operation) != nil || operation.Status != "succeeded" || operation.TransactionID != body["transaction_id"] {
+		t.Fatalf("matching acceptance did not settle durable operation receipt: %v %s", err, data)
+	}
+	// Re-open the manager as a fresh reader: a reload must release UI actions.
+	m := a.Components
+	fresh := &components.Manager{StateDir: m.StateDir, InfoDir: m.InfoDir, RepoDir: m.RepoDir, BinDir: m.BinDir, InitDir: m.InitDir, Opkg: m.Opkg, Runner: runner, Client: m.Client}
+	views, err := fresh.List(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range views {
+		if view.ID == "nfqws2" && view.OperationStatus == "running" {
+			t.Fatal("settled operation still blocks UI after restart")
+		}
+	}
 	commands := len(runner.calls)
 	if code, _ := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code < 400 || len(runner.calls) != commands {
 		t.Fatal("repeat replayed settled transaction", code)
+	}
+}
+
+func TestComponentTerminalHTTPFinishesOperationWithoutReplay(t *testing.T) {
+	a, runner := componentHTTPFixture(t)
+	if err := a.updateComponent(context.Background(), "nfqws2"); !errors.Is(err, components.ErrUpdatePending) {
+		t.Fatal(err)
+	}
+	body := recoveryBody(a, "accept-live")
+	// Simulate a process exit between package-journal acceptance and the
+	// independent operation/checkpoint write, leaving the real running receipt.
+	_, err := a.Components.RecoverManagedUpdate(context.Background(), components.ManagedRecoveryRequest{TransactionID: body["transaction_id"].(string), Component: "nfqws2", Action: "accept-live"}, func(context.Context) error { return nil }, func(context.Context) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := len(runner.calls)
+	a.componentRecoveryChecks.live = func(context.Context, string) error {
+		t.Error("terminal acceptance callback replayed")
+		return errors.New("must not replay")
+	}
+	s := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer s.Close()
+	if code, data := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 200 || !bytes.Contains(data, []byte(`"checkpoint_settled":true`)) {
+		t.Fatalf("terminal follow-up: %d %s", code, data)
+	}
+	if len(runner.calls) != before {
+		t.Fatal("terminal follow-up ran package commands")
+	}
+	if code, _ := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 409 || len(runner.calls) != before {
+		t.Fatal("finished receipt permitted replay", code)
 	}
 }
 

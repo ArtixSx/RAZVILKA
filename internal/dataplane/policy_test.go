@@ -71,7 +71,7 @@ func TestResolvePolicyRulesKeepsPerServiceDeviceScope(t *testing.T) {
 }
 
 func TestApplyPolicyIncludesSourceSelector(t *testing.T) {
-	runner := &nfqwsFakeRunner{}
+	runner := &recordedPolicyFakeRunner{}
 	state := PolicyState{Interface: "rz-test", Table: 210, PriorityBase: 28000, Prefixes: []string{"203.0.113.7/32"}, Rules: []PolicyRule{{Source: "192.168.1.20/32", Destination: "203.0.113.7/32"}}}
 	if err := applyPolicy(context.Background(), runner, "ip", state); err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestApplyPolicyIncludesSourceSelector(t *testing.T) {
 }
 
 func TestApplyPolicyRoutesPrivateEndpointThroughMainFirst(t *testing.T) {
-	runner := &nfqwsFakeRunner{}
+	runner := &recordedPolicyFakeRunner{}
 	state := PolicyState{
 		Interface: "rz-test", Table: 210, PriorityBase: 28000,
 		Prefixes:   []string{"203.0.113.0/24"},

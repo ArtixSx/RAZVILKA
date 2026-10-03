@@ -41,7 +41,7 @@ func (f *precedenceFixture) Run(ctx context.Context, _ string, args ...string) (
 			return nil, errors.New("injected selector creation failure")
 		}
 	}
-	if strings.HasPrefix(command, "rule ") || strings.HasPrefix(command, "route replace") || strings.HasPrefix(command, "route flush") {
+	if strings.HasPrefix(command, "rule ") || strings.HasPrefix(command, "route add") || strings.HasPrefix(command, "route del") || strings.HasPrefix(command, "route replace") || strings.HasPrefix(command, "route flush") {
 		f.mutations = append(f.mutations, strings.Join(args, " "))
 	}
 	if output, handled, err := f.kernel.run(args); handled {
