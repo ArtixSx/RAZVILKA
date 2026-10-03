@@ -5,21 +5,29 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Capabilities struct {
-	Backend             string `json:"backend"`
-	Kernel              string `json:"kernel"`
-	LoadedModuleVersion string `json:"loaded_module_version"`
-	ToolPath            string `json:"tool_path"`
-	ToolVersion         string `json:"tool_version"`
-	ModuleLoaded        bool   `json:"module_loaded"`
-	SupportsAWG31       bool   `json:"supports_awg31"`
+	Backend               string `json:"backend"`
+	Kernel                string `json:"kernel"`
+	LoadedModuleVersion   string `json:"loaded_module_version"`
+	ToolPath              string `json:"tool_path"`
+	ToolVersion           string `json:"tool_version"`
+	ModuleLoaded          bool   `json:"module_loaded"`
+	SupportsAWG31         bool   `json:"supports_awg31"`
+	ToolSHA256            string `json:"tool_sha256,omitempty"`
+	LoadedSourceVersion   string `json:"loaded_source_version,omitempty"`
+	ModuleSourceVersion   string `json:"module_source_version,omitempty"`
+	ModuleName            string `json:"module_name,omitempty"`
+	ModuleVersion         string `json:"module_version,omitempty"`
+	ModuleVermagic        string `json:"module_vermagic,omitempty"`
+	ModuleInitState       string `json:"module_init_state,omitempty"`
+	ModuleTaint           string `json:"module_taint"`
+	KernelTaint           string `json:"kernel_taint,omitempty"`
+	CompatibilityVerified bool   `json:"compatibility_verified"`
 	// None of these inventory facts is network or model/firmware HIL evidence.
 	HardwareVerified bool   `json:"hardware_verified"`
 	Note             string `json:"note"`
@@ -38,30 +46,7 @@ func DetectTool(ctx context.Context, tool string) Capabilities {
 }
 
 func detectTools(ctx context.Context, tools []string) Capabilities {
-	c := Capabilities{Backend: "kernel", Note: "Проверяются загруженный amneziawg и локальный awg. Пакеты и модули не устанавливаются; испытание роутера требуется отдельно."}
-	c.Kernel = readVersion("/proc/sys/kernel/osrelease")
-	c.LoadedModuleVersion = readVersion("/sys/module/amneziawg/version")
-	c.ModuleLoaded = c.LoadedModuleVersion != ""
-	for _, path := range tools {
-		p, e := exec.LookPath(path)
-		if e != nil {
-			continue
-		}
-		c.ToolPath = p
-		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		var b cappedBuffer
-		cmd := exec.CommandContext(ctx, p, "--version")
-		cmd.Stdout = &b
-		cmd.Stderr = &b
-		err := cmd.Run()
-		cancel()
-		if err == nil {
-			c.ToolVersion = safeVersion(b.text.String())
-		}
-		break
-	}
-	c.SupportsAWG31 = atLeast(c.LoadedModuleVersion, 3, 1) && atLeast(c.ToolVersion, 3, 1)
-	return c
+	return inspectRuntime(ctx, tools, nativeRuntimeInspector())
 }
 
 type cappedBuffer struct{ text strings.Builder }
