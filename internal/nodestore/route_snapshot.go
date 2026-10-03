@@ -12,6 +12,15 @@ import (
 // one private-envelope generation. Keys are raw node/group IDs, including
 // empty lists for ineligible entries; no endpoint or credential is returned.
 func (s *Store) RouteSnapshot(ctx context.Context, profile string, now time.Time) (Snapshot, map[string][]string, error) {
+	return s.RouteSnapshotForEngine(ctx, "sing-box", profile, now)
+}
+
+// RouteSnapshotForEngine preserves one envelope generation and separates
+// service permissions for each executor, including groups.
+func (s *Store) RouteSnapshotForEngine(ctx context.Context, engine, profile string, now time.Time) (Snapshot, map[string][]string, error) {
+	if !validRouteEngine(engine) {
+		return Snapshot{}, nil, ErrRouteProof
+	}
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, nil, err
 	}
@@ -40,7 +49,7 @@ func (s *Store) RouteSnapshot(ctx context.Context, profile string, now time.Time
 		if err := ctx.Err(); err != nil {
 			return Snapshot{}, nil, err
 		}
-		services[node.ID] = routeServicesForNode(node, profile, now)
+		services[node.ID] = routeServicesForNodeEngine(node, engine, profile, now)
 	}
 	for _, group := range doc.Groups {
 		if err := ctx.Err(); err != nil {

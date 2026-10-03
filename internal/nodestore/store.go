@@ -644,7 +644,7 @@ var checkTokenPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,127}$`
 
 func validCheckRecord(record CheckRecord, nodeID string) bool {
 	if !checkTokenPattern.MatchString(record.ProbeID) || !sourcePattern.MatchString(record.ServiceID) ||
-		!checkTokenPattern.MatchString(record.NetworkProfile) || record.RoutePathID != "sing-box:"+nodeID ||
+		!checkTokenPattern.MatchString(record.NetworkProfile) || !validExactRoute(record.RoutePathID, nodeID) ||
 		record.CheckedAt.IsZero() || record.ExpiresAt.IsZero() || !record.ExpiresAt.After(record.CheckedAt) ||
 		record.ExpiresAt.Sub(record.CheckedAt) > maxCheckTTL || record.LatencyMS < 0 || record.LatencyMS > 600_000 ||
 		record.HTTPStatus < 0 || record.HTTPStatus > 599 || !utf8.ValidString(record.Message) || utf8.RuneCountInString(record.Message) > 240 ||

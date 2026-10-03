@@ -21,5 +21,5 @@ unshare --net sh -eu -c '
   ip addr add 93.184.216.11/32 dev lo
   ip addr add 93.184.216.12/32 dev lo
   ip addr add 93.184.216.13/32 dev lo
-  exec "$1" -test.run "^TestNativeXrayExactNode$" -test.v -test.timeout 4m
+  exec "$1" -test.run "^TestNativeXray(ExactNode|StoreConfigSyntax)$" -test.v -test.timeout 4m
 ' sh "$tmp/xray-native.test"

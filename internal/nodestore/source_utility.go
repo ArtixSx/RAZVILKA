@@ -15,6 +15,14 @@ import (
 // hint: it grants no route authority and exports no server/credential material.
 // Failed checks do not create a source penalty (the local runtime may be broken).
 func (s *Store) SourceUtility(ctx context.Context, allowed, protocols []string, service, profile string, now time.Time) (map[string]int, error) {
+	return s.SourceUtilityForEngine(ctx, "sing-box", allowed, protocols, service, profile, now)
+}
+
+// SourceUtilityForEngine keeps positive scheduling hints executor-specific.
+func (s *Store) SourceUtilityForEngine(ctx context.Context, engine string, allowed, protocols []string, service, profile string, now time.Time) (map[string]int, error) {
+	if !validRouteEngine(engine) {
+		return nil, ErrRouteProof
+	}
 	if len(allowed) > MaxSources || len(protocols) > 16 || !sourcePattern.MatchString(service) || now.IsZero() {
 		return nil, ErrStore
 	}
@@ -47,7 +55,7 @@ func (s *Store) SourceUtility(ctx context.Context, allowed, protocols []string, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if !slices.Contains(routeServicesForNode(node, profile, now), service) {
+		if !slices.Contains(routeServicesForNodeEngine(node, engine, profile, now), service) {
 			continue
 		}
 		var material struct {
