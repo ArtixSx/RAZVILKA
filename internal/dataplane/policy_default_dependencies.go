@@ -3,10 +3,17 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 )
 
 var ErrPolicyDefaultReferenced = errors.New("policy table default still has a selector dependency or unrecognized RPDB state")
+
+type numericPolicyReadRunner struct{ base NFQWS2Runner }
+
+func (r numericPolicyReadRunner) Run(ctx context.Context, command string, args ...string) ([]byte, error) {
+	return r.base.Run(ctx, command, append([]string{"-N"}, args...)...)
+}
 
 // AssertPolicyDefaultUnreferenced is a read-only negative dependency check,
 // never deletion authority. Call it immediately before a durable default
@@ -21,7 +28,8 @@ func AssertPolicyDefaultUnreferenced(ctx context.Context, runner NFQWS2Runner, i
 	if runner == nil || ip == "" || (family != 4 && family != 6) || state.Table < 1 || state.Table > 252 {
 		return ErrPolicyDefaultReferenced
 	}
-	lines, err := readPolicyRules(ctx, runner, ip, family)
+	numeric := numericPolicyReadRunner{base: runner}
+	lines, err := readPolicyRules(ctx, numeric, ip, family)
 	if err != nil {
 		return errors.Join(ErrPolicyDefaultReferenced, err)
 	}
@@ -34,8 +42,22 @@ func AssertPolicyDefaultUnreferenced(ctx context.Context, runner NFQWS2Runner, i
 			continue
 		}
 		switch line {
-		case "0: from all lookup local", "0: from all lookup 255", "32766: from all lookup main", "32766: from all lookup 254", "32767: from all lookup default", "32767: from all lookup 253":
+		case "0: from all lookup 255", "32766: from all lookup 254", "32767: from all lookup 253":
 			continue
+		}
+		// Even a tool that silently ignores -N cannot turn a reserved-looking
+		// alias (e.g. rt_tables "203 main") into proof of a different table.
+		fields := strings.Fields(line)
+		for i, field := range fields {
+			if field == "lookup" || field == "table" {
+				if i+1 >= len(fields) {
+					return ErrPolicyDefaultReferenced
+				}
+				value, err := strconv.ParseUint(fields[i+1], 10, 32)
+				if err != nil || strconv.FormatUint(value, 10) != fields[i+1] {
+					return ErrPolicyDefaultReferenced
+				}
+			}
 		}
 		parsed, ok := parseKernelPolicyRule(family, line)
 		if !ok && state.WireGuardEndpoint != nil {
@@ -45,7 +67,7 @@ func AssertPolicyDefaultUnreferenced(ctx context.Context, runner NFQWS2Runner, i
 				// this default only while its exact host pin is actually present.
 				// Reuse NET's full rule/route readback; this observer has no file,
 				// process, installation or effect callbacks and mutates nothing.
-				observer := &WARPWireGuardAdapter{Runner: runner, IP: ip}
+				observer := &WARPWireGuardAdapter{Runner: numeric, IP: ip}
 				pinned, present, err := observer.inspectWGEndpoint(ctx, &endpoint)
 				if err != nil || !pinned || !present {
 					return errors.Join(ErrPolicyDefaultReferenced, err)
