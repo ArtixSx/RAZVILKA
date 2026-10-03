@@ -1,6 +1,7 @@
 package usquediag
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
@@ -8,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/netip"
@@ -21,6 +23,8 @@ import (
 const ownedWarpTraceURL = "https://www.cloudflare.com/cdn-cgi/trace"
 const ownedTraceBodyLimit = 16 << 10
 const ownedServiceBodyLimit = 16 << 10
+const ownedDoHURL = "https://cloudflare-dns.com/dns-query"
+const ownedDoHBodyLimit = 4096
 
 var (
 	errOwnedNetworkRequest = errors.New("owned-network-request-invalid")
@@ -119,6 +123,14 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 	stop := context.AfterFunc(ctx, sockets.close)
 	defer stop()
 	proxy, _ := ownedLoopbackSOCKS(request.SOCKSAddress)
+	dnsTransport := ownedDoHTransport(proxy, sockets, timeout)
+	defer dnsTransport.CloseIdleConnections()
+	dnsClient := &http.Client{Transport: dnsTransport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resolve := func(resolveCtx context.Context, host string) ([]netip.Addr, error) {
+		return ownedResolvePublic(resolveCtx, host, func(exchangeCtx context.Context, query []byte) ([]byte, error) {
+			return ownedDoHExchange(exchangeCtx, dnsClient, query)
+		})
+	}
 	transport := &http.Transport{
 		Proxy: nil, DisableKeepAlives: true, DisableCompression: true,
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
@@ -128,19 +140,9 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 			if network != "tcp" && network != "tcp4" && network != "tcp6" {
 				return nil, errOwnedNetworkHTTP
 			}
-			host, port, err := net.SplitHostPort(target)
-			if err != nil || port != "443" {
-				return nil, errOwnedNetworkHTTP
-			}
-			if _, err := validateOwnedNetworkHTTPS("https://" + net.JoinHostPort(host, port) + "/"); err != nil {
-				return nil, errOwnedNetworkHTTP
-			}
-			address, err := ownedSOCKSAddress(host, 443)
-			if err != nil {
-				return nil, errOwnedNetworkHTTP
-			}
-			connection, _, err := ownedSOCKSCommand(dialCtx, proxy, 1, address, sockets)
-			return connection, err
+			// The HTTP URL remains unchanged, so TLS verifies its original
+			// hostname while SOCKS sees only an independently checked literal.
+			return ownedDialPublic(dialCtx, proxy, target, sockets, resolve, ownedSOCKSCommand)
 		},
 	}
 	defer transport.CloseIdleConnections()
@@ -182,6 +184,108 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 		return OwnedApplicationProof{}, errOwnedNetworkStopped
 	}
 	return proof, nil
+}
+
+// Bootstrap uses one fixed public literal through the same owned SOCKS path;
+// it never asks the local/system resolver to resolve the DoH hostname.
+func ownedDoHTransport(proxy netip.AddrPort, sockets *probeSockets, timeout time.Duration) *http.Transport {
+	return &http.Transport{
+		Proxy: nil, DisableKeepAlives: true, DisableCompression: true,
+		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, ServerName: "cloudflare-dns.com"},
+		TLSHandshakeTimeout: timeout, ResponseHeaderTimeout: timeout,
+		MaxResponseHeaderBytes: 8192, MaxConnsPerHost: 1, ForceAttemptHTTP2: true,
+		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
+			if (network != "tcp" && network != "tcp4" && network != "tcp6") || target != "cloudflare-dns.com:443" {
+				return nil, errOwnedNetworkDNS
+			}
+			address, _ := ownedSOCKSAddress("1.1.1.1", 443)
+			connection, _, err := ownedSOCKSCommand(ctx, proxy, 1, address, sockets)
+			if err != nil {
+				return nil, errOwnedNetworkDNS
+			}
+			return connection, nil
+		},
+	}
+}
+
+func ownedDoHExchange(ctx context.Context, client *http.Client, query []byte) ([]byte, error) {
+	if ctx == nil || ctx.Err() != nil || client == nil || len(query) < 12 || len(query) > ownedDoHBodyLimit {
+		return nil, errOwnedNetworkDNS
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, ownedDoHURL, bytes.NewReader(query))
+	if err != nil {
+		return nil, errOwnedNetworkDNS
+	}
+	request.Close = true
+	request.Header.Set("Content-Type", "application/dns-message")
+	request.Header.Set("Accept", "application/dns-message")
+	request.Header.Set("Cache-Control", "no-cache, no-store")
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, errOwnedNetworkDNS
+	}
+	defer response.Body.Close()
+	mediaType, _, mediaErr := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if response.StatusCode != http.StatusOK || response.ContentLength > ownedDoHBodyLimit || mediaErr != nil || mediaType != "application/dns-message" || response.TLS == nil || len(response.TLS.VerifiedChains) == 0 {
+		return nil, errOwnedNetworkDNS
+	}
+	answer, err := io.ReadAll(io.LimitReader(response.Body, ownedDoHBodyLimit+1))
+	if err != nil || len(answer) > ownedDoHBodyLimit || ctx.Err() != nil {
+		clear(answer)
+		return nil, errOwnedNetworkDNS
+	}
+	return answer, nil
+}
+
+func ownedDialPublic(ctx context.Context, proxy netip.AddrPort, target string, sockets *probeSockets, resolve func(context.Context, string) ([]netip.Addr, error), connect func(context.Context, netip.AddrPort, byte, []byte, *probeSockets) (net.Conn, []byte, error)) (net.Conn, error) {
+	if ctx == nil || ctx.Err() != nil || connect == nil {
+		return nil, errOwnedNetworkHTTP
+	}
+	host, port, err := net.SplitHostPort(target)
+	if err != nil || port != "443" {
+		return nil, errOwnedNetworkHTTP
+	}
+	if _, err := validateOwnedNetworkHTTPS("https://" + net.JoinHostPort(host, port) + "/"); err != nil {
+		return nil, errOwnedNetworkHTTP
+	}
+	var addresses []netip.Addr
+	if literal, err := netip.ParseAddr(host); err == nil {
+		addresses = []netip.Addr{literal}
+	} else {
+		if resolve == nil {
+			return nil, errOwnedNetworkDNS
+		}
+		addresses, err = resolve(ctx, host)
+		if err != nil {
+			return nil, errOwnedNetworkDNS
+		}
+		addresses = append([]netip.Addr(nil), addresses...)
+	}
+	if len(addresses) == 0 || len(addresses) > 32 {
+		return nil, errOwnedNetworkDNS
+	}
+	for _, address := range addresses {
+		if address.Is4In6() || address.Zone() != "" || !ownedPublicAddress(address) {
+			return nil, errOwnedNetworkDNS
+		}
+	}
+	if ctx.Err() != nil {
+		return nil, errOwnedNetworkDNS
+	}
+	// One checked destination, one CONNECT. No second name resolution or
+	// fallback after a failed connection can move this request to another peer.
+	address, err := ownedSOCKSAddress(addresses[0].String(), 443)
+	if err != nil {
+		return nil, errOwnedNetworkDNS
+	}
+	connection, _, err := connect(ctx, proxy, 1, address, sockets)
+	if err != nil || ctx.Err() != nil || connection == nil {
+		if connection != nil {
+			connection.Close()
+		}
+		return nil, errOwnedNetworkHTTP
+	}
+	return connection, nil
 }
 
 func ownedNetworkFailure(ctx context.Context, otherwise error) error {
@@ -271,10 +375,7 @@ func ownedSOCKSAddress(host string, port uint16) ([]byte, error) {
 			address = append([]byte{4}, ip.AsSlice()...)
 		}
 	} else {
-		if len(host) == 0 || len(host) > 253 {
-			return nil, errOwnedNetworkRequest
-		}
-		address = append([]byte{3, byte(len(host))}, host...)
+		return nil, errOwnedNetworkRequest
 	}
 	return binary.BigEndian.AppendUint16(address, port), nil
 }

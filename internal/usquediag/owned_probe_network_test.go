@@ -119,13 +119,27 @@ func TestOwnedSOCKSRepliesAndUDPRelayPin(t *testing.T) {
 			t.Fatal("UDP relay mismatch accepted", endpoint, err)
 		}
 	}
-	domain, _ := ownedSOCKSAddress("localhost", 18080)
+	domain := append([]byte{3, 9}, []byte("localhost")...)
+	domain = append(domain, 0x46, 0xa0)
 	if _, err := validateOwnedUDPRelay(domain, proxy); !errors.Is(err, errOwnedNetworkUDP) {
 		t.Fatal("domain relay accepted", err)
 	}
 	for _, raw := range [][]byte{{}, {5}, {4, 0, 0, 1}, {5, 1, 0, 1}, {5, 0, 1, 1}, {5, 0, 0, 9}, {5, 0, 0, 3, 0}, {5, 0, 0, 1, 127, 0, 0}} {
 		if _, err := readOwnedSOCKSReply(bytes.NewReader(raw)); !errors.Is(err, errOwnedNetworkHTTP) {
 			t.Fatal("malformed SOCKS reply accepted", err)
+		}
+	}
+}
+
+func TestOwnedDoHBootstrapRefusesUnapprovedTargetsBeforeSockets(t *testing.T) {
+	transport := ownedDoHTransport(netip.MustParseAddrPort("127.0.0.1:18080"), &probeSockets{}, time.Second)
+	defer transport.CloseIdleConnections()
+	if transport.Proxy != nil || transport.TLSClientConfig.InsecureSkipVerify || transport.TLSClientConfig.ServerName != "cloudflare-dns.com" {
+		t.Fatal("DoH TLS/proxy profile changed")
+	}
+	for _, target := range []string{"1.1.1.1:443", "cloudflare-dns.com:80", "private.example:443"} {
+		if conn, err := transport.DialContext(context.Background(), "tcp", target); conn != nil || !errors.Is(err, errOwnedNetworkDNS) {
+			t.Fatal("unapproved DoH target accepted", target, err)
 		}
 	}
 }
