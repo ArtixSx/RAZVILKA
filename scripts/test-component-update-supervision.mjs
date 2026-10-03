@@ -35,8 +35,8 @@ try {
     writeFileSync(journal, '{"schema_version":1,"phase":"rollback-started","private":"retained"}\n');
     const before = readFileSync(journal);
     assert.match(run('old_binary() { return 2; }\nrequire_native_enrollment_schema old_binary', 1).stderr, /cannot preserve component update recovery/);
-    run('wrong_schema() { printf "2\\n"; }\nrequire_native_enrollment_schema wrong_schema', 1);
-    run('new_binary() { [ "$1" = -component-update-schema ]; printf "1\\n"; }\nrequire_native_enrollment_schema new_binary', 0);
+    run('wrong_schema() { printf "1\\n"; }\nrequire_native_enrollment_schema wrong_schema', 1);
+    run('new_binary() { [ "$1" = -component-update-schema ]; printf "2\\n"; }\nrequire_native_enrollment_schema new_binary', 0);
     assert.deepEqual(readFileSync(journal), before, 'compatibility probe must not consume pending receipt');
     rmSync(journal);
     mkdirSync(journal);

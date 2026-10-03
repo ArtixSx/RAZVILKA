@@ -352,6 +352,14 @@ func (m *Manager) attachLifecycleVerification(view *View) {
 			return
 		}
 	}
+	if receipt.Acceptance == UpdateAcceptedIdle {
+		if view.Installed && view.InstalledVersion == receipt.AfterVersion {
+			view.Verification = "installed-idle-accepted"
+		} else {
+			view.Verification = "changed-after-verification"
+		}
+		return
+	}
 	switch receipt.Action {
 	case "install", "update", "rollback":
 		if view.Installed && receipt.AfterVersion != "" && compareVersions(view.InstalledVersion, receipt.AfterVersion) == 0 {

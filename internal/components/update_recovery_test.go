@@ -107,12 +107,12 @@ func TestManagedUpdatePhaseInterruptionsNeverReplayUnknownCommands(t *testing.T)
 						t.Fatalf("unexpected crash %v", recovered)
 					}
 				}()
-				_, _ = m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
+				_, _ = m.ManagedUpdateGuardedWithRollback(context.Background(), "nfqws2", func(context.Context) error {
 					if runner.installed != "1.3.1" {
 						return errors.New("candidate failed")
 					}
 					return nil
-				})
+				}, nil, allowRecovery)
 			}()
 			if !fired {
 				t.Fatalf("fault point not reached: %s", point)

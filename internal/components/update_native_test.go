@@ -2,15 +2,19 @@ package components
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -26,7 +30,9 @@ func (r nativeOpkgRunner) Run(ctx context.Context, name string, args ...string) 
 		return nil, fmt.Errorf("unsafe native opkg test root")
 	}
 	prefix := []string{"--conf", r.config, "--offline-root", r.root, "--force-postinstall"}
-	return exec.CommandContext(ctx, name, append(prefix, args...)...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, name, append(prefix, args...)...)
+	cmd.Env = append(os.Environ(), "RAZVILKA_EXPECTED_OFFLINE_ROOT="+r.root)
+	return cmd.CombinedOutput()
 }
 
 func TestNativeOpkgManagedUpdateJournal(t *testing.T) {
@@ -39,9 +45,6 @@ func TestNativeOpkgManagedUpdateJournal(t *testing.T) {
 	opkg, err := exec.LookPath(os.Getenv("RAZVILKA_TEST_OPKG"))
 	if err != nil {
 		t.Fatal("RAZVILKA_TEST_OPKG must name a native opkg binary", err)
-	}
-	if _, err := exec.LookPath("ar"); err != nil {
-		t.Fatal("native package fixture requires ar", err)
 	}
 	for _, interrupted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("interrupt-%v", interrupted), func(t *testing.T) {
@@ -129,11 +132,17 @@ func TestNativeOpkgManagedUpdateJournal(t *testing.T) {
 					t.Fatalf("native durable readback: %v %v", versions, err)
 				}
 			} else {
-				_, err := m.ManagedUpdate(context.Background(), "nfqws2", check)
-				if !strings.Contains(fmt.Sprint(err), "rolled back to 1.0.0") {
-					t.Fatalf("native rollback not verified: %v", err)
+				result, err := m.ManagedUpdate(context.Background(), "nfqws2", check)
+				if !errors.Is(err, ErrRollbackUnconfirmed) || !result.PendingRollbackAcceptance {
+					t.Fatalf("native rollback must await independent acceptance: %+v %v", result, err)
 				}
 				fresh := restartedManager(m)
+				if err := fresh.Quiescence(context.Background(), result.TransactionID, "nfqws2"); err != nil {
+					t.Fatal("native descendants not reaped", err)
+				}
+				if _, err := fresh.RecoverManagedUpdate(context.Background(), ManagedRecoveryRequest{TransactionID: result.TransactionID, Component: "nfqws2", Action: "verify-rollback"}, allowRecovery, check); err != nil {
+					t.Fatal("independent native rollback acceptance", err)
+				}
 				state, pending, err := fresh.PendingManagedUpdate()
 				if err != nil || pending || state.Phase != UpdateRolledBack || check(context.Background()) != nil {
 					t.Fatalf("native rollback persistence: %+v %v %v", state, pending, err)
@@ -156,12 +165,24 @@ func nativeFixturePackage(t *testing.T, directory, version string) string {
 		}
 		gz := gzip.NewWriter(f)
 		tw := tar.NewWriter(gz)
-		for path, data := range entries {
+		var names []string
+		for path := range entries {
+			names = append(names, path)
+		}
+		sort.Strings(names)
+		for _, path := range names {
+			data := entries[path]
 			mode := int64(0o644)
+			kind := byte(tar.TypeReg)
+			if strings.HasSuffix(path, "/") {
+				kind = tar.TypeDir
+				mode = 0755
+				data = ""
+			}
 			if path == "./postinst" {
 				mode = 0o755
 			}
-			if err := tw.WriteHeader(&tar.Header{Name: path, Mode: mode, Size: int64(len(data)), Typeflag: tar.TypeReg}); err != nil {
+			if err := tw.WriteHeader(&tar.Header{Name: path, Mode: mode, Size: int64(len(data)), Typeflag: kind, Format: tar.FormatUSTAR}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := tw.Write([]byte(data)); err != nil {
@@ -179,17 +200,96 @@ func nativeFixturePackage(t *testing.T, directory, version string) string {
 		}
 	}
 	control := fmt.Sprintf("Package: nfqws2-keenetic\nVersion: %s\nArchitecture: all\nMaintainer: RAZVILKA test\nDescription: isolated native journal fixture\n", version)
-	postinst := "#!/bin/sh\nset -eu\n[ -n \"${IPKG_INSTROOT:-}\" ] && [ \"$IPKG_INSTROOT\" != / ] || exit 99\nprintf 'MIGRATED BY NATIVE PACKAGE\\n' > \"$IPKG_INSTROOT/etc/nfqws2.conf\"\n"
+	// opkg-lede 80503d94 exports PKG_ROOT (not IPKG_INSTROOT). Bind it to
+	// the independently supplied test root before the first postinst write.
+	postinst := "#!/bin/sh\nset -eu\nROOT=\"${PKG_ROOT:-}\"\ncase \"$ROOT\" in /*) ;; *) exit 99 ;; esac\nROOT=\"${ROOT%/}\"\n[ -n \"$ROOT\" ] && [ \"$ROOT\" != / ] && [ \"$ROOT\" = \"${RAZVILKA_EXPECTED_OFFLINE_ROOT:-}\" ] || exit 99\nprintf 'MIGRATED BY NATIVE PACKAGE\\n' > \"$ROOT/etc/nfqws2.conf\"\n"
 	writeTar("control.tar.gz", map[string]string{"./control": control, "./conffiles": "/etc/nfqws2.conf\n", "./postinst": postinst})
-	writeTar("data.tar.gz", map[string]string{"./etc/nfqws2.conf": "FACTORY CONFIG\n"})
+	writeTar("data.tar.gz", map[string]string{"./etc/": "", "./etc/nfqws2.conf": "FACTORY CONFIG\n"})
 	if err := os.WriteFile(filepath.Join(build, "debian-binary"), []byte("2.0\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(directory, "nfqws2-keenetic_"+version+"_all.ipk")
-	cmd := exec.Command("ar", "rc", path, "debian-binary", "control.tar.gz", "data.tar.gz")
-	cmd.Dir = build
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build fixture ipk: %v %s", err, out)
+	// OpenWrt/Entware opkg-lede 80503d94 walks an outer gzip/USTAR,
+	// then decompresses control.tar.gz/data.tar.gz. A Debian ar container
+	// silently yields no control entry and is rejected as Malformed package.
+	// Source: https://github.com/openwrt/opkg-lede/blob/80503d94/libbb/unarchive.c
+	entries := map[string]string{}
+	for _, name := range []string{"debian-binary", "control.tar.gz", "data.tar.gz"} {
+		data, err := os.ReadFile(filepath.Join(build, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries["./"+name] = string(data)
 	}
+	writeTar(filepath.Join("..", filepath.Base(path)), entries)
 	return path
+}
+
+func TestNativeFixtureEntwareGzipTarContainer(t *testing.T) {
+	path := nativeFixturePackage(t, t.TempDir(), "1.0.0")
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal("Entware outer package must be gzip, not ar", err)
+	}
+	defer gz.Close()
+	outer := tar.NewReader(gz)
+	entries := map[string][]byte{}
+	for {
+		header, err := outer.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if header.Format != tar.FormatUSTAR || header.Typeflag != tar.TypeReg {
+			t.Fatal("opkg-compatible USTAR regular entries required")
+		}
+		data, err := io.ReadAll(outer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries[header.Name] = data
+	}
+	if len(entries) != 3 || string(entries["./debian-binary"]) != "2.0\n" {
+		t.Fatal("wrong IPK members")
+	}
+	for _, name := range []string{"control.tar.gz", "data.tar.gz"} {
+		gz, err := gzip.NewReader(bytes.NewReader(entries["./"+name]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		inner := tar.NewReader(gz)
+		found := map[string][]byte{}
+		for {
+			header, err := inner.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := io.ReadAll(inner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found[header.Name] = data
+			if header.Name == "./postinst" && header.Mode != 0755 {
+				t.Fatal("postinst is not executable")
+			}
+		}
+		gz.Close()
+		if name == "control.tar.gz" {
+			if !strings.Contains(string(found["./control"]), "Package: nfqws2-keenetic\nVersion: 1.0.0\n") || !strings.Contains(string(found["./postinst"]), "PKG_ROOT") || !strings.Contains(string(found["./postinst"]), "RAZVILKA_EXPECTED_OFFLINE_ROOT") || !strings.Contains(string(found["./postinst"]), "MIGRATED BY NATIVE PACKAGE") {
+				t.Fatal("control/postinst evidence removed")
+			}
+		} else if _, dirPresent := found["./etc/"]; !dirPresent || string(found["./etc/nfqws2.conf"]) != "FACTORY CONFIG\n" {
+			t.Fatal("missing native data")
+		}
+	}
 }
