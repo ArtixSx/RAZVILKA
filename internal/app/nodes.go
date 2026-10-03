@@ -160,7 +160,7 @@ func (a *App) nodeGroupAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "явно подтвердите изменение группы", http.StatusPreconditionRequired)
 			return
 		}
-		if a.routeReferenceExists("sing-box:" + id) {
+		if a.nodeRouteReferenceExists(id) {
 			writeNodeError(w, nodestore.ErrInUse)
 			return
 		}
@@ -175,7 +175,7 @@ func (a *App) nodeGroupAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "явно подтвердите удаление группы", http.StatusPreconditionRequired)
 			return
 		}
-		if a.routeReferenceExists("sing-box:" + id) {
+		if a.nodeRouteReferenceExists(id) {
 			writeNodeError(w, nodestore.ErrInUse)
 			return
 		}
@@ -290,7 +290,7 @@ func (a *App) nodeAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "явно подтвердите удаление сохранённого узла", http.StatusPreconditionRequired)
 			return
 		}
-		if a.routeReferenceExists("sing-box:" + id) {
+		if a.nodeRouteReferenceExists(id) {
 			writeNodeError(w, nodestore.ErrInUse)
 			return
 		}
@@ -324,6 +324,10 @@ func (a *App) nodeAction(w http.ResponseWriter, r *http.Request) {
 	default:
 		methodNotAllowed(w)
 	}
+}
+
+func (a *App) nodeRouteReferenceExists(id string) bool {
+	return a.routeReferenceExists("sing-box:"+id) || a.routeReferenceExists("xray:"+id)
 }
 
 func (a *App) routeReferenceExists(route string) bool {

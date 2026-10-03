@@ -14,6 +14,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodecleanup"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
 var cleanupNodeID = regexp.MustCompile(`^node-[a-f0-9]{64}$`)
@@ -220,8 +221,8 @@ func (a *App) protectedCleanupNodes(ctx context.Context, snapshot nodestore.Snap
 		}
 	}
 	route := func(value, why string) {
-		if strings.HasPrefix(value, "sing-box:node-") {
-			add(strings.TrimPrefix(value, "sing-box:"), why)
+		if _, id, exact := routekind.ParseNodeRoute(value); exact && strings.HasPrefix(id, "node-") {
+			add(id, why)
 		}
 	}
 	for _, g := range snapshot.Groups {
