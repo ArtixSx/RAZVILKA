@@ -44,6 +44,11 @@ const paths = {'config':'config.json','catalog':'service-catalog.json','sources'
 for (const [source, target] of [['config.example.json','config.json'],['service-catalog.json','service-catalog.json'],['sources.json','sources.json'],['community-catalog.json','community-catalog.json']]) {
   writeFileSync(join(run,target), readFileSync(join(root,'configs',source)));
 }
+if(!authOnly && !policyTransport){
+  const catalog=JSON.parse(readFileSync(join(run,'service-catalog.json'),'utf8'));
+  for(const [id,name] of [['chatgpt','ChatGPT'],['claude','Claude'],['gemini','Gemini']])catalog.services.push({id:'ui-ai-'+id,name:name+' · UI fixture',category:'AI',description:'Тестовое определение для проверки группировки; доступ не проверялся.',domains:[id+'.ui.invalid'],strategy:['nfqws2']});
+  writeFileSync(join(run,'service-catalog.json'),JSON.stringify(catalog));
+}
 const hashConfig = () => createHash('sha256').update(readFileSync(join(run,'config.json'))).digest('hex');
 const configBefore = hashConfig();
 const env = {...process.env, GOMAXPROCS:'2', GOFLAGS:'-p=2', RAZVILKA_USQUE_INIT:join(run,'absent-init'),
@@ -51,9 +56,10 @@ const env = {...process.env, GOMAXPROCS:'2', GOFLAGS:'-p=2', RAZVILKA_USQUE_INIT
 const server = spawn(resolve(process.env.RAZVILKA_UI_BINARY), ['-listen',listen,...Object.entries(paths).flatMap(([flag,path])=>['-'+flag,join(run,path)])], {cwd:run, env, windowsHide:true, stdio:['ignore','pipe','pipe']});
 let serverLog = '';
 server.stdout.on('data', chunk=>{serverLog+=chunk;});server.stderr.on('data', chunk=>{serverLog+=chunk;});
-let browser, context, page, browserVersion;
+let browser, context, page, browserVersion, failure;
 const results = [], errors = [], requests = [], screenshots = [];
 async function capture(name,source) {
+  await page.evaluate(async()=>{window.scrollTo({top:0,behavior:'instant'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));});
   await page.screenshot({path:join(run,name),fullPage:true,animations:'disabled'});
   screenshots.push({file:name,source,viewport:page.viewportSize()});
 }
@@ -138,6 +144,43 @@ try {
     await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
   });
   if(!authOnly && !policyTransport) {
+    await test('engine card steps keep the chosen engine and dirty profile without writes', 'real engine metadata HTTP and local draft', async()=>{
+      const start=requests.length;await nav('engines');await page.evaluate(()=>refreshEngineConfigs());
+      await capture('07-engine-flow.png','Настоящий HTTP; карточки из свежих метаданных одноразового стенда, Safe Mode включён. Установка, native-проверки и Apply не запускались.');
+      await page.locator('[data-engine-step="profile"][data-card-engine="xray"]').click();
+      await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray');
+      await page.waitForFunction(()=>document.activeElement?.id==='engineFileSelect');
+      await page.locator('#engineModeExpert').click();await page.waitForFunction(()=>state.engineMode==='expert');
+      const draft='{"log":{"loglevel":"warning"}}';await page.locator('#engineEditor').fill(draft);
+      await nav('engines');await page.locator('[data-engine-step="profile"][data-card-engine="usque"]').click();
+      await page.locator('#actionDialog').waitFor({state:'visible'});await page.locator('#actionDialog [value="cancel"]').click();
+      await page.waitForFunction(()=>!document.getElementById('actionDialog').open);
+      assert.equal(await page.evaluate(()=>state.currentView),'engines');assert.equal(await page.evaluate(()=>state.selectedEngine),'xray');
+      assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
+      await page.locator('[data-engine-step="check"][data-card-engine="xray"]').click();
+      await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray' && document.activeElement?.id==='r4ProbeService');
+      assert.equal(await page.locator('#engineEditor').inputValue(),draft);assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
+      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'card navigation started a configuration/check/package write');
+      await page.locator('.engine-tab[data-engine-tab="config"]').click();await page.locator('#engineDiscardDraft').click();
+      await page.waitForFunction(()=>!state.engineEditorDirty && !state.engineIntent);
+      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'discarding a local unstaged draft wrote a file');
+      await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    });
+    await test('AI group is a disclosure and keeps members separate across readback', 'real HTTP + three disposable catalog definitions; presentation only', async()=>{
+      const start=requests.length;await nav('services');await page.waitForFunction(()=>!panelLoad.request);
+      await page.locator('[data-r5-catalog]').click();
+      const group=page.locator('#ui3ServiceCatalog [data-rz-group]').filter({has:page.locator('summary strong', {hasText:'ИИ-сервисы'})});
+      await group.locator('summary').click();await page.waitForFunction(()=>[...document.querySelectorAll('#ui3ServiceCatalog [data-rz-group]')].some(el=>el.open));
+      assert(await group.locator('[data-rz-card]').count()>1);assert.equal(await group.locator('.ui3-status.good').count(),0,'empty fixture AI group claimed working service');
+      await group.locator('summary').focus();await page.evaluate(()=>refreshAll());await page.waitForFunction(()=>!panelLoad.request);
+      assert.equal(await group.evaluate(el=>el.open),true);assert.equal(await page.evaluate(()=>document.activeElement?.tagName),'SUMMARY');
+      await page.locator('#ui3ServiceSearch').fill('ChatGPT');assert.equal(await group.locator('[data-rz-card]').count(),1);
+      await page.locator('#ui3ServiceSearch').fill('');assert(await group.locator('[data-rz-card]').count()>1);
+      await capture('05-ai-group.png','Настоящий HTTP; три AI определения добавлены только в каталог одноразового стенда, домены .invalid, без проверок и PASS. Safe Mode включён, автоматика выключена.');
+      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
+      await group.locator('summary').click();assert.equal(await group.evaluate(el=>el.open),false);
+      await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    });
     await test('mobile drawer fits, closes with focus and retains bottom navigation', 'real HTTP and browser layout 390 × 844', async()=>{
     await nav('nodes');await page.waitForFunction(()=>!panelLoad.request);
     await page.setViewportSize({width:390,height:844});
@@ -175,6 +218,46 @@ try {
     return {closed,open,closeMethods:['Escape','close button','backdrop','drawer destination','bottom destination']};
     });
   }
+
+  if(!authOnly && !policyTransport)await test('all-VLESS scope ignores filters, protects groups and fences a lost deletion reply', 'real metadata HTTP + disposable node profiles; controlled commit delivery 500', async()=>{
+    await nav('nodes');await page.waitForFunction(()=>!panelLoad.request);
+    const profiles=[1,2,3].map(n=>`vless://00000000-0000-4000-8000-${String(n).padStart(12,'0')}@ui-node-${n}.invalid:443?type=tcp&security=tls&sni=ui-node-${n}.invalid#UI-F${n}`);
+    profiles.push('ss://YWVzLTEyOC1nY206dWktZml4dHVyZQ==@ui-ss.invalid:443#UI-SS');
+    await page.locator('#nodeOpenImport').click();await page.locator('#nodeQuickImportText').fill(profiles.join('\n'));await page.locator('#nodeQuickImportSubmit').click();
+    await page.waitForFunction(()=>state.nodes.nodes.length===4 && !document.getElementById('nodeQuickImportSubmit').disabled);
+    await page.locator('#nodeQuickImportClose').click();
+    const before=await context.request.get(origin+'/api/v1/nodes');assert.equal(before.status(),200);const nodes=await before.json();
+    const vless=nodes.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='vless');assert.equal(vless.length,3);
+    const member=vless[1],filter=await page.evaluate(id=>nodeDisplayName(state.nodes.nodes.find(node=>node.id===id)),vless[0].id);
+    const group=await context.request.post(origin+'/api/v1/node-groups',{data:{name:'UI fixture reserve',mode:'fallback',node_ids:[member.id],preferred_node_id:member.id,hold_down_seconds:1800,confirm:'CREATE_NODE_GROUP'}});
+    assert.equal(group.status(),201);assert.equal((await group.json()).working_routes_changed,false);
+    await page.evaluate(()=>refreshNodes());await page.locator('#nodeSearch').fill(filter);
+    assert.equal(await page.locator('#nodeList [data-node-card]').count(),1,'filter must leave one visible node while all-VLESS targets three');
+    await page.locator('#nodeAllVLESSDetails summary').click();assert.match(await page.locator('#nodeCheckAllVLESS').textContent(),/3/);
+    const checkStart=requests.length;await page.locator('#nodeCheckAllVLESS').click();await page.locator('#actionDialog').waitFor({state:'visible'});
+    assert.match(await page.locator('#actionDialogText').textContent(),/3 из 3 VLESS/);await page.locator('#actionDialog [value="cancel"]').click();
+    await page.waitForFunction(()=>!workflowState.bulkBusy);assert.equal(requests.slice(checkStart).filter(r=>r.path==='/api/v1/node-checks'&&r.method==='POST').length,0);
+    await page.locator('#nodeDeleteAllVLESS').click();await page.waitForFunction(()=>!!workflowState.deletion && !workflowState.deleteBusy);
+    assert.equal(await page.evaluate(()=>workflowState.deletion.result.candidates.length),2);
+    assert.equal(await page.evaluate(()=>workflowState.deletion.result.skipped.length),1);
+    assert.equal(await page.evaluate(()=>workflowState.deletion.result.scope),'all-vless');
+    let commits=0;
+    await page.route('**/api/v1/nodes/delete-batch',async route=>{
+      if(route.request().postDataJSON().preview!==false)return route.continue();
+      commits++;const response=await route.fetch();assert.equal(response.status(),200);assert.equal((await response.json()).working_routes_changed,false);
+      await route.fulfill({status:500,json:{error:'Тестовая потеря ответа после удаления'}});
+    });
+    await page.locator('#r4DeleteCommit').click();await page.waitForFunction(()=>!workflowState.deleteBusy && !workflowState.deletion);
+    assert.match(await page.locator('#r4DeleteStatus').textContent(),/потеря ответа/);
+    await page.evaluate(()=>workflowCommitDelete());assert.equal(commits,1,'unknown deletion was replayed');
+    await page.unroute('**/api/v1/nodes/delete-batch');await page.locator('#r4DeleteDialog [data-r4-close]').last().click();
+    await page.locator('#refreshAll').click();await page.waitForFunction(()=>state.nodes.nodes.length===2 && !panelLoad.request);
+    assert.equal(await page.evaluate(id=>state.nodes.nodes.some(node=>node.id===id),member.id),true);
+    assert.equal(await page.evaluate(()=>state.nodes.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='vless').length),1);
+    assert.equal(await page.evaluate(()=>state.nodes.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='shadowsocks').length),1);
+    await page.locator('#nodeSearch').fill('');await capture('06-bulk-library.png','Настоящий HTTP; импортированы только четыре профиля .invalid с фиктивными ключами. Группа защищена, две неиспользуемые записи удалены. Native checks и Apply не запускались.');
+    assert.equal(hashConfig(),configBefore);await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+  });
 
   if(!authOnly) {
   await nav('autopilot');await quickReady();
@@ -374,12 +457,15 @@ try {
   assert.deepEqual(errors,[],'uncaught browser exception');
   assert.equal(hashConfig(),configBefore,'network configuration changed during UI gate');
   assert.equal(JSON.parse(readFileSync(join(run,'config.json'),'utf8')).safe_mode,true);
+} catch(error) {
+  failure={name:error.name,message:error.message};
+  throw error;
 } finally {
   if(page && !page.isClosed())writeFileSync(join(run,'ui-state.json'),JSON.stringify(await page.evaluate(()=>({view:state.currentView,authenticated:state.authenticated,dataLoad:state.dataLoad,issues:state.uiRenderIssues,quick:{message:document.getElementById('autoQuickMessage').textContent,revision:document.getElementById('autoQuickRevision').textContent,value:document.getElementById('autoQuickCheck').value,disabled:document.getElementById('autoQuickSave').disabled}})),null,2));
   if(browser)await browser.close();
   server.kill();
   await Promise.race([new Promise(r=>server.once('exit',r)),delay(5000)]);
   writeFileSync(join(run,'server.log'),serverLog);
-  writeFileSync(join(run,'result.json'),JSON.stringify({browserVersion,origin,port,policyTransport,authOnly,results,errors,requests,screenshots,configUnchanged:hashConfig()===configBefore},null,2));
+  writeFileSync(join(run,'result.json'),JSON.stringify({browserVersion,origin,port,policyTransport,authOnly,results,errors,failure,requests,screenshots,configUnchanged:hashConfig()===configBefore},null,2));
   console.log('Local artifacts: '+run);
 }

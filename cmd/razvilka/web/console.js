@@ -64,7 +64,7 @@ function consoleEngineVersionLabel(info){
  return info.installedVersion?`${info.installedVersion}${update.kind==='update'?` → ${info.availableVersion}`:''}`:info.version;
 }
 function consoleNavigate(name,engine){
- if(engine){void openEngineConfiguration(engine).then(()=>{renderConsoleEngine();consoleViewChanged('engineconfig');if(typeof renderInterface==='function')renderInterface();}).catch(error=>showNotice('error',error.message));return;}
+ if(engine){void openEngineConfiguration(engine).then(opened=>{if(!opened)return;renderConsoleEngine();consoleViewChanged('engineconfig');if(typeof renderInterface==='function')renderInterface();}).catch(error=>showNotice('error',error.message));return;}
  setView(name);
  if(name==='providers')renderNodes();
  if(name==='updates')void refreshAppUpdate();
