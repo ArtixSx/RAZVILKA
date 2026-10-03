@@ -1,5 +1,11 @@
 # OPS: первая порция D11, 03.10.2026
 
+## Дополнение: native IPK container (отдельная порция после 99ac304)
+
+Следующий feedback `native-opkg-03`: extractor дошёл до postinst; explicit `./etc/` отсутствовал, а pinned opkg экспортирует `PKG_ROOT`, не `IPKG_INSTROOT`. Добавлена directory entry до data file; synthetic postinst требует абсолютный непустой PKG_ROOT != `/`, причём `${PKG_ROOT%/}` должен **точно** совпасть с independently supplied `RAZVILKA_EXPECTED_OFFLINE_ROOT` из fixture runner. Никакой fallback к system root и отключения проверки migration. Имя env проверено по [pkg_run_script указанной ревизии](https://github.com/openwrt/opkg-lede/blob/80503d94/libopkg/pkg.c). Адресный container test — RC0; native повторяет координатор.
+
+Координатор сообщил native-opkg-02 FAIL до postinst: Malformed package file, opkg-lede `80503d94`. Проверен [официальный extractor этой ревизии](https://github.com/openwrt/opkg-lede/blob/80503d94/libbb/unarchive.c): он декодирует внешний gzip/USTAR и вложенные control.tar.gz/data.tar.gz. Fixture заменяет Debian ar на этот контейнер; внутренние записи также явный USTAR, порядок детерминированный. Исполняемый postinst и требование фактической migration остаются; зависимости от ar больше нет. Native запуск остаётся у координатора, здесь не выполнен. Адресный `go test ./internal/components -run '^TestNativeFixtureEntwareGzipTarContainer$' -count=1` и launcher contract — RC0. Этот коммит отделён от ещё незавершённых supervision/acceptance изменений.
+
 Ветка `sol/ops-20261003`, worktree `C:/Projects/RAZVILKA/worktrees/sol-ops`.
 Base: `52eee92c28af1b9ad3c789f2ee2c3ffc43a0e175` (проверенная кодовая база `367ef14` + документы).
 Один исполнитель этого чата, без подагентов, чужих worktree, VM, роутера и публикаций.
@@ -78,3 +84,8 @@ GOMAXPROCS=2 GOFLAGS=-p=2 GOTOOLCHAIN=local \
 ```
 
 Native harness имеет две реальные package-сценария, но не physical power cut. Для нового self-update нужна отдельная матрица Linux storage: kill до/после Prepared/current, file copy/sync/rename/dirsync, command intent/run/result и terminal acceptance; затем реальное отключение питания на целевых устройствах. Пакетные unknown не повторять, LKG не удалять. Общий LAN/DNS executor и `NETWORK_POLICY_EXECUTOR_REQUIRED` эта порция не меняет.
+# D11 COMPONENTS: отдельная завершённая порция 03.10.2026
+
+Отдельный subreaper helper вместо обязательного PID namespace, durable boot/start/command identity + wait4 ECHILD receipt, matching Manager.Quiescence, исторический unknown fence; отдельное accept-installed-idle с exact candidate config/version и двумя trusted inactive/quiescence наблюдениями; автоматический rollback больше не переиспользует candidate probe и ждёт independent acceptance. Полный контракт main/HTTP: [OPS_COMPONENT_CONTRACT_RU.md](OPS_COMPONENT_CONTRACT_RU.md).
+
+ComponentUpdateSchema=2, retained v1 читается; writer/shell target gate=2 исключает старый reader поверх новых полей/terminal phase. CORE подключает два private CLI dispatch и HTTP idle action. OPS не менял main/app. Windows components unit/fault/subprocess tests RC0, vet RC0, Linux ARM64 test cross-compile RC0, реальные shell schema gates + syntax RC0. Новые Linux detached-child/supervisor-death и обновлённый native opkg harness здесь unverified — переданы координатору. Native-opkg-04 на предыдущем 6523002 подтвердил только fixture/PKG_ROOT/старую baseline, не эту семантику. Production module/version, другие worktrees, стенды и публикации не менялись.
