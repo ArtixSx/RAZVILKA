@@ -7,7 +7,7 @@ const consoleEngineMeta = {
   'sing-box': {name:'Sing-box',icon:'layers',tone:'violet',subtitle:'Прокси и маршрутизация',description:'Проверенные подключения, профиль движка и резервные группы. Один каталог для всех сервисов.',action:'Подключения',target:'nodes'},
   'xray': {name:'Xray',icon:'route',tone:'blue',subtitle:'Альтернативный прокси-клиент',description:'Редактор профиля и нативная проверка конфигурации перед применением.',action:'Импорт профиля',target:'engineconfig'},
   'wireguard': {name:'WireGuard',icon:'shield',tone:'blue',subtitle:'Свой сервер',description:'Импорт .conf, проверка туннеля и управление маршрутом. Без регистрации Cloudflare.',action:'Настроить профиль',target:'engineconfig'},
-  'amneziawg': {name:'AmneziaWG',icon:'lock',tone:'rose',subtitle:'Туннель к вашему серверу',description:'Совместимость формата, профиль, состояние и проверка маршрута. Версия протокола имеет значение.',action:'Проверить маршрут',target:'testlab'}
+  'amneziawg': {name:'AmneziaWG',icon:'lock',tone:'rose',subtitle:'Туннель к вашему серверу',description:'Проверьте версию протокола и поддержку ядра. Обнаруженная программа сама по себе не подтверждает доступ.',action:'Проверить маршрут',target:'testlab'}
 };
 Object.assign(viewMeta, {
   overview:['Главная','Сервисы, маршруты и состояние вашей сети'],

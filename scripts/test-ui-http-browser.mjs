@@ -58,10 +58,10 @@ let serverLog = '';
 server.stdout.on('data', chunk=>{serverLog+=chunk;});server.stderr.on('data', chunk=>{serverLog+=chunk;});
 let browser, context, page, browserVersion, failure;
 const results = [], errors = [], requests = [], screenshots = [];
-async function capture(name,source) {
-  await page.evaluate(async()=>{window.scrollTo({top:0,behavior:'instant'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));});
-  await page.screenshot({path:join(run,name),fullPage:true,animations:'disabled'});
-  screenshots.push({file:name,source,viewport:page.viewportSize()});
+async function capture(name,source,{fullPage=true,fromTop=true}={}) {
+  await page.evaluate(async fromTop=>{if(fromTop)window.scrollTo({top:0,behavior:'instant'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));},fromTop);
+  await page.screenshot({path:join(run,name),fullPage,animations:'disabled'});
+  screenshots.push({file:name,source,viewport:page.viewportSize(),fullPage});
 }
 async function test(name, boundary, action) {
   const start=requests.length, began=performance.now();const checks=await action();
@@ -134,6 +134,24 @@ try {
   });
   if(!authOnly && !policyTransport)await capture('01-home.png','Настоящее локальное приложение; отдельная тестовая копия catalog/config и журнала, Safe Mode включён, автоматика выключена. Inventory читает установленные бинарники ПК; native-проверки не запускались.');
 
+  if(!authOnly && !policyTransport)await test('connection REST and stream follow the visible view with single-flight readback','real connection HTTP and SSE lifecycle',async()=>{
+    const isConnection=request=>['/api/v1/connections','/api/v1/connections/stream'].includes(request.path);
+    const hidden=requests.length;await page.evaluate(async()=>{await refreshConnections();startConnectionStream();});
+    assert.equal(requests.slice(hidden).filter(isConnection).length,0,'Home admitted hidden connection reads');
+    const entered=requests.length;await page.evaluate(()=>setView('connections'));await page.waitForFunction(()=>state.currentView==='connections'&&!panelLoad.request&&!!state.stream);
+    assert.equal(requests.slice(entered).filter(request=>request.path==='/api/v1/connections/stream').length,1);
+    const readback=requests.length;await page.evaluate(()=>Promise.all([refreshConnections(),refreshConnections()]));
+    assert.equal(requests.slice(readback).filter(request=>request.path==='/api/v1/connections').length,1,'duplicate connection readback sent two GETs');
+    await nav('nodes');await page.waitForFunction(()=>!panelLoad.request&&!state.stream);
+    assert.equal(await page.evaluate(()=>state.connections.live),false,'retained hidden rows claimed a live stream');
+    const left=requests.length;await page.evaluate(async()=>{await refreshConnections();startConnectionStream();});
+    assert.equal(requests.slice(left).filter(isConnection).length,0,'Nodes admitted hidden connection reads');
+    const returned=requests.length;await page.evaluate(()=>setView('connections'));await page.waitForFunction(()=>state.currentView==='connections'&&!panelLoad.request&&!!state.stream);
+    assert.equal(requests.slice(returned).filter(request=>request.path==='/api/v1/connections/stream').length,1,'return did not open exactly one fresh stream');
+    await nav('overview');await page.waitForFunction(()=>!panelLoad.request&&!state.stream);
+    return {hidden_reads:0,visible_streams_per_entry:1,repeated_readback_gets:1};
+  });
+
   if(!policyTransport)await test('component recovery is a read-only journal view on navigation', 'real recovery GET', async()=>{
     const start=requests.length;await nav('engines');
     await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Незавершённых обновлений нет'));
@@ -146,24 +164,38 @@ try {
   if(!authOnly && !policyTransport) {
     await test('engine card steps keep the chosen engine and dirty profile without writes', 'real engine metadata HTTP and local draft', async()=>{
       const start=requests.length;await nav('engines');await page.evaluate(()=>refreshEngineConfigs());
+      await page.waitForFunction(()=>!panelLoad.request);
+      assert.equal(requests.slice(start).filter(request=>/^\/api\/v1\/engine-configs\/[^/]+\/guided$/.test(request.path)).length,0,'hidden profile reader ran on the cards page');
       await capture('07-engine-flow.png','Настоящий HTTP; карточки из свежих метаданных одноразового стенда, Safe Mode включён. Установка, native-проверки и Apply не запускались.');
-      await page.locator('[data-engine-step="profile"][data-card-engine="xray"]').click();
+      const step=async(id,name)=>{const button=page.locator('[data-engine-step="'+name+'"][data-card-engine="'+id+'"]');if(!await button.isVisible())await page.locator('[data-engine-disclosure="'+id+'-flow"] summary').click();await button.click();};
+      const summary=page.locator('[data-engine-disclosure="xray-flow"] summary');await summary.click();await summary.focus();
+      await page.evaluate(()=>refreshEngineConfigs());
+      assert.equal(await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open),true);
+      assert.equal(await summary.evaluate(element=>document.activeElement===element),true,'workflow disclosure lost focus on metadata readback');
+      await step('xray','profile');
       await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray');
       await page.waitForFunction(()=>document.activeElement?.id==='engineFileSelect');
       await page.locator('#engineModeExpert').click();await page.waitForFunction(()=>state.engineMode==='expert');
       const draft='{"log":{"loglevel":"warning"}}';await page.locator('#engineEditor').fill(draft);
-      await nav('engines');await page.locator('[data-engine-step="profile"][data-card-engine="usque"]').click();
+      await nav('engines');await step('usque','profile');
       await page.locator('#actionDialog').waitFor({state:'visible'});await page.locator('#actionDialog [value="cancel"]').click();
       await page.waitForFunction(()=>!document.getElementById('actionDialog').open);
       assert.equal(await page.evaluate(()=>state.currentView),'engines');assert.equal(await page.evaluate(()=>state.selectedEngine),'xray');
       assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
-      await page.locator('[data-engine-step="check"][data-card-engine="xray"]').click();
+      await step('xray','check');
       await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray' && document.activeElement?.id==='r4ProbeService');
       assert.equal(await page.locator('#engineEditor').inputValue(),draft);assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
       assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'card navigation started a configuration/check/package write');
       await page.locator('.engine-tab[data-engine-tab="config"]').click();await page.locator('#engineDiscardDraft').click();
       await page.waitForFunction(()=>!state.engineEditorDirty && !state.engineIntent);
       assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'discarding a local unstaged draft wrote a file');
+      await nav('engines');await page.setViewportSize({width:390,height:844});
+      const disclosure=page.locator('[data-engine-disclosure="xray-flow"]');
+      if(!await disclosure.evaluate(element=>element.open))await disclosure.locator('summary').click();
+      await page.locator('[data-engine-card="xray"]').scrollIntoViewIfNeeded();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth),0,'expanded engine workflow overflows the mobile viewport');
+      await capture('08-engine-flow-narrow.png','Настоящий HTTP; раскрытые шаги Xray, viewport390×844, отдельный config/journal и inventory ПК. Переходы не запускают native-проверки или Apply.',{fullPage:false,fromTop:false});
+      await page.setViewportSize({width:1280,height:900});
       await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
     });
     await test('AI group is a disclosure and keeps members separate across readback', 'real HTTP + three disposable catalog definitions; presentation only', async()=>{

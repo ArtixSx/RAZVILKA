@@ -25,6 +25,18 @@ assert.match(card(), /Процесс не запущен/);
 assert.match(card(), /data-component-action="update"[^>]*>Обновить/);
 assert.match(card(), /data-component-action="remove"[^>]*>Удалить/);
 assert.match(card(), /data-component-refresh="usque"/);
+assert.doesNotMatch(card(), /Бинарник обнаружен/, 'aggregate installed does not prove a binary path');
+state.engines[0].binary_path='/opt/bin/usque';
+assert.match(card(), /Бинарник обнаружен/);
+state.engines[0].installed=false;
+assert.doesNotMatch(card(), /Бинарник обнаружен/, 'a contradictory path alone does not prove installation');
+state.engines[0].installed=true;
+delete state.engines[0].binary_path;
+assert.equal((card().match(/data-engine-step="profile"/g)||[]).length,1);
+assert.equal((card().match(/data-engine-step="check"/g)||[]).length,1);
+assert.equal((card().match(/data-engine-step="apply"/g)||[]).length,1);
+assert.match(card(), /aria-current="step"/);
+assert.match(card(), /Все шаги настройки/);
 
 state.components[0] = {...base, update_check_error:'Источник недоступен', catalog_stale:true, can_update:false};
 assert.match(card(), /Источник недоступен/);
