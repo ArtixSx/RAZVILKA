@@ -72,14 +72,14 @@
     },
     {
       "id": "D07",
-      "owner": "CORE",
+      "owner": "DEFAULT + CORE",
       "depends_on": [
         "D03",
         "D05"
       ],
       "title": "Общий default и service executor",
       "scope": "NetworkPolicy all-except + per-service overrides. Нет сервисов/неизвестный сайт/прямой IP всё равно использует default. Scope mismatch продолжает default, удаление override не DIRECT. Вводить по capabilities, не снимать guard заранее.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D08",
