@@ -75,8 +75,11 @@ function renderProjectLogDetails(value) {
   if (audit.memory_only === true && audit.history_complete === false) problems.push({ name: 'История журнала', message: 'Показаны действия текущего запуска. Предыдущую историю пока не удалось прочитать.' });
   if (audit.available !== true || audit.last_error) problems.push({ name: 'Журнал действий', message: String(audit.last_error || 'Актуальный журнал не получен. Доступная история может быть неполной.') });
   const control = data.control && typeof data.control === 'object' ? data.control : {};
+  const receipt = data.stop_receipt;
+  const stopPending = receipt?.stop_requested === true && receipt.authority_revoked === true && receipt.stopped_confirmed === false && receipt.cleanup_pending === true;
+  if (stopPending) problems.push({ name: 'Остановка запрошена', message: 'Запрос сохранён на роутере. Продолжение обновления заблокировано; очистка маршрутов ещё не подтверждена.' });
   const ready = Number.isSafeInteger(control.config_revision);
-  const runtime = !ready || control.runtime_state === 'unknown' ? 'Состояние не получено' : control.running === true ? 'Обходы включены' : control.runtime_state === 'stopped' ? 'Обходы выключены' : 'Нужна настройка';
+  const runtime = stopPending ? 'Остановка запрошена · результат ещё не подтверждён' : !ready || control.runtime_state === 'unknown' ? 'Состояние не получено' : control.running === true ? 'Обходы включены' : control.runtime_state === 'stopped' ? 'Обходы выключены' : 'Нужна настройка';
   if (!ready || control.runtime_state === 'unknown') problems.push({ name: 'Управление проектом', message: String(control.runtime_issue?.message || 'Состояние обходов не подтверждено. Обновите данные панели.') });
   const uniqueProblems = problems.filter((item, index) => problems.findIndex(other => other.name === item.name && other.message === item.message) === index);
   const allEvents = records(audit.events).sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0));
