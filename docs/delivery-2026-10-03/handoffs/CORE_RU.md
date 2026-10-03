@@ -1,5 +1,13 @@
 # CORE — первая порция D11, 03.10.2026
 
+## Finished: negative default dependency check, 04.10.2026
+
+Root review исправление: все dependency RPDB и WG host-pin reads теперь принудительно `-N`; unsupported option отказывает. Даже если tool игнорирует `-N`, named `main/local/default` не допускается как builtin/table proof. Только exact numeric builtin IDs 255/254/253 пропускаются; central parser остаётся единственным ownership parser. Regression покрывает reserved-looking aliases в builtin priorities и обычном selector, а также unsupported numeric output. `PolicyDefaultDependency|ManagedPolicy` RC0 0.362s после исправления. Старый checkpoint `2313e00` без этого follow-up применять нельзя.
+
+`dataplane.AssertPolicyDefaultUnreferenced(ctx, runner, ip, state, family) error` — read-only negative check для существующего VLESS/NET receipt, не право на удаление. Вызывается до durable default cleanup intent и повторно после него перед syscall. Любой оставшийся selector этой family на таблицу, неизвестная/символическая RPDB grammar или failed read удерживает default. Bounded reader и единственный общий parser сохранены; foreign rule не удаляется. Точный WG endpoint selector из immutable `state.WireGuardEndpoint` допускается только после свежего полного host-pin + exact rule readback существующим NET observer: такой /32|/128 путь не зависит от default. Нет нового Store/receipt/scheduler. Unknown прочие firmware selectors пока консервативно удерживают default; native совместимость не заявлена.
+
+Адресные tests `PolicyDefaultDependency` RC0 0.161s: обе family, own/foreign/late table dependency, known different table, unknown grammar/aliases/negation/read failure/cancel, exact WG pin versus missing/foreign host tuple/remaining service selector; check не делает mutations. VLESS вставляет consumer в свой backend отдельным finished SHA, CORE его не правит. Common D07 iif/mark WIP в этот helper checkpoint не входит.
+
 ## D07: finished config CAS primitive, 04.10.2026
 
 Дополнение для строгого DEFAULT postimage: `ReviewedNetworkPolicyCommitImage(expected Config, applied *NetworkPolicy, services map[string]ServiceState, appliedAt time.Time) (Config, error)` — чистая функция без IO/authority. Store commit использует её же; consumer строит ожидаемый postimage с отдельно проверенным временем actual commit и сравнивает весь Config. Mode normalization и changed/removed service policy fences не дублируются в app. Адресные actual-commit-vs-helper и unchanged/changed/removed policy tests RC0; последний `NetworkPolicyCommit` 0.664s, vet RC0. Native Linux предыдущего CAS checkpoint принят Root отдельно; новая pure-function delta пока требует адресного review.
