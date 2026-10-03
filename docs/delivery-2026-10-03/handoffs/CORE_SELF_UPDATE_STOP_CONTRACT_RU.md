@@ -34,6 +34,27 @@ OPS обязан вызывать `CheckSelfUpdateStop` перед каждым 
 
 Файловый Restore в stopped direction может быть отдельно разрешён как bounded recovery old/new images после trusted quiescence. Он не запускает panel/runtime и не снимает Stop. `Authority` для effects поэтому получает различимый тип действия: **read/observe**, **replace-to-rollback**, **stop-owned**, **start/live**. OPS может предложить нейтральное дополнительное method signature `AuthorityAction(ctx,id,revision,action)`; CORE добавит его в интерфейс. Общий безусловный `Authority` с ErrStopped остаётся для start/live/new install; нельзя обходить Stop простым matching repair ID. Unknown commands не replay даже для Stop.
 
+## Обязательное уточнение: Stop и начало эффекта имеют одну точку admission
+
+04.10.2026, после research `48b3ab0`. Описанный выше readonly `CheckSelfUpdateStop` **не достаточен для разрешения spawn/effect**: между чтением и syscall может быть принят Stop. Этот раздел уточняет прежний API, а не разрешает OPS обходить guard до появления CORE module. Текущий uncommitted OPS `SelfUpdateStopCheck(context.Context, string) (bool, error)` подходит для readonly наблюдения/cancellation; для start consumer нужен отдельный linearized admission callback.
+
+CORE остаётся единственным владельцем независимой authority в `internal/operationgate`. Финальная запись требует installation identity + монотонный control epoch, а не только job-local boolean. Proposed `SelfUpdateStop.Sequence` служит этим epoch и не откатывается вместе с old/new config. Общий root остаётся вне frozen files/private restore. OPS **не создаёт** альтернативный `self-update/ID/stop.intent.json` как источник authority. Fresh bootstrap требует trusted installation ownership; missing/corrupt record после установленного bootstrap не означает разрешение старта. Resume позже повышает epoch и не оживляет tickets прежнего helper.
+
+Дополнение к neutral boundary, пока проектное, не уже существующая функция:
+
+```go
+// begin only admits the bounded start syscall of this exact effect.
+// It does not run/wait opkg, fsync a payload, acquire a Store or call this API.
+func WithSelfUpdateEffectAdmission(ctx context.Context, root, transactionID string,
+    expectedSequence uint64, effectID string, begin func() error) error
+```
+
+`RequestSelfUpdateStop` и epoch validation + `begin` используют **один** короткий межпроцессный control lock, независимый от installer Exclusive/writer lock. Trusted effect identity/durable intent заранее фиксируется owner journal и связывается с review epoch; effectID не приходит из HTTP. Если Stop первым принял lock и сохранил revocation, begin не вызывается. Если begin допущен первым, Stop повышает epoch, отменяет уже допущенное owned дерево и требует join/cleanup. Длинная команда не удерживает control lock; actual worker продолжает читать authority, включая перед собственными child starts. Admission ticket без синхронизации с реальным `Cmd.Start` не закрывает гонку. Readonly callback или дополнительное чтение после Start также не закрывает её.
+
+File effect, live acceptance и helper settlement имеют тот же review epoch. Payload USB writes проходят отдельную admitted/cancelable operation; durable file outcome не превращается в start/live authority после revocation. Публикация live результата обязана учитывать актуальный epoch; receipt, принятый до Stop, после повышения epoch показывает остановку, а не resurrected running. CORE/OPS согласуют action-sensitive authority `AuthorityAction(ctx,id,revision,action)` из OPS WIP: read/observe, replace-to-rollback и stop-owned сохраняют независимые exact matching/quiescence fences; start/live/new install требуют актуальную unstopped authority. Нет generic matching-ID bypass и нет unknown command replay.
+
+Нужные barriers для native review: Stop непосредственно перед/после bounded spawn admission, во время long command и каждого file rename, между file acceptance/helper Finish; ACK → crash/reboot/restore. После Stop ни один позднее допущенный child/start не появляется; ранее допущенные проверяются cancellation/join и не считаются остановленными по пустому scan. Failed fsync/unknown schema не возвращает successful revocation. Old/rollback binary также обязан понимать authority schema; один guarded init не заменяет его HTTP/worker guard. Existing gate/scheduler/owned supervisor остаются, второй scheduler не создаётся. До реализации module + actual consumer production `-self-update-schema` остаётся **0**, `7b8db16` остаётся foundation для review, а Stop не объявляется готовым.
+
 ## Exact owned cleanup и подтверждение
 
 После revocation CORE запускает отдельную bounded cleanup только после подтверждённого освобождения прежнего installer/runtime lease и trusted helper quiescence. План/receipt/launch identity читаются readonly, mutable private Stores не восстанавливаются/мигрируются. Используются штатные concrete adapter ownership checks и общий VLESS addition receipt primitive. Foreign tuple/process/interface и unknown addition/removal не удаляются. Ошибка/unknown оставляет `cleanup-unknown` и retained fence, HTTP никогда не выдаёт stopped-success по одному пустому process scan. `RecordSelfUpdateStopped` требует trusted независимое наблюдение **до и после** durable observation записи: exact owned runtime absent, helper/startup worker quiescent, все receipts согласованы. Выбор bool/PID/path из HTTP не является proof.

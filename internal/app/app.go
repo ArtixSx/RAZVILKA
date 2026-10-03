@@ -164,28 +164,33 @@ type App struct {
 	Cloudflare                *cloudflareprovider.Store
 	Nodes                     *nodestore.Store
 	NodeChecker               dataplane.NodeChecker
-	NodePinger                dataplane.NodePinger
-	NodeFeeds                 *providerfeed.Manager
-	nodeReviews               nodeRouteReviewStore
-	nodeRecovery              nodeRecoveryState
-	nodeChecks                nodeCheckState
-	nodeRecordMu              sync.Mutex // serializes recording of parallel node checks
-	nodeAutofallback          nodeAutofallbackState
-	retainedProofs            retainedProofState
-	reconciler                serviceReconciler
-	DataplaneHost             func() dataplane.HostState
-	FreshProfile              func(context.Context) (string, error)
-	cloudflareBusy            atomic.Bool
-	TestLab                   *testlab.Runner
-	RouteProber               testlab.RouteProber
-	SmartRoute                *smartroute.Manager
-	Updates                   *updatecheck.Manager
-	SelfUpdate                *updatecheck.Updater
-	SelfUpdateFiles           *SelfUpdateFiles
-	USQUE                     *usquediag.Manager
-	Stats                     *routerstats.Sampler
-	Security                  *security.Gate
-	Audit                     *auditlog.Journal
+	// Fixed views of one shared dispatcher, configured before HTTP serving.
+	NodeCheckers map[string]dataplane.NodeChecker
+	// OPS must admit the dual-engine history format before Xray checks write
+	// it; nil keeps those checks unavailable without attempting another engine.
+	NodeHistoryWriteGuard func(context.Context, int) error
+	NodePinger            dataplane.NodePinger
+	NodeFeeds             *providerfeed.Manager
+	nodeReviews           nodeRouteReviewStore
+	nodeRecovery          nodeRecoveryState
+	nodeChecks            nodeCheckState
+	nodeRecordMu          sync.Mutex // serializes recording of parallel node checks
+	nodeAutofallback      nodeAutofallbackState
+	retainedProofs        retainedProofState
+	reconciler            serviceReconciler
+	DataplaneHost         func() dataplane.HostState
+	FreshProfile          func(context.Context) (string, error)
+	cloudflareBusy        atomic.Bool
+	TestLab               *testlab.Runner
+	RouteProber           testlab.RouteProber
+	SmartRoute            *smartroute.Manager
+	Updates               *updatecheck.Manager
+	SelfUpdate            *updatecheck.Updater
+	SelfUpdateFiles       *SelfUpdateFiles
+	USQUE                 *usquediag.Manager
+	Stats                 *routerstats.Sampler
+	Security              *security.Gate
+	Audit                 *auditlog.Journal
 	// EngineInventory is injectable only for deterministic presentation tests.
 	// Production uses the read-only detector and never starts or stops an engine.
 	EngineInventory func() []engine.Status

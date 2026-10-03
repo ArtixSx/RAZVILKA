@@ -1,5 +1,11 @@
 # CORE — первая порция D11, 03.10.2026
 
+## D02: app dispatcher/read capability2 — ready for review
+
+04.10.2026. Normal merge VLESS `0669514` → `6677b5c`, затем один общий dispatcher Sing-box/Xray с квотой2, optional exact engine в single-node check, строгая engine/path binding service evidence и отдельный history write guard. Production Xray guard пока nil: HTTP503 до probe/record; OPS должен подтвердить downgrade/retained images. `-node-history-read-version` печатает actual typed reader2, self-update capability остаётся0. Полный handoff, small OPS boundary, ancestry limitation и оставшаяся D02/D03/D07 работа: `CORE_NODE_ENGINES_RU.md`. Stop contract уточнён по research `48b3ab0`: одно CORE authority, обязательная linearization Stop с bounded spawn/effect admission; readonly callback не достаточен.
+
+Адресный broad Node/Autonomy app+cmd RC0 (75.563s/0.177s), vet RC0, Linux/arm64 main build и Linux/amd64 app test compile RC0 (TEMP only), diff check RC0. Настоящие HTTP/storage/security tests используют явно моделируемый native checker proof; native/race/LAN acceptance не заявлены. Scoped Xray app apply и D02/D03 не закрыты. Порция имеет `7b8db16` в ancestry, которое координатор пока удерживает от integration до durable Stop/order acceptance.
+
 ## Ready: terminal checkpoint preserves protected operation
 
 03.10.2026. Отдельное исправление после review: matching terminal package transaction больше не даёт старому maintenance checkpoint права перезаписать более новую running operation. Перед durable settlement снова проверяется receipt: иной transaction ID защищён независимо от времени, а более поздний UpdatedAt защищён и для legacy receipt, и для совпадающего ID. В этих случаях закрывается только старый matching maintenance checkpoint; байты operation receipt сохраняются, package/live callbacks не повторяются.

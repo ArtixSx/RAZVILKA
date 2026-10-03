@@ -132,12 +132,17 @@ func main() {
 	closeRollbackDigest := flag.String("close-rollback-digest", "", "reviewed digest required with close-rollback-plan")
 	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
+	nodeHistoryReadVersion := flag.Bool("node-history-read-version", false, "print the supported exact node history read capability and exit")
 	componentUpdateSchema := flag.Bool("component-update-schema", false, "print the supported durable component update schema and exit")
 	selfUpdateSchema := flag.Bool("self-update-schema", false, "print the supported application replacement capability and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
 	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
 	flag.Parse()
+	if *nodeHistoryReadVersion {
+		fmt.Println(nodestore.ExactHistoryReadVersion)
+		return
+	}
 	if *selfUpdateSchema {
 		// One means the entire supervised replacement consumer is available.
 		// Retained-journal readers alone are not that capability.
@@ -549,7 +554,10 @@ func main() {
 			log.Print("Node-scoped Sing-box routes disabled: ", err)
 		}
 	}
-	nodeChecker := dataplane.NewExactNodeChecker(filepath.Join(*dataplaneStatePath, "node-check"))
+	nodeDispatch, nodeViews, err := configuredNodeCheckers(*dataplaneStatePath)
+	if err != nil {
+		log.Fatal("exact node dispatcher configuration: ", err)
+	}
 	componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
 	if err != nil {
 		log.Fatal(err)
@@ -586,7 +594,8 @@ func main() {
 			log.Print("Private subscriptions disabled: directory unavailable")
 		}
 	}
-	a.NodeChecker = nodeChecker
+	a.NodeChecker = nodeViews["sing-box"]
+	a.NodeCheckers = nodeViews
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		log.Fatal("component recovery admission could not be initialized")
 	}
@@ -602,9 +611,10 @@ func main() {
 	selfRecoveryPending := a.PendingSelfUpdateRecovery()
 	if !selfRecoveryPending {
 		nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
-		if err := nodeChecker.Recover(nodeRecoveryContext); err != nil {
-			log.Print("Exact node checker disabled: temporary runtime cleanup could not be confirmed")
-			a.NodeChecker = nil
+		if err := nodeDispatch.Recover(nodeRecoveryContext); err != nil {
+			// Each concrete checker preserves its own poison fence. Recover
+			// attempts both; a failed engine never aliases the other engine.
+			log.Print("Exact node checker recovery requires review: temporary runtime cleanup could not be confirmed")
 		}
 		cancelNodeRecovery()
 	}
