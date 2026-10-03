@@ -132,7 +132,7 @@ try {
     assert.equal(requests.filter(r=>r.method!=='GET').length,writes);
     assert.deepEqual(await page.evaluate(()=>state.uiRenderIssues),{});
   });
-  if(!authOnly && !policyTransport)await capture('01-home.png','Настоящее локальное приложение; отдельная тестовая копия catalog/config, Safe Mode включён, автоматика выключена, native engines отсутствуют.');
+  if(!authOnly && !policyTransport)await capture('01-home.png','Настоящее локальное приложение; отдельная тестовая копия catalog/config и журнала, Safe Mode включён, автоматика выключена. Inventory читает установленные бинарники ПК; native-проверки не запускались.');
 
   if(!policyTransport)await test('component recovery is a read-only journal view on navigation', 'real recovery GET', async()=>{
     const start=requests.length;await nav('engines');

@@ -139,7 +139,7 @@ Recovery отрицательные сценарии используют **то
 
 Это PNG настоящего embedded приложения в последнем прогоне; никакого mock/preview transport. В PNG не сохранялись пароли, tokens, config или private profile contents; все три просмотрены исполнителем. После визуальной проверки добавлены отступы и перенос заголовка recovery-панели, `interface.css` пересобран. Narrow capture ждёт завершения анимации закрытия меню.
 
-- [Главная — 1280 × 900](../../../.review-local/ui-http-MyMyJX/01-home.png): отдельная тестовая копия catalog/config, Safe Mode включён, автоматика выключена, native engines отсутствуют. Показаны настоящие пустые/ещё не загруженные данные, успех не имитирован.
+- [Главная — 1280 × 900](../../../.review-local/ui-http-MyMyJX/01-home.png): отдельная тестовая копия catalog/config, Safe Mode включён, автоматика выключена. Inventory использует бинарники ПК (включая установленный пользователем AmneziaWG); native-проверки не выполнялись. Показаны настоящие пустые/ещё не загруженные данные, успех не имитирован.
 - [Обходы/recovery — 1280 × 900](../../../.review-local/ui-http-MyMyJX/02-component-recovery.png): настоящие HTTP и интерфейс; только `upgrade-started` журнал является одноразовой заготовкой. Видны неизвестный исход, версии, чтение и отсутствие replay.
 - [Подключения — 390 × 844](../../../.review-local/ui-http-MyMyJX/03-connections-narrow.png): настоящая пустая библиотека в отдельном состоянии; узкий экран с закрытым меню. Full-page PNG длиннее viewport. Общие счётчики, controls и сообщения взяты из приложения.
 
@@ -206,3 +206,32 @@ Unit transport **18/18 RC 0**. Selected Node gate **79/79**, `.review-local/fron
 - Auth/CSRF/CAS/lost reply/recovery schema1+2/real 503/mobile сценарии из прежней порции проходят.
 
 Снимки из этого же запуска: `07-engine-flow.png`, `05-ai-group.png`, `06-bulk-library.png`, `03-connections-narrow.png`, `04-mobile-drawer-open.png`, `02-component-recovery.png`, `01-home.png`. Источник и viewport записаны рядом в result.json. Полные страницы снимаются с начала прокрутки; карточки/ИИ/массовые действия просмотрены визуально. Результаты Windows UI не заменяют native или ARM64 приёмку координатора.
+
+## Отдельный read-only HTTP измеритель — 04.10.2026
+
+`scripts/measure-ui-http-browser.mjs` работает **только с уже запущенным HTTP(S) сервером**. Не создаёт сервер, аккаунт, fixture или профиль, не вызывает probe/check/install/Apply/Stop/recovery actions. Существующий cookie session читается из Playwright storageState файла (`RAZVILKA_PERF_SESSION`), либо выполняется единственный явный `/auth/login` через env credentials до измерений. Setup/reset/recovery-login отсутствуют. Все запросы страницы, кроме GET/HEAD/OPTIONS того же origin, блокируются до отправки; внешние origins и `refresh=true/force=true` также запрещены. Любая попытка выходит за boundary и делает run failed. Содержимое запросов/ответов, headers/cookies, query, профили, DOM text и screenshots не сохраняются.
+
+Обязательные параметры env:
+
+```powershell
+$env:RAZVILKA_PERF_URL='http://127.0.0.1:<порт существующей копии>'
+$env:RAZVILKA_PERF_PROFILE='empty' # либо loaded для заранее подготовленного состояния
+$env:RAZVILKA_PERF_CHROME='C:/Program Files/Google/Chrome/Application/chrome.exe'
+$env:RAZVILKA_PERF_SESSION='<абсолютный путь к частному storageState.json>'
+# Альтернатива SESSION: RAZVILKA_PERF_USERNAME и RAZVILKA_PERF_PASSWORD.
+# Нельзя одновременно передавать SESSION и пару credentials.
+$env:NODE_PATH='C:/Users/Artix/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules'
+node scripts/measure-ui-http-browser.mjs
+```
+
+По умолчанию результат под `.review-local/ui-perf-*/result.json` рядом с runner; `RAZVILKA_PERF_OUTPUT` задаёт другой корень **локальных частных** артефактов. Chrome/Playwright уже должны быть установлены. Сервер и назначение порта целиком принадлежат координатору; runner произвольный заданный порт не занимает. TLS проверяется штатно, `ignoreHTTPSErrors` не включён.
+
+`RAZVILKA_PERF_DWELL_MS` default2000 (250…30000), `RAZVILKA_PERF_IDLE_MS` default16000 (1000…60000), `RAZVILKA_PERF_TIMEOUT_MS` default45000 (5000…120000). Для сравнения держать одинаковые viewport/Chrome/параметры/состав fixture. Read-only route fence отключает browser HTTP cache; это явно записано, и одинаково для всех прогонов. Cold означает новый browser context, а не холодный сервер. Live HTTP/cookies без response fixtures.
+
+Четырнадцать измеряемых фаз: холодное авторизованное открытие, семь остальных основных разделов, возврат на Home с остальными скрытыми разделами, быстрые переключения с возвратом, возврат к подключениям с idle, mobile подключения/обходы390×844, явный readbackHome. Дополнительно попытка настоящей фоновой браузерной вкладки: если Chromium не сообщает `hidden`, фаза **skipped**, без overrides `document.hidden` и без придуманных чисел.
+
+На фазу сохраняются UTC start/end для совмещения с SSH sampler, настоящие запросы по method/path/status и request IDs, пути текущего `panelViewRequests` + common reads и прочие API paths, pending/stream counts, CDP delta Task/Script/Layout/RecalcStyle duration/counts, Nodes/Documents/JSEventListeners/JSHeap, longtasks, total/active/hidden DOM и горизонтальное переполнение/геометрия. Requests относятся к фазе по моменту **начала**; статус в phase summary — на момент окончания, поздние завершения видны в общей request table. `other_api_paths` требуют анализа, не автоматически дефект. TaskDuration измеряет браузерный main thread; это **не CPU/RSS ARM64 процесса**. CPU/RSS, router/network/native приёмка остаются координатору.
+
+После фаз три явно отделённых GET проверяют реальные counts библиотек/выбранных сервисов/устройств. `empty` допускает stock service catalog, но требует отсутствия nodes/groups/enabled/applied/devices; `loaded` требует ненулевой пользовательский состав. Несоответствие/неполные counts — failure, unknown не подставляется нулём. **Installed inventory не входит в признак empty:** обнаружение binaries идёт на host сервера. Установленный на Windows `C:/Program Files/AmneziaWG/awg.exe` не означает Linux kernel/native route acceptance и не изменяется исполнителем.
+
+Проверки boundary **6/6 RC 0** (`scripts/test-ui-http-perf.mjs`, можно добавить в общий Node gate координатора). Настоящие Windows smoke на собственном18851, dwell250/idle1000: `.review-local/ui-perf-k9tFi6` — empty/env-login; `.review-local/ui-perf-0L4DGM` — loaded/существующий частный session. Оба:14 измеренных+1 честно skippedbackground, verified fixture, failures/blocked/browser_errors отсутствуют, UI requests **только GET**, метрики CDP/DOM получены, horizontaloverflow0 на всех измеренных фазах. Loaded — только4 фиктивных VLESS `.invalid`; config и node metadata hash неизменны до/после измерения. Аккаунт и эти4 записи подготовлены отдельным ignored test helper до запуска измерителя; не runner. Эти короткие smoke доказывают работоспособность измерителя, не слабый роутер/большой каталог и не ARM64 performance PASS. До уплотнения карточек замечен отдельный GET `/engine-configs/nfqws2/guided` при `enter-engines`; follow-up UI уберёт скрытый editor read.
