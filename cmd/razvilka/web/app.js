@@ -1963,8 +1963,18 @@ function engineRoleGuide(id) {
 }
 
 async function openEngineConfiguration(id = '') {
-  if (id && state.engineConfigs.some((engine) => engine.id === id)) await selectEngine(id);
+  const request=state.engineNavigationRequest=(state.engineNavigationRequest||0)+1,generation=state.authGeneration,view=state.currentView;
+  const current=()=>request===state.engineNavigationRequest && generation===state.authGeneration && state.currentView===view && $('#authScreen')?.hidden!==false;
+  if(state.engineIntent){showNotice('review','Операция ещё выполняется','Дождитесь её завершения перед переключением обхода.');return false;}
+  if(id && !state.engineConfigs.some(engine=>engine.id===id)){
+    try{await refreshEngineConfigs();}catch(error){if(current()){if(error.status===401)showAuth({...state.status,authenticated:false},error.message);else showNotice('review','Настройки обхода не прочитаны',error.message);}return false;}
+    if(!current())return false;
+    if(!state.engineConfigs.some(engine=>engine.id===id)){showNotice('review','Настройки обхода недоступны','Сервер не вернул описание выбранного обхода. Обновите состояние; другой обход не выбирался.');return false;}
+  }
+  if(id && state.selectedEngine!==id && !await selectEngine(id,current))return false;
+  if(!current() || id && state.selectedEngine!==id)return false;
   setView('engineconfig');
+  return true;
 }
 
 function openRouteInstallation(id = '') {
@@ -2400,7 +2410,7 @@ function cancelEngineIntent(clearPrivate = false) {
   invalidateEngineEditorContext();
   if (clearPrivate) {
     if (state.engineIntent) state.engineIntent.body = null;
-    state.engineLoaded = null; state.engineGuided = null; state.engineEditorDirty = false;
+    state.engineLoaded = null; state.engineGuided = null; state.engineValidation = null; state.engineEditorDirty = false;
     $('#engineEditor').value = ''; $('#guidedEditor').innerHTML = '';
   } else if (state.engineIntent) {
     $('#engineEditorMessage').textContent = 'Останавливаем операцию. Дождитесь завершения проверки или возврата прежних настроек.';
@@ -2493,9 +2503,10 @@ function noticeBelongsOnlyToEngine(details, id) {
   return Array.isArray(blockers)&&blockers.length>0&&blockers.every(b=>b.code==='ENGINE_DRAFT_UNUSED'&&b.adapter===id);
 }
 
-async function selectEngine(id) {
-  if (state.engineIntent) return;
-  if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить обход и потерять локальные изменения редактора?', 'Переключить')) return;
+async function selectEngine(id, isCurrent=()=>true) {
+  if (state.engineIntent || !isCurrent()) return false;
+  if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить обход и потерять локальные изменения редактора?', 'Переключить')) return false;
+  if(!isCurrent())return false;
   if(state.selectedEngine!==id && noticeBelongsOnlyToEngine(state.noticeDetails,state.selectedEngine))hideNotice();
   state.selectedEngine = id;
   invalidateEngineEditorContext();
@@ -2506,8 +2517,9 @@ async function selectEngine(id) {
   state.engineGuided = null;
   state.engineValidation = null;
   state.engineMode = 'guided';
-  renderEngineControl();
+  if(state.currentView==='engineconfig')renderEngineControl();
   if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
+  return true;
 }
 
 async function selectEngineFile(id) {
@@ -2554,8 +2566,10 @@ async function refreshEngineConfigs(intent = null) {
   if (!engineEditorContextCurrent(context) || intent && !engineIntentCurrent(intent)) return false;
   state.engineConfigs = configs;
   state.status = status;
+  if(typeof panelSectionState==='function'){panelSectionState('engineConfigs','ready');panelSectionState('status','ready');}
   renderStatus();
-  renderEngineControl();
+  if(state.currentView==='engineconfig')renderEngineControl();
+  else if(typeof renderInterfaceEngines==='function')renderInterfaceEngines();
   return true;
 }
 
