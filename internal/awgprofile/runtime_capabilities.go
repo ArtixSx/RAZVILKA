@@ -29,14 +29,15 @@ var kernelTaintIdentity = regexp.MustCompile(`^[0-9]{1,20}$`)
 var toolDigestIdentity = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type runtimeInspector struct {
-	read func(string) string
-	look func(string) (string, error)
-	run  func(context.Context, string, ...string) (string, error)
-	hash func(context.Context, string) (string, error)
+	read    func(string) string
+	look    func(string) (string, error)
+	utility func(string) (string, error)
+	run     func(context.Context, string, ...string) (string, error)
+	hash    func(context.Context, string) (string, error)
 }
 
 func nativeRuntimeInspector() runtimeInspector {
-	return runtimeInspector{read: readVersion, look: resolveToolPath, hash: hashTool, run: func(ctx context.Context, tool string, args ...string) (string, error) {
+	return runtimeInspector{read: readVersion, look: resolveToolPath, utility: resolveUtilityPath, hash: hashTool, run: func(ctx context.Context, tool string, args ...string) (string, error) {
 		commandCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 		var output cappedBuffer
@@ -47,6 +48,16 @@ func nativeRuntimeInspector() runtimeInspector {
 		}
 		return output.text.String(), commandCtx.Err()
 	}}
+}
+
+// Multicall utilities select their applet from argv[0]. Preserve the invocation
+// path (e.g. modinfo -> kmod); this is separate from the AWG executable receipt.
+func resolveUtilityPath(tool string) (string, error) {
+	path, err := exec.LookPath(tool)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(path)
 }
 
 func resolveToolPath(tool string) (string, error) {
@@ -125,7 +136,7 @@ func inspectRuntime(parent context.Context, tools []string, inspect runtimeInspe
 		}
 		break
 	}
-	if modinfo, err := inspect.look("modinfo"); err == nil {
+	if modinfo, err := inspect.utility("modinfo"); err == nil {
 		if output, err := inspect.run(ctx, modinfo, "amneziawg"); err == nil {
 			if values, err := parseModuleInfo(output); err == nil {
 				c.ModuleName, c.ModuleVersion = values["name"], values["version"]
