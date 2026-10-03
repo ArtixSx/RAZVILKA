@@ -106,12 +106,14 @@ func TestWARPDeactivatePartialOrInvalidOwnershipPreservesEverything(t *testing.T
 	}
 }
 func TestWARPFailedInterfaceCreationDoesNotAuthorizeDeactivate(t *testing.T) {
-	a, r, _, profile := warpCleanupFixture(t, false)
+	a, r, state, profile := warpCleanupFixture(t, false)
 	r.failStart = true
 	root := t.TempDir()
 	snapshot, _ := json.Marshal(warpWGSnapshot{})
 	os.WriteFile(filepath.Join(root, "snapshot.json"), snapshot, 0o600)
 	os.WriteFile(filepath.Join(root, "rz-warp.conf.staged"), []byte(profile), 0o600)
+	policy, _ := json.Marshal(state)
+	os.WriteFile(filepath.Join(root, "policy.staged.json"), policy, 0o600)
 	if err := a.Activate(context.Background(), Plan{}, root); err == nil {
 		t.Fatal("synthetic foreign collision succeeded")
 	}

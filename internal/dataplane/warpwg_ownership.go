@@ -55,6 +55,9 @@ func (a *WARPWireGuardAdapter) deactivationOwnership(ctx context.Context) (Polic
 	if err := validPolicyLayout(state); err != nil {
 		return state, false, errWARPCleanupOwnership
 	}
+	if err := a.validWGEndpoint(state.WireGuardEndpoint, runtime); err != nil {
+		return state, false, errWARPCleanupOwnership
+	}
 	sanitized, err := sanitizeWGQuickProfile(string(runtime))
 	if err != nil || sanitized != string(runtime) || filepath.Base(a.RuntimeConfigPath) != a.interfaceName()+".conf" {
 		return state, false, errWARPCleanupOwnership

@@ -105,7 +105,8 @@ type Manager struct {
 	PolicyConflicts func() []Conflict
 	// OwnsPolicyRule consults the configured dataplane's private runtime
 	// journal. It must compare the whole rule; a range/table is not ownership.
-	OwnsPolicyRule func(adapterID string, family int, line string) bool
+	OwnsPolicyRule  func(adapterID string, family int, line string) bool
+	OwnsPolicyRoute func(adapterID string, family int, line string) bool
 }
 
 type capabilitySpec struct {
@@ -149,7 +150,7 @@ func New(configs *engineconfig.Manager) *Manager {
 // and offline tools do not depend on the host running their test suite.
 func (m *Manager) EnablePolicyInspection() {
 	if m != nil {
-		m.PolicyConflicts = func() []Conflict { return discoverPolicyConflicts(m.OwnsPolicyRule) }
+		m.PolicyConflicts = func() []Conflict { return discoverPolicyConflicts(m.OwnsPolicyRule, m.OwnsPolicyRoute) }
 	}
 }
 
@@ -255,7 +256,7 @@ var (
 	policyRulePattern     = regexp.MustCompile(`^\s*(\d+):.*\b(?:lookup|table)\s+([^\s]+)`)
 )
 
-func discoverPolicyConflicts(owns func(string, int, string) bool) []Conflict {
+func discoverPolicyConflicts(owns func(string, int, string) bool, routeOwners ...func(string, int, string) bool) []Conflict {
 	ipCommand := ""
 	for _, candidate := range []string{"/opt/sbin/ip", "/opt/bin/ip"} {
 		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
@@ -286,14 +287,18 @@ func discoverPolicyConflicts(owns func(string, int, string) bool) []Conflict {
 		tables[spec.Adapter+"|4"] = run("route", "show", "table", strconv.Itoa(spec.Table))
 		tables[spec.Adapter+"|6"] = run("-6", "route", "show", "table", strconv.Itoa(spec.Table))
 	}
-	return policyConflictsFromStateWithOwner(rules, tables, owns)
+	return policyConflictsFromStateWithOwner(rules, tables, owns, routeOwners...)
 }
 
 func policyConflictsFromState(ruleOutputs []string, tableOutputs map[string]string) []Conflict {
 	return policyConflictsFromStateWithOwner(ruleOutputs, tableOutputs, nil)
 }
 
-func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[string]string, owns func(string, int, string) bool) []Conflict {
+func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[string]string, owns func(string, int, string) bool, routeOwners ...func(string, int, string) bool) []Conflict {
+	var ownsRoute func(string, int, string) bool
+	if len(routeOwners) > 0 {
+		ownsRoute = routeOwners[0]
+	}
 	conflicts := []Conflict{}
 	seen := map[string]bool{}
 	appendConflict := func(conflict Conflict) {
@@ -319,6 +324,13 @@ func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[st
 			}
 			match := policyRulePattern.FindStringSubmatch(strings.TrimSpace(line))
 			for _, spec := range dataplane.PolicyOwnershipSpecs() {
+				if spec.EndpointPriority > 0 && priority == spec.EndpointPriority {
+					if owns != nil && owns(spec.Adapter, 4+familyIndex*2, line) {
+						continue
+					}
+					appendConflict(Conflict{Kind: "priority", Value: priorityMatch[1], Engines: []string{spec.Adapter}, SystemUse: family + ": endpoint priority is occupied without exact ownership", Blocking: true})
+					continue
+				}
 				if spec.SharedPriorityBase > 0 && priority >= spec.SharedPriorityBase && priority <= spec.SharedPriorityEnd {
 					// Early mark-independent slots outrank firmware policies. Their
 					// table alone never establishes ownership, and even an unknown
@@ -351,6 +363,10 @@ func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[st
 			foreign := []string{}
 			for _, line := range strings.Split(output, "\n") {
 				line = strings.TrimSpace(line)
+				familyNumber, _ := strconv.Atoi(family)
+				if ownsRoute != nil && ownsRoute(spec.Adapter, familyNumber, line) {
+					continue
+				}
 				if line != "" && !strings.Contains(" "+line+" ", " dev "+spec.Interface+" ") {
 					foreign = append(foreign, line)
 				}

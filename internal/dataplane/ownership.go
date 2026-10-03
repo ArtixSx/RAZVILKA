@@ -20,7 +20,7 @@ type kernelPolicyRule struct {
 func (m *Manager) OwnsPolicyRule(adapterID string, family int, line string) bool {
 	rule, ok := parseKernelPolicyRule(family, line)
 	if !ok {
-		return false
+		return m.ownsWGEndpointRule(adapterID, family, line)
 	}
 	registered, exists := m.adapter(adapterID)
 	if !exists {
@@ -82,6 +82,75 @@ func (m *Manager) OwnsPolicyRule(adapterID string, family int, line string) bool
 		}
 	}
 	return false
+}
+
+func (m *Manager) ownedWGEndpoint(adapterID string) *WGEndpointState {
+	registered, ok := m.adapter(adapterID)
+	a, ok := registered.(*WARPWireGuardAdapter)
+	if !ok || a == nil || a.ID() != adapterID {
+		return nil
+	}
+	state, owned, err := a.deactivationOwnership(context.Background())
+	if err != nil || !owned {
+		return nil
+	}
+	return state.WireGuardEndpoint
+}
+
+func (m *Manager) ownsWGEndpointRule(adapterID string, family int, line string) bool {
+	e := m.ownedWGEndpoint(adapterID)
+	return e != nil && e.matchesRule(family, line)
+}
+
+// OwnsPolicyRoute explains only an exact persisted WG transport pin. A table,
+// interface name or route prefix alone is never cleanup/Engine Lab authority.
+func (m *Manager) OwnsPolicyRoute(adapterID string, family int, line string) bool {
+	e := m.ownedWGEndpoint(adapterID)
+	if e == nil || (family != 4 && family != 6) || (family == 4) != e.address().Is4() || len(line) > 2048 || strings.ContainsAny(line, "\x00\r\n") {
+		return false
+	}
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return false
+	}
+	destination := fields[0]
+	if ip, err := netip.ParseAddr(destination); err == nil {
+		destination = netip.PrefixFrom(ip, ip.BitLen()).String()
+	}
+	if destination != e.prefix() {
+		return false
+	}
+	values := map[string]string{}
+	onlink := false
+	for i := 1; i < len(fields); i++ {
+		if fields[i] == "onlink" {
+			if onlink {
+				return false
+			}
+			onlink = true
+			continue
+		}
+		key := fields[i]
+		if i+1 >= len(fields) || values[key] != "" {
+			return false
+		}
+		i++
+		values[key] = fields[i]
+		switch key {
+		case "via", "dev", "src", "proto", "metric":
+		case "scope":
+			if fields[i] != "global" && fields[i] != "link" {
+				return false
+			}
+		case "pref":
+			if fields[i] != "medium" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return values["via"] == e.Gateway && values["dev"] == e.Device && values["src"] == e.Source && values["proto"] == "static" && values["metric"] == strconv.Itoa(e.Metric) && onlink == (e.Gateway != "")
 }
 
 // OwnsProxyEndpointExclusion is a read-only Engine Lab ownership callback.

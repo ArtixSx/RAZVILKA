@@ -23,11 +23,16 @@ type warpFakeRunner struct {
 	failStart             bool
 	failDelete            bool
 	addressOutput         string
+	routeDevice           string
 	policy                policyKernelFake
+	endpoint              wgEndpointKernelFake
 }
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	if output, handled, err := r.endpoint.run(name, args); handled {
+		return output, err
+	}
 	if name == "ip" {
 		policyArgs := append([]string(nil), args...)
 		for i := 0; i+1 < len(policyArgs); i++ {
@@ -37,6 +42,9 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 			}
 		}
 		if output, handled, err := r.policy.run(policyArgs); handled {
+			if err == nil && len(policyArgs) >= 2 && strings.Contains(strings.Join(policyArgs, " "), "rule show") {
+				output = append(output, r.endpoint.ruleOutput(args)...)
+			}
 			return output, err
 		}
 		if len(args) > 0 && args[0] == "-6" {
@@ -82,7 +90,11 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		return []byte("ok"), nil
 	}
 	if name == "ip" && len(args) >= 3 && args[0] == "route" && args[1] == "get" {
-		return []byte(args[2] + " dev rz-warp table 201"), nil
+		device := r.routeDevice
+		if device == "" {
+			device = "rz-warp"
+		}
+		return []byte(args[2] + " dev " + device + " table 201"), nil
 	}
 	if name == "ip" && len(args) >= 2 && args[0] == "rule" && args[1] == "show" {
 		return nil, nil
@@ -212,6 +224,7 @@ func TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner(t *testing.T) 
 	}
 	runner := &warpFakeRunner{handshakeAfterRestart: true}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.NativeOnly = true
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
 	adapter.Runner = runner
@@ -350,6 +363,7 @@ func TestWARPAdapterActivatesHealthChecksAndRollsBack(t *testing.T) {
 	}
 	runner := &warpFakeRunner{}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.NativeOnly = true
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
 	adapter.Runner = runner

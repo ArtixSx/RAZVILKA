@@ -25,10 +25,10 @@ func TestAWG31NativeTypeAndFullParameters(t *testing.T) {
 	runner := &warpFakeRunner{}
 	a.Runner = runner
 	a.IP = "ip"
-	a.WG = "wg"
+	a.WG = filepath.Join(t.TempDir(), "mock-awg")
 	a.WGQuick = "wg-quick"
 	a.AWGCapabilities = func(context.Context) awgprofile.Capabilities {
-		return awgprofile.Capabilities{Backend: "kernel", ToolPath: "wg", ToolVersion: "awg v3.1.20260812", ModuleLoaded: true, LoadedModuleVersion: "3.1.20260906"}
+		return awgprofile.Capabilities{Backend: "kernel", ToolPath: a.WG, ToolVersion: "awg v3.1.20260812", ModuleLoaded: true, LoadedModuleVersion: "3.1.20260906"}
 	}
 	// Capture transient setconf before cleanup, without putting its keys in logs.
 	capture := &awgSetconfCapture{inner: runner}
