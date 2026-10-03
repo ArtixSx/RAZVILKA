@@ -2,7 +2,9 @@ package dataplane
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -16,6 +18,17 @@ func awgNativeFixture() string {
 	key := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("a", 32)))
 	return "[Interface]\nPrivateKey = " + key + "\nAddress = 10.8.0.2/32\nS1 = 12\nS2 = 12\nS3 = 12\nS4 = 12\nHeaderProtectionKey = " + key + "\nRandomTrailers = true\nDisableCookies = false\nH1 = 10-20\nH2 = 30-40\nH3 = 50\nH4 = 60\nI1 = <r 10>\n[Peer]\nPublicKey = " + key + "\nEndpoint = 8.8.4.4:51820\nAllowedIPs = 0.0.0.0/0\n"
 }
+
+func compatibleAWGTestCapabilities(t *testing.T, a *WARPWireGuardAdapter) awgprofile.Capabilities {
+	t.Helper()
+	a.WG = filepath.Join(t.TempDir(), "mock-awg.exe")
+	content := []byte("mock AWG CLI, never executed")
+	if err := os.WriteFile(a.WG, content, 0700); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(content)
+	return awgprofile.Capabilities{Backend: "kernel", ToolPath: a.WG, ToolSHA256: hex.EncodeToString(digest[:]), ToolVersion: "amneziawg-tools v3.1.20260812 - https://amnezia.org", ModuleLoaded: true, LoadedModuleVersion: "3.1.20260906", LoadedSourceVersion: "0123456789ABCDEF01234567", ModuleSourceVersion: "0123456789ABCDEF01234567", ModuleName: "amneziawg", ModuleVersion: "3.1.20260906", ModuleVermagic: "6.8.0-test SMP mod_unload", Kernel: "6.8.0-test", KernelTaint: "12288", ModuleTaint: "OE", ModuleInitState: "live"}
+}
 func TestAWG31NativeTypeAndFullParameters(t *testing.T) {
 	a := NewAmneziaWGAdapter(nil, t.TempDir())
 	a.RuntimeConfigPath = filepath.Join(t.TempDir(), "profile.conf")
@@ -25,10 +38,10 @@ func TestAWG31NativeTypeAndFullParameters(t *testing.T) {
 	runner := &warpFakeRunner{}
 	a.Runner = runner
 	a.IP = "ip"
-	a.WG = filepath.Join(t.TempDir(), "mock-awg")
 	a.WGQuick = "wg-quick"
+	caps := compatibleAWGTestCapabilities(t, a)
 	a.AWGCapabilities = func(context.Context) awgprofile.Capabilities {
-		return awgprofile.Capabilities{Backend: "kernel", ToolPath: a.WG, ToolVersion: "awg v3.1.20260812", ModuleLoaded: true, LoadedModuleVersion: "3.1.20260906"}
+		return caps
 	}
 	// Capture transient setconf before cleanup, without putting its keys in logs.
 	capture := &awgSetconfCapture{inner: runner}

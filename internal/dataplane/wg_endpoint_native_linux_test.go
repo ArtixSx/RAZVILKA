@@ -263,6 +263,9 @@ func nativeWGKernelCapture(t *testing.T, ns, label string) {
 	}
 	for _, field := range []string{"public-key", "peers", "endpoints", "latest-handshakes", "transfer", "fwmark"} {
 		commands = append(commands, []string{"wg", "show", "all", field})
+		if tool := os.Getenv("RAZVILKA_AWG_NATIVE_TOOL"); tool != "" {
+			commands = append(commands, []string{tool, "show", "all", field})
+		}
 	}
 	for _, args := range commands {
 		if captureCtx.Err() != nil {

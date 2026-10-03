@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -307,6 +306,11 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err := a.ensureWGCanaryIdentityFree(ctx, []byte(runtimeProfile)); err != nil {
 		return err
 	}
+	if a.ID() == "amneziawg" {
+		if _, _, err := a.advancedAWGTool(ctx, runtimeProfile); err != nil {
+			return err
+		}
+	}
 	if a.ID() == "wireguard" {
 		state, err := a.readStagedPolicy(root)
 		if err != nil {
@@ -489,6 +493,13 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, _ Plan, root string
 	if err := a.revalidateWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
 		return err
 	}
+	// Recheck before stopping the previous runtime or changing its policy.
+	// Validation/Canary may have run before a module or executable replacement.
+	if a.ID() == "amneziawg" {
+		if _, _, err := a.advancedAWGTool(ctx, string(mustRead(filepath.Join(root, "rz-warp.conf.staged")))); err != nil {
+			return err
+		}
+	}
 	if snapshot.StateExisted {
 		if _, owned, err := a.deactivationOwnership(ctx); err != nil || !owned {
 			return errors.Join(err, errors.New("previous WireGuard runtime ownership is not confirmed"))
@@ -581,6 +592,11 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 	if a.interfaceActive(ctx) {
 		if err := a.healthState(ctx, plan, state, ""); err == nil {
 			return nil
+		}
+	}
+	if a.ID() == "amneziawg" {
+		if _, _, err := a.advancedAWGTool(ctx, string(mustRead(a.RuntimeConfigPath))); err != nil {
+			return err
 		}
 	}
 	if err := a.removeWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
@@ -1060,17 +1076,7 @@ func (a *WARPWireGuardAdapter) interfaceActive(ctx context.Context) bool {
 
 func (a *WARPWireGuardAdapter) startInterface(ctx context.Context) error {
 	if a.ID() == "amneziawg" {
-		b, err := os.ReadFile(a.RuntimeConfigPath)
-		if err != nil {
-			return err
-		}
-		advanced, err := a.advancedAWG(ctx, string(b))
-		if err != nil {
-			return err
-		}
-		if advanced {
-			return a.startNativeInterface(ctx)
-		}
+		return a.startNativeInterface(ctx)
 	}
 	if quick := a.wgQuick(); !a.NativeOnly && quick != "" {
 		output, err := a.run(ctx, quick, "up", a.RuntimeConfigPath)
@@ -1083,15 +1089,7 @@ func (a *WARPWireGuardAdapter) startInterface(ctx context.Context) error {
 }
 
 func (a *WARPWireGuardAdapter) stopInterface(ctx context.Context) error {
-	advanced := false
-	if a.ID() == "amneziawg" {
-		if b, err := os.ReadFile(a.RuntimeConfigPath); err == nil {
-			if p, err := awgprofile.Parse(string(b)); err == nil {
-				advanced = p.Public().MinimumMajor >= 3
-			}
-		}
-	}
-	if quick := a.wgQuick(); !advanced && !a.NativeOnly && quick != "" && regularFile(a.RuntimeConfigPath) {
+	if quick := a.wgQuick(); a.ID() != "amneziawg" && !a.NativeOnly && quick != "" && regularFile(a.RuntimeConfigPath) {
 		if output, err := a.run(ctx, quick, "down", a.RuntimeConfigPath); err == nil {
 			return nil
 		} else if deleteOutput, deleteErr := a.run(ctx, a.ip(), "link", "delete", "dev", a.interfaceName()); deleteErr != nil {
@@ -1444,7 +1442,7 @@ func validateAmneziaProfile(content string) error {
 	return err
 }
 
-// Recheck the actual loaded implementation before every advanced AWG start.
+// Recheck the actual loaded implementation before every AWG start.
 // No module download/reload and no silent downgrade of unsupported parameters.
 func (a *WARPWireGuardAdapter) advancedAWG(ctx context.Context, content string) (bool, error) {
 	advanced, _, err := a.advancedAWGTool(ctx, content)
@@ -1460,27 +1458,19 @@ func (a *WARPWireGuardAdapter) advancedAWGTool(ctx context.Context, content stri
 	if err != nil {
 		return false, "", err
 	}
-	if p.Public().MinimumMajor < 3 {
-		return false, tool, nil
-	}
 	inspect := a.AWGCapabilities
 	if inspect == nil {
 		inspect = func(ctx context.Context) awgprofile.Capabilities { return awgprofile.DetectTool(ctx, tool) }
 	}
 	caps := inspect(ctx)
-	if issues := awgprofile.Check(p.Public(), caps); len(issues) > 0 {
+	if issues := awgprofile.CheckRuntime(p.Public(), caps); len(issues) > 0 {
 		return true, "", issues[0]
 	}
 	// Tests may inject a capability reader, but its receipt must still describe
 	// the executable about to receive the profile. Resolve PATH once, then pin
 	// this checked path for setconf instead of discovering a second CLI later.
-	if resolved, err := exec.LookPath(tool); err == nil {
-		tool = resolved
-	}
-	if tool == "" || filepath.Clean(caps.ToolPath) != filepath.Clean(tool) {
-		return true, "", errors.New("AWG capability receipt belongs to another executable")
-	}
-	return true, tool, ctx.Err()
+	checkedTool, err := awgprofile.VerifyTool(ctx, caps, tool)
+	return p.Public().MinimumMajor >= 3, checkedTool, err
 }
 
 func defaultTunnelProbe(ctx context.Context, rawURL string) error {
