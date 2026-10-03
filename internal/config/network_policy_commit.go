@@ -11,31 +11,9 @@ import (
 // preserved. Full preimage comparison also detects legacy same-revision edits;
 // the ordinary file CAS binds the exact bytes observed by this Store.
 func (s *Store) CommitNetworkPolicyWithRollback(expected Config, applied *NetworkPolicy, services map[string]ServiceState) (func() error, error) {
-	if err := ValidateAppliedNetworkPolicy(applied); err != nil {
+	next, err := ReviewedNetworkPolicyCommitImage(expected, applied, services, time.Now())
+	if err != nil {
 		return nil, err
-	}
-	if expected.Revision == ^uint64(0) || expected.SafeMode || expected.ServiceControl.Stopped {
-		return nil, ErrRevisionChanged
-	}
-	wanted := CloneNetworkPolicy(expected.NetworkPolicy)
-	if wanted != nil && wanted.Traffic.DefaultRoute == DefaultRouteAuto && applied != nil {
-		wanted.Traffic.DefaultRoute = applied.Traffic.DefaultRoute
-	}
-	if !reflect.DeepEqual(wanted, applied) {
-		return nil, ErrRevisionChanged
-	}
-	nextServices := make(map[string]ServiceState, len(services))
-	for id, state := range services {
-		if id == "" {
-			return nil, ErrRevisionChanged
-		}
-		normalized := normalizeState(state)
-		sources, err := NormalizeSources(normalized.Sources)
-		if err != nil || !slices.Equal(sources, normalized.Sources) {
-			return nil, ErrRevisionChanged
-		}
-		normalized.Sources = slices.Clone(sources)
-		nextServices[id] = normalized
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -43,21 +21,7 @@ func (s *Store) CommitNetworkPolicyWithRollback(expected Config, applied *Networ
 		return nil, ErrRevisionChanged
 	}
 	previous := cloneConfig(s.cfg)
-	s.cfg.AppliedNetworkPolicy = CloneNetworkPolicy(applied)
-	s.cfg.AppliedServices = nextServices
-	for id, state := range nextServices {
-		if !reflect.DeepEqual(previous.AppliedServices[id], state) {
-			fenceServicePolicy(&s.cfg, id, state.Route, state.Sources)
-		}
-	}
-	for id := range previous.AppliedServices {
-		if _, retained := nextServices[id]; !retained {
-			fenceServicePolicy(&s.cfg, id, "direct", nil)
-		}
-	}
-	s.cfg.Revision++
-	s.cfg.AppliedRevision = s.cfg.Revision
-	s.cfg.LastAppliedAt = time.Now().UTC().Format(time.RFC3339)
+	s.cfg = next
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
 		return nil, err
@@ -81,4 +45,55 @@ func (s *Store) CommitNetworkPolicyWithRollback(expected Config, applied *Networ
 		used = true
 		return nil
 	}, nil
+}
+
+// ReviewedNetworkPolicyCommitImage constructs the exact sanctioned postimage
+// without IO or effect permission. A consumer can compare it with the actual
+// committed image using that image's separately verified application time.
+// The Store uses this same function, so normalization and policy fences cannot
+// drift from a caller's full postcondition check.
+func ReviewedNetworkPolicyCommitImage(expected Config, applied *NetworkPolicy, services map[string]ServiceState, appliedAt time.Time) (Config, error) {
+	if err := ValidateAppliedNetworkPolicy(applied); err != nil {
+		return Config{}, err
+	}
+	if appliedAt.IsZero() || expected.Revision == ^uint64(0) || expected.SafeMode || expected.ServiceControl.Stopped {
+		return Config{}, ErrRevisionChanged
+	}
+	wanted := CloneNetworkPolicy(expected.NetworkPolicy)
+	if wanted != nil && wanted.Traffic.DefaultRoute == DefaultRouteAuto && applied != nil {
+		wanted.Traffic.DefaultRoute = applied.Traffic.DefaultRoute
+	}
+	if !reflect.DeepEqual(wanted, applied) {
+		return Config{}, ErrRevisionChanged
+	}
+	nextServices := make(map[string]ServiceState, len(services))
+	for id, state := range services {
+		if id == "" {
+			return Config{}, ErrRevisionChanged
+		}
+		normalized := normalizeState(state)
+		sources, err := NormalizeSources(normalized.Sources)
+		if err != nil || !slices.Equal(sources, normalized.Sources) {
+			return Config{}, ErrRevisionChanged
+		}
+		normalized.Sources = slices.Clone(sources)
+		nextServices[id] = normalized
+	}
+	next := cloneConfig(expected)
+	next.AppliedNetworkPolicy = CloneNetworkPolicy(applied)
+	next.AppliedServices = nextServices
+	for id, state := range nextServices {
+		if !reflect.DeepEqual(expected.AppliedServices[id], state) {
+			fenceServicePolicy(&next, id, state.Route, state.Sources)
+		}
+	}
+	for id := range expected.AppliedServices {
+		if _, retained := nextServices[id]; !retained {
+			fenceServicePolicy(&next, id, "direct", nil)
+		}
+	}
+	next.Revision++
+	next.AppliedRevision = next.Revision
+	next.LastAppliedAt = appliedAt.UTC().Format(time.RFC3339)
+	return next, nil
 }
