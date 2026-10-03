@@ -191,9 +191,29 @@ func TestDefaultRouteSelectedDevicesAndNewDevicesBase(t *testing.T) {
 		if c.Classify(defaultRouteFlow("192.168.1.40", "203.0.113.1")).Kind != DefaultRouteDefault {
 			t.Fatal("confirmed included device missing")
 		}
-		if c.Classify(defaultRouteFlow("192.168.1.99", "203.0.113.1")).Kind != DefaultRouteOutside {
+		unknown := defaultRouteFlow("192.168.1.99", "203.0.113.1")
+		unknown.MAC = "02:00:00:00:00:99"
+		if c.Classify(unknown).Kind != DefaultRouteOutside {
 			t.Fatal("new device inherited without consent")
 		}
+		if c.Classify(defaultRouteFlow("fd00::9876", "2001:db8::1")).Kind != DefaultRouteDefault {
+			t.Fatal("confirmed device's new privacy address lost default")
+		}
+	}
+}
+
+func TestDefaultRouteMACOnlyNegativeIdentityRemainsExcluded(t *testing.T) {
+	cfg, s, now := defaultRouteFixture()
+	cfg.NetworkPolicy.Clients.ExcludedDeviceIDs = []string{"excluded"}
+	s.Devices = s.Devices[:1] // No current address lease for the negative MAC.
+	c, err := CompileDefaultRoutePolicy(cfg, s, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flow := defaultRouteFlow("fd00::abcd", "2001:db8::1")
+	flow.MAC = "02:00:00:00:00:02"
+	if c.Classify(flow).Kind != DefaultRouteExcluded {
+		t.Fatal("MAC-only negative was lost")
 	}
 }
 
