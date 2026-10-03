@@ -1,0 +1,161 @@
+{
+  "schema": 1,
+  "purpose": "Data-only source/cache handoff for coordinator native NFQWS test; not an install or activation manifest",
+  "checked_on": "2026-10-04",
+  "timezone": "Europe/Moscow",
+  "payloads_executed": false,
+  "native_acceptance_performed": false,
+  "antivirus_bypassed": false,
+  "lua_compat": 6,
+  "bol_van_linux_amd64": {
+    "flavor": "unmodified-bol-van-zapret2-v1.0.5.2",
+    "source_commit": "6b6c63e3385fa73f8af3be4a69171e947f5a319d",
+    "archive": {
+      "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/zapret2-v1.0.5.2.tar.gz",
+      "url": "https://github.com/bol-van/zapret2/releases/download/v1.0.5.2/zapret2-v1.0.5.2.tar.gz",
+      "size": 9539156,
+      "sha256": "fb3bcf69e7d86b9fa2d60bd53c956ac06d9dcc3adf9392afd84865f1d94b1158"
+    },
+    "checksums": {
+      "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/zapret2-v1.0.5.2-sha256sum.txt",
+      "url": "https://github.com/bol-van/zapret2/releases/download/v1.0.5.2/sha256sum.txt",
+      "size": 6733,
+      "sha256": "12557a74d31b1a3a3a951d5bb896a4accd2c423ef32fde413cd0661b5c34bc72"
+    },
+    "binary": {
+      "architecture": "linux-amd64",
+      "archive_member": "zapret2-v1.0.5.2/binaries/linux-x86_64/nfqws2",
+      "local_extracted_path": null,
+      "size": 321992,
+      "sha256": "de1414b1e0f9a5659d438cddcb0c7e9099b4533bf5c8a3cf841c7bc7e5aa1473",
+      "verification": "Archive member read as bounded bytes; SHA256 matches verified checksum file; ELF64 LE machine62; not written or executed"
+    },
+    "ordered_lua": [
+      {
+        "order": 1,
+        "archive_member": "zapret2-v1.0.5.2/lua/zapret-lib.lua",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/official-release-inspect/zapret2-v1.0.5.2/lua/zapret-lib.lua",
+        "source_url": "https://raw.githubusercontent.com/bol-van/zapret2/6b6c63e3385fa73f8af3be4a69171e947f5a319d/lua/zapret-lib.lua",
+        "size": 92970,
+        "sha256": "b67a470f23b00a8d6e732c4e5135a39b224511e0b71809d5f4616adf62674980"
+      },
+      {
+        "order": 2,
+        "archive_member": "zapret2-v1.0.5.2/lua/zapret-antidpi.lua",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/official-release-inspect/zapret2-v1.0.5.2/lua/zapret-antidpi.lua",
+        "source_url": "https://raw.githubusercontent.com/bol-van/zapret2/6b6c63e3385fa73f8af3be4a69171e947f5a319d/lua/zapret-antidpi.lua",
+        "size": 51782,
+        "sha256": "31c9dd75b0bd55e98e5306293f2be81e9d2ecadcbbf9157394ff37dcff7dc85a"
+      },
+      {
+        "order": 3,
+        "archive_member": "zapret2-v1.0.5.2/lua/zapret-auto.lua",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/official-release-inspect/zapret2-v1.0.5.2/lua/zapret-auto.lua",
+        "source_url": "https://raw.githubusercontent.com/bol-van/zapret2/6b6c63e3385fa73f8af3be4a69171e947f5a319d/lua/zapret-auto.lua",
+        "size": 20988,
+        "sha256": "c2028f544134b0dec33f054ac54fe4f2315d969ba034601456f72017fd5f8528"
+      }
+    ],
+    "blobs": [
+      {
+        "alias": "quic_initial",
+        "archive_member": "zapret2-v1.0.5.2/files/fake/quic_initial_www_google_com.bin",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/official-release-inspect/zapret2-v1.0.5.2/files/fake/quic_initial_www_google_com.bin",
+        "source_url": "https://raw.githubusercontent.com/bol-van/zapret2/6b6c63e3385fa73f8af3be4a69171e947f5a319d/files/fake/quic_initial_www_google_com.bin",
+        "size": 1200,
+        "sha256": "f4589c57749f956bb30538197a521d7005f8b0a8723b4707e72405e51ddac50a"
+      },
+      {
+        "alias": "tls_clienthello",
+        "archive_member": "zapret2-v1.0.5.2/files/fake/tls_clienthello_www_google_com.bin",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/official-release-inspect/zapret2-v1.0.5.2/files/fake/tls_clienthello_www_google_com.bin",
+        "source_url": "https://raw.githubusercontent.com/bol-van/zapret2/6b6c63e3385fa73f8af3be4a69171e947f5a319d/files/fake/tls_clienthello_www_google_com.bin",
+        "size": 681,
+        "sha256": "936c2bee4cfb80aa3c426b2dcbcc834b3fbcd1adb17172959dc569c73a14275c"
+      }
+    ],
+    "license_notice": {
+      "archive_member": "zapret2-v1.0.5.2/docs/LICENSE.txt",
+      "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/official-release-inspect/zapret2-v1.0.5.2/docs/LICENSE.txt",
+      "size": 1069,
+      "sha256": "d089978dd77d53cb6aa5dff51cfdbff617e52dd44af1ac44a6df02c6644f17d5",
+      "note": "Main project notice only; linked dependency notices are documented separately in RESEARCH_NFQWS_BUNDLE_RU.md"
+    }
+  },
+  "keenetic_arm64": {
+    "flavor": "keenetic-payload-1.3.1",
+    "wrapper_source_commit": "077f9af6068cd3380527085ca351b503a2dcf926",
+    "wrapper_annotated_tag_object": "d5b34d66111205afd27f2164dd3b985c65f0b81c",
+    "exact_parent_upstream_build_attestation": "not established; do not label this binary unmodified bol-van",
+    "archive": {
+      "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/nfqws2-keenetic_1.3.1_aarch64-3.10.ipk",
+      "url": "https://github.com/nfqws/nfqws2-keenetic/releases/download/v1.3.1/nfqws2-keenetic_1.3.1_aarch64-3.10.ipk",
+      "size": 381072,
+      "sha256": "9167d72053a83a78f48f6439af38432fb2d1d411fb22c0980240a949ace614df"
+    },
+    "binary": {
+      "architecture": "linux-arm64",
+      "data_tar_member": "./opt/usr/bin/nfqws2",
+      "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/wrapper-arm64-inspect/opt/usr/bin/nfqws2",
+      "size": 318336,
+      "sha256": "0c97153a2cc72392776fc550bf7be1cec77bc5db2505ab5b9dbc6d071e739c09",
+      "verification": "Local bytes rehashed; prior ELF64 LE machine183 inspection; not executed"
+    },
+    "ordered_lua": [
+      {
+        "order": 1,
+        "data_tar_member": "./opt/etc/nfqws2/lua/zapret-lib.lua.gz",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/wrapper-arm64-inspect/opt/etc/nfqws2/lua/zapret-lib.lua.gz",
+        "encoding": "gzip",
+        "size": 22403,
+        "sha256": "7c586c11c8cfa14031c348cb7715890434df779d2bb0cc7ddf0f81f599c70024",
+        "raw_size": 92970,
+        "raw_sha256": "b67a470f23b00a8d6e732c4e5135a39b224511e0b71809d5f4616adf62674980"
+      },
+      {
+        "order": 2,
+        "data_tar_member": "./opt/etc/nfqws2/lua/zapret-antidpi.lua.gz",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/wrapper-arm64-inspect/opt/etc/nfqws2/lua/zapret-antidpi.lua.gz",
+        "encoding": "gzip",
+        "size": 8400,
+        "sha256": "9017b2684a0b7aba96221fde0f9548254764f946b8d73f7abbb2ea8286e6f0b6",
+        "raw_size": 51782,
+        "raw_sha256": "31c9dd75b0bd55e98e5306293f2be81e9d2ecadcbbf9157394ff37dcff7dc85a"
+      },
+      {
+        "order": 3,
+        "data_tar_member": "./opt/etc/nfqws2/lua/zapret-auto.lua.gz",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/wrapper-arm64-inspect/opt/etc/nfqws2/lua/zapret-auto.lua.gz",
+        "encoding": "gzip",
+        "size": 5475,
+        "sha256": "f643392e43f5b87cd75e71fb38883dece57df30d563cd86aca987654c75df422",
+        "raw_size": 20988,
+        "raw_sha256": "c2028f544134b0dec33f054ac54fe4f2315d969ba034601456f72017fd5f8528"
+      }
+    ],
+    "blobs": [
+      {
+        "alias": "quic_initial",
+        "data_tar_member": "./opt/etc/nfqws2/blobs/quic_initial.bin",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/wrapper-arm64-inspect/opt/etc/nfqws2/blobs/quic_initial.bin",
+        "size": 1200,
+        "sha256": "f4589c57749f956bb30538197a521d7005f8b0a8723b4707e72405e51ddac50a"
+      },
+      {
+        "alias": "tls_clienthello",
+        "data_tar_member": "./opt/etc/nfqws2/blobs/tls_clienthello.bin",
+        "local_path": "C:/Users/Artix/AppData/Local/Temp/razvilka-research-20261004/wrapper-arm64-inspect/opt/etc/nfqws2/blobs/tls_clienthello.bin",
+        "size": 681,
+        "sha256": "936c2bee4cfb80aa3c426b2dcbcc834b3fbcd1adb17172959dc569c73a14275c"
+      }
+    ]
+  },
+  "handoff_limits": [
+    "Host cache paths are Windows inputs, not VM/router destination paths; rehash after transfer",
+    "AMD64 binary is available inside the verified archive; there is no separate extracted AMD64 file in this cache",
+    "Use explicit regular-file member allowlists; no upstream installers/init/hooks/control scripts",
+    "Keenetic and unmodified bol-van binaries remain separate flavors even when these Lua/blob bytes match",
+    "No version/dry-run/Lua initialization/NFQUEUE/native execution was performed in this handoff",
+    "Previously blocked MIPSel IPK was not read or retried; no antivirus settings or quarantine were changed"
+  ]
+}
