@@ -55,12 +55,23 @@ type probeHTTPResult struct {
 // never edits an engine config or the default route. Its temporary OUTPUT rule
 // is limited to one destination IP, destination port and reserved source port.
 type SystemProbeExecutor struct {
-	mu sync.Mutex
+	// Non-nil arguments must be the same reviewed base as CompatibleValidator.
+	BaseArguments []string
+	gateOnce      sync.Once
+	gate          chan struct{}
 }
 
 func (x *SystemProbeExecutor) Execute(ctx context.Context, candidate Candidate, target ProbeTarget) (evidence Evidence, returnErr error) {
-	x.mu.Lock()
-	defer x.mu.Unlock()
+	x.gateOnce.Do(func() { x.gate = make(chan struct{}, 1) })
+	select {
+	case x.gate <- struct{}{}:
+		defer func() { <-x.gate }()
+	case <-ctx.Done():
+		return Evidence{}, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return Evidence{}, err
+	}
 
 	started := time.Now()
 	evidence = Evidence{CandidateID: candidate.ID, ServiceID: target.ServiceID, Protocol: target.Protocol, IPFamily: target.IPFamily, CheckedAt: started.UTC().Format(time.RFC3339)}
@@ -172,7 +183,11 @@ func (x *SystemProbeExecutor) Execute(ctx context.Context, candidate Candidate, 
 
 	processStarted := time.Now()
 	processArgs := []string{"--qnum=" + strconv.Itoa(strategyQueueNumber)}
-	processArgs = append(processArgs, installedBaseArguments()...)
+	base := x.BaseArguments
+	if base == nil {
+		base = installedBaseArguments()
+	}
+	processArgs = append(processArgs, base...)
 	processArgs = append(processArgs, arguments...)
 	process = exec.CommandContext(ctx, nfqwsBinary, processArgs...)
 	process.Stdout, process.Stderr = &processOutput, &processOutput
@@ -227,6 +242,7 @@ func (x *SystemProbeExecutor) Execute(ctx context.Context, candidate Candidate, 
 		responseResult, traceStages, requestErr = executePinnedHTTPS(ctx, u, address, port, target.IPFamily)
 	}
 	evidence.HTTPStatus = responseResult.Status
+	evidence.Level = LevelHTTP // the attempted scenario; never media/voice/game
 	evidence.TTFBMS = responseResult.TTFBMS
 	evidence.ReadMS = responseResult.ReadMS
 	evidence.BytesRead = responseResult.BytesRead

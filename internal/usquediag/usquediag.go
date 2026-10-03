@@ -112,6 +112,9 @@ type CanaryEvidence struct {
 	Loc             string   `json:"loc,omitempty"`
 	EgressIP        string   `json:"egress_ip,omitempty"`
 	ConfirmedRoutes []string `json:"confirmed_routes,omitempty"`
+	ValidUntil      string   `json:"valid_until,omitempty"`
+	BindingID       string   `json:"binding_id,omitempty"`
+	Endpoint        string   `json:"endpoint,omitempty"`
 }
 
 type RepairPreview struct {
@@ -157,6 +160,7 @@ type Report struct {
 	EndpointRoute   string                      `json:"endpoint_route_interface,omitempty"`
 	EndpointRoutes  []EndpointRoute             `json:"endpoint_routes,omitempty"`
 	Evidence        CanaryEvidence              `json:"canary_evidence"`
+	Capabilities    TransportCapabilities       `json:"transport_capabilities"`
 	NDMCRepair      RepairPreview               `json:"ndmc_repair_preview"`
 	Bootstrap       BootstrapReadiness          `json:"bootstrap_readiness"`
 	Checks          []Check                     `json:"checks"`
@@ -185,8 +189,11 @@ type Manager struct {
 	Now                     func() time.Time
 	CACandidates            []string
 	EvidencePath            string
-	RepairRoot              string
-	ShellPath               string
+	// Trusted current WAN/DNS/route/boot epoch digest, supplied by app wiring.
+	// Missing identity keeps historical receipts diagnostic-only.
+	EvidenceEnvironment func(context.Context) (string, error)
+	RepairRoot          string
+	ShellPath           string
 }
 
 func New() *Manager {
@@ -226,6 +233,12 @@ func (m *Manager) RegistrationHost() (string, error) {
 }
 
 func (m *Manager) Check(ctx context.Context) Report {
+	environmentID := ""
+	if m.EvidenceEnvironment != nil {
+		if id, err := m.EvidenceEnvironment(ctx); err == nil && canaryDigest(id) {
+			environmentID = id
+		}
+	}
 	now := time.Now()
 	if m.Now != nil {
 		now = m.Now()
@@ -402,7 +415,11 @@ func (m *Manager) Check(ctx context.Context) Report {
 					add("tun-"+strings.ToLower(family.name), "TUN "+family.name, "warning", family.name+" на интерфейсе "+config.Interface+" сейчас не подтверждён.", "Проверьте семейство адресов отдельно; отсутствие IPv6 не должно скрывать рабочий IPv4.")
 				}
 			}
-			for _, route := range []struct{ family, endpoint string }{{"IPv4", firstNonEmpty(endpoints.IPv4, endpoints.H2IPv4)}, {"IPv6", firstNonEmpty(endpoints.IPv6, endpoints.H2IPv6)}} {
+			v4, v6 := endpoints.IPv4, endpoints.IPv6
+			if config.Transport == "HTTP/2" {
+				v4, v6 = endpoints.H2IPv4, endpoints.H2IPv6
+			}
+			for _, route := range []struct{ family, endpoint string }{{"IPv4", v4}, {"IPv6", v6}} {
 				if route.endpoint == "" {
 					add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "warning", "В сессии нет публичного endpoint "+route.family+".", "Используйте доступное семейство; не считайте отсутствие IPv6 отказом IPv4.")
 					continue
@@ -416,14 +433,17 @@ func (m *Manager) Check(ctx context.Context) Report {
 				if err == nil {
 					item.Interface = routeInterface(string(out))
 					item.DependencyLoop = item.Interface != "" && item.Interface == config.Interface
-					item.Expected = !item.DependencyLoop
+					item.Expected = item.Interface != "" && !item.DependencyLoop
 					if route.family == "IPv4" {
 						report.EndpointRoute = item.Interface
 					}
 					if item.DependencyLoop {
 						add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "fail", "Endpoint Cloudflare направлен обратно в "+config.Interface+"; это routing loop.", "Верните маршрут endpoint во внешний WAN. Не запускайте USQUE до устранения петли.")
-					} else {
+					} else if item.Interface != "" {
 						add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "pass", "Endpoint доступен через "+fallback(item.Interface, "определённый системой маршрут")+" вне собственного TUN.", "")
+					} else {
+						item.Available = false
+						add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "warning", "Ответ утилиты ip не подтвердил внешний интерфейс endpoint.", "Повторите проверку маршрута до выбранного endpoint.")
 					}
 				} else {
 					add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "warning", "Маршрут до endpoint не определён.", "Проверьте WAN и исключите routing loop до повторного запуска.")
@@ -447,7 +467,14 @@ func (m *Manager) Check(ctx context.Context) Report {
 
 	if evidence, err := readCanaryEvidence(m.EvidencePath); err == nil {
 		report.Evidence = evidence
-		warpOK := evidence.Warp == "on" || evidence.Warp == "plus"
+		if m.EvidenceEnvironment != nil {
+			if current, err := m.EvidenceEnvironment(ctx); err != nil || current != environmentID {
+				environmentID = ""
+			}
+		}
+		binding := CanaryBinding(report.Files["config"].SHA256, report.Files["session"].SHA256, report.Files["binary"].SHA256, environmentID)
+		report.Capabilities = EvaluateCanaryCapabilities(evidence, endpoints, binding, now)
+		warpOK := report.Capabilities.Fresh && (evidence.Warp == "on" || evidence.Warp == "plus")
 		if warpOK {
 			message := "Последний изолированный кандидат подтвердил warp=" + evidence.Warp + "."
 			if evidence.Colo != "" || evidence.Loc != "" {
@@ -455,14 +482,15 @@ func (m *Manager) Check(ctx context.Context) Report {
 			}
 			add("warp-evidence", "Технический WARP", "pass", message, "")
 		} else {
-			add("warp-evidence", "Технический WARP", "warning", "Последний кандидат не подтвердил warp=on.", "Повторите изолированную проверку профиля; рабочий маршрут не меняйте.")
+			add("warp-evidence", "Технический WARP", "warning", "Текущий WARP не подтверждён свежим результатом для этого endpoint и окружения.", "Повторите изолированную проверку профиля; рабочий маршрут не меняйте.")
 		}
-		if len(evidence.ConfirmedRoutes) > 0 {
+		if warpOK && len(evidence.ConfirmedRoutes) > 0 {
 			add("service-evidence", "Проверка сервиса", "pass", "После WARP отдельно ответили: "+strings.Join(evidence.ConfirmedRoutes, ", ")+".", "")
 		} else {
 			add("service-evidence", "Проверка сервиса", "warning", "WARP и доступность выбранного сервиса ещё не подтверждены вместе.", "Назначьте USQUE одному сервису и выполните применение с canary.")
 		}
 	} else {
+		report.Capabilities = unknownCapabilities("receipt-unavailable")
 		add("warp-evidence", "Технический WARP", "warning", "Нет сохранённого результата изолированного canary.", "Назначьте USQUE выбранному сервису и выполните безопасное применение; текущий маршрут не будет заменён при ошибке.")
 	}
 
@@ -703,7 +731,11 @@ func readSafeSession(path string) (Endpoints, bool, bool, error) {
 	}
 	stringValue := func(key string) string {
 		value := rawString(key)
-		if !safeName.MatchString(value) {
+		address, err := netip.ParseAddr(value)
+		if err != nil || address.Is4In6() || !publicfetch.PublicAddress(address) || address.String() != value {
+			return ""
+		}
+		if strings.HasSuffix(key, "v4") != address.Is4() {
 			return ""
 		}
 		return value
@@ -750,6 +782,18 @@ func readCanaryEvidence(path string) (CanaryEvidence, error) {
 	}
 	if _, err := time.Parse(time.RFC3339, evidence.CheckedAt); err != nil {
 		evidence.CheckedAt = ""
+	}
+	if evidence.Transport != "HTTP/2" && evidence.Transport != "QUIC" {
+		evidence.Transport = ""
+	}
+	if !canaryDigest(evidence.BindingID) {
+		evidence.BindingID = ""
+	}
+	if endpoint, err := netip.ParseAddrPort(evidence.Endpoint); err != nil || endpoint.Port() != 443 || endpoint.Addr().Is4In6() || !publicfetch.PublicAddress(endpoint.Addr()) || endpoint.String() != evidence.Endpoint {
+		evidence.Endpoint = ""
+	}
+	if _, err := time.Parse(time.RFC3339, evidence.ValidUntil); err != nil {
+		evidence.ValidUntil = ""
 	}
 	confirmed := make([]string, 0, len(evidence.ConfirmedRoutes))
 	for _, name := range evidence.ConfirmedRoutes {

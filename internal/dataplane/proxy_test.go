@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -41,10 +42,50 @@ type proxyFakeRunner struct {
 	packageCalls   []string
 	firewall       *proxyFirewallFake
 	policy         policyKernelFake
+	defaults       map[string]string
 }
 
 func (r *proxyFakeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if name == "ip" {
+		family, plain := 4, args
+		if len(plain) > 0 && plain[0] == "-6" {
+			family, plain = 6, plain[1:]
+		}
+		if len(plain) == 4 && strings.Join(plain[:3], " ") == "route show table" {
+			if _, err := strconv.Atoi(plain[3]); err == nil {
+				return []byte(r.defaults[strconv.Itoa(family)+"/"+plain[3]]), nil
+			}
+		}
+		if len(plain) > 2 && plain[0] == "route" && plain[2] == "default" {
+			if r.defaults == nil {
+				r.defaults = map[string]string{}
+			}
+			device, table := r.iface, ""
+			for i := 3; i+1 < len(plain); i += 2 {
+				if plain[i] == "dev" {
+					device = plain[i+1]
+				}
+				if plain[i] == "table" {
+					table = plain[i+1]
+				}
+			}
+			key := strconv.Itoa(family) + "/" + table
+			switch plain[1] {
+			case "add", "replace":
+				if plain[1] == "add" && r.defaults[key] != "" {
+					return []byte("RTNETLINK answers: File exists"), errors.New("EEXIST")
+				}
+				metric := "0"
+				if family == 6 {
+					metric = "1024"
+				}
+				r.defaults[key] = "default dev " + device + " proto boot scope link metric " + metric + "\n"
+				return nil, nil
+			case "del":
+				r.defaults[key] = ""
+				return nil, nil
+			}
+		}
 		if output, handled, err := r.policy.run(args); handled {
 			return output, err
 		}
@@ -298,6 +339,7 @@ func TestProxyAdapterStagesActivatesHealthAndRollsBack(t *testing.T) {
 	runner := &proxyFakeRunner{processes: processes, iface: adapter.Interface}
 	adapter.Processes, adapter.Runner = processes, runner
 	adapter.EngineBin, adapter.SidecarBin, adapter.IP = "sing-box", "sing-box", "ip"
+	adapter.bootIdentity = func() (string, error) { return "proxy-test-boot", nil }
 	adapter.IPTables, adapter.IP6Tables = "iptables", "ip6tables"
 	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
 		if host == "node.example" {

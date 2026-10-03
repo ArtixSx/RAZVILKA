@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -1143,27 +1144,10 @@ func resolveDNSAddresses(ctx context.Context, host string) ([]netip.Addr, error)
 	return result, nil
 }
 
-var nonPublicDNSPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("192.0.0.0/24"),
-	netip.MustParsePrefix("192.0.2.0/24"),
-	netip.MustParsePrefix("198.18.0.0/15"),
-	netip.MustParsePrefix("198.51.100.0/24"),
-	netip.MustParsePrefix("203.0.113.0/24"),
-	netip.MustParsePrefix("2001:db8::/32"),
-}
-
 func publicDNSAddress(address netip.Addr) bool {
-	address = address.Unmap()
-	if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() || address.IsMulticast() || address.IsUnspecified() {
-		return false
-	}
-	for _, prefix := range nonPublicDNSPrefixes {
-		if prefix.Contains(address) {
-			return false
-		}
-	}
-	return true
+	// Use the same boundary as WG/bootstrap HTTPS; a separate shorter list
+	// previously admitted reserved IPv4 and private-address translation ranges.
+	return publicfetch.PublicAddress(address)
 }
 
 func exchangeFramedDNS(connection net.Conn, query []byte) ([]byte, error) {

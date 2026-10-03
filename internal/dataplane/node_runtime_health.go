@@ -105,5 +105,8 @@ func (a *ProxyTunnelAdapter) CommittedNodeHealth(ctx context.Context, plan Plan)
 			return errors.New("invalid committed node endpoint exclusion")
 		}
 	}
+	if err := a.verifyCommittedReceipt(ctx, state); err != nil {
+		return err
+	}
 	return a.healthState(ctx, plan, state)
 }

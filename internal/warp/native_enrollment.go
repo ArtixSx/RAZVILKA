@@ -273,15 +273,68 @@ func eraseNative(data []byte) {
 // NativeRestore holds the live Manager mutex and the exact canonical file lease
 // through journal commit/cache handover. No network method is available here.
 type NativeRestore struct {
-	*nativeenrollment.Target
-	manager *Manager
+	target   *nativeenrollment.Target
+	manager  *Manager
+	retained nativeenrollment.Document
+}
+
+func (s *NativeRestore) Read(ctx context.Context) (restorejournal.Image, error) {
+	if s.manager == nil {
+		return restorejournal.Image{}, ErrEnrollmentStore
+	}
+	return s.target.Read(ctx)
+}
+
+func (s *NativeRestore) Binding() string {
+	if s.manager == nil {
+		return ""
+	}
+	return s.target.Binding()
+}
+
+func (s *NativeRestore) MergeImage(ctx context.Context, snapshot nativeenrollment.Snapshot) (restorejournal.Image, error) {
+	if s.manager == nil {
+		return restorejournal.Image{}, ErrEnrollmentStore
+	}
+	return s.target.MergeImage(ctx, snapshot)
+}
+
+// CompareAndSwap protects facts present before this copy-only import session.
+// Rollback may remove newly imported bytes (no remote request occurred under
+// the session lease), but cannot rewind any pre-existing local enrollment.
+func (s *NativeRestore) CompareAndSwap(ctx context.Context, before, after restorejournal.Image) error {
+	if s.manager == nil {
+		return ErrEnrollmentStore
+	}
+	d, err := nativeenrollment.Decode(after)
+	if err != nil {
+		return ErrEnrollmentStore
+	}
+	defer eraseNativeDocument(&d)
+	for _, file := range s.retained.Files {
+		value := d.Get(file.Name)
+		matches := d.Has(file.Name) && bytes.Equal(value, file.Data)
+		eraseNative(value)
+		if !matches {
+			return nativeenrollment.ErrConflict
+		}
+	}
+	return s.target.CompareAndSwap(ctx, before, after)
+}
+
+func eraseNativeDocument(d *nativeenrollment.Document) {
+	for i := range d.Files {
+		eraseNative(d.Files[i].Data)
+	}
+	d.Files = nil
 }
 
 func (s *NativeRestore) Close() error {
 	if s.manager == nil {
 		return nil
 	}
-	err := s.Target.Close()
+	err := s.target.Close()
+	eraseNativeDocument(&s.retained)
 	s.manager.mu.Unlock()
 	s.manager = nil
 	return err
@@ -299,7 +352,20 @@ func (m *Manager) BeginNativeRestore(ctx context.Context) (*NativeRestore, error
 		m.mu.Unlock()
 		return nil, err
 	}
-	return &NativeRestore{Target: target, manager: m}, nil
+	image, err := target.Read(ctx)
+	if err != nil {
+		target.Close()
+		m.mu.Unlock()
+		return nil, ErrEnrollmentStore
+	}
+	defer eraseNative(image.Data)
+	d, err := nativeenrollment.Decode(image)
+	if err != nil {
+		target.Close()
+		m.mu.Unlock()
+		return nil, ErrEnrollmentStore
+	}
+	return &NativeRestore{target: target, manager: m, retained: d}, nil
 }
 func (m *Manager) ExportNativePrivateIfPresent(ctx context.Context) (*nativeenrollment.Snapshot, error) {
 	if !m.mu.TryLock() {
