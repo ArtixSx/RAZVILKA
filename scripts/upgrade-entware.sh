@@ -195,6 +195,15 @@ if [ ! -f "$CONFIG_SOURCE" ]; then
   fi
 fi
 
+require_node_history_compatibility() {
+  NODE_HISTORY_COMPATIBILITY="$("$1" -check-node-history-state -node-history-config-root "$APPDIR" -node-history-state-root "$STATEDIR" 2>/dev/null)" || {
+    echo "Target binary cannot read all retained node history; installation unchanged" >&2; return 1;
+  }
+  [ "$NODE_HISTORY_COMPATIBILITY" = '{"ok":true}' ] || {
+    echo "Retained node history compatibility not confirmed; installation unchanged" >&2; return 1;
+  }
+}
+
 require_native_enrollment_schema() {
   # Retain both application handoff and file-phase receipts through downgrade.
   # Empty directories alone do not opt an installation into this protocol.
@@ -259,6 +268,7 @@ require_native_enrollment_schema() {
   fi
 }
 require_native_enrollment_schema "$BIN_SOURCE"
+require_node_history_compatibility "$BIN_SOURCE"
 
 VERSION="$($BIN_SOURCE -version)"
 [ -n "$VERSION" ] || { echo "Candidate did not report a version" >&2; exit 1; }
@@ -344,6 +354,7 @@ fi
 # A registration may have checkpointed while the first check was running.
 # Recheck with the application quiescent, before recovery or any replacement.
 require_native_enrollment_schema "$BIN_SOURCE"
+require_node_history_compatibility "$BIN_SOURCE"
 
 mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BINDIR" "$INITDIR" "$BACKUPROOT"
 
@@ -424,6 +435,10 @@ backup_file() {
 }
 
 backup_file "$BINDIR/razvilka" razvilka.bin
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then
+  sha256sum "$BACKUP/razvilka.bin" | awk '{printf "%s", $1}' > "$BACKUP/razvilka.sha256"
+  chmod 600 "$BACKUP/razvilka.sha256"
+fi
 backup_file "$RAZ_INIT" S99razvilka
 backup_file "$APPDIR/config.json" config.json
 backup_file "$APPDIR/service-catalog.json" service-catalog.json
