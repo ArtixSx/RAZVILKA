@@ -70,7 +70,9 @@ function consoleNavigate(name,engine){
  if(name==='updates')void refreshAppUpdate();
 }
 function consoleViewChanged(name){
+ const drawerFocus=document.body.classList.contains('console-menu-open')&&document.querySelector('.sidebar').contains(document.activeElement);
  document.body.classList.remove('console-menu-open');$('#consoleMenuBackdrop').hidden=true;$('#consoleMenu').setAttribute('aria-expanded','false');consoleDrawerInert();
+ if(drawerFocus)$('#pageTitle').focus({preventScroll:true});
  const engine=name==='engineconfig'?state.selectedEngine:'';
  const hash=engine?`#/engine/${encodeURIComponent(engine)}`:`#/${name}`;
  if(location.hash!==hash){try{history.replaceState(null,'',hash);}catch{}}
