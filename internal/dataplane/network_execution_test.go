@@ -373,6 +373,7 @@ func networkCleanupProxy(t *testing.T) (*ProxyTunnelAdapter, *proxyFakeProcesses
 	adapter.Processes = processes
 	adapter.Runner = &proxyFakeRunner{processes: processes, iface: adapter.Interface}
 	adapter.EngineBin, adapter.SidecarBin, adapter.IP = "sing-box", "sing-box", "ip"
+	adapter.bootIdentity = func() (string, error) { return "core-refresh-model-boot", nil }
 	adapter.IPTables, adapter.IP6Tables = "iptables", "ip6tables"
 	adapter.FreshProfile = func(context.Context) (string, error) { return executionNetwork, nil }
 	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
@@ -381,7 +382,11 @@ func networkCleanupProxy(t *testing.T) (*ProxyTunnelAdapter, *proxyFakeProcesses
 	adapter.Resolver = func(context.Context, string) ([]netip.Addr, error) {
 		return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
 	}
-	old := PolicyState{Interface: adapter.Interface, Table: adapter.Table, PriorityBase: adapter.Priority, Prefixes: []string{"198.51.100.8/32"}}
+	old := PolicyState{Interface: adapter.Interface, Table: adapter.Table, PriorityBase: adapter.Priority, Prefixes: []string{"198.51.100.8/32"}, Rules: []PolicyRule{{Source: "192.168.1.25/32", Destination: "198.51.100.8/32"}}}
+	old.Forwarding, err = adapter.compileForwarding(context.Background(), old)
+	if err != nil {
+		t.Fatal(err)
+	}
 	data, _ := json.MarshalIndent(old, "", "  ")
 	for path, contents := range map[string][]byte{adapter.policyPath(): data, adapter.engineConfigPath(): []byte(`{}`), adapter.sidecarConfigPath(): []byte(`{}`)} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -390,6 +395,9 @@ func networkCleanupProxy(t *testing.T) (*ProxyTunnelAdapter, *proxyFakeProcesses
 		if err := os.WriteFile(path, contents, 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := adapter.applyRetainedPolicy(context.Background(), old); err != nil {
+		t.Fatal("fixture failed to acquire acknowledged old policy", err)
 	}
 	return adapter, processes, old
 }
@@ -403,6 +411,10 @@ func TestCanceledNodePolicyRefreshRestoresWithIndependentContext(t *testing.T) {
 			defer cancel()
 			rollbackFailure := errors.New("policy rollback failed")
 			restoreAttempted := false
+			adapter.SOCKSProbe = func(context.Context, string) error {
+				cancel() // Every policy add was acknowledged before health began.
+				return context.Canceled
+			}
 			baseRunner := adapter.Runner
 			adapter.Runner = networkCleanupRunner(func(runCtx context.Context, name string, args ...string) ([]byte, error) {
 				if err := runCtx.Err(); err != nil {
@@ -419,8 +431,6 @@ func TestCanceledNodePolicyRefreshRestoresWithIndependentContext(t *testing.T) {
 							return nil, rollbackFailure
 						}
 					}
-				} else if strings.Contains(command, "rule add") && strings.Contains(command, "203.0.113.9/32") {
-					cancel() // The new rule exists before health notices cancellation.
 				}
 				return baseRunner.Run(runCtx, name, args...)
 			})
@@ -431,10 +441,51 @@ func TestCanceledNodePolicyRefreshRestoresWithIndependentContext(t *testing.T) {
 				t.Fatalf("canceled refresh lost rollback: updated=%t restored=%t err=%v", updated, restoreAttempted, err)
 			}
 			stored, exists, readErr := adapter.loadPolicy()
-			if readErr != nil || !exists || !samePolicy(stored, old) {
-				t.Fatalf("canceled refresh changed committed policy: %+v err=%v", stored, readErr)
+			if readErr != nil || !exists || samePolicy(stored, old) == failRollback {
+				t.Fatalf("canceled refresh reported incorrect restoration: %+v err=%v", stored, readErr)
+			}
+			if failRollback {
+				if _, _, err := adapter.readPolicyBinding(stored); !errors.Is(err, ErrProxyPolicyUnknown) {
+					t.Fatal("failed restoration exposed healthy authority", err)
+				}
 			}
 		})
+	}
+}
+
+func TestCanceledNodePolicyRefreshInsideAddRetainsUnknownIntent(t *testing.T) {
+	adapter, processes, old := networkCleanupProxy(t)
+	processes.running["sing-box-engine"], processes.running["sing-box-tun"] = true, true
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	base := adapter.Runner
+	lateMutation := false
+	adapter.Runner = networkCleanupRunner(func(runCtx context.Context, name string, args ...string) ([]byte, error) {
+		command := strings.Join(args, " ")
+		if ctx.Err() != nil && (strings.Contains(command, "rule add") || strings.Contains(command, "rule del") || strings.Contains(command, "route del")) {
+			lateMutation = true
+		}
+		if strings.Contains(command, "rule add") && strings.Contains(command, "203.0.113.9/32") {
+			cancel() // Kernel effect exists, but durable ACK cannot be published.
+		}
+		return base.Run(runCtx, name, args...)
+	})
+	plan := networkExecutionPlan()
+	plan.Routes[0].Sources = []string{"192.168.1.25/32"}
+	updated, err := adapter.RefreshPolicy(ctx, plan)
+	if updated || !errors.Is(err, ErrProxyPolicyUnknown) || !errors.Is(err, context.Canceled) || lateMutation {
+		t.Fatal("lost ACK performed cleanup/replay or reported restoration", updated, lateMutation, err)
+	}
+	runner := base.(*proxyFakeRunner)
+	if runner.defaults["4/203"] == "" || runner.defaults["6/203"] == "" {
+		t.Fatal("unknown add inferred deletion authority over defaults")
+	}
+	stored, exists, err := adapter.loadPolicy()
+	if err != nil || !exists || !samePolicy(stored, old) {
+		t.Fatal("unknown candidate rewrote historical committed policy", stored, err)
+	}
+	if _, _, err := adapter.readPolicyBinding(old); !errors.Is(err, ErrProxyPolicyUnknown) {
+		t.Fatal("unknown generation fell back to historical intent", err)
 	}
 }
 
