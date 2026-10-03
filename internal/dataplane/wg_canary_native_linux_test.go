@@ -191,6 +191,20 @@ func nativeWGClient(t *testing.T) {
 		{"ipv6", "2001:db8:66::2", "2001:db8:66::2/128", "2001:db8:10::10"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "ipv6" {
+				// Both fixtures deliberately share a peer key as well as Address.
+				// After a candidate session, reset the working fixture to force a
+				// fresh handshake instead of reusing its superseded Noise session.
+				if err := a.stopInterface(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				if err := a.startInterface(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				for _, family := range []string{"-4", "-6"} {
+					nativeWGCommand(t, "", "ip", family, "route", "add", "default", "dev", a.Interface, "table", "206")
+				}
+			}
 			// Prove the working path answers before trying a cold same-address
 			// candidate. Its higher-priority default is deliberately left intact.
 			url := "http://" + net.JoinHostPort(tc.target, "80") + "/"
