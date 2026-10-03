@@ -2,8 +2,8 @@ package strategylab
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,7 +19,7 @@ type CompatibleValidator struct {
 	BaseArguments []string
 	TrustedAssets bool
 	Timeout       time.Duration
-	Run           func(context.Context, string, ...string) ([]byte, error)
+	Provider      CompatibilityProvider
 }
 
 // InstalledBaseArguments snapshots the local data without evaluating shell.
@@ -35,6 +35,10 @@ func InstalledBaseArguments() ([]string, error) {
 
 func (v CompatibleValidator) Validate(parent context.Context, arguments []string) (result Validation) {
 	result = Validation{Arguments: append([]string(nil), arguments...), CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	if parent.Err() != nil {
+		result.Code = "VALIDATION_CANCELLED"
+		return result
+	}
 	if !v.TrustedAssets {
 		result.Code = "ASSET_REVIEW_REQUIRED"
 		return result
@@ -61,34 +65,67 @@ func (v CompatibleValidator) Validate(parent context.Context, arguments []string
 		result.Code = "NFQWS2_NOT_INSTALLED"
 		return result
 	}
+	if v.Provider == nil {
+		// The existing package supervisor is opkg/transaction-only. Do not
+		// forge that authority or launch Lua through plain CommandContext.
+		result.Code = "SUPERVISION_REQUIRED"
+		return result
+	}
 	timeout := v.Timeout
 	if timeout <= 0 || timeout > ProbeTimeout {
 		timeout = 8 * time.Second
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	run := v.Run
-	if run == nil {
-		run = func(ctx context.Context, binary string, args ...string) ([]byte, error) {
-			var output boundedBuffer
-			cmd := exec.CommandContext(ctx, binary, args...)
-			cmd.Stdout, cmd.Stderr = &output, &output
-			err := cmd.Run()
-			return []byte(output.String()), err
+	run := func(args []string) (CompatibilityCompletion, error) {
+		type response struct {
+			completion CompatibilityCompletion
+			err        error
 		}
+		done := make(chan response, 1)
+		go func() {
+			completion, err := v.Provider.Run(ctx, binary, args...)
+			done <- response{completion: completion, err: err}
+		}()
+		var returned response
+		select {
+		case returned = <-done:
+		case <-ctx.Done():
+			timer := time.NewTimer(compatibilityCleanupWait)
+			defer timer.Stop()
+			select {
+			case returned = <-done:
+			case <-timer.C:
+				result.QuiescenceUnknown = true
+				return CompatibilityCompletion{}, errors.Join(ErrCompatibilityQuiescenceUnknown, ctx.Err())
+			}
+		}
+		completion, err := returned.completion, returned.err
+		if !completion.Quiescent || errors.Is(err, ErrCompatibilityQuiescenceUnknown) {
+			result.QuiescenceUnknown = true
+			return completion, errors.Join(ErrCompatibilityQuiescenceUnknown, err)
+		}
+		if err == nil && !completion.Started {
+			return completion, errors.New("provider returned success without an executed command")
+		}
+		return completion, err
 	}
 	// Dry-run comes first: upstream treats unknown options differently outside
 	// dry-run. Test intercept=0 support before permitting Lua initialization.
 	args := append([]string{"--dry-run", "--intercept=0"}, base...)
 	args = append(args, arguments...)
-	output, err := run(ctx, binary, args...)
+	completion, err := run(args)
 	if err == nil && ctx.Err() == nil {
 		args = append([]string{"--intercept=0"}, base...)
 		args = append(args, arguments...)
 		args = append(args, "--lua-init="+assertions)
-		output, err = run(ctx, binary, args...)
+		completion, err = run(args)
 	}
-	result.Output = shortProbeText(string(output))
+	result.Output = shortProbeText(string(completion.Output))
+	if result.QuiescenceUnknown {
+		result.Code = "QUIESCENCE_UNKNOWN"
+		return result
+	}
 	if ctx.Err() != nil {
 		result.Code = "VALIDATION_CANCELLED"
 		return result

@@ -48,15 +48,16 @@ type AdaptiveAttempt struct {
 }
 
 type AdaptiveResult struct {
-	Mode             AdaptiveMode      `json:"mode"`
-	NetworkID        string            `json:"network_id"`
-	Code             string            `json:"code"`
-	CandidateID      string            `json:"candidate_id,omitempty"`
-	Level            string            `json:"level"`
-	CheckedAt        time.Time         `json:"checked_at"`
-	RetryAt          time.Time         `json:"retry_at,omitempty"`
-	FallbackEligible bool              `json:"fallback_eligible"`
-	Attempts         []AdaptiveAttempt `json:"attempts,omitempty"`
+	QuiescenceUnknown bool              `json:"quiescence_unknown,omitempty"`
+	Mode              AdaptiveMode      `json:"mode"`
+	NetworkID         string            `json:"network_id"`
+	Code              string            `json:"code"`
+	CandidateID       string            `json:"candidate_id,omitempty"`
+	Level             string            `json:"level"`
+	CheckedAt         time.Time         `json:"checked_at"`
+	RetryAt           time.Time         `json:"retry_at,omitempty"`
+	FallbackEligible  bool              `json:"fallback_eligible"`
+	Attempts          []AdaptiveAttempt `json:"attempts,omitempty"`
 }
 
 type adaptiveSlot struct {
@@ -77,6 +78,7 @@ type AdaptiveSelector struct {
 	mu        sync.Mutex
 	slots     map[string]adaptiveSlot
 	active    bool // one validator/probe batch across services on a weak router
+	unknown   bool // sticky; never cleared by cooldown or a new network epoch
 }
 
 func (s *AdaptiveSelector) now() time.Time {
@@ -88,6 +90,18 @@ func (s *AdaptiveSelector) now() time.Time {
 
 func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequest) (result AdaptiveResult, err error) {
 	result = AdaptiveResult{Mode: request.Mode, NetworkID: request.NetworkID, Level: request.RequiredLevel, CheckedAt: s.now()}
+	s.mu.Lock()
+	for _, candidate := range request.Candidates {
+		if candidate.Validation.QuiescenceUnknown {
+			s.unknown = true // retained validation also fences a fresh selector
+		}
+	}
+	unknown := s.unknown
+	s.mu.Unlock()
+	if unknown {
+		result.Code, result.QuiescenceUnknown = "quiescence-unknown", true
+		return result, ErrCompatibilityQuiescenceUnknown
+	}
 	if request.Mode != ModePreferred && request.Mode != ModeOnly && request.Mode != ModeManual {
 		return result, errors.New("explicit preferred/only/manual mode is required")
 	}
@@ -118,6 +132,12 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 	}
 	key := selectionKey(request.Target.ServiceID, request.Target.Protocol, request.Target.IPFamily)
 	s.mu.Lock()
+	// Another batch may have latched unknown while this request was checked.
+	if s.unknown {
+		s.mu.Unlock()
+		result.Code, result.QuiescenceUnknown = "quiescence-unknown", true
+		return result, ErrCompatibilityQuiescenceUnknown
+	}
 	if s.slots == nil {
 		s.slots = map[string]adaptiveSlot{}
 	}
@@ -145,8 +165,17 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 	s.slots[key] = adaptiveSlot{running: true}
 	s.active = true
 	s.mu.Unlock()
+	unknownFence := func() bool {
+		s.mu.Lock()
+		unknown := s.unknown
+		s.mu.Unlock()
+		if unknown {
+			result.Code, result.QuiescenceUnknown = "quiescence-unknown", true
+		}
+		return unknown
+	}
 	defer func() {
-		if parent.Err() != nil {
+		if parent.Err() != nil && !result.QuiescenceUnknown {
 			result.Code, err = "cancelled", parent.Err()
 		}
 		result.CheckedAt = s.now()
@@ -155,6 +184,9 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 		s.slots[key] = adaptiveSlot{retryAt: result.RetryAt}
 		s.active = false
 		s.mu.Unlock()
+		if unknownFence() {
+			err = errors.Join(ErrCompatibilityQuiescenceUnknown, err)
+		}
 		if err != nil {
 			result.CandidateID, result.FallbackEligible = "", false
 		}
@@ -174,6 +206,9 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 	}
 	seen := map[string]bool{}
 	for _, candidate := range request.Candidates {
+		if unknownFence() {
+			return result, ErrCompatibilityQuiescenceUnknown
+		}
 		if err := ctx.Err(); err != nil {
 			result.Code = "cancelled"
 			return result, err
@@ -212,6 +247,16 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 		last.Validation = s.Validator.Validate(validationCtx, args)
 		validationErr := validationCtx.Err()
 		validationCancel()
+		if last.Validation.QuiescenceUnknown {
+			last.Code, result.Code, result.QuiescenceUnknown = "quiescence-unknown", "quiescence-unknown", true
+			s.mu.Lock()
+			s.unknown = true
+			s.mu.Unlock()
+			return result, errors.Join(ErrCompatibilityQuiescenceUnknown, ctx.Err())
+		}
+		if unknownFence() {
+			return result, ErrCompatibilityQuiescenceUnknown
+		}
 		if ctx.Err() != nil {
 			result.Code = "cancelled"
 			return result, ctx.Err()
@@ -222,12 +267,18 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 		}
 		candidate.Validation = last.Validation // local copy; caller's strategies unchanged
 		for pass := 0; pass < RequiredPasses; pass++ {
+			if unknownFence() {
+				return result, ErrCompatibilityQuiescenceUnknown
+			}
 			probeCtx, probeCancel := context.WithTimeout(ctx, limits.Attempt)
 			evidence, probeErr := s.Executor.Execute(probeCtx, candidate, request.Target)
 			if probeCtx.Err() != nil {
 				probeErr = probeCtx.Err()
 			}
 			probeCancel()
+			if unknownFence() {
+				return result, ErrCompatibilityQuiescenceUnknown
+			}
 			if ctx.Err() != nil {
 				result.Code = "cancelled"
 				return result, ctx.Err()
