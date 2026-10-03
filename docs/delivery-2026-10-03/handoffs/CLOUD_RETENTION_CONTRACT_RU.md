@@ -10,7 +10,7 @@
 |---|---|
 | `$WARP_ROOT/native-enrollment.private.json` | Весь canonical schema-1 image: current/pending, все attempt identities, key/response/registration bytes и provenance. Он authoritative после появления. |
 | `$WARP_ROOT/native-enrollment/**` | Весь immutable legacy input, включая current.json/pending.json, attempt-*/private-key.bin, response.private.json, registration.private.json, provider/accounts.private.json. Не выбирать только известные leaf-файлы и не удалять прежние материалы после canonical copy. |
-| `$WARP_ROOT/.state-<sha256(native-enrollment.private.json)>.lock` | Permanent exact-file writer lease marker/inode. Не копировать поверх и не удалять при restore/cleanup. Для нестандартного Windows case правила имени определяет restorejournal, не shell. |
+| `$WARP_ROOT/.state-c86235c481bd74a829bc0e0baa588ad179542900e006f8e442425ab1818150ed.lock` | Permanent exact-file writer lease marker/inode. Имя — SHA-256 **UTF-8 basename**, не содержимого и не полного пути. `native-enrollment.private.json` уже lowercase, поэтому этот exact marker одинаков на Windows/Linux. Не копировать поверх и не удалять при restore/cleanup. |
 | `$WARP_ROOT/health-policy.json` | Policy и runtime accounting пока смешаны: registration_attempts, rotations, cooldown/последние решения. Installer оставляет весь файл текущим, иначе старый snapshot вернёт квоту или прежние разрешения. Обычная явная policy CAS остаётся разрешённой владельцем. |
 | `$WARP_ROOT/wgcf-account.toml` | Существующий пользовательский legacy enrollment сохраняется. `wgcf generate` только экспортирует его; native свежая регистрация его не удаляет. |
 | `$CONFIG_DIR/private-restore-native-v1/**` | Полный retained journal generation: restore.private.json, before/after-images и .restore.lock. По одному current marker исключение неполно. |
@@ -52,3 +52,17 @@ OPS/координатору осталось проверить:
 | Старый target reader без schema=1 | existing gate отвергает до replacement, root не перемещается |
 
 Последняя таблица — план совместной приёмки, не выполненный installer gate. Нового root/capability/миграции не добавлено; код OPS/CORE/nativeenrollment/privaterestore не изменён.
+
+## Передача OPS: bounded стенд на существующих API
+
+На проверенных refs CLOUD `4d157889`, OPS `5ca485f7`, integration `59232dd8` файл `selfupdatejournal/journal.go` одинаков (blob `28e959b43071ffd2bf8e87b4905a94d225ca4333`). Публичного generic mutable-directory/overlap API пока нет. Поэтому новый `warp/native_retention_test.go` упражняет реальные `Open/Prepare/Install/Restore/Current`, точный production snapshot selector из `upgrade-entware.sh` и полный `rollback-entware.sh` с инертными binary/init fixtures. Fixture CLI подтверждает только доступность схемы для прохождения shell boundary; он не считается реальным CORE recovery или live acceptance.
+
+Три сценария реализованы и переданы координатору для opt-in запуска:
+
+1. Snapshot/file-journal до simulated POST → automatic timeout/pending с durable accounting → candidate executable install → снимок после POST → file restore + полный shell rollback старого снимка → production prune → restart. Проверяются точный состав деревьев/hash/mode/inode canonical/key/health/legacy account/обоих private journal generations, отсутствие их в snapshot, сохранение working profile и API-call count=1 за весь сценарий. Mutable config/три directory images реально изменяются и обязаны вернуть LKG.
+2. Response сохраняется настоящим production callback, child немедленно завершает процесс `os.Exit(73)` до decode/stage/current. После тех же rollback шагов pending/current переход и key/response сохраняют исходный attempt; recovery не вызывает API. Это process-crash, не power-cut/fsync reliability тест устройства.
+3. Полный shell reader получает historical manifest с `WARP_ROOT_PRESENT`, `STATEDIR_PRESENT` или `APPDIR_PRESENT`; unsupported key отклоняется до schema/recovery/stop effects и live writes. File API отдельно отклоняет root/directory/native target до authority/quiescence callbacks. `Prepare` может создать permanent writer-lock в **self-update journal**, поэтому нулевую запись вообще во все файлы не утверждаем.
+
+Последний сценарий проверяет существующий fixed manifest reader и file allowlist. Он **не** подтверждает отсутствующий generic target-overlap validator. При введении mutable API OPS сохраняет exclusions выше и добавляет проверку opened roots/alias/ancestor до stop; подключить этот стенд к новому API можно только после появления реальных entry points. Default shell deployment paths проверяются здесь; произвольные `-warp-state`/`-config` должны отдельно согласовываться с фактическим installer manifest.
+
+Запуск и текущие результаты — [CLOUD_RETENTION_HARNESS_RU.md](CLOUD_RETENTION_HARNESS_RU.md). Список exclusions и эта передача служат контрактом для OPS; файлы OPS не изменены и сообщения в другие чаты не отправлялись.

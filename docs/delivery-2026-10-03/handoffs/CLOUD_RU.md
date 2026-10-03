@@ -77,15 +77,15 @@ const MaxCanaryAge = 5 * time.Minute
 
 `environmentID` — lowercase SHA-256 доверенной текущей identity, учитывающей boot, WAN, DNS и revision/route epoch. Callback memory/local-only, не начинает сетевую проверку. Missing/error/смена identity между началом и проверкой receipt оставляет unknown. Не брать epoch/binding из UI или самого receipt, не изменять Manager field параллельно с Check.
 
-Действующий producer `internal/dataplane/proxy.go` принадлежит VLESS и в этой порции **не изменён**. CORE/VLESS должны дописать после успешного exact native canary и подтверждённой очистки существующий receipt:
+Действующий producer `internal/dataplane/proxy.go` принадлежит VLESS и в этой порции **не изменён**. Поля existing reader для exact installed-session canary:
 
 - `checked_at` и `valid_until` в RFC3339, `checked_at <= now < valid_until <= checked_at + MaxCanaryAge`;
 - `transport`: ровно `HTTP/2` или `QUIC`, фактически проверенный native transport;
 - `endpoint`: exact pinned canonical AddrPort с портом 443; H2 только из endpoint_h2_v4/v6, QUIC только из endpoint_v4/v6;
-- `binding_id = CanaryBinding(SHA256 текущих usque.conf, session.conf, exact executable bytes, текущий environmentID)`;
+- `binding_id = CanaryBinding(SHA256 текущих usque.conf, session.conf, exact executable bytes, текущий environmentID)` — это installed legacy пара, не временный managed engine.json;
 - прежние warp/service facts только из native canary, без raw output/keys/token/device ID.
 
-Экспортируемые capabilities содержат `http2/http3/udp` = `unknown|confirmed`, `fresh`, фиксированный `reason_code`. Они диагностические, не заменяют dataplane ownership/pin/CAS/revalidation/service proof. Producer обязан связать receipt с теми же bytes и epoch, реально использованными кандидатом; receipt от иной временной конфигурации нельзя переподписать под текущую. До этого wiring **вся legacy evidence unknown**. Exact kernel pin tuple, изменение WAN/DNS перед Apply и изоляция actual runtime остаются CORE/NET/VLESS и требуют отдельной приёмки.
+Экспортируемые capabilities содержат `http2/http3/udp` = `unknown|confirmed`, `fresh`, фиксированный `reason_code`. Они диагностические, не заменяют dataplane ownership/pin/CAS/revalidation/service proof. Producer обязан связать receipt с теми же bytes и epoch, реально использованными кандидатом; receipt от иной временной конфигурации нельзя переподписать под текущую. Managed producer использует transformed engine.json/CLI и требует согласованного typed runtime binding + current reader callback; одного добавления полей выше недостаточно. Точные existing identity/env поля и отсутствующие binary/peer/negotiated proof описаны в [USQUE producer contract](CLOUD_USQUE_PRODUCER_CONTRACT_RU.md). До этого wiring **вся legacy evidence unknown**. Exact kernel pin tuple, изменение WAN/DNS перед Apply и изоляция actual runtime остаются CORE/NET/VLESS и требуют отдельной приёмки.
 
 ### Источники / offline
 
@@ -115,3 +115,16 @@ Base: `c44ffeec4289534d6cb197e7a821aaa920bc8355`. Изменены только 
 - `CLOUD_RETENTION_CONTRACT_RU.md`: вместо несогласованного нового root перечислены exact exclusions на **действующем** root, включая canonical lease, health accounting, legacy account и native/feeds private-restore generations. Broad запрет copy-only rollback заменён baseline guard.
 
 Адресный `test -count=1` warp/usquediag/privaterestore, выбранные app private/native backup restore regressions и vet — RC 0. Linux amd64/arm64 libraries и native fixture binaries cross-compile — RC 0. Default harness test — SKIP; launcher без opt-in — ожидаемый RC 2; shell syntax/diff checks — RC 0. Native opt-in, installer manifests/full Linux/race/HIL, настоящий WARP/USQUE не запускались. CORE/OPS/app/nativeenrollment/privaterestore, schema/layout/CLI paths, VERSION/go.mod/go.sum не изменены. Следующий шаг координатора — localhost native harness и OPS mutable-retention integration review, отдельно от реального WARP.
+
+## Retention checkpoint после принятого 4d15788
+
+Base: `4d157889d80185e9cb56091b7dfb624333d2b072`. Координатор сообщил independent Windows и Linux source28/cloud-native-02 localhost H2/H3 actual RC0, все семь subcases и race warp/usquediag/privaterestore PASS для прежней порции. Это не actual WARP/MASQUE и не retention acceptance.
+
+Новая порция — только own fixture/runner и handoffs:
+
+- `internal/warp/native_retention_test.go` + `scripts/test-cloud-retention.sh`: три opt-in сценария на production enrollment checkpoints, subprocess crash, реальном selfupdatejournal file lifecycle, production snapshot/prune functions и полном fixed shell rollback reader. Timeout accounting, original response/key, exact retained tree+lease inode, mutable LKG и absence старых snapshot root images проверяются без сети/daemon/router.
+- [Retention contract](CLOUD_RETENTION_CONTRACT_RU.md): exact OPS exclusions на существующем root, включая конкретное basename-hash имя canonical lease. Generic mutable API отсутствует в проверенных refs; whole-root test доказывает существующий unsupported-key reader/file allowlist, не новый overlap protocol.
+- [Retention harness](CLOUD_RETENTION_HARNESS_RU.md): root команды и честные границы. Fixtures schema/recovery CLI инертны; independent pending self-update receipt не выдаётся за live acceptance или полноценный CORE startup recovery.
+- [USQUE producer contract](CLOUD_USQUE_PRODUCER_CONTRACT_RU.md): existing ProcessSpec/routeidentity/WAN поля, exact installed-session vs temporary candidate semantics, missing actual executable digest/connected peer/negotiated MASQUE proof. Никакого producer/CORE wiring этим чатом не добавлено.
+
+Windows Go1.26.5 unit warp/usquediag/privaterestore RC0, vet own packages RC0, Linux amd64/arm64 retention test binary cross-compile RC0. Runner syntax RC0, выключенный runner actual RC2, default exact test SKIP. Новый native retention actual run **unverified** — координатор открывает это окно после review. Новый root/capability/migration не вводились; production OPS/CORE/VLESS/NET code, VERSION/go.mod/go.sum не менялись.
