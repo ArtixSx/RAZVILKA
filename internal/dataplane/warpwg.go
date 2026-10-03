@@ -903,35 +903,33 @@ func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string
 	if err != nil {
 		return err
 	}
-	if restored, exists, err := a.readWGPolicyReferenceNamed(root, wgPolicyRollbackFile, snapshot.State, true); err != nil {
-		return err
-	} else if exists {
-		current, err := a.committedWGPolicyReference(currentState)
-		if err != nil || !currentExists || current.ID != restored.ID {
-			return errors.Join(err, ErrPolicyAdditionUnknown)
-		}
-		status, err := a.inspectWGPolicyReference(ctx, restored, "")
-		if err != nil || !status.Complete || status.Unknown {
-			return errors.Join(err, ErrPolicyAdditionUnknown)
-		}
-		raw, err := os.ReadFile(a.RuntimeConfigPath)
-		if err != nil || !bytes.Equal(raw, snapshot.RuntimeConfig) {
-			return errors.Join(err, ErrPolicyAdditionUnknown)
-		}
-		if err := a.verifyWGInterfaceIdentity(ctx, snapshot.State.WireGuardEndpoint); err != nil {
-			return err
-		}
-		if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), currentState); err != nil {
-			return err
-		}
-		return a.restoreWGProfileSnapshot(snapshot)
-	}
 	desired, err := a.readStagedPolicy(root)
 	if err != nil {
 		return err
 	}
 	ref, issued, err := a.readWGPolicyReference(root, desired, false)
 	if err != nil {
+		return err
+	}
+	owner := wgRollbackPolicyOwner(root, snapshot, ref, issued)
+	restored, restoredExists, err := a.readWGPolicyReferenceNamed(root, wgPolicyRollbackFile, snapshot.State, true)
+	if err != nil {
+		return err
+	}
+	if restoration, exists, err := a.readWGPolicyReferenceNamed(root, wgPolicyRestorationFile, snapshot.State, true); err != nil {
+		return err
+	} else if exists {
+		if restoredExists && restored.Checksum != restoration.Checksum {
+			return ErrPolicyAdditionUnknown
+		}
+		return a.resumeWGRollbackPublication(ctx, root, snapshot, restoration, owner, currentState, currentExists)
+	}
+	if restoredExists {
+		return a.resumeWGRollbackPublication(ctx, root, snapshot, restored, owner, currentState, currentExists)
+	}
+	// A restoration that failed before publishing its transaction reference
+	// must not fall back to stopping the interface under candidate markers.
+	if err := a.checkWGPolicyOperation(); err != nil {
 		return err
 	}
 	if currentExists {
@@ -1005,11 +1003,11 @@ func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string
 			if err := a.startInterface(ctx); err != nil {
 				return err
 			}
-			restored, err := a.freshWGPolicyGeneration(ctx, previous)
+			restored, err := a.freshWGPolicyGenerationBound(ctx, previous, root, owner)
 			if err != nil {
 				return err
 			}
-			if err := writeWGPolicyReferenceNamed(ctx, root, wgPolicyRollbackFile, restored); err != nil {
+			if err := a.writeWGRollbackReference(ctx, root, restored); err != nil {
 				return err
 			}
 		} else {

@@ -204,9 +204,16 @@ func nativeWGEndpointClient(t *testing.T) {
 				t.Fatal("different peer live health must fail", err)
 			}
 			a.Timeout, a.HandshakeTimeout = 25*time.Second, 8*time.Second
-			if err := a.Rollback(ctx, badPlan, badTransaction); err != nil {
-				t.Fatal("different peer rollback", err)
+			a.policyReceiptOptions.fault = func(point string, index int) error {
+				if point == "wg-operation-remove" {
+					return &os.PathError{Op: "remove", Path: filepath.Join(a.StateRoot, wgPolicyOperationDirectory), Err: os.ErrPermission}
+				}
+				return nil
 			}
+			if err := a.Rollback(ctx, badPlan, badTransaction); !errors.Is(err, os.ErrPermission) {
+				t.Fatal("different peer restoration cleanup cut", err)
+			}
+			a.policyReceiptOptions.fault = nil
 			state, exists, err = a.loadPolicyState()
 			if err != nil || !exists {
 				t.Fatal("restored state", err)
@@ -224,12 +231,43 @@ func nativeWGEndpointClient(t *testing.T) {
 				}
 			}
 			e = state.WireGuardEndpoint
-			assertLive("different peer rollback")
+			assertLive("different peer restored before cleanup acknowledgement")
+			var beforeLink, afterLink []struct {
+				Index int `json:"ifindex"`
+			}
+			if err := json.Unmarshal([]byte(nativeWGCommand(t, "", "ip", "-j", "link", "show", "dev", a.interfaceName())), &beforeLink); err != nil || len(beforeLink) != 1 || beforeLink[0].Index <= 0 {
+				t.Fatal("restored interface index", err)
+			}
+			a = newAdapter()
+			a.policyReceiptOptions.fault = func(point string, index int) error {
+				if point == "wg-rollback-reference" {
+					return os.Mkdir(filepath.Join(badTransaction, wgPolicyRollbackFile), 0700)
+				}
+				return nil
+			}
+			if err := a.Rollback(ctx, badPlan, badTransaction); err == nil {
+				t.Fatal("restoration final marker write cut missing")
+			}
+			if err := os.Remove(filepath.Join(badTransaction, wgPolicyRollbackFile)); err != nil {
+				t.Fatal(err)
+			}
+			a = newAdapter()
+			if err := a.Rollback(ctx, badPlan, badTransaction); err != nil {
+				t.Fatal("restoration acknowledgement resume", err)
+			}
+			if err := json.Unmarshal([]byte(nativeWGCommand(t, "", "ip", "-j", "link", "show", "dev", a.interfaceName())), &afterLink); err != nil || len(afterLink) != 1 || beforeLink[0].Index != afterLink[0].Index {
+				t.Fatal("restoration retry restarted the interface", err)
+			}
+			settled, err := a.committedWGPolicyReference(state)
+			if err != nil || settled.Checksum != restored.Checksum || a.checkWGPolicyOperation() != nil {
+				t.Fatal("restoration retry replayed generation or retained pending operation", settled, err)
+			}
+			assertLive("different peer rollback resume")
 			if err := a.Rollback(ctx, badPlan, badTransaction); err != nil {
 				t.Fatal("settled rollback retry", err)
 			}
 			recoverProcess()
-			t.Log("different-peer activation health failed; rollback restored old peer service with fresh receipt; retry and process restart passed")
+			t.Log("different-peer activation health failed; rollback restored old peer service with fresh receipt; operation cleanup and actual marker write cuts resumed with unchanged interface/generation; retry and process restart passed")
 			// Both DNS expiry and WAN changes reject before removing the current pin.
 			now = now.Add(2 * time.Minute)
 			answer = netip.MustParseAddr("93.184.216.35")

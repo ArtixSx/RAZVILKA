@@ -293,6 +293,188 @@ func TestWGPolicyReceiptRollbackAfterCommitUsesRecipientAndFreshPriorGeneration(
 	}
 }
 
+func wgReceiptRollbackFailureFixture(t *testing.T, cut string) (*WARPWireGuardAdapter, *warpFakeRunner, Plan, string, warpWGPolicyReference) {
+	t.Helper()
+	a, runner, plan, first := wgReceiptFixture(t)
+	_, previous := commitWGReceiptFixture(t, a, plan, first)
+	newProfile := strings.Replace(testOwnWireGuardProfile(""), "YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=", "Y2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M=", 1)
+	if _, err := a.Configs.Stage(a.ID(), "main", newProfile); err != nil {
+		t.Fatal(err)
+	}
+	second := filepath.Join(filepath.Dir(first), "second")
+	_, candidate := commitWGReceiptFixture(t, a, plan, second)
+	injected := false
+	a.policyReceiptOptions.fault = func(point string, index int) error {
+		if !injected && point == cut {
+			injected = true
+			if cut == "wg-rollback-reference" {
+				// A real definite WriteAtomic failure: rename cannot replace a
+				// directory with the final marker. No journal acknowledgement exists.
+				return os.Mkdir(filepath.Join(second, wgPolicyRollbackFile), 0700)
+			}
+			return &os.PathError{Op: "remove", Path: filepath.Join(a.StateRoot, wgPolicyOperationDirectory), Err: os.ErrPermission}
+		}
+		return nil
+	}
+	if err := a.Rollback(context.Background(), plan, second); err == nil || !injected {
+		t.Fatal("rollback publication cut not exercised", err)
+	}
+	if cut == "wg-rollback-reference" {
+		if err := os.Remove(filepath.Join(second, wgPolicyRollbackFile)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.policyReceiptOptions.fault = nil
+	snapshot, err := readWarpWGSnapshot(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoration, exists, err := a.readWGPolicyReferenceNamed(second, wgPolicyRestorationFile, snapshot.State, true)
+	if err != nil || !exists || restoration.RollbackOwner == "" || restoration.ID == previous.ID || restoration.ID == candidate.ID {
+		t.Fatal("pre-publication transaction binding missing", restoration, err)
+	}
+	state, _, _ := a.loadPolicyState()
+	current, err := a.committedWGPolicyReference(state)
+	if err != nil || current.Checksum != restoration.Checksum || policyAdditionHash(state) != policyAdditionHash(restoration.Policy) {
+		t.Fatal("restoration was not published before failure", current, err)
+	}
+	for _, retired := range []warpWGPolicyReference{previous, candidate} {
+		if status, err := a.inspectWGPolicyReference(context.Background(), retired, ""); err != nil || !status.Removed || status.Unknown {
+			t.Fatal("retired receipt unsettled", status, err)
+		}
+	}
+	if raw, err := os.ReadFile(a.RuntimeConfigPath); err != nil || string(raw) != string(snapshot.RuntimeConfig) || !runner.active {
+		t.Fatal("old runtime was not restored before failure", err)
+	}
+	return a, runner, plan, second, restoration
+}
+
+func TestWGPolicyReceiptRollbackPublicationCutsResumeWithoutReplay(t *testing.T) {
+	for _, cut := range []string{"wg-rollback-reference", "wg-operation-remove"} {
+		t.Run(cut, func(t *testing.T) {
+			a, runner, plan, transaction, restoration := wgReceiptRollbackFailureFixture(t, cut)
+			starts := runner.starts
+			runner.calls = nil
+			fresh := *a
+			for retry := 0; retry < 2; retry++ {
+				if err := fresh.Rollback(context.Background(), plan, transaction); err != nil {
+					t.Fatal("new process rollback resume", err)
+				}
+			}
+			state, _, _ := a.loadPolicyState()
+			current, err := a.committedWGPolicyReference(state)
+			if err != nil || current.Checksum != restoration.Checksum || starts != runner.starts || len(receiptMutationCalls(runner.calls)) != 0 {
+				t.Fatal("rollback resume replayed mutation", current, err, runner.calls)
+			}
+			marker, exists, err := a.readWGPolicyReferenceNamed(transaction, wgPolicyRollbackFile, state, true)
+			if err != nil || !exists || marker.Checksum != restoration.Checksum || a.checkWGPolicyOperation() != nil {
+				t.Fatal("rollback resume failed settlement", marker, err)
+			}
+			if err := verifyPolicyEvidence(context.Background(), a.Runner, a.ip(), state); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestWGPolicyReceiptRollbackResumeNeverAdoptsMissingUnknownOrLaterGeneration(t *testing.T) {
+	for _, damage := range []string{"missing binding", "wrong owner", "corrupt final marker", "missing recipient", "removed recipient", "unknown recipient", "missing source", "new boot", "later generation"} {
+		t.Run(damage, func(t *testing.T) {
+			a, runner, plan, transaction, restoration := wgReceiptRollbackFailureFixture(t, "wg-operation-remove")
+			switch damage {
+			case "missing binding":
+				if err := os.Remove(filepath.Join(transaction, wgPolicyRestorationFile)); err != nil {
+					t.Fatal(err)
+				}
+			case "wrong owner":
+				damaged := restoration
+				damaged.RollbackOwner = strings.Repeat("f", 64)
+				if err := writeWGPolicyReferenceNamed(context.Background(), transaction, wgPolicyRestorationFile, damaged); err != nil {
+					t.Fatal(err)
+				}
+			case "corrupt final marker":
+				if err := os.WriteFile(filepath.Join(transaction, wgPolicyRollbackFile), []byte("{broken"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "missing recipient":
+				if err := os.Remove(filepath.Join(a.wgPolicyGenerationRoot(restoration, ""), policyAdditionFile)); err != nil {
+					t.Fatal(err)
+				}
+			case "removed recipient":
+				if err := a.removeWGPolicyReference(context.Background(), restoration, ""); err != nil {
+					t.Fatal(err)
+				}
+			case "unknown recipient":
+				a.policyReceiptOptions.fault = func(point string, index int) error {
+					if point == "cleanup-intent" {
+						return errors.New("fixture lost cleanup acknowledgement")
+					}
+					return nil
+				}
+				if err := a.removeWGPolicyReference(context.Background(), restoration, ""); err == nil {
+					t.Fatal("unknown cleanup cut missing")
+				}
+				a.policyReceiptOptions.fault = nil
+			case "missing source":
+				if err := os.Remove(filepath.Join(a.StateRoot, wgPolicyOperationDirectory, wgPolicyCandidateDirectory, policyAdditionFile)); err != nil {
+					t.Fatal(err)
+				}
+			case "new boot":
+				a.policyReceiptOptions.boot = func() (string, error) { return "WG-new-boot", nil }
+			case "later generation":
+				if err := a.removeSettledWGPolicyOperation(context.Background(), restoration); err != nil {
+					t.Fatal(err)
+				}
+				commitWGReceiptFixture(t, a, plan, filepath.Join(filepath.Dir(transaction), "later"))
+			}
+			runtimeBefore, err := os.ReadFile(a.RuntimeConfigPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			starts := runner.starts
+			runner.calls = nil
+			fresh := *a
+			if err := fresh.Rollback(context.Background(), plan, transaction); err == nil {
+				t.Fatal("unbound/unknown restoration accepted")
+			}
+			runtimeAfter, err := os.ReadFile(a.RuntimeConfigPath)
+			if err != nil || string(runtimeBefore) != string(runtimeAfter) || starts != runner.starts || len(receiptMutationCalls(runner.calls)) != 0 || !runner.active {
+				t.Fatal("unknown restoration mutated runtime", err, runner.calls)
+			}
+		})
+	}
+}
+
+func TestWGPolicyReceiptRollbackInterruptedRestorationNeverUsesCandidateMarkers(t *testing.T) {
+	a, runner, plan, first := wgReceiptFixture(t)
+	commitWGReceiptFixture(t, a, plan, first)
+	second := filepath.Join(filepath.Dir(first), "second")
+	commitWGReceiptFixture(t, a, plan, second)
+	cut := errors.New("fixture interrupted restoration transfer")
+	a.policyReceiptOptions.fault = func(point string, index int) error {
+		if point == "promotion-copy" {
+			return cut
+		}
+		return nil
+	}
+	if err := a.Rollback(context.Background(), plan, second); !errors.Is(err, cut) {
+		t.Fatal("restoration transfer cut missing", err)
+	}
+	if regularFile(filepath.Join(second, wgPolicyRestorationFile)) || a.checkWGPolicyOperation() == nil || !runner.active || len(runner.policy.defaults) != 2 {
+		t.Fatal("unknown restoration not retained")
+	}
+	fresh := *a
+	fresh.policyReceiptOptions.fault = nil
+	starts := runner.starts
+	runner.calls = nil
+	if err := fresh.Rollback(context.Background(), plan, second); !errors.Is(err, ErrPolicyAdditionUnknown) {
+		t.Fatal("unknown restoration replayed", err)
+	}
+	if starts != runner.starts || len(receiptMutationCalls(runner.calls)) != 0 || !runner.active || len(runner.policy.defaults) != 2 {
+		t.Fatal("candidate markers retired unknown restoration", runner.calls)
+	}
+}
+
 func TestWGPolicyReceiptStaleRollbackCannotRetireRecoveryGeneration(t *testing.T) {
 	a, runner, plan, transaction := wgReceiptFixture(t)
 	_, original := commitWGReceiptFixture(t, a, plan, transaction)

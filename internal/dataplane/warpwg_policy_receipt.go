@@ -17,6 +17,7 @@ import (
 
 const wgPolicyReferenceFile = "wg-policy-generation-v1.json"
 const wgPolicyRollbackFile = "wg-policy-rollback-v1.json"
+const wgPolicyRestorationFile = "wg-policy-restoration-v1.json"
 const wgPolicyCandidateDirectory = "wg-policy-generation"
 const wgPolicyOperationDirectory = "wg-policy-operation"
 
@@ -52,11 +53,12 @@ func writeWGTransactionMarker(ctx context.Context, dir, name string) error {
 // Runtime fallback/lease metadata may subsequently change without changing
 // kernel policy tuples. No file contains an arbitrary cleanup directory.
 type warpWGPolicyReference struct {
-	Schema   int         `json:"schema"`
-	ID       string      `json:"id,omitempty"`
-	Boot     string      `json:"boot"`
-	Policy   PolicyState `json:"policy"`
-	Checksum string      `json:"checksum"`
+	Schema        int         `json:"schema"`
+	ID            string      `json:"id,omitempty"`
+	Boot          string      `json:"boot"`
+	Policy        PolicyState `json:"policy"`
+	RollbackOwner string      `json:"rollback_owner,omitempty"`
+	Checksum      string      `json:"checksum"`
 }
 
 func wgPolicyReferenceChecksum(ref warpWGPolicyReference) string {
@@ -74,6 +76,14 @@ func (a *WARPWireGuardAdapter) validWGPolicyReference(ref warpWGPolicyReference)
 			return ErrPolicyAdditionReceipt
 		}
 		if _, err := hex.DecodeString(ref.ID); err != nil {
+			return ErrPolicyAdditionReceipt
+		}
+	}
+	if ref.RollbackOwner != "" {
+		if len(ref.RollbackOwner) != 64 || ref.RollbackOwner != strings.ToLower(ref.RollbackOwner) {
+			return ErrPolicyAdditionReceipt
+		}
+		if _, err := hex.DecodeString(ref.RollbackOwner); err != nil {
 			return ErrPolicyAdditionReceipt
 		}
 	}
@@ -110,7 +120,7 @@ func writeWGPolicyReference(ctx context.Context, dir string, ref warpWGPolicyRef
 }
 
 func writeWGPolicyReferenceNamed(ctx context.Context, dir, file string, ref warpWGPolicyReference) error {
-	if file != wgPolicyReferenceFile && file != wgPolicyRollbackFile {
+	if file != wgPolicyReferenceFile && file != wgPolicyRollbackFile && file != wgPolicyRestorationFile {
 		return ErrPolicyAdditionReceipt
 	}
 	if err := ctx.Err(); err != nil {
@@ -146,7 +156,7 @@ func (a *WARPWireGuardAdapter) readWGPolicyReference(dir string, state PolicySta
 
 func (a *WARPWireGuardAdapter) readWGPolicyReferenceNamed(dir, file string, state PolicyState, retained bool) (warpWGPolicyReference, bool, error) {
 	var ref warpWGPolicyReference
-	if file != wgPolicyReferenceFile && file != wgPolicyRollbackFile {
+	if file != wgPolicyReferenceFile && file != wgPolicyRollbackFile && file != wgPolicyRestorationFile {
 		return ref, false, ErrPolicyAdditionReceipt
 	}
 	path := filepath.Join(dir, file)
@@ -194,6 +204,10 @@ func (a *WARPWireGuardAdapter) inspectWGPolicyReference(ctx context.Context, ref
 }
 
 func (a *WARPWireGuardAdapter) applyWGPolicyGeneration(ctx context.Context, state PolicyState, transaction string) error {
+	return a.applyWGPolicyGenerationBound(ctx, state, transaction, "")
+}
+
+func (a *WARPWireGuardAdapter) applyWGPolicyGenerationBound(ctx context.Context, state PolicyState, transaction, rollbackOwner string) error {
 	if _, exists, err := a.readWGPolicyReference(transaction, state, false); err != nil || exists {
 		return errors.Join(err, ErrPolicyAdditionExists)
 	}
@@ -201,7 +215,7 @@ func (a *WARPWireGuardAdapter) applyWGPolicyGeneration(ctx context.Context, stat
 	if err != nil {
 		return err
 	}
-	ref := warpWGPolicyReference{Schema: 1, Boot: boot, Policy: state}
+	ref := warpWGPolicyReference{Schema: 1, Boot: boot, Policy: state, RollbackOwner: rollbackOwner}
 	ref.Checksum = wgPolicyReferenceChecksum(ref)
 	if err := os.Mkdir(filepath.Join(transaction, wgPolicyCandidateDirectory), 0700); err != nil {
 		return err
@@ -291,6 +305,10 @@ func (a *WARPWireGuardAdapter) publishWGPolicyGeneration(ctx context.Context, st
 }
 
 func (a *WARPWireGuardAdapter) freshWGPolicyGeneration(ctx context.Context, state PolicyState) (warpWGPolicyReference, error) {
+	return a.freshWGPolicyGenerationBound(ctx, state, "", "")
+}
+
+func (a *WARPWireGuardAdapter) freshWGPolicyGenerationBound(ctx context.Context, state PolicyState, rollbackRoot, rollbackOwner string) (warpWGPolicyReference, error) {
 	if err := os.MkdirAll(a.StateRoot, 0700); err != nil {
 		return warpWGPolicyReference{}, err
 	}
@@ -298,17 +316,96 @@ func (a *WARPWireGuardAdapter) freshWGPolicyGeneration(ctx context.Context, stat
 	if err := os.Mkdir(transaction, 0700); err != nil {
 		return warpWGPolicyReference{}, err
 	}
-	if err := a.applyWGPolicyGeneration(ctx, state, transaction); err != nil {
+	if err := a.applyWGPolicyGenerationBound(ctx, state, transaction, rollbackOwner); err != nil {
 		return warpWGPolicyReference{}, err // keep unknown/failed receipts
 	}
 	ref, err := a.promoteWGPolicyGeneration(ctx, state, transaction)
 	if err != nil {
 		return ref, err
 	}
+	if rollbackRoot != "" {
+		// This transaction names its one restoration before the generation is
+		// published, independently of operation cleanup and the final marker.
+		if err := writeWGPolicyReferenceNamed(ctx, rollbackRoot, wgPolicyRestorationFile, ref); err != nil {
+			return ref, err
+		}
+	}
 	if err := a.publishWGPolicyGeneration(ctx, state, ref); err != nil {
 		return ref, err
 	}
 	return ref, a.removeSettledWGPolicyOperation(ctx, ref)
+}
+
+func wgRollbackPolicyOwner(root string, snapshot warpWGSnapshot, candidate warpWGPolicyReference, issued bool) string {
+	data, _ := json.Marshal(struct {
+		Root      string                `json:"root"`
+		Snapshot  warpWGSnapshot        `json:"snapshot"`
+		Candidate warpWGPolicyReference `json:"candidate"`
+		Issued    bool                  `json:"issued"`
+	}{policyAdditionRootHash(root), snapshot, candidate, issued})
+	return warpRuntimeDigest(data)
+}
+
+func (a *WARPWireGuardAdapter) writeWGRollbackReference(ctx context.Context, root string, ref warpWGPolicyReference) error {
+	if a.policyReceiptOptions.fault != nil {
+		if err := a.policyReceiptOptions.fault("wg-rollback-reference", -1); err != nil {
+			return err
+		}
+	}
+	return writeWGPolicyReferenceNamed(ctx, root, wgPolicyRollbackFile, ref)
+}
+
+// Resume only a transaction's already published restoration. The durable
+// transaction binding and both common transfer receipts precede publication;
+// matching runtime/kernel evidence alone never creates this authority.
+func (a *WARPWireGuardAdapter) resumeWGRollbackPublication(ctx context.Context, root string, snapshot warpWGSnapshot, ref warpWGPolicyReference, owner string, currentState PolicyState, currentExists bool) error {
+	if ref.RollbackOwner != owner || !snapshot.StateExisted || !snapshot.InterfaceWasActive || !snapshot.RuntimeExisted || !currentExists || policyAdditionHash(currentState) != policyAdditionHash(ref.Policy) {
+		return ErrPolicyAdditionUnknown
+	}
+	current, err := a.committedWGPolicyReference(currentState)
+	if err != nil || current.ID != ref.ID || current.Checksum != ref.Checksum {
+		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	status, err := a.inspectWGPolicyReference(ctx, ref, "")
+	if err != nil || !status.Complete || status.Unknown || status.Promoted {
+		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	raw, err := os.ReadFile(a.RuntimeConfigPath)
+	if err != nil || !bytes.Equal(raw, snapshot.RuntimeConfig) || !a.interfaceActive(ctx) {
+		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	if err := a.verifyWGInterfaceIdentity(ctx, snapshot.State.WireGuardEndpoint); err != nil {
+		return err
+	}
+	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), currentState); err != nil {
+		return err
+	}
+	if err := a.verifyWGEndpoint(ctx, currentState.WireGuardEndpoint); err != nil {
+		return err
+	}
+	if err := a.checkWGPolicyOperation(); err != nil {
+		transaction := filepath.Join(a.StateRoot, wgPolicyOperationDirectory)
+		pending, exists, err := a.readWGPolicyReference(transaction, ref.Policy, true)
+		if err != nil || !exists || pending.Checksum != ref.Checksum {
+			return errors.Join(err, ErrPolicyAdditionUnknown)
+		}
+		source := ref
+		source.ID = ""
+		source.Checksum = wgPolicyReferenceChecksum(source)
+		settled, err := a.inspectWGPolicyReference(ctx, source, transaction)
+		if err != nil || !settled.Promoted || settled.Unknown || settled.ID != ref.ID {
+			return errors.Join(err, ErrPolicyAdditionUnknown)
+		}
+		if err := a.writeWGRollbackReference(ctx, root, ref); err != nil {
+			return err
+		}
+		if err := a.removeSettledWGPolicyOperation(ctx, ref); err != nil {
+			return err
+		}
+	} else if err := a.writeWGRollbackReference(ctx, root, ref); err != nil {
+		return err
+	}
+	return a.restoreWGProfileSnapshot(snapshot)
 }
 
 func (a *WARPWireGuardAdapter) checkWGPolicyOperation() error {
@@ -327,6 +424,11 @@ func (a *WARPWireGuardAdapter) removeSettledWGPolicyOperation(ctx context.Contex
 	status, err := a.inspectWGPolicyReference(ctx, source, transaction)
 	if err != nil || status.Unknown || !(status.Removed || status.Promoted) {
 		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	if a.policyReceiptOptions.fault != nil {
+		if err := a.policyReceiptOptions.fault("wg-operation-remove", -1); err != nil {
+			return err
+		}
 	}
 	root, err := ownedfs.Open(a.StateRoot)
 	if err != nil {
