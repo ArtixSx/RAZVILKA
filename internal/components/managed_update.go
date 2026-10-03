@@ -232,9 +232,8 @@ func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(conte
 		return Result{Component: id, Action: "update"}, NoMutation(fmt.Errorf("snapshot package configuration: %w", err))
 	}
 	result, updateErr := m.applyLocked(ctx, id, map[string]bool{})
-	if updateErr != nil && errors.Is(updateErr, errUpdateNotAdvanced) {
-		return result, updateErr
-	}
+	// Even a non-advancing version may follow package/configuration changes.
+	// It must use the same verified rollback as any other failed upgrade.
 	var checkErr error
 	if updateErr == nil {
 		checkErr = check(ctx)
@@ -265,7 +264,13 @@ func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(conte
 	rollbackErr := errors.Join(restoreErr, installErr, verifyErr, postErr)
 	receipt := lifecycleReceipt{SchemaVersion: 1, Component: id, Package: spec.Package, Provider: spec.Provider, Action: "rollback", BeforeVersion: before, AfterVersion: after[spec.Package], CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if rollbackErr == nil {
-		_ = m.writeLifecycleReceipt(receipt)
+		// Callers may release the maintenance fence on ErrRollbackVerified.
+		// Do not confirm recovery until its receipt has also been recorded.
+		if err := m.writeLifecycleReceipt(receipt); err != nil {
+			rollbackErr = fmt.Errorf("write component rollback receipt: %w", err)
+		}
+	}
+	if rollbackErr == nil {
 		result.OK = false
 		result.Output += "\n" + boundedOutput(out)
 		return result, &UpdateFailure{Outcome: ErrRollbackVerified, Version: before, Cause: cause}

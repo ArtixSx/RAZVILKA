@@ -169,3 +169,67 @@ func TestManagedUpdateRollsBackConfigurationAndVersion(t *testing.T) {
 		t.Fatalf("previous version not reinstalled: %v", r.calls)
 	}
 }
+
+func TestManagedUpdateRollsBackNonAdvancingVersion(t *testing.T) {
+	for _, after := range []string{"1.3.1", "1.3.0"} {
+		t.Run(after, func(t *testing.T) {
+			m, r, conf := managedFixture(t)
+			rollback, err := m.CacheRollbackPackage(context.Background(), "nfqws2")
+			if err != nil {
+				t.Fatal(err)
+			}
+			// A zero-exit upgrade can still change configuration or downgrade
+			// the package. A non-advancing version is not proof of no mutation.
+			r.available = after
+			checks := 0
+			result, err := m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
+				checks++
+				data, err := os.ReadFile(conf)
+				if err != nil || string(data) != "USER STRATEGIES\n" || r.installed != "1.3.1" {
+					return errors.New("previous package and configuration were not restored")
+				}
+				return nil
+			})
+			if result.OK || !errors.Is(err, errUpdateNotAdvanced) || !errors.Is(err, ErrRollbackVerified) {
+				t.Fatalf("non-advancing upgrade was not rolled back: result=%+v err=%v", result, err)
+			}
+			if checks != 1 {
+				t.Fatalf("restored runtime checks=%d, want 1", checks)
+			}
+			if _, err := os.Stat(rollback); err != nil {
+				t.Fatalf("previous package cache was lost: %v", err)
+			}
+		})
+	}
+}
+
+func TestManagedUpdateRollbackReceiptFailureRemainsUnconfirmed(t *testing.T) {
+	m, r, _ := managedFixture(t)
+	if _, err := m.CacheRollbackPackage(context.Background(), "nfqws2"); err != nil {
+		t.Fatal(err)
+	}
+	r.available = "1.3.2"
+	checks := 0
+	result, err := m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
+		checks++
+		if checks == 1 {
+			return errors.New("new runtime failed its live check")
+		}
+		// Fail only the rollback receipt write after the previous runtime
+		// passes its check, without making the earlier upgrade write fail.
+		if err := os.Mkdir(filepath.Join(m.StateDir, "receipts", "nfqws2.json.tmp"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	})
+	if result.OK || !errors.Is(err, ErrRollbackUnconfirmed) || errors.Is(err, ErrRollbackVerified) {
+		t.Fatalf("rollback persistence failure was reported as verified: result=%+v err=%v", result, err)
+	}
+	var pathErr *os.PathError
+	if !errors.As(err, &pathErr) {
+		t.Fatalf("rollback receipt failure was discarded: %v", err)
+	}
+	if checks != 2 || r.installed != "1.3.1" {
+		t.Fatalf("runtime was not restored before receipt failure: installed=%s checks=%d", r.installed, checks)
+	}
+}
