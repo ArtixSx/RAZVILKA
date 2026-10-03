@@ -3,6 +3,8 @@ package dataplane
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -20,6 +22,33 @@ func TestResearchCanaryServicesRetainScopedRoutes(t *testing.T) {
 	services := wireGuardCanaryServices(p, "wireguard")
 	if len(services) != 2 || services[0].Name != "one" || !reflect.DeepEqual(before, p.Routes[0].Sources) {
 		t.Fatal(services, p.Routes)
+	}
+}
+
+func TestWGNewLiveInterfaceInitiatesColdScopedPeer(t *testing.T) {
+	a, r, p, _ := ownWireGuardFixture(t, testOwnWireGuardProfile(""))
+	p.Routes[0].Sources = []string{"192.168.1.4/32"}
+	if err := os.MkdirAll(filepath.Dir(a.RuntimeConfigPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(a.RuntimeConfigPath, []byte(testOwnWireGuardProfile("")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var sent atomic.Bool
+	a.Runner = &researchColdWGRunner{base: r, sent: &sent}
+	a.HandshakeTimeout = time.Millisecond
+	a.HealthProbe = func(ctx context.Context, url string) error {
+		if device, _ := ctx.Value(wgSocketInterfaceKey{}).(string); device != a.Interface {
+			t.Fatal("live probe not device-bound")
+		}
+		sent.Store(true)
+		return nil
+	}
+	if err := a.probeLiveWGServices(context.Background(), p, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !sent.Load() || len(p.Routes[0].Sources) != 1 {
+		t.Fatal("cold live peer did not initiate or lost scope")
 	}
 }
 

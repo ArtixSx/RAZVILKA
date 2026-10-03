@@ -470,55 +470,7 @@ func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state
 	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), state); err != nil {
 		return err
 	}
-	// Confirm the tunnel itself before attributing a timeout to the selected
-	// service. This produces an actionable handshake error instead of making
-	// every unreachable endpoint look like a service-specific failure.
-	if err := a.confirmHandshake(ctx, state.Interface); err != nil {
-		if a.ID() != "warp-wg" || transactionRoot == "" {
-			return err
-		}
-		ports, portErr := a.warpEndpointPorts()
-		if portErr != nil {
-			return portErr
-		}
-		attempted := []int{ports[0]}
-		connected := false
-		for _, port := range ports[1:] {
-			attempted = append(attempted, port)
-			endpoint, switchErr := a.switchEndpointPort(ctx, port)
-			if switchErr != nil {
-				continue
-			}
-			if handshakeErr := a.confirmHandshake(ctx, state.Interface); handshakeErr != nil {
-				continue
-			}
-			selection, _ := json.Marshal(warpWGSelection{Endpoint: endpoint})
-			if writeErr := writeAtomic(filepath.Join(transactionRoot, "selected-endpoint.json"), selection, 0o600); writeErr != nil {
-				return writeErr
-			}
-			connected = true
-			break
-		}
-		if !connected {
-			return WARPHandshakeError{Ports: attempted}
-		}
-	}
-	probe := a.HealthProbe
-	if probe == nil {
-		probe = defaultTunnelProbe
-	}
-	for _, route := range plan.Routes {
-		if adapterID(route.Resolved) != a.ID() || route.ProbeURL == "" || len(route.Sources) > 0 {
-			continue
-		}
-		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
-		err := probe(probeCtx, route.ProbeURL)
-		cancel()
-		if err != nil {
-			return fmt.Errorf("%s WARP health probe: %w", route.ServiceName, err)
-		}
-	}
-	return nil
+	return a.probeLiveWGServices(ctx, plan, transactionRoot)
 }
 
 func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
@@ -868,15 +820,37 @@ func (a *WARPWireGuardAdapter) switchEndpointPort(ctx context.Context, port int)
 	if err != nil {
 		return "", err
 	}
-	if a.interfaceActive(ctx) {
-		if err := a.stopInterface(ctx); err != nil {
-			return "", err
+	// Updating a peer does not destroy its link and the routes just installed
+	// for it. Recreating the interface here silently dropped those routes.
+	peer := ""
+	section := ""
+	for _, line := range strings.Split(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			section = line
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if ok && section == "[Peer]" && strings.TrimSpace(key) == "PublicKey" {
+			peer = strings.TrimSpace(value)
+		}
+	}
+	if peer == "" {
+		return "", errors.New("WireGuard peer key is missing")
+	}
+	active := a.interfaceActive(ctx)
+	if active {
+		if _, err := a.run(ctx, a.wg(), "set", a.interfaceName(), "peer", peer, "endpoint", endpoint); err != nil {
+			return "", errors.New("update WireGuard endpoint failed")
 		}
 	}
 	if err := writeAtomic(a.RuntimeConfigPath, updated, 0o600); err != nil {
-		return "", err
-	}
-	if err := a.startInterface(ctx); err != nil {
+		if active {
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+			defer cancel()
+			_, restoreErr := a.run(cleanup, a.wg(), "set", a.interfaceName(), "peer", peer, "endpoint", current)
+			return "", errors.Join(err, restoreErr)
+		}
 		return "", err
 	}
 	return endpoint, nil

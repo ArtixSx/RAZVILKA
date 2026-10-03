@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/tunnelcheck"
 )
@@ -60,7 +62,7 @@ func (a *WARPWireGuardAdapter) probeCanaryServices(ctx context.Context, plan Rou
 			lastErr = err
 			continue
 		}
-		if index > 0 {
+		if index > 0 && root != "" {
 			endpoint, err := wgEndpoint(string(mustRead(a.RuntimeConfigPath)))
 			if err != nil {
 				return err
@@ -76,4 +78,47 @@ func (a *WARPWireGuardAdapter) probeCanaryServices(ctx context.Context, plan Rou
 		return nil
 	}
 	return errors.Join(WARPHandshakeError{Ports: attempted}, lastErr)
+}
+
+// The live interface is freshly created after a successful candidate check;
+// its handshake starts at zero again when keepalive is disabled. An isolated
+// local socket initiates it without forging or removing the LAN source scope.
+func (a *WARPWireGuardAdapter) probeLiveWGServices(ctx context.Context, plan Plan, root string) (retErr error) {
+	content, err := os.ReadFile(a.RuntimeConfigPath)
+	if err != nil {
+		return err
+	}
+	_, addresses, _, err := nativeWGConfig(string(content))
+	if err != nil {
+		return err
+	}
+	source, err := firstTunnelAddress(addresses)
+	if err != nil {
+		return err
+	}
+	probeAdapter := *a
+	probeAdapter.Table, probeAdapter.PriorityBase = 219, 18050
+	if root == "" {
+		probeAdapter.FallbackPorts = []int{}
+	}
+	if err := probeAdapter.ensureCanaryPolicyFree(ctx); err != nil {
+		return err
+	}
+	if err := probeAdapter.installCanaryPolicy(ctx, source); err != nil {
+		return err
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+		defer cancel()
+		retErr = errors.Join(retErr, probeAdapter.cleanupCanaryPolicy(cleanup, source))
+	}()
+	probe := sourceBoundAWGProbe
+	if a.ID() == "warp-wg" {
+		probe = sourceBoundWARPProbe
+	}
+	if a.HealthProbe != nil {
+		probe = func(ctx context.Context, url, _ string) error { return a.HealthProbe(ctx, url) }
+	}
+	ctx = context.WithValue(ctx, wgSocketInterfaceKey{}, a.interfaceName())
+	return probeAdapter.probeCanaryServices(ctx, plan.RoutePlanFor(a.ID()), root, probe, source.String())
 }

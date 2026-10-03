@@ -96,6 +96,9 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		}
 		return []byte(fmt.Sprintf("peer\t%d\n", time.Now().Unix())), nil
 	}
+	if name == "wg" && len(args) == 6 && args[0] == "set" && args[4] == "endpoint" {
+		r.starts++ // the fixture's second transport attempt becomes reachable
+	}
 	return []byte("ok"), nil
 }
 
@@ -258,6 +261,11 @@ func TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner(t *testing.T) 
 	runtimeProfile, readErr := os.ReadFile(adapter.RuntimeConfigPath)
 	if err != nil || readErr != nil || !exists || state.RuntimeConfigSHA256 != warpRuntimeDigest(runtimeProfile) {
 		t.Fatal("commit did not bind cleanup to the selected runtime profile")
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(call, "link delete") {
+			t.Fatal("endpoint fallback destroyed live routes: ", call)
+		}
 	}
 }
 
