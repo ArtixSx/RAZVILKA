@@ -7,11 +7,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +27,7 @@ const maxProfileBytes = 256 << 10
 
 var ErrTermsAcceptanceRequired = errors.New("Cloudflare Terms of Service must be accepted before registration")
 var ErrRegistrationEndpointUnavailable = errors.New("Cloudflare WARP registration endpoint is temporarily unavailable")
+var ErrNativeGeneratorRequired = errors.New("new WARP enrollment requires the durable built-in generator; wgcf can only export an existing account")
 
 type Status struct {
 	GeneratorInstalled bool         `json:"generator_installed"`
@@ -57,6 +60,10 @@ type ConnectivityCheck struct {
 	OK             bool              `json:"ok"`
 	Registration   ConnectivityProbe `json:"registration"`
 	MASQUEHTTP2    ConnectivityProbe `json:"masque_http2"`
+	MASQUETCP      ConnectivityProbe `json:"masque_tcp"`
+	MASQUEHTTP3    ConnectivityProbe `json:"masque_http3"`
+	UDPCapability  ConnectivityProbe `json:"udp_capability"`
+	CheckedAt      time.Time         `json:"checked_at"`
 	WireGuardPorts []int             `json:"wireguard_ports"`
 	Recommendation string            `json:"recommendation"`
 	Note           string            `json:"note"`
@@ -159,6 +166,14 @@ func (m *Manager) Generate(ctx context.Context, acceptTOS, fresh bool) (Result, 
 	if m.nativeAPI != nil && (fresh || !regularFile(m.accountPath()) || m.hasNativeStateLocked()) {
 		return m.generateNativeLocked(ctx, acceptTOS, fresh)
 	}
+	// wgcf has no durable remote-outcome receipt. Even an explicit fresh request
+	// cannot safely use that path after a lost response or process restart.
+	if fresh || !regularFile(m.accountPath()) {
+		if !acceptTOS {
+			return Result{}, ErrTermsAcceptanceRequired
+		}
+		return Result{}, ErrNativeGeneratorRequired
+	}
 	bin := findBinary(m.BinPaths)
 	if bin == "" {
 		return Result{}, ErrLegacyGeneratorRequired
@@ -166,109 +181,23 @@ func (m *Manager) Generate(ctx context.Context, acceptTOS, fresh bool) (Result, 
 	if err := os.MkdirAll(m.Root, 0o700); err != nil {
 		return Result{}, err
 	}
-	account := m.accountPath()
-	var restore []byte
-	if fresh && regularFile(account) {
-		var err error
-		restore, err = os.ReadFile(account)
-		if err != nil {
-			return Result{}, err
-		}
-		if err := m.backupLocked("wgcf-account", restore, ".toml"); err != nil {
-			return Result{}, err
-		}
-		if err := os.Remove(account); err != nil {
-			return Result{}, err
-		}
-	}
-	restoreAccount := func() {
-		if len(restore) > 0 && !regularFile(account) {
-			_ = writeSecret(account, restore)
-		}
-	}
-	if !regularFile(account) {
-		if !acceptTOS {
-			restoreAccount()
-			return Result{}, ErrTermsAcceptanceRequired
-		}
-		if err := m.registerLocked(ctx, bin); err != nil {
-			restoreAccount()
-			return Result{}, err
-		}
-		if !regularFile(account) {
-			restoreAccount()
-			return Result{}, errors.New("wgcf did not create an account file")
-		}
-		_ = os.Chmod(account, 0o600)
-	}
 	profile := filepath.Join(m.Root, "wgcf-profile.conf")
 	_ = os.Remove(profile)
 	if _, err := m.runLocked(ctx, bin, "generate"); err != nil {
-		restoreAccount()
 		return Result{}, fmt.Errorf("wgcf generate: %w", err)
 	}
 	b, err := readProfile(profile)
 	if err != nil {
-		restoreAccount()
 		return Result{}, err
 	}
 	defer func() { _ = os.Remove(profile) }()
 	if err := ValidateProfile(b); err != nil {
-		restoreAccount()
 		return Result{}, fmt.Errorf("generated profile is invalid: %w", err)
 	}
 	if _, err := m.EngineConfigs.Stage("warp-wg", "main", string(b)); err != nil {
-		restoreAccount()
 		return Result{}, err
 	}
-	if fresh {
-		if err := m.recordRotationLocked(); err != nil {
-			return Result{}, err
-		}
-	}
 	return Result{OK: true, Source: "wgcf", FreshAccount: fresh, SHA256: digest(b), Message: "Кандидат создан и проверен структурно. Рабочий WARP не изменён; выполните Validate и Apply."}, nil
-}
-
-func (m *Manager) registerLocked(ctx context.Context, bin string) error {
-	var last error
-	for attempt := 1; attempt <= 3; attempt++ {
-		_, last = m.runLocked(ctx, bin, "register", "--accept-tos", "--name", "RAZVILKA")
-		if last == nil || regularFile(m.accountPath()) {
-			return nil
-		}
-		if !transientRegistrationError(last) {
-			return fmt.Errorf("wgcf register: %w", last)
-		}
-		if attempt == 3 {
-			break
-		}
-		delay := time.Duration(attempt*2) * time.Second
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return fmt.Errorf("%w: запрос отменён", ErrRegistrationEndpointUnavailable)
-		case <-timer.C:
-		}
-	}
-	return fmt.Errorf("%w: три попытки не прошли; проверьте доступ к api.cloudflareclient.com или импортируйте готовый профиль", ErrRegistrationEndpointUnavailable)
-}
-
-func transientRegistrationError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	for _, fragment := range []string{
-		"tls handshake timeout", "i/o timeout", "connection timed out", "connection reset",
-		"temporary failure", "server misbehaving", "network is unreachable", "no route to host",
-		"connection refused", "unexpected eof",
-	} {
-		if strings.Contains(message, fragment) {
-			return true
-		}
-	}
-	return false
 }
 
 func (m *Manager) Import(content string) (Result, error) {
@@ -315,16 +244,23 @@ func (m *Manager) CheckCandidate() (Result, error) {
 func (m *Manager) CheckConnectivity(ctx context.Context) ConnectivityCheck {
 	registration := probeHTTPS(ctx, "https://api.cloudflareclient.com/")
 	masque := probeTCP(ctx, "162.159.198.2:443")
+	return connectivitySummary(registration, masque, time.Now().UTC())
+}
+
+func connectivitySummary(registration, masque ConnectivityProbe, now time.Time) ConnectivityCheck {
 	recommendation := "Создайте или загрузите профиль WARP · WireGuard, затем запустите безопасную проверку без применения. Она проверит UDP handshake через временный интерфейс и не изменит рабочие маршруты."
 	if !registration.Ready && masque.Ready {
-		recommendation = "Регистрация wgcf сейчас недоступна, но TCP/443 до Cloudflare отвечает. Используйте WARP · MASQUE или загрузите готовый WARP-профиль."
+		recommendation = "API регистрации не отвечает, но TCP/443 до Cloudflare доступен. Проверка транспорта MASQUE и UDP ещё требуется; можно загрузить готовый WARP-профиль."
 	} else if masque.Ready {
-		recommendation = "TCP/443 до Cloudflare доступен: WARP · MASQUE — основной запасной маршрут при блокировке WireGuard UDP."
+		recommendation = "TCP/443 до Cloudflare доступен. Проверьте MASQUE через изолированный кандидат: HTTP/2, HTTP/3 и UDP пока не подтверждены."
 	} else if !registration.Ready {
 		recommendation = "Cloudflare недоступен и для регистрации, и по MASQUE TCP/443. Используйте Sing-box/AmneziaWG со своим сервером."
 	}
 	return ConnectivityCheck{
-		OK: registration.Ready || masque.Ready, Registration: registration, MASQUEHTTP2: masque,
+		OK: registration.Ready || masque.Ready, Registration: registration, MASQUETCP: masque, CheckedAt: now,
+		MASQUEHTTP2:    ConnectivityProbe{Target: masque.Target, Message: "HTTP/2 не проверялся; TCP-соединение не подтверждает протокол или туннель"},
+		MASQUEHTTP3:    ConnectivityProbe{Target: masque.Target, Message: "HTTP/3 не проверялся"},
+		UDPCapability:  ConnectivityProbe{Message: "UDP не проверялся"},
 		WireGuardPorts: []int{2408, 500, 1701, 4500}, Recommendation: recommendation,
 		Note: "TCP/TLS-проверка не подменяет реальный туннель. WireGuard подтверждается безопасной проверкой handshake и выбранного сервиса; MASQUE — изолированным запросом сервиса.",
 	}
@@ -495,21 +431,27 @@ func (m *Manager) runLocked(parent context.Context, bin string, args ...string) 
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = m.Root
-	output, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(string(output))
-	if len(text) > 2048 {
-		text = text[len(text)-2048:]
-	}
-	if ctx.Err() == context.DeadlineExceeded {
-		return text, errors.New("command timed out")
+	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+	err := cmd.Run()
+	if ctx.Err() != nil {
+		return "", ctx.Err()
 	}
 	if err != nil {
-		if text == "" {
-			return text, err
-		}
-		return text, errors.New(text)
+		// wgcf output can contain account credentials or profile keys.
+		return "", errors.New("wgcf command failed; private command output withheld")
 	}
-	return text, nil
+	return "", nil
+}
+
+var wgcfVersionLine = regexp.MustCompile(`^(?:wgcf[ \t]+)?v?([0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5})$`)
+
+func safeWGCFVersion(output string) string {
+	first, _, _ := strings.Cut(output, "\n")
+	match := wgcfVersionLine.FindStringSubmatch(strings.TrimSpace(first))
+	if len(match) != 2 {
+		return ""
+	}
+	return match[1]
 }
 func (m *Manager) versionLocked(ctx context.Context, bin string) string {
 	if time.Since(m.versionAt) < 10*time.Minute {
@@ -524,9 +466,7 @@ func (m *Manager) versionLocked(ctx context.Context, bin string) string {
 			m.version = strings.TrimSpace(string(output))
 		}
 	}
-	if len(m.version) > 120 {
-		m.version = m.version[:120]
-	}
+	m.version = safeWGCFVersion(m.version)
 	m.versionAt = time.Now()
 	return m.version
 }

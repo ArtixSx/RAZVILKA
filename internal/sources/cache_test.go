@@ -190,6 +190,9 @@ func TestSignedCDNRedirectSecretsAreNotPersisted(t *testing.T) {
 	if m.List()[0].Provenance.FinalURL != "https://cdn.example/" {
 		t.Fatal("redacted final origin lost")
 	}
+	if reloaded := NewManager(m.reg, m.cacheDir); !reloaded.List()[0].Ready || !reloaded.AutomaticUseReady([]string{"telegram"}) {
+		t.Fatal("approved mirror provenance lost after restart")
+	}
 }
 
 func TestExpiredSourceDoesNotEnrichNewPlans(t *testing.T) {
