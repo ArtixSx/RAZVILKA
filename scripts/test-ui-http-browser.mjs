@@ -124,6 +124,20 @@ try {
   const nav = async name=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name,name);};
   const quickReady = ()=>page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled);
 
+  await test('cold boot and Nodes observers share reads without caching explicit refresh', 'real HTTP read lifecycle', async()=>{
+    const cold=Object.fromEntries(['/api/v1/auth/status','/api/v1/status','/api/v1/panel/inventory','/api/v1/services','/api/v1/metrics'].map(path=>[path,requests.filter(request=>request.path===path).length]));
+    for(const [path,count] of Object.entries(cold))assert.equal(count,1,'cold boot restarted '+path);
+    const start=requests.length;await page.evaluate(()=>setView('nodes'));
+    await page.waitForFunction(()=>!panelLoad.request&&!nodeBrowser.polling&&!nodeActivity.pending);
+    const paths=['/api/v1/nodes','/api/v1/routes/options','/api/v1/node-feeds'];
+    const entered=Object.fromEntries(paths.map(path=>[path,requests.slice(start).filter(request=>request.path===path).length]));
+    for(const [path,count] of Object.entries(entered))assert.equal(count,1,'Nodes duplicated '+path);
+    const explicit=requests.length;await page.locator('#refreshNodes').click();await page.waitForFunction(()=>!document.getElementById('refreshNodes').disabled);
+    for(const path of paths.slice(0,2))assert.equal(requests.slice(explicit).filter(request=>request.path===path).length,1,'explicit refresh reused '+path);
+    await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    return {cold_reads:cold,nodes_reads:entered,explicit_refresh:'fresh GET'};
+  });
+
   await test('fast transitions and repeated refresh retain current workspace', 'real HTTP', async()=>{
     const writes = requests.filter(r=>r.method!=='GET').length;
     await page.evaluate(()=>{for(const name of ['nodes','services','devices','settings','autopilot','overview'])setView(name);for(let i=0;i<4;i++)void refreshAll();});
