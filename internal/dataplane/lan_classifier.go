@@ -11,10 +11,12 @@ import (
 	"strings"
 )
 
-// The LAN classifier is the kernel part of the whole-internet path
-// (docs/plans/v2-all-internet-2026-09-29/ALL_INTERNET_EXECUTOR_RU.md).
+// This legacy tuple builder is NOT an enforced LAN runtime. In particular,
+// its MAC RETURN affects only the default chain, not earlier service rules.
+// New all-internet transactions require LANPolicyRuntime's positive admission
+// and negative MAC gate in the common Manager/addition receipt.
 //
-// Excluded devices skip every RAZVILKA route through one early rule:
+// The legacy source tuples skip the adapters' early service rules:
 // "from <device> goto <anchor>" jumps over the adapters' service slots
 // (priorities 60–71) to the anchor, after which the firmware's own policy
 // rules (100+) and main apply unchanged; nothing is forced to main.
@@ -237,6 +239,16 @@ func lanClassifierChainKey(rule []string) string {
 	out := make([]string, len(rule))
 	for i, token := range rule {
 		out[i] = token
+		if i > 0 && (rule[i-1] == "--mark" || rule[i-1] == "--set-xmark") {
+			parts := strings.Split(token, "/")
+			for j, part := range parts {
+				if value, err := strconv.ParseUint(part, 0, 32); err == nil {
+					parts[j] = fmt.Sprintf("0x%x", value)
+				}
+			}
+			out[i] = strings.Join(parts, "/")
+			continue
+		}
 		if i == 0 || rule[i-1] != "-s" && rule[i-1] != "-d" {
 			if i > 0 && rule[i-1] == "--mac-source" {
 				out[i] = strings.ToUpper(token)

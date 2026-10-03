@@ -22,11 +22,16 @@ for MODE in present absent legacy legacy-unsupported missing unsafe-dir unsafe-f
   printf '%s\n' retained >"$STATE/dns/unrelated"
   cat >"$BASE/bin/razvilka" <<'BINARY'
 #!/bin/sh
-if [ "${1:-}" = -check-dns-state ]; then
-  [ "$DNS_TEST_MODE" != legacy-unsupported ] || exit 1
-  printf '%s\n' '{"ok":true}'
-fi
-exit 0
+case "${1:-}" in
+  -check-node-history-state)
+    [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$RAZVILKA_BASE/var/lib/razvilka" ] || exit 99
+    printf '%s\n' '{"ok":true}' ;;
+  -check-dns-state)
+    [ "$DNS_TEST_MODE" != legacy-unsupported ] || exit 1
+    printf '%s\n' '{"ok":true}' ;;
+  -deactivate-dataplane) ;;
+  *) exit 1 ;;
+esac
 BINARY
   cp "$BASE/bin/razvilka" "$BACKUP/razvilka.bin"
   cat >"$BASE/etc/init.d/S99razvilka" <<'INIT'
@@ -80,6 +85,9 @@ MANIFEST
   else
     case "$MODE" in legacy-unsupported|missing|unsafe-dir|unsafe-file|invalid) ;; *) cat "$BASE/result"; exit 1 ;; esac
     [ ! -e "$BASE/service-actions" ] || { echo "Refusal came after stopping service: $MODE"; exit 1; }
+    if [ "$MODE" = legacy-unsupported ]; then
+      grep -q 'Snapshot has no DNS copy and the previous version cannot confirm compatibility' "$BASE/result"
+    fi
   fi
   echo "PASS DNS rollback $MODE"
 done
