@@ -28,6 +28,12 @@ case "${RAZVILKA_BUILD_TARGETS:-all}" in
     build arm64 arm64
     sha256sum dist/razvilka-linux-arm64 > dist/SHA256SUMS
     ;;
+  arm64+amd64)
+    # Development verification: ARM64 delivery plus the native Linux fixture.
+    build arm64 arm64
+    build amd64 amd64
+    sha256sum dist/razvilka-linux-arm64 dist/razvilka-linux-amd64 > dist/SHA256SUMS
+    ;;
   all)
     build amd64 amd64
     build arm64 arm64
@@ -36,5 +42,5 @@ case "${RAZVILKA_BUILD_TARGETS:-all}" in
     sha256sum dist/razvilka-linux-amd64 dist/razvilka-linux-arm64 \
       dist/razvilka-linux-mips dist/razvilka-linux-mipsle > dist/SHA256SUMS
     ;;
-  *) echo "RAZVILKA_BUILD_TARGETS must be arm64 or all" >&2; exit 1 ;;
+  *) echo "RAZVILKA_BUILD_TARGETS must be arm64, arm64+amd64 or all" >&2; exit 1 ;;
 esac
