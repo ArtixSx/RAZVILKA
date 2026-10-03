@@ -110,19 +110,22 @@ async function refreshWorkspaceControl() {
   if (!workspaceControlVisible()) return false;
   if (workspaceControl.pending) return workspaceControl.pending;
   const generation = workspaceControl.generation;
+  const context = typeof panelReadContext === 'function' ? panelReadContext() : null;
+  const current = () => generation === workspaceControl.generation && workspaceControlVisible() && (context === null || panelReadContextCurrent(context));
   const pending = (async () => {
     if (workspaceControl.runtimeJob || workspaceControl.readBusy || workspaceControl.dnsJobPending) {
       const read = typeof readPanelResource === 'function' ? readPanelResource : api;
       const memory = await read('/api/v1/service-control/current');
-      if (generation !== workspaceControl.generation || !workspaceControlVisible()) return null;
+      if (!current()) return null;
       if (acceptWorkspaceRuntimeJobs(memory)) { renderWorkspaceControls(); return null; }
     }
     return readServiceControl();
   })().then(control => {
-    if (generation !== workspaceControl.generation || !workspaceControlVisible()) return false;
+    if (!current()) return false;
     return acceptWorkspaceControl(control);
   }).catch(error => {
-    if (error.status === 409 && generation === workspaceControl.generation && workspaceControlVisible()) {
+    if (!current()) return false;
+    if (error.status === 409) {
       workspaceControl.readBusy = true; renderWorkspaceControls(); return false;
     }
     throw error;
@@ -222,22 +225,24 @@ function renderEngineUpdateAction(engine) {
 async function openWorkspaceLog() {
   if (!workspaceControlVisible()) return;
   const generation = workspaceControl.generation;
+  const context = typeof panelReadContext === 'function' ? panelReadContext() : null;
+  const current = () => generation === workspaceControl.generation && workspaceControlVisible() && (context === null || panelReadContextCurrent(context));
   setView('activity');
   let jobs = null, jobsError = '';
   try {
     const [audit, memory] = await Promise.allSettled([api('/api/v1/audit/current?limit=40'), api('/api/v1/service-control/current')]);
-    if (generation !== workspaceControl.generation || !workspaceControlVisible()) return;
+    if (!current()) return;
     if (memory.status === 'fulfilled') jobs = memory.value.durable_jobs || [];
     else jobsError = memory.reason?.message || 'Не удалось получить очередь заданий.';
     if (audit.status !== 'fulfilled') throw audit.reason;
     state.audit = audit.value;
     renderAudit();
   } catch (error) {
-    if (generation !== workspaceControl.generation) return;
+    if (!current()) return;
     workspaceControl.lastError = error.message;
     showNotice('error', 'Журнал не обновлён', error.message);
   }
-  if (generation !== workspaceControl.generation || !workspaceControlVisible()) return;
+  if (!current()) return;
   showDetails({
     detail_kind: 'project-log',
     control: state.serviceControl,

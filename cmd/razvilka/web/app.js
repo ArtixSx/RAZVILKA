@@ -75,6 +75,14 @@ const panelLoad = { generation: 0, request: null, controller: null, retryTimer: 
 let inventoryRead = null;
 const panelReads = { epoch: 0, entries: new Map() };
 
+function panelReadContext() {
+  return { epoch: panelReads.epoch, auth: state.authGeneration || 0 };
+}
+
+function panelReadContextCurrent(context) {
+  return context.epoch === panelReads.epoch && context.auth === (state.authGeneration || 0);
+}
+
 function invalidatePanelReads() {
   panelReads.epoch++;
   for (const entry of panelReads.entries.values()) entry.controller.abort();
@@ -1083,9 +1091,9 @@ function cancelPanelInventoryRefresh() {
 function refreshPanelInventory() {
   if (!state.authenticated || document.hidden || state.inventoryUnsupported || panelLoad.request) return Promise.resolve(false);
   if (inventoryRead) return inventoryRead.promise;
-  const ticket = { generation: panelLoad.generation, controller: new AbortController(), promise: null };
+  const ticket = { generation: panelLoad.generation, context: panelReadContext(), controller: new AbortController(), promise: null };
   inventoryRead = ticket;
-  const current = () => inventoryRead === ticket && state.authenticated && !document.hidden && panelSnapshotCurrent(ticket.generation);
+  const current = () => inventoryRead === ticket && state.authenticated && !document.hidden && panelSnapshotCurrent(ticket.generation) && panelReadContextCurrent(ticket.context);
   ticket.promise = Promise.resolve().then(async () => {
     try {
       const started = Date.now();
@@ -1221,10 +1229,11 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     renderPanelLoad();
     await settlePanelReads(requests, async ([key, url]) => {
       if (!panelSnapshotCurrent(generation)) return;
+      const context = panelReadContext();
       try {
         const requestStartedAt = Date.now();
         const value = await readPanelResource(url, options);
-        if (!panelSnapshotCurrent(generation)) return;
+        if (!panelSnapshotCurrent(generation) || !panelReadContextCurrent(context)) return;
         if (key === 'status' && (value?.setup_required || (value?.auth_required && !value?.authenticated))) {
           cancelPanelRefresh();
           showAuth(value); $('#systemText').textContent = 'Требуется вход'; return;
@@ -1232,7 +1241,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
         acceptPanelSection(key, value, requestStartedAt);
         renderPanelSection(key);
       } catch (error) {
-        if (!panelSnapshotCurrent(generation)) return;
+        if (!panelSnapshotCurrent(generation) || !panelReadContextCurrent(context)) return;
         if (error.status === 401) {
           cancelPanelRefresh();
           showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');

@@ -69,7 +69,7 @@ assert.equal(calls.length, afterCancelRequest, 'hidden activity made protected r
 context.document.hidden = false;
 context.hideAuth = () => { $('#authScreen').hidden = true; listeners.get('razvilka:auth-restored')(); };
 const app = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
-const panelFunctions = ['invalidatePanelReads','readPanelResource','panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState', 'panelBusy','refreshPanelLoadNotice', 'panelSnapshotCurrent', 'schedulePanelRetry', 'settlePanelReads', 'refreshAll', 'loadPanelSnapshot', 'acceptPanelInventory'].map(name => app.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`))[0]).join('\n');
+const panelFunctions = ['panelReadContext','panelReadContextCurrent','invalidatePanelReads','readPanelResource','panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState', 'panelBusy','refreshPanelLoadNotice', 'panelSnapshotCurrent', 'schedulePanelRetry', 'settlePanelReads', 'refreshAll', 'loadPanelSnapshot', 'acceptPanelInventory'].map(name => app.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`))[0]).join('\n');
 context.panelLoad = { generation: 0, request: null, controller: null, retryTimer: null, retryCount: 0 };
 context.panelReads = {epoch:0,entries:new Map()};
 context.AbortController = AbortController;

@@ -394,13 +394,15 @@ async function pollNodeBrowserChecks() {
   if (!nodeBrowserActive()) return;
   if (nodeBrowser.polling) return nodeBrowser.polling;
   const epoch = nodeBrowser.epoch;
+  const context = typeof panelReadContext === 'function' ? panelReadContext() : null;
+  const current = () => epoch === nodeBrowser.epoch && nodeBrowserActive() && (context === null || panelReadContextCurrent(context));
   nodeBrowser.polling = (async () => {
     let delay = 15000;
     try {
       const read = typeof readPanelResource === 'function' ? readPanelResource : api;
       const reading = await nodeMeasurementModel.readStatus(read);
       const response = reading.response, fallback = reading.fallback || {};
-      if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
+      if (!current()) return;
       nodeBrowser.job = response.job || null; nodeBrowser.pings = response.pings || [];nodeBrowser.fetchAndCheck=response.fetch_and_check===true; nodeBrowser.measurements = response.node_measurements || [];
       if (reading.fallback) state.nodeAutofallback = fallback;
       const running = ['queued', 'interrupted', 'running', 'canceling'].includes(nodeBrowser.job?.state);
@@ -410,7 +412,7 @@ async function pollNodeBrowserChecks() {
       // A service checker owns exclusive admission until cleanup completes.
       if (!fallback.active && (!running || nodeBrowser.job.mode !== 'service')) {
         const reads = await Promise.allSettled([read('/api/v1/nodes'), read('/api/v1/routes/options'), read('/api/v1/node-feeds')]);
-        if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
+        if (!current()) return;
         const failed = reads.filter(row => row.status === 'rejected');
         const unauthorized = failed.find(row => row.reason?.status === 401);
         if (unauthorized) throw unauthorized.reason;
@@ -428,7 +430,7 @@ async function pollNodeBrowserChecks() {
       }
       renderNodes();
     } catch (error) {
-      if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
+      if (!current()) return;
       if (error.status === 401) { stopNodeBrowserRefresh(true); showAuth({ ...state.status, authenticated: false, auth_required: true }, 'Сессия завершилась. Войдите снова.'); return; }
       renderNodes(); // Local expiry still advances when the router is busy.
       $('#nodeBatchMessage').textContent = `Не удалось обновить проверку: ${error.message}`;
