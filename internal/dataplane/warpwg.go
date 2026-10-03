@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,30 +24,31 @@ import (
 )
 
 type WARPWireGuardAdapter struct {
-	EngineID          string
-	Configs           *engineconfig.Manager
-	StateRoot         string
-	RuntimeConfigPath string
-	Interface         string
-	Table             int
-	PriorityBase      int
-	WGQuick           string
-	WG                string
-	IP                string
-	Runner            NFQWS2Runner
-	Resolver          PrefixResolver
-	HealthProbe       func(context.Context, string) error
-	CanaryProbe       func(context.Context, string, string) error
-	Timeout           time.Duration
-	HandshakeTimeout  time.Duration
-	FallbackPorts     []int
-	NativeOnly        bool
-	AWGCapabilities   func(context.Context) awgprofile.Capabilities
-	Profiles          WireGuardProfileProvider
-	EndpointResolver  WGEndpointResolver
-	EndpointNow       func() time.Time
-	activeEndpoint    *WGEndpointState
-	isolatedCandidate bool
+	EngineID             string
+	Configs              *engineconfig.Manager
+	StateRoot            string
+	RuntimeConfigPath    string
+	Interface            string
+	Table                int
+	PriorityBase         int
+	WGQuick              string
+	WG                   string
+	IP                   string
+	Runner               NFQWS2Runner
+	Resolver             PrefixResolver
+	HealthProbe          func(context.Context, string) error
+	CanaryProbe          func(context.Context, string, string) error
+	Timeout              time.Duration
+	HandshakeTimeout     time.Duration
+	FallbackPorts        []int
+	NativeOnly           bool
+	AWGCapabilities      func(context.Context) awgprofile.Capabilities
+	Profiles             WireGuardProfileProvider
+	EndpointResolver     WGEndpointResolver
+	EndpointNow          func() time.Time
+	activeEndpoint       *WGEndpointState
+	isolatedCandidate    bool
+	policyReceiptOptions policyAdditionOptions // package-test fault/boot seam; production leaves zero
 }
 
 type warpWGSelection struct {
@@ -69,18 +71,19 @@ func (e WARPHandshakeError) Error() string {
 }
 
 type warpWGSnapshot struct {
-	NamedProfileID       string      `json:"named_profile_id,omitempty"`
-	NamedProfileRevision string      `json:"named_profile_revision,omitempty"`
-	ProfilePath          string      `json:"profile_path"`
-	ProfileExisted       bool        `json:"profile_existed"`
-	Profile              []byte      `json:"profile,omitempty"`
-	ProfileDraft         bool        `json:"profile_draft"`
-	StagedProfile        []byte      `json:"staged_profile,omitempty"`
-	RuntimeExisted       bool        `json:"runtime_existed"`
-	RuntimeConfig        []byte      `json:"runtime_config,omitempty"`
-	InterfaceWasActive   bool        `json:"interface_was_active"`
-	StateExisted         bool        `json:"state_existed"`
-	State                PolicyState `json:"state"`
+	NamedProfileID       string                 `json:"named_profile_id,omitempty"`
+	NamedProfileRevision string                 `json:"named_profile_revision,omitempty"`
+	ProfilePath          string                 `json:"profile_path"`
+	ProfileExisted       bool                   `json:"profile_existed"`
+	Profile              []byte                 `json:"profile,omitempty"`
+	ProfileDraft         bool                   `json:"profile_draft"`
+	StagedProfile        []byte                 `json:"staged_profile,omitempty"`
+	RuntimeExisted       bool                   `json:"runtime_existed"`
+	RuntimeConfig        []byte                 `json:"runtime_config,omitempty"`
+	InterfaceWasActive   bool                   `json:"interface_was_active"`
+	StateExisted         bool                   `json:"state_existed"`
+	State                PolicyState            `json:"state"`
+	PolicyGeneration     *warpWGPolicyReference `json:"policy_generation,omitempty"`
 }
 
 func NewWARPWireGuardAdapter(configs *engineconfig.Manager, stateRoot string) *WARPWireGuardAdapter {
@@ -119,6 +122,9 @@ func (a *WARPWireGuardAdapter) ID() string {
 }
 
 func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, plan Plan, root string) error {
+	if err := a.checkWGPolicyOperation(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
 	}
@@ -166,6 +172,13 @@ func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, plan Plan, root str
 	if err != nil {
 		return err
 	}
+	if snapshot.StateExisted {
+		ref, err := a.committedWGPolicyReference(snapshot.State)
+		if err != nil {
+			return err
+		}
+		snapshot.PolicyGeneration = &ref
+	}
 	snapshot.InterfaceWasActive = a.interfaceActive(ctx)
 	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
@@ -181,6 +194,9 @@ func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string
 	}
 	if err := a.verifyNamedProfile(ctx, snapshot); err != nil {
 		return err
+	}
+	if a.validWGSnapshotPolicyReference(snapshot) != nil {
+		return ErrPolicyAdditionReceipt
 	}
 	profile := snapshot.Profile
 	if snapshot.ProfileDraft {
@@ -479,12 +495,31 @@ func (a *WARPWireGuardAdapter) cleanupCanaryPolicy(ctx context.Context, source n
 }
 
 func (a *WARPWireGuardAdapter) Activate(ctx context.Context, _ Plan, root string) error {
+	if err := a.checkWGPolicyOperation(); err != nil {
+		return err
+	}
 	snapshot, err := readWarpWGSnapshot(root)
 	if err != nil {
 		return err
 	}
 	if err := a.verifyNamedProfile(ctx, snapshot); err != nil {
 		return err
+	}
+	if a.validWGSnapshotPolicyReference(snapshot) != nil {
+		return ErrPolicyAdditionReceipt
+	}
+	currentState, currentExists, err := a.loadPolicyState()
+	if err != nil {
+		return err
+	}
+	if currentExists != snapshot.StateExisted {
+		return ErrPolicyAdditionUnknown
+	}
+	if currentExists {
+		current, err := a.committedWGPolicyReference(currentState)
+		if err != nil || current.ID != snapshot.PolicyGeneration.ID || current.Checksum != snapshot.PolicyGeneration.Checksum {
+			return errors.Join(err, ErrPolicyAdditionUnknown)
+		}
 	}
 	state, err := a.readStagedPolicy(root)
 	if err != nil {
@@ -500,20 +535,27 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, _ Plan, root string
 			return err
 		}
 	}
+	if err := writeWGTransactionMarker(ctx, root, "wg-activation-started"); err != nil {
+		return err
+	}
 	if snapshot.StateExisted {
+		if snapshot.PolicyGeneration == nil {
+			return ErrPolicyAdditionReceipt
+		}
 		if _, owned, err := a.deactivationOwnership(ctx); err != nil || !owned {
 			return errors.Join(err, errors.New("previous WireGuard runtime ownership is not confirmed"))
 		}
 		if err := a.verifyWGInterfaceIdentity(ctx, snapshot.State.WireGuardEndpoint); err != nil {
 			return err
 		}
-		if err := a.removeWGEndpoint(ctx, snapshot.State.WireGuardEndpoint); err != nil {
+		if err := a.removeWGPolicyReference(ctx, *snapshot.PolicyGeneration, ""); err != nil {
+			return fmt.Errorf("remove previous WARP policy: %w", err)
+		}
+		if err := a.wgPolicyAbsent(ctx, *snapshot.PolicyGeneration); err != nil {
 			return err
 		}
-	}
-	if snapshot.StateExisted {
-		if err := removePolicy(ctx, a.Runner, a.ip(), snapshot.State); err != nil {
-			return fmt.Errorf("remove previous WARP policy: %w", err)
+		if err := a.removeWGEndpoint(ctx, snapshot.State.WireGuardEndpoint); err != nil {
+			return err
 		}
 	}
 	if snapshot.InterfaceWasActive {
@@ -540,12 +582,10 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, _ Plan, root string
 	if err := a.startInterface(ctx); err != nil {
 		return fmt.Errorf("start WARP interface: %w", err)
 	}
-	if state.WireGuardEndpoint != nil {
-		if err := writeAtomic(filepath.Join(root, "wg-interface-created"), []byte("owned"), 0o600); err != nil {
-			return errors.Join(err, a.stopInterface(context.WithoutCancel(ctx)))
-		}
+	if err := writeWGTransactionMarker(ctx, root, "wg-interface-created"); err != nil {
+		return errors.Join(err, a.stopInterface(context.WithoutCancel(ctx)))
 	}
-	if err := applyPolicy(ctx, a.Runner, a.ip(), state); err != nil {
+	if err := a.applyWGPolicyGeneration(ctx, state, root); err != nil {
 		return err
 	}
 	return nil
@@ -573,6 +613,9 @@ func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state
 }
 
 func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
+	if err := a.checkWGPolicyOperation(); err != nil {
+		return err
+	}
 	state, exists, err := a.loadPolicyState()
 	if err != nil {
 		return err
@@ -580,6 +623,32 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 	if !exists || !regularFile(a.RuntimeConfigPath) {
 		return fmt.Errorf("committed %s runtime state is missing", a.ID())
 	}
+	ref, err := a.committedWGPolicyReference(state)
+	if err != nil {
+		return err
+	}
+	boot, err := a.wgPolicyBoot()
+	if err != nil {
+		return err
+	}
+	status, receiptErr := a.inspectWGPolicyReference(ctx, ref, "")
+	newBoot := boot != ref.Boot
+	if newBoot {
+		if !errors.Is(receiptErr, ErrPolicyAdditionUnknown) || a.interfaceActive(ctx) {
+			return ErrPolicyAdditionUnknown
+		}
+		if err := a.wgPolicyAbsent(ctx, ref); err != nil {
+			return err
+		}
+		if state.WireGuardEndpoint != nil {
+			if route, rule, err := a.inspectWGEndpoint(ctx, state.WireGuardEndpoint); err != nil || route || rule {
+				return errors.Join(err, ErrPolicyAdditionUnknown)
+			}
+		}
+	} else if receiptErr != nil || status.Unknown || status.Promoted {
+		return errors.Join(receiptErr, ErrPolicyAdditionUnknown)
+	}
+	state = cloneWGPolicyState(state)
 	if _, owned, err := a.deactivationOwnership(ctx); err != nil || !owned {
 		return errors.Join(err, errors.New("committed WireGuard cleanup authority is missing"))
 	}
@@ -589,7 +658,7 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 	if err := a.revalidateWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
 		return err
 	}
-	if a.interfaceActive(ctx) {
+	if status.Complete && a.interfaceActive(ctx) {
 		if err := a.healthState(ctx, plan, state, ""); err == nil {
 			return nil
 		}
@@ -599,11 +668,16 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 			return err
 		}
 	}
-	if err := a.removeWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
-		return err
-	}
-	if err := removePolicy(ctx, a.Runner, a.ip(), state); err != nil {
-		return err
+	if !newBoot {
+		if err := a.removeWGPolicyReference(ctx, ref, ""); err != nil {
+			return err
+		}
+		if err := a.wgPolicyAbsent(ctx, ref); err != nil {
+			return err
+		}
+		if err := a.removeWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
+			return err
+		}
 	}
 	if a.interfaceActive(ctx) {
 		if err := a.stopInterface(ctx); err != nil {
@@ -617,20 +691,25 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) error {
 	if err := a.startInterface(ctx); err != nil {
 		return errors.Join(fmt.Errorf("recover %s interface: %w", a.ID(), err), a.removeWGEndpoint(context.WithoutCancel(ctx), state.WireGuardEndpoint))
 	}
-	if err := applyPolicy(ctx, a.Runner, a.ip(), state); err != nil {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
-		defer cancel()
-		return errors.Join(err, a.stopInterface(cleanup), a.removeWGEndpoint(cleanup, state.WireGuardEndpoint))
+	newRef, err := a.freshWGPolicyGeneration(ctx, state)
+	if err != nil {
+		return err
 	}
 	if err := a.healthState(ctx, plan, state, ""); err != nil {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
 		defer cancel()
-		return errors.Join(err, removePolicy(cleanup, a.Runner, a.ip(), state), a.stopInterface(cleanup), a.removeWGEndpoint(cleanup, state.WireGuardEndpoint))
+		if cleanupErr := a.removeWGPolicyReference(cleanup, newRef, ""); cleanupErr != nil {
+			return errors.Join(err, cleanupErr)
+		}
+		return errors.Join(err, a.stopInterface(cleanup), a.removeWGEndpoint(cleanup, state.WireGuardEndpoint))
 	}
 	return nil
 }
 
 func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool, error) {
+	if err := a.checkWGPolicyOperation(); err != nil {
+		return false, err
+	}
 	if err := checkAddressRefreshAuthority(ctx); err != nil {
 		return false, err
 	}
@@ -638,6 +717,11 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bo
 	if err != nil || !exists {
 		return false, err
 	}
+	oldRef, err := a.committedWGPolicyReference(oldState)
+	if err != nil {
+		return false, err
+	}
+	oldState = cloneWGPolicyState(oldState)
 	if err := a.revalidateWGEndpoint(ctx, oldState.WireGuardEndpoint); err != nil {
 		return false, err
 	}
@@ -660,23 +744,38 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bo
 	if samePolicy(oldState, newState) {
 		return false, nil
 	}
-	if err := replacePolicy(ctx, a.Runner, a.ip(), oldState, newState); err != nil {
+	if err := a.removeWGPolicyReference(ctx, oldRef, ""); err != nil {
 		return false, err
+	}
+	if err := a.wgPolicyAbsent(ctx, oldRef); err != nil {
+		return false, err
+	}
+	newRef, applyErr := a.freshWGPolicyGeneration(ctx, newState)
+	if applyErr != nil {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if err := a.settleWGPolicyOperationForStop(cleanup); err != nil {
+			return false, errors.Join(applyErr, err)
+		}
+		_, restoreErr := a.freshWGPolicyGeneration(cleanup, oldState)
+		return false, errors.Join(applyErr, restoreErr)
 	}
 	rollback := func(cause error) (bool, error) {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		// Exact recorded tuples only. Report any incomplete rollback; never hide it.
-		return false, errors.Join(cause, replacePolicy(cleanup, a.Runner, a.ip(), newState, oldState))
+		if err := a.removeWGPolicyReference(cleanup, newRef, ""); err != nil {
+			return false, errors.Join(cause, err)
+		}
+		if err := a.wgPolicyAbsent(cleanup, newRef); err != nil {
+			return false, errors.Join(cause, err)
+		}
+		_, restoreErr := a.freshWGPolicyGeneration(cleanup, oldState)
+		return false, errors.Join(cause, restoreErr)
 	}
 	if err := a.healthState(ctx, plan, newState, ""); err != nil {
 		return rollback(err)
 	}
 	if err := checkAddressRefreshAuthority(ctx); err != nil {
-		return rollback(err)
-	}
-	data, _ := json.MarshalIndent(newState, "", "  ")
-	if err := writeAtomic(a.statePath(), data, 0o600); err != nil {
 		return rollback(err)
 	}
 	return true, nil
@@ -687,15 +786,25 @@ func (a *WARPWireGuardAdapter) Deactivate(ctx context.Context) error {
 	if err != nil || !owned {
 		return err
 	}
+	if err := a.settleWGPolicyOperationForStop(ctx); err != nil {
+		return err
+	}
+	ref, err := a.committedWGPolicyReference(state)
+	if err != nil {
+		return err
+	}
 	if err := a.verifyWGInterfaceIdentity(ctx, state.WireGuardEndpoint); err != nil {
 		return err
 	}
 	var firstErr error
-	if err := a.removeWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
+	if err := a.removeWGPolicyReference(ctx, ref, ""); err != nil {
 		return err
 	}
-	if err := removePolicy(ctx, a.Runner, a.ip(), state); err != nil {
-		firstErr = err
+	if err := a.wgPolicyAbsent(ctx, ref); err != nil {
+		return err
+	}
+	if err := a.removeWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
+		return err
 	}
 	active, err := a.deactivationInterfaceActive(ctx)
 	if err != nil {
@@ -718,7 +827,7 @@ func (a *WARPWireGuardAdapter) Deactivate(ctx context.Context) error {
 	if firstErr != nil {
 		return firstErr
 	}
-	for _, path := range []string{a.statePath(), a.RuntimeConfigPath} {
+	for _, path := range []string{a.statePath(), a.RuntimeConfigPath, filepath.Join(a.StateRoot, wgPolicyReferenceFile)} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) && firstErr == nil {
 			firstErr = err
 		}
@@ -767,11 +876,11 @@ func (a *WARPWireGuardAdapter) Commit(ctx context.Context, _ Plan, root string) 
 		return err
 	}
 	state.RuntimeConfigSHA256 = warpRuntimeDigest(runtimeProfile)
-	data, _ := json.MarshalIndent(state, "", "  ")
-	if err := os.MkdirAll(a.StateRoot, 0o700); err != nil {
+	ref, err := a.promoteWGPolicyGeneration(ctx, state, root)
+	if err != nil {
 		return err
 	}
-	return writeAtomic(a.statePath(), data, 0o600)
+	return a.publishWGPolicyGeneration(ctx, state, ref)
 }
 
 func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string) error {
@@ -782,65 +891,148 @@ func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string
 	if err := a.validWGEndpoint(snapshot.State.WireGuardEndpoint, snapshot.RuntimeConfig); err != nil {
 		return err
 	}
-	var firstErr error
-	ownedCurrent := true
-	if desired, readErr := a.readStagedPolicy(root); readErr == nil {
-		if desired.WireGuardEndpoint != nil {
-			ownedCurrent = regularFile(filepath.Join(root, "wg-interface-created"))
-			if ownedCurrent {
-				if err := a.verifyWGInterfaceIdentity(ctx, desired.WireGuardEndpoint); err != nil {
-					return err
-				}
-			}
-			if regularFile(filepath.Join(root, "wg-endpoint-created")) {
-				if err := a.removeWGEndpoint(ctx, desired.WireGuardEndpoint); err != nil {
-					return err
-				}
+	if a.validWGSnapshotPolicyReference(snapshot) != nil {
+		return ErrPolicyAdditionReceipt
+	}
+	// Validate/Canary/AWG admission failures never entered activation. In
+	// particular, a staged policy and a runtime file grant no cleanup rights.
+	if !regularFile(filepath.Join(root, "wg-activation-started")) {
+		return ctx.Err()
+	}
+	currentState, currentExists, err := a.loadPolicyState()
+	if err != nil {
+		return err
+	}
+	if restored, exists, err := a.readWGPolicyReferenceNamed(root, wgPolicyRollbackFile, snapshot.State, true); err != nil {
+		return err
+	} else if exists {
+		current, err := a.committedWGPolicyReference(currentState)
+		if err != nil || !currentExists || current.ID != restored.ID {
+			return errors.Join(err, ErrPolicyAdditionUnknown)
+		}
+		status, err := a.inspectWGPolicyReference(ctx, restored, "")
+		if err != nil || !status.Complete || status.Unknown {
+			return errors.Join(err, ErrPolicyAdditionUnknown)
+		}
+		raw, err := os.ReadFile(a.RuntimeConfigPath)
+		if err != nil || !bytes.Equal(raw, snapshot.RuntimeConfig) {
+			return errors.Join(err, ErrPolicyAdditionUnknown)
+		}
+		if err := a.verifyWGInterfaceIdentity(ctx, snapshot.State.WireGuardEndpoint); err != nil {
+			return err
+		}
+		if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), currentState); err != nil {
+			return err
+		}
+		return a.restoreWGProfileSnapshot(snapshot)
+	}
+	desired, err := a.readStagedPolicy(root)
+	if err != nil {
+		return err
+	}
+	ref, issued, err := a.readWGPolicyReference(root, desired, false)
+	if err != nil {
+		return err
+	}
+	if currentExists {
+		current, err := a.committedWGPolicyReference(currentState)
+		if err != nil {
+			return err
+		}
+		priorID := ""
+		if snapshot.PolicyGeneration != nil {
+			priorID = snapshot.PolicyGeneration.ID
+		}
+		if current.ID != priorID && (!issued || ref.ID == "" || current.ID != ref.ID) {
+			return ErrPolicyAdditionUnknown
+		}
+	}
+	if issued {
+		if err := a.removeWGPolicyReference(ctx, ref, root); err != nil {
+			return err
+		}
+	}
+	ownedCurrent := regularFile(filepath.Join(root, "wg-interface-created"))
+	if ownedCurrent {
+		if err := a.verifyWGInterfaceIdentity(ctx, desired.WireGuardEndpoint); err != nil {
+			return err
+		}
+	}
+	if regularFile(filepath.Join(root, "wg-endpoint-created")) {
+		if err := a.removeWGEndpoint(ctx, desired.WireGuardEndpoint); err != nil {
+			return err
+		}
+	}
+	if !ownedCurrent && a.interfaceActive(ctx) {
+		// Old policy removal can fail before any command. Preserve an intact
+		// prior runtime; never stop an unacknowledged new interface.
+		current, _ := os.ReadFile(a.RuntimeConfigPath)
+		if snapshot.PolicyGeneration != nil && bytes.Equal(current, snapshot.RuntimeConfig) {
+			status, err := a.inspectWGPolicyReference(ctx, *snapshot.PolicyGeneration, "")
+			if err == nil && status.Complete && !status.Unknown {
+				return verifyPolicyEvidence(ctx, a.Runner, a.ip(), snapshot.State)
 			}
 		}
-		if ownedCurrent {
-			if err := removePolicy(ctx, a.Runner, a.ip(), desired); err != nil {
-				firstErr = err
-			}
-		}
+		return ErrPolicyAdditionUnknown
 	}
 	if ownedCurrent && a.interfaceActive(ctx) {
-		if err := a.stopInterface(ctx); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	if firstErr != nil {
-		return firstErr
-	}
-	if err := restoreOptional(a.RuntimeConfigPath, snapshot.RuntimeConfig, snapshot.RuntimeExisted); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if snapshot.InterfaceWasActive && snapshot.RuntimeExisted {
-		if !ownedCurrent && a.interfaceActive(ctx) {
-			return errors.New("rollback interface identity is unconfirmed; retained for review")
-		}
-		if err := a.revalidateWGEndpoint(ctx, snapshot.State.WireGuardEndpoint); err != nil {
+		if err := a.stopInterface(ctx); err != nil {
 			return err
 		}
-		if err := a.installWGEndpoint(ctx, snapshot.State.WireGuardEndpoint); err != nil {
-			return err
-		}
-		a.activeEndpoint = snapshot.State.WireGuardEndpoint
-		if err := a.startInterface(ctx); err != nil && firstErr == nil {
-			firstErr = err
-		}
+	}
+	if err := restoreOptional(a.RuntimeConfigPath, snapshot.RuntimeConfig, snapshot.RuntimeExisted); err != nil {
+		return err
 	}
 	if snapshot.StateExisted {
-		if err := applyPolicy(ctx, a.Runner, a.ip(), snapshot.State); err != nil && firstErr == nil {
-			firstErr = err
+		if snapshot.PolicyGeneration == nil {
+			return ErrPolicyAdditionReceipt
 		}
-		data, _ := json.MarshalIndent(snapshot.State, "", "  ")
-		if err := os.MkdirAll(a.StateRoot, 0o700); err == nil {
-			_ = writeAtomic(a.statePath(), data, 0o600)
+		if err := a.removeWGPolicyReference(ctx, *snapshot.PolicyGeneration, ""); err != nil {
+			return err
+		}
+		if err := a.wgPolicyAbsent(ctx, *snapshot.PolicyGeneration); err != nil {
+			return err
+		}
+		previous := cloneWGPolicyState(snapshot.State)
+		if snapshot.InterfaceWasActive && snapshot.RuntimeExisted {
+			if err := a.revalidateWGEndpoint(ctx, previous.WireGuardEndpoint); err != nil {
+				return err
+			}
+			if err := a.installWGEndpoint(ctx, previous.WireGuardEndpoint); err != nil {
+				return err
+			}
+			a.activeEndpoint = previous.WireGuardEndpoint
+			if err := a.startInterface(ctx); err != nil {
+				return err
+			}
+			restored, err := a.freshWGPolicyGeneration(ctx, previous)
+			if err != nil {
+				return err
+			}
+			if err := writeWGPolicyReferenceNamed(ctx, root, wgPolicyRollbackFile, restored); err != nil {
+				return err
+			}
+		} else {
+			if err := writeWGPolicyReference(ctx, a.StateRoot, *snapshot.PolicyGeneration); err != nil {
+				return err
+			}
+			data, _ := json.MarshalIndent(previous, "", "  ")
+			if err := writeAtomic(a.statePath(), data, 0600); err != nil {
+				return err
+			}
 		}
 	} else {
-		_ = os.Remove(a.statePath())
+		for _, file := range []string{a.statePath(), filepath.Join(a.StateRoot, wgPolicyReferenceFile)} {
+			if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		}
 	}
+	return a.restoreWGProfileSnapshot(snapshot)
+}
+
+func (a *WARPWireGuardAdapter) restoreWGProfileSnapshot(snapshot warpWGSnapshot) error {
+	var firstErr error
 	if snapshot.NamedProfileID == "" {
 		if err := restoreOptional(snapshot.ProfilePath, snapshot.Profile, snapshot.ProfileExisted); err != nil && firstErr == nil {
 			firstErr = err
