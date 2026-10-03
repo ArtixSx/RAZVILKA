@@ -159,6 +159,15 @@ fi
 
 # Registration requests are monotonic external effects. Keep native WARP state
 # in place, and never start an old binary that cannot see an unresolved request.
+require_node_history_compatibility() {
+  NODE_HISTORY_COMPATIBILITY="$("$1" -check-node-history-state -node-history-config-root "$APPDIR" -node-history-state-root "$STATEDIR" 2>/dev/null)" || {
+    echo "Target binary cannot read all retained node history; installation unchanged" >&2; return 1;
+  }
+  [ "$NODE_HISTORY_COMPATIBILITY" = '{"ok":true}' ] || {
+    echo "Retained node history compatibility not confirmed; installation unchanged" >&2; return 1;
+  }
+}
+
 require_native_enrollment_schema() {
   # Retain both application handoff and file-phase receipts through downgrade.
   # Empty directories alone do not opt an installation into this protocol.
@@ -234,6 +243,7 @@ require_native_enrollment_schema() {
 }
 if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then
   require_native_enrollment_schema "$BACKUP/razvilka.bin"
+  require_node_history_compatibility "$BACKUP/razvilka.bin"
 fi
 
 if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
@@ -266,6 +276,7 @@ if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && ! require_native_enrollment_schema "$BACKU
   fi
   exit 1
 fi
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then require_node_history_compatibility "$BACKUP/razvilka.bin"; fi
 if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
   RECOVERY_OUTPUT="$("$BINDIR/razvilka" -recover-private-restore \
     -config "$APPDIR/config.json" \
@@ -287,6 +298,7 @@ if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && ! require_native_enrollment_schema "$BACKU
   fi
   exit 1
 fi
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then require_node_history_compatibility "$BACKUP/razvilka.bin"; fi
 if [ -x "$BINDIR/razvilka" ]; then
   "$BINDIR/razvilka" -deactivate-dataplane \
     -stage "$STATEDIR/staging" \
