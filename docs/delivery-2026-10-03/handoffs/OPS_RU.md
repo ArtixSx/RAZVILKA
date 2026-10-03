@@ -1,5 +1,9 @@
 # OPS: первая порция D11, 03.10.2026
 
+## Дополнение: native IPK container (отдельная порция после 99ac304)
+
+Координатор сообщил native-opkg-02 FAIL до postinst: Malformed package file, opkg-lede `80503d94`. Проверен [официальный extractor этой ревизии](https://github.com/openwrt/opkg-lede/blob/80503d94/libbb/unarchive.c): он декодирует внешний gzip/USTAR и вложенные control.tar.gz/data.tar.gz. Fixture заменяет Debian ar на этот контейнер; внутренние записи также явный USTAR, порядок детерминированный. Исполняемый postinst и требование фактической migration остаются; зависимости от ar больше нет. Native запуск остаётся у координатора, здесь не выполнен. Адресный `go test ./internal/components -run '^TestNativeFixtureEntwareGzipTarContainer$' -count=1` и launcher contract — RC0. Этот коммит отделён от ещё незавершённых supervision/acceptance изменений.
+
 Ветка `sol/ops-20261003`, worktree `C:/Projects/RAZVILKA/worktrees/sol-ops`.
 Base: `52eee92c28af1b9ad3c789f2ee2c3ffc43a0e175` (проверенная кодовая база `367ef14` + документы).
 Один исполнитель этого чата, без подагентов, чужих worktree, VM, роутера и публикаций.
