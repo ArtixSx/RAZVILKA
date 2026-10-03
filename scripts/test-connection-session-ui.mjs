@@ -7,9 +7,9 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve
 const rows=()=>({connections:[{id:'private'}],active:1,live:true});
 const streams=[],elements=new Map();let renders=0,handler;
 class Stream{constructor(){streams.push(this)}addEventListener(name,fn){this[name]=fn}close(){this.closed=true}}
-const ctx={state:{authenticated:true,connections:{connections:[]}},connectionObservation:{epoch:0,request:0},window:{EventSource:Stream},EventSource:Stream,
- api:()=>handler(),renderConnections(){renders++},$:id=>{if(!elements.has(id))elements.set(id,{textContent:''});return elements.get(id)},showAuth(){ctx.clearConnectionObservation()}};
-vm.createContext(ctx);vm.runInContext(['clearConnectionObservation','refreshConnections','startConnectionStream'].map(extract).join('\n'),ctx);
+const ctx={state:{authenticated:true,currentView:'connections',connections:{connections:[]}},connectionObservation:{epoch:0,request:0,pending:null},document:{hidden:false},AbortController,window:{EventSource:Stream},EventSource:Stream,
+ api:(...args)=>handler(...args),renderConnections(){renders++},$:id=>{if(!elements.has(id))elements.set(id,{textContent:''});return elements.get(id)},showAuth(){ctx.clearConnectionObservation()}};
+vm.createContext(ctx);vm.runInContext(['connectionObservationActive','stopConnectionObservation','syncConnectionObservation','clearConnectionObservation','refreshConnections','startConnectionStream'].map(extract).join('\n'),ctx);
 assert.match(source,/addEventListener\('razvilka:auth-required', clearConnectionObservation\)/);
 let late=deferred();handler=()=>late.promise;
 const pending=ctx.refreshConnections();ctx.startConnectionStream();const old=streams[0];
@@ -20,8 +20,19 @@ old.connections({data:JSON.stringify(rows())});old.onerror();assert.equal(ctx.st
 fresh.connections({data:JSON.stringify(rows())});assert.equal(ctx.state.connections.connections.length,1);
 ctx.clearConnectionObservation();assert.equal(ctx.state.connections.connections.length,0);
 const before=streams.length;ctx.startConnectionStream();assert.equal(streams.length,before,'anonymous stream started');
-ctx.state.authenticated=true;const first=deferred(),second=deferred();handler=()=>first.promise;const one=ctx.refreshConnections();handler=()=>second.promise;const two=ctx.refreshConnections();
-second.resolve({connections:[{id:'newer'}]});await two;first.resolve(rows());await one;
-assert.equal(ctx.state.connections.connections[0].id,'newer','out-of-order REST replaced newer observation');
+ctx.state.authenticated=true;const first=deferred();let reads=0;handler=()=>{reads++;return first.promise};const one=ctx.refreshConnections(),two=ctx.refreshConnections();
+assert.equal(reads,1,'repeated refresh duplicated an in-flight GET');first.resolve(rows());await Promise.all([one,two]);
+const prior=deferred(),newer=deferred();handler=()=>prior.promise;const oldRead=ctx.refreshConnections();const oldSignal=ctx.connectionObservation.pending.controller.signal;
+ctx.state.currentView='overview';ctx.syncConnectionObservation();assert(oldSignal.aborted);assert.equal(ctx.state.authenticated,true);assert.equal(ctx.connectionObservation.pending,null);
+handler=()=>{throw new Error('hidden page read connections')};await ctx.refreshConnections();const streamsBefore=streams.length;ctx.startConnectionStream();assert.equal(streams.length,streamsBefore);
+ctx.state.currentView='connections';ctx.syncConnectionObservation();handler=()=>newer.promise;const newRead=ctx.refreshConnections();
+newer.resolve({connections:[{id:'newer'}],live:true});await newRead;prior.resolve(rows());await oldRead;
+assert.equal(ctx.state.connections.connections[0].id,'newer','late read crossed navigation');
+const hiddenRead=deferred();handler=()=>hiddenRead.promise;const inBackground=ctx.refreshConnections();const signal=ctx.connectionObservation.pending.controller.signal;
+const visibleStream=ctx.state.stream;ctx.document.hidden=true;ctx.syncConnectionObservation();assert(signal.aborted);assert(visibleStream.closed);assert.equal(ctx.state.connections.live,false);
+visibleStream.connections({data:JSON.stringify(rows())});hiddenRead.reject(Object.assign(new Error('old expired'),{status:401}));await inBackground;
+assert.equal(ctx.state.authenticated,true,'hidden old 401 closed the current session');assert.equal(ctx.state.connections.connections[0].id,'newer','hidden SSE replaced retained data');
+handler=()=>{throw new Error('background polling')};await ctx.refreshConnections();ctx.startConnectionStream();assert.equal(ctx.state.stream,null);
+ctx.document.hidden=false;ctx.syncConnectionObservation();assert(ctx.state.stream&&!ctx.state.stream.closed);const count=streams.length;ctx.syncConnectionObservation();assert.equal(streams.length,count,'visible refresh created a duplicate stream');
 handler=()=>Promise.reject(Object.assign(new Error('expired'),{status:401}));await ctx.refreshConnections();assert.equal(ctx.state.authenticated,false);assert.equal(ctx.state.connections.connections.length,0);
-console.log('PASS connection session lifecycle: logout, late REST/SSE, re-login, ordering, 401');
+console.log('PASS connection lifecycle: visible scope, single-flight, hidden cancellation, logout, late REST/SSE, navigation, re-login and 401');

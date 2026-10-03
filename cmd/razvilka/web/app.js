@@ -500,6 +500,7 @@ function setView(name) {
   render('navigation-status', () => { if (state.status && Object.keys(state.status).length) renderStatus(); });
   render('navigation-tabs', () => { if (typeof renderInterfaceNavigation === 'function') renderInterfaceNavigation(name); });
   render('navigation-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
+  if (typeof syncConnectionObservation === 'function') render('navigation-connections', syncConnectionObservation);
   if (typeof queueMicrotask === 'function') queueMicrotask(() => { if (state.currentView === name) refreshPanelView(name); });
   if (name === 'engineconfig') render('navigation-engine', () => {
     if (state.engineGuidedRequest && state.engineGuidedRequest.view !== name && !state.engineIntent) invalidateEngineEditorContext();
@@ -4736,40 +4737,70 @@ async function importPrivateBackup() {
   finally { button.textContent = 'Импортировать приватные данные в черновик'; button.disabled = !state.privateBackupPreview?.valid; }
 }
 
-const connectionObservation = { epoch: 0, request: 0 };
+const connectionObservation = { epoch: 0, request: 0, pending: null };
 
-function clearConnectionObservation() {
+function connectionObservationActive() {
+  return state.authenticated === true && state.currentView === 'connections' && !document.hidden;
+}
+
+function stopConnectionObservation() {
   connectionObservation.epoch++;
-  state.authenticated = false;
+  connectionObservation.request++;
+  connectionObservation.pending?.controller.abort();
+  connectionObservation.pending = null;
   if (state.stream) state.stream.close();
   state.stream = null;
+  if (state.connections) { state.connections.live = false; state.connections.reason = 'Просмотр соединений приостановлен. При открытии раздела данные обновятся.'; }
+}
+
+function syncConnectionObservation() {
+  if (connectionObservationActive()) { renderConnections(); startConnectionStream(); }
+  else stopConnectionObservation();
+}
+
+function clearConnectionObservation() {
+  stopConnectionObservation();
+  state.authenticated = false;
   state.connections = { connections: [], active: 0, closed: 0, live: false, producer: '', reason: 'Требуется вход' };
   renderConnections();
 }
 
 document.addEventListener('razvilka:auth-required', clearConnectionObservation);
+document.addEventListener('razvilka:auth-restored', syncConnectionObservation);
+document.addEventListener('visibilitychange', () => {
+  syncConnectionObservation();
+  if (connectionObservationActive()) void refreshConnections();
+});
 
 async function refreshConnections() {
-  if (state.authenticated !== true) return;
+  if (!connectionObservationActive()) return;
+  if (connectionObservation.pending) return connectionObservation.pending.promise;
   const epoch = connectionObservation.epoch, request = ++connectionObservation.request;
-  const current = () => state.authenticated === true && connectionObservation.epoch === epoch && connectionObservation.request === request;
-  try {
-    const value = await api('/api/v1/connections?include_closed=true');
-    if (!current()) return;
-    state.connections = value;
-    renderConnections();
-  } catch (error) {
-    if (current() && error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
-    // SSE or next refresh will recover. Do not spam the UI on transient failures.
-  }
+  const flight = { controller: new AbortController(), promise: null };
+  connectionObservation.pending = flight;
+  const current = () => connectionObservationActive() && connectionObservation.epoch === epoch && connectionObservation.request === request && connectionObservation.pending === flight;
+  flight.promise = (async () => {
+    try {
+      const value = await api('/api/v1/connections?include_closed=true', { signal: flight.controller.signal });
+      if (!current()) return;
+      state.connections = value;
+      renderConnections();
+    } catch (error) {
+      if (current() && error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
+      // SSE or next visible refresh will recover. No replay or hidden poll.
+    } finally {
+      if (connectionObservation.pending === flight) connectionObservation.pending = null;
+    }
+  })();
+  return flight.promise;
 }
 
 function startConnectionStream() {
-  if (state.authenticated !== true || !window.EventSource || state.stream) return;
+  if (!connectionObservationActive() || !window.EventSource || state.stream) return;
   const epoch = connectionObservation.epoch;
   const stream = new EventSource('/api/v1/connections/stream');
   state.stream = stream;
-  const current = () => state.authenticated === true && connectionObservation.epoch === epoch && state.stream === stream;
+  const current = () => connectionObservationActive() && connectionObservation.epoch === epoch && state.stream === stream;
   stream.addEventListener('connections', (event) => {
     if (!current()) return;
     try {

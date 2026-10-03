@@ -134,6 +134,24 @@ try {
   });
   if(!authOnly && !policyTransport)await capture('01-home.png','Настоящее локальное приложение; отдельная тестовая копия catalog/config и журнала, Safe Mode включён, автоматика выключена. Inventory читает установленные бинарники ПК; native-проверки не запускались.');
 
+  if(!authOnly && !policyTransport)await test('connection REST and stream follow the visible view with single-flight readback','real connection HTTP and SSE lifecycle',async()=>{
+    const isConnection=request=>['/api/v1/connections','/api/v1/connections/stream'].includes(request.path);
+    const hidden=requests.length;await page.evaluate(async()=>{await refreshConnections();startConnectionStream();});
+    assert.equal(requests.slice(hidden).filter(isConnection).length,0,'Home admitted hidden connection reads');
+    const entered=requests.length;await page.evaluate(()=>setView('connections'));await page.waitForFunction(()=>state.currentView==='connections'&&!panelLoad.request&&!!state.stream);
+    assert.equal(requests.slice(entered).filter(request=>request.path==='/api/v1/connections/stream').length,1);
+    const readback=requests.length;await page.evaluate(()=>Promise.all([refreshConnections(),refreshConnections()]));
+    assert.equal(requests.slice(readback).filter(request=>request.path==='/api/v1/connections').length,1,'duplicate connection readback sent two GETs');
+    await nav('nodes');await page.waitForFunction(()=>!panelLoad.request&&!state.stream);
+    assert.equal(await page.evaluate(()=>state.connections.live),false,'retained hidden rows claimed a live stream');
+    const left=requests.length;await page.evaluate(async()=>{await refreshConnections();startConnectionStream();});
+    assert.equal(requests.slice(left).filter(isConnection).length,0,'Nodes admitted hidden connection reads');
+    const returned=requests.length;await page.evaluate(()=>setView('connections'));await page.waitForFunction(()=>state.currentView==='connections'&&!panelLoad.request&&!!state.stream);
+    assert.equal(requests.slice(returned).filter(request=>request.path==='/api/v1/connections/stream').length,1,'return did not open exactly one fresh stream');
+    await nav('overview');await page.waitForFunction(()=>!panelLoad.request&&!state.stream);
+    return {hidden_reads:0,visible_streams_per_entry:1,repeated_readback_gets:1};
+  });
+
   if(!policyTransport)await test('component recovery is a read-only journal view on navigation', 'real recovery GET', async()=>{
     const start=requests.length;await nav('engines');
     await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Незавершённых обновлений нет'));
