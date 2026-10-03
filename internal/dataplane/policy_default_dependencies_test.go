@@ -8,11 +8,29 @@ import (
 	"testing"
 )
 
+type dependencyTestReader struct{ *recordedPolicyFakeRunner }
+
+func dependencyFixture() *dependencyTestReader {
+	return &dependencyTestReader{&recordedPolicyFakeRunner{}}
+}
+
+func (r *dependencyTestReader) Run(ctx context.Context, command string, args ...string) ([]byte, error) {
+	if len(args) == 0 || args[0] != "-N" {
+		return nil, errors.New("numeric read required")
+	}
+	output, err := r.recordedPolicyFakeRunner.Run(ctx, command, args[1:]...)
+	text := string(output)
+	for _, pair := range [][2]string{{"0: from all lookup local", "0: from all lookup 255"}, {"32766: from all lookup main", "32766: from all lookup 254"}, {"32767: from all lookup default", "32767: from all lookup 253"}} {
+		text = strings.Replace(text, pair[0], pair[1], 1)
+	}
+	return []byte(text), err
+}
+
 func TestPolicyDefaultDependencyRetainsOwnAndForeignSelectors(t *testing.T) {
 	for _, family := range []int{4, 6} {
 		t.Run(map[int]string{4: "ipv4", 6: "ipv6"}[family], func(t *testing.T) {
 			state := testEarlyPolicy()
-			runner := &recordedPolicyFakeRunner{}
+			runner := dependencyFixture()
 			if err := AssertPolicyDefaultUnreferenced(context.Background(), runner, "ip", state, family); err != nil {
 				t.Fatal("empty table selectors refused", err)
 			}
@@ -55,14 +73,14 @@ func TestPolicyDefaultDependencyWGPinRequiresExactFreshHostRoute(t *testing.T) {
 					return nil, err
 				}
 				joined := strings.Join(args, " ")
-				if joined == "rule show" {
-					out := "0: from all lookup local\n32766: from all lookup main\n32767: from all lookup default\n50: from all to 203.0.113.9 fwmark 0x1000000 lookup 201\n"
+				if joined == "-N rule show" {
+					out := "0: from all lookup 255\n32766: from all lookup 254\n32767: from all lookup 253\n50: from all to 203.0.113.9 fwmark 0x1000000 lookup 201\n"
 					if kind == "another-selector" {
 						out += "61: from 192.168.1.41 to 149.154.167.99 lookup 201\n"
 					}
 					return []byte(out), nil
 				}
-				if joined == "-j route show table 201 exact 203.0.113.9/32" {
+				if joined == "-N -j route show table 201 exact 203.0.113.9/32" {
 					if kind == "missing" {
 						return []byte("[]"), nil
 					}
@@ -95,7 +113,8 @@ func TestPolicyDefaultDependencyUnknownReadbackAndCancellationRefuse(t *testing.
 		"40: not from 192.168.1.41 to 149.154.167.99 lookup 204",
 		"unrecognized kernel diagnostic",
 	} {
-		runner := &recordedPolicyFakeRunner{kernel: policyKernelFake{foreignIPv4: []string{line}}}
+		runner := dependencyFixture()
+		runner.kernel.foreignIPv4 = []string{line}
 		if err := AssertPolicyDefaultUnreferenced(context.Background(), runner, "ip", state, 4); !errors.Is(err, ErrPolicyDefaultReferenced) || len(receiptMutationCalls(runner.calls)) != 0 {
 			t.Fatal("unknown readback accepted", line, err)
 		}
@@ -109,5 +128,26 @@ func TestPolicyDefaultDependencyUnknownReadbackAndCancellationRefuse(t *testing.
 	bad := networkCleanupRunner(func(context.Context, string, ...string) ([]byte, error) { return nil, errors.New("read failed") })
 	if err := AssertPolicyDefaultUnreferenced(context.Background(), bad, "ip", state, 6); !errors.Is(err, ErrPolicyDefaultReferenced) {
 		t.Fatal("failed read admitted cleanup", err)
+	}
+}
+
+func TestPolicyDefaultDependencyRejectsReservedLookingAliasesAndUnsupportedNumericRead(t *testing.T) {
+	state := testEarlyPolicy()
+	for _, line := range []string{"0: from all lookup local", "32766: from all lookup main", "32767: from all lookup default", "40: from 192.168.1.41 to 149.154.167.99 lookup main"} {
+		runner := networkCleanupRunner(func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			if len(args) == 0 || args[0] != "-N" {
+				t.Fatal("plain symbolic read could grant permission", args)
+			}
+			return []byte(line), nil
+		})
+		if err := AssertPolicyDefaultUnreferenced(context.Background(), runner, "ip", state, 4); !errors.Is(err, ErrPolicyDefaultReferenced) {
+			t.Fatal("reserved-looking alias became a builtin table", line, err)
+		}
+	}
+	unsupported := networkCleanupRunner(func(context.Context, string, ...string) ([]byte, error) {
+		return []byte("unknown option -N"), errors.New("unsupported")
+	})
+	if err := AssertPolicyDefaultUnreferenced(context.Background(), unsupported, "ip", state, 6); !errors.Is(err, ErrPolicyDefaultReferenced) {
+		t.Fatal("unsupported numeric read admitted cleanup", err)
 	}
 }
