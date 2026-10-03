@@ -122,14 +122,50 @@ func TestPackageSupervisorHungChildDeadline(t *testing.T) {
 	defer root.Close()
 	runner := fixtureSupervisedRunner(path)
 	runner.supervisorEnv = append(runner.supervisorEnv, "RAZVILKA_DETACHED_STAGE=fork-hung", "RAZVILKA_DETACHED_ROOT="+path)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	started := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err = runner.runSupervised(ctx, os.Args[0], []string{"-test.run=^TestPackageDetachedFixture$"}, packageSupervision{Schema: 1, TransactionID: id, Component: "nfqws2", Action: "upgrade", Containment: packageContainment, State: "intent"}, root, path)
+	done := make(chan error, 1)
+	go func() {
+		_, err := runner.runSupervised(ctx, os.Args[0], []string{"-test.run=^TestPackageDetachedFixture$"}, packageSupervision{Schema: 1, TransactionID: id, Component: "nfqws2", Action: "upgrade", Containment: packageContainment, State: "intent"}, root, path)
+		done <- err
+	}()
+	for {
+		if _, err := os.Stat(filepath.Join(path, "ready")); err == nil {
+			t.Logf("hung child ready after %s", time.Since(started))
+			break
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("helper ended before hung child started: %v elapsed=%s", err, time.Since(started))
+		default:
+		}
+		if ctx.Err() != nil {
+			t.Fatal("hung child never started before deadline")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	err = <-done
 	if err == nil {
 		t.Fatal("timeout was reported as success")
 	}
-	if err := m.Quiescence(context.Background(), id, "nfqws2"); err != nil {
-		t.Fatal("hung child not durably reaped", err)
+	// Parent's bounded wait can end during the helper's final fsync. Observe
+	// the receipt later, never accept an empty proc scan or kill a fresh PID.
+	until := time.Now().Add(20 * time.Second)
+	for {
+		if err := m.Quiescence(context.Background(), id, "nfqws2"); err == nil {
+			break
+		}
+		if time.Now().After(until) {
+			journal, e := openUpdateRoot(m.updateJournalDir(), false)
+			if e != nil {
+				t.Fatal(e)
+			}
+			r, e := readSupervision(journal, id, "nfqws2", "upgrade")
+			journal.Close()
+			t.Fatalf("hung child not durably reaped: phase=%s child=%d reaped=%d ECHILD=%v cancelled=%v exit=%d receipt_error=%v elapsed=%s", r.State, r.ChildPID, r.Reaped, r.WaitECHILD, r.Cancelled, r.ExitCode, e, time.Since(started))
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

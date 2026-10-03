@@ -175,6 +175,11 @@ func RunPackageSupervisor(transactionID, component, action string) int {
 }
 
 func runPackageSupervisorAt(path, id, component, action string, test bool) error {
+	// Register before filesystem reads/fsync or child creation. A router's
+	// USB storage may make the durable running write take several seconds.
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(signals)
 	if action != "upgrade" && action != "rollback" {
 		return ErrUpdateUnknown
 	}
@@ -275,6 +280,11 @@ func runPackageSupervisorAt(path, id, component, action string, test bool) error
 	cmd.Stderr = write
 	cmd.Env = append(os.Environ(), command.Environment...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	select {
+	case <-signals:
+		return ErrUpdateUnknown
+	default:
+	}
 	if err := cmd.Start(); err != nil {
 		_ = write.Close()
 		<-copied
@@ -290,9 +300,6 @@ func runPackageSupervisorAt(path, id, component, action string, test bool) error
 	r.ChildPID = cmd.Process.Pid
 	r.State = "running"
 	writeErr := writeSupervision(root, r)
-	signals := make(chan os.Signal, 2)
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
-	defer signal.Stop(signals)
 	// This is the sole wait owner. cmd.Wait must never compete with adoption.
 	code, seen := 1, false
 	cleanup := writeErr != nil
