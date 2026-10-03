@@ -49,9 +49,9 @@ async function capture(name,source) {
   screenshots.push({file:name,source,viewport:page.viewportSize()});
 }
 async function test(name, boundary, action) {
-  const start=requests.length, began=performance.now();await action();
+  const start=requests.length, began=performance.now();const checks=await action();
   results.push({name,boundary,wall_ms:Math.round(performance.now()-began),api_requests:requests.length-start,
-    methods:requests.slice(start).reduce((counts,request)=>(counts[request.method]=(counts[request.method]||0)+1,counts),{})});
+    methods:requests.slice(start).reduce((counts,request)=>(counts[request.method]=(counts[request.method]||0)+1,counts),{}),...(checks?{checks}: {})});
   console.log('PASS '+boundary+': '+name);
 }
 function deferred() {let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
@@ -129,13 +129,42 @@ try {
     await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
   });
   if(!authOnly && !policyTransport) {
+    await test('mobile drawer fits, closes with focus and retains bottom navigation', 'real HTTP and browser layout 390 × 844', async()=>{
     await nav('nodes');await page.waitForFunction(()=>!panelLoad.request);
     await page.setViewportSize({width:390,height:844});
     if(await page.evaluate(()=>document.body.classList.contains('console-menu-open')))await page.locator('#consoleCloseMenu').click();
     await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=0);
+    const layout=()=>page.evaluate(()=>{
+      const root=document.documentElement,sidebar=document.querySelector('.sidebar'),main=document.querySelector('.main'),nav=document.querySelector('.ui3-mobile-nav');
+      const rect=element=>{const r=element.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
+      return {scrollWidth:root.scrollWidth,clientWidth:root.clientWidth,bodyScrollWidth:document.body.scrollWidth,sidebar:rect(sidebar),main:rect(main),nav:rect(nav),
+        sidebarInert:sidebar.inert,brand:rect(sidebar.querySelector('.brand b')),focus:document.activeElement?.id,
+        navVisible:[...nav.querySelectorAll('button')].every(button=>{const r=button.getBoundingClientRect();return r.width>0 && r.height>0 && r.top>=0 && r.bottom<=innerHeight && document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('.ui3-mobile-nav')===nav;})};
+    });
+    const closed=await layout();assert(closed.scrollWidth<=closed.clientWidth);assert(closed.bodyScrollWidth<=closed.clientWidth);
+    assert(closed.main.left>=0);assert(closed.main.right<=closed.clientWidth);assert(closed.sidebarInert);assert(closed.navVisible,'closed drawer obscures bottom navigation');
     await capture('03-connections-narrow.png','Настоящий HTTP; пустая библиотека подключений в отдельном тестовом состоянии, экран 390 × 844.');
+    await page.locator('#consoleMenu').click();await page.waitForFunction(()=>Math.abs(document.querySelector('.sidebar').getBoundingClientRect().left)<1);
+    const open=await layout();assert(open.scrollWidth<=open.clientWidth);assert(open.bodyScrollWidth<=open.clientWidth);
+    assert(open.brand.left>=0 && open.brand.right<=open.sidebar.right,'drawer clips the brand');assert(!open.sidebarInert);assert.equal(open.focus,'consoleCloseMenu');
+    assert(open.navVisible,'open drawer obscures bottom navigation');
+    await capture('04-mobile-drawer-open.png','Настоящий HTTP; открытое меню над пустой библиотекой, экран 390 × 844.');
+    await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=0);
+    assert.equal((await layout()).focus,'consoleMenu');assert.equal(await page.locator('#consoleMenu').getAttribute('aria-expanded'),'false');
+    await page.locator('#consoleMenu').click();await page.locator('#consoleCloseMenu').click();
+    await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=0);assert.equal((await layout()).focus,'consoleMenu');
+    await page.locator('#consoleMenu').click();await page.locator('#consoleMenuBackdrop').click({position:{x:375,y:300}});
+    await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=0);assert.equal((await layout()).focus,'consoleMenu');
+    await page.locator('#consoleMenu').click();await page.locator('.sidebar .nav[data-view="settings"]').click();
+    await page.waitForFunction(()=>state.currentView==='settings' && document.querySelector('.sidebar').getBoundingClientRect().right<=0);
+    assert.equal((await layout()).focus,'pageTitle','drawer navigation left focus in the hidden sidebar');
+    await page.locator('#consoleMenu').click();await page.locator('.ui3-mobile-nav [data-mobile-nav="nodes"]').click();
+    await page.waitForFunction(()=>state.currentView==='nodes' && document.querySelector('.sidebar').getBoundingClientRect().right<=0);
+    assert((await layout()).navVisible);
     await page.setViewportSize({width:1280,height:900});
     await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    return {closed,open,closeMethods:['Escape','close button','backdrop','drawer destination','bottom destination']};
+    });
   }
 
   if(!authOnly) {

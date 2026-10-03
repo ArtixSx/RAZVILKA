@@ -148,3 +148,20 @@ Recovery отрицательные сценарии используют **то
 OPS WIP контракт прочитан по указанию координатора: `accept-installed-idle`, terminal `accepted-installed-idle`, `installed_idle_accepted=true`, `live_accepted=false`; exact version/config + trusted inactivity/quiescence. В текущей интегрированной базе action/phase ещё нет, UI не отправляет его по догадке. Будущая idle отметка должна означать установленную неактивную версию, не live и не сервисный PASS. `awaiting-rollback-acceptance` уже имеет отдельную проверку результата отката; candidate callback не используется UI как доказательство принятия.
 
 Эта порция готова к review; весь D12 не закрыт. Следующие шаги: подключить принятый CORE/OPS idle contract, затем полный card workflow, массовые подключения/AI и legacy-дубли. Linux/native/HIL/race/weak-router CPU/RSS/render-cost остаются за координатором.
+
+## Мобильный drawer: отдельная browser регрессия
+
+База `988aebd`. Отступы recovery и закрытый mobile screenshot из `ui-http-MyMyJX` уже приняты координатором; повторно добавлены проверки открытого меню, геометрии и фокуса.
+
+На прежних assets новая настоящая browser проверка воспроизводит **RC 1: open drawer obscures bottom navigation** (`.review-local/ui-http-beNZlH`). Переполнения по ширине закрытого меню не обнаружено: прежний обрезанный снимок `ui-http-eIFcwq` был снят во время transition. В production теперь drawer заканчивается над нижней навигацией с учётом safe-area, footer расположен над drawer/backdrop; четыре кнопки занимают четыре колонки. Выбор раздела из открытого sidebar переводит фокус в заголовок страницы. Escape, X и backdrop возвращают фокус кнопке открытия, закрытый sidebar остаётся inert.
+
+Исправленная проверка: **13/13 browser, RC 0**, `.review-local/ui-http-RGI8GP/result.json`. На ширине 390: **document scrollWidth=390, clientWidth=390, body scrollWidth=390** при закрытом и открытом меню. Main начинается с x=0 и имеет ширину 390; brand целиком внутри открытого drawer. Нижняя навигация y=784…844 видна и доступна под обоими состояниями (проверены hit targets всех кнопок). Проверены закрытие Escape/X/backdrop, выбор раздела sidebar и переход нижней навигацией из открытого меню. Только GET при navigation; никаких package/runtime действий.
+
+Свежие реальные снимки, просмотрены исполнителем:
+
+- [Закрытые подключения — 390 × 844](../../../.review-local/ui-http-RGI8GP/03-connections-narrow.png)
+- [Открытый drawer — 390 × 844](../../../.review-local/ui-http-RGI8GP/04-mobile-drawer-open.png)
+
+Абсолютный каталог: `C:/Projects/RAZVILKA/worktrees/sol-ui/.review-local/ui-http-RGI8GP/`. Данные намеренно пустые тестовые; журнал-заготовка recovery по-прежнему явно описан как fixture. `errors=[]`, `configUnchanged=true`, Safe Mode включён. Скриншоты не включены в Git.
+
+Node selected gate **79/79**, лог `.review-local/frontend-d12-mobile.log`; `go build`, `go test ./cmd/razvilka -count=1`, `go vet ./cmd/razvilka` — RC 0. Shared gate, backend и чужие файлы не редактировались. Следующая вертикаль по указанию координатора: полный card workflow, массовые подключения/AI и legacy-дубли; новый idle action ждёт принятой реализации CORE/OPS.
