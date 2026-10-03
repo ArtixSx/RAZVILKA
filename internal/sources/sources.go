@@ -66,6 +66,7 @@ type State struct {
 	ExpiresAt      time.Time    `json:"expires_at,omitempty"`
 	LastKnownGood  bool         `json:"last_known_good"`
 	LegacyCache    bool         `json:"legacy_cache"`
+	Offline        bool         `json:"offline"`
 	Provenance     *Provenance  `json:"provenance,omitempty"`
 	Diff           *DiffSummary `json:"diff,omitempty"`
 }
@@ -169,6 +170,15 @@ func (m *Manager) List() []State {
 	out := make([]State, 0, len(m.states))
 	for _, s := range m.states {
 		s = currentState(s, time.Now())
+		// Readback owns its nested metadata; callers cannot mutate the live view.
+		if s.Provenance != nil {
+			provenance := *s.Provenance
+			s.Provenance = &provenance
+		}
+		if s.Diff != nil {
+			diff := *s.Diff
+			s.Diff = &diff
+		}
 		s.Enabled = m.settings.Draft[s.ID]
 		s.AppliedEnabled = m.settings.Applied[s.ID]
 		s.Dirty = s.Enabled != s.AppliedEnabled
@@ -176,6 +186,23 @@ func (m *Manager) List() []State {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// OfflineCatalog is a detached read-only view, with no fetch, settings write,
+// cache upgrade or authority to build/apply a new route. Stale/quarantined and
+// legacy labels survive; even a recent cached receipt is not fresh online data.
+func (m *Manager) OfflineCatalog() []State {
+	states := m.List()
+	for i := range states {
+		state := &states[i]
+		state.Offline = true
+		if state.Ready {
+			state.LastKnownGood = true
+			state.CacheStatus = "offline-cache"
+		}
+		state.Ready = false
+	}
+	return states
 }
 
 func (m *Manager) Dirty() bool {
@@ -389,6 +416,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	finalURL := src.URL
 	if resp.Request != nil && resp.Request.URL != nil {
 		finalURL = resp.Request.URL.String()
+	}
+	if err := validateFinalURL(*src, finalURL); err != nil {
+		return m.fail(*src, err)
 	}
 	cached := cacheDocument{Schema: 2, ID: src.ID, Kind: src.Kind, SourceHash: sourceHash(*src), Content: normalized, Entries: len(entries), SHA256: digest, FetchedAt: now, ExpiresAt: now.Add(sourceTTL(*src)), Provenance: Provenance{URL: publicfetch.RedactedURL(src.URL), FinalURL: publicfetch.RedactedURL(finalURL), RawSHA256: rawSHA, TrustTier: trustTier(*src)}}
 	cached.Diff = DiffSummary{Added: len(entries)}
