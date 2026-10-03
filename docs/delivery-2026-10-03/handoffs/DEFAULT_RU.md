@@ -1,0 +1,42 @@
+# DEFAULT — IP compiler и consumer одной транзакции
+
+04.10.2026, база `e0e83db`, ветка `sol/default-executor-20261004`, worktree `C:/Projects/RAZVILKA/worktrees/sol-default`. Только новые `internal/app/default_route_executor*.go`, их tests и этот handoff. VERSION `0.19.3` / go.mod сохранены. Live Linux/router здесь не запускались.
+
+## Реализовано
+
+- `CompileDefaultRoutePolicy`: immutable schema-2 all-except policy; trusted scope/addresses/profile references, authority InstallationID+Sequence, concrete default consent, scope freshness, explicit guest opt-in. Auto intent разрешается только в проверенный concrete profile без изменения desired intent. Нет services и неизвестный сайт/direct IP продолжают default, когда нет явно выбранного IP-wide override. DNS observations не дают service flow identity.
+- IP direct exclusions выше IP-overrides; source scope mismatch и удаление override возвращают default. Source×destination rectangles default/override не пересекаются между adapters, поэтому не нужен новый default priority slot.
+- Exact ingress и отрицательные source/MAC gates представлены явно. Отрицательная MAC-граница остаётся обязательной для новых privacy addresses; она не заменяется адресами из lease. Negative gate должен исполняться shared owner до всех engine/DNS/RPDB действий. Compiler не выдаёт наличие описания gate за установленный gate.
+- `DefaultRouteExecutor.Review/Execute`: реальные `dataplane.BuildAt` и `App.applyDataplane → Manager.Apply`; exclusive application admission удерживается до завершения rollback/readback. Snapshot/config/catalog/profile/node/control/consent bindings перепроверяются через `WithReviewGuard`. Единственный существующий execution journal, scoped receipt/rollback protocol, CAS callback после Health. Каждый review имеет отдельный transaction ID; review одноразовый и не редактируется presentation accessor.
+- Missing bindings, changed review, unfinished journal, unsafe/unsupported scope отказаны до effects. Ошибка совпавшего override сохраняет route identity; она не превращается в DIRECT/default miss. Не подтверждённый rollback после live phase ставит application fence.
+- `DefaultRouteFlowBridge`: минимальная executable граница read-only Compose + существующий `dataplane.Adapter` под тем же Manager. Это контракт следующей порции, **не реализованная domain capability**.
+
+## Capability / точные зависимости
+
+Этот checkpoint **не снимает** `NETWORK_POLICY_EXECUTOR_REQUIRED` и **не закрывает D07/D08**. Нормальный live path ждёт реальных shared bindings, а не фиктивного PASS callback:
+
+1. CORE согласовал `Route.Ingress []string`, `PolicyRule.Ingress string`, exact kernel `iif`/parser/readback/addition receipts. Также `Route.NetworkPolicyGeneration` hex64, `NetworkPolicyRole` default/override, `PolicyState.NetworkPolicyGeneration/NetworkDefault`, `NetworkPolicyRouteAuthority(plan, adapter)`. SHA ещё не получен. После него расширить `defaultRouteBoundInput` только для exact ingress/generation/role и установить их в concrete composer.
+2. CORE уточнил финальный API: `Store.CommitNetworkPolicyWithRollback(expected config.Config, appliedPolicy, appliedServices) (undo, error)`: full expected-preimage disk/memory CAS, Revision+1 / AppliedRevision same, desired editor сохранён, Stop не очищается; guarded undo. Revision-only API не публикуется: legacy ApplyDraftScope может изменить applied state без revision increment. До SHA explicit Commit dependency. Test-only interim CAS использует реальный Store.RestoreSession; это не production replacement API.
+3. CORE shared early negative LAN classifier (source+MAC), physical ingress/connected source proof и фактическое effect admission. Read-only Observe и application gate **не** заменяют короткое sealed control admission actual start/kernel effect. Удерживать control kernel lock через Apply/Wait/fsync/rollback запрещено; остаётся existing effect admission с rechecks и joined cancel.
+4. NET own-server WG default mode: сейчас реальный `WG.Stage → excludeWGEndpoint` отклоняет любой broad CIDR с endpoint. Нельзя вырезать endpoint как LAN-wide DIRECT. NET делает explicit generation/role admission + existing outer-WG fwmark/transport pin, exact receipt/fence. AWG/WARP endpoint coordinates/coverage проверяются отдельно.
+5. VLESS: generic source-scoped Health сейчас пропускает ProbeURL; scoped Xray v4 HTTPS proof / udp:false не full default proof. Один TUN→SOCKS теряет LAN source, разные nodes по overlapping destinations требуют source-aware fanout или refusal. Synthetic network ServiceID не имеет отдельного NodeStore default consent/proof. Proxy forwarding общий bound 128 может не вместить полный IPv6 public complement; CORE решает точный primitive/bound, consumer не увеличивает его сам.
+6. Domain site/RU exclusions и domain service overrides требуют flow dispatch до outbound выбора. Interim compile отказывает им до mutation. Строгий service DNS listener из базы не умеет DNS-default unknown names/обычные types; первый compiler допускает только явно выбранный baseline DNS. Existing scoped DNS нельзя молча уронить: Review при prior DNS refuses до matching совместной композиции.
+
+CORE/NET/VLESS получили concrete rule/gate fields и обсудили adapter ограничения непосредственно по разрешению координатора. Никаких app.go/main.go/manager/plan/policy/adapter-owned файлов этот worktree не меняет.
+
+## Проверки
+
+Go `C:/Projects/RAZVILKA/tools/go/bin/go.exe` 1.26.5; `GOTOOLCHAIN=local`, `GOMAXPROCS=2`, `GOFLAGS=-p=2`.
+
+- `go test ./internal/app -run '^TestNetworkPolicyCannotFallThroughLegacyExecutor$' -count=1 -timeout 120s` — RC0.
+- Первый `go test ./internal/app -run '^TestDefaultRoute' -count=1 -timeout 120s` после transaction tests — RC1: Windows ownedfs `renameat ... Access is denied` раньше adapter phases; test profile key fixture также исправлен на канонические 32-byte base64. Это не обход journal guard.
+- Обычный sandbox-прогон `go test ./internal/app -run '^TestDefaultRoute' -count=1 -timeout 120s -v` — RC0 с явными Windows SKIP для tests, которым нужна запись общего журнала. Условие skip позволяет адресный локальный прогон с `RAZVILKA_DEFAULT_WINDOWS_JOURNAL_TESTS=1`.
+- По разрешённому координатором адресному `require_escalated` повтору, `RAZVILKA_DEFAULT_WINDOWS_JOURNAL_TESTS=1 go test ./internal/app -run '^(TestDefaultRoute|TestNetworkPolicyCannotFallThroughLegacyExecutor)' -count=1 -timeout 120s` — **RC0, без SKIP**. Compiler и auto/concrete consent; изменённые scope/epoch/consent/profile/node review; unknown/direct IP/no services; explicit exclusions/guest; missing/weakening binding; unfinished journal refusal; transaction success/Stop/cancel/CAS/verified/unverified rollback; SafeMode save; actual WG Stage refusal PASS. Production guards не менялись; Windows local file/transaction tests не означают Linux kernel/power-loss PASS.
+- `GOOS=linux GOARCH=amd64 go test -c -o <temp>/razvilka-default-executor-linux.test ./internal/app` — RC0 (cross-compile, не Linux execution).
+- `git diff --check` — RC0.
+
+Transaction doubles проверяют последовательность/admission/fence и не объявляются packet/native PASS. Actual-WG test использует production named-profile adapter и проверяет нынешний отказ endpoint overlap до add/setconf; это не successful tunnel/native proof. Native matrix с настоящими clients/flows/IPv4/IPv6/TCP/UDP/DNS под существующими adapters выполняет root после shared gate/mode интеграции.
+
+## Следующая завершённая порция
+
+Потребить CORE ingress/generation/CAS SHA, NET WG mode SHA и реальный negative gate; заменить interim binder/CAS tests на actual calls. Затем root native selected/control namespace test, bounds/Stop/crash/rollback. После этого domain bridge + согласованный DNS-default, отдельный review coverage; domain refusal не является окончательным выполнением плана.
