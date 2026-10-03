@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/tunnelcheck"
 	"github.com/ArtixSx/razvilka/internal/wireguardprofile"
 )
 
@@ -55,6 +56,7 @@ func nativeWGEndpointClient(t *testing.T) {
 				return a
 			}
 			a := newAdapter()
+			captureProbeFailure := true
 			t.Cleanup(func() {
 				if t.Failed() {
 					nativeWGKernelCapture(t, "", "endpoint child final state")
@@ -62,7 +64,7 @@ func nativeWGEndpointClient(t *testing.T) {
 			})
 			a.CanaryProbe = func(probeCtx context.Context, url, source string) error {
 				err := sourceBoundAWGProbe(probeCtx, url, source)
-				if err != nil {
+				if err != nil && captureProbeFailure {
 					nativeWGKernelCapture(t, "", "candidate before production cleanup")
 					if server := os.Getenv("RAZVILKA_WG_NATIVE_SERVER_NS"); server != "" {
 						nativeWGKernelCapture(t, server, "server before candidate cleanup")
@@ -77,9 +79,50 @@ func nativeWGEndpointClient(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			// WAN is deliberately usable: prove the isolated bound canary cannot
+			// borrow it when the WireGuard peer key is wrong.
+			if err := sourceBoundAWGProbe(ctx, "http://198.51.100.10/", "192.0.2.2"); err != nil {
+				t.Fatal("fixture WAN service control", err)
+			}
+			t.Log("ordinary WAN service control passed")
+			staged := filepath.Join(transaction, "rz-warp.conf.staged")
+			goodProfile, err := os.ReadFile(staged)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, wrongPublic := nativeWGKeys(t)
+			lines := strings.Split(string(goodProfile), "\n")
+			for i, line := range lines {
+				if strings.HasPrefix(line, "PublicKey = ") {
+					lines[i] = "PublicKey = " + wrongPublic
+				}
+			}
+			if err := os.WriteFile(staged, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			captureProbeFailure = false
+			a.Timeout, a.HandshakeTimeout = 1200*time.Millisecond, 200*time.Millisecond
+			if err := a.Canary(ctx, plan.RoutePlanFor(a.ID()), transaction); !errors.Is(err, tunnelcheck.ErrHandshake) {
+				t.Fatal("wrong-key canary must fail with a handshake error despite reachable WAN", err)
+			}
+			t.Log("wrong-key canary rejected with handshake error while WAN service is reachable")
+			a.Timeout, a.HandshakeTimeout = 25*time.Second, 8*time.Second
+			captureProbeFailure = true
+			if err := os.WriteFile(staged, goodProfile, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			candidate := *a
+			candidate.Table, candidate.PriorityBase = 219, 18050
+			if err := candidate.ensureCanaryPolicyFree(ctx); err != nil {
+				t.Fatal("wrong-key canary leaked policy", err)
+			}
+			if _, err := exec.CommandContext(ctx, "ip", "link", "show", "rz-wg-canary").CombinedOutput(); err == nil {
+				t.Fatal("wrong-key canary leaked interface")
+			}
 			if err := a.Canary(ctx, plan.RoutePlanFor(a.ID()), transaction); err != nil {
 				t.Fatal("candidate", err)
 			}
+			t.Log("valid isolated candidate service and handshake passed")
 			for _, step := range []func(context.Context, Plan, string) error{a.Activate, a.Health, a.Commit} {
 				if err := step(ctx, plan, transaction); err != nil {
 					t.Fatal(err)
@@ -216,6 +259,7 @@ func nativeWGKernelCapture(t *testing.T, ns, label string) {
 		{"ip", "-4", "-j", "route", "get", "93.184.216.34", "mark", "0"},
 		{"ip", "-6", "-j", "route", "get", "2606:4700::1111", "mark", "0"},
 		{"ip", "-4", "-j", "route", "get", "198.51.100.10", "from", "10.66.0.2", "oif", "rz-wg-canary"},
+		{"ip", "-4", "-j", "route", "get", "198.51.100.10", "from", "10.66.0.2"},
 		{"sysctl", "-n", "net.ipv4.conf.all.rp_filter", "net.ipv4.conf.default.rp_filter", "net.ipv4.conf.wan-c.rp_filter", "net.ipv4.conf.wan-s.rp_filter", "net.ipv4.conf.wg-server.rp_filter"},
 	}
 	for _, field := range []string{"public-key", "peers", "endpoints", "latest-handshakes", "transfer", "fwmark"} {

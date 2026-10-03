@@ -28,6 +28,78 @@ func wgEndpointFixture(t *testing.T) (*WARPWireGuardAdapter, *warpFakeRunner, *W
 	return a, r, state.WireGuardEndpoint, root
 }
 
+type wgEndpointRouteJSONRunner struct {
+	*warpFakeRunner
+	response []byte
+}
+
+func (r *wgEndpointRouteJSONRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "ip" && strings.HasPrefix(strings.Join(args, " "), "-6 -j route get ") {
+		return r.response, nil
+	}
+	return r.warpFakeRunner.Run(ctx, name, args...)
+}
+
+// The independent native-wg-06 capture contains from:"::" in a unique
+// iproute2 IPv6 route-get result. It is a source selector, not prefsrc.
+func TestWGEndpointCapturedIPv6RouteGet(t *testing.T) {
+	a, r, plan, root := ownWireGuardFixture(t, testOwnWireGuardProfile(""))
+	a.Runner = &wgEndpointRouteJSONRunner{warpFakeRunner: r, response: []byte(`[{"dst":"2606:4700::1111","from":"::","gateway":"2001:db8:1::1","dev":"wan-c","prefsrc":"2001:db8:1::2","metric":1024,"flags":[],"pref":"medium"}]`)}
+	a.EndpointResolver = func(context.Context, string) ([]netip.Addr, time.Time, error) {
+		return []netip.Addr{netip.MustParseAddr("2606:4700::1111")}, time.Now().Add(time.Minute), nil
+	}
+	ctx := context.Background()
+	if err := a.Snapshot(ctx, plan, root); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Stage(ctx, plan, root); err != nil {
+		t.Fatal("captured unique IPv6 route rejected", err)
+	}
+	state, err := a.readStagedPolicy(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := state.WireGuardEndpoint
+	if e.Endpoint != "[2606:4700::1111]:51820" || e.Source != "2001:db8:1::2" || e.Gateway != "2001:db8:1::1" || e.Device != "wan-c" {
+		t.Fatal("source selector replaced the selected WAN source", e)
+	}
+}
+
+func TestWGEndpointRouteSourceSelector(t *testing.T) {
+	for _, tc := range []struct {
+		name, dst, from string
+		valid           bool
+	}{
+		{"IPv6 unspecified", "2606:4700::1111", `"::"`, true},
+		{"IPv6 zero prefix", "2606:4700::1111/128", `"::/0"`, true},
+		{"IPv4 unspecified", "93.184.216.34", `"0.0.0.0"`, true},
+		{"IPv4 zero prefix", "93.184.216.34/32", `"0.0.0.0/0"`, true},
+		{"IPv6 host", "2606:4700::1111", `"2001:db8:1::2"`, false},
+		{"IPv6 host prefix", "2606:4700::1111", `"2001:db8:1::2/128"`, false},
+		{"IPv6 network prefix", "2606:4700::1111", `"2001:db8:1::/64"`, false},
+		{"unspecified restricted prefix", "2606:4700::1111", `"::/128"`, false},
+		{"nonzero zero prefix", "2606:4700::1111", `"::1/0"`, false},
+		{"wrong family", "2606:4700::1111", `"0.0.0.0"`, false},
+		{"wrong family IPv4", "93.184.216.34", `"::"`, false},
+		{"zone", "2606:4700::1111", `"::%wan-c"`, false},
+		{"empty", "2606:4700::1111", `""`, false},
+		{"null", "2606:4700::1111", `null`, false},
+		{"number", "2606:4700::1111", `0`, false},
+		{"malformed", "2606:4700::1111", `"unknown"`, false},
+		{"missing destination", "", `"::"`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseWGEndpointRoutes([]byte(`[{"dst":"` + tc.dst + `","from":` + tc.from + `,"dev":"wan-c"}]`))
+			if (err == nil) != tc.valid {
+				t.Fatal("source selector acceptance", err)
+			}
+		})
+	}
+	if _, err := parseWGEndpointRoutes([]byte(`[{"dst":"2606:4700::1111","from":"::","unsupported":true}]`)); err == nil {
+		t.Fatal("unknown attribute accepted")
+	}
+}
+
 func TestWGEndpointExactPinInstallReadbackAndCleanup(t *testing.T) {
 	a, r, e, _ := wgEndpointFixture(t)
 	ctx := context.Background()
@@ -56,7 +128,7 @@ func TestWGEndpointExactPinInstallReadbackAndCleanup(t *testing.T) {
 }
 
 func TestWGEndpointForeignNearMatchStopsBeforeMutation(t *testing.T) {
-	for _, kind := range []string{"mark", "metric", "gateway"} {
+	for _, kind := range []string{"mark", "metric", "gateway", "source selector"} {
 		t.Run(kind, func(t *testing.T) {
 			a, r, e, _ := wgEndpointFixture(t)
 			ctx := context.Background()
@@ -73,6 +145,10 @@ func TestWGEndpointForeignNearMatchStopsBeforeMutation(t *testing.T) {
 			case "gateway":
 				v := r.endpoint.routes["4|"+e.prefix()]
 				v.Gateway = "192.0.2.9"
+				r.endpoint.routes["4|"+e.prefix()] = v
+			case "source selector":
+				v := r.endpoint.routes["4|"+e.prefix()]
+				v.From = "192.0.2.2/32"
 				r.endpoint.routes["4|"+e.prefix()] = v
 			}
 			r.calls = nil
