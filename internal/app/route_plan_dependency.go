@@ -10,6 +10,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
 // The selected node can be healthy while another retained route prevents a
@@ -21,6 +22,7 @@ type routePlanDependencyError struct {
 	// node, or the node a group resolved to in the committed plan. It stays
 	// server-side; the panel already knows the applied route of the service.
 	NodeID string
+	Engine string
 	// Retained means the same selection is already applied. Checking its node
 	// again changes no route, so the panel and autopilot may do it themselves.
 	Retained bool
@@ -41,11 +43,12 @@ func (e *routePlanDependencyError) Error() string {
 
 func (a *App) routePlanDependency(cfg config.Config, service catalog.Service, selected, committed string) error {
 	dependency := &routePlanDependencyError{ServiceID: service.ID, Name: service.Name, Cause: "check-required"}
-	node := strings.TrimPrefix(selected, "sing-box:")
+	engine, node, _ := routekind.ParseNodeRoute(selected)
+	dependency.Engine = engine
 	if strings.HasPrefix(node, "group-") {
 		node = ""
-		if strings.HasPrefix(committed, "sing-box:node-") {
-			node = strings.TrimPrefix(committed, "sing-box:")
+		if oldEngine, oldNode, exact := routekind.ParseNodeRoute(committed); exact && oldEngine == engine && strings.HasPrefix(oldNode, "node-") {
+			node = oldNode
 		}
 	}
 	applied := cfg.AppliedServices[service.ID]

@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
 var ErrRevisionChanged = errors.New("configuration revision changed")
@@ -26,13 +28,9 @@ func (s *Store) ApplyNodeRouteScopeWithRollback(id, route string, sources []stri
 }
 
 func (s *Store) applyNodeRouteWithRollback(id, route string, sources *[]string, revision uint64) (func() error, error) {
-	if id == "" || len(route) != len("sing-box:node-")+64 || !strings.HasPrefix(route, "sing-box:node-") {
+	_, target, valid := routekind.ParseNodeRoute(route)
+	if id == "" || !valid || !strings.HasPrefix(target, "node-") {
 		return nil, errors.New("invalid node route")
-	}
-	for _, c := range strings.TrimPrefix(route, "sing-box:node-") {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
-			return nil, errors.New("invalid node route")
-		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

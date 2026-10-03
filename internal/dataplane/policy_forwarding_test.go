@@ -516,6 +516,7 @@ func TestProxyForwardingCommitRecoveryRefreshAndDeactivateShareOwnership(t *test
 	a, r, state := proxyForwardingFixture(t)
 	ctx := context.Background()
 	a.Processes = r.processes
+	a.bootIdentity = func() (string, error) { return "core-forwarding-model-boot", nil }
 	a.EngineBin = "sing-box"
 	a.SidecarBin = "sing-box"
 	a.SOCKSProbe = func(context.Context, string) error { return nil }
@@ -530,15 +531,24 @@ func TestProxyForwardingCommitRecoveryRefreshAndDeactivateShareOwnership(t *test
 			t.Fatal(err)
 		}
 	}
-	if err := a.installForwarding(ctx, state); err != nil {
+	transaction := t.TempDir()
+	if err := os.Chmod(transaction, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	transaction := t.TempDir()
 	policy, _ := json.Marshal(state)
 	snapshot, _ := json.Marshal(proxySnapshot{ConfigPath: filepath.Join(transaction, "global.json")})
 	for path, data := range map[string][]byte{filepath.Join(transaction, "policy.staged.json"): policy, filepath.Join(transaction, "snapshot.json"): snapshot} {
 		if err := os.WriteFile(path, data, 0o600); err != nil {
 			t.Fatal(err)
+		}
+	}
+	for _, step := range []func() error{
+		func() error { return a.prepareCandidatePolicy(transaction, state) },
+		func() error { return a.beginCandidatePolicy(transaction, state) },
+		func() error { return a.applyCandidatePolicy(ctx, state, transaction) },
+	} {
+		if err := step(); err != nil {
+			t.Fatal("fixture failed to acquire acknowledged candidate", err)
 		}
 	}
 	if err := a.Commit(ctx, Plan{}, transaction); err != nil {
@@ -559,20 +569,6 @@ func TestProxyForwardingCommitRecoveryRefreshAndDeactivateShareOwnership(t *test
 		t.Fatal(err)
 	}
 	plan := Plan{Routes: []Route{{Resolved: "sing-box", Sources: []string{"192.168.1.25/32"}, CIDRs: []string{"198.51.100.21/32"}}}}
-	failed := false
-	r.firewall.fail = func(call string) bool {
-		if !failed && strings.Contains(call, " -A "+state.Forwarding.Chain) && strings.Contains(call, "198.51.100.21/32") {
-			failed = true
-			return true
-		}
-		return false
-	}
-	if updated, err := a.RefreshPolicy(ctx, plan); updated || err == nil {
-		t.Fatalf("partial refresh succeeded: updated=%t err=%v", updated, err)
-	}
-	if err := a.verifyForwarding(ctx, state); err != nil {
-		t.Fatalf("failed refresh lost old forwarding: %v", err)
-	}
 	if updated, err := a.RefreshPolicy(ctx, plan); !updated || err != nil {
 		t.Fatalf("refresh failed: updated=%t err=%v", updated, err)
 	}
@@ -593,5 +589,39 @@ func TestProxyForwardingCommitRecoveryRefreshAndDeactivateShareOwnership(t *test
 	}
 	if len(r.processes.running) != 0 || regularFile(a.policyPath()) || regularFile(a.forwardingPath()) {
 		t.Fatal("deactivate retained runtime ownership")
+	}
+}
+
+func TestProxyForwardingPreAdditionFailureRetainsPendingGeneration(t *testing.T) {
+	a, processes, old := networkCleanupProxy(t)
+	processes.running["sing-box-engine"], processes.running["sing-box-tun"] = true, true
+	runner := a.Runner.(*proxyFakeRunner)
+	failed := false
+	runner.firewall.fail = func(call string) bool {
+		if !failed && strings.Contains(call, " -A "+old.Forwarding.Chain) && strings.Contains(call, "198.51.100.21/32") {
+			failed = true
+			return true
+		}
+		return false
+	}
+	plan := Plan{Routes: []Route{{Resolved: "sing-box", Sources: []string{"192.168.1.25/32"}, CIDRs: []string{"198.51.100.21/32"}}}}
+	if updated, err := a.RefreshPolicy(context.Background(), plan); updated || err == nil || !failed {
+		t.Fatal("pre-add forwarding failure reported success", updated, failed, err)
+	}
+	if _, _, err := a.readPolicyBinding(old); !errors.Is(err, ErrProxyPolicyUnknown) {
+		t.Fatal("missing addition ledger authorized historical restoration", err)
+	}
+	beforeDefaults := map[string]string{}
+	for key, value := range runner.defaults {
+		beforeDefaults[key] = value
+	}
+	if updated, err := a.RefreshPolicy(context.Background(), plan); updated || !errors.Is(err, ErrProxyPolicyUnknown) {
+		t.Fatal("pending generation replayed refresh", updated, err)
+	}
+	if err := a.Deactivate(context.Background()); !errors.Is(err, ErrProxyPolicyUnknown) {
+		t.Fatal("pending generation inferred cleanup from intent", err)
+	}
+	if !reflect.DeepEqual(beforeDefaults, runner.defaults) || len(processes.running) != 2 {
+		t.Fatal("fenced retry mutated routes or stopped runtime")
 	}
 }

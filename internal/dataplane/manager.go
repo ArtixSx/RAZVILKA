@@ -487,6 +487,18 @@ func (m *Manager) CanaryCapable(id string) bool {
 	return ok
 }
 
+// XrayNodeRouteCapable distinguishes the scoped registry backend from a
+// generic Xray draft adapter. A service proof alone does not grant LAN proof.
+func (m *Manager) XrayNodeRouteCapable() bool {
+	if m == nil {
+		return false
+	}
+	m.registryMu.RLock()
+	defer m.registryMu.RUnlock()
+	a, ok := m.Adapters["xray"].(*ProxyTunnelAdapter)
+	return ok && a != nil && a.scopedXray && a.NodeRoutes != nil && a.FreshProfile != nil && a.NodeTUNProbe != nil
+}
+
 // ProbeCandidate runs the non-live half of a transaction for one adapter:
 // snapshot, stage, validate and isolated canary. It never calls Activate,
 // Commit or Rollback because the CanaryAdapter contract must leave live state

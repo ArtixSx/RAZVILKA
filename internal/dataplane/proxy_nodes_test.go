@@ -136,7 +136,7 @@ func scopedXrayTestFixture(t *testing.T) *scopedXrayFixture {
 
 func stageScopedFixture(t *testing.T, f *scopedXrayFixture) string {
 	t.Helper()
-	root := t.TempDir()
+	root := privateScopedXrayFixtureDir(t)
 	ctx := context.Background()
 	for _, step := range []func(context.Context, Plan, string) error{f.a.Snapshot, f.a.Stage, f.a.Validate} {
 		if err := step(ctx, f.plan, root); err != nil {

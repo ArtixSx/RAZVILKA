@@ -256,6 +256,11 @@ func (a *App) runAutoInstall(ctx context.Context, p autonomy.Policy) bool {
 	if !windowOpen || p.Application.Mode != "install" || a.componentMaintenancePending() || !autoInstallAllowed(*job, cfg, a.Store.Dirty(), p) || len(autoInstallAttemptPrefix)+len(job.Release.Version) > 64 || job.Release.Version == "" || a.autoInstallFailed(job.Release.Version) {
 		return false
 	}
+	if a.SelfUpdateFiles != nil {
+		if a.SelfUpdateFiles.Ready(ctx, job.ID) != nil || a.selfUpdateFileAuthority(ctx, cfg.Revision) != nil {
+			return false
+		}
+	}
 	// Record the attempt before the handoff: after a rollback the old process
 	// starts again and must not repeat the same version every night.
 	a.autonomy.mu.Lock()

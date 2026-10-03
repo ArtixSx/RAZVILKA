@@ -419,7 +419,7 @@ func TestWGEndpointRollbackAfterForeignInterfaceCollisionKeepsForeignLink(t *tes
 		t.Fatal("creation collision accepted")
 	}
 	r.calls = nil
-	if err := a.Rollback(ctx, plan, root); err != nil {
+	if err := a.Rollback(ctx, plan, root); !errors.Is(err, ErrPolicyAdditionUnknown) {
 		t.Fatal(err)
 	}
 	if !r.active {

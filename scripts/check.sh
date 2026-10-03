@@ -108,7 +108,13 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-self-update-supervision.mjs
   node scripts/test-native-opkg-runner.mjs
 fi
-./build.sh
+# Build the native executable required by the mandatory transaction fixture.
+if [ "${RAZVILKA_BUILD_TARGETS:-all}" = arm64 ] &&
+  [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ]; then
+  RAZVILKA_BUILD_TARGETS=arm64+amd64 ./build.sh
+else
+  ./build.sh
+fi
 sha256sum -c dist/SHA256SUMS
 sh ./scripts/test-entware-transaction.sh
 echo "RAZVILKA checks: OK"

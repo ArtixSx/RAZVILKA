@@ -27,6 +27,10 @@ func (a *App) selfUpdateCurrent(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, a.SelfUpdate.Snapshot())
 	case http.MethodDelete:
+		if a.PendingSelfUpdateRecovery() {
+			a.writeOperationFailure(w, errSelfUpdateRecovery)
+			return
+		}
 		job, err := a.SelfUpdate.Cancel()
 		if err != nil {
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "Подготовка уже завершена. Установку останавливает только сам установщик при ошибке.", "job": job})
@@ -113,6 +117,20 @@ func (a *App) selfUpdateApply(w http.ResponseWriter, r *http.Request) {
 		selfUpdateError(w, updatecheck.ErrReviewChanged)
 		return
 	}
+	if err := a.selfUpdateFileAuthority(r.Context(), cfg.Revision); err != nil {
+		selfUpdateError(w, err)
+		return
+	}
+	if a.SelfUpdateFiles != nil {
+		if err := a.SelfUpdateFiles.Ready(r.Context(), request.ID); err != nil {
+			selfUpdateError(w, err)
+			return
+		}
+		if err := a.selfUpdateFileAuthority(r.Context(), cfg.Revision); err != nil {
+			selfUpdateError(w, err)
+			return
+		}
+	}
 	job, err := a.SelfUpdate.Apply(r.Context(), request.ID, request.Token, cfg.Revision, updatecheck.ConfigFingerprint(cfg))
 	if err != nil && !errors.Is(err, updatecheck.ErrHandoffUncertain) {
 		selfUpdateError(w, err)
@@ -143,6 +161,11 @@ func (a *App) StartSelfUpdate(ctx context.Context) {
 	if a.SelfUpdate != nil {
 		a.SelfUpdate.Start(ctx)
 		if a.SelfUpdate.StartupPending() {
+			job := a.SelfUpdate.Snapshot()
+			if a.selfUpdateStartupAllowed(ctx, job.ID, job.HelperPID) != nil {
+				return
+			}
+			ctx = context.WithValue(ctx, selfUpdateFileAdmissionKey{}, selfUpdateFileAdmission{id: job.ID})
 			release, err := a.Operations.Exclusive(ctx)
 			if err != nil {
 				a.Operations.Fence()
@@ -151,7 +174,6 @@ func (a *App) StartSelfUpdate(ctx context.Context) {
 			// This is startup-owned admission, not an HTTP request's lease.
 			// Only the bounded applied-node recovery worker may borrow it. The
 			// installer cannot release it until that worker's cleanup has joined.
-			job := a.SelfUpdate.Snapshot()
 			handoff := &selfUpdateNodeRecovery{app: a, jobID: job.ID, helperPID: job.HelperPID, current: a.SelfUpdate.Snapshot, done: make(chan struct{})}
 			a.nodeRecovery.mu.Lock()
 			a.nodeRecovery.update = handoff
@@ -195,6 +217,9 @@ func (h *selfUpdateNodeRecovery) guard(ctx context.Context) error {
 	job := h.current()
 	if job.ID != h.jobID || job.State != "restarting" || h.helperPID <= 1 || job.HelperPID != h.helperPID {
 		return errNodeRecoveryReview
+	}
+	if err := h.app.selfUpdateStartupAllowed(ctx, h.jobID, h.helperPID); err != nil {
+		return err
 	}
 	return ctx.Err()
 }

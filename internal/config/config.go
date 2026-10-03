@@ -63,9 +63,20 @@ func Default() Config {
 }
 
 func Load(path string) (*Store, error) {
+	return load(path, true)
+}
+
+// LoadExisting is recovery bootstrap only. Missing settings must never be
+// replaced with defaults while application file replacement is unresolved.
+func LoadExisting(path string) (*Store, error) { return load(path, false) }
+
+func load(path string, create bool) (*Store, error) {
 	s := &Store{path: path, cfg: Default()}
 	image, err := restorejournal.ReadFileImage(context.Background(), path)
 	if err == nil && !image.Exists {
+		if !create {
+			return nil, os.ErrNotExist
+		}
 		if err := s.Save(); err != nil {
 			return nil, err
 		}

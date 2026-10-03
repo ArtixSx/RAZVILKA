@@ -131,6 +131,7 @@ func TestWARPCanaryDoesNotDeleteInterfaceWhenStartOwnershipIsUncertain(t *testin
 	}
 	runner := &warpFakeRunner{failStart: true}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", runner
 	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
@@ -171,6 +172,7 @@ func TestWARPCanaryUsesTemporarySourcePolicyAndCleansIt(t *testing.T) {
 	// precedence guard, while its own temporary selectors still get removed.
 	runner := &warpFakeRunner{policy: policyKernelFake{foreignIPv4: []string{"100: from all fwmark 0xffffaaa lookup 4096"}}}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
 	adapter.Runner = runner
@@ -233,6 +235,7 @@ func TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner(t *testing.T) 
 	}
 	runner := &warpFakeRunner{handshakeAfterRestart: true}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.NativeOnly = true
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
@@ -372,6 +375,7 @@ func TestWARPAdapterActivatesHealthChecksAndRollsBack(t *testing.T) {
 	}
 	runner := &warpFakeRunner{}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.NativeOnly = true
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
@@ -422,6 +426,7 @@ func TestWARPDeactivateRemovesOnlyOwnedRuntime(t *testing.T) {
 	root := t.TempDir()
 	runner := &warpFakeRunner{active: true}
 	adapter := NewWARPWireGuardAdapter(engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups")), filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WGQuick, adapter.WG, adapter.IP = "wg-quick", "wg", "ip"
 	adapter.Runner = runner
@@ -441,6 +446,9 @@ func TestWARPDeactivateRemovesOnlyOwnedRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(adapter.statePath(), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.freshWGPolicyGeneration(context.Background(), policy); err != nil {
 		t.Fatal(err)
 	}
 	if err := adapter.Deactivate(context.Background()); err != nil {

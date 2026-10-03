@@ -24,6 +24,11 @@ test('pending streams, aborted writes and cross-view API paths counted distinctl
   assert.equal(result.attempts,4);assert.equal(result.forwarded,3);assert.equal(result.streams,1);assert.equal(result.unfinished_non_stream,0);
   assert.equal(result.statuses.blocked,1);assert.equal(result.statuses.failed,1);assert.equal(result.other_api_paths['GET /api/v1/nodes'],1);
 });
+test('headed visibility measurement is explicit opt-in and defaults to headless',()=>{
+  assert.equal(settings(env).headed,false);assert.equal(settings({...env,RAZVILKA_PERF_HEADED:'0'}).headed,false);
+  assert.equal(settings({...env,RAZVILKA_PERF_HEADED:'1'}).headed,true);
+  for(const value of ['true','yes','2',''])assert.throws(()=>settings({...env,RAZVILKA_PERF_HEADED:value}));
+});
 test('renderer reset and missing metrics stay unavailable',()=>{
   const result=metricDelta({TaskDuration:3,ScriptDuration:1,LayoutCount:2},{TaskDuration:2,ScriptDuration:1.2,LayoutCount:5,Nodes:123});
   assert.equal(result.duration_ms.TaskDuration,null);assert.equal(result.duration_ms.ScriptDuration,200);assert.equal(result.duration_ms.LayoutDuration,null);

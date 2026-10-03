@@ -123,12 +123,26 @@ func TestProxyRollbackReadbackRejectsRestoredProcessFileAndKernelDrift(t *testin
 			if err := a.applyOwnedPolicy(ctx, state); err != nil {
 				t.Fatal(err)
 			}
-			root := t.TempDir()
+			root := privateScopedXrayFixtureDir(t)
 			if err := a.Snapshot(ctx, Plan{}, root); err != nil {
 				t.Fatal(err)
 			}
 			staged, _ := json.Marshal(state)
 			if err := os.WriteFile(filepath.Join(root, "policy.staged.json"), staged, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// Actual candidate additions acquire their own acknowledgement;
+			// a staged intent cannot authorize broad compensation anymore.
+			if err := a.prepareCandidatePolicy(root, state); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.beginCandidatePolicy(root, state); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.removeOwnedPolicy(ctx, state); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.applyCandidatePolicy(ctx, state, root); err != nil {
 				t.Fatal(err)
 			}
 			if err := a.Rollback(ctx, Plan{}, root); err != nil {
