@@ -1,5 +1,11 @@
 # CORE — первая порция D11, 03.10.2026
 
+## D07: finished config CAS primitive, 04.10.2026
+
+`Store.CommitNetworkPolicyWithRollback(expected config.Config, applied *config.NetworkPolicy, services map[string]config.ServiceState) (func() error, error)` — конечный API для DEFAULT. Полный preimage обязателен: legacy scope apply меняет applied state без увеличения revision. Сохраняет desired editor/control, публикует только reviewed applied policy/services, разрешает `auto` только в desired policy и concrete route в applied, увеличивает revision на один и fencing изменённых/удалённых service policies. SafeMode, Stop и переполнение отказываются до записи. Undo сравнивает полный postimage и использует тот же exact disk CAS; новый editor и семантически равные, но заменённые внешние байты не перезаписываются. Входные slices копируются.
+
+Адресные config tests `NetworkPolicyCommit` RC0 (0.663s), vet/diff check RC0: actual reload, byte-identical undo, same-revision legacy apply, external replacement до commit/undo, late undo, Stop/SafeMode/overflow/changed policy/unresolved auto/source canonicality. Это самостоятельный primitive; production DEFAULT wiring, common LAN marks/iif и native Linux acceptance остаются отдельными следующими порциями. Общие WIP dataplane файлы в этот config checkpoint не входят.
+
 ## D02: app dispatcher/read capability2 — ready for review
 
 OPS finished scanner `eba8abe` нормально merged →58c1f39 без provider WIP; actual CORE `-check-node-history-state` использует VLESS typed reader, strict retained scan, trusted independent roots и sanitized nonzero refusal. Actual CLI+OPS scanner tests RC0 (cmd0.243s/updatecheck0.557s), vetRC0, Linux arm64 main build/amd64 app test compileRC0. Ни read capability2, ни этот CLI не включают self-update capability или Xray writer: OPS сейчас выделяет finished old/new/rollback executable admission + shell consumer; CORE ждёт именно их и продолжает независимую работу. Полные interface/results/root flags в `CORE_NODE_ENGINES_RU.md`.
