@@ -44,6 +44,7 @@ func runtimeCapabilityFixture(t *testing.T) (runtimeInspector, map[string]string
 			return "", errors.New("unexpected command")
 		},
 	}
+	inspect.utility = inspect.look
 	return inspect, files, &calls
 }
 
@@ -94,8 +95,8 @@ func TestAWGDetectionFailsClosedOnMissingChangingOrAmbiguousInventory(t *testing
 			case "missing module":
 				delete(files, "/sys/module/amneziawg/version")
 			case "missing modinfo":
-				look := inspect.look
-				inspect.look = func(name string) (string, error) {
+				look := inspect.utility
+				inspect.utility = func(name string) (string, error) {
 					if name == "modinfo" {
 						return "", errors.New("missing")
 					}

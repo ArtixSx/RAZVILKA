@@ -25,6 +25,9 @@ func TestAWGNativeCompatibilityReceipt(t *testing.T) {
 	defer cancel()
 	before := readLoadedRuntime(readVersion)
 	c := DetectTool(ctx, tool)
+	// Public inventory must survive a failed gate too; no profiles/keys are read.
+	data, _ := json.Marshal(c)
+	t.Log("public read-only inventory", string(data))
 	if issues := CheckRuntime(Preview{MinimumMajor: 3, MinimumMinor: 1}, c); len(issues) != 0 {
 		t.Fatal("actual AWG 3.1 compatibility not established", issues)
 	}
@@ -34,8 +37,6 @@ func TestAWGNativeCompatibilityReceipt(t *testing.T) {
 	if before != readLoadedRuntime(readVersion) {
 		t.Fatal("loaded runtime changed during read-only test")
 	}
-	data, _ := json.Marshal(c)
-	t.Log("public read-only inventory", string(data))
 	for _, change := range []string{"source", "kernel", "forced", "CLI"} {
 		bad := c
 		switch change {

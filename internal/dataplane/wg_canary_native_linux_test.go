@@ -83,6 +83,7 @@ func nativeWGFixture(t *testing.T, suite string, selectedEndpoint ...string) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		caps := awgprofile.DetectTool(ctx, tool)
+		t.Logf("public AWG inventory before namespace setup: %+v", caps)
 		if issues := awgprofile.CheckRuntime(awgprofile.Preview{MinimumMajor: 3, MinimumMinor: 1}, caps); len(issues) != 0 {
 			cancel()
 			t.Fatal("AWG 3.1 must already be loaded and compatible before namespace mutation", issues)
