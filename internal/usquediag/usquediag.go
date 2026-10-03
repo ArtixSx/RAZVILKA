@@ -105,16 +105,17 @@ type SafeFileMetadata struct {
 }
 
 type CanaryEvidence struct {
-	CheckedAt       string   `json:"checked_at,omitempty"`
-	Transport       string   `json:"transport,omitempty"`
-	Warp            string   `json:"warp,omitempty"`
-	Colo            string   `json:"colo,omitempty"`
-	Loc             string   `json:"loc,omitempty"`
-	EgressIP        string   `json:"egress_ip,omitempty"`
-	ConfirmedRoutes []string `json:"confirmed_routes,omitempty"`
-	ValidUntil      string   `json:"valid_until,omitempty"`
-	BindingID       string   `json:"binding_id,omitempty"`
-	Endpoint        string   `json:"endpoint,omitempty"`
+	CheckedAt       string                `json:"checked_at,omitempty"`
+	Transport       string                `json:"transport,omitempty"`
+	Warp            string                `json:"warp,omitempty"`
+	Colo            string                `json:"colo,omitempty"`
+	Loc             string                `json:"loc,omitempty"`
+	EgressIP        string                `json:"egress_ip,omitempty"`
+	ConfirmedRoutes []string              `json:"confirmed_routes,omitempty"`
+	ValidUntil      string                `json:"valid_until,omitempty"`
+	BindingID       string                `json:"binding_id,omitempty"`
+	Endpoint        string                `json:"endpoint,omitempty"`
+	Owned           *OwnedRuntimeEvidence `json:"owned_runtime,omitempty"`
 }
 
 type RepairPreview struct {
@@ -161,6 +162,8 @@ type Report struct {
 	EndpointRoutes  []EndpointRoute             `json:"endpoint_routes,omitempty"`
 	Evidence        CanaryEvidence              `json:"canary_evidence"`
 	Capabilities    TransportCapabilities       `json:"transport_capabilities"`
+	OwnedEvidence   *OwnedRuntimeEvidence       `json:"owned_runtime_evidence,omitempty"`
+	OwnedFresh      bool                        `json:"owned_runtime_fresh"`
 	NDMCRepair      RepairPreview               `json:"ndmc_repair_preview"`
 	Bootstrap       BootstrapReadiness          `json:"bootstrap_readiness"`
 	Checks          []Check                     `json:"checks"`
@@ -192,8 +195,11 @@ type Manager struct {
 	// Trusted current WAN/DNS/route/boot epoch digest, supplied by app wiring.
 	// Missing identity keeps historical receipts diagnostic-only.
 	EvidenceEnvironment func(context.Context) (string, error)
-	RepairRoot          string
-	ShellPath           string
+	// Local-only callback assembled from the live adapter's trusted ProcessSpec.
+	// It never runs the explicit ProbeOwnedUSQUE action on a control-plane GET.
+	EvidenceRuntime func(context.Context) (OwnedRuntimeIdentity, error)
+	RepairRoot      string
+	ShellPath       string
 }
 
 func New() *Manager {
@@ -475,6 +481,32 @@ func (m *Manager) Check(ctx context.Context) Report {
 		binding := CanaryBinding(report.Files["config"].SHA256, report.Files["session"].SHA256, report.Files["binary"].SHA256, environmentID)
 		report.Capabilities = EvaluateCanaryCapabilities(evidence, endpoints, binding, now)
 		warpOK := report.Capabilities.Fresh && (evidence.Warp == "on" || evidence.Warp == "plus")
+		if evidence.Owned != nil {
+			report.OwnedEvidence = evidence.Owned
+			if m.EvidenceRuntime != nil {
+				current, err := m.EvidenceRuntime(ctx)
+				if err == nil {
+					after, afterErr := m.EvidenceRuntime(ctx)
+					readbackNow := time.Now()
+					if m.Now != nil {
+						readbackNow = m.Now()
+					}
+					report.OwnedFresh = afterErr == nil && ctx.Err() == nil && !readbackNow.Before(now) && current == after && OwnedEvidenceFresh(*evidence.Owned, current, readbackNow)
+				}
+			}
+			warpOK = report.OwnedFresh
+			if report.OwnedFresh {
+				evidence.Warp = evidence.Owned.Warp
+				evidence.Colo, evidence.Loc = evidence.Owned.Colo, evidence.Owned.Loc
+				evidence.ConfirmedRoutes = append([]string{}, evidence.Owned.ConfirmedRoutes...)
+				add("owned-transport-path", "Путь owned USQUE", "warning", "WARP прошёл через закреплённый owned runtime; путь "+evidence.Owned.ProtocolPath+" выведен из проверенного release и session. Negotiated ALPN отдельно не наблюдался.", "")
+				if evidence.Owned.UDPForwarding {
+					add("owned-udp-forwarding", "UDP через SOCKS", "pass", "Отдельный nonce challenge подтвердил UDP forwarding через этот owned SOCKS runtime.", "")
+				} else {
+					add("owned-udp-forwarding", "UDP через SOCKS", "warning", "Отдельная проверка UDP forwarding не выполнена; QUIC path её не заменяет.", "")
+				}
+			}
+		}
 		if warpOK {
 			message := "Последний изолированный кандидат подтвердил warp=" + evidence.Warp + "."
 			if evidence.Colo != "" || evidence.Loc != "" {
@@ -766,6 +798,9 @@ func readCanaryEvidence(path string) (CanaryEvidence, error) {
 	var evidence CanaryEvidence
 	if err := json.Unmarshal(b, &evidence); err != nil {
 		return CanaryEvidence{}, err
+	}
+	if evidence.Owned != nil && !safeOwnedEvidence(*evidence.Owned) {
+		evidence.Owned = nil
 	}
 	evidence.Warp = strings.ToLower(strings.TrimSpace(evidence.Warp))
 	if evidence.Warp != "on" && evidence.Warp != "plus" && evidence.Warp != "off" {
