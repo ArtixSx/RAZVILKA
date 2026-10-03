@@ -36,3 +36,13 @@ Windows Go 1.26.5, `GOMAXPROCS=2`, `GOFLAGS=-p=2`, `GOTOOLCHAIN=local`:
 Второй cache, DNS manager, scheduler, wildcard listener, redirect/DHCP/firewall mutation здесь не добавлены. Physical LAN discovery, negative MAC/source classifier, exact kernel admission receipt, default/domain flow composition, policy/TTL lease integration и единственное live окно принадлежат LAN/DNS/CORE/DEFAULT и координатору. Native Linux execution, race, router/HIL нового hook здесь NOT_RUN.
 
 Два `wg_network_profile*.go` в рабочем дереве — отдельная незавершённая WG подготовка; в этот checkpoint не входят. D07/default и D05 actual app handoff этим DNS checkpoint не объявляются завершёнными.
+
+## Совместимость с combined Publish LAN/DNS factory
+
+Дополнение поверх `5a1328526c9ebf025257d78156412c4dce56f6d1`: новая фабрика LAN/DNS сама выполняет Resolve/aging внутри `NetworkPolicyDNSResolver.Publish`, возвращая actual final wire в callback. Чтобы не повторять Resolve и не отправлять прежний wire, `ScopedDNSHandler` поддерживает альтернативный `Exchange(ctx, client, query, send func([]byte) error) error`.
+
+Handler должен задать `Admit` и ровно один вариант: `Resolve+Publish` либо `Exchange`. Combined owner передаёт свой `NetworkPolicyDNSResolver.Publish` через адаптирующий callback; final owner lease атомарно проверяет admission/readback/control и вызывает `send(finalWire)` внутри этого lease. Listener копирует и проверяет bounds wire, делает UDP truncation и отправляет весь TCP frame внутри того же callback. Delayed/repeated send сохраняет one-use fence. Все callbacks синхронные. Отдельные `Resolve/Publish` одновременно с Exchange запрещены.
+
+При занятых четырёх worker slots combined path drops UDP: он не запускает лишний upstream exchange и не синтезирует SERVFAIL вне final owner admission. Отдельный legacy path сохраняет admitted busy SERVFAIL. Error из combined Exchange сам по себе не порождает listener reply; owner может явно опубликовать проверенный failure wire в пределах своего send callback.
+
+Финальный DNS package test после этого дополнения: PASS 1.847 s. UDP/TCP tests выполняются для обоих API-вариантов, требуют одного Resolve на request и подавления всех bytes после revocation. Retained combined send отвергается. Windows/Linux DNS vet и Linux amd64 DNS test binary cross-compile: PASS. Actual new LAN/DNS factory integration/native/race остаются за его owner и координатором; фабрика в этом NET checkpoint не изменена.
