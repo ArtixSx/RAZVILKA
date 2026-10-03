@@ -33,6 +33,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-inspector-controls-ui.mjs
   node scripts/test-component-cards-ui.mjs
   node scripts/test-component-recovery-ui.mjs
+  node scripts/test-engine-card-flow-ui.mjs
   node --check cmd/razvilka/web/project-log.js
   node scripts/test-project-log-ui.mjs
   node scripts/test-onboarding-escape-ui.mjs
