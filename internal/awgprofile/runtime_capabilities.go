@@ -18,7 +18,11 @@ import (
 const maxToolBytes = 64 << 20
 
 var awgToolIdentity = regexp.MustCompile(`^amneziawg-tools v[0-9]+\.[0-9]+\.[0-9]+(?: - https://amnezia\.org)?$`)
-var moduleSourceIdentity = regexp.MustCompile(`^[A-Fa-f0-9]{24}$`)
+
+// kbuild has a 25-byte srcversion buffer. Versions using snprintf with
+// sizeof(srcversion)-1 emit 23 hex characters; older emitters use 24.
+// This is only a format bound: the loaded and installed values must still match.
+var moduleSourceIdentity = regexp.MustCompile(`^[A-Fa-f0-9]{23,24}$`)
 var moduleVersionIdentity = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 var kernelReleaseIdentity = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$`)
 var kernelTaintIdentity = regexp.MustCompile(`^[0-9]{1,20}$`)

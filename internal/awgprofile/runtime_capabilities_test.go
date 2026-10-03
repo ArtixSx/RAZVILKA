@@ -139,6 +139,34 @@ func TestAWGDetectionFailsClosedOnMissingChangingOrAmbiguousInventory(t *testing
 	}
 }
 
+func TestAWGSourceVersionKbuildFormatsAndExactIdentity(t *testing.T) {
+	inspect, _, _ := runtimeCapabilityFixture(t)
+	baseline := inspectRuntime(context.Background(), []string{"awg"}, inspect)
+	for _, source := range []string{"8B43245B4272244B0CB9617", "0123456789ABCDEF01234567"} {
+		c := baseline
+		c.LoadedSourceVersion, c.ModuleSourceVersion = source, source
+		if len(CheckRuntime(Preview{MinimumMajor: 3, MinimumMinor: 1}, c)) != 0 {
+			t.Fatalf("supported kbuild srcversion length %d rejected", len(source))
+		}
+		c.ModuleSourceVersion = strings.ToLower(source)
+		if len(CheckRuntime(Preview{MinimumMajor: 3, MinimumMinor: 1}, c)) == 0 {
+			t.Fatal("source identity normalized rather than compared exactly")
+		}
+	}
+	for _, source := range []string{"", strings.Repeat("A", 22), strings.Repeat("A", 25), "8B43245B4272244B0CB961G", "8B43245B4272244B0CB9617\n"} {
+		c := baseline
+		c.LoadedSourceVersion, c.ModuleSourceVersion = source, source
+		if len(CheckRuntime(Preview{MinimumMajor: 3, MinimumMinor: 1}, c)) == 0 {
+			t.Fatal("malformed source identity accepted")
+		}
+	}
+	c := baseline
+	c.LoadedSourceVersion, c.ModuleSourceVersion = "8B43245B4272244B0CB9617", "8B43245B4272244B0CB9618"
+	if len(CheckRuntime(Preview{MinimumMajor: 3, MinimumMinor: 1}, c)) == 0 {
+		t.Fatal("different loaded and installed source identities accepted")
+	}
+}
+
 func TestAWGVerifyToolRejectsReplacementAndAnotherPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "awg.exe")
 	if err := os.WriteFile(path, []byte("fixture executable A"), 0700); err != nil {
