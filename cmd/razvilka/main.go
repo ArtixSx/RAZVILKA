@@ -674,6 +674,20 @@ func runCommand(args []string) (bool, int) {
 	}
 	command := strings.ToLower(strings.TrimSpace(args[0]))
 	switch command {
+	case "component-package-supervisor":
+		if len(args) != 4 {
+			return true, 2
+		}
+		return true, components.RunPackageSupervisor(args[1], args[2], args[3])
+	case "component-package-supervision-probe":
+		if len(args) != 1 {
+			return true, 2
+		}
+		if err := components.ProbePackageSupervision(); err != nil {
+			fmt.Fprintln(os.Stderr, "package supervision unavailable")
+			return true, 3
+		}
+		return true, writeCommandJSON(map[string]any{"package_supervision": 1})
 	case "self-update-helper":
 		if len(args) != 2 {
 			return true, 2
