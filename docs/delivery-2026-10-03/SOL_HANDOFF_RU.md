@@ -18,10 +18,12 @@ VM, роутер, сетевые пространства и порты прин
 
 | Чат | Исключительное владение |
 |---|---|
-| CORE | `internal/app/**`, `cmd/razvilka/main.go`, `internal/config/**`, `internal/autonomy/**`, `internal/operationgate/**`, `internal/routecatalog/**`, `internal/routekind/**`, общие `dataplane/manager.go`, `plan.go`, `policy*.go`, `ownership.go`, `execution_journal*.go`, LAN classifier и общие сетевые контракты |
-| VLESS | `internal/providerprofile/**`, `providerfeed/**`, `nodestore/**`, `nodequality/**`, `nodecleanup/**`; `dataplane/node*.go`, `proxy*.go`, `hev_sidecar*.go`; профильные тесты и стенд Xray |
-| NET | `internal/wireguardprofile/**`, `awgprofile/**`, `dnscontrol/**`, `netresolve/**`, `strategylab/**`; `dataplane/warpwg*.go`, `wg_*.go`, `wireguard*.go`, `awg*.go`, `nfqws2*.go`, `dns_*.go`, `scoped_dns*.go`, `cloudflare_scan_*.go`; профильные network/DNS тесты |
-| OPS | `internal/components/**`, `internal/selfupdatejournal/**` (новый модуль при необходимости), `internal/warp/**`, `cloudflareprovider/**`, `usquediag/**`, `sources/**`, `updatecheck/**`; установочные/обновляющие/rollback shell-скрипты и их тесты |
+| CORE | `internal/app/**`, `cmd/razvilka/main.go`, `internal/config/**`, `internal/autonomy/**`, `internal/operationgate/**`, `internal/routecatalog/**`, `internal/routekind/**`, общие `dataplane/manager.go`, `plan.go`, `policy*.go` кроме нового `policy_addition_receipt*.go`, `ownership.go`, `execution_journal*.go`, LAN classifier и общие сетевые контракты |
+| VLESS | `internal/providerprofile/**`, `providerfeed/**`, `nodestore/**`, `nodequality/**`, `nodecleanup/**`; `dataplane/node*.go`, `proxy*.go`, `hev_sidecar*.go`, новый общий `policy_addition_receipt*.go`; профильные тесты и стенд Xray |
+| NET | `internal/wireguardprofile/**`, `awgprofile/**`, `dnscontrol/**`, `netresolve/**`; `dataplane/warpwg*.go`, `wg_*.go`, `wireguard*.go`, `awg*.go`, `dns_*.go`, `scoped_dns*.go`, `cloudflare_scan_*.go`; профильные network/DNS тесты |
+| OPS | `internal/components/**`, `internal/selfupdatejournal/**`, `internal/updatecheck/**`; установочные/обновляющие/rollback shell-скрипты и их тесты |
+| CLOUD | `internal/warp/**`, `internal/cloudflareprovider/**`, `internal/usquediag/**`, `internal/sources/**`; собственные новые стенды `test-cloud-*` |
+| NFQWS | `internal/strategylab/**`, `internal/dataplane/nfqws2*.go`; собственные новые стенды `test-nfqws-*` |
 | UI | `cmd/razvilka/web/**`, `scripts/build-interface.mjs`, UI/браузерные тесты `scripts/*.mjs` без тестов установщика и package lifecycle |
 | Координатор | интеграционная ветка, общие CI/build, go.mod/go.sum/VERSION, итоговые статусы/очередь, обзоры, независимые испытания и принятие чужих правок |
 
@@ -47,13 +49,19 @@ VM, роутер, сетевые пространства и порты прин
 
 Критичный незакрытый сценарий D04: live и candidate с одинаковым peer/key могут менять endpoint сервера и вытеснять Noise-сессию друг друга. Успешный native тест доказывает изоляцию трафика кандидата, но пока не сохранение доступности live после него; fixture явно пересоздаёт live между IPv4/IPv6. Добавить проверку live ПОСЛЕ успешного и неуспешного candidate. Определить запрет проверки уже используемого peer либо проверяемый протокол восстановления; не скрывать нарушение LKG перезапуском только тестовой fixture.
 
-Далее D06 AWG: проверенный CLI/module/kernel/ABI, неподходящий модуль отклоняется до изменения сети. D08 после CORE D07: согласованный DNS, CNAME/min TTL, устройства/сайты исключены из всех owned путей, guest только opt-in, IPv6/UDP и shared CDN. D09: bounded NFQWS2 preferred/only/manual, сохранение пользовательских стратегий и честные уровни проверки media/voice. На общие policy/ownership файлы сначала передать контракт CORE.
+Далее D06 AWG: проверенный CLI/module/kernel/ABI, неподходящий модуль отклоняется до изменения сети. D08 после CORE D07: согласованный DNS, CNAME/min TTL, устройства/сайты исключены из всех owned путей, guest только opt-in, IPv6/UDP и shared CDN. На общие policy/ownership файлы сначала передать контракт CORE. D09 с 04.10 передан отдельному чату NFQWS.
 
-## OPS — обновления и WARP/USQUE
+## OPS — обновления
 
 Первый результат: аудит и завершение отдельного persistent журнала self-update приложения. Package journal компонентов уже реализован; не переписывать его вторым журналом. Вынести нужную низкоуровневую логику из app в принадлежащий OPS модуль или подготовить контракт CORE. При crash сохранять LKG; unknown не replay; downgrade должен понимать retained receipts. Подготовить реальный воспроизводимый native opkg сценарий и матрицу fault boundaries; исполнитель — координатор. В начале проверить текущий journal на непокрытые границы и сообщить блокирующие ошибки CORE.
 
-После этого D13: различать регистрацию, export, DNS, endpoint; unknown enrollment не запускает новую регистрацию. H2/H3, UDP capability, provenance и TTL источников, read-only offline каталог. Mihomo/HEV не объявлять production без native benefit.
+## CLOUD — WARP/USQUE и источники
+
+С 04.10 D13 выполняется параллельно D11 в `worktrees/sol-cloud`, ветка `sol/cloud-20261004`. Различать регистрацию, export, DNS, endpoint; unknown enrollment не запускает новую регистрацию. H2/H3, UDP capability, provenance и TTL источников, read-only offline каталог. Mihomo/HEV не объявлять production без native benefit. App wiring принадлежит CORE, сетевой scanner — NET. Отчёт — `handoffs/CLOUD_RU.md`.
+
+## NFQWS — подбор локальных стратегий
+
+С 04.10 D09 выполняется в `worktrees/sol-nfqws`, ветка `sol/nfqws-20261004`. Bounded NFQWS2 preferred/only/manual, сохранение пользовательских стратегий, совместимость настоящего бинарника/Lua/assets и честные уровни проверки media/voice. Разрешённый VLESS fallback согласуется с CORE через контракт; app/autonomy остаются CORE. Новый журнал сетевых добавлений — общий VLESS module, не создавать второй primitive. Отчёт — `handoffs/NFQWS_RU.md`.
 
 ## UI — понятные действия и настоящий HTTP
 
