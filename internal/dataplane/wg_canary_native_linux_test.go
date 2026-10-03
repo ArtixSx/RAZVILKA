@@ -89,6 +89,12 @@ func nativeWGFixture(t *testing.T, suite string, selectedEndpoint ...string) {
 		}
 		nativeWGCommand(t, clientNS, "ip", "route", "add", "93.184.216.34/32", "via", "192.0.2.1", "dev", "wan-c")
 		nativeWGCommand(t, clientNS, "ip", "-6", "route", "add", "2606:4700::1111/128", "via", "2001:db8:1::1", "dev", "wan-c")
+		// Model the router's ordinary WAN route. Loose rp_filter needs a reverse
+		// route for the inner service reply; its lookup has no socket oif and
+		// therefore cannot match the candidate-only oif policy. Keep rp_filter
+		// unchanged. A wrong-key canary below must still fail with WAN reachable.
+		nativeWGCommand(t, clientNS, "ip", "route", "add", "default", "via", "192.0.2.1", "dev", "wan-c")
+		nativeWGCommand(t, clientNS, "ip", "-6", "route", "add", "default", "via", "2001:db8:1::1", "dev", "wan-c")
 	}
 	serverPrivate, serverPublic := nativeWGKeys(t)
 	clientPrivate, clientPublic := nativeWGKeys(t)
