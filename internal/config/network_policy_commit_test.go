@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func networkCommitFixture(t *testing.T) (*Store, string) {
@@ -48,6 +49,14 @@ func TestNetworkPolicyCommitPreservesEditorAndUndoRestoresExactImage(t *testing.
 		t.Fatal(err)
 	}
 	committed := s.Get()
+	when, err := time.Parse(time.RFC3339, committed.LastAppliedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	predicted, err := ReviewedNetworkPolicyCommitImage(before, applied, services, when)
+	if err != nil || !reflect.DeepEqual(predicted, committed) {
+		t.Fatal("shared pure postimage disagrees with actual commit", err)
+	}
 	if !reflect.DeepEqual(committed.Services, before.Services) || !reflect.DeepEqual(committed.NetworkPolicy, before.NetworkPolicy) || !reflect.DeepEqual(committed.ServiceControl, before.ServiceControl) {
 		t.Fatal("applied commit changed the editor or runtime control")
 	}
@@ -144,6 +153,36 @@ func TestNetworkPolicyCommitLateUndoPreservesNewEditor(t *testing.T) {
 	current := s.Get()
 	if err := undo(); !errors.Is(err, ErrRevisionChanged) || !reflect.DeepEqual(s.Get(), current) {
 		t.Fatal("late undo overwrote new editor", err)
+	}
+}
+
+func TestNetworkPolicyCommitImageFencesChangedAndRemovedServicesOnly(t *testing.T) {
+	s, _ := networkCommitFixture(t)
+	before := s.Get()
+	before.AppliedServices["removed"] = normalizeState(ServiceState{Enabled: true, Route: "usque"})
+	before.ServicePolicies = map[string]ServicePolicy{}
+	for _, id := range []string{"site", "removed", "untouched"} {
+		p := DefaultServicePolicy(id, before.AppliedServices[id])
+		p.Enabled, p.LegacyOptIn, p.Revision = true, true, 7
+		p.Mode = "auto"
+		before.ServicePolicies[id] = p
+	}
+	applied, services := networkCommitCandidate(before)
+	image, err := ReviewedNetworkPolicyCommitImage(before, applied, services, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"site", "removed"} {
+		p := image.ServicePolicies[id]
+		if p.Enabled || p.LegacyOptIn || p.Mode != "manual" || p.Revision != 8 || p.PinnedNodeID != "" {
+			t.Fatal("new/removed applied choice retained automation grant", id, p)
+		}
+	}
+	if !reflect.DeepEqual(image.ServicePolicies["untouched"], before.ServicePolicies["untouched"]) || before.ServicePolicies["site"].Revision != 7 {
+		t.Fatal("unrelated/input policy changed")
+	}
+	if _, err := ReviewedNetworkPolicyCommitImage(before, applied, services, time.Time{}); err == nil {
+		t.Fatal("missing application time accepted")
 	}
 }
 
