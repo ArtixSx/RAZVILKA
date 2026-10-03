@@ -4,6 +4,8 @@
 
 Адресное продолжение после принятия `48b3ab0`: [RESEARCH_NFQWS_BUNDLE_RU.md](RESEARCH_NFQWS_BUNDLE_RU.md) предлагает отдельный managed payload без исполнения stock hooks. Stock IPK suppression blocker ниже сохраняется; он не запрещает file-only установку собственного runtime с честным provenance.
 
+Разбор механизмов по отдельному запросу: [RESEARCH_Z2K_D2K_RU.md](RESEARCH_Z2K_D2K_RU.md) — что z2k получает от NFQWS2, его Lua/туннели/диагностика и сопоставление с собственным C engine и Telegram веткой d2k. Это исследование отдельных идей, не предложение импортировать проект целиком.
+
 Прочитаны REMAINING_AND_AGENTS_RU.md, TASKS.json, COORDINATION_RU.md, SOL_HANDOFF_RU.md, RESEARCH_RU.md, VALIDATION_RU.md, CHANGES_RU.md, TEST_REPORT_RU.md. Перед новым углублением прочитан завершённый `delivery-review/.review-local/ROUTER_RESEARCH_RU.md`. Его три первоначальные находки здесь не выдаются за новое исследование. Ниже уточнены механизмы внедрения и контрпримеры. H00/IM, DNS min-TTL/cache, общий addition receipt и исправления NET modinfo/srcversion повторно не предлагаются.
 
 Поиск выполнен web; поведение проверено чтением raw-файлов по полным Git SHA, полученным через GitHub API. Некоторые GitHub страницы через web open дали cache miss; соответствующие исходники успешно прочитаны через raw.githubusercontent.com по тому же SHA. README и поисковый wiki не использованы как доказательство выполнения hooks или маршрутизации.
