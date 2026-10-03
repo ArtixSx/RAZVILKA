@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
@@ -21,6 +22,7 @@ import (
 var (
 	ErrNodeTUNProofRequired = errors.New("selected/control TUN client proof is required")
 	ErrNodeEndpointChanged  = errors.New("scoped node endpoint or service addresses changed; fresh transaction required")
+	ErrNodeDestinationScope = errors.New("one managed SOCKS engine cannot preserve different node owners for overlapping destination scopes")
 )
 
 // NewScopedXrayTunnelAdapter is a separate trusted NodeStore integration.
@@ -179,8 +181,16 @@ func scopedDomains(values []string) []string {
 }
 
 func scopedXrayRules(requests []NodeRouteRequest) ([]any, error) {
+	bindings := make([]nodestore.RouteBinding, len(requests))
+	for i, request := range requests {
+		bindings[i] = nodestore.RouteBinding{NodeID: request.NodeID, Domains: request.Domains, Destinations: request.Destinations}
+	}
+	// LAN sources are unavailable to the engine after the TUN's fixed SOCKS
+	// hop. Source-disjoint RPDB cells cannot resolve engine exit ambiguity.
+	if err := nodestore.ValidateRouteDestinationOwners(bindings); err != nil {
+		return nil, errors.Join(ErrNodeDestinationScope, err)
+	}
 	var rules []any
-	seen := map[string]string{}
 	for _, r := range requests {
 		if !exactNodeIDPattern.MatchString(r.NodeID) {
 			return nil, errors.New("invalid exact node reference")
@@ -197,12 +207,6 @@ func scopedXrayRules(requests []NodeRouteRequest) ([]any, error) {
 		cidrs = sortedUnique(cidrs)
 		if len(domains)+len(cidrs) == 0 {
 			return nil, errors.New("empty node destination scope")
-		}
-		for _, dst := range append(append([]string{}, domains...), cidrs...) {
-			if owner := seen[dst]; owner != "" && owner != r.NodeID {
-				return nil, errors.New("conflicting node destination owners")
-			}
-			seen[dst] = r.NodeID
 		}
 		if len(domains) > 0 {
 			for i := range domains {
