@@ -2,15 +2,18 @@ package components
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -39,9 +42,6 @@ func TestNativeOpkgManagedUpdateJournal(t *testing.T) {
 	opkg, err := exec.LookPath(os.Getenv("RAZVILKA_TEST_OPKG"))
 	if err != nil {
 		t.Fatal("RAZVILKA_TEST_OPKG must name a native opkg binary", err)
-	}
-	if _, err := exec.LookPath("ar"); err != nil {
-		t.Fatal("native package fixture requires ar", err)
 	}
 	for _, interrupted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("interrupt-%v", interrupted), func(t *testing.T) {
@@ -156,12 +156,18 @@ func nativeFixturePackage(t *testing.T, directory, version string) string {
 		}
 		gz := gzip.NewWriter(f)
 		tw := tar.NewWriter(gz)
-		for path, data := range entries {
+		var names []string
+		for path := range entries {
+			names = append(names, path)
+		}
+		sort.Strings(names)
+		for _, path := range names {
+			data := entries[path]
 			mode := int64(0o644)
 			if path == "./postinst" {
 				mode = 0o755
 			}
-			if err := tw.WriteHeader(&tar.Header{Name: path, Mode: mode, Size: int64(len(data)), Typeflag: tar.TypeReg}); err != nil {
+			if err := tw.WriteHeader(&tar.Header{Name: path, Mode: mode, Size: int64(len(data)), Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := tw.Write([]byte(data)); err != nil {
@@ -186,10 +192,87 @@ func nativeFixturePackage(t *testing.T, directory, version string) string {
 		t.Fatal(err)
 	}
 	path := filepath.Join(directory, "nfqws2-keenetic_"+version+"_all.ipk")
-	cmd := exec.Command("ar", "rc", path, "debian-binary", "control.tar.gz", "data.tar.gz")
-	cmd.Dir = build
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build fixture ipk: %v %s", err, out)
+	// OpenWrt/Entware opkg-lede 80503d94 walks an outer gzip/USTAR,
+	// then decompresses control.tar.gz/data.tar.gz. A Debian ar container
+	// silently yields no control entry and is rejected as Malformed package.
+	// Source: https://github.com/openwrt/opkg-lede/blob/80503d94/libbb/unarchive.c
+	entries := map[string]string{}
+	for _, name := range []string{"debian-binary", "control.tar.gz", "data.tar.gz"} {
+		data, err := os.ReadFile(filepath.Join(build, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries["./"+name] = string(data)
 	}
+	writeTar(filepath.Join("..", filepath.Base(path)), entries)
 	return path
+}
+
+func TestNativeFixtureEntwareGzipTarContainer(t *testing.T) {
+	path := nativeFixturePackage(t, t.TempDir(), "1.0.0")
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal("Entware outer package must be gzip, not ar", err)
+	}
+	defer gz.Close()
+	outer := tar.NewReader(gz)
+	entries := map[string][]byte{}
+	for {
+		header, err := outer.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if header.Format != tar.FormatUSTAR || header.Typeflag != tar.TypeReg {
+			t.Fatal("opkg-compatible USTAR regular entries required")
+		}
+		data, err := io.ReadAll(outer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries[header.Name] = data
+	}
+	if len(entries) != 3 || string(entries["./debian-binary"]) != "2.0\n" {
+		t.Fatal("wrong IPK members")
+	}
+	for _, name := range []string{"control.tar.gz", "data.tar.gz"} {
+		gz, err := gzip.NewReader(bytes.NewReader(entries["./"+name]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		inner := tar.NewReader(gz)
+		found := map[string][]byte{}
+		for {
+			header, err := inner.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := io.ReadAll(inner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found[header.Name] = data
+			if header.Name == "./postinst" && header.Mode != 0755 {
+				t.Fatal("postinst is not executable")
+			}
+		}
+		gz.Close()
+		if name == "control.tar.gz" {
+			if !strings.Contains(string(found["./control"]), "Package: nfqws2-keenetic\nVersion: 1.0.0\n") || !strings.Contains(string(found["./postinst"]), "IPKG_INSTROOT") || !strings.Contains(string(found["./postinst"]), "MIGRATED BY NATIVE PACKAGE") {
+				t.Fatal("control/postinst evidence removed")
+			}
+		} else if string(found["./etc/nfqws2.conf"]) != "FACTORY CONFIG\n" {
+			t.Fatal("missing native data")
+		}
+	}
 }
