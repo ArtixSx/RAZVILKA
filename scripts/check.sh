@@ -103,6 +103,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-native-enrollment-supervision.mjs
   node scripts/test-component-update-supervision.mjs
   node scripts/test-self-update-supervision.mjs
+  node scripts/test-node-history-admission.mjs
   node scripts/test-native-opkg-runner.mjs
 fi
 ./build.sh
