@@ -375,10 +375,11 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 			return Result{Component: id, Action: action}, faultErr
 		}
 		if err != nil {
-			return Result{Component: id, Action: action, Output: boundedOutput(out)}, errors.Join(ErrUpdateUnknown, err)
-		}
-		if err := tx.phase(UpdateInstalled); err != nil {
-			return Result{Component: id, Action: action}, err
+			err = errors.Join(ErrUpdateUnknown, err)
+		} else {
+			if err := tx.phase(UpdateInstalled); err != nil {
+				return Result{Component: id, Action: action}, err
+			}
 		}
 	}
 	text := strings.TrimSpace(string(out))

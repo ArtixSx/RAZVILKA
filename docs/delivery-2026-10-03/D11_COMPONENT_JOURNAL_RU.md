@@ -28,7 +28,9 @@
 
 ## Проверки и ограничения
 
-Unit fault matrix прерывает выполнение до/после 38 границ durable phases, package commands, config writes и receipts. Пять subprocess-тестов завершают дочерний процесс через os.Exit: старые память и mutex не переживают restart. Package runner в этих тестах явно является симулятором с дисковым состоянием.
+Unit fault matrix прерывает выполнение до/после 40 границ durable phases, package commands, config writes, Sing-box init и receipts. Пять subprocess-тестов завершают дочерний процесс через os.Exit: старые память и mutex не переживают restart. Package runner в этих тестах явно является симулятором с дисковым состоянием.
+
+При откате Sing-box повторно установленный распознанный пакетный init переводится в ENABLED=no без запуска start/stop; этот факт проверяется до принятия rollback. Прерывание между установкой пакета и исправлением init продолжается на этапе конфигурации без повторной команды opkg. Неизвестный/чужой init не переписывается. При ошибке unpack выполняется прежнее узкое отключение распознанного init, но unknown fence не снимается.
 
 `scripts/test-component-update-supervision.mjs` выполняет настоящие shell schema gates на временных файлах. `scripts/test-component-update-native.sh` отдельно запускает opt-in интеграцию с настоящим opkg, локальным feed и временным offline root. Синтетический IPK содержит postinst, который намеренно мигрирует конфигурацию; тест требует подтверждения его выполнения. Этот native тест не запускается обычным unit-прогоном и не объявляется пройденным без отдельного запуска.
 

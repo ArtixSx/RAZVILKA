@@ -203,6 +203,17 @@ func (tx *updateTransaction) rollback(ctx context.Context, guard, check func(con
 		if err := tx.authority(ctx, guard); err != nil {
 			return result, err
 		}
+		if tx.doc.Component == "sing-box" {
+			init, err := tx.manager.prepareSingBoxInit(true)
+			if err != nil {
+				return result, err
+			}
+			err = init.checkWritable()
+			_ = init.root.Close()
+			if err != nil {
+				return result, err
+			}
+		}
 		if err := tx.phase(UpdateRollbackStarted); err != nil {
 			return result, err
 		}
@@ -215,7 +226,9 @@ func (tx *updateTransaction) rollback(ctx context.Context, guard, check func(con
 			return result, faultErr
 		}
 		if err != nil {
-			return result, errors.Join(ErrUpdateUnknown, err)
+			// As on upgrade, an interrupted unpack must not leave the recognized
+			// global package init enabled. This cleanup never starts/stops it.
+			return result, errors.Join(ErrUpdateUnknown, err, tx.disableRollbackInit(false))
 		}
 		if err := tx.phase(UpdateRollbackInstalled); err != nil {
 			return result, err
@@ -230,6 +243,12 @@ func (tx *updateTransaction) rollback(ctx context.Context, guard, check func(con
 		}
 		// Package scripts may migrate defaults even during a downgrade.
 		if err := tx.restore(ctx, images, "after", guard); err != nil {
+			return result, err
+		}
+		if err := tx.authority(ctx, guard); err != nil {
+			return result, err
+		}
+		if err := tx.disableRollbackInit(true); err != nil {
 			return result, err
 		}
 		if err := tx.phase(UpdateAwaitingRollback); err != nil {
@@ -300,7 +319,40 @@ func (tx *updateTransaction) verifyRollback(ctx context.Context) error {
 			return errors.New("configuration does not match rollback snapshot")
 		}
 	}
+	if tx.doc.Component == "sing-box" {
+		init, err := tx.manager.prepareSingBoxInit(true)
+		if err != nil {
+			return err
+		}
+		defer init.root.Close()
+		data, _, exists, err := init.read()
+		if err != nil {
+			return err
+		}
+		disabled, err := disabledSingBoxInit(data)
+		if err != nil || !exists || !bytes.Equal(data, disabled) {
+			return errors.New("restored Sing-box package autostart is not confirmed disabled")
+		}
+	}
 	return nil
+}
+
+func (tx *updateTransaction) disableRollbackInit(required bool) error {
+	if tx.doc.Component != "sing-box" {
+		return nil
+	}
+	if err := tx.fault("before:rollback-init"); err != nil {
+		return err
+	}
+	init, err := tx.manager.prepareSingBoxInit(true)
+	if err != nil {
+		return err
+	}
+	defer init.root.Close()
+	if err := init.disable(required); err != nil {
+		return err
+	}
+	return tx.fault("after:rollback-init")
 }
 
 func (tx *updateTransaction) finish(action, phase, version string) error {
