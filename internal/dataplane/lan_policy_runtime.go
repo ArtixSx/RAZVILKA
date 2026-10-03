@@ -168,7 +168,7 @@ func lanPolicyChains(p *LANPolicyRuntimePlan) []lanPolicyChain {
 			// inherit permission across an exclusion or scope replacement.
 			c.rules = [][]string{{"-j", "MARK", "--set-xmark", "0x0/0x28000000"}}
 			negative := func(match []string) {
-				c.rules = append(c.rules, append(slices.Clone(match), "-j", "MARK", "--set-xmark", "0x08000000/0x38000000"))
+				c.rules = append(c.rules, append(slices.Clone(match), "-j", "MARK", "--set-xmark", "0x08000000/0x28000000"))
 			}
 			for _, mac := range g.ExcludedMACs {
 				negative([]string{"-m", "mac", "--mac-source", mac})
@@ -244,7 +244,10 @@ type LANPolicyRuntime struct {
 	IPTables   string
 	IP6Tables  string
 	ScopeCheck func(context.Context, *LANPolicyRuntimePlan) error
-	Execute    func(context.Context, *LANPolicyRuntimePlan, []LANPolicyEffect) error
+	// ConsumerCheck verifies exact other consumers' common receipts/generation.
+	// It is needed when their positive mark selectors already exist at Verify.
+	ConsumerCheck func(context.Context, *LANPolicyRuntimePlan) error
+	Execute       func(context.Context, *LANPolicyRuntimePlan, []LANPolicyEffect) error
 }
 
 func (r *LANPolicyRuntime) command(tool string) string {

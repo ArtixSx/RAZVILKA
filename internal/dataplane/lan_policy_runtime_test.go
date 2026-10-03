@@ -47,19 +47,20 @@ func TestLANPolicyRuntimeMACPrecedesBothFamiliesAndPreservesForeignBits(t *testi
 	p := lanRuntimeFixture(t)
 	for _, c := range lanPolicyChains(p) {
 		macRule := strings.Join(c.rules[1], " ")
-		if !strings.Contains(macRule, "--mac-source 02:00:00:00:00:01") || !strings.Contains(macRule, "0x08000000/0x38000000") {
+		if !strings.Contains(macRule, "--mac-source 02:00:00:00:00:01") || !strings.Contains(macRule, "0x08000000/0x28000000") {
 			t.Fatal("future IPv6 privacy address lacks early MAC negative", c)
 		}
 		last := strings.Join(c.rules[len(c.rules)-1], " ")
-		if last != "-j MARK --set-xmark 0x08000000/0x38000000" {
+		if last != "-j MARK --set-xmark 0x08000000/0x28000000" {
 			t.Fatal("outside source inherited admission")
 		}
 	}
 	// Kernel xmark semantics: preserve firmware bits, clear stale owned
-	// managed/default bits, and establish bypass independently of IP leases.
-	old := uint32(0x00001234) | LANPolicyManagedMark | lanClassifierMark
-	got := old & ^uint32(0x38000000) ^ LANPolicyBypassMark
-	if got != 0x08001234 || got&LANPolicyManagedMark != 0 || got&lanClassifierMark != 0 {
+	// managed bit, and establish bypass independently of IP leases. Neither
+	// the legacy default bit nor WG's endpoint bit belongs to this gate.
+	old := uint32(0x11001234) | LANPolicyManagedMark
+	got := old & ^uint32(0x28000000) ^ LANPolicyBypassMark
+	if got != 0x19001234 || got&LANPolicyManagedMark != 0 || got&0x11000000 != old&0x11000000 {
 		t.Fatalf("excluded packet mark %x", got)
 	}
 	effects, err := p.Effects()
@@ -147,6 +148,15 @@ func TestLANPolicyRuntimeExactReadbackAndForeignRefusal(t *testing.T) {
 		"missing iif": func(r *lanRuntimeReadRunner) {
 			r.ip["-4"] += "61: from 192.168.1.0/24 to 8.8.8.8 fwmark 0x20000000/0x28000000 lookup 201\n"
 		},
+		"named legacy table": func(r *lanRuntimeReadRunner) { r.ip["-6"] += "28000: from all to 2001:db8::1 lookup rz-wg\n" },
+		"unknown syntax":     func(r *lanRuntimeReadRunner) { r.ip["-4"] += "unparseable RPDB line\n" },
+		"late foreign mark": func(r *lanRuntimeReadRunner) {
+			r.firewall["ip6tables:mangle"] += "-A OUTPUT -j MARK --set-xmark 0x20000000/0x20000000\n"
+		},
+		"late connmark": func(r *lanRuntimeReadRunner) {
+			r.firewall["iptables:filter"] += "-A FORWARD -j CONNMARK --restore-mark\n"
+		},
+		"foreign goto anchor": func(r *lanRuntimeReadRunner) { r.ip["-4"] += "111: from all goto 73\n" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			bad := lanRuntimeReadFixture(p)
@@ -158,8 +168,35 @@ func TestLANPolicyRuntimeExactReadbackAndForeignRefusal(t *testing.T) {
 	}
 	// Positive exact-iif consumer is valid after the gate has activated.
 	reader.ip["-4"] += "61: from 192.168.1.0/24 to 8.8.8.8 fwmark 0x20000000/0x28000000 iif br0 lookup 201\n"
+	r.ConsumerCheck = func(context.Context, *LANPolicyRuntimePlan) error { return nil }
 	if err := r.Verify(context.Background(), p); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLANPolicyRuntimeAnchorAndChainDeletionWaitForAllReferences(t *testing.T) {
+	p := lanRuntimeFixture(t)
+	reader := lanRuntimeReadFixture(p)
+	r := runtimeWithReadRunner(reader)
+	effects, _ := p.Effects()
+	if err := r.BeforeDelete(context.Background(), p, effects[0]); err == nil {
+		t.Fatal("anchor deleted while owned goto referenced it")
+	}
+	reader.ip["-4"] = strings.ReplaceAll(reader.ip["-4"], lanPolicyRules(p)[1].line()+"\n", "")
+	if err := r.BeforeDelete(context.Background(), p, effects[0]); err != nil {
+		t.Fatal(err)
+	}
+	reader.ip["-4"] += "111: from all goto 73\n"
+	if err := r.BeforeDelete(context.Background(), p, effects[0]); err == nil {
+		t.Fatal("foreign goto anchor silently broken")
+	}
+	for _, e := range effects {
+		if len(e.Add) > 3 && e.Add[2] == "-N" {
+			if err := r.BeforeDelete(context.Background(), p, e); err == nil {
+				t.Fatal("chain deleted with active contents/references")
+			}
+			break
+		}
 	}
 }
 
@@ -184,7 +221,7 @@ func TestLANPolicyRuntimeReceiptInspectorDoesNotRequireCurrentReviewForCleanup(t
 
 func TestLANPolicyRuntimePreflightCollisionAndNoEffectBeforeAdmission(t *testing.T) {
 	p := lanRuntimeFixture(t)
-	for name, output := range map[string]string{"fwmark collision": "100: from all fwmark 0x28000000/0x28000000 lookup 4096\n", "full mask": "100: from all fwmark 0x1234 lookup 4096\n", "legacy owner": "28000: from all to 8.8.8.8 lookup 206\n"} {
+	for name, output := range map[string]string{"fwmark collision": "100: from all fwmark 0x28000000/0x28000000 lookup 4096\n", "full mask": "100: from all fwmark 0x1234 lookup 4096\n", "legacy owner": "28000: from all to 8.8.8.8 lookup 206\n", "named legacy table": "28000: from all to 8.8.8.8 lookup rz-wg\n", "unknown syntax": "unknown RPDB output\n"} {
 		t.Run(name, func(t *testing.T) {
 			reader := &lanRuntimeReadRunner{ip: map[string]string{"-4": output}, firewall: map[string]string{}}
 			r := runtimeWithReadRunner(reader)

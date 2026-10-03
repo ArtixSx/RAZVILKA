@@ -30,7 +30,7 @@ func (r *LANPolicyRuntime) Preflight(ctx context.Context, p *LANPolicyRuntimePla
 		return err
 	}
 	for _, family := range []int{4, 6} {
-		args := []string{"-4", "rule", "show"}
+		args := []string{"-4", "-N", "rule", "show"}
 		if family == 6 {
 			args[0] = "-6"
 		}
@@ -39,19 +39,25 @@ func (r *LANPolicyRuntime) Preflight(ctx context.Context, p *LANPolicyRuntimePla
 			return err
 		}
 		for _, line := range strings.Split(output, "\n") {
-			priority, ok := policyLinePriority(line)
-			if !ok {
+			if strings.TrimSpace(line) == "" {
 				continue
+			}
+			priority, ok := policyLinePriority(line)
+			if !ok || !lanPolicyRuleSyntax(line) {
+				return ErrLANPolicyRuntime
 			}
 			if priority == LANPolicySkipPriority || priority == LANPolicyAnchorPriority {
 				return ErrLANPolicyRuntime
 			}
 			f := strings.Fields(line)
 			for i, value := range f {
+				if value == "goto" && i+1 < len(f) && f[i+1] == "73" {
+					return ErrLANPolicyRuntime
+				}
 				if value == "fwmark" && i+1 < len(f) && lanPolicyMarkTouches(f[i+1]) {
 					return ErrLANPolicyRuntime
 				}
-				if value == "lookup" && i+1 < len(f) {
+				if (value == "lookup" || value == "table") && i+1 < len(f) {
 					for _, owner := range PolicyOwnershipSpecs() {
 						// Old IP-only selectors, especially indexed priorities,
 						// cannot be skipped safely while preserving firmware.
@@ -117,7 +123,7 @@ func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePla
 		return err
 	}
 	for _, family := range []int{4, 6} {
-		output, err := r.read(ctx, "ip", "-"+strconv.Itoa(family), "rule", "show")
+		output, err := r.read(ctx, "ip", "-"+strconv.Itoa(family), "-N", "rule", "show")
 		if err != nil {
 			return err
 		}
@@ -128,9 +134,12 @@ func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePla
 			}
 		}
 		for _, line := range strings.Split(output, "\n") {
-			priority, ok := policyLinePriority(line)
-			if !ok {
+			if strings.TrimSpace(line) == "" {
 				continue
+			}
+			priority, ok := policyLinePriority(line)
+			if !ok || !lanPolicyRuleSyntax(line) {
+				return ErrLANPolicyRuntime
 			}
 			if priority == LANPolicySkipPriority || priority == LANPolicyAnchorPriority {
 				key := lanPolicyRuleKey(line)
@@ -140,13 +149,33 @@ func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePla
 				want[key]--
 			}
 			f := strings.Fields(line)
+			ownedPositive := false
 			for i, value := range f {
-				if value == "lookup" && i+1 < len(f) {
+				if value == "goto" && i+1 < len(f) && f[i+1] == "73" && priority != LANPolicySkipPriority {
+					return ErrLANPolicyRuntime
+				}
+				if (value == "lookup" || value == "table") && i+1 < len(f) {
 					for _, owner := range PolicyOwnershipSpecs() {
-						if f[i+1] == strconv.Itoa(owner.Table) && (priority < 60 || priority > 72 || !strings.Contains(" "+strings.Join(f, " ")+" ", " fwmark 0x20000000/0x28000000 ") || !lanPolicyRuleIngress(f, p)) {
-							return ErrLANPolicyRuntime
+						if f[i+1] == strconv.Itoa(owner.Table) {
+							if priority < 60 || priority > 72 || !strings.Contains(" "+strings.Join(f, " ")+" ", " fwmark 0x20000000/0x28000000 ") || !lanPolicyRuleIngress(f, p) {
+								return ErrLANPolicyRuntime
+							}
+							ownedPositive = true
 						}
 					}
+				}
+			}
+			for i, value := range f {
+				if value == "fwmark" && i+1 < len(f) && lanPolicyMarkTouches(f[i+1]) && priority != LANPolicySkipPriority && !ownedPositive {
+					return ErrLANPolicyRuntime
+				}
+			}
+			if ownedPositive {
+				if r.ConsumerCheck == nil {
+					return ErrLANPolicyRuntime
+				}
+				if err := r.ConsumerCheck(ctx, CloneLANPolicyRuntime(p)); err != nil {
+					return err
 				}
 			}
 		}
@@ -206,8 +235,135 @@ func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePla
 				return ErrLANPolicyRuntime
 			}
 		}
+		for _, table := range []string{"mangle", "nat", "filter", "raw"} {
+			text := output
+			if table != "mangle" {
+				text, err = r.read(ctx, tool, "-t", table, "-S")
+				if err != nil {
+					return err
+				}
+			}
+			for _, line := range strings.Split(text, "\n") {
+				f := strings.Fields(line)
+				if len(f) > 2 && f[0] == "-A" && lanPolicyOwnChain(p, f[1], family) {
+					continue
+				} // exact body was checked above
+				for i, value := range f {
+					if value == "CONNMARK" || value == "--and-mark" {
+						return ErrLANPolicyRuntime
+					}
+					if slices.Contains([]string{"--mark", "--set-mark", "--set-xmark", "--or-mark", "--xor-mark"}, value) && i+1 < len(f) && lanPolicyMarkTouches(f[i+1]) {
+						if value != "--mark" || f[i+1] != "0x20000000/0x28000000" || r.ConsumerCheck == nil {
+							return ErrLANPolicyRuntime
+						}
+						if err := r.ConsumerCheck(ctx, CloneLANPolicyRuntime(p)); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
 	}
 	return r.check(ctx, p)
+}
+
+func lanPolicyOwnChain(p *LANPolicyRuntimePlan, name string, family int) bool {
+	for _, c := range lanPolicyChains(p) {
+		if c.family == family && c.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// -N requests numeric tables. Named aliases are refused even if an old ip
+// implementation silently ignores that option; an alias must not hide an
+// owned table or let goto73 fall into a legacy tunnel selector.
+func lanPolicyRuleSyntax(line string) bool {
+	f := strings.Fields(line)
+	if len(f) < 3 {
+		return false
+	}
+	if _, ok := policyLinePriority(line); !ok {
+		return false
+	}
+	for i := 1; i < len(f); i++ {
+		switch f[i] {
+		case "not", "nop", "blackhole", "unreachable", "prohibit", "l3mdev":
+		case "from", "to", "fwmark", "iif", "oif", "goto", "lookup", "table", "tos", "dsfield", "uidrange", "ipproto", "sport", "dport", "suppress_prefixlength", "suppress_ifgroup", "protocol", "realms":
+			kind := f[i]
+			i++
+			if i >= len(f) {
+				return false
+			}
+			if kind == "lookup" || kind == "table" {
+				if f[i] == "local" || f[i] == "main" || f[i] == "default" {
+					continue
+				}
+				if n, err := strconv.ParseUint(f[i], 10, 32); err != nil || n == 0 {
+					return false
+				}
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// BeforeDelete is deliberately stronger than the count inspector. An anchor
+// may not disappear while any goto still references it, and a chain must not
+// disappear until ALL contents/references have been removed. Current review
+// and Stop are not consulted during exact receipt-owned cleanup.
+func (r *LANPolicyRuntime) BeforeDelete(ctx context.Context, p *LANPolicyRuntimePlan, e LANPolicyEffect) error {
+	count, foreign, err := r.InspectEffect(ctx, p, e)
+	if err != nil || foreign || count > 1 {
+		return errors.Join(err, ErrLANPolicyRuntime)
+	}
+	if e.Tool == "ip" {
+		isAnchor := slices.Contains(e.Add, "nop")
+		if !isAnchor {
+			return nil
+		}
+		text, err := r.read(ctx, "ip", e.Add[0], "-N", "rule", "show")
+		if err != nil {
+			return err
+		}
+		for _, line := range strings.Split(text, "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			if !lanPolicyRuleSyntax(line) {
+				return ErrLANPolicyRuntime
+			}
+			f := strings.Fields(line)
+			for i, value := range f {
+				if value == "goto" && i+1 < len(f) && f[i+1] == "73" {
+					return ErrLANPolicyRuntime
+				}
+			}
+		}
+		return nil
+	}
+	if len(e.Add) > 3 && e.Add[2] == "-N" {
+		text, err := r.read(ctx, e.Tool, "-t", "mangle", "-S")
+		if err != nil {
+			return err
+		}
+		name := e.Add[3]
+		for _, line := range strings.Split(text, "\n") {
+			f := strings.Fields(line)
+			if len(f) > 2 && f[0] == "-A" && f[1] == name {
+				return ErrLANPolicyRuntime
+			}
+			for i := 2; i+1 < len(f); i++ {
+				if (f[i] == "-j" || f[i] == "-g") && f[i+1] == name {
+					return ErrLANPolicyRuntime
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func lanPolicyRuleIngress(fields []string, p *LANPolicyRuntimePlan) bool {
@@ -248,14 +404,26 @@ func (r *LANPolicyRuntime) InspectEffect(ctx context.Context, p *LANPolicyRuntim
 	}
 	if effect.Tool == "ip" {
 		family := effect.Add[0]
-		output, err := r.read(ctx, "ip", family, "rule", "show")
+		output, err := r.read(ctx, "ip", family, "-N", "rule", "show")
 		if err != nil {
 			return 0, false, err
 		}
 		for _, rule := range lanPolicyRules(p) {
 			if slices.Equal(rule.args("add"), effect.Add) {
 				for _, line := range strings.Split(output, "\n") {
+					if strings.TrimSpace(line) == "" {
+						continue
+					}
 					priority, ok := policyLinePriority(line)
+					if !ok || !lanPolicyRuleSyntax(line) {
+						return 0, true, ErrLANPolicyRuntime
+					}
+					f := strings.Fields(line)
+					for i, value := range f {
+						if value == "goto" && i+1 < len(f) && f[i+1] == "73" && priority != LANPolicySkipPriority {
+							foreign = true
+						}
+					}
 					if !ok || priority != rule.priority {
 						continue
 					}
