@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -48,9 +49,13 @@ func TestPackageDetachedFixture(t *testing.T) {
 		return
 	}
 	path := os.Getenv("RAZVILKA_DETACHED_ROOT")
-	if stage == "fork" {
+	if stage == "fork" || stage == "fork-hung" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestPackageDetachedFixture$")
-		cmd.Env = append(os.Environ(), "RAZVILKA_DETACHED_STAGE=child")
+		next := "child"
+		if stage == "fork-hung" {
+			next = "hung"
+		}
+		cmd.Env = append(os.Environ(), "RAZVILKA_DETACHED_STAGE="+next)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -78,7 +83,7 @@ func TestSupervisorCleanupWithoutChildrenInterface(t *testing.T) {
 		if err := os.Mkdir(filepath.Join(proc, strconv.Itoa(pid)), 0700); err != nil {
 			t.Fatal(err)
 		}
-		text := strconv.Itoa(pid) + " (name with ) brackets) S " + strconv.Itoa(parent) + " 100 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42"
+		text := strconv.Itoa(pid) + " (name with ) brackets) S " + strconv.Itoa(parent) + " 100 " + strings.Repeat("0 ", 16) + "42"
 		if err := os.WriteFile(filepath.Join(proc, strconv.Itoa(pid), "stat"), []byte(text), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +121,7 @@ func TestPackageSupervisorHungChildDeadline(t *testing.T) {
 	}
 	defer root.Close()
 	runner := fixtureSupervisedRunner(path)
-	runner.supervisorEnv = append(runner.supervisorEnv, "RAZVILKA_DETACHED_STAGE=hung", "RAZVILKA_DETACHED_ROOT="+path)
+	runner.supervisorEnv = append(runner.supervisorEnv, "RAZVILKA_DETACHED_STAGE=fork-hung", "RAZVILKA_DETACHED_ROOT="+path)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	_, err = runner.runSupervised(ctx, os.Args[0], []string{"-test.run=^TestPackageDetachedFixture$"}, packageSupervision{Schema: 1, TransactionID: id, Component: "nfqws2", Action: "upgrade", Containment: packageContainment, State: "intent"}, root, path)
