@@ -1,5 +1,13 @@
 # CORE — первая порция D11, 03.10.2026
 
+## Ready: terminal checkpoint preserves protected operation
+
+03.10.2026. Отдельное исправление после review: matching terminal package transaction больше не даёт старому maintenance checkpoint права перезаписать более новую running operation. Перед durable settlement снова проверяется receipt: иной transaction ID защищён независимо от времени, а более поздний UpdatedAt защищён и для legacy receipt, и для совпадающего ID. В этих случаях закрывается только старый matching maintenance checkpoint; байты operation receipt сохраняются, package/live callbacks не повторяются.
+
+Настоящий HTTP regression проверяет все три случая (legacy/newer, other-ID/older, same-ID/newer), сохранение точных байтов receipt, снятие старого checkpoint и 409 при повторе. `go test ./internal/app -run 'ComponentTerminalHTTP|ComponentInstalledIdleHTTP|ComponentKnownRollbackHTTP|ComponentRecoveryHTTP' -count=1` RC0 (4.096s); `go vet ./internal/app` RC0. Общий self-update WIP в этот отдельный коммит не входит.
+
+**Подтверждение перераспределения ownership:** новый `internal/dataplane/policy_addition_receipt.go` и его новые unit/native tests передаются VLESS по уже опубликованному `CORE_POLICY_ADDITION_CONTRACT_RU.md`. CORE этот файл не начинал и не начнёт; сохраняет `policy_mutation.go`, kernel helpers, manager/app/config и D07. Это заменяет прежнюю запись ниже о реализации receipt силами CORE. VLESS/NET должны пользоваться одним общим primitive; дублировать парсер argv или legacy replace-to-add в адаптерах не требуется. CORE продолжает self-update wiring.
+
 ## Готово для UI: явные component directories (следующая порция)
 
 Base этой маленькой порции: `99ac304778f881bab24692f9d87f880d41da4d09`, получен `git merge --ff-only`; предыдущая история CORE сохранена. Изменены только `cmd/razvilka/main.go`, сопутствующий `component_paths_test.go` и этот отчёт. Порция готова для отдельного переноса UI; self-update интеграция начнётся следующим коммитом.

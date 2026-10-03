@@ -45,9 +45,6 @@ func (a *App) componentSettlementNeeded(state components.ManagedUpdateState) (bo
 	if receipt.Status != "running" || receipt.Action != "update" {
 		return false, nil
 	}
-	if receipt.TransactionID != "" {
-		return receipt.TransactionID == state.TransactionID, nil
-	}
 	// Legacy running receipts have no transaction ID. Never overwrite a newer
 	// operation that began after this particular package transaction settled.
 	operationAt, err := time.Parse(time.RFC3339Nano, receipt.UpdatedAt)
@@ -58,7 +55,10 @@ func (a *App) componentSettlementNeeded(state components.ManagedUpdateState) (bo
 	if err != nil {
 		return false, err
 	}
-	return !operationAt.After(settledAt), nil
+	if operationAt.After(settledAt) {
+		return false, nil
+	}
+	return receipt.TransactionID == "" || receipt.TransactionID == state.TransactionID, nil
 }
 
 func (a *App) settleComponentRecovery(ctx context.Context, id, component string, guard func(context.Context) error) error {
@@ -83,6 +83,18 @@ func (a *App) settleComponentRecovery(ctx context.Context, id, component string,
 	case components.UpdateAbandoned:
 	default:
 		return components.ErrRecoveryAuthority
+	}
+	operationPending, err := a.componentSettlementNeeded(state)
+	if err != nil {
+		return err
+	}
+	if !operationPending {
+		// A stale scheduler checkpoint is not ownership of a later operation.
+		// Finish that checkpoint without changing the protected receipt bytes.
+		if err := guard(ctx); err != nil {
+			return err
+		}
+		return a.finishMatchingComponentMaintenance(ctx, component)
 	}
 	// The package journal, final operation receipt and scheduler checkpoint are
 	// separate durable writes. A retry may finish the latter two, never replay

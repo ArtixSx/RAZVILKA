@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
@@ -428,6 +429,73 @@ func TestComponentKnownRollbackHTTPKeepsSeparateAcceptance(t *testing.T) {
 		if strings.HasPrefix(call, "install ") || strings.HasPrefix(call, "upgrade ") {
 			t.Fatal("acceptance replayed package command", call)
 		}
+	}
+}
+
+func TestComponentTerminalHTTPCheckpointPreservesLaterOperation(t *testing.T) {
+	for _, binding := range []string{"legacy-newer", "different-transaction", "same-transaction-newer"} {
+		t.Run(binding, func(t *testing.T) {
+			a, runner := componentHTTPFixture(t)
+			if err := a.loadAutonomy(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.updateComponent(context.Background(), "nfqws2"); !errors.Is(err, components.ErrUpdatePending) {
+				t.Fatal(err)
+			}
+			body := recoveryBody(a, "accept-live")
+			_, err := a.Components.RecoverManagedUpdate(context.Background(), components.ManagedRecoveryRequest{TransactionID: body["transaction_id"].(string), Component: "nfqws2", Action: "accept-live"}, func(context.Context) error { return nil }, func(context.Context) error { return nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, _, err := a.Components.PendingManagedUpdate()
+			if err != nil {
+				t.Fatal(err)
+			}
+			terminalAt, err := time.Parse(time.RFC3339Nano, state.UpdatedAt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			operation := componentRecoveryOperation{SchemaVersion: 1, Component: "nfqws2", Action: "update", Status: "running", Message: "new operation must remain intact", UpdatedAt: terminalAt.Add(time.Second).Format(time.RFC3339Nano)}
+			if binding == "different-transaction" {
+				operation.TransactionID = strings.Repeat("b", 32)
+				operation.UpdatedAt = terminalAt.Add(-time.Second).Format(time.RFC3339Nano)
+			}
+			if binding == "same-transaction-newer" {
+				operation.TransactionID = state.TransactionID
+			}
+			protected, _ := json.Marshal(operation)
+			path := filepath.Join(a.Components.StateDir, "operations", "nfqws2.json")
+			if err := os.WriteFile(path, protected, 0600); err != nil {
+				t.Fatal(err)
+			}
+			a.autonomy.mu.Lock()
+			a.autonomy.doc.Maintenance["components"] = componentPendingPrefix + "nfqws2"
+			err = a.persistAutonomyLocked(context.Background())
+			a.autonomy.mu.Unlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := len(runner.calls)
+			a.componentRecoveryChecks.live = func(context.Context, string) error {
+				t.Error("terminal observation replayed")
+				return errors.New("no replay")
+			}
+			s := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+			defer s.Close()
+			if code, data := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 200 || !bytes.Contains(data, []byte(`"checkpoint_settled":true`)) {
+				t.Fatalf("checkpoint-only settlement: %d %s", code, data)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(after, protected) || len(runner.calls) != before {
+				t.Fatalf("protected receipt changed: %v %s", err, after)
+			}
+			if a.componentMaintenancePending() {
+				t.Fatal("old scheduler checkpoint not settled")
+			}
+			if code, _ := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 409 {
+				t.Fatal("settled checkpoint accepted repeat", code)
+			}
+		})
 	}
 }
 
