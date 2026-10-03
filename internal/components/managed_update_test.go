@@ -217,7 +217,11 @@ func TestManagedUpdateRollbackReceiptFailureRemainsUnconfirmed(t *testing.T) {
 		}
 		// Fail only the rollback receipt write after the previous runtime
 		// passes its check, without making the earlier upgrade write fail.
-		if err := os.Mkdir(filepath.Join(m.StateDir, "receipts", "nfqws2.json.tmp"), 0o700); err != nil {
+		path := filepath.Join(m.StateDir, "receipts", "nfqws2.json")
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
 		return nil
@@ -226,7 +230,8 @@ func TestManagedUpdateRollbackReceiptFailureRemainsUnconfirmed(t *testing.T) {
 		t.Fatalf("rollback persistence failure was reported as verified: result=%+v err=%v", result, err)
 	}
 	var pathErr *os.PathError
-	if !errors.As(err, &pathErr) {
+	var linkErr *os.LinkError
+	if !errors.As(err, &pathErr) && !errors.As(err, &linkErr) {
 		t.Fatalf("rollback receipt failure was discarded: %v", err)
 	}
 	if checks != 2 || r.installed != "1.3.1" {

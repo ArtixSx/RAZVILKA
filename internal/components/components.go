@@ -77,10 +77,12 @@ type View struct {
 }
 
 type Result struct {
-	OK        bool   `json:"ok"`
-	Component string `json:"component"`
-	Action    string `json:"action"`
-	Output    string `json:"output"`
+	OK                    bool   `json:"ok"`
+	Component             string `json:"component"`
+	Action                string `json:"action"`
+	Output                string `json:"output"`
+	TransactionID         string `json:"transaction_id,omitempty"`
+	PendingLiveAcceptance bool   `json:"pending_live_acceptance,omitempty"`
 }
 
 type BatchResult struct {
@@ -119,6 +121,7 @@ type Manager struct {
 	availableAt   time.Time // when lastAvailable was read; zero after opkg update
 	retryDelay    time.Duration
 	releaseChecks map[string]catalogStatus
+	updateFault   func(string) error // phase-boundary fault injection; nil in production
 	mu            sync.Mutex
 }
 
@@ -247,10 +250,19 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	release, err := m.fencePackageMutation()
+	if err != nil {
+		return Result{}, NoMutation(err)
+	}
+	defer release()
 	return m.applyLocked(ctx, id, map[string]bool{})
 }
 
 func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[string]bool) (Result, error) {
+	return m.applyJournalLocked(ctx, id, visiting, nil, nil)
+}
+
+func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting map[string]bool, tx *updateTransaction, guard func(context.Context) error) (Result, error) {
 	spec, ok := lookup(id)
 	if !ok {
 		return Result{}, fmt.Errorf("unknown component %q", id)
@@ -336,7 +348,29 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 		command = "upgrade"
 	}
 	// Never upgrade the global package set. Only the reviewed allowlisted package.
+	if tx != nil {
+		if err := tx.authority(ctx, guard); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+		if err := tx.phase(UpdateStarted); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+		if err := tx.fault("before:upgrade-command"); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+	}
 	out, err := m.run(ctx, command, spec.Package)
+	if tx != nil {
+		if faultErr := tx.fault("after:upgrade-command"); faultErr != nil {
+			return Result{Component: id, Action: action}, faultErr
+		}
+		if err != nil {
+			return Result{Component: id, Action: action, Output: boundedOutput(out)}, errors.Join(ErrUpdateUnknown, err)
+		}
+		if err := tx.phase(UpdateInstalled); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+	}
 	text := strings.TrimSpace(string(out))
 	if len(text) > 8192 {
 		text = text[len(text)-8192:]
@@ -369,6 +403,9 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 		return Result{Component: id, Action: action, Output: text}, errUpdateNotAdvanced
 	}
 	receipt := lifecycleReceipt{SchemaVersion: 1, Component: id, Package: spec.Package, Provider: spec.Provider, Action: action, BeforeVersion: beforeVersion, AfterVersion: afterVersion, CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	if tx != nil {
+		receipt.TransactionID, receipt.Acceptance = tx.doc.TransactionID, "candidate-installed"
+	}
 	if err := m.writeLifecycleReceipt(receipt); err != nil {
 		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("write component receipt: %w", err)
 	}

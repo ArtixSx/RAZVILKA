@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
 // managedUpdateComponents may be updated while their routes are in use: the
@@ -123,13 +125,8 @@ func (m *Manager) cacheRollbackLocked(ctx context.Context, id string) (string, e
 	if err := os.Rename(matches[0], target); err != nil {
 		return "", err
 	}
-	// Keep exactly one cached version per package.
-	others, _ := filepath.Glob(filepath.Join(m.rollbackDir(), spec.Package+"_*.ipk"))
-	for _, other := range others {
-		if other != target {
-			_ = os.Remove(other)
-		}
-	}
+	// A download is not live acceptance. Keep older packages, including the
+	// previous LKG, until a separately reviewed retention operation is added.
 	return target, nil
 }
 
@@ -151,6 +148,7 @@ func (m *Manager) snapshotConffiles(spec Spec) ([]conffileImage, error) {
 		return nil, err
 	}
 	var images []conffileImage
+	seen := map[string]bool{}
 	total := 0
 	scanner := bufio.NewScanner(bytes.NewReader(list))
 	for scanner.Scan() {
@@ -158,9 +156,10 @@ func (m *Manager) snapshotConffiles(spec Spec) ([]conffileImage, error) {
 		if path == "" {
 			continue
 		}
-		if !filepath.IsAbs(path) || len(images) >= maxConffiles {
+		if !filepath.IsAbs(path) || filepath.Clean(path) != path || seen[path] || len(images) >= maxConffiles {
 			return nil, errors.New("package configuration list is unsafe")
 		}
+		seen[path] = true
 		image := conffileImage{path: path}
 		info, err := os.Lstat(path)
 		switch {
@@ -187,21 +186,25 @@ func (m *Manager) snapshotConffiles(spec Spec) ([]conffileImage, error) {
 func restoreConffiles(images []conffileImage) error {
 	var failures []error
 	for _, image := range images {
+		root, err := ownedfs.Open(filepath.Dir(image.path))
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		name := filepath.Base(image.path)
 		if !image.exists {
-			if err := os.Remove(image.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			if err := root.Remove(name); err != nil && !errors.Is(err, os.ErrNotExist) {
 				failures = append(failures, err)
 			}
+			failures = append(failures, syncUpdateDirectory(root))
+			_ = root.Close()
 			continue
 		}
-		temporary := image.path + ".razvilka-restore"
-		if err := os.WriteFile(temporary, image.data, image.mode); err != nil {
-			failures = append(failures, err)
-			continue
-		}
-		if err := os.Rename(temporary, image.path); err != nil {
-			_ = os.Remove(temporary)
+		if err := root.WriteAtomic(name, image.data, image.mode); err != nil {
 			failures = append(failures, err)
 		}
+		failures = append(failures, syncUpdateDirectory(root))
+		_ = root.Close()
 	}
 	return errors.Join(failures...)
 }
@@ -212,11 +215,30 @@ func restoreConffiles(images []conffileImage) error {
 // the package configuration is restored and the cached previous version is
 // reinstalled, then the check runs again for the restored state.
 func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(context.Context) error) (Result, error) {
+	return m.ManagedUpdateGuarded(ctx, id, check, nil)
+}
+
+// ManagedUpdateGuarded repeats the caller's current SafeMode/Stop/revision
+// admission before each package or configuration mutation. A successful check
+// stages the update; RecoverManagedUpdate("accept-live") accepts actual live
+// runtime later. Until then the old package/configuration snapshot is retained.
+func (m *Manager) ManagedUpdateGuarded(ctx context.Context, id string, check, guard func(context.Context) error) (Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	spec, ok := lookup(id)
 	if !ok || !managedUpdateComponents[id] || check == nil {
 		return Result{}, NoMutation(fmt.Errorf("component %s has no managed update", id))
+	}
+	tx, err := m.lockUpdateJournal()
+	if err != nil {
+		return Result{}, NoMutation(err)
+	}
+	defer tx.close()
+	if err := tx.requireIdle(); err != nil {
+		return Result{}, NoMutation(err)
+	}
+	if err := tx.authority(ctx, guard); err != nil {
+		return Result{}, NoMutation(err)
 	}
 	installed, err := m.installedPackageVersions(ctx)
 	if err != nil {
@@ -227,17 +249,40 @@ func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(conte
 	if before == "" || rollback == "" {
 		return Result{Component: id, Action: "update"}, NoMutation(ErrRollbackPackageMissing)
 	}
+	// A managed transaction snapshots one package. Installing a missing
+	// dependency here would add an unjournaled package/script side effect.
+	for _, dependency := range spec.Dependencies {
+		dep, known := lookup(dependency)
+		if !known || (dep.Provider == "opkg" && installed[dep.Package] == "") || (dep.Provider == "github-release" && externalReceiptVersion(filepath.Join(defaultValue(m.BinDir, "/opt/bin"), dep.Binary)) == "") {
+			return Result{}, NoMutation(fmt.Errorf("managed update dependency %s must already be installed", dependency))
+		}
+	}
 	conffiles, err := m.snapshotConffiles(spec)
 	if err != nil {
 		return Result{Component: id, Action: "update"}, NoMutation(fmt.Errorf("snapshot package configuration: %w", err))
 	}
-	result, updateErr := m.applyLocked(ctx, id, map[string]bool{})
+	if err := tx.prepare(spec, before, rollback, conffiles); err != nil {
+		return Result{}, NoMutation(err)
+	}
+	result, updateErr := m.applyJournalLocked(ctx, id, map[string]bool{}, tx, guard)
 	// Even a non-advancing version may follow package/configuration changes.
 	// It must use the same verified rollback as any other failed upgrade.
 	var checkErr error
 	if updateErr == nil {
-		checkErr = check(ctx)
+		checkErr = tx.authority(ctx, guard)
 		if checkErr == nil {
+			checkErr = check(ctx)
+		}
+		if checkErr == nil {
+			versions, err := m.installedPackageVersions(ctx)
+			if err != nil {
+				return result, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: err}
+			}
+			tx.doc.AfterVersion = versions[spec.Package]
+			if err := tx.phase(UpdateAwaitingLive); err != nil {
+				return result, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: err}
+			}
+			result.TransactionID, result.PendingLiveAcceptance = tx.doc.TransactionID, true
 			if _, cacheErr := m.cacheRollbackLocked(ctx, id); cacheErr != nil {
 				result.Output += "\nnew version is not cached for a later rollback yet: " + boundedMessage(cacheErr.Error())
 			}
@@ -245,37 +290,18 @@ func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(conte
 		}
 	}
 	cause := errors.Join(updateErr, checkErr)
-	// Restore the configuration first, so the previous version's install
-	// scripts see the reviewed configuration and do not migrate it.
-	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*defaultDuration(m.Timeout, 90*time.Second))
-	defer cancel()
-	restoreErr := restoreConffiles(conffiles)
-	out, installErr := m.run(rollbackCtx, "install", "--force-downgrade", "--force-reinstall", rollback)
-	after, verifyErr := m.installedPackageVersions(rollbackCtx)
-	if verifyErr == nil && after[spec.Package] != before {
-		verifyErr = fmt.Errorf("rollback left %s at %q, expected %s", spec.Package, after[spec.Package], before)
+	// An intent with no durably recorded command completion is unknown. It
+	// must remain fenced, even if version readback happens to look unchanged.
+	persisted, _, readErr := readUpdateJournal(tx.root)
+	if readErr != nil || persisted.Phase != UpdateInstalled {
+		return Result{Component: id, Action: "update"}, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: errors.Join(cause, readErr, ErrUpdatePending)}
 	}
-	// The previous version's install scripts may have rewritten defaults.
-	restoreErr = errors.Join(restoreErr, restoreConffiles(conffiles))
-	var postErr error
-	if installErr == nil && verifyErr == nil {
-		postErr = check(rollbackCtx)
+	rollbackResult, rollbackErr := tx.rollback(ctx, guard, check)
+	if rollbackErr != nil {
+		return rollbackResult, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: errors.Join(cause, rollbackErr)}
 	}
-	rollbackErr := errors.Join(restoreErr, installErr, verifyErr, postErr)
-	receipt := lifecycleReceipt{SchemaVersion: 1, Component: id, Package: spec.Package, Provider: spec.Provider, Action: "rollback", BeforeVersion: before, AfterVersion: after[spec.Package], CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	if rollbackErr == nil {
-		// Callers may release the maintenance fence on ErrRollbackVerified.
-		// Do not confirm recovery until its receipt has also been recorded.
-		if err := m.writeLifecycleReceipt(receipt); err != nil {
-			rollbackErr = fmt.Errorf("write component rollback receipt: %w", err)
-		}
-	}
-	if rollbackErr == nil {
-		result.OK = false
-		result.Output += "\n" + boundedOutput(out)
-		return result, &UpdateFailure{Outcome: ErrRollbackVerified, Version: before, Cause: cause}
-	}
-	return Result{Component: id, Action: "update", Output: boundedOutput(out)}, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: errors.Join(cause, rollbackErr)}
+	rollbackResult.OK = false
+	return rollbackResult, &UpdateFailure{Outcome: ErrRollbackVerified, Version: before, Cause: cause}
 }
 
 func defaultDuration(value, fallback time.Duration) time.Duration {

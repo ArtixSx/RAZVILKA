@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
 var validLifecycleActions = map[string]bool{"install": true, "update": true, "remove": true}
@@ -24,6 +26,8 @@ type lifecycleReceipt struct {
 	BeforeVersion string `json:"before_version,omitempty"`
 	AfterVersion  string `json:"after_version,omitempty"`
 	CompletedAt   string `json:"completed_at"`
+	TransactionID string `json:"transaction_id,omitempty"`
+	Acceptance    string `json:"acceptance,omitempty"`
 }
 
 type operationReceipt struct {
@@ -169,6 +173,11 @@ func removeSteps(spec Spec) []PlanStep {
 func (m *Manager) Remove(ctx context.Context, id string) (Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	release, err := m.fencePackageMutation()
+	if err != nil {
+		return Result{}, NoMutation(err)
+	}
+	defer release()
 	spec, ok := lookup(id)
 	if !ok {
 		return Result{}, fmt.Errorf("unknown component %q", id)
@@ -296,16 +305,15 @@ func (m *Manager) writeLifecycleReceipt(receipt lifecycleReceipt) error {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
-	path := filepath.Join(directory, receipt.Component+".json")
-	temporary := path + ".tmp"
-	if err := os.WriteFile(temporary, append(data, '\n'), 0o600); err != nil {
+	root, err := ownedfs.Open(directory)
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(temporary, path); err != nil {
-		_ = os.Remove(temporary)
+	defer root.Close()
+	if err := root.WriteAtomic(receipt.Component+".json", append(data, '\n'), 0o600); err != nil {
 		return err
 	}
-	return nil
+	return syncUpdateDirectory(root)
 }
 
 func (m *Manager) attachLifecycleVerification(view *View) {
@@ -333,8 +341,19 @@ func (m *Manager) attachLifecycleVerification(view *View) {
 	view.LastAction = receipt.Action
 	view.LastActionAt = receipt.CompletedAt
 	view.VerifiedVersion = receipt.AfterVersion
+	if receipt.Acceptance == "candidate-installed" || receipt.Acceptance == UpdateAwaitingLive {
+		view.Verification = "awaiting-live-acceptance"
+		return
+	}
+	if receipt.TransactionID != "" {
+		pending, blocked, err := m.PendingManagedUpdate()
+		if err != nil || (blocked && pending.TransactionID == receipt.TransactionID) {
+			view.Verification = "recovery-pending"
+			return
+		}
+	}
 	switch receipt.Action {
-	case "install", "update":
+	case "install", "update", "rollback":
 		if view.Installed && receipt.AfterVersion != "" && compareVersions(view.InstalledVersion, receipt.AfterVersion) == 0 {
 			view.Verification = "verified"
 		} else {
