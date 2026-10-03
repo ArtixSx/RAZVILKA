@@ -68,7 +68,7 @@
       ],
       "title": "AWG production",
       "scope": "Проверенные module/CLI/kernel/ABI/backend и сервер, readback без секретов, сохранение foreign owners, wrong module safe reject, reboot authority отдельно.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D07",
