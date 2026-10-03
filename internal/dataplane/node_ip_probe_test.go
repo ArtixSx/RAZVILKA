@@ -131,7 +131,7 @@ func TestExactNodeCanceledIPProbeCleansBeforeReleasingRuntime(t *testing.T) {
 		return nil
 	}
 	result, err := checker.Check(ctx, checkedNodeRequest())
-	if err == nil || result.Available || result.Verdict == evidence.VerdictPass || !cleaned || len(checker.gate) != 0 {
+	if err == nil || result.Available || result.Verdict == evidence.VerdictPass || !cleaned || len(checker.gate) != checker.Capacity() {
 		t.Fatalf("cancel lost isolation: available=%t cleaned=%t err=%v", result.Available, cleaned, err)
 	}
 }

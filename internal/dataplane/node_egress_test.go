@@ -317,3 +317,20 @@ func TestNodeEgressPairCancellationSkipsRemainingMeasurements(t *testing.T) {
 		t.Fatalf("canceled pair continued or published an IP: calls=%d result=%+v", calls, result)
 	}
 }
+
+// A node that lets nothing through within the attempt is not retried through
+// the backup provider; a provider that failed quickly still is.
+func TestNodeEgressPairDoesNotRetryATimedOutNode(t *testing.T) {
+	var calls []string
+	result := probeNodeEgressPair(context.Background(), "127.0.0.1:19181", func(ctx context.Context, endpoint nodeEgressEndpoint, proxy string) (string, error) {
+		calls = append(calls, endpoint.url+"/"+proxy)
+		if proxy == "" {
+			return "8.8.8.8", nil
+		}
+		<-ctx.Done()
+		return "", ctx.Err()
+	})
+	if len(calls) != 2 || result.directIP != "8.8.8.8" || !errors.Is(result.proxyErr, context.DeadlineExceeded) {
+		t.Fatalf("timed-out node retried or misreported: calls=%v result=%+v", calls, result)
+	}
+}

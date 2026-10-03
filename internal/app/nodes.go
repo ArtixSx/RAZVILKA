@@ -422,6 +422,44 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 // Store path. A recovery supplies its immutable epoch and expected generation;
 // its own RecordCheck is the only permitted generation increment.
 func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog.Service, profile string, generation uint64) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
+	return a.runAndRecordNode(ctx, id, service, profile, generation, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
+		result, err := a.NodeChecker.Check(ctx, request)
+		return result, true, err
+	})
+}
+
+// screenAndRecordNode runs only the DNS and transport stages. A node that
+// fails them is decided and recorded exactly as a full check would record it;
+// otherwise nothing is recorded and a full check is still required.
+func (a *App) screenAndRecordNode(ctx context.Context, id string, service catalog.Service, profile string) (dataplane.NodeCheckResult, bool, error) {
+	screener, ok := a.NodeChecker.(dataplane.TransportScreener)
+	if !ok {
+		return dataplane.NodeCheckResult{}, false, nil
+	}
+	decided := false
+	result, _, err := a.runAndRecordNode(ctx, id, service, profile, 0, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
+		result, screened, err := screener.ScreenTransport(ctx, request)
+		decided = screened
+		return result, screened, err
+	})
+	return result, decided && err == nil, err
+}
+
+// nodeCheckCapacity is how many checks the checker runs at once.
+func (a *App) nodeCheckCapacity() int {
+	if capacity, ok := a.NodeChecker.(dataplane.NodeCheckCapacity); ok && capacity.Capacity() > 1 {
+		return capacity.Capacity()
+	}
+	return 1
+}
+
+// runAndRecordNode runs one check of a node and records its result when run
+// reports it final. With a generation, the whole catalogue must be unchanged
+// (a reviewed plan depends on it). Without one, only this node must still be
+// present and enabled: node IDs are derived from their configuration, so
+// other nodes or sources changing meanwhile, including parallel checks
+// recording their results, do not change what was checked.
+func (a *App) runAndRecordNode(ctx context.Context, id string, service catalog.Service, profile string, generation uint64, run func(dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error)) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
 	var result dataplane.NodeCheckResult
 	if a.Nodes == nil || a.NodeChecker == nil || !serviceHasNodeProbe(service) {
 		return result, nodestore.Snapshot{}, dataplane.ErrExactNodeUnavailable
@@ -454,13 +492,17 @@ func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog
 		return result, snapshot, dataplane.ErrExactNodeNetworkChanged
 	}
 	profile = current
+	record := false
 	err = a.Nodes.WithSecret(ctx, id, func(material []byte) error {
 		var checkErr error
-		result, checkErr = a.NodeChecker.Check(ctx, dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: service, NetworkProfile: profile})
+		result, record, checkErr = run(dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: service, NetworkProfile: profile})
 		return checkErr
 	})
 	if err != nil {
 		return result, snapshot, err
+	}
+	if !record {
+		return result, snapshot, nil
 	}
 	if result.NodeID != id || result.ServiceID != service.ID || result.NetworkProfile != profile || result.RoutePathID != "sing-box:"+id {
 		return result, snapshot, dataplane.ErrExactNodeUnavailable
@@ -472,13 +514,16 @@ func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog
 	if err != nil || current != profile {
 		return result, snapshot, dataplane.ErrExactNodeNetworkChanged
 	}
+	a.nodeRecordMu.Lock()
+	defer a.nodeRecordMu.Unlock()
 	latest, err := a.Nodes.Snapshot(ctx, time.Now())
 	if err != nil {
 		return result, snapshot, err
 	}
-	if latest.Generation != snapshot.Generation {
+	if generation != 0 && latest.Generation != snapshot.Generation || generation == 0 && !nodeStillCheckable(latest, id) {
 		return result, snapshot, dataplane.ErrReviewChanged
 	}
+	before := latest.Generation
 	state := "unavailable"
 	if result.Available {
 		state = "available"
@@ -489,10 +534,19 @@ func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog
 		Stage: result.Stage, CheckedAt: result.FinishedAt, ExpiresAt: result.ExpiresAt, LatencyMS: result.LatencyMS,
 		EgressIP: result.EgressIP, HTTPStatus: result.HTTPStatus, ErrorCode: result.ErrorCode, Message: result.Message, DirectLeak: result.DirectLeak,
 	}, time.Now())
-	if err == nil && latest.Generation != snapshot.Generation+1 {
+	if err == nil && latest.Generation != before+1 {
 		err = dataplane.ErrReviewChanged
 	}
 	return result, latest, err
+}
+
+func nodeStillCheckable(snapshot nodestore.Snapshot, id string) bool {
+	for _, node := range snapshot.Nodes {
+		if node.ID == id {
+			return !node.Disabled
+		}
+	}
+	return false
 }
 
 func writeNodeNetworkError(w http.ResponseWriter) {

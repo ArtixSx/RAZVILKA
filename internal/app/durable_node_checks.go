@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
@@ -186,7 +187,10 @@ func (a *App) nodeCheckCurrentView() map[string]any {
 	return view
 }
 
-type durableNodeCheckResult struct{ network string }
+type durableNodeCheckResult struct {
+	network  string
+	advanced int // nodes of the selection this step completed
+}
 
 func durableNodeCheckFailure(err error) string {
 	switch {
@@ -305,33 +309,98 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		}
 		a.nodeChecks.mu.Unlock()
 	}()
-	id := r.NodeIDs[r.durableCursor]
+	var service catalog.Service
+	if len(services) == 1 {
+		service = services[0]
+	}
 	snapshot, err := a.Nodes.Snapshot(checkCtx, time.Now())
 	if err != nil {
 		return out, err
 	}
-	eligible := false
+	available := map[string]bool{}
 	for _, node := range snapshot.Nodes {
-		if node.ID == id && !node.Disabled && node.State != "expired" && (r.NodeCatalog == nil || strings.EqualFold(strings.TrimSpace(node.Protocol), "vless")) {
-			eligible = true
-			break
+		if !node.Disabled && node.State != "expired" && (r.NodeCatalog == nil || strings.EqualFold(strings.TrimSpace(node.Protocol), "vless")) {
+			available[node.ID] = true
 		}
 	}
-	item := nodeCheckItem{NodeID: id, CheckedAt: time.Now().UTC(), NetworkProfile: profile, ErrorCode: "bulk-node-skipped", Message: "Подключение удалено, отключено или истекло. Пропущено."}
-	if eligible {
-		var service catalog.Service
-		if len(services) == 1 {
-			service = services[0]
+	pinger := a.NodePinger
+	if pinger == nil {
+		pinger = dataplane.NewTCPNodePinger()
+	}
+	// A step covers a window of the frozen selection. Pings are only TCP
+	// connects and run together. A service check first decides the nodes that
+	// fail DNS or transport (recorded as a full check would record them),
+	// then checks up to the checker's capacity of the others at once. With
+	// one slot and no screening, a step is one node as before.
+	capacity := a.nodeCheckCapacity()
+	_, screens := a.NodeChecker.(dataplane.TransportScreener)
+	limit := 1
+	if r.NodeCheckMode == "tcp" || screens || capacity > 1 {
+		limit = durableNodeWindow
+	}
+	ids := r.NodeIDs[r.durableCursor:min(r.durableCursor+limit, len(r.NodeIDs))]
+	items := make([]nodeCheckItem, len(ids))
+	eligible := make([]bool, len(ids))
+	for i, id := range ids {
+		eligible[i] = available[id]
+		items[i] = nodeCheckItem{NodeID: id, CheckedAt: time.Now().UTC(), NetworkProfile: profile, ErrorCode: "bulk-node-skipped", Message: "Подключение удалено, отключено или истекло. Пропущено."}
+	}
+	pings := map[string]nodeCheckItem{}
+	advanced := len(ids)
+	if r.NodeCheckMode == "tcp" {
+		eachNodeInParallel(len(ids), durableNodeWindow, func(i int) {
+			if eligible[i] {
+				items[i] = a.runNodeCheckItem(checkCtx, r.NodeCheckMode, ids[i], service, profile, pinger)
+			}
+		})
+		for i := range ids {
+			if eligible[i] {
+				pings[ids[i]] = items[i]
+			}
 		}
-		pinger := a.NodePinger
-		if pinger == nil {
-			pinger = dataplane.NewTCPNodePinger()
+	} else {
+		decided := make([]bool, len(ids))
+		screened := make([]nodeCheckItem, len(ids))
+		if screens && r.NodeCheckMode == "service" {
+			eachNodeInParallel(len(ids), durableNodeWindow, func(i int) {
+				if !eligible[i] {
+					return
+				}
+				result, final, err := a.screenAndRecordNode(checkCtx, ids[i], service, profile)
+				if err != nil {
+					return // A full check decides; it reports its own failure.
+				}
+				screened[i] = screenPing(ids[i], profile, result)
+				if final {
+					items[i], decided[i] = nodeCheckItemFromResult(ids[i], profile, result, nil), true
+				}
+			})
 		}
-		item = a.runNodeCheckItem(checkCtx, r.NodeCheckMode, id, service, profile, pinger)
-		if item.ErrorCode == "node-cleanup-failed" {
-			a.Operations.Fence()
-			return out, operationgate.ErrRecovery
+		full := []int{}
+		advanced = 0
+		for i := range ids {
+			if eligible[i] && !decided[i] {
+				if len(full) == capacity {
+					break
+				}
+				full = append(full, i)
+			}
+			advanced++
 		}
+		eachNodeInParallel(len(full), capacity, func(k int) {
+			i := full[k]
+			items[i] = a.runNodeCheckItem(checkCtx, r.NodeCheckMode, ids[i], service, profile, pinger)
+		})
+		for i := range advanced {
+			if items[i].ErrorCode == "node-cleanup-failed" {
+				a.Operations.Fence()
+				return out, operationgate.ErrRecovery
+			}
+			if screened[i].NodeID != "" {
+				pings[ids[i]] = screened[i]
+			}
+		}
+		ids, items, eligible = ids[:advanced], items[:advanced], eligible[:advanced]
 	}
 	if checkCtx.Err() != nil {
 		return out, checkCtx.Err()
@@ -342,23 +411,26 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 	if r.intentHash != durableServiceIntentHash(a.Store.Get(), services) || len(services) == 1 && !a.nodeCheckDefinitionCurrent(services[0].ID, applyReviewHash(services[0])) {
 		return out, config.ErrRevisionChanged
 	}
+	out.advanced = advanced
 	a.nodeChecks.mu.Lock()
 	defer a.nodeChecks.mu.Unlock()
 	if job := a.nodeChecks.job; job != nil && job.ID == r.durableID {
-		job.Results = append(slices.Clone(job.Results), item)
-		if len(job.Results) > maxNodeCheckBatch {
-			job.Results = slices.Clone(job.Results[len(job.Results)-maxNodeCheckBatch:])
-		}
-		job.Completed++
-		switch {
-		case !eligible:
-			job.Skipped++
-		case item.Available && item.Verdict == "PASS" && item.TestLevel == "service":
-			job.Passed++
-		case slices.Contains([]string{"BLOCKED", "MISROUTED", "FAIL"}, item.Verdict):
-			job.Failed++
-		default:
-			job.Inconclusive++
+		for i, item := range items {
+			job.Results = append(slices.Clone(job.Results), item)
+			if len(job.Results) > maxNodeCheckBatch {
+				job.Results = slices.Clone(job.Results[len(job.Results)-maxNodeCheckBatch:])
+			}
+			job.Completed++
+			switch {
+			case !eligible[i]:
+				job.Skipped++
+			case item.Available && item.Verdict == "PASS" && item.TestLevel == "service":
+				job.Passed++
+			case slices.Contains([]string{"BLOCKED", "MISROUTED", "FAIL"}, item.Verdict):
+				job.Failed++
+			default:
+				job.Inconclusive++
+			}
 		}
 		if a.nodeChecks.batchResults == nil {
 			a.nodeChecks.batchResults = map[uint64]*nodeCheckJob{}
@@ -373,23 +445,88 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 			}
 			delete(a.nodeChecks.batchResults, oldest.ID)
 		}
-		if r.NodeCheckMode == "tcp" {
-			if a.nodeChecks.pings == nil {
-				a.nodeChecks.pings = map[string]nodeCheckItem{}
-			}
-			if len(a.nodeChecks.pings) >= maxNodeCheckBatch && a.nodeChecks.pings[id].NodeID == "" {
-				oldest := ""
-				for key, value := range a.nodeChecks.pings {
-					if oldest == "" || value.CheckedAt.Before(a.nodeChecks.pings[oldest].CheckedAt) {
-						oldest = key
-					}
-				}
-				delete(a.nodeChecks.pings, oldest)
-			}
-			a.nodeChecks.pings[id] = item
+		for id, item := range pings {
+			a.rememberNodePing(id, item)
 		}
 	}
 	return out, nil
+}
+
+// durableNodeWindow bounds the nodes one durable step pings or screens.
+const durableNodeWindow = 16
+
+// eachNodeInParallel runs fn for 0..n-1 with at most limit at once.
+func eachNodeInParallel(n, limit int, fn func(int)) {
+	if n <= 0 {
+		return
+	}
+	limit = min(max(limit, 1), n)
+	next := make(chan int)
+	var wg sync.WaitGroup
+	for range limit {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range next {
+				fn(i)
+			}
+		}()
+	}
+	for i := range n {
+		next <- i
+	}
+	close(next)
+	wg.Wait()
+}
+
+// nodeCheckItemFromResult is the job row of a service check of a node.
+func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResult, err error) nodeCheckItem {
+	item := nodeCheckItem{NodeID: id, NetworkProfile: profile, CheckedAt: time.Now().UTC()}
+	if err == nil {
+		item.Available, item.DurationMS, item.Message = result.Available, result.LatencyMS, result.Message
+		item.Verdict, item.TestLevel, item.ErrorCode = string(result.Verdict), result.TestLevel, result.ErrorCode
+	} else {
+		item.Message = nodeCheckFailureMessage(err)
+		item.Verdict, item.TestLevel, item.ErrorCode = "INCONCLUSIVE", "unconfirmed", nodeCheckFailureCode(err)
+	}
+	return item
+}
+
+// screenPing turns the transport stage of a screened node into the node's
+// TCP ping, so a service check fills the ping column as well. UDP nodes have
+// no TCP stage and no ping.
+func screenPing(id, profile string, result dataplane.NodeCheckResult) nodeCheckItem {
+	for _, stage := range result.Stages {
+		if stage.ID != "transport" || stage.Status == "skipped" {
+			continue
+		}
+		item := nodeCheckItem{NodeID: id, NetworkProfile: profile, CheckedAt: time.Now().UTC()}
+		if stage.Status == "passed" {
+			item.Reachable, item.LatencyMS, item.Message = true, max(stage.Duration, 1), "TCP-соединение установлено. Работу сервиса проверьте отдельно."
+		} else {
+			item.Message = "Сервер не принял TCP-соединение."
+		}
+		return item
+	}
+	return nodeCheckItem{}
+}
+
+// rememberNodePing keeps a bounded, process-local ping per node. Call with
+// a.nodeChecks.mu held.
+func (a *App) rememberNodePing(id string, item nodeCheckItem) {
+	if a.nodeChecks.pings == nil {
+		a.nodeChecks.pings = map[string]nodeCheckItem{}
+	}
+	if _, known := a.nodeChecks.pings[id]; !known && len(a.nodeChecks.pings) >= nodestore.MaxNodes {
+		oldest := ""
+		for key, value := range a.nodeChecks.pings {
+			if oldest == "" || value.CheckedAt.Before(a.nodeChecks.pings[oldest].CheckedAt) {
+				oldest = key
+			}
+		}
+		delete(a.nodeChecks.pings, oldest)
+	}
+	a.nodeChecks.pings[id] = item
 }
 
 func (a *App) nodeBatchMemoryResults() map[uint64]nodeCheckJob {

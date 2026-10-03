@@ -23,16 +23,17 @@ import (
 )
 
 type line struct {
-	Source    string `json:"source"`
-	Node      string `json:"node"`
-	Protocol  string `json:"protocol"`
-	Transport string `json:"transport"`
-	Stage     string `json:"stage"`
-	Verdict   string `json:"verdict"`
-	Available bool   `json:"available"`
-	Code      string `json:"code,omitempty"`
-	LatencyMS int64  `json:"latency_ms,omitempty"`
-	Seconds   int64  `json:"seconds"`
+	Source    string           `json:"source"`
+	Node      string           `json:"node"`
+	Protocol  string           `json:"protocol"`
+	Transport string           `json:"transport"`
+	Stage     string           `json:"stage"`
+	Verdict   string           `json:"verdict"`
+	Available bool             `json:"available"`
+	Code      string           `json:"code,omitempty"`
+	LatencyMS int64            `json:"latency_ms,omitempty"`
+	Seconds   int64            `json:"seconds"`
+	Stages    map[string]int64 `json:"stages_ms,omitempty"`
 }
 
 func main() {
@@ -130,7 +131,10 @@ func main() {
 				}
 			}
 			entry := line{Source: name, Node: id[5:17], Protocol: protocols[id][0], Transport: protocols[id][1], Stage: check.Stage, Verdict: string(check.Verdict),
-				Available: check.Available, Code: check.ErrorCode, LatencyMS: check.LatencyMS, Seconds: int64(time.Since(started).Seconds())}
+				Available: check.Available, Code: check.ErrorCode, LatencyMS: check.LatencyMS, Seconds: int64(time.Since(started).Seconds()), Stages: map[string]int64{}}
+			for _, stage := range check.Stages {
+				entry.Stages[stage.ID] += stage.Duration
+			}
 			data, _ := json.Marshal(entry)
 			_, _ = out.Write(append(data, '\n'))
 			t.total++

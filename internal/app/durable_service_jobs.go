@@ -742,13 +742,15 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		j.Cursor = 1
 		finishDurableJob(j, "completed", "", time.Now())
 	} else if request.Kind == "node-check" {
-		j.Cursor++
+		j.Cursor += max(nodeBatch.advanced, 1)
 		j.CheckNetwork = nodeBatch.network
 		j.Reason = ""
 		if j.Cursor < len(request.NodeIDs) {
 			j.State, j.Phase = "queued", "waiting"
 			j.NotBefore = time.Now().Add(time.Second)
 			j.Attempts = 0 // Next item receives its own bounded retry budget.
+			// Continue after the pause instead of the next 5-second round.
+			time.AfterFunc(time.Second, a.nudgeReconciler)
 		} else {
 			finishDurableJob(j, "completed", "", time.Now())
 		}

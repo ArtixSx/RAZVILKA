@@ -94,6 +94,20 @@ func (a *App) reconcilerSnapshot() map[string]any {
 	return map[string]any{"state": state, "error_code": a.reconciler.blockedCode, "operations": ops, "manual_until": a.reconciler.doc.ManualUntil, "persistent": a.reconciler.path != "", "note": "Очередь использует существующие проверки и транзакции. Незавершённое действие после запуска оценивается заново."}
 }
 
+// nudgeReconciler starts the next round now without making maintenance due,
+// so a queued job continues without waiting for the 5-second tick.
+func (a *App) nudgeReconciler() {
+	a.reconciler.mu.Lock()
+	wake := a.reconciler.wake
+	a.reconciler.mu.Unlock()
+	if wake != nil {
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+	}
+}
+
 func (a *App) wakeReconciler() {
 	a.reconciler.mu.Lock()
 	now := time.Now()

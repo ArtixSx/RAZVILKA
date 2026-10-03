@@ -27,7 +27,7 @@ func fakeExactNodeChecker(t *testing.T) *ExactNodeChecker {
 		return []netip.Addr{netip.MustParseAddr("203.0.113.8")}, nil
 	}
 	checker.dialTransport = func(context.Context, exactNodeEndpoint, []netip.Addr) (bool, error) { return true, nil }
-	checker.prepare = func(context.Context, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error) {
+	checker.prepare = func(context.Context, exactNodeSession, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error) {
 		return exactNodeSession{Address: "127.0.0.1:19181", Spec: ProcessSpec{Binary: "sing-box"}}, nil
 	}
 	checker.start = func(context.Context, exactNodeSession) error { return nil }
@@ -145,7 +145,7 @@ func TestExactNodeCheckRejectsBlockedServiceAndCleanupFailure(t *testing.T) {
 func TestExactNodeCheckCleansRejectedRuntimeConfig(t *testing.T) {
 	checker := fakeExactNodeChecker(t)
 	cleaned := false
-	checker.prepare = func(context.Context, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error) {
+	checker.prepare = func(context.Context, exactNodeSession, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error) {
 		return exactNodeSession{Root: checker.StateRoot, Address: "127.0.0.1:19181", Spec: ProcessSpec{Binary: "sing-box"}}, errors.New("config rejected")
 	}
 	checker.cleanup = func(context.Context, exactNodeSession) error {

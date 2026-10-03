@@ -83,6 +83,17 @@ type NodeChecker interface {
 	Recover(context.Context) error
 }
 
+// NodeCheckCapacity is implemented by checkers that run several checks at once.
+type NodeCheckCapacity interface {
+	Capacity() int
+}
+
+// TransportScreener is implemented by checkers that can decide a node from
+// its DNS and transport stages alone, without a temporary process.
+type TransportScreener interface {
+	ScreenTransport(context.Context, NodeCheckRequest) (NodeCheckResult, bool, error)
+}
+
 type exactNodeEndpoint struct {
 	Protocol  string
 	Transport string
@@ -94,11 +105,18 @@ type exactNodeEndpoint struct {
 type exactNodeSession struct {
 	Root    string
 	Address string
+	Port    int
 	Spec    ProcessSpec
 }
 
-// ExactNodeChecker owns one fixed, loopback-only temporary Sing-box process.
-// A non-blocking single-slot gate prevents port/process collisions with itself.
+// MaxExactNodeSlots bounds the temporary Sing-box processes that may run at
+// once, and with them the loopback ports Port .. Port+MaxExactNodeSlots-1.
+const MaxExactNodeSlots = 4
+
+// ExactNodeChecker owns up to MaxExactNodeSlots loopback-only temporary
+// Sing-box processes, one per slot: slot 0 in StateRoot on Port, slot N in
+// StateRoot/slot-N on Port+N. A non-blocking gate of free slots prevents
+// port/process collisions with itself.
 type ExactNodeChecker struct {
 	StateRoot      string
 	Binary         string
@@ -109,7 +127,7 @@ type ExactNodeChecker struct {
 	FreshProfile   func(context.Context) (string, error)
 	resolve        func(context.Context, string) ([]netip.Addr, error)
 	dialTransport  func(context.Context, exactNodeEndpoint, []netip.Addr) (bool, error)
-	prepare        func(context.Context, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error)
+	prepare        func(context.Context, exactNodeSession, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error)
 	start          func(context.Context, exactNodeSession) error
 	identity       func(exactNodeSession) (routeidentity.Passport, error)
 	directEgress   func(context.Context) (string, error)
@@ -120,14 +138,24 @@ type ExactNodeChecker struct {
 	cleanup        func(context.Context, exactNodeSession) error
 	runtimeReady   func() bool
 	now            func() time.Time
-	gate           chan struct{}
+	gate           chan int
 	poisoned       atomic.Bool
 }
 
 func NewExactNodeChecker(stateRoot string) *ExactNodeChecker {
+	return NewExactNodeCheckerSlots(stateRoot, 1)
+}
+
+// NewExactNodeCheckerSlots allows that many checks at once (1..MaxExactNodeSlots).
+func NewExactNodeCheckerSlots(stateRoot string, slots int) *ExactNodeChecker {
+	slots = min(max(slots, 1), MaxExactNodeSlots)
+	gate := make(chan int, slots)
+	for slot := range slots {
+		gate <- slot
+	}
 	checker := &ExactNodeChecker{
 		StateRoot: stateRoot, Port: 19181, Timeout: 45 * time.Second, EvidenceTTL: 30 * time.Minute,
-		Processes: OSProcessController{}, now: time.Now, gate: make(chan struct{}, 1),
+		Processes: OSProcessController{}, now: time.Now, gate: gate,
 	}
 	checker.resolve = checker.resolveHost
 	checker.dialTransport = checker.transportPrefilter
@@ -150,13 +178,105 @@ func NewExactNodeChecker(stateRoot string) *ExactNodeChecker {
 	return checker
 }
 
+// Capacity is the number of checks that may run at once.
+func (c *ExactNodeChecker) Capacity() int {
+	if c == nil || c.gate == nil {
+		return 0
+	}
+	return cap(c.gate)
+}
+
+func (c *ExactNodeChecker) newResult(request NodeCheckRequest) NodeCheckResult {
+	return NodeCheckResult{
+		SchemaVersion: exactNodeSchema, ProbeID: newNodeProbeID(), NodeID: request.NodeID,
+		ServiceID: request.Service.ID, NetworkProfile: request.NetworkProfile,
+		RoutePathID: "sing-box:" + request.NodeID, StartedAt: c.currentTime(), TestLevel: "dns",
+		Stage: "dns", Verdict: evidence.VerdictError, Message: "Проверка не завершена.",
+		DirectControl: "not_run", Stages: []NodeCheckStage{},
+	}
+}
+
+func (c *ExactNodeChecker) finishResult(result *NodeCheckResult) {
+	result.FinishedAt = c.currentTime()
+	result.ExpiresAt = result.FinishedAt.Add(c.evidenceTTL())
+	result.LatencyMS = result.FinishedAt.Sub(result.StartedAt).Milliseconds()
+	if result.LatencyMS < 0 {
+		result.LatencyMS = 0
+	}
+}
+
+// transportStages runs the DNS and transport stages of a check. It reports
+// false when the result is final because the node failed one of them.
+func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeCheckRequest, result *NodeCheckResult) (exactNodeEndpoint, bool) {
+	endpoint, err := inspectExactNodeOutbound(request.Outbound)
+	if err != nil {
+		result.fail("dns", "node-config-invalid", "Конфигурация узла не прошла строгую проверку.")
+		c.finishResult(result)
+		return endpoint, false
+	}
+	stageStarted := c.currentTime()
+	addresses, err := c.resolve(ctx, endpoint.Host)
+	if err != nil || len(addresses) == 0 || !publicNodeAddresses(addresses) {
+		result.fail("dns", "node-dns-failed", "Адрес узла не удалось безопасно определить.")
+		result.addStage("dns", "failed", "DNS-проверка не пройдена.", stageStarted, c.currentTime())
+		c.finishResult(result)
+		return endpoint, false
+	}
+	result.addStage("dns", "passed", "Адрес узла определён без раскрытия в интерфейсе.", stageStarted, c.currentTime())
+	endpoint.Pinned = addresses[0].Unmap()
+
+	stageStarted = c.currentTime()
+	checked, err := c.dialTransport(ctx, endpoint, addresses)
+	if err != nil {
+		result.TestLevel = "transport"
+		result.fail("transport", "node-transport-failed", "Транспорт до узла недоступен.")
+		result.addStage("transport", "failed", "Предварительное соединение не установлено.", stageStarted, c.currentTime())
+		c.finishResult(result)
+		return endpoint, false
+	}
+	result.TestLevel = "transport"
+	if checked {
+		result.addStage("transport", "passed", "Предварительное соединение установлено; это ещё не доказывает работу ключа.", stageStarted, c.currentTime())
+	} else {
+		result.addStage("transport", "skipped", "Для UDP-протокола отдельный TCP-тест неприменим; проверяется реальный обмен.", stageStarted, c.currentTime())
+	}
+	return endpoint, true
+}
+
+// ScreenTransport runs only the DNS and transport stages of Check. It takes
+// no slot, process or port, so a whole queue can be screened at once. A node
+// that fails them is decided: the result is the one Check would give it. Any
+// other node still needs Check; its result then only carries the duration of
+// the transport stage in LatencyMS, for ordering.
+func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeCheckRequest) (NodeCheckResult, bool, error) {
+	if err := c.validRequest(request); err != nil {
+		return NodeCheckResult{}, false, err
+	}
+	ctx, cancel := context.WithTimeout(parent, c.timeout())
+	defer cancel()
+	if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
+		return NodeCheckResult{}, false, err
+	}
+	result := c.newResult(request)
+	_, passed := c.transportStages(ctx, request, &result)
+	if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
+		return NodeCheckResult{}, false, err
+	}
+	if passed {
+		result.LatencyMS = result.Stages[len(result.Stages)-1].Duration
+		return result, false, nil
+	}
+	return result, true, nil
+}
+
 func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckRequest) (result NodeCheckResult, resultErr error) {
 	if err := c.validRequest(request); err != nil {
 		return NodeCheckResult{}, err
 	}
+	var slot int
 	select {
-	case c.gate <- struct{}{}:
-		defer func() { <-c.gate }()
+	case slot = <-c.gate:
+		defer func() { c.gate <- slot }()
 	default:
 		return NodeCheckResult{}, ErrExactNodeBusy
 	}
@@ -170,22 +290,8 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
 		return NodeCheckResult{}, err
 	}
-	started := c.currentTime()
-	result = NodeCheckResult{
-		SchemaVersion: exactNodeSchema, ProbeID: newNodeProbeID(), NodeID: request.NodeID,
-		ServiceID: request.Service.ID, NetworkProfile: request.NetworkProfile,
-		RoutePathID: "sing-box:" + request.NodeID, StartedAt: started, TestLevel: "dns",
-		Stage: "dns", Verdict: evidence.VerdictError, Message: "Проверка не завершена.",
-		DirectControl: "not_run", Stages: []NodeCheckStage{},
-	}
-	finish := func() {
-		result.FinishedAt = c.currentTime()
-		result.ExpiresAt = result.FinishedAt.Add(c.evidenceTTL())
-		result.LatencyMS = result.FinishedAt.Sub(result.StartedAt).Milliseconds()
-		if result.LatencyMS < 0 {
-			result.LatencyMS = 0
-		}
-	}
+	result = c.newResult(request)
+	finish := func() { c.finishResult(&result) }
 	// Registered before session cleanup so this check runs after every probe
 	// and after cleanup, while the checker still owns its single runtime slot.
 	defer func() {
@@ -212,41 +318,13 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		}
 	}()
 
-	endpoint, err := inspectExactNodeOutbound(request.Outbound)
-	if err != nil {
-		result.fail("dns", "node-config-invalid", "Конфигурация узла не прошла строгую проверку.")
-		finish()
+	endpoint, passed := c.transportStages(ctx, request, &result)
+	if !passed {
 		return result, nil
 	}
+
 	stageStarted := c.currentTime()
-	addresses, err := c.resolve(ctx, endpoint.Host)
-	if err != nil || len(addresses) == 0 || !publicNodeAddresses(addresses) {
-		result.fail("dns", "node-dns-failed", "Адрес узла не удалось безопасно определить.")
-		result.addStage("dns", "failed", "DNS-проверка не пройдена.", stageStarted, c.currentTime())
-		finish()
-		return result, nil
-	}
-	result.addStage("dns", "passed", "Адрес узла определён без раскрытия в интерфейсе.", stageStarted, c.currentTime())
-	endpoint.Pinned = addresses[0].Unmap()
-
-	stageStarted = c.currentTime()
-	checked, err := c.dialTransport(ctx, endpoint, addresses)
-	if err != nil {
-		result.TestLevel = "transport"
-		result.fail("transport", "node-transport-failed", "Транспорт до узла недоступен.")
-		result.addStage("transport", "failed", "Предварительное соединение не установлено.", stageStarted, c.currentTime())
-		finish()
-		return result, nil
-	}
-	result.TestLevel = "transport"
-	if checked {
-		result.addStage("transport", "passed", "Предварительное соединение установлено; это ещё не доказывает работу ключа.", stageStarted, c.currentTime())
-	} else {
-		result.addStage("transport", "skipped", "Для UDP-протокола отдельный TCP-тест неприменим; проверяется реальный обмен.", stageStarted, c.currentTime())
-	}
-
-	stageStarted = c.currentTime()
-	session, err := c.prepare(ctx, request, endpoint)
+	session, err := c.prepare(ctx, c.session(slot), request, endpoint)
 	defer func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(parent), 8*time.Second)
 		defer cleanupCancel()
@@ -450,18 +528,36 @@ func nodeRouteIdentityErrorCode(err error, observed, expected string) string {
 }
 
 func (c *ExactNodeChecker) Recover(ctx context.Context) error {
-	if c == nil || c.StateRoot == "" {
+	if c == nil || c.StateRoot == "" || c.gate == nil {
 		return ErrExactNodeUnavailable
 	}
-	select {
-	case c.gate <- struct{}{}:
-		defer func() { <-c.gate }()
-	default:
-		return ErrExactNodeBusy
+	// Recovery owns every slot: no check may start while it cleans up.
+	held := []int{}
+	defer func() {
+		for _, slot := range held {
+			c.gate <- slot
+		}
+	}()
+	for len(held) < cap(c.gate) {
+		select {
+		case slot := <-c.gate:
+			held = append(held, slot)
+		default:
+			return ErrExactNodeBusy
+		}
 	}
-	if err := c.cleanup(ctx, c.session()); err != nil {
-		c.poisoned.Store(true)
-		return err
+	// Also clean slots a previous run with more slots left behind.
+	for slot := range MaxExactNodeSlots {
+		session := c.session(slot)
+		if slot >= cap(c.gate) {
+			if _, err := os.Lstat(session.Root); errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+		}
+		if err := c.cleanup(ctx, session); err != nil {
+			c.poisoned.Store(true)
+			return err
+		}
 	}
 	c.poisoned.Store(false)
 	return nil
@@ -477,7 +573,7 @@ func (c *ExactNodeChecker) validRequest(request NodeCheckRequest) error {
 	if !exactNodeIDPattern.MatchString(request.NodeID) || len(request.Outbound) == 0 || request.Service.ID == "" || selectedNodeProbe(request.Service).URL == "" || !systemprobe.ValidWANProfileID(request.NetworkProfile) {
 		return ErrExactNodeUnavailable
 	}
-	if !filepath.IsAbs(c.StateRoot) || filepath.Clean(c.StateRoot) == filepath.VolumeName(c.StateRoot)+string(filepath.Separator) || c.Port < 1024 || c.Port > 65535 {
+	if !filepath.IsAbs(c.StateRoot) || filepath.Clean(c.StateRoot) == filepath.VolumeName(c.StateRoot)+string(filepath.Separator) || c.Port < 1024 || c.Port+MaxExactNodeSlots-1 > 65535 {
 		return ErrExactNodeUnavailable
 	}
 	return nil
@@ -652,17 +748,19 @@ func (c *ExactNodeChecker) binary() string {
 	return ""
 }
 
-func (c *ExactNodeChecker) session() exactNodeSession {
-	root := c.StateRoot
+func (c *ExactNodeChecker) session(slot int) exactNodeSession {
+	root, id := c.StateRoot, "node-check-sing-box"
+	if slot > 0 {
+		root, id = filepath.Join(c.StateRoot, "slot-"+strconv.Itoa(slot)), id+"-"+strconv.Itoa(slot)
+	}
 	config := filepath.Join(root, "engine.json")
 	return exactNodeSession{
-		Root: root, Address: net.JoinHostPort("127.0.0.1", strconv.Itoa(c.Port)),
-		Spec: ProcessSpec{ID: "node-check-sing-box", Binary: c.binary(), Args: []string{"run", "-c", config}, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config, RouteProof: true},
+		Root: root, Address: net.JoinHostPort("127.0.0.1", strconv.Itoa(c.Port+slot)), Port: c.Port + slot,
+		Spec: ProcessSpec{ID: id, Binary: c.binary(), Args: []string{"run", "-c", config}, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config, RouteProof: true},
 	}
 }
 
-func (c *ExactNodeChecker) prepareSession(ctx context.Context, request NodeCheckRequest, endpoint exactNodeEndpoint) (exactNodeSession, error) {
-	session := c.session()
+func (c *ExactNodeChecker) prepareSession(ctx context.Context, session exactNodeSession, request NodeCheckRequest, endpoint exactNodeEndpoint) (exactNodeSession, error) {
 	if session.Spec.Binary == "" {
 		return session, errors.New("sing-box missing")
 	}
@@ -681,7 +779,7 @@ func (c *ExactNodeChecker) prepareSession(ctx context.Context, request NodeCheck
 	outbound["tag"] = "rz-exact-node"
 	document := map[string]any{
 		"log":       map[string]any{"level": "warn", "timestamp": true},
-		"inbounds":  []any{map[string]any{"type": "socks", "tag": "rz-node-check-in", "listen": "127.0.0.1", "listen_port": c.Port}},
+		"inbounds":  []any{map[string]any{"type": "socks", "tag": "rz-node-check-in", "listen": "127.0.0.1", "listen_port": session.Port}},
 		"outbounds": []any{outbound, map[string]any{"type": "direct", "tag": "direct"}},
 		"route":     map[string]any{"final": "rz-exact-node", "auto_detect_interface": true},
 	}
