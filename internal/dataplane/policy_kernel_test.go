@@ -61,8 +61,8 @@ type policyKernelFake struct {
 }
 
 type policyKernelEntry struct {
-	family, priority    int
-	source, dest, table string
+	family, priority                   int
+	source, dest, table, ingress, mark string
 }
 
 func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
@@ -111,7 +111,14 @@ func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
 		}
 		for _, rule := range f.entries {
 			if rule.family == family {
-				lines = append(lines, fmt.Sprintf("%d: from %s to %s lookup %s", rule.priority, rule.source, rule.dest, rule.table))
+				selector := ""
+				if rule.mark != "" {
+					selector += " fwmark " + rule.mark
+				}
+				if rule.ingress != "" {
+					selector += " iif " + rule.ingress
+				}
+				lines = append(lines, fmt.Sprintf("%d: from %s to %s%s lookup %s", rule.priority, rule.source, rule.dest, selector, rule.table))
 			}
 		}
 		return []byte(strings.Join(lines, "\n") + "\n"), true, nil
@@ -127,6 +134,10 @@ func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
 			entry.dest = args[i+1]
 		case "lookup":
 			entry.table = args[i+1]
+		case "iif":
+			entry.ingress = args[i+1]
+		case "fwmark":
+			entry.mark = args[i+1]
 		default:
 			return nil, true, errors.New("unknown fake RPDB attribute")
 		}

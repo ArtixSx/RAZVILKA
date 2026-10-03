@@ -1,5 +1,15 @@
 # CORE — первая порция D11, 03.10.2026
 
+## D07 common iif/positive mark checkpoint, 04.10.2026
+
+Finished shared fields: `Route.Ingress []string`, `NetworkPolicyGeneration` (lowercase hex64), `NetworkPolicyRole` (`default|override`); `PolicyState.NetworkPolicyGeneration/NetworkDefault`; `PolicyRule.Ingress/Managed`. `NetworkPolicyRouteAuthority(plan, adapter)` проверяет только shape, не даёт effect authority. Mixed legacy/new routes в одном adapter, domains в interim IP-only cells, broad/noncanonical source и repeated/invalid ingress отказываются; review digest включает поля. Adapter owner переносит returned generation/default identity в newly compiled state. Layout2 generation state требует canonical nonzero source + physical iif + Managed у каждого rule; legacy snapshots сохраняют прежние координаты и bound128.
+
+Kernel add/delete и full readback сохраняют exact source/destination/iif/positive `0x20000000/0x28000000`. Endpoint exclusions scoped той же source+iif+mark парой. Disjoint positive iif или mutually exclusive masked mark может доказать отсутствие earlier foreign overlap; negation/duplicate/unknown constraints сохраняют refusal. Forwarding и FIB evidence требуют совпадения actual reverse/connected ingress с reviewed iif; fanout/dedup не стирают iif. Outbound filter/NAT jumps positive-gated, exact TUN return по conntrack остаётся без ложного предположения о reply skb mark. Valid generation forwarding bound512, legacy/invalid по-прежнему128; greater fanout отказывается до effects.
+
+Actual shared receipt tests сохраняют mark+iif для обеих family в acknowledged add/delete, new default dependency check удерживает remaining foreign iif/table reference. Targeted new tests RC0 0.467s, широкие Policy/Forwarding/Build/Network/CanceledNode/NodeRollback RC0 26.236s (до numeric dependency follow-up, отдельно повторённого), vet RC0; Linux amd64 dataplane test compilation и arm64 main build RC0, TEMP outputs only. Native/race/router acceptance выполняет Root, здесь не заявлена.
+
+Это законченные общие primitives без production default enable: frozen `Input/Plan.LAN`, actual gate participant/first activate/last retire, mixed receipt, strict negative goto/nop dependency proof, scoped old-flow drain и full forwarded TCP/UDP/IPv4/IPv6 health ещё подключаются владельцами. Actual LAN gate — accepted owner `416a14e`, CORE не копирует его WIP и не открывает capability по metadata. D07/D08 целиком остаются открыты.
+
 ## Finished: negative default dependency check, 04.10.2026
 
 Root review исправление: все dependency RPDB и WG host-pin reads теперь принудительно `-N`; unsupported option отказывает. Даже если tool игнорирует `-N`, named `main/local/default` не допускается как builtin/table proof. Только exact numeric builtin IDs 255/254/253 пропускаются; central parser остаётся единственным ownership parser. Regression покрывает reserved-looking aliases в builtin priorities и обычном selector, а также unsupported numeric output. `PolicyDefaultDependency|ManagedPolicy` RC0 0.362s после исправления. Старый checkpoint `2313e00` без этого follow-up применять нельзя.
