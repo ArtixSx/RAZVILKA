@@ -33,7 +33,7 @@ func nativeWGEndpointClient(t *testing.T) {
 	}
 	for _, endpoint := range []string{endpoint} {
 		t.Run(endpoint, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
 			defer cancel()
 			root := t.TempDir()
 			store := wireguardprofile.New(filepath.Join(root, "profiles"))
@@ -131,6 +131,13 @@ func nativeWGEndpointClient(t *testing.T) {
 			if err != nil || !exists {
 				t.Fatal("committed state", err)
 			}
+			initial, err := a.committedWGPolicyReference(state)
+			if err != nil {
+				t.Fatal("committed receipt reference", err)
+			}
+			if status, err := a.inspectWGPolicyReference(ctx, initial, ""); err != nil || !status.Complete || status.Unknown {
+				t.Fatal("committed recipient incomplete", status, err)
+			}
 			e := state.WireGuardEndpoint
 			if err := a.verifyWGEndpoint(ctx, e); err != nil {
 				t.Fatal(err)
@@ -160,6 +167,107 @@ func nativeWGEndpointClient(t *testing.T) {
 			}
 			recoverProcess()
 			a = newAdapter()
+			unchanged, err := a.committedWGPolicyReference(state)
+			if err != nil || unchanged.ID != initial.ID {
+				t.Fatal("healthy restart replayed generation", unchanged, err)
+			}
+			// Deliberately enter activation with a different, invalid peer. This
+			// bypasses Canary only inside this failure-boundary fixture; real
+			// Health must fail, and Rollback must restore independent old service.
+			badProfile := strings.Split(profile, "\n")
+			for i, line := range badProfile {
+				if strings.HasPrefix(line, "PublicKey = ") {
+					badProfile[i] = "PublicKey = " + wrongPublic
+				}
+			}
+			if _, err := store.Put(ctx, "native-other", "wrong peer fixture", strings.Join(badProfile, "\n"), ""); err != nil {
+				t.Fatal(err)
+			}
+			badPlan := Plan{Routes: append([]Route(nil), plan.Routes...)}
+			badPlan.Routes[0].Resolved = "wireguard:native-other"
+			badTransaction := filepath.Join(root, "different-peer")
+			for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate, a.Activate} {
+				if err := step(ctx, badPlan, badTransaction); err != nil {
+					t.Fatal("different peer activation", err)
+				}
+			}
+			badState, err := a.readStagedPolicy(badTransaction)
+			if err != nil {
+				t.Fatal(err)
+			}
+			badRef, issued, err := a.readWGPolicyReference(badTransaction, badState, false)
+			if err != nil || !issued {
+				t.Fatal("different peer receipt", err)
+			}
+			a.Timeout, a.HandshakeTimeout = 1200*time.Millisecond, 200*time.Millisecond
+			if err := a.Health(ctx, badPlan, badTransaction); !errors.Is(err, tunnelcheck.ErrHandshake) {
+				t.Fatal("different peer live health must fail", err)
+			}
+			a.Timeout, a.HandshakeTimeout = 25*time.Second, 8*time.Second
+			a.policyReceiptOptions.fault = func(point string, index int) error {
+				if point == "wg-operation-remove" {
+					return &os.PathError{Op: "remove", Path: filepath.Join(a.StateRoot, wgPolicyOperationDirectory), Err: os.ErrPermission}
+				}
+				return nil
+			}
+			if err := a.Rollback(ctx, badPlan, badTransaction); !errors.Is(err, os.ErrPermission) {
+				t.Fatal("different peer restoration cleanup cut", err)
+			}
+			a.policyReceiptOptions.fault = nil
+			state, exists, err = a.loadPolicyState()
+			if err != nil || !exists {
+				t.Fatal("restored state", err)
+			}
+			restored, err := a.committedWGPolicyReference(state)
+			if err != nil || restored.ID == initial.ID || restored.ID == badRef.ID {
+				t.Fatal("rollback replayed retired generation", restored, err)
+			}
+			for _, retired := range []struct {
+				ref  warpWGPolicyReference
+				root string
+			}{{initial, ""}, {badRef, badTransaction}} {
+				if status, err := a.inspectWGPolicyReference(ctx, retired.ref, retired.root); err != nil || !status.Removed || status.Unknown {
+					t.Fatal("rollback did not retire old/candidate grant", status, err)
+				}
+			}
+			e = state.WireGuardEndpoint
+			assertLive("different peer restored before cleanup acknowledgement")
+			var beforeLink, afterLink []struct {
+				Index int `json:"ifindex"`
+			}
+			if err := json.Unmarshal([]byte(nativeWGCommand(t, "", "ip", "-j", "link", "show", "dev", a.interfaceName())), &beforeLink); err != nil || len(beforeLink) != 1 || beforeLink[0].Index <= 0 {
+				t.Fatal("restored interface index", err)
+			}
+			a = newAdapter()
+			a.policyReceiptOptions.fault = func(point string, index int) error {
+				if point == "wg-rollback-reference" {
+					return os.Mkdir(filepath.Join(badTransaction, wgPolicyRollbackFile), 0700)
+				}
+				return nil
+			}
+			if err := a.Rollback(ctx, badPlan, badTransaction); err == nil {
+				t.Fatal("restoration final marker write cut missing")
+			}
+			if err := os.Remove(filepath.Join(badTransaction, wgPolicyRollbackFile)); err != nil {
+				t.Fatal(err)
+			}
+			a = newAdapter()
+			if err := a.Rollback(ctx, badPlan, badTransaction); err != nil {
+				t.Fatal("restoration acknowledgement resume", err)
+			}
+			if err := json.Unmarshal([]byte(nativeWGCommand(t, "", "ip", "-j", "link", "show", "dev", a.interfaceName())), &afterLink); err != nil || len(afterLink) != 1 || beforeLink[0].Index != afterLink[0].Index {
+				t.Fatal("restoration retry restarted the interface", err)
+			}
+			settled, err := a.committedWGPolicyReference(state)
+			if err != nil || settled.Checksum != restored.Checksum || a.checkWGPolicyOperation() != nil {
+				t.Fatal("restoration retry replayed generation or retained pending operation", settled, err)
+			}
+			assertLive("different peer rollback resume")
+			if err := a.Rollback(ctx, badPlan, badTransaction); err != nil {
+				t.Fatal("settled rollback retry", err)
+			}
+			recoverProcess()
+			t.Log("different-peer activation health failed; rollback restored old peer service with fresh receipt; operation cleanup and actual marker write cuts resumed with unchanged interface/generation; retry and process restart passed")
 			// Both DNS expiry and WAN changes reject before removing the current pin.
 			now = now.Add(2 * time.Minute)
 			answer = netip.MustParseAddr("93.184.216.35")
@@ -200,16 +308,27 @@ func nativeWGEndpointClient(t *testing.T) {
 			}
 			a = newAdapter()
 			recoverProcess()
+			state, exists, err = a.loadPolicyState()
+			if err != nil || !exists {
+				t.Fatal("recovered state", err)
+			}
+			recovered, err := a.committedWGPolicyReference(state)
+			if err != nil || recovered.ID == restored.ID {
+				t.Fatal("kernel recovery replayed generation", recovered, err)
+			}
 			assertLive("kernel state recovery")
 			assertForeign()
-			// The original transaction had no previous live runtime: rollback must
-			// remove exactly this runtime and pin, preserving named profile + foreign.
-			if err := a.Rollback(ctx, plan, transaction); err != nil {
-				t.Fatal("rollback", err)
+			// An old transaction cannot retire a later recovery generation.
+			if err := a.Rollback(ctx, plan, transaction); !errors.Is(err, ErrPolicyAdditionUnknown) {
+				t.Fatal("stale rollback was not fenced", err)
+			}
+			assertLive("fenced stale rollback")
+			if err := a.Deactivate(ctx); err != nil {
+				t.Fatal("Stop recovered generation", err)
 			}
 			assertForeign()
 			if route, rule, err := a.inspectWGEndpoint(ctx, e); err != nil || route || rule {
-				t.Fatal("rollback leaked pin", err)
+				t.Fatal("recovered Stop leaked pin", err)
 			}
 			// Cold retry has a new snapshot and real live acceptance before Stop.
 			transaction = filepath.Join(root, "retry")
