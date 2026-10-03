@@ -205,7 +205,7 @@ func (r *ScopedDNSResolver) check(ctx context.Context, choice scopedDNSChoice) e
 		r.cache.clear()
 		return ErrServiceDNSChanged
 	}
-	return nil
+	return ctx.Err()
 }
 
 func scopedDNSQuestion(wire []byte) (dnsmessage.Message, int, error) {

@@ -69,6 +69,9 @@ func (a *WARPWireGuardAdapter) endpointNow() time.Time {
 }
 
 func (a *WARPWireGuardAdapter) resolveWGEndpoint(ctx context.Context, endpoint string) ([]netip.Addr, time.Time, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, time.Time{}, err
+	}
 	host, _, err := net.SplitHostPort(endpoint)
 	if err != nil {
 		return nil, time.Time{}, err
@@ -89,6 +92,11 @@ func (a *WARPWireGuardAdapter) resolveWGEndpoint(ctx context.Context, endpoint s
 		addresses, err = a.Resolver(ctx, host)
 	} else {
 		addresses, err = netresolve.LookupNetIP(ctx, "ip", host)
+	}
+	// An injected/platform callback can finish after cancellation. Its answer
+	// cannot authorize endpoint staging or refresh an existing DNS lease.
+	if err := ctx.Err(); err != nil {
+		return nil, time.Time{}, err
 	}
 	if err != nil || len(addresses) == 0 || len(addresses) > 32 {
 		return nil, time.Time{}, errors.New("WireGuard endpoint resolution unavailable or exceeds limit")
@@ -300,6 +308,7 @@ func (a *WARPWireGuardAdapter) revalidateWGEndpoint(ctx context.Context, e *WGEn
 	if e == nil {
 		return nil
 	}
+	current := *e
 	host, _, _ := net.SplitHostPort(e.Original)
 	_, literalErr := netip.ParseAddr(host)
 	if literalErr != nil && (e.ExpiresAt.IsZero() || a.endpointNow().Before(e.ResolvedAt) || !a.endpointNow().Before(e.ExpiresAt)) {
@@ -314,15 +323,18 @@ func (a *WARPWireGuardAdapter) revalidateWGEndpoint(ctx context.Context, e *WGEn
 		if !found {
 			return ErrWGEndpointChanged
 		}
-		e.ResolvedAt, e.ExpiresAt = a.endpointNow(), expiry
+		current.ResolvedAt, current.ExpiresAt = a.endpointNow(), expiry
 	}
-	current := *e
 	if err := a.readWGEndpointWAN(ctx, &current); err != nil {
 		return err
 	}
 	if current.Device != e.Device || current.Gateway != e.Gateway || current.Source != e.Source {
 		return ErrWGEndpointChanged
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	*e = current // publish a new lease only after the WAN check also succeeds
 	return nil
 }
 
