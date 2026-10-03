@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -39,11 +40,12 @@ func TestScopedDNSServiceMatchNeverConvertsRefusalIntoMiss(t *testing.T) {
 }
 
 func TestScopedDNSHandlerOwnsFinalUDPTCPPublication(t *testing.T) {
-	for _, protocol := range []string{"udp", "tcp"} {
+	for _, transport := range []string{"udp", "tcp", "udp-exchange", "tcp-exchange"} {
+		protocol := strings.TrimSuffix(transport, "-exchange")
 		for _, revoked := range []bool{false, true} {
-			name := protocol + "/allowed"
+			name := transport + "/allowed"
 			if revoked {
-				name = protocol + "/revoked after resolve"
+				name = transport + "/revoked after resolve"
 			}
 			t.Run(name, func(t *testing.T) {
 				udp, tcp := scopedSockets(t, "127.0.0.1:0")
@@ -53,9 +55,11 @@ func TestScopedDNSHandlerOwnsFinalUDPTCPPublication(t *testing.T) {
 				live.Store(true)
 				published := make(chan struct{}, 1)
 				var sent atomic.Int32
+				var resolved atomic.Int32
 				handler := ScopedDNSHandler{
 					Admit: func(context.Context, netip.Addr) error { return nil },
 					Resolve: func(_ context.Context, _ netip.Addr, query []byte) ([]byte, error) {
+						resolved.Add(1)
 						wire := scopedPack(t, scopedResponse(t, query))
 						if revoked {
 							live.Store(false)
@@ -70,6 +74,17 @@ func TestScopedDNSHandlerOwnsFinalUDPTCPPublication(t *testing.T) {
 						sent.Add(1)
 						return send()
 					},
+				}
+				if transport != protocol {
+					resolve, publish := handler.Resolve, handler.Publish
+					handler.Resolve, handler.Publish = nil, nil
+					handler.Exchange = func(ctx context.Context, client netip.Addr, query []byte, send func([]byte) error) error {
+						wire, err := resolve(ctx, client, query)
+						if err != nil {
+							return err
+						}
+						return publish(ctx, client, query, func() error { return send(wire) })
+					}
 				}
 				done := make(chan error, 1)
 				go func() { done <- ServeScopedDNS(ctx, udp, tcp, handler) }()
@@ -97,6 +112,9 @@ func TestScopedDNSHandlerOwnsFinalUDPTCPPublication(t *testing.T) {
 				case <-published:
 				case <-time.After(time.Second):
 					t.Fatal("final publication gate not called")
+				}
+				if resolved.Load() != 1 {
+					t.Fatal("owner DNS resolved more than once", resolved.Load())
 				}
 				buffer := make([]byte, 4096)
 				var n int
@@ -188,6 +206,22 @@ func TestScopedDNSHandlerRequiresPublicationBeforeServing(t *testing.T) {
 	}
 	if err := tcp.SetDeadline(time.Now()); err != nil {
 		t.Fatal("rejected handler closed TCP", err)
+	}
+}
+
+func TestScopedDNSCombinedExchangeCannotRetainSend(t *testing.T) {
+	query := scopedQuery(t, "unknown.example", dnsmessage.TypeA)
+	var delayed func([]byte) error
+	sent := 0
+	handler := ScopedDNSHandler{Exchange: func(_ context.Context, _ netip.Addr, _ []byte, send func([]byte) error) error {
+		delayed = send
+		return nil
+	}}
+	if err := exchangeScopedDNS(context.Background(), handler, netip.MustParseAddr("127.0.0.1"), query, false, func([]byte) error { sent++; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if delayed == nil || !errors.Is(delayed(scopedPack(t, scopedResponse(t, query))), ErrScopedDNS) || sent != 0 {
+		t.Fatal("combined exchange retained its publication capability")
 	}
 }
 
