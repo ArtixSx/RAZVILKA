@@ -43,7 +43,7 @@ func (a *App) serviceControlRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Older clients keep the synchronous contract; production UI sends a key.
-	release, err := a.Operations.Exclusive(r.Context())
+	release, err := a.Operations.Exclusive(componentStopContext(r.Context(), request.Action))
 	if err != nil {
 		a.writeOperationFailure(w, err)
 		return

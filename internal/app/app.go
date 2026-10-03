@@ -556,6 +556,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/node-groups/", a.nodeGroupAction)
 	mux.HandleFunc("/api/v1/components", a.componentList)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
+	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
 	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)

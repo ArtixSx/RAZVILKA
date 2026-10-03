@@ -61,6 +61,11 @@ func (s *operationScope) restoreAdmission() (func(), error) {
 // cleanup finish; inheriting the context value does not extend ownership.
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/components/recovery" {
+			// This read owns bounded inspection admission and remains behind auth.
+			next.ServeHTTP(w, r)
+			return
+		}
 		// Security.Middleware remains outside this middleware. Only this
 		// memory-only endpoints bypass admission, never runtime Store reads.
 		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelInventoryPath || r.URL.Path == panelAutonomyPath || r.URL.Path == panelAuditPath || r.URL.Path == "/api/v1/metrics" || r.URL.Path == "/api/v1/connections" {
@@ -128,6 +133,10 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			exclusive = true
 		}
 		enter := a.Operations.Enter
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/components/") {
+			// Package mutation cannot overlap network Apply or background repair.
+			exclusive = true
+		}
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/community/services/") && strings.HasSuffix(r.URL.Path, "/import") {
 			exclusive = true
 		}
@@ -186,6 +195,10 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 		}
 	}
 	recovery := errors.Is(err, operationgate.ErrRecovery)
+	if errors.Is(err, errComponentRecovery) {
+		code, status = "COMPONENT_RECOVERY_REQUIRED", http.StatusServiceUnavailable
+		message = "Обновление компонента ещё не подтверждено рабочим процессом. Прежняя версия сохранена. Откройте журнал обновления; повторная установка автоматически не запускается."
+	}
 	if recovery {
 		code = "PRIVATE_BACKUP_RECOVERY_REQUIRED"
 		message = "После незавершённого восстановления изменения приостановлены. При следующем запуске приложение проверит журнал восстановления. Не удаляйте журнал и не применяйте черновики вручную."
@@ -200,6 +213,9 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 	// process without reading locked Stores or inventing dataplane health.
 	body := map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false, "recovery_required": recovery,
 		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "node_recovery": a.nodeRecoverySnapshot()}
+	if errors.Is(err, errComponentRecovery) {
+		body["recovery_required"] = true
+	}
 	if holder != nil {
 		body["operation"] = holder
 	}

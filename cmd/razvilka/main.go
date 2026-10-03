@@ -124,10 +124,15 @@ func main() {
 	closeRollbackDigest := flag.String("close-rollback-digest", "", "reviewed digest required with close-rollback-plan")
 	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
+	componentUpdateSchema := flag.Bool("component-update-schema", false, "print the supported durable component update schema and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
 	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
 	flag.Parse()
+	if *componentUpdateSchema {
+		fmt.Println(components.ComponentUpdateSchema)
+		return
+	}
 	if *subscriptionSchema {
 		fmt.Println("1")
 		return
@@ -521,6 +526,9 @@ func main() {
 		}
 	}
 	a.NodeChecker = nodeChecker
+	if err := a.InitializeComponentRecoveryGate(); err != nil {
+		log.Fatal("component recovery admission could not be initialized")
+	}
 	a.TestLab.Profile = smartRouteManager.Profile
 	a.PrivateRestore = privateRecovery
 	a.CloudflareLegacy, err = cloudflareLegacySources(*cfgPath, *warpStatePath)
@@ -536,18 +544,28 @@ func main() {
 		a.NodeChecker = nil
 	}
 	cancelNodeRecovery()
-	usqueRecoveryContext, cancelUSQUERecovery := context.WithTimeout(runtimeContext, 30*time.Second)
-	usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
-	cancelUSQUERecovery()
-	if usqueRecoveryErr != nil {
-		log.Fatal("USQUE repair recovery gate: unfinished repair requires manual review")
+	componentRecoveryPending := a.PendingComponentRecovery()
+	if !componentRecoveryPending {
+		usqueRecoveryContext, cancelUSQUERecovery := context.WithTimeout(runtimeContext, 30*time.Second)
+		usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
+		cancelUSQUERecovery()
+		if usqueRecoveryErr != nil {
+			log.Fatal("USQUE repair recovery gate: unfinished repair requires manual review")
+		}
+		if usqueRecovery != restorejournal.Clean {
+			log.Printf("USQUE repair recovery completed: %s", usqueRecovery)
+		}
+		retryFailedRollbackAtStart(runtimeContext, dataplaneManager, *cfgPath, store, a.Audit)
 	}
-	if usqueRecovery != restorejournal.Clean {
-		log.Printf("USQUE repair recovery completed: %s", usqueRecovery)
-	}
-	retryFailedRollbackAtStart(runtimeContext, dataplaneManager, *cfgPath, store, a.Audit)
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
-	recovery, recoveryErr := dataplaneManager.Recover(recoveryContext)
+	var recovery dataplane.Recovery
+	var recoveryErr error
+	if componentRecoveryPending {
+		recovery.State = "component-recovery-required"
+		log.Print("Unfinished component update: automatic network recovery is paused; the panel and explicit Stop remain available")
+	} else {
+		recovery, recoveryErr = dataplaneManager.Recover(recoveryContext)
+	}
 	cancelRecovery()
 	if errors.Is(recoveryErr, dataplane.ErrExecutionJournal) {
 		// Keep the panel readable, but do not let a restart reopen admission
@@ -1117,7 +1135,7 @@ func checkHealthIdentity(ctx context.Context, rawURL string, expectedPID int, re
 		}
 		// A private restore fence is settled by the next start, so it stays an
 		// ordinary failure. A journal fence survives restarts: report it apart.
-		if resp.StatusCode == http.StatusServiceUnavailable && status.Code == "DATAPLANE_RECOVERY_REQUIRED" && status.NotStarted && status.RecoveryRequired && status.ProcessID > 0 {
+		if resp.StatusCode == http.StatusServiceUnavailable && (status.Code == "DATAPLANE_RECOVERY_REQUIRED" || status.Code == "COMPONENT_RECOVERY_REQUIRED") && status.NotStarted && status.RecoveryRequired && status.ProcessID > 0 {
 			return "", errHealthRecovery
 		}
 		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)

@@ -66,9 +66,15 @@ func (a *App) updateComponent(ctx context.Context, id string, guards ...func(con
 			return err
 		}
 		_ = a.Components.RecordOperation(id, "update", "running", "Ночное обслуживание: обновление с проверкой и откатом")
-		if _, err = a.Components.ManagedUpdate(ctx, id, check); err != nil {
+		var result components.Result
+		result, err = a.Components.ManagedUpdateGuarded(ctx, id, check, func(c context.Context) error { return checkAuthority() })
+		if err != nil {
 			_ = a.Components.RecordOperation(id, "update", "failed", err.Error())
 			return err
+		}
+		if result.PendingLiveAcceptance {
+			a.recordComponentAwaitingLive(id)
+			return components.ErrUpdatePending
 		}
 		_ = a.Components.RecordOperation(id, "update", "succeeded", success)
 		return nil
@@ -119,7 +125,17 @@ func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	_ = a.Components.RecordOperation(id, "update", "running", "Обновление при работающих маршрутах: проверка и откат подготовлены")
-	result, err := a.Components.ManagedUpdate(ctx, id, check)
+	guard, err := a.componentUpdateGuard(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_AUTHORITY_CHANGED", "error": "Настройки разрешений изменились. Пакет не обновлён."})
+		return
+	}
+	result, err := a.Components.ManagedUpdateGuarded(ctx, id, check, guard)
+	if err == nil && result.PendingLiveAcceptance {
+		a.recordComponentAwaitingLive(id)
+		writeJSON(w, http.StatusAccepted, result)
+		return
+	}
 	if err == nil || errors.Is(err, components.ErrRollbackVerified) {
 		if clearErr := a.finishMatchingComponentMaintenance(ctx, id); clearErr != nil {
 			err = errors.Join(err, clearErr)

@@ -20,6 +20,9 @@ const componentPendingPrefix = "pending:"
 // This checkpoint prevents automatic replay. It is not a replacement for the
 // component manager's future durable package/configuration rollback journal.
 func (a *App) componentMaintenancePending() bool {
+	if a.PendingComponentRecovery() {
+		return true
+	}
 	a.autonomy.mu.Lock()
 	defer a.autonomy.mu.Unlock()
 	return strings.HasPrefix(a.autonomy.doc.Maintenance["components"], componentPendingPrefix)
@@ -113,6 +116,9 @@ func (a *App) beginComponentMaintenance(ctx context.Context, p autonomy.Policy, 
 // Call only after the updater proved no mutation, a checked update, or a
 // verified rollback. Never clear an unknown outcome on timer/restart alone.
 func (a *App) finishComponentMaintenance(ctx context.Context, id string) error {
+	if a.PendingComponentRecovery() {
+		return maintenancebatch.ErrPending
+	}
 	a.autonomy.mu.Lock()
 	defer a.autonomy.mu.Unlock()
 	old := a.autonomy.doc.Maintenance["components"]

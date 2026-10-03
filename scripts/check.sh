@@ -100,6 +100,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-warp-generation-ui.mjs
   node scripts/test-restore-busy-supervision.mjs
   node scripts/test-native-enrollment-supervision.mjs
+  node scripts/test-component-update-supervision.mjs
 fi
 ./build.sh
 sha256sum -c dist/SHA256SUMS
