@@ -14,6 +14,11 @@ var ErrBusy = errors.New("application operations are busy")
 var ErrRecovery = errors.New("application operations require private restore recovery")
 var ErrChanged = errors.New("application operations changed during observation")
 
+// Guard may consult a bounded durable recovery record before admission. It
+// runs under the gate lock and must never call the gate or acquire a Store
+// lock held by an admitted operation. Install it before starting workers.
+type Guard func(context.Context) error
+
 // ErrJournalRecovery is the fence reason when startup found an unfinished or
 // unverified network transaction. It matches ErrRecovery, but unlike a private
 // restore a restart does not settle it: an operator must review the journal.
@@ -38,6 +43,19 @@ type Gate struct {
 	generation uint64
 	holders    map[uint64]holder // admitted operations, for the busy explanation
 	nextHolder uint64
+	guard      Guard
+}
+
+// SetGuard is initialization only; changing authority while operations are
+// running would leave existing admissions bound to a different contract.
+func (g *Gate) SetGuard(guard Guard) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.active != 0 || g.generation != 0 || g.fenced {
+		return ErrBusy
+	}
+	g.guard = guard
+	return nil
 }
 
 // holder describes one admitted operation. It is presentation only: it grants
@@ -137,6 +155,13 @@ func (g *Gate) enterAfter(ctx context.Context, exclusive bool, generation *uint6
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	// Memory-only observations may continue to publish the recovery reason.
+	// Runtime reads and writes, including detached workers, need admission.
+	if advance && g.guard != nil {
+		if err := g.guard(ctx); err != nil {
+			return nil, err
+		}
 	}
 	if generation != nil && g.generation != *generation {
 		return nil, ErrChanged
