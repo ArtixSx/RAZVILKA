@@ -23,6 +23,10 @@ type ScopedDNSHandler struct {
 	Admit   func(context.Context, netip.Addr) error
 	Resolve func(context.Context, netip.Addr, []byte) ([]byte, error)
 	Publish func(context.Context, netip.Addr, []byte, func() error) error
+	// Exchange is an alternative to Resolve+Publish for an owner which resolves,
+	// ages and publishes the final wire under one admission. It must invoke send
+	// synchronously while holding its current generation/device lease.
+	Exchange func(context.Context, netip.Addr, []byte, func([]byte) error) error
 }
 
 func (r *ScopedDNSResolver) Serve(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener) error {
@@ -61,7 +65,9 @@ func (r *ScopedDNSResolver) Serve(ctx context.Context, udp *net.UDPConn, tcp *ne
 // workers before returning. A future dataplane owner must provide the separate
 // transactional redirect/readback/rollback and a fresh epoch guard.
 func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener, handler ScopedDNSHandler) error {
-	if udp == nil || tcp == nil || handler.Admit == nil || handler.Resolve == nil || handler.Publish == nil {
+	separate := handler.Exchange == nil && handler.Resolve != nil && handler.Publish != nil
+	combined := handler.Exchange != nil && handler.Resolve == nil && handler.Publish == nil
+	if udp == nil || tcp == nil || handler.Admit == nil || !separate && !combined {
 		return ErrScopedDNS
 	}
 	u, uok := udp.LocalAddr().(*net.UDPAddr)
@@ -95,8 +101,16 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 				go func() {
 					defer workers.Done()
 					defer func() { <-slots }()
-					reply := scopedDNSHandlerReply(ctx, peer.Addr().Unmap(), wire, true, handler.Resolve)
-					if ctx.Err() == nil && len(reply) > 0 {
+					_ = exchangeScopedDNS(ctx, handler, peer.Addr().Unmap(), wire, true, func(reply []byte) error {
+						_, err := udp.WriteToUDPAddrPort(reply, peer)
+						return err
+					})
+				}()
+			default:
+				// A combined owner has no separately admitted failure publisher.
+				// Drop saturation instead of starting an unbounded extra exchange.
+				if handler.Publish != nil {
+					if reply := scopedDNSFailure(wire, dnsmessage.RCodeServerFailure, false); len(reply) > 0 {
 						_ = publishScopedDNS(ctx, handler, peer.Addr().Unmap(), wire, func() error {
 							if err := ctx.Err(); err != nil {
 								return err
@@ -105,16 +119,6 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 							return err
 						})
 					}
-				}()
-			default:
-				if reply := scopedDNSFailure(wire, dnsmessage.RCodeServerFailure, false); len(reply) > 0 {
-					_ = publishScopedDNS(ctx, handler, peer.Addr().Unmap(), wire, func() error {
-						if err := ctx.Err(); err != nil {
-							return err
-						}
-						_, err := udp.WriteToUDPAddrPort(reply, peer)
-						return err
-					})
 				}
 			}
 		}
@@ -159,15 +163,8 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 						if handler.Admit(ctx, peer) != nil {
 							return
 						}
-						reply := scopedDNSHandlerReply(ctx, peer, wire, false, handler.Resolve)
-						if ctx.Err() != nil || len(reply) == 0 {
-							return
-						}
-						binary.BigEndian.PutUint16(prefix[:], uint16(len(reply)))
-						if err := publishScopedDNS(ctx, handler, peer, wire, func() error {
-							if err := ctx.Err(); err != nil {
-								return err
-							}
+						if err := exchangeScopedDNS(ctx, handler, peer, wire, false, func(reply []byte) error {
+							binary.BigEndian.PutUint16(prefix[:], uint16(len(reply)))
 							_, err := io.Copy(connection, bytes.NewReader(append(prefix[:], reply...)))
 							return err
 						}); err != nil {
@@ -197,6 +194,42 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 	connections.Range(func(key, _ any) bool { _ = key.(*net.TCPConn).Close(); return true })
 	workers.Wait()
 	return result
+}
+
+func exchangeScopedDNS(ctx context.Context, handler ScopedDNSHandler, client netip.Addr, query []byte, udp bool, send func([]byte) error) error {
+	if handler.Exchange != nil {
+		var gate sync.Mutex
+		active, used := true, false
+		err := handler.Exchange(ctx, client, query, func(wire []byte) error {
+			gate.Lock()
+			defer gate.Unlock()
+			if !active || used {
+				return ErrScopedDNS
+			}
+			used = true
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			_, size, err := scopedBaselineQuestion(query)
+			if err != nil || len(wire) < 12 || len(wire) > 65535 {
+				return ErrScopedDNS
+			}
+			reply := append([]byte(nil), wire...)
+			if udp && len(reply) > size {
+				reply = scopedDNSFailure(query, dnsmessage.RCodeSuccess, true)
+			}
+			return send(reply)
+		})
+		gate.Lock()
+		active = false
+		gate.Unlock()
+		return err
+	}
+	reply := scopedDNSHandlerReply(ctx, client, query, udp, handler.Resolve)
+	if len(reply) == 0 {
+		return ErrScopedDNS
+	}
+	return publishScopedDNS(ctx, handler, client, query, func() error { return send(reply) })
 }
 
 // The closure is a synchronous, single-use send capability. Keeping it after
