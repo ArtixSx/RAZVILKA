@@ -955,7 +955,7 @@ function renderPanelSection(key) {
       if (state.currentView === 'engineconfig' && state.dataLoad.engineConfigs?.loaded) renderEngineControl();
       if (state.currentView === 'dns' && state.dataLoad.dns?.loaded) renderDNSServiceBindings();
     },
-    engines: renderEngines, engineConfigs: renderEngineControl, components: renderComponents,
+    engines: renderEngines, engineConfigs: () => { if(state.currentView==='engineconfig')renderEngineControl(); else if(typeof renderInterfaceEngines==='function')renderInterfaceEngines(); }, components: renderComponents,
     warp: renderWarpManager, sources: renderSources, nodes: renderNodes,
     nodeFeeds: renderNodes, nodeAutofallback: renderNodes,
     routeOptions: () => { renderServices(); if (state.currentView === 'testlab' && state.dataLoad.testlab?.loaded) renderTestLab(); },
