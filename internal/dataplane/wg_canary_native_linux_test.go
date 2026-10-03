@@ -26,10 +26,18 @@ func TestWGNativeCandidateIsolation(t *testing.T) {
 }
 
 func TestWGNativeEndpointLifecycle(t *testing.T) {
-	nativeWGFixture(t, "TestWGNativeEndpointLifecycle")
+	if os.Getenv("RAZVILKA_WG_NATIVE_ROLE") != "" {
+		nativeWGFixture(t, "TestWGNativeEndpointLifecycle")
+		return
+	}
+	// A failure (including t.Fatal in a child) must not leave the next family
+	// sharing kernel state. Each case owns a complete independent topology.
+	for _, endpoint := range []string{"93.184.216.34", "2606:4700::1111"} {
+		t.Run(endpoint, func(t *testing.T) { nativeWGFixture(t, "TestWGNativeEndpointLifecycle", endpoint) })
+	}
 }
 
-func nativeWGFixture(t *testing.T, suite string) {
+func nativeWGFixture(t *testing.T, suite string, selectedEndpoint ...string) {
 	if os.Getenv("RAZVILKA_WG_NATIVE") != "1" {
 		t.Skip("requires exclusive Linux VM: RAZVILKA_WG_NATIVE=1 go test ./internal/dataplane -run '^" + suite + "$' -count=1 -v")
 	}
@@ -158,8 +166,13 @@ func nativeWGFixture(t *testing.T, suite string) {
 		}
 	}
 	client := exec.Command("ip", "netns", "exec", clientNS, exe, "-test.run=^"+suite+"$", "-test.v")
-	client.Env = append(os.Environ(), "RAZVILKA_WG_NATIVE_ROLE=client", "RAZVILKA_WG_NATIVE_ROOT="+root)
+	client.Env = append(os.Environ(), "RAZVILKA_WG_NATIVE_ROLE=client", "RAZVILKA_WG_NATIVE_ROOT="+root, "RAZVILKA_WG_NATIVE_SERVER_NS="+serverNS)
+	if len(selectedEndpoint) == 1 {
+		client.Env = append(client.Env, "RAZVILKA_WG_NATIVE_TEST_ENDPOINT="+selectedEndpoint[0])
+	}
 	if output, err := client.CombinedOutput(); err != nil {
+		nativeWGKernelCapture(t, clientNS, "client after failure")
+		nativeWGKernelCapture(t, serverNS, "server after failure")
 		t.Fatalf("native client: %v\n%s", err, output)
 	} else {
 		t.Log(string(output))

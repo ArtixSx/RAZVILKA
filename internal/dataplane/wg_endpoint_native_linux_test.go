@@ -27,7 +27,11 @@ func nativeWGEndpointClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, endpoint := range []string{"93.184.216.34", "2606:4700::1111"} {
+	endpoint := os.Getenv("RAZVILKA_WG_NATIVE_TEST_ENDPOINT")
+	if endpoint != "93.184.216.34" && endpoint != "2606:4700::1111" {
+		t.Fatal("explicit isolated endpoint fixture required")
+	}
+	for _, endpoint := range []string{endpoint} {
 		t.Run(endpoint, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 			defer cancel()
@@ -51,6 +55,21 @@ func nativeWGEndpointClient(t *testing.T) {
 				return a
 			}
 			a := newAdapter()
+			t.Cleanup(func() {
+				if t.Failed() {
+					nativeWGKernelCapture(t, "", "endpoint child final state")
+				}
+			})
+			a.CanaryProbe = func(probeCtx context.Context, url, source string) error {
+				err := sourceBoundAWGProbe(probeCtx, url, source)
+				if err != nil {
+					nativeWGKernelCapture(t, "", "candidate before production cleanup")
+					if server := os.Getenv("RAZVILKA_WG_NATIVE_SERVER_NS"); server != "" {
+						nativeWGKernelCapture(t, server, "server before candidate cleanup")
+					}
+				}
+				return err
+			}
 			plan := Plan{Routes: []Route{{Resolved: "wireguard:native", ServiceName: "native", CIDRs: []string{"198.51.100.10/32"}, ProbeURL: "http://198.51.100.10/"}}}
 			transaction := filepath.Join(root, "transaction")
 			for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate} {
@@ -181,6 +200,43 @@ func nativeWGEndpointClient(t *testing.T) {
 			}
 			nativeWGCommand(t, "", "ip", "route", "del", foreign, "dev", "wan-b", "proto", "boot", "metric", "9", "table", "206")
 		})
+	}
+}
+
+// Diagnostic commands never read private-key, preshared-key, showconf or dump.
+// Capture before production Canary's defer removes its temporary interface.
+func nativeWGKernelCapture(t *testing.T, ns, label string) {
+	t.Helper()
+	captureCtx, cancelCapture := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelCapture()
+	commands := [][]string{
+		{"ip", "-j", "-d", "link", "show"}, {"ip", "-j", "address", "show"},
+		{"ip", "-4", "rule", "show"}, {"ip", "-6", "rule", "show"},
+		{"ip", "-4", "-j", "route", "show", "table", "all"}, {"ip", "-6", "-j", "route", "show", "table", "all"},
+		{"ip", "-4", "-j", "route", "get", "93.184.216.34", "mark", "0"},
+		{"ip", "-6", "-j", "route", "get", "2606:4700::1111", "mark", "0"},
+		{"ip", "-4", "-j", "route", "get", "198.51.100.10", "from", "10.66.0.2", "oif", "rz-wg-canary"},
+		{"sysctl", "-n", "net.ipv4.conf.all.rp_filter", "net.ipv4.conf.default.rp_filter", "net.ipv4.conf.wan-c.rp_filter", "net.ipv4.conf.wan-s.rp_filter", "net.ipv4.conf.wg-server.rp_filter"},
+	}
+	for _, field := range []string{"public-key", "peers", "endpoints", "latest-handshakes", "transfer", "fwmark"} {
+		commands = append(commands, []string{"wg", "show", "all", field})
+	}
+	for _, args := range commands {
+		if captureCtx.Err() != nil {
+			t.Logf("kernel capture %s: total diagnostic deadline reached", label)
+			break
+		}
+		original := strings.Join(args, " ")
+		if ns != "" {
+			args = append([]string{"ip", "netns", "exec", ns}, args...)
+		}
+		ctx, cancel := context.WithTimeout(captureCtx, 2*time.Second)
+		out, err := exec.CommandContext(ctx, args[0], args[1:]...).CombinedOutput()
+		cancel()
+		if len(out) > 64<<10 {
+			out = append(out[:64<<10], []byte("\n[bounded capture truncated]")...)
+		}
+		t.Logf("kernel capture %s | %s | err=%v\n%s", label, original, err, out)
 	}
 }
 
