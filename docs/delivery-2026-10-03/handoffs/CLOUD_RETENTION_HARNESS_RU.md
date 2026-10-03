@@ -44,3 +44,9 @@ Whole-root rejection — текущие unsupported manifest keys + fixed file a
 - Native retention actual run: **unverified**, выполняет координатор после приёма коммита. H2/H3 actual результаты предыдущего `4d15788` к retention не относятся.
 
 Точный список исключений OPS: [CLOUD_RETENTION_CONTRACT_RU.md](CLOUD_RETENTION_CONTRACT_RU.md).
+
+## Совместимость с OPS 5ca485f / CORE b0a5093
+
+Инертный fixture поддерживает новый `-check-node-history-state` ровно с trusted config/state root arguments и typed ответом `{"ok":true}`. Argument mismatch возвращает96, unsupported reader94, typed incompatibility — `{"ok":false}`. Production gate не менялся. Дополнительный subcase `node-history-reader-refused-before-stop` запускает полный production reader для incompatible/unsupported fixture и требует отказ до stop/live writes плюс фактический marker вызова typed gate. На CLOUD base без OPS gate этот subcase явно SKIP; он включается после owner merge, а не эмулирует gate вручную.
+
+Координатор сообщил actual Linux трёх исходных retention scenarios RC0 на integration d010e13/source31 до OPS5ca. Это не результат нового negative subcase и не проверка после merge; новую комбинированную ветку прогоняет root отдельно.

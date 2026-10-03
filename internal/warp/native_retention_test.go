@@ -161,6 +161,35 @@ func TestNativeLocalCloudRetentionHarness(t *testing.T) {
 		// still unchanged. Do not claim zero journal writes for Prepare rejection.
 		cloudRetentionAssertTree(t, base, before, "var/lib/razvilka/self-update-files/.writer.lock")
 	})
+	t.Run("node-history-reader-refused-before-stop", func(t *testing.T) {
+		production := string(cloudRetentionRead(t, filepath.Join(repo, "scripts", "rollback-entware.sh")))
+		if !strings.Contains(production, "require_node_history_compatibility()") {
+			t.Skip("OPS node-history admission is not integrated in this checkout")
+		}
+		for _, refusal := range []string{"incompatible", "unsupported"} {
+			t.Run(refusal, func(t *testing.T) {
+				base := t.TempDir()
+				cloudRetentionFixture(t, base)
+				cloudRetentionRunChild(t, base, "timeout-pending")
+				cloudRetentionAddLegacyAndJournals(t, base)
+				backup := cloudRetentionSnapshot(t, sh, repo, base, "20000101T000001Z-1")
+				before := cloudRetentionTree(t, base, []string{"bin", "etc", "var/lib/razvilka/warp"})
+				cloudRetentionWrite(t, filepath.Join(base, "node-history-refuse"), []byte(refusal), 0600)
+				reason := "Retained node history compatibility not confirmed; installation unchanged"
+				if refusal == "unsupported" {
+					reason = "Target binary cannot read all retained node history; installation unchanged"
+				}
+				cloudRetentionRollbackReason(t, sh, repo, base, backup, false, reason)
+				cloudRetentionAssertTree(t, base, before)
+				if _, err := os.Lstat(filepath.Join(base, "node-history-called")); err != nil {
+					t.Fatal("negative fixture did not exercise the typed reader gate")
+				}
+				if _, err := os.Lstat(filepath.Join(base, "stop-called")); !errors.Is(err, os.ErrNotExist) {
+					t.Fatal("typed reader refusal reached stop")
+				}
+			})
+		}
+	})
 }
 
 func cloudRetentionManager(base string) *Manager {
@@ -254,6 +283,17 @@ set -eu
 printf 'called\n' >> "$RAZVILKA_BASE/binary-called"
 case "$1" in
   -native-enrollment-schema|-self-update-schema|-subscription-schema) printf '1\n' ;;
+  -check-node-history-state)
+    [ "$#" -eq 5 ] && [ "$2" = -node-history-config-root ] &&
+      [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] &&
+      [ "$5" = "$RAZVILKA_BASE/var/lib/razvilka" ] || exit 96
+    printf 'checked\n' >> "$RAZVILKA_BASE/node-history-called"
+    if [ -f "$RAZVILKA_BASE/node-history-refuse" ]; then
+      [ "$(cat "$RAZVILKA_BASE/node-history-refuse")" != unsupported ] || exit 94
+      printf '{"ok":false}\n'
+    else
+      printf '{"ok":true}\n'
+    fi ;;
   -recover-private-restore) printf '{"ok":true}\n' ;;
   -deactivate-dataplane) : ;;
   *) exit 94 ;;
@@ -394,6 +434,15 @@ LEGACY_INIT_PRESENT=0; LEGACY_DISABLED_PRESENT=0; LEGACY_WAS_RUNNING=0; RAZ_WAS_
 
 func cloudRetentionRollback(t *testing.T, sh, repo, base, backup string, success bool) {
 	t.Helper()
+	reason := ""
+	if !success {
+		reason = "Unknown rollback manifest key:"
+	}
+	cloudRetentionRollbackReason(t, sh, repo, base, backup, success, reason)
+}
+
+func cloudRetentionRollbackReason(t *testing.T, sh, repo, base, backup string, success bool, reason string) {
+	t.Helper()
 	// Windows checkout CRLF is normalized only in this private executable copy;
 	// every production statement and argument remains unchanged.
 	production := filepath.Join(base, "production-rollback.sh")
@@ -405,11 +454,7 @@ BACKUP=$(CDPATH= cd -- "$2" && pwd -P)
 export RAZVILKA_BASE
 exec "$3" "$4" "$BACKUP" --auto
 `
-	message := ""
-	if !success {
-		message = "Unknown rollback manifest key:"
-	}
-	cloudRetentionShell(t, sh, code, []string{base, backup, filepath.ToSlash(sh), filepath.ToSlash(production)}, success, message)
+	cloudRetentionShell(t, sh, code, []string{base, backup, filepath.ToSlash(sh), filepath.ToSlash(production)}, success, reason)
 }
 
 func cloudRetentionShell(t *testing.T, sh, script string, args []string, success bool, reason string) {
