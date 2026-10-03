@@ -114,3 +114,83 @@ func TestXrayCompiledConfigIsAttestable(t *testing.T) {
 		t.Fatalf("compiled config not attestable: %q %v", protocol, err)
 	}
 }
+
+func TestXrayNativeTLSHonorsEnabledFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name, tls, security, fingerprint string
+	}{
+		{"TLS disabled", `{"enabled":false,"server_name":"front.example"}`, "none", ""},
+		{"TLS enable omitted", `{"server_name":"front.example"}`, "none", ""},
+		{"REALITY disabled", `{"enabled":true,"server_name":"front.example","reality":{"enabled":false,"public_key":"KEY"}}`, "tls", ""},
+		{"REALITY enable omitted", `{"enabled":true,"server_name":"front.example","reality":{"public_key":"KEY"}}`, "tls", ""},
+		{"uTLS disabled", `{"enabled":true,"server_name":"front.example","utls":{"enabled":false,"fingerprint":"firefox"}}`, "tls", ""},
+		{"uTLS enable omitted", `{"enabled":true,"server_name":"front.example","utls":{"fingerprint":"firefox"}}`, "tls", ""},
+		{"uTLS enabled", `{"enabled":true,"server_name":"front.example","utls":{"enabled":true,"fingerprint":"firefox"}}`, "tls", "firefox"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := `{"outbounds":[{"type":"vless","server":"edge.example","server_port":443,"uuid":"` + xrayUUID + `","tls":` + tc.tls + `}]}`
+			bundle, err := ParseProfile(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := selectedBundleOutbound(bundle.Config, 0, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			profile, err := VLESSProfileFromOutbound(out)
+			if err != nil || profile.Security != tc.security || profile.Fingerprint != tc.fingerprint {
+				t.Fatalf("disabled native TLS option changed connection identity: security=%q fingerprint=%q err=%v", profile.Security, profile.Fingerprint, err)
+			}
+			result, err := ParseXrayProfile(raw, 0)
+			if tc.security == "none" {
+				if err == nil || ErrorCode(err) != "XRAY_UNSUPPORTED_PROFILE" || len(result.Config) != 0 {
+					t.Fatalf("plaintext native profile became an Xray TLS draft: err=%v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var document map[string]any
+			if err := json.Unmarshal(result.Config, &document); err != nil {
+				t.Fatal(err)
+			}
+			stream := document["outbounds"].([]any)[0].(map[string]any)["streamSettings"].(map[string]any)
+			if stream["security"] != tc.security || stream["realitySettings"] != nil {
+				t.Fatalf("compiled wrong security mode: %v", stream)
+			}
+			tls := stream["tlsSettings"].(map[string]any)
+			fingerprint, _ := tls["fingerprint"].(string)
+			if fingerprint != tc.fingerprint {
+				t.Fatalf("compiled wrong TLS fingerprint: %q", fingerprint)
+			}
+		})
+	}
+}
+
+func TestXrayRejectsUnmappedNativeTLSConstraints(t *testing.T) {
+	for _, constraint := range []string{
+		`"min_version":"1.3"`,
+		`"max_version":"1.2"`,
+		`"cipher_suites":["TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"]`,
+	} {
+		t.Run(constraint, func(t *testing.T) {
+			raw := `{"outbounds":[{"type":"vless","server":"edge.example","server_port":443,"uuid":"` + xrayUUID + `","tls":{"enabled":true,"server_name":"front.example",` + constraint + `}}]}`
+			bundle, err := ParseProfile(raw)
+			if err != nil || !strings.Contains(string(bundle.Config), constraint[:strings.IndexByte(constraint, ':')]) {
+				t.Fatalf("native parser must preserve the constraint: err=%v", err)
+			}
+			result, err := ParseXrayProfile(raw, 0)
+			if err == nil || ErrorCode(err) != "XRAY_UNSUPPORTED_PROFILE" || len(result.Config) != 0 {
+				t.Fatalf("unmapped TLS constraint silently discarded: err=%v", err)
+			}
+		})
+	}
+}
+
+func TestXrayRejectsUnmappedRealityALPN(t *testing.T) {
+	result, err := ParseXrayProfile("vless://"+xrayUUID+"@edge.example:443?security=reality&sni=front.example&pbk=KEY&alpn=h2", 0)
+	if err == nil || ErrorCode(err) != "XRAY_UNSUPPORTED_PROFILE" || len(result.Config) != 0 {
+		t.Fatalf("unmapped REALITY ALPN silently discarded: err=%v", err)
+	}
+}

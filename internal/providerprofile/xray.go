@@ -116,15 +116,22 @@ func VLESSProfileFromOutbound(out map[string]any) (VLESSProfile, error) {
 		return VLESSProfile{}, errXrayProfile
 	}
 	p := VLESSProfile{Server: text(out, "server"), Port: port, UUID: text(out, "uuid"), Flow: text(out, "flow"), PacketEncoding: text(out, "packet_encoding"), Security: "none", Transport: "tcp"}
-	if tls := object(out, "tls"); tls != nil {
+	if tls := object(out, "tls"); boolField(tls, "enabled") {
+		// The canonical profile has no mapping for these constraints yet.
+		// Reject before projection so the compiler cannot silently weaken TLS.
+		for _, key := range []string{"min_version", "max_version", "cipher_suites"} {
+			if _, exists := tls[key]; exists {
+				return VLESSProfile{}, errXrayProfile
+			}
+		}
 		p.Security = "tls"
 		p.ServerName = text(tls, "server_name")
 		p.Insecure, _ = tls["insecure"].(bool)
 		p.ALPN = stringList(tls["alpn"])
-		if utls := object(tls, "utls"); utls != nil {
+		if utls := object(tls, "utls"); boolField(utls, "enabled") {
 			p.Fingerprint = text(utls, "fingerprint")
 		}
-		if reality := object(tls, "reality"); reality != nil {
+		if reality := object(tls, "reality"); boolField(reality, "enabled") {
 			p.Security = "reality"
 			p.RealityPublicKey = text(reality, "public_key")
 			p.RealityShortID = text(reality, "short_id")
@@ -170,7 +177,8 @@ func CompileXrayConfig(p VLESSProfile) ([]byte, []string, error) {
 	fingerprint := p.Fingerprint
 	switch p.Security {
 	case "reality":
-		if p.RealityPublicKey == "" {
+		// REALITY settings do not map the canonical TLS ALPN list here.
+		if p.RealityPublicKey == "" || len(p.ALPN) > 0 {
 			return nil, nil, errXrayProfile
 		}
 		if fingerprint == "" {
