@@ -2,6 +2,8 @@
 
 ## Дополнение: native IPK container (отдельная порция после 99ac304)
 
+Следующий feedback `native-opkg-03`: extractor дошёл до postinst; explicit `./etc/` отсутствовал, а pinned opkg экспортирует `PKG_ROOT`, не `IPKG_INSTROOT`. Добавлена directory entry до data file; synthetic postinst требует абсолютный непустой PKG_ROOT != `/`, причём `${PKG_ROOT%/}` должен **точно** совпасть с independently supplied `RAZVILKA_EXPECTED_OFFLINE_ROOT` из fixture runner. Никакой fallback к system root и отключения проверки migration. Имя env проверено по [pkg_run_script указанной ревизии](https://github.com/openwrt/opkg-lede/blob/80503d94/libopkg/pkg.c). Адресный container test — RC0; native повторяет координатор.
+
 Координатор сообщил native-opkg-02 FAIL до postinst: Malformed package file, opkg-lede `80503d94`. Проверен [официальный extractor этой ревизии](https://github.com/openwrt/opkg-lede/blob/80503d94/libbb/unarchive.c): он декодирует внешний gzip/USTAR и вложенные control.tar.gz/data.tar.gz. Fixture заменяет Debian ar на этот контейнер; внутренние записи также явный USTAR, порядок детерминированный. Исполняемый postinst и требование фактической migration остаются; зависимости от ar больше нет. Native запуск остаётся у координатора, здесь не выполнен. Адресный `go test ./internal/components -run '^TestNativeFixtureEntwareGzipTarContainer$' -count=1` и launcher contract — RC0. Этот коммит отделён от ещё незавершённых supervision/acceptance изменений.
 
 Ветка `sol/ops-20261003`, worktree `C:/Projects/RAZVILKA/worktrees/sol-ops`.
