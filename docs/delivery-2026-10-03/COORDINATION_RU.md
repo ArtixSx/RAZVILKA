@@ -23,3 +23,15 @@ D00 завершён: сохранены локальные изменения �
 Первую порцию подготовили `/root/delivery_ui`, `/root/delivery_vless`, `/root/delivery_ops`. Следующую — `/root/d02_xray`, `/root/d04_wireguard`, `/root/d11_recovery`. Эти задачи завершены и больше не пишут общие файлы. Их worktrees сохранены как исходники принятых коммитов и отчётов. Нативные проверки WG, Xray и kernel cleanup выполнены координатором, ограничения приведены в [VALIDATION_RU.md](VALIDATION_RU.md).
 
 Новая копия ещё не установлена на роутер и не опубликована. Наличие прошедшего CI не закрывает matching live recovery, общий LAN executor, аппаратную матрицу и длительную работу.
+
+## Вторая порция пяти чатов
+
+Первые коммиты CORE `6451f48`, VLESS `04dd691`, NET `3ee9a0e`, OPS `731a087`, UI `f4356d2` объединены обычными merge до `99ac304`. История всех рабочих веток сохранена. Коммит CORE `0a3a25b` с явными абсолютными каталогами компонентов принят отдельно; Windows-проверки CLI прошли, UI получил его для настоящего HTTP стенда.
+
+- CORE: закончить startup/CLI/API wiring self-update; затем engine-aware Xray/WG API и общий default executor. Ему назначены также routecatalog/routekind. Перед сетевой приёмкой убрать overwrite чужого default и игнорирование ошибки IPv6 из `applyRecordedPolicy`.
+- OPS: доверенное supervision/quiescence компонентов, отдельное принятие установленного неактивного компонента и rollback acceptance; затем замена shell file lifecycle на согласованный self-update протокол.
+- VLESS: scoped Xray TUN adapter и воспроизводимый selected/control сценарий; затем D10. Общая регистрация и app wiring — CORE.
+- NET: исправление выявленного native D05 сбоя, затем AWG compatibility и DNS TTL. D04 live-after IPv4/IPv6 подтверждён координатором.
+- UI: recovery и единый workflow D12; настоящий policy HTTP/браузерный тест после path fix, без synthetic transport.
+
+Координатор выполняет Linux/race, native Xray/WG/kernel/package испытания и принимает небольшие коммиты. До подключения recovery/самообновления промежуточная сборка не устанавливается на рабочий роутер. Рабочие чаты не запускают общие live-окна.

@@ -18,7 +18,7 @@ VM, роутер, сетевые пространства и порты прин
 
 | Чат | Исключительное владение |
 |---|---|
-| CORE | `internal/app/**`, `cmd/razvilka/main.go`, `internal/config/**`, `internal/autonomy/**`, `internal/operationgate/**`, общие `dataplane/manager.go`, `plan.go`, `policy*.go`, `ownership.go`, `execution_journal*.go`, LAN classifier и общие сетевые контракты |
+| CORE | `internal/app/**`, `cmd/razvilka/main.go`, `internal/config/**`, `internal/autonomy/**`, `internal/operationgate/**`, `internal/routecatalog/**`, `internal/routekind/**`, общие `dataplane/manager.go`, `plan.go`, `policy*.go`, `ownership.go`, `execution_journal*.go`, LAN classifier и общие сетевые контракты |
 | VLESS | `internal/providerprofile/**`, `providerfeed/**`, `nodestore/**`, `nodequality/**`, `nodecleanup/**`; `dataplane/node*.go`, `proxy*.go`, `hev_sidecar*.go`; профильные тесты и стенд Xray |
 | NET | `internal/wireguardprofile/**`, `awgprofile/**`, `dnscontrol/**`, `netresolve/**`, `strategylab/**`; `dataplane/warpwg*.go`, `wg_*.go`, `wireguard*.go`, `awg*.go`, `nfqws2*.go`, `dns_*.go`, `scoped_dns*.go`, `cloudflare_scan_*.go`; профильные network/DNS тесты |
 | OPS | `internal/components/**`, `internal/selfupdatejournal/**` (новый модуль при необходимости), `internal/warp/**`, `cloudflareprovider/**`, `usquediag/**`, `sources/**`, `updatecheck/**`; установочные/обновляющие/rollback shell-скрипты и их тесты |
