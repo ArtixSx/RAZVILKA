@@ -191,13 +191,18 @@ function showAuth(status, message = '') {
   document.dispatchEvent(new Event('razvilka:auth-required'));
   state.status = status || state.status || {};
   $('#authScreen').hidden = false;
-  $('.app-shell').setAttribute('aria-hidden', 'true');
   const setup = !!state.status.setup_required;
   $('#authSetupPanel').hidden = !setup;
   $('#authLoginPanel').hidden = setup;
   $('#authMessage').textContent = message;
   if (setup) $('#setupToken').value = sessionStorage.getItem(ADMIN_TOKEN_KEY) || '';
   else $('#loginUsername').value = state.status.username || 'admin';
+  const authPanel = $(setup ? '#authSetupPanel' : '#authLoginPanel');
+  // Move focus before hiding its old ancestor from assistive technology.
+  // Repeated errors keep focus in the active form, including recovery fields.
+  if (!authPanel.contains(document.activeElement)) $(setup ? '#setupToken' : '#loginPassword').focus({ preventScroll: true });
+  $('.app-shell').inert = true;
+  $('.app-shell').setAttribute('aria-hidden', 'true');
 }
 
 function hideAuth() {
@@ -205,7 +210,9 @@ function hideAuth() {
   // login screen. Visibility is not an authentication lifecycle signal.
   const restored = state.authenticated !== true;
   state.authenticated = true;
+  if ($('#authScreen').contains(document.activeElement)) document.activeElement.blur();
   $('#authScreen').hidden = true;
+  $('.app-shell').inert = false;
   $('.app-shell').removeAttribute('aria-hidden');
   $('#authMessage').textContent = '';
   if (restored) {

@@ -5,19 +5,46 @@ import vm from 'node:vm';
 const source=fs.readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
 const functions=source.slice(source.indexOf('function showAuth('),source.indexOf('async function submitSetup('));
 const elements=new Map(), published=[];
-const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',classList:{remove(){}},setAttribute(){},removeAttribute(){}});return elements.get(id);};
+const documentState={activeElement:null,dispatchEvent:e=>published.push(e.type)};
+const $=id=>{
+  if(!elements.has(id)){
+    const panel=/^#setup/.test(id)?'setup':/^#(login|recovery)/.test(id)?'login':null;
+    elements.set(id,{id,panel,shell:['#logoutButton','#serviceSearch'].includes(id),hidden:true,inert:false,textContent:'',attributes:new Map(),classList:{remove(){}},
+      contains(target){return this===target || id==='.app-shell'&&target?.shell || id==='#authScreen'&&!!target?.panel || id==='#authSetupPanel'&&target?.panel==='setup' || id==='#authLoginPanel'&&target?.panel==='login';},
+      focus(){assert(!this.shell||!$('.app-shell').inert,'focused the inert application');documentState.activeElement=this;},
+      blur(){if(documentState.activeElement===this)documentState.activeElement=null;},
+      setAttribute(name,value){if(name==='aria-hidden'&&value==='true')assert(!this.contains(documentState.activeElement),'aria-hidden applied while background retains focus');this.attributes.set(name,value);},
+      removeAttribute(name){this.attributes.delete(name);}
+    });
+  }
+  return elements.get(id);
+};
 const state={authenticated:false,status:{}};
-const ctx=vm.createContext({state,$,document:{dispatchEvent:e=>published.push(e.type)},Event:class{constructor(type){this.type=type;}},sessionStorage:{getItem:()=>''},ADMIN_TOKEN_KEY:'test'});
+const ctx=vm.createContext({state,$,document:documentState,Event:class{constructor(type){this.type=type;}},sessionStorage:{getItem:()=>''},ADMIN_TOKEN_KEY:'test'});
 vm.runInContext(functions,ctx);
+$('#serviceSearch').focus();
 ctx.hideAuth();
 assert.deepEqual(published,['razvilka:auth-restored'],'saved cookie did not activate polling on initial hidden login screen');
+assert.equal(documentState.activeElement,$('#serviceSearch'),'cookie bootstrap stole focus');assert.equal($('.app-shell').inert,false);
 ctx.hideAuth();
 assert.equal(published.length,1,'periodic status read restarted authentication generation');
+$('#logoutButton').focus();
 ctx.showAuth({setup_required:false});
 assert.equal(state.authenticated,false);
+assert.equal($('.app-shell').inert,true);assert.equal($('.app-shell').attributes.get('aria-hidden'),'true');
+assert($('#authLoginPanel').contains(documentState.activeElement),'focus did not move to the login form');
 ctx.hideAuth();
+assert.equal($('.app-shell').inert,false);assert.equal($('.app-shell').attributes.has('aria-hidden'),false);
+assert(!$('#authScreen').contains(documentState.activeElement),'hidden authentication form retained focus');
 assert.deepEqual(published,['razvilka:auth-restored','razvilka:auth-required','razvilka:auth-restored']);
 console.log('Initial cookie session, repeated refresh and re-login lifecycle: PASS');
+
+ctx.showAuth({setup_required:true});assert($('#authSetupPanel').contains(documentState.activeElement));
+ctx.showAuth({setup_required:false});assert($('#authLoginPanel').contains(documentState.activeElement),'focus stayed in the hidden setup panel');
+$('#recoveryToken').focus();ctx.showAuth({setup_required:false},'Recovery key не принят.');
+assert.equal(documentState.activeElement,$('#recoveryToken'),'repeated auth notice interrupted recovery entry');
+ctx.hideAuth();assert.equal($('.app-shell').inert,false);assert(!$('#authScreen').contains(documentState.activeElement));
+console.log('PASS focus and inert lifecycle for logout, setup and recovery');
 
 // Run the shared request wrapper with the actual core API/parser so a response
 // body can complete after logout/login, even if its transport was aborted.
