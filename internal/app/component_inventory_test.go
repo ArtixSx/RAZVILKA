@@ -132,11 +132,10 @@ func TestComponentSidecarProtectionIncludesDesiredAppliedAndResolvedAuto(t *test
 	if hasComponentBlocker(p, "SERVICE_DEPENDENCY") || !hasComponentBlocker(p, "ROLLBACK_PACKAGE_MISSING") {
 		t.Fatal(p)
 	}
-	// An unused component is updated plainly: sources usually keep only the
-	// newest version, so a rollback copy must not be required there.
+	// Dormant managed packages also require a retained rollback package.
 	p = components.Plan{Component: "nfqws2", Action: "update", Ready: true, Installed: true, InstalledVersion: "1.3.1"}
 	a.enrichComponentPlan(&p)
-	if !p.Ready || hasComponentBlocker(p, "ROLLBACK_PACKAGE_MISSING") || len(p.Warnings) != 0 || a.managedUpdateInUse("nfqws2") || !a.managedUpdateInUse("sing-box") {
+	if p.Ready || !hasComponentBlocker(p, "ROLLBACK_PACKAGE_MISSING") || len(p.Warnings) != 1 || a.managedUpdateInUse("nfqws2") || !a.managedUpdateInUse("sing-box") {
 		t.Fatal(p)
 	}
 	if desired, applied := a.componentServiceReferences("nfqws2"); len(desired) != 0 || len(applied) != 0 {
