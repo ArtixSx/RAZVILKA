@@ -1,0 +1,39 @@
+# D10 — first-usable search и publisher fairness
+
+04.10.2026. Библиотечная порция VLESS, отдельная от receipt/proxy. `internal/app/autonomy*`, manager, policy и journal schema не изменены. **Production worker ещё не переключён на новый путь; CORE владеет wiring.** XraySelectable и NETWORK_POLICY_EXECUTOR_REQUIRED сохранены.
+
+## Готовый API
+
+`Nodes.SearchFirstUsable(ctx, nodestore.SearchRequest, nodestore.SearchHooks)` не создаёт worker/goroutine, не запускает сеть сам и не получает новой Apply authority. Вход: engine (`sing-box`/`xray`), exact service/WAN, ordered raw node IDs, current ID, cursor, limit1..4, текущие approved source IDs и разрешённые protocols. Все mutable slices клонированы. Fresh origin, enabled node, approved source и protocol проверяются в private store.
+
+Для cold path или authorized replacement API последовательно делает **fresh exact Check → durable consumed cursor → guarded Apply первого usable**. Нет ожидания ReserveTarget и предварительного заполнения ready/reserve list. Cursor не перепрыгивает заранее выбранную batch: движется только после consumed unsupported, definite service failure, пригодного результата либо явно skipped current/ineligible node. Local/runtime/cleanup/busy/cancel/inconclusive не продвигают candidate и не записывают penalty. Один вызов ограничен1..4 Check callback и максимум512 catalog entries. Ordering нужно зафиксировать на время resume; library не хранит отдельный runtime journal.
+
+Check callback возвращает exact ProbeID/CheckedAt **уже сохранённой новой** записи. Library независимо сверяет latest private record по engine/node/service/WAN, probe/time >= начало этой проверки и freshness. Usable требует existing engine-aware service PASS без DirectLeak. Definite failure — только `nodequality.ServiceFailure` (BLOCKED на service stage, без node-/route-/leak/local attribution). Unsupported нейтрален, без ProbeID/time. После cursor I/O повторно проверяются Guard, eligibility и тот же exact record; более новая failure/disable/revoked consent останавливает Apply.
+
+Apply error не разрешает следующий peer автоматически. Только trusted `ContinueAfterRollback` после typed live Health failure, matching verified rollback **всех** adapters/config, saved failure/budget, unchanged definition/scope/config/network/consent может вернуть true. Тогда C всегда проходит новый exact Check после rollback; cached PASS/проверка C до B rollback не используется. Возвращаемый Rejected — только metadata после этого доверенного подтверждения, не самостоятельная запись penalty в store. Applied сохраняется в result даже если post-commit Guard затем отказывает: уже совершённый Apply не объявляется отсутствующим и не повторяется.
+
+## Минимальное сопряжение CORE
+
+В `runAutonomyService` сохранить существующий same-node runtime repair, healthy-primary/reserve путь и failure quorum. Использовать first-usable лишь когда cold/replace уже разрешены при той же exclusive operation lease. Не вызывать его для healthy primary и не обходить existing config CAS, operation gate, Stop, SafeMode, scope consent, engine support и network epoch.
+
+1. `Guard` проверяет current config/consent/definition/sources/protocols/current WAN + existing autonomy disk receipt после каждого долгого шага. `Ordered` — стабильный снимок списка exact IDs; при изменении membership/ordering нужен matching reset или сохранённый ordering fingerprint в **существующем** runtime journal. Не ранжировать заново тот же cursor после каждой новой записи, иначе возможен повтор prefix.
+2. `Check` вызывает существующий guarded check-and-record через общий exact dispatcher и его **общие**1..4 slots, с фиксированным engine. Возвращает ProbeID/time сохранённой записи. Unsupported capability отказывает до DNS/runtime quota и не становится FAIL/penalty. Не писать synthetic PASS из outcome callback.
+3. `PersistCursor` сохраняет consumed cursor существующим durable autonomy runtime механизмом до Apply; write failure останавливает переключение. Library не заводит второй checkpoint. При exhausted snapshot CORE продолжает существующий provider paging/refill; новый snapshot/version согласовать с stable ordering/cursor.
+4. `Apply` повторно проверяет exact node разрешения, сохраняет ReserveSwitch/attempt budget до Activate, строит обычный reviewed Plan и вызывает существующий guarded transactional application с typed result. Использовать engine из resolved route, без переименования Xray history в Sing-box.
+5. `ContinueAfterRollback` использует `autonomyCandidateFailure`/matching transaction status и existing failure persistence. Сейчас helper hardcodes `sing-box` в step/route/cause matching: CORE должен сделать ожидаемый engine явным при Xray wiring. Недостаточно строки rolled-back. Unknown addition/cleanup, rollback-failed, component receipt mismatch, stale config/WAN/definition/consent, cancellation и local error — false/error; C не проверяется/не применяется поверх uncertainty.
+
+После успешного Apply reserve пополняется отдельно. Existing `SelectReserveIDs` distinct-server diversity остаётся в healthy/reserve ветке; новый API не сокращает healthy LKG ради score. ASN/operator diversity не заявлены без независимой authority.
+
+## Fairness approved feeds
+
+`RequestRefillRanked` группирует лишь trusted builtin collections одного raw GitHub repository (в частности две уже одобренные igareck collections). Publisher age — самый недавний persisted attempt **всех allowed enabled** siblings; ещё одна untried/aged ссылка того же repository не сбрасывает exploration age. Utility — MAX, не SUM, только среди due siblings. Cooldown/Retry-After и queued-job dedup приоритетнее ранга; cooled collection не передаёт utility/failure credit готовому sibling. Между publisher groups и внутри группы deterministic total order; age/exploration предотвращают starvation. Кастомные token-bearing URLs не разбираются на publisher/ASN, сохраняют собственный source ID. Ничто не включает источник вне current allowlist; preset catalogue, URLs/licenses и feed schemas не менялись. История attempts уже durable, новый scheduling journal не создан. Это ranking hints, не локальное health proof.
+
+## Проверки
+
+Windows Go1.26.5/GOMAXPROCS2/GOFLAGS=-p=2: все `internal/nodestore`, `providerfeed`, `providerprofile`, `nodequality`, `nodecleanup` tests PASS; nodestore/providerfeed vet PASS. Адресные Search/Publisher/RankedRefill/DemandRefill/SnapshotCursor PASS; Search/Publisher/integrated first-usable pagination три повтора PASS. Linux amd64 compile обоих пакетов и vet PASS (временные binaries удалены).
+
+Search regressions: оба engines Apply сразу после первого Check/persist; B failure → verified rollback → fresh C; unverified rollback не даёт C; 33 candidates через9 bounded rounds без повторного prefix; первые32 unsupported без history/penalty; local/cleanup/busy/cancel/cached/wrong engine/service/WAN/leak/unrecorded/inconclusive/persist error/disabled/expired/unapproved не Apply. Definite failure двигает ровно consumed cursor; Guard/disable/newer failure во время cursor persistence блокируют Apply.
+
+Provider regressions: две коллекции не умножают utility или untried/aged publisher priority; disabled/not-allowed/cooldown не обходятся; publisher age/order и worker dedup сохраняются после reopen; custom URL не становится operator claim. Integrated fixture: первая page32 нейтральна; restart+validated304 импортирует именно entry33, не повторяет prefix и не продлевает origin; свежий Xray exact PASS entry33 сразу вызывает Apply. Все сетевые ответы в tests — local controlled fixtures; external feed fetching не выполнялся.
+
+Race/full Linux и production worker integration остаются у координатора. Receipt native PASS другого checkpoint не заявляется доказательством D10. Real app/router restart, production LAN proof/HIL и feature readiness этой библиотечной порцией не закрыты.
