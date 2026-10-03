@@ -49,6 +49,7 @@ assert.doesNotMatch(card(), /data-component-action="remove"[^>]*disabled/, 'cata
 }
 state.components[0] = {...base, running:true};
 assert.match(card(), /Процесс запущен/);
+assert.equal(model.consoleEngineState('usque').tone,'unknown','process alone is not accepted runtime evidence');
 assert.match(card(), /data-component-action="update"[^>]*disabled/, 'unmanaged running component must not update in place');
 assert.match(card(), /data-component-action="remove"[^>]*disabled/);
 state.components[0] = {...base};
@@ -141,6 +142,12 @@ f=fixture();
 f.setResponder(async (path,options)=>path.includes('/plan?')?{ready:true}:options.method==='POST'?{ok:false}:[{...base}]);
 assert.equal(await f.ctx.manageComponent('usque','remove'),false);
 assert.equal(f.notices.some(notice=>notice[0]==='success'),false,'unconfirmed response must not announce successful removal');
+
+f=fixture();f.setResponder(async(path,options)=>path.includes('/plan?')?{ready:true}:options.method==='POST'?{ok:true,pending_live_acceptance:true,transaction_id:'a'.repeat(32)}:[{...base}]);
+assert.equal(await f.ctx.manageComponent('usque','update'),true);
+assert.equal(f.calls.filter(call=>call.options.method==='POST').length,1);
+assert.equal(f.notices.some(notice=>notice[0]==='success'),false,'202 candidate must not claim accepted update');
+assert.match(f.notices.at(-1)[1],/принятие версии ожидается/);
 
 f=fixture(); let finishPlan;
 f.setResponder(()=>new Promise(resolve=>{finishPlan=resolve;}));

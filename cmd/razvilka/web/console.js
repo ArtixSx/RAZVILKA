@@ -39,10 +39,12 @@ function consoleEngineState(id){
  const installedKnown=installed||(!component?.inventory_error&&[component,engine,config].some(e=>typeof e?.installed==='boolean'));
  const installedVersion=installed?(component?.installed_version||component?.runtime_version||engine?.version||''):'';
  const availableVersion=component?.available_version||'';
- return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,observationStale,label:observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке',tone:running&&!observationStale?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
+ const recovery=typeof componentRecoverySummary==='function'?componentRecoverySummary(id):null;
+ return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,observationStale,recovery,label:recovery?.label||(observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке'),tone:!observationStale&&recovery?.tone==='good'?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
 }
 function consoleEngineUpdateState(info){
  const c=info.component,load=state.dataLoad?.components;
+ if(info.recovery)return {kind:'pending',text:info.recovery.detail};
  if(state.componentRefreshRequest)return {kind:'checking',text:'Проверяем каталог обновлений…'};
  if(info.observationStale)return {kind:'failed',text:'Состояние обновляется. Последнее наблюдение: '+consoleDate(state.inventoryObservation?.observedAt)};
  if(c?.inventory_error)return {kind:'failed',text:`Не удалось проверить установку: ${c.inventory_error}. Последние данные сохранены.`};

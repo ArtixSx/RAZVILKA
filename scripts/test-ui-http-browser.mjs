@@ -1,4 +1,4 @@
-// Opt-in Windows D01 gate. Real embedded assets, HTTP, cookies and Safe Mode;
+// Opt-in Windows D01/D12 gate. Real embedded assets, HTTP, cookies and Safe Mode;
 // --policy-transport opts into a synthetic policy transport when the Windows
 // component-path fence blocks autonomy. Without it, policy tests require backend.
 // Build first, then set RAZVILKA_UI_BINARY, RAZVILKA_UI_CHROME and NODE_PATH
@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {spawn} from 'node:child_process';
 import {randomBytes, createHash} from 'node:crypto';
-import {readFileSync, writeFileSync, mkdirSync, mkdtempSync} from 'node:fs';
+import {readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, unlinkSync} from 'node:fs';
 import {resolve, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -30,7 +30,8 @@ const paths = {'config':'config.json','catalog':'service-catalog.json','sources'
   'cache':'cache','stage':'stage','backups':'backups','token-file':'admin.token','credentials-file':'admin.credentials.json',
   'custom-services':'custom.json','warp-state':'warp','cloudflare-state':'cloudflare','smart-route-state':'smart-route.json',
   'dataplane-state':'dataplane','devices':'devices.json','metrics-history':'metrics.jsonl','strategy-lab-state':'strategy.json',
-  'audit-log':'audit.jsonl','dns-state':'dns/state.json','node-state':'nodes','z2k-root':'absent-z2k'};
+  'audit-log':'audit.jsonl','dns-state':'dns/state.json','node-state':'nodes','z2k-root':'absent-z2k',
+  'component-state':'components','component-bin':'component-bin','component-init':'component-init','component-repo':'component-repo','component-info':'component-info'};
 for (const [source, target] of [['config.example.json','config.json'],['service-catalog.json','service-catalog.json'],['sources.json','sources.json'],['community-catalog.json','community-catalog.json']]) {
   writeFileSync(join(run,target), readFileSync(join(root,'configs',source)));
 }
@@ -42,7 +43,11 @@ const server = spawn(resolve(process.env.RAZVILKA_UI_BINARY), ['-listen','127.0.
 let serverLog = '';
 server.stdout.on('data', chunk=>{serverLog+=chunk;});server.stderr.on('data', chunk=>{serverLog+=chunk;});
 let browser, context, page, browserVersion;
-const results = [], errors = [], requests = [];
+const results = [], errors = [], requests = [], screenshots = [];
+async function capture(name,source) {
+  await page.screenshot({path:join(run,name),fullPage:true,animations:'disabled'});
+  screenshots.push({file:name,source,viewport:page.viewportSize()});
+}
 async function test(name, boundary, action) {
   const start=requests.length, began=performance.now();await action();
   results.push({name,boundary,wall_ms:Math.round(performance.now()-began),api_requests:requests.length-start,
@@ -93,7 +98,7 @@ try {
   const deliverPolicy = async(route,response)=>policyTransport?route.fulfill({status:response.status(),json:await response.json()}):route.fulfill({response});
   if(!authOnly) {
     const initial = await getPolicy();
-    const policy = {...initial.policy, setup_complete:true, enabled:false, default_sources:['192.168.1.50/32'], inherit_new_services:false,
+    const policy = {...initial.policy, setup_complete:true, enabled:false, default_sources:['192.168.1.50/32'], inherit_new_services:false,reserve_seconds:600,
       application:{...initial.policy.application,mode:'off'},components:{...initial.policy.components,mode:'off'}};
     assert.equal((await putPolicy(policy)).status(),200);
   }
@@ -112,6 +117,26 @@ try {
     assert.equal(requests.filter(r=>r.method!=='GET').length,writes);
     assert.deepEqual(await page.evaluate(()=>state.uiRenderIssues),{});
   });
+  if(!authOnly && !policyTransport)await capture('01-home.png','Настоящее локальное приложение; отдельная тестовая копия catalog/config, Safe Mode включён, автоматика выключена, native engines отсутствуют.');
+
+  if(!policyTransport)await test('component recovery is a read-only journal view on navigation', 'real recovery GET', async()=>{
+    const start=requests.length;await nav('engines');
+    await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Незавершённых обновлений нет'));
+    const response=await context.request.get(origin+'/api/v1/components/recovery');assert.equal(response.status(),200);
+    assert.equal((await response.json()).recovery_required,false);
+    assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
+    assert.equal(await page.evaluate(()=>componentRecoveryFence()),false);
+    await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+  });
+  if(!authOnly && !policyTransport) {
+    await nav('nodes');await page.waitForFunction(()=>!panelLoad.request);
+    await page.setViewportSize({width:390,height:844});
+    if(await page.evaluate(()=>document.body.classList.contains('console-menu-open')))await page.locator('#consoleCloseMenu').click();
+    await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=0);
+    await capture('03-connections-narrow.png','Настоящий HTTP; пустая библиотека подключений в отдельном тестовом состоянии, экран 390 × 844.');
+    await page.setViewportSize({width:1280,height:900});
+    await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+  }
 
   if(!authOnly) {
   await nav('autopilot');await quickReady();
@@ -166,11 +191,11 @@ try {
 
   await test('read errors retain data and do not pull hidden workspace', 'controlled transport 409/500', async()=>{
     await nav('services');await page.waitForFunction(()=>!panelLoad.request);
-    const ids=await page.evaluate(()=>state.services.map(s=>s.id));
+    const ids=await page.evaluate(()=>state.services.map(s=>s.id).sort());
     for(const status of [409,500]) {
       await page.route('**/api/v1/services',route=>route.fulfill({status,contentType:'application/json',body:JSON.stringify({error:'test read fault',...(status===409?{code:'RESTORE_OPERATION_BUSY'}:{})})}));
       await page.evaluate(()=>refreshAfterMutation());
-      assert.deepEqual(await page.evaluate(()=>state.services.map(s=>s.id)),ids);
+      assert.deepEqual(await page.evaluate(()=>state.services.map(s=>s.id).sort()),ids);
       assert(['busy','error'].includes(await page.evaluate(()=>state.dataLoad.services.phase)),'read fault incorrectly marked ready');
       assert.equal(await page.evaluate(()=>state.loadIssues.find(issue=>issue.section==='services')?.busy),status===409);
       await page.unroute('**/api/v1/services');
@@ -181,6 +206,56 @@ try {
     await page.evaluate(()=>refreshAll(true));
     assert(!requests.slice(start).some(r=>r.path==='/api/v1/services'));
   });
+  }
+
+  if(!authOnly && !policyTransport) {
+    // Only the disposable journal is a fixture. The embedded UI, decoder,
+    // recovery GET, authority rejection and corrupt-journal 503 are real.
+    // No package, runtime or acceptance proof is fabricated by these tests.
+    const journalDir=join(run,paths['component-state'],'update-journal');mkdirSync(journalDir,{recursive:true});
+    const journalPath=join(journalDir,'current.json');
+    const journal={schema_version:1,transaction_id:'c'.repeat(32),component:'xray',phase:'prepared',before_version:'1.0',after_version:'2.0',
+      updated_at:new Date().toISOString(),package:'xray',package_file:'xray_1.0_all.ipk',package_sha256:'d'.repeat(64),configs:[]};
+    try {
+      await test('pending journal stays fenced and Safe Mode rejects matching recovery', 'real recovery HTTP + disposable journal fixture', async()=>{
+        writeFileSync(journalPath,JSON.stringify(journal));await nav('engines');
+        await page.evaluate(()=>refreshComponentRecovery());
+        const panel=page.locator('#view-engines [data-component-recovery-panel]');
+        await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Подготовлено'));
+        assert.equal(await panel.locator('[data-component-repair="abandon-prepared"]').isDisabled(),true);
+        assert.equal(await page.evaluate(()=>state.status.safe_mode),true);
+        const observed=await context.request.get(origin+'/api/v1/components/recovery');assert.equal(observed.status(),200);
+        const body=await observed.json();assert.equal(body.recovery_required,true);
+        const before=readFileSync(journalPath,'utf8');
+        const rejected=await context.request.post(origin+'/api/v1/components/recovery',{data:{transaction_id:journal.transaction_id,component:journal.component,
+          action:'abandon-prepared',expected_revision:body.revision,confirm:'REPAIR_COMPONENT_TRANSACTION'}});
+        assert.equal(rejected.status(),409);assert.equal((await rejected.json()).code,'COMPONENT_AUTHORITY_CHANGED');
+        assert.equal(readFileSync(journalPath,'utf8'),before,'Safe Mode repair changed the journal');
+        journal.phase='upgrade-started';writeFileSync(journalPath,JSON.stringify(journal));
+        const start=requests.length;await panel.locator('[data-component-recovery-read]').click();
+        await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Исход установки неизвестен'));
+        assert.equal(await panel.locator('[data-component-repair]').count(),0);
+        assert.equal(await page.evaluate(()=>componentRecoveryFence()),true);
+        assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
+        await capture('02-component-recovery.png','Настоящий HTTP и интерфейс; только pending upgrade-started журнал — заготовка в собственном одноразовом каталоге. Не доказательство native установки.');
+      });
+      await test('corrupt journal reports real 503 and readback remains available', 'real recovery 503 + disposable corrupt fixture', async()=>{
+        writeFileSync(journalPath,'{"schema_version":');
+        const response=await context.request.get(origin+'/api/v1/components/recovery');assert.equal(response.status(),503);
+        assert.equal((await response.json()).code,'COMPONENT_JOURNAL_UNAVAILABLE');
+        const panel=page.locator('#view-engines [data-component-recovery-panel]');
+        await panel.locator('[data-component-recovery-read]').click();
+        await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Журнал обновления не читается'));
+        assert.equal(await panel.locator('[data-component-repair]').count(),0);
+        assert.equal(await panel.locator('[data-component-recovery-read]').isEnabled(),true);
+        assert.equal(await page.evaluate(()=>componentRecoveryFence()),true);
+      });
+    } finally {
+      if(existsSync(journalPath))unlinkSync(journalPath);
+      await page.evaluate(()=>refreshComponentRecovery());
+    }
+    await page.waitForFunction(()=>!componentRecoveryFence());
+    await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
   }
 
   await test(authOnly?'session revocation returns real 401':'session revocation during dirty form returns real 401', 'real backend 401', async()=>{
@@ -253,6 +328,6 @@ try {
   server.kill();
   await Promise.race([new Promise(r=>server.once('exit',r)),delay(5000)]);
   writeFileSync(join(run,'server.log'),serverLog);
-  writeFileSync(join(run,'result.json'),JSON.stringify({browserVersion,policyTransport,authOnly,results,errors,requests,configUnchanged:hashConfig()===configBefore},null,2));
+  writeFileSync(join(run,'result.json'),JSON.stringify({browserVersion,policyTransport,authOnly,results,errors,requests,screenshots,configUnchanged:hashConfig()===configBefore},null,2));
   console.log('Local artifacts: '+run);
 }
