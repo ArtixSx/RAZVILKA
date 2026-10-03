@@ -38,8 +38,10 @@
     for (const id of Object.values(fields)) byID(id).disabled=busy;
     save.disabled = busy || !usable || unknownWrite || !baseCurrent();
     byID('autoQuickReset').disabled = busy || !latest;
+    const refresh = byID('autoQuickRefresh'); if (refresh) refresh.disabled = busy;
     byID('autoQuickRevision').textContent = latest?.policy ? `Редакция ${latest.policy.revision}${dirty?' · есть правки':''}` : 'Ожидаем состояние роутера';
     if (!latest?.policy?.setup_complete) message.textContent = 'Сначала выберите область, источники и разрешённые подключения. Потом обычные параметры можно менять здесь.';
+    else if (unknownWrite) message.textContent = 'Результат сохранения не подтверждён. Нажмите «Обновить состояние». Ваши поля сохранены; повторная запись заблокирована.';
     else if (base && !baseCurrent() && dirty) message.textContent = 'Настройки изменились или роутер перезапущен. Ваши поля сохранены. Нажмите «Отменить правки», чтобы загрузить новую редакцию.';
     else if (!usable) message.textContent = 'Нужно свежее состояние роутера. Поля не сброшены.';
   }
@@ -97,9 +99,9 @@
       if(token===epoch)message.textContent=error.message||'Сохранение не подтверждено. Обновите состояние.';
     } finally {if(token===epoch){busy=false;render();}}
   });
-  // The explicit existing refresh button reconciles unknown writes; never resubmit.
-  byID('a1-reloadButton')?.addEventListener('click', async () => {
-    const token=epoch, process=instanceEpoch;if(busy||!unknownWrite)return;
+  // A visible, explicit read reconciles unknown writes without ever replaying PUT.
+  async function reconcile(requireUnknown = false) {
+    const token=epoch, process=instanceEpoch;if(busy||requireUnknown&&!unknownWrite)return;
     busy=true;render();
     try{
       const next=await interfaceRequest('/api/v1/autonomy');if(token!==epoch)return;
@@ -110,6 +112,9 @@
       message.textContent='Состояние прочитано. Сравните сохранённые параметры с вашими полями.';
     }catch(error){if(token===epoch)message.textContent=error.message||'Состояние не прочитано. Повторите обновление.';}
     finally{if(token===epoch){busy=false;render();}}
-  });
+  }
+  byID('autoQuickRefresh')?.addEventListener('click', () => reconcile());
+  byID('refreshAll')?.addEventListener('click', () => reconcile(true));
+  byID('a1-reloadButton')?.addEventListener('click', () => reconcile(true));
   render();
 })(typeof globalThis === 'undefined' ? window : globalThis);
