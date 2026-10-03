@@ -302,6 +302,20 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err != nil {
 		return err
 	}
+	// A locally isolated socket cannot isolate the remote peer's Noise session
+	// or roaming endpoint. Never start a second interface with an in-use key.
+	if err := a.ensureWGCanaryIdentityFree(ctx, []byte(runtimeProfile)); err != nil {
+		return err
+	}
+	if a.ID() == "wireguard" {
+		state, err := a.readStagedPolicy(root)
+		if err != nil {
+			return err
+		}
+		if err := a.revalidateWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
+			return err
+		}
+	}
 
 	candidate := *a
 	candidate.Interface = "rz-warp-canary"
