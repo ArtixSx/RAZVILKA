@@ -45,10 +45,10 @@ func TestSelfUpdateStopIndependentEpochPersistsAndNeverResets(t *testing.T) {
 	}
 	starts := 0
 	begin := func() error { starts++; return nil }
-	if err = WithSelfUpdateEffectAdmission(ctx, path, controlTestID, ready.Sequence, "start-candidate-panel", begin); err != nil || starts != 1 {
+	if err = WithSelfUpdateEffectAdmission(ctx, path, controlTestID, ready.InstallationID, ready.Sequence, "start-candidate-panel", begin); err != nil || starts != 1 {
 		t.Fatal(starts, err)
 	}
-	if err = WithSelfUpdateEffectAdmission(ctx, path, controlTestID, ready.Sequence+1, "start-candidate-panel", begin); !errors.Is(err, ErrSelfUpdateStopChanged) || starts != 1 {
+	if err = WithSelfUpdateEffectAdmission(ctx, path, controlTestID, ready.InstallationID, ready.Sequence+1, "start-candidate-panel", begin); !errors.Is(err, ErrSelfUpdateStopChanged) || starts != 1 {
 		t.Fatal("stale epoch admitted", starts, err)
 	}
 	stop, err := RequestSelfUpdateStop(ctx, path, controlTestID, 12)
@@ -66,7 +66,7 @@ func TestSelfUpdateStopIndependentEpochPersistsAndNeverResets(t *testing.T) {
 		if err = CheckSelfUpdateStop(ctx, path, id); !errors.Is(err, ErrSelfUpdateStopped) {
 			t.Fatal("matching/other helper revived", id, err)
 		}
-		if err = WithSelfUpdateEffectAdmission(ctx, path, id, stop.Sequence, "start-rollback-panel", begin); !errors.Is(err, ErrSelfUpdateStopped) || starts != 1 {
+		if err = WithSelfUpdateEffectAdmission(ctx, path, id, stop.InstallationID, stop.Sequence, "start-rollback-panel", begin); !errors.Is(err, ErrSelfUpdateStopped) || starts != 1 {
 			t.Fatal("Stop admitted new effect", starts, err)
 		}
 	}
@@ -93,7 +93,7 @@ func TestSelfUpdateStopSerializesWithActualEffectBegin(t *testing.T) {
 	}
 	entered, release, finished := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 	go func() {
-		finished <- WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, ready.Sequence, "start-candidate-panel", func() error { close(entered); <-release; return nil })
+		finished <- WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, ready.InstallationID, ready.Sequence, "start-candidate-panel", func() error { close(entered); <-release; return nil })
 	}()
 	select {
 	case <-entered:
@@ -117,7 +117,7 @@ func TestSelfUpdateStopSerializesWithActualEffectBegin(t *testing.T) {
 		t.Fatal(err)
 	}
 	late := false
-	if err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, ready.Sequence, "late-child", func() error { late = true; return nil }); !errors.Is(err, ErrSelfUpdateStopped) || late {
+	if err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, ready.InstallationID, ready.Sequence, "late-child", func() error { late = true; return nil }); !errors.Is(err, ErrSelfUpdateStopped) || late {
 		t.Fatal("late begin passed Stop admission", late, err)
 	}
 }
@@ -156,7 +156,7 @@ func TestSelfUpdateStopInterruptedReceiptFencesAndMatchingRetrySettles(t *testin
 				t.Fatal("interruption not reported", err)
 			}
 			called := false
-			if err = WithSelfUpdateEffectAdmission(context.Background(), path, controlOtherID, 1, "start-candidate-panel", func() error { called = true; return nil }); err == nil || called {
+			if err = WithSelfUpdateEffectAdmission(context.Background(), path, controlOtherID, controlOtherID, 1, "start-candidate-panel", func() error { called = true; return nil }); err == nil || called {
 				t.Fatal("partial Stop authorized begin", err)
 			}
 			r, err := RequestSelfUpdateStop(context.Background(), path, controlTestID, 12)
@@ -217,7 +217,7 @@ func TestSelfUpdateStopCorruptUnknownAndIncompleteNeverAuthorize(t *testing.T) {
 				t.Fatal("unknown reader outcome", err)
 			}
 			started := false
-			if err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, 1, "start-candidate-panel", func() error { started = true; return nil }); err == nil || started {
+			if err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, controlOtherID, 1, "start-candidate-panel", func() error { started = true; return nil }); err == nil || started {
 				t.Fatal("unknown control admitted effect", err)
 			}
 			if _, err := InitializeSelfUpdateControl(context.Background(), path); err == nil {
@@ -275,11 +275,11 @@ func TestSelfUpdateStopStrictIdentityAndCallbackValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, effect := range []string{"", "Start", "start /tmp/foreign", strings.Repeat("a", 65)} {
-		if err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, r.Sequence, effect, func() error { t.Fatal("bad effect invoked"); return nil }); !errors.Is(err, ErrSelfUpdateStopChanged) {
+		if err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, r.InstallationID, r.Sequence, effect, func() error { t.Fatal("bad effect invoked"); return nil }); !errors.Is(err, ErrSelfUpdateStopChanged) {
 			t.Fatal(effect, err)
 		}
 	}
-	if err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, r.Sequence, "start-candidate-panel", nil); !errors.Is(err, ErrSelfUpdateStopChanged) {
+	if err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, r.InstallationID, r.Sequence, "start-candidate-panel", nil); !errors.Is(err, ErrSelfUpdateStopChanged) {
 		t.Fatal(err)
 	}
 }
@@ -295,7 +295,7 @@ func TestSelfUpdateReadyMissingMarkerCannotBeRecreatedForAdmission(t *testing.T)
 		t.Fatal(err)
 	}
 	called := false
-	if err = WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, r.Sequence, "start-candidate-panel", func() error { called = true; return nil }); !errors.Is(err, ErrSelfUpdateStopJournal) || called {
+	if err = WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, r.InstallationID, r.Sequence, "start-candidate-panel", func() error { called = true; return nil }); !errors.Is(err, ErrSelfUpdateStopJournal) || called {
 		t.Fatal("missing marker restored effect authority", called, err)
 	}
 	if _, err = InitializeSelfUpdateControl(context.Background(), path); !errors.Is(err, ErrSelfUpdateStopJournal) {
@@ -306,5 +306,25 @@ func TestSelfUpdateReadyMissingMarkerCannotBeRecreatedForAdmission(t *testing.T)
 	}
 	if _, err = os.Lstat(marker); !os.IsNotExist(err) {
 		t.Fatal("missing marker was recreated", err)
+	}
+}
+
+func TestSelfUpdateAdmissionRejectsSameEpochFromAnotherInstallation(t *testing.T) {
+	ctx := context.Background()
+	first, err := InitializeSelfUpdateControl(ctx, controlTestRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := controlTestRoot(t)
+	second, err := InitializeSelfUpdateControl(ctx, path)
+	if err != nil || first.InstallationID == second.InstallationID || first.Sequence != second.Sequence {
+		t.Fatal(first, second, err)
+	}
+	called := false
+	if err = WithSelfUpdateEffectAdmission(ctx, path, controlTestID, first.InstallationID, first.Sequence, "start-candidate-panel", func() error { called = true; return nil }); !errors.Is(err, ErrSelfUpdateStopChanged) || called {
+		t.Fatal("stale installation review admitted", called, err)
+	}
+	if err = WithSelfUpdateEffectAdmission(ctx, path, controlTestID, second.InstallationID, second.Sequence, "start-candidate-panel", func() error { called = true; return nil }); err != nil || !called {
+		t.Fatal("current installation refused", called, err)
 	}
 }

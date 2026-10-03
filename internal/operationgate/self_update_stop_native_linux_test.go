@@ -21,7 +21,8 @@ func TestNativeSelfUpdateControlChild(t *testing.T) {
 	}
 	path := os.Getenv("RAZVILKA_CONTROL_TEST_ROOT")
 	if mode == "hold-admission" {
-		err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, 1, "start-candidate-panel", func() error {
+		identity := os.Getenv("RAZVILKA_CONTROL_TEST_INSTALLATION")
+		err := WithSelfUpdateEffectAdmission(context.Background(), path, controlTestID, identity, 1, "start-candidate-panel", func() error {
 			fmt.Println("admitted")
 			var release [1]byte
 			_, err := io.ReadFull(os.Stdin, release[:])
@@ -47,13 +48,14 @@ func TestNativeSelfUpdateControlChild(t *testing.T) {
 
 func TestNativeSelfUpdateStopCrossProcessAdmission(t *testing.T) {
 	path := controlTestRoot(t)
-	if _, err := InitializeSelfUpdateControl(context.Background(), path); err != nil {
+	ready, err := InitializeSelfUpdateControl(context.Background(), path)
+	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestNativeSelfUpdateControlChild$")
-	cmd.Env = append(os.Environ(), "RAZVILKA_CONTROL_TEST_MODE=hold-admission", "RAZVILKA_CONTROL_TEST_ROOT="+path)
+	cmd.Env = append(os.Environ(), "RAZVILKA_CONTROL_TEST_MODE=hold-admission", "RAZVILKA_CONTROL_TEST_ROOT="+path, "RAZVILKA_CONTROL_TEST_INSTALLATION="+ready.InstallationID)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +97,7 @@ func TestNativeSelfUpdateStopCrossProcessAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	late := false
-	if err = WithSelfUpdateEffectAdmission(ctx, path, controlOtherID, 1, "late-child", func() error { late = true; return nil }); !errors.Is(err, ErrSelfUpdateStopped) || late {
+	if err = WithSelfUpdateEffectAdmission(ctx, path, controlOtherID, ready.InstallationID, 1, "late-child", func() error { late = true; return nil }); !errors.Is(err, ErrSelfUpdateStopped) || late {
 		t.Fatal("Stop allowed later admitted child", late, err)
 	}
 }
@@ -104,20 +106,21 @@ func TestNativeSelfUpdateStopCrashBoundariesPreserveInhibition(t *testing.T) {
 	for _, boundary := range []string{"stop-current-durable", "stop-intent-durable"} {
 		t.Run(boundary, func(t *testing.T) {
 			path := controlTestRoot(t)
-			if _, err := InitializeSelfUpdateControl(context.Background(), path); err != nil {
+			ready, err := InitializeSelfUpdateControl(context.Background(), path)
+			if err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestNativeSelfUpdateControlChild$")
 			cmd.Env = append(os.Environ(), "RAZVILKA_CONTROL_TEST_MODE=crash-stop", "RAZVILKA_CONTROL_TEST_ROOT="+path, "RAZVILKA_CONTROL_TEST_BOUNDARY="+boundary)
-			err := cmd.Run()
+			err = cmd.Run()
 			var exit *exec.ExitError
 			if !errors.As(err, &exit) || exit.ExitCode() != 73 {
 				t.Fatal("crash boundary not reached", err)
 			}
 			called := false
-			if err = WithSelfUpdateEffectAdmission(ctx, path, controlTestID, 1, "start-rollback-panel", func() error { called = true; return nil }); err == nil || called {
+			if err = WithSelfUpdateEffectAdmission(ctx, path, controlTestID, ready.InstallationID, 1, "start-rollback-panel", func() error { called = true; return nil }); err == nil || called {
 				t.Fatal("crashed revocation authorized rollback startup", err)
 			}
 			r, err := RequestSelfUpdateStop(ctx, path, controlTestID, 12)
