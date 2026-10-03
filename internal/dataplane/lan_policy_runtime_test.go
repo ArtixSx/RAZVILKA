@@ -198,6 +198,59 @@ func TestLANPolicyRuntimeAnchorAndChainDeletionWaitForAllReferences(t *testing.T
 			break
 		}
 	}
+	reader = lanRuntimeReadFixture(p)
+	r = runtimeWithReadRunner(reader)
+	for _, e := range effects {
+		if len(e.Add) > 3 && e.Add[2] == "-A" {
+			if err := r.BeforeDelete(context.Background(), p, e); err == nil {
+				t.Fatal("body mutation allowed with late identical attachment")
+			}
+			break
+		}
+	}
+}
+
+func TestLANPolicyRuntimeSelectedMACMembershipAndBoundedDependencies(t *testing.T) {
+	base := lanRuntimeFixture(t)
+	g := base.Ingress[0]
+	g.IncludedMACs = []string{"02:00:00:00:00:02"}
+	g.Membership = "mac"
+	p, err := CompileLANPolicyRuntime(base.Generation, []LANPolicyIngress{g})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range lanPolicyChains(p) {
+		positive := 0
+		for _, rule := range c.rules {
+			if strings.Contains(strings.Join(rule, " "), "--set-xmark 0x20000000/") {
+				positive++
+				if !strings.Contains(strings.Join(rule, " "), "--mac-source 02:00:00:00:00:02") {
+					t.Fatal("unknown MAC inherits selection")
+				}
+			}
+		}
+		if positive != 1 {
+			t.Fatal("missing whole-prefix MAC admission for future IPv6", positive)
+		}
+	}
+	effects, err := p.Effects()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range effects {
+		for _, need := range e.Needs {
+			if need < 0 || need >= i {
+				t.Fatal("non-causal effect dependency")
+			}
+		}
+		if e.Tool != "ip" && e.Add[2] == "-I" && len(e.Needs) < 6 {
+			t.Fatal("published without both-family prerequisites")
+		}
+	}
+	g.IncludedMACs = nil
+	if _, err := CompileLANPolicyRuntime(base.Generation, []LANPolicyIngress{g}); err == nil {
+		t.Fatal("empty positive MAC list became all")
+	}
 }
 
 func TestLANPolicyRuntimeReceiptInspectorDoesNotRequireCurrentReviewForCleanup(t *testing.T) {
@@ -232,8 +285,22 @@ func TestLANPolicyRuntimePreflightCollisionAndNoEffectBeforeAdmission(t *testing
 			}
 		})
 	}
-	reader := &lanRuntimeReadRunner{ip: map[string]string{"-4": "100: from all fwmark 0x1234/0xffff lookup 4096\n"}, firewall: map[string]string{}}
+	reader := &lanRuntimeReadRunner{ip: map[string]string{"-4": "100: from all fwmark 0x1234/0xffff lookup 4096 proto 3\n"}, firewall: map[string]string{}}
 	if err := runtimeWithReadRunner(reader).Preflight(context.Background(), p); err != nil {
 		t.Fatal("disjoint firmware bits rejected", err)
+	}
+	reader = lanRuntimeReadFixture(p)
+	reader.ip["-4"] += "100: from all fwmark 0x1234/0xffff lookup 4096 proto 3\n"
+	r := runtimeWithReadRunner(reader)
+	if err := r.Verify(context.Background(), p); err != nil {
+		t.Fatal("numeric protocol spelling rejected", err)
+	}
+	effects, _ := p.Effects()
+	if _, foreign, err := r.InspectEffect(context.Background(), p, effects[0]); err != nil || foreign {
+		t.Fatal("cleanup rejected disjoint protocol", err)
+	}
+	reader.ip["-4"] += "101: from all lookup 4096 proto 999\n"
+	if err := r.Verify(context.Background(), p); err == nil {
+		t.Fatal("unbounded protocol accepted")
 	}
 }

@@ -33,6 +33,8 @@ type LANPolicyIngress struct {
 	SegmentID       string   `json:"segment_id"`
 	Interface       string   `json:"interface"`
 	Sources         []string `json:"sources"`
+	Membership      string   `json:"membership"` // all or mac; empty is normalized only by compiler
+	IncludedMACs    []string `json:"included_macs,omitempty"`
 	ExcludedSources []string `json:"excluded_sources,omitempty"`
 	ExcludedMACs    []string `json:"excluded_macs,omitempty"`
 }
@@ -48,16 +50,28 @@ type LANPolicyRuntimePlan struct {
 
 func CompileLANPolicyRuntime(generation string, ingress []LANPolicyIngress) (*LANPolicyRuntimePlan, error) {
 	p := &LANPolicyRuntimePlan{Schema: 1, Generation: generation, Ingress: cloneLANPolicyIngress(ingress)}
+	for i := range p.Ingress {
+		if p.Ingress[i].Membership == "" {
+			p.Ingress[i].Membership = "all"
+			if len(p.Ingress[i].IncludedMACs) > 0 {
+				p.Ingress[i].Membership = "mac"
+			}
+		}
+	}
 	if err := validateLANPolicyRuntime(p, false); err != nil {
 		return nil, err
 	}
 	for i := range p.Ingress {
 		sort.Strings(p.Ingress[i].Sources)
+		sort.Strings(p.Ingress[i].IncludedMACs)
 		sort.Strings(p.Ingress[i].ExcludedSources)
 		sort.Strings(p.Ingress[i].ExcludedMACs)
 	}
 	sort.Slice(p.Ingress, func(i, j int) bool { return p.Ingress[i].Interface < p.Ingress[j].Interface })
 	p.Digest = lanPolicyDigest(p)
+	if _, err := p.Effects(); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -74,6 +88,7 @@ func cloneLANPolicyIngress(v []LANPolicyIngress) []LANPolicyIngress {
 	out := slices.Clone(v)
 	for i := range out {
 		out[i].Sources = slices.Clone(out[i].Sources)
+		out[i].IncludedMACs = slices.Clone(out[i].IncludedMACs)
 		out[i].ExcludedSources = slices.Clone(out[i].ExcludedSources)
 		out[i].ExcludedMACs = slices.Clone(out[i].ExcludedMACs)
 	}
@@ -101,7 +116,7 @@ func validateLANPolicyRuntime(p *LANPolicyRuntimePlan, sealed bool) error {
 	interfaces, segments := map[string]bool{}, map[string]bool{}
 	total := 0
 	for _, g := range p.Ingress {
-		if g.SegmentID == "" || len(g.SegmentID) > 128 || !proxyFirewallInterface.MatchString(g.Interface) || strings.Contains(g.Interface, "+") || g.Interface == "lo" || interfaces[g.Interface] || segments[g.SegmentID] || len(g.Sources) == 0 || len(g.Sources) > 1024 || len(g.ExcludedSources) > 128 || len(g.ExcludedMACs) > 128 {
+		if g.SegmentID == "" || len(g.SegmentID) > 128 || !proxyFirewallInterface.MatchString(g.Interface) || strings.Contains(g.Interface, "+") || g.Interface == "lo" || interfaces[g.Interface] || segments[g.SegmentID] || len(g.Sources) == 0 || len(g.Sources) > 1024 || len(g.ExcludedSources) > 128 || len(g.ExcludedMACs) > 128 || len(g.IncludedMACs) > 512 || !slices.Contains([]string{"all", "mac"}, g.Membership) || g.Membership == "mac" && len(g.IncludedMACs) == 0 || g.Membership == "all" && len(g.IncludedMACs) > 0 {
 			return ErrLANPolicyRuntime
 		}
 		for _, owner := range PolicyOwnershipSpecs() {
@@ -120,15 +135,17 @@ func validateLANPolicyRuntime(p *LANPolicyRuntimePlan, sealed bool) error {
 				seen[value] = true
 			}
 		}
-		seen := map[string]bool{}
-		for _, mac := range g.ExcludedMACs {
-			hw, err := net.ParseMAC(mac)
-			if err != nil || len(hw) != 6 || hw[0]&1 != 0 || hw.String() == "00:00:00:00:00:00" || strings.ToUpper(hw.String()) != mac || seen[mac] {
-				return ErrLANPolicyRuntime
+		for _, list := range [][]string{g.ExcludedMACs, g.IncludedMACs} {
+			seen := map[string]bool{}
+			for _, mac := range list {
+				hw, err := net.ParseMAC(mac)
+				if err != nil || len(hw) != 6 || hw[0]&1 != 0 || hw.String() == "00:00:00:00:00:00" || strings.ToUpper(hw.String()) != mac || seen[mac] {
+					return ErrLANPolicyRuntime
+				}
+				seen[mac] = true
 			}
-			seen[mac] = true
 		}
-		total += len(g.Sources) + len(g.ExcludedSources) + len(g.ExcludedMACs)
+		total += len(g.Sources) + len(g.ExcludedSources) + len(g.ExcludedMACs) + len(g.IncludedMACs)
 	}
 	if total > 2048 {
 		return ErrLANPolicyRuntime
@@ -149,6 +166,7 @@ type LANPolicyEffect struct {
 	Tool   string   `json:"tool"`
 	Add    []string `json:"add"`
 	Delete []string `json:"delete"`
+	Needs  []int    `json:"needs,omitempty"`
 }
 
 type lanPolicyChain struct {
@@ -181,7 +199,13 @@ func lanPolicyChains(p *LANPolicyRuntimePlan) []lanPolicyChain {
 			c.rules = append(c.rules, []string{"-m", "mark", "--mark", "0x08000000/0x08000000", "-j", "RETURN"})
 			for _, value := range g.Sources {
 				if strings.Contains(value, ":") == (family == 6) {
-					c.rules = append(c.rules, []string{"-s", value, "-j", "MARK", "--set-xmark", "0x20000000/0x28000000"})
+					if g.Membership == "mac" {
+						for _, mac := range g.IncludedMACs {
+							c.rules = append(c.rules, []string{"-s", value, "-m", "mac", "--mac-source", mac, "-j", "MARK", "--set-xmark", "0x20000000/0x28000000"})
+						}
+					} else {
+						c.rules = append(c.rules, []string{"-s", value, "-j", "MARK", "--set-xmark", "0x20000000/0x28000000"})
+					}
 				}
 			}
 			c.rules = append(c.rules, append(LANPolicyMatch(), "-j", "RETURN"))
@@ -208,18 +232,38 @@ func (p *LANPolicyRuntimePlan) Effects() ([]LANPolicyEffect, error) {
 		return nil, err
 	}
 	var effects []LANPolicyEffect
+	count := 0
+	for _, g := range p.Ingress {
+		count += 2*(6+len(g.ExcludedMACs)) + len(g.ExcludedSources) + len(g.Sources)*max(1, len(g.IncludedMACs))
+	}
+	if count+2+2*len(p.Ingress) > 4096 {
+		return nil, ErrLANPolicyRuntime
+	}
+	ready := []int{}
+	anchors := map[int]int{}
 	for _, rule := range lanPolicyRules(p) {
-		effects = append(effects, LANPolicyEffect{"ip", rule.args("add"), rule.args("del")})
+		idx := len(effects)
+		needs := []int(nil)
+		if rule.action == "nop" {
+			anchors[rule.family] = idx
+		} else {
+			needs = []int{anchors[rule.family]}
+		}
+		effects = append(effects, LANPolicyEffect{Tool: "ip", Add: rule.args("add"), Delete: rule.args("del"), Needs: needs})
+		ready = append(ready, idx)
 	}
 	for _, c := range lanPolicyChains(p) {
 		tool := "iptables"
 		if c.family == 6 {
 			tool = "ip6tables"
 		}
-		effects = append(effects, LANPolicyEffect{tool, []string{"-t", "mangle", "-N", c.name}, []string{"-t", "mangle", "-X", c.name}})
+		previous := len(effects)
+		effects = append(effects, LANPolicyEffect{Tool: tool, Add: []string{"-t", "mangle", "-N", c.name}, Delete: []string{"-t", "mangle", "-X", c.name}})
 		for _, rule := range c.rules {
-			effects = append(effects, LANPolicyEffect{tool, append([]string{"-t", "mangle", "-A", c.name}, rule...), append([]string{"-t", "mangle", "-D", c.name}, rule...)})
+			effects = append(effects, LANPolicyEffect{Tool: tool, Add: append([]string{"-t", "mangle", "-A", c.name}, rule...), Delete: append([]string{"-t", "mangle", "-D", c.name}, rule...), Needs: []int{previous}})
+			previous = len(effects) - 1
 		}
+		ready = append(ready, previous)
 	}
 	// Publish ingress only after both families and every anchor are prepared.
 	for _, c := range lanPolicyChains(p) {
@@ -227,7 +271,7 @@ func (p *LANPolicyRuntimePlan) Effects() ([]LANPolicyEffect, error) {
 		if c.family == 6 {
 			tool = "ip6tables"
 		}
-		effects = append(effects, LANPolicyEffect{tool, append([]string{"-t", "mangle", "-I", "PREROUTING", "1"}, c.jump...), append([]string{"-t", "mangle", "-D", "PREROUTING"}, c.jump...)})
+		effects = append(effects, LANPolicyEffect{Tool: tool, Add: append([]string{"-t", "mangle", "-I", "PREROUTING", "1"}, c.jump...), Delete: append([]string{"-t", "mangle", "-D", "PREROUTING"}, c.jump...), Needs: slices.Clone(ready)})
 	}
 	if len(effects) > 4096 {
 		return nil, ErrLANPolicyRuntime

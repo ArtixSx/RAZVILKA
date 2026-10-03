@@ -290,7 +290,7 @@ func lanPolicyRuleSyntax(line string) bool {
 	for i := 1; i < len(f); i++ {
 		switch f[i] {
 		case "not", "nop", "blackhole", "unreachable", "prohibit", "l3mdev":
-		case "from", "to", "fwmark", "iif", "oif", "goto", "lookup", "table", "tos", "dsfield", "uidrange", "ipproto", "sport", "dport", "suppress_prefixlength", "suppress_ifgroup", "protocol", "realms":
+		case "from", "to", "fwmark", "iif", "oif", "goto", "lookup", "table", "tos", "dsfield", "uidrange", "ipproto", "sport", "dport", "suppress_prefixlength", "suppress_ifgroup", "protocol", "proto", "realms":
 			kind := f[i]
 			i++
 			if i >= len(f) {
@@ -301,6 +301,11 @@ func lanPolicyRuleSyntax(line string) bool {
 					continue
 				}
 				if n, err := strconv.ParseUint(f[i], 10, 32); err != nil || n == 0 {
+					return false
+				}
+			}
+			if kind == "proto" {
+				if n, err := strconv.ParseUint(f[i], 10, 8); err != nil || n == 0 {
 					return false
 				}
 			}
@@ -345,7 +350,7 @@ func (r *LANPolicyRuntime) BeforeDelete(ctx context.Context, p *LANPolicyRuntime
 		}
 		return nil
 	}
-	if len(e.Add) > 3 && e.Add[2] == "-N" {
+	if len(e.Add) > 3 && (e.Add[2] == "-N" || e.Add[2] == "-A") {
 		text, err := r.read(ctx, e.Tool, "-t", "mangle", "-S")
 		if err != nil {
 			return err
@@ -353,7 +358,7 @@ func (r *LANPolicyRuntime) BeforeDelete(ctx context.Context, p *LANPolicyRuntime
 		name := e.Add[3]
 		for _, line := range strings.Split(text, "\n") {
 			f := strings.Fields(line)
-			if len(f) > 2 && f[0] == "-A" && f[1] == name {
+			if e.Add[2] == "-N" && len(f) > 2 && f[0] == "-A" && f[1] == name {
 				return ErrLANPolicyRuntime
 			}
 			for i := 2; i+1 < len(f); i++ {
@@ -394,7 +399,7 @@ func (r *LANPolicyRuntime) InspectEffect(ctx context.Context, p *LANPolicyRuntim
 	}
 	valid := false
 	for _, expected := range effects {
-		if expected.Tool == effect.Tool && slices.Equal(expected.Add, effect.Add) && slices.Equal(expected.Delete, effect.Delete) {
+		if expected.Tool == effect.Tool && slices.Equal(expected.Add, effect.Add) && slices.Equal(expected.Delete, effect.Delete) && slices.Equal(expected.Needs, effect.Needs) {
 			valid = true
 			break
 		}
