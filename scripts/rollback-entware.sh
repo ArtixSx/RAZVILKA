@@ -288,13 +288,17 @@ fi
 # A registration can complete its local checkpoint during graceful shutdown.
 require_legacy_file_protocol_free
 # No files have changed yet, so a compatibility refusal can restart this app.
-if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && ! require_native_enrollment_schema "$BACKUP/razvilka.bin"; then
-  if [ "$CURRENT_WAS_RUNNING" -eq 1 ]; then
-    RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the unchanged RAZVILKA process" >&2
-  fi
+restart_unchanged_after_compatibility_refusal() {
+  [ "$CURRENT_WAS_RUNNING" -eq 1 ] || return 0
+  # Stop or a retained managed protocol can appear during the target check.
+  # Only the legacy path with no such authority may restart unchanged files.
+  require_legacy_file_protocol_free || return 0
+  RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the unchanged RAZVILKA process" >&2
+}
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && { ! require_native_enrollment_schema "$BACKUP/razvilka.bin" || ! require_node_history_compatibility "$BACKUP/razvilka.bin"; }; then
+  restart_unchanged_after_compatibility_refusal
   exit 1
 fi
-if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then require_node_history_compatibility "$BACKUP/razvilka.bin"; fi
 if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
   RECOVERY_OUTPUT="$("$BINDIR/razvilka" -recover-private-restore \
     -config "$APPDIR/config.json" \
@@ -311,13 +315,10 @@ fi
 # Settling a pending restore can materialize a native image that was absent
 require_legacy_file_protocol_free
 # before recovery. Recheck before deactivating or replacing the current app.
-if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && ! require_native_enrollment_schema "$BACKUP/razvilka.bin"; then
-  if [ "$CURRENT_WAS_RUNNING" -eq 1 ]; then
-    RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the unchanged RAZVILKA process" >&2
-  fi
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && { ! require_native_enrollment_schema "$BACKUP/razvilka.bin" || ! require_node_history_compatibility "$BACKUP/razvilka.bin"; }; then
+  restart_unchanged_after_compatibility_refusal
   exit 1
 fi
-if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then require_node_history_compatibility "$BACKUP/razvilka.bin"; fi
 if [ -x "$BINDIR/razvilka" ]; then
   "$BINDIR/razvilka" -deactivate-dataplane \
     -stage "$STATEDIR/staging" \
