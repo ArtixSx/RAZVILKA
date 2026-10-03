@@ -62,7 +62,11 @@ await test('401 cancels sibling results and opens login',async()=>{
 await test('post-write readback rejects a late pre-write snapshot',async()=>{
  const f=fixture(),slow=deferred();let committed=false;
  f.handler(url=>url==='/api/v1/services'?(committed?[{id:'new'}]:slow.promise):f.normal(url));
- const first=f.ctx.refreshAll();await flush();committed=true;await f.ctx.refreshAfterMutation();slow.resolve([{id:'old'}]);await first;assert.equal(f.state.services[0].id,'new');
+ const first=f.ctx.refreshAll();await flush();const oldRead=f.calls.find(call=>call.url==='/api/v1/services'),epoch=f.ctx.panelReads.epoch;
+ assert.equal(oldRead.opt.signal.aborted,false);committed=true;await f.ctx.refreshAfterMutation();
+ assert(f.ctx.panelReads.epoch>epoch,'mutation refresh did not invalidate the shared read epoch');
+ assert.equal(oldRead.opt.signal.aborted,true,'mutation refresh did not abort the old shared transport');
+ slow.resolve([{id:'old'}]);await first;assert.equal(f.state.services[0].id,'new');
 });
 await test('one renderer failure does not suppress completed sibling reads',async()=>{
  const f=fixture();f.ctx.renderStatus=()=>{throw new Error('status render');};f.ctx.renderInterface=()=>{throw new Error('interface render');};
