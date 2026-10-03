@@ -15,6 +15,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/security"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 type engineNodeFixture struct {
@@ -149,7 +150,7 @@ func TestNodeEngineHTTPRejectsWrongProofWithoutRecordOrFallback(t *testing.T) {
 }
 
 func TestNodeEngineHTTPEarlyErrorsAndHistoryGateDoNotObserve(t *testing.T) {
-	for _, failure := range []string{"unsupported", "runtime", "busy", "network", "missing-history-gate", "revoked-history-gate", "network-after-check"} {
+	for _, failure := range []string{"unsupported", "runtime", "busy", "network", "missing-history-gate", "retained-reader-one", "revoked-history-gate", "network-after-check"} {
 		t.Run(failure, func(t *testing.T) {
 			a, sing, xray, id := engineNodeHTTPFixture(t)
 			before, _ := a.Nodes.Snapshot(context.Background(), time.Now())
@@ -169,6 +170,9 @@ func TestNodeEngineHTTPEarlyErrorsAndHistoryGateDoNotObserve(t *testing.T) {
 				want = 409
 			case "missing-history-gate":
 				a.NodeHistoryWriteGuard = nil
+				calls = 0
+			case "retained-reader-one":
+				a.NodeHistoryWriteGuard = func(context.Context, int) error { return updatecheck.ErrNodeHistoryAdmission }
 				calls = 0
 			case "revoked-history-gate":
 				n := 0
