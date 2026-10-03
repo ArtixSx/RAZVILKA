@@ -532,6 +532,9 @@ func TestProxyForwardingCommitRecoveryRefreshAndDeactivateShareOwnership(t *test
 		}
 	}
 	transaction := t.TempDir()
+	if err := os.Chmod(transaction, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	policy, _ := json.Marshal(state)
 	snapshot, _ := json.Marshal(proxySnapshot{ConfigPath: filepath.Join(transaction, "global.json")})
 	for path, data := range map[string][]byte{filepath.Join(transaction, "policy.staged.json"): policy, filepath.Join(transaction, "snapshot.json"): snapshot} {

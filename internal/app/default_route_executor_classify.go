@@ -50,7 +50,7 @@ func (c *DefaultRouteCompilation) Classify(flow DefaultRouteFlow) DefaultRouteDe
 	if gate == nil {
 		return d
 	}
-	if len(gate.ExcludedMACs) > 0 {
+	if len(gate.ExcludedMACs) > 0 || len(gate.IncludedMACs) > 0 {
 		mac, err := net.ParseMAC(flow.MAC)
 		if err != nil || len(mac) != 6 || mac[0]&1 != 0 || mac.String() == "00:00:00:00:00:00" {
 			d.Kind = DefaultRouteRefused
@@ -58,6 +58,9 @@ func (c *DefaultRouteCompilation) Classify(flow DefaultRouteFlow) DefaultRouteDe
 		}
 		if slices.Contains(gate.ExcludedMACs, mac.String()) {
 			d.Kind = DefaultRouteExcluded
+			return d
+		}
+		if len(gate.IncludedMACs) > 0 && !slices.Contains(gate.IncludedMACs, mac.String()) {
 			return d
 		}
 	}

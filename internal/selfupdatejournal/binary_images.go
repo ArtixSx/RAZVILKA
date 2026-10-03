@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"path/filepath"
+	"runtime"
 	"strconv"
 )
 
@@ -35,11 +36,34 @@ func (s *Store) RetainedBinaryImages(ctx context.Context) ([]BinaryImage, error)
 	}
 	var images []BinaryImage
 	found := false
+	marker := false
+	transactions := 0
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if entry.Name() == "current.json" || entry.Name() == ".writer.lock" {
+		if entry.Name() == ".writer.lock" {
+			info, err := s.journal.Stat(entry.Name())
+			data, readErr := s.journal.ReadLimited(entry.Name(), 64)
+			if err != nil || readErr != nil || !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 || string(data) != "RAZVILKA self update writer v1\n" {
+				return nil, ErrMismatch
+			}
+			marker = true
+			continue
+		}
+		if entry.Name() == "current.json" {
+			data, err := s.journal.ReadLimited(entry.Name(), 4096)
+			var pointer struct {
+				Schema int    `json:"schema"`
+				ID     string `json:"id"`
+			}
+			if err != nil || decode(data, &pointer) != nil || pointer.ID != current.ID || (pointer.Schema != 1 && pointer.Schema != Schema) {
+				return nil, ErrMismatch
+			}
+			canonical, _ := json.Marshal(pointer)
+			if !bytes.Equal(data, canonical) {
+				return nil, ErrMismatch
+			}
 			continue
 		}
 		if !entry.IsDir() || !idPattern.MatchString(entry.Name()) {
@@ -60,21 +84,27 @@ func (s *Store) RetainedBinaryImages(ctx context.Context) ([]BinaryImage, error)
 		if receipt.ID == current.ID {
 			found = true
 		}
+		transactions++
 		if err := s.verifyImages(receipt); err != nil {
 			return nil, err
 		}
+		binaries := 0
 		for i, file := range receipt.Files {
 			if file.Target != "bin/razvilka" {
 				continue
 			}
+			binaries++
 			base := filepath.Join(s.journalFiles.Name(), receipt.ID)
 			if file.OldPresent {
 				images = append(images, BinaryImage{filepath.Join(base, "old-"+strconv.Itoa(i)), file.OldHash})
 			}
 			images = append(images, BinaryImage{filepath.Join(base, "new-"+strconv.Itoa(i)), file.NewHash})
 		}
+		if binaries != 1 {
+			return nil, ErrMismatch
+		}
 	}
-	if present && (!found || current.Pending()) || !present && len(images) > 0 {
+	if present && (!found || current.Pending()) || transactions > 0 && (!present || !marker) {
 		return nil, ErrPending
 	}
 	if err := ctx.Err(); err != nil {

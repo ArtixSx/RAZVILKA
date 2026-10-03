@@ -69,6 +69,7 @@ type DefaultRouteRule struct {
 type DefaultRouteIngress struct {
 	SegmentID, Interface string
 	Sources              []netip.Prefix
+	IncludedMACs         []string // nonempty for selected devices / known-device base mode
 	ExcludedSources      []netip.Prefix
 	ExcludedMACs         []string
 }
@@ -94,6 +95,7 @@ func (c *DefaultRouteCompilation) Ingress() []DefaultRouteIngress {
 	result := slices.Clone(c.ingress)
 	for i := range result {
 		result[i].Sources = slices.Clone(result[i].Sources)
+		result[i].IncludedMACs = slices.Clone(result[i].IncludedMACs)
 		result[i].ExcludedSources = slices.Clone(result[i].ExcludedSources)
 		result[i].ExcludedMACs = slices.Clone(result[i].ExcludedMACs)
 	}
@@ -301,7 +303,7 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 	}
 	addresses := map[string][]netip.Addr{}
 	for _, d := range c.snapshot.Devices {
-		if _, duplicate := addresses[d.ID]; duplicate || len(d.Addresses) == 0 || len(d.Addresses) > 32 {
+		if _, duplicate := addresses[d.ID]; duplicate || len(d.Addresses) > 32 {
 			return dataplane.ErrReviewChanged
 		}
 		binding, ok := bindings[d.ID]
@@ -326,25 +328,19 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 				return dataplane.ErrReviewChanged
 			}
 		}
-		if p.Clients.Mode == "lan_except" && p.Clients.NewDevices == "inherit" {
-			gate.Sources = slices.Clone(s.Prefixes)
-		} else {
+		gate.Sources = defaultRouteUniquePrefixes(s.Prefixes)
+		if p.Clients.Mode == "selected_devices" || p.Clients.NewDevices == "base" {
 			for deviceID, binding := range bindings {
 				if binding.SegmentID != id || !binding.Confirmed || binding.Interface != s.Interface || p.Clients.Mode == "selected_devices" && !slices.Contains(p.Clients.DeviceIDs, deviceID) {
 					continue
 				}
-				if len(addresses[deviceID]) == 0 {
-					return dataplane.ErrReviewChanged
-				}
-				for _, ip := range addresses[deviceID] {
-					if !defaultRouteContains(s.Prefixes, ip) {
-						return dataplane.ErrReviewChanged
-					}
-					gate.Sources = append(gate.Sources, netip.PrefixFrom(ip, ip.BitLen()))
-					if len(gate.Sources) > defaultRouteRuleLimit {
-						return defaultRouteBound()
-					}
-				}
+				mac, _ := net.ParseMAC(binding.MAC) // validated above
+				gate.IncludedMACs = append(gate.IncludedMACs, mac.String())
+			}
+			// An empty whitelist never becomes catch-all. Leave that segment
+			// outside the compiled scope until a confirmed member is present.
+			if len(gate.IncludedMACs) == 0 {
+				continue
 			}
 		}
 		negative, err := defaultRouteParsePrefixes(p.Clients.ExcludedCIDRs, false)
@@ -354,7 +350,7 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 		for _, deviceID := range p.Clients.ExcludedDeviceIDs {
 			binding, ok := bindings[deviceID]
 			mac, err := net.ParseMAC(binding.MAC)
-			if !ok || !binding.Confirmed || err != nil || len(mac) != 6 || mac[0]&1 != 0 || mac.String() == "00:00:00:00:00:00" || len(addresses[deviceID]) == 0 {
+			if !ok || !binding.Confirmed || err != nil || len(mac) != 6 || mac[0]&1 != 0 || mac.String() == "00:00:00:00:00:00" {
 				return dataplane.ErrReviewChanged
 			}
 			if binding.SegmentID != id {
@@ -376,6 +372,7 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 		// small-router bounds, and still cannot exclude new device addresses.
 		gate.Sources = defaultRouteUniquePrefixes(gate.Sources)
 		gate.ExcludedSources = defaultRouteIntersections(gate.Sources, negative)
+		slices.Sort(gate.IncludedMACs)
 		slices.Sort(gate.ExcludedMACs)
 		if len(gate.Sources) != 0 {
 			c.ingress = append(c.ingress, gate)
@@ -383,7 +380,7 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 	}
 	for _, id := range p.Clients.DeviceIDs {
 		binding, ok := bindings[id]
-		if !ok || !binding.Confirmed || !slices.Contains(p.Clients.SegmentIDs, binding.SegmentID) || len(addresses[id]) == 0 {
+		if !ok || !binding.Confirmed || !slices.Contains(p.Clients.SegmentIDs, binding.SegmentID) {
 			return dataplane.ErrReviewChanged
 		}
 	}
