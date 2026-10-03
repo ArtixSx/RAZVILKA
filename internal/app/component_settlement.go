@@ -76,6 +76,8 @@ func (a *App) settleComponentRecovery(ctx context.Context, id, component string,
 	switch state.Phase {
 	case components.UpdateAccepted:
 		status, message = "succeeded", "Обновление подтверждено действующим рабочим процессом."
+	case components.UpdateAcceptedIdle:
+		status, message = "succeeded", "Установленная версия и настройки проверены; компонент не используется рабочими маршрутами."
 	case components.UpdateRolledBack:
 		message = "Предыдущая версия восстановлена и проверена после обновления."
 	case components.UpdateAbandoned:

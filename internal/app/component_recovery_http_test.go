@@ -335,6 +335,102 @@ func TestComponentTerminalHTTPFinishesOperationWithoutReplay(t *testing.T) {
 	}
 }
 
+func TestComponentInstalledIdleHTTPRequiresTrustedProofAndSettlesReceipt(t *testing.T) {
+	a, runner := componentHTTPFixture(t)
+	if err := a.updateComponent(context.Background(), "nfqws2"); !errors.Is(err, components.ErrUpdatePending) {
+		t.Fatal(err)
+	}
+	s := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer s.Close()
+	body := recoveryBody(a, "accept-installed-idle")
+	if code, _ := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 409 {
+		t.Fatal("HTTP inferred quiescence", code)
+	}
+	a.componentRecoveryChecks.quiescence = func(context.Context) error { return nil }
+	a.componentRecoveryChecks.inactive = func(context.Context, string) error { return errors.New("working routes still use component") }
+	if code, _ := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 409 {
+		t.Fatal("active package accepted idle", code)
+	}
+	a.componentRecoveryChecks.inactive = func(context.Context, string) error { return nil }
+	if code, data := componentHTTP(t, s, "GET", "/api/v1/components/recovery", nil, componentRecoveryToken, s.URL); code != 200 || !bytes.Contains(data, []byte(`"inactivity_confirmed":true`)) {
+		t.Fatalf("idle capability: %d %s", code, data)
+	}
+	a.componentRecoveryChecks.live = func(context.Context, string) error {
+		t.Error("idle acceptance invoked live proof")
+		return errors.New("not live")
+	}
+	if code, data := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 200 || !bytes.Contains(data, []byte(`"installed_idle_accepted":true`)) || !bytes.Contains(data, []byte(`"live_accepted":false`)) {
+		t.Fatalf("idle acceptance: %d %s", code, data)
+	}
+	state, pending, err := a.Components.PendingManagedUpdate()
+	if err != nil || pending || state.Phase != components.UpdateAcceptedIdle {
+		t.Fatal(state, pending, err)
+	}
+	data, err := os.ReadFile(filepath.Join(a.Components.StateDir, "operations", "nfqws2.json"))
+	if err != nil || !bytes.Contains(data, []byte(`"status":"succeeded"`)) {
+		t.Fatalf("idle receipt left running: %v %s", err, data)
+	}
+	before := len(runner.calls)
+	if code, _ := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 409 || len(runner.calls) != before {
+		t.Fatal("idle settlement replay", code)
+	}
+}
+
+func TestComponentIdleAuthorityRecheckedAfterSecondObservation(t *testing.T) {
+	a, _ := componentHTTPFixture(t)
+	if err := a.updateComponent(context.Background(), "nfqws2"); !errors.Is(err, components.ErrUpdatePending) {
+		t.Fatal(err)
+	}
+	a.componentRecoveryChecks.quiescence = func(context.Context) error { return nil }
+	observations := 0
+	a.componentRecoveryChecks.inactive = func(context.Context, string) error {
+		observations++
+		if observations == 2 {
+			return a.Store.SetSafeMode(true)
+		}
+		return nil
+	}
+	s := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer s.Close()
+	if code, _ := componentHTTP(t, s, "POST", "/api/v1/components/recovery", recoveryBody(a, "accept-installed-idle"), componentRecoveryToken, s.URL); code != 409 || !a.PendingComponentRecovery() || observations != 2 {
+		t.Fatal("SafeMode did not revoke idle acceptance", code, observations)
+	}
+}
+
+func TestComponentKnownRollbackHTTPKeepsSeparateAcceptance(t *testing.T) {
+	a, runner := componentHTTPFixture(t)
+	a.componentRecoveryChecks.inactive = func(context.Context, string) error {
+		if runner.installed == "2.0" {
+			return errors.New("candidate failed")
+		}
+		return nil
+	}
+	s := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer s.Close()
+	if code, data := componentHTTP(t, s, "POST", "/api/v1/components/nfqws2/update", nil, componentRecoveryToken, s.URL); code != 202 || !bytes.Contains(data, []byte(`"pending_rollback_acceptance":true`)) {
+		t.Fatalf("known rollback was prematurely accepted: %d %s", code, data)
+	}
+	state, pending, err := a.Components.PendingManagedUpdate()
+	if err != nil || !pending || state.Phase != components.UpdateAwaitingRollback {
+		t.Fatal(state, pending, err)
+	}
+	before := len(runner.calls)
+	a.componentRecoveryChecks.inactive = func(context.Context, string) error { return errors.New("old runtime unconfirmed") }
+	body := recoveryBody(a, "verify-rollback")
+	if code, _ := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 409 || !a.PendingComponentRecovery() {
+		t.Fatal("failed old runtime accepted", code)
+	}
+	a.componentRecoveryChecks.inactive = func(context.Context, string) error { return nil }
+	if code, data := componentHTTP(t, s, "POST", "/api/v1/components/recovery", body, componentRecoveryToken, s.URL); code != 200 {
+		t.Fatalf("independent old acceptance: %d %s", code, data)
+	}
+	for _, call := range runner.calls[before:] {
+		if strings.HasPrefix(call, "install ") || strings.HasPrefix(call, "upgrade ") {
+			t.Fatal("acceptance replayed package command", call)
+		}
+	}
+}
+
 func TestComponentUnknownHTTPRecoveryNeverReplaysUpgrade(t *testing.T) {
 	a, runner := componentHTTPFixture(t)
 	runner.unknown = true
