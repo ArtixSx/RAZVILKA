@@ -24,6 +24,7 @@ type proxyPolicyReceipt struct {
 	Schema                      int `json:"schema"`
 	Engine, Boot, Digest, Phase string
 	Generation                  string `json:"generation,omitempty"`
+	RestorationGeneration       string `json:"restoration_generation,omitempty"`
 	Checksum                    string `json:"receipt_sha256,omitempty"`
 }
 
@@ -85,6 +86,11 @@ func (a *ProxyTunnelAdapter) readCandidatePolicyReceipt(root string, state Polic
 	if receipt.Generation != "" {
 		if _, err := a.policyGenerationRoot(receipt.Generation); err != nil {
 			return receipt, err
+		}
+	}
+	if receipt.RestorationGeneration != "" {
+		if _, err := a.policyGenerationRoot(receipt.RestorationGeneration); err != nil || receipt.Phase != "restoring" && receipt.Phase != "restored" {
+			return receipt, ErrProxyPolicyUnknown
 		}
 	}
 	switch receipt.Phase {

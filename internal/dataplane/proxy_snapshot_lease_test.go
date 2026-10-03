@@ -137,7 +137,8 @@ func TestProxyRollbackRestoresOnlySameBootActivePolicy(t *testing.T) {
 func TestProxyRollbackDoesNotHidePolicyJournalFailure(t *testing.T) {
 	for _, existed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "remove-candidate", true: "restore-previous"}[existed], func(t *testing.T) {
-			a, _, old := proxyForwardingFixture(t)
+			a, runner, old := proxyForwardingFixture(t)
+			a.Processes = runner.processes
 			a.bootIdentity = func() (string, error) { return "boot-A", nil }
 			root := t.TempDir()
 			snapshot := proxySnapshot{ConfigPath: filepath.Join(root, "engine.json"), Policy: old, PolicyExists: existed, BootID: "boot-A"}

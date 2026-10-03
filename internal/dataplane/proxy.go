@@ -1058,13 +1058,46 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 	}
 	boot, bootErr := a.currentBootIdentity()
 	sameBoot := bootErr == nil && snapshot.BootID != "" && snapshot.BootID == boot
-	if state, err := a.readStagedPolicy(root); err == nil {
+	state, stagedErr := a.readStagedPolicy(root)
+	if errors.Is(stagedErr, os.ErrNotExist) {
+		if _, err := os.Lstat(proxyPolicyReceiptPath(root)); !errors.Is(err, os.ErrNotExist) {
+			return ErrProxyPolicyUnknown
+		}
+		if snapshot.PolicyTracked || snapshot.PolicyBinding != nil || snapshot.PolicyWasActive {
+			// A failed Stage cannot authorize teardown/reinstallation of live A.
+			// Finish only when A's original grant and exact runtime survived.
+			if !sameBoot || !snapshot.PolicyExists || !snapshot.PolicyWasActive || !snapshot.EngineWasRunning || !snapshot.SidecarWasRunning {
+				return ErrProxyPolicyUnknown
+			}
+			if err := a.verifyUnstagedProxyRestoration(ctx, root, snapshot); err != nil {
+				return err
+			}
+			return a.finishProxyRollback(ctx, snapshot, root, sameBoot)
+		}
+		if _, exists, err := a.readPolicyBinding(snapshot.Policy); err != nil || exists {
+			return errors.Join(ErrProxyPolicyUnknown, err)
+		}
+		if err := a.verifyUntrackedProxyHistory(); err != nil {
+			return err
+		}
+	}
+	if stagedErr == nil {
 		receipt, err := a.readCandidatePolicyReceipt(root, state)
 		if err != nil {
 			return err
 		}
 		if receipt.Phase == "prepared" || receipt.Phase == "restored" {
 			return nil
+		}
+		if receipt.Phase == "restoring" {
+			complete, err := a.resumeProxyPolicyRestoration(ctx, root, state, snapshot, receipt)
+			if err != nil {
+				return err
+			}
+			if complete {
+				return a.finishProxyRollback(ctx, snapshot, root, sameBoot)
+			}
+			return a.restoreProxyRollback(ctx, snapshot, root, sameBoot)
 		}
 	}
 	if err := a.removeCandidatePolicy(ctx, root); err != nil {
@@ -1073,65 +1106,94 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 	if err := a.markCandidatePolicyPhase(root, "restoring"); err != nil {
 		return err
 	}
-	firstErr := a.removeForwarding(ctx)
-	if err := a.stopOwned(ctx); err != nil && firstErr == nil {
-		firstErr = err
+	if state, err := a.readStagedPolicy(root); err == nil {
+		receipt, err := a.readCandidatePolicyReceipt(root, state)
+		if err != nil {
+			return err
+		}
+		if _, err := a.resumeProxyPolicyRestoration(ctx, root, state, snapshot, receipt); err != nil {
+			return err
+		}
+	}
+	return a.restoreProxyRollback(ctx, snapshot, root, sameBoot)
+}
+
+func (a *ProxyTunnelAdapter) restoreProxyRollback(ctx context.Context, snapshot proxySnapshot, root string, sameBoot bool) error {
+	if err := a.removeForwarding(ctx); err != nil {
+		return err
+	}
+	if err := a.stopOwned(ctx); err != nil {
+		return err
 	}
 	if a.scopedXray {
-		firstErr = errors.Join(firstErr, a.removeScopedNodeInterface(ctx))
-	}
-	if err := restoreOptional(a.engineConfigPath(), snapshot.RuntimeEngine, snapshot.RuntimeEngineExists); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if err := restoreOptional(a.sidecarConfigPath(), snapshot.RuntimeSidecar, snapshot.RuntimeSideExists); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if err := restoreOptional(a.transportPath(), snapshot.Transport, snapshot.TransportExists); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if err := restoreOptional(a.evidencePath(), snapshot.Evidence, snapshot.EvidenceExists); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if err := restoreOptional(a.nodeManifestPath(), snapshot.NodeManifest, snapshot.NodeManifestExists); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if sameBoot && snapshot.EngineWasRunning && (!a.scopedXray || firstErr == nil) {
-		if err := a.Processes.Start(ctx, a.engineProcess()); err != nil && firstErr == nil {
-			firstErr = err
+		if err := a.removeScopedNodeInterface(ctx); err != nil {
+			return err
 		}
 	}
-	if sameBoot && snapshot.SidecarWasRunning && (!a.scopedXray || firstErr == nil) {
-		if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil && firstErr == nil {
-			firstErr = err
+	for _, file := range []struct {
+		path   string
+		data   []byte
+		exists bool
+	}{
+		{a.engineConfigPath(), snapshot.RuntimeEngine, snapshot.RuntimeEngineExists},
+		{a.sidecarConfigPath(), snapshot.RuntimeSidecar, snapshot.RuntimeSideExists},
+		{a.transportPath(), snapshot.Transport, snapshot.TransportExists},
+		{a.evidencePath(), snapshot.Evidence, snapshot.EvidenceExists},
+		{a.nodeManifestPath(), snapshot.NodeManifest, snapshot.NodeManifestExists},
+	} {
+		if err := restoreOptional(file.path, file.data, file.exists); err != nil {
+			return err
 		}
 	}
-	if a.scopedXray && sameBoot && snapshot.EngineWasRunning && snapshot.SidecarWasRunning && firstErr == nil {
-		firstErr = errors.Join(a.waitForSOCKS(ctx), a.waitForInterface(ctx))
-		if firstErr == nil {
-			firstErr = a.recordScopedNodeInterface(ctx)
+	if sameBoot && snapshot.EngineWasRunning {
+		if err := a.Processes.Start(ctx, a.engineProcess()); err != nil {
+			return err
+		}
+	}
+	if sameBoot && snapshot.SidecarWasRunning {
+		if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil {
+			return err
+		}
+	}
+	if a.scopedXray && sameBoot && snapshot.EngineWasRunning && snapshot.SidecarWasRunning {
+		if err := errors.Join(a.waitForSOCKS(ctx), a.waitForInterface(ctx)); err != nil {
+			return err
+		}
+		if err := a.recordScopedNodeInterface(ctx); err != nil {
+			return err
 		}
 	}
 	if snapshot.PolicyExists {
-		if sameBoot && snapshot.PolicyWasActive && snapshot.EngineWasRunning && snapshot.SidecarWasRunning && firstErr == nil {
-			if err := a.applyRetainedPolicy(ctx, snapshot.Policy); err != nil {
+		liveRestored := sameBoot && snapshot.PolicyWasActive && snapshot.EngineWasRunning && snapshot.SidecarWasRunning
+		if liveRestored {
+			if err := a.applyRetainedPolicyWithReference(ctx, snapshot.Policy, func(id string) error {
+				return a.publishProxyRestoration(root, id)
+			}); err != nil {
 				// Its pending/unknown reference is retained. Never overwrite it
 				// with historical authority after an uncertain restoration add.
-				return errors.Join(firstErr, err)
+				return err
+			}
+		} else {
+			if err := a.restoreHistoricalPolicyBinding(snapshot); err != nil {
+				return err
+			}
+			if err := a.savePolicyJournal(snapshot.Policy, snapshot.PolicyTracked); err != nil {
+				return fmt.Errorf("restore previous proxy policy journal: %w", err)
 			}
 		}
-		liveRestored := sameBoot && snapshot.PolicyWasActive && snapshot.EngineWasRunning && snapshot.SidecarWasRunning && firstErr == nil
-		if !liveRestored {
-			firstErr = errors.Join(firstErr, a.restoreHistoricalPolicyBinding(snapshot))
-		}
-		if err := a.savePolicyJournal(snapshot.Policy, snapshot.PolicyTracked || liveRestored); err != nil {
-			firstErr = errors.Join(firstErr, fmt.Errorf("restore previous proxy policy journal: %w", err))
-		}
 	} else {
-		firstErr = errors.Join(firstErr, a.restoreHistoricalPolicyBinding(snapshot))
+		if err := a.restoreHistoricalPolicyBinding(snapshot); err != nil {
+			return err
+		}
 		if err := restoreOptional(a.policyPath(), nil, false); err != nil {
-			firstErr = errors.Join(firstErr, fmt.Errorf("remove candidate proxy policy journal: %w", err))
+			return fmt.Errorf("remove candidate proxy policy journal: %w", err)
 		}
 	}
+	return a.finishProxyRollback(ctx, snapshot, root, sameBoot)
+}
+
+func (a *ProxyTunnelAdapter) finishProxyRollback(ctx context.Context, snapshot proxySnapshot, root string, sameBoot bool) error {
+	var firstErr error
 	if snapshot.ConfigDraft {
 		if err := restoreOptional(snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil && firstErr == nil {
 			firstErr = err
@@ -1141,8 +1203,12 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 		}
 	}
 	if sameBoot && snapshot.PackageWasRunning {
-		if err := a.startPackageRuntime(ctx); err != nil && firstErr == nil {
+		running, err := a.packageRuntimeRunning(ctx)
+		if err != nil && firstErr == nil {
 			firstErr = err
+		}
+		if err == nil && !running && firstErr == nil {
+			firstErr = a.startPackageRuntime(ctx)
 		}
 	}
 	if firstErr == nil {

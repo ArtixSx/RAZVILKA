@@ -24,20 +24,8 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root st
 	if err := a.checkSnapshotSidecar(s); err != nil {
 		return false, err
 	}
-	for _, file := range []struct {
-		path   string
-		data   []byte
-		exists bool
-	}{
-		{a.engineConfigPath(), s.RuntimeEngine, s.RuntimeEngineExists},
-		{a.sidecarConfigPath(), s.RuntimeSidecar, s.RuntimeSideExists},
-		{a.transportPath(), s.Transport, s.TransportExists},
-		{a.evidencePath(), s.Evidence, s.EvidenceExists},
-		{a.nodeManifestPath(), s.NodeManifest, s.NodeManifestExists},
-	} {
-		if err := verifyRestoredFile(file.path, file.data, file.exists); err != nil {
-			return false, err
-		}
+	if err := a.verifyProxySnapshotRuntimeFiles(s); err != nil {
+		return false, err
 	}
 	if s.ConfigDraft {
 		if err := verifyRestoredFile(s.ConfigPath, s.Config, s.ConfigExisted); err != nil {

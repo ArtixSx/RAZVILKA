@@ -223,6 +223,10 @@ func (a *ProxyTunnelAdapter) promoteCandidatePolicy(ctx context.Context, state P
 // The pending reference is durable before any add. Failure leaves it and the
 // generation intact so later cleanup cannot fall back to broad legacy intent.
 func (a *ProxyTunnelAdapter) applyRetainedPolicy(ctx context.Context, state PolicyState) error {
+	return a.applyRetainedPolicyWithReference(ctx, state, nil)
+}
+
+func (a *ProxyTunnelAdapter) applyRetainedPolicyWithReference(ctx context.Context, state PolicyState, publish func(string) error) error {
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return err
@@ -238,6 +242,13 @@ func (a *ProxyTunnelAdapter) applyRetainedPolicy(ctx context.Context, state Poli
 	data, _ := json.Marshal(state)
 	if err := writeAtomic(filepath.Join(root, "policy-state.json"), data, 0600); err != nil {
 		return err
+	}
+	// Rollback publishes this exact generation in its transaction before the
+	// global pending binding or any forwarding/RPDB mutation can occur.
+	if publish != nil {
+		if err := publish(id); err != nil {
+			return err
+		}
 	}
 	if err := a.writePolicyBinding(binding); err != nil {
 		return err
