@@ -595,6 +595,8 @@ func main() {
 	selfFileState.Helper = a.SelfUpdate
 	a.SelfUpdateFiles = selfFileState
 	a.Nodes = nodeStore
+	historyAdmission := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)
+	a.NodeHistoryWriteGuard = historyAdmission.CheckWrite
 	if nodeStore != nil {
 		feedRoot, feedPathErr := filepath.Abs(filepath.Join(filepath.Dir(*cfgPath), "subscriptions-private"))
 		if err := os.MkdirAll(feedRoot, 0700); err == nil && feedPathErr == nil {
