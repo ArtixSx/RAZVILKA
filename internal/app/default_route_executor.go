@@ -200,8 +200,10 @@ func (e *DefaultRouteExecutor) guard(ctx context.Context, r *DefaultRouteReview,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	current := e.app.Store.Get()
-	if current.SafeMode || current.ServiceControl.Stopped || !reflect.DeepEqual(current, expected) || applyReviewHash(e.app.catalogSnapshot()) != r.catalogHash {
+	if err := e.observeConfig(ctx, expected); err != nil {
+		return err
+	}
+	if applyReviewHash(e.app.catalogSnapshot()) != r.catalogHash {
 		return dataplane.ErrReviewChanged
 	}
 	snapshot, err := e.deps.Observe(ctx)
@@ -217,6 +219,25 @@ func (e *DefaultRouteExecutor) guard(ctx context.Context, r *DefaultRouteReview,
 		if err != nil || exists != r.hasCommitted || exists && !reflect.DeepEqual(previous, r.committed) {
 			return dataplane.ErrReviewChanged
 		}
+	}
+	// Observe can perform bounded profile/control reads; a disk replacement
+	// during that work must not escape this final guard.
+	return e.observeConfig(ctx, expected)
+}
+
+func (e *DefaultRouteExecutor) observeConfig(ctx context.Context, expected config.Config) error {
+	current := e.app.Store.Get()
+	if current.SafeMode || current.ServiceControl.Stopped || !reflect.DeepEqual(current, expected) {
+		return dataplane.ErrReviewChanged
+	}
+	// Bounded disk observation borrows no writer lease. Its callback must
+	// never call Store/Observe or hold admission through adapter effects.
+	if err := e.app.Store.WithRevisionObservation(ctx, expected.Revision, func() error { return nil }); err != nil {
+		return errors.Join(dataplane.ErrReviewChanged, err)
+	}
+	// Same-revision legacy changes also invalidate the full reviewed image.
+	if !reflect.DeepEqual(e.app.Store.Get(), expected) {
+		return dataplane.ErrReviewChanged
 	}
 	return nil
 }
@@ -268,6 +289,9 @@ func (e *DefaultRouteExecutor) Execute(ctx context.Context, r *DefaultRouteRevie
 		committed := e.app.Store.Get()
 		if !defaultRouteCommittedConfig(r.cfg, committed, r.compilation.policy, services, commitStarted, commitFinished) {
 			return undo, dataplane.ErrReviewChanged
+		}
+		if err := e.observeConfig(ctx, committed); err != nil {
+			return undo, err
 		}
 		// Publish only the verified immutable postimage to guards that an
 		// adapter may call concurrently while its owned workers are joined.

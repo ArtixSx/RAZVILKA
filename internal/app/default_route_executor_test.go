@@ -262,6 +262,16 @@ func TestDefaultRouteExecutorChangedReviewNeverStarts(t *testing.T) {
 		"node generation":    func(_ *DefaultRouteExecutor, s *DefaultRouteSnapshot) { s.NodeGeneration++ },
 		"stop":               func(_ *DefaultRouteExecutor, s *DefaultRouteSnapshot) { s.Stopped = true },
 		"safe mode":          func(e *DefaultRouteExecutor, _ *DefaultRouteSnapshot) { _ = e.app.Store.SetSafeMode(true) },
+		"external disk": func(e *DefaultRouteExecutor, _ *DefaultRouteSnapshot) {
+			path := filepath.Join(filepath.Dir(e.app.Dataplane.StateRoot), "config.json")
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if name == "safe mode" {
@@ -343,6 +353,71 @@ func TestDefaultRouteExecutorStopCancelCASAndVerifiedRollback(t *testing.T) {
 				t.Fatal("rollback not joined", adapter.steps)
 			}
 		})
+	}
+}
+
+func TestDefaultRouteExecutorPostCommitDiskReplacementRefusesAndFences(t *testing.T) {
+	defaultRouteRequireLinuxJournal(t)
+	e, _, adapter := defaultRouteExecutorFixture(t)
+	r, err := e.Review(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(filepath.Dir(e.app.Dataplane.StateRoot), "config.json")
+	commit := e.deps.Commit
+	var foreignBytes []byte
+	e.deps.Commit = func(expected config.Config, p *config.NetworkPolicy, services map[string]config.ServiceState) (func() error, error) {
+		undo, err := commit(expected, p, services)
+		if err != nil {
+			return undo, err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return undo, err
+		}
+		foreignBytes = append(data, '\n')
+		return undo, os.WriteFile(path, foreignBytes, 0o600)
+	}
+	execution, err := e.Execute(context.Background(), r, r.Digest())
+	if !errors.Is(err, dataplane.ErrReviewChanged) || execution.State != "rollback-failed" || execution.RollbackVerified || adapter.live || !e.app.Operations.Snapshot().Fenced {
+		t.Fatal("post-commit foreign disk image accepted or unknown undo unfenced", err, execution)
+	}
+	data, readErr := os.ReadFile(path)
+	if readErr != nil || string(data) != string(foreignBytes) {
+		t.Fatal("guarded undo overwrote the foreign postimage", readErr)
+	}
+	if _, exists, err := e.app.Dataplane.Committed(); err != nil || exists {
+		t.Fatal("new dataplane generation published despite unknown config undo", err)
+	}
+}
+
+func TestDefaultRouteExecutorDiskChangeDuringObservationNeverStarts(t *testing.T) {
+	e, _, adapter := defaultRouteExecutorFixture(t)
+	r, err := e.Review(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observe := e.deps.Observe
+	path := filepath.Join(filepath.Dir(e.app.Dataplane.StateRoot), "config.json")
+	var foreignBytes []byte
+	e.deps.Observe = func(ctx context.Context) (DefaultRouteSnapshot, error) {
+		snapshot, err := observe(ctx)
+		if err != nil {
+			return snapshot, err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return snapshot, err
+		}
+		foreignBytes = append(data, '\n')
+		return snapshot, os.WriteFile(path, foreignBytes, 0o600)
+	}
+	if _, err := e.Execute(context.Background(), r, r.Digest()); !errors.Is(err, dataplane.ErrReviewChanged) || len(adapter.steps) != 0 {
+		t.Fatal("disk replacement during final observation escaped before effects", err, adapter.steps)
+	}
+	data, readErr := os.ReadFile(path)
+	if readErr != nil || string(data) != string(foreignBytes) {
+		t.Fatal("preflight overwrote external disk change", readErr)
 	}
 }
 
