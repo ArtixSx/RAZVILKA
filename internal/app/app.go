@@ -151,6 +151,7 @@ type App struct {
 	EngineLab                 *enginelab.Manager
 	StrategyLab               *strategylab.Manager
 	Components                *components.Manager
+	componentRecoveryChecks   componentRecoveryChecks
 	Community                 *community.Manager
 	CustomServices            *customservices.Manager
 	Dataplane                 *dataplane.Manager
@@ -1354,10 +1355,6 @@ func (a *App) componentList(w http.ResponseWriter, r *http.Request) {
 	for i := range views {
 		desired, applied := a.componentServiceReferences(views[i].ID)
 		referenced := len(desired) > 0 || len(applied) > 0
-		if views[i].ManagedUpdate && !referenced && !views[i].Running {
-			// Not in use: an ordinary update, no rollback copy required.
-			views[i].ManagedUpdate = false
-		}
 		if referenced {
 			views[i].CanRemove = false
 			if views[i].ManagedUpdate {
@@ -1425,7 +1422,7 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if action == "update" && a.managedUpdateInUse(id) {
+	if action == "update" && components.ManagedUpdateSupported(id) {
 		a.managedComponentUpdate(w, r, id)
 		return
 	}
@@ -1473,12 +1470,12 @@ func (a *App) enrichComponentPlan(plan *components.Plan) {
 			}
 		}
 		desired, applied := a.componentServiceReferences(plan.Component)
-		if plan.Action == "update" && a.managedUpdateInUse(plan.Component) {
+		if plan.Action == "update" && components.ManagedUpdateSupported(plan.Component) {
 			// A checked in-use update keeps the routes; a failed check rolls
 			// the package back instead of requiring services to move away.
-			plan.Warnings = append(plan.Warnings, components.PlanIssue{Code: "MANAGED_UPDATE", Message: "Обновление выполняется при работающих маршрутах: конфигурация пакета сохраняется, после обновления проверяется работа, при сбое устанавливается прежняя версия."})
+			plan.Warnings = append(plan.Warnings, components.PlanIssue{Code: "MANAGED_UPDATE", Message: "Обновление сохраняет журнал и прежний пакет для отката. Отдельная проверка новой версии не завершает операцию: требуется matching recovery и подтверждение рабочего процесса."})
 			if plan.Installed && (a.Components == nil || !a.Components.RollbackCached(plan.Component, plan.InstalledVersion)) {
-				plan.AddBlocker("ROLLBACK_PACKAGE_MISSING", "Нет сохранённой копии установленной версии для отката", "Нажмите «Проверить версии»: если источник ещё предлагает установленную версию, RAZVILKA сохранит её копию. Если остался только новый выпуск, остановите обход или переведите его сервисы на другой, обновите компонент и верните сервисы.")
+				plan.AddBlocker("ROLLBACK_PACKAGE_MISSING", "Нет сохранённой копии установленной версии для отката", "Нажмите «Проверить версии»: если источник ещё предлагает установленную версию, RAZVILKA сохранит её копию. Остановка обхода не отменяет требование сохранённого пакета; без него обновление заблокировано.")
 			}
 			desired, applied = nil, nil
 		}

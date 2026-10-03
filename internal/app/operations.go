@@ -62,7 +62,7 @@ func (s *operationScope) restoreAdmission() (func(), error) {
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/components/recovery" {
-			// This read owns bounded inspection admission and remains behind auth.
+			// Recovery owns exact inspection/repair admission behind auth and CSRF.
 			next.ServeHTTP(w, r)
 			return
 		}

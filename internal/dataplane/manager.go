@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
@@ -77,6 +79,152 @@ type CanaryAdapter interface {
 
 type RuntimeReconciler interface {
 	Reconcile(context.Context, Plan) error
+}
+
+// CheckComponentLive observes the exact committed runtime and probes its live
+// path. It never runs Stage/Canary/Activate/Reconcile. Component recovery must
+// supply current authority through WithReviewGuard and retain app admission.
+func (m *Manager) CheckComponentLive(ctx context.Context, expected Plan, component string) error {
+	if err := m.beginOperation(ctx); err != nil {
+		return err
+	}
+	defer m.endOperation()
+	verify := func() error {
+		if err := m.checkExecutionRecovery(); err != nil {
+			return err
+		}
+		current, exists, err := m.Committed()
+		if err != nil || !exists || current.State != "committed" || current.SafeMode || current.Noop || !reflect.DeepEqual(current, expected) {
+			return ErrReviewChanged
+		}
+		return m.checkPlanNetwork(ctx, expected)
+	}
+	if err := verify(); err != nil {
+		return err
+	}
+	matched := false
+	for _, id := range expected.Adapters {
+		uses := id == component || component == "sing-box" && (id == "xray" || id == "usque") || (component == "wireguard" || component == "warp-wg") && (id == "wireguard" || id == "warp-wg")
+		if !uses {
+			continue
+		}
+		matched = true
+		if err := verify(); err != nil {
+			return err
+		}
+		registered, exists := m.adapter(id)
+		if !exists {
+			return errors.New("live component adapter unavailable")
+		}
+		observer, ok := registered.(RuntimeObserver)
+		if !ok {
+			return errors.New("live component ownership observation unavailable")
+		}
+		if err := observer.ObserveOwnedRuntime(ctx); err != nil {
+			return err
+		}
+		// All accepted routes must have a real health target. Source-scoped proxy
+		// health without an exact-node probe currently skips service traffic.
+		probe := false
+		for _, route := range expected.Routes {
+			if adapterID(route.Resolved) != id {
+				continue
+			}
+			if route.ProbeURL == "" {
+				return errors.New("live service health target unavailable")
+			}
+			if _, ok := registered.(*ProxyTunnelAdapter); ok && len(route.Sources) > 0 && !(RoutePlan{Routes: []Route{route}}).RequiresNetworkProof() {
+				return errors.New("source-scoped live service probe unavailable")
+			}
+			probe = true
+		}
+		if !probe {
+			return errors.New("live service proof unavailable")
+		}
+		switch a := registered.(type) {
+		case *ProxyTunnelAdapter:
+			state, exists, err := a.loadPolicy()
+			if err != nil || !exists {
+				return errors.New("live proxy policy unavailable")
+			}
+			check := func() error {
+				if component == a.ID() {
+					if err := verifyInstalledManagedProcess(a.engineProcess()); err != nil {
+						return err
+					}
+				}
+				if component == "sing-box" {
+					return verifyInstalledManagedProcess(a.sidecarProcess())
+				}
+				return nil
+			}
+			if err := check(); err != nil {
+				return err
+			}
+			if err := a.healthState(ctx, expected, state); err != nil {
+				return err
+			}
+			if err := check(); err != nil {
+				return err
+			}
+		case *WARPWireGuardAdapter:
+			state, exists, err := a.loadPolicyState()
+			if err != nil || !exists {
+				return errors.New("live WireGuard policy unavailable")
+			}
+			if err := a.healthState(ctx, expected, state, ""); err != nil {
+				return err
+			}
+		case *NFQWS2Adapter:
+			if err := a.Health(ctx, expected, ""); err != nil {
+				return err
+			}
+		default:
+			return errors.New("adapter has no component live acceptance implementation")
+		}
+		if err := observer.ObserveOwnedRuntime(ctx); err != nil {
+			return err
+		}
+	}
+	if !matched {
+		return errors.New("component has no committed live runtime; isolated checks cannot accept it")
+	}
+	return verify()
+}
+
+func verifyInstalledManagedProcess(spec ProcessSpec) error {
+	pid, err := readManagedPID(spec)
+	if err != nil || !processMatches(pid, spec) {
+		return errors.New("live managed component process unavailable")
+	}
+	installed, err := os.Stat(spec.Binary)
+	if err != nil {
+		return err
+	}
+	active, err := os.Stat(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil || !os.SameFile(installed, active) {
+		return errors.New("live managed process has not adopted the installed executable")
+	}
+	// Receipt is launch evidence, not an identity reconstructed from a candidate.
+	data, err := os.ReadFile(spec.PIDPath + routeidentity.ReceiptSuffix)
+	var receipt routeidentity.Receipt
+	if err != nil || json.Unmarshal(data, &receipt) != nil || receipt.Version != 1 || receipt.PID != pid {
+		return errors.New("live managed process launch receipt unavailable")
+	}
+	config, e1 := os.ReadFile(spec.MatchArg)
+	cmd, e2 := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+	stat, e3 := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	boot, e4 := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	executable, e5 := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+	end := strings.LastIndex(string(stat), ")")
+	if e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || end < 0 {
+		return errors.New("live managed process identity unavailable")
+	}
+	fields := strings.Fields(string(stat[end+1:]))
+	if len(fields) < 20 || fields[0] == "Z" || fields[0] == "X" || fields[19] != receipt.StartTicks || strings.TrimSpace(string(boot)) != receipt.BootID || executable != receipt.Executable || routeidentity.Hash(cmd) != receipt.ArgsHash || routeidentity.Hash(config) != receipt.ConfigHash {
+		return errors.New("live managed process changed since launch")
+	}
+	return nil
 }
 
 type PolicyRefresher interface {

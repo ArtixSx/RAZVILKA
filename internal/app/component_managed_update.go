@@ -21,8 +21,15 @@ import (
 // afterwards. Proxy engines are checked in an isolated canary instead.
 // updateComponent updates one installed component outside an HTTP request.
 func (a *App) updateComponent(ctx context.Context, id string, guards ...func(context.Context) error) error {
+	authority, authorityErr := a.componentUpdateGuard(ctx)
+	if authorityErr != nil {
+		return authorityErr
+	}
 	checkAuthority := func() error {
 		if err := ctx.Err(); err != nil {
+			return components.NoMutation(err)
+		}
+		if err := authority(ctx); err != nil {
 			return components.NoMutation(err)
 		}
 		for _, guard := range guards {
@@ -48,17 +55,9 @@ func (a *App) updateComponent(ctx context.Context, id string, guards ...func(con
 	if !plan.Ready {
 		return components.NoMutation(errors.New("component lifecycle plan is blocked"))
 	}
-	if a.managedUpdateInUse(id) {
-		if a.Dataplane == nil {
-			return components.NoMutation(errors.New("dataplane manager is unavailable"))
-		}
-		var check func(context.Context) error
+	if components.ManagedUpdateSupported(id) {
 		success := "Новая версия проверена при работающих маршрутах (ночное обслуживание)"
-		if id == "nfqws2" {
-			check, err = a.nfqws2UpdateCheck(ctx)
-		} else {
-			check, _, err = a.proxyUpdateCheck(ctx, id)
-		}
+		check, _, err := a.componentCandidateCheck(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -98,38 +97,27 @@ func (a *App) updateComponent(ctx context.Context, id string, guards ...func(con
 }
 
 func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id string) {
-	if a.Dataplane == nil {
-		http.Error(w, "dataplane manager is unavailable", http.StatusServiceUnavailable)
-		return
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Minute)
 	defer cancel()
-	var check func(context.Context) error
-	var err error
+	guard, err := a.componentUpdateGuard(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_AUTHORITY_CHANGED", "error": err.Error()})
+		return
+	}
+	check, adapters, err := a.componentCandidateCheck(ctx, id)
 	success := "Новая версия проверена при работающих маршрутах"
-	if id == "nfqws2" {
-		check, err = a.nfqws2UpdateCheck(ctx)
-	} else {
-		var adapters []string
-		check, adapters, err = a.proxyUpdateCheck(ctx, id)
-		if errors.Is(err, errProxyPrecheck) {
-			writeJSON(w, http.StatusConflict, map[string]any{"error": "Маршруты этого обхода не проходят изолированную проверку и на текущей версии, поэтому обновление с проверкой сейчас невозможно. Проверьте подключения сервисов, затем повторите обновление.", "component": id, "code": "MANAGED_UPDATE_PRECHECK_FAILED"})
-			return
-		}
-		if len(adapters) > 0 {
-			success = "Новая версия проверена изолированно на действующих маршрутах. Работающие процессы перейдут на неё при следующем применении или перезапуске."
-		}
+	if errors.Is(err, errProxyPrecheck) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Маршруты этого обхода не проходят изолированную проверку и на текущей версии, поэтому обновление с проверкой сейчас невозможно. Проверьте подключения сервисов, затем повторите обновление.", "component": id, "code": "MANAGED_UPDATE_PRECHECK_FAILED"})
+		return
+	}
+	if len(adapters) > 0 {
+		success = "Новая версия проверена изолированно на действующих маршрутах. Работающие процессы перейдут на неё при следующем применении или перезапуске."
 	}
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": err.Error(), "component": id, "code": "RUNTIME_STATE_UNKNOWN"})
 		return
 	}
 	_ = a.Components.RecordOperation(id, "update", "running", "Обновление при работающих маршрутах: проверка и откат подготовлены")
-	guard, err := a.componentUpdateGuard(ctx)
-	if err != nil {
-		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_AUTHORITY_CHANGED", "error": "Настройки разрешений изменились. Пакет не обновлён."})
-		return
-	}
 	result, err := a.Components.ManagedUpdateGuarded(ctx, id, check, guard)
 	if err == nil && result.PendingLiveAcceptance {
 		a.recordComponentAwaitingLive(id)
@@ -155,11 +143,8 @@ func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id 
 	writeJSON(w, http.StatusOK, result)
 }
 
-// managedUpdateInUse reports whether an update goes through the checked in-use
-// path: the component supports it and its runtime runs or routes reference
-// it. An unused component is updated plainly and needs no rollback copy;
-// package sources usually keep only the newest version, so requiring a copy
-// there would block updates for good.
+// Both dormant and active managed packages use the persistent journal. This
+// predicate selects the check, never permission to use plain Apply.
 func (a *App) managedUpdateInUse(id string) bool {
 	if !components.ManagedUpdateSupported(id) {
 		return false
@@ -168,11 +153,26 @@ func (a *App) managedUpdateInUse(id string) bool {
 		return true
 	}
 	for _, runtime := range (engine.Detector{}).Inventory() {
-		if runtime.ID == id && runtime.Running {
+		if (runtime.ID == id || slices.Contains(managedProxyAdapters[id], runtime.ID)) && runtime.Running {
 			return true
 		}
 	}
 	return false
+}
+
+func (a *App) componentCandidateCheck(ctx context.Context, id string) (func(context.Context) error, []string, error) {
+	if !a.managedUpdateInUse(id) {
+		check := func(c context.Context) error { return a.checkComponentInactive(c, id) }
+		return check, nil, check(ctx)
+	}
+	if a.Dataplane == nil {
+		return nil, nil, components.NoMutation(errors.New("dataplane manager unavailable"))
+	}
+	if id == "nfqws2" {
+		check, err := a.nfqws2UpdateCheck(ctx)
+		return check, nil, err
+	}
+	return a.proxyUpdateCheck(ctx, id)
 }
 
 // managedProxyAdapters lists the committed adapters whose runtime uses the
