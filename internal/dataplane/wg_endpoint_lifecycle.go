@@ -471,23 +471,45 @@ func (a *WARPWireGuardAdapter) verifyWGEndpoint(ctx context.Context, e *WGEndpoi
 }
 
 func wgRuntimePublicKey(profile []byte) (string, error) {
+	section, privateText := "", ""
+	interfaceSeen, privateSeen := false, false
 	for _, line := range strings.Split(string(profile), "\n") {
-		key, value, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(key) != "PrivateKey" {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
 			continue
 		}
-		private, err := base64.StdEncoding.Strict().DecodeString(strings.TrimSpace(value))
-		if err != nil || len(private) != 32 {
-			return "", errors.New("invalid runtime key")
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section = strings.TrimSpace(line[1 : len(line)-1])
+			if section == "Interface" {
+				if interfaceSeen {
+					return "", errors.New("runtime identity is ambiguous")
+				}
+				interfaceSeen = true
+			}
+			continue
 		}
-		public, err := curve25519.X25519(private, curve25519.Basepoint)
-		clear(private)
-		if err != nil {
-			return "", errors.New("derive runtime public identity failed")
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "PrivateKey") {
+			continue
 		}
-		return base64.StdEncoding.EncodeToString(public), nil
+		if section != "Interface" || privateSeen {
+			return "", errors.New("runtime identity is ambiguous")
+		}
+		privateText, privateSeen = strings.TrimSpace(value), true
 	}
-	return "", errors.New("runtime identity unavailable")
+	if !privateSeen {
+		return "", errors.New("runtime identity unavailable")
+	}
+	private, err := base64.StdEncoding.Strict().DecodeString(privateText)
+	if err != nil || len(private) != 32 {
+		return "", errors.New("invalid runtime key")
+	}
+	public, err := curve25519.X25519(private, curve25519.Basepoint)
+	clear(private)
+	if err != nil {
+		return "", errors.New("derive runtime public identity failed")
+	}
+	return base64.StdEncoding.EncodeToString(public), nil
 }
 
 func (a *WARPWireGuardAdapter) verifyWGInterfaceIdentity(ctx context.Context, e *WGEndpointState) error {

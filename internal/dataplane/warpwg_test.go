@@ -30,6 +30,15 @@ type warpFakeRunner struct {
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	if name == "ip" && strings.Join(args, " ") == "-j -d link show" {
+		return []byte("[]"), nil
+	}
+	if len(args) == 3 && args[0] == "show" && args[1] == "all" && args[2] == "public-key" {
+		if r.active && r.endpoint.publicKey != "" {
+			return []byte("live-test\t" + r.endpoint.publicKey + "\n"), nil
+		}
+		return nil, nil
+	}
 	if output, handled, err := r.endpoint.run(name, args); handled {
 		return output, err
 	}
