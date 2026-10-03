@@ -136,7 +136,13 @@ func (s *Store) DeleteGroup(ctx context.Context, id string, now time.Time) error
 // previous node remains selected, preventing latency jitter from causing route
 // churn; it is replaced only after its exact proof expires or fails.
 func (s *Store) ResolveRoute(ctx context.Context, target, serviceID, networkProfile, previousNode string, previousSince, now time.Time) (ResolvedRoute, error) {
-	if !sourcePattern.MatchString(serviceID) || !systemprobe.ValidWANProfileID(networkProfile) || now.IsZero() {
+	return s.ResolveRouteForEngine(ctx, "sing-box", target, serviceID, networkProfile, previousNode, previousSince, now)
+}
+
+// ResolveRouteForEngine retains the executor on node and group resolution.
+// previousNode must come from a committed route using that same executor.
+func (s *Store) ResolveRouteForEngine(ctx context.Context, engine, target, serviceID, networkProfile, previousNode string, previousSince, now time.Time) (ResolvedRoute, error) {
+	if !validRouteEngine(engine) || !sourcePattern.MatchString(serviceID) || !systemprobe.ValidWANProfileID(networkProfile) || now.IsZero() {
 		return ResolvedRoute{}, ErrRouteProof
 	}
 	now = now.UTC()
@@ -149,10 +155,10 @@ func (s *Store) ResolveRoute(ctx context.Context, target, serviceID, networkProf
 	if validNodeID(target) {
 		index := nodeIndex(doc, target)
 		binding := RouteBinding{ServiceID: serviceID, NodeID: target, NetworkProfile: networkProfile}
-		if index < 0 || doc.Nodes[index].Disabled || !originFresh(doc.Nodes[index], now) || !nodeHasRouteProof(doc.Nodes[index], binding, now) {
+		if index < 0 || doc.Nodes[index].Disabled || !originFresh(doc.Nodes[index], now) || !nodeHasRouteProofForEngine(doc.Nodes[index], engine, binding, now) {
 			return ResolvedRoute{}, ErrRouteProof
 		}
-		return ResolvedRoute{Route: "sing-box:" + target, NodeID: target, Reason: "exact-node"}, nil
+		return ResolvedRoute{Route: engine + ":" + target, NodeID: target, Reason: "exact-node"}, nil
 	}
 	group, ok := findGroup(doc.Groups, target)
 	if !ok {
@@ -164,7 +170,7 @@ func (s *Store) ResolveRoute(ctx context.Context, target, serviceID, networkProf
 		if index < 0 || doc.Nodes[index].Disabled || !originFresh(doc.Nodes[index], now) {
 			continue
 		}
-		if latency, ok := nodeRouteLatency(doc.Nodes[index], serviceID, networkProfile, now); ok {
+		if latency, ok := nodeRouteLatencyForEngine(doc.Nodes[index], engine, serviceID, networkProfile, now); ok {
 			usable[id] = latency
 		}
 	}
@@ -175,17 +181,17 @@ func (s *Store) ResolveRoute(ctx context.Context, target, serviceID, networkProf
 		if _, ok := usable[group.PreferredNodeID]; !ok {
 			return ResolvedRoute{}, ErrRouteProof
 		}
-		return ResolvedRoute{Route: "sing-box:" + group.PreferredNodeID, NodeID: group.PreferredNodeID, Reason: "manual-preferred"}, nil
+		return ResolvedRoute{Route: engine + ":" + group.PreferredNodeID, NodeID: group.PreferredNodeID, Reason: "manual-preferred"}, nil
 	}
 	if _, ok := usable[previousNode]; ok {
 		reason := "last-known-good"
 		if !previousSince.IsZero() && now.Sub(previousSince) < time.Duration(group.HoldDownSeconds)*time.Second {
 			reason = "hysteresis-hold"
 		}
-		return ResolvedRoute{Route: "sing-box:" + previousNode, NodeID: previousNode, Reason: reason}, nil
+		return ResolvedRoute{Route: engine + ":" + previousNode, NodeID: previousNode, Reason: reason}, nil
 	}
 	if _, ok := usable[group.PreferredNodeID]; ok {
-		return ResolvedRoute{Route: "sing-box:" + group.PreferredNodeID, NodeID: group.PreferredNodeID, Reason: "preferred-fallback"}, nil
+		return ResolvedRoute{Route: engine + ":" + group.PreferredNodeID, NodeID: group.PreferredNodeID, Reason: "preferred-fallback"}, nil
 	}
 	ids := make([]string, 0, len(usable))
 	for id := range usable {
@@ -197,14 +203,18 @@ func (s *Store) ResolveRoute(ctx context.Context, target, serviceID, networkProf
 		}
 		return usable[ids[i]] < usable[ids[j]]
 	})
-	return ResolvedRoute{Route: "sing-box:" + ids[0], NodeID: ids[0], Reason: "healthy-fallback"}, nil
+	return ResolvedRoute{Route: engine + ":" + ids[0], NodeID: ids[0], Reason: "healthy-fallback"}, nil
 }
 
 func (s *Store) GroupServices(ctx context.Context, groupID, profile string, now time.Time) ([]string, error) {
+	return s.GroupServicesForEngine(ctx, "sing-box", groupID, profile, now)
+}
+
+func (s *Store) GroupServicesForEngine(ctx context.Context, engine, groupID, profile string, now time.Time) ([]string, error) {
 	if !validGroupID(groupID) || !systemprobe.ValidWANProfileID(profile) || now.IsZero() {
 		return nil, ErrGroup
 	}
-	_, services, err := s.RouteSnapshot(ctx, profile, now)
+	_, services, err := s.RouteSnapshotForEngine(ctx, engine, profile, now)
 	if err != nil {
 		return nil, err
 	}
@@ -302,8 +312,12 @@ func findGroup(groups []NodeGroup, id string) (NodeGroup, bool) {
 }
 
 func nodeRouteLatency(node storedNode, service, profile string, now time.Time) (int64, bool) {
-	check, ok := latestRouteCheck(node, service, profile)
-	if !ok || !routeCheckUsable(check, node.ID, service, profile, now) {
+	return nodeRouteLatencyForEngine(node, "sing-box", service, profile, now)
+}
+
+func nodeRouteLatencyForEngine(node storedNode, engine, service, profile string, now time.Time) (int64, bool) {
+	check, ok := latestRouteCheckForEngine(node, engine, service, profile)
+	if !ok || !routeCheckUsableForEngine(check, engine, node.ID, service, profile, now) {
 		return 0, false
 	}
 	return check.LatencyMS, true

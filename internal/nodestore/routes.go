@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
@@ -28,6 +29,7 @@ type RouteBinding struct {
 // RouteMaterial is passed directly to the local dataplane adapter. Config and
 // endpoint hosts are private transient data and must never be returned by HTTP.
 type RouteMaterial struct {
+	EngineID      string
 	Config        []byte
 	EndpointHosts []string
 }
@@ -35,6 +37,14 @@ type RouteMaterial struct {
 // RouteServices returns the services for which a node has a fresh successful
 // exact check on the supplied network. It is safe for selector construction.
 func (s *Store) RouteServices(ctx context.Context, nodeID, networkProfile string, now time.Time) ([]string, error) {
+	return s.RouteServicesForEngine(ctx, "sing-box", nodeID, networkProfile, now)
+}
+
+// RouteServicesForEngine grants eligibility only for the specified executor.
+func (s *Store) RouteServicesForEngine(ctx context.Context, engine, nodeID, networkProfile string, now time.Time) ([]string, error) {
+	if !validRouteEngine(engine) {
+		return nil, ErrRouteProof
+	}
 	if !validNodeID(nodeID) || !checkTokenPattern.MatchString(networkProfile) || now.IsZero() {
 		return nil, ErrStore
 	}
@@ -51,12 +61,16 @@ func (s *Store) RouteServices(ctx context.Context, nodeID, networkProfile string
 	if index < 0 {
 		return nil, ErrNotFound
 	}
-	return routeServicesForNode(doc.Nodes[index], networkProfile, now.UTC()), nil
+	return routeServicesForNodeEngine(doc.Nodes[index], engine, networkProfile, now.UTC()), nil
 }
 
 // All selector APIs use the same private eligibility calculation. Public
 // Health.History is display data and must not grant independent authority.
 func routeServicesForNode(node storedNode, networkProfile string, now time.Time) []string {
+	return routeServicesForNodeEngine(node, "sing-box", networkProfile, now)
+}
+
+func routeServicesForNodeEngine(node storedNode, engine, networkProfile string, now time.Time) []string {
 	if node.Disabled || !originFresh(node, now) {
 		return []string{}
 	}
@@ -64,13 +78,13 @@ func routeServicesForNode(node storedNode, networkProfile string, now time.Time)
 	// DNS, transport and egress failures also revoke an older service PASS.
 	latest := map[string]CheckRecord{}
 	for _, check := range node.Checks {
-		if check.ServiceID != "" && check.NetworkProfile == networkProfile && check.RoutePathID == "sing-box:"+node.ID {
+		if check.ServiceID != "" && check.NetworkProfile == networkProfile && check.RoutePathID == engine+":"+node.ID {
 			latest[check.ServiceID] = check
 		}
 	}
 	services := map[string]bool{}
 	for serviceID, check := range latest {
-		if routeCheckUsable(check, node.ID, serviceID, networkProfile, now) {
+		if routeCheckUsableForEngine(check, engine, node.ID, serviceID, networkProfile, now) {
 			services[serviceID] = true
 		}
 	}
@@ -87,6 +101,16 @@ func routeServicesForNode(node storedNode, networkProfile string, now time.Time)
 // for this network. A missing, disabled, expired or merely TCP-tested node is
 // rejected without exposing which private field failed.
 func (s *Store) MaterializeSingBox(ctx context.Context, bindings []RouteBinding, now time.Time) (RouteMaterial, error) {
+	return s.materializeEngine(ctx, "sing-box", bindings, now)
+}
+
+// MaterializeXray compiles canonical material only with matching Xray proof.
+// It supplies no inbound/TUN and blocks every destination outside the bindings.
+func (s *Store) MaterializeXray(ctx context.Context, bindings []RouteBinding, now time.Time) (RouteMaterial, error) {
+	return s.materializeEngine(ctx, "xray", bindings, now)
+}
+
+func (s *Store) materializeEngine(ctx context.Context, engine string, bindings []RouteBinding, now time.Time) (RouteMaterial, error) {
 	if len(bindings) == 0 || now.IsZero() {
 		return RouteMaterial{}, ErrRouteProof
 	}
@@ -107,7 +131,7 @@ func (s *Store) MaterializeSingBox(ctx context.Context, bindings []RouteBinding,
 			return RouteMaterial{}, ErrRouteProof
 		}
 		index := nodeIndex(doc, binding.NodeID)
-		if index < 0 || doc.Nodes[index].Disabled || !originFresh(doc.Nodes[index], now) || !nodeHasRouteProof(doc.Nodes[index], binding, now) {
+		if index < 0 || doc.Nodes[index].Disabled || !originFresh(doc.Nodes[index], now) || !nodeHasRouteProofForEngine(doc.Nodes[index], engine, binding, now) {
 			return RouteMaterial{}, ErrRouteProof
 		}
 		requested[binding.NodeID] = doc.Nodes[index]
@@ -119,6 +143,11 @@ func (s *Store) MaterializeSingBox(ctx context.Context, bindings []RouteBinding,
 	}
 	sort.Strings(nodeIDs)
 	outbounds := make([]any, 0, len(nodeIDs)+2)
+	if engine == "xray" {
+		// Xray defaults to the first outbound if routing misses. Keep that
+		// default fail-closed even before the managed adapter adds its inbound.
+		outbounds = append(outbounds, map[string]any{"protocol": "blackhole", "tag": "rz-node-block", "settings": map[string]any{}})
+	}
 	endpointSet := map[string]bool{}
 	for _, id := range nodeIDs {
 		node := requested[id]
@@ -126,11 +155,20 @@ func (s *Store) MaterializeSingBox(ctx context.Context, bindings []RouteBinding,
 		if json.Unmarshal(secrets[node.SecretRef], &outbound) != nil || len(outbound) == 0 {
 			return RouteMaterial{}, ErrStore
 		}
+		collectPrivateEndpointHosts(outbound, endpointSet)
+		if engine == "xray" {
+			var err error
+			outbound, err = compileXrayNodeOutbound(secrets[node.SecretRef])
+			if err != nil {
+				return RouteMaterial{}, err
+			}
+		}
 		outbound["tag"] = nodeTag(id)
 		outbounds = append(outbounds, outbound)
-		collectPrivateEndpointHosts(outbound, endpointSet)
 	}
-	outbounds = append(outbounds, map[string]any{"type": "direct", "tag": "rz-node-direct"}, map[string]any{"type": "block", "tag": "rz-node-block"})
+	if engine == "sing-box" {
+		outbounds = append(outbounds, map[string]any{"type": "direct", "tag": "rz-node-direct"}, map[string]any{"type": "block", "tag": "rz-node-block"})
+	}
 
 	rules := make([]any, 0, len(bindings)+1)
 	seenDestination := map[string]string{}
@@ -146,6 +184,19 @@ func (s *Store) MaterializeSingBox(ctx context.Context, bindings []RouteBinding,
 			}
 			seenDestination[destination] = binding.NodeID
 		}
+		if engine == "xray" {
+			if len(domains) > 0 {
+				matches := make([]string, len(domains))
+				for i, domain := range domains {
+					matches[i] = "domain:" + domain
+				}
+				rules = append(rules, map[string]any{"type": "field", "domain": matches, "outboundTag": nodeTag(binding.NodeID)})
+			}
+			if len(cidrs) > 0 {
+				rules = append(rules, map[string]any{"type": "field", "ip": cidrs, "outboundTag": nodeTag(binding.NodeID)})
+			}
+			continue
+		}
 		rule := map[string]any{"outbound": nodeTag(binding.NodeID)}
 		if len(domains) > 0 {
 			rule["domain_suffix"] = domains
@@ -159,6 +210,14 @@ func (s *Store) MaterializeSingBox(ctx context.Context, bindings []RouteBinding,
 		"outbounds": outbounds,
 		"route":     map[string]any{"rules": rules, "final": "rz-node-block", "auto_detect_interface": true},
 	}
+	if engine == "xray" {
+		rules = append(rules, map[string]any{"type": "field", "network": "tcp,udp", "outboundTag": "rz-node-block"})
+		document = map[string]any{
+			"log":       map[string]any{"loglevel": "warning", "access": "none"},
+			"outbounds": outbounds,
+			"routing":   map[string]any{"domainStrategy": "AsIs", "rules": rules},
+		}
+	}
 	config, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return RouteMaterial{}, ErrStore
@@ -168,7 +227,26 @@ func (s *Store) MaterializeSingBox(ctx context.Context, bindings []RouteBinding,
 		endpoints = append(endpoints, host)
 	}
 	sort.Strings(endpoints)
-	return RouteMaterial{Config: config, EndpointHosts: endpoints}, nil
+	return RouteMaterial{EngineID: engine, Config: config, EndpointHosts: endpoints}, nil
+}
+
+func compileXrayNodeOutbound(raw []byte) (map[string]any, error) {
+	profile, err := providerprofile.VLESSProfileFromJSON(raw)
+	if err != nil {
+		return nil, ErrRouteProof
+	}
+	config, _, err := providerprofile.CompileXrayConfig(profile)
+	if err != nil {
+		return nil, ErrRouteProof
+	}
+	defer clear(config)
+	var document struct {
+		Outbounds []map[string]any `json:"outbounds"`
+	}
+	if json.Unmarshal(config, &document) != nil || len(document.Outbounds) != 1 {
+		return nil, ErrStore
+	}
+	return document.Outbounds[0], nil
 }
 
 func nodeIndex(doc document, id string) int {
@@ -190,17 +268,25 @@ func originFresh(node storedNode, now time.Time) bool {
 }
 
 func nodeHasRouteProof(node storedNode, binding RouteBinding, now time.Time) bool {
-	check, ok := latestRouteCheck(node, binding.ServiceID, binding.NetworkProfile)
+	return nodeHasRouteProofForEngine(node, "sing-box", binding, now)
+}
+
+func nodeHasRouteProofForEngine(node storedNode, engine string, binding RouteBinding, now time.Time) bool {
+	check, ok := latestRouteCheckForEngine(node, engine, binding.ServiceID, binding.NetworkProfile)
 	if !ok {
 		return false
 	}
-	return routeCheckUsable(check, node.ID, binding.ServiceID, binding.NetworkProfile, now)
+	return routeCheckUsableForEngine(check, engine, node.ID, binding.ServiceID, binding.NetworkProfile, now)
 }
 
 func latestRouteCheck(node storedNode, serviceID, profile string) (CheckRecord, bool) {
+	return latestRouteCheckForEngine(node, "sing-box", serviceID, profile)
+}
+
+func latestRouteCheckForEngine(node storedNode, engine, serviceID, profile string) (CheckRecord, bool) {
 	for index := len(node.Checks) - 1; index >= 0; index-- {
 		check := node.Checks[index]
-		if check.ServiceID == serviceID && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+node.ID {
+		if check.ServiceID == serviceID && check.NetworkProfile == profile && check.RoutePathID == engine+":"+node.ID {
 			return check, true
 		}
 	}
@@ -208,8 +294,18 @@ func latestRouteCheck(node storedNode, serviceID, profile string) (CheckRecord, 
 }
 
 func routeCheckUsable(check CheckRecord, nodeID, serviceID, profile string, now time.Time) bool {
-	return systemprobe.ValidWANProfileID(profile) && check.ServiceID == serviceID && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+nodeID &&
+	return routeCheckUsableForEngine(check, "sing-box", nodeID, serviceID, profile, now)
+}
+
+func routeCheckUsableForEngine(check CheckRecord, engine, nodeID, serviceID, profile string, now time.Time) bool {
+	return validRouteEngine(engine) && systemprobe.ValidWANProfileID(profile) && check.ServiceID == serviceID && check.NetworkProfile == profile && check.RoutePathID == engine+":"+nodeID &&
 		check.TestLevel == "service" && check.Verdict == "PASS" && check.State == "available" && !check.DirectLeak && !now.Before(check.CheckedAt) && now.Before(check.ExpiresAt)
+}
+
+func validRouteEngine(engine string) bool { return engine == "sing-box" || engine == "xray" }
+
+func validExactRoute(route, nodeID string) bool {
+	return validNodeID(nodeID) && (route == "sing-box:"+nodeID || route == "xray:"+nodeID)
 }
 
 func nodeTag(id string) string { return "rz-node-" + id[len("node-"):len("node-")+16] }
