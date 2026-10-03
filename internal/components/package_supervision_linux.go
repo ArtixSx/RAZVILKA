@@ -360,18 +360,66 @@ func runPackageSupervisorAt(path, id, component, action string, test bool) error
 }
 
 func killSupervisorChildren(pid int) {
-	// Enumeration is for cleanup only. Un-reaped own children cannot have
-	// their PIDs reused while this sole wait loop verifies/signals them.
-	tasks, _ := os.ReadDir("/proc/" + strconv.Itoa(pid) + "/task")
-	for _, task := range tasks {
-		data, _ := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/task/" + task.Name() + "/children")
-		for _, s := range strings.Fields(string(data)) {
-			child, e := strconv.Atoi(s)
-			if e == nil && child > 1 {
-				_ = syscall.Kill(child, syscall.SIGKILL)
-			}
+	// Netcraze 4.9 has no /proc/<pid>/task/<tid>/children interface. The
+	// bounded stat scan is for cleanup only, never for positive quiescence.
+	// These are our own unreaped children; this sole wait loop prevents PID
+	// reuse between the exact PPID/birth recheck and signal.
+	for child, birth := range supervisorChildrenAt("/proc", pid) {
+		start, parent, err := childIdentityAt("/proc", child)
+		if err == nil && parent == pid && start == birth {
+			_ = syscall.Kill(child, syscall.SIGKILL)
 		}
 	}
+}
+
+func childIdentityAt(proc string, pid int) (string, int, error) {
+	path := filepath.Join(proc, strconv.Itoa(pid), "stat")
+	f, err := os.Open(path)
+	if err != nil {
+		return "", 0, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, 4097))
+	if err != nil || len(data) > 4096 {
+		return "", 0, ErrUpdateUnknown
+	}
+	end := strings.LastIndex(string(data), ")")
+	if end < 0 {
+		return "", 0, ErrUpdateUnknown
+	}
+	fields := strings.Fields(string(data)[end+1:])
+	if len(fields) < 20 {
+		return "", 0, ErrUpdateUnknown
+	}
+	parent, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return "", 0, err
+	}
+	if _, err := strconv.ParseUint(fields[19], 10, 64); err != nil {
+		return "", 0, err
+	}
+	return fields[19], parent, nil
+}
+
+func supervisorChildrenAt(proc string, parent int) map[int]string {
+	children := map[int]string{}
+	entries, _ := os.ReadDir(proc)
+	read := 0
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil || pid <= 1 {
+			continue
+		}
+		read++
+		if read > 4096 {
+			break
+		}
+		birth, ppid, err := childIdentityAt(proc, pid)
+		if err == nil && ppid == parent {
+			children[pid] = birth
+		}
+	}
+	return children
 }
 
 func supervisionInactive(ctx context.Context, r packageSupervision) error {
