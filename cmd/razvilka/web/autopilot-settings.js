@@ -47,11 +47,12 @@
     dirty = false; message.textContent = ''; render();
   }
   function accept(snapshot) {
-    if (!snapshot?.policy || !Number.isSafeInteger(snapshot.policy.revision)) return;
+    if (!snapshot?.policy || !Number.isSafeInteger(snapshot.policy.revision) || !Number.isFinite(Date.parse(snapshot.server_time))) return false;
     // Preserve pending drafts even across a process restart or stale poll.
-    if (latest && Date.parse(snapshot.server_time) < Date.parse(latest.server_time)) return;
+    if (latest && Date.parse(snapshot.server_time) < Date.parse(latest.server_time)) return false;
     latest = snapshot; received = Date.now();
     if (!dirty && !busy) load(); else render();
+    return true;
   }
   root.addEventListener('razvilka:autonomy-state', event => accept(event.detail));
   root.addEventListener('razvilka:autonomy-error', () => {received=0;render();});
@@ -68,16 +69,16 @@
         await interfaceRequest('/api/v1/autonomy',{method:'PUT',body:JSON.stringify({expected_revision:base.revision,policy,confirm:'SAVE_AUTONOMY',release_safe_mode:false})});
       } catch (error) {
         // No blind write replay if transport lost its response.
-        if (!error.status || error.status >= 500) unknownWrite=true;
+        if (token===epoch && (!error.status || error.status >= 500)) unknownWrite=true;
         throw error;
       }
       if (token!==epoch) return;
       // An independent live read after the completed write, not the passive cache.
       unknownWrite=true;
       const next=await interfaceRequest('/api/v1/autonomy');
-      if(!Number.isSafeInteger(next?.policy?.revision) || next.policy.revision<=base.revision) throw new Error('Сохранение принято, но новая редакция ещё не прочитана. Обновите состояние.');
       if(token!==epoch)return;
-      dirty=false;unknownWrite=false;accept(next);load();
+      if(!current(next,Date.now()) || !next.policy.setup_complete || next.policy.revision<=base.revision || !accept(next)) throw new Error('Сохранение принято, но новая редакция ещё не прочитана. Обновите состояние.');
+      dirty=false;unknownWrite=false;load();
       document.dispatchEvent(new CustomEvent('razvilka:panel-refresh'));
       message.textContent='Параметры сохранены. Разрешения, устройства и текущие маршруты не изменялись.';
     } catch(error) {
@@ -87,7 +88,16 @@
   // The explicit existing refresh button reconciles unknown writes; never resubmit.
   byID('a1-reloadButton')?.addEventListener('click', async () => {
     const token=epoch;if(busy||!unknownWrite)return;
-    try{const next=await interfaceRequest('/api/v1/autonomy');if(token!==epoch)return;unknownWrite=false;accept(next);message.textContent='Состояние прочитано. Сравните сохранённые параметры с вашими полями.';render();}catch{/* Existing refresh UI reports the error. */}
+    busy=true;render();
+    try{
+      const next=await interfaceRequest('/api/v1/autonomy');if(token!==epoch)return;
+      // Only an accepted live read can resolve an unknown write. A passive
+      // publication or an invalid/older response must not admit another PUT.
+      if(!current(next,Date.now()) || !next.policy.setup_complete || !accept(next)) throw new Error('Состояние ещё не подтверждено. Повторите обновление перед сохранением.');
+      unknownWrite=false;
+      message.textContent='Состояние прочитано. Сравните сохранённые параметры с вашими полями.';
+    }catch(error){if(token===epoch)message.textContent=error.message||'Состояние не прочитано. Повторите обновление.';}
+    finally{if(token===epoch){busy=false;render();}}
   });
   render();
 })(typeof globalThis === 'undefined' ? window : globalThis);
