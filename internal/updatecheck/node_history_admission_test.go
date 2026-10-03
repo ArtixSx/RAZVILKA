@@ -2,6 +2,7 @@ package updatecheck
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -17,6 +18,51 @@ func nodeAdmissionFixture(t *testing.T) *NodeHistoryAdmission {
 	retainedFile(t, installation, "controller", []byte("trusted-current-controller"))
 	retainedFile(t, configRoot, "nodes-private/nodes.private.json", retainedNodeFixture(t, false))
 	return &NodeHistoryAdmission{configRoot: configRoot, stateRoot: stateRoot, installation: installation, executable: executable, read: validatedNodeHistoryRead, currentReadVersion: 2, identity: func(string) error { return nil }, probe: func(context.Context, selfupdatejournal.BinaryImage) (int, error) { return 2, nil }}
+}
+
+func TestNodeAdmissionRequiresMatchingTerminalHelperAndFileJournal(t *testing.T) {
+	a := nodeAdmissionFixture(t)
+	journal := filepath.Join(a.stateRoot, "self-update-files")
+	for _, path := range []string{journal, filepath.Join(a.installation, "bin")} {
+		if err := os.MkdirAll(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data := []byte("trusted-current-controller")
+	retainedFile(t, a.installation, "bin/razvilka", data)
+	candidate := filepath.Join(a.stateRoot, "candidate-controller")
+	if err := os.WriteFile(candidate, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := selfupdatejournal.Open(a.installation, journal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	id := "0123456789abcdef0123456789abcdef"
+	check := func(context.Context) error { return nil }
+	ctx := context.Background()
+	if err := store.Prepare(ctx, id, []selfupdatejournal.File{{Target: "bin/razvilka", Candidate: candidate, SHA256: digestBytes(data)}}, check, check); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Install(ctx, id, check, check); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Accept(ctx, id, false, check, check); err != nil {
+		t.Fatal(err)
+	}
+	for _, matching := range []bool{true, false} {
+		helperID := id
+		if !matching {
+			helperID = "1123456789abcdef0123456789abcdef"
+		}
+		raw, _ := json.Marshal(updateRecord{Owner: updaterOwner, Job: Job{ID: helperID, State: "completed"}})
+		retainedFile(t, a.stateRoot, "self-update/current.json", raw)
+		err := a.CheckWrite(ctx, 2)
+		if matching && err != nil || !matching && err == nil {
+			t.Fatal("helper/file terminal binding", matching, err)
+		}
+	}
 }
 func TestNodeWriteAdmissionChecksFutureRollbackReadCapability(t *testing.T) {
 	for _, version := range []int{0, 1, 2, 3} {
