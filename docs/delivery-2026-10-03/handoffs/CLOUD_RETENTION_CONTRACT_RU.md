@@ -1,77 +1,54 @@
-# CLOUD → CORE/OPS: retained enrollment вне mutable self-update restore
+# CLOUD → CORE/OPS: retention на действующем native enrollment root
 
-Дата: 04.10.2026. Основание: `8821fd1d2e814f6e1a330e4d88f05509a096e2f3`, worktree `sol-cloud`.
-Статус: **контракт для совместной реализации; отдельный root/capability ещё не подключены**. Ниже не заявляется, что новый self-update mutable restore уже безопасен для enrollment. Код CORE/OPS/nativeenrollment/privaterestore и их ownership не менялись.
+Обновлено 04.10.2026 после review `8821fd1`/`c44ffee`. **Предложение отдельного root, миграции и новой retention capability снято с этой порции по уточнению координатора.** Сохраняются действующие `Warp.Root`, schema=1, CLI, private-restore layout/binding и существующий reader gate. Здесь не объявляется согласованным изменение namespace или CORE API.
 
-## Доказанное текущее поведение
+## Точный список исключений из mutable self-update
 
-- `warp/native_enrollment.go`: canonical image и legacy migration inputs сейчас находятся под `Manager.Root`. `Generate` сохраняет pending до единственного POST; restart с unknown не разрешает новый POST. Recovery/backup/restore используют тот же root и lease.
-- `nativeenrollment/state.go`: `MergeImage` не даёт архиву убрать/заменить существующий pending и не заменяет существующие attempt bytes. Но `CompareAndSwap` — общий доверенный file primitive, а не защита от внешнего directory restore или любого старого binary. `ReadEffective` при отсутствии image/legacy inputs возвращает пустое состояние; после удаления root это может снова разрешить enrollment.
-- `privaterestore` имеет typed `native_warp` slot и при ошибке общей транзакции восстанавливает before-image. `TestNativeRollbackWithOtherTargetsPreservesBeforeImage` специально проверяет исчезновение нового импортированного image при rollback. Эту семантику нельзя переносить на retained facts, появившиеся после удалённого side effect. Текущий unit PASS retention проверяет конкретный import/lease, не сохранность при новом mutable self-update restore.
-- Старые upgrade/rollback scripts проверяют `-native-enrollment-schema` и файлы под `$STATEDIR/warp`; обычный rollback сейчас не восстанавливает весь warp directory. Новый OPS mutable restore обязан сохранить эту границу. Schema=1 доказывает формат reader, но не знание другого пути или retained-only семантики.
+`WARP_ROOT` — доверенный текущий `-warp-state`, обычно `$STATEDIR/warp`; `CONFIG_DIR` — каталог доверенного `-config`, обычно `$APPDIR`. Применять список к фактическим deployment paths, а не только hardcoded defaults.
 
-## Обязательные инварианты
+| Retained цель | Содержимое / причина |
+|---|---|
+| `$WARP_ROOT/native-enrollment.private.json` | Весь canonical schema-1 image: current/pending, все attempt identities, key/response/registration bytes и provenance. Он authoritative после появления. |
+| `$WARP_ROOT/native-enrollment/**` | Весь immutable legacy input, включая current.json/pending.json, attempt-*/private-key.bin, response.private.json, registration.private.json, provider/accounts.private.json. Не выбирать только известные leaf-файлы и не удалять прежние материалы после canonical copy. |
+| `$WARP_ROOT/.state-<sha256(native-enrollment.private.json)>.lock` | Permanent exact-file writer lease marker/inode. Не копировать поверх и не удалять при restore/cleanup. Для нестандартного Windows case правила имени определяет restorejournal, не shell. |
+| `$WARP_ROOT/health-policy.json` | Policy и runtime accounting пока смешаны: registration_attempts, rotations, cooldown/последние решения. Installer оставляет весь файл текущим, иначе старый snapshot вернёт квоту или прежние разрешения. Обычная явная policy CAS остаётся разрешённой владельцем. |
+| `$WARP_ROOT/wgcf-account.toml` | Существующий пользовательский legacy enrollment сохраняется. `wgcf generate` только экспортирует его; native свежая регистрация его не удаляет. |
+| `$CONFIG_DIR/private-restore-native-v1/**` | Полный retained journal generation: restore.private.json, before/after-images и .restore.lock. По одному current marker исключение неполно. |
+| `$CONFIG_DIR/private-restore-feeds-v1/**` | Текущий feeds-generation coordinator тоже содержит `native_warp`; его journal/lease/images сохраняются по той же причине. |
 
-Enrollment — факт внешнего side effect, поэтому executable/config rollback не может откатить его историю. Каждый отправленный или потенциально отправленный attempt сохраняет локальную identity, intent, исходный key/response/registration, unresolved fence и уже списанную квоту. Отсутствующий response, старый snapshot или успешный rollback приложения не являются доказательством «POST не был отправлен».
+Все эти цели исключить одновременно из snapshot manifest, mutable restore, удаления отсутствовавших в старом snapshot целей, directory replacement и prune/cleanup. Не восстанавливать `$WARP_ROOT`, `$STATEDIR`, `$CONFIG_DIR` или их общий предок целиком: это обход file allowlist. Historical manifest с whole-dir/overlapping target отклонить до первого stop/write; нельзя молча исполнять его частично и объявлять rollback успешным. Проверки учитывать actual opened ownership/alias/symlink, не только строковый prefix.
 
-Unknown блокирует новые manual/automatic/fresh enrollment независимо от rollback policy, UI/login, Stop и возраста backup. Допустимы read/status, Stop и локальное восстановление того же attempt из сохранённых bytes без POST. При missing/corrupt/unsupported retained state результат blocked/requires-review, не fallback на пустую регистрацию.
+Из production источников: canonical/legacy поведение — `nativeenrollment/state.go`; lease inode — `restorejournal/file_target.go`, `lease.go`; accounting до remote call — `warp/health.go`; два journal поколения — `cmd/razvilka/private_recovery.go`. Текущие scripts уже не копируют WARP tree в directory snapshots; задача OPS — сохранить эту границу при новом mutable lifecycle. Эти файлы этим чатом не менялись.
 
-Снятие pending допустимо только существующим протоколом завершения того же attempt, с сохранённым результатом и локальным checkpoint. Завершение одной операции не снимает неизвестную другую. В этой порции нет API удаления/«сбросить регистрацию», истечения unknown по TTL или разрешения mint-again.
+## Unknown и текущий reader
 
-## Root и минимальный API-контракт
+Durable intent до POST остаётся на прежнем canonical root. Missing response, timeout, успешный executable rollback или старый config не означают «POST не был отправлен». Pending/invalid image блокирует manual/automatic/fresh enrollment. Recovery допускает только восстановление того же attempt из сохранённых материалов, без нового POST.
 
-Предлагаемый trusted deployment root: `/opt/var/lib/razvilka/enrollment-retained/warp`. Он фиксируется установщиком/CLI, отдельно от `warp` mutable settings, stage/live profiles, directory snapshots и обоих self-update journal roots. Администратор может выбрать другой абсолютный private root до deployment; путь из импортируемого config/archive/HTTP недопустим.
+OPS продолжает existing `-native-enrollment-schema` gate на real target executable до stop, после quiescence и после private recovery; schema=1 и root не меняются, новая capability не нужна. Gate проверяет canonical и legacy markers и retained private-restore generations, включая feeds-v1. Unknown/corrupt/unsafe/unsupported protocol остаётся fence; старый reader без schema=1 не запускается поверх этих данных. Native resolved не снимает self-update unknown и наоборот. Read/Stop сохраняются, login/GET не получают сетевых прав.
 
-CORE обязан отклонять overlap/alias с **любой** mutable restore целью или её предком/потомком, filesystem root, symlink/hardlink alias. Если OPS snapshot восстанавливает весь `/opt/var/lib/razvilka`, предложенный child root тоже попадает внутрь и запрещён: нужно сузить snapshot allowlist или выбрать отдельный private root вне него. Строковое сравнение путей без opened ownership/identity недостаточно.
+## Узкий private-import guard — реализован в CLOUD библиотеке
 
-Согласуемый минимальный wiring (не существующий API):
+`Manager.BeginNativeRestore` берёт Manager mutex и существующую canonical lease, затем фиксирует initial effective Document. Новый `NativeRestore.CompareAndSwap` требует точного сохранения **каждого** initial file, включая current/pending/key/response/registration. Удаление/замена исходного локального enrollment возвращает `nativeenrollment.ErrConflict` до записи. Baseline secrets очищаются при Close.
 
-```go
-// CLOUD: отдельное trusted поле, сконфигурированное до запуска workers.
-warp.Manager.EnrollmentRoot string
-// CORE: CLI -warp-enrollment-state <absolute-root>, deployment environment
-// RAZVILKA_WARP_ENROLLMENT_STATE, одинаковые в daemon/check/restore/recovery.
-// CORE: readonly capability -native-enrollment-retention-schema -> 1.
-```
+Новые bytes, внесённые только copy-only import этой сессии, допускается убрать точным typed journal rollback: под Manager mutex/lease не мог быть выполнен remote enrollment. Поэтому `empty → imported → absent` и `old → merged → old` сохраняют прежнюю transactional семантику. Это не общий monotonic CAS и не требование навсегда сохранять незафиксированный архивный импорт. Предыдущая формулировка о запрете любого native before-image rollback заменена этим различием.
 
-`EnrollmentRoot` применяется ко **всем** native status/read/Generate/recover/export/lease/binding путям, а не только POST writer. `Manager.Root` остаётся для legacy account и mutable WARP settings. Не реализовывать разные roots для автоматической и ручной регистрации. CORE обновляет typed private-restore layout/binding совместно с владельцем `nativeenrollment/privaterestore`; старые bindings из pending restore нельзя тихо переименовывать.
+Raw target теперь private; публичные методы сессии — Read, Binding, MergeImage, CompareAndSwap, Close. `Target`/унаследованный Save больше не позволяют обходить guard. Существующий privaterestore использует этот методный контракт; source-level обращений к `.Target` не найдено, schema/layout/journal generation не менялись.
 
-Retained root содержит canonical schema-1 enrollment image, migration provenance/fence и retained attempt accounting. В текущем `health-policy.json` смешаны policy и `HealthState.Attempts/Rotations`: mutable rollback этих данных не должен возвращать квоту неизвестной/выполненной регистрации. До отдельного accounting-контракта сохранить этот файл вне rewind либо держать recovery fence; новый duplicate enrollment provider/journal не вводить. Consent policy можно менять только через обычные CAS/Stop/SafeMode guards; восстановленный старый consent не снимает retained запреты.
+Offline startup recovery по retained journal по-прежнему использует `nativeenrollment.Target` до открытия runtime/writers. Его exact before/after CAS нужен для незавершённого copy-only импорта и не заменяется этим guard. CORE сохраняет startup fence: нельзя открыть enrollment API/workers до разрешённой recovery; после Blocked admission остаётся закрытым. Self-update **не** использует native import/CAS как способ вернуть old enrollment snapshot. Guard не защищает от installer/root, удаляющего файлы — manifest exclusions обязательны.
 
-## Миграция, backup и restore
+## Проверки и приёмка
 
-1. Admission/Stop + доверенное отсутствие старых writers; lease обоих exact source/destination targets. При невозможности доказать quiescence миграция blocked, никакого сетевого действия.
-   До смены root/layout нужно проверить старые private-restore journal generations и закончить их recovery с **прежним** binding, не переименовывая journal под новый scope. Если старый before-image способен убрать retained факт внешней операции, автоматическая recovery/migration остаётся requires-review; сначала обеспечить durable сохранение этого факта/fence. Одной сменой `WarpRoot` незавершённый журнал не исправляется.
-2. Читать прежний canonical image и immutable legacy inputs. Новый destination получает validated copy/merge сохраняемых facts, pending, attempt identity и accounting; совпадение bytes обязательно. Конфликт двух pending — requires-review, не выбор самого нового timestamp.
-3. Durable destination file **и directory entries**, затем readback, затем durable location/compatibility fence. Исходные image/legacy inputs не удалять и не перезаписывать. Crash между шагами не должен превращать новый root в «пустой»: незавершённый migration fence блокирует enrollment. Повтор миграции — тот же merge, без нового POST.
-4. Self-update mutable restore исключает retained root, migration marker, compatibility record, accounting и retained restore journals из файлов/dir images и удаления. Он не вызывает raw CAS/restore before-image для enrollment. Old application snapshot меняет только разрешённые mutable цели.
-5. Явный private backup экспортирует retained secrets только через существующий encrypted private механизм. Import — merge facts под тем же lease, без удаления/замены новейшего unresolved attempt. Его общий rollback может откатить mutable selection/drafts, но уже принятые retained unknown facts остаются либо держат отдельный durable fence; импортный before-image не становится authoritative enrollment state. Это требует изменения владельцем typed native slot: текущая его полная before-image rollback семантика этому контракту не соответствует.
+Добавлены regression tests `warp/native_restore_guard_test.go`: удаление/замена всех preexisting local enrollment files отклоняется, bytes не изменяются; после restart unknown не повторяет POST; rollback новых inert imported bytes разрешён с пустым/существующим baseline. Полный адресный `go test ./internal/warp ./internal/usquediag ./internal/privaterestore` — RC 0. Existing privaterestore copy-only rollback/crash tests тоже прошли; это unit/fault fixtures, не installer/native/power-cut приёмка.
 
-## Upgrade/rollback к старому reader
-
-OPS проверяет реальный target executable до stop/mutation и повторно после quiescence/recovery, а также retained paths, legacy inputs и migration/restore markers. Наличие terminal receipt тоже требует reader capability: terminal facts/квота не удаляются. Unsafe/corrupt/unsupported marker — blocked; отсутствие текущего pending не даёт права игнорировать retained protocol.
-
-Требуются обе capabilities: существующий `-native-enrollment-schema` для формата фактического image и новый `-native-enrollment-retention-schema` для path/retention/fence семантики. Значение 1 нового флага CORE может возвращать только после wiring всех read/write/startup/restore режимов и guards, не как standalone print. Schema-1 binary, знающий только старый `$STATEDIR/warp`, **несовместим** с новым retained root даже при одинаковом JSON schema.
-
-Нет флага/поддержки нужной схемы/root contract → downgrade/rollback target не устанавливается и не запускается поверх retained state. Совместимый LKG executable можно вернуть, сохранив тот же root/fence; вернуть старый config или старый health policy недостаточно. При новых schema writers обновлять объявленные read capabilities согласованно. Нельзя ради старого reader копировать «до регистрации» snapshot в старый root, стирать/переименовывать retained markers или отключать registration fence. Никакой обход через shell/wgcf при отказе capability.
-
-Всем startup/CLI entrypoints нужен fence **до** API/workers: native unknown/migration unknown и неизвестный self-update command outcome сохраняются независимо. Self-update successful/rolled-back не означает native enrollment resolved и наоборот. Без совместимого recovery reader приложение остаётся в режиме чтения/Stop; новая регистрация и фоновые mutations запрещены.
-
-## Ownership и приёмка
-
-CLOUD после review реализует единый выбор native root в `internal/warp/**` и библиотечные регрессии. CORE реализует trusted paths/CLI/capabilities/startup admission, новый layout/binding и координирует владельца `nativeenrollment/privaterestore`. OPS исключает retained targets из mutable manifests/restore/cleanup и проверяет реальный reader upgrade/rollback. Общие файлы не переданы этому чату; эта порция меняет только handoff.
-
-Нужные регрессии владельцам:
+OPS/координатору осталось проверить:
 
 | Сценарий | Обязательный результат |
 |---|---|
-| Snapshot до POST → POST timeout → mutable app rollback → restart | исходный pending/key/квота сохранены, новый POST=0 |
-| Response сохранён → crash до stage/current → rollback | локальная recovery того же attempt, новый POST=0 |
-| Mutable snapshot без enrollment image либо с прежним current | retained bytes/fence не заменены, active LKG сохранён |
-| Crash на каждой границе root migration | старое/новое состояние или requires-review, никогда unfenced empty enrollment |
-| Private import pending → сбой другой mutable цели | retained pending/fence сохранён; новый POST=0 |
-| Новый reader → target schema=1 без retention capability | до stop/replace отказ, receipt bytes сохранены |
-| Retained unknown/corrupt/terminal плюс попытка старого rollback | unsupported/corrupt блокируются; terminal не удалён |
-| Compatible LKG reader + смена policy/config root | retained path/identity неизменны, unknown не разрешён |
+| Snapshot до POST → timeout/pending → mutable update rollback → restart | image/key/accounting unchanged, новый POST=0 |
+| Response сохранён → crash до stage/current → executable rollback | та же локальная recovery, новый POST=0 |
+| Historical manifest содержит whole-dir/root-overlap | отказ до stop/write; retained bytes и active LKG сохранены |
+| Retained native/feeds private journal unknown/corrupt | reader/recovery fence; никаких raw cp/rm или нового POST |
+| Copy-only import → ошибка другой mutable цели | точный rollback новых импортированных bytes, preexisting local facts сохранены |
+| Старый target reader без schema=1 | existing gate отвергает до replacement, root не перемещается |
 
-Это список приёмки, **не выполненные тесты**. В данном docs-only уточнении выполнен `git diff --check`; production код и live среда не менялись. Адресные unit/cross-build результаты предыдущего `8821fd1` остаются только его областью; новый retention протокол ими не покрыт.
+Последняя таблица — план совместной приёмки, не выполненный installer gate. Нового root/capability/миграции не добавлено; код OPS/CORE/nativeenrollment/privaterestore не изменён.

@@ -103,4 +103,15 @@ D13 **не закрыт**. Нет настоящей регистрации, HTT
 
 NETWORK_POLICY_EXECUTOR_REQUIRED сохранён; auth/CSRF/TLS/Stop/CAS/ownership/recovery fence/LKG не отключены. Mihomo/HEV не получили production статус. Общие TASKS/VALIDATION и ownership docs остаются у координатора.
 
-Уточнение OPS о mutable self-update restore: отдельный [retention/root contract для CORE/OPS](CLOUD_RETENTION_CONTRACT_RU.md). Это согласуемое подключение, ещё не реализация: retained enrollment/unknown/accounting не rewind, старый reader без новой retention capability блокируется даже при поддержке JSON schema 1. Текущий typed private import rollback before-image отдельно требует согласованного изменения владельцем.
+Уточнение OPS о mutable self-update restore: [retention contract для CORE/OPS](CLOUD_RETENTION_CONTRACT_RU.md) обновлён после review. Сохраняется действующий root/reader без новой namespace/capability; перечислены точные manifest exclusions и реализован узкий guard preexisting local facts в NativeRestore. Copy-only import rollback остаётся совместимым.
+
+## Следующая библиотечная порция после c44ffee
+
+Base: `c44ffeec4289534d6cb197e7a821aaa920bc8355`. Изменены только принадлежащие CLOUD библиотеки, собственный `test-cloud-*` script и handoffs:
+
+- `internal/warp/native_enrollment.go`, `native_restore_guard_test.go`: live NativeRestore фиксирует initial document под прежним mutex/lease. CAS не может удалить/заменить initial enrollment facts, но позволяет exact rollback новых copy-only imported bytes. Raw Target/Save больше не экспортированы; прежний method contract для privaterestore сохранён. Offline startup journal protocol не меняется.
+- `internal/usquediag/transport_probe.go`, `transport_probe_test.go`, `transport_native_test.go`: отдельный trusted opt-in native H2/H3 probe с literal endpoint, TLS verification, challenge, environment/expiry и resource cleanup. Не имеет enrollment capability и не выдаёт WARP proof.
+- `scripts/test-cloud-transport.sh`: собственный opt-in localhost harness, без регистрации/VM/router mutation. [API, команды, ограничения и фактические проверки](CLOUD_TRANSPORT_HARNESS_RU.md).
+- `CLOUD_RETENTION_CONTRACT_RU.md`: вместо несогласованного нового root перечислены exact exclusions на **действующем** root, включая canonical lease, health accounting, legacy account и native/feeds private-restore generations. Broad запрет copy-only rollback заменён baseline guard.
+
+Адресный `test -count=1` warp/usquediag/privaterestore, выбранные app private/native backup restore regressions и vet — RC 0. Linux amd64/arm64 libraries и native fixture binaries cross-compile — RC 0. Default harness test — SKIP; launcher без opt-in — ожидаемый RC 2; shell syntax/diff checks — RC 0. Native opt-in, installer manifests/full Linux/race/HIL, настоящий WARP/USQUE не запускались. CORE/OPS/app/nativeenrollment/privaterestore, schema/layout/CLI paths, VERSION/go.mod/go.sum не изменены. Следующий шаг координатора — localhost native harness и OPS mutable-retention integration review, отдельно от реального WARP.
