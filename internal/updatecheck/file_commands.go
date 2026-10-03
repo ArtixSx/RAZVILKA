@@ -39,6 +39,10 @@ type fileCommandReceipt struct {
 
 var fileBootPattern = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
 
+// A failed join or missing durable ECHILD receipt leaves the command unknown.
+// Callers must not treat cancellation, worker death, or this error as quiescence.
+var ErrFileCommandUnsettled = errors.New("self update command cleanup is unconfirmed; outcome remains unknown")
+
 func validFileProcess(process fileProcess) bool {
 	start, err := strconv.ParseUint(process.Start, 10, 64)
 	return err == nil && start > 0 && strconv.FormatUint(start, 10) == process.Start && process.Inode != 0 && fileBootPattern.MatchString(process.Boot) && process.PID > 1 && validDigest("sha256:"+process.ExecutableSHA256)

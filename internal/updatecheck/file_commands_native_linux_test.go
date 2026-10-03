@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -41,6 +42,15 @@ func TestMain(m *testing.M) {
 		if os.Args[1] == "self-update-command-helper" {
 			if len(os.Args) != 4 || filepath.Base(job) != os.Args[2] {
 				os.Exit(93)
+			}
+			if p.Scenario == "unsettled-worker" {
+				signal.Ignore(syscall.SIGTERM, syscall.SIGINT)
+				if os.WriteFile(filepath.Join(job, "worker-ready"), []byte("ready\n"), 0600) != nil {
+					os.Exit(97)
+				}
+				for {
+					time.Sleep(time.Hour)
+				}
 			}
 			a := nativeFileAdapter(filepath.Dir(job), p)
 			if err := runFileCommandWorker(a, os.Args[2], os.Args[3]); err != nil {
@@ -246,28 +256,169 @@ func TestNativeSelfUpdateCommandCancelledDirectExitZeroIsRejected(t *testing.T) 
 		time.Sleep(20 * time.Millisecond)
 	}
 	cancel()
-	if err := <-done; err == nil {
-		t.Fatal("cancel accepted direct exit0")
+	if err := <-done; !errors.Is(err, context.Canceled) || errors.Is(err, ErrFileCommandUnsettled) {
+		t.Fatal("cancellation returned without confirmed settlement", err)
+	}
+	assertNativeFileCommandSettled(t, a, r.ID)
+}
+
+// No polling after Run returns: the API boundary must already have joined the
+// worker and read its durable all-child completion, even on an error return.
+func assertNativeFileCommandSettled(t *testing.T, a *SelfUpdateFileAdapter, id string) {
+	t.Helper()
+	root, err := a.commandRoot(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	receipt, err := readFileCommand(root, id, "quiesce-old-runtime")
+	if err != nil || receipt.State != "reaped" || !receipt.WaitECHILD || !receipt.Cancelled || receipt.ExitCode != 125 || receipt.Reaped < 2 {
+		t.Fatal("Run returned before durable canceled ECHILD", receipt, err)
+	}
+	if err := fileCommandInactive(context.Background(), receipt); err != nil {
+		t.Fatal(err)
+	}
+	if birth, _, err := fileBirth(receipt.Supervisor.PID); err == nil && birth == receipt.Supervisor.Start {
+		t.Fatal("Run returned before joining the exact worker", receipt.Supervisor)
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+}
+
+func waitNativeFileMarker(ctx context.Context, path string) error {
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+}
+
+func TestNativeSelfUpdateCommandAdmissionErrorAfterStartJoinsWorker(t *testing.T) {
+	a, _, r, _ := nativeFileFixture(t, "hung")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	admit := a.admission
+	rejected := errors.New("admission failed after actual worker Start")
+	a.admission = func(ctx context.Context, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
+		if err := admit(ctx, id, installationID, sequence, action, effect, begin); err != nil {
+			return err
+		}
+		if effect == "command-worker-quiesce-old-runtime" {
+			if err := waitNativeFileMarker(ctx, filepath.Join(a.directory, id, "child-ready")); err != nil {
+				return err
+			}
+			return rejected
+		}
+		return nil
+	}
+	if err := a.Run(ctx, r.ID, "quiesce-old-runtime"); !errors.Is(err, rejected) || errors.Is(err, ErrFileCommandUnsettled) {
+		t.Fatal("post-Start rejection returned unconfirmed cleanup", err)
+	}
+	assertNativeFileCommandSettled(t, a, r.ID)
+}
+
+func TestNativeSelfUpdateCommandReceiptFailureJoinsWorker(t *testing.T) {
+	for _, failure := range []string{"unreadable", "identity"} {
+		t.Run(failure, func(t *testing.T) {
+			a, _, r, _ := nativeFileFixture(t, "hung")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- a.Run(ctx, r.ID, "quiesce-old-runtime") }()
+			if err := waitNativeFileMarker(ctx, filepath.Join(a.directory, r.ID, "child-ready")); err != nil {
+				cancel()
+				<-done
+				t.Fatal(err)
+			}
+			root, err := a.commandRoot(r.ID)
+			if err != nil {
+				cancel()
+				<-done
+				t.Fatal(err)
+			}
+			defer root.Close()
+			var running fileCommandReceipt
+			for {
+				running, err = readFileCommand(root, r.ID, "quiesce-old-runtime")
+				if err == nil && running.State == "running" {
+					break
+				}
+				if ctx.Err() != nil {
+					cancel()
+					<-done
+					t.Fatal("worker never published running", running, err)
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			if failure == "unreadable" {
+				err = root.WriteAtomic("quiesce-old-runtime.process.json", []byte("{broken"), 0600)
+			} else {
+				running.Supervisor.Start += "0"
+				err = writeFileCommand(root, running)
+			}
+			if err != nil {
+				cancel()
+				<-done
+				t.Fatal(err)
+			}
+			if err := <-done; err == nil || errors.Is(err, ErrFileCommandUnsettled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				t.Fatal("receipt failure returned unconfirmed cleanup", err)
+			}
+			assertNativeFileCommandSettled(t, a, r.ID)
+		})
+	}
+}
+
+func TestNativeSelfUpdateCommandCleanupTimeoutRemainsUnknown(t *testing.T) {
+	a, _, r, _ := nativeFileFixture(t, "unsettled-worker")
+	worker := exec.Command(filepath.Join(a.directory, r.ID, "control.bin"), "self-update-command-helper", r.ID, "quiesce-old-runtime")
+	worker.Env = commandEnvironment()
+	if err := worker.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- worker.Wait(); close(done) }()
+	defer func() { _ = worker.Process.Kill(); <-done }()
+	readyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := waitNativeFileMarker(readyCtx, filepath.Join(a.directory, r.ID, "worker-ready")); err != nil {
+		t.Fatal(err)
+	}
+	supervisor, err := fileProcessOf(worker.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, err := fileProcessOf(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
 	}
 	root, err := a.commandRoot(r.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	for deadline = time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-		receipt, err := readFileCommand(root, r.ID, "quiesce-old-runtime")
-		if err == nil && receipt.State == "reaped" {
-			if !receipt.WaitECHILD || !receipt.Cancelled || receipt.ExitCode != 125 || receipt.Reaped < 2 {
-				t.Fatal("cancel receipt became success", receipt)
-			}
-			if err := fileCommandInactive(context.Background(), receipt); err != nil {
-				t.Fatal(err)
-			}
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
+	intent := fileCommandReceipt{Schema: SelfUpdateReadVersion, ID: r.ID, Command: "quiesce-old-runtime", State: "intent", Parent: parent}
+	if err := writeFileCommand(root, intent); err != nil {
+		t.Fatal(err)
 	}
-	t.Fatal("worker never published durable ECHILD after cancellation")
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cleanupCancel()
+	if err := settleFileCommandWorker(cleanupCtx, root, r.ID, intent.Command, worker.Process, done, parent, supervisor, nil); !errors.Is(err, ErrFileCommandUnsettled) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("unjoined worker was settled", err)
+	}
+	after, err := readFileCommand(root, r.ID, intent.Command)
+	if err != nil || after != intent || fileCommandInactive(context.Background(), after) == nil || fileProcessMatches(supervisor) != nil {
+		t.Fatal("cleanup timeout changed unknown receipt or killed its wait owner", after, err)
+	}
 }
 
 func TestNativeSelfUpdateCommandEpochInstallationBinding(t *testing.T) {

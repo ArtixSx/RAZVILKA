@@ -301,41 +301,90 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthority(command)); err != nil {
 		return err
 	}
-	if err := a.EffectAdmission(ctx, id, fileCommandAuthority(command), "command-worker-"+command, worker.Start); err != nil {
-		if worker.Process != nil {
-			go worker.Wait()
-			_ = worker.Process.Signal(syscall.SIGTERM)
+	admissionErr := a.EffectAdmission(ctx, id, fileCommandAuthority(command), "command-worker-"+command, worker.Start)
+	if worker.Process == nil {
+		if admissionErr != nil {
+			return admissionErr
 		}
-		return err
+		return ErrFileProtocol
+	}
+	// Capture the exact kernel/executable identity before starting the sole
+	// parent Wait. A receipt alone cannot establish which process we joined.
+	supervisor, identityErr := fileProcessOf(worker.Process.Pid)
+	if identityErr == nil && (supervisor.Boot != parent.Boot || supervisor.ExecutableSHA256 != review.OldExecutableSHA256) {
+		identityErr = ErrFileProtocol
 	}
 	done := make(chan error, 1)
 	go func() { done <- worker.Wait() }()
+	cleanup := func(cause error) error {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		return errors.Join(cause, settleFileCommandWorker(cleanupCtx, root, id, command, worker.Process, done, parent, supervisor, identityErr))
+	}
+	if admissionErr != nil || identityErr != nil {
+		return cleanup(errors.Join(admissionErr, identityErr))
+	}
 	tick := time.NewTicker(50 * time.Millisecond)
 	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			_ = worker.Process.Signal(syscall.SIGTERM)
-			return ctx.Err()
-		case <-done:
+			return cleanup(ctx.Err())
+		case waitErr := <-done:
 			r, err := readFileCommand(root, id, command)
-			if err != nil || r.Supervisor.PID != worker.Process.Pid || r.State != "reaped" || !r.WaitECHILD || r.Cancelled || r.ExitCode != 0 {
+			if err != nil || r.Parent != parent || r.Supervisor != supervisor || !r.WaitECHILD || (r.State != "reaped" && r.State != "not-started") {
+				return errors.Join(ctx.Err(), ErrFileProtocol, ErrFileCommandUnsettled, err)
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if waitErr != nil || r.State != "reaped" || r.Cancelled || r.ExitCode != 0 {
 				return ErrFileProtocol
 			}
 			return nil
 		case <-tick.C:
 			r, err := readFileCommand(root, id, command)
 			if err != nil {
-				return err
+				return cleanup(err)
+			}
+			if r.Parent != parent || (r.State != "intent" && r.Supervisor != supervisor) {
+				return cleanup(ErrFileProtocol)
 			}
 			if r.State == "runtime-ready" {
-				if r.Supervisor.PID != worker.Process.Pid || fileProcessMatches(r.Supervisor) != nil || fileProcessMatches(r.Runtime) != nil {
-					return ErrFileProtocol
+				if fileProcessMatches(r.Supervisor) != nil || fileProcessMatches(r.Runtime) != nil {
+					return cleanup(ErrFileProtocol)
+				}
+				if err := ctx.Err(); err != nil {
+					return cleanup(err)
 				}
 				return nil
 			}
 		}
 	}
+}
+
+// Process.Signal uses the exec-created process handle, never a receipt PID or
+// process group. Keep the worker alive to reap its own adopted descendants;
+// killing it on timeout would destroy that proof. The independent cleanup
+// context bounds the join even when the caller's context has already expired.
+func settleFileCommandWorker(ctx context.Context, root *ownedfs.Root, id, command string, process *os.Process, done <-chan error, parent, supervisor fileProcess, identityErr error) error {
+	_ = process.Signal(syscall.SIGTERM)
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return errors.Join(ErrFileCommandUnsettled, ctx.Err())
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(ErrFileCommandUnsettled, err)
+	}
+	r, err := readFileCommand(root, id, command)
+	if deadlineErr := ctx.Err(); deadlineErr != nil {
+		return errors.Join(ErrFileCommandUnsettled, deadlineErr, err)
+	}
+	if identityErr != nil || err != nil || !validFileProcess(supervisor) || r.Parent != parent || r.Supervisor != supervisor || !r.WaitECHILD || (r.State != "reaped" && r.State != "not-started") {
+		return errors.Join(ErrFileCommandUnsettled, identityErr, err)
+	}
+	return nil
 }
 
 // Separate process only. The current/retained trusted controller dispatches
