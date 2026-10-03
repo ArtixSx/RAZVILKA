@@ -43,6 +43,7 @@ type WARPWireGuardAdapter struct {
 	FallbackPorts     []int
 	NativeOnly        bool
 	AWGCapabilities   func(context.Context) awgprofile.Capabilities
+	isolatedCandidate bool
 }
 
 type warpWGSelection struct {
@@ -242,7 +243,7 @@ func (a *WARPWireGuardAdapter) Validate(ctx context.Context, _ Plan, root string
 
 // Canary validates a staged WireGuard profile on a temporary interface before
 // Activate is allowed to touch the live interface or service policy. The only
-// temporary policy rule matches the candidate tunnel source address, so LAN
+// temporary policy rule matches the candidate's bound socket interface, so LAN
 // clients and the router's ordinary traffic keep their current routes.
 func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root string) (retErr error) {
 	staged := filepath.Join(root, "rz-warp.conf.staged")
@@ -261,7 +262,7 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err != nil {
 		return err
 	}
-	source, err := firstIPv4TunnelAddress(addresses)
+	source, err := firstTunnelAddress(addresses)
 	if err != nil {
 		return err
 	}
@@ -275,7 +276,11 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 		candidate.Interface = "rz-wg-canary"
 	}
 	candidate.StateRoot = filepath.Join(root, "canary")
-	candidate.RuntimeConfigPath = filepath.Join(candidate.StateRoot, "candidate.conf")
+	candidate.RuntimeConfigPath = filepath.Join(candidate.StateRoot, candidate.Interface+".conf")
+	// wg-quick derives its link name from the file and may install connected
+	// routes in main. The candidate must use the explicit, isolated native path.
+	candidate.NativeOnly = true
+	candidate.isolatedCandidate = true
 	candidate.Table = 219
 	candidate.PriorityBase = 18050
 	if candidate.interfaceActive(ctx) {
@@ -292,7 +297,7 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err := owned.MkdirAll("canary", 0o700); err != nil {
 		return err
 	}
-	if err := owned.WriteAtomic(filepath.Join("canary", "candidate.conf"), []byte(runtimeProfile), 0o600); err != nil {
+	if err := owned.WriteAtomic(filepath.Join("canary", candidate.Interface+".conf"), []byte(runtimeProfile), 0o600); err != nil {
 		return err
 	}
 	interfaceStarted, policyInstalled := false, false
@@ -308,7 +313,9 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 				cleanupErr = err
 			}
 		}
-		cleanupErr = errors.Join(cleanupErr, owned.RemoveAll("canary"))
+		if cleanupErr == nil {
+			cleanupErr = owned.RemoveAll("canary")
+		}
 		if cleanupErr != nil {
 			retErr = errors.Join(retErr, fmt.Errorf("cleanup WARP canary: %w", cleanupErr))
 		}
@@ -329,7 +336,20 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 			probe = sourceBoundAWGProbe
 		}
 	}
+	ctx = context.WithValue(ctx, wgSocketInterfaceKey{}, candidate.interfaceName())
 	return candidate.probeCanaryServices(ctx, plan, root, probe, source.String())
+}
+
+func firstTunnelAddress(addresses []string) (netip.Addr, error) {
+	if source, err := firstIPv4TunnelAddress(addresses); err == nil {
+		return source, nil
+	}
+	for _, raw := range addresses {
+		if prefix, err := netip.ParsePrefix(strings.TrimSpace(raw)); err == nil && prefix.Addr().Is6() {
+			return prefix.Addr(), nil
+		}
+	}
+	return netip.Addr{}, errors.New("WireGuard canary requires a tunnel address")
 }
 
 func firstIPv4TunnelAddress(addresses []string) (netip.Addr, error) {
@@ -343,7 +363,16 @@ func firstIPv4TunnelAddress(addresses []string) (netip.Addr, error) {
 }
 
 func (a *WARPWireGuardAdapter) ensureCanaryPolicyFree(ctx context.Context) error {
-	rules, err := a.run(ctx, a.ip(), "rule", "show")
+	for _, family := range []string{"-4", "-6"} {
+		if err := a.ensureCanaryFamilyFree(ctx, family); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *WARPWireGuardAdapter) ensureCanaryFamilyFree(ctx context.Context, family string) error {
+	rules, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "rule", "show")...)
 	if err != nil {
 		return fmt.Errorf("inspect temporary WARP rule priority: %w", err)
 	}
@@ -353,8 +382,12 @@ func (a *WARPWireGuardAdapter) ensureCanaryPolicyFree(ctx context.Context) error
 			return fmt.Errorf("temporary WARP rule priority %d is already used", a.priorityBase())
 		}
 	}
-	routes, err := a.run(ctx, a.ip(), "route", "show", "table", strconv.Itoa(a.table()))
+	routes, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "route", "show", "table", strconv.Itoa(a.table()))...)
 	if err != nil {
+		// iproute2 reports an absent FIB table as an error on a clean boot.
+		if strings.Contains(string(routes), "FIB table does not exist") {
+			return nil
+		}
 		return fmt.Errorf("inspect temporary WARP route table: %w", err)
 	}
 	if strings.TrimSpace(string(routes)) != "" {
@@ -364,24 +397,28 @@ func (a *WARPWireGuardAdapter) ensureCanaryPolicyFree(ctx context.Context) error
 }
 
 func (a *WARPWireGuardAdapter) installCanaryPolicy(ctx context.Context, source netip.Addr) error {
-	if _, err := a.run(ctx, a.ip(), "route", "add", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table())); err != nil {
+	family := canarySourceFamily(source)
+	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "route", "add", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table()))...); err != nil {
 		return fmt.Errorf("add temporary WARP route: %w", err)
 	}
-	prefix := netip.PrefixFrom(source, 32).String()
-	if _, err := a.run(ctx, a.ip(), "rule", "add", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "lookup", strconv.Itoa(a.table())); err != nil {
-		_, _ = a.run(ctx, a.ip(), "route", "flush", "table", strconv.Itoa(a.table()))
-		return fmt.Errorf("add temporary WARP source rule: %w", err)
+	prefix := netip.PrefixFrom(source, source.BitLen()).String()
+	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "rule", "add", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "oif", a.interfaceName(), "lookup", strconv.Itoa(a.table()))...); err != nil {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+		defer cancel()
+		_, cleanupErr := a.run(cleanup, a.ip(), canaryFamilyArgs(family, "route", "del", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table()))...)
+		return errors.Join(fmt.Errorf("add temporary WARP socket rule: %w", err), cleanupErr)
 	}
 	return nil
 }
 
 func (a *WARPWireGuardAdapter) cleanupCanaryPolicy(ctx context.Context, source netip.Addr) error {
 	var first error
-	prefix := netip.PrefixFrom(source, 32).String()
-	if _, err := a.run(ctx, a.ip(), "rule", "del", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "lookup", strconv.Itoa(a.table())); err != nil && !commandMissing(err) {
+	family := canarySourceFamily(source)
+	prefix := netip.PrefixFrom(source, source.BitLen()).String()
+	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "rule", "del", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "oif", a.interfaceName(), "lookup", strconv.Itoa(a.table()))...); err != nil && !commandMissing(err) {
 		first = err
 	}
-	if _, err := a.run(ctx, a.ip(), "route", "flush", "table", strconv.Itoa(a.table())); err != nil && first == nil && !commandMissing(err) {
+	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "route", "del", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table()))...); err != nil && first == nil && !commandMissing(err) {
 		first = err
 	}
 	return first
@@ -984,7 +1021,14 @@ func (a *WARPWireGuardAdapter) startNativeInterface(ctx context.Context) (retErr
 		return errors.New("tunnel setconf failed; profile retained, inspect local redacted diagnostics")
 	}
 	for _, address := range addresses {
-		if output, err := a.run(ctx, a.ip(), "address", "add", address, "dev", a.interfaceName()); err != nil {
+		args := []string{"address", "add", address, "dev", a.interfaceName()}
+		if a.isolatedCandidate {
+			args = append(args, "noprefixroute")
+			if prefix, err := netip.ParsePrefix(address); err == nil && prefix.Addr().Is6() {
+				args = append(args, "nodad")
+			}
+		}
+		if output, err := a.run(ctx, a.ip(), args...); err != nil {
 			return fmt.Errorf("assign address %s: %s", address, shortOutput(output, err))
 		}
 	}
@@ -1331,7 +1375,7 @@ func sourceBoundTunnelProbe(ctx context.Context, rawURL, source string, requireW
 	if request.URL.User != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") || request.URL.Hostname() == "" {
 		return errors.New("WARP canary URL must be an absolute HTTP(S) URL without credentials")
 	}
-	client, closeClient, err := newSourceBoundWARPClient(source)
+	client, closeClient, err := newInterfaceBoundWGClient(ctx, source)
 	if err != nil {
 		return err
 	}
@@ -1355,11 +1399,19 @@ func sourceBoundTunnelProbe(ctx context.Context, rawURL, source string, requireW
 }
 
 func newSourceBoundWARPClient(source string) (*http.Client, func(), error) {
+	return newInterfaceBoundWGClient(context.Background(), source)
+}
+
+func newInterfaceBoundWGClient(ctx context.Context, source string) (*http.Client, func(), error) {
 	sourceIP := net.ParseIP(source)
-	if sourceIP == nil || sourceIP.To4() == nil {
-		return nil, nil, errors.New("invalid WARP canary IPv4 source")
+	if sourceIP == nil {
+		return nil, nil, errors.New("invalid WireGuard canary source")
 	}
-	dialer := &net.Dialer{Timeout: 8 * time.Second, LocalAddr: &net.TCPAddr{IP: sourceIP.To4()}}
+	dialer := wgSocketDialer(ctx, sourceIP, false)
+	family := "4"
+	if sourceIP.To4() == nil {
+		family = "6"
+	}
 	transport := &http.Transport{
 		Proxy: nil,
 		DialContext: func(dialCtx context.Context, _ string, address string) (net.Conn, error) {
@@ -1370,7 +1422,7 @@ func newSourceBoundWARPClient(source string) (*http.Client, func(), error) {
 			if port != "80" && port != "443" {
 				return nil, errors.New("WARP canary permits only HTTP/HTTPS service ports")
 			}
-			ips, err := net.DefaultResolver.LookupIP(dialCtx, "ip4", host)
+			ips, err := net.DefaultResolver.LookupIP(dialCtx, "ip"+family, host)
 			if err != nil {
 				return nil, err
 			}
@@ -1379,7 +1431,7 @@ func newSourceBoundWARPClient(source string) (*http.Client, func(), error) {
 				if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast() {
 					continue
 				}
-				conn, err := dialer.DialContext(dialCtx, "tcp4", net.JoinHostPort(ip.String(), port))
+				conn, err := dialer.DialContext(dialCtx, "tcp"+family, net.JoinHostPort(ip.String(), port))
 				if err == nil {
 					return conn, nil
 				}
@@ -1388,7 +1440,7 @@ func newSourceBoundWARPClient(source string) (*http.Client, func(), error) {
 			if last != nil {
 				return nil, last
 			}
-			return nil, errors.New("WARP canary target has no public IPv4 address")
+			return nil, errors.New("WireGuard canary target has no public address in the tunnel family")
 		},
 		TLSHandshakeTimeout: 8 * time.Second,
 		ForceAttemptHTTP2:   true,

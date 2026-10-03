@@ -43,8 +43,11 @@ func newCloudflareScanHTTPProbe() cloudflareScanHTTPProbe {
 			Transport: transport, Timeout: 12 * time.Second,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		boundClient: newSourceBoundWARPClient,
-		traceURL:    cloudflareTraceURL,
+		boundClient: func(source string) (*http.Client, func(), error) {
+			ctx := context.WithValue(context.Background(), wgSocketInterfaceKey{}, cloudflareScanInterface)
+			return newInterfaceBoundWGClient(ctx, source)
+		},
+		traceURL: cloudflareTraceURL,
 	}
 }
 

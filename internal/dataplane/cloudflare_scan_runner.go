@@ -126,6 +126,7 @@ func (runner *CloudflareScanRunner) RunScanAttempt(ctx context.Context, candidat
 	sandbox.StateRoot = filepath.Join(runner.stateRoot, attemptRoot)
 	sandbox.RuntimeConfigPath = filepath.Join(runner.stateRoot, configName)
 	sandbox.NativeOnly = true
+	sandbox.isolatedCandidate = true
 	ownership := &cloudflareScanOwnership{runner: sandbox.Runner, ip: sandbox.ip()}
 	sandbox.Runner = ownership
 	source, err := firstIPv4TunnelAddress(preview.Addresses)

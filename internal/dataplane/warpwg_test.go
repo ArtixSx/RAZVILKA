@@ -29,8 +29,18 @@ type warpFakeRunner struct {
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
 	if name == "ip" {
-		if output, handled, err := r.policy.run(args); handled {
+		policyArgs := append([]string(nil), args...)
+		for i := 0; i+1 < len(policyArgs); i++ {
+			if policyArgs[i] == "oif" {
+				policyArgs = append(policyArgs[:i], policyArgs[i+2:]...)
+				break
+			}
+		}
+		if output, handled, err := r.policy.run(policyArgs); handled {
 			return output, err
+		}
+		if len(args) > 0 && args[0] == "-6" {
+			args = args[1:]
 		}
 	}
 	if name == "ip" && len(args) >= 5 && args[0] == "-o" && args[1] == "link" && args[2] == "show" {
@@ -181,8 +191,8 @@ func TestWARPCanaryUsesTemporarySourcePolicyAndCleansIt(t *testing.T) {
 	for _, required := range []string{
 		"wg setconf rz-warp-canary",
 		"ip route add default dev rz-warp-canary table 219",
-		"ip rule add priority 18050 from 172.16.0.2/32 lookup 219",
-		"ip rule del priority 18050 from 172.16.0.2/32 lookup 219",
+		"ip rule add priority 18050 from 172.16.0.2/32 oif rz-warp-canary lookup 219",
+		"ip rule del priority 18050 from 172.16.0.2/32 oif rz-warp-canary lookup 219",
 		"ip link delete dev rz-warp-canary",
 	} {
 		if !strings.Contains(joined, required) {

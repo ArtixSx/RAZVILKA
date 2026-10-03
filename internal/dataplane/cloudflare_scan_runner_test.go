@@ -98,8 +98,8 @@ func TestCloudflareScanRunnerOwnsTemporaryInterfacePolicyAndCleanup(t *testing.T
 	for _, required := range []string{
 		"ip link add dev rz-cf-scan type wireguard",
 		"ip route add default dev rz-cf-scan table 220",
-		"ip rule add priority 18060 from 172.16.0.2/32 lookup 220",
-		"ip rule del priority 18060 from 172.16.0.2/32 lookup 220",
+		"ip rule add priority 18060 from 172.16.0.2/32 oif rz-cf-scan lookup 220",
+		"ip rule del priority 18060 from 172.16.0.2/32 oif rz-cf-scan lookup 220",
 		"ip link delete dev rz-cf-scan",
 	} {
 		if !strings.Contains(joined, required) {
