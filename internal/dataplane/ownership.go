@@ -11,8 +11,9 @@ import (
 )
 
 type kernelPolicyRule struct {
-	family, priority, table int
-	source, destination     string
+	family, priority, table      int
+	source, destination, ingress string
+	managed                      bool
 }
 
 // OwnsPolicyRule explains a complete kernel tuple from private recorded state.
@@ -158,7 +159,7 @@ func (m *Manager) OwnsPolicyRoute(adapterID string, family int, line string) boo
 // exact main-table endpoint exclusion. No endpoint is returned in a public DTO.
 func (m *Manager) OwnsProxyEndpointExclusion(adapterID string, family int, line string) bool {
 	rule, ok := parseKernelPolicyRule(family, line)
-	if !ok || rule.table != 254 || rule.source != "all" {
+	if !ok || rule.table != 254 || rule.source != "all" || rule.ingress != "" || rule.managed {
 		return false
 	}
 	registered, ok := m.adapter(adapterID)
@@ -217,15 +218,34 @@ func (m *Manager) OwnsProxyEndpointExclusion(adapterID string, family int, line 
 }
 
 // Parse only the grammar emitted for our simple ip rule commands. Optional
-// selectors such as fwmark, iif, uidrange, not, goto or suppress_* must never be
-// discarded while deciding ownership, even if the remaining tuple matches.
+// selectors are never discarded while deciding ownership. Only our exact
+// managed mark with explicit iif is supported in addition to legacy tuples;
+// uidrange, other marks, not, goto and suppress_* cannot explain ownership.
 func parseKernelPolicyRule(family int, line string) (kernelPolicyRule, bool) {
 	var result kernelPolicyRule
 	if (family != 4 && family != 6) || len(line) > 2048 || strings.ContainsAny(line, "\x00\r\n") {
 		return result, false
 	}
 	fields := strings.Fields(line)
-	if len(fields) != 7 || !strings.HasSuffix(fields[0], ":") || fields[1] != "from" || fields[3] != "to" || (fields[5] != "lookup" && fields[5] != "table") {
+	if (len(fields) != 7 && len(fields) != 9 && len(fields) != 11) || !strings.HasSuffix(fields[0], ":") || fields[1] != "from" || fields[3] != "to" {
+		return result, false
+	}
+	lookup := 5
+	ingress := ""
+	managed := false
+	if len(fields) == 11 {
+		if fields[5] != "fwmark" || fields[6] != LANPolicyGateMatch {
+			return result, false
+		}
+		managed, lookup = true, 7
+	}
+	if len(fields) > 7 {
+		if fields[lookup] != "iif" || !validPolicyIngress(fields[lookup+1]) {
+			return result, false
+		}
+		ingress, lookup = fields[lookup+1], lookup+2
+	}
+	if fields[lookup] != "lookup" && fields[lookup] != "table" {
 		return result, false
 	}
 	priorityText := strings.TrimSuffix(fields[0], ":")
@@ -262,11 +282,11 @@ func parseKernelPolicyRule(family int, line string) (kernelPolicyRule, bool) {
 		return result, false
 	}
 	table := 254
-	if fields[6] != "main" {
-		table, err = strconv.Atoi(fields[6])
-		if err != nil || table < 0 || table > 1<<31-1 || strconv.Itoa(table) != fields[6] {
+	if fields[lookup+1] != "main" {
+		table, err = strconv.Atoi(fields[lookup+1])
+		if err != nil || table < 0 || table > 1<<31-1 || strconv.Itoa(table) != fields[lookup+1] {
 			return result, false
 		}
 	}
-	return kernelPolicyRule{family: family, priority: priority, table: table, source: source, destination: destination}, true
+	return kernelPolicyRule{family: family, priority: priority, table: table, source: source, destination: destination, ingress: ingress, managed: managed}, true
 }
