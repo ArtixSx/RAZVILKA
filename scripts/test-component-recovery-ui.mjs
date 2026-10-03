@@ -4,7 +4,7 @@ import vm from 'node:vm';
 const source=readFileSync(new URL('../cmd/razvilka/web/component-recovery-ui.js',import.meta.url),'utf8');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
-function snapshot(phase='awaiting-live-acceptance',pending=true){return {revision:7,recovery_required:pending,transaction:{schema_version:1,transaction_id:'a'.repeat(32),component:'xray',phase,before_version:'1.0',after_version:'2.0',updated_at:new Date().toISOString()}};}
+function snapshot(phase='awaiting-live-acceptance',pending=true){return {revision:7,recovery_required:pending,transaction:{schema_version:1,transaction_id:'a'.repeat(32),component:'xray',phase,before_version:'1.0',after_version:'2.0',updated_at:new Date().toISOString()},capabilities:{supported_actions:['accept-live','accept-installed-idle','rollback','verify-rollback','abandon-prepared'],available_actions:pending?['accept-live','rollback','verify-rollback','abandon-prepared']:[],quiescence_confirmed:false,inactivity_confirmed:false,installed_idle_accepted:phase==='accepted-installed-idle',live_proof_required:true}};}
 const pure={};vm.createContext(pure);vm.runInContext(source,pure);const model=pure.RazvilkaComponentRecovery;
 function fixture(view='engines'){
   const requests=[],listeners=new Map(),notices=[],panel={innerHTML:'',contains:()=>false};
@@ -19,10 +19,10 @@ function fixture(view='engines'){
     showAuth(){authCalls++;state.authenticated=false;listeners.get('razvilka:auth-required')();}
   };
   vm.createContext(ctx);vm.runInContext(source,ctx);
-  const click=selector=>listeners.get('click')({target:{closest:value=>value===selector?{disabled:false,dataset:{componentRepair:selector==='[data-component-repair]'?'accept-live':undefined}}:null}});
+  const click=(selector,action='accept-live')=>listeners.get('click')({target:{closest:value=>value===selector?{disabled:false,dataset:{componentRepair:selector==='[data-component-repair]'?action:undefined}}:null}});
   return {ctx,state,requests,notices,panel,authCalls:()=>authCalls,
     advance:milliseconds=>{now+=milliseconds;},
-    confirm:fn=>{confirm=fn;},clickRead:()=>click('[data-component-recovery-read]'),clickRepair:()=>click('[data-component-repair]'),
+    confirm:fn=>{confirm=fn;},clickRead:()=>click('[data-component-recovery-read]'),clickRepair:action=>click('[data-component-repair]',action),
     revoke(){listeners.get('razvilka:auth-required')();state.authenticated=false;},
     view(name){listeners.get('razvilka:view-change')({detail:name});state.currentView=name;},
     async ready(value=snapshot()){await flush();assert.equal(requests[0].path,'/api/v1/components/recovery');requests[0].resolve(value);await flush();},
@@ -44,6 +44,41 @@ await test('invalid, future, corrupt and inconsistent data fail closed',()=>{
   for(const value of [{},{...snapshot(),revision:-1},{...snapshot(),recovery_required:false},snapshot('future-phase'),{...snapshot(),transaction:{...snapshot().transaction,component:'unknown'}}]) {
     assert.equal(model.valid(value),false);assert.equal(model.summary(value).actions.length,0);
   }
+});
+await test('only schema 1/2 are known; schema 2 idle acceptance stays neutral',()=>{
+  for(const schema of [1,2]){const value=snapshot();value.transaction.schema_version=schema;assert.equal(model.valid(value),true);}
+  for(const schema of [0,3,999,'2']){const value=snapshot();value.transaction.schema_version=schema;assert.equal(model.valid(value),false);}
+  const idle=snapshot('accepted-installed-idle',false);assert.equal(model.valid(idle),false);
+  idle.transaction.schema_version=2;assert.equal(model.valid(idle),true);
+  const receipt={transaction_id:idle.transaction.transaction_id,component:'xray',installed_idle_accepted:true,live_accepted:true};
+  const observed=model.summary(idle,receipt);assert.equal(observed.tone,'unknown');assert.equal(observed.actions.length,0);
+  assert.match(observed.detail,/доступ сервисов ещё не подтверждены/);
+  const pending=snapshot();pending.transaction.schema_version=2;
+  assert(!Array.from(model.summary(pending).actions).includes('accept-installed-idle'),'idle action guessed before HTTP capabilities');
+});
+await test('server capabilities restrict actions; idle needs schema 2 and both trusted observations',()=>{
+  const value=snapshot();delete value.capabilities;assert.equal(model.summary(value).actions.length,0);
+  const idle=snapshot();idle.transaction.schema_version=2;idle.capabilities.available_actions=['accept-installed-idle'];
+  assert.equal(model.summary(idle).actions.length,0);idle.capabilities.quiescence_confirmed=true;assert.equal(model.summary(idle).actions.length,0);
+  idle.capabilities.inactivity_confirmed=true;assert.deepEqual(Array.from(model.summary(idle).actions),['accept-installed-idle']);
+  idle.capabilities.available_actions=[];assert.equal(model.summary(idle).actions.length,0);
+  idle.capabilities.available_actions=['future-action'];assert.equal(model.valid(idle),false);
+});
+await test('matching idle POST and separate idle GET settle with a neutral label',async()=>{
+  const before=snapshot();before.transaction.schema_version=2;before.capabilities.quiescence_confirmed=before.capabilities.inactivity_confirmed=true;
+  before.capabilities.available_actions=['accept-installed-idle'];const f=fixture();await f.ready(before);f.clickRepair('accept-installed-idle');await flush();
+  assert.equal(JSON.parse(f.requests[1].options.body).action,'accept-installed-idle');
+  assert.equal(Object.keys(JSON.parse(f.requests[1].options.body)).length,5,'operator flags were added');
+  f.requests[1].resolve({recovery_required:false,installed_idle_accepted:true,live_accepted:false});await flush();
+  const settled=snapshot('accepted-installed-idle',false);settled.transaction.schema_version=2;f.requests[2].resolve(settled);await flush();
+  assert.equal(f.ctx.componentRecoveryFence(),false);assert.equal(f.ctx.componentRecoverySummary('xray').tone,'unknown');
+  assert.match(f.notices.at(-1)[1],/Неактивная версия/);
+});
+await test('idle result missing its exact acceptance fields cannot settle or replay',async()=>{
+  const before=snapshot();before.transaction.schema_version=2;before.capabilities.quiescence_confirmed=before.capabilities.inactivity_confirmed=true;
+  before.capabilities.available_actions=['accept-installed-idle'];const f=fixture();await f.ready(before);f.clickRepair('accept-installed-idle');await flush();
+  f.requests[1].resolve({recovery_required:false,live_accepted:true});await flush();f.clickRepair('accept-installed-idle');await flush();
+  assert.equal(f.requests.length,2);assert.equal(f.ctx.componentRecoveryFence(),true);assert.equal(f.notices.length,0);
 });
 await test('Home/login do not read recovery; navigation issues only single GET',async()=>{
   const f=fixture('overview');await flush();assert.equal(f.requests.length,0);

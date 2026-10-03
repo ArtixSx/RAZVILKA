@@ -14,28 +14,38 @@
     'rollback-config-after': ['Конфигурация возвращается', 'Откат ещё не подтверждён рабочим процессом.', ['rollback']],
     'awaiting-rollback-acceptance': ['Откат ожидает проверки', 'Проверка наблюдает прежнюю версию и конфигурацию; пакетная команда повторно не запускается.', ['verify-rollback']],
     accepted: ['Обновление завершено по журналу', 'Принятие рабочим процессом отдельно от установки и наличия процесса.', []],
+    'accepted-installed-idle': ['Неактивная версия принята по журналу', 'Версия и конфигурация приняты для неактивного компонента. Рабочий путь и доступ сервисов ещё не подтверждены.', []],
     'rolled-back': ['Откат записан в журнале', 'Прежняя версия возвращена. Доступ конкретного сервиса проверяется отдельно.', []],
     abandoned: ['Подготовка отменена', 'Установка пакета в этой транзакции не выполнялась.', []],
   };
   const supported = ['nfqws2','sing-box','xray','usque','warp-wg','wireguard'];
-  const labels = {'accept-live':'Проверить принятие версии','rollback':'Вернуть прежнюю версию','verify-rollback':'Проверить результат отката','abandon-prepared':'Отменить подготовку'};
+  const labels = {'accept-live':'Проверить принятие версии','accept-installed-idle':'Принять неактивную версию','rollback':'Вернуть прежнюю версию','verify-rollback':'Проверить результат отката','abandon-prepared':'Отменить подготовку'};
+  function validCapabilities(c) {
+    const list=value=>Array.isArray(value) && value.length<=16 && value.every(a=>typeof a==='string' && a.length<=64) && new Set(value).size===value.length;
+    return list(c?.supported_actions) && list(c.available_actions) && c.available_actions.every(a=>c.supported_actions.includes(a))
+      && ['quiescence_confirmed','inactivity_confirmed','installed_idle_accepted','live_proof_required'].every(key=>typeof c[key]==='boolean');
+  }
   function valid(value) {
     if (typeof value?.recovery_required !== 'boolean' || !Number.isSafeInteger(value.revision) || value.revision < 0) return false;
+    if(value.capabilities!=null && !validCapabilities(value.capabilities))return false;
     const t=value.transaction;
     if (!value.recovery_required && !t?.transaction_id) return true;
-    return t?.schema_version===1 && /^[a-f0-9]{32}$/.test(t.transaction_id) && supported.includes(t.component)
+    return [1,2].includes(t?.schema_version) && (t.phase!=='accepted-installed-idle' || t.schema_version===2) && /^[a-f0-9]{32}$/.test(t.transaction_id) && supported.includes(t.component)
       && Object.hasOwn(stages,t.phase) && typeof t.before_version==='string' && t.before_version.length>0 && t.before_version.length<=256
       && (t.after_version==null || typeof t.after_version==='string' && t.after_version.length<=256)
       && Number.isFinite(Date.parse(t.updated_at))
-      && value.recovery_required===!['accepted','rolled-back','abandoned'].includes(t.phase);
+      && value.recovery_required===!['accepted','accepted-installed-idle','rolled-back','abandoned'].includes(t.phase);
   }
   function summary(value, receipt) {
     if (!valid(value)) return {label:'Журнал не прочитан',detail:'Изменения компонентов недоступны до свежего чтения.',actions:[],tone:'unknown'};
     const t=value.transaction;
     if (!t?.transaction_id) return {label:'Незавершённых обновлений нет',detail:'Установка, процесс и доступ сервиса проверяются отдельно.',actions:[],tone:'unknown'};
-    const [label,detail,actions]=stages[t.phase];
+    const [label,detail,knownActions]=stages[t.phase],c=value.capabilities;
+    const eligible=[...knownActions];
+    if(t.schema_version===2 && t.phase==='awaiting-live-acceptance' && c?.quiescence_confirmed===true && c.inactivity_confirmed===true)eligible.push('accept-installed-idle');
+    const actions=value.recovery_required && c?eligible.filter(action=>c.available_actions.includes(action) && c.supported_actions.includes(action)):[];
     const live=t.phase==='accepted' && receipt?.transaction_id===t.transaction_id && receipt.component===t.component && receipt.live_accepted===true;
-    return {label:live?'Рабочий процесс принял версию':label,detail,actions:value.recovery_required?actions:[],tone:live?'good':'unknown',transaction:t};
+    return {label:live?'Рабочий процесс принял версию':label,detail:detail+(!c&&value.recovery_required?' Сервер не сообщил доступные действия; панель работает только для чтения.':''),actions,tone:live?'good':'unknown',transaction:t};
   }
   root.RazvilkaComponentRecovery=Object.freeze({valid,summary});
   if (typeof document==='undefined') return;
@@ -101,7 +111,8 @@
     const ticket={epoch:recovery.epoch,transaction:t.transaction_id,sent:false};recovery.action=ticket;render();
     const current=()=>ticket.epoch===recovery.epoch && recovery.action===ticket && state.authenticated;
     try {
-      const text=`${typeof routeLabel==='function'?routeLabel(t.component):t.component}: ${t.before_version}${t.after_version?' → '+t.after_version:''}. ${model.detail} Сервер повторно проверит транзакцию и разрешения. Доступ сервиса не считается подтверждённым по установке пакета.`;
+      const detail=action==='accept-installed-idle'?'Сервер проверит точную версию, конфигурацию, завершение всех процессов установки и неактивность компонента. Рабочий маршрут этим действием не запускается.':model.detail;
+      const text=`${typeof routeLabel==='function'?routeLabel(t.component):t.component}: ${t.before_version}${t.after_version?' → '+t.after_version:''}. ${detail} Сервер повторно проверит транзакцию и разрешения. Доступ сервиса не считается подтверждённым по установке пакета.`;
       if(!await askConfirmation(labels[action],text,labels[action]) || !current())return;
       if(recovery.data!==observed || !fresh() || state.status?.safe_mode!==false || state.status.revision!==observed.revision || state.serviceControl?.stopped===true)throw new Error('Журнал или разрешения изменились. Прочитайте состояние перед действием.');
       recovery.unknownWrite=true;
@@ -109,11 +120,13 @@
       const result=await api('/api/v1/components/recovery',{method:'POST',body:JSON.stringify({transaction_id:t.transaction_id,component:t.component,action,expected_revision:observed.revision,confirm:'REPAIR_COMPONENT_TRANSACTION'})});
       if(!current())return;
       if(result?.recovery_required!==false)throw new Error('Сервер ещё не подтвердил завершение восстановления. Прочитайте состояние; запись не повторяется.');
-      recovery.receipt={transaction_id:t.transaction_id,component:t.component,live_accepted:action==='accept-live' && result.live_accepted===true};
+      if(action==='accept-installed-idle' && (result.installed_idle_accepted!==true || result.live_accepted!==false))throw new Error('Принятие неактивной версии не подтверждено. Прочитайте состояние; запись не повторяется.');
+      recovery.receipt={transaction_id:t.transaction_id,component:t.component,live_accepted:action==='accept-live' && result.live_accepted===true,installed_idle_accepted:action==='accept-installed-idle' && result.installed_idle_accepted===true};
       // The journal read, not the POST alone, determines whether the fence settled.
       await read(true);
       if(!current())return;
       if(!fresh() || recovery.data.transaction?.transaction_id!==t.transaction_id || recovery.data.recovery_required)throw new Error('Итог журнала ещё не подтверждён. Повторите чтение состояния.');
+      if(action==='accept-installed-idle' && (recovery.data.transaction.phase!=='accepted-installed-idle' || recovery.data.capabilities?.installed_idle_accepted!==true))throw new Error('Журнал ещё не подтвердил принятие неактивной версии. Повторите чтение состояния.');
       showNotice('review',summary(recovery.data,recovery.receipt).label,'Итог прочитан из журнала. Доступ каждого сервиса проверяется отдельно.');
     } catch(error) {
       if(!current())return;
