@@ -34,7 +34,11 @@ type CompatibilityProvider interface {
 // Call only while holding Manager.mu. The existing private candidate state
 // retains unknown; a delete/reimport or subsequent validation cannot clear it.
 func (m *Manager) compatibilityUnknownLocked() bool {
-	if m.compatibilityUnknown || m.state.SchemaVersion == compatibilityUnknownSchema {
+	return m.compatibilityRetainedUnknownLocked() || m.state.CompatibilityFinalizing || (m.state.CompatibilitySession != nil && compatibilitySessionUnknown(*m.state.CompatibilitySession))
+}
+
+func (m *Manager) compatibilityRetainedUnknownLocked() bool {
+	if m.compatibilityUnknown || m.state.SchemaVersion == compatibilityUnknownSchema || (m.state.CompatibilitySession != nil && m.state.CompatibilitySession.Unknown) {
 		return true
 	}
 	for _, candidate := range m.state.Candidates {
@@ -46,8 +50,9 @@ func (m *Manager) compatibilityUnknownLocked() bool {
 }
 
 const (
-	compatibilityCleanupWait   = time.Second
-	compatibilityUnknownSchema = 2
+	compatibilityCleanupWait      = time.Second
+	compatibilityUnknownSchema    = 2
+	compatibilitySupervisedSchema = 3
 )
 
 // CompatibilityProcessProvider bounds direct-process and pipe waiting, but

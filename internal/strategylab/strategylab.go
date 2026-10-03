@@ -138,11 +138,13 @@ type Selection struct {
 }
 
 type State struct {
-	PackReceipts  map[string]PackReceipt `json:"pack_receipts,omitempty"`
-	SchemaVersion int                    `json:"schema_version"`
-	Candidates    map[string]Candidate   `json:"candidates"`
-	Evidence      []Evidence             `json:"evidence"`
-	Selections    map[string]Selection   `json:"selections"`
+	CompatibilitySession    *compatibilitySession  `json:"compatibility_session,omitempty"`
+	CompatibilityFinalizing bool                   `json:"compatibility_finalizing,omitempty"`
+	PackReceipts            map[string]PackReceipt `json:"pack_receipts,omitempty"`
+	SchemaVersion           int                    `json:"schema_version"`
+	Candidates              map[string]Candidate   `json:"candidates"`
+	Evidence                []Evidence             `json:"evidence"`
+	Selections              map[string]Selection   `json:"selections"`
 }
 
 type Snapshot struct {
@@ -237,8 +239,17 @@ func New(path string) (*Manager, error) {
 	if err := json.Unmarshal(data, &m.state); err != nil {
 		return nil, fmt.Errorf("decode Strategy Lab state: %w", err)
 	}
-	if m.state.SchemaVersion != SchemaVersion && m.state.SchemaVersion != compatibilityUnknownSchema {
+	if m.state.SchemaVersion != SchemaVersion && m.state.SchemaVersion != compatibilityUnknownSchema && m.state.SchemaVersion != compatibilitySupervisedSchema {
 		return nil, fmt.Errorf("unsupported Strategy Lab schema %d", m.state.SchemaVersion)
+	}
+	if m.state.SchemaVersion == compatibilitySupervisedSchema {
+		checked, err := decodeCompatibilityState(image)
+		if err != nil {
+			return nil, errors.Join(ErrCompatibilityQuiescenceUnknown, errors.New("invalid retained compatibility session"))
+		}
+		m.state = checked
+	} else if m.state.CompatibilitySession != nil || m.state.CompatibilityFinalizing {
+		return nil, errors.Join(ErrCompatibilityQuiescenceUnknown, errors.New("compatibility session requires its supported schema"))
 	}
 	if m.state.Candidates == nil {
 		m.state.Candidates = map[string]Candidate{}
@@ -446,11 +457,20 @@ func (m *Manager) Validate(ctx context.Context, id string) (Candidate, error) {
 	}
 	candidate.Validation = validation
 	m.mu.Lock()
+	if m.state.CompatibilityFinalizing && !validation.QuiescenceUnknown {
+		if m.prepareCompatibilityPublicationLocked(ctx, validation) != nil {
+			validation.QuiescenceUnknown, validation.OK, validation.Native, validation.LuaChecked = true, false, false, false
+			validation.Code = "QUIESCENCE_UNKNOWN"
+			candidate.Validation = validation
+		}
+	}
 	if validation.QuiescenceUnknown {
 		// Latch before any disk operation. A failed save or a concurrent known
 		// result must never erase an invocation whose cleanup remains unknown.
 		m.compatibilityUnknown = true
-		m.state.SchemaVersion = compatibilityUnknownSchema
+		if m.state.SchemaVersion < compatibilityUnknownSchema {
+			m.state.SchemaVersion = compatibilityUnknownSchema
+		}
 	} else if m.compatibilityUnknownLocked() {
 		m.mu.Unlock()
 		return Candidate{}, ErrCompatibilityQuiescenceUnknown
@@ -888,11 +908,13 @@ func (m *Manager) now() time.Time {
 // One descriptor-anchored CAS path for every Strategy Lab writer. Package
 // receipts and candidates cannot be separated by a crash or a stale writer.
 func (m *Manager) saveLocked() (retErr error) {
-	if m.compatibilityUnknownLocked() {
+	if m.compatibilityRetainedUnknownLocked() {
 		// Schema 1 readers reject schema 2 instead of ignoring the new bool.
 		// The existing Strategy Lab state is the only persistent record.
 		m.compatibilityUnknown = true
-		m.state.SchemaVersion = compatibilityUnknownSchema
+		if m.state.SchemaVersion < compatibilityUnknownSchema {
+			m.state.SchemaVersion = compatibilityUnknownSchema
+		}
 	}
 	if strings.TrimSpace(m.Path) == "" {
 		return nil
@@ -906,11 +928,16 @@ func (m *Manager) saveLocked() (retErr error) {
 				_ = json.Unmarshal(m.image.Data, &previous)
 			}
 			m.state = previous
-			if m.compatibilityUnknown {
+			if m.compatibilityUnknown && m.state.SchemaVersion < compatibilityUnknownSchema {
 				m.state.SchemaVersion = compatibilityUnknownSchema
 			}
 		}
 	}()
+	if m.state.CompatibilityFinalizing || (m.state.CompatibilitySession != nil && compatibilitySessionUnknown(*m.state.CompatibilitySession)) {
+		// Only the owner provider/helper may advance this exact session through
+		// its descriptor CAS path. Ordinary writers cannot discard its intent.
+		return ErrCompatibilityQuiescenceUnknown
+	}
 	if m.writeBlocked {
 		return restorejournal.ErrRecovery
 	}

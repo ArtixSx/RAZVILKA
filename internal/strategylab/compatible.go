@@ -13,7 +13,8 @@ import (
 // Dry-run alone never establishes Lua compatibility. TrustedAssets is granted
 // by the component owner after provenance/ownership review, not by a browser.
 // Installed Lua can execute code even with intercept=0, so arbitrary local
-// expert scripts must not be passed here. No files or network rules are written.
+// expert scripts must not be passed here. No runtime assets or network rules
+// are changed; a supervised provider persists its private execution receipts.
 type CompatibleValidator struct {
 	Binary        string
 	BaseArguments []string
