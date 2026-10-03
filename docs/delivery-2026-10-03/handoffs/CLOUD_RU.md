@@ -102,3 +102,5 @@ D13 **не закрыт**. Нет настоящей регистрации, HTT
 Координатору: принять diff/commit, запустить адресные пакеты на Linux, согласовать receipt writer + current environment callback и UI поля. После wiring проверить настоящий native H2 success при недоступном UDP, QUIC success, смену endpoint/WAN/DNS/boot, stale receipt, повтор unknown enrollment и сохранение активного LKG. Живую регистрацию проводить только в отдельном явно разрешённом owner-managed окне; эта порция её не требует и live harness не запускает.
 
 NETWORK_POLICY_EXECUTOR_REQUIRED сохранён; auth/CSRF/TLS/Stop/CAS/ownership/recovery fence/LKG не отключены. Mihomo/HEV не получили production статус. Общие TASKS/VALIDATION и ownership docs остаются у координатора.
+
+Уточнение OPS о mutable self-update restore: отдельный [retention/root contract для CORE/OPS](CLOUD_RETENTION_CONTRACT_RU.md). Это согласуемое подключение, ещё не реализация: retained enrollment/unknown/accounting не rewind, старый reader без новой retention capability блокируется даже при поддержке JSON schema 1. Текущий typed private import rollback before-image отдельно требует согласованного изменения владельцем.
