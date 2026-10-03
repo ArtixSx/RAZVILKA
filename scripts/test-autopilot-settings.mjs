@@ -27,7 +27,8 @@ function fixture(){
     edit(){element('autoQuickCheck').value='180';element('autoQuickForm').events.input();},
     submit:()=>element('autoQuickForm').events.submit({preventDefault(){}}),
     reload:()=>element('a1-reloadButton').events.click(),
-    logout:()=>documentListeners.get('razvilka:auth-required')()
+    logout:()=>documentListeners.get('razvilka:auth-required')(),
+    leave(){const event={prevented:false,preventDefault(){this.prevented=true;}};listeners.get('beforeunload')?.(event);return event;}
   };
 }
 test('ordinary edit preserves every authority-bearing and unknown future field',()=>{const next=model.draft(policy,inputs);for(const key of Object.keys(policy))if(!(key in inputs))assert.equal(JSON.stringify(next[key]),JSON.stringify(policy[key]),key);assert.equal(policy.check_seconds,300);assert.equal(next.check_seconds,120);});
@@ -114,5 +115,48 @@ await asyncTest('late successful reconciliation cannot overwrite a new session d
   f.requests[1].resolve(f.snapshot(13));await reload;
   assert.equal(f.element('autoQuickCheck').value,'240');assert.equal(f.element('autoQuickSave').disabled,false);
   assert.match(f.element('autoQuickRevision').textContent,/14/);assert.equal(f.requests.length,2);
+});
+test('leaving warns only while quick policy changes remain unsaved',()=>{
+  const f=fixture();f.publish(f.snapshot());assert.equal(f.leave().prevented,false);
+  f.edit();const dirty=f.leave();assert.equal(dirty.prevented,true);assert.equal(dirty.returnValue,'');
+  f.element('autoQuickReset').events.click();assert.equal(f.leave().prevented,false);
+  f.edit();f.logout();assert.equal(f.leave().prevented,false);
+});
+
+function published(f,instance,serverTime,revision=12,checkSeconds=300){
+  const snapshot=f.snapshot(revision);snapshot.server_time=serverTime;snapshot.policy.check_seconds=checkSeconds;
+  snapshot.observation={instance_id:instance.repeat(32),state:'available',revision:1,data_age_ms:0,observed_at:serverTime};return snapshot;
+}
+test('new process accepts an earlier server clock but fences drafts at the same policy revision',()=>{
+  const f=fixture(),old=published(f,'a','2026-10-03T15:00:00Z');f.publish(old);f.edit();
+  f.publish(published(f,'b','2026-10-03T14:00:00Z',12,240));
+  assert.equal(f.element('autoQuickCheck').value,'180');assert.equal(f.element('autoQuickSave').disabled,true,'restart did not fence the old policy draft');
+  f.publish({...old,server_time:'2026-10-03T16:00:00Z'});
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickCheck').value,240,'old process replaced the restarted process');
+  assert.equal(f.element('autoQuickSave').disabled,false);
+  f.publish(published(f,'b','2026-10-03T13:00:00Z',12,600));assert.equal(f.element('autoQuickCheck').value,240,'older same-process snapshot was accepted');
+  f.logout();f.publish(old);assert.equal(f.element('autoQuickCheck').value,300,'new login inherited retired process state');
+});
+
+await asyncTest('live readback without instance id retains the publication ordering context',async()=>{
+  const f=fixture();f.publish(published(f,'a','2026-10-03T15:00:00Z'));f.edit();const save=f.submit();
+  f.requests[0].resolve({});await new Promise(resolve=>setImmediate(resolve));
+  const live=f.snapshot(13);live.server_time='2026-10-03T15:01:00Z';live.policy.check_seconds=180;
+  f.requests[1].resolve(live);await save;assert.equal(f.leave().prevented,false);
+  f.publish(published(f,'b','2026-10-03T14:00:00Z',13,240));assert.equal(f.element('autoQuickCheck').value,240);
+  assert.equal(f.element('autoQuickSave').disabled,false);assert.equal(f.requests.length,2);
+});
+
+await asyncTest('process change while reconciling cannot unlock an unknown write using an old response',async()=>{
+  const f=fixture(),old=published(f,'a','2026-10-03T15:00:00Z');f.publish(old);f.edit();const save=f.submit();
+  f.requests[0].reject(new Error('connection lost'));await save;const reload=f.reload();
+  const restarted=published(f,'b','2026-10-03T14:00:00Z',12,240);f.publish(restarted);
+  f.requests[1].resolve({...old,observation:undefined});await reload;
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickCheck').value,240);
+  assert.equal(f.element('autoQuickSave').disabled,true,'pre-restart live response unlocked the write');
+  assert.equal(f.leave().prevented,true,'unknown write lost its unload warning after resetting draft');
+  const retry=f.reload();f.requests[2].resolve({...restarted,observation:undefined});await retry;
+  assert.equal(f.element('autoQuickSave').disabled,false);assert.equal(f.leave().prevented,false);
+  assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,1);
 });
 console.log(JSON.stringify({suite:'autopilot-settings',tests:total}));

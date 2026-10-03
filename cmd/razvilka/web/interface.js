@@ -331,9 +331,11 @@ function interfaceOpenService(id){
 
 function interfaceCloseInspector(){const d=$('#ui3ServiceDialog');if(d.open)d.close();}
 async function interfaceRequest(path, options={}){
+ const epoch=interfaceState.authEpoch;
+ const requireEpoch=()=>{if(epoch!==interfaceState.authEpoch)throw Object.assign(new Error('Ответ относится к завершённой сессии.'),{name:'AuthGenerationChanged'});};
  const controller=new AbortController();interfaceRequests.add(controller);const timer=setTimeout(()=>controller.abort(),20000);
- try{return await api(path,{...options,signal:controller.signal});}
- catch(e){if(e.status===401)showAuth(state.status,e.message);if(e.name==='AbortError')throw new Error('Ответ не подтверждён. Проверьте состояние операции перед повтором.');throw e;}
+ try{const value=await api(path,{...options,signal:controller.signal});requireEpoch();return value;}
+ catch(e){requireEpoch();if(e.status===401)showAuth(state.status,e.message);if(e.name==='AbortError')throw new Error('Ответ не подтверждён. Проверьте состояние операции перед повтором.');throw e;}
  finally{clearTimeout(timer);interfaceRequests.delete(controller);}
 }
 async function interfaceManage(id,enabled,remove=false){

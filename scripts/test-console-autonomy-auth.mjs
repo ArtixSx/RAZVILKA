@@ -12,7 +12,7 @@ function snapshot(revision=1){
  const window={mode:'check',start:'02:00',end:'03:00',days:[1]};
  return {policy:{revision,enabled:true,setup_complete:true,timezone:'UTC',all_lan:false,default_sources:['192.0.2.1/32'],source_ids:['feed-fixture'],protocols:['vless'],preferred_routes:[],reserve_target:2,candidates_per_round:2,check_seconds:300,reserve_seconds:600,application:window,components:window},services:{},runtime:{},catalog_services:[],source_presets:[],server_time:'2026-09-13T10:00:00Z'};
 }
-function fixture(){
+function fixture(authenticated=true){
  const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),published=[],inputs=new Map();
  let timerID=0,authCalls=0;
  function element(id){
@@ -28,7 +28,7 @@ function fixture(){
  function dispatch(map,event){for(const listener of map.get(event.type)||[])listener(event);}
  const document={hidden:false,getElementById:element,querySelectorAll:selector=>{const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
  const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
- const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(){},confirm:()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
+ const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(){},confirm:()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
   setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:()=>++timerID,clearInterval(){},
   showAuth(){authCalls++;document.dispatchEvent({type:'razvilka:auth-required'});},
   fetch(path,options){const pending=deferred();requests.push({path,options,...pending});return pending.promise;}
@@ -36,8 +36,8 @@ function fixture(){
  vm.runInNewContext(source,context);
  vm.runInNewContext(hideAuthSource+'\n'+showAuthSource,context);
  return {requests,timeouts,published,e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
-  hideAuth:()=>context.hideAuth(),actualShowAuth:()=>context.actualShowAuth(null,'Войдите снова.'),coreElement:element,
-  event:(type,detail)=>document.dispatchEvent({type,detail}),
+  hideAuth:()=>context.hideAuth(),actualShowAuth:status=>context.actualShowAuth(status||null,'Войдите снова.'),coreElement:element,
+  event:(type,detail)=>{if(type==='razvilka:auth-restored')context.state.authenticated=true;if(type==='razvilka:auth-required')context.state.authenticated=false;document.dispatchEvent({type,detail});},
   respond(index,status,data){if(requests[index].path==='/api/v1/panel/autonomy'&&status===200&&data?.policy)data={schema:1,instance_id:'a'.repeat(32),revision:data.policy.revision||1,observed_at:data.server_time,data_age_ms:0,state:'available',dataplane:'not-checked',data};requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
   delayedBody(index,status){const body=deferred();requests[index].resolve({status,ok:status>=200&&status<300,json:()=>body.promise});return body;},
   click(id){element('a1-'+id).events.get('click')({preventDefault(){}});},
@@ -46,6 +46,17 @@ function fixture(){
 }
 let passed=0;
 async function test(name,fn){await fn();passed++;console.log('PASS',name);}
+
+await test('initial setup discovery is not canceled by an early protected autonomy read',async()=>{
+ const f=fixture(false);assert.equal(f.requests.length,0,'protected request ran before core authentication discovery');
+ f.event('razvilka:panel-refresh');f.event('razvilka:view-change','subscription-settings');
+ assert.equal(f.requests.length,0,'unauthenticated navigation started protected reads');
+ f.actualShowAuth({authenticated:false,setup_required:true,username:''});
+ assert.equal(f.coreElement('authSetupPanel').hidden,false);assert.equal(f.coreElement('authLoginPanel').hidden,true);
+ f.event('razvilka:view-change','autopilot');assert.equal(f.requests.length,0);
+ f.hideAuth();assert.equal(f.requests.length,1);assert.equal(f.requests[0].path,'/api/v1/panel/autonomy');
+ f.respond(0,200,snapshot(1));await flush();assert.equal(f.e('workspace').hidden,false);
+});
 
 await test('initial 401 notice clears on restored login and fresh state is requested',async()=>{
  const f=fixture();f.respond(0,401,{});await flush();
@@ -120,7 +131,7 @@ await test('pause completion cannot announce success after logout during its rea
 });
 
 await test('ordinary core refresh hideAuth calls preserve active mutation and open inspector',async()=>{
- const f=fixture();
+ const f=fixture();f.actualShowAuth();
  // The initial visible auth screen causes exactly one restoration transition.
  f.hideAuth();assert.equal(f.requests[0].options.signal.aborted,true);assert.equal(f.requests.length,2);
  f.respond(1,200,snapshot(2));await flush();
@@ -135,7 +146,7 @@ await test('ordinary core refresh hideAuth calls preserve active mutation and op
 });
 
 await test('actual logout and login still invalidate the previous mutation and close inspector',async()=>{
- const f=fixture();f.hideAuth();f.respond(1,200,snapshot(2));await flush();f.click('pauseButton');
+ const f=fixture();f.actualShowAuth();f.hideAuth();f.respond(1,200,snapshot(2));await flush();f.click('pauseButton');
  f.coreElement('detailsPanel').classList.add('open');f.actualShowAuth();
  assert.equal(f.requests[2].options.signal.aborted,true);assert.equal(f.coreElement('authScreen').hidden,false);
  f.hideAuth();assert.equal(f.requests.length,4);assert.equal(f.coreElement('detailsPanel').classList.contains('open'),false);

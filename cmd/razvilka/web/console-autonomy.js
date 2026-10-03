@@ -253,6 +253,9 @@
     if (activeTab==='setup' || !editingPolicy) {fillWizard();renderStarterReview();}
   }
   async function refresh(force=false, live=force) {
+    // Let the core discover setup/login first. A protected read's early 401
+    // must not cancel /auth/status and replace initial setup with login.
+    if (state.authenticated !== true) return false;
     const generation=authGeneration;
     // A read that began before a write cannot serve as its readback. Wait for
     // the admitted read, then request a new snapshot without overlapping it.
@@ -282,6 +285,7 @@
     try{return await request;}finally{if(refreshRequest===request)refreshRequest=null;}
   }
   async function readSources() {
+    if (state.authenticated !== true) return;
     const generation=authGeneration;
     try {const next=await api('/api/v1/node-feeds');if(generation!==authGeneration)return;feeds=next;if(sourceDirty)return;renderSources();} catch(e){if(generation===authGeneration)reportError(e);}
   }
