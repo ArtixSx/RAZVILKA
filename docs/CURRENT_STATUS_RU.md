@@ -21,4 +21,20 @@
 Туннели и новый сетевой исполнитель этой проверкой не подтверждены.
 Публикации на GitHub и замены действующей установки не было.
 
+Следующий checkpoint включает per-node Xray, изоляцию WireGuard, именованные
+WG-профили и endpoint pins, persistent component journal и ограничение
+операций при незавершённом обновлении. Native Linux-проверки Xray TLS/REALITY,
+WG IPv4/IPv6 и сохранения чужих маршрутов прошли на `367ef14`.
+Полный Linux gate `check-linux-06` этой базы также прошёл, RC 0, включая
+обычные/race тесты, vet, UI, четыре cross-build и установочный цикл.
+Matching recovery на уровне приложения, same-peer WG/LKG и полный LAN/DNS
+executor остаются открытыми; этот checkpoint не предназначен для установки
+как готовый релиз.
+
+По новому поручению владельца разработка передаётся пяти чатам модели
+`gpt-6.1-sol`: CORE, VLESS, NET, OPS и UI. Координатор принимает изменения,
+проверяет код, выполняет общий Linux gate и управляет единственным
+live-окном на VM/роутере. Задания и границы файлов:
+[SOL_HANDOFF_RU.md](delivery-2026-10-03/SOL_HANDOFF_RU.md).
+
 [Очередь](ROADMAP.md) · [Результаты проверки](delivery-2026-10-03/VALIDATION_RU.md) · [Распределение](delivery-2026-10-03/COORDINATION_RU.md).

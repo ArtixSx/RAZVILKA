@@ -38,7 +38,7 @@
       ],
       "title": "Xray end-to-end",
       "scope": "Native server/client локально, затем selected/control client, endpoint changes, kill proxy/sidecar, app/router restart, rollback. SOCKS probe не доказывает TUN.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D04",
@@ -48,7 +48,7 @@
       ],
       "title": "WG candidate isolation и холодный старт",
       "scope": "Handshake с инициирующим трафиком; реальное попадание в временный интерфейс при одинаковых Address; Sources не удаляются; keepalive optional; TCP/UDP IPv4/IPv6.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D05",
@@ -58,7 +58,7 @@
       ],
       "title": "WG профили и резервы",
       "scope": "Отдельный engine не WARP, strict conf, hooks rejected, несколько профилей, hostname TTL, endpoint route pin, Stop/WAN/reboot/rollback.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D06",
@@ -72,7 +72,7 @@
     },
     {
       "id": "D07",
-      "owner": "INTEGRATOR",
+      "owner": "CORE",
       "depends_on": [
         "D03",
         "D05"

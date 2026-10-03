@@ -35,4 +35,6 @@ Windows/amd64, Go 1.26.5, production go.mod без изменений:
 
 Первый Linux запуск координатора (`native-xray-01.log`) подтвердил TLS positive path и остановку/перезапуск сервера/неверный UUID. Общий RC 1: тест слишком узко ожидал код ошибки при кратковременном zombie после kill; REALITY не завершил egress. Следующий harness commit `ee3a583` учитывает fail-closed cleanup fence и ждёт завершения фонового REALITY target discovery. Его успех здесь пока не заявлен. Upstream detector читает target до пяти секунд и намеренно проверяет реакцию на CCS: [исходник версии зависимости Xray 26.3.27](https://github.com/XTLS/REALITY/blob/9234c772ba8f/record_detect.go).
 
+Повторный запуск координатора `native-round-03` на интеграционном `043e62c` завершился RC 0: TLS и REALITY подтвердили точный клиент, парный HTTPS-контроль выхода, сервис по имени и IP. Также прошли остановка/перезапуск сервера, неверный UUID и kill/recovery клиента. Использованы настоящий Xray 26.3.27 и Go 1.26.5, изолированный network namespace. Журнал сохранён локально в `.review-local/native-round-03.log`. Исправлен именно жизненный цикл fixture; production TLS и критерии пригодности не ослаблены.
+
 Это не доказательство выхода в Интернет, TUN, выбранного и контрольного LAN-клиента, перезапуска приложения/роутера или аппаратного rollback. Эти подэтапы D03 остаются отдельными от native fixture.

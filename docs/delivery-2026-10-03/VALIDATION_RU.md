@@ -66,3 +66,32 @@
 D01 остаётся частично открытым: нужны измерения на ARM64 и полные сценарии ошибок настоящего HTTP. D02/D03 — точный per-node Xray и native end-to-end. D04–D09 — WG/AWG, общий сетевой исполнитель и DNS/LAN. D10 — холодный подбор и резерв. D11 — полный устойчивый к отключению питания журнал обновления. D12–D14 — оставшиеся сценарии UI, WARP/USQUE и аппаратная длительная приёмка.
 
 Новая рабочая копия не установлена вместо действующей на роутере и не опубликована на GitHub. Локальная успешная проверка не доказывает работу туннелей, всего LAN, медиасервисов или автоматического восстановления после потери питания.
+
+## Следующий проверяемый этап: Xray, WG и journal
+
+После D00 объединены работы `/root/d02_xray`, `/root/d04_wireguard`, `/root/d11_recovery` и общая интеграция координатора.
+
+- Точный checker Xray RAW/TCP TLS/REALITY и строгий канонический VLESS; неизвестные параметры не теряются. Доказательство имеет отдельный путь `xray:<node-id>`; подключение в приложение и NodeStore ещё требуется.
+- Изолированный WG candidate с привязкой сокетов к собственному интерфейсу, инициирующим трафиком и сохранением исходных Sources. Отдельное приватное хранилище именованных Generic WG профилей с revision/CAS; app/API ещё не подключены.
+- Persistent journal package/config обновлений, 40 fault boundaries и 5 subprocess crash-сценариев с дисковым симулятором пакетов. Исправлен повторный автозапуск пакетного Sing-box после отката. Native opkg и physical power cut пока не проверены.
+- Приложение сохраняет fence при pending/corrupt component journal, предоставляет чтение причины и явный Stop. Обновление кандидата возвращает pending, а не ложный успех. **Matching repair API и принятие нового live runtime ещё не реализованы: это checkpoint разработки, не готовый релиз обновлений.**
+- При удалении сетевой политики убран flush всей таблицы: удаляется точный записанный default с readback, чужие маршруты сохраняются. Создание через `route replace default` отдельно требует дальнейшего ownership-аудита.
+
+Нативный запуск `native-round-03` на `043e62c` (Linux, Go 1.26.5) прошёл с RC 0:
+
+| Сценарий | Подтверждено |
+|---|---|
+| WG IPv4 и IPv6 | Настоящие kernel WG client/server в отдельных namespace; live и candidate с одинаковым Address, инициирующий трафик, TCP/UDP и изоляция candidate |
+| Xray TLS и REALITY | Настоящие server/client 26.3.27, парный HTTPS egress, сервис по имени/IP, остановка/возврат сервера, неверный UUID, kill/recovery клиента |
+
+Первые запуски не прошли: AppArmor не разрешал `wg` читать временные ключи из `/tmp`; повторный WG сценарий оставлял устаревшую сессию live peer; REALITY fixture не дожидалась target discovery. Исправлены среда/fixtures, без отключения AppArmor, проверки TLS или production ownership. Временные ключи WG создаются в разрешённой приватной папке `/etc/wireguard/razvilka-native-*`, затем удаляются тестом. Логи сохраняют и неудачные, и успешный запуски.
+
+`check-linux-05` на `dc7370a` выявил три непереносимые fixture в AWG/WARP: поддельные вызовы не были изолированы от настоящих `wg`/`wg-quick` в PATH. Этот прогон имеет RC 1 и не объявляется успешным. Дублирующий полный Windows-прогон остановлен координатором без результата; он не заменяет Linux gate.
+
+Native fixtures не закрывают полный LAN executor, TUN selected/control, аппаратную AWG совместимость или D14. Итоговая аппаратная приёмка остаётся отдельной.
+
+На `367ef14` повторены все три native группы: `native-round-04`, RC 0 для WG, Xray и новой kernel-проверки точной очистки policy. Настоящий iproute2 подтвердил сохранение foreign host routes в обеих семьях и отказ удалять default с чужим protocol. Первый запуск нового QA-теста не поднял loopback в пустом namespace; fixture исправлена до повторного успешного запуска. Это реальный kernel-тест, но не live endpoint lifecycle нового WG pin.
+
+WG endpoint checkpoint `0357f4e` добавляет точные rule/host-route, mark, DNS lease/WAN revalidation и cleanup/rollback. Callback владения host-route подключён к Engine Lab в `367ef14`. Его native endpoint lifecycle и crash window ещё открыты; полный отчёт — D04_D05_NET_CHECKPOINT_RU.md. Отдельно не доказана доступность прежнего live WireGuard после candidate с тем же peer/key: remote Noise/endpoint state может измениться. Этот сценарий явно передан следующему NET чату и не скрывается перезапуском fixture.
+
+Итоговый `check-linux-06` на `367ef14dc67750f6fb141e346f6d3508c492f01e` завершился **RC 0**, `RAZVILKA checks: OK`: штатный Go 1.26.5, go mod verify, обычные и race тесты всех пакетов, vet, UI/shell проверки, сборки Linux amd64/arm64/mips/mipsle с SHA-256, установка/обновление/откат/удаление в изолированном тестовом корне. Три fixture-регрессии предыдущего прогона устранены. Это проверенная общая база для чатов 6.1 sol; перечисленные функциональные и аппаратные ограничения остаются открытыми.
