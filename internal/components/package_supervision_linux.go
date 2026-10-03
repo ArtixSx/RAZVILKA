@@ -347,6 +347,12 @@ func runPackageSupervisorAt(path, id, component, action string, test bool) error
 	if writeErr != nil {
 		return writeErr
 	}
+	// Reaping after forced cleanup proves inactivity, never hook success.
+	// The direct opkg may have exited zero long before its detached child.
+	if cleanup {
+		code = 125
+		r.Cancelled = true
+	}
 	r.State = "reaped"
 	r.WaitECHILD = true
 	r.ExitCode = code
