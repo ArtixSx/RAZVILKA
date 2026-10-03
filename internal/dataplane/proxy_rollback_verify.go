@@ -33,6 +33,7 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root st
 		{a.sidecarConfigPath(), s.RuntimeSidecar, s.RuntimeSideExists},
 		{a.transportPath(), s.Transport, s.TransportExists},
 		{a.evidencePath(), s.Evidence, s.EvidenceExists},
+		{a.nodeManifestPath(), s.NodeManifest, s.NodeManifestExists},
 	} {
 		if err := verifyRestoredFile(file.path, file.data, file.exists); err != nil {
 			return false, err
@@ -85,6 +86,14 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root st
 	}
 	if err := a.verifyCandidateRemoved(ctx, policy, staged); err != nil {
 		return false, err
+	}
+	if a.scopedXray {
+		if err := a.verifyScopedNodeInterface(ctx); err != nil {
+			return false, err
+		}
+		if _, err := a.scopedRuntimeIdentity(); err != nil {
+			return false, err
+		}
 	}
 	// Kernel inspection can take time. A process which exited during readback
 	// must not acquire a live restoration receipt.

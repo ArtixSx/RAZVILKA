@@ -136,6 +136,9 @@ func (a *ProxyTunnelAdapter) validateSidecarConfig(ctx context.Context, path str
 	return nil
 }
 func (a *ProxyTunnelAdapter) checkSnapshotSidecar(snapshot proxySnapshot) error {
+	if snapshot.EngineID != "" && snapshot.EngineID != a.ID() || a.scopedXray && snapshot.EngineID != "xray" {
+		return errors.New("snapshot belongs to another proxy engine")
+	}
 	kind := snapshot.SidecarKind
 	if kind == "" {
 		kind = "sing-box"
