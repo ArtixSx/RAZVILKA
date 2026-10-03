@@ -48,7 +48,8 @@
     const model=summary(recovery.data,recovery.receipt),t=model.transaction;
     const busy=!!recovery.read || !!recovery.action;
     const permission=state.status?.safe_mode===false && state.status.revision===recovery.data?.revision && state.serviceControl?.stopped!==true;
-    const note=recovery.error || (recovery.unknownWrite?'Результат действия не подтверждён. Нажмите «Прочитать состояние». Повторная запись заблокирована.':!fresh()?'Нужно свежее чтение журнала. Изменения компонентов приостановлены.':model.detail);
+    const unknownNote='Результат действия не подтверждён. Нажмите «Прочитать состояние». Повторная запись заблокирована.';
+    const note=recovery.unknownWrite?[recovery.error,unknownNote].filter(Boolean).join(' '):recovery.error || (!fresh()?'Нужно свежее чтение журнала. Изменения компонентов приостановлены.':model.detail);
     const buttons=(fresh() && !recovery.unknownWrite?model.actions:[]).map(action=>`<button class="secondary" type="button" data-component-repair="${action}" data-component-recovery-focus="${action}" ${busy||!permission?'disabled':''}>${labels[action]}</button>`).join('');
     for (const panel of document.querySelectorAll('[data-component-recovery-panel]')) {
       const focus=panel.contains(document.activeElement)?document.activeElement?.getAttribute('data-component-recovery-focus'):null;
@@ -87,16 +88,24 @@
     paint();return ticket.promise;
   }
   async function repair(action) {
-    if (!active() || recovery.action || recovery.read || !fresh() || recovery.unknownWrite) return;
+    if (!active() || recovery.action || recovery.read) return;
+    if(recovery.unknownWrite){render();return;}
+    if(!fresh()){
+      recovery.error='Сведения устарели. Читаем журнал перед новым действием; запись не отправляется.';render();
+      const epoch=recovery.epoch;await read(true);
+      if(epoch===recovery.epoch && fresh())showNotice('review','Журнал обновлён','Просмотрите текущее состояние и выберите действие заново. Запись не отправлялась.');
+      return;
+    }
     const observed=recovery.data,t=observed.transaction,model=summary(observed,recovery.receipt);
     if (!model.actions.includes(action) || state.status?.safe_mode!==false || state.status.revision!==observed.revision || state.serviceControl?.stopped===true) return;
-    const ticket={epoch:recovery.epoch,transaction:t.transaction_id};recovery.action=ticket;render();
+    const ticket={epoch:recovery.epoch,transaction:t.transaction_id,sent:false};recovery.action=ticket;render();
     const current=()=>ticket.epoch===recovery.epoch && recovery.action===ticket && state.authenticated;
     try {
       const text=`${typeof routeLabel==='function'?routeLabel(t.component):t.component}: ${t.before_version}${t.after_version?' → '+t.after_version:''}. ${model.detail} Сервер повторно проверит транзакцию и разрешения. Доступ сервиса не считается подтверждённым по установке пакета.`;
       if(!await askConfirmation(labels[action],text,labels[action]) || !current())return;
       if(recovery.data!==observed || !fresh() || state.status?.safe_mode!==false || state.status.revision!==observed.revision || state.serviceControl?.stopped===true)throw new Error('Журнал или разрешения изменились. Прочитайте состояние перед действием.');
       recovery.unknownWrite=true;
+      ticket.sent=true;
       const result=await api('/api/v1/components/recovery',{method:'POST',body:JSON.stringify({transaction_id:t.transaction_id,component:t.component,action,expected_revision:observed.revision,confirm:'REPAIR_COMPONENT_TRANSACTION'})});
       if(!current())return;
       if(result?.recovery_required!==false)throw new Error('Сервер ещё не подтвердил завершение восстановления. Прочитайте состояние; запись не повторяется.');
@@ -127,8 +136,11 @@
   });
   document.addEventListener('razvilka:auth-required',()=>{recovery.epoch++;recovery.read?.controller.abort();recovery.read=null;recovery.action=null;recovery.data=null;recovery.received=0;recovery.error='';recovery.unknownWrite=false;recovery.receipt=null;paint();});
   document.addEventListener('razvilka:view-change',event=>{
-    if(!views.has(event.detail)){recovery.epoch++;recovery.read?.controller.abort();recovery.read=null;}
-    else void Promise.resolve().then(()=>read());
+    if(!views.has(event.detail) || recovery.action && event.detail!==state.currentView){
+      const sent=recovery.action?.sent;recovery.epoch++;recovery.read?.controller.abort();recovery.read=null;recovery.action=null;
+      if(sent){recovery.unknownWrite=true;recovery.received=0;recovery.error='Результат действия ещё не прочитан. Можно обновить состояние без повторной записи.';}
+    }
+    if(views.has(event.detail))void Promise.resolve().then(()=>read());
   });
   document.addEventListener('razvilka:panel-refresh',()=>{void read();});
   document.addEventListener('razvilka:auth-restored',()=>{void read();});

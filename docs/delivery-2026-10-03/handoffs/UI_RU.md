@@ -108,3 +108,43 @@ $env:RAZVILKA_UI_CHROME='C:/Program Files/Google/Chrome/Application/chrome.exe'
 - CORE: желательно публиковать current Stop/SafeMode/action capabilities в recovery GET вместе с revision. Сейчас UI использует имеющийся status и известный service-control Stop; неизвестные/изменённые полномочия повторно проверяет существующий серверный guard. Нового API не выдумано.
 
 На момент этой UI-порции native runtime/recovery и browser POST recovery не выдаются за проверенные: unit transport явно synthetic. Принятый координатором path fix `0a3a25b3859658d4686ca200df85c079e894a796` будет объединён следующим шагом для настоящего policy HTTP/PUT/CAS без `--policy-transport`. Self-update wiring, полный card workflow, массовые подключения/AI и удаление legacy-дублей остаются дальнейшими D12 шагами.
+
+## Review-поправки и настоящий HTTP после path fix
+
+UI recovery commit: `2ba264e`. Принятый CORE path fix `0a3a25b3859658d4686ca200df85c079e894a796` объединён обычным merge `b5160d1`; чужие файлы вручную не изменялись.
+
+- После 60 секунд ранее нарисованная кнопка больше не завершает обработку молча: показывает устаревание, делает только GET и просит просмотреть журнал и выбрать действие заново. Автоматического POST после чтения нет.
+- Уход с раздела во время review отменяет ещё не отправленный POST. Если POST уже отправлен, старый ticket освобождён, результат остаётся неизвестным, возврат допускает независимое чтение. Поздний ответ не восстанавливает старую отметку принятия и не блокирует новые кнопки. Ошибка и инструкция чтения показаны вместе.
+- Unit transport: `test-component-recovery-ui.mjs` теперь **14/14**, включая freshness, уход во время подтверждения и уход во время pending POST. Эти проверки не выданы за настоящее package recovery.
+- Browser runner передаёт все пять component path flags в отдельные абсолютные каталоги своего `.review-local/ui-http-*`. Настоящий policy API теперь работает без `--policy-transport`; прежний Windows path blocker устранён владельческим CORE commit.
+
+Браузерный прогон без `--auth-only`/`--policy-transport`: **12 сценариев, RC 0**, Chrome `154.0.8037.95`, артефакты `.review-local/ui-http-MyMyJX/result.json`, `ui-state.json`, `server.log`. `errors=[]`, `configUnchanged=true`, `safe_mode=true`; сервер завершён, порт 18851 свободен. Предыдущие полные RC 0 сохранены в `.review-local/ui-http-SlCvpg` и `.review-local/ui-http-eIFcwq`.
+
+Настоящие ответы: policy GET/PUT/readback 200, CAS 409 после второго настоящего HTTP writer, recovery GET 200, logout/session 401, CSRF 403. На дубликат Save — 1 PUT + 2 GET. Recovery navigation — только GET, без записи. Эти суммарные счётчики включают фоновые читатели и не являются бюджетом одного открытия или ARM64 замером.
+
+Recovery отрицательные сценарии используют **только журнал-заготовку в собственном одноразовом каталоге**; embedded assets, HTTP decoder и guards настоящие. GET pending prepared показывает версии и disabled repair в Safe Mode. Matching POST `abandon-prepared` получает настоящий **409 COMPONENT_AUTHORITY_CHANGED**, байты журнала не меняются. После GET `upgrade-started` кнопок force/replay нет. Повреждённый JSON получает настоящий **503 COMPONENT_JOURNAL_UNAVAILABLE**, UI показывает причину и доступное чтение, сохраняет fence. Заготовка удалена только из своего каталога, независимый GET снова показывает отсутствие pending. Пакет, процессы, native quiescence и успешный live/idle acceptance этим не проверены.
+
+Контролируемые transport faults обозначены отдельно: настоящий policy PUT commits 200, затем только его доставка заменена на 500; read 409/500 и auth/status 500 подставлены. Проверены сохранение dirty полей, отсутствие replay и доступное reconciliation. Backend 500 при самой записи по-прежнему unverified.
+
+Повторные проверки после review-поправок:
+
+| Проверка | Результат |
+|---|---|
+| 79 строк Node gate из `check.sh`, исключая `*supervision*` | **79/79, RC 0**, `.review-local/frontend-d12-review.log`; Git shell в PATH, opkg launcher stubs only |
+| recovery UI unit | **14/14, RC 0**; новый test ещё подключает координатор |
+| `go build` embedded server, `go test ./cmd/razvilka -count=1`, `go vet ./cmd/razvilka` | **RC 0**, Go 1.26.5 Windows/amd64, `GOMAXPROCS=2`, `GOFLAGS=-p=2`, `GOTOOLCHAIN=local` |
+| полный браузер без policy transport | **12/12, RC 0** |
+
+### Снимки для визуальной приёмки координатором
+
+Это PNG настоящего embedded приложения в последнем прогоне; никакого mock/preview transport. В PNG не сохранялись пароли, tokens, config или private profile contents; все три просмотрены исполнителем. После визуальной проверки добавлены отступы и перенос заголовка recovery-панели, `interface.css` пересобран. Narrow capture ждёт завершения анимации закрытия меню.
+
+- [Главная — 1280 × 900](../../../.review-local/ui-http-MyMyJX/01-home.png): отдельная тестовая копия catalog/config, Safe Mode включён, автоматика выключена, native engines отсутствуют. Показаны настоящие пустые/ещё не загруженные данные, успех не имитирован.
+- [Обходы/recovery — 1280 × 900](../../../.review-local/ui-http-MyMyJX/02-component-recovery.png): настоящие HTTP и интерфейс; только `upgrade-started` журнал является одноразовой заготовкой. Видны неизвестный исход, версии, чтение и отсутствие replay.
+- [Подключения — 390 × 844](../../../.review-local/ui-http-MyMyJX/03-connections-narrow.png): настоящая пустая библиотека в отдельном состоянии; узкий экран с закрытым меню. Full-page PNG длиннее viewport. Общие счётчики, controls и сообщения взяты из приложения.
+
+Абсолютный каталог всех снимков: `C:/Projects/RAZVILKA/worktrees/sol-ui/.review-local/ui-http-MyMyJX/`. Поля `screenshots[].source` и viewport также записаны в `result.json`. PNG и частные run logs остаются игнорируемыми локальными артефактами.
+
+OPS WIP контракт прочитан по указанию координатора: `accept-installed-idle`, terminal `accepted-installed-idle`, `installed_idle_accepted=true`, `live_accepted=false`; exact version/config + trusted inactivity/quiescence. В текущей интегрированной базе action/phase ещё нет, UI не отправляет его по догадке. Будущая idle отметка должна означать установленную неактивную версию, не live и не сервисный PASS. `awaiting-rollback-acceptance` уже имеет отдельную проверку результата отката; candidate callback не используется UI как доказательство принятия.
+
+Эта порция готова к review; весь D12 не закрыт. Следующие шаги: подключить принятый CORE/OPS idle contract, затем полный card workflow, массовые подключения/AI и legacy-дубли. Linux/native/HIL/race/weak-router CPU/RSS/render-cost остаются за координатором.

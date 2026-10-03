@@ -10,7 +10,8 @@ function fixture(view='engines'){
   const requests=[],listeners=new Map(),notices=[],panel={innerHTML:'',contains:()=>false};
   const state={authenticated:true,currentView:view,status:{safe_mode:false,revision:7},serviceControl:{stopped:false}};
   let confirm=async()=>true,authCalls=0;
-  const ctx={state,Date,AbortController,Promise,esc:value=>String(value??'').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),
+  let now=Date.now();class Clock extends Date{static now(){return now;}}
+  const ctx={state,Date:Clock,AbortController,Promise,esc:value=>String(value??'').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),
     document:{hidden:false,activeElement:null,querySelectorAll:()=>[panel],addEventListener(name,fn){listeners.set(name,fn);}},
     api(path,options={}){const pending=deferred();requests.push({path,options,...pending});return pending.promise;},
     askConfirmation:(...args)=>confirm(...args),showNotice:(...args)=>notices.push(args),routeLabel:id=>id,
@@ -20,6 +21,7 @@ function fixture(view='engines'){
   vm.createContext(ctx);vm.runInContext(source,ctx);
   const click=selector=>listeners.get('click')({target:{closest:value=>value===selector?{disabled:false,dataset:{componentRepair:selector==='[data-component-repair]'?'accept-live':undefined}}:null}});
   return {ctx,state,requests,notices,panel,authCalls:()=>authCalls,
+    advance:milliseconds=>{now+=milliseconds;},
     confirm:fn=>{confirm=fn;},clickRead:()=>click('[data-component-recovery-read]'),clickRepair:()=>click('[data-component-repair]'),
     revoke(){listeners.get('razvilka:auth-required')();state.authenticated=false;},
     view(name){listeners.get('razvilka:view-change')({detail:name});state.currentView=name;},
@@ -98,5 +100,30 @@ await test('current 401 closes the session; 503 keeps journal visible and fenced
   const f=fixture();await flush();f.requests[0].reject(Object.assign(new Error('journal not readable'),{status:503}));await flush();
   assert.match(f.panel.innerHTML,/journal not readable/);assert.equal(f.ctx.componentRecoveryFence(),true);
   f.clickRead();await flush();f.requests[1].reject(Object.assign(new Error('expired session'),{status:401}));await flush();assert.equal(f.authCalls(),1);
+});
+await test('stale enabled action gives a visible readback and never posts',async()=>{
+  const f=fixture();await f.ready();assert.match(f.panel.innerHTML,/data-component-repair="accept-live"/);
+  f.advance(60001);f.clickRepair();await flush();
+  assert.equal(f.requests.length,2);assert.equal(f.requests[1].options.method,undefined);
+  assert.match(f.panel.innerHTML,/Сведения устарели/);
+  f.requests[1].resolve(snapshot());await flush();
+  assert.equal(f.requests.filter(request=>request.options.method==='POST').length,0);
+  assert.match(f.notices.at(-1)[1],/Журнал обновлён/);
+});
+await test('leaving a pending action releases the ticket and allows explicit readback',async()=>{
+  const f=fixture();await f.ready();f.clickRepair();await flush();const old=f.requests[1];
+  f.view('overview');f.view('engines');await flush();f.clickRead();await flush();
+  assert.equal(f.requests.length,3,'obsolete action blocked independent readback');
+  assert.equal(f.requests[2].options.method,undefined);
+  f.requests[2].resolve(snapshot('rollback-started'));await flush();
+  old.resolve({recovery_required:false,live_accepted:true});await flush();
+  assert.equal(f.ctx.componentRecoverySummary('xray').tone,'unknown');
+  assert.doesNotMatch(f.panel.innerHTML,/data-component-repair=/);assert.equal(f.notices.length,0);
+});
+await test('leaving while review is pending cancels POST and releases buttons',async()=>{
+  const f=fixture();await f.ready();const confirmation=deferred();f.confirm(()=>confirmation.promise);f.clickRepair();await flush();
+  f.view('overview');f.view('engines');await flush();confirmation.resolve(true);await flush();
+  assert.equal(f.requests.filter(request=>request.options.method==='POST').length,0);
+  f.clickRead();await flush();assert.equal(f.requests.length,2);
 });
 console.log(JSON.stringify({suite:'component-recovery',tests:total}));
