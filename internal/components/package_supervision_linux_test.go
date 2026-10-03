@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -48,9 +49,13 @@ func TestPackageDetachedFixture(t *testing.T) {
 		return
 	}
 	path := os.Getenv("RAZVILKA_DETACHED_ROOT")
-	if stage == "fork" {
+	if stage == "fork" || stage == "fork-hung" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestPackageDetachedFixture$")
-		cmd.Env = append(os.Environ(), "RAZVILKA_DETACHED_STAGE=child")
+		next := "child"
+		if stage == "fork-hung" {
+			next = "hung"
+		}
+		cmd.Env = append(os.Environ(), "RAZVILKA_DETACHED_STAGE="+next)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -62,14 +67,147 @@ func TestPackageDetachedFixture(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(path, "ready"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 		os.Exit(84)
 	}
-	for until := time.Now().Add(8 * time.Second); time.Now().Before(until); {
-		if _, err := os.Stat(filepath.Join(path, "release")); err == nil {
+	watchdog := 8 * time.Second
+	if stage == "hung" {
+		watchdog = 2 * time.Minute
+	}
+	for until := time.Now().Add(watchdog); time.Now().Before(until); {
+		if _, err := os.Stat(filepath.Join(path, "release")); err == nil && stage != "hung" {
 			_ = os.WriteFile(filepath.Join(path, "done"), nil, 0600)
 			os.Exit(0)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	os.Exit(85)
+}
+
+func TestSupervisorCleanupWithoutChildrenInterface(t *testing.T) {
+	proc := t.TempDir()
+	for pid, parent := range map[int]int{10: 100, 11: 100, 12: 101} {
+		if err := os.Mkdir(filepath.Join(proc, strconv.Itoa(pid)), 0700); err != nil {
+			t.Fatal(err)
+		}
+		text := strconv.Itoa(pid) + " (name with ) brackets) S " + strconv.Itoa(parent) + " 100 " + strings.Repeat("0 ", 16) + "42"
+		if err := os.WriteFile(filepath.Join(proc, strconv.Itoa(pid), "stat"), []byte(text), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	children := supervisorChildrenAt(proc, 100)
+	if len(children) != 2 || children[10] != "42" || children[11] != "42" {
+		t.Fatalf("exact PPID cleanup: %v", children)
+	}
+}
+
+func TestPackageSupervisorHungChildDeadline(t *testing.T) {
+	m, _, _ := prepareJournalFixture(t)
+	tx, err := m.lockUpdateJournal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := lookup("nfqws2")
+	images, err := m.snapshotConffiles(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Runner = execRunner{}
+	if err := tx.prepare(spec, "1.3.1", m.rollbackPackage(spec, "1.3.1"), images); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.phase(UpdateStarted); err != nil {
+		t.Fatal(err)
+	}
+	id := tx.doc.TransactionID
+	path := filepath.Join(m.updateJournalDir(), id)
+	tx.close()
+	root, err := ownedfs.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	runner := fixtureSupervisedRunner(path)
+	runner.supervisorEnv = append(runner.supervisorEnv, "RAZVILKA_DETACHED_STAGE=fork-hung", "RAZVILKA_DETACHED_ROOT="+path)
+	started := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := runner.runSupervised(ctx, os.Args[0], []string{"-test.run=^TestPackageDetachedFixture$"}, packageSupervision{Schema: 1, TransactionID: id, Component: "nfqws2", Action: "upgrade", Containment: packageContainment, State: "intent"}, root, path)
+		done <- err
+	}()
+	for {
+		if _, err := os.Stat(filepath.Join(path, "ready")); err == nil {
+			t.Logf("hung child ready after %s", time.Since(started))
+			cancel() // Cancel only after an actual hung detached child exists.
+			break
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("helper ended before hung child started: %v elapsed=%s", err, time.Since(started))
+		default:
+		}
+		if ctx.Err() != nil {
+			t.Fatal("hung child never started before deadline")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	err = <-done
+	if err == nil {
+		t.Fatal("timeout was reported as success")
+	}
+	// Parent's bounded wait can end during the helper's final fsync. Observe
+	// the receipt later, never accept an empty proc scan or kill a fresh PID.
+	until := time.Now().Add(20 * time.Second)
+	for {
+		if err := m.Quiescence(context.Background(), id, "nfqws2"); err == nil {
+			break
+		}
+		if time.Now().After(until) {
+			journal, e := openUpdateRoot(m.updateJournalDir(), false)
+			if e != nil {
+				t.Fatal(e)
+			}
+			r, e := readSupervision(journal, id, "nfqws2", "upgrade")
+			journal.Close()
+			t.Fatalf("hung child not durably reaped: phase=%s child=%d reaped=%d ECHILD=%v cancelled=%v exit=%d receipt_error=%v elapsed=%s", r.State, r.ChildPID, r.Reaped, r.WaitECHILD, r.Cancelled, r.ExitCode, e, time.Since(started))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestPackageSupervisorPreStartCancellation(t *testing.T) {
+	m, _, _ := prepareJournalFixture(t)
+	tx, err := m.lockUpdateJournal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.close()
+	spec, _ := lookup("nfqws2")
+	images, err := m.snapshotConffiles(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Runner = execRunner{}
+	if err := tx.prepare(spec, "1.3.1", m.rollbackPackage(spec, "1.3.1"), images); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.phase(UpdateStarted); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(m.updateJournalDir(), tx.doc.TransactionID)
+	root, err := ownedfs.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	cancel()
+	_, err = fixtureSupervisedRunner(path).runSupervised(ctx, os.Args[0], []string{"-test.run=^TestPackageDetachedFixture$"}, packageSupervision{Schema: 1, TransactionID: tx.doc.TransactionID, Component: "nfqws2", Action: "upgrade", Containment: packageContainment, State: "intent"}, root, path)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("cancelled context reached spawn", err)
+	}
+	if _, err := root.Stat("upgrade.command.json"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("pre-start cancellation created command", err)
+	}
 }
 
 func TestPackageSupervisionDetachedAndSupervisorDeath(t *testing.T) {
