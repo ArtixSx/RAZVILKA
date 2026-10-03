@@ -84,3 +84,8 @@ GOMAXPROCS=2 GOFLAGS=-p=2 GOTOOLCHAIN=local \
 ```
 
 Native harness имеет две реальные package-сценария, но не physical power cut. Для нового self-update нужна отдельная матрица Linux storage: kill до/после Prepared/current, file copy/sync/rename/dirsync, command intent/run/result и terminal acceptance; затем реальное отключение питания на целевых устройствах. Пакетные unknown не повторять, LKG не удалять. Общий LAN/DNS executor и `NETWORK_POLICY_EXECUTOR_REQUIRED` эта порция не меняет.
+# D11 COMPONENTS: отдельная завершённая порция 03.10.2026
+
+Отдельный subreaper helper вместо обязательного PID namespace, durable boot/start/command identity + wait4 ECHILD receipt, matching Manager.Quiescence, исторический unknown fence; отдельное accept-installed-idle с exact candidate config/version и двумя trusted inactive/quiescence наблюдениями; автоматический rollback больше не переиспользует candidate probe и ждёт independent acceptance. Полный контракт main/HTTP: [OPS_COMPONENT_CONTRACT_RU.md](OPS_COMPONENT_CONTRACT_RU.md).
+
+ComponentUpdateSchema=2, retained v1 читается; writer/shell target gate=2 исключает старый reader поверх новых полей/terminal phase. CORE подключает два private CLI dispatch и HTTP idle action. OPS не менял main/app. Windows components unit/fault/subprocess tests RC0, vet RC0, Linux ARM64 test cross-compile RC0, реальные shell schema gates + syntax RC0. Новые Linux detached-child/supervisor-death и обновлённый native opkg harness здесь unverified — переданы координатору. Native-opkg-04 на предыдущем 6523002 подтвердил только fixture/PKG_ROOT/старую baseline, не эту семантику. Production module/version, другие worktrees, стенды и публикации не менялись.

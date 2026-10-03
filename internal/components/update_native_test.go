@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -131,11 +132,17 @@ func TestNativeOpkgManagedUpdateJournal(t *testing.T) {
 					t.Fatalf("native durable readback: %v %v", versions, err)
 				}
 			} else {
-				_, err := m.ManagedUpdate(context.Background(), "nfqws2", check)
-				if !strings.Contains(fmt.Sprint(err), "rolled back to 1.0.0") {
-					t.Fatalf("native rollback not verified: %v", err)
+				result, err := m.ManagedUpdate(context.Background(), "nfqws2", check)
+				if !errors.Is(err, ErrRollbackUnconfirmed) || !result.PendingRollbackAcceptance {
+					t.Fatalf("native rollback must await independent acceptance: %+v %v", result, err)
 				}
 				fresh := restartedManager(m)
+				if err := fresh.Quiescence(context.Background(), result.TransactionID, "nfqws2"); err != nil {
+					t.Fatal("native descendants not reaped", err)
+				}
+				if _, err := fresh.RecoverManagedUpdate(context.Background(), ManagedRecoveryRequest{TransactionID: result.TransactionID, Component: "nfqws2", Action: "verify-rollback"}, allowRecovery, check); err != nil {
+					t.Fatal("independent native rollback acceptance", err)
+				}
 				state, pending, err := fresh.PendingManagedUpdate()
 				if err != nil || pending || state.Phase != UpdateRolledBack || check(context.Background()) != nil {
 					t.Fatalf("native rollback persistence: %+v %v %v", state, pending, err)

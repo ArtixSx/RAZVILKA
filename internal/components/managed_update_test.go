@@ -144,7 +144,7 @@ func TestManagedUpdateRollsBackConfigurationAndVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	checks := 0
-	_, err := m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
+	result, err := m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
 		checks++
 		data, _ := os.ReadFile(conf)
 		if string(data) != "USER STRATEGIES\n" {
@@ -152,11 +152,11 @@ func TestManagedUpdateRollsBackConfigurationAndVersion(t *testing.T) {
 		}
 		return nil
 	})
-	if err == nil || !strings.Contains(err.Error(), "rolled back to 1.3.1") {
-		t.Fatalf("failed check not rolled back: %v", err)
+	if !errors.Is(err, ErrRollbackUnconfirmed) || !result.PendingRollbackAcceptance || result.TransactionID == "" {
+		t.Fatalf("rollback needs independent acceptance: %+v %v", result, err)
 	}
 	data, _ := os.ReadFile(conf)
-	if r.installed != "1.3.1" || string(data) != "USER STRATEGIES\n" || checks != 2 {
+	if r.installed != "1.3.1" || string(data) != "USER STRATEGIES\n" || checks != 1 {
 		t.Fatalf("installed=%s conf=%q checks=%d", r.installed, data, checks)
 	}
 	found := false
@@ -167,6 +167,19 @@ func TestManagedUpdateRollsBackConfigurationAndVersion(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("previous version not reinstalled: %v", r.calls)
+	}
+	state, pending, e := restartedManager(m).PendingManagedUpdate()
+	if e != nil || !pending || state.Phase != UpdateAwaitingRollback {
+		t.Fatalf("missing rollback fence: %+v %v", state, e)
+	}
+	_, e = restartedManager(m).RecoverManagedUpdate(context.Background(), ManagedRecoveryRequest{TransactionID: result.TransactionID, Component: "nfqws2", Action: "verify-rollback"}, allowRecovery, func(context.Context) error {
+		if r.installed != "1.3.1" {
+			return errors.New("old runtime not installed")
+		}
+		return nil
+	})
+	if e != nil || checks != 1 {
+		t.Fatalf("independent acceptance: %v candidate checks=%d", e, checks)
 	}
 }
 
@@ -182,7 +195,7 @@ func TestManagedUpdateRollsBackNonAdvancingVersion(t *testing.T) {
 			// the package. A non-advancing version is not proof of no mutation.
 			r.available = after
 			checks := 0
-			result, err := m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
+			result, err := m.ManagedUpdateGuardedWithRollback(context.Background(), "nfqws2", func(context.Context) error { t.Fatal("non-advancing candidate must not pass"); return nil }, nil, func(context.Context) error {
 				checks++
 				data, err := os.ReadFile(conf)
 				if err != nil || string(data) != "USER STRATEGIES\n" || r.installed != "1.3.1" {
@@ -210,11 +223,11 @@ func TestManagedUpdateRollbackReceiptFailureRemainsUnconfirmed(t *testing.T) {
 	}
 	r.available = "1.3.2"
 	checks := 0
-	result, err := m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
+	result, err := m.ManagedUpdateGuardedWithRollback(context.Background(), "nfqws2", func(context.Context) error {
 		checks++
-		if checks == 1 {
-			return errors.New("new runtime failed its live check")
-		}
+		return errors.New("new runtime failed its live check")
+	}, nil, func(context.Context) error {
+		checks++
 		// Fail only the rollback receipt write after the previous runtime
 		// passes its check, without making the earlier upgrade write fail.
 		path := filepath.Join(m.StateDir, "receipts", "nfqws2.json")
