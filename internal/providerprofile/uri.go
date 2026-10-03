@@ -120,6 +120,11 @@ func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
 	if err := validateVLESSModes(transport, security, q.Get("flow"), q.Get("packet_encoding")); err != nil {
 		return nil, Preview{}, err
 	}
+	for _, key := range []string{"sni", "fp", "alpn", "pbk", "sid"} {
+		if q.Has(key) && (security == "none" || security == "tls" && (key == "pbk" || key == "sid")) {
+			return nil, Preview{}, importError("INVALID_PARAMETERS")
+		}
+	}
 	out := map[string]any{"type": "vless", "tag": "proxy", "server": server, "server_port": port, "uuid": uuid}
 	if q.Has("packet_encoding") {
 		out["packet_encoding"] = q.Get("packet_encoding")

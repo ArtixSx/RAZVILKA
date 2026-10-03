@@ -270,6 +270,16 @@ func validateClashVLESS(proxy map[string]any) error {
 	if err := onlyProfileFields(proxy, "type name server port uuid flow packet-encoding tls network servername sni client-fingerprint alpn skip-cert-verify reality-opts ws-opts grpc-opts http-opts h2-opts"); err != nil {
 		return err
 	}
+	for _, key := range []string{"servername", "sni", "client-fingerprint"} {
+		if _, err := strictText(proxy, key); err != nil {
+			return err
+		}
+	}
+	if _, exists := proxy["sni"]; exists {
+		if _, duplicate := proxy["servername"]; duplicate {
+			return importError("INVALID_PARAMETERS")
+		}
+	}
 	if raw, exists := proxy["alpn"]; exists {
 		if _, err := strictStringList(raw); err != nil {
 			return err
@@ -279,6 +289,11 @@ func validateClashVLESS(proxy map[string]any) error {
 		m, ok := raw.(map[string]any)
 		if !ok || onlyProfileFields(m, "public-key short-id") != nil {
 			return importError("INVALID_PARAMETERS")
+		}
+		for _, key := range []string{"public-key", "short-id"} {
+			if _, err := strictText(m, key); err != nil {
+				return err
+			}
 		}
 	}
 	transport, err := strictText(proxy, "network")

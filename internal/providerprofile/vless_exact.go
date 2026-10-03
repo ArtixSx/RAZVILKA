@@ -46,6 +46,12 @@ func validateVLESSFields(source map[string]any) error {
 	if err := onlyProfileFields(source, "type tag server server_port uuid flow packet_encoding tls transport multiplex"); err != nil {
 		return err
 	}
+	if raw, exists := source["multiplex"]; exists {
+		mux, ok := raw.(map[string]any)
+		if !ok || onlyProfileFields(mux, "enabled protocol max_connections min_streams max_streams padding") != nil {
+			return importError("INVALID_PARAMETERS")
+		}
+	}
 	for _, key := range []string{"type", "server", "uuid", "flow", "packet_encoding"} {
 		if _, err := strictText(source, key); err != nil {
 			return err

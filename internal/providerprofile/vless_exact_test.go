@@ -14,6 +14,7 @@ func TestCanonicalVLESSRejectsLossyFieldsBeforeNormalization(t *testing.T) {
 		`"tls":{"enabled":true,"utls":{"enabled":"true","fingerprint":"chrome"}}`,
 		`"tls":{"enabled":true,"reality":{"enabled":true,"public_key":"KEY","spider_x":"/path"}}`,
 		`"detour":"other"`, `"bind_interface":"wan2"`, `"unknown_secret":"canary"`,
+		`"multiplex":{"unmapped_option":true}`,
 	} {
 		raw := `{` + base + `,` + fields + `}`
 		if _, err := VLESSProfileFromJSON([]byte(raw)); err == nil {
@@ -21,6 +22,20 @@ func TestCanonicalVLESSRejectsLossyFieldsBeforeNormalization(t *testing.T) {
 		}
 		if result, err := ParseXrayProfile(`{"outbounds":[`+raw+`]}`, 0); err == nil || len(result.Config) != 0 {
 			t.Fatalf("normalization erased unmapped settings: %s", fields)
+		}
+	}
+}
+
+func TestVLESSRejectsSecurityOptionsThatWouldBeDiscarded(t *testing.T) {
+	for _, query := range []string{"security=none&sni=front.example", "security=none&fp=chrome", "security=none&alpn=h2", "security=tls&pbk=KEY", "security=tls&sid=abcd"} {
+		if _, err := ParseXrayProfile(testVLESS+query, 0); err == nil {
+			t.Fatalf("ignored security option accepted: %s", query)
+		}
+	}
+	const base = "proxies:\n  - type: vless\n    server: edge.example\n    port: 443\n    uuid: " + xrayUUID + "\n    tls: true\n"
+	for _, option := range []string{"    client-fingerprint: 123\n", "    servername: one.example\n    sni: two.example\n", "    smux: {enabled: true}\n", "    reality-opts: {public-key: KEY, short-id: 123}\n"} {
+		if _, err := ParseXrayProfile(base+option, 0); err == nil {
+			t.Fatal("lossy Clash projection accepted")
 		}
 	}
 }
