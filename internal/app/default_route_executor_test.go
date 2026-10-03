@@ -16,7 +16,6 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
-	"github.com/ArtixSx/razvilka/internal/restorejournal"
 	"github.com/ArtixSx/razvilka/internal/wireguardprofile"
 )
 
@@ -76,6 +75,11 @@ func (a *defaultRouteTransactionAdapter) VerifyRollback(c context.Context, _ dat
 func defaultRouteExecutorFixture(t *testing.T) (*DefaultRouteExecutor, *DefaultRouteSnapshot, *defaultRouteTransactionAdapter) {
 	t.Helper()
 	cfg, snapshot, _ := defaultRouteFixture()
+	return defaultRouteExecutorFixtureConfig(t, cfg, snapshot)
+}
+
+func defaultRouteExecutorFixtureConfig(t *testing.T, cfg config.Config, snapshot DefaultRouteSnapshot) (*DefaultRouteExecutor, *DefaultRouteSnapshot, *defaultRouteTransactionAdapter) {
+	t.Helper()
 	root := t.TempDir()
 	path := filepath.Join(root, "config.json")
 	bytes, _ := json.Marshal(cfg)
@@ -96,55 +100,12 @@ func defaultRouteExecutorFixture(t *testing.T) (*DefaultRouteExecutor, *DefaultR
 		BindIngress: func(_ context.Context, _ *DefaultRouteCompilation, input dataplane.Input) (dataplane.Input, error) {
 			return input, nil
 		},
-		Commit: func(expected config.Config, p *config.NetworkPolicy, services map[string]config.ServiceState) (func() error, error) {
-			return defaultRouteTestCommit(store, expected, p, services)
-		},
+		Commit: store.CommitNetworkPolicyWithRollback,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return executor, &snapshot, adapter
-}
-
-// An interim test binding for the forthcoming CORE API. It uses the actual
-// Store's locked disk+memory CAS and guarded undo rather than a fake Get/PASS.
-func defaultRouteTestCommit(store *config.Store, expected config.Config, p *config.NetworkPolicy, services map[string]config.ServiceState) (func() error, error) {
-	ctx := context.Background()
-	cfg := store.Get()
-	if !reflect.DeepEqual(cfg, expected) {
-		return nil, config.ErrRevisionChanged
-	}
-	session, err := store.BeginRestore(ctx)
-	if err != nil {
-		return nil, err
-	}
-	before, err := session.Read(ctx)
-	if err != nil {
-		_ = session.Close()
-		return nil, err
-	}
-	current, _, err := config.InspectBytes(before.Data)
-	if err != nil || !reflect.DeepEqual(current, cfg) {
-		_ = session.Close()
-		return nil, config.ErrRevisionChanged
-	}
-	current.AppliedNetworkPolicy, current.AppliedServices = config.CloneNetworkPolicy(p), defaultRouteCloneServices(services)
-	current.Revision++
-	current.AppliedRevision = current.Revision
-	current.LastAppliedAt = time.Now().UTC().Format(time.RFC3339)
-	data, _ := json.Marshal(current)
-	after := restorejournal.Image{Exists: true, Data: data}
-	err = errors.Join(session.CompareAndSwap(ctx, before, after), session.Close())
-	if err != nil {
-		return nil, err
-	}
-	return func() error {
-		session, err := store.BeginRestore(ctx)
-		if err != nil {
-			return err
-		}
-		return errors.Join(session.CompareAndSwap(ctx, after, before), session.Close())
-	}, nil
 }
 
 func TestDefaultRouteExecutorSingleManagerCommitAndReviewCopies(t *testing.T) {
@@ -177,6 +138,115 @@ func TestDefaultRouteExecutorSingleManagerCommitAndReviewCopies(t *testing.T) {
 	}
 	if _, err := e.Review(context.Background(), nil); err != nil {
 		t.Fatal("next review could not consume applied state", err)
+	}
+}
+
+func TestDefaultRouteExecutorRealCommitServiceFencesAndEpochRollback(t *testing.T) {
+	defaultRouteRequireLinuxJournal(t)
+	for _, changedEpoch := range []bool{false, true} {
+		t.Run(map[bool]string{false: "commit", true: "post-commit-epoch-rollback"}[changedEpoch], func(t *testing.T) {
+			cfg, snapshot, _ := defaultRouteFixture()
+			node := "node-" + strings.Repeat("a", 64)
+			cfg.Services["changed"] = config.ServiceState{Route: "xray:" + node, Mode: "xray:" + node, Sources: []string{"192.168.1.40/32"}}
+			cfg.Services["stable"] = config.ServiceState{Route: "direct", Mode: "direct"}
+			cfg.AppliedServices = map[string]config.ServiceState{
+				"changed": {Enabled: true, Route: "warp-wg", Mode: "warp-wg", Sources: []string{"192.168.1.50/32"}},
+				"removed": {Enabled: true, Route: "wireguard", Mode: "wireguard"},
+				"stable":  cfg.Services["stable"],
+			}
+			cfg.ServicePolicies = map[string]config.ServicePolicy{}
+			for _, id := range []string{"changed", "removed", "stable"} {
+				p := config.DefaultServicePolicy(id, cfg.AppliedServices[id])
+				p.Enabled, p.Mode, p.LegacyOptIn, p.Revision = true, "auto", true, 3
+				p.AllowedNodeIDs = []string{node}
+				cfg.ServicePolicies[id] = p
+			}
+			e, s, adapter := defaultRouteExecutorFixtureConfig(t, cfg, snapshot)
+			if err := e.app.Store.Save(); err != nil {
+				t.Fatal(err)
+			}
+			before := e.app.Store.Get()
+			path := filepath.Join(filepath.Dir(e.app.Dataplane.StateRoot), "config.json")
+			beforeBytes, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if changedEpoch {
+				commit := e.deps.Commit
+				e.deps.Commit = func(expected config.Config, p *config.NetworkPolicy, services map[string]config.ServiceState) (func() error, error) {
+					undo, err := commit(expected, p, services)
+					if err == nil {
+						s.Authority.Sequence++ // Durable config commit cannot bypass a newer control owner.
+					}
+					return undo, err
+				}
+			}
+			r, err := e.Review(context.Background(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			execution, err := e.Execute(context.Background(), r, r.Digest())
+			after := e.app.Store.Get()
+			if changedEpoch {
+				if err == nil || execution.State != "rolled-back" || !execution.RollbackVerified || adapter.live || !reflect.DeepEqual(before, after) {
+					t.Fatal("epoch change did not restore applied policy and service fences", err, execution)
+				}
+				afterBytes, readErr := os.ReadFile(path)
+				if readErr != nil || string(afterBytes) != string(beforeBytes) {
+					t.Fatal("guarded undo failed to restore canonical preimage", readErr)
+				}
+				return
+			}
+			if err != nil || execution.State != "committed" || !adapter.live {
+				t.Fatal("real commit rejected sanctioned service fences", err, execution)
+			}
+			changed, removed := after.ServicePolicies["changed"], after.ServicePolicies["removed"]
+			if changed.Enabled || changed.Mode != "manual" || changed.LegacyOptIn || changed.Revision != 4 || changed.PinnedNodeID != node || !reflect.DeepEqual(changed.DeviceSources, cfg.Services["changed"].Sources) ||
+				removed.Enabled || removed.Mode != "manual" || removed.LegacyOptIn || removed.Revision != 4 || removed.PinnedNodeID != "" || len(removed.DeviceSources) != 0 {
+				t.Fatal("changed/removed automatic authority was not fenced", changed, removed)
+			}
+			if !reflect.DeepEqual(after.ServicePolicies["stable"], before.ServicePolicies["stable"]) || !reflect.DeepEqual(after.Services, before.Services) || !reflect.DeepEqual(after.NetworkPolicy, before.NetworkPolicy) {
+				t.Fatal("commit changed unaffected policy or editor")
+			}
+		})
+	}
+}
+
+func TestDefaultRouteCommittedPostimageRejectsExtraChangesAndUnboundTime(t *testing.T) {
+	cfg, _, now := defaultRouteFixture()
+	services := map[string]config.ServiceState{"disabled": {Route: "direct"}}
+	after, err := config.ReviewedNetworkPolicyCommitImage(cfg, cfg.NetworkPolicy, services, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, finished := now.Add(-time.Millisecond), now.Add(time.Millisecond)
+	if !defaultRouteCommittedConfig(cfg, after, cfg.NetworkPolicy, services, started, finished) {
+		t.Fatal("canonical normalized shared postimage rejected")
+	}
+	for name, mutate := range map[string]func(*config.Config){
+		"editor": func(c *config.Config) { c.Services["new"] = config.ServiceState{Route: "direct"} },
+		"policy": func(c *config.Config) { c.NetworkPolicy.Clients.NewDevices = "base" },
+		"safe":   func(c *config.Config) { c.SafeMode = true },
+		"listen": func(c *config.Config) { c.Listen = ":12345" },
+		"applied state": func(c *config.Config) {
+			c.AppliedServices["disabled"] = config.ServiceState{Enabled: true, Route: "direct", Mode: "direct"}
+		},
+		"old timestamp":    func(c *config.Config) { c.LastAppliedAt = now.Add(-time.Hour).UTC().Format(time.RFC3339) },
+		"future timestamp": func(c *config.Config) { c.LastAppliedAt = now.Add(time.Hour).UTC().Format(time.RFC3339) },
+		"noncanonical UTC": func(c *config.Config) { c.LastAppliedAt = strings.TrimSuffix(c.LastAppliedAt, "Z") + "+00:00" },
+		"missing time":     func(c *config.Config) { c.LastAppliedAt = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := defaultRouteCloneConfig(after)
+			mutate(&changed)
+			if defaultRouteCommittedConfig(cfg, changed, cfg.NetworkPolicy, services, started, finished) {
+				t.Fatal("unreviewed committed delta accepted")
+			}
+		})
+	}
+	if defaultRouteCommittedConfig(cfg, after, cfg.NetworkPolicy, services, time.Time{}, finished) ||
+		defaultRouteCommittedConfig(cfg, after, cfg.NetworkPolicy, services, finished, started) {
+		t.Fatal("missing or inverted commit time interval accepted")
 	}
 }
 
@@ -222,14 +292,25 @@ func TestDefaultRouteExecutorStopCancelCASAndVerifiedRollback(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+			var foreignBytes []byte
 			switch mode {
 			case "stop":
 				adapter.afterActivate = func() { s.Stopped = true; s.Authority.Sequence++ }
 			case "cancel":
 				adapter.afterActivate = cancel
 			case "cas":
-				e.deps.Commit = func(config.Config, *config.NetworkPolicy, map[string]config.ServiceState) (func() error, error) {
-					return nil, config.ErrRevisionChanged
+				adapter.afterActivate = func() {
+					// Same semantic config, different exact disk preimage. The
+					// REAL Store commit must reject it and preserve foreign bytes.
+					path := filepath.Join(filepath.Dir(e.app.Dataplane.StateRoot), "config.json")
+					data, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					foreignBytes = append(data, '\n')
+					if err := os.WriteFile(path, foreignBytes, 0o600); err != nil {
+						t.Fatal(err)
+					}
 				}
 			default:
 				adapter.healthErr = errors.New("actual outbound health failed")
@@ -243,6 +324,13 @@ func TestDefaultRouteExecutorStopCancelCASAndVerifiedRollback(t *testing.T) {
 			execution, err := e.Execute(ctx, r, r.Digest())
 			if err == nil || adapter.live || !reflect.DeepEqual(before, e.app.Store.Get()) {
 				t.Fatalf("failed path accepted %+v %v", execution, err)
+			}
+			if mode == "cas" {
+				path := filepath.Join(filepath.Dir(e.app.Dataplane.StateRoot), "config.json")
+				data, err := os.ReadFile(path)
+				if err != nil || string(data) != string(foreignBytes) {
+					t.Fatal("rollback overwrote the foreign disk preimage", err)
+				}
 			}
 			wantFence := mode == "rollback-failed" || mode == "rollback-unverified"
 			if e.app.Operations.Snapshot().Fenced != wantFence {
