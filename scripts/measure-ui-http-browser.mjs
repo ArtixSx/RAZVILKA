@@ -17,8 +17,9 @@ export function settings(env){
   assert(!!session!==credentials,'Supply either an existing session file or username/password via env');
   assert(session||credentials,'Supply authentication for the existing server');
   const number=(key,fallback,min,max)=>{const text=env[key]??String(fallback);assert(/^\d+$/.test(text)&&Number(text)>=min&&Number(text)<=max,key+' is outside its allowed range');return Number(text);};
+  assert(env.RAZVILKA_PERF_HEADED===undefined||['0','1'].includes(env.RAZVILKA_PERF_HEADED),'RAZVILKA_PERF_HEADED must be 0 or 1');
   return {origin:url.origin,profile:env.RAZVILKA_PERF_PROFILE,chrome:resolve(env.RAZVILKA_PERF_CHROME),session:session?resolve(session):null,
-    username:env.RAZVILKA_PERF_USERNAME,password:env.RAZVILKA_PERF_PASSWORD,
+    username:env.RAZVILKA_PERF_USERNAME,password:env.RAZVILKA_PERF_PASSWORD,headed:env.RAZVILKA_PERF_HEADED==='1',
     dwellMs:number('RAZVILKA_PERF_DWELL_MS',2000,250,30000),idleMs:number('RAZVILKA_PERF_IDLE_MS',16000,1000,60000),timeoutMs:number('RAZVILKA_PERF_TIMEOUT_MS',45000,5000,120000),
     output:env.RAZVILKA_PERF_OUTPUT?resolve(env.RAZVILKA_PERF_OUTPUT):null};
 }
@@ -70,7 +71,7 @@ async function run(config){
   mkdirSync(local,{recursive:true});const directory=mkdtempSync(join(local,'ui-perf-'));writeFileSync(join(directory,'.gitignore'),'*\n');
   const report={schema:1,started_at:new Date().toISOString(),origin:config.origin,fixture:{declared:config.profile,verified:false,definition:'user library: nodes, groups, enabled/applied services; devices and installed inventory are separate observations'},
     environment:{node:process.version,platform:process.platform,arch:process.arch,browser:null},
-    configuration:{viewport:{width:1280,height:900},dwell_ms:config.dwellMs,idle_ms:config.idleMs,timeout_ms:config.timeoutMs,browser_cache:'disabled by the request safety fence'},
+    configuration:{viewport:{width:1280,height:900},headed:config.headed,dwell_ms:config.dwellMs,idle_ms:config.idleMs,timeout_ms:config.timeoutMs,browser_cache:'disabled by the request safety fence'},
     boundaries:{server:'existing HTTP only',device_cpu_rss:'not collected; coordinator measures separately',native_acceptance:false,
       content:'no response bodies, request bodies, headers, query strings, cookies, profiles, DOM text or screenshots saved'},
     authentication:{mode:config.session?'existing-session':'env-login',requests:[]},scenarios:[],requests:[],blocked:[],browser_errors:[],failure:null};
@@ -79,7 +80,7 @@ async function run(config){
   const metrics=async()=>Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(item=>[item.name,item.value]));
   const guard=()=>assert.equal(report.blocked.length,0,'The page attempted an action outside the read-only measurement boundary');
   try{
-    browser=await chromium.launch({executablePath:config.chrome,headless:true});report.environment.browser=browser.version();
+    browser=await chromium.launch({executablePath:config.chrome,headless:!config.headed});report.environment.browser=browser.version();
     context=await browser.newContext({viewport:report.configuration.viewport,serviceWorkers:'block',...(config.session?{storageState:config.session}:{})});
     await context.route('**/*',async route=>{
       const request=route.request(),decision=readOnlyDecision(config.origin,request.url(),request.method());
@@ -140,6 +141,7 @@ async function run(config){
           long_tasks:{supported:window.__razvilkaPerf?.supported===true,count:tasks.length,total_ms:tasks.reduce((sum,task)=>sum+task.duration,0),max_ms:tasks.reduce((max,task)=>Math.max(max,task.duration),0)}};
       },mark);
       assert.equal(layout.view,view,'Navigation did not retain the requested view');
+      if(name==='background-home')assert.equal(layout.visibility,'hidden','The measured document became visible');
       const records=report.requests.slice(start),requestCounts=requestSummary(records,[...layout.expected_panel_paths,...layout.shared_paths]);
       report.scenarios.push({name,started_at:startedAt,finished_at:new Date().toISOString(),wall_ms:Math.round(elapsed),dwell_ms:dwell,request_ids:records.map(record=>record.id),
         requests:requestCounts,browser:metricDelta(before,after),...layout});
@@ -160,11 +162,16 @@ async function run(config){
     // Headless Chromium may leave both tabs visible. Report that limitation,
     // instead of simulating visibility with document.hidden overrides.
     const cover=await context.newPage();await cover.goto('about:blank');await cover.bringToFront();
+    try { await page.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:2000}); }
+    catch(error) { if(error.name!=='TimeoutError')throw error; }
     const visibility=await page.evaluate(()=>document.visibilityState);
     if(visibility==='hidden')await measure('background-home','overview',async()=>{},config.idleMs);
     else report.scenarios.push({name:'background-home',skipped:true,reason:'Chromium did not expose a hidden document',observed_visibility:visibility});
-    await cover.close();await page.bringToFront();
-    if(visibility==='hidden')await measure('foreground-return-home','overview',settled);
+    if(visibility==='hidden')await measure('foreground-return-home','overview',async()=>{
+      await cover.close();await page.bringToFront();
+      await page.waitForFunction(()=>document.visibilityState==='visible',null,{timeout:2000});await settled();
+    });
+    else {await cover.close();await page.bringToFront();}
     stage='fixture-inspection';
     // Explicit read-only inspection is separate from measured UI requests.
     const read=async path=>{const response=await context.request.get(config.origin+path,{timeout:config.timeoutMs});report.fixture.requests||=[];report.fixture.requests.push({method:'GET',path:path.split('?')[0],status:response.status()});assert.equal(response.status(),200,'Fixture inspection unavailable');return response.json();};
@@ -186,6 +193,6 @@ async function run(config){
 
 const invoked=process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url);
 if(invoked){
-  if(process.argv.includes('--help'))console.log('Set RAZVILKA_PERF_URL, PROFILE=empty|loaded, CHROME, and SESSION or USERNAME/PASSWORD. Optional DWELL_MS, IDLE_MS, TIMEOUT_MS, OUTPUT use the same RAZVILKA_PERF_ prefix. See UI_RU.md for boundaries.');
+  if(process.argv.includes('--help'))console.log('Set RAZVILKA_PERF_URL, PROFILE=empty|loaded, CHROME, and SESSION or USERNAME/PASSWORD. Optional HEADED=1 opens Chromium to measure real background visibility (default headless); DWELL_MS, IDLE_MS, TIMEOUT_MS, OUTPUT use the same RAZVILKA_PERF_ prefix. See UI_RU.md for boundaries.');
   else try{await run(settings(process.env));}catch(error){console.error('Measurement stopped: '+error.name);process.exitCode=1;}
 }

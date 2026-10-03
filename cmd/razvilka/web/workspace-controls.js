@@ -8,7 +8,8 @@ const workspaceControl = { generation: 0, busy: false, readBusy: false, pending:
 const serviceControlReads = { promise: null };
 function readServiceControl() {
   if (serviceControlReads.promise) return serviceControlReads.promise;
-  const promise = api('/api/v1/service-control').finally(() => { if (serviceControlReads.promise === promise) serviceControlReads.promise = null; });
+  const read = typeof readPanelResource === 'function' ? readPanelResource : api;
+  const promise = read('/api/v1/service-control').finally(() => { if (serviceControlReads.promise === promise) serviceControlReads.promise = null; });
   serviceControlReads.promise = promise;
   return promise;
 }
@@ -111,7 +112,8 @@ async function refreshWorkspaceControl() {
   const generation = workspaceControl.generation;
   const pending = (async () => {
     if (workspaceControl.runtimeJob || workspaceControl.readBusy || workspaceControl.dnsJobPending) {
-      const memory = await api('/api/v1/service-control/current');
+      const read = typeof readPanelResource === 'function' ? readPanelResource : api;
+      const memory = await read('/api/v1/service-control/current');
       if (generation !== workspaceControl.generation || !workspaceControlVisible()) return null;
       if (acceptWorkspaceRuntimeJobs(memory)) { renderWorkspaceControls(); return null; }
     }
@@ -267,6 +269,7 @@ function bindWorkspaceControls() {
     finally { button.disabled = false; button.textContent = 'Проверить версии'; }
   });
   document.addEventListener('razvilka:auth-required', () => {
+    forgetServiceControlRead();
     workspaceControl.authenticated = false; workspaceControl.generation++; workspaceControl.busy = false; workspaceControl.readBusy = false; workspaceControl.lastError = '';
     workspaceControl.runtimeJob = null; workspaceControl.dnsJobPending = false; clearWorkspaceRuntimeToken();
     clearTimeout(workspaceControl.timer); workspaceControl.pending = null; state.serviceControl = null; state.savedPanel = null; renderWorkspaceControls();

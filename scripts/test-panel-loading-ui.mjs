@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
-const names=['panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','refreshPanelInventory','cancelPanelInventoryRefresh','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
+const names=['invalidatePanelReads','readPanelResource','panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','inventoryObservationStale','refreshPanelInventory','cancelPanelInventoryRefresh','settlePanelReads','refreshAll','refreshAfterMutation','refreshCoreAfterEdit','loadPanelSnapshot'];
 const extract=name=>{const match=source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
@@ -14,7 +14,7 @@ function fixture(){
  const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
  const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',value:'',classList:{toggle(){}}});return elements.get(id);};
  const api=async(url,options={})=>{calls.push({url,options});return handler(url,options);};
- const context={state,panelLoad,inventoryRead:null,$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent:event=>events.push(event.type)},
+ const context={state,panelLoad,panelReads:{epoch:0,entries:new Map()},inventoryRead:null,$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent:event=>events.push(event.type)},
  setTimeout(fn,ms){const id=++timer;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},
  api,hideAuth(){$('#authScreen').hidden=true;},showAuth(){$('#authScreen').hidden=false;context.cancelPanelRefresh();},
  refreshNodeActivity:async()=>{if(activityError)throw activityError;return activity;},scheduleNodeActivity(){},
@@ -38,6 +38,68 @@ function fixture(){
 }
 let count=0;
 async function test(name,fn){await fn();count++;console.log('PASS',name);}
+
+await test('passive readers share transport while navigation cancels only its subscription',async()=>{
+ const f=fixture(),pending=deferred(),controller=new AbortController();f.handler(()=>pending.promise);
+ const old=f.context.readPanelResource('/api/v1/nodes',{signal:controller.signal});
+ const kept=f.context.readPanelResource('/api/v1/nodes');await flush();
+ assert.equal(f.calls.length,1);const rejected=assert.rejects(old,error=>error.name==='AbortError');controller.abort();await rejected;
+ assert.equal(f.calls[0].options.signal.aborted,false,'one view canceled a shared transport');
+ pending.resolve({nodes:[{id:'current'}]});assert.equal((await kept).nodes[0].id,'current');
+});
+
+await test('brief list cache is copied, expires, and never caches auth, gates or review journals',async()=>{
+ const f=fixture();f.handler(()=>[{id:'server'}]);
+ const value=await f.context.readPanelResource('/api/v1/services');value[0].id='local-edit';
+ assert.equal((await f.context.readPanelResource('/api/v1/services'))[0].id,'server');assert.equal(f.calls.length,1);
+ f.context.panelReads.entries.get('/api/v1/services').receivedAt=Date.now()-1001;
+ await f.context.readPanelResource('/api/v1/services');assert.equal(f.calls.length,2);
+ for(const url of ['/api/v1/auth/status','/api/v1/status','/api/v1/service-control','/api/v1/service-control/current','/api/v1/components/recovery']) {
+  const start=f.calls.length;await f.context.readPanelResource(url);await f.context.readPanelResource(url);assert.equal(f.calls.length-start,2,url+' reused a completed authority read');
+ }
+});
+
+await test('read failure is exposed, never cached, and the next observer retries immediately',async()=>{
+ const f=fixture();f.handler(()=>{throw Object.assign(new Error('busy'),{status:409});});
+ await assert.rejects(f.context.readPanelResource('/api/v1/nodes'),error=>error.status===409);
+ f.handler(()=>({nodes:[]}));assert.equal((await f.context.readPanelResource('/api/v1/nodes')).nodes.length,0);assert.equal(f.calls.length,2);
+});
+
+await test('new auth epoch fences ignored cancellation without clearing the newer read',async()=>{
+ const f=fixture(),old=deferred(),fresh=deferred();f.handler(()=>old.promise);
+ const previous=f.context.readPanelResource('/api/v1/nodes');const rejected=assert.rejects(previous,error=>error.name==='AbortError');await flush();
+ f.state.authGeneration=1;f.context.invalidatePanelReads();f.handler(()=>fresh.promise);
+ const next=f.context.readPanelResource('/api/v1/nodes');await flush();old.resolve({nodes:[{id:'private-old'}]});await rejected;
+ fresh.resolve({nodes:[{id:'new-session'}]});assert.equal((await next).nodes[0].id,'new-session');
+ assert.equal((await f.context.readPanelResource('/api/v1/nodes')).nodes[0].id,'new-session');assert.equal(f.calls.length,2);
+});
+
+await test('canceled subscriber and invalidated ticket cannot admit a delayed protected GET',async()=>{
+ const f=fixture(),controller=new AbortController();controller.abort();
+ await assert.rejects(f.context.readPanelResource('/api/v1/nodes',{signal:controller.signal}),error=>error.name==='AbortError');assert.equal(f.calls.length,0);
+ const pending=f.context.readPanelResource('/api/v1/nodes');const rejected=assert.rejects(pending,error=>error.name==='AbortError');f.context.invalidatePanelReads();await rejected;assert.equal(f.calls.length,0);
+});
+
+await test('late old 401 is a canceled read and cannot revoke a newer auth epoch',async()=>{
+ const f=fixture(),old=deferred();f.handler(()=>old.promise);
+ const previous=f.context.readPanelResource('/api/v1/status');const rejected=assert.rejects(previous,error=>error.name==='AbortError'&&!error.status);await flush();
+ f.state.authGeneration=1;f.context.invalidatePanelReads();f.handler(f.normal);await f.context.readPanelResource('/api/v1/status');
+ old.reject(Object.assign(new Error('old login expired'),{status:401}));await rejected;
+});
+
+await test('same-view bootstrap notifications join the snapshot instead of restarting authentication',async()=>{
+ const f=fixture(),pending=deferred();f.state.authenticated=true;f.handler(url=>url==='/api/v1/services'?pending.promise:f.normal(url));
+ const initial=f.context.refreshAll();await flush();const generation=f.panelLoad.generation;
+ f.context.refreshPanelView('engineconfig');f.context.refreshPanelView('engineconfig');assert.equal(f.panelLoad.generation,generation);
+ pending.resolve(f.normal('/api/v1/services'));await initial;assert.equal(f.calls.filter(call=>call.url==='/api/v1/auth/status').length,1);
+});
+
+await test('navigation joins recent lists and explicit refresh reads them again',async()=>{
+ const f=fixture();f.state.authenticated=true;await f.context.refreshAll();const before=f.calls.filter(call=>call.url==='/api/v1/services').length;
+ f.state.currentView='nodes';f.context.refreshPanelView('nodes');await f.panelLoad.request;
+ assert.equal(f.calls.filter(call=>call.url==='/api/v1/services').length,before,'navigation ignored the recent shared list');
+ await f.context.refreshAll();assert.equal(f.calls.filter(call=>call.url==='/api/v1/services').length,before+1,'explicit refresh reused a completed list');
+});
 
 await test('general refresh requests protected auxiliary data only after authentication',async()=>{
  const f=fixture();f.context.document.hidden=true;await f.context.refreshAll();

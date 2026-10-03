@@ -397,7 +397,8 @@ async function pollNodeBrowserChecks() {
   nodeBrowser.polling = (async () => {
     let delay = 15000;
     try {
-      const reading = await nodeMeasurementModel.readStatus(api);
+      const read = typeof readPanelResource === 'function' ? readPanelResource : api;
+      const reading = await nodeMeasurementModel.readStatus(read);
       const response = reading.response, fallback = reading.fallback || {};
       if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
       nodeBrowser.job = response.job || null; nodeBrowser.pings = response.pings || [];nodeBrowser.fetchAndCheck=response.fetch_and_check===true; nodeBrowser.measurements = response.node_measurements || [];
@@ -408,7 +409,7 @@ async function pollNodeBrowserChecks() {
       $('#nodeBrowserReadNotice').textContent = reading.partial ? 'Состояние резервирования временно недоступно. Результаты проверки подключений показаны отдельно.' : '';
       // A service checker owns exclusive admission until cleanup completes.
       if (!fallback.active && (!running || nodeBrowser.job.mode !== 'service')) {
-        const reads = await Promise.allSettled([api('/api/v1/nodes'), api('/api/v1/routes/options'), api('/api/v1/node-feeds')]);
+        const reads = await Promise.allSettled([read('/api/v1/nodes'), read('/api/v1/routes/options'), read('/api/v1/node-feeds')]);
         if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
         const failed = reads.filter(row => row.status === 'rejected');
         const unauthorized = failed.find(row => row.reason?.status === 401);

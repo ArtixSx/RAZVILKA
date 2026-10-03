@@ -208,7 +208,8 @@ async function refreshServiceControl() {
     && !serviceDashboard.edit && (generation === null || panelSnapshotCurrent(generation));
   serviceDashboard.read = controller;
   try {
-    const memory = await api('/api/v1/service-control/current', { signal: controller.signal });
+    const read = typeof readPanelResource === 'function' ? readPanelResource : api;
+    const memory = await read('/api/v1/service-control/current', { signal: controller.signal });
     if (!current()) return;
     const priorJob = serviceDashboard.control?.job;
     serviceDashboard.control = { ...serviceDashboard.control, job: memory.job || null };

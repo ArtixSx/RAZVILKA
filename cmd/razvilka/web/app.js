@@ -73,6 +73,57 @@ const state = {
 
 const panelLoad = { generation: 0, request: null, controller: null, retryTimer: null, retryCount: 0 };
 let inventoryRead = null;
+const panelReads = { epoch: 0, entries: new Map() };
+
+function invalidatePanelReads() {
+  panelReads.epoch++;
+  for (const entry of panelReads.entries.values()) entry.controller.abort();
+  panelReads.entries.clear();
+}
+
+function readPanelResource(url, options = {}) {
+  if (options.signal?.aborted) return Promise.reject(Object.assign(new Error('Read canceled'), { name: 'AbortError' }));
+  // Only passive readers opt in. Action review/readback still uses api(), and
+  // auth, runtime gates and operation journals never reuse completed reads.
+  const cacheMS = ['/api/v1/services', '/api/v1/nodes', '/api/v1/routes/options', '/api/v1/node-feeds'].includes(url) ? 1000 : 0;
+  const epoch = panelReads.epoch, auth = state.authGeneration || 0;
+  let entry = panelReads.entries.get(url);
+  const age = entry ? Date.now() - entry.receivedAt : Infinity;
+  if (!entry || entry.epoch !== epoch || entry.auth !== auth || (entry.finished && !(cacheMS && age >= 0 && age < cacheMS))) {
+    entry = { epoch, auth, controller: new AbortController(), receivedAt: 0, finished: false, promise: null };
+    panelReads.entries.set(url, entry);
+    const ticket = entry;
+    ticket.promise = Promise.resolve().then(() => {
+      if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || ticket.controller.signal.aborted) throw Object.assign(new Error('Read context changed'), { name: 'AbortError' });
+      return api(url, { ...options, signal: ticket.controller.signal });
+    }).then(value => {
+      if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || ticket.controller.signal.aborted) throw Object.assign(new Error('Read context changed'), { name: 'AbortError' });
+      ticket.finished = true; ticket.receivedAt = Date.now();
+      if (!cacheMS || value === null || typeof value !== 'object') {
+        if (panelReads.entries.get(url) === ticket) panelReads.entries.delete(url);
+      }
+      return value;
+    }).catch(error => {
+      if (panelReads.entries.get(url) === ticket) panelReads.entries.delete(url);
+      if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || ticket.controller.signal.aborted) throw Object.assign(new Error('Read context changed'), { name: 'AbortError' });
+      throw error;
+    });
+  }
+  // Navigation cancels its subscription, not a transport used by another view
+  // or observer. Logout/writes abort every transport and fence ignored aborts.
+  return new Promise((resolve, reject) => {
+    const signal = options.signal;
+    const abort = () => { cleanup(); reject(Object.assign(new Error('Read canceled'), { name: 'AbortError' })); };
+    const cleanup = () => signal?.removeEventListener('abort', abort);
+    if (signal?.aborted) { abort(); return; }
+    signal?.addEventListener('abort', abort, { once: true });
+    entry.promise.then(value => {
+      cleanup();
+      if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || entry.controller.signal.aborted) { reject(Object.assign(new Error('Read context changed'), { name: 'AbortError' })); return; }
+      resolve(value === undefined ? value : JSON.parse(JSON.stringify(value)));
+    }, error => { cleanup(); reject(error); });
+  });
+}
 
 const viewMeta = {
   overview: ['Главная', 'Сервисы, подключения и состояние вашей сети'],
@@ -116,6 +167,8 @@ try {
 async function api(url, options = {}) {
   const { readTimeoutMs, ...fetchOptions } = options;
   const method = String(options.method || 'GET').toUpperCase();
+  const mutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
   const headers = new Headers(options.headers || {});
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
@@ -151,6 +204,7 @@ async function api(url, options = {}) {
     if (timedOut) throw Object.assign(new Error('Ответ задерживается. Последние полученные данные сохранены; повторите обновление.'), { code: 'READ_TIMEOUT' });
     throw error;
   } finally {
+    if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', abort);
   }
@@ -216,6 +270,7 @@ function finishAuthAction(action) {
 }
 
 function showAuth(status, message = '') {
+  if (typeof invalidatePanelReads === 'function') invalidatePanelReads();
   // Also fence authentication responses, which do not use interfaceRequest.
   state.authGeneration = (state.authGeneration || 0) + 1;
   state.authAction = null;
@@ -243,6 +298,7 @@ function hideAuth() {
   // A saved cookie can authenticate the first load without ever showing the
   // login screen. Visibility is not an authentication lifecycle signal.
   const restored = state.authenticated !== true;
+  if (restored && typeof invalidatePanelReads === 'function') invalidatePanelReads();
   state.authenticated = true;
   if ($('#authScreen').contains(document.activeElement)) document.activeElement.blur();
   $('#authScreen').hidden = true;
@@ -1033,7 +1089,7 @@ function refreshPanelInventory() {
   ticket.promise = Promise.resolve().then(async () => {
     try {
       const started = Date.now();
-      const value = await api('/api/v1/panel/inventory', { signal: ticket.controller.signal, readTimeoutMs: 3000 });
+      const value = await readPanelResource('/api/v1/panel/inventory', { signal: ticket.controller.signal, readTimeoutMs: 3000 });
       if (!current()) return false;
       acceptPanelInventory(value, started);
       return true;
@@ -1097,9 +1153,10 @@ function panelViewRequests(view = state.currentView || 'overview') {
 
 function refreshPanelView(name) {
   if (!state.authenticated || name !== state.currentView) return;
-  // Cancel only read transports; mutations have separate lifetimes/epochs.
+  if (panelLoad.request && panelLoad.view === name) return;
+  // Fence the old view's subscriptions; shared transports can serve this view.
   cancelPanelRefresh();
-  void refreshAll();
+  void refreshAll(false, true);
 }
 
 async function settlePanelReads(requests, read) {
@@ -1109,12 +1166,14 @@ async function settlePanelReads(requests, read) {
   }));
 }
 
-async function refreshAll(retryFailed = false) {
+async function refreshAll(retryFailed = false, navigation = false) {
   if (panelLoad.request) return panelLoad.request;
+  if (!retryFailed && !navigation) invalidatePanelReads();
   if (!retryFailed) panelLoad.retryCount = 0;
   clearTimeout(panelLoad.retryTimer);
   panelLoad.retryTimer = null;
   const generation = ++panelLoad.generation;
+  panelLoad.view = state.currentView;
   panelLoad.controller = new AbortController();
   const pending = loadPanelSnapshot(generation, retryFailed);
   panelLoad.request = pending;
@@ -1164,7 +1223,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
       if (!panelSnapshotCurrent(generation)) return;
       try {
         const requestStartedAt = Date.now();
-        const value = await api(url, options);
+        const value = await readPanelResource(url, options);
         if (!panelSnapshotCurrent(generation)) return;
         if (key === 'status' && (value?.setup_required || (value?.auth_required && !value?.authenticated))) {
           cancelPanelRefresh();
@@ -3309,13 +3368,20 @@ async function deleteNodeGroup(id) {
 }
 
 async function refreshNodes() {
+  invalidatePanelReads();
+  const epoch = panelReads.epoch, auth = state.authGeneration || 0;
+  const current = () => state.authenticated && epoch === panelReads.epoch && auth === (state.authGeneration || 0);
   const button = $('#refreshNodes');
   button.disabled = true;
   button.textContent = 'Обновление…';
   try {
-    [state.nodes, state.routeOptions] = await Promise.all([api('/api/v1/nodes'), api('/api/v1/routes/options')]);
+    const [nodes, routes] = await Promise.all([readPanelResource('/api/v1/nodes'), readPanelResource('/api/v1/routes/options')]);
+    if (!current()) return;
+    state.nodes = nodes; state.routeOptions = routes;
     renderNodes();
   } catch (error) {
+    if (!current()) return;
+    if (error.status === 401) { showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.'); return; }
     showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Узлы не обновлены');
   } finally {
     button.disabled = false;
