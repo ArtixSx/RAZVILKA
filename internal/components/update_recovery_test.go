@@ -82,6 +82,7 @@ func TestManagedUpdatePhaseInterruptionsNeverReplayUnknownCommands(t *testing.T)
 	points := []string{
 		"before:prepared", "after:prepared", "before:upgrade-started", "after:upgrade-started",
 		"before:upgrade-command", "after:upgrade-command", "before:upgrade-finished", "after:upgrade-finished",
+		"before:candidate-receipt", "after:candidate-receipt",
 		"before:rollback-config-before", "after:rollback-config-before", "before:restore-before:0", "after:restore-before:0",
 		"before:rollback-ready", "after:rollback-ready", "before:rollback-started", "after:rollback-started",
 		"before:rollback-command", "after:rollback-command", "before:rollback-installed", "after:rollback-installed",
@@ -284,5 +285,121 @@ func TestManagedJournalSerializesIndependentManagers(t *testing.T) {
 	}
 	if packageMutations(runner) != before {
 		t.Fatal("competing writer mutated package")
+	}
+}
+
+func TestUnknownRollbackRequiresExternalInspectionAndQuiescence(t *testing.T) {
+	m, runner, _ := prepareJournalFixture(t)
+	m.updateFault = func(point string) error {
+		if point == "after:rollback-command" {
+			panic("interrupted")
+		}
+		return nil
+	}
+	func() {
+		defer func() {
+			if recover() != "interrupted" {
+				t.Fatal("interruption not reached")
+			}
+		}()
+		_, _ = m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
+			if runner.installed != "1.3.1" {
+				return errors.New("candidate failed")
+			}
+			return nil
+		})
+	}()
+	m = restartedManager(m)
+	state, pending, err := m.PendingManagedUpdate()
+	if err != nil || !pending || state.Phase != UpdateRollbackStarted {
+		t.Fatalf("unexpected interrupted state: %+v %v", state, err)
+	}
+	request := ManagedRecoveryRequest{Component: state.Component, TransactionID: state.TransactionID, Action: "verify-rollback", ExternalRepairConfirmed: true}
+	before := packageMutations(runner)
+	if _, err := m.RecoverManagedUpdate(context.Background(), request, allowRecovery, allowRecovery); !errors.Is(err, ErrUpdateUnknown) {
+		t.Fatalf("boolean alone resolved unknown: %v", err)
+	}
+	request.QuiescenceCheck = func(context.Context) error { return errors.New("orphan postinst still active") }
+	if _, err := m.RecoverManagedUpdate(context.Background(), request, allowRecovery, allowRecovery); err == nil {
+		t.Fatal("active package script accepted")
+	}
+	request.QuiescenceCheck = allowRecovery
+	request.ExternalRepairConfirmed = false
+	if _, err := m.RecoverManagedUpdate(context.Background(), request, allowRecovery, allowRecovery); !errors.Is(err, ErrUpdateUnknown) {
+		t.Fatalf("external inspection omitted: %v", err)
+	}
+	request.ExternalRepairConfirmed = true
+	if _, err := m.RecoverManagedUpdate(context.Background(), request, allowRecovery, allowRecovery); err != nil {
+		t.Fatal(err)
+	}
+	if packageMutations(runner) != before {
+		t.Fatal("observation replayed a package command")
+	}
+}
+
+func TestLiveAcceptanceInterruptionKeepsFenceUntilDurableCompletion(t *testing.T) {
+	for _, point := range []string{"before:awaiting-live-acceptance", "after:awaiting-live-acceptance", "before:receipt", "after:receipt", "before:accepted", "after:accepted"} {
+		t.Run(strings.ReplaceAll(point, ":", "-"), func(t *testing.T) {
+			m, _, _ := prepareJournalFixture(t)
+			inject := func(current string) error {
+				if current == point {
+					panic("interrupted")
+				}
+				return nil
+			}
+			func() {
+				defer func() {
+					if recover() != "interrupted" {
+						t.Fatal("interruption not reached")
+					}
+				}()
+				if strings.Contains(point, "awaiting-live") {
+					m.updateFault = inject
+					_, _ = m.ManagedUpdate(context.Background(), "nfqws2", allowRecovery)
+					return
+				}
+				result, err := m.ManagedUpdate(context.Background(), "nfqws2", allowRecovery)
+				if err != nil {
+					t.Fatal(err)
+				}
+				m.updateFault = inject
+				_, _ = m.RecoverManagedUpdate(context.Background(), ManagedRecoveryRequest{Component: "nfqws2", TransactionID: result.TransactionID, Action: "accept-live"}, allowRecovery, allowRecovery)
+			}()
+			state, pending, err := restartedManager(m).PendingManagedUpdate()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if point == "after:accepted" {
+				if pending || state.Phase != UpdateAccepted {
+					t.Fatalf("completed acceptance not durable: %+v", state)
+				}
+			} else if !pending {
+				t.Fatalf("acceptance interruption removed fence: %+v", state)
+			}
+		})
+	}
+}
+
+func TestCandidateVersionChangingDuringCheckIsNotAccepted(t *testing.T) {
+	m, r, _ := prepareJournalFixture(t)
+	result, err := m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error { r.installed = "1.3.3"; return nil })
+	if !errors.Is(err, ErrRollbackUnconfirmed) || result.PendingLiveAcceptance {
+		t.Fatalf("unchecked version accepted: %+v %v", result, err)
+	}
+	state, pending, _ := m.PendingManagedUpdate()
+	if !pending || state.Phase != UpdateInstalled {
+		t.Fatalf("version race lost fence: %+v", state)
+	}
+}
+
+func TestPlainApplyCannotUpgradeInstalledManagedComponent(t *testing.T) {
+	m, r, _ := prepareJournalFixture(t)
+	before := packageMutations(r)
+	result, err := m.Apply(context.Background(), "nfqws2")
+	if result.OK || !errors.Is(err, ErrManagedUpdateRequired) || !errors.Is(err, ErrNoMutation) {
+		t.Fatalf("plain installed update not fenced: %+v %v", result, err)
+	}
+	if packageMutations(r) != before {
+		t.Fatal("plain update modified package")
 	}
 }

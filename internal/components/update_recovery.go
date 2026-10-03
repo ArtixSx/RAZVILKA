@@ -21,12 +21,17 @@ func updateModeMatches(actual, expected os.FileMode) bool {
 // caller. SafeMode/Stopped are a fail-closed snapshot, and the required guard
 // must re-read current authority before each mutation and after live checks.
 type ManagedRecoveryRequest struct {
-	TransactionID        string
-	Component            string
-	Action               string // rollback, accept-live, abandon-prepared, verify-rollback
-	AllowUnknownRollback bool   // explicit one-time compensation, never upgrade replay
-	SafeMode             bool
-	Stopped              bool
+	TransactionID           string
+	Component               string
+	Action                  string // rollback, accept-live, abandon-prepared, verify-rollback
+	AllowUnknownRollback    bool   // explicit one-time compensation, never upgrade replay
+	ExternalRepairConfirmed bool   // operator inspected interrupted rollback and all package scripts have stopped
+	// QuiescenceCheck is supplied by trusted application wiring, never JSON.
+	// Unknown outcomes require independent proof that opkg and its package
+	// scripts have stopped. Version/configuration equality cannot provide it.
+	QuiescenceCheck func(context.Context) error `json:"-"`
+	SafeMode        bool
+	Stopped         bool
 }
 
 // RecoverManagedUpdate runs in a new Manager/process using only durable
@@ -53,6 +58,18 @@ func (m *Manager) RecoverManagedUpdate(ctx context.Context, request ManagedRecov
 		return result, errors.New("component recovery does not match the pending transaction")
 	}
 	tx.doc = doc
+	if doc.Phase == UpdateStarted || doc.Phase == UpdateRollbackStarted {
+		if request.QuiescenceCheck == nil {
+			return result, ErrUpdateUnknown
+		}
+		authority := guard
+		guard = func(ctx context.Context) error {
+			if err := authority(ctx); err != nil {
+				return err
+			}
+			return request.QuiescenceCheck(ctx)
+		}
+	}
 	if err := tx.authority(ctx, guard); err != nil {
 		return result, err
 	}
@@ -113,6 +130,9 @@ func (m *Manager) RecoverManagedUpdate(ctx context.Context, request ManagedRecov
 		// action is explicit matching repair, never startup/automatic recovery.
 		if (doc.Phase != UpdateRollbackStarted && doc.Phase != UpdateAwaitingRollback) || liveCheck == nil {
 			return result, ErrUpdatePending
+		}
+		if doc.Phase == UpdateRollbackStarted && !request.ExternalRepairConfirmed {
+			return result, ErrUpdateUnknown
 		}
 		if err := tx.verifyRollback(ctx); err != nil {
 			return result, err

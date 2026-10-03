@@ -160,6 +160,14 @@ fi
 # Registration requests are monotonic external effects. Keep native WARP state
 # in place, and never start an old binary that cannot see an unresolved request.
 require_native_enrollment_schema() {
+  # Never restore an old process over a retained package-operation fence.
+  # Recheck after quiescing; a transaction can appear after initial preflight.
+  COMPONENT_JOURNAL="$STATEDIR/components/update-journal/current.json"
+  if [ -e "$COMPONENT_JOURNAL" ] || [ -L "$COMPONENT_JOURNAL" ]; then
+    [ -f "$COMPONENT_JOURNAL" ] && [ ! -L "$COMPONENT_JOURNAL" ] || { echo "Component update journal is unsafe; installation unchanged" >&2; return 1; }
+    COMPONENT_SCHEMA="$("$1" -component-update-schema 2>/dev/null)" || { echo "Target binary cannot preserve component update recovery; installation unchanged" >&2; return 1; }
+    [ "$COMPONENT_SCHEMA" = 1 ] || { echo "Target binary has an incompatible component update schema; installation unchanged" >&2; return 1; }
+  fi
   if [ "$AUTONOMY_STATE_PRESENT" = skip ] && [ -e "$APPDIR/config.json.automation.json.autonomy.json" ]; then
     AUTONOMY_COMPATIBILITY="$("$1" -check-autonomy-state -config "$APPDIR/config.json" 2>/dev/null)" || {
       echo "Snapshot has no autonomy copy and previous version cannot confirm compatibility; installation unchanged" >&2; return 1;

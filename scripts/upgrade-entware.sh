@@ -196,6 +196,14 @@ if [ ! -f "$CONFIG_SOURCE" ]; then
 fi
 
 require_native_enrollment_schema() {
+  # A replacement binary must preserve the component transaction fence.
+  # The journal is deliberately retained outside mutable update snapshots.
+  COMPONENT_JOURNAL="$STATEDIR/components/update-journal/current.json"
+  if [ -e "$COMPONENT_JOURNAL" ] || [ -L "$COMPONENT_JOURNAL" ]; then
+    [ -f "$COMPONENT_JOURNAL" ] && [ ! -L "$COMPONENT_JOURNAL" ] || { echo "Component update journal is unsafe; installation unchanged" >&2; return 1; }
+    COMPONENT_SCHEMA="$("$1" -component-update-schema 2>/dev/null)" || { echo "Target binary cannot preserve component update recovery; installation unchanged" >&2; return 1; }
+    [ "$COMPONENT_SCHEMA" = 1 ] || { echo "Target binary has an incompatible component update schema; installation unchanged" >&2; return 1; }
+  fi
 	if [ -e "$APPDIR/config.json.automation.json.autonomy.json" ] || [ -L "$APPDIR/config.json.automation.json.autonomy.json" ]; then
 	  AUTONOMY_COMPATIBILITY="$("$1" -check-autonomy-state -config "$APPDIR/config.json" 2>/dev/null)" || {
 	    echo "Target version cannot read the current autonomy state; installation unchanged" >&2; return 1;

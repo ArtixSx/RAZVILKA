@@ -46,7 +46,9 @@ func TestNamedUpgradeMustAdvanceBeforeReceipt(t *testing.T) {
 				t.Fatal(err)
 			}
 			m := &Manager{Opkg: "opkg", RepoDir: t.TempDir(), StateDir: t.TempDir(), InitDir: initDir, Runner: r}
-			result, err := m.Apply(context.Background(), "sing-box")
+			// Version/receipt verification remains a package primitive contract.
+			// Public installed-component updates additionally require a journal.
+			result, err := m.applyLocked(context.Background(), "sing-box", map[string]bool{})
 			if (err == nil) != (version == "1.14.1") || result.OK != (version == "1.14.1") {
 				t.Fatal(result, err)
 			}

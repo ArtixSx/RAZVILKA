@@ -278,7 +278,9 @@ func (m *Manager) ManagedUpdateGuarded(ctx context.Context, id string, check, gu
 			if err != nil {
 				return result, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: err}
 			}
-			tx.doc.AfterVersion = versions[spec.Package]
+			if versions[spec.Package] != tx.doc.AfterVersion {
+				return result, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: errors.New("package version changed during candidate check")}
+			}
 			if err := tx.phase(UpdateAwaitingLive); err != nil {
 				return result, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: err}
 			}

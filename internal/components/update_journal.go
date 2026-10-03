@@ -23,9 +23,10 @@ import (
 const ComponentUpdateSchema = 1
 
 var (
-	ErrUpdatePending     = errors.New("component update requires matching recovery")
-	ErrUpdateUnknown     = errors.New("component package command outcome is unknown; command must not be replayed")
-	ErrRecoveryAuthority = errors.New("component recovery is not authorized")
+	ErrUpdatePending         = errors.New("component update requires matching recovery")
+	ErrUpdateUnknown         = errors.New("component package command outcome is unknown; command must not be replayed")
+	ErrRecoveryAuthority     = errors.New("component recovery is not authorized")
+	ErrManagedUpdateRequired = errors.New("installed component requires a checked journaled update")
 )
 
 const (

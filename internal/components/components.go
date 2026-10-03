@@ -255,6 +255,16 @@ func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
 		return Result{}, NoMutation(err)
 	}
 	defer release()
+	if m.StateDir != "" && ManagedUpdateSupported(id) {
+		spec, _ := lookup(id)
+		installed, err := m.installedPackageVersions(ctx)
+		if err != nil {
+			return Result{}, NoMutation(err)
+		}
+		if installed[spec.Package] != "" {
+			return Result{}, NoMutation(ErrManagedUpdateRequired)
+		}
+	}
 	return m.applyLocked(ctx, id, map[string]bool{})
 }
 
@@ -402,12 +412,23 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 		// receipt for unchanged/downgraded bytes; leave the prior receipt intact.
 		return Result{Component: id, Action: action, Output: text}, errUpdateNotAdvanced
 	}
+	if tx != nil {
+		tx.doc.AfterVersion = afterVersion
+	}
 	receipt := lifecycleReceipt{SchemaVersion: 1, Component: id, Package: spec.Package, Provider: spec.Provider, Action: action, BeforeVersion: beforeVersion, AfterVersion: afterVersion, CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if tx != nil {
 		receipt.TransactionID, receipt.Acceptance = tx.doc.TransactionID, "candidate-installed"
+		if err := tx.fault("before:candidate-receipt"); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
 	}
 	if err := m.writeLifecycleReceipt(receipt); err != nil {
 		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("write component receipt: %w", err)
+	}
+	if tx != nil {
+		if err := tx.fault("after:candidate-receipt"); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
 	}
 	return Result{OK: true, Component: id, Action: action, Output: text + fmt.Sprintf("\nverified installed version: %s", afterVersion)}, nil
 }

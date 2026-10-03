@@ -85,7 +85,9 @@ func TestSingBoxFreshAndUpgradeDisableOnlyPackageAutostart(t *testing.T) {
 			if err := os.WriteFile(foreign, []byte("unrelated process and config"), 0755); err != nil {
 				t.Fatal(err)
 			}
-			result, err := m.Apply(context.Background(), "sing-box")
+			// Exercise the package primitive used inside managed transactions;
+			// public Apply now refuses unjournaled installed-component updates.
+			result, err := m.applyLocked(context.Background(), "sing-box", map[string]bool{})
 			if err != nil || !result.OK {
 				t.Fatal(result, err)
 			}
@@ -118,7 +120,7 @@ func TestSingBoxFreshAndUpgradeDisableOnlyPackageAutostart(t *testing.T) {
 func TestSingBoxPartialPackageFailureStillDisablesAutostart(t *testing.T) {
 	m, r := singBoxManagerFixture(t)
 	r.fail = true
-	result, err := m.Apply(context.Background(), "sing-box")
+	result, err := m.applyLocked(context.Background(), "sing-box", map[string]bool{})
 	if err == nil || result.OK || !strings.Contains(err.Error(), "interrupted after unpacking") {
 		t.Fatal(result, err)
 	}
@@ -165,7 +167,7 @@ func TestSingBoxRefusesForeignInitBeforePackageMutation(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			result, err := m.Apply(context.Background(), "sing-box")
+			result, err := m.applyLocked(context.Background(), "sing-box", map[string]bool{})
 			if err == nil || result.OK {
 				t.Fatal("foreign init accepted", result, err)
 			}
