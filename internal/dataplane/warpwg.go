@@ -43,6 +43,7 @@ type WARPWireGuardAdapter struct {
 	FallbackPorts     []int
 	NativeOnly        bool
 	AWGCapabilities   func(context.Context) awgprofile.Capabilities
+	Profiles          WireGuardProfileProvider
 	isolatedCandidate bool
 }
 
@@ -66,16 +67,18 @@ func (e WARPHandshakeError) Error() string {
 }
 
 type warpWGSnapshot struct {
-	ProfilePath        string      `json:"profile_path"`
-	ProfileExisted     bool        `json:"profile_existed"`
-	Profile            []byte      `json:"profile,omitempty"`
-	ProfileDraft       bool        `json:"profile_draft"`
-	StagedProfile      []byte      `json:"staged_profile,omitempty"`
-	RuntimeExisted     bool        `json:"runtime_existed"`
-	RuntimeConfig      []byte      `json:"runtime_config,omitempty"`
-	InterfaceWasActive bool        `json:"interface_was_active"`
-	StateExisted       bool        `json:"state_existed"`
-	State              PolicyState `json:"state"`
+	NamedProfileID       string      `json:"named_profile_id,omitempty"`
+	NamedProfileRevision string      `json:"named_profile_revision,omitempty"`
+	ProfilePath          string      `json:"profile_path"`
+	ProfileExisted       bool        `json:"profile_existed"`
+	Profile              []byte      `json:"profile,omitempty"`
+	ProfileDraft         bool        `json:"profile_draft"`
+	StagedProfile        []byte      `json:"staged_profile,omitempty"`
+	RuntimeExisted       bool        `json:"runtime_existed"`
+	RuntimeConfig        []byte      `json:"runtime_config,omitempty"`
+	InterfaceWasActive   bool        `json:"interface_was_active"`
+	StateExisted         bool        `json:"state_existed"`
+	State                PolicyState `json:"state"`
 }
 
 func NewWARPWireGuardAdapter(configs *engineconfig.Manager, stateRoot string) *WARPWireGuardAdapter {
@@ -117,20 +120,41 @@ func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, plan Plan, root str
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
 	}
-	if a.Configs == nil {
-		return errors.New("WARP config manager is unavailable")
+	var snapshot warpWGSnapshot
+	var err error
+	profileID := "main"
+	if a.ID() == "wireguard" {
+		profileID, err = selectedWireGuardProfile(plan)
+		if err != nil {
+			return err
+		}
 	}
-	content, err := a.Configs.ReadExpert(a.ID(), "main")
-	if err != nil {
-		return err
-	}
-	snapshot := warpWGSnapshot{ProfilePath: content.Path, ProfileDraft: planUsesEngineDraft(plan, a.ID(), "main") && content.Source == "staged"}
-	snapshot.Profile, snapshot.ProfileExisted, err = optionalFile(content.Path)
-	if err != nil {
-		return err
-	}
-	if snapshot.ProfileDraft {
-		snapshot.StagedProfile = []byte(content.Content)
+	if profileID != "main" && profileID != "" {
+		if a.Profiles == nil {
+			return errors.New("named WireGuard profile provider is unavailable")
+		}
+		p, err := a.Profiles.Get(ctx, profileID)
+		if err != nil {
+			return err
+		}
+		snapshot.Profile = []byte(p.Config())
+		snapshot.NamedProfileID, snapshot.NamedProfileRevision = profileID, p.Public().Revision
+	} else {
+		if a.Configs == nil {
+			return errors.New("WireGuard config manager is unavailable")
+		}
+		content, readErr := a.Configs.ReadExpert(a.ID(), "main")
+		if readErr != nil {
+			return readErr
+		}
+		snapshot.ProfilePath, snapshot.ProfileDraft = content.Path, planUsesEngineDraft(plan, a.ID(), "main") && content.Source == "staged"
+		snapshot.Profile, snapshot.ProfileExisted, err = optionalFile(content.Path)
+		if err != nil {
+			return err
+		}
+		if snapshot.ProfileDraft {
+			snapshot.StagedProfile = []byte(content.Content)
+		}
 	}
 	snapshot.RuntimeConfig, snapshot.RuntimeExisted, err = optionalFile(a.RuntimeConfigPath)
 	if err != nil {
@@ -151,6 +175,9 @@ func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, plan Plan, root str
 func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string) error {
 	snapshot, err := readWarpWGSnapshot(root)
 	if err != nil {
+		return err
+	}
+	if err := a.verifyNamedProfile(ctx, snapshot); err != nil {
 		return err
 	}
 	profile := snapshot.Profile
@@ -429,6 +456,9 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, _ Plan, root string
 	if err != nil {
 		return err
 	}
+	if err := a.verifyNamedProfile(ctx, snapshot); err != nil {
+		return err
+	}
 	if snapshot.StateExisted {
 		if err := removePolicy(ctx, a.Runner, a.ip(), snapshot.State); err != nil {
 			return fmt.Errorf("remove previous WARP policy: %w", err)
@@ -594,9 +624,12 @@ func (a *WARPWireGuardAdapter) Deactivate(ctx context.Context) error {
 	return firstErr
 }
 
-func (a *WARPWireGuardAdapter) Commit(_ context.Context, _ Plan, root string) error {
+func (a *WARPWireGuardAdapter) Commit(ctx context.Context, _ Plan, root string) error {
 	snapshot, err := readWarpWGSnapshot(root)
 	if err != nil {
+		return err
+	}
+	if err := a.verifyNamedProfile(ctx, snapshot); err != nil {
 		return err
 	}
 	profile := snapshot.Profile
@@ -674,8 +707,10 @@ func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string
 	} else {
 		_ = os.Remove(a.statePath())
 	}
-	if err := restoreOptional(snapshot.ProfilePath, snapshot.Profile, snapshot.ProfileExisted); err != nil && firstErr == nil {
-		firstErr = err
+	if snapshot.NamedProfileID == "" {
+		if err := restoreOptional(snapshot.ProfilePath, snapshot.Profile, snapshot.ProfileExisted); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
 	if snapshot.ProfileDraft {
 		if _, err := a.Configs.Stage(a.ID(), "main", string(snapshot.StagedProfile)); err != nil && firstErr == nil {
@@ -787,6 +822,9 @@ func (a *WARPWireGuardAdapter) warpEndpointPorts() ([]int, error) {
 		return nil, errors.New("invalid WireGuard endpoint port")
 	}
 	fallback := a.FallbackPorts
+	if a.ID() != "warp-wg" {
+		fallback = []int{}
+	}
 	if fallback == nil && a.ID() == "warp-wg" {
 		fallback = []int{2408, 500, 1701, 4500}
 	}
