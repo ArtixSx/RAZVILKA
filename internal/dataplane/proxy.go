@@ -63,6 +63,10 @@ type ProxyTunnelAdapter struct {
 	NodeRoutes   NodeRouteMaterializer
 	FreshProfile func(context.Context) (string, error)
 	bootIdentity func() (string, error)
+	// Set only by NewScopedXrayTunnelAdapter; never inferred from user JSON.
+	scopedXray          bool
+	NodeTUNProbe        NodeTUNProbe
+	nodeRuntimeIdentity func(ProcessSpec, string) (string, error)
 }
 
 type NodeRouteRequest struct {
@@ -73,6 +77,7 @@ type NodeRouteRequest struct {
 }
 
 type NodeRouteMaterial struct {
+	EngineID      string
 	Config        []byte
 	EndpointHosts []string
 }
@@ -95,6 +100,9 @@ type usqueCanaryEvidence struct {
 }
 
 type proxySnapshot struct {
+	EngineID            string      `json:"engine_id,omitempty"`
+	NodeManifest        []byte      `json:"node_manifest,omitempty"`
+	NodeManifestExists  bool        `json:"node_manifest_exists,omitempty"`
 	SidecarKind         string      `json:"sidecar_kind,omitempty"`
 	ConfigPath          string      `json:"config_path"`
 	Config              []byte      `json:"config,omitempty"`
@@ -146,7 +154,7 @@ func (a *ProxyTunnelAdapter) checkPlanNetwork(ctx context.Context, plan Plan) er
 }
 
 func (a *ProxyTunnelAdapter) checkRouteNetwork(ctx context.Context, plan RoutePlan) error {
-	if a.ID() != "sing-box" || !plan.RequiresNetworkProof() {
+	if !a.scopedXray && (a.ID() != "sing-box" || !plan.RequiresNetworkProof()) {
 		return nil
 	}
 	return verifyNetworkProfile(ctx, plan.NetworkProfileID, a.FreshProfile)
@@ -156,8 +164,8 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	if err := a.valid(); err != nil {
 		return err
 	}
-	if a.ID() == "sing-box" && plan.RequiresNetworkProof() && planUsesEngineDraft(plan, a.ID(), "main") {
-		return errors.New("node-scoped Sing-box routes cannot consume the general engine draft")
+	if (a.scopedXray || a.ID() == "sing-box" && plan.RequiresNetworkProof()) && planUsesEngineDraft(plan, a.ID(), "main") {
+		return errors.New("node-scoped routes cannot consume the general engine draft")
 	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
@@ -195,11 +203,29 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	if err != nil {
 		return err
 	}
+	nodeManifest, nodeManifestExists, err := optionalFile(a.nodeManifestPath())
+	if err != nil {
+		return err
+	}
+	if a.scopedXray && nodeManifestExists {
+		if _, err := a.readNodeManifest(a.nodeManifestPath()); err != nil {
+			return err
+		}
+		if a.Processes.Running(a.engineProcess()) && a.Processes.Running(a.sidecarProcess()) {
+			if err := a.verifyScopedNodeInterface(ctx); err != nil {
+				return err
+			}
+			if _, err := a.scopedRuntimeIdentity(); err != nil {
+				return err
+			}
+		}
+	}
 	packageWasRunning, err := a.packageRuntimeRunning(ctx)
 	if err != nil {
 		return err
 	}
 	snapshot := proxySnapshot{
+		EngineID: a.ID(), NodeManifest: nodeManifest, NodeManifestExists: nodeManifestExists,
 		SidecarKind: a.effectiveSidecar(),
 		ConfigPath:  view.Path, Config: live, ConfigExisted: liveExists, ConfigDraft: draftExists, StagedConfig: draft,
 		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists, Transport: transport, TransportExists: transportExists, Evidence: evidence, EvidenceExists: evidenceExists,
@@ -236,6 +262,14 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 		source = snapshot.StagedConfig
 	}
 	privateEndpoints := []string{}
+	var nodeManifest *proxyNodeManifest
+	if a.scopedXray {
+		var err error
+		source, privateEndpoints, nodeManifest, err = a.stageScopedXray(ctx, plan)
+		if err != nil {
+			return err
+		}
+	}
 	if a.ID() == "sing-box" {
 		scoped, unscoped := []Route{}, false
 		for _, route := range plan.Routes {
@@ -277,7 +311,7 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	if len(source) == 0 {
 		return errors.New("engine configuration is empty")
 	}
-	candidate, endpoints, err := buildProxyCandidate(a.ID(), source, a.SOCKSPort)
+	candidate, endpoints, err := a.buildEngineCandidate(source, a.SOCKSPort)
 	if err != nil {
 		return err
 	}
@@ -296,6 +330,16 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	sidecar, err := a.buildSidecarConfig(ctx)
 	if err != nil {
 		return err
+	}
+	if nodeManifest != nil {
+		nodeManifest.ConfigHash, nodeManifest.SidecarHash = routeidentity.Hash(candidate), routeidentity.Hash(sidecar)
+		data, err := json.Marshal(nodeManifest)
+		if err != nil || len(data) > 128<<10 {
+			return errors.New("invalid scoped node manifest")
+		}
+		if err := writeAtomic(filepath.Join(root, "nodes.staged.json"), data, 0o600); err != nil {
+			return err
+		}
 	}
 	policy := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
 	if err := a.prepareForwarding(ctx, &policy); err != nil {
@@ -330,6 +374,14 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 	}
 	engineCandidate := filepath.Join(root, "engine.staged.json")
 	sidecarCandidate := filepath.Join(root, "sidecar.staged.json")
+	if a.scopedXray {
+		if a.NodeTUNProbe == nil {
+			return ErrNodeTUNProofRequired
+		}
+		if _, err := a.validateStagedNodes(ctx, root); err != nil {
+			return err
+		}
+	}
 	state, err := a.readStagedPolicy(root)
 	if err != nil {
 		return err
@@ -351,6 +403,10 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 			args = []string{"run", "-test", "-config", engineCandidate}
 		}
 		if output, err := a.run(ctx, a.engineBinary(), args...); err != nil {
+			if a.scopedXray {
+				clear(output)
+				return errors.New("scoped Xray native validation failed")
+			}
 			return fmt.Errorf("%s native validation failed: %s", a.ID(), shortOutput(output, err))
 		}
 	}
@@ -383,7 +439,12 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 	if err != nil {
 		return err
 	}
-	candidate, _, err := buildProxyCandidate(a.ID(), staged, port)
+	if a.scopedXray {
+		if _, err := a.validateStagedNodes(ctx, root); err != nil {
+			return err
+		}
+	}
+	candidate, _, err := a.buildEngineCandidate(staged, port)
 	if err != nil {
 		return err
 	}
@@ -447,6 +508,14 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 	if err := a.waitForSOCKSProcess(ctx, spec, address); err != nil {
 		return evidence, err
 	}
+	var scopedIdentity string
+	if a.scopedXray {
+		var err error
+		scopedIdentity, err = a.verifyNodeProcess(spec, address)
+		if err != nil {
+			return evidence, err
+		}
+	}
 	if a.ID() == "usque" {
 		traceProbe := a.CanaryTraceProbe
 		if traceProbe == nil {
@@ -486,7 +555,7 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 			}
 			return evidence, fmt.Errorf("candidate probe for %s failed: %w", route.ServiceName, err)
 		}
-		if plan.RequiresNetworkProof() {
+		if a.scopedXray || plan.RequiresNetworkProof() {
 			if err := a.probeNodeServiceIP(ctx, route.ProbeURL, address); err != nil {
 				return evidence, err
 			}
@@ -499,6 +568,12 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 		cancel()
 		if err != nil {
 			return evidence, fmt.Errorf("candidate egress probe failed: %w", err)
+		}
+	}
+	if a.scopedXray {
+		after, err := a.verifyNodeProcess(spec, address)
+		if err != nil || after != scopedIdentity {
+			return evidence, errors.New("scoped Xray candidate identity changed")
 		}
 	}
 	return evidence, nil
@@ -514,6 +589,21 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	}
 	if err := a.checkSnapshotSidecar(snapshot); err != nil {
 		return err
+	}
+	if a.scopedXray {
+		if _, err := a.validateStagedNodes(ctx, root); err != nil {
+			return preflightRefusalError{err}
+		}
+		if _, err := a.scopedInterfaceIndex(ctx); err == nil {
+			if err := a.verifyScopedNodeInterface(ctx); err != nil {
+				return preflightRefusalError{err}
+			}
+			if _, err := a.scopedRuntimeIdentity(); err != nil {
+				return preflightRefusalError{errors.New("existing TUN has no scoped runtime identity")}
+			}
+		} else if !errors.Is(err, errNodeInterfaceAbsent) {
+			return preflightRefusalError{err}
+		}
 	}
 	desired, err := a.readStagedPolicy(root)
 	if err != nil {
@@ -537,6 +627,11 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	if err := a.stopOwned(ctx); err != nil {
 		return err
 	}
+	if a.scopedXray {
+		if err := a.removeScopedNodeInterface(ctx); err != nil {
+			return err
+		}
+	}
 	if snapshot.PackageWasRunning {
 		if err := a.stopPackageRuntime(ctx); err != nil {
 			return err
@@ -559,6 +654,15 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	if err := writeAtomic(a.sidecarConfigPath(), sideCandidate, 0o600); err != nil {
 		return err
 	}
+	if a.scopedXray {
+		data, err := os.ReadFile(filepath.Join(root, "nodes.staged.json"))
+		if err != nil {
+			return err
+		}
+		if err := writeAtomic(a.nodeManifestPath(), data, 0o600); err != nil {
+			return err
+		}
+	}
 	transport, err := a.stagedUsqueTransport(root)
 	if err != nil {
 		return err
@@ -574,6 +678,14 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	}
 	if err := a.waitForInterface(ctx); err != nil {
 		return err
+	}
+	if a.scopedXray {
+		if err := a.recordScopedNodeInterface(ctx); err != nil {
+			return err
+		}
+		if _, err := a.scopedRuntimeIdentity(); err != nil {
+			return err
+		}
 	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
@@ -615,6 +727,9 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 	if err := a.verifyHealthRuntime(ctx, state); err != nil {
 		return err
 	}
+	if a.scopedXray {
+		return a.scopedNodeHealth(ctx, plan, state)
+	}
 	for _, route := range plan.Routes {
 		if adapterID(route.Resolved) != a.ID() || strings.TrimSpace(route.ProbeURL) == "" {
 			continue
@@ -645,6 +760,11 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 	if !exists || !regularFile(a.engineConfigPath()) || !regularFile(a.sidecarConfigPath()) {
 		return fmt.Errorf("committed %s runtime state is missing", a.ID())
 	}
+	if a.scopedXray {
+		if _, err := a.checkScopedNodeState(ctx, plan); err != nil {
+			return err
+		}
+	}
 	restarted := false
 	defer func() {
 		if restarted && (errors.Is(retErr, ErrNetworkChanged) || ctx.Err() != nil) {
@@ -672,6 +792,11 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 	if err := a.stopOwned(ctx); err != nil {
 		return err
 	}
+	if a.scopedXray {
+		if err := a.removeScopedNodeInterface(ctx); err != nil {
+			return err
+		}
+	}
 	if err := a.Processes.Start(ctx, a.engineProcess()); err != nil {
 		return err
 	}
@@ -686,6 +811,11 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 	if err := a.waitForInterface(ctx); err != nil {
 		_ = a.stopOwned(ctx)
 		return err
+	}
+	if a.scopedXray {
+		if err := a.recordScopedNodeInterface(ctx); err != nil {
+			return err
+		}
 	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
@@ -705,6 +835,14 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool, error) {
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return false, err
+	}
+	if a.scopedXray {
+		// Destination changes need a new materialized routing config/canary.
+		// Replacing RPDB alone cannot extend an old Xray IP allowlist.
+		if _, err := a.checkScopedNodeState(ctx, plan); err != nil {
+			return false, err
+		}
+		return false, a.CommittedNodeHealth(ctx, plan)
 	}
 	oldState, exists, err := a.loadPolicy()
 	if err != nil || !exists {
@@ -779,7 +917,9 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 	}
 	// A correctly stopped sing-box sidecar removes its TUN. Delete only the
 	// exact adapter-owned interface if a crashed sidecar left it behind.
-	if a.ip() != "" {
+	if a.scopedXray {
+		firstErr = errors.Join(firstErr, a.removeScopedNodeInterface(ctx))
+	} else if a.ip() != "" {
 		if _, err := a.run(ctx, a.ip(), "link", "show", "dev", a.Interface); err == nil {
 			if output, deleteErr := a.run(ctx, a.ip(), "link", "delete", "dev", a.Interface); deleteErr != nil && firstErr == nil {
 				firstErr = fmt.Errorf("delete owned interface %s: %s", a.Interface, shortOutput(output, deleteErr))
@@ -791,7 +931,7 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 		// In particular a failed firewall read is not evidence of removed rules.
 		return firstErr
 	}
-	for _, path := range []string{a.policyPath(), a.engineConfigPath(), a.sidecarConfigPath(), a.transportPath(), a.engineProcess().PIDPath, a.sidecarProcess().PIDPath} {
+	for _, path := range []string{a.policyPath(), a.engineConfigPath(), a.sidecarConfigPath(), a.nodeManifestPath(), a.nodeInterfacePath(), a.transportPath(), a.engineProcess().PIDPath, a.sidecarProcess().PIDPath} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) && firstErr == nil {
 			firstErr = err
 		}
@@ -802,6 +942,11 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string) error {
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
+	}
+	if a.scopedXray {
+		if err := a.Health(ctx, plan, root); err != nil {
+			return err
+		}
 	}
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
@@ -871,6 +1016,9 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 	if err := a.stopOwned(ctx); err != nil && firstErr == nil {
 		firstErr = err
 	}
+	if a.scopedXray {
+		firstErr = errors.Join(firstErr, a.removeScopedNodeInterface(ctx))
+	}
 	if err := restoreOptional(a.engineConfigPath(), snapshot.RuntimeEngine, snapshot.RuntimeEngineExists); err != nil && firstErr == nil {
 		firstErr = err
 	}
@@ -883,18 +1031,27 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) 
 	if err := restoreOptional(a.evidencePath(), snapshot.Evidence, snapshot.EvidenceExists); err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if sameBoot && snapshot.EngineWasRunning {
+	if err := restoreOptional(a.nodeManifestPath(), snapshot.NodeManifest, snapshot.NodeManifestExists); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if sameBoot && snapshot.EngineWasRunning && (!a.scopedXray || firstErr == nil) {
 		if err := a.Processes.Start(ctx, a.engineProcess()); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
-	if sameBoot && snapshot.SidecarWasRunning {
+	if sameBoot && snapshot.SidecarWasRunning && (!a.scopedXray || firstErr == nil) {
 		if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
+	if a.scopedXray && sameBoot && snapshot.EngineWasRunning && snapshot.SidecarWasRunning && firstErr == nil {
+		firstErr = errors.Join(a.waitForSOCKS(ctx), a.waitForInterface(ctx))
+		if firstErr == nil {
+			firstErr = a.recordScopedNodeInterface(ctx)
+		}
+	}
 	if snapshot.PolicyExists {
-		if sameBoot && snapshot.PolicyWasActive && snapshot.EngineWasRunning && snapshot.SidecarWasRunning {
+		if sameBoot && snapshot.PolicyWasActive && snapshot.EngineWasRunning && snapshot.SidecarWasRunning && (!a.scopedXray || firstErr == nil) {
 			if err := a.restorePreviousPolicy(ctx, snapshot.Policy); err != nil && firstErr == nil {
 				firstErr = err
 			}
@@ -1178,7 +1335,7 @@ func (a *ProxyTunnelAdapter) sidecarProcess() ProcessSpec {
 	if a.effectiveSidecar() == "hev" {
 		args = []string{config}
 	}
-	return ProcessSpec{ID: a.ID() + "-tun", Binary: a.sidecarBinary(), Args: args, Dir: a.runtimeRoot(), PIDPath: filepath.Join(a.runtimeRoot(), "sidecar.pid"), LogPath: filepath.Join(a.runtimeRoot(), "sidecar.log"), MatchArg: config}
+	return ProcessSpec{ID: a.ID() + "-tun", Binary: a.sidecarBinary(), Args: args, Dir: a.runtimeRoot(), PIDPath: filepath.Join(a.runtimeRoot(), "sidecar.pid"), LogPath: filepath.Join(a.runtimeRoot(), "sidecar.log"), MatchArg: config, RouteProof: a.scopedXray}
 }
 func (a *ProxyTunnelAdapter) stopOwned(ctx context.Context) error {
 	var firstErr error

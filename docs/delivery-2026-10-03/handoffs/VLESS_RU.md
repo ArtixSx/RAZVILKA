@@ -1,6 +1,6 @@
 # VLESS: первая порция D02 — 03.10.2026
 
-База: `52eee92c28af1b9ad3c789f2ee2c3ffc43a0e175`, ветка `sol/vless-20261003`, worktree `C:/Projects/RAZVILKA/worktrees/sol-vless`. Изменения и этот отчёт входят в один коммит `Preserve exact Xray evidence and bound cross-engine node checks` поверх базы. Следующие D03/D10 не начаты; ожидается review координатора.
+База первой порции: `52eee92c28af1b9ad3c789f2ee2c3ffc43a0e175`, ветка `sol/vless-20261003`, worktree `C:/Projects/RAZVILKA/worktrees/sol-vless`. Первая порция: `04dd691d4fee00ae4b44eef51b6a37ba0c71c402` (`Preserve exact Xray evidence and bound cross-engine node checks`). Последующие checkpoint описаны ниже; ограничения первой порции сохранены как исторический контекст.
 
 ## Результат и файлы
 
@@ -76,3 +76,55 @@ Windows/amd64, штатный `C:/Projects/RAZVILKA/tools/go/bin/go.exe`, Go 1.2
 - Эксклюзивно запустить существующий `RAZVILKA_XRAY_NATIVE=/absolute/path/xray GO=/absolute/path/go sh scripts/check-xray-native.sh`: теперь дополнительно включает TestNativeXrayStoreConfigSyntax. У этого дополнения здесь только успешная cross-compilation; результат native не заявлен. Секреты/конфиги создаются только во временных приватных директориях и не включены в Git.
 - CORE wiring и scoped Xray adapter остаются открытыми. D03 TUN selected/control, endpoint changes, sidecar kill, app/router restart и verified rollback; D10 cold first-usable/fair refill; общий LAN/DNS executor и D14 — отдельные незакрытые этапы.
 - Native syntax success тоже не станет доказательством TUN, всего Интернета или аппаратного LKG. В этой порции нет live-мутаций и релиза.
+
+## D03 — ограниченный scoped Xray TUN adapter
+
+Вход второй порции: интеграционная база `99ac304778f881bab24692f9d87f880d41da4d09`, включённая ff-only по поручению координатора. Результат — отдельная доверенная фабрика `NewScopedXrayTunnelAdapter`, lifecycle и воспроизводимый opt-in native стенд. **D03 не закрыт, XraySelectable остаётся false**: новый путь ещё не подключён CORE к реальному приложению и не принят native/HIL. Обычные Xray drafts сохраняют прежний single-exit validator.
+
+Изменены только принадлежащие VLESS `proxy*`, `hev_sidecar.go`, `nodestore/history_compatibility*`, профильный native script и этот отчёт. manager/plan/policy/ownership/app/main/routecatalog не менялись; production go.mod/go.sum/VERSION неизменны.
+
+- `proxy_nodes.go`: factory требует приватный NodeStore materializer; Stage принимает только `EngineID=xray`, resolved exact node IDs, явные client Sources и HTTPS service probes. Generic main draft, чужой engine, другой listener, freedom/default и изменение exact domain/IP/terminal-blackhole rules отвергаются до Start. Endpoint фиксируется в native config по свежему resolver, SNI сохраняется. Private manifest schema1 связывает полный config/sidecar digest, engine, WAN, routes, service destinations, host/IP/tag. При изменении endpoint или service address нужна новая transaction; RefreshPolicy не расширяет RPDB отдельно от Xray allowlist.
+- `proxy_node_identity.go`: проверки используют launcher-created receipt полного routed process, cmdline, boot/starttime/PID, installed executable, config hash и принадлежность loopback SOCKS inode. Повторная запись receipt в verifier запрещена. Проверяются и Xray, и stock Sing-box sidecar, до/после проб. PID namespaces не нужны; ns/net используется только при наличии. Если оба ns/net отсутствуют с ENOENT (Netcraze), это не зависимость от namespaces; одностороннее отсутствие/ошибка чтения остаются fence.
+- `proxy_node_interface.go`: private interface lease содержит boot, exact ifindex и config hash. Замена same-name интерфейса и неизвестный/нечитаемый inventory не дают права удалить его. Даже после ошибки команды отсутствие подтверждается успешным полным inventory. Остановка owned процессов предшествует точному удалению; ошибки сохраняют файлы/lease. JSON readback iproute2 обязателен; BusyBox без `ip -j` не принят этим checkpoint.
+- `proxy_node_health.go`: `NodeTUNProbe` — доверенный callback настоящих selected/control LAN clients к одному pinned service IP. SOCKS/локальная подмена source/HTTP JSON не могут устанавливать этот callback. Health проверяет service acceptance, public distinct egress, source внутри/вне выбранного scope, actual kernel `route get ... from ... iif ...`, полный runtime до/после, WAN, config/manifest, ifindex и forwarding readback. Commit повторно делает Health. IPv4 TCP HTTPS — проверяемая граница; IPv6/UDP/media/voice ещё не доказаны.
+- `proxy.go`, `proxy_rollback_verify.go`: snapshot и rollback сохраняют engine/manifest; dead sidecar можно восстановить по неизменному committed state. Activate/rollback не стартуют поверх неизвестного интерфейса. После rollback выдаётся read-only verified receipt только при точных файлах, boot, процессах, ifindex, forwarding/RPDB и отсутствии правил кандидата. Это proof восстановления A, а не утверждение, что сервис A здоров.
+- `proxy_nodes_test.go`: lifecycle с actual NodeStore materializer (unit process/probe fixtures), свежий manifest, sidecar death/reconcile, verified rollback, stale endpoint без LKG mutation, wrong-client/same-egress/missing-proof/identity/config/manifest tamper, draft/engine/rules rejection, foreign ifindex и inventory errors. Native evidence из этих тестов не заявляется.
+- `nodestore/history_compatibility.go`: `ExactHistoryReadVersion=2` отдельно от schema4; `RequiredHistoryReadVersion(ctx)` проверяет live validated store, `RequiredPrivateHistoryReadVersion(snapshot)` — retained backup без импорта. Invalid/cancelled/closed даёт error + version0, никогда не legacy fallback. Xray evidence после reopen и corrupted backup fence проверены.
+
+### CORE/OPS контракт D03 и downgrade
+
+1. Для scoped executor создать новый adapter через `NewScopedXrayTunnelAdapter(configs, trustedStateRoot, materializer)`. Callback преобразует `NodeRouteRequest` в `nodestore.RouteBinding` и вызывает **только** `Nodes.MaterializeXray`; передаёт `EngineID`, Config, EndpointHosts без потери engine. Задать Binary/stock Sing-box SidecarBin/Resolver/FreshProfile до использования. HEV остаётся opt-in experimental.
+2. CORE — единственный владелец manager registration и планирования. Зарегистрировать этот exact adapter вместо generic Xray в подходящем trusted режиме; не менять существующий adapter backend на ходу. General engine draft не совместим со scoped node material. Разрешение `xray:node/group` и RequiresNetworkProof/CheckCommittedNodeHealth должны быть engine-aware через manager/plan CORE. Нужны реальные consent/Stop/SafeMode/network guards и независимый production LAN-client verifier для NodeTUNProbe. Пока его нет, Validate отказывает, Selectable не включать.
+3. CORE добавить read-only binary capability flag `-node-history-read-version` с фиксированным выводом `2`. Это предложение контракта; CLI flag в этой порции **не реализован**. OPS перед stop/install/downgrade должен сравнить capability candidate с максимумом required version live store и всех retained backup/restore images, которые workflow может восстановить. Неизвестный flag/nonzero exit/невалидный вывод — fail closed. Capability1 разрешён лишь когда все актуальные/retained images требуют1 и другие schema/receipt gates также проходят. Xray history не удалять и не переписывать в Sing-box. Gate должен действовать до app начинает писать Xray CheckRecord.
+
+### Native стенд для координатора
+
+`proxy_nodes_native_linux_test.go` / `scripts/check-xray-tun-native.sh`: четыре созданных исключительно тестом namespace (router/server/selected/control); public-format fixture IP живут только в изолированных namespaces без uplink. Настоящие TLS VLESS servers A/B, Xray client, stock Sing-box gVisor TUN, kernel RPDB/iptables, два LAN HTTPS клиента. Проверяется A Apply/Health/Commit, новый экземпляр adapter из on-disk state, kill/restart sidecar, endpoint A→B с другим actual egress, kill B sidecar → rejected Commit → rollback A → VerifyRollback → actual selected/control traffic. Новый экземпляр adapter — **не app process restart**; reboot/app HTTP/CORE wiring остаются отдельной приёмкой. Fixture CA доверяется только дочерним процессам теста; TLS verification не отключается. Graceful stop server и exact-owned namespace PID cleanup предусмотрены также после timeout; чужие namespaces/процессы не затрагиваются.
+
+Координатор подтвердил official pinned Xray 26.3.27 и Sing-box 1.13.3/1.14.2 с `with_gvisor/with_quic`, SHA256 проверены им. Сначала выполнить1.13.3, затем1.14.2 отдельным запуском; versions/logs сохранить раздельно:
+
+```sh
+RAZVILKA_XRAY_NATIVE=/home/art/.cache/razvilka-review/toolchains/xray-v26.3.27/xray \
+RAZVILKA_SINGBOX_NATIVE=/home/art/.cache/razvilka-review/toolchains/sing-box-1.13.3/sing-box \
+GO=/absolute/path/to/go sh scripts/check-xray-tun-native.sh
+# Второй запуск: заменить только Sing-box путь на .../sing-box-1.14.2/sing-box.
+```
+
+Этот чат бинарники не скачивал/не устанавливал, VM/роутер/live порты не использовал и native тест не запускал.
+
+### Проверки D03
+
+Та же Windows/Go1.26.5 среда, GOMAXPROCS2/GOFLAGS=-p=2/GOTOOLCHAIN=local. Все команды ниже завершились RC0:
+
+- `go test ./internal/dataplane ./internal/nodestore ./internal/providerprofile ./internal/nodequality ./internal/nodecleanup ./internal/providerfeed -count=1`;
+- `go test ./internal/app -run 'Test.*(Node|Autonomy)' -count=1` — неизменённые app tests;
+- финальные `go test ./internal/nodestore ./internal/dataplane -run 'Test(ScopedXray|RequiredHistory)' -count=3`;
+- Windows `go vet ./internal/dataplane ./internal/nodestore`, `go build ./...`;
+- Linux/amd64 `go test -c ./internal/dataplane` (временный бинарник удалён) и `go vet ./internal/dataplane ./internal/nodestore` — compile/static only;
+- `C:/Program Files/Git/bin/sh.exe -n scripts/check-xray-tun-native.sh`, `git diff --check`.
+
+Один промежуточный тестовый compile выявил повторное `:=` после добавления backup check; исправлено, финальные прогоны выше прошли. Linux race/native/full gate/hardware не выполнялись. Native-команды и оба runtime version остаются **unverified** до запуска координатором. D10 — следующая отдельная порция через CORE worker contract.
+
+### D03 fixture permissions — отдельное исправление
+
+Координатор сообщил native PASS RC0 на интеграции `0669514+b3bc486` с Xray26.3.27 и отдельно Sing-box1.13.3/1.14.2. Это результат координатора, не локальный прогон этого чата. Первый полный Linux gate обычным пользователем art затем обнаружил `private restore journal unavailable` в TestScopedXray*: fixture передавала уже существующий `t.TempDir` в engineconfig.StageRoot без private0700, а stageDirectory правильно отвергал0755. Исправлены исключительно каталоги fixture (nodes/stage/backup/state), Chmod errors теперь проверяются. Production permissions/guards не менялись. Адресный Windows test `TestScopedXrayRejectsDraftWrongEngineAndBlackholeMutation` прошёл RC0; Linux ordinary-user повтор принадлежит координатору. Native fixture создаёт отсутствующие drafts внутри своего private root и этого дефекта не имела.

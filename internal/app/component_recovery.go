@@ -165,12 +165,21 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 	maintenance := a.autonomy.doc.Maintenance["components"] == componentPendingPrefix+in.Component
 	a.autonomy.mu.Unlock()
 	settledAction := state.Phase == components.UpdateAccepted && in.Action == "accept-live" || state.Phase == components.UpdateRolledBack && (in.Action == "rollback" || in.Action == "verify-rollback") || state.Phase == components.UpdateAbandoned && in.Action == "abandon-prepared"
-	if readErr == nil && !pending && maintenance && state.TransactionID == in.TransactionID && state.Component == in.Component && settledAction {
+	if readErr == nil && !pending && state.TransactionID == in.TransactionID && state.Component == in.Component && settledAction {
+		operationPending, operationErr := a.componentSettlementNeeded(state)
+		if operationErr != nil {
+			writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_CHECKPOINT_PENDING", "error": operationErr.Error()})
+			return
+		}
+		if !maintenance && !operationPending {
+			writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_TRANSACTION_SETTLED", "error": "component transaction already settled"})
+			return
+		}
 		if err := guard(ctx); err != nil {
 			writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_AUTHORITY_CHANGED", "error": err.Error()})
 			return
 		}
-		if err := a.finishMatchingComponentMaintenance(ctx, in.Component); err != nil {
+		if err := a.settleComponentRecovery(ctx, in.TransactionID, in.Component, guard); err != nil {
 			writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_CHECKPOINT_PENDING", "error": err.Error()})
 			return
 		}
@@ -201,7 +210,7 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 		return live(c, in.Component)
 	})
 	if err == nil {
-		err = a.finishMatchingComponentMaintenance(ctx, in.Component)
+		err = a.settleComponentRecovery(ctx, in.TransactionID, in.Component, guard)
 	}
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_RECOVERY_UNCONFIRMED", "error": err.Error(), "result": result, "recovery_required": a.PendingComponentRecovery()})
