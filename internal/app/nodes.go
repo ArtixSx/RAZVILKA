@@ -160,7 +160,7 @@ func (a *App) nodeGroupAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "явно подтвердите изменение группы", http.StatusPreconditionRequired)
 			return
 		}
-		if a.routeReferenceExists("sing-box:" + id) {
+		if a.nodeRouteReferenceExists(id) {
 			writeNodeError(w, nodestore.ErrInUse)
 			return
 		}
@@ -175,7 +175,7 @@ func (a *App) nodeGroupAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "явно подтвердите удаление группы", http.StatusPreconditionRequired)
 			return
 		}
-		if a.routeReferenceExists("sing-box:" + id) {
+		if a.nodeRouteReferenceExists(id) {
 			writeNodeError(w, nodestore.ErrInUse)
 			return
 		}
@@ -196,6 +196,7 @@ type nodeMutationRequest struct {
 }
 
 type nodeCheckRequest struct {
+	Engine    string `json:"engine,omitempty"`
 	ServiceID string `json:"service_id"`
 	Confirm   string `json:"confirm"`
 }
@@ -289,7 +290,7 @@ func (a *App) nodeAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "явно подтвердите удаление сохранённого узла", http.StatusPreconditionRequired)
 			return
 		}
-		if a.routeReferenceExists("sing-box:" + id) {
+		if a.nodeRouteReferenceExists(id) {
 			writeNodeError(w, nodestore.ErrInUse)
 			return
 		}
@@ -325,6 +326,10 @@ func (a *App) nodeAction(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *App) nodeRouteReferenceExists(id string) bool {
+	return a.routeReferenceExists("sing-box:"+id) || a.routeReferenceExists("xray:"+id)
+}
+
 func (a *App) routeReferenceExists(route string) bool {
 	if a.Store == nil {
 		return false
@@ -345,10 +350,6 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 		methodNotAllowed(w)
 		return
 	}
-	if a.NodeChecker == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "Точная проверка узлов сейчас недоступна. Убедитесь, что Sing-box установлен."})
-		return
-	}
 	var request nodeCheckRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
@@ -358,6 +359,11 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		http.Error(w, "некорректный запрос проверки", http.StatusBadRequest)
+		return
+	}
+	engine, err := nodeCheckEngine(request.Engine)
+	if err != nil {
+		http.Error(w, "неподдерживаемый движок проверки", http.StatusBadRequest)
 		return
 	}
 	var serviceFound bool
@@ -373,9 +379,11 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, "для сервиса нет безопасного контрольного сценария", http.StatusBadRequest)
 		return
 	}
-	result, _, err := a.checkAndRecordNode(r.Context(), id, service, "", 0)
+	result, _, err := a.checkAndRecordNodeForEngine(r.Context(), engine, id, service, "", 0)
 	if err != nil {
 		switch {
+		case errors.Is(err, errNodeHistoryAdmission):
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "NODE_HISTORY_ADMISSION_REQUIRED", "engine": engine, "recorded": false, "working_routes_changed": false, "error": "Совместимость сохранённой истории при откате ещё не подтверждена. Проверка выбранным движком приостановлена."})
 		case result.ErrorCode == "node-cleanup-failed":
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "NODE_CLEANUP_REQUIRED", "error": "Очистка временного процесса не подтверждена. Проверки остановлены до восстановления.", "result": result, "recorded": false, "working_routes_changed": false})
 		case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
@@ -407,7 +415,9 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 			w.Header().Set("Retry-After", "5")
 			writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "error": "Другая точная проверка уже выполняется. Повторите через несколько секунд."})
 		case errors.Is(err, dataplane.ErrExactNodeRuntime):
-			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "Для точной проверки сначала установите компонент Sing-box в разделе «Обходы»."})
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "NODE_ENGINE_UNAVAILABLE", "engine": engine, "recorded": false, "working_routes_changed": false, "error": "Компонент выбранного движка проверки недоступен."})
+		case errors.Is(err, dataplane.ErrExactNodeUnsupported):
+			writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": "NODE_ENGINE_UNSUPPORTED", "engine": engine, "recorded": false, "working_routes_changed": false, "error": "Выбранный движок не поддерживает профиль этого узла."})
 		case errors.Is(err, dataplane.ErrExactNodeUnavailable):
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "Проверка недоступна: входные данные или среда не прошли защитные ограничения."})
 		default:
@@ -422,8 +432,16 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 // Store path. A recovery supplies its immutable epoch and expected generation;
 // its own RecordCheck is the only permitted generation increment.
 func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog.Service, profile string, generation uint64) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
-	return a.runAndRecordNode(ctx, id, service, profile, generation, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
-		result, err := a.NodeChecker.Check(ctx, request)
+	return a.checkAndRecordNodeForEngine(ctx, "sing-box", id, service, profile, generation)
+}
+
+func (a *App) checkAndRecordNodeForEngine(ctx context.Context, engine, id string, service catalog.Service, profile string, generation uint64) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
+	checker, err := a.nodeCheckerForEngine(engine)
+	if err != nil {
+		return dataplane.NodeCheckResult{}, nodestore.Snapshot{}, err
+	}
+	return a.runAndRecordNode(ctx, engine, id, service, profile, generation, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
+		result, err := checker.Check(ctx, request)
 		return result, true, err
 	})
 }
@@ -432,12 +450,20 @@ func (a *App) checkAndRecordNode(ctx context.Context, id string, service catalog
 // fails them is decided and recorded exactly as a full check would record it;
 // otherwise nothing is recorded and a full check is still required.
 func (a *App) screenAndRecordNode(ctx context.Context, id string, service catalog.Service, profile string) (dataplane.NodeCheckResult, bool, error) {
-	screener, ok := a.NodeChecker.(dataplane.TransportScreener)
+	return a.screenAndRecordNodeForEngine(ctx, "sing-box", id, service, profile)
+}
+
+func (a *App) screenAndRecordNodeForEngine(ctx context.Context, engine, id string, service catalog.Service, profile string) (dataplane.NodeCheckResult, bool, error) {
+	checker, err := a.nodeCheckerForEngine(engine)
+	if err != nil {
+		return dataplane.NodeCheckResult{}, false, err
+	}
+	screener, ok := checker.(dataplane.TransportScreener)
 	if !ok {
 		return dataplane.NodeCheckResult{}, false, nil
 	}
 	decided := false
-	result, _, err := a.runAndRecordNode(ctx, id, service, profile, 0, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
+	result, _, err := a.runAndRecordNode(ctx, engine, id, service, profile, 0, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
 		result, screened, err := screener.ScreenTransport(ctx, request)
 		decided = screened
 		return result, screened, err
@@ -459,10 +485,13 @@ func (a *App) nodeCheckCapacity() int {
 // present and enabled: node IDs are derived from their configuration, so
 // other nodes or sources changing meanwhile, including parallel checks
 // recording their results, do not change what was checked.
-func (a *App) runAndRecordNode(ctx context.Context, id string, service catalog.Service, profile string, generation uint64, run func(dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error)) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
+func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service catalog.Service, profile string, generation uint64, run func(dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error)) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
 	var result dataplane.NodeCheckResult
-	if a.Nodes == nil || a.NodeChecker == nil || !serviceHasNodeProbe(service) {
+	if a.Nodes == nil || run == nil || !serviceHasNodeProbe(service) {
 		return result, nodestore.Snapshot{}, dataplane.ErrExactNodeUnavailable
+	}
+	if err := a.nodeHistoryAdmission(ctx, engine); err != nil {
+		return result, nodestore.Snapshot{}, err
 	}
 	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
 	if err != nil {
@@ -501,10 +530,13 @@ func (a *App) runAndRecordNode(ctx context.Context, id string, service catalog.S
 	if err != nil {
 		return result, snapshot, err
 	}
+	if err := ctx.Err(); err != nil {
+		return result, snapshot, err
+	}
 	if !record {
 		return result, snapshot, nil
 	}
-	if result.NodeID != id || result.ServiceID != service.ID || result.NetworkProfile != profile || result.RoutePathID != "sing-box:"+id {
+	if !exactNodeResultIdentity(result, engine, id, service.ID, profile) {
 		return result, snapshot, dataplane.ErrExactNodeUnavailable
 	}
 	current, err = a.freshNetworkProfile(ctx)
@@ -524,6 +556,9 @@ func (a *App) runAndRecordNode(ctx context.Context, id string, service catalog.S
 		return result, snapshot, dataplane.ErrReviewChanged
 	}
 	before := latest.Generation
+	if err := a.nodeHistoryAdmission(ctx, engine); err != nil {
+		return result, latest, err
+	}
 	state := "unavailable"
 	if result.Available {
 		state = "available"

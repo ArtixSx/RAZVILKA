@@ -333,6 +333,7 @@ func TestNodeExactCheckPersistsOnlySafeEvidence(t *testing.T) {
 		TestLevel: "service", Stage: "service", Verdict: evidence.VerdictPass, Available: true,
 		EgressIP: "203.0.113.25", HTTPStatus: 204, LatencyMS: 1000, Message: "Узел и сервис подтверждены.",
 	}}
+	checker.result = modeledNodeServiceProof(checker.result, "sing-box")
 	a := &App{Nodes: store, NodeChecker: checker, FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`))
 	response := httptest.NewRecorder()
@@ -420,6 +421,7 @@ func TestNodeCheckDoesNotPersistProofAcrossNetworkChange(t *testing.T) {
 				SchemaVersion: 1, ProbeID: "node-check-network", NodeID: id, ServiceID: "telegram", NetworkProfile: "wan-0123456789ab", RoutePathID: "sing-box:" + id,
 				StartedAt: now, FinishedAt: now, ExpiresAt: now.Add(time.Hour), TestLevel: "service", Stage: "service", Verdict: evidence.VerdictPass, Available: true, Message: "Подтверждено.",
 			}}
+			checker.result = modeledNodeServiceProof(checker.result, "sing-box")
 			checker.onCheck = func() {
 				switch scenario {
 				case "changed":
