@@ -279,6 +279,32 @@ func TestPolicyAdditionReceiptInterruptedPromotionCannotCopyOrReplaySource(t *te
 	}
 }
 
+func TestPolicyAdditionReceiptPromotionRetryRejectsConsumedOrTransferredTarget(t *testing.T) {
+	for _, mode := range []string{"removed", "promoted"} {
+		t.Run(mode, func(t *testing.T) {
+			state, source, runner, options := additionFixture(t)
+			ctx, target := context.Background(), privateScopedXrayFixtureDir(t)
+			if err := applyPolicyAddition(ctx, runner, "ip", state, source, options); err != nil {
+				t.Fatal(err)
+			}
+			if err := promotePolicyAddition(ctx, state, source, target, options); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "removed" {
+				if err := removePolicyAddition(ctx, runner, "ip", state, target, options); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := promotePolicyAddition(ctx, state, target, privateScopedXrayFixtureDir(t), options); err != nil {
+				t.Fatal(err)
+			}
+			before := len(runner.calls)
+			if err := promotePolicyAddition(ctx, state, source, target, options); !errors.Is(err, ErrPolicyAdditionUnknown) || len(runner.calls) != before {
+				t.Fatal("stale promotion target accepted", err)
+			}
+		})
+	}
+}
+
 func TestPolicyAdditionReceiptReadOnlyStatusCannotGrantPermission(t *testing.T) {
 	state, root, runner, options := additionFixture(t)
 	ctx := context.Background()

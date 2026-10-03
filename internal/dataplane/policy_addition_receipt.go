@@ -652,10 +652,10 @@ func promotePolicyAddition(ctx context.Context, state PolicyState, source, desti
 		if err := d.load(ctx); err != nil {
 			return err
 		}
-		if d.doc.ID == s.doc.ID {
+		if d.doc.ID == s.doc.ID && d.status().Complete {
 			return nil
 		}
-		return ErrPolicyAdditionReceipt
+		return ErrPolicyAdditionUnknown
 	}
 	if !s.status().Complete {
 		return ErrPolicyAdditionUnknown
