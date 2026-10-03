@@ -1,0 +1,56 @@
+# OPS → CORE/Root: native self-update provider checkpoint, 04.10.2026
+
+Это законченная порция библиотеки/neutral provider для подключения и native review. Production capability main не изменена; HTTP/startup/owned network consumer принадлежит CORE. Windows model tests и Linux cross-compile не означают native PASS или закрытие D11. Ни opkg, ни роутер, VM, accounts, реальные сети/порты этим чатом не использованы.
+
+## Зависимости и binding CORE
+
+Основа: retained-history scanner `eba8abe`, admission `5ca485f`, private POSIX fixture `178798a`, inventory integrity `0168ba6`. Готовые CORE authority modules `a786d0c` + `3c3a6ac` перенесены exact cherry-pick как `ee2c267` + `25ec48e` без app/main WIP; doc-only merge conflicts разрешены сохранением собственной старой handoff ancestry и добавлением точного module checkpoint. Root при полном merge сохраняет более новые CORE consumer docs. Production paths всегда `/opt`; relocation существует только в private fields isolated tests.
+
+```go
+type SelfUpdateAuthority struct { InstallationID string; Sequence uint64 }
+type SelfUpdateStopCheck func(context.Context, string) (bool, error)
+type SelfUpdateEffectAdmission func(context.Context, string /* id */, string /* sealed installation ID */, uint64 /* sealed sequence */, string /* action */, string /* effectID */, func() error) error
+type SelfUpdateRuntimeObservation func(context.Context, string) error
+```
+
+CORE передаёт `NewSelfUpdateFileAdapterWithAuthority(stop, admission, actualRuntimeInactive)`. `Updater.FileAuthorityReview` получает immutable `SelfUpdateAuthority` из явно initialized CORE control root, вне file/helper rollback trees. ReadSelfUpdateStop должен требовать present canonical control; отсутствие/ошибка не выдаёт running authority. Review сохраняет InstallationID **и** Sequence, повторно сравнивает их после staging; EffectAdmission не вычисляет новый token из current.
+
+Для `start/live` callback вызывает `operationgate.WithSelfUpdateEffectAdmission(ctx, controlRoot, id, installationID, sequence, effectID, begin)`. Тот же kernel lock сериализует фактический Start/rename/unlink с Stop; только bounded syscall внутри begin, без Wait/fsync/Store locks. Action-sensitive callbacks принадлежат CORE: `stop-owned` и `replace-to-rollback` не являются правом Start/Live. Generic CORE admission при активном Stop блокирует всё; OPS не обходит это и не создаёт свой Stop ledger. Bounded stopped compensation допускается только через отдельно проверенный matching CORE callback. Полный stopped/unknown recovery остаётся интеграционной проверкой Root.
+
+Readonly constructor, nil callback, missing/corrupt/future authority и несовпавшая installation/sequence fail closed. Effect names fixed: `command-worker-<command>`, `command-child-<command>`, `install-file-0..5`, `rollback-file-0..5`, `rollback-private-<mutable registry target>`. Проверяется соответствие effect/action, start не может заимствовать rollback authority.
+
+## Required consumer и порядок
+
+Concrete adapter реализует Ready, Review, Authority, AuthorityAction, EffectAdmission, Inspect, Quiescence, Run, Observe, Live, Startup, Finish, RepairPrivate, RuntimeQuiesceAuthority. App не импортируется. Core file consumer обязан использовать `InstallAdmitted` / `RestoreAdmitted`; callback направляет fixed effect к Adapter.EffectAdmission. Legacy low-level Install/Restore сохранены для existing model/library callers и не являются production consumer.
+
+Перед основными файлами: prepared → Execute(stop-old-panel) → Execute(prepare-private-state) → Execute(quiesce-old-runtime) → InstallAdmitted → Execute(start-candidate-panel) → независимый accept-live → Finish. Все три pre-files steps durable single-use. Unknown нельзя replay; ResolveUnknown только fresh trusted quiescence/readonly Observe. Перед install quiescence требует их receipts, snapshot и независимый actualRuntimeInactive. Старый panel — отдельный не-child process; проверяется его sealed boot/birth inactivity плюс отсутствие PID file, отдельно от ECHILD hook tree.
+
+Rollback known completed command: stop-candidate-panel → RestoreAdmitted → restore-private-state → start-rollback-panel → независимая acceptance старого runtime → Finish. Data-only RepairPrivate требует существующий matching canonical restore plan, fresh authority и quiescence; не повторяет внешний unknown command и не запускает panel. Каждый файловый CAS/действительный private rename/unlink также проходит admission. Config на время pending строго frozen old/new, та же revision, SafeMode=false/Stopped=false; third image сохраняется и блокирует действие.
+
+Fixed early CLI до ordinary bootstrap:
+
+- `self-update-helper ID` → `RunInstallerHelperWithAuthority(ID, CORE RunHelper closure, stop, admission, actualRuntimeInactive)`. Старый raw shell --apply callback удалён; nil wiring отказывается.
+- `self-update-command-helper ID COMMAND` → `RunFileCommandHelperWithAuthority`. Отдельный sole wait owner/subreaper; это не ordinary daemon.
+- `self-update-runtime-quiesce ID REVISION WORKER_PID` → сначала Adapter.RuntimeQuiesceAuthority, затем только CORE-owned exact runtime deactivation и независимое readback. Guard связывает pre-files journal/command, durable worker DirectPID, kernel parent/boot/executable, sealed old panel inactivity и snapshot; bounded ожидание publication после Start. Обычный `-deactivate-dataplane` не используется, поскольку pending startup guard обязан его блокировать.
+
+S99 передаёт `-self-update-job ID -self-update-helper-pid WORKER_PID`. Startup принимает PID command worker, не original installer helper. Sealed review/config migration создаются до file Prepare: verified bundle, staged config и isolated private roots, old controller copy `control.bin`, O_EXCL/fsync review. Current и candidate должны иметь self/component/node history reader2 + native/subscription reader1; bootstrap старого неподдерживаемого controller автоматически не выполняется.
+
+## Процессы, acceptance, retention
+
+Перед child Start durable intent/armed; signal handling до IO/fsync. Parent worker Start и actual command Start оба admitted. Sole Wait4(-1,WNOHANG|WALL) до ECHILD включает clone children; Cmd.Wait не конкурирует. Exact PPID/birth scan служит только cleanup. Signal/deadline/forced cleanup дают cancelled125 даже при direct exit0; отсутствие PID/пустой proc/PGID не являются supervisor completion. До spawn refusal может дать durable not-started+ECHILD, но не success. Dead/crashed helper same boot без такого receipt остаётся unknown.
+
+Start custody: direct init exit0/75 + один exact adopted daemon → runtime-ready. Это не live acceptance и не quiescence. Worker живёт до matching terminal file acceptance; handoff runtime-handed-off отдельно, без ложного ECHILD. Startup/Live сверяют boot/start/executable inode + job/worker arguments. Finish требует independently accepted file terminal, actual installed six-file bytes/modes, fresh strict version/PID/health/dataplane и повторную authority/image проверку. Нет version/exit-code-only acceptance и нет idle self-update success. Terminal Inspect затем разрешает обычные later typed config revisions/Stop/SafeMode, сохраняя immutable release/artifact integrity; pending/Finish остаются byte-exact.
+
+Новое private snapshot schema2: ровно nodes, feeds, engines, dns и шесть fixed private files. Warp/Cloudflare/runtime/LKG, current+legacy native enrollment, accounting, permanent lease inode и CONFIG_DIR private-restore-native-v1/feeds-v1 вообще не входят в mutable manifest, CAS, remove/prune. Остаются текущими на прежних путях. Старые whole-domain schema1 snapshots читаются только как evidence, их восстановление отклоняется до эффекта. CORE восстанавливает owned network по собственному retained typed lifecycle; generic OPS snapshot не rewinds network ledger.
+
+Directory CAS — staged complete tree, chmod/fsync, свежая image/authority, admitted RENAME_EXCHANGE/NOREPLACE, dirsync; displaced tree сохраняется private sibling. Перед stop старой panel Ready проверяет реальный filesystem support exchange/noreplace+directory fsync на вновь созданных пустых probe dirs. Private files используют existing FileTarget participant lease и отдельно admitted rename/unlink. Физический power-cut этим набором не доказан.
+
+Retained helper/file reviews, process/private recovery evidence, frozen old/new controller images и final LKG не удаляются следующей Prepare. Даже interrupted stage после fsync до publication digest сохраняет material. Retained-node reader проверяет историю live/backups и обе стороны restore; новая history2 допускается только при читающих её sealed retained controllers. Pending/corrupt/missing marker/orphan/mismatched helper-file ID/readers0,1,3 — fence, без удаления старых snapshots.
+
+## Проверки и оставшаяся интеграция
+
+`sh scripts/test-self-update-native.sh` — coordinator-only isolated Linux launcher: actual worker/child admission, detached delayed child, canceled direct exit0, Stop before child, wrong installation same epoch, actual six-file/private rename barrier, filesystem probe, whole-tree CAS/third image, permanent marker, file journal fault/crash matrix. Только TempDir, synthetic process payload, без network/opkg/listener. Он не подменяет full app/HTTP/owned network native acceptance.
+
+На Windows проходят updatecheck/selfupdatejournal/operationgate model tests + vet; compiled Linux amd64/ARM64 tests и main. Shell syntax и self-update/node-history compatibility consumers PASS. Inventory `0168ba6` отдельно проверен из git archive без provider WIP: tests/vet RC0. Выполнение нового native launcher ещё не заявлено.
+
+До production capability2 обязательны CORE callback/main/HTTP integration, Root native actual Stop/candidate/rollback/handoff/unknown matrix и Root native проверка legacy guard. Legacy scripts теперь отказываются от raw replacement при retained helper/file current, любом independent control root или installed capability2/future; matching journaled workflow обязателен. Проверки до Stop, после Stop/recovery и перед основными файлами. Reader-version gate2 сам по себе не разрешает raw --apply. Это консервативный отказ unmanaged path для managed controller, не попытка сериализовать shell mv с Stop. CLOUD harness, выполнявший raw rollback поверх pending file journal, теперь должен ожидать отказ либо использовать actual matching provider recovery; старый PASS не покрывает этот новый consumer. Полный D11/physical power-cut/NFQWS stock postinst остаётся открытым; не удалять receipt и не понижать reader, чтобы получить PASS.

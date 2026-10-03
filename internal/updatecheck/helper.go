@@ -3,7 +3,6 @@ package updatecheck
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/netip"
 	"os"
@@ -17,11 +16,50 @@ import (
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
-// RunInstallerHelper is an internal command of the currently trusted binary.
-// It accepts only a random job identifier from a root-owned reviewed record;
-// neither script text nor installation paths are accepted on the command line.
-func RunInstallerHelper(id string) int {
-	if !jobIDPattern.MatchString(id) || checkRootOwnedPath(productionUpdateRoot) != nil {
+// RunInstallerHelper requires the CORE-owned file protocol callback. Legacy
+// shell apply cannot bypass the file/helper journals when wiring is absent.
+func RunInstallerHelper(id string) int { return RunInstallerHelperWithFileProtocol(id, nil) }
+
+// Main supplies its reviewed SelfUpdateFiles.RunHelper closure, including
+// current config CAS/Stop/SafeMode guards. This function owns handoff identity
+// and helper receipt only; it never performs a second installation workflow.
+func RunInstallerHelperWithFileProtocol(id string, run func(context.Context, string) error, stop ...SelfUpdateStopCheck) int {
+	return runInstallerHelperWithAdapter(id, run, NewSelfUpdateFileAdapter(stop...))
+}
+
+func RunInstallerHelperWithAuthority(id string, run func(context.Context, string) error, stop SelfUpdateStopCheck, admission SelfUpdateEffectAdmission, runtime ...SelfUpdateRuntimeObservation) int {
+	return runInstallerHelperWithAdapter(id, run, NewSelfUpdateFileAdapterWithAuthority(stop, admission, runtime...))
+}
+
+func runInstallerHelperWithAdapter(id string, run func(context.Context, string) error, a *SelfUpdateFileAdapter) int {
+	if run == nil || !jobIDPattern.MatchString(id) || checkRootOwnedPath(productionUpdateRoot) != nil {
+		return 2
+	}
+	if a.admission == nil || a.runtimeInactive == nil {
+		return 2
+	}
+	var record updateRecord
+	for attempt := 0; attempt < 100; attempt++ {
+		var err error
+		record, err = readAdapterRecord(productionUpdateRoot, id)
+		if err != nil || record.Job.State != "installing" || record.Job.ReviewToken != "" || record.ParentPID <= 1 {
+			return 2
+		}
+		if record.Job.HelperPID == os.Getpid() {
+			break
+		}
+		if attempt == 99 {
+			return 2
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	_, review, err := a.load(ctx, id)
+	if err != nil || a.Authority(ctx, id, review.Revision) != nil || checkProductionPID(record.ParentPID, record.Deployment.Executable) != nil {
+		return 2
+	}
+	if err := sealFileHelperIdentity(a, id, review); err != nil {
 		return 2
 	}
 	root, err := ownedfs.Open(productionUpdateRoot)
@@ -29,104 +67,37 @@ func RunInstallerHelper(id string) int {
 		return 2
 	}
 	defer root.Close()
-	var record updateRecord
-	for attempt := 0; attempt < 30; attempt++ {
-		data, err := root.ReadLimited("current.json", 64<<10)
-		if err != nil || json.Unmarshal(data, &record) != nil {
-			return 2
-		}
-		if record.Owner != updaterOwner || record.Job.ID != id || record.Job.State != "installing" || record.Job.Release == nil || record.ParentPID <= 1 || record.Job.ReviewToken != "" {
-			return 2
-		}
-		if record.Job.HelperPID == os.Getpid() {
-			break
-		}
-		if attempt == 29 {
-			return 2
-		}
-		time.Sleep(100 * time.Millisecond)
+	record.Job.State = "restarting"
+	record.Job.Stage = "file-protocol"
+	record.Job.UpdatedAt = time.Now().UTC()
+	data, err := json.Marshal(record)
+	if err != nil || writeSelfUpdateRecord(root, data) != nil {
+		return 3
 	}
-	finish := func(state, code, message string) int {
-		record.Job.State = state
-		record.Job.Stage = state
-		record.Job.Code = code
-		record.Job.Message = message
-		record.Job.CanApply = false
-		record.Job.CanCancel = false
-		record.Job.UpdatedAt = time.Now().UTC()
-		data, _ := json.Marshal(record)
-		if writeSelfUpdateRecord(root, data) != nil {
-			return 3
-		}
-		if state == "completed" {
+	err = run(ctx, id)
+	fresh, readErr := readAdapterRecord(productionUpdateRoot, id)
+	if readErr != nil {
+		return 3
+	}
+	stopErr := a.checkStop(ctx, id, "start/live")
+	if fresh.Job.State == "completed" && stopErr == nil {
+		if err == nil {
 			return 0
 		}
 		return 3
 	}
-	if checkDeploymentLayout(record.Deployment) != nil || checkProductionPID(record.ParentPID, record.Deployment.Executable) != nil {
-		return finish("failed", "deployment-changed", "Обновление отменено: изменилась установка приложения.")
-	}
-	actual, err := hashRegularFile(record.Deployment.Executable, MaximumBinaryBytes)
-	if err != nil || actual != record.ExecutableHash {
-		return finish("failed", "running-binary-changed", "Обновление отменено: текущий файл приложения изменился.")
-	}
-	if !helperConfigMatches(record) {
-		return finish("failed", "settings-changed", "Настройки изменились. Подготовьте обновление заново.")
-	}
-	jobRoot, err := ownedfs.Open(filepath.Join(productionUpdateRoot, id))
-	if err != nil {
-		return finish("failed", "prepared-files-unavailable", "Не найдены подготовленные файлы.")
-	}
-	defer jobRoot.Close()
-	if VerifyExtracted(jobRoot, record.Files, *record.Job.Release) != nil {
-		return finish("failed", "prepared-files-changed", "Файлы изменились после проверки. Обновление отменено.")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	err = preflightInstaller(ctx, filepath.Join(productionUpdateRoot, id, "bundle"), *record.Job.Release)
-	cancel()
-	if err != nil {
-		return finish("failed", "installer-preflight-refused", "Повторная проверка установки не пройдена. Текущая версия сохранена.")
-	}
-	if !helperConfigMatches(record) || VerifyExtracted(jobRoot, record.Files, *record.Job.Release) != nil || checkProductionPID(record.ParentPID, record.Deployment.Executable) != nil {
-		return finish("failed", "review-changed", "Настройки или подготовленные файлы изменились. Подготовьте обновление заново.")
-	}
-	// HTTP received the accepted job before the old daemon is stopped. No API
-	// cancellation is accepted after this point; the installer owns rollback.
-	record.Job.Stage = "restarting"
-	record.Job.State = "restarting"
-	record.Job.Message = "Устанавливаем проверенный пакет и перезапускаем панель."
-	record.Job.UpdatedAt = time.Now().UTC()
-	if data, _ := json.Marshal(record); writeSelfUpdateRecord(root, data) != nil {
+	if fresh.Job.State == "rolled-back" && stopErr == nil {
 		return 3
 	}
-	output, err := jobRoot.OpenFile("installer.log", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return finish("failed", "installer-log-unavailable", "Не удалось подготовить журнал. Версия не заменена.")
-	}
-	defer output.Close()
-	command := exec.Command("/bin/sh", filepath.Join(productionUpdateRoot, id, "bundle/scripts/upgrade-entware.sh"), "--apply", "--without-components")
-	command.Env = commandEnvironment()
-	command.Stdin = nil
-	bounded := &limitedLog{writer: output, remaining: 512 << 10}
-	command.Stdout = bounded
-	command.Stderr = bounded
-	if err := runTransactionalInstaller(command, 20*time.Minute); err != nil {
-		if errors.Is(err, errInstallerTimeout) {
-			return finish("requires-review", "installer-timeout", "Установка превысила время ожидания. Проверьте состояние приложения и отката.")
-		}
-		// Do not infer a successful rollback from the installer's nonzero exit.
-		// Report restored only when the old executable is present and its own
-		// healthcheck confirms the exact supervised process and dataplane.
-		oldHash, hashErr := hashRegularFile(record.Deployment.Executable, MaximumBinaryBytes)
-		if hashErr == nil && oldHash == record.ExecutableHash && confirmInstalledHealth(record.CurrentVersion) {
-			return finish("rolled-back", "upgrade-rolled-back", "Обновление не прошло проверку. Предыдущая версия восстановлена и отвечает.")
-		}
-		return finish("requires-review", "upgrade-needs-review", "Установка не подтверждена. Проверьте приложение и сохранённую резервную копию.")
-	}
-	if !confirmInstalledHealth(record.Job.Release.Version) {
-		return finish("requires-review", "new-version-not-confirmed", "Установщик завершился, но новая версия не подтвердила готовность.")
-	}
-	return finish("completed", "", "Обновление установлено. Панель готова к работе.")
+	fresh.Job.State = "requires-review"
+	fresh.Job.Stage = "file-protocol"
+	fresh.Job.Code = "file-protocol-needs-review"
+	fresh.Job.CanApply = false
+	fresh.Job.CanCancel = false
+	fresh.Job.UpdatedAt = time.Now().UTC()
+	data, _ = json.Marshal(fresh)
+	_ = writeSelfUpdateRecord(root, data)
+	return 3
 }
 
 type limitedLog struct {

@@ -159,6 +159,22 @@ fi
 
 # Registration requests are monotonic external effects. Keep native WARP state
 # in place, and never start an old binary that cannot see an unresolved request.
+require_legacy_file_protocol_free() {
+  for SELF_PROTOCOL_PATH in "$STATEDIR/self-update/current.json" "$STATEDIR/self-update-files/current.json" "$STATEDIR/self-update-stop"; do
+    if [ -e "$SELF_PROTOCOL_PATH" ] || [ -L "$SELF_PROTOCOL_PATH" ]; then
+      echo "Use matching self update recovery; raw application replacement is unavailable with retained control/file protocol" >&2
+      return 1
+    fi
+  done
+  if [ -f "$BINDIR/razvilka" ] && [ -x "$BINDIR/razvilka" ]; then
+    SELF_PROTOCOL_SCHEMA="$("$BINDIR/razvilka" -self-update-schema 2>/dev/null)" || SELF_PROTOCOL_SCHEMA=
+    case "$SELF_PROTOCOL_SCHEMA" in
+      ''|0|1) ;;
+      *) echo "This controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1 ;;
+    esac
+  fi
+}
+
 require_node_history_compatibility() {
   NODE_HISTORY_COMPATIBILITY="$("$1" -check-node-history-state -node-history-config-root "$APPDIR" -node-history-state-root "$STATEDIR" 2>/dev/null)" || {
     echo "Target binary cannot read all retained node history; installation unchanged" >&2; return 1;
@@ -185,7 +201,7 @@ require_native_enrollment_schema() {
   done
   if [ "$SELF_UPDATE_REQUIRED" -eq 1 ]; then
     SELF_UPDATE_SCHEMA="$("$1" -self-update-schema 2>/dev/null)" || { echo "Target binary cannot preserve self update recovery; installation unchanged" >&2; return 1; }
-    [ "$SELF_UPDATE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible self update schema; installation unchanged" >&2; return 1; }
+    [ "$SELF_UPDATE_SCHEMA" = 2 ] || { echo "Target binary has an incompatible self update schema; installation unchanged" >&2; return 1; }
   fi
   # Never restore an old process over a retained package-operation fence.
   # Recheck after quiescing; a transaction can appear after initial preflight.
@@ -258,6 +274,7 @@ if [ "$AUTO" -ne 1 ]; then
   echo "This will stop the current RAZVILKA process and restore the listed snapshot."
 fi
 
+require_legacy_file_protocol_free
 CURRENT_WAS_RUNNING=0
 if [ -x "$RAZ_INIT" ]; then
   if RAZVILKA_BASE="$BASE" "$RAZ_INIT" status >/dev/null 2>&1; then
@@ -269,6 +286,7 @@ elif command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvilka 2>/dev/null || t
   exit 1
 fi
 # A registration can complete its local checkpoint during graceful shutdown.
+require_legacy_file_protocol_free
 # No files have changed yet, so a compatibility refusal can restart this app.
 if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && ! require_native_enrollment_schema "$BACKUP/razvilka.bin"; then
   if [ "$CURRENT_WAS_RUNNING" -eq 1 ]; then
@@ -291,6 +309,7 @@ if [ "$PRIVATE_RESTORE_PROTOCOL" -eq 1 ]; then
   }
 fi
 # Settling a pending restore can materialize a native image that was absent
+require_legacy_file_protocol_free
 # before recovery. Recheck before deactivating or replacing the current app.
 if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && ! require_native_enrollment_schema "$BACKUP/razvilka.bin"; then
   if [ "$CURRENT_WAS_RUNNING" -eq 1 ]; then

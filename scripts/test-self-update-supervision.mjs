@@ -35,8 +35,8 @@ try {
         writeFileSync(receipt, `{"schema":1,"phase":"${phase}"}\n`);
         const before = readFileSync(receipt);
         assert.match(run('old_binary() { return 2; }\nrequire_native_enrollment_schema old_binary', 1).stderr, /cannot preserve self update recovery/);
-        run('wrong_schema() { printf "2\\n"; }\nrequire_native_enrollment_schema wrong_schema', 1);
-        run('new_binary() { [ "$1" = -self-update-schema ]; printf "1\\n"; }\nrequire_native_enrollment_schema new_binary', 0);
+        run('wrong_schema() { printf "1\\n"; }\nrequire_native_enrollment_schema wrong_schema', 1);
+        run('new_binary() { [ "$1" = -self-update-schema ]; printf "2\\n"; }\nrequire_native_enrollment_schema new_binary', 0);
         assert.deepEqual(readFileSync(receipt), before, 'probe consumed a retained receipt');
       }
       rmSync(receipt);
