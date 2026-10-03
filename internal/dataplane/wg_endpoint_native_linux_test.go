@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -139,7 +138,7 @@ func nativeWGEndpointClient(t *testing.T) {
 			marked := nativeWGCommand(t, "", append([]string{"ip"}, e.args("-j", "route", "get", endpoint, "mark", "0x4000000")...)...)
 			var routes []wgEndpointRoute
 			err = json.Unmarshal([]byte(marked), &routes)
-			if err != nil || len(routes) != 1 || routes[0].Device != e.Device || routes[0].Gateway != e.Gateway || string(routes[0].Table) != strconv.Itoa(e.Table) {
+			if err != nil || len(routes) != 1 || routes[0].Destination != endpoint || routes[0].Device != e.Device || routes[0].Gateway != e.Gateway || routes[0].Source != e.Source || !wgEndpointTableMatches(routes[0].Table, e.Table) {
 				t.Fatal("marked transport does not use the exact WAN pin", err, marked)
 			}
 			assertLive := func(label string) {

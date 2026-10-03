@@ -100,6 +100,54 @@ func TestWGEndpointRouteSourceSelector(t *testing.T) {
 	}
 }
 
+func TestWGEndpointTableReadback(t *testing.T) {
+	for _, raw := range []string{"206", `"206"`} {
+		if !wgEndpointTableMatches(json.RawMessage(raw), 206) {
+			t.Fatal("valid table representation rejected", raw)
+		}
+	}
+	for _, raw := range []string{"254", `"254"`, `"main"`} {
+		if !wgEndpointTableMatches(json.RawMessage(raw), 254) || wgEndpointTableMatches(json.RawMessage(raw), 206) {
+			t.Fatal("main alias mismatch", raw)
+		}
+	}
+	for _, raw := range []string{"", "0", "205", `"205"`, `"local"`, `"foreign"`, `"0206"`, `"+206"`, `" 206"`, `"206 "`, "206.0", "2.06e2", "-206", "4294967296", `"4294967296"`, "null", "true", "[]", "{}"} {
+		if wgEndpointTableMatches(json.RawMessage(raw), 206) {
+			t.Fatal("invalid or foreign table accepted", raw)
+		}
+	}
+	for _, expected := range []int{0, -1} {
+		if wgEndpointTableMatches(json.RawMessage("0"), expected) {
+			t.Fatal("invalid expected table accepted", expected)
+		}
+	}
+}
+
+func TestWGEndpointCapturedMarkedTransportTable(t *testing.T) {
+	// Exact marked route-get JSON from independent native-wg-07. IPv4 returns
+	// cache metadata and IPv6 returns the underlying route's protocol/metric.
+	for _, tc := range []struct {
+		name, endpoint, gateway, source, response string
+	}{
+		{"IPv4", "93.184.216.34", "192.0.2.1", "192.0.2.2", `[{"dst":"93.184.216.34","gateway":"192.0.2.1","dev":"wan-c","table":"206","prefsrc":"192.0.2.2","flags":[],"mark":67108864,"uid":0,"cache":[]}]`},
+		{"IPv6", "2606:4700::1111", "2001:db8:1::1", "2001:db8:1::2", `[{"dst":"2606:4700::1111","from":"::","gateway":"2001:db8:1::1","dev":"wan-c","table":"206","protocol":"static","prefsrc":"2001:db8:1::2","metric":1,"flags":[],"pref":"medium"}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var routes []wgEndpointRoute
+			if err := json.Unmarshal([]byte(tc.response), &routes); err != nil || len(routes) != 1 {
+				t.Fatal("captured route JSON", err)
+			}
+			r := routes[0]
+			if r.Destination != tc.endpoint || r.Device != "wan-c" || r.Gateway != tc.gateway || r.Source != tc.source || !wgEndpointTableMatches(r.Table, 206) {
+				t.Fatal("captured marked transport does not match exact WAN pin", r)
+			}
+			if wgEndpointTableMatches(r.Table, 205) {
+				t.Fatal("captured foreign table accepted")
+			}
+		})
+	}
+}
+
 func TestWGEndpointExactPinInstallReadbackAndCleanup(t *testing.T) {
 	a, r, e, _ := wgEndpointFixture(t)
 	ctx := context.Background()
@@ -112,6 +160,10 @@ func TestWGEndpointExactPinInstallReadbackAndCleanup(t *testing.T) {
 	if err := a.installWGEndpoint(ctx, e); err == nil {
 		t.Fatal("occupied pin adopted")
 	}
+	// Quoted table IDs also retain exact cleanup authority for the owned pin.
+	ownedRoute := r.endpoint.routes["4|"+e.prefix()]
+	ownedRoute.Table = json.RawMessage(`"206"`)
+	r.endpoint.routes["4|"+e.prefix()] = ownedRoute
 	// An unrelated route in the same table never becomes cleanup authority.
 	r.endpoint.routes["4|203.0.113.9/32"] = wgEndpointRoute{Destination: "203.0.113.9/32", Device: "foreign", Metric: 9}
 	if err := a.removeWGEndpoint(ctx, e); err != nil {
@@ -128,7 +180,7 @@ func TestWGEndpointExactPinInstallReadbackAndCleanup(t *testing.T) {
 }
 
 func TestWGEndpointForeignNearMatchStopsBeforeMutation(t *testing.T) {
-	for _, kind := range []string{"mark", "metric", "gateway", "source selector"} {
+	for _, kind := range []string{"mark", "metric", "gateway", "source selector", "table"} {
 		t.Run(kind, func(t *testing.T) {
 			a, r, e, _ := wgEndpointFixture(t)
 			ctx := context.Background()
@@ -149,6 +201,10 @@ func TestWGEndpointForeignNearMatchStopsBeforeMutation(t *testing.T) {
 			case "source selector":
 				v := r.endpoint.routes["4|"+e.prefix()]
 				v.From = "192.0.2.2/32"
+				r.endpoint.routes["4|"+e.prefix()] = v
+			case "table":
+				v := r.endpoint.routes["4|"+e.prefix()]
+				v.Table = json.RawMessage(`"205"`)
 				r.endpoint.routes["4|"+e.prefix()] = v
 			}
 			r.calls = nil

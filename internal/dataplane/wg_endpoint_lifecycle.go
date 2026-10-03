@@ -150,6 +150,27 @@ type wgEndpointRoute struct {
 	Protocol       string          `json:"protocol"`
 }
 
+// iproute2 can encode the same table ID as a JSON number or decimal string.
+// Compare IDs without treating arbitrary table names as equivalent authority.
+func wgEndpointTableMatches(raw json.RawMessage, expected int) bool {
+	if expected < 1 || uint64(expected) > 1<<32-1 || len(raw) == 0 || len(raw) > 32 {
+		return false
+	}
+	var number uint32
+	if err := json.Unmarshal(raw, &number); err == nil {
+		return uint64(number) == uint64(expected)
+	}
+	var label string
+	if err := json.Unmarshal(raw, &label); err != nil {
+		return false
+	}
+	if label == "main" {
+		return expected == 254
+	}
+	id, err := strconv.ParseUint(label, 10, 32)
+	return err == nil && strconv.FormatUint(id, 10) == label && id == uint64(expected)
+}
+
 func parseWGEndpointRoutes(data []byte) ([]wgEndpointRoute, error) {
 	if len(data) > 64<<10 {
 		return nil, errors.New("WireGuard endpoint route response exceeds bound")
@@ -220,7 +241,7 @@ func (a *WARPWireGuardAdapter) readWGEndpointWAN(ctx context.Context, e *WGEndpo
 	if route.Source == "" {
 		route.Source = route.SelectedSource
 	}
-	if len(route.Table) != 0 && string(route.Table) != "254" && string(route.Table) != `"main"` {
+	if len(route.Table) != 0 && !wgEndpointTableMatches(route.Table, 254) {
 		return errors.New("WireGuard endpoint bootstrap route must use main")
 	}
 	if route.Device == "" || route.Device == "lo" || strings.HasPrefix(route.Device, "rz-") || strings.ContainsAny(route.Device, " \t\n/\\") || len(route.Device) > 15 || len(route.Flags) != 0 {
@@ -409,7 +430,7 @@ func (a *WARPWireGuardAdapter) inspectWGEndpoint(ctx context.Context, e *WGEndpo
 	if addr, err := netip.ParseAddr(destination); err == nil {
 		destination = netip.PrefixFrom(addr, addr.BitLen()).String()
 	}
-	if destination != e.prefix() || r.Device != e.Device || r.Gateway != e.Gateway || r.Source != e.Source || r.Metric != e.Metric || r.Protocol != "static" || !flagsOK {
+	if destination != e.prefix() || r.Device != e.Device || r.Gateway != e.Gateway || r.Source != e.Source || r.Metric != e.Metric || r.Protocol != "static" || !flagsOK || len(r.Table) != 0 && !wgEndpointTableMatches(r.Table, e.Table) {
 		return false, false, errors.New("WireGuard endpoint route has a foreign tuple")
 	}
 	return true, rulePresent, nil
