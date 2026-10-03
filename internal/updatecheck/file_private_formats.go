@@ -15,6 +15,14 @@ var filePrivateFiles = map[string]string{
 	"token": "etc/razvilka/admin.token", "credentials": "etc/razvilka/admin.credentials.json", "custom": "etc/razvilka/custom-services.json", "devices": "etc/razvilka/devices.json", "source-state": "etc/razvilka/source-state.json", "autonomy": "etc/razvilka/config.json.automation.json.autonomy.json",
 }
 
+// Retained native/provider/runtime ledgers and LKG generations are not mutable
+// application images. Keep the legacy registry above for reading old snapshots;
+// newly produced snapshots and restore targets contain only this subset.
+var fileMutablePrivateDirectories = map[string]string{
+	"nodes": filePrivateDirectories["nodes"], "feeds": filePrivateDirectories["feeds"],
+	"engines": filePrivateDirectories["engines"], "dns": filePrivateDirectories["dns"],
+}
+
 type directoryEntry struct {
 	Name      string `json:"name"`
 	Mode      uint32 `json:"mode"`
@@ -57,12 +65,16 @@ func validateDirectoryImage(image restorejournal.Image) (directoryImage, error) 
 }
 
 func validatePrivateSnapshot(snapshot privateFileSnapshot) error {
-	if snapshot.Schema != 1 || !jobIDPattern.MatchString(snapshot.ID) || len(snapshot.Images) != len(filePrivateDirectories)+len(filePrivateFiles) {
+	directories := filePrivateDirectories
+	if snapshot.Schema == 2 {
+		directories = fileMutablePrivateDirectories
+	}
+	if (snapshot.Schema != 1 && snapshot.Schema != 2) || !jobIDPattern.MatchString(snapshot.ID) || len(snapshot.Images) != len(directories)+len(filePrivateFiles) {
 		return ErrFileProtocol
 	}
 	total := 0
 	for name, image := range snapshot.Images {
-		if _, ok := filePrivateDirectories[name]; ok {
+		if _, ok := directories[name]; ok {
 			if _, err := validateDirectoryImage(image); err != nil {
 				return err
 			}
