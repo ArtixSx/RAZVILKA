@@ -36,6 +36,7 @@ type packageSupervision struct {
 	Reaped        int    `json:"reaped,omitempty"`
 	WaitECHILD    bool   `json:"wait_echild,omitempty"`
 	ExitCode      int    `json:"exit_code,omitempty"`
+	Cancelled     bool   `json:"cancelled,omitempty"`
 }
 
 type packageCommand struct {
@@ -127,6 +128,9 @@ func readSupervision(root *ownedfs.Root, id, component, action string) (packageS
 			return r, ErrUpdateUnknown
 		}
 		if r.State == "reaped" && (!r.WaitECHILD || r.Reaped < 1 || r.ChildPID <= 1) {
+			return r, ErrUpdateUnknown
+		}
+		if r.Cancelled && (r.State != "reaped" || r.ExitCode == 0) {
 			return r, ErrUpdateUnknown
 		}
 		if r.State == "not-started" && (r.ChildPID != 0 || !r.WaitECHILD || r.Reaped != 0) {
