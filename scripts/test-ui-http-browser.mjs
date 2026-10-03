@@ -260,22 +260,36 @@ try {
         await page.evaluate(()=>refreshComponentRecovery());
         const panel=page.locator('#view-engines [data-component-recovery-panel]');
         await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Подготовлено'));
-        assert.equal(await panel.locator('[data-component-repair="abandon-prepared"]').isDisabled(),true);
+        assert.equal(await panel.locator('[data-component-repair]').count(),0,'Safe Mode capabilities exposed repair');
         assert.equal(await page.evaluate(()=>state.status.safe_mode),true);
         const observed=await context.request.get(origin+'/api/v1/components/recovery');assert.equal(observed.status(),200);
         const body=await observed.json();assert.equal(body.recovery_required,true);
+        assert.deepEqual(body.capabilities.available_actions,[]);
         const before=readFileSync(journalPath,'utf8');
         const rejected=await context.request.post(origin+'/api/v1/components/recovery',{data:{transaction_id:journal.transaction_id,component:journal.component,
           action:'abandon-prepared',expected_revision:body.revision,confirm:'REPAIR_COMPONENT_TRANSACTION'}});
         assert.equal(rejected.status(),409);assert.equal((await rejected.json()).code,'COMPONENT_AUTHORITY_CHANGED');
         assert.equal(readFileSync(journalPath,'utf8'),before,'Safe Mode repair changed the journal');
-        journal.phase='upgrade-started';writeFileSync(journalPath,JSON.stringify(journal));
+        journal.schema_version=2;journal.phase='upgrade-started';writeFileSync(journalPath,JSON.stringify(journal));
         const start=requests.length;await panel.locator('[data-component-recovery-read]').click();
         await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Исход установки неизвестен'));
         assert.equal(await panel.locator('[data-component-repair]').count(),0);
         assert.equal(await page.evaluate(()=>componentRecoveryFence()),true);
         assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
+        const schema2=await context.request.get(origin+'/api/v1/components/recovery');assert.equal(schema2.status(),200);
+        assert.equal((await schema2.json()).transaction.schema_version,2);
         await capture('02-component-recovery.png','Настоящий HTTP и интерфейс; только pending upgrade-started журнал — заготовка в собственном одноразовом каталоге. Не доказательство native установки.');
+      });
+      await test('schema 2 idle terminal read stays neutral without guessed actions', 'real recovery GET + disposable idle journal fixture', async()=>{
+        journal.phase='accepted-installed-idle';journal.candidate_snapshot=true;journal.candidate_configs=[];
+        writeFileSync(journalPath,JSON.stringify(journal));const start=requests.length;
+        const panel=page.locator('#view-engines [data-component-recovery-panel]');await panel.locator('[data-component-recovery-read]').click();
+        await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]').textContent.includes('Неактивная версия принята по журналу'));
+        assert.equal(await page.evaluate(()=>componentRecoveryFence()),false);
+        assert.equal(await page.evaluate(()=>componentRecoverySummary('xray').tone),'unknown');
+        assert.equal(await panel.locator('[data-component-repair]').count(),0);
+        assert.match(await panel.textContent(),/доступ сервисов ещё не подтверждены/);
+        assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
       });
       await test('corrupt journal reports real 503 and readback remains available', 'real recovery 503 + disposable corrupt fixture', async()=>{
         writeFileSync(journalPath,'{"schema_version":');

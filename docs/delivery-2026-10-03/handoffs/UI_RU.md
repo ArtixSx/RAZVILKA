@@ -173,3 +173,17 @@ Node selected gate **79/79**, лог `.review-local/frontend-d12-mobile.log`; `g
 Проверены отказ для `0`, `65536`, `abc`, `18852x`, пустого значения и занятый собственным одноразовым TCP listener **18851**; RC 0 проверяющего сценария. Порт 18852 не занимался исполнителем. Полный default browser **13/13, RC 0**, `.review-local/ui-http-QWvip7/result.json`, origin `http://127.0.0.1:18851`, `errors=[]`, config unchanged. Syntax и diff-check RC 0.
 
 Перед этим объединён принятый CORE settlement commit `dc17f55` обычным merge `4cbb71f`; собственный backend не редактировался. Новый сервер собран из этой базы. Новая idle action ещё не включена.
+
+## Schema 2 / idle после принятого CORE HTTP контракта
+
+Объединены принятые OPS предки до `ba99ef4` и CORE предки до `74b987c`, без ручной правки чужих файлов. Источник DTO — `internal/app/component_recovery_capabilities.go`: `supported_actions`, `available_actions`, `quiescence_confirmed`, `inactivity_confirmed`, `installed_idle_accepted`, `live_proof_required`. Поля `allowed_actions/safe_mode/stopped/authority_current` не выдуманы.
+
+- Recovery понимает **только schema 1 и 2**, future schema закрывает действия. `accepted-installed-idle` разрешён только в schema 2 и всегда имеет нейтральный статус, включая receipt с ложным `live_accepted=true`.
+- Кнопки — пересечение известных безопасных phase/actions и supported/available из свежего GET. Без capabilities старый сервер доступен для чтения; пустой available список не заменяется локальным предположением о разрешении.
+- `accept-installed-idle` доступен только для schema 2 `awaiting-live-acceptance`, когда **сервер** сообщил quiescence и inactivity, supported+available включают action. Review поясняет exact version/config и неактивность; POST использует прежние exact transaction/component/revision/confirm, без force/operator boolean.
+- Idle POST требует `installed_idle_accepted=true`, **`live_accepted=false`**, затем независимый GET той же terminal idle transaction с соответствующим capability. Missing/mismatched ответ остаётся unknown, не replay. Это не live и не сервисный PASS.
+- Historical `upgrade-started`/`rollback-started` по-прежнему без force/replay. Текущие UI actions не добавляют `allow_unknown_rollback` / `external_repair_confirmed`.
+
+Unit transport **18/18 RC 0**. Selected Node gate **79/79**, `.review-local/frontend-d12-capabilities.log`; `go build`, `go test ./cmd/razvilka -count=1`, `go vet ./cmd/razvilka` RC 0.
+
+Настоящий полный browser **14/14 RC 0**, `.review-local/ui-http-NCdA0a/result.json`, port18851. Read-only fixture journal сначала schema1 prepared, затем schema2 upgrade-started и schema2 idle terminal: настоящие GET читаются UI без schema blocker, idle остаётся unknown tone, новые записи не отправляются. В Safe Mode backend `available_actions=[]`, repair-кнопок нет; matching POST отвергнут настоящим 409 без изменения журнала. Corrupt journal даёт настоящий 503. Прежние CAS/auth/mobile проверки также прошли, `errors=[]`, config unchanged. Idle terminal здесь **записанная тестовая заготовка**, не native proof; успешный idle POST проверен только unit transport. Safe Mode стенда не выключался, аппаратные/пакетные действия не выполнялись.
