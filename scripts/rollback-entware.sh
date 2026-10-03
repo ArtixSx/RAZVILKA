@@ -160,6 +160,24 @@ fi
 # Registration requests are monotonic external effects. Keep native WARP state
 # in place, and never start an old binary that cannot see an unresolved request.
 require_native_enrollment_schema() {
+  # Retain both application handoff and file-phase receipts through downgrade.
+  # Empty directories alone do not opt an installation into this protocol.
+  SELF_UPDATE_REQUIRED=0
+  for SELF_UPDATE_DIR in "$STATEDIR/self-update" "$STATEDIR/self-update-files"; do
+    if [ -e "$SELF_UPDATE_DIR" ] || [ -L "$SELF_UPDATE_DIR" ]; then
+      [ -d "$SELF_UPDATE_DIR" ] && [ ! -L "$SELF_UPDATE_DIR" ] || { echo "Self update directory is unsafe; installation unchanged" >&2; return 1; }
+    fi
+  done
+  for SELF_UPDATE_RECEIPT in "$STATEDIR/self-update/current.json" "$STATEDIR/self-update-files/current.json"; do
+    if [ -e "$SELF_UPDATE_RECEIPT" ] || [ -L "$SELF_UPDATE_RECEIPT" ]; then
+      [ -f "$SELF_UPDATE_RECEIPT" ] && [ ! -L "$SELF_UPDATE_RECEIPT" ] || { echo "Self update receipt is unsafe; installation unchanged" >&2; return 1; }
+      SELF_UPDATE_REQUIRED=1
+    fi
+  done
+  if [ "$SELF_UPDATE_REQUIRED" -eq 1 ]; then
+    SELF_UPDATE_SCHEMA="$("$1" -self-update-schema 2>/dev/null)" || { echo "Target binary cannot preserve self update recovery; installation unchanged" >&2; return 1; }
+    [ "$SELF_UPDATE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible self update schema; installation unchanged" >&2; return 1; }
+  fi
   # Never restore an old process over a retained package-operation fence.
   # Recheck after quiescing; a transaction can appear after initial preflight.
   COMPONENT_JOURNAL="$STATEDIR/components/update-journal/current.json"

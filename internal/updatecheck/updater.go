@@ -159,7 +159,7 @@ func (u *Updater) readHelperStatusLocked() {
 	}
 	root, err := ownedfs.Open(u.Directory)
 	if err != nil {
-		if u.record.Job.ID != "" {
+		if !errors.Is(err, os.ErrNotExist) || u.record.Job.ID != "" {
 			u.invalidateRecordLocked()
 		}
 		return
@@ -174,6 +174,12 @@ func (u *Updater) readHelperStatusLocked() {
 	}
 	var record updateRecord
 	if json.Unmarshal(data, &record) != nil || record.Owner != updaterOwner || !jobIDPattern.MatchString(record.Job.ID) {
+		u.invalidateRecordLocked()
+		return
+	}
+	switch record.Job.State {
+	case "preparing", "ready", "installing", "restarting", "requires-review", "completed", "rolled-back", "failed", "cancelled", "interrupted":
+	default:
 		u.invalidateRecordLocked()
 		return
 	}
@@ -272,7 +278,10 @@ func (u *Updater) createRootLocked() error {
 		return err
 	}
 	defer parent.Close()
-	return parent.MkdirAll(filepath.Base(u.Directory), 0700)
+	if err := parent.MkdirAll(filepath.Base(u.Directory), 0700); err != nil {
+		return err
+	}
+	return syncSelfUpdateDirectory(parent)
 }
 
 func (u *Updater) persistLocked() error {
@@ -288,7 +297,24 @@ func (u *Updater) persistLocked() error {
 	if err != nil {
 		return err
 	}
-	return root.WriteAtomic("current.json", data, 0600)
+	return writeSelfUpdateRecord(root, data)
+}
+
+// A renamed intent is durable before launching a helper or installer effect.
+// Windows tests cover process termination; directory power-loss durability is
+// deliberately restricted to platforms that implement directory fsync.
+func syncSelfUpdateDirectory(root *ownedfs.Root) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	return root.Sync()
+}
+
+func writeSelfUpdateRecord(root *ownedfs.Root, data []byte) error {
+	if err := root.WriteAtomic("current.json", data, 0600); err != nil {
+		return err
+	}
+	return syncSelfUpdateDirectory(root)
 }
 
 func (u *Updater) progress(id, stage, message string, bytes int64) error {

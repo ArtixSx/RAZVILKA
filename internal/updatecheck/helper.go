@@ -55,7 +55,7 @@ func RunInstallerHelper(id string) int {
 		record.Job.CanCancel = false
 		record.Job.UpdatedAt = time.Now().UTC()
 		data, _ := json.Marshal(record)
-		if root.WriteAtomic("current.json", data, 0600) != nil {
+		if writeSelfUpdateRecord(root, data) != nil {
 			return 3
 		}
 		if state == "completed" {
@@ -96,7 +96,7 @@ func RunInstallerHelper(id string) int {
 	record.Job.State = "restarting"
 	record.Job.Message = "Устанавливаем проверенный пакет и перезапускаем панель."
 	record.Job.UpdatedAt = time.Now().UTC()
-	if data, _ := json.Marshal(record); root.WriteAtomic("current.json", data, 0600) != nil {
+	if data, _ := json.Marshal(record); writeSelfUpdateRecord(root, data) != nil {
 		return 3
 	}
 	output, err := jobRoot.OpenFile("installer.log", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
