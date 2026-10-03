@@ -119,7 +119,7 @@ func nativeXrayListen(t *testing.T, address, cert, key string, handler http.Hand
 	if err != nil {
 		t.Fatal("native fixture listener:", err)
 	}
-	s := &http.Server{Handler: handler, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}, ReadHeaderTimeout: 3 * time.Second}
+	s := &http.Server{Handler: handler, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}, ReadHeaderTimeout: 15 * time.Second}
 	t.Cleanup(func() { _ = s.Close(); _ = l.Close() })
 	go func() { _ = s.ServeTLS(l, cert, key) }()
 }
@@ -136,6 +136,18 @@ func nativeXrayAwait(t *testing.T, address string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("native server did not become ready")
+}
+
+func nativeXrayServerReady(t *testing.T, address, security string) {
+	nativeXrayAwait(t, address)
+	if security == "reality" {
+		// Xray v26.3.27 starts REALITY's asynchronous target-record detector
+		// when the listener opens. It deliberately reads for five seconds and
+		// probes ignored CCS records. TCP readiness alone precedes that work.
+		// Give the test server time to finish its target discovery; the real
+		// checker's HTTP timeouts and certificate verification stay unchanged.
+		time.Sleep(6 * time.Second)
+	}
 }
 
 func TestNativeXrayExactNode(t *testing.T) {
@@ -220,7 +232,7 @@ func TestNativeXrayExactNode(t *testing.T) {
 			server.start()
 			t.Cleanup(server.stop)
 			serverAddress := net.JoinHostPort(nativeXrayServerIP, fmt.Sprint(serverPort))
-			nativeXrayAwait(t, serverAddress)
+			nativeXrayServerReady(t, serverAddress, security)
 			checker := NewExactXrayNodeCheckerSlots(filepath.Join(root, "client-"+security), 2)
 			checker.Binary, checker.Port = binary, 29185+index*MaxExactNodeSlots
 			checker.FreshProfile = func(context.Context) (string, error) { return "wan-0123456789ab", nil }
@@ -274,7 +286,7 @@ func TestNativeXrayExactNode(t *testing.T) {
 				t.Fatalf("stopped server accepted: %+v", failed)
 			}
 			server.start()
-			nativeXrayAwait(t, serverAddress)
+			nativeXrayServerReady(t, serverAddress, security)
 			assertPass(run())
 			// Wrong credentials must fail after local SOCKS readiness succeeds.
 			r.Outbound = []byte(strings.Replace(string(material), nativeXrayUUID, "223e4567-e89b-12d3-a456-426614174000", 1))
@@ -305,12 +317,27 @@ func TestNativeXrayExactNode(t *testing.T) {
 				}
 				return proof, err
 			}
-			if failed := run(); failed.Available || failed.Verdict == evidence.VerdictPass || failed.ErrorCode != "node-route-runtime-changed" {
+			failed := run()
+			// A just-killed child may still be a zombie until the launcher's
+			// wait goroutine reaps it. Cleanup correctly fences that unknown
+			// process state rather than assuming that a PID is safe to remove.
+			if failed.Available || failed.Verdict == evidence.VerdictPass || failed.Evidence.Verdict == evidence.VerdictPass || failed.Evidence.ErrorCode != "node-route-runtime-changed" || failed.ErrorCode != "node-route-runtime-changed" && failed.ErrorCode != "node-cleanup-failed" {
 				t.Fatalf("killed client retained proof: %+v", failed)
 			}
+			if failed.ErrorCode == "node-cleanup-failed" && !checker.poisoned.Load() {
+				t.Fatal("uncertain cleanup did not fence the checker")
+			}
 			checker.serviceProbe = baseProbe
-			if err := checker.Recover(context.Background()); err != nil {
-				t.Fatal(err)
+			deadline := time.Now().Add(2 * time.Second)
+			for {
+				err := checker.Recover(context.Background())
+				if err == nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal(err)
+				}
+				time.Sleep(20 * time.Millisecond)
 			}
 			assertPass(run())
 			t.Log("native failure/recovery passed: stopped/restarted server, wrong UUID, killed/recovered client")
