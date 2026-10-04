@@ -180,6 +180,8 @@ func (a *App) nodeFeedAction(w http.ResponseWriter, r *http.Request) {
 func writeFeedError(w http.ResponseWriter, err error) {
 	status, message := http.StatusServiceUnavailable, "Хранилище подписок временно недоступно."
 	switch {
+	case errors.Is(err, providerfeed.ErrHistoryAdmission):
+		status, message = http.StatusConflict, "Совместимость сохранённой истории узлов не подтверждена. Кандидаты не записаны."
 	case errors.Is(err, providerfeed.ErrRequest):
 		status, message = http.StatusBadRequest, "Проверьте название, публичную HTTPS-ссылку и интервал обновления от 15 минут до 7 дней. Для другого адреса добавьте новую подписку."
 	case errors.Is(err, providerfeed.ErrConflict):
@@ -220,6 +222,8 @@ func (a *App) nodeFeedSync(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status, message := http.StatusBadGateway, "Не удалось получить кандидатов. Сохранённые узлы и рабочие маршруты не изменены."
 		switch {
+		case errors.Is(err, providerfeed.ErrHistoryAdmission):
+			status, message = http.StatusConflict, "Совместимость сохранённой истории узлов не подтверждена. Кандидаты не записаны."
 		case errors.Is(err, providerfeed.ErrRequest):
 			status, message = http.StatusBadRequest, "Нужен известный источник либо корректная публичная HTTPS-подписка."
 		case errors.Is(err, providerfeed.ErrPartial):

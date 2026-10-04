@@ -610,7 +610,6 @@ func main() {
 	a.SelfUpdateStartupJobID, a.SelfUpdateStartupHelperPID = *selfJob, *selfWorker
 	a.Nodes = nodeStore
 	historyAdmission := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)
-	a.NodeHistoryWriteGuard = historyAdmission.CheckWrite
 	if nodeStore != nil {
 		feedRoot, feedPathErr := filepath.Abs(filepath.Join(filepath.Dir(*cfgPath), "subscriptions-private"))
 		if err := os.MkdirAll(feedRoot, 0700); err == nil && feedPathErr == nil {
@@ -623,6 +622,9 @@ func main() {
 		} else {
 			log.Print("Private subscriptions disabled: directory unavailable")
 		}
+	}
+	if err := bindNodeHistoryWriteAdmission(a, historyAdmission.CheckWrite); err != nil {
+		log.Fatal("node history admission startup binding unavailable")
 	}
 	a.NodeChecker = nodeViews["sing-box"]
 	a.NodeCheckers = nodeViews

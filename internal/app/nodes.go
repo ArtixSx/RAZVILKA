@@ -632,6 +632,14 @@ func (a *App) nodeImport(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	required, err := nodestore.RequiredImportReadVersion(request.Profile, request.AcceptPartial)
+	if err == nil {
+		err = a.nodeHistoryMaterialAdmission(r.Context(), required)
+	}
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": "NODE_HISTORY_ADMISSION_REQUIRED", "error": "Не удалось подтвердить совместимость сохранённой истории узлов. Данные не записаны.", "working_routes_changed": false})
+		return
+	}
 	snapshot, err := a.Nodes.Import(r.Context(), nodestore.Source{ID: "manual", Kind: "manual"}, request.Profile, time.Now(), nodeImportTTL, request.AcceptPartial)
 	if err != nil {
 		writeNodeError(w, err)
