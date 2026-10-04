@@ -21,7 +21,9 @@ import (
 
 // Opt-in filesystem/subprocess acceptance. The provider is an in-process test
 // double; no socket, daemon, actual registration or router is used. The shell
-// backup selector and full rollback reader come from production source.
+// backup selector and full rollback reader come from production source. A
+// retained file/helper/control fence must refuse raw rollback; matching provider
+// recovery, command admission and live acceptance are not fabricated here.
 func TestNativeLocalCloudRetentionHarness(t *testing.T) {
 	if os.Getenv("RAZVILKA_NATIVE_CLOUD_RETENTION") != "1" {
 		t.Skip("coordinator-owned retention subprocess window is disabled")
@@ -42,8 +44,13 @@ func TestNativeLocalCloudRetentionHarness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	productionRollback := string(cloudRetentionRead(t, filepath.Join(repo, "scripts", "rollback-entware.sh")))
+	managedGuard := strings.Count(productionRollback, "require_legacy_file_protocol_free() {") == 1
 	for _, mode := range []string{"timeout-pending", "response-crash"} {
 		t.Run(mode, func(t *testing.T) {
+			if !managedGuard {
+				t.Skip("OPS managed raw-replacement guard is not integrated; obsolete pending-journal raw success is not exercised")
+			}
 			base := t.TempDir()
 			cloudRetentionFixture(t, base)
 			oldBackup := cloudRetentionSnapshot(t, sh, repo, base, "20000101T000001Z-1")
@@ -87,9 +94,16 @@ func TestNativeLocalCloudRetentionHarness(t *testing.T) {
 				t.Fatal("executable restore lost its independent pending fence")
 			}
 			cloudRetentionMutateMutable(t, base)
-			cloudRetentionRollback(t, sh, repo, base, oldBackup, true)
-			cloudRetentionAssertMutableRestored(t, base)
+			cloudRetentionEnableReader2(t, base)
+			beforeRefusal := cloudRetentionTree(t, base, []string{"bin", "etc", "var/lib/razvilka"})
+			cloudRetentionRollbackReason(t, sh, repo, base, oldBackup, false, cloudRetentionManagedRefusal)
+			cloudRetentionAssertTree(t, base, beforeRefusal)
+			cloudRetentionAssertNoRawEffects(t, base)
+			cloudRetentionAssertPendingFileReceipt(t, store, id)
+			// Prune is a separate production-function boundary. Raw rollback did
+			// not restore mutable state or settle the retained file transaction.
 			cloudRetentionPrune(t, sh, repo, base, newBackup)
+			cloudRetentionAssertTree(t, base, beforeRefusal)
 			cloudRetentionAssertTree(t, base, retained)
 			if !bytes.Equal(live, cloudRetentionRead(t, m.ProfilePaths[0])) {
 				t.Fatal("rollback changed the working WARP profile")
@@ -116,10 +130,45 @@ func TestNativeLocalCloudRetentionHarness(t *testing.T) {
 				}
 			}
 			if calls != 0 || string(cloudRetentionRead(t, filepath.Join(base, "simulated-requests"))) != "request\n" {
-				t.Fatal("rollback/restart initiated another simulated POST")
+				t.Fatal("rollback refusal/enrollment restart initiated another simulated POST")
 			}
+			if len(m.Health().State.Attempts) != 1 {
+				t.Fatal("rollback refusal/enrollment restart changed charged attempt accounting")
+			}
+			cloudRetentionAssertPendingFileReceipt(t, store, id)
 		})
 	}
+	t.Run("retained-managed-protocol-refused-before-stop", func(t *testing.T) {
+		if !managedGuard {
+			t.Skip("OPS managed raw-replacement guard is not integrated")
+		}
+		for _, fixture := range []struct {
+			name, current string
+		}{
+			{"file-current", "var/lib/razvilka/self-update-files/current.json"},
+			{"helper-current", "var/lib/razvilka/self-update/current.json"},
+			{"control-root", "var/lib/razvilka/self-update-stop/current-v1.json"},
+		} {
+			t.Run(fixture.name, func(t *testing.T) {
+				base := t.TempDir()
+				cloudRetentionFixture(t, base)
+				backup := cloudRetentionSnapshot(t, sh, repo, base, "20000101T000001Z-1")
+				path := filepath.Join(base, filepath.FromSlash(fixture.current))
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				// Presence fixtures test the conservative shell gate. They are
+				// not typed matching journals or accepted provider/control seals.
+				cloudRetentionWrite(t, path, []byte("retained managed presence fixture\n"), 0600)
+				cloudRetentionEnableReader2(t, base)
+				cloudRetentionMutateMutable(t, base)
+				before := cloudRetentionTree(t, base, []string{"bin", "etc", "var/lib/razvilka"})
+				cloudRetentionRollbackReason(t, sh, repo, base, backup, false, cloudRetentionManagedRefusal)
+				cloudRetentionAssertTree(t, base, before)
+				cloudRetentionAssertNoRawEffects(t, base)
+			})
+		}
+	})
 	// Current shell schema is fixed: root image keys are unsupported. This is
 	// evidence for its actual reader, not a nonexistent generic overlap validator.
 	t.Run("whole-directory-manifest-rejected-before-stop", func(t *testing.T) {
@@ -280,9 +329,11 @@ func cloudRetentionRunChild(t *testing.T, base, mode string) {
 
 const cloudRetentionBinary = `#!/bin/sh
 set -eu
-printf 'called\n' >> "$RAZVILKA_BASE/binary-called"
+printf '%s\n' "$1" >> "$RAZVILKA_BASE/binary-called"
 case "$1" in
-  -native-enrollment-schema|-self-update-schema|-subscription-schema) printf '1\n' ;;
+  -native-enrollment-schema|-subscription-schema) printf '1\n' ;;
+  -self-update-schema)
+    if [ -f "$RAZVILKA_BASE/retention-target-reader2" ]; then printf '2\n'; else printf '1\n'; fi ;;
   -check-node-history-state)
     [ "$#" -eq 5 ] && [ "$2" = -node-history-config-root ] &&
       [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] &&
@@ -294,11 +345,39 @@ case "$1" in
     else
       printf '{"ok":true}\n'
     fi ;;
-  -recover-private-restore) printf '{"ok":true}\n' ;;
-  -deactivate-dataplane) : ;;
+  -recover-private-restore)
+    printf 'recovery\n' >> "$RAZVILKA_BASE/recovery-called"
+    printf '{"ok":true}\n' ;;
+  -deactivate-dataplane) printf 'deactivate\n' >> "$RAZVILKA_BASE/deactivate-called" ;;
   *) exit 94 ;;
 esac
 `
+
+const cloudRetentionManagedRefusal = "Use matching self update recovery; raw application replacement is unavailable with retained control/file protocol"
+
+func cloudRetentionEnableReader2(t *testing.T, base string) {
+	t.Helper()
+	// Both schema invocations are inert CLI reader doubles. This only clears
+	// the earlier compatibility check so the actual shell presence gate runs;
+	// it grants no production capability, authority or matching recovery.
+	cloudRetentionWrite(t, filepath.Join(base, "retention-target-reader2"), []byte("inert reader fixture only\n"), 0600)
+}
+
+func cloudRetentionAssertNoRawEffects(t *testing.T, base string) {
+	t.Helper()
+	for _, name := range []string{"init-status-called", "stop-called", "recovery-called", "deactivate-called"} {
+		if _, err := os.Lstat(filepath.Join(base, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("managed rollback refusal reached a raw runtime/recovery effect:", name)
+		}
+	}
+}
+
+func cloudRetentionAssertPendingFileReceipt(t *testing.T, store *selfupdatejournal.Store, id string) {
+	t.Helper()
+	if receipt, present, err := store.Current(); err != nil || !present || receipt.ID != id || receipt.Phase != "restored" || !receipt.Pending() {
+		t.Fatal("raw rollback refusal changed or settled the retained file receipt")
+	}
+}
 
 func cloudRetentionFixture(t *testing.T, base string) {
 	t.Helper()
@@ -308,7 +387,7 @@ func cloudRetentionFixture(t *testing.T, base string) {
 		}
 	}
 	cloudRetentionWrite(t, filepath.Join(base, "bin", "razvilka"), []byte(cloudRetentionBinary), 0755)
-	cloudRetentionWrite(t, filepath.Join(base, "etc", "init.d", "S99razvilka"), []byte("#!/bin/sh\ncase \"$1\" in status) exit 1;; stop) printf 'stop\\n' >> \"$RAZVILKA_BASE/stop-called\";; *) exit 95;; esac\n"), 0755)
+	cloudRetentionWrite(t, filepath.Join(base, "etc", "init.d", "S99razvilka"), []byte("#!/bin/sh\ncase \"$1\" in status) printf 'status\\n' >> \"$RAZVILKA_BASE/init-status-called\"; exit 1;; stop) printf 'stop\\n' >> \"$RAZVILKA_BASE/stop-called\";; *) exit 95;; esac\n"), 0755)
 	cloudRetentionWrite(t, filepath.Join(base, "etc", "razvilka", "config.json"), []byte("fixture config LKG\n"), 0600)
 	cloudRetentionWrite(t, cloudRetentionManager(base).ProfilePaths[0], []byte(validProfile), 0600)
 	for _, dir := range cloudMutableDirectories {
@@ -344,24 +423,6 @@ func cloudRetentionMutateMutable(t *testing.T, base string) {
 		cloudRetentionWrite(t, filepath.Join(base, filepath.FromSlash(dir), "new-file"), []byte("new mutable\n"), 0600)
 		if err := os.Remove(filepath.Join(base, filepath.FromSlash(dir), "old-removed-file")); err != nil {
 			t.Fatal(err)
-		}
-	}
-}
-
-func cloudRetentionAssertMutableRestored(t *testing.T, base string) {
-	t.Helper()
-	if string(cloudRetentionRead(t, filepath.Join(base, "etc", "razvilka", "config.json"))) != "fixture config LKG\n" {
-		t.Fatal("shell rollback did not restore mutable config LKG")
-	}
-	for _, dir := range cloudMutableDirectories {
-		if string(cloudRetentionRead(t, filepath.Join(base, filepath.FromSlash(dir), "old-file"))) != "mutable LKG\n" {
-			t.Fatal("shell rollback did not restore populated mutable directory")
-		}
-		if string(cloudRetentionRead(t, filepath.Join(base, filepath.FromSlash(dir), "old-removed-file"))) != "mutable LKG\n" {
-			t.Fatal("shell rollback did not restore a removed mutable LKG file")
-		}
-		if _, err := os.Lstat(filepath.Join(base, filepath.FromSlash(dir), "new-file")); !errors.Is(err, os.ErrNotExist) {
-			t.Fatal("shell rollback did not remove a newly added mutable file")
 		}
 	}
 }
