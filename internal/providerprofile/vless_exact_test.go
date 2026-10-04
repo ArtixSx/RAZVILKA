@@ -66,8 +66,8 @@ func TestXrayRAWCanonicalAliasAndNoLossyTCPOptions(t *testing.T) {
 		}
 	}
 	for _, transport := range []string{"xhttp", "splithttp"} {
-		if result, err := ParseXrayProfile(testVLESS+"security=tls&type="+transport, 0); err == nil || len(result.Config) != 0 {
-			t.Fatal("XHTTP must remain unavailable until its own compiler and native checks exist")
+		if result, err := ParseXrayProfile(testVLESS+"security=tls&type="+transport+"&mode=unsupported", 0); err == nil || len(result.Config) != 0 {
+			t.Fatal("unsupported XHTTP mode was silently converted")
 		}
 	}
 }

@@ -121,3 +121,5 @@ RAZVILKA_NFQWS_PROCESS_FIXTURE=1 \
 ```
 
 Обе fixtures второго checkpoint локально **not_run**; предыдущий native SKIP относится к первой порции. Linux race новой порции, native CLI/assets, real LAN/IPv6/H3 selected/control, Stop cleanup fault/power cut, media/voice/game, router/HIL/soak остаются **unverified/not_run**. D09 целиком не закрыт; production worker wiring и crash между spawn/save fence не доказаны.
+
+Текущий adaptive worker contract и закрывающие live consumer зависимости: [NFQWS_ADAPTIVE_CONTRACT_RU.md](NFQWS_ADAPTIVE_CONTRACT_RU.md). Это уточнение поверх исторических checkpoint; оно не объявляет production readiness или genuine native PASS.

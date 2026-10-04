@@ -61,3 +61,31 @@ func TestWireGuardPlanRejectsConflictingProfiles(t *testing.T) {
 		}
 	}
 }
+
+func TestWireGuardProfileCatalogUsesRegisteredRuntimeOwner(t *testing.T) {
+	manager := New(t.TempDir())
+	if _, err := manager.WireGuardProfileCatalog(); err == nil {
+		t.Fatal("missing runtime discovered or created a profile store")
+	}
+	adapter := NewWireGuardAdapter(nil, t.TempDir())
+	if err := manager.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.WireGuardProfileCatalog(); err == nil {
+		t.Fatal("runtime without named catalog created another store")
+	}
+	store := wireguardprofile.New(filepath.Join(t.TempDir(), "profiles"))
+	adapter.Profiles = store
+	catalog, err := manager.WireGuardProfileCatalog()
+	if err != nil || catalog != store {
+		t.Fatal("handler did not receive the runtime's catalog", err)
+	}
+	metadata, err := catalog.Put(context.Background(), "reserve", "Reserve", testOwnWireGuardProfile(""), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := adapter.Profiles.Get(context.Background(), "reserve")
+	if err != nil || profile.Public().Revision != metadata.Revision {
+		t.Fatal("app catalog and runtime diverged", err)
+	}
+}

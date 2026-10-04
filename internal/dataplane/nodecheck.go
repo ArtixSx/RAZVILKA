@@ -139,6 +139,7 @@ type ExactNodeChecker struct {
 	serviceIPProbe func(context.Context, string, string, string, catalog.Service, netip.Addr) (evidence.ProbeEvidence, error)
 	cleanup        func(context.Context, exactNodeSession) error
 	runtimeReady   func() bool
+	xhttpRuntime   func(context.Context, string) (bool, error)
 	now            func() time.Time
 	gate           chan int
 	poisoned       atomic.Bool
@@ -254,7 +255,7 @@ func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeChec
 // other node still needs Check; its result then only carries the duration of
 // the transport stage in LatencyMS, for ordering.
 func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeCheckRequest) (NodeCheckResult, bool, error) {
-	if err := c.validRequest(request); err != nil {
+	if err := c.validRequest(parent, request); err != nil {
 		return NodeCheckResult{}, false, err
 	}
 	ctx, cancel := context.WithTimeout(parent, c.timeout())
@@ -275,7 +276,7 @@ func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeC
 }
 
 func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckRequest) (result NodeCheckResult, resultErr error) {
-	if err := c.validRequest(request); err != nil {
+	if err := c.validRequest(parent, request); err != nil {
 		return NodeCheckResult{}, err
 	}
 	var slot int
@@ -458,7 +459,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	result.TestLevel = "service"
 	result.Stage = "service"
 	result.Verdict = proof.Verdict
-	exactRoute := proof.RoutePathID == result.RoutePathID && proof.ExpectedRoutePathID == result.RoutePathID && proof.ObservedRoutePathID == result.RoutePathID
+	exactRoute := exactNodeProofEngine(proof.Engine, c.EngineID()) && proof.RoutePathID == result.RoutePathID && proof.ExpectedRoutePathID == result.RoutePathID && proof.ObservedRoutePathID == result.RoutePathID
 	result.Available = proof.AssuranceLevel().AtLeast(evidence.Service) && exactRoute
 	if result.Available {
 		result.addStage("service", "passed", "Контрольный адрес сервиса вернул ожидаемый ответ.", stageStarted, c.currentTime())
@@ -477,7 +478,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		for _, address := range addresses {
 			ipProof, ipErr := c.serviceIPProbe(ctx, session.Address, result.RoutePathID, proxyIP, request.Service, address)
 			ipProof.NetworkProfile = request.NetworkProfile
-			if ipErr != nil || !ipProof.Valid() || !ipProof.AssuranceLevel().AtLeast(evidence.Service) || ipProof.RoutePathID != result.RoutePathID || ipProof.ExpectedRoutePathID != result.RoutePathID || ipProof.ObservedRoutePathID != result.RoutePathID {
+			if ipErr != nil || !ipProof.Valid() || !ipProof.AssuranceLevel().AtLeast(evidence.Service) || !exactNodeProofEngine(ipProof.Engine, c.EngineID()) || ipProof.RoutePathID != result.RoutePathID || ipProof.ExpectedRoutePathID != result.RoutePathID || ipProof.ObservedRoutePathID != result.RoutePathID {
 				result.Evidence = ipProof
 				result.fail("service_ip", "node-service-ip-path-failed", "Узел не подтвердил доступ к сервису по IP-адресу, необходимый для маршрута устройств.")
 				result.Evidence.Verdict = evidence.VerdictError
@@ -585,7 +586,7 @@ func (c *ExactNodeChecker) Recover(ctx context.Context) error {
 	return nil
 }
 
-func (c *ExactNodeChecker) validRequest(request NodeCheckRequest) error {
+func (c *ExactNodeChecker) validRequest(ctx context.Context, request NodeCheckRequest) error {
 	if c == nil || c.Processes == nil || c.resolve == nil || c.dialTransport == nil || c.prepare == nil || c.start == nil || c.identity == nil || c.directEgress == nil || c.proxyEgress == nil || c.serviceProbe == nil || c.serviceIPProbe == nil || c.cleanup == nil || c.runtimeReady == nil || c.FreshProfile == nil || c.gate == nil || c.poisoned.Load() {
 		return ErrExactNodeUnavailable
 	}
@@ -593,9 +594,17 @@ func (c *ExactNodeChecker) validRequest(request NodeCheckRequest) error {
 		return ErrExactNodeRuntime
 	}
 	if c.EngineID() == "xray" {
-		if _, err := exactXrayProfile(request.Outbound); err != nil {
+		p, err := exactXrayProfile(request.Outbound)
+		if err != nil {
 			return ErrExactNodeUnsupported
 		}
+		if p.Transport == "xhttp" {
+			if err := c.requireXHTTPRuntime(ctx, c.binary()); err != nil {
+				return err
+			}
+		}
+	} else if !exactSingBoxTransportSupported(request.Outbound) {
+		return ErrExactNodeUnsupported
 	}
 	if !exactNodeIDPattern.MatchString(request.NodeID) || len(request.Outbound) == 0 || request.Service.ID == "" || selectedNodeProbe(request.Service).URL == "" || !systemprobe.ValidWANProfileID(request.NetworkProfile) {
 		return ErrExactNodeUnavailable

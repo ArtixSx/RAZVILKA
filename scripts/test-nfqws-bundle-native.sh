@@ -3,6 +3,10 @@
 # network, service or listener. Optional official IPK must already be local.
 set -eu
 case "$(uname -s)" in Linux) ;; *) echo 'SKIP managed NFQWS native: requires Linux'; exit 0 ;; esac
+if [ "$(id -u)" != 0 ]; then
+  echo 'FAIL managed NFQWS native: root-euid required for actual foreign-owner refusal fixtures' >&2
+  exit 1
+fi
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 cd "$ROOT"
 GO="${GO:-go}"
