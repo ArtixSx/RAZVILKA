@@ -28,6 +28,34 @@ func (f *SelfUpdateFiles) controlAuthority(ctx context.Context, allowMissing boo
 	return nil
 }
 
+func (f *SelfUpdateFiles) controlAction(ctx context.Context, id string, revision uint64, action string) error {
+	if f == nil || f.ControlRoot == "" {
+		return nil
+	}
+	r, present, err := operationgate.ReadSelfUpdateStop(ctx, f.ControlRoot)
+	if err != nil {
+		return err
+	}
+	if !present {
+		if action == "prepare" {
+			return nil
+		}
+		return operationgate.ErrSelfUpdateStopJournal
+	}
+	if !r.Stopped {
+		return nil
+	}
+	if r.TransactionID != id || r.ConfigRevision != revision {
+		return operationgate.ErrSelfUpdateStopChanged
+	}
+	switch selfUpdateActionAuthority(action) {
+	case "stop-owned", "replace-to-rollback", "read/observe":
+		return nil
+	default:
+		return operationgate.ErrSelfUpdateStopped
+	}
+}
+
 func (f *SelfUpdateFiles) controlPending() bool {
 	if f == nil || f.ControlRoot == "" {
 		return false
