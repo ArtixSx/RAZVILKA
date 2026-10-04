@@ -116,7 +116,8 @@ func TestNativeScopedXrayTUN(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := append(os.Environ(), "RAZVILKA_XRAY_TUN_ROOT="+root, "RAZVILKA_XRAY_TUN_SELECTED_NS="+names["selected"], "RAZVILKA_XRAY_TUN_CONTROL_NS="+names["control"])
-	serverCmd := exec.Command("ip", "netns", "exec", server, exe, "-test.run=^TestNativeScopedXrayTUN$", "-test.v", "-test.timeout=3m")
+	serverTimeout := 3*time.Minute + nativeScopedXrayFixtureExtraBudget()
+	serverCmd := exec.Command("ip", "netns", "exec", server, exe, "-test.run=^TestNativeScopedXrayTUN$", "-test.v", "-test.timeout="+serverTimeout.String())
 	serverCmd.Env = append(env, "RAZVILKA_XRAY_TUN_ROLE=server")
 	serverCmd.Stdout, serverCmd.Stderr = os.Stdout, os.Stderr
 	if err := serverCmd.Start(); err != nil {
@@ -156,9 +157,10 @@ func TestNativeScopedXrayTUN(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second+nativeScopedXrayFixtureExtraBudget())
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "ip", "netns", "exec", router, exe, "-test.run=^TestNativeScopedXrayTUN$", "-test.v", "-test.timeout=140s")
+	routerTimeout := 140*time.Second + nativeScopedXrayFixtureExtraBudget()
+	cmd := exec.CommandContext(ctx, "ip", "netns", "exec", router, exe, "-test.run=^TestNativeScopedXrayTUN$", "-test.v", "-test.timeout="+routerTimeout.String())
 	cmd.Env = append(env, "RAZVILKA_XRAY_TUN_ROLE=router")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("scoped TUN router scenario failed: %v\n%s", err, output)
@@ -191,7 +193,7 @@ func nativeScopedXrayServer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "server.ready"), []byte("ready"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(160 * time.Second)
+	deadline := time.Now().Add(160*time.Second + nativeScopedXrayFixtureExtraBudget())
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(filepath.Join(root, "server.stop")); err == nil {
 			return
@@ -232,7 +234,7 @@ func nativeScopedXrayProbe(t *testing.T) {
 }
 
 func nativeScopedXrayRouter(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second+nativeScopedXrayFixtureExtraBudget())
 	defer cancel()
 	root := os.Getenv("RAZVILKA_XRAY_TUN_ROOT")
 	t.Setenv("SSL_CERT_FILE", filepath.Join(root, "ca.pem"))
@@ -333,9 +335,16 @@ func nativeScopedXrayRouter(t *testing.T) {
 		return a
 	}
 	a := newAdapter()
+	var routerHTTPSLease *nativeRouterHTTPSLease
 	t.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
+		if routerHTTPSLease != nil {
+			if err := routerHTTPSLease.assertAbsent(cleanup); err != nil {
+				t.Errorf("router HTTPS lease must be absent before Deactivate: %v", err)
+				return
+			}
+		}
 		if err := a.Deactivate(cleanup); err != nil {
 			t.Errorf("owned adapter cleanup: %v", err)
 		}
@@ -369,6 +378,12 @@ func nativeScopedXrayRouter(t *testing.T) {
 		}
 	}
 	assertHealth("A active")
+	if os.Getenv("RAZVILKA_XRAY_ROUTER_HTTPS_NATIVE") == "1" {
+		routerHTTPSLease, err = nativeScopedXrayRouterHTTPS(t, ctx, a, plan, roots, expectedExit)
+		if err != nil {
+			t.Fatal("actual router TUN HTTPS component", err)
+		}
+	}
 	// Read current on-disk state in a new adapter; no candidate identity is used.
 	a = newAdapter()
 	assertHealth("fresh adapter runtime inspection")
