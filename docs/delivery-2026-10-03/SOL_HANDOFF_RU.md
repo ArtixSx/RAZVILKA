@@ -16,6 +16,8 @@ VM, роутер, сетевые пространства и порты прин
 
 ## Владение файлами
 
+Уточнение 04.10 после чистого CORE checkpoint `8dea1e5`: `dataplane/manager.go`, `plan.go`, новые `network_policy_manager*.go` и новые D07 regression tests переданы **DEFAULT**. CORE подтвердил отсутствие WIP и не редактирует их параллельно. Это исключение из исходной таблицы ниже; app/main/config/operationgate и existing policy/readback helpers остаются CORE. D11 использует существующий Manager API либо согласует изменение с DEFAULT. LAN/DNS, proxy и WG по-прежнему имеют собственных владельцев. Цель передачи — обычный совместный Apply/Stop/rollback, а не второй Manager.
+
 | Чат | Исключительное владение |
 |---|---|
 | CORE | `internal/app/**`, `cmd/razvilka/main.go`, `internal/config/**`, `internal/autonomy/**`, `internal/operationgate/**`, `internal/routecatalog/**`, `internal/routekind/**`, общие `dataplane/manager.go`, `plan.go`, `policy*.go` кроме нового `policy_addition_receipt*.go`, `ownership.go`, `execution_journal*.go`, LAN classifier и общие сетевые контракты |

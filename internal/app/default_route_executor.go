@@ -279,9 +279,15 @@ func (e *DefaultRouteExecutor) Execute(ctx context.Context, r *DefaultRouteRevie
 		if err := guard(ctx); err != nil {
 			return nil, err
 		}
+		// Store.Get provides its exact defensive representation. A JSON
+		// round trip loses empty omitempty maps and is not a full CAS preimage.
+		commitConfig := e.app.Store.Get()
+		if !reflect.DeepEqual(commitConfig, r.cfg) {
+			return nil, dataplane.ErrReviewChanged
+		}
 		services := defaultRouteCloneServices(r.cfg.Services)
 		commitStarted := time.Now()
-		undo, err := e.deps.Commit(defaultRouteCloneConfig(r.cfg), r.compilation.Policy(), services)
+		undo, err := e.deps.Commit(commitConfig, r.compilation.Policy(), services)
 		commitFinished := time.Now()
 		if err != nil {
 			return undo, err
