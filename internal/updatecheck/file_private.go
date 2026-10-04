@@ -227,6 +227,9 @@ func (a *SelfUpdateFileAdapter) preparePrivateSnapshot(ctx context.Context, id s
 		if err != nil {
 			return err
 		}
+		if err := a.verifyPrivateFileMetadata(ctx, filepath.Join(a.installation, filepath.FromSlash(path)), image.Exists); err != nil {
+			return err
+		}
 		snapshot.Images[name] = image
 		total += len(image.Data)
 	}
@@ -281,6 +284,18 @@ func (a *SelfUpdateFileAdapter) restorePrivateSnapshot(ctx context.Context, id s
 	// cannot authorize rewinding independent native/runtime/LKG histories.
 	if snapshot.Schema != 2 {
 		return ErrFileProtocol
+	}
+	// Refuse metadata drift even when the byte-only generic journal would
+	// see equal Before/After and execute no replacement. No implicit repair.
+	for _, path := range filePrivateFiles {
+		full := filepath.Join(a.installation, filepath.FromSlash(path))
+		current, err := restorejournal.ReadFileImage(ctx, full)
+		if err != nil {
+			return err
+		}
+		if err := a.verifyPrivateFileMetadata(ctx, full, current.Exists); err != nil {
+			return err
+		}
 	}
 	_, review, err := a.loadHeader(ctx, id)
 	if err != nil {
@@ -380,6 +395,9 @@ func (a *SelfUpdateFileAdapter) verifyPrivateRestore(ctx context.Context, id str
 		expected := snapshot.Images[name]
 		if err != nil || actual.Exists != expected.Exists || !bytes.Equal(actual.Data, expected.Data) {
 			return ErrFileProtocol
+		}
+		if err := a.verifyPrivateFileMetadata(ctx, filepath.Join(a.installation, filepath.FromSlash(path)), expected.Exists); err != nil {
+			return err
 		}
 	}
 	return ctx.Err()

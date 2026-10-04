@@ -107,6 +107,7 @@ func TestNativeStoppedSettlementActualECHILDAndPreservedStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	retainedFile(t, a.installation, "etc/razvilka/admin.token", []byte("original private token"))
+	retainedFile(t, a.installation, "etc/razvilka/admin.credentials.json", []byte(`{"fixture":"original credentials"}`))
 	for _, command := range []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime"} {
 		if err := store.Execute(ctx, review.ID, command, func(ctx context.Context) error {
 			return a.AuthorityAction(ctx, review.ID, review.Revision, fileCommandAuthority(command))
@@ -144,6 +145,21 @@ func TestNativeStoppedSettlementActualECHILDAndPreservedStop(t *testing.T) {
 	}
 	if err := a.verifyPrivateRestore(ctx, review.ID); err != nil {
 		t.Fatal(err)
+	}
+	for _, name := range []string{"admin.token", "admin.credentials.json"} {
+		path := filepath.Join(a.installation, "etc/razvilka", name)
+		if err := os.Chmod(path, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.restorePrivateSnapshot(ctx, review.ID); err == nil {
+			t.Fatal("equal bytes bypassed widened private mode before restore", name)
+		}
+		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0644 {
+			t.Fatal("refusal silently repaired mode", name, err)
+		}
+		if err := os.Chmod(path, 0600); err != nil {
+			t.Fatal(err)
+		} // fixture cleanup only
 	}
 	root, err := a.commandRoot(review.ID)
 	if err != nil {
@@ -195,6 +211,23 @@ func TestNativeStoppedSettlementActualECHILDAndPreservedStop(t *testing.T) {
 	}
 	if _, err := a.probeJournalReader(ctx, review, selfupdatejournal.BinaryImage{Path: filepath.Join(job, "control.bin"), SHA256: review.OldExecutableSHA256}); err == nil {
 		t.Fatal("Stop admitted a new probe")
+	}
+	for _, name := range []string{"admin.token", "admin.credentials.json"} {
+		path := filepath.Join(a.installation, "etc/razvilka", name)
+		before, _ := os.ReadFile(filepath.Join(a.fileJournal, review.ID, "receipt.json"))
+		if err := os.Chmod(path, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.SettleStoppedRollback(ctx, review.ID, authority); err == nil {
+			t.Fatal("terminal accepted unchanged private bytes with widened mode", name)
+		}
+		after, _ := os.ReadFile(filepath.Join(a.fileJournal, review.ID, "receipt.json"))
+		if string(before) != string(after) {
+			t.Fatal("metadata refusal published terminal", name)
+		}
+		if err := os.Chmod(path, 0600); err != nil {
+			t.Fatal(err)
+		} // fixture cleanup only
 	}
 	original, err := readFileCommand(root, review.ID, "quiesce-old-runtime")
 	if err != nil {
