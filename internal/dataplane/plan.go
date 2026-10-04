@@ -23,17 +23,18 @@ import (
 const SchemaVersion = 1
 
 type Route struct {
-	LogicalServiceID string           `json:"logical_service_id,omitempty"`
-	ProbeService     *catalog.Service `json:"probe_service,omitempty"`
-	ServiceID        string           `json:"service_id"`
-	ServiceName      string           `json:"service_name"`
-	Selected         string           `json:"selected_route"`
-	Resolved         string           `json:"resolved_route"`
-	Domains          []string         `json:"domains,omitempty"`
-	CIDRs            []string         `json:"cidrs,omitempty"`
-	SourceRefs       []string         `json:"source_refs,omitempty"`
-	Sources          []string         `json:"sources,omitempty"`
-	Ingress          []string         `json:"ingress,omitempty"`
+	WireGuardProfileRevision string           `json:"wireguard_profile_revision,omitempty"`
+	LogicalServiceID         string           `json:"logical_service_id,omitempty"`
+	ProbeService             *catalog.Service `json:"probe_service,omitempty"`
+	ServiceID                string           `json:"service_id"`
+	ServiceName              string           `json:"service_name"`
+	Selected                 string           `json:"selected_route"`
+	Resolved                 string           `json:"resolved_route"`
+	Domains                  []string         `json:"domains,omitempty"`
+	CIDRs                    []string         `json:"cidrs,omitempty"`
+	SourceRefs               []string         `json:"source_refs,omitempty"`
+	Sources                  []string         `json:"sources,omitempty"`
+	Ingress                  []string         `json:"ingress,omitempty"`
 	// Trusted compiler fields; scope/negative gate proof comes from the owner.
 	NetworkPolicyGeneration string `json:"network_policy_generation,omitempty"`
 	NetworkPolicyRole       string `json:"network_policy_role,omitempty"`
@@ -256,6 +257,11 @@ func Build(input Input) (Plan, error) {
 
 func BuildAt(input Input, now time.Time) (Plan, error) {
 	for _, route := range input.Routes {
+		if route.WireGuardProfileRevision != "" {
+			if _, err := FrozenWireGuardProfileRevision(route); err != nil {
+				return Plan{}, err
+			}
+		}
 		if route.ProbeService != nil {
 			if _, err := FrozenProbeService(route); err != nil {
 				return Plan{}, err

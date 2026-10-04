@@ -495,16 +495,20 @@ func (r *defaultRouteReadOnlyRunner) Run(_ context.Context, name string, args ..
 
 func TestDefaultRouteActualWireGuardAdapterCurrentlyRefusesEndpointOverlap(t *testing.T) {
 	defaultRouteRequireLinuxJournal(t)
-	e, _, _ := defaultRouteExecutorFixture(t)
+	e, observed, _ := defaultRouteExecutorFixture(t)
 	// Replace the transaction double with the actual registered WG adapter;
 	// native kernel calls remain refused. This is actual Stage behavior, not
 	// packet/native PASS and not an excuse to carve endpoint out of LAN scope.
 	root := t.TempDir()
 	profiles := wireguardprofile.New(filepath.Join(root, "profiles"))
 	profile := "[Interface]\nPrivateKey = " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("a", 32))) + "\nAddress = 10.66.0.2/32\n[Peer]\nPublicKey = " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32))) + "\nEndpoint = 93.184.216.34:51820\nAllowedIPs = 0.0.0.0/0, ::/0\n"
-	if _, err := profiles.Put(context.Background(), "reserve", "Own server", profile, ""); err != nil {
+	imported, err := profiles.Put(context.Background(), "reserve", "Own server", profile, "")
+	if err != nil {
 		t.Fatal(err)
 	}
+	path := observed.Paths["default"]
+	path.WireGuardProfileRevision = imported.Revision
+	observed.Paths["default"] = path
 	adapter := dataplane.NewWireGuardAdapter(nil, e.app.Dataplane.StateRoot)
 	adapter.Profiles = profiles
 	runner := &defaultRouteReadOnlyRunner{}

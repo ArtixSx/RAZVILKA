@@ -170,8 +170,9 @@ func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Conf
 			path := c.snapshot.Paths[rule.ServiceID]
 			id := "network-" + defaultRouteDigest(key)[:16]
 			route = &dataplane.Route{
-				LogicalServiceID: rule.ServiceID,
-				ServiceID:        id, ServiceName: rule.ServiceID, Selected: path.Selected, Resolved: path.Resolved,
+				WireGuardProfileRevision: path.WireGuardProfileRevision,
+				LogicalServiceID:         rule.ServiceID,
+				ServiceID:                id, ServiceName: rule.ServiceID, Selected: path.Selected, Resolved: path.Resolved,
 				Sources: []string{rule.Source.String()}, Ingress: []string{rule.Ingress}, ProbeURL: path.ProbeURL,
 				NetworkPolicyGeneration: c.digest, NetworkPolicyRole: rule.Origin,
 			}
