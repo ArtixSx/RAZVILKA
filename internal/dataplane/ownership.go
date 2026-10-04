@@ -151,7 +151,7 @@ func ownsWGEndpointRoute(e *WGEndpointState, family int, line string) bool {
 		switch key {
 		case "via", "dev", "src", "proto", "metric":
 		case "scope":
-			if fields[i] != "global" && fields[i] != "link" {
+			if fields[i] != "global" && fields[i] != "link" && fields[i] != "0" && fields[i] != "253" {
 				return false
 			}
 		case "pref":
@@ -162,7 +162,8 @@ func ownsWGEndpointRoute(e *WGEndpointState, family int, line string) bool {
 			return false
 		}
 	}
-	return values["via"] == e.Gateway && values["dev"] == e.Device && values["src"] == e.Source && values["proto"] == "static" && values["metric"] == strconv.Itoa(e.Metric) && onlink == (e.Gateway != "")
+	static := values["proto"] == "static" || values["proto"] == "4"
+	return values["via"] == e.Gateway && values["dev"] == e.Device && values["src"] == e.Source && static && values["metric"] == strconv.Itoa(e.Metric) && onlink == (e.Gateway != "")
 }
 
 // OwnsProxyEndpointExclusion is a read-only Engine Lab ownership callback.
