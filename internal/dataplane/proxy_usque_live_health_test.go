@@ -56,6 +56,167 @@ func usqueLiveBind(i *usquediag.OwnedRuntimeIdentity) {
 	i.BindingID = routeidentity.Hash(raw)
 }
 
+func TestUSQUELiveIdentityLeafUsesOnlyFrozenEnvironmentAndOriginalProof(t *testing.T) {
+	for _, transport := range []usqueTransport{{}, {HTTP2: true, SNI: "cloudflareclient.com"}} {
+		t.Run(usqueTransportName(transport), func(t *testing.T) {
+			f := newUSQUELiveFixture(t, transport)
+			if _, err := f.run(); err != nil {
+				t.Fatal(err)
+			}
+			proof, before := f.produced, nodeRouterTransitReadbackTree(t, f.a.StateRoot)
+			f.a.FreshProfile = func(context.Context) (string, error) { panic("identity leaf called WAN") }
+			f.processes.onRunning = func() { panic("identity leaf called process controller") }
+			ctx := WithReviewGuard(context.Background(), func(context.Context) error { panic("identity leaf acquired action authority") })
+			calls := 0
+			inspect := usqueLiveHealthIO{
+				observe: func(context.Context, usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
+					panic("identity leaf reused action observer")
+				},
+				produce: func(context.Context, usquediag.OwnedProbeOptions) (usquediag.OwnedRuntimeEvidence, error) {
+					panic("identity leaf replayed producer")
+				},
+				identity: func(c context.Context, r usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
+					calls++
+					if r.Root != f.a.runtimeRoot() || r.Binary != f.a.EngineBin || r.SOCKSAddress != "127.0.0.1:18081" || r.Transport != proof.Identity.Transport || r.Endpoint.String() != proof.Identity.Endpoint {
+						t.Fatal("identity leaf lost exact original runtime request")
+					}
+					deadline, bounded := c.Deadline()
+					if !bounded || time.Until(deadline) > 5*time.Second {
+						t.Fatal("identity leaf is unbounded")
+					}
+					for range 2 {
+						value, err := r.Environment(c)
+						if err != nil || value != proof.Identity.EnvironmentID {
+							t.Fatal("identity leaf did not retain original environment", err)
+						}
+					}
+					return proof.Identity, nil
+				},
+			}
+			if err := verifyOwnedUSQUELiveIdentityWith(ctx, f.a.engineProcessWithTransport(transport), "127.0.0.1:18081", proof, inspect.identity); err != nil || calls != 1 {
+				t.Fatal("identity leaf refused unchanged original runtime", err, calls)
+			}
+			if !reflect.DeepEqual(proof, f.produced) || !reflect.DeepEqual(before, nodeRouterTransitReadbackTree(t, f.a.StateRoot)) {
+				t.Fatal("identity leaf changed receipt, TTL or files")
+			}
+		})
+	}
+}
+
+func TestUSQUELiveIdentityLeafRefusesDeathAndEveryOriginalIdentityReplacement(t *testing.T) {
+	for _, mode := range []string{"death", "birth", "exe", "config", "argv", "environment", "transport", "endpoint", "listener", "source", "binding", "peer", "canceled"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newUSQUELiveFixture(t, usqueTransport{HTTP2: true})
+			if _, err := f.run(); err != nil {
+				t.Fatal(err)
+			}
+			proof := f.produced
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cause := errors.New("owned process disappeared")
+			observe := func(c context.Context, r usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
+				if mode == "death" {
+					return usquediag.OwnedRuntimeIdentity{}, cause
+				}
+				current := proof.Identity
+				switch mode {
+				case "birth":
+					current.RuntimeID = "managed:usque:" + strings.Repeat("b", 64)
+				case "exe":
+					current.BinarySHA256 = strings.Repeat("b", 64)
+				case "config":
+					current.SessionSHA256 = strings.Repeat("b", 64)
+				case "argv":
+					current.ArgsSHA256 = strings.Repeat("b", 64)
+				case "environment":
+					current.EnvironmentID = strings.Repeat("b", 64)
+				case "transport":
+					current.Transport = "QUIC"
+				case "endpoint":
+					current.Endpoint = "1.1.1.1:443"
+				case "listener":
+					current.SocketBinding = strings.Repeat("b", 64)
+				case "source":
+					current.SourceCommit = strings.Repeat("b", 40)
+				case "binding":
+					current.BindingID = strings.Repeat("b", 64)
+				case "peer":
+					current.PeerObservation = "udp-connected-default-peer"
+				case "canceled":
+					cancel()
+				}
+				if mode != "binding" {
+					usqueLiveBind(&current)
+				}
+				return current, nil
+			}
+			err := verifyOwnedUSQUELiveIdentityWith(ctx, f.a.engineProcessWithTransport(f.transport), "127.0.0.1:18081", proof, observe)
+			if err == nil || mode == "death" && !errors.Is(err, cause) || mode == "canceled" && !errors.Is(err, context.Canceled) || !reflect.DeepEqual(proof, f.produced) {
+				t.Fatal("identity leaf adopted replacement/dead runtime or changed proof", err)
+			}
+		})
+	}
+}
+
+func TestUSQUELiveIdentityLeafRejectsInvalidInputsBeforeObservation(t *testing.T) {
+	for _, mode := range []string{"nil-context", "canceled", "empty", "expired", "future", "extended", "binding", "spec", "argv", "address"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newUSQUELiveFixture(t, usqueTransport{})
+			if _, err := f.run(); err != nil {
+				t.Fatal(err)
+			}
+			proof, spec, address, ctx := f.produced, f.a.engineProcessWithTransport(f.transport), "127.0.0.1:18081", context.Background()
+			switch mode {
+			case "nil-context":
+				ctx = nil
+			case "canceled":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			case "empty":
+				proof = usquediag.OwnedRuntimeEvidence{}
+			case "expired":
+				proof.ValidUntil = time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)
+			case "future":
+				proof.CheckedAt = time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano)
+			case "extended":
+				proof.ValidUntil = time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)
+			case "binding":
+				proof.Identity.BindingID = strings.Repeat("b", 64)
+			case "spec":
+				spec.ID = "usque-canary"
+			case "argv":
+				spec.Args = append(spec.Args, "--http2")
+			case "address":
+				address = "127.0.0.1:18082"
+			}
+			calls := 0
+			err := verifyOwnedUSQUELiveIdentityWith(ctx, spec, address, proof, func(context.Context, usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
+				calls++
+				return proof.Identity, nil
+			})
+			if err == nil || calls != 0 {
+				t.Fatal("invalid input reached observer", err, calls)
+			}
+		})
+	}
+}
+
+func TestUSQUELiveIdentityLeafNilUsesActualObserverAndCannotAdoptFixture(t *testing.T) {
+	f := newUSQUELiveFixture(t, usqueTransport{})
+	if _, err := f.run(); err != nil {
+		t.Fatal(err)
+	}
+	// The fixture has no PID or launcher passport. Actual observation must refuse
+	// before any procfs process inspection; no executable/process is created.
+	if _, err := os.Lstat(f.a.engineProcess().PIDPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if err := verifyOwnedUSQUELiveIdentity(context.Background(), f.a.engineProcessWithTransport(f.transport), "127.0.0.1:18081", f.produced); err == nil {
+		t.Fatal("nil identity seam adopted fixture or used its action observer")
+	}
+}
+
 // Local files plus private observer/producer doubles; no procfs, executable,
 // DNS, sockets, registration, Start/Stop, policy commands or native proof.
 func newUSQUELiveFixture(t *testing.T, transport usqueTransport) *usqueLiveFixture {
