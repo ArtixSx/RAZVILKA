@@ -496,9 +496,18 @@ func (m *Manager) Check(ctx context.Context) Report {
 			}
 			warpOK = report.OwnedFresh
 			if report.OwnedFresh {
+				evidence.CheckedAt, evidence.ValidUntil = evidence.Owned.CheckedAt, evidence.Owned.ValidUntil
+				evidence.Transport, evidence.Endpoint = evidence.Owned.ProtocolPath, evidence.Owned.Identity.Endpoint
 				evidence.Warp = evidence.Owned.Warp
 				evidence.Colo, evidence.Loc = evidence.Owned.Colo, evidence.Owned.Loc
+				evidence.EgressIP = evidence.Owned.EgressIP
 				evidence.ConfirmedRoutes = append([]string{}, evidence.Owned.ConfirmedRoutes...)
+				if len(evidence.Owned.ReachableRoutes) > 0 {
+					add("owned-service-reachability", "Доступность сервиса", "warning", "TLS подтвердил доступность: "+strings.Join(evidence.Owned.ReachableRoutes, ", ")+". Подтверждение по критериям сервиса хранится отдельно.", "")
+				}
+				if len(evidence.Owned.ChallengeRoutes) > 0 {
+					add("owned-service-challenge", "Диагностический путь сервиса", "pass", "Свежий challenge подтвердил диагностический путь к разрешённому probe через тот же owned runtime: "+strings.Join(evidence.Owned.ChallengeRoutes, ", ")+". Это отдельная проверка пути, а не критериев сервиса.", "")
+				}
 				add("owned-transport-path", "Путь owned USQUE", "warning", "WARP прошёл через закреплённый owned runtime; путь "+evidence.Owned.ProtocolPath+" выведен из проверенного release и session. Negotiated ALPN отдельно не наблюдался.", "")
 				if evidence.Owned.UDPForwarding {
 					add("owned-udp-forwarding", "UDP через SOCKS", "pass", "Отдельный nonce challenge подтвердил UDP forwarding через этот owned SOCKS runtime.", "")
@@ -507,6 +516,8 @@ func (m *Manager) Check(ctx context.Context) Report {
 				}
 			}
 		}
+		// Only locally fresh typed grades may appear as flat service confirmation.
+		report.Evidence = evidence
 		if warpOK {
 			message := "Последний изолированный кандидат подтвердил warp=" + evidence.Warp + "."
 			if evidence.Colo != "" || evidence.Loc != "" {
@@ -516,8 +527,9 @@ func (m *Manager) Check(ctx context.Context) Report {
 		} else {
 			add("warp-evidence", "Технический WARP", "warning", "Текущий WARP не подтверждён свежим результатом для этого endpoint и окружения.", "Повторите изолированную проверку профиля; рабочий маршрут не меняйте.")
 		}
-		if warpOK && len(evidence.ConfirmedRoutes) > 0 {
-			add("service-evidence", "Проверка сервиса", "pass", "После WARP отдельно ответили: "+strings.Join(evidence.ConfirmedRoutes, ", ")+".", "")
+		if report.OwnedFresh && len(evidence.ConfirmedRoutes) > 0 {
+			message := "После WARP по критериям сервиса подтверждены: " + strings.Join(evidence.ConfirmedRoutes, ", ") + "."
+			add("service-evidence", "Проверка сервиса", "pass", message, "")
 		} else {
 			add("service-evidence", "Проверка сервиса", "warning", "WARP и доступность выбранного сервиса ещё не подтверждены вместе.", "Назначьте USQUE одному сервису и выполните применение с canary.")
 		}
@@ -795,12 +807,25 @@ func readCanaryEvidence(path string) (CanaryEvidence, error) {
 	if len(b) > 64*1024 {
 		return CanaryEvidence{}, fmt.Errorf("USQUE canary evidence is too large")
 	}
+	ownedPresent, ownedCanonical, err := ownedCanaryEnvelope(b)
+	if err != nil {
+		return CanaryEvidence{}, err
+	}
 	var evidence CanaryEvidence
 	if err := json.Unmarshal(b, &evidence); err != nil {
 		return CanaryEvidence{}, err
 	}
-	if evidence.Owned != nil && !safeOwnedEvidence(*evidence.Owned) {
-		evidence.Owned = nil
+	// Legacy flat routes carry no predicate/version grade. Semantic display
+	// fields are populated only after current typed-owned freshness succeeds.
+	evidence.ConfirmedRoutes = nil
+	if ownedPresent {
+		// A typed receipt cannot fall back to the installed-session evaluator or
+		// publish historical/conflicting flat service grades before freshness.
+		evidence.BindingID = ""
+		evidence.ConfirmedRoutes = nil
+		if !ownedCanonical || evidence.Owned == nil || !safeOwnedEvidence(*evidence.Owned) {
+			evidence.Owned = nil
+		}
 	}
 	evidence.Warp = strings.ToLower(strings.TrimSpace(evidence.Warp))
 	if evidence.Warp != "on" && evidence.Warp != "plus" && evidence.Warp != "off" {
@@ -830,14 +855,6 @@ func readCanaryEvidence(path string) (CanaryEvidence, error) {
 	if _, err := time.Parse(time.RFC3339, evidence.ValidUntil); err != nil {
 		evidence.ValidUntil = ""
 	}
-	confirmed := make([]string, 0, len(evidence.ConfirmedRoutes))
-	for _, name := range evidence.ConfirmedRoutes {
-		name = strings.TrimSpace(name)
-		if len(name) > 0 && len(name) <= 80 && !strings.ContainsAny(name, "\r\n\t") {
-			confirmed = append(confirmed, name)
-		}
-	}
-	evidence.ConfirmedRoutes = confirmed
 	return evidence, nil
 }
 
