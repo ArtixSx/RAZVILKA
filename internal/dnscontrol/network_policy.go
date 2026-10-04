@@ -212,7 +212,62 @@ func (r *NetworkPolicyDNSResolver) ageResidence(wire []byte, started time.Time) 
 	if answer.Unpack(wire) != nil {
 		return nil, errDNSAnswer
 	}
-	return ageDNSWire(wire, uint64((elapsed+time.Second-1)/time.Second), answer.RCode == dnsmessage.RCodeNameError || len(answer.Answers) == 0)
+	return ageDNSWire(wire, uint64((elapsed+time.Second-1)/time.Second), networkPolicyDNSNegative(answer))
+}
+
+// A CNAME in Answers does not make a NOERROR response positive for the
+// requested type. Follow its owner names to the relevant RRset before aging
+// the SOA negative lease (RFC 2308 sections 2.2 and 5). Unrelated records must
+// not preserve a longer SOA TTL. This classifies the wire; it creates no cache
+// or domain/flow authority.
+func networkPolicyDNSNegative(answer dnsmessage.Message) bool {
+	if answer.RCode == dnsmessage.RCodeNameError || len(answer.Answers) == 0 {
+		return true
+	}
+	if answer.RCode != dnsmessage.RCodeSuccess || len(answer.Questions) != 1 {
+		return false
+	}
+	hasSOA := false
+	for _, rr := range answer.Authorities {
+		hasSOA = hasSOA || rr.Header.Type == dnsmessage.TypeSOA
+	}
+	if !hasSOA {
+		return false
+	}
+	q := answer.Questions[0]
+	aliases := make(map[string]string)
+	relevant := make(map[string]bool)
+	for _, rr := range answer.Answers {
+		if rr.Header.Class != q.Class {
+			continue
+		}
+		name := strings.ToLower(rr.Header.Name.String())
+		if rr.Header.Type == q.Type || q.Type == dnsmessage.TypeALL {
+			relevant[name] = true
+		}
+		if cname, ok := rr.Body.(*dnsmessage.CNAMEResource); ok {
+			target := strings.ToLower(cname.CNAME.String())
+			if old, duplicate := aliases[name]; duplicate && old != target {
+				aliases[name] = "" // ambiguity cannot prove a relevant RRset
+			} else {
+				aliases[name] = target
+			}
+		}
+	}
+	name := strings.ToLower(q.Name.String())
+	seen := make(map[string]bool)
+	for !seen[name] {
+		if relevant[name] {
+			return false
+		}
+		seen[name] = true
+		next := aliases[name]
+		if next == "" {
+			break
+		}
+		name = next
+	}
+	return true
 }
 
 func slicesDNSWire(wire []byte) []byte { return append([]byte(nil), wire...) }
@@ -246,7 +301,7 @@ func (r *NetworkPolicyDNSResolver) resolveDefault(ctx context.Context, query []b
 	if response.age > ^uint64(0)-seconds {
 		return nil, errDNSAnswer
 	}
-	negative := answer.RCode == dnsmessage.RCodeNameError || len(answer.Answers) == 0
+	negative := networkPolicyDNSNegative(answer)
 	// No second DNS cache. Preserve arbitrary standard types/EDNS and consume
 	// HTTP Age plus local residence in the original wire, without repacking.
 	return ageDNSWire(response.wire, response.age+seconds, negative)

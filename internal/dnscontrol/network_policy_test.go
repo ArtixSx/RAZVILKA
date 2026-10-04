@@ -174,6 +174,51 @@ func TestNetworkPolicyDNSSharedCDNObservationsAreSeparateDiagnostics(t *testing.
 	}
 }
 
+func TestNetworkPolicyDNSCNAMENODATAConsumesSOAMinimumAndFinalResidence(t *testing.T) {
+	for _, terminalType := range []dnsmessage.Type{0, dnsmessage.TypeA, dnsmessage.TypeAAAA} {
+		t.Run(terminalType.String(), func(t *testing.T) {
+			r, client := networkDNSFixture(t)
+			now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
+			r.now = func() time.Time { return now }
+			query := scopedQuery(t, "unknown.example.com", dnsmessage.TypeA)
+			networkDefaultExchange(r, func(_ context.Context, q []byte) (dohResponse, error) {
+				a := scopedResponse(t, q)
+				terminal := dnsmessage.MustNewName("cdn.example.com.")
+				a.Answers = []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: a.Questions[0].Name, Type: dnsmessage.TypeCNAME, Class: dnsmessage.ClassINET, TTL: 120}, Body: &dnsmessage.CNAMEResource{CNAME: terminal}}}
+				if terminalType == dnsmessage.TypeA {
+					a.Answers = append(a.Answers, dnsmessage.Resource{Header: dnsmessage.ResourceHeader{Name: terminal, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: 120}, Body: &dnsmessage.AResource{A: [4]byte{93, 184, 215, 14}}})
+				} else if terminalType == dnsmessage.TypeAAAA {
+					a.Answers = append(a.Answers, dnsmessage.Resource{Header: dnsmessage.ResourceHeader{Name: terminal, Type: dnsmessage.TypeAAAA, Class: dnsmessage.ClassINET, TTL: 120}, Body: &dnsmessage.AAAAResource{AAAA: netip.MustParseAddr("2001:db8::1").As16()}})
+				}
+				a.Authorities = []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: dnsmessage.MustNewName("example.com."), Type: dnsmessage.TypeSOA, Class: dnsmessage.ClassINET, TTL: 120}, Body: &dnsmessage.SOAResource{NS: dnsmessage.MustNewName("ns.example.com."), MBox: dnsmessage.MustNewName("hostmaster.example.com."), Serial: 1, MinTTL: 30}}}
+				now = now.Add(2 * time.Second)
+				return dohResponse{wire: scopedPack(t, a), age: 20}, nil
+			})
+			checks := 0
+			original := r.admit
+			r.admit = func(ctx context.Context, c netip.Addr, n string) (NetworkPolicyDNSAdmission, error) {
+				checks++
+				if checks == 3 {
+					now = now.Add(3 * time.Second)
+				}
+				return original(ctx, c, n)
+			}
+			var answer dnsmessage.Message
+			if err := r.Publish(context.Background(), client, query, func(_ context.Context, _ NetworkPolicyDNSAdmission, wire []byte) error { return answer.Unpack(wire) }); err != nil {
+				t.Fatal(err)
+			}
+			want := uint32(5) // min(120,30) - HTTP Age20 - exchange2 - final3
+			if terminalType == dnsmessage.TypeA {
+				want = 95 // actual requested RRset: ordinary SOA TTL, not NODATA
+			}
+			soa := answer.Authorities[0]
+			if soa.Header.TTL != want || soa.Body.(*dnsmessage.SOAResource).MinTTL != 30 || answer.Answers[0].Header.TTL != 95 {
+				t.Fatal("CNAME NODATA renewed negative lease or changed RDATA", soa, answer.Answers)
+			}
+		})
+	}
+}
+
 func TestNetworkPolicyDNSCNAMEAgeAndPublicationUseExistingMinimumLease(t *testing.T) {
 	r, client := networkDNSFixture(t)
 	start := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
