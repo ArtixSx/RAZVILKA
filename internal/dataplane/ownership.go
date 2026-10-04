@@ -239,6 +239,21 @@ func parseKernelPolicyRule(family int, line string) (kernelPolicyRule, bool) {
 		return result, false
 	}
 	fields := strings.Fields(line)
+	if len(fields) < 5 {
+		return result, false
+	}
+	if fields[3] != "to" {
+		// iproute2 omits the destination selector for /0. Normalize only
+		// these three bounded forms into the existing exact tuple grammar.
+		if len(fields) != 5 && len(fields) != 7 && len(fields) != 9 {
+			return result, false
+		}
+		destination := "0.0.0.0/0"
+		if family == 6 {
+			destination = "::/0"
+		}
+		fields = append([]string{fields[0], fields[1], fields[2], "to", destination}, fields[3:]...)
+	}
 	if (len(fields) != 7 && len(fields) != 9 && len(fields) != 11) || !strings.HasSuffix(fields[0], ":") || fields[1] != "from" || fields[3] != "to" {
 		return result, false
 	}
