@@ -21,14 +21,14 @@ func TestRequiredHistoryReadVersionFencesXrayAcrossReopen(t *testing.T) {
 	if _, err := s.RecordCheck(ctx, id, enginePass(id, "xray", "xr-capability", testTime), testTime); err != nil {
 		t.Fatal(err)
 	}
-	if version, err := s.RequiredHistoryReadVersion(ctx); err != nil || version != ExactHistoryReadVersion {
+	if version, err := s.RequiredHistoryReadVersion(ctx); err != nil || version != 2 {
 		t.Fatal(version, err)
 	}
 	backup, err := s.ExportPrivate(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version, err := RequiredPrivateHistoryReadVersion(backup); err != nil || version != ExactHistoryReadVersion {
+	if version, err := RequiredPrivateHistoryReadVersion(backup); err != nil || version != 2 {
 		t.Fatal(version, err)
 	}
 	backup.SHA256 = "invalid"
@@ -43,7 +43,7 @@ func TestRequiredHistoryReadVersionFencesXrayAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if version, err := s.RequiredHistoryReadVersion(ctx); err != nil || version != ExactHistoryReadVersion {
+	if version, err := s.RequiredHistoryReadVersion(ctx); err != nil || version != 2 {
 		t.Fatal(version, err)
 	}
 	cancelled, cancel := context.WithCancel(ctx)

@@ -4,7 +4,7 @@
 Вход: `1f197d9f580648663557ec95d5b692a2fccb06a0`.
 Код: **`b9372bc0cc06fa6d54fe99d02c37424f9ecf9f5c`**.
 
-Статус: реализован и проверен unit/static подэтап точного XHTTP VLESS. **Native XHTTP не запускался этим чатом; transport не production validated. D02/D03 не закрыты.** Применение через scoped adapter, NodeStore import/read compatibility и root native acceptance требуют следующей порции владельцев. VERSION/go.mod/go.sum, app/main, Manager/Plan, прочие node/proxy, VM/роутер/рабочая сеть и GitHub не изменены. Новых scheduler/store/journal нет.
+Статус первого compiler checkpoint: реализован и проверен unit/static подэтап точного XHTTP VLESS. **Native XHTTP не запускался этим чатом; transport не production validated. D02/D03 не закрыты.** Последующие native55 CA fix и NodeStore import/read compatibility checkpoint описаны ниже; scoped adapter и ROOT native/admission acceptance остаются открыты. VERSION/go.mod/go.sum, app/main, Manager/Plan, прочие node/proxy, VM/роутер/рабочая сеть и GitHub этим чатом не изменены. Новых scheduler/store/journal нет.
 
 ## Результат и API
 
@@ -35,6 +35,8 @@
 - [Sing-box 1.14.2 transport decoder](https://github.com/SagerNet/sing-box/blob/v1.14.2/option/v2ray_transport.go) и [official transport documentation](https://sing-box.sagernet.org/configuration/shared/v2ray-transport/): XHTTP не является принимаемым типом stock decoder.
 
 ## Обязательный handoff VLESS / CORE / OPS
+
+Это исходный контракт b9372bc. NodeStore части пунктов 1, 2, 4 выполнены checkpoint 516f014 ниже; scoped adapter, CORE/OPS admission и ROOT acceptance остаются владельцам.
 
 1. **NodeStore import/reopen:** после принятия compiler checkpoint заменить `providerprofile.ParseProfile` на `ParseCanonicalProfile` в `nodestore/store.go` (Import) и `nodestore/document.go` (persisted material revalidation). Extract продолжает удалять tag; один приватный Store/schema/journal остаётся прежним. Проверить импорт URI/JSON/feed, стабильную identity, reopen/backup/restore с XHTTP и сохранение всех extra. Этот чат эти owned VLESS файлы не редактировал.
 2. **Sing-box materialization:** `nodestore/routes.go` обязан до выдачи `MaterializeSingBox` явно отвергать `!providerprofile.SingBoxSupportsOutbound(outbound)` с ErrRouteProof. Невозможность получить новый Sing-box checker PASS сама по себе не заменяет compiler/materializer gate для сохранённого/поданного вручную evidence.
@@ -89,3 +91,50 @@ Windows/amd64, `C:/Projects/RAZVILKA/tools/go/bin/go.exe`, Go1.26.5, GOTOOLCHAIN
 Первый sandbox прогон завершился RC1: Windows owned atomic rename Access denied; dataplane дошёл до standard 10-minute test timeout. Контроль **неизменённого** TestFileTargetReadOnlyAndExactCAS в restorejournal тоже падал внутри sandbox и прошёл RC0 при auto-approved обычном запуске вне него. MSYS syntax process аналогично имел NtCreateDirectoryObject access denial; разрешённый повтор -n прошёл RC0. Это ограничения sandbox, production ownership/permissions/cleanup не ослаблялись. В исправленных промежуточных прогонах также найдены/устранены XHTTP YAML nil mapping, missing engine unit fixtures и неверная keys-json fixture shape. Все финальные команды в таблице прошли после исправлений.
 
 Runtime version producers/checker probes в новых Windows unit tests — явные fixtures. Linux runtime/race, XHTTP native server/client, full integration gate, scoped TUN и аппаратная проверка **не выполнялись**. ROOT должен сохранить реальные logs/RC и проверить semantic oracle, не повышая compilation/SKIP до native PASS.
+
+## Native55: CA isolation checkpoint (после принятия ROOT 86c29d1)
+
+ROOT передал read-only evidence `delivery-review/.review-local/xhttp-native55.log`: **RC1**. RAW TLS/REALITY и StoreConfigSyntax прошли; все 8 XHTTP случаев прошли protocol/paired egress (actual `.13`), затем получили service request-failed, HTTPStatus 0; TLS listener записал `remote error: tls: bad certificate`. Native PASS XHTTP отсутствует.
+
+Исправление harness: **`c2436eb8532a9a4ef898381089a94262e0d8c951`**, только `internal/dataplane/nodecheck_xray_native_linux_test.go`. Каждый top-level RAW/XHTTP matrix reexec-ится в отдельном Go test child **в той же isolated network namespace**. Причина: каждый matrix генерирует отдельную CA, но локальный Go1.26.5 `crypto/x509/root.go` вызывает `once.Do(initSystemRoots)`; последующий SSL_CERT_FILE не обновляет cache для штатного service TLS probe. Egress getter уже имел explicit fixture roots, поэтому egress проходил. Child получает env marker с exact test name, единственный test.run, count1 и bounded parent deadline; все прежние server/client, real service, egress/source/receipt/cleanup/mismatch/lifecycle criteria сохранены. Production code, TLS verification и confidence oracle не изменены. Причина затем подтверждена ROOT native57 ниже.
+
+Проверки здесь: Linux amd64 dataplane test compilation **RC0**, Linux dataplane vet **RC0**, diff check **RC0**. **Actual native/race этим чатом не запускались. ROOT принял fix и повторил тот же `RAZVILKA_XHTTP_NATIVE=1 ... sh scripts/check-xray-native.sh`: native57 RC0.** Исправление принято отдельно от NodeStore checkpoint.
+
+### Reader3 integration: CORE/OPS contract
+
+Согласованный scope ROOT передал XHTTP владельцу NodeStore `store.go`, `document.go`, history compatibility и `routes.go` плюс узкие tests. Работа начата от обычного fast-forward accepted base **86c29d116f6e7978a95217423208fa9b0f11ca10**; native55 diagnosis имела приоритет. NodeStore changes зафиксированы отдельным checkpoint **516f01450e4faf3bcfe4ee355b55ca91fd2ec18e**: canonical import/reopen, Sing-box transport gate и supported reader3 / required3 только XHTTP secrets, RAW Xray history2, legacy1. Native CA fix можно принять отдельно, до reader3 consumers.
+
+CORE/OPS до принятия reader3 должны устранить hard-coded reader2 в своих owned consumers: `internal/updatecheck/node_history_admission.go` (CheckReadable, CheckWrite bounds, checked binary version bounds, probe accepts only strings1/2), `internal/updatecheck/node_history.go` (typed reader верхняя граница сейчас ошибочно связана с **SelfUpdateReadVersion=2** — node read capability отделить, **не менять self-update schema2**), `internal/updatecheck/file_adapter.go` (`-node-history-read-version` expects2), `cmd/razvilka/node_check_engines_test.go` (CLI expects2) и соответствующие fixtures. Main печатает typed `nodestore.ExactHistoryReadVersion` и app передаёт constant в Xray write guard: после bump это3, старый OPS guard иначе fail-closed отвергнет все Xray writes. Это не NodeStore-owned изменения; здесь они не редактировались. Дополнительно admission должен покрывать XHTTP secret write **до первого check**, включая обычный import/feed/restore, и проверять live + every retained backup/journal/controller image before stop/install/downgrade. Candidate reader2 обязан отвергаться без удаления данных. ROOT координирует это с CORE/OPS; отправку сообщений после auto-review rejection не повторял.
+
+## NodeStore XHTTP checkpoints 516f014 + b0d27a9 — завершённый подэтап
+
+**Код: `516f01450e4faf3bcfe4ee355b55ca91fd2ec18e`**. `Store.Import` и persisted `validate` используют `ParseCanonicalProfile`, extract/identity/private schema4/lease/CAS/restore journal/health history остаются прежними. XHTTP имеет canonical identity, не Sing-box executable draft. `MaterializeSingBox` возвращает ErrRouteProof и нулевой RouteMaterial для XHTTP даже при вручную сохранённом current Sing-box PASS; отказ не записывает history. `MaterializeXray` сохраняет exact streamSettings host/path/mode/extra/TLS/REALITY, endpoint set, node tag, destination domains/IPs и default/terminal blackhole только при matching Xray proof.
+
+**Дополнительный code checkpoint: `b0d27a9e01dc5970555a825f1a68b4cb8a0c1e0e`**, только `routes.go` и его XHTTP regression. По finding VLESS и поручению ROOT `collectPrivateEndpointHosts` больше не обходит вложенные keys `server/address/endpoint`: единственный DNS/exclusion endpoint — validated top-level canonical `outbound.server`. Accepted XHTTP private headers `Address`, `SERVER`, `Endpoint` сохраняются в compiled config и никогда не становятся EndpointHosts; SNI/HTTP host тоже не приобретают endpoint authority. Проверено полным materializer test с matching Xray proof и private header tokens. `SourceUtility` уже читает только top-level canonical server; не менялся. VLESS scoped consumer отдельно выводит actual remote endpoint из `settings.vnext[0].address`; его файлы не редактировались.
+
+`ExactHistoryReadVersion=3` обозначает supported reader, не required для любых Xray записей. Required inspection сначала проверяет **все validated private secrets** (включая unchecked/disabled/expired XHTTP), и возвращает frozen XHTTP capability3; иначе frozen RAW Xray history capability2; иначе1. Required inspection read-only, не возвращает IDs/credentials, не зависит от latest health, origin expiry или наличия PASS. `RequiredPrivateHistoryReadVersion` применяет тот же typed validator к backup/retained image: live XHTTP deletion не убирает требование3 у retained backup; restore снова восстанавливает live3. Schema number4, binary VERSION и RAW/TCP exact contract не повышались/не ослаблялись.
+
+Файлы checkpoint: `internal/nodestore/{store.go,document.go,routes.go,history_compatibility.go,history_compatibility_test.go}`, новые `exact_history_xhttp_test.go` / `xhttp_store_test.go`, узкая end-to-end feed regression в existing `internal/providerfeed/xhttp_parse_test.go`. D10 логика/group/store mutation алгоритмы не менялись. VLESS `proxy_nodes.go` не редактировался.
+
+Новые регрессии: TLS+REALITY URI/canonical feed envelope/native Xray JSON dedup одной identity; все принятые extra byte-exact при reopen/export/private journal restore/reopen; public DTO privacy; mode matrix auto/packet-up/stream-up/stream-one; untested/no matching engine proof и expired proof отвергаются; невозможный Sing-box PASS не обходит transport capability; unsupported import сохраняет existing bytes, mixed import требует explicit accept; persisted unsupported secondary endpoint при согласованной HMAC identity отвергается без repair/deletion; live+retained unchecked/failed/disabled/expired secret требует3, RAW history и old retained RAW backup остаются2, legacy/empty1; actual feed Sync импортирует только quarantined/untrusted/not_checked material с read3 fence.
+
+Финальные проверки после всех code changes, Go1.26.5, GOTOOLCHAIN=local, GOMAXPROCS=2, GOFLAGS=-p=2:
+
+| Команда | RC |
+|---|---|
+| Windows `go test ./internal/nodestore ./internal/providerprofile ./internal/providerfeed -count=1` | **0**; финально после endpoint fix 7.157s / 0.598s / 6.298s |
+| Windows `go test ./internal/nodestore ./internal/providerfeed -run 'Test(XHTTP\|RequiredHistoryReadVersion\|XrayEvidence\|EngineFailure\|EngineRoute\|XrayProof)' -count=3` | **0**; финально после endpoint fix 4.531s / 0.764s |
+| Windows `go vet ./internal/nodestore ./internal/providerprofile ./internal/providerfeed` | **0** |
+| Windows `go build ./...` | **0** |
+| Linux amd64 `go vet ./internal/nodestore ./internal/providerprofile ./internal/providerfeed` | **0**, static only |
+| Linux amd64 `go test -c -o <own temporary output> ./internal/nodestore` | **0**, compilation only |
+| Linux amd64 `go test -c -o <own temporary output> ./internal/dataplane` / `go vet ./internal/dataplane` | **0**, final native CA harness compiled/checked |
+| `git diff --check` / staged check | **0** |
+
+Windows filesystem-writing tests запускались auto-approved вне sandbox из-за ранее доказанного запрета atomic rename; production permissions не ослаблялись. Собственные temporary Linux binaries удалены после проверки абсолютного target внутри assigned worktree. Linux runtime/race, scoped TUN/LAN/HIL, CORE/OPS candidate2 actual admission/downgrade tests **этим чатом** не выполнялись. Перед разрешением production writes нужен совместный CORE/OPS checkpoint выше; данный NodeStore API результат сам по себе не заявляет completed admission gate или D02/D03 acceptance.
+
+## ROOT native57 — полученное actual evidence
+
+ROOT сообщил **RC0**, source **`ea69cb91375c1fa7db4de933f7a377b512f83c56`** (включает c2436eb). Read-only просмотрен `C:/Projects/RAZVILKA/delivery-review/.review-local/xhttp-native57.log`: оба RAW/TCP security cases PASS, все **8 XHTTP TLS/REALITY × auto/packet-up/stream-up/stream-one PASS**, StoreConfigSyntax PASS. XHTTP matrix 49.63s; реальный fixture наблюдал **direct36/proxy46/service30**. TLS packet-up и REALITY stream-one также подтвердили actual wrong path/TLS name/mode/RAW transport rejection, правильный material recovery, stopped/restarted server, wrong UUID и killed/recovered owned client. TLS verification не отключалась; fake server/process/SOCKS/proof не добавлялись.
+
+Это подтверждает локальный exact XHTTP checker/harness и CA cache diagnosis; **не является TUN/LAN/Internet/router/HIL/restart/rollback production evidence**. Native57 не включает новые NodeStore reader3/endpoint checkpoints: их Linux native integration/admission повтор ROOT выполняет после объединения owned VLESS/CORE/OPS потребителей. Чат XHTTP самостоятельно native/VM/network не запускал и root evidence не изменял.
