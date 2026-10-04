@@ -154,5 +154,14 @@ adaptive selection efficacy или production capability.
 
 Первый ROOT `nfqws-kernel59`, integration `b642b73`, **RC1 до Start**: queue
 inventory отсутствовал. ROOT проверяет VM module и повторяет запуск; это не
-скрытый PASS и не причина заменить missing inventory пустым списком. На этом
-этапе actual queue packet PASS ещё не заявлен.
+скрытый PASS и не причина заменить missing inventory пустым списком.
+
+Повтор ROOT **`nfqws-kernel59b`, RC0**, тот же integration `b642b73`, после
+загрузки stock VM `nfnetlink_queue`. Genuine pinned executable/Lua/blob review,
+actual run 7.68s: exact socket owner; выбранные IPv4/IPv6 packet counters;
+excluded MAC с новыми адресами bypass; exact process ECHILD + parent ACK;
+common mixed receipt Remove; foreign IPv6 same queue refusal без изменения
+own receipt; LAN gate удалён последним. ROOT primary evidence:
+`.review-local/nfqws-kernel59b.log`; private retained artifacts
+`/tmp/razvilka-nfqws-scoped-kernel.cXwrG6`. Это isolated kernel/process proof;
+commonExecution / actual production main / service health ещё не заявлены.
