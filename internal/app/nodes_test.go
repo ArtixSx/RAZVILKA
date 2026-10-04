@@ -285,7 +285,7 @@ func TestNodeImportStoresAcceptedEntriesWithoutChangingRoutes(t *testing.T) {
 	a := &App{Nodes: store}
 	handler := a.Handler(http.NotFoundHandler())
 	good := "vless://123e4567-e89b-12d3-a456-426614174000@private.example:443?security=tls&sni=secret.example"
-	bad := "vless://123e4567-e89b-12d3-a456-426614174001@bad.example:443?security=tls&type=xhttp"
+	bad := "vless://123e4567-e89b-12d3-a456-426614174001@bad.example:443?security=tls&type=xhttp&mode=unsupported"
 
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/import", strings.NewReader(`{"profile":"`+good+`\n`+bad+`","confirm":"STORE_REMOTE_NODES"}`))
 	response := httptest.NewRecorder()
