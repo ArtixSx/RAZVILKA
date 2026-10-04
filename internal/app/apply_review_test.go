@@ -216,14 +216,22 @@ func TestGenericApplyExcludesEditorWritesUntilRequestCleanup(t *testing.T) {
 }
 
 func TestGenericReviewGuardsNonNodeTransactionPhasesAndOwnDraftCommit(t *testing.T) {
-	for _, change := range []string{"stage-content", "stage-discard", "canary-config", "health-config", "commit-content", "own-commit", "none"} {
+	for _, change := range []string{"stage-content", "stage-discard", "canary-config", "health-config", "commit-content", "commit-wan-config", "own-commit", "none"} {
 		t.Run(change, func(t *testing.T) {
 			a := genericReviewFixture(t)
+			a.FreshProfile = func(ctx context.Context) (string, error) {
+				if change == "commit-wan-config" && dataplane.ReviewCommittedAdapter(ctx) == "sing-box" {
+					if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: false, Route: "direct"}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return "wan-0123456789ab", nil
+			}
 			a.Dataplane = dataplane.New(t.TempDir())
 			if _, err := a.EngineConfigs.Stage("sing-box", "main", `{"log":{"level":"info"}}`); err != nil {
 				t.Fatal(err)
 			}
-			plan, err := dataplane.Build(dataplane.Input{Revision: a.Store.Get().Revision, Routes: []dataplane.Route{{ServiceID: "telegram", ServiceName: "Telegram", Selected: "sing-box", Resolved: "sing-box", Domains: []string{"telegram.org"}}}, EngineConfigDrafts: []string{"sing-box/main"}, Engines: []dataplane.Engine{{ID: "sing-box", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: dataplane.HostState{TUN: true, IPCommand: true, SingBox: true}})
+			plan, err := dataplane.Build(dataplane.Input{NetworkProfileID: "wan-0123456789ab", Revision: a.Store.Get().Revision, Routes: []dataplane.Route{{ServiceID: "telegram", ServiceName: "Telegram", Selected: "sing-box", Resolved: "sing-box", Domains: []string{"telegram.org"}}}, EngineConfigDrafts: []string{"sing-box/main"}, Engines: []dataplane.Engine{{ID: "sing-box", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: dataplane.HostState{TUN: true, IPCommand: true, SingBox: true}})
 			if err != nil || !plan.Ready {
 				t.Fatalf("fixture: %v %+v", err, plan.Blockers)
 			}
@@ -262,6 +270,9 @@ func TestGenericReviewGuardsNonNodeTransactionPhasesAndOwnDraftCommit(t *testing
 					}
 				} else if !slices.Contains(adapter.calls, "rollback") {
 					t.Fatal("postactivation refusal did not rollback")
+				}
+				if change == "commit-wan-config" && binding.committedAdapters["sing-box"] {
+					t.Fatal("closing refusal published adapter commit authority")
 				}
 			}
 		})

@@ -175,13 +175,41 @@ func (a *App) bindApplyReview(ctx context.Context, cfg config.Config, plan datap
 }
 
 func (b *applyReviewBinding) guard(a *App, ctx context.Context) error {
+	committing := dataplane.ReviewCommittedAdapter(ctx)
+	if err := b.checkReviewedSources(a, ctx, committing); err != nil {
+		return err
+	}
+	if b.profile != "" {
+		current, err := a.freshNetworkProfile(ctx)
+		if contextErr := ctx.Err(); contextErr != nil {
+			return contextErr
+		}
+		if err != nil || current != b.profile {
+			return dataplane.ErrNetworkChanged
+		}
+		// The WAN reader may block while another source changes. Close the
+		// reviewed-source checks after it without requesting another WAN read.
+		if err := b.checkReviewedSources(a, ctx, committing); err != nil {
+			return err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if committing != "" {
+		b.committedAdapters[committing] = true
+	}
+	return nil
+}
+
+// Read-only: adapter commit bookkeeping is published only by the complete guard.
+func (b *applyReviewBinding) checkReviewedSources(a *App, ctx context.Context, committing string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if !reflect.DeepEqual(a.Store.Get(), b.cfg) || applyReviewHash(a.catalogSnapshot()) != b.catalogHash {
 		return dataplane.ErrReviewChanged
 	}
-	committing := dataplane.ReviewCommittedAdapter(ctx)
 	for profile, digest := range b.dnsProfiles {
 		if a.DNS == nil {
 			return dataplane.ErrReviewChanged
@@ -241,22 +269,7 @@ func (b *applyReviewBinding) guard(a *App, ctx context.Context) error {
 			return dataplane.ErrReviewChanged
 		}
 	}
-	if b.profile != "" {
-		current, err := a.freshNetworkProfile(ctx)
-		if contextErr := ctx.Err(); contextErr != nil {
-			return contextErr
-		}
-		if err != nil || current != b.profile {
-			return dataplane.ErrNetworkChanged
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if committing != "" {
-		b.committedAdapters[committing] = true
-	}
-	return nil
+	return ctx.Err()
 }
 
 func (b *applyReviewBinding) commit(a *App, ctx context.Context, scope changeScope) (func() error, error) {
