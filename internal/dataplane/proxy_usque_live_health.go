@@ -63,10 +63,14 @@ func (a *ProxyTunnelAdapter) probeOwnedUSQUELiveWith(ctx context.Context, plan R
 		if err := verifyNetworkProfile(c, plan.NetworkProfileID, a.FreshProfile); err != nil {
 			return err
 		}
+		if err := requireOwnedUSQUEReviewGuard(c); err != nil {
+			return err
+		}
 		if !a.Processes.Running(spec) {
 			return errOwnedUSQUELiveHealth
 		}
-		return c.Err()
+		// Callbacks may revoke review authority while returning matching facts.
+		return requireOwnedUSQUEReviewGuard(c)
 	}
 	if err := authority(ctx); err != nil {
 		return empty, err
