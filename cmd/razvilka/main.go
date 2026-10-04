@@ -114,6 +114,8 @@ func main() {
 	selfFiles := flag.String("self-update-file-state", getenv("RAZVILKA_SELF_UPDATE_FILE_STATE", ""), "explicit absolute retained application file journal directory")
 	selfHelper := flag.String("self-update-helper-state", getenv("RAZVILKA_SELF_UPDATE_HELPER_STATE", ""), "explicit absolute retained application helper receipt directory")
 	selfControl := flag.String("self-update-control-state", getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE", ""), "fixed absolute control authority root outside rollback images")
+	selfJob := flag.String("self-update-job", "", "matching supervised application startup job")
+	selfWorker := flag.Int("self-update-helper-pid", 0, "matching self-update command worker PID")
 	z2kRoot := flag.String("z2k-root", defaultZ2KRoot, "read-only z2k migration source root")
 	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
 	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
@@ -158,8 +160,8 @@ func main() {
 		return
 	}
 	if *selfUpdateSchema {
-		// One means the entire supervised replacement consumer is available.
-		// Retained-journal readers alone are not that capability.
+		// Capability2 requires the complete owned-runtime and stopped recovery
+		// consumer. Missing owner proofs/installer Start admission remain fenced.
 		fmt.Println("0")
 		return
 	}
@@ -188,6 +190,9 @@ func main() {
 	}
 	if modes > 1 {
 		log.Fatal("check, migration, recovery, health, installation and deactivation modes are mutually exclusive")
+	}
+	if (*selfJob == "") != (*selfWorker == 0) || *selfWorker < 0 || *selfWorker == 1 || *selfJob != "" && modes != 0 {
+		log.Fatal("self update startup requires a matching job and command worker in ordinary daemon mode")
 	}
 	if (*retryRollbackPlan == "") != (*retryRollbackDigest == "") || (*closeRollbackPlan == "") != (*closeRollbackDigest == "") {
 		log.Fatal("rollback recovery requires both plan and digest")
@@ -257,14 +262,16 @@ func main() {
 	selfFileState.RecoveryGuard = func(c context.Context) error {
 		return independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath)
 	}
+	if *selfJob != "" && selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
+		log.Fatal("matching self update startup authority unavailable; preserve retained files")
+	}
 	if selfFileState.Pending() {
 		// Observe retained file/helper journals before permission repairs,
 		// private restore, default creation or any runtime recovery can write.
 		if modes != 0 {
 			log.Fatal("self update recovery required; preserve retained journals and application files")
 		}
-		job := selfFileState.Helper.Snapshot()
-		if selfFileState.StartupAllowed(context.Background(), job.ID, job.HelperPID) != nil {
+		if selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
 			manager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
 			if err != nil {
 				log.Fatal(err)
@@ -593,8 +600,12 @@ func main() {
 		"dns": *dnsStatePath,
 	}})
 	a.SelfUpdate.Directory = selfFileState.Helper.Directory
+	if selfFileState.Adapter != nil {
+		a.SelfUpdate.FileAuthorityReview = selfUpdateAuthorityReview(selfFileState.ControlRoot)
+	}
 	selfFileState.Helper = a.SelfUpdate
 	a.SelfUpdateFiles = selfFileState
+	a.SelfUpdateStartupJobID, a.SelfUpdateStartupHelperPID = *selfJob, *selfWorker
 	a.Nodes = nodeStore
 	historyAdmission := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)
 	a.NodeHistoryWriteGuard = historyAdmission.CheckWrite
@@ -776,6 +787,13 @@ func runCommand(args []string) (bool, int) {
 			return true, 2
 		}
 		return true, runSelfUpdateFileHelper(args[1])
+	case "self-update-command-helper":
+		if len(args) != 3 {
+			return true, 2
+		}
+		return true, runSelfUpdateCommandHelper(args[1], args[2])
+	case "self-update-runtime-quiesce":
+		return true, runSelfUpdateRuntimeQuiesce(args[1:])
 	case "self-update-files":
 		return true, runSelfUpdateFileCommand(args[1:])
 	case "version", "v":

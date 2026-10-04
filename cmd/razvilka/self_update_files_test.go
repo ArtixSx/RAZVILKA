@@ -57,6 +57,9 @@ func TestSelfUpdateExplicitRootsAndCapability(t *testing.T) {
 	if f.Pending() {
 		t.Fatal("missing retained state falsely pending")
 	}
+	if f.Adapter != nil {
+		t.Fatal("private root overrides acquired the fixed production provider")
+	}
 	if _, err := os.Stat(f.Directory); !os.IsNotExist(err) {
 		t.Fatal("reader created journal", err)
 	}
