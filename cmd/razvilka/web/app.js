@@ -2076,6 +2076,7 @@ function engineStatusText(engine) {
 }
 
 function renderEngineControl() {
+  if (typeof renderWireGuardProfiles === 'function') renderWireGuardProfiles();
   if (!state.engineConfigs.length) {
     const load = state.dataLoad?.engineConfigs;
     const message = load?.loaded ? 'Нет описаний обходов' : load?.phase === 'busy' ? 'Настройки временно заняты. Повторим загрузку.' : load?.phase === 'error' ? 'Не удалось загрузить настройки. Нажмите «Обновить».' : 'Загружаем настройки обходов…';

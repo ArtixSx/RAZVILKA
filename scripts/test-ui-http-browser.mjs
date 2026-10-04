@@ -111,6 +111,57 @@ try {
   const putPolicy = async(policy, expected_revision=policy.revision)=>policyTransport?fixturePut(policy,expected_revision):context.request.put(origin+'/api/v1/autonomy',{data:{expected_revision,policy,confirm:'SAVE_AUTONOMY',release_safe_mode:false}});
   const forwardPolicy = async route=>{if(!policyTransport)return route.fetch();const {policy,expected_revision}=route.request().postDataJSON();return fixturePut(policy,expected_revision);};
   const deliverPolicy = async(route,response)=>policyTransport?route.fulfill({status:response.status(),json:await response.json()}):route.fulfill({response});
+  const namedWGTest=async()=>test('named WG create/replace/delete uses CAS and fences an unknown write','real embedded UI; controlled named WG catalog DTOs',async()=>{
+    const actualStatus=(await context.request.get(origin+'/api/v1/wireguard/profiles')).status();
+    await nav('engines');
+    await page.locator('[data-engine-disclosure="wireguard-flow"] summary').click();
+    await page.locator('[data-engine-step="profile"][data-card-engine="wireguard"]').click();
+    await page.waitForFunction(()=>state.currentView==='engineconfig'&&state.selectedEngine==='wireguard'&&!wgProfiles.read);
+    if([404,501,503].includes(actualStatus))assert.equal(await page.locator('#wgProfileSave').isEnabled(),false,'unavailable actual handler enabled save');else assert.equal(actualStatus,200);
+    const metadata=(id,name,revision='a'.repeat(64),references=[])=>({profile:{id,name,revision,engine:'wireguard',verification:'syntax-only'},route:'wireguard:'+id,reserve:references.length===0,references});
+    let catalog=[metadata('in-use','Уже назначен','a'.repeat(64),[{kind:'applied',service_id:'telegram'}])],unknown=false;
+    const writes=[];
+    await page.route('**/api/v1/wireguard/profiles**',async route=>{
+      const request=route.request(),method=request.method(),id=new URL(request.url()).pathname.split('/')[5],body=method==='GET'?null:request.postDataJSON();
+      if(method==='GET'){await route.fulfill({status:200,json:{profiles:catalog,config_revision:12}});return;}
+      writes.push({method,id,body});
+      if(method==='DELETE'){assert.equal(body.expected_revision,catalog.find(view=>view.profile.id===id).profile.revision);catalog=catalog.filter(view=>view.profile.id!==id);await route.fulfill({status:200,json:{deleted:true,live_applied:false}});return;}
+      if(method==='PUT')assert.equal(body.expected_revision,catalog.find(view=>view.profile.id===id).profile.revision);
+      const view=metadata(body.id||id,body.name,'b'.repeat(64));catalog=catalog.filter(item=>item.profile.id!==view.profile.id).concat(view);
+      if(unknown){await route.fulfill({status:503,json:{outcome:'unconfirmed',restoration_confirmed:false}});return;}
+      await route.fulfill({status:200,json:{saved:true,live_applied:false,profile:view}});
+    });
+    await page.locator('#wgProfilesRefresh').click();await page.waitForFunction(()=>wgProfiles.loaded&&!wgProfiles.read&&!wgProfiles.needsRead);
+    assert.equal(await page.locator('[data-wg-delete="in-use"]').isEnabled(),false);
+    await page.locator('#wgProfileFormDisclosure summary').click();
+    await page.locator('#wgProfileID').fill('home');await page.locator('#wgProfileName').fill('Дом');
+    await page.locator('#wgProfileContent').fill('[Interface]\nPrivateKey = synthetic-ui-private\n[Peer]\nPublicKey = synthetic-ui-public');
+    await page.evaluate(()=>{const form=document.getElementById('wgProfileForm');form.requestSubmit();form.requestSubmit();});
+    await page.waitForFunction(()=>!wgProfiles.mutation&&!wgProfiles.read&&wgProfiles.profiles.some(view=>view.profile.id==='home'));
+    assert.equal(writes.length,1);assert.equal(writes[0].method,'POST');assert.equal(await page.locator('#wgProfileContent').inputValue(),'');
+    await page.locator('[data-wg-replace="home"]').click();assert.equal(await page.locator('#wgProfileContent').inputValue(),'');
+    await page.locator('#wgProfileName').fill('Дом обновлён');await page.locator('#wgProfileContent').fill('synthetic replacement config');await page.locator('#wgProfileSave').click();
+    await page.waitForFunction(()=>!wgProfiles.mutation&&!wgProfiles.read&&wgProfiles.profiles.some(view=>view.profile.name==='Дом обновлён'));
+    assert.equal(writes[1].method,'PUT');assert.equal(writes[1].body.expected_revision,'b'.repeat(64));
+    await capture('08-wg-profiles-wide.png','Настоящие embedded assets и UI handlers; synthetic public WG catalog DTO transport. Создание/замена CAS, syntax-only, referenced delete disabled. Native WG, service probe и Apply не запускались.');
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.locator('#wgProfilesWorkspace').evaluate(element=>element.scrollWidth>element.clientWidth+1),false,'WG workspace overflows mobile');
+    await capture('09-wg-profiles-mobile.png','Тот же controlled public WG catalog fixture при390×844. Приватная форма очищена после подтверждённого сохранения.');
+    await page.setViewportSize({width:1280,height:900});
+    await page.locator('[data-wg-delete="home"]').click();await page.locator('#actionDialog [value="confirm"]').click();
+    await page.waitForFunction(()=>!wgProfiles.mutation&&!wgProfiles.read&&!wgProfiles.profiles.some(view=>view.profile.id==='home'));assert.equal(writes[2].method,'DELETE');
+    unknown=true;await page.locator('#wgProfileID').fill('uncertain');await page.locator('#wgProfileName').fill('Не подтверждён');await page.locator('#wgProfileContent').fill('synthetic unknown write');await page.locator('#wgProfileSave').click();
+    await page.waitForFunction(()=>!wgProfiles.mutation&&wgProfiles.needsRead);
+    assert.equal(await page.locator('#wgProfileSave').isEnabled(),false);assert.equal(await page.locator('#wgProfileContent').inputValue(),'synthetic unknown write');
+    await page.evaluate(()=>wgProfilesSave());assert.equal(writes.length,4,'unknown WG write was replayed');
+    await page.locator('#wgProfilesRefresh').click();await page.waitForFunction(()=>!wgProfiles.read&&!wgProfiles.needsRead);
+    assert.equal(await page.evaluate(()=>wgProfiles.profiles.some(view=>view.profile.id==='uncertain')),true,'readback hid the uncertain stored result');
+    assert.equal(requests.some(request=>request.path==='/api/v1/apply'&&request.method==='POST'),false);
+    await page.unroute('**/api/v1/wireguard/profiles**');await page.locator('#wgProfileReset').click();await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    assert.equal(hashConfig(),configBefore);
+    return {actual_handler_status:actualStatus,controlled_writes:writes.length};
+  });
+
   if(!authOnly) {
     const initial = await getPolicy();
     const policy = {...initial.policy, setup_complete:true, enabled:false, default_sources:['192.168.1.50/32'], inherit_new_services:false,reserve_seconds:600,
@@ -305,6 +356,7 @@ try {
     assert.equal(hashConfig(),configBefore);await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
   });
 
+  if(!authOnly&&!policyTransport)await namedWGTest();
   if(!authOnly) {
   await nav('autopilot');await quickReady();
   await test('duplicate Save sends one PUT with independent readback', policyBoundary, async()=>{
