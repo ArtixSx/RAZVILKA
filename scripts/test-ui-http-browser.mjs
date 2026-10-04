@@ -111,6 +111,41 @@ try {
   const putPolicy = async(policy, expected_revision=policy.revision)=>policyTransport?fixturePut(policy,expected_revision):context.request.put(origin+'/api/v1/autonomy',{data:{expected_revision,policy,confirm:'SAVE_AUTONOMY',release_safe_mode:false}});
   const forwardPolicy = async route=>{if(!policyTransport)return route.fetch();const {policy,expected_revision}=route.request().postDataJSON();return fixturePut(policy,expected_revision);};
   const deliverPolicy = async(route,response)=>policyTransport?route.fulfill({status:response.status(),json:await response.json()}):route.fulfill({response});
+  const namedWGServiceTest=async()=>test('named WG service choice stores frozen profile/config revisions in draft only','real embedded UI; controlled service writer DTOs',async()=>{
+    const original=(await context.request.get(origin+'/api/v1/services')).json();
+    const services=await original, routes=await (await context.request.get(origin+'/api/v1/routes/options')).json();
+    const selected=services.find(row=>row.id==='youtube');assert(selected);
+    const beforeApplied=JSON.stringify(selected.applied_state), hash='a'.repeat(64), next='b'.repeat(64), writes=[];
+    let reject=false, profileHash=hash;
+    const option=()=>({id:'wireguard:ui-draft',name:'WireGuard · UI черновик',kind:'wireguard-profile',configured:true,selectable:true,installed:false,ready:false,running:false,wireguard_profile_revision:profileHash});
+    await page.route('**/api/v1/routes/options',route=>route.fulfill({status:200,json:[...routes,option()]}));
+    await page.route('**/api/v1/services',route=>route.fulfill({status:200,json:services}));
+    await page.route('**/api/v1/services/youtube',async route=>{
+      assert.equal(route.request().method(),'PUT');const body=route.request().postDataJSON();writes.push(body);
+      assert.equal(body.route,'wireguard:ui-draft');assert.equal(body.expected_profile_revision,hash);assert(Number.isSafeInteger(body.expected_revision));
+      if(reject)return route.fulfill({status:409,json:{ok:false,code:'WIREGUARD_ASSIGNMENT_CHANGED',error:'Редакция изменилась'}});
+      Object.assign(selected,{enabled:body.enabled,route:body.route,sources:body.sources,wireguard_profile_revision:hash,dirty:true,route_dirty:true});
+      await route.fulfill({status:200,json:{ok:true,id:selected.id,state:{enabled:body.enabled,route:body.route,sources:body.sources,wireguard_profile_revision:hash}}});
+    });
+    await nav('services');await page.waitForFunction(()=>!panelLoad.request);await page.locator('#ui3ServiceExpert > summary').click();await page.locator('#serviceSearch').fill('YouTube');
+    await page.locator('[data-sd-expand="youtube"]').click();
+    const select=page.locator('[data-sd-route="youtube"]');assert.match(await select.textContent(),/только формат · в черновик/);
+    await select.selectOption('wireguard:ui-draft');await page.waitForFunction(()=>!serviceDashboard.edit&&state.services.find(row=>row.id==='youtube')?.route==='wireguard:ui-draft');
+    assert.equal(writes.length,1);assert.equal(JSON.stringify(await page.evaluate(()=>state.services.find(row=>row.id==='youtube').applied_state)),beforeApplied);
+    assert.match(await page.locator('#serviceCheckStatus').textContent(),/в черновике/);
+    await page.locator('[data-sd-card="youtube"] .sd-wg-profile summary').click();
+    assert.match(await page.locator('[data-sd-card="youtube"] .sd-wg-profile').textContent(),new RegExp(hash));
+    await capture('11-wg-service-draft.png','Настоящий embedded UI; controlled service writer DTOs. Только черновик, не Handler/native proof.');
+    reject=true;profileHash=next;await page.locator('[data-sd-toggle="youtube"]').click();
+    await page.waitForFunction(()=>!serviceDashboard.edit&&serviceDashboard.draftUnconfirmed.has('youtube'));
+    await page.evaluate(()=>serviceDashboardEdit('youtube',{enabled:false}));assert.equal(writes.length,2,'CAS conflict replayed');assert.equal(await select.isEnabled(),false);
+    await page.locator('[data-sd-read-draft="youtube"]').click();await page.waitForFunction(()=>!serviceDashboard.edit&&!serviceDashboard.draftUnconfirmed.has('youtube'));
+    assert.equal(writes.length,2);assert.equal(await page.evaluate(()=>state.routeOptions.find(row=>row.id==='wireguard:ui-draft').wireguard_profile_revision),next);
+    await page.unroute('**/api/v1/services/youtube');await page.unroute('**/api/v1/services');await page.unroute('**/api/v1/routes/options');
+    await page.locator('#serviceSearch').fill('');await page.locator('#ui3ServiceExpert > summary').click();await page.evaluate(()=>{invalidatePanelReads();return refreshAll(false,true);});
+    assert.equal(hashConfig(),configBefore);
+    return {controlled_service_puts:writes.length,config_profile_CAS:true,applied_unchanged:true,no_automatic_replay:true};
+  });
   const offlineSourceTest=async()=>test('saved source view is GET-only and preserves warning/draft facts','real embedded UI and normal source HTTP; controlled offline DTO',async()=>{
     const actualStatus=(await context.request.get(origin+'/api/v1/sources/offline')).status();
     await page.evaluate(()=>setView('sources'));await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sources?.phase==='ready');
@@ -384,6 +419,7 @@ try {
 
   if(!authOnly&&!policyTransport)await namedWGTest();
   if(!authOnly&&!policyTransport)await offlineSourceTest();
+  if(!authOnly&&!policyTransport)await namedWGServiceTest();
   if(!authOnly) {
   await nav('autopilot');await quickReady();
   await test('duplicate Save sends one PUT with independent readback', policyBoundary, async()=>{

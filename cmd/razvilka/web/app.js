@@ -1910,11 +1910,11 @@ function routeSelectHTML(service) {
     return !Array.isArray(option.services) || !option.services.length || option.services.includes(service.id);
   });
   if (service.route && !options.some((o) => o.id === service.route)) {
-    options.push({ id: service.route, name: service.route, installed: true, selectable: true, kind: 'custom' });
+    options.push({ id: service.route, name: service.route, installed: true, selectable: !service.route.startsWith('wireguard:'), kind: 'custom' });
   }
-  return `<select class="route-select" data-route-id="${esc(service.id)}" aria-label="Маршрут для ${esc(service.name)}">${options.map((o) => {
+  return `<select class="route-select" data-route-id="${esc(service.id)}" data-config-revision="${esc(state.status?.revision ?? '')}" aria-label="Маршрут для ${esc(service.name)}">${options.map((o) => {
     const selected = o.id === service.route ? 'selected' : '';
-    const disabled = !o.selectable ? 'disabled' : '';
+    const disabled = !serviceRouteOptionSelectable(o) ? 'disabled' : '';
     const suffix = !o.selectable && o.id !== 'auto' && o.id !== 'direct'
       ? !o.installed
         ? ' · компонент не установлен'
@@ -1923,7 +1923,7 @@ function routeSelectHTML(service) {
         : ' · конфигурация не готова'
       : '';
     const label = o.id === 'auto' ? 'Автопилот (AUTO)' : (o.name || routeLabel(o.id));
-    return `<option value="${esc(o.id)}" ${selected} ${disabled}>${esc(label)}${suffix}</option>`;
+    return `<option value="${esc(o.id)}" ${serviceRouteOptionReviewHTML(o)} ${selected} ${disabled}>${esc(label)}${o.kind === 'wireguard-profile' ? ' · только формат · в черновик' : suffix}</option>`;
   }).join('')}</select>`;
 }
 
@@ -3930,9 +3930,10 @@ async function saveDevicePolicy(event) {
   const sources = [...new Set(members.flatMap((item) => item.ips || []))].sort();
   if (!sources.length) { showDetails({ error: 'У выбранной области нет известных IP.' }, 'Политика не сохранена'); return; }
   const route = service.route || 'auto';
-  if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: область будет ограничена ${sources.length} адресом(ами). Маршрут ${routeLabel(route)} и состояние сервиса эта вкладка не изменяет.`, 'Сохранить в черновик')) return;
   try {
-    await api(`/api/v1/services/${encodeURIComponent(service.id)}`, { method: 'PUT', body: JSON.stringify({ enabled: service.enabled, route, sources }) });
+    const body = serviceDraftBody(service, { route, sources });
+    if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: область будет ограничена ${sources.length} адресом(ами). Маршрут ${routeLabel(route)} и состояние сервиса эта вкладка не изменяет.`, 'Сохранить в черновик')) return;
+    await writeServiceDraft(service.id, body);
     $('#devicePolicyDialog').close();
     await refreshCoreAfterEdit();
     await refreshDevices();
@@ -4198,16 +4199,74 @@ async function deleteCustomService(id) {
   } catch (error) { showDetails({ error: error.message }, 'Не удалось удалить сервис'); }
 }
 
-async function saveService(service) {
-  return api(`/api/v1/services/${encodeURIComponent(service.id)}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ enabled: service.enabled, route: service.route, sources: service.sources || [] }),
-  });
+function serviceRouteOptionReviewHTML(option) {
+  return `data-route-kind="${esc(option.kind || '')}" data-route-selectable="${option.selectable === true}" data-profile-revision="${esc(option.wireguard_profile_revision || '')}"`;
+}
+
+function serviceRouteOptionSelectable(option) {
+  return option.selectable === true && (!option.id?.startsWith('wireguard:')
+    || option.kind === 'wireguard-profile' && /^[a-f0-9]{64}$/.test(option.wireguard_profile_revision || ''));
+}
+
+function serviceRouteReview(select) {
+  if (!select?.value?.startsWith('wireguard:')) return null;
+  const option = select.selectedOptions?.[0];
+  if (!option || option.value !== select.value || option.disabled || option.dataset.routeKind !== 'wireguard-profile'
+      || option.dataset.routeSelectable !== 'true' || !/^[a-f0-9]{64}$/.test(option.dataset.profileRevision || '')
+      || !/^\d+$/.test(select.dataset.configRevision || '') || !Number.isSafeInteger(Number(select.dataset.configRevision))) {
+    throw new Error('Перечитайте выбор: редакция именованного WireGuard профиля не подтверждена.');
+  }
+  // Freeze the option the user actually saw, even while a passive read updates
+  // routeOptions behind an open native select. Backend owns both CAS checks.
+  return { route: select.value, expected_revision: Number(select.dataset.configRevision), expected_profile_revision: option.dataset.profileRevision };
+}
+
+function serviceDraftBody(service, changes = {}, review = null) {
+  if (typeof serviceDashboard !== 'undefined' && serviceDashboard.draftUnconfirmed?.has(service.id)) throw new Error('Результат записи не подтверждён. Нажмите «Перечитать выбор» перед следующим изменением.');
+  const body = { enabled: !!service.enabled, route: service.route, sources: [...(service.sources || [])], ...changes };
+  if (!body.route?.startsWith('wireguard:')) return { enabled: !!body.enabled, route: body.route, sources: [...body.sources] };
+  const revision = review ? review.expected_revision : state.status?.revision;
+  const profileRevision = review ? review.expected_profile_revision : service.wireguard_profile_revision;
+  const withdrawingRetained = !body.enabled && body.route === service.route && !profileRevision;
+  if (!Number.isSafeInteger(revision) || revision < 0 || (review && review.route !== body.route)
+      || (body.route !== service.route && !review) || (!withdrawingRetained && !/^[a-f0-9]{64}$/.test(profileRevision || ''))) {
+    throw new Error('Перечитайте выбор: нужны точные редакции настроек и WireGuard профиля.');
+  }
+  return { enabled: !!body.enabled, route: body.route, sources: [...body.sources], expected_revision: revision,
+    ...(profileRevision ? { expected_profile_revision: profileRevision } : {}) };
+}
+
+function confirmServiceDraftReceipt(result, id, body) {
+  if (!body.route?.startsWith('wireguard:')) return;
+  if (result?.ok !== true || result.id !== id || result.state?.route !== body.route || result.state.enabled !== body.enabled
+      || (body.expected_profile_revision && result.state.wireguard_profile_revision !== body.expected_profile_revision)
+      || (body.sources.length > 0 && !Array.isArray(result.state.sources))
+      || (result.state.sources !== undefined && (!Array.isArray(result.state.sources) || result.state.sources.some(source => typeof source !== 'string')))) {
+    throw new Error('Запись WireGuard выбора не подтверждена. Перечитайте выбор; повторная запись автоматически не выполняется.');
+  }
+}
+
+async function saveService(service, review = null) {
+  const body = serviceDraftBody(service, {}, review);
+  return writeServiceDraft(service.id, body);
+}
+
+async function writeServiceDraft(id, body, options = {}) {
+  const epoch = typeof serviceDashboard === 'undefined' ? null : serviceDashboard.epoch;
+  try {
+    const result = await api(`/api/v1/services/${encodeURIComponent(id)}`, { ...options, method: 'PUT', body: JSON.stringify(body) });
+    confirmServiceDraftReceipt(result, id, body);
+    return result;
+  } catch (error) {
+    if (body.route?.startsWith('wireguard:') && epoch !== null && serviceDashboard.epoch === epoch && !options.signal?.aborted) serviceDashboard.draftUnconfirmed.add(id);
+    throw error;
+  }
 }
 
 function closeServiceScope() {
   state.scopeService = null;
+  state.scopeServiceSnapshot = null;
+  state.scopeServiceRevision = null;
   $('#serviceScopeDialog').close();
 }
 
@@ -4215,6 +4274,8 @@ function openServiceScope(id) {
   const service = state.services.find((item) => item.id === id);
   if (!service) return;
   state.scopeService = id;
+  state.scopeServiceSnapshot = service.route?.startsWith('wireguard:') ? { ...service, sources: [...(service.sources || [])] } : null;
+  state.scopeServiceRevision = state.status?.revision;
   $('#serviceScopeTitle').textContent = `${service.name}: устройства`;
   $('#serviceScopeSources').value = (service.sources || []).join('\n');
   $('#serviceScopeMode').value = service.sources?.length ? 'selected' : 'all';
@@ -4250,7 +4311,7 @@ function changeServiceScopeDevice(event) {
 
 async function saveServiceScope(event) {
   event.preventDefault();
-  const service = state.services.find((item) => item.id === state.scopeService);
+  const service = state.scopeServiceSnapshot || state.services.find((item) => item.id === state.scopeService);
   if (!service) return closeServiceScope();
   const previous = [...(service.sources || [])];
   const sources = $('#serviceScopeMode').value === 'all' ? [] : $('#serviceScopeSources').value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
@@ -4259,7 +4320,8 @@ async function saveServiceScope(event) {
   const button = $('#serviceScopeForm button[type="submit"]');
   button.disabled = true; button.textContent = 'Сохранение…';
   try {
-    const result = await saveService(service);
+    const review = service.route?.startsWith('wireguard:') ? { route: service.route, expected_revision: state.scopeServiceRevision, expected_profile_revision: service.wireguard_profile_revision } : null;
+    const result = await saveService(service, review);
     service.sources = result.state?.sources || service.sources;
     closeServiceScope();
     await refreshCoreAfterEdit();
@@ -4287,19 +4349,14 @@ async function toggleService(id) {
   }
 }
 
-async function changeRoute(id, route) {
+async function changeRoute(id, route, select = null) {
   const service = state.services.find((s) => s.id === id);
   if (!service) return;
-  const previous = service.route;
-  service.route = route;
-  service.mode = route;
-  renderServices();
   try {
-    await saveService(service);
+    const body = serviceDraftBody(service, { route }, serviceRouteReview(select));
+    await writeServiceDraft(id, body);
     await refreshCoreAfterEdit();
   } catch (error) {
-    service.route = previous;
-    service.mode = previous;
     renderServices();
     showDetails(error.payload || { error: error.message }, 'Не удалось изменить маршрут');
   }
