@@ -174,6 +174,7 @@ func (p *usqueHealthProcesses) failure() error {
 }
 
 type usqueLiveHealthCaptureKey struct{}
+type usqueLiveHealthPolicyKey struct{}
 
 type usqueHealthReceiptAction struct {
 	actual    *ProxyTunnelAdapter
@@ -287,6 +288,20 @@ func (action *usqueHealthReceiptAction) verify(ctx context.Context, plan Plan, r
 	}
 	if err := requireOwnedUSQUEReviewGuard(ctx); err != nil {
 		return err
+	}
+	// Read actual policy last: a successful observer or WAN callback can still
+	// change it. The remaining selection/config/TTL checks have no callbacks.
+	if callback := ctx.Value(usqueLiveHealthPolicyKey{}); callback != nil {
+		check, ok := callback.(func(context.Context) error)
+		if !ok || check == nil {
+			return errOwnedUSQUELiveHealth
+		}
+		if err := requireOwnedUSQUEReviewGuard(ctx); err != nil {
+			return err
+		}
+		if err := errors.Join(check(ctx), requireOwnedUSQUEReviewGuard(ctx)); err != nil {
+			return err
+		}
 	}
 	// No callbacks intervene between these final reads and the anchored write.
 	closing, err := root.readTransport()

@@ -314,7 +314,7 @@ func TestUSQUEPublicLifecycleRefreshSamePolicyClosesFinalSuccessfulReadback(t *t
 			cut := false
 			commandsAtCut := -1
 			f.runner.after = func(name string, args []string) {
-				if cut || f.liveCalls != producers+1 || name != "iptables" || strings.Join(args, " ") != "-t nat -S" {
+				if cut || f.liveCalls != producers+1 || name != "iptables" || strings.Join(args, " ") != "-t nat -S" || !f.hasCurrentEvidence(f.a.evidencePath()) {
 					return
 				}
 				// The IPv4-only fixture's final successful forwarding snapshot
@@ -478,6 +478,12 @@ func (f *usqueLifecycleFixture) evidence(path string) []byte {
 	return data
 }
 
+func (f *usqueLifecycleFixture) hasCurrentEvidence(path string) bool {
+	data, err := os.ReadFile(path)
+	canonical, marshalErr := json.Marshal(f.produced.CanaryEvidence())
+	return err == nil && marshalErr == nil && string(data) == string(canonical)
+}
+
 func (f *usqueLifecycleFixture) proofWindow(started time.Time) {
 	f.t.Helper()
 	checked, checkedErr := time.Parse(time.RFC3339Nano, f.produced.CheckedAt)
@@ -499,7 +505,7 @@ func TestUSQUEPublicLifecycleSelectedTransportFreshHealthCommitAndReconcile(t *t
 	canaryBytes, _ := json.Marshal(f.canary)
 	injected := false
 	f.runner.after = func(name string, args []string) {
-		if !injected && f.liveCalls == 2 && name == "ip" && strings.Join(args, " ") == "route get 192.168.1.25" {
+		if !injected && f.liveCalls == 2 && name == "ip" && strings.Join(args, " ") == "route get 192.168.1.25" && f.hasCurrentEvidence(filepath.Join(f.root, "evidence.staged.json")) {
 			// Actual Commit's forwarding readback follows its private Health capture.
 			// A substituted staged Canary must not become the active receipt.
 			f.evidence(filepath.Join(f.root, "evidence.staged.json"))
@@ -572,6 +578,147 @@ func TestUSQUEPublicLifecycleAuthorityFailurePrecedesPolicyAndLiveProducer(t *te
 				if err == nil || f.liveCalls != calls || f.observations != observations || f.processes.starts != starts || f.processes.stops != stops || len(f.runner.seen) != commands ||
 					!reflect.DeepEqual(before, nodeRouterTransitReadbackTree(t, f.base)) {
 					t.Fatal("authority failure reached receipt/kernel observation, producer or mutation", err)
+				}
+			})
+		}
+	}
+}
+
+func TestUSQUEPublicLifecycleProducerRemovesRPDBCannotWriteOrPromoteEvidence(t *testing.T) {
+	for _, operation := range []string{"Health", "Commit", "Reconcile", "RefreshPolicy"} {
+		t.Run(operation, func(t *testing.T) {
+			f := newUSQUELifecycleFixture(t)
+			f.activate()
+			if operation == "Reconcile" || operation == "RefreshPolicy" {
+				if err := f.a.Commit(f.ctx, f.plan, f.root); err != nil {
+					t.Fatal(err)
+				}
+			}
+			paths := []string{filepath.Join(f.root, "evidence.staged.json"), f.a.evidencePath()}
+			before := make(map[string][]byte, len(paths))
+			for _, path := range paths {
+				data, err := os.ReadFile(path)
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
+					t.Fatal(err)
+				}
+				if err == nil {
+					before[path] = data
+				}
+			}
+			producers := f.liveCalls
+			produce := f.a.ownedUSQUELiveIO.produce
+			cuts := 0
+			f.a.ownedUSQUELiveIO.produce = func(ctx context.Context, options usquediag.OwnedProbeOptions) (usquediag.OwnedRuntimeEvidence, error) {
+				proof, err := produce(ctx, options)
+				if err == nil {
+					if len(f.runner.base.policy.entries) == 0 {
+						t.Fatal("cut did not remove an actually installed fixture RPDB")
+					}
+					cuts++
+					f.runner.base.policy.entries = nil
+				}
+				return proof, err
+			}
+			var err error
+			switch operation {
+			case "Health":
+				err = f.a.Health(f.ctx, f.plan, f.root)
+			case "Commit":
+				err = f.a.Commit(f.ctx, f.plan, f.root)
+			case "Reconcile":
+				err = f.a.Reconcile(f.ctx, f.plan)
+			case "RefreshPolicy":
+				_, err = f.a.RefreshPolicy(f.ctx, f.plan)
+			}
+			if err == nil || cuts == 0 || cuts != f.liveCalls-producers || f.revoked || f.profile != f.plan.NetworkProfileID || f.ctx.Err() != nil {
+				t.Fatal("valid proof hid the subsequently absent RPDB policy", err, cuts)
+			}
+			for _, path := range paths {
+				data, readErr := os.ReadFile(path)
+				previous, existed := before[path]
+				if existed && (readErr != nil || string(data) != string(previous)) || !existed && !errors.Is(readErr, os.ErrNotExist) {
+					t.Fatal("absent-policy action wrote or promoted new evidence", path, readErr)
+				}
+			}
+		})
+	}
+}
+
+func TestUSQUEPublicLifecycleCommitRPDBLossAfterHealthCaptureCannotPromoteEvidence(t *testing.T) {
+	f := newUSQUELifecycleFixture(t)
+	f.activate()
+	producers := f.liveCalls
+	cut := false
+	f.runner.after = func(name string, args []string) {
+		if cut || f.liveCalls != producers+1 || name != "ip" || strings.Join(args, " ") != "route get 192.168.1.25" || !f.hasCurrentEvidence(filepath.Join(f.root, "evidence.staged.json")) {
+			return
+		}
+		// This is the real Commit's first forwarding readback after private
+		// Health capture; current staged evidence is already fully valid.
+		f.evidence(filepath.Join(f.root, "evidence.staged.json"))
+		if len(f.runner.base.policy.entries) == 0 {
+			t.Fatal("post-capture cut did not remove installed RPDB")
+		}
+		cut = true
+		f.runner.base.policy.entries = nil
+	}
+	err := f.a.Commit(f.ctx, f.plan, f.root)
+	if err == nil || !cut || f.liveCalls != producers+1 || f.revoked || f.profile != f.plan.NetworkProfileID || f.ctx.Err() != nil {
+		t.Fatal("Commit accepted absent RPDB after a valid private Health capture", err, cut)
+	}
+	if _, err := os.Lstat(f.a.evidencePath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("Commit promoted captured fresh proof despite later missing RPDB", err)
+	}
+}
+
+func TestUSQUEPublicLifecycleClosingObservationRPDBLossCannotWriteEvidence(t *testing.T) {
+	for _, operation := range []string{"Health", "Commit"} {
+		for _, phase := range []string{"final-observer", "profile-after-final-observer"} {
+			t.Run(operation+"/"+phase, func(t *testing.T) {
+				f := newUSQUELifecycleFixture(t)
+				f.activate()
+				before := nodeRouterTransitReadbackTree(t, f.base)
+				producers, observations, starts, stops := f.liveCalls, f.observations, f.processes.starts, f.processes.stops
+				mutations := len(receiptMutationCalls(f.runner.seen))
+				observe := f.a.ownedUSQUELiveIO.observe
+				finalReturned, cut := false, false
+				losePolicy := func() {
+					if cut || len(f.runner.base.policy.entries) == 0 {
+						t.Fatal("late cut did not remove installed RPDB exactly once")
+					}
+					cut = true
+					f.runner.base.policy.entries = nil
+				}
+				f.a.ownedUSQUELiveIO.observe = func(ctx context.Context, request usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
+					identity, err := observe(ctx, request)
+					if err == nil && f.liveCalls == producers+1 && f.observations == observations+3 {
+						// The first two CLOUD observations have already returned;
+						// this is the receipt helper's final exact closing identity.
+						finalReturned = true
+						if phase == "final-observer" {
+							losePolicy()
+						}
+					}
+					return identity, err
+				}
+				if phase == "profile-after-final-observer" {
+					f.a.FreshProfile = func(context.Context) (string, error) {
+						if finalReturned && !cut {
+							losePolicy()
+						}
+						return f.profile, nil
+					}
+				}
+				var err error
+				if operation == "Health" {
+					err = f.a.Health(f.ctx, f.plan, f.root)
+				} else {
+					err = f.a.Commit(f.ctx, f.plan, f.root)
+				}
+				if err == nil || !cut || !finalReturned || f.liveCalls != producers+1 || f.observations != observations+3 || f.processes.starts != starts || f.processes.stops != stops ||
+					f.revoked || f.profile != f.plan.NetworkProfileID || f.ctx.Err() != nil || errors.Is(err, ErrReviewChanged) || errors.Is(err, ErrNetworkChanged) ||
+					len(receiptMutationCalls(f.runner.seen)) != mutations || !reflect.DeepEqual(before, nodeRouterTransitReadbackTree(t, f.base)) {
+					t.Fatal("matching final callback hid lost policy or wrote/promoted evidence", err, cut, finalReturned)
 				}
 			})
 		}

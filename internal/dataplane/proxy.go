@@ -802,7 +802,7 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 		if err := a.verifyUSQUEHealthRuntime(ctx, state, engine); err != nil {
 			return err
 		}
-		return a.healthOwnedUSQUE(ctx, plan, roots...)
+		return a.healthOwnedUSQUEWithPolicy(ctx, plan, state, engine, roots...)
 	}
 	if err := a.verifyHealthRuntimeProcess(ctx, state, engine); err != nil {
 		return err
@@ -1125,6 +1125,11 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 	if err := a.verifyForwarding(ctx, state); err != nil {
 		return err
 	}
+	if a.ID() == "usque" {
+		if err := a.verifyUSQUECandidatePolicy(ctx, plan, root, state); err != nil {
+			return err
+		}
+	}
 	if err := os.MkdirAll(a.StateRoot, 0o700); err != nil {
 		return err
 	}
@@ -1143,7 +1148,7 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 		return err
 	}
 	if a.ID() == "usque" {
-		if err := a.commitOwnedUSQUEHealth(ctx, plan, root, activeUSQUEEvidence); err != nil {
+		if err := a.commitOwnedUSQUEHealthWithPolicy(ctx, plan, root, activeUSQUEEvidence, state); err != nil {
 			return err
 		}
 	}

@@ -16,6 +16,10 @@
 6. Commit сначала выполняет новый Health, получает private owned copy исходных bytes и перед promotion проверяет действующий receipt/forwarding. Promotion повторно readonly проверяет whole proof и TTL, не вызывает второй producer и не перечитывает staged receipt как authority. Подмена `evidence.staged.json` старым Canary после Health не влияет на promoted proof.
 7. Здоровый Reconcile обновляет current proof без Start/Stop или нового Canary. Recovery удерживает исходную committed selection и отвергает её смену до teardown. Forward-authority/WAN refusal не разрешает restart. Same-policy RefreshPolicy также требует fresh Health и closing authority после последних firewall readbacks.
 
+## Closing kernel readback
+
+Независимый CLOUD review исходного `22cc80b` воспроизвёл исчезновение RPDB во время успешного live producer: одной проверки до запроса было недостаточно. Corrective consumer повторно проверяет frozen PolicyState, actual forwarding и RPDB/FIB после producer и последних identity/WAN callbacks, перед заключительными чтениями файлов и сохранением receipt. Runner и LAN callbacks закрываются review/cancel guard до и после каждого вызова. Commit отдельно повторяет этот gate перед policy promotion и ещё раз перед final proof persistence. Ошибка не обновляет receipt и не подтверждает исчезнувшую kernel policy; historical rollback cleanup остаётся самостоятельным.
+
 ## Несколько source cells одного сервиса
 
 Полный frozen predicate и canonical URL проверяются для каждой raw route cell. До 64 cells могут содержать до 8 различных semantic service probes. Повтор одного service ID с тем же full predicate выполняет один producer probe; различающийся predicate/URL или отсутствующий freeze вызывает отказ до producer. Sources и kernel policy cells не объединяются и не переписываются.
