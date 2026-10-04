@@ -15,14 +15,25 @@ import (
 
 type wgIdentityRunner struct {
 	*warpFakeRunner
-	identities []byte
-	readErr    error
-	inventory  []byte
+	identities   []byte
+	identityTool string
+	peerReadback map[string]string
+	readErr      error
+	inventory    []byte
 }
 
 func (r *wgIdentityRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if r.peerReadback != nil && name == r.identityTool && len(args) == 3 && args[0] == "show" && args[1] != "all" {
+		if value, ok := r.peerReadback[args[2]]; ok {
+			r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+			return []byte(value), nil
+		}
+	}
 	if strings.Join(args, " ") == "show all public-key" {
 		r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+		if r.identityTool != "" && name != r.identityTool {
+			return nil, nil
+		}
 		return r.identities, r.readErr
 	}
 	if r.inventory != nil && strings.Join(args, " ") == "-j -d link show" {
