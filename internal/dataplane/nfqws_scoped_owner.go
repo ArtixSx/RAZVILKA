@@ -17,6 +17,10 @@ import (
 
 var ErrNFQWSScopedOwner = errors.New("scoped NFQWS owner unavailable or mismatched")
 
+// Caller-facing capability diagnostic only. Missing inventory never grants an
+// empty namespace, process launch, queue reservation or cleanup permission.
+var ErrNFQWSScopedQueueInventory = errors.New("NFQUEUE kernel inventory unavailable; install or load nfnetlink_queue for this kernel and repeat preflight")
+
 // NFQWSScopedCandidate is compiler input from the frozen managed-payload and
 // candidate review. None of these strings is an executable or receipt path.
 // ArgumentsSHA256 includes the real executable argv[0] and the reserved qnum.
