@@ -381,6 +381,11 @@ func nativeScopedXrayRouter(t *testing.T) {
 		}
 	}
 	assertHealth("A active")
+	if os.Getenv("RAZVILKA_NODE_TRANSIT_MANAGER_NATIVE") == "1" {
+		if err := nativeScopedXrayManagerTransit(t, ctx, a, plan, roots, expectedExit); err != nil {
+			t.Fatal("actual Manager node transit", err)
+		}
+	}
 	if os.Getenv("RAZVILKA_XRAY_ROUTER_HTTPS_NATIVE") == "1" {
 		routerHTTPSLease, err = nativeScopedXrayRouterHTTPS(t, ctx, a, plan, roots, expectedExit)
 		if err != nil {
