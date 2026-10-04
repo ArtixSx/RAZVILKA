@@ -195,6 +195,22 @@ if [ ! -f "$CONFIG_SOURCE" ]; then
   fi
 fi
 
+require_legacy_file_protocol_free() {
+  for SELF_PROTOCOL_PATH in "$STATEDIR/self-update/current.json" "$STATEDIR/self-update-files/current.json" "$STATEDIR/self-update-stop"; do
+    if [ -e "$SELF_PROTOCOL_PATH" ] || [ -L "$SELF_PROTOCOL_PATH" ]; then
+      echo "Use matching self update recovery; raw application replacement is unavailable with retained control/file protocol" >&2
+      return 1
+    fi
+  done
+  if [ -f "$BINDIR/razvilka" ] && [ -x "$BINDIR/razvilka" ]; then
+    SELF_PROTOCOL_SCHEMA="$("$BINDIR/razvilka" -self-update-schema 2>/dev/null)" || SELF_PROTOCOL_SCHEMA=
+    case "$SELF_PROTOCOL_SCHEMA" in
+      ''|0|1) ;;
+      *) echo "This controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1 ;;
+    esac
+  fi
+}
+
 require_node_history_compatibility() {
   NODE_HISTORY_COMPATIBILITY="$("$1" -check-node-history-state -node-history-config-root "$APPDIR" -node-history-state-root "$STATEDIR" 2>/dev/null)" || {
     echo "Target binary cannot read all retained node history; installation unchanged" >&2; return 1;
@@ -221,7 +237,7 @@ require_native_enrollment_schema() {
   done
   if [ "$SELF_UPDATE_REQUIRED" -eq 1 ]; then
     SELF_UPDATE_SCHEMA="$("$1" -self-update-schema 2>/dev/null)" || { echo "Target binary cannot preserve self update recovery; installation unchanged" >&2; return 1; }
-    [ "$SELF_UPDATE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible self update schema; installation unchanged" >&2; return 1; }
+    [ "$SELF_UPDATE_SCHEMA" = 2 ] || { echo "Target binary has an incompatible self update schema; installation unchanged" >&2; return 1; }
   fi
   # A replacement binary must preserve the component transaction fence.
   # The journal is deliberately retained outside mutable update snapshots.
@@ -269,6 +285,7 @@ require_native_enrollment_schema() {
 }
 require_native_enrollment_schema "$BIN_SOURCE"
 require_node_history_compatibility "$BIN_SOURCE"
+if [ "$MODE" = apply ]; then require_legacy_file_protocol_free; fi
 
 VERSION="$($BIN_SOURCE -version)"
 [ -n "$VERSION" ] || { echo "Candidate did not report a version" >&2; exit 1; }
@@ -356,6 +373,7 @@ fi
 require_native_enrollment_schema "$BIN_SOURCE"
 require_node_history_compatibility "$BIN_SOURCE"
 
+require_legacy_file_protocol_free
 mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BINDIR" "$INITDIR" "$BACKUPROOT"
 
 # The candidate understands the newest journal format. Settle any interrupted
@@ -515,6 +533,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 stage 2 "Устанавливаем проверенные файлы с безопасными правами..."
+require_legacy_file_protocol_free
 install_atomic() {
   SRC="$1"
   DST="$2"

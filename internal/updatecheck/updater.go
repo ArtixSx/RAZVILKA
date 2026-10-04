@@ -64,20 +64,22 @@ type updateRecord struct {
 	Files             map[string]string `json:"files"`
 	ParentPID         int               `json:"parent_pid"`
 	Deployment        Deployment        `json:"deployment"`
+	FileReviewSHA256  string            `json:"file_review_sha256,omitempty"`
 }
 
 type Updater struct {
-	Current       string
-	Directory     string
-	Deployment    Deployment
-	Client        *http.Client
-	mu            sync.Mutex
-	record        updateRecord
-	cancel        context.CancelFunc
-	done          chan struct{}
-	handoffDone   chan struct{}
-	handoffActive bool
-	parent        context.Context
+	FileAuthorityReview func(context.Context, string) (SelfUpdateAuthority, error)
+	Current             string
+	Directory           string
+	Deployment          Deployment
+	Client              *http.Client
+	mu                  sync.Mutex
+	record              updateRecord
+	cancel              context.CancelFunc
+	done                chan struct{}
+	handoffDone         chan struct{}
+	handoffActive       bool
+	parent              context.Context
 	// Tests inject bounded local preflight and launch behavior. Browser input
 	// never configures a command, URL, destination or transport.
 	eligibility func(Deployment) error
@@ -241,14 +243,26 @@ func (u *Updater) PrepareChannel(revision uint64, fingerprint, channel string) (
 		u.record = updateRecord{Job: Job{State: "blocked", Stage: "preflight", Code: err.Error(), Message: updateMessage(err.Error()), Verification: "github-release-sha256"}}
 		return cloneJob(u.record.Job), nil
 	}
-	// Keep at most one prepared archive. Delete only the previous recorded
-	// random job after its worker has joined and no installation is active.
-	if jobIDPattern.MatchString(u.record.Job.ID) {
+	// Retained reviewed jobs contain durable process/private recovery evidence.
+	// A subsequent preparation never deletes them or conceals a native receipt.
+	if u.record.FileReviewSHA256 != "" && (u.record.Job.State == "completed" || u.record.Job.State == "rolled-back") {
+		if err := archiveHelperRecord(u.Directory, u.record); err != nil {
+			return Job{}, err
+		}
+	}
+	if jobIDPattern.MatchString(u.record.Job.ID) && u.record.FileReviewSHA256 == "" {
 		root, err := ownedfs.Open(u.Directory)
 		if err != nil {
 			return Job{}, err
 		}
-		err = root.RemoveAll(u.record.Job.ID)
+		retained, readErr := fileRecoveryEvidence(root, u.record.Job.ID)
+		if readErr != nil {
+			root.Close()
+			return Job{}, readErr
+		}
+		if !retained {
+			err = root.RemoveAll(u.record.Job.ID)
+		}
 		root.Close()
 		if err != nil {
 			return Job{}, err
@@ -270,6 +284,24 @@ func (u *Updater) PrepareChannel(revision uint64, fingerprint, channel string) (
 	u.done = make(chan struct{})
 	go u.prepare(ctx, id, u.done)
 	return cloneJob(u.record.Job), nil
+}
+
+// A failed preparation may have fsynced recovery material before publication
+// of its digest. Preserve that evidence instead of treating it as a download
+// cache. This grants no authority and does not remove a pending fence.
+func fileRecoveryEvidence(root *ownedfs.Root, id string) (bool, error) {
+	names := []string{"file-review.json", "control.bin", "helper.identity.json", "private-snapshot.json", "private-restore"}
+	for _, command := range []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel", "restore-private-state", "start-rollback-panel"} {
+		names = append(names, command+".process.json")
+	}
+	for _, name := range names {
+		if _, err := root.Stat(filepath.Join(id, name)); err == nil {
+			return true, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (u *Updater) createRootLocked() error {
@@ -439,6 +471,19 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 		failure = err
 		return
 	}
+	var fileReviewSHA string
+	if u.Directory == productionUpdateRoot {
+		u.mu.Lock()
+		reviewRecord := u.record
+		u.mu.Unlock()
+		reviewRecord.Files = files
+		reviewRecord.ExecutableHash = executableHash
+		fileReviewSHA, err = stageFileReview(ctx, u.Directory, reviewRecord, u.FileAuthorityReview)
+		if err != nil {
+			failure = err
+			return
+		}
+	}
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if ctx.Err() != nil {
@@ -449,6 +494,7 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 	_, _ = rand.Read(token[:])
 	u.record.ExecutableHash = executableHash
 	u.record.Files = files
+	u.record.FileReviewSHA256 = fileReviewSHA
 	u.record.Job.State = "ready"
 	u.record.Job.Stage = "ready"
 	u.record.Job.Message = "Пакет проверен. Можно установить обновление."
