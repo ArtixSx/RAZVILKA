@@ -25,6 +25,17 @@ models passed 0.903s; vet/diff RC0. No native or full D07 readiness is claimed.
 NET owns WG source NAT and its common mixed effect compiler/readback callbacks;
 userspace proxy NAT ACCEPT is not a WG source NAT substitute. Public delegated
 IPv6 LAN prefix forwarding is not broadened by this change: existing private
-subnet checks still apply. A `/0` destination FIB sample also needs owner/native
-review; this patch does not claim that lookup of the unspecified address proves
-an actual default route or that a full LAN classifier/consumer receipt is ready.
+subnet checks still apply. A full LAN classifier/consumer receipt is not proved
+by these observations.
+
+Root review held the first checkpoint because `/0` used the unspecified prefix
+base. The follow-up selects one of four bounded public unicast literals per
+family, inside the destination and outside the reviewed endpoint exclusions and
+client subnet. It refuses unavailable/unqualified scope and never retries a
+failed or wrong-interface FIB result. Selection sends no packets and is not
+remote reachability evidence. The real command retains exact forwarded source,
+ingress and managed mark, with `-6` for IPv6. Models cover both families, an
+excluded first candidate, all candidates excluded, bad exclusion, missing
+authority and a wrong device without fallback. Related dataplane tests passed
+0.885s; vet/diff RC0. Native execution remains with Root, including actual
+IPv4/IPv6 default FIB observations before promoting the held checkpoint.

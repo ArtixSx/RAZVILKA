@@ -293,7 +293,11 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 		if err != nil {
 			return err
 		}
-		args := []string{"route", "get", prefix.Addr().String()}
+		destination, err := policyEvidenceDestination(state, rule, prefix)
+		if err != nil {
+			return err
+		}
+		args := []string{"route", "get", destination.String()}
 		if rule.Source != "" {
 			source, sourceErr := netip.ParsePrefix(rule.Source)
 			if sourceErr != nil {
@@ -364,6 +368,48 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 		}
 	}
 	return nil
+}
+
+// Default-route FIB observations use public unicast literals, never the
+// unspecified /0 base. This sends no packets and is not reachability proof.
+// Selection is bounded and excludes the policy's explicit bypass destinations
+// and the client subnet; it never retries a failed/wrong-interface observation.
+func policyEvidenceDestination(state PolicyState, rule PolicyRule, destination netip.Prefix) (netip.Addr, error) {
+	if destination.Bits() != 0 {
+		return destination.Addr(), nil
+	}
+	if state.NetworkPolicyGeneration == "" || !state.NetworkDefault || !rule.Managed || !validPolicyIngress(rule.Ingress) {
+		return netip.Addr{}, ErrNetworkPolicyAuthority
+	}
+	exclusions := make([]netip.Prefix, 0, len(state.Exclusions)+1)
+	for _, value := range append(append([]string(nil), state.Exclusions...), rule.Source) {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil || prefix != prefix.Masked() || prefix.Addr().Is4In6() {
+			return netip.Addr{}, ErrNetworkPolicyAuthority
+		}
+		exclusions = append(exclusions, prefix)
+	}
+	candidates := []string{"9.9.9.9", "1.1.1.1", "8.8.8.8", "208.67.222.222"}
+	if destination.Addr().Is6() {
+		candidates = []string{"2620:fe::fe", "2606:4700:4700::1111", "2001:4860:4860::8888", "2620:119:35::35"}
+	}
+	for _, value := range candidates {
+		address := netip.MustParseAddr(value)
+		if !destination.Contains(address) || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsUnspecified() {
+			return netip.Addr{}, ErrNetworkPolicyAuthority
+		}
+		excluded := false
+		for _, prefix := range exclusions {
+			if prefix.Contains(address) {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			return address, nil
+		}
+	}
+	return netip.Addr{}, errors.New("no bounded unicast default-route observation destination is outside the reviewed exclusions")
 }
 
 // A reverse lookup is only an ingress hint. For a forwarded source it must
