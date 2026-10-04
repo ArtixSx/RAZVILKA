@@ -30,6 +30,20 @@ type OwnedRuntimeRequest struct {
 type OwnedServiceProbe struct {
 	ID, URL   string
 	Challenge bool
+	// Validator is a trusted, pure in-process servicecriteria callback. It has
+	// no dialer and cannot be populated from an HTTP request or stored receipt.
+	Validator func(OwnedServiceResponse) error `json:"-"`
+}
+
+// OwnedServiceResponse is the immutable bounded response supplied to Validator.
+// URL is the unchanged approved request URL; redirects are rejected. Ordinary
+// service bodies use a bounded sample with an explicit truncation flag.
+type OwnedServiceResponse struct {
+	URL           string
+	HTTPStatus    int
+	ContentType   string
+	Body          string
+	BodyTruncated bool
 }
 
 type OwnedUDPProbe struct{ Target netip.AddrPort }
@@ -43,7 +57,9 @@ type OwnedNetworkRequest struct {
 
 type OwnedApplicationProof struct {
 	Warp, Colo, Loc, EgressIP string
+	ReachableRoutes           []string
 	ConfirmedRoutes           []string
+	ChallengeRoutes           []string
 	UDPConfirmed              bool
 }
 
@@ -69,19 +85,22 @@ type OwnedRuntimeIdentity struct {
 // ALPN/QUIC peer is deliberately not asserted. UDPForwarding is a separate
 // optional nonce challenge through SOCKS UDP ASSOCIATE, not a TUN claim.
 type OwnedRuntimeEvidence struct {
-	Origin          string               `json:"origin"`
-	CheckedAt       string               `json:"checked_at"`
-	ValidUntil      string               `json:"valid_until"`
-	Identity        OwnedRuntimeIdentity `json:"identity"`
-	ProofBasis      string               `json:"proof_basis"`
-	ProtocolPath    string               `json:"protocol_path"`
-	Negotiated      bool                 `json:"negotiated"`
-	Warp            string               `json:"warp"`
-	Colo            string               `json:"colo,omitempty"`
-	Loc             string               `json:"loc,omitempty"`
-	EgressIP        string               `json:"egress_ip,omitempty"`
-	ConfirmedRoutes []string             `json:"confirmed_routes,omitempty"`
-	UDPForwarding   bool                 `json:"udp_forwarding"`
+	Origin              string               `json:"origin"`
+	CheckedAt           string               `json:"checked_at"`
+	ValidUntil          string               `json:"valid_until"`
+	Identity            OwnedRuntimeIdentity `json:"identity"`
+	ProofBasis          string               `json:"proof_basis"`
+	ProtocolPath        string               `json:"protocol_path"`
+	Negotiated          bool                 `json:"negotiated"`
+	Warp                string               `json:"warp"`
+	Colo                string               `json:"colo,omitempty"`
+	Loc                 string               `json:"loc,omitempty"`
+	EgressIP            string               `json:"egress_ip,omitempty"`
+	ServiceProofVersion int                  `json:"service_proof_version"`
+	ReachableRoutes     []string             `json:"reachable_routes,omitempty"`
+	ConfirmedRoutes     []string             `json:"confirmed_routes,omitempty"`
+	ChallengeRoutes     []string             `json:"challenge_routes,omitempty"`
+	UDPForwarding       bool                 `json:"udp_forwarding"`
 }
 
 type OwnedProbeOptions struct {
@@ -111,6 +130,10 @@ func probeOwnedUSQUE(ctx context.Context, o OwnedProbeOptions, observe func(cont
 	if err := validateOwnedNetworkRequest(o.Network); err != nil {
 		return OwnedRuntimeEvidence{}, err
 	}
+	// Capture criteria before callbacks; the worker gets a separate backing
+	// array and cannot rewrite expected Validator/Challenge through its request.
+	expectedServices := append([]OwnedServiceProbe(nil), o.Network.Services...)
+	o.Network.Services = append([]OwnedServiceProbe(nil), expectedServices...)
 	window, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	ctx = window
@@ -132,6 +155,9 @@ func probeOwnedUSQUE(ctx context.Context, o OwnedProbeOptions, observe func(cont
 	if err != nil {
 		return OwnedRuntimeEvidence{}, err
 	}
+	if !ownedServiceProofMatches(expectedServices, app) {
+		return OwnedRuntimeEvidence{}, errors.New("owned-probe-service-proof-invalid")
+	}
 	after, err := observe(ctx, o.Runtime)
 	if err != nil || before != after {
 		return OwnedRuntimeEvidence{}, errors.New("owned-probe-runtime-changed")
@@ -143,7 +169,7 @@ func probeOwnedUSQUE(ctx context.Context, o OwnedProbeOptions, observe func(cont
 	if ctx.Err() != nil || checked.Before(started) || checked.Sub(started) > 30*time.Second || (app.Warp != "on" && app.Warp != "plus") {
 		return OwnedRuntimeEvidence{}, errors.New("owned-probe-window-invalid")
 	}
-	return OwnedRuntimeEvidence{Origin: "managed-usque-canary", CheckedAt: checked.UTC().Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).UTC().Format(time.RFC3339Nano), Identity: after, ProofBasis: ownedPathBasis, ProtocolPath: after.Transport, Warp: app.Warp, Colo: app.Colo, Loc: app.Loc, EgressIP: app.EgressIP, ConfirmedRoutes: append([]string{}, app.ConfirmedRoutes...), UDPForwarding: app.UDPConfirmed}, nil
+	return OwnedRuntimeEvidence{Origin: "managed-usque-canary", CheckedAt: checked.UTC().Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).UTC().Format(time.RFC3339Nano), Identity: after, ProofBasis: ownedPathBasis, ProtocolPath: after.Transport, Warp: app.Warp, Colo: app.Colo, Loc: app.Loc, EgressIP: app.EgressIP, ServiceProofVersion: ownedServiceProofVersion, ReachableRoutes: append([]string{}, app.ReachableRoutes...), ConfirmedRoutes: append([]string{}, app.ConfirmedRoutes...), ChallengeRoutes: append([]string{}, app.ChallengeRoutes...), UDPForwarding: app.UDPConfirmed}, nil
 }
 
 // CanaryEvidence keeps the existing receipt path/layout while carrying a typed
@@ -151,7 +177,9 @@ func probeOwnedUSQUE(ctx context.Context, o OwnedProbeOptions, observe func(cont
 // empty; the legacy capability evaluator cannot adopt this different identity.
 func (e OwnedRuntimeEvidence) CanaryEvidence() CanaryEvidence {
 	copy := e
+	copy.ReachableRoutes = append([]string{}, e.ReachableRoutes...)
 	copy.ConfirmedRoutes = append([]string{}, e.ConfirmedRoutes...)
+	copy.ChallengeRoutes = append([]string{}, e.ChallengeRoutes...)
 	return CanaryEvidence{CheckedAt: e.CheckedAt, ValidUntil: e.ValidUntil, Transport: e.ProtocolPath, Endpoint: e.Identity.Endpoint, Warp: e.Warp, Colo: e.Colo, Loc: e.Loc, EgressIP: e.EgressIP, ConfirmedRoutes: append([]string{}, e.ConfirmedRoutes...), Owned: &copy}
 }
 
@@ -269,7 +297,7 @@ func OwnedEvidenceFresh(e OwnedRuntimeEvidence, current OwnedRuntimeIdentity, no
 }
 
 func safeOwnedEvidence(e OwnedRuntimeEvidence) bool {
-	if !stringsHasOwnedRuntime(e.Identity) || e.Identity.BindingID != ownedIdentityBinding(e.Identity) || e.Origin != "managed-usque-canary" || e.ProofBasis != ownedPathBasis || e.ProtocolPath != e.Identity.Transport || e.Negotiated || (e.Warp != "on" && e.Warp != "plus") || len(e.ConfirmedRoutes) > 8 {
+	if !stringsHasOwnedRuntime(e.Identity) || e.Identity.BindingID != ownedIdentityBinding(e.Identity) || e.Origin != "managed-usque-canary" || e.ProofBasis != ownedPathBasis || e.ProtocolPath != e.Identity.Transport || e.Negotiated || (e.Warp != "on" && e.Warp != "plus") || e.ServiceProofVersion != ownedServiceProofVersion || !safeOwnedServiceRoutes(e.ReachableRoutes, e.ConfirmedRoutes, e.ChallengeRoutes) {
 		return false
 	}
 	if _, err := time.Parse(time.RFC3339Nano, e.CheckedAt); err != nil {
@@ -286,13 +314,6 @@ func safeOwnedEvidence(e OwnedRuntimeEvidence) bool {
 		if err != nil || address.Is4In6() || address.String() != e.EgressIP || !ownedPublicAddress(address) {
 			return false
 		}
-	}
-	seen := map[string]bool{}
-	for _, id := range e.ConfirmedRoutes {
-		if !ownedServiceID(id) || seen[id] {
-			return false
-		}
-		seen[id] = true
 	}
 	return true
 }

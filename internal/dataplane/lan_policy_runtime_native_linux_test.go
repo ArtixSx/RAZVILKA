@@ -5,6 +5,7 @@ package dataplane
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/netip"
@@ -17,6 +18,14 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+type lanNativeLink struct {
+	Name   string `json:"ifname"`
+	Master string `json:"master"`
+	Info   struct {
+		Kind string `json:"info_kind"`
+	} `json:"linkinfo"`
+}
 
 // The coordinator runs this inside an exclusively assigned EMPTY netns.
 // This verifies actual Ethernet ingress/MAC marking, RPDB, both address
@@ -87,18 +96,64 @@ func TestNativeLANPolicyMACGate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &LANPolicyRuntime{Runner: nfqws2ExecRunner{}, IP: ip, IPTables: ipt, IP6Tables: ip6t, ScopeCheck: func(_ context.Context, p *LANPolicyRuntimePlan) error {
+	var acknowledged []LANPolicyEffect
+	dump := func(stage string, cause error) {
+		t.Helper()
+		plan, _ := json.MarshalIndent(p, "", "  ")
+		effects, _ := p.Effects()
+		expected, _ := json.MarshalIndent(effects, "", "  ")
+		t.Logf("LAN phase=%s acknowledged=%d/%d cause=%v\nexpected plan=%s\nexpected effects=%s", stage, len(acknowledged), len(effects), cause, plan, expected)
+		inspect := func(tool string, args ...string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			actual, err := exec.CommandContext(ctx, tool, args...).CombinedOutput()
+			if len(actual) > 256<<10 {
+				actual = actual[:256<<10]
+			}
+			t.Logf("actual %s %v error=%v\n%s", tool, args, err, actual)
+		}
+		inspect(ip, "-j", "-d", "link", "show")
+		inspect(ip, "-4", "-N", "rule", "show")
+		inspect(ip, "-6", "-N", "rule", "show")
+		for _, tool := range []string{ipt, ip6t} {
+			for _, table := range []string{"mangle", "nat", "filter", "raw"} {
+				inspect(tool, "-t", table, "-S")
+			}
+		}
+		sysfsMembers, sysfsErr := linuxBridgeMembers(context.Background(), "br-lan")
+		t.Logf("sysfs bridge members=%v error=%v (sysfs mount may belong to another netns)", sysfsMembers, sysfsErr)
+	}
+	readLinks := func(ctx context.Context, args ...string) ([]lanNativeLink, error) {
+		var links []lanNativeLink
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		data, err := exec.CommandContext(ctx, ip, args...).CombinedOutput()
+		if err != nil || len(data) > 256<<10 {
+			return nil, fmt.Errorf("netns link readback %v: %v: %s", args, err, data)
+		}
+		if err := json.Unmarshal(data, &links); err != nil {
+			return nil, err
+		}
+		return links, nil
+	}
+	r := &LANPolicyRuntime{Runner: nfqws2ExecRunner{}, IP: ip, IPTables: ipt, IP6Tables: ip6t, ScopeCheck: func(ctx context.Context, p *LANPolicyRuntimePlan) error {
 		iface, err := net.InterfaceByName(p.Ingress[0].Interface)
 		if err != nil || iface.Flags&net.FlagUp == 0 {
-			return ErrLANPolicyRuntime
+			return fmt.Errorf("scope interface expected up %s, actual=%v: %v", p.Ingress[0].Interface, iface, err)
 		}
-		members, err := linuxBridgeMembers(context.Background(), iface.Name)
-		if err != nil || len(members) != 1 || members[0] != "rz-lan-r" {
-			return ErrLANPolicyRuntime
+		// sysfs is tied to its mount's network namespace. The coordinator's
+		// netns need not remount it, so prove fixture bridge identity/member
+		// through netlink in this actual namespace instead of a host mount.
+		bridge, err := readLinks(ctx, "-j", "-d", "link", "show", "dev", iface.Name)
+		if err != nil || len(bridge) != 1 || bridge[0].Name != iface.Name || bridge[0].Info.Kind != "bridge" {
+			return fmt.Errorf("scope bridge expected %s kind bridge, actual=%+v: %v", iface.Name, bridge, err)
+		}
+		members, err := readLinks(ctx, "-j", "link", "show", "master", iface.Name)
+		if err != nil || len(members) != 1 || members[0].Name != "rz-lan-r" || members[0].Master != iface.Name {
+			return fmt.Errorf("scope member expected rz-lan-r master %s, actual=%+v: %v", iface.Name, members, err)
 		}
 		return nil
 	}}
-	var acknowledged []LANPolicyEffect
 	// Fixture acknowledgements are process-local. Production uses VLESS's
 	// existing common durable addition receipt; this is kernel acceptance only.
 	r.Execute = func(ctx context.Context, p *LANPolicyRuntimePlan, effects []LANPolicyEffect) error {
@@ -121,6 +176,7 @@ func TestNativeLANPolicyMACGate(t *testing.T) {
 		}
 	})
 	if err := r.Activate(context.Background(), p); err != nil {
+		dump("activate", err)
 		t.Fatal(err)
 	}
 	for _, family := range []string{"-4", "-6"} {
@@ -129,6 +185,7 @@ func TestNativeLANPolicyMACGate(t *testing.T) {
 	}
 	r.ConsumerCheck = func(context.Context, *LANPolicyRuntimePlan) error { return nil } // fixture-owned exact selectors above
 	if err := r.Verify(context.Background(), p); err != nil {
+		dump("verify with consumers", err)
 		t.Fatal(err)
 	}
 	for _, tool := range []string{ipt, ip6t} {

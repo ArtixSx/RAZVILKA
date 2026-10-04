@@ -114,7 +114,7 @@ func TestDoctorReportsSafeMetadataAndNDMCLibraryIssue(t *testing.T) {
 	runner := &fakeRunner{}
 	m := &Manager{Runner: runner, HTTP: fakeHTTP{}, BinaryCandidates: []string{paths("usque")}, Architecture: "arm64", FeedPatterns: []string{paths("usque-feed.conf")}, PackageStatusCandidates: []string{paths("opkg-status")}, ConfigPath: paths("usque.conf"), SessionPath: paths("session.conf"), InitPath: paths("S51usque"), NDMCPath: paths("ndmc"), IPCandidates: []string{paths("ip")}, RegistrationURL: "https://api.cloudflareclient.com/v0a4471/reg", EvidencePath: paths("evidence.json")}
 	report := m.Check(context.Background())
-	if !report.OK || report.State != "attention" || report.Config.SNI != "ozon.ru" || report.EndpointRoute != "eth3" || report.Evidence.Warp != "on" || strings.Join(report.Evidence.ConfirmedRoutes, ",") != "Telegram" || report.Versions.Package != "1.4.2-1" || report.Versions.Core != "1.4.2" {
+	if !report.OK || report.State != "attention" || report.Config.SNI != "ozon.ru" || report.EndpointRoute != "eth3" || report.Evidence.Warp != "on" || len(report.Evidence.ConfirmedRoutes) != 0 || report.Versions.Package != "1.4.2-1" || report.Versions.Core != "1.4.2" {
 		t.Fatalf("report=%+v", report)
 	}
 	if report.Ownership.RuntimeOwner != "consistent-with-usque-init" || report.Environment.RouteTool == "" || report.Environment.NDMCMode != "system-libraries-only" {

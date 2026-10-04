@@ -76,3 +76,71 @@ Go1.26.5, Windows, GOMAXPROCS2, GOFLAGS-p=2:
 ## Review follow-up: CNAME→NODATA negative lease
 
 Координатор обнаружил P2 в `180b231`: NOERROR с CNAME в Answers и SOA в Authorities ошибочно считался positive по непустому Answers. Теперь negative classifier сопоставляет исходные QTYPE/QCLASS с RRset по QNAME/CNAME chain; unrelated/wrong-type answer не доказывает positive RRset. Для NODATA применяется existing `ageDNSWire` с SOA TTL=min(TTL,MINIMUM) **до** вычитания HTTP Age/transport/final residence; SOA RDATA/MINIMUM не меняется. Основание: [RFC2308 sections2.2/5](https://www.rfc-editor.org/rfc/rfc2308.html#section-2.2). Новый regression CNAME→NODATA TTL120/MINIMUM30/Age20 + exchange2s + final3s даёт remaining5s; реальный terminal A сохраняет ordinary positive aging, terminal AAAA не делает A-query positive. `TestNetworkPolicyDNS*` RC0, dnscontrol0.899s, Go1.26.5 Windows (loopback outside sandbox).
+
+## Следующая минимальная dependency: existing Manager composition
+
+Этот раздел — конкретный контракт для следующей совместной порции, **не выполненный lifecycle**. Координатор читает этот handoff и передаёт коллегам; повторных inter-chat сообщений не требуется. Review fixes отдельными finished commits: P1 `4c3a5369a4b7eb00079fc7087b008133d7143823`, P2 `ca0b3e744ddf617b660ddf4871fb3bf2da295df1` поверх held `180b231`.
+
+Нужна обычная интеграция accepted common dependencies, затем LAN-owned `lan_policy_runtime_binding*.go` поверх них. Finished VLESS dependency `2a3a9aca8984caa66a30dcf07f27040cfe64f192` уже доступна и прочитана через git object; API frozen в `VLESS_POLICY_EFFECTS_RU.md`, но в этом worktree **ещё не merged**. CORE Route generation/iif fields сами по себе не заменяют `Plan.LAN` и ordering. Новые journals/собственный Manager/самостоятельный control epoch не нужны.
+
+### 1. DEFAULT: freeze и порядок одного transaction (назначение root после source41)
+
+Минимальный shared change — typed `Input.LAN`/`Plan.LAN` = `*LANPolicyRuntimePlan`, включение **полного** payload (не только Generation/Digest) в общий reviewed Plan digest, detached clone при Build/Apply/Committed/readback и строгая ValidateLANPolicyRuntime при journal/recovery read. Не сохранять runtime callbacks, executable paths или HTTP-supplied command argv. Generation должен совпадать с DEFAULT frozen compilation и со всеми Route.NetworkPolicyGeneration; consumer list не объявляется capability flag.
+
+Общий participant получает прежние `Adapter` методы Snapshot/Stage/Validate/Activate/Health/Commit/Rollback, RuntimeDeactivator, RuntimeObserver и RollbackVerifier. Его trusted accessor читает **этот Plan.LAN**, а не app closure с новым live scope. По последнему назначению root **DEFAULT — единственный автор manager.go/plan.go/new network_policy_manager***; CORE сохраняет D11/app/main/operationgate. DEFAULT резервирует явный participant ID и dependency order; alphabetic adapter sorting и continue-on-error Deactivate не являются этим порядком. LAN-owned runtime/binding реализуется после small finished DEFAULT SHA с этими полями и VLESS dependency. Actual contract для DEFAULT — этот раздел плюс готовые `lan_policy_runtime.go`/`network_policy_plan.go`; source пересылки не требуется, root читает handoff.
+
+Apply: Snapshot/Stage всех participants → read-only Validate/canary → LAN durable receipt + negative/positive gate readback → DEFAULT/service backends и marked exact-iif routing/filter consumers → DNS listener/INPUT leases → positive DNS/capture entry **последним** → совместные Health → config CAS Commit → receipt promotion/retained reference → общий committed Plan. Перед каждым effect actual runner должен потреблять существующий CORE effect admission; предварительный guard не заменяет process-start admission.
+
+Один controlled DNS worker может стартовать до capture, но без INPUT/DNAT lease и без owner publication permission он не является активным consumer. Candidate snapshot содержит exact prior committed payload и retained receipt reference, а не новый receipt, созданный из matching kernel tuple.
+
+Retire/Stop/rollback: сначала отозвать common new-flow/query/send authority → снять positive capture/DNS entry по ACK → cancel+join соответствующих owned workers/flows и settle exact old-flow permissions → снять оставшиеся consumers через их receipts → только при отсутствии их active/unknown dependencies снять LAN attachments/body/anchors. Unknown consumer останавливает удаление prerequisite, сохраняет negative gate и recovery fence; нельзя продолжить alphabetic cleanup до снятия LAN. Current Stop не блокирует точный known cleanup старого ACK, но не разрешает запуск old candidate/повтор эффекта.
+
+Rollback использует bounded independent cleanup context, как существующий Manager, и **не** candidate review guard. Восстановление prior runtime — отдельное новое применение с fresh current authority и новым generation root; старый removed/promoted receipt не оживляется. Prior LKG, который снова захватит сейчас исключённый MAC, не является допустимым rollback. VerifyRollback вызывается после полного settlement/config undo и свежего readback; копия snapshot не доказывает restored runtime.
+
+Replacement с изменившимися exclusions требует frozen prior+candidate transition contract и объединённых negative grants до exact old-flow settlement. Нынешний LAN.Preflight намеренно отвергает live RZG другой генерации: нельзя заменить это отключением scanner или схемой «снять old gate, затем поставить new». Пока joint transition protocol не реализован, такой Apply должен отказать до effects и сохранить old safe runtime/fence. Успешный first apply/remove в пустом owned scope не закрывает этот replacement case.
+
+### 2. LAN: точный mapping в уже готовый mixed receipt
+
+Во всех Apply/Remove/Inspect/Promote ожидаемые effects заново выводятся из validated frozen Plan.LAN через `Effects()`. VLESS mapping сохраняет порядок, Tool, Add/Delete и Needs без усечения:
+
+```go
+PolicyEffectPlan{Generation: lan.Generation, Effects: /* exact mapped lan.Effects() */}
+PolicyEffectRuntime{
+    Runner: /* trusted CORE admitted Runner */,
+    Tools: PolicyEffectTools{IP: runtime.IP, IPTables: runtime.IPTables, IP6Tables: runtime.IP6Tables},
+    Preflight: func(ctx context.Context) error { return runtime.Preflight(ctx, lan) },
+    ExactPresence: /* runtime.InspectEffect(ctx, lan, expected[index]); foreign => error */,
+    BeforeDelete: /* runtime.BeforeDelete(ctx, lan, expected[index]) plus shared consumer barrier */,
+    Guard: /* common action-specific Apply or cleanup admission, never always-true */,
+}
+```
+
+Activate вызывает existing `ApplyPolicyEffectsWithReceipt`, затем `runtime.Verify`. Rollback/Deactivate вызывает existing `RemovePolicyEffectsWithReceipt`, затем exact absence readback. Inspect status Complete не заменяет readback/Health. Commit переносит право через `PromotePolicyEffectsReceipt` в trusted new retained root и durably сохраняет единственную reference **до** удаления transaction dir. После promotion Rollback удаляет через destination. Roots создаёт existing participant из fixed StateRoot/generation; JSON path или caller-provided receipt root не даёт authority.
+
+Preflight используется для **нового Apply**, не для cleanup уже активного gate. Для cleanup InspectEffect/BeforeDelete сохраняют свою независимость от expired review; common cleanup Guard проверяет retained receipt/boot/control action и policy dependencies. Для Health runtime.ConsumerCheck обязан сверить exact shared receipts и generation каждого positive consumer; callback `return nil` допустим только в model/native fixture с отдельной explicit limitation.
+
+### 3. NET/CORE: freeze DNS definition и один существующий listener
+
+Не регистрировать второй DNS adapter. NET расширяет existing ScopedDNSPlan/ScopedDNSAdapter network-mode веткой или согласованным typed payload внутри того же participant. Минимальная frozen definition: Generation, default ProfileID+ScopedProfileIdentity, exact service bindings с ServiceID/client/domain/ProfileID/ProfileDigest, listener endpoints/семьи, exact physical ingress binding и baseline-equivalence identity (если baseline разрешён). Definition входит в общий reviewed digest и candidate/owner snapshot. Текущий constructor принимает live production profiles, поэтому owner **обязан** сравнить их с frozen profile digests до/после Stage/Resolve/publication; новая production profile после review не принимается лишь потому, что она production.
+
+LAN-owned минимальная DNS-definition dependency теперь **реализована** в `dnscontrol/network_policy_plan.go`: `NetworkPolicyDNSPlan{Schema,Generation,Digest,DefaultProfileID,DefaultProfileDigest,Bindings[]NetworkPolicyDNSReviewedBinding}`. Каждая binding содержит прежний ClientDNSBinding и ProfileDigest. `FreezeNetworkPolicyDNSPlan` снимает production identities одним read lock, копирует/канонически сортирует bounded bindings; `CloneNetworkPolicyDNSPlan` и `ValidateNetworkPolicyDNSPlan` доступны shared owner. Это definition component общего Plan, без новых journals/lifecycle/capability flags. ServiceID/listener/physical binding остаются в existing NET participant и обязаны связывать definition с теми же Routes/Plan.LAN.
+
+`CheckNetworkPolicyDNSPlan` — публичная read-only проверка current production identities против frozen digests для Stage/Validate/Health existing NET participant; settings/sockets/ownership records не меняет. `NewNetworkPolicyDNSResolverForPlan` требует matching generation и **frozen** profile digests до/после создания existing resolver, сверяет и фактические provider choices; изменение production NextDNS profile после review отказывает. Factory и Check сначала берут bounded detached copy и валидируют **её**. Existing query/cache/send checks продолжают проверять выбранную identity. NET должен потребить именно этот factory, а не low-level live-profile constructor. Новый regression: detached input/clone, changed service/default provider после review, generation mismatch, duplicate/literal/noncanonical/bound128 bindings. `TestNetworkPolicyDNS*` RC0, dnscontrol0.875s (Go1.26.5 Windows, локальный loopback).
+
+Existing validateScopedDNSPlan ограничивает DIRECT/один IPv4 client-service-profile и не является validator нового all-internet режима. Network mode нельзя включить снятием этих проверок для legacy. NET предоставляет отдельную строгую branch validation + возврат/retirement существующих scoped service setting receipts; LAN wrapper сам settings не коммитит и не создаёт firewall owner.json.
+
+`NetworkPolicyDNSResolver.Serve` уже потребляет NET ServeScopedDNS/Exchange и synchronous common `NetworkPolicyDNSPublisher`. Минимальный authority bridge от NET listener/INPUT owner должен сохранять в request context original peer AddrPort, UDP/TCP transport и bound local endpoint/owned flow identity. Нынешние hooks передают лишь client IP; физический ingress/MAC и original-DNAT lease этим не доказаны. NET добавляет read-only context accessor/typed request metadata в свой listener, сохраняя прежний bounded lifecycle. LAN admit/publish callbacks после этого связывают peer с current physical gate/tuple lease; данные из DNS wire/HTTP/loopback source IP не дают такой lease.
+
+До DNAT и на каждом INPUT packet требуется same positive mark+iif **и** exact negative MAC/CIDR admission; direct high-port access не разрешён. DNS RPDB local table предшествует goto, поэтому один RPDB gate не защищает listener. Old NAT sessions/query replies требуют exact owned original53↔listener tuple settlement; отсутствие новых DNAT rules само по себе не удаляет cached NAT. Общего flush и client/subnet-wide conntrack delete нет.
+
+После actual bind, guarded Serve и listener readback NET публикует positive DNS capture через тот же durable mixed receipt. Stop отзывает publication lease до cancel/join, затем снимает capture и settles old tuples; поздний prepared response не отправляется. Worker exit не подтверждает отсутствие firewall/NAT refs. DNS baseline только по reviewed equivalence callback; автоматический UseLocalBaseline/loopback53 для network mode не принимается. Exact-client service DNS bindings не объявляют suffix/all-client/future-IPv6 service DNS coverage.
+
+### Минимальная совместная приёмка следующей порции
+
+DEFAULT model через **обычный Manager.Apply/Deactivate/rollback**, не прямой fixture: first LAN before consumer; last LAN after all consumers; Health/readback before config commit; failure/Stop на каждом effect; unknown capture удерживает gate и anchors; post-Commit rollback использует promoted receipt; stale/mutated Plan.LAN отказывает без effect. NET loopback tests: profile changed after review, direct high-port refusal, same-generation query/cache/send admission, Stop между Resolve и send, cancel+join, exact old NAT settlement/refusal. Root отдельно выполняет реальные IPv4/IPv6 MAC frames и mixed receipt namespace fault cases; общий native/HIL результат в этом handoff не подменяется model pass.
+
+## Source41 native fixture diagnostics
+
+Root source41 (`0755118`) сообщил Linux race DNS/domain/LAN/mixed RC0, затем actual `TestNativeLANPolicyMACGate` RC1 на Activate с generic unavailable; native PASS не заявлен. Прочитан root `.review-local/policy-native41.log`; gate-specific raw kernel dump в нём отсутствовал. Следующий diagnostic fixture перед Fatal печатает frozen plan/effects/Needs, stage и ACK count, `ip -N rule show` обеих семей, all raw/mangle/nat/filter `-S`, actual link JSON и sysfs members. Это expected/actual readback **до** fixture cleanup.
+
+Fixture-only ScopeCheck теперь доказывает exact bridge kind/up + sole `rz-lan-r` member/master через bounded netlink `ip -j[-d] link` текущего namespace. Прежний sysfs helper мог видеть mount другого netns и вернуть empty members; это гипотеза source41 refusal, пока root не повторил запуск. Production `linuxBridgeMembers`, LAN collision/mark/alias/consumer guards не ослаблены. Повтор native запускает только root; владелец выполнил лишь Linux amd64 test compilation.

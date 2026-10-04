@@ -232,12 +232,23 @@ for OLD in 20000101T000001Z-1 20000101T000002Z-2 20000101T000003Z-3 20000101T000
 done
 mkdir -m 700 "$BACKUPS/manual-keep"
 mkdir -m 700 "$TEST_ROOT/outside-backup"
-ln -s "$TEST_ROOT/outside-backup" "$BACKUPS/19990101T000000Z-9"
+# The real history CLI correctly refuses any retained symlink. Exercise
+# foreign-link pruning separately below; do not bypass its upgrade admission.
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 \
   "$UPGRADE" --apply --without-components >/dev/null
 [ -d "$PRIMARY_BACKUP" ] && [ -d "$BACKUPS/20000101T000005Z-5" ] && [ -d "$BACKUPS/20000101T000003Z-3" ] || { echo "Retention removed a recent snapshot" >&2; exit 1; }
 assert_absent "$BACKUPS/20000101T000002Z-2"
 assert_absent "$BACKUPS/20000101T000001Z-1"
+ln -s "$TEST_ROOT/outside-backup" "$BACKUPS/19990101T000000Z-9"
+awk '/^prune_update_backups\(\) \{/ {copy=1} copy {print} copy && /^\}$/ {exit}' \
+  "$UPGRADE" >"$TEST_ROOT/prune-function.sh"
+grep -q '^prune_update_backups() {' "$TEST_ROOT/prune-function.sh"
+(
+  BACKUPROOT="$BACKUPS"
+  BACKUP="$(cat "$PRIMARY/var/lib/razvilka/current-backup")"
+  . "$TEST_ROOT/prune-function.sh"
+  prune_update_backups
+)
 [ -d "$BACKUPS/manual-keep" ] && [ -L "$BACKUPS/19990101T000000Z-9" ] && [ -d "$TEST_ROOT/outside-backup" ] || { echo "Retention removed a foreign entry" >&2; exit 1; }
 rmdir "$BACKUPS/manual-keep"
 rm "$BACKUPS/19990101T000000Z-9"

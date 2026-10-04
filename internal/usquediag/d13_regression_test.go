@@ -41,7 +41,10 @@ func TestDoctorDowngradesHistoricalCanaryAndUsesSelectedTransportEndpoint(t *tes
 		t.Fatalf("capabilities=%+v", report.Capabilities)
 	}
 	assertCheckStatus(t, report, "warp-evidence", "pass")
-	assertCheckStatus(t, report, "service-evidence", "pass")
+	assertCheckStatus(t, report, "service-evidence", "warning")
+	if len(report.Evidence.ConfirmedRoutes) != 0 {
+		t.Fatal("ungraded legacy receipt published semantic service proof")
+	}
 	selected := false
 	for _, command := range runner.calls {
 		args := strings.Join(command.Args, " ")
