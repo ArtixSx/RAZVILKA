@@ -36,3 +36,5 @@ func trustedManagedNFQWSOwner(_ os.FileInfo, fixture bool) error {
 func managedNFQWSPublicTraversal(info os.FileInfo) bool {
 	return runtime.GOOS == "windows" || info.Mode().Perm()&0001 != 0
 }
+
+func managedNFQWSNodeDescription(os.FileInfo) string { return "POSIX ownership unavailable" }

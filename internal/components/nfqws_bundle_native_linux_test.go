@@ -146,6 +146,9 @@ func TestNativeManagedNFQWSRejectsUntrustedAncestorsBeforeMkdir(t *testing.T) {
 			if _, err := os.Lstat(m.nfqwsReleases); !errors.Is(err, os.ErrNotExist) {
 				t.Fatal("refusal created below an untrusted ancestor", err)
 			}
+			if _, err := os.Lstat(m.StateDir); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("unsafe mount reached journal initialization", err)
+			}
 		})
 	}
 }
