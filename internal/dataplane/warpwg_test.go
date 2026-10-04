@@ -30,6 +30,10 @@ type warpFakeRunner struct {
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	numeric := name == "ip" && len(args) > 0 && args[0] == "-N"
+	if numeric {
+		args = args[1:]
+	}
 	if name == "ip" && strings.Join(args, " ") == "-j -d link show" {
 		return []byte("[]"), nil
 	}
@@ -40,6 +44,22 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		return nil, nil
 	}
 	if output, handled, err := r.endpoint.run(name, args); handled {
+		if numeric && err == nil && strings.Contains(strings.Join(args, " "), "-j route show table") {
+			var routes []map[string]any
+			if json.Unmarshal(output, &routes) == nil {
+				for _, route := range routes {
+					if route["protocol"] == "static" {
+						route["protocol"] = 4
+					}
+					if gateway, _ := route["gateway"].(string); gateway == "" {
+						route["scope"] = 253
+					} else {
+						route["scope"] = 0
+					}
+				}
+				output, _ = json.Marshal(routes)
+			}
+		}
 		return output, err
 	}
 	if name == "ip" {
@@ -49,6 +69,9 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 				policyArgs = append(policyArgs[:i], policyArgs[i+2:]...)
 				break
 			}
+		}
+		if numeric {
+			policyArgs = append([]string{"-N"}, policyArgs...)
 		}
 		if output, handled, err := r.policy.run(policyArgs); handled {
 			if err == nil && len(policyArgs) >= 2 && strings.Contains(strings.Join(policyArgs, " "), "rule show") {
