@@ -8,6 +8,8 @@ CAS consumer follow-up: `1727a90` (parent merge `d085fcd`), только owned e
 
 Независимый review координатора нашёл P2 в `1727a90`: external config replacement сразу после настоящего Commit мог совпасть с memory postimage и получить committed. Текущая исправленная порция использует existing `Store.WithRevisionObservation` для bounded exact disk observation после Commit и до/после Observe в каждом review guard, плюс full memory equality для same-revision legacy edits. Callback не вызывает Store/Observe и не держит writer/control/kernel lock. Новая after-Commit regression подтверждает refusal + actual guarded-undo failure + `rollback-failed`/application fence, сохранение чужих bytes и отсутствие нового committed dataplane plan. Отдельная regression подменяет bytes во время Observe и подтверждает отказ до adapter phases.
 
+P2 исправление `13c4c75` повторно reviewed координатором без findings и принято в `afb5e07` вместе `1727a90` и selected-device binding fix `7da3ce0`. После этого найдена и устранена отдельная representational CAS проблема: JSON clone терял empty omitempty ServicePolicies map после удаления последней политики. Commit получает настоящий defensive Store.Get preimage, отдельно полностью сверенный с reviewed config. Regression через реальные UpdateServicePolicy/DeleteService/Commit подтверждает успешное сохранение при retained empty map.
+
 ## Реализовано
 
 - `CompileDefaultRoutePolicy`: immutable schema-2 all-except policy; trusted scope/addresses/profile references, authority InstallationID+Sequence, concrete default consent, scope freshness, explicit guest opt-in. Auto intent разрешается только в проверенный concrete profile без изменения desired intent. Нет services и неизвестный сайт/direct IP продолжают default, когда нет явно выбранного IP-wide override. DNS observations не дают service flow identity.
@@ -50,6 +52,8 @@ Go `C:/Projects/RAZVILKA/tools/go/bin/go.exe` 1.26.5; `GOTOOLCHAIN=local`, `GOMA
 После добавления защиты публикации postimage адресный `go test ./internal/app -run '^(TestDefaultRoute|TestNetworkPolicyCannotFallThroughLegacyExecutor)' -count=1 -timeout 120s` с тем же env/разрешённым локальным Windows режимом — RC0, без SKIP, 1.608s.
 
 После P2 exact disk observation исправления тот же адресный Windows full subset с journal env=1 — RC0, без SKIP, 1.861s. Первое новое after-Commit assertion ожидало rolled-back; реальный Manager правильно дал rollback-failed из-за отказа guarded config undo на чужих bytes. Assertion уточнён до точного состояния/fence; production rollback guards не ослаблялись. Normal merge принятой integration `66792db` потребил LAN `416a14e` (typed membership/effects/readback) и NET `5a13285` (DNS owner hook); common activation/Plan.LAN integration ещё не существует.
+
+После empty policy-map CAS regression и shared LAN composer адресный Windows subset с тем же journal env=1 — RC0, без SKIP, 2.023s. Локальный pure shared-LAN subset `go test ./internal/app -run '^TestDefaultRouteSharedLAN' -count=1 -timeout 120s` — RC0 (0.084s). Это compiled intent/effect bounds, не установка gate и не native PASS.
 
 Transaction doubles проверяют последовательность/admission/fence и не объявляются packet/native PASS. Actual-WG test использует production named-profile adapter и проверяет нынешний отказ endpoint overlap до add/setconf; это не successful tunnel/native proof. Native matrix с настоящими clients/flows/IPv4/IPv6/TCP/UDP/DNS под существующими adapters выполняет root после shared gate/mode интеграции.
 
