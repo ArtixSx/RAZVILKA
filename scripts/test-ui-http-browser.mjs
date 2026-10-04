@@ -111,6 +111,118 @@ try {
   const putPolicy = async(policy, expected_revision=policy.revision)=>policyTransport?fixturePut(policy,expected_revision):context.request.put(origin+'/api/v1/autonomy',{data:{expected_revision,policy,confirm:'SAVE_AUTONOMY',release_safe_mode:false}});
   const forwardPolicy = async route=>{if(!policyTransport)return route.fetch();const {policy,expected_revision}=route.request().postDataJSON();return fixturePut(policy,expected_revision);};
   const deliverPolicy = async(route,response)=>policyTransport?route.fulfill({status:response.status(),json:await response.json()}):route.fulfill({response});
+  const namedWGServiceTest=async()=>test('named WG service choice stores frozen profile/config revisions in draft only','real embedded UI; controlled service writer DTOs',async()=>{
+    const original=(await context.request.get(origin+'/api/v1/services')).json();
+    const services=await original, routes=await (await context.request.get(origin+'/api/v1/routes/options')).json();
+    const selected=services.find(row=>row.id==='youtube');assert(selected);
+    const beforeApplied=JSON.stringify(selected.applied_state), hash='a'.repeat(64), next='b'.repeat(64), writes=[];
+    let reject=false, profileHash=hash;
+    const option=()=>({id:'wireguard:ui-draft',name:'WireGuard · UI черновик',kind:'wireguard-profile',configured:true,selectable:true,installed:false,ready:false,running:false,wireguard_profile_revision:profileHash});
+    await page.route('**/api/v1/routes/options',route=>route.fulfill({status:200,json:[...routes,option()]}));
+    await page.route('**/api/v1/services',route=>route.fulfill({status:200,json:services}));
+    await page.route('**/api/v1/services/youtube',async route=>{
+      assert.equal(route.request().method(),'PUT');const body=route.request().postDataJSON();writes.push(body);
+      assert.equal(body.route,'wireguard:ui-draft');assert.equal(body.expected_profile_revision,hash);assert(Number.isSafeInteger(body.expected_revision));
+      if(reject)return route.fulfill({status:409,json:{ok:false,code:'WIREGUARD_ASSIGNMENT_CHANGED',error:'Редакция изменилась'}});
+      Object.assign(selected,{enabled:body.enabled,route:body.route,sources:body.sources,wireguard_profile_revision:hash,dirty:true,route_dirty:true});
+      await route.fulfill({status:200,json:{ok:true,id:selected.id,state:{enabled:body.enabled,route:body.route,sources:body.sources,wireguard_profile_revision:hash}}});
+    });
+    await nav('services');await page.waitForFunction(()=>!panelLoad.request);await page.locator('#ui3ServiceExpert > summary').click();await page.locator('#serviceSearch').fill('YouTube');
+    await page.locator('[data-sd-expand="youtube"]').click();
+    const select=page.locator('[data-sd-route="youtube"]');assert.match(await select.textContent(),/только формат · в черновик/);
+    await select.selectOption('wireguard:ui-draft');await page.waitForFunction(()=>!serviceDashboard.edit&&state.services.find(row=>row.id==='youtube')?.route==='wireguard:ui-draft');
+    assert.equal(writes.length,1);assert.equal(JSON.stringify(await page.evaluate(()=>state.services.find(row=>row.id==='youtube').applied_state)),beforeApplied);
+    assert.match(await page.locator('#serviceCheckStatus').textContent(),/в черновике/);
+    await page.locator('[data-sd-card="youtube"] .sd-wg-profile summary').click();
+    assert.match(await page.locator('[data-sd-card="youtube"] .sd-wg-profile').textContent(),new RegExp(hash));
+    await capture('11-wg-service-draft.png','Настоящий embedded UI; controlled service writer DTOs. Только черновик, не Handler/native proof.');
+    reject=true;profileHash=next;await page.locator('[data-sd-toggle="youtube"]').click();
+    await page.waitForFunction(()=>!serviceDashboard.edit&&serviceDashboard.draftUnconfirmed.has('youtube'));
+    await page.evaluate(()=>serviceDashboardEdit('youtube',{enabled:false}));assert.equal(writes.length,2,'CAS conflict replayed');assert.equal(await select.isEnabled(),false);
+    await page.locator('[data-sd-read-draft="youtube"]').click();await page.waitForFunction(()=>!serviceDashboard.edit&&!serviceDashboard.draftUnconfirmed.has('youtube'));
+    assert.equal(writes.length,2);assert.equal(await page.evaluate(()=>state.routeOptions.find(row=>row.id==='wireguard:ui-draft').wireguard_profile_revision),next);
+    await page.unroute('**/api/v1/services/youtube');await page.unroute('**/api/v1/services');await page.unroute('**/api/v1/routes/options');
+    await page.locator('#serviceSearch').fill('');await page.locator('#ui3ServiceExpert > summary').click();await page.evaluate(()=>{invalidatePanelReads();return refreshAll(false,true);});
+    assert.equal(hashConfig(),configBefore);
+    return {controlled_service_puts:writes.length,config_profile_CAS:true,applied_unchanged:true,no_automatic_replay:true};
+  });
+  const offlineSourceTest=async()=>test('saved source view is GET-only and preserves warning/draft facts','real embedded UI and normal source HTTP; controlled offline DTO',async()=>{
+    const actualStatus=(await context.request.get(origin+'/api/v1/sources/offline')).status();
+    await page.evaluate(()=>setView('sources'));await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sources?.phase==='ready');
+    const live=await page.evaluate(()=>JSON.stringify(state.sources));
+    const row=(id,name,extra={})=>({id,name,kind:'domains',description:'UI fixture',url:'https://source.fixture.invalid/list',offline:true,ready:false,entries:12,enabled:false,applied_enabled:true,dirty:true,legacy_cache:false,last_known_good:false,sha256:'a'.repeat(64),updated_at:'2026-01-02T03:04:05Z',expires_at:'2099-01-02T03:04:05Z',cache_status:'offline-cache',...extra});
+    const rows=[row('saved','Сохранённый'),row('reference','Справочник',{kind:'reference',sha256:'',updated_at:'0001-01-01T00:00:00Z',expires_at:'invalid'}),row('stale','Просрочен',{cache_status:'stale',expires_at:'2020-01-01T00:00:00Z'}),row('legacy','Legacy',{legacy_cache:true,expires_at:'2020-01-01T00:00:00Z'}),row('rejected','LKG',{last_known_good:true,last_error:'<script>rejected</script>'}),row('quarantine','Не подтверждён',{cache_status:'quarantined'}),row('missing','Нет копии',{cache_status:'missing',sha256:'',entries:0})];
+    let denied=false,reads=0;
+    await page.route('**/api/v1/sources/offline',async route=>{assert.equal(route.request().method(),'GET');reads++;await route.fulfill(denied?{status:403,json:{error:'controlled authorization denial'}}:{status:200,json:{offline:true,read_only:true,sources:rows}});});
+    const start=requests.length;
+    await page.locator('[data-source-view="offline"]').click();await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sourceOffline?.phase==='ready');
+    assert.equal(reads,1);assert.equal(await page.evaluate(()=>JSON.stringify(state.sources)),live,'offline view changed the normal source array');
+    assert.equal(await page.locator('#sourceOfflineBanner').isVisible(),true);
+    for(const id of ['refreshSources','applySourceChanges','discardSourceChanges'])assert.equal(await page.locator('#'+id).isEnabled(),false);
+    assert.equal(await page.locator('#sourceRows .toggle:not([disabled])').count(),0);
+    for(const label of ['Справочный источник','Срок копии истёк','Копия не подтверждена','Источник требует сверки','Последнее обновление отклонено · сохранена прежняя копия','Сохранённая копия','Сохранённой копии нет'])assert((await page.locator('#sourceRows').textContent()).includes(label),label);
+    assert.equal(await page.locator('#sourceRows script').count(),0);assert.doesNotMatch(await page.locator('#sourceOverview').textContent(),/готов|PASS|актуален/);
+    await page.evaluate(async()=>{await refreshSources();await setSourceDraft('saved',true);await applySourceDraft();await discardSourceDraft();});
+    assert.equal(requests.slice(start).some(request=>request.path.startsWith('/api/v1/sources')&&request.method!=='GET'),false);
+    await capture('10-source-offline.png','Настоящие embedded assets и обычный source HTTP; controlled readonly offline DTO с fresh/stale/legacy/LKG/quarantined/reference/missing. Ни refresh, ни draft/apply/discard POST не выполнялись.');
+    denied=true;await page.locator('#readSourceView').click();await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sourceOffline?.phase==='error');
+    assert.equal(await page.locator('#sourceOfflineBanner').isVisible(),false);assert.doesNotMatch(await page.locator('#sourceRows').textContent(),/Сохранённая копия|LKG/);
+    await page.locator('[data-source-view="online"]').click();await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sources?.phase==='ready');
+    assert.equal(await page.locator('#refreshSources').isEnabled(),true);assert.equal(await page.evaluate(()=>JSON.stringify(state.sources)),live);
+    await page.unroute('**/api/v1/sources/offline');await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    assert.equal(hashConfig(),configBefore);return {actual_handler_status:actualStatus,controlled_offline_reads:reads,source_posts:0};
+  });
+  const namedWGTest=async()=>test('named WG create/replace/delete uses CAS and fences an unknown write','real embedded UI; controlled named WG catalog DTOs',async()=>{
+    const actualStatus=(await context.request.get(origin+'/api/v1/wireguard/profiles')).status();
+    await nav('engines');
+    await page.locator('[data-engine-disclosure="wireguard-flow"] summary').click();
+    await page.locator('[data-engine-step="profile"][data-card-engine="wireguard"]').click();
+    await page.waitForFunction(()=>state.currentView==='engineconfig'&&state.selectedEngine==='wireguard'&&!wgProfiles.read);
+    if([404,501,503].includes(actualStatus))assert.equal(await page.locator('#wgProfileSave').isEnabled(),false,'unavailable actual handler enabled save');else assert.equal(actualStatus,200);
+    const metadata=(id,name,revision='a'.repeat(64),references=[])=>({profile:{id,name,revision,engine:'wireguard',verification:'syntax-only'},route:'wireguard:'+id,reserve:references.length===0,references});
+    let catalog=[metadata('in-use','Уже назначен','a'.repeat(64),[{kind:'applied',service_id:'telegram'}])],unknown=false;
+    const writes=[];
+    await page.route('**/api/v1/wireguard/profiles**',async route=>{
+      const request=route.request(),method=request.method(),id=new URL(request.url()).pathname.split('/')[5],body=method==='GET'?null:request.postDataJSON();
+      if(method==='GET'){await route.fulfill({status:200,json:{profiles:catalog,config_revision:12}});return;}
+      writes.push({method,id,body});
+      if(method==='DELETE'){assert.equal(body.expected_revision,catalog.find(view=>view.profile.id===id).profile.revision);catalog=catalog.filter(view=>view.profile.id!==id);await route.fulfill({status:200,json:{deleted:true,live_applied:false}});return;}
+      if(method==='PUT')assert.equal(body.expected_revision,catalog.find(view=>view.profile.id===id).profile.revision);
+      const view=metadata(body.id||id,body.name,'b'.repeat(64));catalog=catalog.filter(item=>item.profile.id!==view.profile.id).concat(view);
+      if(unknown){await route.fulfill({status:503,json:{outcome:'unconfirmed',restoration_confirmed:false}});return;}
+      await route.fulfill({status:200,json:{saved:true,live_applied:false,profile:view}});
+    });
+    await page.locator('#wgProfilesRefresh').click();await page.waitForFunction(()=>wgProfiles.loaded&&!wgProfiles.read&&!wgProfiles.needsRead);
+    assert.equal(await page.locator('[data-wg-delete="in-use"]').isEnabled(),false);
+    await page.locator('#wgProfileFormDisclosure summary').click();
+    await page.locator('#wgProfileID').fill('home');await page.locator('#wgProfileName').fill('Дом');
+    await page.locator('#wgProfileContent').fill('[Interface]\nPrivateKey = synthetic-ui-private\n[Peer]\nPublicKey = synthetic-ui-public');
+    await page.evaluate(()=>{const form=document.getElementById('wgProfileForm');form.requestSubmit();form.requestSubmit();});
+    await page.waitForFunction(()=>!wgProfiles.mutation&&!wgProfiles.read&&wgProfiles.profiles.some(view=>view.profile.id==='home'));
+    assert.equal(writes.length,1);assert.equal(writes[0].method,'POST');assert.equal(await page.locator('#wgProfileContent').inputValue(),'');
+    await page.locator('[data-wg-replace="home"]').click();assert.equal(await page.locator('#wgProfileContent').inputValue(),'');
+    await page.locator('#wgProfileName').fill('Дом обновлён');await page.locator('#wgProfileContent').fill('synthetic replacement config');await page.locator('#wgProfileSave').click();
+    await page.waitForFunction(()=>!wgProfiles.mutation&&!wgProfiles.read&&wgProfiles.profiles.some(view=>view.profile.name==='Дом обновлён'));
+    assert.equal(writes[1].method,'PUT');assert.equal(writes[1].body.expected_revision,'b'.repeat(64));
+    await capture('08-wg-profiles-wide.png','Настоящие embedded assets и UI handlers; synthetic public WG catalog DTO transport. Создание/замена CAS, syntax-only, referenced delete disabled. Native WG, service probe и Apply не запускались.');
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.locator('#wgProfilesWorkspace').evaluate(element=>element.scrollWidth>element.clientWidth+1),false,'WG workspace overflows mobile');
+    await capture('09-wg-profiles-mobile.png','Тот же controlled public WG catalog fixture при390×844. Приватная форма очищена после подтверждённого сохранения.');
+    await page.setViewportSize({width:1280,height:900});
+    await page.locator('[data-wg-delete="home"]').click();await page.locator('#actionDialog [value="confirm"]').click();
+    await page.waitForFunction(()=>!wgProfiles.mutation&&!wgProfiles.read&&!wgProfiles.profiles.some(view=>view.profile.id==='home'));assert.equal(writes[2].method,'DELETE');
+    unknown=true;await page.locator('#wgProfileID').fill('uncertain');await page.locator('#wgProfileName').fill('Не подтверждён');await page.locator('#wgProfileContent').fill('synthetic unknown write');await page.locator('#wgProfileSave').click();
+    await page.waitForFunction(()=>!wgProfiles.mutation&&wgProfiles.needsRead);
+    assert.equal(await page.locator('#wgProfileSave').isEnabled(),false);assert.equal(await page.locator('#wgProfileContent').inputValue(),'synthetic unknown write');
+    await page.evaluate(()=>wgProfilesSave());assert.equal(writes.length,4,'unknown WG write was replayed');
+    await page.locator('#wgProfilesRefresh').click();await page.waitForFunction(()=>!wgProfiles.read&&!wgProfiles.needsRead);
+    assert.equal(await page.evaluate(()=>wgProfiles.profiles.some(view=>view.profile.id==='uncertain')),true,'readback hid the uncertain stored result');
+    assert.equal(requests.some(request=>request.path==='/api/v1/apply'&&request.method==='POST'),false);
+    await page.unroute('**/api/v1/wireguard/profiles**');await page.locator('#wgProfileReset').click();await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    assert.equal(hashConfig(),configBefore);
+    return {actual_handler_status:actualStatus,controlled_writes:writes.length};
+  });
+
   if(!authOnly) {
     const initial = await getPolicy();
     const policy = {...initial.policy, setup_complete:true, enabled:false, default_sources:['192.168.1.50/32'], inherit_new_services:false,reserve_seconds:600,
@@ -305,6 +417,9 @@ try {
     assert.equal(hashConfig(),configBefore);await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
   });
 
+  if(!authOnly&&!policyTransport)await namedWGTest();
+  if(!authOnly&&!policyTransport)await offlineSourceTest();
+  if(!authOnly&&!policyTransport)await namedWGServiceTest();
   if(!authOnly) {
   await nav('autopilot');await quickReady();
   await test('duplicate Save sends one PUT with independent readback', policyBoundary, async()=>{

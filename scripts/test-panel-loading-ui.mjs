@@ -320,3 +320,4 @@ await test('mutation uses caller cancellation without read timeout or automatic 
  await context.api('/api/v1/apply',{method:'POST',signal:controller.signal});assert.equal(observed,controller.signal);assert.equal(timers,0);assert.equal(calls,1);
 });
 console.log(JSON.stringify({status:'passed',tests:count}));
+await import('./test-source-offline-ui.mjs');

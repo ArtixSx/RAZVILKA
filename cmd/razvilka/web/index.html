@@ -189,6 +189,11 @@ https://telegram.org" rows="2" spellcheck="false"></textarea><small>До 12 са
 <aside class="engine-control-list" id="engineControlList"></aside>
 <section class="engine-control-main">
 <div class="engine-selected-head" id="engineSelectedHead"></div>
+<section id="wgProfilesWorkspace" class="wg-profiles-workspace" hidden aria-label="Сохранённые профили WireGuard">
+<div class="r4-section-head"><div><h3>Свои профили WireGuard</h3><p>Для подключения к вашему серверу. Сохранённый профиль можно затем выбрать в настройках сервиса.</p></div><button id="wgProfilesRefresh" class="secondary" type="button">Перечитать каталог</button></div>
+<p id="wgProfilesStatus" class="r4-note" role="status" aria-live="polite"></p><div id="wgProfileList"></div>
+<details id="wgProfileFormDisclosure"><summary>Добавить или заменить файл</summary><form id="wgProfileForm"><h4 id="wgProfileFormTitle">Добавить профиль</h4><div class="wg-profile-fields"><label>Короткое имя латиницей<input id="wgProfileID" maxlength="64" pattern="[a-z0-9][a-z0-9_-]{0,63}" placeholder="home" required autocomplete="off"></label><label>Название<input id="wgProfileName" maxlength="160" required autocomplete="off"></label></div><label>Файл .conf<input id="wgProfileFile" type="file" accept=".conf,.ini,text/plain"></label><label>Полная конфигурация<textarea id="wgProfileContent" rows="8" maxlength="131072" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="[Interface]&#10;PrivateKey = …&#10;&#10;[Peer]&#10;PublicKey = …"></textarea></label><p class="r4-note">Файл содержит приватный ключ. Проверяется только синтаксис; сохранение не проверяет доступ к сайту, не разрешает автоматический резерв и не применяет маршрут.</p><div class="wg-profile-actions"><button id="wgProfileReset" class="secondary" type="button">Очистить форму</button><button id="wgProfileSave" class="primary" type="submit" disabled>Сохранить профиль</button></div></form></details>
+</section>
 <section class="engine-draft-dependency" hidden="" id="engineDraftDependency">
 <div><b id="engineDraftDependencyTitle">Выберите сервис</b><span id="engineDraftDependencyText">Укажите, для какого сервиса и устройств использовать этот обход.</span></div>
 <div><button class="secondary" id="engineDiscardAllDrafts" type="button">Отменить изменения</button><button class="primary" id="engineAssignService" type="button">Выбрать сервис</button></div>
@@ -237,6 +242,7 @@ https://telegram.org" rows="2" spellcheck="false"></textarea><small>До 12 са
 </div>
 </details>
 </section>
+<p id="wgProfilesLegacyHint" class="r4-note" hidden>Ниже — один общий профиль WireGuard. Именованные профили из каталога выше выбираются отдельно в настройках сервиса.</p>
 <div class="engine-tabs">
 <button class="engine-tab active" data-engine-tab="config">Конфиг</button>
 <button class="engine-tab" data-engine-tab="files">Файлы</button>
@@ -307,13 +313,14 @@ hysteria2://…
 <section class="view" id="view-sources">
 <article class="panel full-panel">
 <div class="panel-title"><div><h2>Источники данных</h2><p>Выберите списки, сохраните выбор и только затем обновляйте их. Маршруты от этого не переключаются.</p></div><button class="secondary" id="refreshSources">Обновить используемые</button></div>
+<div class="source-view-tools"><div class="editor-mode-switch" role="group" aria-label="Представление источников"><button class="mode-button active" type="button" data-source-view="online" aria-pressed="true">Выбор и обновление</button><button class="mode-button" type="button" data-source-view="offline" aria-pressed="false">Сохранённые копии</button></div><button id="readSourceView" type="button" class="secondary">Перечитать сведения</button></div><p id="sourceOfflineBanner" class="source-offline-banner" hidden>Сохранённые данные. Сейчас источники не обновлялись.</p><p id="sourceViewStatus" class="r4-note" role="status" aria-live="polite"></p>
 <div class="draft-bar section-draft-bar" id="sourceDraftBar">
 <div><span class="draft-pulse"></span><b>Выбор источников изменён</b><small>Черновик относится только к этой вкладке. Сервисы, DNS и обходы останутся без изменений.</small></div>
 <div class="draft-actions"><button class="secondary" id="discardSourceChanges" type="button">Отменить здесь</button><button class="primary" id="applySourceChanges" type="button">Сохранить выбор</button></div>
 </div>
-<div class="table-wrap"><table><thead><tr><th>Источник</th><th>Использовать</th><th>Роль</th><th>Состояние</th><th>Записи</th><th>Последняя ошибка</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Источник</th><th>Использовать</th><th>Роль</th><th>Состояние</th><th>Записи</th><th id="sourceDetailsTitle">Последнее обновление</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
 </article>
-<article class="panel source-overview-panel"><div class="panel-title"><div><h2>Каталог и источники</h2><p>Проверенные локальные данные</p></div><button class="text-button" data-view="sources">Открыть →</button></div><div class="source-overview" id="sourceOverview"></div></article></section>
+<article class="panel source-overview-panel"><div class="panel-title"><div><h2>Каталог и источники</h2><p id="sourceOverviewCaption">Сведения об источниках</p></div><button class="text-button" data-view="sources">Открыть →</button></div><div class="source-overview" id="sourceOverview"></div></article></section>
 <section class="view" id="view-testlab">
 <article class="panel full-panel">
 <div class="panel-title sticky-title"><div><h2>Тест обходов</h2><p>Проверяем фактическую доступность сервисов и постепенно строим матрицу «сервис × обход»</p></div><div class="test-actions"><select id="testScope"><option value="all">Все сервисы</option><option value="enabled">Только включённые</option></select><button class="primary" id="runCurrentTests">Проверить текущую конфигурацию</button></div></div>
@@ -700,5 +707,6 @@ fd00::25"></textarea><small>По одному адресу или диапазо
 <div class="ext5-footer"><p id="ext5Status" role="status" aria-live="polite">Выберите действие.</p><button type="button" class="secondary" id="ext5Cancel" hidden>Отменить запрос</button></div>
 </dialog>
 <script src="/setup-workflows.js?v=0.19.3"></script><script src="/dns-service-lab.js?v=0.19.3"></script><script src="/dns-scoped.js?v=0.19.3"></script><script src="/automation-setup.js?v=0.19.3"></script><script src="/extension-lab.js?v=0.19.3"></script><script src="/panel-availability.js?v=0.19.3" defer></script>
+<script src="/wireguard-profiles-ui.js?v=0.19.3"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@ const serviceDashboard = {
   operation: null, edit: null, scheduleDirty: false, scheduleRevision: null, scheduleServiceIDs: [],
   lookup: null, lookupResults: [], authenticated: true, message: '',
   pendingRequest: null,
+  draftUnconfirmed: new Set(),
 };
 
 function serviceDashboardApplied(service) {
@@ -37,9 +38,12 @@ function serviceDashboardSummary(service) {
   if (state.serviceControl?.runtime_state === 'stopped' && !directResult) return { route: '', label: 'Остановлен', kind: 'unknown', detail: 'Маршруты RAZVILKA остановлены. Сохранённые настройки можно включить общей кнопкой.', pingLabel: 'Пинг: —' };
   const route = applied.enabled ? applied.route : '';
   const observed = service.observed_state || {};
-  const currentResult = applied.enabled && serviceDashboardFresh(result) && result.kind !== 'select'
+  // Current proof DTOs do not bind named WG evidence to profile revision and
+  // runtime generation. Syntax-only catalog metadata cannot fill that gap.
+  const namedWG = route?.startsWith('wireguard:');
+  const currentResult = !namedWG && applied.enabled && serviceDashboardFresh(result) && result.kind !== 'select'
     && !result.recommended_node_id && (result.checked_route || result.applied_route) === route;
-  const freshObserved = applied.enabled && observed.route === route
+  const freshObserved = !namedWG && applied.enabled && observed.route === route
     && observed.status !== 'stale' && Number.isFinite(Date.parse(observed.checked_at || ''))
     && Date.parse(observed.checked_at) <= Date.now() && Date.parse(observed.checked_at) < Date.parse(observed.fresh_until || '')
     && Date.parse(observed.fresh_until || '') > Date.now();
@@ -87,7 +91,13 @@ function serviceDashboardRouteSelect(service) {
   if (service.route && !options.some(option => option.id === service.route)) {
     options.push({ id: service.route, name: routeLabel(service.route), selectable: false });
   }
-  return `<select data-sd-route="${esc(service.id)}" data-sd-focus="route-${esc(service.id)}" aria-label="Выбранный маршрут: ${esc(service.name)}" ${serviceDashboard.edit ? 'disabled' : ''}>${options.map(option => `<option value="${esc(option.id)}" ${option.id === service.route ? 'selected' : ''} ${option.selectable === false ? 'disabled' : ''}>${esc(option.id === 'auto' ? 'Автоматически по правилам' : option.id === 'direct' ? 'Напрямую' : option.name || routeLabel(option.id))}${option.selectable === false ? ' · недоступен' : ''}</option>`).join('')}</select>`;
+  return `<select data-sd-route="${esc(service.id)}" data-sd-focus="route-${esc(service.id)}" data-config-revision="${esc(state.status?.revision ?? '')}" aria-label="Выбранный маршрут: ${esc(service.name)}" ${serviceDashboard.edit || serviceDashboard.draftUnconfirmed.has(service.id) ? 'disabled' : ''}>${options.map(option => `<option value="${esc(option.id)}" ${serviceRouteOptionReviewHTML(option)} ${option.id === service.route ? 'selected' : ''} ${serviceRouteOptionSelectable(option) ? '' : 'disabled'}>${esc(option.id === 'auto' ? 'Автоматически по правилам' : option.id === 'direct' ? 'Напрямую' : option.name || routeLabel(option.id))}${option.kind === 'wireguard-profile' ? ' · только формат · в черновик' : serviceRouteOptionSelectable(option) ? '' : ' · недоступен'}</option>`).join('')}</select>`;
+}
+
+function serviceDashboardWireGuardDraft(service) {
+  if (!service.route?.startsWith('wireguard:')) return '';
+  const revision = service.wireguard_profile_revision, applied = service.applied_wireguard_profile_revision;
+  return `<div class="sd-wg-profile"><p>Именованный WireGuard профиль: проверен только формат. Нативная проверка и применение выполняются отдельно.</p><details><summary>Редакции профиля</summary><small>В черновике: ${esc(revision || 'не привязана — перечитайте выбор')}</small><small>Применённая редакция: ${esc(applied || 'нет сведений')}</small></details></div>`;
 }
 
 function serviceDashboardRecommendation(service) {
@@ -118,14 +128,15 @@ function serviceDashboardCard(service) {
       <span class="sd-current"><small>Применённый маршрут</small><b>${esc(summary.route ? routeLabel(summary.route) : 'Не включён')}</b></span>
       <span class="sd-health ${summary.kind}">${summary.label === 'Не включён' ? '' : `<b>${esc(summary.label)}</b>`}<small title="TCP-пинг измеряет соединение с сервером. Доступ к сайту проверяется отдельно.">${esc(summary.pingLabel)}</small></span>
       <span class="sd-chevron" aria-hidden="true"><span class="r41-expand-label">${open ? 'Свернуть' : 'Подробнее'}</span>${open ? '−' : '+'}</span>
-    </button><div class="sd-switch"><button type="button" class="toggle ${service.enabled ? 'on' : ''}" role="switch" aria-checked="${!!service.enabled}" aria-label="${service.enabled ? 'Выключить' : 'Включить'} ${esc(service.name)} после применения" data-sd-toggle="${id}" data-sd-focus="toggle-${id}" ${serviceDashboard.edit ? 'disabled' : ''}><i></i></button><small>${service.enabled ? 'Выбрано: вкл.' : 'Выбрано: выкл.'}</small></div></div>
+    </button><div class="sd-switch"><button type="button" class="toggle ${service.enabled ? 'on' : ''}" role="switch" aria-checked="${!!service.enabled}" aria-label="${service.enabled ? 'Выключить' : 'Включить'} ${esc(service.name)} после применения" data-sd-toggle="${id}" data-sd-focus="toggle-${id}" ${serviceDashboard.edit || serviceDashboard.draftUnconfirmed.has(service.id) ? 'disabled' : ''}><i></i></button><small>${service.enabled ? 'Выбрано: вкл.' : 'Выбрано: выкл.'}</small></div></div>
     <div class="sd-details" id="sd-details-${id}" ${open ? '' : 'hidden'}>
       <p class="sd-description">${esc(service.description || '')}</p>
       <div class="sd-detail-grid"><div class="sd-setting"><label><span>Изменить маршрут</span>${serviceDashboardRouteSelect(service)}</label><small>${service.route === 'auto' ? 'Автоматический расчёт не доказывает, что выбранный обход уже работает.' : 'Выбор вступит в силу после проверки и применения.'}</small>${service.route_available === false ? `<p class="sd-warning">${esc(service.route_issue || 'Выбранный маршрут недоступен.')}</p>` : ''}</div>
-      <div class="sd-setting"><span>Устройства действующего маршрута</span><b>${esc(scope)}</b>${service.sources_dirty ? `<small>После применения: ${esc(nodeScopeText(service.sources || []))}</small>` : ''}<button class="secondary" type="button" data-sd-scope="${id}" data-sd-focus="scope-${id}" ${serviceDashboard.edit ? 'disabled' : ''}>Изменить устройства</button></div>
+      <div class="sd-setting"><span>Устройства действующего маршрута</span><b>${esc(scope)}</b>${service.sources_dirty ? `<small>После применения: ${esc(nodeScopeText(service.sources || []))}</small>` : ''}<button class="secondary" type="button" data-sd-scope="${id}" data-sd-focus="scope-${id}" ${serviceDashboard.edit || serviceDashboard.draftUnconfirmed.has(service.id) ? 'disabled' : ''}>Изменить устройства</button></div>
       <div class="sd-setting"><span>Последняя проверка</span><b class="${summary.kind}">${esc(summary.label)}</b><small>${esc(summary.detail)}</small>${timing ? `<small>${esc(timing)} · это не пинг</small>` : ''}${result?.checked_at ? `<small>${esc(new Date(result.checked_at).toLocaleString('ru-RU'))}</small>` : ''}</div></div>
       ${serviceDashboardRecommendation(service)}
       <div class="sd-card-actions"><button class="secondary" type="button" data-sd-check="${id}" data-sd-focus="check-${id}" ${busy ? 'disabled' : ''}>Проверить сервис</button>${pingNode ? `<button class="secondary" type="button" data-sd-ping="${id}" data-sd-focus="ping-${id}" ${busy ? 'disabled' : ''}>Пинг сервера</button>` : ''}<button class="secondary" type="button" data-sd-select="${id}" data-sd-focus="select-${id}" ${busy ? 'disabled' : ''}>Подобрать подключение</button><button class="secondary" type="button" data-sd-lists="${id}" data-sd-focus="lists-${id}">Домены и IP (${(service.domains || []).length})</button>${service.route_available === false ? `<button class="secondary" type="button" data-sd-setup="${esc(service.route)}">Настроить обход</button>` : ''}${service.nfqws2?.relevant ? `<button class="secondary" type="button" data-sd-nfqws="${id}">Проверка NFQWS2</button>` : ''}${service.custom ? `<button class="secondary" type="button" data-sd-custom="${id}">Изменить сервис</button><button class="secondary" type="button" data-sd-delete="${id}">Удалить сервис</button>` : ''}</div>
+      ${serviceDashboardWireGuardDraft(service)}${service.route?.startsWith('wireguard:') || serviceDashboard.draftUnconfirmed.has(service.id) ? `<button class="secondary" type="button" data-sd-read-draft="${id}" ${serviceDashboard.edit ? 'disabled' : ''}>Перечитать выбор</button>` : ''}
     </div></article>`;
 }
 
@@ -378,28 +389,51 @@ async function serviceDashboardSaveSchedule(event) {
   }
 }
 
-async function serviceDashboardEdit(serviceID, changes) {
+async function serviceDashboardEdit(serviceID, changes, select = null) {
   const service = state.services.find(item => item.id === serviceID);
   if (!service || serviceDashboard.edit || !serviceDashboard.authenticated) return;
-  const snapshot = { enabled: !!service.enabled, route: service.route, sources: [...(service.sources || [])], ...changes };
+  let snapshot;
   const edit = { epoch: serviceDashboard.epoch, controller: new AbortController() };
   serviceDashboard.read?.abort();
   serviceDashboard.edit = edit;
   renderServiceDashboard();
   try {
-    const result = await api(`/api/v1/services/${encodeURIComponent(serviceID)}`, { method: 'PUT', signal: edit.controller.signal, body: JSON.stringify(snapshot) });
+    snapshot = serviceDraftBody(service, changes, serviceRouteReview(select));
+    const result = await writeServiceDraft(serviceID, snapshot, { signal: edit.controller.signal });
     if (serviceDashboard.edit !== edit || edit.epoch !== serviceDashboard.epoch || edit.controller.signal.aborted) return;
     if (result.id !== serviceID || result.ok !== true) throw new Error('Не удалось подтвердить изменение сервиса. Обновите страницу.');
-    serviceDashboard.message = 'Выбор сохранён. Нажмите «Проверить и применить», чтобы изменить действующий маршрут.';
     const [status, services] = await Promise.all([api('/api/v1/status', { signal: edit.controller.signal }), api('/api/v1/services', { signal: edit.controller.signal })]);
     if (serviceDashboard.edit !== edit || edit.epoch !== serviceDashboard.epoch || edit.controller.signal.aborted) return;
+    if (!Number.isSafeInteger(status?.revision) || !Array.isArray(services) || !services.some(row => row.id === serviceID)) throw new Error('Сохранённый выбор прочитан не полностью.');
     state.status = status; state.services = services;
+    serviceDashboard.message = snapshot.route?.startsWith('wireguard:') ? 'Выбор WireGuard профиля сохранён в черновике. Проверен только формат; нативная проверка и применение выполняются отдельно.' : 'Выбор сохранён. Нажмите «Проверить и применить», чтобы изменить действующий маршрут.';
     renderStatus(); renderOverviewQuickServices(); renderOverviewServices(); renderReadiness(); renderSettings();
   } catch (error) {
-    if (serviceDashboard.edit === edit && edit.epoch === serviceDashboard.epoch && !edit.controller.signal.aborted) serviceDashboard.message = error.message;
+    if (serviceDashboard.edit === edit && edit.epoch === serviceDashboard.epoch && !edit.controller.signal.aborted) {
+      if (snapshot?.route?.startsWith('wireguard:')) serviceDashboard.draftUnconfirmed.add(serviceID);
+      serviceDashboard.message = serviceDashboard.draftUnconfirmed.has(serviceID) ? 'Запись WireGuard выбора не подтверждена. Нажмите «Перечитать выбор»; повторная запись автоматически не выполняется.' : error.message;
+    }
   } finally {
     if (serviceDashboard.edit === edit) { serviceDashboard.edit = null; renderServiceDashboard(); }
   }
+}
+
+async function serviceDashboardReadDraft(serviceID) {
+  if (serviceDashboard.edit || !serviceDashboard.authenticated || document.hidden) return;
+  const edit = { epoch: serviceDashboard.epoch, controller: new AbortController() };
+  serviceDashboard.read?.abort(); serviceDashboard.edit = edit; renderServiceDashboard();
+  const current = () => serviceDashboard.edit === edit && edit.epoch === serviceDashboard.epoch && !edit.controller.signal.aborted;
+  try {
+    const options = { signal: edit.controller.signal };
+    const [status, services, routes] = await Promise.all([api('/api/v1/status', options), api('/api/v1/services', options), api('/api/v1/routes/options', options)]);
+    if (!current()) return;
+    if (!Number.isSafeInteger(status?.revision) || !Array.isArray(services) || !services.some(service => service.id === serviceID) || !Array.isArray(routes)) throw new Error('Выбор прочитан не полностью.');
+    state.status = status; state.services = services; state.routeOptions = routes;
+    serviceDashboard.draftUnconfirmed.delete(serviceID);
+    serviceDashboard.message = 'Выбор перечитан. Выберите нужную редакцию вручную; запись и применение не выполнялись.';
+    renderStatus(); renderOverviewQuickServices(); renderOverviewServices(); renderReadiness(); renderSettings();
+  } catch (error) { if (current()) serviceDashboard.message = 'Не удалось перечитать выбор. ' + error.message; }
+  finally { if (serviceDashboard.edit === edit) { serviceDashboard.edit = null; renderServiceDashboard(); } }
 }
 
 function serviceWebsiteHosts(input) {
@@ -497,6 +531,7 @@ function bindServiceDashboard() {
     const data = button.dataset;
     if (data.sdExpand) { serviceDashboard.expanded.has(data.sdExpand) ? serviceDashboard.expanded.delete(data.sdExpand) : serviceDashboard.expanded.add(data.sdExpand); renderServiceDashboard(); }
     if (data.sdToggle) { const service = state.services.find(item => item.id === data.sdToggle); if (service) serviceDashboardEdit(service.id, { enabled: !service.enabled }); }
+    if (data.sdReadDraft) serviceDashboardReadDraft(data.sdReadDraft);
     if (data.sdScope) openServiceScope(data.sdScope);
     if (data.sdLists) showServiceDetails(data.sdLists);
     if (data.sdCustom) openCustomServiceDialog(data.sdCustom);
@@ -514,7 +549,7 @@ function bindServiceDashboard() {
   });
   $('#serviceList').addEventListener('change', event => {
     const select = event.target.closest('[data-sd-route]');
-    if (select) serviceDashboardEdit(select.dataset.sdRoute, { route: select.value });
+    if (select) serviceDashboardEdit(select.dataset.sdRoute, { route: select.value }, select);
   });
   $('#serviceList').addEventListener('focusout', event => { if (event.target.matches?.('[data-sd-route]')) queueMicrotask(renderServiceDashboard); });
   $('#serviceExpandAll').addEventListener('click', () => {

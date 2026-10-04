@@ -5,6 +5,10 @@ import { webcrypto } from 'node:crypto';
 
 const source = readFileSync(new URL('../cmd/razvilka/web/service-dashboard-ui.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../cmd/razvilka/web/index.html', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
+const draftHelpers = ['serviceRouteOptionReviewHTML','serviceRouteOptionSelectable','serviceRouteReview','serviceDraftBody','confirmServiceDraftReceipt','writeServiceDraft','saveService'].map(name => {
+  const match = appSource.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`)); assert(match, name); return match[0];
+}).join('\n');
 const future = () => new Date(Date.now() + 60000).toISOString();
 const deferred = () => { let resolve, reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; }); return { promise, resolve, reject }; };
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
@@ -57,7 +61,7 @@ function fixture() {
     openCustomServiceDialog: id => opened.push(['custom', id]), openNodeCheck: (id, service) => opened.push(['node', id, service]),
     renderStatus() {}, renderOverviewQuickServices() {}, renderOverviewServices() {}, renderReadiness() {}, renderSettings() {},
   });
-  vm.runInContext(source, context);
+  vm.runInContext(draftHelpers + '\n' + source, context);
   const nodeSource = readFileSync(new URL('../cmd/razvilka/web/node-browser.js', import.meta.url), 'utf8');
   vm.runInContext(nodeSource.slice(nodeSource.indexOf('let nodeCheckPendingRequest'),nodeSource.indexOf('async function pollNodeBrowserChecks')),context);
   const dashboard = vm.runInContext('serviceDashboard', context);
@@ -370,3 +374,109 @@ for(const invalidate of ['new-generation','logout','full-read','edit']) {
  f.document.hidden=false;f.dispatch('visibilitychange');await flush();assert.equal(f.calls.length,count+2);
 }
 console.log('Autonomous observations: latest result, home polling, bounded reads, visibility and mutation fences passed');
+
+const wgRevision = 'a'.repeat(64), nextWGRevision = 'b'.repeat(64);
+const wgOption = (revision = wgRevision) => ({ id:'wireguard:private', name:'WireGuard · Личный', kind:'wireguard-profile', selectable:true, configured:true, installed:false, ready:false, running:false, wireguard_profile_revision:revision });
+const wgSelect = (revision = wgRevision, config = '9') => ({ value:'wireguard:private', dataset:{configRevision:config}, selectedOptions:[{value:'wireguard:private',disabled:false,dataset:{routeKind:'wireguard-profile',routeSelectable:'true',profileRevision:revision}}] });
+function wgResponder(f, revision = wgRevision) {
+  return (url, options={}) => {
+    if(options.method==='PUT') {
+      const body=JSON.parse(options.body), service=f.state.services[0];
+      assert.equal(body.expected_revision,9);assert.equal(body.expected_profile_revision,revision);
+      Object.assign(service,{enabled:body.enabled,route:body.route,sources:body.sources,wireguard_profile_revision:revision,dirty:true,route_dirty:true});
+      return {id:service.id,ok:true,state:{enabled:body.enabled,route:body.route,sources:body.sources,wireguard_profile_revision:revision}};
+    }
+    if(url==='/api/v1/status')return {...f.state.status};
+    if(url==='/api/v1/services')return structuredClone(f.state.services);
+    if(url==='/api/v1/routes/options')return [wgOption(nextWGRevision)];
+    throw new Error('Unexpected WG call '+url);
+  };
+}
+{
+  const f=fixture();f.state.routeOptions.push(wgOption());
+  const markup=f.context.serviceDashboardRouteSelect(f.state.services[0]);
+  assert.match(markup,/data-config-revision="9"/);assert.match(markup,/только формат · в черновик/);
+  assert.doesNotMatch(markup,/<option value="wireguard:private"[^>]* disabled/,'not installed/ready prevented syntax-only draft selection');
+  const select=wgSelect();f.state.routeOptions=[wgOption(nextWGRevision)];f.state.status.revision=10;
+  // The old open select carries both revisions the user reviewed; it cannot
+  // borrow a newer hash/config revision from a passive in-memory update.
+  f.setHandler((url,options)=>{if(options.method==='PUT'){const body=JSON.parse(options.body);assert.equal(body.expected_profile_revision,wgRevision);assert.equal(body.expected_revision,9);throw Object.assign(new Error('CAS'),{status:409});}throw new Error(url);});
+  await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},select);
+  assert.equal(f.calls.length,1);assert.equal(f.dashboard.draftUnconfirmed.has('youtube'),true);
+  await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},wgSelect(nextWGRevision,'10'));
+  assert.equal(f.calls.length,1,'409 caused a replay or enabled another write without explicit read');
+  assert.match(f.$('#serviceList').innerHTML,/Перечитать выбор/);
+  f.setHandler(wgResponder(f));await f.context.serviceDashboardReadDraft('youtube');
+  assert.equal(f.calls.length,4);assert.equal(f.dashboard.draftUnconfirmed.has('youtube'),false);assert.equal(f.state.routeOptions[0].wireguard_profile_revision,nextWGRevision);
+}
+{
+  const f=fixture();f.state.routeOptions.push(wgOption());f.setHandler(wgResponder(f));
+  await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},wgSelect());
+  const body=JSON.parse(f.calls[0].body);
+  assert.deepEqual(body,{enabled:true,route:'wireguard:private',sources:['192.168.1.40/32'],expected_revision:9,expected_profile_revision:wgRevision});
+  assert.equal(f.state.services[0].applied_state.route,'nfqws','draft save changed applied route');
+  assert.match(f.dashboard.message,/в черновике/);assert.match(f.dashboard.message,/только формат/);
+  assert.match(f.context.serviceDashboardCard(f.state.services[0]),new RegExp(wgRevision));
+  // Retained route/scope/toggle writes use the saved binding, not the current
+  // catalog hash; replacing the catalog must trigger backend CAS refusal.
+  f.state.routeOptions=[wgOption(nextWGRevision)];
+  const retained=f.context.serviceDraftBody(f.state.services[0],{sources:['192.168.1.41/32']});
+  assert.equal(retained.expected_profile_revision,wgRevision);
+  await f.context.saveService({...f.state.services[0],enabled:false});
+  assert.equal(JSON.parse(f.calls.at(-1).body).expected_profile_revision,wgRevision);
+  const direct=f.context.serviceDraftBody(f.state.services[0],{route:'direct'});
+  assert.deepEqual(JSON.parse(JSON.stringify(direct)),{enabled:false,route:'direct',sources:['192.168.1.40/32']},'obsolete WG revision escaped with another route');
+  f.state.services[0].applied_state={enabled:true,route:'wireguard:private'};
+  f.state.services[0].observed_state={route:'wireguard:private',status:'pass',level:'service-confirmed',outcome:'service_accepted',checked_at:new Date(Date.now()-1000).toISOString(),fresh_until:future()};
+  assert.notEqual(f.context.serviceDashboardSummary(f.state.services[0]).label,'Сервис доступен','ID-only proof promoted syntax-only profile metadata');
+}
+for(const tamper of [select=>select.dataset.configRevision='',select=>select.selectedOptions[0].dataset.profileRevision='',select=>select.selectedOptions[0].dataset.profileRevision='A'.repeat(64),select=>select.selectedOptions[0].dataset.routeKind='engine',select=>select.selectedOptions[0].disabled=true]) {
+  const f=fixture(), select=wgSelect();tamper(select);await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},select);assert.equal(f.calls.length,0);
+}
+{
+  const f=fixture();await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'});assert.equal(f.calls.length,0,'ID-only writer admitted a named route');
+  const legacy={...f.state.services[0],route:'wireguard:removed',wireguard_profile_revision:undefined};
+  assert.equal(f.context.serviceDraftBody(legacy,{enabled:false}).expected_revision,9);
+  assert.throws(()=>f.context.serviceDraftBody(legacy,{enabled:true}));
+}
+for(const reply of [{ok:true,id:'youtube',state:{enabled:true,route:'wireguard:private',wireguard_profile_revision:nextWGRevision}},{ok:true,id:'other',state:{enabled:true,route:'wireguard:private',wireguard_profile_revision:wgRevision}},new Error('lost reply')]) {
+  const f=fixture();f.setHandler(()=>{if(reply instanceof Error)throw reply;return reply;});
+  await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},wgSelect());
+  assert.equal(f.calls.length,1);assert.equal(f.dashboard.draftUnconfirmed.has('youtube'),true);assert.equal(f.state.services[0].route,'auto');
+  await f.context.serviceDashboardEdit('youtube',{enabled:false});assert.equal(f.calls.length,1);
+}
+{
+  const f=fixture(), pending=deferred();f.setHandler(()=>pending.promise);
+  const write=f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},wgSelect());
+  f.dispatch('razvilka:auth-required');pending.resolve({ok:true,id:'youtube',state:{enabled:true,route:'wireguard:private',sources:['192.168.1.40/32'],wireguard_profile_revision:wgRevision}});await write;
+  assert.equal(f.calls.length,1);assert.equal(f.state.services[0].route,'auto');assert.equal(f.dashboard.message,'');
+  const readFixture=fixture(), late=deferred();readFixture.dashboard.draftUnconfirmed.add('youtube');readFixture.setHandler(()=>late.promise);
+  const read=readFixture.context.serviceDashboardReadDraft('youtube');readFixture.dispatch('razvilka:auth-required');late.resolve([]);await read;
+  assert.equal(readFixture.dashboard.draftUnconfirmed.has('youtube'),true,'old read reopened write permission after logout');
+}
+console.log('PASS named WG draft writer: frozen config/profile CAS, syntax-only options, retained binding and withdrawal, no obsolete hash, unconfirmed-write readback and auth fences');
+
+function loadDraftHandlers(f, names) {
+  vm.runInContext(names.map(name=>{const match=appSource.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];}).join('\n'),f.context);
+  f.context.refreshCoreAfterEdit=async()=>{};f.context.refreshDevices=async()=>{};f.context.showPlan=async()=>{};
+  f.context.showDetails=()=>{};
+}
+{
+  const f=fixture(),service=f.state.services[0];Object.assign(service,{route:'wireguard:private',wireguard_profile_revision:wgRevision});
+  loadDraftHandlers(f,['openServiceScope','closeServiceScope','renderServiceScopeDevices','saveServiceScope']);
+  f.$('#serviceScopeDialog').showModal=()=>{};f.$('#serviceScopeDialog').close=()=>{};
+  f.context.openServiceScope(service.id);f.state.status.revision=10;service.route='direct';service.wireguard_profile_revision=nextWGRevision;
+  f.$('#serviceScopeSources').value='192.168.1.41/32';f.setHandler(wgResponder(f));
+  await f.context.saveServiceScope({preventDefault(){}});
+  assert.equal(f.calls.length,1);const body=JSON.parse(f.calls[0].body);
+  assert.equal(body.route,'wireguard:private');assert.equal(body.expected_revision,9);assert.equal(body.expected_profile_revision,wgRevision);assert.deepEqual(body.sources,['192.168.1.41/32']);
+}
+{
+  const f=fixture(),service=f.state.services[0];Object.assign(service,{route:'wireguard:private',wireguard_profile_revision:wgRevision});
+  f.state.devices=[{id:'device',ips:['192.168.1.42'],group:''}];loadDraftHandlers(f,['saveDevicePolicy']);
+  f.$('#devicePolicyID').value='device';f.$('#devicePolicyService').value=service.id;f.$('#devicePolicyScope').value='device';f.$('#devicePolicyDialog').close=()=>{};
+  f.context.askConfirmation=async()=>{f.state.status.revision=10;service.route='direct';service.wireguard_profile_revision=nextWGRevision;return true;};
+  f.setHandler(wgResponder(f));await f.context.saveDevicePolicy({preventDefault(){}});
+  assert.equal(f.calls.length,1);const body=JSON.parse(f.calls[0].body);assert.equal(body.route,'wireguard:private');assert.equal(body.expected_revision,9);assert.equal(body.expected_profile_revision,wgRevision);assert.deepEqual(body.sources,['192.168.1.42']);
+}
+console.log('PASS named WG scoped writers: actual service scope and device confirmation preserve the frozen route/revision pair');

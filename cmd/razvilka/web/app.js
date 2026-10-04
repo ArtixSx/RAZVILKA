@@ -45,6 +45,8 @@ const state = {
   dns: { profiles: [], providers: [], draft: { profile_id: 'automatic' }, applied: { profile_id: 'automatic' }, plan: null },
   sessions: [],
   sources: [],
+  sourceView: 'online',
+  sourceOffline: null,
   nodes: { available: false, generation: 0, nodes: [], sources: [], counts: {}, note: '' },
   routeOptions: [],
   connections: { connections: [], active: 0, closed: 0, live: false },
@@ -990,6 +992,7 @@ function renderPanelLoad() {
     try { action(); delete state.uiRenderIssues[key]; }
     catch (_) { state.uiRenderIssues[key] = 'Не удалось обновить виджет. Последние данные сохранены.'; }
   };
+  if (state.currentView === 'sources') render('panel-sources', renderSources);
   render('panel-snapshot', () => { if (typeof renderSavedPanelSnapshot === 'function') renderSavedPanelSnapshot(); });
   render('panel-settings-mode', () => { if (typeof renderSettingsMode === 'function') renderSettingsMode(); });
   const values = panelViewKeys().map(key => state.dataLoad?.[key]).filter(Boolean);
@@ -1021,7 +1024,7 @@ function renderPanelSection(key) {
       if (state.currentView === 'dns' && state.dataLoad.dns?.loaded) renderDNSServiceBindings();
     },
     engines: renderEngines, engineConfigs: () => { if(state.currentView==='engineconfig')renderEngineControl(); else if(typeof renderInterfaceEngines==='function')renderInterfaceEngines(); }, components: renderComponents,
-    warp: renderWarpManager, sources: renderSources, nodes: renderNodes,
+    warp: renderWarpManager, sources: renderSources, sourceOffline: renderSources, nodes: renderNodes,
     nodeFeeds: renderNodes, nodeAutofallback: renderNodes,
     routeOptions: () => { renderServices(); if (state.currentView === 'testlab' && state.dataLoad.testlab?.loaded) renderTestLab(); },
     connections: renderConnections, devices: renderDevices, testlab: renderTestLab,
@@ -1036,6 +1039,7 @@ function renderPanelSection(key) {
 }
 
 function acceptPanelSection(key, value, requestStartedAt) {
+  if (key === 'sourceOffline') { acceptSourceOfflineCatalog(value); panelSectionState(key, 'ready'); return; }
   if (key === 'inventory') { acceptPanelInventory(value, requestStartedAt); return; }
   const arrays = ['services', 'engines', 'engineConfigs', 'components', 'sources', 'routeOptions'];
   if (arrays.includes(key) && !Array.isArray(value)) throw new Error('Получен неполный список. Последние данные сохранены.');
@@ -1043,6 +1047,7 @@ function acceptPanelSection(key, value, requestStartedAt) {
   if (key === 'serviceControl') { if (typeof acceptWorkspaceControl === 'function') acceptWorkspaceControl(value); else state.serviceControl = value; }
   else if (key === 'devices') acceptDeviceList(value);
   else state[key] = key === 'sessions' ? (value.sessions || []) : value;
+  if (key === 'sources' && typeof sourceViewRuntime !== 'undefined' && state.sourceView !== 'offline') sourceViewRuntime.readValid = true;
   panelSectionState(key, 'ready');
 }
 
@@ -1140,7 +1145,7 @@ function panelViewKeys(view = state.currentView || 'overview') {
     onboard: ['status','inventory','services','nodeFeeds','devices','engineConfigs'],
     managed: ['status','services','nodes','routeOptions'],
     updates: ['status','inventory','serviceControl'],
-    connections: ['status','connections','devices'], sources: ['status','sources','services']
+    connections: ['status','connections','devices'], sources: ['status',state.sourceView === 'offline' ? 'sourceOffline' : 'sources','services']
   };
   return groups[view] || groups.overview;
 }
@@ -1149,7 +1154,7 @@ function panelViewRequests(view = state.currentView || 'overview') {
   const paths = {
     status:'/api/v1/status', inventory:'/api/v1/panel/inventory',
     metrics:'/api/v1/metrics?limit=120', services:'/api/v1/services', engineConfigs:'/api/v1/engine-configs',
-    warp:'/api/v1/warp', sources:'/api/v1/sources', nodes:'/api/v1/nodes', nodeFeeds:'/api/v1/node-feeds',
+    warp:'/api/v1/warp', sources:'/api/v1/sources', sourceOffline:'/api/v1/sources/offline', nodes:'/api/v1/nodes', nodeFeeds:'/api/v1/node-feeds',
     nodeAutofallback:'/api/v1/node-autofallback', routeOptions:'/api/v1/routes/options',
     connections:'/api/v1/connections?include_closed=true', devices:'/api/v1/devices?view=status',
     testlab:'/api/v1/testlab', engineLab:'/api/v1/engine-lab', audit:'/api/v1/audit/current?limit=40',
@@ -1186,7 +1191,10 @@ async function refreshAll(retryFailed = false, navigation = false) {
   const pending = loadPanelSnapshot(generation, retryFailed);
   panelLoad.request = pending;
   try { return await pending; }
-  finally { if (panelLoad.request === pending) { panelLoad.request = null; panelLoad.controller = null; } }
+  finally {
+    if (panelLoad.request === pending) { panelLoad.request = null; panelLoad.controller = null; }
+    if (state.currentView === 'sources' && typeof syncSourceViewControls === 'function') syncSourceViewControls();
+  }
 }
 
 async function refreshAfterMutation() {
@@ -1557,6 +1565,7 @@ function renderStatus() {
   $('#deviceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
   $('#sourceDraftBar').classList.toggle('show', !!s.sources_pending_changes);
   $('#sourceDraftBar').classList.toggle('safe-review', !!s.safe_mode);
+  if (typeof syncSourceViewControls === 'function') syncSourceViewControls();
   $('#applyDeviceChanges').textContent = s.safe_mode ? 'Проверить изменения' : 'Проверить и применить';
   const pendingViews = pendingChangeViews(s);
   $('#draftBar').classList.toggle('show', pendingViews.some(view => view !== state.currentView));
@@ -1901,11 +1910,11 @@ function routeSelectHTML(service) {
     return !Array.isArray(option.services) || !option.services.length || option.services.includes(service.id);
   });
   if (service.route && !options.some((o) => o.id === service.route)) {
-    options.push({ id: service.route, name: service.route, installed: true, selectable: true, kind: 'custom' });
+    options.push({ id: service.route, name: service.route, installed: true, selectable: !service.route.startsWith('wireguard:'), kind: 'custom' });
   }
-  return `<select class="route-select" data-route-id="${esc(service.id)}" aria-label="Маршрут для ${esc(service.name)}">${options.map((o) => {
+  return `<select class="route-select" data-route-id="${esc(service.id)}" data-config-revision="${esc(state.status?.revision ?? '')}" aria-label="Маршрут для ${esc(service.name)}">${options.map((o) => {
     const selected = o.id === service.route ? 'selected' : '';
-    const disabled = !o.selectable ? 'disabled' : '';
+    const disabled = !serviceRouteOptionSelectable(o) ? 'disabled' : '';
     const suffix = !o.selectable && o.id !== 'auto' && o.id !== 'direct'
       ? !o.installed
         ? ' · компонент не установлен'
@@ -1914,7 +1923,7 @@ function routeSelectHTML(service) {
         : ' · конфигурация не готова'
       : '';
     const label = o.id === 'auto' ? 'Автопилот (AUTO)' : (o.name || routeLabel(o.id));
-    return `<option value="${esc(o.id)}" ${selected} ${disabled}>${esc(label)}${suffix}</option>`;
+    return `<option value="${esc(o.id)}" ${serviceRouteOptionReviewHTML(o)} ${selected} ${disabled}>${esc(label)}${o.kind === 'wireguard-profile' ? ' · только формат · в черновик' : suffix}</option>`;
   }).join('')}</select>`;
 }
 
@@ -2076,6 +2085,7 @@ function engineStatusText(engine) {
 }
 
 function renderEngineControl() {
+  if (typeof renderWireGuardProfiles === 'function') renderWireGuardProfiles();
   if (!state.engineConfigs.length) {
     const load = state.dataLoad?.engineConfigs;
     const message = load?.loaded ? 'Нет описаний обходов' : load?.phase === 'busy' ? 'Настройки временно заняты. Повторим загрузку.' : load?.phase === 'error' ? 'Не удалось загрузить настройки. Нажмите «Обновить».' : 'Загружаем настройки обходов…';
@@ -3248,6 +3258,83 @@ async function runIsolatedTests() {
   }
 }
 
+const sourceViewRuntime = { epoch: 0, readValid: false, write: null, message: '' };
+
+function acceptSourceOfflineCatalog(value) {
+  if (value?.offline !== true || value.read_only !== true || !Array.isArray(value.sources)
+      || value.sources.some(row => !row || row.offline !== true || row.ready !== false || typeof row.id !== 'string' || typeof row.name !== 'string'
+        || !Number.isSafeInteger(row.entries) || row.entries < 0 || ['enabled','applied_enabled','dirty','legacy_cache','last_known_good'].some(key => typeof row[key] !== 'boolean'))) {
+    throw new Error('Сохранённые копии получены не полностью. Чтение не подтверждено.');
+  }
+  if (new Set(value.sources.map(row => row.id)).size !== value.sources.length) throw new Error('Получены повторяющиеся источники. Чтение не подтверждено.');
+  const fields = ['id','name','kind','url','description','offline','ready','entries','sha256','updated_at','expires_at','enabled','applied_enabled','dirty','legacy_cache','last_error','last_known_good','cache_status','trust_tier'];
+  const pick = (row, names) => Object.fromEntries(names.filter(key => row[key] !== undefined).map(key => [key, row[key]]));
+  state.sourceOffline = { offline: true, read_only: true, sources: value.sources.map(row => ({ ...pick(row, fields),
+    ...(row.provenance ? { provenance: pick(row.provenance, ['url','final_url','raw_sha256','trust_tier']) } : {}),
+    ...(row.diff ? { diff: pick(row.diff, ['added','removed','previous_sha256']) } : {}) })) };
+  sourceViewRuntime.readValid = true;
+}
+
+function sourceOfflineDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(value) || value.startsWith('0001-') || !Number.isFinite(Date.parse(value))) return '—';
+  return new Date(value).toLocaleString('ru-RU');
+}
+
+function sourceHasSavedCopy(source) {
+  return source.kind !== 'reference' && source.cache_status !== 'missing'
+    && (source.legacy_cache === true || source.last_known_good === true || /^[a-f0-9]{64}$/i.test(source.sha256 || '') || ['offline-cache','stale','legacy','last-known-good'].includes(source.cache_status));
+}
+
+function sourceOfflineStateText(source) {
+  const warnings = [];
+  if (source.legacy_cache) warnings.push('Источник требует сверки');
+  if (source.last_error && source.last_known_good) warnings.push('Последнее обновление отклонено · сохранена прежняя копия');
+  if (source.cache_status === 'quarantined') warnings.push('Копия не подтверждена');
+  if (source.cache_status === 'stale' || sourceOfflineDate(source.expires_at) !== '—' && Date.parse(source.expires_at) <= Date.now()) warnings.push('Срок копии истёк');
+  if (warnings.length) return [warnings.join(' · '), 'warn'];
+  return [source.kind === 'reference' ? 'Справочный источник' : sourceHasSavedCopy(source) ? 'Сохранённая копия' : 'Сохранённой копии нет', ''];
+}
+
+function syncSourceViewControls() {
+  const offline = state.sourceView === 'offline', key = offline ? 'sourceOffline' : 'sources';
+  const valid = state.authenticated !== false && $('#authScreen')?.hidden !== false && sourceViewRuntime.readValid && state.dataLoad?.[key]?.phase === 'ready';
+  for (const id of ['refreshSources','applySourceChanges','discardSourceChanges']) $('#'+id).disabled = offline || !valid || !!sourceViewRuntime.write;
+  $$('[data-source-toggle]').forEach(button => { button.disabled = offline || !valid || !!sourceViewRuntime.write; });
+  $('#readSourceView').disabled = state.authenticated === false || !!sourceViewRuntime.write || !!panelLoad.request;
+  for (const button of $$('[data-source-view]')) { const selected = button.dataset.sourceView === (offline ? 'offline' : 'online'); button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected)); }
+  $('#sourceOfflineBanner').hidden = !offline || !valid;
+  $('#sourceDetailsTitle').textContent = offline ? 'Сохранённые сведения' : 'Последнее обновление';
+  $('#sourceOverviewCaption').textContent = offline ? 'Сведения о сохранённых копиях' : 'Сведения об источниках';
+  const load = state.dataLoad?.[key];
+  $('#sourceViewStatus').textContent = sourceViewRuntime.message || (load?.phase === 'error' ? 'Данные не прочитаны. Перечитайте это представление; ошибка не заменена сохранённой копией.'
+    : load?.phase === 'busy' ? 'Чтение временно занято. Источники не обновлялись.' : !valid ? 'Читаем сведения об источниках…' : '');
+  return valid;
+}
+
+async function readSourceView() {
+  if (!state.authenticated || state.currentView !== 'sources' || document.hidden) return;
+  cancelPanelRefresh();
+  invalidatePanelReads();
+  sourceViewRuntime.readValid = false; sourceViewRuntime.message = '';
+  panelSectionState(state.sourceView === 'offline' ? 'sourceOffline' : 'sources', 'loading');
+  renderSources();
+  return refreshAll(false, true);
+}
+
+async function switchSourceView(mode) {
+  if (!['online','offline'].includes(mode) || state.sourceView === mode) return;
+  sourceViewRuntime.epoch++; sourceViewRuntime.write?.controller.abort();
+  state.sourceView = mode;
+  return readSourceView();
+}
+
+function handleSourceViewLifecycle(event) {
+  sourceViewRuntime.epoch++; sourceViewRuntime.readValid = false; sourceViewRuntime.message = '';
+  sourceViewRuntime.write?.controller.abort();
+  if (event.type === 'razvilka:auth-required') state.sourceOffline = null;
+  renderSources();
+}
+
 function sourceStateText(s) {
   if (s.kind === 'reference') return ['справочник', ''];
   if (!s.enabled) return ['выключен', ''];
@@ -3283,6 +3370,23 @@ function sourceDiffText(s) {
 }
 
 function renderSources() {
+  const valid = syncSourceViewControls(), offline = state.sourceView === 'offline';
+  if (!valid) {
+    $('#sourceOverview').innerHTML = '<div class="source-stat"><strong>—</strong><span>Сведения ещё не подтверждены чтением</span></div>';
+    $('#sourceRows').innerHTML = '<tr><td colspan="6">Данные этого представления ещё не прочитаны.</td></tr>';
+    return;
+  }
+  if (offline) {
+    const rows = state.sourceOffline?.sources || [], copies = rows.filter(sourceHasSavedCopy).length, references = rows.filter(row => row.kind === 'reference').length;
+    $('#sourceOverview').innerHTML = `<div class="source-stat"><strong>${copies}</strong><span>сохранённых копий · ${references} справочных источников</span></div>`;
+    $('#sourceRows').innerHTML = rows.map(source => {
+      const [text, tone] = sourceOfflineStateText(source), provenance = source.provenance || {};
+      const metadata = [['SHA256',source.sha256],['Происхождение',provenance.url],['Конечный адрес',provenance.final_url],['Отпечаток исходного ответа',provenance.raw_sha256],['Уровень источника',provenance.trust_tier]];
+      const receipt = `<details class="source-saved-receipt"><summary>Отпечаток и происхождение</summary>${metadata.map(([label,value])=>`<div><b>${label}</b><span>${esc(value || '—')}</span></div>`).join('')}</details>`;
+      return `<tr class="${source.dirty ? 'source-dirty-row' : ''}"><td><b>${esc(source.name)}</b><div class="source-role">${esc(source.description || '')}</div></td><td><button class="toggle ${source.enabled ? 'on' : ''}" disabled aria-readonly="true" aria-pressed="${source.enabled}" aria-label="Сохранённый выбор ${esc(source.name)}"><i></i></button><small class="source-applied-state">Сохранённый выбор: ${source.enabled ? 'включён' : 'выключен'}<br>Применённый выбор: ${source.applied_enabled ? 'включён' : 'выключен'}${source.dirty ? '<br>Есть сохранённые изменения выбора' : ''}</small></td><td>${esc(sourceKindText(source.kind))}</td><td><span class="source-state"><i class="state-dot ${tone}"></i>${esc(text)}</span></td><td>${source.entries.toLocaleString('ru-RU')}</td><td><div class="source-role">Загружено: ${esc(sourceOfflineDate(source.updated_at))}<br>Срок локальной копии: ${esc(sourceOfflineDate(source.expires_at))}</div>${source.last_error ? `<div>${esc(source.last_error)}</div>` : ''}<div class="source-role">${esc(sourceDiffText({...source,legacy_cache:false}))}</div>${receipt}</td></tr>`;
+    }).join('') || '<tr><td colspan="6">Сохранённых сведений об источниках пока нет.</td></tr>';
+    return;
+  }
   const operational = state.sources.filter((s) => s.kind !== 'reference' && s.applied_enabled);
   const ready = operational.filter((s) => s.ready).length;
   const references = state.sources.filter((s) => s.kind === 'reference').length;
@@ -3826,9 +3930,10 @@ async function saveDevicePolicy(event) {
   const sources = [...new Set(members.flatMap((item) => item.ips || []))].sort();
   if (!sources.length) { showDetails({ error: 'У выбранной области нет известных IP.' }, 'Политика не сохранена'); return; }
   const route = service.route || 'auto';
-  if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: область будет ограничена ${sources.length} адресом(ами). Маршрут ${routeLabel(route)} и состояние сервиса эта вкладка не изменяет.`, 'Сохранить в черновик')) return;
   try {
-    await api(`/api/v1/services/${encodeURIComponent(service.id)}`, { method: 'PUT', body: JSON.stringify({ enabled: service.enabled, route, sources }) });
+    const body = serviceDraftBody(service, { route, sources });
+    if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: область будет ограничена ${sources.length} адресом(ами). Маршрут ${routeLabel(route)} и состояние сервиса эта вкладка не изменяет.`, 'Сохранить в черновик')) return;
+    await writeServiceDraft(service.id, body);
     $('#devicePolicyDialog').close();
     await refreshCoreAfterEdit();
     await refreshDevices();
@@ -4094,16 +4199,74 @@ async function deleteCustomService(id) {
   } catch (error) { showDetails({ error: error.message }, 'Не удалось удалить сервис'); }
 }
 
-async function saveService(service) {
-  return api(`/api/v1/services/${encodeURIComponent(service.id)}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ enabled: service.enabled, route: service.route, sources: service.sources || [] }),
-  });
+function serviceRouteOptionReviewHTML(option) {
+  return `data-route-kind="${esc(option.kind || '')}" data-route-selectable="${option.selectable === true}" data-profile-revision="${esc(option.wireguard_profile_revision || '')}"`;
+}
+
+function serviceRouteOptionSelectable(option) {
+  return option.selectable === true && (!option.id?.startsWith('wireguard:')
+    || option.kind === 'wireguard-profile' && /^[a-f0-9]{64}$/.test(option.wireguard_profile_revision || ''));
+}
+
+function serviceRouteReview(select) {
+  if (!select?.value?.startsWith('wireguard:')) return null;
+  const option = select.selectedOptions?.[0];
+  if (!option || option.value !== select.value || option.disabled || option.dataset.routeKind !== 'wireguard-profile'
+      || option.dataset.routeSelectable !== 'true' || !/^[a-f0-9]{64}$/.test(option.dataset.profileRevision || '')
+      || !/^\d+$/.test(select.dataset.configRevision || '') || !Number.isSafeInteger(Number(select.dataset.configRevision))) {
+    throw new Error('Перечитайте выбор: редакция именованного WireGuard профиля не подтверждена.');
+  }
+  // Freeze the option the user actually saw, even while a passive read updates
+  // routeOptions behind an open native select. Backend owns both CAS checks.
+  return { route: select.value, expected_revision: Number(select.dataset.configRevision), expected_profile_revision: option.dataset.profileRevision };
+}
+
+function serviceDraftBody(service, changes = {}, review = null) {
+  if (typeof serviceDashboard !== 'undefined' && serviceDashboard.draftUnconfirmed?.has(service.id)) throw new Error('Результат записи не подтверждён. Нажмите «Перечитать выбор» перед следующим изменением.');
+  const body = { enabled: !!service.enabled, route: service.route, sources: [...(service.sources || [])], ...changes };
+  if (!body.route?.startsWith('wireguard:')) return { enabled: !!body.enabled, route: body.route, sources: [...body.sources] };
+  const revision = review ? review.expected_revision : state.status?.revision;
+  const profileRevision = review ? review.expected_profile_revision : service.wireguard_profile_revision;
+  const withdrawingRetained = !body.enabled && body.route === service.route && !profileRevision;
+  if (!Number.isSafeInteger(revision) || revision < 0 || (review && review.route !== body.route)
+      || (body.route !== service.route && !review) || (!withdrawingRetained && !/^[a-f0-9]{64}$/.test(profileRevision || ''))) {
+    throw new Error('Перечитайте выбор: нужны точные редакции настроек и WireGuard профиля.');
+  }
+  return { enabled: !!body.enabled, route: body.route, sources: [...body.sources], expected_revision: revision,
+    ...(profileRevision ? { expected_profile_revision: profileRevision } : {}) };
+}
+
+function confirmServiceDraftReceipt(result, id, body) {
+  if (!body.route?.startsWith('wireguard:')) return;
+  if (result?.ok !== true || result.id !== id || result.state?.route !== body.route || result.state.enabled !== body.enabled
+      || (body.expected_profile_revision && result.state.wireguard_profile_revision !== body.expected_profile_revision)
+      || (body.sources.length > 0 && !Array.isArray(result.state.sources))
+      || (result.state.sources !== undefined && (!Array.isArray(result.state.sources) || result.state.sources.some(source => typeof source !== 'string')))) {
+    throw new Error('Запись WireGuard выбора не подтверждена. Перечитайте выбор; повторная запись автоматически не выполняется.');
+  }
+}
+
+async function saveService(service, review = null) {
+  const body = serviceDraftBody(service, {}, review);
+  return writeServiceDraft(service.id, body);
+}
+
+async function writeServiceDraft(id, body, options = {}) {
+  const epoch = typeof serviceDashboard === 'undefined' ? null : serviceDashboard.epoch;
+  try {
+    const result = await api(`/api/v1/services/${encodeURIComponent(id)}`, { ...options, method: 'PUT', body: JSON.stringify(body) });
+    confirmServiceDraftReceipt(result, id, body);
+    return result;
+  } catch (error) {
+    if (body.route?.startsWith('wireguard:') && epoch !== null && serviceDashboard.epoch === epoch && !options.signal?.aborted) serviceDashboard.draftUnconfirmed.add(id);
+    throw error;
+  }
 }
 
 function closeServiceScope() {
   state.scopeService = null;
+  state.scopeServiceSnapshot = null;
+  state.scopeServiceRevision = null;
   $('#serviceScopeDialog').close();
 }
 
@@ -4111,6 +4274,8 @@ function openServiceScope(id) {
   const service = state.services.find((item) => item.id === id);
   if (!service) return;
   state.scopeService = id;
+  state.scopeServiceSnapshot = service.route?.startsWith('wireguard:') ? { ...service, sources: [...(service.sources || [])] } : null;
+  state.scopeServiceRevision = state.status?.revision;
   $('#serviceScopeTitle').textContent = `${service.name}: устройства`;
   $('#serviceScopeSources').value = (service.sources || []).join('\n');
   $('#serviceScopeMode').value = service.sources?.length ? 'selected' : 'all';
@@ -4146,7 +4311,7 @@ function changeServiceScopeDevice(event) {
 
 async function saveServiceScope(event) {
   event.preventDefault();
-  const service = state.services.find((item) => item.id === state.scopeService);
+  const service = state.scopeServiceSnapshot || state.services.find((item) => item.id === state.scopeService);
   if (!service) return closeServiceScope();
   const previous = [...(service.sources || [])];
   const sources = $('#serviceScopeMode').value === 'all' ? [] : $('#serviceScopeSources').value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
@@ -4155,7 +4320,8 @@ async function saveServiceScope(event) {
   const button = $('#serviceScopeForm button[type="submit"]');
   button.disabled = true; button.textContent = 'Сохранение…';
   try {
-    const result = await saveService(service);
+    const review = service.route?.startsWith('wireguard:') ? { route: service.route, expected_revision: state.scopeServiceRevision, expected_profile_revision: service.wireguard_profile_revision } : null;
+    const result = await saveService(service, review);
     service.sources = result.state?.sources || service.sources;
     closeServiceScope();
     await refreshCoreAfterEdit();
@@ -4183,19 +4349,14 @@ async function toggleService(id) {
   }
 }
 
-async function changeRoute(id, route) {
+async function changeRoute(id, route, select = null) {
   const service = state.services.find((s) => s.id === id);
   if (!service) return;
-  const previous = service.route;
-  service.route = route;
-  service.mode = route;
-  renderServices();
   try {
-    await saveService(service);
+    const body = serviceDraftBody(service, { route }, serviceRouteReview(select));
+    await writeServiceDraft(id, body);
     await refreshCoreAfterEdit();
   } catch (error) {
-    service.route = previous;
-    service.mode = previous;
     renderServices();
     showDetails(error.payload || { error: error.message }, 'Не удалось изменить маршрут');
   }
@@ -4428,63 +4589,46 @@ async function discardDraft(scope = 'all', engineID = '') {
 }
 
 async function refreshSources() {
-  const button = $('#refreshSources');
-  button.disabled = true;
-  button.textContent = 'Проверка…';
-  try {
-    state.sources = await api('/api/v1/sources/refresh', { method: 'POST' });
-    state.status = await api('/api/v1/status');
-    renderSources();
-    renderStatus();
-    renderReadiness();
-    showDetails({ message: 'Сохранённые как используемые источники обновлены и проверены.', sources: state.sources }, 'Источники обновлены');
-  } catch (error) {
-    showDetails({ error: error.message }, 'Ошибка источников');
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Обновить используемые';
-  }
+  return runSourceAction(options => api('/api/v1/sources/refresh', { ...options, method: 'POST' }), result => showDetails({ message: 'Сохранённые как используемые источники обновлены и проверены.', sources: result }, 'Источники обновлены'));
 }
 
 async function setSourceDraft(id, enabled) {
-  try {
-    state.sources = await api(`/api/v1/sources/${encodeURIComponent(id)}/draft`, { method: 'POST', body: JSON.stringify({ enabled }) });
-    state.status = await api('/api/v1/status');
-    renderSources();
-    renderStatus();
-  } catch (error) {
-    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Выбор источника не сохранён');
-  }
+  return runSourceAction(options => api(`/api/v1/sources/${encodeURIComponent(id)}/draft`, { ...options, method: 'POST', body: JSON.stringify({ enabled }) }));
 }
 
 async function applySourceDraft() {
-  const button = $('#applySourceChanges');
-  button.disabled = true;
-  button.textContent = 'Сохранение…';
-  try {
-    const result = await api('/api/v1/sources/apply', { method: 'POST', body: '{}' });
-    state.sources = result.sources || await api('/api/v1/sources');
-    state.status = await api('/api/v1/status');
-    renderSources();
-    renderStatus();
-    renderReadiness();
-    showNotice('success', 'Выбор источников сохранён', result.note || 'Маршруты и обходы не менялись.', result);
-  } catch (error) {
-    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Источники не сохранены');
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Сохранить выбор';
-  }
+  return runSourceAction(options => api('/api/v1/sources/apply', { ...options, method: 'POST', body: '{}' }), result => showNotice('success', 'Выбор источников сохранён', result.note || 'Маршруты и обходы не менялись.', result));
 }
 
 async function discardSourceDraft() {
+  return runSourceAction(options => api('/api/v1/sources/discard', { ...options, method: 'POST', body: '{}' }));
+}
+
+async function runSourceAction(operation, completed = null) {
+  if (state.sourceView === 'offline' || sourceViewRuntime.write || !sourceViewRuntime.readValid || state.dataLoad?.sources?.phase !== 'ready'
+    || !state.authenticated || $('#authScreen')?.hidden === false || state.currentView !== 'sources') return;
+  const ticket = { epoch: sourceViewRuntime.epoch, auth: state.authGeneration || 0, controller: new AbortController() };
+  const current = () => !ticket.controller.signal.aborted && ticket.epoch === sourceViewRuntime.epoch && ticket.auth === (state.authGeneration || 0)
+    && state.authenticated && $('#authScreen')?.hidden !== false && state.currentView === 'sources' && state.sourceView !== 'offline';
+  sourceViewRuntime.write = ticket; sourceViewRuntime.message = 'Выполняем выбранное действие…'; syncSourceViewControls();
   try {
-    state.sources = await api('/api/v1/sources/discard', { method: 'POST', body: '{}' });
-    state.status = await api('/api/v1/status');
-    renderSources();
-    renderStatus();
+    const options = { signal: ticket.controller.signal }, result = await operation(options);
+    if (!current()) return;
+    const rows = Array.isArray(result) ? result : result?.sources || await api('/api/v1/sources', options);
+    if (!current()) return;
+    if (!Array.isArray(rows)) throw new Error('Выбор источников не подтверждён.');
+    const status = await api('/api/v1/status', options);
+    if (!current()) return;
+    state.sources = rows; state.status = status; sourceViewRuntime.message = ''; sourceViewRuntime.readValid = true;
+    panelSectionState('sources', 'ready'); renderSources(); renderStatus(); renderReadiness();
+    completed?.(result);
   } catch (error) {
-    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Изменения источников не отменены');
+    if (!current()) return;
+    sourceViewRuntime.readValid = false; sourceViewRuntime.message = 'Результат действия не подтверждён. Перечитайте выбор перед следующим действием.';
+    showDetails({ error: error.message }, 'Действие с источниками не подтверждено');
+  } finally {
+    if (sourceViewRuntime.write === ticket) sourceViewRuntime.write = null;
+    syncSourceViewControls();
   }
 }
 
@@ -4998,6 +5142,10 @@ function bindEvents() {
   $('#dnsApply').addEventListener('click', applyDNSDraft);
   $('#dnsDiscard').addEventListener('click', discardDNSDraft);
   $('#refreshSources').addEventListener('click', refreshSources);
+  $('#readSourceView').addEventListener('click', readSourceView);
+  $$('[data-source-view]').forEach(button => button.addEventListener('click', () => switchSourceView(button.dataset.sourceView)));
+  document.addEventListener('razvilka:auth-required', handleSourceViewLifecycle);
+  document.addEventListener('razvilka:view-change', handleSourceViewLifecycle);
   $('#applySourceChanges').addEventListener('click', applySourceDraft);
   $('#discardSourceChanges').addEventListener('click', discardSourceDraft);
   $('#refreshSystem').addEventListener('click', refreshSystem);

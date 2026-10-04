@@ -14,6 +14,8 @@
 
 Вывод: **D01 готов к закрытию координатором по записанному DoD; D12 сохранить in_progress.** UI должен связать этапы с engine ID, актуальными profile hash/revision и generations, отдельными format/service checks и matching accepted Apply receipt. Изменение профиля, устаревание, pending/Stop и отрицательный результат снимают подтверждение. Источники доказательств подключают их владельцы CORE/VLESS/NET/NFQWS; UI отображает их. TASKS здесь не меняется.
 
+Дополнение после отчёта: координатор подтвердил полный `check-linux-16` на `226e7537557c6606ea8e64c666827f8e0426ae4f` (source-44), **RC0**: Go1.26.5/mod verify, Go/race/vet, UI/shell, ARM64/native amd64 build/checksum и изолированная Entware transaction. Локально прочитаны `check-linux-16.rc` (=0), script с source-44 и конец log с `Entware transaction test: OK` / `RAZVILKA checks: OK`; повторного запуска здесь не было. Этот общий regression gate дополняет real HTTP19/19, 14 ARM64-server browser phases и настоящий hidden/resume. Он не подтверждает неподключённый backend, per-engine progress D12, NFQUEUE, полный LAN executor или D14; последующие коммиты автоматически этим PASS не покрываются.
+
 Поправка к сводке метрик: поле `runs[].phases[].api_requests` в `router-ui-perf4-summary.json` содержит общий счётчик запросов. Для cold-open первичный result даёт **57 всего, 21 API**, не 57 API. Browser cold Task224.065ms/Script19.845ms/Layout57.816ms/Recalc14.05ms — клиентские измерения, отдельно от ARM64 process samples.
 
 ## Конкретный первый D07/D08 путь
