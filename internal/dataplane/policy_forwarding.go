@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -301,6 +302,17 @@ func proxyFirewallRuleKey(rule []string) string {
 			states := strings.Split(value, ",")
 			sort.Strings(states)
 			value = strings.Join(states, ",")
+		case "--mark":
+			markMask := strings.Split(value, "/")
+			if len(markMask) != 2 {
+				return "!" + strings.Join(rule, " ")
+			}
+			mark, markErr := strconv.ParseUint(markMask[0], 0, 32)
+			mask, maskErr := strconv.ParseUint(markMask[1], 0, 32)
+			if markErr != nil || maskErr != nil {
+				return "!" + strings.Join(rule, " ")
+			}
+			value = fmt.Sprintf("0x%x/0x%x", mark, mask)
 		case "-i", "-o", "-m", "-j":
 		default:
 			return "!" + strings.Join(rule, " ")
