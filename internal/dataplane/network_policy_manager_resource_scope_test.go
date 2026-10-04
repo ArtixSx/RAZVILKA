@@ -214,16 +214,16 @@ func TestNetworkPolicyManagerResourceCancellationAndWANChangePermitExactCleanup(
 		cleanup, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 		defer cleanupCancel()
 		issuer := cleanup.Value(nodeTransitRegistrarKey{}).(nodeTransitRegistrar)
-		if _, err := issuer(cleanup, f.lease.spec); !errors.Is(err, ErrNetworkChanged) {
-			t.Fatal("changed WAN retained forward admission", err)
+		if _, err := issuer(cleanup, f.lease.spec); !errors.Is(err, context.Canceled) {
+			t.Fatal("cancel detachment retained forward admission", err)
 		}
 		// Only the actual Remove entry point can mark its registration as
 		// cleanup. Apply must mask an inherited private removal marker.
 		if err := f.lease.Apply(context.WithValue(cleanup, nodeTransitRemovalKey{}, true)); err == nil || f.runner.adds != 1 {
 			t.Fatal("repeated Apply borrowed cleanup authority", err)
 		}
-		if err := f.registration.register(cleanup, f.lease.spec, f.registration.root, f.lease.digest); !errors.Is(err, ErrNetworkChanged) {
-			t.Fatal("forward registration skipped current WAN admission", err)
+		if err := f.registration.register(cleanup, f.lease.spec, f.registration.root, f.lease.digest); !errors.Is(err, context.Canceled) {
+			t.Fatal("forward registration renewed cancelled operation", err)
 		}
 		if err := f.registration.cleanupGuard(cleanup); err != nil {
 			return err
@@ -235,6 +235,41 @@ func TestNetworkPolicyManagerResourceCancellationAndWANChangePermitExactCleanup(
 	}
 	if err := New(f.m.StateRoot).CheckExecutionRecovery(context.Background()); err != nil {
 		t.Fatal("fully removed cancelled check stayed fenced", err)
+	}
+}
+
+func TestNetworkPolicyManagerResourceWANChangeRefusesForwardButAllowsKnownRemoval(t *testing.T) {
+	f := executionResourceManagerFixture(t)
+	err := f.m.WithExecutionResources(f.ctx, f.p, "xray", func(ctx context.Context) error {
+		ctx = f.bind(t, ctx)
+		if err := f.lease.Apply(ctx); err != nil {
+			return err
+		}
+		f.m.FreshProfile = func(context.Context) (string, error) { return "wan-ffffffffffff", nil }
+		if err := f.registration.register(ctx, f.lease.spec, f.registration.root, f.lease.digest); !errors.Is(err, ErrNetworkChanged) {
+			t.Fatal("forward register ignored WAN change", err)
+		}
+		return f.remove(ctx)
+	})
+	if err != nil || f.runner.adds != 1 || f.runner.deletes != 1 || f.latest(t).Resources[0].State != "removed" {
+		t.Fatal("fresh-forward/owned-cleanup authority mixed", err)
+	}
+}
+
+func TestNetworkPolicyManagerResourceRegistryChangeRevokesScope(t *testing.T) {
+	f := executionResourceManagerFixture(t)
+	err := f.m.WithExecutionResources(f.ctx, f.p, "xray", func(ctx context.Context) error {
+		ctx = f.bind(t, ctx)
+		if err := f.m.Register(&fakeAdapter{id: "nfqws2"}); err != nil {
+			return err
+		}
+		if err := f.registration.register(ctx, f.lease.spec, f.registration.root, f.lease.digest); err == nil {
+			t.Fatal("changed registry retained resource authority")
+		}
+		return nil
+	})
+	if err != nil || f.runner.adds != 0 || len(f.latest(t).Resources) != 0 {
+		t.Fatal("registry change granted effects", err)
 	}
 }
 

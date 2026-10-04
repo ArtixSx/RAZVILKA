@@ -18,21 +18,22 @@ import (
 // revokes every retained callback and cancels borrowers; unfinished resources
 // keep the existing journal fenced. No persisted outcome creates an issuer.
 type executionResourceScope struct {
-	mu        sync.Mutex
-	manager   *Manager
-	plan      Plan
-	adapter   string
-	execution *Execution
-	root      string
-	owned     *ownedfs.Root
-	anchor    os.FileInfo
-	ctx       context.Context
-	cancel    context.CancelFunc
-	guard     func(context.Context) error
-	open      bool
-	failure   error
-	closedErr error
-	issued    map[string]*executionTransitResource
+	mu                 sync.Mutex
+	manager            *Manager
+	plan               Plan
+	adapter            string
+	registryGeneration uint64
+	execution          *Execution
+	root               string
+	owned              *ownedfs.Root
+	anchor             os.FileInfo
+	ctx                context.Context
+	cancel             context.CancelFunc
+	guard              func(context.Context) error
+	open               bool
+	failure            error
+	closedErr          error
+	issued             map[string]*executionTransitResource
 }
 
 type executionTransitResource struct {
@@ -71,9 +72,12 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 	plan.Routes = cloneNetworkPolicyRoutes(plan.Routes)
 	plan.LAN = CloneLANPolicyRuntime(plan.LAN)
 	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
+	m.registryMu.RLock()
+	registryGeneration := m.registryGeneration
+	m.registryMu.RUnlock()
 	return &executionResourceScope{manager: m, plan: plan, adapter: adapter, execution: execution,
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
-		open: true, issued: map[string]*executionTransitResource{}}, nil
+		open: true, issued: map[string]*executionTransitResource{}, registryGeneration: registryGeneration}, nil
 }
 
 func (s *executionResourceScope) context() context.Context {
@@ -88,6 +92,17 @@ func (s *executionResourceScope) check(ctx context.Context, resource *executionT
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if forward {
+		if err := s.ctx.Err(); err != nil {
+			return err // Cancellation detachment grants cleanup only.
+		}
+	}
+	s.manager.registryMu.RLock()
+	currentRegistry := s.manager.registryGeneration
+	s.manager.registryMu.RUnlock()
+	if currentRegistry != s.registryGeneration {
+		return ErrNodeTransitUnavailable
 	}
 	current, err := os.Lstat(s.root)
 	if err != nil || !os.SameFile(s.anchor, current) {
