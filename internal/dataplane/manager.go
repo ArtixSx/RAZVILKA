@@ -49,14 +49,15 @@ type preflightRefusalError struct{ error }
 func (err preflightRefusalError) Unwrap() error { return err.error }
 
 type Manager struct {
-	operationOnce   sync.Once
-	operationGate   chan struct{}
-	journalMu       sync.RWMutex
-	registryMu      sync.RWMutex
-	StateRoot       string
-	Adapters        map[string]Adapter
-	RollbackTimeout time.Duration
-	FreshProfile    func(context.Context) (string, error)
+	operationOnce      sync.Once
+	operationGate      chan struct{}
+	journalMu          sync.RWMutex
+	registryMu         sync.RWMutex
+	registryGeneration uint64
+	StateRoot          string
+	Adapters           map[string]Adapter
+	RollbackTimeout    time.Duration
+	FreshProfile       func(context.Context) (string, error)
 }
 
 type Adapter interface {
@@ -161,7 +162,9 @@ func (m *Manager) CheckComponentLive(ctx context.Context, expected Plan, compone
 			if err := check(); err != nil {
 				return err
 			}
-			if err := a.healthState(ctx, expected, state); err != nil {
+			if err := m.withExecutionResourcesLocked(ctx, expected, id, func(c context.Context) error {
+				return a.healthState(c, expected, state)
+			}); err != nil {
 				return err
 			}
 			if err := check(); err != nil {
@@ -288,14 +291,16 @@ type ExecutionStep struct {
 }
 
 type Execution struct {
-	PlanID           string          `json:"plan_id"`
-	Digest           string          `json:"digest"`
-	State            string          `json:"state"`
-	StartedAt        string          `json:"started_at"`
-	FinishedAt       string          `json:"finished_at,omitempty"`
-	Steps            []ExecutionStep `json:"steps"`
-	Error            string          `json:"error,omitempty"`
-	RollbackVerified bool            `json:"rollback_verified,omitempty"`
+	ResourcePlanID   string              `json:"resource_plan_id,omitempty"`
+	Resources        []ExecutionResource `json:"resources,omitempty"`
+	PlanID           string              `json:"plan_id"`
+	Digest           string              `json:"digest"`
+	State            string              `json:"state"`
+	StartedAt        string              `json:"started_at"`
+	FinishedAt       string              `json:"finished_at,omitempty"`
+	Steps            []ExecutionStep     `json:"steps"`
+	Error            string              `json:"error,omitempty"`
+	RollbackVerified bool                `json:"rollback_verified,omitempty"`
 }
 
 type PolicyRefresh struct {
@@ -369,6 +374,9 @@ func verifyNetworkProfile(ctx context.Context, expected string, observe func(con
 // adapterNeedsNetworkProof reports whether an adapter serves node routes or
 // the scoped DNS of the plan, whose proof is bound to a network epoch.
 func adapterNeedsNetworkProof(plan Plan, id string) bool {
+	if plan.LAN != nil {
+		return true
+	}
 	if plan.DNS != nil && id == scopedDNSAdapterID {
 		return true
 	}
@@ -464,7 +472,13 @@ func (m *Manager) Register(adapter Adapter) error {
 			return err
 		}
 	}
+	if gate, ok := adapter.(*NetworkPolicyAdapter); ok {
+		if err := gate.bindStateRoot(m.StateRoot); err != nil {
+			return err
+		}
+	}
 	m.Adapters[adapter.ID()] = adapter
+	m.registryGeneration++
 	return nil
 }
 
@@ -558,7 +572,13 @@ func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID strin
 			return err
 		}
 	}
-	if err := canary.Canary(ctx, plan.RoutePlanFor(adapterID), root); err != nil {
+	check := func(c context.Context) error { return canary.Canary(c, plan.RoutePlanFor(adapterID), root) }
+	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
+	if guard != nil && validPlanID(plan.PlanID) && validPlanDigest(plan.Digest) {
+		call := check
+		check = func(c context.Context) error { return m.withExecutionResourcesLocked(c, plan, adapterID, call) }
+	}
+	if err := check(ctx); err != nil {
 		return fmt.Errorf("%s isolated canary: %w", adapterID, err)
 	}
 	return m.checkPlanNetwork(ctx, plan)
@@ -867,7 +887,12 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	}
 	recovery.State = "recovering"
 	var firstErr error
-	for _, id := range plan.Adapters {
+	gateFailed := false
+	for _, id := range networkPolicyGateFirstIDs(plan.Adapters) {
+		if gateFailed && id != NetworkPolicyAdapterID {
+			recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: id, State: "failed", Detail: "LAN admission recovery failed; consumer was not started"})
+			continue
+		}
 		if err := m.checkPlanNetwork(ctx, plan); err != nil {
 			return networkStale(err)
 		}
@@ -887,6 +912,9 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		}
 		if step.State == "failed" && firstErr == nil {
 			firstErr = fmt.Errorf("recover %s: %s", id, step.Detail)
+		}
+		if id == NetworkPolicyAdapterID && step.State == "failed" {
+			gateFailed = true
 		}
 		recovery.Steps = append(recovery.Steps, step)
 	}
@@ -910,10 +938,18 @@ func (m *Manager) deactivateForRecovery(parent context.Context, plan Plan) []Rec
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), m.rollbackTimeout())
 	defer cancel()
 	steps := []RecoveryStep{}
-	for i := len(plan.Adapters) - 1; i >= 0; i-- {
-		id := plan.Adapters[i]
+	ids := slices.Clone(plan.Adapters)
+	slices.Reverse(ids)
+	ids = networkPolicyGateLastIDs(ids)
+	consumerFailed := false
+	for _, id := range ids {
 		step := RecoveryStep{Adapter: id, State: "safe-mode-skipped", Detail: "adapter has no owned-runtime deactivator"}
 		adapter, ok := m.adapter(id)
+		if id == NetworkPolicyAdapterID && consumerFailed {
+			step.State, step.Detail = "safe-mode-failed", ErrNetworkPolicyConsumers.Error()
+			steps = append(steps, step)
+			continue
+		}
 		if !ok {
 			step.State = "safe-mode-failed"
 			step.Detail = "adapter is not registered"
@@ -924,6 +960,9 @@ func (m *Manager) deactivateForRecovery(parent context.Context, plan Plan) []Rec
 			}
 		}
 		steps = append(steps, step)
+		if id != NetworkPolicyAdapterID && step.State != "safe-mode-deactivated" {
+			consumerFailed = true
+		}
 	}
 	return steps
 }
@@ -1048,10 +1087,16 @@ func (m *Manager) Deactivate(ctx context.Context) (Deactivation, error) {
 	}
 	m.registryMu.RUnlock()
 	sort.Sort(sort.Reverse(sort.StringSlice(ids)))
+	ids = networkPolicyGateLastIDs(ids)
 	var firstErr error
 	for _, id := range ids {
 		adapter, _ := m.adapter(id)
 		step := DeactivationStep{Adapter: id, State: "skipped", Detail: "adapter has no owned-runtime deactivator"}
+		if id == NetworkPolicyAdapterID && firstErr != nil {
+			step.State, step.Detail = "failed", ErrNetworkPolicyConsumers.Error()
+			report.Steps = append(report.Steps, step)
+			continue
+		}
 		if deactivator, ok := adapter.(RuntimeDeactivator); ok {
 			step.State, step.Detail = "deactivated", ""
 			if err := deactivator.Deactivate(ctx); err != nil {
@@ -1060,6 +1105,9 @@ func (m *Manager) Deactivate(ctx context.Context) (Deactivation, error) {
 					firstErr = fmt.Errorf("deactivate %s: %w", id, err)
 				}
 			}
+		} else if slices.Contains(ids, NetworkPolicyAdapterID) {
+			step.State, step.Detail = "failed", ErrNetworkPolicyConsumers.Error()
+			firstErr = errors.Join(firstErr, ErrNetworkPolicyConsumers)
 		}
 		report.Steps = append(report.Steps, step)
 	}
@@ -1094,6 +1142,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, err
 	}
 	defer m.endOperation()
+	if err := validateNetworkPolicyParticipation(plan); err != nil {
+		return execution, err
+	}
 	if plan.SchemaVersion != SchemaVersion || plan.PlanID == "" || plan.Digest == "" {
 		return execution, errors.New("invalid dataplane plan")
 	}
@@ -1115,6 +1166,15 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.State, execution.Error = "journal-failed", err.Error()
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return execution, err
+	}
+	previousPolicy, previousExists, previousErr := m.committedLocked()
+	if previousErr != nil {
+		return execution, executionJournalError(previousErr)
+	}
+	if previousExists && previousPolicy.LAN != nil && plan.LAN == nil {
+		if err := m.verifyRuntimeInactiveLocked(ctx); err != nil {
+			return execution, errors.Join(ErrNetworkPolicyReplacement, err)
+		}
 	}
 	// Resolve a stopped DNS snapshot before publishing this transaction's
 	// unfinished journal. SuspendedDNS deliberately refuses unfinished work.
@@ -1179,9 +1239,26 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if phase == "activate" || phase == "deactivate" || phase == "commit-adapter" {
 			liveMutation = true
 		}
-		err := action(runCtx, plan, adapterRoot)
+		var err error
+		if (phase == "health" || phase == "canary") && validPlanID(plan.PlanID) && validPlanDigest(plan.Digest) {
+			var scope *executionResourceScope
+			scope, err = m.newExecutionResourceScope(runCtx, plan, adapter.ID(), &execution, transactionRoot)
+			if err == nil {
+				defer scope.close() // Unexpected callback exits cannot retain authority.
+				err = action(scope.context(), plan, adapterRoot)
+				err = errors.Join(err, scope.close())
+			}
+		} else {
+			err = action(runCtx, plan, adapterRoot)
+		}
+		if validateExecutionResources(execution, true) != nil {
+			// A temporary rule may have entered the common writer even when the
+			// adapter phase is nominally isolated. Unknown resources require the
+			// same rollback fence and retained LAN boundary as live mutations.
+			liveMutation = true
+		}
 		var preflight preflightRefusalError
-		if !previouslyMutated && errors.As(err, &preflight) {
+		if !previouslyMutated && errors.As(err, &preflight) && validateExecutionResources(execution, true) == nil {
 			liveMutation = false
 		}
 		if err == nil && !restoring {
@@ -1209,9 +1286,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			plan.RouteEvidence[index].Observed = evidence.None
 		}
 		execution.State = "rolling-back"
-		rollbackErr := writeExecution()
+		rollbackErr := errors.Join(writeExecution(), validateExecutionResources(execution, true))
+		var gate Adapter
 		for i := len(prepared) - 1; i >= 0; i-- {
 			adapter := prepared[i]
+			if adapter.ID() == NetworkPolicyAdapterID {
+				gate = adapter
+				continue
+			}
 			if err := run(rollbackCtx, adapter, "rollback", adapter.Rollback); err != nil {
 				rollbackErr = errors.Join(rollbackErr, err)
 			}
@@ -1225,12 +1307,17 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			rollbackErr = errors.Join(rollbackErr, restoreCommitted())
 		}
 		verified := liveMutation && len(prepared) > 0 && rollbackErr == nil
+		consumersVerified := rollbackErr == nil
 		// Readback must follow the complete reverse restoration, including
 		// desired-state undo. Never reuse the failed candidate's review guard.
 		for _, adapter := range prepared {
+			if adapter.ID() == NetworkPolicyAdapterID {
+				continue
+			}
 			verifier, ok := adapter.(RollbackVerifier)
 			if !ok {
 				verified = false
+				consumersVerified = false
 				continue
 			}
 			var confirmed bool
@@ -1243,6 +1330,31 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				rollbackErr = errors.Join(rollbackErr, err)
 			}
 			verified = verified && confirmed && err == nil
+			consumersVerified = consumersVerified && confirmed && err == nil
+		}
+		if gate != nil {
+			if liveMutation && !consumersVerified {
+				// A successful rollback call alone cannot authorize removing the
+				// physical negative boundary beneath an unknown consumer.
+				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", func(context.Context, Plan, string) error { return ErrNetworkPolicyConsumers }))
+				verified = false
+			} else {
+				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", gate.Rollback))
+				verifier, ok := gate.(RollbackVerifier)
+				if !ok {
+					rollbackErr = errors.Join(rollbackErr, ErrNetworkPolicyConsumers)
+					verified = false
+				} else {
+					var confirmed bool
+					err := run(rollbackCtx, gate, "verify-rollback", func(c context.Context, p Plan, root string) error {
+						var err error
+						confirmed, err = verifier.VerifyRollback(c, p, root)
+						return errors.Join(err, c.Err())
+					})
+					rollbackErr = errors.Join(rollbackErr, err)
+					verified = verified && confirmed && err == nil && rollbackErr == nil
+				}
+			}
 		}
 		execution.RollbackVerified = verified
 		plan.Ready = false
@@ -1369,7 +1481,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		adapters = append(adapters, adapter)
 	}
-	for _, adapter := range append(append([]Adapter(nil), retiringAdapters...), adapters...) {
+	adapters = networkPolicyGateFirst(adapters)
+	retiringAdapters = networkPolicyGateLast(retiringAdapters)
+	allPrepared := append(append([]Adapter(nil), retiringAdapters...), adapters...)
+	allPrepared = networkPolicyGateFirst(allPrepared)
+	for _, adapter := range allPrepared {
 		snapshot := adapter.Snapshot
 		if owner, ok := adapter.(interface {
 			snapshotRetiring(context.Context, Plan, Plan, string) error
@@ -1415,6 +1531,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if err := run(ctx, adapter, "canary", func(runCtx context.Context, _ Plan, root string) error {
 			return canary.Canary(runCtx, routePlan, root)
 		}); err != nil {
+			if validateExecutionResources(execution, true) != nil {
+				return execution, rollback(err)
+			}
 			// CanaryAdapter owns and removes only its isolated candidate. Calling
 			// the live Rollback method here could unnecessarily interrupt the
 			// still-working process even though Activate has not started.
@@ -1422,6 +1541,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				return execution, rejectNetwork(err)
 			}
 			return execution, rejectCanary(err)
+		}
+	}
+	for _, adapter := range adapters {
+		if adapter.ID() == NetworkPolicyAdapterID {
+			if err := run(ctx, adapter, "activate", adapter.Activate); err != nil {
+				return execution, fail(err)
+			}
 		}
 	}
 	for _, adapter := range retiringAdapters {
@@ -1441,6 +1567,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		{name: "commit-adapter", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Commit }},
 	} {
 		for _, adapter := range adapters {
+			if phase.name == "activate" && adapter.ID() == NetworkPolicyAdapterID {
+				continue
+			}
 			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
 				return execution, fail(err)
 			}

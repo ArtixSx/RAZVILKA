@@ -188,10 +188,14 @@ type App struct {
 	Updates               *updatecheck.Manager
 	SelfUpdate            *updatecheck.Updater
 	SelfUpdateFiles       *SelfUpdateFiles
-	USQUE                 *usquediag.Manager
-	Stats                 *routerstats.Sampler
-	Security              *security.Gate
-	Audit                 *auditlog.Journal
+	// Supplied only by the exact supervised startup command. HelperPID in the
+	// retained job is the installer, while this PID is the command wait owner.
+	SelfUpdateStartupJobID     string
+	SelfUpdateStartupHelperPID int
+	USQUE                      *usquediag.Manager
+	Stats                      *routerstats.Sampler
+	Security                   *security.Gate
+	Audit                      *auditlog.Journal
 	// EngineInventory is injectable only for deterministic presentation tests.
 	// Production uses the read-only detector and never starts or stops an engine.
 	EngineInventory func() []engine.Status
@@ -208,34 +212,36 @@ type App struct {
 
 type serviceView struct {
 	catalog.Service
-	Custom             bool                      `json:"custom"`
-	Enabled            bool                      `json:"enabled"`
-	Mode               string                    `json:"mode"`
-	Route              string                    `json:"route"`
-	Planned            string                    `json:"planned_engine"`
-	Applied            bool                      `json:"applied_enabled"`
-	AppliedRoute       string                    `json:"applied_route"`
-	Sources            []string                  `json:"sources,omitempty"`
-	AppliedSources     []string                  `json:"applied_sources,omitempty"`
-	Dirty              bool                      `json:"dirty"`
-	RouteDirty         bool                      `json:"route_dirty"`
-	SourcesDirty       bool                      `json:"sources_dirty"`
-	Suspended          bool                      `json:"suspended"`
-	RouteAvailable     bool                      `json:"route_available"`
-	RouteIssue         string                    `json:"route_issue,omitempty"`
-	EvidenceLevel      evidence.Level            `json:"evidence_level"`
-	EvidenceRoute      string                    `json:"evidence_route,omitempty"`
-	EvidenceStatus     string                    `json:"evidence_status,omitempty"`
-	EvidenceSource     string                    `json:"evidence_source,omitempty"`
-	EvidenceAt         string                    `json:"evidence_checked_at,omitempty"`
-	EvidenceOutcome    evidence.Outcome          `json:"evidence_outcome,omitempty"`
-	EvidenceProbeID    string                    `json:"evidence_probe_id,omitempty"`
-	EvidenceFreshUntil string                    `json:"evidence_fresh_until,omitempty"`
-	DesiredState       serviceRouteStateView     `json:"desired_state"`
-	PlannedState       serviceRouteStateView     `json:"planned_state"`
-	AppliedState       serviceRouteStateView     `json:"applied_state"`
-	ObservedState      serviceObservedStateView  `json:"observed_state"`
-	NFQWS2             nfqws2ServicePresentation `json:"nfqws2"`
+	WireGuardProfileRevision        string                    `json:"wireguard_profile_revision,omitempty"`
+	AppliedWireGuardProfileRevision string                    `json:"applied_wireguard_profile_revision,omitempty"`
+	Custom                          bool                      `json:"custom"`
+	Enabled                         bool                      `json:"enabled"`
+	Mode                            string                    `json:"mode"`
+	Route                           string                    `json:"route"`
+	Planned                         string                    `json:"planned_engine"`
+	Applied                         bool                      `json:"applied_enabled"`
+	AppliedRoute                    string                    `json:"applied_route"`
+	Sources                         []string                  `json:"sources,omitempty"`
+	AppliedSources                  []string                  `json:"applied_sources,omitempty"`
+	Dirty                           bool                      `json:"dirty"`
+	RouteDirty                      bool                      `json:"route_dirty"`
+	SourcesDirty                    bool                      `json:"sources_dirty"`
+	Suspended                       bool                      `json:"suspended"`
+	RouteAvailable                  bool                      `json:"route_available"`
+	RouteIssue                      string                    `json:"route_issue,omitempty"`
+	EvidenceLevel                   evidence.Level            `json:"evidence_level"`
+	EvidenceRoute                   string                    `json:"evidence_route,omitempty"`
+	EvidenceStatus                  string                    `json:"evidence_status,omitempty"`
+	EvidenceSource                  string                    `json:"evidence_source,omitempty"`
+	EvidenceAt                      string                    `json:"evidence_checked_at,omitempty"`
+	EvidenceOutcome                 evidence.Outcome          `json:"evidence_outcome,omitempty"`
+	EvidenceProbeID                 string                    `json:"evidence_probe_id,omitempty"`
+	EvidenceFreshUntil              string                    `json:"evidence_fresh_until,omitempty"`
+	DesiredState                    serviceRouteStateView     `json:"desired_state"`
+	PlannedState                    serviceRouteStateView     `json:"planned_state"`
+	AppliedState                    serviceRouteStateView     `json:"applied_state"`
+	ObservedState                   serviceObservedStateView  `json:"observed_state"`
+	NFQWS2                          nfqws2ServicePresentation `json:"nfqws2"`
 	// StandardRoute is NFQWS2 for the services of its reviewed list.
 	StandardRoute string `json:"standard_route,omitempty"`
 }
@@ -567,6 +573,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
 	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
+	a.registerWireGuardProfileRoutes(mux)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
 	mux.HandleFunc("/api/v1/warp/", a.warpAction)
 	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)
@@ -631,6 +638,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/connections", a.connections)
 	mux.HandleFunc("/api/v1/connections/stream", a.connectionStream)
 	mux.HandleFunc("/api/v1/sources", a.sourceList)
+	mux.HandleFunc(sourceOfflineCatalogPath, a.sourceOfflineCatalog)
 	mux.HandleFunc("/api/v1/sources/refresh", a.sourceRefreshAll)
 	mux.HandleFunc("/api/v1/sources/apply", a.sourceApply)
 	mux.HandleFunc("/api/v1/sources/discard", a.sourceDiscard)
@@ -2805,7 +2813,7 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		if appliedEffectiveRoute == "" {
 			appliedEffectiveRoute = appliedRoute
 		}
-		routeDirty := st.Enabled != saved.Enabled || selected != selectedRoute(saved)
+		routeDirty := st.Enabled != saved.Enabled || selected != selectedRoute(saved) || st.WireGuardProfileRevision != saved.WireGuardProfileRevision
 		sourcesDirty := !stringSlicesEqual(st.Sources, saved.Sources)
 		dirty := routeDirty || sourcesDirty
 		routeAvailable := routecatalog.ValidForServiceWithOptions(selected, s.ID, options)
@@ -2819,13 +2827,13 @@ func (a *App) services(w http.ResponseWriter, r *http.Request) {
 		if selected == "auto" {
 			plannedSource = "autopilot"
 		}
-		plannedStale := dirty && (st.Enabled != applied.Enabled || planned != appliedEffectiveRoute)
+		plannedStale := dirty && (st.Enabled != applied.Enabled || planned != appliedEffectiveRoute || st.WireGuardProfileRevision != applied.WireGuardProfileRevision)
 		desiredState := serviceRouteStateView{Enabled: st.Enabled, Route: selected, Source: "user-intent"}
 		plannedState := serviceRouteStateView{Enabled: st.Enabled, Route: planned, Source: plannedSource, RecommendationOnly: !st.Enabled, Stale: plannedStale}
 		appliedState := serviceRouteStateView{Enabled: applied.Enabled, Route: appliedEffectiveRoute, Source: "committed"}
 		observedState := serviceObservedStateView{Route: proof.Route, Level: proof.Level, Status: proof.Status, Source: proof.Source, CheckedAt: proof.CheckedAt, Outcome: proof.Outcome, ProbeID: proof.ProbeID, FreshUntil: proof.FreshUntil}
 		nfqws2 := nfqws2Presentation(s.ID, selected, planned, st.Enabled, appliedEffectiveRoute, applied.Enabled, proof, inventory, strategies, dirty)
-		views = append(views, serviceView{Service: s, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, Suspended: cfg.ServiceControl.Stopped && saved.Enabled, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil, DesiredState: desiredState, PlannedState: plannedState, AppliedState: appliedState, ObservedState: observedState, NFQWS2: nfqws2, StandardRoute: standardRoute(s)})
+		views = append(views, serviceView{Service: s, WireGuardProfileRevision: st.WireGuardProfileRevision, AppliedWireGuardProfileRevision: applied.WireGuardProfileRevision, Custom: custom, Enabled: st.Enabled, Mode: selected, Route: selected, Planned: planned, Applied: applied.Enabled, AppliedRoute: appliedRoute, Sources: append([]string(nil), st.Sources...), AppliedSources: append([]string(nil), applied.Sources...), Dirty: dirty, RouteDirty: routeDirty, SourcesDirty: sourcesDirty, Suspended: cfg.ServiceControl.Stopped && saved.Enabled, RouteAvailable: routeAvailable, RouteIssue: routeIssue, EvidenceLevel: proof.Level, EvidenceRoute: proof.Route, EvidenceStatus: proof.Status, EvidenceSource: proof.Source, EvidenceAt: proof.CheckedAt, EvidenceOutcome: proof.Outcome, EvidenceProbeID: proof.ProbeID, EvidenceFreshUntil: proof.FreshUntil, DesiredState: desiredState, PlannedState: plannedState, AppliedState: appliedState, ObservedState: observedState, NFQWS2: nfqws2, StandardRoute: standardRoute(s)})
 	}
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Category == views[j].Category {
@@ -2963,11 +2971,16 @@ func (a *App) service(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown service", http.StatusNotFound)
 		return
 	}
-	var in config.ServiceState
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&in); err != nil {
+	var request struct {
+		config.ServiceState
+		ExpectedRevision        *uint64 `json:"expected_revision"`
+		ExpectedProfileRevision string  `json:"expected_profile_revision"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&request); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
+	in := request.ServiceState
 	selected := in.Route
 	if selected == "" {
 		selected = in.Mode
@@ -2998,8 +3011,25 @@ func (a *App) service(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Sources = normalizedSources
-	if err := a.Store.UpdateService(id, in); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	var saveErr error
+	if strings.HasPrefix(selected, "wireguard:") {
+		in, saveErr = a.bindNamedWireGuardService(r.Context(), id, selected, in, request.ExpectedRevision, request.ExpectedProfileRevision)
+		if saveErr == nil {
+			saveErr = a.Store.UpdateServiceIfRevision(id, in, *request.ExpectedRevision)
+		}
+	} else {
+		if request.ExpectedProfileRevision != "" || in.WireGuardProfileRevision != "" {
+			http.Error(w, "WireGuard profile revision requires an exact named WireGuard route", http.StatusBadRequest)
+			return
+		}
+		saveErr = a.Store.UpdateService(id, in)
+	}
+	if saveErr != nil {
+		if strings.HasPrefix(selected, "wireguard:") {
+			writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": "WIREGUARD_ASSIGNMENT_CHANGED", "error": "Профиль или настройки изменились. Обновите выбор профиля и повторите сохранение."})
+			return
+		}
+		http.Error(w, saveErr.Error(), http.StatusInternalServerError)
 		return
 	}
 	warning := ""
@@ -3794,8 +3824,14 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 					}
 				}
 			}
+			if strings.HasPrefix(resolved, "wireguard:") {
+				if err := a.checkNamedWireGuardRevision(context.Background(), resolved, state.WireGuardProfileRevision); err != nil {
+					return dataplane.Plan{}, err
+				}
+			}
 			routes = append(routes, dataplane.Route{
-				ServiceID: service.ID, ServiceName: service.Name, Selected: selected, Resolved: resolved,
+				WireGuardProfileRevision: state.WireGuardProfileRevision,
+				ServiceID:                service.ID, ServiceName: service.Name, Selected: selected, Resolved: resolved,
 				Domains: service.Domains, CIDRs: service.CIDRs, SourceRefs: service.SourceRefs, Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL, AppliedRoute: appliedRoute,
 			})
 		}
@@ -5080,7 +5116,7 @@ func (a *App) routeOptionsSnapshotContext(ctx context.Context) []routecatalog.Op
 		}
 		a.prepareRouteOption(&options[i])
 	}
-	return a.appendNodeRouteOptions(ctx, options)
+	return a.appendNodeRouteOptions(ctx, a.appendWireGuardRouteOptions(ctx, options))
 }
 
 func (a *App) prepareRouteOption(option *routecatalog.Option) {

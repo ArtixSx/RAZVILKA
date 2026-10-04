@@ -115,6 +115,24 @@ func bundleFixtureManager(t *testing.T, input []byte) *Manager {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS == "linux" {
+		// Go1.26 creates the freshly owned numbered TempDir leaf with0777
+		// filtered by umask. Pin that exact leaf before making it private;
+		// never chmod the Go container or another outside ancestor.
+		leaf, err := os.Open(base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pinned, statErr := leaf.Stat()
+		if statErr != nil || !os.SameFile(info, pinned) {
+			leaf.Close()
+			t.Fatal("fresh TempDir leaf identity changed", statErr)
+		}
+		err = errors.Join(leaf.Chmod(0700), leaf.Close())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	// Complete generations are readonly. Relax only this fixture tree before
 	// testing.TempDir cleanup, including Windows readonly file attributes.
 	t.Cleanup(func() {
@@ -178,6 +196,24 @@ func bundleFixtureAuthority() ManagedNFQWSBundleAuthority {
 			return begin()
 		},
 		Inactive: func(ctx context.Context) error { return ctx.Err() },
+	}
+}
+
+func TestManagedNFQWSPreflightIsReadOnly(t *testing.T) {
+	_, input, _ := bundleFixtureManifest(t, "fixture-a")
+	m := bundleFixtureManager(t, input)
+	if err := m.PreflightManagedNFQWS(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{m.StateDir, m.nfqwsReleases} {
+		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("readonly preflight created a path", path, err)
+		}
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := m.PreflightManagedNFQWS(cancelled); !errors.Is(err, context.Canceled) {
+		t.Fatal("preflight ignored cancellation", err)
 	}
 }
 

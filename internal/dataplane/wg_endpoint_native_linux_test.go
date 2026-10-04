@@ -71,7 +71,7 @@ func nativeWGEndpointClient(t *testing.T) {
 				}
 				return err
 			}
-			plan := Plan{Routes: []Route{{Resolved: "wireguard:native", ServiceName: "native", CIDRs: []string{"198.51.100.10/32"}, ProbeURL: "http://198.51.100.10/"}}}
+			plan := Plan{Routes: []Route{{Resolved: "wireguard:native", WireGuardProfileRevision: metadata.Revision, ServiceName: "native", CIDRs: []string{"198.51.100.10/32"}, ProbeURL: "http://198.51.100.10/"}}}
 			transaction := filepath.Join(root, "transaction")
 			for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate} {
 				if err := step(ctx, plan, transaction); err != nil {
@@ -160,7 +160,7 @@ func nativeWGEndpointClient(t *testing.T) {
 					t.Fatal(err)
 				}
 				cmd := exec.CommandContext(ctx, exe, "-test.run=^TestWGNativeEndpointLifecycle$", "-test.v")
-				cmd.Env = append(os.Environ(), "RAZVILKA_WG_NATIVE_ROLE=recover", "RAZVILKA_WG_NATIVE_RECOVER_ROOT="+root, "RAZVILKA_WG_NATIVE_ENDPOINT="+endpoint, "RAZVILKA_WG_NATIVE_NOW="+now.Format(time.RFC3339Nano))
+				cmd.Env = append(os.Environ(), "RAZVILKA_WG_NATIVE_ROLE=recover", "RAZVILKA_WG_NATIVE_RECOVER_ROOT="+root, "RAZVILKA_WG_NATIVE_ENDPOINT="+endpoint, "RAZVILKA_WG_NATIVE_NOW="+now.Format(time.RFC3339Nano), "RAZVILKA_WG_NATIVE_PROFILE_REVISION="+metadata.Revision)
 				if out, err := cmd.CombinedOutput(); err != nil {
 					t.Fatalf("new process recovery: %v\n%s", err, out)
 				}
@@ -180,11 +180,13 @@ func nativeWGEndpointClient(t *testing.T) {
 					badProfile[i] = "PublicKey = " + wrongPublic
 				}
 			}
-			if _, err := store.Put(ctx, "native-other", "wrong peer fixture", strings.Join(badProfile, "\n"), ""); err != nil {
+			badMetadata, err := store.Put(ctx, "native-other", "wrong peer fixture", strings.Join(badProfile, "\n"), "")
+			if err != nil {
 				t.Fatal(err)
 			}
 			badPlan := Plan{Routes: append([]Route(nil), plan.Routes...)}
 			badPlan.Routes[0].Resolved = "wireguard:native-other"
+			badPlan.Routes[0].WireGuardProfileRevision = badMetadata.Revision
 			badTransaction := filepath.Join(root, "different-peer")
 			for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate, a.Activate} {
 				if err := step(ctx, badPlan, badTransaction); err != nil {
@@ -422,7 +424,7 @@ func nativeWGEndpointRecover(t *testing.T) {
 	a.EndpointResolver = func(context.Context, string) ([]netip.Addr, time.Time, error) {
 		return []netip.Addr{addr}, now.Add(time.Minute), nil
 	}
-	plan := Plan{Routes: []Route{{Resolved: "wireguard:native", ServiceName: "native", CIDRs: []string{"198.51.100.10/32"}, ProbeURL: "http://198.51.100.10/"}}}
+	plan := Plan{Routes: []Route{{Resolved: "wireguard:native", WireGuardProfileRevision: os.Getenv("RAZVILKA_WG_NATIVE_PROFILE_REVISION"), ServiceName: "native", CIDRs: []string{"198.51.100.10/32"}, ProbeURL: "http://198.51.100.10/"}}}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	if err := a.Reconcile(ctx, plan); err != nil {

@@ -4,6 +4,7 @@ package dataplane
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -239,7 +240,7 @@ func nativeWGCommand(t *testing.T, ns string, args ...string) string {
 	if err != nil {
 		for _, arg := range args {
 			if arg == "setconf" {
-				t.Fatalf("native tunnel setconf failed: %v; secret-bearing CLI output suppressed", err)
+				t.Fatalf("native tunnel setconf failed: %v; class=%s; secret-bearing CLI output suppressed", err, nativeWGSetconfFailureClass(output))
 			}
 		}
 		t.Fatalf("native %s: %v: %s", strings.Join(args, " "), err, output)
@@ -249,7 +250,17 @@ func nativeWGCommand(t *testing.T, ns string, args ...string) string {
 
 func nativeWGKeys(t *testing.T) (string, string) {
 	t.Helper()
-	private := nativeWGCommand(t, "", "wg", "genkey")
+	// Key material is stdout only. CombinedOutput can append a diagnostic line
+	// to an otherwise valid key and turn the private INI into a parse error.
+	privateWire, err := exec.Command("wg", "genkey").Output()
+	if err != nil {
+		t.Fatal("generate fixture private key; diagnostics suppressed")
+	}
+	private := strings.TrimSpace(string(privateWire))
+	decoded, err := base64.StdEncoding.DecodeString(private)
+	if err != nil || len(decoded) != 32 {
+		t.Fatal("fixture generator did not return one canonical 32-byte private key")
+	}
 	cmd := exec.Command("wg", "pubkey")
 	cmd.Stdin = strings.NewReader(private + "\n")
 	public, err := cmd.Output()
@@ -257,6 +268,40 @@ func nativeWGKeys(t *testing.T) (string, string) {
 		t.Fatal("derive fixture public key")
 	}
 	return private, strings.TrimSpace(string(public))
+}
+
+func nativeWGSetconfFailureClass(output []byte) string {
+	if len(output) > 64<<10 {
+		return "diagnostic-too-large"
+	}
+	message := strings.ToLower(string(output))
+	for _, known := range []struct{ token, class string }{
+		{"not a wireguard interface", "backend-mismatch"},
+		{"operation not permitted", "permission"},
+		{"permission denied", "permission"},
+		{"no such device", "interface-unavailable"},
+		{"unable to access interface", "interface-unavailable"},
+		{"key is not the correct length or format", "key-format"},
+		{"invalid key", "key-format"},
+		{"line unrecognized", "profile-grammar"},
+		{"configuration parsing error", "profile-grammar"},
+		{"no such file or directory", "config-unavailable"},
+		{"name or service not known", "endpoint-resolution"},
+		{"unknown command", "tool-dispatch"},
+	} {
+		if strings.Contains(message, known.token) {
+			return known.class
+		}
+	}
+	return "unclassified"
+}
+
+func TestNativeWGSetconfDiagnosticsNeverExposeConfigLines(t *testing.T) {
+	for _, message := range []string{"Line unrecognized: PrivateKey=fixture-secret", "invalid key: fixture-secret", "unknown failure with fixture-secret"} {
+		if class := nativeWGSetconfFailureClass([]byte(message)); strings.Contains(class, "fixture-secret") || strings.ContainsAny(class, "=\r\n") {
+			t.Fatal("unsafe native diagnostic category")
+		}
+	}
 }
 
 func nativeWGServe(t *testing.T) {

@@ -5,15 +5,16 @@ import (
 )
 
 type Option struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Kind        string `json:"kind"`
-	Description string `json:"description"`
-	Installed   bool   `json:"installed"`
-	Configured  bool   `json:"configured"`
-	Running     bool   `json:"running"`
-	Selectable  bool   `json:"selectable"`
-	Ready       bool   `json:"ready"`
+	WireGuardProfileRevision string `json:"wireguard_profile_revision,omitempty"`
+	ID                       string `json:"id"`
+	Name                     string `json:"name"`
+	Kind                     string `json:"kind"`
+	Description              string `json:"description"`
+	Installed                bool   `json:"installed"`
+	Configured               bool   `json:"configured"`
+	Running                  bool   `json:"running"`
+	Selectable               bool   `json:"selectable"`
+	Ready                    bool   `json:"ready"`
 	// Services is empty for ordinary engine routes. Node-scoped routes list
 	// the services for which an exact, unexpired canary exists on this WAN.
 	Services []string `json:"services,omitempty"`

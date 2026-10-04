@@ -116,6 +116,10 @@ func (a *WARPWireGuardAdapter) resolveWGEndpoint(ctx context.Context, endpoint s
 }
 
 func (a *WARPWireGuardAdapter) stageWGEndpoint(ctx context.Context, profile string) (string, *WGEndpointState, error) {
+	return a.stageWGEndpointForNetwork(ctx, profile, false)
+}
+
+func (a *WARPWireGuardAdapter) stageWGEndpointForNetwork(ctx context.Context, profile string, network bool) (string, *WGEndpointState, error) {
 	endpoint, err := wgEndpoint(profile)
 	if err != nil {
 		return "", nil, err
@@ -137,6 +141,9 @@ func (a *WARPWireGuardAdapter) stageWGEndpoint(ctx context.Context, profile stri
 		return "", nil, err
 	}
 	e := &WGEndpointState{Original: endpoint, Endpoint: net.JoinHostPort(chosen.String(), port), ResolvedAt: a.endpointNow(), ExpiresAt: expiry, Priority: spec.EndpointPriority, Mark: spec.EndpointMark, Table: spec.Table, Metric: 1}
+	if network {
+		e.Table = spec.EndpointTable
+	}
 	if err := a.readWGEndpointWAN(ctx, e); err != nil {
 		return "", nil, err
 	}
@@ -339,7 +346,7 @@ func (a *WARPWireGuardAdapter) validWGEndpoint(e *WGEndpointState, runtime []byt
 		return err
 	}
 	endpoint, err := wgEndpoint(string(runtime))
-	if err != nil || endpoint != e.Endpoint || !publicfetch.PublicAddress(e.address()) || e.Priority != spec.EndpointPriority || e.Mark != spec.EndpointMark || e.Table != spec.Table || e.Metric != 1 || e.ResolvedAt.IsZero() || e.Device == "" || e.Device == "lo" || strings.HasPrefix(e.Device, "rz-") || len(e.Device) > 15 || strings.ContainsAny(e.Device, " \t\r\n/\\") {
+	if err != nil || endpoint != e.Endpoint || !publicfetch.PublicAddress(e.address()) || e.Priority != spec.EndpointPriority || e.Mark != spec.EndpointMark || (e.Table != spec.Table && e.Table != spec.EndpointTable) || e.Metric != 1 || e.ResolvedAt.IsZero() || e.Device == "" || e.Device == "lo" || strings.HasPrefix(e.Device, "rz-") || len(e.Device) > 15 || strings.ContainsAny(e.Device, " \t\r\n/\\") {
 		return errors.New("WireGuard endpoint receipt does not match runtime ownership")
 	}
 	host, port, err := net.SplitHostPort(e.Original)
@@ -478,7 +485,14 @@ func (a *WARPWireGuardAdapter) inspectWGEndpoint(ctx context.Context, e *WGEndpo
 			}
 			rulePresent = true
 		}
-		if priority > 0 && priority < e.Priority && policyLineMayOverlap(line, kernelPolicyRule{family: family, source: "all", destination: e.prefix()}) {
+		target := kernelPolicyRule{family: family, source: "all", destination: e.prefix()}
+		// WG's marked outer datagram originates on this host. Only fully parsed
+		// positive physical-iif selectors prove it disjoint from LAN input;
+		// negated, duplicate or unknown selector syntax retains the old fence.
+		if parsed, known := parseKernelPolicyRule(family, line); known && parsed.ingress != "" {
+			target.ingress = "lo"
+		}
+		if priority > 0 && priority < e.Priority && policyLineMayOverlap(line, target) {
 			return false, false, errors.New("earlier foreign rule may intercept WireGuard endpoint")
 		}
 	}
@@ -498,21 +512,30 @@ func (a *WARPWireGuardAdapter) inspectWGEndpoint(ctx context.Context, e *WGEndpo
 		return false, rulePresent, nil
 	}
 	r := routes[0]
-	flagsOK := len(r.Flags) == 0 && e.Gateway == "" || len(r.Flags) == 1 && r.Flags[0] == "onlink" && e.Gateway != ""
-	destination := r.Destination
-	if addr, err := netip.ParseAddr(destination); err == nil {
-		destination = netip.PrefixFrom(addr, addr.BitLen()).String()
-	}
-	scopeOK := r.Scope == "" || e.Gateway == "" && r.Scope == "link" || e.Gateway != "" && (r.Scope == "global" || r.Scope == "universe")
-	if destination != e.prefix() || r.Device != e.Device || r.Gateway != e.Gateway || r.Source != e.Source || r.Metric != e.Metric || r.Protocol != "static" || !scopeOK || !flagsOK || len(r.Table) != 0 && !wgEndpointTableMatches(r.Table, e.Table) {
+	if !wgEndpointRouteMatches(*e, r) {
 		return false, false, errors.New("WireGuard endpoint route has a foreign tuple")
 	}
 	return true, rulePresent, nil
 }
 
-func (a *WARPWireGuardAdapter) installWGEndpoint(ctx context.Context, e *WGEndpointState) (retErr error) {
+func wgEndpointRouteMatches(e WGEndpointState, r wgEndpointRoute) bool {
+	destination := r.Destination
+	if addr, err := netip.ParseAddr(destination); err == nil {
+		destination = netip.PrefixFrom(addr, addr.BitLen()).String()
+	}
+	flagsOK := len(r.Flags) == 0 && e.Gateway == "" || len(r.Flags) == 1 && r.Flags[0] == "onlink" && e.Gateway != ""
+	scopeOK := r.Scope == "" || e.Gateway == "" && r.Scope == "link" || e.Gateway != "" && (r.Scope == "global" || r.Scope == "universe")
+	return destination == e.prefix() && r.Device == e.Device && r.Gateway == e.Gateway && r.Source == e.Source && r.Metric == e.Metric && r.Protocol == "static" && scopeOK && flagsOK && (len(r.Table) == 0 || wgEndpointTableMatches(r.Table, e.Table))
+}
+
+func (a *WARPWireGuardAdapter) installWGEndpoint(ctx context.Context, e *WGEndpointState, frozen ...*LANPolicyRuntimePlan) (retErr error) {
 	if e == nil {
 		return nil
+	}
+	if spec, err := a.endpointSpec(); err == nil && e.Table == spec.EndpointTable {
+		if err := a.inspectWGNetworkTransportTable(ctx, e.Table, nil, frozen...); err != nil {
+			return err
+		}
 	}
 	route, rule, err := a.inspectWGEndpoint(ctx, e)
 	if err != nil {
@@ -527,7 +550,7 @@ func (a *WARPWireGuardAdapter) installWGEndpoint(ctx context.Context, e *WGEndpo
 	routeAdded, ruleAdded := true, false
 	defer func() {
 		if retErr != nil {
-			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+			cleanup, cancel := context.WithTimeout(wgNamedCleanupContext(context.WithoutCancel(ctx)), 8*time.Second)
 			defer cancel()
 			if ruleAdded {
 				_, err := a.run(cleanup, a.ip(), e.ruleArgs("del")...)
@@ -554,6 +577,7 @@ func (a *WARPWireGuardAdapter) installWGEndpoint(ctx context.Context, e *WGEndpo
 }
 
 func (a *WARPWireGuardAdapter) removeWGEndpoint(ctx context.Context, e *WGEndpointState) error {
+	ctx = wgNamedCleanupContext(ctx)
 	if e == nil {
 		return nil
 	}
@@ -581,7 +605,7 @@ func (a *WARPWireGuardAdapter) removeWGEndpoint(ctx context.Context, e *WGEndpoi
 	return nil
 }
 
-func (a *WARPWireGuardAdapter) verifyWGEndpoint(ctx context.Context, e *WGEndpointState) error {
+func (a *WARPWireGuardAdapter) verifyWGEndpoint(ctx context.Context, e *WGEndpointState, frozen ...*LANPolicyRuntimePlan) error {
 	if e == nil {
 		return nil
 	}
@@ -591,6 +615,11 @@ func (a *WARPWireGuardAdapter) verifyWGEndpoint(ctx context.Context, e *WGEndpoi
 	}
 	if !route || !rule {
 		return errors.New("WireGuard endpoint pin is missing")
+	}
+	if spec, err := a.endpointSpec(); err == nil && e.Table == spec.EndpointTable {
+		if err := a.inspectWGNetworkTransportTable(ctx, e.Table, e, frozen...); err != nil {
+			return err
+		}
 	}
 	return a.verifyWGInterfaceIdentity(ctx, e)
 }

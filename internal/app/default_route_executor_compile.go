@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
@@ -43,6 +44,7 @@ type DefaultRouteDevice struct {
 type DefaultRoutePath struct {
 	Selected, Resolved         string
 	ProfileDigest, ProofDigest string
+	WireGuardProfileRevision   string
 	ProbeURL                   string
 }
 
@@ -178,6 +180,10 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 		seen[service.ServiceID] = true
 		path, ok := snapshot.Paths[service.ServiceID]
 		if !ok || !defaultRoutePathValid(path) || path.Selected != selectedRoute(state) || service.Selected != path.Selected || service.Resolved != path.Resolved || !slices.Equal(service.Sources, state.Sources) {
+			return nil, dataplane.ErrReviewChanged
+		}
+		if strings.HasPrefix(path.Resolved, "wireguard:") && (service.WireGuardProfileRevision != path.WireGuardProfileRevision ||
+			strings.HasPrefix(path.Selected, "wireguard:") && state.WireGuardProfileRevision != path.WireGuardProfileRevision) {
 			return nil, dataplane.ErrReviewChanged
 		}
 		if (strings.HasPrefix(path.Resolved, "sing-box:node-") || strings.HasPrefix(path.Resolved, "xray:node-")) && snapshot.NodeGeneration == 0 {
@@ -561,6 +567,11 @@ func defaultRouteInterface(v string) bool {
 	return len(v) > 0 && len(v) <= 15 && v != "lo" && strings.Trim(v, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:-") == ""
 }
 func defaultRoutePathValid(p DefaultRoutePath) bool {
+	if strings.HasPrefix(p.Resolved, "wireguard:") || p.WireGuardProfileRevision != "" {
+		if _, err := dataplane.FrozenWireGuardProfileRevision(dataplane.Route{Selected: p.Selected, Resolved: p.Resolved, WireGuardProfileRevision: p.WireGuardProfileRevision}); err != nil {
+			return false
+		}
+	}
 	return p.Selected != "" && p.Resolved != "" && dataplane.AdapterID(p.Resolved) != "" && p.Resolved != "direct" && defaultRouteHash(p.ProfileDigest) && defaultRouteHash(p.ProofDigest) && strings.HasPrefix(p.ProbeURL, "https://")
 }
 func defaultRouteHash(v string) bool {
@@ -583,6 +594,10 @@ func defaultRouteCloneRoutes(routes []dataplane.Route) []dataplane.Route {
 	result := slices.Clone(routes)
 	for i := range result {
 		r := &result[i]
+		if r.ProbeService != nil {
+			service := defaultRouteCloneCatalogService(*r.ProbeService)
+			r.ProbeService = &service
+		}
 		r.Domains = slices.Clone(r.Domains)
 		r.CIDRs = slices.Clone(r.CIDRs)
 		r.Sources = slices.Clone(r.Sources)
@@ -590,6 +605,27 @@ func defaultRouteCloneRoutes(routes []dataplane.Route) []dataplane.Route {
 		r.SourceRefs = slices.Clone(r.SourceRefs)
 	}
 	return result
+}
+
+func defaultRouteCloneCatalogService(s catalog.Service) catalog.Service {
+	s.Domains = slices.Clone(s.Domains)
+	s.CIDRs = slices.Clone(s.CIDRs)
+	s.Strategy = slices.Clone(s.Strategy)
+	s.SourceRefs = slices.Clone(s.SourceRefs)
+	s.Probes = slices.Clone(s.Probes)
+	for i := range s.Probes {
+		e := &s.Probes[i].Expect
+		e.StatusCodes = slices.Clone(e.StatusCodes)
+		e.RedirectHosts = slices.Clone(e.RedirectHosts)
+		e.ContentTypes = slices.Clone(e.ContentTypes)
+		e.JSONFields = slices.Clone(e.JSONFields)
+		e.BodyContains = slices.Clone(e.BodyContains)
+	}
+	if s.Provenance != nil {
+		p := *s.Provenance
+		s.Provenance = &p
+	}
+	return s
 }
 
 func defaultRouteClone(s DefaultRouteSnapshot) DefaultRouteSnapshot {

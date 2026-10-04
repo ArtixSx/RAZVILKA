@@ -16,7 +16,7 @@ func (e *ImportError) Error() string {
 	case "UNSUPPORTED_PROTOCOL":
 		return "Протокол этой записи пока не поддерживается."
 	case "UNSUPPORTED_TRANSPORT":
-		return "Транспорт профиля пока не поддерживается. XHTTP не заменяется на TCP; используйте совместимый профиль TCP, WS, gRPC или HTTP."
+		return "Транспорт не поддерживается выбранным движком. Для XHTTP нужен совместимый Xray; замена транспорта на TCP запрещена."
 	case "UNSUPPORTED_SECURITY":
 		return "Неподдерживаемый режим защиты VLESS; допустимы none, tls и reality."
 	case "UNSUPPORTED_FLOW":
@@ -24,7 +24,7 @@ func (e *ImportError) Error() string {
 	case "UNSUPPORTED_PACKET_ENCODING":
 		return "Неподдерживаемый формат UDP-пакетов VLESS."
 	case "XRAY_UNSUPPORTED_PROFILE":
-		return "Для Xray пока поддерживается VLESS с REALITY или TLS поверх TCP (RAW), с flow xtls-rprx-vision или без него. Этот профиль можно использовать через Sing-box."
+		return "Параметры профиля не поддерживаются точным компилятором Xray. Поддерживаются VLESS TLS/REALITY поверх RAW/TCP и ограниченный XHTTP без потери параметров."
 	case "INSECURE_TLS":
 		return "Импорт с отключённой проверкой сертификата запрещён. Нужен профиль с корректной проверкой TLS."
 	default:
@@ -41,6 +41,15 @@ func redactPreview(preview Preview, outbound map[string]any) Preview {
 	var collect func(map[string]any)
 	collect = func(m map[string]any) {
 		for k, v := range m {
+			if k == "headers" {
+				if headers, ok := v.(map[string]any); ok {
+					for _, value := range headers {
+						if text, ok := value.(string); ok && text != "" {
+							secrets = append(secrets, text)
+						}
+					}
+				}
+			}
 			if nested, ok := v.(map[string]any); ok {
 				collect(nested)
 			}
@@ -126,7 +135,7 @@ func ErrorCode(err error) string {
 
 func validateVLESSModes(transport, security, flow, packet string) error {
 	switch transport {
-	case "tcp", "ws", "websocket", "grpc", "http", "h2":
+	case "tcp", "ws", "websocket", "grpc", "http", "h2", "xhttp":
 	default:
 		return importError("UNSUPPORTED_TRANSPORT")
 	}
@@ -150,7 +159,7 @@ func validateVLESSModes(transport, security, flow, packet string) error {
 // could silently choose one value or drop a malformed parameter.
 func vlessQuery(u *url.URL) (url.Values, error) {
 	aliases := map[string]string{"serverName": "sni", "publicKey": "pbk", "shortId": "sid", "fingerprint": "fp", "service_name": "serviceName", "packetEncoding": "packet_encoding", "allowInsecure": "insecure"}
-	allowed := strings.Fields("security type flow packet_encoding sni pbk sid fp alpn path host serviceName insecure encryption headerType")
+	allowed := strings.Fields("security type flow packet_encoding sni pbk sid fp alpn path host serviceName insecure encryption headerType mode extra")
 	clean, err := profileQuery(u, allowed, aliases)
 	if err != nil {
 		return nil, err
@@ -310,6 +319,11 @@ func validateClashVLESS(proxy map[string]any) error {
 			}
 		}
 	}
+	// Clash XHTTP options do not share Xray's schema. Until they have their
+	// own exact importer, reject before clashTransport's default nil mapping.
+	if transport == "xhttp" || transport == "splithttp" {
+		return importError("UNSUPPORTED_TRANSPORT")
+	}
 	flow, err := strictText(proxy, "flow")
 	if err != nil {
 		return err
@@ -396,6 +410,11 @@ func validateNativeVLESS(source map[string]any) error {
 		// Native TCP is represented by absence of transport, not type:tcp.
 		if transport == "" || transport == "tcp" || transport == "websocket" || transport == "h2" {
 			return importError("UNSUPPORTED_TRANSPORT")
+		}
+		if transport == "xhttp" {
+			if err := validateXHTTPTransport(m); err != nil {
+				return err
+			}
 		}
 	}
 	if raw, exists := source["tls"]; exists {

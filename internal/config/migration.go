@@ -111,6 +111,9 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 	if err := validateServicePolicies(cfg.ServicePolicies); err != nil {
 		return Config{}, report, err
 	}
+	if err := validateConfigServiceBindings(cfg); err != nil {
+		return Config{}, report, err
+	}
 	if err := validateServiceControl(cfg.ServiceControl); err != nil {
 		return Config{}, report, err
 	}

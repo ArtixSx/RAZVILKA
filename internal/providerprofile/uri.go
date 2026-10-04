@@ -36,6 +36,9 @@ func ParseURI(raw string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if !SingBoxSupportsOutbound(outbound) {
+		return Result{}, importError("UNSUPPORTED_TRANSPORT")
+	}
 	preview.EngineID = "sing-box"
 	document := map[string]any{
 		"log":       map[string]any{"level": "warn", "timestamp": true},
@@ -80,7 +83,7 @@ func parseURIOutbound(raw string) (map[string]any, Preview, error) {
 	if err != nil {
 		return nil, Preview{}, err
 	}
-	preview.EngineID = "sing-box"
+	preview.EngineID = outboundEngine(outbound)
 	return outbound, redactPreview(preview, outbound), nil
 }
 
@@ -113,6 +116,12 @@ func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
 	}
 	if transport == "raw" {
 		transport = "tcp"
+	}
+	if transport == "splithttp" {
+		transport = "xhttp"
+	}
+	if transport != "xhttp" && (q.Has("mode") || q.Has("extra")) || transport == "xhttp" && q.Has("serviceName") {
+		return nil, Preview{}, importError("INVALID_PARAMETERS")
 	}
 	if transport == "tcp" && (q.Has("path") || q.Has("host") || q.Has("serviceName")) {
 		return nil, Preview{}, importError("INVALID_PARAMETERS")
@@ -147,7 +156,13 @@ func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
 		}
 		out["tls"] = tls
 	}
-	if value := transportOptions(q, transport); value != nil {
+	if transport == "xhttp" {
+		value, err := xhttpURITransport(q)
+		if err != nil {
+			return nil, Preview{}, err
+		}
+		out["transport"] = value
+	} else if value := transportOptions(q, transport); value != nil {
 		out["transport"] = value
 	}
 	preview := Preview{Protocol: "VLESS", Name: profileName(u), Server: server, Port: port, TLS: security == "tls" || security == "reality", Transport: transport, Security: security}

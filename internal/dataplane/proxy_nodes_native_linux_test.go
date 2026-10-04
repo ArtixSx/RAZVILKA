@@ -60,6 +60,9 @@ func TestNativeScopedXrayTUN(t *testing.T) {
 		}
 	}
 	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal("private scoped native fixture root", err)
+	}
 	nativeXrayCertificate(t, root)
 	names := map[string]string{}
 	for _, role := range []string{"router", "server", "selected", "control"} {

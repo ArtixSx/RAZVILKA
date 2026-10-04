@@ -3,6 +3,7 @@
 package updatecheck
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -138,7 +139,7 @@ func checkUpdateSpace(directory string, archiveBytes int64) error {
 	return nil
 }
 
-func launchInstallerHelper(id string) (int, error) {
+func launchInstallerHelper(ctx context.Context, id string, admission func(func() error) error) (int, error) {
 	if !jobIDPattern.MatchString(id) {
 		return 0, ErrReviewChanged
 	}
@@ -148,14 +149,10 @@ func launchInstallerHelper(id string) (int, error) {
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	if err := cmd.Start(); err != nil {
-		return 0, err
-	}
-	pid := cmd.Process.Pid
 	// Reap preflight refusals while the original daemon remains alive. When
 	// the daemon exits during an actual install, init inherits the helper.
-	go func() { _ = cmd.Wait() }()
-	return pid, nil
+	pid, _, err := startInstallerHelperCommand(ctx, cmd, admission)
+	return pid, err
 }
 
 func runTransactionalInstaller(command *exec.Cmd, timeout time.Duration) error {

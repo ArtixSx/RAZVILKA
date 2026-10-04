@@ -208,6 +208,108 @@ function interfaceOpenServiceChanges(){
  $('#serviceDraftBar').scrollIntoView({block:'center',behavior:'smooth'});
  $('#applyServiceChanges').focus({preventScroll:true});
 }
+// These receipts describe completed UI requests; they grant no routing authority.
+// Keep only public identity/typed outcomes, never config content or review tokens.
+const engineProgressEvidence = new Map();
+function engineProgressBinding(engineID,fileID='main') {
+ const engine=state.engineConfigs?.find(item=>item.id===engineID),file=engine?.files?.find(item=>item.id===fileID);
+ const component=state.components?.find(item=>item.id===engineID),runtime=state.engines?.find(item=>item.id===engineID);
+ const revision=Math.max(state.status?.revision||0,state.serviceControl?.config_revision||0);
+ const loaded=state.engineLoaded,loadedSame=loaded?.engine_id===engineID&&loaded.file_id===fileID;
+ // FileView.sha256 is the live hash, even when a draft exists. Never bind a
+ // staged validation to that live hash; use the actual Stage/read receipt.
+ const sha256=file?.staged?(loadedSame&&loaded.source==='staged'?loaded.sha256:''):file?.sha256||(loadedSame&&loaded.source==='live'?loaded.sha256:'');
+ if(!file||!Number.isSafeInteger(revision)||revision<1||!/^[a-f0-9]{64}$/.test(sha256||'')||state.authenticated===false||typeof interfaceState!=='undefined'&&interfaceState.authRevoked)return null;
+ return {engineID,fileID,sha256,staged:file.staged===true,revision,auth:state.authGeneration||0,requestedAt:Date.now(),
+   profileGeneration:file.staged?file.staged_at||'':file.modified_at||'',
+   generation:Number.isSafeInteger(state.nodes?.generation)?state.nodes.generation:null,network:state.nodes?.network_profile||'',
+   installed:JSON.stringify([runtime?.binary_path||'',component?.installed_version||runtime?.version||'',component?.installed===true,runtime?.installed===true])};
+}
+function engineProgressSame(before,after,allowCommitted=false) {
+ return !!before&&!!after&&['engineID','fileID','sha256','revision','auth','generation','installed'].every(key=>before[key]===after[key])
+   &&(allowCommitted||before.staged===after.staged&&before.profileGeneration===after.profileGeneration)&&(!before.network||!after.network||before.network===after.network);
+}
+function invalidateEngineProgress(engineID='') {
+ if(engineID)engineProgressEvidence.delete(engineID);else engineProgressEvidence.clear();
+}
+function refreshEngineProgressCards() {
+ if(typeof renderInterfaceEngines!=='function'||!['engines','engineconfig'].includes(state.currentView))return;
+ try{renderInterfaceEngines();}catch(_){/* A card render cannot change an operation outcome. */}
+}
+function engineProgressFormat(binding,result) {
+ if(!binding)return;
+ const current=engineProgressBinding(binding.engineID,binding.fileID);
+ if(!engineProgressSame(binding,current)||result?.engine_id!==binding.engineID||result.file_id!==binding.fileID||result.ok!==true){invalidateEngineProgress(binding.engineID);return;}
+ const old=engineProgressEvidence.get(binding.engineID),entry=engineProgressSame(old?.binding,current,true)?old:{};
+ engineProgressEvidence.set(binding.engineID,{...entry,binding:current,format:{native:result.native===true,until:Date.now()+120000}});
+}
+function engineProgressProbe(binding,result,serviceID) {
+ if(!binding)return;
+ const current=engineProgressBinding(binding.engineID,binding.fileID),rows=(result?.results||[]).filter(row=>row.service_id===serviceID&&row.route===binding.engineID);
+ const positive=rows.length>0&&rows.every(row=>{
+   const proof=row.evidence_v2,exact=(expected,observed)=>!expected&&!observed||!!expected&&expected===observed;
+   return row.status==='pass'&&row.verdict==='PASS'&&row.route_confirmed===true
+     &&row.evidence_level==='service-confirmed'&&row.outcome==='service_accepted'&&!row.error_code&&!row.route_proof_error&&!row.negative_control_matched
+     &&exact(row.expected_route_path_id,row.observed_route_path_id)
+     &&proof?.schema_version===2&&proof.probe_id&&proof.service===serviceID&&proof.engine===binding.engineID&&proof.route_path_id
+     &&proof.verdict==='PASS'&&proof.outcome==='service_accepted'&&!proof.error_code&&!proof.route_proof_error&&!proof.negative_control_matched
+     &&exact(proof.expected_route_path_id,proof.observed_route_path_id)
+     &&current?.network&&row.network_profile_id===current.network&&proof.network_profile===current.network
+     &&Date.parse(proof.started_at)>=binding.requestedAt-1000&&Date.parse(proof.started_at)<=Date.parse(proof.finished_at)
+     &&Date.parse(proof.finished_at)===Date.parse(row.checked_at)&&Date.parse(row.checked_at)<=Date.now()
+     &&Date.parse(row.checked_at)<Date.parse(row.evidence_fresh_until)&&Date.parse(row.evidence_fresh_until)>Date.now();
+ });
+ // The route checker observes the installed profile, never an unapplied draft.
+ if(!engineProgressSame(binding,current)||binding.staged||!positive){invalidateEngineProgress(binding.engineID);return;}
+ const old=engineProgressEvidence.get(binding.engineID),entry=engineProgressSame(old?.binding,current)?old:{};
+ engineProgressEvidence.set(binding.engineID,{...entry,binding:current,service:{serviceID,network:rows[0].network_profile_id,checkedAt:Math.max(...rows.map(row=>Date.parse(row.checked_at))),
+   until:Math.min(Date.now()+120000,...rows.map(row=>Date.parse(row.evidence_fresh_until)))}});
+}
+function engineProgressApply(binding,preview,result) {
+ if(!binding)return;
+ const current=engineProgressBinding(binding.engineID,binding.fileID),transaction=result?.transaction,execution=result?.execution;
+ const digest=preview?.review?.reviewed_digest;
+ const routes=(transaction?.routes||[]).filter(route=>(route.resolved||route.route)===binding.engineID||(route.resolved||route.route||'').startsWith(binding.engineID+':'));
+ const matched=engineProgressSame(binding,current,true)&&result?.ok===true&&result.live_applied===true&&!result.safe_mode&&!result.scope_pending_changes
+   &&typeof digest==='string'&&digest&&preview.transaction?.digest===digest&&transaction?.digest===digest
+   &&transaction.plan_id===execution?.plan_id&&execution.digest===digest&&execution.state==='committed'&&!execution.error
+   &&preview.review.expected_revision===binding.revision&&transaction.revision===binding.revision
+   &&Date.parse(execution.started_at)>=binding.requestedAt-1000&&Date.parse(execution.started_at)<=Date.parse(execution.finished_at)
+   &&Date.parse(execution.finished_at)<=Date.now()&&Date.parse(execution.finished_at)>Date.now()-120000
+   &&transaction.adapters?.includes(binding.engineID)&&routes.length>0&&routes.every(route=>(state.services||[]).some(service=>{
+     const applied=serviceDashboardApplied(service);return service.id===route.service_id&&applied.enabled&&applied.route===(route.resolved||route.route);
+   }));
+ if(!matched){invalidateEngineProgress(binding.engineID);return;}
+ const old=engineProgressEvidence.get(binding.engineID),entry=engineProgressSame(old?.binding,current,true)?old:{};
+ // Services may still contain a fresh test of the previous installed profile.
+ // A committed Apply is not a new service probe: require an explicit fresh test.
+ engineProgressEvidence.set(binding.engineID,{...entry,binding:current,
+   service:null,
+   apply:{digest,routes:routes.map(route=>({serviceID:route.service_id,route:route.resolved||route.route})),until:Date.parse(execution.finished_at)+120000}});
+}
+function engineProgressView(engineID,fileID='main') {
+ const current=engineProgressBinding(engineID,fileID),entry=engineProgressEvidence.get(engineID);
+ const stopped=state.serviceControl?.runtime_state==='stopped'||state.status?.dataplane_state==='stopped'||typeof workspaceControl!=='undefined'&&workspaceControl.stopReceipt;
+ const pending=state.engineIntent?.engineID===engineID||state.componentOperation?.id===engineID||typeof workflowState!=='undefined'&&workflowState.probe?.engine===engineID||state.selectedEngine===engineID&&state.engineEditorDirty
+   ||['running','queued','canceling','interrupted'].includes(state.serviceControl?.durable_jobs?.find(job=>['service-stop','service-resume'].includes(job.mode))?.state)
+   ||state.dataLoad?.engineConfigs?.phase==='busy'||state.dataLoad?.status?.phase==='busy';
+ const negative=state.status?.last_apply_failure||['requires-review','network-stale','revalidating'].includes(state.status?.node_recovery?.state)
+   ||state.dataLoad?.engineConfigs?.phase==='error'||state.dataLoad?.status?.phase==='error'
+   ||typeof inventoryObservationStale==='function'&&inventoryObservationStale();
+ if(!entry||stopped||negative){if(entry)invalidateEngineProgress(engineID);return {format:false,service:false,apply:false};}
+ if(pending)return {format:false,service:false,apply:false};
+ if(!engineProgressSame(entry.binding,current)){invalidateEngineProgress(engineID);return {format:false,service:false,apply:false};}
+ const newerNegative=(state.services||[]).some(service=>{
+   const observed=service.observed_state;
+   return service.id===entry.service?.serviceID&&(observed?.route===engineID||observed?.route?.startsWith(engineID+':'))
+     &&Date.parse(observed.checked_at)>=entry.service.checkedAt&&(observed.status!=='pass'||observed.level!=='service-confirmed'||observed.outcome!=='service_accepted');
+ });
+ if(newerNegative){invalidateEngineProgress(engineID);return {format:false,service:false,apply:false};}
+ const format=!!(entry.format?.until>Date.now()),service=!!(entry.service?.until>Date.now()&&(!current.network||!entry.service.network||entry.service.network===current.network)&&!newerNegative);
+ const applied=!!(entry.apply?.until>Date.now()&&!current.staged&&state.status?.dataplane_state==='committed'&&state.status?.live_active===true
+   &&entry.apply.routes.every(route=>(state.services||[]).some(service=>{const applied=serviceDashboardApplied(service);return service.id===route.serviceID&&applied.enabled&&applied.route===route.route;})));
+ return {format,service,apply:applied,native:format&&entry.format.native};
+}
 function interfaceEngineCard(id,meta){
  const info=consoleEngineState(id),component=info.component,update=consoleEngineUpdateState(info);
  const used=(state.services||[]).filter(service=>{const applied=serviceDashboardApplied(service);return applied.enabled&&(applied.route===id||applied.route?.startsWith(id+':'));});
@@ -227,10 +329,12 @@ function interfaceEngineCard(id,meta){
  if(info.installed)actions+=action('remove','Удалить',lifecycleAllowed&&component.can_remove===true);
  const file=info.config?.files?.find(f=>f.id==='main')||info.config?.files?.[0];
  const binaryDetected=info.engine?.installed===true&&typeof info.engine.binary_path==='string'&&info.engine.binary_path.trim().length>0;
- const steps=[['install','Установка',info.observationStale?'Сведения устарели':binaryDetected?'Бинарник обнаружен':info.installed?'Есть сведения об установке; бинарник не уточнён':info.installedKnown?'Требуется компонент':'Состояние не прочитано'],['profile','Профиль',file?.staged?'Есть подготовленные изменения':file?.exists?'Файл есть; содержимое требует проверки':'Профиль ещё не подтверждён'],['check','Проверки',`${file?.staged?'Есть подготовленный профиль. ':''}Формат и доступ сервиса — отдельные результаты`],['apply','Применение',used.length?`Сохранённых назначений: ${used.length}`:'Назначения ещё не подтверждены']];
- const next=!info.installed?'install':file?.exists||file?.staged?'check':'profile',current=steps.find(([step])=>step===next);
+ const progress=engineProgressView(id,file?.id||'main'),checked=progress.format&&progress.service;
+ const complete={install:binaryDetected&&!info.observationStale,profile:progress.format,check:checked,apply:progress.apply};
+ const steps=[['install','Установка',info.observationStale?'Сведения устарели':binaryDetected?'Бинарник обнаружен':info.installed?'Есть сведения об установке; бинарник не уточнён':info.installedKnown?'Требуется компонент':'Состояние не прочитано'],['profile','Профиль',progress.format?'Текущий профиль прошёл проверку формата':file?.staged?'Есть подготовленные изменения':file?.exists?'Файл есть; содержимое требует проверки':'Профиль ещё не подтверждён'],['check','Проверки',`Формат: ${progress.format?(progress.native?'проверен утилитой обхода':'прошёл предварительную проверку'):'не подтверждён'}. Сервис: ${progress.service?'свежий веб-сценарий подтверждён':'нужна отдельная проверка'}`],['apply','Применение',progress.apply?'Получено совпадающее подтверждение применения':used.length?`Сохранённых назначений: ${used.length}`:'Назначения ещё не подтверждены']];
+ const next=!info.installed?'install':!file?.exists&&!file?.staged?'profile':!checked?'check':'apply',current=steps.find(([step])=>step===next);
  const stepAction=step=>step==='install'?install:`<button type="button" class="secondary" data-engine-step="${step}" data-card-engine="${esc(id)}" data-rz-focus="engine-${esc(id)}-${step}" ${state.engineIntent?'disabled':''}>Открыть ${step==='profile'?'профиль':step==='check'?'проверки':'применение'}</button>`;
- const flow=`<ol class="ui3-engine-progress" aria-label="Этапы настройки ${esc(meta.name)}">${steps.map(([step,title],index)=>`<li ${step===next?'aria-current="step"':''}><span>${index+1}</span><b>${title}</b></li>`).join('')}</ol><div class="ui3-engine-next"><div><b>${steps.indexOf(current)+1}. ${current[1]}</b><small>${esc(current[2])}</small></div>${stepAction(next)}</div><details class="ui3-engine-flow-details" data-engine-disclosure="${esc(id)}-flow"><summary data-rz-focus="engine-${esc(id)}-flow">Все шаги настройки</summary><ol class="ui3-engine-workflow">${steps.map(([step,title,text],index)=>`<li><b>${index+1}. ${title}</b><small>${esc(text)}</small>${step===next?'':stepAction(step)}</li>`).join('')}</ol></details>`;
+ const flow=`<ol class="ui3-engine-progress" aria-label="Этапы настройки ${esc(meta.name)}">${steps.map(([step,title],index)=>`<li data-engine-progress="${step}" ${complete[step]?'data-completed="true"':''} ${step===next&&!complete[step]?'aria-current="step"':''}><span>${complete[step]?'✓':index+1}</span><b>${title}${complete[step]?' · подтверждено':''}</b></li>`).join('')}</ol><div class="ui3-engine-next"><div><b>${progress.apply&&checked?'Проверка и применение подтверждены':steps.indexOf(current)+1+'. '+current[1]}</b><small>${esc(current[2])}</small></div>${stepAction(next)}</div><details class="ui3-engine-flow-details" data-engine-disclosure="${esc(id)}-flow"><summary data-rz-focus="engine-${esc(id)}-flow">Все шаги настройки</summary><ol class="ui3-engine-workflow">${steps.map(([step,title,text],index)=>`<li><b>${index+1}. ${title}</b><small>${esc(text)}</small>${step===next?'':stepAction(step)}</li>`).join('')}</ol></details>`;
  const operation=state.componentOperation?.id===id?state.componentOperation.action:component?.operation_status==='running'?component.operation_action:'';
  const settledReceipt=info.recovery && ['accepted','accepted-installed-idle','rolled-back','abandoned'].includes(info.recovery.transaction?.phase);
  const operationText=settledReceipt&&component?.operation_status==='running'?'Журнал завершён; серверная отметка операции ещё требует обновления.':operation?({install:'Установка выполняется…',update:'Обновление выполняется…',remove:'Удаление выполняется…'})[operation]||'Операция выполняется…':['failed','interrupted','receipt-error'].includes(component?.operation_status)?'Последняя операция не завершена: '+(component.operation_message||'откройте подробности компонента'):'';
@@ -423,7 +527,7 @@ function interfaceReturnInspectorFocus(){
  target?.focus({preventScroll:true});
 }
 $('#ui3ServiceDialog').addEventListener('close',interfaceReturnInspectorFocus);
-document.addEventListener('razvilka:auth-required',()=>{interfaceState.authRevoked=true;interfaceState.authEpoch++;interfaceState.busy=false;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');renderInterfaceHome({});});
+document.addEventListener('razvilka:auth-required',()=>{invalidateEngineProgress();interfaceState.authRevoked=true;interfaceState.authEpoch++;interfaceState.busy=false;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');renderInterfaceHome({});});
 document.addEventListener('razvilka:auth-restored',()=>{interfaceState.authRevoked=false;renderInterfaceHome(interfaceSummaries());});
 document.addEventListener('click',interfaceTaskAction);
 function interfaceSafeRender(key, callback){

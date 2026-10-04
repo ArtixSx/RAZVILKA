@@ -41,6 +41,25 @@ func NewScopedXrayTunnelAdapter(configs *engineconfig.Manager, root string, mate
 	return a, nil
 }
 
+// NewScopedXrayRouterTunnelAdapter selects the concrete router-origin HTTPS
+// verifier. Every health attempt still requires Manager's registered transient
+// resource and fresh runtime/source readback; construction grants no mutation.
+func NewScopedXrayRouterTunnelAdapter(configs *engineconfig.Manager, root string, materializer NodeRouteMaterializer) (*ProxyTunnelAdapter, error) {
+	a, err := NewScopedXrayTunnelAdapter(configs, root, materializer)
+	if err != nil {
+		return nil, err
+	}
+	a.nodeRouterVerifier = true
+	return a, nil
+}
+
+// NodeRouteVerificationCapable reports an installed concrete verification path.
+// Router service evidence remains distinct from optional actual LAN evidence.
+func (a *ProxyTunnelAdapter) NodeRouteVerificationCapable() bool {
+	return a != nil && a.scopedXray && a.NodeRoutes != nil && a.FreshProfile != nil &&
+		(a.NodeTUNProbe != nil || a.nodeRouterVerifier && nodeRouterDeviceBindingAvailable())
+}
+
 type proxyNodeEndpoint struct {
 	Host string `json:"host"`
 	IP   string `json:"ip"`
@@ -83,17 +102,25 @@ func (a *ProxyTunnelAdapter) scopedRoutes(plan Plan) ([]Route, error) {
 func (a *ProxyTunnelAdapter) nodeRequests(ctx context.Context, routes []Route) ([]NodeRouteRequest, error) {
 	var requests []NodeRouteRequest
 	for _, route := range routes {
+		serviceID := route.ServiceID
+		if a.nodeRouterVerifier || route.LogicalServiceID != "" {
+			service, err := FrozenProbeService(route)
+			if err != nil {
+				return nil, err
+			}
+			serviceID = service.ID
+		}
 		destinations, err := resolvePolicyPrefixes(ctx, Plan{Routes: []Route{route}}, "xray", a.Resolver)
 		if err != nil {
 			return nil, err
 		}
-		requests = append(requests, NodeRouteRequest{ServiceID: route.ServiceID, NodeID: strings.TrimPrefix(route.Resolved, "xray:"), Domains: append([]string{}, route.Domains...), Destinations: destinations})
+		requests = append(requests, NodeRouteRequest{ServiceID: serviceID, NodeID: strings.TrimPrefix(route.Resolved, "xray:"), Domains: append([]string{}, route.Domains...), Destinations: destinations})
 	}
 	return requests, nil
 }
 
 func (a *ProxyTunnelAdapter) stageScopedXray(ctx context.Context, plan Plan) ([]byte, []string, *proxyNodeManifest, error) {
-	if a.NodeRoutes == nil || a.NodeTUNProbe == nil {
+	if a.NodeRoutes == nil || a.NodeTUNProbe == nil && !a.nodeRouterVerifier {
 		return nil, nil, nil, ErrNodeTUNProofRequired
 	}
 	routes, err := a.scopedRoutes(plan)

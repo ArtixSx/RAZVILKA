@@ -236,7 +236,7 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 		return selfupdatejournal.ErrMismatch
 	}
 	authority := func(c context.Context) error {
-		if err := f.controlAuthority(c, action == "prepare"); err != nil {
+		if err := f.controlAction(c, id, revision, action); err != nil {
 			return err
 		}
 		if err := guard(c); err != nil {
@@ -415,6 +415,7 @@ type selfUpdateFileAdmissionKey struct{}
 type selfUpdateFileAdmission struct {
 	id      string
 	inspect bool
+	action  string
 }
 
 func (a *App) PendingSelfUpdateRecovery() bool {
@@ -432,7 +433,10 @@ func (a *App) selfUpdateFileGuard(ctx context.Context) error {
 		if scope, ok := ctx.Value(selfUpdateFileAdmissionKey{}).(selfUpdateFileAdmission); ok && scope.inspect {
 			return nil
 		}
-		return errSelfUpdateRecovery
+		scope, ok := ctx.Value(selfUpdateFileAdmissionKey{}).(selfUpdateFileAdmission)
+		if !ok || a.Store == nil || !selfUpdateFileAction(scope.action) || a.SelfUpdateFiles.controlAction(ctx, scope.id, a.Store.Get().Revision, scope.action) != nil {
+			return errSelfUpdateRecovery
+		}
 	}
 	if !a.PendingSelfUpdateRecovery() {
 		return nil

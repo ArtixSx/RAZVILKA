@@ -19,7 +19,7 @@ type VLESSProfile struct {
 	UUID             string
 	Flow             string
 	Security         string // none, tls or reality
-	Transport        string // tcp (Xray RAW), ws, grpc or http
+	Transport        string // tcp (Xray RAW) or xhttp in the exact Xray compiler
 	ServerName       string
 	Fingerprint      string
 	ALPN             []string
@@ -30,6 +30,7 @@ type VLESSProfile struct {
 	Host             string
 	ServiceName      string
 	PacketEncoding   string
+	XHTTP            map[string]any // validated host/path/mode/extra, no alternate endpoint
 }
 
 // XrayResult is a draft for the managed Xray engine: one outbound, no
@@ -45,7 +46,7 @@ var errXrayProfile = importError("XRAY_UNSUPPORTED_PROFILE")
 // profile and compiles it for Xray. Xray uses exactly one remote exit here;
 // the rest of a subscription stays available through Sing-box and NodeStore.
 func ParseXrayProfile(raw string, selectedIndex int) (XrayResult, error) {
-	bundle, err := ParseProfileWithSelection(raw, selectedIndex)
+	bundle, err := parseProfileWithSelection(raw, selectedIndex, true)
 	if err != nil {
 		return XrayResult{Preview: bundle.Preview}, err
 	}
@@ -65,7 +66,7 @@ func ParseXrayProfile(raw string, selectedIndex int) (XrayResult, error) {
 	preview.EngineID = "xray"
 	preview.Warnings = append(slicesWithoutPoolNote(preview.Warnings), warnings...)
 	if len(bundle.Preview.Nodes) > 1 {
-		preview.Warnings = append(preview.Warnings, "Xray использует один выбранный узел. Остальные узлы подписки остаются доступны через Sing-box.")
+		preview.Warnings = append(preview.Warnings, "Xray использует один выбранный узел. Остальные узлы подписки сохраняются отдельно.")
 	}
 	return XrayResult{Preview: preview, Config: config}, nil
 }
@@ -157,9 +158,11 @@ func VLESSProfileFromOutbound(out map[string]any) (VLESSProfile, error) {
 		}
 	}
 	if transport := object(out, "transport"); transport != nil {
-		// Other transports need canonical representations of every header,
-		// timeout and option before an engine compiler can accept them.
-		return VLESSProfile{}, errXrayProfile
+		if text(transport, "type") != "xhttp" || validateXHTTPTransport(transport) != nil {
+			return VLESSProfile{}, errXrayProfile
+		}
+		p.Transport = "xhttp"
+		p.XHTTP = cloneXHTTPTransport(transport)
 	}
 	if p.Server == "" || !looksLikeUUID(p.UUID) {
 		return VLESSProfile{}, errXrayProfile
@@ -186,12 +189,12 @@ func VLESSProfileFromJSON(raw []byte) (VLESSProfile, error) {
 	return VLESSProfileFromOutbound(out)
 }
 
-// CompileXrayConfig supports VLESS + REALITY or TLS over RAW/TCP, with the
-// optional xtls-rprx-vision flow. Other transports are separate, later sets.
+// CompileXrayConfig supports VLESS TLS/REALITY over RAW/TCP (optional Vision)
+// and a restricted exact XHTTP contract pinned to Xray v26.3.27 (no Vision).
 // The managed engine adds its own loopback inbound and log settings; the only
 // outbound is the remote exit, so no imported DIRECT can become the default.
 func CompileXrayConfig(p VLESSProfile) ([]byte, []string, error) {
-	if p.Transport != "tcp" || p.Security != "reality" && p.Security != "tls" || p.Insecure || p.Path != "" || p.Host != "" || p.ServiceName != "" {
+	if p.Transport != "tcp" && p.Transport != "xhttp" || p.Security != "reality" && p.Security != "tls" || p.Insecure || p.Path != "" || p.Host != "" || p.ServiceName != "" {
 		return nil, nil, errXrayProfile
 	}
 	if p.Flow != "" && p.Flow != "xtls-rprx-vision" || p.PacketEncoding != "" && p.PacketEncoding != "xudp" {
@@ -206,6 +209,16 @@ func CompileXrayConfig(p VLESSProfile) ([]byte, []string, error) {
 		user["flow"] = p.Flow
 	}
 	stream := map[string]any{"network": "tcp", "security": p.Security}
+	if p.Transport == "xhttp" {
+		if p.Flow != "" || validateXHTTPTransport(p.XHTTP) != nil || !xhttpALPNSupported(p) {
+			return nil, nil, errXrayProfile
+		}
+		settings := cloneXHTTPTransport(p.XHTTP)
+		delete(settings, "type")
+		stream["network"], stream["xhttpSettings"] = "xhttp", settings
+	} else if p.XHTTP != nil {
+		return nil, nil, errXrayProfile
+	}
 	fingerprint := p.Fingerprint
 	switch p.Security {
 	case "reality":

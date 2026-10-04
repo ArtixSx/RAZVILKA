@@ -45,6 +45,17 @@ func ParseProfile(raw string) (BundleResult, error) {
 // ParseProfileWithSelection selects the initial node in the generated local
 // selector. The source bundle itself never gets control over routes or APIs.
 func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, error) {
+	return parseProfileWithSelection(raw, selectedIndex, false)
+}
+
+// ParseCanonicalProfile rebuilds private node material for import/storage.
+// Its envelope contains only outbounds, never a runnable engine draft. Engine
+// capability must be checked again by the selected compiler/materializer.
+func ParseCanonicalProfile(raw string) (BundleResult, error) {
+	return parseProfileWithSelection(raw, 0, true)
+}
+
+func parseProfileWithSelection(raw string, selectedIndex int, canonical bool) (BundleResult, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return BundleResult{}, errors.New("вставьте ссылку, подписку или JSON-профиль")
@@ -53,7 +64,7 @@ func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, err
 		return BundleResult{}, errors.New("профиль слишком большой или содержит недопустимые данные")
 	}
 
-	report := &entryReport{}
+	report := &entryReport{canonical: canonical}
 	outbounds, nodes, format, warnings, err := parseProfileContent(raw, report)
 	if err == nil && len(nodes) == 0 {
 		err = report.firstErr
@@ -63,7 +74,7 @@ func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, err
 		if decoded == "" || decoded == raw {
 			return BundleResult{Preview: BundlePreview{Rejected: report.rejected, Skipped: report.skipped}}, err
 		}
-		report = &entryReport{}
+		report = &entryReport{canonical: canonical}
 		outbounds, nodes, format, warnings, err = parseProfileContent(decoded, report)
 		if err == nil && len(nodes) == 0 {
 			err = report.firstErr
@@ -83,16 +94,24 @@ func ParseProfileWithSelection(raw string, selectedIndex int) (BundleResult, err
 		return BundleResult{}, errors.New("выбранный узел отсутствует в профиле")
 	}
 
-	config, err := buildBundleConfig(outbounds, selectedIndex)
+	var config []byte
+	if canonical {
+		config, err = buildCanonicalConfig(outbounds)
+	} else {
+		config, err = buildBundleConfig(outbounds, selectedIndex)
+	}
 	if err != nil {
 		return BundleResult{}, err
 	}
 	preview := BundlePreview{Format: format, EngineID: "sing-box", NodeCount: len(nodes), SelectedIndex: selectedIndex, Nodes: nodes, Warnings: warnings}
+	if canonical {
+		preview.EngineID = "canonical"
+	}
 	preview.Rejected, preview.Skipped = report.rejected, report.skipped
 	if len(report.rejected) > 0 {
 		preview.Warnings = append(preview.Warnings, "Часть записей отклонена. В черновик попадут только принятые узлы; проверьте список перед сохранением.")
 	}
-	if len(nodes) > 1 {
+	if len(nodes) > 1 && !canonical {
 		preview.Warnings = append(preview.Warnings, "Sing-box локально проверит пул узлов и выберет доступный; выбранный узел получит первый приоритет. Остальные сохранятся для ручного выбора.")
 	}
 	return BundleResult{Preview: preview, Config: config}, nil
@@ -245,6 +264,9 @@ func parseJSONProfile(data []byte, report *entryReport) ([]map[string]any, []Pre
 }
 
 func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, error) {
+	if _, exists := source["protocol"]; exists {
+		return normalizeXrayXHTTPOutbound(source)
+	}
 	if err := validateNativeTLS(source); err != nil {
 		return nil, Preview{}, err
 	}
@@ -315,6 +337,7 @@ func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, er
 	if transport, ok := source["transport"].(map[string]any); ok && stringField(transport, "type") != "" {
 		preview.Transport = stringField(transport, "type")
 	}
+	preview.EngineID = outboundEngine(outbound)
 	return outbound, redactPreview(preview, outbound), nil
 }
 
@@ -376,7 +399,7 @@ func copySanitizedFields(destination, source map[string]any) {
 	if tls := sanitizeTLS(source["tls"]); len(tls) > 0 {
 		destination["tls"] = tls
 	}
-	if transport := sanitizeMap(source["transport"], "type", "host", "path", "method", "headers", "service_name", "idle_timeout", "ping_timeout"); len(transport) > 0 {
+	if transport := sanitizeMap(source["transport"], "type", "host", "path", "mode", "extra", "method", "headers", "service_name", "idle_timeout", "ping_timeout"); len(transport) > 0 {
 		destination["transport"] = transport
 	}
 	if multiplex := sanitizeMap(source["multiplex"], "enabled", "protocol", "max_connections", "min_streams", "max_streams", "padding"); len(multiplex) > 0 {
