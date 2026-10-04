@@ -30,6 +30,9 @@ func cloneWGPolicyState(state PolicyState) PolicyState {
 }
 
 func writeWGTransactionMarker(ctx context.Context, dir, name string) error {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -120,6 +123,9 @@ func writeWGPolicyReference(ctx context.Context, dir string, ref warpWGPolicyRef
 }
 
 func writeWGPolicyReferenceNamed(ctx context.Context, dir, file string, ref warpWGPolicyReference) error {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		return err
+	}
 	if file != wgPolicyReferenceFile && file != wgPolicyRollbackFile && file != wgPolicyRestorationFile {
 		return ErrPolicyAdditionReceipt
 	}
@@ -208,6 +214,9 @@ func (a *WARPWireGuardAdapter) applyWGPolicyGeneration(ctx context.Context, stat
 }
 
 func (a *WARPWireGuardAdapter) applyWGPolicyGenerationBound(ctx context.Context, state PolicyState, transaction, rollbackOwner string) error {
+	if rollbackOwner != "" {
+		ctx = wgNamedCleanupContext(ctx)
+	}
 	if _, exists, err := a.readWGPolicyReference(transaction, state, false); err != nil || exists {
 		return errors.Join(err, ErrPolicyAdditionExists)
 	}
@@ -225,10 +234,11 @@ func (a *WARPWireGuardAdapter) applyWGPolicyGenerationBound(ctx context.Context,
 	if err := writeWGPolicyReference(ctx, transaction, ref); err != nil {
 		return err
 	}
-	return applyPolicyAddition(ctx, a.Runner, a.ip(), state, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
+	return applyPolicyAddition(ctx, wgNamedForwardRunner{base: a.Runner}, a.ip(), state, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
 }
 
 func (a *WARPWireGuardAdapter) removeWGPolicyReference(ctx context.Context, ref warpWGPolicyReference, transaction string) error {
+	ctx = wgNamedCleanupContext(ctx)
 	if err := a.validWGPolicyReference(ref); err != nil {
 		return err
 	}
@@ -280,6 +290,9 @@ func (a *WARPWireGuardAdapter) promoteWGPolicyGeneration(ctx context.Context, st
 }
 
 func (a *WARPWireGuardAdapter) publishWGPolicyGeneration(ctx context.Context, state PolicyState, ref warpWGPolicyReference) error {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		return err
+	}
 	status, err := a.inspectWGPolicyReference(ctx, ref, "")
 	if err != nil || !status.Complete || status.Unknown || status.Promoted {
 		return errors.Join(err, ErrPolicyAdditionUnknown)
@@ -309,6 +322,9 @@ func (a *WARPWireGuardAdapter) freshWGPolicyGeneration(ctx context.Context, stat
 }
 
 func (a *WARPWireGuardAdapter) freshWGPolicyGenerationBound(ctx context.Context, state PolicyState, rollbackRoot, rollbackOwner string) (warpWGPolicyReference, error) {
+	if rollbackOwner != "" {
+		ctx = wgNamedCleanupContext(ctx)
+	}
 	if err := os.MkdirAll(a.StateRoot, 0700); err != nil {
 		return warpWGPolicyReference{}, err
 	}

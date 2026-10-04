@@ -136,7 +136,40 @@ func (r wgInactiveReceiptRunner) Run(ctx context.Context, name string, args ...s
 		}
 		return []byte(`[{"ifname":"lo"}]`), nil
 	}
+	plain := args
+	if len(plain) > 0 && plain[0] == "-N" {
+		plain = plain[1:]
+	}
+	if len(plain) > 0 && plain[0] == "-6" {
+		plain = plain[1:]
+	}
+	if name == "ip" && len(plain) == 5 && strings.Join(plain[:4], " ") == "-j route show table" {
+		r.base.calls = append(r.base.calls, name+" "+strings.Join(args, " "))
+		// The legacy fake models exact-host JSON and textual service defaults.
+		// This retained-receipt fixture may prove a whole empty table only
+		// after both models have been emptied by confirmed owned removal.
+		if len(r.base.endpoint.routes) != 0 || len(r.base.policy.defaults) != 0 {
+			return nil, errors.New("nonempty model has no complete JSON inventory")
+		}
+		return []byte("[]"), nil
+	}
 	return r.base.Run(ctx, name, args...)
+}
+
+func TestWGInactivityReceiptFixtureCannotHideNonemptyTable(t *testing.T) {
+	for _, endpoint := range []bool{false, true} {
+		base := &warpFakeRunner{}
+		if endpoint {
+			base.endpoint.routes = map[string]wgEndpointRoute{"4|93.184.216.34/32": {Destination: "93.184.216.34/32"}}
+		} else {
+			base.policy.defaults = map[string]string{"4/206": "default dev foreign\n"}
+		}
+		for _, args := range [][]string{{"-N", "-j", "route", "show", "table", "206"}, {"-N", "-6", "-j", "route", "show", "table", "206"}} {
+			if _, err := (wgInactiveReceiptRunner{base: base}).Run(context.Background(), "ip", args...); err == nil {
+				t.Fatal("partial model hid a retained table", endpoint)
+			}
+		}
+	}
 }
 
 func TestWGInactivityRetainedRemovedReceiptIsRequired(t *testing.T) {
