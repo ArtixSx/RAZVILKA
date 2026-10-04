@@ -343,6 +343,9 @@ func (a *WARPWireGuardAdapter) Validate(ctx context.Context, plan Plan, root str
 	if _, err := a.wgNetworkPolicySources(ctx, plan, string(mustRead(filepath.Join(root, "rz-warp.conf.staged"))), state); err != nil {
 		return err
 	}
+	if err := a.verifyWGNetworkForwarding(ctx, state); err != nil {
+		return err
+	}
 	if state.NetworkPolicyGeneration != "" {
 		if err := a.preflightWGNetworkTransport(ctx, state.WireGuardEndpoint, Plan{LAN: plan.LAN, Routes: plan.Routes}); err != nil {
 			return err
@@ -659,6 +662,9 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, plan Plan, root str
 		return err
 	}
 	if state.NetworkPolicyGeneration != "" {
+		if err := a.verifyWGNetworkForwarding(ctx, state); err != nil {
+			return err
+		}
 		if err := a.preflightWGNetworkTransport(ctx, state.WireGuardEndpoint, Plan{LAN: plan.LAN, Routes: plan.Routes}); err != nil {
 			return err
 		}
@@ -792,6 +798,9 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) (retErr
 		return fmt.Errorf("committed %s runtime state is missing", a.ID())
 	}
 	if _, err := a.wgNetworkPolicySources(ctx, plan, string(mustRead(a.RuntimeConfigPath)), state); err != nil {
+		return err
+	}
+	if err := a.verifyWGNetworkForwarding(ctx, state); err != nil {
 		return err
 	}
 	ref, err := a.committedWGPolicyReference(state)

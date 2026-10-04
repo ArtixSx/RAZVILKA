@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"reflect"
 	"slices"
 	"strings"
 )
@@ -135,6 +136,20 @@ func (a *WARPWireGuardAdapter) wgForwardingObserver() *ProxyTunnelAdapter {
 	return &ProxyTunnelAdapter{EngineID: a.ID(), Interface: a.interfaceName(), StateRoot: a.StateRoot, Runner: a.Runner, IP: a.ip(), IPTables: a.wgNetworkFirewallBinary(false), IP6Tables: a.wgNetworkFirewallBinary(true), LANBridgeMembers: a.networkLANBridgeMembers}
 }
 
+// Frozen forwarding intent must still fit the whole current assigned,
+// connected bridge prefix. A successful lookup from one address cannot prove
+// that the rest of a reviewed /24 or /64 remains physically admitted.
+func (a *WARPWireGuardAdapter) verifyWGNetworkForwarding(ctx context.Context, state PolicyState) error {
+	if state.NetworkPolicyGeneration == "" {
+		return nil
+	}
+	current, err := a.wgForwardingObserver().compileForwarding(ctx, state)
+	if err != nil || !reflect.DeepEqual(current, state.Forwarding) {
+		return errors.Join(err, ErrWGNetworkPolicy)
+	}
+	return ctx.Err()
+}
+
 func (a *WARPWireGuardAdapter) wgNetworkFirewallBinary(v6 bool) string {
 	if v6 && a.IP6Tables != "" {
 		return a.IP6Tables
@@ -209,6 +224,14 @@ func (a *WARPWireGuardAdapter) wgNetworkEffectRuntime(ref warpWGPolicyReference,
 			if err := checkWGNetworkReview(ctx); err != nil {
 				return err
 			}
+		}
+		// Exact tuple absence alone does not prove that an earlier foreign
+		// selector cannot intercept this scope, or that reserved slots are free.
+		if err := verifyPolicyPrecedence(ctx, numericPolicyReadRunner{base: a.Runner}, a.ip(), ref.Policy, true); err != nil {
+			return err
+		}
+		if err := a.verifyWGNetworkForwarding(ctx, ref.Policy); err != nil {
+			return err
 		}
 		for _, table := range compiled.tables {
 			read, err := snapshot(ctx, table)
@@ -287,6 +310,11 @@ func (a *WARPWireGuardAdapter) wgNetworkEffectRuntime(ref warpWGPolicyReference,
 // Every health/Stop inspection reconstructs the complete tuple set from the
 // immutable reference, rather than deserializing executable receipt argv.
 func (a *WARPWireGuardAdapter) verifyWGNetworkEffectPresence(ctx context.Context, ref warpWGPolicyReference, wanted int) error {
+	if wanted == 1 {
+		if err := a.verifyWGNetworkForwarding(ctx, ref.Policy); err != nil {
+			return err
+		}
+	}
 	compiled, err := a.compileWGNetworkEffects(ref)
 	if err != nil {
 		return err

@@ -92,3 +92,18 @@ network consumer или конечную ordinary manager/CORE/LAN/DNS инте�
 DEFAULT `3581111` и named guards `eb9d127` + `0633783`. Linux native запускает Root;
 на его Ubuntu fixture приватные файлы следует создавать через отдельный TMPDIR
 под `/etc/wireguard/razvilka-native-...`, как в принятом EndpointLifecycle 58b.
+
+## Исправления независимого review Root для `5e113ed`
+
+Mixed preflight повторяет существующий numeric `verifyPolicyPrecedence(..., true)`
+до первого routing/firewall effect. Отсутствие собственных exact tuples больше
+не скрывает более ранний foreign selector либо занятый reserved priority slot.
+Регрессии покрывают перехват69→table214 и чужие selectors в70/71 обеих семей.
+
+Validate, Activate до остановки старого runtime, Reconcile до recovery mutation,
+mixed preflight и live Health повторяют full `compileForwarding` текущих
+connected/assigned bridge prefixes, members и WAN. Результат обязан совпасть
+с frozen Forwarding. Уменьшение `/24`→`/25` или `/64`→`/65`, DOWN и WAN drift
+отказывают до effects/probes; один успешный sample внутри нового prefix не даёт
+разрешение на весь старый source CIDR. Exact receipt cleanup не требует такого
+forward physical grant и сохраняет прежнюю causal authority.
