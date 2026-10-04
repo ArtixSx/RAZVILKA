@@ -40,7 +40,7 @@ func fakeExactNodeChecker(t *testing.T) *ExactNodeChecker {
 	checker.serviceProbe = func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error) {
 		probeTime := checker.now()
 		return evidence.ProbeEvidence{
-			SchemaVersion: evidence.ProbeSchemaVersion, ProbeID: "service-proof", StartedAt: probeTime,
+			SchemaVersion: evidence.ProbeSchemaVersion, ProbeID: "service-proof", StartedAt: probeTime, Engine: "sing-box",
 			FinishedAt: probeTime.Add(time.Millisecond), Service: "telegram", RoutePathID: "sing-box:" + checkedNodeID,
 			ExpectedRoutePathID: "sing-box:" + checkedNodeID, ObservedRoutePathID: "sing-box:" + checkedNodeID,
 			Outcome: evidence.OutcomeServiceAccepted, Verdict: evidence.VerdictPass, HTTPStatus: 204,
@@ -126,7 +126,7 @@ func TestExactNodeCheckRejectsBlockedServiceAndCleanupFailure(t *testing.T) {
 	checker := fakeExactNodeChecker(t)
 	checker.serviceProbe = func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error) {
 		now := time.Now().UTC()
-		return evidence.ProbeEvidence{SchemaVersion: evidence.ProbeSchemaVersion, StartedAt: now, FinishedAt: now, RoutePathID: "sing-box:" + checkedNodeID, ExpectedRoutePathID: "sing-box:" + checkedNodeID, ObservedRoutePathID: "sing-box:" + checkedNodeID, Outcome: evidence.OutcomeServiceBlocked, Verdict: evidence.VerdictBlocked, HTTPStatus: 451}, nil
+		return evidence.ProbeEvidence{SchemaVersion: evidence.ProbeSchemaVersion, StartedAt: now, FinishedAt: now, Engine: "sing-box", RoutePathID: "sing-box:" + checkedNodeID, ExpectedRoutePathID: "sing-box:" + checkedNodeID, ObservedRoutePathID: "sing-box:" + checkedNodeID, Outcome: evidence.OutcomeServiceBlocked, Verdict: evidence.VerdictBlocked, HTTPStatus: 451}, nil
 	}
 	result, err := checker.Check(context.Background(), checkedNodeRequest())
 	if err != nil || result.Available || result.Verdict != evidence.VerdictBlocked || result.TestLevel != "service" {

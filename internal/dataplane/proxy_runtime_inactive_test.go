@@ -105,7 +105,8 @@ func newInactiveFixture(t *testing.T, engine string) *inactiveFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.EngineBin, a.SidecarBin, a.IP, a.IPTables, a.IP6Tables = "fixture-engine", "fixture-sidecar", "ip", "iptables", "ip6tables"
+	a.EngineBin, a.SidecarBin = filepath.Join(base, "bin", "fixture-engine"), filepath.Join(base, "bin", "fixture-sidecar")
+	a.IP, a.IPTables, a.IP6Tables = "ip", "iptables", "ip6tables"
 	a.bootIdentity = func() (string, error) { return "inactive-fixture-boot", nil }
 	processes := &inactiveFixtureProcesses{}
 	runner := &inactiveFixtureRunner{t: t, rules: map[int]string{4: inactiveFixtureRules, 6: inactiveFixtureRules}, routes: map[int]string{}, fw: map[string]string{}}
@@ -246,7 +247,7 @@ func TestProxyRuntimeInactiveColdWithoutConfigs(t *testing.T) {
 			}
 		})
 	}
-	for _, mode := range []string{"root", "interface", "table", "priority", "port", "runner", "processes", "tool", "engine-binary", "sidecar-kind"} {
+	for _, mode := range []string{"root", "interface", "table", "priority", "port", "runner", "processes", "tool", "engine-binary", "relative-engine", "relative-sidecar", "sidecar-kind", "hev-without-path"} {
 		t.Run("missing-or-changed-"+mode, func(t *testing.T) {
 			f := newInactiveFixture(t, "xray")
 			f.a.Configs = nil
@@ -269,8 +270,14 @@ func TestProxyRuntimeInactiveColdWithoutConfigs(t *testing.T) {
 				f.a.IP = "invalid\x00tool"
 			case "engine-binary":
 				f.a.EngineBin = "invalid\x00binary"
+			case "relative-engine":
+				f.a.EngineBin = "xray"
+			case "relative-sidecar":
+				f.a.SidecarBin = "sing-box"
 			case "sidecar-kind":
 				f.a.SidecarKind = "unknown"
+			case "hev-without-path":
+				f.a.SidecarKind, f.a.SidecarBin = "hev", ""
 			}
 			if err := f.a.verifyRuntimeInactive(context.Background(), f.proof); !errors.Is(err, ErrProxyRuntimeInactive) {
 				t.Fatal("nil Configs bypassed resource coordinate guard", err)
@@ -279,6 +286,101 @@ func TestProxyRuntimeInactiveColdWithoutConfigs(t *testing.T) {
 				t.Fatal("invalid coordinates reached inventory RPC", f.runner.seen, f.processes.calls)
 			}
 		})
+	}
+}
+
+func inactiveColdConstructor(t *testing.T, f *inactiveFixture, sidecar string) *ProxyTunnelAdapter {
+	t.Helper()
+	var cold *ProxyTunnelAdapter
+	var err error
+	if sidecar == "hev" {
+		// An explicit startup path is a trusted identity even when the package
+		// is uninstalled. No executable or fake script is created here.
+		cold, err = NewProxyTunnelAdapterWithHev(f.a.ID(), nil, filepath.Dir(f.a.StateRoot), filepath.Join(filepath.Dir(f.a.StateRoot), "uninstalled", "hev-fixture"))
+	} else {
+		cold, err = NewProxyTunnelAdapter(f.a.ID(), nil, filepath.Dir(f.a.StateRoot))
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	cold.Runner, cold.Processes = f.runner, f.processes
+	cold.IP, cold.IPTables, cold.IP6Tables = f.a.IP, f.a.IPTables, f.a.IP6Tables
+	return cold
+}
+
+func TestProxyRuntimeInactiveColdUninstalledBinaries(t *testing.T) {
+	for _, engine := range []string{"usque", "sing-box", "xray"} {
+		for _, sidecar := range []string{"sing-box", "hev"} {
+			t.Run(engine+"/"+sidecar, func(t *testing.T) {
+				f := newInactiveFixture(t, engine)
+				// Remove PATH lookup only; fixed /opt startup candidates remain real
+				// and are never shadowed by fake installed binaries.
+				t.Setenv("PATH", filepath.Join(filepath.Dir(f.a.StateRoot), "uninstalled"))
+				f.a = inactiveColdConstructor(t, f, sidecar)
+				if f.a.engineBinary() != "" || sidecar == "sing-box" && f.a.sidecarBinary() != "" {
+					t.Skip("fixed startup engine/sidecar package is installed on this host")
+				}
+				if sidecar == "hev" {
+					if _, err := os.Lstat(f.a.SidecarBin); !errors.Is(err, os.ErrNotExist) {
+						t.Fatal("HEV fixture must genuinely be uninstalled", err)
+					}
+				}
+				if f.a.engineProcess().Binary != "" {
+					t.Fatal("read-only fixture fabricated a launch binary")
+				}
+				if err := f.a.verifyRuntimeInactive(context.Background(), f.proof); err != nil {
+					t.Fatal("uninstalled packages blocked fresh populated negative proof", err)
+				}
+				if len(f.runner.seen) != 20 || f.processes.calls != 0 {
+					t.Fatal("uninstalled observer bypassed inventory", f.runner.seen, f.processes.calls)
+				}
+				if _, err := os.Lstat(f.a.StateRoot); !errors.Is(err, os.ErrNotExist) {
+					t.Fatal("read-only observer created runtime", err)
+				}
+			})
+		}
+	}
+}
+
+func TestProxyRuntimeInactiveColdKnownAndConfiguredProcessesHold(t *testing.T) {
+	for _, engine := range []string{"usque", "sing-box", "xray"} {
+		for _, sidecar := range []string{"sing-box", "hev"} {
+			for _, mode := range []string{"engine", "sidecar", "configured-engine", "configured-engine-interpreter", "configured-sidecar", "canary"} {
+				t.Run(engine+"/"+sidecar+"/"+mode, func(t *testing.T) {
+					f := newInactiveFixture(t, engine)
+					t.Setenv("PATH", filepath.Join(filepath.Dir(f.a.StateRoot), "uninstalled"))
+					f.a = inactiveColdConstructor(t, f, sidecar)
+					argv := engine + "\x00--config=/foreign/engine.json\x00"
+					switch mode {
+					case "sidecar":
+						name := "sing-box"
+						if sidecar == "hev" {
+							name = filepath.Base(f.a.SidecarBin)
+						}
+						argv = name + "\x00--config=/foreign/sidecar.json\x00"
+					case "configured-engine", "configured-engine-interpreter":
+						f.a.EngineBin = filepath.Join(filepath.Dir(f.a.StateRoot), "uninstalled", "private-engine")
+						argv = "private-engine\x00--config=/foreign/engine.json\x00"
+						if mode == "configured-engine-interpreter" {
+							argv = "foreign-interpreter\x00" + f.a.EngineBin + "\x00--config=/foreign/engine.json\x00"
+						}
+					case "configured-sidecar":
+						f.a.SidecarBin = filepath.Join(filepath.Dir(f.a.StateRoot), "uninstalled", "private-sidecar")
+						argv = "private-sidecar\x00--config=/foreign/sidecar.json\x00"
+					case "canary":
+						path := filepath.Join(filepath.Dir(f.a.StateRoot), "transactions", "dp-0123456789abcdef", engine, "canary", "engine.json")
+						argv = "foreign-interpreter\x00--config=" + path + "\x00"
+					}
+					f.writeProcess(t, 456, "S", "0", argv)
+					if err := f.a.verifyRuntimeInactive(context.Background(), f.proof); !errors.Is(err, ErrProxyRuntimeInactive) {
+						t.Fatal("lookup absence dropped configured/known process identity", err)
+					}
+					if f.processes.calls != 0 || len(f.runner.seen) != 0 {
+						t.Fatal("live process reached kernel or process-controller mutation", f.processes.calls, f.runner.seen)
+					}
+				})
+			}
+		}
 	}
 }
 
