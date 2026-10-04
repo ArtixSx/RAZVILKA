@@ -31,6 +31,8 @@ var errNodeRouterHTTPSUnavailable = errors.New("router TUN HTTPS transport unava
 // after this operation. These private fields are not an HTTP authority DTO.
 type nodeRouterHTTPSRequest struct {
 	URL         string
+	ServiceID   string
+	Predicate   *proxyServicePredicate
 	Interface   string
 	IfIndex     int
 	Source      netip.Addr
@@ -42,6 +44,9 @@ type nodeRouterHTTPSRequest struct {
 // ServiceAccepted alone grants no route/lease/runtime ownership or Commit.
 type nodeRouterHTTPSResult struct {
 	Origin          string
+	ServiceID       string
+	ProbeID         string
+	PredicateHash   string
 	Interface       string
 	IfIndex         int
 	Source          netip.AddrPort
@@ -86,6 +91,9 @@ func runNodeRouterHTTPSProbe(ctx context.Context, request nodeRouterHTTPSRequest
 	if err := ctx.Err(); err != nil {
 		return nodeRouterHTTPSResult{}, err
 	}
+	if !request.Predicate.matches(request.ServiceID, request.URL) {
+		return nodeRouterHTTPSResult{}, errProxyServicePredicate
+	}
 	if !proxyFirewallInterface.MatchString(request.Interface) || request.Interface == "lo" || request.IfIndex < 1 || request.IfIndex > 1<<31-1 ||
 		!request.Source.Is4() || request.Source.Is4In6() || !nodeLANSourceAddress(request.Source) || !request.Destination.Is4() || request.Destination.Is4In6() ||
 		!publicfetch.PublicAddress(request.Destination) || len(request.URL) > 4096 || publicfetch.ValidateURL(request.URL) != nil {
@@ -107,7 +115,9 @@ func runNodeRouterHTTPSProbe(ctx context.Context, request nodeRouterHTTPSRequest
 	if err := nodeRouterAssignedSource(probeCtx, request, options); err != nil {
 		return nodeRouterHTTPSResult{}, err
 	}
-	result := nodeRouterHTTPSResult{Origin: nodeRouterHTTPSOrigin, Interface: request.Interface, IfIndex: request.IfIndex, StartedAt: time.Now().UTC()}
+	result := nodeRouterHTTPSResult{Origin: nodeRouterHTTPSOrigin, ServiceID: request.ServiceID,
+		ProbeID: request.Predicate.probe.ID, PredicateHash: request.Predicate.digest(),
+		Interface: request.Interface, IfIndex: request.IfIndex, StartedAt: time.Now().UTC()}
 	var mu sync.Mutex
 	var actualSource, actualDestination netip.AddrPort
 	var socket net.Conn
@@ -233,7 +243,7 @@ func runNodeRouterHTTPSProbe(ctx context.Context, request nodeRouterHTTPSRequest
 	}
 	defer response.Body.Close()
 	result.HTTPStatus = response.StatusCode
-	body, err := strictServiceResponse(request.URL, response)
+	body, err := request.Predicate.evaluateResponse(probeCtx, response)
 	defer clear(body)
 	result.FinishedAt = time.Now().UTC()
 	if probeCtx.Err() != nil {
