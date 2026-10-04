@@ -571,6 +571,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
 	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
+	a.registerWireGuardProfileRoutes(mux)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
 	mux.HandleFunc("/api/v1/warp/", a.warpAction)
 	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)

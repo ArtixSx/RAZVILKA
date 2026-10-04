@@ -52,6 +52,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 	"github.com/ArtixSx/razvilka/internal/usquediag"
 	"github.com/ArtixSx/razvilka/internal/warp"
+	"github.com/ArtixSx/razvilka/internal/wireguardprofile"
 )
 
 //go:embed web/*
@@ -920,6 +921,10 @@ func writeCommandJSON(value any) int {
 
 func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*dataplane.Manager, error) {
 	manager := dataplane.New(stateRoot)
+	wireGuardAdapter := dataplane.NewWireGuardAdapter(configs, stateRoot)
+	// One explicit startup Store is shared by the catalog and runtime owner.
+	// Construction is read-only; HTTP never discovers or relocates this path.
+	wireGuardAdapter.Profiles = wireguardprofile.New(filepath.Join(stateRoot, "profiles", "wireguard"))
 	nfqws2Adapter := dataplane.NewNFQWS2Adapter()
 	nfqws2Adapter.Configs = configs
 	if err := manager.Register(nfqws2Adapter); err != nil {
@@ -928,7 +933,7 @@ func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*data
 	for _, adapter := range []dataplane.Adapter{
 		dataplane.NewWARPWireGuardAdapter(configs, stateRoot),
 		dataplane.NewAmneziaWGAdapter(configs, stateRoot),
-		dataplane.NewWireGuardAdapter(configs, stateRoot),
+		wireGuardAdapter,
 	} {
 		if err := manager.Register(adapter); err != nil {
 			return nil, fmt.Errorf("register %s dataplane adapter: %w", adapter.ID(), err)
