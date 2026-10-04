@@ -6,7 +6,7 @@ import (
 
 func TestFileCommandReceiptRequiresCoherentKernelEvidence(t *testing.T) {
 	p := fileProcess{Boot: "01234567-89ab-cdef-0123-456789abcdef", PID: 20, Start: "123", ExecutableSHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Inode: 5}
-	r := fileCommandReceipt{Schema: SelfUpdateReadVersion, ID: "0123456789abcdef0123456789abcdef", Command: "quiesce-old-runtime", State: "reaped", Parent: p, Supervisor: p, DirectPID: 22, Reaped: 2, WaitECHILD: true}
+	r := fileCommandReceipt{Schema: selfUpdateProtocolSchema, ID: "0123456789abcdef0123456789abcdef", Command: "quiesce-old-runtime", State: "reaped", Parent: p, Supervisor: p, DirectPID: 22, Reaped: 2, WaitECHILD: true}
 	if !validFileCommandReceipt(r) {
 		t.Fatal("coherent completed receipt refused")
 	}

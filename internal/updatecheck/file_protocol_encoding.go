@@ -11,7 +11,8 @@ import (
 )
 
 // Reader version is a format capability, not production installer readiness.
-const SelfUpdateReadVersion = 2
+const SelfUpdateReadVersion = 3
+const selfUpdateProtocolSchema = 2
 
 var ErrFileProtocol = errors.New("self update file/helper protocol requires matching trusted evidence")
 

@@ -89,6 +89,11 @@ func runInstallerHelperWithAdapter(id string, run func(context.Context, string) 
 	if fresh.Job.State == "rolled-back" && stopErr == nil {
 		return 3
 	}
+	// Preserve this distinct data-only outcome; it can never report live
+	// success, and its retained file receipt must independently verify.
+	if fresh.Job.State == stoppedRollbackState && a.Inspect(ctx, id) == nil {
+		return 3
+	}
 	fresh.Job.State = "requires-review"
 	fresh.Job.Stage = "file-protocol"
 	fresh.Job.Code = "file-protocol-needs-review"

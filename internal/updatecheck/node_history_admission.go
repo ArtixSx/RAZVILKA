@@ -124,7 +124,7 @@ func (a *NodeHistoryAdmission) controllerImages(ctx context.Context) ([]selfupda
 			return nil, ErrNodeHistoryAdmission
 		}
 		var record updateRecord
-		if decodeFileProtocol(data, &record) != nil || record.Owner != updaterOwner || !jobIDPattern.MatchString(record.Job.ID) || (record.Job.State != "completed" && record.Job.State != "rolled-back") {
+		if decodeFileProtocol(data, &record) != nil || record.Owner != updaterOwner || !jobIDPattern.MatchString(record.Job.ID) || !terminalHelperState(record.Job.State) {
 			return nil, ErrNodeHistoryAdmission
 		}
 		helperPresent = true

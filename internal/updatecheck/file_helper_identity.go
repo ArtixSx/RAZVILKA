@@ -30,7 +30,7 @@ func sealFileHelperIdentity(a *SelfUpdateFileAdapter, id string, review fileRevi
 		return err
 	}
 	defer root.Close()
-	data, err := json.Marshal(fileHelperIdentity{SelfUpdateReadVersion, id, process, oldPanel})
+	data, err := json.Marshal(fileHelperIdentity{selfUpdateProtocolSchema, id, process, oldPanel})
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (a *SelfUpdateFileAdapter) helperIdentity(id string, review fileReview) (fi
 	if err != nil {
 		return identity, err
 	}
-	if decodeFileProtocol(data, &identity) != nil || identity.Schema != SelfUpdateReadVersion || identity.ID != id || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != review.OldExecutableSHA256 || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot {
+	if decodeFileProtocol(data, &identity) != nil || identity.Schema != selfUpdateProtocolSchema || identity.ID != id || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != review.OldExecutableSHA256 || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot {
 		return identity, ErrFileProtocol
 	}
 	record, err := readAdapterRecord(a.directory, id)

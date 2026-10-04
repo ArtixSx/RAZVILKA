@@ -72,7 +72,7 @@ func readFileCommand(root *ownedfs.Root, id, command string) (fileCommandReceipt
 	if err != nil {
 		return receipt, err
 	}
-	if decodeFileProtocol(data, &receipt) != nil || receipt.Schema != SelfUpdateReadVersion || receipt.ID != id || receipt.Command != command {
+	if decodeFileProtocol(data, &receipt) != nil || receipt.Schema != selfUpdateProtocolSchema || receipt.ID != id || receipt.Command != command {
 		return receipt, ErrFileProtocol
 	}
 	if !validFileCommandReceipt(receipt) {
@@ -82,7 +82,7 @@ func readFileCommand(root *ownedfs.Root, id, command string) (fileCommandReceipt
 }
 
 func validFileCommandReceipt(r fileCommandReceipt) bool {
-	if r.Schema != SelfUpdateReadVersion || !jobIDPattern.MatchString(r.ID) || !validFileCommand(r.Command) || !validFileProcess(r.Parent) || r.Reaped < 0 || r.ExitCode < 0 || r.ExitCode > 255 {
+	if r.Schema != selfUpdateProtocolSchema || !jobIDPattern.MatchString(r.ID) || !validFileCommand(r.Command) || !validFileProcess(r.Parent) || r.Reaped < 0 || r.ExitCode < 0 || r.ExitCode > 255 {
 		return false
 	}
 	zero := fileProcess{}

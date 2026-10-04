@@ -57,6 +57,7 @@ type fileReview struct {
 	NewVersion              string                   `json:"new_version"`
 	ReleaseID               int64                    `json:"release_id"`
 	Files                   []selfupdatejournal.File `json:"files"`
+	JournalReaders          *journalReaderProof      `json:"journal_readers,omitempty"`
 }
 
 // Concrete neutral provider: this package does not import app. Production
@@ -72,6 +73,8 @@ type SelfUpdateFileAdapter struct {
 	stopCheck       SelfUpdateStopCheck
 	admission       SelfUpdateEffectAdmission
 	runtimeInactive SelfUpdateRuntimeObservation
+	// Private process observer override is used only by isolated model tests.
+	processInactive func(context.Context, fileProcess) error
 }
 
 func NewSelfUpdateFileAdapterWithAuthority(stop SelfUpdateStopCheck, admission SelfUpdateEffectAdmission, runtime ...SelfUpdateRuntimeObservation) *SelfUpdateFileAdapter {
@@ -112,7 +115,7 @@ func readAdapterRecord(directory, id string) (updateRecord, error) {
 		return record, ErrFileProtocol
 	}
 	switch record.Job.State {
-	case "ready", "installing", "restarting", "requires-review", "completed", "rolled-back":
+	case "ready", "installing", "restarting", "requires-review", "completed", "rolled-back", stoppedRollbackState:
 	default:
 		return record, ErrFileProtocol
 	}
@@ -162,11 +165,11 @@ func (a *SelfUpdateFileAdapter) loadBoundReview(ctx context.Context, id string, 
 		return record, review, err
 	}
 	defer root.Close()
-	data, err := root.ReadLimited("file-review.json", 16<<10)
+	data, err := root.ReadLimited("file-review.json", 256<<10)
 	if err != nil || digestBytes(data) != record.FileReviewSHA256 || decodeFileProtocol(data, &review) != nil {
 		return record, review, ErrFileProtocol
 	}
-	if review.Schema != SelfUpdateReadVersion || review.ID != id || !jobIDPattern.MatchString(review.AuthorityInstallationID) || review.AuthoritySequence == 0 || review.Revision != record.Job.ConfigRevision || review.ReleaseID != record.Job.Release.ID || review.OldVersion != record.CurrentVersion || review.NewVersion != record.Job.Release.Version || review.OldExecutableSHA256 != record.ExecutableHash || !validDigest("sha256:"+review.OldExecutableSHA256) || !validDigest("sha256:"+review.OldInitSHA256) || !validDigest("sha256:"+review.OldConfigSHA256) || !validDigest("sha256:"+review.MigratedConfigSHA256) {
+	if review.Schema != selfUpdateProtocolSchema || review.ID != id || !jobIDPattern.MatchString(review.AuthorityInstallationID) || review.AuthoritySequence == 0 || review.Revision != record.Job.ConfigRevision || review.ReleaseID != record.Job.Release.ID || review.OldVersion != record.CurrentVersion || review.NewVersion != record.Job.Release.Version || review.OldExecutableSHA256 != record.ExecutableHash || !validDigest("sha256:"+review.OldExecutableSHA256) || !validDigest("sha256:"+review.OldInitSHA256) || !validDigest("sha256:"+review.OldConfigSHA256) || !validDigest("sha256:"+review.MigratedConfigSHA256) {
 		return record, review, ErrFileProtocol
 	}
 	if verifyArtifacts {
@@ -191,7 +194,7 @@ func (a *SelfUpdateFileAdapter) loadBoundReview(ctx context.Context, id string, 
 }
 
 func archiveHelperRecord(directory string, record updateRecord) error {
-	if !jobIDPattern.MatchString(record.Job.ID) || !validDigest("sha256:"+record.FileReviewSHA256) || (record.Job.State != "completed" && record.Job.State != "rolled-back") {
+	if !jobIDPattern.MatchString(record.Job.ID) || !validDigest("sha256:"+record.FileReviewSHA256) || !terminalHelperState(record.Job.State) {
 		return ErrFileProtocol
 	}
 	root, err := ownedfs.Open(filepath.Join(directory, record.Job.ID))
@@ -231,7 +234,7 @@ func readRetainedHelperRecord(directory, id string) (updateRecord, error) {
 	if err != nil {
 		return record, err
 	}
-	if decodeFileProtocol(data, &record) != nil || record.Owner != updaterOwner || record.Job.ID != id || record.Job.Release == nil || !validDigest("sha256:"+record.FileReviewSHA256) || (record.Job.State != "completed" && record.Job.State != "rolled-back") {
+	if decodeFileProtocol(data, &record) != nil || record.Owner != updaterOwner || record.Job.ID != id || record.Job.Release == nil || !validDigest("sha256:"+record.FileReviewSHA256) || !terminalHelperState(record.Job.State) {
 		return record, ErrFileProtocol
 	}
 	return record, nil
@@ -254,7 +257,17 @@ func (a *SelfUpdateFileAdapter) Inspect(ctx context.Context, id string) error {
 	if err != nil || !present || receipt.ID != id || receipt.Pending() {
 		return errors.Join(ErrFileProtocol, err)
 	}
-	if receipt.Rollback != (record.Job.State == "rolled-back") || receipt.Rollback && receipt.Phase != "rolled-back" || !receipt.Rollback && receipt.Phase != "accepted" {
+	wanted := "accepted"
+	if record.Job.State == "rolled-back" {
+		wanted = "rolled-back"
+	}
+	if record.Job.State == stoppedRollbackState {
+		wanted = stoppedRollbackState
+	}
+	if receipt.Rollback != (record.Job.State != "completed") || receipt.Phase != wanted {
+		return ErrFileProtocol
+	}
+	if wanted == stoppedRollbackState && (receipt.Stopped == nil || receipt.Stopped.InstallationID != review.AuthorityInstallationID || receipt.Stopped.PreStopSequence != review.AuthoritySequence || receipt.Stopped.Revision != review.Revision || !validJournalReaderProof(review.JournalReaders)) {
 		return ErrFileProtocol
 	}
 	if err := store.VerifyTerminalArtifacts(ctx, id, receipt.Rollback); err != nil {
@@ -291,7 +304,7 @@ func reviewedFileList(jobPath string, release Release, hashes map[string]string,
 	return files
 }
 
-func stageFileReview(ctx context.Context, directory string, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error)) (string, error) {
+func stageFileReview(ctx context.Context, directory string, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), admission SelfUpdateEffectAdmission) (string, error) {
 	if record.Job.Release == nil || !helperConfigMatches(record) {
 		return "", ErrReviewChanged
 	}
@@ -360,7 +373,7 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	if json.Unmarshal(staged, &cfg) != nil || cfg.Revision != record.Job.ConfigRevision || cfg.SafeMode || cfg.ServiceControl.Stopped {
 		return "", ErrReviewChanged
 	}
-	review := fileReview{Schema: SelfUpdateReadVersion, ID: record.Job.ID, Revision: record.Job.ConfigRevision, OldConfigSHA256: digestBytes(old), MigratedConfigSHA256: digestBytes(staged), OldExecutableSHA256: record.ExecutableHash, OldVersion: record.CurrentVersion, NewVersion: record.Job.Release.Version, ReleaseID: record.Job.Release.ID}
+	review := fileReview{Schema: selfUpdateProtocolSchema, ID: record.Job.ID, Revision: record.Job.ConfigRevision, OldConfigSHA256: digestBytes(old), MigratedConfigSHA256: digestBytes(staged), OldExecutableSHA256: record.ExecutableHash, OldVersion: record.CurrentVersion, NewVersion: record.Job.Release.Version, ReleaseID: record.Job.Release.ID}
 	review.AuthoritySequence = authority.Sequence
 	review.AuthorityInstallationID = authority.InstallationID
 	review.OldInitSHA256, err = hashRegularFile("/opt/etc/init.d/S99razvilka", 256<<10)
@@ -371,9 +384,18 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 		return "", err
 	}
 	review.Files = reviewedFileList(jobPath, *record.Job.Release, record.Files, review.MigratedConfigSHA256)
+	readerAdapter := NewSelfUpdateFileAdapterWithAuthority(nil, admission)
+	readerAdapter.directory = directory
+	review.JournalReaders, err = readerAdapter.sealJournalReaders(ctx, review, authorityReview)
+	if err != nil {
+		return "", err
+	}
 	data, err := json.Marshal(review)
 	if err != nil {
 		return "", err
+	}
+	if len(data) > 256<<10 {
+		return "", ErrFileProtocol
 	}
 	file, err := root.OpenFile("file-review.json", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
@@ -479,7 +501,7 @@ func (a *SelfUpdateFileAdapter) EffectAdmission(ctx context.Context, id, action,
 }
 
 func validFileEffectAction(effect, action string) bool {
-	if effect == installerHelperEffect {
+	if effect == installerHelperEffect || effect == journalReaderProbeEffect {
 		return action == "start/live"
 	}
 	for _, prefix := range []string{"command-worker-", "command-child-"} {
@@ -500,7 +522,7 @@ func validFileEffectAction(effect, action string) bool {
 }
 
 func validFileEffect(effect string) bool {
-	if effect == installerHelperEffect {
+	if effect == installerHelperEffect || effect == journalReaderProbeEffect {
 		return true
 	}
 	if strings.HasPrefix(effect, "rollback-private-") {
@@ -650,7 +672,7 @@ func (a *SelfUpdateFileAdapter) Finish(ctx context.Context, id string, rollback 
 	if fresh.Job.State == wanted {
 		return nil
 	}
-	if fresh.Job.State == "completed" || fresh.Job.State == "rolled-back" {
+	if terminalHelperState(fresh.Job.State) {
 		return ErrFileProtocol
 	}
 	fresh.Job.State = wanted
