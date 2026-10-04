@@ -35,3 +35,14 @@ permission fence. Initial targeted tests passed config 0.334s/app 2.627s; full
 config/routes passed 2.321s/0.193s; related app subset with explicit Windows
 default-journal fixtures passed 13.061s. Vet/diff, all-package test compilation
 and Linux ARM64 main build RC0. No native WG/LAN readiness is claimed.
+
+Root review held the first checkpoint because existing service-scope helpers
+copied route fields separately from the new binding. The correction moves and
+discards profile revision together with route/mode, includes revision-only
+changes in service dirty checks, and preserves the routing binding in device
+scope. Existing node/autonomy routing commits and the App's node hypothetical
+clear obsolete WG metadata when replacing its executor. Guarded undo restores
+the full prior state. Regressions cover named-to-direct, direct-to-named,
+same-ID revision changes, different named IDs, every scoped apply/discard,
+device-scope separation and both node engines/autonomy with exact rollback.
+The strict save validation remains enabled.

@@ -375,7 +375,7 @@ func draftScopeDirty(cfg Config, scope DraftScope) bool {
 		applied := normalizeState(baseline[id])
 		switch scope {
 		case DraftScopeServices:
-			if desired.Enabled != applied.Enabled || desired.Route != applied.Route {
+			if desired.Enabled != applied.Enabled || desired.Route != applied.Route || desired.WireGuardProfileRevision != applied.WireGuardProfileRevision {
 				return true
 			}
 		case DraftScopeDevices:
@@ -401,6 +401,7 @@ func applyDraftScope(cfg *Config, scope DraftScope) {
 			applied.Enabled = desired.Enabled
 			applied.Route = desired.Route
 			applied.Mode = desired.Route
+			applied.WireGuardProfileRevision = desired.WireGuardProfileRevision
 			applied.Sources = AppliedSources(*cfg, id)
 		case DraftScopeDevices:
 			applied.Sources = append([]string(nil), desired.Sources...)
@@ -425,6 +426,7 @@ func discardDraftScope(cfg *Config, scope DraftScope) {
 			desired.Enabled = applied.Enabled
 			desired.Route = applied.Route
 			desired.Mode = applied.Route
+			desired.WireGuardProfileRevision = applied.WireGuardProfileRevision
 		case DraftScopeDevices:
 			desired.Sources = append([]string(nil), applied.Sources...)
 		}
