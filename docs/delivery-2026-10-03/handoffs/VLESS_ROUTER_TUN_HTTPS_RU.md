@@ -1,0 +1,13 @@
+# Router-origin HTTPS через owned TUN — VLESS → CORE
+
+`proxy_node_router_http*.go` содержит private transport `probeNodeRouterHTTPS`, предназначенный для production NodeTUN verifier из research checkpoint `477d411`. Это один настоящий TCP4 HTTPS request с назначенного router TUN IPv4 source, public literal destination и исходного service URL. Результат имеет origin `router-owned-tun`; он не является LAN observation, egress witness или разрешением Commit.
+
+Linux transport проверяет up/nonloopback interface, exact source address и ifindex до запроса, непосредственно до и после `SO_BINDTODEVICE`, затем после service response. Socket binding требует успешного set и matching kernel get. Actual socket local source и remote destination:443 проверяются после connect. TLS использует исходные Host/SNI и обычную certificate verification; redirect, proxy environment, DNS dial, повторная попытка и alternate source отсутствуют.
+
+Общий бюджет 10 секунд, dial/TLS по 4 секунды, response headers 6 секунд и 16 KiB; `strictServiceResponse` проверяет semantic response и bounded 32 KiB sample. Cancellation закрывает socket и завершает pending dial перед возвратом. Non-Linux production возвращает unavailable. Private per-call options существуют только для local TLS/OS fixtures и не экспортируются.
+
+Перед вызовом и после него владелец verifier обязан проверить текущие runtime/config/manifest/control/network/generation identities, назначенный TunnelCIDR и exact TUN ifindex. CORE typed NodeTransitLease должен дать краткий exact source /32 + oif + pinned destination /32 selector в уже owned TUN table, общий allocator, central parser/readback, durable intent и recovery в существующем Manager journal. Caller проверяет backend remote-socket isolation и return path/rp_filter capability. Закрытие sockets и exact lease removal/absence обязаны завершиться до успешной проверки или Commit. Unknown cleanup удерживает transaction fence.
+
+Обычный Apply может получить RouterTUNService evidence после фактической native acceptance этой вертикали. LANFlowObserved/LANServiceObserved остаются unknown без настоящего LAN client flow и same-service witness. Exported LAN HTTPS helper из `76a3cd0` остаётся отдельной optional acceptance возможностью.
+
+Local TLS fixtures проверяют exact source/device/pin, set/get refusal, ifindex/address drift, invalid input before work, actual socket mismatch, original TLS hostname, semantic refusal, bounded body, proxy/redirect refusal, cancellation во время dial/TLS/body и non-Linux unavailable. Windows unit/vet и Linux compile/vet прошли у автора. Native kernel/TUN/network здесь не запускались; normal registration, typed lease/recovery и committed health consumer пока требуют CORE integration.

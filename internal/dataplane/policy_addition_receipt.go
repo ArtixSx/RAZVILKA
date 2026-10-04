@@ -35,6 +35,9 @@ type policyAdditionStep struct {
 	Add    []string `json:"add"`
 	Delete []string `json:"delete"`
 	State  string   `json:"state"`
+	// Schema 2 only. Omitting these fields preserves schema 1 bytes/checksums.
+	Tool  PolicyEffectTool `json:"tool,omitempty"`
+	Needs []int            `json:"needs,omitempty"`
 }
 type policyAdditionDocument struct {
 	Schema          int                  `json:"schema"`
@@ -46,6 +49,9 @@ type policyAdditionDocument struct {
 	PromotionTarget string               `json:"promotion_target,omitempty"`
 	Steps           []policyAdditionStep `json:"steps"`
 	Checksum        string               `json:"receipt_sha256,omitempty"`
+	// Schema 2 only: this is the trusted complete mixed plan, never argv authority.
+	Generation  string `json:"generation,omitempty"`
+	EffectsHash string `json:"effects_sha256,omitempty"`
 }
 
 // Status is non-secret metadata, not new permission to apply/restore a route.
@@ -133,6 +139,22 @@ func openPolicyAdditionSession(ctx context.Context, state PolicyState, path stri
 	if _, err := policyAdditionExpected(state); err != nil {
 		return nil, err
 	}
+	s, err := openPolicyAdditionRootSession(ctx, path, options)
+	if err != nil {
+		return nil, err
+	}
+	s.state = state
+	return s, nil
+}
+
+// Both receipt modes use the same anchored root, permanent lock and boot source.
+func openPolicyAdditionRootSession(ctx context.Context, path string, options policyAdditionOptions) (*policyAdditionSession, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return nil, ErrPolicyAdditionReceipt
+	}
 	// ownedfs deliberately rejects Stat("."): exported targets must be below
 	// the root. Check root permissions before its anchored, SameFile open.
 	info, err := os.Lstat(path)
@@ -151,7 +173,7 @@ func openPolicyAdditionSession(ctx context.Context, state PolicyState, path stri
 	if options.boot == nil {
 		options.boot = func() (string, error) { return (&ProxyTunnelAdapter{}).currentBootIdentity() }
 	}
-	return &policyAdditionSession{root: root, unlocked: unlock, path: path, state: state, options: options}, nil
+	return &policyAdditionSession{root: root, unlocked: unlock, path: path, options: options}, nil
 }
 
 func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), error) {
@@ -225,6 +247,28 @@ func (s *policyAdditionSession) save(ctx context.Context) error {
 	return ctx.Err()
 }
 func (s *policyAdditionSession) load(ctx context.Context) error {
+	if err := s.loadDocument(ctx); err != nil {
+		return err
+	}
+	wanted, err := policyAdditionExpected(s.state)
+	if err != nil {
+		return err
+	}
+	if s.doc.Schema != 1 || s.doc.Generation != "" || s.doc.EffectsHash != "" || s.doc.PolicyHash != policyAdditionHash(s.state) || len(s.doc.Steps) != len(wanted) {
+		return ErrPolicyAdditionReceipt
+	}
+	if err := s.validateIdentity(ctx); err != nil {
+		return err
+	}
+	for i, step := range s.doc.Steps {
+		if step.Tool != "" || len(step.Needs) != 0 || !reflect.DeepEqual(step.Add, wanted[i].Add) || !reflect.DeepEqual(step.Delete, wanted[i].Delete) || !validPolicyAdditionStepState(step.State) {
+			return ErrPolicyAdditionReceipt
+		}
+	}
+	return ctx.Err()
+}
+
+func (s *policyAdditionSession) loadDocument(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -249,11 +293,11 @@ func (s *policyAdditionSession) load(ctx context.Context) error {
 	if json.Compact(&compact, data) != nil || !bytes.Equal(compact.Bytes(), canonical) || s.doc.Checksum != policyAdditionChecksum(s.doc) {
 		return ErrPolicyAdditionReceipt
 	}
-	wanted, err := policyAdditionExpected(s.state)
-	if err != nil {
-		return err
-	}
-	if s.doc.Schema != 1 || len(s.doc.ID) != 32 || s.doc.PolicyHash != policyAdditionHash(s.state) || s.doc.RootHash != policyAdditionRootHash(s.path) || len(s.doc.Steps) != len(wanted) {
+	return ctx.Err()
+}
+
+func (s *policyAdditionSession) validateIdentity(ctx context.Context) error {
+	if len(s.doc.ID) != 32 || s.doc.RootHash != policyAdditionRootHash(s.path) {
 		return ErrPolicyAdditionReceipt
 	}
 	if _, err := hex.DecodeString(s.doc.ID); err != nil {
@@ -275,17 +319,15 @@ func (s *policyAdditionSession) load(ctx context.Context) error {
 	default:
 		return ErrPolicyAdditionReceipt
 	}
-	for i, step := range s.doc.Steps {
-		if !reflect.DeepEqual(step.Add, wanted[i].Add) || !reflect.DeepEqual(step.Delete, wanted[i].Delete) {
-			return ErrPolicyAdditionReceipt
-		}
-		switch step.State {
-		case "planned", "intent", "added", "cleanup-intent", "removed":
-		default:
-			return ErrPolicyAdditionReceipt
-		}
-	}
 	return ctx.Err()
+}
+
+func validPolicyAdditionStepState(state string) bool {
+	switch state {
+	case "planned", "intent", "added", "cleanup-intent", "removed":
+		return true
+	}
+	return false
 }
 
 func (s *policyAdditionSession) status() PolicyAdditionStatus {
@@ -645,11 +687,17 @@ func promotePolicyAddition(ctx context.Context, state PolicyState, source, desti
 		return err
 	}
 	defer d.close()
-	if err := s.load(ctx); err != nil {
+	return promotePolicyAdditionSessions(ctx, s, d, s.load, d.load)
+}
+
+// Both modes transfer exactly one cleanup grant through the same durability
+// boundaries. The supplied readers reconstruct the respective trusted plan.
+func promotePolicyAdditionSessions(ctx context.Context, s, d *policyAdditionSession, loadSource, loadDestination func(context.Context) error) error {
+	if err := loadSource(ctx); err != nil {
 		return err
 	}
-	if s.doc.Phase == "promoted" && s.doc.PromotionTarget == policyAdditionRootHash(destination) {
-		if err := d.load(ctx); err != nil {
+	if s.doc.Phase == "promoted" && s.doc.PromotionTarget == policyAdditionRootHash(d.path) {
+		if err := loadDestination(ctx); err != nil {
 			return err
 		}
 		if d.doc.ID == s.doc.ID && d.status().Complete {
@@ -660,10 +708,10 @@ func promotePolicyAddition(ctx context.Context, state PolicyState, source, desti
 	if !s.status().Complete {
 		return ErrPolicyAdditionUnknown
 	}
-	if err := d.load(ctx); !errors.Is(err, os.ErrNotExist) {
+	if err := loadDestination(ctx); !errors.Is(err, os.ErrNotExist) {
 		return ErrPolicyAdditionExists
 	}
-	s.doc.Phase, s.doc.PromotionTarget = "promotion-intent", policyAdditionRootHash(destination)
+	s.doc.Phase, s.doc.PromotionTarget = "promotion-intent", policyAdditionRootHash(d.path)
 	if err := s.save(ctx); err != nil {
 		return err
 	}
@@ -671,7 +719,7 @@ func promotePolicyAddition(ctx context.Context, state PolicyState, source, desti
 		return err
 	}
 	d.doc = s.doc
-	d.doc.Phase, d.doc.PromotionTarget, d.doc.RootHash = "active", "", policyAdditionRootHash(destination)
+	d.doc.Phase, d.doc.PromotionTarget, d.doc.RootHash = "active", "", policyAdditionRootHash(d.path)
 	if err := d.save(ctx); err != nil {
 		return err
 	}
