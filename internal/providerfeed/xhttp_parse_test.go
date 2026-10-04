@@ -3,9 +3,11 @@ package providerfeed
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 )
 
@@ -54,5 +56,45 @@ func TestXHTTPFeedUnsupportedIsRejectedBeforeAnyImportEvidence(t *testing.T) {
 		if b, err := parse(context.Background(), []byte(raw), "uri", 32); err == nil || b.accepted != 0 || len(b.materials) != 0 {
 			t.Fatal("unsupported feed entry became an accepted candidate")
 		}
+	}
+}
+
+func TestXHTTPFeedSyncPersistsQuarantinedCanonicalMaterialAndReaderFence(t *testing.T) {
+	ctx := context.Background()
+	m, store, path := testManager(t)
+	raw := strings.Replace(goodURI, "type=tcp", "type=xhttp&mode=packet-up&host=front.example&path=%2Ftunnel&extra=%7B%22headers%22%3A%7B%22Authorization%22%3A%22private-extra-token%22%7D%2C%22xPaddingBytes%22%3A%2264-128%22%7D", 1)
+	setResponse(m, 200, raw, nil)
+	result, err := m.Sync(ctx, Request{URL: "https://feed.example.org/private-subscription"})
+	if err != nil || result.Imported != 1 || len(result.NodeIDs) != 1 {
+		t.Fatal("feed canonical material did not reach NodeStore", err)
+	}
+	id := result.NodeIDs[0]
+	snap, err := store.Snapshot(ctx, testTime)
+	if err != nil || len(snap.Nodes) != 1 || snap.Nodes[0].Transport != "xhttp" || snap.Nodes[0].State != "quarantined" || snap.Nodes[0].Trust != "untrusted" || snap.Nodes[0].Health.State != "not_checked" {
+		t.Fatal("feed gained health/route authority or lost transport", err)
+	}
+	if version, err := store.RequiredHistoryReadVersion(ctx); err != nil || version != 3 {
+		t.Fatal("unchecked feed material permits reader2", version, err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err = nodestore.Open(filepath.Dir(path))
+	if err != nil {
+		t.Fatal("XHTTP feed material cannot reopen", err)
+	}
+	defer store.Close()
+	if err := store.WithSecret(ctx, id, func(material []byte) error {
+		p, err := providerprofile.VLESSProfileFromJSON(material)
+		if err != nil || p.Transport != "xhttp" || p.XHTTP["path"] != "/tunnel" || !strings.Contains(string(material), "private-extra-token") {
+			t.Fatal("persisted feed lost required XHTTP settings", err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	public, _ := json.Marshal(snap)
+	if strings.Contains(string(public), "private-extra-token") || strings.Contains(string(public), "front.example") {
+		t.Fatal("public feed snapshot leaked private transport fields")
 	}
 }

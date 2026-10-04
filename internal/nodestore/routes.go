@@ -229,6 +229,9 @@ func (s *Store) materializeEngine(ctx context.Context, engine string, bindings [
 		if json.Unmarshal(secrets[node.SecretRef], &outbound) != nil || len(outbound) == 0 {
 			return RouteMaterial{}, ErrStore
 		}
+		if engine == "sing-box" && !providerprofile.SingBoxSupportsOutbound(outbound) {
+			return RouteMaterial{}, ErrRouteProof
+		}
 		collectPrivateEndpointHosts(outbound, endpointSet)
 		if engine == "xray" {
 			var err error
