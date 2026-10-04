@@ -109,6 +109,15 @@ const fileReading=deferred();f.$('#wgProfileFile').files=[{size:20,text:()=>file
 const fileRead=f.$('#wgProfileFile').change();f.ctx.wgProfilesClearForm();fileReading.resolve('late synthetic private key');await fileRead;
 assert.equal(f.$('#wgProfileContent').value,'','late file read restored a cleared private form');
 console.log('PASS named WG CRUD: typed metadata, exact CAS payloads, references, unknown receipts, single-flight and auth/navigation fences');
+f=wgFixture();await ready(f);const initialCatalogCalls=f.calls.length;
+f.state.currentView='services';f.listeners.get('razvilka:view-change')({detail:'services'});f.ctx.renderWireGuardProfiles();
+f.state.currentView='engineconfig';f.ctx.renderWireGuardProfiles();
+assert.equal(f.model.loaded,true);assert.equal(f.model.needsRead,true);assert.equal(f.calls.length,initialCatalogCalls,'return to a retained catalog silently reread it');
+assert.match(f.$('#wgProfileList').innerHTML,/data-wg-delete="home" disabled/);
+assert.equal(f.$('#wgProfilesRefresh').disabled,false,'explicit catalog read unavailable on return');
+await f.ctx.refreshWireGuardProfiles();assert.equal(f.calls.length,initialCatalogCalls+1);assert.equal(f.model.needsRead,false);
+assert.doesNotMatch(f.$('#wgProfileList').innerHTML,/data-wg-delete="home" disabled/);
+console.log('PASS retained WG catalog return requires explicit fresh GET before deletion');
 const {realWGSettings,realWGDecision,realWGServiceBodyAllowed}=await import('./test-wireguard-profile-http-browser.mjs');
 const realWGEnv={RAZVILKA_WG_UI_URL:'http://127.0.0.1:18851',RAZVILKA_WG_UI_FIXTURE:'empty-private',RAZVILKA_WG_UI_CHROME:'/installed/chrome',RAZVILKA_WG_UI_SESSION:'/private/session.json'};
 assert.equal(realWGSettings(realWGEnv).origin,'http://127.0.0.1:18851');

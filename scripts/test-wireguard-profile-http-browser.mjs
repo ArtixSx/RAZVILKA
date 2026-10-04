@@ -184,16 +184,36 @@ export async function runRealWG(config,{serviceDraft=false}={}) {
    const stored=(await readJSON('/api/v1/services')).find(service=>service.id===original.id);assert.equal(stored.enabled,false);assert.equal(stored.route,routeID);assert.equal(stored.wireguard_profile_revision,nextRevision);assert.deepEqual(stored.sources,['192.0.2.40/32']);assert.deepEqual(stored.applied_state,original.applied_state);
    stage='service-scope-explicit-reread';await reread();assert.deepEqual(await page.evaluate(serviceID=>state.services.find(service=>service.id===serviceID).sources,original.id),['192.0.2.40/32']);
    report.steps.push({name:'real scope PUT committed200; delivery aborted; unknown fence; explicit GETs without replay',status:'passed'});
-   stage='service-private-fixture-cleanup';await verifiedPut(servicePath,{enabled:false,route:original.route,sources:original.sources||[]},'fixture-cleanup');
+   const cleanupDiagnostics=report.cleanup_diagnostics={intent_restored:false,engines_view:false,disclosure_open:false,workspace_visible:false,catalog_needs_read:null,catalog_read_completed:false,profile_revision_matches:false,profile_unreferenced:false,delete_enabled:false,delete_confirmed:false,collection_empty:false,profile_absent:false,network_unchanged:false};
+   stage='service-cleanup-restore-intent';await verifiedPut(servicePath,{enabled:false,route:original.route,sources:original.sources||[]},'fixture-cleanup');
    assert.deepEqual(intent((await readJSON('/api/v1/services')).find(service=>service.id===original.id)),intent(original));
-   await page.locator('.nav[data-view="engines"]').click();const disclosure=page.locator('[data-engine-disclosure="wireguard-flow"]');if(!await disclosure.evaluate(element=>element.open))await disclosure.locator('summary').click();
+   cleanupDiagnostics.intent_restored=true;
+   stage='service-cleanup-open-engines';await page.locator('.nav[data-view="engines"]').click();await page.waitForFunction(()=>state.currentView==='engines');cleanupDiagnostics.engines_view=true;
+   stage='service-cleanup-open-disclosure';const disclosure=page.locator('[data-engine-disclosure="wireguard-flow"]');if(!await disclosure.evaluate(element=>element.open))await disclosure.locator('summary').click();cleanupDiagnostics.disclosure_open=true;
+   stage='service-cleanup-open-workspace';
    await page.locator('[data-engine-step="profile"][data-card-engine="wireguard"]').click();
-   await page.waitForFunction(()=>state.currentView==='engineconfig'&&state.selectedEngine==='wireguard'&&wgProfiles.loaded&&!wgProfiles.read&&!wgProfiles.needsRead);
-   publicProfile(await readJSON(target),id);await page.locator('[data-wg-delete="'+id+'"]').click();await page.locator('#actionDialogConfirm').click();
+   await page.waitForFunction(()=>state.currentView==='engineconfig'&&state.selectedEngine==='wireguard'&&!wgProfiles.read&&!wgProfiles.mutation);await page.locator('#wgProfilesWorkspace').waitFor({state:'visible'});cleanupDiagnostics.workspace_visible=true;
+   cleanupDiagnostics.catalog_needs_read=await page.evaluate(()=>wgProfiles.needsRead);
+   // Leaving a loaded catalog deliberately fences its old metadata. Re-enter
+   // the real workspace, then explicitly GET before asking for deletion.
+   stage='service-cleanup-reread-catalog';const catalogReads=()=>report.requests.filter(record=>record.source==='browser'&&record.method==='GET'&&record.path===path).length;
+   const beforeCatalogRead=catalogReads();await page.locator('#wgProfilesRefresh').click();
+   await page.waitForFunction(()=>wgProfiles.loaded&&!wgProfiles.read&&!wgProfiles.mutation&&!wgProfiles.needsRead);assert.equal(catalogReads(),beforeCatalogRead+1);cleanupDiagnostics.catalog_read_completed=true;
+   stage='service-cleanup-verify-profile';assert.equal(publicProfile(await readJSON(target),id),nextRevision);
+   const profileMatches=await page.evaluate(({id,revision})=>{const view=wgProfiles.profiles.find(view=>view.profile.id===id);return {revision:!!view&&view.profile.revision===revision,unreferenced:!!view&&view.references.length===0};},{id,revision:nextRevision});
+   cleanupDiagnostics.profile_revision_matches=profileMatches.revision;cleanupDiagnostics.profile_unreferenced=profileMatches.unreferenced;assert.equal(profileMatches.revision,true);assert.equal(profileMatches.unreferenced,true);
+   const deleteButton=page.locator('[data-wg-delete="'+id+'"]');cleanupDiagnostics.delete_enabled=await deleteButton.isEnabled();assert.equal(cleanupDiagnostics.delete_enabled,true);
+   stage='service-cleanup-request-delete';await deleteButton.click();
+   stage='service-cleanup-confirm-delete';await page.locator('#actionDialogConfirm').waitFor({state:'visible'});await page.locator('#actionDialogConfirm').click();
+   stage='service-cleanup-wait-delete';
    await page.waitForFunction(id=>!wgProfiles.mutation&&!wgProfiles.read&&!wgProfiles.needsRead&&!wgProfiles.profiles.some(view=>view.profile.id===id),id);
-   assert.deepEqual((await readJSON(path)).profiles,[]);const absent=await context.request.get(config.origin+target);report.requests.push({method:'GET',path:target,status:absent.status(),source:'verification'});assert.equal(absent.status(),404);
+   const deleted=report.requests.filter(record=>record.source==='browser'&&record.method==='DELETE'&&record.path===target);assert.equal(deleted.length,1);assert.equal(deleted[0].status,200);cleanupDiagnostics.delete_confirmed=true;
+   stage='service-cleanup-verify-empty';assert.deepEqual((await readJSON(path)).profiles,[]);cleanupDiagnostics.collection_empty=true;
+   const absent=await context.request.get(config.origin+target);report.requests.push({method:'GET',path:target,status:absent.status(),source:'verification'});assert.equal(absent.status(),404);cleanupDiagnostics.profile_absent=true;
+   stage='service-cleanup-verify-network';
    const finalStatus=await readJSON('/api/v1/status'),finalServices=await readJSON('/api/v1/services');assert.equal(finalStatus.safe_mode,true);assert.equal(finalStatus.live_active,false);disabled(finalServices);
    assert.deepEqual(finalServices.map(intent),servicesBefore.map(intent));assert.equal(puts().length,4);assert.equal(report.browser_errors,0);guard();
+   cleanupDiagnostics.network_unchanged=true;
    report.cleanup_required=false;report.steps.push({name:'original disabled intent restored; profile deleted; empty404; applied/network unchanged',status:'passed'});
    return report;
   }
