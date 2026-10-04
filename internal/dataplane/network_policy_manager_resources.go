@@ -48,7 +48,7 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 	}
 	seen := map[string]bool{}
 	for _, resource := range execution.Resources {
-		if len(resource.ID) != len("nt-")+16 || !strings.HasPrefix(resource.ID, "nt-") || strings.Trim(strings.TrimPrefix(resource.ID, "nt-"), "0123456789abcdef") != "" || seen[resource.ID] {
+		if (len(resource.ID) != len("nt-")+16 && len(resource.ID) != len("nt-")+32) || !strings.HasPrefix(resource.ID, "nt-") || strings.Trim(strings.TrimPrefix(resource.ID, "nt-"), "0123456789abcdef") != "" || seen[resource.ID] {
 			return ErrExecutionJournal
 		}
 		seen[resource.ID] = true
