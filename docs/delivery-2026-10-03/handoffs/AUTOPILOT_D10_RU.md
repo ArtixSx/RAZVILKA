@@ -35,3 +35,13 @@ Go `C:/Projects/RAZVILKA/tools/go/bin/go.exe`1.26.5; `GOMAXPROCS=2`, `GOFLAGS=-p
 Linux/race/full-gate/native proxy/LAN/router restart/retained old binary/live feed и HIL/soak здесь не запускались. Не изменялись VM/router/accounts/release. D10 production/HIL readiness не объявляется. Для приёмки Root: final checkpoint merge, Linux `go test ./internal/app ./internal/autonomy ./internal/nodestore ./internal/providerfeed -count=1`, адресный race и existing stable304 test; native/live окно только Root. До изменения Xray ranking/actual config Xray consumer — согласовать с владельцами, capability gates не снимать.
 
 Commit SHA и точный diff передаются сообщением Root после commit этого отчёта и кода.
+
+## Follow-up: non-divisible tail / ring cursor
+
+CORE read-only review выявил P2 в `bb489b6`: библиотека использует ring cursor и bounded Examined=len(Ordered). При full ordering3, persisted Cursor2, budget2 после unsupported последнего она могла ещё проверить entry0 и уменьшить durable cursor с3 до1. Exhausted терялся, refill задерживался. Аналогично full ordering32/cursor31/budget2; прежние budgets1/2 и4/32 этого не показывали.
+
+App теперь передаёт библиотеке только `Ordered[absoluteCursor:]`, локальный cursor0. PersistCursor переводит локальное смещение назад в абсолютное; локальный wrap0 обозначает конец suffix. Library Examined bound ограничивает оставшийся хвост и не допускает проверку consumed-prefix. NodeStore/library API, guards, journal schema и rollback continuation не менялись.
+
+Новый `TestD10RestartTailDoesNotWrapIntoConsumedPrefix`: реальные app/store/journal, deterministic persisted tail для3 и32 узлов при budget2; reopen → только один последний unsupported Check → monotonic cursor3/32 + exhausted; повторный reopen не проверяет prefix; approved passive page append → только новый usable Check → Apply + cursor4/33. OS/checker fixtures контролируемые, внешний fetch/native/HIL не выполнялись.
+
+Адресный `go test ./internal/app -run 'TestD10RestartTail|TestD10Cold|TestD10Cursor|TestAutonomyCandidate' -count=1` — RC0,10.821s (Windows Go1.26.5/тот же env, auto-reviewed execution вне sandbox). Связанный `go test ./internal/app -run 'TestD10(Unsupported|Worker32)|TestAutonomyReserves(CandidateBudget|Definite)' -count=1` — RC0,2.561s. Final `go vet ./internal/app ./internal/autonomy` и `git diff --check` — RC0. Follow-up SHA передаётся Root после commit. Эта порция исправляет App ring/suffix boundary; общий library ring contract сохранён.

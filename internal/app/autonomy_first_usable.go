@@ -134,10 +134,15 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	if r.Search.Exhausted {
 		return finish("searching", "Доступный снимок проверен. Ожидаем разрешённое пополнение или повторную проверку.")
 	}
+	// The library cursor is a ring. Present only the remaining suffix, so its
+	// per-call examined bound cannot wrap into an already consumed prefix when
+	// the last round has fewer entries than the checker budget.
+	offset := r.Search.Cursor
+	remaining := r.Search.Ordered[offset:]
 	checkState, checkMessage := "", ""
 	result, err := a.Nodes.SearchFirstUsable(ctx, nodestore.SearchRequest{
-		Engine: engine, ServiceID: s.ID, NetworkProfile: profile, Ordered: r.Search.Ordered,
-		Current: current, Cursor: r.Search.Cursor, Limit: p.CandidatesPerRound,
+		Engine: engine, ServiceID: s.ID, NetworkProfile: profile, Ordered: remaining,
+		Current: current, Cursor: 0, Limit: p.CandidatesPerRound,
 		AllowedSources: p.SourceIDs, Protocols: p.Protocols,
 	}, nodestore.SearchHooks{
 		Guard: guard,
@@ -167,10 +172,10 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		},
 		PersistCursor: func(c context.Context, next int) error {
 			if next == 0 {
-				next = len(r.Search.Ordered)
+				next = len(remaining)
 			}
-			r.Search.Cursor = next
-			r.Search.Exhausted = next == len(r.Search.Ordered)
+			r.Search.Cursor = offset + next
+			r.Search.Exhausted = r.Search.Cursor == len(r.Search.Ordered)
 			if r.Search.Exhausted {
 				r.Search.RetryAt = time.Now().Add(time.Duration(p.ReserveSeconds) * time.Second)
 			}

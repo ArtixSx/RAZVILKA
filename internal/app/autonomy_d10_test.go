@@ -359,6 +359,81 @@ func TestD10Worker32UnsupportedQueuesRefillThenAppliesEntry33(t *testing.T) {
 	}
 }
 
+func TestD10RestartTailDoesNotWrapIntoConsumedPrefix(t *testing.T) {
+	for _, total := range []int{3, 32} {
+		t.Run(fmt.Sprintf("nodes%d", total), func(t *testing.T) {
+			a, _, adapter := autonomousIntegrationFixture(t)
+			profiles := []string{}
+			for i := 2; i < total; i++ {
+				profiles = append(profiles, fmt.Sprintf("vless://123e4567-e89b-12d3-a456-426614174000@tail%d.example:443?security=tls", i))
+			}
+			snapshot, err := a.Nodes.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, strings.Join(profiles, "\n"), time.Now(), time.Hour, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids := []string{}
+			for _, node := range snapshot.Nodes {
+				ids = append(ids, node.ID)
+			}
+			slices.Sort(ids)
+			if len(ids) != total {
+				t.Fatal("wrong catalogue size", len(ids))
+			}
+			a.autonomy.mu.Lock()
+			a.autonomy.doc.Policy.CandidatesPerRound = 2
+			p := a.autonomy.doc.Policy
+			s := a.autonomy.doc.Services["my-independent-site"]
+			r := a.autonomy.doc.Runtime[s.ID]
+			r.Search = &autonomy.Traversal{Version: autonomyTraversalVersion(p, s, "sing-box", "wan-0123456789ab"), Ordered: slices.Clone(ids), Cursor: total - 1}
+			a.autonomy.doc.Runtime[s.ID] = r
+			err = a.persistAutonomyLocked(context.Background())
+			a.autonomy.mu.Unlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+			d10Reopen(t, a)
+			checked := []string{}
+			a.NodeChecker = jobNodeChecker(func(_ context.Context, req dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+				checked = append(checked, req.NodeID)
+				return dataplane.NodeCheckResult{}, dataplane.ErrExactNodeUnsupported
+			})
+			a.autonomyRound(context.Background(), time.Now())
+			r = autonomyTestState(a)
+			if !reflect.DeepEqual(checked, ids[total-1:]) || r.Search.Cursor != total || !r.Search.Exhausted || len(adapter.calls) != 0 {
+				t.Fatal("tail wrapped consumed prefix", r, checked)
+			}
+			d10Reopen(t, a)
+			checked = nil
+			a.autonomyRound(context.Background(), time.Now())
+			if r = autonomyTestState(a); len(checked) != 0 || r.Search.Cursor != total || !r.Search.Exhausted {
+				t.Fatal("restart lost exhausted tail", r, checked)
+			}
+			// A finished passive page is appended after the consumed tail;
+			// its single usable entry can apply despite the round budget being2.
+			snapshot, err = a.Nodes.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174000@after-tail.example:443?security=tls", time.Now(), time.Hour, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			newID := ""
+			for _, node := range snapshot.Nodes {
+				if !slices.Contains(ids, node.ID) {
+					newID = node.ID
+				}
+			}
+			d10Options(a, []string{newID})
+			a.NodeChecker = jobNodeChecker(func(_ context.Context, req dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+				checked = append(checked, req.NodeID)
+				return d10Result(req, "sing-box", true), nil
+			})
+			autonomyTestDue(a, false)
+			a.autonomyRound(context.Background(), time.Now())
+			if r = autonomyTestState(a); r.State != "applied" || !reflect.DeepEqual(checked, []string{newID}) || r.Search.Cursor != total+1 || !r.Search.Exhausted {
+				t.Fatal("page after tail repeated prefix", r, checked)
+			}
+		})
+	}
+}
+
 func TestD10TraversalValidationAndRestartStableOrdering(t *testing.T) {
 	ids := []string{"node-" + strings.Repeat("1", 64), "node-" + strings.Repeat("2", 64)}
 	r := autonomy.Runtime{}
