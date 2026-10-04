@@ -1,5 +1,15 @@
 # CORE D02: точный app dispatcher, первая порция
 
+04.10.2026 reader3 follow-up: accepted NodeStore checkpoints `516f014`,
+`b0d27a9`, `30b432f` normal-merged into CORE. Actual capability CLI already
+uses the typed supported reader constant, now 3; its subprocess regression
+requires the exact canonical version line. Existing RAW Xray retained state
+remains readable by both reader2 and reader3, and reader1 still refuses it.
+Targeted cmd NodeHistory/ConfiguredNodeCheckers tests passed 0.243s; diff RC0.
+This finished fixture correction does not enable unchecked XHTTP ingress.
+OPS owns the separate scanner/admission reader3 follow-up; CORE and XHTTP are
+coordinating typed pre-write admission for manual import, feeds and restore.
+
 04.10.2026 retained admission dependency завершена отдельной OPS порцией `5ca485f750c9113b4f7c8e9c5bcd257792cb6795`, branch `sol/ops-20261003`, parent только `eba8abe`. CORE normal merge `18edfcf`; provider WIP не включён. Main подключает `updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion).CheckWrite` к `App.NodeHistoryWriteGuard`. Callback проверяется до probe и перед RecordCheck; отказ OPS API возвращает503 `NODE_HISTORY_ADMISSION_REQUIRED`, без history/probe/fallback. До первой write2 проверяются future maximum2 и sealed retained old/new/legacy backup controllers, exact installed kernel executable identity, bounded reader flag; pending/orphan/unknown/reader1 блокируют. Config/state roots production fixed `/opt/etc/razvilka` и `/opt/var/lib/razvilka`, независимо от ordinary config override. Temporary noninstalled controller не обходит identity. Generic Xray node Apply по-прежнему требует actual scoped materializer + independent NodeTUNProbe; этот gate их не подменяет.
 
 Проверки finished dependency в CORE: updatecheck NodeHistory/Retained/Admission .800s RC0, selfupdatejournal BinaryImages .344s RC0, cmdtypedCLI .246s RC0, shell actual before/afterStop gate PASS в Git Bash (old target/version-only/error refuse; exact marker success). Consumer NodeEngineHTTP/NodeHistory/XrayNodeRoute app1.305s/cmd.253s RC0, vet app/cmd/updatecheck/selfupdatejournal RC0. Local fixtures моделируют executable identity/capability, native production image/probe/fsync acceptance остаётся координатору. В следующих исторических разделах «guard nil/OPS WIP» описывает предыдущие checkpoints, заменённые этим finished dependency/wiring.

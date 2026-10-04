@@ -59,6 +59,11 @@ func TestNodeHistoryStateCLIUsesTypedReaderAndIsReadOnly(t *testing.T) {
 	if err = checkNodeHistoryState(context.Background(), configRoot, stateRoot, 1); err == nil {
 		t.Fatal("reader1 admitted retained Xray history")
 	}
+	for _, reader := range []int{2, 3} {
+		if err := checkNodeHistoryState(context.Background(), configRoot, stateRoot, reader); err != nil {
+			t.Fatal("RAW Xray history rejected by compatible typed reader", reader, err)
+		}
+	}
 	entries, err := os.ReadDir(stateRoot)
 	if err != nil || len(entries) != 0 {
 		t.Fatal("read-only CLI bootstrapped state", entries, err)
