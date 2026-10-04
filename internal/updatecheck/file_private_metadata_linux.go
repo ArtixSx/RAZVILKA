@@ -7,6 +7,10 @@ import (
 	"syscall"
 )
 
+func openPrivateReadOnly(root *os.Root, name string) (*os.File, error) {
+	return root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+}
+
 func checkPrivateDescriptorOwner(info os.FileInfo) error {
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	// Production load requires euid0 and root-owned ancestors. Isolated

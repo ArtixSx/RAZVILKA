@@ -140,6 +140,8 @@ func (target *fileDirectoryTarget) CompareAndSwap(ctx context.Context, before, a
 }
 
 type fileGuardedTarget struct {
+	// The embedded target holds its participant lease for the full session;
+	// byte-only Read/CAS are deliberately overridden for these private files.
 	restorejournal.Target
 	check     func(context.Context) error
 	root      *os.Root
@@ -147,11 +149,20 @@ type fileGuardedTarget struct {
 	admission filePrivateAdmission
 }
 
+func (target fileGuardedTarget) Read(ctx context.Context) (restorejournal.Image, error) {
+	observation, err := observePrivateFile(ctx, target.root, target.name)
+	if err != nil {
+		return restorejournal.Image{}, err
+	}
+	defer observation.close()
+	return observation.image, nil
+}
+
 func (target fileGuardedTarget) CompareAndSwap(ctx context.Context, before, after restorejournal.Image) error {
 	if err := target.check(ctx); err != nil {
 		return err
 	}
-	return replacePrivateFile(ctx, target.root, target.name, target.Target, before, after, target.check, target.admission)
+	return replacePrivateFile(ctx, target.root, target.name, before, after, target.check, target.admission)
 }
 
 func (a *SelfUpdateFileAdapter) privateTargets(ctx context.Context, id string) (map[string]restorejournal.Target, func(), error) {
@@ -183,7 +194,7 @@ func (a *SelfUpdateFileAdapter) privateTargets(ctx context.Context, id string) (
 	}
 	for name, path := range filePrivateFiles {
 		full := filepath.Join(a.installation, filepath.FromSlash(path))
-		root, err := os.OpenRoot(filepath.Dir(full))
+		root, err := a.openPrivateFileRoot(full)
 		if err != nil {
 			close()
 			return nil, nil, err
@@ -223,11 +234,8 @@ func (a *SelfUpdateFileAdapter) preparePrivateSnapshot(ctx context.Context, id s
 		total += len(image.Data)
 	}
 	for name, path := range filePrivateFiles {
-		image, err := restorejournal.ReadFileImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
+		image, err := a.readPrivateFileImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
 		if err != nil {
-			return err
-		}
-		if err := a.verifyPrivateFileMetadata(ctx, filepath.Join(a.installation, filepath.FromSlash(path)), image.Exists); err != nil {
 			return err
 		}
 		snapshot.Images[name] = image
@@ -289,11 +297,8 @@ func (a *SelfUpdateFileAdapter) restorePrivateSnapshot(ctx context.Context, id s
 	// see equal Before/After and execute no replacement. No implicit repair.
 	for _, path := range filePrivateFiles {
 		full := filepath.Join(a.installation, filepath.FromSlash(path))
-		current, err := restorejournal.ReadFileImage(ctx, full)
+		_, err := a.readPrivateFileImage(ctx, full)
 		if err != nil {
-			return err
-		}
-		if err := a.verifyPrivateFileMetadata(ctx, full, current.Exists); err != nil {
 			return err
 		}
 	}
@@ -391,13 +396,10 @@ func (a *SelfUpdateFileAdapter) verifyPrivateRestore(ctx context.Context, id str
 		}
 	}
 	for name, path := range filePrivateFiles {
-		actual, err := restorejournal.ReadFileImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
+		actual, err := a.readPrivateFileImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
 		expected := snapshot.Images[name]
 		if err != nil || actual.Exists != expected.Exists || !bytes.Equal(actual.Data, expected.Data) {
 			return ErrFileProtocol
-		}
-		if err := a.verifyPrivateFileMetadata(ctx, filepath.Join(a.installation, filepath.FromSlash(path)), expected.Exists); err != nil {
-			return err
 		}
 	}
 	return ctx.Err()
