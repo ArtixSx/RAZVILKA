@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -54,7 +56,11 @@ func TestWGNetworkMixedPreflightRequiresNumericPrecedenceAndEmptyReservedSlots(t
 					return data, err
 				})
 				beforeIP, beforeFW := len(kernel.calls), len(firewall.calls)
-				if err := applyPolicyEffects(ctx, a.wgNetworkEffectRuntime(ref, compiled, true), compiled.plan, t.TempDir(), a.policyReceiptOptions); err == nil {
+				receiptRoot := filepath.Join(t.TempDir(), "receipt")
+				if err := os.Mkdir(receiptRoot, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := applyPolicyEffects(ctx, a.wgNetworkEffectRuntime(ref, compiled, true), compiled.plan, receiptRoot, a.policyReceiptOptions); err == nil {
 					t.Fatal("tuple absence bypassed precedence or reserved slot collision")
 				}
 				assertWGNetworkReadOnlyCalls(t, kernel.calls[beforeIP:], firewall.calls[beforeFW:])
