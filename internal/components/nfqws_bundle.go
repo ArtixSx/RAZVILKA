@@ -106,7 +106,7 @@ func (a ManagedNFQWSBundleAuthority) admit(ctx context.Context, v *managedNFQWST
 	return a.Admit(ctx, v.After.TransactionID, v.InstallationID, v.Sequence, v.Revision, effect, begin)
 }
 
-func (m *Manager) managedNFQWSRoot(create bool) (string, *ownedfs.Root, error) {
+func (m *Manager) managedNFQWSLocation() (string, string, error) {
 	base, relative := "/opt", filepath.FromSlash("lib/razvilka/nfqws2/releases")
 	if m.nfqwsReleases != "" {
 		base, relative = filepath.Dir(m.nfqwsReleases), filepath.Base(m.nfqwsReleases)
@@ -114,6 +114,14 @@ func (m *Manager) managedNFQWSRoot(create bool) (string, *ownedfs.Root, error) {
 	// Resolve only the reviewed mount/test base. Reject every symlink below
 	// it, so an app-owned intermediate path cannot redirect writes to stock.
 	canonicalBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return "", "", err
+	}
+	return canonicalBase, relative, nil
+}
+
+func (m *Manager) managedNFQWSRoot(create bool) (string, *ownedfs.Root, error) {
+	canonicalBase, relative, err := m.managedNFQWSLocation()
 	if err != nil {
 		return "", nil, err
 	}
@@ -299,6 +307,9 @@ func (m *Manager) installManagedNFQWS(ctx context.Context, manifest ManagedNFQWS
 	v := &managedNFQWSTransaction{InstallationID: authority.InstallationID, Sequence: authority.Sequence, Revision: revision, Manifest: manifest}
 	if err := authority.check(ctx, v); err != nil {
 		return zero, NoMutation(err)
+	}
+	if err := m.PreflightManagedNFQWS(ctx); err != nil {
+		return zero, NoMutation(err) // no journal initialization or download on an unsafe mount
 	}
 	tx, err := m.lockUpdateJournal()
 	if err != nil {

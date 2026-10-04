@@ -199,6 +199,24 @@ func bundleFixtureAuthority() ManagedNFQWSBundleAuthority {
 	}
 }
 
+func TestManagedNFQWSPreflightIsReadOnly(t *testing.T) {
+	_, input, _ := bundleFixtureManifest(t, "fixture-a")
+	m := bundleFixtureManager(t, input)
+	if err := m.PreflightManagedNFQWS(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{m.StateDir, m.nfqwsReleases} {
+		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("readonly preflight created a path", path, err)
+		}
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := m.PreflightManagedNFQWS(cancelled); !errors.Is(err, context.Canceled) {
+		t.Fatal("preflight ignored cancellation", err)
+	}
+}
+
 func TestManagedNFQWSBundleInstallDescriptorLeaseAndRollback(t *testing.T) {
 	ctx := context.Background()
 	manifest, input, _ := bundleFixtureManifest(t, "fixture-a")
