@@ -133,6 +133,9 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if r.Method != http.MethodGet && (strings.HasPrefix(r.URL.Path, "/api/v1/amneziawg") || strings.HasPrefix(r.URL.Path, "/api/v1/warp/")) {
 			exclusive = true
 		}
+		if (r.URL.Path == wireGuardProfilesPath || strings.HasPrefix(r.URL.Path, wireGuardProfilesPath+"/")) && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete) {
+			exclusive = true
+		}
 		enter := a.Operations.Enter
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/components/") {
 			// Package mutation cannot overlap network Apply or background repair.

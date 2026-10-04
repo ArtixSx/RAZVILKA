@@ -275,3 +275,13 @@ CLOUD producer выявил два реальных дефекта: потеря
 Проверенный ARM64 perf4 sample window: **85 samples / 84,51 s**, средний CPU **9,76% одного ядра**, reaped child CPU отдельно **10,6%**, RSS **27,22–31,48 MiB**. `.review-local/router-ui-perf4-summary.json` содержит покрытие отдельных фаз. Browser прошёл 14 измеренных фаз; skipped background подтверждён позднейшим отдельным native visibility cycle. Это один window, не сравнение ускорения и не долгий нагрузочный тест.
 
 CLOUD semantic fix `34074f5` принят после независимого review: reachable/challenge/confirmed разделены; service confirmation требует trusted full predicate на фактическом ответе внутри owned identity bracket, старые receipts не получают новый semantic grade. Актуальный Transport repeat и actual production consumer ещё нужны. NFQWS adaptive `ef0b959` удержан из-за same-second delete/re-add ABA; OPS traversal `609385a` удержан до исправления ancestor ownership/write и crash между chmod/rename. Эти findings не скрыты успешными предыдущими native runs.
+
+### Полный объединённый gate и закрытие D01
+
+`check-linux-16`, source-44 / `226e7537557c6606ea8e64c666827f8e0426ae4f`, **RC 0**: Go 1.26.5, mod verify, полный Go/race/vet, UI/shell, ARM64 + native amd64 build/SHA, architecture/checksum и полный Entware transaction. Настоящий CLOUD HTTP/DoH→SOCKS→TLS harness повторён после semantic fix `34074f5` и также прошёл. Production USQUE/WARP owner hook этим не подтверждён.
+
+По независимому аудиту RESEARCH и первичным root-артефактам **D01 закрыт**: настоящий HTTP 19/19, ARM64 14 измеренных фаз и отдельный native hidden→visible цикл. Часть 500/ошибок чтения доставлялась браузеру управляемо и доказывает реакцию UI, а не искусственное падение backend. D12 остаётся открытым: карточкам ещё нужны свежие per-engine check/Apply receipts, совпадающие с profile/revision/generation.
+
+Исправлена трактовка сводки perf4: прежнее поле `api_requests` в derived summary считало все запросы. Cold-open первичного отчёта — **57 запросов всего, 21 API**. Browser Task 224,065 ms, Script 19,845 ms, Layout 57,816 ms и Recalc 14,05 ms относятся к клиентскому Windows-браузеру, отдельно от ARM64 CPU/RSS. Числа не доказывают ускорения относительно прошлого запуска.
+
+`xray-router-native45`, source-45 / `88793a5`, **RC 1**. Targeted Linux race прошёл, genuine Xray selected TUN/control packet path прошёл до новой стадии Router HTTPS. Новая fixture остановилась: `router HTTPS component requires its absolute private fixture root`. Проверка полного Router HTTPS пока не выполнена; исправление передано VLESS. Ошибка стенда не скрывается общим fullcheck PASS.

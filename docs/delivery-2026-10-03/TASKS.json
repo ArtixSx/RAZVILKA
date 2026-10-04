@@ -18,7 +18,7 @@
       ],
       "title": "Настоящий HTTP/login/CSP и ленивые чтения",
       "scope": "Браузер с реальным приложением: auth/CSRF/logout, скрытые вкладки, быстрые переходы, повторные клики, 401/409/500, dirty forms. Измерить число запросов, render-cost, CPU на ARM64.",
-      "status": "in_progress"
+      "status": "completed"
     },
     {
       "id": "D02",

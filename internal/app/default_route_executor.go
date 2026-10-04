@@ -160,6 +160,7 @@ func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Conf
 	// One route per source/ingress/path permits exact binding by CORE without
 	// an accidental Cartesian union between two different LAN segments.
 	groups := map[string]*dataplane.Route{}
+	catalogServices := e.app.catalogSnapshot().Services
 	for _, rule := range c.rules {
 		key := rule.ServiceID + "\x00" + rule.Ingress + "\x00" + rule.Source.String() + "\x00" + rule.Route
 		route, ok := groups[key]
@@ -167,9 +168,19 @@ func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Conf
 			path := c.snapshot.Paths[rule.ServiceID]
 			id := "network-" + defaultRouteDigest(key)[:16]
 			route = &dataplane.Route{
-				ServiceID: id, ServiceName: rule.ServiceID, Selected: path.Selected, Resolved: path.Resolved,
+				LogicalServiceID: rule.ServiceID,
+				ServiceID:        id, ServiceName: rule.ServiceID, Selected: path.Selected, Resolved: path.Resolved,
 				Sources: []string{rule.Source.String()}, Ingress: []string{rule.Ingress}, ProbeURL: path.ProbeURL,
 				NetworkPolicyGeneration: c.digest, NetworkPolicyRole: rule.Origin,
+			}
+			if rule.Origin == "override" {
+				for _, service := range catalogServices {
+					if service.ID == rule.ServiceID {
+						frozen := defaultRouteCloneCatalogService(service)
+						route.ProbeService = &frozen
+						break
+					}
+				}
 			}
 			groups[key] = route
 		}

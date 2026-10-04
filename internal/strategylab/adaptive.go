@@ -176,7 +176,7 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 	}
 	defer func() {
 		if parent.Err() != nil && !result.QuiescenceUnknown {
-			result.Code, err = "cancelled", parent.Err()
+			result.Code, err = "cancelled", errors.Join(err, parent.Err())
 		}
 		result.CheckedAt = s.now()
 		result.RetryAt = result.CheckedAt.Add(limits.Cooldown)
@@ -272,8 +272,17 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 			}
 			probeCtx, probeCancel := context.WithTimeout(ctx, limits.Attempt)
 			evidence, probeErr := s.Executor.Execute(probeCtx, candidate, request.Target)
+			if errors.Is(probeErr, ErrCompatibilityQuiescenceUnknown) {
+				last.Code, result.Code, result.QuiescenceUnknown = "quiescence-unknown", "quiescence-unknown", true
+				s.mu.Lock()
+				s.unknown = true
+				s.mu.Unlock()
+				probeErr = errors.Join(probeErr, probeCtx.Err(), ctx.Err())
+				probeCancel()
+				return result, probeErr
+			}
 			if probeCtx.Err() != nil {
-				probeErr = probeCtx.Err()
+				probeErr = errors.Join(probeErr, probeCtx.Err())
 			}
 			probeCancel()
 			if unknownFence() {
@@ -281,7 +290,7 @@ func (s *AdaptiveSelector) Evaluate(parent context.Context, request AdaptiveRequ
 			}
 			if ctx.Err() != nil {
 				result.Code = "cancelled"
-				return result, ctx.Err()
+				return result, errors.Join(probeErr, ctx.Err())
 			}
 			if probeErr != nil {
 				last.Code = "local-error"

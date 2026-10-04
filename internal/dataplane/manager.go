@@ -49,14 +49,15 @@ type preflightRefusalError struct{ error }
 func (err preflightRefusalError) Unwrap() error { return err.error }
 
 type Manager struct {
-	operationOnce   sync.Once
-	operationGate   chan struct{}
-	journalMu       sync.RWMutex
-	registryMu      sync.RWMutex
-	StateRoot       string
-	Adapters        map[string]Adapter
-	RollbackTimeout time.Duration
-	FreshProfile    func(context.Context) (string, error)
+	operationOnce      sync.Once
+	operationGate      chan struct{}
+	journalMu          sync.RWMutex
+	registryMu         sync.RWMutex
+	registryGeneration uint64
+	StateRoot          string
+	Adapters           map[string]Adapter
+	RollbackTimeout    time.Duration
+	FreshProfile       func(context.Context) (string, error)
 }
 
 type Adapter interface {
@@ -465,6 +466,7 @@ func (m *Manager) Register(adapter Adapter) error {
 		}
 	}
 	m.Adapters[adapter.ID()] = adapter
+	m.registryGeneration++
 	return nil
 }
 

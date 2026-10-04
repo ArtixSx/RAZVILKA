@@ -69,6 +69,10 @@ func cloneNetworkPolicyRoutes(routes []Route) []Route {
 	result := slices.Clone(routes)
 	for i := range result {
 		r := &result[i]
+		if r.ProbeService != nil {
+			service := copyProxyPredicateService(*r.ProbeService)
+			r.ProbeService = &service
+		}
 		r.Domains = slices.Clone(r.Domains)
 		r.CIDRs = slices.Clone(r.CIDRs)
 		r.SourceRefs = slices.Clone(r.SourceRefs)

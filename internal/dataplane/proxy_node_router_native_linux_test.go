@@ -219,7 +219,8 @@ func nativeScopedXrayRouterHTTPS(t *testing.T, ctx context.Context, a *ProxyTunn
 		return nil, errors.New("router HTTPS component requires its explicit owned fixture role and CA")
 	}
 	root := os.Getenv("RAZVILKA_XRAY_TUN_ROOT")
-	if len(root) > 4096 || !filepath.IsAbs(root) || filepath.Clean(a.StateRoot) != filepath.Join(root, "router-state") {
+	// NewProxyTunnelAdapter appends the engine ID to its supplied state root.
+	if len(root) > 4096 || !filepath.IsAbs(root) || a.ID() != "xray" || filepath.Clean(a.StateRoot) != filepath.Join(root, "router-state", "xray") {
 		return nil, errors.New("router HTTPS component requires its absolute private fixture root")
 	}
 	info, err := os.Lstat(root)

@@ -162,7 +162,11 @@ func (a *App) StartSelfUpdate(ctx context.Context) {
 		a.SelfUpdate.Start(ctx)
 		if a.SelfUpdate.StartupPending() {
 			job := a.SelfUpdate.Snapshot()
-			if a.selfUpdateStartupAllowed(ctx, job.ID, job.HelperPID) != nil {
+			jobID, workerPID := job.ID, job.HelperPID
+			if a.SelfUpdateFiles != nil {
+				jobID, workerPID = a.SelfUpdateStartupJobID, a.SelfUpdateStartupHelperPID
+			}
+			if jobID != job.ID || a.selfUpdateStartupAllowed(ctx, jobID, workerPID) != nil {
 				return
 			}
 			ctx = context.WithValue(ctx, selfUpdateFileAdmissionKey{}, selfUpdateFileAdmission{id: job.ID})
@@ -174,7 +178,7 @@ func (a *App) StartSelfUpdate(ctx context.Context) {
 			// This is startup-owned admission, not an HTTP request's lease.
 			// Only the bounded applied-node recovery worker may borrow it. The
 			// installer cannot release it until that worker's cleanup has joined.
-			handoff := &selfUpdateNodeRecovery{app: a, jobID: job.ID, helperPID: job.HelperPID, current: a.SelfUpdate.Snapshot, done: make(chan struct{})}
+			handoff := &selfUpdateNodeRecovery{app: a, jobID: job.ID, helperPID: workerPID, installerPID: job.HelperPID, current: a.SelfUpdate.Snapshot, done: make(chan struct{})}
 			a.nodeRecovery.mu.Lock()
 			a.nodeRecovery.update = handoff
 			a.nodeRecovery.mu.Unlock()
@@ -190,10 +194,11 @@ func (a *App) StartSelfUpdate(ctx context.Context) {
 // startup lease. It cannot be created by a request, restored from JSON or used
 // by the ordinary reconciler. A helper in requires-review never grants it.
 type selfUpdateNodeRecovery struct {
-	mu        sync.Mutex
-	app       *App
-	jobID     string
-	helperPID int
+	mu           sync.Mutex
+	app          *App
+	jobID        string
+	helperPID    int
+	installerPID int
 	// Tests replace only the process-status observation, never recovery proof.
 	current func() updatecheck.Job
 	started bool
@@ -215,7 +220,7 @@ func (h *selfUpdateNodeRecovery) guard(ctx context.Context) error {
 		return errNodeRecoveryReview
 	}
 	job := h.current()
-	if job.ID != h.jobID || job.State != "restarting" || h.helperPID <= 1 || job.HelperPID != h.helperPID {
+	if job.ID != h.jobID || job.State != "restarting" || h.helperPID <= 1 || job.HelperPID != h.installerPID {
 		return errNodeRecoveryReview
 	}
 	if err := h.app.selfUpdateStartupAllowed(ctx, h.jobID, h.helperPID); err != nil {

@@ -87,7 +87,7 @@ func (a *App) selfUpdateRecovery(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Minute)
 	defer cancel()
-	ctx = context.WithValue(ctx, selfUpdateFileAdmissionKey{}, selfUpdateFileAdmission{id: in.ID})
+	ctx = context.WithValue(ctx, selfUpdateFileAdmissionKey{}, selfUpdateFileAdmission{id: in.ID, action: in.Action})
 	release, err := a.Operations.Exclusive(ctx)
 	if err != nil {
 		a.writeOperationFailure(w, err)
