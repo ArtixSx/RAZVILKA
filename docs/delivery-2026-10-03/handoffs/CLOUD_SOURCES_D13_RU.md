@@ -24,6 +24,8 @@ Regression fixtures проверяют отменённый успешный о�
 
 OfflineCatalog уже существует как library API. В committed app, находящемся в этой CLOUD базе, GET использует memory-only List; отдельного consumer OfflineCatalog нет. Выбор offline presentation и её UI labels — остающаяся CORE/UI интеграция, без автоматического Refresh при входе/GET. App/config/UI в этой порции не изменены.
 
+Следующая согласованная порция — dedicated app handler/DTO: [exact registrar, DTO и UI request](CLOUD_SOURCE_OFFLINE_CONSUMER_RU.md). Регистрацию existing app.go выполняет CORE после finished checkpoint; CLOUD handler tests сами по себе не закрывают production consumer/UI gate.
+
 ## Первичные источники, проверка 04.10.2026
 
 Существующие approved feeds не расширялись и не переподписывались. Re:filter сам публикует `domains_all.lst` и `ipsum.lst`; эти же filenames присутствуют в проверенной странице assets. [Репозиторий издателя](https://github.com/1andrevich/Re-filter-lists), [assets release 01082026](https://github.com/1andrevich/Re-filter-lists/releases/expanded_assets/01082026).
