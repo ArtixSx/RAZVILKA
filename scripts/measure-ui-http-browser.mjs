@@ -6,6 +6,41 @@ import {mkdirSync,mkdtempSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+const measurementChecks=Object.freeze({
+  read_boundary:'The page attempted an action outside the read-only measurement boundary',
+  authentication_failed:'Authentication failed; no setup/reset/recovery action is attempted',
+  navigation_changed:'Navigation did not retain the requested view',
+  visibility_changed:'The measured document became visible',
+  fixture_read_failed:'Fixture inspection unavailable',
+  fixture_metadata_invalid:'Incomplete fixture metadata',
+  fixture_profile_mismatch:'Declared empty/loaded fixture does not match observed data',
+  browser_error:'Uncaught browser error during measurements',
+});
+const measurementFailures=new WeakMap();
+const measurementViews=new Set(['overview','autopilot','services','nodes','providers','subscription-settings','engines','engineconfig','devices','exclusions','activity','settings','dns','strategylab','testlab','diagnostics','onboard','managed','updates','connections','sources']);
+
+export function measurementAssert(condition,code,observation={}){
+  assert(Object.hasOwn(measurementChecks,code),'Unknown measurement check');
+  if(condition)return;
+  const error=new assert.AssertionError({message:measurementChecks[code],actual:false,expected:true,operator:'strictEqual'});
+  const diagnostic={diagnostic_code:code,message:measurementChecks[code]};
+  if(code==='navigation_changed'){
+    for(const key of ['expected_view','observed_view'])diagnostic[key]=measurementViews.has(observation[key])?observation[key]:'unknown';
+    diagnostic.view_transitions=(Array.isArray(observation.view_transitions)?observation.view_transitions:[]).slice(-32)
+      .filter(item=>Number.isFinite(item?.at_ms)&&item.at_ms>=0&&item.at_ms<=3600000)
+      .map(item=>({view:measurementViews.has(item.view)?item.view:'unknown',at_ms:Math.round(item.at_ms)}));
+  }
+  measurementFailures.set(error,diagnostic);throw error;
+}
+
+export function failureDiagnostic(error,stage){
+  // Never copy arbitrary messages, actual/expected values, stacks or causes.
+  // Only errors created by our own checks can publish their fixed messages.
+  const name=['AssertionError','TimeoutError','TypeError','SyntaxError','Error'].includes(error?.name)?error.name:'Error';
+  const code=['ERR_ASSERTION','ECONNREFUSED','ETIMEDOUT','EPIPE','ENOENT'].includes(error?.code)?error.code:null;
+  return {stage,name,code,...(measurementFailures.get(error)||{diagnostic_code:'unclassified',message:'Measurement failed; private exception details omitted'})};
+}
+
 export function settings(env){
   assert(env.RAZVILKA_PERF_URL,'Supply RAZVILKA_PERF_URL for an existing isolated server');
   const url=new URL(env.RAZVILKA_PERF_URL);
@@ -17,8 +52,9 @@ export function settings(env){
   assert(!!session!==credentials,'Supply either an existing session file or username/password via env');
   assert(session||credentials,'Supply authentication for the existing server');
   const number=(key,fallback,min,max)=>{const text=env[key]??String(fallback);assert(/^\d+$/.test(text)&&Number(text)>=min&&Number(text)<=max,key+' is outside its allowed range');return Number(text);};
+  assert(env.RAZVILKA_PERF_HEADED===undefined||['0','1'].includes(env.RAZVILKA_PERF_HEADED),'RAZVILKA_PERF_HEADED must be 0 or 1');
   return {origin:url.origin,profile:env.RAZVILKA_PERF_PROFILE,chrome:resolve(env.RAZVILKA_PERF_CHROME),session:session?resolve(session):null,
-    username:env.RAZVILKA_PERF_USERNAME,password:env.RAZVILKA_PERF_PASSWORD,
+    username:env.RAZVILKA_PERF_USERNAME,password:env.RAZVILKA_PERF_PASSWORD,headed:env.RAZVILKA_PERF_HEADED==='1',
     dwellMs:number('RAZVILKA_PERF_DWELL_MS',2000,250,30000),idleMs:number('RAZVILKA_PERF_IDLE_MS',16000,1000,60000),timeoutMs:number('RAZVILKA_PERF_TIMEOUT_MS',45000,5000,120000),
     output:env.RAZVILKA_PERF_OUTPUT?resolve(env.RAZVILKA_PERF_OUTPUT):null};
 }
@@ -70,16 +106,16 @@ async function run(config){
   mkdirSync(local,{recursive:true});const directory=mkdtempSync(join(local,'ui-perf-'));writeFileSync(join(directory,'.gitignore'),'*\n');
   const report={schema:1,started_at:new Date().toISOString(),origin:config.origin,fixture:{declared:config.profile,verified:false,definition:'user library: nodes, groups, enabled/applied services; devices and installed inventory are separate observations'},
     environment:{node:process.version,platform:process.platform,arch:process.arch,browser:null},
-    configuration:{viewport:{width:1280,height:900},dwell_ms:config.dwellMs,idle_ms:config.idleMs,timeout_ms:config.timeoutMs,browser_cache:'disabled by the request safety fence'},
+    configuration:{viewport:{width:1280,height:900},headed:config.headed,dwell_ms:config.dwellMs,idle_ms:config.idleMs,timeout_ms:config.timeoutMs,browser_cache:'disabled by the request safety fence'},
     boundaries:{server:'existing HTTP only',device_cpu_rss:'not collected; coordinator measures separately',native_acceptance:false,
       content:'no response bodies, request bodies, headers, query strings, cookies, profiles, DOM text or screenshots saved'},
     authentication:{mode:config.session?'existing-session':'env-login',requests:[]},scenarios:[],requests:[],blocked:[],browser_errors:[],failure:null};
   const save=()=>writeFileSync(join(directory,'result.json'),JSON.stringify(report,null,2));
   let browser,page,context,cdp,stage='authentication';const known=new Map();let next=0;
   const metrics=async()=>Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(item=>[item.name,item.value]));
-  const guard=()=>assert.equal(report.blocked.length,0,'The page attempted an action outside the read-only measurement boundary');
+  const guard=()=>measurementAssert(report.blocked.length===0,'read_boundary');
   try{
-    browser=await chromium.launch({executablePath:config.chrome,headless:true});report.environment.browser=browser.version();
+    browser=await chromium.launch({executablePath:config.chrome,headless:!config.headed});report.environment.browser=browser.version();
     context=await browser.newContext({viewport:report.configuration.viewport,serviceWorkers:'block',...(config.session?{storageState:config.session}:{})});
     await context.route('**/*',async route=>{
       const request=route.request(),decision=readOnlyDecision(config.origin,request.url(),request.method());
@@ -93,12 +129,17 @@ async function run(config){
     if(!config.session){
       const response=await context.request.post(config.origin+'/api/v1/auth/login',{data:{username:config.username,password:config.password},timeout:config.timeoutMs});
       report.authentication.requests.push({method:'POST',path:'/api/v1/auth/login',status:response.status()});
-      assert.equal(response.status(),200,'Authentication failed; no setup/reset/recovery action is attempted');
+      measurementAssert(response.status()===200,'authentication_failed');
     }
-    await context.addInitScript(()=>{
-      window.__razvilkaPerf={longTasks:[],supported:PerformanceObserver.supportedEntryTypes.includes('longtask')};
+    await context.addInitScript(views=>{
+      const knownViews=new Set(views);
+      window.__razvilkaPerf={longTasks:[],viewTransitions:[],supported:PerformanceObserver.supportedEntryTypes.includes('longtask')};
       if(window.__razvilkaPerf.supported)new PerformanceObserver(list=>{for(const entry of list.getEntries())window.__razvilkaPerf.longTasks.push({start:entry.startTime,duration:entry.duration});}).observe({type:'longtask',buffered:false});
-    });
+      document.addEventListener('razvilka:view-change',event=>{
+        window.__razvilkaPerf.viewTransitions.push({view:knownViews.has(event.detail)?event.detail:'unknown',at_ms:performance.now()});
+        if(window.__razvilkaPerf.viewTransitions.length>256)window.__razvilkaPerf.viewTransitions.shift();
+      });
+    },[...measurementViews]);
     page=await context.newPage();page.setDefaultTimeout(config.timeoutMs);
     page.on('pageerror',error=>report.browser_errors.push({stage,name:error.name}));
     page.on('request',request=>{
@@ -137,9 +178,11 @@ async function run(config){
             active_view:rect(active),main:rect(document.querySelector('.main')),mobile_nav:rect(document.querySelector('.ui3-mobile-nav'))},
           read_state:Object.fromEntries(Object.entries(state.dataLoad||{}).map(([key,value])=>[key,{loaded:value.loaded===true,phase:value.phase}])),
           expected_panel_paths:expected,shared_paths:shared,
+          view_transitions:(window.__razvilkaPerf?.viewTransitions||[]).filter(item=>item.at_ms>=mark).map(item=>({view:item.view,at_ms:Math.round(item.at_ms-mark)})),
           long_tasks:{supported:window.__razvilkaPerf?.supported===true,count:tasks.length,total_ms:tasks.reduce((sum,task)=>sum+task.duration,0),max_ms:tasks.reduce((max,task)=>Math.max(max,task.duration),0)}};
       },mark);
-      assert.equal(layout.view,view,'Navigation did not retain the requested view');
+      measurementAssert(layout.view===view,'navigation_changed',{expected_view:view,observed_view:layout.view,view_transitions:layout.view_transitions});
+      if(name==='background-home')measurementAssert(layout.visibility==='hidden','visibility_changed');
       const records=report.requests.slice(start),requestCounts=requestSummary(records,[...layout.expected_panel_paths,...layout.shared_paths]);
       report.scenarios.push({name,started_at:startedAt,finished_at:new Date().toISOString(),wall_ms:Math.round(elapsed),dwell_ms:dwell,request_ids:records.map(record=>record.id),
         requests:requestCounts,browser:metricDelta(before,after),...layout});
@@ -160,17 +203,22 @@ async function run(config){
     // Headless Chromium may leave both tabs visible. Report that limitation,
     // instead of simulating visibility with document.hidden overrides.
     const cover=await context.newPage();await cover.goto('about:blank');await cover.bringToFront();
+    try { await page.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:2000}); }
+    catch(error) { if(error.name!=='TimeoutError')throw error; }
     const visibility=await page.evaluate(()=>document.visibilityState);
     if(visibility==='hidden')await measure('background-home','overview',async()=>{},config.idleMs);
     else report.scenarios.push({name:'background-home',skipped:true,reason:'Chromium did not expose a hidden document',observed_visibility:visibility});
-    await cover.close();await page.bringToFront();
-    if(visibility==='hidden')await measure('foreground-return-home','overview',settled);
+    if(visibility==='hidden')await measure('foreground-return-home','overview',async()=>{
+      await cover.close();await page.bringToFront();
+      await page.waitForFunction(()=>document.visibilityState==='visible',null,{timeout:2000});await settled();
+    });
+    else {await cover.close();await page.bringToFront();}
     stage='fixture-inspection';
     // Explicit read-only inspection is separate from measured UI requests.
-    const read=async path=>{const response=await context.request.get(config.origin+path,{timeout:config.timeoutMs});report.fixture.requests||=[];report.fixture.requests.push({method:'GET',path:path.split('?')[0],status:response.status()});assert.equal(response.status(),200,'Fixture inspection unavailable');return response.json();};
+    const read=async path=>{const response=await context.request.get(config.origin+path,{timeout:config.timeoutMs});report.fixture.requests||=[];report.fixture.requests.push({method:'GET',path:path.split('?')[0],status:response.status()});measurementAssert(response.status()===200,'fixture_read_failed');return response.json();};
     const nodes=await read('/api/v1/nodes'),services=await read('/api/v1/services'),devices=await read('/api/v1/devices?view=status');
-    const list=(value,key)=>{assert(Object.hasOwn(value,key)&&(value[key]===null||Array.isArray(value[key])),'Incomplete fixture metadata');return value[key]||[];};
-    assert(Array.isArray(services),'Incomplete service metadata');
+    const list=(value,key)=>{measurementAssert(value!==null&&typeof value==='object'&&Object.hasOwn(value,key)&&(value[key]===null||Array.isArray(value[key])),'fixture_metadata_invalid');return value[key]||[];};
+    measurementAssert(Array.isArray(services),'fixture_metadata_invalid');
     const deviceList=Array.isArray(devices)?devices:list(devices,'devices');
     report.fixture.counts={nodes:list(nodes,'nodes').length,groups:list(nodes,'groups').length,catalog_services:services.length,
       enabled_services:services.filter(service=>service.enabled===true).length,applied_services:services.filter(service=>service.applied_enabled===true).length,devices:deviceList.length,
@@ -178,14 +226,14 @@ async function run(config){
       discovery_unknown_devices:deviceList.filter(device=>typeof device.discovered!=='boolean').length,
       device_policy_assignments:deviceList.every(device=>Object.hasOwn(device,'policies')&&(device.policies===null||Array.isArray(device.policies)))?deviceList.reduce((sum,device)=>sum+(device.policies?.length||0),0):null};
     report.fixture.verified=fixtureMatches(config.profile,report.fixture.counts);
-    assert(report.fixture.verified,'Declared empty/loaded fixture does not match observed data');
-    guard();assert.equal(report.browser_errors.length,0,'Uncaught browser error during measurements');
-  }catch(error){report.failure={stage,name:error.name,code:error.code||null};throw error;}
+    measurementAssert(report.fixture.verified,'fixture_profile_mismatch');
+    guard();measurementAssert(report.browser_errors.length===0,'browser_error');
+  }catch(error){report.failure=failureDiagnostic(error,stage);throw error;}
   finally{if(browser)await browser.close();report.finished_at=new Date().toISOString();save();console.log('Measurement artifacts: '+directory);}
 }
 
 const invoked=process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url);
 if(invoked){
-  if(process.argv.includes('--help'))console.log('Set RAZVILKA_PERF_URL, PROFILE=empty|loaded, CHROME, and SESSION or USERNAME/PASSWORD. Optional DWELL_MS, IDLE_MS, TIMEOUT_MS, OUTPUT use the same RAZVILKA_PERF_ prefix. See UI_RU.md for boundaries.');
-  else try{await run(settings(process.env));}catch(error){console.error('Measurement stopped: '+error.name);process.exitCode=1;}
+  if(process.argv.includes('--help'))console.log('Set RAZVILKA_PERF_URL, PROFILE=empty|loaded, CHROME, and SESSION or USERNAME/PASSWORD. Optional HEADED=1 opens Chromium to measure real background visibility (default headless); DWELL_MS, IDLE_MS, TIMEOUT_MS, OUTPUT use the same RAZVILKA_PERF_ prefix. See UI_RU.md for boundaries.');
+  else try{await run(settings(process.env));}catch(error){const diagnostic=failureDiagnostic(error,'runner');console.error('Measurement stopped: '+diagnostic.diagnostic_code+'; '+diagnostic.message);process.exitCode=1;}
 }

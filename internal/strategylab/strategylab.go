@@ -45,13 +45,14 @@ var Pools = []Pool{
 }
 
 type Validation struct {
-	LuaChecked bool     `json:"lua_checked,omitempty"`
-	OK         bool     `json:"ok"`
-	Native     bool     `json:"native"`
-	Code       string   `json:"code"`
-	Output     string   `json:"output"`
-	Arguments  []string `json:"arguments,omitempty"`
-	CheckedAt  string   `json:"checked_at,omitempty"`
+	QuiescenceUnknown bool     `json:"quiescence_unknown,omitempty"`
+	LuaChecked        bool     `json:"lua_checked,omitempty"`
+	OK                bool     `json:"ok"`
+	Native            bool     `json:"native"`
+	Code              string   `json:"code"`
+	Output            string   `json:"output"`
+	Arguments         []string `json:"arguments,omitempty"`
+	CheckedAt         string   `json:"checked_at,omitempty"`
 }
 
 type Candidate struct {
@@ -137,22 +138,25 @@ type Selection struct {
 }
 
 type State struct {
-	PackReceipts  map[string]PackReceipt `json:"pack_receipts,omitempty"`
-	SchemaVersion int                    `json:"schema_version"`
-	Candidates    map[string]Candidate   `json:"candidates"`
-	Evidence      []Evidence             `json:"evidence"`
-	Selections    map[string]Selection   `json:"selections"`
+	CompatibilitySession    *compatibilitySession  `json:"compatibility_session,omitempty"`
+	CompatibilityFinalizing bool                   `json:"compatibility_finalizing,omitempty"`
+	PackReceipts            map[string]PackReceipt `json:"pack_receipts,omitempty"`
+	SchemaVersion           int                    `json:"schema_version"`
+	Candidates              map[string]Candidate   `json:"candidates"`
+	Evidence                []Evidence             `json:"evidence"`
+	Selections              map[string]Selection   `json:"selections"`
 }
 
 type Snapshot struct {
-	SchemaVersion int            `json:"schema_version"`
-	Mode          string         `json:"mode"`
-	Pools         []Pool         `json:"pools"`
-	Candidates    []Candidate    `json:"candidates"`
-	Evidence      []Evidence     `json:"evidence"`
-	Summaries     []Summary      `json:"summaries"`
-	Selections    []Selection    `json:"selections"`
-	Safety        map[string]any `json:"safety"`
+	QuiescenceUnknown bool           `json:"quiescence_unknown,omitempty"`
+	SchemaVersion     int            `json:"schema_version"`
+	Mode              string         `json:"mode"`
+	Pools             []Pool         `json:"pools"`
+	Candidates        []Candidate    `json:"candidates"`
+	Evidence          []Evidence     `json:"evidence"`
+	Summaries         []Summary      `json:"summaries"`
+	Selections        []Selection    `json:"selections"`
+	Safety            map[string]any `json:"safety"`
 }
 
 type Validator interface {
@@ -210,10 +214,13 @@ type Manager struct {
 	Resources ResourceInspector
 	Now       func() time.Time
 
-	mu           sync.RWMutex
-	state        State
-	image        restorejournal.Image
-	writeBlocked bool
+	mu                           sync.RWMutex
+	state                        State
+	image                        restorejournal.Image
+	writeBlocked                 bool
+	compatibilityUnknown         bool         // survives failed persistence/rollback until recovery
+	nativeRunning                bool         // one validation/probe admission until completion
+	compatibilityPublicationHook func(string) // deterministic private test barriers; nil in production
 }
 
 func New(path string) (*Manager, error) {
@@ -233,8 +240,17 @@ func New(path string) (*Manager, error) {
 	if err := json.Unmarshal(data, &m.state); err != nil {
 		return nil, fmt.Errorf("decode Strategy Lab state: %w", err)
 	}
-	if m.state.SchemaVersion != SchemaVersion {
+	if m.state.SchemaVersion != SchemaVersion && m.state.SchemaVersion != compatibilityUnknownSchema && m.state.SchemaVersion != compatibilitySupervisedSchema {
 		return nil, fmt.Errorf("unsupported Strategy Lab schema %d", m.state.SchemaVersion)
+	}
+	if m.state.SchemaVersion == compatibilitySupervisedSchema {
+		checked, err := decodeCompatibilityState(image)
+		if err != nil {
+			return nil, errors.Join(ErrCompatibilityQuiescenceUnknown, errors.New("invalid retained compatibility session"))
+		}
+		m.state = checked
+	} else if m.state.CompatibilitySession != nil || m.state.CompatibilityFinalizing {
+		return nil, errors.Join(ErrCompatibilityQuiescenceUnknown, errors.New("compatibility session requires its supported schema"))
 	}
 	if m.state.Candidates == nil {
 		m.state.Candidates = map[string]Candidate{}
@@ -246,12 +262,24 @@ func New(path string) (*Manager, error) {
 }
 
 func (m *Manager) Probe(ctx context.Context, id string, target ProbeTarget) (Evidence, error) {
-	m.mu.RLock()
+	m.mu.Lock()
+	if m.compatibilityUnknownLocked() {
+		m.mu.Unlock()
+		return Evidence{}, ErrCompatibilityQuiescenceUnknown
+	}
+	if m.nativeRunning {
+		m.mu.Unlock()
+		return Evidence{}, errCompatibilityBusy
+	}
 	candidate, ok := m.state.Candidates[id]
-	m.mu.RUnlock()
+	if ok {
+		m.nativeRunning = true
+	}
+	m.mu.Unlock()
 	if !ok {
 		return Evidence{}, fmt.Errorf("unknown candidate %q", id)
 	}
+	defer m.finishNative()
 	if !candidate.Validation.OK || !candidate.Validation.Native {
 		return Evidence{}, errors.New("candidate must pass native NFQWS2 validation first")
 	}
@@ -314,7 +342,8 @@ func (m *Manager) Snapshot() Snapshot {
 	})
 	evidence := append(make([]Evidence, 0, len(m.state.Evidence)), m.state.Evidence...)
 	return Snapshot{
-		SchemaVersion: SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
+		QuiescenceUnknown: m.compatibilityUnknownLocked(),
+		SchemaVersion:     m.state.SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
 		Candidates: candidates, Evidence: evidence, Summaries: summaries, Selections: selections,
 		Safety: map[string]any{"state_write_blocked": m.writeBlocked, "live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour), "probe_budget": m.resourceBudget()},
 	}
@@ -357,6 +386,10 @@ func (m *Manager) AddCandidates(inputs []CandidateInput) ([]Candidate, error) {
 		next[id] = candidate
 	}
 	for _, candidate := range candidates {
+		if previous[candidate.ID].Validation.QuiescenceUnknown {
+			m.mu.Unlock()
+			return nil, ErrCompatibilityQuiescenceUnknown
+		}
 		next[candidate.ID] = candidate
 	}
 	m.state.Candidates = next
@@ -392,12 +425,24 @@ func buildCandidate(input CandidateInput, now time.Time) (Candidate, error) {
 }
 
 func (m *Manager) Validate(ctx context.Context, id string) (Candidate, error) {
-	m.mu.RLock()
+	m.mu.Lock()
+	if m.compatibilityUnknownLocked() {
+		m.mu.Unlock()
+		return Candidate{}, ErrCompatibilityQuiescenceUnknown
+	}
+	if m.nativeRunning {
+		m.mu.Unlock()
+		return Candidate{}, errCompatibilityBusy
+	}
 	candidate, ok := m.state.Candidates[id]
-	m.mu.RUnlock()
+	if ok {
+		m.nativeRunning = true
+	}
+	m.mu.Unlock()
 	if !ok {
 		return Candidate{}, fmt.Errorf("unknown candidate %q", id)
 	}
+	defer m.finishNative()
 	arguments, err := parseArguments(candidate.Arguments)
 	if err != nil {
 		return Candidate{}, err
@@ -413,6 +458,25 @@ func (m *Manager) Validate(ctx context.Context, id string) (Candidate, error) {
 	}
 	candidate.Validation = validation
 	m.mu.Lock()
+	if m.state.CompatibilityFinalizing && !validation.QuiescenceUnknown {
+		err := m.publishCompatibilityValidationLocked(ctx, candidate)
+		if err != nil {
+			candidate.Validation = compatibilityPublicationUnknown(candidate.Validation)
+		}
+		m.mu.Unlock()
+		return candidate, err
+	}
+	if validation.QuiescenceUnknown {
+		// Latch before any disk operation. A failed save or a concurrent known
+		// result must never erase an invocation whose cleanup remains unknown.
+		m.compatibilityUnknown = true
+		if m.state.SchemaVersion < compatibilityUnknownSchema {
+			m.state.SchemaVersion = compatibilityUnknownSchema
+		}
+	} else if m.compatibilityUnknownLocked() {
+		m.mu.Unlock()
+		return Candidate{}, ErrCompatibilityQuiescenceUnknown
+	}
 	m.state.Candidates[id] = candidate
 	err = m.saveLocked()
 	m.mu.Unlock()
@@ -426,6 +490,9 @@ func (m *Manager) DeleteCandidate(id string) error {
 	defer m.mu.Unlock()
 	if _, ok := m.state.Candidates[id]; !ok {
 		return fmt.Errorf("unknown candidate %q", id)
+	}
+	if m.state.Candidates[id].Validation.QuiescenceUnknown {
+		return ErrCompatibilityQuiescenceUnknown
 	}
 	delete(m.state.Candidates, id)
 	evidence := m.state.Evidence[:0]
@@ -455,6 +522,9 @@ func (m *Manager) Record(evidence Evidence) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.compatibilityUnknownLocked() {
+		return ErrCompatibilityQuiescenceUnknown
+	}
 	candidate, ok := m.state.Candidates[evidence.CandidateID]
 	if !ok {
 		return errors.New("candidate is unknown")
@@ -486,6 +556,9 @@ func (m *Manager) Record(evidence Evidence) error {
 func (m *Manager) Select(serviceID, protocol, family, candidateID string, frozen bool) (Selection, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.compatibilityUnknownLocked() {
+		return Selection{}, ErrCompatibilityQuiescenceUnknown
+	}
 	if _, ok := m.state.Candidates[candidateID]; !ok {
 		return Selection{}, errors.New("candidate is unknown")
 	}
@@ -837,6 +910,14 @@ func (m *Manager) now() time.Time {
 // One descriptor-anchored CAS path for every Strategy Lab writer. Package
 // receipts and candidates cannot be separated by a crash or a stale writer.
 func (m *Manager) saveLocked() (retErr error) {
+	if m.compatibilityRetainedUnknownLocked() {
+		// Schema 1 readers reject schema 2 instead of ignoring the new bool.
+		// The existing Strategy Lab state is the only persistent record.
+		m.compatibilityUnknown = true
+		if m.state.SchemaVersion < compatibilityUnknownSchema {
+			m.state.SchemaVersion = compatibilityUnknownSchema
+		}
+	}
 	if strings.TrimSpace(m.Path) == "" {
 		return nil
 	}
@@ -849,8 +930,16 @@ func (m *Manager) saveLocked() (retErr error) {
 				_ = json.Unmarshal(m.image.Data, &previous)
 			}
 			m.state = previous
+			if m.compatibilityUnknown && m.state.SchemaVersion < compatibilityUnknownSchema {
+				m.state.SchemaVersion = compatibilityUnknownSchema
+			}
 		}
 	}()
+	if m.state.CompatibilityFinalizing || (m.state.CompatibilitySession != nil && compatibilitySessionUnknown(*m.state.CompatibilitySession)) {
+		// Only the owner provider/helper may advance this exact session through
+		// its descriptor CAS path. Ordinary writers cannot discard its intent.
+		return ErrCompatibilityQuiescenceUnknown
+	}
 	if m.writeBlocked {
 		return restorejournal.ErrRecovery
 	}

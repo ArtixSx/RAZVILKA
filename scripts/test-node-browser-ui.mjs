@@ -330,3 +330,39 @@ finishDelete({ok:true});await deleting;
 assert.equal(calls.length,deleteCalls,'late delete started private reload after logout');
 assert.equal(state.nodeFeeds.sources.length,0);
 console.log('Node browser filtering, proof expiry, transport labels, focus, polling, logout, durable retries and subscription removal passed');
+
+// Real read transport + a fulfilled catalog response held by sibling reads.
+// Invalidation at individual settlement cannot fence the later aggregate.
+const appSource=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
+const appFunction=name=>appSource.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`))[0];
+context.panelReads={epoch:0,entries:new Map()};context.AbortController=AbortController;context.Headers=Headers;context.ADMIN_TOKEN_KEY='fixture';
+context.fetch=async(url,options)=>{calls.push({url,options});const value=await handler(url,options);return {ok:true,status:200,json:async()=>value};};
+vm.runInContext(['panelReadContext','panelReadContextCurrent','invalidatePanelReads','readPanelResource','api'].map(appFunction).join('\n'),context);
+for(const invalidation of ['mutation','new-auth']) {
+ context.browser.authRequired=false;context.browser.viewActive=true;context.browser.polling=null;document.hidden=false;$('#authScreen').hidden=true;
+ const before={...state.nodes,nodes:[node('node-before')]},after={...state.nodes,nodes:[node('node-after')]};
+ state.nodes=before;state.routeOptions=[{id:'before'}];state.nodeFeeds={sources:[]};
+ let finishRoutes,finishFeeds;
+ handler=(url,options)=>{
+  if(options?.method==='PUT')return {ok:true};
+  if(url==='/api/v1/node-checks/current')return {job:null,pings:[]};
+  if(url==='/api/v1/node-autofallback')return {active:false};
+  if(url==='/api/v1/nodes')return before;
+  if(url==='/api/v1/routes/options')return new Promise(resolve=>{finishRoutes=resolve;});
+  if(url==='/api/v1/node-feeds')return new Promise(resolve=>{finishFeeds=resolve;});
+  throw new Error('Unexpected '+url);
+ };
+ const aggregate=context.pollNodeBrowserChecks();
+ for(let turn=0;turn<60;turn++)await Promise.resolve();
+ assert.equal(context.panelReads.entries.get('/api/v1/nodes').finished,true,'catalog A did not finish before invalidation');
+ assert.equal(typeof finishRoutes,'function');assert.equal(typeof finishFeeds,'function');
+ const browserEpoch=context.browser.epoch;
+ if(invalidation==='mutation')await context.api('/api/v1/nodes/node-after',{method:'PUT',body:'{}'});
+ else {state.authGeneration=(state.authGeneration||0)+1;context.invalidatePanelReads();}
+ state.nodes=after;state.routeOptions=[{id:'after'}];
+ finishRoutes([{id:'old-route'}]);finishFeeds({sources:[{source_id:'old-feed'}]});await aggregate;
+ assert.equal(context.browser.epoch,browserEpoch,'regression relied on a view epoch change');
+ assert.equal(state.nodes.nodes[0].id,'node-after',invalidation+' allowed fulfilled A from the old aggregate');
+ assert.equal(state.routeOptions[0].id,'after');assert.equal(state.nodeFeeds.sources.length,0);
+}
+console.log('Fulfilled A + pending B/C cannot cross mutation or auth epoch: PASS');

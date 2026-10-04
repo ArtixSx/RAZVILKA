@@ -16,21 +16,27 @@ import (
 func retainedNodeFixture(t *testing.T, xray bool) []byte {
 	t.Helper()
 	ctx := context.Background()
-	s, err := nodestore.Open(t.TempDir())
+	path := t.TempDir()
+	// testing.TempDir's numbered child directory follows the process umask.
+	// NodeStore deliberately requires a private POSIX parent, even in fixtures.
+	if err := os.Chmod(path, 0700); err != nil {
+		t.Fatal("private node fixture permissions:", err)
+	}
+	s, err := nodestore.Open(path)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("open private node fixture:", err)
 	}
 	defer s.Close()
 	at := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	nodes, err := s.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174000@private-host.example:443?security=tls&sni=private-sni.example#private", at, time.Hour, false)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("import private node fixture:", err)
 	}
 	if xray {
 		id := nodes.Nodes[0].ID
 		record := nodestore.CheckRecord{ProbeID: "history-pass", ServiceID: "telegram", NetworkProfile: "wan-0123456789ab", RoutePathID: "xray:" + id, TestLevel: "service", Verdict: "PASS", State: "available", Stage: "service", CheckedAt: at, ExpiresAt: at.Add(30 * time.Minute)}
 		if _, err := s.RecordCheck(ctx, id, record, at); err != nil {
-			t.Fatal(err)
+			t.Fatal("record exact Xray fixture check:", err)
 		}
 	}
 	snapshot, err := s.ExportPrivate(ctx)

@@ -110,6 +110,7 @@ func (a *NodeHistoryAdmission) CheckWrite(ctx context.Context, wanted int) error
 func (a *NodeHistoryAdmission) controllerImages(ctx context.Context) ([]selfupdatejournal.BinaryImage, error) {
 	var images []selfupdatejournal.BinaryImage
 	helperPresent := false
+	helperID := ""
 	filesPresent := false
 	helper := filepath.Join(a.stateRoot, "self-update")
 	if _, err := os.Lstat(helper); err == nil {
@@ -127,6 +128,7 @@ func (a *NodeHistoryAdmission) controllerImages(ctx context.Context) ([]selfupda
 			return nil, ErrNodeHistoryAdmission
 		}
 		helperPresent = true
+		helperID = record.Job.ID
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -137,11 +139,14 @@ func (a *NodeHistoryAdmission) controllerImages(ctx context.Context) ([]selfupda
 			return nil, err
 		}
 		retained, err := store.RetainedBinaryImages(ctx)
-		_, present, currentErr := store.Current()
+		current, present, currentErr := store.Current()
 		filesPresent = present
 		store.Close()
 		if err != nil || currentErr != nil {
 			return nil, errors.Join(err, currentErr)
+		}
+		if helperPresent && (!present || helperID != current.ID) {
+			return nil, ErrNodeHistoryAdmission
 		}
 		images = append(images, retained...)
 	} else if !errors.Is(err, os.ErrNotExist) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,35 @@ func TestPolicyTransportTablesAreReservedSeparately(t *testing.T) {
 		state.WireGuardEndpoint.Table = spec.Table
 		if err := validPolicyLayout(state); err != nil {
 			t.Fatal("legacy pin receipt shape was discarded", err)
+		}
+	}
+}
+
+func TestPolicyTransportRouteOwnershipAcceptsOnlyExactNumericSemantics(t *testing.T) {
+	for _, family := range []int{4, 6} {
+		e := &WGEndpointState{Endpoint: "203.0.113.9:443", Table: 211, Device: "wan0", Gateway: "192.0.2.1", Source: "192.0.2.2", Metric: 1}
+		if family == 6 {
+			e.Endpoint, e.Gateway, e.Source = "[2001:db8::9]:443", "2001:db8:1::1", "2001:db8:1::2"
+		}
+		base := fmt.Sprintf("%s via %s dev %s proto static src %s metric 1 onlink", e.prefix(), e.Gateway, e.Device, e.Source)
+		for _, protocol := range []string{"static", "4"} {
+			for _, scope := range []string{"", " scope global", " scope 0", " scope link", " scope 253"} {
+				line := strings.Replace(base, "proto static", "proto "+protocol, 1) + scope
+				if !ownsWGEndpointRoute(e, family, line) {
+					t.Fatal("exact numeric protocol/scope refused", family, line)
+				}
+			}
+		}
+		for _, line := range []string{
+			strings.Replace(base, "proto static", "proto boot", 1),
+			strings.Replace(base, "proto static", "proto 3", 1),
+			strings.Replace(base, "proto static", "proto 04", 1),
+			base + " scope 200", base + " scope 254", base + " scope 0253",
+			base + " proto 4", base + " linkdown",
+		} {
+			if ownsWGEndpointRoute(e, family, line) {
+				t.Fatal("foreign/ambiguous route explained", family, line)
+			}
 		}
 	}
 }

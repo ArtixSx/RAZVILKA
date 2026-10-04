@@ -48,7 +48,7 @@
       ],
       "title": "WG candidate isolation и холодный старт",
       "scope": "Handshake с инициирующим трафиком; реальное попадание в временный интерфейс при одинаковых Address; Sources не удаляются; keepalive optional; TCP/UDP IPv4/IPv6.",
-      "status": "in_progress"
+      "status": "completed"
     },
     {
       "id": "D05",

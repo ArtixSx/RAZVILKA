@@ -20,6 +20,7 @@ sh ./scripts/test-build-targets.sh
 sh ./scripts/test-uninstall-entware.sh
 sh ./scripts/test-dns-rollback.sh
 sh ./scripts/test-autonomy-rollback.sh
+sh ./scripts/test-node-history-rollback.sh
 if command -v node >/dev/null 2>&1; then
   node scripts/build-interface.mjs --check
   node scripts/test-interface-model.mjs
@@ -106,6 +107,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-native-enrollment-supervision.mjs
   node scripts/test-component-update-supervision.mjs
   node scripts/test-self-update-supervision.mjs
+  node scripts/test-node-history-admission.mjs
   node scripts/test-native-opkg-runner.mjs
 fi
 # Build the native executable required by the mandatory transaction fixture.

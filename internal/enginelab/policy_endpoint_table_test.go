@@ -4,11 +4,11 @@ import "testing"
 
 func TestDedicatedTransportTableRequiresExactOwner(t *testing.T) {
 	for _, family := range []string{"4", "6"} {
-		route := "203.0.113.9 dev rz-wg proto static src 192.0.2.2 metric 1"
+		route := "203.0.113.9 dev rz-wg proto 4 scope 253 src 192.0.2.2 metric 1"
 		familyNumber := 4
 		rules := []string{"47: from all to 203.0.113.9 lookup 213"}
 		if family == "6" {
-			familyNumber, route = 6, "2001:db8::9 dev rz-wg proto static src 2001:db8:1::2 metric 1"
+			familyNumber, route = 6, "2001:db8::9 dev rz-wg proto 4 scope 253 src 2001:db8:1::2 metric 1"
 			rules = []string{"", "47: from all to 2001:db8::9 lookup 213"}
 		}
 		tables := map[string]string{"wireguard|endpoint|" + family: route}
