@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strconv"
@@ -99,12 +100,7 @@ func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, proces
 				if err := AssertPolicyDefaultUnreferenced(ctx, a.Runner, a.ip(), PolicyState{Table: table}, family); err != nil {
 					return err
 				}
-				args := []string{"-N"}
-				if family == 6 {
-					args = append(args, "-6")
-				}
-				args = append(args, "-j", "route", "show", "table", strconv.Itoa(table))
-				data, err := a.run(ctx, a.ip(), args...)
+				data, err := a.readWGCompleteNumericTable(ctx, table, family)
 				if err != nil {
 					return err
 				}
@@ -121,6 +117,49 @@ func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, proces
 	}
 	// Observe both sides of the process inventory; no cached absence is used.
 	return observe()
+}
+
+// An unused Linux FIB table can report ENOENT instead of an empty JSON array.
+// Recognize only the bounded exact diagnostic of this family, then confirm it
+// with the existing full numeric text reader. Any route or other error refuses.
+func (a *WARPWireGuardAdapter) readWGCompleteNumericTable(ctx context.Context, table, family int) ([]byte, error) {
+	if family != 4 && family != 6 || table < 1 || table > 252 {
+		return nil, errWGInactiveUnknown
+	}
+	args := []string{"-N"}
+	if family == 6 {
+		args = append(args, "-6")
+	}
+	args = append(args, "-j", "route", "show", "table", strconv.Itoa(table))
+	data, err := a.run(ctx, a.ip(), args...)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if len(data) > 1<<20 {
+		return nil, errWGInactiveUnknown
+	}
+	if err == nil {
+		return data, nil
+	}
+	message := strings.TrimSpace(string(data))
+	if strings.HasPrefix(message, "[]\n") {
+		message = strings.TrimSpace(strings.TrimPrefix(message, "[]\n"))
+	}
+	if strings.HasSuffix(message, "\n[]") {
+		message = strings.TrimSpace(strings.TrimSuffix(message, "\n[]"))
+	}
+	if strings.HasPrefix(message, "[") && strings.HasSuffix(message, "]") {
+		message = strings.TrimSpace(message[1 : len(message)-1])
+	}
+	absent := fmt.Sprintf("Error: ipv%d: FIB table does not exist.", family)
+	if message != absent && message != absent+"\nDump terminated" {
+		return nil, err
+	}
+	confirmation, confirmErr := readPolicyTable(ctx, numericPolicyReadRunner{base: a.Runner}, a.ip(), PolicyState{Table: table}, family)
+	if confirmErr != nil || strings.TrimSpace(string(confirmation)) != "" {
+		return nil, errors.Join(confirmErr, errWGInactiveUnknown)
+	}
+	return []byte("[]"), nil
 }
 
 func (a *WARPWireGuardAdapter) verifyWGInactiveLinks(ctx context.Context, interfaces []string) error {

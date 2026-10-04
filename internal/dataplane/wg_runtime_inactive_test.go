@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,16 +46,45 @@ func (r *wgInactiveRunner) Run(_ context.Context, name string, args ...string) (
 		return []byte("0: from all lookup 255\n32766: from all lookup 254\n32767: from all lookup 253\n"), nil
 	}
 	if strings.Contains(cmd, "-j route show table") {
+		family := 4
+		if strings.Contains(cmd, "-6 ") {
+			family = 6
+		}
+		if r.cut == "missing4" && family == 4 || r.cut == "missing6" && family == 6 || r.cut == "missing-text-occupied" || r.cut == "missing-lookalike" || r.cut == "missing-wrong-family" || r.cut == "missing-oversized" {
+			message := fmt.Sprintf("Error: ipv%d: FIB table does not exist.\nDump terminated", family)
+			if r.cut == "missing-lookalike" {
+				message += "\nPermission denied"
+			}
+			if r.cut == "missing-wrong-family" {
+				message = fmt.Sprintf("Error: ipv%d: FIB table does not exist.", 10-family)
+			}
+			if r.cut == "missing-oversized" {
+				message += strings.Repeat("x", 1<<20)
+			}
+			return []byte(message), errors.New("exit status 2")
+		}
 		if r.cut == "route" {
 			return []byte(`[{"dst":"192.0.2.1","dev":"foreign","protocol":4}]`), nil
 		}
 		return []byte(`[]`), nil
 	}
+	if strings.Contains(cmd, "route show table") {
+		family := 4
+		if strings.Contains(cmd, "-6 ") {
+			family = 6
+		}
+		if r.cut == "missing-text-occupied" {
+			return []byte("192.0.2.1 dev foreign proto kernel\n"), nil
+		}
+		if r.cut == "missing4" && family == 4 || r.cut == "missing6" && family == 6 {
+			return []byte(fmt.Sprintf("Error: ipv%d: FIB table does not exist.\nDump terminated", family)), errors.New("exit status 2")
+		}
+	}
 	return nil, errors.New("unexpected command: " + cmd)
 }
 
 func TestWGInactivityRequiresFreshCompleteAbsenceWithoutEffects(t *testing.T) {
-	for _, cut := range []string{"none", "link", "candidate", "empty-inventory", "route", "selector", "foreign-priority", "unknown", "command", "process", "pending", "orphan"} {
+	for _, cut := range []string{"none", "missing4", "missing6", "missing-text-occupied", "missing-lookalike", "missing-wrong-family", "missing-oversized", "link", "candidate", "empty-inventory", "route", "selector", "foreign-priority", "unknown", "command", "process", "pending", "orphan"} {
 		t.Run(cut, func(t *testing.T) {
 			a := NewWireGuardAdapter(nil, t.TempDir())
 			a.IP = "ip"
@@ -81,7 +111,7 @@ func TestWGInactivityRequiresFreshCompleteAbsenceWithoutEffects(t *testing.T) {
 				}
 				return nil
 			})
-			if cut == "none" {
+			if cut == "none" || cut == "missing4" || cut == "missing6" {
 				if err != nil || count != 2 {
 					t.Fatal("fresh absence refused", count, err)
 				}
