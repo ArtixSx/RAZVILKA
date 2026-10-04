@@ -109,7 +109,7 @@ const fileReading=deferred();f.$('#wgProfileFile').files=[{size:20,text:()=>file
 const fileRead=f.$('#wgProfileFile').change();f.ctx.wgProfilesClearForm();fileReading.resolve('late synthetic private key');await fileRead;
 assert.equal(f.$('#wgProfileContent').value,'','late file read restored a cleared private form');
 console.log('PASS named WG CRUD: typed metadata, exact CAS payloads, references, unknown receipts, single-flight and auth/navigation fences');
-const {realWGSettings,realWGDecision}=await import('./test-wireguard-profile-http-browser.mjs');
+const {realWGSettings,realWGDecision,realWGServiceBodyAllowed}=await import('./test-wireguard-profile-http-browser.mjs');
 const realWGEnv={RAZVILKA_WG_UI_URL:'http://127.0.0.1:18851',RAZVILKA_WG_UI_FIXTURE:'empty-private',RAZVILKA_WG_UI_CHROME:'/installed/chrome',RAZVILKA_WG_UI_SESSION:'/private/session.json'};
 assert.equal(realWGSettings(realWGEnv).origin,'http://127.0.0.1:18851');
 for(const patch of [{RAZVILKA_WG_UI_FIXTURE:'loaded'},{RAZVILKA_WG_UI_URL:'http://user:pass@localhost/'},{RAZVILKA_WG_UI_URL:'http://localhost/path'},{RAZVILKA_WG_UI_USERNAME:'test',RAZVILKA_WG_UI_PASSWORD:'synthetic'}])assert.throws(()=>realWGSettings({...realWGEnv,...patch}));
@@ -118,4 +118,11 @@ assert.equal(realWGDecision(origin,id,origin+'/api/v1/wireguard/profiles','POST'
 for(const method of ['PUT','DELETE'])assert.equal(realWGDecision(origin,id,origin+'/api/v1/wireguard/profiles/'+id,method),true);
 for(const [url,method] of [['/api/v1/apply','POST'],['/api/v1/testlab/routes','POST'],['/api/v1/auth/setup','POST'],['/api/v1/service-control/stop','POST'],['/api/v1/wireguard/profiles/foreign','DELETE'],['/api/v1/components?refresh=true','GET']])assert.equal(realWGDecision(origin,id,origin+url,method),false);
 assert.equal(realWGDecision(origin,id,'https://external.invalid/','GET'),false);
+assert.equal(realWGDecision(origin,id,origin+'/api/v1/services/youtube','PUT'),false);
+assert.equal(realWGDecision(origin,id,origin+'/api/v1/services/youtube','PUT','youtube'),true);
+for(const [path,method] of [['/api/v1/services/telegram','PUT'],['/api/v1/services/youtube','POST'],['/api/v1/services/youtube','DELETE'],['/api/v1/apply?scope=services','POST']])assert.equal(realWGDecision(origin,id,origin+path,method,'youtube'),false);
+const approvedBody={enabled:false,route:'wireguard:ui-wg-012345abcdef',sources:['192.0.2.40/32'],expected_revision:7,expected_profile_revision:'a'.repeat(64)};
+assert.equal(realWGServiceBodyAllowed(structuredClone(approvedBody),approvedBody),true);
+assert.equal(realWGServiceBodyAllowed(approvedBody,null),false);
+for(const patch of [{enabled:true},{route:'wireguard:foreign'},{expected_revision:8},{expected_profile_revision:'b'.repeat(64)},{sources:[]},{wireguard_profile_revision:'a'.repeat(64)}])assert.equal(realWGServiceBodyAllowed({...approvedBody,...patch},approvedBody),false);
 console.log('PASS real WG harness settings and request boundary; actual Handler CRUD remains the coordinator gate');
