@@ -75,23 +75,27 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 	return finish("applied", "NFQWS2 применён через общую транзакцию. Проверка остальных функций сервиса выполняется отдельно.")
 }
 
-// Snapshot only the state needed to avoid taking over existing routes. Draft
-// fingerprints retain the config.ServiceState serialization exactly.
+// Snapshot only the fields needed to avoid taking over existing routes. The
+// whole configuration revision fences additional reviewed profile bindings.
 func starterConfigView(cfg config.Config) onboarding.ConfigView {
 	v := onboarding.ConfigView{Revision: cfg.Revision, Services: map[string]onboarding.State{}, AppliedServices: map[string]onboarding.State{}, ServicePolicies: map[string]bool{}}
 	for id, s := range cfg.Services {
-		v.Services[id] = onboarding.State(s)
+		v.Services[id] = starterServiceState(s)
 	}
 	for id, s := range cfg.AppliedServices {
-		v.AppliedServices[id] = onboarding.State(s)
+		v.AppliedServices[id] = starterServiceState(s)
 	}
 	for id := range cfg.ServicePolicies {
 		v.ServicePolicies[id] = true
 	}
 	v.ServiceControl.SuspendedServices = map[string]onboarding.State{}
 	for id, s := range cfg.ServiceControl.SuspendedServices {
-		v.ServiceControl.SuspendedServices[id] = onboarding.State(s)
+		v.ServiceControl.SuspendedServices[id] = starterServiceState(s)
 	}
 	v.ServiceControl.SuspendedRoutes = cfg.ServiceControl.SuspendedRoutes
 	return v
+}
+
+func starterServiceState(s config.ServiceState) onboarding.State {
+	return onboarding.State{Enabled: s.Enabled, Mode: s.Mode, Route: s.Route, Sources: append([]string(nil), s.Sources...)}
 }

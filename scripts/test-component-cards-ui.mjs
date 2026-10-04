@@ -17,7 +17,7 @@ const base = {id:'usque', name:meta.name, provider:'opkg', installed:true, insta
 const state = {components:[{...base}], engines:[{id:'usque', installed:true, version:'different runtime output'}], engineConfigs:[], services:[], dataLoad:{components:{loaded:true, phase:'ready'}}};
 const model = vm.createContext({state, esc, consoleDate:value=>value, ci:()=>'', serviceDashboardApplied:service=>service.applied_state||{}, consoleEngineMeta:{usque:meta}});
 vm.runInContext(slice(consoleCode, 'function consoleEngineState(', 'function consoleNavigate('), model);
-vm.runInContext(slice(interfaceCode, 'function interfaceEngineCard(', 'function renderInterfaceEngines('), model);
+vm.runInContext(slice(interfaceCode, 'const engineProgressEvidence =', 'function renderInterfaceEngines('), model);
 const card = () => model.interfaceEngineCard('usque', meta);
 assert.match(card(), /1\.0\.1 → 1\.0\.3/);
 assert.doesNotMatch(card(), /different runtime output/);

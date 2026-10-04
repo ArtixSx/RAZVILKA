@@ -527,7 +527,7 @@ func (a *WARPWireGuardAdapter) installWGEndpoint(ctx context.Context, e *WGEndpo
 	routeAdded, ruleAdded := true, false
 	defer func() {
 		if retErr != nil {
-			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+			cleanup, cancel := context.WithTimeout(wgNamedCleanupContext(context.WithoutCancel(ctx)), 8*time.Second)
 			defer cancel()
 			if ruleAdded {
 				_, err := a.run(cleanup, a.ip(), e.ruleArgs("del")...)
@@ -554,6 +554,7 @@ func (a *WARPWireGuardAdapter) installWGEndpoint(ctx context.Context, e *WGEndpo
 }
 
 func (a *WARPWireGuardAdapter) removeWGEndpoint(ctx context.Context, e *WGEndpointState) error {
+	ctx = wgNamedCleanupContext(ctx)
 	if e == nil {
 		return nil
 	}

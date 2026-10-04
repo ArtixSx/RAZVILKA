@@ -289,14 +289,16 @@ type ExecutionStep struct {
 }
 
 type Execution struct {
-	PlanID           string          `json:"plan_id"`
-	Digest           string          `json:"digest"`
-	State            string          `json:"state"`
-	StartedAt        string          `json:"started_at"`
-	FinishedAt       string          `json:"finished_at,omitempty"`
-	Steps            []ExecutionStep `json:"steps"`
-	Error            string          `json:"error,omitempty"`
-	RollbackVerified bool            `json:"rollback_verified,omitempty"`
+	ResourcePlanID   string              `json:"resource_plan_id,omitempty"`
+	Resources        []ExecutionResource `json:"resources,omitempty"`
+	PlanID           string              `json:"plan_id"`
+	Digest           string              `json:"digest"`
+	State            string              `json:"state"`
+	StartedAt        string              `json:"started_at"`
+	FinishedAt       string              `json:"finished_at,omitempty"`
+	Steps            []ExecutionStep     `json:"steps"`
+	Error            string              `json:"error,omitempty"`
+	RollbackVerified bool                `json:"rollback_verified,omitempty"`
 }
 
 type PolicyRefresh struct {

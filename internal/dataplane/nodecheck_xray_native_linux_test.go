@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -151,7 +152,48 @@ func nativeXrayServerReady(t *testing.T, address, security string) {
 }
 
 func TestNativeXrayExactNode(t *testing.T) {
+	if nativeXrayIsolatedFixture(t) {
+		return
+	}
 	nativeXrayExactNodeMatrix(t, []nativeXrayCase{{security: "tls", lifecycle: true}, {security: "reality", lifecycle: true}})
+}
+
+// Each matrix creates a fresh CA. Go's system roots are process-cached, so a
+// second matrix cannot replace the first CA merely by changing SSL_CERT_FILE.
+// Re-execute the selected test in the SAME isolated namespace, with a fresh
+// Go trust store. The production service/TLS probes and genuine Xray processes
+// stay unchanged; explicit fixture roots still verify both paired egress paths.
+func nativeXrayIsolatedFixture(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv("RAZVILKA_XRAY_NATIVE") == "" {
+		t.Skip("requires scripts/check-xray-native.sh and a verified Xray binary")
+	}
+	const marker = "RAZVILKA_XRAY_FIXTURE_CHILD"
+	if selected := os.Getenv(marker); selected != "" {
+		if selected != t.Name() {
+			t.Fatal("native fixture child selected a different matrix")
+		}
+		return false
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(11 * time.Minute)
+	if parentDeadline, ok := t.Deadline(); ok && parentDeadline.Add(-5*time.Second).Before(deadline) {
+		deadline = parentDeadline.Add(-5 * time.Second)
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	command := exec.CommandContext(ctx, binary, "-test.run", "^"+regexp.QuoteMeta(t.Name())+"$", "-test.v", "-test.count=1", "-test.timeout", time.Until(deadline).String())
+	command.Env = append(os.Environ(), marker+"="+t.Name())
+	output, err := command.CombinedOutput()
+	defer clear(output)
+	t.Logf("isolated native matrix:\n%s", output)
+	if err != nil {
+		t.Fatalf("isolated native matrix failed: %v", err)
+	}
+	return true
 }
 
 type nativeXrayCase struct {
@@ -164,6 +206,9 @@ type nativeXrayCase struct {
 // Separate opt-in test: genuine Xray server/client for each XHTTP mode,
 // preserving the accepted RAW/TCP fixture and its independently recorded runs.
 func TestNativeXrayXHTTPExactNode(t *testing.T) {
+	if nativeXrayIsolatedFixture(t) {
+		return
+	}
 	var cases []nativeXrayCase
 	for _, security := range []string{"tls", "reality"} {
 		for _, mode := range []string{"auto", "packet-up", "stream-up", "stream-one"} {
@@ -199,7 +244,8 @@ func nativeXrayExactNodeMatrix(t *testing.T, cases []nativeXrayCase) {
 	root := t.TempDir()
 	cert, key, roots := nativeXrayCertificate(t, root)
 	// Both Go service probes and the child Xray verify the generated CA.
-	// This process runs only this test; production never supplies these roots.
+	// The isolated fixture process runs only this matrix. Production never
+	// supplies these roots; the wrapper prevents Go system-root cache reuse.
 	t.Setenv("SSL_CERT_FILE", cert)
 	t.Setenv("SSL_CERT_DIR", filepath.Join(root, "empty-roots"))
 	var directRequests, proxyRequests, serviceRequests atomic.Int64

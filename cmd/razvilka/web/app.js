@@ -2076,6 +2076,7 @@ function engineStatusText(engine) {
 }
 
 function renderEngineControl() {
+  if (typeof renderWireGuardProfiles === 'function') renderWireGuardProfiles();
   if (!state.engineConfigs.length) {
     const load = state.dataLoad?.engineConfigs;
     const message = load?.loaded ? 'Нет описаний обходов' : load?.phase === 'busy' ? 'Настройки временно заняты. Повторим загрузку.' : load?.phase === 'error' ? 'Не удалось загрузить настройки. Нажмите «Обновить».' : 'Загружаем настройки обходов…';
@@ -2443,8 +2444,10 @@ function markEngineEditorDirty() {
   state.engineEditorDirty = true;
   state.engineEditorVersion = (state.engineEditorVersion || 0) + 1;
   state.engineValidation = null;
+  if (typeof invalidateEngineProgress === 'function') invalidateEngineProgress(state.selectedEngine);
   $('#engineEditorMessage').textContent = 'Есть изменения. Нажмите «Проверить и применить».';
   updateEngineEditorActions();
+  if (typeof refreshEngineProgressCards === 'function') refreshEngineProgressCards();
 }
 
 function invalidateEngineEditorContext() {
@@ -2472,9 +2475,11 @@ function finishEngineIntent(intent) {
   intent.body = null;
   updateEngineEditorActions();
   if (engineEditorContextCurrent(intent)) renderEngineControl();
+  if (typeof refreshEngineProgressCards === 'function') refreshEngineProgressCards();
 }
 
 function cancelEngineIntent(clearPrivate = false) {
+  if (state.engineIntent && typeof invalidateEngineProgress === 'function') invalidateEngineProgress(state.engineIntent.engineID);
   state.engineIntent?.controller.abort();
   invalidateEngineEditorContext();
   if (clearPrivate) {
@@ -2669,13 +2674,16 @@ async function validateEngineFile() {
   try {
     if (intent.dirty && !await saveEngineDraft(intent)) return;
     if (!engineIntentCurrent(intent)) return;
+    const progress = typeof engineProgressBinding === 'function' ? engineProgressBinding(intent.engineID, intent.fileID) : null;
     const validation = await api(`/api/v1/engine-configs/${encodeURIComponent(intent.engineID)}/validate?file=${encodeURIComponent(intent.fileID)}`, { method: 'POST', signal: intent.controller.signal });
     if (!engineIntentCurrent(intent)) return;
     if (validation.engine_id !== intent.engineID || validation.file_id !== intent.fileID) throw new Error('Проверен другой файл. Повторите выбор.');
     state.engineValidation = validation;
+    if (progress && (!await refreshEngineConfigs(intent) || !engineIntentCurrent(intent))) return;
+    if (typeof engineProgressFormat === 'function') engineProgressFormat(progress, validation);
     renderEngineControl();
     switchEngineTab('check');
-  } catch (error) { if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Ошибка проверки конфигурации'); }
+  } catch (error) { if (engineIntentCurrent(intent)) { if (typeof invalidateEngineProgress === 'function') invalidateEngineProgress(intent.engineID); showDetails({ error: error.message }, 'Ошибка проверки конфигурации'); } }
   finally { finishEngineIntent(intent); }
 }
 
@@ -2721,12 +2729,14 @@ async function applyEngineConfig() {
     $('#engineEditorMessage').textContent = 'Подготавливаем выбранные настройки и проверяем их…';
     if (intent.dirty && !await saveEngineDraft(intent)) return;
     if (!engineIntentCurrent(intent)) return;
+    const progress = typeof engineProgressBinding === 'function' ? engineProgressBinding(intent.engineID, intent.fileID) : null;
     const validation = await api(`/api/v1/engine-configs/${encodeURIComponent(intent.engineID)}/validate?file=${encodeURIComponent(intent.fileID)}`, { method: 'POST', signal: intent.controller.signal });
     if (!engineIntentCurrent(intent)) return;
     if (validation.engine_id !== intent.engineID || validation.file_id !== intent.fileID) throw new Error('Проверен другой файл. Применение остановлено.');
     state.engineValidation = validation;
     if (!state.engineValidation.ok) throw new Error(state.engineValidation.output || 'Конфигурация не прошла проверку');
     if (!await refreshEngineConfigs(intent) || !engineIntentCurrent(intent)) return;
+    if (typeof engineProgressFormat === 'function') engineProgressFormat(progress, validation);
     const plan = await planWithRetainedNodeCheck(`?scope=engine&engine=${encodeURIComponent(intent.engineID)}`, { signal: intent.controller.signal, isCurrent: () => engineIntentCurrent(intent) });
     if (!engineIntentCurrent(intent)) return;
     const unused = (plan.transaction?.blockers || []).find((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED' && blocker.adapter === engine.id);
@@ -2737,6 +2747,7 @@ async function applyEngineConfig() {
     await applyDraft('engine', intent.engineID, { signal: intent.controller.signal, isCurrent: () => engineIntentCurrent(intent), preview: plan, engineIntent: intent });
   } catch (error) {
     if (!engineIntentCurrent(intent)) return;
+    if (typeof invalidateEngineProgress === 'function') invalidateEngineProgress(intent.engineID);
     if (error.payload?.code === 'NODE_ROUTE_DEPENDENCY') showRouteDependencyNotice(error);
     else showDetails({ error: error.message }, 'Настройки не применены');
   }
@@ -4318,6 +4329,7 @@ function openNodeServiceSection(id) {
 async function applyDraft(scope = 'all', engineID = '', options = {}) {
   const current = () => !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
   if (!current()) return null;
+  const progress = scope === 'engine' && typeof engineProgressBinding === 'function' ? engineProgressBinding(engineID, state.selectedEngineFile || 'main') : null;
   let awaitingReview = false;
   const closeCanceledReview = () => { if (awaitingReview && $('#applyReviewDialog').open) $('#applyReviewDialog').close(); };
   options.signal?.addEventListener('abort', closeCanceledReview, { once: true });
@@ -4359,6 +4371,7 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
     if (!current()) return null;
     await showPlan();
     if (!current()) return null;
+    if (typeof engineProgressApply === 'function') engineProgressApply(progress, preview, result);
     if (result.safe_mode && result.reviewed && !result.live_applied) {
       showNotice('review', 'План проверен — рабочие маршруты не изменены', 'Изменения подготовлены. Чтобы включить их, разрешите применение в настройках и повторите проверку.', result, true);
     } else if (result.live_applied && !result.scope_pending_changes) {
@@ -4373,6 +4386,7 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
     return result;
   } catch (error) {
 	if (!current()) return null;
+	if (scope === 'engine' && typeof invalidateEngineProgress === 'function') invalidateEngineProgress(engineID);
 	await showPlan();
 	if (!current()) return null;
 	const unused = (error.payload?.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');

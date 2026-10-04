@@ -39,3 +39,17 @@ excluded first candidate, all candidates excluded, bad exclusion, missing
 authority and a wrong device without fallback. Related dataplane tests passed
 0.885s; vet/diff RC0. Native execution remains with Root, including actual
 IPv4/IPv6 default FIB observations before promoting the held checkpoint.
+
+Root's isolated native source54 then confirmed a separate readback mismatch:
+`67: from 192.168.93.0/24 fwmark 0x20000000/0x28000000 iif rz-def-lan lookup 204`
+and the equivalent IPv6 `from fd93::/64` omit `to` for the default destination.
+The ownership parser now normalizes only fixed 5/7/9-token omitted-destination
+forms into its existing 7/9/11-token exact grammar, inserting family-specific
+canonical `/0`. Exact mark/mask, ingress, source family, numeric coordinates
+and unknown-selector rejection remain required. No general token parser or
+cleanup authority is added. Regressions compare omitted/explicit tuples in
+both families, refuse near matches and run modeled apply/readback/cleanup with
+the actual omitted form. The existing ingress test now checks every expected
+full tuple at reserved priorities while leaving baseline rules outside those
+priorities alone. Root remains responsible for repeating actual native kernel
+verification after this parser correction.

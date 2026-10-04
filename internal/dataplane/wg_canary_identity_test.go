@@ -163,12 +163,14 @@ func TestWGManagerSamePeerProbePreservesCommittedLKG(t *testing.T) {
 	a, r, plan, root := ownWireGuardFixture(t, testOwnWireGuardProfile(""))
 	ctx := context.Background()
 	store := wireguardprofile.New(filepath.Join(t.TempDir(), "profiles"))
-	if _, err := store.Put(ctx, "named", "named", testOwnWireGuardProfile(""), ""); err != nil {
+	metadata, err := store.Put(ctx, "named", "named", testOwnWireGuardProfile(""), "")
+	if err != nil {
 		t.Fatal(err)
 	}
 	a.Profiles = store
 	plan.EngineDrafts = nil
 	plan.Routes[0].Resolved = "wireguard:named"
+	plan.Routes[0].WireGuardProfileRevision = metadata.Revision
 	for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Activate, a.Commit} {
 		if err := step(ctx, plan, root); err != nil {
 			t.Fatal(err)
