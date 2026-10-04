@@ -53,7 +53,7 @@ Enrollment restart в этом стенде — адресный вызов CLOU
 
 Root сообщил native RC0 для OPS `8f96be6`; это owner provider checkpoint, не результат обновлённого CLOUD harness. Ранее сообщённые Linux результаты исходного retention harness на integration d010e13/source31 и typed-reader порции source32 относятся к прежнему shell lifecycle. Они не доказывают новый managed refusal и не разрешают raw rollback с retained protocol.
 
-Actual запуск обновлённого harness на объединённом source — **UNVERIFIED**, выполняет координатор. CLOUD выполняет portable unit/vet и Linux cross-compilation без запуска fixture binaries; результаты новой порции записываются в [CLOUD_RU.md](CLOUD_RU.md). Выключенный opt-in — SKIP, не native PASS.
+Root сообщил `cloud-bundle-native42`, combined source `8a3ade8`, RC0: updated retention suite прошёл все branches без relevant SKIP (timeout/crash/file/helper/control/manifest/history refusals). Это actual filesystem/subprocess fixture execution, не matching admitted provider recovery или genuine USQUE/WARP. CLOUD самостоятельно native не запускал; portable/cross-compile результаты и root checkpoint записаны в [CLOUD_RU.md](CLOUD_RU.md). Выключенный opt-in сам по себе остаётся SKIP, не native PASS.
 
 Matching provider recovery после CORE wiring, `InstallAdmitted/RestoreAdmitted` с actual authority/quiescence, six-file/private schema2 restoration, generic opened-root/alias/ancestor overlap, power-cut durability и live acceptance остаются отдельными root проверками. Этот стенд не подменяет их legacy raw shell или инертным schema ответом.
 

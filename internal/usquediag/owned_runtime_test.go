@@ -137,7 +137,7 @@ func requireOwnedRuntimeError(t *testing.T, got OwnedRuntimeIdentity, err error,
 
 func requireOwnedProbeError(t *testing.T, got OwnedRuntimeEvidence, err error, code string) {
 	t.Helper()
-	if err == nil || err.Error() != code || got.Origin != "" || got.Identity != (OwnedRuntimeIdentity{}) || len(got.ConfirmedRoutes) != 0 {
+	if err == nil || err.Error() != code || got.Origin != "" || got.Identity != (OwnedRuntimeIdentity{}) || len(got.ConfirmedRoutes) != 0 || len(got.ReachableRoutes) != 0 || len(got.ChallengeRoutes) != 0 {
 		t.Fatalf("evidence=%+v err=%v want=%s", got, err, code)
 	}
 }
@@ -187,7 +187,7 @@ func TestOwnedProducerPreflightHasNoCallbacksOrIO(t *testing.T) {
 			}
 			probe := func(context.Context, OwnedNetworkRequest) (OwnedApplicationProof, error) {
 				calls++
-				return OwnedApplicationProof{Warp: "on"}, nil
+				return OwnedApplicationProof{Warp: "on", ReachableRoutes: []string{"fixture-service"}}, nil
 			}
 			got, err := probeOwnedUSQUE(ctx, o, observe, probe, func() time.Time { calls++; return time.Now() })
 			requireOwnedProbeError(t, got, err, want)
@@ -216,7 +216,7 @@ func TestOwnedProducerRereadsAdmission(t *testing.T) {
 			}
 			probe := func(context.Context, OwnedNetworkRequest) (OwnedApplicationProof, error) {
 				probes++
-				return OwnedApplicationProof{Warp: "on"}, nil
+				return OwnedApplicationProof{Warp: "on", ReachableRoutes: []string{"fixture-service"}}, nil
 			}
 			got, err := probeOwnedUSQUE(context.Background(), o, observe, probe, func() time.Time { return time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC) })
 			requireOwnedProbeError(t, got, err, "owned-probe-admission-refused")
@@ -259,7 +259,7 @@ func TestOwnedProducerRejectsBeforeAfterDrift(t *testing.T) {
 				return i, nil
 			}
 			got, err := probeOwnedUSQUE(context.Background(), ownedFixtureOptions(t), observe, func(context.Context, OwnedNetworkRequest) (OwnedApplicationProof, error) {
-				return OwnedApplicationProof{Warp: "plus"}, nil
+				return OwnedApplicationProof{Warp: "plus", ReachableRoutes: []string{"fixture-service"}}, nil
 			}, func() time.Time { return time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC) })
 			requireOwnedProbeError(t, got, err, "owned-probe-runtime-changed")
 		})
@@ -276,6 +276,7 @@ func TestOwnedProducerPathInferenceAndUDPForwardingAreSeparate(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/udp-%t", transport, udp), func(t *testing.T) {
 				o := ownedFixtureOptions(t)
 				o.Runtime.Transport = transport
+				o.Network.Services[0].Validator = func(OwnedServiceResponse) error { return nil }
 				if udp {
 					o.Network.UDP = &OwnedUDPProbe{Target: netip.MustParseAddrPort("8.8.8.8:9999")}
 				}
@@ -286,7 +287,7 @@ func TestOwnedProducerPathInferenceAndUDPForwardingAreSeparate(t *testing.T) {
 				}
 				i.BindingID = ownedIdentityBinding(i)
 				checked := time.Date(2026, 10, 4, 0, 0, 0, 123, time.UTC)
-				proof := OwnedApplicationProof{Warp: "plus", ConfirmedRoutes: []string{"fixture-service"}, UDPConfirmed: udp}
+				proof := OwnedApplicationProof{Warp: "plus", ReachableRoutes: []string{"fixture-service"}, ConfirmedRoutes: []string{"fixture-service"}, UDPConfirmed: udp}
 				got, err := probeOwnedUSQUE(context.Background(), o, func(context.Context, OwnedRuntimeRequest) (OwnedRuntimeIdentity, error) { return i, nil }, func(_ context.Context, request OwnedNetworkRequest) (OwnedApplicationProof, error) {
 					if (request.UDP != nil) != udp {
 						t.Fatal("UDP challenge request lost")
@@ -336,7 +337,7 @@ func TestOwnedProducerRejectsInvalidWindowAndWARP(t *testing.T) {
 				if name == "canceled-during-probe" {
 					cancel()
 				}
-				return OwnedApplicationProof{Warp: warp}, nil
+				return OwnedApplicationProof{Warp: warp, ReachableRoutes: []string{"fixture-service"}}, nil
 			}, func() time.Time {
 				clocks++
 				if clocks == 1 {
@@ -352,7 +353,7 @@ func TestOwnedProducerRejectsInvalidWindowAndWARP(t *testing.T) {
 func TestOwnedEvidenceFreshnessRejectsStaleAndCurrentMismatch(t *testing.T) {
 	checked := time.Date(2026, 10, 4, 0, 0, 0, 123, time.UTC)
 	identity := ownedFixtureIdentity()
-	base := OwnedRuntimeEvidence{Origin: "managed-usque-canary", CheckedAt: checked.Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).Format(time.RFC3339Nano), Identity: identity, ProofBasis: ownedPathBasis, ProtocolPath: "HTTP/2", Warp: "on"}
+	base := OwnedRuntimeEvidence{ServiceProofVersion: ownedServiceProofVersion, Origin: "managed-usque-canary", CheckedAt: checked.Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).Format(time.RFC3339Nano), Identity: identity, ProofBasis: ownedPathBasis, ProtocolPath: "HTTP/2", Warp: "on"}
 	if !OwnedEvidenceFresh(base, identity, checked.Add(time.Nanosecond)) {
 		t.Fatal("valid current receipt refused")
 	}
@@ -816,7 +817,7 @@ func TestOwnedEvidenceRequiresValidCurrentRuntimeEvenWithMatchingBinding(t *test
 			i := ownedFixtureIdentity()
 			tt.change(&i)
 			i.BindingID = ownedIdentityBinding(i)
-			e := OwnedRuntimeEvidence{Origin: "managed-usque-canary", CheckedAt: checked.Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).Format(time.RFC3339Nano), Identity: i, ProofBasis: ownedPathBasis, ProtocolPath: i.Transport, Warp: "on"}
+			e := OwnedRuntimeEvidence{ServiceProofVersion: ownedServiceProofVersion, Origin: "managed-usque-canary", CheckedAt: checked.Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).Format(time.RFC3339Nano), Identity: i, ProofBasis: ownedPathBasis, ProtocolPath: i.Transport, Warp: "on"}
 			if OwnedEvidenceFresh(e, i, checked) || safeOwnedEvidence(e) {
 				t.Fatal("invalid identity accepted solely because binding matches")
 			}
@@ -834,7 +835,7 @@ func TestOwnedEvidenceConversionCannotPromoteLegacyCapabilities(t *testing.T) {
 				i.PeerObservation = "udp-unconnected-exclusive-config-inference"
 			}
 			i.BindingID = ownedIdentityBinding(i)
-			e := OwnedRuntimeEvidence{Origin: "managed-usque-canary", CheckedAt: checked.Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).Format(time.RFC3339Nano), Identity: i, ProofBasis: ownedPathBasis, ProtocolPath: transport, Warp: "on", ConfirmedRoutes: []string{"fixture-service"}}
+			e := OwnedRuntimeEvidence{ServiceProofVersion: ownedServiceProofVersion, Origin: "managed-usque-canary", CheckedAt: checked.Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).Format(time.RFC3339Nano), Identity: i, ProofBasis: ownedPathBasis, ProtocolPath: transport, Warp: "on", ReachableRoutes: []string{"fixture-service"}, ConfirmedRoutes: []string{"fixture-service"}}
 			if !safeOwnedEvidence(e) {
 				t.Fatal("valid typed evidence refused")
 			}
@@ -983,7 +984,7 @@ func TestOwnedEvidenceReadbackExpiresDuringCallbacksAndRefusesCancellation(t *te
 			checked := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
 			clock := checked.Add(time.Minute)
 			identity := ownedFixtureIdentity()
-			evidence := OwnedRuntimeEvidence{Origin: "managed-usque-canary", CheckedAt: checked.Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).Format(time.RFC3339Nano), Identity: identity, ProofBasis: ownedPathBasis, ProtocolPath: identity.Transport, Warp: "on", ConfirmedRoutes: []string{"fixture-service"}}
+			evidence := OwnedRuntimeEvidence{ServiceProofVersion: ownedServiceProofVersion, Origin: "managed-usque-canary", CheckedAt: checked.Format(time.RFC3339Nano), ValidUntil: checked.Add(MaxCanaryAge).Format(time.RFC3339Nano), Identity: identity, ProofBasis: ownedPathBasis, ProtocolPath: identity.Transport, Warp: "on", ReachableRoutes: []string{"fixture-service"}, ConfirmedRoutes: []string{"fixture-service"}}
 			data, err := json.Marshal(evidence.CanaryEvidence())
 			if err != nil {
 				t.Fatal(err)
