@@ -19,12 +19,13 @@ var ErrDomainPolicy = errors.New("domain policy flow authority unavailable")
 // builder. Selected=false keeps a catalogue identity for explicit RU rules;
 // it cannot acquire service override authority merely from a DNS answer.
 type DomainPolicyService struct {
-	ID       string
-	Route    string
-	Selected bool
-	Domains  []string
-	CIDRs    []string
-	Sources  []string
+	ID             string
+	Route          string
+	Selected       bool
+	Domains        []string
+	DomainSuffixes []string // only these entries match subdomains
+	CIDRs          []string
+	Sources        []string
 }
 
 // NameSource may be application, tls-sni or quic-sni ONLY when the existing
@@ -38,6 +39,7 @@ type DomainPolicyFlow struct {
 	Protocol        string // tcp or udp
 	Name            string
 	NameSource      string
+	NameState       DomainPolicyNameState
 	Ambiguous       bool
 	Coalesced       bool
 	BeforeOutbound  bool
@@ -94,12 +96,13 @@ func CompileDomainPolicy(generation string, policy *config.NetworkPolicy, scope 
 	seen := map[string]bool{}
 	for i := range p.services {
 		s := &p.services[i]
-		if s.ID == "" || seen[s.ID] || len(s.Domains) > 256 || len(s.CIDRs) > 256 || len(s.Sources) > 128 || s.Selected && (adapterID(s.Route) == "" || adapterID(s.Route) == "auto") {
+		if s.ID == "" || seen[s.ID] || len(s.Domains)+len(s.DomainSuffixes) > 256 || len(s.CIDRs) > 256 || len(s.Sources) > 128 || s.Selected && (adapterID(s.Route) == "" || adapterID(s.Route) == "auto") {
 			return nil, ErrDomainPolicy
 		}
 		seen[s.ID] = true
 		s.Domains, s.CIDRs, s.Sources = slices.Clone(s.Domains), slices.Clone(s.CIDRs), slices.Clone(s.Sources)
-		for _, name := range s.Domains {
+		s.DomainSuffixes = slices.Clone(s.DomainSuffixes)
+		for _, name := range append(slices.Clone(s.Domains), s.DomainSuffixes...) {
 			canonical, err := config.PolicyDomain(name)
 			if err != nil || canonical != name {
 				return nil, ErrDomainPolicy
@@ -152,6 +155,9 @@ func (p *DomainPolicy) DecideWithScope(flow DomainPolicyFlow, current autonomy.S
 }
 
 func domainPolicyName(flow DomainPolicyFlow) string {
+	if flow.NameState != "" && flow.NameState != DomainPolicyNameVisible {
+		return ""
+	}
 	if !flow.BeforeOutbound || flow.Ambiguous || flow.Coalesced || !slices.Contains([]string{"application", "tls-sni", "quic-sni"}, flow.NameSource) || flow.NameSource == "tls-sni" && flow.Protocol != "tcp" || flow.NameSource == "quic-sni" && flow.Protocol != "udp" {
 		return ""
 	}
@@ -190,6 +196,9 @@ func (p *DomainPolicy) Decide(flow DomainPolicyFlow, now time.Time) DomainPolicy
 		s := &p.services[i]
 		matched := false
 		for _, name := range s.Domains {
+			matched = matched || q.Domain != "" && q.Domain == name
+		}
+		for _, name := range s.DomainSuffixes {
 			matched = matched || q.Domain != "" && (q.Domain == name || strings.HasSuffix(q.Domain, "."+name))
 		}
 		for _, value := range s.CIDRs {
@@ -254,7 +263,7 @@ func (p *DomainPolicy) opaqueDirectApplies(device string, source netip.Addr) boo
 		}
 	}
 	for _, service := range p.services {
-		if !service.Selected || service.Route != "direct" || len(service.Domains) == 0 {
+		if !service.Selected || service.Route != "direct" || len(service.Domains)+len(service.DomainSuffixes) == 0 {
 			continue
 		}
 		if len(service.Sources) == 0 {
