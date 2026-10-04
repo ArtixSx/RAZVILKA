@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -29,6 +30,8 @@ type SelfUpdateFileAdapter interface {
 	Ready(context.Context, string) error
 	Review(context.Context, string) (revision uint64, migratedConfigSHA256 string, files []selfupdatejournal.File, err error)
 	Authority(context.Context, string, uint64) error
+	AuthorityAction(context.Context, string, uint64, string) error
+	EffectAdmission(context.Context, string, string, string, func() error) error
 	Quiescence(context.Context, string) error
 	Run(context.Context, string, string) error
 	Observe(context.Context, string, string) error
@@ -58,7 +61,7 @@ func (f *SelfUpdateFiles) RunHelper(ctx context.Context, id string, guard selfup
 	if err != nil {
 		return err
 	}
-	for _, action := range []string{"prepare", "install", "stop-old-panel", "start-candidate-panel"} {
+	for _, action := range []string{"prepare", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "install", "start-candidate-panel"} {
 		if err := f.Action(ctx, id, action, revision, guard); err != nil {
 			return err
 		}
@@ -72,7 +75,7 @@ func (f *SelfUpdateFiles) RunHelper(ctx context.Context, id string, guard selfup
 		if readErr != nil || !present || r.ID != id || r.Phase != "command-finished" || r.Command != "start-candidate-panel" {
 			return errors.Join(err, readErr)
 		}
-		for _, action := range []string{"stop-candidate-panel", "restore", "start-rollback-panel", "accept-rollback"} {
+		for _, action := range []string{"stop-candidate-panel", "restore", "restore-private-state", "start-rollback-panel", "accept-rollback"} {
 			if rollbackErr := f.Action(ctx, id, action, revision, guard); rollbackErr != nil {
 				return errors.Join(err, rollbackErr)
 			}
@@ -244,7 +247,7 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 				return err
 			}
 		}
-		return f.Adapter.Authority(c, id, revision)
+		return f.Adapter.AuthorityAction(c, id, revision, selfUpdateActionAuthority(action))
 	}
 	quiescence := func(c context.Context) error { return f.Adapter.Quiescence(c, id) }
 	if err := authority(ctx); err != nil {
@@ -300,16 +303,28 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 	case "prepare":
 		return s.Prepare(ctx, id, files, authority, quiescence)
 	case "install":
-		return s.Install(ctx, id, authority, quiescence)
+		r, present, err := s.Current()
+		if err != nil || !present || r.ID != id {
+			return errors.Join(selfupdatejournal.ErrMismatch, err)
+		}
+		if r.Rollback || !selfUpdatePreFilesComplete(r.Commands) || r.Phase != "prepared" && r.Phase != "installing" {
+			return selfupdatejournal.ErrPending
+		}
+		return s.InstallAdmitted(ctx, id, authority, quiescence, func(c context.Context, effect string, begin func() error) error {
+			return f.Adapter.EffectAdmission(c, id, "start/live", effect, begin)
+		})
 	case "restore":
 		r, present, err := s.Current()
 		if err != nil || !present || r.ID != id {
 			return errors.Join(selfupdatejournal.ErrMismatch, err)
 		}
-		if !r.Rollback && (r.Phase != "command-finished" || r.Command != "stop-old-panel" && r.Command != "stop-candidate-panel") {
+		knownInactive := selfUpdatePreFilesComplete(r.Commands) && (r.Phase == "prepared" || r.Phase == "installing" || r.Phase == "installed") || r.Phase == "command-finished" && r.Command == "stop-candidate-panel"
+		if !r.Rollback && !knownInactive {
 			return selfupdatejournal.ErrPending
 		}
-		return s.Restore(ctx, id, authority, quiescence)
+		return s.RestoreAdmitted(ctx, id, authority, quiescence, func(c context.Context, effect string, begin func() error) error {
+			return f.Adapter.EffectAdmission(c, id, "replace-to-rollback", effect, begin)
+		})
 	case "accept-live", "accept-rollback":
 		rollback := action == "accept-rollback"
 		r, present, err := s.Current()
@@ -352,7 +367,7 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 			return selfupdatejournal.ErrMismatch
 		}
 		return s.ResolveUnknown(ctx, id, authority, quiescence, func(c context.Context) error { return f.Adapter.Observe(c, id, r.Command) })
-	case "stop-old-panel", "start-candidate-panel", "stop-candidate-panel", "start-rollback-panel":
+	case "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel", "restore-private-state", "start-rollback-panel":
 		r, present, err := s.Current()
 		if err != nil || !present || r.ID != id {
 			return errors.Join(selfupdatejournal.ErrMismatch, err)
@@ -360,10 +375,13 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 		if r.Phase == "command-started" {
 			return selfupdatejournal.ErrUnknown
 		}
-		allowed := action == "stop-old-panel" && !r.Rollback && r.Phase == "installed" && len(r.Commands) == 0 ||
-			action == "start-candidate-panel" && !r.Rollback && r.Phase == "command-finished" && r.Command == "stop-old-panel" ||
+		allowed := action == "stop-old-panel" && !r.Rollback && r.Phase == "prepared" && len(r.Commands) == 0 ||
+			action == "prepare-private-state" && !r.Rollback && r.Phase == "prepared" && slices.Equal(r.Commands, []string{"stop-old-panel"}) ||
+			action == "quiesce-old-runtime" && !r.Rollback && r.Phase == "prepared" && slices.Equal(r.Commands, []string{"stop-old-panel", "prepare-private-state"}) ||
+			action == "start-candidate-panel" && !r.Rollback && r.Phase == "installed" && selfUpdatePreFilesComplete(r.Commands) ||
 			action == "stop-candidate-panel" && !r.Rollback && r.Phase == "command-finished" && r.Command == "start-candidate-panel" ||
-			action == "start-rollback-panel" && r.Rollback && r.Phase == "restored"
+			action == "restore-private-state" && r.Rollback && r.Phase == "restored" ||
+			action == "start-rollback-panel" && r.Rollback && r.Phase == "command-finished" && r.Command == "restore-private-state"
 		if !allowed {
 			return selfupdatejournal.ErrPending
 		}
@@ -373,6 +391,23 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 		return authority(ctx)
 	default:
 		return errors.New("unsupported self update file action")
+	}
+}
+
+func selfUpdatePreFilesComplete(commands []string) bool {
+	return slices.Equal(commands, []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime"})
+}
+
+func selfUpdateActionAuthority(action string) string {
+	switch action {
+	case "stop-old-panel", "stop-candidate-panel", "quiesce-old-runtime":
+		return "stop-owned"
+	case "restore", "restore-private-state":
+		return "replace-to-rollback"
+	case "resolve-unknown":
+		return "read/observe"
+	default:
+		return "start/live"
 	}
 }
 
