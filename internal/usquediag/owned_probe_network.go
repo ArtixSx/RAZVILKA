@@ -22,7 +22,7 @@ import (
 
 const ownedWarpTraceURL = "https://www.cloudflare.com/cdn-cgi/trace"
 const ownedTraceBodyLimit = 16 << 10
-const ownedServiceBodyLimit = 16 << 10
+const ownedServiceBodyLimit = 32 << 10
 const ownedDoHURL = "https://cloudflare-dns.com/dns-query"
 const ownedDoHBodyLimit = 4096
 
@@ -153,13 +153,14 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 			}
 			challenge, limit = hex.EncodeToString(nonce[:]), 256
 		}
-		body, err := ownedHTTPSBody(ctx, client, service.URL, challenge, limit, service.Challenge)
-		if err != nil || challenge != "" && string(body) != TransportChallengeResponse(challenge) {
-			clear(body)
+		response, err := ownedHTTPSResponse(ctx, client, service.URL, challenge, limit, service.Challenge, !service.Challenge)
+		if err != nil {
 			return OwnedApplicationProof{}, ownedNetworkFailure(ctx, errOwnedNetworkHTTP)
 		}
-		clear(body)
-		proof.ConfirmedRoutes = append(proof.ConfirmedRoutes, service.ID)
+		if err := validateOwnedServiceResponse(ctx, service, challenge, response); err != nil {
+			return OwnedApplicationProof{}, ownedNetworkFailure(ctx, errOwnedNetworkService)
+		}
+		recordOwnedServiceProof(&proof, service)
 	}
 	if request.UDP != nil {
 		if err := probeOwnedSOCKSUDP(ctx, proxy, request.UDP.Target, sockets); err != nil {
@@ -328,34 +329,11 @@ func ownedNetworkFailure(ctx context.Context, otherwise error) error {
 }
 
 func ownedHTTPSBody(ctx context.Context, client *http.Client, raw, challenge string, limit int, requireOK bool) ([]byte, error) {
-	if ctx == nil || ctx.Err() != nil || client == nil {
-		return nil, errOwnedNetworkHTTP
-	}
-	ctx, cancel := ownedOperationRequestContext(ctx, 20*time.Second)
-	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
+	response, err := ownedHTTPSResponse(ctx, client, raw, challenge, limit, requireOK, false)
 	if err != nil {
 		return nil, errOwnedNetworkHTTP
 	}
-	request.Close = true
-	request.Header.Set("User-Agent", "RAZVILKA-Owned-USQUE-Probe/1")
-	if challenge != "" {
-		request.Header.Set(TransportChallengeHeader, challenge)
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return nil, errOwnedNetworkHTTP
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode > 299 || requireOK && response.StatusCode != http.StatusOK || response.ContentLength > int64(limit) || response.TLS == nil || len(response.TLS.VerifiedChains) == 0 {
-		return nil, errOwnedNetworkHTTP
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, int64(limit)+1))
-	if err != nil || len(body) > limit || ctx.Err() != nil {
-		clear(body)
-		return nil, errOwnedNetworkHTTP
-	}
-	return body, nil
+	return []byte(response.Body), nil
 }
 
 func parseOwnedWarpTrace(body []byte) (OwnedApplicationProof, error) {
