@@ -41,6 +41,25 @@ func NewScopedXrayTunnelAdapter(configs *engineconfig.Manager, root string, mate
 	return a, nil
 }
 
+// NewScopedXrayRouterTunnelAdapter selects the concrete router-origin HTTPS
+// verifier. Every health attempt still requires Manager's registered transient
+// resource and fresh runtime/source readback; construction grants no mutation.
+func NewScopedXrayRouterTunnelAdapter(configs *engineconfig.Manager, root string, materializer NodeRouteMaterializer) (*ProxyTunnelAdapter, error) {
+	a, err := NewScopedXrayTunnelAdapter(configs, root, materializer)
+	if err != nil {
+		return nil, err
+	}
+	a.nodeRouterVerifier = true
+	return a, nil
+}
+
+// NodeRouteVerificationCapable reports an installed concrete verification path.
+// Router service evidence remains distinct from optional actual LAN evidence.
+func (a *ProxyTunnelAdapter) NodeRouteVerificationCapable() bool {
+	return a != nil && a.scopedXray && a.NodeRoutes != nil && a.FreshProfile != nil &&
+		(a.NodeTUNProbe != nil || a.nodeRouterVerifier && nodeRouterDeviceBindingAvailable())
+}
+
 type proxyNodeEndpoint struct {
 	Host string `json:"host"`
 	IP   string `json:"ip"`
