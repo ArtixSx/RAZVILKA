@@ -68,13 +68,14 @@ type journalConfig struct {
 
 type updateJournal struct {
 	ManagedUpdateState
-	Package            string          `json:"package"`
-	PackageFile        string          `json:"package_file"`
-	PackageSHA256      string          `json:"package_sha256"`
-	Configs            []journalConfig `json:"configs"`
-	CandidateSnapshot  bool            `json:"candidate_snapshot,omitempty"`
-	CandidateConfigs   []journalConfig `json:"candidate_configs,omitempty"`
-	SupervisionVersion int             `json:"supervision_version,omitempty"`
+	Package            string                   `json:"package"`
+	PackageFile        string                   `json:"package_file"`
+	PackageSHA256      string                   `json:"package_sha256"`
+	Configs            []journalConfig          `json:"configs"`
+	CandidateSnapshot  bool                     `json:"candidate_snapshot,omitempty"`
+	CandidateConfigs   []journalConfig          `json:"candidate_configs,omitempty"`
+	SupervisionVersion int                      `json:"supervision_version,omitempty"`
+	ManagedNFQWS       *managedNFQWSTransaction `json:"managed_nfqws,omitempty"`
 }
 
 type updateTransaction struct {
@@ -164,6 +165,12 @@ func readUpdateJournal(root *ownedfs.Root) (updateJournal, bool, error) {
 	if err := validateUpdateJournal(doc); err != nil {
 		return doc, false, err
 	}
+	if doc.ManagedNFQWS != nil {
+		canonical, err := json.Marshal(doc)
+		if err != nil || !bytes.Equal(bytes.TrimSuffix(data, []byte{'\n'}), canonical) {
+			return doc, false, ErrManagedNFQWSBundle
+		}
+	}
 	return doc, true, nil
 }
 
@@ -172,6 +179,9 @@ func updateTerminal(phase string) bool {
 }
 
 func validateUpdateJournal(doc updateJournal) error {
+	if doc.ManagedNFQWS != nil {
+		return validateManagedNFQWSJournal(doc)
+	}
 	spec, known := lookup(doc.Component)
 	_, idErr := hex.DecodeString(doc.TransactionID)
 	_, packageErr := hex.DecodeString(doc.PackageSHA256)

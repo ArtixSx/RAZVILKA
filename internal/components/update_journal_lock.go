@@ -14,6 +14,13 @@ import (
 func lockUpdateWriter(root *ownedfs.Root) (func(), error) {
 	const name = ".writer.lock"
 	const marker = "RAZVILKA component update writer v1\n"
+	// A disappeared permanent inode is corruption, not a new installation.
+	// Recreating it could admit a second writer while the old descriptor lives.
+	if _, err := root.Stat(name); errors.Is(err, os.ErrNotExist) {
+		if _, currentErr := root.Stat("current.json"); !errors.Is(currentErr, os.ErrNotExist) {
+			return nil, errors.New("component journal lost its permanent writer marker")
+		}
+	}
 	f, err := root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL|updateFileFlags(), 0o600)
 	created := err == nil
 	if errors.Is(err, os.ErrExist) {
