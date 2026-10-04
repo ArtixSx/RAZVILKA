@@ -30,7 +30,11 @@ func TestNativeStoppedSettlementActualECHILDAndPreservedStop(t *testing.T) {
 	if err := os.Rename(filepath.Join(oldDirectory, review.ID), filepath.Join(newDirectory, review.ID)); err != nil {
 		t.Fatal(err)
 	}
-	u.Directory, a.directory = newDirectory, newDirectory
+	u.Directory = newDirectory
+	// Native callbacks capture their trusted startup roots. Rebuild the
+	// fixture binding after relocation, exactly as the copied worker does;
+	// assigning a.directory alone leaves runtime readback on the old root.
+	a = nativeFileAdapter(newDirectory, profile)
 	job := filepath.Join(newDirectory, review.ID)
 	review.Files = reviewedFileList(job, *u.record.Job.Release, u.record.Files, review.MigratedConfigSHA256)
 	saveStoppedReview(t, a, u, review)
@@ -119,16 +123,30 @@ func TestNativeStoppedSettlementActualECHILDAndPreservedStop(t *testing.T) {
 			joined = true
 		}
 	}
-	quiet := func(ctx context.Context) error { return a.Quiescence(ctx, review.ID) }
+	if err := a.runtimeInactive(ctx, review.ID); err != nil {
+		t.Fatal("parent-runtime-readback-after-quiesce", err)
+	}
+	quiet := func(ctx context.Context) error {
+		if err := a.Quiescence(ctx, review.ID); err != nil {
+			return fmt.Errorf("native-file-quiescence: %w", err)
+		}
+		return nil
+	}
 	start := func(ctx context.Context) error {
-		return a.AuthorityAction(ctx, review.ID, review.Revision, "start/live")
+		if err := a.AuthorityAction(ctx, review.ID, review.Revision, "start/live"); err != nil {
+			return fmt.Errorf("native-file-install-authority: %w", err)
+		}
+		return nil
 	}
 	rollback := func(ctx context.Context) error {
 		return a.AuthorityAction(ctx, review.ID, review.Revision, "replace-to-rollback")
 	}
 	admit := func(action string) selfupdatejournal.Admission {
 		return func(ctx context.Context, effect string, begin func() error) error {
-			return a.EffectAdmission(ctx, review.ID, action, effect, begin)
+			if err := a.EffectAdmission(ctx, review.ID, action, effect, begin); err != nil {
+				return fmt.Errorf("native-file-admission-%s: %w", effect, err)
+			}
+			return nil
 		}
 	}
 	if err := store.InstallAdmitted(ctx, review.ID, start, quiet, admit("start/live")); err != nil {
