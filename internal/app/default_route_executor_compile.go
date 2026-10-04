@@ -84,6 +84,7 @@ type DefaultRouteCompilation struct {
 	rules    []DefaultRouteRule
 	ingress  []DefaultRouteIngress
 	digest   string
+	lan      *dataplane.LANPolicyRuntimePlan
 }
 
 func (c *DefaultRouteCompilation) Digest() string { return c.digest }
@@ -267,6 +268,10 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 		Snapshot DefaultRouteSnapshot
 		Rules    []DefaultRouteRule
 	}{cfg.Revision, p, defaultRouteIdentity(c.snapshot), c.rules})
+	c.lan, err = defaultRouteCompileLAN(c.digest, c.ingress)
+	if err != nil {
+		return nil, fmt.Errorf("%w: shared LAN gate: %w", ErrDefaultRouteCapability, err)
+	}
 	return c, nil
 }
 
