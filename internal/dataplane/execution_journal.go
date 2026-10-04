@@ -57,9 +57,12 @@ func (m *Manager) checkExecutionRecovery() error {
 		return executionJournalError(errors.New("unfinished or invalid execution record"))
 	}
 	switch latest.State {
-	case "committed", "rolled-back", "canary-failed", "network-stale":
+	case "committed", "rolled-back", "canary-failed", "network-stale", "temporary-complete":
 	default:
 		return executionJournalError(errors.New("previous execution requires recovery"))
+	}
+	if err := validateExecutionResources(*latest, true); err != nil {
+		return executionJournalError(err)
 	}
 	if _, err := time.Parse(time.RFC3339Nano, latest.FinishedAt); err != nil {
 		return executionJournalError(errors.New("invalid execution finish time"))
@@ -99,7 +102,10 @@ func (m *Manager) settleCommittedPublication() (bool, error) {
 	if err != nil || !exists || transaction == nil || transaction.PlanID != latest.PlanID || transaction.Digest != latest.Digest || transaction.StartedAt != latest.StartedAt || latest.Digest == "" {
 		return false, nil
 	}
-	if !reflect.DeepEqual(transaction.Steps, latest.Steps) || len(latest.Steps) == 0 {
+	if !reflect.DeepEqual(transaction.Steps, latest.Steps) || !reflect.DeepEqual(transaction.Resources, latest.Resources) || transaction.ResourcePlanID != latest.ResourcePlanID || len(latest.Steps) == 0 {
+		return false, nil
+	}
+	if validateExecutionResources(*latest, true) != nil || validateExecutionResources(*transaction, true) != nil {
 		return false, nil
 	}
 	for _, step := range latest.Steps {
@@ -136,6 +142,10 @@ func validExecutionPlanID(id string) bool {
 }
 
 func (m *Manager) writeExecution(root string, execution Execution) error {
+	terminal := execution.State == "committed" || execution.State == "committing" || execution.State == "rolled-back" || execution.State == "canary-failed" || execution.State == "network-stale" || execution.State == "temporary-complete"
+	if err := validateExecutionResources(execution, terminal); err != nil {
+		return executionJournalError(err)
+	}
 	data, err := json.MarshalIndent(execution, "", "  ")
 	if err != nil {
 		return executionJournalError(err)
