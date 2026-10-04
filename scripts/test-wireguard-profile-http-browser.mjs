@@ -73,6 +73,7 @@ export async function runRealWG(config,{serviceDraft=false}={}) {
    let drop=false;
    if(method==='PUT'&&serviceGate.id&&url.pathname==='/api/v1/services/'+encodeURIComponent(serviceGate.id)){
     try{allowed=allowed&&realWGServiceBodyAllowed(request.postDataJSON(),serviceGate.body);}catch(_){allowed=false;}
+    if(report.scope_diagnostics)report.scope_diagnostics.body_authorized=allowed;
     if(allowed){drop=serviceGate.drop;serviceGate.body=null;serviceGate.drop=false;}
    }
    if(!allowed){report.blocked.push({method,path:url.origin===config.origin?url.pathname:'external'});await route.abort('blockedbyclient');return;}
@@ -80,6 +81,7 @@ export async function runRealWG(config,{serviceDraft=false}={}) {
     // One real Handler write completes, then its browser delivery is lost.
     // No response body is read, fulfilled, fabricated or saved.
     const response=await route.fetch({maxRetries:0,maxRedirects:0});serviceGate.droppedStatus=response.status();
+    if(report.scope_diagnostics)report.scope_diagnostics.real_handler_status=response.status();
     report.requests.push({method,path:url.pathname,status:response.status(),source:'real-handler-delivery-aborted'});
     await route.abort('failed');return;
    }
@@ -159,14 +161,28 @@ export async function runRealWG(config,{serviceDraft=false}={}) {
    const saved=(await readJSON('/api/v1/services')).find(service=>service.id===original.id);assert.equal(saved.enabled,false);assert.equal(saved.route,routeID);assert.equal(saved.wireguard_profile_revision,nextRevision);
    assert.deepEqual(saved.applied_state,original.applied_state);assert.deepEqual(saved.applied_sources||[],original.applied_sources||[]);assert.equal(saved.applied_wireguard_profile_revision||'',original.applied_wireguard_profile_revision||'');
    report.steps.push({name:'real UI PUT both CAS revisions; disabled named draft readback; applied state unchanged',status:'passed'});guard();
-   stage='service-real-lost-delivery';await page.locator('[data-sd-scope="'+original.id+'"]').click();
-   await page.locator('#serviceScopeMode').selectOption('selected');await page.locator('#serviceScopeSources').fill('192.0.2.40/32');
-   const scopeStatus=await readJSON('/api/v1/status');expectBody(scopeStatus.revision,nextRevision,['192.0.2.40/32']);serviceGate.drop=true;
+   const scopeDiagnostics=report.scope_diagnostics={dialog_open:false,selected_scope:false,addresses_open:false,input_visible:false,input_enabled:false,config_revision_matches:false,body_authorized:false,real_handler_status:null,unknown_fence:false,dialog_closed:false};
+   stage='service-scope-open-dialog';await page.locator('[data-sd-scope="'+original.id+'"]').click();
+   await page.locator('#serviceScopeDialog').waitFor({state:'visible'});scopeDiagnostics.dialog_open=true;
+   stage='service-scope-select-devices';await page.locator('#serviceScopeMode').selectOption('selected');
+   assert.equal(await page.locator('#serviceScopeMode').inputValue(),'selected');scopeDiagnostics.selected_scope=true;
+   stage='service-scope-open-addresses';const addresses=page.locator('#serviceScopeForm details');
+   if(!await addresses.evaluate(element=>element.open))await addresses.locator('summary').click();scopeDiagnostics.addresses_open=true;
+   stage='service-scope-fill-addresses';const scopeInput=page.locator('#serviceScopeSources');
+   scopeDiagnostics.input_visible=await scopeInput.isVisible();scopeDiagnostics.input_enabled=await scopeInput.isEnabled();assert.equal(scopeDiagnostics.input_visible,true);assert.equal(scopeDiagnostics.input_enabled,true);
+   await scopeInput.fill('192.0.2.40/32');
+   stage='service-scope-authorize-put';const scopeStatus=await readJSON('/api/v1/status');
+   scopeDiagnostics.config_revision_matches=await page.evaluate(revision=>state.scopeServiceRevision===revision,scopeStatus.revision);assert.equal(scopeDiagnostics.config_revision_matches,true);
+   expectBody(scopeStatus.revision,nextRevision,['192.0.2.40/32']);serviceGate.drop=true;
+   stage='service-scope-submit';const beforeScopePuts=puts().length;
    await page.locator('#serviceScopeForm button[type="submit"]').click();
+   stage='service-scope-wait-unknown-fence';
    await page.waitForFunction(serviceID=>serviceDashboard.draftUnconfirmed.has(serviceID),original.id);assert.equal(serviceGate.droppedStatus,200);
-   await page.locator('#serviceScopeCancel').click();await noReplay();
+   assert.equal(puts().length,beforeScopePuts+1);scopeDiagnostics.unknown_fence=true;
+   stage='service-scope-cancel-dialog';await page.locator('#serviceScopeCancel').click();await page.locator('#serviceScopeDialog').waitFor({state:'hidden'});scopeDiagnostics.dialog_closed=true;await noReplay();
+   stage='service-scope-readback';
    const stored=(await readJSON('/api/v1/services')).find(service=>service.id===original.id);assert.equal(stored.enabled,false);assert.equal(stored.route,routeID);assert.equal(stored.wireguard_profile_revision,nextRevision);assert.deepEqual(stored.sources,['192.0.2.40/32']);assert.deepEqual(stored.applied_state,original.applied_state);
-   await reread();assert.deepEqual(await page.evaluate(serviceID=>state.services.find(service=>service.id===serviceID).sources,original.id),['192.0.2.40/32']);
+   stage='service-scope-explicit-reread';await reread();assert.deepEqual(await page.evaluate(serviceID=>state.services.find(service=>service.id===serviceID).sources,original.id),['192.0.2.40/32']);
    report.steps.push({name:'real scope PUT committed200; delivery aborted; unknown fence; explicit GETs without replay',status:'passed'});
    stage='service-private-fixture-cleanup';await verifiedPut(servicePath,{enabled:false,route:original.route,sources:original.sources||[]},'fixture-cleanup');
    assert.deepEqual(intent((await readJSON('/api/v1/services')).find(service=>service.id===original.id)),intent(original));

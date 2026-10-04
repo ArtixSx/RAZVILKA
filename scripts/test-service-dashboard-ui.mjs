@@ -480,3 +480,19 @@ function loadDraftHandlers(f, names) {
   assert.equal(f.calls.length,1);const body=JSON.parse(f.calls[0].body);assert.equal(body.route,'wireguard:private');assert.equal(body.expected_revision,9);assert.equal(body.expected_profile_revision,wgRevision);assert.deepEqual(body.sources,['192.168.1.42']);
 }
 console.log('PASS named WG scoped writers: actual service scope and device confirmation preserve the frozen route/revision pair');
+{
+  const f=fixture();loadDraftHandlers(f,['renderServiceScopeDevices','changeServiceScopeDevice','bindServiceScopeControls']);
+  f.context.deviceDisplayName=device=>device.name;
+  f.state.devices=[{id:'test-device',name:'Тест',ips:['192.0.2.40']}];
+  f.$('#serviceScopeMode').value='all';f.$('#serviceScopeSources').value='';f.context.renderServiceScopeDevices();f.context.bindServiceScopeControls();
+  assert.equal(f.$('#serviceScopeSources').disabled,true);assert.equal(f.$('#serviceScopeDevices').hidden,true);
+  f.$('#serviceScopeMode').value='selected';f.$('#serviceScopeMode').listeners.change();
+  assert.equal(f.$('#serviceScopeSources').disabled,false);assert.equal(f.$('#serviceScopeDevices').hidden,false);assert.match(f.$('#serviceScopeSummary').textContent,/Пустой выбор не включает всю сеть/);
+  f.$('#serviceScopeSources').value='192.0.2.40/32';f.$('#serviceScopeSources').listeners.input();
+  assert.match(f.$('#serviceScopeDevices').innerHTML,/checked/);assert.match(f.$('#serviceScopeSummary').textContent,/192\.0\.2\.40\/32/);
+  f.$('#serviceScopeDevices').listeners.change({target:{closest:()=>({dataset:{serviceScopeDevice:'test-device'},checked:false})}});
+  assert.equal(f.$('#serviceScopeSources').value,'');assert.doesNotMatch(f.$('#serviceScopeDevices').innerHTML,/ checked/);
+  f.$('#serviceScopeMode').value='all';f.$('#serviceScopeMode').listeners.change();assert.equal(f.$('#serviceScopeSources').disabled,true);assert.equal(f.$('#serviceScopeDevices').hidden,true);
+  assert.equal(f.calls.length,0,'scope form interaction sent an API write');
+}
+console.log('PASS scope UI controls: all/selected updates enabled fields, manual addresses and checkbox changes without API writes');
