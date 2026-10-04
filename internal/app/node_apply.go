@@ -172,6 +172,7 @@ func nodeRouteConfigForEngineScope(cfg config.Config, engine, id, nodeID string,
 	}
 	selected := services[id]
 	selected.Enabled, selected.Mode, selected.Route = true, engine+":"+nodeID, engine+":"+nodeID
+	selected.WireGuardProfileRevision = ""
 	selected.Sources = append([]string(nil), sources...)
 	services[id] = selected
 	cfg.Services = services

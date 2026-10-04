@@ -27,8 +27,13 @@ func managedPolicyFixture() PolicyState {
 func TestManagedPolicyReceiptBindsExactIngressAndMarkInBothFamilies(t *testing.T) {
 	_, root, runner, options := additionFixture(t)
 	state := managedPolicyFixture()
+	initializePolicyLayout(&state)
 	ctx := context.Background()
 	if err := applyPolicyAddition(ctx, runner, "ip", state, root, options); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := kernelRulesForPolicy(state)
+	if err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range runner.kernel.entries {
@@ -41,17 +46,28 @@ func TestManagedPolicyReceiptBindsExactIngressAndMarkInBothFamilies(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		matched := 0
-		for _, line := range lines {
-			if rule, ok := parseKernelPolicyRule(family, line); ok {
-				if !rule.managed || rule.ingress == "" {
-					t.Fatal("readback lost gate", line)
-				}
-				matched++
+		wanted, priorities := map[kernelPolicyRule]bool{}, map[int]bool{}
+		for _, rule := range expected {
+			if rule.family == family {
+				wanted[rule], priorities[rule.priority] = true, true
 			}
 		}
-		if matched == 0 {
-			t.Fatal("family missing", family)
+		matched := map[kernelPolicyRule]bool{}
+		for _, line := range lines {
+			priority, hasPriority := policyLinePriority(line)
+			if !hasPriority || !priorities[priority] {
+				continue
+			}
+			rule, ok := parseKernelPolicyRule(family, line)
+			if !ok || !wanted[rule] || !rule.managed || rule.ingress == "" || matched[rule] {
+				t.Fatal("owned readback lost exact gate or duplicated tuple", line)
+			}
+			matched[rule] = true
+		}
+		for want := range wanted {
+			if !matched[want] {
+				t.Fatal("family missing exact owned rule", family, want)
+			}
 		}
 	}
 	doc := readAdditionFixture(t, state, root, options)

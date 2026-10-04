@@ -157,7 +157,7 @@ func (m *Manager) StageGuided(engineID, fileID string, values map[string]string)
 	if err := target.CompareAndSwap(context.Background(), before, restorejournal.Image{Exists: true, Data: updated}); err != nil {
 		return Content{}, err
 	}
-	livePath := choosePath(file.Paths)
+	livePath := m.livePath(file.Paths)
 	return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: "staged", SHA256: sum(updated), Sensitive: file.Sensitive}, nil
 }
 
@@ -166,7 +166,7 @@ func (m *Manager) rawLocked(engineID, fileID string) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	path := choosePath(file.Paths)
+	path := m.livePath(file.Paths)
 	source := "live"
 	image, err := m.readStageImage(context.Background(), engineID, fileID)
 	if err != nil {

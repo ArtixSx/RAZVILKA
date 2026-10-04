@@ -231,3 +231,135 @@ for (const value of ['', 'legacy"<&', '$MODE_AUTO']) {
   context.finishEngineIntent(intent);
 }
 console.log('Guided empty and unknown enum values remain selected instead of becoming the first option');
+
+// Exercise receipts through the actual Stage/Validate/reviewed Apply/probe
+// handlers, then render the production card. DTOs model public API responses;
+// they do not claim a native router or real network test.
+const interfaceSource = readFileSync(new URL('../cmd/razvilka/web/interface.js', import.meta.url), 'utf8');
+const consoleSource = readFileSync(new URL('../cmd/razvilka/web/console.js', import.meta.url), 'utf8');
+const workflowSource = readFileSync(new URL('../cmd/razvilka/web/workflow-actions.js', import.meta.url), 'utf8');
+const section = (code, start, end) => code.slice(code.indexOf(start), code.indexOf(end, code.indexOf(start) + start.length));
+context.consoleEngineMeta = {'sing-box':{name:'Sing-box',tone:'mint',icon:'layers'}};
+context.consoleDate = String; context.ci = () => '';
+context.serviceDashboardApplied = service => service.applied_state || {};
+context.workflowState = {epoch:1,probe:null};
+context.workspaceControl = {stopReceipt:null};
+context.interfaceState = {authRevoked:false};
+context.workflowSession = epoch => epoch === context.workflowState.epoch && $('#authScreen').hidden;
+context.workflowRequest = (path, options) => context.api(path, options);
+context.renderWorkflowControls = () => {};
+context.routeLabel = String; context.workflowError = error => error.message;
+vm.runInContext(section(consoleSource, 'function consoleEngineState(', 'function consoleNavigate('), context);
+vm.runInContext(section(interfaceSource, 'const engineProgressEvidence =', 'function renderInterfaceEngines('), context);
+const runProbe = workflowSource.match(/async function workflowRunProbe\([^]*?\n}\n/);
+assert.ok(runProbe); vm.runInContext(runProbe[0], context);
+let liveHash, stagedHash, resultOverride;
+const hashA = 'a'.repeat(64), hashB = 'b'.repeat(64);
+const receiptConfigs = () => [{id:'sing-box',name:'Sing-box',installed:true,files:[{id:'main',exists:true,staged,sha256:liveHash,staged_at:'draft-generation',modified_at:liveHash}]}];
+const receiptPreview = {review:{expected_revision:12,reviewed_digest:'review-digest'},transaction:{digest:'review-digest',revision:12,plan_id:'plan-1',adapters:['sing-box'],routes:[{service_id:'telegram',resolved:'sing-box'}],blockers:[]}};
+const probeResult = () => {
+  const now = new Date().toISOString();
+  return {results:[{service_id:'telegram',route:'sing-box',network_profile_id:'network-a',status:'pass',verdict:'PASS',route_confirmed:true,evidence_level:'service-confirmed',outcome:'service_accepted',checked_at:now,evidence_fresh_until:new Date(Date.now()+60000).toISOString(),
+    evidence_v2:{schema_version:2,probe_id:'probe-1',service:'telegram',engine:'sing-box',network_profile:'network-a',route_path_id:'isolated:sing-box',verdict:'PASS',outcome:'service_accepted',started_at:now,finished_at:now}}]};
+};
+const resetReceipts = () => {
+  reset(); context.invalidateEngineProgress();
+  liveHash = hashA; stagedHash = hashB; resultOverride = null;
+  Object.assign(state,{authenticated:true,authGeneration:3,nodes:{generation:8,network_profile:'network-a'},dataLoad:{},services:[{id:'telegram',name:'Telegram',applied_state:{enabled:true,route:'sing-box'}}],serviceControl:{config_revision:12,runtime_state:'running'},components:[{id:'sing-box',installed:true,installed_version:'1.0'}],engines:[{id:'sing-box',installed:true,binary_path:'/opt/bin/sing-box'}],engineConfigs:receiptConfigs()});
+  context.workflowState.probe = null; context.workspaceControl.stopReceipt = null; context.interfaceState.authRevoked = false;
+  $('#r4ProbeService').value = 'telegram'; $('#r4ProbeResults').replaceChildren = () => {};
+  handler = async (url, options) => {
+    if (options.method === 'PUT') { staged = true; return {engine_id:'sing-box',file_id:'main',source:'staged',sha256:stagedHash}; }
+    if (url === '/api/v1/engine-configs') return receiptConfigs();
+    if (url === '/api/v1/status') return {revision:12,dataplane_state:'committed',live_active:true};
+    if (url.includes('/validate?')) return {engine_id:'sing-box',file_id:'main',ok:true,native:true};
+    if (url.startsWith('/api/v1/plan?')) return receiptPreview;
+    if (url.startsWith('/api/v1/apply?')) {
+      staged = false; liveHash = stagedHash;
+      const now = new Date().toISOString();
+      const result = {ok:true,live_applied:true,scope_pending_changes:false,transaction:receiptPreview.transaction,execution:{plan_id:'plan-1',digest:'review-digest',state:'committed',started_at:now,finished_at:now}};
+      return resultOverride ? resultOverride(result) : result;
+    }
+    if (url === '/api/v1/testlab/routes') return resultOverride ? resultOverride(probeResult()) : probeResult();
+    throw new Error('unexpected '+url);
+  };
+};
+const progress = () => JSON.parse(JSON.stringify(context.engineProgressView('sing-box')));
+const renderReceiptCard = () => context.interfaceEngineCard('sing-box', context.consoleEngineMeta['sing-box']);
+const complete = async () => {
+  resetReceipts(); await context.applyEngineConfig(); await context.workflowRunProbe();
+  assert.deepEqual(progress(),{format:true,service:true,apply:true,native:true});
+};
+
+resetReceipts();
+await context.validateEngineFile();
+assert.equal(progress().format,true); assert.equal(progress().service,false); assert.equal(progress().apply,false);
+assert.equal(appliedCalls().length,0,'format validation initiated Apply');
+assert.equal(calls.some(call=>call.url.includes('/testlab/')),false,'format validation initiated a network test');
+// A previous observed service PASS cannot complete a new Apply's check step.
+state.services[0].observed_state = {level:'service-confirmed',outcome:'service_accepted',status:'pass',route:'sing-box',checked_at:new Date(Date.now()-5000).toISOString(),fresh_until:new Date(Date.now()+60000).toISOString()};
+await context.applyEngineConfig();
+assert.equal(progress().format,true,'matching candidate-to-live commit lost the format receipt');
+assert.equal(progress().apply,true); assert.equal(progress().service,false,'Apply borrowed an old service test');
+assert.deepEqual(JSON.parse(appliedCalls()[0].options.body),receiptPreview.review);
+await context.workflowRunProbe();
+assert.deepEqual(progress(),{format:true,service:true,apply:true,native:true});
+const fullCard = renderReceiptCard();
+for (const step of ['install','profile','check','apply']) assert.match(fullCard,new RegExp(`data-engine-progress="${step}" data-completed="true"`));
+assert.match(fullCard,/Проверка и применение подтверждены/);
+assert.equal(appliedCalls().length,1,'fresh service probe repeated Apply');
+assert.deepEqual(JSON.parse(calls.find(call=>call.url==='/api/v1/testlab/routes').options.body),{services:['telegram'],routes:['sing-box']});
+
+for (const [name, change] of [
+  ['hash',()=>state.engineConfigs[0].files[0].sha256=hashA],
+  ['revision',()=>state.status.revision++], ['generation',()=>state.nodes.generation++],
+  ['network',()=>state.nodes.network_profile='network-b'], ['auth',()=>state.authGeneration++],
+  ['binary',()=>state.engines[0].binary_path='/changed/bin'],
+  ['staged',()=>state.engineConfigs[0].files[0].staged=true],
+  ['Stop',()=>context.workspaceControl.stopReceipt={accepted:true}],
+  ['negative Apply',()=>state.status.last_apply_failure='failed'],
+  ['new negative probe',()=>state.services[0].observed_state={route:'sing-box',status:'fail',checked_at:new Date().toISOString()}],
+  ['read error',()=>state.dataLoad.status={phase:'error'}],
+]) {
+  await complete(); change();
+  assert.deepEqual(progress(),{format:false,service:false,apply:false},name+' retained completed receipts');
+  assert.doesNotMatch(renderReceiptCard(),/Проверка и применение подтверждены/,name+' rendered success');
+}
+for (const change of [()=>state.engineIntent={engineID:'sing-box'},()=>context.workflowState.probe={engine:'sing-box'},()=>state.dataLoad.status={phase:'busy'},()=>state.serviceControl.durable_jobs=[{mode:'service-stop',state:'queued'}]]) {
+  await complete(); change(); assert.deepEqual(progress(),{format:false,service:false,apply:false},'pending operation showed completed steps');
+}
+for (const [name, tamper] of [
+  ['unconfirmed',result=>({...result,live_applied:false})],
+  ['safe mode',result=>({...result,safe_mode:true})],
+  ['digest',result=>({...result,execution:{...result.execution,digest:'other'}})],
+  ['plan',result=>({...result,execution:{...result.execution,plan_id:'other'}})],
+  ['revision',result=>({...result,transaction:{...result.transaction,revision:13}})],
+  ['pending',result=>({...result,scope_pending_changes:true})],
+  ['failed',result=>({...result,execution:{...result.execution,state:'failed'}})],
+]) {
+  resetReceipts(); resultOverride=tamper; await context.applyEngineConfig();
+  assert.equal(progress().apply,false,name+' committed a mismatched receipt');
+}
+for (const [name, tamper] of [
+  ['wrong service',row=>row.service_id='other'],['wrong engine',row=>row.evidence_v2.engine='other'],
+  ['wrong network',row=>row.evidence_v2.network_profile='other'],
+  ['path mismatch',row=>{row.expected_route_path_id='expected';row.observed_route_path_id='foreign';}],
+  ['negative control',row=>row.evidence_v2.negative_control_matched=true],
+  ['old test',row=>{row.checked_at=new Date(Date.now()-10000).toISOString();row.evidence_v2.started_at=row.checked_at;row.evidence_v2.finished_at=row.checked_at;}],
+  ['expiry',row=>row.evidence_fresh_until=new Date(Date.now()-1000).toISOString()],
+  ['runtime only',row=>row.evidence_level='runtime'],
+]) {
+  resetReceipts(); await context.applyEngineConfig(); resultOverride=result=>{tamper(result.results[0]);return result;};
+  await context.workflowRunProbe(); assert.equal(progress().service,false,name+' completed the service check');
+}
+resetReceipts();state.engineEditorDirty=false;state.engineConfigs[0].files[0].sha256='';
+assert.equal(context.engineProgressBinding('sing-box'),null,'redacted profile acquired invented identity');
+resetReceipts();staged=true;state.engineConfigs=receiptConfigs();state.engineLoaded={engine_id:'sing-box',file_id:'main',source:'live',sha256:hashA};
+assert.equal(context.engineProgressBinding('sing-box'),null,'draft used the live FileView hash');
+await complete();state.services[0].applied_state.route='direct';
+assert.equal(progress().apply,false,'receipt survived removal of its applied service route');
+await complete();const clockNow=Date.now();
+context.Date=class extends Date {static now(){return clockNow+121000;}};
+assert.deepEqual(progress(),{format:false,service:false,apply:false,native:false},'expired evidence remained complete');
+context.Date=Date;
+console.log('Engine progress completes actual reviewed Apply + fresh typed probe and clears on profile/revision/generation/negative/Stop changes');
