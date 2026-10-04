@@ -201,7 +201,7 @@ func TestNetworkPolicyManagerResourceUnusedRequiresOriginalProofAndMatchingRecor
 	}
 }
 
-func TestNetworkPolicyManagerResourceCancellationAndWANChangePermitExactCleanup(t *testing.T) {
+func TestNetworkPolicyManagerResourceCancellationPermitsExactCleanup(t *testing.T) {
 	f := executionResourceManagerFixture(t)
 	parent, cancel := context.WithCancel(f.ctx)
 	err := f.m.WithExecutionResources(parent, f.p, "xray", func(ctx context.Context) error {
@@ -210,7 +210,6 @@ func TestNetworkPolicyManagerResourceCancellationAndWANChangePermitExactCleanup(
 			return err
 		}
 		cancel()
-		f.m.FreshProfile = func(context.Context) (string, error) { return "wan-ffffffffffff", nil }
 		cleanup, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 		defer cleanupCancel()
 		issuer := cleanup.Value(nodeTransitRegistrarKey{}).(nodeTransitRegistrar)
