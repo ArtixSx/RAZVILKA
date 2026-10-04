@@ -1631,3 +1631,4 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
   .interface-ui .ui3-mobile-nav{height:var(--ui3-mobile-nav-height);grid-template-columns:repeat(4,minmax(0,1fr));z-index:72;}
   .interface-ui .sidebar{height:calc(100dvh - var(--ui3-mobile-nav-height));bottom:var(--ui3-mobile-nav-height);}
 }
+.sd-wg-profile{margin:12px 0;color:var(--muted);font-size:12px;line-height:1.6}.sd-wg-profile p{margin:0 0 8px}.sd-wg-profile summary{cursor:pointer}.sd-wg-profile small{display:block;margin-top:6px;overflow-wrap:anywhere}
