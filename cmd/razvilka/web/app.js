@@ -4295,6 +4295,12 @@ function renderServiceScopeDevices() {
   $('#serviceScopeSummary').textContent = all ? 'После применения будет выбрана вся локальная сеть.' : sources.length ? `После применения будут выбраны: ${nodeScopeText(sources)}.` : 'Отметьте устройство или введите адрес. Пустой выбор не включает всю сеть.';
 }
 
+function bindServiceScopeControls() {
+  $('#serviceScopeMode').addEventListener('change', renderServiceScopeDevices);
+  $('#serviceScopeSources').addEventListener('input', renderServiceScopeDevices);
+  $('#serviceScopeDevices').addEventListener('change', changeServiceScopeDevice);
+}
+
 function changeServiceScopeDevice(event) {
   const input = event.target.closest('[data-service-scope-device]');
   const device = input && (state.devices || []).find(item => item.id === input.dataset.serviceScopeDevice);
@@ -5309,6 +5315,7 @@ function bindEvents() {
   $('#customServiceClose').addEventListener('click', closeCustomServiceDialog);
   $('#customServiceCancel').addEventListener('click', closeCustomServiceDialog);
   $('#serviceScopeForm').addEventListener('submit', saveServiceScope);
+  bindServiceScopeControls();
   $('#serviceScopeClose').addEventListener('click', closeServiceScope);
   $('#serviceScopeCancel').addEventListener('click', closeServiceScope);
 }
