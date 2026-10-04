@@ -164,6 +164,46 @@ events.get('razvilka:auth-required')();
 assert.equal(state.savedPanel, null, 'logout retained Stop revision');
 assert.equal($('#projectPower').disabled, true);
 
+// Self-update Stop 202 revokes authority, but proves neither cleanup nor a
+// stopped runtime. Old running observations must not erase this receipt.
+events.get('razvilka:auth-restored')();
+const liveBeforeStop = { ...snapshot, config_revision: 30, running: true, runtime_state: 'running', can_stop: true };
+context.acceptWorkspaceControl(liveBeforeStop);
+const receipt = { stop_requested: true, authority_revoked: true, stopped_confirmed: false, cleanup_pending: true };
+request = async path => path.endsWith('/runtime') ? receipt : liveBeforeStop;
+const beforeReceipt = notices.length, beforeReceiptRefresh = refreshes;
+await context.toggleWorkspaceRuntime();
+assert.equal(notices.at(-1)[0], 'review', 'revocation 202 was presented as a failure or completed cleanup');
+assert.equal(notices.at(-1)[1], 'Остановка запрошена');
+assert.equal(notices.slice(beforeReceipt).some(item => item[0] === 'success' || item[0] === 'error'), false);
+assert.equal(refreshes, beforeReceiptRefresh, 'accepted receipt ran completion refresh');
+assert.equal(state.serviceControl.running, true, 'receipt invented stopped runtime');
+assert.equal($('#projectPowerLabel').textContent, 'Остановка запрошена');
+assert.match($('#projectPowerHint').textContent, /Очистка маршрутов ещё не подтверждена/);
+assert.equal($('#projectPower').disabled, true);
+assert.equal($('#projectModeAuto').disabled, true);
+const receiptCalls = calls.length;
+await context.toggleWorkspaceRuntime(); await context.changeWorkspaceMode('auto');
+assert.equal(calls.length, receiptCalls, 'pending cleanup admitted another runtime or mode write');
+await context.refreshWorkspaceControl();
+assert.equal($('#projectPowerLabel').textContent, 'Остановка запрошена', 'old running control erased the receipt');
+request = async path => path.includes('/audit') ? { available: true, events: [] } : { durable_jobs: [] };
+await context.openWorkspaceLog();
+assert.deepEqual({ ...details.at(-1)[0].stop_receipt }, receipt);
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 31, runtime_state: 'stopped', running: false });
+assert.equal(context.control.stopReceipt, null, 'confirmed stopped control did not settle the receipt');
+context.control.stopReceipt = receipt;
+events.get('razvilka:auth-required')();
+assert.equal(context.control.stopReceipt, null, 'logout retained a private Stop receipt');
+events.get('razvilka:auth-restored')();
+context.acceptWorkspaceControl({ ...liveBeforeStop, config_revision: 32 });
+request = () => new Promise(resolve => { release = resolve; });
+const lateReceipt = context.toggleWorkspaceRuntime(), beforeLateReceipt = notices.length;
+events.get('razvilka:auth-required')();
+release(receipt);await lateReceipt;
+assert.equal(context.control.stopReceipt, null, 'late 202 restored a private receipt after logout');
+assert.equal(notices.length, beforeLateReceipt, 'late 202 displayed an acknowledgement after logout');
+
 state.components = [{ id: 'sing-box', installed: true, installed_version: '1.10', available_version: '1.11', update_available: true, can_update: true }];
 assert.match(context.engineVersionHTML({ id: 'sing-box', installed: true }), /1\.10[^]*→ 1\.11/);
 state.components[0].update_available = false;

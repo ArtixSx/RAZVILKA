@@ -10,14 +10,14 @@ const flush=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const results=[];
 async function test(name,fn){let timer;try{await Promise.race([fn(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('test deadline')),4000);})]);results.push({name,status:'passed'});console.log('PASS',name);}catch(e){results.push({name,status:'failed',error:e.message});console.error('FAIL',name,e.stack);}finally{clearTimeout(timer);}}
-const helpers=['panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','settlePanelReads','refreshAll','refreshAfterMutation','loadPanelSnapshot'];
+const helpers=['panelReadContext','panelReadContextCurrent','invalidatePanelReads','readPanelResource','panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','settlePanelReads','refreshAll','refreshAfterMutation','loadPanelSnapshot'];
 const renderNames=['renderStatus','renderSettings','renderSystem','renderMetrics','renderServices','renderOverviewQuickServices','renderOverviewServices','renderReadiness','renderEngines','renderEngineControl','renderComponents','renderWarpManager','renderSources','renderNodes','renderConnections','renderDevices','renderTestLab','renderEngineLab','renderAudit','renderStrategyLab','renderDNS','renderDNSPlan','renderDNSServiceBindings'];
 function fixture(){
  const els=new Map(),calls=[],renders=[],timers=new Map();let serial=0,handler;
  const state={currentView:'engineconfig',authenticated:true,status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
  const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
  const $=key=>{if(!els.has(key))els.set(key,{hidden:true,value:'',textContent:'',classList:{toggle(){}}});return els.get(key);};
- const ctx={state,panelLoad,$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent(){}},
+ const ctx={state,panelLoad,panelReads:{epoch:0,entries:new Map()},$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent(){}},
  setTimeout(fn,ms){timers.set(++serial,{fn,ms});return serial;},clearTimeout(id){timers.delete(id);},
  hideAuth(){state.authenticated=true;$('#authScreen').hidden=true;},showAuth(){state.authenticated=false;$('#authScreen').hidden=false;ctx.cancelPanelRefresh();},
  refreshNodeActivity:async()=>false,scheduleNodeActivity(){},showNotice(){},consoleInitialSetup(){},acceptDeviceList:v=>state.devices=v};
@@ -62,7 +62,11 @@ await test('401 cancels sibling results and opens login',async()=>{
 await test('post-write readback rejects a late pre-write snapshot',async()=>{
  const f=fixture(),slow=deferred();let committed=false;
  f.handler(url=>url==='/api/v1/services'?(committed?[{id:'new'}]:slow.promise):f.normal(url));
- const first=f.ctx.refreshAll();await flush();committed=true;await f.ctx.refreshAfterMutation();slow.resolve([{id:'old'}]);await first;assert.equal(f.state.services[0].id,'new');
+ const first=f.ctx.refreshAll();await flush();const oldRead=f.calls.find(call=>call.url==='/api/v1/services'),epoch=f.ctx.panelReads.epoch;
+ assert.equal(oldRead.opt.signal.aborted,false);committed=true;await f.ctx.refreshAfterMutation();
+ assert(f.ctx.panelReads.epoch>epoch,'mutation refresh did not invalidate the shared read epoch');
+ assert.equal(oldRead.opt.signal.aborted,true,'mutation refresh did not abort the old shared transport');
+ slow.resolve([{id:'old'}]);await first;assert.equal(f.state.services[0].id,'new');
 });
 await test('one renderer failure does not suppress completed sibling reads',async()=>{
  const f=fixture();f.ctx.renderStatus=()=>{throw new Error('status render');};f.ctx.renderInterface=()=>{throw new Error('interface render');};

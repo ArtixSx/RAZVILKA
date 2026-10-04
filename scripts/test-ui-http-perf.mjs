@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {settings,readOnlyDecision,requestSummary,metricDelta,fixtureMatches,measurementAssert,failureDiagnostic} from './measure-ui-http-browser.mjs';
+import {visibilitySettings,ownedProfilePath} from './measure-ui-visibility-cdp.mjs';
+import {join,resolve} from 'node:path';
 const origin='http://127.0.0.1:18851',env={RAZVILKA_PERF_URL:origin,RAZVILKA_PERF_PROFILE:'empty',RAZVILKA_PERF_CHROME:'browser',RAZVILKA_PERF_SESSION:'session.json'};
 let passed=0;function test(name,action){action();passed++;console.log('PASS '+name);}
 test('mutation fence applies even to login, probes, Stop, recovery and Apply',()=>{
@@ -28,6 +30,13 @@ test('headed visibility measurement is explicit opt-in and defaults to headless'
   assert.equal(settings(env).headed,false);assert.equal(settings({...env,RAZVILKA_PERF_HEADED:'0'}).headed,false);
   assert.equal(settings({...env,RAZVILKA_PERF_HEADED:'1'}).headed,true);
   for(const value of ['true','yes','2',''])assert.throws(()=>settings({...env,RAZVILKA_PERF_HEADED:value}));
+});
+test('raw visibility sample spans an observer interval and cleanup owns only its Chrome profile',()=>{
+  assert.equal(visibilitySettings(env).idleMs,16000);
+  assert.throws(()=>visibilitySettings({...env,RAZVILKA_PERF_IDLE_MS:'15000'}));
+  const owned=resolve('owned-run');
+  assert.equal(ownedProfilePath(owned,join(owned,'chrome-profile')),true);
+  for(const target of [owned,join(owned,'..','chrome-profile'),join(owned,'other-profile'),join(owned,'chrome-profile','child')])assert.equal(ownedProfilePath(owned,target),false);
 });
 test('renderer reset and missing metrics stay unavailable',()=>{
   const result=metricDelta({TaskDuration:3,ScriptDuration:1,LayoutCount:2},{TaskDuration:2,ScriptDuration:1.2,LayoutCount:5,Nodes:123});
