@@ -128,7 +128,7 @@ func (c *DispatchedNodeChecker) acquire(ctx context.Context, request NodeCheckRe
 		return err
 	}
 	// Capability rejection must precede the shared quota and any DNS work.
-	if err := c.checker.validRequest(request); err != nil {
+	if err := c.checker.validRequest(ctx, request); err != nil {
 		return err
 	}
 	select {

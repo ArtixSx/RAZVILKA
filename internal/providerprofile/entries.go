@@ -13,10 +13,11 @@ type EntryIssue struct {
 }
 
 type entryReport struct {
-	rejected []EntryIssue
-	skipped  []EntryIssue
-	firstErr error
-	seen     map[[32]byte]bool
+	canonical bool
+	rejected  []EntryIssue
+	skipped   []EntryIssue
+	firstErr  error
+	seen      map[[32]byte]bool
 }
 
 func (r *entryReport) reject(index int, err error) {
@@ -32,6 +33,14 @@ func (r *entryReport) reject(index int, err error) {
 }
 
 func (r *entryReport) accept(index int, outbound map[string]any) bool {
+	if !r.canonical && !SingBoxSupportsOutbound(outbound) {
+		r.reject(index, importError("UNSUPPORTED_TRANSPORT"))
+		return false
+	}
+	if r.canonical && validateCanonicalEngineCapabilities(outbound) != nil {
+		r.reject(index, errXrayProfile)
+		return false
+	}
 	identity := make(map[string]any, len(outbound))
 	for k, v := range outbound {
 		if k != "tag" {
