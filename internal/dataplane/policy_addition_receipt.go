@@ -532,6 +532,13 @@ func (r *policyAdditionRunner) remove(ctx context.Context, index int, args []str
 	}
 	if index < 2 {
 		if err := assertPolicyAdditionDefaultsUnreferenced(ctx, r.base, r.ip, s.state); err != nil {
+			// The delete has definitely not been invoked in this live call.
+			// Restore only the original ACKed grant, never a readback grant.
+			s.doc.Steps[index].State = "added"
+			if saveErr := s.save(ctx); saveErr != nil {
+				s.doc.Steps[index].State = "cleanup-intent"
+				return nil, errors.Join(err, ErrPolicyAdditionUnknown, saveErr)
+			}
 			return nil, err
 		}
 	}

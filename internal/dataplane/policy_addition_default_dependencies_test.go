@@ -13,12 +13,13 @@ import (
 // Mutations use the shared independent kernel model. This fixture supplies
 // unknown/read-failed RPDB output without interpreting ownership or selectors.
 type additionDefaultDependencyRunner struct {
-	base         *recordedPolicyFakeRunner
-	family       int
-	kind         string
-	row          string
-	foreign      policyKernelEntry
-	numericReads map[int]int
+	base             *recordedPolicyFakeRunner
+	family           int
+	kind             string
+	row              string
+	foreign          policyKernelEntry
+	numericReads     map[int]int
+	afterNumericRead func(int)
 }
 
 func (r *additionDefaultDependencyRunner) arm(family int, kind string, table int) {
@@ -58,6 +59,9 @@ func (r *additionDefaultDependencyRunner) Run(ctx context.Context, command strin
 			r.numericReads = make(map[int]int)
 		}
 		r.numericReads[family]++
+		if r.afterNumericRead != nil {
+			r.afterNumericRead(family)
+		}
 	}
 	output, err := r.base.Run(ctx, command, args...)
 	if err != nil || !read || family != r.family {
@@ -175,17 +179,67 @@ func TestPolicyAdditionDefaultDependenciesRecheckAfterDurableIntent(t *testing.T
 					t.Fatal("late dependency passed the durable intent", err, base.calls[before:])
 				}
 				options.fault = nil
-				assertAdditionDependencyHeld(t, state, root, options, runner, defaults, [2]string{"added", "cleanup-intent"})
+				assertAdditionDependencyHeld(t, state, root, options, runner, defaults, [2]string{"added", "added"})
 				doc := readAdditionFixture(t, state, root, options)
-				if !(&policyAdditionSession{doc: doc}).status().Unknown {
-					t.Fatal("fresh reader lost the durable cleanup fence")
+				if (&policyAdditionSession{doc: doc}).status().Unknown {
+					t.Fatal("definite pre-command refusal lost the original ACKed grant")
 				}
 				before = len(base.calls)
 				if err := removePolicyAddition(ctx, runner, "ip", state, root, options); !errors.Is(err, ErrPolicyAdditionUnknown) || len(receiptMutationCalls(base.calls[before:])) != 0 {
 					t.Fatal("fresh retry replayed a dependent intent", err, base.calls[before:])
 				}
+				// The temporary dependency vanishes independently. A retry can
+				// use the original add ACK, without acquiring any foreign grant.
+				if kind == "foreign" {
+					base.kernel.entries = nil
+				}
+				runner.family, runner.kind, runner.row = 0, "", ""
+				before = len(base.calls)
+				if err := removePolicyAddition(ctx, runner, "ip", state, root, options); err != nil || len(additionDependencyDefaultDeletes(base.calls[before:])) != 2 || len(base.kernel.defaults) != 0 || len(base.kernel.entries) != 0 {
+					t.Fatal("cleanup did not recover after definite pre-command refusal", err, base.calls[before:])
+				}
 			})
 		}
+	}
+}
+
+func TestPolicyAdditionDefaultDependenciesFailedPreCommandRestoreStaysFenced(t *testing.T) {
+	state, root, base, options := additionFixture(t)
+	runner := &additionDefaultDependencyRunner{base: base}
+	if err := applyPolicyAddition(context.Background(), runner, "ip", state, root, options); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	options.fault = func(point string, index int) error {
+		if point == "cleanup-intent" && index == 1 {
+			runner.arm(4, "foreign", state.Table)
+			runner.afterNumericRead = func(family int) {
+				if family == 4 {
+					cancel() // also prevents the durable known-not-invoked restore
+				}
+			}
+		}
+		return nil
+	}
+	before := len(base.calls)
+	if err := removePolicyAddition(ctx, runner, "ip", state, root, options); !errors.Is(err, context.Canceled) || len(additionDependencyDefaultDeletes(base.calls[before:])) != 0 {
+		t.Fatal("failed restore invoked delete", err, base.calls[before:])
+	}
+	options.fault, runner.afterNumericRead = nil, nil
+	doc := readAdditionFixture(t, state, root, options)
+	if doc.Steps[1].State != "cleanup-intent" || !(&policyAdditionSession{doc: doc}).status().Unknown {
+		t.Fatal("failed save released the durable intent")
+	}
+	base.kernel.entries = nil
+	runner.family, runner.kind = 0, ""
+	before = len(base.calls)
+	if err := removePolicyAddition(context.Background(), runner, "ip", state, root, options); !errors.Is(err, ErrPolicyAdditionUnknown) || len(additionDependencyDefaultDeletes(base.calls[before:])) != 1 || !strings.Contains(additionDependencyDefaultDeletes(base.calls[before:])[0], "ip route del") {
+		t.Fatal("retry adopted readback after failed restore", err, base.calls[before:])
+	}
+	doc = readAdditionFixture(t, state, root, options)
+	if doc.Steps[1].State != "cleanup-intent" || base.kernel.defaults["6/"+strconv.Itoa(state.Table)] == "" {
+		t.Fatal("unknown IPv6 grant was reconstructed from readback")
 	}
 }
 
