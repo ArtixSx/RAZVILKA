@@ -500,6 +500,7 @@ function setView(name) {
   render('navigation-status', () => { if (state.status && Object.keys(state.status).length) renderStatus(); });
   render('navigation-tabs', () => { if (typeof renderInterfaceNavigation === 'function') renderInterfaceNavigation(name); });
   render('navigation-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
+  if (typeof syncConnectionObservation === 'function') render('navigation-connections', syncConnectionObservation);
   if (typeof queueMicrotask === 'function') queueMicrotask(() => { if (state.currentView === name) refreshPanelView(name); });
   if (name === 'engineconfig') render('navigation-engine', () => {
     if (state.engineGuidedRequest && state.engineGuidedRequest.view !== name && !state.engineIntent) invalidateEngineEditorContext();
@@ -955,7 +956,7 @@ function renderPanelSection(key) {
       if (state.currentView === 'engineconfig' && state.dataLoad.engineConfigs?.loaded) renderEngineControl();
       if (state.currentView === 'dns' && state.dataLoad.dns?.loaded) renderDNSServiceBindings();
     },
-    engines: renderEngines, engineConfigs: renderEngineControl, components: renderComponents,
+    engines: renderEngines, engineConfigs: () => { if(state.currentView==='engineconfig')renderEngineControl(); else if(typeof renderInterfaceEngines==='function')renderInterfaceEngines(); }, components: renderComponents,
     warp: renderWarpManager, sources: renderSources, nodes: renderNodes,
     nodeFeeds: renderNodes, nodeAutofallback: renderNodes,
     routeOptions: () => { renderServices(); if (state.currentView === 'testlab' && state.dataLoad.testlab?.loaded) renderTestLab(); },
@@ -1273,7 +1274,8 @@ function renderComponents() {
     const info = typeof consoleEngineState === 'function' ? consoleEngineState(c.id) : null;
     const update = info ? consoleEngineUpdateState(info) : null;
     const stale = c.catalog_stale || c.update_check_error || c.inventory_error || state.componentCatalogError || update?.kind === 'failed';
-    const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running';
+    const recoveryBlocked = typeof componentRecoveryFence === 'function' && componentRecoveryFence();
+    const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running' || recoveryBlocked;
     const unavailable = busy || c.running || c.external_owner || inventoryObservationStale();
     // A managed component (NFQWS2) is updated in place while its routes run:
     // the server checks the result and restores the previous version on failure.
@@ -1373,6 +1375,10 @@ async function refreshComponents(refresh = true) {
 
 async function manageComponent(id, requestedAction) {
   if (state.componentOperation || state.componentRefreshRequest || !workflowSession(workflowState.epoch)) return false;
+  if (typeof componentRecoveryFence === 'function' && componentRecoveryFence()) {
+    showNotice('review', 'Прочитайте журнал обновления', 'Новые изменения компонентов доступны после свежего чтения и завершения восстановления.');
+    return false;
+  }
   const component = state.components.find(c => c.id === id);
   if (!component) return false;
   const action = requestedAction || (component.update_available ? 'update' : 'install');
@@ -1427,6 +1433,11 @@ async function manageComponentReviewed(id, requestedAction) {
     const result = await api(`/api/v1/components/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' });
     if(!workflowSession(epoch))return false;
     if (result?.ok !== true) throw new Error('Сервер не подтвердил завершение операции с компонентом.');
+    if (result.pending_live_acceptance === true) {
+      if (typeof componentUpdatePending === 'function') componentUpdatePending();
+      showNotice('review', `${component.name}: принятие версии ожидается`, 'Пакет установлен и проверен отдельно. Рабочий процесс ещё не подтвердил новую версию; прежняя версия сохранена. Откройте журнал на карточке компонента.', { plan, result });
+      return true;
+    }
     if (!await refreshComponents(false)) throw new Error('Операция отправлена, но повторная проверка состояния не завершена.');
     if(!workflowSession(epoch))return false;
     const [engines, engineConfigs] = await Promise.all([api('/api/v1/engines'), api('/api/v1/engine-configs')]);
@@ -1440,7 +1451,8 @@ async function manageComponentReviewed(id, requestedAction) {
     if(!workflowSession(epoch))return false;
     await refreshComponents(false);
     if(!workflowSession(epoch))return false;
-    showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Причина сохранена в карточке компонента; устраните её и повторите операцию. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
+    if (typeof componentUpdatePending === 'function') componentUpdatePending();
+    showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Прочитайте журнал обновления перед новым действием. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
     showDetails({ error: error.message, response: error.payload, plan }, `${component.name}: ошибка`);
     return false;
   }
@@ -1952,8 +1964,18 @@ function engineRoleGuide(id) {
 }
 
 async function openEngineConfiguration(id = '') {
-  if (id && state.engineConfigs.some((engine) => engine.id === id)) await selectEngine(id);
+  const request=state.engineNavigationRequest=(state.engineNavigationRequest||0)+1,generation=state.authGeneration,view=state.currentView;
+  const current=()=>request===state.engineNavigationRequest && generation===state.authGeneration && state.currentView===view && $('#authScreen')?.hidden!==false;
+  if(state.engineIntent){showNotice('review','Операция ещё выполняется','Дождитесь её завершения перед переключением обхода.');return false;}
+  if(id && !state.engineConfigs.some(engine=>engine.id===id)){
+    try{await refreshEngineConfigs();}catch(error){if(current()){if(error.status===401)showAuth({...state.status,authenticated:false},error.message);else showNotice('review','Настройки обхода не прочитаны',error.message);}return false;}
+    if(!current())return false;
+    if(!state.engineConfigs.some(engine=>engine.id===id)){showNotice('review','Настройки обхода недоступны','Сервер не вернул описание выбранного обхода. Обновите состояние; другой обход не выбирался.');return false;}
+  }
+  if(id && state.selectedEngine!==id && !await selectEngine(id,current))return false;
+  if(!current() || id && state.selectedEngine!==id)return false;
   setView('engineconfig');
+  return true;
 }
 
 function openRouteInstallation(id = '') {
@@ -2389,7 +2411,7 @@ function cancelEngineIntent(clearPrivate = false) {
   invalidateEngineEditorContext();
   if (clearPrivate) {
     if (state.engineIntent) state.engineIntent.body = null;
-    state.engineLoaded = null; state.engineGuided = null; state.engineEditorDirty = false;
+    state.engineLoaded = null; state.engineGuided = null; state.engineValidation = null; state.engineEditorDirty = false;
     $('#engineEditor').value = ''; $('#guidedEditor').innerHTML = '';
   } else if (state.engineIntent) {
     $('#engineEditorMessage').textContent = 'Останавливаем операцию. Дождитесь завершения проверки или возврата прежних настроек.';
@@ -2482,9 +2504,10 @@ function noticeBelongsOnlyToEngine(details, id) {
   return Array.isArray(blockers)&&blockers.length>0&&blockers.every(b=>b.code==='ENGINE_DRAFT_UNUSED'&&b.adapter===id);
 }
 
-async function selectEngine(id) {
-  if (state.engineIntent) return;
-  if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить обход и потерять локальные изменения редактора?', 'Переключить')) return;
+async function selectEngine(id, isCurrent=()=>true) {
+  if (state.engineIntent || !isCurrent()) return false;
+  if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить обход и потерять локальные изменения редактора?', 'Переключить')) return false;
+  if(!isCurrent())return false;
   if(state.selectedEngine!==id && noticeBelongsOnlyToEngine(state.noticeDetails,state.selectedEngine))hideNotice();
   state.selectedEngine = id;
   invalidateEngineEditorContext();
@@ -2495,8 +2518,9 @@ async function selectEngine(id) {
   state.engineGuided = null;
   state.engineValidation = null;
   state.engineMode = 'guided';
-  renderEngineControl();
+  if(state.currentView==='engineconfig')renderEngineControl();
   if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
+  return true;
 }
 
 async function selectEngineFile(id) {
@@ -2543,8 +2567,10 @@ async function refreshEngineConfigs(intent = null) {
   if (!engineEditorContextCurrent(context) || intent && !engineIntentCurrent(intent)) return false;
   state.engineConfigs = configs;
   state.status = status;
+  if(typeof panelSectionState==='function'){panelSectionState('engineConfigs','ready');panelSectionState('status','ready');}
   renderStatus();
-  renderEngineControl();
+  if(state.currentView==='engineconfig')renderEngineControl();
+  else if(typeof renderInterfaceEngines==='function')renderInterfaceEngines();
   return true;
 }
 
@@ -4711,40 +4737,70 @@ async function importPrivateBackup() {
   finally { button.textContent = 'Импортировать приватные данные в черновик'; button.disabled = !state.privateBackupPreview?.valid; }
 }
 
-const connectionObservation = { epoch: 0, request: 0 };
+const connectionObservation = { epoch: 0, request: 0, pending: null };
 
-function clearConnectionObservation() {
+function connectionObservationActive() {
+  return state.authenticated === true && state.currentView === 'connections' && !document.hidden;
+}
+
+function stopConnectionObservation() {
   connectionObservation.epoch++;
-  state.authenticated = false;
+  connectionObservation.request++;
+  connectionObservation.pending?.controller.abort();
+  connectionObservation.pending = null;
   if (state.stream) state.stream.close();
   state.stream = null;
+  if (state.connections) { state.connections.live = false; state.connections.reason = 'Просмотр соединений приостановлен. При открытии раздела данные обновятся.'; }
+}
+
+function syncConnectionObservation() {
+  if (connectionObservationActive()) { renderConnections(); startConnectionStream(); }
+  else stopConnectionObservation();
+}
+
+function clearConnectionObservation() {
+  stopConnectionObservation();
+  state.authenticated = false;
   state.connections = { connections: [], active: 0, closed: 0, live: false, producer: '', reason: 'Требуется вход' };
   renderConnections();
 }
 
 document.addEventListener('razvilka:auth-required', clearConnectionObservation);
+document.addEventListener('razvilka:auth-restored', syncConnectionObservation);
+document.addEventListener('visibilitychange', () => {
+  syncConnectionObservation();
+  if (connectionObservationActive()) void refreshConnections();
+});
 
 async function refreshConnections() {
-  if (state.authenticated !== true) return;
+  if (!connectionObservationActive()) return;
+  if (connectionObservation.pending) return connectionObservation.pending.promise;
   const epoch = connectionObservation.epoch, request = ++connectionObservation.request;
-  const current = () => state.authenticated === true && connectionObservation.epoch === epoch && connectionObservation.request === request;
-  try {
-    const value = await api('/api/v1/connections?include_closed=true');
-    if (!current()) return;
-    state.connections = value;
-    renderConnections();
-  } catch (error) {
-    if (current() && error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
-    // SSE or next refresh will recover. Do not spam the UI on transient failures.
-  }
+  const flight = { controller: new AbortController(), promise: null };
+  connectionObservation.pending = flight;
+  const current = () => connectionObservationActive() && connectionObservation.epoch === epoch && connectionObservation.request === request && connectionObservation.pending === flight;
+  flight.promise = (async () => {
+    try {
+      const value = await api('/api/v1/connections?include_closed=true', { signal: flight.controller.signal });
+      if (!current()) return;
+      state.connections = value;
+      renderConnections();
+    } catch (error) {
+      if (current() && error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
+      // SSE or next visible refresh will recover. No replay or hidden poll.
+    } finally {
+      if (connectionObservation.pending === flight) connectionObservation.pending = null;
+    }
+  })();
+  return flight.promise;
 }
 
 function startConnectionStream() {
-  if (state.authenticated !== true || !window.EventSource || state.stream) return;
+  if (!connectionObservationActive() || !window.EventSource || state.stream) return;
   const epoch = connectionObservation.epoch;
   const stream = new EventSource('/api/v1/connections/stream');
   state.stream = stream;
-  const current = () => state.authenticated === true && connectionObservation.epoch === epoch && state.stream === stream;
+  const current = () => connectionObservationActive() && connectionObservation.epoch === epoch && state.stream === stream;
   stream.addEventListener('connections', (event) => {
     if (!current()) return;
     try {

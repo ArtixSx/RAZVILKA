@@ -31,7 +31,7 @@ func bulkTestWait(ctx context.Context, _ time.Duration) error {
 }
 func bulkTestResult(q dataplane.NodeCheckRequest) dataplane.NodeCheckResult {
 	now := time.Now().UTC()
-	return dataplane.NodeCheckResult{ProbeID: "node-check-0123456789abcdef01234567", NodeID: q.NodeID, ServiceID: q.Service.ID, NetworkProfile: q.NetworkProfile, RoutePathID: "sing-box:" + q.NodeID, FinishedAt: now, ExpiresAt: now.Add(time.Hour), Stage: "service", Verdict: evidence.VerdictPass, Available: true, TestLevel: "service", Message: "test"}
+	return modeledNodeServiceProof(dataplane.NodeCheckResult{ProbeID: "node-check-0123456789abcdef01234567", NodeID: q.NodeID, ServiceID: q.Service.ID, NetworkProfile: q.NetworkProfile, RoutePathID: "sing-box:" + q.NodeID, FinishedAt: now, ExpiresAt: now.Add(time.Hour), Stage: "service", Verdict: evidence.VerdictPass, Available: true, TestLevel: "service", Message: "test"}, "sing-box")
 }
 func postBulkTest(t *testing.T, a *App, q nodeCheckJobRequest) *httptest.ResponseRecorder {
 	t.Helper()

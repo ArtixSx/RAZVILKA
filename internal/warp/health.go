@@ -208,13 +208,14 @@ func (m *Manager) RecordActivation(ok bool, detail string) error {
 		return err
 	}
 	doc.State.LastActivation = time.Now().UTC().Format(time.RFC3339)
-	doc.State.LastActivationError = strings.TrimSpace(detail)
+	doc.State.LastActivationError = ""
 	if ok {
 		doc.State.ConsecutiveFailedRounds = 0
 		doc.State.LastDecision = "fresh-profile-activated"
 		doc.State.LastActivationError = ""
 	} else {
 		doc.State.LastDecision = "fresh-profile-activation-failed"
+		doc.State.LastActivationError = "candidate-activation-failed"
 	}
 	return m.saveHealthLocked(doc)
 }
@@ -323,6 +324,11 @@ func (m *Manager) loadHealthLocked() (healthDocument, error) {
 	}
 	if len(doc.State.Attempts) > 32 || len(doc.State.Rotations) > 32 {
 		return healthDocument{}, errors.New("health history exceeds limit")
+	}
+	// Old versions persisted free-form executor errors, potentially containing
+	// secrets. Never replay those values in readback or a subsequent save.
+	if doc.State.LastActivationError != "" {
+		doc.State.LastActivationError = "candidate-activation-failed"
 	}
 	for _, values := range [][]string{doc.State.Attempts, doc.State.Rotations} {
 		for _, v := range values {

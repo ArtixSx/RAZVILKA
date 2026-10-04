@@ -77,12 +77,14 @@ type View struct {
 }
 
 type Result struct {
-	OK                    bool   `json:"ok"`
-	Component             string `json:"component"`
-	Action                string `json:"action"`
-	Output                string `json:"output"`
-	TransactionID         string `json:"transaction_id,omitempty"`
-	PendingLiveAcceptance bool   `json:"pending_live_acceptance,omitempty"`
+	OK                        bool   `json:"ok"`
+	Component                 string `json:"component"`
+	Action                    string `json:"action"`
+	Output                    string `json:"output"`
+	TransactionID             string `json:"transaction_id,omitempty"`
+	PendingLiveAcceptance     bool   `json:"pending_live_acceptance,omitempty"`
+	PendingRollbackAcceptance bool   `json:"pending_rollback_acceptance,omitempty"`
+	InstalledIdleAccepted     bool   `json:"installed_idle_accepted,omitempty"`
 }
 
 type BatchResult struct {
@@ -97,7 +99,12 @@ type Runner interface {
 	Run(context.Context, string, ...string) ([]byte, error)
 }
 
-type execRunner struct{}
+// Private helper overrides are constructed only by isolated native tests.
+type execRunner struct {
+	supervisorPath string
+	supervisorArgs []string
+	supervisorEnv  []string
+}
 
 func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, name, args...).CombinedOutput()
@@ -369,7 +376,12 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 			return Result{Component: id, Action: action}, err
 		}
 	}
-	out, err := m.run(ctx, command, spec.Package)
+	var out []byte
+	if tx != nil {
+		out, err = tx.runPackage(ctx, "upgrade", command, spec.Package)
+	} else {
+		out, err = m.run(ctx, command, spec.Package)
+	}
 	if tx != nil {
 		if faultErr := tx.fault("after:upgrade-command"); faultErr != nil {
 			return Result{Component: id, Action: action}, faultErr

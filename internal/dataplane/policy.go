@@ -65,12 +65,16 @@ type PolicyState struct {
 	Exclusions []string `json:"exclusions,omitempty"`
 	// Forwarding is the private, exact client/TUN firewall intent. Older state
 	// remains removable, but cannot acquire new forwarding authority implicitly.
-	Forwarding *ProxyForwardingState `json:"forwarding,omitempty"`
+	Forwarding              *ProxyForwardingState `json:"forwarding,omitempty"`
+	NetworkPolicyGeneration string                `json:"network_policy_generation,omitempty"`
+	NetworkDefault          bool                  `json:"network_default,omitempty"`
 }
 
 type PolicyRule struct {
+	Managed     bool   `json:"managed,omitempty"`
 	Source      string `json:"source,omitempty"`
 	Destination string `json:"destination"`
+	Ingress     string `json:"ingress,omitempty"`
 }
 
 func resolvePolicyPrefixes(ctx context.Context, plan Plan, adapter string, resolver PrefixResolver) ([]string, error) {
@@ -163,12 +167,20 @@ func resolvePolicyPrefixes(ctx context.Context, plan Plan, adapter string, resol
 }
 
 func resolvePolicyRules(ctx context.Context, plan Plan, adapter string, resolver PrefixResolver) ([]string, []PolicyRule, error) {
+	generation, _, err := NetworkPolicyRouteAuthority(plan, adapter)
+	if err != nil {
+		return nil, nil, err
+	}
 	prefixSet := map[string]bool{}
 	ruleSet := map[string]PolicyRule{}
 	global := map[string]bool{}
 	for _, route := range plan.Routes {
 		if adapterID(route.Resolved) != adapter {
 			continue
+		}
+		ingresses, err := routeIngresses(route)
+		if err != nil {
+			return nil, nil, err
 		}
 		prefixes, err := resolvePolicyPrefixes(ctx, Plan{Routes: []Route{route}}, adapter, resolver)
 		if err != nil {
@@ -190,25 +202,31 @@ func resolvePolicyRules(ctx context.Context, plan Plan, adapter string, resolver
 		for _, destination := range prefixes {
 			prefixSet[destination] = true
 			destinationPrefix, _ := netip.ParsePrefix(destination)
-			if len(sources) == 0 {
-				global[destination] = true
-				for key, rule := range ruleSet {
-					if rule.Destination == destination {
-						delete(ruleSet, key)
-					}
-				}
-				ruleSet["\x00"+destination] = PolicyRule{Destination: destination}
-				continue
-			}
-			if global[destination] {
-				continue
-			}
-			for _, source := range sources {
-				if source.Addr().Is4() != destinationPrefix.Addr().Is4() {
+			for _, ingress := range ingresses {
+				globalKey := destination + "\x00" + ingress
+				if global[destination+"\x00"] {
 					continue
 				}
-				rule := PolicyRule{Source: source.String(), Destination: destination}
-				ruleSet[rule.Source+"\x00"+rule.Destination] = rule
+				if len(sources) == 0 {
+					global[globalKey] = true
+					for key, rule := range ruleSet {
+						if rule.Destination == destination && (ingress == "" || rule.Ingress == ingress) {
+							delete(ruleSet, key)
+						}
+					}
+					ruleSet["\x00"+globalKey] = PolicyRule{Destination: destination, Ingress: ingress}
+					continue
+				}
+				if global[globalKey] || global[destination+"\x00"] {
+					continue
+				}
+				for _, source := range sources {
+					if source.Addr().Is4() != destinationPrefix.Addr().Is4() {
+						continue
+					}
+					rule := PolicyRule{Source: source.String(), Destination: destination, Ingress: ingress, Managed: generation != ""}
+					ruleSet[rule.Source+"\x00"+rule.Destination+"\x00"+rule.Ingress] = rule
+				}
 			}
 		}
 	}
@@ -223,6 +241,9 @@ func resolvePolicyRules(ctx context.Context, plan Plan, adapter string, resolver
 	}
 	sort.Slice(rules, func(i, j int) bool {
 		if rules[i].Destination == rules[j].Destination {
+			if rules[i].Source == rules[j].Source {
+				return rules[i].Ingress < rules[j].Ingress
+			}
 			return rules[i].Source < rules[j].Source
 		}
 		return rules[i].Destination < rules[j].Destination
@@ -255,7 +276,7 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 	if runner == nil || ipCommand == "" || state.Interface == "" || len(rules) == 0 {
 		return errors.New("policy routing evidence is unavailable")
 	}
-	if state.Forwarding != nil && len(rules) > maxProxyForwardingRules {
+	if state.Forwarding != nil && len(rules) > proxyForwardingRuleLimit(state) {
 		return errors.New("proxy forwarding route evidence exceeds its safe rule bound")
 	}
 	checked := 0
@@ -279,11 +300,12 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 				return errors.New("device source and destination families do not match")
 			}
 			sourceAddress := source.Addr()
-			ingress, known := ingresses[source.String()]
+			key := source.String() + "\x00" + rule.Ingress
+			ingress, known := ingresses[key]
 			if !known {
 				if state.Forwarding != nil && source.Bits() != source.Addr().BitLen() {
 					for _, grant := range state.Forwarding.Rules {
-						if grant.Source == source.String() && grant.Destination == rule.Destination {
+						if grant.Source == source.String() && grant.Destination == rule.Destination && (rule.Ingress == "" || grant.Ingress == rule.Ingress) {
 							ingress = grant.Ingress
 							break
 						}
@@ -298,10 +320,13 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 				if sourceErr != nil {
 					return sourceErr
 				}
-				ingresses[source.String()] = ingress
-				probeSources[source.String()] = sourceAddress
+				if rule.Ingress != "" && ingress != rule.Ingress {
+					return ErrNetworkPolicyAuthority
+				}
+				ingresses[key] = ingress
+				probeSources[key] = sourceAddress
 			} else {
-				sourceAddress = probeSources[source.String()]
+				sourceAddress = probeSources[key]
 			}
 			args = append(args, "from", sourceAddress.String())
 			if ingress != "" {
@@ -309,6 +334,11 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 				// rejects the non-local address of an actual LAN client.
 				args = append(args, "iif", ingress)
 			}
+		} else if rule.Ingress != "" {
+			return ErrNetworkPolicyAuthority
+		}
+		if rule.Managed {
+			args = append(args, "mark", "0x20000000")
 		}
 		if prefix.Addr().Is6() {
 			args = append([]string{"-6"}, args...)
@@ -448,7 +478,7 @@ func effectivePolicyRules(state PolicyState) []PolicyRule {
 }
 
 func samePolicy(left, right PolicyState) bool {
-	return left.RuleLayout == right.RuleLayout && left.SharedPriorityBase == right.SharedPriorityBase && left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(left.Exclusions, right.Exclusions) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right)) && reflect.DeepEqual(left.Forwarding, right.Forwarding)
+	return left.NetworkPolicyGeneration == right.NetworkPolicyGeneration && left.NetworkDefault == right.NetworkDefault && left.RuleLayout == right.RuleLayout && left.SharedPriorityBase == right.SharedPriorityBase && left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(left.Exclusions, right.Exclusions) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right)) && reflect.DeepEqual(left.Forwarding, right.Forwarding)
 }
 
 func replacePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, oldState, newState PolicyState) error {

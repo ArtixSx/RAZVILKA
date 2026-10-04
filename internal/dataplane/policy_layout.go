@@ -22,6 +22,9 @@ func initializePolicyLayout(state *PolicyState) {
 }
 
 func validPolicyLayout(state PolicyState) error {
+	if err := validNetworkPolicyState(state); err != nil {
+		return err
+	}
 	if state.RuleLayout == 0 && state.SharedPriorityBase == 0 {
 		return nil
 	}
@@ -51,7 +54,10 @@ func kernelRulesForPolicy(state PolicyState) ([]kernelPolicyRule, error) {
 		return nil, errors.New("policy routing rule bound exceeded")
 	}
 	var out []kernelPolicyRule
-	appendRule := func(source, destination string, priority, table int) error {
+	appendRule := func(source, destination, ingress string, managed bool, priority, table int) error {
+		if ingress != "" && (!validPolicyIngress(ingress) || ingress == state.Interface) {
+			return ErrNetworkPolicyAuthority
+		}
 		dest, err := netip.ParsePrefix(destination)
 		if err != nil || dest.Addr().Is4In6() || dest != dest.Masked() {
 			return errors.New("invalid policy routing destination")
@@ -71,7 +77,7 @@ func kernelRulesForPolicy(state PolicyState) ([]kernelPolicyRule, error) {
 		if dest.Addr().Is4() {
 			family = 4
 		}
-		out = append(out, kernelPolicyRule{family: family, priority: priority, table: table, source: source, destination: dest.String()})
+		out = append(out, kernelPolicyRule{family: family, priority: priority, table: table, source: source, destination: dest.String(), ingress: ingress, managed: managed})
 		if len(out) > maxPolicyPrefixes {
 			return errors.New("expanded policy routing rule bound exceeded")
 		}
@@ -79,7 +85,7 @@ func kernelRulesForPolicy(state PolicyState) ([]kernelPolicyRule, error) {
 	}
 	for index, destination := range state.Exclusions {
 		if state.RuleLayout == 0 {
-			if err := appendRule("", destination, state.PriorityBase+index, 254); err != nil {
+			if err := appendRule("", destination, "", false, state.PriorityBase+index, 254); err != nil {
 				return nil, err
 			}
 			continue
@@ -88,23 +94,28 @@ func kernelRulesForPolicy(state PolicyState) ([]kernelPolicyRule, error) {
 		if err != nil {
 			return nil, err
 		}
-		sources := map[string]bool{}
+		type selector struct {
+			source, ingress string
+			managed         bool
+		}
+		sources := map[string]selector{}
 		for _, service := range services {
 			serviceDest, err := netip.ParsePrefix(service.Destination)
 			if err != nil {
 				return nil, err
 			}
 			if serviceDest.Addr().Is4() == dest.Addr().Is4() {
-				sources[service.Source] = true
+				sources[service.Source+"\x00"+service.Ingress] = selector{service.Source, service.Ingress, service.Managed}
 			}
 		}
 		ordered := make([]string, 0, len(sources))
-		for source := range sources {
-			ordered = append(ordered, source)
+		for key := range sources {
+			ordered = append(ordered, key)
 		}
 		sort.Strings(ordered)
-		for _, source := range ordered {
-			if err := appendRule(source, destination, state.SharedPriorityBase, 254); err != nil {
+		for _, key := range ordered {
+			source := sources[key]
+			if err := appendRule(source.source, destination, source.ingress, source.managed, state.SharedPriorityBase, 254); err != nil {
 				return nil, err
 			}
 		}
@@ -114,7 +125,7 @@ func kernelRulesForPolicy(state PolicyState) ([]kernelPolicyRule, error) {
 		if state.RuleLayout == 2 {
 			priority = state.SharedPriorityBase + 1
 		}
-		if err := appendRule(service.Source, service.Destination, priority, state.Table); err != nil {
+		if err := appendRule(service.Source, service.Destination, service.Ingress, service.Managed, priority, state.Table); err != nil {
 			return nil, err
 		}
 	}
@@ -133,7 +144,14 @@ func kernelRuleArgs(action string, rule kernelPolicyRule) []string {
 	if rule.source != "all" {
 		args = append(args, "from", rule.source)
 	}
-	args = append(args, "to", rule.destination, "lookup")
+	args = append(args, "to", rule.destination)
+	if rule.managed {
+		args = append(args, "fwmark", LANPolicyGateMatch)
+	}
+	if rule.ingress != "" {
+		args = append(args, "iif", rule.ingress)
+	}
+	args = append(args, "lookup")
 	if rule.table == 254 {
 		args = append(args, "main")
 	} else {
@@ -181,10 +199,43 @@ func policyLineMayOverlap(line string, target kernelPolicyRule) bool {
 		if field == "not" || field == "!" {
 			return true
 		}
-		if field == "from" || field == "to" {
+		if field == "from" || field == "to" || field == "iif" || field == "fwmark" {
 			selectorCounts[field]++
 			if selectorCounts[field] > 1 {
 				return true
+			}
+		}
+	}
+	for i, field := range fields {
+		if field == "iif" {
+			if i+1 >= len(fields) || !validPolicyIngress(fields[i+1]) {
+				return true
+			}
+			if target.ingress != "" && fields[i+1] != target.ingress {
+				return false
+			}
+		}
+		if field == "fwmark" && target.managed {
+			if i+1 >= len(fields) {
+				return true
+			}
+			parts := strings.Split(fields[i+1], "/")
+			if len(parts) > 2 {
+				return true
+			}
+			mark, err := strconv.ParseUint(parts[0], 0, 32)
+			if err != nil {
+				return true
+			}
+			mask := uint64(^uint32(0))
+			if len(parts) == 2 {
+				mask, err = strconv.ParseUint(parts[1], 0, 32)
+				if err != nil {
+					return true
+				}
+			}
+			if (mark^uint64(networkPolicyManagedMark))&mask&uint64(networkPolicyGateMask) != 0 {
+				return false
 			}
 		}
 	}

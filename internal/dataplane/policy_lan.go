@@ -245,7 +245,7 @@ func (a *ProxyTunnelAdapter) prepareForwarding(ctx context.Context, state *Polic
 	lanByFamily := map[bool][]proxyLANPrefix{}
 	for _, rule := range rules {
 		if rule.Source != "" {
-			expanded[rule.Source+"\x00"+rule.Destination] = rule
+			expanded[rule.Source+"\x00"+rule.Destination+"\x00"+rule.Ingress] = rule
 			continue
 		}
 		destination, err := netip.ParsePrefix(rule.Destination)
@@ -261,11 +261,19 @@ func (a *ProxyTunnelAdapter) prepareForwarding(ctx context.Context, state *Polic
 			}
 			lanByFamily[v6] = lan
 		}
+		matched := false
 		for _, network := range lan {
+			if rule.Ingress != "" && network.ingress != rule.Ingress {
+				continue
+			}
+			matched = true
 			source := network.prefix.String()
-			expanded[source+"\x00"+rule.Destination] = PolicyRule{Source: source, Destination: rule.Destination}
+			expanded[source+"\x00"+rule.Destination+"\x00"+rule.Ingress] = PolicyRule{Source: source, Destination: rule.Destination, Ingress: rule.Ingress, Managed: rule.Managed}
 		}
-		if len(expanded) > maxProxyForwardingRules {
+		if !matched {
+			return ErrNetworkPolicyAuthority
+		}
+		if len(expanded) > proxyForwardingRuleLimit(*state) {
 			return errors.New("LAN/service rule fanout exceeds the safe forwarding limit")
 		}
 	}
@@ -275,6 +283,9 @@ func (a *ProxyTunnelAdapter) prepareForwarding(ctx context.Context, state *Polic
 	}
 	sort.Slice(state.Rules, func(i, j int) bool {
 		if state.Rules[i].Destination == state.Rules[j].Destination {
+			if state.Rules[i].Source == state.Rules[j].Source {
+				return state.Rules[i].Ingress < state.Rules[j].Ingress
+			}
 			return state.Rules[i].Source < state.Rules[j].Source
 		}
 		return state.Rules[i].Destination < state.Rules[j].Destination

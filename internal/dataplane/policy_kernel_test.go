@@ -23,6 +23,9 @@ func (r *recordedPolicyFakeRunner) Run(_ context.Context, command string, args .
 	r.calls = append(r.calls, command+" "+strings.Join(args, " "))
 	family := 4
 	plain := args
+	if len(plain) > 0 && plain[0] == "-N" {
+		plain = plain[1:]
+	}
 	if len(plain) > 0 && plain[0] == "-6" {
 		family = 6
 		plain = plain[1:]
@@ -61,11 +64,15 @@ type policyKernelFake struct {
 }
 
 type policyKernelEntry struct {
-	family, priority    int
-	source, dest, table string
+	family, priority                   int
+	source, dest, table, ingress, mark string
 }
 
 func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
+	numeric := len(args) > 0 && args[0] == "-N"
+	if numeric {
+		args = args[1:]
+	}
 	family := 4
 	if len(args) > 0 && args[0] == "-6" {
 		family, args = 6, args[1:]
@@ -106,12 +113,26 @@ func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
 	}
 	if args[1] == "show" {
 		lines := []string{"0: from all lookup local", "32766: from all lookup main", "32767: from all lookup default"}
+		if numeric {
+			lines = []string{"0: from all lookup 255", "32766: from all lookup 254", "32767: from all lookup 253"}
+		}
 		if family == 4 {
 			lines = append(lines, f.foreignIPv4...)
 		}
 		for _, rule := range f.entries {
 			if rule.family == family {
-				lines = append(lines, fmt.Sprintf("%d: from %s to %s lookup %s", rule.priority, rule.source, rule.dest, rule.table))
+				selector := ""
+				if rule.mark != "" {
+					selector += " fwmark " + rule.mark
+				}
+				if rule.ingress != "" {
+					selector += " iif " + rule.ingress
+				}
+				table := rule.table
+				if numeric && table == "main" {
+					table = "254"
+				}
+				lines = append(lines, fmt.Sprintf("%d: from %s to %s%s lookup %s", rule.priority, rule.source, rule.dest, selector, table))
 			}
 		}
 		return []byte(strings.Join(lines, "\n") + "\n"), true, nil
@@ -127,6 +148,10 @@ func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
 			entry.dest = args[i+1]
 		case "lookup":
 			entry.table = args[i+1]
+		case "iif":
+			entry.ingress = args[i+1]
+		case "fwmark":
+			entry.mark = args[i+1]
 		default:
 			return nil, true, errors.New("unknown fake RPDB attribute")
 		}

@@ -67,6 +67,10 @@ func (a *App) updateComponent(ctx context.Context, id string, guards ...func(con
 		_ = a.Components.RecordOperation(id, "update", "running", "Ночное обслуживание: обновление с проверкой и откатом")
 		var result components.Result
 		result, err = a.Components.ManagedUpdateGuarded(ctx, id, check, func(c context.Context) error { return checkAuthority() })
+		if result.PendingRollbackAcceptance {
+			a.recordComponentAwaitingRollback(id)
+			return errors.Join(components.ErrUpdatePending, err)
+		}
 		if err != nil {
 			_ = a.Components.RecordOperation(id, "update", "failed", err.Error())
 			return err
@@ -119,6 +123,11 @@ func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id 
 	}
 	_ = a.Components.RecordOperation(id, "update", "running", "Обновление при работающих маршрутах: проверка и откат подготовлены")
 	result, err := a.Components.ManagedUpdateGuarded(ctx, id, check, guard)
+	if result.PendingRollbackAcceptance {
+		a.recordComponentAwaitingRollback(id)
+		writeJSON(w, http.StatusAccepted, map[string]any{"result": result, "recovery_required": true, "live_accepted": false, "error": "Пакет и настройки возвращены к прежней версии. Откат ещё требует независимой проверки рабочего процесса."})
+		return
+	}
 	if err == nil && result.PendingLiveAcceptance {
 		a.recordComponentAwaitingLive(id)
 		writeJSON(w, http.StatusAccepted, result)

@@ -129,6 +129,26 @@ func validDigest(value string) bool {
 	return err == nil && len(decoded) == 32
 }
 
+func validateFinalURL(src Source, raw string) error {
+	if publicfetch.ValidateURL(raw) != nil {
+		return errors.New("cache final origin is not public HTTPS")
+	}
+	final, _ := url.Parse(raw)
+	original, _ := url.Parse(src.URL)
+	if original == nil {
+		return errors.New("invalid source origin")
+	}
+	if strings.EqualFold(final.Hostname(), original.Hostname()) {
+		return nil
+	}
+	for _, host := range src.RedirectHosts {
+		if strings.EqualFold(final.Hostname(), host) {
+			return nil
+		}
+	}
+	return errors.New("cache final origin is not an approved source mirror")
+}
+
 func (m *Manager) readCache(src Source) (cacheDocument, error) {
 	if err := validateSource(src); err != nil {
 		return cacheDocument{}, err
@@ -168,6 +188,9 @@ func (m *Manager) readCache(src Source) (cacheDocument, error) {
 		}
 		if cached.Provenance.URL != publicfetch.RedactedURL(src.URL) || cached.Provenance.TrustTier != trustTier(src) {
 			return cacheDocument{}, errors.New("cache provenance does not match source")
+		}
+		if err := validateFinalURL(src, cached.Provenance.FinalURL); err != nil {
+			return cacheDocument{}, err
 		}
 		if cached.Diff.Added < 0 || cached.Diff.Added > cached.Entries || cached.Diff.Removed < 0 || cached.Diff.Removed > sourceEntryLimit(src) || cached.Diff.PreviousSHA256 != "" && !validDigest(cached.Diff.PreviousSHA256) {
 			return cacheDocument{}, errors.New("cache diff has invalid counts or digest")

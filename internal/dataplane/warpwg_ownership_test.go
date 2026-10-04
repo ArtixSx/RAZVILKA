@@ -20,6 +20,7 @@ func warpCleanupFixture(t *testing.T, awg bool) (*WARPWireGuardAdapter, *warpFak
 		a = NewAmneziaWGAdapter(configs, filepath.Join(root, "state"))
 	}
 	r := &warpFakeRunner{active: true}
+	a.policyReceiptOptions = testWGPolicyReceiptOptions()
 	a.IP, a.WG, a.Runner, a.NativeOnly = "ip", "wg", r, true
 	profile, err := sanitizeWGQuickProfile(testWARPProfile())
 	if err != nil {
@@ -39,6 +40,12 @@ func writeWarpCleanupFixture(t *testing.T, a *WARPWireGuardAdapter, state Policy
 	}
 	if err := os.WriteFile(a.RuntimeConfigPath, []byte(profile), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	if _, owned, err := a.deactivationOwnership(context.Background()); err == nil && owned {
+		if _, err := a.freshWGPolicyGeneration(context.Background(), state); err != nil {
+			t.Fatal(err)
+		}
+		a.Runner.(*warpFakeRunner).calls = nil
 	}
 }
 func TestWARPDeactivateWithoutOwnershipNeverInspectsForeignInterface(t *testing.T) {

@@ -69,6 +69,9 @@ func (a *WARPWireGuardAdapter) endpointNow() time.Time {
 }
 
 func (a *WARPWireGuardAdapter) resolveWGEndpoint(ctx context.Context, endpoint string) ([]netip.Addr, time.Time, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, time.Time{}, err
+	}
 	host, _, err := net.SplitHostPort(endpoint)
 	if err != nil {
 		return nil, time.Time{}, err
@@ -89,6 +92,11 @@ func (a *WARPWireGuardAdapter) resolveWGEndpoint(ctx context.Context, endpoint s
 		addresses, err = a.Resolver(ctx, host)
 	} else {
 		addresses, err = netresolve.LookupNetIP(ctx, "ip", host)
+	}
+	// An injected/platform callback can finish after cancellation. Its answer
+	// cannot authorize endpoint staging or refresh an existing DNS lease.
+	if err := ctx.Err(); err != nil {
+		return nil, time.Time{}, err
 	}
 	if err != nil || len(addresses) == 0 || len(addresses) > 32 {
 		return nil, time.Time{}, errors.New("WireGuard endpoint resolution unavailable or exceeds limit")
@@ -138,6 +146,7 @@ func (a *WARPWireGuardAdapter) stageWGEndpoint(ctx context.Context, profile stri
 
 type wgEndpointRoute struct {
 	Destination    string          `json:"dst"`
+	From           string          `json:"from,omitempty"`
 	Gateway        string          `json:"gateway"`
 	Device         string          `json:"dev"`
 	Source         string          `json:"prefsrc"`
@@ -149,6 +158,27 @@ type wgEndpointRoute struct {
 	Protocol       string          `json:"protocol"`
 }
 
+// iproute2 can encode the same table ID as a JSON number or decimal string.
+// Compare IDs without treating arbitrary table names as equivalent authority.
+func wgEndpointTableMatches(raw json.RawMessage, expected int) bool {
+	if expected < 1 || uint64(expected) > 1<<32-1 || len(raw) == 0 || len(raw) > 32 {
+		return false
+	}
+	var number uint32
+	if err := json.Unmarshal(raw, &number); err == nil {
+		return uint64(number) == uint64(expected)
+	}
+	var label string
+	if err := json.Unmarshal(raw, &label); err != nil {
+		return false
+	}
+	if label == "main" {
+		return expected == 254
+	}
+	id, err := strconv.ParseUint(label, 10, 32)
+	return err == nil && strconv.FormatUint(id, 10) == label && id == uint64(expected)
+}
+
 func parseWGEndpointRoutes(data []byte) ([]wgEndpointRoute, error) {
 	if len(data) > 64<<10 {
 		return nil, errors.New("WireGuard endpoint route response exceeds bound")
@@ -157,7 +187,7 @@ func parseWGEndpointRoutes(data []byte) ([]wgEndpointRoute, error) {
 	if err := json.Unmarshal(data, &raw); err != nil || len(raw) > 1 {
 		return nil, errors.New("WireGuard endpoint route is invalid or ambiguous")
 	}
-	allowed := map[string]bool{"dst": true, "gateway": true, "dev": true, "prefsrc": true, "src": true, "table": true, "type": true, "flags": true, "protocol": true, "scope": true, "metric": true, "pref": true, "uid": true, "cache": true}
+	allowed := map[string]bool{"dst": true, "from": true, "gateway": true, "dev": true, "prefsrc": true, "src": true, "table": true, "type": true, "flags": true, "protocol": true, "scope": true, "metric": true, "pref": true, "uid": true, "cache": true}
 	for _, route := range raw {
 		for key := range route {
 			if !allowed[key] {
@@ -169,12 +199,38 @@ func parseWGEndpointRoutes(data []byte) ([]wgEndpointRoute, error) {
 	if err := json.Unmarshal(data, &routes); err != nil {
 		return nil, err
 	}
-	for _, route := range routes {
+	for i, route := range routes {
 		if route.Type != "" && route.Type != "unicast" {
 			return nil, errors.New("WireGuard endpoint route is not unicast")
 		}
+		if _, present := raw[i]["from"]; present && !wgEndpointUnrestrictedSource(route.From, route.Destination) {
+			return nil, errors.New("WireGuard endpoint route has a restricted or invalid source selector")
+		}
 	}
 	return routes, nil
+}
+
+// IPv6 route-get normally reports from:"::". Accept only a well-formed
+// unrestricted selector of the destination's family; a source-specific route
+// cannot authorize our source-independent endpoint pin or its cleanup.
+func wgEndpointUnrestrictedSource(from, destination string) bool {
+	source, err := netip.ParseAddr(from)
+	if err != nil {
+		prefix, prefixErr := netip.ParsePrefix(from)
+		if prefixErr != nil || prefix.Bits() != 0 {
+			return false
+		}
+		source = prefix.Addr()
+	}
+	dst, err := netip.ParseAddr(destination)
+	if err != nil {
+		prefix, prefixErr := netip.ParsePrefix(destination)
+		if prefixErr != nil {
+			return false
+		}
+		dst = prefix.Addr()
+	}
+	return source.IsUnspecified() && source.Zone() == "" && dst.Zone() == "" && source.Is4() == dst.Is4()
 }
 
 func (a *WARPWireGuardAdapter) readWGEndpointWAN(ctx context.Context, e *WGEndpointState) error {
@@ -183,14 +239,17 @@ func (a *WARPWireGuardAdapter) readWGEndpointWAN(ctx context.Context, e *WGEndpo
 		return errors.New("WireGuard endpoint WAN route inspection failed")
 	}
 	routes, err := parseWGEndpointRoutes(data)
-	if err != nil || len(routes) != 1 {
+	if err != nil {
+		return fmt.Errorf("WireGuard endpoint WAN route inspection is invalid: %w", err)
+	}
+	if len(routes) != 1 {
 		return errors.New("WireGuard endpoint WAN route is not unique")
 	}
 	route := routes[0]
 	if route.Source == "" {
 		route.Source = route.SelectedSource
 	}
-	if len(route.Table) != 0 && string(route.Table) != "254" && string(route.Table) != `"main"` {
+	if len(route.Table) != 0 && !wgEndpointTableMatches(route.Table, 254) {
 		return errors.New("WireGuard endpoint bootstrap route must use main")
 	}
 	if route.Device == "" || route.Device == "lo" || strings.HasPrefix(route.Device, "rz-") || strings.ContainsAny(route.Device, " \t\n/\\") || len(route.Device) > 15 || len(route.Flags) != 0 {
@@ -249,6 +308,7 @@ func (a *WARPWireGuardAdapter) revalidateWGEndpoint(ctx context.Context, e *WGEn
 	if e == nil {
 		return nil
 	}
+	current := *e
 	host, _, _ := net.SplitHostPort(e.Original)
 	_, literalErr := netip.ParseAddr(host)
 	if literalErr != nil && (e.ExpiresAt.IsZero() || a.endpointNow().Before(e.ResolvedAt) || !a.endpointNow().Before(e.ExpiresAt)) {
@@ -263,15 +323,18 @@ func (a *WARPWireGuardAdapter) revalidateWGEndpoint(ctx context.Context, e *WGEn
 		if !found {
 			return ErrWGEndpointChanged
 		}
-		e.ResolvedAt, e.ExpiresAt = a.endpointNow(), expiry
+		current.ResolvedAt, current.ExpiresAt = a.endpointNow(), expiry
 	}
-	current := *e
 	if err := a.readWGEndpointWAN(ctx, &current); err != nil {
 		return err
 	}
 	if current.Device != e.Device || current.Gateway != e.Gateway || current.Source != e.Source {
 		return ErrWGEndpointChanged
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	*e = current // publish a new lease only after the WAN check also succeeds
 	return nil
 }
 
@@ -379,7 +442,7 @@ func (a *WARPWireGuardAdapter) inspectWGEndpoint(ctx context.Context, e *WGEndpo
 	if addr, err := netip.ParseAddr(destination); err == nil {
 		destination = netip.PrefixFrom(addr, addr.BitLen()).String()
 	}
-	if destination != e.prefix() || r.Device != e.Device || r.Gateway != e.Gateway || r.Source != e.Source || r.Metric != e.Metric || r.Protocol != "static" || !flagsOK {
+	if destination != e.prefix() || r.Device != e.Device || r.Gateway != e.Gateway || r.Source != e.Source || r.Metric != e.Metric || r.Protocol != "static" || !flagsOK || len(r.Table) != 0 && !wgEndpointTableMatches(r.Table, e.Table) {
 		return false, false, errors.New("WireGuard endpoint route has a foreign tuple")
 	}
 	return true, rulePresent, nil

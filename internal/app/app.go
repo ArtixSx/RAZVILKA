@@ -41,6 +41,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/profileexchange"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
+	"github.com/ArtixSx/razvilka/internal/routekind"
 	"github.com/ArtixSx/razvilka/internal/routeprobe"
 	"github.com/ArtixSx/razvilka/internal/routerstats"
 	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
@@ -164,27 +165,33 @@ type App struct {
 	Cloudflare                *cloudflareprovider.Store
 	Nodes                     *nodestore.Store
 	NodeChecker               dataplane.NodeChecker
-	NodePinger                dataplane.NodePinger
-	NodeFeeds                 *providerfeed.Manager
-	nodeReviews               nodeRouteReviewStore
-	nodeRecovery              nodeRecoveryState
-	nodeChecks                nodeCheckState
-	nodeRecordMu              sync.Mutex // serializes recording of parallel node checks
-	nodeAutofallback          nodeAutofallbackState
-	retainedProofs            retainedProofState
-	reconciler                serviceReconciler
-	DataplaneHost             func() dataplane.HostState
-	FreshProfile              func(context.Context) (string, error)
-	cloudflareBusy            atomic.Bool
-	TestLab                   *testlab.Runner
-	RouteProber               testlab.RouteProber
-	SmartRoute                *smartroute.Manager
-	Updates                   *updatecheck.Manager
-	SelfUpdate                *updatecheck.Updater
-	USQUE                     *usquediag.Manager
-	Stats                     *routerstats.Sampler
-	Security                  *security.Gate
-	Audit                     *auditlog.Journal
+	// Fixed views of one shared dispatcher, configured before HTTP serving.
+	NodeCheckers map[string]dataplane.NodeChecker
+	// OPS must admit the dual-engine history format before Xray checks write
+	// it; nil keeps those checks unavailable without attempting another engine.
+	NodeHistoryWriteGuard func(context.Context, int) error
+	NodePinger            dataplane.NodePinger
+	NodeFeeds             *providerfeed.Manager
+	nodeReviews           nodeRouteReviewStore
+	nodeRecovery          nodeRecoveryState
+	nodeChecks            nodeCheckState
+	nodeRecordMu          sync.Mutex // serializes recording of parallel node checks
+	nodeAutofallback      nodeAutofallbackState
+	retainedProofs        retainedProofState
+	reconciler            serviceReconciler
+	DataplaneHost         func() dataplane.HostState
+	FreshProfile          func(context.Context) (string, error)
+	cloudflareBusy        atomic.Bool
+	TestLab               *testlab.Runner
+	RouteProber           testlab.RouteProber
+	SmartRoute            *smartroute.Manager
+	Updates               *updatecheck.Manager
+	SelfUpdate            *updatecheck.Updater
+	SelfUpdateFiles       *SelfUpdateFiles
+	USQUE                 *usquediag.Manager
+	Stats                 *routerstats.Sampler
+	Security              *security.Gate
+	Audit                 *auditlog.Journal
 	// EngineInventory is injectable only for deterministic presentation tests.
 	// Production uses the read-only detector and never starts or stops an engine.
 	EngineInventory func() []engine.Status
@@ -606,6 +613,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/settings/safe-mode", a.safeModeSetting)
 	mux.HandleFunc("/api/v1/update", a.updateStatus)
 	mux.HandleFunc("/api/v1/self-update/current", a.selfUpdateCurrent)
+	mux.HandleFunc("/api/v1/self-update/recovery", a.selfUpdateRecovery)
 	mux.HandleFunc("/api/v1/self-update/prepare", a.selfUpdatePrepare)
 	mux.HandleFunc("/api/v1/self-update/apply", a.selfUpdateApply)
 	mux.HandleFunc("/api/v1/diagnostics/domain", a.domainDiagnostic)
@@ -3744,13 +3752,14 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 		state := cfg.Services[service.ID]
 		if state.Enabled {
 			selected := selectedRoute(state)
-			if (strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-")) && !routecatalog.ValidForServiceWithOptions(selected, service.ID, options) {
+			nodeEngine, nodeTarget, nodeRoute := routekind.ParseNodeRoute(selected)
+			if routekind.HasNodeRoutePrefix(selected) && (!nodeRoute || !routecatalog.ValidForServiceWithOptions(selected, service.ID, options)) {
 				return dataplane.Plan{}, a.routePlanDependency(cfg, service, selected, committedRoutes[service.ID])
 			}
 			resolved := selected
 			if selected == "auto" {
 				resolved = a.resolveAutoWithOptions(service, cfg.EngineOrder, options)
-			} else if strings.HasPrefix(selected, "sing-box:node-") || strings.HasPrefix(selected, "sing-box:group-") {
+			} else if nodeRoute {
 				if networkProfile == "" {
 					var profileErr error
 					networkProfile, profileErr = a.freshNetworkProfile(context.Background())
@@ -3761,11 +3770,11 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 				if a.Nodes == nil {
 					return dataplane.Plan{}, fmt.Errorf("private node registry is unavailable")
 				}
-				previousNode := strings.TrimPrefix(committedRoutes[service.ID], "sing-box:")
-				if !strings.HasPrefix(previousNode, "node-") {
+				previousEngine, previousNode, previousExact := routekind.ParseNodeRoute(committedRoutes[service.ID])
+				if !previousExact || previousEngine != nodeEngine || !strings.HasPrefix(previousNode, "node-") {
 					previousNode = ""
 				}
-				proof, proofErr := a.Nodes.ResolveRoute(context.Background(), strings.TrimPrefix(selected, "sing-box:"), service.ID, networkProfile, previousNode, committedAt, time.Now())
+				proof, proofErr := a.Nodes.ResolveRouteForEngine(context.Background(), nodeEngine, nodeTarget, service.ID, networkProfile, previousNode, committedAt, time.Now())
 				if proofErr != nil {
 					return dataplane.Plan{}, a.routePlanDependency(cfg, service, selected, committedRoutes[service.ID])
 				}
@@ -3812,10 +3821,10 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 	}
 	sort.Strings(retiringAdapters)
 	engines := make([]dataplane.Engine, 0, len(options))
-	nodeScopedSingBox := false
+	nodeScopedEngines := map[string]bool{}
 	for _, route := range routes {
-		if strings.HasPrefix(route.Resolved, "sing-box:node-") {
-			nodeScopedSingBox = true
+		if engine, target, ok := routekind.ParseNodeRoute(route.Resolved); ok && strings.HasPrefix(target, "node-") {
+			nodeScopedEngines[engine] = true
 		}
 	}
 	for _, option := range options {
@@ -3826,7 +3835,7 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 			continue
 		}
 		configured := option.Selectable
-		if option.ID == "sing-box" && nodeScopedSingBox {
+		if nodeScopedEngines[option.ID] {
 			configured = true
 		}
 		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: configured, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
@@ -3865,9 +3874,9 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 	}
 	// Exact registry routes materialize their own private runtime configuration.
 	// Applying a service or routing choice grants no authority to install or
-	// discard an unrelated legacy Sing-box editor draft.
-	if nodeScopedSingBox && scope != changeScopeEngine {
-		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id != "sing-box" })
+	// discard an unrelated editor draft for that engine.
+	if len(nodeScopedEngines) > 0 && scope != changeScopeEngine {
+		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return !nodeScopedEngines[id] })
 	}
 	host := dataplane.DiscoverHost()
 	if a.DataplaneHost != nil {
@@ -5071,55 +5080,7 @@ func (a *App) routeOptionsSnapshotContext(ctx context.Context) []routecatalog.Op
 		}
 		a.prepareRouteOption(&options[i])
 	}
-	if a.Nodes == nil || a.Dataplane == nil || !a.Dataplane.Capable("sing-box") {
-		return options
-	}
-	profile, profileErr := a.freshNetworkProfile(ctx)
-	if profileErr != nil {
-		return options
-	}
-	// Read and validate the private envelope once for the whole selector. A
-	// separate RouteServices load per node made a large subscription quadratic
-	// and could hold the Services response beyond the HTTP write deadline.
-	snapshot, availableServices, err := a.Nodes.RouteSnapshot(ctx, profile, time.Now())
-	if err != nil {
-		return options
-	}
-	installed, running := false, false
-	for _, option := range options {
-		if option.ID == "sing-box" {
-			installed, running = option.Installed, option.Running
-			break
-		}
-	}
-	if !installed {
-		return options
-	}
-	for _, node := range snapshot.Nodes {
-		services := availableServices[node.ID]
-		if len(services) == 0 || node.Disabled {
-			continue
-		}
-		options = append(options, routecatalog.Option{
-			ID: "sing-box:" + node.ID, Name: "Sing-box · " + node.Name, Kind: "node", Description: "Точно проверенный узел для выбранного сервиса и текущей сети",
-			Installed: true, Configured: true, Running: running, Selectable: true, Ready: true, Services: services,
-		})
-	}
-	for _, group := range snapshot.Groups {
-		services := availableServices[group.ID]
-		if len(services) == 0 {
-			continue
-		}
-		mode := "резервная группа"
-		if group.Mode == "manual" {
-			mode = "выбранный узел"
-		}
-		options = append(options, routecatalog.Option{
-			ID: "sing-box:" + group.ID, Name: "Sing-box · " + group.Name, Kind: "node-group", Description: mode + " с возвратом к последнему рабочему узлу",
-			Installed: true, Configured: true, Running: running, Selectable: true, Ready: true, Services: services,
-		})
-	}
-	return options
+	return a.appendNodeRouteOptions(ctx, options)
 }
 
 func (a *App) prepareRouteOption(option *routecatalog.Option) {

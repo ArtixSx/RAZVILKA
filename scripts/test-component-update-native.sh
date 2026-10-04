@@ -5,7 +5,6 @@ set -eu
 cd "$(dirname "$0")/.."
 OPKG="${RAZVILKA_TEST_OPKG:-opkg}"
 command -v "$OPKG" >/dev/null 2>&1 || { echo "Native opkg is required; no test was run" >&2; exit 2; }
-command -v ar >/dev/null 2>&1 || { echo "ar is required to build disposable test packages" >&2; exit 2; }
 case "$(uname -s)" in Linux) ;; *) echo "Native opkg test requires Linux" >&2; exit 2 ;; esac
 GO="${GO:-go}"
 command -v "$GO" >/dev/null 2>&1 || { echo "Go is required; set GO to the pinned Go 1.26.5 executable" >&2; exit 2; }
