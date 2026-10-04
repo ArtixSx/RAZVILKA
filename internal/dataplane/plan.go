@@ -22,16 +22,20 @@ import (
 const SchemaVersion = 1
 
 type Route struct {
-	ServiceID    string   `json:"service_id"`
-	ServiceName  string   `json:"service_name"`
-	Selected     string   `json:"selected_route"`
-	Resolved     string   `json:"resolved_route"`
-	Domains      []string `json:"domains,omitempty"`
-	CIDRs        []string `json:"cidrs,omitempty"`
-	SourceRefs   []string `json:"source_refs,omitempty"`
-	Sources      []string `json:"sources,omitempty"`
-	ProbeURL     string   `json:"probe_url,omitempty"`
-	AppliedRoute string   `json:"applied_route,omitempty"`
+	ServiceID   string   `json:"service_id"`
+	ServiceName string   `json:"service_name"`
+	Selected    string   `json:"selected_route"`
+	Resolved    string   `json:"resolved_route"`
+	Domains     []string `json:"domains,omitempty"`
+	CIDRs       []string `json:"cidrs,omitempty"`
+	SourceRefs  []string `json:"source_refs,omitempty"`
+	Sources     []string `json:"sources,omitempty"`
+	Ingress     []string `json:"ingress,omitempty"`
+	// Trusted compiler fields; scope/negative gate proof comes from the owner.
+	NetworkPolicyGeneration string `json:"network_policy_generation,omitempty"`
+	NetworkPolicyRole       string `json:"network_policy_role,omitempty"`
+	ProbeURL                string `json:"probe_url,omitempty"`
+	AppliedRoute            string `json:"applied_route,omitempty"`
 }
 
 type Engine struct {
@@ -245,6 +249,20 @@ func Build(input Input) (Plan, error) {
 }
 
 func BuildAt(input Input, now time.Time) (Plan, error) {
+	checkedAdapters := map[string]bool{}
+	for _, route := range input.Routes {
+		if _, err := routeIngresses(route); err != nil {
+			return Plan{}, err
+		}
+		id := adapterID(route.Resolved)
+		if checkedAdapters[id] {
+			continue
+		}
+		checkedAdapters[id] = true
+		if _, _, err := NetworkPolicyRouteAuthority(Plan{Routes: input.Routes}, id); err != nil {
+			return Plan{}, err
+		}
+	}
 	if input.SuspendDNS && (input.DNS != nil || len(input.Routes) != 0 || !slices.Contains(input.RetiringAdapters, scopedDNSAdapterID)) {
 		return Plan{}, errors.New("DNS suspension requires a complete owned runtime stop")
 	}
@@ -690,6 +708,7 @@ func canonicalize(input *Input) {
 		route.CIDRs = sortedUnique(route.CIDRs)
 		route.SourceRefs = sortedUnique(route.SourceRefs)
 		route.Sources = sortedUnique(route.Sources)
+		route.Ingress = sortedUnique(route.Ingress)
 	}
 	sort.Slice(input.Routes, func(i, j int) bool { return input.Routes[i].ServiceID < input.Routes[j].ServiceID })
 	sort.Slice(input.Engines, func(i, j int) bool { return input.Engines[i].ID < input.Engines[j].ID })

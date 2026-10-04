@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -21,6 +22,13 @@ import (
 // NAT exemptions preserve the client source address inside the userspace TUN.
 // ACCEPT in the nat table does not bypass the filter table.
 const maxProxyForwardingRules = 128
+
+func proxyForwardingRuleLimit(state PolicyState) int {
+	if state.NetworkPolicyGeneration != "" && validPolicyLayout(state) == nil {
+		return 512
+	}
+	return maxProxyForwardingRules
+}
 
 type ProxyForwardingState struct {
 	Chain string                `json:"chain"`
@@ -45,6 +53,9 @@ func (a *ProxyTunnelAdapter) forwardingPath() string {
 }
 
 func (a *ProxyTunnelAdapter) compileForwarding(ctx context.Context, state PolicyState) (*ProxyForwardingState, error) {
+	if err := validPolicyLayout(state); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, a.timeout())
 	defer cancel()
 	result := &ProxyForwardingState{Chain: a.forwardingChain()}
@@ -52,7 +63,7 @@ func (a *ProxyTunnelAdapter) compileForwarding(ctx context.Context, state Policy
 	wanByFamily := map[bool]map[string]bool{}
 	lanByFamily := map[bool][]proxyLANPrefix{}
 	rules := effectivePolicyRules(state)
-	if len(rules) == 0 || len(rules) > maxProxyForwardingRules {
+	if len(rules) == 0 || len(rules) > proxyForwardingRuleLimit(state) {
 		return nil, errors.New("proxy forwarding rule count exceeds its safe bound")
 	}
 	for _, rule := range rules {
@@ -64,7 +75,8 @@ func (a *ProxyTunnelAdapter) compileForwarding(ctx context.Context, state Policy
 		if err != nil || destErr != nil || source.Addr().Is4In6() || dest.Addr().Is4In6() || source.Addr().BitLen() != dest.Addr().BitLen() || source.Bits() != source.Addr().BitLen() && !privateLANPrefix(source) {
 			return nil, errors.New("proxy forwarding requires an exact client address or a proven private LAN subnet of the destination family")
 		}
-		ingress, ok := ingresses[source.String()]
+		key := source.String() + "\x00" + rule.Ingress
+		ingress, ok := ingresses[key]
 		if !ok {
 			if source.Bits() == source.Addr().BitLen() {
 				ingress, err = policySourceIngress(ctx, a.Runner, a.ip(), source.Addr(), state.Interface)
@@ -86,7 +98,10 @@ func (a *ProxyTunnelAdapter) compileForwarding(ctx context.Context, state Policy
 			if ingress == "" || !proxyFirewallInterface.MatchString(ingress) {
 				return nil, errors.New("proxy forwarding client ingress is unavailable")
 			}
-			ingresses[source.String()] = ingress
+			if rule.Ingress != "" && rule.Ingress != ingress {
+				return nil, ErrNetworkPolicyAuthority
+			}
+			ingresses[key] = ingress
 		}
 		wan, known := wanByFamily[source.Addr().Is6()]
 		if !known {
@@ -178,7 +193,7 @@ func (a *ProxyTunnelAdapter) validateForwarding(state PolicyState, forwarding *P
 	if err := validPolicyLayout(state); err != nil {
 		return err
 	}
-	if forwarding == nil || forwarding.Chain != a.forwardingChain() || len(forwarding.Rules) == 0 || len(forwarding.Rules) > maxProxyForwardingRules || state.Interface != a.Interface || !proxyFirewallInterface.MatchString(state.Interface) {
+	if forwarding == nil || forwarding.Chain != a.forwardingChain() || len(forwarding.Rules) == 0 || len(forwarding.Rules) > proxyForwardingRuleLimit(state) || state.Interface != a.Interface || !proxyFirewallInterface.MatchString(state.Interface) {
 		return errors.New("proxy forwarding manifest is missing or has invalid ownership/bounds")
 	}
 	rules := effectivePolicyRules(state)
@@ -186,6 +201,9 @@ func (a *ProxyTunnelAdapter) validateForwarding(state PolicyState, forwarding *P
 		return errors.New("proxy forwarding does not match the routing policy")
 	}
 	for i, grant := range forwarding.Rules {
+		if rules[i].Ingress != "" && rules[i].Ingress != grant.Ingress {
+			return ErrNetworkPolicyAuthority
+		}
 		source, err := netip.ParsePrefix(grant.Source)
 		dest, destErr := netip.ParsePrefix(grant.Destination)
 		if err != nil || destErr != nil || source.Bits() != source.Addr().BitLen() && !privateLANPrefix(source) || source.Addr().Is4In6() || dest.Addr().Is4In6() || !source.Addr().IsGlobalUnicast() || !dest.Addr().IsGlobalUnicast() || dest.Bits() == 0 || source.Addr().BitLen() != dest.Addr().BitLen() || source.Masked().String() != grant.Source || dest.Masked().String() != grant.Destination || grant.Source != rules[i].Source || grant.Destination != rules[i].Destination || !proxyFirewallInterface.MatchString(grant.Ingress) || grant.Ingress == state.Interface || grant.Ingress == "lo" {
@@ -217,6 +235,9 @@ func proxyFirewallTables(state PolicyState) []proxyFirewallTable {
 				continue
 			}
 			out := []string{"-i", grant.Ingress, "-o", state.Interface, "-s", grant.Source, "-d", grant.Destination}
+			if state.NetworkPolicyGeneration != "" {
+				out = append(out, "-m", "mark", "--mark", LANPolicyGateMatch)
+			}
 			back := []string{"-i", state.Interface, "-o", grant.Ingress, "-s", grant.Destination, "-d", grant.Source, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED"}
 			for _, match := range [][]string{out, back} {
 				filter.rules = append(filter.rules, append(append([]string{}, match...), "-j", "ACCEPT"))
@@ -225,6 +246,9 @@ func proxyFirewallTables(state PolicyState) []proxyFirewallTable {
 			// POSTROUTING has no input interface match. The exact source, service
 			// destination and owned output TUN bind this source-preserving exception.
 			match := []string{"-o", state.Interface, "-s", grant.Source, "-d", grant.Destination}
+			if state.NetworkPolicyGeneration != "" {
+				match = append(match, "-m", "mark", "--mark", LANPolicyGateMatch)
+			}
 			nat.rules = append(nat.rules, append(append([]string{}, match...), "-j", "ACCEPT"))
 			nat.jumps = append(nat.jumps, append(append([]string{}, match...), "-j", nat.chain))
 		}
@@ -278,6 +302,17 @@ func proxyFirewallRuleKey(rule []string) string {
 			states := strings.Split(value, ",")
 			sort.Strings(states)
 			value = strings.Join(states, ",")
+		case "--mark":
+			markMask := strings.Split(value, "/")
+			if len(markMask) != 2 {
+				return "!" + strings.Join(rule, " ")
+			}
+			mark, markErr := strconv.ParseUint(markMask[0], 0, 32)
+			mask, maskErr := strconv.ParseUint(markMask[1], 0, 32)
+			if markErr != nil || maskErr != nil {
+				return "!" + strings.Join(rule, " ")
+			}
+			value = fmt.Sprintf("0x%x/0x%x", mark, mask)
 		case "-i", "-o", "-m", "-j":
 		default:
 			return "!" + strings.Join(rule, " ")
