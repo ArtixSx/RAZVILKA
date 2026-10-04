@@ -22,6 +22,11 @@ import (
 )
 
 const Schema = 2
+
+// Only stopped data settlement writes version 3. Ordinary live transactions
+// retain version 2; readers 1/2 must refuse the new terminal outcome.
+const StoppedSchema = 3
+const ReadVersion = StoppedSchema
 const maxFileBytes = 256 << 20
 
 var (
@@ -55,18 +60,21 @@ type image struct {
 }
 
 type Receipt struct {
-	Schema      int      `json:"schema"`
-	ID          string   `json:"id"`
-	Phase       string   `json:"phase"`
-	Index       int      `json:"index"`
-	Command     string   `json:"command,omitempty"`
-	Commands    []string `json:"commands,omitempty"`
-	Rollback    bool     `json:"rollback,omitempty"`
-	BeforeFiles bool     `json:"before_files,omitempty"`
-	Files       []image  `json:"files"`
+	Schema      int             `json:"schema"`
+	ID          string          `json:"id"`
+	Phase       string          `json:"phase"`
+	Index       int             `json:"index"`
+	Command     string          `json:"command,omitempty"`
+	Commands    []string        `json:"commands,omitempty"`
+	Rollback    bool            `json:"rollback,omitempty"`
+	BeforeFiles bool            `json:"before_files,omitempty"`
+	Files       []image         `json:"files"`
+	Stopped     *StoppedBinding `json:"stopped,omitempty"`
 }
 
-func (r Receipt) Pending() bool { return r.Phase != "accepted" && r.Phase != "rolled-back" }
+func (r Receipt) Pending() bool {
+	return r.Phase != "accepted" && r.Phase != "rolled-back" && r.Phase != "rolled-back-stopped"
+}
 
 // Store uses pre-existing directories. The caller must establish ownership and
 // durably create the private journal directory before opening it. Receipts and
@@ -184,7 +192,14 @@ func (s *Store) writeReceipt(r Receipt) error {
 }
 
 func valid(r Receipt) bool {
-	if (r.Schema != 1 && r.Schema != Schema) || (r.Schema == 1 && r.BeforeFiles) || !idPattern.MatchString(r.ID) || len(r.Files) == 0 || len(r.Files) > 6 || r.Index < 0 || r.Index > len(r.Files) {
+	if (r.Schema != 1 && r.Schema != Schema && r.Schema != StoppedSchema) || (r.Schema == 1 && r.BeforeFiles) || !idPattern.MatchString(r.ID) || len(r.Files) == 0 || len(r.Files) > 6 || r.Index < 0 || r.Index > len(r.Files) {
+		return false
+	}
+	if r.Schema == StoppedSchema {
+		if r.Phase != "rolled-back-stopped" || r.Stopped == nil || !validStoppedBinding(*r.Stopped) || len(r.Files) != 6 {
+			return false
+		}
+	} else if r.Stopped != nil || r.Phase == "rolled-back-stopped" {
 		return false
 	}
 	switch r.Phase {
@@ -196,7 +211,7 @@ func valid(r Receipt) bool {
 		if r.Command != "" {
 			return false
 		}
-	case "installed", "restored", "accepted", "rolled-back":
+	case "installed", "restored", "accepted", "rolled-back", "rolled-back-stopped":
 		if r.Index != len(r.Files) || r.Command != "" {
 			return false
 		}
@@ -226,7 +241,7 @@ func valid(r Receipt) bool {
 	if r.Command != "" && r.Commands[len(r.Commands)-1] != r.Command {
 		return false
 	}
-	if (r.Phase == "restoring" || r.Phase == "restored" || r.Phase == "rolled-back") && !r.Rollback {
+	if (r.Phase == "restoring" || r.Phase == "restored" || r.Phase == "rolled-back" || r.Phase == "rolled-back-stopped") && !r.Rollback {
 		return false
 	}
 	if (r.Phase == "prepared" || r.Phase == "installing" || r.Phase == "installed" || r.Phase == "accepted") && r.Rollback {
@@ -280,7 +295,11 @@ func (s *Store) Current() (Receipt, bool, error) {
 		Schema int    `json:"schema"`
 		ID     string `json:"id"`
 	}
-	if decode(data, &pointer) != nil || (pointer.Schema != 1 && pointer.Schema != Schema) || !idPattern.MatchString(pointer.ID) {
+	if decode(data, &pointer) != nil || (pointer.Schema != 1 && pointer.Schema != Schema && pointer.Schema != StoppedSchema) || !idPattern.MatchString(pointer.ID) {
+		return Receipt{}, false, ErrMismatch
+	}
+	canonical, err := json.Marshal(pointer)
+	if err != nil || string(canonical) != string(data) {
 		return Receipt{}, false, ErrMismatch
 	}
 	data, err = s.journal.ReadLimited(pointer.ID+"/receipt.json", 16<<10)
@@ -289,6 +308,15 @@ func (s *Store) Current() (Receipt, bool, error) {
 	}
 	var r Receipt
 	if decode(data, &r) != nil || !valid(r) || r.ID != pointer.ID {
+		return Receipt{}, false, ErrMismatch
+	}
+	canonical, err = json.Marshal(r)
+	if err != nil || string(canonical) != string(data) {
+		return Receipt{}, false, ErrMismatch
+	}
+	// Receipt publication precedes pointer publication. This one known cut
+	// can be completed idempotently; every other schema disagreement is fenced.
+	if pointer.Schema != r.Schema && !(pointer.Schema == Schema && r.Schema == StoppedSchema && r.Phase == "rolled-back-stopped") {
 		return Receipt{}, false, ErrMismatch
 	}
 	return r, true, nil
@@ -303,6 +331,57 @@ func (s *Store) matching(id string) (Receipt, error) {
 		return r, ErrMismatch
 	}
 	return r, nil
+}
+
+// RetainedReceipt validates one immutable retained transaction for a trusted
+// helper inventory. It neither changes current nor accepts pending effects.
+func (s *Store) RetainedReceipt(ctx context.Context, id string) (Receipt, error) {
+	var r Receipt
+	if !idPattern.MatchString(id) {
+		return r, ErrMismatch
+	}
+	if err := ctx.Err(); err != nil {
+		return r, err
+	}
+	data, err := s.journal.ReadLimited(id+"/receipt.json", 16<<10)
+	if err != nil {
+		return r, err
+	}
+	if decode(data, &r) != nil || !valid(r) || r.ID != id {
+		return r, ErrMismatch
+	}
+	canonical, err := json.Marshal(r)
+	if err != nil || string(canonical) != string(data) {
+		return r, ErrMismatch
+	}
+	if err := s.verifyImages(r); err != nil {
+		return r, err
+	}
+	return r, ctx.Err()
+}
+
+// VerifyReviewedImages binds the six frozen replacement snapshots to the
+// separate sealed review. The three mandatory prior executable/init/config
+// images cannot be silently rebound to a migrated or candidate installation.
+func (s *Store) VerifyReviewedImages(ctx context.Context, id string, files []File, oldBinary, oldInit, oldConfig string) error {
+	r, err := s.RetainedReceipt(ctx, id)
+	if err != nil {
+		return err
+	}
+	if len(files) != 6 || len(r.Files) != len(files) {
+		return ErrMismatch
+	}
+	old := map[string]string{"bin/razvilka": oldBinary, "etc/init.d/S99razvilka": oldInit, "etc/razvilka/config.json": oldConfig}
+	for i, file := range files {
+		entry := r.Files[i]
+		if entry.Target != file.Target || entry.NewHash != file.SHA256 {
+			return ErrMismatch
+		}
+		if expected, mandatory := old[file.Target]; mandatory && (!entry.OldPresent || entry.OldHash != expected || !digest(expected)) {
+			return ErrMismatch
+		}
+	}
+	return ctx.Err()
 }
 
 // VerifyInstallation is a fresh read-only observation for settlement of the

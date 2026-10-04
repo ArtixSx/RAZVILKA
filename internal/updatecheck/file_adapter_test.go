@@ -44,7 +44,7 @@ func fileAdapterFixture(t *testing.T) (*SelfUpdateFileAdapter, *Updater, fileRev
 	if err := os.WriteFile(filepath.Join(jobPath, "staged", "config.json"), staged, 0600); err != nil {
 		t.Fatal(err)
 	}
-	r := fileReview{Schema: SelfUpdateReadVersion, ID: id, Revision: 7, OldConfigSHA256: digestBytes(old), MigratedConfigSHA256: digestBytes(staged), OldExecutableSHA256: u.record.ExecutableHash, OldInitSHA256: digestBytes([]byte("trusted old init")), OldVersion: u.Current, NewVersion: u.record.Job.Release.Version, ReleaseID: u.record.Job.Release.ID}
+	r := fileReview{Schema: selfUpdateProtocolSchema, ID: id, Revision: 7, OldConfigSHA256: digestBytes(old), MigratedConfigSHA256: digestBytes(staged), OldExecutableSHA256: u.record.ExecutableHash, OldInitSHA256: digestBytes([]byte("trusted old init")), OldVersion: u.Current, NewVersion: u.record.Job.Release.Version, ReleaseID: u.record.Job.Release.ID}
 	r.AuthoritySequence = 1
 	r.AuthorityInstallationID = "fedcba9876543210fedcba9876543210"
 	r.Files = reviewedFileList(jobPath, *u.record.Job.Release, u.record.Files, r.MigratedConfigSHA256)

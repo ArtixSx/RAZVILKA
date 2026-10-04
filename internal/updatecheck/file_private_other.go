@@ -12,7 +12,7 @@ func exchangePrivateDirectory(context.Context, string, restorejournal.Image, res
 	return ErrFileProtocol
 }
 
-func replacePrivateFile(context.Context, *os.Root, string, restorejournal.Target, restorejournal.Image, restorejournal.Image, func(context.Context) error, filePrivateAdmission) error {
+func replacePrivateFile(context.Context, *os.Root, string, restorejournal.Image, restorejournal.Image, func(context.Context) error, filePrivateAdmission) error {
 	return ErrFileProtocol
 }
 

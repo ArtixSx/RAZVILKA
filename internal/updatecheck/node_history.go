@@ -30,7 +30,9 @@ func RequiredRetainedNodeHistoryReadVersion(ctx context.Context, configRoot, sta
 			return err
 		}
 		version, err := read(nodestore.PrivateSnapshot{Content: json.RawMessage(data), SHA256: digestBytes(data)})
-		if err != nil || version < 1 || version > SelfUpdateReadVersion {
+		// Node history has its own reader range; self-update receipt evolution
+		// must never advertise a future node-history capability by accident.
+		if err != nil || version < 1 || version > 2 {
 			return ErrFileProtocol
 		}
 		if version > required {
