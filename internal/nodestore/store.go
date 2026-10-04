@@ -294,7 +294,7 @@ func (s *Store) Import(ctx context.Context, source Source, raw string, now time.
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err
 	}
-	result, err := providerprofile.ParseProfile(raw)
+	result, err := providerprofile.ParseCanonicalProfile(raw)
 	if err != nil {
 		return Snapshot{}, ErrImport
 	}
