@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 type nodeTransitTestRunner struct {
@@ -333,8 +334,10 @@ func TestNodeTransitBeforeEffectsCannotSettleForeignUnknownOrChangedState(t *tes
 		t.Run(kind, func(t *testing.T) {
 			l, runner, authority := nodeTransitFixture(t)
 			authority.preflightErr = errors.New("active preflight refused")
-			if err := l.Apply(context.Background()); !isNodeTransitBeforeEffects(err) {
-				t.Fatal("fixture did not establish a live early refusal", err)
+			applyErr := l.Apply(context.Background())
+			var proof *nodeTransitBeforeEffectsError
+			if !errors.As(applyErr, &proof) || !isNodeTransitBeforeEffects(applyErr) {
+				t.Fatal("fixture did not establish a live early refusal", applyErr)
 			}
 			switch kind {
 			case "foreign-slot":
@@ -357,6 +360,9 @@ func TestNodeTransitBeforeEffectsCannotSettleForeignUnknownOrChangedState(t *tes
 			before := fmt.Sprint(runner.rules)
 			if err := l.VerifyUnused(context.Background()); err == nil || runner.adds != 0 || runner.deletes != 0 || before != fmt.Sprint(runner.rules) {
 				t.Fatal("unused settlement widened into foreign/unknown state", err)
+			}
+			if proof.verified.Load() != nil || proof.consumeUnused(context.Background(), l.spec, l.root, l.digest) == nil || proof.claimed.Load() {
+				t.Fatal("failed VerifyUnused published or consumed a successful proof")
 			}
 		})
 	}
@@ -446,8 +452,10 @@ func TestNodeTransitUnusedClosingGuardCannotIntroduceReceiptMarker(t *testing.T)
 		t.Run(name, func(t *testing.T) {
 			l, runner, authority := nodeTransitFixture(t)
 			authority.preflightErr = errors.New("live early preflight refusal")
-			if err := l.Apply(context.Background()); !isNodeTransitBeforeEffects(err) {
-				t.Fatal(err)
+			applyErr := l.Apply(context.Background())
+			var proof *nodeTransitBeforeEffectsError
+			if !errors.As(applyErr, &proof) || !isNodeTransitBeforeEffects(applyErr) {
+				t.Fatal(applyErr)
 			}
 			originalGuard := l.runtime.guard
 			guards, inserted := 0, false
@@ -467,6 +475,132 @@ func TestNodeTransitUnusedClosingGuardCannotIntroduceReceiptMarker(t *testing.T)
 			}
 			if data, err := os.ReadFile(filepath.Join(l.root, name)); err != nil || string(data) != "late foreign marker" {
 				t.Fatal("closing marker was removed or adopted", err)
+			}
+			if proof.verified.Load() != nil || proof.consumeUnused(context.Background(), l.spec, l.root, l.digest) == nil || proof.claimed.Load() {
+				t.Fatal("failed closing marker check granted a successful proof")
+			}
+		})
+	}
+}
+
+func nodeTransitUnusedProofFixture(t *testing.T) (*nodeTransitLease, *nodeTransitTestRunner, *nodeTransitAuthority, *nodeTransitBeforeEffectsError) {
+	t.Helper()
+	l, runner, authority := nodeTransitFixture(t)
+	authority.preflightErr = errors.New("live preflight refusal")
+	applyErr := l.Apply(context.Background())
+	var proof *nodeTransitBeforeEffectsError
+	if !errors.As(errors.Join(errors.New("outer result"), applyErr), &proof) || !isNodeTransitBeforeEffects(applyErr) {
+		t.Fatal("fixture lacks original typed refusal", applyErr)
+	}
+	return l, runner, authority, proof
+}
+
+func TestNodeTransitUnusedProofRequiresSuccessfulValidationAndExactResource(t *testing.T) {
+	l, runner, authority, proof := nodeTransitUnusedProofFixture(t)
+	ctx := context.Background()
+	if err := proof.consumeUnused(ctx, l.spec, l.root, l.digest); err == nil || proof.claimed.Load() || proof.verified.Load() != nil || len(runner.calls) != 0 {
+		t.Fatal("before-effects classification alone granted settlement", err)
+	}
+	if err := l.VerifyUnused(ctx); err != nil {
+		t.Fatal(err)
+	}
+	verified := proof.verified.Load()
+	if verified == nil || verified.lease != l || verified.spec != l.spec || verified.root != l.root || verified.digest != l.digest || verified.verifiedAt.IsZero() {
+		t.Fatal("successful closing checks did not publish their exact immutable binding")
+	}
+	for _, kind := range []string{"spec", "root", "digest", "lease"} {
+		spec, root, digest := l.spec, l.root, l.digest
+		switch kind {
+		case "spec":
+			spec.RuntimeID = strings.Repeat("e", 64)
+		case "root":
+			root = filepath.Join(root, "another-resource")
+		case "digest":
+			digest = strings.Repeat("f", 64)
+		case "lease":
+			// Same spec/root/digest cannot substitute another lease object for
+			// the one that actually performed the successful closing checks.
+			fresh, err := newNodeTransitLeaseWithOptions(l.spec, l.root, l.runtime, l.options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			proof.lease = fresh
+		}
+		err := proof.consumeUnused(ctx, spec, root, digest)
+		proof.lease = l
+		if err == nil || proof.claimed.Load() || proof.verified.Load() != verified {
+			t.Fatal("wrong resource binding spent or rewrote the claim", kind, err)
+		}
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := proof.consumeUnused(canceled, l.spec, l.root, l.digest); !errors.Is(err, context.Canceled) || proof.claimed.Load() {
+		t.Fatal("canceled metadata claim spent proof", err)
+	}
+	calls, registrations := len(runner.calls), authority.registrations
+	if err := proof.consumeUnused(ctx, l.spec, l.root, l.digest); err != nil || !proof.claimed.Load() || l.effects.Load() {
+		t.Fatal("matching successful proof could not be claimed", err)
+	}
+	if err := proof.consumeUnused(ctx, l.spec, l.root, l.digest); err == nil || len(runner.calls) != calls || authority.registrations != registrations || proof.verified.Load() != verified {
+		t.Fatal("used proof replayed or mutated its binding", err)
+	}
+}
+
+func TestNodeTransitUnusedProofRejectsExpiredFutureAndUnverifiedRecords(t *testing.T) {
+	for _, kind := range []string{"unverified", "expired", "future", "zero"} {
+		t.Run(kind, func(t *testing.T) {
+			l, runner, _, proof := nodeTransitUnusedProofFixture(t)
+			if kind != "unverified" {
+				if err := l.VerifyUnused(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				// Private fixture copies model elapsed time without sleeping or
+				// replacing any production/global clock.
+				copy := *proof.verified.Load()
+				switch kind {
+				case "expired":
+					copy.verifiedAt = time.Now().Add(-nodeTransitBudget - time.Second)
+				case "future":
+					copy.verifiedAt = time.Now().Add(time.Second)
+				case "zero":
+					copy.verifiedAt = time.Time{}
+				}
+				proof.verified.Store(&copy)
+			}
+			calls := len(runner.calls)
+			if err := proof.consumeUnused(context.Background(), l.spec, l.root, l.digest); err == nil || proof.claimed.Load() || len(runner.calls) != calls {
+				t.Fatal("nonfresh validation became a claim", err)
+			}
+		})
+	}
+}
+
+func TestNodeTransitUnusedProofDoesNotSurviveLaterMutationAPI(t *testing.T) {
+	for _, kind := range []string{"guarded-apply", "shared-apply", "remove"} {
+		t.Run(kind, func(t *testing.T) {
+			l, runner, authority, proof := nodeTransitUnusedProofFixture(t)
+			if err := l.VerifyUnused(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "guarded-apply":
+				authority.guardErr = ErrReviewChanged
+				if err := l.Apply(context.Background()); !errors.Is(err, ErrReviewChanged) || isNodeTransitBeforeEffects(err) {
+					t.Fatal("second Apply renewed the old unused phase", err)
+				}
+			case "shared-apply":
+				authority.preflightErr = nil
+				if err := l.Apply(context.Background()); err != nil || runner.adds != 1 {
+					t.Fatal("fixture did not enter actual shared addition", err)
+				}
+			case "remove":
+				if err := l.Remove(context.Background()); err == nil {
+					t.Fatal("missing receipt gained cleanup authority")
+				}
+			}
+			calls := len(runner.calls)
+			if !l.effects.Load() || proof.consumeUnused(context.Background(), l.spec, l.root, l.digest) == nil || proof.claimed.Load() || len(runner.calls) != calls {
+				t.Fatal("later lease mutation did not fence its earlier sample")
 			}
 		})
 	}
