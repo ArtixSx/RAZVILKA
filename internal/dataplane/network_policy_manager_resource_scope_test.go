@@ -441,3 +441,58 @@ func TestNetworkPolicyManagerResourceLateReadbackCannotGrantEffects(t *testing.T
 		t.Fatal("late borrower escaped retained fence", err)
 	}
 }
+
+func TestNetworkPolicyManagerResourceLateCallbackCancellationRefusesForward(t *testing.T) {
+	for _, callback := range []string{"fresh network", "review"} {
+		t.Run(callback, func(t *testing.T) {
+			f := executionResourceManagerFixture(t)
+			armed := false
+			var cancel context.CancelFunc
+			f.ctx = WithReviewGuard(context.Background(), func(c context.Context) error {
+				if callback == "review" && armed {
+					cancel()
+				}
+				return c.Err()
+			})
+			parent, cancelParent := context.WithCancel(f.ctx)
+			cancel = cancelParent
+			defer cancelParent()
+			f.m.FreshProfile = func(context.Context) (string, error) {
+				if callback == "fresh network" && armed {
+					cancel()
+				}
+				return f.p.NetworkProfileID, nil // Unchanged WAN, detached ctx alive.
+			}
+			err := f.m.WithExecutionResources(parent, f.p, "xray", func(ctx context.Context) error {
+				ctx = f.bind(t, ctx)
+				armed = true
+				return f.lease.Apply(context.WithoutCancel(ctx))
+			})
+			if !errors.Is(err, context.Canceled) || f.runner.adds != 0 || len(f.latest(t).Resources) != 0 {
+				t.Fatal("late callback cancellation renewed forward authority", err)
+			}
+		})
+	}
+}
+
+func TestNetworkPolicyManagerResourceLateCallbackRegistryChangeRefusesForward(t *testing.T) {
+	f := executionResourceManagerFixture(t)
+	armed := false
+	f.m.FreshProfile = func(context.Context) (string, error) {
+		if armed {
+			armed = false
+			if err := f.m.Register(&fakeAdapter{id: "nfqws2"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return f.p.NetworkProfileID, nil
+	}
+	err := f.m.WithExecutionResources(f.ctx, f.p, "xray", func(ctx context.Context) error {
+		ctx = f.bind(t, ctx)
+		armed = true
+		return f.lease.Apply(ctx)
+	})
+	if !errors.Is(err, ErrNodeTransitUnavailable) || f.runner.adds != 0 || len(f.latest(t).Resources) != 0 {
+		t.Fatal("late callback registry change renewed forward authority", err)
+	}
+}

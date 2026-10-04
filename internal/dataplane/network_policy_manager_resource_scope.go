@@ -86,7 +86,7 @@ func (s *executionResourceScope) context() context.Context {
 
 // Called with s.mu held. Actual owner readback runs outside this mutex and
 // rechecks the matching record after returning, so read-only guards can reenter.
-func (s *executionResourceScope) check(ctx context.Context, resource *executionTransitResource, forward bool) error {
+func (s *executionResourceScope) checkCurrent(ctx context.Context, resource *executionTransitResource, forward bool) error {
 	if !s.open || s.failure != nil || s.guard == nil || ctx == nil {
 		return errors.Join(ErrNodeTransitUnavailable, s.failure)
 	}
@@ -114,16 +114,27 @@ func (s *executionResourceScope) check(ctx context.Context, resource *executionT
 			return errors.Join(ErrNodeTransitUnavailable, err)
 		}
 	}
+	return nil
+}
+
+func (s *executionResourceScope) check(ctx context.Context, resource *executionTransitResource, forward bool) error {
+	if err := s.checkCurrent(ctx, resource, forward); err != nil {
+		return err
+	}
 	if forward {
 		if err := verifyNetworkProfile(ctx, s.plan.NetworkProfileID, s.manager.FreshProfile); err != nil {
 			return err
 		}
-		return s.guard(ctx)
 	}
 	// Cleanup is bounded by this still-held operation, exact issued identity
 	// and the same live context-aware authority. WAN freshness grants forward
 	// effects only; it cannot convert a retained old rule into an unowned rule.
-	return s.guard(ctx)
+	if err := s.guard(ctx); err != nil {
+		return err
+	}
+	// External readers may cancel the original request, change the registry or
+	// replace a retained root while returning a nominally successful result.
+	return s.checkCurrent(ctx, resource, forward)
 }
 
 func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTransitSpec) (nodeTransitRegistration, error) {
