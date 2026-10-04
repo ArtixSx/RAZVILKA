@@ -480,10 +480,6 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 		log.Fatal(err)
 	}
 	engineConfigs := engineconfig.New(*stagePath, *backupPath)
-	dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineConfigs)
-	if err != nil {
-		log.Fatal(err)
-	}
 	warpManager := warp.New(*warpStatePath, filepath.Join(*backupPath, "warp"), engineConfigs)
 	smartRouteManager, err := smartroute.New(*smartRouteStatePath)
 	if err != nil {
@@ -499,6 +495,10 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	// This narrow recovery cannot contain DNS. Do not open or migrate its
 	// settings before returning to the previously installed application.
 	if *retryRollbackPlan != "" || *closeRollbackPlan != "" {
+		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineConfigs)
+		if err != nil {
+			log.Fatal(err)
+		}
 		guard, err := rollbackRecoveryGuard(*cfgPath, store)
 		if err != nil {
 			log.Fatal("rollback settings unavailable")
@@ -518,6 +518,19 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 			log.Fatal(err)
 		}
 		return
+	}
+	nodeStore, err := openNodeStore(*cfgPath, *nodeStatePath)
+	if err != nil {
+		log.Print("Private node store disabled: existing bypasses are unchanged")
+	} else {
+		defer nodeStore.Close()
+	}
+	dataplaneManager, err := newDataplaneManagerWithNodes(*dataplaneStatePath, engineConfigs, nodeStore, func(ctx context.Context) (string, error) {
+		profile, err := systemprobe.FreshWANProfile(ctx)
+		return profile.ID, err
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
 	dnsManager, err := dnscontrol.New(*dnsStatePath)
 	if err != nil {
@@ -570,11 +583,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	} else {
 		defer cloudflareStore.Close()
 	}
-	nodeStore, err := openNodeStore(*cfgPath, *nodeStatePath)
-	if err != nil {
-		log.Print("Private node store disabled: existing bypasses are unchanged")
-	} else {
-		defer nodeStore.Close()
+	if nodeStore != nil {
 		if err := dataplaneManager.ConfigureSingBoxNodeRoutes(func(ctx context.Context, requests []dataplane.NodeRouteRequest, profile string, now time.Time) (dataplane.NodeRouteMaterial, error) {
 			bindings := make([]nodestore.RouteBinding, 0, len(requests))
 			for _, request := range requests {
@@ -972,6 +981,13 @@ func writeCommandJSON(value any) int {
 }
 
 func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*dataplane.Manager, error) {
+	return newDataplaneManagerWithNodes(stateRoot, configs, nil, nil)
+}
+
+// Ordinary startup binds the same private catalog to the registered Xray
+// runtime before any Apply/health work. Cold recovery keeps its nil-store
+// observer constructor and never opens a catalog to manufacture absence.
+func newDataplaneManagerWithNodes(stateRoot string, configs *engineconfig.Manager, nodes *nodestore.Store, freshProfile func(context.Context) (string, error)) (*dataplane.Manager, error) {
 	manager := dataplane.New(stateRoot)
 	wireGuardAdapter := dataplane.NewWireGuardAdapter(configs, stateRoot)
 	// One explicit startup Store is shared by the catalog and runtime owner.
@@ -992,7 +1008,13 @@ func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*data
 		}
 	}
 	for _, engineID := range []string{"usque", "sing-box", "xray"} {
-		adapter, err := dataplane.NewProxyTunnelAdapter(engineID, configs, stateRoot)
+		var adapter *dataplane.ProxyTunnelAdapter
+		var err error
+		if engineID == "xray" && nodes != nil {
+			adapter, err = app.NewXrayNodeRuntime(app.NodeRuntimeFactoryOptions{Configs: configs, Nodes: nodes, StateRoot: stateRoot, FreshProfile: freshProfile})
+		} else {
+			adapter, err = dataplane.NewProxyTunnelAdapter(engineID, configs, stateRoot)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("configure %s dataplane adapter: %w", engineID, err)
 		}
