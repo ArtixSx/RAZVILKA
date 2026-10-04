@@ -31,9 +31,15 @@ Same `ProbeOwnedUSQUE` сохраняет своё existing producer Origin / Pr
 Go 1.26.5, GOTOOLCHAIN=local, GOMAXPROCS=2, GOFLAGS=-p=2, GOPROXY=off. Все три CLOUD native opt-in flags пусты.
 
 - New `TestUSQUELiveHealth*`: PASS, 0.236s. Local files + private observer/producer doubles; реальные процессы, procfs, DNS, sockets и native USQUE не запускаются.
-- Полный portable `go test -count=1 ./internal/dataplane`: RC 0, 150.508s, без skip.
+- Полный portable `go test -count=1 ./internal/dataplane` для исходного checkpoint `91ed14e`: RC 0, 150.508s, без skip.
 - Fixtures: QUIC/HTTP2 exact active spec + whole receipt equality; unchanged existing evidence/config tree; mandatory/missing/revoked/canceled authority; Stop/WAN change; process birth/executable/config/argv/listener/profile replacement; missing endpoint/predicate/default seal; full status/content-type/JSON/body/truncation semantics; caller mutation; historical-within-TTL / expired / future / extended TTL; foreign/runtime/service / invented UDP/challenge; explicit default WARP-only.
 - Windows `go vet ./internal/dataplane`: RC 0.
 - Linux amd64 и arm64 `go build ./internal/dataplane`: оба RC 0, binaries здесь не исполнялись.
+
+## Delta после независимого review `91ed14e`
+
+VLESS выявил P2: callbacks могли revoke review authority, но вернуть matching profile / Running=true после последней проверки guard. Новые late FreshProfile/Running regressions воспроизвели ошибочный успешный receipt в исходном checkpoint. Authority теперь повторно проверяет mandatory guard после FreshProfile, перед Running, и после Running; helper также проверяет context до/после guard. Ранняя revocation не запускает следующее process/runtime observation; late revocation/cancellation после второго runtime observation возвращает пустой receipt. Даже matching/nil callback results не сохраняют authority.
+
+Финальный целевой selector live health / owned bridge / Canary / predicate tests ×3: RC 0, 0.979s, включая early callback revocation и late FreshProfile/Running revoke/cancel-nil. Windows vet и Linux amd64/arm64 builds повторены для delta; native/live/caller acceptance не утверждается. Shared semantic deduplication разных LAN cells принадлежит VLESS, existing bridge здесь не менялся.
 
 Actual caller insertion, current evidence retention/GET observer, CORE ordinary plan/admission binding и Root live acceptance остаются **UNVERIFIED**. Library/helper pass не закрывает D13. VLESS сохраняет ownership existing proxy lifecycle/caller files; CORE — main/Manager/app insertion.

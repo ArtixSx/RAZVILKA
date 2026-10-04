@@ -16,8 +16,9 @@ import (
 )
 
 type usqueLiveProcesses struct {
-	running bool
-	specs   []ProcessSpec
+	running   bool
+	specs     []ProcessSpec
+	onRunning func()
 }
 
 func (*usqueLiveProcesses) Start(context.Context, ProcessSpec) error {
@@ -28,6 +29,9 @@ func (*usqueLiveProcesses) Stop(context.Context, ProcessSpec) error {
 }
 func (p *usqueLiveProcesses) Running(spec ProcessSpec) bool {
 	p.specs = append(p.specs, spec)
+	if p.onRunning != nil {
+		p.onRunning()
+	}
 	return p.running
 }
 
@@ -240,6 +244,72 @@ func TestUSQUELiveHealthRejectsStopWANRevocationAndCanceledProducer(t *testing.T
 				t.Fatal("invalidated health escaped or retried producer", err)
 			}
 		})
+	}
+}
+
+func TestUSQUELiveHealthFencesCallbackDriftBeforeNextObservation(t *testing.T) {
+	for _, callback := range []string{"FreshProfile", "Running"} {
+		t.Run(callback, func(t *testing.T) {
+			f := newUSQUELiveFixture(t, usqueTransport{})
+			if callback == "FreshProfile" {
+				fresh := f.a.FreshProfile
+				f.a.FreshProfile = func(ctx context.Context) (string, error) {
+					profile, err := fresh(ctx)
+					f.revoked = true
+					return profile, err
+				}
+			} else {
+				f.processes.onRunning = func() { f.revoked = true }
+			}
+			got, err := f.run()
+			if !errors.Is(err, ErrReviewChanged) || f.observed != 0 || f.probes != 0 || !reflect.DeepEqual(got, usquediag.CanaryEvidence{}) ||
+				(callback == "FreshProfile" && len(f.processes.specs) != 0) {
+				t.Fatal("revoked callback reached another process/runtime observation", err)
+			}
+		})
+	}
+}
+
+func TestUSQUELiveHealthRejectsAuthorityDriftDuringClosingCallbacks(t *testing.T) {
+	for _, callback := range []string{"FreshProfile", "Running"} {
+		for _, effect := range []string{"revoke", "cancel-nil"} {
+			t.Run(callback+"/"+effect, func(t *testing.T) {
+				f := newUSQUELiveFixture(t, usqueTransport{})
+				ctx, cancel := context.WithCancel(f.ctx)
+				defer cancel()
+				f.ctx = ctx
+				late := false
+				drift := func() {
+					if f.observed != 2 {
+						return
+					}
+					late = true
+					if effect == "revoke" {
+						f.revoked = true
+					} else {
+						cancel()
+					}
+				}
+				if callback == "FreshProfile" {
+					fresh := f.a.FreshProfile
+					f.a.FreshProfile = func(ctx context.Context) (string, error) {
+						profile, err := fresh(ctx)
+						drift()
+						return profile, err // matching profile and nil despite drift
+					}
+				} else {
+					f.processes.onRunning = drift // returns true despite drift
+				}
+				got, err := f.run()
+				want := ErrReviewChanged
+				if effect == "cancel-nil" {
+					want = context.Canceled
+				}
+				if !late || f.probes != 1 || f.observed != 2 || !errors.Is(err, want) || !reflect.DeepEqual(got, usquediag.CanaryEvidence{}) {
+					t.Fatal("closing callback invalidated authority but retained receipt", err)
+				}
+			})
+		}
 	}
 }
 
