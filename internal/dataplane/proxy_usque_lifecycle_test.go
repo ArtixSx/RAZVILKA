@@ -93,20 +93,21 @@ func (r *usqueLifecycleRunner) Run(ctx context.Context, name string, args ...str
 }
 
 type usqueLifecycleFixture struct {
-	t            *testing.T
-	base, root   string
-	a            *ProxyTunnelAdapter
-	plan         Plan
-	ctx          context.Context
-	processes    *usqueLifecycleProcesses
-	runner       *usqueLifecycleRunner
-	profile      string
-	revoked      bool
-	canaryCalls  int
-	liveCalls    int
-	observations int
-	canary       usquediag.CanaryEvidence
-	produced     usquediag.OwnedRuntimeEvidence
+	t              *testing.T
+	base, root     string
+	a              *ProxyTunnelAdapter
+	plan           Plan
+	ctx            context.Context
+	processes      *usqueLifecycleProcesses
+	runner         *usqueLifecycleRunner
+	profile        string
+	revoked        bool
+	canaryCalls    int
+	liveCalls      int
+	observations   int
+	identityLeaves int
+	canary         usquediag.CanaryEvidence
+	produced       usquediag.OwnedRuntimeEvidence
 }
 
 func newUSQUELifecycleFixture(t *testing.T) *usqueLifecycleFixture {
@@ -183,6 +184,7 @@ func newUSQUELifecycleFixture(t *testing.T) *usqueLifecycleFixture {
 		return proof, nil
 	}
 	a.ownedUSQUELiveIO = usqueLiveHealthIO{
+		identity: f.identityLeaf,
 		observe: func(ctx context.Context, request usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
 			f.observations++
 			return f.identity(ctx, request)
@@ -215,6 +217,42 @@ func newUSQUELifecycleFixture(t *testing.T) *usqueLifecycleFixture {
 		},
 	}
 	return f
+}
+
+// The closing leaf reads only this fixture's current exact process/birth and
+// config. Its Environment is the helper's literal original-proof closure;
+// action observers, FreshProfile, Running and cached produced evidence are
+// deliberately unavailable as inputs to this independent local inventory.
+func (f *usqueLifecycleFixture) identityLeaf(ctx context.Context, request usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
+	f.t.Helper()
+	f.identityLeaves++
+	spec, present := f.processes.active["usque-engine"]
+	if ctx.Err() != nil || !present || !f.processes.base.running["usque-engine"] || spec.Dir != request.Root || spec.Binary != request.Binary || request.Environment == nil {
+		return usquediag.OwnedRuntimeIdentity{}, errors.New("fixture local process inventory has no exact current engine")
+	}
+	protocol, err := ownedUSQUELiveTransport(spec, request.SOCKSAddress)
+	if err != nil || protocol != request.Transport {
+		return usquediag.OwnedRuntimeIdentity{}, errors.New("fixture local argv transport changed")
+	}
+	config, err := os.ReadFile(spec.MatchArg)
+	if err != nil {
+		return usquediag.OwnedRuntimeIdentity{}, err
+	}
+	endpoint, err := usquediag.SelectedOwnedUSQUEEndpoint(config, protocol)
+	if err != nil || endpoint != request.Endpoint {
+		return usquediag.OwnedRuntimeIdentity{}, errors.New("fixture local session endpoint changed")
+	}
+	environment, err := request.Environment(ctx)
+	if err != nil {
+		return usquediag.OwnedRuntimeIdentity{}, err
+	}
+	identity := usqueOwnedBridgeProof(usquediag.OwnedProbeOptions{Runtime: request}).Identity
+	identity.RuntimeID = "managed:usque:" + routeidentity.Hash([]byte(fmt.Sprintf("public-lifecycle-start-%d", f.processes.starts)))
+	identity.SessionSHA256, identity.EnvironmentID = routeidentity.Hash(config), environment
+	identity.ArgsSHA256 = routeidentity.Hash([]byte(strings.Join(append([]string{spec.Binary}, spec.Args...), "\x00") + "\x00"))
+	identity.SocketBinding = routeidentity.Hash([]byte(request.SOCKSAddress + identity.RuntimeID))
+	usqueLiveBind(&identity)
+	return identity, nil
 }
 
 func TestUSQUEPublicLifecycleReconcileRestartsCommittedHTTP2WithoutCanary(t *testing.T) {
@@ -719,6 +757,77 @@ func TestUSQUEPublicLifecycleClosingObservationRPDBLossCannotWriteEvidence(t *te
 					f.revoked || f.profile != f.plan.NetworkProfileID || f.ctx.Err() != nil || errors.Is(err, ErrReviewChanged) || errors.Is(err, ErrNetworkChanged) ||
 					len(receiptMutationCalls(f.runner.seen)) != mutations || !reflect.DeepEqual(before, nodeRouterTransitReadbackTree(t, f.base)) {
 					t.Fatal("matching final callback hid lost policy or wrote/promoted evidence", err, cut, finalReturned)
+				}
+			})
+		}
+	}
+}
+
+func TestUSQUEPublicLifecycleClosingKernelRuntimeDeathOrSameArgsRestartCannotWriteEvidence(t *testing.T) {
+	for _, operation := range []string{"Health", "Reconcile", "Commit"} {
+		for _, change := range []string{"engine-death", "same-args-new-birth"} {
+			t.Run(operation+"/"+change, func(t *testing.T) {
+				f := newUSQUELifecycleFixture(t)
+				f.activate()
+				if operation == "Reconcile" {
+					if err := f.a.Commit(f.ctx, f.plan, f.root); err != nil {
+						t.Fatal(err)
+					}
+				}
+				paths := []string{filepath.Join(f.root, "evidence.staged.json"), f.a.evidencePath()}
+				before := make(map[string][]byte, len(paths))
+				for _, path := range paths {
+					data, err := os.ReadFile(path)
+					if err == nil {
+						before[path] = data
+					} else if !errors.Is(err, os.ErrNotExist) {
+						t.Fatal(err)
+					}
+				}
+				producers, observations, leaves := f.liveCalls, f.observations, f.identityLeaves
+				cutProducers := map[int]bool{}
+				f.runner.after = func(name string, args []string) {
+					if name != "ip" || strings.Join(args, " ") != "route get 8.8.8.8 from 192.168.1.25 iif br0" ||
+						f.liveCalls <= producers || f.observations != observations+3*(f.liveCalls-producers) || cutProducers[f.liveCalls] {
+						return
+					}
+					// This exact successful route sample is the policy callback's
+					// final RPC, after the ordinary final identity/profile reads.
+					cutProducers[f.liveCalls] = true
+					spec, present := f.processes.active["usque-engine"]
+					if !present || !f.processes.base.running[spec.ID] {
+						t.Fatal("closing cut has no original live engine")
+					}
+					if change == "engine-death" {
+						delete(f.processes.active, spec.ID)
+						f.processes.base.running[spec.ID] = false
+					} else {
+						if err := f.processes.Start(f.ctx, spec); err != nil {
+							t.Fatal(err)
+						}
+						if !reflect.DeepEqual(f.processes.active[spec.ID], spec) {
+							t.Fatal("birth cut changed argv rather than only process identity")
+						}
+					}
+				}
+				var err error
+				switch operation {
+				case "Health":
+					err = f.a.Health(f.ctx, f.plan, f.root)
+				case "Reconcile":
+					err = f.a.Reconcile(f.ctx, f.plan)
+				case "Commit":
+					err = f.a.Commit(f.ctx, f.plan, f.root)
+				}
+				if err == nil || len(cutProducers) == 0 || f.identityLeaves-leaves != len(cutProducers) || f.revoked || f.profile != f.plan.NetworkProfileID || f.ctx.Err() != nil {
+					t.Fatal("last kernel callback hid dead/replaced runtime from independent identity leaf", err, len(cutProducers), f.identityLeaves-leaves)
+				}
+				for _, path := range paths {
+					data, readErr := os.ReadFile(path)
+					previous, existed := before[path]
+					if existed && (readErr != nil || string(data) != string(previous)) || !existed && !errors.Is(readErr, os.ErrNotExist) {
+						t.Fatal("dead/replaced-runtime operation wrote or promoted evidence", path, readErr)
+					}
 				}
 			})
 		}

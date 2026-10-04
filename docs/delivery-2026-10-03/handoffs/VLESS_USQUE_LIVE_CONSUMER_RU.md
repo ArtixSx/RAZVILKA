@@ -2,7 +2,7 @@
 
 ## Граница готовой порции
 
-Это отдельный VLESS consumer поверх принятых CLOUD `91ed14e` и closing fix `b9cb61e`. Обычные публичные `Health`, `Commit`, `Reconcile` и `RefreshPolicy` теперь вызывают actual owned USQUE live producer через штатный `usque-engine` и постоянный SOCKS listener. Canary остаётся отдельным временным процессом; его JSON не подтверждает текущий активный процесс.
+Это отдельный VLESS consumer поверх принятых CLOUD `91ed14e`, closing fix `b9cb61e` и readonly identity leaf `f4da266`. Обычные публичные `Health`, `Commit`, `Reconcile` и `RefreshPolicy` теперь вызывают actual owned USQUE live producer через штатный `usque-engine` и постоянный SOCKS listener. Canary остаётся отдельным временным процессом; его JSON не подтверждает текущий активный процесс.
 
 Новый private live IO seam используется только локальными fixtures. Нулевое значение вызывает штатные `ObserveOwnedUSQUE` и `ProbeOwnedUSQUE`. Нет нового HTTP DTO, выдачи разрешения из argv, generic trace, подмены TUN/LAN/egress/UDP или продления исторического TTL.
 
@@ -19,6 +19,8 @@
 ## Closing kernel readback
 
 Независимый CLOUD review исходного `22cc80b` воспроизвёл исчезновение RPDB во время успешного live producer: одной проверки до запроса было недостаточно. Corrective consumer повторно проверяет frozen PolicyState, actual forwarding и RPDB/FIB после producer и последних identity/WAN callbacks, перед заключительными чтениями файлов и сохранением receipt. Runner и LAN callbacks закрываются review/cancel guard до и после каждого вызова. Commit отдельно повторяет этот gate перед policy promotion и ещё раз перед final proof persistence. Ошибка не обновляет receipt и не подтверждает исчезнувшую kernel policy; historical rollback cleanup остаётся самостоятельным.
+
+Повторный review `b5dbf56` воспроизвёл смерть процесса во время последнего успешного kernel readback. После всех policy/review/WAN callbacks consumer теперь вызывает отдельный `verifyOwnedUSQUELiveIdentityWith`: он сравнивает текущую локальную identity с исходной whole proof, включая PID/birth, exe/argv, session, listener и endpoint. Production nil seam вызывает actual `ObserveOwnedUSQUE`; environment callback возвращает только исходный literal EnvironmentID. Этот leaf не вызывает FreshProfile, Running, обычный action observer или второй producer. После него остаются callback-free anchored file/selection/config reads и original TTL перед записью. Смерть и перезапуск с теми же argv отказывают в публичных Health/Reconcile/Commit; ранее добавленные late RPDB cuts продолжают отказывать.
 
 ## Несколько source cells одного сервиса
 

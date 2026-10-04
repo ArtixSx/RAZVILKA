@@ -5,13 +5,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/usquediag"
 )
 
@@ -37,8 +41,52 @@ func usqueHealthReceiptSelection(t *testing.T, f *usqueLiveFixture, candidate bo
 	data, _ := json.Marshal(f.transport)
 	usqueHealthReceiptWrite(t, filepath.Join(root, selection), data)
 	usqueHealthReceiptWrite(t, filepath.Join(root, evidence), []byte(`{"historical_canary":"leave unchanged"}`))
+	f.inspect.identity = usqueHealthReceiptLocalIdentity(t, f)
 	f.a.ownedUSQUELiveIO = f.inspect
 	return root, roots
+}
+
+// This seam reads only the fixture's current local process state and files.
+// It deliberately does not invoke Running, WAN, review, observe or producer.
+func usqueHealthReceiptLocalIdentity(t *testing.T, f *usqueLiveFixture) usqueLiveIdentityObserver {
+	t.Helper()
+	return func(ctx context.Context, request usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
+		if ctx.Err() != nil || !f.processes.running {
+			return usquediag.OwnedRuntimeIdentity{}, errors.Join(errors.New("local owned process absent"), ctx.Err())
+		}
+		spec := f.a.engineProcessWithTransport(f.transport)
+		address := net.JoinHostPort("127.0.0.1", strconv.Itoa(f.a.SOCKSPort))
+		protocol, err := ownedUSQUELiveTransport(spec, address)
+		if err != nil || request.Root != spec.Dir || request.Binary != spec.Binary || request.SOCKSAddress != address || request.Transport != protocol || request.Environment == nil {
+			return usquediag.OwnedRuntimeIdentity{}, errors.New("local owned process specification changed")
+		}
+		root, err := ownedfs.Open(spec.Dir)
+		if err != nil {
+			return usquediag.OwnedRuntimeIdentity{}, err
+		}
+		defer root.Close()
+		config, err := root.ReadLimited("engine.json", 8<<20)
+		if err != nil {
+			return usquediag.OwnedRuntimeIdentity{}, err
+		}
+		defer clear(config)
+		endpoint, err := usquediag.SelectedOwnedUSQUEEndpoint(config, protocol)
+		if err != nil || endpoint != request.Endpoint {
+			return usquediag.OwnedRuntimeIdentity{}, errors.New("local owned process endpoint changed")
+		}
+		// The leaf supplies a literal captured environment closure, never the
+		// FreshProfile-based action environment used by the earlier observer.
+		environment, err := request.Environment(ctx)
+		if err != nil {
+			return usquediag.OwnedRuntimeIdentity{}, err
+		}
+		identity := f.identity // independent local birth/binary/socket fixture state
+		identity.SessionSHA256 = routeidentity.Hash(config)
+		identity.ArgsSHA256 = routeidentity.Hash([]byte(strings.Join(append([]string{spec.Binary}, spec.Args...), "\x00") + "\x00"))
+		identity.EnvironmentID, identity.Transport, identity.Endpoint = environment, protocol, endpoint.String()
+		usqueLiveBind(&identity)
+		return identity, ctx.Err()
+	}
 }
 
 func TestUSQUEHealthReceiptCandidateUsesSelectedHTTP2AndPersistsOriginalWholeProof(t *testing.T) {
@@ -441,6 +489,73 @@ func TestUSQUEHealthReceiptClosingWriteGuardCannotReturnSuccess(t *testing.T) {
 				data, _ := os.ReadFile(f.a.evidencePath())
 				if !errors.Is(err, want) || !bytes.Contains(data, []byte(`"owned_runtime"`)) || f.probes != 1 {
 					t.Fatal("action returned success after write-time authority loss or replayed producer", err, f.probes)
+				}
+			})
+		}
+	}
+}
+
+func TestUSQUEHealthReceiptLastPolicyCallbackCannotHideProcessDeathOrReplacement(t *testing.T) {
+	for _, operation := range []string{"Health", "Commit"} {
+		for _, drift := range []string{"death", "replacement"} {
+			t.Run(operation+"/"+drift, func(t *testing.T) {
+				f := newUSQUELiveFixture(t, usqueTransport{HTTP2: true})
+				root, roots := usqueHealthReceiptSelection(t, f, true)
+				plan := usqueHealthReceiptPlan(f)
+				var captured []byte
+				if operation == "Commit" {
+					ctx := context.WithValue(f.ctx, usqueLiveHealthCaptureKey{}, func(data []byte) { captured = data })
+					if err := f.a.healthOwnedUSQUE(ctx, plan, roots...); err != nil {
+						t.Fatal(err)
+					}
+				}
+				beforeRoot, beforeState := nodeRouterTransitReadbackTree(t, root), nodeRouterTransitReadbackTree(t, f.a.StateRoot)
+				probes, observations := f.probes, f.observed
+				cut := false
+				fresh := f.a.FreshProfile
+				f.a.FreshProfile = func(ctx context.Context) (string, error) {
+					if cut {
+						t.Fatal("final identity leaf called WAN after policy check")
+					}
+					return fresh(ctx)
+				}
+				f.processes.onRunning = func() {
+					if cut {
+						t.Fatal("final identity leaf queried controller after policy check")
+					}
+				}
+				observe := f.inspect.observe
+				f.inspect.observe = func(ctx context.Context, request usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error) {
+					if cut {
+						t.Fatal("final identity leaf reused action observer")
+					}
+					return observe(ctx, request)
+				}
+				f.a.ownedUSQUELiveIO = f.inspect
+				ctx := context.WithValue(f.ctx, usqueLiveHealthPolicyKey{}, func(context.Context) error {
+					if cut {
+						t.Fatal("policy closing callback replayed")
+					}
+					cut = true
+					if drift == "death" {
+						f.processes.running = false
+					} else {
+						f.identity.RuntimeID = "managed:usque:" + strings.Repeat("b", 64)
+						usqueLiveBind(&f.identity)
+					}
+					return nil
+				})
+				var err error
+				wantProbes, wantObservations := probes, observations+1
+				if operation == "Health" {
+					err = f.a.healthOwnedUSQUE(ctx, plan, roots...)
+					wantProbes, wantObservations = probes+1, observations+3
+				} else {
+					err = f.a.commitOwnedUSQUEHealth(ctx, plan, root, captured)
+				}
+				if err == nil || !cut || f.probes != wantProbes || f.observed != wantObservations || !reflect.DeepEqual(beforeRoot, nodeRouterTransitReadbackTree(t, root)) ||
+					!reflect.DeepEqual(beforeState, nodeRouterTransitReadbackTree(t, f.a.StateRoot)) {
+					t.Fatal("last policy callback hid process drift or persisted proof", err, f.probes, f.observed)
 				}
 			})
 		}

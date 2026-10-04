@@ -289,8 +289,9 @@ func (action *usqueHealthReceiptAction) verify(ctx context.Context, plan Plan, r
 	if err := requireOwnedUSQUEReviewGuard(ctx); err != nil {
 		return err
 	}
-	// Read actual policy last: a successful observer or WAN callback can still
-	// change it. The remaining selection/config/TTL checks have no callbacks.
+	// Read actual policy after action observers and WAN callbacks: either may
+	// change it. The independent local identity leaf then closes process drift
+	// caused by those final policy commands without replaying action callbacks.
 	if callback := ctx.Value(usqueLiveHealthPolicyKey{}); callback != nil {
 		check, ok := callback.(func(context.Context) error)
 		if !ok || check == nil {
@@ -302,6 +303,9 @@ func (action *usqueHealthReceiptAction) verify(ctx context.Context, plan Plan, r
 		if err := errors.Join(check(ctx), requireOwnedUSQUEReviewGuard(ctx)); err != nil {
 			return err
 		}
+	}
+	if err := verifyOwnedUSQUELiveIdentityWith(ctx, spec, address, *receipt.Owned, action.frozen.ownedUSQUELiveIO.identity); err != nil {
+		return err
 	}
 	// No callbacks intervene between these final reads and the anchored write.
 	closing, err := root.readTransport()
