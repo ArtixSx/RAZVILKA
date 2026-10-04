@@ -39,7 +39,7 @@ func TestManagedNFQWSBundleRollbackRestartAtPublicationBoundaries(t *testing.T) 
 			if _, err := m.RecoverManagedBundle(ctx, candidate.TransactionID, "rollback", a); !errors.Is(err, interrupted) {
 				t.Fatal("fault boundary missed", err)
 			}
-			n := &Manager{StateDir: m.StateDir, nfqwsReleases: m.nfqwsReleases, nfqwsPublish: m.nfqwsPublish, Runner: bundleForbiddenRunner{t}}
+			n := &Manager{StateDir: m.StateDir, nfqwsReleases: m.nfqwsReleases, nfqwsFixture: m.nfqwsFixture, nfqwsPublish: m.nfqwsPublish, Runner: bundleForbiddenRunner{t}}
 			state, pending, err := n.PendingManagedUpdate()
 			if err != nil {
 				t.Fatal(err)
@@ -59,7 +59,7 @@ func TestManagedNFQWSBundleRollbackRestartAtPublicationBoundaries(t *testing.T) 
 			if err := lease.Close(); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := verifyManagedNFQWS(ctx, candidate.GenerationPath, candidate.ManifestSHA256); err != nil {
+			if _, err := m.verifyManagedNFQWS(ctx, candidate.GenerationPath, candidate.ManifestSHA256); err != nil {
 				t.Fatal("candidate deleted by rollback", err)
 			}
 		})

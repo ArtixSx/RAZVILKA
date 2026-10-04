@@ -72,3 +72,53 @@ func TestDefaultRouteSharedLANGateActualEffectBound(t *testing.T) {
 		t.Fatal("actual shared effect capacity was bypassed", err)
 	}
 }
+
+func TestDefaultRouteInputUsesExactSharedIngressGenerationAndRole(t *testing.T) {
+	cfg, snapshot, now := defaultRouteFixture()
+	services := defaultRouteOverrideFixture(&cfg, &snapshot)
+	c, err := CompileDefaultRoutePolicy(cfg, snapshot, services, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _, _ := defaultRouteExecutorFixtureConfig(t, cfg, snapshot)
+	if err := e.app.Dataplane.Register(&defaultRouteTransactionAdapter{id: "warp-wg", app: e.app}); err != nil {
+		t.Fatal(err)
+	}
+	input := e.input(c, e.app.Store.Get())
+	for _, route := range input.Routes {
+		role := "override"
+		if route.ServiceName == "default" {
+			role = "default"
+		}
+		if !reflect.DeepEqual(route.Ingress, []string{"br0"}) || route.NetworkPolicyGeneration != c.LAN().Generation || route.NetworkPolicyRole != role {
+			t.Fatal("compiled route lost exact shared authority metadata", route)
+		}
+	}
+	p, err := dataplane.BuildAt(input, now)
+	if err != nil || !p.Ready {
+		t.Fatal("actual common Build rejected compiled authority shape", err, p.Blockers)
+	}
+	for adapter, wantDefault := range map[string]bool{"wireguard": true, "warp-wg": false} {
+		generation, hasDefault, err := dataplane.NetworkPolicyRouteAuthority(p, adapter)
+		if err != nil || generation != c.Digest() || hasDefault != wantDefault {
+			t.Fatal("common authority helper changed generation/role", adapter, generation, hasDefault, err)
+		}
+	}
+	for _, name := range []string{"ingress", "generation", "role"} {
+		changed := defaultRouteCloneInput(input)
+		switch name {
+		case "ingress":
+			changed.Routes[0].Ingress = []string{"eth0"}
+		case "generation":
+			changed.Routes[0].NetworkPolicyGeneration = snapshot.Paths["default"].ProfileDigest
+		case "role":
+			changed.Routes[0].NetworkPolicyRole = "default"
+			if input.Routes[0].NetworkPolicyRole == "default" {
+				changed.Routes[0].NetworkPolicyRole = "override"
+			}
+		}
+		if defaultRouteBoundInput(input, changed) {
+			t.Fatal("binding could alter compiled " + name)
+		}
+	}
+}

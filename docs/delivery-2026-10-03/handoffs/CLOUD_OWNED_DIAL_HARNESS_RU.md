@@ -30,4 +30,4 @@ RAZVILKA_NATIVE_CLOUD_OWNED_DIAL=1 GO=/path/to/go sh scripts/test-cloud-owned-di
 RAZVILKA_NATIVE_CLOUD_OWNED_DIAL=1 go test ./internal/usquediag -run '^TestNativeOwnedHTTPDialContextHarness$' -count=1 -v -timeout=60s
 ```
 
-Без opt-in runner отказывает RC2 до Go, native test SKIP. Здесь CLOUD выполняет только portable unit/vet, syntax и Linux cross-compilation; binaries не исполняются. Actual native result — **UNVERIFIED**, окно открывает координатор. VERSION/go.mod/go.sum и consumer/receipt backend не меняются.
+Без opt-in runner отказывает RC2 до Go, native test SKIP. CLOUD выполнял только portable unit/vet, syntax и Linux cross-compilation; binaries здесь не исполнялись. Root сообщил `cloud-bundle-native42`, combined source `8a3ade8`, RC0: actual localhost HTTP/DoH Transport/SOCKS/TLS, все17 leaves PASS, включая cancel/deadline/TLS-name/trust/DNS child3s. Это приёмка deadline fix `a5d168b` до последующей semantic response порции; её новые network/body изменения требуют отдельного root review/run. Genuine USQUE/WARP этим checkpoint не проверен. VERSION/go.mod/go.sum и consumer/receipt backend не меняются.

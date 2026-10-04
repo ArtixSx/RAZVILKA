@@ -244,8 +244,7 @@ func (f nativeEffectFixture) kernelSnapshot(t *testing.T) string {
 func (f nativeEffectFixture) foreign(t *testing.T, verb string) {
 	t.Helper()
 	for index, tool := range []string{f.tools.IPTables, f.tools.IP6Tables} {
-		source := []string{"192.168.88.26/32", "fd88::26/128"}[index]
-		nativeEffectRun(t, tool, "-t", "mangle", verb, "PREROUTING", "-i", f.state.Ingress[0], "-s", source, "-j", "RETURN")
+		nativeEffectRun(t, tool, f.foreignFirewallArgs(index, verb)...)
 	}
 	ipVerb := "add"
 	if verb == "-D" {
@@ -255,6 +254,29 @@ func (f nativeEffectFixture) foreign(t *testing.T, verb string) {
 		rule := lanClassifierRule{family: family, priority: 22960, source: []string{"192.168.88.26/32", "fd88::26/128"}[index], action: "lookup main"}
 		nativeEffectRun(t, f.tools.IP, rule.args(ipVerb)...)
 	}
+}
+
+func (f nativeEffectFixture) foreignFirewallArgs(familyIndex int, verb string) []string {
+	source := []string{"192.168.88.26/32", "fd88::26/128"}[familyIndex]
+	return []string{"-t", "mangle", verb, "PREROUTING", "-i", f.state.Ingress[0], "-s", source, "-j", "RETURN"}
+}
+
+// -S may reorder the fixed header matches (-s before -i). Let the kernel
+// verify the exact inserted tuple with -C; textual preservation then compares
+// the actual canonical baseline, never an assumed option order. This is only
+// a positive check of this empty-namespace fixture's synthetic foreign rule.
+func (f nativeEffectFixture) foreignFirewallReadback(t *testing.T, ctx context.Context, familyIndex int, stage string) proxyFirewallSnapshot {
+	t.Helper()
+	tool := []string{f.tools.IPTables, f.tools.IP6Tables}[familyIndex]
+	args := f.foreignFirewallArgs(familyIndex, "-C")
+	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, checkErr := exec.CommandContext(checkCtx, tool, args...).CombinedOutput()
+	snapshot, readErr := f.firewall(ctx, familyIndex == 1)
+	if checkErr != nil || readErr != nil || len(out) > 64<<10 {
+		t.Fatalf("synthetic foreign firewall tuple unavailable %s IPv%d: expected=%q check_err=%v read_err=%v check_output=%q actual_parent=%q", stage, []int{4, 6}[familyIndex], args, checkErr, readErr, out[:min(len(out), 4096)], snapshot.parent)
+	}
+	return snapshot
 }
 
 // Only an exclusively assigned empty namespace may execute this fixture. The
@@ -397,6 +419,25 @@ func TestNativePolicyEffectReceiptCrashBoundaries(t *testing.T) {
 					}
 					f.foreign(t, "-A")
 					t.Cleanup(func() { f.foreign(t, "-D") })
+					var foreignKeys [2]string
+					for familyIndex := range []int{4, 6} {
+						snapshot := f.foreignFirewallReadback(t, ctx, familyIndex, "before cleanup")
+						jumpKey := lanClassifierChainKey(lanClassifierJumps(f.state)[0])
+						var foreignRules [][]string
+						for _, rule := range snapshot.parent {
+							if lanClassifierChainKey(rule) != jumpKey {
+								foreignRules = append(foreignRules, rule)
+							}
+						}
+						if len(foreignRules) != 1 {
+							t.Fatalf("synthetic foreign baseline is not unique IPv%d: expected=%q actual_parent=%q", []int{4, 6}[familyIndex], f.foreignFirewallArgs(familyIndex, "-C"), snapshot.parent)
+						}
+						foreignKeys[familyIndex] = lanClassifierChainKey(foreignRules[0])
+						insertedKey := lanClassifierChainKey(f.foreignFirewallArgs(familyIndex, "-A")[4:])
+						if foreignKeys[familyIndex] != insertedKey {
+							t.Logf("kernel canonicalized the exact -C-verified synthetic rule IPv%d: inserted=%q actual=%q", []int{4, 6}[familyIndex], insertedKey, foreignKeys[familyIndex])
+						}
+					}
 					before, calls := f.kernelSnapshot(t), f.runner.calls
 					cleanupErr := RemovePolicyEffectsWithReceipt(ctx, f.runtime(), f.plan, root)
 					if unknown {
@@ -415,19 +456,15 @@ func TestNativePolicyEffectReceiptCrashBoundaries(t *testing.T) {
 					}
 					for familyIndex := range []int{4, 6} {
 						source := []string{"192.168.88.26/32", "fd88::26/128"}[familyIndex]
-						snapshot, err := f.firewall(ctx, familyIndex == 1)
-						if err != nil {
-							t.Fatal(err)
-						}
-						foreignKey := lanClassifierChainKey([]string{"-i", f.state.Ingress[0], "-s", source, "-j", "RETURN"})
+						snapshot := f.foreignFirewallReadback(t, ctx, familyIndex, "after cleanup")
 						count := 0
 						for _, rule := range snapshot.parent {
-							if lanClassifierChainKey(rule) == foreignKey {
+							if lanClassifierChainKey(rule) == foreignKeys[familyIndex] {
 								count++
 							}
 						}
 						if count != 1 {
-							t.Fatal("receipt cleanup removed a foreign near-match firewall rule")
+							t.Fatalf("synthetic foreign firewall baseline changed IPv%d: expected=%q before_key=%q actual_parent=%q count=%d", []int{4, 6}[familyIndex], f.foreignFirewallArgs(familyIndex, "-C"), foreignKeys[familyIndex], snapshot.parent, count)
 						}
 						family := []string{"-4", "-6"}[familyIndex]
 						foreignRule := lanClassifierRule{family: []int{4, 6}[familyIndex], priority: 22960, source: source, action: "lookup main"}

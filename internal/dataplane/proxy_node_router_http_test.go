@@ -16,12 +16,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
 )
 
 func nodeRouterFixtureRequest() nodeRouterHTTPSRequest {
-	return nodeRouterHTTPSRequest{URL: "https://example.com/health?q=original", Interface: "rz-xray", IfIndex: 77,
+	service := nodeRouterFixtureCatalog("https://example.com/health?q=original")
+	predicate, err := newProxyServicePredicate(service)
+	if err != nil {
+		panic(err)
+	}
+	return nodeRouterHTTPSRequest{URL: service.ProbeURL, ServiceID: service.ID, Predicate: predicate, Interface: "rz-xray", IfIndex: 77,
 		Source: netip.MustParseAddr("172.31.22.1"), Destination: netip.MustParseAddr("1.1.1.1")}
+}
+
+func nodeRouterFixtureCatalog(rawURL string) catalog.Service {
+	return catalog.Service{ID: "router-fixture", Name: "Router fixture", Category: "test",
+		Strategy: []string{"xray"}, Domains: []string{"example.com"}, ProbeURL: rawURL}
 }
 
 type nodeRouterFixtureRawConn struct{ err error }
@@ -106,6 +117,9 @@ func TestNodeRouterHTTPSUsesExactSourceDevicePinTLSAndOrigin(t *testing.T) {
 	}
 	if result.Source.Addr() != request.Source || result.Source.Port() == 0 || result.Destination != netip.AddrPortFrom(request.Destination, 443) || result.StartedAt.IsZero() || result.FinishedAt.Before(result.StartedAt) || !nodeLANHash(result.BodySHA256) || result.BodyBytes != len("service reached") {
 		t.Fatalf("observed socket/sample facts were not exact: %+v", result)
+	}
+	if result.ServiceID != request.ServiceID || result.ProbeID != "primary" || result.PredicateHash != request.Predicate.digest() {
+		t.Fatalf("service predicate identity was not retained: %+v", result)
 	}
 }
 
@@ -246,6 +260,11 @@ func TestNodeRouterHTTPSRejectsInvalidRequestBeforeAnyWork(t *testing.T) {
 				request.URL = "https://example.com/#secret"
 			case "literal-mismatch":
 				request.URL = "https://9.9.9.9/"
+				var err error
+				request.Predicate, err = newProxyServicePredicate(nodeRouterFixtureCatalog(request.URL))
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			work := &atomic.Int32{}
 			options := nodeRouterHTTPSOptions{bind: func(syscall.RawConn, string) error { work.Add(1); return nil }, interfaces: func() ([]net.Interface, error) { work.Add(1); return nil, nil }}
@@ -287,6 +306,11 @@ func TestNodeRouterHTTPSSemanticsTLSBoundsAndNoProxy(t *testing.T) {
 				options.roots = x509.NewCertPool()
 			} else if scenario == "bad-TLS-host" {
 				request.URL = "https://wrong.invalid/"
+				var err error
+				request.Predicate, err = newProxyServicePredicate(nodeRouterFixtureCatalog(request.URL))
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			proxyCalls := &atomic.Int32{}
 			if scenario == "environment-proxy" {
@@ -300,6 +324,83 @@ func TestNodeRouterHTTPSSemanticsTLSBoundsAndNoProxy(t *testing.T) {
 			accepted := scenario == "large-body" || scenario == "environment-proxy"
 			if (err == nil) != accepted || result.ServiceAccepted != accepted || calls.Load() != 1 || proxyCalls.Load() != 0 || scenario == "large-body" && result.BodyBytes != probecheck.MaxBodyBytes {
 				t.Fatalf("HTTPS semantic/TLS/boundary weakened: %+v %v", result, err)
+			}
+		})
+	}
+}
+
+func TestNodeRouterHTTPSRequiresExactFrozenPredicateBeforeOS(t *testing.T) {
+	for _, mode := range []string{"missing", "empty", "service", "URL", "tampered"} {
+		t.Run(mode, func(t *testing.T) {
+			request := nodeRouterFixtureRequest()
+			switch mode {
+			case "missing":
+				request.Predicate = nil
+			case "empty":
+				request.Predicate = &proxyServicePredicate{}
+			case "service":
+				request.ServiceID = "another-service"
+			case "URL":
+				request.URL += "&changed=1"
+			case "tampered":
+				request.Predicate.probe.Expect.BodyContains = []string{"replaced predicate"}
+			}
+			work := &atomic.Int32{}
+			options := nodeRouterHTTPSOptions{
+				interfaces: func() ([]net.Interface, error) { work.Add(1); return nil, nil },
+				bind:       func(syscall.RawConn, string) error { work.Add(1); return nil },
+				dial: func(context.Context, *net.Dialer, string, string) (net.Conn, error) {
+					work.Add(1)
+					return nil, errors.New("unexpected dial")
+				},
+			}
+			result, err := runNodeRouterHTTPSProbe(context.Background(), request, options)
+			if !errors.Is(err, errProxyServicePredicate) || work.Load() != 0 || result.Origin != "" || result.ServiceAccepted {
+				t.Fatal("invalid predicate reached OS/dial", result, err, work.Load())
+			}
+		})
+	}
+}
+
+func TestNodeRouterHTTPSUsesFullCatalogPredicate(t *testing.T) {
+	for _, mode := range []string{"accepted", "login", "soft-block", "content-type", "JSON-schema", "JSON-truncated"} {
+		t.Run(mode, func(t *testing.T) {
+			request := nodeRouterFixtureRequest()
+			service := nodeRouterFixtureCatalog(request.URL)
+			service.Probes = []catalog.Probe{{ID: "catalog-check", Label: "Catalog check", URL: service.ProbeURL, Required: true,
+				Expect: catalog.ProbeExpectation{JSON: true, JSONFields: []string{"result.accepted"}, ContentTypes: []string{"application/json"}, BodyContains: []string{`"accepted":true`}}}}
+			var err error
+			request.Predicate, err = newProxyServicePredicate(service)
+			if err != nil {
+				t.Fatal(err)
+			}
+			options, _, calls := nodeRouterTLSFixture(t, request, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				body := `{"result":{"accepted":true}}`
+				switch mode {
+				case "login":
+					body = `{"login":"sign in"}`
+				case "soft-block":
+					body = `{"message":"service temporarily unavailable"}`
+				case "content-type":
+					w.Header().Set("Content-Type", "text/html")
+				case "JSON-schema":
+					body = `{"accepted":true}`
+				case "JSON-truncated":
+					body = `{"result":{"accepted":true},"padding":"` + strings.Repeat("x", probecheck.MaxBodyBytes) + `"}`
+				}
+				_, _ = io.WriteString(w, body)
+			})
+			// Caller-owned catalog edits must not weaken the selected expectation.
+			service.Probes[0].Expect.JSONFields[0] = "login"
+			service.Probes[0].Expect.BodyContains[0] = ""
+			result, err := runNodeRouterHTTPSProbe(context.Background(), request, options)
+			accepted := mode == "accepted"
+			if (err == nil) != accepted || result.ServiceAccepted != accepted || calls.Load() != 1 || result.ServiceID != service.ID || result.ProbeID != "catalog-check" || result.PredicateHash != request.Predicate.digest() {
+				t.Fatal("full catalog semantics or binding lost", result, err)
+			}
+			if !accepted && (result.BodySHA256 != "" || result.BodyBytes != 0) {
+				t.Fatal("rejected content acquired accepted sample identity", result)
 			}
 		})
 	}
