@@ -425,8 +425,12 @@ func buildCandidate(input CandidateInput, now time.Time) (Candidate, error) {
 }
 
 func (m *Manager) Validate(ctx context.Context, id string) (Candidate, error) {
+	return m.validateCandidate(ctx, id, nil)
+}
+
+func (m *Manager) validateCandidate(ctx context.Context, id string, expected *adaptiveCandidateBinding) (Candidate, error) {
 	m.mu.Lock()
-	if m.compatibilityUnknownLocked() {
+	if m.compatibilityUnknownLocked() || m.writeBlocked {
 		m.mu.Unlock()
 		return Candidate{}, ErrCompatibilityQuiescenceUnknown
 	}
@@ -435,52 +439,104 @@ func (m *Manager) Validate(ctx context.Context, id string) (Candidate, error) {
 		return Candidate{}, errCompatibilityBusy
 	}
 	candidate, ok := m.state.Candidates[id]
-	if ok {
-		m.nativeRunning = true
-	}
-	m.mu.Unlock()
 	if !ok {
+		m.mu.Unlock()
+		if expected != nil {
+			return Candidate{}, errAdaptiveCandidateChanged
+		}
 		return Candidate{}, fmt.Errorf("unknown candidate %q", id)
 	}
+	validator := m.Validator
+	if expected != nil {
+		if expected.manager != m || !adaptiveCandidateIdentityEqual(candidate, expected.candidate) {
+			m.mu.Unlock()
+			return Candidate{}, errAdaptiveCandidateChanged
+		}
+		if ctx == nil {
+			m.mu.Unlock()
+			return Candidate{}, errors.New("adaptive bound validation requires a context")
+		}
+		if err := ctx.Err(); err != nil {
+			m.mu.Unlock()
+			return Candidate{}, err
+		}
+		var err error
+		validator, err = adaptiveManagedValidatorLocked(m)
+		if err != nil {
+			m.mu.Unlock()
+			return Candidate{}, err
+		}
+	} else if validator == nil {
+		validator = ExecValidator{}
+	}
+	candidate = adaptiveCandidateDetached(candidate)
+	m.nativeRunning = true
+	m.mu.Unlock()
 	defer m.finishNative()
 	arguments, err := parseArguments(candidate.Arguments)
 	if err != nil {
 		return Candidate{}, err
 	}
-	validator := m.Validator
-	if validator == nil {
-		validator = ExecValidator{}
-	}
-	validation := validator.Validate(ctx, arguments)
-	validation.Arguments = arguments
+	validation := validator.Validate(ctx, append([]string(nil), arguments...))
+	validation.Arguments = append([]string(nil), arguments...)
 	if validation.CheckedAt == "" {
 		validation.CheckedAt = m.now().UTC().Format(time.RFC3339)
 	}
 	candidate.Validation = validation
 	m.mu.Lock()
-	if m.state.CompatibilityFinalizing && !validation.QuiescenceUnknown {
-		err := m.publishCompatibilityValidationLocked(ctx, candidate)
-		if err != nil {
-			candidate.Validation = compatibilityPublicationUnknown(candidate.Validation)
-		}
-		m.mu.Unlock()
-		return candidate, err
-	}
 	if validation.QuiescenceUnknown {
-		// Latch before any disk operation. A failed save or a concurrent known
-		// result must never erase an invocation whose cleanup remains unknown.
+		// Preserve real process uncertainty even if its candidate was removed
+		// or rebound while validation was outside the Manager lock.
 		m.compatibilityUnknown = true
 		if m.state.SchemaVersion < compatibilityUnknownSchema {
 			m.state.SchemaVersion = compatibilityUnknownSchema
 		}
-	} else if m.compatibilityUnknownLocked() {
+	}
+	current, exists := m.state.Candidates[id]
+	if !exists || !adaptiveCandidateIdentityEqual(current, candidate) {
+		// A settled identity mismatch is not process uncertainty. Preserve the
+		// newer record/deletion, but retain a real unknown outcome independently.
+		if validation.QuiescenceUnknown {
+			err = m.retainAdaptiveValidationUnknownLocked()
+			m.mu.Unlock()
+			return Candidate{}, errors.Join(ErrCompatibilityQuiescenceUnknown, errAdaptiveCandidateChanged, err)
+		}
+		unknown := m.compatibilityUnknownLocked() || m.writeBlocked
+		m.mu.Unlock()
+		if unknown {
+			return Candidate{}, errors.Join(ErrCompatibilityQuiescenceUnknown, errAdaptiveCandidateChanged)
+		}
+		return Candidate{}, errAdaptiveCandidateChanged
+	}
+	if m.writeBlocked {
 		m.mu.Unlock()
 		return Candidate{}, ErrCompatibilityQuiescenceUnknown
 	}
-	m.state.Candidates[id] = candidate
+	if expected != nil && !validation.QuiescenceUnknown {
+		if _, err := adaptiveManagedValidatorLocked(m); err != nil {
+			m.mu.Unlock()
+			return Candidate{}, err
+		}
+	}
+	if m.state.CompatibilityFinalizing && !validation.QuiescenceUnknown {
+		err := m.publishCompatibilityValidationLocked(ctx, adaptiveCandidateDetached(candidate))
+		if err != nil {
+			candidate.Validation = compatibilityPublicationUnknown(candidate.Validation)
+		}
+		m.mu.Unlock()
+		return adaptiveCandidateDetached(candidate), err
+	}
+	if !validation.QuiescenceUnknown && m.compatibilityUnknownLocked() {
+		m.mu.Unlock()
+		return Candidate{}, ErrCompatibilityQuiescenceUnknown
+	}
+	m.state.Candidates[id] = adaptiveCandidateDetached(candidate)
 	err = m.saveLocked()
 	m.mu.Unlock()
-	return candidate, err
+	if expected != nil && err != nil {
+		return Candidate{}, err
+	}
+	return adaptiveCandidateDetached(candidate), err
 }
 
 // DeleteCandidate removes a draft experiment together with only its own
