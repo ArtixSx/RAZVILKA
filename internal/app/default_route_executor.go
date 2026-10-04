@@ -151,7 +151,7 @@ func (e *DefaultRouteExecutor) Review(ctx context.Context, services []dataplane.
 }
 
 func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Config) dataplane.Input {
-	input := dataplane.Input{Revision: cfg.Revision + 1, NetworkProfileID: c.snapshot.Scope.NetworkID, SafeMode: cfg.SafeMode}
+	input := dataplane.Input{LAN: c.LAN(), Revision: cfg.Revision + 1, NetworkProfileID: c.snapshot.Scope.NetworkID, SafeMode: cfg.SafeMode}
 	if e.app.DataplaneHost != nil {
 		input.Host = e.app.DataplaneHost()
 	} else {

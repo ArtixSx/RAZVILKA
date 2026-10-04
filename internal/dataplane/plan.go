@@ -74,18 +74,19 @@ type ResourceConflict struct {
 }
 
 type Input struct {
-	DNS                *ScopedDNSPlan     `json:"scoped_dns,omitempty"`
-	SuspendDNS         bool               `json:"suspend_dns,omitempty"`
-	DiscardDNS         bool               `json:"discard_dns,omitempty"`
-	NetworkProfileID   string             `json:"network_profile_id,omitempty"`
-	Revision           uint64             `json:"revision"`
-	SafeMode           bool               `json:"safe_mode"`
-	Routes             []Route            `json:"routes"`
-	RetiringAdapters   []string           `json:"retiring_adapters,omitempty"`
-	Engines            []Engine           `json:"engines"`
-	EngineConfigDrafts []string           `json:"engine_config_drafts,omitempty"`
-	ResourceConflicts  []ResourceConflict `json:"resource_conflicts,omitempty"`
-	Host               HostState          `json:"host"`
+	LAN                *LANPolicyRuntimePlan `json:"lan_policy,omitempty"`
+	DNS                *ScopedDNSPlan        `json:"scoped_dns,omitempty"`
+	SuspendDNS         bool                  `json:"suspend_dns,omitempty"`
+	DiscardDNS         bool                  `json:"discard_dns,omitempty"`
+	NetworkProfileID   string                `json:"network_profile_id,omitempty"`
+	Revision           uint64                `json:"revision"`
+	SafeMode           bool                  `json:"safe_mode"`
+	Routes             []Route               `json:"routes"`
+	RetiringAdapters   []string              `json:"retiring_adapters,omitempty"`
+	Engines            []Engine              `json:"engines"`
+	EngineConfigDrafts []string              `json:"engine_config_drafts,omitempty"`
+	ResourceConflicts  []ResourceConflict    `json:"resource_conflicts,omitempty"`
+	Host               HostState             `json:"host"`
 }
 
 type Action struct {
@@ -124,50 +125,52 @@ type RouteEvidence struct {
 // It deliberately contains only routes and actions owned by one adapter, so a
 // candidate cannot infer authority over another engine or global router state.
 type RoutePlan struct {
-	NetworkProfileID string             `json:"network_profile_id,omitempty"`
-	SchemaVersion    int                `json:"schema_version"`
-	PlanID           string             `json:"plan_id"`
-	Digest           string             `json:"digest"`
-	Revision         uint64             `json:"revision"`
-	CreatedAt        string             `json:"created_at"`
-	Adapter          string             `json:"adapter"`
-	Routes           []Route            `json:"routes"`
-	Actions          []Action           `json:"actions"`
-	ResourceClaims   []ResourceConflict `json:"resource_claims,omitempty"`
-	RequiredEvidence evidence.Level     `json:"required_evidence"`
+	LAN              *LANPolicyRuntimePlan `json:"lan_policy,omitempty"`
+	NetworkProfileID string                `json:"network_profile_id,omitempty"`
+	SchemaVersion    int                   `json:"schema_version"`
+	PlanID           string                `json:"plan_id"`
+	Digest           string                `json:"digest"`
+	Revision         uint64                `json:"revision"`
+	CreatedAt        string                `json:"created_at"`
+	Adapter          string                `json:"adapter"`
+	Routes           []Route               `json:"routes"`
+	Actions          []Action              `json:"actions"`
+	ResourceClaims   []ResourceConflict    `json:"resource_claims,omitempty"`
+	RequiredEvidence evidence.Level        `json:"required_evidence"`
 }
 
 type Plan struct {
-	DNS               *ScopedDNSPlan     `json:"scoped_dns,omitempty"`
-	SuspendDNS        bool               `json:"suspend_dns,omitempty"`
-	DiscardDNS        bool               `json:"discard_dns,omitempty"`
-	NetworkProfileID  string             `json:"network_profile_id,omitempty"`
-	SchemaVersion     int                `json:"schema_version"`
-	PlanID            string             `json:"plan_id"`
-	Digest            string             `json:"digest"`
-	Revision          uint64             `json:"revision"`
-	CreatedAt         string             `json:"created_at"`
-	SafeMode          bool               `json:"safe_mode"`
-	Ready             bool               `json:"ready"`
-	Noop              bool               `json:"noop"`
-	RouteCount        int                `json:"route_count"`
-	EngineDrafts      []string           `json:"engine_config_drafts,omitempty"`
-	ResourceConflicts []ResourceConflict `json:"resource_conflicts,omitempty"`
-	Adapters          []string           `json:"adapters"`
-	RetiringAdapters  []string           `json:"retiring_adapters,omitempty"`
-	CanaryAdapters    []string           `json:"canary_adapters,omitempty"`
-	Routes            []Route            `json:"routes"`
-	Actions           []Action           `json:"actions"`
-	Blockers          []Blocker          `json:"blockers"`
-	Warnings          []Warning          `json:"warnings"`
-	RequiredEvidence  evidence.Level     `json:"required_evidence"`
-	ObservedEvidence  evidence.Level     `json:"observed_evidence"`
-	EvidenceNote      string             `json:"evidence_note"`
-	RouteEvidence     []RouteEvidence    `json:"route_evidence"`
-	Host              HostState          `json:"host"`
-	Protocol          []string           `json:"protocol"`
-	State             string             `json:"state"`
-	Note              string             `json:"note"`
+	LAN               *LANPolicyRuntimePlan `json:"lan_policy,omitempty"`
+	DNS               *ScopedDNSPlan        `json:"scoped_dns,omitempty"`
+	SuspendDNS        bool                  `json:"suspend_dns,omitempty"`
+	DiscardDNS        bool                  `json:"discard_dns,omitempty"`
+	NetworkProfileID  string                `json:"network_profile_id,omitempty"`
+	SchemaVersion     int                   `json:"schema_version"`
+	PlanID            string                `json:"plan_id"`
+	Digest            string                `json:"digest"`
+	Revision          uint64                `json:"revision"`
+	CreatedAt         string                `json:"created_at"`
+	SafeMode          bool                  `json:"safe_mode"`
+	Ready             bool                  `json:"ready"`
+	Noop              bool                  `json:"noop"`
+	RouteCount        int                   `json:"route_count"`
+	EngineDrafts      []string              `json:"engine_config_drafts,omitempty"`
+	ResourceConflicts []ResourceConflict    `json:"resource_conflicts,omitempty"`
+	Adapters          []string              `json:"adapters"`
+	RetiringAdapters  []string              `json:"retiring_adapters,omitempty"`
+	CanaryAdapters    []string              `json:"canary_adapters,omitempty"`
+	Routes            []Route               `json:"routes"`
+	Actions           []Action              `json:"actions"`
+	Blockers          []Blocker             `json:"blockers"`
+	Warnings          []Warning             `json:"warnings"`
+	RequiredEvidence  evidence.Level        `json:"required_evidence"`
+	ObservedEvidence  evidence.Level        `json:"observed_evidence"`
+	EvidenceNote      string                `json:"evidence_note"`
+	RouteEvidence     []RouteEvidence       `json:"route_evidence"`
+	Host              HostState             `json:"host"`
+	Protocol          []string              `json:"protocol"`
+	State             string                `json:"state"`
+	Note              string                `json:"note"`
 }
 
 // DiscoverHost is read-only. It only inventories binaries, the NFQUEUE kernel
@@ -249,6 +252,11 @@ func Build(input Input) (Plan, error) {
 }
 
 func BuildAt(input Input, now time.Time) (Plan, error) {
+	if input.LAN != nil {
+		if err := ValidateNetworkPolicyLAN(input.LAN, input.Routes); err != nil {
+			return Plan{}, err
+		}
+	}
 	checkedAdapters := map[string]bool{}
 	for _, route := range input.Routes {
 		if _, err := routeIngresses(route); err != nil {
@@ -283,6 +291,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	sum := sha256.Sum256(encoded)
 	digest := hex.EncodeToString(sum[:])
 	plan := Plan{
+		LAN:               input.LAN,
 		DNS:               input.DNS,
 		SuspendDNS:        input.SuspendDNS,
 		DiscardDNS:        input.DiscardDNS,
@@ -506,6 +515,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 func (p Plan) RoutePlanFor(adapter string) RoutePlan {
 	adapter = AdapterID(adapter)
 	ir := RoutePlan{
+		LAN:              CloneLANPolicyRuntime(p.LAN),
 		NetworkProfileID: p.NetworkProfileID,
 		SchemaVersion:    p.SchemaVersion,
 		PlanID:           p.PlanID,
@@ -517,7 +527,7 @@ func (p Plan) RoutePlanFor(adapter string) RoutePlan {
 	}
 	for _, route := range p.Routes {
 		if adapterID(route.Resolved) == adapter {
-			ir.Routes = append(ir.Routes, route)
+			ir.Routes = append(ir.Routes, cloneNetworkPolicyRoutes([]Route{route})[0])
 		}
 	}
 	for _, action := range p.Actions {
@@ -673,6 +683,8 @@ func adapterID(route string) string {
 func AdapterID(route string) string { return adapterID(route) }
 
 func canonicalize(input *Input) {
+	input.LAN = CloneLANPolicyRuntime(input.LAN)
+	input.Routes = cloneNetworkPolicyRoutes(input.Routes)
 	if input.DNS != nil {
 		copyDNS := *input.DNS
 		copyDNS.Bindings = append([]ScopedDNSBinding(nil), input.DNS.Bindings...)
