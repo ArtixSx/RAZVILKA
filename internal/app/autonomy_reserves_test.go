@@ -44,11 +44,18 @@ func autonomyThreeReserveFixture(t *testing.T) (*App, []string, *nodeApplyAdapte
 		t.Fatal(err)
 	}
 	a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
-		return autofallbackResult(request, true), nil
+		return d10Result(request, "sing-box", true), nil
 	})
 	a.autonomyRound(context.Background(), time.Now())
 	if autonomyTestState(a).State != "applied" || selectedRoute(a.Store.Get().AppliedServices["my-independent-site"]) != "sing-box:"+ids[0] {
 		t.Fatal("initial A assignment failed")
+	}
+	// First-usable deliberately applies A before checking B/C. Prepare the
+	// reserves in a separate healthy maintenance round for this fixture.
+	autonomyTestDue(a, false)
+	a.autonomyRound(context.Background(), time.Now())
+	if autonomyTestState(a).State != "healthy" {
+		t.Fatal("healthy reserve preparation failed")
 	}
 	adapter.calls = nil
 	return a, ids, adapter
@@ -68,7 +75,7 @@ func autonomyConfirmFailure(t *testing.T, a *App, ctx context.Context) {
 func TestAutonomyReserveTargetDoesNotCountAnotherKeyForSameServer(t *testing.T) {
 	a, ids, adapter := autonomousIntegrationFixture(t)
 	a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
-		return autofallbackResult(request, true), nil
+		return d10Result(request, "sing-box", true), nil
 	})
 	a.autonomyRound(context.Background(), time.Now())
 	before := a.Store.Get()
@@ -109,7 +116,7 @@ func TestAutonomyReservesDefiniteFailureContinuesToFreshPeer(t *testing.T) {
 	var checked []string
 	a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 		checked = append(checked, request.NodeID)
-		return autofallbackResult(request, request.NodeID == ids[2]), nil
+		return d10Result(request, "sing-box", request.NodeID == ids[2]), nil
 	})
 	autonomyConfirmFailure(t, a, context.Background())
 	state := autonomyTestState(a)
@@ -132,7 +139,7 @@ func TestAutonomyReservesDefiniteFailureContinuesToFreshPeer(t *testing.T) {
 }
 
 func TestAutonomyReservesUncertainOrGlobalFailureStopsBeforeC(t *testing.T) {
-	for _, scenario := range []string{"inconclusive", "cleanup", "cleanup-cancel", "network", "engine", "ownership", "permission", "expired", "refresh-inconclusive", "refresh-cleanup", "refresh-network"} {
+	for _, scenario := range []string{"inconclusive", "error-verdict", "cleanup", "cleanup-cancel", "network", "engine", "ownership", "permission", "expired", "refresh-inconclusive", "refresh-cleanup", "refresh-network"} {
 		outcome := strings.TrimPrefix(scenario, "refresh-")
 		t.Run(scenario, func(t *testing.T) {
 			a, ids, adapter := autonomyThreeReserveFixture(t)
@@ -154,13 +161,15 @@ func TestAutonomyReservesUncertainOrGlobalFailureStopsBeforeC(t *testing.T) {
 			var checked []string
 			a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 				checked = append(checked, request.NodeID)
-				result := autofallbackResult(request, request.NodeID == ids[2])
+				result := d10Result(request, "sing-box", request.NodeID == ids[2])
 				if request.NodeID != ids[1] {
 					return result, nil
 				}
 				switch outcome {
 				case "inconclusive":
 					result.Verdict = evidence.VerdictInconclusive
+				case "error-verdict":
+					result.Verdict = evidence.VerdictError
 				case "cleanup", "cleanup-cancel":
 					result.ErrorCode = "node-cleanup-failed"
 					result.Stage = "cleanup"
@@ -190,7 +199,7 @@ func TestAutonomyReservesUncertainOrGlobalFailureStopsBeforeC(t *testing.T) {
 			})
 			autonomyConfirmFailure(t, a, ctx)
 			state := autonomyTestState(a)
-			wantState := map[string]string{"inconclusive": "unconfirmed", "cleanup": "requires-review", "cleanup-cancel": "requires-review", "network": "network-unknown", "engine": "checker-unavailable", "ownership": "paused", "permission": "paused", "expired": "checker-unavailable"}[outcome]
+			wantState := map[string]string{"inconclusive": "unconfirmed", "error-verdict": "unconfirmed", "cleanup": "requires-review", "cleanup-cancel": "requires-review", "network": "network-unknown", "engine": "checker-unavailable", "ownership": "paused", "permission": "paused", "expired": "checker-unavailable"}[outcome]
 			if state.State != wantState || !reflect.DeepEqual(checked, []string{ids[0], ids[0], ids[1]}) || len(adapter.calls) != 0 || len(state.Switches) != beforeSwitches || !reflect.DeepEqual(before, a.Store.Get()) {
 				t.Fatalf("continued after %s: state=%s checks=%v calls=%v", outcome, state.State, checked, adapter.calls)
 			}
@@ -214,7 +223,7 @@ func TestAutonomyReservesCandidateBudgetDefersCWithoutRetryingFailedB(t *testing
 	var checked []string
 	a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 		checked = append(checked, request.NodeID)
-		return autofallbackResult(request, request.NodeID == ids[2]), nil
+		return d10Result(request, "sing-box", request.NodeID == ids[2]), nil
 	})
 	autonomyConfirmFailure(t, a, context.Background())
 	state := autonomyTestState(a)
@@ -240,7 +249,7 @@ func TestAutonomyReservesApplyFailureStopsEvenAfterRollback(t *testing.T) {
 			var checked []string
 			a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 				checked = append(checked, request.NodeID)
-				return autofallbackResult(request, request.NodeID != ids[0]), nil
+				return d10Result(request, "sing-box", request.NodeID != ids[0]), nil
 			})
 			adapter.after = func(phase string) error {
 				if phase == "rollback" && outcome == "rollback-failed" {

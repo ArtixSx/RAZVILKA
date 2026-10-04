@@ -173,8 +173,15 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		}
 	}
 	healthy, replace := false, current == ""
-	currentNode := strings.TrimPrefix(current, "sing-box:")
-	isNode := strings.HasPrefix(current, "sing-box:node-")
+	engine := autonomyNodeEngine(current)
+	if current == "" {
+		engine = autonomyNodeEngine(s.ExpectedRoute)
+	}
+	currentNode := ""
+	isNode := strings.HasPrefix(current, engine+":node-")
+	if isNode {
+		currentNode = strings.TrimPrefix(current, engine+":")
+	}
 	if current != "" && !isNode {
 		// Only a confirmed failure of the current path may replace an existing
 		// non-proxy route. Unsupported probes are not counted as a failure.
@@ -218,8 +225,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 		}
 	}
-	if a.Nodes == nil || a.NodeChecker == nil {
+	if a.Nodes == nil {
 		return finish("checker-unavailable", "Точная проверка подключений недоступна.")
+	}
+	if _, err := a.nodeCheckerForEngine(engine); err != nil {
+		return finish("checker-unavailable", "Точная проверка выбранного движка недоступна.")
 	}
 	snapshot, e := a.Nodes.Snapshot(ctx, time.Now())
 	if e != nil {
@@ -239,7 +249,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 		}
 	}
-	ids = orderAutonomyCandidates(snapshot, ids, s.ID, profile, time.Now())
+	if engine == "sing-box" {
+		ids = orderAutonomyCandidates(snapshot, ids, s.ID, profile, time.Now())
+	} else {
+		slices.Sort(ids)
+	}
 	if isNode {
 		if _, ok := eligible[currentNode]; !ok {
 			// No new authority is created for a disabled/revoked/expired node. Search
@@ -247,13 +261,13 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			replace = true
 			r.State = "origin-expired"
 		} else {
-			check, _, err := a.checkAndRecordNode(ctx, currentNode, service, profile, 0)
+			check, _, err := a.checkAndRecordNodeForEngine(ctx, engine, currentNode, service, profile, 0)
 			verdict := "INCONCLUSIVE"
 			if err == nil {
 				verdict = autonomyNodeObservation(check, time.Now())
 				healthy = verdict == "PASS"
 				if healthy {
-					_, resolveErr := a.Nodes.ResolveRoute(ctx, currentNode, service.ID, profile, "", time.Time{}, time.Now())
+					_, resolveErr := a.Nodes.ResolveRouteForEngine(ctx, engine, currentNode, service.ID, profile, "", time.Time{}, time.Now())
 					if resolveErr != nil {
 						healthy = false
 						verdict = "INCONCLUSIVE"
@@ -345,7 +359,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			return finish("applied", "Прежний проверенный узел и его область восстановлены через общую транзакцию.")
 		}
 	}
-	checkedThisRound := map[string]bool{}
+	if !healthy && replace {
+		return a.runAutonomyFirstUsable(ctx, p, s, r, cfg, service, engine, profile, currentNode, ids)
+	}
 	ready := []string{}
 	if healthy && isNode {
 		ready = append(ready, currentNode)
@@ -354,7 +370,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		if slices.Contains(ready, id) {
 			continue
 		}
-		if _, err := a.Nodes.ResolveRoute(ctx, id, s.ID, profile, "", time.Time{}, time.Now()); err == nil {
+		if _, err := a.Nodes.ResolveRouteForEngine(ctx, engine, id, s.ID, profile, "", time.Time{}, time.Now()); err == nil {
 			ready = append(ready, id)
 		}
 	}
@@ -362,7 +378,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	if healthy && isNode {
 		keep = currentNode
 	}
-	ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now(), a.nodeMeasurements()...)
+	if engine == "sing-box" {
+		ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now(), a.nodeMeasurements()...)
+	} else {
+		ready = orderAutonomyExactReserves(ready, keep)
+	}
 	ready, e = a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
 	if e != nil {
 		return finish("catalog-unavailable", "Не удалось сопоставить резервные подключения. Маршрут сохранён.")
@@ -377,8 +397,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			if ctx.Err() != nil {
 				break
 			}
-			check, err := a.checkAutonomyReserve(ctx, p, s, cfg, id, service, profile)
-			checkedThisRound[id] = true
+			check, err := a.checkAutonomyReserveForEngine(ctx, p, s, cfg, engine, id, service, profile)
 			if state, message := autonomyReserveCheckStop(ctx, check, err); state != "" {
 				return finish(state, message)
 			}
@@ -393,7 +412,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			snapshot = fresh
 		}
 	}
-	ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now(), a.nodeMeasurements()...)
+	if engine == "sing-box" {
+		ready = rankAutonomyNodes(snapshot, ready, keep, s.ID, profile, time.Now(), a.nodeMeasurements()...)
+	} else {
+		ready = orderAutonomyExactReserves(ready, keep)
+	}
 	ready, e = a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
 	if e != nil {
 		return finish("catalog-unavailable", "Не удалось сопоставить резервные подключения. Маршрут сохранён.")
@@ -417,71 +440,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	if !replace {
 		return finish("unconfirmed", "Текущий путь не подтверждён. Разрешённый резерв проверен отдельно; без основания и свежего доказательства маршрут не меняется.")
 	}
-	if len(ready) == 0 {
-		return finish("searching", "Подходящий узел пока не найден. Продолжается ограниченный подбор.")
-	}
-	// Cached PASS alone cannot replace a failed path. Walk the bounded reserve
-	// list, allowing only a definite candidate failure to advance to its peer.
-	// INCONCLUSIVE and local/network/cleanup failures stop this round instead of
-	// poisoning candidates or probing on top of uncertain temporary resources.
-	checks := len(checkedThisRound)
-	for _, id := range ready {
-		if id == currentNode {
-			continue
-		}
-		if !checkedThisRound[id] {
-			if checks >= p.CandidatesPerRound {
-				break
-			}
-			checks++
-			check, checkErr := a.checkAutonomyReserve(ctx, p, s, cfg, id, service, profile)
-			checkedThisRound[id] = true
-			if state, message := autonomyReserveCheckStop(ctx, check, checkErr); state != "" {
-				return finish(state, message)
-			}
-			if autonomyNodeObservation(check, time.Now()) == "FAIL" {
-				r.Reserves = slices.DeleteFunc(r.Reserves, func(candidate string) bool { return candidate == id })
-				continue
-			}
-		}
-		if len(r.CandidateFailures) >= 4 {
-			return finish("searching", "Четыре пути временно отложены после отказов. Подбор продолжится после их паузы; прежняя конфигурация сохранена.")
-		}
-		if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
-			return finish("rate-limited", "Лимит переключений исчерпан; автоматическое применение отложено.")
-		}
-		// Persist the budget BEFORE entering Activate, including failed attempts.
-		r.State = "applying"
-		r.Message = "Подготовлен проверенный узел; выполняется транзакция."
-		a.autonomyRuntime(s.ID, r)
-		if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "sing-box:"+id); err != nil {
-			if failure, attributed := a.autonomyCandidateFailure(ctx, p, s, cfg, profile, id, err); attributed {
-				r.RecordCandidateFailure(failure)
-				r.Reserves = slices.DeleteFunc(r.Reserves, func(candidate string) bool { return candidate == id })
-				r.Message = "Прежний маршрут восстановлен и проверен. Проверяем следующий резерв; неудачный путь отложен на 5 минут."
-				a.autonomyRuntime(s.ID, r)
-				if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
-					return finish("requires-review", "Не удалось сохранить результат отката. Дальнейшие переключения остановлены.")
-				}
-				// Earlier checks cannot stand in for a fresh peer check after a
-				// live rollback. Rechecks consume the same bounded round budget.
-				for candidate := range checkedThisRound {
-					checkedThisRound[candidate] = false
-				}
-				continue
-			}
-			if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
-				return finish(state, message)
-			}
-			state, message := autonomyApplyFailureStatus(err)
-			return finish(state, message)
-		}
-		r.Failures = 0
-		r.FirstFailure = time.Time{}
-		r.LastFailure = time.Time{}
-		return finish("applied", "Проверенный узел применён только к этому сервису и его устройствам.")
-	}
-	return finish("searching", "В пределах текущей проверки рабочий резерв не найден. Подбор продолжится; прежняя конфигурация сохранена.")
+	return finish("searching", "Подбор продолжится; прежняя конфигурация сохранена.")
 }
 
 func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, profile string) string {
@@ -564,12 +523,13 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		if !ok || autonomyDefinition(service) != s.Definition {
 			return dataplane.ErrReviewChanged
 		}
-		if strings.HasPrefix(route, "sing-box:node-") {
+		routeEngine := autonomyNodeEngine(route)
+		if strings.HasPrefix(route, routeEngine+":node-") {
 			snap, e := a.Nodes.Snapshot(ctx, time.Now())
 			if e != nil || snap.Generation != generation {
 				return dataplane.ErrReviewChanged
 			}
-			id := strings.TrimPrefix(route, "sing-box:")
+			id := strings.TrimPrefix(route, routeEngine+":")
 			permitted := false
 			for _, n := range snap.Nodes {
 				if n.ID == id && allowedAutonomyNode(p, n, time.Now()) {
@@ -579,7 +539,7 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 			if !permitted {
 				return dataplane.ErrReviewChanged
 			}
-			if _, e = a.Nodes.ResolveRoute(ctx, id, s.ID, profile, "", time.Time{}, time.Now()); e != nil {
+			if _, e = a.Nodes.ResolveRouteForEngine(ctx, routeEngine, id, s.ID, profile, "", time.Time{}, time.Now()); e != nil {
 				return e
 			}
 		}

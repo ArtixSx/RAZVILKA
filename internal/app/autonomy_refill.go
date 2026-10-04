@@ -29,7 +29,14 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 		return
 	}
 	// A poisoned exact checker cannot be repaired by downloading more URLs.
-	if a.NodeChecker == nil || a.Nodes == nil {
+	if a.Nodes == nil {
+		return
+	}
+	engine := autonomyNodeEngine(s.ExpectedRoute)
+	if _, err := a.nodeCheckerForEngine(engine); err != nil {
+		return
+	}
+	if a.autonomyDiskCurrent(ctx) != nil {
 		return
 	}
 	profile, err := a.freshNetworkProfile(ctx)
@@ -39,11 +46,21 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 	// Candidates are checked a few per round. Fetching more while many wait
 	// only fills the bounded catalogue with records nobody has checked.
 	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
-	if err != nil || uncheckedAutonomyCandidates(snapshot, p, s.ID, profile, time.Now()) >= autonomyRefillBacklog {
+	if err != nil {
 		return
 	}
-	useful, err := a.Nodes.SourceUtility(ctx, p.SourceIDs, p.Protocols, s.ID, profile, time.Now())
+	if r.Search != nil && r.Search.Version == autonomyTraversalVersion(p, s, engine, profile) && !r.Search.Exhausted {
+		// Finish the bounded snapshot before requesting its next passive page.
+		return
+	}
+	if uncheckedAutonomySearchCandidates(snapshot, p, s, r, engine, profile, time.Now()) >= autonomyRefillBacklog {
+		return
+	}
+	useful, err := a.Nodes.SourceUtilityForEngine(ctx, engine, p.SourceIDs, p.Protocols, s.ID, profile, time.Now())
 	if err != nil {
+		return
+	}
+	if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
 		return
 	}
 	decision, err := a.NodeFeeds.RequestRefillRanked(ctx, p.SourceIDs, useful)
@@ -64,6 +81,34 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 
 // About half an hour of work at the default pace of two checks per round.
 const autonomyRefillBacklog = 32
+
+// Unsupported checks deliberately have no history. Only a matching durable
+// traversal may count their consumed entries, and only for refill scheduling.
+func uncheckedAutonomySearchCandidates(snapshot nodestore.Snapshot, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, engine, profile string, now time.Time) int {
+	consumed := map[string]bool{}
+	if r.Search != nil && r.Search.Version == autonomyTraversalVersion(p, s, engine, profile) {
+		for _, id := range r.Search.Ordered[:r.Search.Cursor] {
+			consumed[id] = true
+		}
+	}
+	count := 0
+	for _, n := range snapshot.Nodes {
+		if !allowedAutonomyNode(p, n, now) || consumed[n.ID] {
+			continue
+		}
+		checked := false
+		for _, c := range n.Health.History {
+			if c.ServiceID == s.ID && c.NetworkProfile == profile && c.RoutePathID == engine+":"+n.ID {
+				checked = true
+				break
+			}
+		}
+		if !checked {
+			count++
+		}
+	}
+	return count
+}
 
 // uncheckedAutonomyCandidates counts permitted candidates without any check
 // of this service in this network.
