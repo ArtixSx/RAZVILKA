@@ -22,6 +22,9 @@ type componentAdmission struct {
 // Journal reads are bounded and do not take the component manager's mutex.
 func (a *App) InitializeComponentRecoveryGate() error {
 	return a.Operations.SetGuard(func(ctx context.Context) error {
+		if err := a.selfUpdateFileGuard(ctx); err != nil {
+			return err
+		}
 		if a.Components == nil {
 			return nil
 		}
@@ -89,7 +92,7 @@ func (a *App) componentRecoveryStatus(w http.ResponseWriter, r *http.Request) {
 	if a.Store != nil {
 		revision = a.Store.Get().Revision
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"recovery_required": pending, "transaction": state, "revision": revision, "working_routes_changed": false})
+	writeJSON(w, http.StatusOK, map[string]any{"recovery_required": pending, "transaction": state, "revision": revision, "working_routes_changed": false, "capabilities": a.componentRecoveryCapabilities(ctx, state, pending), "installed_idle_accepted": state.Phase == components.UpdateAcceptedIdle})
 }
 
 // Callbacks are trusted application dependencies, never decoded from a request.
@@ -117,7 +120,7 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceControl(w, r, &in) {
 		return
 	}
-	if in.TransactionID == "" || !components.ManagedUpdateSupported(in.Component) || in.ExpectedRevision == nil || in.Confirm != "REPAIR_COMPONENT_TRANSACTION" || (in.Action != "accept-live" && in.Action != "rollback" && in.Action != "verify-rollback" && in.Action != "abandon-prepared") || in.AllowUnknownRollback && in.Action != "rollback" || in.ExternalRepairConfirmed && in.Action != "verify-rollback" {
+	if in.TransactionID == "" || !components.ManagedUpdateSupported(in.Component) || in.ExpectedRevision == nil || in.Confirm != "REPAIR_COMPONENT_TRANSACTION" || (in.Action != "accept-live" && in.Action != "accept-installed-idle" && in.Action != "rollback" && in.Action != "verify-rollback" && in.Action != "abandon-prepared") || in.AllowUnknownRollback && in.Action != "rollback" || in.ExternalRepairConfirmed && in.Action != "verify-rollback" {
 		http.Error(w, "invalid matching component recovery request", http.StatusBadRequest)
 		return
 	}
@@ -164,7 +167,7 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 	a.autonomy.mu.Lock()
 	maintenance := a.autonomy.doc.Maintenance["components"] == componentPendingPrefix+in.Component
 	a.autonomy.mu.Unlock()
-	settledAction := state.Phase == components.UpdateAccepted && in.Action == "accept-live" || state.Phase == components.UpdateRolledBack && (in.Action == "rollback" || in.Action == "verify-rollback") || state.Phase == components.UpdateAbandoned && in.Action == "abandon-prepared"
+	settledAction := state.Phase == components.UpdateAccepted && in.Action == "accept-live" || state.Phase == components.UpdateAcceptedIdle && in.Action == "accept-installed-idle" || state.Phase == components.UpdateRolledBack && (in.Action == "rollback" || in.Action == "verify-rollback") || state.Phase == components.UpdateAbandoned && in.Action == "abandon-prepared"
 	if readErr == nil && !pending && state.TransactionID == in.TransactionID && state.Component == in.Component && settledAction {
 		operationPending, operationErr := a.componentSettlementNeeded(state)
 		if operationErr != nil {
@@ -188,7 +191,7 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 	}
 	quiescence := a.componentRecoveryChecks.quiescence
 	if quiescence == nil {
-		quiescence = nativeComponentQuiescence
+		quiescence = func(c context.Context) error { return a.Components.Quiescence(c, in.TransactionID, in.Component) }
 	}
 	live := a.componentRecoveryChecks.live
 	if live == nil {
@@ -198,6 +201,15 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 		TransactionID: in.TransactionID, Component: in.Component, Action: in.Action,
 		AllowUnknownRollback: in.AllowUnknownRollback, ExternalRepairConfirmed: in.ExternalRepairConfirmed,
 		SafeMode: cfg.SafeMode, Stopped: cfg.ServiceControl.Stopped, QuiescenceCheck: quiescence,
+		InactivityCheck: func(c context.Context) error {
+			if err := guard(c); err != nil {
+				return err
+			}
+			if err := a.checkComponentInactive(c, in.Component); err != nil {
+				return err
+			}
+			return guard(c)
+		},
 	}, guard, func(c context.Context) error {
 		if err := guard(c); err != nil {
 			return err
@@ -216,7 +228,7 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_RECOVERY_UNCONFIRMED", "error": err.Error(), "result": result, "recovery_required": a.PendingComponentRecovery()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"result": result, "recovery_required": false, "live_accepted": in.Action == "accept-live"})
+	writeJSON(w, http.StatusOK, map[string]any{"result": result, "recovery_required": false, "live_accepted": in.Action == "accept-live", "installed_idle_accepted": result.InstalledIdleAccepted})
 }
 
 // Recheck actual authority after preparation and before every package command.
@@ -240,5 +252,10 @@ func (a *App) componentUpdateGuard(ctx context.Context) (func(context.Context) e
 
 func (a *App) recordComponentAwaitingLive(id string) {
 	_ = a.Components.RecordOperation(id, "update", "running", "Пакет установлен и проверен отдельно. Рабочий процесс ещё не подтвердил новую версию; прежняя версия сохранена для отката.")
+	a.wakePanelSnapshot()
+}
+
+func (a *App) recordComponentAwaitingRollback(id string) {
+	_ = a.Components.RecordOperation(id, "update", "running", "Пакет и настройки возвращены к прежней версии. Независимое подтверждение рабочего процесса после отката ещё требуется.")
 	a.wakePanelSnapshot()
 }

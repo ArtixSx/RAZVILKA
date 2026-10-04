@@ -72,13 +72,13 @@ func TestManagedJournalAbruptProcessExit(t *testing.T) {
 			}
 			return nil
 		}
-		_, _ = m.ManagedUpdate(context.Background(), "nfqws2", func(context.Context) error {
+		_, _ = m.ManagedUpdateGuardedWithRollback(context.Background(), "nfqws2", func(context.Context) error {
 			data, _ := os.ReadFile(filepath.Join(root, "installed-version"))
 			if string(data) != "1.3.1" {
 				return errors.New("candidate failed")
 			}
 			return nil
-		})
+		}, nil, allowRecovery)
 		t.Fatal("child did not reach interruption point")
 	}
 	for _, point := range []string{"after:prepared", "before:upgrade-command", "after:upgrade-command", "after:rollback-command", "after:rolled-back"} {

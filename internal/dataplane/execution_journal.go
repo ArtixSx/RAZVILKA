@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,22 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
+
+// CheckExecutionRecovery only observes retained transaction records. Recovery
+// panels and installer authority may consult it before opening normal runtime.
+// It never settles a publication, changes networking or writes a journal.
+func (m *Manager) CheckExecutionRecovery(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if m == nil {
+		return ErrExecutionJournal
+	}
+	if err := m.checkExecutionRecovery(); err != nil {
+		return err
+	}
+	return ctx.Err()
+}
 
 // ErrExecutionJournal means that a transaction's durable outcome cannot be
 // trusted. Callers must stop subsequent mutations even if live cleanup worked.

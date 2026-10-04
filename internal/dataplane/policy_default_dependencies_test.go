@@ -151,3 +151,22 @@ func TestPolicyDefaultDependencyRejectsReservedLookingAliasesAndUnsupportedNumer
 		t.Fatal("unsupported numeric read admitted cleanup", err)
 	}
 }
+
+func TestPolicyDefaultDependencyCommonModelHonorsNumericReads(t *testing.T) {
+	runner := &recordedPolicyFakeRunner{}
+	state := testEarlyPolicy()
+	if err := AssertPolicyDefaultUnreferenced(context.Background(), runner, "ip", state, 4); err != nil {
+		t.Fatal("common model did not honor -N", err)
+	}
+	if len(runner.calls) != 1 || runner.calls[0] != "ip -N rule show" {
+		t.Fatal("guard used symbolic read", runner.calls)
+	}
+	runner.kernel.entries = []policyKernelEntry{{family: 4, priority: 65, source: "192.168.1.40/32", dest: "149.154.167.99/32", table: "203", ingress: "br0", mark: LANPolicyGateMatch}}
+	if err := AssertPolicyDefaultUnreferenced(context.Background(), runner, "ip", state, 4); !errors.Is(err, ErrPolicyDefaultReferenced) {
+		t.Fatal("numeric model dropped selector", err)
+	}
+	output, err := runner.Run(context.Background(), "ip", "-N", "rule", "show")
+	if err != nil || !strings.Contains(string(output), "fwmark "+LANPolicyGateMatch+" iif br0 lookup 203") {
+		t.Fatal("numeric read lost full iif/mark/table", string(output), err)
+	}
+}

@@ -111,6 +111,32 @@ func TestPolicyAdditionReceiptUnknownRuleKeepsDefaultsToPreventDirectFallback(t 
 	}
 }
 
+func TestPolicyAdditionReceiptPostAcknowledgementErrorKeepsDefaultsUntilKnownRuleRemoved(t *testing.T) {
+	state, root, runner, options := additionFixture(t)
+	options.fault = func(point string, index int) error {
+		if point == "added" && index == 2 {
+			return errors.New("failure after durable rule acknowledgement")
+		}
+		return nil
+	}
+	if err := applyPolicyAddition(context.Background(), runner, "ip", state, root, options); err == nil {
+		t.Fatal("post-ack failure ignored")
+	}
+	// CORE cannot include this rule in its in-memory compensation list because
+	// its runner returned an error. The durable ledger still acknowledges it.
+	doc := readAdditionFixture(t, state, root, options)
+	if doc.Steps[2].State != "added" || len(runner.kernel.entries) != 1 || len(runner.kernel.defaults) != 2 {
+		t.Fatal("default dropped while acknowledged selector remains", doc.Steps, runner.kernel)
+	}
+	options.fault = nil
+	if err := removePolicyAddition(context.Background(), runner, "ip", state, root, options); err != nil {
+		t.Fatal("fresh reader failed known cleanup", err)
+	}
+	if len(runner.kernel.entries) != 0 || len(runner.kernel.defaults) != 0 {
+		t.Fatal("known additions remain after settlement")
+	}
+}
+
 func TestPolicyAdditionReceiptCleanupIntentCannotDeleteAgainAfterLostAcknowledgement(t *testing.T) {
 	for _, point := range []string{"cleanup-intent", "delete"} {
 		t.Run(point, func(t *testing.T) {
@@ -274,6 +300,32 @@ func TestPolicyAdditionReceiptInterruptedPromotionCannotCopyOrReplaySource(t *te
 			}
 			if err := promotePolicyAddition(ctx, state, root, dest, options); !errors.Is(err, ErrPolicyAdditionUnknown) {
 				t.Fatal("promotion intent retried", err)
+			}
+		})
+	}
+}
+
+func TestPolicyAdditionReceiptPromotionRetryRejectsConsumedOrTransferredTarget(t *testing.T) {
+	for _, mode := range []string{"removed", "promoted"} {
+		t.Run(mode, func(t *testing.T) {
+			state, source, runner, options := additionFixture(t)
+			ctx, target := context.Background(), privateScopedXrayFixtureDir(t)
+			if err := applyPolicyAddition(ctx, runner, "ip", state, source, options); err != nil {
+				t.Fatal(err)
+			}
+			if err := promotePolicyAddition(ctx, state, source, target, options); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "removed" {
+				if err := removePolicyAddition(ctx, runner, "ip", state, target, options); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := promotePolicyAddition(ctx, state, target, privateScopedXrayFixtureDir(t), options); err != nil {
+				t.Fatal(err)
+			}
+			before := len(runner.calls)
+			if err := promotePolicyAddition(ctx, state, source, target, options); !errors.Is(err, ErrPolicyAdditionUnknown) || len(runner.calls) != before {
+				t.Fatal("stale promotion target accepted", err)
 			}
 		})
 	}

@@ -17,6 +17,7 @@ var errNodeJobReview = errors.New("node apply review is unavailable or changed")
 
 // A durable intent has no bearer token, node credential or replayable plan.
 type nodeApplyJobSpec struct {
+	Engine     string `json:"engine,omitempty"`
 	Digest     string `json:"digest"`
 	Generation uint64 `json:"generation"`
 }
@@ -33,6 +34,12 @@ func isNodeApplyPath(r *http.Request) bool {
 }
 
 func validDurableNodeApply(r serviceControlJobRequest) bool {
+	if r.NodeApply == nil {
+		return false
+	}
+	if _, err := nodeCheckEngine(r.NodeApply.Engine); err != nil {
+		return false
+	}
 	return r.ExpectedRevision != nil && len(r.ServiceIDs) == 1 && len(r.NodeIDs) == 1 &&
 		r.DNS == nil && r.NodeApply != nil && validJobHash(r.NodeApply.Digest) && r.NodeApply.Generation > 0 &&
 		len(r.ServiceIDs[0]) > 0 && len(r.ServiceIDs[0]) <= 128 && strings.Trim(r.ServiceIDs[0], "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.") == "" &&
@@ -71,7 +78,9 @@ func (a *App) prepareDurableNodeApply(ctx context.Context, r serviceControlJobRe
 	a.nodeReviews.mu.Lock()
 	review, ok := a.nodeReviews.reviews[token]
 	a.nodeReviews.mu.Unlock()
-	if !ok || review.owner != owner || review.NodeID != r.NodeIDs[0] || review.ServiceID != r.ServiceIDs[0] || review.Revision != *r.ExpectedRevision || review.Generation != r.NodeApply.Generation || review.Digest != r.NodeApply.Digest || !validJobHash(review.intentHash) || !time.Now().Before(review.ExpiresAt) {
+	engine, engineErr := nodeCheckEngine(r.NodeApply.Engine)
+	reviewEngine, reviewEngineErr := nodeCheckEngine(review.Engine)
+	if engineErr != nil || reviewEngineErr != nil || !ok || reviewEngine != engine || review.owner != owner || review.NodeID != r.NodeIDs[0] || review.ServiceID != r.ServiceIDs[0] || review.Revision != *r.ExpectedRevision || review.Generation != r.NodeApply.Generation || review.Digest != r.NodeApply.Digest || !validJobHash(review.intentHash) || !time.Now().Before(review.ExpiresAt) {
 		return nil, "", errNodeJobReview
 	}
 	return &durableNodeReview{NetworkProfile: review.NetworkProfile, ExpiresAt: review.ExpiresAt, ScopeSelection: review.ScopeSelection, Sources: slices.Clone(review.scopeSources)}, review.intentHash, nil
@@ -102,7 +111,7 @@ func (a *App) runDurableNodeApply(ctx context.Context, r serviceControlJobReques
 	if cfg.Revision != *r.ExpectedRevision || len(services) != 1 || durableServiceIntentHash(cfg, services) != r.intentHash {
 		return serviceRuntimeOutcome{Code: "NODE_REVIEW_CHANGED"}, nil
 	}
-	return a.executeNodeRoute(ctx, nodeRouteReview{Revision: *r.ExpectedRevision, Generation: r.NodeApply.Generation,
+	return a.executeNodeRoute(ctx, nodeRouteReview{Engine: r.NodeApply.Engine, Revision: *r.ExpectedRevision, Generation: r.NodeApply.Generation,
 		NodeID: r.NodeIDs[0], ServiceID: r.ServiceIDs[0], Digest: r.NodeApply.Digest,
 		NetworkProfile: saved.NetworkProfile, ExpiresAt: saved.ExpiresAt, ScopeSelection: saved.ScopeSelection, scopeSources: slices.Clone(saved.Sources)}), nil
 }

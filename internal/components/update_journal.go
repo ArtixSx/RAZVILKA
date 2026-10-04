@@ -20,7 +20,7 @@ import (
 
 // ComponentUpdateSchema must also be understood by a replacement application
 // binary before it is allowed to inherit an unfinished component transaction.
-const ComponentUpdateSchema = 1
+const ComponentUpdateSchema = 2
 
 var (
 	ErrUpdatePending         = errors.New("component update requires matching recovery")
@@ -41,6 +41,7 @@ const (
 	UpdateRestoreAfter      = "rollback-config-after"
 	UpdateAwaitingRollback  = "awaiting-rollback-acceptance"
 	UpdateAccepted          = "accepted"
+	UpdateAcceptedIdle      = "accepted-installed-idle"
 	UpdateRolledBack        = "rolled-back"
 	UpdateAbandoned         = "abandoned"
 )
@@ -67,10 +68,13 @@ type journalConfig struct {
 
 type updateJournal struct {
 	ManagedUpdateState
-	Package       string          `json:"package"`
-	PackageFile   string          `json:"package_file"`
-	PackageSHA256 string          `json:"package_sha256"`
-	Configs       []journalConfig `json:"configs"`
+	Package            string          `json:"package"`
+	PackageFile        string          `json:"package_file"`
+	PackageSHA256      string          `json:"package_sha256"`
+	Configs            []journalConfig `json:"configs"`
+	CandidateSnapshot  bool            `json:"candidate_snapshot,omitempty"`
+	CandidateConfigs   []journalConfig `json:"candidate_configs,omitempty"`
+	SupervisionVersion int             `json:"supervision_version,omitempty"`
 }
 
 type updateTransaction struct {
@@ -164,21 +168,21 @@ func readUpdateJournal(root *ownedfs.Root) (updateJournal, bool, error) {
 }
 
 func updateTerminal(phase string) bool {
-	return phase == UpdateAccepted || phase == UpdateRolledBack || phase == UpdateAbandoned
+	return phase == UpdateAccepted || phase == UpdateAcceptedIdle || phase == UpdateRolledBack || phase == UpdateAbandoned
 }
 
 func validateUpdateJournal(doc updateJournal) error {
 	spec, known := lookup(doc.Component)
 	_, idErr := hex.DecodeString(doc.TransactionID)
 	_, packageErr := hex.DecodeString(doc.PackageSHA256)
-	if doc.SchemaVersion != ComponentUpdateSchema || len(doc.TransactionID) != 32 || idErr != nil || !known || !ManagedUpdateSupported(doc.Component) || spec.Package != doc.Package || len(doc.PackageSHA256) != 64 || packageErr != nil || doc.BeforeVersion == "" || len(doc.Configs) > maxConffiles {
+	if (doc.SchemaVersion != 1 && doc.SchemaVersion != ComponentUpdateSchema) || len(doc.TransactionID) != 32 || idErr != nil || !known || !ManagedUpdateSupported(doc.Component) || spec.Package != doc.Package || len(doc.PackageSHA256) != 64 || packageErr != nil || doc.BeforeVersion == "" || len(doc.Configs) > maxConffiles {
 		return errors.New("unsupported or invalid component update journal")
 	}
 	if filepath.Base(doc.PackageFile) != doc.PackageFile || !strings.HasPrefix(doc.PackageFile, spec.Package+"_"+doc.BeforeVersion+"_") || !strings.HasSuffix(doc.PackageFile, ".ipk") || strings.ContainsAny(doc.BeforeVersion, "/\\") {
 		return errors.New("invalid component rollback package identity")
 	}
 	switch doc.Phase {
-	case UpdatePrepared, UpdateStarted, UpdateInstalled, UpdateAwaitingLive, UpdateRestoreBefore, UpdateRollbackReady, UpdateRollbackStarted, UpdateRollbackInstalled, UpdateRestoreAfter, UpdateAwaitingRollback, UpdateAccepted, UpdateRolledBack, UpdateAbandoned:
+	case UpdatePrepared, UpdateStarted, UpdateInstalled, UpdateAwaitingLive, UpdateRestoreBefore, UpdateRollbackReady, UpdateRollbackStarted, UpdateRollbackInstalled, UpdateRestoreAfter, UpdateAwaitingRollback, UpdateAccepted, UpdateAcceptedIdle, UpdateRolledBack, UpdateAbandoned:
 	default:
 		return errors.New("unknown component update phase")
 	}
@@ -200,6 +204,35 @@ func validateUpdateJournal(doc updateJournal) error {
 			}
 		} else if conf.Blob != "" || conf.SHA256 != "" || conf.Mode != 0 {
 			return errors.New("invalid absent component configuration")
+		}
+	}
+	if doc.SupervisionVersion != 0 && doc.SupervisionVersion != 1 {
+		return errors.New("unsupported package supervision")
+	}
+	if doc.SchemaVersion == 1 && (doc.SupervisionVersion != 0 || doc.CandidateSnapshot || len(doc.CandidateConfigs) != 0 || doc.Phase == UpdateAcceptedIdle) {
+		return errors.New("component journal features require schema 2")
+	}
+	if !doc.CandidateSnapshot && len(doc.CandidateConfigs) != 0 {
+		return errors.New("uncommitted candidate configuration snapshot")
+	}
+	if len(doc.CandidateConfigs) > maxConffiles {
+		return errors.New("too many candidate configuration files")
+	}
+	seen = map[string]bool{}
+	for i, conf := range doc.CandidateConfigs {
+		if !filepath.IsAbs(conf.Path) || filepath.Clean(conf.Path) != conf.Path || seen[conf.Path] || conf.Mode & ^uint32(0777) != 0 {
+			return errors.New("invalid candidate configuration snapshot")
+		}
+		seen[conf.Path] = true
+		if conf.Exists {
+			if conf.Blob != fmt.Sprintf("candidate-config-%02d", i) || len(conf.SHA256) != 64 {
+				return errors.New("invalid candidate configuration blob")
+			}
+			if _, err := hex.DecodeString(conf.SHA256); err != nil {
+				return err
+			}
+		} else if conf.Blob != "" || conf.SHA256 != "" || conf.Mode != 0 {
+			return errors.New("invalid absent candidate configuration")
 		}
 	}
 	return nil
@@ -265,6 +298,9 @@ func (tx *updateTransaction) prepare(spec Spec, before, rollback string, images 
 	}
 	id := hex.EncodeToString(nonce[:])
 	tx.doc = updateJournal{ManagedUpdateState: ManagedUpdateState{SchemaVersion: ComponentUpdateSchema, TransactionID: id, Component: spec.ID, BeforeVersion: before}, Package: spec.Package, PackageFile: filepath.Base(rollback)}
+	if _, ok := tx.manager.Runner.(supervisedPackageRunner); ok {
+		tx.doc.SupervisionVersion = 1
+	}
 	if err := tx.root.MkdirAll(id, 0o700); err != nil {
 		return err
 	}

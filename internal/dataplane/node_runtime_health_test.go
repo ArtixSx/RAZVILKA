@@ -88,6 +88,7 @@ func TestCommittedNodeHealthUsesRefreshedLivePolicyInsteadOfStagedSnapshot(t *te
 	a.EngineBin, a.SidecarBin, a.IP = "sing-box", "sing-box", "ip"
 	a.IPTables, a.IP6Tables = "iptables", "ip6tables"
 	a.FreshProfile = m.FreshProfile
+	a.bootIdentity = func() (string, error) { return "node-health-test-boot", nil }
 	a.SOCKSProbe = func(context.Context, string) error { return nil }
 	a.Probe = func(context.Context, string) error { return nil }
 	a.ServiceIPProbe = func(context.Context, string, string, netip.Addr) error { return nil }

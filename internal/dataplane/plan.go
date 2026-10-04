@@ -15,6 +15,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/routekind"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
@@ -544,7 +545,7 @@ func (p RoutePlan) RequiresNetworkProof() bool { return routesRequireNetworkProo
 func routesRequireNetworkProof(routes []Route) bool {
 	for _, route := range routes {
 		for _, id := range []string{route.Selected, route.Resolved} {
-			if strings.HasPrefix(id, "sing-box:node-") || strings.HasPrefix(id, "sing-box:group-") {
+			if routekind.HasNodeRoutePrefix(id) {
 				return true
 			}
 		}

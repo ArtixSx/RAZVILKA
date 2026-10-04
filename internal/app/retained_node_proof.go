@@ -41,7 +41,11 @@ func (a *App) buildPlanReprovingRetained(ctx context.Context, cfg config.Config,
 }
 
 func (a *App) reproveRetainedNode(ctx context.Context, dependency *routePlanDependencyError, profile string) error {
-	key := dependency.NodeID + "|" + dependency.ServiceID + "|" + profile
+	engine, engineErr := nodeCheckEngine(dependency.Engine)
+	if engineErr != nil {
+		return nodestore.ErrRouteProof
+	}
+	key := engine + "|" + dependency.NodeID + "|" + dependency.ServiceID + "|" + profile
 	now := time.Now()
 	a.retainedProofs.mu.Lock()
 	failedAt, failed := a.retainedProofs.failed[key]
@@ -53,7 +57,7 @@ func (a *App) reproveRetainedNode(ctx context.Context, dependency *routePlanDepe
 	if !ok {
 		return nodestore.ErrRouteProof
 	}
-	result, _, err := a.checkAndRecordNode(ctx, dependency.NodeID, service, profile, 0)
+	result, _, err := a.checkAndRecordNodeForEngine(ctx, engine, dependency.NodeID, service, profile, 0)
 	if err == nil && !result.Available {
 		err = nodestore.ErrRouteProof
 	}

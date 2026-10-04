@@ -110,6 +110,10 @@ func main() {
 	componentInit := flag.String("component-init", getenv("RAZVILKA_COMPONENT_INIT", ""), "explicit absolute component init directory (default: /opt/etc/init.d)")
 	componentRepo := flag.String("component-repo", getenv("RAZVILKA_COMPONENT_REPO", ""), "explicit absolute component repository directory (default: /opt/etc/opkg)")
 	componentInfo := flag.String("component-info", getenv("RAZVILKA_COMPONENT_INFO", ""), "explicit absolute component conffile metadata directory (default: /opt/lib/opkg/info)")
+	selfInstallation := flag.String("self-update-installation", getenv("RAZVILKA_SELF_UPDATE_INSTALLATION", ""), "explicit absolute application installation root (default: /opt)")
+	selfFiles := flag.String("self-update-file-state", getenv("RAZVILKA_SELF_UPDATE_FILE_STATE", ""), "explicit absolute retained application file journal directory")
+	selfHelper := flag.String("self-update-helper-state", getenv("RAZVILKA_SELF_UPDATE_HELPER_STATE", ""), "explicit absolute retained application helper receipt directory")
+	selfControl := flag.String("self-update-control-state", getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE", ""), "fixed absolute control authority root outside rollback images")
 	z2kRoot := flag.String("z2k-root", defaultZ2KRoot, "read-only z2k migration source root")
 	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
 	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
@@ -129,11 +133,36 @@ func main() {
 	closeRollbackDigest := flag.String("close-rollback-digest", "", "reviewed digest required with close-rollback-plan")
 	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
+	nodeHistoryReadVersion := flag.Bool("node-history-read-version", false, "print the supported exact node history read capability and exit")
+	checkNodeHistory := flag.Bool("check-node-history-state", false, "check retained node history compatibility without changing files and exit")
+	nodeHistoryConfigRoot := flag.String("node-history-config-root", "/opt/etc/razvilka", "absolute trusted retained node history config root")
+	nodeHistoryStateRoot := flag.String("node-history-state-root", "/opt/var/lib/razvilka", "absolute trusted retained node history state root")
 	componentUpdateSchema := flag.Bool("component-update-schema", false, "print the supported durable component update schema and exit")
+	selfUpdateSchema := flag.Bool("self-update-schema", false, "print the supported application replacement capability and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
 	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
 	flag.Parse()
+	if *nodeHistoryReadVersion {
+		fmt.Println(nodestore.ExactHistoryReadVersion)
+		return
+	}
+	if *checkNodeHistory {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if checkNodeHistoryState(ctx, *nodeHistoryConfigRoot, *nodeHistoryStateRoot, nodestore.ExactHistoryReadVersion) != nil {
+			log.Print(errNodeHistoryState)
+			os.Exit(1)
+		}
+		fmt.Println(`{"ok":true}`)
+		return
+	}
+	if *selfUpdateSchema {
+		// One means the entire supervised replacement consumer is available.
+		// Retained-journal readers alone are not that capability.
+		fmt.Println("0")
+		return
+	}
 	if *componentUpdateSchema {
 		fmt.Println(components.ComponentUpdateSchema)
 		return
@@ -220,6 +249,36 @@ func main() {
 		}
 		fmt.Printf("healthy: %s\n", version)
 		return
+	}
+	selfFileState, err := configuredSelfUpdateFiles(*selfInstallation, *selfFiles, *selfHelper, *selfControl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	selfFileState.RecoveryGuard = func(c context.Context) error {
+		return independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath)
+	}
+	if selfFileState.Pending() {
+		// Observe retained file/helper journals before permission repairs,
+		// private restore, default creation or any runtime recovery can write.
+		if modes != 0 {
+			log.Fatal("self update recovery required; preserve retained journals and application files")
+		}
+		job := selfFileState.Helper.Snapshot()
+		if selfFileState.StartupAllowed(context.Background(), job.ID, job.HelperPID) != nil {
+			manager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+			if err != nil {
+				log.Fatal(err)
+			}
+			a, err := selfUpdateRecoveryApp(selfFileState, *cfgPath, *tokenPath, *credentialsPath, manager, *dataplaneStatePath)
+			if err != nil {
+				log.Fatal("self update recovery bootstrap unavailable; files preserved: ", err)
+			}
+			log.Print("self update requires matching recovery; automatic startup writes are paused")
+			if err := serveSelfUpdateRecovery(a, *listen); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
 	}
 	// Older releases could leave per-engine draft directories at 0755. Repair
 	// only the fixed RAZVILKA staging layout before opening recovery targets.
@@ -350,7 +409,11 @@ func main() {
 	if legacyOutcome != "clean" || privateOutcome != "clean" {
 		log.Print("private draft boot recovery completed; live profiles and routes were not changed")
 	}
-	store, err := config.Load(*cfgPath)
+	loadConfig := config.Load
+	if selfFileState.Pending() {
+		loadConfig = config.LoadExisting
+	}
+	store, err := loadConfig(*cfgPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -505,7 +568,10 @@ func main() {
 			log.Print("Node-scoped Sing-box routes disabled: ", err)
 		}
 	}
-	nodeChecker := dataplane.NewExactNodeChecker(filepath.Join(*dataplaneStatePath, "node-check"))
+	nodeDispatch, nodeViews, err := configuredNodeCheckers(*dataplaneStatePath)
+	if err != nil {
+		log.Fatal("exact node dispatcher configuration: ", err)
+	}
 	componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
 	if err != nil {
 		log.Fatal(err)
@@ -525,7 +591,12 @@ func main() {
 		"cloudflare": updateCloudflarePath, "nodes": updateNodePath, "stage": *stagePath, "backups": *backupPath, "warp": *warpStatePath, "dataplane": *dataplaneStatePath,
 		"dns": *dnsStatePath,
 	}})
+	a.SelfUpdate.Directory = selfFileState.Helper.Directory
+	selfFileState.Helper = a.SelfUpdate
+	a.SelfUpdateFiles = selfFileState
 	a.Nodes = nodeStore
+	historyAdmission := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)
+	a.NodeHistoryWriteGuard = historyAdmission.CheckWrite
 	if nodeStore != nil {
 		feedRoot, feedPathErr := filepath.Abs(filepath.Join(filepath.Dir(*cfgPath), "subscriptions-private"))
 		if err := os.MkdirAll(feedRoot, 0700); err == nil && feedPathErr == nil {
@@ -539,7 +610,8 @@ func main() {
 			log.Print("Private subscriptions disabled: directory unavailable")
 		}
 	}
-	a.NodeChecker = nodeChecker
+	a.NodeChecker = nodeViews["sing-box"]
+	a.NodeCheckers = nodeViews
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		log.Fatal("component recovery admission could not be initialized")
 	}
@@ -552,14 +624,18 @@ func main() {
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
 	a.StartSelfUpdate(runtimeContext)
-	nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
-	if err := nodeChecker.Recover(nodeRecoveryContext); err != nil {
-		log.Print("Exact node checker disabled: temporary runtime cleanup could not be confirmed")
-		a.NodeChecker = nil
+	selfRecoveryPending := a.PendingSelfUpdateRecovery()
+	if !selfRecoveryPending {
+		nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
+		if err := nodeDispatch.Recover(nodeRecoveryContext); err != nil {
+			// Each concrete checker preserves its own poison fence. Recover
+			// attempts both; a failed engine never aliases the other engine.
+			log.Print("Exact node checker recovery requires review: temporary runtime cleanup could not be confirmed")
+		}
+		cancelNodeRecovery()
 	}
-	cancelNodeRecovery()
 	componentRecoveryPending := a.PendingComponentRecovery()
-	if !componentRecoveryPending {
+	if !componentRecoveryPending && !selfRecoveryPending {
 		usqueRecoveryContext, cancelUSQUERecovery := context.WithTimeout(runtimeContext, 30*time.Second)
 		usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
 		cancelUSQUERecovery()
@@ -574,7 +650,10 @@ func main() {
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
 	var recovery dataplane.Recovery
 	var recoveryErr error
-	if componentRecoveryPending {
+	if selfRecoveryPending {
+		recovery.State = "self-update-recovery-required"
+		log.Print("Unfinished application update: automatic network recovery is paused")
+	} else if componentRecoveryPending {
 		recovery.State = "component-recovery-required"
 		log.Print("Unfinished component update: automatic network recovery is paused; the panel and explicit Stop remain available")
 	} else {
@@ -674,11 +753,30 @@ func runCommand(args []string) (bool, int) {
 	}
 	command := strings.ToLower(strings.TrimSpace(args[0]))
 	switch command {
+	case "component-package-supervisor":
+		if len(args) != 4 {
+			return true, 2
+		}
+		if f, err := productionSelfUpdateFiles(); err != nil || f.Pending() {
+			return true, 3
+		}
+		return true, components.RunPackageSupervisor(args[1], args[2], args[3])
+	case "component-package-supervision-probe":
+		if len(args) != 1 {
+			return true, 2
+		}
+		if err := components.ProbePackageSupervision(); err != nil {
+			fmt.Fprintln(os.Stderr, "package supervision unavailable")
+			return true, 3
+		}
+		return true, writeCommandJSON(map[string]any{"package_supervision": 1})
 	case "self-update-helper":
 		if len(args) != 2 {
 			return true, 2
 		}
-		return true, updatecheck.RunInstallerHelper(args[1])
+		return true, runSelfUpdateFileHelper(args[1])
+	case "self-update-files":
+		return true, runSelfUpdateFileCommand(args[1:])
 	case "version", "v":
 		fmt.Println(app.Version)
 		return true, 0
@@ -715,6 +813,9 @@ func runCommand(args []string) (bool, int) {
 			fmt.Fprintln(os.Stderr, "usage: razvilka components [--refresh]")
 			return true, 2
 		}
+		if refresh && selfUpdatePendingFromEnv() {
+			return true, 3
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		manager, err := componentsFromEnv()
@@ -737,6 +838,9 @@ func runCommand(args []string) (bool, int) {
 		if len(args) > 5 || (len(args) == 5 && !refresh) {
 			fmt.Fprintln(os.Stderr, "usage: razvilka component plan <id> <install|update|remove> [--refresh]")
 			return true, 2
+		}
+		if refresh && selfUpdatePendingFromEnv() {
+			return true, 3
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -1184,7 +1288,7 @@ func checkHealthIdentity(ctx context.Context, rawURL string, expectedPID int, re
 		}
 		// A private restore fence is settled by the next start, so it stays an
 		// ordinary failure. A journal fence survives restarts: report it apart.
-		if resp.StatusCode == http.StatusServiceUnavailable && (status.Code == "DATAPLANE_RECOVERY_REQUIRED" || status.Code == "COMPONENT_RECOVERY_REQUIRED") && status.NotStarted && status.RecoveryRequired && status.ProcessID > 0 {
+		if resp.StatusCode == http.StatusServiceUnavailable && (status.Code == "DATAPLANE_RECOVERY_REQUIRED" || status.Code == "COMPONENT_RECOVERY_REQUIRED" || status.Code == "SELF_UPDATE_RECOVERY_REQUIRED") && status.NotStarted && status.RecoveryRequired && status.ProcessID > 0 {
 			return "", errHealthRecovery
 		}
 		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)

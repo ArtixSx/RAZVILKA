@@ -53,7 +53,7 @@ func checkSingBoxRollback(m *Manager, r *singBoxPackageRunner) func(context.Cont
 
 func TestManagedSingBoxRollbackDisablesReinstalledPackageAutostart(t *testing.T) {
 	m, r := managedSingBoxFixture(t)
-	_, err := m.ManagedUpdate(context.Background(), "sing-box", checkSingBoxRollback(m, r))
+	_, err := m.ManagedUpdateGuardedWithRollback(context.Background(), "sing-box", func(context.Context) error { return errors.New("candidate rejected") }, nil, checkSingBoxRollback(m, r))
 	if !errors.Is(err, ErrRollbackVerified) {
 		t.Fatalf("rollback init not verified: %v", err)
 	}

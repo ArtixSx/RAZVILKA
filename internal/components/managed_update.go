@@ -213,7 +213,8 @@ func restoreConffiles(images []conffileImage) error {
 // check runs after the package changed (for NFQWS2: configuration kept, init
 // adopted, service and routes healthy). If the upgrade or the check fails,
 // the package configuration is restored and the cached previous version is
-// reinstalled, then the check runs again for the restored state.
+// reinstalled. Candidate evidence is never reused as rollback acceptance;
+// the default path remains pending until matching independent recovery.
 func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(context.Context) error) (Result, error) {
 	return m.ManagedUpdateGuarded(ctx, id, check, nil)
 }
@@ -223,6 +224,13 @@ func (m *Manager) ManagedUpdate(ctx context.Context, id string, check func(conte
 // stages the update; RecoverManagedUpdate("accept-live") accepts actual live
 // runtime later. Until then the old package/configuration snapshot is retained.
 func (m *Manager) ManagedUpdateGuarded(ctx context.Context, id string, check, guard func(context.Context) error) (Result, error) {
+	return m.ManagedUpdateGuardedWithRollback(ctx, id, check, guard, nil)
+}
+
+// ManagedUpdateGuardedWithRollback optionally supplies separate trusted live
+// or inactive evidence for the old runtime. It must not be a candidate probe.
+// Without it, known file/package rollback stops at awaiting-rollback-acceptance.
+func (m *Manager) ManagedUpdateGuardedWithRollback(ctx context.Context, id string, check, guard, rollbackAcceptance func(context.Context) error) (Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	spec, ok := lookup(id)
@@ -281,6 +289,9 @@ func (m *Manager) ManagedUpdateGuarded(ctx context.Context, id string, check, gu
 			if versions[spec.Package] != tx.doc.AfterVersion {
 				return result, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: errors.New("package version changed during candidate check")}
 			}
+			if err := tx.captureCandidateConfig(spec); err != nil {
+				return result, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: err}
+			}
 			if err := tx.phase(UpdateAwaitingLive); err != nil {
 				return result, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: err}
 			}
@@ -298,7 +309,7 @@ func (m *Manager) ManagedUpdateGuarded(ctx context.Context, id string, check, gu
 	if readErr != nil || persisted.Phase != UpdateInstalled {
 		return Result{Component: id, Action: "update"}, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: errors.Join(cause, readErr, ErrUpdatePending)}
 	}
-	rollbackResult, rollbackErr := tx.rollback(ctx, guard, check)
+	rollbackResult, rollbackErr := tx.rollback(ctx, guard, rollbackAcceptance)
 	if rollbackErr != nil {
 		return rollbackResult, &UpdateFailure{Outcome: ErrRollbackUnconfirmed, Version: before, Cause: errors.Join(cause, rollbackErr)}
 	}

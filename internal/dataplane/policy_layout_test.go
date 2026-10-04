@@ -26,6 +26,9 @@ func (f *precedenceFixture) Run(ctx context.Context, _ string, args ...string) (
 	}
 	family := 4
 	commandArgs := args
+	if len(commandArgs) > 0 && commandArgs[0] == "-N" {
+		commandArgs = commandArgs[1:]
+	}
 	if len(commandArgs) > 0 && commandArgs[0] == "-6" {
 		family = 6
 		commandArgs = commandArgs[1:]

@@ -461,7 +461,7 @@ func (r *policyAdditionRunner) remove(ctx context.Context, index int, args []str
 	if s.doc.Steps[index].State != "added" {
 		return nil, ErrPolicyAdditionUnknown
 	}
-	if index < 2 && s.hasUnknownRules() {
+	if index < 2 && s.hasUnsettledRules() {
 		return nil, ErrPolicyAdditionUnknown
 	}
 	present, err := policyAdditionPresence(ctx, r.base, r.ip, s.state, index)
@@ -502,9 +502,9 @@ func (r *policyAdditionRunner) remove(ctx context.Context, index int, args []str
 	return out, s.fault("removed", index)
 }
 
-func (s *policyAdditionSession) hasUnknownRules() bool {
+func (s *policyAdditionSession) hasUnsettledRules() bool {
 	for _, step := range s.doc.Steps[2:] {
-		if step.State == "intent" || step.State == "cleanup-intent" {
+		if step.State == "added" || step.State == "intent" || step.State == "cleanup-intent" {
 			return true
 		}
 	}
@@ -581,8 +581,8 @@ func removePolicyAddition(ctx context.Context, runner NFQWS2Runner, ip string, s
 		if s.doc.Steps[i].State != "added" {
 			continue
 		}
-		if i < 2 && s.hasUnknownRules() {
-			continue // Never open a DIRECT fallback under an unknown selector.
+		if i < 2 && s.hasUnsettledRules() {
+			continue // Never open a DIRECT fallback under an unsettled selector.
 		}
 		args := s.doc.Steps[i].Delete
 		if i < 2 {
@@ -652,10 +652,10 @@ func promotePolicyAddition(ctx context.Context, state PolicyState, source, desti
 		if err := d.load(ctx); err != nil {
 			return err
 		}
-		if d.doc.ID == s.doc.ID {
+		if d.doc.ID == s.doc.ID && d.status().Complete {
 			return nil
 		}
-		return ErrPolicyAdditionReceipt
+		return ErrPolicyAdditionUnknown
 	}
 	if !s.status().Complete {
 		return ErrPolicyAdditionUnknown

@@ -45,12 +45,13 @@ var Pools = []Pool{
 }
 
 type Validation struct {
-	OK        bool     `json:"ok"`
-	Native    bool     `json:"native"`
-	Code      string   `json:"code"`
-	Output    string   `json:"output"`
-	Arguments []string `json:"arguments,omitempty"`
-	CheckedAt string   `json:"checked_at,omitempty"`
+	LuaChecked bool     `json:"lua_checked,omitempty"`
+	OK         bool     `json:"ok"`
+	Native     bool     `json:"native"`
+	Code       string   `json:"code"`
+	Output     string   `json:"output"`
+	Arguments  []string `json:"arguments,omitempty"`
+	CheckedAt  string   `json:"checked_at,omitempty"`
 }
 
 type Candidate struct {
@@ -78,6 +79,9 @@ type StageEvidence struct {
 }
 
 type Evidence struct {
+	// Outcome distinguishes service rejection from an unavailable local checker.
+	Outcome        string          `json:"outcome,omitempty"`
+	Level          string          `json:"level,omitempty"`
 	CandidateID    string          `json:"candidate_id"`
 	ServiceID      string          `json:"service_id"`
 	Protocol       string          `json:"protocol"`
@@ -95,22 +99,23 @@ type Evidence struct {
 }
 
 type Summary struct {
-	CandidateID    string  `json:"candidate_id"`
-	ServiceID      string  `json:"service_id"`
-	Protocol       string  `json:"protocol"`
-	IPFamily       string  `json:"ip_family"`
-	Passes         int     `json:"passes"`
-	Failures       int     `json:"failures"`
-	Confirmed      int     `json:"confirmed"`
-	FreshPasses    int     `json:"fresh_passes"`
-	FreshFailures  int     `json:"fresh_failures"`
-	SuccessRate    float64 `json:"success_rate"`
-	Confidence     float64 `json:"confidence"`
-	AverageLatency float64 `json:"average_latency_ms"`
-	AverageTTFB    float64 `json:"average_ttfb_ms"`
-	LastCheckedAt  string  `json:"last_checked_at,omitempty"`
-	Eligible       bool    `json:"eligible"`
-	Reason         string  `json:"reason"`
+	Coverage       []Coverage `json:"coverage,omitempty"`
+	CandidateID    string     `json:"candidate_id"`
+	ServiceID      string     `json:"service_id"`
+	Protocol       string     `json:"protocol"`
+	IPFamily       string     `json:"ip_family"`
+	Passes         int        `json:"passes"`
+	Failures       int        `json:"failures"`
+	Confirmed      int        `json:"confirmed"`
+	FreshPasses    int        `json:"fresh_passes"`
+	FreshFailures  int        `json:"fresh_failures"`
+	SuccessRate    float64    `json:"success_rate"`
+	Confidence     float64    `json:"confidence"`
+	AverageLatency float64    `json:"average_latency_ms"`
+	AverageTTFB    float64    `json:"average_ttfb_ms"`
+	LastCheckedAt  string     `json:"last_checked_at,omitempty"`
+	Eligible       bool       `json:"eligible"`
+	Reason         string     `json:"reason"`
 }
 
 type Selection struct {
@@ -275,6 +280,9 @@ func (m *Manager) Probe(ctx context.Context, id string, target ProbeTarget) (Evi
 	if err != nil {
 		return evidence, err
 	}
+	if err := probeContext.Err(); err != nil {
+		return evidence, err
+	}
 	if len(evidence.Stages) == 0 {
 		return Evidence{}, errors.New("executor returned no typed evidence")
 	}
@@ -300,7 +308,7 @@ func (m *Manager) Snapshot() Snapshot {
 	})
 	now := m.now()
 	summaries := summarize(m.state, now)
-	selections := selectionsWithHealth(m.state, summaries)
+	selections := selectionsWithHealth(m.state, summaries, now)
 	sort.Slice(selections, func(i, j int) bool {
 		return selectionKey(selections[i].ServiceID, selections[i].Protocol, selections[i].IPFamily) < selectionKey(selections[j].ServiceID, selections[j].Protocol, selections[j].IPFamily)
 	})
@@ -457,6 +465,13 @@ func (m *Manager) Record(evidence Evidence) error {
 	if evidence.CheckedAt == "" {
 		evidence.CheckedAt = m.now().UTC().Format(time.RFC3339)
 	}
+	checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
+	if err != nil || checked.After(m.now()) {
+		return errors.New("evidence timestamp is invalid or in the future")
+	}
+	if err := normalizeEvidence(&evidence); err != nil {
+		return err
+	}
 	if evidence.Success && !evidence.RouteConfirmed {
 		return errors.New("successful evidence must confirm the tested route")
 	}
@@ -502,6 +517,7 @@ func (m *Manager) ResetSelection(serviceID, protocol, family string) error {
 func summarize(state State, now time.Time) []Summary {
 	type aggregate struct {
 		s               Summary
+		coverage        map[string]time.Time
 		latency         int64
 		ttfb            int64
 		latest          time.Time
@@ -514,8 +530,19 @@ func summarize(state State, now time.Time) []Summary {
 		key := evidence.CandidateID + "|" + selectionKey(evidence.ServiceID, evidence.Protocol, evidence.IPFamily)
 		group := groups[key]
 		if group == nil {
-			group = &aggregate{s: Summary{CandidateID: evidence.CandidateID, ServiceID: evidence.ServiceID, Protocol: evidence.Protocol, IPFamily: evidence.IPFamily}}
+			group = &aggregate{s: Summary{CandidateID: evidence.CandidateID, ServiceID: evidence.ServiceID, Protocol: evidence.Protocol, IPFamily: evidence.IPFamily}, coverage: map[string]time.Time{}}
 			groups[key] = group
+		}
+		checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
+		if err != nil || checked.After(now) || normalizeEvidence(&evidence) != nil || !reputationEvidence(evidence) {
+			continue
+		}
+		if evidence.Success {
+			for _, level := range evidenceLevels(evidence) {
+				if checked.After(group.coverage[level]) {
+					group.coverage[level] = checked
+				}
+			}
 		}
 		if evidence.Success {
 			group.s.Passes++
@@ -526,10 +553,6 @@ func summarize(state State, now time.Time) []Summary {
 		}
 		if evidence.RouteConfirmed {
 			group.s.Confirmed++
-		}
-		checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
-		if err != nil {
-			continue
 		}
 		age := now.Sub(checked)
 		if age < 0 {
@@ -556,6 +579,11 @@ func summarize(state State, now time.Time) []Summary {
 	}
 	out := make([]Summary, 0, len(groups))
 	for _, group := range groups {
+		for _, level := range scenarioLevels {
+			if checked := group.coverage[level]; !checked.IsZero() {
+				group.s.Coverage = append(group.s.Coverage, Coverage{Level: level, LastPassedAt: checked.UTC().Format(time.RFC3339), Fresh: now.Sub(checked) <= EvidenceFreshness})
+			}
+		}
 		total := group.s.Passes + group.s.Failures
 		if total > 0 {
 			group.s.SuccessRate = float64(group.s.Passes) / float64(total)
@@ -589,7 +617,7 @@ func summarize(state State, now time.Time) []Summary {
 	return out
 }
 
-func selectionsWithHealth(state State, summaries []Summary) []Selection {
+func selectionsWithHealth(state State, summaries []Summary, now time.Time) []Selection {
 	byCandidate := make(map[string]Summary, len(summaries))
 	for _, summary := range summaries {
 		byCandidate[summary.CandidateID+"|"+selectionKey(summary.ServiceID, summary.Protocol, summary.IPFamily)] = summary
@@ -599,7 +627,7 @@ func selectionsWithHealth(state State, summaries []Summary) []Selection {
 		summary, ok := byCandidate[selection.CandidateID+"|"+key]
 		selection.Healthy = ok && summary.Eligible
 		selection.Confidence = summary.Confidence
-		selection.ConsecutiveFailures = consecutiveFailures(state.Evidence, selection)
+		selection.ConsecutiveFailures = consecutiveFailures(state.Evidence, selection, now)
 		if ok {
 			selection.Reason = summary.Reason
 		} else {
@@ -620,7 +648,7 @@ func selectionsWithHealth(state State, summaries []Summary) []Selection {
 	return selections
 }
 
-func consecutiveFailures(evidence []Evidence, selection Selection) int {
+func consecutiveFailures(evidence []Evidence, selection Selection, now time.Time) int {
 	selectedAt, _ := time.Parse(time.RFC3339, selection.SelectedAt)
 	count := 0
 	for index := len(evidence) - 1; index >= 0; index-- {
@@ -628,7 +656,10 @@ func consecutiveFailures(evidence []Evidence, selection Selection) int {
 		if item.CandidateID != selection.CandidateID || selectionKey(item.ServiceID, item.Protocol, item.IPFamily) != selectionKey(selection.ServiceID, selection.Protocol, selection.IPFamily) {
 			continue
 		}
-		checked, _ := time.Parse(time.RFC3339, item.CheckedAt)
+		checked, err := time.Parse(time.RFC3339, item.CheckedAt)
+		if err != nil || checked.After(now) || now.Sub(checked) > EvidenceFreshness || normalizeEvidence(&item) != nil || !reputationEvidence(item) {
+			break // uncertainty cannot bridge a consecutive failure quorum
+		}
 		if !selectedAt.IsZero() && !checked.IsZero() && checked.Before(selectedAt) {
 			break
 		}
@@ -641,6 +672,9 @@ func consecutiveFailures(evidence []Evidence, selection Selection) int {
 }
 
 func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
+	if !reputationEvidence(evidence) {
+		return
+	}
 	key := selectionKey(evidence.ServiceID, evidence.Protocol, evidence.IPFamily)
 	selection, ok := m.state.Selections[key]
 	if !ok || selection.CandidateID != evidence.CandidateID {
@@ -651,7 +685,7 @@ func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
 		m.state.Selections[key] = selection
 		return
 	}
-	if selection.Frozen || consecutiveFailures(m.state.Evidence, selection) < RollbackFailures {
+	if selection.Frozen || consecutiveFailures(m.state.Evidence, selection, m.now()) < RollbackFailures {
 		return
 	}
 	summaries := summarize(m.state, m.now())

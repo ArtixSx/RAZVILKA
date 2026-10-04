@@ -7,7 +7,7 @@ const consoleEngineMeta = {
   'sing-box': {name:'Sing-box',icon:'layers',tone:'violet',subtitle:'Прокси и маршрутизация',description:'Проверенные подключения, профиль движка и резервные группы. Один каталог для всех сервисов.',action:'Подключения',target:'nodes'},
   'xray': {name:'Xray',icon:'route',tone:'blue',subtitle:'Альтернативный прокси-клиент',description:'Редактор профиля и нативная проверка конфигурации перед применением.',action:'Импорт профиля',target:'engineconfig'},
   'wireguard': {name:'WireGuard',icon:'shield',tone:'blue',subtitle:'Свой сервер',description:'Импорт .conf, проверка туннеля и управление маршрутом. Без регистрации Cloudflare.',action:'Настроить профиль',target:'engineconfig'},
-  'amneziawg': {name:'AmneziaWG',icon:'lock',tone:'rose',subtitle:'Туннель к вашему серверу',description:'Совместимость формата, профиль, состояние и проверка маршрута. Версия протокола имеет значение.',action:'Проверить маршрут',target:'testlab'}
+  'amneziawg': {name:'AmneziaWG',icon:'lock',tone:'rose',subtitle:'Туннель к вашему серверу',description:'Проверьте версию протокола и поддержку ядра. Обнаруженная программа сама по себе не подтверждает доступ.',action:'Проверить маршрут',target:'testlab'}
 };
 Object.assign(viewMeta, {
   overview:['Главная','Сервисы, маршруты и состояние вашей сети'],
@@ -39,10 +39,12 @@ function consoleEngineState(id){
  const installedKnown=installed||(!component?.inventory_error&&[component,engine,config].some(e=>typeof e?.installed==='boolean'));
  const installedVersion=installed?(component?.installed_version||component?.runtime_version||engine?.version||''):'';
  const availableVersion=component?.available_version||'';
- return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,observationStale,label:observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке',tone:running&&!observationStale?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
+ const recovery=typeof componentRecoverySummary==='function'?componentRecoverySummary(id):null;
+ return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,observationStale,recovery,label:recovery?.label||(observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке'),tone:!observationStale&&recovery?.tone==='good'?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
 }
 function consoleEngineUpdateState(info){
  const c=info.component,load=state.dataLoad?.components;
+ if(info.recovery)return {kind:'pending',text:info.recovery.detail};
  if(state.componentRefreshRequest)return {kind:'checking',text:'Проверяем каталог обновлений…'};
  if(info.observationStale)return {kind:'failed',text:'Состояние обновляется. Последнее наблюдение: '+consoleDate(state.inventoryObservation?.observedAt)};
  if(c?.inventory_error)return {kind:'failed',text:`Не удалось проверить установку: ${c.inventory_error}. Последние данные сохранены.`};
@@ -62,13 +64,15 @@ function consoleEngineVersionLabel(info){
  return info.installedVersion?`${info.installedVersion}${update.kind==='update'?` → ${info.availableVersion}`:''}`:info.version;
 }
 function consoleNavigate(name,engine){
- if(engine){void openEngineConfiguration(engine).then(()=>{renderConsoleEngine();consoleViewChanged('engineconfig');if(typeof renderInterface==='function')renderInterface();}).catch(error=>showNotice('error',error.message));return;}
+ if(engine){void openEngineConfiguration(engine).then(opened=>{if(!opened)return;renderConsoleEngine();consoleViewChanged('engineconfig');if(typeof renderInterface==='function')renderInterface();}).catch(error=>showNotice('error',error.message));return;}
  setView(name);
  if(name==='providers')renderNodes();
  if(name==='updates')void refreshAppUpdate();
 }
 function consoleViewChanged(name){
+ const drawerFocus=document.body.classList.contains('console-menu-open')&&document.querySelector('.sidebar').contains(document.activeElement);
  document.body.classList.remove('console-menu-open');$('#consoleMenuBackdrop').hidden=true;$('#consoleMenu').setAttribute('aria-expanded','false');consoleDrawerInert();
+ if(drawerFocus)$('#pageTitle').focus({preventScroll:true});
  const engine=name==='engineconfig'?state.selectedEngine:'';
  const hash=engine?`#/engine/${encodeURIComponent(engine)}`:`#/${name}`;
  if(location.hash!==hash){try{history.replaceState(null,'',hash);}catch{}}

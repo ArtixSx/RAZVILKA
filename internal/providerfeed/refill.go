@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,11 +47,12 @@ func (m *Manager) RequestRefillRanked(ctx context.Context, allowed []string, use
 	now := m.now().UTC()
 	seen := map[string]bool{}
 	type candidate struct {
-		id       string
-		due      time.Time
-		attempt  time.Time
-		failures int
-		utility  int
+		id        string
+		due       time.Time
+		attempt   time.Time
+		failures  int
+		utility   int
+		publisher string
 	}
 	var candidates []candidate
 	for _, id := range allowed {
@@ -79,10 +81,35 @@ func (m *Manager) RequestRefillRanked(ctx context.Context, allowed []string, use
 		if s.RetryAfterAt.After(due) {
 			due = s.RetryAfterAt
 		}
-		candidates = append(candidates, candidate{id, due, s.LastAttemptAt, m.storage.doc.Sources[i].Failures, max(0, min(512, useful[id]))})
+		candidates = append(candidates, candidate{id: id, due: due, attempt: s.LastAttemptAt, failures: m.storage.doc.Sources[i].Failures, utility: max(0, min(512, useful[id])), publisher: refillPublisherKey(m.storage.doc.Sources[i])})
 	}
 	if len(candidates) == 0 {
 		return RefillDecision{State: "no-enabled-source"}, nil
+	}
+	// Known publisher collections share one exploration age. More links to the
+	// same approved repository cannot reset that age or multiply its usefulness.
+	// These are scheduling hints, never operator identity or health evidence.
+	type publisher struct {
+		attempt           time.Time
+		utility, failures int
+		ready             bool
+	}
+	publishers := map[string]publisher{}
+	for _, c := range candidates {
+		p := publishers[c.publisher]
+		if c.attempt.After(p.attempt) {
+			p.attempt = c.attempt
+		}
+		if !now.Before(c.due) {
+			// A cooled-down collection can age the publisher, but cannot lend
+			// utility or a lower failure count to a different ready sibling.
+			p.utility = max(p.utility, c.utility)
+			if !p.ready || c.failures < p.failures {
+				p.failures = c.failures
+			}
+			p.ready = true
+		}
+		publishers[c.publisher] = p
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		a, b := candidates[i], candidates[j]
@@ -95,6 +122,33 @@ func (m *Manager) RequestRefillRanked(ctx context.Context, allowed []string, use
 				return a.due.Before(b.due)
 			}
 			return a.id < b.id
+		}
+		pa, pb := publishers[a.publisher], publishers[b.publisher]
+		agedPublisher := func(p publisher) bool {
+			return p.attempt.IsZero() || !now.Before(p.attempt.Add(4*MinRefreshMinutes*time.Minute))
+		}
+		if a.publisher != b.publisher {
+			if agedPublisher(pa) != agedPublisher(pb) {
+				return agedPublisher(pa)
+			}
+			if agedPublisher(pa) {
+				if !pa.attempt.Equal(pb.attempt) {
+					return pa.attempt.Before(pb.attempt)
+				}
+			} else {
+				if pa.failures != pb.failures {
+					return pa.failures < pb.failures
+				}
+				if pa.utility != pb.utility {
+					return pa.utility > pb.utility
+				}
+			}
+			// Complete the publisher order independently of its members, so
+			// within-publisher exploration cannot make the comparator cyclic.
+			if !pa.attempt.Equal(pb.attempt) {
+				return pa.attempt.Before(pb.attempt)
+			}
+			return a.publisher < b.publisher
 		}
 		aged := func(c candidate) bool {
 			return c.attempt.IsZero() || !now.Before(c.attempt.Add(4*MinRefreshMinutes*time.Minute))
@@ -135,6 +189,27 @@ func (m *Manager) RequestRefillRanked(ctx context.Context, allowed []string, use
 		return RefillDecision{}, err
 	}
 	return RefillDecision{State: "queued", SourceID: c.id}, nil
+}
+
+// Group only repository identities from the trusted builtin catalogue. Custom
+// token-bearing URLs are not decoded into publisher/ASN claims and retain
+// independent scheduling. This never enables a builtin outside allowed IDs.
+func refillPublisherKey(s subscription) string {
+	for _, preset := range builtinPresets {
+		if preset.ID != s.Request.PresetID {
+			continue
+		}
+		u, err := url.Parse(preset.URL)
+		if err != nil {
+			break
+		}
+		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if u.Host == "raw.githubusercontent.com" && len(parts) >= 2 {
+			return "builtin-github:" + strings.ToLower(parts[0]+"/"+parts[1])
+		}
+		return "builtin:" + preset.ID
+	}
+	return "source:" + s.ID
 }
 
 func retryAfter(value string, now time.Time) time.Time {

@@ -16,6 +16,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
 type applyReview struct {
@@ -82,7 +83,7 @@ func (a *App) bindApplyReview(ctx context.Context, cfg config.Config, plan datap
 	// Network authority also covers scoped DNS. Only exact registry routes
 	// require node credentials/generation; a DNS-only plan has no node owner.
 	for _, route := range plan.Routes {
-		b.nodes = b.nodes || strings.HasPrefix(route.Resolved, "sing-box:node-")
+		b.nodes = b.nodes || routekind.HasNodeRoutePrefix(route.Resolved)
 	}
 	if plan.DNS != nil {
 		b.dnsProfiles = map[string]string{}
@@ -213,10 +214,14 @@ func (b *applyReviewBinding) guard(a *App, ctx context.Context) error {
 			return dataplane.ErrReviewChanged
 		}
 		for _, route := range b.routes {
-			if !strings.HasPrefix(route.Resolved, "sing-box:node-") {
+			engine, target, exact := routekind.ParseNodeRoute(route.Resolved)
+			if !exact || !strings.HasPrefix(target, "node-") {
 				continue
 			}
-			proof, err := a.Nodes.ResolveRoute(ctx, strings.TrimPrefix(route.Resolved, "sing-box:"), route.ServiceID, b.profile, "", time.Time{}, time.Now())
+			if a.nodeHistoryAdmission(ctx, engine) != nil {
+				return dataplane.ErrReviewChanged
+			}
+			proof, err := a.Nodes.ResolveRouteForEngine(ctx, engine, target, route.ServiceID, b.profile, "", time.Time{}, time.Now())
 			if err != nil || proof.Route != route.Resolved {
 				return dataplane.ErrReviewChanged
 			}
