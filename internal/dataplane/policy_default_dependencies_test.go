@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -64,41 +65,46 @@ func TestPolicyDefaultDependencyRetainsOwnAndForeignSelectors(t *testing.T) {
 }
 
 func TestPolicyDefaultDependencyWGPinRequiresExactFreshHostRoute(t *testing.T) {
-	state := PolicyState{Interface: "rz-warp", Table: 201, PriorityBase: 18100, WireGuardEndpoint: &WGEndpointState{Endpoint: "203.0.113.9:443", Priority: 50, Mark: 0x01000000, Table: 201, Metric: 1, Device: "wan0", Gateway: "192.0.2.1", Source: "192.0.2.2"}}
-	for _, kind := range []string{"exact", "missing", "foreign-device", "foreign-protocol", "another-selector"} {
-		t.Run(kind, func(t *testing.T) {
-			var mutations []string
-			runner := networkCleanupRunner(func(ctx context.Context, command string, args ...string) ([]byte, error) {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				joined := strings.Join(args, " ")
-				if joined == "-N rule show" {
-					out := "0: from all lookup 255\n32766: from all lookup 254\n32767: from all lookup 253\n50: from all to 203.0.113.9 fwmark 0x1000000 lookup 201\n"
-					if kind == "another-selector" {
-						out += "61: from 192.168.1.41 to 149.154.167.99 lookup 201\n"
+	for _, table := range []int{201, 211} {
+		t.Run(fmt.Sprintf("pin-table=%d", table), func(t *testing.T) {
+			state := PolicyState{Interface: "rz-warp", Table: 201, PriorityBase: 18100, WireGuardEndpoint: &WGEndpointState{Endpoint: "203.0.113.9:443", Priority: 50, Mark: 0x01000000, Table: 201, Metric: 1, Device: "wan0", Gateway: "192.0.2.1", Source: "192.0.2.2"}}
+			state.WireGuardEndpoint.Table = table
+			for _, kind := range []string{"exact", "missing", "foreign-device", "foreign-protocol", "another-selector"} {
+				t.Run(kind, func(t *testing.T) {
+					var mutations []string
+					runner := networkCleanupRunner(func(ctx context.Context, command string, args ...string) ([]byte, error) {
+						if err := ctx.Err(); err != nil {
+							return nil, err
+						}
+						joined := strings.Join(args, " ")
+						if joined == "-N rule show" {
+							out := fmt.Sprintf("0: from all lookup 255\n32766: from all lookup 254\n32767: from all lookup 253\n50: from all to 203.0.113.9 fwmark 0x1000000 lookup %d\n", table)
+							if kind == "another-selector" {
+								out += "61: from 192.168.1.41 to 149.154.167.99 lookup 201\n"
+							}
+							return []byte(out), nil
+						}
+						if joined == fmt.Sprintf("-N -j route show table %d exact 203.0.113.9/32", table) {
+							if kind == "missing" {
+								return []byte("[]"), nil
+							}
+							out := fmt.Sprintf(`[{"dst":"203.0.113.9/32","gateway":"192.0.2.1","dev":"wan0","prefsrc":"192.0.2.2","protocol":"static","metric":1,"table":%d,"flags":["onlink"]}]`, table)
+							if kind == "foreign-device" {
+								out = strings.Replace(out, "wan0", "foreign0", 1)
+							}
+							if kind == "foreign-protocol" {
+								out = strings.Replace(out, "static", "boot", 1)
+							}
+							return []byte(out), nil
+						}
+						mutations = append(mutations, joined)
+						return nil, errors.New("unexpected command")
+					})
+					err := AssertPolicyDefaultUnreferenced(context.Background(), runner, "ip", state, 4)
+					if (err == nil) != (kind == "exact") || len(mutations) != 0 {
+						t.Fatal("pin dependency proof mismatch", kind, err, mutations)
 					}
-					return []byte(out), nil
-				}
-				if joined == "-N -j route show table 201 exact 203.0.113.9/32" {
-					if kind == "missing" {
-						return []byte("[]"), nil
-					}
-					out := `[{"dst":"203.0.113.9/32","gateway":"192.0.2.1","dev":"wan0","prefsrc":"192.0.2.2","protocol":"static","metric":1,"table":201,"flags":["onlink"]}]`
-					if kind == "foreign-device" {
-						out = strings.Replace(out, "wan0", "foreign0", 1)
-					}
-					if kind == "foreign-protocol" {
-						out = strings.Replace(out, "static", "boot", 1)
-					}
-					return []byte(out), nil
-				}
-				mutations = append(mutations, joined)
-				return nil, errors.New("unexpected command")
-			})
-			err := AssertPolicyDefaultUnreferenced(context.Background(), runner, "ip", state, 4)
-			if (err == nil) != (kind == "exact") || len(mutations) != 0 {
-				t.Fatal("pin dependency proof mismatch", kind, err, mutations)
+				})
 			}
 		})
 	}

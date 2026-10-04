@@ -29,16 +29,19 @@ type PolicyOwnershipSpec struct {
 	SharedPriorityEnd  int
 	EndpointPriority   int
 	EndpointMark       uint32
+	// Network-policy transport pins must not outrank the LAN service default
+	// inside its table. Legacy receipts retain their recorded service table.
+	EndpointTable int
 }
 
 func PolicyOwnershipSpecs() []PolicyOwnershipSpec {
 	return []PolicyOwnershipSpec{
-		{Adapter: "warp-wg", Interface: "rz-warp", Table: 201, PriorityBase: 18100, PriorityEnd: 18100 + maxPolicyPrefixes - 1, SharedPriorityBase: 60, SharedPriorityEnd: 61, EndpointPriority: 50, EndpointMark: 0x01000000},
+		{Adapter: "warp-wg", Interface: "rz-warp", Table: 201, PriorityBase: 18100, PriorityEnd: 18100 + maxPolicyPrefixes - 1, SharedPriorityBase: 60, SharedPriorityEnd: 61, EndpointPriority: 50, EndpointMark: 0x01000000, EndpointTable: 211},
 		{Adapter: "usque", Interface: "rz-usque", Table: 202, PriorityBase: 20000, PriorityEnd: 20000 + maxPolicyPrefixes - 1, SharedPriorityBase: 62, SharedPriorityEnd: 63},
 		{Adapter: "sing-box", Interface: "rz-sing", Table: 203, PriorityBase: 22000, PriorityEnd: 22000 + maxPolicyPrefixes - 1, SharedPriorityBase: 64, SharedPriorityEnd: 65},
 		{Adapter: "xray", Interface: "rz-xray", Table: 204, PriorityBase: 24000, PriorityEnd: 24000 + maxPolicyPrefixes - 1, SharedPriorityBase: 66, SharedPriorityEnd: 67},
-		{Adapter: "amneziawg", Interface: "rz-awg", Table: 205, PriorityBase: 26000, PriorityEnd: 26000 + maxPolicyPrefixes - 1, SharedPriorityBase: 68, SharedPriorityEnd: 69, EndpointPriority: 51, EndpointMark: 0x02000000},
-		{Adapter: "wireguard", Interface: "rz-wg", Table: 206, PriorityBase: 28000, PriorityEnd: 28000 + maxPolicyPrefixes - 1, SharedPriorityBase: 70, SharedPriorityEnd: 71, EndpointPriority: 52, EndpointMark: 0x04000000},
+		{Adapter: "amneziawg", Interface: "rz-awg", Table: 205, PriorityBase: 26000, PriorityEnd: 26000 + maxPolicyPrefixes - 1, SharedPriorityBase: 68, SharedPriorityEnd: 69, EndpointPriority: 51, EndpointMark: 0x02000000, EndpointTable: 212},
+		{Adapter: "wireguard", Interface: "rz-wg", Table: 206, PriorityBase: 28000, PriorityEnd: 28000 + maxPolicyPrefixes - 1, SharedPriorityBase: 70, SharedPriorityEnd: 71, EndpointPriority: 52, EndpointMark: 0x04000000, EndpointTable: 213},
 	}
 }
 
