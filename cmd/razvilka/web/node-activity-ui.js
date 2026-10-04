@@ -29,9 +29,11 @@ async function refreshNodeActivity() {
   if (!nodeActivityVisible()) return false;
   if (nodeActivity.pending) return nodeActivity.pending;
   const generation = nodeActivity.generation;
+  const context = typeof panelReadContext === 'function' ? panelReadContext() : null;
   const request = (async () => {
-    const [checks, fallback] = await Promise.all([api('/api/v1/node-checks/current'), api('/api/v1/node-autofallback')]);
-    if (generation !== nodeActivity.generation || !nodeActivityVisible()) return false;
+    const read = typeof readPanelResource === 'function' ? readPanelResource : api;
+    const [checks, fallback] = await Promise.all([read('/api/v1/node-checks/current'), read('/api/v1/node-autofallback')]);
+    if (generation !== nodeActivity.generation || !nodeActivityVisible() || (context !== null && !panelReadContextCurrent(context))) return false;
     nodeActivity.checks = checks.job || null;
     nodeActivity.fallback = fallback;
     state.nodeAutofallback = fallback;

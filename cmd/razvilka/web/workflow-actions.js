@@ -64,6 +64,7 @@ async function workflowRunProbe(){
   if(workflowState.probe)return;
   const engine=state.selectedEngine,serviceID=$('#r4ProbeService').value,service=state.services.find(s=>s.id===serviceID);
   if(!engine||!service)return;
+  const progress=typeof engineProgressBinding==='function'?engineProgressBinding(engine,state.selectedEngineFile||'main'):null;
   const epoch=workflowState.epoch,controller=new AbortController();
   const test={engine,serviceName:service.name,controller};workflowState.probe=test;workflowState.lastProbe=null;
   $('#r4ProbeResults').replaceChildren();$('#r4ProbeStatus').textContent=`Проверяем ${service.name} через ${routeLabel(engine)} и напрямую. До 90 секунд, включая очистку.`;renderWorkflowControls();
@@ -72,9 +73,11 @@ async function workflowRunProbe(){
     if(!workflowSession(epoch))return;
     const rows=(result.results||[]).filter(r=>r.service_id===serviceID&&[engine,'direct'].includes(r.route));
     if(!rows.length)throw new Error('Backend не вернул результаты выбранного теста. Успех не подтверждён.');
+    if(progress){await refreshEngineConfigs();if(!workflowSession(epoch))return;}
+    if(typeof engineProgressProbe==='function')engineProgressProbe(progress,result,serviceID);
     workflowState.lastProbe={...test,rows,message:'Проверка завершена. Результаты относятся к указанному веб-сценарию и моменту теста. Маршрут не применялся.'};
-  }catch(error){if(workflowSession(epoch))workflowState.lastProbe={...test,rows:[],message:error.name==='AbortError'?'Тест остановлен. Дождитесь очистки временных ресурсов на роутере; статус успеха не присваивается.':workflowError(error)};}
-  finally{if(workflowState.probe===test)workflowState.probe=null;if(workflowSession(epoch))renderWorkflowControls();}
+  }catch(error){if(workflowSession(epoch)){if(typeof invalidateEngineProgress==='function')invalidateEngineProgress(engine);workflowState.lastProbe={...test,rows:[],message:error.name==='AbortError'?'Тест остановлен. Дождитесь очистки временных ресурсов на роутере; статус успеха не присваивается.':workflowError(error)};}}
+  finally{if(workflowState.probe===test)workflowState.probe=null;if(workflowSession(epoch)){renderWorkflowControls();if(typeof refreshEngineProgressCards==='function')refreshEngineProgressCards();}}
 }
 function workflowOpenFetch(preset='',url=''){
   if(workflowState.fetchBusy||['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state)){interfaceToast('Дождитесь текущей проверки или остановите её.');return;}
@@ -179,18 +182,20 @@ function workflowBulkControls(){
     ['nodeCheckAllVLESS','nodeCheckSelected','primary',workflowCheckAllVLESS],
     ['nodeDeleteAllVLESS','r4DeleteFailed','danger-button',()=>workflowDelete([],'all-vless')]
   ]){
-    if(!$('#'+id)&&$('#'+anchor)){
-      const button=document.createElement('button');button.id=id;button.type='button';button.className=kind;
+    let button=$('#'+id);
+    if(!button&&$('#'+anchor)){
+      button=document.createElement('button');button.id=id;button.type='button';button.className=kind;
       button.title='Весь VLESS-каталог: все страницы и источники, независимо от фильтров';
-      button.addEventListener('click',handler);$('#'+anchor).insertAdjacentElement('afterend',button);
+      $('#'+anchor).insertAdjacentElement('afterend',button);
     }
+    if(button && !button.dataset.bulkBound){button.dataset.bulkBound='true';button.addEventListener('click',handler);}
   }
   const all=workflowAllVLESS(),eligible=all.filter(nodeCanCheck),running=['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state);
   const check=$('#nodeCheckAllVLESS'),remove=$('#nodeDeleteAllVLESS');
   if(check){check.textContent=`Проверить все VLESS · ${eligible.length}`;check.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!$('#nodeBrowserService').value||!eligible.length||state.nodes?.available===false;}
   if(remove){remove.textContent=`Удалить все VLESS… · ${all.length}`;remove.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!all.length||state.nodes?.available===false;}
   const hint=$('.node-check-hint');
-  if(hint)hint.textContent='Проверка — выбранный веб-сценарий через узел, не только пинг. «Проверить все VLESS» создаёт одну очередь всего каталога, независимо от страниц и фильтров. Отключённые/истёкшие узлы пропускаются. Между узлами ресурс освобождается для восстановления. Обычная выборка ограничена 64 узлами; массовая проверка не применяет маршруты.';
+  if(hint)hint.textContent='Проверка открывает выбранный веб-сценарий через узел; пинг измеряет только соединение. Для обычной проверки можно выбрать до 64 подключений. Массовые действия для всех VLESS раскрываются отдельно и не применяют маршруты.';
 }
 async function workflowCheckAllVLESS(){
   if(workflowState.bulkBusy||['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state))return;

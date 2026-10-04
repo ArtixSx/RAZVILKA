@@ -77,6 +77,7 @@ func resolveNodeScope(cfg config.Config, serviceID string, selection *nodeScopeS
 }
 
 type nodeRouteReview struct {
+	Engine         string    `json:"engine,omitempty"`
 	Token          string    `json:"review_token"`
 	Digest         string    `json:"reviewed_digest"`
 	Revision       uint64    `json:"revision"`
@@ -160,13 +161,17 @@ func nodeRouteConfig(cfg config.Config, id, nodeID string) config.Config {
 }
 
 func nodeRouteConfigForScope(cfg config.Config, id, nodeID string, sources []string) config.Config {
+	return nodeRouteConfigForEngineScope(cfg, "sing-box", id, nodeID, sources)
+}
+
+func nodeRouteConfigForEngineScope(cfg config.Config, engine, id, nodeID string, sources []string) config.Config {
 	services := make(map[string]config.ServiceState, len(cfg.AppliedServices)+1)
 	for key, value := range cfg.AppliedServices {
 		value.Sources = append([]string(nil), value.Sources...)
 		services[key] = value
 	}
 	selected := services[id]
-	selected.Enabled, selected.Mode, selected.Route = true, "sing-box:"+nodeID, "sing-box:"+nodeID
+	selected.Enabled, selected.Mode, selected.Route = true, engine+":"+nodeID, engine+":"+nodeID
 	selected.Sources = append([]string(nil), sources...)
 	services[id] = selected
 	cfg.Services = services
@@ -181,12 +186,16 @@ func (a *App) nodeReviewProof(ctx context.Context, review nodeRouteReview, revis
 	if !time.Now().Before(review.ExpiresAt) || a.Store.Get().Revision != revision {
 		return dataplane.ErrReviewChanged
 	}
+	engine, err := nodeCheckEngine(review.Engine)
+	if err != nil || a.nodeHistoryAdmission(ctx, engine) != nil {
+		return dataplane.ErrReviewChanged
+	}
 	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
 	if err != nil || snapshot.Generation != review.Generation {
 		return dataplane.ErrReviewChanged
 	}
-	_, err = a.Nodes.ResolveRoute(ctx, review.NodeID, review.ServiceID, review.NetworkProfile, "", time.Time{}, time.Now())
-	if err != nil {
+	proof, err := a.Nodes.ResolveRouteForEngine(ctx, engine, review.NodeID, review.ServiceID, review.NetworkProfile, "", time.Time{}, time.Now())
+	if err != nil || proof.Route != engine+":"+review.NodeID {
 		return dataplane.ErrReviewChanged
 	}
 	return ctx.Err()
@@ -202,6 +211,7 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	var request struct {
+		Engine           string              `json:"engine,omitempty"`
 		ServiceID        string              `json:"service_id"`
 		Scope            *nodeScopeSelection `json:"scope,omitempty"`
 		ExpectedRevision *uint64             `json:"expected_revision,omitempty"`
@@ -212,6 +222,15 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF {
 		http.Error(w, "некорректный запрос просмотра узла", http.StatusBadRequest)
+		return
+	}
+	engine, err := nodeCheckEngine(request.Engine)
+	if err != nil {
+		http.Error(w, "неподдерживаемый движок маршрута", http.StatusBadRequest)
+		return
+	}
+	if err := a.nodeHistoryAdmission(r.Context(), engine); err != nil {
+		writeNodeApplyError(w, "NODE_APPLY_UNAVAILABLE", "Совместимость маршрута при откате ещё не подтверждена.")
 		return
 	}
 	name := ""
@@ -258,20 +277,20 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 		writeNodeError(w, nodestore.ErrNotFound)
 		return
 	}
-	if _, err = a.Nodes.ResolveRoute(r.Context(), id, request.ServiceID, profile, "", time.Time{}, time.Now()); err != nil {
+	if _, err = a.Nodes.ResolveRouteForEngine(r.Context(), engine, id, request.ServiceID, profile, "", time.Time{}, time.Now()); err != nil {
 		writeNodeError(w, err)
 		return
 	}
-	review := nodeRouteReview{Revision: cfg.Revision, Generation: snapshot.Generation, NodeID: id, ServiceID: request.ServiceID, NetworkProfile: profile, ExpiresAt: time.Now().Add(nodeReviewTTL), ScopeSelection: scopeMode, scopeSources: append([]string(nil), scopeSources...), owner: nodeReviewOwner(r), intentHash: durableServiceIntentHash(cfg, reviewedServices)}
+	review := nodeRouteReview{Engine: engine, Revision: cfg.Revision, Generation: snapshot.Generation, NodeID: id, ServiceID: request.ServiceID, NetworkProfile: profile, ExpiresAt: time.Now().Add(nodeReviewTTL), ScopeSelection: scopeMode, scopeSources: append([]string(nil), scopeSources...), owner: nodeReviewOwner(r), intentHash: durableServiceIntentHash(cfg, reviewedServices)}
 	for _, check := range node.Health.History {
-		if check.ServiceID == request.ServiceID && check.NetworkProfile == profile && check.RoutePathID == "sing-box:"+id {
+		if check.ServiceID == request.ServiceID && check.NetworkProfile == profile && check.RoutePathID == engine+":"+id {
 			if check.ExpiresAt.Before(review.ExpiresAt) {
 				review.ExpiresAt = check.ExpiresAt
 			}
 			break
 		}
 	}
-	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForScope(cfg, request.ServiceID, id, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
+	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForEngineScope(cfg, engine, request.ServiceID, id, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
 	if err != nil {
 		writeNodePlanFailure(w, err)
 		return
@@ -313,6 +332,7 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 }
 
 type nodeApplyRequest struct {
+	Engine         string `json:"engine,omitempty"`
 	Token          string `json:"review_token"`
 	Digest         string `json:"reviewed_digest"`
 	Revision       uint64 `json:"revision"`
@@ -339,11 +359,20 @@ func (a *App) nodeRouteApply(w http.ResponseWriter, r *http.Request, id string) 
 		writeNodeApplyError(w, "NODE_REVIEW_REQUIRED", "Просмотрите маршрут и явно подтвердите применение.")
 		return
 	}
+	engine, err := nodeCheckEngine(request.Engine)
+	if err != nil {
+		http.Error(w, "неподдерживаемый движок маршрута", http.StatusBadRequest)
+		return
+	}
 	if request.IdempotencyKey != "" {
+		jobEngine := engine
+		if jobEngine == "sing-box" {
+			jobEngine = "" // Preserve the canonical request hash of legacy jobs.
+		}
 		job, err := a.enqueueDurableServiceJob(r.Context(), serviceControlJobRequest{
 			Kind: "node-apply", ServiceIDs: []string{request.ServiceID}, NodeIDs: []string{id},
 			ExpectedRevision: &request.Revision, IdempotencyKey: request.IdempotencyKey,
-			NodeApply:       &nodeApplyJobSpec{Digest: request.Digest, Generation: request.Generation},
+			NodeApply:       &nodeApplyJobSpec{Engine: jobEngine, Digest: request.Digest, Generation: request.Generation},
 			nodeReviewToken: request.Token, nodeReviewOwner: nodeReviewOwner(r),
 		})
 		if err != nil {
@@ -361,7 +390,7 @@ func (a *App) nodeRouteApply(w http.ResponseWriter, r *http.Request, id string) 
 	}
 	defer release()
 	review, ok := a.nodeReviews.take(request.Token, nodeReviewOwner(r), time.Now())
-	if !ok || review.NodeID != id || review.ServiceID != request.ServiceID || review.Digest != request.Digest || review.Revision != request.Revision || review.Generation != request.Generation {
+	if !ok || review.Engine != engine || review.NodeID != id || review.ServiceID != request.ServiceID || review.Digest != request.Digest || review.Revision != request.Revision || review.Generation != request.Generation {
 		writeNodeApplyError(w, "NODE_REVIEW_CHANGED", "Подтверждение устарело или относится к другому выбору. Откройте новый план.")
 		return
 	}
@@ -386,7 +415,11 @@ func (a *App) executeNodeRoute(parent context.Context, review nodeRouteReview) s
 	if cfg.SafeMode || a.nodeReviewProof(parent, review, cfg.Revision) != nil || cfg.Revision != review.Revision {
 		return fail("NODE_REVIEW_CHANGED", "Настройки, узлы или срок проверки изменились. Проверьте узел и откройте новый план.")
 	}
-	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForScope(cfg, review.ServiceID, review.NodeID, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
+	engine, engineErr := nodeCheckEngine(review.Engine)
+	if engineErr != nil {
+		return fail("NODE_REVIEW_CHANGED", "Движок просмотренного маршрута недоступен.")
+	}
+	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForEngineScope(cfg, engine, review.ServiceID, review.NodeID, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
 	if err != nil || !plan.Ready || plan.Digest != review.Digest || plan.NetworkProfileID != review.NetworkProfile {
 		var dependency *routePlanDependencyError
 		if errors.As(err, &dependency) {
@@ -412,9 +445,9 @@ func (a *App) executeNodeRoute(parent context.Context, review nodeRouteReview) s
 		var undo func() error
 		var err error
 		if review.ScopeSelection == "applied" {
-			undo, err = a.Store.ApplyNodeRouteWithRollback(review.ServiceID, "sing-box:"+review.NodeID, review.Revision)
+			undo, err = a.Store.ApplyNodeRouteWithRollback(review.ServiceID, engine+":"+review.NodeID, review.Revision)
 		} else {
-			undo, err = a.Store.ApplyNodeRouteScopeWithRollback(review.ServiceID, "sing-box:"+review.NodeID, review.scopeSources, review.Revision)
+			undo, err = a.Store.ApplyNodeRouteScopeWithRollback(review.ServiceID, engine+":"+review.NodeID, review.scopeSources, review.Revision)
 		}
 		if errors.Is(err, config.ErrRevisionChanged) {
 			return nil, dataplane.ErrReviewChanged

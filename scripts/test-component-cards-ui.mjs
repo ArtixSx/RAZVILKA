@@ -17,7 +17,7 @@ const base = {id:'usque', name:meta.name, provider:'opkg', installed:true, insta
 const state = {components:[{...base}], engines:[{id:'usque', installed:true, version:'different runtime output'}], engineConfigs:[], services:[], dataLoad:{components:{loaded:true, phase:'ready'}}};
 const model = vm.createContext({state, esc, consoleDate:value=>value, ci:()=>'', serviceDashboardApplied:service=>service.applied_state||{}, consoleEngineMeta:{usque:meta}});
 vm.runInContext(slice(consoleCode, 'function consoleEngineState(', 'function consoleNavigate('), model);
-vm.runInContext(slice(interfaceCode, 'function interfaceEngineCard(', 'function renderInterfaceEngines('), model);
+vm.runInContext(slice(interfaceCode, 'const engineProgressEvidence =', 'function renderInterfaceEngines('), model);
 const card = () => model.interfaceEngineCard('usque', meta);
 assert.match(card(), /1\.0\.1 → 1\.0\.3/);
 assert.doesNotMatch(card(), /different runtime output/);
@@ -25,6 +25,18 @@ assert.match(card(), /Процесс не запущен/);
 assert.match(card(), /data-component-action="update"[^>]*>Обновить/);
 assert.match(card(), /data-component-action="remove"[^>]*>Удалить/);
 assert.match(card(), /data-component-refresh="usque"/);
+assert.doesNotMatch(card(), /Бинарник обнаружен/, 'aggregate installed does not prove a binary path');
+state.engines[0].binary_path='/opt/bin/usque';
+assert.match(card(), /Бинарник обнаружен/);
+state.engines[0].installed=false;
+assert.doesNotMatch(card(), /Бинарник обнаружен/, 'a contradictory path alone does not prove installation');
+state.engines[0].installed=true;
+delete state.engines[0].binary_path;
+assert.equal((card().match(/data-engine-step="profile"/g)||[]).length,1);
+assert.equal((card().match(/data-engine-step="check"/g)||[]).length,1);
+assert.equal((card().match(/data-engine-step="apply"/g)||[]).length,1);
+assert.match(card(), /aria-current="step"/);
+assert.match(card(), /Все шаги настройки/);
 
 state.components[0] = {...base, update_check_error:'Источник недоступен', catalog_stale:true, can_update:false};
 assert.match(card(), /Источник недоступен/);
@@ -49,6 +61,7 @@ assert.doesNotMatch(card(), /data-component-action="remove"[^>]*disabled/, 'cata
 }
 state.components[0] = {...base, running:true};
 assert.match(card(), /Процесс запущен/);
+assert.equal(model.consoleEngineState('usque').tone,'unknown','process alone is not accepted runtime evidence');
 assert.match(card(), /data-component-action="update"[^>]*disabled/, 'unmanaged running component must not update in place');
 assert.match(card(), /data-component-action="remove"[^>]*disabled/);
 state.components[0] = {...base};
@@ -141,6 +154,12 @@ f=fixture();
 f.setResponder(async (path,options)=>path.includes('/plan?')?{ready:true}:options.method==='POST'?{ok:false}:[{...base}]);
 assert.equal(await f.ctx.manageComponent('usque','remove'),false);
 assert.equal(f.notices.some(notice=>notice[0]==='success'),false,'unconfirmed response must not announce successful removal');
+
+f=fixture();f.setResponder(async(path,options)=>path.includes('/plan?')?{ready:true}:options.method==='POST'?{ok:true,pending_live_acceptance:true,transaction_id:'a'.repeat(32)}:[{...base}]);
+assert.equal(await f.ctx.manageComponent('usque','update'),true);
+assert.equal(f.calls.filter(call=>call.options.method==='POST').length,1);
+assert.equal(f.notices.some(notice=>notice[0]==='success'),false,'202 candidate must not claim accepted update');
+assert.match(f.notices.at(-1)[1],/принятие версии ожидается/);
 
 f=fixture(); let finishPlan;
 f.setResponder(()=>new Promise(resolve=>{finishPlan=resolve;}));

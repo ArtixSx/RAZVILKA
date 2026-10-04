@@ -13,9 +13,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/awgprofile"
+	"github.com/ArtixSx/razvilka/internal/tunnelcheck"
 )
 
 // Opt-in kernel integration: run only in an exclusively assigned Linux VM.
@@ -26,12 +30,25 @@ func TestWGNativeCandidateIsolation(t *testing.T) {
 }
 
 func TestWGNativeEndpointLifecycle(t *testing.T) {
-	nativeWGFixture(t, "TestWGNativeEndpointLifecycle")
+	if os.Getenv("RAZVILKA_WG_NATIVE_ROLE") != "" {
+		nativeWGFixture(t, "TestWGNativeEndpointLifecycle")
+		return
+	}
+	// A failure (including t.Fatal in a child) must not leave the next family
+	// sharing kernel state. Each case owns a complete independent topology.
+	for _, endpoint := range []string{"93.184.216.34", "2606:4700::1111"} {
+		t.Run(endpoint, func(t *testing.T) { nativeWGFixture(t, "TestWGNativeEndpointLifecycle", endpoint) })
+	}
 }
 
-func nativeWGFixture(t *testing.T, suite string) {
-	if os.Getenv("RAZVILKA_WG_NATIVE") != "1" {
-		t.Skip("requires exclusive Linux VM: RAZVILKA_WG_NATIVE=1 go test ./internal/dataplane -run '^" + suite + "$' -count=1 -v")
+func nativeWGFixture(t *testing.T, suite string, selectedEndpoint ...string) {
+	awgRuntime := suite == "TestAWG31NativeCandidateIsolation"
+	nativeFlag := "RAZVILKA_WG_NATIVE"
+	if awgRuntime {
+		nativeFlag = "RAZVILKA_AWG_NATIVE"
+	}
+	if !awgRuntime && os.Getenv("RAZVILKA_WG_NATIVE") != "1" || awgRuntime && os.Getenv("RAZVILKA_AWG_NATIVE") != "1" {
+		t.Skip("requires exclusive Linux VM: " + nativeFlag + "=1 go test ./internal/dataplane -run '^" + suite + "$' -count=1 -v")
 	}
 	if role := os.Getenv("RAZVILKA_WG_NATIVE_ROLE"); role != "" {
 		if role == "server" {
@@ -40,6 +57,8 @@ func nativeWGFixture(t *testing.T, suite string) {
 			nativeWGEndpointRecover(t)
 		} else if role == "client" && suite == "TestWGNativeEndpointLifecycle" {
 			nativeWGEndpointClient(t)
+		} else if role == "client" && awgRuntime {
+			nativeTunnelClient(t, true)
 		} else if role == "client" {
 			nativeWGClient(t)
 		} else {
@@ -54,6 +73,31 @@ func nativeWGFixture(t *testing.T, suite string) {
 		if _, err := exec.LookPath(name); err != nil {
 			t.Fatal(err)
 		}
+	}
+	tunnelCLI, tunnelKind := "wg", "wireguard"
+	awgParameters := ""
+	if awgRuntime {
+		tool := os.Getenv("RAZVILKA_AWG_NATIVE_TOOL")
+		if tool == "" {
+			tool = "awg"
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		caps := awgprofile.DetectTool(ctx, tool)
+		t.Logf("public AWG inventory before namespace setup: %+v", caps)
+		if issues := awgprofile.CheckRuntime(awgprofile.Preview{MinimumMajor: 3, MinimumMinor: 1}, caps); len(issues) != 0 {
+			cancel()
+			t.Fatal("AWG 3.1 must already be loaded and compatible before namespace mutation", issues)
+		}
+		checked, err := awgprofile.VerifyTool(ctx, caps, tool)
+		cancel()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tunnelCLI, tunnelKind = checked, "amneziawg"
+		// Deliberately exercise advanced parsing on both real peers. No config,
+		// private key or header-protection key is logged or read back.
+		key, _ := nativeWGKeys(t)
+		awgParameters = "S1 = 12\nS2 = 12\nS3 = 12\nS4 = 12\nH1 = 10-20\nH2 = 30-40\nH3 = 50\nH4 = 60\nHeaderProtectionKey = " + key + "\nRandomTrailers = on\nDisableCookies = off\n"
 	}
 	root := t.TempDir()
 	clientNS, serverNS := fmt.Sprintf("rz-wg-c-%d", os.Getpid()), fmt.Sprintf("rz-wg-s-%d", os.Getpid())
@@ -81,17 +125,26 @@ func nativeWGFixture(t *testing.T, suite string) {
 		}
 		nativeWGCommand(t, clientNS, "ip", "route", "add", "93.184.216.34/32", "via", "192.0.2.1", "dev", "wan-c")
 		nativeWGCommand(t, clientNS, "ip", "-6", "route", "add", "2606:4700::1111/128", "via", "2001:db8:1::1", "dev", "wan-c")
+		// Model the router's ordinary WAN route. Loose rp_filter needs a reverse
+		// route for the inner service reply; its lookup has no socket oif and
+		// therefore cannot match the candidate-only oif policy. Keep rp_filter
+		// unchanged. A wrong-key canary below must still fail with WAN reachable.
+		nativeWGCommand(t, clientNS, "ip", "route", "add", "default", "via", "192.0.2.1", "dev", "wan-c")
+		nativeWGCommand(t, clientNS, "ip", "-6", "route", "add", "default", "via", "2001:db8:1::1", "dev", "wan-c")
 	}
 	serverPrivate, serverPublic := nativeWGKeys(t)
 	clientPrivate, clientPublic := nativeWGKeys(t)
 	candidatePrivate, candidatePublic := nativeWGKeys(t)
 	serverConfig := "[Interface]\nPrivateKey = " + serverPrivate + "\nListenPort = 51820\n[Peer]\nPublicKey = " + clientPublic + "\nAllowedIPs = 10.66.0.2/32, 2001:db8:66::2/128\n"
+	if awgRuntime {
+		serverConfig = strings.Replace(serverConfig, "ListenPort = 51820\n", "ListenPort = 51820\n"+awgParameters, 1)
+	}
 	serverPath := filepath.Join(root, "server.conf")
 	if err := os.WriteFile(serverPath, []byte(serverConfig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	nativeWGCommand(t, serverNS, "ip", "link", "add", "wg-server", "type", "wireguard")
-	nativeWGCommand(t, serverNS, "wg", "setconf", "wg-server", serverPath)
+	nativeWGCommand(t, serverNS, "ip", "link", "add", "wg-server", "type", tunnelKind)
+	nativeWGCommand(t, serverNS, tunnelCLI, "setconf", "wg-server", serverPath)
 	nativeWGCommand(t, serverNS, "ip", "link", "set", "wg-server", "up")
 	for _, value := range []string{"198.51.100.10/32", "2001:db8:10::10/128"} {
 		nativeWGCommand(t, serverNS, "ip", "address", "add", value, "dev", "lo", "nodad")
@@ -99,6 +152,9 @@ func nativeWGFixture(t *testing.T, suite string) {
 	nativeWGCommand(t, serverNS, "ip", "route", "add", "10.66.0.2/32", "dev", "wg-server")
 	nativeWGCommand(t, serverNS, "ip", "-6", "route", "add", "2001:db8:66::2/128", "dev", "wg-server")
 	profile := "[Interface]\nPrivateKey = " + clientPrivate + "\nAddress = 10.66.0.2/32, 2001:db8:66::2/128\n[Peer]\nPublicKey = " + serverPublic + "\nEndpoint = 192.0.2.1:51820\nAllowedIPs = 0.0.0.0/0, ::/0\n"
+	if awgRuntime {
+		profile = strings.Replace(profile, "[Peer]\n", awgParameters+"[Peer]\n", 1)
+	}
 	if err := os.WriteFile(filepath.Join(root, "client.conf"), []byte(profile), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -121,8 +177,8 @@ func nativeWGFixture(t *testing.T, suite string) {
 	if err := os.WriteFile(candidateServerPath, []byte(strings.Replace(serverConfig, clientPublic, candidatePublic, 1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	nativeWGCommand(t, candidateNS, "ip", "link", "add", "wg-server", "type", "wireguard")
-	nativeWGCommand(t, candidateNS, "wg", "setconf", "wg-server", candidateServerPath)
+	nativeWGCommand(t, candidateNS, "ip", "link", "add", "wg-server", "type", tunnelKind)
+	nativeWGCommand(t, candidateNS, tunnelCLI, "setconf", "wg-server", candidateServerPath)
 	nativeWGCommand(t, candidateNS, "ip", "link", "set", "wg-server", "up")
 	for _, value := range []string{"198.51.100.10/32", "2001:db8:10::10/128"} {
 		nativeWGCommand(t, candidateNS, "ip", "address", "add", value, "dev", "lo", "nodad")
@@ -158,8 +214,16 @@ func nativeWGFixture(t *testing.T, suite string) {
 		}
 	}
 	client := exec.Command("ip", "netns", "exec", clientNS, exe, "-test.run=^"+suite+"$", "-test.v")
-	client.Env = append(os.Environ(), "RAZVILKA_WG_NATIVE_ROLE=client", "RAZVILKA_WG_NATIVE_ROOT="+root)
+	client.Env = append(os.Environ(), "RAZVILKA_WG_NATIVE_ROLE=client", "RAZVILKA_WG_NATIVE_ROOT="+root, "RAZVILKA_WG_NATIVE_SERVER_NS="+serverNS)
+	if awgRuntime {
+		client.Env = append(client.Env, "RAZVILKA_AWG_NATIVE_TOOL="+tunnelCLI)
+	}
+	if len(selectedEndpoint) == 1 {
+		client.Env = append(client.Env, "RAZVILKA_WG_NATIVE_TEST_ENDPOINT="+selectedEndpoint[0])
+	}
 	if output, err := client.CombinedOutput(); err != nil {
+		nativeWGKernelCapture(t, clientNS, "client after failure")
+		nativeWGKernelCapture(t, serverNS, "server after failure")
 		t.Fatalf("native client: %v\n%s", err, output)
 	} else {
 		t.Log(string(output))
@@ -173,6 +237,11 @@ func nativeWGCommand(t *testing.T, ns string, args ...string) string {
 	}
 	output, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	if err != nil {
+		for _, arg := range args {
+			if arg == "setconf" {
+				t.Fatalf("native tunnel setconf failed: %v; secret-bearing CLI output suppressed", err)
+			}
+		}
 		t.Fatalf("native %s: %v: %s", strings.Join(args, " "), err, output)
 	}
 	return strings.TrimSpace(string(output))
@@ -224,6 +293,10 @@ func nativeWGServe(t *testing.T) {
 }
 
 func nativeWGClient(t *testing.T) {
+	nativeTunnelClient(t, false)
+}
+
+func nativeTunnelClient(t *testing.T, awgRuntime bool) {
 	root := os.Getenv("RAZVILKA_WG_NATIVE_ROOT")
 	profile, err := os.ReadFile(filepath.Join(root, "client.conf"))
 	if err != nil {
@@ -235,8 +308,17 @@ func nativeWGClient(t *testing.T) {
 	}
 	a := NewWireGuardAdapter(nil, root)
 	a.WG, a.IP, a.NativeOnly = "wg", "ip", true
+	canaryInterface := "rz-wg-canary"
+	if awgRuntime {
+		a = NewAmneziaWGAdapter(nil, root)
+		a.WG, a.IP, a.NativeOnly = os.Getenv("RAZVILKA_AWG_NATIVE_TOOL"), "ip", true
+		if a.WG == "" {
+			t.Fatal("explicit checked AWG tool required in child")
+		}
+		canaryInterface = "rz-awg-canary"
+	}
 	a.isolatedCandidate = true // avoid IPv6 DAD timing in this owned fixture
-	a.RuntimeConfigPath = filepath.Join(root, "rz-wg.conf")
+	a.RuntimeConfigPath = filepath.Join(root, a.Interface+".conf")
 	if err := os.WriteFile(a.RuntimeConfigPath, profile, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -244,12 +326,20 @@ func nativeWGClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, family := range []string{"-4", "-6"} {
-		nativeWGCommand(t, "", "ip", family, "route", "add", "default", "dev", a.Interface, "table", "206")
+		nativeWGCommand(t, "", "ip", family, "route", "add", "default", "dev", a.Interface, "table", strconv.Itoa(a.Table))
 		source := "10.66.0.2/32"
 		if family == "-6" {
 			source = "2001:db8:66::2/128"
 		}
-		nativeWGCommand(t, "", "ip", family, "rule", "add", "priority", "70", "from", source, "lookup", "206")
+		priority := "70"
+		if awgRuntime {
+			priority = "68"
+		}
+		nativeWGCommand(t, "", "ip", family, "rule", "add", "priority", priority, "from", source, "lookup", strconv.Itoa(a.Table))
+	}
+	foreign := "198.51.100.200/32"
+	if awgRuntime {
+		nativeWGCommand(t, "", "ip", "route", "add", foreign, "dev", "wan-b", "proto", "boot", "metric", "9", "table", strconv.Itoa(a.Table))
 	}
 	for _, tc := range []struct{ name, source, address, target string }{
 		{"ipv4", "10.66.0.2", "10.66.0.2/32", "198.51.100.10"},
@@ -264,7 +354,7 @@ func nativeWGClient(t *testing.T) {
 			if err := sourceBoundAWGProbe(ctx, url, tc.source); err != nil {
 				t.Fatal("working tunnel: ", err)
 			}
-			before := nativeWGCommand(t, "", "wg", "show", a.Interface, "transfer")
+			before := nativeWGCommand(t, "", a.WG, "show", a.Interface, "transfer")
 			transaction := filepath.Join(root, tc.name)
 			if err := os.MkdirAll(transaction, 0o700); err != nil {
 				t.Fatal(err)
@@ -274,7 +364,7 @@ func nativeWGClient(t *testing.T) {
 			if err := os.WriteFile(staged, []byte(candidateProfile), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			plan := RoutePlan{Routes: []Route{{Resolved: "wireguard", ServiceName: "native", ProbeURL: url, Sources: []string{"192.168.40.2/32"}}}}
+			plan := RoutePlan{Routes: []Route{{Resolved: a.ID(), ServiceName: "native", ProbeURL: url, Sources: []string{"192.168.40.2/32"}}}}
 			a.CanaryProbe = func(ctx context.Context, url, source string) error {
 				if err := sourceBoundAWGProbe(ctx, url, source); err != nil {
 					return err
@@ -304,19 +394,25 @@ func nativeWGClient(t *testing.T) {
 				if err := a.CanaryProbe(liveCtx, url, tc.source); err != nil {
 					t.Fatalf("live after %s: %v", label, err)
 				}
+				if awgRuntime {
+					out := nativeWGCommand(t, "", "ip", "route", "show", "table", strconv.Itoa(a.Table), "exact", foreign)
+					if !strings.Contains(out, "dev wan-b") || !strings.Contains(out, "metric 9") {
+						t.Fatal("foreign route lost", out)
+					}
+				}
 			}
 			// Valid and wrong-peer configurations sharing the live private key
 			// must both be rejected without touching either end of that session.
 			_, wrongPublic := nativeWGKeys(t)
-			for _, same := range []string{string(profile), strings.Replace(string(profile), nativeWGCommand(t, "", "wg", "show", a.Interface, "peers"), wrongPublic, 1)} {
+			for _, same := range []string{string(profile), strings.Replace(string(profile), nativeWGCommand(t, "", a.WG, "show", a.Interface, "peers"), wrongPublic, 1)} {
 				if err := os.WriteFile(staged, []byte(same), 0o600); err != nil {
 					t.Fatal(err)
 				}
-				before = nativeWGCommand(t, "", "wg", "show", a.Interface, "transfer")
+				before = nativeWGCommand(t, "", a.WG, "show", a.Interface, "transfer")
 				if err := a.Canary(ctx, plan, transaction); !errors.Is(err, ErrWGCanaryIdentityInUse) {
 					t.Fatal("same-key candidate not safely rejected", err)
 				}
-				if after := nativeWGCommand(t, "", "wg", "show", a.Interface, "transfer"); after != before {
+				if after := nativeWGCommand(t, "", a.WG, "show", a.Interface, "transfer"); after != before {
 					t.Fatal("rejected candidate disturbed live counters")
 				}
 				assertLive("same-key rejection")
@@ -337,18 +433,18 @@ func nativeWGClient(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(transaction, "policy.staged.json"), data, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			before = nativeWGCommand(t, "", "wg", "show", a.Interface, "transfer")
+			before = nativeWGCommand(t, "", a.WG, "show", a.Interface, "transfer")
 			if err := a.Canary(ctx, plan, transaction); err != nil {
 				t.Fatal(err)
 			}
-			if after := nativeWGCommand(t, "", "wg", "show", a.Interface, "transfer"); after != before {
+			if after := nativeWGCommand(t, "", a.WG, "show", a.Interface, "transfer"); after != before {
 				t.Fatal("candidate traffic used working tunnel")
 			}
 			if plan.Routes[0].Sources[0] != "192.168.40.2/32" {
 				t.Fatal("client source scope changed")
 			}
 			assertLive("successful independent candidate")
-			before = nativeWGCommand(t, "", "wg", "show", a.Interface, "transfer")
+			before = nativeWGCommand(t, "", a.WG, "show", a.Interface, "transfer")
 			// A candidate with the wrong peer key must fail even while the
 			// working interface retains a recent successful handshake.
 			lines := strings.Split(candidateProfile, "\n")
@@ -361,11 +457,11 @@ func nativeWGClient(t *testing.T) {
 				t.Fatal(err)
 			}
 			a.Timeout, a.HandshakeTimeout = 1200*time.Millisecond, 200*time.Millisecond
-			if err := a.Canary(context.Background(), plan, transaction); err == nil {
-				t.Fatal("wrong-key candidate borrowed working path")
+			if err := a.Canary(context.Background(), plan, transaction); !errors.Is(err, tunnelcheck.ErrHandshake) {
+				t.Fatal("wrong-key candidate must fail with handshake error", err)
 			}
 			a.Timeout, a.HandshakeTimeout = 25*time.Second, 8*time.Second
-			if after := nativeWGCommand(t, "", "wg", "show", a.Interface, "transfer"); after != before {
+			if after := nativeWGCommand(t, "", a.WG, "show", a.Interface, "transfer"); after != before {
 				t.Fatal("failed candidate used working tunnel")
 			}
 			assertLive("failed independent candidate")
@@ -374,7 +470,7 @@ func nativeWGClient(t *testing.T) {
 			if err := c.ensureCanaryPolicyFree(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := exec.Command("ip", "link", "show", "rz-wg-canary").CombinedOutput(); err == nil {
+			if _, err := exec.Command("ip", "link", "show", canaryInterface).CombinedOutput(); err == nil {
 				t.Fatal("candidate interface leaked")
 			}
 		})

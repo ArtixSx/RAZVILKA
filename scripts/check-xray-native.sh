@@ -16,10 +16,17 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 # Public-format fixture addresses pass production admission, but cannot reach
 # the Internet: this namespace has only loopback, with no external interface.
 export RAZVILKA_XRAY_NETNS=1
+pattern='^TestNativeXray(ExactNode|StoreConfigSyntax)$'
+timeout=4m
+case "${RAZVILKA_XHTTP_NATIVE:-0}" in
+  0) ;;
+  1) pattern='^TestNativeXray(ExactNode|XHTTPExactNode|StoreConfigSyntax)$'; timeout=12m;;
+  *) echo 'RAZVILKA_XHTTP_NATIVE must be 0 or 1' >&2; exit 2;;
+esac
 unshare --net sh -eu -c '
   ip link set lo up
   ip addr add 93.184.216.11/32 dev lo
   ip addr add 93.184.216.12/32 dev lo
   ip addr add 93.184.216.13/32 dev lo
-  exec "$1" -test.run "^TestNativeXray(ExactNode|StoreConfigSyntax)$" -test.v -test.timeout 4m
-' sh "$tmp/xray-native.test"
+  exec "$1" -test.run "$2" -test.v -test.timeout "$3"
+' sh "$tmp/xray-native.test" "$pattern" "$timeout"

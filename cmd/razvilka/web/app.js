@@ -73,6 +73,65 @@ const state = {
 
 const panelLoad = { generation: 0, request: null, controller: null, retryTimer: null, retryCount: 0 };
 let inventoryRead = null;
+const panelReads = { epoch: 0, entries: new Map() };
+
+function panelReadContext() {
+  return { epoch: panelReads.epoch, auth: state.authGeneration || 0 };
+}
+
+function panelReadContextCurrent(context) {
+  return context.epoch === panelReads.epoch && context.auth === (state.authGeneration || 0);
+}
+
+function invalidatePanelReads() {
+  panelReads.epoch++;
+  for (const entry of panelReads.entries.values()) entry.controller.abort();
+  panelReads.entries.clear();
+}
+
+function readPanelResource(url, options = {}) {
+  if (options.signal?.aborted) return Promise.reject(Object.assign(new Error('Read canceled'), { name: 'AbortError' }));
+  // Only passive readers opt in. Action review/readback still uses api(), and
+  // auth, runtime gates and operation journals never reuse completed reads.
+  const cacheMS = ['/api/v1/services', '/api/v1/nodes', '/api/v1/routes/options', '/api/v1/node-feeds'].includes(url) ? 1000 : 0;
+  const epoch = panelReads.epoch, auth = state.authGeneration || 0;
+  let entry = panelReads.entries.get(url);
+  const age = entry ? Date.now() - entry.receivedAt : Infinity;
+  if (!entry || entry.epoch !== epoch || entry.auth !== auth || (entry.finished && !(cacheMS && age >= 0 && age < cacheMS))) {
+    entry = { epoch, auth, controller: new AbortController(), receivedAt: 0, finished: false, promise: null };
+    panelReads.entries.set(url, entry);
+    const ticket = entry;
+    ticket.promise = Promise.resolve().then(() => {
+      if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || ticket.controller.signal.aborted) throw Object.assign(new Error('Read context changed'), { name: 'AbortError' });
+      return api(url, { ...options, signal: ticket.controller.signal });
+    }).then(value => {
+      if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || ticket.controller.signal.aborted) throw Object.assign(new Error('Read context changed'), { name: 'AbortError' });
+      ticket.finished = true; ticket.receivedAt = Date.now();
+      if (!cacheMS || value === null || typeof value !== 'object') {
+        if (panelReads.entries.get(url) === ticket) panelReads.entries.delete(url);
+      }
+      return value;
+    }).catch(error => {
+      if (panelReads.entries.get(url) === ticket) panelReads.entries.delete(url);
+      if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || ticket.controller.signal.aborted) throw Object.assign(new Error('Read context changed'), { name: 'AbortError' });
+      throw error;
+    });
+  }
+  // Navigation cancels its subscription, not a transport used by another view
+  // or observer. Logout/writes abort every transport and fence ignored aborts.
+  return new Promise((resolve, reject) => {
+    const signal = options.signal;
+    const abort = () => { cleanup(); reject(Object.assign(new Error('Read canceled'), { name: 'AbortError' })); };
+    const cleanup = () => signal?.removeEventListener('abort', abort);
+    if (signal?.aborted) { abort(); return; }
+    signal?.addEventListener('abort', abort, { once: true });
+    entry.promise.then(value => {
+      cleanup();
+      if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || entry.controller.signal.aborted) { reject(Object.assign(new Error('Read context changed'), { name: 'AbortError' })); return; }
+      resolve(value === undefined ? value : JSON.parse(JSON.stringify(value)));
+    }, error => { cleanup(); reject(error); });
+  });
+}
 
 const viewMeta = {
   overview: ['Главная', 'Сервисы, подключения и состояние вашей сети'],
@@ -116,6 +175,8 @@ try {
 async function api(url, options = {}) {
   const { readTimeoutMs, ...fetchOptions } = options;
   const method = String(options.method || 'GET').toUpperCase();
+  const mutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
   const headers = new Headers(options.headers || {});
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
@@ -151,6 +212,7 @@ async function api(url, options = {}) {
     if (timedOut) throw Object.assign(new Error('Ответ задерживается. Последние полученные данные сохранены; повторите обновление.'), { code: 'READ_TIMEOUT' });
     throw error;
   } finally {
+    if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', abort);
   }
@@ -216,6 +278,7 @@ function finishAuthAction(action) {
 }
 
 function showAuth(status, message = '') {
+  if (typeof invalidatePanelReads === 'function') invalidatePanelReads();
   // Also fence authentication responses, which do not use interfaceRequest.
   state.authGeneration = (state.authGeneration || 0) + 1;
   state.authAction = null;
@@ -243,6 +306,7 @@ function hideAuth() {
   // A saved cookie can authenticate the first load without ever showing the
   // login screen. Visibility is not an authentication lifecycle signal.
   const restored = state.authenticated !== true;
+  if (restored && typeof invalidatePanelReads === 'function') invalidatePanelReads();
   state.authenticated = true;
   if ($('#authScreen').contains(document.activeElement)) document.activeElement.blur();
   $('#authScreen').hidden = true;
@@ -500,6 +564,7 @@ function setView(name) {
   render('navigation-status', () => { if (state.status && Object.keys(state.status).length) renderStatus(); });
   render('navigation-tabs', () => { if (typeof renderInterfaceNavigation === 'function') renderInterfaceNavigation(name); });
   render('navigation-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
+  if (typeof syncConnectionObservation === 'function') render('navigation-connections', syncConnectionObservation);
   if (typeof queueMicrotask === 'function') queueMicrotask(() => { if (state.currentView === name) refreshPanelView(name); });
   if (name === 'engineconfig') render('navigation-engine', () => {
     if (state.engineGuidedRequest && state.engineGuidedRequest.view !== name && !state.engineIntent) invalidateEngineEditorContext();
@@ -955,7 +1020,7 @@ function renderPanelSection(key) {
       if (state.currentView === 'engineconfig' && state.dataLoad.engineConfigs?.loaded) renderEngineControl();
       if (state.currentView === 'dns' && state.dataLoad.dns?.loaded) renderDNSServiceBindings();
     },
-    engines: renderEngines, engineConfigs: renderEngineControl, components: renderComponents,
+    engines: renderEngines, engineConfigs: () => { if(state.currentView==='engineconfig')renderEngineControl(); else if(typeof renderInterfaceEngines==='function')renderInterfaceEngines(); }, components: renderComponents,
     warp: renderWarpManager, sources: renderSources, nodes: renderNodes,
     nodeFeeds: renderNodes, nodeAutofallback: renderNodes,
     routeOptions: () => { renderServices(); if (state.currentView === 'testlab' && state.dataLoad.testlab?.loaded) renderTestLab(); },
@@ -1026,13 +1091,13 @@ function cancelPanelInventoryRefresh() {
 function refreshPanelInventory() {
   if (!state.authenticated || document.hidden || state.inventoryUnsupported || panelLoad.request) return Promise.resolve(false);
   if (inventoryRead) return inventoryRead.promise;
-  const ticket = { generation: panelLoad.generation, controller: new AbortController(), promise: null };
+  const ticket = { generation: panelLoad.generation, context: panelReadContext(), controller: new AbortController(), promise: null };
   inventoryRead = ticket;
-  const current = () => inventoryRead === ticket && state.authenticated && !document.hidden && panelSnapshotCurrent(ticket.generation);
+  const current = () => inventoryRead === ticket && state.authenticated && !document.hidden && panelSnapshotCurrent(ticket.generation) && panelReadContextCurrent(ticket.context);
   ticket.promise = Promise.resolve().then(async () => {
     try {
       const started = Date.now();
-      const value = await api('/api/v1/panel/inventory', { signal: ticket.controller.signal, readTimeoutMs: 3000 });
+      const value = await readPanelResource('/api/v1/panel/inventory', { signal: ticket.controller.signal, readTimeoutMs: 3000 });
       if (!current()) return false;
       acceptPanelInventory(value, started);
       return true;
@@ -1096,9 +1161,10 @@ function panelViewRequests(view = state.currentView || 'overview') {
 
 function refreshPanelView(name) {
   if (!state.authenticated || name !== state.currentView) return;
-  // Cancel only read transports; mutations have separate lifetimes/epochs.
+  if (panelLoad.request && panelLoad.view === name) return;
+  // Fence the old view's subscriptions; shared transports can serve this view.
   cancelPanelRefresh();
-  void refreshAll();
+  void refreshAll(false, true);
 }
 
 async function settlePanelReads(requests, read) {
@@ -1108,12 +1174,14 @@ async function settlePanelReads(requests, read) {
   }));
 }
 
-async function refreshAll(retryFailed = false) {
+async function refreshAll(retryFailed = false, navigation = false) {
   if (panelLoad.request) return panelLoad.request;
+  if (!retryFailed && !navigation) invalidatePanelReads();
   if (!retryFailed) panelLoad.retryCount = 0;
   clearTimeout(panelLoad.retryTimer);
   panelLoad.retryTimer = null;
   const generation = ++panelLoad.generation;
+  panelLoad.view = state.currentView;
   panelLoad.controller = new AbortController();
   const pending = loadPanelSnapshot(generation, retryFailed);
   panelLoad.request = pending;
@@ -1161,10 +1229,11 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     renderPanelLoad();
     await settlePanelReads(requests, async ([key, url]) => {
       if (!panelSnapshotCurrent(generation)) return;
+      const context = panelReadContext();
       try {
         const requestStartedAt = Date.now();
-        const value = await api(url, options);
-        if (!panelSnapshotCurrent(generation)) return;
+        const value = await readPanelResource(url, options);
+        if (!panelSnapshotCurrent(generation) || !panelReadContextCurrent(context)) return;
         if (key === 'status' && (value?.setup_required || (value?.auth_required && !value?.authenticated))) {
           cancelPanelRefresh();
           showAuth(value); $('#systemText').textContent = 'Требуется вход'; return;
@@ -1172,7 +1241,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
         acceptPanelSection(key, value, requestStartedAt);
         renderPanelSection(key);
       } catch (error) {
-        if (!panelSnapshotCurrent(generation)) return;
+        if (!panelSnapshotCurrent(generation) || !panelReadContextCurrent(context)) return;
         if (error.status === 401) {
           cancelPanelRefresh();
           showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
@@ -1273,7 +1342,8 @@ function renderComponents() {
     const info = typeof consoleEngineState === 'function' ? consoleEngineState(c.id) : null;
     const update = info ? consoleEngineUpdateState(info) : null;
     const stale = c.catalog_stale || c.update_check_error || c.inventory_error || state.componentCatalogError || update?.kind === 'failed';
-    const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running';
+    const recoveryBlocked = typeof componentRecoveryFence === 'function' && componentRecoveryFence();
+    const busy = !!state.componentOperation || !!state.componentRefreshRequest || c.operation_status === 'running' || recoveryBlocked;
     const unavailable = busy || c.running || c.external_owner || inventoryObservationStale();
     // A managed component (NFQWS2) is updated in place while its routes run:
     // the server checks the result and restores the previous version on failure.
@@ -1373,6 +1443,10 @@ async function refreshComponents(refresh = true) {
 
 async function manageComponent(id, requestedAction) {
   if (state.componentOperation || state.componentRefreshRequest || !workflowSession(workflowState.epoch)) return false;
+  if (typeof componentRecoveryFence === 'function' && componentRecoveryFence()) {
+    showNotice('review', 'Прочитайте журнал обновления', 'Новые изменения компонентов доступны после свежего чтения и завершения восстановления.');
+    return false;
+  }
   const component = state.components.find(c => c.id === id);
   if (!component) return false;
   const action = requestedAction || (component.update_available ? 'update' : 'install');
@@ -1427,6 +1501,11 @@ async function manageComponentReviewed(id, requestedAction) {
     const result = await api(`/api/v1/components/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' });
     if(!workflowSession(epoch))return false;
     if (result?.ok !== true) throw new Error('Сервер не подтвердил завершение операции с компонентом.');
+    if (result.pending_live_acceptance === true) {
+      if (typeof componentUpdatePending === 'function') componentUpdatePending();
+      showNotice('review', `${component.name}: принятие версии ожидается`, 'Пакет установлен и проверен отдельно. Рабочий процесс ещё не подтвердил новую версию; прежняя версия сохранена. Откройте журнал на карточке компонента.', { plan, result });
+      return true;
+    }
     if (!await refreshComponents(false)) throw new Error('Операция отправлена, но повторная проверка состояния не завершена.');
     if(!workflowSession(epoch))return false;
     const [engines, engineConfigs] = await Promise.all([api('/api/v1/engines'), api('/api/v1/engine-configs')]);
@@ -1440,7 +1519,8 @@ async function manageComponentReviewed(id, requestedAction) {
     if(!workflowSession(epoch))return false;
     await refreshComponents(false);
     if(!workflowSession(epoch))return false;
-    showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Причина сохранена в карточке компонента; устраните её и повторите операцию. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
+    if (typeof componentUpdatePending === 'function') componentUpdatePending();
+    showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Прочитайте журнал обновления перед новым действием. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
     showDetails({ error: error.message, response: error.payload, plan }, `${component.name}: ошибка`);
     return false;
   }
@@ -1952,8 +2032,18 @@ function engineRoleGuide(id) {
 }
 
 async function openEngineConfiguration(id = '') {
-  if (id && state.engineConfigs.some((engine) => engine.id === id)) await selectEngine(id);
+  const request=state.engineNavigationRequest=(state.engineNavigationRequest||0)+1,generation=state.authGeneration,view=state.currentView;
+  const current=()=>request===state.engineNavigationRequest && generation===state.authGeneration && state.currentView===view && $('#authScreen')?.hidden!==false;
+  if(state.engineIntent){showNotice('review','Операция ещё выполняется','Дождитесь её завершения перед переключением обхода.');return false;}
+  if(id && !state.engineConfigs.some(engine=>engine.id===id)){
+    try{await refreshEngineConfigs();}catch(error){if(current()){if(error.status===401)showAuth({...state.status,authenticated:false},error.message);else showNotice('review','Настройки обхода не прочитаны',error.message);}return false;}
+    if(!current())return false;
+    if(!state.engineConfigs.some(engine=>engine.id===id)){showNotice('review','Настройки обхода недоступны','Сервер не вернул описание выбранного обхода. Обновите состояние; другой обход не выбирался.');return false;}
+  }
+  if(id && state.selectedEngine!==id && !await selectEngine(id,current))return false;
+  if(!current() || id && state.selectedEngine!==id)return false;
   setView('engineconfig');
+  return true;
 }
 
 function openRouteInstallation(id = '') {
@@ -2353,8 +2443,10 @@ function markEngineEditorDirty() {
   state.engineEditorDirty = true;
   state.engineEditorVersion = (state.engineEditorVersion || 0) + 1;
   state.engineValidation = null;
+  if (typeof invalidateEngineProgress === 'function') invalidateEngineProgress(state.selectedEngine);
   $('#engineEditorMessage').textContent = 'Есть изменения. Нажмите «Проверить и применить».';
   updateEngineEditorActions();
+  if (typeof refreshEngineProgressCards === 'function') refreshEngineProgressCards();
 }
 
 function invalidateEngineEditorContext() {
@@ -2382,14 +2474,16 @@ function finishEngineIntent(intent) {
   intent.body = null;
   updateEngineEditorActions();
   if (engineEditorContextCurrent(intent)) renderEngineControl();
+  if (typeof refreshEngineProgressCards === 'function') refreshEngineProgressCards();
 }
 
 function cancelEngineIntent(clearPrivate = false) {
+  if (state.engineIntent && typeof invalidateEngineProgress === 'function') invalidateEngineProgress(state.engineIntent.engineID);
   state.engineIntent?.controller.abort();
   invalidateEngineEditorContext();
   if (clearPrivate) {
     if (state.engineIntent) state.engineIntent.body = null;
-    state.engineLoaded = null; state.engineGuided = null; state.engineEditorDirty = false;
+    state.engineLoaded = null; state.engineGuided = null; state.engineValidation = null; state.engineEditorDirty = false;
     $('#engineEditor').value = ''; $('#guidedEditor').innerHTML = '';
   } else if (state.engineIntent) {
     $('#engineEditorMessage').textContent = 'Останавливаем операцию. Дождитесь завершения проверки или возврата прежних настроек.';
@@ -2482,9 +2576,10 @@ function noticeBelongsOnlyToEngine(details, id) {
   return Array.isArray(blockers)&&blockers.length>0&&blockers.every(b=>b.code==='ENGINE_DRAFT_UNUSED'&&b.adapter===id);
 }
 
-async function selectEngine(id) {
-  if (state.engineIntent) return;
-  if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить обход и потерять локальные изменения редактора?', 'Переключить')) return;
+async function selectEngine(id, isCurrent=()=>true) {
+  if (state.engineIntent || !isCurrent()) return false;
+  if (state.engineEditorDirty && !await askConfirmation('Несохранённые изменения', 'Переключить обход и потерять локальные изменения редактора?', 'Переключить')) return false;
+  if(!isCurrent())return false;
   if(state.selectedEngine!==id && noticeBelongsOnlyToEngine(state.noticeDetails,state.selectedEngine))hideNotice();
   state.selectedEngine = id;
   invalidateEngineEditorContext();
@@ -2495,8 +2590,9 @@ async function selectEngine(id) {
   state.engineGuided = null;
   state.engineValidation = null;
   state.engineMode = 'guided';
-  renderEngineControl();
+  if(state.currentView==='engineconfig')renderEngineControl();
   if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
+  return true;
 }
 
 async function selectEngineFile(id) {
@@ -2543,8 +2639,10 @@ async function refreshEngineConfigs(intent = null) {
   if (!engineEditorContextCurrent(context) || intent && !engineIntentCurrent(intent)) return false;
   state.engineConfigs = configs;
   state.status = status;
+  if(typeof panelSectionState==='function'){panelSectionState('engineConfigs','ready');panelSectionState('status','ready');}
   renderStatus();
-  renderEngineControl();
+  if(state.currentView==='engineconfig')renderEngineControl();
+  else if(typeof renderInterfaceEngines==='function')renderInterfaceEngines();
   return true;
 }
 
@@ -2575,13 +2673,16 @@ async function validateEngineFile() {
   try {
     if (intent.dirty && !await saveEngineDraft(intent)) return;
     if (!engineIntentCurrent(intent)) return;
+    const progress = typeof engineProgressBinding === 'function' ? engineProgressBinding(intent.engineID, intent.fileID) : null;
     const validation = await api(`/api/v1/engine-configs/${encodeURIComponent(intent.engineID)}/validate?file=${encodeURIComponent(intent.fileID)}`, { method: 'POST', signal: intent.controller.signal });
     if (!engineIntentCurrent(intent)) return;
     if (validation.engine_id !== intent.engineID || validation.file_id !== intent.fileID) throw new Error('Проверен другой файл. Повторите выбор.');
     state.engineValidation = validation;
+    if (progress && (!await refreshEngineConfigs(intent) || !engineIntentCurrent(intent))) return;
+    if (typeof engineProgressFormat === 'function') engineProgressFormat(progress, validation);
     renderEngineControl();
     switchEngineTab('check');
-  } catch (error) { if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Ошибка проверки конфигурации'); }
+  } catch (error) { if (engineIntentCurrent(intent)) { if (typeof invalidateEngineProgress === 'function') invalidateEngineProgress(intent.engineID); showDetails({ error: error.message }, 'Ошибка проверки конфигурации'); } }
   finally { finishEngineIntent(intent); }
 }
 
@@ -2627,12 +2728,14 @@ async function applyEngineConfig() {
     $('#engineEditorMessage').textContent = 'Подготавливаем выбранные настройки и проверяем их…';
     if (intent.dirty && !await saveEngineDraft(intent)) return;
     if (!engineIntentCurrent(intent)) return;
+    const progress = typeof engineProgressBinding === 'function' ? engineProgressBinding(intent.engineID, intent.fileID) : null;
     const validation = await api(`/api/v1/engine-configs/${encodeURIComponent(intent.engineID)}/validate?file=${encodeURIComponent(intent.fileID)}`, { method: 'POST', signal: intent.controller.signal });
     if (!engineIntentCurrent(intent)) return;
     if (validation.engine_id !== intent.engineID || validation.file_id !== intent.fileID) throw new Error('Проверен другой файл. Применение остановлено.');
     state.engineValidation = validation;
     if (!state.engineValidation.ok) throw new Error(state.engineValidation.output || 'Конфигурация не прошла проверку');
     if (!await refreshEngineConfigs(intent) || !engineIntentCurrent(intent)) return;
+    if (typeof engineProgressFormat === 'function') engineProgressFormat(progress, validation);
     const plan = await planWithRetainedNodeCheck(`?scope=engine&engine=${encodeURIComponent(intent.engineID)}`, { signal: intent.controller.signal, isCurrent: () => engineIntentCurrent(intent) });
     if (!engineIntentCurrent(intent)) return;
     const unused = (plan.transaction?.blockers || []).find((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED' && blocker.adapter === engine.id);
@@ -2643,6 +2746,7 @@ async function applyEngineConfig() {
     await applyDraft('engine', intent.engineID, { signal: intent.controller.signal, isCurrent: () => engineIntentCurrent(intent), preview: plan, engineIntent: intent });
   } catch (error) {
     if (!engineIntentCurrent(intent)) return;
+    if (typeof invalidateEngineProgress === 'function') invalidateEngineProgress(intent.engineID);
     if (error.payload?.code === 'NODE_ROUTE_DEPENDENCY') showRouteDependencyNotice(error);
     else showDetails({ error: error.message }, 'Настройки не применены');
   }
@@ -3283,13 +3387,20 @@ async function deleteNodeGroup(id) {
 }
 
 async function refreshNodes() {
+  invalidatePanelReads();
+  const epoch = panelReads.epoch, auth = state.authGeneration || 0;
+  const current = () => state.authenticated && epoch === panelReads.epoch && auth === (state.authGeneration || 0);
   const button = $('#refreshNodes');
   button.disabled = true;
   button.textContent = 'Обновление…';
   try {
-    [state.nodes, state.routeOptions] = await Promise.all([api('/api/v1/nodes'), api('/api/v1/routes/options')]);
+    const [nodes, routes] = await Promise.all([readPanelResource('/api/v1/nodes'), readPanelResource('/api/v1/routes/options')]);
+    if (!current()) return;
+    state.nodes = nodes; state.routeOptions = routes;
     renderNodes();
   } catch (error) {
+    if (!current()) return;
+    if (error.status === 401) { showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.'); return; }
     showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Узлы не обновлены');
   } finally {
     button.disabled = false;
@@ -4217,6 +4328,7 @@ function openNodeServiceSection(id) {
 async function applyDraft(scope = 'all', engineID = '', options = {}) {
   const current = () => !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
   if (!current()) return null;
+  const progress = scope === 'engine' && typeof engineProgressBinding === 'function' ? engineProgressBinding(engineID, state.selectedEngineFile || 'main') : null;
   let awaitingReview = false;
   const closeCanceledReview = () => { if (awaitingReview && $('#applyReviewDialog').open) $('#applyReviewDialog').close(); };
   options.signal?.addEventListener('abort', closeCanceledReview, { once: true });
@@ -4258,6 +4370,7 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
     if (!current()) return null;
     await showPlan();
     if (!current()) return null;
+    if (typeof engineProgressApply === 'function') engineProgressApply(progress, preview, result);
     if (result.safe_mode && result.reviewed && !result.live_applied) {
       showNotice('review', 'План проверен — рабочие маршруты не изменены', 'Изменения подготовлены. Чтобы включить их, разрешите применение в настройках и повторите проверку.', result, true);
     } else if (result.live_applied && !result.scope_pending_changes) {
@@ -4272,6 +4385,7 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
     return result;
   } catch (error) {
 	if (!current()) return null;
+	if (scope === 'engine' && typeof invalidateEngineProgress === 'function') invalidateEngineProgress(engineID);
 	await showPlan();
 	if (!current()) return null;
 	const unused = (error.payload?.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
@@ -4711,40 +4825,70 @@ async function importPrivateBackup() {
   finally { button.textContent = 'Импортировать приватные данные в черновик'; button.disabled = !state.privateBackupPreview?.valid; }
 }
 
-const connectionObservation = { epoch: 0, request: 0 };
+const connectionObservation = { epoch: 0, request: 0, pending: null };
 
-function clearConnectionObservation() {
+function connectionObservationActive() {
+  return state.authenticated === true && state.currentView === 'connections' && !document.hidden;
+}
+
+function stopConnectionObservation() {
   connectionObservation.epoch++;
-  state.authenticated = false;
+  connectionObservation.request++;
+  connectionObservation.pending?.controller.abort();
+  connectionObservation.pending = null;
   if (state.stream) state.stream.close();
   state.stream = null;
+  if (state.connections) { state.connections.live = false; state.connections.reason = 'Просмотр соединений приостановлен. При открытии раздела данные обновятся.'; }
+}
+
+function syncConnectionObservation() {
+  if (connectionObservationActive()) { renderConnections(); startConnectionStream(); }
+  else stopConnectionObservation();
+}
+
+function clearConnectionObservation() {
+  stopConnectionObservation();
+  state.authenticated = false;
   state.connections = { connections: [], active: 0, closed: 0, live: false, producer: '', reason: 'Требуется вход' };
   renderConnections();
 }
 
 document.addEventListener('razvilka:auth-required', clearConnectionObservation);
+document.addEventListener('razvilka:auth-restored', syncConnectionObservation);
+document.addEventListener('visibilitychange', () => {
+  syncConnectionObservation();
+  if (connectionObservationActive()) void refreshConnections();
+});
 
 async function refreshConnections() {
-  if (state.authenticated !== true) return;
+  if (!connectionObservationActive()) return;
+  if (connectionObservation.pending) return connectionObservation.pending.promise;
   const epoch = connectionObservation.epoch, request = ++connectionObservation.request;
-  const current = () => state.authenticated === true && connectionObservation.epoch === epoch && connectionObservation.request === request;
-  try {
-    const value = await api('/api/v1/connections?include_closed=true');
-    if (!current()) return;
-    state.connections = value;
-    renderConnections();
-  } catch (error) {
-    if (current() && error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
-    // SSE or next refresh will recover. Do not spam the UI on transient failures.
-  }
+  const flight = { controller: new AbortController(), promise: null };
+  connectionObservation.pending = flight;
+  const current = () => connectionObservationActive() && connectionObservation.epoch === epoch && connectionObservation.request === request && connectionObservation.pending === flight;
+  flight.promise = (async () => {
+    try {
+      const value = await api('/api/v1/connections?include_closed=true', { signal: flight.controller.signal });
+      if (!current()) return;
+      state.connections = value;
+      renderConnections();
+    } catch (error) {
+      if (current() && error.status === 401) showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
+      // SSE or next visible refresh will recover. No replay or hidden poll.
+    } finally {
+      if (connectionObservation.pending === flight) connectionObservation.pending = null;
+    }
+  })();
+  return flight.promise;
 }
 
 function startConnectionStream() {
-  if (state.authenticated !== true || !window.EventSource || state.stream) return;
+  if (!connectionObservationActive() || !window.EventSource || state.stream) return;
   const epoch = connectionObservation.epoch;
   const stream = new EventSource('/api/v1/connections/stream');
   state.stream = stream;
-  const current = () => state.authenticated === true && connectionObservation.epoch === epoch && state.stream === stream;
+  const current = () => connectionObservationActive() && connectionObservation.epoch === epoch && state.stream === stream;
   stream.addEventListener('connections', (event) => {
     if (!current()) return;
     try {

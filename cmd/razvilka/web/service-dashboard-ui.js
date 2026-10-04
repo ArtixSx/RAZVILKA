@@ -204,11 +204,14 @@ async function refreshServiceControl() {
   const controller = new AbortController();
   const epoch = serviceDashboard.epoch;
   const generation = typeof panelLoad === 'undefined' ? null : panelLoad.generation;
+  const context = typeof panelReadContext === 'function' ? panelReadContext() : null;
   const current = () => !controller.signal.aborted && epoch === serviceDashboard.epoch
-    && !serviceDashboard.edit && (generation === null || panelSnapshotCurrent(generation));
+    && !serviceDashboard.edit && (generation === null || panelSnapshotCurrent(generation))
+    && (context === null || panelReadContextCurrent(context));
   serviceDashboard.read = controller;
   try {
-    const memory = await api('/api/v1/service-control/current', { signal: controller.signal });
+    const read = typeof readPanelResource === 'function' ? readPanelResource : api;
+    const memory = await read('/api/v1/service-control/current', { signal: controller.signal });
     if (!current()) return;
     const priorJob = serviceDashboard.control?.job;
     serviceDashboard.control = { ...serviceDashboard.control, job: memory.job || null };

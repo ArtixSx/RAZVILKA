@@ -24,19 +24,8 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root st
 	if err := a.checkSnapshotSidecar(s); err != nil {
 		return false, err
 	}
-	for _, file := range []struct {
-		path   string
-		data   []byte
-		exists bool
-	}{
-		{a.engineConfigPath(), s.RuntimeEngine, s.RuntimeEngineExists},
-		{a.sidecarConfigPath(), s.RuntimeSidecar, s.RuntimeSideExists},
-		{a.transportPath(), s.Transport, s.TransportExists},
-		{a.evidencePath(), s.Evidence, s.EvidenceExists},
-	} {
-		if err := verifyRestoredFile(file.path, file.data, file.exists); err != nil {
-			return false, err
-		}
+	if err := a.verifyProxySnapshotRuntimeFiles(s); err != nil {
+		return false, err
 	}
 	if s.ConfigDraft {
 		if err := verifyRestoredFile(s.ConfigPath, s.Config, s.ConfigExisted); err != nil {
@@ -76,6 +65,9 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root st
 	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), policy); err != nil {
 		return false, err
 	}
+	if err := a.verifyCommittedReceipt(ctx, policy); err != nil {
+		return false, err
+	}
 	staged, err := a.readStagedPolicy(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil // No complete candidate journal: do not grant a receipt.
@@ -83,8 +75,23 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root st
 	if err != nil {
 		return false, err
 	}
+	addition, err := a.readCandidatePolicyReceipt(root, staged)
+	if err != nil || addition.Phase != "restored" && addition.Phase != "prepared" {
+		return false, ErrProxyPolicyUnknown
+	}
+	if err := a.verifyCandidateReceipt(ctx, root, staged, false); err != nil {
+		return false, err
+	}
 	if err := a.verifyCandidateRemoved(ctx, policy, staged); err != nil {
 		return false, err
+	}
+	if a.scopedXray {
+		if err := a.verifyScopedNodeInterface(ctx); err != nil {
+			return false, err
+		}
+		if _, err := a.scopedRuntimeIdentity(); err != nil {
+			return false, err
+		}
 	}
 	// Kernel inspection can take time. A process which exited during readback
 	// must not acquire a live restoration receipt.

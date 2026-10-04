@@ -12,6 +12,32 @@ type WireGuardProfileProvider interface {
 	Get(context.Context, string) (wireguardprofile.Profile, error)
 }
 
+// The app catalog and runtime consume the same explicitly registered owner.
+// Observing an API never creates a second store or discovers a private path.
+type WireGuardProfileCatalog interface {
+	WireGuardProfileProvider
+	List(context.Context) ([]wireguardprofile.Metadata, error)
+	Put(context.Context, string, string, string, string) (wireguardprofile.Metadata, error)
+	Delete(context.Context, string, string) error
+}
+
+func (m *Manager) WireGuardProfileCatalog() (WireGuardProfileCatalog, error) {
+	if m == nil {
+		return nil, errors.New("named WireGuard profile runtime is unavailable")
+	}
+	m.registryMu.RLock()
+	defer m.registryMu.RUnlock()
+	adapter, ok := m.Adapters["wireguard"].(*WARPWireGuardAdapter)
+	if !ok || adapter == nil || adapter.ID() != "wireguard" {
+		return nil, errors.New("named WireGuard profile runtime is unavailable")
+	}
+	catalog, ok := adapter.Profiles.(WireGuardProfileCatalog)
+	if !ok || catalog == nil {
+		return nil, errors.New("named WireGuard profile catalog is unavailable")
+	}
+	return catalog, nil
+}
+
 func selectedWireGuardProfile(plan Plan) (string, error) {
 	selected := ""
 	for _, route := range plan.Routes {

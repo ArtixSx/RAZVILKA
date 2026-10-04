@@ -16,6 +16,36 @@ type journalFaultAdapter struct {
 	*networkExecutionAdapter
 }
 
+func TestExecutionJournalReadOnlyInspectionDoesNotSettleCommit(t *testing.T) {
+	m := New(t.TempDir())
+	plan := journalTestPlan()
+	execution := Execution{PlanID: plan.PlanID, Digest: plan.Digest, State: "committing", StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	root := filepath.Join(m.StateRoot, "transactions", plan.PlanID)
+	if err := m.prepareExecutionRoot(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.writeExecution(root, execution); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(m.StateRoot, "latest-execution.json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.CheckExecutionRecovery(context.Background()); !errors.Is(err, ErrExecutionJournal) {
+		t.Fatal("unfinished publication admitted", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != string(before) {
+		t.Fatal("inspection settled publication", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := m.CheckExecutionRecovery(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatal("cancellation ignored", err)
+	}
+}
+
 func TestExecutionJournalRestartDoesNotEraseRecoveryBarrier(t *testing.T) {
 	for _, state := range []string{"applying", "committing", "rolling-back", "rollback-failed", "journal-failed", "unknown", "mismatch", "missing-transaction", "corrupt", "running-step", "bad-path"} {
 		t.Run(state, func(t *testing.T) {

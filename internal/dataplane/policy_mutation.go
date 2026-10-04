@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -20,25 +21,134 @@ func applyRecordedPolicy(ctx context.Context, runner NFQWS2Runner, ipCommand str
 	if len(rules) == 0 {
 		return errors.New("policy routing rules are empty")
 	}
+	// A table number grants no ownership of defaults installed by another
+	// process. Inspect BOTH families before the first mutation; do not infer
+	// admission from the cleanup helper, which intentionally skips other devs.
+	if err := inspectPolicyDefaults(ctx, runner, ipCommand, state, false); err != nil {
+		return err
+	}
 	if state.RuleLayout == 2 {
 		if err := verifyPolicyPrecedence(ctx, runner, ipCommand, state, true); err != nil {
 			return err
 		}
 	}
-	if _, err := runner.Run(ctx, ipCommand, "route", "replace", "default", "dev", state.Interface, "table", strconv.Itoa(state.Table)); err != nil {
-		return fmt.Errorf("create IPv4 policy table: %w", err)
-	}
-	_, _ = runner.Run(ctx, ipCommand, "-6", "route", "replace", "default", "dev", state.Interface, "table", strconv.Itoa(state.Table))
 	added := make([]kernelPolicyRule, 0, len(rules))
+	created := map[int]bool{}
+	rollback := func(cause error) error {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		return errors.Join(cause, removeAddedPolicy(cleanup, runner, ipCommand, state, added, created))
+	}
+	for _, family := range []int{4, 6} {
+		args := []string{"route", "add", "default", "dev", state.Interface, "table", strconv.Itoa(state.Table), "proto", "boot", "metric", "0"}
+		if family == 6 {
+			args[len(args)-1] = "1024"
+			args = append([]string{"-6"}, args...)
+		}
+		if _, err := runner.Run(ctx, ipCommand, args...); err != nil {
+			return rollback(fmt.Errorf("create IPv%d policy table: %w", family, err))
+		}
+		created[family] = true
+	}
+	// A different-metric occupant may coexist with a successful netlink add.
+	// Refuse it before selectors can route traffic to an ambiguous default.
+	if err := inspectPolicyDefaults(ctx, runner, ipCommand, state, true); err != nil {
+		return rollback(err)
+	}
 	for _, rule := range rules {
 		if _, err := runner.Run(ctx, ipCommand, kernelRuleArgs("add", rule)...); err != nil {
-			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-			defer cancel()
-			return errors.Join(fmt.Errorf("add exact policy selector: %w", err), removeKernelPolicy(cleanup, runner, ipCommand, state, added))
+			return rollback(fmt.Errorf("add exact policy selector: %w", err))
 		}
 		added = append(added, rule)
 	}
 	return nil
+}
+
+func readPolicyTable(ctx context.Context, runner NFQWS2Runner, command string, state PolicyState, family int) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	args := []string{"route", "show", "table", strconv.Itoa(state.Table)}
+	if family == 6 {
+		args = append([]string{"-6"}, args...)
+	}
+	out, err := runner.Run(ctx, command, args...)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return nil, contextErr
+	}
+	if err != nil && ctx.Err() == nil {
+		absent := fmt.Sprintf("Error: ipv%d: FIB table does not exist.", family)
+		message := strings.TrimSpace(string(out))
+		if message == absent || message == absent+"\nDump terminated" {
+			return nil, nil
+		}
+	}
+	if err != nil || len(out) > 1<<20 {
+		return nil, errors.New("policy table inspection unavailable")
+	}
+	return out, nil
+}
+
+func inspectPolicyDefaults(ctx context.Context, runner NFQWS2Runner, command string, state PolicyState, created bool) error {
+	var failures error
+	for _, family := range []int{4, 6} {
+		out, err := readPolicyTable(ctx, runner, command, state, family)
+		if err != nil {
+			failures = errors.Join(failures, err)
+			continue
+		}
+		defaults := 0
+		for _, line := range strings.Split(string(out), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 0 {
+				continue
+			}
+			switch fields[0] {
+			case "unicast", "blackhole", "unreachable", "prohibit", "throw":
+				fields = fields[1:]
+			}
+			if len(fields) == 0 {
+				failures = errors.Join(failures, errors.New("unrecognized policy table entry"))
+				continue
+			}
+			if fields[0] == "default" || fields[0] == "0.0.0.0/0" || fields[0] == "::/0" {
+				defaults++
+				continue
+			}
+			// Endpoint pins can coexist. Diagnostic text, multipath continuation
+			// lines and unknown route syntax cannot prove an empty default slot.
+			_, prefixErr := netip.ParsePrefix(fields[0])
+			_, addrErr := netip.ParseAddr(fields[0])
+			if prefixErr != nil && addrErr != nil {
+				failures = errors.Join(failures, errors.New("unrecognized policy table entry"))
+			}
+		}
+		if !created && defaults != 0 {
+			failures = errors.Join(failures, fmt.Errorf("IPv%d policy table has an existing default", family))
+		}
+		if created {
+			selector, err := recordedDefaultRoute(ctx, runner, command, state, family)
+			if defaults != 1 || err != nil || len(selector) == 0 {
+				failures = errors.Join(failures, err, fmt.Errorf("IPv%d policy default ownership is unconfirmed", family))
+			}
+		}
+	}
+	return failures
+}
+
+func removeAddedPolicy(ctx context.Context, runner NFQWS2Runner, command string, state PolicyState, rules []kernelPolicyRule, created map[int]bool) error {
+	defaults := map[int][]string{}
+	for _, family := range []int{4, 6} {
+		if !created[family] {
+			continue
+		} // A failed add grants no cleanup authority.
+		args, err := recordedDefaultRoute(ctx, runner, command, state, family)
+		if err != nil {
+			return err
+		}
+		defaults[family] = args
+	}
+	return removeKernelPolicyTuples(ctx, runner, command, state, rules, defaults)
 }
 
 func removeRecordedPolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState) error {
@@ -66,6 +176,10 @@ func removeKernelPolicy(ctx context.Context, runner NFQWS2Runner, ipCommand stri
 		}
 		defaults[family] = args
 	}
+	return removeKernelPolicyTuples(ctx, runner, ipCommand, state, rules, defaults)
+}
+
+func removeKernelPolicyTuples(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState, rules []kernelPolicyRule, defaults map[int][]string) error {
 	wanted := map[kernelPolicyRule]bool{}
 	families := map[int]bool{}
 	priorities := map[int]bool{}
@@ -146,22 +260,9 @@ func removeKernelPolicy(ctx context.Context, runner NFQWS2Runner, ipCommand stri
 // Returns a complete deletion selector only for the default installed by
 // applyRecordedPolicy. Unknown attributes on a matching interface are not ours.
 func recordedDefaultRoute(ctx context.Context, runner NFQWS2Runner, command string, state PolicyState, family int) ([]string, error) {
-	args := []string{"route", "show", "table", strconv.Itoa(state.Table)}
-	if family == 6 {
-		args = append([]string{"-6"}, args...)
-	}
-	out, err := runner.Run(ctx, command, args...)
-	if err != nil && ctx.Err() == nil {
-		// iproute2 returns status 2 for a genuinely absent FIB. Other read
-		// failures (including permissions or a lost command) remain unknown.
-		message := strings.TrimSpace(string(out))
-		empty := fmt.Sprintf("Error: ipv%d: FIB table does not exist.\nDump terminated", family)
-		if message == empty {
-			return nil, nil
-		}
-	}
-	if err != nil || len(out) > 1<<20 {
-		return nil, errors.New("policy table inspection unavailable during cleanup")
+	out, err := readPolicyTable(ctx, runner, command, state, family)
+	if err != nil {
+		return nil, err
 	}
 	var deletion []string
 	for _, line := range strings.Split(string(out), "\n") {

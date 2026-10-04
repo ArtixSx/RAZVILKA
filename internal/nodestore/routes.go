@@ -16,6 +16,14 @@ import (
 
 var ErrRouteProof = errors.New("node route has no current exact service proof")
 
+const (
+	// Keep destination-only materialization bounded by the existing service
+	// policy and local destination limits. Count raw inputs before deduplication.
+	maxRouteBindings         = 128
+	maxRouteDestinations     = 512
+	maxRouteDestinationBytes = 256
+)
+
 // RouteBinding is trusted local intent. NodeID is resolved only inside the
 // private store; callers never receive the corresponding credential material.
 type RouteBinding struct {
@@ -110,8 +118,74 @@ func (s *Store) MaterializeXray(ctx context.Context, bindings []RouteBinding, no
 	return s.materializeEngine(ctx, "xray", bindings, now)
 }
 
+// ValidateRouteDestinationOwners checks the destination-only routing boundary
+// shared by materializers and their local adapters. A SOCKS engine cannot retain
+// the original LAN source, so overlapping destinations must use the same node.
+// This pure check grants no service, network, or node-health authority.
+func ValidateRouteDestinationOwners(bindings []RouteBinding) error {
+	if len(bindings) == 0 || len(bindings) > maxRouteBindings {
+		return ErrRouteProof
+	}
+	total := 0
+	for _, binding := range bindings {
+		if !validNodeID(binding.NodeID) || len(binding.Domains) > maxRouteDestinations-total {
+			return ErrRouteProof
+		}
+		total += len(binding.Domains)
+		if len(binding.Destinations) > maxRouteDestinations-total {
+			return ErrRouteProof
+		}
+		total += len(binding.Destinations)
+		for _, values := range [][]string{binding.Domains, binding.Destinations} {
+			for _, value := range values {
+				if len(value) > maxRouteDestinationBytes {
+					return ErrRouteProof
+				}
+			}
+		}
+	}
+	type domainOwner struct{ domain, nodeID string }
+	type prefixOwner struct {
+		prefix netip.Prefix
+		nodeID string
+	}
+	var domains []domainOwner
+	var prefixes []prefixOwner
+	for _, binding := range bindings {
+		names, err := normalizedDomains(binding.Domains)
+		if err != nil {
+			return err
+		}
+		cidrs, err := normalizedDestinations(binding.Destinations)
+		if err != nil || len(names)+len(cidrs) == 0 {
+			return ErrRouteProof
+		}
+		for _, name := range names {
+			for _, previous := range domains {
+				if previous.nodeID != binding.NodeID && (name == previous.domain || strings.HasSuffix(name, "."+previous.domain) || strings.HasSuffix(previous.domain, "."+name)) {
+					return ErrRouteProof
+				}
+			}
+			domains = append(domains, domainOwner{name, binding.NodeID})
+		}
+		for _, cidr := range cidrs {
+			prefix, err := netip.ParsePrefix(cidr)
+			if err != nil {
+				return ErrRouteProof
+			}
+			for _, previous := range prefixes {
+				if previous.nodeID != binding.NodeID && prefix.Overlaps(previous.prefix) {
+					return ErrRouteProof
+				}
+			}
+			prefixes = append(prefixes, prefixOwner{prefix, binding.NodeID})
+		}
+	}
+	return nil
+}
+
 func (s *Store) materializeEngine(ctx context.Context, engine string, bindings []RouteBinding, now time.Time) (RouteMaterial, error) {
-	if len(bindings) == 0 || now.IsZero() {
+	if now.IsZero() || ValidateRouteDestinationOwners(bindings) != nil {
 		return RouteMaterial{}, ErrRouteProof
 	}
 	now = now.UTC()
@@ -155,6 +229,9 @@ func (s *Store) materializeEngine(ctx context.Context, engine string, bindings [
 		if json.Unmarshal(secrets[node.SecretRef], &outbound) != nil || len(outbound) == 0 {
 			return RouteMaterial{}, ErrStore
 		}
+		if engine == "sing-box" && !providerprofile.SingBoxSupportsOutbound(outbound) {
+			return RouteMaterial{}, ErrRouteProof
+		}
 		collectPrivateEndpointHosts(outbound, endpointSet)
 		if engine == "xray" {
 			var err error
@@ -171,18 +248,14 @@ func (s *Store) materializeEngine(ctx context.Context, engine string, bindings [
 	}
 
 	rules := make([]any, 0, len(bindings)+1)
-	seenDestination := map[string]string{}
 	for _, binding := range bindings {
-		domains := normalizedDomains(binding.Domains)
+		domains, err := normalizedDomains(binding.Domains)
+		if err != nil {
+			return RouteMaterial{}, ErrRouteProof
+		}
 		cidrs, err := normalizedDestinations(binding.Destinations)
 		if err != nil || len(domains)+len(cidrs) == 0 {
 			return RouteMaterial{}, ErrRouteProof
-		}
-		for _, destination := range append(append([]string{}, domains...), cidrs...) {
-			if owner, exists := seenDestination[destination]; exists && owner != binding.NodeID {
-				return RouteMaterial{}, ErrRouteProof
-			}
-			seenDestination[destination] = binding.NodeID
 		}
 		if engine == "xray" {
 			if len(domains) > 0 {
@@ -310,39 +383,25 @@ func validExactRoute(route, nodeID string) bool {
 
 func nodeTag(id string) string { return "rz-node-" + id[len("node-"):len("node-")+16] }
 
-func normalizedDomains(values []string) []string {
+func normalizedDomains(values []string) ([]string, error) {
 	seen := map[string]bool{}
 	for _, value := range values {
 		value = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(value), "."))
 		value = strings.TrimPrefix(value, "*.")
-		if value != "" && !strings.ContainsAny(value, " /\\\x00") {
-			seen[value] = true
-		}
-	}
-	out := make([]string, 0, len(seen))
-	for value := range seen {
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func normalizedDestinations(values []string) ([]string, error) {
-	seen := map[string]bool{}
-	for _, value := range values {
-		prefix, err := netip.ParsePrefix(value)
-		if err != nil {
-			address, addressErr := netip.ParseAddr(value)
-			if addressErr != nil {
-				return nil, ErrRouteProof
-			}
-			prefix = netip.PrefixFrom(address.Unmap(), address.BitLen())
-		}
-		address := prefix.Addr().Unmap()
-		if !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsMulticast() {
+		if len(value) == 0 || len(value) > 253 {
 			return nil, ErrRouteProof
 		}
-		seen[netip.PrefixFrom(address, prefix.Bits()).Masked().String()] = true
+		for _, label := range strings.Split(value, ".") {
+			if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+				return nil, ErrRouteProof
+			}
+			for _, ch := range label {
+				if (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '-' {
+					return nil, ErrRouteProof
+				}
+			}
+		}
+		seen[value] = true
 	}
 	out := make([]string, 0, len(seen))
 	for value := range seen {
@@ -352,30 +411,48 @@ func normalizedDestinations(values []string) ([]string, error) {
 	return out, nil
 }
 
-func collectPrivateEndpointHosts(value any, seen map[string]bool) {
-	var walk func(any, string)
-	walk = func(current any, key string) {
-		switch item := current.(type) {
-		case map[string]any:
-			for childKey, child := range item {
-				walk(child, strings.ToLower(childKey))
+func normalizedDestinations(values []string) ([]string, error) {
+	seen := map[string]bool{}
+	for _, value := range values {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			address, addressErr := netip.ParseAddr(value)
+			if addressErr != nil || address.Is4In6() {
+				return nil, ErrRouteProof
 			}
-		case []any:
-			for _, child := range item {
-				walk(child, key)
-			}
-		case string:
-			if key != "server" && key != "address" && key != "endpoint" {
-				return
-			}
-			host := strings.Trim(strings.TrimSpace(item), "[]")
-			if split, _, err := net.SplitHostPort(host); err == nil {
-				host = strings.Trim(split, "[]")
-			}
-			if host != "" && host != "127.0.0.1" && host != "::1" {
-				seen[host] = true
-			}
+			prefix = netip.PrefixFrom(address, address.BitLen())
 		}
+		if prefix.Addr().Is4In6() {
+			return nil, ErrRouteProof
+		}
+		address := prefix.Addr().Unmap()
+		if !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsMulticast() {
+			return nil, ErrRouteProof
+		}
+		canonical := netip.PrefixFrom(address, prefix.Bits()).Masked()
+		if !canonical.IsValid() {
+			return nil, ErrRouteProof
+		}
+		seen[canonical.String()] = true
 	}
-	walk(value, "")
+	out := make([]string, 0, len(seen))
+	for value := range seen {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func collectPrivateEndpointHosts(outbound map[string]any, seen map[string]bool) {
+	// This is a validated canonical node, whose only remote endpoint is its
+	// top-level server. Transport headers/extra and TLS names are private
+	// protocol data, never DNS or route-exclusion authority.
+	server, _ := outbound["server"].(string)
+	host := strings.Trim(strings.TrimSpace(server), "[]")
+	if split, _, err := net.SplitHostPort(host); err == nil {
+		host = strings.Trim(split, "[]")
+	}
+	if host != "" && host != "127.0.0.1" && host != "::1" {
+		seen[host] = true
+	}
 }

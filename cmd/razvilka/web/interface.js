@@ -208,38 +208,165 @@ function interfaceOpenServiceChanges(){
  $('#serviceDraftBar').scrollIntoView({block:'center',behavior:'smooth'});
  $('#applyServiceChanges').focus({preventScroll:true});
 }
+// These receipts describe completed UI requests; they grant no routing authority.
+// Keep only public identity/typed outcomes, never config content or review tokens.
+const engineProgressEvidence = new Map();
+function engineProgressBinding(engineID,fileID='main') {
+ const engine=state.engineConfigs?.find(item=>item.id===engineID),file=engine?.files?.find(item=>item.id===fileID);
+ const component=state.components?.find(item=>item.id===engineID),runtime=state.engines?.find(item=>item.id===engineID);
+ const revision=Math.max(state.status?.revision||0,state.serviceControl?.config_revision||0);
+ const loaded=state.engineLoaded,loadedSame=loaded?.engine_id===engineID&&loaded.file_id===fileID;
+ // FileView.sha256 is the live hash, even when a draft exists. Never bind a
+ // staged validation to that live hash; use the actual Stage/read receipt.
+ const sha256=file?.staged?(loadedSame&&loaded.source==='staged'?loaded.sha256:''):file?.sha256||(loadedSame&&loaded.source==='live'?loaded.sha256:'');
+ if(!file||!Number.isSafeInteger(revision)||revision<1||!/^[a-f0-9]{64}$/.test(sha256||'')||state.authenticated===false||typeof interfaceState!=='undefined'&&interfaceState.authRevoked)return null;
+ return {engineID,fileID,sha256,staged:file.staged===true,revision,auth:state.authGeneration||0,requestedAt:Date.now(),
+   profileGeneration:file.staged?file.staged_at||'':file.modified_at||'',
+   generation:Number.isSafeInteger(state.nodes?.generation)?state.nodes.generation:null,network:state.nodes?.network_profile||'',
+   installed:JSON.stringify([runtime?.binary_path||'',component?.installed_version||runtime?.version||'',component?.installed===true,runtime?.installed===true])};
+}
+function engineProgressSame(before,after,allowCommitted=false) {
+ return !!before&&!!after&&['engineID','fileID','sha256','revision','auth','generation','installed'].every(key=>before[key]===after[key])
+   &&(allowCommitted||before.staged===after.staged&&before.profileGeneration===after.profileGeneration)&&(!before.network||!after.network||before.network===after.network);
+}
+function invalidateEngineProgress(engineID='') {
+ if(engineID)engineProgressEvidence.delete(engineID);else engineProgressEvidence.clear();
+}
+function refreshEngineProgressCards() {
+ if(typeof renderInterfaceEngines!=='function'||!['engines','engineconfig'].includes(state.currentView))return;
+ try{renderInterfaceEngines();}catch(_){/* A card render cannot change an operation outcome. */}
+}
+function engineProgressFormat(binding,result) {
+ if(!binding)return;
+ const current=engineProgressBinding(binding.engineID,binding.fileID);
+ if(!engineProgressSame(binding,current)||result?.engine_id!==binding.engineID||result.file_id!==binding.fileID||result.ok!==true){invalidateEngineProgress(binding.engineID);return;}
+ const old=engineProgressEvidence.get(binding.engineID),entry=engineProgressSame(old?.binding,current,true)?old:{};
+ engineProgressEvidence.set(binding.engineID,{...entry,binding:current,format:{native:result.native===true,until:Date.now()+120000}});
+}
+function engineProgressProbe(binding,result,serviceID) {
+ if(!binding)return;
+ const current=engineProgressBinding(binding.engineID,binding.fileID),rows=(result?.results||[]).filter(row=>row.service_id===serviceID&&row.route===binding.engineID);
+ const positive=rows.length>0&&rows.every(row=>{
+   const proof=row.evidence_v2,exact=(expected,observed)=>!expected&&!observed||!!expected&&expected===observed;
+   return row.status==='pass'&&row.verdict==='PASS'&&row.route_confirmed===true
+     &&row.evidence_level==='service-confirmed'&&row.outcome==='service_accepted'&&!row.error_code&&!row.route_proof_error&&!row.negative_control_matched
+     &&exact(row.expected_route_path_id,row.observed_route_path_id)
+     &&proof?.schema_version===2&&proof.probe_id&&proof.service===serviceID&&proof.engine===binding.engineID&&proof.route_path_id
+     &&proof.verdict==='PASS'&&proof.outcome==='service_accepted'&&!proof.error_code&&!proof.route_proof_error&&!proof.negative_control_matched
+     &&exact(proof.expected_route_path_id,proof.observed_route_path_id)
+     &&current?.network&&row.network_profile_id===current.network&&proof.network_profile===current.network
+     &&Date.parse(proof.started_at)>=binding.requestedAt-1000&&Date.parse(proof.started_at)<=Date.parse(proof.finished_at)
+     &&Date.parse(proof.finished_at)===Date.parse(row.checked_at)&&Date.parse(row.checked_at)<=Date.now()
+     &&Date.parse(row.checked_at)<Date.parse(row.evidence_fresh_until)&&Date.parse(row.evidence_fresh_until)>Date.now();
+ });
+ // The route checker observes the installed profile, never an unapplied draft.
+ if(!engineProgressSame(binding,current)||binding.staged||!positive){invalidateEngineProgress(binding.engineID);return;}
+ const old=engineProgressEvidence.get(binding.engineID),entry=engineProgressSame(old?.binding,current)?old:{};
+ engineProgressEvidence.set(binding.engineID,{...entry,binding:current,service:{serviceID,network:rows[0].network_profile_id,checkedAt:Math.max(...rows.map(row=>Date.parse(row.checked_at))),
+   until:Math.min(Date.now()+120000,...rows.map(row=>Date.parse(row.evidence_fresh_until)))}});
+}
+function engineProgressApply(binding,preview,result) {
+ if(!binding)return;
+ const current=engineProgressBinding(binding.engineID,binding.fileID),transaction=result?.transaction,execution=result?.execution;
+ const digest=preview?.review?.reviewed_digest;
+ const routes=(transaction?.routes||[]).filter(route=>(route.resolved||route.route)===binding.engineID||(route.resolved||route.route||'').startsWith(binding.engineID+':'));
+ const matched=engineProgressSame(binding,current,true)&&result?.ok===true&&result.live_applied===true&&!result.safe_mode&&!result.scope_pending_changes
+   &&typeof digest==='string'&&digest&&preview.transaction?.digest===digest&&transaction?.digest===digest
+   &&transaction.plan_id===execution?.plan_id&&execution.digest===digest&&execution.state==='committed'&&!execution.error
+   &&preview.review.expected_revision===binding.revision&&transaction.revision===binding.revision
+   &&Date.parse(execution.started_at)>=binding.requestedAt-1000&&Date.parse(execution.started_at)<=Date.parse(execution.finished_at)
+   &&Date.parse(execution.finished_at)<=Date.now()&&Date.parse(execution.finished_at)>Date.now()-120000
+   &&transaction.adapters?.includes(binding.engineID)&&routes.length>0&&routes.every(route=>(state.services||[]).some(service=>{
+     const applied=serviceDashboardApplied(service);return service.id===route.service_id&&applied.enabled&&applied.route===(route.resolved||route.route);
+   }));
+ if(!matched){invalidateEngineProgress(binding.engineID);return;}
+ const old=engineProgressEvidence.get(binding.engineID),entry=engineProgressSame(old?.binding,current,true)?old:{};
+ // Services may still contain a fresh test of the previous installed profile.
+ // A committed Apply is not a new service probe: require an explicit fresh test.
+ engineProgressEvidence.set(binding.engineID,{...entry,binding:current,
+   service:null,
+   apply:{digest,routes:routes.map(route=>({serviceID:route.service_id,route:route.resolved||route.route})),until:Date.parse(execution.finished_at)+120000}});
+}
+function engineProgressView(engineID,fileID='main') {
+ const current=engineProgressBinding(engineID,fileID),entry=engineProgressEvidence.get(engineID);
+ const stopped=state.serviceControl?.runtime_state==='stopped'||state.status?.dataplane_state==='stopped'||typeof workspaceControl!=='undefined'&&workspaceControl.stopReceipt;
+ const pending=state.engineIntent?.engineID===engineID||state.componentOperation?.id===engineID||typeof workflowState!=='undefined'&&workflowState.probe?.engine===engineID||state.selectedEngine===engineID&&state.engineEditorDirty
+   ||['running','queued','canceling','interrupted'].includes(state.serviceControl?.durable_jobs?.find(job=>['service-stop','service-resume'].includes(job.mode))?.state)
+   ||state.dataLoad?.engineConfigs?.phase==='busy'||state.dataLoad?.status?.phase==='busy';
+ const negative=state.status?.last_apply_failure||['requires-review','network-stale','revalidating'].includes(state.status?.node_recovery?.state)
+   ||state.dataLoad?.engineConfigs?.phase==='error'||state.dataLoad?.status?.phase==='error'
+   ||typeof inventoryObservationStale==='function'&&inventoryObservationStale();
+ if(!entry||stopped||negative){if(entry)invalidateEngineProgress(engineID);return {format:false,service:false,apply:false};}
+ if(pending)return {format:false,service:false,apply:false};
+ if(!engineProgressSame(entry.binding,current)){invalidateEngineProgress(engineID);return {format:false,service:false,apply:false};}
+ const newerNegative=(state.services||[]).some(service=>{
+   const observed=service.observed_state;
+   return service.id===entry.service?.serviceID&&(observed?.route===engineID||observed?.route?.startsWith(engineID+':'))
+     &&Date.parse(observed.checked_at)>=entry.service.checkedAt&&(observed.status!=='pass'||observed.level!=='service-confirmed'||observed.outcome!=='service_accepted');
+ });
+ if(newerNegative){invalidateEngineProgress(engineID);return {format:false,service:false,apply:false};}
+ const format=!!(entry.format?.until>Date.now()),service=!!(entry.service?.until>Date.now()&&(!current.network||!entry.service.network||entry.service.network===current.network)&&!newerNegative);
+ const applied=!!(entry.apply?.until>Date.now()&&!current.staged&&state.status?.dataplane_state==='committed'&&state.status?.live_active===true
+   &&entry.apply.routes.every(route=>(state.services||[]).some(service=>{const applied=serviceDashboardApplied(service);return service.id===route.serviceID&&applied.enabled&&applied.route===route.route;})));
+ return {format,service,apply:applied,native:format&&entry.format.native};
+}
 function interfaceEngineCard(id,meta){
  const info=consoleEngineState(id),component=info.component,update=consoleEngineUpdateState(info);
  const used=(state.services||[]).filter(service=>{const applied=serviceDashboardApplied(service);return applied.enabled&&(applied.route===id||applied.route?.startsWith(id+':'));});
- const busy=!!state.componentOperation||!!state.componentRefreshRequest||component?.operation_status==='running';
+ const recoveryBlocked=typeof componentRecoveryFence==='function'&&componentRecoveryFence();
+ const busy=!!state.componentOperation||!!state.componentRefreshRequest||component?.operation_status==='running'||recoveryBlocked;
  const stale=['failed','checking'].includes(update.kind);
  const protectedComponent=component?.lifecycle_block_reason||component?.external_owner||info.running||used.length>0;
  const lifecycleAllowed=component&&!busy&&!component.inventory_error&&!protectedComponent&&!info.observationStale;
  // NFQWS2 is updated while its routes run: checked on the router and rolled back on failure.
  const managedUpdate=component?.managed_update===true&&!component.external_owner&&!component.lifecycle_block_reason;
  const updateAllowed=managedUpdate?component&&!busy&&!component.inventory_error&&!info.observationStale&&component.rollback_ready===true:lifecycleAllowed;
- const disabledReason=managedUpdate&&component.update_available&&!component.rollback_ready?'Нажмите «Проверить версии»: RAZVILKA сохранит копию текущей версии для отката.':component?.lifecycle_block_reason||(component?.external_owner?'Компонент управляется внешним проектом.':info.running||used.length?'Сначала остановите обход и перенесите зависимые сервисы на другой маршрут.':stale?'Обновите сведения о пакете перед изменением.':busy?'Дождитесь завершения операции.':'Нет разрешения на действие в каталоге компонентов.');
+ const disabledReason=recoveryBlocked?'Прочитайте журнал обновления и завершите соответствующее восстановление.':managedUpdate&&component.update_available&&!component.rollback_ready?'Нажмите «Проверить версии»: RAZVILKA сохранит копию текущей версии для отката.':component?.lifecycle_block_reason||(component?.external_owner?'Компонент управляется внешним проектом.':info.running||used.length?'Сначала остановите обход и перенесите зависимые сервисы на другой маршрут.':stale?'Обновите сведения о пакете перед изменением.':busy?'Дождитесь завершения операции.':'Нет разрешения на действие в каталоге компонентов.');
  const action=(name,label,allowed)=>`<button type="button" class="${name==='remove'?'component-remove':'primary'} component-action" data-component="${esc(id)}" data-component-action="${name}" data-rz-focus="engine-${esc(id)}-${name}" ${allowed?'':`disabled title="${esc(disabledReason)}"`}>${label}</button>`;
+ const install=info.installed?'':action('install','Установить',lifecycleAllowed&&!stale&&component?.can_install===true);
  let actions='';
- if(!info.installed)actions+=action('install','Установить',lifecycleAllowed&&!stale&&component?.can_install===true);
- else if(component?.update_available)actions+=action('update',managedUpdate?'Обновить с проверкой':'Обновить',updateAllowed&&!stale&&component.can_update===true);
+ if(info.installed&&component?.update_available)actions+=action('update',managedUpdate?'Обновить с проверкой':'Обновить',updateAllowed&&!stale&&component.can_update===true);
  if(info.installed)actions+=action('remove','Удалить',lifecycleAllowed&&component.can_remove===true);
+ const file=info.config?.files?.find(f=>f.id==='main')||info.config?.files?.[0];
+ const binaryDetected=info.engine?.installed===true&&typeof info.engine.binary_path==='string'&&info.engine.binary_path.trim().length>0;
+ const progress=engineProgressView(id,file?.id||'main'),checked=progress.format&&progress.service;
+ const complete={install:binaryDetected&&!info.observationStale,profile:progress.format,check:checked,apply:progress.apply};
+ const steps=[['install','Установка',info.observationStale?'Сведения устарели':binaryDetected?'Бинарник обнаружен':info.installed?'Есть сведения об установке; бинарник не уточнён':info.installedKnown?'Требуется компонент':'Состояние не прочитано'],['profile','Профиль',progress.format?'Текущий профиль прошёл проверку формата':file?.staged?'Есть подготовленные изменения':file?.exists?'Файл есть; содержимое требует проверки':'Профиль ещё не подтверждён'],['check','Проверки',`Формат: ${progress.format?(progress.native?'проверен утилитой обхода':'прошёл предварительную проверку'):'не подтверждён'}. Сервис: ${progress.service?'свежий веб-сценарий подтверждён':'нужна отдельная проверка'}`],['apply','Применение',progress.apply?'Получено совпадающее подтверждение применения':used.length?`Сохранённых назначений: ${used.length}`:'Назначения ещё не подтверждены']];
+ const next=!info.installed?'install':!file?.exists&&!file?.staged?'profile':!checked?'check':'apply',current=steps.find(([step])=>step===next);
+ const stepAction=step=>step==='install'?install:`<button type="button" class="secondary" data-engine-step="${step}" data-card-engine="${esc(id)}" data-rz-focus="engine-${esc(id)}-${step}" ${state.engineIntent?'disabled':''}>Открыть ${step==='profile'?'профиль':step==='check'?'проверки':'применение'}</button>`;
+ const flow=`<ol class="ui3-engine-progress" aria-label="Этапы настройки ${esc(meta.name)}">${steps.map(([step,title],index)=>`<li data-engine-progress="${step}" ${complete[step]?'data-completed="true"':''} ${step===next&&!complete[step]?'aria-current="step"':''}><span>${complete[step]?'✓':index+1}</span><b>${title}${complete[step]?' · подтверждено':''}</b></li>`).join('')}</ol><div class="ui3-engine-next"><div><b>${progress.apply&&checked?'Проверка и применение подтверждены':steps.indexOf(current)+1+'. '+current[1]}</b><small>${esc(current[2])}</small></div>${stepAction(next)}</div><details class="ui3-engine-flow-details" data-engine-disclosure="${esc(id)}-flow"><summary data-rz-focus="engine-${esc(id)}-flow">Все шаги настройки</summary><ol class="ui3-engine-workflow">${steps.map(([step,title,text],index)=>`<li><b>${index+1}. ${title}</b><small>${esc(text)}</small>${step===next?'':stepAction(step)}</li>`).join('')}</ol></details>`;
  const operation=state.componentOperation?.id===id?state.componentOperation.action:component?.operation_status==='running'?component.operation_action:'';
- const operationText=operation?({install:'Установка выполняется…',update:'Обновление выполняется…',remove:'Удаление выполняется…'})[operation]||'Операция выполняется…':['failed','interrupted','receipt-error'].includes(component?.operation_status)?'Последняя операция не завершена: '+(component.operation_message||'откройте подробности компонента'):'';
- return `<article class="ui3-engine-card" data-engine-card="${esc(id)}"><div class="ui3-engine-card-heading"><span class="engine-mini-icon ${meta.tone}">${ci(meta.icon)}</span><span class="ui3-status ${info.tone}"><i></i>${esc(info.label)}</span></div><h3>${esc(meta.name)} <span class="ui3-engine-version ${update.kind==='update'?'has-update':''}">${esc(consoleEngineVersionLabel(info))}</span></h3><span class="ui3-engine-subtitle">${esc(meta.subtitle)}</span><p>${esc(meta.description)}</p><div class="ui3-engine-meta"><span>${info.observationStale?'Ожидаем свежие сведения':info.installed?(info.running?'Процесс запущен':'Процесс не запущен'):info.installedKnown?'Процесс не обнаружен':'Нет данных о процессе'}</span><b>${used.length} сервисов</b></div>${state.inventoryObservation?`<small class="ui3-engine-observed">Состояние на ${esc(consoleDate(state.inventoryObservation.observedAt))}</small>`:''}<small class="ui3-engine-update ${update.kind}" role="status">${esc(update.text)}</small>${operationText?`<small class="ui3-engine-operation" role="status">${esc(operationText)}</small>`:''}<div class="ui3-engine-actions"><button type="button" class="secondary" data-component-refresh="${esc(id)}" data-rz-focus="engine-${esc(id)}-refresh" title="Обновить общий каталог компонентов" ${busy?'disabled':''}>${state.componentRefreshRequest?'Проверяем…':'Проверить обновления'}</button>${actions}<button type="button" class="secondary" data-console-engine="${esc(id)}" data-rz-focus="engine-${esc(id)}-settings">Настройки ${ci('chevron')}</button></div>${protectedComponent&&info.installed?`<small class="ui3-engine-action-hint">${esc(disabledReason)}</small>`:''}</article>`;
+ const settledReceipt=info.recovery && ['accepted','accepted-installed-idle','rolled-back','abandoned'].includes(info.recovery.transaction?.phase);
+ const operationText=settledReceipt&&component?.operation_status==='running'?'Журнал завершён; серверная отметка операции ещё требует обновления.':operation?({install:'Установка выполняется…',update:'Обновление выполняется…',remove:'Удаление выполняется…'})[operation]||'Операция выполняется…':['failed','interrupted','receipt-error'].includes(component?.operation_status)?'Последняя операция не завершена: '+(component.operation_message||'откройте подробности компонента'):'';
+ return `<article class="ui3-engine-card" data-engine-card="${esc(id)}"><div class="ui3-engine-card-heading"><span class="engine-mini-icon ${meta.tone}">${ci(meta.icon)}</span><span class="ui3-status ${info.tone}"><i></i>${esc(info.label)}</span></div><h3>${esc(meta.name)} <span class="ui3-engine-version ${update.kind==='update'?'has-update':''}">${esc(consoleEngineVersionLabel(info))}</span></h3><span class="ui3-engine-subtitle">${esc(meta.subtitle)}</span><p>${esc(meta.description)}</p><div class="ui3-engine-meta"><span>${info.observationStale?'Ожидаем свежие сведения':info.installed?(info.running?'Процесс запущен':'Процесс не запущен'):info.installedKnown?'Процесс не обнаружен':'Нет данных о процессе'}</span><b>${used.length} сервисов</b></div><small class="ui3-engine-update ${update.kind}" role="status">${esc(update.text)}</small>${operationText?`<small class="ui3-engine-operation" role="status">${esc(operationText)}</small>`:''}${flow}<details class="ui3-engine-maintenance" data-engine-disclosure="${esc(id)}-maintenance"><summary data-rz-focus="engine-${esc(id)}-maintenance">Версии и обслуживание</summary>${state.inventoryObservation?`<small class="ui3-engine-observed">Состояние на ${esc(consoleDate(state.inventoryObservation.observedAt))}</small>`:''}<div class="ui3-engine-actions"><button type="button" class="secondary" data-component-refresh="${esc(id)}" data-rz-focus="engine-${esc(id)}-refresh" title="Обновить общий каталог компонентов" ${busy?'disabled':''}>${state.componentRefreshRequest?'Проверяем…':'Проверить обновления'}</button>${actions}</div>${protectedComponent&&info.installed?`<small class="ui3-engine-action-hint">${esc(disabledReason)}</small>`:''}</details></article>`;
 }
 function renderInterfaceEngines(){
+ if(typeof renderComponentRecovery==='function')renderComponentRecovery();
  if(!interfaceDataReady('engines') && !interfaceDataReady('engineConfigs') && !interfaceDataReady('components')){
    interfaceHTML('ui3EngineGrid',interfaceEmpty('Сведения об обходах загружаются',interfaceLoadMessage('engineConfigs'),'<button type="button" class="secondary" data-panel-refresh>Повторить загрузку</button>'));
    return;
  }
+ const grid=$('#ui3EngineGrid'),open=[...grid.querySelectorAll('[data-engine-disclosure][open]')].map(element=>element.dataset.engineDisclosure);
+ const focus=grid.contains(document.activeElement)?document.activeElement.closest('[data-rz-focus]')?.getAttribute('data-rz-focus'):null;
  interfaceHTML('ui3EngineGrid',Object.entries(consoleEngineMeta).map(([id,meta])=>interfaceEngineCard(id,meta)).join(''));
+ for(const disclosure of grid.querySelectorAll('[data-engine-disclosure]'))disclosure.open=open.includes(disclosure.dataset.engineDisclosure);
+ if(focus)[...grid.querySelectorAll('[data-rz-focus]')].find(element=>element.getAttribute('data-rz-focus')===focus)?.focus({preventScroll:true});
  const id=state.selectedEngine,e=consoleEngineState(id);
  interfaceHTML('ui3EngineContext',Object.entries(consoleEngineMeta).map(([k,m])=>`<button type="button" class="${k===id?'active':''}" data-console-engine="${esc(k)}" ${k===id?'aria-current="page"':''}>${ci(m.icon)}${esc(m.name)}</button>`).join(''));
  const used=state.services.filter(s=>{const a=serviceDashboardApplied(s);return a.enabled&&(a.route===id||a.route?.startsWith(id+':'));});
  const good=used.filter(s=>serviceDashboardSummary(s).kind==='good').length;
  interfaceHTML('ui3EngineSteps',[[e.installed&&!e.observationStale,'Установка',e.observationStale?'Состояние уточняется':e.installed?'Бинарник обнаружен':'Не подтверждена'],[e.running&&!e.observationStale,'Процесс',e.observationStale?'Состояние уточняется':e.running?'Запущен':'Не запущен'],[used.length>0,'Маршруты',`${used.length} сервисов`],[good>0,'Проверка',`${good} из ${used.length} подтверждены`]].map(([ok,title,detail])=>`<div class="${ok?'confirmed':''}"><span>${ci(ok?'check':'clock')}</span><section><b>${title}</b><small>${esc(detail)}</small></section></div>`).join(''));
 }
+async function interfaceOpenEngineStep(id,step){
+ if(!['profile','check','apply'].includes(step)||!Object.hasOwn(consoleEngineMeta,id)||interfaceState.authRevoked||$('#authScreen')?.hidden===false)return;
+ const epoch=interfaceState.authEpoch,request=interfaceState.engineCardRequest=(interfaceState.engineCardRequest||0)+1;
+ if(!await openEngineConfiguration(id)||epoch!==interfaceState.authEpoch||request!==interfaceState.engineCardRequest||state.currentView!=='engineconfig'||state.selectedEngine!==id)return;
+ switchEngineTab(step==='check'?'check':'config');
+ const target=$('#'+(step==='profile'?'engineFileSelect':step==='check'?'r4ProbeService':'engineApplyConfig'));
+ if(target?.disabled){showNotice('review','Подготовьте изменения профиля','Применение выполняется после подготовки и проверки выбранного файла. Этот переход не применяет изменения.');$('#engineFileSelect')?.focus({preventScroll:true});}
+ else target?.focus({preventScroll:true});
+}
+document.addEventListener('click',event=>{const button=event.target.closest('[data-engine-step]');if(button&&!button.disabled)void interfaceOpenEngineStep(button.dataset.cardEngine,button.dataset.engineStep).catch(error=>showNotice('review','Шаг не открыт',error.message));});
 function renderInterfaceSettings(){
  interfaceHTML('r5SettingsTasks',rim.settingsTasks.map(t=>`<button type="button" class="r5-setting-task" data-rz-nav="${esc(t.target)}">${ci(t.icon)}<span><b>${esc(t.title)}</b><small>${esc(t.detail)}</small></span>${ci('chevron')}</button>`).join(''));
 }
@@ -400,7 +527,7 @@ function interfaceReturnInspectorFocus(){
  target?.focus({preventScroll:true});
 }
 $('#ui3ServiceDialog').addEventListener('close',interfaceReturnInspectorFocus);
-document.addEventListener('razvilka:auth-required',()=>{interfaceState.authRevoked=true;interfaceState.authEpoch++;interfaceState.busy=false;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');renderInterfaceHome({});});
+document.addEventListener('razvilka:auth-required',()=>{invalidateEngineProgress();interfaceState.authRevoked=true;interfaceState.authEpoch++;interfaceState.busy=false;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');renderInterfaceHome({});});
 document.addEventListener('razvilka:auth-restored',()=>{interfaceState.authRevoked=false;renderInterfaceHome(interfaceSummaries());});
 document.addEventListener('click',interfaceTaskAction);
 function interfaceSafeRender(key, callback){

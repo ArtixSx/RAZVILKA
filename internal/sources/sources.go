@@ -66,6 +66,7 @@ type State struct {
 	ExpiresAt      time.Time    `json:"expires_at,omitempty"`
 	LastKnownGood  bool         `json:"last_known_good"`
 	LegacyCache    bool         `json:"legacy_cache"`
+	Offline        bool         `json:"offline"`
 	Provenance     *Provenance  `json:"provenance,omitempty"`
 	Diff           *DiffSummary `json:"diff,omitempty"`
 }
@@ -130,6 +131,14 @@ func LoadRegistry(path string) (Registry, error) {
 }
 
 func NewManager(reg Registry, cacheDir string, settingsPath ...string) *Manager {
+	// Keep the approved source policy detached from caller-owned slices. A
+	// later registry edit must create a new manager, not change mirrors, TTL or
+	// service enrichment while this manager is fetching or reading receipts.
+	reg.Sources = append([]Source(nil), reg.Sources...)
+	for i := range reg.Sources {
+		reg.Sources[i].Services = append([]string(nil), reg.Sources[i].Services...)
+		reg.Sources[i].RedirectHosts = append([]string(nil), reg.Sources[i].RedirectHosts...)
+	}
 	path := ""
 	if len(settingsPath) > 0 {
 		path = strings.TrimSpace(settingsPath[0])
@@ -169,6 +178,15 @@ func (m *Manager) List() []State {
 	out := make([]State, 0, len(m.states))
 	for _, s := range m.states {
 		s = currentState(s, time.Now())
+		// Readback owns its nested metadata; callers cannot mutate the live view.
+		if s.Provenance != nil {
+			provenance := *s.Provenance
+			s.Provenance = &provenance
+		}
+		if s.Diff != nil {
+			diff := *s.Diff
+			s.Diff = &diff
+		}
 		s.Enabled = m.settings.Draft[s.ID]
 		s.AppliedEnabled = m.settings.Applied[s.ID]
 		s.Dirty = s.Enabled != s.AppliedEnabled
@@ -176,6 +194,23 @@ func (m *Manager) List() []State {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// OfflineCatalog is a detached read-only view, with no fetch, settings write,
+// cache upgrade or authority to build/apply a new route. Stale/quarantined and
+// legacy labels survive; even a recent cached receipt is not fresh online data.
+func (m *Manager) OfflineCatalog() []State {
+	states := m.List()
+	for i := range states {
+		state := &states[i]
+		state.Offline = true
+		if state.Ready {
+			state.LastKnownGood = true
+			state.CacheStatus = "offline-cache"
+		}
+		state.Ready = false
+	}
+	return states
 }
 
 func (m *Manager) Dirty() bool {
@@ -358,6 +393,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	if err != nil {
 		return m.fail(*src, publicfetch.SafeError(err))
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if int64(len(b)) > max {
 		return m.fail(*src, fmt.Errorf("source exceeds max_bytes=%d", max))
 	}
@@ -382,6 +420,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	normalized := strings.Join(entries, "\n") + "\n"
 	sum := sha256.Sum256([]byte(normalized))
 	digest := hex.EncodeToString(sum[:])
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(m.cacheDir, 0o700); err != nil {
 		return m.fail(*src, errors.New("cannot create source cache directory"))
 	}
@@ -389,6 +430,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	finalURL := src.URL
 	if resp.Request != nil && resp.Request.URL != nil {
 		finalURL = resp.Request.URL.String()
+	}
+	if err := validateFinalURL(*src, finalURL); err != nil {
+		return m.fail(*src, err)
 	}
 	cached := cacheDocument{Schema: 2, ID: src.ID, Kind: src.Kind, SourceHash: sourceHash(*src), Content: normalized, Entries: len(entries), SHA256: digest, FetchedAt: now, ExpiresAt: now.Add(sourceTTL(*src)), Provenance: Provenance{URL: publicfetch.RedactedURL(src.URL), FinalURL: publicfetch.RedactedURL(finalURL), RawSHA256: rawSHA, TrustTier: trustTier(*src)}}
 	cached.Diff = DiffSummary{Added: len(entries)}
@@ -398,6 +442,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	data, err := json.Marshal(cached)
 	if err != nil {
 		return m.fail(*src, errors.New("cannot encode source cache"))
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := writeAtomic(filepath.Join(m.cacheDir, src.ID+".cache.json"), data, 0o600); err != nil {
 		return m.fail(*src, errors.New("cannot commit source cache"))

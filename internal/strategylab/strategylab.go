@@ -3,6 +3,7 @@ package strategylab
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -45,22 +46,27 @@ var Pools = []Pool{
 }
 
 type Validation struct {
-	OK        bool     `json:"ok"`
-	Native    bool     `json:"native"`
-	Code      string   `json:"code"`
-	Output    string   `json:"output"`
-	Arguments []string `json:"arguments,omitempty"`
-	CheckedAt string   `json:"checked_at,omitempty"`
+	QuiescenceUnknown bool     `json:"quiescence_unknown,omitempty"`
+	LuaChecked        bool     `json:"lua_checked,omitempty"`
+	OK                bool     `json:"ok"`
+	Native            bool     `json:"native"`
+	Code              string   `json:"code"`
+	Output            string   `json:"output"`
+	Arguments         []string `json:"arguments,omitempty"`
+	CheckedAt         string   `json:"checked_at,omitempty"`
 }
 
 type Candidate struct {
-	ID         string     `json:"id"`
-	PoolID     string     `json:"pool_id"`
-	Name       string     `json:"name"`
-	Arguments  string     `json:"arguments"`
-	Origin     string     `json:"origin"`
-	Validation Validation `json:"validation"`
-	CreatedAt  string     `json:"created_at"`
+	ID string `json:"id"`
+	// Incarnation retires a binding when the same deterministic ID is replaced.
+	// Only the server builder assigns it; legacy records remain readable as-is.
+	Incarnation string     `json:"incarnation,omitempty"`
+	PoolID      string     `json:"pool_id"`
+	Name        string     `json:"name"`
+	Arguments   string     `json:"arguments"`
+	Origin      string     `json:"origin"`
+	Validation  Validation `json:"validation"`
+	CreatedAt   string     `json:"created_at"`
 }
 
 type CandidateInput struct {
@@ -78,6 +84,9 @@ type StageEvidence struct {
 }
 
 type Evidence struct {
+	// Outcome distinguishes service rejection from an unavailable local checker.
+	Outcome        string          `json:"outcome,omitempty"`
+	Level          string          `json:"level,omitempty"`
 	CandidateID    string          `json:"candidate_id"`
 	ServiceID      string          `json:"service_id"`
 	Protocol       string          `json:"protocol"`
@@ -95,22 +104,23 @@ type Evidence struct {
 }
 
 type Summary struct {
-	CandidateID    string  `json:"candidate_id"`
-	ServiceID      string  `json:"service_id"`
-	Protocol       string  `json:"protocol"`
-	IPFamily       string  `json:"ip_family"`
-	Passes         int     `json:"passes"`
-	Failures       int     `json:"failures"`
-	Confirmed      int     `json:"confirmed"`
-	FreshPasses    int     `json:"fresh_passes"`
-	FreshFailures  int     `json:"fresh_failures"`
-	SuccessRate    float64 `json:"success_rate"`
-	Confidence     float64 `json:"confidence"`
-	AverageLatency float64 `json:"average_latency_ms"`
-	AverageTTFB    float64 `json:"average_ttfb_ms"`
-	LastCheckedAt  string  `json:"last_checked_at,omitempty"`
-	Eligible       bool    `json:"eligible"`
-	Reason         string  `json:"reason"`
+	Coverage       []Coverage `json:"coverage,omitempty"`
+	CandidateID    string     `json:"candidate_id"`
+	ServiceID      string     `json:"service_id"`
+	Protocol       string     `json:"protocol"`
+	IPFamily       string     `json:"ip_family"`
+	Passes         int        `json:"passes"`
+	Failures       int        `json:"failures"`
+	Confirmed      int        `json:"confirmed"`
+	FreshPasses    int        `json:"fresh_passes"`
+	FreshFailures  int        `json:"fresh_failures"`
+	SuccessRate    float64    `json:"success_rate"`
+	Confidence     float64    `json:"confidence"`
+	AverageLatency float64    `json:"average_latency_ms"`
+	AverageTTFB    float64    `json:"average_ttfb_ms"`
+	LastCheckedAt  string     `json:"last_checked_at,omitempty"`
+	Eligible       bool       `json:"eligible"`
+	Reason         string     `json:"reason"`
 }
 
 type Selection struct {
@@ -132,22 +142,25 @@ type Selection struct {
 }
 
 type State struct {
-	PackReceipts  map[string]PackReceipt `json:"pack_receipts,omitempty"`
-	SchemaVersion int                    `json:"schema_version"`
-	Candidates    map[string]Candidate   `json:"candidates"`
-	Evidence      []Evidence             `json:"evidence"`
-	Selections    map[string]Selection   `json:"selections"`
+	CompatibilitySession    *compatibilitySession  `json:"compatibility_session,omitempty"`
+	CompatibilityFinalizing bool                   `json:"compatibility_finalizing,omitempty"`
+	PackReceipts            map[string]PackReceipt `json:"pack_receipts,omitempty"`
+	SchemaVersion           int                    `json:"schema_version"`
+	Candidates              map[string]Candidate   `json:"candidates"`
+	Evidence                []Evidence             `json:"evidence"`
+	Selections              map[string]Selection   `json:"selections"`
 }
 
 type Snapshot struct {
-	SchemaVersion int            `json:"schema_version"`
-	Mode          string         `json:"mode"`
-	Pools         []Pool         `json:"pools"`
-	Candidates    []Candidate    `json:"candidates"`
-	Evidence      []Evidence     `json:"evidence"`
-	Summaries     []Summary      `json:"summaries"`
-	Selections    []Selection    `json:"selections"`
-	Safety        map[string]any `json:"safety"`
+	QuiescenceUnknown bool           `json:"quiescence_unknown,omitempty"`
+	SchemaVersion     int            `json:"schema_version"`
+	Mode              string         `json:"mode"`
+	Pools             []Pool         `json:"pools"`
+	Candidates        []Candidate    `json:"candidates"`
+	Evidence          []Evidence     `json:"evidence"`
+	Summaries         []Summary      `json:"summaries"`
+	Selections        []Selection    `json:"selections"`
+	Safety            map[string]any `json:"safety"`
 }
 
 type Validator interface {
@@ -205,10 +218,13 @@ type Manager struct {
 	Resources ResourceInspector
 	Now       func() time.Time
 
-	mu           sync.RWMutex
-	state        State
-	image        restorejournal.Image
-	writeBlocked bool
+	mu                           sync.RWMutex
+	state                        State
+	image                        restorejournal.Image
+	writeBlocked                 bool
+	compatibilityUnknown         bool         // survives failed persistence/rollback until recovery
+	nativeRunning                bool         // one validation/probe admission until completion
+	compatibilityPublicationHook func(string) // deterministic private test barriers; nil in production
 }
 
 func New(path string) (*Manager, error) {
@@ -228,8 +244,17 @@ func New(path string) (*Manager, error) {
 	if err := json.Unmarshal(data, &m.state); err != nil {
 		return nil, fmt.Errorf("decode Strategy Lab state: %w", err)
 	}
-	if m.state.SchemaVersion != SchemaVersion {
+	if m.state.SchemaVersion != SchemaVersion && m.state.SchemaVersion != compatibilityUnknownSchema && m.state.SchemaVersion != compatibilitySupervisedSchema {
 		return nil, fmt.Errorf("unsupported Strategy Lab schema %d", m.state.SchemaVersion)
+	}
+	if m.state.SchemaVersion == compatibilitySupervisedSchema {
+		checked, err := decodeCompatibilityState(image)
+		if err != nil {
+			return nil, errors.Join(ErrCompatibilityQuiescenceUnknown, errors.New("invalid retained compatibility session"))
+		}
+		m.state = checked
+	} else if m.state.CompatibilitySession != nil || m.state.CompatibilityFinalizing {
+		return nil, errors.Join(ErrCompatibilityQuiescenceUnknown, errors.New("compatibility session requires its supported schema"))
 	}
 	if m.state.Candidates == nil {
 		m.state.Candidates = map[string]Candidate{}
@@ -241,12 +266,24 @@ func New(path string) (*Manager, error) {
 }
 
 func (m *Manager) Probe(ctx context.Context, id string, target ProbeTarget) (Evidence, error) {
-	m.mu.RLock()
+	m.mu.Lock()
+	if m.compatibilityUnknownLocked() {
+		m.mu.Unlock()
+		return Evidence{}, ErrCompatibilityQuiescenceUnknown
+	}
+	if m.nativeRunning {
+		m.mu.Unlock()
+		return Evidence{}, errCompatibilityBusy
+	}
 	candidate, ok := m.state.Candidates[id]
-	m.mu.RUnlock()
+	if ok {
+		m.nativeRunning = true
+	}
+	m.mu.Unlock()
 	if !ok {
 		return Evidence{}, fmt.Errorf("unknown candidate %q", id)
 	}
+	defer m.finishNative()
 	if !candidate.Validation.OK || !candidate.Validation.Native {
 		return Evidence{}, errors.New("candidate must pass native NFQWS2 validation first")
 	}
@@ -275,6 +312,9 @@ func (m *Manager) Probe(ctx context.Context, id string, target ProbeTarget) (Evi
 	if err != nil {
 		return evidence, err
 	}
+	if err := probeContext.Err(); err != nil {
+		return evidence, err
+	}
 	if len(evidence.Stages) == 0 {
 		return Evidence{}, errors.New("executor returned no typed evidence")
 	}
@@ -300,13 +340,14 @@ func (m *Manager) Snapshot() Snapshot {
 	})
 	now := m.now()
 	summaries := summarize(m.state, now)
-	selections := selectionsWithHealth(m.state, summaries)
+	selections := selectionsWithHealth(m.state, summaries, now)
 	sort.Slice(selections, func(i, j int) bool {
 		return selectionKey(selections[i].ServiceID, selections[i].Protocol, selections[i].IPFamily) < selectionKey(selections[j].ServiceID, selections[j].Protocol, selections[j].IPFamily)
 	})
 	evidence := append(make([]Evidence, 0, len(m.state.Evidence)), m.state.Evidence...)
 	return Snapshot{
-		SchemaVersion: SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
+		QuiescenceUnknown: m.compatibilityUnknownLocked(),
+		SchemaVersion:     m.state.SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
 		Candidates: candidates, Evidence: evidence, Summaries: summaries, Selections: selections,
 		Safety: map[string]any{"state_write_blocked": m.writeBlocked, "live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour), "probe_budget": m.resourceBudget()},
 	}
@@ -349,6 +390,10 @@ func (m *Manager) AddCandidates(inputs []CandidateInput) ([]Candidate, error) {
 		next[id] = candidate
 	}
 	for _, candidate := range candidates {
+		if previous[candidate.ID].Validation.QuiescenceUnknown {
+			m.mu.Unlock()
+			return nil, ErrCompatibilityQuiescenceUnknown
+		}
 		next[candidate.ID] = candidate
 	}
 	m.state.Candidates = next
@@ -379,36 +424,127 @@ func buildCandidate(input CandidateInput, now time.Time) (Candidate, error) {
 	}
 	digest := sha256.Sum256([]byte(poolID + "\x00" + name + "\x00" + strings.Join(parsed, "\x00")))
 	id := "st-" + hex.EncodeToString(digest[:8])
-	candidate := Candidate{ID: id, PoolID: poolID, Name: name, Arguments: strings.TrimSpace(arguments), Origin: origin, CreatedAt: now.Format(time.RFC3339), Validation: Validation{Code: "NATIVE_REQUIRED", Output: "Синтаксис разобран; требуется NFQWS2 --dry-run", Arguments: parsed}}
+	var incarnation [16]byte
+	if _, err := rand.Read(incarnation[:]); err != nil {
+		return Candidate{}, fmt.Errorf("generate Strategy Lab candidate incarnation: %w", err)
+	}
+	candidate := Candidate{ID: id, Incarnation: hex.EncodeToString(incarnation[:]), PoolID: poolID, Name: name, Arguments: strings.TrimSpace(arguments), Origin: origin, CreatedAt: now.Format(time.RFC3339), Validation: Validation{Code: "NATIVE_REQUIRED", Output: "Синтаксис разобран; требуется NFQWS2 --dry-run", Arguments: parsed}}
 	return candidate, nil
 }
 
 func (m *Manager) Validate(ctx context.Context, id string) (Candidate, error) {
-	m.mu.RLock()
+	return m.validateCandidate(ctx, id, nil)
+}
+
+func (m *Manager) validateCandidate(ctx context.Context, id string, expected *adaptiveCandidateBinding) (Candidate, error) {
+	m.mu.Lock()
+	if m.compatibilityUnknownLocked() || m.writeBlocked {
+		m.mu.Unlock()
+		return Candidate{}, ErrCompatibilityQuiescenceUnknown
+	}
+	if m.nativeRunning {
+		m.mu.Unlock()
+		return Candidate{}, errCompatibilityBusy
+	}
 	candidate, ok := m.state.Candidates[id]
-	m.mu.RUnlock()
 	if !ok {
+		m.mu.Unlock()
+		if expected != nil {
+			return Candidate{}, errAdaptiveCandidateChanged
+		}
 		return Candidate{}, fmt.Errorf("unknown candidate %q", id)
 	}
+	validator := m.Validator
+	if expected != nil {
+		if expected.manager != m || !adaptiveCandidateIdentityEqual(candidate, expected.candidate) {
+			m.mu.Unlock()
+			return Candidate{}, errAdaptiveCandidateChanged
+		}
+		if ctx == nil {
+			m.mu.Unlock()
+			return Candidate{}, errors.New("adaptive bound validation requires a context")
+		}
+		if err := ctx.Err(); err != nil {
+			m.mu.Unlock()
+			return Candidate{}, err
+		}
+		var err error
+		validator, err = adaptiveManagedValidatorLocked(m)
+		if err != nil {
+			m.mu.Unlock()
+			return Candidate{}, err
+		}
+	} else if validator == nil {
+		validator = ExecValidator{}
+	}
+	candidate = adaptiveCandidateDetached(candidate)
+	m.nativeRunning = true
+	m.mu.Unlock()
+	defer m.finishNative()
 	arguments, err := parseArguments(candidate.Arguments)
 	if err != nil {
 		return Candidate{}, err
 	}
-	validator := m.Validator
-	if validator == nil {
-		validator = ExecValidator{}
-	}
-	validation := validator.Validate(ctx, arguments)
-	validation.Arguments = arguments
+	validation := validator.Validate(ctx, append([]string(nil), arguments...))
+	validation.Arguments = append([]string(nil), arguments...)
 	if validation.CheckedAt == "" {
 		validation.CheckedAt = m.now().UTC().Format(time.RFC3339)
 	}
 	candidate.Validation = validation
 	m.mu.Lock()
-	m.state.Candidates[id] = candidate
+	if validation.QuiescenceUnknown {
+		// Preserve real process uncertainty even if its candidate was removed
+		// or rebound while validation was outside the Manager lock.
+		m.compatibilityUnknown = true
+		if m.state.SchemaVersion < compatibilityUnknownSchema {
+			m.state.SchemaVersion = compatibilityUnknownSchema
+		}
+	}
+	current, exists := m.state.Candidates[id]
+	if !exists || !adaptiveCandidateIdentityEqual(current, candidate) {
+		// A settled identity mismatch is not process uncertainty. Preserve the
+		// newer record/deletion, but retain a real unknown outcome independently.
+		if validation.QuiescenceUnknown {
+			err = m.retainAdaptiveValidationUnknownLocked()
+			m.mu.Unlock()
+			return Candidate{}, errors.Join(ErrCompatibilityQuiescenceUnknown, errAdaptiveCandidateChanged, err)
+		}
+		unknown := m.compatibilityUnknownLocked() || m.writeBlocked
+		m.mu.Unlock()
+		if unknown {
+			return Candidate{}, errors.Join(ErrCompatibilityQuiescenceUnknown, errAdaptiveCandidateChanged)
+		}
+		return Candidate{}, errAdaptiveCandidateChanged
+	}
+	if m.writeBlocked {
+		m.mu.Unlock()
+		return Candidate{}, ErrCompatibilityQuiescenceUnknown
+	}
+	if expected != nil && !validation.QuiescenceUnknown {
+		if _, err := adaptiveManagedValidatorLocked(m); err != nil {
+			m.mu.Unlock()
+			return Candidate{}, err
+		}
+	}
+	if m.state.CompatibilityFinalizing && !validation.QuiescenceUnknown {
+		err := m.publishCompatibilityValidationLocked(ctx, adaptiveCandidateDetached(candidate))
+		if err != nil {
+			candidate.Validation = compatibilityPublicationUnknown(candidate.Validation)
+		}
+		m.mu.Unlock()
+		return adaptiveCandidateDetached(candidate), err
+	}
+	if !validation.QuiescenceUnknown && m.compatibilityUnknownLocked() {
+		m.mu.Unlock()
+		return Candidate{}, ErrCompatibilityQuiescenceUnknown
+	}
+	m.state.Candidates[id] = adaptiveCandidateDetached(candidate)
 	err = m.saveLocked()
 	m.mu.Unlock()
-	return candidate, err
+	if expected != nil && err != nil {
+		return Candidate{}, err
+	}
+	return adaptiveCandidateDetached(candidate), err
 }
 
 // DeleteCandidate removes a draft experiment together with only its own
@@ -418,6 +554,9 @@ func (m *Manager) DeleteCandidate(id string) error {
 	defer m.mu.Unlock()
 	if _, ok := m.state.Candidates[id]; !ok {
 		return fmt.Errorf("unknown candidate %q", id)
+	}
+	if m.state.Candidates[id].Validation.QuiescenceUnknown {
+		return ErrCompatibilityQuiescenceUnknown
 	}
 	delete(m.state.Candidates, id)
 	evidence := m.state.Evidence[:0]
@@ -447,6 +586,9 @@ func (m *Manager) Record(evidence Evidence) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.compatibilityUnknownLocked() {
+		return ErrCompatibilityQuiescenceUnknown
+	}
 	candidate, ok := m.state.Candidates[evidence.CandidateID]
 	if !ok {
 		return errors.New("candidate is unknown")
@@ -456,6 +598,13 @@ func (m *Manager) Record(evidence Evidence) error {
 	}
 	if evidence.CheckedAt == "" {
 		evidence.CheckedAt = m.now().UTC().Format(time.RFC3339)
+	}
+	checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
+	if err != nil || checked.After(m.now()) {
+		return errors.New("evidence timestamp is invalid or in the future")
+	}
+	if err := normalizeEvidence(&evidence); err != nil {
+		return err
 	}
 	if evidence.Success && !evidence.RouteConfirmed {
 		return errors.New("successful evidence must confirm the tested route")
@@ -471,6 +620,9 @@ func (m *Manager) Record(evidence Evidence) error {
 func (m *Manager) Select(serviceID, protocol, family, candidateID string, frozen bool) (Selection, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.compatibilityUnknownLocked() {
+		return Selection{}, ErrCompatibilityQuiescenceUnknown
+	}
 	if _, ok := m.state.Candidates[candidateID]; !ok {
 		return Selection{}, errors.New("candidate is unknown")
 	}
@@ -502,6 +654,7 @@ func (m *Manager) ResetSelection(serviceID, protocol, family string) error {
 func summarize(state State, now time.Time) []Summary {
 	type aggregate struct {
 		s               Summary
+		coverage        map[string]time.Time
 		latency         int64
 		ttfb            int64
 		latest          time.Time
@@ -514,8 +667,19 @@ func summarize(state State, now time.Time) []Summary {
 		key := evidence.CandidateID + "|" + selectionKey(evidence.ServiceID, evidence.Protocol, evidence.IPFamily)
 		group := groups[key]
 		if group == nil {
-			group = &aggregate{s: Summary{CandidateID: evidence.CandidateID, ServiceID: evidence.ServiceID, Protocol: evidence.Protocol, IPFamily: evidence.IPFamily}}
+			group = &aggregate{s: Summary{CandidateID: evidence.CandidateID, ServiceID: evidence.ServiceID, Protocol: evidence.Protocol, IPFamily: evidence.IPFamily}, coverage: map[string]time.Time{}}
 			groups[key] = group
+		}
+		checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
+		if err != nil || checked.After(now) || normalizeEvidence(&evidence) != nil || !reputationEvidence(evidence) {
+			continue
+		}
+		if evidence.Success {
+			for _, level := range evidenceLevels(evidence) {
+				if checked.After(group.coverage[level]) {
+					group.coverage[level] = checked
+				}
+			}
 		}
 		if evidence.Success {
 			group.s.Passes++
@@ -526,10 +690,6 @@ func summarize(state State, now time.Time) []Summary {
 		}
 		if evidence.RouteConfirmed {
 			group.s.Confirmed++
-		}
-		checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
-		if err != nil {
-			continue
 		}
 		age := now.Sub(checked)
 		if age < 0 {
@@ -556,6 +716,11 @@ func summarize(state State, now time.Time) []Summary {
 	}
 	out := make([]Summary, 0, len(groups))
 	for _, group := range groups {
+		for _, level := range scenarioLevels {
+			if checked := group.coverage[level]; !checked.IsZero() {
+				group.s.Coverage = append(group.s.Coverage, Coverage{Level: level, LastPassedAt: checked.UTC().Format(time.RFC3339), Fresh: now.Sub(checked) <= EvidenceFreshness})
+			}
+		}
 		total := group.s.Passes + group.s.Failures
 		if total > 0 {
 			group.s.SuccessRate = float64(group.s.Passes) / float64(total)
@@ -589,7 +754,7 @@ func summarize(state State, now time.Time) []Summary {
 	return out
 }
 
-func selectionsWithHealth(state State, summaries []Summary) []Selection {
+func selectionsWithHealth(state State, summaries []Summary, now time.Time) []Selection {
 	byCandidate := make(map[string]Summary, len(summaries))
 	for _, summary := range summaries {
 		byCandidate[summary.CandidateID+"|"+selectionKey(summary.ServiceID, summary.Protocol, summary.IPFamily)] = summary
@@ -599,7 +764,7 @@ func selectionsWithHealth(state State, summaries []Summary) []Selection {
 		summary, ok := byCandidate[selection.CandidateID+"|"+key]
 		selection.Healthy = ok && summary.Eligible
 		selection.Confidence = summary.Confidence
-		selection.ConsecutiveFailures = consecutiveFailures(state.Evidence, selection)
+		selection.ConsecutiveFailures = consecutiveFailures(state.Evidence, selection, now)
 		if ok {
 			selection.Reason = summary.Reason
 		} else {
@@ -620,7 +785,7 @@ func selectionsWithHealth(state State, summaries []Summary) []Selection {
 	return selections
 }
 
-func consecutiveFailures(evidence []Evidence, selection Selection) int {
+func consecutiveFailures(evidence []Evidence, selection Selection, now time.Time) int {
 	selectedAt, _ := time.Parse(time.RFC3339, selection.SelectedAt)
 	count := 0
 	for index := len(evidence) - 1; index >= 0; index-- {
@@ -628,7 +793,10 @@ func consecutiveFailures(evidence []Evidence, selection Selection) int {
 		if item.CandidateID != selection.CandidateID || selectionKey(item.ServiceID, item.Protocol, item.IPFamily) != selectionKey(selection.ServiceID, selection.Protocol, selection.IPFamily) {
 			continue
 		}
-		checked, _ := time.Parse(time.RFC3339, item.CheckedAt)
+		checked, err := time.Parse(time.RFC3339, item.CheckedAt)
+		if err != nil || checked.After(now) || now.Sub(checked) > EvidenceFreshness || normalizeEvidence(&item) != nil || !reputationEvidence(item) {
+			break // uncertainty cannot bridge a consecutive failure quorum
+		}
 		if !selectedAt.IsZero() && !checked.IsZero() && checked.Before(selectedAt) {
 			break
 		}
@@ -641,6 +809,9 @@ func consecutiveFailures(evidence []Evidence, selection Selection) int {
 }
 
 func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
+	if !reputationEvidence(evidence) {
+		return
+	}
 	key := selectionKey(evidence.ServiceID, evidence.Protocol, evidence.IPFamily)
 	selection, ok := m.state.Selections[key]
 	if !ok || selection.CandidateID != evidence.CandidateID {
@@ -651,7 +822,7 @@ func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
 		m.state.Selections[key] = selection
 		return
 	}
-	if selection.Frozen || consecutiveFailures(m.state.Evidence, selection) < RollbackFailures {
+	if selection.Frozen || consecutiveFailures(m.state.Evidence, selection, m.now()) < RollbackFailures {
 		return
 	}
 	summaries := summarize(m.state, m.now())
@@ -803,6 +974,14 @@ func (m *Manager) now() time.Time {
 // One descriptor-anchored CAS path for every Strategy Lab writer. Package
 // receipts and candidates cannot be separated by a crash or a stale writer.
 func (m *Manager) saveLocked() (retErr error) {
+	if m.compatibilityRetainedUnknownLocked() {
+		// Schema 1 readers reject schema 2 instead of ignoring the new bool.
+		// The existing Strategy Lab state is the only persistent record.
+		m.compatibilityUnknown = true
+		if m.state.SchemaVersion < compatibilityUnknownSchema {
+			m.state.SchemaVersion = compatibilityUnknownSchema
+		}
+	}
 	if strings.TrimSpace(m.Path) == "" {
 		return nil
 	}
@@ -815,8 +994,16 @@ func (m *Manager) saveLocked() (retErr error) {
 				_ = json.Unmarshal(m.image.Data, &previous)
 			}
 			m.state = previous
+			if m.compatibilityUnknown && m.state.SchemaVersion < compatibilityUnknownSchema {
+				m.state.SchemaVersion = compatibilityUnknownSchema
+			}
 		}
 	}()
+	if m.state.CompatibilityFinalizing || (m.state.CompatibilitySession != nil && compatibilitySessionUnknown(*m.state.CompatibilitySession)) {
+		// Only the owner provider/helper may advance this exact session through
+		// its descriptor CAS path. Ordinary writers cannot discard its intent.
+		return ErrCompatibilityQuiescenceUnknown
+	}
 	if m.writeBlocked {
 		return restorejournal.ErrRecovery
 	}

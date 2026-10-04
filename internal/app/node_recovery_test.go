@@ -63,6 +63,7 @@ func (f *recoveryChecker) Check(ctx context.Context, request dataplane.NodeCheck
 	result := dataplane.NodeCheckResult{ProbeID: fmt.Sprintf("probe-recovery-%d", len(f.requests)), NodeID: request.NodeID, ServiceID: request.Service.ID,
 		NetworkProfile: request.NetworkProfile, RoutePathID: "sing-box:" + request.NodeID, TestLevel: "service", Verdict: evidence.VerdictPass,
 		Stage: "service", Available: true, StartedAt: now.Add(-time.Second), FinishedAt: now, ExpiresAt: now.Add(ttl), HTTPStatus: 200}
+	result = modeledNodeServiceProof(result, "sing-box")
 	if f.fail {
 		result.Available = false
 		result.Verdict = evidence.VerdictError

@@ -26,6 +26,7 @@ func ownWireGuardFixture(t *testing.T, profile string) (*WARPWireGuardAdapter, *
 	}
 	runner := &warpFakeRunner{}
 	adapter := NewWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-wg.conf")
 	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", runner
 	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {

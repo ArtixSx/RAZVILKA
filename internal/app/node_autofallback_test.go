@@ -60,9 +60,10 @@ func autofallbackResult(request dataplane.NodeCheckRequest, available bool) data
 	if available {
 		verdict = evidence.VerdictPass
 	}
-	return dataplane.NodeCheckResult{ProbeID: fmt.Sprintf("probe-fallback-%d", now.UnixNano()), NodeID: request.NodeID, ServiceID: request.Service.ID,
+	result := dataplane.NodeCheckResult{ProbeID: fmt.Sprintf("probe-fallback-%d", now.UnixNano()), NodeID: request.NodeID, ServiceID: request.Service.ID,
 		NetworkProfile: request.NetworkProfile, RoutePathID: "sing-box:" + request.NodeID, StartedAt: now.Add(-time.Second), FinishedAt: now,
 		ExpiresAt: now.Add(30 * time.Minute), Stage: "service", TestLevel: "service", Verdict: verdict, Available: available, DirectControl: "measured", Message: "Проверка завершена."}
+	return modeledNodeServiceProof(result, "sing-box")
 }
 
 func fallbackEntry(t *testing.T, a *App) nodeAutofallbackService {

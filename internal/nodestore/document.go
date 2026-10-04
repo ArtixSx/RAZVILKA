@@ -60,7 +60,7 @@ func validate(doc document) error {
 			return ErrStore
 		}
 		// Re-normalization forbids persisted inbounds/routing/unsupported fields.
-		result, err := providerprofile.ParseProfile("[" + string(s.Outbound) + "]")
+		result, err := providerprofile.ParseCanonicalProfile("[" + string(s.Outbound) + "]")
 		if err != nil || result.Preview.NodeCount != 1 || len(result.Preview.Rejected) > 0 {
 			return ErrStore
 		}

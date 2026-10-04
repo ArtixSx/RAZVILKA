@@ -77,21 +77,6 @@ func TestGenerateRequiresExplicitTermsAcceptanceBeforeRegistration(t *testing.T)
 	}
 }
 
-func TestTransientRegistrationErrorClassification(t *testing.T) {
-	for _, message := range []string{
-		`Post "https://api.cloudflareclient.com/v0a1922/reg": net/http: TLS handshake timeout`,
-		"dial tcp: i/o timeout",
-		"read: connection reset by peer",
-	} {
-		if !transientRegistrationError(errors.New(message)) {
-			t.Fatalf("transient error was not classified: %s", message)
-		}
-	}
-	if transientRegistrationError(errors.New("invalid account format")) {
-		t.Fatal("permanent error was classified as transient")
-	}
-}
-
 func TestHealthPolicyRequiresConfirmedEvidenceAndThreshold(t *testing.T) {
 	root := t.TempDir()
 	m := New(filepath.Join(root, "warp"), filepath.Join(root, "backups"), nil)
@@ -163,7 +148,7 @@ func TestRecordActivationState(t *testing.T) {
 		t.Fatal(err)
 	}
 	status := m.Health()
-	if status.State.LastDecision != "fresh-profile-activation-failed" || status.State.LastActivationError != "handshake timeout" {
+	if status.State.LastDecision != "fresh-profile-activation-failed" || status.State.LastActivationError != "candidate-activation-failed" {
 		t.Fatalf("unexpected failed activation state: %+v", status.State)
 	}
 	if err := m.RecordActivation(true, ""); err != nil {

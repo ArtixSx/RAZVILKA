@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -151,6 +152,73 @@ func nativeXrayServerReady(t *testing.T, address, security string) {
 }
 
 func TestNativeXrayExactNode(t *testing.T) {
+	if nativeXrayIsolatedFixture(t) {
+		return
+	}
+	nativeXrayExactNodeMatrix(t, []nativeXrayCase{{security: "tls", lifecycle: true}, {security: "reality", lifecycle: true}})
+}
+
+// Each matrix creates a fresh CA. Go's system roots are process-cached, so a
+// second matrix cannot replace the first CA merely by changing SSL_CERT_FILE.
+// Re-execute the selected test in the SAME isolated namespace, with a fresh
+// Go trust store. The production service/TLS probes and genuine Xray processes
+// stay unchanged; explicit fixture roots still verify both paired egress paths.
+func nativeXrayIsolatedFixture(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv("RAZVILKA_XRAY_NATIVE") == "" {
+		t.Skip("requires scripts/check-xray-native.sh and a verified Xray binary")
+	}
+	const marker = "RAZVILKA_XRAY_FIXTURE_CHILD"
+	if selected := os.Getenv(marker); selected != "" {
+		if selected != t.Name() {
+			t.Fatal("native fixture child selected a different matrix")
+		}
+		return false
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(11 * time.Minute)
+	if parentDeadline, ok := t.Deadline(); ok && parentDeadline.Add(-5*time.Second).Before(deadline) {
+		deadline = parentDeadline.Add(-5 * time.Second)
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	command := exec.CommandContext(ctx, binary, "-test.run", "^"+regexp.QuoteMeta(t.Name())+"$", "-test.v", "-test.count=1", "-test.timeout", time.Until(deadline).String())
+	command.Env = append(os.Environ(), marker+"="+t.Name())
+	output, err := command.CombinedOutput()
+	defer clear(output)
+	t.Logf("isolated native matrix:\n%s", output)
+	if err != nil {
+		t.Fatalf("isolated native matrix failed: %v", err)
+	}
+	return true
+}
+
+type nativeXrayCase struct {
+	security  string
+	mode      string
+	extra     bool
+	lifecycle bool
+}
+
+// Separate opt-in test: genuine Xray server/client for each XHTTP mode,
+// preserving the accepted RAW/TCP fixture and its independently recorded runs.
+func TestNativeXrayXHTTPExactNode(t *testing.T) {
+	if nativeXrayIsolatedFixture(t) {
+		return
+	}
+	var cases []nativeXrayCase
+	for _, security := range []string{"tls", "reality"} {
+		for _, mode := range []string{"auto", "packet-up", "stream-up", "stream-one"} {
+			cases = append(cases, nativeXrayCase{security: security, mode: mode, extra: mode == "packet-up", lifecycle: security == "tls" && mode == "packet-up" || security == "reality" && mode == "stream-one"})
+		}
+	}
+	nativeXrayExactNodeMatrix(t, cases)
+}
+
+func nativeXrayExactNodeMatrix(t *testing.T, cases []nativeXrayCase) {
 	binary := os.Getenv("RAZVILKA_XRAY_NATIVE")
 	if binary == "" {
 		t.Skip("requires scripts/check-xray-native.sh and a verified Xray binary")
@@ -160,10 +228,24 @@ func TestNativeXrayExactNode(t *testing.T) {
 	if os.Getenv("RAZVILKA_XRAY_NETNS") != "1" || e1 != nil || e2 != nil || selfNS == ownerNS {
 		t.Fatal("native test requires its own isolated network namespace")
 	}
+	for _, fixture := range cases {
+		if fixture.mode != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			version, err := exec.CommandContext(ctx, binary, "version").Output()
+			cancel()
+			pinned := exactXHTTPVersionOutput(version)
+			clear(version)
+			if err != nil || !pinned {
+				t.Fatal("XHTTP schema harness requires the reviewed Xray 26.3.27 binary")
+			}
+			break
+		}
+	}
 	root := t.TempDir()
 	cert, key, roots := nativeXrayCertificate(t, root)
 	// Both Go service probes and the child Xray verify the generated CA.
-	// This process runs only this test; production never supplies these roots.
+	// The isolated fixture process runs only this matrix. Production never
+	// supplies these roots; the wrapper prevents Go system-root cache reuse.
 	t.Setenv("SSL_CERT_FILE", cert)
 	t.Setenv("SSL_CERT_DIR", filepath.Join(root, "empty-roots"))
 	var directRequests, proxyRequests, serviceRequests atomic.Int64
@@ -198,20 +280,47 @@ func TestNativeXrayExactNode(t *testing.T) {
 	}
 	publicKey := base64.RawURLEncoding.EncodeToString(xkey.PublicKey().Bytes())
 	privateKey := base64.RawURLEncoding.EncodeToString(xkey.Bytes())
-	for index, security := range []string{"tls", "reality"} {
-		t.Run(security, func(t *testing.T) {
+	for index, fixture := range cases {
+		security := fixture.security
+		name := security
+		if fixture.mode != "" {
+			name += "-xhttp-" + fixture.mode
+		}
+		t.Run(name, func(t *testing.T) {
 			serverPort := 10443 + index
 			stream := map[string]any{"network": "tcp", "security": security}
 			tlsOptions := map[string]any{"enabled": true, "server_name": "front.example"}
 			user := map[string]any{"id": nativeXrayUUID}
 			outbound := map[string]any{"type": "vless", "server": "node.example", "server_port": serverPort, "uuid": nativeXrayUUID, "tls": tlsOptions}
+			if fixture.mode != "" {
+				xsettings := map[string]any{"host": "front.example", "path": "/exact-xhttp?fixture=1", "mode": fixture.mode}
+				if fixture.extra {
+					xsettings["extra"] = map[string]any{
+						"xPaddingBytes": "64-128", "xPaddingObfsMode": true, "xPaddingPlacement": "header", "xPaddingHeader": "X-Fixture-Pad",
+						"sessionPlacement": "query", "sessionKey": "fixture-session", "seqPlacement": "query", "seqKey": "fixture-seq",
+						"noGRPCHeader": true, "noSSEHeader": true, "scMaxEachPostBytes": 8192, "scMinPostsIntervalMs": 0,
+						"xmux": map[string]any{"maxConcurrency": 2, "hMaxRequestTimes": "10-20", "hMaxReusableSecs": 30},
+					}
+				}
+				stream["network"], stream["xhttpSettings"] = "xhttp", xsettings
+				transport := map[string]any{"type": "xhttp"}
+				for field, value := range xsettings {
+					transport[field] = value
+				}
+				outbound["transport"] = transport
+				if security == "tls" {
+					tlsOptions["alpn"] = []string{"h2"}
+				}
+			}
 			if security == "tls" {
 				stream["tlsSettings"] = map[string]any{"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}, "alpn": []string{"h2", "http/1.1"}}
 			} else {
 				stream["realitySettings"] = map[string]any{"target": net.JoinHostPort(nativeXrayHTTPSIP, "9443"), "serverNames": []string{"front.example"}, "privateKey": privateKey, "shortIds": []string{"abcd"}}
 				tlsOptions["utls"] = map[string]any{"enabled": true, "fingerprint": "chrome"}
 				tlsOptions["reality"] = map[string]any{"enabled": true, "public_key": publicKey, "short_id": "abcd"}
-				user["flow"], outbound["flow"] = "xtls-rprx-vision", "xtls-rprx-vision"
+				if fixture.mode == "" {
+					user["flow"], outbound["flow"] = "xtls-rprx-vision", "xtls-rprx-vision"
+				}
 			}
 			serverConfig := map[string]any{
 				"log":       map[string]any{"loglevel": "warning", "access": "none"},
@@ -219,7 +328,7 @@ func TestNativeXrayExactNode(t *testing.T) {
 				"inbounds":  []any{map[string]any{"listen": nativeXrayServerIP, "port": serverPort, "protocol": "vless", "settings": map[string]any{"clients": []any{user}, "decryption": "none"}, "streamSettings": stream}},
 				"outbounds": []any{map[string]any{"protocol": "freedom", "sendThrough": nativeXrayExitIP, "settings": map[string]any{"domainStrategy": "UseIPv4"}}},
 			}
-			serverPath := filepath.Join(root, "server-"+security+".json")
+			serverPath := filepath.Join(root, "server-"+name+".json")
 			data, err := json.Marshal(serverConfig)
 			if err != nil {
 				t.Fatal(err)
@@ -233,7 +342,7 @@ func TestNativeXrayExactNode(t *testing.T) {
 			t.Cleanup(server.stop)
 			serverAddress := net.JoinHostPort(nativeXrayServerIP, fmt.Sprint(serverPort))
 			nativeXrayServerReady(t, serverAddress, security)
-			checker := NewExactXrayNodeCheckerSlots(filepath.Join(root, "client-"+security), 2)
+			checker := NewExactXrayNodeCheckerSlots(filepath.Join(root, "client-"+name), 2)
 			checker.Binary, checker.Port = binary, 29185+index*MaxExactNodeSlots
 			checker.FreshProfile = func(context.Context) (string, error) { return "wan-0123456789ab", nil }
 			checker.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
@@ -279,6 +388,41 @@ func TestNativeXrayExactNode(t *testing.T) {
 			}
 			assertPass(run())
 			t.Log("native exact path passed: owned client, TLS-verified paired egress, service hostname and literal-IP path")
+			if !fixture.lifecycle {
+				return
+			}
+			if fixture.mode != "" {
+				// A real server requires the correct transport, TLS name, path
+				// and mode. SOCKS readiness or TCP connect cannot substitute.
+				for _, mutation := range []struct {
+					name     string
+					material []byte
+				}{
+					{"wrong-path", []byte(strings.Replace(string(material), "/exact-xhttp?fixture=1", "/wrong-xhttp", 1))},
+					{"wrong-tls-name", []byte(strings.Replace(string(material), `"server_name":"front.example"`, `"server_name":"wrong.example"`, 1))},
+					{"wrong-mode", []byte(strings.Replace(string(material), `"mode":"`+fixture.mode+`"`, `"mode":"stream-up"`, 1))},
+				} {
+					r.Outbound = mutation.material
+					if failed := run(); failed.Available || failed.Verdict == evidence.VerdictPass || failed.Evidence.Verdict == evidence.VerdictPass || failed.ErrorCode != "node-egress-failed" || failed.Stage != "egress" {
+						t.Fatalf("%s was not rejected by the real path: %+v", mutation.name, failed)
+					}
+				}
+				var wrongTransport map[string]any
+				if json.Unmarshal(material, &wrongTransport) != nil {
+					t.Fatal("invalid fixture")
+				}
+				delete(wrongTransport, "transport")
+				r.Outbound, err = json.Marshal(wrongTransport)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if failed := run(); failed.Available || failed.ErrorCode != "node-egress-failed" || failed.Stage != "egress" {
+					t.Fatalf("RAW client was accepted by XHTTP server: %+v", failed)
+				}
+				r.Outbound = material
+				assertPass(run())
+				t.Log("native XHTTP mismatch rejection: actual wrong path/TLS name/mode/transport failed, correct material recovered")
+			}
 			// Real server restart: a stopped endpoint cannot produce a PASS;
 			// the same material works again only after the real server returns.
 			server.stop()

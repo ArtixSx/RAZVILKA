@@ -33,6 +33,9 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-inspector-focus.mjs
   node scripts/test-inspector-controls-ui.mjs
   node scripts/test-component-cards-ui.mjs
+  node scripts/test-component-recovery-ui.mjs
+  node scripts/test-engine-card-flow-ui.mjs
+  node scripts/test-ui-http-perf.mjs
   node --check cmd/razvilka/web/project-log.js
   node scripts/test-project-log-ui.mjs
   node scripts/test-onboarding-escape-ui.mjs
@@ -107,7 +110,13 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-node-history-admission.mjs
   node scripts/test-native-opkg-runner.mjs
 fi
-./build.sh
+# Build the native executable required by the mandatory transaction fixture.
+if [ "${RAZVILKA_BUILD_TARGETS:-all}" = arm64 ] &&
+  [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ]; then
+  RAZVILKA_BUILD_TARGETS=arm64+amd64 ./build.sh
+else
+  ./build.sh
+fi
 sha256sum -c dist/SHA256SUMS
 sh ./scripts/test-entware-transaction.sh
 echo "RAZVILKA checks: OK"

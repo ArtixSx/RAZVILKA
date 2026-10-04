@@ -52,6 +52,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 	"github.com/ArtixSx/razvilka/internal/usquediag"
 	"github.com/ArtixSx/razvilka/internal/warp"
+	"github.com/ArtixSx/razvilka/internal/wireguardprofile"
 )
 
 //go:embed web/*
@@ -105,6 +106,17 @@ func main() {
 	auditLogPath := flag.String("audit-log", defaultAuditLog, "bounded control-plane audit journal path")
 	dnsStatePath := flag.String("dns-state", defaultDNSState, "DNS profile draft and probe state path")
 	nodeStatePath := flag.String("node-state", getenv("RAZVILKA_NODE_STATE", ""), "private proxy node store directory (default: nodes-private beside config)")
+	componentState := flag.String("component-state", getenv("RAZVILKA_COMPONENT_STATE", ""), "explicit absolute component journal/receipt directory (default: /opt/var/lib/razvilka/components)")
+	componentBin := flag.String("component-bin", getenv("RAZVILKA_COMPONENT_BIN", ""), "explicit absolute managed component binary directory (default: /opt/bin)")
+	componentInit := flag.String("component-init", getenv("RAZVILKA_COMPONENT_INIT", ""), "explicit absolute component init directory (default: /opt/etc/init.d)")
+	componentRepo := flag.String("component-repo", getenv("RAZVILKA_COMPONENT_REPO", ""), "explicit absolute component repository directory (default: /opt/etc/opkg)")
+	componentInfo := flag.String("component-info", getenv("RAZVILKA_COMPONENT_INFO", ""), "explicit absolute component conffile metadata directory (default: /opt/lib/opkg/info)")
+	selfInstallation := flag.String("self-update-installation", getenv("RAZVILKA_SELF_UPDATE_INSTALLATION", ""), "explicit absolute application installation root (default: /opt)")
+	selfFiles := flag.String("self-update-file-state", getenv("RAZVILKA_SELF_UPDATE_FILE_STATE", ""), "explicit absolute retained application file journal directory")
+	selfHelper := flag.String("self-update-helper-state", getenv("RAZVILKA_SELF_UPDATE_HELPER_STATE", ""), "explicit absolute retained application helper receipt directory")
+	selfControl := flag.String("self-update-control-state", getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE", ""), "fixed absolute control authority root outside rollback images")
+	selfJob := flag.String("self-update-job", "", "matching supervised application startup job")
+	selfWorker := flag.Int("self-update-helper-pid", 0, "matching self-update command worker PID")
 	z2kRoot := flag.String("z2k-root", defaultZ2KRoot, "read-only z2k migration source root")
 	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
 	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
@@ -124,11 +136,36 @@ func main() {
 	closeRollbackDigest := flag.String("close-rollback-digest", "", "reviewed digest required with close-rollback-plan")
 	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
+	nodeHistoryReadVersion := flag.Bool("node-history-read-version", false, "print the supported exact node history read capability and exit")
+	checkNodeHistory := flag.Bool("check-node-history-state", false, "check retained node history compatibility without changing files and exit")
+	nodeHistoryConfigRoot := flag.String("node-history-config-root", "/opt/etc/razvilka", "absolute trusted retained node history config root")
+	nodeHistoryStateRoot := flag.String("node-history-state-root", "/opt/var/lib/razvilka", "absolute trusted retained node history state root")
 	componentUpdateSchema := flag.Bool("component-update-schema", false, "print the supported durable component update schema and exit")
+	selfUpdateSchema := flag.Bool("self-update-schema", false, "print the supported application replacement capability and exit")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
 	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
 	flag.Parse()
+	if *nodeHistoryReadVersion {
+		fmt.Println(nodestore.ExactHistoryReadVersion)
+		return
+	}
+	if *checkNodeHistory {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if checkNodeHistoryState(ctx, *nodeHistoryConfigRoot, *nodeHistoryStateRoot, nodestore.ExactHistoryReadVersion) != nil {
+			log.Print(errNodeHistoryState)
+			os.Exit(1)
+		}
+		fmt.Println(`{"ok":true}`)
+		return
+	}
+	if *selfUpdateSchema {
+		// Capability2 requires the complete owned-runtime and stopped recovery
+		// consumer. Missing owner proofs/stopped settlement remain fenced.
+		fmt.Println("0")
+		return
+	}
 	if *componentUpdateSchema {
 		fmt.Println(components.ComponentUpdateSchema)
 		return
@@ -154,6 +191,9 @@ func main() {
 	}
 	if modes > 1 {
 		log.Fatal("check, migration, recovery, health, installation and deactivation modes are mutually exclusive")
+	}
+	if (*selfJob == "") != (*selfWorker == 0) || *selfWorker < 0 || *selfWorker == 1 || *selfJob != "" && modes != 0 {
+		log.Fatal("self update startup requires a matching job and command worker in ordinary daemon mode")
 	}
 	if (*retryRollbackPlan == "") != (*retryRollbackDigest == "") || (*closeRollbackPlan == "") != (*closeRollbackDigest == "") {
 		log.Fatal("rollback recovery requires both plan and digest")
@@ -216,6 +256,38 @@ func main() {
 		fmt.Printf("healthy: %s\n", version)
 		return
 	}
+	selfFileState, err := configuredSelfUpdateFiles(*selfInstallation, *selfFiles, *selfHelper, *selfControl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	selfFileState.RecoveryGuard = func(c context.Context) error {
+		return independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath)
+	}
+	if *selfJob != "" && selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
+		log.Fatal("matching self update startup authority unavailable; preserve retained files")
+	}
+	if selfFileState.Pending() {
+		// Observe retained file/helper journals before permission repairs,
+		// private restore, default creation or any runtime recovery can write.
+		if modes != 0 {
+			log.Fatal("self update recovery required; preserve retained journals and application files")
+		}
+		if selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
+			manager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+			if err != nil {
+				log.Fatal(err)
+			}
+			a, err := selfUpdateRecoveryApp(selfFileState, *cfgPath, *tokenPath, *credentialsPath, manager, *dataplaneStatePath)
+			if err != nil {
+				log.Fatal("self update recovery bootstrap unavailable; files preserved: ", err)
+			}
+			log.Print("self update requires matching recovery; automatic startup writes are paused")
+			if err := serveSelfUpdateRecovery(a, *listen); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+	}
 	// Older releases could leave per-engine draft directories at 0755. Repair
 	// only the fixed RAZVILKA staging layout before opening recovery targets.
 	if !*checkOnly {
@@ -240,9 +312,13 @@ func main() {
 		return
 	}
 	if *installComponents {
+		manager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 		defer cancel()
-		report := components.New().InstallRecommended(ctx)
+		report := manager.InstallRecommended(ctx)
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(report); err != nil {
@@ -341,7 +417,11 @@ func main() {
 	if legacyOutcome != "clean" || privateOutcome != "clean" {
 		log.Print("private draft boot recovery completed; live profiles and routes were not changed")
 	}
-	store, err := config.Load(*cfgPath)
+	loadConfig := config.Load
+	if selfFileState.Pending() {
+		loadConfig = config.LoadExisting
+	}
+	store, err := loadConfig(*cfgPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -463,6 +543,7 @@ func main() {
 	engineLab := enginelab.New(engineConfigs)
 	engineLab.OwnsPolicyRule = dataplaneManager.OwnsPolicyRule
 	engineLab.OwnsPolicyRoute = dataplaneManager.OwnsPolicyRoute
+	engineLab.OwnsPolicyRouteInTable = dataplaneManager.OwnsPolicyRouteInTable
 	engineLab.EnablePolicyInspection()
 	usqueDoctor := usquediag.New()
 	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")
@@ -496,8 +577,15 @@ func main() {
 			log.Print("Node-scoped Sing-box routes disabled: ", err)
 		}
 	}
-	nodeChecker := dataplane.NewExactNodeChecker(filepath.Join(*dataplaneStatePath, "node-check"))
-	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: components.New(), Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
+	nodeDispatch, nodeViews, err := configuredNodeCheckers(*dataplaneStatePath)
+	if err != nil {
+		log.Fatal("exact node dispatcher configuration: ", err)
+	}
+	componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+	if err != nil {
+		log.Fatal(err)
+	}
+	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: componentManager, Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	// Panel actions wait briefly for background work instead of failing with
 	// "busy" at once; the operation holding the gate is named if they still fail.
 	a.AdmissionPatience = 20 * time.Second
@@ -512,7 +600,17 @@ func main() {
 		"cloudflare": updateCloudflarePath, "nodes": updateNodePath, "stage": *stagePath, "backups": *backupPath, "warp": *warpStatePath, "dataplane": *dataplaneStatePath,
 		"dns": *dnsStatePath,
 	}})
+	a.SelfUpdate.Directory = selfFileState.Helper.Directory
+	if selfFileState.Adapter != nil {
+		a.SelfUpdate.FileAuthorityReview = selfUpdateAuthorityReview(selfFileState.ControlRoot)
+		a.SelfUpdate.FileEffectAdmission = selfUpdateEffectAdmission
+	}
+	selfFileState.Helper = a.SelfUpdate
+	a.SelfUpdateFiles = selfFileState
+	a.SelfUpdateStartupJobID, a.SelfUpdateStartupHelperPID = *selfJob, *selfWorker
 	a.Nodes = nodeStore
+	historyAdmission := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)
+	a.NodeHistoryWriteGuard = historyAdmission.CheckWrite
 	if nodeStore != nil {
 		feedRoot, feedPathErr := filepath.Abs(filepath.Join(filepath.Dir(*cfgPath), "subscriptions-private"))
 		if err := os.MkdirAll(feedRoot, 0700); err == nil && feedPathErr == nil {
@@ -526,7 +624,8 @@ func main() {
 			log.Print("Private subscriptions disabled: directory unavailable")
 		}
 	}
-	a.NodeChecker = nodeChecker
+	a.NodeChecker = nodeViews["sing-box"]
+	a.NodeCheckers = nodeViews
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		log.Fatal("component recovery admission could not be initialized")
 	}
@@ -539,14 +638,18 @@ func main() {
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
 	a.StartSelfUpdate(runtimeContext)
-	nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
-	if err := nodeChecker.Recover(nodeRecoveryContext); err != nil {
-		log.Print("Exact node checker disabled: temporary runtime cleanup could not be confirmed")
-		a.NodeChecker = nil
+	selfRecoveryPending := a.PendingSelfUpdateRecovery()
+	if !selfRecoveryPending {
+		nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
+		if err := nodeDispatch.Recover(nodeRecoveryContext); err != nil {
+			// Each concrete checker preserves its own poison fence. Recover
+			// attempts both; a failed engine never aliases the other engine.
+			log.Print("Exact node checker recovery requires review: temporary runtime cleanup could not be confirmed")
+		}
+		cancelNodeRecovery()
 	}
-	cancelNodeRecovery()
 	componentRecoveryPending := a.PendingComponentRecovery()
-	if !componentRecoveryPending {
+	if !componentRecoveryPending && !selfRecoveryPending {
 		usqueRecoveryContext, cancelUSQUERecovery := context.WithTimeout(runtimeContext, 30*time.Second)
 		usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
 		cancelUSQUERecovery()
@@ -561,7 +664,10 @@ func main() {
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
 	var recovery dataplane.Recovery
 	var recoveryErr error
-	if componentRecoveryPending {
+	if selfRecoveryPending {
+		recovery.State = "self-update-recovery-required"
+		log.Print("Unfinished application update: automatic network recovery is paused")
+	} else if componentRecoveryPending {
 		recovery.State = "component-recovery-required"
 		log.Print("Unfinished component update: automatic network recovery is paused; the panel and explicit Stop remain available")
 	} else {
@@ -661,11 +767,37 @@ func runCommand(args []string) (bool, int) {
 	}
 	command := strings.ToLower(strings.TrimSpace(args[0]))
 	switch command {
+	case "component-package-supervisor":
+		if len(args) != 4 {
+			return true, 2
+		}
+		if f, err := productionSelfUpdateFiles(); err != nil || f.Pending() {
+			return true, 3
+		}
+		return true, components.RunPackageSupervisor(args[1], args[2], args[3])
+	case "component-package-supervision-probe":
+		if len(args) != 1 {
+			return true, 2
+		}
+		if err := components.ProbePackageSupervision(); err != nil {
+			fmt.Fprintln(os.Stderr, "package supervision unavailable")
+			return true, 3
+		}
+		return true, writeCommandJSON(map[string]any{"package_supervision": 1})
 	case "self-update-helper":
 		if len(args) != 2 {
 			return true, 2
 		}
-		return true, updatecheck.RunInstallerHelper(args[1])
+		return true, runSelfUpdateFileHelper(args[1])
+	case "self-update-command-helper":
+		if len(args) != 3 {
+			return true, 2
+		}
+		return true, runSelfUpdateCommandHelper(args[1], args[2])
+	case "self-update-runtime-quiesce":
+		return true, runSelfUpdateRuntimeQuiesce(args[1:])
+	case "self-update-files":
+		return true, runSelfUpdateFileCommand(args[1:])
 	case "version", "v":
 		fmt.Println(app.Version)
 		return true, 0
@@ -702,9 +834,17 @@ func runCommand(args []string) (bool, int) {
 			fmt.Fprintln(os.Stderr, "usage: razvilka components [--refresh]")
 			return true, 2
 		}
+		if refresh && selfUpdatePendingFromEnv() {
+			return true, 3
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		views, err := components.New().List(ctx, refresh)
+		manager, err := componentsFromEnv()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return true, 3
+		}
+		views, err := manager.List(ctx, refresh)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return true, 3
@@ -720,9 +860,17 @@ func runCommand(args []string) (bool, int) {
 			fmt.Fprintln(os.Stderr, "usage: razvilka component plan <id> <install|update|remove> [--refresh]")
 			return true, 2
 		}
+		if refresh && selfUpdatePendingFromEnv() {
+			return true, 3
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		plan, err := components.New().Plan(ctx, args[2], args[3], refresh)
+		manager, err := componentsFromEnv()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return true, 3
+		}
+		plan, err := manager.Plan(ctx, args[2], args[3], refresh)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return true, 3
@@ -737,6 +885,31 @@ func runCommand(args []string) (bool, int) {
 	}
 }
 
+func componentsFromEnv() (*components.Manager, error) {
+	return configuredComponents(os.Getenv("RAZVILKA_COMPONENT_STATE"), os.Getenv("RAZVILKA_COMPONENT_BIN"), os.Getenv("RAZVILKA_COMPONENT_INIT"), os.Getenv("RAZVILKA_COMPONENT_REPO"), os.Getenv("RAZVILKA_COMPONENT_INFO"))
+}
+
+// Overrides are explicit; config relocation never relocates retained journals.
+// Do not create paths or normalize/resolve links here: ownedfs remains the gate.
+func configuredComponents(state, bin, init, repo, info string) (*components.Manager, error) {
+	m := components.New()
+	for _, item := range []struct {
+		name, value string
+		target      *string
+	}{
+		{"state", state, &m.StateDir}, {"bin", bin, &m.BinDir}, {"init", init, &m.InitDir}, {"repo", repo, &m.RepoDir}, {"info", info, &m.InfoDir},
+	} {
+		if item.value == "" {
+			continue
+		}
+		if !filepath.IsAbs(item.value) || strings.TrimSpace(item.value) != item.value {
+			return nil, fmt.Errorf("component-%s requires an explicit absolute directory", item.name)
+		}
+		*item.target = item.value
+	}
+	return m, nil
+}
+
 func writeCommandJSON(value any) int {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
@@ -749,6 +922,10 @@ func writeCommandJSON(value any) int {
 
 func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*dataplane.Manager, error) {
 	manager := dataplane.New(stateRoot)
+	wireGuardAdapter := dataplane.NewWireGuardAdapter(configs, stateRoot)
+	// One explicit startup Store is shared by the catalog and runtime owner.
+	// Construction is read-only; HTTP never discovers or relocates this path.
+	wireGuardAdapter.Profiles = wireguardprofile.New(filepath.Join(stateRoot, "profiles", "wireguard"))
 	nfqws2Adapter := dataplane.NewNFQWS2Adapter()
 	nfqws2Adapter.Configs = configs
 	if err := manager.Register(nfqws2Adapter); err != nil {
@@ -757,7 +934,7 @@ func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*data
 	for _, adapter := range []dataplane.Adapter{
 		dataplane.NewWARPWireGuardAdapter(configs, stateRoot),
 		dataplane.NewAmneziaWGAdapter(configs, stateRoot),
-		dataplane.NewWireGuardAdapter(configs, stateRoot),
+		wireGuardAdapter,
 	} {
 		if err := manager.Register(adapter); err != nil {
 			return nil, fmt.Errorf("register %s dataplane adapter: %w", adapter.ID(), err)
@@ -1136,7 +1313,7 @@ func checkHealthIdentity(ctx context.Context, rawURL string, expectedPID int, re
 		}
 		// A private restore fence is settled by the next start, so it stays an
 		// ordinary failure. A journal fence survives restarts: report it apart.
-		if resp.StatusCode == http.StatusServiceUnavailable && (status.Code == "DATAPLANE_RECOVERY_REQUIRED" || status.Code == "COMPONENT_RECOVERY_REQUIRED") && status.NotStarted && status.RecoveryRequired && status.ProcessID > 0 {
+		if resp.StatusCode == http.StatusServiceUnavailable && (status.Code == "DATAPLANE_RECOVERY_REQUIRED" || status.Code == "COMPONENT_RECOVERY_REQUIRED" || status.Code == "SELF_UPDATE_RECOVERY_REQUIRED") && status.NotStarted && status.RecoveryRequired && status.ProcessID > 0 {
 			return "", errHealthRecovery
 		}
 		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)

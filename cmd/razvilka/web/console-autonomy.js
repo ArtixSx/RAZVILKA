@@ -106,6 +106,8 @@
   function formatDate(value,zone) { const n=new Date(value); if(!Number.isFinite(n.getTime())||n.getFullYear()<2000) return 'Ещё нет'; try {return n.toLocaleString('ru-RU',{timeZone:zone||snapshot?.policy.timezone||'UTC',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});} catch {return n.toISOString();} }
   async function api(path,method='GET',body,attempt=0,requestGeneration=authGeneration) {
     requireGeneration(requestGeneration);
+    const mutation=method!=='GET';
+    if(mutation&&typeof root.invalidatePanelReads==='function')root.invalidatePanelReads();
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
     requests.add(controller);
     const headers={Accept:'application/json'};
@@ -129,7 +131,7 @@
       if(e.name==='AbortError') e=new Error('Ответ не получен. Обновите состояние: запрос мог быть сохранён.');
       e.authGeneration=requestGeneration;
       throw e;
-    } finally {clearTimeout(timer);requests.delete(controller);}
+    } finally {clearTimeout(timer);requests.delete(controller);if(mutation&&typeof root.invalidatePanelReads==='function')root.invalidatePanelReads();}
   }
   function tab(name) {
     const map={overview:'autopilot',services:'managed',sources:'subscription-settings',setup:'onboard'};
