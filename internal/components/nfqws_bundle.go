@@ -169,6 +169,10 @@ func (m *Manager) managedNFQWSRoot(create bool) (string, *ownedfs.Root, error) {
 		root.Close()
 		return "", nil, ErrManagedNFQWSBundle
 	}
+	if err := publicManagedNFQWSPath(canonical); err != nil {
+		root.Close()
+		return "", nil, err
+	}
 	if create {
 		parent, err := ownedfs.Open(filepath.Dir(canonical))
 		if err != nil {
@@ -386,7 +390,7 @@ func (m *Manager) continueManagedNFQWS(ctx context.Context, tx *updateTransactio
 	}
 	if tx.doc.Phase == UpdateStarted {
 		if _, err := releases.Stat(v.After.ManifestSHA256); errors.Is(err, os.ErrNotExist) {
-			if _, err := verifyManagedNFQWS(ctx, filepath.Join(path, v.Stage), v.After.ManifestSHA256); err != nil {
+			if _, err := verifyManagedNFQWSImage(ctx, filepath.Join(path, v.Stage), v.After.ManifestSHA256, true); err != nil {
 				return zero, err
 			}
 			publish := m.nfqwsPublish

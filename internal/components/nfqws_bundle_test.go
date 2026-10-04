@@ -107,6 +107,20 @@ func (r bundleForbiddenRunner) Run(context.Context, string, ...string) ([]byte, 
 func bundleFixtureManager(t *testing.T, input []byte) *Manager {
 	t.Helper()
 	base := t.TempDir()
+	if runtime.GOOS == "linux" {
+		// Only the Go-created fixture container is made traversable. Private
+		// control/state subtrees remain0700; this test never relaxes /root.
+		parent := filepath.Dir(base)
+		rel, err := filepath.Rel(os.TempDir(), parent)
+		if err != nil || rel == "." || strings.HasPrefix(rel, "..") || !strings.HasPrefix(filepath.Base(parent), "TestManagedNFQWS") && !strings.HasPrefix(filepath.Base(parent), "TestNativeManagedNFQWS") {
+			t.Fatal("unexpected test container", parent, err)
+		}
+		for _, path := range []string{parent, base} {
+			if err := os.Chmod(path, 0755); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	// Complete generations are readonly. Relax only this fixture tree before
 	// testing.TempDir cleanup, including Windows readonly file attributes.
 	t.Cleanup(func() {

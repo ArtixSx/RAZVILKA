@@ -65,6 +65,18 @@ func TestNativeManagedNFQWSStopBeforeAtomicPublication(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(m.nfqwsReleases, hash)); !errors.Is(err, os.ErrNotExist) {
 					t.Fatal("Stop published generation", err)
 				}
+				journal, err := openUpdateRoot(m.updateJournalDir(), false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				doc, _, err := readUpdateJournal(journal)
+				journal.Close()
+				if err != nil || doc.ManagedNFQWS == nil {
+					t.Fatal(doc, err)
+				}
+				if info, err := os.Stat(filepath.Join(m.nfqwsReleases, doc.ManagedNFQWS.Stage)); err != nil || info.Mode().Perm() != 0700 {
+					t.Fatal("Stop exposed unpublished stage", info, err)
+				}
 			} else if _, err := verifyManagedNFQWS(context.Background(), filepath.Join(m.nfqwsReleases, hash), hash); err != nil {
 				t.Fatal("retained complete generation lost", err)
 			}
@@ -80,5 +92,53 @@ func TestNativeManagedNFQWSStopBeforeAtomicPublication(t *testing.T) {
 				t.Fatal("cleanup cleared durable Stop", after, err)
 			}
 		})
+	}
+}
+
+func TestNativeManagedNFQWSPrivateAncestorRefusesWithoutChmod(t *testing.T) {
+	manifest, input, _ := bundleFixtureManifest(t, "fixture-a")
+	m := bundleFixtureManager(t, input)
+	private := filepath.Join(filepath.Dir(m.nfqwsReleases), "private")
+	if err := os.Mkdir(private, 0700); err != nil {
+		t.Fatal(err)
+	}
+	m.nfqwsReleases = filepath.Join(private, "releases")
+	if _, err := m.InstallManagedBundle(context.Background(), manifest, 7, bundleFixtureAuthority()); err == nil {
+		t.Fatal("UID drop was allowed across a private ancestor")
+	}
+	if info, err := os.Stat(private); err != nil || info.Mode().Perm() != 0700 {
+		t.Fatal("installer weakened private ancestor permissions", info, err)
+	}
+	entries, err := os.ReadDir(m.nfqwsReleases)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("private path acquired staged payload", entries, err)
+	}
+}
+
+func TestNativeManagedNFQWSPublishedPayloadIsPublicWhileControlsStayPrivate(t *testing.T) {
+	manifest, input, _ := bundleFixtureManifest(t, "fixture-a")
+	m := bundleFixtureManager(t, input)
+	receipt, err := m.InstallManagedBundle(context.Background(), manifest, 7, bundleFixtureAuthority())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := publicManagedNFQWSPath(receipt.GenerationPath); err != nil {
+		t.Fatal("published payload is not traversable", err)
+	}
+	for _, path := range []string{m.updateJournalDir(), filepath.Join(m.StateDir, "receipts")} {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != 0700 {
+			t.Fatal("control root lost privacy", path, info, err)
+		}
+	}
+	for _, member := range manifest.Members {
+		info, err := os.Stat(filepath.Join(receipt.GenerationPath, filepath.FromSlash(member.Destination)))
+		if err != nil || info.Mode().Perm()&0004 == 0 || info.Mode().Perm()&0222 != 0 {
+			t.Fatal("payload unreadable or mutable by runtime", member.Destination, info, err)
+		}
+	}
+	info, err := os.Stat(filepath.Join(m.StateDir, "receipts", managedNFQWSReceiptName))
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatal("receipt lost privacy", info, err)
 	}
 }

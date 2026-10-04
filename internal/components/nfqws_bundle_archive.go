@@ -195,7 +195,13 @@ func stageManagedNFQWS(ctx context.Context, path string, m ManagedNFQWSManifest,
 		if err != nil {
 			return err
 		}
-		err = errors.Join(chmodBundleDirectory(f), syncBundleFile(f), f.Close())
+		// Keep the unpublished stage root private. Publication seals its root
+		// mode under the same short authority as the actual directory rename.
+		var modeErr error
+		if directory != "." {
+			modeErr = chmodBundleDirectory(f)
+		}
+		err = errors.Join(modeErr, syncBundleFile(f), f.Close())
 		if err != nil {
 			return err
 		}
@@ -204,6 +210,10 @@ func stageManagedNFQWS(ctx context.Context, path string, m ManagedNFQWSManifest,
 }
 
 func verifyManagedNFQWS(ctx context.Context, path string, expected string) (ManagedNFQWSManifest, error) {
+	return verifyManagedNFQWSImage(ctx, path, expected, false)
+}
+
+func verifyManagedNFQWSImage(ctx context.Context, path string, expected string, staged bool) (ManagedNFQWSManifest, error) {
 	var m ManagedNFQWSManifest
 	root, err := ownedfs.Open(path)
 	if err != nil {
@@ -256,7 +266,11 @@ func verifyManagedNFQWS(ctx context.Context, path string, expected string) (Mana
 		info, statErr := f.Stat()
 		entries, readErr := f.ReadDir(16)
 		f.Close()
-		if statErr != nil || !info.IsDir() || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !updateModeMatches(info.Mode().Perm(), 0555) || (readErr != nil && readErr != io.EOF) {
+		mode := os.FileMode(0555)
+		if directory == "." && staged {
+			mode = 0700
+		}
+		if statErr != nil || !info.IsDir() || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !updateModeMatches(info.Mode().Perm(), mode) || (readErr != nil && readErr != io.EOF) {
 			return m, ErrManagedNFQWSBundle
 		}
 		for _, entry := range entries {
