@@ -328,7 +328,7 @@ func (l *nodeTransitLease) Apply(ctx context.Context) error {
 		l.unused.Store(before)
 		return before
 	}
-	if err := l.register(ctx); err != nil {
+	if err := l.register(context.WithValue(ctx, nodeTransitRemovalKey{}, false)); err != nil {
 		return classify(err)
 	}
 	// This early invocation provides a definite before-effects refusal. The
@@ -369,7 +369,7 @@ func (l *nodeTransitLease) Remove(ctx context.Context) error {
 	if status.Unknown || status.Promoted {
 		return ErrPolicyAdditionUnknown
 	}
-	if err := l.register(ctx); err != nil {
+	if err := l.register(context.WithValue(ctx, nodeTransitRemovalKey{}, true)); err != nil {
 		return err
 	}
 	return removePolicyEffects(ctx, l.effectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault})
