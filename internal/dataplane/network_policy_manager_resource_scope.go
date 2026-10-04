@@ -19,6 +19,7 @@ import (
 // keep the existing journal fenced. No persisted outcome creates an issuer.
 type executionResourceScope struct {
 	mu                 sync.Mutex
+	startMu            sync.RWMutex
 	manager            *Manager
 	plan               Plan
 	adapter            string
@@ -34,6 +35,7 @@ type executionResourceScope struct {
 	failure            error
 	closedErr          error
 	issued             map[string]*executionTransitResource
+	nfqws              map[string]*NFQWSExecutionResource
 }
 
 type executionTransitResource struct {
@@ -69,19 +71,19 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 		return nil, executionJournalError(err)
 	}
 	child, cancel := context.WithCancel(ctx)
-	plan.Routes = cloneNetworkPolicyRoutes(plan.Routes)
-	plan.LAN = CloneLANPolicyRuntime(plan.LAN)
+	plan = cloneExecutionResourcePlan(plan)
 	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
 	m.registryMu.RLock()
 	registryGeneration := m.registryGeneration
 	m.registryMu.RUnlock()
 	return &executionResourceScope{manager: m, plan: plan, adapter: adapter, execution: execution,
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
-		open: true, issued: map[string]*executionTransitResource{}, registryGeneration: registryGeneration}, nil
+		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, registryGeneration: registryGeneration}, nil
 }
 
 func (s *executionResourceScope) context() context.Context {
-	return context.WithValue(s.ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
+	ctx := context.WithValue(s.ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
+	return context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
 }
 
 // Called with s.mu held. Actual owner readback runs outside this mutex and
@@ -203,6 +205,9 @@ func (s *executionResourceScope) resourceCount() int {
 	for id := range s.issued {
 		ids[id] = true
 	}
+	for id := range s.nfqws {
+		ids[id] = true
+	}
 	for _, resource := range s.execution.Resources {
 		ids[resource.ID] = true
 	}
@@ -317,6 +322,10 @@ func (s *executionResourceScope) settleTransit(ctx context.Context, resource *ex
 }
 
 func (s *executionResourceScope) close() error {
+	// A live one-shot managed Start holds this barrier through actual child
+	// Start ACK. Closing cannot release the operation or revoke its root early.
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.open {
@@ -324,6 +333,17 @@ func (s *executionResourceScope) close() error {
 	}
 	s.open = false
 	s.cancel()
+	changed := false
+	for i := range s.execution.Resources {
+		resource := &s.execution.Resources[i]
+		if s.nfqws[resource.ID] != nil && resource.State == "prepared" {
+			resource.Phase = "closed"
+			changed = true
+		}
+	}
+	if changed {
+		_ = s.persist() // Failure is sticky; pending never becomes terminal.
+	}
 	err := errors.Join(s.failure, validateExecutionResources(*s.execution, true))
 	s.closedErr = errors.Join(err, s.owned.Close())
 	return s.closedErr
