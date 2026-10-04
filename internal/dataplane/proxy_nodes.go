@@ -102,13 +102,9 @@ func (a *ProxyTunnelAdapter) scopedRoutes(plan Plan) ([]Route, error) {
 func (a *ProxyTunnelAdapter) nodeRequests(ctx context.Context, routes []Route) ([]NodeRouteRequest, error) {
 	var requests []NodeRouteRequest
 	for _, route := range routes {
-		serviceID := route.ServiceID
-		if a.nodeRouterVerifier || route.LogicalServiceID != "" {
-			service, err := FrozenProbeService(route)
-			if err != nil {
-				return nil, err
-			}
-			serviceID = service.ID
+		serviceID, err := a.nodeRequestServiceID(route)
+		if err != nil {
+			return nil, err
 		}
 		destinations, err := resolvePolicyPrefixes(ctx, Plan{Routes: []Route{route}}, "xray", a.Resolver)
 		if err != nil {
@@ -120,6 +116,12 @@ func (a *ProxyTunnelAdapter) nodeRequests(ctx context.Context, routes []Route) (
 }
 
 func (a *ProxyTunnelAdapter) stageScopedXray(ctx context.Context, plan Plan) ([]byte, []string, *proxyNodeManifest, error) {
+	if ctx == nil {
+		return nil, nil, nil, ErrExactNodeUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, nil, err
+	}
 	if a.NodeRoutes == nil || a.NodeTUNProbe == nil && !a.nodeRouterVerifier {
 		return nil, nil, nil, ErrNodeTUNProofRequired
 	}
@@ -127,22 +129,63 @@ func (a *ProxyTunnelAdapter) stageScopedXray(ctx context.Context, plan Plan) ([]
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	intent, err := a.nodeIntentRequests(routes)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	preview, err := a.NodeRoutes(ctx, cloneScopedNodeRequests(intent), plan.NetworkProfileID, nowUTC())
+	if err != nil || preview.EngineID != "xray" {
+		return nil, nil, nil, errors.Join(errors.New("Xray material has no matching executor proof"), err)
+	}
+	if err := errors.Join(checkAddressRefreshAuthority(ctx), ctx.Err()); err != nil {
+		return nil, nil, nil, err
+	}
+	preview, err = copyScopedNodeMaterial(preview)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer clear(preview.Config)
+	if err := validateScopedXrayConfig(preview.Config, intent, 0); err != nil {
+		return nil, nil, nil, err
+	}
+	seal, err := scopedNodeMaterialSeal(preview)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := a.requireScopedXHTTPRuntime(ctx, preview.Config); err != nil {
+		return nil, nil, nil, err
+	}
 	requests, err := a.nodeRequests(ctx, routes)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	material, err := a.NodeRoutes(ctx, requests, plan.NetworkProfileID, nowUTC())
+	material, err := a.NodeRoutes(ctx, cloneScopedNodeRequests(requests), plan.NetworkProfileID, nowUTC())
 	if err != nil || material.EngineID != "xray" {
-		return nil, nil, nil, errors.New("Xray material has no matching executor proof")
+		return nil, nil, nil, errors.Join(errors.New("Xray material has no matching executor proof"), err)
+	}
+	if err := errors.Join(checkAddressRefreshAuthority(ctx), ctx.Err()); err != nil {
+		return nil, nil, nil, err
+	}
+	material, err = copyScopedNodeMaterial(material)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	defer clear(material.Config)
 	if err := validateScopedXrayConfig(material.Config, requests, 0); err != nil {
+		return nil, nil, nil, err
+	}
+	currentSeal, err := scopedNodeMaterialSeal(material)
+	if err != nil || currentSeal != seal {
+		return nil, nil, nil, errors.Join(ErrNodeEndpointChanged, err)
+	}
+	if err := a.requireScopedXHTTPRuntime(ctx, material.Config); err != nil {
 		return nil, nil, nil, err
 	}
 	document := map[string]any{}
 	if json.Unmarshal(material.Config, &document) != nil {
 		return nil, nil, nil, errors.New("invalid scoped Xray material")
 	}
+	endpointHosts := scopedNodeEndpointHosts(document)
 	manifest := &proxyNodeManifest{Schema: 1, Engine: "xray", NetworkProfile: plan.NetworkProfileID, Routes: routes, Requests: requests}
 	for _, item := range document["outbounds"].([]any)[1:] {
 		outbound := item.(map[string]any)
@@ -159,7 +202,7 @@ func (a *ProxyTunnelAdapter) stageScopedXray(ctx context.Context, plan Plan) ([]
 		manifest.Endpoints = append(manifest.Endpoints, proxyNodeEndpoint{Host: host, IP: pinned, Tag: outbound["tag"].(string)})
 	}
 	data, err := json.Marshal(document)
-	return data, append([]string{}, material.EndpointHosts...), manifest, err
+	return data, endpointHosts, manifest, err
 }
 
 func (a *ProxyTunnelAdapter) resolveNodeEndpoint(ctx context.Context, host string) ([]netip.Addr, error) {
@@ -191,7 +234,7 @@ func (a *ProxyTunnelAdapter) buildEngineCandidate(source []byte, port int) ([]by
 	delete(doc, "inbounds")
 	doc["inbounds"] = []any{map[string]any{"tag": "rz-engine-in", "listen": "127.0.0.1", "port": port, "protocol": "socks", "settings": map[string]any{"auth": "noauth", "udp": false}}}
 	data, err := json.MarshalIndent(doc, "", "  ")
-	return data, collectEndpointHosts(doc), err
+	return data, scopedNodeEndpointHosts(doc), err
 }
 
 func scopedNodeTag(id string) string { return "rz-node-" + strings.TrimPrefix(id, "node-")[:16] }
@@ -251,6 +294,9 @@ func scopedXrayRules(requests []NodeRouteRequest) ([]any, error) {
 // A trusted template boundary. User drafts never reach this validator; all
 // route rules must exactly match the current NodeStore materialization intent.
 func validateScopedXrayConfig(data []byte, requests []NodeRouteRequest, port int) error {
+	if !scopedNodeUniqueJSON(data) {
+		return errors.New("invalid scoped Xray template")
+	}
 	var doc struct {
 		Log       json.RawMessage   `json:"log"`
 		Outbounds []json.RawMessage `json:"outbounds"`
@@ -292,11 +338,14 @@ func validateScopedXrayConfig(data []byte, requests []NodeRouteRequest, port int
 	if !reflect.DeepEqual(block, map[string]any{"protocol": "blackhole", "tag": "rz-node-block", "settings": map[string]any{}}) {
 		return errors.New("Xray default is not the exact blackhole")
 	}
+	seenTags := map[string]bool{}
 	for i, id := range ordered {
 		var outbound map[string]any
-		if json.Unmarshal(doc.Outbounds[i+1], &outbound) != nil || outbound["tag"] != scopedNodeTag(id) {
+		tag := scopedNodeTag(id)
+		if seenTags[tag] || json.Unmarshal(doc.Outbounds[i+1], &outbound) != nil || outbound["tag"] != tag {
 			return errors.New("Xray exit identity differs")
 		}
+		seenTags[tag] = true
 		// Static-exit validation is used for config admission only, never as a
 		// substituted runtime passport for the full routed process.
 		projection, _ := json.Marshal(map[string]any{"outbounds": []any{outbound}})
@@ -304,6 +353,9 @@ func validateScopedXrayConfig(data []byte, requests []NodeRouteRequest, port int
 		clear(projection)
 		if err != nil || kind != "vless" {
 			return errors.New("scoped Xray has no static VLESS exit")
+		}
+		if _, err := validateScopedXHTTPOutbound(doc.Outbounds[i+1], outbound); err != nil {
+			return err
 		}
 		settings, ok := outbound["settings"].(map[string]any)
 		if !ok {
@@ -375,6 +427,9 @@ func (a *ProxyTunnelAdapter) validateNodeFiles(ctx context.Context, path, engine
 		return m, errors.New("scoped runtime config digest differs")
 	}
 	if err := validateScopedXrayConfig(config, m.Requests, a.SOCKSPort); err != nil {
+		return m, err
+	}
+	if err := a.requireScopedXHTTPRuntime(ctx, config); err != nil {
 		return m, err
 	}
 	var document struct {
