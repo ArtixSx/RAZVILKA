@@ -15,14 +15,25 @@ import (
 
 type wgIdentityRunner struct {
 	*warpFakeRunner
-	identities []byte
-	readErr    error
-	inventory  []byte
+	identities   []byte
+	identityTool string
+	peerReadback map[string]string
+	readErr      error
+	inventory    []byte
 }
 
 func (r *wgIdentityRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if r.peerReadback != nil && name == r.identityTool && len(args) == 3 && args[0] == "show" && args[1] != "all" {
+		if value, ok := r.peerReadback[args[2]]; ok {
+			r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+			return []byte(value), nil
+		}
+	}
 	if strings.Join(args, " ") == "show all public-key" {
 		r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+		if r.identityTool != "" && name != r.identityTool {
+			return nil, nil
+		}
 		return r.identities, r.readErr
 	}
 	if r.inventory != nil && strings.Join(args, " ") == "-j -d link show" {
@@ -163,12 +174,14 @@ func TestWGManagerSamePeerProbePreservesCommittedLKG(t *testing.T) {
 	a, r, plan, root := ownWireGuardFixture(t, testOwnWireGuardProfile(""))
 	ctx := context.Background()
 	store := wireguardprofile.New(filepath.Join(t.TempDir(), "profiles"))
-	if _, err := store.Put(ctx, "named", "named", testOwnWireGuardProfile(""), ""); err != nil {
+	metadata, err := store.Put(ctx, "named", "named", testOwnWireGuardProfile(""), "")
+	if err != nil {
 		t.Fatal(err)
 	}
 	a.Profiles = store
 	plan.EngineDrafts = nil
 	plan.Routes[0].Resolved = "wireguard:named"
+	plan.Routes[0].WireGuardProfileRevision = metadata.Revision
 	for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Activate, a.Commit} {
 		if err := step(ctx, plan, root); err != nil {
 			t.Fatal(err)

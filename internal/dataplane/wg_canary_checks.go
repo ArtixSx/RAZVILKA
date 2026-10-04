@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"time"
@@ -96,6 +97,25 @@ func (a *WARPWireGuardAdapter) probeLiveWGServices(ctx context.Context, plan Pla
 	if err != nil {
 		return err
 	}
+	sources := []netip.Addr{source}
+	networkGeneration, _, err := NetworkPolicyRouteAuthority(plan, a.ID())
+	if err != nil {
+		return err
+	}
+	if networkGeneration != "" {
+		state, exists, err := a.loadPolicyState()
+		if root != "" {
+			state, err = a.readStagedPolicy(root)
+			exists = err == nil
+		}
+		if err != nil || !exists {
+			return errors.Join(err, ErrWGNetworkPolicy)
+		}
+		sources, err = a.wgNetworkPolicySources(ctx, plan, string(content), state)
+		if err != nil {
+			return err
+		}
+	}
 	probeAdapter := *a
 	probeAdapter.Table, probeAdapter.PriorityBase = 219, 18050
 	if root == "" {
@@ -104,14 +124,20 @@ func (a *WARPWireGuardAdapter) probeLiveWGServices(ctx context.Context, plan Pla
 	if err := probeAdapter.ensureCanaryPolicyFree(ctx); err != nil {
 		return err
 	}
-	if err := probeAdapter.installCanaryPolicy(ctx, source); err != nil {
-		return err
-	}
+	var installedSources []netip.Addr
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
 		defer cancel()
-		retErr = errors.Join(retErr, probeAdapter.cleanupCanaryPolicy(cleanup, source))
+		for i := len(installedSources) - 1; i >= 0; i-- {
+			retErr = errors.Join(retErr, probeAdapter.cleanupCanaryPolicy(cleanup, installedSources[i]))
+		}
 	}()
+	for _, source := range sources {
+		if err := probeAdapter.installCanaryPolicy(ctx, source); err != nil {
+			return err
+		}
+		installedSources = append(installedSources, source)
+	}
 	probe := sourceBoundAWGProbe
 	if a.ID() == "warp-wg" {
 		probe = sourceBoundWARPProbe
@@ -120,5 +146,15 @@ func (a *WARPWireGuardAdapter) probeLiveWGServices(ctx context.Context, plan Pla
 		probe = func(ctx context.Context, url, _ string) error { return a.HealthProbe(ctx, url) }
 	}
 	ctx = context.WithValue(ctx, wgSocketInterfaceKey{}, a.interfaceName())
+	if networkGeneration != "" {
+		udp := sourceBoundWGNetworkUDPProbe
+		if a.networkUDPProbe != nil {
+			udp = a.networkUDPProbe
+		}
+		if err := probeAdapter.probeWGNetworkFamilies(ctx, plan.RoutePlanFor(a.ID()), root, sources, probe, udp); err != nil {
+			return err
+		}
+		return checkWGNetworkReview(ctx)
+	}
 	return probeAdapter.probeCanaryServices(ctx, plan.RoutePlanFor(a.ID()), root, probe, source.String())
 }

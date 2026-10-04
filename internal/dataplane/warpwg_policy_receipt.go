@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -22,6 +23,14 @@ const wgPolicyCandidateDirectory = "wg-policy-generation"
 const wgPolicyOperationDirectory = "wg-policy-operation"
 
 func cloneWGPolicyState(state PolicyState) PolicyState {
+	state.Prefixes = slices.Clone(state.Prefixes)
+	state.Rules = slices.Clone(state.Rules)
+	state.Exclusions = slices.Clone(state.Exclusions)
+	if state.Forwarding != nil {
+		forward := *state.Forwarding
+		forward.Rules = slices.Clone(forward.Rules)
+		state.Forwarding = &forward
+	}
 	if state.WireGuardEndpoint != nil {
 		copy := *state.WireGuardEndpoint
 		state.WireGuardEndpoint = &copy
@@ -30,6 +39,9 @@ func cloneWGPolicyState(state PolicyState) PolicyState {
 }
 
 func writeWGTransactionMarker(ctx context.Context, dir, name string) error {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -53,12 +65,15 @@ func writeWGTransactionMarker(ctx context.Context, dir, name string) error {
 // Runtime fallback/lease metadata may subsequently change without changing
 // kernel policy tuples. No file contains an arbitrary cleanup directory.
 type warpWGPolicyReference struct {
-	Schema        int         `json:"schema"`
-	ID            string      `json:"id,omitempty"`
-	Boot          string      `json:"boot"`
-	Policy        PolicyState `json:"policy"`
-	RollbackOwner string      `json:"rollback_owner,omitempty"`
-	Checksum      string      `json:"checksum"`
+	Schema               int                   `json:"schema"`
+	ID                   string                `json:"id,omitempty"`
+	Boot                 string                `json:"boot"`
+	Policy               PolicyState           `json:"policy"`
+	RollbackOwner        string                `json:"rollback_owner,omitempty"`
+	NetworkHealthVersion int                   `json:"network_health_version,omitempty"`
+	FrozenLAN            *LANPolicyRuntimePlan `json:"frozen_lan,omitempty"`
+	NetworkTunnelSources []string              `json:"network_tunnel_sources,omitempty"`
+	Checksum             string                `json:"checksum"`
 }
 
 func wgPolicyReferenceChecksum(ref warpWGPolicyReference) string {
@@ -68,6 +83,23 @@ func wgPolicyReferenceChecksum(ref warpWGPolicyReference) string {
 }
 
 func (a *WARPWireGuardAdapter) validWGPolicyReference(ref warpWGPolicyReference) error {
+	expectedHealthVersion := 0
+	if ref.Policy.NetworkPolicyGeneration != "" {
+		expectedHealthVersion = wgNetworkHealthVersion
+	}
+	if ref.NetworkHealthVersion != expectedHealthVersion {
+		return ErrPolicyAdditionReceipt
+	}
+	if _, err := a.wgFrozenLANForState(ref.Policy, ref.FrozenLAN); err != nil {
+		return err
+	}
+	if ref.Policy.NetworkPolicyGeneration != "" {
+		if _, err := a.compileWGNetworkEffects(ref); err != nil {
+			return err
+		}
+	} else if len(ref.NetworkTunnelSources) != 0 {
+		return ErrPolicyAdditionReceipt
+	}
 	if ref.Schema != 1 || ref.Checksum != wgPolicyReferenceChecksum(ref) || len(ref.Boot) == 0 || len(ref.Boot) > 128 || strings.ContainsAny(ref.Boot, "\r\n\x00") || ref.Policy.Interface != a.interfaceName() || ref.Policy.Table != a.table() || ref.Policy.PriorityBase != a.priorityBase() {
 		return ErrPolicyAdditionReceipt
 	}
@@ -120,6 +152,9 @@ func writeWGPolicyReference(ctx context.Context, dir string, ref warpWGPolicyRef
 }
 
 func writeWGPolicyReferenceNamed(ctx context.Context, dir, file string, ref warpWGPolicyReference) error {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		return err
+	}
 	if file != wgPolicyReferenceFile && file != wgPolicyRollbackFile && file != wgPolicyRestorationFile {
 		return ErrPolicyAdditionReceipt
 	}
@@ -188,6 +223,17 @@ func (a *WARPWireGuardAdapter) inspectWGPolicyReference(ctx context.Context, ref
 	if err := a.validWGPolicyReference(ref); err != nil {
 		return PolicyAdditionStatus{}, err
 	}
+	if ref.Policy.NetworkPolicyGeneration != "" {
+		compiled, err := a.compileWGNetworkEffects(ref)
+		if err != nil {
+			return PolicyAdditionStatus{}, err
+		}
+		status, err := inspectPolicyEffects(ctx, compiled.plan, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
+		if err == nil && ref.ID != "" && ref.ID != status.ID {
+			err = ErrPolicyAdditionReceipt
+		}
+		return status, err
+	}
 	s, err := openPolicyAdditionSession(ctx, ref.Policy, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
 	if err != nil {
 		return PolicyAdditionStatus{}, err
@@ -203,11 +249,18 @@ func (a *WARPWireGuardAdapter) inspectWGPolicyReference(ctx context.Context, ref
 	return status, nil
 }
 
-func (a *WARPWireGuardAdapter) applyWGPolicyGeneration(ctx context.Context, state PolicyState, transaction string) error {
-	return a.applyWGPolicyGenerationBound(ctx, state, transaction, "")
+func (a *WARPWireGuardAdapter) applyWGPolicyGeneration(ctx context.Context, state PolicyState, transaction string, frozen ...*LANPolicyRuntimePlan) error {
+	return a.applyWGPolicyGenerationBound(ctx, state, transaction, "", frozen...)
 }
 
-func (a *WARPWireGuardAdapter) applyWGPolicyGenerationBound(ctx context.Context, state PolicyState, transaction, rollbackOwner string) error {
+func (a *WARPWireGuardAdapter) applyWGPolicyGenerationBound(ctx context.Context, state PolicyState, transaction, rollbackOwner string, frozen ...*LANPolicyRuntimePlan) error {
+	if rollbackOwner != "" {
+		ctx = wgNamedCleanupContext(ctx)
+	}
+	lan, err := a.wgFrozenLANForState(state, frozen...)
+	if err != nil {
+		return err
+	}
 	if _, exists, err := a.readWGPolicyReference(transaction, state, false); err != nil || exists {
 		return errors.Join(err, ErrPolicyAdditionExists)
 	}
@@ -215,7 +268,18 @@ func (a *WARPWireGuardAdapter) applyWGPolicyGenerationBound(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	ref := warpWGPolicyReference{Schema: 1, Boot: boot, Policy: state, RollbackOwner: rollbackOwner}
+	ref := warpWGPolicyReference{Schema: 1, Boot: boot, Policy: state, RollbackOwner: rollbackOwner, FrozenLAN: lan}
+	if state.NetworkPolicyGeneration != "" {
+		ref.NetworkHealthVersion = wgNetworkHealthVersion
+		sources, err := wgNetworkProfileSources(ctx, string(mustRead(a.RuntimeConfigPath)), state.Prefixes)
+		if err != nil {
+			return err
+		}
+		ref.NetworkTunnelSources = wgNetworkSourceStrings(sources)
+		if _, err := a.compileWGNetworkEffects(ref); err != nil {
+			return err
+		}
+	}
 	ref.Checksum = wgPolicyReferenceChecksum(ref)
 	if err := os.Mkdir(filepath.Join(transaction, wgPolicyCandidateDirectory), 0700); err != nil {
 		return err
@@ -225,12 +289,27 @@ func (a *WARPWireGuardAdapter) applyWGPolicyGenerationBound(ctx context.Context,
 	if err := writeWGPolicyReference(ctx, transaction, ref); err != nil {
 		return err
 	}
-	return applyPolicyAddition(ctx, a.Runner, a.ip(), state, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
+	if state.NetworkPolicyGeneration != "" {
+		compiled, err := a.compileWGNetworkEffects(ref)
+		if err != nil {
+			return err
+		}
+		return applyPolicyEffects(ctx, a.wgNetworkEffectRuntime(ref, compiled, rollbackOwner == ""), compiled.plan, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
+	}
+	return applyPolicyAddition(ctx, wgNamedForwardRunner{base: a.Runner}, a.ip(), state, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
 }
 
 func (a *WARPWireGuardAdapter) removeWGPolicyReference(ctx context.Context, ref warpWGPolicyReference, transaction string) error {
+	ctx = wgNamedCleanupContext(ctx)
 	if err := a.validWGPolicyReference(ref); err != nil {
 		return err
+	}
+	if ref.Policy.NetworkPolicyGeneration != "" {
+		compiled, err := a.compileWGNetworkEffects(ref)
+		if err != nil {
+			return err
+		}
+		return removePolicyEffects(ctx, a.wgNetworkEffectRuntime(ref, compiled, false), compiled.plan, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
 	}
 	return removePolicyAddition(ctx, a.Runner, a.ip(), ref.Policy, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
 }
@@ -273,13 +352,26 @@ func (a *WARPWireGuardAdapter) promoteWGPolicyGeneration(ctx context.Context, st
 	if err := writeWGPolicyReference(ctx, transaction, ref); err != nil {
 		return ref, err
 	}
-	if err := promotePolicyAddition(ctx, ref.Policy, source, destination, a.policyReceiptOptions); err != nil {
-		return ref, err
+	if ref.Policy.NetworkPolicyGeneration != "" {
+		compiled, err := a.compileWGNetworkEffects(ref)
+		if err != nil {
+			return ref, err
+		}
+		if err := promotePolicyEffects(ctx, compiled.plan, source, destination, a.policyReceiptOptions); err != nil {
+			return ref, err
+		}
+	} else {
+		if err := promotePolicyAddition(ctx, ref.Policy, source, destination, a.policyReceiptOptions); err != nil {
+			return ref, err
+		}
 	}
 	return ref, nil
 }
 
 func (a *WARPWireGuardAdapter) publishWGPolicyGeneration(ctx context.Context, state PolicyState, ref warpWGPolicyReference) error {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		return err
+	}
 	status, err := a.inspectWGPolicyReference(ctx, ref, "")
 	if err != nil || !status.Complete || status.Unknown || status.Promoted {
 		return errors.Join(err, ErrPolicyAdditionUnknown)
@@ -304,11 +396,17 @@ func (a *WARPWireGuardAdapter) publishWGPolicyGeneration(ctx context.Context, st
 	return ctx.Err()
 }
 
-func (a *WARPWireGuardAdapter) freshWGPolicyGeneration(ctx context.Context, state PolicyState) (warpWGPolicyReference, error) {
-	return a.freshWGPolicyGenerationBound(ctx, state, "", "")
+func (a *WARPWireGuardAdapter) freshWGPolicyGeneration(ctx context.Context, state PolicyState, frozen ...*LANPolicyRuntimePlan) (warpWGPolicyReference, error) {
+	return a.freshWGPolicyGenerationBound(ctx, state, "", "", frozen...)
 }
 
-func (a *WARPWireGuardAdapter) freshWGPolicyGenerationBound(ctx context.Context, state PolicyState, rollbackRoot, rollbackOwner string) (warpWGPolicyReference, error) {
+func (a *WARPWireGuardAdapter) freshWGPolicyGenerationBound(ctx context.Context, state PolicyState, rollbackRoot, rollbackOwner string, frozen ...*LANPolicyRuntimePlan) (warpWGPolicyReference, error) {
+	if rollbackOwner != "" {
+		ctx = wgNamedCleanupContext(ctx)
+	}
+	if _, err := a.wgFrozenLANForState(state, frozen...); err != nil {
+		return warpWGPolicyReference{}, err
+	}
 	if err := os.MkdirAll(a.StateRoot, 0700); err != nil {
 		return warpWGPolicyReference{}, err
 	}
@@ -316,7 +414,7 @@ func (a *WARPWireGuardAdapter) freshWGPolicyGenerationBound(ctx context.Context,
 	if err := os.Mkdir(transaction, 0700); err != nil {
 		return warpWGPolicyReference{}, err
 	}
-	if err := a.applyWGPolicyGenerationBound(ctx, state, transaction, rollbackOwner); err != nil {
+	if err := a.applyWGPolicyGenerationBound(ctx, state, transaction, rollbackOwner, frozen...); err != nil {
 		return warpWGPolicyReference{}, err // keep unknown/failed receipts
 	}
 	ref, err := a.promoteWGPolicyGeneration(ctx, state, transaction)
@@ -380,7 +478,7 @@ func (a *WARPWireGuardAdapter) resumeWGRollbackPublication(ctx context.Context, 
 	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), currentState); err != nil {
 		return err
 	}
-	if err := a.verifyWGEndpoint(ctx, currentState.WireGuardEndpoint); err != nil {
+	if err := a.verifyWGEndpoint(ctx, currentState.WireGuardEndpoint, ref.FrozenLAN); err != nil {
 		return err
 	}
 	if err := a.checkWGPolicyOperation(); err != nil {
@@ -462,6 +560,9 @@ func (a *WARPWireGuardAdapter) settleWGPolicyOperationForStop(ctx context.Contex
 }
 
 func (a *WARPWireGuardAdapter) wgPolicyAbsent(ctx context.Context, ref warpWGPolicyReference) error {
+	if ref.Policy.NetworkPolicyGeneration != "" {
+		return a.verifyWGNetworkEffectPresence(ctx, ref, 0)
+	}
 	steps, err := policyAdditionExpected(ref.Policy)
 	if err != nil {
 		return err

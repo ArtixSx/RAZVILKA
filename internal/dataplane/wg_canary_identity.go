@@ -26,6 +26,12 @@ func wgCanaryIdentityInspectionError(reason string) error {
 // other RAZVILKA engines and configured links that are currently administratively
 // down. External network owners must serialize changes with the coordinator.
 func (a *WARPWireGuardAdapter) ensureWGCanaryIdentityFree(ctx context.Context, profile []byte) error {
+	return a.inspectWGProbeIdentity(ctx, profile, "")
+}
+
+// The exception is usable only by a separately verified owned-runtime probe.
+// It never authorizes creating another interface with the same private key.
+func (a *WARPWireGuardAdapter) inspectWGProbeIdentity(ctx context.Context, profile []byte, ownedInterface string) error {
 	public, err := wgRuntimePublicKey(profile)
 	if err != nil {
 		return err
@@ -72,7 +78,11 @@ func (a *WARPWireGuardAdapter) ensureWGCanaryIdentityFree(ctx context.Context, p
 		if err != nil || len(data) > 1<<20 {
 			return wgCanaryIdentityInspectionError("public identity readback failed")
 		}
-		identities, err := wgCanaryPublicInventory(data, public)
+		permitted := ""
+		if kind == "wireguard" && a.ID() != "amneziawg" || kind == "amneziawg" && a.ID() == "amneziawg" {
+			permitted = ownedInterface
+		}
+		identities, err := wgCanaryPublicInventoryForProbe(data, public, permitted)
 		if err != nil {
 			return err
 		}
@@ -91,7 +101,12 @@ func wgCanaryPublicIdentities(data []byte, candidate string) error {
 }
 
 func wgCanaryPublicInventory(data []byte, candidate string) (map[string]bool, error) {
+	return wgCanaryPublicInventoryForProbe(data, candidate, "")
+}
+
+func wgCanaryPublicInventoryForProbe(data []byte, candidate, ownedInterface string) (map[string]bool, error) {
 	seen := map[string]bool{}
+	ownedCandidate := false
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
 		if line == "" {
 			continue
@@ -108,9 +123,15 @@ func wgCanaryPublicInventory(data []byte, candidate string) (map[string]bool, er
 		if err != nil || len(key) != 32 {
 			return nil, wgCanaryIdentityInspectionError("public identity inventory is invalid")
 		}
-		if fields[1] == candidate {
+		if fields[1] == candidate && fields[0] != ownedInterface {
 			return nil, ErrWGCanaryIdentityInUse
 		}
+		if fields[1] == candidate && fields[0] == ownedInterface {
+			ownedCandidate = true
+		}
+	}
+	if ownedInterface != "" && !ownedCandidate {
+		return nil, wgCanaryIdentityInspectionError("public inventory omitted the owned identity")
 	}
 	return seen, nil
 }
