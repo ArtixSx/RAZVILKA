@@ -71,6 +71,7 @@ type ProxyTunnelAdapter struct {
 	nodeRouterVerifier  bool
 	NodeTUNProbe        NodeTUNProbe
 	nodeRuntimeIdentity func(ProcessSpec, string) (string, error)
+	nodeXHTTPVersion    func(context.Context, string) error
 }
 
 type NodeRouteRequest struct {
@@ -348,6 +349,9 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 		return err
 	}
 	if nodeManifest != nil {
+		if err := a.requireScopedXHTTPRuntime(ctx, candidate); err != nil {
+			return err
+		}
 		nodeManifest.ConfigHash, nodeManifest.SidecarHash = routeidentity.Hash(candidate), routeidentity.Hash(sidecar)
 		data, err := json.Marshal(nodeManifest)
 		if err != nil || len(data) > 128<<10 {
