@@ -78,3 +78,5 @@ NFQWS дополнительно получил только новые `interna
 - Root владеет общими live-окнами, native/HTTP QA, интеграционными merges и этим отчётом. Результаты дочерних mocks/compile не превращаются в native PASS. Дополнительная read-only проверка CLOUD и временные review assistants не получают production ownership.
 
 Всего выделено 11 sol-чатов с раздельным владением. Основной роутер сохраняется выключенным до готовности общего executor/recovery; тестовые namespace и браузерные копии имеют отдельное состояние.
+
+CLOUD дополнительно получил только новые `dataplane/proxy_usque_live_health.go` и собственные tests. VLESS подтвердил границу: CLOUD готовит свежую проверку активного USQUE через существующий owned producer; VLESS единолично добавляет вызов в существующий `proxy.go`/health path после приёмки. CORE сохраняет actual operation/main authority. Исторический canary receipt не становится подтверждением нового процесса. Новый scheduler/ledger не создаётся.
