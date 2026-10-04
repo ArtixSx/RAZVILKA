@@ -2077,7 +2077,7 @@ func (a *App) backgroundAutopilotApply(parent context.Context) {
 		}
 	}
 	live := configForChangeScope(cfg, changeScopeEngine)
-	plan, err := a.buildDataplanePlanForScope(live, a.routeOptionsSnapshot(), changeScopeDevices, "")
+	plan, err := a.buildDataplanePlanForScopeContext(parent, live, a.routeOptionsSnapshot(), changeScopeDevices, "")
 	if err != nil || plan.Noop || !plan.Ready {
 		return
 	}
@@ -2109,6 +2109,11 @@ func (a *App) backgroundAutopilotApply(parent context.Context) {
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
+	binding, err := a.bindApplyReview(ctx, cfg, plan, changeScopeDevices, "")
+	if err != nil {
+		return
+	}
+	ctx = dataplane.WithReviewGuard(ctx, func(c context.Context) error { return binding.guard(a, c) })
 	_, _ = a.applyDataplane(ctx, plan, nil)
 }
 
@@ -3739,16 +3744,29 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 // snapshot; the normal review digest binds the resulting no-draft plan.
 func (a *App) buildDataplanePlanForRequest(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string, r *http.Request) (dataplane.Plan, error) {
 	if scope == changeScopeServices && r.URL.Query().Get("engine_drafts") == "preserve" {
-		return a.buildDataplanePlanForScope(configForChangeScope(cfg, scope), options, changeScopeNode, "")
+		return a.buildDataplanePlanForScopeContext(r.Context(), configForChangeScope(cfg, scope), options, changeScopeNode, "")
 	}
-	return a.buildDataplanePlanForScope(cfg, options, scope, engineID)
+	return a.buildDataplanePlanForScopeContext(r.Context(), cfg, options, scope, engineID)
 }
 
+// Compatibility helper for plan fixtures. Admitted callers retain their context.
 func (a *App) buildDataplanePlanForScope(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
-	return a.buildDataplanePlanWithDNS(cfg, options, scope, engineID, nil)
+	return a.buildDataplanePlanForScopeContext(context.Background(), cfg, options, scope, engineID)
 }
 
+func (a *App) buildDataplanePlanForScopeContext(ctx context.Context, cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string) (dataplane.Plan, error) {
+	return a.buildDataplanePlanWithDNSContext(ctx, cfg, options, scope, engineID, nil)
+}
+
+// Compatibility helper for plan fixtures. Admitted DNS callers use the context variant.
 func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string, dnsChange *scopedDNSChange) (dataplane.Plan, error) {
+	return a.buildDataplanePlanWithDNSContext(context.Background(), cfg, options, scope, engineID, dnsChange)
+}
+
+func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string, dnsChange *scopedDNSChange) (dataplane.Plan, error) {
+	if err := ctx.Err(); err != nil {
+		return dataplane.Plan{}, err
+	}
 	// The versioned LAN intent is preserved, but must not be silently ignored
 	// by legacy adapters before the unified scope/DNS executor is integrated.
 	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil {
@@ -3792,7 +3810,7 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 			} else if nodeRoute {
 				if networkProfile == "" {
 					var profileErr error
-					networkProfile, profileErr = a.freshNetworkProfile(context.Background())
+					networkProfile, profileErr = a.freshNetworkProfile(ctx)
 					if profileErr != nil {
 						return dataplane.Plan{}, profileErr
 					}
@@ -3804,11 +3822,20 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 				if !previousExact || previousEngine != nodeEngine || !strings.HasPrefix(previousNode, "node-") {
 					previousNode = ""
 				}
-				proof, proofErr := a.Nodes.ResolveRouteForEngine(context.Background(), nodeEngine, nodeTarget, service.ID, networkProfile, previousNode, committedAt, time.Now())
+				proof, proofErr := a.Nodes.ResolveRouteForEngine(ctx, nodeEngine, nodeTarget, service.ID, networkProfile, previousNode, committedAt, time.Now())
 				if proofErr != nil {
 					return dataplane.Plan{}, a.routePlanDependency(cfg, service, selected, committedRoutes[service.ID])
 				}
 				resolved = proof.Route
+			}
+			// USQUE live health binds its fresh canary to this frozen WAN even
+			// for an ordinary route without a registry node or scoped DNS.
+			if dataplane.AdapterID(resolved) == "usque" && networkProfile == "" {
+				var profileErr error
+				networkProfile, profileErr = a.freshNetworkProfile(ctx)
+				if profileErr != nil {
+					return dataplane.Plan{}, profileErr
+				}
 			}
 			if adapter := dataplane.AdapterID(resolved); adapter != "" && adapter != "direct" {
 				desiredAdapters[adapter] = true
@@ -3825,7 +3852,7 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 				}
 			}
 			if strings.HasPrefix(resolved, "wireguard:") {
-				if err := a.checkNamedWireGuardRevision(context.Background(), resolved, state.WireGuardProfileRevision); err != nil {
+				if err := a.checkNamedWireGuardRevision(ctx, resolved, state.WireGuardProfileRevision); err != nil {
 					return dataplane.Plan{}, err
 				}
 			}
@@ -3918,14 +3945,20 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 	if a.DataplaneHost != nil {
 		host = a.DataplaneHost()
 	}
-	if networkProfile != "" {
-		current, profileErr := a.freshNetworkProfile(context.Background())
-		if profileErr != nil || current != networkProfile {
+	input := dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: host}
+	if err := a.composeScopedDNSContext(ctx, cfg, previousDNSPlan, &input, dnsChange); err != nil {
+		return dataplane.Plan{}, err
+	}
+	if input.NetworkProfileID != "" {
+		current, profileErr := a.freshNetworkProfile(ctx)
+		if err := ctx.Err(); err != nil {
+			return dataplane.Plan{}, err
+		}
+		if profileErr != nil || current != input.NetworkProfileID {
 			return dataplane.Plan{}, dataplane.ErrExactNodeNetworkChanged
 		}
 	}
-	input := dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: host}
-	if err := a.composeScopedDNS(cfg, previousDNSPlan, &input, dnsChange); err != nil {
+	if err := ctx.Err(); err != nil {
 		return dataplane.Plan{}, err
 	}
 	return dataplane.Build(input)

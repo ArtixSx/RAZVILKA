@@ -168,7 +168,7 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 			}
 		}
 	}
-	plan, err := a.buildDataplanePlanWithDNS(target, a.nodeRouteOptions(), changeScopeNode, "", &scopedDNSChange{Suspend: stop, Resume: !stop})
+	plan, err := a.buildDataplanePlanWithDNSContext(ctx, target, a.nodeRouteOptions(), changeScopeNode, "", &scopedDNSChange{Suspend: stop, Resume: !stop})
 	if err != nil || !plan.Ready {
 		return fail("SERVICE_RUNTIME_CHECK_REQUIRED", "План пока не готов. Проверьте сохранённые подключения; ожидающие изменения сохранены.")
 	}

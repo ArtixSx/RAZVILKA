@@ -166,7 +166,7 @@ func (a *App) reviewScopedDNSApply(ctx context.Context, id string, revision uint
 	target := cfg
 	target.Services = cfg.AppliedServices
 	target.Revision = cfg.AppliedRevision
-	plan, err := a.buildDataplanePlanWithDNS(target, a.nodeRouteOptions(), changeScopeNode, "", change)
+	plan, err := a.buildDataplanePlanWithDNSContext(ctx, target, a.nodeRouteOptions(), changeScopeNode, "", change)
 	if err != nil || !plan.Ready {
 		return fail(errors.Join(err, errScopedDNSReview))
 	}

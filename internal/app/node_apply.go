@@ -291,7 +291,7 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 			break
 		}
 	}
-	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForEngineScope(cfg, engine, request.ServiceID, id, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
+	plan, err := a.buildDataplanePlanForScopeContext(r.Context(), nodeRouteConfigForEngineScope(cfg, engine, request.ServiceID, id, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
 	if err != nil {
 		writeNodePlanFailure(w, err)
 		return
@@ -420,7 +420,7 @@ func (a *App) executeNodeRoute(parent context.Context, review nodeRouteReview) s
 	if engineErr != nil {
 		return fail("NODE_REVIEW_CHANGED", "Движок просмотренного маршрута недоступен.")
 	}
-	plan, err := a.buildDataplanePlanForScope(nodeRouteConfigForEngineScope(cfg, engine, review.ServiceID, review.NodeID, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
+	plan, err := a.buildDataplanePlanForScopeContext(parent, nodeRouteConfigForEngineScope(cfg, engine, review.ServiceID, review.NodeID, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
 	if err != nil || !plan.Ready || plan.Digest != review.Digest || plan.NetworkProfileID != review.NetworkProfile {
 		var dependency *routePlanDependencyError
 		if errors.As(err, &dependency) {

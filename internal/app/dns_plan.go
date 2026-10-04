@@ -23,6 +23,10 @@ type scopedDNSChange struct {
 }
 
 func (a *App) composeScopedDNS(cfg config.Config, previous *dataplane.Plan, in *dataplane.Input, change *scopedDNSChange) error {
+	return a.composeScopedDNSContext(context.Background(), cfg, previous, in, change)
+}
+
+func (a *App) composeScopedDNSContext(ctx context.Context, cfg config.Config, previous *dataplane.Plan, in *dataplane.Input, change *scopedDNSChange) error {
 	if previous != nil && previous.SuspendDNS && (change == nil || !change.Resume && !change.Discard) {
 		// Replacing the stopped journal would lose the sole scope snapshot.
 		// A reviewed resume owns that transition; editor drafts remain editable.
@@ -102,7 +106,7 @@ func (a *App) composeScopedDNS(cfg config.Config, previous *dataplane.Plan, in *
 					return errScopedDNSReview
 				}
 			}
-			profile, err := a.freshNetworkProfile(context.Background())
+			profile, err := a.freshNetworkProfile(ctx)
 			if err != nil {
 				return err
 			}

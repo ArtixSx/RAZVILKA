@@ -28,7 +28,7 @@ type retainedProofState struct {
 func (a *App) buildPlanReprovingRetained(ctx context.Context, cfg config.Config, profile string) (dataplane.Plan, error) {
 	checked := map[string]bool{}
 	for {
-		plan, err := a.buildDataplanePlanForScope(cfg, a.nodeRouteOptions(), changeScopeNode, "")
+		plan, err := a.buildDataplanePlanForScopeContext(ctx, cfg, a.nodeRouteOptions(), changeScopeNode, "")
 		var dependency *routePlanDependencyError
 		if !errors.As(err, &dependency) || !dependency.Retained || dependency.Cause != "check-required" || dependency.NodeID == "" || checked[dependency.ServiceID] || ctx.Err() != nil {
 			return plan, err

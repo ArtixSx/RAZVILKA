@@ -83,19 +83,29 @@ func TestNodePlanBindsProofAndRejectsNetworkChangeDuringBuild(t *testing.T) {
 	a := &App{Nodes: store, FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Domains: []string{"telegram.org"}}}}}
 	cfg := config.Config{Revision: 1, Services: map[string]config.ServiceState{"telegram": {Enabled: true, Route: "sing-box:" + id}}}
 	options := []routecatalog.Option{{ID: "sing-box:" + id, Selectable: true, Services: []string{"telegram"}}, {ID: "sing-box", Installed: true, Selectable: true}}
-	plan, err := a.buildDataplanePlan(cfg, options)
+	ctx := context.WithValue(context.Background(), usquePlanContextKey{}, "original-node")
+	a.FreshProfile = func(c context.Context) (string, error) {
+		if c != ctx {
+			t.Fatal("node plan lost original context")
+		}
+		return stableNodeProfile(c)
+	}
+	plan, err := a.buildDataplanePlanForScopeContext(ctx, cfg, options, changeScopeAll, "")
 	if err != nil || plan.NetworkProfileID != "wan-0123456789ab" {
 		t.Fatalf("proof not bound: profile=%q err=%v", plan.NetworkProfileID, err)
 	}
 	calls := 0
-	a.FreshProfile = func(context.Context) (string, error) {
+	a.FreshProfile = func(c context.Context) (string, error) {
+		if c != ctx {
+			t.Fatal("closing node network check lost original context")
+		}
 		calls++
 		if calls > 1 {
 			return "wan-222222222222", nil
 		}
 		return "wan-0123456789ab", nil
 	}
-	if _, err = a.buildDataplanePlan(cfg, options); !errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
+	if _, err = a.buildDataplanePlanForScopeContext(ctx, cfg, options, changeScopeAll, ""); !errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
 		t.Fatalf("network change during build accepted: %v", err)
 	}
 }
