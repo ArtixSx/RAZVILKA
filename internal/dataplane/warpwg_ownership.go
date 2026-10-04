@@ -47,13 +47,18 @@ func (a *WARPWireGuardAdapter) deactivationOwnership(ctx context.Context) (Polic
 	var state PolicyState
 	decoder := json.NewDecoder(bytes.NewReader(policy))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&state) != nil || decoder.Decode(&struct{}{}) != io.EOF || state.Interface != a.interfaceName() || state.Table != a.table() || state.PriorityBase != a.priorityBase() || len(state.Prefixes) == 0 || len(state.Prefixes) > maxPolicyPrefixes || len(effectivePolicyRules(state)) > maxPolicyPrefixes || len(state.Exclusions) != 0 || state.Forwarding != nil || state.RuntimeConfigSHA256 != warpRuntimeDigest(runtime) {
+	if decoder.Decode(&state) != nil || decoder.Decode(&struct{}{}) != io.EOF || state.Interface != a.interfaceName() || state.Table != a.table() || state.PriorityBase != a.priorityBase() || len(state.Prefixes) == 0 || len(state.Prefixes) > maxPolicyPrefixes || len(effectivePolicyRules(state)) > maxPolicyPrefixes || len(state.Exclusions) != 0 || state.Forwarding != nil && state.NetworkPolicyGeneration == "" || state.NetworkPolicyGeneration != "" && state.Forwarding == nil || state.RuntimeConfigSHA256 != warpRuntimeDigest(runtime) {
 		return state, false, errWARPCleanupOwnership
 	}
 	// wg-quick derives the interface from the filename. Keep it consistent with
 	// the exact policy identity and reject hooks, automatic routes or DNS changes.
 	if err := validPolicyLayout(state); err != nil {
 		return state, false, errWARPCleanupOwnership
+	}
+	if state.NetworkPolicyGeneration != "" {
+		if _, err := a.committedWGPolicyReference(state); err != nil {
+			return state, false, errWARPCleanupOwnership
+		}
 	}
 	if err := a.validWGEndpoint(state.WireGuardEndpoint, runtime); err != nil {
 		return state, false, errWARPCleanupOwnership

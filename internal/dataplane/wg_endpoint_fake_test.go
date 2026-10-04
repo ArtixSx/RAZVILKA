@@ -10,11 +10,12 @@ import (
 )
 
 type wgEndpointKernelFake struct {
-	routes    map[string]wgEndpointRoute
-	rules     map[string]string
-	mark      string
-	publicKey string
-	wanDevice string
+	routes      map[string]wgEndpointRoute
+	routeTables map[string]int
+	rules       map[string]string
+	mark        string
+	publicKey   string
+	wanDevice   string
 }
 
 func (f *wgEndpointKernelFake) ruleOutput(args []string) []byte {
@@ -66,16 +67,27 @@ func (f *wgEndpointKernelFake) run(name string, args []string) ([]byte, bool, er
 		data, _ := json.Marshal([]wgEndpointRoute{{Destination: args[3], Device: dev, Source: source, Gateway: gateway}})
 		return data, true, nil
 	}
-	if len(args) >= 7 && args[0] == "-j" && args[1] == "route" && args[2] == "show" {
-		key := family + "|" + args[len(args)-1]
-		r, exists := f.routes[key]
-		if !exists {
-			return []byte("[]"), true, nil
+	if len(args) >= 5 && args[0] == "-j" && args[1] == "route" && args[2] == "show" && args[3] == "table" {
+		table, err := strconv.Atoi(args[4])
+		if err != nil {
+			return nil, true, err
 		}
-		data, _ := json.Marshal([]wgEndpointRoute{r})
+		routes := []wgEndpointRoute{}
+		for key, r := range f.routes {
+			origin := f.routeTables[key]
+			if !strings.HasPrefix(key, family+"|") || origin != 0 && origin != table || origin == 0 && len(r.Table) != 0 && !wgEndpointTableMatches(r.Table, table) {
+				continue
+			}
+			if len(args) >= 7 && args[5] == "exact" && key != family+"|"+args[6] {
+				continue
+			}
+			routes = append(routes, r)
+		}
+		data, _ := json.Marshal(routes)
 		return data, true, nil
 	}
-	if len(args) > 2 && args[0] == "rule" && strings.Contains(strings.Join(args, " "), "fwmark") {
+	joined := " " + strings.Join(args, " ") + " "
+	if len(args) > 2 && args[0] == "rule" && strings.Contains(joined, " fwmark ") && !strings.Contains(joined, " from ") && !strings.Contains(joined, " iif ") {
 		v := map[string]string{}
 		for i := 2; i+1 < len(args); i += 2 {
 			v[args[i]] = args[i+1]
@@ -108,6 +120,7 @@ func (f *wgEndpointKernelFake) run(name string, args []string) ([]byte, bool, er
 		key := family + "|" + args[2]
 		if args[1] == "del" {
 			delete(f.routes, key)
+			delete(f.routeTables, key)
 			return nil, true, nil
 		}
 		if _, ok := f.routes[key]; ok {
@@ -129,6 +142,7 @@ func (f *wgEndpointKernelFake) run(name string, args []string) ([]byte, bool, er
 				r.Flags = []string{"onlink"}
 			case "table":
 				i++
+				r.Table = json.RawMessage(args[i])
 			case "metric":
 				i++
 				r.Metric, _ = strconv.Atoi(args[i])
@@ -138,6 +152,12 @@ func (f *wgEndpointKernelFake) run(name string, args []string) ([]byte, bool, er
 			}
 		}
 		f.routes[key] = r
+		if f.routeTables == nil {
+			f.routeTables = map[string]int{}
+		}
+		var tableID int
+		_ = json.Unmarshal(r.Table, &tableID)
+		f.routeTables[key] = tableID
 		return nil, true, nil
 	}
 	return nil, false, nil

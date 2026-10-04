@@ -24,31 +24,35 @@ import (
 )
 
 type WARPWireGuardAdapter struct {
-	EngineID             string
-	Configs              *engineconfig.Manager
-	StateRoot            string
-	RuntimeConfigPath    string
-	Interface            string
-	Table                int
-	PriorityBase         int
-	WGQuick              string
-	WG                   string
-	IP                   string
-	Runner               NFQWS2Runner
-	Resolver             PrefixResolver
-	HealthProbe          func(context.Context, string) error
-	CanaryProbe          func(context.Context, string, string) error
-	Timeout              time.Duration
-	HandshakeTimeout     time.Duration
-	FallbackPorts        []int
-	NativeOnly           bool
-	AWGCapabilities      func(context.Context) awgprofile.Capabilities
-	Profiles             WireGuardProfileProvider
-	EndpointResolver     WGEndpointResolver
-	EndpointNow          func() time.Time
-	activeEndpoint       *WGEndpointState
-	isolatedCandidate    bool
-	policyReceiptOptions policyAdditionOptions // package-test fault/boot seam; production leaves zero
+	EngineID                string
+	Configs                 *engineconfig.Manager
+	StateRoot               string
+	RuntimeConfigPath       string
+	Interface               string
+	Table                   int
+	PriorityBase            int
+	WGQuick                 string
+	WG                      string
+	IP                      string
+	IPTables                string
+	IP6Tables               string
+	Runner                  NFQWS2Runner
+	Resolver                PrefixResolver
+	HealthProbe             func(context.Context, string) error
+	CanaryProbe             func(context.Context, string, string) error
+	Timeout                 time.Duration
+	HandshakeTimeout        time.Duration
+	FallbackPorts           []int
+	NativeOnly              bool
+	AWGCapabilities         func(context.Context) awgprofile.Capabilities
+	Profiles                WireGuardProfileProvider
+	EndpointResolver        WGEndpointResolver
+	EndpointNow             func() time.Time
+	activeEndpoint          *WGEndpointState
+	isolatedCandidate       bool
+	policyReceiptOptions    policyAdditionOptions                           // package-test fault/boot seam; production leaves zero
+	networkUDPProbe         func(context.Context, netip.Addr) error         // package-test transport seam
+	networkLANBridgeMembers func(context.Context, string) ([]string, error) // package-test physical scope seam
 }
 
 type warpWGSelection struct {
@@ -201,6 +205,10 @@ func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string
 		return retErr
 	}
 	defer func() { retErr = errors.Join(retErr, checkWGNamedReviewContext(ctx)) }()
+	networkGeneration, networkDefault, err := NetworkPolicyRouteAuthority(plan, a.ID())
+	if err != nil {
+		return err
+	}
 	snapshot, err := readWarpWGSnapshot(root)
 	if err != nil {
 		return err
@@ -229,7 +237,7 @@ func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string
 		}
 		// The endpoint exclusion and the tunnel must use one resolved address;
 		// otherwise wg could resolve the name again to a different target.
-		profileText, endpointState, err = a.stageWGEndpoint(ctx, profileText)
+		profileText, endpointState, err = a.stageWGEndpointForNetwork(ctx, profileText, networkGeneration != "")
 		if err != nil {
 			return fmt.Errorf("WireGuard server address: %w; a server inside the local network is not supported yet, use a public address or DNS name", err)
 		}
@@ -238,7 +246,11 @@ func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string
 		if err := validateAmneziaProfile(profileText); err != nil {
 			return err
 		}
-		profileText, err = a.pinAWGEndpoint(ctx, profileText)
+		if networkGeneration != "" {
+			profileText, endpointState, err = a.stageWGEndpointForNetwork(ctx, profileText, true)
+		} else {
+			profileText, err = a.pinAWGEndpoint(ctx, profileText)
+		}
 		if err != nil {
 			return err
 		}
@@ -257,15 +269,34 @@ func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string
 	if err != nil {
 		return err
 	}
-	prefixes, err = excludeWGEndpoint(ctx, prefixes, profileText, a.Resolver)
-	if err != nil {
-		return err
+	if networkGeneration == "" {
+		prefixes, err = excludeWGEndpoint(ctx, prefixes, profileText, a.Resolver)
+		if err != nil {
+			return err
+		}
 	}
 	if len(prefixes) == 0 {
 		return errors.New("WARP policy has no service prefixes after endpoint exclusion")
 	}
-	state := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules, WireGuardEndpoint: endpointState}
+	state := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules, WireGuardEndpoint: endpointState, NetworkPolicyGeneration: networkGeneration, NetworkDefault: networkDefault}
 	initializePolicyLayout(&state)
+	if networkGeneration != "" {
+		if _, err := a.wgFrozenLANForState(state, plan.LAN); err != nil {
+			return err
+		}
+		state.Forwarding, err = a.wgForwardingObserver().compileForwarding(ctx, state)
+		if err != nil {
+			return err
+		}
+	}
+	if _, err := a.wgNetworkPolicySources(ctx, plan, runtimeProfile, state); err != nil {
+		return err
+	}
+	if networkGeneration != "" {
+		if err := a.preflightWGNetworkTransport(ctx, state.WireGuardEndpoint, Plan{LAN: plan.LAN, Routes: plan.Routes}); err != nil {
+			return err
+		}
+	}
 	if _, err := kernelRulesForPolicy(state); err != nil {
 		return err
 	}
@@ -305,8 +336,20 @@ func (a *WARPWireGuardAdapter) Validate(ctx context.Context, plan Plan, root str
 	if snapshot.InterfaceWasActive && !snapshot.StateExisted {
 		return fmt.Errorf("interface %s already exists without RAZVILKA ownership state", a.interfaceName())
 	}
-	if _, err := a.readStagedPolicy(root); err != nil {
+	state, err := a.readStagedPolicy(root)
+	if err != nil {
 		return err
+	}
+	if _, err := a.wgNetworkPolicySources(ctx, plan, string(mustRead(filepath.Join(root, "rz-warp.conf.staged"))), state); err != nil {
+		return err
+	}
+	if err := a.verifyWGNetworkForwarding(ctx, state); err != nil {
+		return err
+	}
+	if state.NetworkPolicyGeneration != "" {
+		if err := a.preflightWGNetworkTransport(ctx, state.WireGuardEndpoint, Plan{LAN: plan.LAN, Routes: plan.Routes}); err != nil {
+			return err
+		}
 	}
 	return ctx.Err()
 }
@@ -321,6 +364,10 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 		return retErr
 	}
 	defer func() { retErr = errors.Join(retErr, checkWGNamedReviewContext(ctx)) }()
+	networkGeneration, _, err := NetworkPolicyRouteAuthority(Plan{Routes: plan.Routes}, a.ID())
+	if err != nil {
+		return err
+	}
 	staged := filepath.Join(root, "rz-warp.conf.staged")
 	profile, err := os.ReadFile(staged)
 	if err != nil {
@@ -346,9 +393,29 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err != nil {
 		return err
 	}
+	sources := []netip.Addr{source}
+	if networkGeneration != "" {
+		state, err := a.readStagedPolicy(root)
+		if err != nil {
+			return err
+		}
+		sources, err = a.wgNetworkPolicySources(ctx, Plan{LAN: plan.LAN, Routes: plan.Routes}, runtimeProfile, state)
+		if err != nil {
+			return err
+		}
+		if err := a.revalidateWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
+			return err
+		}
+		if err := a.preflightWGNetworkTransport(ctx, state.WireGuardEndpoint, Plan{LAN: plan.LAN, Routes: plan.Routes}); err != nil {
+			return err
+		}
+	}
 	// A locally isolated socket cannot isolate the remote peer's Noise session
 	// or roaming endpoint. Never start a second interface with an in-use key.
 	if err := a.ensureWGCanaryIdentityFree(ctx, []byte(runtimeProfile)); err != nil {
+		if networkGeneration != "" && errors.Is(err, ErrWGCanaryIdentityInUse) {
+			return a.probeOwnedWGNetworkCandidate(ctx, plan, root, []byte(runtimeProfile), sources)
+		}
 		return err
 	}
 	if a.ID() == "amneziawg" {
@@ -399,15 +466,19 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	if err := owned.WriteAtomic(filepath.Join("canary", candidate.Interface+".conf"), []byte(runtimeProfile), 0o600); err != nil {
 		return err
 	}
-	interfaceStarted, policyInstalled := false, false
+	interfaceStarted := false
+	var installedSources []netip.Addr
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
-		var cleanupErr error
-		if policyInstalled {
-			cleanupErr = candidate.cleanupCanaryPolicy(cleanupCtx, source)
+		if errors.Is(retErr, ErrPolicyAdditionUnknown) {
+			return // Keep the private candidate and every unsettled selector prerequisite.
 		}
-		if interfaceStarted && candidate.interfaceActive(cleanupCtx) {
+		var cleanupErr error
+		for i := len(installedSources) - 1; i >= 0; i-- {
+			cleanupErr = errors.Join(cleanupErr, candidate.cleanupCanaryPolicy(cleanupCtx, installedSources[i]))
+		}
+		if cleanupErr == nil && interfaceStarted && candidate.interfaceActive(cleanupCtx) {
 			if err := candidate.stopInterface(cleanupCtx); cleanupErr == nil {
 				cleanupErr = err
 			}
@@ -423,10 +494,12 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 		return fmt.Errorf("start temporary WARP interface: %w", err)
 	}
 	interfaceStarted = true
-	if err := candidate.installCanaryPolicy(ctx, source); err != nil {
-		return err
+	for _, source := range sources {
+		if err := candidate.installCanaryPolicy(ctx, source); err != nil {
+			return err
+		}
+		installedSources = append(installedSources, source)
 	}
-	policyInstalled = true
 
 	probe := candidate.CanaryProbe
 	if probe == nil {
@@ -436,6 +509,16 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 		}
 	}
 	ctx = context.WithValue(ctx, wgSocketInterfaceKey{}, candidate.interfaceName())
+	if networkGeneration != "" {
+		udp := sourceBoundWGNetworkUDPProbe
+		if a.networkUDPProbe != nil {
+			udp = a.networkUDPProbe
+		}
+		if err := candidate.probeWGNetworkFamilies(ctx, plan, root, sources, probe, udp); err != nil {
+			return err
+		}
+		return checkWGNetworkReview(ctx)
+	}
 	return candidate.probeCanaryServices(ctx, plan, root, probe, source.String())
 }
 
@@ -496,32 +579,44 @@ func (a *WARPWireGuardAdapter) ensureCanaryFamilyFree(ctx context.Context, famil
 }
 
 func (a *WARPWireGuardAdapter) installCanaryPolicy(ctx context.Context, source netip.Addr) error {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		return err // No selector command has been sent yet.
+	}
 	family := canarySourceFamily(source)
 	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "route", "add", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table()))...); err != nil {
-		return fmt.Errorf("add temporary WARP route: %w", err)
+		return errors.Join(ErrPolicyAdditionUnknown, fmt.Errorf("add temporary WARP route: %w", err))
 	}
-	prefix := netip.PrefixFrom(source, source.BitLen()).String()
-	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "rule", "add", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "oif", a.interfaceName(), "lookup", strconv.Itoa(a.table()))...); err != nil {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		// This boundary rejected the next command before it was sent. The route
+		// has a successful creation ACK and can be causally removed by itself.
 		cleanup, cancel := context.WithTimeout(wgNamedCleanupContext(context.WithoutCancel(ctx)), 8*time.Second)
 		defer cancel()
 		_, cleanupErr := a.run(cleanup, a.ip(), canaryFamilyArgs(family, "route", "del", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table()))...)
-		return errors.Join(fmt.Errorf("add temporary WARP socket rule: %w", err), cleanupErr)
+		if cleanupErr != nil {
+			return errors.Join(err, cleanupErr, ErrPolicyAdditionUnknown)
+		}
+		return err
+	}
+	prefix := netip.PrefixFrom(source, source.BitLen()).String()
+	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "rule", "add", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "oif", a.interfaceName(), "lookup", strconv.Itoa(a.table()))...); err != nil {
+		// A failed command can have installed the rule before losing its ACK.
+		// Retain the route and interface rather than infer absence from an error.
+		return errors.Join(ErrPolicyAdditionUnknown, fmt.Errorf("add temporary WARP socket rule: %w", err))
 	}
 	return nil
 }
 
 func (a *WARPWireGuardAdapter) cleanupCanaryPolicy(ctx context.Context, source netip.Addr) error {
 	ctx = wgNamedCleanupContext(ctx)
-	var first error
 	family := canarySourceFamily(source)
 	prefix := netip.PrefixFrom(source, source.BitLen()).String()
-	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "rule", "del", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "oif", a.interfaceName(), "lookup", strconv.Itoa(a.table()))...); err != nil && !commandMissing(err) {
-		first = err
+	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "rule", "del", "priority", strconv.Itoa(a.priorityBase()), "from", prefix, "oif", a.interfaceName(), "lookup", strconv.Itoa(a.table()))...); err != nil {
+		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
-	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "route", "del", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table()))...); err != nil && first == nil && !commandMissing(err) {
-		first = err
+	if _, err := a.run(ctx, a.ip(), canaryFamilyArgs(family, "route", "del", "default", "dev", a.interfaceName(), "table", strconv.Itoa(a.table()))...); err != nil {
+		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
-	return first
+	return nil
 }
 
 func (a *WARPWireGuardAdapter) Activate(ctx context.Context, plan Plan, root string) (retErr error) {
@@ -560,8 +655,19 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, plan Plan, root str
 	if err != nil {
 		return err
 	}
+	if _, err := a.wgNetworkPolicySources(ctx, plan, string(mustRead(filepath.Join(root, "rz-warp.conf.staged"))), state); err != nil {
+		return err
+	}
 	if err := a.revalidateWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
 		return err
+	}
+	if state.NetworkPolicyGeneration != "" {
+		if err := a.verifyWGNetworkForwarding(ctx, state); err != nil {
+			return err
+		}
+		if err := a.preflightWGNetworkTransport(ctx, state.WireGuardEndpoint, Plan{LAN: plan.LAN, Routes: plan.Routes}); err != nil {
+			return err
+		}
 	}
 	// Recheck before stopping the previous runtime or changing its policy.
 	// Validation/Canary may have run before a module or executable replacement.
@@ -604,7 +710,7 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, plan Plan, root str
 	if err := installStaged(filepath.Join(root, "rz-warp.conf.staged"), a.RuntimeConfigPath); err != nil {
 		return err
 	}
-	if err := a.installWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
+	if err := a.installWGEndpoint(ctx, state.WireGuardEndpoint, plan.LAN); err != nil {
 		return err
 	}
 	if state.WireGuardEndpoint != nil {
@@ -623,7 +729,7 @@ func (a *WARPWireGuardAdapter) Activate(ctx context.Context, plan Plan, root str
 	if err := writeWGTransactionMarker(ctx, root, "wg-interface-created"); err != nil {
 		return errors.Join(err, a.stopInterface(wgNamedCleanupContext(context.WithoutCancel(ctx))))
 	}
-	if err := a.applyWGPolicyGeneration(ctx, state, root); err != nil {
+	if err := a.applyWGPolicyGeneration(ctx, state, root, plan.LAN); err != nil {
 		return err
 	}
 	return nil
@@ -648,14 +754,29 @@ func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state
 		return retErr
 	}
 	defer func() { retErr = errors.Join(retErr, checkWGNamedReviewContext(ctx)) }()
+	if _, err := a.wgNetworkPolicySources(ctx, plan, string(mustRead(a.RuntimeConfigPath)), state); err != nil {
+		return err
+	}
 	if !a.interfaceActive(ctx) {
 		return fmt.Errorf("WARP interface %s is not active", state.Interface)
 	}
 	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), state); err != nil {
 		return err
 	}
-	if err := a.verifyWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
+	if err := a.verifyWGEndpoint(ctx, state.WireGuardEndpoint, plan.LAN); err != nil {
 		return err
+	}
+	if state.NetworkPolicyGeneration != "" {
+		ref, exists, err := a.readWGPolicyReference(a.StateRoot, state, true)
+		if transactionRoot != "" {
+			ref, exists, err = a.readWGPolicyReference(transactionRoot, state, false)
+		}
+		if err != nil || !exists {
+			return errors.Join(err, ErrPolicyAdditionReceipt)
+		}
+		if err := a.verifyWGNetworkEffectPresence(ctx, ref, 1); err != nil {
+			return err
+		}
 	}
 	return a.probeLiveWGServices(ctx, plan, transactionRoot)
 }
@@ -676,8 +797,17 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) (retErr
 	if !exists || !regularFile(a.RuntimeConfigPath) {
 		return fmt.Errorf("committed %s runtime state is missing", a.ID())
 	}
+	if _, err := a.wgNetworkPolicySources(ctx, plan, string(mustRead(a.RuntimeConfigPath)), state); err != nil {
+		return err
+	}
+	if err := a.verifyWGNetworkForwarding(ctx, state); err != nil {
+		return err
+	}
 	ref, err := a.committedWGPolicyReference(state)
 	if err != nil {
+		return err
+	}
+	if err := a.verifyWGNetworkReferenceScope(plan, ref); err != nil {
 		return err
 	}
 	boot, err := a.wgPolicyBoot()
@@ -737,14 +867,14 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) (retErr
 			return fmt.Errorf("stop stale %s interface: %w", a.ID(), err)
 		}
 	}
-	if err := a.installWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
+	if err := a.installWGEndpoint(ctx, state.WireGuardEndpoint, plan.LAN); err != nil {
 		return err
 	}
 	a.activeEndpoint = state.WireGuardEndpoint
 	if err := a.startInterface(ctx); err != nil {
 		return errors.Join(fmt.Errorf("recover %s interface: %w", a.ID(), err), a.removeWGEndpoint(wgNamedCleanupContext(context.WithoutCancel(ctx)), state.WireGuardEndpoint))
 	}
-	newRef, err := a.freshWGPolicyGeneration(ctx, state)
+	newRef, err := a.freshWGPolicyGeneration(ctx, state, plan.LAN)
 	if err != nil {
 		return err
 	}
@@ -765,6 +895,10 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (ch
 		return false, retErr
 	}
 	defer func() { retErr = errors.Join(retErr, checkWGNamedReviewContext(ctx)) }()
+	networkGeneration, networkDefault, err := NetworkPolicyRouteAuthority(plan, a.ID())
+	if err != nil {
+		return false, err
+	}
 	if err := a.checkWGPolicyOperation(); err != nil {
 		return false, err
 	}
@@ -779,6 +913,9 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (ch
 	if err != nil {
 		return false, err
 	}
+	if err := a.verifyWGNetworkReferenceScope(plan, oldRef); err != nil {
+		return false, err
+	}
 	oldState = cloneWGPolicyState(oldState)
 	if err := a.revalidateWGEndpoint(ctx, oldState.WireGuardEndpoint); err != nil {
 		return false, err
@@ -791,14 +928,25 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (ch
 	if err != nil {
 		return false, err
 	}
-	if prefixes, err = excludeWGEndpoint(ctx, prefixes, string(profile), a.Resolver); err != nil {
-		return false, err
+	if networkGeneration == "" {
+		if prefixes, err = excludeWGEndpoint(ctx, prefixes, string(profile), a.Resolver); err != nil {
+			return false, err
+		}
 	}
 	if err := checkAddressRefreshAuthority(ctx); err != nil {
 		return false, err
 	}
-	newState := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules, RuntimeConfigSHA256: oldState.RuntimeConfigSHA256, WireGuardEndpoint: oldState.WireGuardEndpoint}
+	newState := PolicyState{Interface: a.interfaceName(), Table: a.table(), PriorityBase: a.priorityBase(), Prefixes: prefixes, Rules: rules, RuntimeConfigSHA256: oldState.RuntimeConfigSHA256, WireGuardEndpoint: oldState.WireGuardEndpoint, NetworkPolicyGeneration: networkGeneration, NetworkDefault: networkDefault}
 	newState.RuleLayout, newState.SharedPriorityBase = oldState.RuleLayout, oldState.SharedPriorityBase
+	if networkGeneration != "" {
+		newState.Forwarding, err = a.wgForwardingObserver().compileForwarding(ctx, newState)
+		if err != nil {
+			return false, err
+		}
+	}
+	if _, err := a.wgNetworkPolicySources(ctx, plan, string(profile), newState); err != nil {
+		return false, err
+	}
 	if samePolicy(oldState, newState) {
 		return false, nil
 	}
@@ -808,14 +956,14 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (ch
 	if err := a.wgPolicyAbsent(ctx, oldRef); err != nil {
 		return false, err
 	}
-	newRef, applyErr := a.freshWGPolicyGeneration(ctx, newState)
+	newRef, applyErr := a.freshWGPolicyGeneration(ctx, newState, plan.LAN)
 	if applyErr != nil {
 		cleanup, cancel := context.WithTimeout(wgNamedCleanupContext(context.WithoutCancel(ctx)), 30*time.Second)
 		defer cancel()
 		if err := a.settleWGPolicyOperationForStop(cleanup); err != nil {
 			return false, errors.Join(applyErr, err)
 		}
-		_, restoreErr := a.freshWGPolicyGeneration(cleanup, oldState)
+		_, restoreErr := a.freshWGPolicyGenerationBound(cleanup, oldState, "", oldRef.Checksum, oldRef.FrozenLAN)
 		return false, errors.Join(applyErr, restoreErr)
 	}
 	rollback := func(cause error) (bool, error) {
@@ -827,7 +975,7 @@ func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (ch
 		if err := a.wgPolicyAbsent(cleanup, newRef); err != nil {
 			return false, errors.Join(cause, err)
 		}
-		_, restoreErr := a.freshWGPolicyGeneration(cleanup, oldState)
+		_, restoreErr := a.freshWGPolicyGenerationBound(cleanup, oldState, "", oldRef.Checksum, oldRef.FrozenLAN)
 		return false, errors.Join(cause, restoreErr)
 	}
 	if err := a.healthState(ctx, plan, newState, ""); err != nil {
@@ -1064,14 +1212,14 @@ func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string
 			if err := a.revalidateWGEndpoint(ctx, previous.WireGuardEndpoint); err != nil {
 				return err
 			}
-			if err := a.installWGEndpoint(ctx, previous.WireGuardEndpoint); err != nil {
+			if err := a.installWGEndpoint(ctx, previous.WireGuardEndpoint, snapshot.PolicyGeneration.FrozenLAN); err != nil {
 				return err
 			}
 			a.activeEndpoint = previous.WireGuardEndpoint
 			if err := a.startInterface(ctx); err != nil {
 				return err
 			}
-			restored, err := a.freshWGPolicyGenerationBound(ctx, previous, root, owner)
+			restored, err := a.freshWGPolicyGenerationBound(ctx, previous, root, owner, snapshot.PolicyGeneration.FrozenLAN)
 			if err != nil {
 				return err
 			}
