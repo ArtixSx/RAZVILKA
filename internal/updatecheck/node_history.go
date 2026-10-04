@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -32,7 +31,7 @@ func RequiredRetainedNodeHistoryReadVersion(ctx context.Context, configRoot, sta
 		version, err := read(nodestore.PrivateSnapshot{Content: json.RawMessage(data), SHA256: digestBytes(data)})
 		// Node history has its own reader range; self-update receipt evolution
 		// must never advertise a future node-history capability by accident.
-		if err != nil || version < 1 || version > 2 {
+		if err != nil || !knownNodeHistoryReadVersion(version) {
 			return ErrFileProtocol
 		}
 		if version > required {
@@ -202,27 +201,8 @@ func inspectRetainedRestoreNodes(data []byte, inspect func([]byte) error) error 
 	return nil
 }
 
-// Baseline typed validator; CORE passes the dedicated VLESS reader to its CLI.
-// Conservatively retain capability2 for every validated Xray history record.
+// The owner validates complete canonical material, including unchecked XHTTP
+// secrets. Checks alone cannot prove that a retained image is reader2-safe.
 func validatedNodeHistoryRead(snapshot nodestore.PrivateSnapshot) (int, error) {
-	if err := nodestore.ValidatePrivateSnapshot(snapshot); err != nil {
-		return 0, err
-	}
-	var doc struct {
-		Nodes []struct {
-			ID     string                  `json:"id"`
-			Checks []nodestore.CheckRecord `json:"checks"`
-		} `json:"nodes"`
-	}
-	if json.Unmarshal(snapshot.Content, &doc) != nil {
-		return 0, ErrFileProtocol
-	}
-	for _, node := range doc.Nodes {
-		for _, check := range node.Checks {
-			if strings.HasPrefix(check.RoutePathID, "xray:") {
-				return 2, nil
-			}
-		}
-	}
-	return 1, nil
+	return nodestore.RequiredPrivateHistoryReadVersion(snapshot)
 }

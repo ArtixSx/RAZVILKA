@@ -14,11 +14,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 var ErrNodeHistoryAdmission = errors.New("retained node history or controller read capability requires review")
+
+func knownNodeHistoryReadVersion(version int) bool {
+	// This range belongs to the typed NodeStore reader, never to the
+	// independently evolving self-update journal or envelope schema.
+	return version >= 1 && version <= nodestore.ExactHistoryReadVersion
+}
+
+func parseNodeHistoryReadVersion(output string) (int, error) {
+	version, err := strconv.Atoi(strings.TrimSuffix(output, "\n"))
+	if err != nil || !knownNodeHistoryReadVersion(version) || output != strconv.Itoa(version)+"\n" {
+		return 0, ErrNodeHistoryAdmission
+	}
+	return version, nil
+}
 
 // Paths and callback bindings come from trusted startup. This guard must run
 // under CORE's existing operation admission, before probes and again before
@@ -39,7 +54,7 @@ func NewNodeHistoryAdmission(read NodeHistoryReader, currentReadVersion int) *No
 // typed reader capability must cover all retained private images, not merely
 // return a version flag. CORE prints {"ok":true} only after this succeeds.
 func (a *NodeHistoryAdmission) CheckReadable(ctx context.Context) error {
-	if a == nil || a.read == nil || a.currentReadVersion < 1 || a.currentReadVersion > 2 {
+	if a == nil || a.read == nil || !knownNodeHistoryReadVersion(a.currentReadVersion) {
 		return ErrNodeHistoryAdmission
 	}
 	required, err := RequiredRetainedNodeHistoryReadVersion(ctx, a.configRoot, a.stateRoot, a.read)
@@ -50,7 +65,7 @@ func (a *NodeHistoryAdmission) CheckReadable(ctx context.Context) error {
 }
 
 func (a *NodeHistoryAdmission) CheckWrite(ctx context.Context, wanted int) error {
-	if a == nil || a.read == nil || a.identity == nil || a.probe == nil || wanted < 1 || wanted > 2 || a.currentReadVersion < wanted {
+	if a == nil || a.read == nil || a.identity == nil || a.probe == nil || !knownNodeHistoryReadVersion(wanted) || !knownNodeHistoryReadVersion(a.currentReadVersion) || a.currentReadVersion < wanted {
 		return ErrNodeHistoryAdmission
 	}
 	if err := a.identity(a.executable); err != nil {
@@ -60,6 +75,7 @@ func (a *NodeHistoryAdmission) CheckWrite(ctx context.Context, wanted int) error
 	if err != nil {
 		return errors.Join(ErrNodeHistoryAdmission, err)
 	}
+	retainedRequired := required
 	if required < wanted {
 		required = wanted
 	}
@@ -83,7 +99,7 @@ func (a *NodeHistoryAdmission) CheckWrite(ctx context.Context, wanted int) error
 		if before != currentSHA {
 			version, err = a.probe(ctx, image)
 		}
-		if err != nil || version < required || version > 2 {
+		if err != nil || !knownNodeHistoryReadVersion(version) || version < required {
 			return errors.Join(ErrNodeHistoryAdmission, err)
 		}
 		after, err := hashRegularFile(image.Path, MaximumBinaryBytes)
@@ -104,7 +120,13 @@ func (a *NodeHistoryAdmission) CheckWrite(ctx context.Context, wanted int) error
 	if err != nil || !reflect.DeepEqual(images, fresh) {
 		return errors.Join(ErrNodeHistoryAdmission, err)
 	}
-	return a.CheckReadable(ctx)
+	freshRequired, err := RequiredRetainedNodeHistoryReadVersion(ctx, a.configRoot, a.stateRoot, a.read)
+	if err != nil || freshRequired != retainedRequired || !knownNodeHistoryReadVersion(a.currentReadVersion) || freshRequired > a.currentReadVersion {
+		// An XHTTP image appearing during observations cannot borrow reader2
+		// proofs that were collected for the prior RAW-only inventory.
+		return errors.Join(ErrNodeHistoryAdmission, err)
+	}
+	return ctx.Err()
 }
 
 func (a *NodeHistoryAdmission) controllerImages(ctx context.Context) ([]selfupdatejournal.BinaryImage, error) {
@@ -249,14 +271,14 @@ func probeNodeHistoryBinary(ctx context.Context, image selfupdatejournal.BinaryI
 	command := exec.CommandContext(probeCtx, path, "-node-history-read-version")
 	command.Env = commandEnvironment()
 	out := &cappedOutput{maximum: 16}
+	stderr := &cappedOutput{maximum: 1024}
 	command.Stdout = out
-	command.Stderr = io.Discard
-	if err := runBoundedCommand(command); err != nil {
+	command.Stderr = stderr
+	if err := runBoundedCommand(command); err != nil || stderr.Len() != 0 {
 		return 0, ErrNodeHistoryAdmission
 	}
-	value := strings.TrimSpace(out.String())
-	version, err := strconv.Atoi(value)
-	if err != nil || (value != "1" && value != "2") {
+	version, err := parseNodeHistoryReadVersion(out.String())
+	if err != nil {
 		return 0, ErrNodeHistoryAdmission
 	}
 	return version, ctx.Err()

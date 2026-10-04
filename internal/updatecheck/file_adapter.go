@@ -325,14 +325,15 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	}
 	jobPath := filepath.Join(directory, record.Job.ID)
 	binary := filepath.Join(jobPath, "bundle", "dist", record.Job.Release.Binary.Name)
-	if err := checkFileCapabilities(ctx, binary); err != nil {
+	requiredNodeReader, err := RequiredRetainedNodeHistoryReadVersion(ctx, "/opt/etc/razvilka", "/opt/var/lib/razvilka", validatedNodeHistoryRead)
+	if err != nil {
 		return "", err
 	}
-	if err := checkFileCapabilities(ctx, record.Deployment.Executable); err != nil {
+	if err := checkFileCapabilitiesForNodeHistory(ctx, binary, requiredNodeReader, probeFileCapability); err != nil {
+		return "", err
+	}
+	if err := checkFileCapabilitiesForNodeHistory(ctx, record.Deployment.Executable, requiredNodeReader, probeFileCapability); err != nil {
 		return "", errors.New("current-file-controller-capability-refused")
-	}
-	if _, err := RequiredRetainedNodeHistoryReadVersion(ctx, "/opt/etc/razvilka", "/opt/var/lib/razvilka", validatedNodeHistoryRead); err != nil {
-		return "", err
 	}
 	if err := root.MkdirAll("staged", 0700); err != nil {
 		return "", err
@@ -420,6 +421,10 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	if !helperConfigMatches(record) {
 		return "", ErrReviewChanged
 	}
+	freshNodeReader, err := RequiredRetainedNodeHistoryReadVersion(ctx, "/opt/etc/razvilka", "/opt/var/lib/razvilka", validatedNodeHistoryRead)
+	if err != nil || freshNodeReader != requiredNodeReader {
+		return "", errors.Join(ErrReviewChanged, err)
+	}
 	freshAuthority, err := authorityReview(ctx, record.Job.ID)
 	if err != nil || freshAuthority != authority {
 		return "", errors.Join(ErrFileProtocol, err)
@@ -453,17 +458,59 @@ func copyFileController(root *ownedfs.Root, path, expected string) error {
 }
 
 func checkFileCapabilities(ctx context.Context, binary string) error {
-	for flag, wanted := range map[string]string{"-self-update-schema": "2", "-component-update-schema": "2", "-node-history-read-version": "2", "-native-enrollment-schema": "1", "-subscription-schema": "1"} {
-		command := exec.CommandContext(ctx, binary, flag)
-		command.Env = commandEnvironment()
-		out := &cappedOutput{maximum: 32}
-		command.Stdout = out
-		command.Stderr = io.Discard
-		if err := runBoundedCommand(command); err != nil || strings.TrimSpace(out.String()) != wanted {
+	required, err := RequiredRetainedNodeHistoryReadVersion(ctx, "/opt/etc/razvilka", "/opt/var/lib/razvilka", validatedNodeHistoryRead)
+	if err != nil {
+		return err
+	}
+	return checkFileCapabilitiesForNodeHistory(ctx, binary, required, probeFileCapability)
+}
+
+func checkFileCapabilitiesForNodeHistory(ctx context.Context, binary string, required int, probe func(context.Context, string, string) (string, error)) error {
+	if !knownNodeHistoryReadVersion(required) || probe == nil {
+		return ErrFileProtocol
+	}
+	// Keep the existing reader2 floor for ordinary file-protocol2 controllers.
+	// Reader3 is additionally admitted only with the actual typed library;
+	// retained XHTTP material requires 3 without changing any journal schema.
+	if required < 2 {
+		required = 2
+	}
+	for _, capability := range []struct{ flag, wanted string }{
+		{"-self-update-schema", "2"}, {"-component-update-schema", "2"},
+		{"-node-history-read-version", ""}, {"-native-enrollment-schema", "1"}, {"-subscription-schema", "1"},
+	} {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		output, err := probe(ctx, binary, capability.flag)
+		if err != nil {
+			return errors.New("candidate-recovery-capability-refused")
+		}
+		if capability.flag == "-node-history-read-version" {
+			version, err := parseNodeHistoryReadVersion(output)
+			if err != nil || version < required {
+				return ErrNodeHistoryAdmission
+			}
+		} else if strings.TrimSpace(output) != capability.wanted {
 			return errors.New("candidate-recovery-capability-refused")
 		}
 	}
 	return ctx.Err()
+}
+
+func probeFileCapability(ctx context.Context, binary, flag string) (string, error) {
+	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	command := exec.CommandContext(probeCtx, binary, flag)
+	command.Env = commandEnvironment()
+	out := &cappedOutput{maximum: 32}
+	stderr := &cappedOutput{maximum: 1024}
+	command.Stdout = out
+	command.Stderr = stderr
+	if err := runBoundedCommand(command); err != nil || stderr.Len() != 0 {
+		return "", errors.New("candidate-recovery-capability-refused")
+	}
+	return out.String(), ctx.Err()
 }
 
 func (a *SelfUpdateFileAdapter) Ready(ctx context.Context, id string) error {

@@ -15,6 +15,16 @@ import (
 
 func retainedNodeFixture(t *testing.T, xray bool) []byte {
 	t.Helper()
+	return retainedNodeMaterialFixture(t, false, xray)
+}
+
+func retainedXHTTPNodeFixture(t *testing.T) []byte {
+	t.Helper()
+	return retainedNodeMaterialFixture(t, true, false)
+}
+
+func retainedNodeMaterialFixture(t *testing.T, xhttp, xray bool) []byte {
+	t.Helper()
 	ctx := context.Background()
 	path := t.TempDir()
 	// testing.TempDir's numbered child directory follows the process umask.
@@ -28,7 +38,11 @@ func retainedNodeFixture(t *testing.T, xray bool) []byte {
 	}
 	defer s.Close()
 	at := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
-	nodes, err := s.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174000@private-host.example:443?security=tls&sni=private-sni.example#private", at, time.Hour, false)
+	material := "vless://123e4567-e89b-12d3-a456-426614174000@private-host.example:443?security=tls&sni=private-sni.example"
+	if xhttp {
+		material += "&type=xhttp&mode=packet-up&host=private-front.example&path=%2Ffixture"
+	}
+	nodes, err := s.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, material+"#private", at, time.Hour, false)
 	if err != nil {
 		t.Fatal("import private node fixture:", err)
 	}
@@ -100,7 +114,7 @@ func TestRetainedNodeHistoryMaximumIncludesBackupsAndBothRestoreSides(t *testing
 
 func TestRetainedNodeHistoryCorruptAndUnknownNeverDowngrade(t *testing.T) {
 	plain := retainedNodeFixture(t, false)
-	for _, kind := range []string{"corrupt-nodes", "journal-checksum", "journal-state", "journal-duplicate", "snapshot-incomplete", "cancelled", "unknown-reader"} {
+	for _, kind := range []string{"corrupt-nodes", "future-node-schema", "journal-checksum", "journal-state", "journal-duplicate", "snapshot-incomplete", "cancelled", "unknown-reader"} {
 		t.Run(kind, func(t *testing.T) {
 			configRoot, stateRoot := t.TempDir(), t.TempDir()
 			ctx := context.Background()
@@ -109,6 +123,8 @@ func TestRetainedNodeHistoryCorruptAndUnknownNeverDowngrade(t *testing.T) {
 			switch kind {
 			case "corrupt-nodes":
 				retainedFile(t, stateRoot, "backup/nodes.private.json", []byte("{}"))
+			case "future-node-schema":
+				retainedFile(t, stateRoot, "backup/nodes.private.json", bytes.Replace(plain, []byte(`"schema":4`), []byte(`"schema":5`), 1))
 			case "journal-checksum", "journal-state", "journal-duplicate":
 				data := sealedRetainedJournal(t, restorejournal.Image{}, restorejournal.Image{Exists: true, Data: plain})
 				if kind == "journal-checksum" {
@@ -130,11 +146,84 @@ func TestRetainedNodeHistoryCorruptAndUnknownNeverDowngrade(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			case "unknown-reader":
-				reader = func(nodestore.PrivateSnapshot) (int, error) { return 3, nil }
+				reader = func(nodestore.PrivateSnapshot) (int, error) { return nodestore.ExactHistoryReadVersion + 1, nil }
 			}
 			required, err := RequiredRetainedNodeHistoryReadVersion(ctx, configRoot, stateRoot, reader)
 			if err == nil || required != 0 {
 				t.Fatal("unknown/corrupt retained state authorized a downgrade")
+			}
+		})
+	}
+}
+
+func TestRetainedNodeHistoryUncheckedXHTTPMaterialRequiresReader3Everywhere(t *testing.T) {
+	plain, raw, xhttp := retainedNodeFixture(t, false), retainedNodeFixture(t, true), retainedXHTTPNodeFixture(t)
+	for _, test := range []struct {
+		where    string
+		required int
+	}{
+		{"legacy-live", 1}, {"raw-live", 2}, {"xhttp-live", 3},
+		{"retained-backup", 3}, {"restore-before", 3}, {"restore-after", 3},
+		{"directory-restore-before", 3}, {"private-snapshot", 3},
+	} {
+		t.Run(test.where, func(t *testing.T) {
+			ctx := context.Background()
+			configRoot, stateRoot := t.TempDir(), t.TempDir()
+			live := plain
+			if test.where == "raw-live" {
+				live = raw
+			} else if test.where == "xhttp-live" {
+				live = xhttp
+			}
+			retainedFile(t, configRoot, "nodes-private/nodes.private.json", live)
+			treeBytes, err := json.Marshal(directoryImage{Mode: 0700, Entries: []directoryEntry{{Name: "nodes.private.json", Mode: 0600, Data: xhttp}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch test.where {
+			case "retained-backup":
+				retainedFile(t, stateRoot, "backups/deleted-live/nodes.private.json", xhttp)
+			case "restore-before":
+				retainedFile(t, stateRoot, "restore/restore.private.json", sealedRetainedJournal(t, restorejournal.Image{Exists: true, Data: xhttp}, restorejournal.Image{Exists: true, Data: raw}))
+			case "restore-after":
+				retainedFile(t, stateRoot, "restore/restore.private.json", sealedRetainedJournal(t, restorejournal.Image{Exists: true, Data: raw}, restorejournal.Image{Exists: true, Data: xhttp}))
+			case "directory-restore-before":
+				retainedFile(t, stateRoot, "restore/restore.private.json", sealedRetainedJournal(t, restorejournal.Image{Exists: true, Data: treeBytes}, restorejournal.Image{}))
+			case "private-snapshot":
+				snapshot := privateFileSnapshot{Schema: 2, ID: "0123456789abcdef0123456789abcdef", Images: map[string]restorejournal.Image{}}
+				for name := range fileMutablePrivateDirectories {
+					snapshot.Images[name] = restorejournal.Image{}
+				}
+				for name := range filePrivateFiles {
+					snapshot.Images[name] = restorejournal.Image{}
+				}
+				snapshot.Images["nodes"] = restorejournal.Image{Exists: true, Data: treeBytes}
+				data, err := json.Marshal(snapshot)
+				if err != nil || validatePrivateSnapshot(snapshot) != nil {
+					t.Fatal("private snapshot fixture", err)
+				}
+				retainedFile(t, stateRoot, "self-update/retained/private-snapshot.json", data)
+				retainedFile(t, stateRoot, "self-update/retained/private-snapshot.sha256", []byte(digestBytes(data)))
+			}
+			configBefore, err := readDirectoryImage(ctx, configRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stateBefore, err := readDirectoryImage(ctx, stateRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			required, err := RequiredRetainedNodeHistoryReadVersion(ctx, configRoot, stateRoot, validatedNodeHistoryRead)
+			if err != nil || required != test.required {
+				t.Fatal("typed material/history capability lost", required, err)
+			}
+			configAfter, err := readDirectoryImage(ctx, configRoot)
+			if err != nil || !bytes.Equal(configBefore.Data, configAfter.Data) {
+				t.Fatal("compatibility scan mutated live private tree", err)
+			}
+			stateAfter, err := readDirectoryImage(ctx, stateRoot)
+			if err != nil || !bytes.Equal(stateBefore.Data, stateAfter.Data) {
+				t.Fatal("compatibility scan rewrote/cleared retained images", err)
 			}
 		})
 	}
