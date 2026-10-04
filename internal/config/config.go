@@ -19,10 +19,11 @@ import (
 )
 
 type ServiceState struct {
-	Enabled bool     `json:"enabled"`
-	Mode    string   `json:"mode,omitempty"` // legacy compatibility
-	Route   string   `json:"route,omitempty"`
-	Sources []string `json:"sources,omitempty"` // empty means every LAN client
+	WireGuardProfileRevision string   `json:"wireguard_profile_revision,omitempty"`
+	Enabled                  bool     `json:"enabled"`
+	Mode                     string   `json:"mode,omitempty"` // legacy compatibility
+	Route                    string   `json:"route,omitempty"`
+	Sources                  []string `json:"sources,omitempty"` // empty means every LAN client
 }
 
 type Config struct {
@@ -112,14 +113,30 @@ func normalizeState(state ServiceState) ServiceState {
 }
 
 func (s *Store) UpdateService(id string, state ServiceState) error {
+	return s.updateService(id, state, nil)
+}
+
+// UpdateServiceIfRevision keeps the ordinary service-policy fence and persists
+// one draft revision only if the reviewed whole configuration is unchanged.
+func (s *Store) UpdateServiceIfRevision(id string, state ServiceState, revision uint64) error {
+	return s.updateService(id, state, &revision)
+}
+
+func (s *Store) updateService(id string, state ServiceState, revision *uint64) error {
 	sources, err := NormalizeSources(state.Sources)
 	if err != nil {
 		return err
 	}
 	state.Sources = sources
 	state = normalizeState(state)
+	if err := validateServiceProfileBinding(state); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if revision != nil && s.cfg.Revision != *revision {
+		return ErrRevisionChanged
+	}
 	previous := cloneConfig(s.cfg)
 	s.cfg.Services[id] = state
 	if !reflect.DeepEqual(previous.Services[id], state) {
@@ -434,6 +451,9 @@ func (s *Store) Save() error {
 }
 
 func (s *Store) saveLocked() error {
+	if err := validateConfigServiceBindings(s.cfg); err != nil {
+		return err
+	}
 	if s.writeUncertain {
 		return restorejournal.ErrRecovery
 	}
