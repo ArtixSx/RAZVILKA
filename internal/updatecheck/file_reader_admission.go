@@ -235,6 +235,18 @@ func (a *SelfUpdateFileAdapter) sealJournalReaders(ctx context.Context, review f
 }
 
 func (a *SelfUpdateFileAdapter) sealJournalReadersWithProbe(ctx context.Context, review fileReview, authority func(context.Context, string) (SelfUpdateAuthority, error), probe func(context.Context, fileReview, selfupdatejournal.BinaryImage) (int, error)) (*journalReaderProof, error) {
+	proof, err := a.sealOptionalJournalReadersWithProbe(ctx, review, authority, probe)
+	if err == nil && proof == nil {
+		return nil, ErrStoppedSettlementIneligible
+	}
+	return proof, err
+}
+
+// Ordinary schema2 live Prepare keeps its existing capability2 guards. A
+// positively observed reader2 makes this review explicitly stopped-ineligible;
+// it never manufactures reader3 proof. Unknown/corrupt/future evidence refuses
+// the preparation rather than borrowing this compatibility path.
+func (a *SelfUpdateFileAdapter) sealOptionalJournalReadersWithProbe(ctx context.Context, review fileReview, authority func(context.Context, string) (SelfUpdateAuthority, error), probe func(context.Context, fileReview, selfupdatejournal.BinaryImage) (int, error)) (*journalReaderProof, error) {
 	if authority == nil || probe == nil || a.admission == nil {
 		return nil, ErrFileProtocol
 	}
@@ -253,13 +265,17 @@ func (a *SelfUpdateFileAdapter) sealJournalReadersWithProbe(ctx context.Context,
 		return nil, err
 	}
 	proof := &journalReaderProof{Schema: SelfUpdateReadVersion, RequiredReader: SelfUpdateReadVersion}
+	eligible := true
 	for _, image := range images {
 		if err := check(); err != nil {
 			return nil, err
 		}
 		version, err := probe(ctx, review, image)
-		if err != nil || version != SelfUpdateReadVersion {
+		if err != nil || (version != selfUpdateProtocolSchema && version != SelfUpdateReadVersion) {
 			return nil, errors.Join(ErrFileProtocol, err)
+		}
+		if version == selfUpdateProtocolSchema {
+			eligible = false
 		}
 		proof.Controllers = append(proof.Controllers, journalReaderImage{image.Path, image.SHA256, version})
 	}
@@ -269,6 +285,9 @@ func (a *SelfUpdateFileAdapter) sealJournalReadersWithProbe(ctx context.Context,
 	fresh, err := a.journalReaderImages(ctx, review)
 	if err != nil || !reflect.DeepEqual(images, fresh) {
 		return nil, errors.Join(ErrFileProtocol, err)
+	}
+	if !eligible {
+		return nil, nil
 	}
 	return proof, nil
 }
@@ -298,28 +317,47 @@ func (a *SelfUpdateFileAdapter) probeJournalReader(ctx context.Context, review f
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	command := exec.CommandContext(probeCtx, path, "-self-update-read-version")
-	command.Env = commandEnvironment()
-	output := &cappedOutput{maximum: 16}
-	command.Stdout, command.Stderr = output, io.Discard
-	configureBoundedCommand(command)
-	_, done, err := startInstallerHelperCommand(probeCtx, command, func(begin func() error) error {
-		return a.admission(probeCtx, review.ID, review.AuthorityInstallationID, review.AuthoritySequence, "start/live", journalReaderProbeEffect, begin)
-	})
-	if done == nil {
-		return 0, err
+	run := func(flag string) (stdout, stderr string, waitErr, admissionErr error) {
+		command := exec.CommandContext(probeCtx, path, flag)
+		command.Env = commandEnvironment()
+		output, diagnostic := &cappedOutput{maximum: 16}, &cappedOutput{maximum: 4096}
+		command.Stdout, command.Stderr = output, diagnostic
+		configureBoundedCommand(command)
+		_, done, err := startInstallerHelperCommand(probeCtx, command, func(begin func() error) error {
+			return a.admission(probeCtx, review.ID, review.AuthorityInstallationID, review.AuthoritySequence, "start/live", journalReaderProbeEffect, begin)
+		})
+		if done == nil {
+			return "", "", nil, err
+		}
+		if err != nil {
+			cancel()
+			cleanupCommand(command)
+		}
+		waitErr = <-done
+		return output.String(), diagnostic.String(), waitErr, err
 	}
-	if err != nil {
-		cancel()
-		cleanupCommand(command)
+	stdout, stderr, waitErr, admissionErr := run("-self-update-read-version")
+	legacy := false
+	if admissionErr != nil {
+		return 0, errors.Join(ErrFileProtocol, admissionErr, waitErr)
 	}
-	waitErr := <-done
-	if err != nil || waitErr != nil {
-		return 0, errors.Join(ErrFileProtocol, err, waitErr)
+	if waitErr != nil {
+		var exited *exec.ExitError
+		// Old Go flag parsers explicitly refuse the new flag. Only this
+		// known ABI response allows a second positive legacy capability2
+		// observation. Panic/timeout/signals/garbage never downgrade.
+		if !errors.As(waitErr, &exited) || exited.ExitCode() != 2 || stdout != "" || !strings.HasPrefix(stderr, "flag provided but not defined: -self-update-read-version\n") || probeCtx.Err() != nil {
+			return 0, errors.Join(ErrFileProtocol, waitErr)
+		}
+		legacy = true
+		stdout, stderr, waitErr, admissionErr = run("-self-update-schema")
+		if waitErr != nil || admissionErr != nil || stderr != "" {
+			return 0, errors.Join(ErrFileProtocol, waitErr, admissionErr)
+		}
 	}
-	value := strings.TrimSpace(output.String())
+	value := strings.TrimSpace(stdout)
 	version, err := strconv.Atoi(value)
-	if err != nil || strconv.Itoa(version) != value || version < 1 || version > SelfUpdateReadVersion {
+	if err != nil || strconv.Itoa(version) != value || version < 1 || version > SelfUpdateReadVersion || legacy && version != selfUpdateProtocolSchema || !legacy && stderr != "" {
 		return 0, ErrFileProtocol
 	}
 	return version, ctx.Err()
@@ -339,6 +377,9 @@ func (a *SelfUpdateFileAdapter) CheckRetainedJournalReaders(ctx context.Context,
 		return err
 	}
 	if !validJournalReaderProof(review.JournalReaders) {
+		if review.JournalReaders == nil {
+			return ErrStoppedSettlementIneligible
+		}
 		return ErrFileProtocol
 	}
 	images, err := a.journalReaderImages(ctx, review)
@@ -355,6 +396,23 @@ func (a *SelfUpdateFileAdapter) CheckRetainedJournalReaders(ctx context.Context,
 		}
 	}
 	return ctx.Err()
+}
+
+// Immutable review declaration only, never effect authority. False is explicit
+// stopped ineligibility for a legacy/ordinary schema2 review. Even true still
+// requires CheckRetainedJournalReaders and exact preserved Stop at settlement.
+func (a *SelfUpdateFileAdapter) StoppedSettlementEligibility(ctx context.Context, id string) (bool, error) {
+	_, review, err := a.load(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if review.JournalReaders == nil {
+		return false, nil
+	}
+	if !validJournalReaderProof(review.JournalReaders) {
+		return false, ErrFileProtocol
+	}
+	return true, ctx.Err()
 }
 
 // CORE's downgrade reader CLI supplies fixed startup paths. It performs no

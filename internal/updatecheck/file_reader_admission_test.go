@@ -1,8 +1,10 @@
 package updatecheck
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -123,8 +125,13 @@ func TestLegacyReviewStaysReadableButCannotSettleStopped(t *testing.T) {
 	if version, err := a.requiredJournalReadVersion(context.Background()); err != nil || version != 2 {
 		t.Fatal(version, err)
 	}
-	if err := a.SettleStoppedRollback(context.Background(), review.ID, authority); err == nil {
+	before, _ := os.ReadFile(filepath.Join(a.fileJournal, review.ID, "receipt.json"))
+	if err := a.SettleStoppedRollback(context.Background(), review.ID, authority); !errors.Is(err, ErrStoppedSettlementIneligible) {
 		t.Fatal("legacy review auto-adopted reader3")
+	}
+	after, _ := os.ReadFile(filepath.Join(a.fileJournal, review.ID, "receipt.json"))
+	if !bytes.Equal(before, after) {
+		t.Fatal("ineligible stopped review wrote terminal3")
 	}
 	if SelfUpdateReadVersion != 3 || selfUpdateProtocolSchema != 2 {
 		t.Fatal("reader capability coupled to replacement/private protocol")
@@ -184,5 +191,129 @@ func TestJournalReaderProofIncludesEveryRetainedController(t *testing.T) {
 	}
 	if err := a.CheckRetainedJournalReaders(ctx, newID, 3); err == nil {
 		t.Fatal("missing retained helper controller was silently dropped")
+	}
+}
+
+func TestReader2To3OrdinarySchema2PrepareStaysStoppedIneligible(t *testing.T) {
+	a, u, review, _ := stoppedAdapterFixture(t)
+	ctx := context.Background()
+	a.stopCheck = func(context.Context, string) (bool, error) { return false, nil } // ordinary running model, no control reset
+	ready := func(context.Context, string) (SelfUpdateAuthority, error) {
+		return SelfUpdateAuthority{review.AuthorityInstallationID, review.AuthoritySequence}, nil
+	}
+	observed := 0
+	proof, err := a.sealOptionalJournalReadersWithProbe(ctx, review, ready, func(ctx context.Context, review fileReview, image selfupdatejournal.BinaryImage) (int, error) {
+		observed++
+		if image.Path == review.Files[0].Candidate {
+			return 3, nil
+		} // reader2 -> reader3 candidate
+		return 2, nil
+	})
+	if err != nil || proof != nil || observed != 3 {
+		t.Fatal("ordinary reader2 upgrade refused or granted reader3", proof, observed, err)
+	}
+	review.JournalReaders = proof
+	saveStoppedReview(t, a, u, review)
+	data, _ := os.ReadFile(filepath.Join(a.directory, review.ID, "file-review.json"))
+	if bytes.Contains(data, []byte("journal_readers")) {
+		t.Fatal("ineligible review changed the old strict schema2 wire format")
+	}
+	if eligible, err := a.StoppedSettlementEligibility(ctx, review.ID); err != nil || eligible {
+		t.Fatal("reader2 silently eligible", eligible, err)
+	}
+	if err := a.CheckRetainedJournalReaders(ctx, review.ID, 3); !errors.Is(err, ErrStoppedSettlementIneligible) {
+		t.Fatal("reader2 gained stopped terminal", err)
+	}
+	// The existing ordinary live acceptance model still upgrades the six
+	// files and writes accepted/schema2. Its trusted live callback is separate
+	// from stopped eligibility; no fake idle live callback is introduced.
+	store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	okay := func(context.Context) error { return nil }
+	ordinary := func(ctx context.Context) error { return a.Authority(ctx, review.ID, review.Revision) }
+	// Close the fixture's prior ordinary rollback and prepare a fresh upgrade
+	// in the same journal. No pending rollback is reinterpreted as an install.
+	if err := store.Accept(ctx, review.ID, true, ordinary, okay); err != nil {
+		t.Fatal(err)
+	}
+	u.record.Job.State, u.record.Job.CanApply, u.record.Job.CanCancel = "rolled-back", false, false
+	if err := archiveHelperRecord(a.directory, u.record); err != nil {
+		t.Fatal(err)
+	}
+	oldJob := filepath.Join(a.directory, review.ID)
+	newID := "fedcba9876543210fedcba9876543210"
+	newJob := filepath.Join(a.directory, newID)
+	if err := os.CopyFS(newJob, os.DirFS(oldJob)); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"retained-helper.json", "helper.identity.json", "private-snapshot.json", "private-snapshot.sha256", "stop-old-panel.process.json", "prepare-private-state.process.json", "quiesce-old-runtime.process.json", "restore-private-state.process.json"} {
+		if err := os.Remove(filepath.Join(newJob, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	review.ID, u.record.Job.ID, u.record.Job.State = newID, newID, "ready"
+	review.Files = reviewedFileList(newJob, *u.record.Job.Release, u.record.Files, review.MigratedConfigSHA256)
+	saveStoppedReview(t, a, u, review)
+	proof, err = a.sealOptionalJournalReadersWithProbe(ctx, review, ready, func(ctx context.Context, review fileReview, image selfupdatejournal.BinaryImage) (int, error) {
+		if image.Path == review.Files[0].Candidate {
+			return 3, nil
+		}
+		return 2, nil
+	})
+	if err != nil || proof != nil {
+		t.Fatal("fresh reader2 -> reader3 Prepare refused", proof, err)
+	}
+	review.JournalReaders = proof
+	saveStoppedReview(t, a, u, review)
+	if err := store.Prepare(ctx, newID, review.Files, ordinary, okay); err != nil {
+		t.Fatal("fresh ordinary prepare", err)
+	}
+	if err := store.Install(ctx, review.ID, ordinary, okay); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Accept(ctx, review.ID, false, ordinary, okay); err != nil {
+		t.Fatal("ordinary live accepted refused", err)
+	}
+	r, present, err := store.Current()
+	if err != nil || !present || r.Schema != 2 || r.Phase != "accepted" || r.Stopped != nil {
+		t.Fatal("ordinary acceptance evolved into stopped format", r, err)
+	}
+	if err := store.VerifyInstallation(ctx, review.ID, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOptionalReaderProofNeverFallsBackOnUnknownOrFuture(t *testing.T) {
+	for _, test := range []string{"future", "reader1", "probe-error", "drift"} {
+		t.Run(test, func(t *testing.T) {
+			a, _, review, _ := stoppedAdapterFixture(t)
+			ready := func(context.Context, string) (SelfUpdateAuthority, error) {
+				return SelfUpdateAuthority{review.AuthorityInstallationID, review.AuthoritySequence}, nil
+			}
+			calls := 0
+			proof, err := a.sealOptionalJournalReadersWithProbe(context.Background(), review, ready, func(ctx context.Context, review fileReview, image selfupdatejournal.BinaryImage) (int, error) {
+				calls++
+				if calls == 1 {
+					return 2, nil
+				}
+				switch test {
+				case "future":
+					return 4, nil
+				case "reader1":
+					return 1, nil
+				case "probe-error":
+					return 0, ErrFileProtocol
+				case "drift":
+					_ = os.WriteFile(image.Path, []byte("changed after known reader2"), 0600)
+				}
+				return 3, nil
+			})
+			if err == nil || proof != nil || calls < 2 {
+				t.Fatal("legacy2 hid untrusted future/drift", proof, calls, err)
+			}
+		})
 	}
 }

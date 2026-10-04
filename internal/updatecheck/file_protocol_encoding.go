@@ -15,6 +15,7 @@ const SelfUpdateReadVersion = 3
 const selfUpdateProtocolSchema = 2
 
 var ErrFileProtocol = errors.New("self update file/helper protocol requires matching trusted evidence")
+var ErrStoppedSettlementIneligible = errors.New("self update review has no complete retained reader3 admission; stopped settlement is ineligible")
 
 func decodeFileProtocol(data []byte, out any) error {
 	decoder := json.NewDecoder(strings.NewReader(string(data)))

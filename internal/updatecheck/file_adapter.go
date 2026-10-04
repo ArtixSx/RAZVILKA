@@ -386,7 +386,10 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	review.Files = reviewedFileList(jobPath, *record.Job.Release, record.Files, review.MigratedConfigSHA256)
 	readerAdapter := NewSelfUpdateFileAdapterWithAuthority(nil, admission)
 	readerAdapter.directory = directory
-	review.JournalReaders, err = readerAdapter.sealJournalReaders(ctx, review, authorityReview)
+	// Nil proof is an explicit ineligible outcome for stopped settlement.
+	// Keeping the schema2 encoding unchanged lets the existing reader2 helper
+	// perform an ordinary live upgrade; it cannot write the new terminal3.
+	review.JournalReaders, err = readerAdapter.sealOptionalJournalReadersWithProbe(ctx, review, authorityReview, readerAdapter.probeJournalReader)
 	if err != nil {
 		return "", err
 	}
