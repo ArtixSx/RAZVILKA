@@ -16,6 +16,8 @@ Production verifier D03: [RESEARCH_XRAY_PRODUCTION_VERIFIER_RU.md](RESEARCH_XRAY
 
 Actual TCP capture→Go→node: [RESEARCH_LAN_TCP_CAPTURE_RU.md](RESEARCH_LAN_TCP_CAPTURE_RU.md) — сравнение stock sing-box1.14.2/Xray и минимального TUN stack API, конкретный tun2socks/core candidate с original tuple, single physical capture class, frozen per-node inbound и Stop/DNS/ABI границами. Source audit и implementation proposal; dependencies/runtime не менялись. Межчатовая отправка отклонена auto-review и требует прямого разрешения пользователя.
 
+Независимый OPS review `b1f34a9`: [RESEARCH_OPS_STOPPED_REVIEW_RU.md](RESEARCH_OPS_STOPPED_REVIEW_RU.md) — matching Stop, exact old images, retained readers, ECHILD и stopped terminal publication. Один P2: private file metadata drift при unchanged bytes не проверяется terminal consumer. Native/VM/router не запускались; ordinary Prepare compatibility WIP исключён из этого аудита.
+
 Прочитаны REMAINING_AND_AGENTS_RU.md, TASKS.json, COORDINATION_RU.md, SOL_HANDOFF_RU.md, RESEARCH_RU.md, VALIDATION_RU.md, CHANGES_RU.md, TEST_REPORT_RU.md. Перед новым углублением прочитан завершённый `delivery-review/.review-local/ROUTER_RESEARCH_RU.md`. Его три первоначальные находки здесь не выдаются за новое исследование. Ниже уточнены механизмы внедрения и контрпримеры. H00/IM, DNS min-TTL/cache, общий addition receipt и исправления NET modinfo/srcversion повторно не предлагаются.
 
 Поиск выполнен web; поведение проверено чтением raw-файлов по полным Git SHA, полученным через GitHub API. Некоторые GitHub страницы через web open дали cache miss; соответствующие исходники успешно прочитаны через raw.githubusercontent.com по тому же SHA. README и поисковый wiki не использованы как доказательство выполнения hooks или маршрутизации.
