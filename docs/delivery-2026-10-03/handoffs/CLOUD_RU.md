@@ -1,5 +1,7 @@
 # CLOUD — D13, библиотечный checkpoint 04.10.2026
 
+Последняя ограниченная source/enrollment проверка: [CLOUD_SOURCES_D13_RU.md](CLOUD_SOURCES_D13_RU.md). Закрыты cancellation-before-cache-commit и caller registry aliasing; approved feed set не расширен. Source TTL/provenance/offline и unknown enrollment library contracts проверены, остающиеся consumer/live gates перечислены отдельно.
+
 Worktree: `C:/Projects/RAZVILKA/worktrees/sol-cloud`, ветка `sol/cloud-20261004`.
 Base: `fe7d0ab9baaec1151c92593f308e080274903a93`.
 Этот отчёт включён в коммит checkpoint; его SHA возвращается координатору в итоговом ответе.
