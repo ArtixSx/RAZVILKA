@@ -217,6 +217,30 @@ func TestDefaultRouteMACOnlyNegativeIdentityRemainsExcluded(t *testing.T) {
 	}
 }
 
+func TestDefaultRouteSelectedDevicesRequiresCompletePhysicalBindings(t *testing.T) {
+	cfg, s, now := defaultRouteFixture()
+	cfg.NetworkPolicy.Clients.Mode = "selected_devices"
+	cfg.NetworkPolicy.Clients.NewDevices = "base"
+	cfg.NetworkPolicy.Clients.DeviceIDs = []string{"included", "excluded"}
+	s.Scope.Devices[1].Interface = "eth0"
+	if _, err := CompileDefaultRoutePolicy(cfg, s, nil, now); !errors.Is(err, dataplane.ErrReviewChanged) {
+		t.Fatal("partially bound selected-device whitelist accepted", err)
+	}
+	// A current IP lease is optional. Confirmed physical MAC membership is
+	// sufficient and must still authorize that device's new privacy address.
+	s.Scope.Devices[1].Interface = "br0"
+	s.Devices = s.Devices[:1]
+	c, err := CompileDefaultRoutePolicy(cfg, s, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flow := defaultRouteFlow("fd00::5678", "2001:db8::1")
+	flow.MAC = "02:00:00:00:00:02"
+	if c.Classify(flow).Kind != DefaultRouteDefault {
+		t.Fatal("selected MAC without current lease was lost")
+	}
+}
+
 func TestDefaultRouteRefusesUnavailableAndAmbiguousInputs(t *testing.T) {
 	for name, mutate := range map[string]func(*config.Config, *DefaultRouteSnapshot){
 		"safe mode":        func(c *config.Config, _ *DefaultRouteSnapshot) { c.SafeMode = true },

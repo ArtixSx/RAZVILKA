@@ -53,11 +53,13 @@ OPS/координатору осталось проверить:
 
 Последняя таблица — план совместной приёмки, не выполненный installer gate. Нового root/capability/миграции не добавлено; код OPS/CORE/nativeenrollment/privaterestore не изменён.
 
-## Передача OPS: bounded стенд на существующих API
+## Историческая передача OPS: исходный legacy shell стенд
+
+Следующий checkpoint описывает первоначальный harness до OPS `8f96be6`. Его успешный raw rollback при pending file journal больше не является допустимым ожиданием; актуальный сценарий отказа описан ниже и в [CLOUD_RETENTION_HARNESS_RU.md](CLOUD_RETENTION_HARNESS_RU.md).
 
 На проверенных refs CLOUD `4d157889`, OPS `5ca485f7`, integration `59232dd8` файл `selfupdatejournal/journal.go` одинаков (blob `28e959b43071ffd2bf8e87b4905a94d225ca4333`). Публичного generic mutable-directory/overlap API пока нет. Поэтому новый `warp/native_retention_test.go` упражняет реальные `Open/Prepare/Install/Restore/Current`, точный production snapshot selector из `upgrade-entware.sh` и полный `rollback-entware.sh` с инертными binary/init fixtures. Fixture CLI подтверждает только доступность схемы для прохождения shell boundary; он не считается реальным CORE recovery или live acceptance.
 
-Три сценария реализованы и переданы координатору для opt-in запуска:
+Три исходных сценария были реализованы и переданы координатору для opt-in запуска:
 
 1. Snapshot/file-journal до simulated POST → automatic timeout/pending с durable accounting → candidate executable install → снимок после POST → file restore + полный shell rollback старого снимка → production prune → restart. Проверяются точный состав деревьев/hash/mode/inode canonical/key/health/legacy account/обоих private journal generations, отсутствие их в snapshot, сохранение working profile и API-call count=1 за весь сценарий. Mutable config/три directory images реально изменяются и обязаны вернуть LKG.
 2. Response сохраняется настоящим production callback, child немедленно завершает процесс `os.Exit(73)` до decode/stage/current. После тех же rollback шагов pending/current переход и key/response сохраняют исходный attempt; recovery не вызывает API. Это process-crash, не power-cut/fsync reliability тест устройства.
@@ -65,4 +67,16 @@ OPS/координатору осталось проверить:
 
 Последний сценарий проверяет существующий fixed manifest reader и file allowlist. Он **не** подтверждает отсутствующий generic target-overlap validator. При введении mutable API OPS сохраняет exclusions выше и добавляет проверку opened roots/alias/ancestor до stop; подключить этот стенд к новому API можно только после появления реальных entry points. Default shell deployment paths проверяются здесь; произвольные `-warp-state`/`-config` должны отдельно согласовываться с фактическим installer manifest.
 
-Запуск и текущие результаты — [CLOUD_RETENTION_HARNESS_RU.md](CLOUD_RETENTION_HARNESS_RU.md). Список exclusions и эта передача служат контрактом для OPS; файлы OPS не изменены и сообщения в другие чаты не отправлялись.
+Этот исторический checkpoint не подтверждает новый managed provider lifecycle. Файлы OPS этой CLOUD порцией не изменялись.
+
+## Актуальная совместимость с OPS 8f96be6
+
+Принятый neutral provider оставляет production capability=0 до CORE wiring. Текущий raw `rollback-entware.sh` обязан отказать при retained helper/file current или control root; инертный schema2 reader не разрешает обойти этот отказ. Сохраняются все journals, current/control и pending status. Нельзя удалять их либо возвращать whole-root snapshot, чтобы получить успешный shell exit.
+
+Текущий CLOUD harness заменяет старое ожидание raw success в timeout/response-crash на точный managed refusal до init status/Stop/private recovery/deactivate. Перед вызовом фиксируется полное дерево `bin`, `etc`, `var/lib/razvilka`; после отказа оно должно сохранить состав, bytes, modes и inodes. Model file `Restore` оставляет прежний ID в `restored+pending`, и этот receipt повторно проверяется после отдельной CLOUD enrollment recovery. Дополнительные presence-only cases отдельно сохраняют file current, helper current и control directory. Никаких matching provider seals эти fixtures не создают.
+
+Если реального owner guard нет в объединённом production source, managed cases явно SKIP; выполнять вместо них устаревший raw-success сценарий нельзя. Root native acceptance требует совместимого OPS source и отсутствия relevant SKIP. Точный запуск, assertions и статус — [CLOUD_RETENTION_HARNESS_RU.md](CLOUD_RETENTION_HARNESS_RU.md).
+
+После CORE wiring actual self-update consumer использует `InstallAdmitted/RestoreAdmitted`, immutable InstallationID/Sequence из отдельного current control root, fixed action/effect admission и независимую actual runtime quiescence. Low-level file API с инертными callbacks из CLOUD harness это не проверяет. При matching recovery retained journals/control сохраняются до допустимого terminal acceptance; unknown не даёт replay или Start.
+
+OPS privateSnapshot schema2 ограничен своим mutable registry и шестью файлами. WARP/Cloudflare runtime/LKG, canonical/legacy enrollment, accounting/lease и оба private-restore generations из списка выше остаются вне snapshot/CAS/remove/prune. Schema1 whole-root private snapshots сохраняются как evidence и отклоняются для restore. Проверка этого production provider, CORE startup/Stop custody, matching private recovery и live acceptance остаётся root интеграцией, а не legacy selector/prune fixture.

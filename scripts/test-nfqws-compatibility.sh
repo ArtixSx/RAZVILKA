@@ -3,6 +3,11 @@
 set -eu
 : "${RAZVILKA_NFQWS_NATIVE_BINARY:?absolute path to genuine reviewed nfqws2 required}"
 : "${RAZVILKA_NFQWS_NATIVE_ASSETS:?reviewed disposable flat Lua/blob fixture directory required}"
+: "${RAZVILKA_NFQWS_NATIVE_CASE:?select one case; inspect cleanup before another run}"
+case "$RAZVILKA_NFQWS_NATIVE_CASE" in
+    dry-run|lua-init|lua-syntax|missing-function|missing-blob) ;;
+    *) exit 2 ;;
+esac
 case "$RAZVILKA_NFQWS_NATIVE_BINARY" in /*) ;; *) exit 2 ;; esac
 case "$RAZVILKA_NFQWS_NATIVE_ASSETS" in /*) ;; *) exit 2 ;; esac
 test -x "$RAZVILKA_NFQWS_NATIVE_BINARY"

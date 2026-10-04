@@ -383,6 +383,10 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 		if !ok || !binding.Confirmed || !slices.Contains(p.Clients.SegmentIDs, binding.SegmentID) {
 			return dataplane.ErrReviewChanged
 		}
+		segment, ok := segments[binding.SegmentID]
+		if !ok || binding.Interface != segment.Interface {
+			return dataplane.ErrReviewChanged
+		}
 	}
 	// Source-only platform observations must not turn overlapping bridges
 	// into an arbitrary choice of ingress. Same-bridge overlaps collapse.

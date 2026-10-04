@@ -4,11 +4,19 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+type compatibilityProviderFunc func(context.Context, string, ...string) (CompatibilityCompletion, error)
+
+func (f compatibilityProviderFunc) Run(ctx context.Context, binary string, args ...string) (CompatibilityCompletion, error) {
+	return f(ctx, binary, args...)
+}
 
 func compatibilityBase(root string) []string {
 	return []string{"--lua-init=@" + filepath.Join(root, "zapret-lib.lua"), "--lua-init=@" + filepath.Join(root, "zapret-antidpi.lua"), "--lua-init=@" + filepath.Join(root, "zapret-auto.lua"), "--blob=tls_clienthello:@" + filepath.Join(root, "tls_clienthello.bin")}
@@ -18,13 +26,13 @@ func TestCompatibilityDryRunDoesNotProveLua(t *testing.T) {
 	base := compatibilityBase(t.TempDir())
 	arguments := []string{"--filter-tcp=443", "--lua-desync=circular:fails=2:time=300", "--lua-desync=fake:blob=tls_clienthello"}
 	calls := [][]string{}
-	v := CompatibleValidator{Binary: "reviewed-nfqws2", BaseArguments: base, TrustedAssets: true, Run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	v := CompatibleValidator{Binary: "reviewed-nfqws2", BaseArguments: base, TrustedAssets: true, Provider: compatibilityProviderFunc(func(_ context.Context, _ string, args ...string) (CompatibilityCompletion, error) {
 		calls = append(calls, append([]string(nil), args...))
 		if len(calls) == 2 {
-			return []byte("Lua syntax error"), errors.New("exit 1")
+			return CompatibilityCompletion{Output: []byte("Lua syntax error"), Started: true, Quiescent: true}, errors.New("exit 1")
 		}
-		return []byte("command line parameters verified"), nil
-	}}
+		return CompatibilityCompletion{Output: []byte("command line parameters verified"), Started: true, Quiescent: true}, nil
+	})}
 	before := append([]string(nil), base...)
 	result := v.Validate(context.Background(), arguments)
 	if result.OK || result.LuaChecked || len(calls) != 2 || calls[0][0] != "--dry-run" || calls[0][1] != "--intercept=0" || calls[1][0] != "--intercept=0" || !reflect.DeepEqual(base, before) {
@@ -40,10 +48,10 @@ func TestCompatibilityDryRunDoesNotProveLua(t *testing.T) {
 
 func TestCompatibilityRejectsUnsupportedInterceptBeforeInitializingLua(t *testing.T) {
 	calls := 0
-	v := CompatibleValidator{Binary: "nfqws2", TrustedAssets: true, BaseArguments: compatibilityBase(t.TempDir()), Run: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	v := CompatibleValidator{Binary: "nfqws2", TrustedAssets: true, BaseArguments: compatibilityBase(t.TempDir()), Provider: compatibilityProviderFunc(func(_ context.Context, _ string, _ ...string) (CompatibilityCompletion, error) {
 		calls++
-		return []byte("unknown option intercept"), errors.New("exit 1")
-	}}
+		return CompatibilityCompletion{Output: []byte("unknown option intercept"), Started: true, Quiescent: true}, errors.New("exit 1")
+	})}
 	result := v.Validate(context.Background(), []string{"--lua-desync=fake:blob=0x00000000"})
 	if result.OK || result.LuaChecked || calls != 1 {
 		t.Fatalf("unsupported binary initialized Lua: %+v calls=%d", result, calls)
@@ -53,10 +61,10 @@ func TestCompatibilityRejectsUnsupportedInterceptBeforeInitializingLua(t *testin
 func TestCompatibilityRequiresReviewedDataOnlyBase(t *testing.T) {
 	for _, kind := range []string{"untrusted", "custom-lua", "runtime", "missing-auto", "inline", "manual"} {
 		t.Run(kind, func(t *testing.T) {
-			v := CompatibleValidator{Binary: "nfqws2", TrustedAssets: true, BaseArguments: compatibilityBase(t.TempDir()), Run: func(context.Context, string, ...string) ([]byte, error) {
+			v := CompatibleValidator{Binary: "nfqws2", TrustedAssets: true, BaseArguments: compatibilityBase(t.TempDir()), Provider: compatibilityProviderFunc(func(context.Context, string, ...string) (CompatibilityCompletion, error) {
 				t.Fatal("unsafe base executed")
-				return nil, nil
-			}}
+				return CompatibilityCompletion{}, nil
+			})}
 			args := []string{"--lua-desync=circular:fails=2:time=300", "--lua-desync=fake:blob=tls_clienthello"}
 			switch kind {
 			case "untrusted":
@@ -89,49 +97,87 @@ func TestNFQWSNativeCompatibilityNoIntercept(t *testing.T) {
 	if !filepath.IsAbs(binary) || !filepath.IsAbs(root) {
 		t.Fatal("native fixture requires absolute paths")
 	}
+	selected := os.Getenv("RAZVILKA_NFQWS_NATIVE_CASE")
+	dry, expectExitError := false, false
+	switch selected {
+	case "dry-run":
+		dry = true
+	case "lua-init":
+	case "lua-syntax", "missing-function":
+		expectExitError = true
+	case "missing-blob":
+		dry, expectExitError = true, true
+	default:
+		t.Fatal("select exactly one reviewed native case: dry-run/lua-init/lua-syntax/missing-function/missing-blob")
+	}
 	args := []string{"--filter-tcp=443", "--lua-desync=circular:fails=2:time=300", "--lua-desync=fake:blob=tls_clienthello"}
 	v := CompatibleValidator{Binary: binary, BaseArguments: compatibilityBase(root), TrustedAssets: true}
 	result := v.Validate(context.Background(), args)
-	if !result.OK || !result.Native || !result.LuaChecked {
-		t.Fatalf("genuine installed options/assets rejected: %+v", result)
+	if result.OK || result.Native || result.LuaChecked || result.Code != "SUPERVISION_REQUIRED" {
+		t.Fatalf("plain native process was accepted without supervision: %+v", result)
 	}
-	// Disposable, publicly traversable directory: nfqws2 drops privilege. Do
-	// not widen permissions of a user's data or of the supplied installed tree.
-	fixture, err := os.MkdirTemp("", "razvilka-nfqws-compat-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(fixture); err != nil {
-			t.Error(err)
-		}
-	})
-	if err := os.Chmod(fixture, 0755); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"zapret-lib.lua", "zapret-antidpi.lua", "zapret-auto.lua", "tls_clienthello.bin"} {
-		data, err := os.ReadFile(filepath.Join(root, name))
+	if expectExitError {
+		// Only this selected case gets a disposable, publicly traversable tree:
+		// nfqws2 drops privilege. The supplied installed tree stays untouched.
+		fixture, err := os.MkdirTemp("", "razvilka-nfqws-compat-")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(fixture, name), data, 0644); err != nil {
+		t.Cleanup(func() {
+			if err := os.RemoveAll(fixture); err != nil {
+				t.Error(err)
+			}
+		})
+		if err := os.Chmod(fixture, 0755); err != nil {
 			t.Fatal(err)
 		}
-	}
-	v.BaseArguments = compatibilityBase(fixture)
-	for _, content := range []string{"this is not Lua syntax !", "-- valid Lua, but fake is missing\n"} {
-		if err := os.WriteFile(filepath.Join(fixture, "zapret-antidpi.lua"), []byte(content), 0644); err != nil {
-			t.Fatal(err)
+		for _, name := range []string{"zapret-lib.lua", "zapret-antidpi.lua", "zapret-auto.lua", "tls_clienthello.bin"} {
+			data, err := os.ReadFile(filepath.Join(root, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(fixture, name), data, 0644); err != nil {
+				t.Fatal(err)
+			}
 		}
-		result := v.Validate(context.Background(), args)
-		if result.OK || result.LuaChecked {
-			t.Fatalf("broken/missing Lua passed genuine initialization: %+v", result)
+		var mutationErr error
+		switch selected {
+		case "lua-syntax":
+			mutationErr = os.WriteFile(filepath.Join(fixture, "zapret-antidpi.lua"), []byte("this is not Lua syntax !"), 0644)
+		case "missing-function":
+			mutationErr = os.WriteFile(filepath.Join(fixture, "zapret-antidpi.lua"), []byte("-- valid Lua, but fake is missing\n"), 0644)
+		case "missing-blob":
+			mutationErr = os.Remove(filepath.Join(fixture, "tls_clienthello.bin"))
 		}
+		if mutationErr != nil {
+			t.Fatal(mutationErr)
+		}
+		v.BaseArguments = compatibilityBase(fixture)
 	}
-	if err := os.Remove(filepath.Join(fixture, "tls_clienthello.bin")); err != nil {
+	assertions, err := compatibilityAssertions(v.BaseArguments, args)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if result := v.Validate(context.Background(), args); result.OK {
-		t.Fatalf("missing blob passed: %+v", result)
+	command := []string{"--intercept=0"}
+	if dry {
+		command = append([]string{"--dry-run"}, command...)
+	}
+	command = append(command, v.BaseArguments...)
+	command = append(command, args...)
+	if !dry {
+		command = append(command, "--lua-init="+assertions)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	provider := &CompatibilityProcessProvider{}
+	completion, err := provider.Run(ctx, binary, command...)
+	var exitError *exec.ExitError
+	if !completion.Started || completion.Quiescent || !errors.Is(err, ErrCompatibilityQuiescenceUnknown) || errors.As(err, &exitError) != expectExitError || ctx.Err() != nil {
+		t.Fatalf("native exit/fence mismatch: completion=%+v err=%v", completion, err)
+	}
+	// Exactly one invocation per explicit coordinator run. A subsequent case
+	// requires external cleanup review; a fresh provider cannot supply proof.
+	if replay, err := provider.Run(context.Background(), binary); replay.Started || !errors.Is(err, ErrCompatibilityQuiescenceUnknown) {
+		t.Fatal("native fixture bypassed unknown fence")
 	}
 }

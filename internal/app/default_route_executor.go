@@ -21,8 +21,8 @@ import (
 // capability booleans. Observe checks actual profile/node proofs and the
 // durable control owner. BindIngress compiles exact iif and negative MAC gates
 // in the existing adapters/receipt protocol, and refuses unsupported coverage.
-// Commit is Store.CommitNetworkPolicyWithRollback after CORE lands
-// it. Missing dependencies can never release the legacy executor guard.
+// Commit must use Store.CommitNetworkPolicyWithRollback for the same Store.
+// Missing dependencies can never release the legacy executor guard.
 type DefaultRouteDependencies struct {
 	Observe     func(context.Context) (DefaultRouteSnapshot, error)
 	BindIngress func(context.Context, *DefaultRouteCompilation, dataplane.Input) (dataplane.Input, error)
@@ -200,8 +200,10 @@ func (e *DefaultRouteExecutor) guard(ctx context.Context, r *DefaultRouteReview,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	current := e.app.Store.Get()
-	if current.SafeMode || current.ServiceControl.Stopped || !reflect.DeepEqual(current, expected) || applyReviewHash(e.app.catalogSnapshot()) != r.catalogHash {
+	if err := e.observeConfig(ctx, expected); err != nil {
+		return err
+	}
+	if applyReviewHash(e.app.catalogSnapshot()) != r.catalogHash {
 		return dataplane.ErrReviewChanged
 	}
 	snapshot, err := e.deps.Observe(ctx)
@@ -217,6 +219,25 @@ func (e *DefaultRouteExecutor) guard(ctx context.Context, r *DefaultRouteReview,
 		if err != nil || exists != r.hasCommitted || exists && !reflect.DeepEqual(previous, r.committed) {
 			return dataplane.ErrReviewChanged
 		}
+	}
+	// Observe can perform bounded profile/control reads; a disk replacement
+	// during that work must not escape this final guard.
+	return e.observeConfig(ctx, expected)
+}
+
+func (e *DefaultRouteExecutor) observeConfig(ctx context.Context, expected config.Config) error {
+	current := e.app.Store.Get()
+	if current.SafeMode || current.ServiceControl.Stopped || !reflect.DeepEqual(current, expected) {
+		return dataplane.ErrReviewChanged
+	}
+	// Bounded disk observation borrows no writer lease. Its callback must
+	// never call Store/Observe or hold admission through adapter effects.
+	if err := e.app.Store.WithRevisionObservation(ctx, expected.Revision, func() error { return nil }); err != nil {
+		return errors.Join(dataplane.ErrReviewChanged, err)
+	}
+	// Same-revision legacy changes also invalidate the full reviewed image.
+	if !reflect.DeepEqual(e.app.Store.Get(), expected) {
+		return dataplane.ErrReviewChanged
 	}
 	return nil
 }
@@ -246,21 +267,37 @@ func (e *DefaultRouteExecutor) Execute(ctx context.Context, r *DefaultRouteRevie
 		return dataplane.Execution{}, err
 	}
 	expected := r.cfg
-	guard := func(c context.Context) error { return e.guard(c, r, expected, false) }
+	var expectedMu sync.RWMutex
+	guard := func(c context.Context) error {
+		expectedMu.RLock()
+		currentExpected := expected
+		expectedMu.RUnlock()
+		return e.guard(c, r, currentExpected, false)
+	}
 	ctx = dataplane.WithReviewGuard(ctx, guard)
 	execution, err := e.app.applyDataplane(ctx, defaultRouteClonePlan(r.plan), func() (func() error, error) {
 		if err := guard(ctx); err != nil {
 			return nil, err
 		}
 		services := defaultRouteCloneServices(r.cfg.Services)
+		commitStarted := time.Now()
 		undo, err := e.deps.Commit(defaultRouteCloneConfig(r.cfg), r.compilation.Policy(), services)
+		commitFinished := time.Now()
 		if err != nil {
 			return undo, err
 		}
-		expected = e.app.Store.Get()
-		if !defaultRouteCommittedConfig(r.cfg, expected, r.compilation.policy, services) {
+		committed := e.app.Store.Get()
+		if !defaultRouteCommittedConfig(r.cfg, committed, r.compilation.policy, services, commitStarted, commitFinished) {
 			return undo, dataplane.ErrReviewChanged
 		}
+		if err := e.observeConfig(ctx, committed); err != nil {
+			return undo, err
+		}
+		// Publish only the verified immutable postimage to guards that an
+		// adapter may call concurrently while its owned workers are joined.
+		expectedMu.Lock()
+		expected = committed
+		expectedMu.Unlock()
 		return undo, nil
 	})
 	// The manager reports missing rollback proof separately from errors in
@@ -280,14 +317,18 @@ func (e *DefaultRouteExecutor) Execute(ctx context.Context, r *DefaultRouteRevie
 	return execution, err
 }
 
-func defaultRouteCommittedConfig(before, after config.Config, p *config.NetworkPolicy, services map[string]config.ServiceState) bool {
-	if after.Revision != before.Revision+1 || after.AppliedRevision != after.Revision || !reflect.DeepEqual(after.AppliedNetworkPolicy, p) || !reflect.DeepEqual(after.AppliedServices, services) {
+func defaultRouteCommittedConfig(before, after config.Config, p *config.NetworkPolicy, services map[string]config.ServiceState, started, finished time.Time) bool {
+	at, err := time.Parse(time.RFC3339, after.LastAppliedAt)
+	// Bind the only clock-derived field independently of the shared image
+	// helper; otherwise an old/future timestamp could masquerade as this commit.
+	if err != nil || started.IsZero() || finished.Before(started) || after.LastAppliedAt != at.UTC().Format(time.RFC3339) ||
+		at.Before(started.UTC().Truncate(time.Second)) || at.After(finished.UTC().Truncate(time.Second)) {
 		return false
 	}
-	copy := after
-	copy.Revision, copy.AppliedRevision, copy.LastAppliedAt = before.Revision, before.AppliedRevision, before.LastAppliedAt
-	copy.AppliedNetworkPolicy, copy.AppliedServices = before.AppliedNetworkPolicy, before.AppliedServices
-	return reflect.DeepEqual(copy, before)
+	// The Store and this checker share CORE's exact sanctioned transition:
+	// normalized applied states plus fences for changed/removed service policy.
+	expected, err := config.ReviewedNetworkPolicyCommitImage(before, p, services, at)
+	return err == nil && reflect.DeepEqual(expected, after)
 }
 
 func defaultRouteCloneServices(in map[string]config.ServiceState) map[string]config.ServiceState {

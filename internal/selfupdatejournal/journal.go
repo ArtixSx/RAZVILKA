@@ -21,7 +21,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
-const Schema = 1
+const Schema = 2
 const maxFileBytes = 256 << 20
 
 var (
@@ -35,6 +35,10 @@ var (
 // Authority must re-read current CAS/Stop/SafeMode before each write/effect.
 // Quiescence is a trusted process check, never an HTTP-provided boolean.
 type Check func(context.Context) error
+
+// Admission linearizes the one bounded rename/unlink syscall with Stop's
+// short control lock. Payload copy/fsync and process waits remain outside it.
+type Admission func(context.Context, string, func() error) error
 
 type File struct {
 	Target    string // Fixed relative application path; see allowedTarget.
@@ -51,14 +55,15 @@ type image struct {
 }
 
 type Receipt struct {
-	Schema   int      `json:"schema"`
-	ID       string   `json:"id"`
-	Phase    string   `json:"phase"`
-	Index    int      `json:"index"`
-	Command  string   `json:"command,omitempty"`
-	Commands []string `json:"commands,omitempty"`
-	Rollback bool     `json:"rollback,omitempty"`
-	Files    []image  `json:"files"`
+	Schema      int      `json:"schema"`
+	ID          string   `json:"id"`
+	Phase       string   `json:"phase"`
+	Index       int      `json:"index"`
+	Command     string   `json:"command,omitempty"`
+	Commands    []string `json:"commands,omitempty"`
+	Rollback    bool     `json:"rollback,omitempty"`
+	BeforeFiles bool     `json:"before_files,omitempty"`
+	Files       []image  `json:"files"`
 }
 
 func (r Receipt) Pending() bool { return r.Phase != "accepted" && r.Phase != "rolled-back" }
@@ -179,12 +184,12 @@ func (s *Store) writeReceipt(r Receipt) error {
 }
 
 func valid(r Receipt) bool {
-	if r.Schema != Schema || !idPattern.MatchString(r.ID) || len(r.Files) == 0 || len(r.Files) > 6 || r.Index < 0 || r.Index > len(r.Files) {
+	if (r.Schema != 1 && r.Schema != Schema) || (r.Schema == 1 && r.BeforeFiles) || !idPattern.MatchString(r.ID) || len(r.Files) == 0 || len(r.Files) > 6 || r.Index < 0 || r.Index > len(r.Files) {
 		return false
 	}
 	switch r.Phase {
 	case "prepared":
-		if r.Index != 0 || r.Command != "" || len(r.Commands) != 0 {
+		if r.Index != 0 || r.Command != "" || r.BeforeFiles || (r.Schema == 1 && len(r.Commands) != 0) {
 			return false
 		}
 	case "installing", "restoring":
@@ -196,10 +201,13 @@ func valid(r Receipt) bool {
 			return false
 		}
 	case "command-started", "command-finished":
-		if r.Index != len(r.Files) || !commandPattern.MatchString(r.Command) {
+		if !commandPattern.MatchString(r.Command) || (!r.BeforeFiles && r.Index != len(r.Files)) || (r.BeforeFiles && (r.Index != 0 || r.Rollback || !beforeFilesCommand(r.Command))) {
 			return false
 		}
 	default:
+		return false
+	}
+	if r.BeforeFiles && r.Phase != "command-started" {
 		return false
 	}
 	if len(r.Commands) > 16 {
@@ -272,7 +280,7 @@ func (s *Store) Current() (Receipt, bool, error) {
 		Schema int    `json:"schema"`
 		ID     string `json:"id"`
 	}
-	if decode(data, &pointer) != nil || pointer.Schema != Schema || !idPattern.MatchString(pointer.ID) {
+	if decode(data, &pointer) != nil || (pointer.Schema != 1 && pointer.Schema != Schema) || !idPattern.MatchString(pointer.ID) {
 		return Receipt{}, false, ErrMismatch
 	}
 	data, err = s.journal.ReadLimited(pointer.ID+"/receipt.json", 16<<10)
@@ -295,6 +303,63 @@ func (s *Store) matching(id string) (Receipt, error) {
 		return r, ErrMismatch
 	}
 	return r, nil
+}
+
+// VerifyInstallation is a fresh read-only observation for settlement of the
+// separate helper receipt after terminal file acceptance. It verifies frozen
+// images as well as actual installed bytes/modes, never executes or accepts.
+func (s *Store) VerifyInstallation(ctx context.Context, id string, rollback bool) error {
+	return s.verifyInstallation(ctx, id, rollback, false)
+}
+
+// VerifyTerminalArtifacts checks retained images and the installed immutable
+// release files after helper settlement. Config is mutable again after terminal
+// acceptance; its typed readability and revision must be checked by the caller.
+// During pending settlement VerifyInstallation remains exact for every file.
+func (s *Store) VerifyTerminalArtifacts(ctx context.Context, id string, rollback bool) error {
+	return s.verifyInstallation(ctx, id, rollback, true)
+}
+
+func (s *Store) verifyInstallation(ctx context.Context, id string, rollback, terminal bool) error {
+	r, err := s.matching(id)
+	if err != nil {
+		return err
+	}
+	if r.Rollback != rollback || r.Index != len(r.Files) {
+		return ErrPending
+	}
+	if terminal && r.Pending() {
+		return ErrPending
+	}
+	if err := s.verifyImages(r); err != nil {
+		return err
+	}
+	for _, entry := range r.Files {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if terminal && entry.Target == "etc/razvilka/config.json" {
+			continue
+		}
+		expected, present, mode := entry.NewHash, true, os.FileMode(0600)
+		if entry.Target == "bin/razvilka" || entry.Target == "etc/init.d/S99razvilka" {
+			mode = 0755
+		}
+		if rollback {
+			expected, present, mode = entry.OldHash, entry.OldPresent, os.FileMode(entry.OldMode)
+		}
+		actual, exists, err := hashFile(s.installation, entry.Target)
+		if err != nil || exists != present || actual != expected {
+			return ErrMismatch
+		}
+		if present {
+			info, err := s.installation.Stat(entry.Target)
+			if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != mode) {
+				return ErrMismatch
+			}
+		}
+	}
+	return ctx.Err()
 }
 
 // Prepare freezes both old and candidate images before publishing current.
@@ -488,13 +553,26 @@ func (s *Store) verifyImages(r Receipt) error {
 // its frozen old/new digest. Foreign edits stop recovery. Neither method
 // replays commands or accepts a live process; callers must prove quiescence.
 func (s *Store) Install(ctx context.Context, id string, authority, quiescence Check) error {
-	return s.replace(ctx, id, false, authority, quiescence)
+	return s.replace(ctx, id, false, authority, quiescence, nil)
 }
 func (s *Store) Restore(ctx context.Context, id string, authority, quiescence Check) error {
-	return s.replace(ctx, id, true, authority, quiescence)
+	return s.replace(ctx, id, true, authority, quiescence, nil)
 }
 
-func (s *Store) replace(ctx context.Context, id string, rollback bool, authority, quiescence Check) error {
+func (s *Store) InstallAdmitted(ctx context.Context, id string, authority, quiescence Check, admission Admission) error {
+	if admission == nil {
+		return ErrMismatch
+	}
+	return s.replace(ctx, id, false, authority, quiescence, admission)
+}
+func (s *Store) RestoreAdmitted(ctx context.Context, id string, authority, quiescence Check, admission Admission) error {
+	if admission == nil {
+		return ErrMismatch
+	}
+	return s.replace(ctx, id, true, authority, quiescence, admission)
+}
+
+func (s *Store) replace(ctx context.Context, id string, rollback bool, authority, quiescence Check, admission Admission) error {
 	unlock, err := lockWriter(s.journal)
 	if err != nil {
 		return err
@@ -526,7 +604,7 @@ func (s *Store) replace(ctx context.Context, id string, rollback bool, authority
 		return err
 	}
 	if r.Phase != phase {
-		r.Phase, r.Index, r.Command, r.Rollback = phase, 0, "", rollback
+		r.Phase, r.Index, r.Command, r.Rollback, r.BeforeFiles = phase, 0, "", rollback, false
 		if err := s.writeReceipt(r); err != nil {
 			return err
 		}
@@ -538,7 +616,7 @@ func (s *Store) replace(ctx context.Context, id string, rollback bool, authority
 		if err := s.writeReceipt(r); err != nil {
 			return err
 		}
-		if err := s.replaceFile(ctx, r, rollback, authority, quiescence); err != nil {
+		if err := s.replaceFile(ctx, r, rollback, authority, quiescence, admission); err != nil {
 			return err
 		}
 		checkpoint := r
@@ -551,7 +629,7 @@ func (s *Store) replace(ctx context.Context, id string, rollback bool, authority
 	return s.writeReceipt(r)
 }
 
-func (s *Store) replaceFile(ctx context.Context, r Receipt, rollback bool, authority, quiescence Check) error {
+func (s *Store) replaceFile(ctx context.Context, r Receipt, rollback bool, authority, quiescence Check, admission Admission) error {
 	entry := r.Files[r.Index]
 	actual, present, err := hashFile(s.installation, entry.Target)
 	if err != nil {
@@ -576,6 +654,16 @@ func (s *Store) replaceFile(ctx context.Context, r Receipt, rollback bool, autho
 		}
 	}
 	point := fmt.Sprintf("file:%d", r.Index)
+	effect := "install-file-" + strconv.Itoa(r.Index)
+	if rollback {
+		effect = "rollback-file-" + strconv.Itoa(r.Index)
+	}
+	begin := func(run func() error) error {
+		if admission == nil {
+			return run()
+		}
+		return admission(ctx, effect, run)
+	}
 	if err := s.boundary("before:" + point); err != nil {
 		return err
 	}
@@ -584,7 +672,7 @@ func (s *Store) replaceFile(ctx context.Context, r Receipt, rollback bool, autho
 			return err
 		}
 		if present {
-			if err := s.installation.Remove(entry.Target); err != nil {
+			if err := begin(func() error { return s.installation.Remove(entry.Target) }); err != nil {
 				return err
 			}
 		}
@@ -637,7 +725,7 @@ func (s *Store) replaceFile(ctx context.Context, r Receipt, rollback bool, autho
 		if err := checks(ctx, authority, quiescence); err != nil {
 			return err
 		}
-		if err := s.files.Rename(tmpName, entry.Target); err != nil {
+		if err := begin(func() error { return s.files.Rename(tmpName, entry.Target) }); err != nil {
 			return err
 		}
 		if err := s.boundary("after:rename:" + point); err != nil {
@@ -669,7 +757,8 @@ func (s *Store) Execute(ctx context.Context, id, command string, authority Check
 	if err := s.verifyImages(r); err != nil {
 		return err
 	}
-	if (r.Phase != "installed" && r.Phase != "restored" && r.Phase != "command-finished") || !commandPattern.MatchString(command) || run == nil || authority == nil || len(r.Commands) >= 16 {
+	before := r.Phase == "prepared" && r.Schema == Schema && beforeFilesCommand(command)
+	if (!before && r.Phase != "installed" && r.Phase != "restored" && r.Phase != "command-finished") || !commandPattern.MatchString(command) || run == nil || authority == nil || len(r.Commands) >= 16 {
 		return ErrPending
 	}
 	// A command name is a monotonically single-use step, including after restart.
@@ -684,7 +773,7 @@ func (s *Store) Execute(ctx context.Context, id, command string, authority Check
 	if err := authority(ctx); err != nil {
 		return err
 	}
-	r.Phase, r.Command = "command-started", command
+	r.Phase, r.Command, r.BeforeFiles = "command-started", command, before
 	r.Commands = append(r.Commands, command)
 	if err := s.writeReceipt(r); err != nil {
 		return err
@@ -704,8 +793,20 @@ func (s *Store) Execute(ctx context.Context, id, command string, authority Check
 	if err := s.boundary("after:command"); err != nil {
 		return err
 	}
-	r.Phase = "command-finished"
+	finishCommand(&r)
 	return s.writeReceipt(r)
+}
+
+func beforeFilesCommand(command string) bool {
+	return command == "stop-old-panel" || command == "prepare-private-state" || command == "quiesce-old-runtime"
+}
+
+func finishCommand(r *Receipt) {
+	if r.BeforeFiles {
+		r.Phase, r.Command, r.BeforeFiles = "prepared", "", false
+	} else {
+		r.Phase = "command-finished"
+	}
 }
 
 // ResolveUnknown observes an externally repaired/quiescent installation; it
@@ -739,7 +840,7 @@ func (s *Store) ResolveUnknown(ctx context.Context, id string, authority, quiesc
 	if err := checks(ctx, authority, quiescence); err != nil {
 		return err
 	}
-	r.Phase = "command-finished"
+	finishCommand(&r)
 	return s.writeReceipt(r)
 }
 
