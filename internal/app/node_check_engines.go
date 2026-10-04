@@ -6,14 +6,10 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
 var errNodeHistoryAdmission = errors.New("dual-engine node history requires trusted downgrade admission")
-
-// RAW Xray exact history uses its frozen reader2 contract. A newer supported
-// reader version is not the minimum required by this write. The trusted
-// admission independently inspects current and retained XHTTP material.
-const xrayHistoryWriteReadVersion = 2
 
 func nodeCheckEngine(engine string) (string, error) {
 	if engine == "" {
@@ -55,7 +51,7 @@ func (a *App) nodeHistoryAdmission(ctx context.Context, engine string) error {
 	if a.NodeHistoryWriteGuard == nil {
 		return errors.Join(dataplane.ErrExactNodeUnavailable, errNodeHistoryAdmission)
 	}
-	if err := a.NodeHistoryWriteGuard(ctx, xrayHistoryWriteReadVersion); err != nil {
+	if err := a.NodeHistoryWriteGuard(ctx, nodestore.XrayHistoryReadVersion); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
