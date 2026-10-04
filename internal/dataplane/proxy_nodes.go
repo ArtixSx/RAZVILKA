@@ -102,17 +102,25 @@ func (a *ProxyTunnelAdapter) scopedRoutes(plan Plan) ([]Route, error) {
 func (a *ProxyTunnelAdapter) nodeRequests(ctx context.Context, routes []Route) ([]NodeRouteRequest, error) {
 	var requests []NodeRouteRequest
 	for _, route := range routes {
+		serviceID := route.ServiceID
+		if a.nodeRouterVerifier || route.LogicalServiceID != "" {
+			service, err := FrozenProbeService(route)
+			if err != nil {
+				return nil, err
+			}
+			serviceID = service.ID
+		}
 		destinations, err := resolvePolicyPrefixes(ctx, Plan{Routes: []Route{route}}, "xray", a.Resolver)
 		if err != nil {
 			return nil, err
 		}
-		requests = append(requests, NodeRouteRequest{ServiceID: route.ServiceID, NodeID: strings.TrimPrefix(route.Resolved, "xray:"), Domains: append([]string{}, route.Domains...), Destinations: destinations})
+		requests = append(requests, NodeRouteRequest{ServiceID: serviceID, NodeID: strings.TrimPrefix(route.Resolved, "xray:"), Domains: append([]string{}, route.Domains...), Destinations: destinations})
 	}
 	return requests, nil
 }
 
 func (a *ProxyTunnelAdapter) stageScopedXray(ctx context.Context, plan Plan) ([]byte, []string, *proxyNodeManifest, error) {
-	if a.NodeRoutes == nil || a.NodeTUNProbe == nil {
+	if a.NodeRoutes == nil || a.NodeTUNProbe == nil && !a.nodeRouterVerifier {
 		return nil, nil, nil, ErrNodeTUNProofRequired
 	}
 	routes, err := a.scopedRoutes(plan)

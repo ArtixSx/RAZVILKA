@@ -296,15 +296,15 @@ func recordedDefaultRoute(ctx context.Context, runner NFQWS2Runner, command stri
 					return nil, errors.New("default route interface mismatch")
 				}
 			case "proto":
-				if value != "boot" {
+				if value != "boot" && value != "3" {
 					return nil, errors.New("default route has foreign protocol")
 				}
-				selector = append(selector, key, value)
+				selector = append(selector, key, "boot")
 			case "scope":
-				if value != "link" {
+				if value != "link" && value != "253" {
 					return nil, errors.New("default route has foreign scope")
 				}
-				selector = append(selector, key, value)
+				selector = append(selector, key, "link")
 			case "metric":
 				if value != "0" && !(family == 6 && value == "1024") {
 					return nil, errors.New("default route has foreign metric")

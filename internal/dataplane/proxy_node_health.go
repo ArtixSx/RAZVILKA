@@ -34,7 +34,19 @@ type NodeTUNObservation struct {
 
 type NodeTUNProbe func(context.Context, NodeTUNRequest) (NodeTUNObservation, error)
 
-func (a *ProxyTunnelAdapter) scopedNodeHealth(ctx context.Context, plan Plan, state PolicyState) error {
+func (a *ProxyTunnelAdapter) scopedNodeHealth(ctx context.Context, plan Plan, state PolicyState, roots ...string) error {
+	if a.nodeRouterVerifier {
+		root := ""
+		if len(roots) > 0 {
+			root = roots[0]
+		}
+		if err := a.scopedNodeRouterHealth(ctx, plan, state, root); err != nil {
+			return err
+		}
+		if a.NodeTUNProbe == nil {
+			return nil
+		}
+	}
 	if a.NodeTUNProbe == nil {
 		return ErrNodeTUNProofRequired
 	}

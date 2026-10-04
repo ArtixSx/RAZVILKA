@@ -44,7 +44,7 @@ func parseWindow(ctx context.Context, data []byte, format string, limit, cursor 
 		if parsed, handled, err := parseJSONFeedWindow(ctx, data, limit, cursor); handled {
 			return parsed, err
 		}
-		parsed, err := providerprofile.ParseProfile(string(data))
+		parsed, err := providerprofile.ParseCanonicalProfile(string(data))
 		if err != nil {
 			return batch{}, ErrFormat
 		}
@@ -118,7 +118,7 @@ func parseWindow(ctx context.Context, data []byte, format string, limit, cursor 
 			break
 		}
 		b.nextCursor = index + 1
-		parsed, err := providerprofile.ParseURI(entry)
+		parsed, err := providerprofile.ParseCanonicalURI(entry)
 		if err != nil {
 			b.rejected++
 			if len(b.issues) < MaxCandidates {
@@ -214,7 +214,7 @@ func parseJSONFeedWindow(ctx context.Context, data []byte, limit, cursor int) (b
 			b.omitted++
 			continue
 		}
-		parsed, err := providerprofile.ParseProfile("[" + string(entry) + "]")
+		parsed, err := providerprofile.ParseCanonicalProfile("[" + string(entry) + "]")
 		if err != nil || parsed.Preview.NodeCount != 1 {
 			b.rejected++
 			if len(b.issues) < MaxCandidates {

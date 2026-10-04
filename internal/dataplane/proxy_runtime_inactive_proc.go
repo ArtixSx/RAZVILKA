@@ -52,7 +52,10 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 	if err != nil {
 		return ErrProxyRuntimeInactive
 	}
-	binaries := []string{adapter.engineBinary(), adapter.sidecarBinary()}
+	binaries, err := adapter.inactiveProcessNames()
+	if err != nil {
+		return err
+	}
 	dir, err := os.Open(proof.procRoot)
 	if err != nil {
 		return ErrProxyRuntimeInactive
@@ -131,7 +134,8 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 				}
 			}
 			for _, arg := range args {
-				if proxyInactiveConfigArgument(arg, adapter) {
+				if proxyInactiveConfigArgument(arg, adapter) || adapter.EngineBin != "" && arg == adapter.EngineBin ||
+					adapter.SidecarBin != "" && arg == adapter.SidecarBin {
 					return ErrProxyRuntimeInactive
 				}
 			}
