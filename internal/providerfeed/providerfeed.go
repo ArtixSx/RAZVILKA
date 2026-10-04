@@ -31,17 +31,18 @@ const (
 )
 
 var (
-	ErrRequest  = errors.New("invalid provider feed request")
-	ErrBusy     = errors.New("provider feed sync already running")
-	ErrFetch    = errors.New("provider feed HTTPS fetch failed")
-	ErrSize     = errors.New("provider feed exceeds bounded limits")
-	ErrFormat   = errors.New("provider feed format is invalid or unsupported")
-	ErrPartial  = errors.New("provider feed contains rejected entries; explicit partial acceptance required")
-	ErrStore    = errors.New("provider feed candidates could not be saved")
-	ErrNotFound = errors.New("provider feed not found")
-	ErrConflict = errors.New("provider feed changed; refresh before editing")
-	ErrDeferred = errors.New("provider feed retry is deferred")
-	ErrCapacity = errors.New("local node catalog capacity reached")
+	ErrRequest          = errors.New("invalid provider feed request")
+	ErrBusy             = errors.New("provider feed sync already running")
+	ErrFetch            = errors.New("provider feed HTTPS fetch failed")
+	ErrSize             = errors.New("provider feed exceeds bounded limits")
+	ErrFormat           = errors.New("provider feed format is invalid or unsupported")
+	ErrPartial          = errors.New("provider feed contains rejected entries; explicit partial acceptance required")
+	ErrStore            = errors.New("provider feed candidates could not be saved")
+	ErrNotFound         = errors.New("provider feed not found")
+	ErrConflict         = errors.New("provider feed changed; refresh before editing")
+	ErrDeferred         = errors.New("provider feed retry is deferred")
+	ErrCapacity         = errors.New("local node catalog capacity reached")
+	ErrHistoryAdmission = errors.New("provider feed history write admission refused")
 )
 
 type Preset struct {
@@ -165,6 +166,11 @@ type Manager struct {
 	closed  bool
 	fenced  bool
 	jobs    jobState
+	// Trusted startup binding, immutable after workers start. Called under the
+	// existing operation admission, after accepted canonical parse and before
+	// candidate/body/cursor/TTL writes, without holding Store or feed locks.
+	// Nil permits legacy reader-1 imports only; XHTTP always requires a guard.
+	HistoryWriteAdmission func(context.Context, int) error
 	// Incremented even for a restore that later rolls back: a prepared response
 	// must not overwrite a restored image with the same subscription revision.
 	restoreGeneration uint64
@@ -499,6 +505,17 @@ func (m *Manager) syncAdmitted(parent context.Context, s source, acceptPartial b
 			return finish("stale", ErrDeferred)
 		}
 	}
+	required, err := nodestore.RequiredImportReadVersion(parsed.raw, false)
+	if err != nil {
+		return result, ErrStore
+	}
+	if err := m.checkHistoryWriteAdmission(ctx, required); err != nil {
+		// Preserve the existing pre-fetch retry reservation. Never finish this
+		// rejected candidate with a state promotion, failure penalty, new body,
+		// cursor advance or origin/health extension.
+		result.Status, result.OriginExpiresAt = "deferred", state.OriginExpiresAt
+		return result, err
+	}
 	// Keep subscription edits and deletion from racing the import after its
 	// network response. This lock is bounded local I/O, never network work.
 	m.mu.Lock()
@@ -608,6 +625,8 @@ func ErrorCode(err error) string {
 		return "FEED_FORMAT"
 	case errors.Is(err, ErrPartial):
 		return "FEED_PARTIAL"
+	case errors.Is(err, ErrHistoryAdmission):
+		return "FEED_HISTORY_ADMISSION"
 	case errors.Is(err, ErrStore):
 		return "FEED_STORE"
 	case errors.Is(err, ErrNotFound):

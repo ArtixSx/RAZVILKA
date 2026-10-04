@@ -294,16 +294,9 @@ func (s *Store) Import(ctx context.Context, source Source, raw string, now time.
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err
 	}
-	result, err := providerprofile.ParseCanonicalProfile(raw)
+	materials, err := parseImportMaterials(raw, acceptPartial)
 	if err != nil {
-		return Snapshot{}, ErrImport
-	}
-	if len(result.Preview.Rejected) > 0 && !acceptPartial {
-		return Snapshot{}, ErrPartial
-	}
-	materials, err := extract(result.Config)
-	if err != nil || len(materials) != result.Preview.NodeCount {
-		return Snapshot{}, ErrImport
+		return Snapshot{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -387,6 +380,24 @@ func (s *Store) Import(ctx context.Context, source Source, raw string, now time.
 		return Snapshot{}, ErrStore
 	}
 	return snapshot(doc, now), nil
+}
+
+// Shared by Import and the pure pre-write read-capability inspector. Never
+// permit a caller to probe compatibility using a weaker parser/partial policy.
+func parseImportMaterials(raw string, acceptPartial bool) ([]json.RawMessage, error) {
+	result, err := providerprofile.ParseCanonicalProfile(raw)
+	if err != nil {
+		return nil, ErrImport
+	}
+	defer clear(result.Config)
+	if len(result.Preview.Rejected) > 0 && !acceptPartial {
+		return nil, ErrPartial
+	}
+	materials, err := extract(result.Config)
+	if err != nil || len(materials) != result.Preview.NodeCount {
+		return nil, ErrImport
+	}
+	return materials, nil
 }
 
 // CopyLegacyMain is explicit copy-only migration of supplied sing-box/main
