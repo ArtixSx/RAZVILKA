@@ -353,6 +353,12 @@ func nativeScopedXrayRouter(t *testing.T) {
 		}
 	})
 	plan := Plan{NetworkProfileID: profile, Routes: []Route{{ServiceID: "native-site", ServiceName: "Native site", Selected: "xray:" + id, Resolved: "xray:" + id, Domains: []string{"service.example"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://service.example/probe"}}}
+	if os.Getenv("RAZVILKA_NODE_TRANSIT_MANAGER_NATIVE") == "1" {
+		// Seal the exact service before staging. The actual router observer
+		// cannot derive a trusted service predicate from the probe URL alone.
+		service := nativeRouterHTTPSService(plan.Routes[0].ProbeURL, expectedExit)
+		plan.Routes[0].ProbeService = &service
+	}
 	stage := func(label string) string {
 		transaction := filepath.Join(root, label)
 		for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate} {
