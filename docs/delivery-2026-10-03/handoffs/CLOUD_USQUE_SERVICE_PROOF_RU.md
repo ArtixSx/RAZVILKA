@@ -2,6 +2,8 @@
 
 04.10.2026. Эта порция исправляет false service PASS от одного verified-TLS2xx. Required base: producer `2b23a613`, DNS boundary `a0b8cec`, actual Transport deadline fix `a5d168be84c813e3c7c5146ca4f1971d5b3d8827`. SHA этой порции передаётся root вместе с результатами проверки. Production thin hook и root acceptance остаются у VLESS/CORE/root.
 
+Root сообщил независимое принятие semantic checkpoint `34074f56bf8d92ac96b1862bd1bda1ecd613a38c` без замечаний. Следующий actual Transport повтор выполняется root на combined source; full frozen predicate caller/thin hook пока делает VLESS. Это принятие библиотеки, не genuine USQUE/live acceptance.
+
 ## Согласованный API
 
 ```go
