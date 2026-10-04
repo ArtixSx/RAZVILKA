@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -487,18 +488,29 @@ type defaultRouteReadOnlyRunner struct{ calls []string }
 
 func (r *defaultRouteReadOnlyRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
-	if name == "ip" && strings.Join(args, " ") == "-j route get 93.184.216.34 mark 0" {
-		return []byte(`[{"dst":"93.184.216.34","dev":"eth0","prefsrc":"192.0.2.2","gateway":"192.0.2.1","table":254}]`), nil
+	if name == "ip" {
+		switch strings.Join(args, " ") {
+		case "-j route get 93.184.216.34 mark 0":
+			return []byte(`[{"dst":"93.184.216.34","dev":"eth0","prefsrc":"192.0.2.2","gateway":"192.0.2.1","table":254}]`), nil
+		case "route show table main default", "-6 route show table main default":
+			// The reviewed LAN bridge is currently also a WAN default device.
+			return []byte("default dev br0\n"), nil
+		case "route show table main":
+			return []byte("192.168.1.0/24 dev br0 proto kernel scope link src 192.168.1.1\n"), nil
+		case "-6 route show table main":
+			return []byte("fd00::/64 dev br0 proto kernel metric 256\n"), nil
+		}
 	}
 	return nil, errors.New("no live interface in test")
 }
 
-func TestDefaultRouteActualWireGuardAdapterCurrentlyRefusesEndpointOverlap(t *testing.T) {
+func TestDefaultRouteActualWireGuardAdapterRefusesUnsafeScopeAndLegacyEndpointOverlap(t *testing.T) {
 	defaultRouteRequireLinuxJournal(t)
 	e, observed, _ := defaultRouteExecutorFixture(t)
 	// Replace the transaction double with the actual registered WG adapter;
-	// native kernel calls remain refused. This is actual Stage behavior, not
-	// packet/native PASS and not an excuse to carve endpoint out of LAN scope.
+	// Read-only physical responses model the reviewed bridge becoming WAN.
+	// DEFAULT now has a separate endpoint transport pin, so public endpoint
+	// overlap alone is no longer a refusal for this network policy path.
 	root := t.TempDir()
 	profiles := wireguardprofile.New(filepath.Join(root, "profiles"))
 	profile := "[Interface]\nPrivateKey = " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("a", 32))) + "\nAddress = 10.66.0.2/32\n[Peer]\nPublicKey = " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32))) + "\nEndpoint = 93.184.216.34:51820\nAllowedIPs = 0.0.0.0/0, ::/0\n"
@@ -529,8 +541,27 @@ func TestDefaultRouteActualWireGuardAdapterCurrentlyRefusesEndpointOverlap(t *te
 		t.Fatal(err)
 	}
 	_, err = e.Execute(context.Background(), r, r.Digest())
-	if err == nil || !strings.Contains(err.Error(), "overlaps selected service prefix") {
-		t.Fatal("unimplemented WG default falsely accepted", err)
+	if err == nil || !strings.Contains(err.Error(), "no directly connected private LAN bridge prefix could be proven") {
+		t.Fatal("WAN bridge acquired DEFAULT forwarding authority", err)
+	}
+	for _, read := range []string{"ip route show table main default", "ip -6 route show table main default"} {
+		if !slices.Contains(runner.calls, read) {
+			t.Fatal("physical refusal did not inspect exact current routes", read, runner.calls)
+		}
+	}
+	if !slices.Contains(runner.calls, "ip route show table main") && !slices.Contains(runner.calls, "ip -6 route show table main") {
+		t.Fatal("WAN bridge refusal omitted connected LAN readback", runner.calls)
+	}
+	// The legacy service path has no separate network transport table and must
+	// still refuse the original endpoint/service-prefix loop before effects.
+	legacy := dataplane.Plan{Routes: []dataplane.Route{{ServiceID: "legacy", Resolved: "wireguard:reserve", CIDRs: []string{"93.184.216.0/24"}, WireGuardProfileRevision: imported.Revision}}}
+	legacyRoot := t.TempDir()
+	legacyCtx := dataplane.WithReviewGuard(context.Background(), func(c context.Context) error { return c.Err() })
+	if err := adapter.Snapshot(legacyCtx, legacy, legacyRoot); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Stage(legacyCtx, legacy, legacyRoot); err == nil || !strings.Contains(err.Error(), "overlaps selected service prefix") {
+		t.Fatal("legacy endpoint overlap acquired forwarding authority", err)
 	}
 	for _, call := range runner.calls {
 		if strings.Contains(call, "link add") || strings.Contains(call, "rule add") || strings.Contains(call, "setconf") {
