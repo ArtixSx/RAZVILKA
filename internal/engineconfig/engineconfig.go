@@ -103,8 +103,12 @@ type StageItem struct {
 }
 
 type Manager struct {
-	StageRoot     string
-	BackupRoot    string
+	StageRoot  string
+	BackupRoot string
+	// LiveRoot relocates the fixed file catalog beneath a trusted instance
+	// root. Configure it before using the Manager. Empty preserves /opt paths;
+	// this setting is never accepted from an HTTP request.
+	LiveRoot      string
 	NativeTimeout time.Duration
 	mu            sync.RWMutex
 }
@@ -191,7 +195,7 @@ func (m *Manager) readLocked(engineID, fileID string, revealSensitive bool) (Con
 	if err != nil {
 		return Content{}, err
 	}
-	livePath := choosePath(f.Paths)
+	livePath := m.livePath(f.Paths)
 	image, err := m.readStageImage(context.Background(), engineID, fileID)
 	if err != nil {
 		return Content{}, err
@@ -243,7 +247,7 @@ func (m *Manager) Stage(engineID, fileID, content string) (Content, error) {
 	if err := target.CompareAndSwap(context.Background(), before, restorejournal.Image{Exists: true, Data: []byte(content)}); err != nil {
 		return Content{}, err
 	}
-	livePath := choosePath(f.Paths)
+	livePath := m.livePath(f.Paths)
 	if f.Sensitive {
 		return Content{EngineID: engineID, FileID: fileID, Path: livePath, Source: "staged", Sensitive: true, SHA256: sum([]byte(content))}, nil
 	}
@@ -351,7 +355,7 @@ func (m *Manager) validateLocked(engineID, fileID string) Validation {
 		return Validation{OK: false, EngineID: engineID, FileID: fileID, Output: err.Error()}
 	}
 	staged := m.stagePath(engineID, fileID)
-	live := choosePath(f.Paths)
+	live := m.livePath(f.Paths)
 	path := live
 	image, err := m.readStageImage(context.Background(), engineID, fileID)
 	if err != nil {
@@ -472,7 +476,7 @@ func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) 
 	if !fileExists(staged) {
 		return "", errors.New("no staged config to apply")
 	}
-	dst := choosePath(f.Paths)
+	dst := m.livePath(f.Paths)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return "", err
 	}
@@ -506,7 +510,7 @@ func (m *Manager) Apply(engineID, fileID string, safeMode bool) (string, error) 
 }
 
 func (m *Manager) fileView(engineID string, f FileSpec) FileView {
-	path := choosePath(f.Paths)
+	path := m.livePath(f.Paths)
 	v := FileView{ID: f.ID, Name: f.Name, Kind: f.Kind, Syntax: f.Syntax, Path: path, Sensitive: f.Sensitive, Description: f.Description}
 	if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
 		v.Exists = true
@@ -567,6 +571,17 @@ func lookup(engineID, fileID string) (EngineSpec, FileSpec, error) {
 		return EngineSpec{}, FileSpec{}, fmt.Errorf("unknown file %q for engine %q", fileID, engineID)
 	}
 	return EngineSpec{}, FileSpec{}, fmt.Errorf("unknown engine %q", engineID)
+}
+
+func (m *Manager) livePath(paths []string) string {
+	if m.LiveRoot == "" {
+		return choosePath(paths)
+	}
+	relocated := make([]string, len(paths))
+	for i, path := range paths {
+		relocated[i] = filepath.Join(m.LiveRoot, filepath.FromSlash(strings.TrimPrefix(filepath.ToSlash(path), "/")))
+	}
+	return choosePath(relocated)
 }
 
 func choosePath(paths []string) string {
