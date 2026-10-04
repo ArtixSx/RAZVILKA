@@ -479,6 +479,9 @@ func (a *SelfUpdateFileAdapter) EffectAdmission(ctx context.Context, id, action,
 }
 
 func validFileEffectAction(effect, action string) bool {
+	if effect == installerHelperEffect {
+		return action == "start/live"
+	}
 	for _, prefix := range []string{"command-worker-", "command-child-"} {
 		if strings.HasPrefix(effect, prefix) {
 			return fileCommandAuthority(strings.TrimPrefix(effect, prefix)) == action
@@ -497,6 +500,9 @@ func validFileEffectAction(effect, action string) bool {
 }
 
 func validFileEffect(effect string) bool {
+	if effect == installerHelperEffect {
+		return true
+	}
 	if strings.HasPrefix(effect, "rollback-private-") {
 		name := strings.TrimPrefix(effect, "rollback-private-")
 		_, directory := fileMutablePrivateDirectories[name]

@@ -285,9 +285,12 @@ func TestSelfUpdatePrepareCancelAndDoubleJob(t *testing.T) {
 }
 
 func TestSelfUpdateApplyBindsReviewConfigAndAssetIdentity(t *testing.T) {
-	u := readyUpdater(t)
+	_, u, _ := fileAdapterFixture(t)
 	var launches atomic.Int32
-	u.launch = func(string) (int, error) { launches.Add(1); return 345678, nil }
+	u.launch = func(ctx context.Context, id string, admission func(func() error) error) (int, error) {
+		err := admission(func() error { launches.Add(1); return nil })
+		return 345678, err
+	}
 	job := u.Snapshot()
 	for _, attempt := range []struct {
 		id, token, fp string
@@ -325,9 +328,11 @@ func TestSelfUpdateApplyBindsReviewConfigAndAssetIdentity(t *testing.T) {
 }
 
 func TestSelfUpdatePostLaunchVisibleWriteFailureIsUncertain(t *testing.T) {
-	u := readyUpdater(t)
+	_, u, _ := fileAdapterFixture(t)
 	job := u.Snapshot()
-	u.launch = func(string) (int, error) { return 345679, nil }
+	u.launch = func(ctx context.Context, id string, admission func(func() error) error) (int, error) {
+		return 345679, admission(func() error { return nil })
+	}
 	u.persistHook = func(record updateRecord) error {
 		root, err := ownedfs.Open(u.Directory)
 		if err != nil {

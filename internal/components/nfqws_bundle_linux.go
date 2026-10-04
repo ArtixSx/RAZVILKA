@@ -5,6 +5,7 @@ package components
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 
@@ -62,3 +63,14 @@ func trustedManagedNFQWSOwner(info os.FileInfo, fixture bool) error {
 }
 
 func managedNFQWSPublicTraversal(info os.FileInfo) bool { return info.Mode().Perm()&0001 != 0 }
+
+func managedNFQWSNodeDescription(info os.FileInfo) string {
+	if info == nil {
+		return "unavailable metadata"
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return "unavailable UID"
+	}
+	return fmt.Sprintf("UID=%d EUID=%d mode=%04o; production requires UID/EUID0 and no group/other write", owner.Uid, os.Geteuid(), info.Mode().Perm())
+}

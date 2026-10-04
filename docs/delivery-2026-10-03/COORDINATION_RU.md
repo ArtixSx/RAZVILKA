@@ -1,5 +1,7 @@
 # Координация и чаты 6.1 sol — 03.10.2026
 
+04.10 добавлен **RAZVILKA XHTTP · 6.1 sol**, id `01a10472-cc16-7473-b3bb-42c8ce3de93d`, `worktrees/sol-xhttp`, branch `sol/xhttp-20261004`, base `1f197d9`. VLESS подтвердил отсутствие XHTTP WIP: ему переданы providerprofile/providerfeed и nodecheck compiler/checker с тестами, чтобы D02 не задерживал D03/D10. Scoped adapter grammar в `proxy_nodes.go` остаётся VLESS; новый compiler передаётся через законченный checkpoint. Native запускает только координатор.
+
 По указанию владельца программирование переносится в отдельные чаты `gpt-6.1-sol`. Координатор в чате «RAZVILKA Astra» выполняет обзоры, независимые проверки, тестирование и объединение. VM и роутер остаются под одним владельцем.
 
 Общая интеграционная ветка — `review/delivery-2026-10-03`, папка `C:/Projects/RAZVILKA/delivery-review`. Исходная копия владельца `current` сохранена. Внешняя папка `C:/Projects/RAZVILKA` не является Git-репозиторием, поэтому каждому чату назначается собственный явно указанный worktree внутри `worktrees`.
