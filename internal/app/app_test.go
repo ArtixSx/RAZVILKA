@@ -1945,6 +1945,7 @@ func TestEncryptedPrivateBackupRestoresSensitiveConfigIntoDraftOnly(t *testing.T
 			t.Fatal(err)
 		}
 		a := &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "youtube", Name: "YouTube"}}}, CustomServices: custom, Devices: deviceManager, EngineConfigs: engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups")), Start: time.Now()}
+		a.EngineConfigs.LiveRoot = filepath.Join(root, "live")
 		attachTestRestore(t, a, root)
 		return a
 	}
@@ -1971,7 +1972,7 @@ func TestEncryptedPrivateBackupRestoresSensitiveConfigIntoDraftOnly(t *testing.T
 	}
 	payload, err := privatebackup.Decrypt(envelope, "correct horse battery staple")
 	if err != nil || len(payload.EngineFiles) != 1 || !payload.EngineFiles[0].Sensitive || payload.EngineFiles[0].Content != secret {
-		t.Fatalf("payload=%+v err=%v", payload, err)
+		t.Fatalf("unexpected private payload: files=%d decrypt_error=%v", len(payload.EngineFiles), err)
 	}
 
 	target := makeApp(filepath.Join(t.TempDir(), "target"))
