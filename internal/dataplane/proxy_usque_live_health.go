@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,8 +21,58 @@ var errOwnedUSQUELiveHealth = errors.New("fresh owned USQUE live health is requi
 // Only local fixtures replace these callbacks. Production uses the same owned
 // observer/producer as Canary, against the actual live usque-engine process.
 type usqueLiveHealthIO struct {
-	observe func(context.Context, usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error)
-	produce usqueOwnedProducer
+	observe  func(context.Context, usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error)
+	produce  usqueOwnedProducer
+	identity usqueLiveIdentityObserver
+}
+
+// Separate from the action observer: final local identity checks must not call
+// WAN, admission, process-controller or producer callbacks after kernel checks.
+// A nil observer always uses the actual owned procfs observer.
+type usqueLiveIdentityObserver func(context.Context, usquediag.OwnedRuntimeRequest) (usquediag.OwnedRuntimeIdentity, error)
+
+// verifyOwnedUSQUELiveIdentity is only a final read-only continuity check. The
+// caller has already checked current review/WAN/kernel authority and must check
+// its anchored source/selection and original TTL before writing. This function
+// grants no authority, reads no saved evidence and preserves the original proof.
+func verifyOwnedUSQUELiveIdentity(ctx context.Context, spec ProcessSpec, address string, proof usquediag.OwnedRuntimeEvidence) error {
+	return verifyOwnedUSQUELiveIdentityWith(ctx, spec, address, proof, nil)
+}
+
+func verifyOwnedUSQUELiveIdentityWith(ctx context.Context, spec ProcessSpec, address string, proof usquediag.OwnedRuntimeEvidence, observe usqueLiveIdentityObserver) error {
+	if ctx == nil {
+		return errOwnedUSQUELiveHealth
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	window, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ctx = window
+	spec.Args = append([]string(nil), spec.Args...)
+	protocol, err := ownedUSQUELiveTransport(spec, address)
+	expected := proof.Identity
+	argsHash := routeidentity.Hash([]byte(strings.Join(append([]string{spec.Binary}, spec.Args...), "\x00") + "\x00"))
+	endpoint, endpointErr := netip.ParseAddrPort(expected.Endpoint)
+	if err != nil || endpointErr != nil || endpoint.String() != expected.Endpoint || protocol != expected.Transport || argsHash != expected.ArgsSHA256 ||
+		!usquediag.OwnedEvidenceFresh(proof, expected, time.Now()) {
+		return errOwnedUSQUELiveHealth
+	}
+	// This is the already-authorized environment of the same original proof,
+	// not an observation of WAN readiness. No external callback is retained.
+	environment := expected.EnvironmentID
+	request := usquediag.OwnedRuntimeRequest{Root: spec.Dir, Binary: spec.Binary, SOCKSAddress: address,
+		Transport: protocol, Endpoint: endpoint, Environment: func(c context.Context) (string, error) {
+			return environment, c.Err()
+		}}
+	if observe == nil {
+		observe = usquediag.ObserveOwnedUSQUE
+	}
+	current, err := observe(ctx, request)
+	if err != nil || current != expected || ctx.Err() != nil || !usquediag.OwnedEvidenceFresh(proof, current, time.Now()) {
+		return errors.Join(errOwnedUSQUELiveHealth, err, ctx.Err())
+	}
+	return nil
 }
 
 // probeOwnedUSQUELive is an explicit guarded health action, never a GET reader.
