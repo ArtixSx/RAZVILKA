@@ -17,9 +17,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
+	"github.com/ArtixSx/razvilka/internal/usquediag"
 	xnetproxy "golang.org/x/net/proxy"
 )
 
@@ -40,9 +42,9 @@ type ProxyTunnelAdapter struct {
 	CanaryProbe      func(context.Context, string, string) error
 	ServiceIPProbe   func(context.Context, string, string, netip.Addr) error
 	CanaryTraceProbe func(context.Context, string) (usqueCanaryEvidence, error)
+	ownedUSQUEProbe  usqueOwnedProducer
 	EngineBin        string
 	SidecarBin       string
-	ownedUSQUEProbe  usqueOwnedProducer
 	// Fixed for adapter lifetime; empty preserves the original sing-box backend.
 	SidecarKind string
 	PackageInit string
@@ -66,9 +68,9 @@ type ProxyTunnelAdapter struct {
 	bootIdentity func() (string, error)
 	// Set only by NewScopedXrayTunnelAdapter; never inferred from user JSON.
 	scopedXray          bool
+	nodeRouterVerifier  bool
 	NodeTUNProbe        NodeTUNProbe
 	nodeRuntimeIdentity func(ProcessSpec, string) (string, error)
-	nodeRouterVerifier  bool
 }
 
 type NodeRouteRequest struct {
@@ -91,15 +93,9 @@ type usqueTransport struct {
 	SNI   string `json:"sni,omitempty"`
 }
 
-type usqueCanaryEvidence struct {
-	CheckedAt       string   `json:"checked_at"`
-	Transport       string   `json:"transport"`
-	Warp            string   `json:"warp"`
-	Colo            string   `json:"colo,omitempty"`
-	Loc             string   `json:"loc,omitempty"`
-	EgressIP        string   `json:"egress_ip,omitempty"`
-	ConfirmedRoutes []string `json:"confirmed_routes,omitempty"`
-}
+type usqueCanaryEvidence = usquediag.CanaryEvidence
+
+var errProxyCanaryCleanup = errors.New("isolated proxy candidate cleanup is unverified")
 
 type proxySnapshot struct {
 	EngineID            string              `json:"engine_id,omitempty"`
@@ -398,7 +394,7 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 	engineCandidate := filepath.Join(root, "engine.staged.json")
 	sidecarCandidate := filepath.Join(root, "sidecar.staged.json")
 	if a.scopedXray {
-		if a.NodeTUNProbe == nil {
+		if a.NodeTUNProbe == nil && !a.nodeRouterVerifier {
 			return ErrNodeTUNProofRequired
 		}
 		if _, err := a.validateStagedNodes(ctx, root); err != nil {
@@ -490,6 +486,9 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 		spec := a.engineProcessAt(configPath, port, canaryRoot, a.ID()+"-canary", transport)
 		evidence, err := a.runCanaryAttempt(ctx, plan, spec, address)
 		if err != nil {
+			if errors.Is(err, errProxyCanaryCleanup) {
+				return err
+			}
 			if a.Processes.Running(spec) {
 				return fmt.Errorf("isolated %s candidate could not be stopped after failed %s probe", a.ID(), usqueTransportName(transport))
 			}
@@ -497,12 +496,13 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 			continue
 		}
 		if a.ID() == "usque" {
+			if evidence.Owned == nil {
+				return errOwnedUSQUECandidate
+			}
 			data, _ := json.MarshalIndent(transport, "", "  ")
 			if err := writeAtomic(filepath.Join(root, "transport.staged.json"), data, 0o600); err != nil {
 				return err
 			}
-			evidence.CheckedAt = time.Now().UTC().Format(time.RFC3339)
-			evidence.Transport = usqueTransportName(transport)
 			data, _ = json.MarshalIndent(evidence, "", "  ")
 			if err := writeAtomic(filepath.Join(root, "evidence.staged.json"), data, 0o600); err != nil {
 				return err
@@ -514,6 +514,17 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 }
 
 func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePlan, spec ProcessSpec, address string) (evidence usqueCanaryEvidence, resultErr error) {
+	var frozenServices []catalog.Service
+	if a.ID() == "usque" {
+		var err error
+		plan, frozenServices, err = a.preflightOwnedUSQUECanary(ctx, plan, spec, address)
+		if err != nil {
+			return evidence, err
+		}
+		if err := requireOwnedUSQUEReviewGuard(ctx); err != nil {
+			return evidence, err
+		}
+	}
 	if err := a.Processes.Start(ctx, spec); err != nil {
 		return evidence, fmt.Errorf("start isolated %s candidate: %w", a.ID(), err)
 	}
@@ -521,11 +532,7 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.timeout())
 		defer cancel()
 		if err := a.Processes.Stop(cleanupCtx, spec); err != nil {
-			if resultErr == nil {
-				resultErr = fmt.Errorf("stop isolated %s candidate: %w", a.ID(), err)
-			} else {
-				resultErr = fmt.Errorf("%v; stop isolated %s candidate: %w", resultErr, a.ID(), err)
-			}
+			resultErr = errors.Join(resultErr, errProxyCanaryCleanup, fmt.Errorf("stop isolated %s candidate: %w", a.ID(), err))
 		}
 	}()
 	if err := a.waitForSOCKSProcess(ctx, spec, address); err != nil {
@@ -540,24 +547,7 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 		}
 	}
 	if a.ID() == "usque" {
-		traceProbe := a.CanaryTraceProbe
-		if traceProbe == nil {
-			traceProbe = probeCloudflareTraceViaSOCKS
-		}
-		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
-		trace, err := traceProbe(probeCtx, address)
-		cancel()
-		if err != nil {
-			return evidence, fmt.Errorf("candidate WARP trace failed: %w", err)
-		}
-		if trace.Warp != "on" && trace.Warp != "plus" {
-			warpState := trace.Warp
-			if warpState == "" {
-				warpState = "unknown"
-			}
-			return evidence, fmt.Errorf("candidate Cloudflare trace reported warp=%s", warpState)
-		}
-		evidence = trace
+		return a.probeOwnedUSQUECandidate(ctx, plan, spec, address, frozenServices)
 	}
 	probe := a.CanaryProbe
 	if probe == nil {
@@ -730,7 +720,7 @@ func (a *ProxyTunnelAdapter) Health(ctx context.Context, plan Plan, root string)
 	if err := a.verifyCandidateReceipt(ctx, root, state, true); err != nil {
 		return err
 	}
-	return a.healthState(ctx, plan, state)
+	return a.healthState(ctx, plan, state, root)
 }
 
 func (a *ProxyTunnelAdapter) verifyHealthRuntime(ctx context.Context, state PolicyState) error {
@@ -749,7 +739,7 @@ func (a *ProxyTunnelAdapter) verifyHealthRuntime(ctx context.Context, state Poli
 	return ctx.Err()
 }
 
-func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state PolicyState) error {
+func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state PolicyState, roots ...string) error {
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
@@ -757,7 +747,7 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 		return err
 	}
 	if a.scopedXray {
-		return a.scopedNodeHealth(ctx, plan, state)
+		return a.scopedNodeHealth(ctx, plan, state, roots...)
 	}
 	for _, route := range plan.Routes {
 		if adapterID(route.Resolved) != a.ID() || strings.TrimSpace(route.ProbeURL) == "" {

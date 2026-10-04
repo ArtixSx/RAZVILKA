@@ -13,7 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/usquediag"
 )
 
 type proxyFakeProcesses struct {
@@ -174,7 +176,7 @@ func TestUsqueCanaryFallsBackToHTTP2AndPersistsSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter.EngineBin = "usque"
+	adapter.EngineBin = filepath.Join(root, "usque")
 	adapter.UsqueConfig = filepath.Join(root, "usque.conf")
 	if err := os.WriteFile(adapter.UsqueConfig, []byte("SNI=\"ozon.ru\"\nHTTP2_ENABLE=0\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -182,27 +184,34 @@ func TestUsqueCanaryFallsBackToHTTP2AndPersistsSelection(t *testing.T) {
 	processes := &proxyFakeProcesses{running: map[string]bool{}}
 	adapter.Processes = processes
 	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
+	adapter.FreshProfile = func(context.Context) (string, error) { return "wan-0123456789ab", nil }
 	adapter.CanaryTraceProbe = func(context.Context, string) (usqueCanaryEvidence, error) {
-		return usqueCanaryEvidence{Warp: "on", Colo: "DME", Loc: "RU", EgressIP: "203.0.113.4"}, nil
+		panic("owned failure must not downgrade to legacy trace")
 	}
 	probeCount := 0
-	adapter.CanaryProbe = func(context.Context, string, string) error {
+	adapter.CanaryProbe = func(context.Context, string, string) error { panic("owned path must not run a second generic probe") }
+	var retained usquediag.CanaryEvidence
+	adapter.ownedUSQUEProbe = func(_ context.Context, options usquediag.OwnedProbeOptions) (usquediag.OwnedRuntimeEvidence, error) {
 		probeCount++
 		if probeCount == 1 {
-			return errors.New("QUIC tunnel stalled")
+			return usquediag.OwnedRuntimeEvidence{}, errors.New("QUIC tunnel stalled")
 		}
-		return nil
+		proof := usqueOwnedBridgeProof(options)
+		retained = proof.CanaryEvidence()
+		return proof, nil
 	}
 	transaction := filepath.Join(root, "transaction")
 	if err := os.MkdirAll(transaction, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	config := `{"private_key":"key","endpoint_pub_key":"pub","id":"device","access_token":"token"}`
+	config := `{"private_key":"key","endpoint_pub_key":"pub","id":"device","access_token":"token","endpoint_v4":"1.1.1.1","endpoint_h2_v4":"162.159.193.10"}`
 	if err := os.WriteFile(filepath.Join(transaction, "engine.staged.json"), []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	plan := RoutePlan{Routes: []Route{{ServiceName: "Telegram", ProbeURL: "https://telegram.org/"}}}
-	if err := adapter.Canary(context.Background(), plan, transaction); err != nil {
+	service := catalog.Service{ID: "telegram", Name: "Telegram", Category: "messaging", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/", Strategy: []string{"usque"}}
+	plan := RoutePlan{Adapter: "usque", Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", ProbeURL: "https://telegram.org/", ProbeService: &service}}}
+	ctx := WithReviewGuard(context.Background(), func(context.Context) error { return nil })
+	if err := adapter.Canary(ctx, plan, transaction); err != nil {
 		t.Fatal(err)
 	}
 	if probeCount != 2 || len(processes.startSpecs) != 2 {
@@ -222,6 +231,14 @@ func TestUsqueCanaryFallsBackToHTTP2AndPersistsSelection(t *testing.T) {
 	}
 	if len(processes.running) != 0 {
 		t.Fatalf("canary process remained: %v", processes.running)
+	}
+	data, err := os.ReadFile(filepath.Join(transaction, "evidence.staged.json"))
+	var persisted usquediag.CanaryEvidence
+	decodeErr := json.Unmarshal(data, &persisted)
+	wanted, _ := json.Marshal(retained)
+	actual, _ := json.Marshal(persisted)
+	if err != nil || decodeErr != nil || string(actual) != string(wanted) {
+		t.Fatal("producer-owned timestamps, endpoint, transport or semantic grades changed during persistence")
 	}
 }
 
