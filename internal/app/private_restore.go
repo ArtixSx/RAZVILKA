@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/privaterestore"
@@ -33,6 +34,12 @@ func (a *App) restorePrivateDraft(ctx context.Context, payload privatebackup.Pay
 	}
 	if len(payload.ProviderSnapshots) != 0 || a.PrivateRestore == nil || a.Store == nil || a.CustomServices == nil || a.EngineConfigs == nil || a.Devices == nil || payload.NodeSnapshot != nil && a.Nodes == nil || payload.NativeEnrollment != nil && a.Warp == nil || payload.SubscriptionSnapshot != nil && a.NodeFeeds == nil {
 		return &privateRestoreFailure{phase: "preflight", notStarted: true}
+	}
+	if payload.NodeSnapshot != nil {
+		required, err := nodestore.RequiredPrivateHistoryReadVersion(*payload.NodeSnapshot)
+		if err != nil || a.nodeHistoryMaterialAdmission(ctx, required) != nil {
+			return &privateRestoreFailure{phase: "preflight", notStarted: true}
+		}
 	}
 	finished := false
 	defer func() {
