@@ -27,11 +27,12 @@ type NetworkPolicyAdapter struct {
 }
 
 type networkPolicyGateState struct {
-	Schema   int                   `json:"schema"`
-	PlanID   string                `json:"plan_id"`
-	Digest   string                `json:"digest"`
-	LAN      *LANPolicyRuntimePlan `json:"lan"`
-	Promoted bool                  `json:"promoted"`
+	Schema           int                   `json:"schema"`
+	PlanID           string                `json:"plan_id"`
+	Digest           string                `json:"digest"`
+	LAN              *LANPolicyRuntimePlan `json:"lan"`
+	Promoted         bool                  `json:"promoted"`
+	PromotionPending bool                  `json:"promotion_pending,omitempty"`
 }
 
 type networkPolicyGateSnapshot struct {
@@ -74,7 +75,7 @@ func (a *NetworkPolicyAdapter) receiptRoot(s *networkPolicyGateState) (string, e
 	if err := a.check(); err != nil {
 		return "", err
 	}
-	if s == nil || s.Schema != 1 || !validExecutionPlanID(s.PlanID) || !validNetworkPolicyGeneration(s.Digest) || ValidateLANPolicyRuntime(s.LAN) != nil {
+	if s == nil || s.Schema != 1 || s.Promoted && s.PromotionPending || !validExecutionPlanID(s.PlanID) || !validNetworkPolicyGeneration(s.Digest) || ValidateLANPolicyRuntime(s.LAN) != nil {
 		return "", ErrLANPolicyRuntime
 	}
 	if s.Promoted {
@@ -221,12 +222,41 @@ func (a *NetworkPolicyAdapter) Commit(ctx context.Context, p Plan, root string) 
 	if err := os.MkdirAll(destination, 0700); err != nil {
 		return err
 	}
-	// The typed promoted reference precedes promotion. Unknown promotion keeps
-	// the reference fenced; persisted receipt argv never supply cleanup intent.
+	// Keep both compiler-derived roots during the transition. A guard can
+	// definitely refuse BEFORE promotion while the source still owns the grant.
+	state.Promoted, state.PromotionPending = false, true
 	if err := writeNetworkPolicyGate(a.ownerPath(), state); err != nil {
 		return err
 	}
-	return a.Binding.Promote(ctx, state.LAN, root, destination)
+	if err := a.Binding.Promote(ctx, state.LAN, root, destination); err != nil {
+		return err
+	}
+	state.Promoted, state.PromotionPending = true, false
+	return writeNetworkPolicyGate(a.ownerPath(), state)
+}
+
+func (a *NetworkPolicyAdapter) cleanupReceiptRoot(ctx context.Context, state *networkPolicyGateState) (string, error) {
+	source, err := a.receiptRoot(state)
+	if err != nil || !state.PromotionPending {
+		return source, err
+	}
+	destinationState := *state
+	destinationState.Promoted, destinationState.PromotionPending = true, false
+	destination, err := a.receiptRoot(&destinationState)
+	if err != nil {
+		return "", err
+	}
+	// Only the existing active source ACK (or known cleanup) plus a destination
+	// with NO receipt proves a pre-promotion refusal. Any intent/copy/unknown retains
+	// both references and fences cleanup; absence alone supplies no grant.
+	status, err := a.Binding.Inspect(ctx, state.LAN, source)
+	if err != nil || !status.Complete && !status.Removed || status.Unknown || status.Promoted {
+		return "", errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	if _, err := os.Lstat(filepath.Join(destination, policyAdditionFile)); !errors.Is(err, os.ErrNotExist) {
+		return "", errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	return source, ctx.Err()
 }
 
 func (a *NetworkPolicyAdapter) inspectAbsent(ctx context.Context, lan *LANPolicyRuntimePlan) error {
@@ -259,10 +289,11 @@ func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string
 		return a.inspectAbsent(ctx, want.LAN)
 	}
 	want.Promoted = current.Promoted
+	want.PromotionPending = current.PromotionPending
 	if !reflect.DeepEqual(current, want) {
 		return ErrReviewChanged
 	}
-	receipt, err := a.receiptRoot(current)
+	receipt, err := a.cleanupReceiptRoot(ctx, current)
 	if err != nil {
 		return err
 	}
@@ -304,7 +335,7 @@ func (a *NetworkPolicyAdapter) Deactivate(ctx context.Context) error {
 	if state == nil {
 		return a.VerifyRuntimeInactive(ctx)
 	}
-	root, err := a.receiptRoot(state)
+	root, err := a.cleanupReceiptRoot(ctx, state)
 	if err != nil {
 		return err
 	}

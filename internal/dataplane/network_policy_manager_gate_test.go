@@ -214,14 +214,14 @@ func TestNetworkPolicyManagerGateRefusesReplacementWithoutMutation(t *testing.T)
 }
 
 func TestNetworkPolicyManagerGateLostAcknowledgementAndPromotionFence(t *testing.T) {
-	for _, fault := range []string{"add", "promotion"} {
+	for _, fault := range []string{"add", "promotion-intent", "promotion-copy"} {
 		t.Run(fault, func(t *testing.T) {
 			m, p, gate, _, model := networkPolicyGateManagerFixture(t)
 			if fault == "add" {
 				model.lostAdd = 0
 			} else {
 				gate.Binding.options.fault = func(point string, _ int) error {
-					if point == "promotion-intent" {
+					if point == fault {
 						return errors.New("model power loss during promotion")
 					}
 					return nil
@@ -262,6 +262,53 @@ func TestNetworkPolicyManagerGateCannotDisappearInLegacyPlan(t *testing.T) {
 	}
 	if _, err := m.Apply(context.Background(), legacy, nil); err != nil {
 		t.Fatal("verified stopped gate could not return to baseline", err)
+	}
+}
+
+func TestNetworkPolicyManagerGatePromotionGuardAfterOwnerRetainsSourceGrant(t *testing.T) {
+	for _, verifiedRollback := range []bool{true, false} {
+		t.Run(map[bool]string{true: "rollback", false: "stop"}[verifiedRollback], func(t *testing.T) {
+			m, p, gate, consumer, model := networkPolicyGateManagerFixture(t)
+			consumer.proof = verifiedRollback
+			guard := gate.Binding.ApplyGuard
+			gate.Binding.ApplyGuard = func(ctx context.Context, lan *LANPolicyRuntimePlan, e LANPolicyEffect) error {
+				state, err := gate.readOwner()
+				if err != nil {
+					return err
+				}
+				if state != nil && state.PromotionPending {
+					return ErrReviewChanged
+				}
+				return guard(ctx, lan, e)
+			}
+			x, err := m.Apply(context.Background(), p, nil)
+			if !errors.Is(err, ErrReviewChanged) {
+				t.Fatal("guard-after-owner refusal missing", x, err)
+			}
+			if verifiedRollback {
+				if x.State != "rolled-back" || !x.RollbackVerified {
+					t.Fatal("active source grant was stranded", x, err)
+				}
+			} else {
+				state, _ := gate.readOwner()
+				if state == nil || !state.PromotionPending || state.Promoted {
+					t.Fatal("both transitional references not retained", state)
+				}
+				report, err := m.Deactivate(context.Background())
+				if err != nil || report.State != "deactivated" {
+					t.Fatal("Stop could not consume known source grant", report, err)
+				}
+			}
+			for _, count := range model.present {
+				if count != 0 {
+					t.Fatal("source ACK effects not cleaned")
+				}
+			}
+			state, _ := gate.readOwner()
+			if state != nil {
+				t.Fatal("known cleaned transition retained owner")
+			}
+		})
 	}
 }
 
