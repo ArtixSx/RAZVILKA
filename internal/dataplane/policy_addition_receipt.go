@@ -510,6 +510,11 @@ func (r *policyAdditionRunner) remove(ctx context.Context, index int, args []str
 	if err != nil || present > 1 {
 		return nil, errors.Join(ErrPolicyAdditionUnknown, err)
 	}
+	if index < 2 {
+		if err := assertPolicyAdditionDefaultsUnreferenced(ctx, r.base, r.ip, s.state); err != nil {
+			return nil, err
+		}
+	}
 	if present == 0 {
 		s.doc.Steps[index].State = "removed"
 		return nil, s.save(ctx)
@@ -524,6 +529,11 @@ func (r *policyAdditionRunner) remove(ctx context.Context, index int, args []str
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if index < 2 {
+		if err := assertPolicyAdditionDefaultsUnreferenced(ctx, r.base, r.ip, s.state); err != nil {
+			return nil, err
+		}
 	}
 	out, err := r.base.Run(ctx, r.ip, args...)
 	if err != nil {
@@ -542,6 +552,18 @@ func (r *policyAdditionRunner) remove(ctx context.Context, index int, args []str
 		return out, err
 	}
 	return out, s.fault("removed", index)
+}
+
+// Defaults are one receipt's prerequisites. Reverse cleanup starts with IPv6,
+// so a foreign or unknown selector in either family must retain both defaults.
+// CORE owns the numeric readback, bounded reader and sole selector parser.
+func assertPolicyAdditionDefaultsUnreferenced(ctx context.Context, runner NFQWS2Runner, ip string, state PolicyState) error {
+	for _, family := range []int{4, 6} {
+		if err := AssertPolicyDefaultUnreferenced(ctx, runner, ip, state, family); err != nil {
+			return errors.Join(ErrPolicyAdditionUnknown, err)
+		}
+	}
+	return nil
 }
 
 func (s *policyAdditionSession) hasUnsettledRules() bool {
@@ -637,6 +659,9 @@ func removePolicyAddition(ctx context.Context, runner NFQWS2Runner, ip string, s
 				return err
 			}
 			if len(args) == 0 {
+				if err := assertPolicyAdditionDefaultsUnreferenced(ctx, runner, ip, state); err != nil {
+					return err
+				}
 				s.doc.Steps[i].State = "removed"
 				if err := s.save(ctx); err != nil {
 					return err
