@@ -23,6 +23,9 @@ func (r *recordedPolicyFakeRunner) Run(_ context.Context, command string, args .
 	r.calls = append(r.calls, command+" "+strings.Join(args, " "))
 	family := 4
 	plain := args
+	if len(plain) > 0 && plain[0] == "-N" {
+		plain = plain[1:]
+	}
 	if len(plain) > 0 && plain[0] == "-6" {
 		family = 6
 		plain = plain[1:]
@@ -66,6 +69,10 @@ type policyKernelEntry struct {
 }
 
 func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
+	numeric := len(args) > 0 && args[0] == "-N"
+	if numeric {
+		args = args[1:]
+	}
 	family := 4
 	if len(args) > 0 && args[0] == "-6" {
 		family, args = 6, args[1:]
@@ -106,6 +113,9 @@ func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
 	}
 	if args[1] == "show" {
 		lines := []string{"0: from all lookup local", "32766: from all lookup main", "32767: from all lookup default"}
+		if numeric {
+			lines = []string{"0: from all lookup 255", "32766: from all lookup 254", "32767: from all lookup 253"}
+		}
 		if family == 4 {
 			lines = append(lines, f.foreignIPv4...)
 		}
@@ -118,7 +128,11 @@ func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
 				if rule.ingress != "" {
 					selector += " iif " + rule.ingress
 				}
-				lines = append(lines, fmt.Sprintf("%d: from %s to %s%s lookup %s", rule.priority, rule.source, rule.dest, selector, rule.table))
+				table := rule.table
+				if numeric && table == "main" {
+					table = "254"
+				}
+				lines = append(lines, fmt.Sprintf("%d: from %s to %s%s lookup %s", rule.priority, rule.source, rule.dest, selector, table))
 			}
 		}
 		return []byte(strings.Join(lines, "\n") + "\n"), true, nil
