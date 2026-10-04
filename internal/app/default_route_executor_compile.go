@@ -182,7 +182,8 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 		if !ok || !defaultRoutePathValid(path) || path.Selected != selectedRoute(state) || service.Selected != path.Selected || service.Resolved != path.Resolved || !slices.Equal(service.Sources, state.Sources) {
 			return nil, dataplane.ErrReviewChanged
 		}
-		if strings.HasPrefix(path.Resolved, "wireguard:") && service.WireGuardProfileRevision != path.WireGuardProfileRevision {
+		if strings.HasPrefix(path.Resolved, "wireguard:") && (service.WireGuardProfileRevision != path.WireGuardProfileRevision ||
+			strings.HasPrefix(path.Selected, "wireguard:") && state.WireGuardProfileRevision != path.WireGuardProfileRevision) {
 			return nil, dataplane.ErrReviewChanged
 		}
 		if (strings.HasPrefix(path.Resolved, "sing-box:node-") || strings.HasPrefix(path.Resolved, "xray:node-")) && snapshot.NodeGeneration == 0 {

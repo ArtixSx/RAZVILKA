@@ -162,7 +162,9 @@ func (m *Manager) CheckComponentLive(ctx context.Context, expected Plan, compone
 			if err := check(); err != nil {
 				return err
 			}
-			if err := a.healthState(ctx, expected, state); err != nil {
+			if err := m.withExecutionResourcesLocked(ctx, expected, id, func(c context.Context) error {
+				return a.healthState(c, expected, state)
+			}); err != nil {
 				return err
 			}
 			if err := check(); err != nil {
@@ -570,7 +572,13 @@ func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID strin
 			return err
 		}
 	}
-	if err := canary.Canary(ctx, plan.RoutePlanFor(adapterID), root); err != nil {
+	check := func(c context.Context) error { return canary.Canary(c, plan.RoutePlanFor(adapterID), root) }
+	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
+	if guard != nil && validPlanID(plan.PlanID) && validPlanDigest(plan.Digest) {
+		call := check
+		check = func(c context.Context) error { return m.withExecutionResourcesLocked(c, plan, adapterID, call) }
+	}
+	if err := check(ctx); err != nil {
 		return fmt.Errorf("%s isolated canary: %w", adapterID, err)
 	}
 	return m.checkPlanNetwork(ctx, plan)
@@ -1231,9 +1239,26 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if phase == "activate" || phase == "deactivate" || phase == "commit-adapter" {
 			liveMutation = true
 		}
-		err := action(runCtx, plan, adapterRoot)
+		var err error
+		if (phase == "health" || phase == "canary") && validPlanID(plan.PlanID) && validPlanDigest(plan.Digest) {
+			var scope *executionResourceScope
+			scope, err = m.newExecutionResourceScope(runCtx, plan, adapter.ID(), &execution, transactionRoot)
+			if err == nil {
+				defer scope.close() // Unexpected callback exits cannot retain authority.
+				err = action(scope.context(), plan, adapterRoot)
+				err = errors.Join(err, scope.close())
+			}
+		} else {
+			err = action(runCtx, plan, adapterRoot)
+		}
+		if validateExecutionResources(execution, true) != nil {
+			// A temporary rule may have entered the common writer even when the
+			// adapter phase is nominally isolated. Unknown resources require the
+			// same rollback fence and retained LAN boundary as live mutations.
+			liveMutation = true
+		}
 		var preflight preflightRefusalError
-		if !previouslyMutated && errors.As(err, &preflight) {
+		if !previouslyMutated && errors.As(err, &preflight) && validateExecutionResources(execution, true) == nil {
 			liveMutation = false
 		}
 		if err == nil && !restoring {
@@ -1261,7 +1286,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			plan.RouteEvidence[index].Observed = evidence.None
 		}
 		execution.State = "rolling-back"
-		rollbackErr := writeExecution()
+		rollbackErr := errors.Join(writeExecution(), validateExecutionResources(execution, true))
 		var gate Adapter
 		for i := len(prepared) - 1; i >= 0; i-- {
 			adapter := prepared[i]
@@ -1506,6 +1531,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if err := run(ctx, adapter, "canary", func(runCtx context.Context, _ Plan, root string) error {
 			return canary.Canary(runCtx, routePlan, root)
 		}); err != nil {
+			if validateExecutionResources(execution, true) != nil {
+				return execution, rollback(err)
+			}
 			// CanaryAdapter owns and removes only its isolated candidate. Calling
 			// the live Rollback method here could unnecessarily interrupt the
 			// still-working process even though Activate has not started.
