@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"sync"
 	"syscall"
 	"time"
 
@@ -149,6 +150,19 @@ func (a *NFQWS2Adapter) observeManagedNFQWSProcessRunning(ctx context.Context) (
 // before production wiring; self-update admission alone is not that authority.
 // No package init, PID file, queue plan or stock resource is touched here.
 func (a *NFQWS2Adapter) runManagedNFQWSProcess(ctx context.Context, command nfqws2ManagedProcessCommand, helperPrefix []string) (nfqws2ManagedProcessLease, error) {
+	return a.runManagedNFQWSProcessInternal(ctx, command, helperPrefix, nil)
+}
+
+// Only a finished common Execution issuer may supply these live callbacks.
+// This private bridge is not a runtime constructor or admission from metadata.
+func (a *NFQWS2Adapter) runManagedNFQWSProcessWithAdmission(ctx context.Context, command nfqws2ManagedProcessCommand, helperPrefix []string, admission nfqws2ManagedProcessAdmission) (nfqws2ManagedProcessLease, error) {
+	if !admission.valid(command) {
+		return nfqws2ManagedProcessLease{}, ErrNFQWSManagedProcessUnknown
+	}
+	return a.runManagedNFQWSProcessInternal(ctx, command, helperPrefix, &admission)
+}
+
+func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, command nfqws2ManagedProcessCommand, helperPrefix []string, admission *nfqws2ManagedProcessAdmission) (nfqws2ManagedProcessLease, error) {
 	var zero nfqws2ManagedProcessLease
 	owner, err := a.owner()
 	if ctx == nil || err != nil || command.StateRoot != a.StateRoot || command.Owner != owner || nfqws2ValidateManagedCommand(command) != nil || !time.Now().Before(command.Deadline) || command.Deadline.After(time.Now().Add(15*time.Second)) {
@@ -175,6 +189,20 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcess(ctx context.Context, command nfqw
 	if err != nil || !parent.IsDir() || parent.Mode().Perm()&0o077 != 0 {
 		return zero, ErrNFQWSManagedProcessUnknown
 	}
+	var channel *nfqws2ManagedStartSocket
+	var endpoint *os.File
+	var binding *nfqws2ManagedStartBinding
+	if admission != nil {
+		if !admission.valid(command) {
+			return zero, ErrNFQWSManagedProcessUnknown
+		}
+		frozen := admission.Binding
+		binding = &frozen
+		// This callback must record pending before the producer intent or Start.
+		if err := admission.BeforeStart(ctx, frozen); err != nil {
+			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err)
+		}
+	}
 	target, err := restorejournal.OpenFileTarget(path)
 	if err != nil {
 		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err)
@@ -184,7 +212,7 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcess(ctx context.Context, command nfqw
 		_ = target.Close()
 		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err)
 	}
-	store := nfqws2ManagedProcessStore{target: target, image: before, lease: nfqws2ManagedProcessLease{Version: 2, StateRoot: a.StateRoot, Owner: owner, Command: command, CommandSHA256: nfqws2ManagedCommandDigest(command), Receipt: components.NFQWSSupervisionReceipt{State: "intent"}}}
+	store := nfqws2ManagedProcessStore{target: target, image: before, lease: nfqws2ManagedProcessLease{Version: 2, StateRoot: a.StateRoot, Owner: owner, Command: command, CommandSHA256: nfqws2ManagedCommandDigest(command), LaunchBinding: binding, Receipt: components.NFQWSSupervisionReceipt{State: "intent"}}}
 	err = store.publish(ctx)
 	store.close() // The helper takes this same filename's writer lease.
 	if err != nil {
@@ -197,16 +225,88 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcess(ctx context.Context, command nfqw
 	cmd := exec.Command(program, args...)
 	cmd.Env = []string{"PATH=/opt/bin:/opt/sbin:/usr/bin:/bin", "LANG=C", "TZ=UTC", "RAZVILKA_DATAPLANE_STATE=" + filepath.Dir(filepath.Dir(a.StateRoot)), "RAZVILKA_SELF_UPDATE_CONTROL_STATE=" + command.ControlRoot}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	err = operationgate.WithSelfUpdateEffectAdmission(ctx, command.ControlRoot, command.ID, command.InstallationID, command.Sequence, "nfqws-managed-helper", cmd.Start)
-	if err != nil {
-		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err) // Durable intent remains fenced.
-	}
-	identity, identityErr := components.ReadNFQWSSupervisionProcessIdentity(cmd.Process.Pid)
+	var identity components.NFQWSSupervisionIdentity
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }() // Parent waits only for this exact helper.
-	if identityErr != nil || identity.Group != identity.PID || identity.BootID != command.Parent.BootID {
+	begin := func() error {
+		if cmd.Process != nil {
+			return ErrNFQWSManagedProcessUnknown
+		}
+		if admission != nil {
+			deadline := time.Now().Add(nfqws2ManagedStartGrace)
+			if command.Deadline.Before(deadline) {
+				deadline = command.Deadline
+			}
+			channel, endpoint, err = nfqws2ManagedStartSocketPair(deadline)
+			if err != nil {
+				return err
+			}
+			cmd.ExtraFiles = []*os.File{endpoint} // Fixed inherited descriptor 3.
+		}
+		startErr := operationgate.WithSelfUpdateEffectAdmission(ctx, command.ControlRoot, command.ID, command.InstallationID, command.Sequence, "nfqws-managed-helper", cmd.Start)
+		if endpoint != nil {
+			_ = endpoint.Close()
+		}
+		if cmd.Process == nil {
+			return errors.Join(ErrNFQWSManagedProcessUnknown, startErr)
+		}
+		go func() { done <- cmd.Wait() }() // Exactly one parent helper wait owner.
+		identity, err = components.ReadNFQWSSupervisionProcessIdentity(cmd.Process.Pid)
+		if startErr != nil || err != nil || identity.Group != identity.PID || identity.BootID != command.Parent.BootID {
+			return errors.Join(ErrNFQWSManagedProcessUnknown, startErr, err)
+		}
+		if admission == nil {
+			return nil
+		}
+		return nfqws2ManagedStartParent(ctx, channel, command, *binding, identity, func() error {
+			current, readErr := components.ReadNFQWSSupervisionProcessIdentity(identity.PID)
+			if readErr != nil || current != identity {
+				return ErrNFQWSManagedProcessUnknown
+			}
+			return nfqws2ManagedControlCurrent(ctx, command)
+		})
+	}
+	called, startOpen := false, true
+	var startMu sync.Mutex
+	var beginErr error
+	start := func() error {
+		startMu.Lock()
+		defer startMu.Unlock()
+		if called || !startOpen {
+			return ErrNFQWSManagedProcessUnknown
+		}
+		called = true
+		beginErr = begin()
+		return beginErr
+	}
+	if admission == nil {
+		err = start()
+	} else {
+		err = admission.WithStart(ctx, *binding, start)
+	}
+	startMu.Lock()
+	startOpen = false // A retained callback cannot fork after WithStart returns.
+	if !called {
+		err = errors.Join(err, ErrNFQWSManagedProcessUnknown)
+	}
+	err = errors.Join(err, beginErr) // Issuer cannot hide a lost Start ACK.
+	startMu.Unlock()
+	if channel != nil {
+		_ = channel.close()
+	}
+	if endpoint != nil {
+		_ = endpoint.Close()
+	}
+	if cmd.Process == nil {
+		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err) // Intent stays fenced.
+	}
+	startErr := err
+	if startErr == nil && admission != nil {
+		// Slow process/queue/LAN proofs and phase publication are outside both
+		// the common start barrier and the short self-update control lock.
+		startErr = admission.Prepared(ctx, *binding)
+	}
+	if startErr != nil {
 		_ = cmd.Process.Signal(syscall.SIGTERM)
-		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, identityErr)
 	}
 	var waitErr error
 	select {
@@ -245,7 +345,7 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcess(ctx context.Context, command nfqw
 	if err := ack.publish(cleanupCtx); err != nil {
 		return zero, err
 	}
-	return actual, ctx.Err()
+	return actual, errors.Join(ctx.Err(), startErr)
 }
 
 // Fixed early dispatch ABI: only the invocation ID comes from CLI. Both roots
@@ -272,6 +372,17 @@ func runNFQWSManagedProcessSupervisor(id, stateRoot, controlRoot string) error {
 	if err != nil || decodeErr != nil || declared.Command.ID != id || declared.Command.ControlRoot != controlRoot || declared.Receipt.State != "intent" || declared.Acknowledged {
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err, decodeErr)
 	}
+	var channel *nfqws2ManagedStartSocket
+	var handshake *nfqws2ManagedStartHelper
+	if declared.LaunchBinding != nil {
+		file := os.NewFile(3, "nfqws-start-helper")
+		channel, err = nfqws2ManagedStartSocketOpen(file, declared.Command.Parent.PID, declared.Command.Deadline)
+		_ = file.Close()
+		if err != nil {
+			return ErrNFQWSManagedProcessUnknown // No writer or Start without live fd.
+		}
+		defer channel.close()
+	}
 	target, err := restorejournal.OpenFileTarget(path)
 	if err != nil {
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
@@ -295,7 +406,18 @@ func runNFQWSManagedProcessSupervisor(id, stateRoot, controlRoot string) error {
 	hooks := components.NFQWSSupervisionHooks{
 		Armed: func(identity components.NFQWSSupervisionIdentity) error {
 			store.lease.Receipt = components.NFQWSSupervisionReceipt{State: "armed", BootID: identity.BootID, Start: identity.Start, PID: identity.PID, Group: identity.Group, CommandSHA256: hash}
-			return store.publish(ctx)
+			if err := store.publish(ctx); err != nil {
+				return err
+			}
+			if channel != nil {
+				base, err := nfqws2ManagedStartBase(command, *store.lease.LaunchBinding, identity)
+				if err != nil {
+					return err
+				}
+				handshake = &nfqws2ManagedStartHelper{transport: channel, base: base}
+				return handshake.ready()
+			}
+			return nil
 		},
 		Started: func(pid int) error {
 			store.lease.Receipt.State, store.lease.Receipt.Started, store.lease.Receipt.ChildPID = "running", true, pid
@@ -304,13 +426,31 @@ func runNFQWSManagedProcessSupervisor(id, stateRoot, controlRoot string) error {
 				return err
 			}
 			store.lease.Child = identity
-			return store.publish(ctx)
+			if err := store.publish(ctx); err != nil {
+				return err
+			}
+			if handshake != nil {
+				return handshake.started(command, identity)
+			}
+			return nil
 		},
 		StartAdmission: func(begin func() error) error {
 			if err := nfqws2ManagedFilesCurrent(command); err != nil {
 				return err
 			}
-			return operationgate.WithSelfUpdateEffectAdmission(ctx, controlRoot, id, command.InstallationID, command.Sequence, "nfqws-managed-child", begin)
+			start := func() error {
+				return operationgate.WithSelfUpdateEffectAdmission(ctx, controlRoot, id, command.InstallationID, command.Sequence, "nfqws-managed-child", begin)
+			}
+			if store.lease.LaunchBinding != nil {
+				return handshake.admit(ctx, func() error {
+					parent, err := components.ReadNFQWSSupervisionProcessIdentity(command.Parent.PID)
+					if err != nil || parent != command.Parent || os.Getppid() != command.Parent.PID {
+						return ErrNFQWSManagedProcessUnknown
+					}
+					return nfqws2ManagedControlCurrent(ctx, command)
+				}, start)
+			}
+			return start()
 		},
 		StopCheck: func() error { return nfqws2ManagedControlCurrent(ctx, command) },
 		Result: func(receipt components.NFQWSSupervisionReceipt, _ []byte) error {

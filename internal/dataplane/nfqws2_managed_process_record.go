@@ -49,6 +49,7 @@ type nfqws2ManagedProcessLease struct {
 	Owner         string                                 `json:"owner"`
 	Command       nfqws2ManagedProcessCommand            `json:"managed_command"`
 	CommandSHA256 string                                 `json:"command_sha256"`
+	LaunchBinding *nfqws2ManagedStartBinding             `json:"execution_binding,omitempty"`
 	Receipt       components.NFQWSSupervisionReceipt     `json:"process_receipt"`
 	Child         components.NFQWSRuntimeProcessIdentity `json:"child_identity"`
 	Acknowledged  bool                                   `json:"process_acknowledged"`
@@ -116,6 +117,9 @@ func nfqws2ValidateManagedCommand(command nfqws2ManagedProcessCommand) error {
 func nfqws2ValidateManagedLease(lease nfqws2ManagedProcessLease) error {
 	command, receipt := lease.Command, lease.Receipt
 	if lease.Version != 2 || lease.StateRoot != command.StateRoot || lease.Owner != command.Owner || nfqws2ValidateManagedCommand(command) != nil || !nfqws2ManagedHex(lease.CommandSHA256, 64) || lease.CommandSHA256 != nfqws2ManagedCommandDigest(command) {
+		return ErrNFQWSManagedProcessUnknown
+	}
+	if lease.LaunchBinding != nil && !nfqws2ManagedStartBindingValid(*lease.LaunchBinding, command) {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	if receipt.State == "intent" {
