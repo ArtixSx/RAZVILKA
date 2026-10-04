@@ -3,6 +3,7 @@ package strategylab
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -56,13 +57,16 @@ type Validation struct {
 }
 
 type Candidate struct {
-	ID         string     `json:"id"`
-	PoolID     string     `json:"pool_id"`
-	Name       string     `json:"name"`
-	Arguments  string     `json:"arguments"`
-	Origin     string     `json:"origin"`
-	Validation Validation `json:"validation"`
-	CreatedAt  string     `json:"created_at"`
+	ID string `json:"id"`
+	// Incarnation retires a binding when the same deterministic ID is replaced.
+	// Only the server builder assigns it; legacy records remain readable as-is.
+	Incarnation string     `json:"incarnation,omitempty"`
+	PoolID      string     `json:"pool_id"`
+	Name        string     `json:"name"`
+	Arguments   string     `json:"arguments"`
+	Origin      string     `json:"origin"`
+	Validation  Validation `json:"validation"`
+	CreatedAt   string     `json:"created_at"`
 }
 
 type CandidateInput struct {
@@ -420,7 +424,11 @@ func buildCandidate(input CandidateInput, now time.Time) (Candidate, error) {
 	}
 	digest := sha256.Sum256([]byte(poolID + "\x00" + name + "\x00" + strings.Join(parsed, "\x00")))
 	id := "st-" + hex.EncodeToString(digest[:8])
-	candidate := Candidate{ID: id, PoolID: poolID, Name: name, Arguments: strings.TrimSpace(arguments), Origin: origin, CreatedAt: now.Format(time.RFC3339), Validation: Validation{Code: "NATIVE_REQUIRED", Output: "Синтаксис разобран; требуется NFQWS2 --dry-run", Arguments: parsed}}
+	var incarnation [16]byte
+	if _, err := rand.Read(incarnation[:]); err != nil {
+		return Candidate{}, fmt.Errorf("generate Strategy Lab candidate incarnation: %w", err)
+	}
+	candidate := Candidate{ID: id, Incarnation: hex.EncodeToString(incarnation[:]), PoolID: poolID, Name: name, Arguments: strings.TrimSpace(arguments), Origin: origin, CreatedAt: now.Format(time.RFC3339), Validation: Validation{Code: "NATIVE_REQUIRED", Output: "Синтаксис разобран; требуется NFQWS2 --dry-run", Arguments: parsed}}
 	return candidate, nil
 }
 

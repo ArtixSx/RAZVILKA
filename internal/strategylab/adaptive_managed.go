@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	errAdaptiveCandidateChanged = errors.New("adaptive candidate identity or provenance changed")
-	errAdaptiveManagedValidator = errors.New("adaptive bound validation requires the same Manager's reviewed supervised validator")
-	errAdaptivePackBinding      = errors.New("adaptive pack candidate membership is not recorded")
+	errAdaptiveCandidateChanged     = errors.New("adaptive candidate identity or provenance changed")
+	errAdaptiveCandidateIncarnation = errors.New("adaptive candidate requires an existing valid server-generated incarnation")
+	errAdaptiveManagedValidator     = errors.New("adaptive bound validation requires the same Manager's reviewed supervised validator")
+	errAdaptivePackBinding          = errors.New("adaptive pack candidate membership is not recorded")
 )
 
 // This is candidate/validation plumbing only. It offers no probe consumer,
@@ -51,7 +52,13 @@ func (f *managerAdaptiveFoundation) bind(expected Candidate) (adaptiveCandidateB
 		return adaptiveCandidateBinding{}, ErrCompatibilityQuiescenceUnknown
 	}
 	current, exists := m.state.Candidates[expected.ID]
-	if !exists || !adaptiveCandidateIdentityEqual(current, expected) {
+	if !exists {
+		return adaptiveCandidateBinding{}, errAdaptiveCandidateChanged
+	}
+	if !compatibilityHex(current.Incarnation, 32) || !compatibilityHex(expected.Incarnation, 32) {
+		return adaptiveCandidateBinding{}, errAdaptiveCandidateIncarnation
+	}
+	if !adaptiveCandidateIdentityEqual(current, expected) {
 		return adaptiveCandidateBinding{}, errAdaptiveCandidateChanged
 	}
 	// Origin is a label, and PackReceipts binds only a whole reviewed payload.
@@ -67,11 +74,14 @@ func (f *managerAdaptiveFoundation) validateBound(ctx context.Context, binding a
 	if f == nil || f.manager == nil || binding.manager != f.manager {
 		return Candidate{}, errAdaptiveCandidateChanged
 	}
+	if !compatibilityHex(binding.candidate.Incarnation, 32) {
+		return Candidate{}, errAdaptiveCandidateIncarnation
+	}
 	return f.manager.validateCandidate(ctx, binding.candidate.ID, &binding)
 }
 
 func adaptiveCandidateIdentityEqual(a, b Candidate) bool {
-	return a.ID == b.ID && a.PoolID == b.PoolID && a.Name == b.Name && a.Arguments == b.Arguments && a.Origin == b.Origin && a.CreatedAt == b.CreatedAt
+	return a.ID == b.ID && a.Incarnation == b.Incarnation && a.PoolID == b.PoolID && a.Name == b.Name && a.Arguments == b.Arguments && a.Origin == b.Origin && a.CreatedAt == b.CreatedAt
 }
 
 func adaptiveCandidateDetached(candidate Candidate) Candidate {
