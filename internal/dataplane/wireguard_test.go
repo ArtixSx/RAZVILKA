@@ -21,6 +21,7 @@ func ownWireGuardFixture(t *testing.T, profile string) (*WARPWireGuardAdapter, *
 	t.Helper()
 	root := t.TempDir()
 	configs := engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups"))
+	configs.LiveRoot = filepath.Join(root, "live")
 	if _, err := configs.Stage("wireguard", "main", profile); err != nil {
 		t.Fatal(err)
 	}
