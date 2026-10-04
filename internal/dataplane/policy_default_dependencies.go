@@ -62,7 +62,7 @@ func AssertPolicyDefaultUnreferenced(ctx context.Context, runner NFQWS2Runner, i
 		parsed, ok := parseKernelPolicyRule(family, line)
 		if !ok && state.WireGuardEndpoint != nil {
 			endpoint := *state.WireGuardEndpoint
-			if endpoint.Table == state.Table && endpoint.matchesRule(family, line) {
+			if endpoint.matchesRule(family, line) {
 				// The immutable receipt's transport selector is independent of
 				// this default only while its exact host pin is actually present.
 				// Reuse NET's full rule/route readback; this observer has no file,

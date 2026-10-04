@@ -105,8 +105,9 @@ type Manager struct {
 	PolicyConflicts func() []Conflict
 	// OwnsPolicyRule consults the configured dataplane's private runtime
 	// journal. It must compare the whole rule; a range/table is not ownership.
-	OwnsPolicyRule  func(adapterID string, family int, line string) bool
-	OwnsPolicyRoute func(adapterID string, family int, line string) bool
+	OwnsPolicyRule         func(adapterID string, family int, line string) bool
+	OwnsPolicyRoute        func(adapterID string, family int, line string) bool
+	OwnsPolicyRouteInTable func(adapterID string, family, table int, line string) bool
 }
 
 type capabilitySpec struct {
@@ -150,7 +151,9 @@ func New(configs *engineconfig.Manager) *Manager {
 // and offline tools do not depend on the host running their test suite.
 func (m *Manager) EnablePolicyInspection() {
 	if m != nil {
-		m.PolicyConflicts = func() []Conflict { return discoverPolicyConflicts(m.OwnsPolicyRule, m.OwnsPolicyRoute) }
+		m.PolicyConflicts = func() []Conflict {
+			return discoverPolicyConflicts(m.OwnsPolicyRule, m.OwnsPolicyRoute, m.OwnsPolicyRouteInTable)
+		}
 	}
 }
 
@@ -256,7 +259,7 @@ var (
 	policyRulePattern     = regexp.MustCompile(`^\s*(\d+):.*\b(?:lookup|table)\s+([^\s]+)`)
 )
 
-func discoverPolicyConflicts(owns func(string, int, string) bool, routeOwners ...func(string, int, string) bool) []Conflict {
+func discoverPolicyConflicts(owns, ownsRoute func(string, int, string) bool, ownsTableRoute func(string, int, int, string) bool) []Conflict {
 	ipCommand := ""
 	for _, candidate := range []string{"/opt/sbin/ip", "/opt/bin/ip"} {
 		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
@@ -281,13 +284,17 @@ func discoverPolicyConflicts(owns func(string, int, string) bool, routeOwners ..
 		}
 		return string(output)
 	}
-	rules := []string{run("rule", "show"), run("-6", "rule", "show")}
+	rules := []string{run("-N", "rule", "show"), run("-N", "-6", "rule", "show")}
 	tables := map[string]string{}
 	for _, spec := range dataplane.PolicyOwnershipSpecs() {
 		tables[spec.Adapter+"|4"] = run("route", "show", "table", strconv.Itoa(spec.Table))
 		tables[spec.Adapter+"|6"] = run("-6", "route", "show", "table", strconv.Itoa(spec.Table))
+		if spec.EndpointTable != 0 {
+			tables[spec.Adapter+"|endpoint|4"] = run("-N", "route", "show", "table", strconv.Itoa(spec.EndpointTable))
+			tables[spec.Adapter+"|endpoint|6"] = run("-N", "-6", "route", "show", "table", strconv.Itoa(spec.EndpointTable))
+		}
 	}
-	return policyConflictsFromStateWithOwner(rules, tables, owns, routeOwners...)
+	return policyConflictsFromStateWithTableOwner(rules, tables, owns, ownsRoute, ownsTableRoute)
 }
 
 func policyConflictsFromState(ruleOutputs []string, tableOutputs map[string]string) []Conflict {
@@ -299,6 +306,10 @@ func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[st
 	if len(routeOwners) > 0 {
 		ownsRoute = routeOwners[0]
 	}
+	return policyConflictsFromStateWithTableOwner(ruleOutputs, tableOutputs, owns, ownsRoute, nil)
+}
+
+func policyConflictsFromStateWithTableOwner(ruleOutputs []string, tableOutputs map[string]string, owns, ownsRoute func(string, int, string) bool, ownsTableRoute func(string, int, int, string) bool) []Conflict {
 	conflicts := []Conflict{}
 	seen := map[string]bool{}
 	appendConflict := func(conflict Conflict) {
@@ -344,6 +355,12 @@ func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[st
 				if len(match) != 3 {
 					continue
 				}
+				if spec.EndpointTable != 0 && match[2] == strconv.Itoa(spec.EndpointTable) {
+					if owns == nil || !owns(spec.Adapter, 4+familyIndex*2, line) {
+						appendConflict(Conflict{Kind: "table", Value: match[2], Engines: []string{spec.Adapter}, SystemUse: family + ": transport table has an unconfirmed selector", Blocking: true})
+					}
+					continue
+				}
 				if priority < spec.PriorityBase || priority > spec.PriorityEnd || match[2] == strconv.Itoa(spec.Table) {
 					continue
 				}
@@ -356,6 +373,23 @@ func policyConflictsFromStateWithOwner(ruleOutputs []string, tableOutputs map[st
 	}
 	for _, spec := range dataplane.PolicyOwnershipSpecs() {
 		for _, family := range []string{"4", "6"} {
+			if spec.EndpointTable != 0 {
+				foreignPins := 0
+				for _, line := range strings.Split(tableOutputs[spec.Adapter+"|endpoint|"+family], "\n") {
+					line = strings.TrimSpace(line)
+					familyNumber, _ := strconv.Atoi(family)
+					if line != "" && (ownsTableRoute == nil || !ownsTableRoute(spec.Adapter, familyNumber, spec.EndpointTable, line)) {
+						foreignPins++
+					}
+				}
+				if foreignPins != 0 {
+					label := "IPv4"
+					if family == "6" {
+						label = "IPv6"
+					}
+					appendConflict(Conflict{Kind: "table", Value: strconv.Itoa(spec.EndpointTable), Engines: []string{spec.Adapter}, SystemUse: label + ": transport table contains unconfirmed routes: " + strconv.Itoa(foreignPins), Blocking: true})
+				}
+			}
 			output := strings.TrimSpace(tableOutputs[spec.Adapter+"|"+family])
 			if output == "" {
 				continue
