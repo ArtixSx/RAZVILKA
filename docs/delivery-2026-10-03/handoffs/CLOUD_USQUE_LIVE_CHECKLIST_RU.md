@@ -8,7 +8,7 @@ Producer: `2b23a613e3fe970451ba4a3f3adf91fce19ff986`; required P2 DNS boundary f
 
 Semantic follow-up обязателен отдельно: [owned service validator/grade contract](CLOUD_USQUE_SERVICE_PROOF_RU.md). TLS2xx — reachability, nonce — challenge; semantic acceptance требует полного frozen catalog predicate внутри owned identity bracket. Flat/bodyless receipt без этой степени не даёт service PASS.
 
-Root сообщил independent acceptance semantic `34074f56bf8d92ac96b1862bd1bda1ecd613a38c`; deadline `a5d168b` ранее принят с native17. Combined-source Transport повтор и finished VLESS/CORE thin hook ещё pending. Ledger genuine USQUE ниже остаётся целиком UNVERIFIED до отдельного actual root window.
+Root сообщил independent acceptance semantic `34074f56bf8d92ac96b1862bd1bda1ecd613a38c`; deadline `a5d168b` ранее принят с native17. Повтор actual HTTPS/DoH/SOCKS Transport после semantic fix прошёл в root `check-linux-16` на source `226e7537557c6606ea8e64c666827f8e0426ae4f`, RC0. Finished VLESS/CORE thin hook и live USQUE остаются открытыми. Ledger genuine USQUE ниже целиком UNVERIFIED до отдельного actual root window.
 
 ## Почему выбран live путь
 
