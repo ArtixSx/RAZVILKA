@@ -45,3 +45,9 @@ App теперь передаёт библиотеке только `Ordered[abs
 Новый `TestD10RestartTailDoesNotWrapIntoConsumedPrefix`: реальные app/store/journal, deterministic persisted tail для3 и32 узлов при budget2; reopen → только один последний unsupported Check → monotonic cursor3/32 + exhausted; повторный reopen не проверяет prefix; approved passive page append → только новый usable Check → Apply + cursor4/33. OS/checker fixtures контролируемые, внешний fetch/native/HIL не выполнялись.
 
 Адресный `go test ./internal/app -run 'TestD10RestartTail|TestD10Cold|TestD10Cursor|TestAutonomyCandidate' -count=1` — RC0,10.821s (Windows Go1.26.5/тот же env, auto-reviewed execution вне sandbox). Связанный `go test ./internal/app -run 'TestD10(Unsupported|Worker32)|TestAutonomyReserves(CandidateBudget|Definite)' -count=1` — RC0,2.561s. Final `go vet ./internal/app ./internal/autonomy` и `git diff --check` — RC0. Follow-up SHA передаётся Root после commit. Эта порция исправляет App ring/suffix boundary; общий library ring contract сохранён.
+
+## Follow-up: Linux private feed fixture
+
+Root Linux race log `delivery-review/.review-local/integration66.log` выявил единственный app failure: `TestD10Worker32UnsupportedQueuesRefillThenAppliesEntry33` на открытии providerfeed, до paging/assertions. Fixture передавал напрямую `t.TempDir()`, а Linux guard требует существующий absolute private0700 directory. Тест теперь создаёт child `feeds` через `os.Mkdir(..., 0o700)` и передаёт его реальному Manager. Production feed/NodeStore/ownedfs guards и код не изменены.
+
+Адресный Windows `go test ./internal/app -run '^TestD10Worker32UnsupportedQueuesRefillThenAppliesEntry33$' -count=1` — RC0,0.913s; diff check — RC0; тот же Go1.26.5/env/auto-reviewed execution. Новый адресный Linux/race результат этой fixture-правки должен подтвердить Root; здесь Linux/native не запускались.

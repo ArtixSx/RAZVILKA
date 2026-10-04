@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -274,7 +275,11 @@ func TestD10UnsupportedCursorSurvivesRestartAndAppendsNewPage(t *testing.T) {
 
 func TestD10Worker32UnsupportedQueuesRefillThenAppliesEntry33(t *testing.T) {
 	a, _, adapter := autonomousIntegrationFixture(t)
-	feeds, err := providerfeed.Open(a.Nodes, t.TempDir())
+	feedRoot := filepath.Join(t.TempDir(), "feeds")
+	if err := os.Mkdir(feedRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	feeds, err := providerfeed.Open(a.Nodes, feedRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
