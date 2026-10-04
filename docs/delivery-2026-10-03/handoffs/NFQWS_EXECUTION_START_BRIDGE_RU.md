@@ -97,6 +97,11 @@ parent context не переносится в другой процесс. От�
 Manager.Current. Copy не выходит в Apply/Runner writer path. Actual binding
 сохраняет отдельный capture-ready ApplyGuard. Cleanup guard и
 VerifyInactive/SettleRemoved остаются самостоятельными.
+Для paired producer есть private `nfqwsScopedReadExecutionProcess`: в том же
+two-sided observed ownership lease требуется exact равенство всех восьми
+LaunchBinding fields с retained resource.Binding и compiled header/digest.
+Нет отдельного unbound metadata read или adoption legacy receipt как Manager
+proof. Публичный process-only reader сохраняет свой прежний contract.
 
 ## Проверки / ROOT launcher
 

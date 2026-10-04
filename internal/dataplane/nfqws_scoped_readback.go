@@ -344,6 +344,25 @@ func nfqwsScopedProcessProof(p *NFQWSScopedPlan, proof NFQWSScopedProcessProof, 
 // ReadNFQWSScopedManagedProcess binds the existing producer's exact session
 // observation to this frozen queue candidate. It is not a launch constructor.
 func ReadNFQWSScopedManagedProcess(ctx context.Context, adapter *NFQWS2Adapter, p *NFQWSScopedPlan, inactive bool) (NFQWSScopedProcessProof, error) {
+	return nfqwsScopedReadManagedProcess(ctx, adapter, p, inactive, nil)
+}
+
+// The paired issuer supplies the exact retained eight-field identity. Compare
+// it in the SAME two-sided observed lease, never a separate metadata sample.
+func nfqwsScopedReadExecutionProcess(ctx context.Context, adapter *NFQWS2Adapter, p *NFQWSScopedPlan, binding NFQWSExecutionBinding, inactive bool) (NFQWSScopedProcessProof, error) {
+	return nfqwsScopedReadManagedProcess(ctx, adapter, p, inactive, &binding)
+}
+
+func nfqwsScopedLeaseExecutionMatches(lease nfqws2ManagedProcessLease, p *NFQWSScopedPlan, binding NFQWSExecutionBinding) bool {
+	if p == nil || lease.LaunchBinding == nil || *lease.LaunchBinding != binding || !nfqws2ManagedStartBindingValid(binding, lease.Command) {
+		return false
+	}
+	r := p.Resources()
+	return binding.PlanID == r.PlanID && binding.PlanDigest == r.PlanDigest && binding.ResourceGeneration == r.Generation &&
+		binding.EffectsDigest == p.Digest() && binding.SessionID == r.SessionID && binding.CommandSHA256 == r.CommandSHA256
+}
+
+func nfqwsScopedReadManagedProcess(ctx context.Context, adapter *NFQWS2Adapter, p *NFQWSScopedPlan, inactive bool, binding *NFQWSExecutionBinding) (NFQWSScopedProcessProof, error) {
 	var zero NFQWSScopedProcessProof
 	if adapter == nil || p == nil || ctx == nil {
 		return zero, ErrNFQWSScopedOwner
@@ -357,6 +376,9 @@ func ReadNFQWSScopedManagedProcess(ctx context.Context, adapter *NFQWS2Adapter, 
 	}
 	if err != nil {
 		return zero, err
+	}
+	if binding != nil && !nfqwsScopedLeaseExecutionMatches(lease, p, *binding) {
+		return zero, ErrNFQWSScopedOwner
 	}
 	if lease.Command.ID != p.resources.SessionID || lease.CommandSHA256 != p.resources.CommandSHA256 || lease.Command.Parent.BootID != p.resources.BootID || components.NFQWSRuntimeArgumentsSHA256(lease.Command.Program.Path, lease.Command.Args) != p.resources.ArgumentsHash {
 		return zero, ErrNFQWSScopedOwner
