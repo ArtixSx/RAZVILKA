@@ -32,6 +32,14 @@ type lanNativeLink struct {
 // families and preservation of a firmware-like foreign route. It does not
 // attest a VPN server, DNS redirect, NFQWS daemon or a physical router.
 func TestNativeLANPolicyMACGate(t *testing.T) {
+	lanNativePolicyGate(t, false)
+}
+
+func TestNativeLANPolicySuspension(t *testing.T) {
+	lanNativePolicyGate(t, true)
+}
+
+func lanNativePolicyGate(t *testing.T, suspension bool) {
 	if os.Getenv("RAZVILKA_LAN_POLICY_NETNS") != "1" {
 		t.Skip("requires an exclusively assigned empty Linux network namespace")
 	}
@@ -175,13 +183,33 @@ func TestNativeLANPolicyMACGate(t *testing.T) {
 			run(r.command(e.Tool), e.Delete...)
 		}
 	})
-	if err := r.Activate(context.Background(), p); err != nil {
+	activate := func() error { return r.Activate(context.Background(), p) }
+	var priorRoot string
+	if suspension {
+		priorRoot = privateScopedXrayFixtureDir(t)
+		guard := func(ctx context.Context, _ *LANPolicyRuntimePlan, _ LANPolicyEffect) error { return ctx.Err() }
+		gate := &LANPolicyReceiptBinding{Runtime: r, ApplyGuard: guard, CleanupGuard: guard, RetireCheck: func(ctx context.Context, _ *LANPolicyRuntimePlan) error { return ctx.Err() }}
+		activate = func() error { return gate.Apply(context.Background(), p, priorRoot) }
+		t.Cleanup(func() {
+			if err := gate.Remove(context.Background(), p, priorRoot); err != nil {
+				dump("receipt gate cleanup", err)
+				t.Error(err)
+			}
+		})
+	}
+	if err := activate(); err != nil {
 		dump("activate", err)
 		t.Fatal(err)
 	}
 	for _, family := range []string{"-4", "-6"} {
 		run(ip, family, "route", "add", "default", "dev", "rz-svc", "table", "201")
 		run(ip, family, "rule", "add", "priority", "61", "fwmark", "0x20000000/0x28000000", "iif", "br-lan", "lookup", "201")
+		if suspension {
+			family := family
+			t.Cleanup(func() {
+				run(ip, family, "rule", "del", "priority", "61", "fwmark", "0x20000000/0x28000000", "iif", "br-lan", "lookup", "201")
+			})
+		}
 	}
 	r.ConsumerCheck = func(context.Context, *LANPolicyRuntimePlan) error { return nil } // fixture-owned exact selectors above
 	if err := r.Verify(context.Background(), p); err != nil {
@@ -267,6 +295,9 @@ func TestNativeLANPolicyMACGate(t *testing.T) {
 		if !strings.Contains(run(ip, family, "rule", "show"), "100:") {
 			t.Fatal("foreign firmware selector lost")
 		}
+	}
+	if suspension {
+		lanNativeSuspensionFrames(t, r, p, priorRoot, bridge, client, counts, run)
 	}
 }
 
