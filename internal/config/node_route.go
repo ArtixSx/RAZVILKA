@@ -44,6 +44,7 @@ func (s *Store) applyNodeRouteWithRollback(id, route string, sources *[]string, 
 	}
 	desired.Enabled, desired.Mode, desired.Route = true, route, route
 	applied.Enabled, applied.Mode, applied.Route = true, route, route
+	desired.WireGuardProfileRevision, applied.WireGuardProfileRevision = "", ""
 	if sources != nil {
 		desired.Sources = append([]string(nil), (*sources)...)
 		applied.Sources = append([]string(nil), (*sources)...)

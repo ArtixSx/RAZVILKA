@@ -131,6 +131,14 @@ func LoadRegistry(path string) (Registry, error) {
 }
 
 func NewManager(reg Registry, cacheDir string, settingsPath ...string) *Manager {
+	// Keep the approved source policy detached from caller-owned slices. A
+	// later registry edit must create a new manager, not change mirrors, TTL or
+	// service enrichment while this manager is fetching or reading receipts.
+	reg.Sources = append([]Source(nil), reg.Sources...)
+	for i := range reg.Sources {
+		reg.Sources[i].Services = append([]string(nil), reg.Sources[i].Services...)
+		reg.Sources[i].RedirectHosts = append([]string(nil), reg.Sources[i].RedirectHosts...)
+	}
 	path := ""
 	if len(settingsPath) > 0 {
 		path = strings.TrimSpace(settingsPath[0])
@@ -385,6 +393,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	if err != nil {
 		return m.fail(*src, publicfetch.SafeError(err))
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if int64(len(b)) > max {
 		return m.fail(*src, fmt.Errorf("source exceeds max_bytes=%d", max))
 	}
@@ -409,6 +420,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	normalized := strings.Join(entries, "\n") + "\n"
 	sum := sha256.Sum256([]byte(normalized))
 	digest := hex.EncodeToString(sum[:])
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(m.cacheDir, 0o700); err != nil {
 		return m.fail(*src, errors.New("cannot create source cache directory"))
 	}
@@ -428,6 +442,9 @@ func (m *Manager) Refresh(ctx context.Context, id string) error {
 	data, err := json.Marshal(cached)
 	if err != nil {
 		return m.fail(*src, errors.New("cannot encode source cache"))
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := writeAtomic(filepath.Join(m.cacheDir, src.ID+".cache.json"), data, 0o600); err != nil {
 		return m.fail(*src, errors.New("cannot commit source cache"))

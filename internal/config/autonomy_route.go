@@ -35,6 +35,7 @@ func (s *Store) ApplyAutonomyRouteWithRollback(id, route string, sources []strin
 	desired.Enabled = true
 	desired.Route = route
 	desired.Mode = route
+	desired.WireGuardProfileRevision = "" // Autonomous executor/node routes are not named WG review bindings.
 	desired.Sources = normalized
 	s.cfg.Services[id] = desired
 	s.cfg.AppliedServices[id] = desired
