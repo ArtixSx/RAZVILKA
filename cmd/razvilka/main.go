@@ -162,7 +162,7 @@ func main() {
 	}
 	if *selfUpdateSchema {
 		// Capability2 requires the complete owned-runtime and stopped recovery
-		// consumer. Missing owner proofs/installer Start admission remain fenced.
+		// consumer. Missing owner proofs/stopped settlement remain fenced.
 		fmt.Println("0")
 		return
 	}
@@ -603,6 +603,7 @@ func main() {
 	a.SelfUpdate.Directory = selfFileState.Helper.Directory
 	if selfFileState.Adapter != nil {
 		a.SelfUpdate.FileAuthorityReview = selfUpdateAuthorityReview(selfFileState.ControlRoot)
+		a.SelfUpdate.FileEffectAdmission = selfUpdateEffectAdmission
 	}
 	selfFileState.Helper = a.SelfUpdate
 	a.SelfUpdateFiles = selfFileState

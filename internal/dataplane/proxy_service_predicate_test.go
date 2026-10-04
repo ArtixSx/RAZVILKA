@@ -169,3 +169,66 @@ func TestProxyServicePredicateExactLimitJSONIsComplete(t *testing.T) {
 		}
 	}
 }
+
+func TestProxyServicePredicateMemorySampleRequiresExactFrozenIdentity(t *testing.T) {
+	for _, mode := range []string{"accepted", "service-ID", "URL", "hash", "predicate-tampered", "oversized-body", "oversized-type", "invalid-type", "nil-context", "canceled-context"} {
+		t.Run(mode, func(t *testing.T) {
+			service := proxyPredicateFixtureService()
+			predicate, err := newProxyServicePredicate(service)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, rawURL, hash := service.ID, service.ProbeURL, predicate.digest()
+			ctx := context.Background()
+			contentType, body := "application/json", `{"result":{"accepted":true}}`
+			switch mode {
+			case "service-ID":
+				id = "other"
+			case "URL":
+				rawURL = "https://example.com/other"
+			case "hash":
+				hash = strings.Repeat("a", 64)
+			case "predicate-tampered":
+				predicate.probe.Expect.JSONFields[0] = "other"
+			case "oversized-body":
+				body = strings.Repeat("x", probecheck.MaxBodyBytes+1)
+			case "oversized-type":
+				contentType = strings.Repeat("x", 1025)
+			case "invalid-type":
+				contentType = "application/json\r\nX-Test: changed"
+			case "nil-context":
+				ctx = nil
+			case "canceled-context":
+				canceled, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = canceled
+			}
+			err = predicate.evaluateSample(ctx, id, rawURL, hash, 200, contentType, body, false)
+			if (err == nil) != (mode == "accepted") {
+				t.Fatal("memory sample acquired different identity or bypassed bounds/cancellation", mode, err)
+			}
+		})
+	}
+}
+
+func TestProxyServicePredicateMemorySampleKeepsHonestJSONTruncation(t *testing.T) {
+	service := proxyPredicateFixtureService()
+	predicate, err := newProxyServicePredicate(service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefix, suffix := `{"result":{"accepted":true},"padding":"`, `"}`
+	body := prefix + strings.Repeat("x", probecheck.MaxBodyBytes-len(prefix)-len(suffix)) + suffix
+	for _, truncated := range []bool{false, true} {
+		err := predicate.evaluateSample(context.Background(), service.ID, service.ProbeURL, predicate.digest(), 200, "application/json", body, truncated)
+		if !truncated && err != nil {
+			t.Fatal("complete exactly bounded JSON rejected", err)
+		}
+		if truncated {
+			var semantic *serviceResponseError
+			if !errors.As(err, &semantic) || semantic.code != "json-sample-incomplete" {
+				t.Fatal("truncated JSON was promoted to semantic acceptance", err)
+			}
+		}
+	}
+}

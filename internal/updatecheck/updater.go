@@ -69,6 +69,9 @@ type updateRecord struct {
 
 type Updater struct {
 	FileAuthorityReview func(context.Context, string) (SelfUpdateAuthority, error)
+	// Mandatory for installer helper Start; sealed review authority is passed
+	// with action start/live and effect installer-helper. Only Start is inside.
+	FileEffectAdmission SelfUpdateEffectAdmission
 	Current             string
 	Directory           string
 	Deployment          Deployment
@@ -84,14 +87,15 @@ type Updater struct {
 	// never configures a command, URL, destination or transport.
 	eligibility func(Deployment) error
 	preflight   func(context.Context, string, Release) error
-	launch      func(string) (int, error)
+	launch      func(context.Context, string, func(func() error) error) (int, error)
+	helperOwned func(string) error
 	space       func(string, int64) error
 	persistHook func(updateRecord) error
 	alive       func(int) bool
 }
 
 func NewUpdater(current, stateRoot string, deployment Deployment) *Updater {
-	return &Updater{Current: current, Directory: filepath.Join(stateRoot, "self-update"), Deployment: deployment, Client: OfficialClient(3 * time.Minute), parent: context.Background(), eligibility: CheckDeployment, preflight: preflightInstaller, launch: launchInstallerHelper, space: checkUpdateSpace, alive: helperAlive}
+	return &Updater{Current: current, Directory: filepath.Join(stateRoot, "self-update"), Deployment: deployment, Client: OfficialClient(3 * time.Minute), parent: context.Background(), eligibility: CheckDeployment, preflight: preflightInstaller, launch: launchInstallerHelper, helperOwned: checkRootOwnedPath, space: checkUpdateSpace, alive: helperAlive}
 }
 
 func (u *Updater) Start(ctx context.Context) { u.mu.Lock(); u.parent = ctx; u.mu.Unlock() }
@@ -564,6 +568,10 @@ func (u *Updater) Apply(ctx context.Context, id, token string, revision uint64, 
 	if err != nil || actual != r.ExecutableHash {
 		return cloneJob(r.Job), ErrReviewChanged
 	}
+	admission, err := u.installerHelperAdmission(ctx, id)
+	if err != nil || u.launch == nil {
+		return cloneJob(r.Job), errors.Join(ErrFileProtocol, err)
+	}
 	r.Job.State = "installing"
 	r.Job.Stage = "handoff"
 	r.Job.CanApply = false
@@ -574,13 +582,29 @@ func (u *Updater) Apply(ctx context.Context, id, token string, revision uint64, 
 	if err = u.persistLocked(); err != nil {
 		return cloneJob(r.Job), err
 	}
-	pid, err := u.launch(id)
+	pid, err := u.launch(ctx, id, admission)
 	if err != nil {
+		if pid > 1 {
+			// Start already happened. Preserve custody and retain the startup
+			// fence; the helper refuses requires-review before any file effect.
+			r.Job.HelperPID = pid
+			r.Job.State = "requires-review"
+			r.Job.Code = "helper-handoff-uncertain"
+			r.Job.Message = "Установщик запущен. Требуется проверка результата передачи."
+			_ = u.persistLocked()
+			return cloneJob(r.Job), errors.Join(ErrHandoffUncertain, err)
+		}
 		r.Job.State = "failed"
 		r.Job.Code = "helper-launch-failed"
 		r.Job.Message = updateMessage(r.Job.Code)
 		_ = u.persistLocked()
 		return cloneJob(r.Job), err
+	}
+	if pid <= 1 {
+		r.Job.State = "requires-review"
+		r.Job.Code = "helper-handoff-uncertain"
+		_ = u.persistLocked()
+		return cloneJob(r.Job), ErrHandoffUncertain
 	}
 	r.Job.HelperPID = pid
 	if err = u.persistLocked(); err != nil {

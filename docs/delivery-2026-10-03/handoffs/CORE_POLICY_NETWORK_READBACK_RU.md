@@ -25,6 +25,31 @@ models passed 0.903s; vet/diff RC0. No native or full D07 readiness is claimed.
 NET owns WG source NAT and its common mixed effect compiler/readback callbacks;
 userspace proxy NAT ACCEPT is not a WG source NAT substitute. Public delegated
 IPv6 LAN prefix forwarding is not broadened by this change: existing private
-subnet checks still apply. A `/0` destination FIB sample also needs owner/native
-review; this patch does not claim that lookup of the unspecified address proves
-an actual default route or that a full LAN classifier/consumer receipt is ready.
+subnet checks still apply. A full LAN classifier/consumer receipt is not proved
+by these observations.
+
+Root review held the first checkpoint because `/0` used the unspecified prefix
+base. The follow-up selects one of four bounded public unicast literals per
+family, inside the destination and outside the reviewed endpoint exclusions and
+client subnet. It refuses unavailable/unqualified scope and never retries a
+failed or wrong-interface FIB result. Selection sends no packets and is not
+remote reachability evidence. The real command retains exact forwarded source,
+ingress and managed mark, with `-6` for IPv6. Models cover both families, an
+excluded first candidate, all candidates excluded, bad exclusion, missing
+authority and a wrong device without fallback. Related dataplane tests passed
+0.885s; vet/diff RC0. Native execution remains with Root, including actual
+IPv4/IPv6 default FIB observations before promoting the held checkpoint.
+
+Root's isolated native source54 then confirmed a separate readback mismatch:
+`67: from 192.168.93.0/24 fwmark 0x20000000/0x28000000 iif rz-def-lan lookup 204`
+and the equivalent IPv6 `from fd93::/64` omit `to` for the default destination.
+The ownership parser now normalizes only fixed 5/7/9-token omitted-destination
+forms into its existing 7/9/11-token exact grammar, inserting family-specific
+canonical `/0`. Exact mark/mask, ingress, source family, numeric coordinates
+and unknown-selector rejection remain required. No general token parser or
+cleanup authority is added. Regressions compare omitted/explicit tuples in
+both families, refuse near matches and run modeled apply/readback/cleanup with
+the actual omitted form. The existing ingress test now checks every expected
+full tuple at reserved priorities while leaving baseline rules outside those
+priorities alone. Root remains responsible for repeating actual native kernel
+verification after this parser correction.

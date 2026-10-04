@@ -42,6 +42,7 @@ type ProxyTunnelAdapter struct {
 	CanaryTraceProbe func(context.Context, string) (usqueCanaryEvidence, error)
 	EngineBin        string
 	SidecarBin       string
+	ownedUSQUEProbe  usqueOwnedProducer
 	// Fixed for adapter lifetime; empty preserves the original sing-box backend.
 	SidecarKind string
 	PackageInit string
@@ -67,6 +68,7 @@ type ProxyTunnelAdapter struct {
 	scopedXray          bool
 	NodeTUNProbe        NodeTUNProbe
 	nodeRuntimeIdentity func(ProcessSpec, string) (string, error)
+	nodeRouterVerifier  bool
 }
 
 type NodeRouteRequest struct {

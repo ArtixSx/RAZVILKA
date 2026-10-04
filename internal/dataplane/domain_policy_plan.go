@@ -35,6 +35,7 @@ func CloneDomainPolicyRuntimePlan(p *DomainPolicyRuntimePlan) *DomainPolicyRunti
 	copy.Services = slices.Clone(p.Services)
 	for i := range copy.Services {
 		copy.Services[i].Domains = slices.Clone(p.Services[i].Domains)
+		copy.Services[i].DomainSuffixes = slices.Clone(p.Services[i].DomainSuffixes)
 		copy.Services[i].CIDRs = slices.Clone(p.Services[i].CIDRs)
 		copy.Services[i].Sources = slices.Clone(p.Services[i].Sources)
 	}
