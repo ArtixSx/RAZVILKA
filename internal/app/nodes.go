@@ -621,7 +621,7 @@ func (a *App) nodeImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "явно подтвердите сохранение узлов", http.StatusPreconditionRequired)
 		return
 	}
-	parsed, err := providerprofile.ParseProfile(request.Profile)
+	parsed, err := providerprofile.ParseCanonicalProfile(request.Profile)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "code": providerprofile.ErrorCode(err), "error": "Пакет узлов не принят.", "preview": parsed.Preview})
 		return
