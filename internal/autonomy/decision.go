@@ -19,6 +19,7 @@ type Runtime struct {
 	FirstFailure      time.Time          `json:"first_failure,omitempty"`
 	LastFailure       time.Time          `json:"last_failure,omitempty"`
 	Cursor            int                `json:"cursor"`
+	Search            *Traversal         `json:"search,omitempty"`
 	Reserves          []string           `json:"reserves"`
 	Switches          []time.Time        `json:"switches"`
 	CandidateFailures []CandidateFailure `json:"candidate_failures,omitempty"`
@@ -79,6 +80,11 @@ func (r *Runtime) RefundSwitch() {
 	}
 }
 func (r Runtime) Clone() Runtime {
+	if r.Search != nil {
+		copy := *r.Search
+		copy.Ordered = slices.Clone(copy.Ordered)
+		r.Search = &copy
+	}
 	r.Reserves = slices.Clone(r.Reserves)
 	r.Switches = slices.Clone(r.Switches)
 	r.CandidateFailures = slices.Clone(r.CandidateFailures)

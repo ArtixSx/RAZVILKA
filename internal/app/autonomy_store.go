@@ -61,6 +61,19 @@ func decodeAutonomy(data []byte) (autonomyDocument, error) {
 		}
 	}
 	for id, r := range d.Runtime {
+		if r.Search != nil {
+			t := r.Search
+			if len(t.Version) != 64 || strings.Trim(t.Version, "0123456789abcdef") != "" || len(t.Ordered) > 512 || t.Cursor < 0 || t.Cursor > len(t.Ordered) || t.Exhausted != (t.Cursor == len(t.Ordered)) {
+				return d, restorejournal.ErrInvalid
+			}
+			seen := map[string]bool{}
+			for _, node := range t.Ordered {
+				if len(node) != 69 || !strings.HasPrefix(node, "node-") || strings.Trim(node[5:], "0123456789abcdef") != "" || seen[node] {
+					return d, restorejournal.ErrInvalid
+				}
+				seen[node] = true
+			}
+		}
 		if len(r.CandidateFailures) > 4 {
 			return d, restorejournal.ErrInvalid
 		}

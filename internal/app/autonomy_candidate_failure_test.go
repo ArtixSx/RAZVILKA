@@ -71,7 +71,7 @@ func TestAutonomyCandidateApplyFailureVerifiedRollbackThenFreshC(t *testing.T) {
 		if request.NodeID == ids[2] && !slices.Contains(old.calls, "verify-rollback") {
 			t.Fatal("C checked before rollback verification")
 		}
-		return autofallbackResult(request, request.NodeID != ids[0]), nil
+		return d10Result(request, "sing-box", request.NodeID != ids[0]), nil
 	})
 	autonomyConfirmFailure(t, a, context.Background())
 	state, after := autonomyTestState(a), a.Store.Get()
@@ -160,7 +160,7 @@ func TestAutonomyCandidateFailureCannotBypassStopConditions(t *testing.T) {
 			var checked []string
 			a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 				checked = append(checked, request.NodeID)
-				return autofallbackResult(request, request.NodeID != ids[0]), nil
+				return d10Result(request, "sing-box", request.NodeID != ids[0]), nil
 			})
 			autonomyConfirmFailure(t, a, ctx)
 			state := autonomyTestState(a)
