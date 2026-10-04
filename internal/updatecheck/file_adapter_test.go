@@ -17,6 +17,10 @@ import (
 func fileAdapterFixture(t *testing.T) (*SelfUpdateFileAdapter, *Updater, fileReview) {
 	t.Helper()
 	u := readyUpdater(t)
+	u.helperOwned = func(string) error { return nil } // isolated file fixture only
+	u.FileEffectAdmission = func(ctx context.Context, id, installation string, sequence uint64, action, effect string, begin func() error) error {
+		return begin()
+	}
 	installation := t.TempDir()
 	configPath := filepath.Join(installation, "config.json")
 	cfg := config.Config{Revision: 7}
