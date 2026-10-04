@@ -21,7 +21,10 @@ func TestManualNodeImportAdmitsTypedMaterialBeforeUncheckedXHTTPWrite(t *testing
 	for _, xhttp := range []bool{false, true} {
 		for _, mode := range []string{"missing", "reader2", "reader3", "panic", "cancel-nil"} {
 			t.Run(strings.Join([]string{map[bool]string{false: "raw", true: "xhttp"}[xhttp], mode}, "/"), func(t *testing.T) {
-				root := t.TempDir()
+				root := filepath.Join(t.TempDir(), "nodes")
+				if err := os.Mkdir(root, 0o700); err != nil {
+					t.Fatal(err)
+				}
 				store, err := nodestore.Open(root)
 				if err != nil {
 					t.Fatal(err)
