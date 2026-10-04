@@ -136,13 +136,16 @@ func (a *ProxyTunnelAdapter) inactiveCoordinates() (PolicyOwnershipSpec, int, er
 	if transitPriority == 0 {
 		return refuse(nil)
 	}
-	for _, command := range []string{a.ip(), a.firewallBinary(false), a.firewallBinary(true), a.engineBinary(), a.sidecarBinary()} {
+	for _, command := range []string{a.ip(), a.firewallBinary(false), a.firewallBinary(true)} {
 		if command == "" || strings.ContainsAny(command, "\x00\r\n") {
 			return refuse(nil)
 		}
 	}
+	if _, err := a.inactiveProcessNames(); err != nil {
+		return refuse(err)
+	}
 	for _, spec := range []ProcessSpec{a.engineProcess(), a.sidecarProcess()} {
-		if err := validateProcessSpec(spec); err != nil {
+		if err := validateProxyInactiveProcessScope(spec); err != nil {
 			return refuse(err)
 		}
 	}
@@ -150,6 +153,87 @@ func (a *ProxyTunnelAdapter) inactiveCoordinates() (PolicyOwnershipSpec, int, er
 		return refuse(err)
 	}
 	return owner, transitPriority, nil
+}
+
+// These are fixed startup identities, not an executable lookup or an activation
+// grant. Uninstalled defaults still hold when a foreign/canary process uses the
+// known name. Explicit binaries add their basename even if their file is absent.
+func (a *ProxyTunnelAdapter) inactiveProcessNames() ([]string, error) {
+	if a == nil {
+		return nil, ErrProxyRuntimeInactive
+	}
+	switch a.ID() {
+	case "usque", "sing-box", "xray":
+	default:
+		return nil, ErrProxyRuntimeInactive
+	}
+	names := []string{a.ID()}
+	switch a.effectiveSidecar() {
+	case "sing-box":
+		names = append(names, "sing-box")
+	case "hev":
+		if a.SidecarBin == "" {
+			return nil, ErrProxyRuntimeInactive
+		}
+	default:
+		return nil, ErrProxyRuntimeInactive
+	}
+	for _, binary := range []string{a.EngineBin, a.SidecarBin} {
+		if binary == "" {
+			continue
+		}
+		if len(binary) > 4096 || strings.ContainsAny(binary, "\x00\r\n") || !filepath.IsAbs(binary) ||
+			filepath.Clean(binary) != binary || filepath.Base(binary) == "." || filepath.Base(binary) == string(filepath.Separator) ||
+			binary == filepath.VolumeName(binary)+string(filepath.Separator) {
+			return nil, ErrProxyRuntimeInactive
+		}
+		names = append(names, filepath.Base(binary))
+	}
+	return names, nil
+}
+
+// Negative observation validates the same private file scope without requiring
+// an installed executable. It never fills Binary, starts a process or converts
+// absence into permission to activate. Only trusted startup constructors supply
+// these specs; process identities are checked separately above.
+func validateProxyInactiveProcessScope(spec ProcessSpec) error {
+	if spec.ID == "" || strings.ContainsAny(spec.ID, "/\\\x00\r\n") || !filepath.IsAbs(spec.Dir) ||
+		filepath.Clean(spec.Dir) != spec.Dir || spec.Dir == filepath.VolumeName(spec.Dir)+string(filepath.Separator) ||
+		len(spec.Args) == 0 || len(spec.Args) > 256 {
+		return ErrProxyRuntimeInactive
+	}
+	for _, path := range []string{spec.PIDPath, spec.LogPath, spec.MatchArg} {
+		relative, err := filepath.Rel(spec.Dir, path)
+		if err != nil || !filepath.IsAbs(path) || filepath.Clean(path) != path || !filepath.IsLocal(relative) || relative == "." || strings.ContainsAny(path, "\x00\r\n") {
+			return ErrProxyRuntimeInactive
+		}
+	}
+	matched, bytes := false, 0
+	for _, arg := range spec.Args {
+		bytes += len(arg)
+		if arg == "" || strings.ContainsRune(arg, '\x00') || bytes > 64<<10 {
+			return ErrProxyRuntimeInactive
+		}
+		matched = matched || arg == spec.MatchArg
+	}
+	if !matched {
+		return ErrProxyRuntimeInactive
+	}
+	if _, err := os.Lstat(spec.Dir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	root, err := ownedfs.Open(spec.Dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	for _, path := range []string{spec.PIDPath, spec.LogPath, spec.MatchArg, spec.PIDPath + routeidentity.ReceiptSuffix} {
+		relative, _ := filepath.Rel(spec.Dir, path)
+		if err := root.Check(relative); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *ProxyTunnelAdapter) inactiveKernel(ctx context.Context, owner PolicyOwnershipSpec, transitPriority int) error {
