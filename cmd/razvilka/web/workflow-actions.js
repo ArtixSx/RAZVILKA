@@ -64,6 +64,7 @@ async function workflowRunProbe(){
   if(workflowState.probe)return;
   const engine=state.selectedEngine,serviceID=$('#r4ProbeService').value,service=state.services.find(s=>s.id===serviceID);
   if(!engine||!service)return;
+  const progress=typeof engineProgressBinding==='function'?engineProgressBinding(engine,state.selectedEngineFile||'main'):null;
   const epoch=workflowState.epoch,controller=new AbortController();
   const test={engine,serviceName:service.name,controller};workflowState.probe=test;workflowState.lastProbe=null;
   $('#r4ProbeResults').replaceChildren();$('#r4ProbeStatus').textContent=`Проверяем ${service.name} через ${routeLabel(engine)} и напрямую. До 90 секунд, включая очистку.`;renderWorkflowControls();
@@ -72,9 +73,11 @@ async function workflowRunProbe(){
     if(!workflowSession(epoch))return;
     const rows=(result.results||[]).filter(r=>r.service_id===serviceID&&[engine,'direct'].includes(r.route));
     if(!rows.length)throw new Error('Backend не вернул результаты выбранного теста. Успех не подтверждён.');
+    if(progress){await refreshEngineConfigs();if(!workflowSession(epoch))return;}
+    if(typeof engineProgressProbe==='function')engineProgressProbe(progress,result,serviceID);
     workflowState.lastProbe={...test,rows,message:'Проверка завершена. Результаты относятся к указанному веб-сценарию и моменту теста. Маршрут не применялся.'};
-  }catch(error){if(workflowSession(epoch))workflowState.lastProbe={...test,rows:[],message:error.name==='AbortError'?'Тест остановлен. Дождитесь очистки временных ресурсов на роутере; статус успеха не присваивается.':workflowError(error)};}
-  finally{if(workflowState.probe===test)workflowState.probe=null;if(workflowSession(epoch))renderWorkflowControls();}
+  }catch(error){if(workflowSession(epoch)){if(typeof invalidateEngineProgress==='function')invalidateEngineProgress(engine);workflowState.lastProbe={...test,rows:[],message:error.name==='AbortError'?'Тест остановлен. Дождитесь очистки временных ресурсов на роутере; статус успеха не присваивается.':workflowError(error)};}}
+  finally{if(workflowState.probe===test)workflowState.probe=null;if(workflowSession(epoch)){renderWorkflowControls();if(typeof refreshEngineProgressCards==='function')refreshEngineProgressCards();}}
 }
 function workflowOpenFetch(preset='',url=''){
   if(workflowState.fetchBusy||['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state)){interfaceToast('Дождитесь текущей проверки или остановите её.');return;}
