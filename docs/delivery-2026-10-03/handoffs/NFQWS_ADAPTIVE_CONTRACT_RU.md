@@ -37,6 +37,10 @@ Candidate-ready recommendation допускается только после ge
 
 Текущий `SystemProbeExecutor` выбирает stock binary, напрямую запускает NFQWS и очищает direct child/iptables. Он не предоставляет durable descendant quiescence и **не допускается** как managed adaptive backend. Custom executor также не получает admission только по отличающемуся Go type. До перечисленных контрактов production consumer закрыт; private binding tests и model evidence не выдают ему capability.
 
+После этого checkpoint ROOT принял OPS `a1755dc0368fbdab960445a89f7f3027ea9f3dc3`: конкретные `AcquireManagedNFQWSRuntime(ctx,receiptID)`, `ManagedNFQWSRuntimeLease.Descriptor/Check/Close` и ordered `NFQWSRuntimeDescriptor` доступны. Producer больше не считается отсутствующим API. CORE преобразует descriptor в exact approval и удерживает существующий component writer lease до session settlement по порядку component → StrategyLab → short common effect admission. Remaining lifetime/parent-death boundary должна учитывать immutable generations, retained fence и actual helper ownership; наличие descriptor alone не открывает runtime. CORE подтвердил, что opaque scoped-plan/effect owner и prepared-rename hook будут отдельным finished checkpoint после actual D11 registration. Предложение `WithScopedNFQWSProbe` не является существующим API.
+
+ROOT independent review `ef0b959` нашёл ABA: deterministic ID и CreatedAt с точностью до секунды не отличают Delete/Add того же candidate. Этот checkpoint HELD до persisted incarnation fix; его локальные PASS ниже не заменяют независимое принятие.
+
 ## Проверки и статус
 
 Local correction финальной publication сохранена в `f7a46bf8ae40785c8083c91fa8fcf77982ca770b`, поверх held `9cdcbff`; подробнее `NFQWS_SUPERVISED_RU.md`. CORE подтвердил, что actual atomic-rename hook ещё не готов и будет передан отдельным reviewable SHA/API.

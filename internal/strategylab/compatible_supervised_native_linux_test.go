@@ -102,12 +102,15 @@ func TestNFQWSNativeSupervisedCompatibility(t *testing.T) {
 		if !checked.Validation.OK || !checked.Validation.Native || !checked.Validation.LuaChecked || checked.Validation.Code != "COMPATIBLE" || !compatibilityInvocationSucceeded(*session.LuaInit) {
 			t.Fatalf("genuine native PASS required: %+v", checked.Validation)
 		}
-	} else if checked.Validation.OK || checked.Validation.Native || checked.Validation.LuaChecked || checked.Validation.Code != "COMPATIBILITY_REJECTED" || session.LuaInit.Receipt.ExitCode == 0 || session.LuaInit.Receipt.Cancelled {
-		t.Fatalf("expected genuine known Lua rejection: %+v receipt=%+v", checked.Validation, session.LuaInit.Receipt)
+	} else if !compatibilityNativeMissingCircularRejected(m.state, checked) {
+		t.Fatalf("expected exact genuine missing-circular Lua assertion exit 1: validation=%+v receipt=%+v output=%q", checked.Validation, session.LuaInit.Receipt, session.LuaInit.Output)
 	}
 	reopened, err := New(m.Path)
-	if err != nil || reopened.Snapshot().QuiescenceUnknown {
+	if err != nil || reopened.Snapshot().QuiescenceUnknown || !compatibilityJSONEqual(reopened.state.Candidates[candidate.ID], checked) || !compatibilityJSONEqual(reopened.state.CompatibilitySession, session) {
 		t.Fatalf("acknowledged exact quiescence did not survive reload: %v", err)
+	}
+	if selected == "lua-reject" && !compatibilityNativeMissingCircularRejected(reopened.state, reopened.state.Candidates[candidate.ID]) {
+		t.Fatal("exact missing-circular rejection did not survive reload")
 	}
 	t.Logf("genuine case=%s dry-helper=%d dry-direct=%d dry-reaped=%d lua-helper=%d lua-direct=%d lua-reaped=%d; both exact ECHILD receipts acknowledged", selected, session.DryRun.Receipt.PID, session.DryRun.Receipt.ChildPID, session.DryRun.Receipt.Reaped, session.LuaInit.Receipt.PID, session.LuaInit.Receipt.ChildPID, session.LuaInit.Receipt.Reaped)
 }
