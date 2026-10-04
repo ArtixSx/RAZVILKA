@@ -212,6 +212,29 @@ func TestDefaultRouteExecutorRealCommitServiceFencesAndEpochRollback(t *testing.
 	}
 }
 
+func TestDefaultRouteExecutorRealCommitPreservesEmptyPolicyMapPreimage(t *testing.T) {
+	defaultRouteRequireLinuxJournal(t)
+	e, _, adapter := defaultRouteExecutorFixture(t)
+	p := config.DefaultServicePolicy("temporary", config.ServiceState{})
+	if _, err := e.app.Store.UpdateServicePolicy(p, e.app.Store.Get().Revision, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.app.Store.DeleteService("temporary"); err != nil {
+		t.Fatal(err)
+	}
+	if c := e.app.Store.Get(); c.ServicePolicies == nil || len(c.ServicePolicies) != 0 {
+		t.Fatal("fixture did not retain empty policy map")
+	}
+	r, err := e.Review(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execution, err := e.Execute(context.Background(), r, r.Digest())
+	if err != nil || execution.State != "committed" || !adapter.live || e.app.Store.Get().ServicePolicies == nil {
+		t.Fatal("JSON representation weakened the exact Store preimage", err, execution)
+	}
+}
+
 func TestDefaultRouteCommittedPostimageRejectsExtraChangesAndUnboundTime(t *testing.T) {
 	cfg, _, now := defaultRouteFixture()
 	services := map[string]config.ServiceState{"disabled": {Route: "direct"}}

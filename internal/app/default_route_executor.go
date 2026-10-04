@@ -151,7 +151,7 @@ func (e *DefaultRouteExecutor) Review(ctx context.Context, services []dataplane.
 }
 
 func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Config) dataplane.Input {
-	input := dataplane.Input{Revision: cfg.Revision + 1, NetworkProfileID: c.snapshot.Scope.NetworkID, SafeMode: cfg.SafeMode}
+	input := dataplane.Input{LAN: c.LAN(), Revision: cfg.Revision + 1, NetworkProfileID: c.snapshot.Scope.NetworkID, SafeMode: cfg.SafeMode}
 	if e.app.DataplaneHost != nil {
 		input.Host = e.app.DataplaneHost()
 	} else {
@@ -160,13 +160,28 @@ func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Conf
 	// One route per source/ingress/path permits exact binding by CORE without
 	// an accidental Cartesian union between two different LAN segments.
 	groups := map[string]*dataplane.Route{}
+	catalogServices := e.app.catalogSnapshot().Services
 	for _, rule := range c.rules {
 		key := rule.ServiceID + "\x00" + rule.Ingress + "\x00" + rule.Source.String() + "\x00" + rule.Route
 		route, ok := groups[key]
 		if !ok {
 			path := c.snapshot.Paths[rule.ServiceID]
 			id := "network-" + defaultRouteDigest(key)[:16]
-			route = &dataplane.Route{ServiceID: id, ServiceName: rule.ServiceID, Selected: path.Selected, Resolved: path.Resolved, Sources: []string{rule.Source.String()}, ProbeURL: path.ProbeURL}
+			route = &dataplane.Route{
+				LogicalServiceID: rule.ServiceID,
+				ServiceID:        id, ServiceName: rule.ServiceID, Selected: path.Selected, Resolved: path.Resolved,
+				Sources: []string{rule.Source.String()}, Ingress: []string{rule.Ingress}, ProbeURL: path.ProbeURL,
+				NetworkPolicyGeneration: c.digest, NetworkPolicyRole: rule.Origin,
+			}
+			if rule.Origin == "override" {
+				for _, service := range catalogServices {
+					if service.ID == rule.ServiceID {
+						frozen := defaultRouteCloneCatalogService(service)
+						route.ProbeService = &frozen
+						break
+					}
+				}
+			}
 			groups[key] = route
 		}
 		route.CIDRs = append(route.CIDRs, rule.Destination.String())
@@ -279,9 +294,15 @@ func (e *DefaultRouteExecutor) Execute(ctx context.Context, r *DefaultRouteRevie
 		if err := guard(ctx); err != nil {
 			return nil, err
 		}
+		// Store.Get provides its exact defensive representation. A JSON
+		// round trip loses empty omitempty maps and is not a full CAS preimage.
+		commitConfig := e.app.Store.Get()
+		if !reflect.DeepEqual(commitConfig, r.cfg) {
+			return nil, dataplane.ErrReviewChanged
+		}
 		services := defaultRouteCloneServices(r.cfg.Services)
 		commitStarted := time.Now()
-		undo, err := e.deps.Commit(defaultRouteCloneConfig(r.cfg), r.compilation.Policy(), services)
+		undo, err := e.deps.Commit(commitConfig, r.compilation.Policy(), services)
 		commitFinished := time.Now()
 		if err != nil {
 			return undo, err
@@ -363,9 +384,9 @@ func defaultRouteCloneConfig(cfg config.Config) config.Config {
 	return result
 }
 
-// The interim binder may not clear a route, add DNS redirection, widen a
-// source, weaken preflight or retire an unrelated owner. This check is extended
-// to permit only exact Route.Ingress after CORE adds that shared primitive.
+// The binder may not clear a route, add DNS redirection, widen a source,
+// change exact ingress/generation/role, weaken preflight or retire an unrelated
+// owner. The composer already binds CORE's reviewed route metadata.
 func defaultRouteBoundInput(before, after dataplane.Input) bool {
 	return reflect.DeepEqual(before, after)
 }

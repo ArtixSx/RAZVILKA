@@ -108,7 +108,7 @@ func (a *App) selfUpdateRecovery(w http.ResponseWriter, r *http.Request) {
 
 func selfUpdateFileAction(action string) bool {
 	switch action {
-	case "prepare", "install", "restore", "accept-live", "accept-rollback", "resolve-unknown", "stop-old-panel", "start-candidate-panel", "stop-candidate-panel", "start-rollback-panel":
+	case "prepare", "install", "restore", "accept-live", "accept-rollback", "resolve-unknown", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel", "restore-private-state", "start-rollback-panel":
 		return true
 	}
 	return false

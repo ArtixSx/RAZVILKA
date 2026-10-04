@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +36,9 @@ type fileUpdateProof struct {
 	liveHook                                                     func()
 	quiescenceHook                                               func()
 	finishHook                                                   func(bool)
+	runHook                                                      func(string) error
+	effects                                                      []string
+	effectError                                                  error
 }
 
 func (p *fileUpdateProof) Inspect(context.Context, string) error { return p.inspectError }
@@ -42,7 +46,15 @@ func (p *fileUpdateProof) Ready(context.Context, string) error   { return nil }
 func (p *fileUpdateProof) Review(context.Context, string) (uint64, string, []selfupdatejournal.File, error) {
 	return p.revision, p.sha, p.files, nil
 }
-func (p *fileUpdateProof) Authority(context.Context, string, uint64) error { return nil }
+func (p *fileUpdateProof) Authority(context.Context, string, uint64) error               { return nil }
+func (p *fileUpdateProof) AuthorityAction(context.Context, string, uint64, string) error { return nil }
+func (p *fileUpdateProof) EffectAdmission(_ context.Context, _ string, action, effect string, begin func() error) error {
+	p.effects = append(p.effects, action+":"+effect)
+	if p.effectError != nil {
+		return p.effectError
+	}
+	return begin()
+}
 func (p *fileUpdateProof) Quiescence(context.Context, string) error {
 	if p.quiescenceHook != nil {
 		p.quiescenceHook()
@@ -51,6 +63,9 @@ func (p *fileUpdateProof) Quiescence(context.Context, string) error {
 }
 func (p *fileUpdateProof) Run(_ context.Context, _ string, command string) error {
 	p.runs = append(p.runs, command)
+	if p.runHook != nil {
+		return p.runHook(command)
+	}
 	return p.runError
 }
 func (p *fileUpdateProof) Observe(context.Context, string, string) error { return p.observeError }
@@ -179,15 +194,15 @@ func TestSelfUpdateFilesHTTPMatchingAndAdmission(t *testing.T) {
 	if code, data := componentHTTP(t, s, "GET", "/api/v1/self-update/recovery", nil, componentRecoveryToken, s.URL); code != 200 || !bytes.Contains(data, []byte(`"phase":"prepared"`)) {
 		t.Fatalf("read: %d %s", code, data)
 	}
-	for _, action := range []string{"install", "stop-old-panel", "start-candidate-panel", "accept-live"} {
+	for _, action := range []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "install", "start-candidate-panel", "accept-live"} {
 		if code, data := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", fileUpdateBody(a, action), componentRecoveryToken, s.URL); code != 200 {
 			t.Fatalf("%s: %d %s", action, code, data)
 		}
 	}
-	if len(p.runs) != 2 || len(p.lives) != 1 || p.lives[0] || len(p.finishes) != 1 || a.PendingSelfUpdateRecovery() {
+	if len(p.runs) != 4 || len(p.lives) != 1 || p.lives[0] || len(p.finishes) != 1 || a.PendingSelfUpdateRecovery() {
 		t.Fatal("incorrect acceptance", p.runs, p.lives, p.finishes)
 	}
-	if code, _ := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", fileUpdateBody(a, "accept-live"), componentRecoveryToken, s.URL); code != 409 || len(p.lives) != 1 || len(p.runs) != 2 {
+	if code, _ := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", fileUpdateBody(a, "accept-live"), componentRecoveryToken, s.URL); code != 409 || len(p.lives) != 1 || len(p.runs) != 4 {
 		t.Fatal("terminal replay", code)
 	}
 	p.inspectError = errors.New("retained terminal images unavailable")
@@ -198,7 +213,7 @@ func TestSelfUpdateFilesHTTPMatchingAndAdmission(t *testing.T) {
 
 func TestSelfUpdateFilesHTTPUnknownNeverReplays(t *testing.T) {
 	a, p := fileUpdateHTTPFixture(t)
-	for _, action := range []string{"prepare", "install"} {
+	for _, action := range []string{"prepare"} {
 		if err := fileUpdateAction(t, a, action); err != nil {
 			t.Fatal(err)
 		}
@@ -239,16 +254,17 @@ func TestSelfUpdateFilesHelperIndependentRollbackAndForeignFile(t *testing.T) {
 		if err != nil || !present || r.Phase != "rolled-back" {
 			t.Fatal(r, err)
 		}
-		if len(p.runs) != 4 || len(p.lives) != 2 || p.lives[0] || !p.lives[1] || len(p.finishes) != 1 || !p.finishes[0] {
+		wantRuns := []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel", "restore-private-state", "start-rollback-panel"}
+		if !reflect.DeepEqual(p.runs, wantRuns) || len(p.lives) != 2 || p.lives[0] || !p.lives[1] || len(p.finishes) != 1 || !p.finishes[0] {
 			t.Fatal(p.runs, p.lives, p.finishes)
 		}
-		if err := a.SelfUpdateFiles.RunHelper(context.Background(), fileUpdateID, func(context.Context) error { return nil }); err == nil || len(p.runs) != 4 {
+		if err := a.SelfUpdateFiles.RunHelper(context.Background(), fileUpdateID, func(context.Context) error { return nil }); err == nil || len(p.runs) != 7 {
 			t.Fatal("helper resumed terminal transaction", err)
 		}
 	})
 	t.Run("foreign third image", func(t *testing.T) {
 		a, _ := fileUpdateHTTPFixture(t)
-		for _, action := range []string{"prepare", "install", "stop-old-panel", "start-candidate-panel", "stop-candidate-panel"} {
+		for _, action := range []string{"prepare", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "install", "start-candidate-panel", "stop-candidate-panel"} {
 			if err := fileUpdateAction(t, a, action); err != nil {
 				t.Fatal(action, err)
 			}
@@ -281,7 +297,7 @@ func TestSelfUpdateFilesHTTPFreshStopSafeModeAndIndependentFence(t *testing.T) {
 				}
 				p.revision = a.Store.Get().Revision
 			}
-			for _, action := range []string{"prepare", "install", "stop-old-panel", "start-candidate-panel"} {
+			for _, action := range []string{"prepare", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "install", "start-candidate-panel"} {
 				if err := fileUpdateAction(t, a, action); err != nil {
 					t.Fatal(action, err)
 				}
@@ -348,7 +364,7 @@ func TestSelfUpdateFilesHTTPFinishesOnlyRetainedHelperGap(t *testing.T) {
 	writeHelper("requires-review")
 	a.SelfUpdateFiles.Helper = updatecheck.NewUpdater(Version, filepath.Dir(helper), updatecheck.Deployment{})
 	a.SelfUpdateFiles.Helper.Directory = helper
-	for _, action := range []string{"prepare", "install", "stop-old-panel", "start-candidate-panel"} {
+	for _, action := range []string{"prepare", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "install", "start-candidate-panel"} {
 		if err := fileUpdateAction(t, a, action); err != nil {
 			t.Fatal(action, err)
 		}
@@ -368,7 +384,7 @@ func TestSelfUpdateFilesHTTPFinishesOnlyRetainedHelperGap(t *testing.T) {
 	if code, data := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", fileUpdateBody(a, "accept-live"), componentRecoveryToken, s.URL); code != 200 || !bytes.Contains(data, []byte(`"recovery_required":false`)) {
 		t.Fatalf("gap: %d %s", code, data)
 	}
-	if len(p.runs) != 2 || len(p.lives) != 1 || len(p.finishes) != 2 {
+	if len(p.runs) != 4 || len(p.lives) != 1 || len(p.finishes) != 2 {
 		t.Fatal("file/command acceptance replay", p.runs, p.lives, p.finishes)
 	}
 	if code, _ := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", fileUpdateBody(a, "accept-live"), componentRecoveryToken, s.URL); code != 409 || len(p.finishes) != 2 {
