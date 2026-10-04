@@ -638,6 +638,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/connections", a.connections)
 	mux.HandleFunc("/api/v1/connections/stream", a.connectionStream)
 	mux.HandleFunc("/api/v1/sources", a.sourceList)
+	mux.HandleFunc(sourceOfflineCatalogPath, a.sourceOfflineCatalog)
 	mux.HandleFunc("/api/v1/sources/refresh", a.sourceRefreshAll)
 	mux.HandleFunc("/api/v1/sources/apply", a.sourceApply)
 	mux.HandleFunc("/api/v1/sources/discard", a.sourceDiscard)

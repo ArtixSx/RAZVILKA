@@ -48,7 +48,7 @@ func engineNodeHTTPFixture(t *testing.T) (*App, *engineNodeFixture, *engineNodeF
 	a.NodeChecker = sing
 	a.NodeCheckers = map[string]dataplane.NodeChecker{"sing-box": sing, "xray": xray}
 	a.NodeHistoryWriteGuard = func(c context.Context, version int) error {
-		if version != nodestore.ExactHistoryReadVersion {
+		if version != 2 {
 			return errors.New("wrong read version")
 		}
 		return c.Err()

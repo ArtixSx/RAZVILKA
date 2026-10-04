@@ -53,3 +53,13 @@ the actual omitted form. The existing ingress test now checks every expected
 full tuple at reserved priorities while leaving baseline rules outside those
 priorities alone. Root remains responsible for repeating actual native kernel
 verification after this parser correction.
+
+Numeric route readback follow-up: the existing exact default-route parser now
+accepts only `proto 3` as the numeric alias for `boot` and `scope 253` as the
+numeric alias for `link`. The recorded deletion selector retains canonical
+`boot`/`link` arguments so immutable receipt comparison does not change. Both
+families and mixed symbolic/numeric forms are covered through the actual `-N`
+read wrapper. Near values, duplicates, gateways and unknown attributes remain
+refused. Related portable dataplane tests passed 24.829s; vet/diff RC0. This
+does not change NET's full service-table ownership check or authorize native
+execution; Root owns the native repeat.

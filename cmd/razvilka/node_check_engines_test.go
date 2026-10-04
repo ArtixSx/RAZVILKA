@@ -3,10 +3,11 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"testing"
 
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
 func TestConfiguredNodeCheckersShareOneQuotaAndCreateNoState(t *testing.T) {
@@ -31,7 +32,7 @@ func TestConfiguredNodeCheckersShareOneQuotaAndCreateNoState(t *testing.T) {
 
 func TestNodeHistoryReadCapabilityMatchesNativeReader(t *testing.T) {
 	output, err := selfUpdateMainSubprocess(t, "-node-history-read-version")
-	if err != nil || strings.TrimSpace(string(output)) != "2" {
+	if err != nil || string(output) != strconv.Itoa(nodestore.ExactHistoryReadVersion)+"\n" {
 		t.Fatal("reader capability missing", string(output), err)
 	}
 }
