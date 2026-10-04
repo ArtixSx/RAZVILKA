@@ -2,14 +2,21 @@ package nodestore
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 // ExactHistoryReadVersion is a read capability, independent of envelope schema
 // 4. CORE exposes it via -node-history-read-version; OPS must gate downgrade
-// against current/retained images before any stop or install operation.
-const ExactHistoryReadVersion = 2
+// against current/retained images before any stop or install operation. Version
+// 3 reads XHTTP material even before its first check; RAW Xray history needs 2.
+const ExactHistoryReadVersion = 3
+
+const (
+	xrayHistoryReadVersion   = 2
+	xhttpMaterialReadVersion = 3
+)
 
 // RequiredHistoryReadVersion inspects validated private state without returning
 // IDs or secrets. Failure is a compatibility fence, never implicit version 1.
@@ -39,10 +46,24 @@ func RequiredPrivateHistoryReadVersion(in PrivateSnapshot) (int, error) {
 }
 
 func requiredHistoryReadVersion(doc document) int {
+	// Material alone fences old readers: their profile parser rejects XHTTP
+	// even when the node has never been checked, is disabled, or has expired.
+	// The document has already passed strict canonical validation.
+	for _, item := range doc.Secrets {
+		var outbound struct {
+			Transport struct {
+				Type string `json:"type"`
+			} `json:"transport"`
+		}
+		_ = json.Unmarshal(item.Outbound, &outbound)
+		if outbound.Transport.Type == "xhttp" {
+			return xhttpMaterialReadVersion
+		}
+	}
 	for _, node := range doc.Nodes {
 		for _, check := range node.Checks {
 			if check.RoutePathID == "xray:"+node.ID {
-				return ExactHistoryReadVersion
+				return xrayHistoryReadVersion
 			}
 		}
 	}
