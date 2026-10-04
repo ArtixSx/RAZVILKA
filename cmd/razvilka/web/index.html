@@ -313,13 +313,14 @@ hysteria2://…
 <section class="view" id="view-sources">
 <article class="panel full-panel">
 <div class="panel-title"><div><h2>Источники данных</h2><p>Выберите списки, сохраните выбор и только затем обновляйте их. Маршруты от этого не переключаются.</p></div><button class="secondary" id="refreshSources">Обновить используемые</button></div>
+<div class="source-view-tools"><div class="editor-mode-switch" role="group" aria-label="Представление источников"><button class="mode-button active" type="button" data-source-view="online" aria-pressed="true">Выбор и обновление</button><button class="mode-button" type="button" data-source-view="offline" aria-pressed="false">Сохранённые копии</button></div><button id="readSourceView" type="button" class="secondary">Перечитать сведения</button></div><p id="sourceOfflineBanner" class="source-offline-banner" hidden>Сохранённые данные. Сейчас источники не обновлялись.</p><p id="sourceViewStatus" class="r4-note" role="status" aria-live="polite"></p>
 <div class="draft-bar section-draft-bar" id="sourceDraftBar">
 <div><span class="draft-pulse"></span><b>Выбор источников изменён</b><small>Черновик относится только к этой вкладке. Сервисы, DNS и обходы останутся без изменений.</small></div>
 <div class="draft-actions"><button class="secondary" id="discardSourceChanges" type="button">Отменить здесь</button><button class="primary" id="applySourceChanges" type="button">Сохранить выбор</button></div>
 </div>
-<div class="table-wrap"><table><thead><tr><th>Источник</th><th>Использовать</th><th>Роль</th><th>Состояние</th><th>Записи</th><th>Последняя ошибка</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Источник</th><th>Использовать</th><th>Роль</th><th>Состояние</th><th>Записи</th><th id="sourceDetailsTitle">Последнее обновление</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
 </article>
-<article class="panel source-overview-panel"><div class="panel-title"><div><h2>Каталог и источники</h2><p>Проверенные локальные данные</p></div><button class="text-button" data-view="sources">Открыть →</button></div><div class="source-overview" id="sourceOverview"></div></article></section>
+<article class="panel source-overview-panel"><div class="panel-title"><div><h2>Каталог и источники</h2><p id="sourceOverviewCaption">Сведения об источниках</p></div><button class="text-button" data-view="sources">Открыть →</button></div><div class="source-overview" id="sourceOverview"></div></article></section>
 <section class="view" id="view-testlab">
 <article class="panel full-panel">
 <div class="panel-title sticky-title"><div><h2>Тест обходов</h2><p>Проверяем фактическую доступность сервисов и постепенно строим матрицу «сервис × обход»</p></div><div class="test-actions"><select id="testScope"><option value="all">Все сервисы</option><option value="enabled">Только включённые</option></select><button class="primary" id="runCurrentTests">Проверить текущую конфигурацию</button></div></div>

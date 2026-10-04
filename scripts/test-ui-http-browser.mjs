@@ -111,6 +111,32 @@ try {
   const putPolicy = async(policy, expected_revision=policy.revision)=>policyTransport?fixturePut(policy,expected_revision):context.request.put(origin+'/api/v1/autonomy',{data:{expected_revision,policy,confirm:'SAVE_AUTONOMY',release_safe_mode:false}});
   const forwardPolicy = async route=>{if(!policyTransport)return route.fetch();const {policy,expected_revision}=route.request().postDataJSON();return fixturePut(policy,expected_revision);};
   const deliverPolicy = async(route,response)=>policyTransport?route.fulfill({status:response.status(),json:await response.json()}):route.fulfill({response});
+  const offlineSourceTest=async()=>test('saved source view is GET-only and preserves warning/draft facts','real embedded UI and normal source HTTP; controlled offline DTO',async()=>{
+    const actualStatus=(await context.request.get(origin+'/api/v1/sources/offline')).status();
+    await page.evaluate(()=>setView('sources'));await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sources?.phase==='ready');
+    const live=await page.evaluate(()=>JSON.stringify(state.sources));
+    const row=(id,name,extra={})=>({id,name,kind:'domains',description:'UI fixture',url:'https://source.fixture.invalid/list',offline:true,ready:false,entries:12,enabled:false,applied_enabled:true,dirty:true,legacy_cache:false,last_known_good:false,sha256:'a'.repeat(64),updated_at:'2026-01-02T03:04:05Z',expires_at:'2099-01-02T03:04:05Z',cache_status:'offline-cache',...extra});
+    const rows=[row('saved','Сохранённый'),row('reference','Справочник',{kind:'reference',sha256:'',updated_at:'0001-01-01T00:00:00Z',expires_at:'invalid'}),row('stale','Просрочен',{cache_status:'stale',expires_at:'2020-01-01T00:00:00Z'}),row('legacy','Legacy',{legacy_cache:true,expires_at:'2020-01-01T00:00:00Z'}),row('rejected','LKG',{last_known_good:true,last_error:'<script>rejected</script>'}),row('quarantine','Не подтверждён',{cache_status:'quarantined'}),row('missing','Нет копии',{cache_status:'missing',sha256:'',entries:0})];
+    let denied=false,reads=0;
+    await page.route('**/api/v1/sources/offline',async route=>{assert.equal(route.request().method(),'GET');reads++;await route.fulfill(denied?{status:403,json:{error:'controlled authorization denial'}}:{status:200,json:{offline:true,read_only:true,sources:rows}});});
+    const start=requests.length;
+    await page.locator('[data-source-view="offline"]').click();await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sourceOffline?.phase==='ready');
+    assert.equal(reads,1);assert.equal(await page.evaluate(()=>JSON.stringify(state.sources)),live,'offline view changed the normal source array');
+    assert.equal(await page.locator('#sourceOfflineBanner').isVisible(),true);
+    for(const id of ['refreshSources','applySourceChanges','discardSourceChanges'])assert.equal(await page.locator('#'+id).isEnabled(),false);
+    assert.equal(await page.locator('#sourceRows .toggle:not([disabled])').count(),0);
+    for(const label of ['Справочный источник','Срок копии истёк','Копия не подтверждена','Источник требует сверки','Последнее обновление отклонено · сохранена прежняя копия','Сохранённая копия','Сохранённой копии нет'])assert((await page.locator('#sourceRows').textContent()).includes(label),label);
+    assert.equal(await page.locator('#sourceRows script').count(),0);assert.doesNotMatch(await page.locator('#sourceOverview').textContent(),/готов|PASS|актуален/);
+    await page.evaluate(async()=>{await refreshSources();await setSourceDraft('saved',true);await applySourceDraft();await discardSourceDraft();});
+    assert.equal(requests.slice(start).some(request=>request.path.startsWith('/api/v1/sources')&&request.method!=='GET'),false);
+    await capture('10-source-offline.png','Настоящие embedded assets и обычный source HTTP; controlled readonly offline DTO с fresh/stale/legacy/LKG/quarantined/reference/missing. Ни refresh, ни draft/apply/discard POST не выполнялись.');
+    denied=true;await page.locator('#readSourceView').click();await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sourceOffline?.phase==='error');
+    assert.equal(await page.locator('#sourceOfflineBanner').isVisible(),false);assert.doesNotMatch(await page.locator('#sourceRows').textContent(),/Сохранённая копия|LKG/);
+    await page.locator('[data-source-view="online"]').click();await page.waitForFunction(()=>!panelLoad.request&&state.dataLoad.sources?.phase==='ready');
+    assert.equal(await page.locator('#refreshSources').isEnabled(),true);assert.equal(await page.evaluate(()=>JSON.stringify(state.sources)),live);
+    await page.unroute('**/api/v1/sources/offline');await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    assert.equal(hashConfig(),configBefore);return {actual_handler_status:actualStatus,controlled_offline_reads:reads,source_posts:0};
+  });
   const namedWGTest=async()=>test('named WG create/replace/delete uses CAS and fences an unknown write','real embedded UI; controlled named WG catalog DTOs',async()=>{
     const actualStatus=(await context.request.get(origin+'/api/v1/wireguard/profiles')).status();
     await nav('engines');
@@ -357,6 +383,7 @@ try {
   });
 
   if(!authOnly&&!policyTransport)await namedWGTest();
+  if(!authOnly&&!policyTransport)await offlineSourceTest();
   if(!authOnly) {
   await nav('autopilot');await quickReady();
   await test('duplicate Save sends one PUT with independent readback', policyBoundary, async()=>{
