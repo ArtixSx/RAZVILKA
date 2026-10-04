@@ -90,9 +90,17 @@ func defaultRouteExecutorFixtureConfig(t *testing.T, cfg config.Config, snapshot
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &App{Store: store, Dataplane: dataplane.New(filepath.Join(root, "dataplane")), DataplaneHost: func() dataplane.HostState { return dataplane.HostState{IPCommand: true} }}
+	a := &App{Store: store, Dataplane: dataplane.New(filepath.Join(root, "dataplane")), DataplaneHost: func() dataplane.HostState {
+		return dataplane.HostState{IPCommand: true, IPTables: true, IP6Tables: true}
+	}}
+	a.Dataplane.FreshProfile = func(context.Context) (string, error) { return snapshot.Scope.NetworkID, nil }
 	adapter := &defaultRouteTransactionAdapter{id: "wireguard", app: a, verified: true}
 	if err := a.Dataplane.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	// Explicit protocol double for the LAN participant; concrete mixed-receipt
+	// execution is covered by dataplane tests and independent native replay.
+	if err := a.Dataplane.Register(&defaultRouteTransactionAdapter{id: dataplane.NetworkPolicyAdapterID, app: a, verified: true}); err != nil {
 		t.Fatal(err)
 	}
 	executor, err := NewDefaultRouteExecutor(a, DefaultRouteDependencies{
@@ -502,6 +510,13 @@ func TestDefaultRouteActualWireGuardAdapterCurrentlyRefusesEndpointOverlap(t *te
 	runner := &defaultRouteReadOnlyRunner{}
 	adapter.Runner, adapter.WG, adapter.IP = runner, "wg", "ip"
 	e.app.Dataplane = dataplane.New(filepath.Join(root, "manager"))
+	e.app.Dataplane.FreshProfile = func(ctx context.Context) (string, error) {
+		snapshot, err := e.deps.Observe(ctx)
+		return snapshot.Scope.NetworkID, err
+	}
+	if err := e.app.Dataplane.Register(&defaultRouteTransactionAdapter{id: dataplane.NetworkPolicyAdapterID, app: e.app, verified: true}); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.app.Dataplane.Register(adapter); err != nil {
 		t.Fatal(err)
 	}
