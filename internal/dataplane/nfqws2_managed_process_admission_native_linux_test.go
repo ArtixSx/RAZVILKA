@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
@@ -27,10 +28,10 @@ func nfqws2ManagedNativeBinding(command nfqws2ManagedProcessCommand) nfqws2Manag
 func TestNFQWSManagedProcessLaunchBridgeNative(t *testing.T) {
 	program := nfqws2ManagedNativeGate(t)
 	prefix := []string{"-test.run=^TestNFQWSManagedProcessNativeEntry$", "nfqws-managed-helper"}
-	for n, mode := range []string{"exact", "pending-denied", "scope-closed", "prepared-denied", "scoped-intent-without-channel"} {
+	for n, mode := range []string{"exact", "pending-denied", "scope-closed", "prepared-denied", "scoped-intent-without-channel", "current-denied-after-ready", "panic-before-start", "panic-after-start", "panic-current", "panic-prepared"} {
 		t.Run(mode, func(t *testing.T) {
 			daemonMode := "normal"
-			if mode == "prepared-denied" {
+			if mode == "prepared-denied" || mode == "panic-after-start" || mode == "panic-prepared" {
 				daemonMode = "hold"
 			}
 			a, command := nfqws2ManagedNativePrepare(t, program, fmt.Sprintf("%032x", n+100), daemonMode)
@@ -68,7 +69,21 @@ func TestNFQWSManagedProcessLaunchBridgeNative(t *testing.T) {
 			}
 			pending, inBarrier, prepared := false, false, false
 			var retained func() error
+			var panicAt time.Time
 			hooks := nfqws2ManagedProcessAdmission{Binding: binding,
+				Current: func(ctx context.Context, got nfqws2ManagedStartBinding) error {
+					if !pending || !inBarrier || got != binding {
+						t.Fatal("late current outside retained barrier")
+					}
+					if mode == "current-denied-after-ready" {
+						return ErrNFQWSScopedOwner
+					}
+					if mode == "panic-current" {
+						panicAt = time.Now()
+						panic("current fixture")
+					}
+					return ctx.Err()
+				},
 				BeforeStart: func(ctx context.Context, got nfqws2ManagedStartBinding) error {
 					if got != binding {
 						t.Fatal("pending used different binding")
@@ -87,6 +102,10 @@ func TestNFQWSManagedProcessLaunchBridgeNative(t *testing.T) {
 						t.Fatal("Start before pending")
 					}
 					retained = begin
+					if mode == "panic-before-start" {
+						panicAt = time.Now()
+						panic("scope fixture")
+					}
 					if mode == "scope-closed" {
 						return ErrNFQWSScopedOwner
 					}
@@ -94,6 +113,10 @@ func TestNFQWSManagedProcessLaunchBridgeNative(t *testing.T) {
 					defer func() { inBarrier = false }()
 					if err := begin(); err != nil {
 						return err
+					}
+					if mode == "panic-after-start" {
+						panicAt = time.Now()
+						panic("scope fixture")
 					}
 					lease, err := a.observeManagedNFQWSProcessRunning(ctx)
 					if err != nil || lease.LaunchBinding == nil || *lease.LaunchBinding != binding {
@@ -109,13 +132,56 @@ func TestNFQWSManagedProcessLaunchBridgeNative(t *testing.T) {
 						t.Fatal("prepared without actual child", err)
 					}
 					prepared = true
+					if mode == "panic-prepared" {
+						panicAt = time.Now()
+						panic("prepared fixture")
+					}
 					if mode == "prepared-denied" {
 						return ErrNFQWSScopedOwner
 					}
 					return nil
 				},
 			}
-			lease, err := a.runManagedNFQWSProcessWithAdmission(context.Background(), command, prefix, hooks)
+			var lease nfqws2ManagedProcessLease
+			var err error
+			panicked := false
+			func() {
+				defer func() {
+					if recover() != nil {
+						panicked = true
+					}
+				}()
+				lease, err = a.runManagedNFQWSProcessWithAdmission(context.Background(), command, prefix, hooks)
+			}()
+			if strings.HasPrefix(mode, "panic-") {
+				if !panicked || prepared != (mode == "panic-prepared") || retained == nil || !errors.Is(retained(), ErrNFQWSManagedProcessUnknown) {
+					t.Fatal("exceptional return left Start borrower live")
+				}
+				got, _ := nfqws2ManagedNativeRead(t, a)
+				if got.Acknowledged {
+					t.Fatal("panic fabricated parent terminal ACK")
+				}
+				if mode == "panic-before-start" {
+					if got.Receipt.State != "intent" || got.Receipt.PID != 0 {
+						t.Fatal("late callback launched helper after panic", got.Receipt)
+					}
+				} else if mode == "panic-current" {
+					if time.Since(panicAt) > nfqws2ManagedJoinGrace+500*time.Millisecond || !got.Receipt.WaitECHILD || got.Receipt.Started || got.Receipt.DirectReaped {
+						t.Fatal("Current panic started child or escaped bounded cleanup", got.Receipt)
+					}
+				} else {
+					if time.Since(panicAt) > nfqws2ManagedJoinGrace+500*time.Millisecond || !got.Receipt.WaitECHILD || !got.Receipt.DirectReaped || !got.Receipt.Cancelled {
+						t.Fatal("panic did not bound exact helper cleanup", got.Receipt)
+					}
+					if _, err := a.observeManagedNFQWSProcessInactive(context.Background()); !errors.Is(err, ErrNFQWSManagedProcessUnknown) {
+						t.Fatal("unacknowledged panic became inactive proof", err)
+					}
+				}
+				return
+			}
+			if panicked {
+				t.Fatal("unexpected producer panic")
+			}
 			if mode == "exact" {
 				if err != nil || !pending || !prepared || !nfqws2ManagedProcessSettled(lease) {
 					t.Fatal("exact channel Start/terminal failed", err, lease.Receipt)

@@ -6,14 +6,16 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 )
 
 type nfqws2ManagedStartModel struct {
-	in      []nfqws2ManagedStartFrame
-	out     []nfqws2ManagedStartFrame
-	failure error
+	in       []nfqws2ManagedStartFrame
+	out      []nfqws2ManagedStartFrame
+	failure  error
+	received func()
 }
 
 func (m *nfqws2ManagedStartModel) send(frame nfqws2ManagedStartFrame) error {
@@ -21,6 +23,9 @@ func (m *nfqws2ManagedStartModel) send(frame nfqws2ManagedStartFrame) error {
 	return m.failure
 }
 func (m *nfqws2ManagedStartModel) receive() (nfqws2ManagedStartFrame, error) {
+	if m.received != nil {
+		m.received()
+	}
 	if m.failure != nil || len(m.in) == 0 {
 		return nfqws2ManagedStartFrame{}, ErrNFQWSManagedProcessUnknown
 	}
@@ -216,5 +221,141 @@ func TestNFQWSScopedCurrentProofNeverGrantsCaptureWriter(t *testing.T) {
 	}
 	if err := nfqwsScopedPreparedCurrent(context.Background(), b, model.p, root, func(context.Context, *NFQWSScopedPlan) error { return ErrReviewChanged }); !errors.Is(err, ErrReviewChanged) {
 		t.Fatal("revoked current guard accepted", err)
+	}
+}
+
+func TestNFQWSManagedDelayedREADYCancelNeverSendsPermit(t *testing.T) {
+	command, binding, ready, started := nfqws2ManagedStartFixture(t)
+	for _, stage := range []string{"while-ready-blocked", "inside-late-current", "inside-ack-current"} {
+		t.Run(stage, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			transport := &nfqws2ManagedStartModel{in: []nfqws2ManagedStartFrame{ready, started}}
+			if stage == "while-ready-blocked" {
+				entered, release := make(chan struct{}), make(chan struct{})
+				transport.received = func() { close(entered); <-release }
+				go func() { <-entered; cancel(); close(release) }()
+			}
+			checks := 0
+			current := func() error {
+				checks++
+				if stage == "inside-late-current" || (stage == "inside-ack-current" && checks == 2) {
+					cancel()
+				}
+				return nil // A nominally successful reader cannot conceal cancel.
+			}
+			if err := nfqws2ManagedStartParent(ctx, transport, command, binding, ready.Helper, current); !errors.Is(err, ErrNFQWSManagedProcessUnknown) {
+				t.Fatal("cancel became acknowledged launch", err)
+			}
+			want := 0
+			if stage == "inside-ack-current" {
+				want = 1
+			}
+			if len(transport.out) != want {
+				t.Fatal("cancel before permit admitted Start", len(transport.out))
+			}
+		})
+	}
+}
+
+func TestNFQWSManagedStartDeadlinePreservesOriginalCancellation(t *testing.T) {
+	type contextMarker struct{}
+	original, stop := context.WithCancel(context.WithValue(context.Background(), contextMarker{}, "original"))
+	defer stop()
+	deadline := time.Now().Add(5 * time.Second)
+	bounded, cancel, err := nfqws2ManagedStartContext(original, deadline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cancel()
+	got, present := bounded.Deadline()
+	if !present || !got.Equal(deadline) || bounded.Value(contextMarker{}) != "original" {
+		t.Fatal("bounded context detached original scope")
+	}
+	stop()
+	if bounded.Err() != context.Canceled {
+		t.Fatal("bounded scope ignored original cancel")
+	}
+	short := time.Now().Add(time.Second)
+	earlier, release := context.WithDeadline(context.Background(), short)
+	defer release()
+	boundedEarlier, cancelEarlier, err := nfqws2ManagedStartContext(earlier, deadline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cancelEarlier()
+	if got, _ := boundedEarlier.Deadline(); !got.Equal(short) {
+		t.Fatal("command extended original deadline")
+	}
+	for _, invalid := range []time.Time{time.Time{}, time.Now().Add(-time.Second), time.Now().Add(16 * time.Second)} {
+		if _, _, err := nfqws2ManagedStartContext(context.Background(), invalid); !errors.Is(err, ErrNFQWSManagedProcessUnknown) {
+			t.Fatal("unbounded launch context accepted", err)
+		}
+	}
+}
+
+func TestNFQWSManagedStartExceptionalExitRevokesRetainedBegin(t *testing.T) {
+	for _, mode := range []string{"panic-before-begin", "panic-after-begin", "swallowed-begin-panic", "ignored-begin-error"} {
+		t.Run(mode, func(t *testing.T) {
+			calls := 0
+			gate := &nfqws2ManagedStartOnce{open: true, begin: func() error {
+				calls++
+				if mode == "swallowed-begin-panic" {
+					panic("begin fixture")
+				}
+				if mode == "ignored-begin-error" {
+					return ErrNFQWSManagedProcessUnknown
+				}
+				return nil
+			}}
+			var retained func() error
+			panicked := false
+			var result error
+			func() {
+				defer func() {
+					if recover() != nil {
+						panicked = true
+					}
+				}()
+				result = gate.invoke(func(begin func() error) error {
+					retained = begin
+					if mode == "panic-before-begin" {
+						panic("scope fixture")
+					}
+					if mode == "swallowed-begin-panic" {
+						func() { defer func() { _ = recover() }(); _ = begin() }()
+						return nil
+					}
+					_ = begin()
+					if mode == "panic-after-begin" {
+						panic("scope fixture")
+					}
+					return nil
+				})
+			}()
+			if (mode == "panic-before-begin" || mode == "panic-after-begin") != panicked {
+				t.Fatal("panic incorrectly swallowed")
+			}
+			if !panicked && !errors.Is(result, ErrNFQWSManagedProcessUnknown) {
+				t.Fatal("exceptional begin became success", result)
+			}
+			before := calls
+			if retained == nil || !errors.Is(retained(), ErrNFQWSManagedProcessUnknown) || calls != before {
+				t.Fatal("late borrowed Start survived exceptional completion")
+			}
+		})
+	}
+}
+
+func TestNFQWSManagedStartAdmissionRequiresLateCurrent(t *testing.T) {
+	command, binding, _, _ := nfqws2ManagedStartFixture(t)
+	guard := func(context.Context, nfqws2ManagedStartBinding) error { return nil }
+	admission := nfqws2ManagedProcessAdmission{Binding: binding, BeforeStart: guard, Current: guard, Prepared: guard, WithStart: func(_ context.Context, _ nfqws2ManagedStartBinding, begin func() error) error { return begin() }}
+	if !admission.valid(command) {
+		t.Fatal("exact live callback contract refused")
+	}
+	admission.Current = nil
+	if admission.valid(command) {
+		t.Fatal("opening WithStart replaced required late Current")
 	}
 }

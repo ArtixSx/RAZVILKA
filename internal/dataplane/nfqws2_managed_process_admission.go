@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 )
@@ -31,11 +34,58 @@ type nfqws2ManagedProcessAdmission struct {
 	Binding     nfqws2ManagedStartBinding
 	BeforeStart func(context.Context, nfqws2ManagedStartBinding) error
 	WithStart   func(context.Context, nfqws2ManagedStartBinding, func() error) error
+	Current     func(context.Context, nfqws2ManagedStartBinding) error
 	Prepared    func(context.Context, nfqws2ManagedStartBinding) error
 }
 
 func (a *nfqws2ManagedProcessAdmission) valid(command nfqws2ManagedProcessCommand) bool {
-	return a != nil && nfqws2ManagedStartBindingValid(a.Binding, command) && a.BeforeStart != nil && a.WithStart != nil && a.Prepared != nil
+	return a != nil && nfqws2ManagedStartBindingValid(a.Binding, command) && a.BeforeStart != nil && a.WithStart != nil && a.Current != nil && a.Prepared != nil
+}
+
+func nfqws2ManagedStartContext(ctx context.Context, deadline time.Time) (context.Context, context.CancelFunc, error) {
+	now := time.Now()
+	if ctx == nil || ctx.Err() != nil || deadline.IsZero() || !now.Before(deadline) || deadline.After(now.Add(15*time.Second)) {
+		return nil, nil, ErrNFQWSManagedProcessUnknown
+	}
+	bounded, cancel := context.WithDeadline(ctx, deadline)
+	return bounded, cancel, nil
+}
+
+type nfqws2ManagedStartOnce struct {
+	mu           sync.Mutex
+	open, called bool
+	begin        func() error
+	outcome      error
+}
+
+func (s *nfqws2ManagedStartOnce) run() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.open || s.called || s.begin == nil {
+		return ErrNFQWSManagedProcessUnknown
+	}
+	s.called = true
+	s.outcome = ErrNFQWSManagedProcessUnknown // A swallowed panic cannot become success.
+	s.outcome = s.begin()
+	return s.outcome
+}
+
+func (s *nfqws2ManagedStartOnce) seal() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.open = false
+	if !s.called {
+		return ErrNFQWSManagedProcessUnknown
+	}
+	return s.outcome
+}
+
+func (s *nfqws2ManagedStartOnce) invoke(action func(func() error) error) (err error) {
+	defer func() { err = errors.Join(err, s.seal()) }()
+	if action == nil {
+		return ErrNFQWSManagedProcessUnknown
+	}
+	return action(s.run)
 }
 
 const nfqws2ManagedStartFrameLimit = 4096
@@ -90,7 +140,7 @@ func nfqws2ManagedStartParent(ctx context.Context, transport nfqws2ManagedStartT
 	}
 	ready, err := transport.receive()
 	base.Kind = "ready"
-	if err != nil || ready != base || ctx.Err() != nil || current() != nil {
+	if err != nil || ready != base || ctx.Err() != nil || current() != nil || ctx.Err() != nil {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	base.Kind = "permit"
@@ -101,7 +151,7 @@ func nfqws2ManagedStartParent(ctx context.Context, transport nfqws2ManagedStartT
 	base.Kind = "started"
 	child := ack.Child
 	ack.Child = components.NFQWSRuntimeProcessIdentity{}
-	if err != nil || ack != base || !nfqws2ManagedStartChild(command, helper, child) || ctx.Err() != nil || current() != nil {
+	if err != nil || ack != base || !nfqws2ManagedStartChild(command, helper, child) || ctx.Err() != nil || current() != nil || ctx.Err() != nil {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	return nil

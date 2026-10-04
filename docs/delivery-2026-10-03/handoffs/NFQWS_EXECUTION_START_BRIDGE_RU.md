@@ -27,11 +27,19 @@ SessionID, CommandSHA256. Identity хранится optional `execution_binding`
   отправлять в detached goroutine или удерживать как reusable issuer.
 - `Prepared(ctx, binding)`: после ACK и release start barrier подтверждает
   actual Process/Queue/LAN `VerifyPrepared`, затем durable capture-ready.
+- `Current(ctx, binding)`: обязательная свежая readonly проверка original
+  review/WAN/registry/anchor/full resource после READY непосредственно перед
+  PERMIT и после ACK. Она выполняется вне 3c при уже удерживаемом start
+  barrier; повторно приобретать этот RW barrier внутри Current нельзя.
 
 Callbacks копируются, binding frozen. Перед/после они потребляют только
 finished retained issuer; callback presence не доказывает authority.
 Без вызова begin и после WithStart return повторный Start отказывает.
 Root/path/session не приходят из произвольного CLI/JSON.
+Scoped entry выводит deadline из неизменённого command.Deadline (<=15s),
+сохраняя cancellation, values и более короткий deadline original context.
+После nominally-successful Current повторно проверяется ctx.Err: отмена
+во время READY/readback не позволяет отправить PERMIT.
 
 ## Actual cross-process boundary
 
@@ -47,7 +55,8 @@ binding/helper) -> STARTED (actual child Cmd.Start, true /proc birth/argv/
 executable, durable running receipt). Каждая frame <=4096 bytes, typed
 strict JSON с duplicate/unknown fields refusal; truncation, ancillary data,
 EOF, timeout, unexpected/replayed phase и mismatch — unknown/refusal.
-Parent exchange deadline min(session deadline, now+3s); session <=15s.
+Parent exchange deadline min(original ctx deadline, session deadline, now+3s);
+session <=15s.
 
 Manager start barrier охватывает parent Start и весь обмен. **3c lock**
 охватывает только соответствующий actual Cmd.Start: parent освобождает
@@ -72,6 +81,16 @@ death после PERMIT не является атомарным kernel no-fork 
 parent identity проверяется перед child admission, existing supervisor
 детектирует parent loss и убирает/reaps детей. Pending record после crash
 сохраняется; missing parent/ACK/receipt не разрешает restart adoption.
+Exceptional completion тоже отзывает begin: unconditional deferred seal
+срабатывает при panic/Goexit/return. Если WithStart скрыл panic/error
+из begin, one-shot gate сохраняет unknown, а не nil success. Канал и
+endpoint закрываются; запущенный exact os.Process helper получает
+SIGTERM и ожидается через уже существующего sole Wait owner не дольше
+1s cleanup grace. Defer не публикует terminal ACK: pending/unknown остаётся
+даже при успешном helper ECHILD; отсутствие процесса не продвигается в grant.
+Helper child3c получает свой signal/session-deadline context; original
+parent context не переносится в другой процесс. Отмена после PERMIT
+остаётся unknown с cleanup/pending, а не atomic cancellation/fork proof.
 
 Новые узкие private функции `nfqwsScopedBeforeStartCurrent` и
 `nfqwsScopedPreparedCurrent` используют detached read-only binding с
@@ -84,15 +103,24 @@ VerifyInactive/SettleRemoved остаются самостоятельными.
 Локально: focused Windows managed/start/scoped regressions RC0; strict
 frame decoder, foreign helper/resource/child, lost ACK, cancelled/revoked
 permit, single-use/replay, outside-command binding hash, Current proof
-vs capture writer. Windows vet; Linux amd64/arm64 test compilation и
+vs capture writer; delayed READY cancellation, cancellation внутри late
+Current/ACK Current, original deadline/value/cancellation preservation.
+Panic-before/after begin, swallowed begin panic и ignored begin error
+не оставляют reusable callback и не дают successful Start result.
+Windows vet; Linux amd64/arm64 test compilation и
 shell syntax. Native/race/router/kernel actions локально не выполнялись.
 
 Existing ROOT-only `scripts/test-nfqws-managed-process-native.sh` теперь
 добавляет `TestNFQWSManagedProcessLaunchBridgeNative` к accepted lifecycle
-и genuine no-intercept suite. Actual five cases: exact Start/ACK/terminal;
+и genuine no-intercept suite. Actual ten cases: exact Start/ACK/terminal;
 pending denied before intent; scope closed before Start; Prepared refusal
 with independent ECHILD/terminal ACK; scoped persisted intent without fd3
 refuses without changing intent. Retained begin callback тоже отказывает.
+Шестой case: Current refusal после actual READY не отправляет PERMIT.
+Panic-before-begin затем retained late call не запускает helper; panic после
+actual Start ограниченно ждёт exact helper cleanup/ECHILD без parent ACK.
+Panic в late Current не запускает child; panic в Prepared после actual ACK
+тоже убирает helper/child и оставляет terminal без parent ACK.
 Это **private channel/process proof**, не production Manager/LAN/queue proof.
 
 Следующий finished checkpoint DEFAULT должен привязать callbacks к opaque

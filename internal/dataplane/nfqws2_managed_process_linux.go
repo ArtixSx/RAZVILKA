@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sync"
 	"syscall"
 	"time"
 
@@ -159,7 +158,12 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessWithAdmission(ctx context.Context,
 	if !admission.valid(command) {
 		return nfqws2ManagedProcessLease{}, ErrNFQWSManagedProcessUnknown
 	}
-	return a.runManagedNFQWSProcessInternal(ctx, command, helperPrefix, &admission)
+	bounded, cancel, err := nfqws2ManagedStartContext(ctx, command.Deadline)
+	if err != nil {
+		return nfqws2ManagedProcessLease{}, err
+	}
+	defer cancel()
+	return a.runManagedNFQWSProcessInternal(bounded, command, helperPrefix, &admission)
 }
 
 func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, command nfqws2ManagedProcessCommand, helperPrefix []string, admission *nfqws2ManagedProcessAdmission) (nfqws2ManagedProcessLease, error) {
@@ -227,6 +231,33 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	var identity components.NFQWSSupervisionIdentity
 	done := make(chan error, 1)
+	joined := false
+	// Exceptional completion must close the live channel and settle only the
+	// exact launched helper through the existing sole Wait owner. No ACK is
+	// fabricated here; a panic/timeout retains the durable pending outcome.
+	defer func() {
+		if channel != nil {
+			_ = channel.close()
+		}
+		if endpoint != nil {
+			_ = endpoint.Close()
+		}
+		if cmd.Process == nil || joined {
+			return
+		}
+		select {
+		case <-done:
+			return
+		default:
+		}
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		timer := time.NewTimer(nfqws2ManagedJoinGrace)
+		defer timer.Stop()
+		select {
+		case <-done:
+		case <-timer.C:
+		}
+	}()
 	begin := func() error {
 		if cmd.Process != nil {
 			return ErrNFQWSManagedProcessUnknown
@@ -235,6 +266,9 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 			deadline := time.Now().Add(nfqws2ManagedStartGrace)
 			if command.Deadline.Before(deadline) {
 				deadline = command.Deadline
+			}
+			if original, present := ctx.Deadline(); present && original.Before(deadline) {
+				deadline = original
 			}
 			channel, endpoint, err = nfqws2ManagedStartSocketPair(deadline)
 			if err != nil {
@@ -258,6 +292,11 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 			return nil
 		}
 		return nfqws2ManagedStartParent(ctx, channel, command, *binding, identity, func() error {
+			// The Manager's readonly check must not reacquire the start/close
+			// barrier already held by WithStart. This runs outside 3c.
+			if err := admission.Current(ctx, *binding); err != nil {
+				return err
+			}
 			current, readErr := components.ReadNFQWSSupervisionProcessIdentity(identity.PID)
 			if readErr != nil || current != identity {
 				return ErrNFQWSManagedProcessUnknown
@@ -265,31 +304,14 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 			return nfqws2ManagedControlCurrent(ctx, command)
 		})
 	}
-	called, startOpen := false, true
-	var startMu sync.Mutex
-	var beginErr error
-	start := func() error {
-		startMu.Lock()
-		defer startMu.Unlock()
-		if called || !startOpen {
-			return ErrNFQWSManagedProcessUnknown
+	start := &nfqws2ManagedStartOnce{open: true, begin: begin}
+	defer start.seal()
+	err = start.invoke(func(begin func() error) error {
+		if admission == nil {
+			return begin()
 		}
-		called = true
-		beginErr = begin()
-		return beginErr
-	}
-	if admission == nil {
-		err = start()
-	} else {
-		err = admission.WithStart(ctx, *binding, start)
-	}
-	startMu.Lock()
-	startOpen = false // A retained callback cannot fork after WithStart returns.
-	if !called {
-		err = errors.Join(err, ErrNFQWSManagedProcessUnknown)
-	}
-	err = errors.Join(err, beginErr) // Issuer cannot hide a lost Start ACK.
-	startMu.Unlock()
+		return admission.WithStart(ctx, *binding, begin)
+	})
 	if channel != nil {
 		_ = channel.close()
 	}
@@ -311,12 +333,14 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 	var waitErr error
 	select {
 	case waitErr = <-done:
+		joined = true
 	case <-ctx.Done():
 		_ = cmd.Process.Signal(syscall.SIGTERM)
 		timer := time.NewTimer(nfqws2ManagedJoinGrace)
 		defer timer.Stop()
 		select {
 		case waitErr = <-done:
+			joined = true
 		case <-timer.C:
 			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, ctx.Err())
 		}
