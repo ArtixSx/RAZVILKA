@@ -131,9 +131,21 @@ type nodeTransitLease struct {
 // receipt, deletion grant or recovery classification. The issuer must never
 // offer unused settlement for an older/recovery resource.
 type nodeTransitBeforeEffectsError struct {
-	cause error
-	lease *nodeTransitLease
-	root  os.FileInfo
+	cause    error
+	lease    *nodeTransitLease
+	root     os.FileInfo
+	verified atomic.Pointer[nodeTransitUnusedValidation]
+	claimed  atomic.Bool
+}
+
+// Published once, only after every VerifyUnused closing check succeeds. Its
+// timestamp retains Go's monotonic clock; none of these facts are serialized.
+type nodeTransitUnusedValidation struct {
+	lease      *nodeTransitLease
+	spec       NodeTransitSpec
+	root       string
+	digest     string
+	verifiedAt time.Time
 }
 
 func (e *nodeTransitBeforeEffectsError) Error() string {
@@ -145,6 +157,39 @@ func (e *nodeTransitBeforeEffectsError) Unwrap() error { return e.cause }
 func isNodeTransitBeforeEffects(err error) bool {
 	var before *nodeTransitBeforeEffectsError
 	return errors.As(err, &before) && before != nil && before.lease != nil && before.root != nil && before.cause != nil
+}
+
+// Manager claims this original live proof before settling only its matching
+// resource metadata. A wrong binding never spends the claim. Subsequent lease
+// mutation attempts fence this validation; a spent claim cannot be renewed.
+func (e *nodeTransitBeforeEffectsError) consumeUnused(ctx context.Context, spec NodeTransitSpec, root, digest string) error {
+	if e == nil || e.lease == nil || ctx == nil {
+		return ErrNodeTransitUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	l := e.lease
+	if !l.busy.CompareAndSwap(false, true) {
+		return ErrNodeTransitUnavailable
+	}
+	defer l.busy.Store(false)
+	verified := e.verified.Load()
+	if verified == nil || verified.lease != l || spec != verified.spec || spec != l.spec || root != verified.root || root != l.root ||
+		digest != verified.digest || digest != l.digest || l.effects.Load() || verified.verifiedAt.IsZero() {
+		return ErrNodeTransitUnavailable
+	}
+	age := time.Since(verified.verifiedAt)
+	if age < 0 || age > nodeTransitBudget {
+		return ErrNodeTransitUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !e.claimed.CompareAndSwap(false, true) {
+		return ErrNodeTransitUnavailable
+	}
+	return nil
 }
 
 // Only private local fixtures may replace OS inventory/boot identity.
@@ -249,6 +294,11 @@ func (l *nodeTransitLease) Apply(ctx context.Context) error {
 	defer l.busy.Store(false)
 	l.unused.Store(nil)
 	firstApply := !l.applied.Swap(true)
+	if !firstApply {
+		// A later mutation API attempt cannot reuse an earlier unused sample,
+		// even when its own guard refuses before the shared backend.
+		l.effects.Store(true)
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -357,7 +407,14 @@ func (l *nodeTransitLease) VerifyUnused(ctx context.Context) error {
 	if err != nil || !os.SameFile(before.root, root) {
 		return errors.Join(ErrNodeTransitUnavailable, err)
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	verified := &nodeTransitUnusedValidation{lease: l, spec: l.spec, root: l.root, digest: l.digest, verifiedAt: time.Now()}
+	if !before.verified.CompareAndSwap(nil, verified) {
+		return ErrNodeTransitUnavailable
+	}
+	return nil
 }
 
 // Bounded marker checks never interpret or grant authority from file contents.
