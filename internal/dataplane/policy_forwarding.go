@@ -206,7 +206,8 @@ func (a *ProxyTunnelAdapter) validateForwarding(state PolicyState, forwarding *P
 		}
 		source, err := netip.ParsePrefix(grant.Source)
 		dest, destErr := netip.ParsePrefix(grant.Destination)
-		if err != nil || destErr != nil || source.Bits() != source.Addr().BitLen() && !privateLANPrefix(source) || source.Addr().Is4In6() || dest.Addr().Is4In6() || !source.Addr().IsGlobalUnicast() || !dest.Addr().IsGlobalUnicast() || dest.Bits() == 0 || source.Addr().BitLen() != dest.Addr().BitLen() || source.Masked().String() != grant.Source || dest.Masked().String() != grant.Destination || grant.Source != rules[i].Source || grant.Destination != rules[i].Destination || !proxyFirewallInterface.MatchString(grant.Ingress) || grant.Ingress == state.Interface || grant.Ingress == "lo" {
+		managedDefault := destErr == nil && dest.Bits() == 0 && dest == dest.Masked() && state.NetworkPolicyGeneration != "" && state.NetworkDefault && rules[i].Managed && rules[i].Ingress == grant.Ingress
+		if err != nil || destErr != nil || source.Bits() != source.Addr().BitLen() && !privateLANPrefix(source) || source.Addr().Is4In6() || dest.Addr().Is4In6() || !source.Addr().IsGlobalUnicast() || (!dest.Addr().IsGlobalUnicast() || dest.Bits() == 0) && !managedDefault || source.Addr().BitLen() != dest.Addr().BitLen() || source.Masked().String() != grant.Source || dest.Masked().String() != grant.Destination || grant.Source != rules[i].Source || grant.Destination != rules[i].Destination || !proxyFirewallInterface.MatchString(grant.Ingress) || grant.Ingress == state.Interface || grant.Ingress == "lo" {
 			return errors.New("proxy forwarding manifest contains an invalid or unrelated grant")
 		}
 	}
