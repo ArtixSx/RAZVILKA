@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 )
 
 type wgNamedReviewKey struct{}
@@ -11,9 +12,14 @@ type wgNamedReviewKey struct{}
 type wgNamedReviewScope struct {
 	adapter *WARPWireGuardAdapter
 	routes  []Route
+	mu      sync.Mutex
+	revoked error
 }
 
 func (a *WARPWireGuardAdapter) namedProfileReviewContext(ctx context.Context, routes []Route) (context.Context, error) {
+	if err := checkWGNamedReviewContext(ctx); err != nil {
+		return ctx, err
+	}
 	if err := a.verifyNamedProfileReview(ctx, routes); err != nil {
 		return ctx, err
 	}
@@ -24,15 +30,20 @@ func (a *WARPWireGuardAdapter) namedProfileReviewContext(ctx context.Context, ro
 	if err != nil || id == "" || id == "main" {
 		return ctx, err
 	}
-	return context.WithValue(ctx, wgNamedReviewKey{}, wgNamedReviewScope{a, cloneNetworkPolicyRoutes(routes)}), nil
+	return context.WithValue(ctx, wgNamedReviewKey{}, &wgNamedReviewScope{adapter: a, routes: cloneNetworkPolicyRoutes(routes)}), nil
 }
 
 func checkWGNamedReviewContext(ctx context.Context) error {
-	scope, ok := ctx.Value(wgNamedReviewKey{}).(wgNamedReviewScope)
+	scope, ok := ctx.Value(wgNamedReviewKey{}).(*wgNamedReviewScope)
 	if !ok {
 		return ctx.Err()
 	}
-	return scope.adapter.verifyNamedProfileReview(ctx, scope.routes)
+	scope.mu.Lock()
+	defer scope.mu.Unlock()
+	if scope.revoked == nil {
+		scope.revoked = scope.adapter.verifyNamedProfileReview(ctx, scope.routes)
+	}
+	return errors.Join(ctx.Err(), scope.revoked)
 }
 
 // Removal and restoration are authorized by the retained immutable receipt,
@@ -52,7 +63,15 @@ func (r wgNamedForwardRunner) Run(ctx context.Context, name string, args ...stri
 		return nil, errors.New("WireGuard command runner is unavailable")
 	}
 	output, err := r.base.Run(ctx, name, args...)
-	return output, errors.Join(err, checkWGNamedReviewContext(ctx))
+	reviewErr := checkWGNamedReviewContext(ctx)
+	if err != nil {
+		return output, errors.Join(err, reviewErr)
+	}
+	// Keep the successful command ACK: callers must install their exact
+	// created-resource cleanup before the next forward check can refuse.
+	// The scope latches a post-command revocation for that next check and
+	// the phase's closing boundary, even if the catalog is later restored.
+	return output, nil
 }
 
 // The plan binds the reviewed revision; the snapshot additionally binds the

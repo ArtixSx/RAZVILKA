@@ -3,6 +3,8 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,16 +103,90 @@ func TestNamedWGProfileChangeFencesEveryForwardLifecycleBoundary(t *testing.T) {
 type namedWGChangeRunner struct {
 	base   NFQWS2Runner
 	change func()
+	match  func(string, []string) bool
 }
 
 func (r *namedWGChangeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	out, err := r.base.Run(ctx, name, args...)
-	if r.change != nil {
+	if r.change != nil && (r.match == nil || r.match(name, args)) {
 		change := r.change
 		r.change = nil
 		change()
 	}
 	return out, err
+}
+
+func TestNamedWGSuccessfulInterfaceCommandsKeepCleanupAfterReviewRevocation(t *testing.T) {
+	for _, cut := range []string{"link-add", "setconf", "link-up"} {
+		for _, failedDelete := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/delete-failure=%t", cut, failedDelete), func(t *testing.T) {
+				a, r, plan, root, store, rev := namedWGReviewedFixture(t)
+				ctx := context.Background()
+				for _, prepare := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage} {
+					if err := prepare(ctx, plan, root); err != nil {
+						t.Fatal(err)
+					}
+				}
+				r.calls, r.failDelete = nil, failedDelete
+				a.Runner = &namedWGChangeRunner{base: r, match: func(name string, args []string) bool {
+					command := name + " " + strings.Join(args, " ")
+					switch cut {
+					case "link-add":
+						return strings.HasPrefix(command, "ip link add dev rz-wg-canary ")
+					case "setconf":
+						return strings.HasPrefix(command, "wg setconf rz-wg-canary ")
+					default:
+						return command == "ip link set dev rz-wg-canary up"
+					}
+				}, change: func() {
+					if _, err := store.Put(ctx, "reviewed", "Changed after successful command", testOwnWireGuardProfile(""), rev); err != nil {
+						t.Fatal(err)
+					}
+				}}
+				if err := a.Canary(ctx, plan.RoutePlanFor(a.ID()), root); !errors.Is(err, ErrWireGuardProfileRevision) {
+					t.Fatal("revoked startup reported success", err)
+				} else if failedDelete && cut != "link-up" && !errors.Is(err, ErrPolicyAdditionUnknown) {
+					t.Fatal("failed known-created cleanup was hidden", err)
+				}
+				joined := strings.Join(r.calls, "\n")
+				if !strings.Contains(joined, "ip link delete dev rz-wg-canary") {
+					t.Fatal("successful creation ACK did not retain exact cleanup", r.calls)
+				}
+				if cut == "link-add" && strings.Contains(joined, "wg setconf ") || cut == "setconf" && strings.Contains(joined, "ip address add ") {
+					t.Fatal("revoked phase continued with forward effects", r.calls)
+				}
+				_, statErr := os.Stat(filepath.Join(root, "canary"))
+				if r.active != failedDelete || failedDelete && statErr != nil || !failedDelete && !errors.Is(statErr, os.ErrNotExist) {
+					t.Fatal("candidate cleanup or retained evidence differs from command outcome", r.active, statErr)
+				}
+			})
+		}
+	}
+}
+
+func TestNamedWGPostCommandRevocationStaysLatchedWhenCatalogReturns(t *testing.T) {
+	a, r, plan, _, store, rev := namedWGReviewedFixture(t)
+	ctx, err := a.namedProfileReviewContext(context.Background(), plan.Routes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var successor string
+	runner := &namedWGChangeRunner{base: r, change: func() {
+		metadata, err := store.Put(ctx, "reviewed", "Temporarily changed", testOwnWireGuardProfile(""), rev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		successor = metadata.Revision
+	}}
+	if _, err := (wgNamedForwardRunner{base: runner}).Run(ctx, "ip", "rule", "show"); err != nil {
+		t.Fatal("known command ACK hidden by review failure", err)
+	}
+	if _, err := store.Put(context.Background(), "reviewed", "Reviewed", testOwnWireGuardProfile(""), successor); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkWGNamedReviewContext(ctx); !errors.Is(err, ErrWireGuardProfileRevision) {
+		t.Fatal("catalog ABA revived an already revoked phase", err)
+	}
 }
 
 func TestNamedWGProfileChangeDuringCommandStopsBeforeNextEffect(t *testing.T) {

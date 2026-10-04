@@ -412,7 +412,7 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 				cleanupErr = err
 			}
 		}
-		if cleanupErr == nil {
+		if cleanupErr == nil && !errors.Is(retErr, ErrPolicyAdditionUnknown) {
 			cleanupErr = owned.RemoveAll("canary")
 		}
 		if cleanupErr != nil {
@@ -1405,7 +1405,11 @@ func (a *WARPWireGuardAdapter) startNativeInterface(ctx context.Context) (retErr
 	}
 	defer func() {
 		if retErr != nil {
-			_, _ = a.run(ctx, a.ip(), "link", "delete", "dev", a.interfaceName())
+			cleanup, cancel := context.WithTimeout(wgNamedCleanupContext(context.WithoutCancel(ctx)), 8*time.Second)
+			defer cancel()
+			if _, cleanupErr := a.run(cleanup, a.ip(), "link", "delete", "dev", a.interfaceName()); cleanupErr != nil {
+				retErr = errors.Join(retErr, ErrPolicyAdditionUnknown, errors.New("owned native interface removal is unconfirmed"), cleanupErr)
+			}
 		}
 	}()
 	if output, err := a.run(ctx, wg, "setconf", a.interfaceName(), temporary); err != nil {
