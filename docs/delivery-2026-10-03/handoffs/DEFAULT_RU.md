@@ -144,3 +144,7 @@ Root/VLESS independent review уточнил closing P2 в `27315c2`: внешн
 Эта порция является только retained intent. Actual NFQ issuer и effect/start capability ещё не опубликованы. Parent helper Start и child qnum bind обязаны идти после durable process-pending через original live Manager admission; early helper нуждается в actual cross-process Start/close barrier и ACK, а не persisted open flag. Контракт запрошен у CORE/NFQ owners. ROOT отдельно подтвердил accepted `b1a9ecb` actual Manager→NodeTransit native PASS4.12s и Linux race resource tests PASS1.211s; эти результаты относятся к NodeTransit, не к NFQ Start и не к router/HIL.
 
 Полный адресный Windows `TestExecutionJournal|TestNetworkPolicyManager` subset с journal env=1 в ранее разрешённом local temp/model-only mode — RC0 без SKIP (15.236s). Dataplane vet и diff-check — RC0.
+
+## WG test после принятого network runtime
+
+Потреблён accepted ROOT NET `5e113ed` + `54b8ed1`. Старое ожидание DEFAULT endpoint-overlap refusal было семантически устаревшим: scoped WG использует отдельную transport pin table, не legacy exclusion. Actual DEFAULT fixture теперь возвращает current both-family WAN defaults на reviewed LAN bridge и connected LAN routes: production Stage отказывает exact physical scope proof до любой kernel mutation. Отдельный actual legacy Snapshot/Stage на том же named profile сохраняет прежний endpoint/service-prefix overlap refusal. Production code/guard не изменялись, accept-any-error нет. Full DEFAULT/legacy executor subset с env journal=1 — RC0 без SKIP (3.366s).
