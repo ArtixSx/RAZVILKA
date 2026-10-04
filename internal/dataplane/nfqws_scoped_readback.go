@@ -668,6 +668,9 @@ func nfqwsScopedReadProc(ctx context.Context, path string) (string, error) {
 	}
 	f, err := os.Open(path)
 	if err != nil {
+		if path == "/proc/net/netfilter/nfnetlink_queue" && errors.Is(err, os.ErrNotExist) {
+			return "", errors.Join(ErrNFQWSScopedOwner, ErrNFQWSScopedQueueInventory, err)
+		}
 		return "", errors.Join(ErrNFQWSScopedOwner, err)
 	}
 	defer f.Close()

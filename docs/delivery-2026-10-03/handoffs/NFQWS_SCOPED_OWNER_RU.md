@@ -102,6 +102,10 @@ numeric marks и host /32 /128 нормализуются только в compil
 port с socket inode и exact recorded child open fd, требует COPY_PACKET, свежие
 netns/birth/exe/argv и повторное чтение port/queue/process. Nil child требует
 пустой entire namespace; missing/permission errors никогда не означают empty.
+При missing `/proc/net/netfilter/nfnetlink_queue` возвращается отдельный
+`ErrNFQWSScopedQueueInventory`: caller показывает необходимость установить или
+загрузить `nfnetlink_queue` для данного ядра и повторить preflight. Owner сам
+модуль не загружает; classification не ослабляет отказ и не создаёт authority.
 [Kernel queue proc producer](https://github.com/torvalds/linux/blob/v6.12/net/netfilter/nfnetlink_queue.c#L1619)
 и [netlink proc producer](https://github.com/torvalds/linux/blob/v6.12/net/netlink/af_netlink.c#L2525).
 
@@ -147,3 +151,8 @@ rule снимается только test fixture, который её созд�
 Этот isolated harness **не доказывает** pending sharedExecution admission,
 OPS generation lease bridge, service health, router/native firmware/offload,
 adaptive selection efficacy или production capability.
+
+Первый ROOT `nfqws-kernel59`, integration `b642b73`, **RC1 до Start**: queue
+inventory отсутствовал. ROOT проверяет VM module и повторяет запуск; это не
+скрытый PASS и не причина заменить missing inventory пустым списком. На этом
+этапе actual queue packet PASS ещё не заявлен.
