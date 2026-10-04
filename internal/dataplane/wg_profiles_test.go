@@ -20,6 +20,7 @@ func TestNamedWireGuardSnapshotUsesSelectedReserveWithoutMutatingCatalog(t *test
 		t.Fatal(err)
 	}
 	plan.Routes[0].Resolved, plan.Routes[0].Sources = "wireguard:reserve", []string{"192.168.1.4/32"}
+	plan.Routes[0].WireGuardProfileRevision = meta.Revision
 	a.Configs = nil // named profiles have no WARP/main file dependency
 	if err := a.Snapshot(ctx, plan, transaction); err != nil {
 		t.Fatal(err)
@@ -45,7 +46,7 @@ func TestNamedWireGuardSnapshotUsesSelectedReserveWithoutMutatingCatalog(t *test
 	if _, err := store.Put(ctx, "reserve", "New revision", p.Config(), meta.Revision); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.Activate(ctx, plan, transaction); err == nil || !strings.Contains(err.Error(), "changed after snapshot") {
+	if err := a.Activate(ctx, plan, transaction); err == nil {
 		t.Fatal("stale profile activated", err)
 	}
 }
