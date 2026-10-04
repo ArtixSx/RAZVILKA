@@ -77,6 +77,18 @@ NFQWS дополнительно получил только новые `interna
 - **RAZVILKA XHTTP · 6.1 sol**, id `01a10472-cc16-7473-b3bb-42c8ce3de93d`, branch `sol/xhttp-20261004`, worktree `sol-xhttp`: exact XHTTP compiler/checker и отдельная native suite. После подтверждения VLESS переданы `nodestore/store.go`, `document.go`, `exact_history*.go`, `routes.go` и узкие canonical/history/materialization tests. `proxy_nodes.go`, NodeTransit и actual consumer остаются VLESS; main/installer retained-reader integration — CORE/OPS. XHTTP не конвертируется с потерей security/transport полей.
 - Root владеет общими live-окнами, native/HTTP QA, интеграционными merges и этим отчётом. Результаты дочерних mocks/compile не превращаются в native PASS. Дополнительная read-only проверка CLOUD и временные review assistants не получают production ownership.
 
-Всего выделено 11 sol-чатов с раздельным владением. Основной роутер сохраняется выключенным до готовности общего executor/recovery; тестовые namespace и браузерные копии имеют отдельное состояние.
+Всего выделено 12 sol-чатов с раздельным владением. Основной роутер сохраняется выключенным до готовности общего executor/recovery; тестовые namespace и браузерные копии имеют отдельное состояние.
 
 CLOUD дополнительно получил только новые `dataplane/proxy_usque_live_health.go` и собственные tests. VLESS подтвердил границу: CLOUD готовит свежую проверку активного USQUE через существующий owned producer; VLESS единолично добавляет вызов в существующий `proxy.go`/health path после приёмки. CORE сохраняет actual operation/main authority. Исторический canary receipt не становится подтверждением нового процесса. Новый scheduler/ledger не создаётся.
+
+### D10 и заключительная интеграция
+
+**RAZVILKA AUTOPILOT · 6.1 sol**, id `01a104df-b095-7e00-9f75-7273a819a7e1`, worktree `sol-autopilot`, branch `sol/autopilot-20261004`, base `43b6447`: CORE подтвердил передачу `app/autonomy_worker.go`, `autonomy_refill.go`, `autonomy_reserves.go`, `autonomy_store.go`, `autonomy/decision.go`, новых D10 helpers/tests и handoff. `autonomy_ranking.go`, main/config/operation admission остаются CORE; providerfeed — XHTTP. Разрешены узкие исправления fixtures в `autonomy_reserves_test.go` и `autonomy_candidate_failure_test.go`: подтверждённый удалённый отказ моделируется BLOCKED, неизвестная ошибка остаётся inconclusive. Защиты Store и runtime не ослабляются.
+
+Задача D10 — подключить уже проверенный последовательный подбор к реальному worker: первый пригодный путь без ожидания всего резерва, стабильный cursor при смене результатов, переход 32→33, различение ошибок проверяющего и отказа сервиса, engine-aware проверка и подтверждённый rollback перед следующим кандидатом.
+
+Новый `internal/autonomy/traversal.go` с metadata/clone поиска также принадлежит AUTOPILOT. CORE выполнил независимый review завершённого checkpoint; выявленный повтор уже обработанного начала списка при последнем неполном раунде исправлен в App, без изменения общего NodeStore search API.
+
+Root принял подготовленные QA файлы `proxy_manager_transit_native_linux_test.go` и узкие opt-in изменения двух существующих native Xray fixtures. Компиляция Linux подтверждена; фактический запуск выполняется только в общем Root VM окне. Проверка использует настоящий Manager, временное правило, общую квитанцию и HTTPS через принадлежащий TUN; она не заменяет проверку обычного main и домашнего роутера.
+
+После сообщения пользователя об остатке недельного лимита приоритет — завершённые блокирующие изменения, независимый review и адресные совместные проверки. Дополнительные направления и повторные широкие прогоны без новых причин не добавляются. Оценка 65–70% относится к реализации; формальная приёмка в `TASKS.json` остаётся 3/15, пока сквозные условия этапов не подтверждены.

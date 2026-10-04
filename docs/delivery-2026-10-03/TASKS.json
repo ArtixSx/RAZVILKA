@@ -83,7 +83,7 @@
     },
     {
       "id": "D08",
-      "owner": "NET",
+      "owner": "LAN + NET + DEFAULT",
       "depends_on": [
         "D07"
       ],
@@ -103,7 +103,7 @@
     },
     {
       "id": "D10",
-      "owner": "VLESS",
+      "owner": "AUTOPILOT + CORE",
       "depends_on": [
         "D02"
       ],
@@ -113,7 +113,7 @@
     },
     {
       "id": "D11",
-      "owner": "OPS",
+      "owner": "OPS + CORE",
       "depends_on": [
         "D00"
       ],
