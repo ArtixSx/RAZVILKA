@@ -535,6 +535,7 @@ func main() {
 	engineLab := enginelab.New(engineConfigs)
 	engineLab.OwnsPolicyRule = dataplaneManager.OwnsPolicyRule
 	engineLab.OwnsPolicyRoute = dataplaneManager.OwnsPolicyRoute
+	engineLab.OwnsPolicyRouteInTable = dataplaneManager.OwnsPolicyRouteInTable
 	engineLab.EnablePolicyInspection()
 	usqueDoctor := usquediag.New()
 	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")
