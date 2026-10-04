@@ -32,7 +32,7 @@ func TestNativeManagedDefaultRouteEvidence(t *testing.T) {
 		}
 	}
 	run("link", "set", "lo", "up")
-	for _, name := range []string{"rz-def-lan", "rz-def-tun"} {
+	for _, name := range []string{"rz-def-lan", "rz-xray"} {
 		run("link", "add", name, "type", "dummy")
 		t.Cleanup(func() { run("link", "delete", name) })
 		run("link", "set", name, "up")
@@ -54,7 +54,7 @@ func TestNativeManagedDefaultRouteEvidence(t *testing.T) {
 	run("route", "add", "local", "0.0.0.0/32", "dev", "lo", "table", "local")
 	run("-6", "route", "add", "local", "::/128", "dev", "lo", "table", "local")
 	state := PolicyState{
-		Interface: "rz-def-tun", Table: 225, PriorityBase: 22500,
+		Interface: "rz-xray", Table: 204, PriorityBase: 24000,
 		NetworkPolicyGeneration: strings.Repeat("a", 64), NetworkDefault: true,
 		Prefixes: []string{"0.0.0.0/0", "::/0"},
 		Rules: []PolicyRule{
