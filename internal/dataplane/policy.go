@@ -279,7 +279,7 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 	if runner == nil || ipCommand == "" || state.Interface == "" || len(rules) == 0 {
 		return errors.New("policy routing evidence is unavailable")
 	}
-	if state.Forwarding != nil && len(rules) > proxyForwardingRuleLimit(state) {
+	if (state.Forwarding != nil || state.NetworkPolicyGeneration != "") && len(rules) > proxyForwardingRuleLimit(state) {
 		return errors.New("proxy forwarding route evidence exceeds its safe rule bound")
 	}
 	checked := 0
@@ -306,12 +306,18 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 			key := source.String() + "\x00" + rule.Ingress
 			ingress, known := ingresses[key]
 			if !known {
-				if state.Forwarding != nil && source.Bits() != source.Addr().BitLen() {
-					for _, grant := range state.Forwarding.Rules {
-						if grant.Source == source.String() && grant.Destination == rule.Destination && (rule.Ingress == "" || grant.Ingress == rule.Ingress) {
-							ingress = grant.Ingress
-							break
+				if source.Bits() != source.Addr().BitLen() {
+					if state.Forwarding != nil {
+						for _, grant := range state.Forwarding.Rules {
+							if grant.Source == source.String() && grant.Destination == rule.Destination && (rule.Ingress == "" || grant.Ingress == rule.Ingress) {
+								ingress = grant.Ingress
+								break
+							}
 						}
+					} else if state.NetworkPolicyGeneration != "" && rule.Managed {
+						// The checked frozen network rule supplies the ingress for
+						// this read-only sample. It grants no firewall authority.
+						ingress = rule.Ingress
 					}
 					if ingress == "" {
 						return errors.New("LAN route probe has no exact forwarding grant")
@@ -353,7 +359,7 @@ func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand st
 		checked++
 		// Proxy grants are already bounded: verify every granted pair so an
 		// IPv6 or second-LAN rule cannot hide behind four IPv4 samples.
-		if state.Forwarding == nil && checked >= 4 {
+		if state.Forwarding == nil && state.NetworkPolicyGeneration == "" && checked >= 4 {
 			break
 		}
 	}
