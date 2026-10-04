@@ -54,38 +54,15 @@ func (a *ProxyTunnelAdapter) verifyRuntimeInactive(parent context.Context, proof
 	if err := ctx.Err(); err != nil {
 		return refuse("context", err)
 	}
-	if err := a.valid(); err != nil {
-		return refuse("adapter", err)
-	}
-	if !filepath.IsAbs(a.StateRoot) || filepath.Clean(a.StateRoot) != a.StateRoot ||
-		a.StateRoot == filepath.VolumeName(a.StateRoot)+string(filepath.Separator) || filepath.Base(a.StateRoot) != a.ID() || proof.interfaces == nil || proof.readlink == nil {
+	if a == nil || proof.interfaces == nil || proof.readlink == nil {
 		return ErrProxyRuntimeInactive
 	}
 	// Resource coordinates and commands are local startup intent, never loaded
 	// from a historical receipt. Custom or changed coordinates have no proof.
 	frozen := *a
-	var owner PolicyOwnershipSpec
-	for _, spec := range PolicyOwnershipSpecs() {
-		if spec.Adapter == frozen.ID() {
-			owner = spec
-		}
-	}
-	if owner.Adapter == "" || owner.Interface != frozen.Interface || owner.Table != frozen.Table || owner.PriorityBase != frozen.Priority {
-		return ErrProxyRuntimeInactive
-	}
-	transitPriority := 0
-	for _, spec := range NodeTransitOwnershipSpecs() {
-		if spec.Engine == frozen.ID() && spec.Interface == frozen.Interface && spec.Table == frozen.Table {
-			transitPriority = spec.Priority
-		}
-	}
-	if transitPriority == 0 {
-		return ErrProxyRuntimeInactive
-	}
-	for _, spec := range []ProcessSpec{frozen.engineProcess(), frozen.sidecarProcess()} {
-		if err := validateProcessSpec(spec); err != nil {
-			return refuse("process specification", err)
-		}
+	owner, transitPriority, err := frozen.inactiveCoordinates()
+	if err != nil {
+		return refuse("adapter coordinates", err)
 	}
 	// Both ends of the read-only kernel inspection get fresh file/process/socket
 	// inventories. This detects drift without pretending to lock outside writers.
@@ -122,6 +99,57 @@ func (a *ProxyTunnelAdapter) verifyRuntimeInactive(parent context.Context, proof
 		return ErrProxyRuntimeInactive
 	}
 	return ctx.Err()
+}
+
+// Cold self-update constructs observers without a configuration manager. A
+// negative resource inventory needs startup coordinates, not activation or
+// materialization capability. Every resource and process guard still applies.
+func (a *ProxyTunnelAdapter) inactiveCoordinates() (PolicyOwnershipSpec, int, error) {
+	refuse := func(err error) (PolicyOwnershipSpec, int, error) {
+		return PolicyOwnershipSpec{}, 0, errors.Join(ErrProxyRuntimeInactive, err)
+	}
+	if a == nil || a.Runner == nil || a.Processes == nil || a.SOCKSPort < 1024 || a.SOCKSPort > 65535 ||
+		!filepath.IsAbs(a.StateRoot) || filepath.Clean(a.StateRoot) != a.StateRoot ||
+		a.StateRoot == filepath.VolumeName(a.StateRoot)+string(filepath.Separator) || filepath.Base(a.StateRoot) != a.ID() {
+		return refuse(nil)
+	}
+	switch a.ID() {
+	case "usque", "sing-box", "xray":
+	default:
+		return refuse(nil)
+	}
+	var owner PolicyOwnershipSpec
+	for _, spec := range PolicyOwnershipSpecs() {
+		if spec.Adapter == a.ID() {
+			owner = spec
+		}
+	}
+	if owner.Adapter == "" || owner.Interface != a.Interface || owner.Table != a.Table || owner.PriorityBase != a.Priority {
+		return refuse(nil)
+	}
+	transitPriority := 0
+	for _, spec := range NodeTransitOwnershipSpecs() {
+		if spec.Engine == a.ID() && spec.Interface == a.Interface && spec.Table == a.Table {
+			transitPriority = spec.Priority
+		}
+	}
+	if transitPriority == 0 {
+		return refuse(nil)
+	}
+	for _, command := range []string{a.ip(), a.firewallBinary(false), a.firewallBinary(true), a.engineBinary(), a.sidecarBinary()} {
+		if command == "" || strings.ContainsAny(command, "\x00\r\n") {
+			return refuse(nil)
+		}
+	}
+	for _, spec := range []ProcessSpec{a.engineProcess(), a.sidecarProcess()} {
+		if err := validateProcessSpec(spec); err != nil {
+			return refuse(err)
+		}
+	}
+	if err := a.checkSidecarIdentity(); err != nil {
+		return refuse(err)
+	}
+	return owner, transitPriority, nil
 }
 
 func (a *ProxyTunnelAdapter) inactiveKernel(ctx context.Context, owner PolicyOwnershipSpec, transitPriority int) error {

@@ -222,6 +222,66 @@ func TestProxyRuntimeInactiveFreshNegativeInventories(t *testing.T) {
 	})
 }
 
+func TestProxyRuntimeInactiveColdWithoutConfigs(t *testing.T) {
+	for _, engine := range []string{"usque", "sing-box", "xray"} {
+		t.Run(engine, func(t *testing.T) {
+			f := newInactiveFixture(t, engine)
+			// CORE selfUpdateRuntimeManager/newDataplaneManager(..., nil)
+			// constructs read-only observers without activation Configs.
+			cold, err := NewProxyTunnelAdapter(engine, nil, filepath.Dir(f.a.StateRoot))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cold.Runner, cold.Processes = f.runner, f.processes
+			cold.EngineBin, cold.SidecarBin, cold.IP, cold.IPTables, cold.IP6Tables = f.a.EngineBin, f.a.SidecarBin, f.a.IP, f.a.IPTables, f.a.IP6Tables
+			f.a = cold
+			if err := f.a.verifyRuntimeInactive(context.Background(), f.proof); err != nil {
+				t.Fatal("cold observer depended on activation configuration manager", err)
+			}
+			if len(f.runner.seen) != 20 || f.processes.calls != 0 {
+				t.Fatal("cold observer bypassed fresh negative inventory", f.runner.seen, f.processes.calls)
+			}
+			if _, err := os.Lstat(f.a.StateRoot); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("cold observer created runtime metadata", err)
+			}
+		})
+	}
+	for _, mode := range []string{"root", "interface", "table", "priority", "port", "runner", "processes", "tool", "engine-binary", "sidecar-kind"} {
+		t.Run("missing-or-changed-"+mode, func(t *testing.T) {
+			f := newInactiveFixture(t, "xray")
+			f.a.Configs = nil
+			switch mode {
+			case "root":
+				f.a.StateRoot = ""
+			case "interface":
+				f.a.Interface = ""
+			case "table":
+				f.a.Table++
+			case "priority":
+				f.a.Priority++
+			case "port":
+				f.a.SOCKSPort = 0
+			case "runner":
+				f.a.Runner = nil
+			case "processes":
+				f.a.Processes = nil
+			case "tool":
+				f.a.IP = "invalid\x00tool"
+			case "engine-binary":
+				f.a.EngineBin = "invalid\x00binary"
+			case "sidecar-kind":
+				f.a.SidecarKind = "unknown"
+			}
+			if err := f.a.verifyRuntimeInactive(context.Background(), f.proof); !errors.Is(err, ErrProxyRuntimeInactive) {
+				t.Fatal("nil Configs bypassed resource coordinate guard", err)
+			}
+			if len(f.runner.seen) != 0 || f.processes.calls != 0 {
+				t.Fatal("invalid coordinates reached inventory RPC", f.runner.seen, f.processes.calls)
+			}
+		})
+	}
+}
+
 func TestProxyRuntimeInactiveRefusesProcessAndMissingProof(t *testing.T) {
 	for _, mode := range []string{"engine-without-pid", "foreign-exe-owned-config", "option-owned-config", "empty-live-argv", "malformed-stat", "missing-stat", "empty-inventory", "missing-self", "missing-exe", "exe-owned-with-fake-argv", "foreign-engine-config", "canary-config", "canary-listener4", "canary-listener6", "missing-tcp6", "malformed-sockets", "listener4", "listener6", "empty-interfaces", "interface-error", "foreign-tun"} {
 		t.Run(mode, func(t *testing.T) {
