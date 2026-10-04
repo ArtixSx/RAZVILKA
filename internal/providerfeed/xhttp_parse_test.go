@@ -62,6 +62,12 @@ func TestXHTTPFeedUnsupportedIsRejectedBeforeAnyImportEvidence(t *testing.T) {
 func TestXHTTPFeedSyncPersistsQuarantinedCanonicalMaterialAndReaderFence(t *testing.T) {
 	ctx := context.Background()
 	m, store, path := testManager(t)
+	m.HistoryWriteAdmission = func(ctx context.Context, required int) error {
+		if required != 3 {
+			t.Fatal("XHTTP feed was admitted as legacy material")
+		}
+		return ctx.Err()
+	}
 	raw := strings.Replace(goodURI, "type=tcp", "type=xhttp&mode=packet-up&host=front.example&path=%2Ftunnel&extra=%7B%22headers%22%3A%7B%22Authorization%22%3A%22private-extra-token%22%7D%2C%22xPaddingBytes%22%3A%2264-128%22%7D", 1)
 	setResponse(m, 200, raw, nil)
 	result, err := m.Sync(ctx, Request{URL: "https://feed.example.org/private-subscription"})
