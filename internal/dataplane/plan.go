@@ -23,17 +23,18 @@ import (
 const SchemaVersion = 1
 
 type Route struct {
-	LogicalServiceID string           `json:"logical_service_id,omitempty"`
-	ProbeService     *catalog.Service `json:"probe_service,omitempty"`
-	ServiceID        string           `json:"service_id"`
-	ServiceName      string           `json:"service_name"`
-	Selected         string           `json:"selected_route"`
-	Resolved         string           `json:"resolved_route"`
-	Domains          []string         `json:"domains,omitempty"`
-	CIDRs            []string         `json:"cidrs,omitempty"`
-	SourceRefs       []string         `json:"source_refs,omitempty"`
-	Sources          []string         `json:"sources,omitempty"`
-	Ingress          []string         `json:"ingress,omitempty"`
+	WireGuardProfileRevision string           `json:"wireguard_profile_revision,omitempty"`
+	LogicalServiceID         string           `json:"logical_service_id,omitempty"`
+	ProbeService             *catalog.Service `json:"probe_service,omitempty"`
+	ServiceID                string           `json:"service_id"`
+	ServiceName              string           `json:"service_name"`
+	Selected                 string           `json:"selected_route"`
+	Resolved                 string           `json:"resolved_route"`
+	Domains                  []string         `json:"domains,omitempty"`
+	CIDRs                    []string         `json:"cidrs,omitempty"`
+	SourceRefs               []string         `json:"source_refs,omitempty"`
+	Sources                  []string         `json:"sources,omitempty"`
+	Ingress                  []string         `json:"ingress,omitempty"`
 	// Trusted compiler fields; scope/negative gate proof comes from the owner.
 	NetworkPolicyGeneration string `json:"network_policy_generation,omitempty"`
 	NetworkPolicyRole       string `json:"network_policy_role,omitempty"`
@@ -256,6 +257,11 @@ func Build(input Input) (Plan, error) {
 
 func BuildAt(input Input, now time.Time) (Plan, error) {
 	for _, route := range input.Routes {
+		if route.WireGuardProfileRevision != "" {
+			if _, err := FrozenWireGuardProfileRevision(route); err != nil {
+				return Plan{}, err
+			}
+		}
 		if route.ProbeService != nil {
 			if _, err := FrozenProbeService(route); err != nil {
 				return Plan{}, err
@@ -327,6 +333,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	}
 	if plan.RequiresNetworkProof() && !systemprobe.ValidWANProfileID(plan.NetworkProfileID) {
 		adapter := "sing-box"
+		if plan.LAN != nil {
+			adapter = NetworkPolicyAdapterID
+		}
 		if plan.DNS != nil {
 			adapter = scopedDNSAdapterID
 		}
@@ -344,6 +353,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		engineByID[item.ID] = item
 	}
 	adapterSet := map[string]bool{}
+	if input.LAN != nil {
+		adapterSet[NetworkPolicyAdapterID] = true
+	}
 	if input.DNS != nil {
 		adapterSet[scopedDNSAdapterID] = true
 	}
@@ -361,9 +373,10 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		plan.Adapters = append(plan.Adapters, adapter)
 	}
 	sort.Strings(plan.Adapters)
+	plan.Adapters = networkPolicyGateFirstIDs(plan.Adapters)
 	retiring := plan.RetiringAdapters[:0]
 	for _, adapter := range plan.RetiringAdapters {
-		if adapter != scopedDNSAdapterID {
+		if adapter != scopedDNSAdapterID && adapter != NetworkPolicyAdapterID {
 			adapter = adapterID(adapter)
 		}
 		if adapter == "" || adapter == "direct" || adapterSet[adapter] {
@@ -472,6 +485,10 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 			plan.Blockers = append(plan.Blockers, Blocker{Code: "ENGINE_NOT_CONFIGURED", Adapter: adapter, Message: fmt.Sprintf("Обход %s не настроен", adapter), Resolution: "Создайте или импортируйте конфигурацию и выполните native validation."})
 		}
 		switch adapter {
+		case NetworkPolicyAdapterID:
+			if !input.Host.IPCommand || !input.Host.IPTables || !input.Host.IP6Tables {
+				plan.Blockers = append(plan.Blockers, Blocker{Code: "LAN_GATE_TOOLS_UNAVAILABLE", Adapter: adapter, Message: "Допуск LAN требует проверки правил IPv4 и IPv6.", Resolution: "Восстановите инструменты проверки сети и сформируйте новый план."})
+			}
 		case "nfqws2":
 			addNFQWS2Preflight(&plan, input.Host)
 			for _, route := range input.Routes {
@@ -558,9 +575,13 @@ func (p Plan) RoutePlanFor(adapter string) RoutePlan {
 
 // Node proof is tied to one observed network epoch. Legacy journals remain
 // readable, but a missing epoch must never authorize reusing a node route.
-func (p Plan) RequiresNetworkProof() bool { return p.DNS != nil || routesRequireNetworkProof(p.Routes) }
+func (p Plan) RequiresNetworkProof() bool {
+	return p.LAN != nil || p.DNS != nil || routesRequireNetworkProof(p.Routes)
+}
 
-func (p RoutePlan) RequiresNetworkProof() bool { return routesRequireNetworkProof(p.Routes) }
+func (p RoutePlan) RequiresNetworkProof() bool {
+	return p.LAN != nil || routesRequireNetworkProof(p.Routes)
+}
 
 func routesRequireNetworkProof(routes []Route) bool {
 	for _, route := range routes {
@@ -589,6 +610,9 @@ func addAdapterActions(plan *Plan, adapter string, canary bool, order *int) {
 		*order++
 	}
 	switch adapter {
+	case NetworkPolicyAdapterID:
+		appendAction("stage", "lan-intent", "physical LAN", "Сохранить точные границы источников и MAC в общей транзакции.", true)
+		appendAction("validate", "lan-preflight", "IPv4/IPv6 gate", "Проверить физическую область и отсутствие конфликтов до сетевых изменений.", true)
 	case "nfqws2":
 		appendAction("stage", "lists", "/opt/var/lib/razvilka/dataplane/nfqws2", "Сгенерировать нормализованные domain/CIDR-листы в изолированной staging-папке.", true)
 		appendAction("validate", "native", "nfqws2 + iptables", "Проверить синтаксис, NFQUEUE, WAN binding, IPv4/IPv6 и offload без записи правил.", true)
@@ -606,6 +630,8 @@ func addAdapterActions(plan *Plan, adapter string, canary bool, order *int) {
 		appendAction("canary", "isolated-probe", adapter, "Проверить candidate через отдельный путь до замены рабочего процесса или правил.", true)
 	}
 	switch adapter {
+	case NetworkPolicyAdapterID:
+		appendAction("activate", "lan-gate", "shared mixed receipt", "Установить и проверить допуск LAN до подключения маршрутов.", true)
 	case "nfqws2":
 		appendAction("activate", "netfilter", "RAZVILKA-owned chain/set", "Подключить собственную цепочку атомарно, не удаляя чужие правила.", true)
 	case "usque":
@@ -712,7 +738,7 @@ func canonicalize(input *Input) {
 	input.EngineConfigDrafts = sortedUnique(input.EngineConfigDrafts)
 	retiring := make([]string, 0, len(input.RetiringAdapters))
 	for _, value := range input.RetiringAdapters {
-		if value == scopedDNSAdapterID {
+		if value == scopedDNSAdapterID || value == NetworkPolicyAdapterID {
 			retiring = append(retiring, value)
 			continue
 		}
@@ -740,10 +766,16 @@ func canonicalize(input *Input) {
 }
 
 func sortActions(actions []Action) {
-	priority := map[string]int{"snapshot": 0, "stage": 1, "validate": 2, "canary": 3, "deactivate": 4, "activate": 5, "health": 6, "commit": 7}
+	priority := map[string]int{"snapshot": 0, "stage": 1, "validate": 2, "canary": 3, "deactivate": 5, "activate": 6, "health": 7, "commit": 8}
 	sort.SliceStable(actions, func(i, j int) bool {
 		left, leftOK := priority[actions[i].Phase]
 		right, rightOK := priority[actions[j].Phase]
+		if actions[i].Adapter == NetworkPolicyAdapterID && actions[i].Phase == "activate" {
+			left = 4
+		}
+		if actions[j].Adapter == NetworkPolicyAdapterID && actions[j].Phase == "activate" {
+			right = 4
+		}
 		if !leftOK {
 			left = 99
 		}
@@ -751,6 +783,12 @@ func sortActions(actions []Action) {
 			right = 99
 		}
 		if left == right {
+			if actions[i].Adapter == NetworkPolicyAdapterID || actions[j].Adapter == NetworkPolicyAdapterID {
+				if actions[i].Phase == "deactivate" {
+					return actions[j].Adapter == NetworkPolicyAdapterID
+				}
+				return actions[i].Adapter == NetworkPolicyAdapterID
+			}
 			return actions[i].Adapter < actions[j].Adapter
 		}
 		return left < right

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
@@ -158,6 +159,32 @@ func copyProxyPredicateService(service catalog.Service) catalog.Service {
 		service.Provenance = &provenance
 	}
 	return service
+}
+
+// evaluateSample consumes the producer's already bounded, immutable response.
+// It neither reads a stream nor issues another request. The exact service, URL
+// and frozen predicate digest must still match before interpreting any bytes.
+func (p *proxyServicePredicate) evaluateSample(ctx context.Context, serviceID, rawURL, hash string, status int, contentType, body string, truncated bool) error {
+	if ctx == nil {
+		return errProxyServicePredicate
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !p.matches(serviceID, rawURL) || hash != p.digest() || len(body) > probecheck.MaxBodyBytes ||
+		len(contentType) > 1024 || !utf8.ValidString(contentType) || strings.ContainsAny(contentType, "\r\n\x00") {
+		return errProxyServicePredicate
+	}
+	sample := []byte(body)
+	defer clear(sample)
+	assessment := probecheck.Evaluate(p.service, p.probe, probecheck.Observation{
+		RequestedURL: rawURL, FinalURL: rawURL, HTTPStatus: status,
+		ContentType: contentType, Body: sample, BodyTruncated: truncated,
+	})
+	if assessment.Verdict != evidence.VerdictPass {
+		return &serviceResponseError{code: assessment.ErrorCode, detail: fmt.Sprintf("%s (%s): %s", assessment.Verdict, assessment.ErrorCode, assessment.Detail)}
+	}
+	return ctx.Err()
 }
 
 // Read one extra byte to distinguish a complete exactly-32KiB body from a

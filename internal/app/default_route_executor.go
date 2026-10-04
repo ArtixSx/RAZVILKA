@@ -152,6 +152,8 @@ func (e *DefaultRouteExecutor) Review(ctx context.Context, services []dataplane.
 
 func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Config) dataplane.Input {
 	input := dataplane.Input{LAN: c.LAN(), Revision: cfg.Revision + 1, NetworkProfileID: c.snapshot.Scope.NetworkID, SafeMode: cfg.SafeMode}
+	gateCapable := e.app.Dataplane.Capable(dataplane.NetworkPolicyAdapterID)
+	input.Engines = append(input.Engines, dataplane.Engine{ID: dataplane.NetworkPolicyAdapterID, Installed: gateCapable, Configured: gateCapable, Activatable: gateCapable})
 	if e.app.DataplaneHost != nil {
 		input.Host = e.app.DataplaneHost()
 	} else {
@@ -168,8 +170,9 @@ func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Conf
 			path := c.snapshot.Paths[rule.ServiceID]
 			id := "network-" + defaultRouteDigest(key)[:16]
 			route = &dataplane.Route{
-				LogicalServiceID: rule.ServiceID,
-				ServiceID:        id, ServiceName: rule.ServiceID, Selected: path.Selected, Resolved: path.Resolved,
+				WireGuardProfileRevision: path.WireGuardProfileRevision,
+				LogicalServiceID:         rule.ServiceID,
+				ServiceID:                id, ServiceName: rule.ServiceID, Selected: path.Selected, Resolved: path.Resolved,
 				Sources: []string{rule.Source.String()}, Ingress: []string{rule.Ingress}, ProbeURL: path.ProbeURL,
 				NetworkPolicyGeneration: c.digest, NetworkPolicyRole: rule.Origin,
 			}
