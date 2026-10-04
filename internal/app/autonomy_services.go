@@ -134,7 +134,7 @@ func (a *App) runAutonomyRemoval(ctx context.Context, p autonomy.Policy, s auton
 		target := hypothetical.Services[s.ID]
 		target.Enabled = false
 		hypothetical.Services[s.ID] = target
-		plan, e := a.buildDataplanePlanForScope(hypothetical, a.nodeRouteOptions(), changeScopeNode, "")
+		plan, e := a.buildDataplanePlanForScopeContext(ctx, hypothetical, a.nodeRouteOptions(), changeScopeNode, "")
 		if e != nil || !plan.Ready {
 			return finish("removal-blocked", "Снятие маршрута не прошло предварительную проверку. Конфигурация сохранена.")
 		}

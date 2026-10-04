@@ -23,6 +23,7 @@ import (
 
 func TestDNSApplyReviewDoesNotRequireNodeRegistryAndBindsProvider(t *testing.T) {
 	a := genericReviewFixture(t)
+	a.FreshProfile = stableNodeProfile
 	a.DNS, _ = dnscontrol.New("")
 	if err := a.DNS.SetServiceDraft("telegram", "private"); err != nil {
 		t.Fatal(err)

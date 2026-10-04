@@ -241,6 +241,18 @@ func (b *applyReviewBinding) guard(a *App, ctx context.Context) error {
 			return dataplane.ErrReviewChanged
 		}
 	}
+	if b.profile != "" {
+		current, err := a.freshNetworkProfile(ctx)
+		if contextErr := ctx.Err(); contextErr != nil {
+			return contextErr
+		}
+		if err != nil || current != b.profile {
+			return dataplane.ErrNetworkChanged
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if committing != "" {
 		b.committedAdapters[committing] = true
 	}

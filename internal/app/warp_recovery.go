@@ -150,7 +150,7 @@ func (a *App) processWarpHealth(ctx context.Context, items []warp.HealthEvidence
 		}
 		return decision, err
 	}
-	transaction, err := a.buildDataplanePlanForScope(cfg, a.routeOptionsSnapshot(), changeScopeEngine, "warp-wg")
+	transaction, err := a.buildDataplanePlanForScopeContext(ctx, cfg, a.routeOptionsSnapshot(), changeScopeEngine, "warp-wg")
 	if err != nil || !transaction.Ready || transaction.Noop {
 		decision.Reason = "candidate-staged-transaction-blocked"
 		return decision, nil
