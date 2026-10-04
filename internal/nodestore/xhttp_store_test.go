@@ -291,3 +291,41 @@ func TestXHTTPStoreReopenRejectsUnsupportedPersistedMaterialWithoutRepair(t *tes
 		t.Fatal("reopen silently repaired/dropped unsupported secret")
 	}
 }
+
+func TestXHTTPStorePrivateHeadersNeverBecomeEndpointHosts(t *testing.T) {
+	ctx := context.Background()
+	s, _ := setup(t)
+	headers := map[string]any{"Address": "private-address-token", "SERVER": "private-server-token", "Endpoint": "private-endpoint-token"}
+	extra, _ := json.Marshal(map[string]any{"headers": headers})
+	u, _ := url.Parse(xhttpStoreURI("tls", "packet-up"))
+	q := u.Query()
+	q.Set("extra", string(extra))
+	u.RawQuery = q.Encode()
+	snap, err := s.Import(ctx, manual, u.String(), testTime, time.Hour, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snap.Nodes[0].ID
+	pass := enginePass(id, "xray", "header-authority", testTime)
+	if _, err := s.RecordCheck(ctx, id, pass, testTime); err != nil {
+		t.Fatal(err)
+	}
+	binding := RouteBinding{ServiceID: pass.ServiceID, NodeID: id, NetworkProfile: pass.NetworkProfile, Domains: []string{"telegram.org"}}
+	material, err := s.MaterializeXray(ctx, []RouteBinding{binding}, testTime)
+	if err != nil || !reflect.DeepEqual(material.EndpointHosts, []string{"private-host.example"}) {
+		t.Fatal("private header value or SNI/HTTP host became endpoint authority", err)
+	}
+	defer clear(material.Config)
+	var doc struct {
+		Outbounds []struct {
+			StreamSettings struct {
+				XHTTPSettings struct {
+					Extra struct{ Headers map[string]any }
+				}
+			}
+		}
+	}
+	if json.Unmarshal(material.Config, &doc) != nil || len(doc.Outbounds) != 2 || !reflect.DeepEqual(doc.Outbounds[1].StreamSettings.XHTTPSettings.Extra.Headers, headers) {
+		t.Fatal("endpoint scoping dropped or changed accepted private headers")
+	}
+}

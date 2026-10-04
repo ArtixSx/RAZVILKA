@@ -443,30 +443,16 @@ func normalizedDestinations(values []string) ([]string, error) {
 	return out, nil
 }
 
-func collectPrivateEndpointHosts(value any, seen map[string]bool) {
-	var walk func(any, string)
-	walk = func(current any, key string) {
-		switch item := current.(type) {
-		case map[string]any:
-			for childKey, child := range item {
-				walk(child, strings.ToLower(childKey))
-			}
-		case []any:
-			for _, child := range item {
-				walk(child, key)
-			}
-		case string:
-			if key != "server" && key != "address" && key != "endpoint" {
-				return
-			}
-			host := strings.Trim(strings.TrimSpace(item), "[]")
-			if split, _, err := net.SplitHostPort(host); err == nil {
-				host = strings.Trim(split, "[]")
-			}
-			if host != "" && host != "127.0.0.1" && host != "::1" {
-				seen[host] = true
-			}
-		}
+func collectPrivateEndpointHosts(outbound map[string]any, seen map[string]bool) {
+	// This is a validated canonical node, whose only remote endpoint is its
+	// top-level server. Transport headers/extra and TLS names are private
+	// protocol data, never DNS or route-exclusion authority.
+	server, _ := outbound["server"].(string)
+	host := strings.Trim(strings.TrimSpace(server), "[]")
+	if split, _, err := net.SplitHostPort(host); err == nil {
+		host = strings.Trim(split, "[]")
 	}
-	walk(value, "")
+	if host != "" && host != "127.0.0.1" && host != "::1" {
+		seen[host] = true
+	}
 }
