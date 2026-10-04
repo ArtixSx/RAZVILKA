@@ -128,3 +128,7 @@ GO=/absolute/path/to/go sh scripts/check-xray-tun-native.sh
 ### D03 fixture permissions — отдельное исправление
 
 Координатор сообщил native PASS RC0 на интеграции `0669514+b3bc486` с Xray26.3.27 и отдельно Sing-box1.13.3/1.14.2. Это результат координатора, не локальный прогон этого чата. Первый полный Linux gate обычным пользователем art затем обнаружил `private restore journal unavailable` в TestScopedXray*: fixture передавала уже существующий `t.TempDir` в engineconfig.StageRoot без private0700, а stageDirectory правильно отвергал0755. Исправлены исключительно каталоги fixture (nodes/stage/backup/state), Chmod errors теперь проверяются. Production permissions/guards не менялись. Адресный Windows test `TestScopedXrayRejectsDraftWrongEngineAndBlackholeMutation` прошёл RC0; Linux ordinary-user повтор принадлежит координатору. Native fixture создаёт отсутствующие drafts внутри своего private root и этого дефекта не имела.
+
+## Shared policy receipt и proxy generations
+
+Общий модуль поставлен в 0d49f3e, stricter promotion retry — 7253153. По отчёту координатора native-policy-receipt-01 (race и 12 real crash boundaries в отдельном netns) PASS RC0. Proxy теперь подключён к общему per-tuple receipt, сохраняет promoted generation при Commit и использует новые receipts для recovery/restoration. Подробный финальный контракт, ограничения и точные результаты проверок: VLESS_POLICY_ADDITION_RU.md и VLESS_PROXY_GENERATIONS_RU.md. Эти отчёты заменяют промежуточный aggregate-only checkpoint. D10 будет отдельной порцией; app/worker wiring остаётся CORE.

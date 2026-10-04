@@ -44,6 +44,11 @@ const paths = {'config':'config.json','catalog':'service-catalog.json','sources'
 for (const [source, target] of [['config.example.json','config.json'],['service-catalog.json','service-catalog.json'],['sources.json','sources.json'],['community-catalog.json','community-catalog.json']]) {
   writeFileSync(join(run,target), readFileSync(join(root,'configs',source)));
 }
+if(!authOnly && !policyTransport){
+  const catalog=JSON.parse(readFileSync(join(run,'service-catalog.json'),'utf8'));
+  for(const [id,name] of [['chatgpt','ChatGPT'],['claude','Claude'],['gemini','Gemini']])catalog.services.push({id:'ui-ai-'+id,name:name+' · UI fixture',category:'AI',description:'Тестовое определение для проверки группировки; доступ не проверялся.',domains:[id+'.ui.invalid'],strategy:['nfqws2']});
+  writeFileSync(join(run,'service-catalog.json'),JSON.stringify(catalog));
+}
 const hashConfig = () => createHash('sha256').update(readFileSync(join(run,'config.json'))).digest('hex');
 const configBefore = hashConfig();
 const env = {...process.env, GOMAXPROCS:'2', GOFLAGS:'-p=2', RAZVILKA_USQUE_INIT:join(run,'absent-init'),
@@ -51,11 +56,12 @@ const env = {...process.env, GOMAXPROCS:'2', GOFLAGS:'-p=2', RAZVILKA_USQUE_INIT
 const server = spawn(resolve(process.env.RAZVILKA_UI_BINARY), ['-listen',listen,...Object.entries(paths).flatMap(([flag,path])=>['-'+flag,join(run,path)])], {cwd:run, env, windowsHide:true, stdio:['ignore','pipe','pipe']});
 let serverLog = '';
 server.stdout.on('data', chunk=>{serverLog+=chunk;});server.stderr.on('data', chunk=>{serverLog+=chunk;});
-let browser, context, page, browserVersion;
+let browser, context, page, browserVersion, failure;
 const results = [], errors = [], requests = [], screenshots = [];
-async function capture(name,source) {
-  await page.screenshot({path:join(run,name),fullPage:true,animations:'disabled'});
-  screenshots.push({file:name,source,viewport:page.viewportSize()});
+async function capture(name,source,{fullPage=true,fromTop=true}={}) {
+  await page.evaluate(async fromTop=>{if(fromTop)window.scrollTo({top:0,behavior:'instant'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));},fromTop);
+  await page.screenshot({path:join(run,name),fullPage,animations:'disabled'});
+  screenshots.push({file:name,source,viewport:page.viewportSize(),fullPage});
 }
 async function test(name, boundary, action) {
   const start=requests.length, began=performance.now();const checks=await action();
@@ -118,6 +124,20 @@ try {
   const nav = async name=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name,name);};
   const quickReady = ()=>page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled);
 
+  await test('cold boot and Nodes observers share reads without caching explicit refresh', 'real HTTP read lifecycle', async()=>{
+    const cold=Object.fromEntries(['/api/v1/auth/status','/api/v1/status','/api/v1/panel/inventory','/api/v1/services','/api/v1/metrics'].map(path=>[path,requests.filter(request=>request.path===path).length]));
+    for(const [path,count] of Object.entries(cold))assert.equal(count,1,'cold boot restarted '+path);
+    const start=requests.length;await page.evaluate(()=>setView('nodes'));
+    await page.waitForFunction(()=>!panelLoad.request&&!nodeBrowser.polling&&!nodeActivity.pending);
+    const paths=['/api/v1/nodes','/api/v1/routes/options','/api/v1/node-feeds'];
+    const entered=Object.fromEntries(paths.map(path=>[path,requests.slice(start).filter(request=>request.path===path).length]));
+    for(const [path,count] of Object.entries(entered))assert.equal(count,1,'Nodes duplicated '+path);
+    const explicit=requests.length;await page.locator('#refreshNodes').click();await page.waitForFunction(()=>!document.getElementById('refreshNodes').disabled);
+    for(const path of paths.slice(0,2))assert.equal(requests.slice(explicit).filter(request=>request.path===path).length,1,'explicit refresh reused '+path);
+    await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    return {cold_reads:cold,nodes_reads:entered,explicit_refresh:'fresh GET'};
+  });
+
   await test('fast transitions and repeated refresh retain current workspace', 'real HTTP', async()=>{
     const writes = requests.filter(r=>r.method!=='GET').length;
     await page.evaluate(()=>{for(const name of ['nodes','services','devices','settings','autopilot','overview'])setView(name);for(let i=0;i<4;i++)void refreshAll();});
@@ -126,7 +146,25 @@ try {
     assert.equal(requests.filter(r=>r.method!=='GET').length,writes);
     assert.deepEqual(await page.evaluate(()=>state.uiRenderIssues),{});
   });
-  if(!authOnly && !policyTransport)await capture('01-home.png','Настоящее локальное приложение; отдельная тестовая копия catalog/config, Safe Mode включён, автоматика выключена, native engines отсутствуют.');
+  if(!authOnly && !policyTransport)await capture('01-home.png','Настоящее локальное приложение; отдельная тестовая копия catalog/config и журнала, Safe Mode включён, автоматика выключена. Inventory читает установленные бинарники ПК; native-проверки не запускались.');
+
+  if(!authOnly && !policyTransport)await test('connection REST and stream follow the visible view with single-flight readback','real connection HTTP and SSE lifecycle',async()=>{
+    const isConnection=request=>['/api/v1/connections','/api/v1/connections/stream'].includes(request.path);
+    const hidden=requests.length;await page.evaluate(async()=>{await refreshConnections();startConnectionStream();});
+    assert.equal(requests.slice(hidden).filter(isConnection).length,0,'Home admitted hidden connection reads');
+    const entered=requests.length;await page.evaluate(()=>setView('connections'));await page.waitForFunction(()=>state.currentView==='connections'&&!panelLoad.request&&!!state.stream);
+    assert.equal(requests.slice(entered).filter(request=>request.path==='/api/v1/connections/stream').length,1);
+    const readback=requests.length;await page.evaluate(()=>Promise.all([refreshConnections(),refreshConnections()]));
+    assert.equal(requests.slice(readback).filter(request=>request.path==='/api/v1/connections').length,1,'duplicate connection readback sent two GETs');
+    await nav('nodes');await page.waitForFunction(()=>!panelLoad.request&&!state.stream);
+    assert.equal(await page.evaluate(()=>state.connections.live),false,'retained hidden rows claimed a live stream');
+    const left=requests.length;await page.evaluate(async()=>{await refreshConnections();startConnectionStream();});
+    assert.equal(requests.slice(left).filter(isConnection).length,0,'Nodes admitted hidden connection reads');
+    const returned=requests.length;await page.evaluate(()=>setView('connections'));await page.waitForFunction(()=>state.currentView==='connections'&&!panelLoad.request&&!!state.stream);
+    assert.equal(requests.slice(returned).filter(request=>request.path==='/api/v1/connections/stream').length,1,'return did not open exactly one fresh stream');
+    await nav('overview');await page.waitForFunction(()=>!panelLoad.request&&!state.stream);
+    return {hidden_reads:0,visible_streams_per_entry:1,repeated_readback_gets:1};
+  });
 
   if(!policyTransport)await test('component recovery is a read-only journal view on navigation', 'real recovery GET', async()=>{
     const start=requests.length;await nav('engines');
@@ -138,6 +176,57 @@ try {
     await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
   });
   if(!authOnly && !policyTransport) {
+    await test('engine card steps keep the chosen engine and dirty profile without writes', 'real engine metadata HTTP and local draft', async()=>{
+      const start=requests.length;await nav('engines');await page.evaluate(()=>refreshEngineConfigs());
+      await page.waitForFunction(()=>!panelLoad.request);
+      assert.equal(requests.slice(start).filter(request=>/^\/api\/v1\/engine-configs\/[^/]+\/guided$/.test(request.path)).length,0,'hidden profile reader ran on the cards page');
+      await capture('07-engine-flow.png','Настоящий HTTP; карточки из свежих метаданных одноразового стенда, Safe Mode включён. Установка, native-проверки и Apply не запускались.');
+      const step=async(id,name)=>{const button=page.locator('[data-engine-step="'+name+'"][data-card-engine="'+id+'"]');if(!await button.isVisible())await page.locator('[data-engine-disclosure="'+id+'-flow"] summary').click();await button.click();};
+      const summary=page.locator('[data-engine-disclosure="xray-flow"] summary');await summary.click();await summary.focus();
+      await page.evaluate(()=>refreshEngineConfigs());
+      assert.equal(await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open),true);
+      assert.equal(await summary.evaluate(element=>document.activeElement===element),true,'workflow disclosure lost focus on metadata readback');
+      await step('xray','profile');
+      await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray');
+      await page.waitForFunction(()=>document.activeElement?.id==='engineFileSelect');
+      await page.locator('#engineModeExpert').click();await page.waitForFunction(()=>state.engineMode==='expert');
+      const draft='{"log":{"loglevel":"warning"}}';await page.locator('#engineEditor').fill(draft);
+      await nav('engines');await step('usque','profile');
+      await page.locator('#actionDialog').waitFor({state:'visible'});await page.locator('#actionDialog [value="cancel"]').click();
+      await page.waitForFunction(()=>!document.getElementById('actionDialog').open);
+      assert.equal(await page.evaluate(()=>state.currentView),'engines');assert.equal(await page.evaluate(()=>state.selectedEngine),'xray');
+      assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
+      await step('xray','check');
+      await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray' && document.activeElement?.id==='r4ProbeService');
+      assert.equal(await page.locator('#engineEditor').inputValue(),draft);assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
+      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'card navigation started a configuration/check/package write');
+      await page.locator('.engine-tab[data-engine-tab="config"]').click();await page.locator('#engineDiscardDraft').click();
+      await page.waitForFunction(()=>!state.engineEditorDirty && !state.engineIntent);
+      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'discarding a local unstaged draft wrote a file');
+      await nav('engines');await page.setViewportSize({width:390,height:844});
+      const disclosure=page.locator('[data-engine-disclosure="xray-flow"]');
+      if(!await disclosure.evaluate(element=>element.open))await disclosure.locator('summary').click();
+      await page.locator('[data-engine-card="xray"]').scrollIntoViewIfNeeded();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth),0,'expanded engine workflow overflows the mobile viewport');
+      await capture('08-engine-flow-narrow.png','Настоящий HTTP; раскрытые шаги Xray, viewport390×844, отдельный config/journal и inventory ПК. Переходы не запускают native-проверки или Apply.',{fullPage:false,fromTop:false});
+      await page.setViewportSize({width:1280,height:900});
+      await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    });
+    await test('AI group is a disclosure and keeps members separate across readback', 'real HTTP + three disposable catalog definitions; presentation only', async()=>{
+      const start=requests.length;await nav('services');await page.waitForFunction(()=>!panelLoad.request);
+      await page.locator('[data-r5-catalog]').click();
+      const group=page.locator('#ui3ServiceCatalog [data-rz-group]').filter({has:page.locator('summary strong', {hasText:'ИИ-сервисы'})});
+      await group.locator('summary').click();await page.waitForFunction(()=>[...document.querySelectorAll('#ui3ServiceCatalog [data-rz-group]')].some(el=>el.open));
+      assert(await group.locator('[data-rz-card]').count()>1);assert.equal(await group.locator('.ui3-status.good').count(),0,'empty fixture AI group claimed working service');
+      await group.locator('summary').focus();await page.evaluate(()=>refreshAll());await page.waitForFunction(()=>!panelLoad.request);
+      assert.equal(await group.evaluate(el=>el.open),true);assert.equal(await page.evaluate(()=>document.activeElement?.tagName),'SUMMARY');
+      await page.locator('#ui3ServiceSearch').fill('ChatGPT');assert.equal(await group.locator('[data-rz-card]').count(),1);
+      await page.locator('#ui3ServiceSearch').fill('');assert(await group.locator('[data-rz-card]').count()>1);
+      await capture('05-ai-group.png','Настоящий HTTP; три AI определения добавлены только в каталог одноразового стенда, домены .invalid, без проверок и PASS. Safe Mode включён, автоматика выключена.');
+      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
+      await group.locator('summary').click();assert.equal(await group.evaluate(el=>el.open),false);
+      await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+    });
     await test('mobile drawer fits, closes with focus and retains bottom navigation', 'real HTTP and browser layout 390 × 844', async()=>{
     await nav('nodes');await page.waitForFunction(()=>!panelLoad.request);
     await page.setViewportSize({width:390,height:844});
@@ -175,6 +264,46 @@ try {
     return {closed,open,closeMethods:['Escape','close button','backdrop','drawer destination','bottom destination']};
     });
   }
+
+  if(!authOnly && !policyTransport)await test('all-VLESS scope ignores filters, protects groups and fences a lost deletion reply', 'real metadata HTTP + disposable node profiles; controlled commit delivery 500', async()=>{
+    await nav('nodes');await page.waitForFunction(()=>!panelLoad.request);
+    const profiles=[1,2,3].map(n=>`vless://00000000-0000-4000-8000-${String(n).padStart(12,'0')}@ui-node-${n}.invalid:443?type=tcp&security=tls&sni=ui-node-${n}.invalid#UI-F${n}`);
+    profiles.push('ss://YWVzLTEyOC1nY206dWktZml4dHVyZQ==@ui-ss.invalid:443#UI-SS');
+    await page.locator('#nodeOpenImport').click();await page.locator('#nodeQuickImportText').fill(profiles.join('\n'));await page.locator('#nodeQuickImportSubmit').click();
+    await page.waitForFunction(()=>state.nodes.nodes.length===4 && !document.getElementById('nodeQuickImportSubmit').disabled);
+    await page.locator('#nodeQuickImportClose').click();
+    const before=await context.request.get(origin+'/api/v1/nodes');assert.equal(before.status(),200);const nodes=await before.json();
+    const vless=nodes.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='vless');assert.equal(vless.length,3);
+    const member=vless[1],filter=await page.evaluate(id=>nodeDisplayName(state.nodes.nodes.find(node=>node.id===id)),vless[0].id);
+    const group=await context.request.post(origin+'/api/v1/node-groups',{data:{name:'UI fixture reserve',mode:'fallback',node_ids:[member.id],preferred_node_id:member.id,hold_down_seconds:1800,confirm:'CREATE_NODE_GROUP'}});
+    assert.equal(group.status(),201);assert.equal((await group.json()).working_routes_changed,false);
+    await page.evaluate(()=>refreshNodes());await page.locator('#nodeSearch').fill(filter);
+    assert.equal(await page.locator('#nodeList [data-node-card]').count(),1,'filter must leave one visible node while all-VLESS targets three');
+    await page.locator('#nodeAllVLESSDetails summary').click();assert.match(await page.locator('#nodeCheckAllVLESS').textContent(),/3/);
+    const checkStart=requests.length;await page.locator('#nodeCheckAllVLESS').click();await page.locator('#actionDialog').waitFor({state:'visible'});
+    assert.match(await page.locator('#actionDialogText').textContent(),/3 из 3 VLESS/);await page.locator('#actionDialog [value="cancel"]').click();
+    await page.waitForFunction(()=>!workflowState.bulkBusy);assert.equal(requests.slice(checkStart).filter(r=>r.path==='/api/v1/node-checks'&&r.method==='POST').length,0);
+    await page.locator('#nodeDeleteAllVLESS').click();await page.waitForFunction(()=>!!workflowState.deletion && !workflowState.deleteBusy);
+    assert.equal(await page.evaluate(()=>workflowState.deletion.result.candidates.length),2);
+    assert.equal(await page.evaluate(()=>workflowState.deletion.result.skipped.length),1);
+    assert.equal(await page.evaluate(()=>workflowState.deletion.result.scope),'all-vless');
+    let commits=0;
+    await page.route('**/api/v1/nodes/delete-batch',async route=>{
+      if(route.request().postDataJSON().preview!==false)return route.continue();
+      commits++;const response=await route.fetch();assert.equal(response.status(),200);assert.equal((await response.json()).working_routes_changed,false);
+      await route.fulfill({status:500,json:{error:'Тестовая потеря ответа после удаления'}});
+    });
+    await page.locator('#r4DeleteCommit').click();await page.waitForFunction(()=>!workflowState.deleteBusy && !workflowState.deletion);
+    assert.match(await page.locator('#r4DeleteStatus').textContent(),/потеря ответа/);
+    await page.evaluate(()=>workflowCommitDelete());assert.equal(commits,1,'unknown deletion was replayed');
+    await page.unroute('**/api/v1/nodes/delete-batch');await page.locator('#r4DeleteDialog [data-r4-close]').last().click();
+    await page.locator('#refreshAll').click();await page.waitForFunction(()=>state.nodes.nodes.length===2 && !panelLoad.request);
+    assert.equal(await page.evaluate(id=>state.nodes.nodes.some(node=>node.id===id),member.id),true);
+    assert.equal(await page.evaluate(()=>state.nodes.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='vless').length),1);
+    assert.equal(await page.evaluate(()=>state.nodes.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='shadowsocks').length),1);
+    await page.locator('#nodeSearch').fill('');await capture('06-bulk-library.png','Настоящий HTTP; импортированы только четыре профиля .invalid с фиктивными ключами. Группа защищена, две неиспользуемые записи удалены. Native checks и Apply не запускались.');
+    assert.equal(hashConfig(),configBefore);await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+  });
 
   if(!authOnly) {
   await nav('autopilot');await quickReady();
@@ -374,12 +503,15 @@ try {
   assert.deepEqual(errors,[],'uncaught browser exception');
   assert.equal(hashConfig(),configBefore,'network configuration changed during UI gate');
   assert.equal(JSON.parse(readFileSync(join(run,'config.json'),'utf8')).safe_mode,true);
+} catch(error) {
+  failure={name:error.name,message:error.message};
+  throw error;
 } finally {
   if(page && !page.isClosed())writeFileSync(join(run,'ui-state.json'),JSON.stringify(await page.evaluate(()=>({view:state.currentView,authenticated:state.authenticated,dataLoad:state.dataLoad,issues:state.uiRenderIssues,quick:{message:document.getElementById('autoQuickMessage').textContent,revision:document.getElementById('autoQuickRevision').textContent,value:document.getElementById('autoQuickCheck').value,disabled:document.getElementById('autoQuickSave').disabled}})),null,2));
   if(browser)await browser.close();
   server.kill();
   await Promise.race([new Promise(r=>server.once('exit',r)),delay(5000)]);
   writeFileSync(join(run,'server.log'),serverLog);
-  writeFileSync(join(run,'result.json'),JSON.stringify({browserVersion,origin,port,policyTransport,authOnly,results,errors,requests,screenshots,configUnchanged:hashConfig()===configBefore},null,2));
+  writeFileSync(join(run,'result.json'),JSON.stringify({browserVersion,origin,port,policyTransport,authOnly,results,errors,failure,requests,screenshots,configUnchanged:hashConfig()===configBefore},null,2));
   console.log('Local artifacts: '+run);
 }

@@ -129,6 +129,12 @@ type Manager struct {
 	retryDelay    time.Duration
 	releaseChecks map[string]catalogStatus
 	updateFault   func(string) error // phase-boundary fault injection; nil in production
+	// Isolated bundle tests relocate files and supply an already reviewed
+	// synthetic archive. Production uses the fixed owned root/catalog below.
+	nfqwsReleases string
+	nfqwsFixture  *managedNFQWSFixtureBoundary // private pinned TempDir exception, never production wiring
+	nfqwsReview   func(ManagedNFQWSManifest) error
+	nfqwsPublish  func(context.Context, string, string, string, func(func() error) error, func(string) error) error
 	mu            sync.Mutex
 }
 

@@ -113,6 +113,7 @@ func main() {
 	selfInstallation := flag.String("self-update-installation", getenv("RAZVILKA_SELF_UPDATE_INSTALLATION", ""), "explicit absolute application installation root (default: /opt)")
 	selfFiles := flag.String("self-update-file-state", getenv("RAZVILKA_SELF_UPDATE_FILE_STATE", ""), "explicit absolute retained application file journal directory")
 	selfHelper := flag.String("self-update-helper-state", getenv("RAZVILKA_SELF_UPDATE_HELPER_STATE", ""), "explicit absolute retained application helper receipt directory")
+	selfControl := flag.String("self-update-control-state", getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE", ""), "fixed absolute control authority root outside rollback images")
 	z2kRoot := flag.String("z2k-root", defaultZ2KRoot, "read-only z2k migration source root")
 	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
 	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
@@ -249,7 +250,7 @@ func main() {
 		fmt.Printf("healthy: %s\n", version)
 		return
 	}
-	selfFileState, err := configuredSelfUpdateFiles(*selfInstallation, *selfFiles, *selfHelper)
+	selfFileState, err := configuredSelfUpdateFiles(*selfInstallation, *selfFiles, *selfHelper, *selfControl)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -534,6 +535,7 @@ func main() {
 	engineLab := enginelab.New(engineConfigs)
 	engineLab.OwnsPolicyRule = dataplaneManager.OwnsPolicyRule
 	engineLab.OwnsPolicyRoute = dataplaneManager.OwnsPolicyRoute
+	engineLab.OwnsPolicyRouteInTable = dataplaneManager.OwnsPolicyRouteInTable
 	engineLab.EnablePolicyInspection()
 	usqueDoctor := usquediag.New()
 	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")
@@ -594,6 +596,8 @@ func main() {
 	selfFileState.Helper = a.SelfUpdate
 	a.SelfUpdateFiles = selfFileState
 	a.Nodes = nodeStore
+	historyAdmission := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)
+	a.NodeHistoryWriteGuard = historyAdmission.CheckWrite
 	if nodeStore != nil {
 		feedRoot, feedPathErr := filepath.Abs(filepath.Join(filepath.Dir(*cfgPath), "subscriptions-private"))
 		if err := os.MkdirAll(feedRoot, 0700); err == nil && feedPathErr == nil {

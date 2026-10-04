@@ -254,12 +254,34 @@ func TestWGEndpointDNSExpiryAndWANChangeRequireRevalidation(t *testing.T) {
 	a.EndpointResolver = func(context.Context, string) ([]netip.Addr, time.Time, error) {
 		return []netip.Addr{e.address()}, now.Add(time.Minute), nil
 	}
+	beforeWAN := *e
 	r.endpoint.wanDevice = "eth1"
 	if err := a.revalidateWGEndpoint(ctx, e); !errors.Is(err, ErrWGEndpointChanged) {
 		t.Fatal("changed WAN accepted", err)
 	}
-	if e.Device != "eth0" {
-		t.Fatal("WAN pin silently changed")
+	if *e != beforeWAN {
+		t.Fatal("WAN failure changed the pin or refreshed its DNS lease")
+	}
+}
+
+func TestWGEndpointCancelledResolutionCannotRefreshLease(t *testing.T) {
+	a, r, e, _ := wgEndpointFixture(t)
+	before := *e
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.EndpointResolver = func(context.Context, string) ([]netip.Addr, time.Time, error) {
+		cancel() // simulate a callback completing after its caller cancels
+		return []netip.Addr{e.address()}, time.Now().Add(time.Minute), nil
+	}
+	r.calls = nil
+	if err := a.revalidateWGEndpoint(ctx, e); !errors.Is(err, context.Canceled) {
+		t.Fatal("late answer accepted", err)
+	}
+	if *e != before || len(r.calls) != 0 {
+		t.Fatal("canceled answer refreshed the lease or read the WAN", e, r.calls)
+	}
+	if _, _, err := a.resolveWGEndpoint(ctx, "1.1.1.1:51820"); !errors.Is(err, context.Canceled) {
+		t.Fatal("canceled literal lookup accepted", err)
 	}
 }
 
@@ -397,7 +419,7 @@ func TestWGEndpointRollbackAfterForeignInterfaceCollisionKeepsForeignLink(t *tes
 		t.Fatal("creation collision accepted")
 	}
 	r.calls = nil
-	if err := a.Rollback(ctx, plan, root); err != nil {
+	if err := a.Rollback(ctx, plan, root); !errors.Is(err, ErrPolicyAdditionUnknown) {
 		t.Fatal(err)
 	}
 	if !r.active {

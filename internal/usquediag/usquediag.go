@@ -105,13 +105,17 @@ type SafeFileMetadata struct {
 }
 
 type CanaryEvidence struct {
-	CheckedAt       string   `json:"checked_at,omitempty"`
-	Transport       string   `json:"transport,omitempty"`
-	Warp            string   `json:"warp,omitempty"`
-	Colo            string   `json:"colo,omitempty"`
-	Loc             string   `json:"loc,omitempty"`
-	EgressIP        string   `json:"egress_ip,omitempty"`
-	ConfirmedRoutes []string `json:"confirmed_routes,omitempty"`
+	CheckedAt       string                `json:"checked_at,omitempty"`
+	Transport       string                `json:"transport,omitempty"`
+	Warp            string                `json:"warp,omitempty"`
+	Colo            string                `json:"colo,omitempty"`
+	Loc             string                `json:"loc,omitempty"`
+	EgressIP        string                `json:"egress_ip,omitempty"`
+	ConfirmedRoutes []string              `json:"confirmed_routes,omitempty"`
+	ValidUntil      string                `json:"valid_until,omitempty"`
+	BindingID       string                `json:"binding_id,omitempty"`
+	Endpoint        string                `json:"endpoint,omitempty"`
+	Owned           *OwnedRuntimeEvidence `json:"owned_runtime,omitempty"`
 }
 
 type RepairPreview struct {
@@ -157,6 +161,9 @@ type Report struct {
 	EndpointRoute   string                      `json:"endpoint_route_interface,omitempty"`
 	EndpointRoutes  []EndpointRoute             `json:"endpoint_routes,omitempty"`
 	Evidence        CanaryEvidence              `json:"canary_evidence"`
+	Capabilities    TransportCapabilities       `json:"transport_capabilities"`
+	OwnedEvidence   *OwnedRuntimeEvidence       `json:"owned_runtime_evidence,omitempty"`
+	OwnedFresh      bool                        `json:"owned_runtime_fresh"`
 	NDMCRepair      RepairPreview               `json:"ndmc_repair_preview"`
 	Bootstrap       BootstrapReadiness          `json:"bootstrap_readiness"`
 	Checks          []Check                     `json:"checks"`
@@ -185,8 +192,14 @@ type Manager struct {
 	Now                     func() time.Time
 	CACandidates            []string
 	EvidencePath            string
-	RepairRoot              string
-	ShellPath               string
+	// Trusted current WAN/DNS/route/boot epoch digest, supplied by app wiring.
+	// Missing identity keeps historical receipts diagnostic-only.
+	EvidenceEnvironment func(context.Context) (string, error)
+	// Local-only callback assembled from the live adapter's trusted ProcessSpec.
+	// It never runs the explicit ProbeOwnedUSQUE action on a control-plane GET.
+	EvidenceRuntime func(context.Context) (OwnedRuntimeIdentity, error)
+	RepairRoot      string
+	ShellPath       string
 }
 
 func New() *Manager {
@@ -226,6 +239,12 @@ func (m *Manager) RegistrationHost() (string, error) {
 }
 
 func (m *Manager) Check(ctx context.Context) Report {
+	environmentID := ""
+	if m.EvidenceEnvironment != nil {
+		if id, err := m.EvidenceEnvironment(ctx); err == nil && canaryDigest(id) {
+			environmentID = id
+		}
+	}
 	now := time.Now()
 	if m.Now != nil {
 		now = m.Now()
@@ -402,7 +421,11 @@ func (m *Manager) Check(ctx context.Context) Report {
 					add("tun-"+strings.ToLower(family.name), "TUN "+family.name, "warning", family.name+" на интерфейсе "+config.Interface+" сейчас не подтверждён.", "Проверьте семейство адресов отдельно; отсутствие IPv6 не должно скрывать рабочий IPv4.")
 				}
 			}
-			for _, route := range []struct{ family, endpoint string }{{"IPv4", firstNonEmpty(endpoints.IPv4, endpoints.H2IPv4)}, {"IPv6", firstNonEmpty(endpoints.IPv6, endpoints.H2IPv6)}} {
+			v4, v6 := endpoints.IPv4, endpoints.IPv6
+			if config.Transport == "HTTP/2" {
+				v4, v6 = endpoints.H2IPv4, endpoints.H2IPv6
+			}
+			for _, route := range []struct{ family, endpoint string }{{"IPv4", v4}, {"IPv6", v6}} {
 				if route.endpoint == "" {
 					add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "warning", "В сессии нет публичного endpoint "+route.family+".", "Используйте доступное семейство; не считайте отсутствие IPv6 отказом IPv4.")
 					continue
@@ -416,14 +439,17 @@ func (m *Manager) Check(ctx context.Context) Report {
 				if err == nil {
 					item.Interface = routeInterface(string(out))
 					item.DependencyLoop = item.Interface != "" && item.Interface == config.Interface
-					item.Expected = !item.DependencyLoop
+					item.Expected = item.Interface != "" && !item.DependencyLoop
 					if route.family == "IPv4" {
 						report.EndpointRoute = item.Interface
 					}
 					if item.DependencyLoop {
 						add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "fail", "Endpoint Cloudflare направлен обратно в "+config.Interface+"; это routing loop.", "Верните маршрут endpoint во внешний WAN. Не запускайте USQUE до устранения петли.")
-					} else {
+					} else if item.Interface != "" {
 						add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "pass", "Endpoint доступен через "+fallback(item.Interface, "определённый системой маршрут")+" вне собственного TUN.", "")
+					} else {
+						item.Available = false
+						add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "warning", "Ответ утилиты ip не подтвердил внешний интерфейс endpoint.", "Повторите проверку маршрута до выбранного endpoint.")
 					}
 				} else {
 					add("endpoint-route-"+strings.ToLower(route.family), "MASQUE "+route.family, "warning", "Маршрут до endpoint не определён.", "Проверьте WAN и исключите routing loop до повторного запуска.")
@@ -447,7 +473,51 @@ func (m *Manager) Check(ctx context.Context) Report {
 
 	if evidence, err := readCanaryEvidence(m.EvidencePath); err == nil {
 		report.Evidence = evidence
-		warpOK := evidence.Warp == "on" || evidence.Warp == "plus"
+		if m.EvidenceEnvironment != nil {
+			if current, err := m.EvidenceEnvironment(ctx); err != nil || current != environmentID {
+				environmentID = ""
+			}
+		}
+		binding := CanaryBinding(report.Files["config"].SHA256, report.Files["session"].SHA256, report.Files["binary"].SHA256, environmentID)
+		report.Capabilities = EvaluateCanaryCapabilities(evidence, endpoints, binding, now)
+		warpOK := report.Capabilities.Fresh && (evidence.Warp == "on" || evidence.Warp == "plus")
+		if evidence.Owned != nil {
+			report.OwnedEvidence = evidence.Owned
+			if m.EvidenceRuntime != nil {
+				current, err := m.EvidenceRuntime(ctx)
+				if err == nil {
+					after, afterErr := m.EvidenceRuntime(ctx)
+					readbackNow := time.Now()
+					if m.Now != nil {
+						readbackNow = m.Now()
+					}
+					report.OwnedFresh = afterErr == nil && ctx.Err() == nil && !readbackNow.Before(now) && current == after && OwnedEvidenceFresh(*evidence.Owned, current, readbackNow)
+				}
+			}
+			warpOK = report.OwnedFresh
+			if report.OwnedFresh {
+				evidence.CheckedAt, evidence.ValidUntil = evidence.Owned.CheckedAt, evidence.Owned.ValidUntil
+				evidence.Transport, evidence.Endpoint = evidence.Owned.ProtocolPath, evidence.Owned.Identity.Endpoint
+				evidence.Warp = evidence.Owned.Warp
+				evidence.Colo, evidence.Loc = evidence.Owned.Colo, evidence.Owned.Loc
+				evidence.EgressIP = evidence.Owned.EgressIP
+				evidence.ConfirmedRoutes = append([]string{}, evidence.Owned.ConfirmedRoutes...)
+				if len(evidence.Owned.ReachableRoutes) > 0 {
+					add("owned-service-reachability", "Доступность сервиса", "warning", "TLS подтвердил доступность: "+strings.Join(evidence.Owned.ReachableRoutes, ", ")+". Подтверждение по критериям сервиса хранится отдельно.", "")
+				}
+				if len(evidence.Owned.ChallengeRoutes) > 0 {
+					add("owned-service-challenge", "Диагностический путь сервиса", "pass", "Свежий challenge подтвердил диагностический путь к разрешённому probe через тот же owned runtime: "+strings.Join(evidence.Owned.ChallengeRoutes, ", ")+". Это отдельная проверка пути, а не критериев сервиса.", "")
+				}
+				add("owned-transport-path", "Путь owned USQUE", "warning", "WARP прошёл через закреплённый owned runtime; путь "+evidence.Owned.ProtocolPath+" выведен из проверенного release и session. Negotiated ALPN отдельно не наблюдался.", "")
+				if evidence.Owned.UDPForwarding {
+					add("owned-udp-forwarding", "UDP через SOCKS", "pass", "Отдельный nonce challenge подтвердил UDP forwarding через этот owned SOCKS runtime.", "")
+				} else {
+					add("owned-udp-forwarding", "UDP через SOCKS", "warning", "Отдельная проверка UDP forwarding не выполнена; QUIC path её не заменяет.", "")
+				}
+			}
+		}
+		// Only locally fresh typed grades may appear as flat service confirmation.
+		report.Evidence = evidence
 		if warpOK {
 			message := "Последний изолированный кандидат подтвердил warp=" + evidence.Warp + "."
 			if evidence.Colo != "" || evidence.Loc != "" {
@@ -455,14 +525,16 @@ func (m *Manager) Check(ctx context.Context) Report {
 			}
 			add("warp-evidence", "Технический WARP", "pass", message, "")
 		} else {
-			add("warp-evidence", "Технический WARP", "warning", "Последний кандидат не подтвердил warp=on.", "Повторите изолированную проверку профиля; рабочий маршрут не меняйте.")
+			add("warp-evidence", "Технический WARP", "warning", "Текущий WARP не подтверждён свежим результатом для этого endpoint и окружения.", "Повторите изолированную проверку профиля; рабочий маршрут не меняйте.")
 		}
-		if len(evidence.ConfirmedRoutes) > 0 {
-			add("service-evidence", "Проверка сервиса", "pass", "После WARP отдельно ответили: "+strings.Join(evidence.ConfirmedRoutes, ", ")+".", "")
+		if report.OwnedFresh && len(evidence.ConfirmedRoutes) > 0 {
+			message := "После WARP по критериям сервиса подтверждены: " + strings.Join(evidence.ConfirmedRoutes, ", ") + "."
+			add("service-evidence", "Проверка сервиса", "pass", message, "")
 		} else {
 			add("service-evidence", "Проверка сервиса", "warning", "WARP и доступность выбранного сервиса ещё не подтверждены вместе.", "Назначьте USQUE одному сервису и выполните применение с canary.")
 		}
 	} else {
+		report.Capabilities = unknownCapabilities("receipt-unavailable")
 		add("warp-evidence", "Технический WARP", "warning", "Нет сохранённого результата изолированного canary.", "Назначьте USQUE выбранному сервису и выполните безопасное применение; текущий маршрут не будет заменён при ошибке.")
 	}
 
@@ -703,7 +775,11 @@ func readSafeSession(path string) (Endpoints, bool, bool, error) {
 	}
 	stringValue := func(key string) string {
 		value := rawString(key)
-		if !safeName.MatchString(value) {
+		address, err := netip.ParseAddr(value)
+		if err != nil || address.Is4In6() || !publicfetch.PublicAddress(address) || address.String() != value {
+			return ""
+		}
+		if strings.HasSuffix(key, "v4") != address.Is4() {
 			return ""
 		}
 		return value
@@ -731,9 +807,25 @@ func readCanaryEvidence(path string) (CanaryEvidence, error) {
 	if len(b) > 64*1024 {
 		return CanaryEvidence{}, fmt.Errorf("USQUE canary evidence is too large")
 	}
+	ownedPresent, ownedCanonical, err := ownedCanaryEnvelope(b)
+	if err != nil {
+		return CanaryEvidence{}, err
+	}
 	var evidence CanaryEvidence
 	if err := json.Unmarshal(b, &evidence); err != nil {
 		return CanaryEvidence{}, err
+	}
+	// Legacy flat routes carry no predicate/version grade. Semantic display
+	// fields are populated only after current typed-owned freshness succeeds.
+	evidence.ConfirmedRoutes = nil
+	if ownedPresent {
+		// A typed receipt cannot fall back to the installed-session evaluator or
+		// publish historical/conflicting flat service grades before freshness.
+		evidence.BindingID = ""
+		evidence.ConfirmedRoutes = nil
+		if !ownedCanonical || evidence.Owned == nil || !safeOwnedEvidence(*evidence.Owned) {
+			evidence.Owned = nil
+		}
 	}
 	evidence.Warp = strings.ToLower(strings.TrimSpace(evidence.Warp))
 	if evidence.Warp != "on" && evidence.Warp != "plus" && evidence.Warp != "off" {
@@ -751,14 +843,18 @@ func readCanaryEvidence(path string) (CanaryEvidence, error) {
 	if _, err := time.Parse(time.RFC3339, evidence.CheckedAt); err != nil {
 		evidence.CheckedAt = ""
 	}
-	confirmed := make([]string, 0, len(evidence.ConfirmedRoutes))
-	for _, name := range evidence.ConfirmedRoutes {
-		name = strings.TrimSpace(name)
-		if len(name) > 0 && len(name) <= 80 && !strings.ContainsAny(name, "\r\n\t") {
-			confirmed = append(confirmed, name)
-		}
+	if evidence.Transport != "HTTP/2" && evidence.Transport != "QUIC" {
+		evidence.Transport = ""
 	}
-	evidence.ConfirmedRoutes = confirmed
+	if !canaryDigest(evidence.BindingID) {
+		evidence.BindingID = ""
+	}
+	if endpoint, err := netip.ParseAddrPort(evidence.Endpoint); err != nil || endpoint.Port() != 443 || endpoint.Addr().Is4In6() || !publicfetch.PublicAddress(endpoint.Addr()) || endpoint.String() != evidence.Endpoint {
+		evidence.Endpoint = ""
+	}
+	if _, err := time.Parse(time.RFC3339, evidence.ValidUntil); err != nil {
+		evidence.ValidUntil = ""
+	}
 	return evidence, nil
 }
 

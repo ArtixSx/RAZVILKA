@@ -64,6 +64,10 @@ for ARCH in amd64 arm64 mips mipsle; do
 #!/bin/sh
 printf '%s\n' "${0##*/}" >>"$TEST_BINARY_CAPTURE"
 case "$1" in
+  -check-node-history-state)
+    FIXTURE_BASE="$(CDPATH= cd -- "$RAZVILKA_BASE" && pwd -P)"
+    [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$FIXTURE_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$FIXTURE_BASE/var/lib/razvilka" ] || exit 99
+    printf '{"ok":true}\n' ;;
   -version) printf '0.18.1-rc.2\n' ;;
   -check) printf '{"ok": true}\n' ;;
   *) exit 99 ;;
@@ -88,7 +92,7 @@ run_case() {
   if RAZVILKA_BASE="$BASE" sh "$BUNDLE/scripts/upgrade-entware.sh" --dry-run >"$TEST_ROOT/output" 2>&1; then
     [ "$EXPECTED" != refuse ] || { echo "Unknown architecture/header was accepted" >&2; exit 1; }
     [ "$(sort -u "$TEST_BINARY_CAPTURE")" = "razvilka-linux-$EXPECTED" ] || { echo "Installer selected the wrong binary for $TEST_UNAME" >&2; exit 1; }
-    [ "$(wc -l <"$TEST_BINARY_CAPTURE" | tr -d ' ')" = 2 ] || { echo "Expected only candidate version and preflight checks" >&2; exit 1; }
+    [ "$(wc -l <"$TEST_BINARY_CAPTURE" | tr -d ' ')" = 3 ] || { echo "Expected candidate history, version and config checks" >&2; exit 1; }
   else
     [ "$EXPECTED" = refuse ] || { cat "$TEST_ROOT/output" >&2; echo "Expected architecture $EXPECTED to pass preflight" >&2; exit 1; }
     [ ! -e "$TEST_BINARY_CAPTURE" ] || { echo "Invalid architecture executed a candidate binary" >&2; exit 1; }
@@ -159,7 +163,7 @@ run_checksum_case() {
   if [ "$EXPECTED" = pass ]; then MODE=--dry-run; else MODE=--apply; fi
   if RAZVILKA_BASE="$BASE" sh "$BUNDLE/scripts/upgrade-entware.sh" "$MODE" >"$TEST_ROOT/output" 2>&1; then
     [ "$EXPECTED" = pass ] || { echo "Invalid checksum accepted: $LABEL" >&2; exit 1; }
-    [ "$(wc -l <"$TEST_BINARY_CAPTURE" | tr -d ' ')" = 2 ] || { echo "Expected only candidate version and preflight checks: $LABEL" >&2; exit 1; }
+    [ "$(wc -l <"$TEST_BINARY_CAPTURE" | tr -d ' ')" = 3 ] || { echo "Expected candidate history, version and config checks: $LABEL" >&2; exit 1; }
   else
     [ "$EXPECTED" = refuse ] || { cat "$TEST_ROOT/output" >&2; echo "Valid checksum refused: $LABEL" >&2; exit 1; }
     [ ! -e "$TEST_BINARY_CAPTURE" ] || { echo "Unverified candidate was executed: $LABEL" >&2; exit 1; }

@@ -18,7 +18,7 @@
       ],
       "title": "Настоящий HTTP/login/CSP и ленивые чтения",
       "scope": "Браузер с реальным приложением: auth/CSRF/logout, скрытые вкладки, быстрые переходы, повторные клики, 401/409/500, dirty forms. Измерить число запросов, render-cost, CPU на ARM64.",
-      "status": "in_progress"
+      "status": "completed"
     },
     {
       "id": "D02",
@@ -48,7 +48,7 @@
       ],
       "title": "WG candidate isolation и холодный старт",
       "scope": "Handshake с инициирующим трафиком; реальное попадание в временный интерфейс при одинаковых Address; Sources не удаляются; keepalive optional; TCP/UDP IPv4/IPv6.",
-      "status": "in_progress"
+      "status": "completed"
     },
     {
       "id": "D05",
@@ -72,14 +72,14 @@
     },
     {
       "id": "D07",
-      "owner": "CORE",
+      "owner": "DEFAULT + CORE",
       "depends_on": [
         "D03",
         "D05"
       ],
       "title": "Общий default и service executor",
       "scope": "NetworkPolicy all-except + per-service overrides. Нет сервисов/неизвестный сайт/прямой IP всё равно использует default. Scope mismatch продолжает default, удаление override не DIRECT. Вводить по capabilities, не снимать guard заранее.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D08",
@@ -89,17 +89,17 @@
       ],
       "title": "Согласованный LAN/DNS/RU exclusions",
       "scope": "Исключённые устройства вне всех owned обходов и service DNS. Guest opt-in. Bootstrap DAG, IPv6/UDP policy, CNAME/TTL, shared CDN, existing connections scoped, не flush всего LAN.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D09",
-      "owner": "NET",
+      "owner": "NFQWS",
       "depends_on": [
         "D00"
       ],
       "title": "Адаптивный NFQWS2",
       "scope": "Явно отделить preferred/only/manual. Локальный bounded подбор на compatible Lua/assets с visibility; packet success не media/voice. Разрешённый VLESS fallback; пользовательские стратегии сохраняются.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D10",
@@ -109,7 +109,7 @@
       ],
       "title": "Холодный first-usable и справедливый refill",
       "scope": "Не ждать весь резерв для первого пригодного пути, но сохранить B apply-fail→verified rollback→C. igareck и другие approved feeds, cursor32/33, shared publisher mirrors, reserve diversity, no poisoning checker errors.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D11",
@@ -133,13 +133,13 @@
     },
     {
       "id": "D13",
-      "owner": "OPS",
+      "owner": "CLOUD",
       "depends_on": [
         "D00"
       ],
       "title": "WARP/USQUE и источники",
       "scope": "Регистрация != export/DNS/endpoint. Unknown enrollment не mint-again. H2/H3 отдельно, pins/environment/UDP capability, mirror TTL/provenance, read-only offline каталог. Mihomo/HEV experimental до native benefit.",
-      "status": "not_run"
+      "status": "in_progress"
     },
     {
       "id": "D14",

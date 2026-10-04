@@ -179,18 +179,20 @@ function workflowBulkControls(){
     ['nodeCheckAllVLESS','nodeCheckSelected','primary',workflowCheckAllVLESS],
     ['nodeDeleteAllVLESS','r4DeleteFailed','danger-button',()=>workflowDelete([],'all-vless')]
   ]){
-    if(!$('#'+id)&&$('#'+anchor)){
-      const button=document.createElement('button');button.id=id;button.type='button';button.className=kind;
+    let button=$('#'+id);
+    if(!button&&$('#'+anchor)){
+      button=document.createElement('button');button.id=id;button.type='button';button.className=kind;
       button.title='Весь VLESS-каталог: все страницы и источники, независимо от фильтров';
-      button.addEventListener('click',handler);$('#'+anchor).insertAdjacentElement('afterend',button);
+      $('#'+anchor).insertAdjacentElement('afterend',button);
     }
+    if(button && !button.dataset.bulkBound){button.dataset.bulkBound='true';button.addEventListener('click',handler);}
   }
   const all=workflowAllVLESS(),eligible=all.filter(nodeCanCheck),running=['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state);
   const check=$('#nodeCheckAllVLESS'),remove=$('#nodeDeleteAllVLESS');
   if(check){check.textContent=`Проверить все VLESS · ${eligible.length}`;check.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!$('#nodeBrowserService').value||!eligible.length||state.nodes?.available===false;}
   if(remove){remove.textContent=`Удалить все VLESS… · ${all.length}`;remove.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!all.length||state.nodes?.available===false;}
   const hint=$('.node-check-hint');
-  if(hint)hint.textContent='Проверка — выбранный веб-сценарий через узел, не только пинг. «Проверить все VLESS» создаёт одну очередь всего каталога, независимо от страниц и фильтров. Отключённые/истёкшие узлы пропускаются. Между узлами ресурс освобождается для восстановления. Обычная выборка ограничена 64 узлами; массовая проверка не применяет маршруты.';
+  if(hint)hint.textContent='Проверка открывает выбранный веб-сценарий через узел; пинг измеряет только соединение. Для обычной проверки можно выбрать до 64 подключений. Массовые действия для всех VLESS раскрываются отдельно и не применяют маршруты.';
 }
 async function workflowCheckAllVLESS(){
   if(workflowState.bulkBusy||['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state))return;

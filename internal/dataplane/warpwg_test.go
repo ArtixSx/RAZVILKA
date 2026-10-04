@@ -30,6 +30,10 @@ type warpFakeRunner struct {
 
 func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	numeric := name == "ip" && len(args) > 0 && args[0] == "-N"
+	if numeric {
+		args = args[1:]
+	}
 	if name == "ip" && strings.Join(args, " ") == "-j -d link show" {
 		return []byte("[]"), nil
 	}
@@ -40,6 +44,22 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 		return nil, nil
 	}
 	if output, handled, err := r.endpoint.run(name, args); handled {
+		if numeric && err == nil && strings.Contains(strings.Join(args, " "), "-j route show table") {
+			var routes []map[string]any
+			if json.Unmarshal(output, &routes) == nil {
+				for _, route := range routes {
+					if route["protocol"] == "static" {
+						route["protocol"] = 4
+					}
+					if gateway, _ := route["gateway"].(string); gateway == "" {
+						route["scope"] = 253
+					} else {
+						route["scope"] = 0
+					}
+				}
+				output, _ = json.Marshal(routes)
+			}
+		}
 		return output, err
 	}
 	if name == "ip" {
@@ -49,6 +69,9 @@ func (r *warpFakeRunner) Run(_ context.Context, name string, args ...string) ([]
 				policyArgs = append(policyArgs[:i], policyArgs[i+2:]...)
 				break
 			}
+		}
+		if numeric {
+			policyArgs = append([]string{"-N"}, policyArgs...)
 		}
 		if output, handled, err := r.policy.run(policyArgs); handled {
 			if err == nil && len(policyArgs) >= 2 && strings.Contains(strings.Join(policyArgs, " "), "rule show") {
@@ -131,6 +154,7 @@ func TestWARPCanaryDoesNotDeleteInterfaceWhenStartOwnershipIsUncertain(t *testin
 	}
 	runner := &warpFakeRunner{failStart: true}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", runner
 	adapter.Resolver = func(_ context.Context, host string) ([]netip.Addr, error) {
@@ -171,6 +195,7 @@ func TestWARPCanaryUsesTemporarySourcePolicyAndCleansIt(t *testing.T) {
 	// precedence guard, while its own temporary selectors still get removed.
 	runner := &warpFakeRunner{policy: policyKernelFake{foreignIPv4: []string{"100: from all fwmark 0xffffaaa lookup 4096"}}}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
 	adapter.Runner = runner
@@ -233,6 +258,7 @@ func TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner(t *testing.T) 
 	}
 	runner := &warpFakeRunner{handshakeAfterRestart: true}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.NativeOnly = true
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
@@ -372,6 +398,7 @@ func TestWARPAdapterActivatesHealthChecksAndRollsBack(t *testing.T) {
 	}
 	runner := &warpFakeRunner{}
 	adapter := NewWARPWireGuardAdapter(configs, filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.NativeOnly = true
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WG, adapter.IP = "wg", "ip"
@@ -422,6 +449,7 @@ func TestWARPDeactivateRemovesOnlyOwnedRuntime(t *testing.T) {
 	root := t.TempDir()
 	runner := &warpFakeRunner{active: true}
 	adapter := NewWARPWireGuardAdapter(engineconfig.New(filepath.Join(root, "stage"), filepath.Join(root, "backups")), filepath.Join(root, "state"))
+	adapter.policyReceiptOptions = testWGPolicyReceiptOptions()
 	adapter.RuntimeConfigPath = filepath.Join(root, "runtime", "rz-warp.conf")
 	adapter.WGQuick, adapter.WG, adapter.IP = "wg-quick", "wg", "ip"
 	adapter.Runner = runner
@@ -441,6 +469,9 @@ func TestWARPDeactivateRemovesOnlyOwnedRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(adapter.statePath(), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.freshWGPolicyGeneration(context.Background(), policy); err != nil {
 		t.Fatal(err)
 	}
 	if err := adapter.Deactivate(context.Background()); err != nil {

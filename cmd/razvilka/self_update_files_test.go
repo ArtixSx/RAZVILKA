@@ -17,6 +17,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 func TestSelfUpdateStartupSubprocess(t *testing.T) {
@@ -62,6 +63,11 @@ func TestSelfUpdateExplicitRootsAndCapability(t *testing.T) {
 	for _, bad := range []string{"relative", " " + work, filepath.VolumeName(work) + string(filepath.Separator)} {
 		if _, err := configuredSelfUpdateFiles(bad, "", ""); err == nil {
 			t.Fatal("unsafe override accepted", bad)
+		}
+	}
+	for _, bad := range []string{filepath.Join(work, "files"), filepath.Join(work, "files", "authority"), work} {
+		if _, err := configuredSelfUpdateFiles(filepath.Join(work, "installation"), filepath.Join(work, "files"), filepath.Join(work, "helper"), bad); err == nil {
+			t.Fatal("control root overlapping retained journal accepted", bad)
 		}
 	}
 	output, err := selfUpdateMainSubprocess(t, "-self-update-schema")
@@ -111,6 +117,46 @@ func TestSelfUpdateStartupPendingPrecedesAllOrdinaryWrites(t *testing.T) {
 	}
 }
 
+func TestSelfUpdateDurableControlStartupPrecedesBootstrapAndIgnoresMatchingHelper(t *testing.T) {
+	for _, state := range []string{"requested", "corrupt", "incomplete"} {
+		t.Run(state, func(t *testing.T) {
+			work := t.TempDir()
+			control := filepath.Join(work, "authority")
+			if _, err := operationgate.RequestSelfUpdateStop(context.Background(), control, strings.Repeat("a", 32), 12); err != nil {
+				t.Fatal(err)
+			}
+			current := filepath.Join(control, "current-v1.json")
+			if state == "corrupt" {
+				if err := os.WriteFile(current, []byte("corrupt authority"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else if state == "incomplete" {
+				if err := os.Remove(filepath.Join(control, "stop-"+strings.Repeat("a", 32)+".json")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := os.ReadFile(current)
+			if err != nil {
+				t.Fatal(err)
+			}
+			configPath, stage := filepath.Join(work, "config.json"), filepath.Join(work, "staging")
+			output, err := selfUpdateMainSubprocess(t, "-self-update-installation", filepath.Join(work, "installation"), "-self-update-file-state", filepath.Join(work, "files"), "-self-update-helper-state", filepath.Join(work, "helper"), "-self-update-control-state", control, "-config", configPath, "-stage", stage, "-migrate-config")
+			if err == nil || !bytes.Contains(output, []byte("self update recovery required")) {
+				t.Fatal("durable Stop admitted ordinary bootstrap", string(output), err)
+			}
+			for _, path := range []string{configPath, stage, filepath.Join(work, "private-restore"), filepath.Join(work, "files"), filepath.Join(work, "helper")} {
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Fatal("startup wrote before authority admission", path, err)
+				}
+			}
+			after, err := os.ReadFile(current)
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("restart reset Stop authority", err)
+			}
+		})
+	}
+}
+
 func TestSelfUpdateRecoveryBootstrapRealHTTPReadOnly(t *testing.T) {
 	work := t.TempDir()
 	configPath := filepath.Join(work, "config.json")
@@ -137,7 +183,7 @@ func TestSelfUpdateRecoveryBootstrapRealHTTPReadOnly(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(files, "current.json"), protected, 0600); err != nil {
 		t.Fatal(err)
 	}
-	f, err := configuredSelfUpdateFiles(installation, files, helper)
+	f, err := configuredSelfUpdateFiles(installation, files, helper, filepath.Join(work, "authority"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +234,28 @@ func TestSelfUpdateRecoveryBootstrapRealHTTPReadOnly(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(work, "missing-config.json")); !os.IsNotExist(err) {
 		t.Fatal("missing config created", err)
+	}
+	stopBody := map[string]any{"action": "stop", "confirm": "STOP_OWNED_ROUTES", "expected_revision": a.Store.Get().Revision}
+	encoded, _ := json.Marshal(stopBody)
+	request, err := http.NewRequest(http.MethodPost, s.URL+"/api/v1/service-control/runtime", bytes.NewReader(encoded))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Origin", s.URL)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := s.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopData, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != http.StatusAccepted || !bytes.Contains(stopData, []byte(`"authority_revoked":true`)) || !bytes.Contains(stopData, []byte(`"stopped_confirmed":false`)) {
+		t.Fatalf("restricted recovery Stop: %d %s", response.StatusCode, stopData)
+	}
+	actual, err = os.ReadFile(filepath.Join(files, "current.json"))
+	if err != nil || !bytes.Equal(actual, protected) {
+		t.Fatal("Stop rewrote damaged file transaction", err)
 	}
 }
 

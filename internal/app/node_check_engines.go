@@ -52,7 +52,10 @@ func (a *App) nodeHistoryAdmission(ctx context.Context, engine string) error {
 		return errors.Join(dataplane.ErrExactNodeUnavailable, errNodeHistoryAdmission)
 	}
 	if err := a.NodeHistoryWriteGuard(ctx, nodestore.ExactHistoryReadVersion); err != nil {
-		return err
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return errors.Join(dataplane.ErrExactNodeUnavailable, errNodeHistoryAdmission, err)
 	}
 	return ctx.Err()
 }

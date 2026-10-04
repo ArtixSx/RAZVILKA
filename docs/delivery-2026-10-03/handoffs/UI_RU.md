@@ -139,7 +139,7 @@ Recovery отрицательные сценарии используют **то
 
 Это PNG настоящего embedded приложения в последнем прогоне; никакого mock/preview transport. В PNG не сохранялись пароли, tokens, config или private profile contents; все три просмотрены исполнителем. После визуальной проверки добавлены отступы и перенос заголовка recovery-панели, `interface.css` пересобран. Narrow capture ждёт завершения анимации закрытия меню.
 
-- [Главная — 1280 × 900](../../../.review-local/ui-http-MyMyJX/01-home.png): отдельная тестовая копия catalog/config, Safe Mode включён, автоматика выключена, native engines отсутствуют. Показаны настоящие пустые/ещё не загруженные данные, успех не имитирован.
+- [Главная — 1280 × 900](../../../.review-local/ui-http-MyMyJX/01-home.png): отдельная тестовая копия catalog/config, Safe Mode включён, автоматика выключена. Inventory использует бинарники ПК (включая установленный пользователем AmneziaWG); native-проверки не выполнялись. Показаны настоящие пустые/ещё не загруженные данные, успех не имитирован.
 - [Обходы/recovery — 1280 × 900](../../../.review-local/ui-http-MyMyJX/02-component-recovery.png): настоящие HTTP и интерфейс; только `upgrade-started` журнал является одноразовой заготовкой. Видны неизвестный исход, версии, чтение и отсутствие replay.
 - [Подключения — 390 × 844](../../../.review-local/ui-http-MyMyJX/03-connections-narrow.png): настоящая пустая библиотека в отдельном состоянии; узкий экран с закрытым меню. Full-page PNG длиннее viewport. Общие счётчики, controls и сообщения взяты из приложения.
 
@@ -187,3 +187,77 @@ Node selected gate **79/79**, лог `.review-local/frontend-d12-mobile.log`; `g
 Unit transport **18/18 RC 0**. Selected Node gate **79/79**, `.review-local/frontend-d12-capabilities.log`; `go build`, `go test ./cmd/razvilka -count=1`, `go vet ./cmd/razvilka` RC 0.
 
 Настоящий полный browser **14/14 RC 0**, `.review-local/ui-http-NCdA0a/result.json`, port18851. Read-only fixture journal сначала schema1 prepared, затем schema2 upgrade-started и schema2 idle terminal: настоящие GET читаются UI без schema blocker, idle остаётся unknown tone, новые записи не отправляются. В Safe Mode backend `available_actions=[]`, repair-кнопок нет; matching POST отвергнут настоящим 409 без изменения журнала. Corrupt journal даёт настоящий 503. Прежние CAS/auth/mobile проверки также прошли, `errors=[]`, config unchanged. Idle terminal здесь **записанная тестовая заготовка**, не native proof; успешный idle POST проверен только unit transport. Safe Mode стенда не выключался, аппаратные/пакетные действия не выполнялись.
+
+## D12: шаги в карточках, массовые действия и ИИ — 04.10.2026
+
+Карточка каждого обхода теперь показывает установку, профиль, проверки и применение. Метаданные файла и сохранённые назначения не выдаются за проверенный формат или доступ сервиса. Кнопки открывают существующий редактор **того же движка** на нужной вкладке и переводят фокус на нужный контрол; переход не запускает install/check/Apply. Версии, обновление и удаление раскрываются в «Версии и обслуживание»; ошибки операции и recovery остаются видимыми. Старые ID и обработчики сохранены, новый backend не добавлялся.
+
+`openEngineConfiguration` возвращает результат перехода и проверяет auth generation, текущий раздел и последовательность запросов после чтения/подтверждения. Отсутствующий движок требует независимого чтения; подстановка другого движка запрещена. Повторное открытие того же движка сохраняет dirty профиль. Отказ от смены, уход из раздела, новый переход и logout отзывают старый переход до изменения редактора. Logout также очищает результат проверки формата.
+
+В библиотеке обычные проверки и выбор остаются доступны; «Весь VLESS-каталог» и очистка раскрываются отдельно. Текст прямо объясняет, что фильтры/страницы/выбор не ограничивают all-VLESS, удаление требует preview, группа/назначение/резерв защищены. Изменения касаются представления и однократной привязки существующих кнопок; generation/digest/idempotency/CAS/Stop не менялись. Общая заметка о загрузке и дата сохранённых данных размещаются компактнее без скрытия freshness.
+
+Проверки: selected Node gate **79/79 RC 0**, `.review-local/frontend-d12-card-bulk.log`; новый `scripts/test-engine-card-flow-ui.mjs` **11/11 RC 0**; `go build`, `go test ./cmd/razvilka -count=1`, `go vet ./cmd/razvilka`, diff-check RC 0. **Координатору:** добавить новый card-flow test в общий `check.sh`; исполнитель общий gate не редактировал.
+
+Настоящий browser **17/17 RC 0**, `.review-local/ui-http-qFiZ53/result.json`, port18851, `errors=[]`, failure отсутствует, config unchanged, Safe Mode включён и автоматика выключена:
+
+- Engine metadata GET → профиль Xray → локальный dirty draft → отмена перехода к USQUE → проверки Xray с тем же draft. Ноль записей на всех переходах.
+- ИИ disclosure: три определения добавлены **только в каталог одноразового стенда**, помечены `UI fixture`, домены `.invalid`, без проверки доступа. Раскрытие, фокус после readback, поиск одного участника и возврат всех участников проходят; группа не создаёт общий маршрут/PASS. Stock каталог этих определений не содержит.
+- В одноразовую библиотеку импортированы три VLESS и один Shadowsocks с фиктивными ключами и адресами `.invalid`. При одном видимом подключении review all-VLESS показывает три; отмена не отправляет node-check POST. Реальная резервная группа защищает одну запись. Настоящий preview разрешает две записи, commit удаляет их с `working_routes_changed=false`; **только доставка ответа** заменена на 500. Повторный вызов UI не повторяет commit; отдельный GET получает защищённый VLESS и Shadowsocks. Native checks и Apply не запускались.
+- Auth/CSRF/CAS/lost reply/recovery schema1+2/real 503/mobile сценарии из прежней порции проходят.
+
+Снимки из этого же запуска: `07-engine-flow.png`, `05-ai-group.png`, `06-bulk-library.png`, `03-connections-narrow.png`, `04-mobile-drawer-open.png`, `02-component-recovery.png`, `01-home.png`. Источник и viewport записаны рядом в result.json. Полные страницы снимаются с начала прокрутки; карточки/ИИ/массовые действия просмотрены визуально. Результаты Windows UI не заменяют native или ARM64 приёмку координатора.
+
+## Отдельный read-only HTTP измеритель — 04.10.2026
+
+`scripts/measure-ui-http-browser.mjs` работает **только с уже запущенным HTTP(S) сервером**. Не создаёт сервер, аккаунт, fixture или профиль, не вызывает probe/check/install/Apply/Stop/recovery actions. Существующий cookie session читается из Playwright storageState файла (`RAZVILKA_PERF_SESSION`), либо выполняется единственный явный `/auth/login` через env credentials до измерений. Setup/reset/recovery-login отсутствуют. Все запросы страницы, кроме GET/HEAD/OPTIONS того же origin, блокируются до отправки; внешние origins и `refresh=true/force=true` также запрещены. Любая попытка выходит за boundary и делает run failed. Содержимое запросов/ответов, headers/cookies, query, профили, DOM text и screenshots не сохраняются.
+
+Обязательные параметры env:
+
+```powershell
+$env:RAZVILKA_PERF_URL='http://127.0.0.1:<порт существующей копии>'
+$env:RAZVILKA_PERF_PROFILE='empty' # либо loaded для заранее подготовленного состояния
+$env:RAZVILKA_PERF_CHROME='C:/Program Files/Google/Chrome/Application/chrome.exe'
+$env:RAZVILKA_PERF_SESSION='<абсолютный путь к частному storageState.json>'
+# Альтернатива SESSION: RAZVILKA_PERF_USERNAME и RAZVILKA_PERF_PASSWORD.
+# Нельзя одновременно передавать SESSION и пару credentials.
+$env:NODE_PATH='C:/Users/Artix/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules'
+node scripts/measure-ui-http-browser.mjs
+```
+
+По умолчанию результат под `.review-local/ui-perf-*/result.json` рядом с runner; `RAZVILKA_PERF_OUTPUT` задаёт другой корень **локальных частных** артефактов. Chrome/Playwright уже должны быть установлены. Сервер и назначение порта целиком принадлежат координатору; runner произвольный заданный порт не занимает. TLS проверяется штатно, `ignoreHTTPSErrors` не включён.
+
+`RAZVILKA_PERF_DWELL_MS` default2000 (250…30000), `RAZVILKA_PERF_IDLE_MS` default16000 (1000…60000), `RAZVILKA_PERF_TIMEOUT_MS` default45000 (5000…120000). Для сравнения держать одинаковые viewport/Chrome/параметры/состав fixture. Read-only route fence отключает browser HTTP cache; это явно записано, и одинаково для всех прогонов. Cold означает новый browser context, а не холодный сервер. Live HTTP/cookies без response fixtures.
+
+Четырнадцать измеряемых фаз: холодное авторизованное открытие, семь остальных основных разделов, возврат на Home с остальными скрытыми разделами, быстрые переключения с возвратом, возврат к подключениям с idle, mobile подключения/обходы390×844, явный readbackHome. Дополнительно попытка настоящей фоновой браузерной вкладки: если Chromium не сообщает `hidden`, фаза **skipped**, без overrides `document.hidden` и без придуманных чисел.
+
+На фазу сохраняются UTC start/end для совмещения с SSH sampler, настоящие запросы по method/path/status и request IDs, пути текущего `panelViewRequests` + common reads и прочие API paths, pending/stream counts, CDP delta Task/Script/Layout/RecalcStyle duration/counts, Nodes/Documents/JSEventListeners/JSHeap, longtasks, total/active/hidden DOM и горизонтальное переполнение/геометрия. Requests относятся к фазе по моменту **начала**; статус в phase summary — на момент окончания, поздние завершения видны в общей request table. `other_api_paths` требуют анализа, не автоматически дефект. TaskDuration измеряет браузерный main thread; это **не CPU/RSS ARM64 процесса**. CPU/RSS, router/network/native приёмка остаются координатору.
+
+После фаз три явно отделённых GET проверяют реальные counts библиотек/выбранных сервисов/устройств. `empty` допускает stock service catalog и требует отсутствия nodes/groups/enabled/applied services; `loaded` требует ненулевого состава именно этой пользовательской библиотеки. Устройства LAN/их policies и installed inventory — независимые наблюдения. Counts устройств сохраняются целиком: total, discovered, not_discovered, unknown discovery marker и policy assignments (null при неполном DTO). Устройства не превращают пустую библиотеку в наполненную. Несоответствие/неполные **library** counts — failure, unknown не подставляется нулём. Обнаружение binaries идёт на host сервера. Установленный на Windows `C:/Program Files/AmneziaWG/awg.exe` не означает Linux kernel/native route acceptance и не изменяется исполнителем.
+
+Проверки boundary **6/6 RC 0** (`scripts/test-ui-http-perf.mjs`, можно добавить в общий Node gate координатора). Настоящие Windows smoke на собственном18851, dwell250/idle1000: `.review-local/ui-perf-k9tFi6` — empty/env-login; `.review-local/ui-perf-0L4DGM` — loaded/существующий частный session. Оба:14 измеренных+1 честно skippedbackground, verified fixture, failures/blocked/browser_errors отсутствуют, UI requests **только GET**, метрики CDP/DOM получены, horizontaloverflow0 на всех измеренных фазах. Loaded — только4 фиктивных VLESS `.invalid`; config и node metadata hash неизменны до/после измерения. Аккаунт и эти4 записи подготовлены отдельным ignored test helper до запуска измерителя; не runner. Эти короткие smoke доказывают работоспособность измерителя, не слабый роутер/большой каталог и не ARM64 performance PASS. До уплотнения карточек замечен отдельный GET `/engine-configs/nfqws2/guided` при `enter-engines`; follow-up UI уберёт скрытый editor read.
+
+ARM baseline координатора выявил auto-discovery LAN при пустой библиотеке: прежний criterion devices==0 ошибочно давал RC1 уже после всех14 измерений. Исправлено только определение profile, query/body/backend не менялись; существующие `empty/loaded` env совместимы. Boundary tests теперь **7/7 RC0**, включая discovered-only пустую библиотеку и ненулевые nodes. Compact UI в этот hotfix не входит.
+
+## Уплотнение карточек и скрытый profile GET — 04.10.2026
+
+Четыре этапа видны в компактном progress (выделен **следующий**, не доказанно пройденный этап), рядом одно текущее действие. Все остальные переходы/описания доступны в «Все шаги настройки», версии отдельно. Каждый profile/check/apply control существует ровно один раз. Раскрытие и фокус сохраняются при обновлении метаданных. При одинаковом viewport1280×900 полный снимок страницы сократился **3539→2877px** (около19%); это геометрия той же UI-заготовки, не CPU benchmark. Mobile390×844 с раскрытым Xray workflow имеет horizontaloverflow0; footer остаётся видимым.
+
+«Бинарник обнаружен» теперь требует свежих metadata `engine.installed===true` **и** непустой `engine.binary_path`; aggregate running/config/component installed без path даёт только «Есть сведения об установке; бинарник не уточнён». Contradictory installed=false + path не становится proof. Источник backend checked read-only: `internal/engine/engine.go`, `Detector.Inventory()` определяет installed по найденному executable path, `internal/engineconfig` переносит detector status; редактор/шаблон installed не создаёт. Конкретный AmneziaWG Windows снимка — пользовательский host binary, не дефект backend. Он не изменялся. В тексте карточки указано, что версия протокола/поддержка ядра и доступ требуют собственной проверки.
+
+`renderPanelSection(engineConfigs)` открывает editor только в `engineconfig`, иначе обновляет карточки. Это устраняет обнаруженный hidden `/engine-configs/nfqws2/guided` GET на `engines`, не меняя editor/CAS/actions. Real browser регрессия требует **0 guided GET** на карточках до явного перехода; Xray/USQUE выбор, dirty draft и отмена сохраняются.
+
+Selected Node **79/79 RC0**, `.review-local/frontend-compact-engine.log`; card-flow11/11, perf-boundary7/7, component-cards включая новые binary/progress assertions и CSS/DOM contract RC0; build/test/vet cmd RC0. Реальный финальный browser **17/17 RC0**, `.review-local/ui-http-vKOwil`, `errors=[]`, config unchanged, SafeMode/автоматика по прежним ограничениям. Снимки `07-engine-flow.png` и viewport excerpt `08-engine-flow-narrow.png` просмотрены визуально; captions содержат source/viewport/fullPage. Read-only perf smoke после правки: `.review-local/ui-perf-qbcog0` empty и `ui-perf-ktXg7I` loaded, verified fixture, no blocked/errors, overflow0; `enter-engines` other paths только `/components/recovery`, без guided profile. Dwell250/idle1000, Windows — не ARM64 приёмка.
+
+Read-only анализ ARM artifact координатора `delivery-review/.review-local/ui-perf-RDZm6u/result.json`: library0, services selected/applied0, **14 discovered-host devices** в исходном total count (discovery flags старый report ещё не сохранял). 40cold API; home idle22/node idle31. Кроме hidden guided GET, на Home/Nodes видны периодические `/connections`. Последующий отдельный UI follow-up ограничит REST/SSE видимым разделом соединений; node/activity/inventory/read-capability schedulers этим коммитом не менялись.
+
+## Соединения: REST/SSE только в видимом разделе — 04.10.2026
+
+`app.js` теперь допускает periodic REST и SSE только при authenticated + `currentView==='connections'` + visible document. Уход в другой раздел/скрытие вкладки закрывает stream, отзывает epoch, abort GET и освобождает flight. Сохранённые строки остаются в памяти текущей сессии как **не live**; logout очищает их прежним lifecycle. Возврат открывает один свежий stream, foreground запрашивает новое чтение, REST fallback остаётся каждые15сек в видимом разделе. Два одновременных refresh делят один GET. Старые ответы/ошибки/finally/пакеты не меняют новый flight/сессию. Общие node activity, Stop, inventory, service-control и capability schedulers не редактировались; backend/производитель потоков не менялся.
+
+`scripts/test-connection-session-ui.mjs` расширен: Home/background не допускают REST/SSE; повторный GET single-flight; отмена signal на уходе/hidden; late REST/401/SSE не пересекают navigation/logout; старый finally не снимает новый flight; возврат, повторный sync и текущий401. Selected Node **79/79 RC0**, `.review-local/frontend-connection-scope.log`, card-flow11/11, perf-boundary7/7; build/test/vet cmd RC0.
+
+Real HTTP browser **18/18 RC0**, `.review-local/ui-http-Zt6fqp/result.json`, failures/errors отсутствуют, config unchanged. Новый сценарий: на Home нет connection requests; явный `connections` открывает1stream; двойной refresh даёт1GET; на Nodes stream закрыт и hidden reads0; возврат открывает1новый stream. Остальные auth/CSRF/CAS/recovery/bulk/card/AI/mobile сценарии проходят. Browser пока не доказывает настоящую hidden browser tab: это поведение покрыто unit lifecycle и честно skipped в headless perf.
+
+Read-only smoke текущего поведения: `.review-local/ui-perf-dKpyAE` empty/env-login и `ui-perf-UcvZ4O` loaded/session, 14 измерений + skippedbackground. В обоих **0 `/connections*` и 0 `*/guided`** в общем request table, overflow0, no errors/blocked/failure, fixture verified; config и node metadata неизменны. Это короткий Windows dwell250/idle1000, не новый ARM CPU/RSS benchmark. Координатор отдельно повторяет ARM после новой embedded сборки; его прежний baseline происходил рядом с production autonomy, которая меняла config, и не означает «production config неизменен». Router/VM/порты18854/8787 исполнитель не трогал.
+
+Отдельный косметический commit `9a45551` исправляет undefined цветовой token progress на существующий theme accent; geometry/actions не менялись, compiled CSS contract51/51. Состояние highlighted step по-прежнему next, а не PASS.

@@ -41,3 +41,28 @@ D00 завершён: сохранены локальные изменения �
 После согласования с CORE новый `internal/dataplane/policy_addition_receipt*.go` (реализация и новые unit/fault/native tests) передан VLESS. Контракт — [CORE_POLICY_ADDITION_CONTRACT_RU.md](handoffs/CORE_POLICY_ADDITION_CONTRACT_RU.md). CORE подтвердил, что этот модуль не начинал и параллельно его не пишет; существующие policy mutation/kernel helpers, manager/app/config и D07 остаются у CORE. Новые необходимые изменения этих файлов согласуются с владельцем.
 
 VLESS реализует один общий протокол для proxy и WG, затем подключает proxy. NET использует тот же API для WG. Отдельные парсеры и переписывание legacy `route replace` в каждом адаптере не нужны: исправленный общий primitive `b3bc486` уже принят и проверен настоящим ядром. Такая передача освобождает CORE для self-update и app wiring, сохраняя одного автора каждого общего файла. Координатор проверяет реальные crash/foreign-owner сценарии отдельно от unit тестов.
+
+## Дополнительные направления — 04.10
+
+Чтобы D11 и WG/DNS не задерживали независимые D09/D13, созданы два чата `gpt-6.1-sol` от интеграции `fe7d0ab`:
+
+| Чат | Ветка / папка | Задача |
+|---|---|---|
+| RAZVILKA CLOUD · 6.1 sol | `sol/cloud-20261004`, `worktrees/sol-cloud` | D13: WARP/USQUE и источники; id `01a10395-72aa-7f10-a98f-bbdb05418f05` |
+| RAZVILKA NFQWS · 6.1 sol | `sol/nfqws-20261004`, `worktrees/sol-nfqws` | D09: bounded локальный подбор; id `01a10395-74c0-7cb2-a735-f9f3e4fbc52e` |
+
+Перед передачей проверен WIP прежних владельцев: перечисленные в новой таблице SOL_HANDOFF файлы не изменялись. OPS и NET уведомлены о передаче; их активные изменения сохранены. CORE по-прежнему единственный автор app/worker/config. Новые чаты не запускают общие live-окна и не регистрируют публичные аккаунты.
+
+По отдельному запросу пользователя исследователь перенесён из временной задачи `router_research` в пользовательский чат **RAZVILKA RESEARCH · 6.1 sol**, id `01a10399-da1b-7800-94fd-df9d5ce762c5`, ветка `sol/research-20261004`, папка `worktrees/sol-research`. Временная задача передала findings и остановлена; дублирующего поиска нет. Исследователь ищет применимые реализации в первичных проектах для роутеров и сетевых программ, проверяет лицензии и ограничения. Первые темы: согласованная LAN/DNS маршрутизация и Stop/восстановление при обновлении. Он не меняет production код; координатор передаёт выбранные решения владельцам соответствующих файлов.
+
+## Параллельная реализация общего пути — 04.10
+
+По согласованной с CORE границе создан **RAZVILKA DEFAULT · 6.1 sol**, id `01a103df-5be1-7233-ae14-f6af8fdd9edd`, `worktrees/sol-default`, branch `sol/default-executor-20261004`, base `e0e83db`. Его исключительная область — новые `internal/app/default_route_executor*.go` с тестами и `handoffs/DEFAULT_RU.md`. Существующие app/main/config/manager/plan/policy остаются у CORE. Исполнитель делает review/compiler/Execute через один Manager; CORE добавляет ingress в точные kernel selectors/receipts и atomic applied NetworkPolicy CAS/undo. Первая IP-only capability не закрывает требуемые domain-aware исключения/overrides; DNS→IP не становится доказательством flow identity.
+
+NFQWS дополнительно получил только новые `internal/components/nfqws_supervision*.go` и собственные тесты для согласованного bridge существующего subreaper supervisor. Существующие OPS helpers принадлежат OPS. Persistent intent/receipt остаётся в текущем Strategy Lab, новые общие журналы не создаются. CLI dispatch и app worker подключает CORE; native/live acceptance — root.
+
+Вспомогательная задача `/root/review_core` получила отдельный `qa-build-gate` worktree и три файла build/check/mock-test. Коммит `53bcc93` принят: ARM64 check на Linux amd64 создаёт оба необходимых test binaries без промежуточного MIPS/MIPSel; install/update/rollback/remove не пропускаются. Эта порция завершена; дальнейшие изменения этих файлов снова через координатора.
+
+Для независимого D08 создан **RAZVILKA LAN DNS · 6.1 sol**, id `01a103fe-96bf-7553-bc32-74139690e3e6`, `worktrees/sol-lan-dns`, branch `sol/lan-dns-20261004`, base `f1d0768`. Владение: `dataplane/lan_classifier.go` и его тесты, новые `lan_policy_runtime*.go`/`domain_policy*.go`, новые `dnscontrol/network_policy*.go`, `handoffs/LAN_DNS_RU.md`. Existing scoped DNS listener/query/cache остаются у NET до отдельной передачи; WG/AWG и endpoint DNS у NET, proxy у VLESS, manager/policy/app/config у CORE. Задача — исполнение единых LAN/device/guest исключений, включая MAC/IPv6 и DNS, и согласование domain-flow пути с DEFAULT, без второго manager/scheduler. Все владельцы уведомлены. Новая задача не использует живой роутер или VM.
+
+После завершённого CORE `8dea1e5` и подтверждённого чистого дерева `dataplane/manager.go`, `plan.go`, новые `network_policy_manager*.go` и их новые D07 tests переданы DEFAULT. Он связывает frozen LAN/domain/DNS plan с существующим Manager и общим mixed receipt: gate применяется первым и снимается последним. CORE продолжает реальный D11 provider/main/HTTP и владеет app/config/operationgate; policy/readback helpers также сохраняются за CORE. LAN и DEFAULT уведомлены. Это снимает последовательное ожидание D11 перед реализацией D07, не допускает параллельных авторов общего файла и не открывает capability до сквозной проверки.

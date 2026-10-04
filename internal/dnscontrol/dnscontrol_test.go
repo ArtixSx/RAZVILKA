@@ -536,7 +536,7 @@ func TestDoHRedirectPolicy(t *testing.T) {
 }
 
 func TestPublicDNSAddressPolicy(t *testing.T) {
-	for _, raw := range []string{"127.0.0.1", "10.0.0.1", "100.64.0.1", "169.254.1.1", "192.0.2.1", "224.0.0.1", "::", "::1", "fe80::1", "2001:db8::1"} {
+	for _, raw := range []string{"127.0.0.1", "10.0.0.1", "100.64.0.1", "169.254.1.1", "192.0.2.1", "224.0.0.1", "::", "::1", "fe80::1", "2001:db8::1", "0.1.2.3", "240.1.2.3", "64:ff9b::a00:1", "64:ff9b:1::a00:1", "2001::a00:1", "2002:0a00:0001::", "2606:4700::1111%wan0"} {
 		if publicDNSAddress(netip.MustParseAddr(raw)) {
 			t.Fatalf("non-public address accepted: %s", raw)
 		}

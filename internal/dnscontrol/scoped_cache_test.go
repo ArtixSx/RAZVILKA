@@ -213,6 +213,25 @@ func TestScopedCacheGuardAlsoProtectsCacheHitsAndClearsOldEpoch(t *testing.T) {
 	}
 }
 
+func TestScopedCacheGuardCancellationCannotPublishCachedAnswer(t *testing.T) {
+	r, key := scopedFixture(t)
+	calls := 0
+	scopedExchange(r, key, func(_ context.Context, q []byte) (dohResponse, error) {
+		calls++
+		return dohResponse{wire: scopedPack(t, scopedResponse(t, q))}, nil
+	})
+	q := scopedQuery(t, key.host, dnsmessage.TypeA)
+	if _, err := r.Resolve(context.Background(), key.client, q); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.guard = func(context.Context) error { cancel(); return nil }
+	if wire, err := r.Resolve(ctx, key.client, q); !errors.Is(err, context.Canceled) || wire != nil || calls != 1 {
+		t.Fatal("cached answer escaped cancellation inside guard", wire, err, calls)
+	}
+}
+
 func TestScopedCacheOutOfOrderCompletionCannotOverwriteNewerAnswer(t *testing.T) {
 	r, key := scopedFixture(t)
 	entered, release := make(chan struct{}), make(chan struct{})
