@@ -76,3 +76,15 @@ the actual managed process/kernel ownership lifecycle producer. Missing or
 ambiguous owner evidence remains refusal even for an unused adapter. Full D11,
 production capability2, native Stop/candidate/rollback/Resume acceptance and
 physical power-cut remain open.
+
+## Initial installer Start binding follow-up
+
+Root accepted OPS `ebccf087abbf3a4f16c3a3a953e37582c06c1eaa` adds mandatory
+`Updater.FileEffectAdmission` and admits only the bounded actual installer
+`cmd.Start` with action `start/live`, fixed effect `installer-helper` and the
+immutable sealed review installation/sequence. CORE assigns the existing
+`selfUpdateEffectAdmission` in the same actual main provider block as
+`FileAuthorityReview`. No callback means refusal. Wait, fetch and persistence
+remain outside the control lock. Addressed OPS/cmd SelfUpdate/Installer tests
+passed 5.586s/0.599s; vet/diff RC0. This removes the initial helper Start blocker;
+stopped data-only settlement/readers3/Resume and owned inactivity remain open.
