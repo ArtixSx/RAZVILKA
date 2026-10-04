@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
@@ -583,6 +584,10 @@ func defaultRouteCloneRoutes(routes []dataplane.Route) []dataplane.Route {
 	result := slices.Clone(routes)
 	for i := range result {
 		r := &result[i]
+		if r.ProbeService != nil {
+			service := defaultRouteCloneCatalogService(*r.ProbeService)
+			r.ProbeService = &service
+		}
 		r.Domains = slices.Clone(r.Domains)
 		r.CIDRs = slices.Clone(r.CIDRs)
 		r.Sources = slices.Clone(r.Sources)
@@ -590,6 +595,27 @@ func defaultRouteCloneRoutes(routes []dataplane.Route) []dataplane.Route {
 		r.SourceRefs = slices.Clone(r.SourceRefs)
 	}
 	return result
+}
+
+func defaultRouteCloneCatalogService(s catalog.Service) catalog.Service {
+	s.Domains = slices.Clone(s.Domains)
+	s.CIDRs = slices.Clone(s.CIDRs)
+	s.Strategy = slices.Clone(s.Strategy)
+	s.SourceRefs = slices.Clone(s.SourceRefs)
+	s.Probes = slices.Clone(s.Probes)
+	for i := range s.Probes {
+		e := &s.Probes[i].Expect
+		e.StatusCodes = slices.Clone(e.StatusCodes)
+		e.RedirectHosts = slices.Clone(e.RedirectHosts)
+		e.ContentTypes = slices.Clone(e.ContentTypes)
+		e.JSONFields = slices.Clone(e.JSONFields)
+		e.BodyContains = slices.Clone(e.BodyContains)
+	}
+	if s.Provenance != nil {
+		p := *s.Provenance
+		s.Provenance = &p
+	}
+	return s
 }
 
 func defaultRouteClone(s DefaultRouteSnapshot) DefaultRouteSnapshot {

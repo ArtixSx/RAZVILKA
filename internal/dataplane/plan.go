@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/routekind"
@@ -22,15 +23,17 @@ import (
 const SchemaVersion = 1
 
 type Route struct {
-	ServiceID   string   `json:"service_id"`
-	ServiceName string   `json:"service_name"`
-	Selected    string   `json:"selected_route"`
-	Resolved    string   `json:"resolved_route"`
-	Domains     []string `json:"domains,omitempty"`
-	CIDRs       []string `json:"cidrs,omitempty"`
-	SourceRefs  []string `json:"source_refs,omitempty"`
-	Sources     []string `json:"sources,omitempty"`
-	Ingress     []string `json:"ingress,omitempty"`
+	LogicalServiceID string           `json:"logical_service_id,omitempty"`
+	ProbeService     *catalog.Service `json:"probe_service,omitempty"`
+	ServiceID        string           `json:"service_id"`
+	ServiceName      string           `json:"service_name"`
+	Selected         string           `json:"selected_route"`
+	Resolved         string           `json:"resolved_route"`
+	Domains          []string         `json:"domains,omitempty"`
+	CIDRs            []string         `json:"cidrs,omitempty"`
+	SourceRefs       []string         `json:"source_refs,omitempty"`
+	Sources          []string         `json:"sources,omitempty"`
+	Ingress          []string         `json:"ingress,omitempty"`
 	// Trusted compiler fields; scope/negative gate proof comes from the owner.
 	NetworkPolicyGeneration string `json:"network_policy_generation,omitempty"`
 	NetworkPolicyRole       string `json:"network_policy_role,omitempty"`
@@ -252,6 +255,13 @@ func Build(input Input) (Plan, error) {
 }
 
 func BuildAt(input Input, now time.Time) (Plan, error) {
+	for _, route := range input.Routes {
+		if route.ProbeService != nil {
+			if _, err := FrozenProbeService(route); err != nil {
+				return Plan{}, err
+			}
+		}
+	}
 	if input.LAN != nil {
 		if err := ValidateNetworkPolicyLAN(input.LAN, input.Routes); err != nil {
 			return Plan{}, err
