@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 const nfqws2LeaseFile = "ownership.json"
@@ -174,23 +176,31 @@ func (a *NFQWS2Adapter) writeLease(lease *nfqws2Lease) error {
 	if err := os.MkdirAll(a.StateRoot, 0o700); err != nil {
 		return err
 	}
-	root, err := ownedfs.Open(a.StateRoot)
+	target, err := restorejournal.OpenFileTarget(filepath.Join(a.StateRoot, nfqws2LeaseFile))
 	if err != nil {
 		return err
 	}
-	defer root.Close()
-	if lease == nil {
-		err = root.Remove(nfqws2LeaseFile)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
+	defer target.Close()
+	before, err := target.Read(context.Background())
+	if err != nil {
+		return err
+	}
+	if before.Exists {
+		// The same filename/kernel writer lease excludes a managed helper.
+		// Legacy callers cannot erase or replace a typed managed lifecycle.
+		if _, err := a.readLease(); err != nil {
+			return err
 		}
-		return err
 	}
-	data, err := json.Marshal(lease)
-	if err != nil {
-		return err
+	after := restorejournal.Image{}
+	if lease != nil {
+		data, err := json.Marshal(lease)
+		if err != nil {
+			return err
+		}
+		after = restorejournal.Image{Exists: true, Data: data}
 	}
-	return root.WriteAtomic(nfqws2LeaseFile, data, 0o600)
+	return target.CompareAndSwap(context.Background(), before, after)
 }
 
 func (a *NFQWS2Adapter) checkListOwnership(lease *nfqws2Lease, index int, data []byte, partial bool) error {
