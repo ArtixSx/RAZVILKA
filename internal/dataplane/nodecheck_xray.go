@@ -48,36 +48,18 @@ func (c *ExactNodeChecker) prepareXraySession(ctx context.Context, session exact
 	if session.Spec.Binary == "" {
 		return session, ErrExactNodeRuntime
 	}
-	p, err := exactXrayProfile(request.Outbound)
+	data, err := compilePinnedXrayNodeConfig(request.Outbound, endpoint, session.Port)
 	if err != nil {
-		return session, ErrExactNodeUnsupported
-	}
-	if !endpoint.Pinned.IsValid() || !publicNodeAddresses([]netip.Addr{endpoint.Pinned}) || p.Server != endpoint.Host || p.Port != endpoint.Port {
-		return session, errors.New("candidate endpoint is not pinned to its profile")
-	}
-	// Retain SNI before substituting the exact IP selected by the prefilter.
-	if p.ServerName == "" {
-		p.ServerName = p.Server
-	}
-	p.Server = endpoint.Pinned.String()
-	data, _, err := providerprofile.CompileXrayConfig(p)
-	if err != nil {
-		return session, ErrExactNodeUnsupported
+		return session, err
 	}
 	defer clear(data)
-	var document map[string]any
-	if json.Unmarshal(data, &document) != nil {
-		return session, errors.New("invalid candidate")
+	if !exactSingBoxTransportSupported(request.Outbound) {
+		// Recheck after DNS/prefilter and immediately before materialization;
+		// a runtime replacement cannot make a stale capability usable.
+		if err := c.requireXHTTPRuntime(ctx, session.Spec.Binary); err != nil {
+			return session, err
+		}
 	}
-	document["inbounds"] = []any{map[string]any{
-		"tag": "rz-node-check-in", "listen": "127.0.0.1", "port": session.Port,
-		"protocol": "socks", "settings": map[string]any{"auth": "noauth", "udp": false},
-	}}
-	data, err = json.MarshalIndent(document, "", "  ")
-	if err != nil {
-		return session, errors.New("invalid candidate")
-	}
-	defer clear(data)
 	if err := os.MkdirAll(session.Root, 0o700); err != nil {
 		return session, errors.New("candidate directory unavailable")
 	}
@@ -92,4 +74,33 @@ func (c *ExactNodeChecker) prepareXraySession(ctx context.Context, session exact
 		return session, errors.New("xray check failed")
 	}
 	return session, nil
+}
+
+func compilePinnedXrayNodeConfig(raw []byte, endpoint exactNodeEndpoint, port int) ([]byte, error) {
+	p, err := exactXrayProfile(raw)
+	if err != nil {
+		return nil, ErrExactNodeUnsupported
+	}
+	if !endpoint.Pinned.IsValid() || !publicNodeAddresses([]netip.Addr{endpoint.Pinned}) || p.Server != endpoint.Host || p.Port != endpoint.Port {
+		return nil, errors.New("candidate endpoint is not pinned to its profile")
+	}
+	// Retain SNI before substituting the exact IP selected by the prefilter.
+	if p.ServerName == "" {
+		p.ServerName = p.Server
+	}
+	p.Server = endpoint.Pinned.String()
+	data, _, err := providerprofile.CompileXrayConfig(p)
+	if err != nil {
+		return nil, ErrExactNodeUnsupported
+	}
+	defer clear(data)
+	var document map[string]any
+	if json.Unmarshal(data, &document) != nil {
+		return nil, errors.New("invalid candidate")
+	}
+	document["inbounds"] = []any{map[string]any{
+		"tag": "rz-node-check-in", "listen": "127.0.0.1", "port": port,
+		"protocol": "socks", "settings": map[string]any{"auth": "noauth", "udp": false},
+	}}
+	return json.MarshalIndent(document, "", "  ")
 }

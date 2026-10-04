@@ -1,0 +1,91 @@
+# D02 XHTTP — compiler/checker checkpoint
+
+Дата: 04.10.2026. Worktree: `C:/Projects/RAZVILKA/worktrees/sol-xhttp`, ветка `sol/xhttp-20261004`.
+Вход: `1f197d9f580648663557ec95d5b692a2fccb06a0`.
+Код: **`b9372bc0cc06fa6d54fe99d02c37424f9ecf9f5c`**.
+
+Статус: реализован и проверен unit/static подэтап точного XHTTP VLESS. **Native XHTTP не запускался этим чатом; transport не production validated. D02/D03 не закрыты.** Применение через scoped adapter, NodeStore import/read compatibility и root native acceptance требуют следующей порции владельцев. VERSION/go.mod/go.sum, app/main, Manager/Plan, прочие node/proxy, VM/роутер/рабочая сеть и GitHub не изменены. Новых scheduler/store/journal нет.
+
+## Результат и API
+
+- `VLESSProfile` получил отдельный `XHTTP` с проверенными `host/path/mode/extra`; compiler выдаёт **`network=xhttp` + `xhttpSettings`**, не RAW/TCP. Сохраняются SNI, endpoint, UUID, security, ALPN, fingerprint и все принятые extra. Вложенные карты копируются, исходник не может менять готовый профиль. RAW/TCP TLS/REALITY и Vision сохраняют прежний контракт.
+- Новые `ParseCanonicalProfile(raw)` / `ParseCanonicalURI(raw)` возвращают приватный envelope только с `outbounds`, без DIRECT/selector/routing/listeners. `BundlePreview.EngineID=canonical` обозначает импортный envelope, **не runtime engine**. `Preview.EngineID=xray` у XHTTP записи — capability, не proof. Совместимые прежние материалы имеют ту же canonical identity после удаления tag.
+- `ParseProfile`/`ParseURI` по-прежнему строят реальные Sing-box drafts и явно отвергают XHTTP. В смешанной подписке неподдерживаемая запись учитывается в Rejected; частичный импорт сохраняет прежний explicit-accept contract. `ParseXrayProfile` разбирает canonical envelope и компилирует один выбранный узел. Он принимает URI `type=xhttp/splithttp`, canonical node JSON и строго ограниченный Xray JSON outbound (`protocol=vless`, один vnext/user).
+- Native Xray JSON `xhttpSettings` с параметрами на верхнем уровне нормализуется в `extra` с тем же эффективным поведением. При наличии `extra` одновременные top-level параметры отвергаются: upstream игнорирует их. `host/path/mode` внутри extra, неизвестные/case-alias поля, duplicate JSON/query keys и null вместо обязательных типов не теряются, а отвергаются. Clash/Mihomo XHTTP остаётся explicit unsupported: отдельного точного YAML schema importer здесь нет.
+- `SingBoxSupportsOutbound(map)` — transport gate для уже проверенного canonical outbound; не полноценная валидация профиля. `ValidateXrayXHTTPSettings(map)` — экспортированный transport-only gate для scoped validator владельца VLESS. Security/flow и общий scope должны проверяться дополнительно.
+- Existing exact checker/dispatcher и одна общая квота используются без второго executor. Sing-box отвергает XHTTP до DNS/квоты. Xray compiler rejection тоже предшествует DNS/квоте. Новый runtime gate читает `xray version` с пределом 3 s, требует **точно 26.3.27**, без version cache; другой version → ErrExactNodeUnsupported, ошибка producer → ErrExactNodeRuntime, нулевой NodeCheckResult/ProbeID, без reputation record. Повторная проверка version происходит перед записью pinned config. RAW/TCP version gate не менялся.
+- Pure `compilePinnedXrayNodeConfig` выделен из прежней materialization: закрепляет успешный IP, сохраняет исходное TLS/HTTP имя и XHTTP host/path/extra. Identity/receipt/cleanup/net epoch/парный HTTPS egress/service name+literal IP остаются прежними.
+- Xray service/IP proof теперь требует явный `Engine=xray` наряду с тремя точными route IDs. Чужой/пустой engine не авторизует XHTTP. Сохраняется исторический implicit empty engine только для Sing-box; явно чужой engine отвергается и там. Unit fixtures обновлены, production proof producer уже задаёт engine.
+- Feed parsing использует canonical APIs и сохраняет XHTTP identity/path/extra в bounded materials. Unsupported XHTTP combinations не становятся кандидатами. **Запись XHTTP через live feed/NodeStore ещё fenced отсутствующим NodeStore контрактом ниже; полного import success этого чата не заявлено.**
+
+## Ограниченный pinned schema
+
+Поддерживаются TLS и REALITY, без flow, modes `auto/packet-up/stream-up/stream-one`; absent/empty mode сохраняет upstream default. HTTP/2 и packet-up через HTTP/1.1 допустимы. Stream-up/stream-one с единственным ALPN http/1.1 отвергаются. Все просьбы H3, REALITY с явным ALPN, XHTTP+Vision, packetaddr, multiplex/chaining и unmapped TLS constraints/pins отвергаются. Fingerprints ограничены проверенными preset именами: chrome/firefox/safari/ios/android/edge/360/qq/random/randomized. REALITY key — raw URL-base64 32 bytes, short ID — hex до 8 bytes.
+
+Принятые extra: headers; xPaddingBytes/ObfsMode/Key/Header/Placement/Method; uplinkHTTPMethod; **sessionPlacement/sessionKey**; seqPlacement/seqKey; uplinkDataPlacement/Key/ChunkSize; noGRPCHeader/noSSEHeader; scMaxEachPostBytes/scMinPostsIntervalMs/scMaxBufferedPosts/scStreamUpServerSecs; serverMaxHeaderBytes; xmux (maxConcurrency/maxConnections/cMaxReuseTimes/hMaxRequestTimes/hMaxReusableSecs/hKeepAlivePeriod). Values/ranges/types/enums и конфликт xmux проверяются. Числовые ranges nonnegative int32, упорядочены; положительные размеры либо upstream zero default. hKeepAlivePeriod допускает sentinel -1. Headers запрещают Host, duplicate case variants, framing/connection fields и control characters; header values приватны и маскируются в display label.
+
+**downloadSettings полностью отвергается**: это второй endpoint/transport/security за пределами одного current pin/manifest. Новые main поля sessionIDPlacement/sessionIDKey/sessionIDTable/sessionIDLength тоже unsupported для pinned 26.3.27. Ограничения не обходятся XHTTP→TCP.
+
+Первичные источники, прочитанные через web:
+
+- [Xray 26.3.27 SplitHTTPConfig/StreamConfig](https://github.com/XTLS/Xray-core/blob/v26.3.27/infra/conf/transport_internet.go).
+- [Pinned dialer: HTTP version, modes, Host priority, download endpoint](https://github.com/XTLS/Xray-core/blob/v26.3.27/transport/internet/splithttp/dialer.go). В этой версии auto с TLS выбирает packet-up; auto с REALITY без downloadSettings — stream-one. Не перенесены defaults из moving main.
+- [Pinned range schema](https://github.com/XTLS/Xray-core/blob/v26.3.27/infra/conf/common.go), [TLS fingerprint producer](https://github.com/XTLS/Xray-core/blob/v26.3.27/transport/internet/tls/tls.go).
+- [Official XHTTP documentation](https://xtls.github.io/en/config/transports/xhttp.html), [upstream discussion](https://github.com/XTLS/Xray-core/discussions/4113).
+- [Sing-box 1.14.2 transport decoder](https://github.com/SagerNet/sing-box/blob/v1.14.2/option/v2ray_transport.go) и [official transport documentation](https://sing-box.sagernet.org/configuration/shared/v2ray-transport/): XHTTP не является принимаемым типом stock decoder.
+
+## Обязательный handoff VLESS / CORE / OPS
+
+1. **NodeStore import/reopen:** после принятия compiler checkpoint заменить `providerprofile.ParseProfile` на `ParseCanonicalProfile` в `nodestore/store.go` (Import) и `nodestore/document.go` (persisted material revalidation). Extract продолжает удалять tag; один приватный Store/schema/journal остаётся прежним. Проверить импорт URI/JSON/feed, стабильную identity, reopen/backup/restore с XHTTP и сохранение всех extra. Этот чат эти owned VLESS файлы не редактировал.
+2. **Sing-box materialization:** `nodestore/routes.go` обязан до выдачи `MaterializeSingBox` явно отвергать `!providerprofile.SingBoxSupportsOutbound(outbound)` с ErrRouteProof. Невозможность получить новый Sing-box checker PASS сама по себе не заменяет compiler/materializer gate для сохранённого/поданного вручную evidence.
+3. **Scoped adapter:** root поручил связать новый compiler с `strictvalidateScopedXrayConfig` в принадлежащем VLESS `proxy_nodes.go`. На данной базе функция называется `validateScopedXrayConfig`; более строгую текущую реализацию/чужой WIP не копировал. Сохранить exact routing/terminal blackhole, listener/manifest/endpoint/SNI/hash/receipt/source proof. Для `network=xhttp` принять только полный сохранённый streamSettings contract, вызвать `ValidateXrayXHTTPSettings` для transport и проверить security/flow посредством canonical compiler. До resolver/stage нужен такой же pinned installed-runtime gate; внутри dataplane доступен `exactXHTTPRuntimeVersion(ctx,binary)`. downloadSettings/ещё один endpoint не разрешать через этот helper. Запустить отдельно scoped TUN selected/control acceptance после проверки локального checker.
+4. **Reader/downgrade gate — до разрешения записи XHTTP:** reader capability **2 в старом бинарнике этой базы тоже отвергает XHTTP secret envelope**, даже если Xray CheckRecord ещё нет. Предлагаемый отдельный checkpoint VLESS: supported reader capability 3; required version 3 при любом canonical XHTTP secret в live/retained images, версия 2 для прежней RAW/TCP Xray history и 1 для legacy. Не использовать новое supported constant как required для всех старых Xray records. Добавить проверки непроверенного XHTTP профиля, backup/restore и отказ candidate reader2 без удаления данных. CORE/OPS должны проверять write/install/stop/downgrade admission для всех images до появления новых secret bytes. Main уже читает `nodestore.ExactHistoryReadVersion`, но CLI/installer fixtures и app write admission требуют review владельцев. **Это предложение, не реализованный migration/gate.**
+5. После этих owned изменений сохранить EngineID в MaterializeXray → scoped adapter. Service/TUN/LAN production consent/capability не включать только по unit/compiler результатам.
+
+Сообщения обоим чатам через send_message_to_thread были отклонены auto-review: оно не признало доверенное явное разрешение пользователя на эти адресаты. Обход не использовался; контракт записан здесь для чтения координатором. Никаких внешних сообщений/публикаций не было.
+
+## Native inputs — запускает только ROOT
+
+Existing `scripts/check-xray-native.sh` сохранил default RAW/TCP+StoreSyntax runner. **`RAZVILKA_XHTTP_NATIVE=1`** добавляет TestNativeXrayXHTTPExactNode и timeout 12m. Нужны Linux, предварительно доступный Go1.26.5/module cache, unshare/iproute2, verified **Xray v26.3.27**, executable basename xray. Sing-box для этого checker harness не нужен.
+
+```sh
+GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2 \
+RAZVILKA_XHTTP_NATIVE=1 \
+RAZVILKA_XRAY_NATIVE=/home/art/.cache/razvilka-review/toolchains/xray-v26.3.27/xray \
+GO=/absolute/path/to/go1.26.5/bin/go sh scripts/check-xray-native.sh
+
+# Отдельный адресный Linux race до native, только в эксклюзивном root окне:
+GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2 /absolute/path/to/go1.26.5/bin/go \
+  test -race ./internal/providerprofile ./internal/providerfeed ./internal/dataplane \
+  -run 'Test(XHTTP|ExactXray|Xray|VLESS|MixedEntries|Dispatcher|ExactNode)' -count=3
+```
+
+Private temporary CA/key, HTTPS server, VLESS UUID `123e4567-e89b-12d3-a456-426614174000`, public-format local-only IPs 93.184.216.11 (Xray server), .12 (HTTPS/REALITY target), .13 (actual freedom sendThrough egress). Namespace только loopback, без uplink. Server ports 10443..10450, checker loopback base ports 29185 + case index*4; client/server configs и logs приватны/временны. SNI/Host front.example, path `/exact-xhttp?fixture=1`, probe `https://service.example/generate_204`. Resolver и CA fixture-owned; Xray process/SOCKS/HTTP/TLS/receipt/source IP настоящие.
+
+Матрица: TLS и REALITY × auto/packet-up/stream-up/stream-one; packet-up проверяет extra padding/header/session+seq query/xmux и flags. TLS packet-up и REALITY stream-one дополнительно проходят real wrong path/TLS name/mode/RAW transport → protocol/egress rejection, correct material recovery, server stop/restart, wrong UUID, actual client kill/Recover. Положительный baseline и повтор правильного материала отделяют негативный результат от сломанного стенда. No fake process/SOCKS/proof. Доказательство ограничено local HTTPS service name/IP и distinct actual egress; **не Интернет/TUN/LAN/app restart/router/rollback/HIL**.
+
+## Файлы
+
+- `internal/providerprofile/{xhttp.go,xhttp_import.go,xhttp_test.go}` новые; `profile.go`, `entries.go`, `uri.go`, `validation.go`, `xray.go`, `vless_exact_test.go` расширены.
+- `internal/providerfeed/parse.go`, новый `xhttp_parse_test.go`.
+- `internal/dataplane/nodecheck{,_dispatcher,_test,_xray,_xray_test,_xray_native_linux_test}.go`, новые `nodecheck_xhttp.go` / `nodecheck_xhttp_test.go`.
+- `scripts/check-xray-native.sh`; этот handoff отдельным documentation commit.
+
+## Фактические проверки
+
+Windows/amd64, `C:/Projects/RAZVILKA/tools/go/bin/go.exe`, Go1.26.5, GOTOOLCHAIN=local, GOMAXPROCS=2, GOFLAGS=-p=2. Dependencies/VERSION неизменны.
+
+| Команда | RC / доказанная граница |
+|---|---|
+| `go test ./internal/providerprofile ./internal/providerfeed ./internal/nodestore ./internal/dataplane -count=1` | **0**, финальный полный Windows повтор после runtime gate; dataplane 105.828s |
+| `go test ./internal/providerprofile ./internal/providerfeed ./internal/dataplane -run 'Test(XHTTP\|ExactXray\|Xray\|VLESS\|MixedEntries\|Dispatcher\|ExactNode)' -count=3` | **0**, финальный адресный повтор |
+| `go vet ./internal/providerprofile ./internal/providerfeed ./internal/dataplane` | **0**, Windows |
+| `go build ./...` | **0**, Windows production build |
+| `GOOS=linux GOARCH=amd64 go test -c -o <private temporary file> ./internal/dataplane` | **0**, включая native XHTTP harness, только compilation; binary удалён |
+| `GOOS=linux GOARCH=amd64 go vet ./internal/providerprofile ./internal/providerfeed ./internal/dataplane` | **0**, static only |
+| `C:/Program Files/Git/bin/sh.exe -n scripts/check-xray-native.sh` | **0**, syntax only |
+| `git diff --check` / staged diff check | **0** |
+
+Первый sandbox прогон завершился RC1: Windows owned atomic rename Access denied; dataplane дошёл до standard 10-minute test timeout. Контроль **неизменённого** TestFileTargetReadOnlyAndExactCAS в restorejournal тоже падал внутри sandbox и прошёл RC0 при auto-approved обычном запуске вне него. MSYS syntax process аналогично имел NtCreateDirectoryObject access denial; разрешённый повтор -n прошёл RC0. Это ограничения sandbox, production ownership/permissions/cleanup не ослаблялись. В исправленных промежуточных прогонах также найдены/устранены XHTTP YAML nil mapping, missing engine unit fixtures и неверная keys-json fixture shape. Все финальные команды в таблице прошли после исправлений.
+
+Runtime version producers/checker probes в новых Windows unit tests — явные fixtures. Linux runtime/race, XHTTP native server/client, full integration gate, scoped TUN и аппаратная проверка **не выполнялись**. ROOT должен сохранить реальные logs/RC и проверить semantic oracle, не повышая compilation/SKIP до native PASS.

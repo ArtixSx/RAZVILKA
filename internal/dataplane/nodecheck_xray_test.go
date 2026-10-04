@@ -24,6 +24,7 @@ func xrayCheckedRequest() NodeCheckRequest {
 func fakeExactXrayChecker(t *testing.T) *ExactNodeChecker {
 	c := fakeExactNodeChecker(t)
 	c.engine = "xray"
+	c.xhttpRuntime = func(context.Context, string) (bool, error) { return true, nil } // unit runtime capability fixture only
 	probe := c.serviceProbe
 	c.serviceProbe = func(ctx context.Context, address, route, egress string, svc catalog.Service) (evidence.ProbeEvidence, error) {
 		p, err := probe(ctx, address, route, egress, svc)
@@ -73,7 +74,7 @@ func TestExactXrayPreservesPathAndSuccessfulPin(t *testing.T) {
 }
 
 func TestExactXrayUnsupportedIsLocalBeforeDNSOrSlots(t *testing.T) {
-	for _, extra := range []string{`,"transport":{"type":"xhttp"}`, `,"multiplex":{"enabled":true}`, `,"detour":"other"`} {
+	for _, extra := range []string{`,"transport":{"type":"xhttp","mode":"unsupported"}`, `,"multiplex":{"enabled":true}`, `,"detour":"other"`} {
 		c := fakeExactXrayChecker(t)
 		c.resolve = func(context.Context, string) ([]netip.Addr, error) {
 			t.Fatal("unsupported profile reached DNS")
