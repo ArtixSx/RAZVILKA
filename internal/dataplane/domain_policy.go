@@ -184,20 +184,7 @@ func (p *DomainPolicy) Decide(flow DomainPolicyFlow, now time.Time) DomainPolicy
 	if !flow.Destination.IsValid() || flow.Destination.Is4In6() || flow.Destination.Zone() != "" || !slices.Contains([]string{"tcp", "udp"}, flow.Protocol) {
 		return d
 	}
-	// An explicit IP/CIDR direct rule already settles this destination,
-	// independently of any opaque domain exceptions elsewhere in the policy.
-	if gate.Action == "base" && gate.Reason == "MANUAL_DIRECT" {
-		d.Kind, d.Route, d.Reason = "baseline", "direct", gate.Reason
-		return d
-	}
 	q.Domain = domainPolicyName(flow)
-	// A mandatory domain-direct exclusion cannot be promised for opaque
-	// flows by labelling a shared CDN address. Reject that class before an
-	// owned outbound; silently taking default would violate the exclusion.
-	if q.Domain == "" && p.opaqueDirectApplies(gate.DeviceID, flow.Client.Address) {
-		d.Reason = "EXPLICIT_DOMAIN_DIRECT_REQUIRES_FLOW_IDENTITY"
-		return d
-	}
 	var match *DomainPolicyService
 	for i := range p.services {
 		s := &p.services[i]
@@ -231,6 +218,15 @@ func (p *DomainPolicy) Decide(flow DomainPolicyFlow, now time.Time) DomainPolicy
 	}
 	d.Decision = autonomy.DecideNetworkPolicy(p.policy, p.scope, q, now)
 	d.Reason = d.Decision.Reason
+	// The complete shared question must settle an IP/domain rule conflict
+	// before an IP-direct exception can be honored. With no visible name,
+	// an explicit IP/CIDR direct rule still supplies independent authority.
+	// Other mandatory domain-direct exceptions cannot be promised for an
+	// opaque flow by labelling a shared CDN address or silently taking default.
+	if q.Domain == "" && !(d.Decision.Action == "base" && d.Decision.Reason == "MANUAL_DIRECT") && p.opaqueDirectApplies(gate.DeviceID, flow.Client.Address) {
+		d.Reason = "EXPLICIT_DOMAIN_DIRECT_REQUIRES_FLOW_IDENTITY"
+		return d
+	}
 	switch d.Decision.Action {
 	case "base":
 		d.Kind, d.Route = "baseline", "direct"

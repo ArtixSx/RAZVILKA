@@ -84,6 +84,27 @@ func TestDomainPolicyDirectExclusionNeverWidensToSharedIP(t *testing.T) {
 	}
 }
 
+func TestDomainPolicyIPDirectAndKnownMandatoryDomainBypassConflict(t *testing.T) {
+	rules := []config.NetworkRule{
+		{ID: "ip-direct", Revision: 1, Kind: "ip", Value: "93.184.215.14", Action: "direct", Mandatory: true},
+		{ID: "domain-bypass", Revision: 1, Kind: "exact", Value: "service.example.com", Action: "bypass", Mandatory: true},
+	}
+	p, f, now := domainPolicyFixture(t, rules)
+	if d := p.Decide(f, now); d.Kind != "refused" || d.Reason != "MANUAL_RULE_CONFLICT" || d.Decision.Action != "unavailable" {
+		t.Fatal("IP direct bypassed known-name conflict", d)
+	}
+	called := false
+	if d, err := p.Dispatch(context.Background(), f, now, func(context.Context, string) error { return nil }, func(context.Context, DomainPolicyDecision) error { called = true; return nil }); !errors.Is(err, ErrDomainPolicy) || d.Kind != "refused" || called {
+		t.Fatal("conflicted known flow reached outbound", d, err, called)
+	}
+	for _, name := range []string{"", "unknown.example.com"} {
+		f.Name = name
+		if d := p.Decide(f, now); d.Kind != "baseline" || d.Reason != "MANUAL_DIRECT" {
+			t.Fatal("explicit IP exclusion lost independent authority", name, d)
+		}
+	}
+}
+
 func TestDomainPolicyExcludedFuturePrivacyAddressAndGuestBeforeMetadata(t *testing.T) {
 	p, f, now := domainPolicyFixture(t, nil)
 	f.Client.Address = netip.MustParseAddr("fd00:1::ab:cdef")

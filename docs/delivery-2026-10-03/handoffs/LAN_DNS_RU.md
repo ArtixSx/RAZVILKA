@@ -68,3 +68,7 @@ Go1.26.5, Windows, GOMAXPROCS2, GOFLAGS-p=2:
 - Linux amd64 CGO0 dataplane test binary compilation с native fixture: RC0; это cross-compilation, **не native execution**.
 
 `NETWORK_POLICY_EXECUTOR_REQUIRED` остаётся закрытым. Для готового D08 всё ещё нужны accepted frozen Plan.LAN/common receipt adapter, actual Manager first-activate/last-retire ordering и shared scope/control admission, exact domain producer/frontend, baseline equivalence, DNS ingress leases, precise owned flow drain и независимые mixed-consumer/native/HIL proofs. Ни boolean capability, ни diagnostic pass этих условий не заменяет.
+
+## Review follow-up: IP-direct и known domain conflict
+
+Координатор обнаружил P1 в `180b231`: ранний IP/CIDR MANUAL_DIRECT возвращался до извлечения имени потока и мог обойти допустимую в конфиге пару IP-direct + mandatory domain-bypass. Исправление всегда формирует full shared question (genuine name и service context), затем выполняет `DecideNetworkPolicy`; MANUAL_RULE_CONFLICT остаётся refused/unavailable, без outbound. При opaque/unknown имени explicit IP-direct сохраняется, если full shared decision действительно MANUAL_DIRECT. Добавлен regression known TLS SNI/conflict/Dispatch без outbound и opaque/known-miss IP-direct. Go1.26.5 `TestDomainPolicy*` RC0, dataplane0.079s; diffcheck RC0.
