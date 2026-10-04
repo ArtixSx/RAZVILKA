@@ -8,7 +8,9 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
@@ -119,6 +121,30 @@ type nodeTransitLease struct {
 	root    string
 	runtime nodeTransitRuntime
 	options nodeTransitOptions
+	busy    atomic.Bool
+	applied atomic.Bool
+	effects atomic.Bool
+	unused  atomic.Pointer[nodeTransitBeforeEffectsError]
+}
+
+// This is live control-flow evidence for a newly issued root, not a persisted
+// receipt, deletion grant or recovery classification. The issuer must never
+// offer unused settlement for an older/recovery resource.
+type nodeTransitBeforeEffectsError struct {
+	cause error
+	lease *nodeTransitLease
+	root  os.FileInfo
+}
+
+func (e *nodeTransitBeforeEffectsError) Error() string {
+	return "node transit refused before receipt/effects invocation: " + e.cause.Error()
+}
+
+func (e *nodeTransitBeforeEffectsError) Unwrap() error { return e.cause }
+
+func isNodeTransitBeforeEffects(err error) bool {
+	var before *nodeTransitBeforeEffectsError
+	return errors.As(err, &before) && before != nil && before.lease != nil && before.root != nil && before.cause != nil
 }
 
 // Only private local fixtures may replace OS inventory/boot identity.
@@ -217,6 +243,12 @@ func (l *nodeTransitLease) Apply(ctx context.Context) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, nodeTransitBudget)
 	defer cancel()
+	if !l.busy.CompareAndSwap(false, true) {
+		return ErrNodeTransitUnavailable
+	}
+	defer l.busy.Store(false)
+	l.unused.Store(nil)
+	firstApply := !l.applied.Swap(true)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -235,10 +267,30 @@ func (l *nodeTransitLease) Apply(ctx context.Context) error {
 		}
 		return ErrPolicyAdditionExists
 	}
-	if err := l.register(ctx); err != nil {
-		return err
+	// Marker absence contributes only to a live first-call proof. It can never
+	// establish unused status on its own, or restore it after shared entry.
+	newRoot, rootErr := l.unusedRoot(ctx)
+	classify := func(err error) error {
+		if !firstApply || l.effects.Load() || rootErr != nil {
+			return err
+		}
+		before := &nodeTransitBeforeEffectsError{cause: err, lease: l, root: newRoot}
+		l.unused.Store(before)
+		return before
 	}
-	if err := applyPolicyEffects(ctx, l.effectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault}); err != nil {
+	if err := l.register(ctx); err != nil {
+		return classify(err)
+	}
+	// This early invocation provides a definite before-effects refusal. The
+	// shared backend repeats preflight under its permanent receipt lock; every
+	// error after entering that backend remains unclassified.
+	runtime := l.effectRuntime()
+	if err := runtime.Preflight(ctx); err != nil {
+		return classify(err)
+	}
+	l.unused.Store(nil)
+	l.effects.Store(true)
+	if err := applyPolicyEffects(ctx, runtime, l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault}); err != nil {
 		return err
 	}
 	count, err := l.presence(ctx)
@@ -254,6 +306,12 @@ func (l *nodeTransitLease) Remove(ctx context.Context) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, nodeTransitBudget)
 	defer cancel()
+	if !l.busy.CompareAndSwap(false, true) {
+		return ErrNodeTransitUnavailable
+	}
+	defer l.busy.Store(false)
+	l.unused.Store(nil)
+	l.effects.Store(true)
 	status, err := l.Inspect(ctx)
 	if err != nil {
 		return errors.Join(ErrPolicyAdditionReceipt, err)
@@ -265,6 +323,58 @@ func (l *nodeTransitLease) Remove(ctx context.Context) error {
 		return err
 	}
 	return removePolicyEffects(ctx, l.effectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault})
+}
+
+// VerifyUnused consumes only this lease's live before-effects refusal. A fresh
+// lease, a disappeared receipt, or a read-only kernel snapshot cannot obtain
+// this capability. It invokes no mutation or metadata settlement itself.
+func (l *nodeTransitLease) VerifyUnused(ctx context.Context) error {
+	if l == nil || ctx == nil || !l.busy.CompareAndSwap(false, true) {
+		return ErrNodeTransitUnavailable
+	}
+	defer l.busy.Store(false)
+	before := l.unused.Swap(nil)
+	if before == nil || before.lease != l || l.effects.Load() {
+		return ErrNodeTransitUnavailable
+	}
+	ctx, cancel := context.WithTimeout(ctx, nodeTransitBudget)
+	defer cancel()
+	if err := l.guard(ctx); err != nil {
+		return err
+	}
+	root, err := l.unusedRoot(ctx)
+	if err != nil || !os.SameFile(before.root, root) {
+		return errors.Join(ErrNodeTransitUnavailable, err)
+	}
+	count, err := l.presence(ctx)
+	if err != nil || count != 0 {
+		return errors.Join(ErrNodeTransitUnavailable, err)
+	}
+	if err := l.guard(ctx); err != nil {
+		return err
+	}
+	root, err = l.unusedRoot(ctx)
+	if err != nil || !os.SameFile(before.root, root) {
+		return errors.Join(ErrNodeTransitUnavailable, err)
+	}
+	return ctx.Err()
+}
+
+// Bounded marker checks never interpret or grant authority from file contents.
+func (l *nodeTransitLease) unusedRoot(ctx context.Context) (os.FileInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	info, err := os.Lstat(l.root)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
+		return nil, errors.Join(ErrNodeTransitUnavailable, err)
+	}
+	for _, name := range []string{policyAdditionFile, policyAdditionLock} {
+		if _, err := os.Lstat(filepath.Join(l.root, name)); !errors.Is(err, os.ErrNotExist) {
+			return nil, errors.Join(ErrNodeTransitUnavailable, err)
+		}
+	}
+	return info, ctx.Err()
 }
 
 func (l *nodeTransitLease) Inspect(ctx context.Context) (PolicyAdditionStatus, error) {

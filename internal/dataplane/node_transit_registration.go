@@ -10,8 +10,11 @@ type nodeTransitRegistrarKey struct{}
 type nodeTransitRegistrar func(context.Context, NodeTransitSpec) (nodeTransitRegistration, error)
 
 type nodeTransitRegistration struct {
-	root         string
-	register     func(context.Context, NodeTransitSpec, string, string) error
-	settle       func(context.Context, NodeTransitSpec, string, string) error
+	root     string
+	register func(context.Context, NodeTransitSpec, string, string) error
+	settle   func(context.Context, NodeTransitSpec, string, string) error
+	// Optional only on a newly issued live resource. This settles Manager
+	// metadata after VerifyUnused; it conveys no kernel deletion authority.
+	settleUnused func(context.Context, NodeTransitSpec, string, string) error
 	cleanupGuard func(context.Context) error
 }

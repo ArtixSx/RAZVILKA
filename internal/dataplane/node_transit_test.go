@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -21,6 +22,7 @@ type nodeTransitTestRunner struct {
 	beforeRead                func(context.Context, int) error
 	calls                     []string
 	adds, deletes             int
+	addErr                    error
 	loseAddACK, loseDeleteACK bool
 	route                     string
 }
@@ -62,6 +64,9 @@ func (r *nodeTransitTestRunner) Run(ctx context.Context, name string, args ...st
 	switch args[2] {
 	case "add":
 		r.adds++
+		if r.addErr != nil {
+			return nil, r.addErr
+		}
 		r.rules[4] = append(r.rules[4], r.line())
 		if r.loseAddACK {
 			return nil, errors.New("lost actual add acknowledgement")
@@ -182,7 +187,7 @@ func TestNodeTransitLeaseRegistersBeforeEffectsAndUsesExistingReceipt(t *testing
 	if err != nil || !status.Removed || status.Unknown || authority.registrations != 2 {
 		t.Fatal("cleanup was not durably settled", status, err)
 	}
-	if err := l.Apply(ctx); !errors.Is(err, ErrPolicyAdditionExists) || runner.adds != 1 {
+	if err := l.Apply(ctx); !errors.Is(err, ErrPolicyAdditionExists) || isNodeTransitBeforeEffects(err) || runner.adds != 1 {
 		t.Fatal("old generation was replayed", err)
 	}
 	if authority.registrations != 2 {
@@ -275,8 +280,193 @@ func TestNodeTransitLeaseLateCopyAndLostAcknowledgementsKeepUnknownFence(t *test
 			if err := fresh.Remove(context.Background()); !errors.Is(err, ErrPolicyAdditionUnknown) || len(runner.calls) != calls || authority.registrations != registrations {
 				t.Fatal("unknown generation replayed RPC or registration", err, runner.calls[calls:])
 			}
-			if err := fresh.Apply(context.Background()); !errors.Is(err, ErrPolicyAdditionUnknown) || len(runner.calls) != calls || authority.registrations != registrations {
+			if err := fresh.Apply(context.Background()); !errors.Is(err, ErrPolicyAdditionUnknown) || isNodeTransitBeforeEffects(err) || len(runner.calls) != calls || authority.registrations != registrations {
 				t.Fatal("unknown generation Apply replayed RPC or registration", err, runner.calls[calls:])
+			}
+			if err := fresh.VerifyUnused(context.Background()); err == nil || len(runner.calls) != calls || authority.registrations != registrations {
+				t.Fatal("unknown generation obtained unused authority", err)
+			}
+		})
+	}
+}
+
+func TestNodeTransitBeforeEffectsRefusalIsLiveOneShotAndNeverFreshReadback(t *testing.T) {
+	for _, phase := range []string{"registration", "preflight"} {
+		t.Run(phase, func(t *testing.T) {
+			l, runner, authority := nodeTransitFixture(t)
+			refusal := errors.New("live issuer or preflight refused")
+			if phase == "registration" {
+				authority.registerErr = refusal
+			} else {
+				authority.preflightErr = refusal
+			}
+			err := l.Apply(context.Background())
+			if !isNodeTransitBeforeEffects(err) || !errors.Is(err, refusal) || len(runner.calls) != 0 || runner.adds != 0 || authority.registrations != 1 {
+				t.Fatal("definite early refusal lost phase or invoked effects", err, runner)
+			}
+			for _, name := range []string{policyAdditionFile, policyAdditionLock} {
+				if _, err := os.Lstat(filepath.Join(l.root, name)); !errors.Is(err, os.ErrNotExist) {
+					t.Fatal("early refusal invoked receipt backend", name, err)
+				}
+			}
+			fresh, err := newNodeTransitLeaseWithOptions(l.spec, l.root, l.runtime, l.options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := fresh.VerifyUnused(context.Background()); err == nil || len(runner.calls) != 0 {
+				t.Fatal("fresh lease granted settlement from absence", err)
+			}
+			// The separate cleanup authority still checks current source/boot.
+			if err := l.VerifyUnused(context.Background()); err != nil || runner.adds != 0 || runner.deletes != 0 {
+				t.Fatal("live definite refusal could not prove unused", err)
+			}
+			calls := len(runner.calls)
+			if err := l.VerifyUnused(context.Background()); err == nil || len(runner.calls) != calls {
+				t.Fatal("unused proof was replayed", err)
+			}
+		})
+	}
+}
+
+func TestNodeTransitBeforeEffectsCannotSettleForeignUnknownOrChangedState(t *testing.T) {
+	for _, kind := range []string{"foreign-slot", "unknown-read", "late-receipt", "late-lock", "late-source", "revoked-cleanup"} {
+		t.Run(kind, func(t *testing.T) {
+			l, runner, authority := nodeTransitFixture(t)
+			authority.preflightErr = errors.New("active preflight refused")
+			if err := l.Apply(context.Background()); !isNodeTransitBeforeEffects(err) {
+				t.Fatal("fixture did not establish a live early refusal", err)
+			}
+			switch kind {
+			case "foreign-slot":
+				runner.rules[4] = []string{runner.line()}
+			case "unknown-read":
+				runner.readErrors[6] = errors.New("numeric inspection failed")
+			case "late-receipt":
+				if err := os.WriteFile(filepath.Join(l.root, policyAdditionFile), []byte("foreign receipt"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "late-lock":
+				if err := os.WriteFile(filepath.Join(l.root, policyAdditionLock), []byte(policyAdditionMarker), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "late-source":
+				authority.source = netip.MustParseAddr("172.31.22.2")
+			case "revoked-cleanup":
+				authority.guardErr = ErrReviewChanged
+			}
+			before := fmt.Sprint(runner.rules)
+			if err := l.VerifyUnused(context.Background()); err == nil || runner.adds != 0 || runner.deletes != 0 || before != fmt.Sprint(runner.rules) {
+				t.Fatal("unused settlement widened into foreign/unknown state", err)
+			}
+		})
+	}
+}
+
+func TestNodeTransitSharedBackendEntryNeverGrantsBeforeEffectsSettlement(t *testing.T) {
+	for _, point := range []string{"second-preflight", "initial-save", "intent-save", "intent", "add-error", "lost-add-ACK"} {
+		t.Run(point, func(t *testing.T) {
+			l, runner, authority := nodeTransitFixture(t)
+			failure := errors.New("shared backend failure")
+			preflights := 0
+			l.runtime.preflight = func(context.Context, NodeTransitSpec) error {
+				preflights++
+				if preflights == 2 {
+					if point == "second-preflight" {
+						return failure
+					}
+					if point == "initial-save" {
+						// The common loader already observed absence. Block its
+						// first actual atomic document write, not an early hook.
+						return os.Mkdir(filepath.Join(l.root, policyAdditionFile), 0700)
+					}
+				}
+				return nil
+			}
+			blockedIntent := false
+			if point == "intent-save" {
+				originalGuard := l.runtime.guard
+				l.runtime.guard = func(ctx context.Context, spec NodeTransitSpec) error {
+					if !blockedIntent {
+						path := filepath.Join(l.root, policyAdditionFile)
+						if data, err := os.ReadFile(path); err == nil {
+							var doc policyAdditionDocument
+							if json.Unmarshal(data, &doc) != nil || len(doc.Steps) != 1 || doc.Steps[0].State != "planned" {
+								return errors.New("expected first actual planned document")
+							}
+							if err := os.Remove(path); err != nil {
+								return err
+							}
+							if err := os.Mkdir(path, 0700); err != nil {
+								return err
+							}
+							blockedIntent = true
+						}
+					}
+					return originalGuard(ctx, spec)
+				}
+			}
+			if point == "intent" {
+				l.options.fault = func(at string, _ int) error {
+					if at == "intent" {
+						return failure
+					}
+					return nil
+				}
+			}
+			if point == "add-error" {
+				runner.addErr = failure
+			}
+			runner.loseAddACK = point == "lost-add-ACK"
+			err := l.Apply(context.Background())
+			if err == nil || isNodeTransitBeforeEffects(err) || !l.effects.Load() || preflights != 2 || point == "intent-save" && !blockedIntent {
+				t.Fatal("shared-entry failure became an unused grant", err, preflights, blockedIntent)
+			}
+			calls, registrations := len(runner.calls), authority.registrations
+			if err := l.VerifyUnused(context.Background()); err == nil || len(runner.calls) != calls || authority.registrations != registrations {
+				t.Fatal("shared failure obtained authority from fresh absence", err)
+			}
+			if point == "second-preflight" {
+				// A lock surviving before the initial document write also fences
+				// a new object; it cannot reconstruct live pre-crash evidence.
+				authority.registerErr = failure
+				fresh, err := newNodeTransitLeaseWithOptions(l.spec, l.root, l.runtime, l.options)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := fresh.Apply(context.Background()); !errors.Is(err, failure) || isNodeTransitBeforeEffects(err) {
+					t.Fatal("old shared root regained before-effects classification", err)
+				}
+			}
+		})
+	}
+}
+
+func TestNodeTransitUnusedClosingGuardCannotIntroduceReceiptMarker(t *testing.T) {
+	for _, name := range []string{policyAdditionFile, policyAdditionLock} {
+		t.Run(name, func(t *testing.T) {
+			l, runner, authority := nodeTransitFixture(t)
+			authority.preflightErr = errors.New("live early preflight refusal")
+			if err := l.Apply(context.Background()); !isNodeTransitBeforeEffects(err) {
+				t.Fatal(err)
+			}
+			originalGuard := l.runtime.guard
+			guards, inserted := 0, false
+			l.runtime.guard = func(ctx context.Context, spec NodeTransitSpec) error {
+				guards++
+				if guards == 4 {
+					// This final guard follows both numeric reads and their guard.
+					if err := os.WriteFile(filepath.Join(l.root, name), []byte("late foreign marker"), 0600); err != nil {
+						return err
+					}
+					inserted = true
+				}
+				return originalGuard(ctx, spec)
+			}
+			if err := l.VerifyUnused(context.Background()); err == nil || !inserted || guards != 4 || runner.adds != 0 || runner.deletes != 0 {
+				t.Fatal("closing guard marker became unused settlement", err, guards, inserted)
+			}
+			if data, err := os.ReadFile(filepath.Join(l.root, name)); err != nil || string(data) != "late foreign marker" {
+				t.Fatal("closing marker was removed or adopted", err)
 			}
 		})
 	}
