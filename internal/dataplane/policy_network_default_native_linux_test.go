@@ -74,6 +74,10 @@ func TestNativeManagedDefaultRouteEvidence(t *testing.T) {
 		}
 	})
 	if err := verifyPolicyEvidence(ctx, runner, ip, state); err != nil {
+		for _, args := range [][]string{{"-N", "rule", "show"}, {"-6", "-N", "rule", "show"}, {"route", "show", "table", "204"}, {"-6", "route", "show", "table", "204"}} {
+			output, readErr := exec.Command(ip, args...).CombinedOutput()
+			t.Logf("readback ip %v: %s (%v)", args, output, readErr)
+		}
 		t.Fatal("actual IPv4/IPv6 public default FIB evidence", err)
 	}
 	for _, args := range [][]string{
