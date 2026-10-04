@@ -117,6 +117,9 @@ func (m *Manager) managedNFQWSRoot(create bool) (string, *ownedfs.Root, error) {
 	if err != nil {
 		return "", nil, err
 	}
+	if err := m.publicManagedNFQWSPath(filepath.Join(canonicalBase, relative), create); err != nil {
+		return "", nil, err // reject existing foreign/private/writable ancestors before mkdir
+	}
 	baseRoot, err := ownedfs.Open(canonicalBase)
 	if err != nil {
 		return "", nil, err
@@ -169,7 +172,7 @@ func (m *Manager) managedNFQWSRoot(create bool) (string, *ownedfs.Root, error) {
 		root.Close()
 		return "", nil, ErrManagedNFQWSBundle
 	}
-	if err := publicManagedNFQWSPath(canonical); err != nil {
+	if err := m.publicManagedNFQWSPath(canonical, false); err != nil {
 		root.Close()
 		return "", nil, err
 	}
@@ -384,13 +387,16 @@ func (m *Manager) continueManagedNFQWS(ctx context.Context, tx *updateTransactio
 		return zero, ErrManagedNFQWSBundle
 	}
 	if tx.doc.Phase == UpdatePrepared {
+		if _, err := m.verifyManagedNFQWSImage(ctx, filepath.Join(path, v.Stage), v.After.ManifestSHA256, managedNFQWSPrivateStage); err != nil {
+			return zero, err
+		}
 		if err := tx.phase(UpdateStarted); err != nil {
 			return zero, err
 		}
 	}
 	if tx.doc.Phase == UpdateStarted {
 		if _, err := releases.Stat(v.After.ManifestSHA256); errors.Is(err, os.ErrNotExist) {
-			if _, err := verifyManagedNFQWSImage(ctx, filepath.Join(path, v.Stage), v.After.ManifestSHA256, true); err != nil {
+			if _, err := m.verifyStartedManagedNFQWSStage(ctx, tx.doc, path); err != nil {
 				return zero, err
 			}
 			publish := m.nfqwsPublish
@@ -400,7 +406,7 @@ func (m *Manager) continueManagedNFQWS(ctx context.Context, tx *updateTransactio
 			if err := tx.fault("before:bundle-generation"); err != nil {
 				return zero, err
 			}
-			if err := publish(ctx, path, v.Stage, v.After.ManifestSHA256, func(begin func() error) error { return a.admit(ctx, v, "nfqws-publish-generation", begin) }); err != nil {
+			if err := publish(ctx, path, v.Stage, v.After.ManifestSHA256, func(begin func() error) error { return a.admit(ctx, v, "nfqws-publish-generation", begin) }, tx.fault); err != nil {
 				return zero, err
 			}
 			if err := syncUpdateDirectory(releases); err != nil {
@@ -412,7 +418,7 @@ func (m *Manager) continueManagedNFQWS(ctx context.Context, tx *updateTransactio
 		} else if err != nil {
 			return zero, err
 		}
-		if _, err := verifyManagedNFQWS(ctx, v.After.GenerationPath, v.After.ManifestSHA256); err != nil {
+		if _, err := m.verifyManagedNFQWS(ctx, v.After.GenerationPath, v.After.ManifestSHA256); err != nil {
 			return zero, err
 		}
 		if err := a.check(ctx, v); err != nil {
@@ -430,7 +436,7 @@ func (m *Manager) continueManagedNFQWS(ctx context.Context, tx *updateTransactio
 	if tx.doc.Phase != UpdateAwaitingLive && tx.doc.Phase != UpdateAcceptedIdle {
 		return zero, ErrUpdatePending
 	}
-	if _, err := verifyManagedNFQWS(ctx, v.After.GenerationPath, v.After.ManifestSHA256); err != nil {
+	if _, err := m.verifyManagedNFQWS(ctx, v.After.GenerationPath, v.After.ManifestSHA256); err != nil {
 		return zero, err
 	}
 	if err := m.publishManagedNFQWSReceipt(ctx, tx, a, false); err != nil {
@@ -439,7 +445,7 @@ func (m *Manager) continueManagedNFQWS(ctx context.Context, tx *updateTransactio
 	if err := a.check(ctx, v); err != nil {
 		return zero, err
 	}
-	if _, err := verifyManagedNFQWS(ctx, v.After.GenerationPath, v.After.ManifestSHA256); err != nil {
+	if _, err := m.verifyManagedNFQWS(ctx, v.After.GenerationPath, v.After.ManifestSHA256); err != nil {
 		return zero, err
 	}
 	if err := archiveManagedNFQWS(tx, UpdateAcceptedIdle); err != nil {
@@ -667,5 +673,5 @@ func (m *Manager) verifyManagedNFQWSTerminal(ctx context.Context, receipt Manage
 	if filepath.Dir(receipt.GenerationPath) != path {
 		return zero, ErrManagedNFQWSBundle
 	}
-	return verifyManagedNFQWS(ctx, receipt.GenerationPath, receipt.ManifestSHA256)
+	return m.verifyManagedNFQWS(ctx, receipt.GenerationPath, receipt.ManifestSHA256)
 }

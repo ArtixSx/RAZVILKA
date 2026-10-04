@@ -209,12 +209,40 @@ func stageManagedNFQWS(ctx context.Context, path string, m ManagedNFQWSManifest,
 	return nil
 }
 
-func verifyManagedNFQWS(ctx context.Context, path string, expected string) (ManagedNFQWSManifest, error) {
-	return verifyManagedNFQWSImage(ctx, path, expected, false)
+type managedNFQWSImageState uint8
+
+const (
+	managedNFQWSPublishedImage managedNFQWSImageState = iota
+	managedNFQWSPrivateStage
+	managedNFQWSStartedStage
+)
+
+func (m *Manager) verifyManagedNFQWS(ctx context.Context, path string, expected string) (ManagedNFQWSManifest, error) {
+	return m.verifyManagedNFQWSImage(ctx, path, expected, managedNFQWSPublishedImage)
 }
 
-func verifyManagedNFQWSImage(ctx context.Context, path string, expected string, staged bool) (ManagedNFQWSManifest, error) {
+// A sealed stage is a known image only for this exact upgrade-started journal.
+// The chmod -> rename crash cut can leave either0700 or0555; neither permits
+// bypassing full hashes/tree/owner verification or frozen effect admission.
+func (m *Manager) verifyStartedManagedNFQWSStage(ctx context.Context, doc updateJournal, releases string) (ManagedNFQWSManifest, error) {
+	if validateManagedNFQWSJournal(doc) != nil || doc.Phase != UpdateStarted || filepath.Dir(doc.ManagedNFQWS.After.GenerationPath) != releases {
+		return ManagedNFQWSManifest{}, ErrManagedNFQWSBundle
+	}
+	return m.verifyManagedNFQWSImage(ctx, filepath.Join(releases, doc.ManagedNFQWS.Stage), doc.ManagedNFQWS.After.ManifestSHA256, managedNFQWSStartedStage)
+}
+
+func (manager *Manager) verifyManagedNFQWSImage(ctx context.Context, path string, expected string, state managedNFQWSImageState) (ManagedNFQWSManifest, error) {
 	var m ManagedNFQWSManifest
+	if state > managedNFQWSStartedStage {
+		return m, ErrManagedNFQWSBundle
+	}
+	if err := manager.publicManagedNFQWSPath(filepath.Dir(path), false); err != nil {
+		return m, err
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.IsDir() || manager.trustedManagedNFQWSNode(info) != nil {
+		return m, ErrManagedNFQWSBundle
+	}
 	root, err := ownedfs.Open(path)
 	if err != nil {
 		return m, err
@@ -247,7 +275,7 @@ func verifyManagedNFQWSImage(ctx context.Context, path string, expected string, 
 		if name == "bin/rzv-nfqws2" {
 			mode = 0555
 		}
-		if err != nil || infoErr != nil || !bytes.Equal(data, expectedData) || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !updateModeMatches(info.Mode().Perm(), mode) {
+		if err != nil || infoErr != nil || !bytes.Equal(data, expectedData) || manager.trustedManagedNFQWSNode(info) != nil || !updateModeMatches(info.Mode().Perm(), mode) {
 			return m, ErrManagedNFQWSBundle
 		}
 	}
@@ -266,11 +294,16 @@ func verifyManagedNFQWSImage(ctx context.Context, path string, expected string, 
 		info, statErr := f.Stat()
 		entries, readErr := f.ReadDir(16)
 		f.Close()
-		mode := os.FileMode(0555)
-		if directory == "." && staged {
-			mode = 0700
+		modeOK := statErr == nil && updateModeMatches(info.Mode().Perm(), 0555)
+		if statErr == nil && directory == "." {
+			switch state {
+			case managedNFQWSPrivateStage:
+				modeOK = updateModeMatches(info.Mode().Perm(), 0700)
+			case managedNFQWSStartedStage:
+				modeOK = modeOK || updateModeMatches(info.Mode().Perm(), 0700)
+			}
 		}
-		if statErr != nil || !info.IsDir() || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || !updateModeMatches(info.Mode().Perm(), mode) || (readErr != nil && readErr != io.EOF) {
+		if statErr != nil || !info.IsDir() || manager.trustedManagedNFQWSNode(info) != nil || !modeOK || (readErr != nil && readErr != io.EOF) {
 			return m, ErrManagedNFQWSBundle
 		}
 		for _, entry := range entries {

@@ -107,19 +107,13 @@ func (r bundleForbiddenRunner) Run(context.Context, string, ...string) ([]byte, 
 func bundleFixtureManager(t *testing.T, input []byte) *Manager {
 	t.Helper()
 	base := t.TempDir()
-	if runtime.GOOS == "linux" {
-		// Only the Go-created fixture container is made traversable. Private
-		// control/state subtrees remain0700; this test never relaxes /root.
-		parent := filepath.Dir(base)
-		rel, err := filepath.Rel(os.TempDir(), parent)
-		if err != nil || rel == "." || strings.HasPrefix(rel, "..") || !strings.HasPrefix(filepath.Base(parent), "TestManagedNFQWS") && !strings.HasPrefix(filepath.Base(parent), "TestNativeManagedNFQWS") {
-			t.Fatal("unexpected test container", parent, err)
-		}
-		for _, path := range []string{parent, base} {
-			if err := os.Chmod(path, 0755); err != nil {
-				t.Fatal(err)
-			}
-		}
+	base, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(base)
+	if err != nil {
+		t.Fatal(err)
 	}
 	// Complete generations are readonly. Relax only this fixture tree before
 	// testing.TempDir cleanup, including Windows readonly file attributes.
@@ -139,12 +133,13 @@ func bundleFixtureManager(t *testing.T, input []byte) *Manager {
 		})
 	})
 	m := &Manager{StateDir: filepath.Join(base, "state"), nfqwsReleases: filepath.Join(base, "releases"), Arch: "arm64", Runner: bundleForbiddenRunner{t}, nfqwsReview: func(ManagedNFQWSManifest) error { return nil }}
+	m.nfqwsFixture = &managedNFQWSFixtureBoundary{base, info}
 	m.Client = &http.Client{Transport: bundleFixtureTransport(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(input)), ContentLength: int64(len(input)), Request: r}, nil
 	})}
 	if runtime.GOOS != "linux" {
 		// Private portable model override. Linux tests use real RENAME_NOREPLACE.
-		m.nfqwsPublish = func(ctx context.Context, path, stage, generation string, admit func(func() error) error) error {
+		m.nfqwsPublish = func(ctx context.Context, path, stage, generation string, admit func(func() error) error, fault func(string) error) error {
 			root, err := os.OpenRoot(path)
 			if err != nil {
 				return err
@@ -153,7 +148,12 @@ func bundleFixtureManager(t *testing.T, input []byte) *Manager {
 			if _, err := root.Lstat(generation); !errors.Is(err, os.ErrNotExist) {
 				return ErrManagedNFQWSBundle
 			}
-			return admit(func() error { return root.Rename(stage, generation) })
+			return admit(func() error {
+				if err := fault("after:bundle-stage-chmod"); err != nil {
+					return err
+				}
+				return root.Rename(stage, generation)
+			})
 		}
 	}
 	return m
@@ -232,7 +232,7 @@ func TestManagedNFQWSBundleInstallDescriptorLeaseAndRollback(t *testing.T) {
 		t.Fatal(old, err)
 	}
 	for _, r := range []ManagedNFQWSBundleReceipt{receipt, candidate} {
-		if _, err := verifyManagedNFQWS(ctx, r.GenerationPath, r.ManifestSHA256); err != nil {
+		if _, err := m.verifyManagedNFQWS(ctx, r.GenerationPath, r.ManifestSHA256); err != nil {
 			t.Fatal("immutable generation lost", r, err)
 		}
 	}
@@ -248,7 +248,7 @@ func TestManagedNFQWSBundleInstallDescriptorLeaseAndRollback(t *testing.T) {
 func TestManagedNFQWSBundleRestartAtPublicationBoundaries(t *testing.T) {
 	points := []string{
 		"after:" + UpdatePrepared, "before:" + UpdateStarted, "after:" + UpdateStarted,
-		"before:bundle-generation", "after:bundle-generation", "before:" + UpdateInstalled, "after:" + UpdateInstalled,
+		"before:bundle-generation", "after:bundle-stage-chmod", "after:bundle-generation", "before:" + UpdateInstalled, "after:" + UpdateInstalled,
 		"before:" + UpdateAwaitingLive, "after:" + UpdateAwaitingLive,
 		"before:nfqws-publish-receipt", "after:nfqws-publish-receipt",
 		"before:" + UpdateAcceptedIdle, "after:" + UpdateAcceptedIdle,
@@ -273,7 +273,7 @@ func TestManagedNFQWSBundleRestartAtPublicationBoundaries(t *testing.T) {
 				t.Fatal(state, err)
 			}
 			// New manager/lease, no download or command replay on recovery.
-			n := &Manager{StateDir: m.StateDir, nfqwsReleases: m.nfqwsReleases, nfqwsPublish: m.nfqwsPublish, Runner: bundleForbiddenRunner{t}}
+			n := &Manager{StateDir: m.StateDir, nfqwsReleases: m.nfqwsReleases, nfqwsFixture: m.nfqwsFixture, nfqwsPublish: m.nfqwsPublish, Runner: bundleForbiddenRunner{t}}
 			receipt, err := n.RecoverManagedBundle(context.Background(), state.TransactionID, "resume", a)
 			if err != nil {
 				t.Fatal(err)
