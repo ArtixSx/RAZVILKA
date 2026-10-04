@@ -122,7 +122,7 @@ func (u *Updater) RetainHandoff(release func()) {
 				return
 			case <-timer.C:
 				job := u.Snapshot()
-				terminal := job.State == "completed" || job.State == "rolled-back" || job.State == "failed"
+				terminal := terminalHelperState(job.State) || job.State == "failed"
 				if terminal && (helperPID <= 1 || !u.alive(helperPID)) {
 					return
 				}
@@ -184,7 +184,7 @@ func (u *Updater) readHelperStatusLocked() {
 		return
 	}
 	switch record.Job.State {
-	case "preparing", "ready", "installing", "restarting", "requires-review", "completed", "rolled-back", "failed", "cancelled", "interrupted":
+	case "preparing", "ready", "installing", "restarting", "requires-review", "completed", "rolled-back", stoppedRollbackState, "failed", "cancelled", "interrupted":
 	default:
 		u.invalidateRecordLocked()
 		return
@@ -249,7 +249,7 @@ func (u *Updater) PrepareChannel(revision uint64, fingerprint, channel string) (
 	}
 	// Retained reviewed jobs contain durable process/private recovery evidence.
 	// A subsequent preparation never deletes them or conceals a native receipt.
-	if u.record.FileReviewSHA256 != "" && (u.record.Job.State == "completed" || u.record.Job.State == "rolled-back") {
+	if u.record.FileReviewSHA256 != "" && terminalHelperState(u.record.Job.State) {
 		if err := archiveHelperRecord(u.Directory, u.record); err != nil {
 			return Job{}, err
 		}
@@ -482,7 +482,7 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 		u.mu.Unlock()
 		reviewRecord.Files = files
 		reviewRecord.ExecutableHash = executableHash
-		fileReviewSHA, err = stageFileReview(ctx, u.Directory, reviewRecord, u.FileAuthorityReview)
+		fileReviewSHA, err = stageFileReview(ctx, u.Directory, reviewRecord, u.FileAuthorityReview, u.FileEffectAdmission)
 		if err != nil {
 			failure = err
 			return

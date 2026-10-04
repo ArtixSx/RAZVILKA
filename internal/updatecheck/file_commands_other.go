@@ -28,8 +28,9 @@ func RunFileCommandHelperWithStopGuard(string, string, SelfUpdateStopCheck) int 
 func RunFileCommandHelperWithAuthority(string, string, SelfUpdateStopCheck, SelfUpdateEffectAdmission, ...SelfUpdateRuntimeObservation) int {
 	return 2
 }
-func fileHelperProcess() (fileProcess, error) { return fileProcess{}, ErrFileProtocol }
-func fileProcessAt(int) (fileProcess, error)  { return fileProcess{}, ErrFileProtocol }
+func fileHelperProcess() (fileProcess, error)                { return fileProcess{}, ErrFileProtocol }
+func fileProcessAt(int) (fileProcess, error)                 { return fileProcess{}, ErrFileProtocol }
+func fileProcessInactive(context.Context, fileProcess) error { return ErrFileProtocol }
 func (a *SelfUpdateFileAdapter) fileQuiescenceExcept(context.Context, string, string) error {
 	return ErrFileProtocol
 }

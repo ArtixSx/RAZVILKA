@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -28,6 +29,15 @@ type nativeFileProfile struct {
 }
 
 func TestMain(m *testing.M) {
+	if len(os.Args) == 2 && os.Args[1] == "-self-update-read-version" {
+		fmt.Println(SelfUpdateReadVersion) // copied fixture binary's actual CLI observation
+		os.Exit(0)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "fixture-old-panel" {
+		_, _ = os.Stdout.Write([]byte("ready\n"))
+		_, _ = io.Copy(io.Discard, os.Stdin)
+		os.Exit(0)
+	}
 	if len(os.Args) > 1 && (os.Args[1] == "self-update-command-helper" || os.Args[1] == "self-update-runtime-quiesce") {
 		binary, err := os.Executable()
 		if err != nil || filepath.Base(binary) != "control.bin" {
@@ -406,7 +416,7 @@ func TestNativeSelfUpdateCommandCleanupTimeoutRemainsUnknown(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	intent := fileCommandReceipt{Schema: SelfUpdateReadVersion, ID: r.ID, Command: "quiesce-old-runtime", State: "intent", Parent: parent}
+	intent := fileCommandReceipt{Schema: selfUpdateProtocolSchema, ID: r.ID, Command: "quiesce-old-runtime", State: "intent", Parent: parent}
 	if err := writeFileCommand(root, intent); err != nil {
 		t.Fatal(err)
 	}

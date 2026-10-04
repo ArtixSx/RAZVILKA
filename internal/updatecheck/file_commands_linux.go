@@ -121,6 +121,33 @@ func fileProcessMatches(process fileProcess) error {
 func fileHelperProcess() (fileProcess, error)    { return fileProcessOf(os.Getpid()) }
 func fileProcessAt(pid int) (fileProcess, error) { return fileProcessOf(pid) }
 
+func fileProcessInactive(ctx context.Context, process fileProcess) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !validFileProcess(process) {
+		return ErrFileProtocol
+	}
+	boot, err := fileBoot()
+	if err != nil {
+		return err
+	}
+	if boot != process.Boot {
+		return ctx.Err()
+	}
+	birth, _, err := fileBirth(process.PID)
+	if errors.Is(err, os.ErrNotExist) {
+		return ctx.Err()
+	}
+	if err != nil {
+		return err
+	}
+	if birth != process.Start {
+		return ctx.Err()
+	}
+	return ErrFileProtocol
+}
+
 func fileCommandInactive(ctx context.Context, receipt fileCommandReceipt) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -270,7 +297,7 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if parent.ExecutableSHA256 != review.OldExecutableSHA256 && parent.ExecutableSHA256 != strings.TrimPrefix(record.Job.Release.Binary.Digest, "sha256:") {
 		return ErrFileProtocol
 	}
-	receipt := fileCommandReceipt{Schema: SelfUpdateReadVersion, ID: id, Command: command, State: "intent", Parent: parent}
+	receipt := fileCommandReceipt{Schema: selfUpdateProtocolSchema, ID: id, Command: command, State: "intent", Parent: parent}
 	data, err := json.Marshal(receipt)
 	if err != nil {
 		return err
@@ -661,6 +688,10 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 				continue
 			}
 			if present && receipt.ID == id && !receipt.Pending() {
+				if receipt.Phase == "rolled-back-stopped" {
+					cleanup = true
+					continue
+				}
 				if (receipt.Phase == "accepted" && command != "start-candidate-panel") || (receipt.Phase == "rolled-back" && command != "start-rollback-panel") {
 					cleanup = true
 					continue

@@ -146,10 +146,11 @@ func exchangePrivateDirectory(ctx context.Context, path string, before, after re
 }
 
 // The caller retains FileTarget's existing participant lease for the complete
-// restore session. Payload staging/fsync and fresh CAS reads happen before the
-// independent short Stop lock; only the rename/unlink happens inside it.
-func replacePrivateFile(ctx context.Context, root *os.Root, name string, reader restorejournal.Target, before, after restorejournal.Image, check func(context.Context) error, admission filePrivateAdmission) error {
-	if root == nil || reader == nil || check == nil || admission == nil || !filepath.IsLocal(name) || filepath.Base(name) != name || len(after.Data) > restorejournal.MaxImageBytes || !after.Exists && len(after.Data) != 0 {
+// restore session. Payload staging/fsync and combined fd CAS reads happen
+// before the short Stop lock. Inside it only pinned fd/leaf metadata and the
+// rename/unlink are observed, never a payload read or lease acquisition.
+func replacePrivateFile(ctx context.Context, root *os.Root, name string, before, after restorejournal.Image, check func(context.Context) error, admission filePrivateAdmission) error {
+	if root == nil || check == nil || admission == nil || !filepath.IsLocal(name) || filepath.Base(name) != name || len(after.Data) > restorejournal.MaxImageBytes || !after.Exists && len(after.Data) != 0 {
 		return ErrFileProtocol
 	}
 	if err := ctx.Err(); err != nil {
@@ -180,10 +181,12 @@ func replacePrivateFile(ctx context.Context, root *os.Root, name string, reader 
 	if err := syncPrivateFileRoot(root); err != nil {
 		return err
 	}
-	actual, err := reader.Read(ctx)
+	observation, err := observePrivateFile(ctx, root, name)
 	if err != nil {
 		return err
 	}
+	defer observation.close()
+	actual := observation.image
 	if actual.Exists != before.Exists || !bytes.Equal(actual.Data, before.Data) {
 		return restorejournal.ErrConflict
 	}
@@ -191,9 +194,12 @@ func replacePrivateFile(ctx context.Context, root *os.Root, name string, reader 
 		return err
 	}
 	if before.Exists == after.Exists && bytes.Equal(before.Data, after.Data) {
-		return nil
+		return observation.verify(ctx)
 	}
 	if err := admission(ctx, func() error {
+		if err := observation.verify(ctx); err != nil {
+			return err
+		}
 		if after.Exists {
 			return root.Rename(stage, name)
 		}
