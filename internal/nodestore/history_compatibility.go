@@ -13,10 +13,11 @@ import (
 // 3 reads XHTTP material even before its first check; RAW Xray history needs 2.
 const ExactHistoryReadVersion = 3
 
-const (
-	xrayHistoryReadVersion   = 2
-	xhttpMaterialReadVersion = 3
-)
+// XrayHistoryReadVersion is the immutable minimum for recording RAW/TCP Xray
+// evidence. Supported reader capability 3 must not upgrade every RAW write.
+const XrayHistoryReadVersion = 2
+
+const xhttpMaterialReadVersion = 3
 
 // RequiredHistoryReadVersion inspects validated private state without returning
 // IDs or secrets. Failure is a compatibility fence, never implicit version 1.
@@ -50,22 +51,30 @@ func requiredHistoryReadVersion(doc document) int {
 	// even when the node has never been checked, is disabled, or has expired.
 	// The document has already passed strict canonical validation.
 	for _, item := range doc.Secrets {
-		var outbound struct {
-			Transport struct {
-				Type string `json:"type"`
-			} `json:"transport"`
-		}
-		_ = json.Unmarshal(item.Outbound, &outbound)
-		if outbound.Transport.Type == "xhttp" {
+		if requiredOutboundReadVersion(item.Outbound) == xhttpMaterialReadVersion {
 			return xhttpMaterialReadVersion
 		}
 	}
 	for _, node := range doc.Nodes {
 		for _, check := range node.Checks {
 			if check.RoutePathID == "xray:"+node.ID {
-				return xrayHistoryReadVersion
+				return XrayHistoryReadVersion
 			}
 		}
+	}
+	return 1
+}
+
+// Both callers supply material already accepted by the canonical parser.
+func requiredOutboundReadVersion(raw json.RawMessage) int {
+	var outbound struct {
+		Transport struct {
+			Type string `json:"type"`
+		} `json:"transport"`
+	}
+	_ = json.Unmarshal(raw, &outbound)
+	if outbound.Transport.Type == "xhttp" {
+		return xhttpMaterialReadVersion
 	}
 	return 1
 }
