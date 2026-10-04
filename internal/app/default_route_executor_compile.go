@@ -586,6 +586,7 @@ func defaultRouteCloneRoutes(routes []dataplane.Route) []dataplane.Route {
 		r.Domains = slices.Clone(r.Domains)
 		r.CIDRs = slices.Clone(r.CIDRs)
 		r.Sources = slices.Clone(r.Sources)
+		r.Ingress = slices.Clone(r.Ingress)
 		r.SourceRefs = slices.Clone(r.SourceRefs)
 	}
 	return result
