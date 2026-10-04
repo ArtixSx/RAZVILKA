@@ -94,6 +94,18 @@ func validNetworkPolicyState(state PolicyState) error {
 	if !validNetworkPolicyGeneration(state.NetworkPolicyGeneration) || state.RuleLayout != 2 || len(state.Rules) == 0 {
 		return ErrNetworkPolicyAuthority
 	}
+	if state.WireGuardEndpoint != nil {
+		matched := false
+		for _, spec := range PolicyOwnershipSpecs() {
+			if spec.Interface == state.Interface && spec.Table == state.Table {
+				matched = spec.EndpointTable != 0 && state.WireGuardEndpoint.Table == spec.EndpointTable
+				break
+			}
+		}
+		if !matched {
+			return ErrNetworkPolicyAuthority
+		}
+	}
 	for _, rule := range state.Rules {
 		source, err := netip.ParsePrefix(rule.Source)
 		if err != nil || source.String() != rule.Source || source != source.Masked() || source.Bits() == 0 || source.Addr().Is4In6() || !source.Addr().IsGlobalUnicast() || !rule.Managed || !validPolicyIngress(rule.Ingress) || rule.Ingress == state.Interface {

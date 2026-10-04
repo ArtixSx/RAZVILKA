@@ -107,6 +107,17 @@ func (m *Manager) ownsWGEndpointRule(adapterID string, family int, line string) 
 // interface name or route prefix alone is never cleanup/Engine Lab authority.
 func (m *Manager) OwnsPolicyRoute(adapterID string, family int, line string) bool {
 	e := m.ownedWGEndpoint(adapterID)
+	return ownsWGEndpointRoute(e, family, line)
+}
+
+// OwnsPolicyRouteInTable binds the route's readback origin as well as its full
+// tuple. A legacy receipt in another table cannot explain an identical pin.
+func (m *Manager) OwnsPolicyRouteInTable(adapterID string, family, table int, line string) bool {
+	e := m.ownedWGEndpoint(adapterID)
+	return e != nil && e.Table == table && ownsWGEndpointRoute(e, family, line)
+}
+
+func ownsWGEndpointRoute(e *WGEndpointState, family int, line string) bool {
 	if e == nil || (family != 4 && family != 6) || (family == 4) != e.address().Is4() || len(line) > 2048 || strings.ContainsAny(line, "\x00\r\n") {
 		return false
 	}
