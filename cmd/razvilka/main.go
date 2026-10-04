@@ -767,6 +767,11 @@ func runCommand(args []string) (bool, int) {
 	}
 	command := strings.ToLower(strings.TrimSpace(args[0]))
 	switch command {
+	case "nfqws-managed-process-supervisor":
+		if args[0] != command {
+			return true, 2
+		}
+		return true, runNFQWSManagedProcessCommand(args[1:], dataplane.RunNFQWSManagedProcessSupervisor)
 	case "component-package-supervisor":
 		if len(args) != 4 {
 			return true, 2
