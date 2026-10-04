@@ -1,5 +1,7 @@
 # CLOUD — D13, библиотечный checkpoint 04.10.2026
 
+Последняя ограниченная source/enrollment проверка: [CLOUD_SOURCES_D13_RU.md](CLOUD_SOURCES_D13_RU.md). Закрыты cancellation-before-cache-commit и caller registry aliasing; approved feed set не расширен. Source TTL/provenance/offline и unknown enrollment library contracts проверены, остающиеся consumer/live gates перечислены отдельно.
+
 Worktree: `C:/Projects/RAZVILKA/worktrees/sol-cloud`, ветка `sol/cloud-20261004`.
 Base: `fe7d0ab9baaec1151c92593f308e080274903a93`.
 Этот отчёт включён в коммит checkpoint; его SHA возвращается координатору в итоговом ответе.
@@ -196,3 +198,13 @@ Typed receipt `service_proof_version=1` проверяет safe unique bounded g
 Meaningful portable tests используют actual probecheck над полным catalog predicate: YouTube200 blockpage reject/204accept; full BodyContains marker missing/exact и JSONschema missing/exact; large nonJSON bounded sample/truncatedJSON; nilvalidator reachability only; nonce-only challenge; private callback error/wrongURL/cancel и semantic-success→runtime/admission drift zero receipt; envelope/grade/flat/conflictingmetadata/copy boundaries. Independent static review не нашёл оставшихся production defects.
 
 Финальный exact tree, Go1.26.5, `GOTOOLCHAIN=local`, `GOMAXPROCS=2`, `GOFLAGS=-p=2`, `GOPROXY=off`, все native flags empty: `test -count=1 ./internal/usquediag` RC0,0.392s; `vet` RC0; `test -run '^$' ./internal/app ./internal/dataplane` RC0 (compile only); Linux amd64/arm64 `test -c ./internal/usquediag` RC0 без исполнения. Дополнительно agent arm64/armv7 cross-compile RC0. Syntax/diff checks RC0. Native42 предшествует semantic helper changes: root повторяет Transport/service acceptance на новом combined source отдельно. Genuine USQUE и finished VLESS/CORE consumer остаются pending; полный frozen catalog predicate должен быть передан reviewed intent/sealed provider, ID/URL-only fallback запрещён. VERSION/go.mod/go.sum и owner app/dataplane/backend не менялись.
+
+## После independent root acceptance 34074f56
+
+Root сообщил принятие semantic checkpoint `34074f56bf8d92ac96b1862bd1bda1ecd613a38c`: независимое ревью без замечаний. Следующий native Transport повтор — root combined-source window; genuine USQUE ledger целиком UNVERIFIED до finished owner hook и отдельного existing-account live окна.
+
+CLOUD продолжил прямое dependency согласование VLESS/CORE. Read-only осмотр finished VLESS `fe0fdf2cc6eff73fcb72c2538109268ca8bbb510` нашёл private deep-frozen полный catalog predicate с exact ID/URL/digest; thin producer call ещё отсутствует в осмотренном owner checkpoint. Согласована memory-only validator seam без второго HTTP stream/dial, guard до Processes.Start, typed receipt без потери version/grades и stale history после canary Stop. CORE existing apply review уже включает catalogHash и повторно сравнивает catalog snapshot вместе cfg; этот seal предложен владельцам для frozen predicate transport без другого scheduler/control root. Это read-only integration рекомендации, не заявление о finished wiring или root приёмке VLESS/CORE.
+
+## Root check-linux-16 после semantic fix
+
+Root сообщил полностью RC0 для `check-linux-16` на combined source `226e7537557c6606ea8e64c666827f8e0426ae4f`, включая повтор реального localhost HTTPS/DoH/SOCKS Transport native harness **после** `34074f5`. Также сообщил PASS полного Go/race/vet/UI/ARM64/full Entware gate. Это результаты root окна, не запуск из CLOUD и не genuine USQUE/WARP proof. Actual owner hook/live USQUE остаются открытыми; live ledger не получает PASS. Doc-only `8395bcd` и это уточнение предназначены для передачи вместе с finished hook.

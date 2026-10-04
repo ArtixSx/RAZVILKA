@@ -1,0 +1,43 @@
+# NFQWS → ROOT / CORE: runnable managed process lifecycle, 04.10.2026
+
+Owned `sol/nfqws-20261004`, `C:/Projects/RAZVILKA/worktrees/sol-nfqws`. Parent `bf302ba6232ad5bc10ba8e3c1ba39500a8e05a25` — authorized normal merge reviewed ROOT source47 `dfcb38a0316916a0fdee3d39a60d00d0df418fb2`, including accepted OPS `0cde6330aec8b932dd694ba67c38e22eb2f69b73`. Separate legacy boundary tests are `2e3d90b14b2468fa14fc08e422a7b527e5b73e1a`; they are not the lifecycle producer.
+
+Этот checkpoint реализует runnable **process portion** managed lifecycle и real isolated native harness для ROOT. Whole NFQWS runtime inactivity, queue/scoped effects, retirement и production consumer не объявляются готовыми. `VerifyRuntimeInactive` выдаёт refusal даже после genuine process ECHILD/ACK: `ErrNFQWSManagedKernelOwner` пока common owner не завершит exact kernel observation. Наличие общего mixed backend `2a3a9aca8984caa66a30dcf07f27040cfe64f192` само по себе не является queue compiler/observer/retirement grant.
+
+## Реализованный producer и observation
+
+Private `(*NFQWS2Adapter).runManagedNFQWSProcess(ctx, frozenCommand, helperPrefix)` пишет typed version 2 intent в **существующий** `runtime/nfqws2/ownership.json`, затем запускает dedicated setsid helper. Default helper prefix fixed; alternate prefix используется только package-private native fixture. Нет нового ledger или scheduler. Existing legacy `writeLease` использует тот же FileTarget CAS/kernel writer lease; он не может удалить/переписать managed record. Legacy package cleanup отклоняет version 2 до effects.
+
+Frozen command связывает exact instance root/owner, invocation ID, reviewed executable/assets digests и argv, parent boot/birth/PID, deadline до 15 секунд и independent Stop InstallationID/Sequence. Files проверяются parent и helper перед actual child Start. Hashing не создаёт provenance: production command должен быть построен finished trusted owner из accepted OPS immutable descriptor/lease, frozen candidate ID/incarnation/definition/WAN/scope и common admission. Сейчас production constructor/caller отсутствует; private native fixture создаёт собственный explicitly reviewed test command.
+
+Helper держит тот же filename writer lease, проверяет exact intent перед mutation и не replay-ит intent с receipt/ACK. `RunNFQWSSupervision` остаётся единственным Wait4 owner всех foreground/adopted/detached descendants. Before Start durable armed receipt сохраняет exact helper birth. Started path читает child boot/birth/PID/PPID/process group/executable и NUL-separated argv hash, а затем записывает running receipt. Неудачный identity read отменяет child; он не становится live proof.
+
+Терминальный record содержит actual direct reap, полный Wait4 ECHILD и exact frozen command/helper identity. Helper exit 0 означает durable receipt, а не successful runtime/compatibility. Parent ждёт только свой exact helper, повторно читает whole record, допускает изменение только receipt/child identity и сохраняет process ACK exact CAS. После Stop/cancel ACK может подтвердить quiescence, не снимая scope/replay fences. Parent death оставляет durable terminal **без ACK** и блокирует следующий attempt. Любой uncertain write/foreign image остаётся refusal. Terminal record сохраняется; retire/reuse не выполняются до finished common kernel owner.
+
+`components.ReadNFQWSRuntimeProcessIdentity(pid)` выполняет two-sided /proc readback boot/birth/PPID/group/executable/argv и отказывает для dead/zombie/ambiguous identity. Private running observer проверяет recorded helper и child на обеих сторонах whole image/control readback. Private inactive observer требует valid durable ECHILD + parent ACK, текущий boot, fresh helper/child absence и неизменный whole image. `/proc` absence отдельно не является proof; permission/read error или live/reused PID дают refusal. Observers не создают locks/markers, не меняют файлы и не выполняют cleanup.
+
+## Finished early helper ABI и trusted root insertion
+
+`dataplane.RunNFQWSManagedProcessSupervisor(invocationID, fixedOwnedStateRoot, fixedIndependentControlRoot) int` существует на Linux; другие platforms возвращают отказ. CORE после ROOT acceptance может добавить единственный early command `nfqws-managed-process-supervisor <lowercase32hexnonce>` **до** запуска daemon. Ни path, ни program/args, ни JSON command не передаются в argv.
+
+Owned state root — existing `NFQWS2Adapter.StateRoot`, назначаемый `Manager.Register` через `bindStateRoot`: `Abs(Join(trustedDataplaneRoot, "runtime", "nfqws2"))`. Existing default dataplane root из startup settings `RAZVILKA_DATAPLANE_STATE` — `/opt/var/lib/razvilka/dataplane`; default owned file — `/opt/var/lib/razvilka/dataplane/runtime/nfqws2/ownership.json`. Не создаётся alternate runtime root. Parent helper environment передаёт existing `RAZVILKA_DATAPLANE_STATE` с тем же base. Native fixture использует такой же suffix внутри private temporary dataplane root.
+
+Independent control root — existing trusted `RAZVILKA_SELF_UPDATE_CONTROL_STATE` / configured `SelfUpdateFiles.ControlRoot`, тот же frozen `Command.ControlRoot`. Он не выводится из rollback images и не инициализируется helper. Helper проверяет protected ancestry/owner, private owned parent, exact persisted root/owner/ID/control и current independent Stop identity. Missing/foreign intent отказывает до открытия writer lease. CORE не должен писать command record или создавать новый public launch constructor вместо pending scoped owner.
+
+Actual helper/child Cmd.Start используют existing `operationgate.WithSelfUpdateEffectAdmission` (`3c3a6ace`), только bounded Start под общим Stop lock. Это fixed self-update admission, **не** general NFQWS scope/queue permission. File fsync, wait и process ACK происходят вне short admission lock. CORE-owned CLI/registration/main wiring здесь не менялись.
+
+## ROOT-only runnable native harness
+
+`sh scripts/test-nfqws-managed-process-native.sh` требует ROOT в exclusive Linux VM. Script компилирует dataplane test binary в private 0700 directory, задаёт Go1.26 local toolchain bounds, запускает только новую suite через `unshare --net` и сохраняет artifacts. Штатный пакетный init не вызывается; queue/rules не создаются.
+
+`TestNFQWSManagedProcessLifecycleNative` выполняет реальные foreground processes, setsid helper, detached/adopted descendant, context cancellation, actual independent control Stop, wrong parent birth и SIGKILL parent. Проверяет live two-sided child identity, actual terminal ECHILD/ACK, unACK after crash, no replay, read-only image invariance и mandatory kernel-owner refusal. Go fixture проверяет process mechanism, не NFQWS payload compatibility или network health.
+
+Optional `RAZVILKA_NFQWS_MANAGED_GENUINE_REVIEW=/protected/review.json` добавляет `TestNFQWSManagedGenuineNoInterceptNative`. JSON содержит explicit `BinaryPath`, `BinarySHA256`, ordered `Assets` `{Path,SHA256}` и `BaseArguments` только `--lua-init=@...` / `--blob=...`; digest берётся из ROOT review, не discovery. Test принудительно добавляет `--intercept=0` и closed data candidate, запускает actual reviewed NFQWS через тот же producer и требует actual ECHILD/ACK. Log печатает настоящий exit/cancel status. Это process settlement независимо от CLI result; exit 125 либо EPERM не объявляются compatibility PASS. Meaningful normal/strict Lua evidence уже отдельно подтвердил ROOT genuine47 на source47.
+
+Native/race/router здесь не запускались. ROOT выполняет native acceptance по exact SHA. Common queue compiler/owner/observer/retire и production descriptor/frozen-candidate wiring остаются обязательными finished dependencies; собственный queue parser, OUTPUT chain, cleanup grant, ready marker или boolean callback не добавлены.
+
+## Local verification
+
+Go1.26.5, GOTOOLCHAIN=local, GOMAXPROCS=2, GOFLAGS=-p=2. Windows full owned packages: StrategyLab 136 top-level PASS / 5 SKIP, dataplane 492 PASS / 2 SKIP, components 80 PASS / 2 SKIP, 0 FAIL. JSON ignored `.hil/nfqws/managed-process-windows-unit.jsonl`. New ordinary tests проверяют terminal/ACK/kernel-field tampering, duplicate/Unicode alias/unknown JSON, pending/cancelled/not-started receipt, shared writer exclusion, legacy erase refusal, exact foreign CAS preservation и missing/legacy/cancel observer refusal. Modeled records не являются native proof.
+
+Scoped app/cmd `NFQWS|Strategy`, focused updated process/runtime tests, Windows vet и Linux vet dataplane/components — RC0. Dataplane/components test binaries Linux amd64/arm64 cross-compile, script syntax и diff/scope — RC0. Scope: new `components/nfqws_supervision_runtime*.go`, owned `dataplane/nfqws2*.go`, own script/handoff; CORE/OPS-owned implementation не менялась вручную.
