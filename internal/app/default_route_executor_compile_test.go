@@ -24,7 +24,7 @@ func defaultRouteFixture() (config.Config, DefaultRouteSnapshot, time.Time) {
 		Segments: []autonomy.HomeSegment{{ID: "home", Interface: "br0", Home: true, Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24"), netip.MustParsePrefix("fd00::/64")}}},
 		Devices:  []autonomy.DeviceBinding{{ID: "included", MAC: "02:00:00:00:00:01", Interface: "br0", SegmentID: "home", Confirmed: true}, {ID: "excluded", MAC: "02:00:00:00:00:02", Interface: "br0", SegmentID: "home", Confirmed: true}}},
 		Devices:           []DefaultRouteDevice{{ID: "included", Addresses: []netip.Addr{netip.MustParseAddr("192.168.1.40"), netip.MustParseAddr("fd00::40")}}, {ID: "excluded", Addresses: []netip.Addr{netip.MustParseAddr("192.168.1.50"), netip.MustParseAddr("fd00::50")}}},
-		Paths:             map[string]DefaultRoutePath{"default": {Selected: "wireguard", Resolved: "wireguard:reserve", ProfileDigest: strings.Repeat("1", 64), ProofDigest: strings.Repeat("2", 64), ProbeURL: "https://example.com/"}},
+		Paths:             map[string]DefaultRoutePath{"default": {Selected: "wireguard", Resolved: "wireguard:reserve", WireGuardProfileRevision: strings.Repeat("6", 64), ProfileDigest: strings.Repeat("1", 64), ProofDigest: strings.Repeat("2", 64), ProbeURL: "https://example.com/"}},
 		ProfileGeneration: 1, Authority: DefaultRouteAuthority{InstallationID: "installation-current", Sequence: 5, ConsentDigest: strings.Repeat("3", 64)}, AllowedDefaultRoutes: []string{"wireguard"}, DNSMode: "baseline"}
 	return cfg, snapshot, now
 }

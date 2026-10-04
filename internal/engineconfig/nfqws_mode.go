@@ -98,7 +98,7 @@ func (m *Manager) NFQWSMode() (NFQWSModeView, error) {
 	v, err := nfqwsModeView(raw, source)
 	if err == nil {
 		if _, file, lookupErr := lookup("nfqws2", "main"); lookupErr == nil {
-			v.PolicyRuntime = nfqwsPolicyRuntime(choosePath(file.Paths))
+			v.PolicyRuntime = nfqwsPolicyRuntime(m.livePath(file.Paths))
 		}
 	}
 	return v, err

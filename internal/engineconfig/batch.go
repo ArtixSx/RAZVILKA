@@ -68,7 +68,7 @@ func (m *Manager) stageBatch(items []StageItem, validate func(string, string, st
 	out := make([]Content, 0, len(items))
 	for _, item := range items {
 		_, file, _ := lookup(item.EngineID, item.FileID)
-		value := Content{EngineID: item.EngineID, FileID: item.FileID, Path: choosePath(file.Paths), Source: "staged", Sensitive: file.Sensitive, SHA256: sum([]byte(item.Content))}
+		value := Content{EngineID: item.EngineID, FileID: item.FileID, Path: m.livePath(file.Paths), Source: "staged", Sensitive: file.Sensitive, SHA256: sum([]byte(item.Content))}
 		if !file.Sensitive {
 			value.Content = item.Content
 		}

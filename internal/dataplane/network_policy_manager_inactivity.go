@@ -31,6 +31,11 @@ func (m *Manager) VerifyRuntimeInactive(ctx context.Context) error {
 		return err
 	}
 	defer m.endOperation()
+	return m.verifyRuntimeInactiveLocked(ctx)
+}
+
+// Caller holds the existing operation gate; owner observers cannot reenter it.
+func (m *Manager) verifyRuntimeInactiveLocked(ctx context.Context) error {
 	if err := m.CheckExecutionRecovery(ctx); err != nil {
 		return errors.Join(ErrRuntimeInactivity, err)
 	}

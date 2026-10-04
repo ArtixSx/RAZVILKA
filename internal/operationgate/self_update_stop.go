@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -482,6 +483,77 @@ func WithSelfUpdateEffectAdmission(ctx context.Context, path, id, installationID
 		return ErrSelfUpdateStopJournal
 	}
 	return begin()
+}
+
+// Stopped compensation uses the sealed pre-Stop epoch and the matching Stop
+// revision. It admits only cleanup/rollback syscalls, never candidate install,
+// Start, live acceptance, or a change to the control record. The owning provider
+// still proves exact file/process ownership and quiescence before calling it.
+func WithSelfUpdateStoppedEffectAdmission(ctx context.Context, path, id, installationID string, sequence, revision uint64, action, effectID string, begin func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !controlHex(id, 32) || !controlHex(installationID, 32) || sequence == 0 || sequence == ^uint64(0) || revision == ^uint64(0) || begin == nil || !stoppedCompensationEffect(action, effectID) {
+		return ErrSelfUpdateStopChanged
+	}
+	d, err := openControlDirectory(path, false)
+	if err != nil {
+		return ErrSelfUpdateStopJournal
+	}
+	defer d.close()
+	release, _, err := lockControl(ctx, d)
+	if err != nil {
+		return err
+	}
+	defer release()
+	r, err := readControlCurrent(d)
+	if err != nil || checkControlRequest(d, r) != nil || d.unchanged() != nil {
+		return ErrSelfUpdateStopJournal
+	}
+	if !r.Stopped || r.TransactionID != id || r.InstallationID != installationID || r.Sequence != sequence+1 || r.ConfigRevision != revision {
+		return ErrSelfUpdateStopChanged
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return begin()
+}
+
+func stoppedCompensationEffect(action, effect string) bool {
+	if action == "stop-owned" {
+		for _, prefix := range []string{"command-worker-", "command-child-"} {
+			for _, command := range []string{"stop-old-panel", "stop-candidate-panel", "quiesce-old-runtime"} {
+				if effect == prefix+command {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if action != "replace-to-rollback" {
+		return false
+	}
+	if effect == "command-worker-restore-private-state" || effect == "command-child-restore-private-state" {
+		return true
+	}
+	if len(effect) == len("rollback-file-0") && strings.HasPrefix(effect, "rollback-file-") && effect[len(effect)-1] >= '0' && effect[len(effect)-1] <= '5' {
+		return true
+	}
+	// Exact private target names are checked by the single OPS registry. This
+	// outer authority boundary limits the effect class; it does not parse paths.
+	if !strings.HasPrefix(effect, "rollback-private-") || len(effect) <= len("rollback-private-") || len(effect) > 64 {
+		return false
+	}
+	for _, c := range effect {
+		if c < 'a' || c > 'z' {
+			if c < '0' || c > '9' {
+				if c != '-' {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 // Observations do not restore authority. Caller must independently join owned

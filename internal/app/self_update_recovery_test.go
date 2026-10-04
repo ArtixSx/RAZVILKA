@@ -61,7 +61,8 @@ func startupUpdateFixture(t *testing.T, a *App, confirmedHelper bool) (context.C
 		// Model only a confirmed private helper process. Job state, identity,
 		// terminal transitions and corruption still come from the real journal.
 		// No route/proof/adapter is stubbed by this process-observation seam.
-		handoff.helperPID = 1234
+		handoff.helperPID = 4321 // Command worker and installer are distinct.
+		handoff.installerPID = 1234
 		handoff.current = func() updatecheck.Job {
 			job := u.Snapshot()
 			if job.HelperPID == 0 {

@@ -188,10 +188,14 @@ type App struct {
 	Updates               *updatecheck.Manager
 	SelfUpdate            *updatecheck.Updater
 	SelfUpdateFiles       *SelfUpdateFiles
-	USQUE                 *usquediag.Manager
-	Stats                 *routerstats.Sampler
-	Security              *security.Gate
-	Audit                 *auditlog.Journal
+	// Supplied only by the exact supervised startup command. HelperPID in the
+	// retained job is the installer, while this PID is the command wait owner.
+	SelfUpdateStartupJobID     string
+	SelfUpdateStartupHelperPID int
+	USQUE                      *usquediag.Manager
+	Stats                      *routerstats.Sampler
+	Security                   *security.Gate
+	Audit                      *auditlog.Journal
 	// EngineInventory is injectable only for deterministic presentation tests.
 	// Production uses the read-only detector and never starts or stops an engine.
 	EngineInventory func() []engine.Status
@@ -567,6 +571,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
 	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
+	a.registerWireGuardProfileRoutes(mux)
 	mux.HandleFunc("/api/v1/warp", a.warpStatus)
 	mux.HandleFunc("/api/v1/warp/", a.warpAction)
 	mux.HandleFunc("/api/v1/cloudflare/accounts", a.cloudflareAccounts)

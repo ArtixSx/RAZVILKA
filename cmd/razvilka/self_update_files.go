@@ -23,15 +23,125 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/security"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
-// OPS supplies a concrete neutral-signature provider in updatecheck. Until its
-// supervised helper consumer is linked, replacement capability stays zero and
-// new manual/scheduled/helper installation is refused before any effect.
-func nativeSelfUpdateFileAdapter() app.SelfUpdateFileAdapter { return nil }
+func nativeSelfUpdateFileAdapter() app.SelfUpdateFileAdapter {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	return updatecheck.NewSelfUpdateFileAdapterWithAuthority(selfUpdateStopCheck, selfUpdateEffectAdmission, selfUpdateRuntimeInactive)
+}
+
+func selfUpdateStopCheck(ctx context.Context, id string) (bool, error) {
+	r, present, err := operationgate.ReadSelfUpdateStop(ctx, selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop"))
+	if err != nil {
+		return false, err
+	}
+	if !present {
+		return false, operationgate.ErrSelfUpdateStopJournal
+	}
+	if r.Stopped && r.TransactionID != id {
+		return false, operationgate.ErrSelfUpdateStopChanged
+	}
+	return r.Stopped, nil
+}
+
+func selfUpdateEffectAdmission(ctx context.Context, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
+	switch action {
+	case "start/live", "stop-owned", "replace-to-rollback":
+	default:
+		return operationgate.ErrSelfUpdateStopChanged
+	}
+	control := selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop")
+	r, present, err := operationgate.ReadSelfUpdateStop(ctx, control)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return operationgate.ErrSelfUpdateStopJournal
+	}
+	if !r.Stopped {
+		return operationgate.WithSelfUpdateEffectAdmission(ctx, control, id, installationID, sequence, effect, begin)
+	}
+	store, err := config.LoadExisting(selfUpdateDefaultPath("/opt/etc/razvilka/config.json"))
+	if err != nil {
+		return err
+	}
+	cfg := store.Get()
+	if cfg.SafeMode || cfg.ServiceControl.Stopped {
+		return updatecheck.ErrReviewChanged
+	}
+	return operationgate.WithSelfUpdateStoppedEffectAdmission(ctx, control, id, installationID, sequence, cfg.Revision, action, effect, begin)
+}
+
+func selfUpdateAuthorityReview(control string) func(context.Context, string) (updatecheck.SelfUpdateAuthority, error) {
+	return func(ctx context.Context, id string) (updatecheck.SelfUpdateAuthority, error) {
+		decoded, err := hex.DecodeString(id)
+		if err != nil || len(decoded) != 16 || hex.EncodeToString(decoded) != id {
+			return updatecheck.SelfUpdateAuthority{}, updatecheck.ErrReviewChanged
+		}
+		r, err := operationgate.InitializeSelfUpdateControl(ctx, control)
+		if err != nil {
+			return updatecheck.SelfUpdateAuthority{}, err
+		}
+		return updatecheck.SelfUpdateAuthority{InstallationID: r.InstallationID, Sequence: r.Sequence}, nil
+	}
+}
+
+// The sole Manager owns adapter aggregation. Missing owner observers refuse;
+// neither a previous Deactivate result nor an empty process scan is a proof.
+func verifySelfUpdateRuntimeInactive(ctx context.Context, observer dataplane.RuntimeInactivityObserver) error {
+	if observer == nil {
+		return dataplane.ErrRuntimeInactivity
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := observer.VerifyRuntimeInactive(ctx); err != nil {
+		return err
+	}
+	return ctx.Err()
+}
+
+func selfUpdateRuntimeManager() (*dataplane.Manager, error) {
+	manager, err := newDataplaneManager(selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane"), nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := registerScopedDNS(manager, nil); err != nil {
+		return nil, err
+	}
+	// This freshly constructed registry is private to this helper. Require
+	// every owner contract before Deactivate can perform any cleanup. This is
+	// availability only; the Manager still supplies the sole fresh proof.
+	for _, adapter := range manager.Adapters {
+		if _, ok := adapter.(dataplane.RuntimeInactivityObserver); !ok {
+			return nil, dataplane.ErrRuntimeInactivity
+		}
+	}
+	return manager, nil
+}
+
+func selfUpdateRuntimeInactive(ctx context.Context, id string) error {
+	if _, err := selfUpdateStopCheck(ctx, id); err != nil {
+		return err
+	}
+	if err := independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane")); err != nil {
+		return err
+	}
+	manager, err := selfUpdateRuntimeManager()
+	if err != nil {
+		return err
+	}
+	if err := verifySelfUpdateRuntimeInactive(ctx, manager); err != nil {
+		return err
+	}
+	return independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), manager.StateRoot)
+}
 
 func selfUpdateDefaultPath(path string) string {
 	absolute, err := filepath.Abs(path)
@@ -74,7 +184,15 @@ func configuredSelfUpdateFiles(installation, files, helper string, control ...st
 	}
 	u := updatecheck.NewUpdater(app.Version, filepath.Dir(values[2]), updatecheck.Deployment{})
 	u.Directory = values[2]
-	return &app.SelfUpdateFiles{Installation: values[0], Directory: values[1], ControlRoot: values[3], Helper: u, Adapter: nativeSelfUpdateFileAdapter()}, nil
+	var adapter app.SelfUpdateFileAdapter
+	production := true
+	for i := range values {
+		production = production && values[i] == selfUpdateDefaultPath(defaults[i])
+	}
+	if production {
+		adapter = nativeSelfUpdateFileAdapter()
+	}
+	return &app.SelfUpdateFiles{Installation: values[0], Directory: values[1], ControlRoot: values[3], Helper: u, Adapter: adapter}, nil
 }
 
 func productionSelfUpdateFiles() (*app.SelfUpdateFiles, error) {
@@ -135,12 +253,60 @@ func runSelfUpdateFileHelper(id string) int {
 	if err != nil || f.Adapter == nil {
 		return 3
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
-	defer cancel()
 	guard := func(c context.Context) error {
 		return independentSelfUpdateFences(c, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane"))
 	}
-	if err := f.RunHelper(ctx, id, guard); err != nil {
+	return updatecheck.RunInstallerHelperWithAuthority(id, func(ctx context.Context, job string) error {
+		return f.RunHelper(ctx, job, guard)
+	}, selfUpdateStopCheck, selfUpdateEffectAdmission, selfUpdateRuntimeInactive)
+}
+
+func runSelfUpdateCommandHelper(id, command string) int {
+	if nativeSelfUpdateFileAdapter() == nil {
+		return 3
+	}
+	return updatecheck.RunFileCommandHelperWithAuthority(id, command, selfUpdateStopCheck, selfUpdateEffectAdmission, selfUpdateRuntimeInactive)
+}
+
+func runSelfUpdateRuntimeQuiesce(args []string) int {
+	if len(args) != 3 {
+		return 2
+	}
+	revision, err := strconv.ParseUint(args[1], 10, 64)
+	if err != nil || strconv.FormatUint(revision, 10) != args[1] {
+		return 2
+	}
+	worker, err := strconv.Atoi(args[2])
+	if err != nil || worker <= 1 || strconv.Itoa(worker) != args[2] {
+		return 2
+	}
+	adapter, ok := nativeSelfUpdateFileAdapter().(interface {
+		RuntimeQuiesceAuthority(context.Context, string, uint64, int) error
+	})
+	if !ok {
+		return 3
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	defer cancel()
+	// This exact helper/command identity must be proven before any Store or
+	// runtime manager is opened. Ordinary bootstrap remains fenced.
+	if adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
+		return 3
+	}
+	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane")) != nil {
+		return 3
+	}
+	manager, err := selfUpdateRuntimeManager()
+	if err != nil {
+		return 3
+	}
+	if _, err := manager.Deactivate(ctx); err != nil {
+		return 3
+	}
+	if verifySelfUpdateRuntimeInactive(ctx, manager) != nil || adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
+		return 3
+	}
+	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), manager.StateRoot) != nil {
 		return 3
 	}
 	return 0

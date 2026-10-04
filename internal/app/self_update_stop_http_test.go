@@ -14,6 +14,83 @@ import (
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
+func TestSelfUpdateStoppedHTTPRepairAllowsOnlyMatchingKnownRollback(t *testing.T) {
+	a, proof := fileUpdateHTTPFixture(t)
+	fileUpdateEnableControl(t, a)
+	for _, action := range []string{"prepare", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime"} {
+		if err := fileUpdateAction(t, a, action); err != nil {
+			t.Fatal(action, err)
+		}
+	}
+	s := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer s.Close()
+	if code, data := componentHTTP(t, s, "POST", "/api/v1/service-control/runtime", selfUpdateStopBody(a), componentRecoveryToken, s.URL); code != 202 {
+		t.Fatal(code, string(data))
+	}
+	stop, _, err := operationgate.ReadSelfUpdateStop(context.Background(), a.SelfUpdateFiles.ControlRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"restore", "restore-private-state"} {
+		if code, data := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", fileUpdateBody(a, action), componentRecoveryToken, s.URL); code != 200 {
+			t.Fatal(action, code, string(data))
+		}
+	}
+	runs := len(proof.runs)
+	for _, action := range []string{"install", "start-candidate-panel", "start-rollback-panel", "accept-live", "accept-rollback", "prepare"} {
+		if code, data := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", fileUpdateBody(a, action), componentRecoveryToken, s.URL); code < 400 {
+			t.Fatal("Stop admitted Start/live", action, code, string(data))
+		}
+	}
+	if len(proof.runs) != runs || len(proof.lives) != 0 || len(proof.finishes) != 0 {
+		t.Fatal("repair borrowed live authority", proof.runs)
+	}
+	current, _, err := operationgate.ReadSelfUpdateStop(context.Background(), a.SelfUpdateFiles.ControlRoot)
+	if err != nil || current != stop {
+		t.Fatal("repair changed Stop authority", current, err)
+	}
+	for _, field := range []string{"transaction_id", "expected_revision"} {
+		body := fileUpdateBody(a, "resolve-unknown")
+		if field == "transaction_id" {
+			body[field] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		} else {
+			body[field] = a.Store.Get().Revision + 1
+		}
+		if code, data := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", body, componentRecoveryToken, s.URL); code < 400 {
+			t.Fatal("unmatched repair admitted", field, code, string(data))
+		}
+	}
+}
+
+func TestSelfUpdateStoppedHTTPUnknownCommandCannotReplayOrRestore(t *testing.T) {
+	a, proof := fileUpdateHTTPFixture(t)
+	fileUpdateEnableControl(t, a)
+	for _, action := range []string{"prepare", "stop-old-panel", "prepare-private-state"} {
+		if err := fileUpdateAction(t, a, action); err != nil {
+			t.Fatal(action, err)
+		}
+	}
+	proof.runError = errors.New("unknown supervised runtime command")
+	if err := fileUpdateAction(t, a, "quiesce-old-runtime"); err == nil {
+		t.Fatal("unknown outcome accepted")
+	}
+	proof.observeError = errors.New("ECHILD is unavailable")
+	s := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer s.Close()
+	if code, data := componentHTTP(t, s, "POST", "/api/v1/service-control/runtime", selfUpdateStopBody(a), componentRecoveryToken, s.URL); code != 202 {
+		t.Fatal(code, string(data))
+	}
+	runs := len(proof.runs)
+	for _, action := range []string{"quiesce-old-runtime", "restore", "restore-private-state", "resolve-unknown"} {
+		if code, data := componentHTTP(t, s, "POST", "/api/v1/self-update/recovery", fileUpdateBody(a, action), componentRecoveryToken, s.URL); code < 400 {
+			t.Fatal("unknown command replayed/accepted", action, code, string(data))
+		}
+	}
+	if len(proof.runs) != runs {
+		t.Fatal("unknown command replayed", proof.runs)
+	}
+}
+
 func fileUpdateEnableControl(t *testing.T, a *App) {
 	t.Helper()
 	a.SelfUpdateFiles.ControlRoot = filepath.Join(filepath.Dir(a.SelfUpdateFiles.Directory), "authority")
