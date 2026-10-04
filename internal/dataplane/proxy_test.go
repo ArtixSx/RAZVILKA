@@ -48,6 +48,9 @@ type proxyFakeRunner struct {
 func (r *proxyFakeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if name == "ip" {
 		family, plain := 4, args
+		if len(plain) > 0 && plain[0] == "-N" {
+			plain = plain[1:]
+		}
 		if len(plain) > 0 && plain[0] == "-6" {
 			family, plain = 6, plain[1:]
 		}
