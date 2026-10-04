@@ -214,12 +214,13 @@ type Manager struct {
 	Resources ResourceInspector
 	Now       func() time.Time
 
-	mu                   sync.RWMutex
-	state                State
-	image                restorejournal.Image
-	writeBlocked         bool
-	compatibilityUnknown bool // survives failed persistence/rollback until recovery
-	nativeRunning        bool // one validation/probe admission until completion
+	mu                           sync.RWMutex
+	state                        State
+	image                        restorejournal.Image
+	writeBlocked                 bool
+	compatibilityUnknown         bool         // survives failed persistence/rollback until recovery
+	nativeRunning                bool         // one validation/probe admission until completion
+	compatibilityPublicationHook func(string) // deterministic private test barriers; nil in production
 }
 
 func New(path string) (*Manager, error) {
@@ -458,11 +459,12 @@ func (m *Manager) Validate(ctx context.Context, id string) (Candidate, error) {
 	candidate.Validation = validation
 	m.mu.Lock()
 	if m.state.CompatibilityFinalizing && !validation.QuiescenceUnknown {
-		if m.prepareCompatibilityPublicationLocked(ctx, validation) != nil {
-			validation.QuiescenceUnknown, validation.OK, validation.Native, validation.LuaChecked = true, false, false, false
-			validation.Code = "QUIESCENCE_UNKNOWN"
-			candidate.Validation = validation
+		err := m.publishCompatibilityValidationLocked(ctx, candidate)
+		if err != nil {
+			candidate.Validation = compatibilityPublicationUnknown(candidate.Validation)
 		}
+		m.mu.Unlock()
+		return candidate, err
 	}
 	if validation.QuiescenceUnknown {
 		// Latch before any disk operation. A failed save or a concurrent known

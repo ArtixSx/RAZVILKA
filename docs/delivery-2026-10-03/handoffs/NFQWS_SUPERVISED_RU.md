@@ -1,5 +1,7 @@
 # NFQWS → ROOT / CORE / OPS: supervised compatibility, 04.10.2026
 
+**ROOT HELD: `9cdcbff0c516a548276415d58021700771b8867b` (`9cdcbff`), P2 final publication race.** Локальное исправление описано ниже; это не полное закрытие P2. Production capability остаётся закрыт до согласованного CORE atomic-rename admission. Локальные проверки исправления завершены; независимое принятие остаётся у ROOT.
+
 Рабочая порция D09 в `sol/nfqws-20261004`, `C:/Projects/RAZVILKA/worktrees/sol-nfqws`. Предыдущий fuse `d993cdbeea27c4876746b331359f1a34b2f98bff` сохранён. По разрешению ROOT normal merge CORE `3c3a6ace5d9f8f463049eb3ed11a7d8ecc5a27c0` дал base `1be6f94`; эта зависимость не означает независимого принятия held CORE foundation. Existing CORE/OPS files, VERSION и go.mod/go.sum вручную не изменялись. Новые components files принадлежат NFQWS по согласованному OPS варианту A из `OPS_NFQWS_SUPERVISION_REUSE_RU.md`.
 
 ## Контракт для CORE
@@ -16,7 +18,7 @@ Actual parent helper Start и actual NFQWS child Start проходят `operati
 
 StrategyLab читает history schema 1/2/3. Schema 2 остаётся unknown. Schema 3 содержит одну `compatibility_session` (nested schema 1), immutable binary/assets SHA256+size, exact base/argv, boot/PID/birth/deadline, session/invocation nonces, canonical command digest и отдельные dry-run/Lua-init receipts. Receipt lifecycle: intent → armed → running → reaped либо not-started. Parent ACK хранится вместе с receipt. JSON strict: unknown fields, duplicate case-folded keys и invalid raw UTF-8 отклоняются. Output sanitizes UTF-8, сохраняет максимум 8192 bytes tail.
 
-Дополнительно `compatibility_finalizing=true` сохраняется **до spawn** в том же State. ACK фаз не снимает marker. Только Manager.Validate, когда внешний CompatibleValidator уже вернул known result именно этого provider/session/argv, проверяет live context и Stop authority и одним CAS публикует candidate validation + снимает marker. Если ACK fsync задержался после deadline, timeout/late completion или crash не очищают durable fence. Даже оба ACK с finalizing=true при reload означают unknown. Никакого второго ledger, recovery по PID absence или resume pending invocation нет.
+Дополнительно `compatibility_finalizing=true` сохраняется **до spawn** в том же State. ACK фаз не снимает marker. Даже оба ACK с finalizing=true при reload означают unknown. `prepareCompatibilityPublicationLocked` теперь только проверяет preconditions и не снимает marker ни в памяти, ни на диске. Только Manager.Validate после known result именно этого provider/session/argv вызывает отдельный guarded publisher для candidate validation + снятия marker. До финальной публикации timeout/late ACK или crash сохраняют durable fence; ограничения самой финальной публикации перечислены ниже. Никакого второго ledger, recovery по PID absence или resume pending invocation нет.
 
 Helper держит existing FileTarget per-file kernel lease от intent read до terminal CAS+directory fsync. Parent intent/ACK/final publication используют тот же descriptor CAS. Ordinary writers не могут удалить/переимпортировать pending session или обновить старый image; missing/mismatched receipt, helper crash, foreign boot/birth/epoch, unACK, finalizing marker, invalid schema или uncertain CAS сохраняют fence. Новый provider/Manager не снимает его.
 
@@ -24,7 +26,28 @@ Closed command допускает только `--dry-run --intercept=0 <exact r
 
 Subreaper запускается только в отдельном helper. NFQWS-owned bridge reuse-ит private OPS primitives в том же components package; existing OPS code не меняется. Единственный reap owner — Wait4(-1, WNOHANG|WALL), EINTR retry; exact ECHILD после direct-child accounting. Нет Cmd.Wait в helper, PID namespace и /proc/task/children. Cleanup PPID/birth scan применяется только к own unreaped children; пустой scan не является proof. Loop следит за parent birth, deadline и Stop; forced cleanup остаётся exit125/cancelled даже если direct child успел exit0. Cleanup/pipe join bounded; missing proof означает unknown. Parent Wait относится только к owned helper и проверяет его точный boot/PID/group/birth против receipt.
 
+## Локальное исправление HELD P2
+
+`publishCompatibilityValidationLocked` сначала проверяет точную текущую identity candidate, сохраняя её поля вне Validation, и exact provider/session/argv. Полный proposed image сериализуется и existing FileTarget lease открывается до последнего guard. CAS использует исходный context с дополнительным frozen command deadline; Stop authority проверяется до и после CAS. Prepare не меняет `compatibility_finalizing=true`; снятие marker входит только в proposed image отдельного publisher.
+
+Если deadline/cancel/Stop вмешались во время финального сохранения, publisher возвращает unknown и через тот же открытый descriptor пытается durably восстановить `compatibility_finalizing=true`, `session.Unknown=true` и unknown validation только точного candidate. Repair CAS допускается лишь для собственного exact proposed image; чужой или stale image не перезаписывается. Неопределённый readback/repair сохраняет `writeBlocked` и sticky unknown. Соседние candidates и ранее принятые evidence сохраняются.
+
+**Crash/Stop interval `rename → repair` остаётся.** Если снятый marker уже опубликован, затем изменился Stop/истёк context и процесс погиб до unknown repair, одни pre/post checks не обеспечивают согласованную crash-safe публикацию. Требуется CORE-owned atomic-rename admission для финальной publication boundary. Нельзя оборачивать fsync/ожидание или repair в Start-only `WithSelfUpdateEffectAdmission`: его callback предназначен только для actual Start. Локальная correction закрывает проверяемый live-return путь, но не является полным закрытием P2; production capability остаётся закрыт.
+
+Добавлены deterministic model regressions без native запусков:
+
+- Барьер `prepared`: timeout/deadline, cancel и Stop после подготовки image/lease, перед CAS; прежний durable marker сохраняется.
+- Барьер `written`: timeout/deadline, cancel и Stop после CAS; exact-descriptor repair возвращает durable unknown, включая reload.
+- Stale CAS: независимый committed image с retained marker не перезаписывается; конфликт сохраняет fence.
+- Removed/rebound candidate: завершённая старая validation не воссоздаёт удалённый draft и не перезаписывает новую identity/provenance того же ID.
+
+Сценарии находятся в `compatible_supervised_publication_test.go` и `compatible_supervised_store_test.go`. Model receipts и барьеры не подтверждают настоящий NFQWS CLI/Lua, kernel cleanup или отсутствие crash interval.
+
+Финальная local Windows проверка correction: StrategyLab 108 top-level PASS / 5 SKIP / 0 FAIL; components 69 PASS / 1 SKIP / 0 FAIL. Полный JSON сохранён в ignored `.hil/nfqws/publication-windows-unit.jsonl`. Scoped app `NFQWS|Strategy`, dataplane `NFQWS` и vet StrategyLab/components/dataplane — RC0. Test binaries обоих пакетов для Linux amd64/arm64 cross-compile — RC0. Go1.26.5 windows/amd64, GOTOOLCHAIN=local, GOMAXPROCS=2, GOFLAGS=-p=2. Native, race и opt-in process fixtures здесь не запускались.
+
 ## Проверка ROOT
+
+Следующие результаты относятся к checkpoint `9cdcbff` до локальной P2 correction; они не означают принятия HELD checkpoint и не подменяют ещё идущие финальные проверки.
 
 Local Windows: StrategyLab 105 top-level PASS / 5 SKIP, components 69 PASS / 1 SKIP (Go1.26.5, GOMAXPROCS=2, GOFLAGS=-p=2); scoped app NFQWS/StrategyLab и dataplane NFQWS PASS; vet StrategyLab/components RC0. Test binaries Linux amd64/arm64 cross-compile RC0; shell syntax каждого нового launcher и diff/scope checks RC0. Artifact JSON первых 104 StrategyLab tests и 69 components tests: ignored `.hil/nfqws/supervised-windows-unit.jsonl`; после дополнительной Unicode alias regression повторный full StrategyLab suite PASS. Native, Linux race, router/VM/HIL здесь не выполнялись. Fixed Go kernel fixtures и modeled receipts не подтверждают настоящий NFQWS CLI/Lua. Production consumer/CLI wiring остаётся у CORE; capability flag сам по себе не является consumer.
 

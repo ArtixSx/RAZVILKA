@@ -629,6 +629,7 @@ func compatibilityStoreFinalizationFixture(t *testing.T, phase string, exit int)
 	}
 	review := &session.DryRun.Command.Review
 	review.ControlPath, review.InstallationID, review.Sequence = controlPath, control.InstallationID, control.Sequence
+	session.DryRun.Command.Deadline = time.Now().UTC().Add(time.Minute)
 	compatibilityRecordReseal(session.DryRun)
 	if err := compatibilityStoreBegin(m, context.Background(), session); err != nil {
 		t.Fatal(err)
@@ -678,7 +679,7 @@ func TestCompatibilityStoreModeledFinalPublicationIsOneAtomicImage(t *testing.T)
 			m.mu.Lock()
 			err := m.prepareCompatibilityPublicationLocked(context.Background(), validation)
 			m.mu.Unlock()
-			if err != nil || m.state.CompatibilityFinalizing || !bytes.Equal(before, compatibilityStoreBytes(t, m)) {
+			if err != nil || !m.state.CompatibilityFinalizing || !bytes.Equal(before, compatibilityStoreBytes(t, m)) {
 				t.Fatalf("preparing publication changed its durable crash fence: %v", err)
 			}
 			reopened, err := New(m.Path)
@@ -687,8 +688,7 @@ func TestCompatibilityStoreModeledFinalPublicationIsOneAtomicImage(t *testing.T)
 			}
 			candidate.Validation = validation
 			m.mu.Lock()
-			m.state.Candidates[candidate.ID] = candidate
-			err = m.saveLocked()
+			err = m.publishCompatibilityValidationLocked(context.Background(), candidate)
 			m.mu.Unlock()
 			if err != nil || !bytes.Equal(m.image.Data, compatibilityStoreBytes(t, m)) {
 				t.Fatalf("candidate and marker were not published by one exact CAS: %v", err)
@@ -702,9 +702,9 @@ func TestCompatibilityStoreModeledFinalPublicationIsOneAtomicImage(t *testing.T)
 }
 
 func TestCompatibilityStoreModeledFinalPublicationRejectsUnknownOrMismatch(t *testing.T) {
-	for _, condition := range []string{"cancelled", "retained-unknown", "unbound-validator", "other-manager", "provider-running", "provider-unknown", "different-session", "wrong-arguments", "cancelled-result", "unknown-result", "missing-native-proof", "no-admission", "stopped"} {
+	for _, condition := range []string{"cancelled", "retained-unknown", "unbound-validator", "other-manager", "provider-running", "provider-unknown", "different-session", "wrong-arguments", "cancelled-result", "unknown-result", "missing-native-proof", "no-admission", "candidate-removed", "candidate-rebound", "stopped"} {
 		t.Run(condition, func(t *testing.T) {
-			m, provider, _, validation := compatibilityStoreFinalizationFixture(t, "lua-init", 0)
+			m, provider, candidate, validation := compatibilityStoreFinalizationFixture(t, "lua-init", 0)
 			ctx := context.Background()
 			switch condition {
 			case "cancelled":
@@ -733,14 +733,27 @@ func TestCompatibilityStoreModeledFinalPublicationRejectsUnknownOrMismatch(t *te
 				validation.Native = false
 			case "no-admission":
 				m.nativeRunning = false
+			case "candidate-removed":
+				// Model a cooperating writer that committed before durable intent.
+				// The captured completion must not recreate its deleted draft.
+				delete(m.state.Candidates, candidate.ID)
+				m.image = compatibilityStoreRawState(t, m, m.state)
+			case "candidate-rebound":
+				// An import can replace provenance for the same content-based ID.
+				// The earlier validation must not overwrite that new identity.
+				current := m.state.Candidates[candidate.ID]
+				current.Origin = "reviewed-replacement"
+				m.state.Candidates[candidate.ID] = current
+				m.image = compatibilityStoreRawState(t, m, m.state)
 			case "stopped":
 				if _, err := operationgate.RequestSelfUpdateStop(ctx, provider.review.ControlPath, strings.Repeat("e", 32), 1); err != nil {
 					t.Fatal(err)
 				}
 			}
 			before := compatibilityStoreBytes(t, m)
+			candidate.Validation = validation
 			m.mu.Lock()
-			err := m.prepareCompatibilityPublicationLocked(ctx, validation)
+			err := m.publishCompatibilityValidationLocked(ctx, candidate)
 			m.mu.Unlock()
 			if !errors.Is(err, ErrCompatibilityQuiescenceUnknown) || !m.state.CompatibilityFinalizing || !bytes.Equal(before, compatibilityStoreBytes(t, m)) {
 				t.Fatalf("unaccepted modeled result cleared publication fence: %v", err)
@@ -757,10 +770,6 @@ func TestCompatibilityStoreFinalPublicationConflictRestoresCrashFence(t *testing
 	}
 	m.mu.Lock()
 	err = m.prepareCompatibilityPublicationLocked(context.Background(), validation)
-	if err == nil {
-		candidate.Validation = validation
-		m.state.Candidates[candidate.ID] = candidate
-	}
 	m.mu.Unlock()
 	if err != nil {
 		t.Fatal(err)
@@ -771,8 +780,9 @@ func TestCompatibilityStoreFinalPublicationConflictRestoresCrashFence(t *testing
 	changed.Name = "independent writer before final publication"
 	durable.Candidates[candidate.ID] = changed
 	image := compatibilityStoreRawState(t, m, durable)
+	candidate.Validation = validation
 	m.mu.Lock()
-	err = m.saveLocked()
+	err = m.publishCompatibilityValidationLocked(context.Background(), candidate)
 	m.mu.Unlock()
 	if !errors.Is(err, restorejournal.ErrConflict) || !m.writeBlocked || !m.state.CompatibilityFinalizing || !m.Snapshot().QuiescenceUnknown || m.state.Candidates[candidate.ID].Validation.Native || !bytes.Equal(image.Data, compatibilityStoreBytes(t, m)) {
 		t.Fatalf("failed final publication dropped its preexisting crash fence: %v", err)

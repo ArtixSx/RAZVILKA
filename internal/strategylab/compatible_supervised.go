@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/components"
@@ -223,7 +224,8 @@ func compatibilityControlCurrent(ctx context.Context, review compatibilityReview
 // Called only by Manager.Validate after its outer validator has returned a
 // known result. Phase ACK never clears this marker: a timeout or crash before
 // this point leaves durable unknown, even if ACK fsync eventually completes.
-// saveLocked publishes the candidate validation and clearing in one image.
+// This is only a precondition check. The guarded publisher retains the marker
+// in memory until its exact candidate image has been confirmed on disk.
 func (m *Manager) prepareCompatibilityPublicationLocked(ctx context.Context, validation Validation) error {
 	if validation.QuiescenceUnknown || !m.state.CompatibilityFinalizing || ctx.Err() != nil || m.compatibilityRetainedUnknownLocked() || m.writeBlocked || !m.nativeRunning || m.state.CompatibilitySession == nil || compatibilitySessionUnknown(*m.state.CompatibilitySession) {
 		return ErrCompatibilityQuiescenceUnknown
@@ -245,6 +247,9 @@ func (m *Manager) prepareCompatibilityPublicationLocked(ctx context.Context, val
 		return ErrCompatibilityQuiescenceUnknown
 	}
 	active := compatibilityActiveInvocation(m.state.CompatibilitySession)
+	if !time.Now().Before(active.Command.Deadline) {
+		return ErrCompatibilityQuiescenceUnknown
+	}
 	offset, end := 1+len(active.Command.Review.BaseArguments), len(active.Command.Args)
 	if active.Command.Phase == "dry-run" {
 		offset++
@@ -265,7 +270,6 @@ func (m *Manager) prepareCompatibilityPublicationLocked(ctx context.Context, val
 	if ctx.Err() != nil {
 		return ErrCompatibilityQuiescenceUnknown
 	}
-	m.state.CompatibilityFinalizing = false
 	return nil
 }
 
