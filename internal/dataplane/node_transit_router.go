@@ -124,6 +124,10 @@ func (a *ProxyTunnelAdapter) scopedNodeRouterHealth(ctx context.Context, plan Pl
 	if err != nil {
 		return err
 	}
+	policy, err := a.captureNodeTransitPolicyAuthority(ctx, plan.PlanID, state, root, generation)
+	if err != nil {
+		return err
+	}
 	index, err := a.scopedInterfaceIndex(ctx)
 	if err != nil {
 		return err
@@ -180,13 +184,8 @@ func (a *ProxyTunnelAdapter) scopedNodeRouterHealth(ctx context.Context, plan Pl
 		if routeidentity.Hash(raw) != manifestHash {
 			return ErrNodeTransitUnavailable
 		}
-		currentState, exists, err := a.loadPolicy()
-		if err != nil || !exists || proxyPolicyDigest(currentState) != proxyPolicyDigest(state) {
-			return ErrNodeTransitUnavailable
-		}
-		currentGeneration, err := a.nodeRouterPolicyGeneration(c, state, root)
-		if err != nil || currentGeneration != generation {
-			return ErrNodeTransitUnavailable
+		if err := policy.verify(c, a); err != nil {
+			return err
 		}
 		if err := nodeRouterAssignedSource(c, request, nodeRouterHTTPSOptions{}); err != nil {
 			return err

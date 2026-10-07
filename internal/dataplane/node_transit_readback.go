@@ -53,11 +53,10 @@ func (a *ProxyTunnelAdapter) nodeTransitRuntimeFor(ctx context.Context, spec Nod
 	}
 	raw, _ := json.Marshal(manifest)
 	manifestHash := routeidentity.Hash(raw)
-	state, exists, err := a.loadPolicy()
-	if err != nil || !exists {
-		return nodeTransitRuntime{}, errors.Join(ErrNodeTransitUnavailable, err)
+	policy, err := a.nodeTransitPolicyAuthorityFor(ctx, spec)
+	if err != nil {
+		return nodeTransitRuntime{}, err
 	}
-	stateHash := proxyPolicyDigest(state)
 	guard := func(c context.Context, current NodeTransitSpec) error {
 		if c == nil || c.Err() != nil || current != spec {
 			return ErrNodeTransitUnavailable
@@ -81,11 +80,7 @@ func (a *ProxyTunnelAdapter) nodeTransitRuntimeFor(ctx context.Context, spec Nod
 		if routeidentity.Hash(raw) != manifestHash {
 			return ErrNodeTransitUnavailable
 		}
-		currentState, exists, err := a.loadPolicy()
-		if err != nil || !exists || proxyPolicyDigest(currentState) != stateHash {
-			return ErrNodeTransitUnavailable
-		}
-		if err := a.nodeTransitCurrentGeneration(c, state, spec); err != nil {
+		if err := policy.verify(c, a); err != nil {
 			return err
 		}
 		request := nodeRouterHTTPSRequest{Interface: spec.Interface, IfIndex: spec.IfIndex, Source: spec.Source}
@@ -95,25 +90,6 @@ func (a *ProxyTunnelAdapter) nodeTransitRuntimeFor(ctx context.Context, spec Nod
 		return nodeTransitRuntime{}, err
 	}
 	return nodeTransitRuntime{runner: a.Runner, ip: a.ip(), guard: guard, preflight: guard, beforeDelete: guard}, nil
-}
-
-func (a *ProxyTunnelAdapter) nodeTransitCurrentGeneration(ctx context.Context, state PolicyState, spec NodeTransitSpec) error {
-	binding, exists, bindingErr := a.readPolicyBinding(state)
-	if bindingErr == nil && exists && binding.Phase == "active" && binding.Generation == spec.PolicyGeneration {
-		generation, err := a.nodeRouterPolicyGeneration(ctx, state, "")
-		if err != nil || generation != spec.PolicyGeneration {
-			return errors.Join(ErrNodeTransitUnavailable, err)
-		}
-		return nil
-	}
-	// This is a fixed local path derived from a validated execution ID, never a
-	// cleanup root supplied by a DTO. A candidate may coexist with an old binding.
-	candidate := filepath.Join(filepath.Dir(a.StateRoot), "transactions", spec.PlanID, a.ID())
-	generation, err := a.nodeRouterPolicyGeneration(ctx, state, candidate)
-	if err != nil || generation != spec.PolicyGeneration {
-		return errors.Join(ErrNodeTransitUnavailable, bindingErr, err)
-	}
-	return ctx.Err()
 }
 
 // Read the existing anchored document and permanent marker without the common

@@ -1913,7 +1913,11 @@ func (a *ProxyTunnelAdapter) loadPolicy() (PolicyState, bool, error) {
 	return state, true, nil
 }
 func (a *ProxyTunnelAdapter) readStagedPolicy(root string) (PolicyState, error) {
-	data, err := os.ReadFile(filepath.Join(root, "policy.staged.json"))
+	path := filepath.Join(root, "policy.staged.json")
+	if _, err := os.Lstat(path); err != nil {
+		return PolicyState{}, err
+	}
+	data, err := readBoundedProxyConfig(path)
 	if err != nil {
 		return PolicyState{}, err
 	}
