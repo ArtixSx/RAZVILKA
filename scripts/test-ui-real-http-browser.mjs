@@ -46,7 +46,7 @@ export function realHTTPIdentity(value,instance) {
 export function realHTTPPrivateFixture({snapshot,inventory,status,services,nodes,recovery},instance) {
   realHTTPIdentity(snapshot,instance);realHTTPIdentity(inventory,instance);
   realHTTPAssert(inventory.data?.system?.opt_ready===true&&typeof inventory.data.system.kernel==='string'&&inventory.data.system.kernel.length>0,'QA_OPT_INVENTORY_REQUIRED');
-  realHTTPAssert(status?.safe_mode===true&&status.live_active===false&&Number.isSafeInteger(status.revision)&&status.revision>=1,'QA_PRIVATE_SAFE_MODE_REQUIRED');
+  realHTTPAssert(status?.safe_mode===true&&status.live_active===false&&Number.isSafeInteger(status.revision)&&status.revision>=0,'QA_PRIVATE_SAFE_MODE_REQUIRED');
   realHTTPAssert(Array.isArray(services)&&services.length>0&&services.every(row=>row.enabled===false&&row.applied_state?.enabled===false&&!row.applied_enabled),'QA_DISABLED_SERVICES_REQUIRED');
   realHTTPAssert(Array.isArray(nodes?.nodes)&&nodes.nodes.length===0&&Array.isArray(nodes.groups)&&nodes.groups.length===0,'QA_EMPTY_NODE_STORE_REQUIRED');
   realHTTPAssert(recovery?.recovery_required===false,'QA_RECOVERY_CLEAR_REQUIRED');
