@@ -378,7 +378,7 @@ func nativeScopedXrayRouter(t *testing.T) {
 		return view, frozen
 	}
 	stage := func(label string) string {
-		transaction := filepath.Join(root, label)
+		transaction := filepath.Join(filepath.Dir(a.StateRoot), "transactions", plan.PlanID, a.ID())
 		for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate} {
 			if err := step(ctx, plan, transaction); err != nil {
 				t.Fatal(label, err)
@@ -403,12 +403,18 @@ func nativeScopedXrayRouter(t *testing.T) {
 		t.Log(label + ": real selected TUN exit differs from same-destination control")
 	}
 	first := stage("A")
-	for _, step := range []func(context.Context, Plan, string) error{a.Activate, a.Health, a.Commit} {
+	for _, step := range []struct {
+		name string
+		run  func(context.Context, Plan, string) error
+	}{{"Activate", a.Activate}, {"Health", a.Health}, {"Commit", a.Commit}} {
+		t.Logf("A %s: begin", step.name)
 		if err := nativeXrayDispatcherExecution(ctx, a, plan, func(c context.Context) error {
-			return step(c, plan, first)
+			return step.run(c, plan, first)
 		}); err != nil {
-			t.Fatal(err)
+			nativeXrayDispatcherFailureReadback(t, ctx, a, plan, first)
+			t.Fatal("A", step.name, err)
 		}
+		t.Logf("A %s: passed", step.name)
 	}
 	assertHealth("A active")
 	if os.Getenv("RAZVILKA_NODE_TRANSIT_MANAGER_NATIVE") == "1" {

@@ -258,7 +258,91 @@ func nativeXrayDispatcherExecution(ctx context.Context, registered *ProxyTunnelA
 		}
 		return verifyNetworkProfile(c, plan.NetworkProfileID, registered.FreshProfile)
 	})
-	return m.WithExecutionResources(reviewed, plan, registered.ID(), action)
+	entered := false
+	err := m.WithExecutionResources(reviewed, plan, registered.ID(), func(c context.Context) error {
+		entered = true
+		if err := action(c); err != nil {
+			return fmt.Errorf("dispatcher lifecycle action: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("real Manager resource scope (action entered=%t): %w", entered, err)
+	}
+	return nil
+}
+
+// Failure diagnostics only: repeat read-only production owner prerequisites.
+// No issuer, receipt writer, effect, controller action or alternate grant is
+// constructed here, and a successful reread never replaces the original error.
+func nativeXrayDispatcherFailureReadback(t *testing.T, ctx context.Context, registered *ProxyTunnelAdapter, plan Plan, root string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	check := func(name string, err error) bool {
+		if err != nil {
+			t.Logf("A refusal readback: %s: %v", name, err)
+			return false
+		}
+		t.Logf("A refusal readback: %s: passed", name)
+		return true
+	}
+	view, frozen, err := registered.dispatchCandidateXrayPlan(plan, root, true)
+	if !check("detached candidate snapshot view", err) {
+		return
+	}
+	state, err := view.readStagedPolicy(root)
+	if !check("candidate policy", err) || !check("TUN interface lease", view.verifyScopedNodeInterface(ctx)) {
+		return
+	}
+	manifest, err := view.checkScopedNodeState(ctx, frozen)
+	if !check("exact frozen node manifest", err) {
+		return
+	}
+	runtimeID, err := view.scopedRuntimeIdentity()
+	if !check("live process passports", err) {
+		return
+	}
+	boot, err := view.currentBootIdentity()
+	if !check("boot", err) {
+		return
+	}
+	generation, err := view.nodeRouterPolicyGeneration(ctx, state, root)
+	if !check("candidate complete addition generation", err) {
+		return
+	}
+	index, err := view.scopedInterfaceIndex(ctx)
+	if !check("actual TUN ifindex", err) {
+		return
+	}
+	prefix, err := netip.ParsePrefix(view.TunnelCIDR)
+	if !check("assigned source prefix", err) {
+		return
+	}
+	probes, err := view.nodeRouterAdmittedProbes(ctx, manifest, prefix.Addr(), index)
+	if !check("frozen service predicate and destination", err) {
+		return
+	}
+	for _, probe := range probes {
+		request := probe.request
+		if !check("assigned TUN source", nodeRouterAssignedSource(ctx, request, nodeRouterHTTPSOptions{})) ||
+			!check("actual return path", nodeRouterReturnPath(ctx, view.Interface)) ||
+			!check("owned backend socket disjointness", view.nodeRouterBackendDisjoint(ctx, manifest, prefix.Addr(), request.Destination)) {
+			return
+		}
+		spec := NodeTransitSpec{Schema: 1, Engine: view.ID(), BootID: boot, PlanID: frozen.PlanID, PlanDigest: frozen.Digest,
+			NetworkProfile: frozen.NetworkProfileID, RuntimeID: runtimeID, PolicyGeneration: generation,
+			Interface: view.Interface, IfIndex: index, Source: prefix.Addr(), Destination: request.Destination, Table: view.Table}
+		for _, owner := range NodeTransitOwnershipSpecs() {
+			if owner.Engine == spec.Engine && owner.Interface == spec.Interface && owner.Table == spec.Table {
+				spec.Priority = owner.Priority
+			}
+		}
+		owner, err := view.nodeTransitRuntimeFor(ctx, spec)
+		if !check("readonly scoped runtime observer", err) || !check("canonical candidate generation owner guard", owner.guard(ctx, spec)) {
+			return
+		}
+	}
 }
 
 func nativeManagerTransitIssue(m *Manager, ctx context.Context, spec NodeTransitSpec, owner nodeTransitRuntime) (*nodeTransitLease, nodeTransitRegistration, *nodeRouterTransitReadback, context.Context, error) {
