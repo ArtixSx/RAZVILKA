@@ -66,7 +66,7 @@ func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) 
 	if err := b.AdditionalReadback(ctx, p); err != nil {
 		return nil, err
 	}
-	result, err := b.readClassicRules(ctx)
+	result, err := b.readClassicRules(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -83,12 +83,18 @@ func (b *NFQWSScopedBinding) readFinalRules(ctx context.Context, p *NFQWSScopedP
 	if _, err := b.readRules(ctx, p); err != nil {
 		return nil, err
 	}
-	return b.readClassicRules(ctx)
+	return b.readClassicRules(ctx, p)
 }
 
 // The runner performs only trusted fixed read commands here. Process, LAN,
 // Guard and AdditionalReadback predicate callbacks belong before this image.
-func (b *NFQWSScopedBinding) readClassicRules(ctx context.Context) (nfqwsScopedRules, error) {
+func (b *NFQWSScopedBinding) readClassicRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedRules, error) {
+	if b.network != nil {
+		return b.network.rules(ctx, p)
+	}
+	if p == nil || p.resources.NetworkIdentity != nil {
+		return nil, ErrNFQWSScopedOwner
+	}
 	result := nfqwsScopedRules{}
 	for _, tool := range []PolicyEffectTool{PolicyEffectIPTables, PolicyEffectIP6Tables} {
 		result[tool] = map[string][][]string{}
@@ -274,7 +280,7 @@ func (b *NFQWSScopedBinding) checkProcess(ctx context.Context, p *NFQWSScopedPla
 		if err != nil || nfqwsScopedProcessProof(p, proof, true) != nil {
 			return errors.Join(ErrNFQWSScopedOwner, err)
 		}
-		if err := b.QueueCheck(ctx, p.resources.NetNamespace, p.resources.Queue, nil); err != nil {
+		if err := b.checkQueue(ctx, p, nil); err != nil {
 			return err
 		}
 		after, err := b.ProcessInactive(ctx, p)
@@ -287,7 +293,7 @@ func (b *NFQWSScopedBinding) checkProcess(ctx context.Context, p *NFQWSScopedPla
 	if err != nil || nfqwsScopedProcessProof(p, proof, false) != nil {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	if err := b.QueueCheck(ctx, p.resources.NetNamespace, p.resources.Queue, &proof.Child); err != nil {
+	if err := b.checkQueue(ctx, p, &proof.Child); err != nil {
 		return err
 	}
 	after, err := b.ProcessRunning(ctx, p)
@@ -432,7 +438,7 @@ func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedP
 	}
 	check := func() error {
 		if mode == nfqwsScopedBeforeStart {
-			return b.QueueCheck(ctx, p.resources.NetNamespace, p.resources.Queue, nil)
+			return b.checkQueue(ctx, p, nil)
 		}
 		return b.checkProcess(ctx, p, mode == nfqwsScopedCleanup || mode == nfqwsScopedAbsent)
 	}

@@ -16,7 +16,7 @@ import (
 // Ready can change only from positively empty to an exact ready owned queue;
 // an error is never a request to wait. Prepared/Apply remain strict and fresh.
 func nfqwsScopedAfterStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, current func(context.Context, *NFQWSScopedPlan) error) (bool, error) {
-	if ctx == nil || b == nil || p == nil || current == nil || b.queueReadiness == nil {
+	if ctx == nil || b == nil || p == nil || current == nil || (b.queueReadiness == nil && b.network == nil) {
 		return false, ErrNFQWSScopedOwner
 	}
 	if _, bounded := ctx.Deadline(); !bounded {
@@ -38,7 +38,7 @@ func nfqwsScopedAfterStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p 
 	if err := current(ctx, p); err != nil {
 		return false, fmt.Errorf("current after process readback: %w", err)
 	}
-	openingReady, err := b.queueReadiness(ctx, p.resources.NetNamespace, p.resources.Queue, &proof.Child)
+	openingReady, err := b.checkQueueReadiness(ctx, p, &proof.Child)
 	if err != nil {
 		return false, fmt.Errorf("opening queue readiness: %w", err)
 	}
@@ -55,7 +55,7 @@ func nfqwsScopedAfterStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p 
 	if err := b.VerifyLAN(ctx, CloneLANPolicyRuntime(p.lan)); err != nil {
 		return false, fmt.Errorf("closing LAN readback: %w", err)
 	}
-	closingReady, err := b.queueReadiness(ctx, p.resources.NetNamespace, p.resources.Queue, &proof.Child)
+	closingReady, err := b.checkQueueReadiness(ctx, p, &proof.Child)
 	if err != nil {
 		return false, fmt.Errorf("closing queue readiness: %w", err)
 	}

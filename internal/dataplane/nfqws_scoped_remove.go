@@ -145,7 +145,7 @@ func (b *NFQWSScopedBinding) postDelete(ctx context.Context, p *NFQWSScopedPlan,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	out, err := b.Runner.Run(ctx, b.Tools.command(tool), "-t", "mangle", "-S")
+	out, err := b.readTargetRules(ctx, p, tool)
 	if err != nil || ctx.Err() != nil || len(out) > 1<<20 || !utf8.Valid(out) {
 		return errors.Join(ErrNFQWSScopedOwner, err, ctx.Err())
 	}

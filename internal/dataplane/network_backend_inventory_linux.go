@@ -201,10 +201,46 @@ func (s *backendNFTSocket) receive(buffer []byte) (backendNFTDatagram, bool, err
 // never /proc/net's process symlink. No symlink or different proc mount is
 // accepted. Empty EOF is valid; missing/unreadable names are Unknown.
 func backendInventoryRegisteredTables(ctx context.Context, family int) (result []byte, resultErr error) {
-	if ctx == nil || ctx.Err() != nil || family != 4 && family != 6 {
+	if family != 4 && family != 6 {
 		return nil, errBackendInventory
 	}
+	which := backendThreadTables4
+	if family == 6 {
+		which = backendThreadTables6
+	}
+	return backendInventoryThreadProc(ctx, which)
+}
+
+type backendThreadProcFile uint8
+
+const (
+	backendThreadTables4 backendThreadProcFile = iota
+	backendThreadTables6
+	backendThreadQueues
+	backendThreadNetlink
+)
+
+// Closed set of read-only proc leaves, all anchored to the caller's actual
+// PID/task/TID. The provider's same-thread bracket must surround this reader.
+func backendInventoryThreadProc(ctx context.Context, which backendThreadProcFile) (result []byte, resultErr error) {
+	name, limit := "ip_tables_names", backendClassicNamesBytes
 	pid, tid := unix.Getpid(), unix.Gettid()
+	parts := []string{strconv.Itoa(pid), "task", strconv.Itoa(tid), "net"}
+	switch which {
+	case backendThreadTables4:
+	case backendThreadTables6:
+		name = "ip6_tables_names"
+	case backendThreadQueues:
+		parts = append(parts, "netfilter")
+		name, limit = "nfnetlink_queue", 1<<20
+	case backendThreadNetlink:
+		name, limit = "netlink", 1<<20
+	default:
+		return nil, errBackendInventory
+	}
+	if ctx == nil || ctx.Err() != nil {
+		return nil, errBackendInventory
+	}
 	const dirs = unix.O_RDONLY | unix.O_DIRECTORY | unix.O_NOFOLLOW | unix.O_CLOEXEC
 	root, err := unix.Open("/proc", dirs, 0)
 	if err != nil {
@@ -237,7 +273,7 @@ func backendInventoryRegisteredTables(ctx context.Context, family int) (result [
 	}
 	parent := root
 	var pidFD int
-	for i, part := range []string{strconv.Itoa(pid), "task", strconv.Itoa(tid), "net"} {
+	for i, part := range parts {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -253,10 +289,6 @@ func backendInventoryRegisteredTables(ctx context.Context, family int) (result [
 			pidFD = fd
 		}
 		parent = fd
-	}
-	name := "ip_tables_names"
-	if family == 6 {
-		name = "ip6_tables_names"
 	}
 	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
@@ -310,9 +342,9 @@ func backendInventoryRegisteredTables(ctx context.Context, family int) (result [
 		return nil, err
 	}
 	file := os.NewFile(uintptr(dup), "classic-table-names")
-	data, readErr := io.ReadAll(io.LimitReader(file, backendClassicNamesBytes+1))
+	data, readErr := io.ReadAll(io.LimitReader(file, int64(limit)+1))
 	closeErr := file.Close()
-	if readErr != nil || closeErr != nil || len(data) > backendClassicNamesBytes || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {
+	if readErr != nil || closeErr != nil || len(data) > limit || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {
 		return nil, errors.Join(errBackendInventory, readErr, closeErr, ctx.Err())
 	}
 	for i, f := range fds {

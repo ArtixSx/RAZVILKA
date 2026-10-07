@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 )
 
@@ -41,6 +42,7 @@ type NFQWSScopedSpec struct {
 	BootID, NetNamespace, SessionID string
 	CommandSHA256                   string
 	Candidate                       NFQWSScopedCandidate
+	NetworkIdentity                 *netidentity.Identity `json:"network_identity,omitempty"`
 }
 
 type NFQWSScopedResources struct {
@@ -51,6 +53,7 @@ type NFQWSScopedResources struct {
 	Revision                                uint64
 	Chains                                  []string
 	BootID, SessionID, CommandSHA256        string
+	NetworkIdentity                         *netidentity.Identity `json:"network_identity,omitempty"`
 }
 
 // Exact process evidence returned from the existing ownership.json session.
@@ -87,9 +90,23 @@ func (p *NFQWSScopedPlan) Spec() NFQWSScopedSpec {
 	if p == nil {
 		return NFQWSScopedSpec{}
 	}
-	spec := p.spec
-	spec.Candidate.Traffic = slices.Clone(spec.Candidate.Traffic)
-	return spec
+	return p.spec.Clone()
+}
+
+// Clone detaches the entire compiler input, including typed network metadata.
+// It does not create a provider, a reservation or launch authority.
+func (s NFQWSScopedSpec) Clone() NFQWSScopedSpec {
+	s.Candidate.Traffic = slices.Clone(s.Candidate.Traffic)
+	s.NetworkIdentity = cloneNFQWSScopedNetworkIdentity(s.NetworkIdentity)
+	return s
+}
+
+func cloneNFQWSScopedNetworkIdentity(identity *netidentity.Identity) *netidentity.Identity {
+	if identity == nil {
+		return nil
+	}
+	copy := *identity
+	return &copy
 }
 
 func (p *NFQWSScopedPlan) Resources() NFQWSScopedResources {
@@ -98,6 +115,7 @@ func (p *NFQWSScopedPlan) Resources() NFQWSScopedResources {
 	}
 	r := p.resources
 	r.Chains = slices.Clone(r.Chains)
+	r.NetworkIdentity = cloneNFQWSScopedNetworkIdentity(r.NetworkIdentity)
 	return r
 }
 
@@ -128,6 +146,25 @@ func nfqwsScopedNamespace(s string) bool {
 	return err == nil && n > 0 && strconv.FormatUint(n, 10) == v
 }
 
+// Legacy compiler input remains proc-only. A typed singleton can never carry
+// an invented inode string; typed proc input cross-checks the legacy field.
+func nfqwsScopedSpecNetworkValid(spec NFQWSScopedSpec) bool {
+	if spec.NetworkIdentity == nil {
+		return nfqwsScopedNamespace(spec.NetNamespace) && nfqws2ManagedBoot(spec.BootID)
+	}
+	identity := *spec.NetworkIdentity
+	if identity.Validate() != nil || identity.BootID != spec.BootID {
+		return false
+	}
+	switch identity.Kind {
+	case netidentity.ProcNetInode:
+		return spec.NetNamespace == "net:["+strconv.FormatUint(identity.Inode, 10)+"]"
+	case netidentity.ReviewedSingleInitNet:
+		return spec.NetNamespace == ""
+	}
+	return false
+}
+
 func nfqwsScopedPrefix(value string) (netip.Prefix, error) {
 	p, err := netip.ParsePrefix(value)
 	if err != nil || p != p.Masked() || p.String() != value || p.Addr().Is4In6() || p.Addr().Zone() != "" {
@@ -152,7 +189,7 @@ func nfqwsScopedPublic(p netip.Prefix) bool {
 // actual effect boundary. Passing typed input alone grants no authority.
 func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPlan, error) {
 	candidate := spec.Candidate
-	if expected.SchemaVersion != SchemaVersion || expected.PlanID == "" || len(expected.PlanID) > 128 || !lanPolicyHash(expected.Digest) || expected.Revision == 0 || expected.NetworkProfileID == "" || len(expected.NetworkProfileID) > 128 || !expected.Ready || expected.SafeMode || expected.Noop || len(expected.Blockers) != 0 || len(expected.ResourceConflicts) != 0 || spec.Queue == 0 || !nfqwsScopedNamespace(spec.NetNamespace) || !nfqws2ManagedBoot(spec.BootID) || !nfqws2ManagedHex(spec.SessionID, 32) || !lanPolicyHash(spec.CommandSHA256) || ValidateLANPolicyRuntime(expected.LAN) != nil || candidate.ID == "" || len(candidate.ID) > 128 || strings.ContainsAny(candidate.ID, "\x00\r\n") || len(candidate.Incarnation) != 32 || strings.Trim(candidate.Incarnation, "0123456789abcdef") != "" || !lanPolicyHash(candidate.ArgumentsSHA256) || len(candidate.Traffic) == 0 || len(candidate.Traffic) > 16 || len(expected.Routes) == 0 || len(expected.Routes) > 1024 {
+	if expected.SchemaVersion != SchemaVersion || expected.PlanID == "" || len(expected.PlanID) > 128 || !lanPolicyHash(expected.Digest) || expected.Revision == 0 || expected.NetworkProfileID == "" || len(expected.NetworkProfileID) > 128 || !expected.Ready || expected.SafeMode || expected.Noop || len(expected.Blockers) != 0 || len(expected.ResourceConflicts) != 0 || spec.Queue == 0 || !nfqwsScopedSpecNetworkValid(spec) || !nfqws2ManagedHex(spec.SessionID, 32) || !lanPolicyHash(spec.CommandSHA256) || ValidateLANPolicyRuntime(expected.LAN) != nil || candidate.ID == "" || len(candidate.ID) > 128 || strings.ContainsAny(candidate.ID, "\x00\r\n") || len(candidate.Incarnation) != 32 || strings.Trim(candidate.Incarnation, "0123456789abcdef") != "" || !lanPolicyHash(candidate.ArgumentsSHA256) || len(candidate.Traffic) == 0 || len(candidate.Traffic) > 16 || len(expected.Routes) == 0 || len(expected.Routes) > 1024 {
 		return nil, ErrNFQWSScopedOwner
 	}
 	// Bound nested input before copying or marshaling any caller slices.
@@ -172,6 +209,7 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 	}
 	p := &NFQWSScopedPlan{lan: CloneLANPolicyRuntime(expected.LAN)}
 	p.resources = NFQWSScopedResources{Queue: spec.Queue, NetNamespace: spec.NetNamespace, Generation: p.lan.Generation, LANDigest: p.lan.Digest, PlanID: expected.PlanID, PlanDigest: expected.Digest, NetworkProfileID: expected.NetworkProfileID, Revision: expected.Revision, CandidateID: candidate.ID, Incarnation: candidate.Incarnation, ArgumentsHash: candidate.ArgumentsSHA256, BootID: spec.BootID, SessionID: spec.SessionID, CommandSHA256: spec.CommandSHA256}
+	p.resources.NetworkIdentity = cloneNFQWSScopedNetworkIdentity(spec.NetworkIdentity)
 	traffic := slices.Clone(candidate.Traffic)
 	sort.Slice(traffic, func(i, j int) bool {
 		if traffic[i].Protocol != traffic[j].Protocol {
@@ -184,7 +222,7 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 			return nil, ErrNFQWSScopedOwner
 		}
 	}
-	p.spec = spec
+	p.spec = spec.Clone()
 	p.spec.Candidate.Traffic = slices.Clone(traffic)
 	// Hash the complete frozen input, including incarnation and WAN, for names.
 	data, err := json.Marshal(struct {
@@ -195,7 +233,11 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 	if err != nil || len(data) > 256<<10 || len(expected.Routes) > 1024 {
 		return nil, ErrNFQWSScopedOwner
 	}
-	nameHash := routeidentity.Hash(append([]byte("nfqws-scoped-v1\x00"), data...))
+	domain := "nfqws-scoped-v1\x00"
+	if spec.NetworkIdentity != nil {
+		domain = "nfqws-scoped-v2\x00"
+	}
+	nameHash := routeidentity.Hash(append([]byte(domain), data...))
 	seen := map[string]bool{}
 	for _, family := range []int{4, 6} {
 		c := nfqwsScopedChain{tool: PolicyEffectIPTables, name: fmt.Sprintf("RZQ_%s_%d", nameHash[:18], family)}
@@ -333,11 +375,20 @@ type NFQWSScopedBinding struct {
 	// Strict pre-Start, Prepared, Apply and cleanup still use QueueCheck.
 	queueReadiness func(context.Context, string, uint16, *components.NFQWSRuntimeProcessIdentity) (bool, error)
 	options        policyAdditionOptions
+	network        *nfqwsScopedNetworkBinding
 }
 
 func (b *NFQWSScopedBinding) prepare(p *NFQWSScopedPlan, cleanup bool) (PolicyEffectRuntime, PolicyEffectPlan, error) {
-	if b == nil || b.Runner == nil || b.ApplyGuard == nil || b.CleanupGuard == nil || b.VerifyLAN == nil || b.ProcessRunning == nil || b.ProcessInactive == nil || b.QueueCheck == nil || b.AdditionalReadback == nil || b.Tools.IPTables == "" || b.Tools.IP6Tables == "" {
+	if b == nil || p == nil || b.Runner == nil || b.ApplyGuard == nil || b.CleanupGuard == nil || b.VerifyLAN == nil || b.ProcessRunning == nil || b.ProcessInactive == nil || (b.network == nil && b.QueueCheck == nil) || b.AdditionalReadback == nil || b.Tools.IPTables == "" || b.Tools.IP6Tables == "" {
 		return PolicyEffectRuntime{}, PolicyEffectPlan{}, ErrNFQWSScopedOwner
+	}
+	if (p.resources.NetworkIdentity != nil) != (b.network != nil) {
+		return PolicyEffectRuntime{}, PolicyEffectPlan{}, ErrNFQWSScopedOwner
+	}
+	if b.network != nil {
+		if _, err := nfqwsScopedTypedNetwork(p); err != nil {
+			return PolicyEffectRuntime{}, PolicyEffectPlan{}, err
+		}
 	}
 	plan, err := p.Effects()
 	if err != nil {
@@ -348,6 +399,9 @@ func (b *NFQWSScopedBinding) prepare(p *NFQWSScopedPlan, cleanup bool) (PolicyEf
 		guard = b.CleanupGuard
 	}
 	r := PolicyEffectRuntime{Runner: b.Runner, Tools: b.Tools}
+	if b.network != nil {
+		r.Runner = nfqwsScopedTypedRunner{base: b.Runner, network: b.network, plan: p}
+	}
 	r.Guard = func(ctx context.Context, i int) error {
 		if ctx == nil || i < 0 || i >= len(plan.Effects) {
 			return ErrNFQWSScopedOwner
