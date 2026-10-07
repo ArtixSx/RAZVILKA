@@ -20,7 +20,7 @@
 
 **Rollback:** до публикации protected payload допустимо вернуть только прежний UID того же pinned inode, если mount/tuple и receipts/runtime ещё соответствуют сохранённому pre-state; GID/mode/descendants остаются прежними. После публикации автоматический возврат UID1001 недопустим: он вновь открывает namespace владельцу1001. Тогда rollback требует отдельно принятого прекращения protected использования и settlement его exact resources, после чего повторной проверки исходного inode. Не удалять чужие packages/data. SMB changes, если владелец отдельно примет их, имеют собственный сохранённый pre-state и rollback; их нельзя скрыть внутри bundle cleanup. Persistence owner/guard и SMB access после штатного remount/reboot проверяются ROOT отдельно, здесь таких испытаний нет.
 
-Подробный прежний контракт: [storage preflight](C:/Projects/RAZVILKA/worktrees/sol-research/docs/delivery-2026-10-03/handoffs/RESEARCH_ENTWARE_STORAGE_PREFLIGHT_RU.md). GID0 guard не требует; root-owned `/opt/lib` не защищает имя `lib`, пока родитель принадлежит1001.
+Подробный прежний контракт: [storage preflight](RESEARCH_ENTWARE_STORAGE_PREFLIGHT_RU.md). GID0 guard не требует; root-owned `/opt/lib` не защищает имя `lib`, пока родитель принадлежит1001.
 
 ## 2. Достижимое evidence полного backend coverage
 
