@@ -95,15 +95,26 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		exeBefore := ""
 		mark("proc.cmdline-shape")
 		if len(cmd) == 0 {
-			if flags&0x00200000 == 0 || pid == p.selfPID {
+			if flags&0x00200000 == 0 {
+				mark("proc.cmdline-empty.kthread-flag-false")
+				return ErrScopedDNSRuntimeInactive
+			}
+			if pid == p.selfPID {
+				mark("proc.cmdline-empty.self-true")
 				return ErrScopedDNSRuntimeInactive
 			}
 		} else {
 			if cmd[len(cmd)-1] != 0 {
+				mark("proc.cmdline-nonempty.terminal-nul-false")
 				return ErrScopedDNSRuntimeInactive
 			}
 			args := strings.Split(string(cmd[:len(cmd)-1]), "\x00")
-			if len(args) > 256 || args[0] == "" {
+			if len(args) > 256 {
+				mark("proc.cmdline-nonempty.argc-bounded-false")
+				return ErrScopedDNSRuntimeInactive
+			}
+			if args[0] == "" {
+				mark("proc.cmdline-nonempty.argv0-nonempty-false")
 				return ErrScopedDNSRuntimeInactive
 			}
 			mark("proc.exe-read")
