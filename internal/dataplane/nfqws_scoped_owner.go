@@ -410,6 +410,22 @@ func (b *NFQWSScopedBinding) Remove(ctx context.Context, p *NFQWSScopedPlan, roo
 	if err != nil {
 		return err
 	}
+	// Only this operation drops repeated whole scans from common Guards.
+	// VerifyInactive and all other users of prepare keep their strict runtime.
+	r.Guard = func(c context.Context, i int) error {
+		if c == nil || i < 0 || i >= len(plan.Effects) {
+			return ErrNFQWSScopedOwner
+		}
+		if err := c.Err(); err != nil {
+			return err
+		}
+		if err := b.CleanupGuard(c, p, cloneNFQWSScopedEffect(plan.Effects[i])); err != nil {
+			return err
+		}
+		return c.Err()
+	}
+	r.BeforeDelete = func(c context.Context, i int) error { return b.cleanupBoundary(c, p, i) }
+	r.Runner = nfqwsScopedRemoveRunner{base: r.Runner, binding: b, scoped: p, plan: plan, tools: r.Tools, guard: r.Guard}
 	if err := b.checkProcess(ctx, p, true); err != nil {
 		return err
 	}
