@@ -109,6 +109,7 @@ func TestManagerStopDoesNotRecordLateSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	m.Resources = safeProbeTestResources()
 	m.Validator = fakeValidator{result: Validation{OK: true, Native: true}}
 	c, _ := m.AddCandidate("tcp-tls", "reviewed", "--filter-tcp=443", "expert")
 	if _, err := m.Validate(context.Background(), c.ID); err != nil {
