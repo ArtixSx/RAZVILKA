@@ -1,5 +1,7 @@
 # Upstream: контракты внедрения D07/D08/D11 — 04.10.2026
 
+Узкое продолжение Netcraze по Root capture90: [single init-net platform contract](C:/Projects/RAZVILKA/worktrees/sol-research/docs/delivery-2026-10-03/handoffs/RESEARCH_NETCRAZE_SINGLE_NETNS_CONTRACT_RU.md) — полное verified namespace directory наблюдение, точное оставшееся vendor ABI допущение, минимальная приёмка и tests; без fake inode/boot-only fallback и без NFT completeness grant.
+
 Исследовательский checkpoint, база `ceeaab843647e98b137c598c309949c739ad80ab`, ветка `sol/research-20261004`. Только этот документ; production, зависимости, VERSION, VM, роутер и GitHub не изменены. Временные raw-исходники сохранены вне worktree в локальном Temp. Это чтение кода и проектные предложения, не runtime/HIL PASS.
 
 Адресное продолжение после принятия `48b3ab0`: [RESEARCH_NFQWS_BUNDLE_RU.md](RESEARCH_NFQWS_BUNDLE_RU.md) предлагает отдельный managed payload без исполнения stock hooks. Stock IPK suppression blocker ниже сохраняется; он не запрещает file-only установку собственного runtime с честным provenance.
