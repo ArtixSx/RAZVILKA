@@ -324,3 +324,66 @@ func TestWGNetworkLANTransportClosingFreshness(t *testing.T) {
 		})
 	}
 }
+
+func TestWGNetworkLANTransportRejectsInterfaceMissingAtIdentityRead(t *testing.T) {
+	a, kernel, plan, ctx, line := wgLANTransportFixture(t)
+	base := a.Runner
+	firewall := base.(wgNetworkLANReadbackRunner).firewall
+	linkReads, identityReads := 0, 0
+	a.Runner = networkCleanupRunner(func(c context.Context, tool string, args ...string) ([]byte, error) {
+		if tool == "ip" && strings.Join(args, " ") == "link show dev rz-wg" {
+			linkReads++
+			if linkReads == 2 {
+				return []byte("Device rz-wg does not exist"), errors.New("device not found")
+			}
+			if linkReads > 2 {
+				t.Fatal("missing identity was retried; a reappeared interface cannot grant transport proof")
+			}
+		}
+		if tool == "wg" && (strings.Join(args, " ") == "show rz-wg public-key" || strings.Join(args, " ") == "show rz-wg fwmark") {
+			identityReads++
+		}
+		return base.Run(c, tool, args...)
+	})
+	beforeIP, beforeFW := len(kernel.calls), len(firewall.calls)
+	if err := a.VerifyLANPolicyTransport(ctx, plan.LAN, 4, line); err == nil {
+		t.Fatal("interface disappearance granted transport exception")
+	}
+	if linkReads != 2 || identityReads != 0 {
+		t.Fatal("missing identity did not stop before key/fwmark", linkReads, identityReads)
+	}
+	assertWGNetworkReadOnlyCalls(t, kernel.calls[beforeIP:], firewall.calls[beforeFW:])
+}
+
+func TestWGNetworkReconcileRejectsMissingIdentityAndForeignReappearance(t *testing.T) {
+	for _, cut := range []string{"missing-at-identity", "foreign-reappearance"} {
+		t.Run(cut, func(t *testing.T) {
+			a, kernel, plan, ctx, _ := wgLANTransportFixture(t)
+			base := a.Runner
+			firewall := base.(wgNetworkLANReadbackRunner).firewall
+			linkReads := 0
+			a.Runner = networkCleanupRunner(func(c context.Context, tool string, args ...string) ([]byte, error) {
+				if tool == "ip" && strings.Join(args, " ") == "link show dev rz-wg" {
+					linkReads++
+					if cut == "missing-at-identity" && linkReads == 2 {
+						return nil, errors.New("device not found")
+					}
+					if cut == "foreign-reappearance" && linkReads == 1 {
+						// Initial absence is followed by a foreign same-name link.
+						kernel.endpoint.publicKey = "foreign"
+						return nil, errors.New("device not found")
+					}
+				}
+				return base.Run(c, tool, args...)
+			})
+			beforeIP, beforeFW := len(kernel.calls), len(firewall.calls)
+			if err := a.Reconcile(ctx, plan); err == nil {
+				t.Fatal("missing or foreign identity entered recovery")
+			}
+			if linkReads < 2 {
+				t.Fatal("recovery identity boundary not reached", linkReads)
+			}
+			assertWGNetworkReadOnlyCalls(t, kernel.calls[beforeIP:], firewall.calls[beforeFW:])
+		})
+	}
+}

@@ -835,8 +835,16 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) (retErr
 	if _, owned, err := a.deactivationOwnership(ctx); err != nil || !owned {
 		return errors.Join(err, errors.New("committed WireGuard cleanup authority is missing"))
 	}
-	if err := a.verifyWGInterfaceIdentity(ctx, state.WireGuardEndpoint); err != nil {
+	// An absent link can enter committed recovery. A present link requires
+	// strict identity; disappearance during that check is never a success.
+	active, err := a.deactivationInterfaceActive(ctx)
+	if err != nil {
 		return err
+	}
+	if active {
+		if err := a.verifyWGInterfaceIdentity(ctx, state.WireGuardEndpoint); err != nil {
+			return err
+		}
 	}
 	if err := a.revalidateWGEndpoint(ctx, state.WireGuardEndpoint); err != nil {
 		return err
@@ -848,6 +856,11 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) (retErr
 	}
 	if a.ID() == "amneziawg" {
 		if _, _, err := a.advancedAWGTool(ctx, string(mustRead(a.RuntimeConfigPath))); err != nil {
+			return err
+		}
+	}
+	if a.interfaceActive(ctx) {
+		if err := a.verifyWGInterfaceIdentity(ctx, state.WireGuardEndpoint); err != nil {
 			return err
 		}
 	}
@@ -863,6 +876,11 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) (retErr
 		}
 	}
 	if a.interfaceActive(ctx) {
+		// Recovery may have begun with an absent link. Do not stop a foreign
+		// interface that appeared while the owned policy was being settled.
+		if err := a.verifyWGInterfaceIdentity(ctx, state.WireGuardEndpoint); err != nil {
+			return err
+		}
 		if err := a.stopInterface(ctx); err != nil {
 			return fmt.Errorf("stop stale %s interface: %w", a.ID(), err)
 		}

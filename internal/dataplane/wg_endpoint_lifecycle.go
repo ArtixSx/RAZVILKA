@@ -676,8 +676,11 @@ func (a *WARPWireGuardAdapter) verifyWGInterfaceIdentity(ctx context.Context, e 
 		return nil
 	}
 	active, err := a.deactivationInterfaceActive(ctx)
-	if err != nil || !active {
+	if err != nil {
 		return err
+	}
+	if !active {
+		return errors.New("WireGuard interface is missing during identity verification")
 	}
 	expected, err := wgRuntimePublicKey(mustRead(a.RuntimeConfigPath))
 	if err != nil {
