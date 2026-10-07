@@ -1,6 +1,24 @@
 package startuptools
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
+
+func commandResultFailure(stage string, err, contextErr error, stdoutOverflow, stderrOverflow, stderrNonempty bool) error {
+	var reasons []error
+	reasons = append(reasons, err, contextErr)
+	if stdoutOverflow {
+		reasons = append(reasons, at("COMMAND_STDOUT_LIMIT", nil))
+	}
+	if stderrOverflow {
+		reasons = append(reasons, at("COMMAND_STDERR_LIMIT", nil))
+	}
+	if stderrNonempty {
+		reasons = append(reasons, at("COMMAND_STDERR_NONEMPTY", nil))
+	}
+	return at(stage, errors.Join(reasons...))
+}
 
 // Fixed categories only: never interpolate arbitrary paths or CLI data into
 // startup diagnostics. The category identifies which protected boundary failed.

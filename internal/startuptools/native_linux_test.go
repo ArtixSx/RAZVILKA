@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -41,10 +40,12 @@ func TestProductionStartupToolsNative(t *testing.T) {
 	} else {
 		lease, err = AcquireUbuntuLegacy(lifetime, provider)
 	}
+	acquired := time.Since(started)
 	if err != nil {
-		t.Fatal("production acquisition refused: stages=", nativeStages(err))
+		t.Fatalf("production acquisition refused: acquisition-ms=%d stages=%s", acquired.Milliseconds(), nativeStages(err))
 	}
 	defer lease.Close()
+	t.Logf("production acquisition passed: acquisition-ms=%d images=%d bytes=%d nodes=%d review=%s; no mutation grant", acquired.Milliseconds(), len(lease.review.images), lease.review.bytes, len(lease.review.nodes), lease.digest)
 	tools, err := lease.InventoryTools()
 	if err != nil {
 		t.Fatal(err)
@@ -59,12 +60,14 @@ func TestProductionStartupToolsNative(t *testing.T) {
 		t.Fatal(err)
 	}
 	read, readCancel := context.WithTimeout(lifetime, operationTimeout)
+	captureStart := time.Now()
 	snapshot, err := inventory.Read(read, lease.identity)
+	captureElapsed, captureContext := time.Since(captureStart), nativeContextState(read)
 	readCancel()
 	if err != nil {
-		t.Fatal("actual production inventory refused: stages=", nativeStages(err))
+		t.Fatalf("actual production inventory refused: acquisition-ms=%d capture-ms=%d capture-context=%s stages=%s", acquired.Milliseconds(), captureElapsed.Milliseconds(), captureContext, nativeStages(err))
 	}
-	t.Logf("production tools acquired=%s images=%d bytes=%d nodes=%d review=%s rows=%d; no mutation grant", time.Since(started), len(lease.review.images), lease.review.bytes, len(lease.review.nodes), tools.ReviewSHA256, len(snapshot.Rows))
+	t.Logf("production inventory passed: acquisition-ms=%d capture-ms=%d capture-context=%s rows=%d; no mutation grant", acquired.Milliseconds(), captureElapsed.Milliseconds(), captureContext, len(snapshot.Rows))
 	if err := lease.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -94,20 +97,4 @@ func nativeProvider(t *testing.T, ctx context.Context, mode string) *netidentity
 		t.Fatal("stock provider refused: stages=", nativeStages(err))
 	}
 	return provider
-}
-
-func nativeStages(err error) string {
-	var stages []string
-	for len(stages) < 16 {
-		var f *failure
-		if !errors.As(err, &f) {
-			break
-		}
-		stages = append(stages, f.stage)
-		err = f.cause
-	}
-	if len(stages) == 0 {
-		return "UNKNOWN"
-	}
-	return strings.Join(stages, "/")
 }

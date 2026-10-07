@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestAdmissionRejectsConcurrentOtherKernelThread(t *testing.T) {
@@ -48,26 +49,33 @@ func TestProductionStartupPolicyNative(t *testing.T) {
 	t.Setenv("XTABLES_LIBDIR", "/unreviewed-startup-tools-extensions")
 	var lease *Lease
 	var err error
+	started := time.Now()
 	if mode == "stock-nc1812" {
 		lease, err = AcquireReviewedStockNC1812Policy(lifetime, provider)
 	} else {
 		lease, err = AcquireUbuntuLegacyPolicy(lifetime, provider)
 	}
+	acquired := time.Since(started)
 	if err != nil {
-		t.Fatal("production policy acquisition refused: stages=", nativeStages(err))
+		t.Fatalf("production policy acquisition refused: acquisition-ms=%d stages=%s", acquired.Milliseconds(), nativeStages(err))
 	}
 	defer lease.Close()
+	t.Logf("production policy acquisition passed: acquisition-ms=%d images=%d bytes=%d nodes=%d review=%s; no mutation grant", acquired.Milliseconds(), len(lease.review.images), lease.review.bytes, len(lease.review.nodes), lease.digest)
 	tools, runner, err := lease.PolicyRuntimeTools()
 	if err != nil {
 		t.Fatal(err)
 	}
 	// No admission is needed for these exact, numeric inspection commands.
 	for _, family := range []string{"-4", "-6"} {
-		data, err := runner.Run(lifetime, tools.IP, family, "-N", "rule", "show")
+		read, readCancel := context.WithTimeout(lifetime, operationTimeout)
+		readStart := time.Now()
+		data, err := runner.Run(read, tools.IP, family, "-N", "rule", "show")
+		readElapsed, readContext := time.Since(readStart), nativeContextState(read)
+		readCancel()
 		if err != nil {
-			t.Fatal("actual policy IP read refused: stages=", nativeStages(err))
+			t.Fatalf("actual policy IP read refused: acquisition-ms=%d read-ms=%d read-context=%s family=%s stages=%s", acquired.Milliseconds(), readElapsed.Milliseconds(), readContext, family, nativeStages(err))
 		}
-		t.Logf("numeric RPDB family=%s bytes=%d rows=%d", family, len(data), strings.Count(string(data), "\n"))
+		t.Logf("numeric RPDB family=%s read-ms=%d read-context=%s bytes=%d rows=%d", family, readElapsed.Milliseconds(), readContext, len(data), strings.Count(string(data), "\n"))
 	}
 	// This command is never started: absence of CORE admission must refuse it.
 	if data, err := runner.Run(lifetime, tools.IPTables, "-t", "mangle", "-N", "RZG_unissued_native"); !errors.Is(err, ErrUnknown) || len(data) != 0 {

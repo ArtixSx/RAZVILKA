@@ -123,7 +123,7 @@ func (l *Lease) policyEffect(original context.Context, index int, args []string)
 	}
 	waitErr := command.Wait()
 	if admissionErr != nil || waitErr != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 {
-		return nil, at("EFFECT_UNKNOWN", errors.Join(admissionErr, waitErr))
+		return nil, at("EFFECT_UNKNOWN", errors.Join(admissionErr, commandResultFailure("EFFECT_RESULT", waitErr, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)))
 	}
 	// Successful Wait after the exact admitted Start acknowledges the write.
 	// Do not erase that ACK if cancellation races after the child exited: the
