@@ -1,0 +1,215 @@
+package operationgate
+
+import (
+	"context"
+	"errors"
+	"io"
+	"os"
+	"sync"
+)
+
+// ControlEpochReference is a comparison value, never an admission. The held
+// protected root/lock incarnation, same Gate and original operation capability
+// cannot be reconstructed from it. It does not authorize a self-update.
+type ControlEpochReference struct {
+	InstallationID string
+	Sequence       uint64
+}
+
+// ControlEpochReview retains the actual protected control directory and the
+// permanent lock inode. Every forward use requires a live original exclusive
+// operation context; its reference grants no Store or provider permission.
+type ControlEpochReview struct {
+	self   *ControlEpochReview
+	mu     sync.Mutex
+	gate   *Gate
+	dir    *controlDirectory
+	lock   *os.File
+	info   os.FileInfo
+	ref    ControlEpochReference
+	closed bool
+}
+
+func (*ControlEpochReview) String() string   { return "[private control epoch review]" }
+func (*ControlEpochReview) GoString() string { return "[private control epoch review]" }
+
+// ReviewControlEpoch only reads existing control state under actual original
+// exclusive admission. Missing state never initializes authority.
+func (g *Gate) ReviewControlEpoch(ctx context.Context, path string) (*ControlEpochReview, error) {
+	var review *ControlEpochReview
+	err := g.WithExclusiveContext(ctx, func() error {
+		d, err := openControlDirectory(path, false)
+		if err != nil {
+			return ErrSelfUpdateStopJournal
+		}
+		keep := false
+		defer func() {
+			if !keep {
+				d.close()
+			}
+		}()
+		f, err := d.root.OpenFile(selfControlLock, os.O_RDONLY|controlFileFlags(), 0)
+		if err != nil {
+			return ErrSelfUpdateStopJournal
+		}
+		defer func() {
+			if !keep {
+				_ = f.Close()
+			}
+		}()
+		info, err := f.Stat()
+		if err != nil || !info.Mode().IsRegular() || !controlPrivate(info) {
+			return ErrSelfUpdateStopJournal
+		}
+		r, err := readControlCurrent(d)
+		if err != nil || checkControlRequest(d, r) != nil {
+			return ErrSelfUpdateStopJournal
+		}
+		review = &ControlEpochReview{gate: g, dir: d, lock: f, info: info,
+			ref: ControlEpochReference{InstallationID: r.InstallationID, Sequence: r.Sequence}}
+		review.self = review
+		if err := review.check(ctx); err != nil {
+			review = nil
+			return err
+		}
+		keep = true
+		return nil
+	})
+	if err != nil {
+		if review != nil {
+			_ = review.Close()
+		}
+		return nil, err
+	}
+	return review, nil
+}
+
+func (r *ControlEpochReview) Reference() ControlEpochReference {
+	if r == nil || r.self != r {
+		return ControlEpochReference{}
+	}
+	return r.ref
+}
+
+// Current reads the SAME retained protected owner, epoch and permanent marker.
+// Fresh same-Gate operations may compare a durable consent epoch, but Current
+// itself does not grant consent, certify a Store or authorize an effect.
+func (r *ControlEpochReview) Current(ctx context.Context) error {
+	if r == nil || r.self != r || r.gate == nil {
+		return ErrSelfUpdateStopChanged
+	}
+	return r.gate.WithExclusiveContext(ctx, func() error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return r.check(ctx)
+	})
+}
+
+// WithStart linearizes ONLY an actual bounded Cmd.Start syscall with durable
+// Stop. The caller must already retain its exact command/review/Store/owner
+// binding; this primitive grants none of them. The synchronous callback must
+// not call this review or perform readiness, Wait, fsync or cleanup. No Gate
+// mutex is held while acquiring or holding the protected control lock.
+func (r *ControlEpochReview) WithStart(ctx context.Context, begin func() error) error {
+	if r == nil || r.self != r || r.gate == nil || begin == nil {
+		return ErrSelfUpdateStopChanged
+	}
+	return r.gate.WithExclusiveContext(ctx, func() error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if err := r.check(ctx); err != nil {
+			return err
+		}
+		locked, _, err := lockControlFile(ctx, r.dir)
+		if err != nil {
+			return err
+		}
+		defer locked.Close()
+		if err := r.checkWithMarker(ctx, locked); err != nil {
+			return err
+		}
+		err = begin()
+		return errors.Join(err, r.checkWithMarker(ctx, locked))
+	})
+}
+
+func (r *ControlEpochReview) check(ctx context.Context) error {
+	return r.checkWithMarker(ctx, r.lock)
+}
+
+func (r *ControlEpochReview) checkWithMarker(ctx context.Context, markerReader *os.File) error {
+	if ctx == nil || r.closed || r.dir == nil || r.lock == nil || r.info == nil {
+		return ErrSelfUpdateStopChanged
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := r.checkHeldOwner(markerReader); err != nil {
+		return err
+	}
+	record, err := readControlCurrent(r.dir)
+	if err != nil || checkControlRequest(r.dir, record) != nil {
+		return ErrSelfUpdateStopJournal
+	}
+	if record.Stopped {
+		return ErrSelfUpdateStopped
+	}
+	if record.InstallationID != r.ref.InstallationID || record.Sequence != r.ref.Sequence {
+		return ErrSelfUpdateStopChanged
+	}
+	if err := r.checkHeldOwner(markerReader); err != nil {
+		return err
+	}
+	return ctx.Err()
+}
+
+func (r *ControlEpochReview) checkHeldOwner(markerReader *os.File) error {
+	if r.dir.unchanged() != nil {
+		return ErrSelfUpdateStopJournal
+	}
+	root, err := os.Lstat(r.dir.path)
+	if err != nil || !root.IsDir() || !controlPrivate(root) || root.Mode()&os.ModeSymlink != 0 {
+		return ErrSelfUpdateStopJournal
+	}
+	held, err := r.lock.Stat()
+	current, currentErr := r.dir.root.Stat(selfControlLock)
+	if err != nil || currentErr != nil || !os.SameFile(r.info, held) || !os.SameFile(held, current) || !controlPrivate(current) || !current.Mode().IsRegular() {
+		return ErrSelfUpdateStopJournal
+	}
+	marker := make([]byte, len(selfControlMarker)+1)
+	markerInfo, err := markerReader.Stat()
+	if err != nil || !os.SameFile(held, markerInfo) {
+		return ErrSelfUpdateStopJournal
+	}
+	n, err := markerReader.ReadAt(marker, 0)
+	if err != nil && !errors.Is(err, io.EOF) || string(marker[:n]) != selfControlMarker {
+		return ErrSelfUpdateStopJournal
+	}
+	return nil
+}
+
+// Close joins a concurrent short Current/Start use and closes both retained
+// descriptors. It does not release a Gate lease or settle an effect. The actual
+// owner first proves Stop/Wait/ECHILD and then releases original admission.
+func (r *ControlEpochReview) Close() error {
+	if r == nil {
+		return nil
+	}
+	if r.self != r {
+		return ErrSelfUpdateStopChanged
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil
+	}
+	r.closed = true
+	var err error
+	if r.lock != nil {
+		err = r.lock.Close()
+	}
+	if r.dir != nil {
+		err = errors.Join(err, r.dir.root.Close())
+	}
+	return err
+}

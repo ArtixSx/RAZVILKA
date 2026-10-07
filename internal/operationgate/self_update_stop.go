@@ -210,6 +210,16 @@ func ReadSelfUpdateStop(ctx context.Context, path string) (SelfUpdateStop, bool,
 }
 
 func lockControl(ctx context.Context, d *controlDirectory) (func(), bool, error) {
+	f, created, err := lockControlFile(ctx, d)
+	if err != nil {
+		return nil, false, err
+	}
+	return func() { _ = f.Close() }, created, nil
+}
+
+// The retained file permits an owner to read its marker using the SAME locked
+// handle. Windows byte locks also exclude reads through another handle.
+func lockControlFile(ctx context.Context, d *controlDirectory) (*os.File, bool, error) {
 	var f *os.File
 	var err error
 	created := false
@@ -270,7 +280,7 @@ func lockControl(ctx context.Context, d *controlDirectory) (func(), bool, error)
 		}
 	}
 	keep = true
-	return func() { _ = f.Close() }, created, nil
+	return f, created, nil
 }
 
 func writeControl(d *controlDirectory, name string, r SelfUpdateStop) error {
