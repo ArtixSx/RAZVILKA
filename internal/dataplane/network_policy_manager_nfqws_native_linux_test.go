@@ -514,6 +514,7 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 			if err != nil || !nfqwsScopedLeaseExecutionMatches(lease, e.resource.Plan(), e.resource.Binding()) || !lease.Receipt.WaitECHILD || !lease.Acknowledged {
 				t.Fatal("same eight-field process did not finish ECHILD/parent ACK", err)
 			}
+			t.Logf("paired settled process checkpoint: state=%s started=%t cancelled=%t exit-code=%d child-present=%t", lease.Receipt.State, lease.Receipt.Started, lease.Receipt.Cancelled, lease.Receipt.ExitCode, lease.Child != (components.NFQWSRuntimeProcessIdentity{}))
 			if mode == "late-start-current" {
 				fencedManager = m
 				if !errors.Is(result, ErrReviewChanged) || !armedDenied || actionCalled || lease.Receipt.Started || lease.Receipt.State != "not-started" || execution.State != "resource-failed" || execution.Resources[0].Phase != "closed" {
