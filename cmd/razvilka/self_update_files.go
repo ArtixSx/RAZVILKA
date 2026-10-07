@@ -192,7 +192,16 @@ func configuredSelfUpdateFiles(installation, files, helper string, control ...st
 	if production {
 		adapter = nativeSelfUpdateFileAdapter()
 	}
-	return &app.SelfUpdateFiles{Installation: values[0], Directory: values[1], ControlRoot: values[3], Helper: u, Adapter: adapter}, nil
+	f := &app.SelfUpdateFiles{Installation: values[0], Directory: values[1], ControlRoot: values[3], Helper: u, Adapter: adapter}
+	if adapter != nil {
+		f.JournalReadGuard = func(ctx context.Context, required int) error {
+			if required != updatecheck.SelfUpdateReadVersion {
+				return errSelfUpdateJournalState
+			}
+			return boundedSelfUpdateJournalState(ctx, productionSelfUpdateJournalRoots())
+		}
+	}
+	return f, nil
 }
 
 func productionSelfUpdateFiles() (*app.SelfUpdateFiles, error) {
@@ -222,7 +231,7 @@ func runSelfUpdateFileCommand(args []string) int {
 		return 2
 	}
 	revision, err := strconv.ParseUint(args[2], 10, 64)
-	if err != nil {
+	if err != nil || args[0] == "settle-stopped-rollback" && (revision == 0 || strconv.FormatUint(revision, 10) != args[2]) {
 		return 2
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)

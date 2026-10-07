@@ -98,6 +98,9 @@ type SelfUpdateFiles struct {
 	// RecoveryGuard reads independent private/network journals. It must never
 	// recover or mutate them as a side effect of application file repair.
 	RecoveryGuard selfupdatejournal.Check
+	// Trusted fixed-deployment reader check. It preserves the provider's
+	// original callback context and grants no process or control effects.
+	JournalReadGuard func(context.Context, int) error
 }
 
 func (f *SelfUpdateFiles) Current() (selfupdatejournal.Receipt, bool, error) {
@@ -227,6 +230,9 @@ func (f *SelfUpdateFiles) Pending() bool {
 func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revision uint64, guard selfupdatejournal.Check) error {
 	if f == nil || f.Adapter == nil || guard == nil || !selfUpdateID.MatchString(id) || !selfUpdateFileAction(action) {
 		return errSelfUpdateRecovery
+	}
+	if action == "settle-stopped-rollback" {
+		return f.settleStoppedRollback(ctx, id, revision, guard)
 	}
 	reviewRevision, migratedSHA, files, err := f.Adapter.Review(ctx, id)
 	if err != nil {
@@ -402,7 +408,7 @@ func selfUpdateActionAuthority(action string) string {
 	switch action {
 	case "stop-old-panel", "stop-candidate-panel", "quiesce-old-runtime":
 		return "stop-owned"
-	case "restore", "restore-private-state":
+	case "restore", "restore-private-state", "settle-stopped-rollback":
 		return "replace-to-rollback"
 	case "resolve-unknown":
 		return "read/observe"

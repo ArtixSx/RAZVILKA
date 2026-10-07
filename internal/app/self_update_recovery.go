@@ -100,15 +100,23 @@ func (a *App) selfUpdateRecovery(w http.ResponseWriter, r *http.Request) {
 		err = a.SelfUpdateFiles.Action(ctx, in.ID, in.Action, *in.Revision, guard)
 	}
 	if err != nil {
+		if in.Action == "settle-stopped-rollback" {
+			writeJSON(w, http.StatusConflict, map[string]any{"code": "SELF_UPDATE_STOPPED_SETTLEMENT_UNCONFIRMED", "error": "Завершение остановленного отката не подтверждено. Сохраните журнал и действующую остановку.", "recovery_required": a.PendingSelfUpdateRecovery()})
+			return
+		}
 		writeJSON(w, http.StatusConflict, map[string]any{"code": "SELF_UPDATE_RECOVERY_UNCONFIRMED", "error": err.Error(), "recovery_required": a.PendingSelfUpdateRecovery()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"recovery_required": a.PendingSelfUpdateRecovery(), "live_accepted": in.Action == "accept-live", "rollback_accepted": in.Action == "accept-rollback"})
+	response := map[string]any{"recovery_required": a.PendingSelfUpdateRecovery(), "live_accepted": in.Action == "accept-live", "rollback_accepted": in.Action == "accept-rollback"}
+	if in.Action == "settle-stopped-rollback" {
+		response["stopped_settlement_completed"] = true
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func selfUpdateFileAction(action string) bool {
 	switch action {
-	case "prepare", "install", "restore", "accept-live", "accept-rollback", "resolve-unknown", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel", "restore-private-state", "start-rollback-panel":
+	case "prepare", "install", "restore", "accept-live", "accept-rollback", "resolve-unknown", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel", "restore-private-state", "start-rollback-panel", "settle-stopped-rollback":
 		return true
 	}
 	return false
