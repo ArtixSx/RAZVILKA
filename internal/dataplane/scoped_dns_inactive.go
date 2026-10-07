@@ -18,6 +18,7 @@ var _ RuntimeInactivityObserver = (*ScopedDNSAdapter)(nil)
 type scopedDNSInactiveProof struct {
 	procRoot       string
 	netRoot        string
+	threadNetRoot  func() string
 	selfPID        int
 	readlink       func(string) (string, error)
 	sameExecutable func(string, string) (bool, error)

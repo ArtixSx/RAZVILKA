@@ -14,7 +14,11 @@ import (
 // DNS serves in the controller process. Other controller incarnations cannot
 // be cleared by this process's lifecycle accounting, even with a missing owner.
 func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, settings string, ports map[uint16]bool) error {
-	if p.readlink == nil || p.sameExecutable == nil || p.selfPID < 1 || !scopedDNSInactivePath(p.netRoot) {
+	netRoot := p.netRoot
+	if p.threadNetRoot != nil {
+		netRoot = p.threadNetRoot()
+	}
+	if p.readlink == nil || p.sameExecutable == nil || p.selfPID < 1 || !scopedDNSInactivePath(netRoot) {
 		return ErrScopedDNSRuntimeInactive
 	}
 	selfExe, err := p.readlink(filepath.Join(p.procRoot, strconv.Itoa(p.selfPID), "exe"))
@@ -163,7 +167,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		raw, err := readProxyInactiveProc(filepath.Join(p.netRoot, kind), 1<<20)
+		raw, err := readProxyInactiveProc(filepath.Join(netRoot, kind), 1<<20)
 		if err != nil {
 			return err
 		}
