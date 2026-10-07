@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/netresolve"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/usquediag"
 	xnetproxy "golang.org/x/net/proxy"
@@ -73,6 +75,14 @@ type ProxyTunnelAdapter struct {
 	nodeRuntimeIdentity func(ProcessSpec, string) (string, error)
 	nodeXHTTPVersion    func(context.Context, string) error
 	ownedUSQUELiveIO    usqueLiveHealthIO
+	// Startup-only dispatch capability; operation views never mutate this owner.
+	xrayPlanDispatch  bool
+	xrayOperation     bool
+	xrayPreviousMode  proxyXrayMode
+	xrayCandidateMode proxyXrayMode
+	xraySnapshotRoot  string
+	xraySnapshotHash  string
+	xraySnapshotOwner os.FileInfo
 }
 
 type NodeRouteRequest struct {
@@ -100,9 +110,13 @@ type usqueCanaryEvidence = usquediag.CanaryEvidence
 var errProxyCanaryCleanup = errors.New("isolated proxy candidate cleanup is unverified")
 
 type proxySnapshot struct {
+	CandidateXrayMode   string              `json:"candidate_xray_mode,omitempty"`
+	PreviousXrayMode    string              `json:"previous_xray_mode,omitempty"`
 	EngineID            string              `json:"engine_id,omitempty"`
 	NodeManifest        []byte              `json:"node_manifest,omitempty"`
 	NodeManifestExists  bool                `json:"node_manifest_exists,omitempty"`
+	NodeInterface       []byte              `json:"node_interface,omitempty"`
+	NodeInterfaceExists bool                `json:"node_interface_exists,omitempty"`
 	SidecarKind         string              `json:"sidecar_kind,omitempty"`
 	ConfigPath          string              `json:"config_path"`
 	Config              []byte              `json:"config,omitempty"`
@@ -155,7 +169,12 @@ func (a *ProxyTunnelAdapter) checkPlanNetwork(ctx context.Context, plan Plan) er
 	return a.checkRouteNetwork(ctx, plan.RoutePlanFor(a.ID()))
 }
 
-func (a *ProxyTunnelAdapter) checkRouteNetwork(ctx context.Context, plan RoutePlan) error {
+func (a *ProxyTunnelAdapter) checkRouteNetwork(ctx context.Context, plan RoutePlan) (retErr error) {
+	defer func() {
+		if retErr == nil {
+			retErr = a.checkXrayTransactionSnapshot()
+		}
+	}()
 	if a.ID() == "usque" && plan.NetworkProfileID != "" {
 		if err := requireOwnedUSQUEReviewGuard(ctx); err != nil {
 			return err
@@ -172,11 +191,31 @@ func (a *ProxyTunnelAdapter) checkRouteNetwork(ctx context.Context, plan RoutePl
 }
 
 func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root string) error {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchXrayPlan(plan, root, false)
+		if err != nil {
+			return err
+		}
+		view.xrayPreviousMode, err = a.currentXrayRuntimeMode(ctx)
+		if err != nil {
+			return err
+		}
+		return view.Snapshot(ctx, frozen, root)
+	}
 	if err := a.valid(); err != nil {
 		return err
 	}
 	if (a.scopedXray || a.ID() == "sing-box" && plan.RequiresNetworkProof()) && planUsesEngineDraft(plan, a.ID(), "main") {
 		return errors.New("node-scoped routes cannot consume the general engine draft")
+	}
+	history := a
+	if a.xrayOperation {
+		var err error
+		history, err = a.xrayModeView(a.xrayPreviousMode)
+		if err != nil {
+			return err
+		}
+		history.xrayOperation = false
 	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
@@ -218,15 +257,23 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	if err != nil {
 		return err
 	}
-	if a.scopedXray && nodeManifestExists {
-		if _, err := a.readNodeManifest(a.nodeManifestPath()); err != nil {
+	var nodeInterface []byte
+	var nodeInterfaceExists bool
+	if a.xrayOperation {
+		nodeInterface, nodeInterfaceExists, err = optionalProxySnapshotImage(a.StateRoot, filepath.Join("runtime", "interface.json"), 4096)
+		if err != nil {
+			return errors.Join(ErrProxyPolicyUnknown, err)
+		}
+	}
+	if history.scopedXray && nodeManifestExists {
+		if _, err := history.readNodeManifest(history.nodeManifestPath()); err != nil {
 			return err
 		}
-		if a.Processes.Running(a.engineProcess()) && a.Processes.Running(a.sidecarProcess()) {
-			if err := a.verifyScopedNodeInterface(ctx); err != nil {
+		if history.Processes.Running(history.engineProcess()) && history.Processes.Running(history.sidecarProcess()) {
+			if err := history.verifyScopedNodeInterface(ctx); err != nil {
 				return err
 			}
-			if _, err := a.scopedRuntimeIdentity(); err != nil {
+			if _, err := history.scopedRuntimeIdentity(); err != nil {
 				return err
 			}
 		}
@@ -237,10 +284,17 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	}
 	snapshot := proxySnapshot{
 		EngineID: a.ID(), NodeManifest: nodeManifest, NodeManifestExists: nodeManifestExists,
+		NodeInterface: nodeInterface, NodeInterfaceExists: nodeInterfaceExists,
 		SidecarKind: a.effectiveSidecar(),
 		ConfigPath:  view.Path, Config: live, ConfigExisted: liveExists, ConfigDraft: draftExists, StagedConfig: draft,
 		RuntimeEngine: engineRuntime, RuntimeEngineExists: engineRuntimeExists, RuntimeSidecar: sideRuntime, RuntimeSideExists: sideRuntimeExists, Transport: transport, TransportExists: transportExists, Evidence: evidence, EvidenceExists: evidenceExists,
-		Policy: policy, PolicyExists: policyExists, EngineWasRunning: a.Processes.Running(a.engineProcess()), SidecarWasRunning: a.Processes.Running(a.sidecarProcess()), PackageWasRunning: packageWasRunning,
+		Policy: policy, PolicyExists: policyExists, EngineWasRunning: history.Processes.Running(history.engineProcess()), SidecarWasRunning: history.Processes.Running(history.sidecarProcess()), PackageWasRunning: packageWasRunning,
+	}
+	if a.xrayOperation {
+		snapshot.CandidateXrayMode, snapshot.PreviousXrayMode = string(a.xrayCandidateMode), string(a.xrayPreviousMode)
+		if _, err := a.xraySnapshotPreviousMode(snapshot); err != nil {
+			return err
+		}
 	}
 	if policyExists {
 		snapshot.PolicyTracked, err = a.trackedPolicyJournal()
@@ -274,6 +328,13 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 }
 
 func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) error {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
+		if err != nil {
+			return err
+		}
+		return view.Stage(ctx, frozen, root)
+	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
@@ -290,6 +351,7 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	}
 	privateEndpoints := []string{}
 	var nodeManifest *proxyNodeManifest
+	var nodeManifestData []byte
 	if a.scopedXray {
 		var err error
 		source, privateEndpoints, nodeManifest, err = a.stageScopedXray(ctx, plan)
@@ -367,9 +429,7 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 		if err != nil || len(data) > 128<<10 {
 			return errors.New("invalid scoped node manifest")
 		}
-		if err := writeAtomic(filepath.Join(root, "nodes.staged.json"), data, 0o600); err != nil {
-			return err
-		}
+		nodeManifestData = data
 	}
 	policy := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
 	if err := a.prepareForwarding(ctx, &policy); err != nil {
@@ -382,8 +442,16 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	if err := a.preflightForwarding(ctx, policy); err != nil {
 		return preflightRefusalError{err}
 	}
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
+		return err
+	}
 	if err := a.prepareCandidatePolicy(root, policy); err != nil {
 		return err
+	}
+	if nodeManifestData != nil {
+		if err := writeAtomic(filepath.Join(root, "nodes.staged.json"), nodeManifestData, 0o600); err != nil {
+			return err
+		}
 	}
 	policyData, _ := json.MarshalIndent(policy, "", "  ")
 	for _, item := range []struct {
@@ -401,7 +469,14 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 	return a.checkPlanNetwork(ctx, plan)
 }
 
-func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) error {
+func (a *ProxyTunnelAdapter) Validate(ctx context.Context, plan Plan, root string) error {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
+		if err != nil {
+			return err
+		}
+		return view.Validate(ctx, frozen, root)
+	}
 	if err := a.valid(); err != nil {
 		return err
 	}
@@ -446,13 +521,27 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, _ Plan, root string) 
 	if err := a.validateSidecarConfig(ctx, sidecarCandidate); err != nil {
 		return err
 	}
-	return nil
+	return a.checkXrayTransactionSnapshot()
 }
 
 // Canary starts only the staged proxy engine on an isolated loopback SOCKS
 // port. It does not stop the working process, create a TUN interface or touch
 // policy routing. The candidate is always removed before Activate can run.
 func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root string) (retErr error) {
+	if a.xrayPlanDispatch {
+		plan.Routes = cloneNetworkPolicyRoutes(plan.Routes)
+		plan.LAN = CloneLANPolicyRuntime(plan.LAN)
+		mode, err := proxyXrayFrozenPlanMode(plan)
+		if err != nil {
+			return err
+		}
+		view, frozen, err := a.dispatchCandidateXrayPlan(Plan{Routes: plan.Routes, LAN: plan.LAN, NetworkProfileID: plan.NetworkProfileID}, root, true)
+		if err != nil || view.xrayCandidateMode != mode {
+			return errors.Join(ErrProxyPolicyUnknown, err)
+		}
+		plan.Routes, plan.LAN = frozen.Routes, frozen.LAN
+		return view.Canary(ctx, plan, root)
+	}
 	if err := a.checkRouteNetwork(ctx, plan); err != nil {
 		return err
 	}
@@ -479,6 +568,9 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 	}
 	candidate, _, err := a.buildEngineCandidate(staged, port)
 	if err != nil {
+		return err
+	}
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
 		return err
 	}
 	canaryRoot := filepath.Join(root, "canary")
@@ -607,6 +699,13 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 }
 
 func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root string) error {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
+		if err != nil {
+			return preflightRefusalError{err}
+		}
+		return view.Activate(ctx, frozen, root)
+	}
 	plan = a.freezeUSQUEHealthPlan(plan)
 	var selectedUSQUE usqueTransport
 	if a.ID() == "usque" {
@@ -629,15 +728,21 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	if err := a.checkSnapshotSidecar(snapshot); err != nil {
 		return err
 	}
+	previous, err := a.xrayPreviousView(snapshot)
+	if err != nil {
+		return preflightRefusalError{err}
+	}
 	if a.scopedXray {
 		if _, err := a.validateStagedNodes(ctx, root); err != nil {
 			return preflightRefusalError{err}
 		}
-		if _, err := a.scopedInterfaceIndex(ctx); err == nil {
-			if err := a.verifyScopedNodeInterface(ctx); err != nil {
+	}
+	if previous.scopedXray {
+		if _, err := previous.scopedInterfaceIndex(ctx); err == nil {
+			if err := previous.verifyScopedNodeInterface(ctx); err != nil {
 				return preflightRefusalError{err}
 			}
-			if _, err := a.scopedRuntimeIdentity(); err != nil {
+			if _, err := previous.scopedRuntimeIdentity(); err != nil {
 				return preflightRefusalError{errors.New("existing TUN has no scoped runtime identity")}
 			}
 		} else if !errors.Is(err, errNodeInterfaceAbsent) {
@@ -654,24 +759,52 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	if err := a.preflightForwarding(ctx, desired); err != nil {
 		return preflightRefusalError{err}
 	}
+	if a.xrayOperation {
+		if err := previous.verifyProxySnapshotRuntimeFiles(snapshot); err != nil {
+			return preflightRefusalError{err}
+		}
+		if snapshot.NodeInterfaceExists {
+			if err := verifyRestoredFile(a.nodeInterfacePath(), snapshot.NodeInterface, true); err != nil {
+				return preflightRefusalError{err}
+			}
+		}
+		if a.xrayPreviousMode == proxyXrayModeCold {
+			if err := a.verifyXrayInterfaceAbsent(ctx); err != nil {
+				return preflightRefusalError{err}
+			}
+		}
+	}
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
+		return preflightRefusalError{err}
+	}
 	if err := a.beginCandidatePolicy(root, desired); err != nil {
 		return err
 	}
 	if old, exists, err := a.loadPolicy(); err != nil {
 		return err
 	} else if exists {
-		if err := a.removeCommittedPolicy(ctx, old); err != nil {
+		if err := previous.removeCommittedPolicy(ctx, old); err != nil {
 			return fmt.Errorf("remove previous %s policy: %w", a.ID(), err)
 		}
-	} else if err := a.removeForwarding(ctx); err != nil {
+	} else if err := previous.removeForwarding(ctx); err != nil {
 		return err
 	}
-	if err := a.stopOwned(ctx); err != nil {
+	if err := previous.stopOwned(ctx); err != nil {
 		return err
 	}
-	if a.scopedXray {
-		if err := a.removeScopedNodeInterface(ctx); err != nil {
+	if previous.scopedXray {
+		if err := previous.removeScopedNodeInterface(ctx); err != nil {
 			return err
+		}
+	}
+	if a.xrayOperation {
+		if err := a.verifyXrayInterfaceAbsent(ctx); err != nil {
+			return err
+		}
+		if previous.scopedXray {
+			if err := a.consumeXrayNodeHistory(snapshot); err != nil {
+				return err
+			}
 		}
 	}
 	if snapshot.PackageWasRunning {
@@ -746,6 +879,13 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 }
 
 func (a *ProxyTunnelAdapter) Health(ctx context.Context, plan Plan, root string) error {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
+		if err != nil {
+			return err
+		}
+		return view.Health(ctx, frozen, root)
+	}
 	plan = a.freezeUSQUEHealthPlan(plan)
 	if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
 		return err
@@ -830,6 +970,13 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 }
 
 func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr error) {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchCurrentXrayPlan(ctx, plan)
+		if err != nil {
+			return err
+		}
+		return view.Reconcile(ctx, frozen)
+	}
 	plan = a.freezeUSQUEHealthPlan(plan)
 	var selectedUSQUE usqueTransport
 	if a.ID() == "usque" {
@@ -945,6 +1092,13 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 }
 
 func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool, error) {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchCurrentXrayPlan(ctx, plan)
+		if err != nil {
+			return false, err
+		}
+		return view.RefreshPolicy(ctx, frozen)
+	}
 	plan = a.freezeUSQUEHealthPlan(plan)
 	if a.ID() == "usque" {
 		if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
@@ -1040,6 +1194,25 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 }
 
 func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
+	if a.xrayPlanDispatch {
+		mode, err := a.currentXrayRuntimeMode(ctx)
+		if err != nil {
+			return err
+		}
+		if mode == proxyXrayModeCold {
+			for _, path := range []string{a.policyPath(), a.policyBindingPath(), a.forwardingPath()} {
+				if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+					return errors.Join(ErrProxyPolicyUnknown, err)
+				}
+			}
+			return ctx.Err()
+		}
+		view, err := a.xrayModeView(mode)
+		if err != nil {
+			return err
+		}
+		return view.Deactivate(ctx)
+	}
 	owned := regularFile(a.forwardingPath()) || regularFile(a.policyPath()) || regularFile(a.engineConfigPath()) || regularFile(a.sidecarConfigPath()) || regularFile(a.transportPath()) || regularFile(a.engineProcess().PIDPath) || regularFile(a.sidecarProcess().PIDPath)
 	if !owned {
 		return nil
@@ -1087,6 +1260,13 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 }
 
 func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string) error {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
+		if err != nil {
+			return err
+		}
+		return view.Commit(ctx, frozen, root)
+	}
 	plan = a.freezeUSQUEHealthPlan(plan)
 	var activeUSQUEEvidence []byte
 	if a.ID() == "usque" {
@@ -1130,6 +1310,9 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 			return err
 		}
 	}
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(a.StateRoot, 0o700); err != nil {
 		return err
 	}
@@ -1155,7 +1338,14 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 	return a.checkPlanNetwork(ctx, plan)
 }
 
-func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, _ Plan, root string) error {
+func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, plan Plan, root string) error {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchXrayPlan(plan, root, true)
+		if err != nil {
+			return err
+		}
+		return view.Rollback(ctx, frozen, root)
+	}
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
 		return err
@@ -1237,6 +1427,25 @@ func (a *ProxyTunnelAdapter) restoreProxyRollback(ctx context.Context, snapshot 
 			return err
 		}
 	}
+	if a.xrayOperation {
+		if err := a.verifyXrayInterfaceAbsent(ctx); err != nil {
+			return err
+		}
+		if a.scopedXray {
+			if err := a.consumeXrayCandidateInterface(ctx); err != nil {
+				return err
+			}
+		}
+		previous, err := a.xrayPreviousView(snapshot)
+		if err != nil {
+			return err
+		}
+		return previous.restoreProxySnapshot(ctx, snapshot, root, sameBoot)
+	}
+	return a.restoreProxySnapshot(ctx, snapshot, root, sameBoot)
+}
+
+func (a *ProxyTunnelAdapter) restoreProxySnapshot(ctx context.Context, snapshot proxySnapshot, root string, sameBoot bool) error {
 	for _, file := range []struct {
 		path   string
 		data   []byte
@@ -1300,6 +1509,9 @@ func (a *ProxyTunnelAdapter) restoreProxyRollback(ctx context.Context, snapshot 
 }
 
 func (a *ProxyTunnelAdapter) finishProxyRollback(ctx context.Context, snapshot proxySnapshot, root string, sameBoot bool) error {
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
+		return err
+	}
 	var firstErr error
 	if snapshot.ConfigDraft {
 		if err := restoreOptional(snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil && firstErr == nil {
@@ -1317,6 +1529,9 @@ func (a *ProxyTunnelAdapter) finishProxyRollback(ctx context.Context, snapshot p
 		if err == nil && !running && firstErr == nil {
 			firstErr = a.startPackageRuntime(ctx)
 		}
+	}
+	if firstErr == nil {
+		firstErr = a.checkXrayTransactionSnapshot()
 	}
 	if firstErr == nil {
 		firstErr = a.markCandidatePolicyPhase(root, "restored")
@@ -1680,18 +1895,63 @@ func (a *ProxyTunnelAdapter) readStagedPolicy(root string) (PolicyState, error) 
 }
 
 func readProxySnapshot(root string) (proxySnapshot, error) {
-	data, err := os.ReadFile(filepath.Join(root, "snapshot.json"))
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
+		return proxySnapshot{}, ErrProxyPolicyUnknown
+	}
+	before, err := os.Lstat(root)
+	if err != nil || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return proxySnapshot{}, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	owner, err := ownedfs.Open(root)
 	if err != nil {
 		return proxySnapshot{}, err
 	}
+	defer owner.Close()
+	image, identity, err := readProxyXrayImage(owner, "snapshot.json", 64<<20)
+	if err != nil || !image.exists {
+		return proxySnapshot{}, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	defer clear(image.data)
 	var snapshot proxySnapshot
-	if err := json.Unmarshal(data, &snapshot); err != nil {
+	if err := decodeProxySnapshotJSON(image.data, &snapshot); err != nil {
 		return proxySnapshot{}, err
 	}
 	if snapshot.ConfigPath == "" {
 		return proxySnapshot{}, errors.New("invalid proxy snapshot")
 	}
+	closing, closingIdentity, err := readProxyXrayImage(owner, "snapshot.json", 64<<20)
+	defer clear(closing.data)
+	after, rootErr := os.Lstat(root)
+	if err != nil || !closing.exists || !os.SameFile(identity, closingIdentity) || !bytes.Equal(image.data, closing.data) ||
+		rootErr != nil || !after.IsDir() || after.Mode()&os.ModeSymlink != 0 || !os.SameFile(before, after) {
+		return proxySnapshot{}, errors.Join(ErrProxyPolicyUnknown, err, rootErr)
+	}
 	return snapshot, nil
+}
+
+func decodeProxySnapshotJSON(data []byte, snapshot *proxySnapshot) error {
+	if !uniqueProxyJSONKeys(data, 64<<20, true) || bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return ErrProxyPolicyUnknown
+	}
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.DisallowUnknownFields()
+	if d.Decode(snapshot) != nil || d.Decode(new(any)) != io.EOF {
+		return ErrProxyPolicyUnknown
+	}
+	return nil
+}
+
+func optionalProxySnapshotImage(root, name string, limit int64) ([]byte, bool, error) {
+	owner, err := ownedfs.Open(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	defer owner.Close()
+	image, _, err := readProxyXrayImage(owner, name, limit)
+	return image.data, image.exists, err
 }
 
 func buildProxyCandidate(engineID string, source []byte, port int) ([]byte, []string, error) {

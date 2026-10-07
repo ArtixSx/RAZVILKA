@@ -21,9 +21,9 @@ type NodeRuntimeFactoryOptions struct {
 	FreshProfile func(context.Context) (string, error)
 }
 
-// NewXrayNodeRuntime constructs the ordinary scoped Xray executor and concrete
-// router TUN HTTPS verifier. Semantic expectations come from the sealed Plan,
-// and optional actual LAN witnesses keep their separate evidence path.
+// NewXrayNodeRuntime constructs one Xray owner for generic and exact-node plans
+// and its concrete router TUN HTTPS verifier. The sealed plan selects the mode
+// before effects; actual LAN witnesses retain their separate evidence path.
 func NewXrayNodeRuntime(options NodeRuntimeFactoryOptions) (*dataplane.ProxyTunnelAdapter, error) {
 	if options.Configs == nil || options.Nodes == nil || options.FreshProfile == nil ||
 		!filepath.IsAbs(options.StateRoot) || filepath.Clean(options.StateRoot) != options.StateRoot {
@@ -44,7 +44,7 @@ func NewXrayNodeRuntime(options NodeRuntimeFactoryOptions) (*dataplane.ProxyTunn
 		}
 		return dataplane.NodeRouteMaterial{EngineID: "xray", Config: material.Config, EndpointHosts: append([]string(nil), material.EndpointHosts...)}, nil
 	}
-	adapter, err := dataplane.NewScopedXrayRouterTunnelAdapter(options.Configs, options.StateRoot, materialize)
+	adapter, err := dataplane.NewXrayRuntimeAdapter(options.Configs, options.StateRoot, materialize)
 	if err != nil {
 		return nil, err
 	}

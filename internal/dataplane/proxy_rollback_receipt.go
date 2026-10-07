@@ -20,10 +20,18 @@ func (a *ProxyTunnelAdapter) publishProxyRestoration(root, id string) error {
 		return ErrProxyPolicyUnknown
 	}
 	receipt.RestorationGeneration = id
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
+		return err
+	}
 	return writeProxyPolicyReceipt(root, receipt)
 }
 
 func (a *ProxyTunnelAdapter) verifyUnstagedProxyRestoration(ctx context.Context, root string, snapshot proxySnapshot) error {
+	var err error
+	a, err = a.xrayPreviousView(snapshot)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Lstat(proxyPolicyReceiptPath(root)); !errors.Is(err, os.ErrNotExist) {
 		return ErrProxyPolicyUnknown
 	}
@@ -44,12 +52,17 @@ func (a *ProxyTunnelAdapter) verifyUnstagedProxyRestoration(ctx context.Context,
 	if err := a.verifyProxyRestorationRuntime(ctx, snapshot, snapshot.Policy); err != nil {
 		return errors.Join(ErrProxyPolicyUnknown, err)
 	}
-	return nil
+	return a.checkXrayTransactionSnapshot()
 }
 
 // All classification and runtime checks precede any retry mutation. A removed
 // candidate grants no authority over an uncertain or unrelated restoration.
 func (a *ProxyTunnelAdapter) resumeProxyPolicyRestoration(ctx context.Context, root string, candidate PolicyState, snapshot proxySnapshot, receipt proxyPolicyReceipt) (bool, error) {
+	var err error
+	a, err = a.xrayPreviousView(snapshot)
+	if err != nil {
+		return false, err
+	}
 	boot, err := a.currentBootIdentity()
 	if err != nil || receipt.Boot == "" || receipt.Boot != boot || snapshot.BootID != "" && snapshot.BootID != boot {
 		return false, ErrProxyPolicyUnknown
@@ -88,6 +101,9 @@ func (a *ProxyTunnelAdapter) resumeProxyPolicyRestoration(ctx context.Context, r
 	// the ACK; it only verifies that this exact acknowledged runtime survived.
 	if err := a.verifyProxyRestorationRuntime(ctx, snapshot, candidate); err != nil {
 		return false, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
+		return false, err
 	}
 	binding.Phase, binding.ReceiptID = "active", status.ID
 	if err := a.writePolicyBinding(binding); err != nil {
@@ -156,6 +172,11 @@ func (a *ProxyTunnelAdapter) verifyUntrackedProxyHistory() error {
 }
 
 func (a *ProxyTunnelAdapter) verifyProxyRestorationRuntime(ctx context.Context, snapshot proxySnapshot, candidate PolicyState) error {
+	var err error
+	a, err = a.xrayPreviousView(snapshot)
+	if err != nil {
+		return err
+	}
 	if err := a.verifyProxySnapshotRuntimeFiles(snapshot); err != nil {
 		return err
 	}

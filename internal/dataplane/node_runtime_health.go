@@ -149,6 +149,16 @@ func (m *Manager) CheckCommittedNodeHealth(ctx context.Context, expected Plan) e
 // transaction. Validate that current policy so ordinary DNS refresh cannot make
 // a healthy runtime look stale and cause repeated transactional restarts.
 func (a *ProxyTunnelAdapter) CommittedNodeHealth(ctx context.Context, plan Plan) error {
+	if a.xrayPlanDispatch {
+		view, frozen, err := a.dispatchCurrentXrayPlan(ctx, plan)
+		if err != nil {
+			return err
+		}
+		if !view.scopedXray {
+			return ErrNodeTUNProofRequired
+		}
+		return view.CommittedNodeHealth(ctx, frozen)
+	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}

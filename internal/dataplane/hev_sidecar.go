@@ -136,6 +136,13 @@ func (a *ProxyTunnelAdapter) validateSidecarConfig(ctx context.Context, path str
 	return nil
 }
 func (a *ProxyTunnelAdapter) checkSnapshotSidecar(snapshot proxySnapshot) error {
+	if a.xrayOperation {
+		previous, err := a.xrayPreviousView(snapshot)
+		if err != nil {
+			return err
+		}
+		return previous.checkSnapshotSidecar(snapshot)
+	}
 	if snapshot.EngineID != "" && snapshot.EngineID != a.ID() || a.scopedXray && snapshot.EngineID != "xray" {
 		return errors.New("snapshot belongs to another proxy engine")
 	}

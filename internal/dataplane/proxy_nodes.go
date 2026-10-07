@@ -53,10 +53,22 @@ func NewScopedXrayRouterTunnelAdapter(configs *engineconfig.Manager, root string
 	return a, nil
 }
 
+// NewXrayRuntimeAdapter installs one owner for reviewed generic or exact-node
+// plans. Each operation selects a detached mode before observing or changing
+// runtime state; a failed node operation cannot switch to the generic path.
+func NewXrayRuntimeAdapter(configs *engineconfig.Manager, root string, materializer NodeRouteMaterializer) (*ProxyTunnelAdapter, error) {
+	a, err := NewScopedXrayRouterTunnelAdapter(configs, root, materializer)
+	if err != nil {
+		return nil, err
+	}
+	a.scopedXray, a.xrayPlanDispatch = false, true
+	return a, nil
+}
+
 // NodeRouteVerificationCapable reports an installed concrete verification path.
 // Router service evidence remains distinct from optional actual LAN evidence.
 func (a *ProxyTunnelAdapter) NodeRouteVerificationCapable() bool {
-	return a != nil && a.scopedXray && a.NodeRoutes != nil && a.FreshProfile != nil &&
+	return a != nil && (a.scopedXray || a.xrayPlanDispatch) && a.NodeRoutes != nil && a.FreshProfile != nil &&
 		(a.NodeTUNProbe != nil || a.nodeRouterVerifier && nodeRouterDeviceBindingAvailable())
 }
 

@@ -13,11 +13,22 @@ import (
 // VerifyRollback is deliberately read-only. A successful Start/restore command
 // is not enough: processes may already have died, a file may differ, or router
 // hooks may have removed/reordered the restored RPDB/firewall rules.
-func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root string) (bool, error) {
+func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root string) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
+	if a.xrayPlanDispatch && !a.xrayOperation {
+		view, frozen, err := a.dispatchXrayPlan(plan, root, true)
+		if err != nil {
+			return false, err
+		}
+		return view.VerifyRollback(ctx, frozen, root)
+	}
 	s, err := readProxySnapshot(root)
+	if err != nil {
+		return false, err
+	}
+	a, err = a.xrayPreviousView(s)
 	if err != nil {
 		return false, err
 	}
@@ -97,6 +108,9 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, _ Plan, root st
 	// must not acquire a live restoration receipt.
 	if !a.Processes.Running(a.engineProcess()) || !a.Processes.Running(a.sidecarProcess()) {
 		return false, errors.New("restored proxy process exited during verification")
+	}
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
+		return false, err
 	}
 	// The caller still must verify network epoch, service definition and cause
 	// attribution before any next Apply. A broken old service A can be restored

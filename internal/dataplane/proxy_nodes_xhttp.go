@@ -232,7 +232,15 @@ func (a *ProxyTunnelAdapter) requireScopedXHTTPRuntime(ctx context.Context, data
 // Duplicate keys are ambiguous execution intent even if a decoder keeps the
 // last value. This checks only JSON syntax/uniqueness, not a second schema.
 func scopedNodeUniqueJSON(data []byte) bool {
-	if len(data) == 0 || len(data) > 4<<20 {
+	return uniqueProxyJSON(data, 4<<20)
+}
+
+func uniqueProxyJSON(data []byte, maxBytes int) bool {
+	return uniqueProxyJSONKeys(data, maxBytes, false)
+}
+
+func uniqueProxyJSONKeys(data []byte, maxBytes int, foldKeys bool) bool {
+	if len(data) == 0 || len(data) > maxBytes {
 		return false
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
@@ -256,6 +264,9 @@ func scopedNodeUniqueJSON(data []byte) bool {
 			for d.More() {
 				key, err := d.Token()
 				name, ok := key.(string)
+				if foldKeys {
+					name = strings.ToLower(name)
+				}
 				if err != nil || !ok || seen[name] || !value(depth+1) {
 					return false
 				}
