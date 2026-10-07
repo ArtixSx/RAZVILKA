@@ -36,6 +36,7 @@ type executionResourceScope struct {
 	closedErr          error
 	issued             map[string]*executionTransitResource
 	nfqws              map[string]*NFQWSExecutionResource
+	networkIdentity    *networkPolicyIdentity
 }
 
 type executionTransitResource struct {
@@ -76,9 +77,17 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 	m.registryMu.RLock()
 	registryGeneration := m.registryGeneration
 	m.registryMu.RUnlock()
+	identity := m.executionNetworkIdentity()
+	if identity != nil {
+		if err := identity.check(ctx); err != nil {
+			cancel()
+			_ = owned.Close()
+			return nil, err
+		}
+	}
 	return &executionResourceScope{manager: m, plan: plan, adapter: adapter, execution: execution,
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
-		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, registryGeneration: registryGeneration}, nil
+		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}, nil
 }
 
 func (s *executionResourceScope) context() context.Context {
@@ -123,6 +132,11 @@ func (s *executionResourceScope) check(ctx context.Context, resource *executionT
 	if err := s.checkCurrent(ctx, resource, forward); err != nil {
 		return err
 	}
+	if s.networkIdentity != nil {
+		if err := s.networkIdentity.check(ctx); err != nil {
+			return err
+		}
+	}
 	if forward {
 		if err := verifyNetworkProfile(ctx, s.plan.NetworkProfileID, s.manager.FreshProfile); err != nil {
 			return err
@@ -133,6 +147,11 @@ func (s *executionResourceScope) check(ctx context.Context, resource *executionT
 	// effects only; it cannot convert a retained old rule into an unowned rule.
 	if err := s.guard(ctx); err != nil {
 		return err
+	}
+	if s.networkIdentity != nil {
+		if err := s.networkIdentity.check(ctx); err != nil {
+			return err
+		}
 	}
 	// External readers may cancel the original request, change the registry or
 	// replace a retained root while returning a nominally successful result.

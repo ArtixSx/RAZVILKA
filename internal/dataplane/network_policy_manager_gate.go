@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 const NetworkPolicyAdapterID = "lan-policy"
@@ -21,6 +23,7 @@ var ErrNetworkPolicyReplacement = errors.New("LAN generation replacement require
 type NetworkPolicyAdapter struct {
 	StateRoot string
 	Binding   *LANPolicyReceiptBinding
+	identity  *networkPolicyIdentity
 	// InventoryCheck must inspect the complete owned gate namespace, including
 	// orphan generations. An absent owner file alone cannot prove inactivity.
 	InventoryCheck func(context.Context) error
@@ -28,6 +31,7 @@ type NetworkPolicyAdapter struct {
 
 type networkPolicyGateState struct {
 	Schema           int                   `json:"schema"`
+	NetworkIdentity  *netidentity.Identity `json:"network_identity,omitempty"`
 	PlanID           string                `json:"plan_id"`
 	Digest           string                `json:"digest"`
 	LAN              *LANPolicyRuntimePlan `json:"lan"`
@@ -75,7 +79,7 @@ func (a *NetworkPolicyAdapter) receiptRoot(s *networkPolicyGateState) (string, e
 	if err := a.check(); err != nil {
 		return "", err
 	}
-	if s == nil || s.Schema != 1 || s.Promoted && s.PromotionPending || !validExecutionPlanID(s.PlanID) || !validNetworkPolicyGeneration(s.Digest) || ValidateLANPolicyRuntime(s.LAN) != nil {
+	if !a.gateIdentityMatches(s) || s.Promoted && s.PromotionPending || !validExecutionPlanID(s.PlanID) || !validNetworkPolicyGeneration(s.Digest) || ValidateLANPolicyRuntime(s.LAN) != nil {
 		return "", ErrLANPolicyRuntime
 	}
 	if s.Promoted {
@@ -130,7 +134,7 @@ func (a *NetworkPolicyAdapter) clearOwner(expected *networkPolicyGateState) erro
 }
 
 func (a *NetworkPolicyAdapter) Snapshot(ctx context.Context, p Plan, root string) error {
-	if _, err := networkPolicyGateFor(p); err != nil {
+	if _, err := a.gateFor(p); err != nil {
 		return preflightRefusalError{err}
 	}
 	prior, err := a.readOwner()
@@ -147,7 +151,7 @@ func (a *NetworkPolicyAdapter) Snapshot(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) Stage(ctx context.Context, p Plan, root string) error {
-	state, err := networkPolicyGateFor(p)
+	state, err := a.gateFor(p)
 	if err != nil {
 		return preflightRefusalError{err}
 	}
@@ -161,7 +165,7 @@ func (a *NetworkPolicyAdapter) Stage(ctx context.Context, p Plan, root string) e
 }
 
 func (a *NetworkPolicyAdapter) Validate(ctx context.Context, p Plan, root string) error {
-	state, err := networkPolicyGateFor(p)
+	state, err := a.gateFor(p)
 	if err != nil {
 		return err
 	}
@@ -173,9 +177,14 @@ func (a *NetworkPolicyAdapter) Validate(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) Activate(ctx context.Context, p Plan, root string) error {
-	state, err := networkPolicyGateFor(p)
+	state, err := a.gateFor(p)
 	if err != nil {
 		return err
+	}
+	if a.identity != nil {
+		if err := a.identity.check(ctx); err != nil {
+			return err
+		}
 	}
 	expected, err := a.receiptRoot(state)
 	if err != nil || expected != filepath.Clean(root) {
@@ -194,7 +203,7 @@ func (a *NetworkPolicyAdapter) Activate(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) Health(ctx context.Context, p Plan, root string) error {
-	want, err := networkPolicyGateFor(p)
+	want, err := a.gateFor(p)
 	if err != nil {
 		return err
 	}
@@ -213,7 +222,7 @@ func (a *NetworkPolicyAdapter) Commit(ctx context.Context, p Plan, root string) 
 	if err := a.Health(ctx, p, root); err != nil {
 		return err
 	}
-	state, _ := networkPolicyGateFor(p)
+	state, _ := a.gateFor(p)
 	state.Promoted = true
 	destination, err := a.receiptRoot(state)
 	if err != nil {
@@ -277,7 +286,7 @@ func (a *NetworkPolicyAdapter) inspectAbsent(ctx context.Context, lan *LANPolicy
 }
 
 func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string) error {
-	want, err := networkPolicyGateFor(p)
+	want, err := a.gateFor(p)
 	if err != nil {
 		return err
 	}
@@ -315,7 +324,7 @@ func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) VerifyRollback(ctx context.Context, p Plan, root string) (bool, error) {
-	state, err := networkPolicyGateFor(p)
+	state, err := a.gateFor(p)
 	if err != nil {
 		return false, err
 	}
@@ -354,7 +363,7 @@ func (a *NetworkPolicyAdapter) VerifyRuntimeInactive(ctx context.Context) error 
 }
 
 func (a *NetworkPolicyAdapter) Reconcile(ctx context.Context, p Plan) error {
-	want, err := networkPolicyGateFor(p)
+	want, err := a.gateFor(p)
 	if err != nil {
 		return err
 	}

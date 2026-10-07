@@ -89,6 +89,11 @@ func (s *executionResourceScope) issueNFQWS(ctx context.Context, spec NFQWSScope
 	if err := s.check(ctx, nil, true); err != nil {
 		return nil, err
 	}
+	if s.networkIdentity != nil {
+		if err := nfqwsExecutionNetworkMatches(s.networkIdentity.value, spec); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := s.plan.FrozenLAN(); err != nil {
 		return nil, err
 	}
@@ -130,6 +135,10 @@ func (s *executionResourceScope) issueNFQWS(ctx context.Context, spec NFQWSScope
 	s.nfqws[r.binding.ResourceID] = r
 	s.execution.Resources = append(s.execution.Resources, ExecutionResource{ID: r.binding.ResourceID, Kind: "nfqws-scoped", State: "prepared", Phase: "planned",
 		Generation: metadata.Generation, EffectsDigest: compiled.Digest(), NFQWS: &ExecutionNFQWSDefinition{Plan: cloneExecutionResourcePlan(s.plan), Spec: compiled.Spec()}})
+	if s.networkIdentity != nil {
+		identity := s.networkIdentity.value
+		s.execution.Resources[len(s.execution.Resources)-1].NFQWS.NetworkIdentity = &identity
+	}
 	// Retain the entire reservation BEFORE any ownership intent/helper process.
 	if err := s.persist(); err != nil {
 		return nil, err
@@ -147,6 +156,10 @@ func (r *NFQWSExecutionResource) matching(binding NFQWSExecutionBinding) (int, e
 			if recorded.Kind != "nfqws-scoped" || recorded.State != "prepared" || recorded.NFQWS == nil || recorded.NodeTransit != nil ||
 				recorded.Generation != binding.ResourceGeneration || recorded.EffectsDigest != binding.EffectsDigest ||
 				!reflect.DeepEqual(recorded.NFQWS.Plan, r.scope.plan) || !reflect.DeepEqual(recorded.NFQWS.Spec, r.plan.Spec()) {
+				return -1, ErrNFQWSScopedOwner
+			}
+			identity := r.scope.networkIdentity
+			if identity == nil && recorded.NFQWS.NetworkIdentity != nil || identity != nil && (recorded.NFQWS.NetworkIdentity == nil || *recorded.NFQWS.NetworkIdentity != identity.value) {
 				return -1, ErrNFQWSScopedOwner
 			}
 			switch recorded.Phase {

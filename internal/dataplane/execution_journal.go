@@ -146,7 +146,15 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 	if err := validateExecutionResources(execution, terminal); err != nil {
 		return executionJournalError(err)
 	}
-	data, err := json.MarshalIndent(execution, "", "  ")
+	// Typed network identities have a canonical compact wire form. Indenting
+	// their embedded object would produce a journal their decoder must refuse.
+	var data []byte
+	var err error
+	if executionHasNetworkIdentity(execution) {
+		data, err = json.Marshal(execution)
+	} else {
+		data, err = json.MarshalIndent(execution, "", "  ")
+	}
 	if err != nil {
 		return executionJournalError(err)
 	}
@@ -155,6 +163,15 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 	transactionErr := writeDataplaneJournal(filepath.Join(root, "execution.json"), data)
 	latestErr := writeDataplaneJournal(filepath.Join(m.StateRoot, "latest-execution.json"), data)
 	return executionJournalError(errors.Join(transactionErr, latestErr))
+}
+
+func executionHasNetworkIdentity(execution Execution) bool {
+	for _, resource := range execution.Resources {
+		if resource.NFQWS != nil && resource.NFQWS.NetworkIdentity != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // preserveCommittedJournal keeps the previous boot recovery source before

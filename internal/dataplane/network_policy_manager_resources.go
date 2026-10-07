@@ -4,6 +4,8 @@ import (
 	"errors"
 	"slices"
 	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 const maxExecutionResources = 256
@@ -26,8 +28,9 @@ type ExecutionResource struct {
 // ExecutionNFQWSDefinition retains full typed compiler input, never argv or
 // executable paths. Reconstructing it checks intent only, not launch authority.
 type ExecutionNFQWSDefinition struct {
-	Plan Plan            `json:"plan"`
-	Spec NFQWSScopedSpec `json:"spec"`
+	Plan            Plan                  `json:"plan"`
+	Spec            NFQWSScopedSpec       `json:"spec"`
+	NetworkIdentity *netidentity.Identity `json:"network_identity,omitempty"`
 }
 
 func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource {
@@ -41,6 +44,10 @@ func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource 
 			definition := *result[i].NFQWS
 			definition.Plan = cloneExecutionResourcePlan(definition.Plan)
 			definition.Spec.Candidate.Traffic = slices.Clone(definition.Spec.Candidate.Traffic)
+			if definition.NetworkIdentity != nil {
+				identity := *definition.NetworkIdentity
+				definition.NetworkIdentity = &identity
+			}
 			result[i].NFQWS = &definition
 		}
 	}
@@ -87,6 +94,11 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 		case "nfqws-scoped":
 			if resource.NFQWS == nil || resource.NodeTransit != nil || resource.NFQWS.Plan.PlanID != planID || resource.NFQWS.Plan.Digest != execution.Digest {
 				return ErrExecutionJournal
+			}
+			if resource.NFQWS.NetworkIdentity != nil {
+				if err := nfqwsExecutionNetworkMatches(*resource.NFQWS.NetworkIdentity, resource.NFQWS.Spec); err != nil {
+					return errors.Join(ErrExecutionJournal, err)
+				}
 			}
 			plan, err := CompileNFQWSScopedPlan(resource.NFQWS.Plan, resource.NFQWS.Spec)
 			if err != nil || plan.Resources().Generation != resource.Generation || plan.Digest() != resource.EffectsDigest {
