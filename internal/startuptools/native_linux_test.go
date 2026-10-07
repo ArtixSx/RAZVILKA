@@ -59,7 +59,13 @@ func TestProductionStartupToolsNative(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	read, readCancel := context.WithTimeout(lifetime, operationTimeout)
+	captureBudget := operationTimeout
+	if mode == "stock-nc1812" {
+		// Only the whole stock capture gets the agreed six-second parent.
+		// Production acquisition, Check and each command still cap at two.
+		captureBudget = 6 * time.Second
+	}
+	read, readCancel := context.WithTimeout(lifetime, captureBudget)
 	captureStart := time.Now()
 	snapshot, err := inventory.Read(read, lease.identity)
 	captureElapsed, captureContext := time.Since(captureStart), nativeContextState(read)
