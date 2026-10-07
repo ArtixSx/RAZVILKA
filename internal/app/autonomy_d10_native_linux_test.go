@@ -733,6 +733,32 @@ func d10NativeChild(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Ubuntu can point /etc/resolv.conf into /run/systemd/resolve. Mirroring
+	// only OUR fixture bytes preserves that symlink after the private /run bind;
+	// copying host resolver data would defeat the isolated DNS boundary.
+	for _, name := range []string{"hosts", "resolv.conf"} {
+		target, err := filepath.EvalSymlinks(filepath.Join("/etc", name))
+		if err != nil {
+			t.Fatal("fixture mount target resolution", name, d10NativeErrorClass(err))
+		}
+		relative, err := filepath.Rel("/run", target)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+			continue // A target outside /run remains present in the private mount namespace.
+		}
+		private := filepath.Join(root, "run", relative)
+		if err := os.MkdirAll(filepath.Dir(private), 0700); err != nil {
+			t.Fatal("private fixture resolver parent", d10NativeErrorClass(err))
+		}
+		data, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil || len(data) > 1024 {
+			t.Fatal("owned fixture resolver bytes unavailable", d10NativeErrorClass(err))
+		}
+		err = os.WriteFile(private, data, 0600)
+		clear(data)
+		if err != nil {
+			t.Fatal("private fixture resolver target", d10NativeErrorClass(err))
+		}
+	}
 	// These bind mounts live only in the fresh private mount namespace.
 	for _, mount := range [][2]string{{opt, "/opt"}, {filepath.Join(root, "run"), "/run"}, {filepath.Join(root, "hosts"), "/etc/hosts"}, {filepath.Join(root, "resolv.conf"), "/etc/resolv.conf"}} {
 		if err := unix.Mount(mount[0], mount[1], "", unix.MS_BIND, ""); err != nil {
