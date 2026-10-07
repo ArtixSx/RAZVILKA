@@ -386,7 +386,17 @@ try {
     await nav('nodes');await page.waitForFunction(()=>!panelLoad.request);
     const profiles=[1,2,3].map(n=>`vless://00000000-0000-4000-8000-${String(n).padStart(12,'0')}@ui-node-${n}.invalid:443?type=tcp&security=tls&sni=ui-node-${n}.invalid#UI-F${n}`);
     profiles.push('ss://YWVzLTEyOC1nY206dWktZml4dHVyZQ==@ui-ss.invalid:443#UI-SS');
-    await page.locator('#nodeOpenImport').click();await page.locator('#nodeQuickImportText').fill(profiles.join('\n'));await page.locator('#nodeQuickImportSubmit').click();
+    await page.locator('#nodeOpenImport').click();await page.locator('#nodeQuickImportText').fill(profiles.join('\n'));
+    const [importResponse]=await Promise.all([
+      page.waitForResponse(response=>response.url()===origin+'/api/v1/nodes/import'&&response.request().method()==='POST'),
+      page.locator('#nodeQuickImportSubmit').click()
+    ]);
+    const importReceipt=await importResponse.json().catch(()=>null);
+    const importCode=/^[A-Z0-9_]{1,80}$/.test(importReceipt?.code||'')?importReceipt.code:'NO_TYPED_CODE';
+    assert.equal(importResponse.status(),200,`all-VLESS fixture import rejected: HTTP ${importResponse.status()} (${importCode}); real node write admission must succeed before UI readback`);
+    assert.equal(importReceipt?.ok,true,'all-VLESS fixture import has no matching success receipt');
+    assert.equal(importReceipt.accepted_nodes,profiles.length,'all-VLESS fixture import did not accept the exact requested profiles');
+    assert.equal(importReceipt.working_routes_changed,false,'all-VLESS fixture import changed working routes');
     await page.waitForFunction(()=>state.nodes.nodes.length===4 && !document.getElementById('nodeQuickImportSubmit').disabled);
     await page.locator('#nodeQuickImportClose').click();
     const before=await context.request.get(origin+'/api/v1/nodes');assert.equal(before.status(),200);const nodes=await before.json();
