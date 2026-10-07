@@ -149,36 +149,39 @@ func nfqwsExecutionAwaitQueue(ctx context.Context, b *NFQWSScopedBinding, p *NFQ
 	}
 	for {
 		if err := current(ctx, p); err != nil {
-			return err
+			return fmt.Errorf("opening current: %w", err)
 		}
 		proof, err := b.ProcessRunning(ctx, p)
 		if err != nil {
-			return err
+			return fmt.Errorf("running process readback: %w", err)
 		}
 		if err := nfqwsScopedProcessProof(p, proof, false); err != nil {
-			return err
+			return fmt.Errorf("running proof shape: %w", err)
 		}
 		if err := current(ctx, p); err != nil {
-			return err
+			return fmt.Errorf("current after process readback: %w", err)
 		}
 		queueErr := b.QueueCheck(ctx, p.resources.NetNamespace, p.resources.Queue, &proof.Child)
 		if queueErr == nil {
-			return current(ctx, p)
+			if err := current(ctx, p); err != nil {
+				return fmt.Errorf("closing current after owned queue: %w", err)
+			}
+			return nil
 		}
 		if err := b.QueueCheck(ctx, p.resources.NetNamespace, p.resources.Queue, nil); err != nil {
-			return errors.Join(queueErr, err) // Foreign/missing inventory is not transient.
+			return errors.Join(fmt.Errorf("owned queue readback: %w", queueErr), fmt.Errorf("whole empty queue readback: %w", err)) // Foreign/missing inventory is not transient.
 		}
 		if err := nfqwsScopedBeforeStartCurrent(ctx, b, p, current); err != nil {
-			return err
+			return fmt.Errorf("empty queue LAN/capture preflight: %w", err)
 		}
 		if err := current(ctx, p); err != nil {
-			return err
+			return fmt.Errorf("closing current after empty preflight: %w", err)
 		}
 		timer := time.NewTimer(10 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return ctx.Err()
+			return fmt.Errorf("empty queue wait: %w", ctx.Err())
 		case <-timer.C:
 		}
 	}

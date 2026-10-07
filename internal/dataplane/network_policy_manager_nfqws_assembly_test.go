@@ -209,6 +209,18 @@ func TestNetworkPolicyManagerNFQWSAssemblyReadiness(t *testing.T) {
 			} else if err == nil {
 				t.Fatal("unknown or expired readiness became permission")
 			}
+			if mode == "unknown-child" && (!strings.Contains(err.Error(), "running process readback") || !errors.Is(err, ErrNFQWSManagedProcessUnknown)) {
+				t.Fatal("process failure lost its stage or original cause", err)
+			}
+			if (mode == "foreign-queue" || mode == "missing-inventory") && (!strings.Contains(err.Error(), "owned queue readback") || !strings.Contains(err.Error(), "whole empty queue readback") || !errors.Is(err, ErrNFQWSScopedQueueInventory)) {
+				t.Fatal("queue failures lost an independent stage or original cause", err)
+			}
+			if mode == "foreign-capture" && !strings.Contains(err.Error(), "empty queue LAN/capture preflight") {
+				t.Fatal("preflight failure lost its stage", err)
+			}
+			if mode == "cancel-in-probe" && (!strings.Contains(err.Error(), "closing current after owned queue") || !errors.Is(err, context.Canceled)) {
+				t.Fatal("post-probe cancellation lost its stage or original cause", err)
+			}
 			if len(model.calls) != 0 {
 				t.Fatal("readiness wait wrote a kernel effect")
 			}

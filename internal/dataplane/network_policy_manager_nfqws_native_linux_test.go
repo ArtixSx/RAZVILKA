@@ -332,6 +332,24 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 				if err != nil {
 					return err
 				}
+				// Diagnostics run before the Prepared callback's deferred stop.
+				// They never replace the actual owner result or grant readiness.
+				processReadback := e.binding.ProcessRunning
+				e.binding.ProcessRunning = func(c context.Context, p *NFQWSScopedPlan) (NFQWSScopedProcessProof, error) {
+					proof, err := processReadback(c, p)
+					if err != nil {
+						nfqwsExecutionNativeReadinessDiagnostic(t, c, e, "running process", err)
+					}
+					return proof, err
+				}
+				queueReadback := e.binding.QueueCheck
+				e.binding.QueueCheck = func(c context.Context, ns string, q uint16, child *components.NFQWSRuntimeProcessIdentity) error {
+					err := queueReadback(c, ns, q, child)
+					if err != nil && child == nil {
+						nfqwsExecutionNativeReadinessDiagnostic(t, c, e, "whole empty queue", err)
+					}
+					return err
+				}
 				lanRuntime.ConsumerCheck = func(c context.Context, _ *LANPolicyRuntimePlan) error {
 					return e.binding.CheckKnownReferences(c, e.resource.Plan())
 				}
@@ -490,4 +508,42 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 		t.Fatal("pending-start fence did not retain whole LAN gate/receipt")
 	}
 	t.Log("real Manager/Start/queue/LAN/receipt pair: same eight fields, pending before intent, selected v4/v6 and excluded MAC/new addresses, closing Current, exact ECHILD+ACK, known cleanup after action failure/cancel, LAN last after removed owners; fresh pending READY denial without child/capture keeps resource fence and LAN, no replay/unused adoption")
+}
+
+// Read-only failure evidence, sampled while the same managed child is still
+// live. A single image is diagnostic only; the real double observer remains
+// the only proof used by the binding.
+func nfqwsExecutionNativeReadinessDiagnostic(t *testing.T, ctx context.Context, e *nfqwsExecutionAssembly, stage string, primary error) {
+	t.Helper()
+	t.Logf("paired live readiness checkpoint: stage=%s error=%v", stage, primary)
+	data, readErr := os.ReadFile(filepath.Join(e.adapter.StateRoot, nfqws2LeaseFile))
+	var lease nfqws2ManagedProcessLease
+	if readErr == nil && len(data) <= 1<<20 && json.Unmarshal(data, &lease) == nil {
+		proof := NFQWSScopedProcessProof{SessionID: lease.Command.ID, CommandSHA256: lease.CommandSHA256, Receipt: lease.Receipt, Child: lease.Child, Acknowledged: lease.Acknowledged}
+		actual, identityErr := components.ReadNFQWSRuntimeProcessIdentity(lease.Child.PID)
+		childNS, namespaceErr := os.Readlink(fmt.Sprintf("/proc/%d/ns/net", lease.Child.PID))
+		t.Logf("paired live lease checkpoint: state=%s acknowledged=%t valid=%v binding-matches=%t command-args-match=%t proof-shape=%v child-matches=%t identity-error=%v namespace-matches=%t namespace-error=%v",
+			lease.Receipt.State, lease.Acknowledged, nfqws2ValidateManagedLease(lease), nfqwsScopedLeaseExecutionMatches(lease, e.resource.Plan(), e.resource.Binding()),
+			components.NFQWSRuntimeArgumentsSHA256(lease.Command.Program.Path, lease.Command.Args) == e.resource.Plan().resources.ArgumentsHash,
+			nfqwsScopedProcessProof(e.resource.Plan(), proof, false), actual == lease.Child, identityErr, childNS == e.resource.Plan().resources.NetNamespace, namespaceErr)
+	} else {
+		t.Logf("paired live lease checkpoint: read-error=%v bytes=%d", readErr, len(data))
+	}
+	for _, path := range []string{"/proc/net/netfilter/nfnetlink_queue", "/proc/net/netlink"} {
+		out, err := nfqwsScopedReadProc(ctx, path)
+		if path == "/proc/net/netlink" {
+			var netfilter []string
+			for _, line := range strings.Split(out, "\n") {
+				fields := strings.Fields(line)
+				if len(fields) == 10 && (fields[0] == "sk" || fields[1] == "12") {
+					netfilter = append(netfilter, line)
+				}
+			}
+			out = strings.Join(netfilter, "\n")
+		}
+		if len(out) > 4096 {
+			out = out[:4096]
+		}
+		t.Logf("paired live queue checkpoint: path=%s error=%v output=%s", path, err, out)
+	}
 }
