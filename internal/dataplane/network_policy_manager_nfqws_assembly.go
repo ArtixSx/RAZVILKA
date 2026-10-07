@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -202,20 +203,20 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 				return ErrNFQWSScopedOwner
 			}
 			if err := nfqwsExecutionAwaitQueue(ctx, e.binding, r.Plan(), e.current); err != nil {
-				return err
+				return fmt.Errorf("NFQWS queue readiness: %w", err)
 			}
 			if err := r.Prepared(ctx, binding); err != nil {
-				return err
+				return fmt.Errorf("NFQWS prepared readback: %w", err)
 			}
 			applyAttempted = true
 			if err := e.binding.Apply(ctx, r.Plan(), r.Root()); err != nil {
-				return err
+				return fmt.Errorf("NFQWS capture apply: %w", err)
 			}
 			if err := action(ctx, r, e.binding); err != nil {
-				return err
+				return fmt.Errorf("NFQWS action: %w", err)
 			}
 			if err := e.current(ctx, r.Plan()); err != nil {
-				return err
+				return fmt.Errorf("NFQWS closing current: %w", err)
 			}
 			completed = true
 			return nil
@@ -229,14 +230,22 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 	// Inspect is read-only and requires the existing common receipt/lock. A
 	// missing receipt never acquires a new deletion or synthetic unused grant.
 	status, cleanupErr := e.binding.Inspect(cleanupCtx, r.Plan(), r.Root())
+	if cleanupErr != nil {
+		cleanupErr = fmt.Errorf("NFQWS receipt inspect: %w", cleanupErr)
+	}
 	if cleanupErr == nil && (status.Unknown || status.Promoted) {
-		cleanupErr = ErrNFQWSScopedOwner
+		cleanupErr = fmt.Errorf("NFQWS receipt state (complete=%t removed=%t unknown=%t promoted=%t added=%d pending=%d cleaned=%d): %w",
+			status.Complete, status.Removed, status.Unknown, status.Promoted, status.Added, status.Pending, status.Cleaned, ErrNFQWSScopedOwner)
 	}
 	if cleanupErr == nil {
-		cleanupErr = e.binding.Remove(cleanupCtx, r.Plan(), r.Root())
+		if err := e.binding.Remove(cleanupCtx, r.Plan(), r.Root()); err != nil {
+			cleanupErr = fmt.Errorf("NFQWS capture remove: %w", err)
+		}
 	}
 	if cleanupErr == nil {
-		cleanupErr = r.SettleRemoved(cleanupCtx)
+		if err := r.SettleRemoved(cleanupCtx); err != nil {
+			cleanupErr = fmt.Errorf("NFQWS removed settlement: %w", err)
+		}
 	}
 	if cleanupErr == nil && completed && e.ctx.Err() == nil && nfqwsScopedLeaseExecutionMatches(lease, r.Plan(), r.Binding()) &&
 		lease.Acknowledged && lease.Receipt.WaitECHILD && nfqws2ValidateManagedLease(lease) == nil && nfqwsExecutionOnlyCanceled(runErr, 0) {

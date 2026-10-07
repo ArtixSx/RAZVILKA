@@ -37,13 +37,20 @@ func (r nfqwsExecutionNativeRunner) Run(ctx context.Context, name string, args .
 	cmd.Stdout, cmd.Stderr = &output, &output
 	err := operationgate.WithSelfUpdateEffectAdmission(ctx, r.control, strings.Repeat("4", 32), r.installation, r.sequence, "nfqws-paired-kernel", cmd.Start)
 	if cmd.Process == nil {
-		return output.Bytes(), err
+		return output.Bytes(), fmt.Errorf("private kernel command admission %s %q: %w", name, args, err)
 	}
 	if err != nil {
 		_ = cmd.Process.Kill()
 	}
 	waitErr := cmd.Wait()
-	return output.Bytes(), errors.Join(err, waitErr)
+	if failure := errors.Join(err, waitErr); failure != nil {
+		data := output.Bytes()
+		if len(data) > 1024 {
+			data = data[:1024]
+		}
+		return output.Bytes(), fmt.Errorf("private kernel command %s %q (output=%q): %w", name, args, data, failure)
+	}
+	return output.Bytes(), nil
 }
 
 func TestNetworkPolicyManagerNFQWSNativePeerEntry(t *testing.T) {
@@ -389,6 +396,29 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 			lanRuntime.ConsumerCheck = nil
 			if e == nil {
 				t.Fatal("assembly did not acquire actual Manager resource", result)
+			}
+			if result != nil {
+				status, inspectErr := e.binding.Inspect(context.Background(), e.resource.Plan(), e.resource.Root())
+				t.Logf("paired checkpoint: action-called=%t intent-observed=%t armed-denied=%t receipt=%+v inspect-error=%v", actionCalled, intentObserved, armedDenied, status, inspectErr)
+				if data, err := os.ReadFile(filepath.Join(e.resource.Root(), policyAdditionFile)); err == nil {
+					var receipt policyAdditionDocument
+					if json.Unmarshal(data, &receipt) == nil {
+						states := make([]string, len(receipt.Steps))
+						for i, step := range receipt.Steps {
+							states[i] = strconv.Itoa(i) + ":" + step.State
+						}
+						t.Logf("paired receipt checkpoint: phase=%s steps=%v", receipt.Phase, states)
+					}
+				}
+				for _, tool := range []string{tools.IPTables, tools.IP6Tables} {
+					probe, cancel := context.WithTimeout(context.Background(), time.Second)
+					data, err := runner.Run(probe, tool, "-t", "mangle", "-S")
+					cancel()
+					if len(data) > 4096 {
+						data = data[:4096]
+					}
+					t.Logf("paired read-only mangle checkpoint: tool=%s error=%v rules=%s", tool, err, data)
+				}
 			}
 			execution, err := readExecution()
 			if err != nil || !intentObserved {
