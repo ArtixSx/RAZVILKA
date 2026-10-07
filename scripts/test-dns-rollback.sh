@@ -23,6 +23,7 @@ for MODE in present absent legacy legacy-unsupported missing unsafe-dir unsafe-f
   cat >"$BASE/bin/razvilka" <<'BINARY'
 #!/bin/sh
 case "${1:-}" in
+  -self-update-read-version|-self-update-schema) printf 'flag provided but not defined: %s\n' "$1" >&2; exit 2 ;;
   -check-node-history-state)
     [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$RAZVILKA_BASE/var/lib/razvilka" ] || exit 99
     printf '%s\n' '{"ok":true}' ;;

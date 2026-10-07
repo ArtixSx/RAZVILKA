@@ -21,6 +21,7 @@ for MODE in after-stop after-recovery stop-during-history not-running; do
 set -eu
 STATE="$RAZVILKA_BASE/var/lib/razvilka"
 case "${1:-}" in
+  -self-update-read-version) printf 'flag provided but not defined: -self-update-read-version\n' >&2; exit 2 ;;
   -self-update-schema) printf '0\n' ;;
   -check-node-history-state)
     [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$STATE" ] || exit 99

@@ -159,6 +159,52 @@ fi
 
 # Registration requests are monotonic external effects. Keep native WARP state
 # in place, and never start an old binary that cannot see an unresolved request.
+probe_self_update_metadata() (
+  # These exact metadata entrypoints are read-only, including under Stop.
+  # Unsupported flags need the old Go ABI, never a guessed empty response.
+  case "$2" in -self-update-read-version|-self-update-schema|-check-self-update-state) ;; *) exit 1 ;; esac
+  [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ] || { echo "Self update metadata binary is unsafe; installation unchanged" >&2; exit 1; }
+  command -v timeout >/dev/null 2>&1 || { echo "Bounded self update metadata probe is unavailable; installation unchanged" >&2; exit 1; }
+  SELF_PROBE_DIR="$(mktemp -d "$STATEDIR/.rollback-reader.XXXXXX")" || exit 1
+  trap 'rm -f "$SELF_PROBE_DIR/output" "$SELF_PROBE_DIR/error" "$SELF_PROBE_DIR/expected"; rmdir "$SELF_PROBE_DIR"' EXIT
+  trap 'exit 1' HUP INT TERM
+  SELF_PROBE_CODE=0
+  timeout -k 1 5 "$1" "$2" >"$SELF_PROBE_DIR/output" 2>"$SELF_PROBE_DIR/error" || SELF_PROBE_CODE=$?
+  if [ "$SELF_PROBE_CODE" -eq 0 ] && [ ! -s "$SELF_PROBE_DIR/error" ]; then
+    case "$2" in
+      -self-update-read-version) SELF_PROBE_VALUES='2 3' ;;
+      -self-update-schema) SELF_PROBE_VALUES='0 1 2' ;;
+      -check-self-update-state) SELF_PROBE_VALUES='{"ok":true}' ;;
+    esac
+    for SELF_PROBE_VALUE in $SELF_PROBE_VALUES; do
+      printf '%s\n' "$SELF_PROBE_VALUE" >"$SELF_PROBE_DIR/expected"
+      if cmp -s "$SELF_PROBE_DIR/output" "$SELF_PROBE_DIR/expected"; then
+        printf '%s\n' "$SELF_PROBE_VALUE"
+        exit 0
+      fi
+    done
+  fi
+  if [ "$2" != -check-self-update-state ] && [ "$SELF_PROBE_CODE" -eq 2 ] && [ ! -s "$SELF_PROBE_DIR/output" ] &&
+    IFS= read -r SELF_PROBE_FIRST <"$SELF_PROBE_DIR/error" && [ "$SELF_PROBE_FIRST" = "flag provided but not defined: $2" ]; then
+    printf '%s\n' unsupported
+    exit 0
+  fi
+  echo "Self update metadata is unknown or incompatible; installation unchanged" >&2
+  exit 1
+)
+
+require_target_self_update_compatibility() {
+  SELF_TARGET_READER="$(probe_self_update_metadata "$1" -self-update-read-version)" || return 1
+  case "$SELF_TARGET_READER" in
+    unsupported) return 0 ;; # Existing selected-backup/private-state gates still apply.
+    3)
+      # Fixed production roots only; no shell backup or public root arguments.
+      probe_self_update_metadata "$1" -check-self-update-state >/dev/null || return 1
+      ;;
+    *) echo "Target controller requires the journaled self update workflow; raw rollback is unavailable" >&2; return 1 ;;
+  esac
+}
+
 require_legacy_file_protocol_free() {
   for SELF_PROTOCOL_PATH in "$STATEDIR/self-update/current.json" "$STATEDIR/self-update-files/current.json" "$STATEDIR/self-update-stop"; do
     if [ -e "$SELF_PROTOCOL_PATH" ] || [ -L "$SELF_PROTOCOL_PATH" ]; then
@@ -166,10 +212,29 @@ require_legacy_file_protocol_free() {
       return 1
     fi
   done
+  for SELF_PROTOCOL_DIR in "$STATEDIR/self-update" "$STATEDIR/self-update-files"; do
+    if [ -e "$SELF_PROTOCOL_DIR" ] || [ -L "$SELF_PROTOCOL_DIR" ]; then
+      [ -d "$SELF_PROTOCOL_DIR" ] && [ ! -L "$SELF_PROTOCOL_DIR" ] && [ -r "$SELF_PROTOCOL_DIR" ] && [ -x "$SELF_PROTOCOL_DIR" ] || {
+        echo "Self update protocol directory is unsafe; installation unchanged" >&2; return 1;
+      }
+      SELF_PROTOCOL_CONTENTS="$(LC_ALL=C ls -A "$SELF_PROTOCOL_DIR" 2>/dev/null && printf '|')" || {
+        echo "Self update protocol directory cannot be inspected; installation unchanged" >&2; return 1;
+      }
+      # The sentinel preserves even entries consisting entirely of newlines.
+      [ "$SELF_PROTOCOL_CONTENTS" = '|' ] || {
+        echo "Use matching self update recovery; raw application replacement is unavailable with retained protocol artifacts" >&2
+        return 1
+      }
+    fi
+  done
   if [ -f "$BINDIR/razvilka" ] && [ -x "$BINDIR/razvilka" ]; then
-    SELF_PROTOCOL_SCHEMA="$("$BINDIR/razvilka" -self-update-schema 2>/dev/null)" || SELF_PROTOCOL_SCHEMA=
+    SELF_PROTOCOL_READER="$(probe_self_update_metadata "$BINDIR/razvilka" -self-update-read-version)" || return 1
+    [ "$SELF_PROTOCOL_READER" = unsupported ] || {
+      echo "This controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1;
+    }
+    SELF_PROTOCOL_SCHEMA="$(probe_self_update_metadata "$BINDIR/razvilka" -self-update-schema)" || return 1
     case "$SELF_PROTOCOL_SCHEMA" in
-      ''|0|1) ;;
+      unsupported|0|1) ;;
       *) echo "This controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1 ;;
     esac
   fi
@@ -258,6 +323,7 @@ require_native_enrollment_schema() {
   fi
 }
 if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then
+  require_target_self_update_compatibility "$BACKUP/razvilka.bin"
   require_native_enrollment_schema "$BACKUP/razvilka.bin"
   require_node_history_compatibility "$BACKUP/razvilka.bin"
 fi
@@ -295,7 +361,7 @@ restart_unchanged_after_compatibility_refusal() {
   require_legacy_file_protocol_free || return 0
   RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the unchanged RAZVILKA process" >&2
 }
-if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && { ! require_native_enrollment_schema "$BACKUP/razvilka.bin" || ! require_node_history_compatibility "$BACKUP/razvilka.bin"; }; then
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && { ! require_target_self_update_compatibility "$BACKUP/razvilka.bin" || ! require_native_enrollment_schema "$BACKUP/razvilka.bin" || ! require_node_history_compatibility "$BACKUP/razvilka.bin"; }; then
   restart_unchanged_after_compatibility_refusal
   exit 1
 fi
@@ -315,7 +381,7 @@ fi
 # Settling a pending restore can materialize a native image that was absent
 require_legacy_file_protocol_free
 # before recovery. Recheck before deactivating or replacing the current app.
-if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && { ! require_native_enrollment_schema "$BACKUP/razvilka.bin" || ! require_node_history_compatibility "$BACKUP/razvilka.bin"; }; then
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && { ! require_target_self_update_compatibility "$BACKUP/razvilka.bin" || ! require_native_enrollment_schema "$BACKUP/razvilka.bin" || ! require_node_history_compatibility "$BACKUP/razvilka.bin"; }; then
   restart_unchanged_after_compatibility_refusal
   exit 1
 fi

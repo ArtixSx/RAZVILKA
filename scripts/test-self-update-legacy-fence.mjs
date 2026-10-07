@@ -13,12 +13,14 @@ try {
     const end=source.indexOf('\n}\n',start);
     assert(start>=0 && end>start);
     const gate=source.slice(start,end+3);
+    const probeStart=source.indexOf('probe_self_update_metadata() (\n');
+    const helpers=probeStart>=0?source.slice(probeStart,start):'';
     const stop=source.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
     assert(source.indexOf('require_legacy_file_protocol_free',end)<stop);
     assert(source.lastIndexOf('require_legacy_file_protocol_free')>stop);
     mkdirSync(join(root,'bin'),{recursive:true});
     const run=(expected)=>{
-      const result=spawnSync(process.argv[2]||'sh',['-s'],{input:`set -eu\nSTATEDIR=${quote(root.replaceAll('\\','/'))}\nBINDIR="$STATEDIR/bin"\n${gate}\nrequire_legacy_file_protocol_free\n`,encoding:'utf8',timeout:5000});
+      const result=spawnSync(process.argv[2]||'sh',['-s'],{input:`set -eu\nSTATEDIR=${quote(root.replaceAll('\\','/'))}\nBINDIR="$STATEDIR/bin"\n${helpers}\n${gate}\nrequire_legacy_file_protocol_free\n`,encoding:'utf8',timeout:10000});
       assert.ifError(result.error);
       assert.equal(result.status,expected,result.stdout+result.stderr);
     };
@@ -31,7 +33,7 @@ try {
     }
     const binary=join(root,'bin','razvilka');
     for (const value of ['0','1','2','3','future']) {
-      writeFileSync(binary,`#!/bin/sh\nprintf '%s\\n' '${value}'\n`,{mode:0o755});
+      writeFileSync(binary,`#!/bin/sh\ncase "$1" in\n-self-update-read-version) printf 'flag provided but not defined: -self-update-read-version\\n' >&2; exit 2 ;;\n-self-update-schema) printf '%s\\n' '${value}' ;;\n*) exit 99 ;;\nesac\n`,{mode:0o755});
       run(value==='0'||value==='1'?0:1);
     }
     rmSync(binary);
