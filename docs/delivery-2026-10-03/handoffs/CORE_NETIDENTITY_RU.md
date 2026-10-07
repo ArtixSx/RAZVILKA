@@ -122,3 +122,33 @@ generation/receipt/process integration и trusted startup registration —
 последующие owner commits **после Root review провайдера**. Эта порция не
 снимает backend HOLD, не подтверждает table/queue completeness, inactivity,
 process ownership, effect admission или linked self-update e2e.
+
+## QA-only диагностика отказа provider96
+
+Root actual source `4d98100`: VM proc/thread/closing PASS (0.02 s, RC0);
+exact stock factory FAIL (0.10 s, RC1, stderr empty). Это не принятое
+production provider и не разрешение consumer integration.
+
+Отдельная QA-порция добавляет только `qa_*_test.go` и этот раздел. Root opt-in
+`RAZVILKA_NETIDENTITY_DIAGNOSTIC=1`, test
+`TestNativeReviewedStockSanitizedStages` сначала повторяет **actual factory**.
+При отказе выполняет bounded readonly probes в том же locked thread и исходном
+2 s context: proc checks, protected image/ELF/dependencies, fixed system NDMC,
+tuple и closing brackets. Все production bytes/guards остаются прежними.
+
+Вывод ограничен фиксированными stage labels, booleans и bounded image index;
+actual error strings, argv/environment values, NDMC data, paths, hashes,
+version/boot/identity не печатаются. Первый отказ даёт `blocked_stage`.
+`nobits_over_file` отдельно проверяет существующий source predicate: текущий
+ELF preflight отвергает `SHT_NOBITS.sh_size > file size`, хотя NOBITS bytes в
+файле отсутствуют ([ELF ABI](https://gabi.xinuos.com/elf/03-sheader.html)).
+Это source-level concern, **не установленная причина native отказа**. Portable
+регрессия проверяет bounded probe и сохранение текущего production refusal;
+исправления ELF acceptance эта QA-порция не содержит.
+
+Повторный actual factory success может завершить диагностический test PASS;
+если factory отказал, однокомандный probe не выдаёт admission даже при полном
+успехе всех этапов и завершается FAIL. Независимый первоначальный stock тест
+остаётся обязательным. CORE native диагностику не исполняет; Root выполняет
+следующее router окно. Windows portable tests/vet PASS (0.212 s); Linux amd64
+и arm64 vet/test binary crosscompile PASS / RC0.
