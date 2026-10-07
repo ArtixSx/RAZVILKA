@@ -59,7 +59,14 @@ import (
 var embedded embed.FS
 
 func main() {
-	if handled, code := runCommand(os.Args[1:]); handled {
+	mainWithSelfUpdateJournalRoots(productionSelfUpdateJournalRoots())
+}
+
+func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
+	if handled, code := runSelfUpdateJournalReadCommand(os.Args[1:], journalRoots); handled {
+		os.Exit(code)
+	}
+	if handled, code := runCommandWithSelfUpdateJournalRoots(os.Args[1:], journalRoots); handled {
 		os.Exit(code)
 	}
 	defaultCfg := getenv("RAZVILKA_CONFIG", "/opt/etc/razvilka/config.json")
@@ -142,6 +149,8 @@ func main() {
 	nodeHistoryStateRoot := flag.String("node-history-state-root", "/opt/var/lib/razvilka", "absolute trusted retained node history state root")
 	componentUpdateSchema := flag.Bool("component-update-schema", false, "print the supported durable component update schema and exit")
 	selfUpdateSchema := flag.Bool("self-update-schema", false, "print the supported application replacement capability and exit")
+	flag.Bool("self-update-read-version", false, "standalone immutable self update journal reader capability")
+	flag.Bool("check-self-update-state", false, "standalone read-only retained self update check at fixed production roots")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
 	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
@@ -255,6 +264,9 @@ func main() {
 		}
 		fmt.Printf("healthy: %s\n", version)
 		return
+	}
+	if !allowSelfUpdateJournalCommand(journalRoots) {
+		os.Exit(1)
 	}
 	selfFileState, err := configuredSelfUpdateFiles(*selfInstallation, *selfFiles, *selfHelper, *selfControl)
 	if err != nil {
@@ -764,6 +776,10 @@ func main() {
 }
 
 func runCommand(args []string) (bool, int) {
+	return runCommandWithSelfUpdateJournalRoots(args, productionSelfUpdateJournalRoots())
+}
+
+func runCommandWithSelfUpdateJournalRoots(args []string, journalRoots selfUpdateJournalRoots) (bool, int) {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return false, 0
 	}
@@ -773,10 +789,18 @@ func runCommand(args []string) (bool, int) {
 		if args[0] != command {
 			return true, 2
 		}
-		return true, runNFQWSManagedProcessCommand(args[1:], dataplane.RunNFQWSManagedProcessSupervisor)
+		return true, runNFQWSManagedProcessCommand(args[1:], func(id, state, control string) int {
+			if !allowSelfUpdateJournalCommand(journalRoots) {
+				return 3
+			}
+			return dataplane.RunNFQWSManagedProcessSupervisor(id, state, control)
+		})
 	case "component-package-supervisor":
 		if len(args) != 4 {
 			return true, 2
+		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
 		}
 		if f, err := productionSelfUpdateFiles(); err != nil || f.Pending() {
 			return true, 3
@@ -785,6 +809,9 @@ func runCommand(args []string) (bool, int) {
 	case "component-package-supervision-probe":
 		if len(args) != 1 {
 			return true, 2
+		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
 		}
 		if err := components.ProbePackageSupervision(); err != nil {
 			fmt.Fprintln(os.Stderr, "package supervision unavailable")
@@ -795,15 +822,24 @@ func runCommand(args []string) (bool, int) {
 		if len(args) != 2 {
 			return true, 2
 		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
 		return true, runSelfUpdateFileHelper(args[1])
 	case "self-update-command-helper":
 		if len(args) != 3 {
 			return true, 2
 		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
 		return true, runSelfUpdateCommandHelper(args[1], args[2])
 	case "self-update-runtime-quiesce":
-		return true, runSelfUpdateRuntimeQuiesce(args[1:])
+		return true, runSelfUpdateRuntimeQuiesceWithJournalRoots(args[1:], journalRoots)
 	case "self-update-files":
+		if len(args) == 4 && !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
 		return true, runSelfUpdateFileCommand(args[1:])
 	case "version", "v":
 		fmt.Println(app.Version)
@@ -846,6 +882,10 @@ func runCommand(args []string) (bool, int) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		if refresh && boundedSelfUpdateJournalState(ctx, journalRoots) != nil {
+			fmt.Fprintln(os.Stderr, errSelfUpdateJournalState)
+			return true, 3
+		}
 		manager, err := componentsFromEnv()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -872,6 +912,10 @@ func runCommand(args []string) (bool, int) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		if refresh && boundedSelfUpdateJournalState(ctx, journalRoots) != nil {
+			fmt.Fprintln(os.Stderr, errSelfUpdateJournalState)
+			return true, 3
+		}
 		manager, err := componentsFromEnv()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)

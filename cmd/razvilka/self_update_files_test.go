@@ -31,7 +31,11 @@ func TestSelfUpdateStartupSubprocess(t *testing.T) {
 		}
 	}
 	flag.CommandLine = flag.NewFlagSet("razvilka", flag.ExitOnError)
-	main()
+	if fixture := os.Getenv("RAZVILKA_SELF_UPDATE_READER_FIXTURE_TEST"); fixture != "" {
+		mainWithSelfUpdateJournalRoots(selfUpdateJournalRoots{installation: filepath.Join(fixture, "installation"), helper: filepath.Join(fixture, "helper"), files: filepath.Join(fixture, "files")})
+	} else {
+		main()
+	}
 	os.Exit(0)
 }
 
@@ -44,7 +48,7 @@ func selfUpdateMainSubprocess(t *testing.T, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, exe, append([]string{"-test.run=^TestSelfUpdateStartupSubprocess$", "--"}, args...)...)
-	command.Env = append(os.Environ(), "RAZVILKA_SELF_UPDATE_BOOTSTRAP_TEST=1")
+	command.Env = append(os.Environ(), "RAZVILKA_SELF_UPDATE_BOOTSTRAP_TEST=1", "RAZVILKA_SELF_UPDATE_READER_FIXTURE_TEST="+filepath.Join(t.TempDir(), "fixed-protocol"))
 	return command.CombinedOutput()
 }
 
