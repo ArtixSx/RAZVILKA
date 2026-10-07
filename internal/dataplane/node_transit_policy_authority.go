@@ -136,6 +136,17 @@ func (b *nodeTransitPolicyAuthority) verify(ctx context.Context, a *ProxyTunnelA
 	if err != nil || boot != b.boot {
 		return ErrNodeTransitUnavailable
 	}
+	// Recheck the common grant after the last external boot callback. The
+	// decoder gets only the boot already observed above, so this closing read
+	// cannot reopen that callback and invalidate the facts it just checked.
+	receiptID := b.generation
+	if !b.candidate {
+		receiptID = b.receiptID
+	}
+	status, err := nodeTransitReadAddition(ctx, state, b.root, func() (string, error) { return b.boot, nil })
+	if err != nil || !status.Complete || status.Unknown || status.ID != receiptID {
+		return errors.Join(ErrNodeTransitUnavailable, err)
+	}
 	// Close after boot/receipt callbacks with fresh local state and binding,
 	// without selecting a different authority.
 	if b.candidate {

@@ -327,3 +327,84 @@ func TestNodeTransitPolicyAuthorityHoldsCandidateAcrossCallbacks(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeTransitPolicyAuthorityClosingCommonReceiptDrift(t *testing.T) {
+	for _, mode := range []string{"candidate", "committed"} {
+		for _, cut := range []string{"unknown-common", "changed-common-id", "corrupt-common-marker"} {
+			t.Run(mode+"/"+cut, func(t *testing.T) {
+				a, state, root, spec, runner := nodeTransitPolicyAuthorityFixture(t)
+				argument := root
+				if mode == "committed" {
+					var err error
+					root, err = a.createPolicyGeneration(spec.PolicyGeneration)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := applyPolicyAddition(context.Background(), &recordedPolicyFakeRunner{}, "ip", state, root, policyAdditionOptions{boot: a.currentBootIdentity}); err != nil {
+						t.Fatal(err)
+					}
+					doc := readAdditionFixture(t, state, root, policyAdditionOptions{boot: a.currentBootIdentity})
+					if err := a.savePolicyJournal(state, true); err != nil {
+						t.Fatal(err)
+					}
+					if err := a.writePolicyBinding(proxyPolicyBinding{Schema: 1, Engine: a.ID(), Digest: proxyPolicyDigest(state), Generation: spec.PolicyGeneration, ReceiptID: doc.ID, Phase: "active"}); err != nil {
+						t.Fatal(err)
+					}
+					argument = ""
+				}
+				held, err := a.nodeTransitPolicyAuthorityFor(context.Background(), spec)
+				if err != nil {
+					t.Fatal("valid baseline authority refused", err)
+				}
+				doc := readAdditionFixture(t, state, root, policyAdditionOptions{boot: a.currentBootIdentity})
+				status, err := nodeTransitReadAddition(context.Background(), state, root, a.currentBootIdentity)
+				if err != nil || !status.Complete || status.Unknown || held.root != root || held.generation != spec.PolicyGeneration {
+					t.Fatal("cut baseline is not the exact complete held common authority", status, held, err)
+				}
+				calls, boots, fired := len(runner.calls), 0, false
+				originalBoot := a.bootIdentity
+				a.bootIdentity = func() (string, error) {
+					boots++
+					if boots == 3 {
+						fired = true
+						if cut == "corrupt-common-marker" {
+							if err := os.WriteFile(filepath.Join(root, policyAdditionLock), []byte("foreign marker"), 0600); err != nil {
+								t.Fatal(err)
+							}
+						} else {
+							if cut == "unknown-common" {
+								doc.Steps[0].State = "intent"
+							} else {
+								doc.ID = strings.Repeat("f", 32)
+								if doc.ID == status.ID {
+									doc.ID = strings.Repeat("e", 32)
+								}
+							}
+							doc.Checksum = policyAdditionChecksum(doc)
+							data, err := json.Marshal(doc)
+							if err != nil {
+								t.Fatal(err)
+							}
+							if err := os.WriteFile(filepath.Join(root, policyAdditionFile), data, 0600); err != nil {
+								t.Fatal(err)
+							}
+						}
+					}
+					return spec.BootID, nil
+				}
+				err = held.verify(context.Background(), a)
+				a.bootIdentity = originalBoot
+				if !fired || boots < 3 || len(runner.calls) != calls {
+					t.Fatal("did not reach the last boot cut without a mutation RPC", fired, boots, calls, len(runner.calls), err)
+				}
+				freshGeneration, freshErr := a.nodeRouterPolicyGeneration(context.Background(), state, argument)
+				if freshErr == nil && freshGeneration == held.generation {
+					t.Fatal("cut did not invalidate the exact common receipt authority", freshGeneration)
+				}
+				if err == nil {
+					t.Fatalf("held %s authority accepted %s during the closing boot callback: freshGeneration=%q freshErr=%v", mode, cut, freshGeneration, freshErr)
+				}
+			})
+		}
+	}
+}
