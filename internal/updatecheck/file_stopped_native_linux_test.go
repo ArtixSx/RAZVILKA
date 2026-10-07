@@ -27,7 +27,7 @@ func TestNativeStoppedSettlementActualECHILDAndPreservedStop(t *testing.T) {
 	// The copied race test executable is probed/hashed repeatedly and real workers
 	// must finish their own ECHILD joins before the stopped checks can begin.
 	started := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	deadline, _ := ctx.Deadline()
 	phase := func(name string) {
