@@ -219,6 +219,7 @@ type d10NativeChecks struct {
 	before  func(context.Context, dataplane.NodeCheckRequest) error
 	ids     []string
 	results []dataplane.NodeCheckResult
+	errors  []string
 }
 
 func (c *d10NativeChecks) Check(ctx context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
@@ -230,7 +231,52 @@ func (c *d10NativeChecks) Check(ctx context.Context, request dataplane.NodeCheck
 	c.ids = append(c.ids, request.NodeID)
 	result, err := c.NodeChecker.Check(ctx, request)
 	c.results = append(c.results, result)
+	c.errors = append(c.errors, d10NativeErrorClass(err))
 	return result, err
+}
+
+func d10NativeErrorClass(err error) string {
+	if err == nil {
+		return "none"
+	}
+	for _, known := range []struct {
+		err  error
+		name string
+	}{{context.Canceled, "canceled"}, {context.DeadlineExceeded, "deadline"},
+		{dataplane.ErrExactNodeBusy, "checker-busy"}, {dataplane.ErrExactNodeUnavailable, "checker-unavailable"},
+		{dataplane.ErrExactNodeRuntime, "runtime-unavailable"}, {dataplane.ErrExactNodeUnsupported, "unsupported"},
+		{dataplane.ErrExactNodeNetworkChanged, "network-changed"}} {
+		if errors.Is(err, known.err) {
+			return known.name
+		}
+	}
+	// Type only: never format an error's URL, remote endpoint or process output.
+	return fmt.Sprintf("type:%T", err)
+}
+
+// Explicit bounded diagnostic allowlist; no complete result/evidence DTO,
+// requested URL, config, credentials, process output or response body.
+func d10NativeCheckDiagnostic(t *testing.T, checks *d10NativeChecks, state autonomy.Runtime) {
+	t.Helper()
+	bound := func(value string, size int) string {
+		if len(value) > size {
+			return value[:size] + "..."
+		}
+		return value
+	}
+	t.Logf("D10 native checkpoint: checks=%d results=%d state=%q reason=%q failures=%d", len(checks.ids), len(checks.results), bound(state.State, 64), bound(state.Message, 512), state.Failures)
+	start := max(0, len(checks.results)-8)
+	for i := start; i < len(checks.results); i++ {
+		r := checks.results[i]
+		t.Logf("D10 native check[%d]: available=%t level=%q stage=%q code=%q verdict=%q engine=%q control=%q http=%d evidence_code=%q error_class=%q",
+			i, r.Available, bound(r.TestLevel, 64), bound(r.Stage, 64), bound(r.ErrorCode, 96), bound(string(r.Verdict), 64), bound(r.Evidence.Engine, 64), bound(r.DirectControl, 64), r.HTTPStatus, bound(r.Evidence.ErrorCode, 96), bound(checks.errors[i], 96))
+		for j, stage := range r.Stages {
+			if j == 8 {
+				break
+			}
+			t.Logf("D10 native phase[%d.%d]: id=%q status=%q duration_ms=%d", i, j, bound(stage.ID, 64), bound(stage.Status, 64), stage.Duration)
+		}
+	}
 }
 
 // Same constructors, roots, slot count and engine views as configuredNodeCheckers
@@ -564,6 +610,7 @@ func d10NativeChild(t *testing.T) {
 	first := autonomyTestState(a)
 	if !reflect.DeepEqual(checks.ids, ids[:1]) || len(checks.results) != 1 || !checks.results[0].Available ||
 		checks.results[0].Evidence.Engine != engine || checks.results[0].EgressIP != "93.184.216.13" || checks.results[0].DirectControl != "measured" {
+		d10NativeCheckDiagnostic(t, checks, first)
 		t.Fatal("first node lacks genuine exact engine/service/paired TLS proof", first.State)
 	}
 	if first.State != "applied" || selectedRoute(store.Get().AppliedServices[d10NativeService]) != engine+":"+ids[0] {
