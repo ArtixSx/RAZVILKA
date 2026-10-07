@@ -120,6 +120,9 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 	if ValidateNetworkPolicy(cfg.NetworkPolicy) != nil || ValidateAppliedNetworkPolicy(cfg.AppliedNetworkPolicy) != nil {
 		return Config{}, report, ErrNetworkPolicy
 	}
+	if err := ValidateDefaultRouteConsent(cfg.DefaultRouteConsent); err != nil {
+		return Config{}, report, err
+	}
 	report.normalize()
 	return cfg, report, nil
 }

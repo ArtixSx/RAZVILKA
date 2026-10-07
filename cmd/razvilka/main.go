@@ -630,6 +630,12 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	a.SelfUpdateFiles = selfFileState
 	a.SelfUpdateStartupJobID, a.SelfUpdateStartupHelperPID = *selfJob, *selfWorker
 	a.Nodes = nodeStore
+	if nodeStore != nil {
+		if err := a.ConfigureDefaultConsent(*cfgPath, updateNodePath); err != nil {
+			log.Printf("default network policy consent reader unavailable")
+		}
+		defer a.CloseDefaultConsent()
+	}
 	historyAdmission := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)
 	if nodeStore != nil {
 		feedRoot, feedPathErr := filepath.Abs(filepath.Join(filepath.Dir(*cfgPath), "subscriptions-private"))

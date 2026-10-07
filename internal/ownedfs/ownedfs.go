@@ -41,6 +41,10 @@ func Open(path string) (*Root, error) {
 
 func (r *Root) Close() error { return r.fs.Close() }
 
+// RootInfo reads the original directory descriptor. Detached file metadata is
+// for comparing a configured path with this held owner, never a permission.
+func (r *Root) RootInfo() (os.FileInfo, error) { return r.fs.Stat(".") }
+
 // Sync flushes the opened directory itself, not a path resolved again from the
 // working directory. Call after an atomic rename when the protocol requires
 // directory-entry durability. Unsupported filesystems/platforms return errors.

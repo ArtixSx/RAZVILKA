@@ -93,6 +93,11 @@ func ReviewedNetworkPolicyCommitImage(expected Config, applied *NetworkPolicy, s
 		}
 	}
 	next.Revision++
+	// Only this exact sanctioned unchanged-policy CAS may advance an approved
+	// intent's current config revision. Its immutable approval digest is stable.
+	if CurrentDefaultRouteConsent(expected) {
+		next.DefaultRouteConsent.ConfigRevision = next.Revision
+	}
 	next.AppliedRevision = next.Revision
 	next.LastAppliedAt = appliedAt.UTC().Format(time.RFC3339)
 	return next, nil

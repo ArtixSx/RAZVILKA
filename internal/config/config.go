@@ -41,6 +41,7 @@ type Config struct {
 	ServiceControl       ServiceControl           `json:"service_control,omitempty"`
 	NetworkPolicy        *NetworkPolicy           `json:"network_policy,omitempty"`
 	AppliedNetworkPolicy *NetworkPolicy           `json:"applied_network_policy,omitempty"`
+	DefaultRouteConsent  *DefaultRouteConsent     `json:"default_route_consent,omitempty"`
 }
 
 type Store struct {
@@ -498,6 +499,7 @@ func cloneConfig(in Config) Config {
 	out := in
 	out.NetworkPolicy = CloneNetworkPolicy(in.NetworkPolicy)
 	out.AppliedNetworkPolicy = CloneNetworkPolicy(in.AppliedNetworkPolicy)
+	out.DefaultRouteConsent = CloneDefaultRouteConsent(in.DefaultRouteConsent)
 	out.ServiceControl = cloneServiceControl(in.ServiceControl)
 	out.Services = cloneServices(in.Services)
 	out.AppliedServices = cloneServices(in.AppliedServices)
