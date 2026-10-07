@@ -66,6 +66,29 @@ func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) 
 	if err := b.AdditionalReadback(ctx, p); err != nil {
 		return nil, err
 	}
+	result, err := b.readClassicRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := b.AdditionalReadback(ctx, p); err != nil {
+		return nil, err
+	}
+	return result, ctx.Err()
+}
+
+// Final decision boundary: preserve the whole other-backend/namespace bracket,
+// discard its classic image before the closing callback, then collect a new
+// all-ten-table image with no external predicate callback after those rows.
+func (b *NFQWSScopedBinding) readFinalRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedRules, error) {
+	if _, err := b.readRules(ctx, p); err != nil {
+		return nil, err
+	}
+	return b.readClassicRules(ctx)
+}
+
+// The runner performs only trusted fixed read commands here. Process, LAN,
+// Guard and AdditionalReadback predicate callbacks belong before this image.
+func (b *NFQWSScopedBinding) readClassicRules(ctx context.Context) (nfqwsScopedRules, error) {
 	result := nfqwsScopedRules{}
 	for _, tool := range []PolicyEffectTool{PolicyEffectIPTables, PolicyEffectIP6Tables} {
 		result[tool] = map[string][][]string{}
@@ -91,9 +114,6 @@ func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) 
 				result[tool][table] = append(result[tool][table], fields)
 			}
 		}
-	}
-	if err := b.AdditionalReadback(ctx, p); err != nil {
-		return nil, err
 	}
 	return result, ctx.Err()
 }
@@ -386,7 +406,7 @@ func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedP
 		if err := b.readback(ctx, p, mode, index); err != nil {
 			return err
 		}
-		rules, err := b.readRules(ctx, p)
+		rules, err := b.readFinalRules(ctx, p)
 		if err != nil {
 			return err
 		}
@@ -408,7 +428,7 @@ func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedP
 				return ErrNFQWSScopedOwner
 			}
 		}
-		return ctx.Err() // No external Guard/LAN callback after this image.
+		return ctx.Err() // No external predicate callback after this image.
 	}
 	check := func() error {
 		if mode == nfqwsScopedBeforeStart {
@@ -436,7 +456,20 @@ func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedP
 		return err
 	}
 	if mode != nfqwsScopedCleanup && mode != nfqwsScopedAbsent {
-		return b.VerifyLAN(ctx, CloneLANPolicyRuntime(p.lan))
+		if err := b.VerifyLAN(ctx, CloneLANPolicyRuntime(p.lan)); err != nil {
+			return err
+		}
+	}
+	if mode == nfqwsScopedComplete {
+		// Closing process/LAN/other-backend callbacks must not invalidate
+		// a previously sampled body while returning nominal success.
+		rules, err := b.readFinalRules(ctx, p)
+		if err != nil {
+			return err
+		}
+		if _, err := p.ruleCounts(rules, mode); err != nil {
+			return err
+		}
 	}
 	return ctx.Err()
 }

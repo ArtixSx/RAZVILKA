@@ -29,7 +29,7 @@ func TestNFQWSScopedApplyBoundedScanCounts(t *testing.T) {
 	n := len(m.p.mixed.Effects)
 	// Direct model reads exclude the separate production LAN collector and
 	// its ConsumerCheck. No production observer has been stubbed by this path.
-	if reads != 10*(4*n+2)+n || additional != 2*(4*n+2) || m.lanReads != 2*(n+2) || processReads != 4*(n+2) || len(m.calls) != n {
+	if reads != 10*(5*n+4)+n || additional != 2*(4*n+3) || m.lanReads != 2*(n+2) || processReads != 4*(n+2) || len(m.calls) != n {
 		t.Fatal("duplicate full scans or missing actual proof", reads, additional, m.lanReads, processReads, len(m.calls), n)
 	}
 	status, err := b.Inspect(context.Background(), m.p, root)
