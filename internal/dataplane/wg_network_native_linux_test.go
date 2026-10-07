@@ -243,6 +243,7 @@ func TestWGNativeNetworkReceipt(t *testing.T) {
 		t.Fatal("exact committed real WG consumer", err)
 	}
 	t.Log("native exact committed real WG consumer passed")
+	lan.TransportCheck = a.VerifyLANPolicyTransport
 	checksBeforeVerify := consumerChecks
 	if err := lan.Verify(ctx, plan.LAN); err != nil {
 		t.Logf("native LAN Verify consumer-check calls=%d", consumerChecks-checksBeforeVerify)
