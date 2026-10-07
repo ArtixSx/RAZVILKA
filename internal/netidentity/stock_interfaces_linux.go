@@ -22,6 +22,12 @@ func (p *Provider) ReadReviewedStockInterfaces(ctx context.Context) ([]byte, err
 		if identity.Kind != ReviewedSingleInitNet {
 			return ErrUnknown
 		}
+		leaf, cancel, err := operationContext(c)
+		if err != nil {
+			return err
+		}
+		defer cancel()
+		c = leaf
 		_, nodes, err := protectedPath("/etc")
 		if err != nil {
 			return ErrUnknown
