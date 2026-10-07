@@ -32,9 +32,9 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root
 	if err != nil {
 		return false, err
 	}
-	var retirementRuntime []xrayRetirementRuntimeImage
+	var retirementRuntime xrayRetirementRuntimeWitness
 	if a.isXrayRetirement() {
-		retirementRuntime, err = a.captureXrayRetirementRuntime()
+		retirementRuntime, err = a.captureXrayRetirementRuntime(ctx, s)
 		if err != nil {
 			return false, err
 		}
@@ -126,7 +126,7 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root
 	}
 	if a.isXrayRetirement() {
 		if err := errors.Join(a.verifyXrayRetirementVerificationGrant(ctx, s, root), a.closeXrayRetirementReceipt(s, addition),
-			closeXrayRetirementRuntime(retirementRuntime)); err != nil {
+			a.closeXrayRetirementRuntime(ctx, s, retirementRuntime)); err != nil {
 			return false, errors.Join(ErrProxyPolicyUnknown, err)
 		}
 	}

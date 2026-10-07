@@ -152,7 +152,7 @@ func (a *ProxyTunnelAdapter) closeXrayRetirementReceipt(snapshot proxySnapshot, 
 }
 
 func (a *ProxyTunnelAdapter) closeXrayRetirementActive(ctx context.Context, snapshot proxySnapshot, expected proxyPolicyBinding, requireJournal bool) error {
-	runtime, err := a.captureXrayRetirementRuntime()
+	runtime, err := a.captureXrayRetirementRuntime(ctx, snapshot)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (a *ProxyTunnelAdapter) closeXrayRetirementActive(ctx context.Context, snap
 	if err != nil || !status.Complete || status.Unknown || expected.ReceiptID != "" && status.ID != expected.ReceiptID {
 		return errors.Join(ErrProxyPolicyUnknown, err)
 	}
-	return errors.Join(view.verifyProxySnapshotRuntimeFiles(snapshot), view.checkXrayTransactionSnapshot(), closeXrayRetirementRuntime(runtime), ctx.Err())
+	return a.closeXrayRetirementRuntime(ctx, snapshot, runtime)
 }
 
 type xrayRetirementRuntimeImage struct {
@@ -213,35 +213,110 @@ type xrayRetirementRuntimeImage struct {
 	exists bool
 }
 
+type xrayRetirementRuntimeWitness struct {
+	images       []xrayRetirementRuntimeImage
+	pair         xrayRetirementPair
+	binding      proxyPolicyBinding
+	additionID   string
+	receipt      proxyPolicyReceipt
+	hasReceipt   bool
+	policyExists bool
+}
+
 // Pin the new runtime's current lease and process passports across readback;
 // the old captured ifindex is intentionally not replayed as new authority.
-func (a *ProxyTunnelAdapter) captureXrayRetirementRuntime() ([]xrayRetirementRuntimeImage, error) {
+func (a *ProxyTunnelAdapter) captureXrayRetirementRuntime(ctx context.Context, snapshot proxySnapshot) (xrayRetirementRuntimeWitness, error) {
+	var witness xrayRetirementRuntimeWitness
 	root, err := ownedfs.Open(a.runtimeRoot())
 	if err != nil {
-		return nil, errors.Join(ErrProxyPolicyUnknown, err)
+		return witness, errors.Join(ErrProxyPolicyUnknown, err)
 	}
 	defer root.Close()
 	paths := []string{a.nodeInterfacePath(), a.engineProcess().PIDPath, a.sidecarProcess().PIDPath,
 		a.engineProcess().PIDPath + routeidentity.ReceiptSuffix, a.sidecarProcess().PIDPath + routeidentity.ReceiptSuffix}
 	limits := []int64{4096, 64, 64, 128 << 10, 128 << 10}
-	var images []xrayRetirementRuntimeImage
 	for i, path := range paths {
 		image, _, err := readProxyXrayImage(root, filepath.Base(path), limits[i])
 		if err != nil || i == 0 && (a.scopedXray && !image.exists || !a.scopedXray && image.exists) {
-			return nil, errors.Join(ErrProxyPolicyUnknown, err)
+			return witness, errors.Join(ErrProxyPolicyUnknown, err)
 		}
-		images = append(images, xrayRetirementRuntimeImage{path: path, data: image.data, exists: image.exists})
+		witness.images = append(witness.images, xrayRetirementRuntimeImage{path: path, data: image.data, exists: image.exists})
 	}
-	return images, nil
+	witness.pair, err = a.observeXrayRetirementPair(ctx, snapshot)
+	if err != nil {
+		return witness, err
+	}
+	var exists bool
+	witness.binding, exists, err = a.readPolicyBinding(snapshot.Policy)
+	if err != nil || !exists || witness.binding.Phase != "active" && witness.binding.Phase != "pending" {
+		return witness, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	view := *a
+	view.bootIdentity = func() (string, error) { return snapshot.BootID, nil }
+	generation, err := view.policyGenerationRoot(witness.binding.Generation)
+	if err != nil {
+		return witness, err
+	}
+	status, err := view.additionStatus(ctx, snapshot.Policy, generation)
+	if err != nil || !status.Complete || status.Unknown || witness.binding.ReceiptID != "" && status.ID != witness.binding.ReceiptID {
+		return witness, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	witness.additionID = status.ID
+	policy, exists, err := a.loadPolicy()
+	tracked, trackedErr := a.trackedPolicyJournal()
+	if err != nil || trackedErr != nil || exists && (!tracked || !reflect.DeepEqual(policy, snapshot.Policy)) {
+		return witness, errors.Join(ErrProxyPolicyUnknown, err, trackedErr)
+	}
+	witness.policyExists = exists
+	if _, err := os.Lstat(proxyPolicyReceiptPath(a.xraySnapshotRoot)); !errors.Is(err, os.ErrNotExist) {
+		witness.receipt, err = a.readCandidatePolicyReceipt(a.xraySnapshotRoot, snapshot.Policy)
+		if err != nil {
+			return witness, err
+		}
+		witness.hasReceipt = true
+	}
+	return witness, errors.Join(a.checkXrayTransactionSnapshot(), ctx.Err())
 }
 
-func closeXrayRetirementRuntime(images []xrayRetirementRuntimeImage) error {
-	for _, image := range images {
+// The pair leaf is the LAST factual runtime observation. Everything after it
+// checks frozen local authority and bytes, without reopening action callbacks.
+func (a *ProxyTunnelAdapter) closeXrayRetirementRuntime(ctx context.Context, snapshot proxySnapshot, witness xrayRetirementRuntimeWitness) error {
+	current, err := a.observeXrayRetirementPair(ctx, snapshot)
+	if err != nil || current != witness.pair {
+		return errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	view := *a
+	view.bootIdentity = func() (string, error) { return snapshot.BootID, nil }
+	binding, exists, err := view.readPolicyBinding(snapshot.Policy)
+	if err != nil || !exists || binding != witness.binding {
+		return errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	policy, exists, err := view.loadPolicy()
+	tracked, trackedErr := view.trackedPolicyJournal()
+	if err != nil || trackedErr != nil || exists != witness.policyExists || exists && (!tracked || !reflect.DeepEqual(policy, snapshot.Policy)) {
+		return errors.Join(ErrProxyPolicyUnknown, err, trackedErr)
+	}
+	generation, err := view.policyGenerationRoot(binding.Generation)
+	if err != nil {
+		return err
+	}
+	status, err := view.additionStatus(ctx, snapshot.Policy, generation)
+	if err != nil || !status.Complete || status.Unknown || status.ID != witness.additionID {
+		return errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	if witness.hasReceipt {
+		if err := view.closeXrayRetirementReceipt(snapshot, witness.receipt); err != nil {
+			return err
+		}
+	} else if _, err := os.Lstat(proxyPolicyReceiptPath(a.xraySnapshotRoot)); !errors.Is(err, os.ErrNotExist) {
+		return ErrProxyPolicyUnknown
+	}
+	for _, image := range witness.images {
 		if err := verifyRestoredFile(image.path, image.data, image.exists); err != nil {
 			return errors.Join(ErrProxyPolicyUnknown, err)
 		}
 	}
-	return nil
+	return errors.Join(view.verifyProxySnapshotRuntimeFiles(snapshot), view.checkXrayTransactionSnapshot(), ctx.Err())
 }
 
 func (a *ProxyTunnelAdapter) verifyXrayRetirementPriorBinding(snapshot proxySnapshot) error {
@@ -358,7 +433,7 @@ func (a *ProxyTunnelAdapter) rollbackXrayRetirement(ctx context.Context, snapsho
 		return previous.finishProxyRollback(ctx, snapshot, root, true)
 	}
 	if receipt.Phase == "restored" {
-		runtime, err := previous.captureXrayRetirementRuntime()
+		runtime, err := previous.captureXrayRetirementRuntime(ctx, snapshot)
 		if err != nil {
 			return err
 		}
@@ -369,7 +444,7 @@ func (a *ProxyTunnelAdapter) rollbackXrayRetirement(ctx context.Context, snapsho
 			return err
 		}
 		return errors.Join(previous.verifyXrayRetirementVerificationGrant(ctx, snapshot, root), previous.closeXrayRetirementReceipt(snapshot, receipt),
-			closeXrayRetirementRuntime(runtime), ctx.Err())
+			previous.closeXrayRetirementRuntime(ctx, snapshot, runtime), ctx.Err())
 	}
 	if receipt.Phase == "restoring" && receipt.RestorationGeneration != "" {
 		complete, err := previous.resumeProxyPolicyRestoration(ctx, root, snapshot.Policy, snapshot, receipt)

@@ -790,3 +790,376 @@ func TestProxyXrayRetirementLastBootCallbackCannotHideRuntimeDeathOrBirthChange(
 		}
 	}
 }
+
+func TestProxyXrayRetirementLastIdentityCannotHideOtherProcessDeath(t *testing.T) {
+	for _, mode := range []string{"generic", "node"} {
+		for _, operation := range []string{"Rollback", "VerifyRollback"} {
+			t.Run(mode+"/"+operation, func(t *testing.T) {
+				f := newXrayDispatchFixture(t)
+				f.commit(mode)
+				original := proxyXrayRetirementCapture(t, f, mode)
+				plan, root := proxyXrayRetirementSnapshot(t, f)
+				if err := f.a.Deactivate(f.ctx); err != nil {
+					t.Fatal(err)
+				}
+				if err := f.a.Rollback(f.ctx, plan, root); err != nil {
+					t.Fatal("initial retirement restoration", err)
+				}
+				identityBase, identities := f.a.nodeRuntimeIdentity, 0
+				var cutAt int
+				cut, stoppedID := false, ""
+				birth := f.scoped.identity
+				f.a.nodeRuntimeIdentity = func(spec ProcessSpec, address string) (string, error) {
+					identity, err := identityBase(spec, address)
+					identities++
+					if err == nil && cutAt != 0 && identities == cutAt {
+						if identity == "" || !f.processes.Running(spec) {
+							t.Fatal("cut did not retain a truthful exact identity of the observed live process")
+						}
+						stoppedID = "xray-engine"
+						if spec.ID == stoppedID {
+							stoppedID = "xray-tun"
+						} else if spec.ID != "xray-tun" {
+							t.Fatal("unexpected process identity specimen", spec.ID)
+						}
+						if _, present := f.processes.active[stoppedID]; !present {
+							t.Fatal("other process was already absent before the identity cut")
+						}
+						delete(f.processes.active, stoppedID)
+						cut = true
+					}
+					// The process sampled by this callback remains alive and retains
+					// its actual original identity; only its peer has exited.
+					return identity, err
+				}
+				run := func() (bool, error) {
+					if operation == "Rollback" {
+						err := f.a.Rollback(f.ctx, plan, root)
+						return err == nil, err
+					}
+					return f.a.VerifyRollback(f.ctx, plan, root)
+				}
+				if ok, err := run(); err != nil || !ok || identities == 0 {
+					t.Fatal("baseline did not verify observed original runtime identities", ok, err, identities)
+				}
+				cutAt, identities = identities, 0
+				before := proxyRollbackRetryFiles(t, f.a.StateRoot, root)
+				starts, stops, mutations := f.processes.starts, f.processes.stops, len(receiptMutationCalls(f.commands))
+				ok, err := run()
+				if !cut || ok || !errors.Is(err, ErrProxyPolicyUnknown) || f.processes.starts != starts || f.processes.stops != stops ||
+					len(receiptMutationCalls(f.commands)) != mutations || f.scoped.identity != birth ||
+					!reflect.DeepEqual(before, proxyRollbackRetryFiles(t, f.a.StateRoot, root)) {
+					t.Fatal("truthful last identity hid the other process death or caused effects", ok, err, cut)
+				}
+				expected := make(map[string]ProcessSpec, len(original.processes)-1)
+				for id, spec := range original.processes {
+					if id != stoppedID {
+						expected[id] = spec
+					}
+				}
+				if !reflect.DeepEqual(expected, f.processes.active) {
+					t.Fatal("identity-only callback altered another process fact")
+				}
+				f.constantOwner()
+			})
+		}
+	}
+}
+
+func proxyXrayRetirementBoundPairFixture(t *testing.T, mode string) (*xrayDispatchFixture, *ProxyTunnelAdapter, proxySnapshot, string) {
+	t.Helper()
+	f := newXrayDispatchFixture(t)
+	f.commit(mode)
+	plan, root := proxyXrayRetirementSnapshot(t, f)
+	snapshot, err := readProxySnapshot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, _, err := f.a.dispatchXrayPlan(plan, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous, err := bound.xrayPreviousView(snapshot)
+	if err != nil || !previous.isXrayRetirement() || previous.scopedXray != (mode == "node") {
+		t.Fatal("pair fixture did not retain bound original mode and transaction", err)
+	}
+	return f, previous, snapshot, root
+}
+
+type proxyXrayRetirementForbiddenProcesses struct{}
+
+func (proxyXrayRetirementForbiddenProcesses) Start(context.Context, ProcessSpec) error {
+	panic("retirement pair reopened Start")
+}
+func (proxyXrayRetirementForbiddenProcesses) Stop(context.Context, ProcessSpec) error {
+	panic("retirement pair reopened Stop")
+}
+func (proxyXrayRetirementForbiddenProcesses) Running(ProcessSpec) bool {
+	panic("retirement pair reopened Running")
+}
+
+func proxyXrayRetirementForbidGeneralCallbacks(a *ProxyTunnelAdapter) {
+	a.Processes = proxyXrayRetirementForbiddenProcesses{}
+	a.bootIdentity = func() (string, error) { panic("retirement pair reopened Boot") }
+	a.nodeRuntimeIdentity = func(ProcessSpec, string) (string, error) { panic("retirement pair reopened node identity") }
+	a.Runner = networkCleanupRunner(func(context.Context, string, ...string) ([]byte, error) { panic("retirement pair reopened Runner") })
+	a.FreshProfile = func(context.Context) (string, error) { panic("retirement pair reopened FreshProfile") }
+}
+
+func TestProxyXrayRetirementPairLeafDoesNotReopenGeneralCallbacks(t *testing.T) {
+	for _, mode := range []string{"generic", "node"} {
+		t.Run(mode, func(t *testing.T) {
+			f, view, snapshot, root := proxyXrayRetirementBoundPairFixture(t, mode)
+			beforePair, err := view.observeXrayRetirementPair(f.ctx, snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := proxyRollbackRetryFiles(t, f.a.StateRoot, root)
+			starts, stops, mutations := f.processes.starts, f.processes.stops, len(receiptMutationCalls(f.commands))
+			leaf, calls := view.xrayRetirementPairObserver, 0
+			view.xrayRetirementPairObserver = func(ctx context.Context, specs [2]ProcessSpec) (xrayRetirementPair, error) {
+				calls++
+				return leaf(ctx, specs)
+			}
+			proxyXrayRetirementForbidGeneralCallbacks(view)
+			pair, err := view.observeXrayRetirementPair(f.ctx, snapshot)
+			if err != nil || pair != beforePair || calls != 1 || f.processes.starts != starts || f.processes.stops != stops ||
+				len(receiptMutationCalls(f.commands)) != mutations || !reflect.DeepEqual(before, proxyRollbackRetryFiles(t, f.a.StateRoot, root)) {
+				t.Fatal("direct factual pair changed state, skipped its leaf or reopened action callbacks", pair, err, calls)
+			}
+			f.constantOwner()
+		})
+	}
+}
+
+func TestProxyXrayRetirementPairLeafRejectsPartialOrMismatchedFacts(t *testing.T) {
+	for _, mode := range []string{"generic", "node"} {
+		for _, fault := range []string{"missing-engine", "missing-sidecar", "unreadable-sidecar", "duplicate-pid", "wrong-namespace", "empty-namespace", "wrong-full-argv", "wrong-config", "wrong-boot", "noncanonical-birth"} {
+			t.Run(mode+"/"+fault, func(t *testing.T) {
+				f, view, snapshot, root := proxyXrayRetirementBoundPairFixture(t, mode)
+				pair, err := view.observeXrayRetirementPair(f.ctx, snapshot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch fault {
+				case "missing-engine":
+					pair[0] = xrayRetirementProcessIdentity{}
+				case "missing-sidecar", "unreadable-sidecar":
+					pair[1] = xrayRetirementProcessIdentity{}
+				case "duplicate-pid":
+					pair[1].PID = pair[0].PID
+				case "wrong-namespace":
+					pair[1].Namespace = "foreign-netns"
+				case "empty-namespace":
+					pair[0].Namespace = ""
+				case "wrong-full-argv":
+					pair[0].ArgsHash = routeidentity.Hash([]byte("another-complete-argv\x00"))
+				case "wrong-config":
+					pair[1].ConfigHash = strings.Repeat("f", 64)
+				case "wrong-boot":
+					pair[0].BootID, pair[1].BootID = "foreign-boot", "foreign-boot"
+				case "noncanonical-birth":
+					pair[0].StartTicks = "01"
+				}
+				calls := 0
+				view.xrayRetirementPairObserver = func(context.Context, [2]ProcessSpec) (xrayRetirementPair, error) {
+					calls++
+					if fault == "unreadable-sidecar" {
+						return pair, errors.New("second member unreadable")
+					}
+					return pair, nil
+				}
+				proxyXrayRetirementForbidGeneralCallbacks(view)
+				before := proxyRollbackRetryFiles(t, f.a.StateRoot, root)
+				got, err := view.observeXrayRetirementPair(f.ctx, snapshot)
+				if !errors.Is(err, ErrProxyPolicyUnknown) || got != (xrayRetirementPair{}) || calls != 1 ||
+					!reflect.DeepEqual(before, proxyRollbackRetryFiles(t, f.a.StateRoot, root)) {
+					t.Fatal("partial or mismatched pair became factual authority", got, err, calls)
+				}
+			})
+		}
+	}
+}
+
+func TestProxyXrayRetirementPairLeafRejectsCanceledContextAndMissingDefaultMarkers(t *testing.T) {
+	for _, mode := range []string{"generic", "node"} {
+		for _, fault := range []string{"already-canceled", "observer-cancels", "nil-default-missing-owned-markers"} {
+			t.Run(mode+"/"+fault, func(t *testing.T) {
+				f, view, snapshot, root := proxyXrayRetirementBoundPairFixture(t, mode)
+				before := proxyRollbackRetryFiles(t, f.a.StateRoot, root)
+				leaf, calls := view.xrayRetirementPairObserver, 0
+				ctx, cancel := context.WithCancel(f.ctx)
+				defer cancel()
+				view.xrayRetirementPairObserver = func(ctx context.Context, specs [2]ProcessSpec) (xrayRetirementPair, error) {
+					calls++
+					pair, err := leaf(ctx, specs)
+					if fault == "observer-cancels" {
+						cancel()
+					}
+					return pair, err
+				}
+				if fault == "already-canceled" {
+					cancel()
+				} else if fault == "nil-default-missing-owned-markers" {
+					// Local portable fixtures have no owned PID/passport. The real
+					// default must refuse there, before any live procfs observation.
+					for _, path := range []string{view.engineProcess().PIDPath, view.engineProcess().PIDPath + routeidentity.ReceiptSuffix} {
+						if _, err := os.Lstat(path); !os.IsNotExist(err) {
+							t.Fatal("fixture unexpectedly has a native process marker", path, err)
+						}
+					}
+					view.xrayRetirementPairObserver = nil
+				}
+				proxyXrayRetirementForbidGeneralCallbacks(view)
+				pair, err := view.observeXrayRetirementPair(ctx, snapshot)
+				wantCalls := 0
+				if fault == "observer-cancels" {
+					wantCalls = 1
+				}
+				if !errors.Is(err, ErrProxyPolicyUnknown) || pair != (xrayRetirementPair{}) || calls != wantCalls ||
+					fault == "observer-cancels" && !errors.Is(err, context.Canceled) || !reflect.DeepEqual(before, proxyRollbackRetryFiles(t, f.a.StateRoot, root)) {
+					t.Fatal("canceled/default-unowned pair used fallback or leaked a partial proof", pair, err, calls)
+				}
+			})
+		}
+	}
+}
+
+func TestProxyXrayRetirementPairWitnessRejectsLostMemberOrChangedBirth(t *testing.T) {
+	for _, mode := range []string{"generic", "node"} {
+		for _, change := range []string{"engine-death", "sidecar-death", "birth-change", "engine-only-birth-change", "sidecar-only-birth-change"} {
+			t.Run(mode+"/"+change, func(t *testing.T) {
+				f, view, snapshot, root := proxyXrayRetirementBoundPairFixture(t, mode)
+				witness, err := view.captureXrayRetirementRuntime(f.ctx, snapshot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if change == "engine-only-birth-change" || change == "sidecar-only-birth-change" {
+					member := 0
+					if change == "sidecar-only-birth-change" {
+						member = 1
+					}
+					leaf := view.xrayRetirementPairObserver
+					view.xrayRetirementPairObserver = func(ctx context.Context, specs [2]ProcessSpec) (xrayRetirementPair, error) {
+						pair, err := leaf(ctx, specs)
+						if err == nil {
+							pair[member].StartTicks = "987654321"
+						}
+						return pair, err
+					}
+					fresh, err := view.observeXrayRetirementPair(f.ctx, snapshot)
+					if err != nil || fresh[member].StartTicks == witness.pair[member].StartTicks || fresh[1-member] != witness.pair[1-member] {
+						t.Fatal("individual birth cut must remain a valid full pair with the other member unchanged", fresh, err)
+					}
+				} else if change == "birth-change" {
+					f.scoped.identity++
+				} else {
+					id := "xray-engine"
+					if change == "sidecar-death" {
+						id = "xray-tun"
+					}
+					delete(f.processes.active, id)
+				}
+				before := proxyRollbackRetryFiles(t, f.a.StateRoot, root)
+				starts, stops, mutations := f.processes.starts, f.processes.stops, len(receiptMutationCalls(f.commands))
+				proxyXrayRetirementForbidGeneralCallbacks(view)
+				if err := view.closeXrayRetirementRuntime(f.ctx, snapshot, witness); !errors.Is(err, ErrProxyPolicyUnknown) ||
+					f.processes.starts != starts || f.processes.stops != stops || len(receiptMutationCalls(f.commands)) != mutations ||
+					!reflect.DeepEqual(before, proxyRollbackRetryFiles(t, f.a.StateRoot, root)) {
+					t.Fatal("held pair admitted another live process generation or changed state", err)
+				}
+			})
+		}
+	}
+}
+
+func TestProxyXrayRetirementPairWitnessClosesLateAuthorityAndMetadata(t *testing.T) {
+	for _, mode := range []string{"generic", "node"} {
+		for _, change := range []string{"receipt", "binding", "root", "pid", "passport", "interface", "engine-config", "missing-journal"} {
+			t.Run(mode+"/"+change, func(t *testing.T) {
+				f, view, snapshot, root := proxyXrayRetirementBoundPairFixture(t, mode)
+				witness, err := view.captureXrayRetirementRuntime(f.ctx, snapshot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				originalTree := nodeRouterTransitReadbackTree(t, root)
+				snapshotBytes, err := os.ReadFile(filepath.Join(root, "snapshot.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				receiptBytes, err := os.ReadFile(proxyPolicyReceiptPath(root))
+				if err != nil {
+					t.Fatal(err)
+				}
+				held := filepath.Join(t.TempDir(), "pair-original-transaction")
+				leaf, calls := view.xrayRetirementPairObserver, 0
+				var cutTree map[string]string
+				view.xrayRetirementPairObserver = func(ctx context.Context, specs [2]ProcessSpec) (xrayRetirementPair, error) {
+					pair, err := leaf(ctx, specs)
+					if err != nil {
+						return pair, err
+					}
+					calls++
+					// The factual pair remains truthful. A concurrent metadata writer
+					// changes only ownership/file facts after that last sample.
+					switch change {
+					case "receipt":
+						changed := witness.receipt
+						changed.Phase = "restoring"
+						if err := writeProxyPolicyReceipt(root, changed); err != nil {
+							t.Fatal(err)
+						}
+					case "binding":
+						changed := witness.binding
+						changed.Generation, changed.Phase, changed.ReceiptID = strings.Repeat("e", 32), "pending", ""
+						if err := view.writePolicyBinding(changed); err != nil {
+							t.Fatal(err)
+						}
+					case "root":
+						if err := os.Rename(root, held); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.Mkdir(root, 0700); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(filepath.Join(root, "snapshot.json"), snapshotBytes, 0600); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(proxyPolicyReceiptPath(root), receiptBytes, 0600); err != nil {
+							t.Fatal(err)
+						}
+					case "missing-journal":
+						if err := os.Remove(view.policyPath()); err != nil {
+							t.Fatal(err)
+						}
+					default:
+						path, data := view.engineProcess().PIDPath, []byte("4231\n")
+						if change == "passport" {
+							path += routeidentity.ReceiptSuffix
+							data = []byte(`{"version":1,"pid":4231,"boot_id":"foreign-boot"}`)
+						} else if change == "interface" {
+							path, data = view.nodeInterfacePath(), []byte(`{"schema":1,"boot":"foreign-boot","interface":"foreign0","ifindex":91,"config_sha256":"foreign"}`)
+						} else if change == "engine-config" {
+							path, data = view.engineConfigPath(), append(append([]byte(nil), snapshot.RuntimeEngine...), ' ')
+						}
+						if err := os.WriteFile(path, data, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+					cutTree = proxyRollbackRetryFiles(t, f.a.StateRoot, root)
+					return pair, nil
+				}
+				proxyXrayRetirementForbidGeneralCallbacks(view)
+				starts, stops, mutations := f.processes.starts, f.processes.stops, len(receiptMutationCalls(f.commands))
+				if err := view.closeXrayRetirementRuntime(f.ctx, snapshot, witness); err == nil || change != "engine-config" && !errors.Is(err, ErrProxyPolicyUnknown) || calls != 1 ||
+					f.processes.starts != starts || f.processes.stops != stops || len(receiptMutationCalls(f.commands)) != mutations ||
+					!reflect.DeepEqual(cutTree, proxyRollbackRetryFiles(t, f.a.StateRoot, root)) {
+					t.Fatal("last factual pair hid later authority/metadata drift or reopened effects", err, calls)
+				}
+				if change == "root" && !reflect.DeepEqual(originalTree, nodeRouterTransitReadbackTree(t, held)) {
+					t.Fatal("pair close modified the original retained transaction")
+				}
+			})
+		}
+	}
+}

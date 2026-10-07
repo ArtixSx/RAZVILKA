@@ -108,6 +108,27 @@ func newXrayDispatchFixture(t *testing.T) *xrayDispatchFixture {
 		}
 		return spec.ID + ":" + strconv.Itoa(scoped.identity) + ":" + routeidentity.Hash(data), nil
 	}
+	// One coherent private pair sample; no action/controller/identity/boot
+	// callback is invoked by this fixture's final local observer.
+	a.xrayRetirementPairObserver = func(ctx context.Context, specs [2]ProcessSpec) (xrayRetirementPair, error) {
+		var pair xrayRetirementPair
+		for i, spec := range specs {
+			current, exists := f.processes.active[spec.ID]
+			if !exists || !reflect.DeepEqual(current, spec) || ctx.Err() != nil {
+				return pair, ErrProxyPolicyUnknown
+			}
+			data, err := readBoundedProxyConfig(spec.MatchArg)
+			if err != nil {
+				return pair, err
+			}
+			pair[i] = xrayRetirementProcessIdentity{Receipt: routeidentity.Receipt{Version: 1, PID: 100 + i,
+				BootID: "boot-test", StartTicks: strconv.Itoa(scoped.identity), Executable: spec.Binary,
+				ArgsHash:   routeidentity.Hash([]byte(strings.Join(append([]string{spec.Binary}, spec.Args...), "\x00") + "\x00")),
+				ConfigHash: routeidentity.Hash(data)}, Namespace: "fixture-owned-netns"}
+			clear(data)
+		}
+		return pair, nil
+	}
 	paired := scoped.a.NodeTUNProbe
 	a.NodeTUNProbe = func(ctx context.Context, request NodeTUNRequest) (NodeTUNObservation, error) {
 		f.nodeProofs++
@@ -156,6 +177,7 @@ func (f *xrayDispatchFixture) freshOwner() *ProxyTunnelAdapter {
 	a.Resolver, a.SOCKSProbe, a.ServiceIPProbe = f.a.Resolver, f.a.SOCKSProbe, f.a.ServiceIPProbe
 	a.CanaryProbe, a.Probe = f.a.CanaryProbe, f.a.Probe
 	a.NodeTUNProbe, a.nodeRuntimeIdentity = f.a.NodeTUNProbe, f.a.nodeRuntimeIdentity
+	a.xrayRetirementPairObserver = f.a.xrayRetirementPairObserver
 	if a.scopedXray || !a.xrayPlanDispatch || a.nodeRouterVerifier {
 		f.t.Fatal("fresh constructor changed registered startup flags")
 	}

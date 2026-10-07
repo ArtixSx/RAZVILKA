@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -58,42 +59,7 @@ func verifyNodeLaunch(spec ProcessSpec, endpoint string) (string, error) {
 		return "", errors.New("scoped launch receipt is unavailable")
 	}
 	capture := func() (routeidentity.Receipt, error) {
-		current := routeidentity.Receipt{Version: 1, PID: pid}
-		root := filepath.Join("/proc", strconv.Itoa(pid))
-		boot, e1 := os.ReadFile("/proc/sys/kernel/random/boot_id")
-		stat, e2 := os.ReadFile(filepath.Join(root, "stat"))
-		cmd, e3 := os.ReadFile(filepath.Join(root, "cmdline"))
-		exe, e4 := os.Readlink(filepath.Join(root, "exe"))
-		config, e5 := readBoundedProxyConfig(spec.MatchArg)
-		defer clear(config)
-		if e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || string(cmd) != strings.Join(append([]string{spec.Binary}, spec.Args...), "\x00")+"\x00" {
-			return current, errors.New("scoped process command/config is unavailable")
-		}
-		end := strings.LastIndex(string(stat), ")")
-		if end < 0 {
-			return current, errors.New("invalid scoped process stat")
-		}
-		fields := strings.Fields(string(stat[end+1:]))
-		if len(fields) < 20 || fields[0] == "Z" || fields[0] == "X" {
-			return current, errors.New("scoped process is not live")
-		}
-		if ticks, e := strconv.ParseUint(fields[19], 10, 64); e != nil || ticks == 0 {
-			return current, errors.New("invalid scoped start ticks")
-		}
-		current.BootID, current.StartTicks, current.Executable = strings.TrimSpace(string(boot)), fields[19], exe
-		current.ArgsHash, current.ConfigHash = routeidentity.Hash(cmd), routeidentity.Hash(config)
-		installed, e1 := os.Stat(spec.Binary)
-		active, e2 := os.Stat(filepath.Join(root, "exe"))
-		if e1 != nil || e2 != nil || !os.SameFile(installed, active) {
-			return current, errors.New("scoped process executable differs from installed binary")
-		}
-		self, e1 := os.Readlink("/proc/self/ns/net")
-		child, e2 := os.Readlink(filepath.Join(root, "ns/net"))
-		noNamespaces := errors.Is(e1, os.ErrNotExist) && errors.Is(e2, os.ErrNotExist)
-		if !noNamespaces && (e1 != nil || e2 != nil || self == "" || self != child) {
-			return current, errors.New("scoped process network namespace is unverified")
-		}
-		return current, nil
+		return captureProxyProcessIdentity(context.Background(), spec, pid)
 	}
 	current, err := capture()
 	if err != nil || current != saved {
@@ -111,6 +77,68 @@ func verifyNodeLaunch(spec ProcessSpec, endpoint string) (string, error) {
 		return "", errors.New("scoped identity changed during inspection")
 	}
 	return routeidentity.Hash(append(raw, []byte("|"+endpoint+"|"+inode)...)), nil
+}
+
+// Direct local facts only. Shared with retirement's final paired observer;
+// this never invokes adapter hooks or records a retroactive launch passport.
+func captureProxyProcessIdentity(ctx context.Context, spec ProcessSpec, pid int) (routeidentity.Receipt, error) {
+	current := routeidentity.Receipt{Version: 1, PID: pid}
+	if ctx == nil || ctx.Err() != nil || pid <= 1 {
+		return current, errors.New("scoped process identity is unavailable")
+	}
+	root := filepath.Join("/proc", strconv.Itoa(pid))
+	boot, e1 := readProxyProcessIdentityImage(ctx, "/proc/sys/kernel/random/boot_id", 128)
+	stat, e2 := readProxyProcessIdentityImage(ctx, filepath.Join(root, "stat"), 4096)
+	cmd, e3 := readProxyProcessIdentityImage(ctx, filepath.Join(root, "cmdline"), 64<<10)
+	exe, e4 := os.Readlink(filepath.Join(root, "exe"))
+	config, e5 := readBoundedProxyConfig(spec.MatchArg)
+	defer clear(config)
+	if e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || len(exe) > 4096 ||
+		string(cmd) != strings.Join(append([]string{spec.Binary}, spec.Args...), "\x00")+"\x00" {
+		return current, errors.New("scoped process command/config is unavailable")
+	}
+	end := strings.LastIndex(string(stat), ")")
+	if end < 0 {
+		return current, errors.New("invalid scoped process stat")
+	}
+	fields := strings.Fields(string(stat[end+1:]))
+	if len(fields) < 20 || fields[0] == "Z" || fields[0] == "X" {
+		return current, errors.New("scoped process is not live")
+	}
+	if ticks, e := strconv.ParseUint(fields[19], 10, 64); e != nil || ticks == 0 {
+		return current, errors.New("invalid scoped start ticks")
+	}
+	current.BootID, current.StartTicks, current.Executable = strings.TrimSpace(string(boot)), fields[19], exe
+	current.ArgsHash, current.ConfigHash = routeidentity.Hash(cmd), routeidentity.Hash(config)
+	installed, e1 := os.Stat(spec.Binary)
+	active, e2 := os.Stat(filepath.Join(root, "exe"))
+	if e1 != nil || e2 != nil || !os.SameFile(installed, active) {
+		return current, errors.New("scoped process executable differs from installed binary")
+	}
+	self, e1 := os.Readlink("/proc/self/ns/net")
+	child, e2 := os.Readlink(filepath.Join(root, "ns/net"))
+	noNamespaces := errors.Is(e1, os.ErrNotExist) && errors.Is(e2, os.ErrNotExist)
+	if !noNamespaces && (e1 != nil || e2 != nil || self == "" || len(self) > 4096 || len(child) > 4096 || self != child) {
+		return current, errors.New("scoped process network namespace is unverified")
+	}
+	return current, ctx.Err()
+}
+
+func readProxyProcessIdentityImage(ctx context.Context, path string, limit int64) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil || len(data) > int(limit) || ctx.Err() != nil {
+		clear(data)
+		return nil, errors.Join(errors.New("bounded process identity is unavailable"), err, ctx.Err())
+	}
+	return data, nil
 }
 
 func nodeListenerOwner(pid int, endpoint string) (string, error) {

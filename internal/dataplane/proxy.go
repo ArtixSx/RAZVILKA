@@ -76,13 +76,14 @@ type ProxyTunnelAdapter struct {
 	nodeXHTTPVersion    func(context.Context, string) error
 	ownedUSQUELiveIO    usqueLiveHealthIO
 	// Startup-only dispatch capability; operation views never mutate this owner.
-	xrayPlanDispatch  bool
-	xrayOperation     bool
-	xrayPreviousMode  proxyXrayMode
-	xrayCandidateMode proxyXrayMode
-	xraySnapshotRoot  string
-	xraySnapshotHash  string
-	xraySnapshotOwner os.FileInfo
+	xrayPlanDispatch           bool
+	xrayOperation              bool
+	xrayPreviousMode           proxyXrayMode
+	xrayCandidateMode          proxyXrayMode
+	xraySnapshotRoot           string
+	xraySnapshotHash           string
+	xraySnapshotOwner          os.FileInfo
+	xrayRetirementPairObserver xrayRetirementPairObserver
 }
 
 type NodeRouteRequest struct {
@@ -1527,10 +1528,10 @@ func (a *ProxyTunnelAdapter) finishProxyRollback(ctx context.Context, snapshot p
 	}
 	var retirementReceipt proxyPolicyReceipt
 	var retirementBinding proxyPolicyBinding
-	var retirementRuntime []xrayRetirementRuntimeImage
+	var retirementRuntime xrayRetirementRuntimeWitness
 	if a.isXrayRetirement() {
 		var err error
-		retirementRuntime, err = a.captureXrayRetirementRuntime()
+		retirementRuntime, err = a.captureXrayRetirementRuntime(ctx, snapshot)
 		if err != nil {
 			return err
 		}
@@ -1569,7 +1570,7 @@ func (a *ProxyTunnelAdapter) finishProxyRollback(ctx context.Context, snapshot p
 	}
 	if firstErr == nil && a.isXrayRetirement() {
 		firstErr = errors.Join(a.closeXrayRetirementActive(ctx, snapshot, retirementBinding, true),
-			a.closeXrayRetirementReceipt(snapshot, retirementReceipt), closeXrayRetirementRuntime(retirementRuntime))
+			a.closeXrayRetirementReceipt(snapshot, retirementReceipt), a.closeXrayRetirementRuntime(ctx, snapshot, retirementRuntime))
 	}
 	if firstErr == nil {
 		firstErr = a.markCandidatePolicyPhase(root, "restored")

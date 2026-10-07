@@ -198,9 +198,9 @@ func (a *ProxyTunnelAdapter) verifyProxyRestorationRuntime(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	var retirementRuntime []xrayRetirementRuntimeImage
+	var retirementRuntime xrayRetirementRuntimeWitness
 	if a.isXrayRetirement() {
-		retirementRuntime, err = a.captureXrayRetirementRuntime()
+		retirementRuntime, err = a.captureXrayRetirementRuntime(ctx, snapshot)
 		if err != nil {
 			return err
 		}
@@ -226,7 +226,7 @@ func (a *ProxyTunnelAdapter) verifyProxyRestorationRuntime(ctx context.Context, 
 		return ErrProxyPolicyUnknown
 	}
 	if a.isXrayRetirement() {
-		if err := closeXrayRetirementRuntime(retirementRuntime); err != nil {
+		if err := a.closeXrayRetirementRuntime(ctx, snapshot, retirementRuntime); err != nil {
 			return err
 		}
 	}
