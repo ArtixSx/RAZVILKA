@@ -6,7 +6,12 @@ const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').
 
 export async function runRealHTTPOfflineSources({page,requests,test,readJSON}) {
   await test('saved Sources uses actual GET-only offline handler','real HTTP; saved metadata only',async()=>{
-    await navTo(page,'sources');const start=requests.length;
+    const start=requests.length;await navTo(page,'settings');
+    // Sources is an advanced Settings task, not a top-level sidebar button.
+    const advanced=page.locator('#view-settings details.r5-advanced:has([data-rz-nav="sources"])');
+    if(!await advanced.evaluate(element=>element.open))await advanced.locator('summary').click();
+    await page.locator('#view-settings [data-rz-nav="sources"]').click();
+    await page.waitForFunction(()=>state.currentView==='sources'&&!panelLoad.request&&state.dataLoad.sources?.phase==='ready');
     const catalog=await readJSON('/api/v1/sources/offline');
     assert.equal(catalog.offline,true);assert.equal(catalog.read_only,true);assert(Array.isArray(catalog.sources));
     assert(catalog.sources.every(row=>row.offline===true&&row.ready===false));
