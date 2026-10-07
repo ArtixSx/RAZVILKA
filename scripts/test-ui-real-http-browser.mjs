@@ -1,9 +1,10 @@
 // External client only: existing coordinator-owned disposable Linux QA instance.
-// No server spawn, fixture copies, downloads, account setup, route interception,
-// screenshots, private response dumps, native probes or Apply.
+// No server spawn, fixture copies, downloads, response interception or screenshots.
+// Optional fresh QA account/policy setup requires separate explicit flags.
+// Private response dumps, native probes and Apply are excluded.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {mkdirSync,mkdtempSync,writeFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runRealHTTPReadScenarios,runRealHTTPOfflineSources,runRealHTTPDraftScenarios} from './ui-real-http-scenarios.mjs';
@@ -23,7 +24,7 @@ export function realHTTPFailure(error,stage) {
   return {stage,status:'failed',code:diagnostics.get(error)||({AssertionError:'ASSERTION_FAILED',TimeoutError:'TIMEOUT'}[error?.name]||'CLIENT_FAILED')};
 }
 export function realHTTPSettings(env,args=[]) {
-  realHTTPAssert(args.every(arg=>arg==='--draft-mutations')&&new Set(args).size===args.length,'INVALID_ARGUMENTS');
+  realHTTPAssert(args.every(arg=>['--draft-mutations','--setup-account','--prepare-policy'].includes(arg))&&new Set(args).size===args.length,'INVALID_ARGUMENTS');
   realHTTPAssert(env.RAZVILKA_QA_UI_FIXTURE==='disposable-linux','QA_FIXTURE_REQUIRED');
   let url;try{url=new URL(env.RAZVILKA_QA_UI_URL);}catch(_){realHTTPAssert(false,'QA_ORIGIN_REQUIRED');}
   realHTTPAssert(['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&!url.search&&!url.hash&&url.pathname==='/','INVALID_QA_ORIGIN');
@@ -31,25 +32,32 @@ export function realHTTPSettings(env,args=[]) {
   realHTTPAssert(!!env.RAZVILKA_QA_UI_CHROME,'CHROME_REQUIRED');
   const session=env.RAZVILKA_QA_UI_SESSION,username=env.RAZVILKA_QA_UI_USERNAME,password=env.RAZVILKA_QA_UI_PASSWORD;
   realHTTPAssert(!!session!==!!(username&&password)&&!(session&&(username||password))&&!(!!username!==!!password),'QA_AUTH_REQUIRED');
+  const setupAccount=args.includes('--setup-account'),setupToken=env.RAZVILKA_QA_UI_SETUP_TOKEN;
+  realHTTPAssert(setupAccount?!!setupToken&&!session:!setupToken,'QA_SETUP_TOKEN_REQUIRED');
   return {origin:url.origin,instance:env.RAZVILKA_QA_UI_INSTANCE,chrome:resolve(env.RAZVILKA_QA_UI_CHROME),session:session?resolve(session):null,
-    username,password,draftMutations:args.includes('--draft-mutations'),output:env.RAZVILKA_QA_UI_OUTPUT?resolve(env.RAZVILKA_QA_UI_OUTPUT):null};
+    username,password,setupAccount,setupToken:setupToken?resolve(setupToken):null,preparePolicy:args.includes('--prepare-policy'),
+    draftMutations:args.includes('--draft-mutations'),output:env.RAZVILKA_QA_UI_OUTPUT?resolve(env.RAZVILKA_QA_UI_OUTPUT):null};
 }
 export function realHTTPIdentity(value,instance) {
   realHTTPAssert(value?.schema===1&&value.instance_id===instance&&value.state==='available'&&value.dataplane==='not-checked'
     &&Number.isFinite(value.data_age_ms)&&value.data_age_ms>=0&&Number.isFinite(value.max_age_seconds)&&value.max_age_seconds>0
     &&value.data_age_ms<Math.min(value.max_age_seconds*1000,120000),'QA_INSTANCE_MISMATCH_OR_STALE');
 }
-export function realHTTPFixture({snapshot,inventory,status,services,nodes,autonomy,recovery},instance) {
+export function realHTTPPrivateFixture({snapshot,inventory,status,services,nodes,recovery},instance) {
   realHTTPIdentity(snapshot,instance);realHTTPIdentity(inventory,instance);
   realHTTPAssert(inventory.data?.system?.opt_ready===true&&typeof inventory.data.system.kernel==='string'&&inventory.data.system.kernel.length>0,'QA_OPT_INVENTORY_REQUIRED');
   realHTTPAssert(status?.safe_mode===true&&status.live_active===false&&Number.isSafeInteger(status.revision)&&status.revision>=1,'QA_PRIVATE_SAFE_MODE_REQUIRED');
   realHTTPAssert(Array.isArray(services)&&services.length>0&&services.every(row=>row.enabled===false&&row.applied_state?.enabled===false&&!row.applied_enabled),'QA_DISABLED_SERVICES_REQUIRED');
   realHTTPAssert(Array.isArray(nodes?.nodes)&&nodes.nodes.length===0&&Array.isArray(nodes.groups)&&nodes.groups.length===0,'QA_EMPTY_NODE_STORE_REQUIRED');
+  realHTTPAssert(recovery?.recovery_required===false,'QA_RECOVERY_CLEAR_REQUIRED');
+}
+export function realHTTPFixture(value,instance) {
+  realHTTPPrivateFixture(value,instance);
+  const {autonomy}=value;
   const policy=autonomy?.policy;
   realHTTPAssert(policy?.setup_complete===true&&policy.enabled===false&&policy.inherit_new_services===false&&policy.application?.mode==='off'&&policy.components?.mode==='off','QA_AUTOMATION_OFF_REQUIRED');
   realHTTPAssert(Number.isSafeInteger(policy.revision)&&policy.revision>=1&&Number.isSafeInteger(policy.check_seconds)&&policy.check_seconds>=60&&policy.check_seconds<=3600
     &&Number.isSafeInteger(policy.reserve_seconds)&&policy.reserve_seconds>=Math.max(600,policy.check_seconds)&&policy.reserve_seconds<=86400,'QA_POLICY_TUNING_REQUIRED');
-  realHTTPAssert(recovery?.recovery_required===false,'QA_RECOVERY_CLEAR_REQUIRED');
 }
 function serviceIntent(rows) {
   return JSON.stringify(rows.map(row=>({id:row.id,enabled:row.enabled,route:row.route,sources:row.sources,
@@ -60,16 +68,16 @@ export async function runRealHTTPUI(config) {
   const parent=config.output||join(fileURLToPath(new URL('../',import.meta.url)),'.review-local');mkdirSync(parent,{recursive:true});
   const directory=mkdtempSync(join(parent,'ui-linux-real-'));
   const report={boundary:'actual HTTP/browser to supplied coordinator-owned Linux QA; no native probe or Apply',mode:config.draftMutations?'draft-mutations':'read-only',
-    status:'running',steps:[],requests:[],browser_errors:0,cleanup_required:false};
+    account_setup:config.setupAccount===true,policy_setup:config.preparePolicy===true,status:'running',steps:[],requests:[],browser_errors:0,cleanup_required:false};
   let browser,context,page,stage='launch',fixtureVerified=false;
   const browserRequests=[],records=new WeakMap();
   const recordResponse=async(response,path,method,source)=>{
     const receipt=await response.json().catch(()=>null);
     report.requests.push({method,path,status:response.status(),code:realHTTPCode(receipt?.code),source});return receipt;
   };
-  const readJSON=async path=>{
+  const readJSON=async(path,headers={})=>{
     realHTTPAssert(/^\/api\/v1\/[a-z0-9/-]+$/.test(path),'INVALID_READ_PATH');
-    const response=await context.request.get(config.origin+path,{maxRedirects:0,maxRetries:0,timeout:30000});
+    const response=await context.request.get(config.origin+path,{headers,maxRedirects:0,maxRetries:0,timeout:30000});
     const receipt=await recordResponse(response,path,'GET','verification');realHTTPAssert(response.status()===200,'HTTP_READ_REJECTED');return receipt;
   };
   const checkIdentity=async()=>realHTTPIdentity(await readJSON('/api/v1/panel/snapshot'),config.instance);
@@ -95,6 +103,17 @@ export async function runRealHTTPUI(config) {
     browser=await chromium.launch({executablePath:config.chrome,headless:true});
     context=await browser.newContext({viewport:{width:1280,height:900},serviceWorkers:'block',...(config.session?{storageState:config.session}:{})});
     stage='authenticate-existing-QA-account';
+    if(config.setupAccount){
+      stage='verify-fresh-QA-before-account-setup';
+      const token=readFileSync(config.setupToken,'utf8').trim();realHTTPAssert(/^[A-Za-z0-9_+/=-]{32,128}$/.test(token),'QA_RECOVERY_TOKEN_INVALID');
+      const headers={Authorization:'Bearer '+token,Origin:config.origin};
+      realHTTPIdentity(await readJSON('/api/v1/panel/snapshot',headers),config.instance);
+      const auth=await readJSON('/api/v1/auth/status',headers);realHTTPAssert(auth.setup_required===true&&auth.using_recovery_key===true,'QA_FRESH_ACCOUNT_REQUIRED');
+      report.cleanup_required=true;
+      const response=await context.request.post(config.origin+'/api/v1/auth/setup',{headers,data:{username:config.username,password:config.password},maxRedirects:0,maxRetries:0,timeout:30000});
+      report.requests.push({method:'POST',path:'/api/v1/auth/setup',status:response.status(),code:null,source:'explicit-QA-account-setup'});
+      realHTTPAssert(response.status()===200,'QA_ACCOUNT_SETUP_REJECTED');
+    }
     if(!config.session){
       const response=await context.request.post(config.origin+'/api/v1/auth/login',{headers:{Origin:config.origin},data:{username:config.username,password:config.password},maxRedirects:0,maxRetries:0,timeout:30000});
       report.requests.push({method:'POST',path:'/api/v1/auth/login',status:response.status(),code:null,source:'authentication'});
@@ -102,7 +121,19 @@ export async function runRealHTTPUI(config) {
     }
     stage='verify-QA-instance';const auth=await readJSON('/api/v1/auth/status');realHTTPAssert(auth.authenticated===true,'QA_SESSION_REQUIRED');
     const snapshot=await readJSON('/api/v1/panel/snapshot');realHTTPIdentity(snapshot,config.instance);
-    const inventory=await readJSON('/api/v1/panel/inventory'),status=await readJSON('/api/v1/status'),services=await readJSON('/api/v1/services'),nodes=await readJSON('/api/v1/nodes'),autonomy=await readJSON('/api/v1/autonomy'),recovery=await readJSON('/api/v1/components/recovery');
+    const inventory=await readJSON('/api/v1/panel/inventory'),nodes=await readJSON('/api/v1/nodes'),recovery=await readJSON('/api/v1/components/recovery');
+    let status=await readJSON('/api/v1/status'),services=await readJSON('/api/v1/services'),autonomy=await readJSON('/api/v1/autonomy');
+    if(config.preparePolicy){
+      stage='prepare-disabled-QA-policy';realHTTPPrivateFixture({snapshot,inventory,status,services,nodes,recovery},config.instance);
+      const previous=autonomy.policy;
+      realHTTPAssert(previous?.schema===1&&previous.setup_complete===false&&previous.enabled===false&&Number.isSafeInteger(previous.revision),'QA_FRESH_POLICY_REQUIRED');
+      await checkIdentity();report.cleanup_required=true;
+      const policy={...previous,setup_complete:true,enabled:false,inherit_new_services:false,default_sources:['192.168.1.50/32'],check_seconds:120,reserve_seconds:600,reserve_target:3,candidates_per_round:2,
+        application:{...previous.application,mode:'off'},components:{...previous.components,mode:'off'}};
+      const response=await context.request.put(config.origin+'/api/v1/autonomy',{headers:{Origin:config.origin},data:{expected_revision:previous.revision,policy,confirm:'SAVE_AUTONOMY',release_safe_mode:false},maxRedirects:0,maxRetries:0,timeout:30000});
+      await recordResponse(response,'/api/v1/autonomy','PUT','explicit-QA-policy-setup');realHTTPAssert(response.status()===200,'QA_POLICY_SETUP_REJECTED');
+      autonomy=await readJSON('/api/v1/autonomy');status=await readJSON('/api/v1/status');services=await readJSON('/api/v1/services');
+    }
     realHTTPFixture({snapshot,inventory,status,services,nodes,autonomy,recovery},config.instance);fixtureVerified=true;
     report.steps.push({scenario:'existing disposable QA preflight',status:'passed'});
     page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',()=>report.browser_errors++);

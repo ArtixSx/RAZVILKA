@@ -9,6 +9,7 @@ const check=action=>{action();checks++;};
 const reject=(action,code)=>check(()=>{try{action();assert.fail('expected rejection');}catch(error){assert.equal(realHTTPFailure(error,'admission').code,code);}});
 check(()=>assert.equal(realHTTPSettings(env).draftMutations,false));
 check(()=>assert.equal(realHTTPSettings(env,['--draft-mutations']).draftMutations,true));
+check(()=>assert.equal(realHTTPSettings(env,['--prepare-policy']).preparePolicy,true));
 reject(()=>realHTTPSettings({...env,RAZVILKA_QA_UI_FIXTURE:'production'}),'QA_FIXTURE_REQUIRED');
 for(const url of ['http://name:password@127.0.0.1:19001/','http://127.0.0.1:19001/path','http://127.0.0.1:19001/?token=secret','http://127.0.0.1:19001/#secret','file:///tmp/qa']){
   reject(()=>realHTTPSettings({...env,RAZVILKA_QA_UI_URL:url}),'INVALID_QA_ORIGIN');
@@ -18,7 +19,11 @@ reject(()=>realHTTPSettings(env,['--policy-transport']),'INVALID_ARGUMENTS');
 reject(()=>realHTTPSettings(env,['--draft-mutations','--draft-mutations']),'INVALID_ARGUMENTS');
 reject(()=>realHTTPSettings({...env,RAZVILKA_QA_UI_USERNAME:'qa',RAZVILKA_QA_UI_PASSWORD:'private'}),'QA_AUTH_REQUIRED');
 reject(()=>realHTTPSettings({...env,RAZVILKA_QA_UI_SESSION:undefined,RAZVILKA_QA_UI_USERNAME:'qa'}),'QA_AUTH_REQUIRED');
+reject(()=>realHTTPSettings(env,['--setup-account']),'QA_SETUP_TOKEN_REQUIRED');
+reject(()=>realHTTPSettings({...env,RAZVILKA_QA_UI_SETUP_TOKEN:'private-token'},[]),'QA_SETUP_TOKEN_REQUIRED');
+reject(()=>realHTTPSettings({...env,RAZVILKA_QA_UI_SETUP_TOKEN:'private-token'},['--setup-account']),'QA_SETUP_TOKEN_REQUIRED');
 check(()=>assert.equal(realHTTPSettings({...env,RAZVILKA_QA_UI_SESSION:undefined,RAZVILKA_QA_UI_USERNAME:'qa',RAZVILKA_QA_UI_PASSWORD:'private'}).session,null));
+check(()=>assert.equal(realHTTPSettings({...env,RAZVILKA_QA_UI_SESSION:undefined,RAZVILKA_QA_UI_USERNAME:'qa',RAZVILKA_QA_UI_PASSWORD:'private',RAZVILKA_QA_UI_SETUP_TOKEN:'private-token'},['--setup-account']).setupAccount,true));
 const envelope={schema:1,instance_id:instance,state:'available',dataplane:'not-checked',data_age_ms:10,max_age_seconds:300};
 const fixture=()=>({snapshot:structuredClone(envelope),inventory:{...structuredClone(envelope),data:{system:{opt_ready:true,kernel:'6.1-qa'}}},
   status:{safe_mode:true,live_active:false,revision:1},services:[{enabled:false,applied_state:{enabled:false}}],nodes:{nodes:[],groups:[]},
