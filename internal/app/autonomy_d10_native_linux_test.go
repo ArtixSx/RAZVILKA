@@ -333,11 +333,13 @@ type d10NativeProcesses struct {
 	dataplane.OSProcessController
 	mu         sync.Mutex
 	specs      []dataplane.ProcessSpec
+	failures   []string
 	afterStart func(dataplane.ProcessSpec) error
 }
 
 func (p *d10NativeProcesses) Start(ctx context.Context, spec dataplane.ProcessSpec) error {
 	if err := p.OSProcessController.Start(ctx, spec); err != nil {
+		p.recordFailure("start", err)
 		return err
 	}
 	p.mu.Lock()
@@ -347,6 +349,177 @@ func (p *d10NativeProcesses) Start(ctx context.Context, spec dataplane.ProcessSp
 		return p.afterStart(spec)
 	}
 	return nil
+}
+
+func (p *d10NativeProcesses) Stop(ctx context.Context, spec dataplane.ProcessSpec) error {
+	err := p.OSProcessController.Stop(ctx, spec)
+	if err != nil {
+		p.recordFailure("stop", err)
+	}
+	return err
+}
+
+func (p *d10NativeProcesses) recordFailure(operation string, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.failures) == 8 {
+		p.failures = p.failures[1:]
+	}
+	p.failures = append(p.failures, operation+":"+d10NativeErrorClass(err))
+}
+
+// Forward every command unchanged to the adapter's original OS runner. Retain
+// only bounded failure labels; command arguments and output are never logged.
+type d10NativeRunner struct {
+	base     dataplane.NFQWS2Runner
+	mu       sync.Mutex
+	failures []string
+}
+
+func (r *d10NativeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	out, err := r.base.Run(ctx, name, args...)
+	if err != nil {
+		tool := d10NativeLabel(filepath.Base(name), "ip", "iptables", "ip6tables", "sing-box", "xray")
+		operation := "other"
+		if len(args) > 0 {
+			operation = d10NativeLabel(args[0], "check", "run", "version", "-4", "-6", "link", "route", "rule", "-t")
+		}
+		r.mu.Lock()
+		if len(r.failures) == 8 {
+			r.failures = r.failures[1:]
+		}
+		r.failures = append(r.failures, fmt.Sprintf("tool=%s operation=%s ipv6=%t error=%s output_class=%s", tool, operation, slices.Contains(args, "-6"), d10NativeErrorClass(err), d10NativeCauseCodes(string(out))))
+		r.mu.Unlock()
+	}
+	return out, err
+}
+
+func d10NativeLabel(value string, allowed ...string) string {
+	if slices.Contains(allowed, value) {
+		return value
+	}
+	return "other"
+}
+
+// These labels describe persisted error text; they are NOT recovered typed
+// causes. Only OS command/process observers above retain genuine error types.
+func d10NativeCauseCodes(value string) string {
+	if value == "" {
+		return "none"
+	}
+	var codes []string
+	for _, code := range []struct{ text, label string }{
+		{"native validation failed", "native-validation"}, {"unknown field", "unknown-field"}, {"deprecated", "deprecated-schema"},
+		{"legacy", "legacy-schema"}, {"with_gvisor", "gvisor-build"}, {"not installed", "binary-absent"},
+		{"sidecar", "sidecar"}, {"forwarding", "forwarding"}, {"candidate probe", "candidate-service-probe"},
+		{"candidate egress probe", "candidate-egress-probe"}, {"candidate transports failed", "candidate-transport"},
+		{"exited before", "process-exited"}, {"did not become ready", "process-not-ready"}, {"certificate", "tls-certificate"},
+		{"no such host", "dns-not-found"}, {"network is unreachable", "network-unreachable"}, {"operation not permitted", "permission"},
+		{"policy", "policy"}, {"receipt", "receipt"}, {"cleanup", "cleanup"}, {"identity", "identity"},
+		{"network epoch", "network-epoch"}, {"HTTP 403", "http-403"}, {"destination prefixes", "destinations-absent"},
+		{"public address", "public-address-refusal"}, {"node-scoped", "node-scope"}, {"manifest", "manifest"},
+		{"scoped node endpoint or service addresses changed", "node-endpoint-changed"}, {"selected/control TUN client proof", "tun-proof-required"},
+		{"context deadline", "deadline"}, {"context canceled", "canceled"},
+	} {
+		if strings.Contains(value, code.text) && len(codes) < 8 {
+			codes = append(codes, code.label)
+		}
+	}
+	if len(codes) == 0 {
+		return "unclassified"
+	}
+	return strings.Join(codes, ",")
+}
+
+func d10NativeApplyDiagnostic(t *testing.T, a *App, checks *d10NativeChecks, processes *d10NativeProcesses, runner *d10NativeRunner) {
+	t.Helper()
+	d10NativeCheckDiagnostic(t, checks, autonomyTestState(a))
+	status, err := a.Dataplane.Status()
+	t.Logf("D10 native journal: plan=%t execution=%t error_class=%s", status.Plan != nil, status.Execution != nil, d10NativeErrorClass(err))
+	if plan := status.Plan; plan != nil {
+		t.Logf("D10 native plan: ready=%t state=%s routes=%d adapters=%d blockers=%d", plan.Ready, d10NativeLabel(plan.State, "ready", "blocked", "canary-failed", "network-stale", "committed", "rolled-back", "rollback-failed", "applying"), len(plan.Routes), len(plan.Adapters), len(plan.Blockers))
+	}
+	if execution := status.Execution; execution != nil {
+		t.Logf("D10 native execution: state=%s rollback_verified=%t steps=%d cause_codes=%s", d10NativeLabel(execution.State, "committed", "rolled-back", "rollback-failed", "canary-failed", "network-stale", "failed", "running", "applying", "rolling-back"), execution.RollbackVerified, len(execution.Steps), d10NativeCauseCodes(execution.Error))
+		for i, step := range execution.Steps {
+			if i == 16 {
+				break
+			}
+			t.Logf("D10 native transaction[%d]: adapter=%s phase=%s state=%s cause_codes=%s", i, d10NativeLabel(step.Adapter, "sing-box", "xray", "lan-policy"), d10NativeLabel(step.Phase, "snapshot", "stage", "validate", "canary", "activate", "health", "commit-adapter", "rollback", "verify-rollback", "commit", "deactivate"), d10NativeLabel(step.State, "pending", "running", "passed", "failed", "ok", "done", "skipped"), d10NativeCauseCodes(step.Detail))
+		}
+	}
+	processes.mu.Lock()
+	for i, failure := range processes.failures {
+		t.Logf("D10 native OS process failure[%d]: %s", i, failure)
+	}
+	processes.mu.Unlock()
+	runner.mu.Lock()
+	for i, failure := range runner.failures {
+		t.Logf("D10 native OS command failure[%d]: %s", i, failure)
+	}
+	runner.mu.Unlock()
+}
+
+func d10NativeKernelDiagnostic(t *testing.T, before, after [][]byte) {
+	t.Helper()
+	for i, category := range []string{"ipv4-rules", "ipv6-rules", "ipv4-routes", "ipv6-routes", "ipv4-firewall", "ipv6-firewall"} {
+		if i >= len(before) || i >= len(after) {
+			t.Logf("D10 native kernel diff: category=%s readback-incomplete=true", category)
+			continue
+		}
+		if bytes.Equal(before[i], after[i]) {
+			continue
+		}
+		oldLines, newLines := strings.FieldsFunc(string(before[i]), func(r rune) bool { return r == '\n' }), strings.FieldsFunc(string(after[i]), func(r rune) bool { return r == '\n' })
+		slices.Sort(oldLines)
+		slices.Sort(newLines)
+		t.Logf("D10 native kernel diff: category=%s before_lines=%d after_lines=%d order_only=%t", category, len(oldLines), len(newLines), slices.Equal(oldLines, newLines))
+		for direction, pair := range [][][]string{{oldLines, newLines}, {newLines, oldLines}} {
+			counts := map[string]int{}
+			for _, line := range pair[1] {
+				counts[line]++
+			}
+			changed := map[string]int{}
+			for _, line := range pair[0] {
+				if counts[line] > 0 {
+					counts[line]--
+					continue
+				}
+				fields := strings.Fields(line)
+				kind := "other"
+				if len(fields) > 0 {
+					kind = d10NativeLabel(fields[0], "local", "unicast", "unreachable", "blackhole", "multicast", "broadcast", "-A", "COMMIT", "*filter", "*mangle", "*nat")
+					if strings.HasPrefix(fields[0], ":") {
+						kind = "chain-policy"
+					}
+				}
+				device, table, proto := "none", "implicit", "none"
+				for j := 0; j+1 < len(fields); j++ {
+					switch fields[j] {
+					case "dev":
+						device = d10NativeLabel(fields[j+1], "lo", "br0", "rz-sing", "rz-xray")
+					case "table", "lookup":
+						table = d10NativeLabel(fields[j+1], "local", "main", "default")
+					case "proto":
+						proto = d10NativeLabel(fields[j+1], "kernel", "boot", "static", "ra")
+					}
+				}
+				key := fmt.Sprintf("kind=%s device=%s table=%s proto=%s expires=%t linkdown=%t", kind, device, table, proto, slices.Contains(fields, "expires"), slices.Contains(fields, "linkdown"))
+				changed[key]++
+			}
+			var keys []string
+			for key := range changed {
+				keys = append(keys, key)
+			}
+			slices.Sort(keys)
+			for j, key := range keys {
+				if j == 8 {
+					break
+				}
+				t.Logf("D10 native kernel delta: category=%s direction=%s count=%d %s", category, []string{"removed", "added"}[direction], changed[key], key)
+			}
+		}
+	}
 }
 
 type d10NativeChecks struct {
@@ -384,6 +557,22 @@ func d10NativeErrorClass(err error) string {
 		if errors.Is(err, known.err) {
 			return known.name
 		}
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return fmt.Sprintf("process-exit-%d", exit.ExitCode())
+	}
+	var dns *net.DNSError
+	if errors.As(err, &dns) {
+		return "dns-error"
+	}
+	var authority x509.UnknownAuthorityError
+	if errors.As(err, &authority) {
+		return "tls-unknown-authority"
+	}
+	var hostname x509.HostnameError
+	if errors.As(err, &hostname) {
+		return "tls-hostname"
 	}
 	// Type only: never format an error's URL, remote endpoint or process output.
 	return fmt.Sprintf("type:%T", err)
@@ -564,6 +753,7 @@ func d10NativeChild(t *testing.T) {
 	var serverWait []chan error
 	processes := &d10NativeProcesses{}
 	var adapter *dataplane.ProxyTunnelAdapter
+	var runner *d10NativeRunner
 	var dispatch *dataplane.ExactNodeDispatcher
 	// Registered before any process starts; runs even on a failed assertion.
 	t.Cleanup(func() {
@@ -617,6 +807,7 @@ func d10NativeChild(t *testing.T) {
 		processes.mu.Unlock()
 		after, err := d10NativeKernel(cleanup)
 		if err != nil || !reflect.DeepEqual(after, kernelBase) {
+			d10NativeKernelDiagnostic(t, kernelBase, after)
 			t.Error("native kernel configuration was not restored", err)
 			ok = false
 		}
@@ -712,6 +903,8 @@ func d10NativeChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	adapter.EngineBin, adapter.SidecarBin, adapter.Processes = os.Getenv("RAZVILKA_SINGBOX_NATIVE"), os.Getenv("RAZVILKA_SINGBOX_NATIVE"), processes
+	runner = &d10NativeRunner{base: adapter.Runner}
+	adapter.Runner = runner
 	if err := a.Dataplane.Register(adapter); err != nil {
 		t.Fatal(err)
 	}
@@ -755,6 +948,7 @@ func d10NativeChild(t *testing.T) {
 		t.Fatal("first node lacks genuine exact engine/service/paired TLS proof", first.State)
 	}
 	if first.State != "applied" || selectedRoute(store.Get().AppliedServices[d10NativeService]) != engine+":"+ids[0] {
+		d10NativeApplyDiagnostic(t, a, checks, processes, runner)
 		t.Fatal("ordinary App/Manager did not commit native A", first.State)
 	}
 	if scenario == "failure-exit" {
