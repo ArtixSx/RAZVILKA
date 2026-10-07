@@ -200,7 +200,17 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 		if err != nil {
 			return err
 		}
-		return view.Snapshot(ctx, frozen, root)
+		if err := view.Snapshot(ctx, frozen, root); err != nil {
+			return err
+		}
+		if view.xrayCandidateMode == proxyXrayModeCold && view.xrayPreviousMode != proxyXrayModeCold {
+			bound, _, err := a.dispatchXrayPlan(frozen, root, true)
+			if err != nil {
+				return err
+			}
+			return bound.prepareXrayRetirement(ctx, root)
+		}
+		return nil
 	}
 	if err := a.valid(); err != nil {
 		return err
@@ -1353,6 +1363,9 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, plan Plan, root strin
 	if err := a.checkSnapshotSidecar(snapshot); err != nil {
 		return err
 	}
+	if a.isXrayRetirement() {
+		return a.rollbackXrayRetirement(ctx, snapshot, root)
+	}
 	boot, bootErr := a.currentBootIdentity()
 	sameBoot := bootErr == nil && snapshot.BootID != "" && snapshot.BootID == boot
 	state, stagedErr := a.readStagedPolicy(root)
@@ -1512,6 +1525,27 @@ func (a *ProxyTunnelAdapter) finishProxyRollback(ctx context.Context, snapshot p
 	if err := a.checkXrayTransactionSnapshot(); err != nil {
 		return err
 	}
+	var retirementReceipt proxyPolicyReceipt
+	var retirementBinding proxyPolicyBinding
+	var retirementRuntime []xrayRetirementRuntimeImage
+	if a.isXrayRetirement() {
+		var err error
+		retirementRuntime, err = a.captureXrayRetirementRuntime()
+		if err != nil {
+			return err
+		}
+		retirementReceipt, err = a.readCandidatePolicyReceipt(root, snapshot.Policy)
+		if err != nil {
+			return err
+		}
+		var exists bool
+		retirementBinding, exists, err = a.readPolicyBinding(snapshot.Policy)
+		if err != nil || !exists || retirementBinding.Phase != "active" ||
+			retirementReceipt.RestorationGeneration != "" && retirementBinding.Generation != retirementReceipt.RestorationGeneration ||
+			retirementReceipt.RestorationGeneration == "" && (snapshot.PolicyBinding == nil || retirementBinding != *snapshot.PolicyBinding) {
+			return errors.Join(ErrProxyPolicyUnknown, err)
+		}
+	}
 	var firstErr error
 	if snapshot.ConfigDraft {
 		if err := restoreOptional(snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil && firstErr == nil {
@@ -1532,6 +1566,10 @@ func (a *ProxyTunnelAdapter) finishProxyRollback(ctx context.Context, snapshot p
 	}
 	if firstErr == nil {
 		firstErr = a.checkXrayTransactionSnapshot()
+	}
+	if firstErr == nil && a.isXrayRetirement() {
+		firstErr = errors.Join(a.closeXrayRetirementActive(ctx, snapshot, retirementBinding, true),
+			a.closeXrayRetirementReceipt(snapshot, retirementReceipt), closeXrayRetirementRuntime(retirementRuntime))
 	}
 	if firstErr == nil {
 		firstErr = a.markCandidatePolicyPhase(root, "restored")

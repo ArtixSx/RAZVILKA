@@ -20,12 +20,20 @@ Committed runtime mode читается bounded и descriptor-anchored, без W
 
 Rollback сначала очищает candidate B своим режимом, затем восстанавливает A его режимом. Старый scoped interface lease не копируется как новая authority: при восстановлении создаётся текущий lease. Fresh-owner retry использует durable receipt phases и captured A, включая точные ProcessSpecs/RouteProof; read-only VerifyRollback также проверяет A.
 
+## Follow-up: retiring Xray без Stage
+
+Manager вызывает Snapshot и Deactivate для retiring adapter, но не Stage. Поэтому Snapshot сохраняет отдельный private retirement receipt до teardown: whole snapshot hash, исходный root identity, boot и точные directory generation / receipt document ID исходного подтверждённого A. Receipt фиксирует intent; право восстановления даёт только durable ACK полного удаления именно этого A. Поддельный staged candidate не создаётся, Manager/main/factory API не меняются.
+
+После удаления нужны свежие отсутствие TUN/default/RPDB/forwarding и совпадение live LAN. Чужие binding, policy, runtime config/interface images, forwarding manifest, PID/passport markers запрещают Stop/Start и перезапись. Metadata, original ledger, private receipt и snapshot seal повторно проверяются без внешних callbacks после завершающего preflight, каждого Stop и перед восстановлением. Publication новой restoration generation отдельно проверяет прежний binding после Start/wait callbacks.
+
+Новое restoration generation записывается в transaction receipt до global pending binding и policy effects. Неизвестный ACK сохраняет ссылку на pending generation и запрещает fresh-owner replay по старому удалённому receipt. Подтверждённое restoration может быть завершено после cut; directory generation и document ID сохраняются раздельно. Нетронутое A проверяется без process/kernel replay. Idempotent Rollback и read-only VerifyRollback закрывают grant, binding, runtime images, receipt и snapshot seal после runtime callbacks.
+
 ## Bounded snapshot reader
 
 Private snapshot reader ограничен 64 MiB до allocation/decode, повторно проверяет root/file identity и неизменность bytes. Duplicate keys, включая case aliases Go decoder, unknown keys, trailing/null JSON и unsafe file shape отвергаются. Snapshot может содержать несколько bounded config images и быть больше 4 MiB; отдельный scoped Xray/XHTTP JSON admission сохраняет прежний лимит 4 MiB. Captured interface image ограничен 4 KiB до копирования и разбирается строго.
 
 ## Проверки и ограничения
 
-Portable public fixtures проверяют generic/node полный lifecycle, обе стороны A→B→rollback, Stage failure с сохранением A, retirement Snapshot, fresh-owner rollback retry, legacy generic header, plan/marker drift, wrong Canary Adapter/foreign routes и отказ malformed/mixed intent до effects. Bounded reader fixtures покрывают корректный snapshot больше 8 MiB и повреждённые/oversize варианты. Конкретные результаты isolated tracked archive передаются с checkpoint SHA.
+Portable public fixtures проверяют generic/node полный lifecycle, обе стороны A→B→rollback, Stage failure с сохранением A, retirement Snapshot, fresh-owner rollback retry, legacy generic header, plan/marker drift, wrong Canary Adapter/foreign routes и отказ malformed/mixed intent до effects. Retirement follow-up добавляет public Snapshot→Deactivate→Rollback→Verify без Stage, same/fresh owner, повторное retirement восстановленного поколения, нетронутое A, interrupted cleanup retry, lost add ACK, missing/tampered receipt, чужой acknowledged/pending binding и поздние callback/marker cuts. Bounded reader fixtures покрывают корректный snapshot больше 8 MiB и повреждённые/oversize варианты. Конкретные результаты isolated tracked archive передаются с checkpoint SHA.
 
 Эта worktree выполняет portable tests и compile-only Linux проверки. Actual main/Manager execution, Linux/native TUN, router/VM и account/live probes принадлежат ROOT; portable PASS не подтверждает их. ROOT-owned native QA files не изменяются. Отдельный принятый USQUE consumer `1af0877` не смешан с этим checkpoint.

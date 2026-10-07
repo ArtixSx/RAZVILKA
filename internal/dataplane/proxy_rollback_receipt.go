@@ -11,13 +11,22 @@ import (
 // The transaction names restoration A before publishing its global binding.
 // State hashes alone cannot distinguish A and B with identical selectors.
 func (a *ProxyTunnelAdapter) publishProxyRestoration(root, id string) error {
-	state, err := a.readStagedPolicy(root)
+	state, err := a.rollbackPolicyState(root)
 	if err != nil {
 		return ErrProxyPolicyUnknown
 	}
 	receipt, err := a.readCandidatePolicyReceipt(root, state)
 	if err != nil || receipt.Phase != "restoring" || receipt.RestorationGeneration != "" {
 		return ErrProxyPolicyUnknown
+	}
+	if a.isXrayRetirement() {
+		snapshot, err := readProxySnapshot(root)
+		if err != nil {
+			return err
+		}
+		if err := errors.Join(a.verifyXrayRetirementPriorBinding(snapshot), a.closeXrayRetirementReceipt(snapshot, receipt)); err != nil {
+			return err
+		}
 	}
 	receipt.RestorationGeneration = id
 	if err := a.checkXrayTransactionSnapshot(); err != nil {
@@ -75,7 +84,11 @@ func (a *ProxyTunnelAdapter) resumeProxyPolicyRestoration(ctx context.Context, r
 		}
 	}
 	status, err := a.additionStatus(ctx, candidate, additionRoot)
-	if err != nil || !status.Removed || status.Unknown || receipt.Generation != "" && status.ID != receipt.Generation {
+	expectedReceipt := receipt.Generation
+	if a.isXrayRetirement() {
+		expectedReceipt = receipt.RetirementReceiptID
+	}
+	if err != nil || !status.Removed || status.Unknown || receipt.Generation != "" && status.ID != expectedReceipt {
 		return false, errors.Join(ErrProxyPolicyUnknown, err)
 	}
 	if receipt.RestorationGeneration == "" {
@@ -105,6 +118,11 @@ func (a *ProxyTunnelAdapter) resumeProxyPolicyRestoration(ctx context.Context, r
 	if err := a.checkXrayTransactionSnapshot(); err != nil {
 		return false, err
 	}
+	if a.isXrayRetirement() {
+		if err := errors.Join(a.closeXrayRetirementActive(ctx, snapshot, binding, false), a.closeXrayRetirementReceipt(snapshot, receipt)); err != nil {
+			return false, err
+		}
+	}
 	binding.Phase, binding.ReceiptID = "active", status.ID
 	if err := a.writePolicyBinding(binding); err != nil {
 		return false, err
@@ -116,6 +134,9 @@ func (a *ProxyTunnelAdapter) resumeProxyPolicyRestoration(ctx context.Context, r
 }
 
 func (a *ProxyTunnelAdapter) verifyPreRestorationBinding(ctx context.Context, snapshot proxySnapshot, candidate PolicyState, receipt proxyPolicyReceipt) error {
+	if a.isXrayRetirement() {
+		return a.verifyXrayRetirementPreRestoration(ctx, snapshot, receipt)
+	}
 	// Before A starts, the global reference can only be the consumed prior A
 	// or B's consumed promoted receiver. Missing tracked or foreign references
 	// fail closed; neither may be overwritten with historical authority.
@@ -177,6 +198,13 @@ func (a *ProxyTunnelAdapter) verifyProxyRestorationRuntime(ctx context.Context, 
 	if err != nil {
 		return err
 	}
+	var retirementRuntime []xrayRetirementRuntimeImage
+	if a.isXrayRetirement() {
+		retirementRuntime, err = a.captureXrayRetirementRuntime()
+		if err != nil {
+			return err
+		}
+	}
 	if err := a.verifyProxySnapshotRuntimeFiles(snapshot); err != nil {
 		return err
 	}
@@ -196,6 +224,11 @@ func (a *ProxyTunnelAdapter) verifyProxyRestorationRuntime(ctx context.Context, 
 	}
 	if !a.Processes.Running(a.engineProcess()) || !a.Processes.Running(a.sidecarProcess()) {
 		return ErrProxyPolicyUnknown
+	}
+	if a.isXrayRetirement() {
+		if err := closeXrayRetirementRuntime(retirementRuntime); err != nil {
+			return err
+		}
 	}
 	return ctx.Err()
 }

@@ -25,6 +25,8 @@ type proxyPolicyReceipt struct {
 	Engine, Boot, Digest, Phase string
 	Generation                  string `json:"generation,omitempty"`
 	RestorationGeneration       string `json:"restoration_generation,omitempty"`
+	RetirementSnapshot          string `json:"retirement_snapshot_sha256,omitempty"`
+	RetirementReceiptID         string `json:"retirement_receipt_id,omitempty"`
 	Checksum                    string `json:"receipt_sha256,omitempty"`
 }
 
@@ -81,6 +83,13 @@ func (a *ProxyTunnelAdapter) readCandidatePolicyReceipt(root string, state Polic
 	unsigned, _ := json.Marshal(receipt)
 	receipt.Checksum = checksum
 	if !bytes.Equal(canonical, data) || checksum != routeidentity.Hash(unsigned) {
+		return receipt, ErrProxyPolicyUnknown
+	}
+	if receipt.RetirementSnapshot != "" {
+		if err := a.validateXrayRetirementReceipt(root, receipt); err != nil {
+			return receipt, err
+		}
+	} else if a.isXrayRetirement() || receipt.RetirementReceiptID != "" {
 		return receipt, ErrProxyPolicyUnknown
 	}
 	if receipt.Generation != "" {
@@ -178,6 +187,13 @@ func (a *ProxyTunnelAdapter) removeCandidatePolicy(ctx context.Context, root str
 }
 
 func (a *ProxyTunnelAdapter) verifyCandidateReceipt(ctx context.Context, root string, state PolicyState, active bool) error {
+	if a.isXrayRetirement() && !active {
+		snapshot, err := readProxySnapshot(root)
+		if err != nil || a.verifyXrayTransactionSnapshot(snapshot) != nil {
+			return errors.Join(ErrProxyPolicyUnknown, err)
+		}
+		return a.verifyXrayRetirementVerificationGrant(ctx, snapshot, root)
+	}
 	receipt, err := a.readCandidatePolicyReceipt(root, state)
 	if err != nil {
 		return err
@@ -203,7 +219,7 @@ func (a *ProxyTunnelAdapter) verifyCandidateReceipt(ctx context.Context, root st
 }
 
 func (a *ProxyTunnelAdapter) markCandidatePolicyPhase(root string, phase string) error {
-	state, err := a.readStagedPolicy(root)
+	state, err := a.rollbackPolicyState(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}

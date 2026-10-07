@@ -32,6 +32,18 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root
 	if err != nil {
 		return false, err
 	}
+	var retirementRuntime []xrayRetirementRuntimeImage
+	if a.isXrayRetirement() {
+		retirementRuntime, err = a.captureXrayRetirementRuntime()
+		if err != nil {
+			return false, err
+		}
+	}
+	if a.isXrayRetirement() {
+		if err := a.verifyXrayRetirementVerificationGrant(ctx, s, root); err != nil {
+			return false, err
+		}
+	}
 	if err := a.checkSnapshotSidecar(s); err != nil {
 		return false, err
 	}
@@ -79,7 +91,7 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root
 	if err := a.verifyCommittedReceipt(ctx, policy); err != nil {
 		return false, err
 	}
-	staged, err := a.readStagedPolicy(root)
+	staged, err := a.rollbackPolicyState(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil // No complete candidate journal: do not grant a receipt.
 	}
@@ -111,6 +123,12 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root
 	}
 	if err := a.checkXrayTransactionSnapshot(); err != nil {
 		return false, err
+	}
+	if a.isXrayRetirement() {
+		if err := errors.Join(a.verifyXrayRetirementVerificationGrant(ctx, s, root), a.closeXrayRetirementReceipt(s, addition),
+			closeXrayRetirementRuntime(retirementRuntime)); err != nil {
+			return false, errors.Join(ErrProxyPolicyUnknown, err)
+		}
 	}
 	// The caller still must verify network epoch, service definition and cause
 	// attribution before any next Apply. A broken old service A can be restored
