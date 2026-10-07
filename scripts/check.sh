@@ -107,6 +107,9 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-native-enrollment-supervision.mjs
   node scripts/test-component-update-supervision.mjs
   node scripts/test-self-update-supervision.mjs
+  node scripts/test-self-update-legacy-fence.mjs
+  node scripts/test-self-update-rollback-reader.mjs sh rollback-entware.sh
+  node scripts/test-self-update-rollback-reader.mjs sh upgrade-entware.sh
   node scripts/test-node-history-admission.mjs
   node scripts/test-native-opkg-runner.mjs
 fi
