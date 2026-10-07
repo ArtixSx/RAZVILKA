@@ -29,7 +29,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -48,12 +47,16 @@ import (
 const d10NativeService = "my-independent-site"
 
 // ROOT-only. Each case re-executes in fresh net/mount/PID namespaces, with no
-// external interface or default route. Public-format addresses are owned local
-// fixtures. The production checker, TLS, OS processes, adapter, Manager and
-// rollback verifier are retained. This does not attest physical LAN or HIL.
+// host interface or external default route. Public-format targets live in an
+// owned backend netns joined by veth. The production checker, TLS, OS processes,
+// adapter, Manager and rollback verifier are retained. This does not attest LAN/HIL.
 func TestD10NativeAppManagerRollbackFreshC(t *testing.T) {
 	if os.Getenv("RAZVILKA_D10_NATIVE") != "1" {
 		t.Skip("ROOT-only: explicit native D10 opt-in and pinned Xray/Sing-box binaries")
+	}
+	if os.Getenv("RAZVILKA_D10_NATIVE_BACKEND") == "1" {
+		d10NativeBackend(t)
+		return
 	}
 	if os.Getenv("RAZVILKA_D10_NATIVE_CHILD") != "" {
 		d10NativeChild(t)
@@ -83,6 +86,9 @@ func TestD10NativeAppManagerRollbackFreshC(t *testing.T) {
 	}
 	if st, err := os.Stat("/opt"); err != nil || !st.IsDir() {
 		t.Fatal("/opt mount point must already exist; fixture never creates a host mount point")
+	}
+	if st, err := os.Stat("/run"); err != nil || !st.IsDir() {
+		t.Fatal("/run mount point must already exist for private namespace handles")
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -284,8 +290,8 @@ func d10NativeEndpointPreflight(t *testing.T, ctx context.Context) {
 	for _, endpoint := range []struct {
 		host, path, body string
 		status           int
-	}{{"www.cloudflare.com", "/cdn-cgi/trace", "ip=93.184.216.12\nwarp=off\n", http.StatusOK},
-		{"api.ipify.org", "/", "93.184.216.12", http.StatusOK},
+	}{{"www.cloudflare.com", "/cdn-cgi/trace", "ip=93.184.216.16\nwarp=off\n", http.StatusOK},
+		{"api.ipify.org", "/", "93.184.216.16", http.StatusOK},
 		{"service.example", "/generate_204", "", http.StatusNoContent}} {
 		addresses, err := netresolve.LookupNetIP(ctx, "ip", endpoint.host)
 		if err != nil || len(addresses) != 1 || !addresses[0].Is4() || addresses[0].Is4In6() || addresses[0].String() != "93.184.216.12" {
@@ -488,6 +494,7 @@ func d10NativePrivateFailure(t *testing.T, status dataplane.RuntimeStatus) {
 	replacements := []string{root, "<fixture-root>", os.Getenv("RAZVILKA_XRAY_NATIVE"), "<pinned-xray>", os.Getenv("RAZVILKA_SINGBOX_NATIVE"), "<pinned-sing-box>",
 		"/opt", "<private-opt>", "127.0.0.1", "<fixture-loopback>", "192.168.1.50", "<fixture-client>", "192.168.1.1", "<fixture-bridge>",
 		"93.184.216.11", "<fixture-node-endpoint>", "93.184.216.12", "<fixture-service-ip>", "93.184.216.13", "<fixture-A-exit>", "93.184.216.14", "<fixture-B-exit>", "93.184.216.15", "<fixture-C-exit>",
+		"93.184.216.16", "<fixture-direct-exit>", "192.0.2.1", "<fixture-backend-veth>", "192.0.2.2", "<fixture-router-veth>",
 		"service.example", "<fixture-service-host>", "front.example", "<fixture-front-host>", "www.cloudflare.com", "<fixture-trace-host>", "api.ipify.org", "<fixture-ip-host>"}
 	redactor := strings.NewReplacer(replacements...)
 	urls := regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^\s"'<>]+`)
@@ -721,13 +728,13 @@ func d10NativeChild(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	opt := filepath.Join(root, "opt")
-	for _, dir := range []string{opt, filepath.Join(opt, "bin"), filepath.Join(opt, "etc", "razvilka"), filepath.Join(opt, "var", "lib", "razvilka")} {
+	for _, dir := range []string{opt, filepath.Join(root, "run"), filepath.Join(opt, "bin"), filepath.Join(opt, "etc", "razvilka"), filepath.Join(opt, "var", "lib", "razvilka")} {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// These bind mounts live only in the fresh private mount namespace.
-	for _, mount := range [][2]string{{opt, "/opt"}, {filepath.Join(root, "hosts"), "/etc/hosts"}, {filepath.Join(root, "resolv.conf"), "/etc/resolv.conf"}} {
+	for _, mount := range [][2]string{{opt, "/opt"}, {filepath.Join(root, "run"), "/run"}, {filepath.Join(root, "hosts"), "/etc/hosts"}, {filepath.Join(root, "resolv.conf"), "/etc/resolv.conf"}} {
 		if err := unix.Mount(mount[0], mount[1], "", unix.MS_BIND, ""); err != nil {
 			t.Fatal("private fixture bind mount", err)
 		}
@@ -739,7 +746,7 @@ func d10NativeChild(t *testing.T) {
 	}
 	t.Setenv("PATH", "/opt/bin:"+os.Getenv("PATH"))
 	commands := [][]string{{"link", "set", "lo", "up"}, {"link", "add", "br0", "type", "bridge"}, {"link", "set", "br0", "up"}, {"addr", "add", "192.168.1.1/24", "dev", "br0"}}
-	for _, ip := range []string{"93.184.216.11", "93.184.216.12", "93.184.216.13", "93.184.216.14", "93.184.216.15"} {
+	for _, ip := range []string{"93.184.216.16"} {
 		commands = append(commands, []string{"addr", "add", ip + "/32", "dev", "lo"})
 	}
 	for _, args := range commands {
@@ -780,6 +787,7 @@ func d10NativeChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	backendNamespace, stopBackendNamespace := d10NativeBackendTopology(t, ctx)
 	stopDNS := d10NativeDNS(t)
 	nodesPath := "/opt/etc/razvilka/nodes-private"
 	if err := os.Mkdir(nodesPath, 0700); err != nil {
@@ -811,33 +819,8 @@ func d10NativeChild(t *testing.T) {
 	if len(ids) != 3 {
 		t.Fatal("expected three distinct genuine nodes")
 	}
-	var blockA, blockB atomic.Bool
-	l, err := net.Listen("tcp4", "93.184.216.12:443")
-	if err != nil {
-		t.Fatal(err)
-	}
-	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		source, _, _ := net.SplitHostPort(r.RemoteAddr)
-		w.Header().Set("Content-Type", "text/plain")
-		switch r.URL.Path {
-		case "/cdn-cgi/trace":
-			_, _ = fmt.Fprintf(w, "ip=%s\nwarp=off\n", source)
-		case "/":
-			_, _ = fmt.Fprint(w, source)
-		case "/generate_204":
-			if source == "93.184.216.13" && blockA.Load() || source == "93.184.216.14" && blockB.Load() {
-				w.WriteHeader(http.StatusForbidden)
-			} else {
-				w.WriteHeader(http.StatusNoContent)
-			}
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})}
-	tlsDone := make(chan error, 1)
-	go func() { tlsDone <- server.ServeTLS(l, filepath.Join(root, "ca.pem"), filepath.Join(root, "key.pem")) }()
-	var servers []*exec.Cmd
-	var serverWait []chan error
+	var backend *exec.Cmd
+	backendDone := make(chan error, 1)
 	processes := &d10NativeProcesses{}
 	var adapter *dataplane.ProxyTunnelAdapter
 	var runner *d10NativeRunner
@@ -859,25 +842,35 @@ func d10NativeChild(t *testing.T) {
 				ok = false
 			}
 		}
-		for i, cmd := range servers {
-			_ = cmd.Process.Kill()
+		if backend != nil && backend.Process != nil {
+			if err := os.WriteFile(filepath.Join(root, "backend.stop"), []byte("stop\n"), 0600); err != nil {
+				t.Error("owned backend stop request", d10NativeErrorClass(err))
+				ok = false
+			}
 			select {
-			case <-serverWait[i]:
-			case <-cleanup.Done():
-				t.Error("native server was not reaped")
+			case err := <-backendDone:
+				if err != nil {
+					t.Error("owned backend exit", d10NativeErrorClass(err))
+					ok = false
+				}
+			case <-time.After(10 * time.Second):
+				_ = backend.Process.Kill()
+				select {
+				case <-backendDone:
+				case <-cleanup.Done():
+					t.Error("owned backend was not reaped")
+				}
+				t.Error("owned backend exceeded graceful cleanup bound")
+				ok = false
+			}
+			marker, err := os.ReadFile(filepath.Join(root, "backend-cleanup.complete"))
+			if err != nil || string(marker) != "owned VLESS stopped; HTTPS joined\n" {
+				t.Error("owned backend lacks real process/TLS cleanup receipt")
 				ok = false
 			}
 		}
-		_ = server.Close()
-		_ = l.Close()
-		select {
-		case err := <-tlsDone:
-			if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
-				t.Errorf("TLS fixture: %v", err)
-				ok = false
-			}
-		case <-cleanup.Done():
-			t.Error("TLS fixture did not join")
+		if err := stopBackendNamespace(); err != nil {
+			t.Error("owned remote namespace/veth cleanup", d10NativeErrorClass(err))
 			ok = false
 		}
 		if err := stopDNS(); err != nil {
@@ -910,55 +903,45 @@ func d10NativeChild(t *testing.T) {
 			}
 		}
 	})
-	d10NativeEndpointPreflight(t, ctx)
-	for i, id := range ids {
-		doc := map[string]any{"log": map[string]any{"loglevel": "warning", "access": "none"},
-			"dns": map[string]any{"hosts": map[string]any{"service.example": "93.184.216.12", "www.cloudflare.com": "93.184.216.12", "api.ipify.org": "93.184.216.12"}},
-			"inbounds": []any{map[string]any{"listen": "93.184.216.11", "port": ports[id], "protocol": "vless",
-				"settings":       map[string]any{"clients": []any{map[string]any{"id": "123e4567-e89b-12d3-a456-426614174000"}}, "decryption": "none"},
-				"streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": filepath.Join(root, "ca.pem"), "keyFile": filepath.Join(root, "key.pem")}}}}}},
-			"outbounds": []any{map[string]any{"protocol": "freedom", "sendThrough": fmt.Sprintf("93.184.216.%d", 13+i), "settings": map[string]any{"domainStrategy": "UseIPv4"}}}}
-		data, _ := json.Marshal(doc)
-		path := filepath.Join(root, fmt.Sprintf("server-%d.json", i))
-		if err := os.WriteFile(path, data, 0600); err != nil {
-			t.Fatal(err)
-		}
-		clear(data)
-		binary := os.Getenv("RAZVILKA_XRAY_NATIVE")
-		if out, err := d10NativeCommand(ctx, binary, "run", "-test", "-config", path); err != nil {
-			clear(out)
-			t.Fatal("real native server config rejected", err)
-		}
-		log, err := os.OpenFile(path+".log", os.O_CREATE|os.O_WRONLY, 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cmd := exec.Command(binary, "run", "-config", path)
-		cmd.Stdout, cmd.Stderr = log, log
-		err = cmd.Start()
-		_ = log.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		servers = append(servers, cmd)
-		done := make(chan error, 1)
-		serverWait = append(serverWait, done)
-		go func() { done <- cmd.Wait() }()
-		deadline := time.Now().Add(5 * time.Second)
-		ready := false
-		for time.Now().Before(deadline) {
-			conn, err := net.DialTimeout("tcp4", net.JoinHostPort("93.184.216.11", strconv.Itoa(ports[id])), 100*time.Millisecond)
-			if err == nil {
-				_ = conn.Close()
-				ready = true
-				break
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
-		if !ready {
-			t.Fatal("real VLESS server not ready")
-		}
+	orderedPorts := []int{ports[ids[0]], ports[ids[1]], ports[ids[2]]}
+	data, err := json.Marshal(orderedPorts)
+	if err != nil {
+		t.Fatal("owned backend node order", d10NativeErrorClass(err))
 	}
+	err = os.WriteFile(filepath.Join(root, "backend-ports.json"), data, 0600)
+	clear(data)
+	if err != nil {
+		t.Fatal("owned backend binding write", d10NativeErrorClass(err))
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	routerNamespace, err := os.Readlink("/proc/self/ns/net")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend = exec.Command("ip", "netns", "exec", backendNamespace, exe, "-test.run=^TestD10NativeAppManagerRollbackFreshC$", "-test.v", "-test.timeout=3m30s")
+	backend.Env = append(os.Environ(), "RAZVILKA_D10_NATIVE_BACKEND=1", "RAZVILKA_D10_ROUTER_NET="+routerNamespace)
+	backend.Stdout, backend.Stderr = os.Stdout, os.Stderr
+	if err := backend.Start(); err != nil {
+		t.Fatal("owned remote backend start", d10NativeErrorClass(err))
+	}
+	go func() { backendDone <- backend.Wait() }()
+	ready := false
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		marker, err := os.ReadFile(filepath.Join(root, "backend.ready"))
+		if err == nil && string(marker) == "real TLS and VLESS ready\n" {
+			ready = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !ready {
+		t.Fatal("owned remote backend readiness absent")
+	}
+	d10NativeEndpointPreflight(t, ctx)
 	store, err := config.Load("/opt/etc/razvilka/config.json")
 	if err != nil {
 		t.Fatal(err)
@@ -1118,12 +1101,14 @@ func d10NativeChild(t *testing.T) {
 			if out.Type == "vless" && out.Port == ports[ids[1]] {
 				// Actual process start is after isolated checker+Canary, before live
 				// Health. Change only the owned remote server's response, not results.
-				blockB.Store(true)
+				return os.WriteFile(filepath.Join(root, "block-b"), []byte("live B rejects\n"), 0600)
 			}
 		}
 		return nil
 	}
-	blockA.Store(true)
+	if err := os.WriteFile(filepath.Join(root, "block-a"), []byte("live A rejects\n"), 0600); err != nil {
+		t.Fatal("owned remote A failure request", d10NativeErrorClass(err))
+	}
 	d10NativeDue(a)
 	a.autonomyRound(ctx, time.Now())
 	if r := autonomyTestState(a); r.Failures != 1 || !reflect.DeepEqual(store.Get(), base) {
@@ -1140,6 +1125,7 @@ func d10NativeChild(t *testing.T) {
 	if !rollbackSeen || final.State != "applied" || selectedRoute(store.Get().AppliedServices[d10NativeService]) != engine+":"+ids[2] ||
 		len(final.CandidateFailures) != 1 || final.CandidateFailures[0].NodeID != ids[1] || final.CandidateFailures[0].Code != "http-403" ||
 		!reflect.DeepEqual(checks.ids, []string{ids[0], ids[0], ids[0], ids[1], ids[2]}) {
+		d10NativeApplyDiagnostic(t, a, checks, processes, runner)
 		t.Fatal("native B failure/verified A rollback/fresh C chain not complete", final.State, checks.ids)
 	}
 	if !checks.results[len(checks.results)-1].Available || checks.results[len(checks.results)-1].EgressIP != "93.184.216.15" {
@@ -1182,4 +1168,219 @@ func d10NativeDue(a *App) {
 	r := a.autonomy.doc.Runtime[d10NativeService]
 	r.NextCheck = time.Time{}
 	a.autonomy.doc.Runtime[d10NativeService] = r
+}
+
+func d10NativeBackendTopology(t *testing.T, ctx context.Context) (string, func() error) {
+	t.Helper()
+	const namespace = "rz-d10-backend"
+	if out, err := d10NativeCommand(ctx, "ip", "netns", "add", namespace); err != nil {
+		clear(out)
+		t.Fatal("owned backend namespace creation", d10NativeErrorClass(err))
+	}
+	var once sync.Once
+	var closeErr error
+	stop := func() error {
+		once.Do(func() {
+			cleanup, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+			defer cancel()
+			out, err := d10NativeCommand(cleanup, "ip", "netns", "delete", namespace)
+			clear(out)
+			closeErr = err
+			links, err := net.Interfaces()
+			if err != nil {
+				closeErr = errors.Join(closeErr, err)
+			}
+			for _, link := range links {
+				if link.Name == "wan-r" {
+					closeErr = errors.Join(closeErr, errors.New("owned backend veth survived namespace removal"))
+				}
+			}
+		})
+		return closeErr
+	}
+	t.Cleanup(func() {
+		if err := stop(); err != nil {
+			t.Error("owned backend namespace cleanup", d10NativeErrorClass(err))
+		}
+	})
+	commands := [][]string{
+		{"link", "add", "wan-r", "type", "veth", "peer", "name", "wan-s", "netns", namespace},
+		{"addr", "add", "192.0.2.2/30", "dev", "wan-r"},
+		{"link", "set", "wan-r", "addrgenmode", "none"},
+		{"link", "set", "wan-r", "up"},
+		{"-n", namespace, "link", "set", "lo", "up"},
+		{"-n", namespace, "addr", "add", "192.0.2.1/30", "dev", "wan-s"},
+		{"-n", namespace, "link", "set", "wan-s", "addrgenmode", "none"},
+		{"-n", namespace, "link", "set", "wan-s", "up"},
+		{"route", "add", "93.184.216.0/24", "via", "192.0.2.1", "dev", "wan-r", "src", "93.184.216.16"},
+		{"-n", namespace, "route", "add", "93.184.216.16/32", "via", "192.0.2.2"},
+		{"-n", namespace, "route", "add", "192.168.1.0/24", "via", "192.0.2.2"},
+	}
+	for _, address := range []string{"93.184.216.11", "93.184.216.12", "93.184.216.13", "93.184.216.14", "93.184.216.15"} {
+		commands = append(commands, []string{"-n", namespace, "addr", "add", address + "/32", "dev", "lo"})
+	}
+	for _, args := range commands {
+		if out, err := d10NativeCommand(ctx, "ip", args...); err != nil {
+			clear(out)
+			t.Fatal("owned backend veth topology", d10NativeErrorClass(err))
+		}
+	}
+	return namespace, stop
+}
+
+// Owned remote endpoint role for the veth/netns topology. Public service/node
+// addresses are local only to this backend, never the App/router namespace.
+func d10NativeBackend(t *testing.T) {
+	root := os.Getenv("RAZVILKA_D10_NATIVE_ROOT")
+	namespace, err := os.Readlink("/proc/self/ns/net")
+	if os.Geteuid() != 0 || !filepath.IsAbs(root) || err != nil || namespace == os.Getenv("RAZVILKA_D10_ROUTER_NET") || namespace == os.Getenv("RAZVILKA_D10_PARENT_NET") {
+		t.Fatal("remote backend requires its distinct owned network namespace")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	data, err := os.ReadFile(filepath.Join(root, "backend-ports.json"))
+	if err != nil {
+		t.Fatal("owned backend port binding", d10NativeErrorClass(err))
+	}
+	var ports []int
+	if json.Unmarshal(data, &ports) != nil || len(ports) != 3 {
+		t.Fatal("invalid owned backend port binding")
+	}
+	clear(data)
+	seen := map[int]bool{}
+	for _, port := range ports {
+		if port < 10443 || port > 10445 || seen[port] {
+			t.Fatal("unexpected owned backend port")
+		}
+		seen[port] = true
+	}
+	l, err := net.Listen("tcp4", "93.184.216.12:443")
+	if err != nil {
+		t.Fatal("owned remote HTTPS listener", d10NativeErrorClass(err))
+	}
+	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		source, _, _ := net.SplitHostPort(r.RemoteAddr)
+		w.Header().Set("Content-Type", "text/plain")
+		switch r.URL.Path {
+		case "/cdn-cgi/trace":
+			_, _ = fmt.Fprintf(w, "ip=%s\nwarp=off\n", source)
+		case "/":
+			_, _ = fmt.Fprint(w, source)
+		case "/generate_204":
+			block := ""
+			if source == "93.184.216.13" {
+				block = "block-a"
+			} else if source == "93.184.216.14" {
+				block = "block-b"
+			}
+			_, err := os.Stat(filepath.Join(root, block))
+			if block != "" && err == nil {
+				w.WriteHeader(http.StatusForbidden)
+			} else {
+				w.WriteHeader(http.StatusNoContent)
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})}
+	tlsDone := make(chan error, 1)
+	go func() { tlsDone <- server.ServeTLS(l, filepath.Join(root, "ca.pem"), filepath.Join(root, "key.pem")) }()
+	var servers []*exec.Cmd
+	var waits []chan error
+	t.Cleanup(func() {
+		ok := !t.Failed()
+		for i, cmd := range servers {
+			_ = cmd.Process.Kill()
+			select {
+			case <-waits[i]:
+			case <-time.After(3 * time.Second):
+				t.Error("owned remote VLESS process was not reaped")
+				ok = false
+			}
+		}
+		_ = server.Close()
+		_ = l.Close()
+		select {
+		case err := <-tlsDone:
+			if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+				t.Error("owned remote TLS shutdown", d10NativeErrorClass(err))
+				ok = false
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("owned remote TLS did not join")
+			ok = false
+		}
+		if ok {
+			if err := os.WriteFile(filepath.Join(root, "backend-cleanup.complete"), []byte("owned VLESS stopped; HTTPS joined\n"), 0600); err != nil {
+				t.Error("owned backend cleanup receipt", d10NativeErrorClass(err))
+			}
+		}
+	})
+	for i, port := range ports {
+		doc := map[string]any{"log": map[string]any{"loglevel": "warning", "access": "none"},
+			"dns": map[string]any{"hosts": map[string]any{"service.example": "93.184.216.12", "www.cloudflare.com": "93.184.216.12", "api.ipify.org": "93.184.216.12"}},
+			"inbounds": []any{map[string]any{"listen": "93.184.216.11", "port": port, "protocol": "vless",
+				"settings":       map[string]any{"clients": []any{map[string]any{"id": "123e4567-e89b-12d3-a456-426614174000"}}, "decryption": "none"},
+				"streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": filepath.Join(root, "ca.pem"), "keyFile": filepath.Join(root, "key.pem")}}}}}},
+			"outbounds": []any{map[string]any{"protocol": "freedom", "sendThrough": fmt.Sprintf("93.184.216.%d", 13+i), "settings": map[string]any{"domainStrategy": "UseIPv4"}}}}
+		data, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal("owned backend config encode", d10NativeErrorClass(err))
+		}
+		path := filepath.Join(root, fmt.Sprintf("server-%d.json", i))
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			clear(data)
+			t.Fatal("owned backend config write", d10NativeErrorClass(err))
+		}
+		clear(data)
+		binary := os.Getenv("RAZVILKA_XRAY_NATIVE")
+		if out, err := d10NativeCommand(ctx, binary, "run", "-test", "-config", path); err != nil {
+			clear(out)
+			t.Fatal("real remote VLESS config refused", d10NativeErrorClass(err))
+		}
+		log, err := os.OpenFile(path+".log", os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			t.Fatal("owned backend private log", d10NativeErrorClass(err))
+		}
+		cmd := exec.Command(binary, "run", "-config", path)
+		cmd.Stdout, cmd.Stderr = log, log
+		err = cmd.Start()
+		_ = log.Close()
+		if err != nil {
+			t.Fatal("real remote VLESS start", d10NativeErrorClass(err))
+		}
+		servers = append(servers, cmd)
+		done := make(chan error, 1)
+		waits = append(waits, done)
+		go func() { done <- cmd.Wait() }()
+		deadline := time.Now().Add(5 * time.Second)
+		ready := false
+		for time.Now().Before(deadline) {
+			conn, err := net.DialTimeout("tcp4", net.JoinHostPort("93.184.216.11", strconv.Itoa(port)), 100*time.Millisecond)
+			if err == nil {
+				_ = conn.Close()
+				ready = true
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if !ready {
+			t.Fatal("real remote VLESS did not become ready")
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "backend.ready"), []byte("real TLS and VLESS ready\n"), 0600); err != nil {
+		t.Fatal("owned backend readiness receipt", d10NativeErrorClass(err))
+	}
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("owned backend stop was not received")
+		case <-ticker.C:
+			if _, err := os.Stat(filepath.Join(root, "backend.stop")); err == nil {
+				return
+			}
+		}
+	}
 }
