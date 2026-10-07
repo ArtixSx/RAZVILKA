@@ -1,0 +1,130 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+)
+
+func TestHTTPExclusiveContextBelongsToActualRequest(t *testing.T) {
+	a := &App{}
+	var retained context.Context
+	handler := a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		retained = r.Context()
+		ctx, release, err := a.privateExclusiveOperation(r.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer release()
+		if err := a.Operations.WithExclusiveContext(ctx, func() error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := a.privateExclusiveOperation(ctx); !errors.Is(err, operationgate.ErrBusy) {
+			t.Fatal("double borrow", err)
+		}
+		if a.Operations.Snapshot().Active != 1 {
+			t.Fatal("nested request admission")
+		}
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v1/apply", nil))
+	if a.Operations.Snapshot().Active != 0 {
+		t.Fatal("outer request retained")
+	}
+	if _, _, err := a.privateExclusiveOperation(retained); !errors.Is(err, operationgate.ErrBusy) {
+		t.Fatal("expired request scope", err)
+	}
+}
+
+func TestHTTPSharedContextCannotBecomeExclusiveAuthority(t *testing.T) {
+	a := &App{}
+	handler := a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := a.Operations.WithExclusiveContext(r.Context(), func() error { t.Fatal("shared use"); return nil }); !errors.Is(err, operationgate.ErrBusy) {
+			t.Fatal(err)
+		}
+		if _, _, err := a.privateExclusiveOperation(r.Context()); !errors.Is(err, operationgate.ErrBusy) {
+			t.Fatal("shared upgrade", err)
+		}
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/status", nil))
+	if a.Operations.Snapshot().Active != 0 {
+		t.Fatal("shared request retained")
+	}
+}
+
+func TestHTTPExclusiveBorrowRetainsAdmissionUntilCleanup(t *testing.T) {
+	a := &App{}
+	var cleanup func()
+	var ctx context.Context
+	handler := a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		ctx, cleanup, err = a.privateExclusiveOperation(r.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v1/apply", nil))
+	if a.Operations.Snapshot().Active != 1 {
+		t.Fatal("request close released live owner")
+	}
+	if _, _, err := a.privateExclusiveOperation(ctx); !errors.Is(err, operationgate.ErrBusy) {
+		t.Fatal("expired scope borrowed again", err)
+	}
+	cleanup()
+	cleanup()
+	if a.Operations.Snapshot().Active != 0 {
+		t.Fatal("cleanup did not release")
+	}
+}
+
+func TestInternalExclusiveContextRejectsForeignAppAndCancellation(t *testing.T) {
+	a, other := &App{}, &App{}
+	raw, cancel := context.WithCancel(context.Background())
+	ctx, release, err := a.privateExclusiveOperation(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if err := other.Operations.WithExclusiveContext(ctx, func() error { t.Fatal("foreign owner"); return nil }); !errors.Is(err, operationgate.ErrBusy) {
+		t.Fatal(err)
+	}
+	cancel()
+	if err := a.Operations.WithExclusiveContext(context.WithoutCancel(ctx), func() error { t.Fatal("canceled owner"); return nil }); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if a.Operations.Snapshot().Active != 1 {
+		t.Fatal("cancellation released work before cleanup")
+	}
+}
+
+func TestDefaultExecutorBorrowsActualHTTPExclusiveOperation(t *testing.T) {
+	defaultRouteRequireLinuxJournal(t)
+	e, _, adapter := defaultRouteExecutorFixture(t)
+	observe := e.deps.Observe
+	e.deps.Observe = func(ctx context.Context) (DefaultRouteSnapshot, error) {
+		if err := e.app.Operations.WithExclusiveContext(ctx, func() error { return nil }); err != nil {
+			t.Fatal("observer received no original admission", err)
+		}
+		return observe(ctx)
+	}
+	handler := e.app.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		review, err := e.Review(r.Context(), nil)
+		if err != nil {
+			t.Fatal("review reentered request gate", err)
+		}
+		execution, err := e.Execute(r.Context(), review, review.Digest())
+		if err != nil || execution.State != "committed" {
+			t.Fatal("execute reentered request gate", execution.State, err)
+		}
+		if e.app.Operations.Snapshot().Active != 1 {
+			t.Fatal("executor released outer HTTP admission")
+		}
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v1/apply", nil))
+	if !adapter.live || e.app.Operations.Snapshot().Active != 0 {
+		t.Fatal("actual executor/app request did not finish")
+	}
+}

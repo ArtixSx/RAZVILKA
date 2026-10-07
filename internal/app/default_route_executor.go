@@ -86,7 +86,7 @@ func (r *DefaultRouteReview) Plan() dataplane.Plan {
 // Review takes trusted resolved definitions from the existing application
 // route builder, not route/profile/proof fields from an HTTP request.
 func (e *DefaultRouteExecutor) Review(ctx context.Context, services []dataplane.Route) (*DefaultRouteReview, error) {
-	release, err := e.app.Operations.Exclusive(ctx)
+	ctx, release, err := e.app.privateExclusiveOperation(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -215,6 +215,12 @@ func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Conf
 }
 
 func (e *DefaultRouteExecutor) guard(ctx context.Context, r *DefaultRouteReview, expected config.Config, checkCommitted bool) error {
+	return e.app.Operations.WithExclusiveContext(ctx, func() error {
+		return e.guardUnderOperation(ctx, r, expected, checkCommitted)
+	})
+}
+
+func (e *DefaultRouteExecutor) guardUnderOperation(ctx context.Context, r *DefaultRouteReview, expected config.Config, checkCommitted bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -269,7 +275,7 @@ func (e *DefaultRouteExecutor) Execute(ctx context.Context, r *DefaultRouteRevie
 	if r == nil || r.owner != e || digest != r.digest {
 		return dataplane.Execution{}, dataplane.ErrReviewChanged
 	}
-	release, err := e.app.Operations.Exclusive(ctx)
+	ctx, release, err := e.app.privateExclusiveOperation(ctx)
 	if err != nil {
 		return dataplane.Execution{}, err
 	}

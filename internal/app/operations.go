@@ -140,7 +140,6 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if (r.URL.Path == wireGuardProfilesPath || strings.HasPrefix(r.URL.Path, wireGuardProfilesPath+"/")) && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete) {
 			exclusive = true
 		}
-		enter := a.Operations.Enter
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/components/") {
 			// Package mutation cannot overlap network Apply or background repair.
 			exclusive = true
@@ -148,10 +147,18 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/community/services/") && strings.HasSuffix(r.URL.Path, "/import") {
 			exclusive = true
 		}
-		if exclusive {
-			enter = a.Operations.Exclusive
-		}
 		labeled := operationgate.WithLabel(r.Context(), requestOperationLabel(r))
+		admitted := labeled
+		enter := func(ctx context.Context) (func(), error) {
+			if !exclusive {
+				return a.Operations.Enter(ctx)
+			}
+			owned, release, err := a.Operations.ExclusiveContext(ctx)
+			if err == nil {
+				admitted = owned
+			}
+			return release, err
+		}
 		release, err := enter(labeled)
 		if errors.Is(err, operationgate.ErrBusy) {
 			release, err = waitForAdmission(labeled, enter, a.admissionPatience(r))
@@ -167,7 +174,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 				a.wakePanelSnapshot()
 			}
 		}()
-		ctx := context.WithValue(labeled, operationContextKey{}, scope)
+		ctx := context.WithValue(admitted, operationContextKey{}, scope)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -179,6 +186,28 @@ func (a *App) privateRestoreAdmission(ctx context.Context) (func(), error) {
 		return scope.restoreAdmission()
 	}
 	return a.Operations.Exclusive(ctx)
+}
+
+// privateExclusiveOperation borrows an actual request-owned exclusive
+// capability, or issues one at admission for an internal operation. A shared
+// request cannot upgrade and a copied expired request scope cannot revive it.
+// Borrowing retains the outer request admission through owner cleanup; the
+// returned release must be called after all work joins.
+func (a *App) privateExclusiveOperation(ctx context.Context) (context.Context, func(), error) {
+	if a == nil || ctx == nil {
+		return nil, nil, operationgate.ErrBusy
+	}
+	if scope, ok := ctx.Value(operationContextKey{}).(*operationScope); ok && scope.app == a {
+		if err := a.Operations.WithExclusiveContext(ctx, func() error { return nil }); err != nil {
+			return nil, nil, err
+		}
+		release, err := scope.restoreAdmission()
+		if err != nil {
+			return nil, nil, err
+		}
+		return ctx, release, nil
+	}
+	return a.Operations.ExclusiveContext(ctx)
 }
 
 func writeOperationFailure(w http.ResponseWriter, err error) {
