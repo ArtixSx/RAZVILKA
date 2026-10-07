@@ -92,3 +92,69 @@ were removed. Go sources remained unchanged throughout these final checks.
 
 Capability `-self-update-schema` remains0. Reviewed Resume/new control epoch is
 a separate future checkpoint after B acceptance and is not implemented here.
+
+## Reviewed Resume direction
+
+07.10.2026. Root integrated source-reviewed B as
+`97598f05f7a9e7868e5a0a0310575a3ca9eeda4e`; targeted Root Linux/native acceptance
+is pending. Root accepted the following design direction, without authorizing
+implementation, a new version or production wiring.
+
+1. The first D11 Resume requires both exact `rolled-back-stopped` helper/file
+   bindings and their immutable transaction, installation, revision and
+   pre-Stop epoch. Current Stop must match `preStop+1`. Freeze its entire
+   canonical record, including state/digest, and canonical `stop-ID.json`.
+   Preserve their exact bytes as retained evidence; a new Resume receipt links
+   them to a fresh config/review binding. The same installation advances to
+   `stopEpoch+1`, rejecting overflow. Old tickets stay stale. No boolean reset,
+   Stop deletion, `InitializeSelfUpdateControl` or `RecordSelfUpdateStopped`.
+   A Global Stop without this settled transaction needs a separate reviewed
+   cleanup contract.
+
+2. Control schema1 accepts nonstopped `ready` only at sequence1. A new control
+   format requires an agreed OPS/CORE/Root capability and minimum-reader matrix
+   before its first publication. Current immutable reader3/scanner covers
+   helper/file schemas2/3, not a new control epoch. Require actual admission of
+   the complete retained controller/rollback fleet and a fixed-root scanner
+   that understands the new format; legacy readers must refuse it. Preserve
+   old canonical receipts and sealed `RequiredReader3` bindings. No version
+   numbers are assigned here; readonly metadata does not grant Start.
+
+3. Required existing seals include both terminal bindings, all six restored
+   images/hashes/metadata, completed rollback index, private restore and
+   mandatory stop/prepare/quiesce/restore receipts. Require durable WaitECHILD,
+   exact parent/helper birth and executable hashes, inactive original/captured
+   candidate/rollback processes, absent PID file and retained-reader inventory.
+   B success does not replace fresh Resume checks. A readonly OPS verification
+   seam is needed; `SettleStoppedRollback` remains a compensation writer.
+
+4. Use the original bounded context for fresh `Manager.VerifyRuntimeInactive`
+   over every registered owner, including unused adapters, with unchanged
+   registry/execution identity. Recheck independent file/helper/component,
+   private-restore/execution fences and current config/review around callbacks.
+   Missing ownership, unknown state, cancellation or a cancelled nil-success
+   refuses. Slow observers/scanners run outside control/config/Store mutexes;
+   a short final CAS under existing serialization compares the frozen Stop and
+   current review/anchors. Historical deactivation, reboot or a stored boolean
+   cannot substitute for these checks.
+
+5. Before atomic publication Stop still fences Start. A crash leaves Stop or
+   unknown until complete linked evidence is validated; an orphan receipt is
+   not authority. Resume itself performs no plan apply or automatic start.
+   Startup and future effects require newly reviewed tickets bound to the new
+   epoch. Repeated requests do not implicitly advance the epoch.
+
+6. LAN backend HOLD remains a real dependency. Finished constructor/inventory
+   `43f8e3b50089e60464ac787e0d9e2dab3d3ff3d7` and required full NamespaceCheck
+   `e59d8bc7e35b12bf01474216c07a2dc5e43833ce` do not supply a physical Apply grant.
+   Physical checker `73e3245f779c6269717142d5ae41b5dcdaf37f8a` is available;
+   production still needs its trusted current ScopeObservation/review/full-LAN
+   binding, actual Consumer/AdditionalConsumer receipts and flow barriers, and
+   registration. Shared inventory agreement
+   `ae1da167a93672daf54afc2cb998a3b4f7bedff5` explicitly has
+   `RegisteredTablesComplete=false`: empty fixed-five classic tables and native
+   NFT do not prove all required registered tables/hooks absent. Current legacy
+   owners plus ScopedDNS can freshly prove their registered scope, not an
+   unregistered LAN/capture/backend. A Resume requiring that backend stays HOLD
+   until complete proofs/wiring are accepted; no full D07/D08 or LAN-start
+   success follows from B or this design.
