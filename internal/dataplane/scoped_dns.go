@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 // ScopedDNSAdapter participates in Manager.Apply, including its journal,
@@ -28,17 +29,23 @@ type ScopedDNSAdapter struct {
 	// ScopeCheck must verify the exact gateway, ingress and every client.
 	ScopeCheck  func(context.Context, ScopedDNSPlan) error
 	HealthProbe func(context.Context, *dnscontrol.ScopedDNSResolver, Plan) error
-	lifetime    context.Context
-	mu          sync.Mutex
-	live        *scopedDNSSession
-	listen      func(netip.AddrPort) (*net.UDPConn, *net.TCPListener, error)
+	// Trusted startup coordinates and fresh common full-inventory predicate.
+	// Neither settings nor an inventory DTO may install these dependencies.
+	InactivitySettingsPath string
+	InactivityIdentity     *netidentity.Provider
+	InactivityKernelCheck  func(context.Context, netidentity.Identity) error
+	lifetime               context.Context
+	mu                     sync.Mutex
+	live                   *scopedDNSSession
+	listen                 func(netip.AddrPort) (*net.UDPConn, *net.TCPListener, error)
 }
 
 type scopedDNSSession struct {
-	state    scopedDNSState
-	resolver *dnscontrol.ScopedDNSResolver
-	cancel   context.CancelFunc
-	done     chan struct{}
+	state     scopedDNSState
+	resolver  *dnscontrol.ScopedDNSResolver
+	cancel    context.CancelFunc
+	done      chan struct{}
+	resources scopedDNSInactiveResources
 }
 
 type scopedDNSState struct {
@@ -57,7 +64,11 @@ type scopedDNSSnapshot struct {
 }
 
 func NewScopedDNSAdapter(lifetime context.Context, manager *dnscontrol.Manager, stateRoot string) *ScopedDNSAdapter {
-	return &ScopedDNSAdapter{DNS: manager, StateRoot: filepath.Join(stateRoot, scopedDNSAdapterID), Runner: nfqws2ExecRunner{}, IPTables: "iptables", FreshProfile: observeNetworkProfile, lifetime: lifetime}
+	a := &ScopedDNSAdapter{DNS: manager, StateRoot: filepath.Join(stateRoot, scopedDNSAdapterID), Runner: nfqws2ExecRunner{}, IPTables: "iptables", FreshProfile: observeNetworkProfile, lifetime: lifetime}
+	if manager != nil {
+		a.InactivitySettingsPath = manager.Path
+	}
+	return a
 }
 
 func (a *ScopedDNSAdapter) ID() string { return scopedDNSAdapterID }
@@ -212,6 +223,8 @@ func (a *ScopedDNSAdapter) Activate(ctx context.Context, p Plan, root string) er
 }
 
 func (a *ScopedDNSAdapter) startLocked(ctx context.Context, s scopedDNSState) error {
+	finish := scopedDNSInactiveMutation(a.StateRoot)
+	defer finish()
 	// Own an immutable JSON-normalized copy; callers may reuse their input
 	// slices, and omitted empty slices must compare equally after disk readback.
 	encoded, err := json.Marshal(s)
@@ -255,9 +268,10 @@ func (a *ScopedDNSAdapter) startLocked(ctx context.Context, s scopedDNSState) er
 		return err
 	}
 	life, cancel := context.WithCancel(a.lifetime)
-	session := &scopedDNSSession{s, r, cancel, make(chan struct{})}
+	session := &scopedDNSSession{state: s, resolver: r, cancel: cancel, done: make(chan struct{}), resources: scopedDNSInactiveResources{udp: u, tcp: t}}
+	scopedDNSInactivePublish(a.StateRoot, session)
 	a.live = session
-	go func() { defer close(session.done); _ = r.Serve(life, u, t) }()
+	go session.serve(life)
 	if err := a.changeRules(ctx, s.DNS, true); err != nil {
 		return err
 	}
@@ -408,6 +422,8 @@ func (a *ScopedDNSAdapter) Reconcile(ctx context.Context, p Plan) error {
 }
 
 func (a *ScopedDNSAdapter) stopLocked(ctx context.Context) error {
+	finish := scopedDNSInactiveMutation(a.StateRoot)
+	defer finish()
 	s, err := a.readState(a.statePath())
 	if err != nil {
 		return err
@@ -423,9 +439,13 @@ func (a *ScopedDNSAdapter) stopLocked(ctx context.Context) error {
 		}
 	}
 	if a.live != nil {
+		a.live.resources.cancelled.Store(true)
 		a.live.cancel()
 		select {
 		case <-a.live.done:
+			if err := scopedDNSInactiveRetire(a.StateRoot, a.live); err != nil {
+				return err
+			}
 			a.live = nil
 		case <-ctx.Done():
 			return ctx.Err()
