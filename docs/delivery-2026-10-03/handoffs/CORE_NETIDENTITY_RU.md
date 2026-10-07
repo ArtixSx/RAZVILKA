@@ -89,7 +89,7 @@ attestation running `.config`:
 system paths, исполняется через retained FD. Interpreter и статический
 DT_NEEDED closure проверяются в `/lib` / `/usr/lib`; metadata/paths/FD/hash
 сверяются до/после. RPATH/RUNPATH/audit/filter/auxiliary и compressed,
-extended/ambiguous/out-of-file ELF metadata отвергаются. До debug/elf чтения
+extended/ambiguous и out-of-file file-backed ELF metadata отвергаются. До debug/elf чтения
 проверяются tables/extents; максимум 128 program headers / 256 sections,
 32 images / 128 edges, 16 MiB/image / 64 MiB total. Это защита фиксированного
 system producer, не attestation всего firmware или динамических dlopen effects.
@@ -139,12 +139,13 @@ tuple и closing brackets. Все production bytes/guards остаются пр�
 Вывод ограничен фиксированными stage labels, booleans и bounded image index;
 actual error strings, argv/environment values, NDMC data, paths, hashes,
 version/boot/identity не печатаются. Первый отказ даёт `blocked_stage`.
-`nobits_over_file` отдельно проверяет существующий source predicate: текущий
-ELF preflight отвергает `SHT_NOBITS.sh_size > file size`, хотя NOBITS bytes в
+`nobits_over_file` отдельно проверяет факт `SHT_NOBITS.sh_size > file size`:
+ELF preflight в source `35e65dc` отвергал его, хотя NOBITS bytes в
 файле отсутствуют ([ELF ABI](https://gabi.xinuos.com/elf/03-sheader.html)).
-Это source-level concern, **не установленная причина native отказа**. Portable
-регрессия проверяет bounded probe и сохранение текущего production refusal;
-исправления ELF acceptance эта QA-порция не содержит.
+На QA checkpoint `35e65dc` это был source-level concern без установленной
+native причины. Эта QA-порция содержала bounded probe с регрессией прежнего
+production refusal, без исправления ELF acceptance; последующий узкий fix
+ниже обновляет regression на корректную memory-only семантику.
 
 Повторный actual factory success может завершить диагностический test PASS;
 если factory отказал, однокомандный probe не выдаёт admission даже при полном
@@ -152,3 +153,34 @@ ELF preflight отвергает `SHT_NOBITS.sh_size > file size`, хотя NOBI
 остаётся обязательным. CORE native диагностику не исполняет; Root выполняет
 следующее router окно. Windows portable tests/vet PASS (0.212 s); Linux amd64
 и arm64 vet/test binary crosscompile PASS / RC0.
+
+## Узкий NOBITS extent fix после actual identity97
+
+Root router source `35e65dc`, RC1: proc/typed identity/uname/preload/path/open/
+hash checks TRUE, ELF image 0/1 TRUE. У image 2 `nobits_probe_known=true`,
+`nobits_over_file=true`, `elf_preflight_ok=false`; отказ `build.dependencies`.
+Это подтверждённый ранний false rejection memory-only section в dependency
+chain. Более поздние producer отказы ещё не исключены.
+
+Production diff — только удаление file-size сравнения для `SHT_NOBITS` в
+`boundedELF`. Все file-backed section и program extents по-прежнему должны
+помещаться в ограниченный file image; compressed, extended, malformed и
+ambiguous metadata, file/table/image/edge/IO/context caps, protected paths,
+NDMC, profile, authority и thread brackets не изменены. NOBITS не загружается
+в память observer: сохраняется только metadata; Go ELF parser продолжает
+отвергать offset/size, не представимые как неотрицательный int64.
+
+Модельный ELF с file 449 bytes, loadable BSS 32 MiB и linked dynamic string
+table принимается. Его BSS reader не читает file bytes; regressions отвергают
+аналогичный oversized file-backed section, truncated section/program extents,
+compressed BSS, malformed size/offset, extended count и cancel до/между reads.
+QA probe по-прежнему печатает только booleans; `nobits_over_file=true` теперь
+является допустимым metadata фактом и не означает отказ.
+
+Go 1.26.5 Windows portable tests PASS (0.220 s), Windows vet PASS; Linux
+amd64/arm64 vet и test binary crosscompile PASS / RC0.
+
+CORE не выполняет router тест. Root review + повторный **original**
+`TestNativeReviewedStockNC1812FactoryAndScope` обязателен до provider acceptance
+и разрешения consumer integration. Коррекция не подтверждает backend
+completeness, ownership или effect authority.

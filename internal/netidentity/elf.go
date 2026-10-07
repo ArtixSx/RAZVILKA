@@ -63,7 +63,9 @@ func boundedELF(ctx context.Context, reader io.ReaderAt, size int64) (*elf.File,
 			return nil, ErrUnknown
 		}
 		offset, length := u64(s[24:32]), u64(s[32:40])
-		if u64(s[8:16])&uint64(elf.SHF_COMPRESSED) != 0 || length > uint64(size) || (u32(s[4:8]) != uint32(elf.SHT_NOBITS) && !within(offset, length)) {
+		// NOBITS has a memory extent, not file bytes; debug/elf never reads its
+		// section data. Every file-backed extent still fits the bounded image.
+		if u64(s[8:16])&uint64(elf.SHF_COMPRESSED) != 0 || (u32(s[4:8]) != uint32(elf.SHT_NOBITS) && !within(offset, length)) {
 			return nil, ErrUnknown
 		}
 		if u32(s[4:8]) == uint32(elf.SHT_DYNAMIC) {

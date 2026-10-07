@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// Test-only fact probe; no changed ELF policy, acceptance or identity issuer.
-// Output is limited to whether the current NOBITS/file-size predicate fires.
+// Test-only fact probe; no ELF policy, acceptance or identity issuer.
+// Report NOBITS memory size versus file size without treating it as a fault.
 func qaNoBitsOverFile(ctx context.Context, reader io.ReaderAt, size int64) (known, overFile bool) {
 	if ctx == nil || ctx.Err() != nil || size < 64 || size > 16<<20 {
 		return false, false
@@ -37,26 +37,20 @@ func qaNoBitsOverFile(ctx context.Context, reader io.ReaderAt, size int64) (know
 	return ctx.Err() == nil, overFile
 }
 
-func TestQANoBitsPredicateIsBoundedAndDoesNotRelaxPolicy(t *testing.T) {
+func TestQANoBitsProbeIsBoundedAndFollowsMemorySemantics(t *testing.T) {
 	raw := elfModel()
 	if known, over := qaNoBitsOverFile(context.Background(), bytes.NewReader(raw), int64(len(raw))); !known || over {
 		t.Fatal("absent NOBITS predicate")
 	}
-	withBSS := make([]byte, len(raw)+64)
-	copy(withBSS, raw[:248])
-	copy(withBSS[312:], raw[248:])
-	binary.LittleEndian.PutUint16(withBSS[60:], 3)
-	binary.LittleEndian.PutUint64(withBSS[72:], 312)
-	binary.LittleEndian.PutUint64(withBSS[208:], 312)
-	binary.LittleEndian.PutUint32(withBSS[252:], uint32(elf.SHT_NOBITS))
-	binary.LittleEndian.PutUint64(withBSS[280:], 1<<20)
+	withBSS := elfBSSModel()
 	if known, over := qaNoBitsOverFile(context.Background(), bytes.NewReader(withBSS), int64(len(withBSS))); !known || !over {
 		t.Fatal("NOBITS/file-size predicate lost")
 	}
-	if e, err := boundedELF(context.Background(), bytes.NewReader(withBSS), int64(len(withBSS))); err == nil {
-		_ = e.Close()
-		t.Fatal("QA relaxed current policy")
+	e, err := boundedELF(context.Background(), bytes.NewReader(withBSS), int64(len(withBSS)))
+	if err != nil {
+		t.Fatal("memory-only size is not a file extent", err)
 	}
+	_ = e.Close()
 	binary.LittleEndian.PutUint64(withBSS[40:], 1<<62)
 	if known, _ := qaNoBitsOverFile(context.Background(), bytes.NewReader(withBSS), int64(len(withBSS))); known {
 		t.Fatal("out-of-bounds table accepted")
