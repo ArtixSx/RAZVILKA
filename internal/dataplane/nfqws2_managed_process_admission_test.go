@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -357,5 +359,46 @@ func TestNFQWSManagedStartAdmissionRequiresLateCurrent(t *testing.T) {
 	admission.Current = nil
 	if admission.valid(command) {
 		t.Fatal("opening WithStart replaced required late Current")
+	}
+}
+
+func TestNFQWSManagedStartReadbackRequiresWholeBinding(t *testing.T) {
+	_, lease := nfqws2ManagedRecordFixture(t)
+	plan, spec, _ := nfqwsScopedFixture(t)
+	plan.PlanID = "dp-0123456789abcdef"
+	lease.Command.Args = append(lease.Command.Args, "--qnum="+strconv.Itoa(int(spec.Queue)))
+	lease.CommandSHA256 = nfqws2ManagedCommandDigest(lease.Command)
+	spec.SessionID, spec.CommandSHA256 = lease.Command.ID, lease.CommandSHA256
+	spec.Candidate.ArgumentsSHA256 = components.NFQWSRuntimeArgumentsSHA256(lease.Command.Program.Path, lease.Command.Args)
+	p, err := CompileNFQWSScopedPlan(plan, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, binding, _, _ := nfqws2ManagedStartFixture(t)
+	binding.PlanID, binding.PlanDigest = plan.PlanID, plan.Digest
+	binding.ResourceGeneration, binding.EffectsDigest = p.Resources().Generation, p.Digest()
+	binding.SessionID, binding.CommandSHA256 = lease.Command.ID, lease.CommandSHA256
+	lease.LaunchBinding = &binding
+	if !nfqwsScopedLeaseExecutionMatches(lease, p, binding) {
+		t.Fatal("exact retained binding rejected")
+	}
+	for field := 0; field < reflect.TypeOf(binding).NumField(); field++ {
+		name := reflect.TypeOf(binding).Field(field).Name
+		t.Run(name, func(t *testing.T) {
+			foreign := binding
+			reflect.ValueOf(&foreign).Elem().Field(field).SetString("foreign-identity")
+			if nfqwsScopedLeaseExecutionMatches(lease, p, foreign) {
+				t.Fatal("foreign retained field adopted")
+			}
+			changed := lease
+			changed.LaunchBinding = &foreign
+			if nfqwsScopedLeaseExecutionMatches(changed, p, binding) {
+				t.Fatal("foreign observed field adopted")
+			}
+		})
+	}
+	lease.LaunchBinding = nil
+	if nfqwsScopedLeaseExecutionMatches(lease, p, binding) {
+		t.Fatal("legacy process receipt created execution proof")
 	}
 }
