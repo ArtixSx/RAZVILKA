@@ -151,6 +151,7 @@ func (a *NetworkPolicyAdapter) Snapshot(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) Stage(ctx context.Context, p Plan, root string) error {
+	ctx = networkPolicyConsumerContext(ctx, p)
 	state, err := a.gateFor(p)
 	if err != nil {
 		return preflightRefusalError{err}
@@ -165,6 +166,7 @@ func (a *NetworkPolicyAdapter) Stage(ctx context.Context, p Plan, root string) e
 }
 
 func (a *NetworkPolicyAdapter) Validate(ctx context.Context, p Plan, root string) error {
+	ctx = networkPolicyConsumerContext(ctx, p)
 	state, err := a.gateFor(p)
 	if err != nil {
 		return err
@@ -177,6 +179,7 @@ func (a *NetworkPolicyAdapter) Validate(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) Activate(ctx context.Context, p Plan, root string) error {
+	ctx = networkPolicyConsumerContext(ctx, p)
 	state, err := a.gateFor(p)
 	if err != nil {
 		return err
@@ -203,6 +206,7 @@ func (a *NetworkPolicyAdapter) Activate(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) Health(ctx context.Context, p Plan, root string) error {
+	ctx = networkPolicyConsumerContext(ctx, p)
 	want, err := a.gateFor(p)
 	if err != nil {
 		return err
@@ -219,6 +223,7 @@ func (a *NetworkPolicyAdapter) Health(ctx context.Context, p Plan, root string) 
 }
 
 func (a *NetworkPolicyAdapter) Commit(ctx context.Context, p Plan, root string) error {
+	ctx = networkPolicyConsumerContext(ctx, p)
 	if err := a.Health(ctx, p, root); err != nil {
 		return err
 	}
@@ -286,6 +291,7 @@ func (a *NetworkPolicyAdapter) inspectAbsent(ctx context.Context, lan *LANPolicy
 }
 
 func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string) error {
+	ctx = networkPolicyConsumerContext(ctx, p)
 	want, err := a.gateFor(p)
 	if err != nil {
 		return err
@@ -324,6 +330,7 @@ func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) VerifyRollback(ctx context.Context, p Plan, root string) (bool, error) {
+	ctx = networkPolicyConsumerContext(ctx, p)
 	state, err := a.gateFor(p)
 	if err != nil {
 		return false, err
@@ -363,6 +370,7 @@ func (a *NetworkPolicyAdapter) VerifyRuntimeInactive(ctx context.Context) error 
 }
 
 func (a *NetworkPolicyAdapter) Reconcile(ctx context.Context, p Plan) error {
+	ctx = networkPolicyConsumerContext(ctx, p)
 	want, err := a.gateFor(p)
 	if err != nil {
 		return err

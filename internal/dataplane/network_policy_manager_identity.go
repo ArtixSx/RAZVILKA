@@ -23,6 +23,7 @@ type NetworkPolicyAssemblyOptions struct {
 
 type networkPolicyIdentity struct {
 	value       netidentity.Identity
+	provider    *netidentity.Provider
 	withCurrent func(context.Context, func(context.Context, netidentity.Identity) error) error
 }
 
@@ -54,7 +55,7 @@ func NewNetworkPolicyAdapter(ctx context.Context, options NetworkPolicyAssemblyO
 	if err != nil {
 		return nil, errors.Join(ErrNetworkPolicyIdentity, err)
 	}
-	return newNetworkPolicyIdentityAdapter(options, &networkPolicyIdentity{value: identity, withCurrent: options.Provider.WithCurrent})
+	return newNetworkPolicyIdentityAdapter(options, &networkPolicyIdentity{value: identity, provider: options.Provider, withCurrent: options.Provider.WithCurrent})
 }
 
 func networkPolicyAssemblyOptionsValid(options NetworkPolicyAssemblyOptions) bool {
