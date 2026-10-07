@@ -295,13 +295,19 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 			// The Manager's readonly check must not reacquire the start/close
 			// barrier already held by WithStart. This runs outside 3c.
 			if err := admission.Current(ctx, *binding); err != nil {
-				return err
+				return nfqws2ManagedStartFailure("retained Current", err)
 			}
 			current, readErr := components.ReadNFQWSSupervisionProcessIdentity(identity.PID)
-			if readErr != nil || current != identity {
-				return ErrNFQWSManagedProcessUnknown
+			if readErr != nil {
+				return nfqws2ManagedStartFailure("helper identity read", readErr)
 			}
-			return nfqws2ManagedControlCurrent(ctx, command)
+			if current != identity {
+				return nfqws2ManagedStartFailure("helper identity changed", nil)
+			}
+			if err := nfqws2ManagedControlCurrent(ctx, command); err != nil {
+				return nfqws2ManagedStartFailure("self-update control", err)
+			}
+			return nil
 		})
 	}
 	start := &nfqws2ManagedStartOnce{open: true, begin: begin}

@@ -4,6 +4,7 @@ package dataplane
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"syscall"
@@ -64,7 +65,10 @@ func (s *nfqws2ManagedStartSocket) send(frame nfqws2ManagedStartFrame) error {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	n, _, err := s.conn.WriteMsgUnix(data, nil, nil)
-	if err != nil || n != len(data) {
+	if err != nil {
+		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
+	}
+	if n != len(data) {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	return nil
@@ -74,7 +78,10 @@ func (s *nfqws2ManagedStartSocket) receive() (nfqws2ManagedStartFrame, error) {
 	data := make([]byte, nfqws2ManagedStartFrameLimit+1)
 	oob := make([]byte, 1)
 	n, oobn, flags, _, err := s.conn.ReadMsgUnix(data, oob)
-	if err != nil || n == 0 || n > nfqws2ManagedStartFrameLimit || oobn != 0 || flags&(syscall.MSG_TRUNC|syscall.MSG_CTRUNC) != 0 {
+	if err != nil {
+		return nfqws2ManagedStartFrame{}, errors.Join(ErrNFQWSManagedProcessUnknown, err)
+	}
+	if n == 0 || n > nfqws2ManagedStartFrameLimit || oobn != 0 || flags&(syscall.MSG_TRUNC|syscall.MSG_CTRUNC) != 0 {
 		return nfqws2ManagedStartFrame{}, ErrNFQWSManagedProcessUnknown
 	}
 	return nfqws2ManagedStartDecode(data[:n])

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -135,26 +136,62 @@ func nfqws2ManagedStartChild(command nfqws2ManagedProcessCommand, helper compone
 // An error after sending permit is unknown, even if the kernel child ran.
 func nfqws2ManagedStartParent(ctx context.Context, transport nfqws2ManagedStartTransport, command nfqws2ManagedProcessCommand, binding nfqws2ManagedStartBinding, helper components.NFQWSSupervisionIdentity, current func() error) error {
 	base, err := nfqws2ManagedStartBase(command, binding, helper)
-	if err != nil || ctx == nil || transport == nil || current == nil {
-		return ErrNFQWSManagedProcessUnknown
+	if err != nil {
+		return nfqws2ManagedStartFailure("parent binding", err)
+	}
+	if ctx == nil || transport == nil || current == nil {
+		return nfqws2ManagedStartFailure("parent inputs", nil)
 	}
 	ready, err := transport.receive()
 	base.Kind = "ready"
-	if err != nil || ready != base || ctx.Err() != nil || current() != nil || ctx.Err() != nil {
-		return ErrNFQWSManagedProcessUnknown
+	if err != nil {
+		return nfqws2ManagedStartFailure("READY receive", err)
+	}
+	if ready != base {
+		return nfqws2ManagedStartFailure("READY frame", nil)
+	}
+	if err := ctx.Err(); err != nil {
+		return nfqws2ManagedStartFailure("READY context before Current", err)
+	}
+	if err := current(); err != nil {
+		return nfqws2ManagedStartFailure("READY Current", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nfqws2ManagedStartFailure("READY context after Current", err)
 	}
 	base.Kind = "permit"
-	if transport.send(base) != nil {
-		return ErrNFQWSManagedProcessUnknown
+	if err := transport.send(base); err != nil {
+		return nfqws2ManagedStartFailure("PERMIT send", err)
 	}
 	ack, err := transport.receive()
 	base.Kind = "started"
 	child := ack.Child
 	ack.Child = components.NFQWSRuntimeProcessIdentity{}
-	if err != nil || ack != base || !nfqws2ManagedStartChild(command, helper, child) || ctx.Err() != nil || current() != nil || ctx.Err() != nil {
-		return ErrNFQWSManagedProcessUnknown
+	if err != nil {
+		return nfqws2ManagedStartFailure("STARTED receive", err)
+	}
+	if ack != base {
+		return nfqws2ManagedStartFailure("STARTED frame", nil)
+	}
+	if !nfqws2ManagedStartChild(command, helper, child) {
+		return nfqws2ManagedStartFailure("STARTED child identity", nil)
+	}
+	if err := ctx.Err(); err != nil {
+		return nfqws2ManagedStartFailure("STARTED context before Current", err)
+	}
+	if err := current(); err != nil {
+		return nfqws2ManagedStartFailure("STARTED Current", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nfqws2ManagedStartFailure("STARTED context after Current", err)
 	}
 	return nil
+}
+
+// Stage strings are fixed call-site labels. Never format frames, commands,
+// argv, bindings or control payloads; preserve the existing error identity.
+func nfqws2ManagedStartFailure(stage string, cause error) error {
+	return fmt.Errorf("managed NFQWS start %s: %w", stage, errors.Join(ErrNFQWSManagedProcessUnknown, cause))
 }
 
 // The helper gets permission only from the inherited live endpoint. Reading
