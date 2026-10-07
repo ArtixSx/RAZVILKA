@@ -442,11 +442,15 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 		}
 		nodeManifestData = data
 	}
-	policy := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
+	generation, networkDefault, err := NetworkPolicyRouteAuthority(plan, a.ID())
+	if err != nil {
+		return err
+	}
+	policy := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions, NetworkPolicyGeneration: generation, NetworkDefault: networkDefault}
+	initializePolicyLayout(&policy)
 	if err := a.prepareForwarding(ctx, &policy); err != nil {
 		return preflightRefusalError{err}
 	}
-	initializePolicyLayout(&policy)
 	if _, err := kernelRulesForPolicy(policy); err != nil {
 		return preflightRefusalError{err}
 	}
@@ -1134,6 +1138,15 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 	if err != nil || !exists {
 		return false, err
 	}
+	generation, networkDefault, err := NetworkPolicyRouteAuthority(plan, a.ID())
+	if err != nil {
+		return false, err
+	}
+	// Refresh may update selectors within the same reviewed authority. Changing
+	// the LAN generation or default role requires a new reviewed Apply.
+	if generation != oldState.NetworkPolicyGeneration || networkDefault != oldState.NetworkDefault {
+		return false, ErrNetworkPolicyAuthority
+	}
 	if err := a.checkCommittedReceipt(ctx, oldState, false); err != nil {
 		return false, err
 	}
@@ -1153,7 +1166,7 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 	if err != nil {
 		return false, err
 	}
-	newState := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions}
+	newState := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority, Prefixes: prefixes, Rules: rules, Exclusions: exclusions, NetworkPolicyGeneration: generation, NetworkDefault: networkDefault}
 	// DNS refresh preserves recorded coordinates. Only a reviewed new Apply
 	// may migrate legacy routing; a crash must not orphan new early rules.
 	newState.RuleLayout, newState.SharedPriorityBase = oldState.RuleLayout, oldState.SharedPriorityBase
