@@ -33,16 +33,47 @@ func TestNetworkPolicyManagerNFQWSAssemblyRefusesCommandBeforeReservation(t *tes
 	a, command, spec := nfqwsExecutionAssemblyCommand(t)
 	runtime := nfqwsExecutionRuntime{Runner: f.b.Runner, Tools: f.b.Tools, VerifyLAN: f.b.VerifyLAN, AdditionalReadback: f.b.AdditionalReadback}
 	err := f.m.WithExecutionResources(f.ctx, f.p, "nfqws2", func(ctx context.Context) error {
+		issuer := ctx.Value(nfqwsExecutionRegistrarKey{}).(nfqwsExecutionRegistrar)
+		reservations := 0
+		ctx = context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(func(c context.Context, s NFQWSScopedSpec) (*NFQWSExecutionResource, error) {
+			reservations++
+			return issuer(c, s)
+		}))
 		for name, mutate := range map[string]func(*nfqws2ManagedProcessCommand, *NFQWSScopedSpec){
-			"wrong queue":         func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[1] = "--qnum=40322" },
-			"duplicate queue":     func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, c.Args[1]) },
-			"noncanonical queue":  func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[1] = "--qnum=040321" },
-			"split queue":         func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[1] = "--qnum" },
-			"no interception":     func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[0] = "--intercept=0" },
-			"duplicate intercept": func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, c.Args[0]) },
-			"daemon":              func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "--daemon") },
-			"end options":         func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append([]string{"--"}, c.Args...) },
-			"wrong session":       func(_ *nfqws2ManagedProcessCommand, s *NFQWSScopedSpec) { s.SessionID = strings.Repeat("2", 32) },
+			"wrong queue":                   func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[1] = "--qnum=40322" },
+			"duplicate queue":               func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, c.Args[1]) },
+			"noncanonical queue":            func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[1] = "--qnum=040321" },
+			"split queue":                   func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[1] = "--qnum" },
+			"no interception":               func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[0] = "--intercept=0" },
+			"duplicate intercept":           func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, c.Args[0]) },
+			"daemon":                        func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "--daemon") },
+			"single-dash queue":             func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "-qnum=40322") },
+			"single-dash intercept":         func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "-intercept=0") },
+			"single-dash daemon":            func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "-daemon") },
+			"abbreviated queue":             func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "--q=40322") },
+			"abbreviated intercept":         func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "--inter=0") },
+			"abbreviated daemon":            func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "--daem") },
+			"single-dash abbreviated queue": func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "-qn=40322") },
+			"split abbreviated queue":       func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "--qn", "40322") },
+			"first at config": func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) {
+				c.Args = append([]string{"@/reviewed/nfqws.conf"}, c.Args...)
+			},
+			"first dollar config": func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) {
+				c.Args = append([]string{"$/reviewed/nfqws.conf"}, c.Args...)
+			},
+			"later positional config": func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) {
+				c.Args = append(c.Args, "@/reviewed/nfqws.conf")
+			},
+			"fuzz disables intercept": func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append(c.Args, "--fuzz=1") },
+			"abbreviated candidate":   func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args[2] = "--filter-u=443" },
+			"split candidate value": func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) {
+				c.Args = append(c.Args[:2], "--filter-udp", "443")
+			},
+			"unknown global": func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) {
+				c.Args = append(c.Args, "--future-runtime=1")
+			},
+			"end options":   func(c *nfqws2ManagedProcessCommand, _ *NFQWSScopedSpec) { c.Args = append([]string{"--"}, c.Args...) },
+			"wrong session": func(_ *nfqws2ManagedProcessCommand, s *NFQWSScopedSpec) { s.SessionID = strings.Repeat("2", 32) },
 			"wrong boot": func(_ *nfqws2ManagedProcessCommand, s *NFQWSScopedSpec) {
 				s.BootID = "11234567-89ab-cdef-0123-456789abcdef"
 			},
@@ -70,7 +101,7 @@ func TestNetworkPolicyManagerNFQWSAssemblyRefusesCommandBeforeReservation(t *tes
 				t.Fatalf("%s acquired launch resource: %v", name, err)
 			}
 		}
-		if len(f.latest(t).Resources) != 0 {
+		if reservations != 0 || len(f.latest(t).Resources) != 0 {
 			t.Fatal("invalid command allocated a common resource")
 		}
 		if _, err := os.Stat(filepath.Join(a.StateRoot, nfqws2LeaseFile)); !errors.Is(err, os.ErrNotExist) {
@@ -106,6 +137,22 @@ func TestNetworkPolicyManagerNFQWSAssemblyFreezesCommandAndSpec(t *testing.T) {
 	}
 	if err := retained.current(context.Background(), retained.resource.Plan()); err == nil {
 		t.Fatal("borrowed assembly survived issuer close")
+	}
+}
+
+func TestNetworkPolicyManagerNFQWSAssemblyCanonicalManagedArguments(t *testing.T) {
+	_, command, spec := nfqwsExecutionAssemblyCommand(t)
+	command.Args = []string{"--qnum=40321", "--intercept=1",
+		"--lua-init=@" + command.Assets[0].Path,
+		"--blob=tls_clienthello:@" + command.Assets[0].Path,
+		"--filter-tcp=443,80", "--filter-l7=http,tls", "--payload=tls_client_hello",
+		"--lua-desync=circular:fails=2:time=300", "--lua-desync=fake:blob=tls_clienthello:repeats=11",
+		"--new", "--filter-udp=443", "--filter-l7=quic", "--payload=quic_initial",
+		"--lua-desync=fake:blob=0x00000000"}
+	spec.CommandSHA256 = nfqws2ManagedCommandDigest(command)
+	spec.Candidate.ArgumentsSHA256 = components.NFQWSRuntimeArgumentsSHA256(command.Program.Path, command.Args)
+	if err := nfqwsExecutionCommandMatches(command, spec); err != nil {
+		t.Fatal("canonical reviewed base/multi-profile managed candidate rejected", err)
 	}
 }
 

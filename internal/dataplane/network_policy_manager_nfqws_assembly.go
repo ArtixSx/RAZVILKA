@@ -39,19 +39,36 @@ func nfqwsExecutionCommandMatches(command nfqws2ManagedProcessCommand, spec NFQW
 	}
 	queue, intercept := 0, 0
 	for _, arg := range command.Args {
-		if strings.HasPrefix(arg, "--qnum") {
+		// The pinned producer uses getopt_long_only: both single-dash long
+		// options and unique abbreviations can replace reserved globals.
+		// Its first positional @/$ file also replaces the entire argv. Close
+		// this launch grammar to exact full option names and attached values;
+		// no positional, alias, split value or unknown global reaches Start.
+		key, value, attached := strings.Cut(arg, "=")
+		switch key {
+		case "--qnum":
 			if arg != "--qnum="+strconv.Itoa(int(spec.Queue)) {
 				return ErrNFQWSScopedOwner
 			}
 			queue++
-		}
-		if strings.HasPrefix(arg, "--intercept") {
+		case "--intercept":
 			if arg != "--intercept=1" {
 				return ErrNFQWSScopedOwner
 			}
 			intercept++
-		}
-		if arg == "--daemon" || strings.HasPrefix(arg, "--daemon=") || arg == "--" {
+		case "--new":
+			if arg != "--new" {
+				return ErrNFQWSScopedOwner
+			}
+		case "--lua-init", "--blob", "--filter-tcp", "--filter-udp", "--filter-l7", "--payload", "--lua-desync":
+			// Preserve the reviewed base and all current managed candidate
+			// option names (strategylab.ExportableArguments). Their semantic
+			// values/provenance remain the original owner's review, not a
+			// new candidate or asset grant from this lexical boundary.
+			if !attached || value == "" {
+				return ErrNFQWSScopedOwner
+			}
+		default:
 			return ErrNFQWSScopedOwner
 		}
 	}
