@@ -26,7 +26,7 @@ type networkPolicyProxyObservation struct {
 func closeNetworkPolicyProxyObservations(observations []networkPolicyProxyObservation) {
 	for _, observation := range observations {
 		observation.owner.Close()
-		observation.receipt.owner.Close()
+		observation.receipt.close()
 	}
 }
 
@@ -39,6 +39,9 @@ func checkNetworkPolicyProxyObservations(observations []networkPolicyProxyObserv
 		info, err = os.Lstat(observation.receipt.path)
 		if err != nil || !networkPolicyPrivateDirectory(info) || !os.SameFile(observation.receipt.anchor, info) {
 			return errors.Join(ErrNetworkPolicyConsumers, err)
+		}
+		if err := observation.receipt.current(); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -53,7 +56,8 @@ func equalNetworkPolicyProxyObservations(a, b []networkPolicyProxyObservation) b
 			!os.SameFile(a[i].anchor, b[i].anchor) || !reflect.DeepEqual(a[i].state, b[i].state) || !reflect.DeepEqual(a[i].rows, b[i].rows) {
 			return false
 		}
-		if a[i].receipt.path != b[i].receipt.path || a[i].receipt.checksum != b[i].receipt.checksum || !os.SameFile(a[i].receipt.anchor, b[i].receipt.anchor) {
+		if a[i].receipt.path != b[i].receipt.path || a[i].receipt.checksum != b[i].receipt.checksum || !os.SameFile(a[i].receipt.anchor, b[i].receipt.anchor) ||
+			!os.SameFile(a[i].receipt.fileInfo, b[i].receipt.fileInfo) || !os.SameFile(a[i].receipt.lockInfo, b[i].receipt.lockInfo) {
 			return false
 		}
 	}
@@ -72,13 +76,12 @@ func (c *NetworkPolicyChecks) proxyConsumers(ctx context.Context, lan *LANPolicy
 	}
 	var plan *Plan
 	for _, id := range c.ids {
-		actual, ok := c.adapters[id].(*ProxyTunnelAdapter)
+		view, ok := c.proxies[id]
 		if !ok {
 			continue
 		}
 		// A frozen view retains the actual owner runner/process controller. It
 		// cannot be replaced by caller-provided expected rules or a mark token.
-		view := *actual
 		lease, exists, err := view.readForwardingLease()
 		if err != nil {
 			return observations, errors.Join(ErrNetworkPolicyConsumers, err)
@@ -170,7 +173,7 @@ func (c *NetworkPolicyChecks) observeScopedProxy(ctx context.Context, a *ProxyTu
 	}
 	defer func() {
 		if result != nil {
-			receipt.owner.Close()
+			receipt.close()
 		}
 	}()
 	if err := a.verifyScopedNodeInterface(ctx); err != nil {
@@ -241,7 +244,7 @@ func (c *NetworkPolicyChecks) scopedProxyReceipt(ctx context.Context, a *ProxyTu
 		}
 		status := observed.status
 		if !status.Complete || status.Removed || status.Unknown || status.Promoted || receipt.Generation != "" && status.ID != receipt.Generation {
-			observed.owner.Close()
+			observed.close()
 			return unknown, ErrNetworkPolicyConsumers
 		}
 		return observed, nil
@@ -267,7 +270,7 @@ func (c *NetworkPolicyChecks) scopedProxyReceipt(ctx context.Context, a *ProxyTu
 	}
 	status := observed.status
 	if !status.Complete || status.Removed || status.Unknown || status.Promoted || status.ID != binding.ReceiptID {
-		observed.owner.Close()
+		observed.close()
 		return unknown, ErrNetworkPolicyConsumers
 	}
 	return observed, nil

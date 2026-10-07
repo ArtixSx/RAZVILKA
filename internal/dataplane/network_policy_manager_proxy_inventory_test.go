@@ -15,6 +15,16 @@ import (
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 )
 
+type networkPolicyInventoryTestRunner struct {
+	use   func(context.Context, string, ...string) ([]byte, error)
+	calls []string
+}
+
+func (r *networkPolicyInventoryTestRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	return r.use(ctx, name, args...)
+}
+
 // Explicit kernel/process model. Actual owner compilers, mixed LAN receipt,
 // proxy forwarding lease, schema-1 addition receipt and live owner validators
 // run unchanged. The pending Stage generation producer fix is not emulated by
@@ -24,14 +34,14 @@ func networkPolicyScopedProxyInventoryFixture(t *testing.T) (*NetworkPolicyCheck
 	m, _, gate, oldChecks, _, model, _ := networkPolicyChecksTestFixture(t)
 	f := scopedXrayTestFixture(t)
 	baseRunner := f.a.Runner
-	f.a.Runner = networkCleanupRunner(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	f.a.Runner = &networkPolicyInventoryTestRunner{use: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		// The existing LAN FIB probe double treats any iif-br0 argv as a
 		// lookup. Managed RPDB mutations must reach its actual stateful model.
 		if name == "ip" && slices.Contains(args, "rule") {
 			return f.runner.Run(ctx, name, args...)
 		}
 		return baseRunner.Run(ctx, name, args...)
-	})
+	}}
 	f.a.bootIdentity = func() (string, error) { return gate.identity.value.BootID, nil }
 	route := f.plan.Routes[0]
 	route.Domains, route.CIDRs = nil, []string{"8.8.8.8/32"}
@@ -255,22 +265,71 @@ func TestNetworkPolicyChecksScopedProxyUnknownProofRefusesWithoutEffects(t *test
 					return image, nil
 				}
 			}
-			var calls []string
-			base := f.a.Runner
-			f.a.Runner = networkCleanupRunner(func(ctx context.Context, name string, args ...string) ([]byte, error) {
-				calls = append(calls, name+" "+strings.Join(args, " "))
-				return base.Run(ctx, name, args...)
-			})
+			runner := f.a.Runner.(*networkPolicyInventoryTestRunner)
+			runner.calls = nil
 			if err := checks.ConsumerCheck(ctx, p.LAN); err == nil {
 				t.Fatal("unknown/changed proof granted consumer allowance", fault)
 			}
-			if mutated := receiptMutationCalls(calls); len(mutated) != 0 {
+			if mutated := receiptMutationCalls(runner.calls); len(mutated) != 0 {
 				t.Fatal("read-only refusal mutated owner state", mutated)
 			}
 			if fault == "lock" {
 				if _, err := os.Stat(filepath.Join(root, policyAdditionLock)); !errors.Is(err, os.ErrNotExist) {
 					t.Fatal("observer recreated absent receipt lock", err)
 				}
+			}
+		})
+	}
+}
+
+func TestNetworkPolicyChecksFinalCaptureRejectsInPlaceDependencyAndReceiptChanges(t *testing.T) {
+	for _, fault := range []string{"gate-runner", "proxy-runner", "process-controller", "receipt-replace-same-bytes", "receipt-change", "lock-replace-same-bytes"} {
+		t.Run(fault, func(t *testing.T) {
+			checks, ctx, p, f, root, _ := networkPolicyScopedProxyInventoryFixture(t)
+			read := checks.read
+			reads := 0
+			runner := f.a.Runner.(*networkPolicyInventoryTestRunner)
+			runner.calls = nil
+			checks.read = func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+				image, err := read(ctx, identity)
+				reads++
+				if err != nil || reads != 2 {
+					return image, err
+				}
+				switch fault {
+				case "gate-runner":
+					checks.gate.Binding.Runtime.Runner = &networkPolicyInventoryTestRunner{use: runner.use}
+				case "proxy-runner":
+					f.a.Runner = &networkPolicyInventoryTestRunner{use: runner.use}
+				case "process-controller":
+					copy := *f.processes
+					f.a.Processes = &copy
+				default:
+					name := policyAdditionFile
+					if fault == "lock-replace-same-bytes" {
+						name = policyAdditionLock
+					}
+					path := filepath.Join(root, name)
+					data, readErr := os.ReadFile(path)
+					if readErr != nil {
+						t.Fatal(readErr)
+					}
+					if fault == "receipt-change" {
+						data = []byte(`{"phase":"unknown"}`)
+						if writeErr := os.WriteFile(path, data, 0600); writeErr != nil {
+							t.Fatal(writeErr)
+						}
+					} else if writeErr := writeAtomic(path, data, 0600); writeErr != nil {
+						t.Fatal(writeErr)
+					}
+				}
+				return image, nil
+			}
+			if err := checks.ConsumerCheck(ctx, p.LAN); err == nil || reads != 2 {
+				t.Fatal("final capture mutation accepted", fault, err, reads)
+			}
+			if mutated := receiptMutationCalls(runner.calls); len(mutated) != 0 {
+				t.Fatal("read-only refusal changed actual effects", mutated)
 			}
 		})
 	}

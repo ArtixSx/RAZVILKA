@@ -21,22 +21,24 @@ import (
 // the typed LAN adapter. The original physical/admission/cleanup guards remain
 // mandatory. These checks neither acquire a Manager operation nor grant effects.
 type NetworkPolicyChecks struct {
-	manager    *Manager
-	gate       *NetworkPolicyAdapter
-	binding    *LANPolicyReceiptBinding
-	runtime    *LANPolicyRuntime
-	tools      [3]string
-	identity   *networkPolicyIdentity
-	network    netidentity.Identity
-	root       string
-	anchor     os.FileInfo
-	owner      *ownedfs.Root
-	adapters   map[string]Adapter
-	roots      map[string]string
-	ids        []string
-	generation uint64
-	read       func(context.Context, netidentity.Identity) (BackendInventorySnapshot, error)
-	closed     atomic.Bool
+	manager      *Manager
+	gate         *NetworkPolicyAdapter
+	binding      *LANPolicyReceiptBinding
+	runtime      *LANPolicyRuntime
+	tools        [3]string
+	identity     *networkPolicyIdentity
+	network      netidentity.Identity
+	root         string
+	anchor       os.FileInfo
+	owner        *ownedfs.Root
+	adapters     map[string]Adapter
+	roots        map[string]string
+	dependencies map[string][2]any
+	proxies      map[string]ProxyTunnelAdapter
+	ids          []string
+	generation   uint64
+	read         func(context.Context, netidentity.Identity) (BackendInventorySnapshot, error)
+	closed       atomic.Bool
 }
 
 // BindNetworkPolicyChecks freezes actual registered instances, their registry
@@ -66,12 +68,16 @@ func (m *Manager) bindNetworkPolicyChecks(gate *NetworkPolicyAdapter, read func(
 		return nil, ErrNetworkPolicyConsumers
 	}
 	r := gate.Binding.Runtime
-	c := &NetworkPolicyChecks{manager: m, gate: gate, binding: gate.Binding, runtime: r, tools: [3]string{r.IP, r.IPTables, r.IP6Tables}, identity: gate.identity, network: gate.identity.value, root: m.StateRoot, anchor: anchor, owner: owner, read: read, adapters: map[string]Adapter{}, roots: map[string]string{}}
+	c := &NetworkPolicyChecks{manager: m, gate: gate, binding: gate.Binding, runtime: r, tools: [3]string{r.IP, r.IPTables, r.IP6Tables}, identity: gate.identity, network: gate.identity.value, root: m.StateRoot, anchor: anchor, owner: owner, read: read, adapters: map[string]Adapter{}, roots: map[string]string{}, dependencies: map[string][2]any{}, proxies: map[string]ProxyTunnelAdapter{}}
 	m.registryMu.RLock()
 	c.generation = m.registryGeneration
 	for id, adapter := range m.Adapters {
 		c.adapters[id] = adapter
 		c.roots[id] = networkPolicyAdapterRoot(adapter)
+		c.dependencies[id] = networkPolicyAdapterDependencies(adapter)
+		if proxy, ok := adapter.(*ProxyTunnelAdapter); ok && proxy != nil {
+			c.proxies[id] = *proxy
+		}
 		if id != NetworkPolicyAdapterID {
 			c.ids = append(c.ids, id)
 		}
@@ -113,8 +119,54 @@ func (c *NetworkPolicyChecks) current(ctx context.Context) error {
 		if adapter == nil || reflect.ValueOf(adapter).Kind() == reflect.Pointer && reflect.ValueOf(adapter).IsNil() || adapter.ID() != id || networkPolicyAdapterRoot(adapter) != c.roots[id] {
 			return ErrNetworkPolicyConsumers
 		}
+		actual := networkPolicyAdapterDependencies(adapter)
+		for i, original := range c.dependencies[id] {
+			if !sameNetworkPolicyDependency(actual[i], original) {
+				return ErrNetworkPolicyConsumers
+			}
+		}
 	}
 	return nil
+}
+
+// Equality here preserves an already bound concrete owner; it issues no grant.
+// Function code pointers cannot distinguish closure captures. Such dependencies
+// refuse instead of treating a matching code address as an immutable owner.
+func sameNetworkPolicyDependency(actual, original any) bool {
+	if actual == nil || original == nil {
+		return actual == nil && original == nil
+	}
+	a, b := reflect.ValueOf(actual), reflect.ValueOf(original)
+	if a.Kind() == reflect.Pointer && a.IsNil() || b.Kind() == reflect.Pointer && b.IsNil() {
+		return false
+	}
+	return a.Comparable() && b.Comparable() && a.Type() == b.Type() && actual == original
+}
+
+func networkPolicyAdapterDependencies(adapter Adapter) [2]any {
+	switch a := adapter.(type) {
+	case *NetworkPolicyAdapter:
+		if a != nil && a.Binding != nil && a.Binding.Runtime != nil {
+			return [2]any{a.Binding.Runtime.Runner, nil}
+		}
+	case *ProxyTunnelAdapter:
+		if a != nil {
+			return [2]any{a.Runner, a.Processes}
+		}
+	case *NFQWS2Adapter:
+		if a != nil {
+			return [2]any{a.Runner, nil}
+		}
+	case *WARPWireGuardAdapter:
+		if a != nil {
+			return [2]any{a.Runner, nil}
+		}
+	case *ScopedDNSAdapter:
+		if a != nil {
+			return [2]any{a.Runner, nil}
+		}
+	}
+	return [2]any{}
 }
 
 func networkPolicyAdapterRoot(adapter Adapter) string {

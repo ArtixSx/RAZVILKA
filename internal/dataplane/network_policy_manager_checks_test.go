@@ -205,3 +205,17 @@ func TestNetworkPolicyChecksNilAndUnregisteredDescriptorsRefuse(t *testing.T) {
 		t.Fatal("fixture changed registry")
 	}
 }
+
+func TestNetworkPolicyChecksFunctionRunnerIsNotAnImmutableOwner(t *testing.T) {
+	_, _, gate, checks, _, _, _ := networkPolicyChecksTestFixture(t)
+	old := gate.Binding.Runtime.Runner
+	gate.Binding.Runtime.Runner = networkCleanupRunner(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return old.Run(ctx, name, args...)
+	})
+	if checks.current(context.Background()) == nil {
+		t.Fatal("function-valued replacement acquired original runner identity")
+	}
+	if sameNetworkPolicyDependency(gate.Binding.Runtime.Runner, gate.Binding.Runtime.Runner) {
+		t.Fatal("closure code address supplied stable ownership")
+	}
+}
