@@ -310,9 +310,27 @@ function engineProgressView(engineID,fileID='main') {
    &&entry.apply.routes.every(route=>(state.services||[]).some(service=>{const applied=serviceDashboardApplied(service);return service.id===route.serviceID&&applied.enabled&&applied.route===route.route;})));
  return {format,service,apply:applied,native:format&&entry.format.native};
 }
+function engineWorkflowPresentation(id,info=consoleEngineState(id)) {
+ const files=info.config?.files||[],active=state.selectedEngine===id;
+ const file=(active&&files.find(file=>file.id===state.selectedEngineFile))||files.find(file=>file.id==='main')||files[0];
+ const used=(state.services||[]).filter(service=>{const applied=serviceDashboardApplied(service);return applied.enabled&&(applied.route===id||applied.route?.startsWith(id+':'));});
+ const binaryDetected=info.engine?.installed===true&&typeof info.engine.binary_path==='string'&&info.engine.binary_path.trim().length>0;
+ const progress=engineProgressView(id,file?.id||'main'),checked=progress.format&&progress.service;
+ const dirty=active&&state.engineEditorDirty===true;
+ const complete={install:binaryDetected&&!info.observationStale,profile:progress.format,check:checked,apply:progress.apply};
+ const steps=[['install','Установка',info.observationStale?'Сведения устарели':binaryDetected?'Бинарник обнаружен':info.installed?'Есть сведения об установке; бинарник не уточнён':info.installedKnown?'Требуется компонент':'Состояние не прочитано'],['profile','Профиль',dirty?'Есть несохранённые изменения':progress.format?'Текущий профиль прошёл проверку формата':file?.staged?'Есть подготовленные изменения':file?.exists?'Файл есть; содержимое требует проверки':'Профиль ещё не подтверждён'],['check','Проверки',`Формат: ${progress.format?(progress.native?'проверен утилитой обхода':'прошёл предварительную проверку'):'не подтверждён'}. Сервис: ${progress.service?'свежий веб-сценарий подтверждён':file?.staged?'проверяется после применения подготовленного профиля':'нужна отдельная проверка'}`],['apply','Применение',progress.apply?'Получено совпадающее подтверждение применения':file?.staged&&progress.format?'Формат проверен. Примените подготовленный профиль, затем проверьте сервис.':used.length?`Сохранённых назначений: ${used.length}`:'Назначения ещё не подтверждены']];
+ // A web probe observes the live profile. Do not hold a validated staged file
+ // behind that probe; Apply first, then require a fresh post-Apply service test.
+ const next=!info.installed?'install':dirty||!file?.exists&&!file?.staged?'profile':file?.staged&&progress.format?'apply':!checked?'check':'apply';
+ return {file,used,binaryDetected,progress,checked,complete,steps,next,current:steps.find(([step])=>step===next)};
+}
+function engineWorkflowSummary(id) {
+ const workflow=engineWorkflowPresentation(id);
+ return workflow.steps.map(([step,title,detail])=>`<div data-engine-workspace-progress="${step}" class="${workflow.complete[step]?'confirmed':''}"><span>${ci(workflow.complete[step]?'check':'clock')}</span><section><b>${esc(title)}</b><small>${esc(detail)}</small></section></div>`).join('');
+}
 function interfaceEngineCard(id,meta){
  const info=consoleEngineState(id),component=info.component,update=consoleEngineUpdateState(info);
- const used=(state.services||[]).filter(service=>{const applied=serviceDashboardApplied(service);return applied.enabled&&(applied.route===id||applied.route?.startsWith(id+':'));});
+ const workflow=engineWorkflowPresentation(id,info),used=workflow.used;
  const recoveryBlocked=typeof componentRecoveryFence==='function'&&componentRecoveryFence();
  const busy=!!state.componentOperation||!!state.componentRefreshRequest||component?.operation_status==='running'||recoveryBlocked;
  const stale=['failed','checking'].includes(update.kind);
@@ -327,12 +345,7 @@ function interfaceEngineCard(id,meta){
  let actions='';
  if(info.installed&&component?.update_available)actions+=action('update',managedUpdate?'Обновить с проверкой':'Обновить',updateAllowed&&!stale&&component.can_update===true);
  if(info.installed)actions+=action('remove','Удалить',lifecycleAllowed&&component.can_remove===true);
- const file=info.config?.files?.find(f=>f.id==='main')||info.config?.files?.[0];
- const binaryDetected=info.engine?.installed===true&&typeof info.engine.binary_path==='string'&&info.engine.binary_path.trim().length>0;
- const progress=engineProgressView(id,file?.id||'main'),checked=progress.format&&progress.service;
- const complete={install:binaryDetected&&!info.observationStale,profile:progress.format,check:checked,apply:progress.apply};
- const steps=[['install','Установка',info.observationStale?'Сведения устарели':binaryDetected?'Бинарник обнаружен':info.installed?'Есть сведения об установке; бинарник не уточнён':info.installedKnown?'Требуется компонент':'Состояние не прочитано'],['profile','Профиль',progress.format?'Текущий профиль прошёл проверку формата':file?.staged?'Есть подготовленные изменения':file?.exists?'Файл есть; содержимое требует проверки':'Профиль ещё не подтверждён'],['check','Проверки',`Формат: ${progress.format?(progress.native?'проверен утилитой обхода':'прошёл предварительную проверку'):'не подтверждён'}. Сервис: ${progress.service?'свежий веб-сценарий подтверждён':'нужна отдельная проверка'}`],['apply','Применение',progress.apply?'Получено совпадающее подтверждение применения':used.length?`Сохранённых назначений: ${used.length}`:'Назначения ещё не подтверждены']];
- const next=!info.installed?'install':!file?.exists&&!file?.staged?'profile':!checked?'check':'apply',current=steps.find(([step])=>step===next);
+ const {file,binaryDetected,progress,checked,complete,steps,next,current}=workflow;
  const stepAction=step=>step==='install'?install:`<button type="button" class="secondary" data-engine-step="${step}" data-card-engine="${esc(id)}" data-rz-focus="engine-${esc(id)}-${step}" ${state.engineIntent?'disabled':''}>Открыть ${step==='profile'?'профиль':step==='check'?'проверки':'применение'}</button>`;
  const flow=`<ol class="ui3-engine-progress" aria-label="Этапы настройки ${esc(meta.name)}">${steps.map(([step,title],index)=>`<li data-engine-progress="${step}" ${complete[step]?'data-completed="true"':''} ${step===next&&!complete[step]?'aria-current="step"':''}><span>${complete[step]?'✓':index+1}</span><b>${title}${complete[step]?' · подтверждено':''}</b></li>`).join('')}</ol><div class="ui3-engine-next"><div><b>${progress.apply&&checked?'Проверка и применение подтверждены':steps.indexOf(current)+1+'. '+current[1]}</b><small>${esc(current[2])}</small></div>${stepAction(next)}</div><details class="ui3-engine-flow-details" data-engine-disclosure="${esc(id)}-flow"><summary data-rz-focus="engine-${esc(id)}-flow">Все шаги настройки</summary><ol class="ui3-engine-workflow">${steps.map(([step,title,text],index)=>`<li><b>${index+1}. ${title}</b><small>${esc(text)}</small>${step===next?'':stepAction(step)}</li>`).join('')}</ol></details>`;
  const operation=state.componentOperation?.id===id?state.componentOperation.action:component?.operation_status==='running'?component.operation_action:'';
@@ -353,16 +366,15 @@ function renderInterfaceEngines(){
  if(focus)[...grid.querySelectorAll('[data-rz-focus]')].find(element=>element.getAttribute('data-rz-focus')===focus)?.focus({preventScroll:true});
  const id=state.selectedEngine,e=consoleEngineState(id);
  interfaceHTML('ui3EngineContext',Object.entries(consoleEngineMeta).map(([k,m])=>`<button type="button" class="${k===id?'active':''}" data-console-engine="${esc(k)}" ${k===id?'aria-current="page"':''}>${ci(m.icon)}${esc(m.name)}</button>`).join(''));
- const used=state.services.filter(s=>{const a=serviceDashboardApplied(s);return a.enabled&&(a.route===id||a.route?.startsWith(id+':'));});
- const good=used.filter(s=>serviceDashboardSummary(s).kind==='good').length;
- interfaceHTML('ui3EngineSteps',[[e.installed&&!e.observationStale,'Установка',e.observationStale?'Состояние уточняется':e.installed?'Бинарник обнаружен':'Не подтверждена'],[e.running&&!e.observationStale,'Процесс',e.observationStale?'Состояние уточняется':e.running?'Запущен':'Не запущен'],[used.length>0,'Маршруты',`${used.length} сервисов`],[good>0,'Проверка',`${good} из ${used.length} подтверждены`]].map(([ok,title,detail])=>`<div class="${ok?'confirmed':''}"><span>${ci(ok?'check':'clock')}</span><section><b>${title}</b><small>${esc(detail)}</small></section></div>`).join(''));
+ interfaceHTML('ui3EngineSteps',engineWorkflowSummary(id));
 }
 async function interfaceOpenEngineStep(id,step){
  if(!['profile','check','apply'].includes(step)||!Object.hasOwn(consoleEngineMeta,id)||interfaceState.authRevoked||$('#authScreen')?.hidden===false)return;
  const epoch=interfaceState.authEpoch,request=interfaceState.engineCardRequest=(interfaceState.engineCardRequest||0)+1;
  if(!await openEngineConfiguration(id)||epoch!==interfaceState.authEpoch||request!==interfaceState.engineCardRequest||state.currentView!=='engineconfig'||state.selectedEngine!==id)return;
  switchEngineTab(step==='check'?'check':'config');
- const target=$('#'+(step==='profile'?'engineFileSelect':step==='check'?'r4ProbeService':'engineApplyConfig'));
+ const format=typeof engineProgressView==='function'&&engineProgressView(id,state.selectedEngineFile||'main').format;
+ const target=$('#'+(step==='profile'?'engineFileSelect':step==='check'?(format?'r4ProbeService':'r4Validate'):'engineApplyConfig'));
  if(target?.disabled){showNotice('review','Подготовьте изменения профиля','Применение выполняется после подготовки и проверки выбранного файла. Этот переход не применяет изменения.');$('#engineFileSelect')?.focus({preventScroll:true});}
  else target?.focus({preventScroll:true});
 }

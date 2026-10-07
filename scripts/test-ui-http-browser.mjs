@@ -301,6 +301,11 @@ try {
       await step('xray','profile');
       await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray');
       await page.waitForFunction(()=>document.activeElement?.id==='engineFileSelect');
+      const workspaceProgress=await page.locator('#ui3EngineSteps [data-engine-workspace-progress]').evaluateAll(rows=>rows.map(row=>({step:row.dataset.engineWorkspaceProgress,complete:row.classList.contains('confirmed')})));
+      assert.deepEqual(workspaceProgress.map(row=>row.step),['install','profile','check','apply']);
+      const matchingProgress=await page.evaluate(()=>engineWorkflowPresentation('xray').complete);
+      for(const row of workspaceProgress)assert.equal(row.complete,matchingProgress[row.step],'workspace used unrelated runtime/route proof');
+      assert.doesNotMatch(await page.locator('#ui3EngineSteps').textContent(),/Процесс|Маршруты/);
       await page.locator('#engineModeExpert').click();await page.waitForFunction(()=>state.engineMode==='expert');
       const draft='{"log":{"loglevel":"warning"}}';await page.locator('#engineEditor').fill(draft);
       await nav('engines');await step('usque','profile');
@@ -309,7 +314,7 @@ try {
       assert.equal(await page.evaluate(()=>state.currentView),'engines');assert.equal(await page.evaluate(()=>state.selectedEngine),'xray');
       assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
       await step('xray','check');
-      await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray' && document.activeElement?.id==='r4ProbeService');
+      await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray' && document.activeElement?.id==='r4Validate');
       assert.equal(await page.locator('#engineEditor').inputValue(),draft);assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
       assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'card navigation started a configuration/check/package write');
       await page.locator('.engine-tab[data-engine-tab="config"]').click();await page.locator('#engineDiscardDraft').click();

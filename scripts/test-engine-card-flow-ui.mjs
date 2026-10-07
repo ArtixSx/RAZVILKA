@@ -24,10 +24,14 @@ function fixture(){
 }
 let tests=0;async function test(name,action){await action();tests++;console.log('PASS '+name);}
 await test('each card step opens its exact engine and never starts a write',async()=>{
- for(const [step,target,tab] of [['profile','#engineFileSelect','config'],['check','#r4ProbeService','check'],['apply','#engineApplyConfig','config']]){
+ for(const [step,target,tab] of [['profile','#engineFileSelect','config'],['check','#r4Validate','check'],['apply','#engineApplyConfig','config']]){
    const f=fixture();await f.ctx.interfaceOpenEngineStep('xray',step);assert.equal(f.state.selectedEngine,'xray');assert.equal(f.state.currentView,'engineconfig');
    assert.equal(f.focus.at(-1),target);assert.equal(f.tabs.at(-1),tab);assert.equal(f.calls.length,0);
  }
+});
+await test('checks focus the real validator first and the service selector after a matching format receipt',async()=>{
+ const f=fixture();f.ctx.engineProgressView=()=>({format:true});
+ await f.ctx.interfaceOpenEngineStep('xray','check');assert.equal(f.focus.at(-1),'#r4ProbeService');assert.equal(f.calls.length,0);
 });
 await test('reopening the same engine keeps dirty values without a switch review',async()=>{
  const f=fixture();f.state.engineEditorDirty=true;f.confirm(()=>{throw new Error('same engine asked to discard');});
@@ -52,7 +56,7 @@ await test('leaving during a switch review revokes the old selection',async()=>{
 await test('newer card request wins over a late older confirmation',async()=>{
  const f=fixture(),old=deferred(),latest=deferred();let n=0;f.state.engineEditorDirty=true;f.confirm(()=>++n===1?old.promise:latest.promise);
  const first=f.ctx.interfaceOpenEngineStep('usque','profile'),second=f.ctx.interfaceOpenEngineStep('xray','check');old.resolve(true);await first;
- assert.equal(f.state.selectedEngine,'sing-box');latest.resolve(true);await second;assert.equal(f.state.selectedEngine,'xray');assert.equal(f.focus.at(-1),'#r4ProbeService');
+ assert.equal(f.state.selectedEngine,'sing-box');latest.resolve(true);await second;assert.equal(f.state.selectedEngine,'xray');assert.equal(f.focus.at(-1),'#r4Validate');
 });
 await test('logout while confirmation or read is pending cannot open private settings',async()=>{
  for(const mode of ['confirm','read']){
