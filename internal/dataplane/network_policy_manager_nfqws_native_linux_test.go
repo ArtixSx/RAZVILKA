@@ -29,13 +29,19 @@ import (
 type nfqwsExecutionNativeRunner struct {
 	control, installation string
 	sequence              uint64
+	metrics               *nfqwsExecutionNativeMetrics
 }
 
-func (r nfqwsExecutionNativeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+func (r nfqwsExecutionNativeRunner) Run(ctx context.Context, name string, args ...string) (result []byte, resultErr error) {
+	finish := r.metrics.begin(nfqwsExecutionNativeCommandKind(name, args))
+	var admission time.Duration
+	defer func() { finish(admission, resultErr) }()
 	cmd := exec.CommandContext(ctx, name, args...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
+	start := time.Now()
 	err := operationgate.WithSelfUpdateEffectAdmission(ctx, r.control, strings.Repeat("4", 32), r.installation, r.sequence, "nfqws-paired-kernel", cmd.Start)
+	admission = time.Since(start)
 	if cmd.Process == nil {
 		return output.Bytes(), fmt.Errorf("private kernel command admission %s %q: %w", name, args, err)
 	}
@@ -247,6 +253,13 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 			}
 		}
 		if !t.Run(mode, func(t *testing.T) {
+			metrics := newNFQWSExecutionNativeMetrics(t)
+			defer metrics.report()
+			metrics.setPhase(context.Background(), "manager-acquisition")
+			caseRunner := runner
+			caseRunner.metrics = metrics
+			lanRuntime.Runner = caseRunner
+			defer func() { lanRuntime.Runner = runner }()
 			peerCommand("link", "set", "peer0", "address", "02:00:00:00:00:02")
 			a, command := nfqws2ManagedNativePrepare(t, program, strings.Repeat(strconv.Itoa(index+6), 32), "hold")
 			command.ControlRoot, command.InstallationID, command.Sequence = controlRoot, control.InstallationID, control.Sequence
@@ -255,6 +268,7 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 			command.Args = append([]string{"--intercept=1", "--qnum=" + strconv.Itoa(int(queue))}, review.BaseArguments...)
 			command.Args = append(command.Args, "--filter-udp=443", "--lua-desync=fake:blob=0x00000000")
 			command.Deadline = time.Now().Add(15 * time.Second).UTC()
+			t.Logf("paired immutable budgets: command-deadline=%s forward=15s cleanup=5s original context retains its own cancellation", command.Deadline.Format(time.RFC3339Nano))
 			spec := NFQWSScopedSpec{Queue: queue, BootID: command.Parent.BootID, NetNamespace: namespace, SessionID: command.ID, CommandSHA256: nfqws2ManagedCommandDigest(command), Candidate: NFQWSScopedCandidate{ID: "native-pinned-candidate", Incarnation: strings.Repeat(strconv.Itoa(index+6), 32), ArgumentsSHA256: components.NFQWSRuntimeArgumentsSHA256(command.Program.Path, command.Args), Traffic: []NFQWSScopedTraffic{{Protocol: "udp", First: 443, Last: 443}}}}
 			m := New(filepath.Dir(filepath.Dir(a.StateRoot))) // Same actual adapter instance root.
 			m.FreshProfile = func(c context.Context) (string, error) { return plan.NetworkProfileID, c.Err() }
@@ -281,7 +295,9 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 			intentObserved, armedDenied, actionCalled := false, false, false
 			original, originalCancel := context.WithCancel(context.Background())
 			defer originalCancel()
-			ctx := WithReviewGuard(original, func(c context.Context) error {
+			ctx := WithReviewGuard(original, func(c context.Context) (result error) {
+				finish := metrics.begin("check retained review/journals")
+				defer func() { finish(0, result) }()
 				if err := c.Err(); err != nil {
 					return err
 				}
@@ -321,13 +337,19 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 			})
 			result := m.WithExecutionResources(ctx, plan, "nfqws2", func(borrowed context.Context) error {
 				var err error
-				e, err = newNFQWSExecutionAssembly(borrowed, a, command, spec, []string{"-test.run=^TestNFQWSManagedProcessNativeEntry$", "nfqws-managed-helper"}, nfqwsExecutionRuntime{Runner: runner, Tools: tools,
-					VerifyLAN: lanRuntime.Verify,
-					AdditionalReadback: func(c context.Context, p *NFQWSScopedPlan) error {
+				e, err = newNFQWSExecutionAssembly(borrowed, a, command, spec, []string{"-test.run=^TestNFQWSManagedProcessNativeEntry$", "nfqws-managed-helper"}, nfqwsExecutionRuntime{Runner: caseRunner, Tools: tools,
+					VerifyLAN: func(c context.Context, p *LANPolicyRuntimePlan) (result error) {
+						finish := metrics.begin("check LAN Verify")
+						defer func() { finish(0, result) }()
+						return lanRuntime.Verify(c, p)
+					},
+					AdditionalReadback: func(c context.Context, p *NFQWSScopedPlan) (result error) {
+						finish := metrics.begin("check additional backend/physical")
+						defer func() { finish(0, result) }()
 						if err := physical(c, p.lan); err != nil {
 							return err
 						}
-						return CheckNFQWSScopedOtherBackends(c, runner, tools, "nft", namespace)
+						return CheckNFQWSScopedOtherBackends(c, caseRunner, tools, "nft", namespace)
 					}})
 				if err != nil {
 					return err
@@ -335,33 +357,69 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 				// Diagnostics run before the Prepared callback's deferred stop.
 				// They never replace the actual owner result or grant readiness.
 				processReadback := e.binding.ProcessRunning
-				e.binding.ProcessRunning = func(c context.Context, p *NFQWSScopedPlan) (NFQWSScopedProcessProof, error) {
+				e.binding.ProcessRunning = func(c context.Context, p *NFQWSScopedPlan) (result NFQWSScopedProcessProof, resultErr error) {
+					if metrics.phaseName() == "managed-start" {
+						metrics.setPhase(c, "queue-readiness")
+					}
+					finish := metrics.begin("check running lease/identity/files")
 					proof, err := processReadback(c, p)
+					finish(0, err)
 					if err != nil {
 						nfqwsExecutionNativeReadinessDiagnostic(t, c, e, "running process", err)
 					}
 					return proof, err
 				}
 				queueReadback := e.binding.QueueCheck
-				e.binding.QueueCheck = func(c context.Context, ns string, q uint16, child *components.NFQWSRuntimeProcessIdentity) error {
+				e.binding.QueueCheck = func(c context.Context, ns string, q uint16, child *components.NFQWSRuntimeProcessIdentity) (result error) {
+					if child != nil && metrics.phaseName() == "queue-readiness" {
+						metrics.setPhase(c, "prepared-strict-readback")
+					}
+					finish := metrics.begin("check strict queue")
 					err := queueReadback(c, ns, q, child)
+					finish(0, err)
 					if err != nil && child == nil {
 						nfqwsExecutionNativeReadinessDiagnostic(t, c, e, "whole empty queue", err)
 					}
 					return err
 				}
 				readinessReadback := e.binding.queueReadiness
-				e.binding.queueReadiness = func(c context.Context, ns string, q uint16, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+				e.binding.queueReadiness = func(c context.Context, ns string, q uint16, child *components.NFQWSRuntimeProcessIdentity) (result bool, resultErr error) {
+					finish := metrics.begin("check after-start queue")
 					ready, err := readinessReadback(c, ns, q, child)
+					finish(0, err)
 					if err != nil {
 						nfqwsExecutionNativeReadinessDiagnostic(t, c, e, "after-start queue readiness", err)
 					}
 					return ready, err
 				}
-				lanRuntime.ConsumerCheck = func(c context.Context, _ *LANPolicyRuntimePlan) error {
+				inactive := e.binding.ProcessInactive
+				e.binding.ProcessInactive = func(c context.Context, p *NFQWSScopedPlan) (result NFQWSScopedProcessProof, resultErr error) {
+					metrics.setPhase(c, "capture-cleanup")
+					finish := metrics.begin("check inactive lease/ACK")
+					defer func() { finish(0, resultErr) }()
+					return inactive(c, p)
+				}
+				applyGuard, cleanupGuard := e.binding.ApplyGuard, e.binding.CleanupGuard
+				e.binding.ApplyGuard = func(c context.Context, p *NFQWSScopedPlan, effect PolicyEffect) (result error) {
+					metrics.setPhase(c, "capture-apply")
+					finish := metrics.begin("check original ApplyGuard")
+					defer func() { finish(0, result) }()
+					return applyGuard(c, p, effect)
+				}
+				e.binding.CleanupGuard = func(c context.Context, p *NFQWSScopedPlan, effect PolicyEffect) (result error) {
+					metrics.setPhase(c, "capture-cleanup")
+					finish := metrics.begin("check original CleanupGuard")
+					defer func() { finish(0, result) }()
+					return cleanupGuard(c, p, effect)
+				}
+				lanRuntime.ConsumerCheck = func(c context.Context, _ *LANPolicyRuntimePlan) (result error) {
+					finish := metrics.begin("check LAN ConsumerCheck")
+					defer func() { finish(0, result) }()
 					return e.binding.CheckKnownReferences(c, e.resource.Plan())
 				}
+				metrics.setPhase(borrowed, "managed-start")
 				return e.run(func(c context.Context, r *NFQWSExecutionResource, b *NFQWSScopedBinding) error {
+					metrics.setPhase(c, "packet-action")
 					actionCalled = true
 					execution, err := readExecution()
 					if err != nil || execution.Resources[0].Phase != "capture-ready" {
@@ -419,6 +477,8 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 					return nil
 				})
 			})
+			metrics.setPhase(original, "post-run-inspection")
+			t.Logf("paired final context: original-error=%v command-remaining=%s result-failed=%t", original.Err(), time.Until(command.Deadline), result != nil)
 			lanRuntime.ConsumerCheck = nil
 			if e == nil {
 				t.Fatal("assembly did not acquire actual Manager resource", result)
