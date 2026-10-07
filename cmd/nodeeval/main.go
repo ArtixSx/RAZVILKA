@@ -1,165 +1,281 @@
-// Command nodeeval compares node sources with the exact check the autopilot
-// uses (connection, internet through the node, the service by name and IP).
-// It runs beside the panel with its own store, port and state directory and
-// changes nothing else. Development tool; not part of release packages.
+// Command nodeeval is a bounded development probe, never a production route or
+// history writer. HTTPS checks use the actual isolated exact-node checker.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
-	"fmt"
-	"log"
+	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
-	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
 
-type line struct {
-	Source    string           `json:"source"`
-	Node      string           `json:"node"`
-	Protocol  string           `json:"protocol"`
-	Transport string           `json:"transport"`
-	Stage     string           `json:"stage"`
-	Verdict   string           `json:"verdict"`
-	Available bool             `json:"available"`
-	Code      string           `json:"code,omitempty"`
-	LatencyMS int64            `json:"latency_ms,omitempty"`
-	Seconds   int64            `json:"seconds"`
-	Stages    map[string]int64 `json:"stages_ms,omitempty"`
+const cleanupReserve = 20 * time.Second
+
+type options struct {
+	root, store, preset, engine, binary string
+	port, limit                         int
+	duration, checkTimeout              time.Duration
+}
+
+func parseOptions(args []string) (options, error) {
+	var o options
+	f := flag.NewFlagSet("nodeeval", flag.ContinueOnError)
+	f.SetOutput(io.Discard) // An invalid argument may itself contain a secret.
+	f.StringVar(&o.root, "root", "", "new private working directory; must not exist")
+	f.StringVar(&o.store, "store", "", "existing private NodeStore, read only")
+	f.StringVar(&o.preset, "preset", "", "approved feed ID imported only into the new isolated store")
+	f.StringVar(&o.engine, "engine", "sing-box", "sing-box or xray")
+	f.StringVar(&o.binary, "binary", "", "absolute checker runtime path; empty uses discovery")
+	f.IntVar(&o.port, "port", 19291, "one temporary loopback SOCKS port")
+	f.IntVar(&o.limit, "limit", 12, "total VLESS candidates, 1..128")
+	f.DurationVar(&o.duration, "duration", 8*time.Minute, "overall budget, 30s..1h, including cleanup reserve")
+	f.DurationVar(&o.checkTimeout, "check-timeout", 45*time.Second, "per-node budget, 1s..60s")
+	if err := f.Parse(args); err != nil {
+		return o, err
+	}
+	if len(f.Args()) != 0 || o.duration < 30*time.Second || o.duration > time.Hour || o.checkTimeout < time.Second || o.checkTimeout > time.Minute || o.limit < 1 || o.limit > 128 ||
+		!absoluteClean(o.root) || (o.store == "") == (o.preset == "") || (o.engine != "sing-box" && o.engine != "xray") || o.port < 1024 || o.port > 65535-dataplane.MaxExactNodeSlots+1 || o.binary != "" && !absoluteClean(o.binary) {
+		return o, errors.New("arguments")
+	}
+	if o.store != "" && (!absoluteClean(o.store) || pathsOverlap(o.root, o.store)) {
+		return o, errors.New("arguments")
+	}
+	if o.preset != "" {
+		approved := false
+		for _, p := range providerfeed.Builtins() {
+			approved = approved || p.ID == o.preset
+		}
+		if !approved {
+			return o, errors.New("arguments")
+		}
+	}
+	return o, nil
+}
+
+func absoluteClean(path string) bool { return filepath.IsAbs(path) && filepath.Clean(path) == path }
+
+type report struct {
+	Kind       string `json:"kind"`
+	Code       string `json:"code,omitempty"`
+	Engine     string `json:"engine,omitempty"`
+	NodeID     string `json:"node_id,omitempty"`
+	Candidate  int    `json:"candidate,omitempty"`
+	Stage      string `json:"stage,omitempty"`
+	Verdict    string `json:"verdict,omitempty"`
+	HTTPSPass  bool   `json:"https_pass"`
+	Fresh      bool   `json:"fresh"`
+	DirectLeak bool   `json:"direct_leak"`
+	HTTPStatus int    `json:"http_status,omitempty"`
+	Checked    int    `json:"checked,omitempty"`
+	Passed     int    `json:"https_passed,omitempty"`
+	Imported   int    `json:"imported,omitempty"`
+	Total      int    `json:"feed_entries,omitempty"`
+	Rejected   int    `json:"rejected,omitempty"`
+	Finished   bool   `json:"finished"`
+	Scope      string `json:"scope,omitempty"`
+}
+
+const httpsScope = "fresh exact-node Telegram HTTPS by name/IP; no MTProto, account, media, voice, LAN/TUN or Selectable claim"
+
+type checkStore interface {
+	Snapshot(context.Context, time.Time) (nodestore.Snapshot, error)
+	WithSecret(context.Context, string, func([]byte) error) error
+}
+
+type exactChecker interface {
+	dataplane.NodeChecker
+	EngineID() string
+}
+
+func recoverOnce(ctx context.Context, checker exactChecker) error {
+	bounded, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	return checker.Recover(bounded)
+}
+
+func telegramService() catalog.Service {
+	return catalog.Service{ID: "custom-telegram-https", Name: "Telegram HTTPS", Domains: []string{"telegram.org"},
+		Strategy: []string{"auto"}, ProbeURL: "https://telegram.org/"}
+}
+
+// No RecordCheck, Import, restore, history admission or route API exists on this
+// existing-store evaluation interface. Cached health chooses order only.
+func evaluate(ctx, cleanupCtx context.Context, store checkStore, checker exactChecker, freshProfile func(context.Context) (string, error), limit int, out *json.Encoder) int {
+	finish := func(checked, passed int, code string) int {
+		if out.Encode(report{Kind: "summary", Engine: checker.EngineID(), Checked: checked, Passed: passed, Finished: code == "", Code: code, Scope: httpsScope}) != nil {
+			return 1
+		}
+		if code != "" {
+			return 1
+		}
+		if passed == 0 {
+			return 2
+		}
+		return 0
+	}
+	snapshot, err := store.Snapshot(ctx, time.Now())
+	if err != nil {
+		return finish(0, 0, "store-unavailable")
+	}
+	sort.SliceStable(snapshot.Nodes, func(i, j int) bool {
+		return snapshot.Nodes[i].Health.CheckedAt.After(snapshot.Nodes[j].Health.CheckedAt)
+	})
+	checked, passed := 0, 0
+	service := telegramService()
+	for _, node := range snapshot.Nodes {
+		if checked == limit {
+			break
+		}
+		if ctx.Err() != nil {
+			return finish(checked, passed, "deadline-or-canceled")
+		}
+		if node.Disabled || node.Protocol != "VLESS" {
+			continue
+		}
+		profile, err := freshProfile(ctx)
+		if err != nil || ctx.Err() != nil {
+			return finish(checked, passed, "fresh-profile-unavailable")
+		}
+		started := time.Now()
+		var result dataplane.NodeCheckResult
+		called := false
+		err = store.WithSecret(ctx, node.ID, func(material []byte) error {
+			called = true
+			var checkErr error
+			result, checkErr = checker.Check(ctx, dataplane.NodeCheckRequest{NodeID: node.ID, Outbound: material, Service: service, NetworkProfile: profile})
+			return checkErr
+		})
+		if !called {
+			return finish(checked, passed, "secret-unavailable")
+		}
+		checked++
+		finished := time.Now()
+		fresh := result.NodeID == node.ID && result.ServiceID == service.ID && result.NetworkProfile == profile && result.RoutePathID == checker.EngineID()+":"+node.ID &&
+			!result.StartedAt.Before(started) && !result.FinishedAt.Before(result.StartedAt) && !result.FinishedAt.After(finished) && finished.Before(result.ExpiresAt)
+		ok := err == nil && ctx.Err() == nil && fresh && result.Available && result.Verdict == evidence.VerdictPass && result.TestLevel == "service" && result.ErrorCode == "" &&
+			!result.DirectLeak && result.HTTPStatus >= 200 && result.HTTPStatus < 300 && result.Stage != "cleanup"
+		entry := report{Kind: "candidate", Engine: checker.EngineID(), NodeID: safeNodeID(node.ID), Candidate: checked, Stage: safeStage(result.Stage), Verdict: safeVerdict(result.Verdict),
+			Code: safeCheckCode(result.ErrorCode), HTTPSPass: ok, Fresh: fresh, DirectLeak: result.DirectLeak, HTTPStatus: min(max(result.HTTPStatus, 0), 599)}
+		if errors.Is(err, dataplane.ErrExactNodeUnsupported) {
+			entry.Stage, entry.Code, entry.Verdict = "unsupported", "node-profile-unsupported", "INCONCLUSIVE"
+		}
+		if out.Encode(entry) != nil {
+			_ = recoverOnce(cleanupCtx, checker)
+			return 1
+		}
+		// Cleanup failure can be a result with nil error. Never check another
+		// candidate or count a positive response after this acknowledgement gap.
+		if result.Stage == "cleanup" || result.ErrorCode == "node-cleanup-failed" {
+			_ = recoverOnce(cleanupCtx, checker)
+			return finish(checked, passed, "cleanup-unconfirmed")
+		}
+		if err != nil && !errors.Is(err, dataplane.ErrExactNodeUnsupported) {
+			if recoverOnce(cleanupCtx, checker) != nil {
+				return finish(checked, passed, "cleanup-unconfirmed")
+			}
+			return finish(checked, passed, "checker-error")
+		}
+		if ok {
+			passed++
+		}
+	}
+	if recoverOnce(cleanupCtx, checker) != nil {
+		return finish(checked, passed, "cleanup-unconfirmed")
+	}
+	if ctx.Err() != nil {
+		return finish(checked, passed, "deadline-or-canceled")
+	}
+	return finish(checked, passed, "")
 }
 
 func main() {
-	root := flag.String("root", "/opt/tmp/nodeeval", "private working directory")
-	port := flag.Int("port", 19291, "loopback port of the temporary proxy")
-	limit := flag.Int("limit", 30, "candidates per source")
-	sources := flag.String("sources", "", "comma-separated preset:<id> or url:<https URL>")
-	flag.Parse()
-	if err := os.MkdirAll(filepath.Join(*root, "store"), 0o700); err != nil {
-		log.Fatal(err)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := run(ctx, os.Args[1:], os.Stdout)
+	cancel()
+	os.Exit(code)
+}
+
+func run(parent context.Context, args []string, output io.Writer) int {
+	encoder := json.NewEncoder(output)
+	fail := func(code string) int { _ = encoder.Encode(report{Kind: "fatal", Code: code}); return 1 }
+	o, err := parseOptions(args)
+	if errors.Is(err, flag.ErrHelp) {
+		_, _ = io.WriteString(output, "nodeeval -root NEW_PRIVATE_DIR (-store EXISTING_PRIVATE_STORE | -preset APPROVED_ID) [-engine sing-box|xray] [-binary ABS_PATH] [-limit 12] [-duration 8m]\n")
+		return 0
 	}
-	store, err := nodestore.Open(filepath.Join(*root, "store"))
+	if err != nil || parent == nil || parent.Err() != nil {
+		return fail("arguments-or-canceled")
+	}
+	end := time.Now().Add(o.duration)
+	if parentEnd, ok := parent.Deadline(); ok && parentEnd.Before(end) {
+		end = parentEnd
+	}
+	workCtx, cancel := context.WithDeadline(parent, end.Add(-cleanupReserve))
+	defer cancel()
+	// Cleanup may detach cancellation, but retains the same finite overall end.
+	cleanupCtx, cleanupCancel := context.WithDeadline(context.WithoutCancel(parent), end)
+	defer cleanupCancel()
+	if workCtx.Err() != nil {
+		return fail("deadline-or-canceled")
+	}
+	if o.store != "" && !separatedExistingStore(o.root, o.store) {
+		return fail("store-workspace-overlap-or-unavailable")
+	}
+	w, err := newWorkspace(o.root)
 	if err != nil {
-		log.Fatal(err)
+		return fail("workspace-unavailable")
+	}
+	defer w.Close()
+	file, err := w.reportFile()
+	if err != nil {
+		return fail("report-unavailable")
+	}
+	defer file.Close()
+	encoder = json.NewEncoder(io.MultiWriter(output, file))
+	var store *nodestore.Store
+	if o.preset != "" {
+		store, err = w.createStore()
+	} else {
+		store, err = nodestore.Open(o.store)
+	}
+	if err != nil {
+		return fail("store-unavailable-or-busy")
 	}
 	defer store.Close()
-	feeds := providerfeed.New(store)
-	checker := dataplane.NewExactNodeChecker(filepath.Join(*root, "checker"))
-	checker.Port = *port
-	ctx := context.Background()
-	profile, err := checker.FreshProfile(ctx)
-	if err != nil {
-		log.Fatal("network profile: ", err)
-	}
-	service := catalog.Service{ID: "custom-telegram-networks", Name: "Telegram", Domains: []string{"telegram.org", "t.me", "telegram.me"},
-		CIDRs:    []string{"149.154.160.0/20", "91.108.4.0/22", "91.108.8.0/21", "91.108.16.0/21", "91.108.56.0/22", "95.161.64.0/20", "185.76.151.0/24"},
-		Strategy: []string{"auto"}, ProbeURL: "https://telegram.org/"}
-	out, err := os.OpenFile(filepath.Join(*root, "results.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer out.Close()
-	type tally struct{ total, connected, internet, service int }
-	summary := map[string]*tally{}
-	order := []string{}
-	for _, spec := range strings.Split(*sources, ",") {
-		spec = strings.TrimSpace(spec)
-		if spec == "" {
-			continue
+	if o.preset != "" {
+		admit, err := w.historyAdmission(workCtx)
+		if err != nil {
+			return fail("isolated-history-admission")
 		}
-		request := providerfeed.Request{Limit: *limit, AcceptPartial: true}
-		name := spec
-		switch {
-		case strings.HasPrefix(spec, "preset:"):
-			request.PresetID = strings.TrimPrefix(spec, "preset:")
-		case strings.HasPrefix(spec, "url:"):
-			request.URL, request.Format = strings.TrimPrefix(spec, "url:"), "uri-lines"
-			name = request.URL[strings.LastIndex(request.URL, "/")+1:]
-		default:
-			log.Fatal("unknown source ", spec)
-		}
-		var result providerfeed.Result
-		var err error
-		for attempt := 0; attempt < 4; attempt++ {
-			if result, err = feeds.Sync(ctx, request); err == nil {
-				break
-			}
-			time.Sleep(5 * time.Second)
+		feed := providerfeed.New(store)
+		feed.HistoryWriteAdmission = admit
+		result, err := feed.Sync(workCtx, providerfeed.Request{PresetID: o.preset, Limit: o.limit, AcceptPartial: true})
+		if encoder.Encode(report{Kind: "feed", Imported: result.Imported, Total: result.TotalEntries, Rejected: result.Rejected, Code: providerfeed.ErrorCode(err)}) != nil {
+			return 1
 		}
 		if err != nil {
-			log.Printf("%s: fetch failed: %v (%s)", name, err, providerfeed.ErrorCode(err))
-			continue
+			return fail("feed-sync-refused")
 		}
-		t := &tally{}
-		summary[name] = t
-		order = append(order, name)
-		snapshot, err := store.Snapshot(ctx, time.Now())
-		if err != nil {
-			log.Fatal(err)
-		}
-		protocols := map[string][2]string{}
-		for _, n := range snapshot.Nodes {
-			protocols[n.ID] = [2]string{n.Protocol, n.Transport}
-		}
-		log.Printf("%s: %d candidates (total %d, rejected %d)", name, len(result.NodeIDs), result.TotalEntries, result.Rejected)
-		for _, id := range result.NodeIDs {
-			started := time.Now()
-			// The network epoch may change between checks; each check binds
-			// to the epoch observed right before it.
-			if fresh, err := checker.FreshProfile(ctx); err == nil {
-				profile = fresh
-			}
-			var check dataplane.NodeCheckResult
-			err := store.WithSecret(ctx, id, func(material []byte) error {
-				var checkErr error
-				check, checkErr = checker.Check(ctx, dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: service, NetworkProfile: profile})
-				return checkErr
-			})
-			if err != nil {
-				check.ErrorCode = "check-error"
-				log.Printf("%s %s: %v", name, id[5:17], err)
-				// A failed cleanup fences the checker until its recovery ran.
-				if recoverErr := checker.Recover(ctx); recoverErr != nil {
-					log.Printf("recover: %v", recoverErr)
-				}
-			}
-			entry := line{Source: name, Node: id[5:17], Protocol: protocols[id][0], Transport: protocols[id][1], Stage: check.Stage, Verdict: string(check.Verdict),
-				Available: check.Available, Code: check.ErrorCode, LatencyMS: check.LatencyMS, Seconds: int64(time.Since(started).Seconds()), Stages: map[string]int64{}}
-			for _, stage := range check.Stages {
-				entry.Stages[stage.ID] += stage.Duration
-			}
-			data, _ := json.Marshal(entry)
-			_, _ = out.Write(append(data, '\n'))
-			t.total++
-			switch {
-			case check.Available:
-				t.connected++
-				t.internet++
-				t.service++
-			case check.ErrorCode == "node-transport-failed" || check.ErrorCode == "node-runtime-config-rejected" || check.ErrorCode == "check-error":
-			case check.ErrorCode == "node-egress-failed":
-				t.connected++
-			default:
-				t.connected++
-				t.internet++
-			}
-		}
-		log.Printf("%s: checked %d, connected %d, internet %d, Telegram %d", name, t.total, t.connected, t.internet, t.service)
 	}
-	sort.SliceStable(order, func(i, j int) bool {
-		a, b := summary[order[i]], summary[order[j]]
-		return a.service*b.total > b.service*a.total
-	})
-	fmt.Println("source\tchecked\tconnected\tinternet\ttelegram")
-	for _, name := range order {
-		t := summary[name]
-		fmt.Printf("%s\t%d\t%d\t%d\t%d\n", name, t.total, t.connected, t.internet, t.service)
+	checkerRoot := filepath.Join(o.root, "checker")
+	checker := dataplane.NewExactNodeChecker(checkerRoot)
+	if o.engine == "xray" {
+		checker = dataplane.NewExactXrayNodeCheckerSlots(checkerRoot, 1)
 	}
+	checker.Port, checker.Timeout = o.port, o.checkTimeout
+	checker.Binary = o.binary
+	return evaluate(workCtx, cleanupCtx, store, checker, checker.FreshProfile, o.limit, encoder)
 }
