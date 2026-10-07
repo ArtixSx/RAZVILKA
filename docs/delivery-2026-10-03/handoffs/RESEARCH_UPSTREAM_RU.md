@@ -14,6 +14,8 @@ Production verifier D03: [RESEARCH_XRAY_PRODUCTION_VERIFIER_RU.md](RESEARCH_XRAY
 
 Подготовка storage для managed NFQWS: [RESEARCH_ENTWARE_STORAGE_PREFLIGHT_RU.md](RESEARCH_ENTWARE_STORAGE_PREFLIGHT_RU.md) — почему /opt UID1001/0755 блокируется, официальный EXT/SMB/UBIFS контракт и bounded read-only диагностика для OPS. Single-inode UID preparation лишь после доказанных mount/share facts и отдельной авторизации; recursive chown/remount/guard exceptions не предлагаются.
 
+Checkpoint Netcraze ARM64 07.10: [RESEARCH_NETCRAZE_ACCEPTANCE_CHECKPOINT_RU.md](RESEARCH_NETCRAZE_ACCEPTANCE_CHECKPOINT_RU.md) — UID-only подготовка inode `/opt`, SMB data/permissions и conditional rollback; pinned vendor kernel/SDK, registered tables и NFT/build evidence, точный следующий read-only metadata/proc capture для ROOT. Reader3e94 сохраняет RegisteredTablesComplete=false; source evidence не объявляется native PASS.
+
 Actual TCP capture→Go→node: [RESEARCH_LAN_TCP_CAPTURE_RU.md](RESEARCH_LAN_TCP_CAPTURE_RU.md) — сравнение stock sing-box1.14.2/Xray и минимального TUN stack API, конкретный tun2socks/core candidate с original tuple, single physical capture class, frozen per-node inbound и Stop/DNS/ABI границами. Source audit и implementation proposal; dependencies/runtime не менялись. Межчатовая отправка отклонена auto-review и требует прямого разрешения пользователя.
 
 Независимый OPS review `b1f34a9`: [RESEARCH_OPS_STOPPED_REVIEW_RU.md](RESEARCH_OPS_STOPPED_REVIEW_RU.md) — matching Stop, exact old images, retained readers, ECHILD и stopped terminal publication. Один P2: private file metadata drift при unchanged bytes не проверяется terminal consumer. Native/VM/router не запускались; ordinary Prepare compatibility WIP исключён из этого аудита.
