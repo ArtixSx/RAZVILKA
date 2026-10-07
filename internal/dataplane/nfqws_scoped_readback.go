@@ -55,55 +55,8 @@ func nfqwsScopedPreparedCurrent(ctx context.Context, b *NFQWSScopedBinding, p *N
 // iptables -S quotes match arguments. Interpret quotes without shell expansion;
 // Fields alone could mistake a quoted comment for an actual NFQUEUE target.
 func nfqwsScopedTokens(line string) ([]string, error) {
-	if len(line) > 16384 || !utf8.ValidString(line) || strings.ContainsAny(line, "\x00\r") {
-		return nil, ErrNFQWSScopedOwner
-	}
-	var out []string
-	var token strings.Builder
-	quote, escape, started := rune(0), false, false
-	for _, c := range line {
-		if escape {
-			token.WriteRune(c)
-			escape = false
-			continue
-		}
-		if c == '\\' && quote != '\'' {
-			escape, started = true, true
-			continue
-		}
-		if quote != 0 {
-			if c == quote {
-				quote = 0
-			} else {
-				token.WriteRune(c)
-			}
-			continue
-		}
-		if c == '\'' || c == '"' {
-			quote, started = c, true
-			continue
-		}
-		if c == ' ' || c == '\t' {
-			if started {
-				out = append(out, token.String())
-				token.Reset()
-				started = false
-			}
-			continue
-		}
-		if c < 32 || c == 127 {
-			return nil, ErrNFQWSScopedOwner
-		}
-		started = true
-		token.WriteRune(c)
-	}
-	if escape || quote != 0 {
-		return nil, ErrNFQWSScopedOwner
-	}
-	if started {
-		out = append(out, token.String())
-	}
-	if len(out) == 0 || len(out) > 128 {
+	out, err := backendXTablesTokens(line)
+	if err != nil {
 		return nil, ErrNFQWSScopedOwner
 	}
 	return out, nil
@@ -131,8 +84,8 @@ func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) 
 				if strings.TrimSpace(line) == "" {
 					continue
 				}
-				fields, err := nfqwsScopedTokens(line)
-				if err != nil || len(fields) < 2 || fields[0] != "-A" && fields[0] != "-N" && fields[0] != "-P" || fields[0] == "-N" && len(fields) != 2 || fields[0] == "-P" && len(fields) != 3 || fields[0] == "-A" && len(fields) < 4 {
+				fields, err := backendXTablesRowTokens(line)
+				if err != nil {
 					return nil, ErrNFQWSScopedOwner
 				}
 				result[tool][table] = append(result[tool][table], fields)
