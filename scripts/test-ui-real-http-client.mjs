@@ -1,6 +1,6 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
-import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis} from './test-ui-real-http-browser.mjs';
+import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
   RAZVILKA_QA_UI_INSTANCE:instance,RAZVILKA_QA_UI_CHROME:'installed-chrome',RAZVILKA_QA_UI_SESSION:'private-session.json'};
@@ -25,6 +25,14 @@ reject(()=>realHTTPSettings({...env,RAZVILKA_QA_UI_SETUP_TOKEN:'private-token'},
 check(()=>assert.equal(realHTTPSettings({...env,RAZVILKA_QA_UI_SESSION:undefined,RAZVILKA_QA_UI_USERNAME:'qa',RAZVILKA_QA_UI_PASSWORD:'private'}).session,null));
 check(()=>assert.equal(realHTTPSettings({...env,RAZVILKA_QA_UI_SESSION:undefined,RAZVILKA_QA_UI_USERNAME:'qa',RAZVILKA_QA_UI_PASSWORD:'private',RAZVILKA_QA_UI_SETUP_TOKEN:'private-token'},['--setup-account']).setupAccount,true));
 const envelope={schema:1,instance_id:instance,state:'available',dataplane:'not-checked',data_age_ms:10,max_age_seconds:300};
+check(()=>assert.deepEqual(realHTTPIdentityFacts({...envelope,data_age_ms:453,max_age_seconds:900,
+  admission:{state:'idle',exclusive:false,fenced:false},data:{private_profile:'private URI'},headers:{Authorization:'private token'}},instance),
+  {schema_valid:true,instance_matches:true,state:'available',dataplane_valid:true,data_age_ms:453,max_age_seconds:900,
+    age_valid:true,within_age_limit:true,admission_state:'idle',admission_exclusive:false,admission_fenced:false}));
+check(()=>assert.deepEqual(realHTTPIdentityFacts({schema:'private',instance_id:'private token',state:'private URI',dataplane:'private',
+  data_age_ms:'private age',max_age_seconds:{secret:'private'},admission:{state:'private operation label',exclusive:'private',fenced:{secret:'private'}}},instance),
+  {schema_valid:false,instance_matches:false,state:'unknown',dataplane_valid:false,data_age_ms:null,max_age_seconds:null,
+    age_valid:false,within_age_limit:false,admission_state:null,admission_exclusive:null,admission_fenced:null}));
 const fixture=()=>({snapshot:structuredClone(envelope),inventory:{...structuredClone(envelope),data:{system:{opt_ready:true,kernel:'6.1-qa'}}},
   status:{safe_mode:true,live_active:false,revision:1},services:[{enabled:false,applied_state:{enabled:false}}],nodes:{nodes:[],groups:[]},
   autonomy:{policy:{revision:1,check_seconds:120,reserve_seconds:600,setup_complete:true,enabled:false,inherit_new_services:false,application:{mode:'off'},components:{mode:'off'}}},recovery:{recovery_required:false}});

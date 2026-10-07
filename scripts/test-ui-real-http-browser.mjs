@@ -52,6 +52,18 @@ export function realHTTPIdentity(value,instance) {
     &&Number.isFinite(value.data_age_ms)&&value.data_age_ms>=0&&Number.isFinite(value.max_age_seconds)&&value.max_age_seconds>0
     &&value.data_age_ms<Math.min(value.max_age_seconds*1000,120000),'QA_INSTANCE_MISMATCH_OR_STALE');
 }
+export function realHTTPIdentityFacts(value,instance) {
+  const age=value?.data_age_ms,limit=value?.max_age_seconds;
+  const ageValid=Number.isFinite(age)&&age>=0&&Number.isFinite(limit)&&limit>0;
+  const admission=value?.admission;
+  return {schema_valid:value?.schema===1,instance_matches:value?.instance_id===instance,
+    state:['empty','available','retained','expired'].includes(value?.state)?value.state:'unknown',
+    dataplane_valid:value?.dataplane==='not-checked',data_age_ms:Number.isFinite(age)?age:null,max_age_seconds:Number.isFinite(limit)?limit:null,
+    age_valid:ageValid,within_age_limit:ageValid&&age<Math.min(limit*1000,120000),
+    admission_state:['idle','shared','busy','recovery-required'].includes(admission?.state)?admission.state:null,
+    admission_exclusive:typeof admission?.exclusive==='boolean'?admission.exclusive:null,
+    admission_fenced:typeof admission?.fenced==='boolean'?admission.fenced:null};
+}
 export function realHTTPPrivateFixture({snapshot,inventory,status,services,nodes,recovery},instance) {
   realHTTPIdentity(snapshot,instance);realHTTPIdentity(inventory,instance);
   realHTTPAssert(inventory.data?.system?.opt_ready===true&&typeof inventory.data.system.kernel==='string'&&inventory.data.system.kernel.length>0,'QA_OPT_INVENTORY_REQUIRED');
@@ -77,7 +89,7 @@ export async function runRealHTTPUI(config) {
   const parent=config.output||join(fileURLToPath(new URL('../',import.meta.url)),'.review-local');mkdirSync(parent,{recursive:true});
   const directory=mkdtempSync(join(parent,'ui-linux-real-'));
   const report={boundary:'actual HTTP/browser to supplied coordinator-owned Linux QA; no native probe or Apply',mode:config.draftMutations?'draft-mutations':'read-only',
-    account_setup:config.setupAccount===true,policy_setup:config.preparePolicy===true,status:'running',steps:[],requests:[],browser_errors:0,cleanup_required:false};
+    account_setup:config.setupAccount===true,policy_setup:config.preparePolicy===true,status:'running',steps:[],requests:[],identity_checks:[],browser_errors:0,cleanup_required:false};
   let browser,context,page,stage='launch',fixtureVerified=false;
   const browserRequests=[],records=new WeakMap();
   const recordResponse=async(response,path,method,source)=>{
@@ -87,7 +99,12 @@ export async function runRealHTTPUI(config) {
   const readJSON=async(path,headers={})=>{
     realHTTPAssert(/^\/api\/v1\/[a-z0-9/-]+$/.test(path),'INVALID_READ_PATH');
     const response=await context.request.get(config.origin+path,{headers,maxRedirects:0,maxRetries:0,timeout:30000});
-    const receipt=await recordResponse(response,path,'GET','verification');realHTTPAssert(response.status()===200,'HTTP_READ_REJECTED');return receipt;
+    const receipt=await recordResponse(response,path,'GET','verification');
+    if(['/api/v1/panel/snapshot','/api/v1/panel/inventory'].includes(path)){
+      report.identity_checks.push({path,...realHTTPIdentityFacts(receipt,config.instance)});
+      if(report.identity_checks.length>64)report.identity_checks.shift();
+    }
+    realHTTPAssert(response.status()===200,'HTTP_READ_REJECTED');return receipt;
   };
   const checkIdentity=async()=>realHTTPIdentity(await readJSON('/api/v1/panel/snapshot'),config.instance);
   const beforeMutation=async()=>{
