@@ -89,6 +89,9 @@ func (s *executionResourceScope) issueNFQWS(ctx context.Context, spec NFQWSScope
 	if err := s.check(ctx, nil, true); err != nil {
 		return nil, err
 	}
+	if (s.networkIdentity != nil) != (spec.NetworkIdentity != nil) {
+		return nil, ErrNetworkPolicyIdentity
+	}
 	if s.networkIdentity != nil {
 		if err := nfqwsExecutionNetworkMatches(s.networkIdentity.value, spec); err != nil {
 			return nil, err
@@ -160,6 +163,9 @@ func (r *NFQWSExecutionResource) matching(binding NFQWSExecutionBinding) (int, e
 			}
 			identity := r.scope.networkIdentity
 			if identity == nil && recorded.NFQWS.NetworkIdentity != nil || identity != nil && (recorded.NFQWS.NetworkIdentity == nil || *recorded.NFQWS.NetworkIdentity != identity.value) {
+				return -1, ErrNFQWSScopedOwner
+			}
+			if identity == nil && recorded.NFQWS.Spec.NetworkIdentity != nil || identity != nil && nfqwsExecutionNetworkMatches(identity.value, recorded.NFQWS.Spec) != nil {
 				return -1, ErrNFQWSScopedOwner
 			}
 			switch recorded.Phase {

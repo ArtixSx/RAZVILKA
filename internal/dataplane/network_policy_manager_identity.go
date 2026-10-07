@@ -3,7 +3,6 @@ package dataplane
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
@@ -177,11 +176,12 @@ func (m *Manager) executionNetworkIdentity() *networkPolicyIdentity {
 	return gate.identity
 }
 
-// The current NFQ compiler supports the proc inode variant only. In particular
-// a missing old string can NEVER manufacture the reviewed singleton variant.
-// Typed singleton NFQ intent requires the NFQ owner's separate Spec phase.
+// Typed Manager resources require the SAME full typed compiler identity.
+// The owner's validator independently cross-checks proc's canonical old field;
+// reviewed singleton requires that field empty. Neither old strings nor saved
+// identity metadata issue a provider, a resource or launch authority.
 func nfqwsExecutionNetworkMatches(identity netidentity.Identity, spec NFQWSScopedSpec) error {
-	if identity.Validate() != nil || identity.Kind != netidentity.ProcNetInode || spec.BootID != identity.BootID || spec.NetNamespace != fmt.Sprintf("net:[%d]", identity.Inode) {
+	if identity.Validate() != nil || spec.NetworkIdentity == nil || *spec.NetworkIdentity != identity || !nfqwsScopedSpecNetworkValid(spec) {
 		return ErrNetworkPolicyIdentity
 	}
 	return nil

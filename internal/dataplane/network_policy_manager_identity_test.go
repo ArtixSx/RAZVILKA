@@ -175,7 +175,7 @@ func TestNetworkPolicyManagerIdentityNFQJournalWireAndDefensiveCopy(t *testing.T
 	execution := executionNFQWSResourceFixture(t, "removed")
 	execution.Resources[0].State = "removed"
 	execution.State, execution.FinishedAt = "committed", execution.StartedAt
-	execution.Resources[0].NFQWS.NetworkIdentity = &identity.value
+	bindNetworkPolicyTypedExecutionFixture(t, &execution, identity.value)
 	manager := New(privateScopedXrayFixtureDir(t))
 	root := filepath.Join(manager.StateRoot, "transactions", execution.PlanID)
 	if err := os.MkdirAll(root, 0700); err != nil {
@@ -205,6 +205,7 @@ func TestNetworkPolicyManagerIdentityIssuerRetainsProofAndRefusesLateDrift(t *te
 		t.Run(fault, func(t *testing.T) {
 			f := executionNFQWSManagerFixture(t)
 			identity, current := networkPolicyIdentityFixture()
+			f.spec.NetworkIdentity = &identity.value
 			binding, _, _ := lanReceiptBindingFixture(t)
 			gate, err := newNetworkPolicyIdentityAdapter(NetworkPolicyAssemblyOptions{Binding: binding, InventoryCheck: func(context.Context, netidentity.Identity, *LANPolicyRuntimePlan) error { return nil }}, identity)
 			if err != nil || f.m.Register(gate) != nil {

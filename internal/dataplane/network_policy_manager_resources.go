@@ -43,7 +43,7 @@ func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource 
 		if result[i].NFQWS != nil {
 			definition := *result[i].NFQWS
 			definition.Plan = cloneExecutionResourcePlan(definition.Plan)
-			definition.Spec.Candidate.Traffic = slices.Clone(definition.Spec.Candidate.Traffic)
+			definition.Spec = definition.Spec.Clone()
 			if definition.NetworkIdentity != nil {
 				identity := *definition.NetworkIdentity
 				definition.NetworkIdentity = &identity
@@ -99,6 +99,8 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 				if err := nfqwsExecutionNetworkMatches(*resource.NFQWS.NetworkIdentity, resource.NFQWS.Spec); err != nil {
 					return errors.Join(ErrExecutionJournal, err)
 				}
+			} else if resource.NFQWS.Spec.NetworkIdentity != nil {
+				return ErrExecutionJournal
 			}
 			plan, err := CompileNFQWSScopedPlan(resource.NFQWS.Plan, resource.NFQWS.Spec)
 			if err != nil || plan.Resources().Generation != resource.Generation || plan.Digest() != resource.EffectsDigest {

@@ -167,7 +167,7 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 
 func executionHasNetworkIdentity(execution Execution) bool {
 	for _, resource := range execution.Resources {
-		if resource.NFQWS != nil && resource.NFQWS.NetworkIdentity != nil {
+		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {
 			return true
 		}
 	}
