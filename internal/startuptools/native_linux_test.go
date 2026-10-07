@@ -27,22 +27,14 @@ func TestProductionStartupToolsNative(t *testing.T) {
 	lifetime, lifetimeCancel := context.WithCancel(context.Background())
 	defer lifetimeCancel()
 	setup, setupCancel := context.WithTimeout(lifetime, operationTimeout)
-	provider := netidentity.NewProcProvider()
-	var err error
-	if mode == "stock-nc1812" {
-		provider, err = netidentity.NewReviewedStockNC1812Provider(setup)
-	} else if mode != "ubuntu-legacy" {
-		t.Fatal("unreviewed native profile")
-	}
+	provider := nativeProvider(t, setup, mode)
 	setupCancel()
-	if err != nil {
-		t.Fatal("stock provider refused: stages=", nativeStages(err))
-	}
 	// Deliberate inherited poison: it must not reach a production child.
 	t.Setenv("LD_PRELOAD", "/unreviewed-startup-tools-preload.so")
 	t.Setenv("LD_LIBRARY_PATH", "/unreviewed-startup-tools-libraries")
 	t.Setenv("XTABLES_LIBDIR", "/unreviewed-startup-tools-extensions")
 	var lease *Lease
+	var err error
 	started := time.Now()
 	if mode == "stock-nc1812" {
 		lease, err = AcquireReviewedStockNC1812(lifetime, provider)
@@ -84,6 +76,24 @@ func TestProductionStartupToolsNative(t *testing.T) {
 	if _, err := inventory.Read(read, lease.identity); err == nil {
 		t.Fatal("collector issued evidence after tool lease close")
 	}
+}
+
+func nativeProvider(t *testing.T, ctx context.Context, mode string) *netidentity.Provider {
+	t.Helper()
+	if os.Geteuid() != 0 {
+		t.Fatal("native startup tools require root")
+	}
+	if mode == "ubuntu-legacy" {
+		return netidentity.NewProcProvider()
+	}
+	if mode != "stock-nc1812" {
+		t.Fatal("unreviewed native profile")
+	}
+	provider, err := netidentity.NewReviewedStockNC1812Provider(ctx)
+	if err != nil {
+		t.Fatal("stock provider refused: stages=", nativeStages(err))
+	}
+	return provider
 }
 
 func nativeStages(err error) string {

@@ -13,7 +13,8 @@ import (
 )
 
 func (l *Lease) execute(ctx context.Context, index, limit int, args ...string) ([]byte, error) {
-	if index < 0 || index >= len(l.profile.aliases) || l.review == nil || l.review.entry[index] == nil || limit <= 0 || limit > maxOutputBytes || ctx.Err() != nil || l.closed.Load() || l.lifetime.Err() != nil {
+	name, image := l.commandImage(index)
+	if name == "" || image == nil || limit <= 0 || limit > maxOutputBytes || ctx.Err() != nil || l.closed.Load() || l.lifetime.Err() != nil {
 		return nil, at("COMMAND_SCOPE", nil)
 	}
 	if err := l.review.unchanged(ctx); err != nil {
@@ -23,10 +24,10 @@ func (l *Lease) execute(ctx context.Context, index, limit int, args ...string) (
 	defer cancel()
 	stdout, stderr := &output{limit: limit, cancel: cancel}, &output{limit: min(limit, 4096), cancel: cancel}
 	command := exec.CommandContext(c, "/proc/self/fd/3", args...)
-	// The genuine immutable xtables-multi descriptor is exec'd, while argv[0]
-	// preserves the reviewed family/legacy alias required by multi dispatch.
-	command.Args[0] = l.profile.aliases[index]
-	command.ExtraFiles = []*os.File{l.review.entry[index].file}
+	// Execute the genuine held entry fd. argv[0] preserves its fixed alias,
+	// including the xtables family/legacy selection required by multicall.
+	command.Args[0] = name
+	command.ExtraFiles = []*os.File{image.file}
 	command.Env = l.profile.environment()
 	command.Dir = "/"
 	command.Stdout, command.Stderr = stdout, stderr
@@ -38,6 +39,27 @@ func (l *Lease) execute(ctx context.Context, index, limit int, args ...string) (
 		return nil, err
 	}
 	return stdout.data, nil
+}
+
+func (l *Lease) commandImage(index int) (string, *heldImage) {
+	if l.review == nil {
+		return "", nil
+	}
+	if index >= 0 && index < len(l.profile.aliases) {
+		return l.profile.aliases[index], l.review.entry[index]
+	}
+	if index == 2 && l.profile.ipAlias != "" {
+		return l.profile.ipAlias, l.review.ipEntry
+	}
+	return "", nil
+}
+
+func (l *Lease) ipVersion(ctx context.Context) error {
+	data, err := l.execute(ctx, 2, 256, "-Version")
+	if err != nil || string(data) != l.profile.ipVersion {
+		return at("IP_VERSION", err)
+	}
+	return ctx.Err()
 }
 
 func (l *Lease) version(ctx context.Context, index int) error {

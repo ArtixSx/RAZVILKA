@@ -40,6 +40,11 @@ func acquire(ctx context.Context, provider *netidentity.Provider, p profile) (*L
 				return err
 			}
 		}
+		if p.ipAlias != "" {
+			if err := l.ipVersion(held); err != nil {
+				return err
+			}
+		}
 		return held.Err()
 	})
 	if err == nil {
@@ -288,6 +293,17 @@ func (r *heldReview) capture(ctx context.Context) error {
 			return at("BACKEND_PIN", err)
 		}
 	}
+	if r.profile.ipAlias != "" {
+		main, err := r.resolve(r.profile.ipMain)
+		if err != nil {
+			return at("IP_MAIN_PATH", err)
+		}
+		image, err := r.image(ctx, r.profile.ipAlias, entryRole)
+		if err != nil || image.path != main || hex.EncodeToString(image.hash[:]) != r.profile.ipSHA {
+			return at("IP_MAIN_PIN", err)
+		}
+		r.ipEntry = image
+	}
 	canonical, err := r.resolve(r.profile.extension)
 	if err != nil || !r.nodes[canonical].info.IsDir() {
 		return at("EXTENSION_DIRECTORY", err)
@@ -429,6 +445,11 @@ func (l *Lease) current(ctx context.Context, expected netidentity.Identity, vers
 		if versions {
 			for i := range l.profile.aliases {
 				if err := l.version(held, i); err != nil {
+					return err
+				}
+			}
+			if l.profile.ipAlias != "" {
+				if err := l.ipVersion(held); err != nil {
 					return err
 				}
 			}

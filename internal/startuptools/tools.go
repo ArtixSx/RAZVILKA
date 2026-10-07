@@ -5,6 +5,7 @@ package startuptools
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,7 +38,7 @@ func at(stage string, err error) error {
 // Lease has no caller-supplied paths, runner, hashes, filesystem or profile.
 // Its factory context is its lifetime; use a service lifetime context, not a
 // short acquisition-only context. Acquisition and each read are internally
-// capped. Close cancels in-flight reads before releasing held descriptors.
+// capped. Close cancels and joins reads/effects before releasing descriptors.
 type Lease struct {
 	provider  *netidentity.Provider
 	identity  netidentity.Identity
@@ -50,6 +51,8 @@ type Lease struct {
 	closeDone chan struct{}
 	closeErr  error
 	closed    atomic.Bool
+	retainMu  sync.Mutex
+	retained  sync.WaitGroup
 }
 
 // AcquireUbuntuLegacy selects only the reviewed Ubuntu AMD64 1.8.11 legacy
@@ -160,6 +163,11 @@ func (l *Lease) Close() error {
 	if l.cancel != nil {
 		l.cancel()
 	}
+	// Join retain's closed check and Add before Wait. External admission may
+	// reenter Check, so it retains lifetime without holding the command gate.
+	l.retainMu.Lock()
+	l.retainMu.Unlock()
+	l.retained.Wait()
 	if l.gate == nil {
 		return nil
 	}
@@ -171,4 +179,17 @@ func (l *Lease) Close() error {
 	l.closeErr = l.review.close()
 	l.review = nil
 	return l.closeErr
+}
+
+func (l *Lease) retain(ctx context.Context) error {
+	if l == nil || ctx == nil {
+		return at("LIFETIME", nil)
+	}
+	l.retainMu.Lock()
+	defer l.retainMu.Unlock()
+	if ctx.Err() != nil || l.lifetime == nil || l.lifetime.Err() != nil || l.closed.Load() || l.gate == nil {
+		return at("LIFETIME", nil)
+	}
+	l.retained.Add(1)
+	return nil
 }

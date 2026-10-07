@@ -9,6 +9,26 @@ type profile struct {
 	libraries                  []string
 	pins                       map[string][]string
 	stock                      bool
+	ipAlias, ipMain, ipSHA     string
+	ipVersion                  string
+}
+
+func ubuntuPolicyProfile() profile {
+	p := ubuntuProfile()
+	p.id = "ubuntu-amd64-legacy-1.8.11-ip-6.19.0-policy-v1"
+	p.ipAlias, p.ipMain = "/usr/sbin/ip", "/usr/bin/ip"
+	p.ipSHA = "2829deca72cff655d6d1290646abb9cc829da2e2db615eec8bc0ccd283acf3a7"
+	p.ipVersion = "ip utility, iproute2-6.19.0, libbpf 1.6.3\n"
+	return p
+}
+
+func stockPolicyProfile() profile {
+	p := stockProfile()
+	p.id = "stock-nc1812-arm64-iptables-1.4.21-ip-4.4.0-policy-v1"
+	p.ipAlias, p.ipMain = "/opt/sbin/ip", "/opt/libexec/ip-full"
+	p.ipSHA = "cce8d3fafdf0c1393878adb53e596c16788b37f8ecdd0d0ac25c4a751b0b7b88"
+	p.ipVersion = "ip utility, iproute2-ss4.4.0-11-entware\n"
+	return p
 }
 
 func ubuntuProfile() profile {

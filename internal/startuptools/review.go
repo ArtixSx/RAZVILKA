@@ -31,6 +31,7 @@ type heldReview struct {
 	directories []string
 	extensions  []string
 	entry       [2]*heldImage
+	ipEntry     *heldImage
 	bytes       int64
 	edges       int
 }
@@ -102,12 +103,13 @@ func (r *heldReview) digest() (string, error) {
 		Schema      int
 		Profile     string
 		Aliases     [2]string
+		IPAlias     string `json:",omitempty"`
 		Environment []string
 		Images      []imageBinding
 		Nodes       []nodeBinding
 		Absent      []string
 		Extensions  []string
-	}{1, r.profile.id, r.profile.aliases, r.profile.environment(), images, nodes, sortedKeys(r.absent), r.extensions})
+	}{1, r.profile.id, r.profile.aliases, r.profile.ipAlias, r.profile.environment(), images, nodes, sortedKeys(r.absent), r.extensions})
 	if err != nil || len(raw) > 1<<20 {
 		return "", at("REVIEW_DIGEST", err)
 	}

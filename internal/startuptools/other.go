@@ -17,3 +17,7 @@ func (*Lease) current(context.Context, netidentity.Identity, bool) error {
 func (*Lease) RunBounded(context.Context, string, int, ...string) ([]byte, error) {
 	return nil, at("READ_PLATFORM", nil)
 }
+
+func (*Lease) runPolicy(context.Context, string, ...string) ([]byte, error) {
+	return nil, at("POLICY_PLATFORM", nil)
+}
