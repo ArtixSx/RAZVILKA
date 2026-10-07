@@ -19,6 +19,7 @@ type scopedDNSInactiveProof struct {
 	procRoot       string
 	netRoot        string
 	threadNetRoot  func() string
+	stage          *string // private ROOT dependency QA: fixed labels only, no callback
 	selfPID        int
 	readlink       func(string) (string, error)
 	sameExecutable func(string, string) (bool, error)

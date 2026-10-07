@@ -14,6 +14,12 @@ import (
 // DNS serves in the controller process. Other controller incarnations cannot
 // be cleared by this process's lifecycle accounting, even with a missing owner.
 func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, settings string, ports map[uint16]bool) error {
+	mark := func(label string) {
+		if p.stage != nil {
+			*p.stage = label
+		}
+	}
+	mark("proc.thread-net-path")
 	netRoot := p.netRoot
 	if p.threadNetRoot != nil {
 		netRoot = p.threadNetRoot()
@@ -21,11 +27,13 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 	if p.readlink == nil || p.sameExecutable == nil || p.selfPID < 1 || !scopedDNSInactivePath(netRoot) {
 		return ErrScopedDNSRuntimeInactive
 	}
+	mark("proc.self-exe")
 	selfExe, err := p.readlink(filepath.Join(p.procRoot, strconv.Itoa(p.selfPID), "exe"))
 	if err != nil || selfExe == "" {
 		return ErrScopedDNSRuntimeInactive
 	}
 	selfName := filepath.Base(strings.TrimSuffix(selfExe, " (deleted)"))
+	mark("proc.enumerate")
 	dir, err := os.Open(p.procRoot)
 	if err != nil {
 		return err
@@ -37,6 +45,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 	}
 	self, count, size := false, 0, 0
 	for _, entry := range entries {
+		mark("proc.pid-shape")
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -52,6 +61,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		gone := func(err error) bool {
 			return pid != p.selfPID && errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path)
 		}
+		mark("proc.stat-read")
 		stat, err := readProxyInactiveProc(filepath.Join(path, "stat"), 16<<10)
 		if gone(err) {
 			continue
@@ -59,6 +69,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		if err != nil {
 			return err
 		}
+		mark("proc.stat-decode")
 		state, flags, ticks, err := proxyInactiveProcStat(stat, pid)
 		if err != nil {
 			return err
@@ -69,6 +80,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 			}
 			continue
 		}
+		mark("proc.cmdline-read")
 		cmd, err := readProxyInactiveProc(filepath.Join(path, "cmdline"), 64<<10)
 		if gone(err) {
 			continue
@@ -81,6 +93,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 			return ErrScopedDNSRuntimeInactive
 		}
 		exeBefore := ""
+		mark("proc.cmdline-shape")
 		if len(cmd) == 0 {
 			if flags&0x00200000 == 0 || pid == p.selfPID {
 				return ErrScopedDNSRuntimeInactive
@@ -93,6 +106,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 			if len(args) > 256 || args[0] == "" {
 				return ErrScopedDNSRuntimeInactive
 			}
+			mark("proc.exe-read")
 			exe, err := p.readlink(filepath.Join(path, "exe"))
 			if gone(err) {
 				clear(cmd)
@@ -105,6 +119,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 			if pid != p.selfPID {
 				// Detect a renamed/hard-linked copy of this controller as well as
 				// named older images. /proc/exe remains inspectable after deletion.
+				mark("proc.exe-incarnation")
 				same, err := p.sameExecutable(filepath.Join(p.procRoot, strconv.Itoa(p.selfPID), "exe"), filepath.Join(path, "exe"))
 				if gone(err) {
 					clear(cmd)
@@ -113,6 +128,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 				if err != nil || same {
 					return ErrScopedDNSRuntimeInactive
 				}
+				mark("proc.controller-ownership")
 				for _, name := range []string{filepath.Base(strings.TrimSuffix(exe, " (deleted)")), filepath.Base(args[0])} {
 					if strings.EqualFold(name, selfName) || strings.EqualFold(name, "razvilka") || strings.EqualFold(name, "razvilka.exe") {
 						return ErrScopedDNSRuntimeInactive
@@ -128,6 +144,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		if len(cmd) > 0 {
 			// PID start ticks do not change on exec. A second argv/exe image is
 			// required before accepting a stable non-controller incarnation.
+			mark("proc.argv-recheck")
 			againCmd, err := readProxyInactiveProc(filepath.Join(path, "cmdline"), 64<<10)
 			if gone(err) {
 				clear(cmd)
@@ -139,6 +156,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 				return ErrScopedDNSRuntimeInactive
 			}
 			clear(againCmd)
+			mark("proc.exe-recheck")
 			againExe, err := p.readlink(filepath.Join(path, "exe"))
 			if gone(err) {
 				clear(cmd)
@@ -150,6 +168,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 			}
 		}
 		clear(cmd)
+		mark("proc.stat-recheck")
 		again, err := readProxyInactiveProc(filepath.Join(path, "stat"), 16<<10)
 		if gone(err) {
 			continue
@@ -164,6 +183,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		return ErrScopedDNSRuntimeInactive
 	}
 	for _, kind := range []string{"tcp", "tcp6", "udp", "udp6"} {
+		mark("socket." + kind + ".read")
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -171,10 +191,12 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		if err != nil {
 			return err
 		}
+		mark("socket." + kind + ".parse")
 		if err := scopedDNSInactiveSocketTable(raw, strings.HasSuffix(kind, "6"), strings.HasPrefix(kind, "udp"), ports); err != nil {
 			return err
 		}
 	}
+	mark("proc-socket.complete")
 	return ctx.Err()
 }
 

@@ -45,6 +45,9 @@ func scopedDNSInactiveNativeDependency(t *testing.T, provider *netidentity.Provi
 	if err != nil {
 		t.Fatal(err)
 	}
+	stage := "provider.WithCurrent"
+	proof.stage = &stage
+	defer func() { t.Logf("DNS dependency final_stage=%s", stage) }()
 	root := filepath.Join(t.TempDir(), scopedDNSAdapterID)
 	settings := filepath.Join(filepath.Dir(root), "settings.json")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
