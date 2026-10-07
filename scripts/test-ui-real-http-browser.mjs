@@ -7,9 +7,10 @@ import {createRequire} from 'node:module';
 import {mkdirSync,mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {runRealHTTPReadScenarios,runRealHTTPOfflineSources,runRealHTTPDraftScenarios} from './ui-real-http-scenarios.mjs';
+import {runRealHTTPReadScenarios,runRealHTTPOfflineSources,runRealHTTPDraftScenarios,realHTTPDiagnosticIDs} from './ui-real-http-scenarios.mjs';
 
 const diagnostics=new WeakMap();
+const diagnosticStages=new WeakMap(),allowedDiagnosticIDs=new Set(realHTTPDiagnosticIDs);
 const publicCodes=new Set(['NODE_HISTORY_ADMISSION_REQUIRED','PARTIAL_IMPORT_CONFIRMATION_REQUIRED','APPLY_REVIEW_CHANGED','WIREGUARD_ASSIGNMENT_CHANGED']);
 export function realHTTPAssert(condition,code) {
   assert(/^[A-Z][A-Z0-9_]{0,79}$/.test(code));
@@ -21,7 +22,15 @@ export function realHTTPCode(value) {
   return publicCodes.has(value)?value:'UNKNOWN_TYPED_CODE';
 }
 export function realHTTPFailure(error,stage) {
-  return {stage,status:'failed',code:diagnostics.get(error)||({AssertionError:'ASSERTION_FAILED',TimeoutError:'TIMEOUT'}[error?.name]||'CLIENT_FAILED')};
+  return {stage:diagnosticStages.get(error)||stage,status:'failed',code:diagnostics.get(error)||({AssertionError:'ASSERTION_FAILED',TimeoutError:'TIMEOUT'}[error?.name]||'CLIENT_FAILED')};
+}
+export async function realHTTPDiagnosis(id,action) {
+  realHTTPAssert(allowedDiagnosticIDs.has(id),'INVALID_DIAGNOSTIC_ID');
+  try{return await action();}
+  catch(error){
+    if(error&&typeof error==='object'&&!diagnosticStages.has(error))diagnosticStages.set(error,id);
+    throw error;
+  }
 }
 export function realHTTPSettings(env,args=[]) {
   realHTTPAssert(args.every(arg=>['--draft-mutations','--setup-account','--prepare-policy'].includes(arg))&&new Set(args).size===args.length,'INVALID_ARGUMENTS');
@@ -148,7 +157,7 @@ export async function runRealHTTPUI(config) {
     realHTTPAssert(document?.status()===200,'DOCUMENT_REJECTED');
     const csp=document.headers()['content-security-policy'];realHTTPAssert(csp?.includes("default-src 'self'")&&csp.includes("frame-ancestors 'none'"),'CSP_REQUIRED');
     await page.waitForFunction(()=>state.authenticated&&!panelLoad.request);
-    const shared={page,requests:browserRequests,test,readJSON,writeJSON,uiReceipt,beforeMutation};
+    const shared={page,requests:browserRequests,test,readJSON,writeJSON,uiReceipt,beforeMutation,diagnose:realHTTPDiagnosis};
     await runRealHTTPReadScenarios(shared);await runRealHTTPOfflineSources(shared);
     if(config.draftMutations)await runRealHTTPDraftScenarios(shared);
     stage='verify-final-QA-boundary';await checkIdentity();

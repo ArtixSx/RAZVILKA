@@ -2,6 +2,18 @@
 // All requests use the supplied existing QA instance. No response interception.
 import assert from 'node:assert/strict';
 
+// Only these static checkpoint IDs may enter the public failure report.
+export const realHTTPDiagnosticIDs=Object.freeze([
+  'UI_NODE_IMPORT','UI_NODE_IMPORT_READBACK','UI_NODE_GROUP','UI_NODE_FILTER','UI_NODE_CHECK_CANCEL',
+  'UI_NODE_DELETE_PREVIEW','UI_NODE_DELETE_COMMIT','UI_NODE_DELETE_SINGLE_COMMIT','UI_NODE_FINAL_REFRESH',
+  'UI_NODE_REMAINING_TOTAL','UI_NODE_REMAINING_GROUP','UI_NODE_RETAINED_MEMBER','UI_NODE_REMAINING_VLESS','UI_NODE_REMAINING_SHADOWSOCKS',
+  'UI_POLICY_EDITOR_READY','UI_POLICY_DUPLICATE_SAVE_RECEIPT','UI_POLICY_DUPLICATE_SAVE_UI_READBACK',
+  'UI_POLICY_DUPLICATE_SAVE_REQUEST_COUNT','UI_POLICY_DUPLICATE_SAVE_API_READBACK',
+  'UI_POLICY_CAS_SECOND_WRITER','UI_POLICY_CAS_STALE_EDITOR_READY','UI_POLICY_CAS_RECEIPT','UI_POLICY_CAS_DRAFT_RETAINED',
+  'UI_POLICY_CAS_EXPLICIT_READ','UI_POLICY_CAS_READ_NO_REPLAY','UI_POLICY_CAS_RESET',
+  'UI_POLICY_RESTORE_DISABLED_TUNING','UI_POLICY_RESTORE_READBACK'
+]);
+
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
 
 export async function runRealHTTPOfflineSources({page,requests,test,readJSON}) {
@@ -29,73 +41,109 @@ export async function runRealHTTPOfflineSources({page,requests,test,readJSON}) {
   });
 }
 
-export async function runRealHTTPDraftScenarios({page,requests,test,readJSON,writeJSON,uiReceipt,beforeMutation}) {
+export async function runRealHTTPDraftScenarios({page,requests,test,readJSON,writeJSON,uiReceipt,beforeMutation,diagnose}) {
   await test('all-VLESS real import and deletion ignore filters and protect group members','real Linux admission, HTTP and public readback; no fault injection',async()=>{
     await navTo(page,'nodes');
     const profiles=[1,2,3].map(n=>`vless://00000000-0000-4000-8000-${String(n).padStart(12,'0')}@ui-node-${n}.invalid:443?type=tcp&security=tls&sni=ui-node-${n}.invalid#UI-F${n}`);
     profiles.push('ss://YWVzLTEyOC1nY206dWktZml4dHVyZQ==@ui-ss.invalid:443#UI-SS');
-    await page.locator('#nodeOpenImport').click();await page.locator('#nodeQuickImportText').fill(profiles.join('\n'));
-    const imported=await uiReceipt('/api/v1/nodes/import','POST',()=>page.locator('#nodeQuickImportSubmit').click());
-    assert.equal(imported?.ok,true);assert.equal(imported.accepted_nodes,profiles.length);assert.equal(imported.working_routes_changed,false);
-    await page.waitForFunction(()=>state.nodes.nodes.length===4&&!document.getElementById('nodeQuickImportSubmit').disabled);
-    await page.locator('#nodeQuickImportClose').click();
-    const snapshot=await readJSON('/api/v1/nodes'),vless=snapshot.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='vless');assert.equal(vless.length,3);
+    await diagnose('UI_NODE_IMPORT',async()=>{
+      await page.locator('#nodeOpenImport').click();await page.locator('#nodeQuickImportText').fill(profiles.join('\n'));
+      const imported=await uiReceipt('/api/v1/nodes/import','POST',()=>page.locator('#nodeQuickImportSubmit').click());
+      assert.equal(imported?.ok,true);assert.equal(imported.accepted_nodes,profiles.length);assert.equal(imported.working_routes_changed,false);
+    });
+    const snapshot=await diagnose('UI_NODE_IMPORT_READBACK',async()=>{
+      await page.waitForFunction(()=>state.nodes.nodes.length===4&&!document.getElementById('nodeQuickImportSubmit').disabled);
+      await page.locator('#nodeQuickImportClose').click();
+      const snapshot=await readJSON('/api/v1/nodes');assert.equal(snapshot.nodes.length,4);
+      assert.equal(snapshot.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='vless').length,3);return snapshot;
+    });
+    const vless=snapshot.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='vless');
     const member=vless[1],filter=await page.evaluate(id=>nodeDisplayName(state.nodes.nodes.find(node=>node.id===id)),vless[0].id);
-    const group=await writeJSON('/api/v1/node-groups','POST',{name:'UI fixture reserve',mode:'fallback',node_ids:[member.id],preferred_node_id:member.id,hold_down_seconds:1800,confirm:'CREATE_NODE_GROUP'});
-    assert.equal(group.ok,true);assert.equal(group.working_routes_changed,false);
-    await page.evaluate(()=>refreshNodes());await page.locator('#nodeSearch').fill(filter);
-    assert.equal(await page.locator('#nodeList [data-node-card]').count(),1);
-    await page.locator('#nodeAllVLESSDetails summary').click();assert.match(await page.locator('#nodeCheckAllVLESS').textContent(),/3/);
-    const checkStart=requests.length;await page.locator('#nodeCheckAllVLESS').click();await page.locator('#actionDialog').waitFor({state:'visible'});
-    assert.match(await page.locator('#actionDialogText').textContent(),/3 из 3 VLESS/);await page.locator('#actionDialog [value="cancel"]').click();
-    await page.waitForFunction(()=>!workflowState.bulkBusy);assert.equal(requests.slice(checkStart).filter(row=>row.path==='/api/v1/node-checks'&&row.method==='POST').length,0);
-    const preview=await uiReceipt('/api/v1/nodes/delete-batch','POST',()=>page.locator('#nodeDeleteAllVLESS').click());
-    await page.waitForFunction(()=>!!workflowState.deletion&&!workflowState.deleteBusy);
-    assert.equal(preview.preview,true);assert.equal(preview.scope,'all-vless');assert.equal(preview.candidates.length,2);assert.equal(preview.skipped.length,1);
-    assert.equal(preview.working_routes_changed,false);assert.equal(preview.skipped[0].node_id,member.id);
+    await diagnose('UI_NODE_GROUP',async()=>{
+      const group=await writeJSON('/api/v1/node-groups','POST',{name:'UI fixture reserve',mode:'fallback',node_ids:[member.id],preferred_node_id:member.id,hold_down_seconds:1800,confirm:'CREATE_NODE_GROUP'});
+      assert.equal(group.ok,true);assert.equal(group.working_routes_changed,false);
+    });
+    await diagnose('UI_NODE_FILTER',async()=>{
+      await page.evaluate(()=>refreshNodes());await page.locator('#nodeSearch').fill(filter);
+      assert.equal(await page.locator('#nodeList [data-node-card]').count(),1);
+    });
+    await diagnose('UI_NODE_CHECK_CANCEL',async()=>{
+      await page.locator('#nodeAllVLESSDetails summary').click();assert.match(await page.locator('#nodeCheckAllVLESS').textContent(),/3/);
+      const checkStart=requests.length;await page.locator('#nodeCheckAllVLESS').click();await page.locator('#actionDialog').waitFor({state:'visible'});
+      assert.match(await page.locator('#actionDialogText').textContent(),/3 из 3 VLESS/);await page.locator('#actionDialog [value="cancel"]').click();
+      await page.waitForFunction(()=>!workflowState.bulkBusy);assert.equal(requests.slice(checkStart).filter(row=>row.path==='/api/v1/node-checks'&&row.method==='POST').length,0);
+    });
+    const preview=await diagnose('UI_NODE_DELETE_PREVIEW',async()=>{
+      const preview=await uiReceipt('/api/v1/nodes/delete-batch','POST',()=>page.locator('#nodeDeleteAllVLESS').click());
+      await page.waitForFunction(()=>!!workflowState.deletion&&!workflowState.deleteBusy);
+      assert.equal(preview.preview,true);assert.equal(preview.scope,'all-vless');assert.equal(preview.candidates.length,2);assert.equal(preview.skipped.length,1);
+      assert.equal(preview.working_routes_changed,false);assert.equal(preview.skipped[0].node_id,member.id);return preview;
+    });
     const commitStart=requests.length;
-    const committed=await uiReceipt('/api/v1/nodes/delete-batch','POST',()=>page.locator('#r4DeleteCommit').click());
-    assert.equal(committed.complete,true);assert.equal(committed.deleted.length,2);assert.equal(committed.working_routes_changed,false);
-    assert.deepEqual([...committed.deleted].sort(),preview.candidates.map(row=>row.node_id).sort());
-    await page.waitForFunction(()=>!workflowState.deleteBusy&&!workflowState.deletion);
-    assert.equal(requests.slice(commitStart).filter(row=>row.path==='/api/v1/nodes/delete-batch'&&row.method==='POST').length,1);
-    await page.locator('#r4DeleteDialog [data-r4-close]').last().click();
-    await page.locator('#refreshNodes').click();await page.waitForFunction(()=>state.nodes.nodes.length===2&&!document.getElementById('refreshNodes').disabled);
-    const remaining=await readJSON('/api/v1/nodes');assert.equal(remaining.nodes.length,2);assert.equal(remaining.groups.length,1);
-    assert(remaining.nodes.some(node=>node.id===member.id));assert.equal(remaining.nodes.filter(node=>node.protocol==='vless').length,1);
-    assert.equal(remaining.nodes.filter(node=>node.protocol==='shadowsocks').length,1);
+    await diagnose('UI_NODE_DELETE_COMMIT',async()=>{
+      const committed=await uiReceipt('/api/v1/nodes/delete-batch','POST',()=>page.locator('#r4DeleteCommit').click());
+      assert.equal(committed.complete,true);assert.equal(committed.deleted.length,2);assert.equal(committed.working_routes_changed,false);
+      assert.deepEqual([...committed.deleted].sort(),preview.candidates.map(row=>row.node_id).sort());
+      await page.waitForFunction(()=>!workflowState.deleteBusy&&!workflowState.deletion);
+    });
+    await diagnose('UI_NODE_DELETE_SINGLE_COMMIT',()=>assert.equal(requests.slice(commitStart).filter(row=>row.path==='/api/v1/nodes/delete-batch'&&row.method==='POST').length,1));
+    const remaining=await diagnose('UI_NODE_FINAL_REFRESH',async()=>{
+      await page.locator('#r4DeleteDialog [data-r4-close]').last().click();
+      await page.locator('#refreshNodes').click();await page.waitForFunction(()=>state.nodes.nodes.length===2&&!document.getElementById('refreshNodes').disabled);
+      return await readJSON('/api/v1/nodes');
+    });
+    await diagnose('UI_NODE_REMAINING_TOTAL',()=>assert.equal(remaining.nodes.length,2));
+    await diagnose('UI_NODE_REMAINING_GROUP',()=>{assert.equal(remaining.groups.length,1);assert(remaining.groups[0].node_ids.includes(member.id));});
+    await diagnose('UI_NODE_RETAINED_MEMBER',()=>assert(remaining.nodes.some(node=>node.id===member.id)));
+    await diagnose('UI_NODE_REMAINING_VLESS',()=>assert.equal(remaining.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='vless').length,1));
+    await diagnose('UI_NODE_REMAINING_SHADOWSOCKS',()=>assert.equal(remaining.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='shadowsocks').length,1));
     await page.locator('#nodeSearch').fill('');await navTo(page,'overview');
   });
 
-  await navTo(page,'autopilot');await page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled);
-  const original=(await readJSON('/api/v1/autonomy')).policy;
+  const original=await diagnose('UI_POLICY_EDITOR_READY',async()=>{
+    await navTo(page,'autopilot');await page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled);
+    return (await readJSON('/api/v1/autonomy')).policy;
+  });
   await test('duplicate Save submits one actual PUT with independent readback','real HTTP; disabled QA policy tuning only',async()=>{
     const seconds=original.check_seconds===180?181:180;await page.locator('#autoQuickCheck').fill(String(seconds));
     const start=requests.length;
-    await uiReceipt('/api/v1/autonomy','PUT',()=>page.evaluate(()=>{const form=document.getElementById('autoQuickForm');form.requestSubmit();form.requestSubmit();}));
-    await page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled&&!document.getElementById('autoQuickRevision').textContent.includes('есть правки'));
-    assert.equal(requests.slice(start).filter(row=>row.path==='/api/v1/autonomy'&&row.method==='PUT').length,1);
-    const saved=await readJSON('/api/v1/autonomy');assert.equal(saved.policy.check_seconds,seconds);assert.equal(saved.policy.enabled,false);
+    await diagnose('UI_POLICY_DUPLICATE_SAVE_RECEIPT',()=>uiReceipt('/api/v1/autonomy','PUT',()=>page.evaluate(()=>{const form=document.getElementById('autoQuickForm');form.requestSubmit();form.requestSubmit();})));
+    await diagnose('UI_POLICY_DUPLICATE_SAVE_UI_READBACK',()=>page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled&&!document.getElementById('autoQuickRevision').textContent.includes('есть правки')));
+    await diagnose('UI_POLICY_DUPLICATE_SAVE_REQUEST_COUNT',()=>assert.equal(requests.slice(start).filter(row=>row.path==='/api/v1/autonomy'&&row.method==='PUT').length,1));
+    await diagnose('UI_POLICY_DUPLICATE_SAVE_API_READBACK',async()=>{
+      const saved=await readJSON('/api/v1/autonomy');assert.equal(saved.policy.check_seconds,seconds);assert.equal(saved.policy.enabled,false);
+    });
   });
   await test('stale policy CAS gets actual 409 and retains draft until reset','real second HTTP writer; no request interception',async()=>{
     await page.locator('#autoQuickCheck').fill('240');const previous=(await readJSON('/api/v1/autonomy')).policy;
-    await writeJSON('/api/v1/autonomy','PUT',{expected_revision:previous.revision,policy:{...previous,check_seconds:300},confirm:'SAVE_AUTONOMY',release_safe_mode:false});
-    assert.equal(await page.locator('#autoQuickSave').isEnabled(),true,'QA fixture advanced passive UI before stale CAS submission');
-    await uiReceipt('/api/v1/autonomy','PUT',()=>page.locator('#autoQuickSave').click(),409);
-    await page.waitForFunction(()=>document.getElementById('autoQuickMessage').textContent.includes('изменились'));
-    assert.equal(await page.locator('#autoQuickCheck').inputValue(),'240');
-    const readback=requests.length;await page.locator('#autoQuickRefresh').click();
-    await page.waitForFunction(()=>document.getElementById('autoQuickSave').disabled&&document.getElementById('autoQuickMessage').textContent.includes('Ваши поля сохранены'));
-    assert.equal(requests.slice(readback).filter(row=>row.path==='/api/v1/autonomy'&&row.method==='PUT').length,0);
-    await page.locator('#autoQuickReset').click();await page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled);
-    assert.equal(await page.locator('#autoQuickCheck').inputValue(),'300');
+    await diagnose('UI_POLICY_CAS_SECOND_WRITER',()=>writeJSON('/api/v1/autonomy','PUT',{expected_revision:previous.revision,policy:{...previous,check_seconds:300},confirm:'SAVE_AUTONOMY',release_safe_mode:false}));
+    await diagnose('UI_POLICY_CAS_STALE_EDITOR_READY',async()=>assert.equal(await page.locator('#autoQuickSave').isEnabled(),true));
+    await diagnose('UI_POLICY_CAS_RECEIPT',()=>uiReceipt('/api/v1/autonomy','PUT',()=>page.locator('#autoQuickSave').click(),409));
+    await diagnose('UI_POLICY_CAS_DRAFT_RETAINED',async()=>{
+      await page.waitForFunction(()=>document.getElementById('autoQuickMessage').textContent.includes('изменились'));
+      assert.equal(await page.locator('#autoQuickCheck').inputValue(),'240');
+    });
+    const readback=requests.length;
+    await diagnose('UI_POLICY_CAS_EXPLICIT_READ',async()=>{
+      await page.locator('#autoQuickRefresh').click();
+      await page.waitForFunction(()=>document.getElementById('autoQuickSave').disabled&&document.getElementById('autoQuickMessage').textContent.includes('Ваши поля сохранены'));
+    });
+    await diagnose('UI_POLICY_CAS_READ_NO_REPLAY',()=>assert.equal(requests.slice(readback).filter(row=>row.path==='/api/v1/autonomy'&&row.method==='PUT').length,0));
+    await diagnose('UI_POLICY_CAS_RESET',async()=>{
+      await page.locator('#autoQuickReset').click();await page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled);
+      assert.equal(await page.locator('#autoQuickCheck').inputValue(),'300');
+    });
   });
   // Restore known tuning only after every write/readback above succeeded.
   // Failures leave QA disposal to the coordinator; no uncertain mutation replay.
-  await beforeMutation();const current=(await readJSON('/api/v1/autonomy')).policy;
-  await writeJSON('/api/v1/autonomy','PUT',{expected_revision:current.revision,policy:{...original,revision:current.revision},confirm:'SAVE_AUTONOMY',release_safe_mode:false});
-  const restored=(await readJSON('/api/v1/autonomy')).policy;
-  assert.deepEqual({...restored,revision:original.revision},original);
+  await diagnose('UI_POLICY_RESTORE_DISABLED_TUNING',async()=>{
+    await beforeMutation();const current=(await readJSON('/api/v1/autonomy')).policy;
+    await writeJSON('/api/v1/autonomy','PUT',{expected_revision:current.revision,policy:{...original,revision:current.revision},confirm:'SAVE_AUTONOMY',release_safe_mode:false});
+  });
+  await diagnose('UI_POLICY_RESTORE_READBACK',async()=>{
+    const restored=(await readJSON('/api/v1/autonomy')).policy;
+    assert.deepEqual({...restored,revision:original.revision},original);
+  });
   await navTo(page,'overview');
 }
 

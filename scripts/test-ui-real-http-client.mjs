@@ -1,6 +1,6 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
-import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPCode,realHTTPFailure} from './test-ui-real-http-browser.mjs';
+import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
   RAZVILKA_QA_UI_INSTANCE:instance,RAZVILKA_QA_UI_CHROME:'installed-chrome',RAZVILKA_QA_UI_SESSION:'private-session.json'};
@@ -50,4 +50,31 @@ check(()=>{
   const error=Object.assign(new Error('private credentials URI response body'),{actual:'private',expected:'private',cause:'private'});
   assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'known-scenario',status:'failed',code:'CLIENT_FAILED'});
 });
+assert.equal(await realHTTPDiagnosis('UI_NODE_IMPORT',()=>7),7);checks++;
+try{
+  await realHTTPDiagnosis('UI_NODE_REMAINING_VLESS',()=>assert.equal('private actual URI','private expected profile'));
+  assert.fail('expected assertion failure');
+}catch(error){
+  assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'UI_NODE_REMAINING_VLESS',status:'failed',code:'ASSERTION_FAILED'});checks++;
+}
+try{
+  await realHTTPDiagnosis('UI_POLICY_CAS_EXPLICIT_READ',()=>{throw Object.assign(new Error('private DOM credentials'),{name:'TimeoutError'});});
+  assert.fail('expected timeout failure');
+}catch(error){
+  assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'UI_POLICY_CAS_EXPLICIT_READ',status:'failed',code:'TIMEOUT'});checks++;
+}
+try{
+  await realHTTPDiagnosis('UI_POLICY_CAS_RECEIPT',()=>realHTTPAssert(false,'HTTP_UI_WRITE_REJECTED'));
+  assert.fail('expected HTTP failure');
+}catch(error){
+  assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'UI_POLICY_CAS_RECEIPT',status:'failed',code:'HTTP_UI_WRITE_REJECTED'});checks++;
+}
+let invoked=false;
+try{
+  await realHTTPDiagnosis('private dynamic ID',()=>{invoked=true;});
+  assert.fail('expected diagnostic ID rejection');
+}catch(error){
+  assert.equal(invoked,false);
+  assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'known-scenario',status:'failed',code:'INVALID_DIAGNOSTIC_ID'});checks++;
+}
 console.log('PASS pure real HTTP client checks '+checks);
