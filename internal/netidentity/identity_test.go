@@ -38,7 +38,7 @@ func modelProvider(net bool, profile bool) *Provider {
 	return p
 }
 func TestIdentityCodecClosedVariants(t *testing.T) {
-	if nc1812Profile().hash() != "7909df2d50793c6847474b778feb906386f4b66244d6e278d00273892f889c75" {
+	if nc1812Profile().hash() != "f77d10cde0399faf1ab9ab6060bc52aa54e61e25c3d4c2381f4f712e78144733" {
 		t.Fatal("reviewed catalog changed without a new contract")
 	}
 	proc := Identity{Version: 1, Kind: ProcNetInode, BootID: testBoot, Inode: 4026531992}
@@ -86,7 +86,9 @@ func TestIdentityCodecClosedVariants(t *testing.T) {
 			t.Fatal("invalid proc variant", v)
 		}
 	}
-	for _, mutate := range []func(*Identity){func(v *Identity) { v.Inode = 1 }, func(v *Identity) { v.PlatformReviewSHA256 = strings.Repeat("a", 64) }} {
+	for _, mutate := range []func(*Identity){func(v *Identity) { v.Inode = 1 }, func(v *Identity) { v.PlatformReviewSHA256 = strings.Repeat("a", 64) }, func(v *Identity) {
+		v.PlatformReviewSHA256 = "7909df2d50793c6847474b778feb906386f4b66244d6e278d00273892f889c75"
+	}} {
 		v := single
 		mutate(&v)
 		if v.Validate() == nil {
@@ -192,7 +194,19 @@ func TestRawDirentsCannotHideNetOrManufactureEOF(t *testing.T) {
 	}
 }
 func buildText(v buildTuple) []byte {
-	return []byte("manufacturer: " + v.Manufacturer + "\nmodel: " + v.Model + "\ndevice: " + v.Device + "\nrelease: " + v.Release + "\nsandbox: " + v.Sandbox + "\ntitle: " + v.Title + "\narch: " + v.Arch + "\nndm: " + v.NDM + "\nversion: " + v.FirmwareVersion + "\n")
+	var b strings.Builder
+	for _, field := range [][2]string{{"manufacturer", v.Manufacturer}, {"model", v.Model}, {"device", v.Device}, {"release", v.Release}, {"sandbox", v.Sandbox}, {"title", v.Title}, {"arch", v.Arch}} {
+		b.WriteString(versionLine(17, field[0], field[1]))
+	}
+	b.WriteString(versionLine(17, "ndm", "") + versionLine(21, "exact", v.NDMExact))
+	b.WriteString(versionLine(17, "ndw4", "") + versionLine(21, "version", v.NDW4Version))
+	return []byte(b.String())
+}
+func versionLine(column int, key, value string) string {
+	if value != "" {
+		value = " " + value
+	}
+	return strings.Repeat(" ", column-len(key)) + key + ":" + value + "\n"
 }
 func TestBuildUniqueExactTupleAndFreshProviderDrift(t *testing.T) {
 	profile := nc1812Profile()
@@ -200,7 +214,7 @@ func TestBuildUniqueExactTupleAndFreshProviderDrift(t *testing.T) {
 	if v, err := parseBuild(raw); err != nil || v != profile.Build {
 		t.Fatal(v, err)
 	}
-	for _, bad := range [][]byte{append(append([]byte(nil), raw...), []byte("release: "+profile.Build.Release+"\n")...), bytes.Replace(raw, []byte("arch: aarch64\n"), nil, 1), append(append([]byte(nil), raw...), 0), []byte(strings.Repeat("x", 8193))} {
+	for _, bad := range [][]byte{append(append([]byte(nil), raw...), []byte(versionLine(17, "release", profile.Build.Release))...), bytes.Replace(raw, []byte(versionLine(17, "arch", profile.Build.Arch)), nil, 1), append(append([]byte(nil), raw...), 0), []byte(strings.Repeat("x", 8193))} {
 		if _, err := parseBuild(bad); err == nil {
 			t.Fatal("ambiguous/unbounded build")
 		}
@@ -231,7 +245,7 @@ func TestBuildUniqueExactTupleAndFreshProviderDrift(t *testing.T) {
 				case "release":
 					v.Release = "new"
 				case "ndm":
-					v.NDM = "new"
+					v.NDMExact = "new"
 				case "manufacturer":
 					v.Manufacturer = "unknown"
 				case "error":

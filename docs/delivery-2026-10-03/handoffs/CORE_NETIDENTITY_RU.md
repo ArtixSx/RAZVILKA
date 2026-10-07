@@ -74,12 +74,13 @@ Compiled profile — maintainer-accepted **vendor ABI**, не независим
 attestation running `.config`:
 
 * Netcraze Ltd.; Ultra (NC-1812); device Ultra; release `5.01.C.6.0-1`;
-  stable; title `5.1.6`; arch aarch64; ndm `exact: 0-996b1e0`;
-  firmware version `5.1.C.6.0`; uname `4.9-ndm-5` / aarch64.
+  stable; title `5.1.6`; arch aarch64; `ndm.exact = 0-996b1e0`;
+  `ndw4.version = 5.1.C.6.0` — component version, firmware release остаётся
+  `release = 5.01.C.6.0-1`; uname `4.9-ndm-5` / aarch64.
 * SDK `1d58c10c46e270d6876836e5455fa4e9b786ad1e`, kernel
   `7b6c9477d429217042117fbfa3d2e9894a087607`.
 * Profile SHA256
-  `7909df2d50793c6847474b778feb906386f4b66244d6e278d00273892f889c75`:
+  `f77d10cde0399faf1ab9ab6060bc52aa54e61e25c3d4c2381f4f712e78144733`:
   SHA256(domain `razvilka-network-platform-review-v1` + NUL + compiled
   profile JSON). Portable test pins this value.
 
@@ -99,6 +100,19 @@ LANG/LC_ALL=C; shell, inherited env, Entware library path и caller argv не
 используются. `/etc/ld.so.preload` должен отсутствовать и его protected parent
 не меняться. stdout 8192 bytes, stderr 1024 bytes; любой stderr, overflow,
 дубликат/missing tuple field или drift — отказ без вывода raw NDMC data.
+
+NDMC text имеет scoped fields, а не плоский dictionary. Root field colon
+строго в column 17, child — 21 после unique empty header `ndm`, `bsp`, `ndw`,
+`ndw3` или `ndw4`. Две `version` в разных groups допустимы;
+`ndw3.version` не заполняет и не исправляет `NDW4Version`. Любой дубликат
+qualified path/header, orphan child, wrong column, dotted flat alias, пустой
+root metadata scalar или scalar/header ambiguity отвергается. Required
+scalar continuation запрещена. Единственные ignored continuations — lists
+`ndw.features` / `ndw.components` с ровно 23 leading spaces и bounded chunks;
+blank line прекращает continuation. LF и целый CRLF допустимы, bare CR/tabs
+и non-ASCII отвергаются. Optional cosmetic envelope — только paired exact
+`ESC[K` на первых/последних bytes; любой embedded/unknown/unpaired ESC
+отвергается. Полного ANSI stripping и last-wins dictionary нет.
 
 ## Проверки и следующий owner шаг
 
@@ -184,3 +198,35 @@ CORE не выполняет router тест. Root review + повторный *
 `TestNativeReviewedStockNC1812FactoryAndScope` обязателен до provider acceptance
 и разрешения consumer integration. Коррекция не подтверждает backend
 completeness, ownership или effect authority.
+
+## Scoped NDMC format correction после identity98–100
+
+Root source `8021d10`: Linux package/native proc race PASS (1.111 s);
+original router factory98 FAIL (0.10 s). Diagnostics99 после NOBITS fix
+прошли ELF/images/dependencies, NDMC join/caps и closing file/uname checks;
+отказ — `build.tuple-parse`. Actual shape100: 1646 bytes / 48 lines,
+ровно outer erase-line `ESC[K` pair. Поля right-aligned, leading indentation
+самого key не означает depth. `ndm` — empty root header, `exact` — child;
+две `version` принадлежат `ndw3` и `ndw4`. Прежний flattened capture скрывал
+эту структуру и ошибочно называл NDW4 component version firmware version.
+
+Законченная коррекция ограничена catalog/parser/tests и этим handoff.
+`NDM` заменён на `NDMExact`, `FirmwareVersion` — на `NDW4Version`; значения
+сопоставляются только с соответствующими qualified paths. Compiled profile
+hash пересчитан выше; wire Identity version 1 сохранена. Старый candidate hash
+`7909df2d50793c6847474b778feb906386f4b66244d6e278d00273892f889c75`
+не имеет alias/fallback и отвергается `Validate`/codec. Приложение/receipts
+этой порцией не подключаются. Private response не копировался в fixture,
+commit или output: для анализа выводились только key/column/control shape.
+
+Synthetic fixtures содержат reviewed tuple и synthetic ignored metadata с
+теми же reviewed strings. Проверены scoped same-name leaves с различными
+values, отказ дубля внутри scope, foreign-scope substitution/override, forged
+nested/flat fields, orphan/wrong-level fields, пустые scalar/header ambiguity,
+continuation только lists, malformed/unpaired/embedded controls, old flat
+format, byte/line/scalar caps и whole CRLF. Fixed command/loader/env/caps,
+profile selection authority, proc/thread guards и caller budget не изменены.
+Go 1.26.5 Windows portable tests PASS (0.218 s), Windows vet PASS; Linux
+amd64/arm64 vet и test binary crosscompile PASS / RC0. gofmt/diff check PASS.
+Original native stock factory+closing остаётся обязательным следующим Root
+шагом; CORE native/router код не исполняет и integration grant не передаёт.
