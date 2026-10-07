@@ -76,12 +76,13 @@ type Link struct {
 	NativeType          string `json:"native_type"`
 }
 type Device struct {
-	ID        string   `json:"id"`
-	MAC       string   `json:"mac"`
-	Interface string   `json:"interface"`
-	IfIndex   int      `json:"ifindex"`
-	SegmentID string   `json:"segment_id"`
-	Addresses []string `json:"addresses"`
+	ID                 string   `json:"id"`
+	MAC                string   `json:"mac"`
+	Interface          string   `json:"interface"`
+	IfIndex            int      `json:"ifindex"`
+	SegmentID          string   `json:"segment_id"`
+	Addresses          []string `json:"addresses"`
+	LinkLocalAddresses []string `json:"link_local_addresses"`
 }
 type Snapshot struct {
 	// ReviewID distinguishes one opened continuity fence from another. It is
@@ -94,7 +95,7 @@ type Snapshot struct {
 }
 
 type lifecycleFence interface {
-	check(context.Context, []Segment) error
+	check(context.Context, []Segment, []Device) error
 	close() error
 }
 type observerSource struct {
@@ -227,7 +228,7 @@ func (o *Observer) Observe(ctx context.Context) (*Review, error) {
 	}
 	r := &Review{state: &reviewState{issuer: o, fence: fence}}
 	r.state.self = r
-	r.state.snapshot, err = o.capture(c, selection, identity, fence)
+	r.state.snapshot, err = o.capture(c, selection, identity, fence, nil)
 	if err != nil {
 		_ = r.Close()
 		return nil, err
@@ -235,7 +236,7 @@ func (o *Observer) Observe(ctx context.Context) (*Review, error) {
 	r.state.snapshot.ReviewID = hex.EncodeToString(nonce[:])
 	return r, nil
 }
-func (o *Observer) capture(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence) (Snapshot, error) {
+func (o *Observer) capture(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence, baseline *Snapshot) (Snapshot, error) {
 	var result Snapshot
 	for pass := 0; pass < 2; pass++ {
 		var segments []Segment
@@ -244,12 +245,24 @@ func (o *Observer) capture(ctx context.Context, selection Selection, expected ne
 			if id.Validate() != nil || id != expected {
 				return ErrUnknown
 			}
+			original := baseline
+			if original == nil && pass > 0 {
+				original = &result
+			}
+			if original != nil {
+				if err := fence.check(held, original.Segments, original.Devices); err != nil {
+					return err
+				}
+			}
 			var err error
 			segments, devices, err = o.source.capture(held, selection)
 			if err != nil {
 				return err
 			}
-			return fence.check(held, segments)
+			if original != nil {
+				return fence.check(held, original.Segments, original.Devices)
+			}
+			return fence.check(held, segments, devices)
 		})
 		if err != nil {
 			return Snapshot{}, errors.Join(ErrUnknown, err)
@@ -270,7 +283,11 @@ func (o *Observer) capture(ctx context.Context, selection Selection, expected ne
 		if id != expected {
 			return ErrUnknown
 		}
-		return fence.check(c, result.Segments)
+		original := &result
+		if baseline != nil {
+			original = baseline
+		}
+		return fence.check(c, original.Segments, original.Devices)
 	}); err != nil {
 		return Snapshot{}, errors.Join(ErrUnknown, err)
 	}
@@ -301,7 +318,7 @@ func (o *Observer) Verify(ctx context.Context, r *Review) error {
 		s.invalid = true
 		return errors.Join(ErrUnknown, err)
 	}
-	snapshot, err := o.capture(c, selection, s.snapshot.Identity, s.fence)
+	snapshot, err := o.capture(c, selection, s.snapshot.Identity, s.fence, &s.snapshot)
 	snapshot.ReviewID = s.snapshot.ReviewID
 	if err != nil || !reflect.DeepEqual(snapshot, s.snapshot) {
 		s.invalid = true
@@ -321,6 +338,7 @@ func cloneSnapshot(s Snapshot) Snapshot {
 	s.Devices = slices.Clone(s.Devices)
 	for i := range s.Devices {
 		s.Devices[i].Addresses = slices.Clone(s.Devices[i].Addresses)
+		s.Devices[i].LinkLocalAddresses = slices.Clone(s.Devices[i].LinkLocalAddresses)
 	}
 	return s
 }

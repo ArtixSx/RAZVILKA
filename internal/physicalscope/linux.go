@@ -198,7 +198,7 @@ func (f *kernelFence) close() error {
 	} // Never close a replaced descriptor.
 	return unix.Close(f.fd)
 }
-func (f *kernelFence) check(ctx context.Context, segments []Segment) error {
+func (f *kernelFence) check(ctx context.Context, segments []Segment, devices []Device) error {
 	if f.closed || f.failed || ctx.Err() != nil || !f.current() {
 		return ErrUnknown
 	}
@@ -227,7 +227,7 @@ func (f *kernelFence) check(ctx context.Context, segments []Segment) error {
 		if err != nil {
 			return fail(err)
 		}
-		if err := checkNotifications(frames, segments); err != nil {
+		if err := checkNotifications(frames, segments, devices); err != nil {
 			return fail(err)
 		}
 	}

@@ -316,7 +316,7 @@ func bindDevices(ctx context.Context, segments []Segment, rows kernelNeighborRow
 		if segment.IfIndex == 0 {
 			return nil, ErrUnknown
 		}
-		device := Device{ID: b.ID, MAC: b.MAC, Interface: b.Interface, IfIndex: segment.IfIndex, SegmentID: segment.ID, Addresses: []string{}}
+		device := Device{ID: b.ID, MAC: b.MAC, Interface: b.Interface, IfIndex: segment.IfIndex, SegmentID: segment.ID, Addresses: []string{}, LinkLocalAddresses: []string{}}
 		for _, a := range b.Addresses {
 			address, err := netip.ParseAddr(a.Address)
 			if err != nil {
@@ -332,9 +332,10 @@ func bindDevices(ctx context.Context, segments []Segment, rows kernelNeighborRow
 					matches++
 				}
 			}
-			// Link-local neighbors are not routable selected clients. Preserve
-			// their observation in the kernel fence, omit their client address.
+			// Link-local mappings stay frozen for exact NUD comparison, but do
+			// not become routable selected client sources.
 			if address.IsLinkLocalUnicast() {
+				device.LinkLocalAddresses = append(device.LinkLocalAddresses, a.Address)
 				continue
 			}
 			if matches != 1 || owners[a.Address] {
@@ -343,7 +344,7 @@ func bindDevices(ctx context.Context, segments []Segment, rows kernelNeighborRow
 			owners[a.Address] = true
 			device.Addresses = append(device.Addresses, a.Address)
 		}
-		if len(device.Addresses) == 0 {
+		if len(device.Addresses) == 0 && len(device.LinkLocalAddresses) == 0 {
 			continue
 		}
 		out = append(out, device)

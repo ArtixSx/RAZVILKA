@@ -250,7 +250,7 @@ func TestPhysicalKernelNeighborsUseExistingStrictAggregator(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := kernelNeighborRows{"Home": {false: {}, true: {}}}
-	for _, m := range []message{neighborFrame(9, "192.0.2.20", "02:00:00:00:00:03", 2), neighborFrame(9, "2001:db8::20", "02:00:00:00:00:03", 4)} {
+	for _, m := range []message{neighborFrame(9, "192.0.2.20", "02:00:00:00:00:03", 2), neighborFrame(9, "2001:db8::20", "02:00:00:00:00:03", 4), neighborFrame(9, "fe80::20", "02:00:00:00:00:03", 4)} {
 		_, row, err := decodeNeighbor(m)
 		if err != nil {
 			t.Fatal(err)
@@ -259,7 +259,7 @@ func TestPhysicalKernelNeighborsUseExistingStrictAggregator(t *testing.T) {
 		rows["Home"][v6] = append(rows["Home"][v6], []byte(row)...)
 	}
 	devices, err := bindDevices(context.Background(), segments, rows)
-	if err != nil || len(devices) != 1 || len(devices[0].Addresses) != 2 || devices[0].IfIndex != 9 || devices[0].SegmentID != "Home" {
+	if err != nil || len(devices) != 1 || len(devices[0].Addresses) != 2 || len(devices[0].LinkLocalAddresses) != 1 || devices[0].IfIndex != 9 || devices[0].SegmentID != "Home" {
 		t.Fatalf("actual attachment lost: %v", err)
 	}
 	rows["Home"][false] = append(rows["Home"][false], []byte("192.0.2.20 lladdr 02:00:00:00:00:04 REACHABLE\n")...)

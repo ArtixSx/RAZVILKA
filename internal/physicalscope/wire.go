@@ -176,7 +176,7 @@ func decodeNeighbor(m message) (int, string, error) {
 	state := binary.NativeEndian.Uint16(m.data[8:10])
 	states := map[uint16]string{1: "INCOMPLETE", 2: "REACHABLE", 4: "STALE", 8: "DELAY", 16: "PROBE", 32: "FAILED", 64: "NOARP", 128: "PERMANENT"}
 	label := states[state]
-	if label == "" || m.data[11] != 1 || m.data[10]&^(byte(2|8|16)) != 0 {
+	if label == "" || m.data[11] != 1 || m.data[10]&^(byte(2|16)) != 0 {
 		return 0, "", ErrUnknown
 	}
 	mac := net.HardwareAddr(a[2]).String()
@@ -228,7 +228,7 @@ func uniqueSorted(values []string) ([]string, error) {
 	return values, nil
 }
 
-func checkNotifications(frames []message, segments []Segment) error {
+func checkNotifications(frames []message, segments []Segment, devices []Device) error {
 	tracked, roots, names := map[int]bool{}, map[int]bool{}, map[string]bool{}
 	for _, s := range segments {
 		tracked[s.IfIndex], roots[s.IfIndex], names[s.Interface] = true, true, true
@@ -237,7 +237,11 @@ func checkNotifications(frames []message, segments []Segment) error {
 		}
 	}
 	for _, m := range frames {
-		if m.seq != 0 || m.pid != 0 || m.flags != 0 {
+		// receive authenticates the datagram's kernel sender (sockaddr PID0).
+		// A multicast notification can retain the triggering writer's header
+		// sequence/port ID; those fields do not make it a foreign datagram.
+		// This socket issues no requests, so dump/multipart flags still refuse.
+		if m.flags != 0 {
 			return ErrUnknown
 		}
 		switch m.kind {
@@ -261,7 +265,26 @@ func checkNotifications(frames []message, segments []Segment) error {
 				return ErrUnknown
 			}
 			if roots[int(binary.NativeEndian.Uint32(m.data[4:8]))] {
-				return ErrUnknown
+				if m.kind == 29 {
+					return ErrUnknown
+				}
+				index, row, err := decodeNeighbor(m)
+				if err != nil {
+					return err
+				}
+				fields := strings.Fields(row)
+				if len(fields) != 4 || fields[1] != "lladdr" || fields[3] == "FAILED" || fields[3] == "INCOMPLETE" {
+					return ErrUnknown
+				}
+				matched := 0
+				for _, d := range devices {
+					if d.IfIndex == index && d.MAC == fields[2] && (slicesContains(d.Addresses, fields[0]) || slicesContains(d.LinkLocalAddresses, fields[0])) {
+						matched++
+					}
+				}
+				if matched != 1 {
+					return ErrUnknown
+				}
 			}
 		default:
 			return ErrUnknown

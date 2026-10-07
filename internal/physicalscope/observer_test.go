@@ -15,7 +15,7 @@ type modelFence struct {
 	checks                  int
 }
 
-func (f *modelFence) check(ctx context.Context, _ []Segment) error {
+func (f *modelFence) check(ctx context.Context, _ []Segment, _ []Device) error {
 	f.checks++
 	if !f.opened || f.closed || f.changed || ctx.Err() != nil {
 		return ErrUnknown
@@ -39,7 +39,7 @@ func newModel(t *testing.T) (*Observer, *observerModel, context.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	t.Cleanup(cancel)
 	m := &observerModel{selection: Selection{Revision: 7, PolicyRevision: 3, HomeSegmentID: "Home", GuestSegmentIDs: []string{"iot"}}, identity: netidentity.Identity{Version: 1, Kind: netidentity.ProcNetInode, BootID: "12345678-1234-1234-1234-123456789abc", Inode: 92}, fence: &modelFence{}}
-	m.facts = Snapshot{Segments: []Segment{{ID: "Bridge0", NativeName: "Home", Interface: "Home", IfIndex: 9, MAC: "02:00:00:00:00:01", Prefixes: []string{"192.0.2.0/24", "2001:db8::/64"}, LinkAddresses: []string{"192.0.2.1/24", "2001:db8::1/64"}, Members: []Link{{Interface: "eth0", IfIndex: 4, MAC: "02:00:00:00:00:02"}}, Home: true}}, Devices: []Device{{ID: "mac-020000000003", MAC: "02:00:00:00:00:03", Interface: "Home", IfIndex: 9, SegmentID: "Bridge0", Addresses: []string{"192.0.2.20", "2001:db8::20"}}}}
+	m.facts = Snapshot{Segments: []Segment{{ID: "Bridge0", NativeName: "Home", Interface: "Home", IfIndex: 9, MAC: "02:00:00:00:00:01", Prefixes: []string{"192.0.2.0/24", "2001:db8::/64"}, LinkAddresses: []string{"192.0.2.1/24", "2001:db8::1/64"}, Members: []Link{{Interface: "eth0", IfIndex: 4, MAC: "02:00:00:00:00:02"}}, Home: true}}, Devices: []Device{{ID: "mac-020000000003", MAC: "02:00:00:00:00:03", Interface: "Home", IfIndex: 9, SegmentID: "Bridge0", Addresses: []string{"192.0.2.20", "2001:db8::20"}, LinkLocalAddresses: []string{"fe80::20"}}}}
 	o := &Observer{selection: func(c context.Context) (Selection, error) {
 		m.reads++
 		if m.onSelection != nil {
@@ -108,6 +108,7 @@ func TestPhysicalSnapshotIsDetached(t *testing.T) {
 	copy.Segments[0].LinkAddresses[0] = "198.51.100.1/24"
 	copy.Segments[0].Members[0].IfIndex = 19
 	copy.Devices[0].Addresses[0] = "203.0.113.2"
+	copy.Devices[0].LinkLocalAddresses[0] = "fe80::21"
 	if !reflect.DeepEqual(before, r.Snapshot()) || o.Verify(ctx, r) != nil {
 		t.Fatal("detached metadata mutated review")
 	}
@@ -144,6 +145,7 @@ func TestPhysicalChangedFactsPermanentlyRevoke(t *testing.T) {
 		"Home role":          func(m *observerModel) { m.facts.Segments[0].Home = false },
 		"device attachment":  func(m *observerModel) { m.facts.Devices[0].SegmentID = "Bridge1" },
 		"device address":     func(m *observerModel) { m.facts.Devices[0].Addresses[0] = "192.0.2.21" },
+		"link-local binding": func(m *observerModel) { m.facts.Devices[0].LinkLocalAddresses[0] = "fe80::21" },
 		"fence ABA":          func(m *observerModel) { m.fence.changed = true },
 	}
 	for name, change := range changes {

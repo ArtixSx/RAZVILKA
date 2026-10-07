@@ -20,7 +20,8 @@ func frame(m message) []byte {
 func TestPhysicalLifecycleRejectsRestoredTupleAndMemberChange(t *testing.T) {
 	segments := []Segment{{Interface: "Home", IfIndex: 9, Members: []Link{{Interface: "eth0", IfIndex: 4}}}}
 	unrelated := linkFrame(20, "rztun0", "tun", "", 0)
-	if err := checkNotifications([]message{unrelated}, segments); err != nil {
+	unrelated.seq, unrelated.pid = 12, 23
+	if err := checkNotifications([]message{unrelated}, segments, nil); err != nil {
 		t.Fatal("unrelated TUN invalidated physical LAN")
 	}
 	selected := linkFrame(9, "Home", "bridge", "02:00:00:00:00:01", 0)
@@ -35,12 +36,12 @@ func TestPhysicalLifecycleRejectsRestoredTupleAndMemberChange(t *testing.T) {
 		"address":                    {addressFrame(9, "192.0.2.1/24")},
 		"neighbor":                   {neighborFrame(9, "192.0.2.20", "02:00:00:00:00:03", 2)},
 		"overrun":                    {{kind: 4}},
-		"solicited mix":              {{kind: 16, seq: 1, data: selected.data}},
-		"foreign header PID":         {{kind: 16, pid: 23, data: selected.data}},
+		"solicited dump mix":         {{kind: 16, flags: 2, seq: 1, data: selected.data}},
+		"selected writer context":    {{kind: 16, pid: 23, seq: 12, data: selected.data}},
 		"truncated message":          {{kind: 16, data: []byte{0}}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if checkNotifications(events, segments) == nil {
+			if checkNotifications(events, segments, nil) == nil {
 				t.Fatal("continuity survived changed/unknown stream")
 			}
 		})

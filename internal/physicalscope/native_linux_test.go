@@ -59,7 +59,7 @@ func TestPhysicalScopeNativeWireDependency(t *testing.T) {
 				}
 			}
 		}
-		return f.check(c, nil)
+		return f.check(c, nil, nil)
 	})
 	if err != nil {
 		t.Fatal(err)
