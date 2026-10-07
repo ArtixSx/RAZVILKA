@@ -3856,11 +3856,19 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 					return dataplane.Plan{}, err
 				}
 			}
-			routes = append(routes, dataplane.Route{
+			route := dataplane.Route{
 				WireGuardProfileRevision: state.WireGuardProfileRevision,
 				ServiceID:                service.ID, ServiceName: service.Name, Selected: selected, Resolved: resolved,
 				Domains: service.Domains, CIDRs: service.CIDRs, SourceRefs: service.SourceRefs, Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL, AppliedRoute: appliedRoute,
-			})
+			}
+			if engine, target, exactNode := routekind.ParseNodeRoute(resolved); exactNode && engine == "xray" && strings.HasPrefix(target, "node-") {
+				// The actual node runtime consumes the catalog's complete service
+				// predicate. Keep it in the reviewed plan for ordinary Apply and
+				// autonomy alike, detached from later catalog/editor changes.
+				frozen := defaultRouteCloneCatalogService(service)
+				route.LogicalServiceID, route.ProbeService = service.ID, &frozen
+			}
+			routes = append(routes, route)
 		}
 		applied := cfg.AppliedServices[service.ID]
 		if applied.Enabled {

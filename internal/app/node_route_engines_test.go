@@ -29,6 +29,12 @@ func (*xrayApplyFixtureAdapter) ID() string { return "xray" }
 func xrayRouteFixture(t *testing.T, proof bool) (*App, string, *nodeApplyAdapter, *nodeApplyAdapter) {
 	t.Helper()
 	a, id, sing := nodeApplyFixture(t)
+	// Actual Xray consumes the same validated catalog predicate as startup.
+	// The generic node fixture predates that contract and omits these fields.
+	for i := range a.Catalog.Services {
+		a.Catalog.Services[i].Category = "internet"
+		a.Catalog.Services[i].Strategy = []string{"xray"}
+	}
 	if proof {
 		at := time.Now()
 		_, err := a.Nodes.RecordCheck(context.Background(), id, nodestore.CheckRecord{ProbeID: "xray-app-route-proof", ServiceID: "telegram", NetworkProfile: "wan-0123456789ab", RoutePathID: "xray:" + id, TestLevel: "service", Verdict: "PASS", State: "available", Stage: "service", CheckedAt: at, ExpiresAt: at.Add(time.Hour)}, at)
