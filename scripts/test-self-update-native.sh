@@ -13,4 +13,7 @@ export GOTOOLCHAIN=local
 # Command children and all journals/images live exclusively in Go TempDir.
 "$GO" test -race ./internal/updatecheck ./internal/selfupdatejournal ./internal/operationgate \
   -run 'NativeSelfUpdate|NativeStoppedSettlement|NativePrivateMetadata|NativeNodeHistory|NodeHistory|NodeAdmission|NodeWriteAdmission|NodeReadable|Stopped|JournalReader|Reader2To3|OptionalReader|LegacyReview|FileJournal|PrivateDirectory|FileCommandLease|FileCommandReceipt|StopBeforeFiles|AtomicFileEffect|TerminalArtifacts|TerminalFileInspection|PrivateSnapshotExcludes|FileEffectAdmission|FileStopConsumer|FileReview' \
+  -skip '^TestNativeSelfUpdatePersistentCrashRecovery$' \
   -count=1 -timeout=3m
+# The multi-process persistent case has a separate finite fixture envelope.
+sh "$HERE/scripts/test-self-update-persistent-native.sh"
