@@ -37,11 +37,15 @@ func nativeScopedXrayManagerTransit(t *testing.T, ctx context.Context, a *ProxyT
 	if !filepath.IsAbs(fixtureRoot) || a == nil || a.ID() != "xray" || filepath.Clean(a.StateRoot) != filepath.Join(fixtureRoot, "router-state", "xray") {
 		return errors.New("Manager transit requires the actual fixture adapter")
 	}
-	// The old fixture exercises LAN acceptance. Enable the actual owner observer
-	// only for this extension and restore its original verifier afterward.
-	verifier := a.nodeRouterVerifier
-	a.nodeRouterVerifier = true
-	defer func() { a.nodeRouterVerifier = verifier }()
+	registered := a
+	if registered.scopedXray || !registered.xrayPlanDispatch || !registered.nodeRouterVerifier {
+		return errors.New("Manager transit requires the ordinary app Xray dispatcher")
+	}
+	view, frozen, err := registered.dispatchCurrentXrayPlan(ctx, active)
+	if err != nil || view == registered || !view.scopedXray || view.xrayPlanDispatch || !view.nodeRouterVerifier {
+		return errors.Join(ErrNodeTransitUnavailable, err)
+	}
+	a, active = view, frozen
 	if _, err := a.checkScopedNodeState(ctx, active); err != nil {
 		return err
 	}
@@ -73,7 +77,7 @@ func nativeScopedXrayManagerTransit(t *testing.T, ctx context.Context, a *ProxyT
 	plan.PlanID, plan.Adapters = "dp-"+plan.Digest[:16], []string{a.ID()}
 	m := New(filepath.Join(fixtureRoot, "manager-transit-state"))
 	m.FreshProfile = func(c context.Context) (string, error) { return plan.NetworkProfileID, c.Err() }
-	if err := m.Register(a); err != nil {
+	if err := m.Register(registered); err != nil {
 		return err
 	}
 	if err := m.Record(plan); err != nil {
@@ -207,6 +211,54 @@ func nativeScopedXrayManagerTransit(t *testing.T, ctx context.Context, a *ProxyT
 	}
 	t.Logf("actual Manager transit: RPDB add/readback/route, owned TUN HTTPS exit=%s body SHA256=%s, common removed receipt + IPv4/IPv6 absence, paired prepared->removed journals; IPv6 foreign collision refused; cancelled original scope cannot add", expectedExit, accepted.BodySHA256)
 	return nil
+}
+
+// The native lifecycle seals the real service predicate before materializing
+// each candidate. A and B keep distinct immutable intents for exact rollback.
+func nativeXrayDispatcherPlan(plan Plan, expectedExit string) (Plan, error) {
+	plan.Routes = cloneNetworkPolicyRoutes(plan.Routes)
+	if len(plan.Routes) != 1 {
+		return Plan{}, ErrNetworkPolicyProbe
+	}
+	service := nativeRouterHTTPSService(plan.Routes[0].ProbeURL, expectedExit)
+	plan.Routes[0].ProbeService = &service
+	if _, err := FrozenProbeService(plan.Routes[0]); err != nil {
+		return Plan{}, err
+	}
+	plan.SchemaVersion, plan.Ready, plan.State = SchemaVersion, true, "prepared"
+	plan.PlanID, plan.Digest, plan.Adapters = "", "", []string{"xray"}
+	raw, err := json.Marshal(plan)
+	if err != nil {
+		return Plan{}, err
+	}
+	sum := sha256.Sum256(raw)
+	plan.Digest = hex.EncodeToString(sum[:])
+	plan.PlanID = "dp-" + plan.Digest[:16]
+	return plan, nil
+}
+
+// Only the fixture's reviewed intent, WAN identity and local TLS CA are supplied.
+// Manager issues, journals, verifies and settles the real temporary resources;
+// the action still calls the registered dispatcher's public lifecycle method.
+func nativeXrayDispatcherExecution(ctx context.Context, registered *ProxyTunnelAdapter, plan Plan, action func(context.Context) error) error {
+	if registered == nil || registered.scopedXray || !registered.xrayPlanDispatch || !registered.nodeRouterVerifier || action == nil {
+		return ErrNodeTransitUnavailable
+	}
+	if _, _, err := registered.dispatchCandidateXrayPlan(plan, "", false); err != nil {
+		return err
+	}
+	m := New(filepath.Join(os.Getenv("RAZVILKA_XRAY_TUN_ROOT"), "dispatcher-manager-state"))
+	m.FreshProfile = registered.FreshProfile
+	if err := m.Register(registered); err != nil {
+		return err
+	}
+	reviewed := WithReviewGuard(ctx, func(c context.Context) error {
+		if registered.scopedXray || !registered.xrayPlanDispatch || !registered.nodeRouterVerifier {
+			return ErrReviewChanged
+		}
+		return verifyNetworkProfile(c, plan.NetworkProfileID, registered.FreshProfile)
+	})
+	return m.WithExecutionResources(reviewed, plan, registered.ID(), action)
 }
 
 func nativeManagerTransitIssue(m *Manager, ctx context.Context, spec NodeTransitSpec, owner nodeTransitRuntime) (*nodeTransitLease, nodeTransitRegistration, *nodeRouterTransitReadback, context.Context, error) {

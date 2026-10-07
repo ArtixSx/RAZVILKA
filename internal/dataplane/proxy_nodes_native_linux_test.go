@@ -278,7 +278,7 @@ func nativeScopedXrayRouter(t *testing.T) {
 	}
 	var lastSelected netip.Addr
 	newAdapter := func() *ProxyTunnelAdapter {
-		a, err := NewScopedXrayTunnelAdapter(engineconfig.New(filepath.Join(root, "drafts"), filepath.Join(root, "backups")), state, func(ctx context.Context, req []NodeRouteRequest, p string, at time.Time) (NodeRouteMaterial, error) {
+		a, err := NewXrayRuntimeAdapter(engineconfig.New(filepath.Join(root, "drafts"), filepath.Join(root, "backups")), state, func(ctx context.Context, req []NodeRouteRequest, p string, at time.Time) (NodeRouteMaterial, error) {
 			var bindings []nodestore.RouteBinding
 			for _, r := range req {
 				bindings = append(bindings, nodestore.RouteBinding{ServiceID: r.ServiceID, NodeID: r.NodeID, NetworkProfile: p, Domains: r.Domains, Destinations: r.Destinations})
@@ -288,6 +288,9 @@ func nativeScopedXrayRouter(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatal(err)
+		}
+		if a.scopedXray || !a.xrayPlanDispatch || !a.nodeRouterVerifier {
+			t.Fatal("native fixture requires the ordinary app Xray dispatcher")
 		}
 		a.EngineBin, a.SidecarBin, a.IP, a.IPTables, a.IP6Tables = os.Getenv("RAZVILKA_XRAY_NATIVE"), os.Getenv("RAZVILKA_SINGBOX_NATIVE"), "ip", "iptables", "ip6tables"
 		a.Timeout = 8 * time.Second
@@ -353,11 +356,26 @@ func nativeScopedXrayRouter(t *testing.T) {
 		}
 	})
 	plan := Plan{NetworkProfileID: profile, Routes: []Route{{ServiceID: "native-site", ServiceName: "Native site", Selected: "xray:" + id, Resolved: "xray:" + id, Domains: []string{"service.example"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://service.example/probe"}}}
-	if os.Getenv("RAZVILKA_NODE_TRANSIT_MANAGER_NATIVE") == "1" {
-		// Seal the exact service before staging. The actual router observer
-		// cannot derive a trusted service predicate from the probe URL alone.
-		service := nativeRouterHTTPSService(plan.Routes[0].ProbeURL, expectedExit)
-		plan.Routes[0].ProbeService = &service
+	plan, err = nativeXrayDispatcherPlan(plan, expectedExit)
+	if err != nil {
+		t.Fatal("seal actual A service predicate", err)
+	}
+	firstPlan := plan
+	assertDispatcher := func() {
+		if a.scopedXray || !a.xrayPlanDispatch || !a.nodeRouterVerifier {
+			t.Fatal("native lifecycle changed the registered dispatcher startup flags")
+		}
+	}
+	// Public lifecycle calls keep the registered dispatcher. Direct PID/router
+	// checks use the same frozen Plan's detached view of the actual current mode.
+	scopedRuntime := func() (*ProxyTunnelAdapter, Plan) {
+		assertDispatcher()
+		view, frozen, err := a.dispatchCurrentXrayPlan(ctx, plan)
+		if err != nil || view == a || !view.scopedXray || view.xrayPlanDispatch {
+			t.Fatal("native checks require an immutable current node view", err)
+		}
+		assertDispatcher()
+		return view, frozen
 	}
 	stage := func(label string) string {
 		transaction := filepath.Join(root, label)
@@ -369,12 +387,16 @@ func nativeScopedXrayRouter(t *testing.T) {
 		if err := a.Canary(ctx, plan.RoutePlanFor("xray"), transaction); err != nil {
 			t.Fatal(label, "canary", err)
 		}
+		assertDispatcher()
 		return transaction
 	}
 	assertHealth := func(label string) {
-		if err := a.CommittedNodeHealth(ctx, plan); err != nil {
+		if err := nativeXrayDispatcherExecution(ctx, a, plan, func(c context.Context) error {
+			return a.CommittedNodeHealth(c, plan)
+		}); err != nil {
 			t.Fatal(label, err)
 		}
+		assertDispatcher()
 		if lastSelected.String() != expectedExit {
 			t.Fatal(label, "wrong exit", lastSelected)
 		}
@@ -382,7 +404,9 @@ func nativeScopedXrayRouter(t *testing.T) {
 	}
 	first := stage("A")
 	for _, step := range []func(context.Context, Plan, string) error{a.Activate, a.Health, a.Commit} {
-		if err := step(ctx, plan, first); err != nil {
+		if err := nativeXrayDispatcherExecution(ctx, a, plan, func(c context.Context) error {
+			return step(c, plan, first)
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -391,9 +415,11 @@ func nativeScopedXrayRouter(t *testing.T) {
 		if err := nativeScopedXrayManagerTransit(t, ctx, a, plan, roots, expectedExit); err != nil {
 			t.Fatal("actual Manager node transit", err)
 		}
+		assertDispatcher()
 	}
 	if os.Getenv("RAZVILKA_XRAY_ROUTER_HTTPS_NATIVE") == "1" {
-		routerHTTPSLease, err = nativeScopedXrayRouterHTTPS(t, ctx, a, plan, roots, expectedExit)
+		view, frozen := scopedRuntime()
+		routerHTTPSLease, err = nativeScopedXrayRouterHTTPS(t, ctx, view, frozen, roots, expectedExit)
 		if err != nil {
 			t.Fatal("actual router TUN HTTPS component", err)
 		}
@@ -401,30 +427,44 @@ func nativeScopedXrayRouter(t *testing.T) {
 	// Read current on-disk state in a new adapter; no candidate identity is used.
 	a = newAdapter()
 	assertHealth("fresh adapter runtime inspection")
-	pid, err := readManagedPID(a.sidecarProcess())
+	view, _ := scopedRuntime()
+	sidecar := view.sidecarProcess()
+	pid, err := readManagedPID(sidecar)
 	if err != nil {
 		t.Fatal(err)
 	}
 	process, _ := os.FindProcess(pid)
 	_ = process.Kill()
 	deadline := time.Now().Add(3 * time.Second)
-	for a.Processes.Running(a.sidecarProcess()) && time.Now().Before(deadline) {
+	for view.Processes.Running(sidecar) && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
-	if err := a.CommittedNodeHealth(ctx, plan); err == nil {
+	if err := nativeXrayDispatcherExecution(ctx, a, plan, func(c context.Context) error {
+		return a.CommittedNodeHealth(c, plan)
+	}); err == nil {
 		t.Fatal("killed sidecar retained health")
 	}
-	if err := a.Reconcile(ctx, plan); err != nil {
+	if err := nativeXrayDispatcherExecution(ctx, a, plan, func(c context.Context) error {
+		return a.Reconcile(c, plan)
+	}); err != nil {
 		t.Fatal("sidecar reconcile", err)
 	}
 	assertHealth("sidecar kill/restart")
 	endpoint = "93.184.216.14"
+	plan, err = nativeXrayDispatcherPlan(plan, "93.184.216.15")
+	if err != nil {
+		t.Fatal("seal actual B service predicate", err)
+	}
 	second := stage("B")
-	if err := a.Activate(ctx, plan, second); err != nil {
+	if err := nativeXrayDispatcherExecution(ctx, a, plan, func(c context.Context) error {
+		return a.Activate(c, plan, second)
+	}); err != nil {
 		t.Fatal(err)
 	}
 	expectedExit = "93.184.216.15"
-	if err := a.Health(ctx, plan, second); err != nil {
+	if err := nativeXrayDispatcherExecution(ctx, a, plan, func(c context.Context) error {
+		return a.Health(c, plan, second)
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if lastSelected.String() != expectedExit {
@@ -432,17 +472,21 @@ func nativeScopedXrayRouter(t *testing.T) {
 	}
 	// B's real sidecar dies after its successful health probe. The unchanged
 	// owned config/lease remains cleanup authority; absent runtime cannot commit.
-	pid, err = readManagedPID(a.sidecarProcess())
+	view, _ = scopedRuntime()
+	sidecar = view.sidecarProcess()
+	pid, err = readManagedPID(sidecar)
 	if err != nil {
 		t.Fatal(err)
 	}
 	process, _ = os.FindProcess(pid)
 	_ = process.Kill()
 	deadline = time.Now().Add(3 * time.Second)
-	for a.Processes.Running(a.sidecarProcess()) && time.Now().Before(deadline) {
+	for view.Processes.Running(sidecar) && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
-	if err := a.Commit(ctx, plan, second); err == nil {
+	if err := nativeXrayDispatcherExecution(ctx, a, plan, func(c context.Context) error {
+		return a.Commit(c, plan, second)
+	}); err == nil {
 		t.Fatal("dead B sidecar committed")
 	}
 	if err := a.Rollback(ctx, plan, second); err != nil {
@@ -451,6 +495,7 @@ func nativeScopedXrayRouter(t *testing.T) {
 	if ok, err := a.VerifyRollback(ctx, plan, second); err != nil || !ok {
 		t.Fatal("rollback not verified", ok, err)
 	}
+	plan = firstPlan
 	expectedExit = "93.184.216.13"
 	assertHealth("B failure -> verified A rollback")
 	t.Log("native scoped Xray TUN lifecycle complete; no Internet/router/HIL or production Selectable claim")
