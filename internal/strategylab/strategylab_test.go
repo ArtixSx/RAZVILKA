@@ -34,6 +34,12 @@ type fakeResourceInspector struct{ budget ResourceBudget }
 
 func (f fakeResourceInspector) Inspect() ResourceBudget { return f.budget }
 
+// Logical probe fixtures must not depend on the test host's transient load.
+// Production resource admission still evaluates this observed safe budget.
+func safeProbeTestResources() ResourceInspector {
+	return fakeResourceInspector{budget: ResourceBudget{Observed: true, MemoryTotalKB: 256 * 1024, MemoryAvailableKB: 128 * 1024, CPUCount: 1, Load1: 0.25}}
+}
+
 func (v fakeValidator) Validate(_ context.Context, arguments []string) Validation {
 	result := v.result
 	result.Arguments = arguments
@@ -138,6 +144,7 @@ func TestProbeRequiresNativeValidationAndRecordsTypedEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	manager.Resources = safeProbeTestResources()
 	candidate, err := manager.AddCandidate("tcp-tls", "isolated", "--filter-tcp=443", "expert")
 	if err != nil {
 		t.Fatal(err)
@@ -203,6 +210,7 @@ func TestQUICCandidateUsesTrueHTTP3ProbeProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	manager.Resources = safeProbeTestResources()
 	candidate, err := manager.AddCandidate("quic-udp", "HTTP/3 candidate", "--filter-udp=443 --payload=quic_initial", "expert")
 	if err != nil {
 		t.Fatal(err)
