@@ -1,5 +1,15 @@
 # D02: отдельная проверка Xray
 
+## Текущий статус — завершён 07.10.2026
+
+D02 принят в пределах канонического VLESS/per-node compiler и checker. `native57` подтвердил настоящий RAW/TCP TLS и REALITY (14.27s), все восемь вариантов XHTTP TLS/REALITY × auto/packet-up/stream-up/stream-one (49.63s), отказ неверного профиля и восстановление клиента/сервера. Поля транспорта и безопасности сохраняются без подмены неизвестного транспорта на TCP; compiler capability и matching `xray:<node-id>` evidence остаются обязательными.
+
+`xray-native94`, source `49e8808`, дополнительно подтвердил обычный неизменяемый dispatcher и настоящий Manager/TUN: Activate/Health/Commit, выбранный и контрольный клиент, HTTPS из router namespace, новый адаптер, перезапуск sidecar и B failure → verified A rollback (**RC0, 24.42s**; Linux race2.512s). Подробные границы находятся в [журнале проверок](VALIDATION_RU.md).
+
+D03 остаётся открытым: домашний роутер, внешний Интернет, перезапуск приложения/роутера, физическая перезагрузка и новый platform provider требуют отдельной приёмки. Перезапуск production sidecar в94 и checker client в57 не подменяют проверку kill/recovery production Xray внутри TUN. Ниже сохранены ранние checkpoints, их старые ограничения не описывают текущую поддержку XHTTP.
+
+## Исходный checkpoint
+
 Исходная база: `76d94b6`. Реализация: ветка `feature/delivery-d02-xray`, первые изменения `91c3b2b`, строгие параметры `d3360da`. Общие app/store/worker-контракты и подключение диспетчера остаются у координатора.
 
 ## Подключение
