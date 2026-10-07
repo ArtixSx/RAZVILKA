@@ -1,13 +1,17 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 var errBackendInventory = errors.New("network backend inventory unknown or incomplete")
@@ -22,14 +26,14 @@ const (
 // These private values describe an observation at one held owner boundary.
 // They are not a capability, an ownership receipt, or a persisted grant.
 type backendInventoryScope struct {
-	BootID, NetNamespace, ToolReviewID string
+	Network      netidentity.Identity
+	ToolReviewID string
 }
 
 type backendInventoryCoverage struct {
-	LegacyFixedFiveBothFamilies bool
-	NativeNFTAllFamilies        bool
-	// Fixed table reads do not prove arbitrary registered classic table coverage.
-	// This slice deliberately never sets this field to true.
+	LegacyRegisteredBothFamilies bool
+	NativeNFTAllFamilies         bool
+	// All enumerated tables in both families were read twice with stable closure.
 	RegisteredTablesComplete bool
 }
 
@@ -39,6 +43,7 @@ const (
 	backendNFTUnknown backendNFTState = iota
 	backendNFTEmpty
 	backendNFTPresent
+	backendNFTNoRegisteredSubsystemAtCapture
 )
 
 type backendInventoryRow struct {
@@ -54,6 +59,7 @@ type backendNFTTable struct {
 }
 
 type backendInventorySnapshot struct {
+	Schema              int
 	Scope               backendInventoryScope
 	IPTables, IP6Tables string
 	Coverage            backendInventoryCoverage
@@ -66,21 +72,26 @@ type backendInventorySnapshot struct {
 // Full LAN NamespaceCheck must use this coverage gate in addition to its
 // own pure exact predicates. A complete-empty NFT dump alone cannot pass it.
 func (s backendInventorySnapshot) requireLANBackendCoverage() error {
-	if !s.Coverage.LegacyFixedFiveBothFamilies || !s.Coverage.NativeNFTAllFamilies || !s.Coverage.RegisteredTablesComplete || s.NFTState != backendNFTEmpty {
+	if s.Schema != 1 || s.Scope.Network.Validate() != nil || !lanPolicyHash(s.Scope.ToolReviewID) || !s.Coverage.LegacyRegisteredBothFamilies || !s.Coverage.NativeNFTAllFamilies || !s.Coverage.RegisteredTablesComplete || len(s.NFTTables) != 0 || (s.NFTState != backendNFTEmpty && s.NFTState != backendNFTNoRegisteredSubsystemAtCapture) {
+		return errBackendInventory
+	}
+	if s.NFTState == backendNFTNoRegisteredSubsystemAtCapture && (s.NFTGeneration != 0 || s.Scope.Network.Kind != netidentity.ReviewedSingleInitNet || s.Scope.Network.PlatformReviewSHA256 != backendNFTStockScopeSHA256) {
 		return errBackendInventory
 	}
 	return nil
 }
 
 type backendNFTSession interface {
+	Registration(context.Context, backendNFTABI) (backendNFTRegistration, error)
 	Generation(context.Context) (uint32, error)
 	Tables(context.Context, uint32) ([]backendNFTTable, error)
 	Close() error
 }
 
 type backendInventoryPlatform struct {
-	endpoint func(context.Context) (backendInventoryScope, error)
-	openNFT  func(context.Context) (backendNFTSession, error)
+	withCurrent      func(context.Context, func(context.Context, netidentity.Identity) error) error
+	registeredTables func(context.Context, int) ([]byte, error)
+	openNFT          func(context.Context) (backendNFTSession, error)
 }
 
 // Runner must be the existing admitted read-only runner. CheckTools is
@@ -89,6 +100,8 @@ type backendInventoryPlatform struct {
 // Neither a version suffix nor ToolReviewID alone establishes that proof.
 // The collector never invokes authority/registrar/consumer Verify callbacks.
 type backendInventoryReader struct {
+	Provider            *netidentity.Provider
+	NFTABI              backendNFTABI
 	Runner              NFQWS2Runner
 	IPTables, IP6Tables string
 	CheckTools          func(context.Context, backendInventoryScope) error
@@ -101,16 +114,15 @@ type backendInventoryBoundedRunner interface {
 }
 
 func (r *backendInventoryReader) Read(ctx context.Context, scope backendInventoryScope) (backendInventorySnapshot, error) {
-	// Keep socket creation, reads and both endpoint samples in the same
-	// inherited thread namespace. This function never changes namespaces.
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	return r.read(ctx, scope, backendInventorySystemPlatform())
+	if r == nil || r.Provider == nil {
+		return backendInventorySnapshot{}, errBackendInventory
+	}
+	return r.read(ctx, scope, backendInventorySystemPlatform(r.Provider))
 }
 
 func (r *backendInventoryReader) read(ctx context.Context, scope backendInventoryScope, platform backendInventoryPlatform) (backendInventorySnapshot, error) {
 	var unknown backendInventorySnapshot
-	if ctx == nil || r == nil || r.Runner == nil || r.CheckTools == nil || r.IPTables == "" || r.IP6Tables == "" || !nfqws2ManagedBoot(scope.BootID) || !nfqwsScopedNamespace(scope.NetNamespace) || !lanPolicyHash(scope.ToolReviewID) || platform.endpoint == nil || platform.openNFT == nil {
+	if ctx == nil || r == nil || r.Runner == nil || r.CheckTools == nil || r.IPTables == "" || r.IP6Tables == "" || scope.Network.Validate() != nil || !lanPolicyHash(scope.ToolReviewID) || platform.withCurrent == nil || platform.registeredTables == nil || platform.openNFT == nil || !r.NFTABI.inventoryABI() {
 		return unknown, errBackendInventory
 	}
 	// The private owner creates/fixes this descriptor before the held read.
@@ -122,31 +134,45 @@ func (r *backendInventoryReader) read(ctx context.Context, scope backendInventor
 	}
 	ctx, cancel := context.WithTimeout(ctx, backendInventoryTimeout)
 	defer cancel()
-	check := func() error {
-		if err := ctx.Err(); err != nil {
-			return err
+	var result backendInventorySnapshot
+	uses := 0
+	err := platform.withCurrent(ctx, func(held context.Context, current netidentity.Identity) error {
+		uses++
+		if uses != 1 {
+			return errBackendInventory
 		}
-		if err := r.CheckTools(ctx, scope); err != nil {
-			return err
+		if current != scope.Network || current.Validate() != nil || held == nil || held.Err() != nil || (r.NFTABI == backendNFTABIStockNC1812 && (current.Kind != netidentity.ReviewedSingleInitNet || current.PlatformReviewSHA256 != backendNFTStockScopeSHA256)) {
+			return errBackendInventory
 		}
-		got, err := platform.endpoint(ctx)
-		if err != nil || got.BootID != scope.BootID || got.NetNamespace != scope.NetNamespace {
-			return errors.Join(errBackendInventory, err)
+		var err error
+		result, err = r.capture(held, scope, platform, runner)
+		return err
+	})
+	if err != nil || ctx.Err() != nil || uses != 1 {
+		failure := errors.Join(errBackendInventory, err, ctx.Err())
+		var staged *backendInventoryFailure
+		if !errors.As(failure, &staged) {
+			failure = backendInventoryAt("SCOPE", failure)
 		}
-		return ctx.Err()
+		return unknown, failure
 	}
+	return result, nil
+}
+
+func (r *backendInventoryReader) capture(ctx context.Context, scope backendInventoryScope, platform backendInventoryPlatform, runner backendInventoryBoundedRunner) (backendInventorySnapshot, error) {
+	var unknown backendInventorySnapshot
 	fail := func(err error) (backendInventorySnapshot, error) {
 		return unknown, errors.Join(errBackendInventory, err, ctx.Err())
 	}
-	if err := check(); err != nil {
-		return fail(err)
+	if err := r.CheckTools(ctx, scope); err != nil || ctx.Err() != nil {
+		return fail(backendInventoryAt("TOOLS_A", errors.Join(err, ctx.Err())))
 	}
 	nft, err := platform.openNFT(ctx)
 	if err != nil {
 		if nft != nil {
 			_ = nft.Close()
 		}
-		return fail(err)
+		return fail(backendInventoryAt("OPEN_A", err))
 	}
 	if nft == nil {
 		return fail(errBackendInventory)
@@ -159,54 +185,218 @@ func (r *backendInventoryReader) read(ctx context.Context, scope backendInventor
 			_ = nft.Close()
 		}
 	}()
-	first, err := nft.Generation(ctx)
+	first, err := nft.Registration(ctx, r.NFTABI)
 	if err != nil {
-		return fail(err)
+		return fail(backendInventoryAt("GETGEN_A", err))
 	}
-	tables, err := nft.Tables(ctx, first)
-	if err != nil {
-		return fail(err)
+	if !first.valid(r.NFTABI) {
+		return fail(errBackendInventory)
 	}
-	result := backendInventorySnapshot{Scope: scope, IPTables: r.IPTables, IP6Tables: r.IP6Tables, NFTGeneration: first, NFTState: backendNFTEmpty, NFTTables: append([]backendNFTTable(nil), tables...)}
+	var tables []backendNFTTable
+	if !first.noRegistered {
+		tables, err = nft.Tables(ctx, first.generation)
+		if err != nil {
+			return fail(backendInventoryAt("GETTABLE", err))
+		}
+	} else {
+		// Each sole-negative proof belongs to the first request of a fresh socket.
+		closed = true
+		if err := nft.Close(); err != nil {
+			return fail(err)
+		}
+	}
+	result := backendInventorySnapshot{Schema: 1, Scope: scope, IPTables: r.IPTables, IP6Tables: r.IP6Tables, NFTGeneration: first.generation, NFTState: backendNFTEmpty, NFTTables: append([]backendNFTTable(nil), tables...)}
+	if first.noRegistered {
+		result.NFTState = backendNFTNoRegisteredSubsystemAtCapture
+	}
 	if len(tables) != 0 {
 		result.NFTState = backendNFTPresent
 	}
-	budget := backendClassicBudget{}
-	for _, tool := range []struct {
-		family int
-		path   string
-	}{{4, r.IPTables}, {6, r.IP6Tables}} {
-		for _, table := range []string{"raw", "mangle", "nat", "filter", "security"} {
-			if err := ctx.Err(); err != nil {
-				return fail(err)
-			}
-			data, err := runner.RunBounded(ctx, tool.path, backendClassicBytes-budget.bytes, "-t", table, "-S")
-			if err != nil || ctx.Err() != nil {
-				return fail(errors.Join(err, ctx.Err()))
-			}
-			rows, err := backendXTablesRows(data, &budget)
-			if err != nil {
-				return fail(err)
-			}
-			for _, tokens := range rows {
-				result.Rows = append(result.Rows, backendInventoryRow{Family: tool.family, Table: table, Tokens: tokens})
-			}
+	result.Rows, err = r.classic(ctx, platform, runner, func() error { return backendInventoryAt("TOOLS_B", errors.Join(r.CheckTools(ctx, scope), ctx.Err())) })
+	if err != nil {
+		var staged *backendInventoryFailure
+		if !errors.As(err, &staged) {
+			err = backendInventoryAt("CLASSIC", err)
 		}
+		return fail(err)
 	}
-	last, err := nft.Generation(ctx)
+	if first.noRegistered {
+		nft, err = platform.openNFT(ctx)
+		if err != nil || nft == nil {
+			if nft != nil {
+				_ = nft.Close()
+			}
+			return fail(backendInventoryAt("OPEN_B", errors.Join(errBackendInventory, err)))
+		}
+		closed = false
+	}
+	last, err := nft.Registration(ctx, r.NFTABI)
 	if err != nil || first != last {
-		return fail(errors.Join(errBackendInventory, err))
+		return fail(backendInventoryAt("GETGEN_B", errors.Join(errBackendInventory, err)))
 	}
 	closed = true
 	if err := nft.Close(); err != nil {
-		return fail(err)
+		return fail(backendInventoryAt("CLOSE", err))
 	}
-	if err := check(); err != nil {
-		return fail(err)
+	if ctx.Err() != nil {
+		return fail(ctx.Err())
 	}
-	result.Coverage.LegacyFixedFiveBothFamilies = true
+	result.Coverage.LegacyRegisteredBothFamilies = true
 	result.Coverage.NativeNFTAllFamilies = true
+	result.Coverage.RegisteredTablesComplete = true
 	return result, nil
+}
+
+type backendInventoryFailure struct {
+	stage string
+	cause error
+}
+
+func (e *backendInventoryFailure) Error() string {
+	return "network backend inventory refused at " + e.stage
+}
+func (e *backendInventoryFailure) Unwrap() error { return errors.Join(errBackendInventory, e.cause) }
+func backendInventoryAt(stage string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &backendInventoryFailure{stage: stage, cause: err}
+}
+
+const backendClassicNamesBytes = 4096
+const backendClassicTables = 64
+
+func backendClassicTableName(name string) bool {
+	if len(name) == 0 || len(name) > 31 || name[0] == '-' {
+		return false
+	}
+	for _, c := range name {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == '.') {
+			return false
+		}
+	}
+	return true
+}
+
+func backendClassicNames(data []byte) ([]string, error) {
+	if len(data) > backendClassicNamesBytes || len(data) != 0 && data[len(data)-1] != '\n' {
+		return nil, errBackendInventory
+	}
+	var names []string
+	if len(data) == 0 {
+		return names, nil
+	} // Only a successfully read EOF can prove an empty list.
+	for _, name := range strings.Split(string(data[:len(data)-1]), "\n") {
+		if !backendClassicTableName(name) || len(names) >= backendClassicTables || slices.Contains(names, name) {
+			return nil, errBackendInventory
+		}
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names, nil
+}
+
+func (r *backendInventoryReader) classic(ctx context.Context, p backendInventoryPlatform, runner backendInventoryBoundedRunner, between func() error) ([]backendInventoryRow, error) {
+	type image struct {
+		names  [2][]string
+		bodies [][]byte
+		rows   []backendInventoryRow
+	}
+	budget := backendClassicBudget{}
+	read := func() (image, error) {
+		var result image
+		for i, family := range []int{4, 6} {
+			data, err := p.registeredTables(ctx, family)
+			if err != nil || ctx.Err() != nil {
+				return image{}, errors.Join(errBackendInventory, err, ctx.Err())
+			}
+			result.names[i], err = backendClassicNames(data)
+			if err != nil {
+				return image{}, err
+			}
+		}
+		for i, path := range []string{r.IPTables, r.IP6Tables} {
+			for _, table := range result.names[i] {
+				if ctx.Err() != nil {
+					return image{}, ctx.Err()
+				}
+				data, err := runner.RunBounded(ctx, path, backendClassicBytes-budget.bytes, "-t", table, "-S")
+				if err != nil || ctx.Err() != nil {
+					return image{}, errors.Join(errBackendInventory, err, ctx.Err())
+				}
+				rows, err := backendXTablesRows(data, &budget)
+				if err != nil {
+					return image{}, err
+				}
+				result.bodies = append(result.bodies, append([]byte(nil), data...))
+				for _, tokens := range rows {
+					result.rows = append(result.rows, backendInventoryRow{Family: []int{4, 6}[i], Table: table, Tokens: tokens})
+				}
+			}
+		}
+		for i, family := range []int{4, 6} {
+			data, err := p.registeredTables(ctx, family)
+			if err != nil || ctx.Err() != nil {
+				return image{}, errors.Join(errBackendInventory, err, ctx.Err())
+			}
+			closing, err := backendClassicNames(data)
+			if err != nil || !slices.Equal(closing, result.names[i]) {
+				return image{}, errBackendInventory
+			}
+		}
+		return result, nil
+	}
+	first, err := read()
+	if err != nil {
+		return nil, err
+	}
+	// Closing tool callbacks precede the final complete classic image. They
+	// cannot invalidate the image subsequently returned as the observation.
+	if between == nil {
+		return nil, errBackendInventory
+	}
+	if err := between(); err != nil || ctx.Err() != nil {
+		return nil, errors.Join(errBackendInventory, err, ctx.Err())
+	}
+	last, err := read()
+	if err != nil {
+		return nil, err
+	}
+	if !slices.Equal(first.names[0], last.names[0]) || !slices.Equal(first.names[1], last.names[1]) || len(first.bodies) != len(last.bodies) {
+		return nil, errBackendInventory
+	}
+	for i := range first.bodies {
+		if !bytes.Equal(first.bodies[i], last.bodies[i]) {
+			return nil, errBackendInventory
+		}
+	}
+	return last.rows, nil
+}
+
+func backendInventoryProcMountID(data []byte) (string, error) {
+	if len(data) == 0 || len(data) > 4096 || data[len(data)-1] != '\n' || !utf8.Valid(data) {
+		return "", errBackendInventory
+	}
+	value := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.IndexFunc(line, func(c rune) bool { return c < 32 && c != '\t' || c == 127 }) >= 0 {
+			return "", errBackendInventory
+		}
+		if strings.HasPrefix(line, "mnt_id:") {
+			if value != "" || !strings.HasPrefix(line, "mnt_id:\t") {
+				return "", errBackendInventory
+			}
+			value = strings.TrimPrefix(line, "mnt_id:\t")
+			n, err := strconv.ParseUint(value, 10, 64)
+			if err != nil || n == 0 || strconv.FormatUint(n, 10) != value {
+				return "", errBackendInventory
+			}
+		}
+	}
+	if value == "" {
+		return "", errBackendInventory
+	}
+	return value, nil
 }
 
 type backendClassicBudget struct{ bytes, rows, tokens int }

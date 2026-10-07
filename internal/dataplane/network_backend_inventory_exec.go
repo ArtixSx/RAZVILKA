@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"time"
 )
 
@@ -37,7 +36,7 @@ func (w *backendInventoryOutput) Write(data []byte) (int, error) {
 // Both stdout and stderr share one bounded capture; a command error/overflow
 // produces no rows. No fallback to the unbounded existing Run is permitted.
 func (nfqws2ExecRunner) RunBounded(ctx context.Context, name string, limit int, args ...string) ([]byte, error) {
-	if ctx == nil || ctx.Err() != nil || !filepath.IsAbs(name) || limit <= 0 || limit > backendClassicBytes || len(args) != 3 || args[0] != "-t" || args[2] != "-S" || !slices.Contains([]string{"raw", "mangle", "nat", "filter", "security"}, args[1]) {
+	if ctx == nil || ctx.Err() != nil || !filepath.IsAbs(name) || limit <= 0 || limit > backendClassicBytes || len(args) != 3 || args[0] != "-t" || args[2] != "-S" || !backendClassicTableName(args[1]) {
 		return nil, errBackendInventory
 	}
 	deadline, ok := ctx.Deadline()
@@ -48,6 +47,8 @@ func (nfqws2ExecRunner) RunBounded(ctx context.Context, name string, limit int, 
 	defer cancel()
 	output := &backendInventoryOutput{limit: limit, onOverflow: cancel}
 	command := exec.CommandContext(runCtx, name, args...)
+	// Fixed admitted read environment: no inherited loader or xtables overrides.
+	command.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LANG=C", "LC_ALL=C"}
 	command.Stdout, command.Stderr = output, output
 	// Bound inherited pipe draining even if an unexpected descendant holds it.
 	command.WaitDelay = 100 * time.Millisecond

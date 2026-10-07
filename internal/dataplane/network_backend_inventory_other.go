@@ -2,13 +2,15 @@
 
 package dataplane
 
-import "context"
+import (
+	"context"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
+)
 
-func backendInventorySystemPlatform() backendInventoryPlatform {
+func backendInventorySystemPlatform(provider *netidentity.Provider) backendInventoryPlatform {
 	return backendInventoryPlatform{
-		endpoint: func(context.Context) (backendInventoryScope, error) {
-			return backendInventoryScope{}, errBackendInventory
-		},
-		openNFT: func(context.Context) (backendNFTSession, error) { return nil, errBackendInventory },
+		withCurrent:      provider.WithCurrent,
+		registeredTables: func(context.Context, int) ([]byte, error) { return nil, errBackendInventory },
+		openNFT:          func(context.Context) (backendNFTSession, error) { return nil, errBackendInventory },
 	}
 }

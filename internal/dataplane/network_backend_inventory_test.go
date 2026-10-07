@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"os"
 	"reflect"
 	"strings"
@@ -32,6 +33,20 @@ type backendInventoryTestNFT struct {
 	closed          int
 	onLast          func()
 	order           *[]string
+	noRegistered    bool
+	onRegistration  func(int, *backendNFTRegistration)
+}
+
+func (s *backendInventoryTestNFT) Registration(ctx context.Context, _ backendNFTABI) (backendNFTRegistration, error) {
+	generation, err := s.Generation(ctx)
+	r := backendNFTRegistration{generation: generation, noRegistered: s.noRegistered, sealed: err == nil}
+	if s.noRegistered {
+		r.generation = 0
+	}
+	if s.onRegistration != nil {
+		s.onRegistration(s.generationCalls, &r)
+	}
+	return r, err
 }
 
 func (s *backendInventoryTestNFT) Generation(context.Context) (uint32, error) {
@@ -56,10 +71,10 @@ func (s *backendInventoryTestNFT) Close() error { s.closed++; return s.closeErr 
 
 func backendInventoryTestFixture(t *testing.T) (*backendInventoryReader, backendInventoryScope, backendInventoryPlatform, *backendInventoryTestNFT, *[]string) {
 	t.Helper()
-	scope := backendInventoryScope{BootID: "12345678-1234-1234-1234-123456789abc", NetNamespace: "net:[123456]", ToolReviewID: strings.Repeat("a", 64)}
+	scope := backendInventoryScope{Network: netidentity.Identity{Version: 1, Kind: netidentity.ProcNetInode, BootID: "12345678-1234-1234-1234-123456789abc", Inode: 123456}, ToolReviewID: strings.Repeat("a", 64)}
 	order := []string{}
 	nft := &backendInventoryTestNFT{first: 23, last: 23, order: &order}
-	r := &backendInventoryReader{IPTables: "/review/iptables", IP6Tables: "/review/ip6tables"}
+	r := &backendInventoryReader{NFTABI: backendNFTABILinux70, IPTables: "/review/iptables", IP6Tables: "/review/ip6tables"}
 	r.CheckTools = func(ctx context.Context, got backendInventoryScope) error {
 		order = append(order, "tools")
 		if got != scope {
@@ -79,9 +94,17 @@ func backendInventoryTestFixture(t *testing.T) (*backendInventoryReader, backend
 		return []byte("-P OUTPUT ACCEPT\n"), nil
 	})
 	p := backendInventoryPlatform{
-		endpoint: func(context.Context) (backendInventoryScope, error) {
-			order = append(order, "endpoint")
-			return scope, nil
+		withCurrent: func(ctx context.Context, use func(context.Context, netidentity.Identity) error) error {
+			order = append(order, "scope-open")
+			if err := use(ctx, scope.Network); err != nil {
+				return err
+			}
+			order = append(order, "scope-close")
+			return ctx.Err()
+		},
+		registeredTables: func(_ context.Context, family int) ([]byte, error) {
+			order = append(order, fmt.Sprint("names", family))
+			return []byte("raw\nmangle\nnat\nfilter\nsecurity\n"), nil
 		},
 		openNFT: func(context.Context) (backendNFTSession, error) { order = append(order, "open"); return nft, nil },
 	}
@@ -101,19 +124,26 @@ func TestBackendInventoryBracketsClassicAndPreservesMixedRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.NFTState != backendNFTEmpty || s.NFTGeneration != 23 || !s.Coverage.LegacyFixedFiveBothFamilies || !s.Coverage.NativeNFTAllFamilies || s.Coverage.RegisteredTablesComplete || len(s.Rows) != 20 || nft.closed != 1 {
+	if s.NFTState != backendNFTEmpty || s.NFTGeneration != 23 || !s.Coverage.LegacyRegisteredBothFamilies || !s.Coverage.NativeNFTAllFamilies || !s.Coverage.RegisteredTablesComplete || len(s.Rows) != 20 || nft.closed != 1 {
 		t.Fatalf("incomplete result: %+v, close=%d", s, nft.closed)
 	}
-	if s.requireLANBackendCoverage() == nil {
-		t.Fatal("partial reader granted full LAN coverage")
+	if s.requireLANBackendCoverage() != nil {
+		t.Fatal("complete empty inventory lost coverage")
 	}
-	wantOrder := []string{"tools", "endpoint", "open", "gen", "tables"}
-	for _, path := range []string{r.IPTables, r.IP6Tables} {
-		for _, table := range []string{"raw", "mangle", "nat", "filter", "security"} {
-			wantOrder = append(wantOrder, path+":"+table)
+	wantOrder := []string{"scope-open", "tools", "open", "gen", "tables"}
+	for pass := range 2 {
+		if pass == 1 {
+			wantOrder = append(wantOrder, "tools")
 		}
+		wantOrder = append(wantOrder, "names4", "names6")
+		for _, path := range []string{r.IPTables, r.IP6Tables} {
+			for _, table := range []string{"filter", "mangle", "nat", "raw", "security"} {
+				wantOrder = append(wantOrder, path+":"+table)
+			}
+		}
+		wantOrder = append(wantOrder, "names4", "names6")
 	}
-	wantOrder = append(wantOrder, "gen", "tools", "endpoint")
+	wantOrder = append(wantOrder, "gen", "scope-close")
 	if !reflect.DeepEqual(*order, wantOrder) {
 		t.Fatalf("generation did not bracket whole batch: %v", *order)
 	}
@@ -164,18 +194,20 @@ func TestBackendInventoryUnknownCannotLeakPartialSnapshot(t *testing.T) {
 			case "changed-generation":
 				nft.last++
 			case "changed-boot", "changed-namespace":
-				count := 0
-				p.endpoint = func(context.Context) (backendInventoryScope, error) {
-					count++
-					got := scope
-					if count == 2 {
-						if which == "changed-boot" {
-							got.BootID = "changed"
-						} else {
-							got.NetNamespace = "net:[123457]"
-						}
+				p.withCurrent = func(ctx context.Context, use func(context.Context, netidentity.Identity) error) error {
+					if err := use(ctx, scope.Network); err != nil {
+						return err
 					}
-					return got, nil
+					got := scope.Network
+					if which == "changed-boot" {
+						got.BootID = "22345678-1234-1234-1234-123456789abc"
+					} else {
+						got.Inode++
+					}
+					if got != scope.Network {
+						return netidentity.ErrUnknown
+					}
+					return nil
 				}
 			case "changed-tool-review", "cancel-after-tool-check":
 				count := 0
