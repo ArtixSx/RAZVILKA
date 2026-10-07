@@ -319,8 +319,12 @@ func TestUSQUEOwnedBridgeRejectsRuntimeAndCatalogMismatchBeforeProducer(t *testi
 			case "display-name-as-ID":
 				fixture.services[0].ID = fixture.plan.Routes[0].ServiceName
 			case "duplicate-service":
-				fixture.services = append(fixture.services, fixture.services[0])
-				fixture.plan.Routes = append(fixture.plan.Routes, fixture.plan.Routes[0])
+				other := copyProxyPredicateService(fixture.services[0])
+				other.Probes[0].Expect.BodyContains = []string{"conflicting frozen predicate"}
+				route := fixture.plan.Routes[0]
+				route.ProbeService = &other
+				fixture.services = append(fixture.services, other)
+				fixture.plan.Routes = append(fixture.plan.Routes, route)
 			case "over-eight":
 				fixture.services = make([]catalog.Service, 9)
 				fixture.plan.Routes = make([]Route, 9)

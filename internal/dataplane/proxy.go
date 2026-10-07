@@ -72,6 +72,7 @@ type ProxyTunnelAdapter struct {
 	NodeTUNProbe        NodeTUNProbe
 	nodeRuntimeIdentity func(ProcessSpec, string) (string, error)
 	nodeXHTTPVersion    func(context.Context, string) error
+	ownedUSQUELiveIO    usqueLiveHealthIO
 }
 
 type NodeRouteRequest struct {
@@ -155,6 +156,15 @@ func (a *ProxyTunnelAdapter) checkPlanNetwork(ctx context.Context, plan Plan) er
 }
 
 func (a *ProxyTunnelAdapter) checkRouteNetwork(ctx context.Context, plan RoutePlan) error {
+	if a.ID() == "usque" && plan.NetworkProfileID != "" {
+		if err := requireOwnedUSQUEReviewGuard(ctx); err != nil {
+			return err
+		}
+		if err := verifyNetworkProfile(ctx, plan.NetworkProfileID, a.FreshProfile); err != nil {
+			return err
+		}
+		return requireOwnedUSQUEReviewGuard(ctx)
+	}
 	if !a.scopedXray && (a.ID() != "sing-box" || !plan.RequiresNetworkProof()) {
 		return nil
 	}
@@ -597,6 +607,18 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 }
 
 func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root string) error {
+	plan = a.freezeUSQUEHealthPlan(plan)
+	var selectedUSQUE usqueTransport
+	if a.ID() == "usque" {
+		if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
+			return preflightRefusalError{err}
+		}
+		var err error
+		selectedUSQUE, err = a.usqueHealthTransport(root)
+		if err != nil {
+			return preflightRefusalError{err}
+		}
+	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return preflightRefusalError{err}
 	}
@@ -683,14 +705,21 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 			return err
 		}
 	}
-	transport, err := a.stagedUsqueTransport(root)
-	if err != nil {
+	var transport usqueTransport
+	if a.ID() == "usque" {
+		if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
+			return err
+		}
+		transport, err = a.usqueHealthTransport(root)
+		if err != nil || transport != selectedUSQUE {
+			return errors.Join(errOwnedUSQUELiveHealth, err)
+		}
+	}
+	engine := a.engineProcessWithTransport(transport)
+	if err := a.Processes.Start(ctx, engine); err != nil {
 		return err
 	}
-	if err := a.Processes.Start(ctx, a.engineProcessWithTransport(transport)); err != nil {
-		return err
-	}
-	if err := a.waitForSOCKS(ctx); err != nil {
+	if err := a.waitForSOCKSProcess(ctx, engine, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
 		return err
 	}
 	if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil {
@@ -717,6 +746,10 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 }
 
 func (a *ProxyTunnelAdapter) Health(ctx context.Context, plan Plan, root string) error {
+	plan = a.freezeUSQUEHealthPlan(plan)
+	if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
+		return err
+	}
 	state, err := a.readStagedPolicy(root)
 	if err != nil {
 		return err
@@ -728,10 +761,14 @@ func (a *ProxyTunnelAdapter) Health(ctx context.Context, plan Plan, root string)
 }
 
 func (a *ProxyTunnelAdapter) verifyHealthRuntime(ctx context.Context, state PolicyState) error {
-	if !a.Processes.Running(a.engineProcess()) || !a.Processes.Running(a.sidecarProcess()) {
+	return a.verifyHealthRuntimeProcess(ctx, state, a.engineProcess())
+}
+
+func (a *ProxyTunnelAdapter) verifyHealthRuntimeProcess(ctx context.Context, state PolicyState, engine ProcessSpec) error {
+	if !a.Processes.Running(engine) || !a.Processes.Running(a.sidecarProcess()) {
 		return errors.New("managed proxy or TUN sidecar is not running")
 	}
-	if err := a.waitForSOCKS(ctx); err != nil {
+	if err := a.waitForSOCKSProcess(ctx, engine, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
 		return err
 	}
 	if err := a.verifyForwarding(ctx, state); err != nil {
@@ -744,10 +781,30 @@ func (a *ProxyTunnelAdapter) verifyHealthRuntime(ctx context.Context, state Poli
 }
 
 func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state PolicyState, roots ...string) error {
+	plan = a.freezeUSQUEHealthPlan(plan)
+	if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
+		return err
+	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
-	if err := a.verifyHealthRuntime(ctx, state); err != nil {
+	var engine ProcessSpec
+	if a.ID() == "usque" {
+		transport, err := a.usqueHealthTransport(roots...)
+		if err != nil {
+			return err
+		}
+		engine = a.engineProcessWithTransport(transport)
+	} else {
+		engine = a.engineProcess()
+	}
+	if a.ID() == "usque" {
+		if err := a.verifyUSQUEHealthRuntime(ctx, state, engine); err != nil {
+			return err
+		}
+		return a.healthOwnedUSQUEWithPolicy(ctx, plan, state, engine, roots...)
+	}
+	if err := a.verifyHealthRuntimeProcess(ctx, state, engine); err != nil {
 		return err
 	}
 	if a.scopedXray {
@@ -773,6 +830,20 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 }
 
 func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr error) {
+	plan = a.freezeUSQUEHealthPlan(plan)
+	var selectedUSQUE usqueTransport
+	if a.ID() == "usque" {
+		if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
+			return err
+		}
+		// A missing or invalid committed selection is not a request to choose
+		// package defaults or a different transport during reconciliation.
+		var err error
+		selectedUSQUE, err = a.usqueHealthTransport()
+		if err != nil {
+			return err
+		}
+	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
@@ -815,6 +886,16 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
+	var engine ProcessSpec
+	if a.ID() == "usque" {
+		selected, err := a.usqueHealthTransport()
+		if err != nil || selected != selectedUSQUE {
+			return errors.Join(errOwnedUSQUELiveHealth, err)
+		}
+		engine = a.engineProcessWithTransport(selectedUSQUE)
+	} else {
+		engine = a.engineProcess()
+	}
 	restarted = true
 	if err := a.removeCommittedPolicy(ctx, state); err != nil {
 		return err
@@ -827,10 +908,10 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 			return err
 		}
 	}
-	if err := a.Processes.Start(ctx, a.engineProcess()); err != nil {
+	if err := a.Processes.Start(ctx, engine); err != nil {
 		return err
 	}
-	if err := a.waitForSOCKS(ctx); err != nil {
+	if err := a.waitForSOCKSProcess(ctx, engine, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
 		_ = a.stopOwned(ctx)
 		return err
 	}
@@ -864,6 +945,15 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 }
 
 func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool, error) {
+	plan = a.freezeUSQUEHealthPlan(plan)
+	if a.ID() == "usque" {
+		if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
+			return false, err
+		}
+		if _, err := a.usqueHealthTransport(); err != nil {
+			return false, err
+		}
+	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return false, err
 	}
@@ -906,6 +996,21 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 		return false, err
 	}
 	if samePolicy(oldState, newState) {
+		if a.ID() == "usque" {
+			if err := a.healthState(ctx, plan, newState); err != nil {
+				return false, err
+			}
+			if err := a.checkPlanNetwork(ctx, plan); err != nil {
+				return false, err
+			}
+			if err := a.verifyCommittedReceipt(ctx, newState); err != nil {
+				return false, err
+			}
+			if err := a.verifyForwarding(ctx, newState); err != nil {
+				return false, err
+			}
+			return false, a.checkUSQUEPlanAuthority(ctx, plan)
+		}
 		return false, errors.Join(a.checkPlanNetwork(ctx, plan), a.verifyCommittedReceipt(ctx, newState), a.verifyForwarding(ctx, newState))
 	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
@@ -982,10 +1087,23 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 }
 
 func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string) error {
+	plan = a.freezeUSQUEHealthPlan(plan)
+	var activeUSQUEEvidence []byte
+	if a.ID() == "usque" {
+		if err := a.checkUSQUEPlanAuthority(ctx, plan); err != nil {
+			return err
+		}
+		ctx = context.WithValue(ctx, usqueLiveHealthCaptureKey{}, func(data []byte) {
+			if activeUSQUEEvidence == nil {
+				activeUSQUEEvidence = append([]byte(nil), data...)
+			}
+		})
+		defer func() { clear(activeUSQUEEvidence) }()
+	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
-	if a.scopedXray {
+	if a.scopedXray || a.ID() == "usque" {
 		if err := a.Health(ctx, plan, root); err != nil {
 			return err
 		}
@@ -1007,6 +1125,11 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 	if err := a.verifyForwarding(ctx, state); err != nil {
 		return err
 	}
+	if a.ID() == "usque" {
+		if err := a.verifyUSQUECandidatePolicy(ctx, plan, root, state); err != nil {
+			return err
+		}
+	}
 	if err := os.MkdirAll(a.StateRoot, 0o700); err != nil {
 		return err
 	}
@@ -1025,19 +1148,7 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 		return err
 	}
 	if a.ID() == "usque" {
-		transport, err := a.stagedUsqueTransport(root)
-		if err != nil {
-			return err
-		}
-		data, _ := json.MarshalIndent(transport, "", "  ")
-		if err := writeAtomic(a.transportPath(), data, 0o600); err != nil {
-			return err
-		}
-		evidence, err := os.ReadFile(filepath.Join(root, "evidence.staged.json"))
-		if err != nil {
-			return errors.New("validated USQUE canary evidence is missing")
-		}
-		if err := writeAtomic(a.evidencePath(), evidence, 0o600); err != nil {
+		if err := a.commitOwnedUSQUEHealthWithPolicy(ctx, plan, root, activeUSQUEEvidence, state); err != nil {
 			return err
 		}
 	}
@@ -1346,15 +1457,7 @@ func (a *ProxyTunnelAdapter) stagedUsqueTransport(root string) (usqueTransport, 
 	if a.ID() != "usque" {
 		return usqueTransport{}, nil
 	}
-	data, err := os.ReadFile(filepath.Join(root, "transport.staged.json"))
-	if err != nil {
-		return usqueTransport{}, errors.New("validated USQUE transport selection is missing")
-	}
-	var transport usqueTransport
-	if err := json.Unmarshal(data, &transport); err != nil {
-		return usqueTransport{}, errors.New("validated USQUE transport selection is invalid")
-	}
-	return transport, nil
+	return a.usqueHealthTransport(root)
 }
 
 var (

@@ -142,15 +142,15 @@ func ownedUSQUECandidateTransport(spec ProcessSpec, address string) (string, err
 }
 
 func ownedUSQUECandidateServices(ctx context.Context, plan RoutePlan, services []catalog.Service) ([]usquediag.OwnedServiceProbe, error) {
-	if len(plan.Routes) != len(services) || len(services) > 8 {
+	if len(plan.Routes) != len(services) || len(services) > 64 {
 		return nil, errOwnedUSQUECandidate
 	}
 	probes := make([]usquediag.OwnedServiceProbe, 0, len(services))
-	seen := make(map[string]bool, len(services))
+	seen := make(map[string]string, min(len(services), 8))
 	for i, service := range services {
 		route := plan.Routes[i]
 		frozen, err := FrozenProbeService(route)
-		if err != nil || frozen.ID != service.ID || route.ProbeURL != service.ProbeURL || !ownedUSQUECandidateURL(service.ProbeURL) || seen[service.ID] {
+		if err != nil || frozen.ID != service.ID || route.ProbeURL != service.ProbeURL || !ownedUSQUECandidateURL(service.ProbeURL) {
 			return nil, errOwnedUSQUECandidate
 		}
 		predicate, err := newProxyServicePredicate(service)
@@ -161,7 +161,18 @@ func ownedUSQUECandidateServices(ctx context.Context, plan RoutePlan, services [
 		if err != nil || expected.digest() != predicate.digest() {
 			return nil, errOwnedUSQUECandidate
 		}
-		seen[service.ID] = true
+		// Several admitted policy cells may share one logical service. Retain
+		// every frozen cell, and merge only identical full semantic predicates.
+		if previous, exists := seen[service.ID]; exists {
+			if previous != predicate.digest() {
+				return nil, errOwnedUSQUECandidate
+			}
+			continue
+		}
+		if len(probes) >= 8 {
+			return nil, errOwnedUSQUECandidate
+		}
+		seen[service.ID] = predicate.digest()
 		id, hash := service.ID, predicate.digest()
 		probes = append(probes, usquediag.OwnedServiceProbe{ID: id, URL: service.ProbeURL,
 			Validator: func(response usquediag.OwnedServiceResponse) error {
