@@ -1,0 +1,356 @@
+// Package physicalscope observes selected physical LAN attachments. A detached
+// snapshot is a compilation binding; only its original, open Review retains
+// the kernel lifecycle fence. The observer performs no configuration writes,
+// network effects, registry merges, background reads or scheduling.
+package physicalscope
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"reflect"
+	"regexp"
+	"slices"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
+)
+
+var ErrUnknown = errors.New("selected physical LAN observation unavailable or changed")
+
+type failure struct {
+	stage string
+	cause error
+}
+
+func (e *failure) Error() string { return "physical LAN: " + e.stage }
+func (e *failure) Unwrap() error { return e.cause }
+func at(stage string, err error) error {
+	return &failure{stage: stage, cause: errors.Join(ErrUnknown, err)}
+}
+
+// Selection is fresh user intent, not evidence of a segment's role. Stock IDs
+// must exactly match an NDM native ID or native name. Linux IDs are explicitly
+// selected OS bridge names. Revisions are retained even when the ID set matches.
+type Selection struct {
+	// Revisions are actual physical-selection/policy revisions. They stay
+	// frozen and are compared exactly. An unrelated global config/plan CAS
+	// is fenced by the caller's control owner, not adopted by this observer.
+	// Supplying an old cached revision to conceal changed intent is invalid.
+	Revision       uint64 `json:"revision"`
+	PolicyRevision uint64 `json:"policy_revision"`
+	// Stock can retain exactly the configured segment set. Its Home/guest
+	// roles are resolved only from fresh NDM: one private bridge, remaining
+	// explicitly selected protected bridges. Empty/ambiguous sets refuse.
+	SegmentIDs      []string `json:"segment_ids"`
+	HomeSegmentID   string   `json:"home_segment_id"`
+	GuestSegmentIDs []string `json:"guest_segment_ids"`
+}
+type SelectionReader func(context.Context) (Selection, error)
+
+type Segment struct {
+	ID                  string   `json:"id"`
+	NativeName          string   `json:"native_name"`
+	NativeInterfaceName string   `json:"native_interface_name"`
+	NativeIndex         uint32   `json:"native_index"`
+	Interface           string   `json:"interface"`
+	IfIndex             int      `json:"ifindex"`
+	MAC                 string   `json:"mac"`
+	Prefixes            []string `json:"prefixes"`
+	LinkAddresses       []string `json:"link_addresses"`
+	Members             []Link   `json:"members"`
+	Home                bool     `json:"home"`
+	Guest               bool     `json:"guest"`
+}
+type Link struct {
+	Interface           string `json:"interface"`
+	IfIndex             int    `json:"ifindex"`
+	MAC                 string `json:"mac"`
+	Kind                string `json:"kind"`
+	NativeID            string `json:"native_id"`
+	NativeName          string `json:"native_name"`
+	NativeInterfaceName string `json:"native_interface_name"`
+	NativeType          string `json:"native_type"`
+}
+type Device struct {
+	ID        string   `json:"id"`
+	MAC       string   `json:"mac"`
+	Interface string   `json:"interface"`
+	IfIndex   int      `json:"ifindex"`
+	SegmentID string   `json:"segment_id"`
+	Addresses []string `json:"addresses"`
+}
+type Snapshot struct {
+	// ReviewID distinguishes one opened continuity fence from another. It is
+	// a detached binding only; it does not assert an interface's birth time.
+	ReviewID  string               `json:"review_id"`
+	Identity  netidentity.Identity `json:"identity"`
+	Selection Selection            `json:"selection"`
+	Segments  []Segment            `json:"segments"`
+	Devices   []Device             `json:"devices"`
+}
+
+type lifecycleFence interface {
+	check(context.Context, []Segment) error
+	close() error
+}
+type observerSource struct {
+	current func(context.Context, func(context.Context, netidentity.Identity) error) error
+	open    func(context.Context) (lifecycleFence, error)
+	capture func(context.Context, Selection) ([]Segment, []Device, error)
+}
+type Observer struct {
+	selection SelectionReader
+	source    observerSource
+}
+type Review struct {
+	state *reviewState
+}
+type reviewState struct {
+	self     *Review
+	mu       sync.Mutex
+	issuer   *Observer
+	fence    lifecycleFence
+	snapshot Snapshot
+	closed   bool
+	invalid  bool
+	closeErr error
+}
+
+// NewLinux requires explicit interface intent and the actual proc-net provider.
+// NewReviewedStockNC1812 requires actual NDM roles under the reviewed provider.
+// Neither constructor accepts a fact reader, executable, scope DTO or epoch.
+func NewLinux(provider *netidentity.Provider, selection SelectionReader) *Observer {
+	return newObserver(provider, selection, false)
+}
+func NewReviewedStockNC1812(provider *netidentity.Provider, selection SelectionReader) *Observer {
+	return newObserver(provider, selection, true)
+}
+func newObserver(provider *netidentity.Provider, selection SelectionReader, stock bool) *Observer {
+	if provider == nil || selection == nil {
+		return &Observer{}
+	}
+	return &Observer{selection: selection, source: platformSource(provider, stock)}
+}
+
+var segmentID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,63}$`)
+var interfaceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,14}$`)
+
+func canonicalSelection(s Selection) (Selection, error) {
+	if len(s.SegmentIDs) > 0 {
+		if s.HomeSegmentID != "" || len(s.GuestSegmentIDs) != 0 || len(s.SegmentIDs) > 16 {
+			return Selection{}, ErrUnknown
+		}
+		s.SegmentIDs = slices.Clone(s.SegmentIDs)
+		seen := map[string]bool{}
+		for _, id := range s.SegmentIDs {
+			if !segmentID.MatchString(id) || seen[id] {
+				return Selection{}, ErrUnknown
+			}
+			seen[id] = true
+		}
+		sort.Strings(s.SegmentIDs)
+		return s, nil
+	}
+	if !segmentID.MatchString(s.HomeSegmentID) || len(s.GuestSegmentIDs) > 15 {
+		return Selection{}, ErrUnknown
+	}
+	s.GuestSegmentIDs = slices.Clone(s.GuestSegmentIDs)
+	seen := map[string]bool{s.HomeSegmentID: true}
+	for _, id := range s.GuestSegmentIDs {
+		if !segmentID.MatchString(id) || seen[id] {
+			return Selection{}, ErrUnknown
+		}
+		seen[id] = true
+	}
+	sort.Strings(s.GuestSegmentIDs)
+	return s, nil
+}
+func operationContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
+	if ctx == nil || ctx.Err() != nil {
+		return nil, nil, ErrUnknown
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		return nil, nil, ErrUnknown
+	}
+	c, cancel := context.WithTimeout(ctx, 12*time.Second)
+	return c, cancel, nil
+}
+func (o *Observer) readSelection(ctx context.Context) (Selection, error) {
+	s, err := o.selection(ctx)
+	if err != nil || ctx.Err() != nil {
+		return Selection{}, errors.Join(ErrUnknown, err, ctx.Err())
+	}
+	return canonicalSelection(s)
+}
+func (o *Observer) ready() bool {
+	return o != nil && o.selection != nil && o.source.current != nil && o.source.open != nil && o.source.capture != nil
+}
+
+// Observe opens the continuity socket before the first facts, captures twice,
+// and closes both selection and network identity. No deadline survives as an
+// admission context; each later Verify needs its caller's fresh bounded context.
+func (o *Observer) Observe(ctx context.Context) (*Review, error) {
+	if !o.ready() {
+		return nil, ErrUnknown
+	}
+	c, cancel, err := operationContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+	selection, err := o.readSelection(c)
+	if err != nil {
+		return nil, err
+	}
+	var fence lifecycleFence
+	var identity netidentity.Identity
+	err = o.source.current(c, func(held context.Context, id netidentity.Identity) error {
+		identity = id
+		var err error
+		fence, err = o.source.open(held)
+		return err
+	})
+	if err != nil || fence == nil {
+		if fence != nil {
+			_ = fence.close()
+		}
+		return nil, errors.Join(ErrUnknown, err)
+	}
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		_ = fence.close()
+		return nil, ErrUnknown
+	}
+	r := &Review{state: &reviewState{issuer: o, fence: fence}}
+	r.state.self = r
+	r.state.snapshot, err = o.capture(c, selection, identity, fence)
+	if err != nil {
+		_ = r.Close()
+		return nil, err
+	}
+	r.state.snapshot.ReviewID = hex.EncodeToString(nonce[:])
+	return r, nil
+}
+func (o *Observer) capture(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence) (Snapshot, error) {
+	var result Snapshot
+	for pass := 0; pass < 2; pass++ {
+		var segments []Segment
+		var devices []Device
+		err := o.source.current(ctx, func(held context.Context, id netidentity.Identity) error {
+			if id.Validate() != nil || id != expected {
+				return ErrUnknown
+			}
+			var err error
+			segments, devices, err = o.source.capture(held, selection)
+			if err != nil {
+				return err
+			}
+			return fence.check(held, segments)
+		})
+		if err != nil {
+			return Snapshot{}, errors.Join(ErrUnknown, err)
+		}
+		current := Snapshot{Identity: expected, Selection: selection, Segments: segments, Devices: devices}
+		if pass == 0 {
+			result = current
+		} else if !reflect.DeepEqual(result, current) {
+			return Snapshot{}, ErrUnknown
+		}
+	}
+	closing, err := o.readSelection(ctx)
+	if err != nil || !reflect.DeepEqual(selection, closing) {
+		return Snapshot{}, errors.Join(ErrUnknown, err)
+	}
+	// Catch queued churn during the closing selection read in the same scope.
+	if err := o.source.current(ctx, func(c context.Context, id netidentity.Identity) error {
+		if id != expected {
+			return ErrUnknown
+		}
+		return fence.check(c, result.Segments)
+	}); err != nil {
+		return Snapshot{}, errors.Join(ErrUnknown, err)
+	}
+	return result, nil
+}
+
+// Verify uses only the same live Review, original selection and original kernel
+// fence. A changed/unknown attempt permanently invalidates this Review; fresh
+// facts or a restored tuple cannot refresh it. This is a read before an effect,
+// not a wrapper around the whole Apply, a policy owner or cleanup admission.
+func (o *Observer) Verify(ctx context.Context, r *Review) error {
+	if !o.ready() || r == nil || r.state == nil || r.state.self != r {
+		return ErrUnknown
+	}
+	c, cancel, err := operationContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	s := r.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.issuer != o || s.closed || s.invalid || s.fence == nil {
+		return ErrUnknown
+	}
+	selection, err := o.readSelection(c)
+	if err != nil || !reflect.DeepEqual(selection, s.snapshot.Selection) {
+		s.invalid = true
+		return errors.Join(ErrUnknown, err)
+	}
+	snapshot, err := o.capture(c, selection, s.snapshot.Identity, s.fence)
+	snapshot.ReviewID = s.snapshot.ReviewID
+	if err != nil || !reflect.DeepEqual(snapshot, s.snapshot) {
+		s.invalid = true
+		return errors.Join(ErrUnknown, err)
+	}
+	return nil
+}
+func cloneSnapshot(s Snapshot) Snapshot {
+	s.Selection.SegmentIDs = slices.Clone(s.Selection.SegmentIDs)
+	s.Selection.GuestSegmentIDs = slices.Clone(s.Selection.GuestSegmentIDs)
+	s.Segments = slices.Clone(s.Segments)
+	for i := range s.Segments {
+		s.Segments[i].Prefixes = slices.Clone(s.Segments[i].Prefixes)
+		s.Segments[i].LinkAddresses = slices.Clone(s.Segments[i].LinkAddresses)
+		s.Segments[i].Members = slices.Clone(s.Segments[i].Members)
+	}
+	s.Devices = slices.Clone(s.Devices)
+	for i := range s.Devices {
+		s.Devices[i].Addresses = slices.Clone(s.Devices[i].Addresses)
+	}
+	return s
+}
+func (r *Review) Snapshot() Snapshot {
+	if r == nil || r.state == nil || r.state.self != r {
+		return Snapshot{}
+	}
+	r.state.mu.Lock()
+	defer r.state.mu.Unlock()
+	return cloneSnapshot(r.state.snapshot)
+}
+
+// Close revokes forward verification and releases the descriptor. The caller
+// keeps the review until its separately admitted cleanup has actually settled.
+func (r *Review) Close() error {
+	if r == nil {
+		return nil
+	}
+	if r.state == nil || r.state.self != r {
+		return ErrUnknown
+	}
+	s := r.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return s.closeErr
+	}
+	s.closed = true
+	if s.fence != nil {
+		s.closeErr = s.fence.close()
+	}
+	return s.closeErr
+}
