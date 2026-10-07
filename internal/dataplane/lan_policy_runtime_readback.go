@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -115,6 +116,60 @@ func lanPolicyMarkTouches(value string) bool {
 	return (mask|mark)&uint64(LANPolicyGateMask) != 0
 }
 
+// Reserved coordinates identify candidates, never ownership. Even an unmarked
+// or foreign selector into an endpoint table must reach the strict refusal.
+func lanPolicyTransportTable(fields []string, priority int) (int, bool) {
+	for _, owner := range PolicyOwnershipSpecs() {
+		if owner.EndpointTable == 0 {
+			continue
+		}
+		if priority == owner.EndpointPriority {
+			return owner.EndpointTable, true
+		}
+		for i := 1; i+1 < len(fields); i++ {
+			if fields[i] == "lookup" || fields[i] == "table" {
+				table, err := strconv.ParseUint(fields[i+1], 10, 32)
+				if err == nil && table == uint64(owner.EndpointTable) {
+					return owner.EndpointTable, true
+				}
+			}
+		}
+	}
+	return 0, false
+}
+
+// The observed destination is used only to check host-selector syntax. The
+// separate provider must bind that destination to its committed endpoint.
+func lanPolicyTransportSyntax(family, table int, line string) bool {
+	fields := strings.Fields(line)
+	if len(fields) != 9 {
+		return false
+	}
+	var address netip.Addr
+	for i := 1; i+1 < len(fields); i += 2 {
+		if fields[i] == "to" {
+			if prefix, err := netip.ParsePrefix(fields[i+1]); err == nil {
+				if prefix.Bits() != prefix.Addr().BitLen() {
+					return false
+				}
+				address = prefix.Addr()
+			} else {
+				address, _ = netip.ParseAddr(fields[i+1])
+			}
+		}
+	}
+	if !address.IsValid() {
+		return false
+	}
+	for _, owner := range PolicyOwnershipSpecs() {
+		if owner.EndpointTable == table && (owner.Adapter == "wireguard" || owner.Adapter == "amneziawg") {
+			expected := WGEndpointState{Endpoint: netip.AddrPortFrom(address, 1).String(), Priority: owner.EndpointPriority, Mark: owner.EndpointMark, Table: table}
+			return expected.matchesRule(family, line)
+		}
+	}
+	return false
+}
+
 // Verify checks exact chain order and ALL references, plus positive-gated
 // owned RPDB selectors. This is required before another consumer activates.
 func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePlan) error {
@@ -122,6 +177,7 @@ func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePla
 	if err := r.check(ctx, p); err != nil {
 		return err
 	}
+	transportTables := make(map[int]bool)
 	for _, family := range []int{4, 6} {
 		output, err := r.read(ctx, "ip", "-"+strconv.Itoa(family), "-N", "rule", "show")
 		if err != nil {
@@ -149,6 +205,16 @@ func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePla
 				want[key]--
 			}
 			f := strings.Fields(line)
+			if table, candidate := lanPolicyTransportTable(f, priority); candidate {
+				if transportTables[table] || r.TransportCheck == nil || !lanPolicyTransportSyntax(family, table, line) {
+					return ErrLANPolicyRuntime
+				}
+				if err := errors.Join(ctx.Err(), r.TransportCheck(ctx, CloneLANPolicyRuntime(p), family, line), ctx.Err()); err != nil {
+					return err
+				}
+				transportTables[table] = true
+				continue
+			}
 			ownedPositive := false
 			for i, value := range f {
 				if value == "goto" && i+1 < len(f) && f[i+1] == "73" && priority != LANPolicySkipPriority {

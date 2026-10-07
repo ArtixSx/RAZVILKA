@@ -288,6 +288,10 @@ type LANPolicyRuntime struct {
 	IPTables   string
 	IP6Tables  string
 	ScopeCheck func(context.Context, *LANPolicyRuntimePlan) error
+	// TransportCheck proves the complete observed outer WG/AWG selector against
+	// committed endpoint ownership, its receipt and fresh both-family inventory.
+	// Only Verify consumes this proof; nil refuses and grants no service access.
+	TransportCheck func(context.Context, *LANPolicyRuntimePlan, int, string) error
 	// ConsumerCheck verifies exact other consumers' common receipts/generation.
 	// It is needed when their positive mark selectors already exist at Verify.
 	ConsumerCheck func(context.Context, *LANPolicyRuntimePlan) error
