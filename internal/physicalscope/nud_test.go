@@ -17,6 +17,11 @@ func TestPhysicalBenignNUDRefreshPreservesOriginalBinding(t *testing.T) {
 			}
 		}
 	}
+	router := neighborFrame(9, "fe80::20", devices[0].MAC, 4)
+	router.data[10] = 128
+	if err := checkNotifications([]message{router}, segments, devices); err != nil {
+		t.Fatal("known link-local router mapping lost", err)
+	}
 }
 
 type packetFence struct {
@@ -88,5 +93,11 @@ func TestPhysicalNUDDoesNotMaskBindingChangesOrLoss(t *testing.T) {
 	proxy.data[10] = 8
 	if checkNotifications([]message{proxy}, segments, devices) == nil {
 		t.Fatal("proxy entry became actual client binding")
+	}
+	router := original
+	router.data = append([]byte(nil), original.data...)
+	router.data[10] = 128
+	if checkNotifications([]message{router}, segments, devices) == nil {
+		t.Fatal("router flag on a client source silently accepted")
 	}
 }

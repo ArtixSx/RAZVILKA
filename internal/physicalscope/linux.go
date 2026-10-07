@@ -41,7 +41,7 @@ func platformSource(provider *netidentity.Provider, stock bool) observerSource {
 	}
 }
 
-const fenceGroups = 1 | 4 | 0x10 | 0x100 // LINK, NEIGH, IPv4/IPv6 address.
+const fenceGroups = 1 | 4 | 0x10 | 0x100 | 0x40 | 0x400 // LINK, NEIGH, IPv4/IPv6 address and route.
 const maxNetBytes = 4 << 20
 
 var requestSequence atomic.Uint32

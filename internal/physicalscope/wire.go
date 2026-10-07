@@ -176,7 +176,8 @@ func decodeNeighbor(m message) (int, string, error) {
 	state := binary.NativeEndian.Uint16(m.data[8:10])
 	states := map[uint16]string{1: "INCOMPLETE", 2: "REACHABLE", 4: "STALE", 8: "DELAY", 16: "PROBE", 32: "FAILED", 64: "NOARP", 128: "PERMANENT"}
 	label := states[state]
-	if label == "" || m.data[11] != 1 || m.data[10]&^(byte(2|16)) != 0 {
+	flags := m.data[10]
+	if label == "" || m.data[11] != 1 || flags&^(byte(2|16|128)) != 0 || flags&128 != 0 && (!address.Is6() || !address.IsLinkLocalUnicast()) {
 		return 0, "", ErrUnknown
 	}
 	mac := net.HardwareAddr(a[2]).String()
@@ -241,7 +242,13 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 		// A multicast notification can retain the triggering writer's header
 		// sequence/port ID; those fields do not make it a foreign datagram.
 		// This socket issues no requests, so dump/multipart flags still refuse.
-		if m.flags != 0 {
+		// Route multicast can carry the writer's CREATE/EXCL/REPLACE/APPEND
+		// operation flags. They describe the change, not a dump response.
+		allowedFlags := uint16(0)
+		if m.kind == 24 || m.kind == 25 {
+			allowedFlags = 0xf00
+		}
+		if m.flags&^allowedFlags != 0 {
 			return ErrUnknown
 		}
 		switch m.kind {
@@ -283,6 +290,16 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 					}
 				}
 				if matched != 1 {
+					return ErrUnknown
+				}
+			}
+		case 24, 25:
+			indices, err := decodeWAN(m)
+			if err != nil {
+				return err
+			}
+			for _, index := range indices {
+				if tracked[index] {
 					return ErrUnknown
 				}
 			}
