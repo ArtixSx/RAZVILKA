@@ -63,8 +63,11 @@ for ARCH in amd64 arm64 mips mipsle; do
   cat >"$BUNDLE/dist/razvilka-linux-$ARCH" <<'EOF'
 #!/bin/sh
 printf '%s\n' "${0##*/}" >>"$TEST_BINARY_CAPTURE"
+printf '%s %s\n' "${0##*/}" "$1" >>"$TEST_PROBE_CAPTURE"
 case "$1" in
-  -self-update-read-version) printf 'flag provided but not defined: -self-update-read-version\n' >&2; exit 2 ;;
+  -self-update-read-version)
+    [ "$#" = 1 ] || exit 99
+    printf 'flag provided but not defined: -self-update-read-version\n' >&2; exit 2 ;;
   -check-node-history-state)
     FIXTURE_BASE="$(CDPATH= cd -- "$RAZVILKA_BASE" && pwd -P)"
     [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$FIXTURE_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$FIXTURE_BASE/var/lib/razvilka" ] || exit 99
@@ -79,8 +82,23 @@ done
 (cd "$BUNDLE" && sha256sum dist/razvilka-linux-* >dist/SHA256SUMS)
 PATH="$TEST_ROOT/mocks:$PATH"
 TEST_BINARY_CAPTURE="$TEST_ROOT/executed"
+TEST_PROBE_CAPTURE="$TEST_ROOT/probes"
 TEST_OD_CAPTURE="$TEST_ROOT/elf-read"
-export PATH TEST_BINARY_CAPTURE TEST_OD_CAPTURE
+export PATH TEST_BINARY_CAPTURE TEST_PROBE_CAPTURE TEST_OD_CAPTURE
+
+# A legacy recording candidate has exactly these dry-run entrypoints: readonly
+# reader capability first, then retained history, version and configuration.
+# Its explicit unsupported reader ABI does not call the reader3 fixed scanner.
+assert_preflight_sequence() {
+  for PROBE in -self-update-read-version -check-node-history-state -version -check; do
+    printf 'razvilka-linux-%s %s\n' "$1" "$PROBE"
+  done >"$TEST_ROOT/expected-probes"
+  cmp -s "$TEST_ROOT/expected-probes" "$TEST_PROBE_CAPTURE" || {
+    echo "Candidate preflight lost the exact readonly-reader/history/version/config order" >&2
+    cat "$TEST_PROBE_CAPTURE" >&2
+    exit 1
+  }
+}
 
 run_case() {
   TEST_UNAME="$1"
@@ -89,14 +107,15 @@ run_case() {
   EXPECTED="$4"
   TEST_OD_FAIL="${5:-0}"
   export TEST_UNAME TEST_ELF_HEADER RAZVILKA_ARCH TEST_OD_FAIL
-  rm -f "$TEST_BINARY_CAPTURE" "$TEST_OD_CAPTURE"
+  rm -f "$TEST_BINARY_CAPTURE" "$TEST_PROBE_CAPTURE" "$TEST_OD_CAPTURE"
   if RAZVILKA_BASE="$BASE" sh "$BUNDLE/scripts/upgrade-entware.sh" --dry-run >"$TEST_ROOT/output" 2>&1; then
     [ "$EXPECTED" != refuse ] || { echo "Unknown architecture/header was accepted" >&2; exit 1; }
     [ "$(sort -u "$TEST_BINARY_CAPTURE")" = "razvilka-linux-$EXPECTED" ] || { echo "Installer selected the wrong binary for $TEST_UNAME" >&2; exit 1; }
-    [ "$(wc -l <"$TEST_BINARY_CAPTURE" | tr -d ' ')" = 3 ] || { echo "Expected candidate history, version and config checks" >&2; exit 1; }
+    assert_preflight_sequence "$EXPECTED"
   else
     [ "$EXPECTED" = refuse ] || { cat "$TEST_ROOT/output" >&2; echo "Expected architecture $EXPECTED to pass preflight" >&2; exit 1; }
     [ ! -e "$TEST_BINARY_CAPTURE" ] || { echo "Invalid architecture executed a candidate binary" >&2; exit 1; }
+    [ ! -e "$TEST_PROBE_CAPTURE" ] || { echo "Invalid architecture executed a metadata probe" >&2; exit 1; }
   fi
   [ ! -e "$BASE/bin" ] && [ ! -e "$BASE/etc" ] || { echo "Architecture preflight changed installation" >&2; exit 1; }
   if [ "$TEST_UNAME" != mips ] || [ -n "$RAZVILKA_ARCH" ]; then
@@ -160,14 +179,15 @@ run_checksum_case() {
   TEST_OD_FAIL=0
   RAZVILKA_ARCH=amd64
   export TEST_UNAME TEST_ELF_HEADER TEST_OD_FAIL RAZVILKA_ARCH
-  rm -f "$TEST_BINARY_CAPTURE"
+  rm -f "$TEST_BINARY_CAPTURE" "$TEST_PROBE_CAPTURE"
   if [ "$EXPECTED" = pass ]; then MODE=--dry-run; else MODE=--apply; fi
   if RAZVILKA_BASE="$BASE" sh "$BUNDLE/scripts/upgrade-entware.sh" "$MODE" >"$TEST_ROOT/output" 2>&1; then
     [ "$EXPECTED" = pass ] || { echo "Invalid checksum accepted: $LABEL" >&2; exit 1; }
-    [ "$(wc -l <"$TEST_BINARY_CAPTURE" | tr -d ' ')" = 3 ] || { echo "Expected candidate history, version and config checks: $LABEL" >&2; exit 1; }
+    assert_preflight_sequence amd64
   else
     [ "$EXPECTED" = refuse ] || { cat "$TEST_ROOT/output" >&2; echo "Valid checksum refused: $LABEL" >&2; exit 1; }
     [ ! -e "$TEST_BINARY_CAPTURE" ] || { echo "Unverified candidate was executed: $LABEL" >&2; exit 1; }
+    [ ! -e "$TEST_PROBE_CAPTURE" ] || { echo "Unverified candidate metadata was executed: $LABEL" >&2; exit 1; }
   fi
   [ ! -e "$BASE/bin" ] && [ ! -e "$BASE/etc" ] && [ ! -e "$BASE/var" ] || { echo "Checksum preflight changed installation: $LABEL" >&2; exit 1; }
 }
