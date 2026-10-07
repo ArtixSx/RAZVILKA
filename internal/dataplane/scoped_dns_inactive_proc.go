@@ -104,11 +104,15 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 				return ErrScopedDNSRuntimeInactive
 			}
 		} else {
-			if cmd[len(cmd)-1] != 0 {
-				mark("proc.cmdline-nonempty.terminal-nul-false")
-				return ErrScopedDNSRuntimeInactive
+			// /proc exposes mutable argv memory. A rewritten process title can
+			// omit the final NUL even though the bounded file read reached EOF.
+			// Preserve every byte/token; the original cmdline and exe images
+			// are still rechecked below, with the same controller exclusions.
+			argumentImage := cmd
+			if argumentImage[len(argumentImage)-1] == 0 {
+				argumentImage = argumentImage[:len(argumentImage)-1]
 			}
-			args := strings.Split(string(cmd[:len(cmd)-1]), "\x00")
+			args := strings.Split(string(argumentImage), "\x00")
 			if len(args) > 256 {
 				mark("proc.cmdline-nonempty.argc-bounded-false")
 				return ErrScopedDNSRuntimeInactive
