@@ -1316,6 +1316,9 @@ func d10NativeBackendTopology(t *testing.T, ctx context.Context) (string, func()
 		{"-n", namespace, "link", "set", "wan-s", "addrgenmode", "none"},
 		{"-n", namespace, "link", "set", "wan-s", "up"},
 		{"route", "add", "93.184.216.0/24", "via", "192.0.2.1", "dev", "wan-r", "src", "93.184.216.16"},
+		// Production sing-box auto_detect_interface needs a real default route.
+		// This peer reaches only the owned backend, with no external uplink.
+		{"route", "add", "default", "via", "192.0.2.1", "dev", "wan-r", "src", "93.184.216.16"},
 		{"-n", namespace, "route", "add", "93.184.216.16/32", "via", "192.0.2.2"},
 		{"-n", namespace, "route", "add", "192.168.1.0/24", "via", "192.0.2.2"},
 	}
