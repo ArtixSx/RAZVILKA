@@ -252,6 +252,9 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 				t.Fatal("fresh isolated LAN gate for pending case", err)
 			}
 		}
+		// Retained leases, Manager journals and mixed receipts are inspected by
+		// the parent after t.Run. Own their TempDir until final LAN checks finish.
+		a, command := nfqws2ManagedNativePrepare(t, program, strings.Repeat(strconv.Itoa(index+6), 32), "hold")
 		if !t.Run(mode, func(t *testing.T) {
 			metrics := newNFQWSExecutionNativeMetrics(t)
 			defer metrics.report()
@@ -261,7 +264,6 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 			lanRuntime.Runner = caseRunner
 			defer func() { lanRuntime.Runner = runner }()
 			peerCommand("link", "set", "peer0", "address", "02:00:00:00:00:02")
-			a, command := nfqws2ManagedNativePrepare(t, program, strings.Repeat(strconv.Itoa(index+6), 32), "hold")
 			command.ControlRoot, command.InstallationID, command.Sequence = controlRoot, control.InstallationID, control.Sequence
 			command.Program, command.Assets = nfqws2ManagedFile{review.BinaryPath, review.BinarySHA256}, review.Assets
 			queue := uint16(40321 + index)
