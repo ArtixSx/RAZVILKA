@@ -230,3 +230,9 @@ Go 1.26.5 Windows portable tests PASS (0.218 s), Windows vet PASS; Linux
 amd64/arm64 vet и test binary crosscompile PASS / RC0. gofmt/diff check PASS.
 Original native stock factory+closing остаётся обязательным следующим Root
 шагом; CORE native/router код не исполняет и integration grant не передаёт.
+
+## ROOT: фактическая проверка и интеграция 07.10.2026
+
+После исправлений `8021d10` и `7035641` исходная stock factory + locked scope/closing на домашнем NC-1812 прошла **PASS0.35s / RC0** (`identity101`), новый пакет вместе с настоящим proc reader на Linux — **race PASS1.116s / RC0** (`identity101b`). Все четыре коммита объединены в `delivery-review` до `19e44c2`; package bytes совпадают с испытанным `7035641`. Подробности, предыдущие отказы и границы — в [VALIDATION_RU.md](../VALIDATION_RU.md).
+
+ROOT принимает этот отдельный модуль по собственному source review и адресным фактическим проверкам. Независимый LAN review был прерван платформенным фильтром до итогового verdict и не засчитывается. Main/collector/receipts пока не переключены на новый provider; успешная factory не разрешает сетевые изменения и не снимает остальные проверки полноты и владения.
