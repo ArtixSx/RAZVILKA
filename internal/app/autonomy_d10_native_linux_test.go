@@ -350,6 +350,7 @@ type d10NativeProcesses struct {
 	mu         sync.Mutex
 	specs      []dataplane.ProcessSpec
 	failures   []string
+	logCount   int
 	afterStart func(dataplane.ProcessSpec) error
 }
 
@@ -368,6 +369,15 @@ func (p *d10NativeProcesses) Start(ctx context.Context, spec dataplane.ProcessSp
 }
 
 func (p *d10NativeProcesses) Stop(ctx context.Context, spec dataplane.ProcessSpec) error {
+	p.mu.Lock()
+	index := p.logCount
+	p.logCount++
+	p.mu.Unlock()
+	if index < 16 {
+		if err := d10NativePrivateLog(spec.LogPath, fmt.Sprintf("client-%02d", index)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			p.recordFailure("private-log", err)
+		}
+	}
 	err := p.OSProcessController.Stop(ctx, spec)
 	if err != nil {
 		p.recordFailure("stop", err)
@@ -490,28 +500,7 @@ func d10NativePrivateFailure(t *testing.T, status dataplane.RuntimeStatus) {
 		t.Error("private diagnostic destination refused")
 		return
 	}
-	root := os.Getenv("RAZVILKA_D10_NATIVE_ROOT")
-	replacements := []string{root, "<fixture-root>", os.Getenv("RAZVILKA_XRAY_NATIVE"), "<pinned-xray>", os.Getenv("RAZVILKA_SINGBOX_NATIVE"), "<pinned-sing-box>",
-		"/opt", "<private-opt>", "127.0.0.1", "<fixture-loopback>", "192.168.1.50", "<fixture-client>", "192.168.1.1", "<fixture-bridge>",
-		"93.184.216.11", "<fixture-node-endpoint>", "93.184.216.12", "<fixture-service-ip>", "93.184.216.13", "<fixture-A-exit>", "93.184.216.14", "<fixture-B-exit>", "93.184.216.15", "<fixture-C-exit>",
-		"93.184.216.16", "<fixture-direct-exit>", "192.0.2.1", "<fixture-backend-veth>", "192.0.2.2", "<fixture-router-veth>",
-		"service.example", "<fixture-service-host>", "front.example", "<fixture-front-host>", "www.cloudflare.com", "<fixture-trace-host>", "api.ipify.org", "<fixture-ip-host>"}
-	redactor := strings.NewReplacer(replacements...)
-	urls := regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^\s"'<>]+`)
-	uuid := regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
-	nodes := regexp.MustCompile(`\bnode-[a-f0-9]{64}\b`)
-	paths := regexp.MustCompile(`/(?:opt|proc|sys|dev|etc|tmp|home|run|var)(?:/[a-zA-Z0-9_.-]+)*`)
-	redact := func(value string) string {
-		value = urls.ReplaceAllString(value, "<fixture-url>")
-		value = uuid.ReplaceAllString(value, "<fixture-user>")
-		value = nodes.ReplaceAllString(value, "<fixture-node-id>")
-		value = redactor.Replace(value)
-		value = paths.ReplaceAllString(value, "<path>")
-		if len(value) > 4096 {
-			value = value[:4096] + "<truncated>"
-		}
-		return value
-	}
+	redact := d10NativeRedact
 	payload := struct {
 		Scenario         string   `json:"scenario"`
 		State            string   `json:"state"`
@@ -541,6 +530,94 @@ func d10NativePrivateFailure(t *testing.T, status dataplane.RuntimeStatus) {
 	if writeErr != nil || syncErr != nil || closeErr != nil {
 		t.Error("private diagnostic write incomplete")
 	}
+}
+
+func d10NativeRedact(value string) string {
+	root := os.Getenv("RAZVILKA_D10_NATIVE_ROOT")
+	replacements := []string{root, "<fixture-root>", os.Getenv("RAZVILKA_XRAY_NATIVE"), "<pinned-xray>", os.Getenv("RAZVILKA_SINGBOX_NATIVE"), "<pinned-sing-box>",
+		"/opt", "<private-opt>", "127.0.0.1", "<fixture-loopback>", "192.168.1.50", "<fixture-client>", "192.168.1.1", "<fixture-bridge>",
+		"93.184.216.11", "<fixture-node-endpoint>", "93.184.216.12", "<fixture-service-ip>", "93.184.216.13", "<fixture-A-exit>", "93.184.216.14", "<fixture-B-exit>", "93.184.216.15", "<fixture-C-exit>",
+		"93.184.216.16", "<fixture-direct-exit>", "192.0.2.1", "<fixture-backend-veth>", "192.0.2.2", "<fixture-router-veth>",
+		"service.example", "<fixture-service-host>", "front.example", "<fixture-front-host>", "www.cloudflare.com", "<fixture-trace-host>", "api.ipify.org", "<fixture-ip-host>"}
+	redactor := strings.NewReplacer(replacements...)
+	urls := regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^\s"'<>]+`)
+	uuid := regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
+	nodes := regexp.MustCompile(`\bnode-[a-f0-9]{64}\b`)
+	paths := regexp.MustCompile(`/(?:opt|proc|sys|dev|etc|tmp|home|run|var)(?:/[a-zA-Z0-9_.-]+)*`)
+	value = urls.ReplaceAllString(value, "<fixture-url>")
+	value = uuid.ReplaceAllString(value, "<fixture-user>")
+	value = nodes.ReplaceAllString(value, "<fixture-node-id>")
+	value = redactor.Replace(value)
+	value = paths.ReplaceAllString(value, "<path>")
+	if len(value) > 4096 {
+		value = value[:4096] + "<truncated>"
+	}
+	return value
+}
+
+// Keep only bounded ERROR/WARNING/FATAL lines from actual owned client/server
+// logs before cleanup removes them. Full logs/configs/HTTP bodies are excluded.
+func d10NativePrivateLog(path, label string) error {
+	dir, scenario := os.Getenv("RAZVILKA_D10_NATIVE_ARTIFACTS"), os.Getenv("RAZVILKA_D10_NATIVE_CHILD")
+	info, err := os.Lstat(dir)
+	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "failure-exit") {
+		return errors.New("private diagnostic destination refused")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	info, err = f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("owned diagnostic log unavailable")
+	}
+	if _, err := f.Seek(max(0, info.Size()-8192), io.SeekStart); err != nil {
+		return err
+	}
+	data, err := io.ReadAll(io.LimitReader(f, 8192))
+	if err != nil {
+		return err
+	}
+	defer clear(data)
+	retained := make([]string, 0, 8)
+	severity := regexp.MustCompile(`(?i)(error|warning|warn|fatal)`)
+	ansi := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	for _, line := range strings.Split(string(data), "\n") {
+		if len(retained) == 8 {
+			break
+		}
+		line = ansi.ReplaceAllString(line, "")
+		lower := strings.ToLower(line)
+		if !severity.MatchString(line) {
+			continue
+		}
+		unsafe := false
+		for _, forbidden := range []string{"-----begin", "private_key", "private key", "password", "secret", "token", "request body", "response body", "body=", "\"body\"", "\"uuid\""} {
+			unsafe = unsafe || strings.Contains(lower, forbidden)
+		}
+		if !unsafe {
+			line = d10NativeRedact(line)
+			if len(line) > 1024 {
+				line = line[:1024] + "<truncated>"
+			}
+			retained = append(retained, line)
+		}
+	}
+	payload, err := json.MarshalIndent(struct {
+		Label string   `json:"label"`
+		Lines []string `json:"redacted_error_lines"`
+	}{label, retained}, "", "  ")
+	if err != nil {
+		return err
+	}
+	defer clear(payload)
+	out, err := os.OpenFile(filepath.Join(dir, scenario+"-"+label+".json"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	_, writeErr := out.Write(payload)
+	return errors.Join(writeErr, out.Sync(), out.Close())
 }
 
 func d10NativeKernelDiagnostic(t *testing.T, before, after [][]byte) {
@@ -1321,6 +1398,10 @@ func d10NativeBackend(t *testing.T) {
 			case <-waits[i]:
 			case <-time.After(3 * time.Second):
 				t.Error("owned remote VLESS process was not reaped")
+				ok = false
+			}
+			if err := d10NativePrivateLog(filepath.Join(root, fmt.Sprintf("server-%d.json.log", i)), fmt.Sprintf("backend-%02d", i)); err != nil {
+				t.Error("owned backend private error receipt", d10NativeErrorClass(err))
 				ok = false
 			}
 		}
