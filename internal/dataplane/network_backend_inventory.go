@@ -17,10 +17,11 @@ import (
 var errBackendInventory = errors.New("network backend inventory unknown or incomplete")
 
 const (
-	backendInventoryTimeout = 2 * time.Second
-	backendClassicBytes     = 1 << 20
-	backendClassicRows      = 8192
-	backendClassicTokens    = 65536
+	backendInventoryTimeout      = 2 * time.Second // Each leaf and generic Linux whole capture.
+	backendInventoryStockTimeout = 6 * time.Second // Only explicit reviewed stock whole capture.
+	backendClassicBytes          = 1 << 20
+	backendClassicRows           = 8192
+	backendClassicTokens         = 65536
 )
 
 // These private values describe an observation at one held owner boundary.
@@ -132,7 +133,14 @@ func (r *backendInventoryReader) read(ctx context.Context, scope backendInventor
 	if !ok {
 		return unknown, errBackendInventory
 	}
-	ctx, cancel := context.WithTimeout(ctx, backendInventoryTimeout)
+	budget := backendInventoryTimeout
+	if r.NFTABI == backendNFTABIStockNC1812 {
+		if scope.Network.Kind != netidentity.ReviewedSingleInitNet || scope.Network.PlatformReviewSHA256 != backendNFTStockScopeSHA256 {
+			return unknown, errBackendInventory
+		}
+		budget = backendInventoryStockTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	var result backendInventorySnapshot
 	uses := 0
@@ -159,15 +167,49 @@ func (r *backendInventoryReader) read(ctx context.Context, scope backendInventor
 	return result, nil
 }
 
+// Every leaf retains the original cancellation/values/earlier deadline. The
+// stock aggregate budget cannot become a longer CLI, tool or netlink grant.
+func backendInventoryLeaf[T any](ctx context.Context, use func(context.Context) (T, error)) (T, error) {
+	var zero T
+	leaf, cancel := context.WithTimeout(ctx, backendInventoryTimeout)
+	defer cancel()
+	if err := leaf.Err(); err != nil {
+		return zero, err
+	}
+	result, err := use(leaf)
+	if err = errors.Join(err, leaf.Err()); err != nil {
+		return zero, err
+	}
+	return result, nil
+}
+
+func (r *backendInventoryReader) checkTools(ctx context.Context, scope backendInventoryScope) error {
+	_, err := backendInventoryLeaf(ctx, func(leaf context.Context) (struct{}, error) {
+		return struct{}{}, r.CheckTools(leaf, scope)
+	})
+	return err
+}
+
+func backendInventoryOpenNFT(ctx context.Context, platform backendInventoryPlatform) (backendNFTSession, error) {
+	leaf, cancel := context.WithTimeout(ctx, backendInventoryTimeout)
+	defer cancel()
+	if err := leaf.Err(); err != nil {
+		return nil, err
+	}
+	// Preserve even a partially opened session for the caller's exact close.
+	session, err := platform.openNFT(leaf)
+	return session, errors.Join(err, leaf.Err())
+}
+
 func (r *backendInventoryReader) capture(ctx context.Context, scope backendInventoryScope, platform backendInventoryPlatform, runner backendInventoryBoundedRunner) (backendInventorySnapshot, error) {
 	var unknown backendInventorySnapshot
 	fail := func(err error) (backendInventorySnapshot, error) {
 		return unknown, errors.Join(errBackendInventory, err, ctx.Err())
 	}
-	if err := r.CheckTools(ctx, scope); err != nil || ctx.Err() != nil {
+	if err := r.checkTools(ctx, scope); err != nil || ctx.Err() != nil {
 		return fail(backendInventoryAt("TOOLS_A", errors.Join(err, ctx.Err())))
 	}
-	nft, err := platform.openNFT(ctx)
+	nft, err := backendInventoryOpenNFT(ctx, platform)
 	if err != nil {
 		if nft != nil {
 			_ = nft.Close()
@@ -185,7 +227,9 @@ func (r *backendInventoryReader) capture(ctx context.Context, scope backendInven
 			_ = nft.Close()
 		}
 	}()
-	first, err := nft.Registration(ctx, r.NFTABI)
+	first, err := backendInventoryLeaf(ctx, func(leaf context.Context) (backendNFTRegistration, error) {
+		return nft.Registration(leaf, r.NFTABI)
+	})
 	if err != nil {
 		return fail(backendInventoryAt("GETGEN_A", err))
 	}
@@ -194,7 +238,9 @@ func (r *backendInventoryReader) capture(ctx context.Context, scope backendInven
 	}
 	var tables []backendNFTTable
 	if !first.noRegistered {
-		tables, err = nft.Tables(ctx, first.generation)
+		tables, err = backendInventoryLeaf(ctx, func(leaf context.Context) ([]backendNFTTable, error) {
+			return nft.Tables(leaf, first.generation)
+		})
 		if err != nil {
 			return fail(backendInventoryAt("GETTABLE", err))
 		}
@@ -212,7 +258,7 @@ func (r *backendInventoryReader) capture(ctx context.Context, scope backendInven
 	if len(tables) != 0 {
 		result.NFTState = backendNFTPresent
 	}
-	result.Rows, err = r.classic(ctx, platform, runner, func() error { return backendInventoryAt("TOOLS_B", errors.Join(r.CheckTools(ctx, scope), ctx.Err())) })
+	result.Rows, err = r.classic(ctx, platform, runner, func() error { return backendInventoryAt("TOOLS_B", errors.Join(r.checkTools(ctx, scope), ctx.Err())) })
 	if err != nil {
 		var staged *backendInventoryFailure
 		if !errors.As(err, &staged) {
@@ -221,7 +267,7 @@ func (r *backendInventoryReader) capture(ctx context.Context, scope backendInven
 		return fail(err)
 	}
 	if first.noRegistered {
-		nft, err = platform.openNFT(ctx)
+		nft, err = backendInventoryOpenNFT(ctx, platform)
 		if err != nil || nft == nil {
 			if nft != nil {
 				_ = nft.Close()
@@ -230,7 +276,9 @@ func (r *backendInventoryReader) capture(ctx context.Context, scope backendInven
 		}
 		closed = false
 	}
-	last, err := nft.Registration(ctx, r.NFTABI)
+	last, err := backendInventoryLeaf(ctx, func(leaf context.Context) (backendNFTRegistration, error) {
+		return nft.Registration(leaf, r.NFTABI)
+	})
 	if err != nil || first != last {
 		return fail(backendInventoryAt("GETGEN_B", errors.Join(errBackendInventory, err)))
 	}
@@ -306,7 +354,9 @@ func (r *backendInventoryReader) classic(ctx context.Context, p backendInventory
 	read := func() (image, error) {
 		var result image
 		for i, family := range []int{4, 6} {
-			data, err := p.registeredTables(ctx, family)
+			data, err := backendInventoryLeaf(ctx, func(leaf context.Context) ([]byte, error) {
+				return p.registeredTables(leaf, family)
+			})
 			if err != nil || ctx.Err() != nil {
 				return image{}, errors.Join(errBackendInventory, err, ctx.Err())
 			}
@@ -320,7 +370,9 @@ func (r *backendInventoryReader) classic(ctx context.Context, p backendInventory
 				if ctx.Err() != nil {
 					return image{}, ctx.Err()
 				}
-				data, err := runner.RunBounded(ctx, path, backendClassicBytes-budget.bytes, "-t", table, "-S")
+				data, err := backendInventoryLeaf(ctx, func(leaf context.Context) ([]byte, error) {
+					return runner.RunBounded(leaf, path, backendClassicBytes-budget.bytes, "-t", table, "-S")
+				})
 				if err != nil || ctx.Err() != nil {
 					return image{}, errors.Join(errBackendInventory, err, ctx.Err())
 				}
@@ -335,7 +387,9 @@ func (r *backendInventoryReader) classic(ctx context.Context, p backendInventory
 			}
 		}
 		for i, family := range []int{4, 6} {
-			data, err := p.registeredTables(ctx, family)
+			data, err := backendInventoryLeaf(ctx, func(leaf context.Context) ([]byte, error) {
+				return p.registeredTables(leaf, family)
+			})
 			if err != nil || ctx.Err() != nil {
 				return image{}, errors.Join(errBackendInventory, err, ctx.Err())
 			}

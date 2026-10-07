@@ -537,7 +537,11 @@ func TestBackendInventoryFullNativeObservation(t *testing.T) {
 	if err != nil {
 		t.Fatal("backend full observation: stage=CONSTRUCTOR outcome=unknown capability=ungranted")
 	}
-	ctx, stop := context.WithTimeout(context.Background(), backendInventoryTimeout)
+	captureBudget := backendInventoryTimeout
+	if mode == "stock-nc1812" {
+		captureBudget = backendInventoryStockTimeout
+	}
+	ctx, stop := context.WithTimeout(context.Background(), captureBudget)
 	defer stop()
 	start := time.Now()
 	snapshot, err := collector.Read(ctx, expected)
