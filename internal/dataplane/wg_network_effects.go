@@ -163,16 +163,33 @@ func (a *WARPWireGuardAdapter) wgNetworkFirewallBinary(v6 bool) string {
 	return findExecutable("/opt/sbin/iptables", "/usr/sbin/iptables", "/sbin/iptables", "iptables")
 }
 
-func wgNetworkFirewallKey(rule []string) string {
+// Kernel -S readback elides a universe source/destination. Normalize only that
+// canonical prefix of this exact tool family; every narrower selector remains
+// part of the key. Detect duplicates before elision so they cannot disappear.
+func wgNetworkFirewallKey(rule []string, v6 bool) string {
 	var rest []string
 	nat := ""
+	seen := map[string]bool{}
 	for i := 0; i < len(rule); i += 2 {
-		if i+1 >= len(rule) {
+		if i+1 >= len(rule) || seen[rule[i]] {
 			return "!" + strings.Join(rule, " ")
+		}
+		seen[rule[i]] = true
+		if rule[i] == "-s" || rule[i] == "-d" {
+			prefix, err := netip.ParsePrefix(rule[i+1])
+			if err != nil || prefix.Addr().Is4In6() || prefix.Addr().Is6() != v6 {
+				return "!" + strings.Join(rule, " ")
+			}
+			if prefix.Bits() == 0 {
+				if prefix != prefix.Masked() {
+					return "!" + strings.Join(rule, " ")
+				}
+				continue
+			}
 		}
 		if rule[i] == "--to-source" {
 			addr, err := netip.ParseAddr(rule[i+1])
-			if err != nil || nat != "" || addr.Is4In6() || addr.Zone() != "" {
+			if err != nil || addr.Is4In6() || addr.Zone() != "" || addr.Is6() != v6 {
 				return "!" + strings.Join(rule, " ")
 			}
 			nat = addr.String()
@@ -200,20 +217,20 @@ func (a *WARPWireGuardAdapter) wgNetworkEffectRuntime(ref warpWGPolicyReference,
 		}
 		allowed := map[string]bool{}
 		for _, rule := range table.rules {
-			allowed[wgNetworkFirewallKey(rule)] = true
+			allowed[wgNetworkFirewallKey(rule, table.v6)] = true
 		}
 		for _, rule := range read.own {
-			key := wgNetworkFirewallKey(rule)
+			key := wgNetworkFirewallKey(rule, table.v6)
 			if !allowed[key] || strings.HasPrefix(key, "!") {
 				return read, ErrWGNetworkPolicy
 			}
 		}
 		allowed = map[string]bool{}
 		for _, rule := range table.jumps {
-			allowed[wgNetworkFirewallKey(rule)] = true
+			allowed[wgNetworkFirewallKey(rule, table.v6)] = true
 		}
 		for _, rule := range read.references {
-			if len(rule) == 0 || rule[0] != table.parent || !allowed[wgNetworkFirewallKey(rule[1:])] {
+			if len(rule) == 0 || rule[0] != table.parent || !allowed[wgNetworkFirewallKey(rule[1:], table.v6)] {
 				return read, ErrWGNetworkPolicy
 			}
 		}
@@ -272,9 +289,9 @@ func (a *WARPWireGuardAdapter) wgNetworkEffectRuntime(ref warpWGPolicyReference,
 		if e.attachment {
 			rows = read.parent
 		}
-		count, key := 0, wgNetworkFirewallKey(e.rule)
+		count, key := 0, wgNetworkFirewallKey(e.rule, e.table.v6)
 		for _, row := range rows {
-			if wgNetworkFirewallKey(row) == key {
+			if wgNetworkFirewallKey(row, e.table.v6) == key {
 				count++
 			}
 		}
