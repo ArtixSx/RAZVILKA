@@ -60,6 +60,37 @@ type backendNativeReview struct {
 	calls          int
 }
 
+// Diagnostic labels are compiled constants. Never print an underlying error:
+// it may contain deployment paths, ELF names or command output.
+type backendNativeDiagnostic struct {
+	stage string
+	cause error
+}
+
+func (e *backendNativeDiagnostic) Error() string { return "backend native tool fixture: " + e.stage }
+func (e *backendNativeDiagnostic) Unwrap() error { return e.cause }
+func backendNativeStage(stage string, err error) error {
+	if err == nil {
+		err = errBackendInventory
+	}
+	return &backendNativeDiagnostic{stage: stage, cause: err}
+}
+func backendNativeTrace(err error) string {
+	var stages []string
+	for len(stages) < 16 {
+		var diagnostic *backendNativeDiagnostic
+		if !errors.As(err, &diagnostic) {
+			break
+		}
+		stages = append(stages, diagnostic.stage)
+		err = diagnostic.cause
+	}
+	if len(stages) == 0 {
+		return "UNCLASSIFIED"
+	}
+	return strings.Join(stages, "/")
+}
+
 func (r *backendNativeReview) close() error {
 	var err error
 	for _, image := range r.images {
@@ -70,17 +101,17 @@ func (r *backendNativeReview) close() error {
 func backendNativeHash(ctx context.Context, file *os.File, size int64) ([32]byte, error) {
 	var result [32]byte
 	if size <= 0 || size > 16<<20 {
-		return result, errBackendInventory
+		return result, backendNativeStage("HASH_SIZE", nil)
 	}
 	h := sha256.New()
 	buffer := make([]byte, 32<<10)
 	for offset := int64(0); offset < size; {
 		if ctx.Err() != nil {
-			return result, ctx.Err()
+			return result, backendNativeStage("HASH_CONTEXT", ctx.Err())
 		}
 		n, err := file.ReadAt(buffer[:min(int64(len(buffer)), size-offset)], offset)
 		if n <= 0 || err != nil && !errors.Is(err, io.EOF) {
-			return result, errBackendInventory
+			return result, backendNativeStage("HASH_READ", err)
 		}
 		_, _ = h.Write(buffer[:n])
 		offset += int64(n)
@@ -90,27 +121,33 @@ func backendNativeHash(ctx context.Context, file *os.File, size int64) ([32]byte
 }
 func (r *backendNativeReview) path(path string) (string, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
-		return "", errBackendInventory
+		return "", backendNativeStage("PATH_FORM", nil)
 	}
 	canonical, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return "", err
+		return "", backendNativeStage("PATH_RESOLVE", err)
 	}
 	for _, start := range []string{path, canonical} {
 		for current := start; ; current = filepath.Dir(current) {
 			info, err := os.Lstat(current)
 			if err != nil {
-				return "", err
+				return "", backendNativeStage("PATH_LSTAT", err)
 			}
 			st, ok := info.Sys().(*syscall.Stat_t)
-			if !ok || st.Uid != 0 || info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm()&0022 != 0 {
-				return "", errBackendInventory
+			if !ok {
+				return "", backendNativeStage("PATH_STAT_TYPE", nil)
+			}
+			if st.Uid != 0 {
+				return "", backendNativeStage("PATH_UID", nil)
+			}
+			if info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm()&0022 != 0 {
+				return "", backendNativeStage("PATH_WRITE_MODE", nil)
 			}
 			link := ""
 			if info.Mode()&os.ModeSymlink != 0 {
 				link, err = os.Readlink(current)
 				if err != nil {
-					return "", err
+					return "", backendNativeStage("PATH_READLINK", err)
 				}
 			}
 			r.nodes = append(r.nodes, backendNativeNode{path: current, link: link, info: info})
@@ -132,16 +169,20 @@ func (r *backendNativeReview) image(ctx context.Context, path string) (*backendN
 		}
 	}
 	if len(r.images) >= 384 {
-		return nil, errBackendInventory
+		return nil, backendNativeStage("IMAGE_COUNT", nil)
 	}
 	file, err := os.Open(canonical)
 	if err != nil {
-		return nil, err
+		return nil, backendNativeStage("IMAGE_OPEN", err)
 	}
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 16<<20 || r.bytes+info.Size() > 64<<20 {
+	if err != nil {
 		_ = file.Close()
-		return nil, errBackendInventory
+		return nil, backendNativeStage("IMAGE_STAT", err)
+	}
+	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 16<<20 || r.bytes+info.Size() > 64<<20 {
+		_ = file.Close()
+		return nil, backendNativeStage("IMAGE_BOUNDS", nil)
 	}
 	hash, err := backendNativeHash(ctx, file, info.Size())
 	if err != nil {
@@ -152,11 +193,11 @@ func (r *backendNativeReview) image(ctx context.Context, path string) (*backendN
 	r.images = append(r.images, image)
 	r.bytes += info.Size()
 	if pinned, ok := r.profile.pinned[canonical]; ok && hex.EncodeToString(hash[:]) != pinned {
-		return nil, errBackendInventory
+		return nil, backendNativeStage("IMAGE_PIN", nil)
 	}
 	e, err := elf.NewFile(file)
 	if err != nil {
-		return nil, err
+		return nil, backendNativeStage("ELF_OPEN", err)
 	}
 	defer e.Close()
 	machine := elf.EM_X86_64
@@ -164,27 +205,27 @@ func (r *backendNativeReview) image(ctx context.Context, path string) (*backendN
 		machine = elf.EM_AARCH64
 	}
 	if e.Class != elf.ELFCLASS64 || e.Data != elf.ELFDATA2LSB || e.Machine != machine || e.Type != elf.ET_DYN && e.Type != elf.ET_EXEC {
-		return nil, errBackendInventory
+		return nil, backendNativeStage("ELF_TARGET", nil)
 	}
 	for _, section := range e.Sections {
 		if section.Type != elf.SHT_NOBITS && (section.Offset > uint64(info.Size()) || section.Size > uint64(info.Size())-section.Offset) || section.Flags&elf.SHF_COMPRESSED != 0 {
-			return nil, errBackendInventory
+			return nil, backendNativeStage("ELF_SECTION_BOUNDS", nil)
 		}
 		if section.Type == elf.SHT_STRTAB && section.Size > 1<<20 {
-			return nil, errBackendInventory
+			return nil, backendNativeStage("ELF_STRING_BOUNDS", nil)
 		}
 	}
 	for _, program := range e.Progs {
 		if program.Off > uint64(info.Size()) || program.Filesz > uint64(info.Size())-program.Off {
-			return nil, errBackendInventory
+			return nil, backendNativeStage("ELF_PROGRAM_BOUNDS", nil)
 		}
 		if program.Type == elf.PT_INTERP {
 			data, err := io.ReadAll(io.LimitReader(program.Open(), 4097))
 			if err != nil || len(data) < 2 || len(data) > 4096 || data[len(data)-1] != 0 {
-				return nil, errBackendInventory
+				return nil, backendNativeStage("ELF_INTERPRETER_FORM", err)
 			}
 			if _, err := r.image(ctx, string(data[:len(data)-1])); err != nil {
-				return nil, err
+				return nil, backendNativeStage("ELF_INTERPRETER", err)
 			}
 		}
 	}
@@ -192,23 +233,23 @@ func (r *backendNativeReview) image(ctx context.Context, path string) (*backendN
 	for _, tag := range []elf.DynTag{elf.DT_RPATH, elf.DT_RUNPATH} {
 		paths, err := e.DynString(tag)
 		if err != nil {
-			return nil, err
+			return nil, backendNativeStage("ELF_SEARCH_READ", err)
 		}
 		for _, value := range paths {
 			for _, dir := range strings.Split(value, ":") {
 				if !slices.Contains(r.profile.dirs, dir) {
-					return nil, errBackendInventory
+					return nil, backendNativeStage("ELF_SEARCH_ROOT", nil)
 				}
 			}
 		}
 	}
 	needed, err := e.ImportedLibraries()
 	if err != nil || len(needed) > 32 {
-		return nil, errBackendInventory
+		return nil, backendNativeStage("ELF_DEPENDENCY_LIST", err)
 	}
 	for _, name := range needed {
 		if name == "" || filepath.Base(name) != name || strings.ContainsAny(name, "\\\x00") {
-			return nil, errBackendInventory
+			return nil, backendNativeStage("ELF_DEPENDENCY_FORM", nil)
 		}
 		found := ""
 		for _, dir := range r.profile.dirs {
@@ -217,14 +258,14 @@ func (r *backendNativeReview) image(ctx context.Context, path string) (*backendN
 				found = candidate
 				break
 			} else if !errors.Is(err, os.ErrNotExist) {
-				return nil, err
+				return nil, backendNativeStage("ELF_DEPENDENCY_LOOKUP", err)
 			}
 		}
 		if found == "" {
-			return nil, errBackendInventory
+			return nil, backendNativeStage("ELF_DEPENDENCY_MISSING", nil)
 		}
 		if _, err := r.image(ctx, found); err != nil {
-			return nil, err
+			return nil, backendNativeStage("ELF_DEPENDENCY", err)
 		}
 	}
 	return image, nil
@@ -238,90 +279,96 @@ func (r *backendNativeReview) version(ctx context.Context, index int) error {
 	command.Stdout, command.Stderr = out, out
 	command.WaitDelay = 100 * time.Millisecond
 	if errors.Join(command.Run(), c.Err()) != nil {
-		return errBackendInventory
+		return backendNativeStage("VERSION_EXEC", nil)
 	}
 	name := []string{"iptables", "ip6tables"}[index]
 	if strings.TrimSpace(string(out.data)) != name+" v"+r.profile.version {
-		return errBackendInventory
+		return backendNativeStage("VERSION_VALUE", nil)
 	}
 	return nil
 }
 func (r *backendNativeReview) check(ctx context.Context, identity netidentity.Identity) error {
 	r.calls++
 	if ctx == nil || ctx.Err() != nil || identity.Validate() != nil {
-		return errBackendInventory
+		return backendNativeStage("CHECK_SCOPE", nil)
 	}
 	for _, node := range r.nodes {
 		info, err := os.Lstat(node.path)
 		if err != nil || !os.SameFile(info, node.info) || info.Mode() != node.info.Mode() {
-			return errBackendInventory
+			return backendNativeStage("CHECK_PATH_IMAGE", err)
 		}
 		st, ok := info.Sys().(*syscall.Stat_t)
 		if !ok || st.Uid != 0 {
-			return errBackendInventory
+			return backendNativeStage("CHECK_PATH_UID", nil)
 		}
 		if node.link != "" {
 			link, err := os.Readlink(node.path)
 			if err != nil || link != node.link {
-				return errBackendInventory
+				return backendNativeStage("CHECK_PATH_LINK", err)
 			}
 		}
 	}
 	for _, image := range r.images {
 		current, err := os.Stat(image.path)
 		if err != nil || !os.SameFile(current, image.info) || current.Size() != image.info.Size() || current.ModTime() != image.info.ModTime() {
-			return errBackendInventory
+			return backendNativeStage("CHECK_IMAGE_PATH", err)
 		}
 		held, err := image.file.Stat()
 		if err != nil || !os.SameFile(held, current) {
-			return errBackendInventory
+			return backendNativeStage("CHECK_IMAGE_HELD", err)
 		}
 		hash, err := backendNativeHash(ctx, image.file, current.Size())
-		if err != nil || hash != image.hash {
-			return errBackendInventory
+		if err != nil {
+			return backendNativeStage("CHECK_IMAGE_HASH", err)
+		}
+		if hash != image.hash {
+			return backendNativeStage("CHECK_IMAGE_CHANGED", nil)
 		}
 	}
 	for dir, names := range r.extensionNames {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			return errBackendInventory
+			return backendNativeStage("CHECK_EXTENSION_READ", err)
 		}
 		var closing []string
 		for _, entry := range entries {
 			closing = append(closing, entry.Name())
 		}
 		if !slices.Equal(names, closing) {
-			return errBackendInventory
+			return backendNativeStage("CHECK_EXTENSION_NAMES", nil)
 		}
 	}
 	// A preload file would invalidate this narrow fixture's reviewed loader set.
 	for _, path := range []string{"/etc/ld.so.preload", "/opt/etc/ld.so.preload"} {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
-			return errBackendInventory
+			return backendNativeStage("CHECK_PRELOAD", err)
 		}
 	}
 	for i := range r.profile.aliases {
 		if err := r.version(ctx, i); err != nil {
-			return err
+			return backendNativeStage([]string{"CHECK_VERSION_V4", "CHECK_VERSION_V6"}[i], err)
 		}
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return backendNativeStage("CHECK_CONTEXT", err)
+	}
+	return nil
 }
 func backendNativeHeldTools(ctx context.Context, profile backendNativeProfile) (*backendNativeReview, error) {
 	r := &backendNativeReview{profile: profile, extensionNames: map[string][]string{}}
 	fail := func(err error) (*backendNativeReview, error) { _ = r.close(); return nil, err }
-	for _, alias := range profile.aliases {
+	for i, alias := range profile.aliases {
 		image, err := r.image(ctx, alias)
 		if err != nil {
-			return fail(err)
+			return fail(backendNativeStage([]string{"ALIAS_V4", "ALIAS_V6"}[i], err))
 		}
 		if hex.EncodeToString(image.hash[:]) != profile.mainSHA {
-			return fail(errBackendInventory)
+			return fail(backendNativeStage([]string{"MAIN_PIN_V4", "MAIN_PIN_V6"}[i], nil))
 		}
 	}
 	for path := range profile.pinned {
 		if _, err := r.image(ctx, path); err != nil {
-			return fail(err)
+			return fail(backendNativeStage("PINNED_IMAGE", err))
 		}
 	}
 	for _, dir := range profile.extensions {
@@ -330,25 +377,25 @@ func backendNativeHeldTools(ctx context.Context, profile backendNativeProfile) (
 			continue
 		}
 		if err != nil || len(entries) > 256 {
-			return fail(errBackendInventory)
+			return fail(backendNativeStage("EXTENSION_LIST", err))
 		}
 		if _, err := r.path(dir); err != nil {
-			return fail(err)
+			return fail(backendNativeStage("EXTENSION_ROOT", err))
 		}
 		var names []string
 		for _, entry := range entries {
 			names = append(names, entry.Name())
 			if !strings.HasSuffix(entry.Name(), ".so") || entry.IsDir() {
-				return fail(errBackendInventory)
+				return fail(backendNativeStage("EXTENSION_ENTRY_FORM", nil))
 			}
 			if _, err := r.image(ctx, filepath.Join(dir, entry.Name())); err != nil {
-				return fail(err)
+				return fail(backendNativeStage("EXTENSION_IMAGE", err))
 			}
 		}
 		r.extensionNames[dir] = names
 	}
 	if len(r.extensionNames) == 0 {
-		return fail(errBackendInventory)
+		return fail(backendNativeStage("EXTENSION_SET_EMPTY", nil))
 	}
 	return r, nil
 }
@@ -380,7 +427,7 @@ func TestBackendInventoryFullNativeObservation(t *testing.T) {
 	}
 	review, err := backendNativeHeldTools(setup, profile)
 	if err != nil {
-		t.Fatal("backend full observation: stage=TOOLS outcome=unknown capability=ungranted")
+		t.Fatalf("backend full observation: stage=TOOLS tool-step=%s setup-deadline-expired=%t outcome=unknown capability=ungranted", backendNativeTrace(err), setup.Err() != nil)
 	}
 	defer func() {
 		if review.close() != nil {
@@ -405,7 +452,7 @@ func TestBackendInventoryFullNativeObservation(t *testing.T) {
 		if errors.As(err, &staged) {
 			stage = staged.stage
 		}
-		t.Fatalf("backend full observation: stage=%s outcome=unknown elapsed-ms=%d deadline-expired=%t tool-checks=%d capability=ungranted", stage, time.Since(start).Milliseconds(), ctx.Err() != nil, review.calls)
+		t.Fatalf("backend full observation: stage=%s tool-step=%s outcome=unknown elapsed-ms=%d deadline-expired=%t tool-checks=%d capability=ungranted", stage, backendNativeTrace(err), time.Since(start).Milliseconds(), ctx.Err() != nil, review.calls)
 	}
 	state := "COMPLETE_EMPTY"
 	if snapshot.NFTState == BackendNFTPresent {

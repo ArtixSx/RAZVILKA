@@ -34,3 +34,9 @@ RAZVILKA_BACKEND_INVENTORY_NATIVE=stock-nc1812 ./backend-full.test -test.run='^T
 Fixed production environment не передаёт old test CLI role markers. Поэтому checkpoint9c0d830 выделяет единственный bounded IO/Wait body: production RunBounded задаёт fixed environment, старый nine-mode CLI fixture задаёт dedicated QA env этому же body. Actual full fixture вызывает production method. Существующий CLI fixture ROOT при желании повторяет отдельно; его native assertions owner не исполнял.
 
 Final owner checks PASS: Windows amd64 все `TestBackend*`0.086s и package vet; Linux amd64/arm64 package vet, full test binary cross-compile и stripped minimal full-observation-only overlay cross-compile. Source/gofmt/diff checks PASS. Ни Linux/native/race, ни VM/router/live не исполнялись здесь; GET autoload и userspace deadline limitations прежние. Весь DTO/RequireComplete остаётся observation, не mutation/admission capability.
+
+## Static tool diagnostics follow-up
+
+ROOT native107 на accepted5899399: VM full collector PASS0.38s, actual capture168ms, rows0/NFTtables0/COMPLETE_EMPTY и2 actual tool checks. Router остановился до capture, stageTOOLS; actual unmet fixture assumption пока не установлено.
+
+QA-only follow-up добавляет `tool-step` — до16 compiled labels, например `ALIAS_V4/ELF_DEPENDENCY/PATH_UID`, и `setup-deadline-expired` boolean. Различаются canonical path/UID/write mode, held file bounds/read/hash pin, ELF target/extents/interpreter/search/dependency, extension set, actual version и closing retained-image checks. Вложенный failure сохраняет исходную error identity через Unwrap; underlying Error/paths/names/output не печатаются. Все thresholds, root ownership, exact pins, lookup/search semantics, versions, fixed environment и2s deadlines прежние. Production files не меняются. Это диагностика отказа, не новый trust issuer, не relaxed deployment profile и не router PASS.
