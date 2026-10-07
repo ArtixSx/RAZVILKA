@@ -13,7 +13,7 @@ func (a *WARPWireGuardAdapter) wgNetworkServiceTablePresence(ctx context.Context
 	if state.NetworkPolicyGeneration == "" || state.Interface != a.interfaceName() || state.Table != a.table() || family != 4 && family != 6 {
 		return 0, ErrWGNetworkPolicy
 	}
-	data, err := a.readWGCompleteNumericTable(ctx, state.Table, family)
+	data, err := a.readWGCompleteDetailedNumericTable(ctx, state.Table, family)
 	if err != nil {
 		return 0, err
 	}
@@ -22,11 +22,11 @@ func (a *WARPWireGuardAdapter) wgNetworkServiceTablePresence(ctx context.Context
 		return 0, err
 	}
 	route := rows[0]
-	destination, metric := "0.0.0.0/0", 0
+	destination, metric, scope := "0.0.0.0/0", 0, "link"
 	if family == 6 {
-		destination, metric = "::/0", 1024
+		destination, metric, scope = "::/0", 1024, "global"
 	}
-	if route.Destination != "default" && route.Destination != destination || route.Device != state.Interface || route.Gateway != "" || route.Source != "" || route.SelectedSource != "" || route.From != "" || route.Protocol != "boot" || route.Scope != "" && route.Scope != "link" || route.Metric != metric || len(route.Flags) != 0 || len(route.Table) != 0 && !wgEndpointTableMatches(route.Table, state.Table) {
+	if route.Destination != "default" && route.Destination != destination || route.Type != "unicast" || route.Device != state.Interface || route.Gateway != "" || route.Source != "" || route.SelectedSource != "" || route.From != "" || route.Protocol != "boot" || route.Scope != scope || route.Metric != metric || len(route.Flags) != 0 || len(route.Table) != 0 && !wgEndpointTableMatches(route.Table, state.Table) {
 		return 0, ErrWGNetworkPolicy
 	}
 	return 1, ctx.Err()

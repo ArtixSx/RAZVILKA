@@ -32,6 +32,11 @@ func (r wgNetworkLANReadbackRunner) Run(ctx context.Context, name string, args .
 		if strings.HasPrefix(plain, "-N ") {
 			plain = strings.TrimPrefix(plain, "-N ")
 		}
+		modelArgs := args
+		if len(args) > 1 && args[0] == "-N" && args[1] == "-details" {
+			plain = strings.TrimPrefix(plain, "-details ")
+			modelArgs = append([]string{"-N"}, args[2:]...)
+		}
 		if strings.HasPrefix(plain, "-6 ") {
 			prefix, router = netip.MustParsePrefix("fd01::/64"), "fd01::1"
 			connected = "fd01::/64 dev br0 proto kernel scope link\n"
@@ -40,7 +45,7 @@ func (r wgNetworkLANReadbackRunner) Run(ctx context.Context, name string, args .
 			plain = strings.TrimPrefix(plain, "-6 ")
 		}
 		if plain == "-j route show table 206" {
-			data, err := r.base.Run(ctx, name, args...)
+			data, err := r.base.Run(ctx, name, modelArgs...)
 			if err != nil {
 				return data, err
 			}
@@ -48,16 +53,16 @@ func (r wgNetworkLANReadbackRunner) Run(ctx context.Context, name string, args .
 			if json.Unmarshal(data, &rows) != nil {
 				return nil, errors.New("complete table model unavailable")
 			}
-			family, metric := "4", 0
+			family, metric, scope := "4", 0, 253
 			if prefix.Addr().Is6() {
-				family, metric = "6", 1024
+				family, metric, scope = "6", 1024, 0
 			}
 			if line := r.kernel.policy.defaults[family+"/206"]; line != "" {
 				fields := strings.Fields(line)
 				if len(fields) != 7 || fields[0] != "default" || fields[1] != "dev" || fields[3] != "proto" || fields[4] != "boot" || fields[5] != "metric" || fields[6] != strconv.Itoa(metric) {
 					return nil, errors.New("noncanonical default table model")
 				}
-				row, _ := json.Marshal(map[string]any{"dst": "default", "dev": fields[2], "table": 206, "protocol": 3, "scope": 253, "metric": metric})
+				row, _ := json.Marshal(map[string]any{"type": "1", "dst": "default", "dev": fields[2], "table": 206, "protocol": 3, "scope": scope, "metric": metric})
 				rows = append(rows, row)
 			}
 			return json.Marshal(rows)

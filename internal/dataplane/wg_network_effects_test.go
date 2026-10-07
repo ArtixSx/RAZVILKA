@@ -188,8 +188,8 @@ func TestWGNetworkWholeServiceTableRefusesSpecificRoutesAndWrongDefaultTuple(t *
 				} else {
 					base := a.Runner
 					a.Runner = networkCleanupRunner(func(c context.Context, name string, args ...string) ([]byte, error) {
-						if name == "ip" && strings.Join(args, " ") == "-N -j route show table 206" {
-							row := map[string]any{"dst": "default", "dev": "rz-wg", "protocol": 3, "scope": 253, "metric": 0}
+						if name == "ip" && strings.Join(args, " ") == "-N -details -j route show table 206" {
+							row := map[string]any{"type": "1", "dst": "default", "dev": "rz-wg", "protocol": 3, "scope": 253, "metric": 0}
 							switch cut {
 							case "metric":
 								row["metric"] = 99

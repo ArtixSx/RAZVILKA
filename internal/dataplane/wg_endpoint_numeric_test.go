@@ -90,3 +90,18 @@ func TestWGEndpointNumericFixturePreservesIPv6PinReadback(t *testing.T) {
 		t.Fatal("numeric IPv6 fixture lost endpoint", err)
 	}
 }
+
+func TestWGEndpointNumericRouteTypeAllowsOnlyCanonicalUnicast(t *testing.T) {
+	for _, raw := range []string{"1", `"1"`, `"unicast"`, "2", `"01"`, `"local"`, `""`, "1.0", "1e0", "-1", "256", "null", "true", "[]", "{}"} {
+		wire := []byte(`[{"type":` + raw + `,"dst":"93.184.216.34/32","dev":"wan-c","protocol":4,"scope":253,"metric":1,"flags":[]}]`)
+		rows, err := parseWGEndpointRoutes(wire)
+		allowed := raw == "1" || raw == `"1"` || raw == `"unicast"`
+		if allowed {
+			if err != nil || len(rows) != 1 || rows[0].Type != "unicast" {
+				t.Fatal("canonical numeric unicast was refused", raw, err)
+			}
+		} else if err == nil {
+			t.Fatal("foreign/malformed numeric route type became unicast", raw)
+		}
+	}
+}
