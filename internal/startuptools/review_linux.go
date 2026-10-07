@@ -303,6 +303,11 @@ func (r *heldReview) capture(ctx context.Context) error {
 			return at("IP_MAIN_PIN", err)
 		}
 		r.ipEntry = image
+		if r.profile.stock {
+			if err := r.captureStockNameAbsence(ctx, "/opt/etc/iproute2"); err != nil {
+				return err
+			}
+		}
 	}
 	canonical, err := r.resolve(r.profile.extension)
 	if err != nil || !r.nodes[canonical].info.IsDir() {

@@ -24,7 +24,7 @@ func ubuntuPolicyProfile() profile {
 
 func stockPolicyProfile() profile {
 	p := stockProfile()
-	p.id = "stock-nc1812-arm64-iptables-1.4.21-ip-4.4.0-policy-v1"
+	p.id = "stock-nc1812-arm64-iptables-1.4.21-ip-4.4.0-policy-v2"
 	p.ipAlias, p.ipMain = "/opt/sbin/ip", "/opt/libexec/ip-full"
 	p.ipSHA = "cce8d3fafdf0c1393878adb53e596c16788b37f8ecdd0d0ac25c4a751b0b7b88"
 	p.ipVersion = "ip utility, iproute2-ss4.4.0-11-entware\n"

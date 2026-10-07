@@ -56,6 +56,12 @@ func (l *Lease) policyRead(ctx context.Context, index int, args []string) ([]byt
 	defer l.unlock()
 	stop := context.AfterFunc(l.lifetime, cancel)
 	defer stop()
+	stockRules := index == 2 && l.profile.stock && ipReadArguments(args)
+	if stockRules {
+		// The public inspection ABI remains numeric. Only the compiled old
+		// profile lacks -N; its held no-name-input proof permits this adapter.
+		args = []string{args[0], "rule", "show"}
+	}
 	var data []byte
 	err := l.provider.WithCurrent(c, func(held context.Context, actual netidentity.Identity) error {
 		if actual != l.identity || !l.profile.acceptsIdentity(actual) {
@@ -63,6 +69,9 @@ func (l *Lease) policyRead(ctx context.Context, index int, args []string) ([]byt
 		}
 		var err error
 		data, err = l.execute(held, index, maxOutputBytes, args...)
+		if err == nil && stockRules {
+			data, err = stockNumericRules(data)
+		}
 		return err
 	})
 	if err != nil || c.Err() != nil || l.closed.Load() || l.lifetime.Err() != nil {

@@ -138,3 +138,27 @@ func TestHashAndOutputBoundNeverReturnTruncatedEvidence(t *testing.T) {
 		t.Fatal("overflow did not cancel without growing allocation")
 	}
 }
+
+func TestBoundedLeafReadAcceptsLongCaptureButNeverExtendsOriginalContext(t *testing.T) {
+	for _, duration := range []time.Duration{16 * time.Second, 100 * time.Millisecond} {
+		original, cancelOriginal := context.WithTimeout(context.Background(), duration)
+		leaf, cancelLeaf, err := boundedReadContext(original)
+		if err != nil {
+			cancelOriginal()
+			t.Fatal(err)
+		}
+		originalDeadline, _ := original.Deadline()
+		leafDeadline, _ := leaf.Deadline()
+		if leafDeadline.After(originalDeadline) || time.Until(leafDeadline) > operationTimeout {
+			t.Fatal("leaf extended original or internal cap")
+		}
+		cancelOriginal()
+		if leaf.Err() == nil {
+			t.Fatal("leaf detached original cancellation")
+		}
+		cancelLeaf()
+	}
+	if _, _, err := boundedReadContext(context.Background()); err == nil {
+		t.Fatal("unbounded original read admitted")
+	}
+}

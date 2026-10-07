@@ -32,6 +32,8 @@ func pathCategory(path string) string {
 		return "OPT_ETC"
 	case "/etc":
 		return "ETC"
+	case "/opt/etc/iproute2":
+		return "IP_NAMES_ROOT"
 	case "/usr", "/usr/sbin", "/usr/bin", "/opt/sbin", "/opt/bin", "/opt/libexec":
 		return "TOOL_PARENT"
 	case "/lib", "/lib64", "/usr/lib", "/opt/lib", "/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu":

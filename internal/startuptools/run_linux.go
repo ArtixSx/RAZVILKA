@@ -75,11 +75,10 @@ func (l *Lease) RunBounded(ctx context.Context, name string, limit int, args ...
 	if ctx == nil || !readArguments(args) || limit <= 0 || limit > maxOutputBytes {
 		return nil, at("READ_ABI", nil)
 	}
-	deadline, bounded := ctx.Deadline()
-	if !bounded || time.Until(deadline) <= 0 || time.Until(deadline) > operationTimeout {
-		return nil, at("READ_DEADLINE", nil)
+	c, cancel, err := boundedReadContext(ctx)
+	if err != nil {
+		return nil, err
 	}
-	c, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	if err := l.lock(c); err != nil {
 		return nil, err
@@ -97,7 +96,7 @@ func (l *Lease) RunBounded(ctx context.Context, name string, limit int, args ...
 	stop := context.AfterFunc(l.lifetime, cancel)
 	defer stop()
 	var data []byte
-	err := l.provider.WithCurrent(c, func(held context.Context, actual netidentity.Identity) error {
+	err = l.provider.WithCurrent(c, func(held context.Context, actual netidentity.Identity) error {
 		if actual != l.identity || !l.profile.acceptsIdentity(actual) {
 			return at("READ_IDENTITY", nil)
 		}

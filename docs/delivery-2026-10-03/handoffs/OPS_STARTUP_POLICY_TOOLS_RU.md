@@ -47,6 +47,8 @@ Version probe — exact `-Version`, stdout с одним newline, RC0/stderr emp
 
 Без effect admission runner допускает только exact xtables `-t TABLE -S` и numeric IP `-4/-6 -N rule show`, каждое чтение <=2s и <=1MiB. Это покрывает текущий LAN gate readback. Route show/get, link/addr JSON и neigh пока **explicit capability refusal**; raw runner fallback не допускается.
 
+Root130 выявил unsupported `-N` на actual stock 4.4.0. Отдельный [stock v2 held-absence adapter](OPS_STOCK_NUMERIC_RULES_RU.md) сохраняет public numeric ABI и связывает builtin normalization с protected absence name inputs; исходный b306 stock read был реальным refusal, не PASS. Longer bounded parent теперь допускается только с собственным leaf <=2s; aggregate budgets и их actual acceptance принадлежат owners/Root.
+
 Admitted effect ABI: fixed two xtables aliases с `-t TABLE` и одним начальным `-A/-D/-I/-N/-X`, либо fixed IP alias с `-4/-6 rule add/del` или `route add/del/replace`. 128 args maximum, <=1024 bytes each, <=32KiB total до копирования, valid UTF-8 без NUL/newline. Batch/file restore, shell, flush/policy-wide ABI не выдаётся. Эти shape bounds не являются авторизацией: exact typed command подтверждает CORE owner.
 
 ## Checks / Root native gate

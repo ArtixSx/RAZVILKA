@@ -86,6 +86,20 @@ func (l *Lease) lock(ctx context.Context) error {
 }
 func (l *Lease) unlock() { l.gate <- struct{}{} }
 
+func boundedReadContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
+	if ctx == nil {
+		return nil, nil, at("READ_DEADLINE", nil)
+	}
+	deadline, bounded := ctx.Deadline()
+	if !bounded || time.Until(deadline) <= 0 {
+		return nil, nil, at("READ_DEADLINE", nil)
+	}
+	// A bounded whole capture may outlive this leaf command. Always impose
+	// our own two-second cap while preserving a shorter original deadline.
+	c, cancel := context.WithTimeout(ctx, operationTimeout)
+	return c, cancel, nil
+}
+
 // InventoryTools returns the fixed collector binding while retaining the same
 // opaque lease. Copying this descriptor cannot extend lifetime or replace Check.
 func (l *Lease) InventoryTools() (dataplane.BackendInventoryTools, error) {

@@ -101,3 +101,22 @@ func TestHeldPathsRejectIdenticalReplacementAndNewSearchOccupant(t *testing.T) {
 		t.Fatal("new earlier search candidate escaped the retained closure")
 	}
 }
+
+func TestStockNameInputsRequireHeldAbsenceAndRejectNewDatabase(t *testing.T) {
+	dir, r := rootReviewFixture(t)
+	if err := r.captureStockNameAbsence(context.Background(), dir); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.absent) != 8 {
+		t.Fatal("incomplete stock name input coverage", len(r.absent))
+	}
+	if err := os.WriteFile(filepath.Join(dir, "rt_tables"), []byte("201 named\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.pathsCurrent(context.Background()); err == nil {
+		t.Fatal("new DB changed numeric semantics without revoking review")
+	}
+	if err := r.captureStockNameAbsence(context.Background(), dir); err == nil {
+		t.Fatal("existing DB was silently ignored")
+	}
+}
