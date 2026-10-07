@@ -269,6 +269,10 @@ func runSelfUpdateCommandHelper(id, command string) int {
 }
 
 func runSelfUpdateRuntimeQuiesce(args []string) int {
+	return runSelfUpdateRuntimeQuiesceWithJournalRoots(args, productionSelfUpdateJournalRoots())
+}
+
+func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots selfUpdateJournalRoots) int {
 	if len(args) != 3 {
 		return 2
 	}
@@ -279,6 +283,9 @@ func runSelfUpdateRuntimeQuiesce(args []string) int {
 	worker, err := strconv.Atoi(args[2])
 	if err != nil || worker <= 1 || strconv.Itoa(worker) != args[2] {
 		return 2
+	}
+	if !allowSelfUpdateJournalCommand(journalRoots) {
+		return 3
 	}
 	adapter, ok := nativeSelfUpdateFileAdapter().(interface {
 		RuntimeQuiesceAuthority(context.Context, string, uint64, int) error
