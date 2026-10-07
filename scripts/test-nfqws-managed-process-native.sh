@@ -18,5 +18,5 @@ unset RAZVILKA_NFQWS_PROCESS_FIXTURE RAZVILKA_NFQWS_NATIVE_REVIEW RAZVILKA_NFQWS
 cd "$nfqws_repo"
 go test -c -o "$nfqws_work/dataplane.test" ./internal/dataplane
 chmod 500 "$nfqws_work/dataplane.test"
-unshare --net "$nfqws_work/dataplane.test" -test.run='^TestNFQWSManaged(ProcessLifecycleNative|GenuineNoInterceptNative)$' -test.count=1 -test.v
+unshare --net "$nfqws_work/dataplane.test" -test.run='^TestNFQWSManaged(ProcessLifecycleNative|ProcessLaunchBridgeNative|GenuineNoInterceptNative)$' -test.count=1 -test.v
 echo "Retained private artifacts: $nfqws_work"

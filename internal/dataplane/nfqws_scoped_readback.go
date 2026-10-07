@@ -32,6 +32,26 @@ const (
 
 type nfqwsScopedRules map[PolicyEffectTool]map[string][][]string
 
+// These copies never escape to Apply or a writer Runner. The common issuer's
+// Current guard may prove prepared phases without granting a capture effect.
+func nfqwsScopedBeforeStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, current func(context.Context, *NFQWSScopedPlan) error) error {
+	if b == nil || current == nil {
+		return ErrNFQWSScopedOwner
+	}
+	readonly := *b
+	readonly.ApplyGuard = func(c context.Context, got *NFQWSScopedPlan, _ PolicyEffect) error { return current(c, got) }
+	return readonly.CheckBeforeProcessStart(ctx, p)
+}
+
+func nfqwsScopedPreparedCurrent(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, root string, current func(context.Context, *NFQWSScopedPlan) error) error {
+	if b == nil || current == nil {
+		return ErrNFQWSScopedOwner
+	}
+	readonly := *b
+	readonly.ApplyGuard = func(c context.Context, got *NFQWSScopedPlan, _ PolicyEffect) error { return current(c, got) }
+	return readonly.VerifyPrepared(ctx, p, root)
+}
+
 // iptables -S quotes match arguments. Interpret quotes without shell expansion;
 // Fields alone could mistake a quoted comment for an actual NFQUEUE target.
 func nfqwsScopedTokens(line string) ([]string, error) {

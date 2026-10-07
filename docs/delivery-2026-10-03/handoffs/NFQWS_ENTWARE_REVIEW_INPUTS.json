@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "purpose": "research-evidence-only; not runtime authority or admission",
+  "observedDate": "2026-10-04",
+  "sources": {
+    "entwareCommit": "969c703e6fd8b2ad84d82affaeb14b48d1fcb105",
+    "linuxReferenceCommit": "69973b830859bc6529a7a0468ba0d80ee5117826",
+    "linuxReferenceTag": "v4.9; not an attestation of vendor 4.9-ndm-5",
+    "iptablesSource": {
+      "url": "https://www.netfilter.org/projects/iptables/files/iptables-1.4.21.tar.bz2",
+      "sha256": "52004c68021da9a599feed27f65defcfb22128f7da2c0531c0f75de0f479d3e0"
+    },
+    "mainFeed": {
+      "url": "https://bin.entware.net/aarch64-k3.10/Packages.gz",
+      "sha256": "3e8ce5633dcfacaae96b625b0f568c606c85b88d28c2fef8fc99671a7c8320ee",
+      "nftablesPackages": 0
+    },
+    "keeneticFeed": {
+      "url": "https://bin.entware.net/aarch64-k3.10/keenetic/Packages.gz",
+      "sha256": "31d04b85476a953bbe7ae33c0f1908926b2a03badd96235fca261d702bf94291",
+      "nftablesPackages": 0
+    }
+  },
+  "packages": [
+    {
+      "version": "1.4.21-5",
+      "architecture": "aarch64-3.10",
+      "url": "https://bin.entware.net/aarch64-k3.10/iptables_1.4.21-5_aarch64-3.10.ipk",
+      "size": 200100,
+      "sha256": "17c294575158352583ee9d76aa5b3710f9adf01745e558f23833c20c6040a78b",
+      "libiptextSHA256": "db54c1cf04a661e86502f83313921cb61957c28f0e96cbc651d52011a0789ffa"
+    },
+    {
+      "version": "1.4.21-6",
+      "architecture": "aarch64-3.10_kn",
+      "url": "https://bin.entware.net/aarch64-k3.10/keenetic/iptables_1.4.21-6_aarch64-3.10_kn.ipk",
+      "size": 203022,
+      "sha256": "87f9bf7c2edfc34f5f9d42632d399a29766503d644f1018cbba92526cce5a7ca",
+      "libiptextSHA256": "7949322daea9707f17307c075df84a51ef710b6c9d4f33e1e271b35d1bf36e05"
+    }
+  ],
+  "identicalSelectedFilesInBothPackages": [
+    {
+      "path": "/opt/sbin/xtables-multi",
+      "sha256": "966a3efa461f9f42a9f48dfb8c0bc8b5ef858aac1130adf5f84e3724b3ec2acf"
+    },
+    {
+      "path": "/opt/lib/libip4tc.so.0.1.0",
+      "sha256": "70b9df4548483520cfcdcb89cddbe7ff2faa7cae89ed53e22ad60544fdca1c2a"
+    },
+    {
+      "path": "/opt/lib/libip6tc.so.0.1.0",
+      "sha256": "48a62bbcb302d06abdc438720de6275f63435cd77e87a9379ba5f7aa463788de"
+    },
+    {
+      "path": "/opt/lib/libxtables.so.10.0.0",
+      "sha256": "a97804214fdb2f5a54c17aff8513a5c1213e1e8b90786714cc38c2951b747cf2"
+    },
+    {
+      "path": "/opt/lib/libiptext4.so",
+      "sha256": "7b5e33c8bc143d4f4b1533c22273bec9f8c271c03055ac93a2bde1ecf081c289"
+    },
+    {
+      "path": "/opt/lib/libiptext6.so",
+      "sha256": "c5d9ed037c75e361b210e338484296ced63253f8f03af16eb29ed9e572d67bf2"
+    }
+  ],
+  "referenceKernelSourcesSHA256": {
+    "net/netfilter/nf_tables_api.c": "b156406782e317b87fbcd74b8ba29e27a926c485d29524fec04a293f606238b9",
+    "net/netfilter/nfnetlink.c": "7676b97e5e300f846f604120011117f64324919cb1b7166911ae57df27c352a7",
+    "net/netlink/af_netlink.c": "6c3b1c77187fc30d5169dd42f7154512493d1cb317f5d1f7fc86803a8a2510d4",
+    "include/uapi/linux/netfilter/nfnetlink.h": "8179f378cd6c1aa9690f38ce10b02584938198f90e6692407083651d9abb18d4",
+    "include/uapi/linux/netlink.h": "4a8840a17795ee4bbf005889ec94502f8487bcc2189194e0929164cd101ae36e"
+  },
+  "limitsProposedOnly": {
+    "deadlineMilliseconds": 2000,
+    "requests": 3,
+    "receiveTotalBytes": 262144,
+    "receiveDatagrams": 64,
+    "receiveFrames": 1024,
+    "datagramBytes": 65536
+  },
+  "unresolved": [
+    "Actual router executable and library hashes have not been compared by ROOT yet.",
+    "Vendor 4.9-ndm-5 positive NFT unsupported provenance is not established.",
+    "Current security-table inventory requirement needs firmware runtime verification.",
+    "Direct reader is proposed, not implemented or native verified.",
+    "Common Execution admission and actual cross-process child Start binding remain prerequisites."
+  ]
+}
