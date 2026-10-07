@@ -329,7 +329,10 @@ type NFQWSScopedBinding struct {
 	// Checks other kernel backends (including nftables) and the exact physical
 	// namespace of Runner. Unknown or overlapping foreign capture must refuse.
 	AdditionalReadback func(context.Context, *NFQWSScopedPlan) error
-	options            policyAdditionOptions
+	// Only the private after-Start phase observes empty -> exact ready owned.
+	// Strict pre-Start, Prepared, Apply and cleanup still use QueueCheck.
+	queueReadiness func(context.Context, string, uint16, *components.NFQWSRuntimeProcessIdentity) (bool, error)
+	options        policyAdditionOptions
 }
 
 func (b *NFQWSScopedBinding) prepare(p *NFQWSScopedPlan, cleanup bool) (PolicyEffectRuntime, PolicyEffectPlan, error) {
