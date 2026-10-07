@@ -122,30 +122,35 @@ func nfqws2ValidateManagedLease(lease nfqws2ManagedProcessLease) error {
 	if lease.LaunchBinding != nil && !nfqws2ManagedStartBindingValid(*lease.LaunchBinding, command) {
 		return ErrNFQWSManagedProcessUnknown
 	}
+	return nfqws2ValidateProcessReceipt(command, lease.CommandSHA256, receipt, lease.Child, lease.Acknowledged)
+}
+
+// The immutable file/argv and kernel receipt invariants are shared by the
+// explicitly separate lease versions. No command digest is substituted here.
+func nfqws2ValidateProcessReceipt(command nfqws2ManagedProcessCommand, commandSHA256 string, receipt components.NFQWSSupervisionReceipt, child components.NFQWSRuntimeProcessIdentity, acknowledged bool) error {
 	if receipt.State == "intent" {
-		if lease.Acknowledged || lease.Child != (components.NFQWSRuntimeProcessIdentity{}) || !reflect.DeepEqual(receipt, components.NFQWSSupervisionReceipt{State: "intent"}) {
+		if acknowledged || child != (components.NFQWSRuntimeProcessIdentity{}) || !reflect.DeepEqual(receipt, components.NFQWSSupervisionReceipt{State: "intent"}) {
 			return ErrNFQWSManagedProcessUnknown
 		}
 		return nil
 	}
-	if receipt.BootID != command.Parent.BootID || receipt.CommandSHA256 != lease.CommandSHA256 || !nfqws2ManagedPositive(receipt.Start) || receipt.PID <= 1 || receipt.Group != receipt.PID || receipt.Reaped < 0 || receipt.ExitCode < 0 || receipt.ExitCode > 255 {
+	if receipt.BootID != command.Parent.BootID || receipt.CommandSHA256 != commandSHA256 || !nfqws2ManagedPositive(receipt.Start) || receipt.PID <= 1 || receipt.Group != receipt.PID || receipt.Reaped < 0 || receipt.ExitCode < 0 || receipt.ExitCode > 255 {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	if receipt.Started {
-		child := lease.Child
 		if receipt.ChildPID <= 1 || (child != (components.NFQWSRuntimeProcessIdentity{}) && (child.PID != receipt.ChildPID || child.ParentPID != receipt.PID || child.Group != child.PID || child.BootID != receipt.BootID || !nfqws2ManagedPositive(child.Start) || child.Executable != command.Program.Path || child.ArgumentsSHA256 != components.NFQWSRuntimeArgumentsSHA256(command.Program.Path, command.Args))) {
 			return ErrNFQWSManagedProcessUnknown
 		}
-	} else if receipt.ChildPID != 0 || receipt.DirectReaped || receipt.Reaped != 0 || lease.Child != (components.NFQWSRuntimeProcessIdentity{}) {
+	} else if receipt.ChildPID != 0 || receipt.DirectReaped || receipt.Reaped != 0 || child != (components.NFQWSRuntimeProcessIdentity{}) {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	switch receipt.State {
 	case "armed":
-		if receipt.Started || receipt.WaitECHILD || receipt.Cancelled || lease.Acknowledged || receipt.ExitCode != 0 {
+		if receipt.Started || receipt.WaitECHILD || receipt.Cancelled || acknowledged || receipt.ExitCode != 0 {
 			return ErrNFQWSManagedProcessUnknown
 		}
 	case "running":
-		if !receipt.Started || receipt.DirectReaped || receipt.WaitECHILD || receipt.Reaped != 0 || receipt.Cancelled || receipt.ExitCode != 0 || lease.Acknowledged {
+		if !receipt.Started || receipt.DirectReaped || receipt.WaitECHILD || receipt.Reaped != 0 || receipt.Cancelled || receipt.ExitCode != 0 || acknowledged {
 			return ErrNFQWSManagedProcessUnknown
 		}
 	case "reaped":

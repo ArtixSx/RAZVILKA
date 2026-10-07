@@ -62,12 +62,25 @@ func nfqwsParentAlive(command NFQWSSupervisionCommand) error {
 // including detached sessions and clone children with a non-SIGCHLD signal.
 // A terminal receipt requires Wait4 ECHILD; a /proc scan is cleanup only.
 func RunNFQWSSupervision(ctx context.Context, command NFQWSSupervisionCommand, hooks NFQWSSupervisionHooks) (NFQWSSupervisionReceipt, error) {
-	var receipt NFQWSSupervisionReceipt
 	if err := validateNFQWSSupervision(ctx, command, hooks); err != nil {
-		return receipt, err
+		return NFQWSSupervisionReceipt{}, err
 	}
 	ctx, cancel := context.WithDeadline(ctx, command.Deadline)
 	defer cancel()
+	return runNFQWSSupervision(ctx, command, hooks)
+}
+
+func RunNFQWSActiveSupervision(ctx context.Context, command NFQWSActiveSupervisionCommand, hooks NFQWSSupervisionHooks) (NFQWSSupervisionReceipt, error) {
+	shape := command.shape()
+	if err := validateNFQWSSupervisionShape(ctx, shape, hooks); err != nil {
+		return NFQWSSupervisionReceipt{}, err
+	}
+	return runNFQWSSupervision(ctx, shape, hooks)
+}
+
+// Both explicitly selected modes retain this sole kernel wait owner.
+func runNFQWSSupervision(ctx context.Context, command NFQWSSupervisionCommand, hooks NFQWSSupervisionHooks) (NFQWSSupervisionReceipt, error) {
+	var receipt NFQWSSupervisionReceipt
 	identity, err := ReadNFQWSSupervisionIdentity()
 	if err != nil || identity.Group != identity.PID || identity.BootID != command.BootID {
 		return receipt, errors.Join(ErrNFQWSSupervisionUnknown, err)

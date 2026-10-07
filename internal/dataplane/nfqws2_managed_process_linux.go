@@ -398,6 +398,9 @@ func runNFQWSManagedProcessSupervisor(id, stateRoot, controlRoot string) error {
 	}
 	// Missing/foreign intent must refuse before even opening a writer lease.
 	initial, err := restorejournal.ReadFileImage(signalCtx, path)
+	if err == nil && nfqws2DeclaredLeaseVersion(initial) == 3 {
+		return runNFQWSActiveProcessSupervisor(signalCtx, id, stateRoot, controlRoot, initial)
+	}
 	declared, decodeErr := nfqws2DecodeManagedLease(initial, stateRoot, owner)
 	if err != nil || decodeErr != nil || declared.Command.ID != id || declared.Command.ControlRoot != controlRoot || declared.Receipt.State != "intent" || declared.Acknowledged {
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err, decodeErr)

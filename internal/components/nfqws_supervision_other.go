@@ -15,3 +15,7 @@ func ReadNFQWSSupervisionProcessIdentity(int) (NFQWSSupervisionIdentity, error) 
 func RunNFQWSSupervision(context.Context, NFQWSSupervisionCommand, NFQWSSupervisionHooks) (NFQWSSupervisionReceipt, error) {
 	return NFQWSSupervisionReceipt{}, ErrNFQWSSupervisionUnavailable
 }
+
+func RunNFQWSActiveSupervision(context.Context, NFQWSActiveSupervisionCommand, NFQWSSupervisionHooks) (NFQWSSupervisionReceipt, error) {
+	return NFQWSSupervisionReceipt{}, ErrNFQWSSupervisionUnavailable
+}

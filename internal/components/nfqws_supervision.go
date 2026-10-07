@@ -32,6 +32,20 @@ type NFQWSSupervisionCommand struct {
 	Deadline                                    time.Time
 }
 
+// NFQWSActiveSupervisionCommand is used only by the separate live-transfer
+// helper. Its caller bounds activation and then supplies panel-owned lifetime;
+// there is deliberately no persisted deadline for the active child lifetime.
+type NFQWSActiveSupervisionCommand struct {
+	Program, BootID, ParentStart, CommandSHA256 string
+	Args                                        []string
+	ParentPID                                   int
+}
+
+func (c NFQWSActiveSupervisionCommand) shape() NFQWSSupervisionCommand {
+	return NFQWSSupervisionCommand{Program: c.Program, Args: c.Args, BootID: c.BootID,
+		ParentStart: c.ParentStart, ParentPID: c.ParentPID, CommandSHA256: c.CommandSHA256}
+}
+
 // NFQWSSupervisionReceipt is kernel evidence. The caller must durably publish
 // it before acknowledging the invocation; helper exit status is not evidence.
 type NFQWSSupervisionReceipt struct {
@@ -53,6 +67,13 @@ type NFQWSSupervisionHooks struct {
 }
 
 func validateNFQWSSupervision(ctx context.Context, command NFQWSSupervisionCommand, hooks NFQWSSupervisionHooks) error {
+	if command.Deadline.IsZero() || !time.Now().Before(command.Deadline) {
+		return ErrNFQWSSupervisionUnknown
+	}
+	return validateNFQWSSupervisionShape(ctx, command, hooks)
+}
+
+func validateNFQWSSupervisionShape(ctx context.Context, command NFQWSSupervisionCommand, hooks NFQWSSupervisionHooks) error {
 	if ctx == nil || hooks.Armed == nil || hooks.Started == nil || hooks.Result == nil || hooks.StartAdmission == nil || hooks.StopCheck == nil {
 		return ErrNFQWSSupervisionUnknown
 	}
@@ -60,7 +81,7 @@ func validateNFQWSSupervision(ctx context.Context, command NFQWSSupervisionComma
 		return errors.Join(ErrNFQWSSupervisionUnknown, err)
 	}
 	start, err := strconv.ParseUint(command.ParentStart, 10, 64)
-	if err != nil || start == 0 || strconv.FormatUint(start, 10) != command.ParentStart || command.ParentPID <= 1 || !validBootID(command.BootID) || command.Deadline.IsZero() || !time.Now().Before(command.Deadline) {
+	if err != nil || start == 0 || strconv.FormatUint(start, 10) != command.ParentStart || command.ParentPID <= 1 || !validBootID(command.BootID) {
 		return ErrNFQWSSupervisionUnknown
 	}
 	if !filepath.IsAbs(command.Program) || filepath.Clean(command.Program) != command.Program || len(command.Program) > 4096 || strings.ContainsRune(command.Program, 0) || len(command.Args) > 128 {

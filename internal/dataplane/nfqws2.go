@@ -45,7 +45,8 @@ type NFQWS2Adapter struct {
 	Configs              *engineconfig.Manager
 	HealthProbe          func(context.Context, string) error
 	Timeout              time.Duration
-	activationLeaseReady func() // Deterministic fault injection before the first global write.
+	activationLeaseReady func()             // Deterministic fault injection before the first global write.
+	activeProcess        *nfqws2ActiveOwner // Only the actual separate producer can install it.
 }
 
 type nfqws2Snapshot struct {
