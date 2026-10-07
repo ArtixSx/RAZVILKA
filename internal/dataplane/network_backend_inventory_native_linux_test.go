@@ -3,9 +3,11 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"debug/elf"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -42,10 +44,11 @@ func backendNativeFixtureProfile(mode string) (backendNativeProfile, error) {
 }
 
 type backendNativeImage struct {
-	path string
-	file *os.File
-	info os.FileInfo
-	hash [32]byte
+	path         string
+	file         *os.File
+	info         os.FileInfo
+	hash         [32]byte
+	entryChecked bool
 }
 type backendNativeNode struct {
 	path, link string
@@ -158,13 +161,17 @@ func (r *backendNativeReview) path(path string) (string, error) {
 	}
 	return canonical, nil
 }
-func (r *backendNativeReview) image(ctx context.Context, path string) (*backendNativeImage, error) {
+func (r *backendNativeReview) image(ctx context.Context, path string, executed bool) (*backendNativeImage, error) {
 	canonical, err := r.path(path)
 	if err != nil {
 		return nil, err
 	}
 	for _, image := range r.images {
 		if image.path == canonical {
+			// A DSO's earlier visit never validates its standalone exec role.
+			if err := r.cachedRole(ctx, image, executed); err != nil {
+				return nil, err
+			}
 			return image, nil
 		}
 	}
@@ -219,15 +226,9 @@ func (r *backendNativeReview) image(ctx context.Context, path string) (*backendN
 		if program.Off > uint64(info.Size()) || program.Filesz > uint64(info.Size())-program.Off {
 			return nil, backendNativeStage("ELF_PROGRAM_BOUNDS", nil)
 		}
-		if program.Type == elf.PT_INTERP {
-			data, err := io.ReadAll(io.LimitReader(program.Open(), 4097))
-			if err != nil || len(data) < 2 || len(data) > 4096 || data[len(data)-1] != 0 {
-				return nil, backendNativeStage("ELF_INTERPRETER_FORM", err)
-			}
-			if _, err := r.image(ctx, string(data[:len(data)-1])); err != nil {
-				return nil, backendNativeStage("ELF_INTERPRETER", err)
-			}
-		}
+	}
+	if err := r.interpreters(ctx, e, executed); err != nil {
+		return nil, err
 	}
 	// Fixture allows only fixed protected search roots; no caller loader flags.
 	for _, tag := range []elf.DynTag{elf.DT_RPATH, elf.DT_RUNPATH} {
@@ -264,11 +265,49 @@ func (r *backendNativeReview) image(ctx context.Context, path string) (*backendN
 		if found == "" {
 			return nil, backendNativeStage("ELF_DEPENDENCY_MISSING", nil)
 		}
-		if _, err := r.image(ctx, found); err != nil {
+		if _, err := r.image(ctx, found, false); err != nil {
 			return nil, backendNativeStage("ELF_DEPENDENCY", err)
 		}
 	}
+	image.entryChecked = executed
 	return image, nil
+}
+
+func (r *backendNativeReview) cachedRole(ctx context.Context, image *backendNativeImage, executed bool) error {
+	if !executed || image.entryChecked {
+		return nil
+	}
+	e, err := elf.NewFile(image.file)
+	if err != nil {
+		return backendNativeStage("ELF_OPEN", err)
+	}
+	defer e.Close()
+	if err := r.interpreters(ctx, e, true); err != nil {
+		return err
+	}
+	image.entryChecked = true
+	return nil
+}
+
+// Only the ELF selected for exec causes the kernel to open PT_INTERP. A DSO
+// may retain an unused standalone interpreter without loading it as a library.
+// The DSO's ELF target/extents/dependencies/hash/ownership remain checked.
+func (r *backendNativeReview) interpreters(ctx context.Context, e *elf.File, executed bool) error {
+	for _, program := range e.Progs {
+		if program.Type != elf.PT_INTERP {
+			continue
+		}
+		data, err := io.ReadAll(io.LimitReader(program.Open(), 4097))
+		if err != nil || len(data) < 2 || len(data) > 4096 || data[len(data)-1] != 0 {
+			return backendNativeStage("ELF_INTERPRETER_FORM", err)
+		}
+		if executed {
+			if _, err := r.image(ctx, string(data[:len(data)-1]), false); err != nil {
+				return backendNativeStage("ELF_INTERPRETER", err)
+			}
+		}
+	}
+	return nil
 }
 func (r *backendNativeReview) version(ctx context.Context, index int) error {
 	c, cancel := context.WithCancel(ctx)
@@ -358,7 +397,7 @@ func backendNativeHeldTools(ctx context.Context, profile backendNativeProfile) (
 	r := &backendNativeReview{profile: profile, extensionNames: map[string][]string{}}
 	fail := func(err error) (*backendNativeReview, error) { _ = r.close(); return nil, err }
 	for i, alias := range profile.aliases {
-		image, err := r.image(ctx, alias)
+		image, err := r.image(ctx, alias, true)
 		if err != nil {
 			return fail(backendNativeStage([]string{"ALIAS_V4", "ALIAS_V6"}[i], err))
 		}
@@ -367,7 +406,7 @@ func backendNativeHeldTools(ctx context.Context, profile backendNativeProfile) (
 		}
 	}
 	for path := range profile.pinned {
-		if _, err := r.image(ctx, path); err != nil {
+		if _, err := r.image(ctx, path, false); err != nil {
 			return fail(backendNativeStage("PINNED_IMAGE", err))
 		}
 	}
@@ -388,7 +427,7 @@ func backendNativeHeldTools(ctx context.Context, profile backendNativeProfile) (
 			if !strings.HasSuffix(entry.Name(), ".so") || entry.IsDir() {
 				return fail(backendNativeStage("EXTENSION_ENTRY_FORM", nil))
 			}
-			if _, err := r.image(ctx, filepath.Join(dir, entry.Name())); err != nil {
+			if _, err := r.image(ctx, filepath.Join(dir, entry.Name()), false); err != nil {
 				return fail(backendNativeStage("EXTENSION_IMAGE", err))
 			}
 		}
@@ -398,6 +437,62 @@ func backendNativeHeldTools(ctx context.Context, profile backendNativeProfile) (
 		return fail(backendNativeStage("EXTENSION_SET_EMPTY", nil))
 	}
 	return r, nil
+}
+
+func TestBackendInventoryNativeELFInterpreterRoles(t *testing.T) {
+	// A real ELF parser reads this minimal target ELF with a well-formed but
+	// nonexistent standalone PT_INTERP. No deployment path or mutation is used.
+	missing := filepath.Join(t.TempDir(), "absent-interpreter")
+	data := make([]byte, 120+len(missing)+1)
+	copy(data, []byte{0x7f, 'E', 'L', 'F', 2, 1, 1})
+	binary.LittleEndian.PutUint16(data[16:], uint16(elf.ET_DYN))
+	machine := elf.EM_X86_64
+	if runtime.GOARCH == "arm64" {
+		machine = elf.EM_AARCH64
+	}
+	binary.LittleEndian.PutUint16(data[18:], uint16(machine))
+	binary.LittleEndian.PutUint32(data[20:], 1)
+	binary.LittleEndian.PutUint64(data[32:], 64)
+	binary.LittleEndian.PutUint16(data[52:], 64)
+	binary.LittleEndian.PutUint16(data[54:], 56)
+	binary.LittleEndian.PutUint16(data[56:], 1)
+	binary.LittleEndian.PutUint16(data[58:], 64)
+	binary.LittleEndian.PutUint32(data[64:], uint32(elf.PT_INTERP))
+	binary.LittleEndian.PutUint32(data[68:], uint32(elf.PF_R))
+	binary.LittleEndian.PutUint64(data[72:], 120)
+	binary.LittleEndian.PutUint64(data[96:], uint64(len(missing)+1))
+	binary.LittleEndian.PutUint64(data[104:], uint64(len(missing)+1))
+	copy(data[120:], missing)
+	e, err := elf.NewFile(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal("synthetic ELF rejected")
+	}
+	defer e.Close()
+	r := &backendNativeReview{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := r.interpreters(ctx, e, false); err != nil {
+		t.Fatal("DSO unused standalone interpreter became a loader dependency")
+	}
+	if err := r.interpreters(ctx, e, true); backendNativeTrace(err) != "ELF_INTERPRETER/PATH_RESOLVE" {
+		t.Fatal("standalone executed ELF accepted missing actual interpreter")
+	}
+	// A previous DSO visit must not bypass a subsequent exec-role review.
+	file, err := os.CreateTemp(t.TempDir(), "held-image-")
+	if err != nil {
+		t.Fatal("synthetic held image creation failed")
+	}
+	defer file.Close()
+	if _, err := file.Write(data); err != nil {
+		t.Fatal("synthetic held image write failed")
+	}
+	image := &backendNativeImage{file: file}
+	if r.cachedRole(ctx, image, false) != nil || image.entryChecked {
+		t.Fatal("DSO visit claimed exec-role validation")
+	}
+	if err := r.cachedRole(ctx, image, true); backendNativeTrace(err) != "ELF_INTERPRETER/PATH_RESOLVE" || image.entryChecked {
+		t.Fatal("cached DSO granted standalone interpreter authority")
+	}
 }
 
 func TestBackendInventoryFullNativeObservation(t *testing.T) {
