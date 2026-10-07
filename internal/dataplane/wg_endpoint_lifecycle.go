@@ -159,7 +159,7 @@ type wgEndpointRoute struct {
 	Source         string          `json:"prefsrc"`
 	SelectedSource string          `json:"src"`
 	Table          json.RawMessage `json:"table,omitempty"`
-	Type           string          `json:"type"`
+	Type           string          `json:"type,omitempty"`
 	Flags          []string        `json:"flags"`
 	Metric         int             `json:"metric"`
 	Protocol       string          `json:"protocol,omitempty"`
@@ -207,6 +207,7 @@ func (r *wgEndpointRoute) UnmarshalJSON(data []byte) error {
 	var out plain
 	wire := struct {
 		*plain
+		Type     json.RawMessage `json:"type"`
 		Protocol json.RawMessage `json:"protocol"`
 		Scope    json.RawMessage `json:"scope"`
 	}{plain: &out}
@@ -214,6 +215,10 @@ func (r *wgEndpointRoute) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	var err error
+	out.Type, err = wgEndpointRouteEnum(wire.Type, map[uint8]string{1: "unicast"})
+	if err != nil {
+		return err
+	}
 	out.Protocol, err = wgEndpointRouteEnum(wire.Protocol, map[uint8]string{2: "kernel", 3: "boot", 4: "static", 9: "ra", 16: "dhcp"})
 	if err != nil {
 		return err

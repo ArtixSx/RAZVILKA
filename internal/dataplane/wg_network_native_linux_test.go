@@ -370,6 +370,15 @@ func wgNetworkNativeDiagnose(t *testing.T, a *WARPWireGuardAdapter, ctx context.
 		t.Log("native diagnostic staged-state unavailable", err)
 		return
 	}
+	for _, family := range []int{4, 6} {
+		data, readErr := a.readWGCompleteDetailedNumericTable(ctx, state.Table, family)
+		rows, parseErr := parseWGEndpointRoutes(data)
+		t.Logf("native diagnostic detailed service family=%d rows=%d read-error=%v parse-error=%v", family, len(rows), readErr, parseErr)
+		if readErr == nil && parseErr == nil && len(rows) == 1 {
+			row := rows[0]
+			t.Logf("native diagnostic service family=%d unicast=%t boot=%t link-scope=%t global-scope=%t metric=%d own-device=%t gateway=%t source=%t selected-source=%t from=%t flags=%d", family, row.Type == "unicast", row.Protocol == "boot", row.Scope == "link", row.Scope == "global", row.Metric, row.Device == state.Interface, row.Gateway != "", row.Source != "", row.SelectedSource != "", row.From != "", len(row.Flags))
+		}
+	}
 	ref, exists, err := a.readWGPolicyReference(transaction, state, false)
 	if err != nil || !exists {
 		t.Log("native diagnostic candidate-reference unavailable", err)

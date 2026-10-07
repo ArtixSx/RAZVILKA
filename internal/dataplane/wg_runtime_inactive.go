@@ -123,10 +123,23 @@ func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, proces
 // Recognize only the bounded exact diagnostic of this family, then confirm it
 // with the existing full numeric text reader. Any route or other error refuses.
 func (a *WARPWireGuardAdapter) readWGCompleteNumericTable(ctx context.Context, table, family int) ([]byte, error) {
+	return a.readWGNumericTable(ctx, table, family, false)
+}
+
+// Positive service proof needs explicit protocol/scope/type. iproute2 otherwise
+// elides boot protocol and global scope; missing attributes grant no ownership.
+func (a *WARPWireGuardAdapter) readWGCompleteDetailedNumericTable(ctx context.Context, table, family int) ([]byte, error) {
+	return a.readWGNumericTable(ctx, table, family, true)
+}
+
+func (a *WARPWireGuardAdapter) readWGNumericTable(ctx context.Context, table, family int, details bool) ([]byte, error) {
 	if family != 4 && family != 6 || table < 1 || table > 252 {
 		return nil, errWGInactiveUnknown
 	}
 	args := []string{"-N"}
+	if details {
+		args = append(args, "-details")
+	}
 	if family == 6 {
 		args = append(args, "-6")
 	}
