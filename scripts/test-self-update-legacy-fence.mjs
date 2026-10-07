@@ -6,6 +6,12 @@ import {spawnSync} from 'node:child_process';
 
 const root=mkdtempSync(join(tmpdir(),'razvilka-raw-self-fence-'));
 const quote=value=>`'${value.replaceAll("'","'\\''")}'`;
+const shell=process.argv[2]||'sh';
+const fileLimit=spawnSync(shell,['-c','ulimit -f 128'],{encoding:'utf8',timeout:5000});
+assert.ifError(fileLimit.error);
+// MSYS has no RLIMIT_FSIZE. Model only the successful limit for ABI cases;
+// the separate reader fixture proves the actual unsupported host refuses.
+const limitModel=fileLimit.status===0?'':'ulimit() { return 0; }\n';
 try {
   for (const name of ['upgrade-entware.sh','rollback-entware.sh']) {
     const source=readFileSync(new URL(name,import.meta.url),'utf8').replaceAll('\r\n','\n');
@@ -20,7 +26,7 @@ try {
     assert(source.lastIndexOf('require_legacy_file_protocol_free')>stop);
     mkdirSync(join(root,'bin'),{recursive:true});
     const run=(expected)=>{
-      const result=spawnSync(process.argv[2]||'sh',['-s'],{input:`set -eu\nSTATEDIR=${quote(root.replaceAll('\\','/'))}\nBINDIR="$STATEDIR/bin"\n${helpers}\n${gate}\nrequire_legacy_file_protocol_free\n`,encoding:'utf8',timeout:10000});
+      const result=spawnSync(shell,['-s'],{input:`set -eu\nSTATEDIR=${quote(root.replaceAll('\\','/'))}\nBINDIR="$STATEDIR/bin"\n${limitModel}${helpers}\n${gate}\nrequire_legacy_file_protocol_free\n`,encoding:'utf8',timeout:10000});
       assert.ifError(result.error);
       assert.equal(result.status,expected,result.stdout+result.stderr);
     };

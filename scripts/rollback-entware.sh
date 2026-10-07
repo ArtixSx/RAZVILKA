@@ -169,7 +169,17 @@ probe_self_update_metadata() (
   trap 'rm -f "$SELF_PROBE_DIR/output" "$SELF_PROBE_DIR/error" "$SELF_PROBE_DIR/expected"; rmdir "$SELF_PROBE_DIR"' EXIT
   trap 'exit 1' HUP INT TERM
   SELF_PROBE_CODE=0
-  timeout -k 1 5 "$1" "$2" >"$SELF_PROBE_DIR/output" 2>"$SELF_PROBE_DIR/error" || SELF_PROBE_CODE=$?
+  (
+    # POSIX -f units are 512 bytes; some shells use 1024. Both are bounded.
+    ulimit -f 128 || exit 125
+    exec timeout -k 1 5 "$1" "$2"
+  ) >"$SELF_PROBE_DIR/output" 2>"$SELF_PROBE_DIR/error" || SELF_PROBE_CODE=$?
+  for SELF_PROBE_FILE in output error; do
+    SELF_PROBE_BYTES="$(wc -c <"$SELF_PROBE_DIR/$SELF_PROBE_FILE")" || exit 1
+    [ "$SELF_PROBE_BYTES" -lt 65536 ] || {
+      echo "Self update metadata exceeds its output limit; installation unchanged" >&2; exit 1;
+    }
+  done
   if [ "$SELF_PROBE_CODE" -eq 0 ] && [ ! -s "$SELF_PROBE_DIR/error" ]; then
     case "$2" in
       -self-update-read-version) SELF_PROBE_VALUES='2 3' ;;

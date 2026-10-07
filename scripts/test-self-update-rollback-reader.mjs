@@ -6,6 +6,10 @@ import {join, dirname, basename, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 const root = mkdtempSync(join(tmpdir(), 'razvilka-rollback-reader-'));
+const shell = process.argv[2] || 'sh';
+const fileLimit = spawnSync(shell, ['-c', 'ulimit -f 128'], {encoding: 'utf8', timeout: 5000});
+assert.ifError(fileLimit.error);
+const limitModel = fileLimit.status === 0 ? '' : 'ulimit() { return 0; }\n';
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
 const source = readFileSync(new URL('./rollback-entware.sh', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 const start = source.indexOf('probe_self_update_metadata() (\n');
@@ -31,10 +35,10 @@ const fixture = (reader, schema = "printf '0\\n'", scanner = "printf '{\"ok\":tr
     '-check-self-update-state) printf scan >> "$CASE_ROOT/scans"; ' + scanner + ' ;;\n' +
     '*) exit 99 ;;\nesac\n', {mode: 0o700});
 };
-const run = (body, expected) => {
+const run = (body, expected, model = limitModel) => {
   const prefix = 'set -eu\numask 077\nSTATEDIR=' + quote(root.replaceAll('\\', '/')) + '\nBINDIR="$STATEDIR/bin"\n' +
-    'CASE_ROOT="$STATEDIR"\nexport CASE_ROOT\n' + gates + '\n';
-  const result = spawnSync(process.argv[2] || 'sh', ['-s'], {
+    'CASE_ROOT="$STATEDIR"\nexport CASE_ROOT\n' + model + gates + '\n';
+  const result = spawnSync(shell, ['-s'], {
     input: prefix + body + '\n', encoding: 'utf8', timeout: 10000,
   });
   assert.ifError(result.error);
@@ -45,7 +49,18 @@ const run = (body, expected) => {
 
 try {
   fixture(legacy);
+  if (fileLimit.status !== 0) run('require_legacy_file_protocol_free', 1, '');
+  run('ulimit() { return 1; }\nrequire_legacy_file_protocol_free', 1);
   run('require_legacy_file_protocol_free', 0);
+  fixture("printf 'flag provided but not defined: -self-update-read-version\\nUsage of old controller:\\n' >&2; awk 'BEGIN {for(i=0;i<16000;i++) printf \"x\"; printf \"\\n\"}' >&2; exit 2");
+  run('require_legacy_file_protocol_free', 0);
+  for (const reader of [
+    "awk 'BEGIN {for(i=0;i<65537;i++) printf \"x\"}'",
+    "printf 'flag provided but not defined: -self-update-read-version\\n' >&2; awk 'BEGIN {for(i=0;i<65537;i++) printf \"x\"}' >&2; exit 2",
+  ]) {
+    fixture(reader);
+    run('require_legacy_file_protocol_free', 1);
+  }
   fixture(legacy, legacy);
   run('require_legacy_file_protocol_free', 0);
   fixture(legacy, "printf '1\\n'");
@@ -110,4 +125,4 @@ try {
   assert(basename(root).startsWith('razvilka-rollback-reader-'));
   rmSync(root, {recursive: true, force: true});
 }
-console.log('Rollback immutable reader3 fence, strict bounded metadata and retained rechecks: PASS');
+console.log('Rollback immutable reader3 fence, strict bounded metadata and retained rechecks: PASS' + (fileLimit.status === 0 ? '' : ' (successful RLIMIT capture modeled; actual unavailable limit refuses)'));
