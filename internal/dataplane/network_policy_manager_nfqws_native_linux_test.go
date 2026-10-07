@@ -350,6 +350,14 @@ func TestNetworkPolicyManagerNFQWSPairedNative(t *testing.T) {
 					}
 					return err
 				}
+				readinessReadback := e.binding.queueReadiness
+				e.binding.queueReadiness = func(c context.Context, ns string, q uint16, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+					ready, err := readinessReadback(c, ns, q, child)
+					if err != nil {
+						nfqwsExecutionNativeReadinessDiagnostic(t, c, e, "after-start queue readiness", err)
+					}
+					return ready, err
+				}
 				lanRuntime.ConsumerCheck = func(c context.Context, _ *LANPolicyRuntimePlan) error {
 					return e.binding.CheckKnownReferences(c, e.resource.Plan())
 				}

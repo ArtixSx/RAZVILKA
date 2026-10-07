@@ -171,23 +171,25 @@ func TestNetworkPolicyManagerNFQWSAssemblyReadiness(t *testing.T) {
 				}
 				return process(c, p)
 			}
-			b.QueueCheck = func(_ context.Context, _ string, _ uint16, child *components.NFQWSRuntimeProcessIdentity) error {
-				if child != nil {
+			readinessProbes := 0
+			b.queueReadiness = func(_ context.Context, _ string, _ uint16, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+				readinessProbes++
+				if child == nil || *child != model.proof(false).Child {
+					return false, ErrNFQWSScopedOwner
+				}
+				if mode == "foreign-queue" || mode == "missing-inventory" {
+					return false, ErrNFQWSScopedQueueInventory
+				}
+				if mode == "cancel-in-probe" {
+					cancel()
+					return true, nil
+				}
+				if mode == "known-empty-to-owned" && readinessProbes >= 3 {
 					ownedProbes++
-					if mode == "cancel-in-probe" {
-						cancel()
-						return nil
-					}
-					if mode == "known-empty-to-owned" && ownedProbes >= 2 {
-						return nil
-					}
-					return ErrNFQWSScopedOwner
+					return true, nil
 				}
 				emptyProbes++
-				if mode == "foreign-queue" || mode == "missing-inventory" {
-					return ErrNFQWSScopedQueueInventory
-				}
-				return nil
+				return false, nil
 			}
 			if mode == "foreign-capture" {
 				model.foreign["ip6tables:raw"] = "-A FOREIGN -j NFQUEUE --queue-num 40321"
@@ -203,29 +205,155 @@ func TestNetworkPolicyManagerNFQWSAssemblyReadiness(t *testing.T) {
 			}
 			err := nfqwsExecutionAwaitQueue(ctx, b, model.p, current)
 			if mode == "known-empty-to-owned" {
-				if err != nil || ownedProbes != 2 || emptyProbes < 3 || model.lanReads == 0 {
+				if err != nil || ownedProbes < 2 || emptyProbes != 2 || model.lanReads < 4 {
 					t.Fatal("known empty wait lost independent preflight", err, ownedProbes, emptyProbes)
 				}
 			} else if err == nil {
 				t.Fatal("unknown or expired readiness became permission")
 			}
-			if mode == "unknown-child" && (!strings.Contains(err.Error(), "running process readback") || !errors.Is(err, ErrNFQWSManagedProcessUnknown)) {
+			if mode == "unknown-child" && (!strings.Contains(err.Error(), "after-start owner readiness") || !errors.Is(err, ErrNFQWSManagedProcessUnknown)) {
 				t.Fatal("process failure lost its stage or original cause", err)
 			}
-			if (mode == "foreign-queue" || mode == "missing-inventory") && (!strings.Contains(err.Error(), "owned queue readback") || !strings.Contains(err.Error(), "whole empty queue readback") || !errors.Is(err, ErrNFQWSScopedQueueInventory)) {
-				t.Fatal("queue failures lost an independent stage or original cause", err)
+			if (mode == "foreign-queue" || mode == "missing-inventory") && (!strings.Contains(err.Error(), "after-start owner readiness") || !errors.Is(err, ErrNFQWSScopedQueueInventory)) {
+				t.Fatal("queue failure lost its stage or original cause", err)
 			}
-			if mode == "foreign-capture" && !strings.Contains(err.Error(), "empty queue LAN/capture preflight") {
+			if mode == "foreign-capture" && (!strings.Contains(err.Error(), "after-start owner readiness") || !errors.Is(err, ErrNFQWSScopedOwner)) {
 				t.Fatal("preflight failure lost its stage", err)
 			}
-			if mode == "cancel-in-probe" && (!strings.Contains(err.Error(), "closing current after owned queue") || !errors.Is(err, context.Canceled)) {
+			if mode == "cancel-in-probe" && (!strings.Contains(err.Error(), "after-start owner readiness") || !errors.Is(err, context.Canceled)) {
 				t.Fatal("post-probe cancellation lost its stage or original cause", err)
 			}
 			if len(model.calls) != 0 {
 				t.Fatal("readiness wait wrote a kernel effect")
 			}
-			if (mode == "foreign-queue" || mode == "missing-inventory" || mode == "foreign-capture" || mode == "unknown-child") && processProbes != 1 {
-				t.Fatal("unknown readiness was retried", processProbes)
+			if (mode == "foreign-queue" || mode == "missing-inventory" || mode == "foreign-capture" || mode == "unknown-child") && (processProbes != 1 || readinessProbes > 1) {
+				t.Fatal("unknown readiness was retried", processProbes, readinessProbes)
+			}
+		})
+	}
+}
+
+type nfqwsExecutionReadinessRunner struct {
+	NFQWS2Runner
+	afterRead func()
+}
+
+func (r nfqwsExecutionReadinessRunner) Run(ctx context.Context, command string, args ...string) ([]byte, error) {
+	out, err := r.NFQWS2Runner.Run(ctx, command, args...)
+	if err == nil && len(args) == 3 && args[0] == "-t" && args[2] == "-S" {
+		r.afterRead()
+	}
+	return out, err
+}
+
+func TestNetworkPolicyManagerNFQWSAssemblyQueueAppearsDuringPreflight(t *testing.T) {
+	b, model, _ := nfqwsScopedBindingFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ready := false
+	reads, emptyProbes, ownedProbes := 0, 0, 0
+	b.Runner = nfqwsExecutionReadinessRunner{NFQWS2Runner: model, afterRead: func() {
+		reads++
+		ready = true // Registration completes during the first actual -S read.
+	}}
+	b.QueueCheck = func(_ context.Context, _ string, _ uint16, child *components.NFQWSRuntimeProcessIdentity) error {
+		if child == nil {
+			emptyProbes++
+			if ready {
+				return ErrNFQWSScopedOwner
+			}
+			return nil
+		}
+		ownedProbes++
+		if !ready || *child != model.proof(false).Child {
+			return ErrNFQWSScopedOwner
+		}
+		return nil
+	}
+	b.queueReadiness = func(_ context.Context, _ string, _ uint16, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+		if child == nil || *child != model.proof(false).Child {
+			return false, ErrNFQWSScopedOwner
+		}
+		if ready {
+			ownedProbes++
+		} else {
+			emptyProbes++
+		}
+		return ready, nil
+	}
+	current := func(c context.Context, p *NFQWSScopedPlan) error {
+		if p != model.p {
+			return ErrReviewChanged
+		}
+		return c.Err()
+	}
+	if err := nfqwsExecutionAwaitQueue(ctx, b, model.p, current); err != nil {
+		t.Fatal("exact own queue registration during read-only preflight was refused", err)
+	}
+	if reads < 10 || model.lanReads < 2 || ownedProbes == 0 || emptyProbes == 0 || len(model.calls) != 0 {
+		t.Fatal("readiness omitted independent read-only proof", reads, model.lanReads, ownedProbes, emptyProbes, model.calls)
+	}
+}
+
+func TestNetworkPolicyManagerNFQWSAssemblyUnknownDuringPreflightDoesNotWait(t *testing.T) {
+	for _, mode := range []string{"foreign-queue", "missing-inventory", "foreign-capture", "changed-child", "changed-lan", "late-review", "canceled"} {
+		t.Run(mode, func(t *testing.T) {
+			b, model, _ := nfqwsScopedBindingFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			fault := false
+			reads, inventoryProbes := 0, 0
+			child := model.proof(false).Child
+			b.Runner = nfqwsExecutionReadinessRunner{NFQWS2Runner: model, afterRead: func() {
+				reads++
+				fault = true
+				if mode == "foreign-capture" {
+					model.foreign["ip6tables:raw"] = "-A FOREIGN -j NFQUEUE --queue-num 40321"
+				}
+				if mode == "changed-child" {
+					model.changedChild = true
+				}
+				if mode == "canceled" {
+					cancel()
+				}
+			}}
+			b.queueReadiness = func(_ context.Context, _ string, _ uint16, got *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+				inventoryProbes++
+				if got == nil || *got != child {
+					return false, ErrNFQWSScopedOwner
+				}
+				if fault && (mode == "foreign-queue" || mode == "missing-inventory") {
+					return false, ErrNFQWSScopedQueueInventory
+				}
+				return fault, nil
+			}
+			verifyLAN := b.VerifyLAN
+			b.VerifyLAN = func(c context.Context, p *LANPolicyRuntimePlan) error {
+				if fault && mode == "changed-lan" {
+					return ErrLANPolicyRuntime
+				}
+				return verifyLAN(c, p)
+			}
+			current := func(c context.Context, p *NFQWSScopedPlan) error {
+				if p != model.p || fault && mode == "late-review" {
+					return ErrReviewChanged
+				}
+				return c.Err()
+			}
+			want := ErrNFQWSScopedOwner
+			switch mode {
+			case "foreign-queue", "missing-inventory":
+				want = ErrNFQWSScopedQueueInventory
+			case "changed-lan":
+				want = ErrLANPolicyRuntime
+			case "late-review":
+				want = ErrReviewChanged
+			case "canceled":
+				want = context.Canceled
+			}
+			err := nfqwsExecutionAwaitQueue(ctx, b, model.p, current)
+			if !errors.Is(err, want) || !fault || reads > 10 || inventoryProbes > 2 || len(model.calls) != 0 {
+				t.Fatal("unknown transition became readiness, was retried, or wrote an effect", err, want, reads, inventoryProbes, model.calls)
 			}
 		})
 	}

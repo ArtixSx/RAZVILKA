@@ -120,6 +120,7 @@ func newNFQWSExecutionAssembly(ctx context.Context, adapter *NFQWS2Adapter, comm
 	r := e.resource
 	e.binding = &NFQWSScopedBinding{Runner: runtime.Runner, Tools: runtime.Tools, ApplyGuard: r.ApplyGuard, CleanupGuard: r.CleanupGuard,
 		VerifyLAN: runtime.VerifyLAN, AdditionalReadback: runtime.AdditionalReadback, QueueCheck: CheckNFQWSScopedQueue,
+		queueReadiness: nfqwsScopedQueueReadiness,
 		ProcessRunning: func(c context.Context, p *NFQWSScopedPlan) (NFQWSScopedProcessProof, error) {
 			return nfqwsScopedReadExecutionProcess(c, adapter, p, r.Binding(), false)
 		},
@@ -136,46 +137,27 @@ func (e *nfqwsExecutionAssembly) current(ctx context.Context, p *NFQWSScopedPlan
 	return e.resource.Current(ctx, e.resource.Binding())
 }
 
-// Start ACK precedes userspace queue registration. Wait only with a fresh
-// exact running child and a positively empty whole queue inventory plus the
-// unchanged LAN/all-capture preflight. Any failed/unknown probe fences the
+// Start ACK precedes userspace queue registration. The separate after-Start
+// owner readback permits a positively observed empty-to-exact-owned transition
+// across LAN/all-capture preflight. Any failed/unknown observation fences the
 // attempt. This does not retry Start or the one-shot resource.Prepared.
 func nfqwsExecutionAwaitQueue(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, current func(context.Context, *NFQWSScopedPlan) error) error {
-	if ctx == nil || b == nil || p == nil || current == nil || b.ProcessRunning == nil || b.QueueCheck == nil {
+	if ctx == nil || b == nil || p == nil || current == nil || b.ProcessRunning == nil || b.queueReadiness == nil {
 		return ErrNFQWSScopedOwner
 	}
 	if _, bounded := ctx.Deadline(); !bounded {
 		return ErrNFQWSScopedOwner
 	}
 	for {
-		if err := current(ctx, p); err != nil {
-			return fmt.Errorf("opening current: %w", err)
-		}
-		proof, err := b.ProcessRunning(ctx, p)
+		ready, err := nfqwsScopedAfterStartCurrent(ctx, b, p, current)
 		if err != nil {
-			return fmt.Errorf("running process readback: %w", err)
-		}
-		if err := nfqwsScopedProcessProof(p, proof, false); err != nil {
-			return fmt.Errorf("running proof shape: %w", err)
+			return fmt.Errorf("after-start owner readiness: %w", err)
 		}
 		if err := current(ctx, p); err != nil {
-			return fmt.Errorf("current after process readback: %w", err)
+			return fmt.Errorf("closing current after readiness: %w", err)
 		}
-		queueErr := b.QueueCheck(ctx, p.resources.NetNamespace, p.resources.Queue, &proof.Child)
-		if queueErr == nil {
-			if err := current(ctx, p); err != nil {
-				return fmt.Errorf("closing current after owned queue: %w", err)
-			}
+		if ready {
 			return nil
-		}
-		if err := b.QueueCheck(ctx, p.resources.NetNamespace, p.resources.Queue, nil); err != nil {
-			return errors.Join(fmt.Errorf("owned queue readback: %w", queueErr), fmt.Errorf("whole empty queue readback: %w", err)) // Foreign/missing inventory is not transient.
-		}
-		if err := nfqwsScopedBeforeStartCurrent(ctx, b, p, current); err != nil {
-			return fmt.Errorf("empty queue LAN/capture preflight: %w", err)
-		}
-		if err := current(ctx, p); err != nil {
-			return fmt.Errorf("closing current after empty preflight: %w", err)
 		}
 		timer := time.NewTimer(10 * time.Millisecond)
 		select {
