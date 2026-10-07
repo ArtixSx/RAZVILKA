@@ -8,12 +8,14 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -30,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/dns/dnsmessage"
 	"golang.org/x/sys/unix"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
@@ -37,6 +40,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
@@ -97,9 +101,12 @@ func TestD10NativeAppManagerRollbackFreshC(t *testing.T) {
 				t.Fatal(err)
 			}
 			d10NativeCertificate(t, root)
-			hosts := "127.0.0.1 localhost\n93.184.216.12 service.example www.cloudflare.com api.ipify.org\n"
-			if err := os.WriteFile(filepath.Join(root, "hosts"), []byte(hosts), 0600); err != nil {
-				t.Fatal(err)
+			// Go's files resolver returns IPv4-mapped addresses. The real egress
+			// pin deliberately refuses those; genuine DNS A responses retain IPv4.
+			for name, data := range map[string]string{"hosts": "127.0.0.1 localhost\n", "resolv.conf": "nameserver 127.0.0.1\noptions timeout:1 attempts:1\n"} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(data), 0600); err != nil {
+					t.Fatal(err)
+				}
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 			defer cancel()
@@ -107,7 +114,8 @@ func TestD10NativeAppManagerRollbackFreshC(t *testing.T) {
 				"-test.run=^TestD10NativeAppManagerRollbackFreshC$", "-test.v", "-test.timeout=3m30s")
 			cmd.Env = append(os.Environ(), "RAZVILKA_D10_NATIVE_CHILD="+scenario, "RAZVILKA_D10_NATIVE_ROOT="+root,
 				"RAZVILKA_D10_PARENT_NET="+ns["net"], "RAZVILKA_D10_PARENT_MNT="+ns["mnt"], "RAZVILKA_D10_PARENT_PID="+ns["pid"],
-				"SSL_CERT_FILE="+filepath.Join(root, "ca.pem"), "SSL_CERT_DIR="+filepath.Join(root, "empty-roots"))
+				"SSL_CERT_FILE="+filepath.Join(root, "ca.pem"), "SSL_CERT_DIR="+filepath.Join(root, "empty-roots"),
+				"GODEBUG="+strings.TrimRight(os.Getenv("GODEBUG"), ",")+",netdns=go")
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			err := cmd.Run()
 			if ctx.Err() != nil {
@@ -164,6 +172,133 @@ func d10NativeCommand(ctx context.Context, tool string, args ...string) ([]byte,
 	c, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 	return exec.CommandContext(c, tool, args...).CombinedOutput()
+}
+
+// An actual namespace-local DNS server; it never forwards queries. No resolver
+// function or checker dependency is replaced. Only three owned names have A
+// records; AAAA returns a definitive empty answer and other names are NXDOMAIN.
+func d10NativeDNS(t *testing.T) func() error {
+	t.Helper()
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 53})
+	if err != nil {
+		t.Fatal("owned DNS listener", d10NativeErrorClass(err))
+	}
+	done := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 512)
+		for {
+			n, peer, err := conn.ReadFromUDP(buf)
+			if err != nil {
+				done <- err
+				return
+			}
+			var parser dnsmessage.Parser
+			header, err := parser.Start(buf[:n])
+			if err != nil || header.Response || header.OpCode != 0 {
+				continue
+			}
+			question, err := parser.Question()
+			if err != nil {
+				continue
+			}
+			if _, err := parser.Question(); !errors.Is(err, dnsmessage.ErrSectionDone) {
+				continue
+			}
+			owned := question.Class == dnsmessage.ClassINET && slices.Contains([]string{"service.example.", "www.cloudflare.com.", "api.ipify.org."}, strings.ToLower(question.Name.String()))
+			response := dnsmessage.Header{ID: header.ID, Response: true, Authoritative: true, RecursionDesired: header.RecursionDesired}
+			if !owned {
+				response.RCode = dnsmessage.RCodeNameError
+			}
+			builder := dnsmessage.NewBuilder(nil, response)
+			builder.EnableCompression()
+			if err := builder.StartQuestions(); err != nil {
+				done <- err
+				return
+			}
+			if err := builder.Question(question); err != nil {
+				done <- err
+				return
+			}
+			if err := builder.StartAnswers(); err != nil {
+				done <- err
+				return
+			}
+			if owned && question.Type == dnsmessage.TypeA {
+				if err := builder.AResource(dnsmessage.ResourceHeader{Name: question.Name, Class: dnsmessage.ClassINET, TTL: 60}, dnsmessage.AResource{A: [4]byte{93, 184, 216, 12}}); err != nil {
+					done <- err
+					return
+				}
+			}
+			wire, err := builder.Finish()
+			if err == nil {
+				_, err = conn.WriteToUDP(wire, peer)
+			}
+			if err != nil {
+				done <- err
+				return
+			}
+		}
+	}()
+	var once sync.Once
+	var joined error
+	stop := func() error {
+		once.Do(func() {
+			_ = conn.Close()
+			select {
+			case err := <-done:
+				if !errors.Is(err, net.ErrClosed) {
+					joined = err
+				}
+			case <-time.After(3 * time.Second):
+				joined = context.DeadlineExceeded
+			}
+		})
+		return joined
+	}
+	// Early setup failure also closes and joins the listener. Main cleanup
+	// calls the same idempotent function before writing its completion marker.
+	t.Cleanup(func() {
+		if err := stop(); err != nil {
+			t.Error("owned DNS cleanup", d10NativeErrorClass(err))
+		}
+	})
+	return stop
+}
+
+func d10NativeEndpointPreflight(t *testing.T, ctx context.Context) {
+	t.Helper()
+	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 5 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, endpoint := range []struct {
+		host, path, body string
+		status           int
+	}{{"www.cloudflare.com", "/cdn-cgi/trace", "ip=93.184.216.12\nwarp=off\n", http.StatusOK},
+		{"api.ipify.org", "/", "93.184.216.12", http.StatusOK},
+		{"service.example", "/generate_204", "", http.StatusNoContent}} {
+		addresses, err := netresolve.LookupNetIP(ctx, "ip", endpoint.host)
+		if err != nil || len(addresses) != 1 || !addresses[0].Is4() || addresses[0].Is4In6() || addresses[0].String() != "93.184.216.12" {
+			t.Fatalf("owned DNS preflight: count=%d native-ipv4=%t error=%s", len(addresses), len(addresses) == 1 && addresses[0].Is4() && !addresses[0].Is4In6(), d10NativeErrorClass(err))
+		}
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+endpoint.host+endpoint.path, nil)
+		if err != nil {
+			t.Fatal("owned HTTPS request", d10NativeErrorClass(err))
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal("owned verified HTTPS preflight", d10NativeErrorClass(err))
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 1025))
+		_ = response.Body.Close()
+		bodyMatch := string(body) == endpoint.body
+		ok := readErr == nil && response.StatusCode == endpoint.status && bodyMatch && response.TLS != nil && len(response.TLS.VerifiedChains) > 0
+		clear(body)
+		if !ok {
+			t.Fatalf("owned HTTPS preflight: status=%d verified-tls=%t body-match=%t error=%s", response.StatusCode, response.TLS != nil && len(response.TLS.VerifiedChains) > 0, bodyMatch, d10NativeErrorClass(readErr))
+		}
+	}
+	t.Log("owned endpoints: genuine DNS A, verified HTTPS and expected direct-control/service responses")
 }
 
 // Compare semantic kernel configuration, without traffic counters or PIDs.
@@ -327,7 +462,7 @@ func d10NativeChild(t *testing.T) {
 		}
 	}
 	// These bind mounts live only in the fresh private mount namespace.
-	for _, mount := range [][2]string{{opt, "/opt"}, {filepath.Join(root, "hosts"), "/etc/hosts"}} {
+	for _, mount := range [][2]string{{opt, "/opt"}, {filepath.Join(root, "hosts"), "/etc/hosts"}, {filepath.Join(root, "resolv.conf"), "/etc/resolv.conf"}} {
 		if err := unix.Mount(mount[0], mount[1], "", unix.MS_BIND, ""); err != nil {
 			t.Fatal("private fixture bind mount", err)
 		}
@@ -369,6 +504,7 @@ func d10NativeChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stopDNS := d10NativeDNS(t)
 	nodesPath := "/opt/etc/razvilka/nodes-private"
 	if err := os.Mkdir(nodesPath, 0700); err != nil {
 		t.Fatal(err)
@@ -467,6 +603,10 @@ func d10NativeChild(t *testing.T) {
 			t.Error("TLS fixture did not join")
 			ok = false
 		}
+		if err := stopDNS(); err != nil {
+			t.Error("DNS fixture did not join", d10NativeErrorClass(err))
+			ok = false
+		}
 		processes.mu.Lock()
 		for _, spec := range processes.specs {
 			if processes.Running(spec) {
@@ -492,6 +632,7 @@ func d10NativeChild(t *testing.T) {
 			}
 		}
 	})
+	d10NativeEndpointPreflight(t, ctx)
 	for i, id := range ids {
 		doc := map[string]any{"log": map[string]any{"loglevel": "warning", "access": "none"},
 			"dns": map[string]any{"hosts": map[string]any{"service.example": "93.184.216.12", "www.cloudflare.com": "93.184.216.12", "api.ipify.org": "93.184.216.12"}},
