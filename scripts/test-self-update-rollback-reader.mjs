@@ -11,7 +11,9 @@ const fileLimit = spawnSync(shell, ['-c', 'ulimit -f 128'], {encoding: 'utf8', t
 assert.ifError(fileLimit.error);
 const limitModel = fileLimit.status === 0 ? '' : 'ulimit() { return 0; }\n';
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
-const source = readFileSync(new URL('./rollback-entware.sh', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+const scriptName = process.argv[3] || 'rollback-entware.sh';
+assert(['rollback-entware.sh', 'upgrade-entware.sh'].includes(scriptName));
+const source = readFileSync(new URL('./' + scriptName, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 const start = source.indexOf('probe_self_update_metadata() (\n');
 const end = source.indexOf('require_node_history_compatibility() {\n', start);
 assert(start >= 0 && end > start);
@@ -19,10 +21,19 @@ const gates = source.slice(start, end);
 const stop = source.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
 const recovery = source.indexOf(' -recover-private-restore', stop);
 const deactivate = source.indexOf(' -deactivate-dataplane', recovery);
-const first = source.indexOf('require_target_self_update_compatibility "$BACKUP/razvilka.bin"', end);
-const second = source.indexOf('require_target_self_update_compatibility "$BACKUP/razvilka.bin"', stop);
-const third = source.indexOf('require_target_self_update_compatibility "$BACKUP/razvilka.bin"', recovery);
-assert(first > end && first < stop && second > stop && second < recovery && third > recovery && third < deactivate);
+const targetCall = 'require_target_self_update_compatibility "' + (scriptName === 'rollback-entware.sh' ? '$BACKUP/razvilka.bin' : '$BIN_SOURCE') + '"';
+const first = source.indexOf(targetCall, end);
+const second = source.indexOf(targetCall, stop);
+const third = source.indexOf(targetCall, recovery);
+assert(first > end && first < stop && second > stop && second < recovery && third > recovery);
+if (scriptName === 'rollback-entware.sh') assert(third < deactivate);
+else {
+  assert(third < source.indexOf('STAMP="$(date', recovery));
+  const stage = source.indexOf('stage 2 "');
+  const fourth = source.indexOf(targetCall, stage);
+  const copy = source.indexOf('install_atomic "$BIN_SOURCE"', stage);
+  assert(stage > third && fourth > stage && copy > fourth);
+}
 assert(!gates.includes('WithSelfUpdateEffectAdmission'));
 
 mkdirSync(join(root, 'bin'));
@@ -37,13 +48,13 @@ const fixture = (reader, schema = "printf '0\\n'", scanner = "printf '{\"ok\":tr
 };
 const run = (body, expected, model = limitModel) => {
   const prefix = 'set -eu\numask 077\nSTATEDIR=' + quote(root.replaceAll('\\', '/')) + '\nBINDIR="$STATEDIR/bin"\n' +
-    'CASE_ROOT="$STATEDIR"\nexport CASE_ROOT\n' + model + gates + '\n';
+    'CASE_ROOT="$STATEDIR"\nTMPDIR="$STATEDIR"\nexport CASE_ROOT TMPDIR\n' + model + gates + '\n';
   const result = spawnSync(shell, ['-s'], {
     input: prefix + body + '\n', encoding: 'utf8', timeout: 10000,
   });
   assert.ifError(result.error);
   assert.equal(result.status, expected, result.stdout + result.stderr);
-  assert(!readdirSync(root).some(name => name.startsWith('.rollback-reader.')), 'metadata probe left temporary files');
+  assert(!readdirSync(root).some(name => /^\.(rollback|razvilka)-reader\./.test(name)), 'metadata probe left temporary files');
   return result;
 };
 
@@ -109,6 +120,16 @@ try {
   fixture("printf '3\\n'");
   run('require_target_self_update_compatibility "$BINDIR/razvilka"', 0);
   assert.equal(readFileSync(join(root, 'scans'), 'utf8'), 'scan');
+  if (scriptName === 'upgrade-entware.sh') {
+    run('STATEDIR="$CASE_ROOT/absent-installation-state"\nrequire_target_self_update_compatibility "$BINDIR/razvilka"', 0);
+    assert(!readdirSync(root).includes('absent-installation-state'), 'metadata preflight created installation state');
+    const restartStart = source.indexOf('restart_before_snapshot() {\n');
+    const restartEnd = source.indexOf('\n}\n', restartStart);
+    assert(restartStart >= 0 && restartEnd > restartStart);
+    writeFileSync(join(root, 'init'), '#!/bin/sh\nprintf started > "$CASE_ROOT/restarted"\n', {mode: 0o700});
+    run(source.slice(restartStart, restartEnd + 3) + '\nBASE="$CASE_ROOT"\nRAZ_INIT="$CASE_ROOT/init"\nBACKUP=""\nBACKUPROOT="$CASE_ROOT/backups"\nSAFE_TO_RESTART=1\nRAZ_WAS_RUNNING=1\nLEGACY_RUNNING_DETECTED=0\nLEGACY_CONTROL=""\nrestart_before_snapshot 1', 1);
+    assert(!readdirSync(root).includes('restarted'), 'reader3/schema0 refusal restarted through legacy upgrade trap');
+  }
   for (const scanner of ["printf '{\"ok\":false}\\n'; exit 1", "printf '{\"ok\":true}'", "printf '{\"ok\":true}\\n'; printf warning >&2", legacy]) {
     fixture("printf '3\\n'", "printf '0\\n'", scanner);
     run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
@@ -125,4 +146,4 @@ try {
   assert(basename(root).startsWith('razvilka-rollback-reader-'));
   rmSync(root, {recursive: true, force: true});
 }
-console.log('Rollback immutable reader3 fence, strict bounded metadata and retained rechecks: PASS' + (fileLimit.status === 0 ? '' : ' (successful RLIMIT capture modeled; actual unavailable limit refuses)'));
+console.log(scriptName + ' immutable reader3 fence, strict bounded metadata and retained rechecks: PASS' + (fileLimit.status === 0 ? '' : ' (successful RLIMIT capture modeled; actual unavailable limit refuses)'));

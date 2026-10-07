@@ -64,6 +64,7 @@ for ARCH in amd64 arm64 mips mipsle; do
 #!/bin/sh
 printf '%s\n' "${0##*/}" >>"$TEST_BINARY_CAPTURE"
 case "$1" in
+  -self-update-read-version) printf 'flag provided but not defined: -self-update-read-version\n' >&2; exit 2 ;;
   -check-node-history-state)
     FIXTURE_BASE="$(CDPATH= cd -- "$RAZVILKA_BASE" && pwd -P)"
     [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$FIXTURE_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$FIXTURE_BASE/var/lib/razvilka" ] || exit 99

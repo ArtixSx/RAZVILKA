@@ -195,6 +195,62 @@ if [ ! -f "$CONFIG_SOURCE" ]; then
   fi
 fi
 
+probe_self_update_metadata() (
+  # These exact metadata entrypoints are read-only, including under Stop.
+  # Unsupported flags need the old Go ABI, never a guessed empty response.
+  case "$2" in -self-update-read-version|-self-update-schema|-check-self-update-state) ;; *) exit 1 ;; esac
+  [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ] || { echo "Self update metadata binary is unsafe; installation unchanged" >&2; exit 1; }
+  command -v timeout >/dev/null 2>&1 || { echo "Bounded self update metadata probe is unavailable; installation unchanged" >&2; exit 1; }
+  SELF_PROBE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/.razvilka-reader.XXXXXX")" || exit 1
+  trap 'rm -f "$SELF_PROBE_DIR/output" "$SELF_PROBE_DIR/error" "$SELF_PROBE_DIR/expected"; rmdir "$SELF_PROBE_DIR"' EXIT
+  trap 'exit 1' HUP INT TERM
+  SELF_PROBE_CODE=0
+  (
+    # POSIX -f units are 512 bytes; some shells use 1024. Both are bounded.
+    ulimit -f 128 || exit 125
+    exec timeout -k 1 5 "$1" "$2"
+  ) >"$SELF_PROBE_DIR/output" 2>"$SELF_PROBE_DIR/error" || SELF_PROBE_CODE=$?
+  for SELF_PROBE_FILE in output error; do
+    SELF_PROBE_BYTES="$(wc -c <"$SELF_PROBE_DIR/$SELF_PROBE_FILE")" || exit 1
+    [ "$SELF_PROBE_BYTES" -lt 65536 ] || {
+      echo "Self update metadata exceeds its output limit; installation unchanged" >&2; exit 1;
+    }
+  done
+  if [ "$SELF_PROBE_CODE" -eq 0 ] && [ ! -s "$SELF_PROBE_DIR/error" ]; then
+    case "$2" in
+      -self-update-read-version) SELF_PROBE_VALUES='2 3' ;;
+      -self-update-schema) SELF_PROBE_VALUES='0 1 2' ;;
+      -check-self-update-state) SELF_PROBE_VALUES='{"ok":true}' ;;
+    esac
+    for SELF_PROBE_VALUE in $SELF_PROBE_VALUES; do
+      printf '%s\n' "$SELF_PROBE_VALUE" >"$SELF_PROBE_DIR/expected"
+      if cmp -s "$SELF_PROBE_DIR/output" "$SELF_PROBE_DIR/expected"; then
+        printf '%s\n' "$SELF_PROBE_VALUE"
+        exit 0
+      fi
+    done
+  fi
+  if [ "$2" != -check-self-update-state ] && [ "$SELF_PROBE_CODE" -eq 2 ] && [ ! -s "$SELF_PROBE_DIR/output" ] &&
+    IFS= read -r SELF_PROBE_FIRST <"$SELF_PROBE_DIR/error" && [ "$SELF_PROBE_FIRST" = "flag provided but not defined: $2" ]; then
+    printf '%s\n' unsupported
+    exit 0
+  fi
+  echo "Self update metadata is unknown or incompatible; installation unchanged" >&2
+  exit 1
+)
+
+require_target_self_update_compatibility() {
+  SELF_TARGET_READER="$(probe_self_update_metadata "$1" -self-update-read-version)" || return 1
+  case "$SELF_TARGET_READER" in
+    unsupported) return 0 ;; # Existing selected-backup/private-state gates still apply.
+    3)
+      # Fixed production roots only; no shell backup or public root arguments.
+      probe_self_update_metadata "$1" -check-self-update-state >/dev/null || return 1
+      ;;
+    *) echo "Target controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1 ;;
+  esac
+}
+
 require_legacy_file_protocol_free() {
   for SELF_PROTOCOL_PATH in "$STATEDIR/self-update/current.json" "$STATEDIR/self-update-files/current.json" "$STATEDIR/self-update-stop"; do
     if [ -e "$SELF_PROTOCOL_PATH" ] || [ -L "$SELF_PROTOCOL_PATH" ]; then
@@ -202,10 +258,29 @@ require_legacy_file_protocol_free() {
       return 1
     fi
   done
+  for SELF_PROTOCOL_DIR in "$STATEDIR/self-update" "$STATEDIR/self-update-files"; do
+    if [ -e "$SELF_PROTOCOL_DIR" ] || [ -L "$SELF_PROTOCOL_DIR" ]; then
+      [ -d "$SELF_PROTOCOL_DIR" ] && [ ! -L "$SELF_PROTOCOL_DIR" ] && [ -r "$SELF_PROTOCOL_DIR" ] && [ -x "$SELF_PROTOCOL_DIR" ] || {
+        echo "Self update protocol directory is unsafe; installation unchanged" >&2; return 1;
+      }
+      SELF_PROTOCOL_CONTENTS="$(LC_ALL=C ls -A "$SELF_PROTOCOL_DIR" 2>/dev/null && printf '|')" || {
+        echo "Self update protocol directory cannot be inspected; installation unchanged" >&2; return 1;
+      }
+      # The sentinel preserves even entries consisting entirely of newlines.
+      [ "$SELF_PROTOCOL_CONTENTS" = '|' ] || {
+        echo "Use matching self update recovery; raw application replacement is unavailable with retained protocol artifacts" >&2
+        return 1
+      }
+    fi
+  done
   if [ -f "$BINDIR/razvilka" ] && [ -x "$BINDIR/razvilka" ]; then
-    SELF_PROTOCOL_SCHEMA="$("$BINDIR/razvilka" -self-update-schema 2>/dev/null)" || SELF_PROTOCOL_SCHEMA=
+    SELF_PROTOCOL_READER="$(probe_self_update_metadata "$BINDIR/razvilka" -self-update-read-version)" || return 1
+    [ "$SELF_PROTOCOL_READER" = unsupported ] || {
+      echo "This controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1;
+    }
+    SELF_PROTOCOL_SCHEMA="$(probe_self_update_metadata "$BINDIR/razvilka" -self-update-schema)" || return 1
     case "$SELF_PROTOCOL_SCHEMA" in
-      ''|0|1) ;;
+      unsupported|0|1) ;;
       *) echo "This controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1 ;;
     esac
   fi
@@ -283,6 +358,7 @@ require_native_enrollment_schema() {
     [ "$NATIVE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible native WARP schema; installation unchanged" >&2; return 1; }
   fi
 }
+require_target_self_update_compatibility "$BIN_SOURCE"
 require_native_enrollment_schema "$BIN_SOURCE"
 require_node_history_compatibility "$BIN_SOURCE"
 if [ "$MODE" = apply ]; then require_legacy_file_protocol_free; fi
@@ -343,6 +419,10 @@ SAFE_TO_RESTART=1
 restart_before_snapshot() {
   CODE="$1"
   trap - EXIT HUP INT TERM
+  # A protocol/reader change during target probing must also fence restart.
+  if [ "$SAFE_TO_RESTART" -eq 1 ] && ! require_legacy_file_protocol_free; then
+    SAFE_TO_RESTART=0
+  fi
   if [ "$SAFE_TO_RESTART" -eq 1 ] && [ "$RAZ_WAS_RUNNING" -eq 1 ] && [ -x "$RAZ_INIT" ]; then
     RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the previous RAZVILKA process" >&2
   elif [ "$SAFE_TO_RESTART" -eq 1 ] && [ "$LEGACY_RUNNING_DETECTED" -eq 1 ] && [ -n "$LEGACY_CONTROL" ]; then
@@ -370,6 +450,7 @@ fi
 
 # A registration may have checkpointed while the first check was running.
 # Recheck with the application quiescent, before recovery or any replacement.
+require_target_self_update_compatibility "$BIN_SOURCE"
 require_native_enrollment_schema "$BIN_SOURCE"
 require_node_history_compatibility "$BIN_SOURCE"
 
@@ -389,6 +470,10 @@ RECOVERY_OUTPUT="$($BIN_SOURCE -recover-private-restore \
   -cloudflare-state "$APPDIR/cloudflare-private")"
 printf '%s\n' "$RECOVERY_OUTPUT" | grep -q '"ok":true' || { echo "Private restore recovery did not report success" >&2; false; }
 SAFE_TO_RESTART=1
+
+# Recovery can materialize a retained protocol image before snapshot/copy.
+require_target_self_update_compatibility "$BIN_SOURCE"
+require_legacy_file_protocol_free
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 BACKUP="$BACKUPROOT/$STAMP"
@@ -533,6 +618,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 stage 2 "Устанавливаем проверенные файлы с безопасными правами..."
+require_target_self_update_compatibility "$BIN_SOURCE"
 require_legacy_file_protocol_free
 install_atomic() {
   SRC="$1"
