@@ -218,7 +218,9 @@ func TestWGNativeNetworkReceipt(t *testing.T) {
 		t.Fatal("actual common LAN gate", err)
 	}
 	apply("first")
+	consumerChecks := 0
 	lan.ConsumerCheck = func(c context.Context, p *LANPolicyRuntimePlan) error {
+		consumerChecks++
 		if !reflect.DeepEqual(p, plan.LAN) {
 			return ErrReviewChanged
 		}
@@ -236,7 +238,15 @@ func TestWGNativeNetworkReceipt(t *testing.T) {
 		}
 		return a.verifyWGNetworkEffectPresence(c, ref, 1)
 	}
+	if err := lan.ConsumerCheck(ctx, plan.LAN); err != nil {
+		wgNetworkNativeDiagnoseLAN(t, a, lan, ctx, plan.LAN)
+		t.Fatal("exact committed real WG consumer", err)
+	}
+	t.Log("native exact committed real WG consumer passed")
+	checksBeforeVerify := consumerChecks
 	if err := lan.Verify(ctx, plan.LAN); err != nil {
+		t.Logf("native LAN Verify consumer-check calls=%d", consumerChecks-checksBeforeVerify)
+		wgNetworkNativeDiagnoseLAN(t, a, lan, ctx, plan.LAN)
 		t.Fatal("gate with exact committed real WG consumer", err)
 	}
 	assertClients := func(mode string) {
@@ -357,6 +367,56 @@ func TestWGNativeNetworkReceipt(t *testing.T) {
 		}
 	}
 	t.Log("actual dual-family LAN TCP/UDP source NAT; excluded MAC/privacy baseline; same-peer/fresh process; known/unknown receipt cuts passed")
+}
+
+// Observe the actual committed transport selector without changing the LAN
+// verifier or accepting a foreign rule. Log only receipt-reconstructed public
+// values after the strict endpoint matcher has recognized the native row.
+func wgNetworkNativeDiagnoseLAN(t *testing.T, a *WARPWireGuardAdapter, lan *LANPolicyRuntime, ctx context.Context, plan *LANPolicyRuntimePlan) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+	defer cancel()
+	t.Log("native LAN diagnostic physical scope", lan.ScopeCheck(ctx, plan))
+	state, exists, err := a.loadPolicyState()
+	if err != nil || !exists {
+		t.Log("native LAN diagnostic committed-state unavailable", err)
+		return
+	}
+	ref, err := a.committedWGPolicyReference(state)
+	if err != nil || state.WireGuardEndpoint == nil {
+		t.Log("native LAN diagnostic committed-reference unavailable", err)
+		return
+	}
+	e := state.WireGuardEndpoint
+	t.Log("native LAN diagnostic exact transport proof", a.verifyWGEndpoint(ctx, e, ref.FrozenLAN))
+	serviceTable := false
+	for _, owner := range PolicyOwnershipSpecs() {
+		serviceTable = serviceTable || owner.Table == e.Table
+	}
+	for _, family := range []int{4, 6} {
+		lines, err := readPolicyRules(ctx, a.Runner, a.ip(), family)
+		if err != nil {
+			t.Logf("native LAN diagnostic RPDB family=%d read-error=%v", family, err)
+			return
+		}
+		matched, badSyntax := 0, 0
+		for _, line := range lines {
+			if !lanPolicyRuleSyntax(line) {
+				badSyntax++
+			}
+			if !e.matchesRule(family, line) {
+				continue
+			}
+			matched++
+			fields := strings.Fields(line)
+			for index, value := range fields {
+				if value == "fwmark" && index+1 < len(fields) {
+					t.Logf("native LAN diagnostic exact endpoint row family=%d priority=%d mark=0x%x mask=0xffffffff table=%d lan-mark-touches=%t skip-priority=%t service-table=%t syntax=%t", family, e.Priority, e.Mark, e.Table, lanPolicyMarkTouches(fields[index+1]), e.Priority == LANPolicySkipPriority, serviceTable, lanPolicyRuleSyntax(line))
+				}
+			}
+		}
+		t.Logf("native LAN diagnostic RPDB family=%d endpoint-count=%d bad-syntax=%d", family, matched, badSyntax)
+	}
 }
 
 // Bounded, read-only diagnostics from reconstructed immutable intent. Never
