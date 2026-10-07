@@ -32,6 +32,11 @@ type scopedDNSInactiveFixture struct {
 func newScopedDNSInactiveFixture(t *testing.T) *scopedDNSInactiveFixture {
 	t.Helper()
 	m, a, _, in := scopedAdapterFixture(t)
+	// testing.TempDir creates its numbered child with mode 0777 (umask applies).
+	// The observer requires an explicitly private settings parent on Linux.
+	if err := os.Chmod(filepath.Dir(a.InactivitySettingsPath), 0700); err != nil {
+		t.Fatal(err)
+	}
 	a.StateRoot = filepath.Join(m.StateRoot, scopedDNSAdapterID)
 	if err := os.MkdirAll(m.StateRoot, 0700); err != nil {
 		t.Fatal(err)
