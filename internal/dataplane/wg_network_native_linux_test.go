@@ -180,18 +180,26 @@ func TestWGNativeNetworkReceipt(t *testing.T) {
 	ctx := wgNetworkNativeContext(a, plan)
 	apply := func(label string) {
 		transaction := filepath.Join(root, label)
-		for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate} {
-			if err := step(ctx, plan, transaction); err != nil {
-				t.Fatal(label, err)
-			}
+		previousFault := a.policyReceiptOptions.fault
+		a.policyReceiptOptions.fault = func(point string, index int) error {
+			t.Logf("native %s receipt checkpoint=%s effect=%d", label, point, index)
+			return nil // observe only; no receipt, command or health replacement
 		}
-		if err := a.Canary(ctx, plan.RoutePlanFor(a.ID()), transaction); err != nil {
-			t.Fatal(label, "canary", err)
-		}
-		for _, step := range []func(context.Context, Plan, string) error{a.Activate, a.Health, a.Commit} {
-			if err := step(ctx, plan, transaction); err != nil {
-				t.Fatal(label, err)
+		defer func() { a.policyReceiptOptions.fault = previousFault }()
+		for _, step := range []struct {
+			name string
+			run  func(context.Context, Plan, string) error
+		}{
+			{"snapshot", a.Snapshot}, {"stage", a.Stage}, {"validate", a.Validate},
+			{"canary", func(c context.Context, p Plan, root string) error { return a.Canary(c, p.RoutePlanFor(a.ID()), root) }},
+			{"activate", a.Activate}, {"health", a.Health}, {"commit", a.Commit},
+		} {
+			t.Logf("native %s stage=%s begin", label, step.name)
+			if err := step.run(ctx, plan, transaction); err != nil {
+				wgNetworkNativeDiagnose(t, a, ctx, transaction)
+				t.Fatal(label, step.name, err)
 			}
+			t.Logf("native %s stage=%s passed", label, step.name)
 		}
 	}
 	lan := &LANPolicyRuntime{Runner: a.Runner, IP: a.IP, IPTables: a.IPTables, IP6Tables: a.IP6Tables}
@@ -349,6 +357,39 @@ func TestWGNativeNetworkReceipt(t *testing.T) {
 		}
 	}
 	t.Log("actual dual-family LAN TCP/UDP source NAT; excluded MAC/privacy baseline; same-peer/fresh process; known/unknown receipt cuts passed")
+}
+
+// Bounded, read-only diagnostics from reconstructed immutable intent. Never
+// print profile/config bytes, wg output, receipt argv or arbitrary CLI output.
+func wgNetworkNativeDiagnose(t *testing.T, a *WARPWireGuardAdapter, ctx context.Context, transaction string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+	defer cancel()
+	state, err := a.readStagedPolicy(transaction)
+	if err != nil {
+		t.Log("native diagnostic staged-state unavailable", err)
+		return
+	}
+	ref, exists, err := a.readWGPolicyReference(transaction, state, false)
+	if err != nil || !exists {
+		t.Log("native diagnostic candidate-reference unavailable", err)
+		return
+	}
+	status, err := a.inspectWGPolicyReference(ctx, ref, transaction)
+	t.Logf("native diagnostic receipt complete=%t unknown=%t removed=%t added=%d pending=%d cleaned=%d error=%v", status.Complete, status.Unknown, status.Removed, status.Added, status.Pending, status.Cleaned, err)
+	compiled, err := a.compileWGNetworkEffects(ref)
+	if err != nil {
+		t.Log("native diagnostic effect-compiler unavailable", err)
+		return
+	}
+	runtime := a.wgNetworkEffectRuntime(ref, compiled, false)
+	for index, effect := range compiled.plan.Effects {
+		count, err := runtime.ExactPresence(ctx, index)
+		t.Logf("native diagnostic effect=%d tool=%s count=%d error=%v", index, effect.Tool, count, err)
+		if ctx.Err() != nil {
+			return
+		}
+	}
 }
 
 func wgNetworkNativeAdapter(t *testing.T, root string) *WARPWireGuardAdapter {
