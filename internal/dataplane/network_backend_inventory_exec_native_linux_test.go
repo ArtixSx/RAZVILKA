@@ -321,7 +321,9 @@ func backendCLINativeWorker(mode, dir, program string) (proof backendCLINativePr
 		limit = 32
 	}
 	start := time.Now()
-	output, err := (nfqws2ExecRunner{}).RunBounded(ctx, program, limit, "-t", "mangle", "-S")
+	// Dedicated role/env applies only to this test executable. The production
+	// method fixes its environment; both use the same bounded execution body.
+	output, err := backendInventoryRunBounded(ctx, program, limit, os.Environ(), "-t", "mangle", "-S")
 	elapsed := time.Since(start)
 	proof.ElapsedMS, proof.ReturnedBytes = elapsed.Milliseconds(), len(output)
 	if stopped != nil {

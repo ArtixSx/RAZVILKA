@@ -36,6 +36,13 @@ func (w *backendInventoryOutput) Write(data []byte) (int, error) {
 // Both stdout and stderr share one bounded capture; a command error/overflow
 // produces no rows. No fallback to the unbounded existing Run is permitted.
 func (nfqws2ExecRunner) RunBounded(ctx context.Context, name string, limit int, args ...string) ([]byte, error) {
+	return backendInventoryRunBounded(ctx, name, limit, []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LANG=C", "LC_ALL=C"}, args...)
+}
+
+// The environment is explicit so the Linux test-only CLI role fixture can
+// exercise these same IO/deadline/Wait bounds without changing production's
+// fixed environment or accepting native QA markers as production authority.
+func backendInventoryRunBounded(ctx context.Context, name string, limit int, environment []string, args ...string) ([]byte, error) {
 	if ctx == nil || ctx.Err() != nil || !filepath.IsAbs(name) || limit <= 0 || limit > backendClassicBytes || len(args) != 3 || args[0] != "-t" || args[2] != "-S" || !backendClassicTableName(args[1]) {
 		return nil, errBackendInventory
 	}
@@ -48,7 +55,7 @@ func (nfqws2ExecRunner) RunBounded(ctx context.Context, name string, limit int, 
 	output := &backendInventoryOutput{limit: limit, onOverflow: cancel}
 	command := exec.CommandContext(runCtx, name, args...)
 	// Fixed admitted read environment: no inherited loader or xtables overrides.
-	command.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LANG=C", "LC_ALL=C"}
+	command.Env = append([]string{}, environment...)
 	command.Stdout, command.Stderr = output, output
 	// Bound inherited pipe draining even if an unexpected descendant holds it.
 	command.WaitDelay = 100 * time.Millisecond
