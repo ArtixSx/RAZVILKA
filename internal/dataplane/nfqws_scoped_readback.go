@@ -167,7 +167,9 @@ func nfqwsScopedRuleKey(fields []string) string {
 	return strings.Join(result, "\x00")
 }
 
-func (p *NFQWSScopedPlan) ruleCounts(rules nfqwsScopedRules, mode nfqwsScopedReadMode) ([]int, error) {
+// Classification is pure: callers may consume counts only in the same local
+// read boundary. It never supplies a receipt or an admission grant.
+func (p *NFQWSScopedPlan) scopedRowCounts(rules nfqwsScopedRules) ([]int, error) {
 	counts := make([]int, len(p.mixed.Effects))
 	for tool, tables := range rules {
 		for table, lines := range tables {
@@ -194,6 +196,14 @@ func (p *NFQWSScopedPlan) ruleCounts(rules nfqwsScopedRules, mode nfqwsScopedRea
 				}
 			}
 		}
+	}
+	return counts, nil
+}
+
+func (p *NFQWSScopedPlan) ruleCounts(rules nfqwsScopedRules, mode nfqwsScopedReadMode) ([]int, error) {
+	counts, err := p.scopedRowCounts(rules)
+	if err != nil {
+		return nil, err
 	}
 	for _, count := range counts {
 		if count > 1 || (mode == nfqwsScopedNew || mode == nfqwsScopedAbsent || mode == nfqwsScopedBeforeStart) && count != 0 || mode == nfqwsScopedComplete && count != 1 {
@@ -359,8 +369,46 @@ func nfqwsScopedReadManagedProcess(ctx context.Context, adapter *NFQWS2Adapter, 
 }
 
 func (b *NFQWSScopedBinding) readback(ctx context.Context, p *NFQWSScopedPlan, mode nfqwsScopedReadMode, index int) error {
+	return b.readbackPrefix(ctx, p, mode, index, -1)
+}
+
+func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedPlan, mode nfqwsScopedReadMode, index, prefix int) error {
 	if ctx == nil || p == nil {
 		return ErrNFQWSScopedOwner
+	}
+	if prefix >= 0 {
+		if mode != nfqwsScopedPartial || prefix >= len(p.mixed.Effects) {
+			return ErrNFQWSScopedOwner
+		}
+		// Finish all ordinary process/LAN callbacks before collecting the
+		// exact prefix. Their nominal success cannot validate an earlier
+		// rules image after they changed a peer body or added a fresh copy.
+		if err := b.readback(ctx, p, mode, index); err != nil {
+			return err
+		}
+		rules, err := b.readRules(ctx, p)
+		if err != nil {
+			return err
+		}
+		counts, err := p.ruleCounts(rules, mode)
+		if err != nil {
+			return err
+		}
+		for i, count := range counts {
+			wanted := 0
+			if i < prefix {
+				wanted = 1
+			}
+			if count != wanted {
+				return ErrNFQWSScopedOwner
+			}
+		}
+		for _, parent := range p.mixed.Effects[prefix].Needs {
+			if parent >= prefix || counts[parent] != 1 {
+				return ErrNFQWSScopedOwner
+			}
+		}
+		return ctx.Err() // No external Guard/LAN callback after this image.
 	}
 	check := func() error {
 		if mode == nfqwsScopedBeforeStart {

@@ -390,22 +390,19 @@ func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root
 	if err != nil {
 		return err
 	}
-	// Also check process/LAN/foreign ownership immediately before every actual
-	// command. The Runner consumes the shared admission at the real start.
-	guard := r.Guard
-	r.Guard = func(ctx context.Context, i int) error {
-		if err := guard(ctx, i); err != nil {
-			return err
-		}
-		return b.readback(ctx, p, nfqwsScopedPartial, -1)
-	}
+	// Admission Guards stay fresh without repeating whole namespace scans.
+	// Only this private Apply runner moves the full exact-prefix proof to the
+	// actual mutation boundary; the base runner still owns Cmd.Start admission.
+	r.Runner = nfqwsScopedApplyRunner{base: r.Runner, binding: b, scoped: p, plan: plan, tools: r.Tools, guard: r.Guard}
 	if err := applyPolicyEffects(ctx, r, plan, root, b.options); err != nil {
 		return err
 	}
-	if err := b.readback(ctx, p, nfqwsScopedComplete, -1); err != nil {
+	// The final external admission callback precedes the final full proof.
+	// Its nominal success must not hide a removed body or newly foreign rule.
+	if err := r.Guard(ctx, len(plan.Effects)-1); err != nil {
 		return err
 	}
-	return r.Guard(ctx, len(plan.Effects)-1)
+	return b.readback(ctx, p, nfqwsScopedComplete, -1)
 }
 
 func (b *NFQWSScopedBinding) Remove(ctx context.Context, p *NFQWSScopedPlan, root string) error {
