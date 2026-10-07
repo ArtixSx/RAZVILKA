@@ -4,11 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net/netip"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -123,52 +120,6 @@ func (l *limitedLog) Write(data []byte) (int, error) {
 		l.remaining -= n
 	}
 	return size, nil
-}
-
-func confirmInstalledHealth(expectedVersion string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	version := exec.CommandContext(ctx, "/opt/bin/razvilka", "-version")
-	configureBoundedCommand(version)
-	version.Env = commandEnvironment()
-	out := &cappedOutput{maximum: 1024}
-	version.Stdout = out
-	version.Stderr = io.Discard
-	if runBoundedCommand(version) != nil || strings.TrimSpace(out.String()) != expectedVersion {
-		return false
-	}
-	pid := exec.CommandContext(ctx, "/bin/sh", "/opt/etc/init.d/S99razvilka", "pid")
-	configureBoundedCommand(pid)
-	pid.Env = commandEnvironment()
-	out = &cappedOutput{maximum: 128}
-	pid.Stdout = out
-	pid.Stderr = io.Discard
-	if runBoundedCommand(pid) != nil {
-		return false
-	}
-	id := strings.TrimSpace(out.String())
-	if id == "" || strings.Trim(id, "0123456789") != "" {
-		return false
-	}
-	lan := exec.CommandContext(ctx, "/bin/sh", "/opt/etc/init.d/S99razvilka", "lan-ip")
-	configureBoundedCommand(lan)
-	lan.Env = commandEnvironment()
-	out = &cappedOutput{maximum: 128}
-	lan.Stdout = out
-	lan.Stderr = io.Discard
-	if runBoundedCommand(lan) != nil {
-		return false
-	}
-	address := strings.TrimSpace(out.String())
-	if ip, err := netip.ParseAddr(address); err != nil || !ip.Is4() || ip.IsUnspecified() || ip.IsMulticast() {
-		return false
-	}
-	health := exec.CommandContext(ctx, "/opt/bin/razvilka", "-healthcheck", "http://"+address+":8787/api/v1/status", "-healthcheck-pid", id, "-healthcheck-require-dataplane")
-	configureBoundedCommand(health)
-	health.Env = commandEnvironment()
-	health.Stdout = io.Discard
-	health.Stderr = io.Discard
-	return runBoundedCommand(health) == nil
 }
 
 func helperConfigMatches(record updateRecord) bool {

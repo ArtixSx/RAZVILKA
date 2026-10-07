@@ -29,6 +29,18 @@ type nativeFileProfile struct {
 }
 
 func TestMain(m *testing.M) {
+	// Readonly probe CLI of the copied test image, not actual HTTP health.
+	if len(os.Args) == 2 && os.Args[1] == "-version" {
+		if binary, err := os.Executable(); err == nil && filepath.Base(binary) == "live-probe-hold.bin" {
+			time.Sleep(time.Minute) // actual Stop monitor must cancel/join this probe
+		}
+		fmt.Println("fixture-probe")
+		os.Exit(0)
+	}
+	if len(os.Args) == 6 && os.Args[1] == "-healthcheck" && os.Args[2] == "http://127.0.0.1:8787/api/v1/status" && os.Args[3] == "-healthcheck-pid" && os.Args[5] == "-healthcheck-require-dataplane" {
+		fmt.Println("healthy: fixture-probe")
+		os.Exit(0)
+	}
 	if len(os.Args) == 2 && os.Args[1] == "-self-update-read-version" {
 		fmt.Println(SelfUpdateReadVersion) // copied fixture binary's actual CLI observation
 		os.Exit(0)

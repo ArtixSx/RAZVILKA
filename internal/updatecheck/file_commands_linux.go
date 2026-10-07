@@ -1087,8 +1087,8 @@ func (a *SelfUpdateFileAdapter) liveFileRuntime(ctx context.Context, id string, 
 			return ErrFileProtocol
 		}
 	}
-	if !confirmInstalledHealth(version) {
-		return ErrFileProtocol
+	if err := a.confirmFileLiveHealth(ctx, review, actual, version); err != nil {
+		return err
 	}
 	after, err := a.ownedFileRuntime(id, r.Supervisor.PID, review, rollback)
 	if err != nil || after != actual {
