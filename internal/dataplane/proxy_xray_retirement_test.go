@@ -699,3 +699,94 @@ func TestProxyXrayRetirementCompleteRestorationFreshSettlementDoesNotReplay(t *t
 		}
 	}
 }
+
+func TestProxyXrayRetirementLastBootCallbackCannotHideRuntimeDeathOrBirthChange(t *testing.T) {
+	for _, mode := range []string{"generic", "node"} {
+		for _, operation := range []string{"Rollback", "VerifyRollback"} {
+			for _, change := range []string{"engine-death", "sidecar-death", "same-spec-birth-change"} {
+				t.Run(mode+"/"+operation+"/"+change, func(t *testing.T) {
+					f := newXrayDispatchFixture(t)
+					f.commit(mode)
+					original := proxyXrayRetirementCapture(t, f, mode)
+					plan, root := proxyXrayRetirementSnapshot(t, f)
+					if err := f.a.Deactivate(f.ctx); err != nil {
+						t.Fatal(err)
+					}
+					if err := f.a.Rollback(f.ctx, plan, root); err != nil {
+						t.Fatal("initial retirement restoration", err)
+					}
+					successfulSamples := 0
+					f.a.Processes = &proxyXrayRetirementRunningProcesses{ProcessController: f.processes, after: func(_ ProcessSpec, running bool) {
+						if running {
+							successfulSamples++
+						}
+					}}
+					bootBase, boots := f.a.bootIdentity, 0
+					var cutAt int
+					cut := false
+					f.a.bootIdentity = func() (string, error) {
+						boot, err := bootBase()
+						boots++
+						if err == nil && cutAt != 0 && boots == cutAt {
+							if successfulSamples == 0 {
+								t.Fatal("last boot cut had no previously successful live process observation")
+							}
+							cut = true
+							if change == "same-spec-birth-change" {
+								// The fixture's current identity witness changes while every
+								// process spec and persisted PID/passport/config byte stays.
+								f.scoped.identity++
+							} else {
+								id := "xray-engine"
+								if change == "sidecar-death" {
+									id = "xray-tun"
+								}
+								delete(f.processes.active, id)
+							}
+						}
+						return boot, err
+					}
+					run := func() (bool, error) {
+						if operation == "Rollback" {
+							err := f.a.Rollback(f.ctx, plan, root)
+							return err == nil, err
+						}
+						return f.a.VerifyRollback(f.ctx, plan, root)
+					}
+					if ok, err := run(); err != nil || !ok || boots == 0 || successfulSamples == 0 {
+						t.Fatal("baseline did not verify exact live restored retirement", ok, err, boots, successfulSamples)
+					}
+					cutAt, boots, successfulSamples = boots, 0, 0
+					before := proxyRollbackRetryFiles(t, f.a.StateRoot, root)
+					starts, stops, mutations := f.processes.starts, f.processes.stops, len(receiptMutationCalls(f.commands))
+					birth := f.scoped.identity
+					ok, err := run()
+					if !cut || ok || !errors.Is(err, ErrProxyPolicyUnknown) || f.processes.starts != starts || f.processes.stops != stops ||
+						len(receiptMutationCalls(f.commands)) != mutations || !reflect.DeepEqual(before, proxyRollbackRetryFiles(t, f.a.StateRoot, root)) {
+						t.Fatal("matching last boot hid lost live runtime or changed files/kernel/processes", ok, err, cut)
+					}
+					if change == "same-spec-birth-change" {
+						if f.scoped.identity != birth+1 || !reflect.DeepEqual(original.processes, f.processes.active) {
+							t.Fatal("birth-only cut changed another process fact")
+						}
+					} else {
+						id := "xray-engine"
+						if change == "sidecar-death" {
+							id = "xray-tun"
+						}
+						expected := make(map[string]ProcessSpec, len(original.processes)-1)
+						for activeID, spec := range original.processes {
+							if activeID != id {
+								expected[activeID] = spec
+							}
+						}
+						if !reflect.DeepEqual(expected, f.processes.active) || f.scoped.identity != birth {
+							t.Fatal("death-only cut changed another process fact")
+						}
+					}
+					f.constantOwner()
+				})
+			}
+		}
+	}
+}

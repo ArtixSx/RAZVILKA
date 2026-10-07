@@ -156,9 +156,34 @@ func (a *ProxyTunnelAdapter) closeXrayRetirementActive(ctx context.Context, snap
 	if err != nil {
 		return err
 	}
+	processes := []ProcessSpec{a.engineProcess(), a.sidecarProcess()}
+	identities := make([]string, len(processes))
+	for i, spec := range processes {
+		if spec.RouteProof {
+			identities[i], err = a.verifyNodeProcess(spec, "")
+			if err != nil || identities[i] == "" {
+				return errors.Join(ErrProxyPolicyUnknown, err)
+			}
+		}
+	}
 	view, err := a.retirementClosingView(ctx, snapshot)
 	if err != nil {
 		return err
+	}
+	// A process may exit while boot is sampled without deleting its passport.
+	// Close Running after boot, then repeat the stronger live birth proof so
+	// a successful Running callback cannot hide an exit of a proved process.
+	// Only callback-free binding/ledger/file checks follow; do not reopen boot.
+	if !view.Processes.Running(processes[0]) || !view.Processes.Running(processes[1]) {
+		return ErrProxyPolicyUnknown
+	}
+	for i, spec := range processes {
+		if spec.RouteProof {
+			identity, err := view.verifyNodeProcess(spec, "")
+			if err != nil || identity != identities[i] {
+				return errors.Join(ErrProxyPolicyUnknown, err)
+			}
+		}
 	}
 	binding, exists, err := view.readPolicyBinding(snapshot.Policy)
 	if err != nil || !exists || binding != expected {

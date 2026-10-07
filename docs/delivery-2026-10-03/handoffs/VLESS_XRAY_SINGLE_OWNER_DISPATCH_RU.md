@@ -28,6 +28,8 @@ Manager вызывает Snapshot и Deactivate для retiring adapter, но н
 
 Новое restoration generation записывается в transaction receipt до global pending binding и policy effects. Неизвестный ACK сохраняет ссылку на pending generation и запрещает fresh-owner replay по старому удалённому receipt. Подтверждённое restoration может быть завершено после cut; directory generation и document ID сохраняются раздельно. Нетронутое A проверяется без process/kernel replay. Idempotent Rollback и read-only VerifyRollback закрывают grant, binding, runtime images, receipt и snapshot seal после runtime callbacks.
 
+Follow-up к `79ef0a5`: финальный boot callback мог завершить процесс при неизменных PID/passport bytes. Closing grant теперь захватывает live birth identity процессов с RouteProof до boot; после boot проверяет Running исходных ProcessSpecs и совпадение live birth. После этой проверки идут только локальные binding/ledger/config/lease/PID/passport/receipt/snapshot проверки с уже подтверждённым boot; новый live boot callback не открывается. Portable regression моделирует exit и скрытую смену birth при неизменных файлах.
+
 ## Bounded snapshot reader
 
 Private snapshot reader ограничен 64 MiB до allocation/decode, повторно проверяет root/file identity и неизменность bytes. Duplicate keys, включая case aliases Go decoder, unknown keys, trailing/null JSON и unsafe file shape отвергаются. Snapshot может содержать несколько bounded config images и быть больше 4 MiB; отдельный scoped Xray/XHTTP JSON admission сохраняет прежний лимит 4 MiB. Captured interface image ограничен 4 KiB до копирования и разбирается строго.
