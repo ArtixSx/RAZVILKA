@@ -101,6 +101,7 @@ func TestDNSApplicationReviewAndJointSettingsCommit(t *testing.T) {
 			}
 			a.Dataplane = dataplane.New(t.TempDir())
 			a.Dataplane.FreshProfile = func(context.Context) (string, error) { return "wan-0123456789ab", nil }
+			a.FreshProfile = a.Dataplane.FreshProfile
 			identity, _ := a.DNS.ScopedProfileIdentity("private")
 			route := dataplane.Route{ServiceID: "telegram", ServiceName: "Telegram", Selected: "direct", Resolved: "direct", Domains: []string{"telegram.org"}, Sources: []string{"192.168.1.40/32"}, ProbeURL: "https://telegram.org/"}
 			input := dataplane.Input{Revision: a.Store.Get().Revision, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "dns-scoped", Installed: true, Configured: true, Activatable: true}}, DNS: &dataplane.ScopedDNSPlan{Listener: "192.168.1.1:10553", Ingress: "br0", Probe: catalog.Probe{ID: "web", Label: "Web", URL: route.ProbeURL, Required: true}, Bindings: []dataplane.ScopedDNSBinding{{ServiceID: "telegram", Client: "192.168.1.40", Domain: "telegram.org", ProfileID: "private", ProfileDigest: identity}}}}
