@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -94,6 +95,14 @@ func TestD10NativeAppManagerRollbackFreshC(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Root authorized private diagnostics for this fully owned synthetic
+	// fixture. Retain a dedicated 0700 directory after t.TempDir cleanup, so
+	// Root can inspect exact redacted failure text instead of guessed labels.
+	artifacts, err := os.MkdirTemp("", "razvilka-d10-private-")
+	if err != nil {
+		t.Fatal("private diagnostic directory", d10NativeErrorClass(err))
+	}
+	t.Log("private redacted failure artifacts:", artifacts)
 	for _, scenario := range []string{"sing-box", "failure-exit"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
@@ -113,6 +122,7 @@ func TestD10NativeAppManagerRollbackFreshC(t *testing.T) {
 			cmd := exec.CommandContext(ctx, "unshare", "--mount", "--net", "--pid", "--fork", "--kill-child=SIGKILL", "--mount-proc", "--propagation", "private", exe,
 				"-test.run=^TestD10NativeAppManagerRollbackFreshC$", "-test.v", "-test.timeout=3m30s")
 			cmd.Env = append(os.Environ(), "RAZVILKA_D10_NATIVE_CHILD="+scenario, "RAZVILKA_D10_NATIVE_ROOT="+root,
+				"RAZVILKA_D10_NATIVE_ARTIFACTS="+artifacts,
 				"RAZVILKA_D10_PARENT_NET="+ns["net"], "RAZVILKA_D10_PARENT_MNT="+ns["mnt"], "RAZVILKA_D10_PARENT_PID="+ns["pid"],
 				"SSL_CERT_FILE="+filepath.Join(root, "ca.pem"), "SSL_CERT_DIR="+filepath.Join(root, "empty-roots"),
 				"GODEBUG="+strings.TrimRight(os.Getenv("GODEBUG"), ",")+",netdns=go")
@@ -435,6 +445,7 @@ func d10NativeApplyDiagnostic(t *testing.T, a *App, checks *d10NativeChecks, pro
 	t.Helper()
 	d10NativeCheckDiagnostic(t, checks, autonomyTestState(a))
 	status, err := a.Dataplane.Status()
+	d10NativePrivateFailure(t, status)
 	t.Logf("D10 native journal: plan=%t execution=%t error_class=%s", status.Plan != nil, status.Execution != nil, d10NativeErrorClass(err))
 	if plan := status.Plan; plan != nil {
 		t.Logf("D10 native plan: ready=%t state=%s routes=%d adapters=%d blockers=%d", plan.Ready, d10NativeLabel(plan.State, "ready", "blocked", "canary-failed", "network-stale", "committed", "rolled-back", "rollback-failed", "applying"), len(plan.Routes), len(plan.Adapters), len(plan.Blockers))
@@ -458,6 +469,71 @@ func d10NativeApplyDiagnostic(t *testing.T, a *App, checks *d10NativeChecks, pro
 		t.Logf("D10 native OS command failure[%d]: %s", i, failure)
 	}
 	runner.mu.Unlock()
+}
+
+// Only the persisted transaction error and failed-step text are saved. No
+// configuration, key, process log/output or HTTP response body is serialized.
+func d10NativePrivateFailure(t *testing.T, status dataplane.RuntimeStatus) {
+	t.Helper()
+	if status.Execution == nil {
+		return
+	}
+	dir, scenario := os.Getenv("RAZVILKA_D10_NATIVE_ARTIFACTS"), os.Getenv("RAZVILKA_D10_NATIVE_CHILD")
+	info, err := os.Lstat(dir)
+	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "failure-exit") {
+		t.Error("private diagnostic destination refused")
+		return
+	}
+	root := os.Getenv("RAZVILKA_D10_NATIVE_ROOT")
+	replacements := []string{root, "<fixture-root>", os.Getenv("RAZVILKA_XRAY_NATIVE"), "<pinned-xray>", os.Getenv("RAZVILKA_SINGBOX_NATIVE"), "<pinned-sing-box>",
+		"/opt", "<private-opt>", "127.0.0.1", "<fixture-loopback>", "192.168.1.50", "<fixture-client>", "192.168.1.1", "<fixture-bridge>",
+		"93.184.216.11", "<fixture-node-endpoint>", "93.184.216.12", "<fixture-service-ip>", "93.184.216.13", "<fixture-A-exit>", "93.184.216.14", "<fixture-B-exit>", "93.184.216.15", "<fixture-C-exit>",
+		"service.example", "<fixture-service-host>", "front.example", "<fixture-front-host>", "www.cloudflare.com", "<fixture-trace-host>", "api.ipify.org", "<fixture-ip-host>"}
+	redactor := strings.NewReplacer(replacements...)
+	urls := regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^\s"'<>]+`)
+	uuid := regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
+	nodes := regexp.MustCompile(`\bnode-[a-f0-9]{64}\b`)
+	paths := regexp.MustCompile(`/(?:opt|proc|sys|dev|etc|tmp|home|run|var)(?:/[a-zA-Z0-9_.-]+)*`)
+	redact := func(value string) string {
+		value = urls.ReplaceAllString(value, "<fixture-url>")
+		value = uuid.ReplaceAllString(value, "<fixture-user>")
+		value = nodes.ReplaceAllString(value, "<fixture-node-id>")
+		value = redactor.Replace(value)
+		value = paths.ReplaceAllString(value, "<path>")
+		if len(value) > 4096 {
+			value = value[:4096] + "<truncated>"
+		}
+		return value
+	}
+	payload := struct {
+		Scenario         string   `json:"scenario"`
+		State            string   `json:"state"`
+		RollbackVerified bool     `json:"rollback_verified"`
+		Error            string   `json:"redacted_execution_error"`
+		FailedSteps      []string `json:"redacted_failed_steps"`
+	}{Scenario: scenario, State: status.Execution.State, RollbackVerified: status.Execution.RollbackVerified, Error: redact(status.Execution.Error)}
+	for _, step := range status.Execution.Steps {
+		if step.State == "failed" && len(payload.FailedSteps) < 8 {
+			payload.FailedSteps = append(payload.FailedSteps, d10NativeLabel(step.Phase, "snapshot", "stage", "validate", "canary", "activate", "health", "rollback", "verify-rollback", "commit-adapter")+": "+redact(step.Detail))
+		}
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		t.Error("private diagnostic encode", d10NativeErrorClass(err))
+		return
+	}
+	defer clear(data)
+	f, err := os.OpenFile(filepath.Join(dir, scenario+"-failure.json"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Error("private diagnostic write refused", d10NativeErrorClass(err))
+		return
+	}
+	_, writeErr := f.Write(data)
+	syncErr := f.Sync()
+	closeErr := f.Close()
+	if writeErr != nil || syncErr != nil || closeErr != nil {
+		t.Error("private diagnostic write incomplete")
+	}
 }
 
 func d10NativeKernelDiagnostic(t *testing.T, before, after [][]byte) {
@@ -680,12 +756,23 @@ func d10NativeChild(t *testing.T) {
 	if err := os.WriteFile("/proc/sys/net/ipv6/conf/br0/disable_ipv6", []byte("1\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	// Load the tables before the baseline: lazy module/table creation is not a
-	// leaked rule. Comparison below still requires every actual rule to restore.
+	// iptables-nft -S can report virtual builtins without materializing a table.
+	// Create/remove one empty fixture chain to instantiate real empty builtins
+	// before the baseline. The later exact comparison ignores no table or row.
 	for _, tool := range []string{"iptables", "ip6tables"} {
 		for _, table := range []string{"filter", "mangle", "nat"} {
-			if out, err := d10NativeCommand(ctx, tool, "-t", table, "-S"); err != nil {
-				t.Fatalf("fixture firewall read: %v %s", err, out)
+			for _, operation := range []string{"-N", "-X"} {
+				if out, err := d10NativeCommand(ctx, tool, "-t", table, operation, "RZ_D10_INIT"); err != nil {
+					clear(out)
+					t.Fatal("private firewall table preload", d10NativeErrorClass(err))
+				}
+			}
+			save := tool + "-save"
+			out, err := d10NativeCommand(ctx, save, "-t", table)
+			materialized := err == nil && bytes.Contains(out, []byte("*"+table+"\n")) && bytes.Contains(out, []byte("COMMIT")) && !bytes.Contains(out, []byte("RZ_D10_INIT"))
+			clear(out)
+			if !materialized {
+				t.Fatal("private firewall table did not materialize before baseline", d10NativeErrorClass(err))
 			}
 		}
 	}
