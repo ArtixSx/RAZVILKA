@@ -75,7 +75,10 @@ evidence; no process or production settlement is invoked. It verifies scanner
 reader2/3 boundaries, successful real CLI, byte-identical images and rejection
 of a future archived receipt despite readable current state. The actual OPS
 filesystem scanner requires Linux UID0, so this case explicitly skips elsewhere;
-Root runs it on the accepted source in its native window. Portable metadata,
+Root runs it on the accepted source in its native window with `TMPDIR` under an
+already suitable root-owned private directory. OPS checks every ancestor to
+`/` and refuses writable ancestors, so ordinary `/tmp` is unsuitable; no
+permission/ownership repair or permissive observer is introduced. Portable metadata,
 empty-scan and early refusal tests run on Windows.
 
 Checkpoint B (explicit independent stopped settlement consumer) and reviewed
