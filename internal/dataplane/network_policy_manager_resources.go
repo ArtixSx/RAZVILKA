@@ -28,9 +28,11 @@ type ExecutionResource struct {
 // ExecutionNFQWSDefinition retains full typed compiler input, never argv or
 // executable paths. Reconstructing it checks intent only, not launch authority.
 type ExecutionNFQWSDefinition struct {
-	Plan            Plan                  `json:"plan"`
-	Spec            NFQWSScopedSpec       `json:"spec"`
-	NetworkIdentity *netidentity.Identity `json:"network_identity,omitempty"`
+	Plan            Plan                    `json:"plan"`
+	Spec            NFQWSScopedSpec         `json:"spec"`
+	NetworkIdentity *netidentity.Identity   `json:"network_identity,omitempty"`
+	Mode            string                  `json:"mode,omitempty"`
+	Observation     *NFQWSActiveObservation `json:"observation,omitempty"`
 }
 
 func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource {
@@ -47,6 +49,10 @@ func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource 
 			if definition.NetworkIdentity != nil {
 				identity := *definition.NetworkIdentity
 				definition.NetworkIdentity = &identity
+			}
+			if definition.Observation != nil {
+				observation := *definition.Observation
+				definition.Observation = &observation
 			}
 			result[i].NFQWS = &definition
 		}
@@ -106,8 +112,11 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			if err != nil || plan.Resources().Generation != resource.Generation || plan.Digest() != resource.EffectsDigest {
 				return errors.Join(ErrExecutionJournal, err)
 			}
+			if err := validateExecutionNFQWSMode(execution, resource, plan); err != nil {
+				return err
+			}
 			switch resource.Phase {
-			case "planned", "process-pending", "capture-ready", "closed":
+			case "planned", "process-pending", "capture-ready", "transfer-intent", "transfer-ack", "closed":
 				if resource.State != "prepared" {
 					return ErrExecutionJournal
 				}

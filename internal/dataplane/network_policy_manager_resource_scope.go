@@ -21,6 +21,8 @@ type executionResourceScope struct {
 	mu                 sync.Mutex
 	startMu            sync.RWMutex
 	manager            *Manager
+	managerRoot        string
+	adapterOwner       Adapter
 	plan               Plan
 	adapter            string
 	registryGeneration uint64
@@ -62,13 +64,8 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 	if parent != plan.PlanID || filepath.Join(m.StateRoot, "transactions", execution.PlanID) != root {
 		return nil, ErrNodeTransitUnavailable
 	}
-	owned, err := ownedfs.Open(root)
+	owned, anchor, err := openNetworkPolicyObservationRoot(root)
 	if err != nil {
-		return nil, executionJournalError(err)
-	}
-	anchor, err := os.Lstat(root)
-	if err != nil {
-		_ = owned.Close()
 		return nil, executionJournalError(err)
 	}
 	child, cancel := context.WithCancel(ctx)
@@ -76,6 +73,7 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
 	m.registryMu.RLock()
 	registryGeneration := m.registryGeneration
+	adapterOwner := m.Adapters[adapter]
 	m.registryMu.RUnlock()
 	identity := m.executionNetworkIdentity()
 	if identity != nil {
@@ -85,7 +83,7 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 			return nil, err
 		}
 	}
-	return &executionResourceScope{manager: m, plan: plan, adapter: adapter, execution: execution,
+	return &executionResourceScope{manager: m, managerRoot: m.StateRoot, adapterOwner: adapterOwner, plan: plan, adapter: adapter, execution: execution,
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
 		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}, nil
 }
@@ -98,7 +96,7 @@ func (s *executionResourceScope) context() context.Context {
 // Called with s.mu held. Actual owner readback runs outside this mutex and
 // rechecks the matching record after returning, so read-only guards can reenter.
 func (s *executionResourceScope) checkCurrent(ctx context.Context, resource *executionTransitResource, forward bool) error {
-	if !s.open || s.failure != nil || s.guard == nil || ctx == nil {
+	if !s.open || s.failure != nil || s.guard == nil || ctx == nil || s.manager.StateRoot != s.managerRoot || s.manager.executionNetworkIdentity() != s.networkIdentity {
 		return errors.Join(ErrNodeTransitUnavailable, s.failure)
 	}
 	if err := ctx.Err(); err != nil {
@@ -111,8 +109,9 @@ func (s *executionResourceScope) checkCurrent(ctx context.Context, resource *exe
 	}
 	s.manager.registryMu.RLock()
 	currentRegistry := s.manager.registryGeneration
+	adapterOwner := s.manager.Adapters[s.adapter]
 	s.manager.registryMu.RUnlock()
-	if currentRegistry != s.registryGeneration {
+	if currentRegistry != s.registryGeneration || !sameNetworkPolicyDependency(adapterOwner, s.adapterOwner) {
 		return ErrNodeTransitUnavailable
 	}
 	current, err := os.Lstat(s.root)

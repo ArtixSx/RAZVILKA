@@ -28,18 +28,22 @@ type nfqwsExecutionRegistrarKey struct{}
 // permission. Its lifetime is the existing Manager operation. The managed
 // owner must use the private parent/helper channel for the real Start ACK.
 type NFQWSExecutionResource struct {
-	scope        *executionResourceScope
-	plan         *NFQWSScopedPlan
-	binding      NFQWSExecutionBinding
-	root         string
-	relative     string
-	anchor       os.FileInfo
-	readback     nfqwsExecutionReadback
-	beforeUsed   bool
-	startReady   bool
-	startUsed    bool
-	startACK     bool
-	preparedUsed bool
+	scope             *executionResourceScope
+	plan              *NFQWSScopedPlan
+	binding           NFQWSExecutionBinding
+	root              string
+	relative          string
+	anchor            os.FileInfo
+	readback          nfqwsExecutionReadback
+	beforeUsed        bool
+	startReady        bool
+	startUsed         bool
+	startACK          bool
+	preparedUsed      bool
+	activeCommand     *nfqws2ActiveProcessCommand
+	activeReadback    nfqwsExecutionActiveReadback
+	activeObservation *NFQWSActiveObservation
+	transferUsed      bool
 }
 
 // AcquireNFQWSExecutionResource requires the private issuer and actual owner
@@ -168,8 +172,12 @@ func (r *NFQWSExecutionResource) matching(binding NFQWSExecutionBinding) (int, e
 			if identity == nil && recorded.NFQWS.Spec.NetworkIdentity != nil || identity != nil && nfqwsExecutionNetworkMatches(identity.value, recorded.NFQWS.Spec) != nil {
 				return -1, ErrNFQWSScopedOwner
 			}
+			if r.activeCommand == nil && (recorded.NFQWS.Mode != "" || recorded.NFQWS.Observation != nil) ||
+				r.activeCommand != nil && (recorded.NFQWS.Mode != nfqws2ActiveProcessMode || nfqws2ActiveCommandMatchesSpec(*r.activeCommand, recorded.NFQWS.Spec) != nil) {
+				return -1, ErrNFQWSScopedOwner
+			}
 			switch recorded.Phase {
-			case "planned", "process-pending", "capture-ready", "closed":
+			case "planned", "process-pending", "capture-ready", "transfer-intent", "transfer-ack", "closed":
 			default:
 				return -1, ErrNFQWSScopedOwner
 			}
@@ -281,7 +289,7 @@ func (r *NFQWSExecutionResource) WithStart(ctx context.Context, binding NFQWSExe
 // Prepared requires actual running child/queue, unchanged LAN and zero
 // capture before publishing capture-ready. An ACK alone never grants capture.
 func (r *NFQWSExecutionResource) Prepared(ctx context.Context, binding NFQWSExecutionBinding) error {
-	if r == nil || r.scope == nil {
+	if r == nil || r.scope == nil || r.activeCommand != nil {
 		return ErrNFQWSScopedOwner
 	}
 	if err := func() error {
