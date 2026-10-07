@@ -3,6 +3,7 @@ package dataplane
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/netip"
 	"os"
@@ -221,4 +222,105 @@ func TestWGNetworkLANTransportRejectsUnknownCommonReceipt(t *testing.T) {
 		t.Fatal("unknown receipt granted transport exception", err)
 	}
 	assertWGNetworkReadOnlyCalls(t, kernel.calls[before:])
+}
+
+func TestWGNetworkLANTransportClosingFreshness(t *testing.T) {
+	for _, cut := range []string{"operation", "receipt", "boot", "state", "reference", "runtime", "closing-boot-operation", "closing-boot-receipt"} {
+		t.Run(cut, func(t *testing.T) {
+			a, kernel, plan, ctx, line := wgLANTransportFixture(t)
+			state, _, err := a.loadPolicyState()
+			if err != nil {
+				t.Fatal(err)
+			}
+			ref, err := a.committedWGPolicyReference(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			boot, err := a.wgPolicyBoot()
+			if err != nil {
+				t.Fatal(err)
+			}
+			write := func(path string, value any) {
+				t.Helper()
+				data, err := json.Marshal(value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			operation := func() {
+				t.Helper()
+				if err := os.Mkdir(filepath.Join(a.StateRoot, wgPolicyOperationDirectory), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			receipt := func() {
+				t.Helper()
+				path := filepath.Join(a.wgPolicyGenerationRoot(ref, ""), policyAdditionFile)
+				var doc policyAdditionDocument
+				if err := json.Unmarshal(mustRead(path), &doc); err != nil || len(doc.Steps) == 0 {
+					t.Fatal("missing private model receipt", err)
+				}
+				doc.Steps[len(doc.Steps)-1].State = "cleanup-intent"
+				doc.Checksum = policyAdditionChecksum(doc)
+				write(path, doc)
+			}
+			base := a.Runner
+			firewall := base.(wgNetworkLANReadbackRunner).firewall
+			fired, closingMutation, closingCalls := false, false, 0
+			a.Runner = networkCleanupRunner(func(c context.Context, tool string, args ...string) ([]byte, error) {
+				data, err := base.Run(c, tool, args...)
+				if err != nil || fired || tool != "wg" || strings.Join(args, " ") != "show rz-wg fwmark" {
+					return data, err
+				}
+				fired = true // valid final kernel answer, then external authority drift
+				switch cut {
+				case "operation":
+					operation()
+				case "receipt":
+					receipt()
+				case "boot":
+					a.policyReceiptOptions.boot = func() (string, error) { return "changed-after-kernel-read", nil }
+				case "state":
+					state.WireGuardEndpoint.ResolvedAt = state.WireGuardEndpoint.ResolvedAt.Add(time.Second)
+					write(a.statePath(), state)
+				case "reference":
+					ref.RollbackOwner = strings.Repeat("b", 64)
+					if err := writeWGPolicyReference(ctx, a.StateRoot, ref); err != nil {
+						t.Fatal(err)
+					}
+				case "runtime":
+					if err := os.WriteFile(a.RuntimeConfigPath, append(mustRead(a.RuntimeConfigPath), '\n'), 0600); err != nil {
+						t.Fatal(err)
+					}
+				case "closing-boot-operation", "closing-boot-receipt":
+					a.policyReceiptOptions.boot = func() (string, error) {
+						closingCalls++
+						if cut == "closing-boot-operation" && closingCalls == 1 {
+							operation()
+							closingMutation = true
+						}
+						// The inspector has loaded its document before its boot
+						// callback. Returning the old boot cannot settle new bytes.
+						if cut == "closing-boot-receipt" && closingCalls == 2 {
+							receipt()
+							closingMutation = true
+						}
+						return boot, nil
+					}
+				}
+				return data, err
+			})
+			beforeIP, beforeFW := len(kernel.calls), len(firewall.calls)
+			if err := a.VerifyLANPolicyTransport(ctx, plan.LAN, 4, line); !errors.Is(err, ErrPolicyAdditionUnknown) {
+				t.Fatal("late authority drift granted transport exception", err)
+			}
+			if !fired || strings.HasPrefix(cut, "closing-boot-") && !closingMutation {
+				t.Fatal("late model boundary not reached")
+			}
+			assertWGNetworkReadOnlyCalls(t, kernel.calls[beforeIP:], firewall.calls[beforeFW:])
+		})
+	}
 }

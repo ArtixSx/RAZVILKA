@@ -1,8 +1,10 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 )
@@ -55,6 +57,11 @@ func (a *WARPWireGuardAdapter) VerifyLANPolicyTransport(ctx context.Context, pla
 	if err != nil || boot != ref.Boot {
 		return errors.Join(err, ErrPolicyAdditionUnknown)
 	}
+	receiptPath := filepath.Join(a.wgPolicyGenerationRoot(ref, ""), policyAdditionFile)
+	receipt, exists, err := readWARPCleanupFile(receiptPath, policyAdditionMaxBytes)
+	if err != nil || !exists {
+		return errors.Join(err, ErrPolicyAdditionReceipt)
+	}
 	status, err := a.inspectWGPolicyReference(ctx, ref, "")
 	if err != nil || !status.Complete || status.Unknown || status.Removed || status.Promoted || status.Pending != 0 {
 		return errors.Join(err, ErrPolicyAdditionUnknown)
@@ -96,5 +103,34 @@ func (a *WARPWireGuardAdapter) VerifyLANPolicyTransport(ctx context.Context, pla
 	}
 	// This also checks the complete transport table and selector dependencies
 	// in both families, exact host route, live fwmark and public-key identity.
-	return errors.Join(a.verifyWGEndpoint(ctx, e, ref.FrozenLAN), ctx.Err())
+	if err := a.verifyWGEndpoint(ctx, e, ref.FrozenLAN); err != nil {
+		return errors.Join(err, ctx.Err())
+	}
+	// Kernel/identity callbacks cannot leave an earlier authority snapshot as
+	// the final grant. Inspect settlement again, then close with callback-free
+	// private reads and the operation fence after even the boot callbacks.
+	boot, err = a.wgPolicyBoot()
+	if err != nil || boot != ref.Boot {
+		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	status, err = a.inspectWGPolicyReference(ctx, ref, "")
+	if err != nil || !status.Complete || status.Unknown || status.Removed || status.Promoted || status.Pending != 0 {
+		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	current, owned, err := a.deactivationOwnership(ctx)
+	if err != nil || !owned || !reflect.DeepEqual(current, state) {
+		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	currentRef, err := a.committedWGPolicyReference(current)
+	if err != nil || currentRef.ID != ref.ID || currentRef.Checksum != ref.Checksum {
+		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	currentReceipt, exists, err := readWARPCleanupFile(receiptPath, policyAdditionMaxBytes)
+	if err != nil || !exists || !bytes.Equal(currentReceipt, receipt) {
+		return errors.Join(err, ErrPolicyAdditionUnknown)
+	}
+	if err := a.checkWGPolicyOperation(); err != nil {
+		return err
+	}
+	return ctx.Err()
 }
