@@ -35,6 +35,9 @@ func NewReviewedStockNC1812Provider(ctx context.Context) (*Provider, error) {
 }
 
 func operationContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
+	return boundedContext(ctx, 2*time.Second)
+}
+func boundedContext(ctx context.Context, limit time.Duration) (context.Context, context.CancelFunc, error) {
 	if ctx == nil {
 		return nil, nil, ErrUnknown
 	}
@@ -44,7 +47,7 @@ func operationContext(ctx context.Context) (context.Context, context.CancelFunc,
 	if _, ok := ctx.Deadline(); !ok {
 		return nil, nil, ErrUnknown
 	}
-	bounded, cancel := context.WithTimeout(ctx, 2*time.Second)
+	bounded, cancel := context.WithTimeout(ctx, limit)
 	return bounded, cancel, nil
 }
 
@@ -67,6 +70,16 @@ func (p *Provider) observeLocked(ctx context.Context) (Identity, error) {
 	}
 	if p == nil || !p.valid || p.read == nil || p.build == nil {
 		return Identity{}, ErrUnknown
+	}
+	if p.profile != nil {
+		// The stock aggregate bracket can encompass several bounded reads.
+		// Each fresh identity/build observation retains its own leaf budget.
+		leaf, cancel, err := operationContext(ctx)
+		if err != nil {
+			return Identity{}, err
+		}
+		defer cancel()
+		ctx = leaf
 	}
 	o, err := p.read(ctx)
 	if err != nil {
@@ -108,11 +121,19 @@ func (p *Provider) observeLocked(ctx context.Context) (Identity, error) {
 // WithCurrent brackets the existing caller operation on the same OS thread.
 // A changed identity or cancellation refuses even when use returns nil. The
 // caller still owns all resource/queue/process/backend/effect checks.
+// Only the reviewed stock factory receives a finite 16-second aggregate
+// bracket. Observe and stock metadata leaves remain capped at two seconds;
+// the original caller's shorter deadline always wins. Generic Linux stays at
+// two seconds. This changes timing only, never identity or closing checks.
 func (p *Provider) WithCurrent(ctx context.Context, use func(context.Context, Identity) error) error {
 	if use == nil {
 		return ErrUnknown
 	}
-	c, cancel, err := operationContext(ctx)
+	limit := 2 * time.Second
+	if p != nil && p.profile != nil && p.profile.hash() == nc1812Profile().hash() {
+		limit = 16 * time.Second
+	}
+	c, cancel, err := boundedContext(ctx, limit)
 	if err != nil {
 		return err
 	}

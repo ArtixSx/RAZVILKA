@@ -288,6 +288,12 @@ func readBuild(ctx context.Context) (buildTuple, error) {
 	if ctx == nil || ctx.Err() != nil {
 		return zero, ErrUnknown
 	}
+	leaf, cancel, err := operationContext(ctx)
+	if err != nil {
+		return zero, err
+	}
+	defer cancel()
+	ctx = leaf
 	release, machine, ok := kernelTuple()
 	if !ok || release != nc1812Profile().KernelRelease || machine != nc1812Profile().Machine {
 		return zero, ErrUnknown
