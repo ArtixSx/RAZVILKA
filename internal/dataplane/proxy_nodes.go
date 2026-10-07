@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -501,10 +502,51 @@ func (a *ProxyTunnelAdapter) checkScopedNodeState(ctx context.Context, plan Plan
 	if err != nil {
 		return m, err
 	}
-	if plan.NetworkProfileID != m.NetworkProfile || !reflect.DeepEqual(routes, m.Routes) || !reflect.DeepEqual(requests, m.Requests) {
+	if plan.NetworkProfileID != m.NetworkProfile || !reflect.DeepEqual(canonicalScopedNodeRoutes(routes), canonicalScopedNodeRoutes(m.Routes)) || !reflect.DeepEqual(requests, m.Requests) {
 		return m, ErrNodeEndpointChanged
 	}
 	return m, nil
+}
+
+// Only optional empty slices lose their representation in the manifest's
+// omitempty JSON round trip. Keep all values, order, required catalog slices
+// and pointer presence intact; never canonicalize the caller's sealed plan.
+func canonicalScopedNodeRoutes(routes []Route) []Route {
+	result := slices.Clone(routes)
+	for i := range result {
+		route := &result[i]
+		for _, field := range []*[]string{&route.Domains, &route.CIDRs, &route.SourceRefs, &route.Sources, &route.Ingress} {
+			if len(*field) == 0 {
+				*field = nil
+			}
+		}
+		if route.ProbeService == nil {
+			continue
+		}
+		service := *route.ProbeService
+		for _, field := range []*[]string{&service.CIDRs, &service.SourceRefs} {
+			if len(*field) == 0 {
+				*field = nil
+			}
+		}
+		service.Probes = slices.Clone(service.Probes)
+		if len(service.Probes) == 0 {
+			service.Probes = nil
+		}
+		for j := range service.Probes {
+			expect := &service.Probes[j].Expect
+			if len(expect.StatusCodes) == 0 {
+				expect.StatusCodes = nil
+			}
+			for _, field := range []*[]string{&expect.RedirectHosts, &expect.ContentTypes, &expect.JSONFields, &expect.BodyContains} {
+				if len(*field) == 0 {
+					*field = nil
+				}
+			}
+		}
+		route.ProbeService = &service
+	}
+	return result
 }
 
 // nowUTC is only a compilation timestamp; it never invents a DNS lease.
