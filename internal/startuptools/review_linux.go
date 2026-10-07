@@ -70,7 +70,7 @@ func sameNode(before, after os.FileInfo) bool {
 func (r *heldReview) node(path string) (heldNode, error) {
 	info, err := os.Lstat(path)
 	if err != nil || !protectedInfo(info) {
-		return heldNode{}, at("PATH_OWNER", err)
+		return heldNode{}, pathOwnerFailure(path, info, err)
 	}
 	n := heldNode{path: path, info: info}
 	if info.Mode()&os.ModeSymlink != 0 {
