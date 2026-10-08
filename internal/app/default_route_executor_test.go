@@ -84,6 +84,18 @@ func (a *defaultRouteTransactionAdapter) Deactivate(c context.Context) error {
 	return a.step(c, "verify-inactive")
 }
 
+// Independent protocol observation: a successful phase or retained journal
+// cannot supply inactivity while this same registered owner remains live.
+func (a *defaultRouteTransactionAdapter) VerifyRuntimeInactive(c context.Context) error {
+	if err := a.step(c, "observe-inactive"); err != nil {
+		return err
+	}
+	if a.live || !a.verified {
+		return dataplane.ErrRuntimeInactivity
+	}
+	return nil
+}
+
 func defaultRouteExecutorFixture(t *testing.T) (*DefaultRouteExecutor, *DefaultRouteSnapshot, *defaultRouteTransactionAdapter) {
 	t.Helper()
 	cfg, snapshot, _ := defaultRouteFixture()
@@ -618,7 +630,7 @@ func TestDefaultRouteExecutorExclusionChangeRevokesReviewedApply(t *testing.T) {
 	}
 }
 
-func TestDefaultRouteExecutorRemovingLastEntryRetiresOwnedRuntime(t *testing.T) {
+func TestDefaultRouteExecutorRemovingLastEntryRequiresVerifiedRetirement(t *testing.T) {
 	defaultRouteRequireLinuxJournal(t)
 	e, _, adapter := defaultRouteExecutorFixture(t)
 	r, err := e.Review(context.Background(), defaultRouteListedRoutes())
@@ -638,6 +650,46 @@ func TestDefaultRouteExecutorRemovingLastEntryRetiresOwnedRuntime(t *testing.T) 
 	plan := r.Plan()
 	if plan.Noop || len(plan.Routes) != 0 || len(plan.Adapters) != 0 || plan.LAN != nil || !slices.Contains(plan.RetiringAdapters, "wireguard") || !slices.Contains(plan.RetiringAdapters, dataplane.NetworkPolicyAdapterID) {
 		t.Fatal("empty replacement lost exact owned retirement", plan)
+	}
+	// A disappearing live LAN generation is not an automatic cutover grant.
+	// The real Manager must reject before any new adapter phase/config commit.
+	before := e.app.Store.Get()
+	steps := len(adapter.steps)
+	if _, err := e.Execute(context.Background(), r, r.Digest()); !errors.Is(err, dataplane.ErrNetworkPolicyReplacement) || !errors.Is(err, dataplane.ErrRuntimeInactivity) || !adapter.live || !reflect.DeepEqual(e.app.Store.Get(), before) {
+		t.Fatal("live generation disappeared without a verified cutover", err, adapter.steps)
+	}
+	if !reflect.DeepEqual(adapter.steps[steps:], []string{"observe-inactive"}) {
+		t.Fatal("refused replacement entered a mutation phase", adapter.steps[steps:])
+	}
+	// Use the existing Stop/deactivation protocol under fresh SAME App
+	// admission, then independently observe every actual registered owner.
+	ctx, release, err := e.app.privateExclusiveOperation(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, stopErr := e.app.Dataplane.Deactivate(ctx)
+	inactiveErr := e.app.Dataplane.VerifyRuntimeInactive(ctx)
+	release()
+	if stopErr != nil || inactiveErr != nil || report.State != "deactivated" || adapter.live {
+		t.Fatal("existing deactivation did not settle owned runtime", report, stopErr, inactiveErr)
+	}
+	// Stopped metadata alone still cannot waive an unknown owner observation.
+	adapter.verified = false
+	r, err = e.Review(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	steps = len(adapter.steps)
+	if _, err := e.Execute(context.Background(), r, r.Digest()); !errors.Is(err, dataplane.ErrNetworkPolicyReplacement) || !errors.Is(err, dataplane.ErrRuntimeInactivity) || !reflect.DeepEqual(e.app.Store.Get(), before) {
+		t.Fatal("unknown inactivity was accepted after deactivation", err, adapter.steps)
+	}
+	if !reflect.DeepEqual(adapter.steps[steps:], []string{"observe-inactive"}) {
+		t.Fatal("unknown inactivity entered a mutation phase", adapter.steps[steps:])
+	}
+	adapter.verified = true
+	r, err = e.Review(context.Background(), nil)
+	if err != nil {
+		t.Fatal("verified inactive runtime could not review the empty replacement", err)
 	}
 	execution, err := e.Execute(context.Background(), r, r.Digest())
 	if err != nil || execution.State != "committed" || adapter.live || !slices.Contains(adapter.steps, "verify-inactive") || len(e.app.Store.Get().AppliedServices) != 0 {
