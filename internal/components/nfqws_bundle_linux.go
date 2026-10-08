@@ -34,20 +34,34 @@ func publishManagedNFQWS(ctx context.Context, directory, stage, generation strin
 		return err
 	}
 	defer staged.Close()
+	original, err := staged.Stat()
+	if err != nil {
+		return err
+	}
+	// Seal and sync before short publication admission. UpdateStarted already
+	// accepts this exact immutable stage after a crash; no generation is visible.
+	if err := staged.Chmod(0555); err != nil {
+		return err
+	}
+	if err := staged.Sync(); err != nil {
+		return err
+	}
+	if fault != nil {
+		if err := fault("after:bundle-stage-chmod"); err != nil {
+			return err // preserve the exact sealed-stage crash cut
+		}
+	}
+	published := false
 	if err := admission(func() error {
-		if err := staged.Chmod(0555); err != nil {
-			return err
-		}
-		if fault != nil {
-			if err := fault("after:bundle-stage-chmod"); err != nil {
-				return err // simulate the crash cut: preserve the sealed stage
-			}
-		}
-		if err := unix.Renameat2(int(fd.Fd()), stage, int(fd.Fd()), generation, unix.RENAME_NOREPLACE); err != nil {
-			return errors.Join(err, staged.Chmod(0700))
-		}
-		return nil
+		renameErr := unix.Renameat2(int(fd.Fd()), stage, int(fd.Fd()), generation, unix.RENAME_NOREPLACE)
+		published = renameErr == nil
+		return renameErr
 	}); err != nil {
+		if !published {
+			// A known refusal restores only our still-held unpublished stage.
+			// A rename followed by an admission error keeps the generation sealed.
+			return errors.Join(err, staged.Chmod(original.Mode().Perm()), staged.Sync())
+		}
 		return err
 	}
 	return staged.Sync()
