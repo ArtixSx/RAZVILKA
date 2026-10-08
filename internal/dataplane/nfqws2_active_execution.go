@@ -38,6 +38,8 @@ type nfqws2ActiveExecution struct {
 	binding        *NFQWSScopedBinding
 	prepared       *NFQWSPreparedHandle
 	started        bool
+	launchInvoked  bool
+	preparationErr error
 	retired        bool
 }
 
@@ -415,10 +417,16 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 	ctx = context.WithValue(ctx, nfqwsExecutionActiveReadbackKey{}, activeReadback)
 	r, err := AcquireNFQWSExecutionResource(ctx, e.spec.Clone())
 	if err != nil {
+		e.mu.Lock()
+		e.preparationErr = err
+		e.mu.Unlock()
 		return err
 	}
 	e.resource = r
 	if err := r.configureActive(ctx, e.material.command); err != nil {
+		e.mu.Lock()
+		e.preparationErr = err
+		e.mu.Unlock()
 		return err
 	}
 	e.binding, err = NewTypedNFQWSScopedBinding(e.material.provider, &e.inventory, NFQWSScopedBinding{
@@ -431,6 +439,9 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 			return e.process(c, p, true)
 		}})
 	if err != nil {
+		e.mu.Lock()
+		e.preparationErr = err
+		e.mu.Unlock()
 		return err
 	}
 	admission := nfqws2ActiveProcessAdmission{Binding: r.Binding(), Spec: r.Plan().Spec(), Provider: e.material.provider,
@@ -463,6 +474,9 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 			}
 			return p.VerifyOwnerObservation(c, obs)
 		}}
+	e.mu.Lock()
+	e.launchInvoked = true // Sticky even when the producer returns nil/unknown.
+	e.mu.Unlock()
 	p, startErr := e.material.adapter.startPreparedNFQWSProcess(ctx, e.panel, e.material.command, nil, admission)
 	e.mu.Lock()
 	if e.prepared == nil {
@@ -499,12 +513,15 @@ func (e *nfqws2ActiveExecution) health(ctx context.Context) error {
 }
 
 func (e *nfqws2ActiveExecution) rollback(ctx context.Context) error {
+	e.mu.Lock()
+	started, invoked, retired, p := e.started, e.launchInvoked, e.retired, e.prepared
+	e.mu.Unlock()
+	if started && !invoked && !retired {
+		return e.settleUnlaunched(ctx, e.observeUnlaunched)
+	}
 	if err := e.cleanupCurrent(ctx); err != nil {
 		return err
 	}
-	e.mu.Lock()
-	started, retired, p := e.started, e.retired, e.prepared
-	e.mu.Unlock()
 	if retired {
 		return e.cleanupCurrent(ctx)
 	}
@@ -581,7 +598,7 @@ func (e *nfqws2ActiveExecution) verifyRollback(ctx context.Context) (bool, error
 		return false, err
 	}
 	e.mu.Lock()
-	retired, started, prepared := e.retired, e.started, e.prepared
+	retired, invoked, prepared := e.retired, e.launchInvoked, e.prepared
 	e.mu.Unlock()
 	if !retired {
 		return false, ErrNFQWSScopedOwner
@@ -592,7 +609,7 @@ func (e *nfqws2ActiveExecution) verifyRollback(ctx context.Context) (bool, error
 	if associated {
 		return false, ErrNFQWSScopedOwner
 	}
-	if started {
+	if invoked {
 		if prepared == nil || prepared.owner == nil || !nfqws2ActiveDone(prepared.owner.done) || prepared.owner.result == nil {
 			return false, ErrNFQWSScopedOwner
 		}
