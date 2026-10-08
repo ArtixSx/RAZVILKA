@@ -72,7 +72,18 @@ func selfUpdateReadTree(t *testing.T, root string) map[string][]byte {
 
 func selfUpdateReadFixture(t *testing.T, stopped bool) (string, selfUpdateJournalRoots) {
 	t.Helper()
-	base := filepath.Join(t.TempDir(), "private")
+	// This Linux-root-only fixture exercises the real deployment scanner,
+	// which rejects writable ancestors such as /tmp, even with a private leaf.
+	parent, err := os.MkdirTemp("/root", ".razvilka-reader-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(parent); err != nil {
+			t.Error(err)
+		}
+	})
+	base := filepath.Join(parent, "private")
 	if err := os.Mkdir(base, 0700); err != nil {
 		t.Fatal(err)
 	}
