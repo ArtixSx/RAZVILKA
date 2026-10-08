@@ -149,3 +149,15 @@ fresh post-Apply owner; preservation/current-negative route compatibility OPS
 при restore/recovery; actual COMMON/NFQ/Linux client acceptance. Прежний third-
 config-image recovery fence не ослаблен. DTO/hash/старый runtime snapshot не
 заменяют актуальный owner, и этот пакет не объявляет такие проверки пройденными.
+
+Следующая законченная порция: `defaultconsent.Review.CheckProbeTarget(ctx,
+hostname, pins []netip.Addr)` проверяет hostname и весь набор literal pins через
+реальный retained source/control/config owner до диагностического leaf. Это
+отрицания domain/IP; actual primary/aux service-kind catalog classification,
+client intent и positive path остаются обязательными в original App review.
+Нет DNS/dial/callback effect под Store RLock. Zero/copied/released/stale handle
+отклоняется. Excluded даёт `ErrProbeTargetExcluded`, неопределённый target —
+`ErrProbeTargetUnknown`; producer не должен классифицировать это как bad node.
+Windows defaultconsent1.256s и vet PASS, Linux amd64/arm64 vet/test cross-build
+PASS; реального Linux/native probe CORE не выполнял. Бинарники Root:
+`.review-local/core-probe-target-linux-{amd64,arm64}.test`.
