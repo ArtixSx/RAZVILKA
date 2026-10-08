@@ -17,19 +17,17 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/defaultconsent"
 )
 
 const defaultRouteRuleLimit = 1024
 
 var ErrDefaultRouteCapability = errors.New("NETWORK_POLICY_EXECUTOR_REQUIRED")
 
-// DefaultRouteAuthority is read from the shared durable control owner. A
-// snapshot is a review binding; only Admit below grants mutation authority.
-type DefaultRouteAuthority struct {
-	InstallationID string
-	Sequence       uint64
-	ConsentDigest  string
-}
+// DefaultRouteAuthority is the original scope owner's comparison reference.
+// It carries no provider or engine permission and cannot recreate its private
+// ScopeReview. Actual admission retains that owner separately from this snapshot.
+type DefaultRouteAuthority = defaultconsent.Reference
 
 // DefaultRouteDevice extends the platform's MAC binding with currently
 // confirmed addresses. Excluded MACs also remain negative runtime gates: a
@@ -123,7 +121,7 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 	if cfg.SafeMode || cfg.ServiceControl.Stopped || snapshot.Stopped || cfg.Revision == 0 || cfg.Revision == ^uint64(0) || now.IsZero() {
 		return nil, dataplane.ErrReviewChanged
 	}
-	if snapshot.Authority.InstallationID == "" || snapshot.Authority.Sequence == 0 || !defaultRouteHash(snapshot.Authority.ConsentDigest) {
+	if !defaultRouteScopeReferenceValid(cfg, snapshot.Authority) {
 		return nil, fmt.Errorf("%w: control review binding unavailable", ErrDefaultRouteCapability)
 	}
 	if snapshot.DNSMode != "baseline" {

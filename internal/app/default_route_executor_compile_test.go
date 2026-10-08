@@ -25,7 +25,7 @@ func defaultRouteFixture() (config.Config, DefaultRouteSnapshot, time.Time) {
 		Devices:  []autonomy.DeviceBinding{{ID: "included", MAC: "02:00:00:00:00:01", Interface: "br0", SegmentID: "home", Confirmed: true}, {ID: "excluded", MAC: "02:00:00:00:00:02", Interface: "br0", SegmentID: "home", Confirmed: true}}},
 		Devices:           []DefaultRouteDevice{{ID: "included", Addresses: []netip.Addr{netip.MustParseAddr("192.168.1.40"), netip.MustParseAddr("fd00::40")}}, {ID: "excluded", Addresses: []netip.Addr{netip.MustParseAddr("192.168.1.50"), netip.MustParseAddr("fd00::50")}}},
 		Paths:             map[string]DefaultRoutePath{"default": {Selected: "wireguard", Resolved: "wireguard:reserve", WireGuardProfileRevision: strings.Repeat("6", 64), ProfileDigest: strings.Repeat("1", 64), ProofDigest: strings.Repeat("2", 64), ProbeURL: "https://example.com/"}},
-		ProfileGeneration: 1, Authority: DefaultRouteAuthority{InstallationID: "installation-current", Sequence: 5, ConsentDigest: strings.Repeat("3", 64)}, AllowedDefaultRoutes: []string{"wireguard"}, DNSMode: "baseline"}
+		ProfileGeneration: 1, Authority: DefaultRouteAuthority{Schema: 1, InstallationID: strings.Repeat("a", 32), Sequence: 5, ApprovalRevision: 7, PolicyRevision: cfg.NetworkPolicy.Revision, ConsentDigest: strings.Repeat("3", 64)}, AllowedDefaultRoutes: []string{"wireguard"}, DNSMode: "baseline"}
 	cfg.Services["listed"] = config.ServiceState{Enabled: true, Route: "wireguard"}
 	snapshot.Paths["listed"] = snapshot.Paths["default"]
 	return cfg, snapshot, now
@@ -255,12 +255,19 @@ func TestDefaultRouteSelectedDevicesRequiresCompletePhysicalBindings(t *testing.
 
 func TestDefaultRouteRefusesUnavailableAndAmbiguousInputs(t *testing.T) {
 	for name, mutate := range map[string]func(*config.Config, *DefaultRouteSnapshot){
-		"safe mode":       func(c *config.Config, _ *DefaultRouteSnapshot) { c.SafeMode = true },
-		"stop":            func(c *config.Config, _ *DefaultRouteSnapshot) { c.ServiceControl.Stopped = true },
-		"durable stop":    func(_ *config.Config, s *DefaultRouteSnapshot) { s.Stopped = true },
-		"expired":         func(_ *config.Config, s *DefaultRouteSnapshot) { s.Scope.FreshUntil = s.Scope.ObservedAt },
-		"missing binding": func(_ *config.Config, s *DefaultRouteSnapshot) { s.Authority.ConsentDigest = "" },
-		"missing control": func(_ *config.Config, s *DefaultRouteSnapshot) { s.Authority.InstallationID = "" },
+		"safe mode":        func(c *config.Config, _ *DefaultRouteSnapshot) { c.SafeMode = true },
+		"stop":             func(c *config.Config, _ *DefaultRouteSnapshot) { c.ServiceControl.Stopped = true },
+		"durable stop":     func(_ *config.Config, s *DefaultRouteSnapshot) { s.Stopped = true },
+		"expired":          func(_ *config.Config, s *DefaultRouteSnapshot) { s.Scope.FreshUntil = s.Scope.ObservedAt },
+		"missing binding":  func(_ *config.Config, s *DefaultRouteSnapshot) { s.Authority.ConsentDigest = "" },
+		"missing control":  func(_ *config.Config, s *DefaultRouteSnapshot) { s.Authority.InstallationID = "" },
+		"scope schema":     func(_ *config.Config, s *DefaultRouteSnapshot) { s.Authority.Schema = 0 },
+		"missing approval": func(_ *config.Config, s *DefaultRouteSnapshot) { s.Authority.ApprovalRevision = 0 },
+		"future approval":  func(c *config.Config, s *DefaultRouteSnapshot) { s.Authority.ApprovalRevision = c.Revision + 1 },
+		"policy revision":  func(_ *config.Config, s *DefaultRouteSnapshot) { s.Authority.PolicyRevision++ },
+		"provider reference": func(_ *config.Config, s *DefaultRouteSnapshot) {
+			s.Authority.EngineID, s.Authority.Resolved = "wireguard", "wireguard:reserve"
+		},
 		"missing profile": func(_ *config.Config, s *DefaultRouteSnapshot) { s.Paths = nil },
 		"auto unresolved": func(c *config.Config, _ *DefaultRouteSnapshot) {
 			c.Services["listed"] = config.ServiceState{Enabled: true, Route: "auto"}
@@ -313,12 +320,13 @@ func TestDefaultRouteReviewIdentityAndDefensiveCopies(t *testing.T) {
 		t.Fatal("renewed unchanged scope changed identity", err)
 	}
 	for name, mutate := range map[string]func(*DefaultRouteSnapshot){
-		"network": func(s *DefaultRouteSnapshot) { s.Scope.NetworkID = "wan-222222222222" },
-		"scope":   func(s *DefaultRouteSnapshot) { s.Scope.Revision++ },
-		"epoch":   func(s *DefaultRouteSnapshot) { s.Authority.Sequence++ },
-		"consent": func(s *DefaultRouteSnapshot) { s.Authority.ConsentDigest = strings.Repeat("6", 64) },
-		"profile": func(s *DefaultRouteSnapshot) { s.ProfileGeneration++ },
-		"node":    func(s *DefaultRouteSnapshot) { s.NodeGeneration++ },
+		"network":  func(s *DefaultRouteSnapshot) { s.Scope.NetworkID = "wan-222222222222" },
+		"scope":    func(s *DefaultRouteSnapshot) { s.Scope.Revision++ },
+		"epoch":    func(s *DefaultRouteSnapshot) { s.Authority.Sequence++ },
+		"consent":  func(s *DefaultRouteSnapshot) { s.Authority.ConsentDigest = strings.Repeat("6", 64) },
+		"approval": func(s *DefaultRouteSnapshot) { s.Authority.ApprovalRevision++ },
+		"profile":  func(s *DefaultRouteSnapshot) { s.ProfileGeneration++ },
+		"node":     func(s *DefaultRouteSnapshot) { s.NodeGeneration++ },
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := defaultRouteClone(s)
