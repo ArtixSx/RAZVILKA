@@ -8,6 +8,9 @@ const resourceExclusionsHTMLCache = new WeakMap();
 function resourceExclusionsCurrent() {
   return state.authenticated === true && state.dataLoad?.resourceExclusions?.phase === 'ready' ? state.resourceExclusions : null;
 }
+function resourceExclusionsSupported() {
+  return resourceExclusionsCurrent()?.manualEditable===true;
+}
 function interfaceExclusionMap() {
   return window.RazvilkaInterfaceModel.resourceServiceExclusions(resourceExclusionsCurrent());
 }
@@ -37,16 +40,17 @@ function resourceExclusionsListHTML(rows, query='', page=0, edit=false, list='ma
 function resourceExclusionsServicesHTML(query='') {
   const snapshot=resourceExclusionsCurrent();
   if (!snapshot) return '<p class="r5-caption">Список исключений пока не подтверждён. Обновите состояние.</p>';
-  return `<div class="exclusion-head"><h3>Без обхода</h3><button class="secondary" type="button" data-rz-nav="exclusions">Изменить исключения</button></div><p class="r5-caption">Ручные записи и принятый российский каталог. Исключения устройств находятся отдельно. Здесь показана сохранённая политика; применение маршрутов ещё не подтверждено.</p>${resourceExclusionsListHTML(resourceExclusionsRows(snapshot),query,resourceExclusionsEditor.servicesPage,false,'services')}`;
+  return `<div class="exclusion-head"><h3>Без обхода</h3><button class="secondary" type="button" data-rz-nav="exclusions">Изменить исключения</button></div><p class="r5-caption">Ручные записи и принятый российский каталог. Исключения устройств находятся отдельно. ${snapshot.storageState==='inactive'?'Исключения сохранены до настройки домашней сети. Сохранение списка не включает обход.':'Здесь показана сохранённая политика; применение маршрутов ещё не подтверждено.'}</p>${resourceExclusionsListHTML(resourceExclusionsRows(snapshot),query,resourceExclusionsEditor.servicesPage,false,'services')}`;
 }
 function renderResourceExclusions() {
   const root=document.getElementById('resourceExclusionsContent');if(!root)return;
-  const e=resourceExclusionsEditor,snapshot=state.authenticated?state.resourceExclusions:null,ready=!!resourceExclusionsCurrent(),writable=ready&&snapshot.policy_revision>0&&!e.pending&&!e.conflict&&!e.unknown;
+  const e=resourceExclusionsEditor,snapshot=state.authenticated?state.resourceExclusions:null,ready=!!resourceExclusionsCurrent(),writable=ready&&snapshot.manualEditable&&!e.pending&&!e.conflict&&!e.unknown;
+  const sourceWritable=writable&&snapshot.scopeConfigured;
   const focused=document.activeElement?.closest?.('[data-rz-focus]'), focus=focused?.getAttribute('data-rz-focus'), selection=typeof focused?.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null;
   const open=new Set([...root.querySelectorAll('details[data-resource-section]')].filter(el=>el.open).map(el=>el.dataset.resourceSection));
   const currentKinds={service:'Сервис',exact:'Точный домен',suffix:'Домен и поддомены',ip:'IP-адрес',cidr:'Сеть IP'};
   const draftRows=e.draft.map(row=>({kind:row.kind,value:row.value,label:row.kind==='service'?(state.services||[]).find(s=>s.id===row.value)?.name||row.value:row.value,typeLabel:currentKinds[row.kind],originLabel:'Добавлено вручную',reason:'Ручное исключение ресурса',activeIntent:true}));
-  const absent=!snapshot?'<p>Читаем сохранённые исключения ресурсов…</p>':snapshot.policy_revision===0?'<p>Область домашней сети ещё не сохранена. Редактор исключений недоступен.</p>':'';
+  const absent=!snapshot?'<p>Читаем сохранённые исключения ресурсов…</p>':snapshot.storageState==='inactive'?'<p>Исключения можно сохранить заранее. Они сохранятся при настройке области домашней сети. Обход и разрешения этим действием не включаются.</p>':!snapshot.scopeConfigured?'<p>Область домашней сети ещё не сохранена. Редактор исключений недоступен.</p>':'';
   const stale=snapshot&&!ready?'<p role="status">Новые данные не получены. Показан последний список; сохранение недоступно.</p>':'';
   const pending=e.pending?'<p role="status">Сохраняем список и сверяем ответ…</p>':'';
   const conflict=e.conflict?'<p role="status">Настройки изменились после начала редактирования. Черновик сохранён. Обновите список и загрузите сохранённые записи перед новым изменением.</p>':'';
@@ -58,7 +62,7 @@ function renderResourceExclusions() {
     <p class="r5-caption">Сервис выбирается из каталога. «Домен и поддомены» задаётся явно. Проверка домена, IP и CIDR выполняется при сохранении.</p>
     <label class="resource-search">Поиск по записям<input id="resourceExclusionSearch" type="search" value="${esc(e.query)}" data-rz-focus="resource-search"/></label><h4>Ручные исключения${e.dirty?' · черновик':''}</h4>${resourceExclusionsListHTML(draftRows,e.query,e.page,writable)}
     <div class="resource-save"><button class="primary" type="button" data-resource-save${writable&&e.dirty?'':' disabled'}>Сохранить исключения</button><button class="secondary" type="button" data-resource-reset${ready&&!e.pending?'':' disabled'}>Загрузить сохранённые</button></div>
-    <details class="exclusion-stock" data-resource-section="russian"><summary>Российский каталог · ${russian.rows.length}${russian.enabled?' · включён':' · выключен'}</summary><p class="r5-caption">${russian.present?`Принятый каталог: ${esc(russian.catalogID)} · Ревизия ${russian.revision}. Последний принятый снимок сохраняется при выключении. Обновление каталога само по себе не включает обход.`:'Принятого снимка российского каталога пока нет.'}</p><label class="exclusion-toggle"><input id="resourceRussianEnabled" type="checkbox"${e.russianEnabled?' checked':''}${writable&&(russian.present||snapshot.russian_enabled)?'':' disabled'}/>Использовать принятый российский каталог</label><label class="exclusion-toggle"><input id="resourceRussianAuto" type="checkbox"${e.autoUpdate?' checked':''}${writable&&russian.present&&e.russianEnabled?'':' disabled'}/>Разрешить обновления принятого источника</label>${resourceExclusionsListHTML(russian.rows,e.query,e.russianPage,false,'russian')}</details>
+    <details class="exclusion-stock" data-resource-section="russian"><summary>Российский каталог · ${russian.rows.length}${russian.enabled?' · включён':' · выключен'}</summary><p class="r5-caption">${russian.present?`Принятый каталог: ${esc(russian.catalogID)} · Ревизия ${russian.revision}. Последний принятый снимок сохраняется при выключении. Обновление каталога само по себе не включает обход.`:'Принятого снимка российского каталога пока нет.'}</p><label class="exclusion-toggle"><input id="resourceRussianEnabled" type="checkbox"${e.russianEnabled?' checked':''}${sourceWritable&&(russian.present||snapshot.russian_enabled)?'':' disabled'}/>Использовать принятый российский каталог</label><label class="exclusion-toggle"><input id="resourceRussianAuto" type="checkbox"${e.autoUpdate?' checked':''}${sourceWritable&&russian.present&&e.russianEnabled?'':' disabled'}/>Разрешить обновления принятого источника</label>${resourceExclusionsListHTML(russian.rows,e.query,e.russianPage,false,'russian')}</details>
     ${snapshot.legacy.length?`<details class="exclusion-stock" data-resource-section="legacy"><summary>Ранее сохранённые правила · ${snapshot.legacy.length}</summary><p class="r5-caption">Показаны с прежней областью устройств. Этот редактор меняет только новый ручной список.</p>${resourceExclusionsListHTML(snapshot.legacy,e.query,e.legacyPage,false,'legacy')}</details>`:''}
     <details class="exclusion-stock" data-resource-section="devices"><summary>Исключения устройств — отдельно</summary><p>Устройства без обхода: ${clients.excluded_device_ids.length}. Сети IP без обхода: ${clients.excluded_cidrs.length}.</p>${clients.excluded_device_ids.length?`<p>${esc(clients.excluded_device_ids.join(', '))}</p>`:''}${clients.excluded_cidrs.length?`<p>${esc(clients.excluded_cidrs.join(', '))}</p>`:''}<p class="r5-caption">Сохранённая область: домашних сегментов ${clients.segment_ids.length}, выбранных устройств ${clients.device_ids.length}. Эти данные не подтверждают действующий маршрут.</p><button class="secondary" type="button" data-rz-nav="devices">Открыть устройства</button></details>`:''}</article>`;
   if(resourceExclusionsHTMLCache.get(root)===html)return;
@@ -69,7 +73,7 @@ function renderResourceExclusions() {
 }
 function resourceExclusionsCanEdit() {
   const e=resourceExclusionsEditor,snapshot=resourceExclusionsCurrent();
-  return !!snapshot && snapshot.policy_revision>0 && state.currentView==='exclusions' && !e.pending && !e.conflict && !e.unknown;
+  return !!snapshot && snapshot.manualEditable && state.currentView==='exclusions' && !e.pending && !e.conflict && !e.unknown;
 }
 function resourceExclusionsAdd() {
   if(!resourceExclusionsCanEdit())return;
@@ -80,12 +84,13 @@ function resourceExclusionsAdd() {
   e.draft.push({kind:e.kind,value});e.value='';e.dirty=true;e.message='Запись добавлена в черновик. Нажмите «Сохранить исключения».';renderResourceExclusions();
 }
 function resourceExclusionsReceiptMatches(a,b) {
-  return ['policy_revision','exclusion_revision','russian_enabled','russian_auto_update_allowed'].every(k=>a[k]===b[k]) && b.revision>=a.revision
+  return ['policy_revision','exclusion_revision','scopeConfigured','storageState','russian_enabled','russian_auto_update_allowed'].every(k=>a[k]===b[k]) && b.revision>=a.revision
     && JSON.stringify(a.view)===JSON.stringify(b.view) && a.effective.digest===b.effective.digest;
 }
 async function saveResourceExclusions() {
   const e=resourceExclusionsEditor;if(!resourceExclusionsCanEdit()||!e.dirty||!e.base)return;
   const base=e.base,ticket={epoch:e.epoch,auth:state.authGeneration||0};
+  if(!base.scopeConfigured&&(e.russianEnabled!==base.russian_enabled||e.autoUpdate!==base.russian_auto_update_allowed)){e.message='До настройки области сети можно сохранить только ручные исключения.';renderResourceExclusions();return;}
   const current=()=>e.pending===ticket&&e.epoch===ticket.epoch&&state.authenticated&&(state.authGeneration||0)===ticket.auth;
   const body={expected_revision:base.revision,expected_policy_revision:base.policy_revision,expected_exclusion_revision:base.exclusion_revision,manual:e.draft.map(row=>({kind:row.kind,value:row.value}))};
   if(e.russianEnabled!==base.russian_enabled)body.russian_enabled=e.russianEnabled;
@@ -95,14 +100,16 @@ async function saveResourceExclusions() {
   try {
     const result=await interfaceRequest(resourceExclusionsPath,{method:'POST',body:JSON.stringify(body)});if(!current())return;
     receipt=window.RazvilkaInterfaceModel.resourceExclusionSnapshot(result,state.services||[]);
-    if(!receipt || receipt.revision<=base.revision || receipt.policy_revision<=base.policy_revision || receipt.exclusion_revision<=base.exclusion_revision)throw new Error('Ответ сохранения не подтверждён.');
+    if(!receipt || receipt.revision<=base.revision || receipt.exclusion_revision<=base.exclusion_revision
+      || receipt.storageState!==base.storageState || receipt.scopeConfigured!==base.scopeConfigured
+      || (base.scopeConfigured?receipt.policy_revision<=base.policy_revision:receipt.policy_revision!==0))throw new Error('Ответ сохранения не подтверждён.');
     // A separate uncached GET verifies stored data; no mutation is replayed.
     if(typeof cancelPanelRefresh==='function')cancelPanelRefresh();
     const value=await interfaceRequest(resourceExclusionsPath);if(!current())return;
     const read=window.RazvilkaInterfaceModel.resourceExclusionSnapshot(value,state.services||[]);
     if(!read||!resourceExclusionsReceiptMatches(receipt,read))throw new Error('Сохранённый список ещё не подтверждён независимым чтением.');
     acceptPanelSection('resourceExclusions',value,Date.now());
-    resourceExclusionsReset(read);e.unknown=false;e.message='Исключения сохранены. Применение маршрутов ещё не подтверждено.';
+    resourceExclusionsReset(read);e.unknown=false;e.message=read.storageState==='inactive'?'Ручные исключения сохранены до настройки области сети. Обход не включён.':'Исключения сохранены. Применение маршрутов ещё не подтверждено.';
   } catch(error) {
     if(!current())return;
     const code=error.payload?.code||'';
@@ -124,8 +131,8 @@ function bindResourceExclusions() {
     if(!resourceExclusionsCanEdit())return;const e=resourceExclusionsEditor;
     if(event.target.id==='resourceExclusionKind'){e.kind=event.target.value;e.value='';renderResourceExclusions();}
     if(event.target.id==='resourceExclusionValue')e.value=event.target.value;
-    if(event.target.id==='resourceRussianEnabled'){e.russianEnabled=event.target.checked;if(!e.russianEnabled)e.autoUpdate=false;e.dirty=true;renderResourceExclusions();}
-    if(event.target.id==='resourceRussianAuto'){e.autoUpdate=event.target.checked;e.dirty=true;renderResourceExclusions();}
+    if(event.target.id==='resourceRussianEnabled'&&resourceExclusionsCurrent().scopeConfigured){e.russianEnabled=event.target.checked;if(!e.russianEnabled)e.autoUpdate=false;e.dirty=true;renderResourceExclusions();}
+    if(event.target.id==='resourceRussianAuto'&&resourceExclusionsCurrent().scopeConfigured){e.autoUpdate=event.target.checked;e.dirty=true;renderResourceExclusions();}
   });
   document.addEventListener('click',event=>{
     const button=event.target.closest('button');if(!button||button.disabled)return;const e=resourceExclusionsEditor;

@@ -37,9 +37,9 @@
         || !matches(e.manual) || !matches(e.russian) || !Array.isArray(e.legacy_rules) || !strings(e.broad_tlds)) return null;
       const c=e.clients, r=e.legacy_russian;
       if (!c || !['','selected_devices','lan_except'].includes(c.mode) || !['','inherit','base'].includes(c.new_devices)
-        || !['segment_ids','device_ids','excluded_device_ids','excluded_cidrs'].every(k=>strings(c[k]))
+        || !['segment_ids','device_ids','excluded_device_ids','excluded_cidrs'].every(k=>Object.hasOwn(c,k)&&strings(c[k]))
         || !r || typeof r.enabled !== 'boolean' || typeof r.auto_update_allowed !== 'boolean' || !revision(r.revision)
-        || !strings(r.service_ids) || !strings(r.broad_tlds)
+        || !Object.hasOwn(r,'service_ids') || !Object.hasOwn(r,'broad_tlds') || !strings(r.service_ids) || !strings(r.broad_tlds)
         || e.legacy_rules.some(rule=>!rule || typeof rule.id !== 'string' || !revision(rule.revision) || rule.action !== 'direct' || typeof rule.mandatory !== 'boolean' || !strings(rule.device_ids) || !matches([rule]))) return null;
       if (e.russian_snapshot != null && !resourceExclusionView({schema:1,revision:e.revision,manual:[],russian_snapshot:e.russian_snapshot},e.russian_enabled).available) return null;
       return {policy_revision:e.policy_revision,revision:e.revision,russian_enabled:e.russian_enabled,digest:e.digest,
@@ -49,12 +49,21 @@
         legacy_rules:e.legacy_rules.map(rule=>({id:rule.id,revision:rule.revision,kind:rule.kind,value:rule.value,action:'direct',mandatory:rule.mandatory,device_ids:[...(rule.device_ids||[])]})),
         russian_snapshot:e.russian_snapshot == null?null:{catalog_id:e.russian_snapshot.catalog_id,revision:e.russian_snapshot.revision,digest:e.russian_snapshot.digest,entries:copyMatches(e.russian_snapshot.entries)}};
     };
-    if (!value || value.ok !== true || value.live_applied !== false || !['revision','policy_revision','exclusion_revision','applied_revision'].every(k=>revision(value[k]))
+    if (!value || value.ok !== true || value.live_applied !== false || !Object.hasOwn(value,'resource_exclusions') || !['revision','policy_revision','exclusion_revision','applied_revision'].every(k=>revision(value[k]))
       || !['russian_enabled','russian_auto_update_allowed','desired_matches_applied'].every(k=>typeof value[k] === 'boolean')) return null;
     const view=resourceExclusionView(value.resource_exclusions,value.russian_enabled,services), desired=effective(value.effective), applied=effective(value.applied_effective);
     if (!view.available || !desired || !applied || desired.policy_revision !== value.policy_revision || desired.revision !== value.exclusion_revision
       || desired.russian_enabled !== value.russian_enabled || view.revision !== value.exclusion_revision || !sameMatches(view.manual,desired.manual)
       || value.russian_auto_update_allowed && !value.russian_enabled) return null;
+    const explicitStorage=Object.hasOwn(value,'scope_configured')||Object.hasOwn(value,'storage_state');
+    if(explicitStorage&&(typeof value.scope_configured!=='boolean'||!['inactive','configured'].includes(value.storage_state)
+      || value.scope_configured!==(value.storage_state==='configured')))return null;
+    const scopeConfigured=explicitStorage?value.scope_configured:value.policy_revision>0;
+    const storageState=explicitStorage?value.storage_state:scopeConfigured?'configured':'unavailable';
+    if(explicitStorage&&!scopeConfigured&&(value.policy_revision!==0||value.russian_enabled||value.russian_auto_update_allowed
+      || desired.clients.mode!==''||desired.clients.new_devices!==''||['segment_ids','device_ids','excluded_device_ids','excluded_cidrs'].some(k=>desired.clients[k].length)
+      || desired.legacy_rules.length))return null;
+    if(explicitStorage&&scopeConfigured&&!['selected_devices','lan_except'].includes(desired.clients.mode))return null;
     const expectedRussian=value.russian_enabled?[...view.russian.rows,...desired.legacy_russian.service_ids.map(value=>({kind:'service',value}))]:[];
     const uniqueRussian=[...new Map(expectedRussian.map(row=>[row.kind+'\n'+row.value,row])).values()];
     if(!sameMatches(uniqueRussian,desired.russian)
@@ -70,6 +79,7 @@
     for (const id of desired.legacy_russian.service_ids) if (!view.russian.rows.some(row=>row.kind==='service'&&row.value===id)) legacy.push({kind:'service',value:id,label:names.get(id)||id,typeLabel:'Сервис',origin:'legacy',originLabel:'Ранее сохранённое исключение',reason:'Явная запись прежней политики',deviceIDs:[],activeIntent:true});
     for (const tld of desired.broad_tlds) legacy.push({kind:'tld',value:tld,label:'.'+tld,typeLabel:'Явное правило зоны',origin:'legacy',originLabel:'Ранее сохранённое исключение',reason:'Явно выбранная зона прежней политики',deviceIDs:[],activeIntent:true});
     return {revision:value.revision,policy_revision:value.policy_revision,exclusion_revision:value.exclusion_revision,applied_revision:value.applied_revision,
+      scopeConfigured,storageState,manualEditable:scopeConfigured||storageState==='inactive',
       russian_enabled:value.russian_enabled,russian_auto_update_allowed:value.russian_auto_update_allowed,desired_matches_applied:value.desired_matches_applied,live_applied:false,
       view, effective:desired,applied_effective:applied,legacy};
   }

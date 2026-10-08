@@ -155,11 +155,11 @@ function renderInterfaceHome(summaries){
  const list=loaded?(state.services||[]):[];
  const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
  const counts=rim.humanCounts(list,summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'?consoleSnapshot?.runtime||{}:{},fresh&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready'),exclusions);
- const savedScope=typeof resourceExclusionsCurrent==='function'&&resourceExclusionsCurrent()?.policy_revision>0;
+ const resourceListKnown=typeof resourceExclusionsSupported==='function'&&resourceExclusionsSupported();
  consoleText('ui3HomeCount',loaded?counts.selected:'—');consoleText('ui3NavCount',loaded?counts.selected:'—');
  interfaceHomeAuto(ready);
  renderHomeEngineSummary(summaries,loaded,fresh);
- interfaceHTML('ui3HealthBanner',`<div class="r5-counts"><div><strong>${loaded?counts.selected:'—'}</strong><span>${savedScope?'В сохранённом списке обхода':'Добавлено сервисов'}</span></div><div><strong>${fresh?counts.good:'—'}</strong><span>Работают по проверке</span></div><div><strong>${fresh?counts.unconfirmed:'—'}</strong><span>Без подтверждения</span></div></div><p class="r5-caption">${savedScope?`Без обхода: ${Object.keys(exclusions).length} сервисов. Считаются сохранённые записи, применение исключений ещё не подтверждено. `:''}${!loaded?'Получаем сведения о сервисах.':!fresh?'Показан последний список. Свежая доступность пока неизвестна.':counts.selected?'Проверяется конкретный сценарий, а не все функции приложения.':counts.excluded?'Сохранённые сервисы находятся в исключениях.':'Сервисы пока не добавлены. Начните с настройки автопилота.'}</p>`);
+ interfaceHTML('ui3HealthBanner',`<div class="r5-counts"><div><strong>${loaded?counts.selected:'—'}</strong><span>${resourceListKnown?'В сохранённом списке обхода':'Добавлено сервисов'}</span></div><div><strong>${fresh?counts.good:'—'}</strong><span>Работают по проверке</span></div><div><strong>${fresh?counts.unconfirmed:'—'}</strong><span>Без подтверждения</span></div></div><p class="r5-caption">${resourceListKnown?`Без обхода: ${Object.keys(exclusions).length} сервисов. Считаются сохранённые записи, применение исключений ещё не подтверждено. `:''}${!loaded?'Получаем сведения о сервисах.':!fresh?'Показан последний список. Свежая доступность пока неизвестна.':counts.selected?'Проверяется конкретный сценарий, а не все функции приложения.':counts.excluded?'Сохранённые сервисы находятся в исключениях.':'Сервисы пока не добавлены. Начните с настройки автопилота.'}</p>`);
  const attention=counts.rows.filter(s=>s.member&&s.actionable).slice(0,3);
  // Without a decision for the owner, still name the services without a
  // confirmed result and what the autopilot is doing with them.
@@ -187,7 +187,7 @@ function renderInterfaceServices(summaries){
  }
  const all=interfaceServices(),isCatalog=interfaceState.filter==='all',isExcluded=interfaceState.filter==='excluded';
  const exclusionMap=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
- const exclusionsReady=typeof resourceExclusionsCurrent==='function'&&resourceExclusionsCurrent()?.policy_revision>0;
+ const exclusionsReady=typeof resourceExclusionsSupported==='function'&&resourceExclusionsSupported();
  if($('#resourceBypassTab'))$('#resourceBypassTab').textContent=exclusionsReady?'Обходить':'Мои сервисы';
  if($('#resourceExcludedTab'))$('#resourceExcludedTab').hidden=!exclusionsReady;
  $('#ui3ServiceCatalog').classList.toggle('ui3-list-layout',interfaceState.layout==='list');
