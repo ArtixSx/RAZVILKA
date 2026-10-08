@@ -2,11 +2,15 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
@@ -102,7 +106,28 @@ func TestInternalExclusiveContextRejectsForeignAppAndCancellation(t *testing.T) 
 
 func TestDefaultExecutorBorrowsActualHTTPExclusiveOperation(t *testing.T) {
 	defaultRouteRequireLinuxJournal(t)
-	e, _, adapter := defaultRouteExecutorFixture(t)
+	e, snapshot, adapter := defaultRouteExecutorFixture(t)
+	routes := defaultRouteListedRoutes()
+	// Save and load a CIDR-only test catalogue definition; this operation test
+	// uses no domain projection and does not claim native packet success.
+	catalogPath := filepath.Join(t.TempDir(), "catalog.json")
+	image, err := json.Marshal(catalog.Catalog{Services: []catalog.Service{{
+		ID: routes[0].ServiceID, Name: routes[0].ServiceName, Category: "Test",
+		CIDRs: routes[0].CIDRs, Strategy: []string{routes[0].Selected},
+		ProbeURL: snapshot.Paths[routes[0].ServiceID].ProbeURL,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(catalogPath, image, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.app.Catalog, err = catalog.Load(catalogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := e.app.Catalog.Services[0]
+	routes[0].ServiceName, routes[0].CIDRs, routes[0].ProbeURL = service.Name, service.CIDRs, service.ProbeURL
 	observe := e.deps.Observe
 	e.deps.Observe = func(ctx context.Context) (DefaultRouteSnapshot, error) {
 		if err := e.app.Operations.WithExclusiveContext(ctx, func() error { return nil }); err != nil {
@@ -111,9 +136,12 @@ func TestDefaultExecutorBorrowsActualHTTPExclusiveOperation(t *testing.T) {
 		return observe(ctx)
 	}
 	handler := e.app.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		review, err := e.Review(r.Context(), nil)
+		review, err := e.Review(r.Context(), routes)
 		if err != nil {
 			t.Fatal("review reentered request gate", err)
+		}
+		if len(review.Plan().Routes) == 0 {
+			t.Fatal("operation test did not review the listed CIDR route")
 		}
 		execution, err := e.Execute(r.Context(), review, review.Digest())
 		if err != nil || execution.State != "committed" {
