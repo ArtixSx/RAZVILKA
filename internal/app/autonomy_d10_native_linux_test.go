@@ -1171,7 +1171,7 @@ func d10NativeChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tunA, err := d10NativeOwnedTUN(ctx, filepath.Join(adapter.StateRoot, "runtime", "engine.json"))
+	tunA, err := d10NativeOwnedTUN(ctx, filepath.Join(adapter.StateRoot, "runtime", "sidecar.json"))
 	if err != nil {
 		t.Fatal("A owned TUN identity readback", d10NativeErrorClass(err))
 	}
@@ -1228,14 +1228,14 @@ func d10NativeChild(t *testing.T) {
 		kernel, err := d10NativeKernel(c)
 		if err == nil {
 			var tun d10NativeTUNIdentity
-			tun, err = d10NativeOwnedTUN(c, filepath.Join(adapter.StateRoot, "runtime", "engine.json"))
+			tun, err = d10NativeOwnedTUN(c, filepath.Join(adapter.StateRoot, "runtime", "sidecar.json"))
 			if err == nil {
 				err = d10NativeRestoredKernel(kernelA, kernel, tunA, tun)
 			}
 		}
 		if err != nil {
 			d10NativeKernelDiagnostic(t, kernelA, kernel)
-			d10NativeIPv6RollbackReceipt(t, kernelA, kernel, filepath.Join(adapter.StateRoot, "runtime", "engine.json"))
+			d10NativeIPv6RollbackReceipt(t, kernelA, kernel, filepath.Join(adapter.StateRoot, "runtime", "sidecar.json"))
 			return refuse("restored native A kernel differs", err)
 		}
 		rollbackSeen = true
@@ -1341,7 +1341,8 @@ type d10NativeTUNIdentity struct {
 	Configured []netip.Prefix
 }
 
-// Read the actual owned live interface and its exact configured addresses.
+// Read the actual owned live interface and its exact sidecar TUN addresses.
+// engine.json belongs to the separate SOCKS connector and contains no TUN.
 // This is fixture verification after production VerifyRollback, not authority.
 func d10NativeOwnedTUN(ctx context.Context, enginePath string) (d10NativeTUNIdentity, error) {
 	var identity d10NativeTUNIdentity
@@ -1363,8 +1364,8 @@ func d10NativeOwnedTUN(ctx context.Context, enginePath string) (d10NativeTUNIden
 			Type      string   `json:"type"`
 			Interface string   `json:"interface_name"`
 			Address   []string `json:"address"`
-			IPv4      string   `json:"inet4_address"`
-			IPv6      string   `json:"inet6_address"`
+			IPv4      []string `json:"inet4_address"`
+			IPv6      []string `json:"inet6_address"`
 		} `json:"inbounds"`
 	}
 	if json.Unmarshal(data, &doc) != nil {
@@ -1376,7 +1377,7 @@ func d10NativeOwnedTUN(ctx context.Context, enginePath string) (d10NativeTUNIden
 			continue
 		}
 		owned++
-		for _, raw := range append(inbound.Address, inbound.IPv4, inbound.IPv6) {
+		for _, raw := range append(append(inbound.Address, inbound.IPv4...), inbound.IPv6...) {
 			if raw == "" {
 				continue
 			}
@@ -1615,14 +1616,14 @@ func d10NativeIPv6RollbackReceipt(t *testing.T, before, after [][]byte, enginePa
 				Type      string   `json:"type"`
 				Interface string   `json:"interface_name"`
 				Address   []string `json:"address"`
-				IPv4      string   `json:"inet4_address"`
-				IPv6      string   `json:"inet6_address"`
+				IPv4      []string `json:"inet4_address"`
+				IPv6      []string `json:"inet6_address"`
 			} `json:"inbounds"`
 		}
 		if readErr == nil && len(data) <= 1<<20 && json.Unmarshal(data, &doc) == nil {
 			for _, inbound := range doc.Inbounds {
 				if inbound.Type == "tun" && inbound.Interface == "rz-sing" {
-					for _, address := range append(inbound.Address, inbound.IPv4, inbound.IPv6) {
+					for _, address := range append(append(inbound.Address, inbound.IPv4...), inbound.IPv6...) {
 						if _, err := netip.ParsePrefix(address); err == nil && len(retained) < 24 {
 							retained = append(retained, "configured owned TUN address: "+address)
 						}
