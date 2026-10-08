@@ -207,6 +207,17 @@ func (e *nfqws2ActiveExecution) cleanupCurrent(ctx context.Context) error {
 	if e == nil || e.cleanup == nil || e.material == nil || e.material.control == nil {
 		return ErrNFQWSScopedOwner
 	}
+	e.mu.Lock()
+	retired := e.retired
+	e.mu.Unlock()
+	if retired && e.resource != nil && e.resource.scope != nil {
+		e.resource.scope.mu.Lock()
+		final := e.resource.finalOwner != nil
+		e.resource.scope.mu.Unlock()
+		if final {
+			return e.retiredCleanupCurrent(ctx)
+		}
+	}
 	// A final owner uses the original trusted cleanup guard on this packet's
 	// fresh held App operation. A released activation borrow is never revived.
 	if e.resource != nil {
@@ -610,11 +621,22 @@ func (e *nfqws2ActiveExecution) verifyRollback(ctx context.Context) (bool, error
 		return false, ErrNFQWSScopedOwner
 	}
 	if invoked {
-		if prepared == nil || prepared.owner == nil || !nfqws2ActiveDone(prepared.owner.done) || prepared.owner.result == nil {
+		var owner *nfqws2ActiveOwner
+		if e.resource != nil && e.resource.scope != nil {
+			e.resource.scope.mu.Lock()
+			if e.resource.finalOwner != nil {
+				owner = e.resource.finalOwner.owner
+			}
+			e.resource.scope.mu.Unlock()
+		}
+		if owner == nil && prepared != nil {
+			owner = prepared.owner
+		}
+		if owner == nil || !nfqws2ActiveDone(owner.done) || owner.result == nil {
 			return false, ErrNFQWSScopedOwner
 		}
-		settled, err := prepared.owner.result()
-		if err != nil || !prepared.owner.known(settled) || !nfqws2ActiveProcessSettled(settled) {
+		settled, err := owner.result()
+		if err != nil || !owner.known(settled) || !nfqws2ActiveProcessSettled(settled) {
 			return false, errors.Join(ErrNFQWSScopedOwner, err)
 		}
 	}

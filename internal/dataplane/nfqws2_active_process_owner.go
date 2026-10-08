@@ -58,6 +58,7 @@ type nfqws2ActiveOwner struct {
 	activationCancel                  context.CancelFunc
 	prepared                          *NFQWSPreparedHandle
 	active                            *NFQWSActiveHandle
+	retiredActive                     *NFQWSActiveHandle
 	state                             string
 	finalACK, detached, stopRequested bool
 	committed, cleanup                NFQWSActiveGuard

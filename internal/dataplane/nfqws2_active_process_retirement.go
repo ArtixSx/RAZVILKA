@@ -119,6 +119,7 @@ func (a *NFQWS2Adapter) retireNFQWSProcess(ctx context.Context, o *nfqws2ActiveO
 			cancel()
 		}
 		o.state = "retired"
+		o.retiredActive = h // Only this successful original native/common close can retain it.
 		o.activation, o.activationCancel, o.prepared, o.active = nil, nil, nil, nil
 		o.committed, o.cleanup, o.retire = nil, nil, nil
 		o.admission.BeforeStart, o.admission.WithStart, o.admission.Current, o.admission.Prepared = nil, nil, nil, nil
