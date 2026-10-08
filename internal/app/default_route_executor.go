@@ -100,6 +100,13 @@ func (e *DefaultRouteExecutor) Review(ctx context.Context, services []dataplane.
 	if err != nil {
 		return nil, err
 	}
+	// The generic Route carries no port coverage. Only the separate actual
+	// managed owner may pair these exact tuples with its scoped NFQUEUE spec.
+	for _, rule := range c.rules {
+		if rule.Route == "nfqws2" {
+			return nil, fmt.Errorf("%w: managed NFQWS requires its exact traffic consumer", ErrDefaultRouteCapability)
+		}
+	}
 	previous, exists, err := e.app.Dataplane.Committed()
 	if err != nil {
 		return nil, err

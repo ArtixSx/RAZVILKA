@@ -18,6 +18,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/defaultconsent"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
 
 const defaultRouteRuleLimit = 1024
@@ -44,6 +45,7 @@ type DefaultRoutePath struct {
 	ProfileDigest, ProofDigest string
 	WireGuardProfileRevision   string
 	ProbeURL                   string
+	NFQWS                      *strategylab.SelectedCandidateReference // comparison only; original review remains with its owner
 }
 
 // DefaultRouteSnapshot is supplied by trusted application/platform readers.
@@ -64,6 +66,8 @@ type DefaultRouteSnapshot struct {
 type DefaultRouteRule struct {
 	ServiceID, Origin, Route, Ingress string
 	Source, Destination               netip.Prefix
+	Protocol                          string // empty for an unrestricted tunnel path
+	FirstPort, LastPort               uint16
 }
 
 type DefaultRouteIngress struct {
@@ -165,9 +169,6 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 		c.bindDigest(cfg.Revision)
 		return c, nil
 	}
-	if snapshot.ProfileGeneration == 0 {
-		return nil, dataplane.ErrReviewChanged
-	}
 	for _, list := range [][]config.ResourceMatch{exclusions.Manual, exclusions.Russian} {
 		for _, match := range list {
 			if match.Kind == "exact" || match.Kind == "suffix" {
@@ -202,6 +203,7 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 	// Sort active entries for stable identity, but refuse conflicts instead of
 	// making service order an undocumented routing priority.
 	var overrides []DefaultRouteRule
+	nfqwsService := ""
 	for _, service := range active {
 		state, exists := cfg.Services[service.ServiceID]
 		if !exists || !state.Enabled {
@@ -212,6 +214,14 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 		}
 		path, ok := snapshot.Paths[service.ServiceID]
 		if !ok || !defaultRoutePathValid(path) || path.Selected != selectedRoute(state) || service.Selected != path.Selected || service.Resolved != path.Resolved || !slices.Equal(service.Sources, state.Sources) {
+			return nil, dataplane.ErrReviewChanged
+		}
+		if path.NFQWS != nil {
+			if path.NFQWS.ServiceID != service.ServiceID || nfqwsService != "" {
+				return nil, fmt.Errorf("%w: managed NFQWS requires one exact selected service source", ErrDefaultRouteCapability)
+			}
+			nfqwsService = service.ServiceID
+		} else if snapshot.ProfileGeneration == 0 {
 			return nil, dataplane.ErrReviewChanged
 		}
 		if strings.HasPrefix(path.Resolved, "wireguard:") && (service.WireGuardProfileRevision != path.WireGuardProfileRevision ||
@@ -244,7 +254,15 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 				for _, src := range sources {
 					for _, dest := range defaultRouteIntersections(public, destinations) {
 						if src.Addr().Is4() == dest.Addr().Is4() {
-							overrides = append(overrides, DefaultRouteRule{service.ServiceID, "override", path.Resolved, gate.Interface, src, dest})
+							rule := DefaultRouteRule{ServiceID: service.ServiceID, Origin: "override", Route: path.Resolved, Ingress: gate.Interface, Source: src, Destination: dest}
+							if path.NFQWS == nil {
+								overrides = append(overrides, rule)
+							} else if src.Addr().Is4() == (path.NFQWS.IPFamily == "ipv4") {
+								for _, traffic := range path.NFQWS.Traffic {
+									rule.Protocol, rule.FirstPort, rule.LastPort = traffic.Protocol, traffic.First, traffic.Last
+									overrides = append(overrides, rule)
+								}
+							}
 							if len(overrides) > defaultRouteRuleLimit {
 								return nil, defaultRouteBound()
 							}
@@ -259,7 +277,7 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 	}
 	for i, left := range overrides {
 		for _, right := range overrides[i+1:] {
-			if left.Route != right.Route && left.Ingress == right.Ingress && left.Source.Overlaps(right.Source) && left.Destination.Overlaps(right.Destination) {
+			if left.Route != right.Route && left.Ingress == right.Ingress && left.Source.Overlaps(right.Source) && left.Destination.Overlaps(right.Destination) && defaultRouteTrafficOverlaps(left, right) {
 				return nil, fmt.Errorf("%w: overlapping active entries select different paths", ErrDefaultRouteCapability)
 			}
 		}
@@ -589,6 +607,9 @@ func defaultRouteInterface(v string) bool {
 	return len(v) > 0 && len(v) <= 15 && v != "lo" && strings.Trim(v, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:-") == ""
 }
 func defaultRoutePathValid(p DefaultRoutePath) bool {
+	if dataplane.AdapterID(p.Resolved) == "nfqws2" || p.NFQWS != nil {
+		return p.Selected == "nfqws2" && p.Resolved == "nfqws2" && p.ProfileDigest == "" && p.ProofDigest == "" && p.WireGuardProfileRevision == "" && strings.HasPrefix(p.ProbeURL, "https://") && defaultRouteNFQWSReferenceValid(p.NFQWS)
+	}
 	if strings.HasPrefix(p.Resolved, "wireguard:") || p.WireGuardProfileRevision != "" {
 		if _, err := dataplane.FrozenWireGuardProfileRevision(dataplane.Route{Selected: p.Selected, Resolved: p.Resolved, WireGuardProfileRevision: p.WireGuardProfileRevision}); err != nil {
 			return false
@@ -609,7 +630,7 @@ func defaultRouteBound() error {
 	return fmt.Errorf("%w: expanded policy exceeds %d tuples", ErrDefaultRouteCapability, defaultRouteRuleLimit)
 }
 func defaultRouteRuleKey(r DefaultRouteRule) string {
-	return r.Ingress + "\x00" + r.Source.String() + "\x00" + r.Destination.String() + "\x00" + r.ServiceID + "\x00" + r.Route
+	return r.Ingress + "\x00" + r.Source.String() + "\x00" + r.Destination.String() + "\x00" + r.ServiceID + "\x00" + r.Route + "\x00" + r.Protocol + "\x00" + fmt.Sprint(r.FirstPort, ":", r.LastPort)
 }
 
 func defaultRouteCloneRoutes(routes []dataplane.Route) []dataplane.Route {
@@ -665,17 +686,14 @@ func defaultRouteClone(s DefaultRouteSnapshot) DefaultRouteSnapshot {
 	s.AllowedDefaultRoutes = slices.Clone(s.AllowedDefaultRoutes)
 	s.Paths = make(map[string]DefaultRoutePath, len(s.Paths))
 	for id, path := range paths {
+		path.NFQWS = defaultRouteCloneNFQWSReference(path.NFQWS)
 		s.Paths[id] = path
 	}
 	return s
 }
 
 func defaultRouteIdentity(s DefaultRouteSnapshot) DefaultRouteSnapshot {
-	paths := s.Paths
 	s = defaultRouteClone(s)
-	for id, path := range paths {
-		s.Paths[id] = path
-	}
 	s.Scope.ObservedAt, s.Scope.FreshUntil = time.Time{}, time.Time{}
 	slices.Sort(s.GuestSegmentIDs)
 	slices.Sort(s.AllowedDefaultRoutes)

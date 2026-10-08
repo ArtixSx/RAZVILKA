@@ -26,6 +26,8 @@ type DefaultRouteFlow struct {
 	Source, Destination       netip.Addr
 	MAC                       string
 	FlowName, DNSObservedName string
+	Protocol                  string
+	DestinationPort           uint16
 }
 
 type DefaultRouteDecision struct {
@@ -90,7 +92,7 @@ func (c *DefaultRouteCompilation) Classify(flow DefaultRouteFlow) DefaultRouteDe
 		return d
 	}
 	for _, rule := range c.rules {
-		if rule.Ingress == flow.Ingress && rule.Source.Contains(flow.Source) && rule.Destination.Contains(flow.Destination) {
+		if rule.Ingress == flow.Ingress && rule.Source.Contains(flow.Source) && rule.Destination.Contains(flow.Destination) && (rule.Protocol == "" || rule.Protocol == flow.Protocol && flow.DestinationPort >= rule.FirstPort && flow.DestinationPort <= rule.LastPort) {
 			d.Route, d.ServiceID = rule.Route, rule.ServiceID
 			d.Kind = DefaultRouteDefault
 			if rule.Origin == "override" {
