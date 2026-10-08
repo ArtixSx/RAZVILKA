@@ -22,6 +22,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/security"
 	"github.com/ArtixSx/razvilka/internal/strategylab"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 // The native compiled test binary is its own protected helper, using the SAME
@@ -91,8 +92,11 @@ func TestManagedNFQCompatibilityInstalledAppHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	controlRoot := filepath.Join(root, "control")
-	if _, err := operationgate.InitializeSelfUpdateControl(ctx, controlRoot); err != nil {
+	files, err := productionSelfUpdateFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := operationgate.InitializeSelfUpdateControl(ctx, files.ControlRoot); err != nil {
 		t.Fatal(err)
 	}
 	const token = "native-managed-compatibility-owned-token-0123456789"
@@ -100,7 +104,10 @@ func TestManagedNFQCompatibilityInstalledAppHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app.App{Store: store, StrategyLab: manager, Components: owner, Security: securityGate, SelfUpdateFiles: &app.SelfUpdateFiles{ControlRoot: controlRoot}}
+	a := &app.App{Store: store, StrategyLab: manager, Components: owner, Security: securityGate, SelfUpdate: files.Helper, SelfUpdateFiles: files, ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
+	if err := a.InitializeComponentRecoveryGate(); err != nil {
+		t.Fatal(err)
+	}
 	control, err := configureManagedNFQCompatibility(ctx, a)
 	if err != nil {
 		t.Fatal("actual managed startup constructor", err)
