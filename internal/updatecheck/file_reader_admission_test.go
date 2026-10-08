@@ -7,10 +7,44 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
+
+func TestJournalReaderVersionStrictABI(t *testing.T) {
+	for _, test := range []struct {
+		name, stdout, stderr string
+		legacy               bool
+		wanted               int
+	}{
+		{"reader2", "2\n", "", false, 2},
+		{"reader3", "3\n", "", false, 3},
+		{"reader4", "4\n", "", false, 4},
+		{"legacy2", "2\n", "", true, 2},
+		{"missing-newline", "4", "", false, 0},
+		{"double-newline", "4\n\n", "", false, 0},
+		{"leading-space", " 4\n", "", false, 0},
+		{"trailing-space", "4 \n", "", false, 0},
+		{"carriage-return", "4\r\n", "", false, 0},
+		{"leading-zero", "04\n", "", false, 0},
+		{"diagnostic", "4\n", "warning", false, 0},
+		{"unknown", "unknown\n", "", false, 0},
+		{"future", strconv.Itoa(SelfUpdateReadVersion+1) + "\n", "", false, 0},
+		{"legacy-missing-newline", "2", "", true, 0},
+		{"legacy3", "3\n", "", true, 0},
+		{"legacy4", "4\n", "", true, 0},
+		{"legacy-diagnostic", "2\n", "warning", true, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			version, err := parseJournalReaderVersion(test.stdout, test.stderr, test.legacy)
+			if version != test.wanted || (err != nil) != (test.wanted == 0) {
+				t.Fatal("reader response was normalized or legacy fallback broadened", version, err)
+			}
+		})
+	}
+}
 
 func TestJournalReaderSealRejectsDowngradeFutureAndDrift(t *testing.T) {
 	for _, test := range []string{"reader1", "reader2", "future", "authority", "hash-drift", "unrecognized-job", "inventory-addition"} {

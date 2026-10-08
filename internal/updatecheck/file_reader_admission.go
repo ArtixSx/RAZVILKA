@@ -398,12 +398,20 @@ func (a *SelfUpdateFileAdapter) probeJournalReader(ctx context.Context, review f
 			return 0, errors.Join(ErrFileProtocol, waitErr, admissionErr)
 		}
 	}
-	value := strings.TrimSpace(stdout)
-	version, err := strconv.Atoi(value)
-	if err != nil || strconv.Itoa(version) != value || version < 1 || version > SelfUpdateReadVersion || legacy && version != selfUpdateProtocolSchema || !legacy && stderr != "" {
-		return 0, ErrFileProtocol
+	version, err := parseJournalReaderVersion(stdout, stderr, legacy)
+	if err != nil {
+		return 0, err
 	}
 	return version, ctx.Err()
+}
+
+func parseJournalReaderVersion(stdout, stderr string, legacy bool) (int, error) {
+	value := strings.TrimSuffix(stdout, "\n")
+	version, err := strconv.Atoi(value)
+	if err != nil || stdout != strconv.Itoa(version)+"\n" || version < 1 || version > SelfUpdateReadVersion || legacy && version != selfUpdateProtocolSchema || stderr != "" {
+		return 0, ErrFileProtocol
+	}
+	return version, nil
 }
 
 // Read-only settlement consumer. Missing/old/future proof or any inventory or
