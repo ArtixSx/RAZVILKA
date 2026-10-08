@@ -1753,9 +1753,13 @@ function renderAudit() {
 function strategyCompatibilityView(validation = {}) {
   const compatible = validation?.ok === true && validation.native === true && validation.lua_checked === true && validation.quiescence_unknown !== true;
   const rejected = validation?.quiescence_unknown !== true && ['COMPATIBILITY_REJECTED', 'NATIVE_REJECTED'].includes(validation?.code);
+  const checkedDate = typeof validation?.checked_at === 'string' ? new Date(validation.checked_at) : null;
+  const checkedAt = checkedDate && Number.isFinite(checkedDate.getTime()) ? checkedDate.toLocaleString('ru-RU') : '';
   return { compatible, tone: compatible ? 'pass' : rejected ? 'fail' : 'warn',
-    label: compatible ? 'СОВМЕСТИМА' : rejected ? 'НЕСОВМЕСТИМА' : 'НЕ ПОДТВЕРЖДЕНО',
-    title: compatible ? 'Совместимость с установленным NFQWS2 и Lua подтверждена' : 'Совместимость с установленным NFQWS2 и Lua не подтверждена' };
+    label: compatible ? 'ПРОВЕРКА ПРОЙДЕНА' : rejected ? 'ПРОВЕРКА ОТКЛОНЕНА' : 'НЕ ПОДТВЕРЖДЕНО',
+    title: compatible ? 'Последняя проверка совместимости пройдена' : 'Совместимость с NFQWS2 не подтверждена',
+    checkedAt: checkedAt ? `Последняя проверка: ${checkedAt}` : 'Время последней проверки не указано',
+    note: 'Сохранённый результат проверки параметров и Lua NFQWS2. Повторите проверку перед применением. Проверка соединения и применение выполняются отдельно.' };
 }
 
 function renderStrategyLab() {
@@ -1791,7 +1795,7 @@ function renderStrategyLab() {
   $('#strategyPools').innerHTML = pools.map((pool) => {
     const count = candidates.filter((candidate) => candidate.pool_id === pool.id).length;
     const validated = candidates.filter((candidate) => candidate.pool_id === pool.id && strategyCompatibilityView(candidate.validation).compatible).length;
-    return `<div class="strategy-pool"><span>${esc(pool.protocol.toUpperCase())}</span><b>${esc(pool.name)}</b><small>${esc(pool.description)}</small><em>${validated} совместимо · ${count} всего</em></div>`;
+    return `<div class="strategy-pool"><span>${esc(pool.protocol.toUpperCase())}</span><b>${esc(pool.name)}</b><small>${esc(pool.description)}</small><em>${validated} прошли проверку · ${count} всего</em></div>`;
   }).join('');
   $('#strategyCandidates').innerHTML = candidates.map((candidate) => {
     const validation = candidate.validation || {};
@@ -1800,7 +1804,7 @@ function renderStrategyLab() {
 		const probe = compatibility.compatible && !probeUnavailable
 			? ['tcp', 'quic'].includes(pool?.protocol) ? `<button class="primary" data-strategy-probe="${esc(candidate.id)}">${pool?.protocol === 'quic' ? 'Тест HTTP/3' : 'Тест маршрута'}</button>` : '<button class="secondary" disabled title="Для голосового UDP нужен сервисный handshake">UDP сервиса</button>'
 			: '';
-    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${compatibility.tone}" title="${esc(validation.output || '')}">${compatibility.label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Проверить совместимость</button>${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
+    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small><small>${esc(compatibility.checkedAt)}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${compatibility.tone}" title="${esc(compatibility.title)}. ${esc(compatibility.note)} ${esc(validation.output || '')}">${compatibility.label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Проверить совместимость</button>${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
   }).join('') || '<div class="strategy-empty">Добавьте кандидата вручную или позже импортируйте совместимые данные. Ничего не применяется автоматически.</div>';
 	const evidence = lab.evidence || [];
   $('#strategyEvidence').innerHTML = summaries.map((summary) => {
@@ -1872,8 +1876,9 @@ async function validateStrategyCandidate(id) {
     renderStrategyLab();
     const saved = state.strategyLab?.candidates?.find(candidate => candidate.id === id);
     if (!saved) return showDetails({ error: 'Сохранённый результат проверки не найден. Обновите список.' }, 'Совместимость с NFQWS2 не подтверждена');
-    showDetails(saved.validation, strategyCompatibilityView(saved.validation).title);
-    $('#detailsSubtitle').textContent = 'Проверка параметров и Lua установленного NFQWS2. Проверка соединения и применение выполняются отдельно.';
+    const compatibility = strategyCompatibilityView(saved.validation);
+    showDetails(saved.validation, compatibility.title);
+    $('#detailsSubtitle').textContent = `${compatibility.checkedAt}. ${compatibility.note}`;
   } catch (error) { showDetails({ error: error.message }, 'Совместимость с NFQWS2 не подтверждена'); }
 }
 
