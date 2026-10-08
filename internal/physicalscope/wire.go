@@ -304,6 +304,13 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 		}
 		switch m.kind {
 		case 16, 17:
+			wireless, err := originalWirelessNotification(m, segments)
+			if err != nil {
+				return err
+			}
+			if wireless {
+				continue
+			}
 			link, err := decodeLink(m)
 			if err != nil {
 				return boundary("notifications.link.decode", err)
