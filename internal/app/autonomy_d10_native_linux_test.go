@@ -604,6 +604,15 @@ func d10NativePrivateLog(path, label string) error {
 			retained = append(retained, line)
 		}
 	}
+	return d10NativePrivateReceipt(label, retained)
+}
+
+func d10NativePrivateReceipt(label string, retained []string) error {
+	dir, scenario := os.Getenv("RAZVILKA_D10_NATIVE_ARTIFACTS"), os.Getenv("RAZVILKA_D10_NATIVE_CHILD")
+	info, err := os.Lstat(dir)
+	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "failure-exit") {
+		return errors.New("private diagnostic destination refused")
+	}
 	payload, err := json.MarshalIndent(struct {
 		Label string   `json:"label"`
 		Lines []string `json:"redacted_error_lines"`
@@ -1170,30 +1179,42 @@ func d10NativeChild(t *testing.T) {
 		if req.NodeID != ids[2] {
 			return nil
 		}
+		refuse := func(code string, cause error) error {
+			t.Log("fresh C observer refused:", code)
+			if cause != nil {
+				if err := d10NativePrivateReceipt("rollback-observer", []string{code + ": " + d10NativeRedact(cause.Error())}); err != nil {
+					t.Error("private rollback observer receipt", d10NativeErrorClass(err))
+				}
+			}
+			return errors.New(code)
+		}
 		status, err := a.Dataplane.Status()
 		if err != nil || status.Execution == nil || status.Plan == nil || status.Execution.State != "rolled-back" || !status.Execution.RollbackVerified {
-			return errors.New("fresh C preceded verified native rollback journal")
+			return refuse("fresh C preceded verified native rollback journal", err)
 		}
 		failedB = *status.Execution
 		committed, exists, err := a.Dataplane.Committed()
 		if err != nil || !exists || !reflect.DeepEqual(committed, planA) || !reflect.DeepEqual(store.Get(), base) {
-			return errors.New("fresh C preceded exact A config/committed restoration")
+			t.Logf("fresh C restoration flags: committed-exists=%t plan-equal=%t config-equal=%t", exists, reflect.DeepEqual(committed, planA), reflect.DeepEqual(store.Get(), base))
+			return refuse("fresh C preceded exact A config/committed restoration", err)
 		}
 		confirmed, err := adapter.VerifyRollback(c, *status.Plan, filepath.Join(state, "transactions", failedB.PlanID, engine))
 		if err != nil || !confirmed {
-			return errors.New("independent production VerifyRollback rejected A")
+			return refuse("independent production VerifyRollback rejected A", err)
 		}
 		for name, expected := range filesA {
 			actual, err := os.ReadFile(filepath.Join(adapter.StateRoot, name))
 			match := err == nil && bytes.Equal(actual, expected)
 			clear(actual)
 			if !match {
-				return errors.New("restored native A files differ")
+				t.Log("fresh C restored file refused:", name)
+				return refuse("restored native A files differ", err)
 			}
 		}
 		kernel, err := d10NativeKernel(c)
 		if err != nil || !reflect.DeepEqual(kernel, kernelA) {
-			return errors.New("restored native A kernel differs")
+			d10NativeKernelDiagnostic(t, kernelA, kernel)
+			return refuse("restored native A kernel differs", err)
 		}
 		rollbackSeen = true
 		return nil
@@ -1303,15 +1324,28 @@ func d10NativeBackendTopology(t *testing.T, ctx context.Context) (string, func()
 			cleanup, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 			defer cancel()
 			out, err := d10NativeCommand(cleanup, "ip", "netns", "delete", namespace)
+			if err != nil {
+				err = fmt.Errorf("owned namespace deletion: %s: %w", strings.TrimSpace(string(out)), err)
+			}
 			clear(out)
 			closeErr = err
+			deleted := err == nil
 			links, err := net.Interfaces()
+			readable := err == nil
 			if err != nil {
 				closeErr = errors.Join(closeErr, err)
 			}
+			survived := false
 			for _, link := range links {
 				if link.Name == "wan-r" {
+					survived = true
 					closeErr = errors.Join(closeErr, errors.New("owned backend veth survived namespace removal"))
+				}
+			}
+			if closeErr != nil {
+				t.Logf("owned namespace cleanup flags: delete-succeeded=%t interfaces-readable=%t veth-survived=%t", deleted, readable, survived)
+				if err := d10NativePrivateReceipt("namespace-cleanup", []string{d10NativeRedact(closeErr.Error())}); err != nil {
+					closeErr = errors.Join(closeErr, fmt.Errorf("private namespace cleanup receipt: %w", err))
 				}
 			}
 		})
