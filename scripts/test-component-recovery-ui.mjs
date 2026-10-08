@@ -5,6 +5,11 @@ const source=readFileSync(new URL('../cmd/razvilka/web/component-recovery-ui.js'
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
 function snapshot(phase='awaiting-live-acceptance',pending=true){return {revision:7,recovery_required:pending,transaction:{schema_version:1,transaction_id:'a'.repeat(32),component:'xray',phase,before_version:'1.0',after_version:'2.0',updated_at:new Date().toISOString()},capabilities:{supported_actions:['accept-live','accept-installed-idle','rollback','verify-rollback','abandon-prepared'],available_actions:pending?['accept-live','rollback','verify-rollback','abandon-prepared']:[],quiescence_confirmed:false,inactivity_confirmed:false,installed_idle_accepted:phase==='accepted-installed-idle',live_proof_required:true}};}
+function managedSnapshot(phase='prepared'){
+  const pending=!['accepted-installed-idle','rolled-back','abandoned'].includes(phase),value=snapshot(phase,pending);
+  Object.assign(value.transaction,{schema_version:3,component:'nfqws2',before_version:'absent',after_version:'reviewed-flavor'});
+  Object.assign(value.capabilities,{supported_actions:['resume','rollback'],available_actions:pending?(phase==='rollback-started'?['rollback']:['resume','rollback']):[],live_proof_required:false});return value;
+}
 const pure={};vm.createContext(pure);vm.runInContext(source,pure);const model=pure.RazvilkaComponentRecovery;
 function fixture(view='engines'){
   const requests=[],listeners=new Map(),notices=[],panel={innerHTML:'',contains:()=>false};
@@ -45,7 +50,7 @@ await test('invalid, future, corrupt and inconsistent data fail closed',()=>{
     assert.equal(model.valid(value),false);assert.equal(model.summary(value).actions.length,0);
   }
 });
-await test('only schema 1/2 are known; schema 2 idle acceptance stays neutral',()=>{
+await test('legacy schema 1/2 remain known and schema 2 idle acceptance stays neutral',()=>{
   for(const schema of [1,2]){const value=snapshot();value.transaction.schema_version=schema;assert.equal(model.valid(value),true);}
   for(const schema of [0,3,999,'2']){const value=snapshot();value.transaction.schema_version=schema;assert.equal(model.valid(value),false);}
   const idle=snapshot('accepted-installed-idle',false);assert.equal(model.valid(idle),false);
@@ -160,5 +165,43 @@ await test('leaving while review is pending cancels POST and releases buttons',a
   f.view('overview');f.view('engines');await flush();confirmation.resolve(true);await flush();
   assert.equal(f.requests.filter(request=>request.options.method==='POST').length,0);
   f.clickRead();await flush();assert.equal(f.requests.length,2);
+});
+await test('schema 3 is only the managed NFQ file protocol with exact known phases',()=>{
+  for(const phase of ['prepared','upgrade-started','upgrade-finished','awaiting-live-acceptance','accepted-installed-idle','rollback-started','rolled-back','abandoned'])assert(model.valid(managedSnapshot(phase)),phase);
+  for(const phase of ['started','installed','awaiting-live','accepted-idle','accepted','future-phase'])assert.equal(model.valid(managedSnapshot(phase)),false);
+  const wrongComponent=managedSnapshot();wrongComponent.transaction.component='xray';assert.equal(model.valid(wrongComponent),false);
+  const partial=managedSnapshot();delete partial.transaction.after_version;assert.equal(model.valid(partial),false);
+});
+await test('schema 3 actions come from explicit capabilities, without legacy acceptance or observed booleans as grants',()=>{
+  const value=managedSnapshot();assert.deepEqual(Array.from(model.summary(value).actions),['resume','rollback']);
+  value.capabilities.available_actions=['rollback'];assert.deepEqual(Array.from(model.summary(value).actions),['rollback']);
+  value.capabilities.quiescence_confirmed=value.capabilities.inactivity_confirmed=true;assert.deepEqual(Array.from(model.summary(value).actions),['rollback']);
+  value.capabilities.supported_actions.push('accept-live');assert.equal(model.valid(value),false);
+  const absent=managedSnapshot();delete absent.capabilities;assert.equal(model.summary(absent).actions.length,0);
+  assert.deepEqual(Array.from(model.summary(managedSnapshot('rollback-started')).actions),['rollback']);
+});
+await test('all schema 3 terminal phases stay neutral even with a matching forged live receipt',()=>{
+  for(const phase of ['accepted-installed-idle','rolled-back','abandoned']){
+    const value=managedSnapshot(phase),summary=model.summary(value,{transaction_id:'a'.repeat(32),component:'nfqws2',live_accepted:true});
+    assert.equal(summary.actions.length,0);assert.equal(summary.tone,'unknown');assert.doesNotMatch(summary.label,/Рабочий процесс принял/);
+  }
+});
+await test('schema 3 resume allows Safe Mode and Stop but uses only current CAS and existing transaction confirmation',async()=>{
+  const f=fixture();f.state.status.safe_mode=true;f.state.serviceControl.stopped=true;await f.ready(managedSnapshot());let installedReads=0;f.ctx.refreshManagedNFQBundle=async()=>{installedReads++;};
+  f.clickRepair('resume');await flush();assert.equal(f.requests.length,2);
+  assert.deepEqual(JSON.parse(f.requests[1].options.body),{transaction_id:'a'.repeat(32),component:'nfqws2',action:'resume',expected_revision:7,confirm:'REPAIR_COMPONENT_TRANSACTION'});
+  f.requests[1].resolve({recovery_required:false});await flush();assert.equal(f.notices.length,0);f.requests[2].resolve(managedSnapshot('accepted-installed-idle'));await flush();
+  assert.equal(installedReads,1);assert.equal(f.ctx.componentRecoveryFence(),false);assert.equal(f.ctx.componentRecoverySummary('nfqws2').tone,'unknown');assert.equal(f.notices[0][0],'review');
+});
+await test('schema 3 rollback-started only offers the actually advertised rollback action',async()=>{
+  const f=fixture();await f.ready(managedSnapshot('rollback-started'));f.clickRepair('resume');await flush();assert.equal(f.requests.length,1);
+  f.clickRepair('rollback');await flush();assert.equal(JSON.parse(f.requests[1].options.body).action,'rollback');f.requests[1].resolve({recovery_required:false});await flush();f.requests[2].resolve(managedSnapshot('rolled-back'));await flush();assert.equal(f.notices.length,1);
+});
+await test('schema 3 current revision still fences actions while Safe Mode and Stop stay allowed',async()=>{
+  const f=fixture();f.state.status.safe_mode=true;f.state.serviceControl.stopped=true;await f.ready(managedSnapshot());const confirmation=deferred();f.confirm(()=>confirmation.promise);f.clickRepair('resume');await flush();f.state.status.revision=8;confirmation.resolve(true);await flush();assert.equal(f.requests.length,1);assert.equal(f.ctx.componentRecoveryFence(),true);
+});
+await test('schema 3 pending or a different readback transaction cannot settle the operation',async()=>{
+  const pending=fixture();await pending.ready(managedSnapshot());pending.clickRepair('resume');await flush();pending.requests[1].resolve({recovery_required:true});await flush();assert.equal(pending.requests.length,2);assert.equal(pending.notices.length,0);assert.equal(pending.ctx.componentRecoveryFence(),true);
+  const other=fixture();await other.ready(managedSnapshot());other.clickRepair('resume');await flush();other.requests[1].resolve({recovery_required:false});await flush();const wrong=managedSnapshot('accepted-installed-idle');wrong.transaction.transaction_id='b'.repeat(32);other.requests[2].resolve(wrong);await flush();assert.equal(other.notices.length,0);assert.equal(other.ctx.componentRecoveryFence(),true);
 });
 console.log(JSON.stringify({suite:'component-recovery',tests:total}));

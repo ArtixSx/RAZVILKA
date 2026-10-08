@@ -19,7 +19,18 @@
     abandoned: ['Подготовка отменена', 'Установка пакета в этой транзакции не выполнялась.', []],
   };
   const supported = ['nfqws2','sing-box','xray','usque','warp-wg','wireguard'];
-  const labels = {'accept-live':'Проверить принятие версии','accept-installed-idle':'Принять неактивную версию','rollback':'Вернуть прежнюю версию','verify-rollback':'Проверить результат отката','abandon-prepared':'Отменить подготовку'};
+  const managedStages = {
+    prepared: ['Установка управляемого пакета подготовлена', 'Файлы ещё требуют завершения установки.', ['resume','rollback']],
+    'upgrade-started': ['Исход установки управляемого пакета уточняется', 'Продолжение и откат повторно проверяются сервером по этой транзакции.', ['resume','rollback']],
+    'upgrade-finished': ['Управляемый пакет установлен; итог уточняется', 'Проверка файлов и неактивного состояния ещё не завершена.', ['resume','rollback']],
+    'awaiting-live-acceptance': ['Неактивная установка ожидает проверки', 'Проверяется управляемый пакет без запуска рабочих маршрутов.', ['resume','rollback']],
+    'accepted-installed-idle': ['Неактивная установка подтверждена журналом', 'Рабочие маршруты и доступ сервисов проверяются отдельно.', []],
+    'rollback-started': ['Исход отката управляемого пакета уточняется', 'Продолжение и откат повторно проверяются сервером по этой транзакции.', ['resume','rollback']],
+    'rolled-back': ['Установка управляемого пакета отменена', 'Состояние файлов возвращено по журналу. Доступ сервисов этим не подтверждается.', []],
+    abandoned: ['Подготовка управляемого пакета отменена', 'Установка файлов в этой транзакции не выполнялась.', []],
+  };
+  const labels = {'resume':'Продолжить установку','accept-live':'Проверить принятие версии','accept-installed-idle':'Принять неактивную версию','rollback':'Вернуть прежнюю версию','verify-rollback':'Проверить результат отката','abandon-prepared':'Отменить подготовку'};
+  const actionLabel = (action, managed) => managed && action==='rollback' ? 'Отменить установку пакета' : labels[action];
   function validCapabilities(c) {
     const list=value=>Array.isArray(value) && value.length<=16 && value.every(a=>typeof a==='string' && a.length<=64) && new Set(value).size===value.length;
     return list(c?.supported_actions) && list(c.available_actions) && c.available_actions.every(a=>c.supported_actions.includes(a))
@@ -30,9 +41,11 @@
     if(value.capabilities!=null && !validCapabilities(value.capabilities))return false;
     const t=value.transaction;
     if (!value.recovery_required && !t?.transaction_id) return true;
-    return [1,2].includes(t?.schema_version) && (t.phase!=='accepted-installed-idle' || t.schema_version===2) && /^[a-f0-9]{32}$/.test(t.transaction_id) && supported.includes(t.component)
-      && Object.hasOwn(stages,t.phase) && typeof t.before_version==='string' && t.before_version.length>0 && t.before_version.length<=256
-      && (t.after_version==null || typeof t.after_version==='string' && t.after_version.length<=256)
+    const managed=t?.schema_version===3;
+    if(managed && value.capabilities && (value.capabilities.live_proof_required!==false || value.capabilities.supported_actions.some(a=>!['resume','rollback'].includes(a))))return false;
+    return [1,2,3].includes(t?.schema_version) && (t.phase!=='accepted-installed-idle' || t.schema_version!==1) && /^[a-f0-9]{32}$/.test(t.transaction_id) && (managed?t.component==='nfqws2':supported.includes(t.component))
+      && Object.hasOwn(managed?managedStages:stages,t.phase) && typeof t.before_version==='string' && t.before_version.length>0 && t.before_version.length<=256
+      && (managed?typeof t.after_version==='string' && t.after_version.length>0 && t.after_version.length<=256:t.after_version==null || typeof t.after_version==='string' && t.after_version.length<=256)
       && Number.isFinite(Date.parse(t.updated_at))
       && value.recovery_required===!['accepted','accepted-installed-idle','rolled-back','abandoned'].includes(t.phase);
   }
@@ -40,11 +53,12 @@
     if (!valid(value)) return {label:'Журнал не прочитан',detail:'Изменения компонентов недоступны до свежего чтения.',actions:[],tone:'unknown'};
     const t=value.transaction;
     if (!t?.transaction_id) return {label:'Незавершённых обновлений нет',detail:'Установка, процесс и доступ сервиса проверяются отдельно.',actions:[],tone:'unknown'};
-    const [label,detail,knownActions]=stages[t.phase],c=value.capabilities;
+    const managed=t.schema_version===3;
+    const [label,detail,knownActions]=(managed?managedStages:stages)[t.phase],c=value.capabilities;
     const eligible=[...knownActions];
     if(t.schema_version===2 && t.phase==='awaiting-live-acceptance' && c?.quiescence_confirmed===true && c.inactivity_confirmed===true)eligible.push('accept-installed-idle');
     const actions=value.recovery_required && c?eligible.filter(action=>c.available_actions.includes(action) && c.supported_actions.includes(action)):[];
-    const live=t.phase==='accepted' && receipt?.transaction_id===t.transaction_id && receipt.component===t.component && receipt.live_accepted===true;
+    const live=!managed && t.phase==='accepted' && receipt?.transaction_id===t.transaction_id && receipt.component===t.component && receipt.live_accepted===true;
     return {label:live?'Рабочий процесс принял версию':label,detail:detail+(!c&&value.recovery_required?' Сервер не сообщил доступные действия; панель работает только для чтения.':''),actions,tone:live?'good':'unknown',transaction:t};
   }
   root.RazvilkaComponentRecovery=Object.freeze({valid,summary});
@@ -53,17 +67,19 @@
   const recovery={epoch:0,read:null,action:null,data:null,received:0,error:'',unknownWrite:false,receipt:null};
   const active=()=>state.authenticated && views.has(state.currentView) && !document.hidden;
   const fresh=()=>recovery.data && !recovery.error && recovery.received>0 && Date.now()-recovery.received<60000;
+  const permissionFor=value=>state.status?.revision===value?.revision && (value?.transaction?.schema_version===3 || state.status?.safe_mode===false && state.serviceControl?.stopped!==true);
   function fence() {return !fresh() || recovery.data.recovery_required || recovery.unknownWrite || !!recovery.action;}
   function paint() {
     const model=summary(recovery.data,recovery.receipt),t=model.transaction;
     const busy=!!recovery.read || !!recovery.action;
-    const permission=state.status?.safe_mode===false && state.status.revision===recovery.data?.revision && state.serviceControl?.stopped!==true;
+    const permission=permissionFor(recovery.data);
     const unknownNote='Результат действия не подтверждён. Нажмите «Прочитать состояние». Повторная запись заблокирована.';
     const note=recovery.unknownWrite?[recovery.error,unknownNote].filter(Boolean).join(' '):recovery.error || (!fresh()?'Нужно свежее чтение журнала. Изменения компонентов приостановлены.':model.detail);
-    const buttons=(fresh() && !recovery.unknownWrite?model.actions:[]).map(action=>`<button class="secondary" type="button" data-component-repair="${action}" data-component-recovery-focus="${action}" ${busy||!permission?'disabled':''}>${labels[action]}</button>`).join('');
+    const buttons=(fresh() && !recovery.unknownWrite?model.actions:[]).map(action=>`<button class="secondary" type="button" data-component-repair="${action}" data-component-recovery-focus="${action}" ${busy||!permission?'disabled':''}>${actionLabel(action,t?.schema_version===3)}</button>`).join('');
     for (const panel of document.querySelectorAll('[data-component-recovery-panel]')) {
       const focus=panel.contains(document.activeElement)?document.activeElement?.getAttribute('data-component-recovery-focus'):null;
-      panel.innerHTML=`<div class="ui3-section-heading"><h3>${esc(model.label)}</h3><button class="secondary" type="button" data-component-recovery-read data-component-recovery-focus="read" ${busy?'disabled':''}>${recovery.read?'Читаем…':'Прочитать состояние'}</button></div><p role="status">${esc(note)}</p>${t?`<p>Компонент: <b>${esc(typeof routeLabel==='function'?routeLabel(t.component):t.component)}</b> · прежняя версия <b>${esc(t.before_version)}</b>${t.after_version?` · новая <b>${esc(t.after_version)}</b>`:''}</p><details><summary>Транзакция и этап</summary><p><code>${esc(t.transaction_id)}</code> · ${esc(t.phase)}</p></details>`:''}${buttons?`<div class="ui3-engine-actions">${buttons}</div>${!permission?'<p>Восстановление требует текущей ревизии, выключенного Safe Mode и разрешения после Stop. Панель эти запреты не снимает.</p>':''}`:''}`;
+      const permissionNote=t?.schema_version===3?'Прочитайте текущую ревизию настроек перед восстановлением.':'Восстановление требует текущей ревизии, выключенного Safe Mode и разрешения после Stop. Панель эти запреты не снимает.';
+      panel.innerHTML=`<div class="ui3-section-heading"><h3>${esc(model.label)}</h3><button class="secondary" type="button" data-component-recovery-read data-component-recovery-focus="read" ${busy?'disabled':''}>${recovery.read?'Читаем…':'Прочитать состояние'}</button></div><p role="status">${esc(note)}</p>${t?`<p>Компонент: <b>${esc(typeof routeLabel==='function'?routeLabel(t.component):t.component)}</b> · прежняя версия <b>${esc(t.before_version)}</b>${t.after_version?` · новая <b>${esc(t.after_version)}</b>`:''}</p><details><summary>Транзакция и этап</summary><p><code>${esc(t.transaction_id)}</code> · ${esc(t.phase)}</p></details>`:''}${buttons?`<div class="ui3-engine-actions">${buttons}</div>${!permission?`<p>${permissionNote}</p>`:''}`:''}`;
       if(focus)panel.querySelector(`[data-component-recovery-focus="${focus}"]`)?.focus({preventScroll:true});
     }
   }
@@ -107,14 +123,15 @@
       return;
     }
     const observed=recovery.data,t=observed.transaction,model=summary(observed,recovery.receipt);
-    if (!model.actions.includes(action) || state.status?.safe_mode!==false || state.status.revision!==observed.revision || state.serviceControl?.stopped===true) return;
+    if (!model.actions.includes(action) || !permissionFor(observed)) return;
     const ticket={epoch:recovery.epoch,transaction:t.transaction_id,sent:false};recovery.action=ticket;render();
     const current=()=>ticket.epoch===recovery.epoch && recovery.action===ticket && state.authenticated;
     try {
-      const detail=action==='accept-installed-idle'?'Сервер проверит точную версию, конфигурацию, завершение всех процессов установки и неактивность компонента. Рабочий маршрут этим действием не запускается.':model.detail;
+      const managed=t.schema_version===3;
+      const detail=managed?'Сервер проверит текущую транзакцию и файлы управляемого пакета без запуска рабочих маршрутов.':action==='accept-installed-idle'?'Сервер проверит точную версию, конфигурацию, завершение всех процессов установки и неактивность компонента. Рабочий маршрут этим действием не запускается.':model.detail;
       const text=`${typeof routeLabel==='function'?routeLabel(t.component):t.component}: ${t.before_version}${t.after_version?' → '+t.after_version:''}. ${detail} Сервер повторно проверит транзакцию и разрешения. Доступ сервиса не считается подтверждённым по установке пакета.`;
-      if(!await askConfirmation(labels[action],text,labels[action]) || !current())return;
-      if(recovery.data!==observed || !fresh() || state.status?.safe_mode!==false || state.status.revision!==observed.revision || state.serviceControl?.stopped===true)throw new Error('Журнал или разрешения изменились. Прочитайте состояние перед действием.');
+      if(!await askConfirmation(actionLabel(action,managed),text,actionLabel(action,managed)) || !current())return;
+      if(recovery.data!==observed || !fresh() || !permissionFor(observed))throw new Error('Журнал или разрешения изменились. Прочитайте состояние перед действием.');
       recovery.unknownWrite=true;
       ticket.sent=true;
       const result=await api('/api/v1/components/recovery',{method:'POST',body:JSON.stringify({transaction_id:t.transaction_id,component:t.component,action,expected_revision:observed.revision,confirm:'REPAIR_COMPONENT_TRANSACTION'})});
@@ -126,7 +143,10 @@
       await read(true);
       if(!current())return;
       if(!fresh() || recovery.data.transaction?.transaction_id!==t.transaction_id || recovery.data.recovery_required)throw new Error('Итог журнала ещё не подтверждён. Повторите чтение состояния.');
+      if(managed && (recovery.data.transaction.schema_version!==3 || !['accepted-installed-idle','rolled-back','abandoned'].includes(recovery.data.transaction.phase)))throw new Error('Журнал ещё не подтвердил завершение операции с управляемым пакетом. Повторите чтение состояния.');
       if(action==='accept-installed-idle' && (recovery.data.transaction.phase!=='accepted-installed-idle' || recovery.data.capabilities?.installed_idle_accepted!==true))throw new Error('Журнал ещё не подтвердил принятие неактивной версии. Повторите чтение состояния.');
+      if(managed && typeof refreshManagedNFQBundle==='function')await refreshManagedNFQBundle(recovery.data);
+      if(!current())return;
       showNotice('review',summary(recovery.data,recovery.receipt).label,'Итог прочитан из журнала. Доступ каждого сервиса проверяется отдельно.');
     } catch(error) {
       if(!current())return;
