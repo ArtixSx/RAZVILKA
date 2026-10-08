@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
@@ -51,6 +52,9 @@ func TestServiceQueuesWaitForInitialReconcilerWithDisabledFeatures(t *testing.T)
 		t.Run(scope, func(t *testing.T) {
 			a, ids := newNodeJobTest(t, 1)
 			withBulkConfig(t, a)
+			if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "auto"}); err != nil {
+				t.Fatal(err)
+			}
 			if !a.Store.Get().SafeMode || a.Store.Get().ServiceControl.Schedule.Enabled || a.Dataplane != nil {
 				t.Fatal("fixture must have disabled routing and scheduled checks")
 			}

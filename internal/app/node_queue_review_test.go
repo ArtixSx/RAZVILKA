@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
@@ -74,6 +75,9 @@ func TestSelectedNodeQueueChecksNonVLESSAndYieldsToRecovery(t *testing.T) {
 		t.Fatal("missing non-VLESS fixture")
 	}
 	withBulkConfig(t, a)
+	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "auto"}); err != nil {
+		t.Fatal(err)
+	}
 	initReconcilerFixture(t, a, time.Now())
 	a.reconciler.doc.Operations = futureNodeQueueOperations(time.Now())
 	a.reconciler.doc.Operations[0] = automationOperation{Kind: "node-recovery", State: "backoff", NextRun: time.Now().Add(-time.Minute)}
