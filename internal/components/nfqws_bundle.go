@@ -502,6 +502,9 @@ func (m *Manager) publishManagedNFQWSReceipt(ctx context.Context, tx *updateTran
 	effect := "nfqws-publish-receipt"
 	if rollback {
 		effect = "nfqws-rollback-receipt"
+		if len(wanted) == 0 {
+			effect = "nfqws-remove-receipt"
+		}
 	}
 	name := ".nfqws-receipt-" + tx.doc.TransactionID
 	if len(wanted) > 0 {
@@ -533,7 +536,7 @@ func (m *Manager) publishManagedNFQWSReceipt(ctx context.Context, tx *updateTran
 	defer fs.Close()
 	if err := a.admit(ctx, v, effect, func() error {
 		if len(wanted) == 0 {
-			return root.Remove(managedNFQWSReceiptName)
+			return fs.Remove(managedNFQWSReceiptName)
 		}
 		return fs.Rename(name, managedNFQWSReceiptName)
 	}); err != nil {
