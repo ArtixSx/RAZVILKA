@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1218,6 +1219,7 @@ func d10NativeChild(t *testing.T) {
 		kernel, err := d10NativeKernel(c)
 		if err != nil || !reflect.DeepEqual(kernel, kernelA) {
 			d10NativeKernelDiagnostic(t, kernelA, kernel)
+			d10NativeIPv6RollbackReceipt(t, kernelA, kernel, filepath.Join(adapter.StateRoot, "runtime", "engine.json"))
 			return refuse("restored native A kernel differs", err)
 		}
 		rollbackSeen = true
@@ -1312,6 +1314,68 @@ func d10NativeDue(a *App) {
 	r := a.autonomy.doc.Runtime[d10NativeService]
 	r.NextCheck = time.Time{}
 	a.autonomy.doc.Runtime[d10NativeService] = r
+}
+
+func d10NativeIPv6RollbackReceipt(t *testing.T, before, after [][]byte, enginePath string) {
+	t.Helper()
+	if len(before) <= 3 || len(after) <= 3 {
+		return
+	}
+	var retained []string
+	for _, direction := range []struct {
+		label    string
+		from, to []byte
+	}{{"removed IPv6 route", before[3], after[3]}, {"added IPv6 route", after[3], before[3]}} {
+		counts := map[string]int{}
+		for _, line := range strings.Split(string(direction.to), "\n") {
+			counts[line]++
+		}
+		count := 0
+		for _, line := range strings.Split(string(direction.from), "\n") {
+			if counts[line] > 0 {
+				counts[line]--
+				continue
+			}
+			if strings.TrimSpace(line) == "" || count == 8 {
+				continue
+			}
+			redacted := d10NativeRedact(line)
+			if len(redacted) > 1024 {
+				redacted = redacted[:1024] + "<truncated>"
+			}
+			retained = append(retained, direction.label+": "+redacted)
+			count++
+		}
+	}
+	f, err := os.Open(enginePath)
+	if err == nil {
+		data, readErr := io.ReadAll(io.LimitReader(f, (1<<20)+1))
+		_ = f.Close()
+		var doc struct {
+			Inbounds []struct {
+				Type      string   `json:"type"`
+				Interface string   `json:"interface_name"`
+				Address   []string `json:"address"`
+				IPv4      string   `json:"inet4_address"`
+				IPv6      string   `json:"inet6_address"`
+			} `json:"inbounds"`
+		}
+		if readErr == nil && len(data) <= 1<<20 && json.Unmarshal(data, &doc) == nil {
+			for _, inbound := range doc.Inbounds {
+				if inbound.Type == "tun" && inbound.Interface == "rz-sing" {
+					for _, address := range append(inbound.Address, inbound.IPv4, inbound.IPv6) {
+						if _, err := netip.ParsePrefix(address); err == nil && len(retained) < 24 {
+							retained = append(retained, "configured owned TUN address: "+address)
+						}
+					}
+				}
+			}
+		}
+		clear(data)
+	}
+	if err := d10NativePrivateReceipt("ipv6-rollback", retained); err != nil {
+		t.Error("private IPv6 rollback receipt", d10NativeErrorClass(err))
+	}
 }
 
 // Restoration issues fresh addition authority instead of reviving a consumed
