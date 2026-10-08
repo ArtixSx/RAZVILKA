@@ -22,6 +22,9 @@ func TestNativeManagedCompatibilityInitialSource(t *testing.T) {
 	for _, outcome := range []string{"initial", "existing", "foreign", "foreign-prepared", "stop-prepared", "cancel-prepared", "stop-written"} {
 		t.Run(outcome, func(t *testing.T) {
 			root := t.TempDir()
+			if err := os.Chmod(root, 0700); err != nil {
+				t.Fatal(err)
+			}
 			m, err := New(filepath.Join(root, "strategy-lab.json"))
 			if err != nil {
 				t.Fatal(err)
