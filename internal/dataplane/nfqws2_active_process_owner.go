@@ -62,13 +62,20 @@ type nfqws2ActiveOwner struct {
 	finalACK, detached, stopRequested bool
 	committed, cleanup                NFQWSActiveGuard
 	// Actual platform producer installs these closures; none is caller-facing.
-	read             func(context.Context, bool) (nfqws2ActiveProcessLease, error)
-	signal           func()
-	done             <-chan struct{}
-	result           func() (nfqws2ActiveProcessLease, error)
-	requestWatchStop chan struct{}
-	requestWatchDone chan struct{}
-	requestWatchOnce sync.Once
+	read   func(context.Context, bool) (nfqws2ActiveProcessLease, error)
+	signal func()
+	done   <-chan struct{}
+	result func() (nfqws2ActiveProcessLease, error)
+	// Retirement is installed only by the actual platform producer. It holds
+	// the existing file writer, proves empty typed queues around COMMON cleanup,
+	// and CAS-removes only this terminal ownership.json.
+	retire            func(context.Context, nfqws2ActiveProcessLease, func() error) error
+	startDone         <-chan struct{}
+	commitDone        <-chan struct{}
+	retirementStarted bool
+	requestWatchStop  chan struct{}
+	requestWatchDone  chan struct{}
+	requestWatchOnce  sync.Once
 }
 
 var nfqws2ActiveAdapterMu sync.Mutex // Protects only private participant pointer association.
@@ -356,8 +363,11 @@ func (p *NFQWSPreparedHandle) CommitPrepared(ctx context.Context, committed, cle
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
 	o.state = "committing"
+	commitDone := make(chan struct{})
+	o.commitDone = commitDone
 	o.committed, o.cleanup = committed, cleanup
 	o.mu.Unlock()
+	defer close(commitDone) // Retirement cannot race unfinished transfer compensation.
 	if committed == nil || cleanup == nil || nfqws2ActiveOperation(ctx) != nil {
 		o.abort()
 		_, joinErr := o.join(ctx)

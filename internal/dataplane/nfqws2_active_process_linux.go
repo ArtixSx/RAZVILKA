@@ -99,9 +99,11 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 	cmd.ExtraFiles = []*os.File{endpoint}
 	done := make(chan struct{})
 	identityReady := make(chan struct{})
+	startDone := make(chan struct{})
 	var settled nfqws2ActiveProcessLease
 	var settleErr error
-	o := &nfqws2ActiveOwner{adapter: a, command: c, admission: admission, activation: activation, panel: panel, activationCancel: cancel, transport: channel, done: done, state: "starting"}
+	o := &nfqws2ActiveOwner{adapter: a, command: c, admission: admission, activation: activation, panel: panel, activationCancel: cancel, transport: channel, done: done, startDone: startDone, state: "starting"}
+	defer close(startDone) // Includes all launch failure compensation before retirement.
 	p := &NFQWSPreparedHandle{owner: o}
 	o.prepared = p
 	o.signal = func() {
@@ -112,6 +114,9 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 	o.result = func() (nfqws2ActiveProcessLease, error) { return settled, settleErr }
 	o.read = func(ctx context.Context, live bool) (nfqws2ActiveProcessLease, error) {
 		return nfqws2ActiveRead(ctx, o, live)
+	}
+	o.retire = func(ctx context.Context, settled nfqws2ActiveProcessLease, common func() error) error {
+		return nfqws2ActiveRetireFile(ctx, o, settled, common)
 	}
 	started := false
 	defer func() {
