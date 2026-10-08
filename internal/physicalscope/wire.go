@@ -217,50 +217,19 @@ func decodeAddress(m message) (int, string, string, error) {
 	return index, p.String(), prefix, nil
 }
 func decodeNeighbor(m message) (int, string, error) {
-	if len(m.data) < 12 {
-		return 0, "", at("kernel.bindings.neighbor.header", nil)
-	}
-	if m.data[0] != 2 && m.data[0] != 10 {
-		return 0, "", at("kernel.bindings.neighbor.family", nil)
-	}
-	a, err := attrs(m.data[12:])
+	n, err := parseKernelNeighbor(m)
 	if err != nil {
-		return 0, "", at("kernel.bindings.neighbor.attributes", err)
+		return 0, "", err
 	}
-	index := int(int32(binary.NativeEndian.Uint32(m.data[4:8])))
-	address, ok := netip.AddrFromSlice(a[1])
-	if index <= 0 {
-		return 0, "", at("kernel.bindings.neighbor.index", nil)
+	if err := validateUnicastNeighbor(n); err != nil {
+		return 0, "", err
 	}
-	if !ok || address.Is4In6() || address.Is4() != (m.data[0] == 2) || address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() {
-		return 0, "", at("kernel.bindings.neighbor.address", nil)
+	// The legacy textual row has no flags/role slot. Never erase a router bit
+	// into that client representation; the actual capture uses the typed path.
+	if n.flags&128 != 0 {
+		return 0, "", at("kernel.bindings.neighbor.router-role", nil)
 	}
-	state := binary.NativeEndian.Uint16(m.data[8:10])
-	states := map[uint16]string{1: "INCOMPLETE", 2: "REACHABLE", 4: "STALE", 8: "DELAY", 16: "PROBE", 32: "FAILED", 64: "NOARP", 128: "PERMANENT"}
-	label := states[state]
-	flags := m.data[10]
-	if label == "" {
-		return 0, "", at("kernel.bindings.neighbor.state", nil)
-	}
-	if m.data[11] != 1 {
-		return 0, "", at("kernel.bindings.neighbor.type", nil)
-	}
-	if flags&^(byte(2|16|128)) != 0 {
-		return 0, "", at("kernel.bindings.neighbor.flags", nil)
-	}
-	if flags&128 != 0 && (!address.Is6() || !address.IsLinkLocalUnicast()) {
-		return 0, "", at("kernel.bindings.neighbor.router-flag", nil)
-	}
-	mac := net.HardwareAddr(a[2]).String()
-	if state != 1 && state != 32 && !validMAC(mac) {
-		return 0, "", at("kernel.bindings.neighbor.mac", nil)
-	}
-	row := address.String()
-	if len(a[2]) != 0 {
-		row += " lladdr " + mac
-	}
-	row += " " + label + "\n"
-	return index, row, nil
+	return n.index, n.row(), nil
 }
 func decodeWAN(m message) ([]int, error) {
 	if len(m.data) < 12 || m.data[0] != 2 && m.data[0] != 10 {
@@ -302,7 +271,15 @@ func uniqueSorted(values []string) ([]string, error) {
 
 func checkNotifications(frames []message, segments []Segment, devices []Device) error {
 	tracked, roots, names := map[int]bool{}, map[int]bool{}, map[string]bool{}
+	byIndex := map[int]Segment{}
+	routerMACs := map[string]bool{}
 	for _, s := range segments {
+		byIndex[s.IfIndex] = s
+		for _, n := range s.RouterNeighbors {
+			if n.Flags&128 != 0 {
+				routerMACs[n.MAC] = true
+			}
+		}
 		tracked[s.IfIndex], roots[s.IfIndex], names[s.Interface] = true, true, true
 		for _, m := range s.Members {
 			tracked[m.IfIndex], names[m.Interface] = true, true
@@ -345,21 +322,25 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 			if len(m.data) < 12 {
 				return ErrUnknown
 			}
-			if roots[int(binary.NativeEndian.Uint32(m.data[4:8]))] {
-				if m.kind == 29 {
-					return ErrUnknown
-				}
-				index, row, err := decodeNeighbor(m)
+			if segment, selected := byIndex[int(binary.NativeEndian.Uint32(m.data[4:8]))]; selected {
+				n, bookkeeping, err := decodeSegmentNeighbor(m, segment)
 				if err != nil {
 					return err
 				}
-				fields := strings.Fields(row)
-				if len(fields) != 4 || fields[1] != "lladdr" || fields[3] == "FAILED" || fields[3] == "INCOMPLETE" {
+				if bookkeeping {
+					continue
+				}
+				if m.kind == 29 || n.state == 1 || n.state == 32 || !validMAC(n.mac) {
 					return ErrUnknown
 				}
 				matched := 0
+				for _, r := range segment.RouterNeighbors {
+					if r.Address == n.address.String() && r.MAC == n.mac && r.Flags == n.flags && r.Type == n.kind {
+						matched++
+					}
+				}
 				for _, d := range devices {
-					if d.IfIndex == index && d.MAC == fields[2] && (slicesContains(d.Addresses, fields[0]) || slicesContains(d.LinkLocalAddresses, fields[0])) {
+					if !routerMACs[n.mac] && n.flags&128 == 0 && d.IfIndex == n.index && d.MAC == n.mac && (slicesContains(d.Addresses, n.address.String()) || slicesContains(d.LinkLocalAddresses, n.address.String())) {
 						matched++
 					}
 				}

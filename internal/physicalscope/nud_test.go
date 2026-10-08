@@ -19,6 +19,7 @@ func TestPhysicalBenignNUDRefreshPreservesOriginalBinding(t *testing.T) {
 	}
 	router := neighborFrame(9, "fe80::20", devices[0].MAC, 4)
 	router.data[10] = 128
+	segments[0].RouterNeighbors = []RouterNeighbor{{Address: "fe80::20", MAC: devices[0].MAC, Flags: 128, Type: 1}}
 	if err := checkNotifications([]message{router}, segments, devices); err != nil {
 		t.Fatal("known link-local router mapping lost", err)
 	}

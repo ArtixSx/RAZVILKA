@@ -455,8 +455,14 @@ func (r kernelNeighborRows) Run(ctx context.Context, name string, args ...string
 }
 func bindDevices(ctx context.Context, segments []Segment, rows kernelNeighborRows) ([]Device, error) {
 	ifaces := []string{}
+	routerMACs := map[string]bool{}
 	for _, s := range segments {
 		ifaces = append(ifaces, s.Interface)
+		for _, n := range s.RouterNeighbors {
+			if n.Flags&128 != 0 {
+				routerMACs[n.MAC] = true
+			}
+		}
 	}
 	m := &devices.Manager{Runner: rows, IPCommand: "kernel-rtnetlink-neighbors"}
 	observed, err := m.ObserveBindings(ctx, ifaces)
@@ -472,6 +478,9 @@ func bindDevices(ctx context.Context, segments []Segment, rows kernelNeighborRow
 	out := make([]Device, 0, len(observed.Bindings))
 	owners := map[string]bool{}
 	for _, b := range observed.Bindings {
+		if routerMACs[b.MAC] {
+			continue
+		}
 		var segment Segment
 		for _, s := range segments {
 			if s.Interface == b.Interface {

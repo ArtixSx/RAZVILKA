@@ -62,8 +62,18 @@ type Segment struct {
 	Prefixes            []string `json:"prefixes"`
 	LinkAddresses       []string `json:"link_addresses"`
 	Members             []Link   `json:"members"`
-	Home                bool     `json:"home"`
-	Guest               bool     `json:"guest"`
+	// Actual NTF_ROUTER mappings and other mappings sharing their observed MAC
+	// are negative facts only. Their flags are retained exactly; none is a client.
+	RouterNeighbors []RouterNeighbor `json:"router_neighbors"`
+	Home            bool             `json:"home"`
+	Guest           bool             `json:"guest"`
+}
+
+type RouterNeighbor struct {
+	Address string `json:"address"`
+	MAC     string `json:"mac"`
+	Flags   uint8  `json:"flags"`
+	Type    uint8  `json:"type"`
 }
 type Link struct {
 	Interface           string `json:"interface"`
@@ -370,6 +380,7 @@ func cloneSnapshot(s Snapshot) Snapshot {
 		s.Segments[i].Prefixes = slices.Clone(s.Segments[i].Prefixes)
 		s.Segments[i].LinkAddresses = slices.Clone(s.Segments[i].LinkAddresses)
 		s.Segments[i].Members = slices.Clone(s.Segments[i].Members)
+		s.Segments[i].RouterNeighbors = slices.Clone(s.Segments[i].RouterNeighbors)
 	}
 	s.Devices = slices.Clone(s.Devices)
 	for i := range s.Devices {
