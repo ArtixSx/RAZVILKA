@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
 func publicationFixture(t *testing.T) (*FileTarget, string) {
@@ -23,6 +25,103 @@ func publicationFixture(t *testing.T) (*FileTarget, string) {
 		t.Fatal(err)
 	}
 	return f, path
+}
+
+func TestFileTargetStagedPublicationCleanNoAttemptRefusalIsAborted(t *testing.T) {
+	for _, refusal := range []string{"prepared", "admission", "skip", "late"} {
+		t.Run(refusal, func(t *testing.T) {
+			f, path := publicationFixture(t)
+			cause := errors.New("private refusal: " + path)
+			var retained func() error
+			admissions := 0
+			err := f.CompareAndSwapWithRenameAdmission(context.Background(), content("before"), content("after"), func(_ context.Context, rename func() error) error {
+				admissions++
+				retained = rename
+				if refusal == "admission" {
+					return cause
+				}
+				return nil
+			}, func() error {
+				if refusal == "prepared" {
+					return cause
+				}
+				return nil
+			})
+			if !errors.Is(err, ErrAborted) || errors.Is(err, ErrRecovery) || errors.Is(err, ownedfs.ErrStagedCleanup) || strings.Contains(fmt.Sprintf("%v %#v", err, err), path) {
+				t.Fatalf("clean no-attempt refusal became uncertain publication: %v", err)
+			}
+			if refusal == "prepared" || refusal == "admission" {
+				if !errors.Is(err, cause) {
+					t.Fatal("known refusal lost the actual cause")
+				}
+			} else if !errors.Is(err, ownedfs.ErrRenameAdmission) {
+				t.Fatal("skipped rename lost its one-use refusal cause")
+			}
+			if refusal == "prepared" && admissions != 0 {
+				t.Fatal("prepared refusal entered admission")
+			}
+			if refusal == "late" && (retained == nil || !errors.Is(retained(), ownedfs.ErrRenameAdmission)) {
+				t.Fatal("late callback survived clean refusal and cleanup")
+			}
+			assertPublicationImage(t, f, "before")
+			assertNoPublicationStage(t, path)
+			// No primitive-level poison: an independently permitted later call
+			// still needs a new actual admission and the exact unchanged image.
+			if err := f.CompareAndSwapWithRenameAdmission(context.Background(), content("before"), content("after"), func(_ context.Context, rename func() error) error { return rename() }); err != nil {
+				t.Fatalf("known refusal poisoned the same target: %v", err)
+			}
+			assertPublicationImage(t, f, "after")
+		})
+	}
+}
+
+func TestFileTargetStagedPublicationUnconfirmedCleanupRequiresRecoveryWithoutRename(t *testing.T) {
+	for _, refused := range []bool{false, true} {
+		t.Run(fmt.Sprint(refused), func(t *testing.T) {
+			f, path := publicationFixture(t)
+			cause := errors.New("private prepared refusal: " + path)
+			var foreign string
+			admissions := 0
+			err := f.CompareAndSwapWithRenameAdmission(context.Background(), content("before"), content("after"), func(_ context.Context, rename func() error) error {
+				admissions++
+				return rename()
+			}, func() error {
+				entries, err := os.ReadDir(filepath.Dir(path))
+				if err != nil {
+					return err
+				}
+				for _, entry := range entries {
+					if strings.HasPrefix(entry.Name(), ".transaction-") {
+						foreign = filepath.Join(filepath.Dir(path), entry.Name())
+					}
+				}
+				if foreign == "" {
+					return errors.New("missing prepared stage")
+				}
+				if err := os.Rename(foreign, path+"-original-stage"); err != nil {
+					return err
+				}
+				if err := os.WriteFile(foreign, []byte("independent foreign stage"), 0o600); err != nil {
+					return err
+				}
+				if refused {
+					return cause
+				}
+				return nil
+			})
+			if admissions != 0 || !errors.Is(err, ErrRecovery) || !errors.Is(err, ownedfs.ErrStagedCleanup) || strings.Contains(fmt.Sprintf("%v %#v", err, err), path) {
+				t.Fatalf("unconfirmed cleanup became a clean no-write refusal: %v", err)
+			}
+			if refused && !errors.Is(err, cause) {
+				t.Fatal("unconfirmed cleanup discarded the original refusal cause")
+			}
+			data, readErr := os.ReadFile(foreign)
+			if readErr != nil || string(data) != "independent foreign stage" {
+				t.Fatal("cleanup removed or changed a foreign stage")
+			}
+			assertPublicationImage(t, f, "before")
+		})
+	}
 }
 
 func assertPublicationImage(t *testing.T, f *FileTarget, want string) {
@@ -167,7 +266,7 @@ func TestFileTargetStagedPublicationRefusalCancellationAndInvalidInput(t *testin
 	}
 	cause := errors.New("private admission path: " + path)
 	err = f.CompareAndSwapWithRenameAdmission(context.Background(), content("before"), content("after"), func(_ context.Context, _ func() error) error { return cause })
-	if !errors.Is(err, cause) || !errors.Is(err, ErrRecovery) || strings.Contains(fmt.Sprintf("%v %#v", err, err), path) {
+	if !errors.Is(err, cause) || !errors.Is(err, ErrAborted) || errors.Is(err, ErrRecovery) || strings.Contains(fmt.Sprintf("%v %#v", err, err), path) {
 		t.Fatal("refusal lost its cause or exposed its private path")
 	}
 	assertPublicationImage(t, f, "before")

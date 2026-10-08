@@ -17,9 +17,10 @@ import (
 // Callbacks must not reenter this target. admitRename receives the original ctx
 // and must invoke only the supplied synchronous, one-use rename under the
 // caller's actual control admission. Staging, directory Sync, readback and
-// cleanup are outside that admission. A failure after rename was attempted is
-// uncertain and preserves ErrRecovery plus its cause, without exposing private
-// paths in the error text. The same target remains available for exact repair.
+// cleanup are outside that admission. A clean refusal without a rename attempt
+// preserves ErrAborted (or ErrConflict for a changed image) plus its cause. An
+// attempted rename or unconfirmed stage cleanup preserves ErrRecovery. Error
+// text exposes no private paths. The same target remains available for repair.
 func (f *FileTarget) CompareAndSwapWithRenameAdmission(ctx context.Context, before, after Image, admitRename func(context.Context, func() error) error, prepared ...func() error) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -62,12 +63,10 @@ func (f *FileTarget) CompareAndSwapWithRenameAdmission(ctx context.Context, befo
 	})
 	if err != nil {
 		kind := ErrRecovery
-		if !attempted {
-			switch {
-			case errors.Is(err, ErrConflict), errors.Is(err, ownedfs.ErrStagedFileChanged):
+		if !attempted && !errors.Is(err, ownedfs.ErrStagedCleanup) {
+			kind = ErrAborted
+			if errors.Is(err, ErrConflict) || errors.Is(err, ownedfs.ErrStagedFileChanged) {
 				kind = ErrConflict
-			case errors.Is(err, ErrAborted), ctx.Err() != nil:
-				kind = ErrAborted
 			}
 		}
 		return &filePublicationError{kind, err}

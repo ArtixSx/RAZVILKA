@@ -13,6 +13,7 @@ import (
 
 var (
 	ErrStagedFileChanged = errors.New("owned staged file changed before publication")
+	ErrStagedCleanup     = errors.New("owned staged file cleanup was not confirmed")
 	ErrRenameAdmission   = errors.New("owned rename admission must complete exactly once")
 )
 
@@ -24,6 +25,8 @@ var (
 // and performs directory sync/readback afterwards. attempted reports whether
 // the rename syscall ran, including an uncertain failure. This retains Root's
 // descriptor boundary, not protection against root or uncooperative writers.
+// ErrStagedCleanup identifies a failure to close/remove the owned stage even
+// when no rename was attempted; a clean no-attempt refusal cannot publish data.
 func (r *Root) WriteAtomicWithRenameAdmission(name string, data []byte, mode os.FileMode, admitRename func(func() error) error, prepared func() error) (attempted bool, err error) {
 	if admitRename == nil {
 		return false, ErrRenameAdmission
@@ -39,12 +42,16 @@ func (r *Root) WriteAtomicWithRenameAdmission(name string, data []byte, mode os.
 	created, statErr := f.Stat()
 	closed := false
 	defer func() {
+		var cleanupErr error
 		if !closed {
-			err = errors.Join(err, f.Close())
+			cleanupErr = f.Close()
 		}
 		// Never remove a different inode (including a symlink) that appeared
 		// under the temporary name. All cleanup is outside rename admission.
-		err = errors.Join(err, r.removeStagedFile(temporary, created))
+		cleanupErr = errors.Join(cleanupErr, r.removeStagedFile(temporary, created))
+		if cleanupErr != nil {
+			err = errors.Join(err, ErrStagedCleanup, cleanupErr)
+		}
 	}()
 	if statErr != nil {
 		return false, statErr
@@ -63,7 +70,7 @@ func (r *Root) WriteAtomicWithRenameAdmission(name string, data []byte, mode os.
 	}
 	closed = true
 	if err := f.Close(); err != nil {
-		return false, err
+		return false, errors.Join(ErrStagedCleanup, err)
 	}
 	if prepared != nil {
 		if err := prepared(); err != nil {

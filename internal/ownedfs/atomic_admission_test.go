@@ -73,17 +73,22 @@ func TestAtomicAdmissionRejectsChangedTemporaryWithoutRemovingForeignFile(t *tes
 			if attempted || admissions != 0 || !errors.Is(err, ErrStagedFileChanged) {
 				t.Fatalf("changed stage reached rename: %v %d %v", attempted, admissions, err)
 			}
-			data, err := os.ReadFile(filepath.Join(path, "state"))
-			if err != nil || string(data) != "before" {
+			data, readErr := os.ReadFile(filepath.Join(path, "state"))
+			if readErr != nil || string(data) != "before" {
 				t.Fatal("changed stage overwrote before-image")
 			}
 			_, statErr := os.Lstat(temporary)
 			if change == "replacement" || change == "symlink" {
+				if !errors.Is(err, ErrStagedCleanup) {
+					t.Fatal("unconfirmed foreign-stage cleanup lost its classification")
+				}
 				if statErr != nil {
 					t.Fatal("cleanup removed a foreign temporary inode")
 				}
-			} else if !errors.Is(statErr, os.ErrNotExist) {
-				t.Fatal("owned refused stage was not cleaned")
+			} else {
+				if errors.Is(err, ErrStagedCleanup) || !errors.Is(statErr, os.ErrNotExist) {
+					t.Fatal("owned refused stage was not confirmed cleaned")
+				}
 			}
 		})
 	}
