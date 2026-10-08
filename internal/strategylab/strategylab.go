@@ -124,21 +124,22 @@ type Summary struct {
 }
 
 type Selection struct {
-	ServiceID           string  `json:"service_id"`
-	Protocol            string  `json:"protocol"`
-	IPFamily            string  `json:"ip_family"`
-	CandidateID         string  `json:"candidate_id"`
-	PreviousCandidateID string  `json:"previous_candidate_id,omitempty"`
-	Frozen              bool    `json:"frozen"`
-	SelectedAt          string  `json:"selected_at"`
-	LastHealthyAt       string  `json:"last_healthy_at,omitempty"`
-	RolledBackAt        string  `json:"rolled_back_at,omitempty"`
-	RollbackReason      string  `json:"rollback_reason,omitempty"`
-	Healthy             bool    `json:"healthy"`
-	Confidence          float64 `json:"confidence"`
-	ConsecutiveFailures int     `json:"consecutive_failures"`
-	Status              string  `json:"status"`
-	Reason              string  `json:"reason"`
+	ServiceID           string       `json:"service_id"`
+	Protocol            string       `json:"protocol"`
+	IPFamily            string       `json:"ip_family"`
+	CandidateID         string       `json:"candidate_id"`
+	PreviousCandidateID string       `json:"previous_candidate_id,omitempty"`
+	Mode                AdaptiveMode `json:"mode,omitempty"`
+	Frozen              bool         `json:"frozen"`
+	SelectedAt          string       `json:"selected_at"`
+	LastHealthyAt       string       `json:"last_healthy_at,omitempty"`
+	RolledBackAt        string       `json:"rolled_back_at,omitempty"`
+	RollbackReason      string       `json:"rollback_reason,omitempty"`
+	Healthy             bool         `json:"healthy"`
+	Confidence          float64      `json:"confidence"`
+	ConsecutiveFailures int          `json:"consecutive_failures"`
+	Status              string       `json:"status"`
+	Reason              string       `json:"reason"`
 }
 
 type State struct {
@@ -769,6 +770,12 @@ func selectionsWithHealth(state State, summaries []Summary, now time.Time) []Sel
 		selection.Healthy = ok && summary.Eligible
 		selection.Confidence = summary.Confidence
 		selection.ConsecutiveFailures = consecutiveFailures(state.Evidence, selection, now)
+		if selection.Mode == ModeManual && !manualSelectionHasEvidence(state.Evidence, selection, now) {
+			selection.Healthy, selection.Confidence, selection.ConsecutiveFailures = false, 0, 0
+			selection.Status, selection.Reason = manualSelectionUncheckedStatus, manualSelectionUncheckedReason
+			selections = append(selections, selection)
+			continue
+		}
 		if ok {
 			selection.Reason = summary.Reason
 		} else {
@@ -826,7 +833,7 @@ func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
 		m.state.Selections[key] = selection
 		return
 	}
-	if selection.Frozen || consecutiveFailures(m.state.Evidence, selection, m.now()) < RollbackFailures {
+	if selection.Frozen || selection.Mode == ModeManual || consecutiveFailures(m.state.Evidence, selection, m.now()) < RollbackFailures {
 		return
 	}
 	summaries := summarize(m.state, m.now())

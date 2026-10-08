@@ -38,8 +38,12 @@ type SelectedCandidateReview struct {
 	descriptor components.NFQWSRuntimeDescriptor
 }
 
+func selectedReviewKeyValid(serviceID, protocol, family string) bool {
+	return serviceID != "" && strings.TrimSpace(serviceID) == serviceID && !strings.ContainsAny(serviceID, "|\x00\r\n") && validProtocol(protocol) && validFamily(family)
+}
+
 func (m *Manager) RetainSelectedCandidateReview(ctx context.Context, serviceID, protocol, family string, runtime *components.ManagedNFQWSRuntimeLease) (*SelectedCandidateReview, error) {
-	if m == nil || runtime == nil || selectedReviewContext(ctx) != nil || serviceID == "" || strings.TrimSpace(serviceID) != serviceID || strings.ContainsAny(serviceID, "|\x00\r\n") || !validProtocol(protocol) || !validFamily(family) {
+	if m == nil || runtime == nil || selectedReviewContext(ctx) != nil || !selectedReviewKeyValid(serviceID, protocol, family) {
 		return nil, errors.Join(ErrSelectedCandidateChanged, selectedReviewContext(ctx))
 	}
 	if err := runtime.Check(ctx); err != nil {
@@ -64,30 +68,40 @@ func (m *Manager) RetainSelectedCandidateReview(ctx context.Context, serviceID, 
 	r.self = r
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if err := r.retainSourceLocked(); err != nil {
+		return nil, err
+	}
+	if err := r.currentLocked(ctx); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// Caller holds the configured Manager lock. This captures comparison material
+// only; it cannot issue a public review or authorize a persisted selection.
+func (r *SelectedCandidateReview) retainSourceLocked() error {
+	m := r.binding.manager
 	r.path = m.Path
 	r.image = restorejournal.Image{Exists: m.image.Exists, Data: slices.Clone(m.image.Data)}
 	validator, err := adaptiveManagedValidatorLocked(m)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	r.provider = validator.(CompatibleValidator).Provider.(*SupervisedCompatibilityProvider)
 	r.review = r.provider.review
 	r.review.Assets = slices.Clone(r.review.Assets)
 	r.review.BaseArguments = slices.Clone(r.review.BaseArguments)
 	if err := compatibilityProtectedReview(r.path, r.review); err != nil {
-		return nil, errors.Join(ErrSelectedCandidateChanged, err)
+		return errors.Join(ErrSelectedCandidateChanged, err)
 	}
 	r.file, err = selectedReviewFileIdentity(r.path)
 	if err == nil {
 		r.parent, err = selectedReviewFileIdentity(filepath.Dir(r.path))
 	}
 	if err != nil {
-		return nil, errors.Join(ErrSelectedCandidateChanged, err)
+		return errors.Join(ErrSelectedCandidateChanged, err)
 	}
-	if err := r.currentLocked(ctx); err != nil {
-		return nil, err
-	}
-	return r, nil
+	return nil
 }
 
 func selectedReviewContext(ctx context.Context) error {
@@ -210,6 +224,22 @@ func (r *SelectedCandidateReview) currentLocked(ctx context.Context) error {
 	if err := r.sourceLocked(ctx); err != nil {
 		return err
 	}
+	if err := r.materialCurrentLocked(ctx); err != nil {
+		return err
+	}
+	if err := r.sourceLocked(ctx); err != nil {
+		return err
+	}
+	return errors.Join(compatibilityControlCurrent(ctx, r.review), selectedReviewContext(ctx))
+}
+
+// The manual choice writer checks this same original candidate/material source
+// before it has a saved selection. It grants no public review; currentLocked
+// additionally observes the exact persisted selection on both sides.
+func (r *SelectedCandidateReview) materialCurrentLocked(ctx context.Context) error {
+	if err := r.candidateSourceLocked(ctx); err != nil {
+		return err
+	}
 	// A legacy/native-QA compatibility publisher cannot become a production
 	// source by attaching a component DTO after its unadmitted publication.
 	if r.provider.self != r.provider || r.provider.managedControl == nil || !r.provider.managedControl.MatchesControlRoot(r.review.ControlPath) || !compatibilityJSONEqual(r.descriptor, r.provider.managedDescriptor) {
@@ -234,7 +264,7 @@ func (r *SelectedCandidateReview) currentLocked(ctx context.Context) error {
 	if err := compatibilityControlCurrent(ctx, r.review); err != nil {
 		return errors.Join(ErrSelectedCandidateChanged, err)
 	}
-	if err := r.sourceLocked(ctx); err != nil {
+	if err := r.candidateSourceLocked(ctx); err != nil {
 		return err
 	}
 	if err := r.runtime.Check(ctx); err != nil {
@@ -257,12 +287,25 @@ func (r *SelectedCandidateReview) currentLocked(ctx context.Context) error {
 // Linux ownership, reviewed material and current control.
 func (r *SelectedCandidateReview) sourceLocked(ctx context.Context) error {
 	m := r.binding.manager
-	if m == nil || selectedReviewContext(ctx) != nil || m.Path != r.path || !compatibilityCleanPath(r.path) || m.compatibilityUnknownLocked() || m.writeBlocked || m.nativeRunning || !r.image.Exists || !m.image.Exists || !bytes.Equal(m.image.Data, r.image.Data) {
+	if m == nil {
 		return ErrSelectedCandidateChanged
 	}
 	selection, exists := m.state.Selections[selectionKey(r.selection.ServiceID, r.selection.Protocol, r.selection.IPFamily)]
+	if !exists || selection != r.selection {
+		return ErrSelectedCandidateChanged
+	}
+	return r.candidateSourceLocked(ctx)
+}
+
+// Caller holds Manager.mu. This also checks the prospective choice's transport
+// against the completed native invocation, without treating it as saved data.
+func (r *SelectedCandidateReview) candidateSourceLocked(ctx context.Context) error {
+	m := r.binding.manager
+	if m == nil || selectedReviewContext(ctx) != nil || m.Path != r.path || !compatibilityCleanPath(r.path) || m.compatibilityUnknownLocked() || m.writeBlocked || m.nativeRunning || !r.image.Exists || !m.image.Exists || !bytes.Equal(m.image.Data, r.image.Data) {
+		return ErrSelectedCandidateChanged
+	}
 	candidate, candidateExists := m.state.Candidates[r.binding.candidate.ID]
-	if !exists || !candidateExists || selection != r.selection || !adaptiveCandidateIdentityEqual(candidate, r.binding.candidate) || !compatibilityJSONEqual(candidate.Validation, r.binding.candidate.Validation) {
+	if !candidateExists || !adaptiveCandidateIdentityEqual(candidate, r.binding.candidate) || !compatibilityJSONEqual(candidate.Validation, r.binding.candidate.Validation) {
 		return ErrSelectedCandidateChanged
 	}
 	validator, err := adaptiveManagedValidatorLocked(m)
