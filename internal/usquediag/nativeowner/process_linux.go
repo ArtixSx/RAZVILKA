@@ -111,7 +111,12 @@ func (r *linuxSession) Start(ctx context.Context, original OriginalLease) (err e
 	r.cmd.ExtraFiles = []*os.File{endpoint, r.facts.helper.file, r.config.file, r.binary.file, dir, r.facts.namespace, r.control.directory, r.control.lock}
 	r.cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	defer r.armWait() // including an original admission panic after actual Start
-	actual := startOnce{open: true, begin: r.cmd.Start}
+	actual := startOnce{open: true, begin: func() error {
+		if r.facts.helper.metadataCurrent(ctx) != nil || r.binary.metadataCurrent(ctx) != nil || r.config.metadataCurrent(ctx) != nil {
+			return ErrOwned
+		}
+		return r.cmd.Start()
+	}}
 	admissionErr := actual.invoke(func(begin func() error) error { return original.WithEffectStart(ctx, "usque-native-helper", begin) })
 	if r.cmd.Process == nil {
 		return ErrOwned

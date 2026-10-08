@@ -76,9 +76,9 @@ func supervise() (err error) {
 	if e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || e6 != nil || !os.SameFile(helperInfo, selfExe) || ns != o.Scope.Namespace {
 		return ErrOwned
 	}
-	helper := &heldFile{file: files[0], info: helperInfo, path: o.Scope.Helper.Path, hash: o.Scope.Helper.SHA256, limit: 256 << 20}
-	config := &heldFile{file: files[1], info: configInfo, path: o.Launch.Process.MatchArg, hash: o.Launch.ConfigSHA256, limit: 8 << 20}
-	binary := &heldFile{file: files[2], info: binaryInfo, path: o.Launch.Process.Binary, hash: o.Launch.BinarySHA256, limit: 256 << 20}
+	helper := &heldFile{file: files[0], info: helperInfo, path: o.Scope.Helper.Path, hash: o.Scope.Helper.SHA256, limit: 256 << 20, executable: true}
+	config := &heldFile{file: files[1], info: configInfo, path: o.Launch.Process.MatchArg, hash: o.Launch.ConfigSHA256, limit: 8 << 20, private: true}
+	binary := &heldFile{file: files[2], info: binaryInfo, path: o.Launch.Process.Binary, hash: o.Launch.BinarySHA256, limit: 256 << 20, executable: true}
 	root, err := os.OpenRoot(o.Launch.Process.Dir)
 	if err != nil {
 		return ErrOwned
@@ -166,8 +166,8 @@ func supervise() (err error) {
 		startErr = operationgate.WithSelfUpdateEffectAdmission(ctx, o.Control.Root, o.Control.TransactionID, o.Control.InstallationID, o.Control.Sequence, "usque-native-child", func() error {
 			actual, e1 := root.Stat(".")
 			path, e2 := os.Lstat(o.Launch.Process.Dir)
-			configPath, e3 := os.Lstat(o.Launch.Process.MatchArg)
-			if ctx.Err() != nil || anchors.current() != nil || e1 != nil || e2 != nil || e3 != nil || !os.SameFile(actual, rootInfo) || !os.SameFile(path, rootInfo) || !os.SameFile(configPath, configInfo) {
+			if ctx.Err() != nil || anchors.current() != nil || e1 != nil || e2 != nil || !os.SameFile(actual, rootInfo) || !os.SameFile(path, rootInfo) ||
+				helper.metadataCurrent(ctx) != nil || binary.metadataCurrent(ctx) != nil || config.metadataCurrent(ctx) != nil {
 				return ErrOwned
 			}
 			return cmd.Start()

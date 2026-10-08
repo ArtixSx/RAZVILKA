@@ -26,12 +26,13 @@ type linuxPlatform struct{}
 func nativePlatform() platform { return linuxPlatform{} }
 
 type heldFile struct {
-	mu         sync.Mutex
-	closed     bool
-	file       *os.File
-	info       os.FileInfo
-	path, hash string
-	limit      int64
+	mu                  sync.Mutex
+	closed              bool
+	file                *os.File
+	info                os.FileInfo
+	path, hash          string
+	limit               int64
+	private, executable bool
 }
 
 func protectedPath(path string, private bool) error {
@@ -74,7 +75,7 @@ func openHeld(ctx context.Context, path, hash string, limit int64, private, exec
 	if err != nil {
 		return nil, ErrOwned
 	}
-	h := &heldFile{file: f, info: info, path: path, hash: hash, limit: limit}
+	h := &heldFile{file: f, info: info, path: path, hash: hash, limit: limit, private: private, executable: executable}
 	if unix.Flock(int(f.Fd()), unix.LOCK_SH|unix.LOCK_NB) != nil || h.current(ctx) != nil {
 		_ = f.Close()
 		return nil, ErrOwned
@@ -88,12 +89,7 @@ func (h *heldFile) current(ctx context.Context) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if ctx.Err() != nil || h.closed || h.file == nil || protectedPath(h.path, false) != nil {
-		return ErrOwned
-	}
-	before, e1 := h.file.Stat()
-	path, e2 := os.Lstat(h.path)
-	if e1 != nil || e2 != nil || !os.SameFile(before, h.info) || !os.SameFile(path, h.info) || before.Size() != h.info.Size() || !before.ModTime().Equal(h.info.ModTime()) {
+	if h.metadataLocked(ctx) != nil {
 		return ErrOwned
 	}
 	digest := sha256.New()
@@ -118,12 +114,47 @@ func (h *heldFile) current(ctx context.Context) error {
 			return ErrOwned
 		}
 	}
-	after, e3 := h.file.Stat()
-	current, e4 := os.Lstat(h.path)
-	if e3 != nil || e4 != nil || !os.SameFile(current, h.info) || !os.SameFile(after, h.info) || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || hex.EncodeToString(digest.Sum(nil)) != h.hash || ctx.Err() != nil {
+	if h.metadataLocked(ctx) != nil || hex.EncodeToString(digest.Sum(nil)) != h.hash || ctx.Err() != nil {
 		return ErrOwned
 	}
 	return nil
+}
+
+// Preserve the originally reviewed metadata and requirements on both the held
+// descriptor and its current path. Permission-only changes do not alter the
+// inode, bytes or mtime, and must still revoke this file's retained review.
+func (h *heldFile) metadataLocked(ctx context.Context) error {
+	if ctx == nil || ctx.Err() != nil || h.closed || h.file == nil || h.info == nil || protectedPath(h.path, h.private) != nil {
+		return ErrOwned
+	}
+	held, e1 := h.file.Stat()
+	path, e2 := os.Lstat(h.path)
+	if e1 != nil || e2 != nil || !h.sameMetadata(held) || !h.sameMetadata(path) || ctx.Err() != nil {
+		return ErrOwned
+	}
+	return nil
+}
+
+func (h *heldFile) sameMetadata(actual os.FileInfo) bool {
+	if actual == nil || !actual.Mode().IsRegular() || actual.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 ||
+		!os.SameFile(actual, h.info) || actual.Mode() != h.info.Mode() || actual.Size() != h.info.Size() || !actual.ModTime().Equal(h.info.ModTime()) ||
+		h.private && actual.Mode().Perm()&0o077 != 0 || h.executable && actual.Mode().Perm()&0o111 == 0 {
+		return false
+	}
+	original, ok1 := h.info.Sys().(*syscall.Stat_t)
+	current, ok2 := actual.Sys().(*syscall.Stat_t)
+	return ok1 && ok2 && current.Uid == original.Uid && current.Gid == original.Gid && current.Nlink == original.Nlink && current.Ctim == original.Ctim
+}
+
+// Fast metadata continuity for the short actual Cmd.Start boundary; digest
+// bookends remain outside the protected control lock.
+func (h *heldFile) metadataCurrent(ctx context.Context) error {
+	if h == nil {
+		return ErrOwned
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.metadataLocked(ctx)
 }
 
 func (h *heldFile) close() error {

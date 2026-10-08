@@ -3,6 +3,7 @@
 package nativeowner
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -11,6 +12,110 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 )
+
+func TestOwnerHeldAssetRejectsPermissionOnlyDriftInParentAndHelper(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		initial, changed    os.FileMode
+		private, executable bool
+		restored            bool
+	}{
+		{"private-exposure", 0o600, 0o644, true, false, false},
+		{"private-exposure-restored", 0o600, 0o644, true, false, true},
+		{"private-narrower-mode", 0o600, 0o400, true, false, false},
+		{"executable-removed", 0o700, 0o600, false, true, false},
+		{"executable-mode-changed", 0o755, 0o700, false, true, false},
+		{"executable-setuid", 0o700, 0o700 | os.ModeSetuid, false, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "test-only-inert-asset")
+			data := []byte("TEST-ONLY-NONEXECUTED-ASSET")
+			if err := os.WriteFile(path, data, tc.initial); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(path, tc.initial); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			parent, err := openHeld(ctx, path, routeidentity.Hash(data), 1024, tc.private, tc.executable)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer parent.close()
+			// Model the helper's inherited held FD review without executing one.
+			fd, err := os.Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			info, err := fd.Stat()
+			if err != nil {
+				_ = fd.Close()
+				t.Fatal(err)
+			}
+			helper := &heldFile{file: fd, info: info, path: path, hash: parent.hash, limit: 1024, private: tc.private, executable: tc.executable}
+			defer helper.close()
+			if parent.current(ctx) != nil || helper.current(ctx) != nil {
+				t.Fatal("original protected metadata refused")
+			}
+			if err := os.Chmod(path, tc.changed); err != nil {
+				t.Fatal(err)
+			}
+			wantMode := tc.changed
+			if tc.restored {
+				if err := os.Chmod(path, tc.initial); err != nil {
+					t.Fatal(err)
+				}
+				wantMode = tc.initial // ctime still records the broken original review
+			}
+			changed, err := os.Lstat(path)
+			actualData, readErr := os.ReadFile(path)
+			if err != nil || readErr != nil || !os.SameFile(changed, info) || changed.Size() != info.Size() || !changed.ModTime().Equal(info.ModTime()) || !bytes.Equal(actualData, data) || changed.Mode() != wantMode {
+				t.Fatal("permission-only fixture changed inode/bytes/size/mtime or did not change mode")
+			}
+			for _, h := range []*heldFile{parent, helper} {
+				if h.metadataCurrent(ctx) == nil || h.current(ctx) == nil {
+					t.Fatal("parent/helper retained permission or metadata drift")
+				}
+			}
+			stillChanged, err := os.Lstat(path)
+			if err != nil || stillChanged.Mode() != wantMode {
+				t.Fatal("review repaired changed permissions")
+			}
+		})
+	}
+}
+
+func TestOwnerHeldAssetRejectsPrivateOrExecutableRequirementsOnInheritedSnapshot(t *testing.T) {
+	for _, tc := range []struct {
+		mode                os.FileMode
+		private, executable bool
+	}{{0o644, true, false}, {0o600, false, true}} {
+		path := filepath.Join(t.TempDir(), "test-only-inert-inherited-asset")
+		data := []byte("TEST-ONLY-NONEXECUTED-ASSET")
+		if err := os.WriteFile(path, data, tc.mode); err != nil {
+			t.Fatal(err)
+		}
+		fd, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := fd.Stat()
+		if err != nil {
+			_ = fd.Close()
+			t.Fatal(err)
+		}
+		h := &heldFile{file: fd, info: info, path: path, hash: routeidentity.Hash(data), limit: 1024, private: tc.private, executable: tc.executable}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		if h.metadataCurrent(ctx) == nil || h.current(ctx) == nil {
+			_ = h.close()
+			cancel()
+			t.Fatal("helper accepted fresh same-inode snapshot without its role requirement")
+		}
+		_ = h.close()
+		cancel()
+	}
+}
 
 // Native POSIX FILESYSTEM fixtures only. No child/sockets/account/network probe
 // runs, and no synthetic engine PID/passport/acceptance receipt is persisted.
