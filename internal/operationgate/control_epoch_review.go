@@ -118,6 +118,49 @@ func (r *ControlEpochReview) Current(ctx context.Context) error {
 	})
 }
 
+// ReviewExclusiveCleanup captures only this SAME original operation's cleanup
+// lifetime while the retained control owner is still ready, before effects or
+// cancellation. It reuses the existing cleanup review; no background admission,
+// forward context, process/file ownership or completion proof is created.
+func (r *ControlEpochReview) ReviewExclusiveCleanup(ctx context.Context) (*ExclusiveCleanupReview, error) {
+	if r == nil || r.self != r || r.gate == nil {
+		return nil, ErrSelfUpdateStopChanged
+	}
+	var cleanup *ExclusiveCleanupReview
+	err := r.gate.WithExclusiveContext(ctx, func() error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if err := r.check(ctx); err != nil {
+			return err
+		}
+		var err error
+		cleanup, err = r.gate.ReviewExclusiveCleanup(ctx)
+		return errors.Join(err, r.check(ctx))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cleanup, nil
+}
+
+// CurrentForCleanup only compares this SAME retained control incarnation and
+// ready epoch or its validated durable Stop successor. It grants no Gate
+// admission or effect. A producer calls it inside its pre-issued original
+// ExclusiveCleanupReview.WithCurrent, and independently proves exact ownership
+// and completion before releasing the original operation.
+func (r *ControlEpochReview) CurrentForCleanup(ctx context.Context) error {
+	if r == nil || r.self != r || ctx == nil {
+		return ErrSelfUpdateStopChanged
+	}
+	deadline, bounded := ctx.Deadline()
+	if !bounded || !time.Now().Before(deadline) {
+		return errors.Join(ErrSelfUpdateStopChanged, ctx.Err())
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.checkWithMarkerMode(ctx, r.lock, true)
+}
+
 // WithStart linearizes ONLY an actual bounded Cmd.Start syscall with durable
 // Stop. The caller must already retain its exact command/review/Store/owner
 // binding; this primitive grants none of them. The synchronous callback must
@@ -172,6 +215,10 @@ func (r *ControlEpochReview) check(ctx context.Context) error {
 }
 
 func (r *ControlEpochReview) checkWithMarker(ctx context.Context, markerReader *os.File) error {
+	return r.checkWithMarkerMode(ctx, markerReader, false)
+}
+
+func (r *ControlEpochReview) checkWithMarkerMode(ctx context.Context, markerReader *os.File, allowStopped bool) error {
 	if ctx == nil || r.closed || r.dir == nil || r.lock == nil || r.info == nil {
 		return ErrSelfUpdateStopChanged
 	}
@@ -185,10 +232,17 @@ func (r *ControlEpochReview) checkWithMarker(ctx context.Context, markerReader *
 	if err != nil || checkControlRequest(r.dir, record) != nil {
 		return ErrSelfUpdateStopJournal
 	}
-	if record.Stopped {
+	if record.Stopped && !allowStopped {
 		return ErrSelfUpdateStopped
 	}
-	if record.InstallationID != r.ref.InstallationID || record.Sequence != r.ref.Sequence {
+	expectedSequence := r.ref.Sequence
+	if allowStopped && record.Stopped {
+		if expectedSequence == ^uint64(0) {
+			return ErrSelfUpdateStopChanged
+		}
+		expectedSequence++
+	}
+	if record.InstallationID != r.ref.InstallationID || record.Sequence != expectedSequence {
 		return ErrSelfUpdateStopChanged
 	}
 	if err := r.checkHeldOwner(markerReader); err != nil {
