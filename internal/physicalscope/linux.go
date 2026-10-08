@@ -252,7 +252,7 @@ func captureKernel(ctx context.Context, selection Selection, native []nativeSegm
 	}
 	segments, err := assembleSegments(selection, native, stock, linkFrames, addressFrames, routeFrames)
 	if err != nil {
-		return nil, nil, at("kernel.corroboration", err)
+		return nil, nil, err // Retain the closed assembler branch; no raw data.
 	}
 	bindings, err := observeKernelBindings(ctx, segments)
 	if err != nil {

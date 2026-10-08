@@ -153,30 +153,49 @@ func parseNDM(raw []byte) ([]nativeSegment, error) {
 }
 func validateNativeBridge(v nativeSegment) (nativeSegment, error) {
 	if v.kind != "Bridge" {
-		return nativeSegment{}, ErrUnknown
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.kind", nil)
 	}
 	for _, key := range []string{"global", "security-level", "link", "state", "connected", "mac", "address", "mask", "ipv6", "bridge"} {
 		if _, ok := v.fields[key]; !ok {
-			return nativeSegment{}, ErrUnknown
+			// key comes only from the closed literal list above, never NDM.
+			return nativeSegment{}, at("kernel.corroboration.native.bridge.required-"+key, nil)
 		}
 	}
 	// The actual reviewed fixture has an empty IPv6 field. A future nonempty
 	// dialect must be reviewed; silently dropping a v6 LAN prefix is forbidden.
-	if v.fields["ipv6"] != "" || v.fields["ipv6-subtree"] != "" || v.fields["bridge"] != "" || !segmentID.MatchString(v.osName) {
-		return nativeSegment{}, ErrUnknown
+	if v.fields["ipv6"] != "" {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.ipv6-value", nil)
+	}
+	if v.fields["ipv6-subtree"] != "" {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.ipv6-subtree", nil)
+	}
+	if v.fields["bridge"] != "" {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.value", nil)
+	}
+	if !segmentID.MatchString(v.osName) {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.interface-label", nil)
 	}
 	address, err := netip.ParseAddr(v.fields["address"])
 	mask := net.ParseIP(v.fields["mask"]).To4()
-	if err != nil || !address.Is4() || mask == nil {
-		return nativeSegment{}, ErrUnknown
+	if err != nil || !address.Is4() {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.address", err)
+	}
+	if mask == nil {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.mask", nil)
 	}
 	ones, bits := net.IPMask(mask).Size()
 	if bits != 32 || ones <= 0 || ones > 32 {
-		return nativeSegment{}, ErrUnknown
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.mask-bits", nil)
 	}
 	prefix := netip.PrefixFrom(address, ones).Masked()
-	if !lanPrefix(prefix) || !validMAC(v.mac) || len(v.members) == 0 || len(v.members) > 64 {
-		return nativeSegment{}, ErrUnknown
+	if !lanPrefix(prefix) {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.prefix", nil)
+	}
+	if !validMAC(v.mac) {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.mac", nil)
+	}
+	if len(v.members) == 0 || len(v.members) > 64 {
+		return nativeSegment{}, at("kernel.corroboration.native.bridge.member-count", nil)
 	}
 	v.mac = strings.ToLower(v.mac)
 	v.prefixes = []string{prefix.String()}

@@ -19,13 +19,13 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 	for _, m := range linkFrames {
 		link, err := decodeLink(m)
 		if err != nil {
-			return nil, err
+			return nil, at("kernel.corroboration.link.decode", err)
 		}
 		if _, ok := links[link.IfIndex]; ok {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.link.duplicate-index", nil)
 		}
 		if _, ok := names[link.Interface]; ok {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.link.duplicate-name", nil)
 		}
 		links[link.IfIndex], names[link.Interface] = link, link
 	}
@@ -33,7 +33,7 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 	for _, m := range routeFrames {
 		indices, err := decodeWAN(m)
 		if err != nil {
-			return nil, err
+			return nil, at("kernel.corroboration.route.decode", err)
 		}
 		for _, index := range indices {
 			wan[index] = true
@@ -42,32 +42,35 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 	selected := append([]string{selection.HomeSegmentID}, selection.GuestSegmentIDs...)
 	if len(selection.SegmentIDs) > 0 {
 		if !stock {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.selection.linux-home-required", nil)
 		} // Linux must explicitly identify Home.
 		home := ""
 		guests := []string{}
 		for _, id := range selection.SegmentIDs {
 			v, err := resolveNative(native, id)
 			if err != nil {
-				return nil, err
+				return nil, at("kernel.corroboration.selection.native-resolve", err)
 			}
-			if v.kind != "Bridge" || v.global != "no" {
-				return nil, ErrUnknown
+			if v.kind != "Bridge" {
+				return nil, at("kernel.corroboration.selection.native-kind", nil)
+			}
+			if v.global != "no" {
+				return nil, at("kernel.corroboration.selection.native-global", nil)
 			}
 			switch v.security {
 			case "private":
 				if home != "" {
-					return nil, ErrUnknown
+					return nil, at("kernel.corroboration.selection.multiple-home", nil)
 				}
 				home = id
 			case "protected":
 				guests = append(guests, id)
 			default:
-				return nil, ErrUnknown
+				return nil, at("kernel.corroboration.selection.native-security", nil)
 			}
 		}
 		if home == "" {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.selection.home-missing", nil)
 		}
 		selected = append([]string{home}, guests...)
 	}
@@ -78,7 +81,7 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 		if stock {
 			resolved, err = resolveNative(native, id)
 			if err != nil {
-				return nil, err
+				return nil, at("kernel.corroboration.native.resolve", err)
 			}
 			resolved, err = validateNativeBridge(resolved)
 			if err != nil {
@@ -88,30 +91,91 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 			if i > 0 {
 				role = "protected"
 			}
-			if resolved.kind != "Bridge" || resolved.global != "no" || resolved.security != role || resolved.link != "up" || resolved.state != "up" || resolved.connected != "yes" {
-				return nil, ErrUnknown
+			if resolved.kind != "Bridge" {
+				return nil, at("kernel.corroboration.native.kind", nil)
+			}
+			if resolved.global != "no" {
+				return nil, at("kernel.corroboration.native.global", nil)
+			}
+			if resolved.security != role {
+				return nil, at("kernel.corroboration.native.security", nil)
+			}
+			if resolved.link != "up" {
+				return nil, at("kernel.corroboration.native.link", nil)
+			}
+			if resolved.state != "up" {
+				return nil, at("kernel.corroboration.native.state", nil)
+			}
+			if resolved.connected != "yes" {
+				return nil, at("kernel.corroboration.native.connected", nil)
 			}
 		}
 		link, ok := names[resolved.osName]
 		if stock {
 			count := 0
+			closest := bridgeMatchNoMAC
 			for _, candidate := range links {
 				match, err := matchNativeBridge(resolved, candidate, addressFrames)
 				if err != nil {
 					return nil, err
 				}
-				if match {
+				if match > closest {
+					closest = match
+				}
+				if match == bridgeMatchComplete {
 					link = candidate
 					count++
 				}
 			}
+			if count == 0 {
+				// This closed result reports only the furthest comparison. No
+				// candidate becomes selected evidence until every check passes.
+				switch closest {
+				case bridgeMatchNoMAC:
+					return nil, at("kernel.corroboration.bridge.match.mac", nil)
+				case bridgeMatchWrongKind:
+					return nil, at("kernel.corroboration.bridge.match.kind", nil)
+				case bridgeMatchWrongLinkType:
+					return nil, at("kernel.corroboration.bridge.match.link-type", nil)
+				case bridgeMatchWrongPrefixes:
+					return nil, at("kernel.corroboration.bridge.match.prefixes", nil)
+				case bridgeMatchWrongAddress:
+					return nil, at("kernel.corroboration.bridge.match.host-address", nil)
+				default:
+					return nil, at("kernel.corroboration.bridge.match.unknown", nil)
+				}
+			}
+			if count != 1 {
+				return nil, at("kernel.corroboration.bridge.match.ambiguous", nil)
+			}
 			ok = count == 1
 		}
-		if !ok || !link.up || link.kind != "bridge" || link.linkType != 1 || !validMAC(link.MAC) || wan[link.IfIndex] || link.master != 0 || stock && resolved.mac != link.MAC {
-			return nil, ErrUnknown
+		if !ok {
+			return nil, at("kernel.corroboration.bridge.missing", nil)
+		}
+		if !link.up {
+			return nil, at("kernel.corroboration.bridge.down", nil)
+		}
+		if link.kind != "bridge" {
+			return nil, at("kernel.corroboration.bridge.kind", nil)
+		}
+		if link.linkType != 1 {
+			return nil, at("kernel.corroboration.bridge.link-type", nil)
+		}
+		if !validMAC(link.MAC) {
+			return nil, at("kernel.corroboration.bridge.mac", nil)
+		}
+		if wan[link.IfIndex] {
+			return nil, at("kernel.corroboration.bridge.wan", nil)
+		}
+		if link.master != 0 {
+			return nil, at("kernel.corroboration.bridge.master", nil)
+		}
+		if stock && resolved.mac != link.MAC {
+			return nil, at("kernel.corroboration.bridge.native-mac", nil)
 		}
 		if _, ok := nativeByInterface[link.Interface]; ok {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.bridge.duplicate-selection", nil)
 		}
 		nativeByInterface[link.Interface] = resolved
 		s := Segment{ID: resolved.id, NativeName: resolved.name, NativeInterfaceName: resolved.osName, NativeIndex: resolved.index, Interface: link.Interface, IfIndex: link.IfIndex, MAC: link.MAC, Home: i == 0, Guest: i > 0, Prefixes: []string{}, LinkAddresses: []string{}, Members: []Link{}}
@@ -119,13 +183,22 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 			if member.master != link.IfIndex {
 				continue
 			}
-			if wan[member.IfIndex] || member.linkType != 1 || !validMAC(member.MAC) || member.kind == "bridge" {
-				return nil, ErrUnknown
+			if wan[member.IfIndex] {
+				return nil, at("kernel.corroboration.member.wan", nil)
+			}
+			if member.linkType != 1 {
+				return nil, at("kernel.corroboration.member.link-type", nil)
+			}
+			if !validMAC(member.MAC) {
+				return nil, at("kernel.corroboration.member.mac", nil)
+			}
+			if member.kind == "bridge" {
+				return nil, at("kernel.corroboration.member.nested-bridge", nil)
 			}
 			s.Members = append(s.Members, member.Link)
 		}
 		if len(s.Members) == 0 || len(s.Members) > 64 {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.member.count", nil)
 		}
 		sort.Slice(s.Members, func(i, j int) bool { return s.Members[i].IfIndex < s.Members[j].IfIndex })
 		if stock {
@@ -133,7 +206,7 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 			for _, member := range resolved.members {
 				v, err := resolveNative(native, member)
 				if err != nil {
-					return nil, err
+					return nil, at("kernel.corroboration.member.native-resolve", err)
 				}
 				count := 0
 				position := -1
@@ -143,22 +216,28 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 						position = j
 					}
 				}
-				if count != 1 || matched[s.Members[position].IfIndex] {
-					return nil, ErrUnknown
+				if count == 0 {
+					return nil, at("kernel.corroboration.member.native-match.missing", nil)
+				}
+				if count != 1 {
+					return nil, at("kernel.corroboration.member.native-match.ambiguous", nil)
+				}
+				if matched[s.Members[position].IfIndex] {
+					return nil, at("kernel.corroboration.member.native-match.reused", nil)
 				}
 				m := &s.Members[position]
 				matched[m.IfIndex] = true
 				m.NativeID, m.NativeName, m.NativeInterfaceName, m.NativeType = v.id, v.name, v.osName, v.kind
 			}
 			if len(matched) != len(s.Members) {
-				return nil, ErrUnknown
+				return nil, at("kernel.corroboration.member.kernel-unmatched", nil)
 			}
 		}
 		segments = append(segments, s)
 	}
 	for _, m := range addressFrames {
 		if len(m.data) < 8 {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.address.frame-shape", nil)
 		}
 		index := int(binary.NativeEndian.Uint32(m.data[4:8]))
 		position := -1
@@ -173,7 +252,7 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 		}
 		_, address, prefix, err := decodeAddress(m)
 		if err != nil {
-			return nil, err
+			return nil, at("kernel.corroboration.address.decode", err)
 		}
 		s := &segments[position]
 		s.LinkAddresses = append(s.LinkAddresses, address)
@@ -184,24 +263,27 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 	for i := range segments {
 		s := &segments[i]
 		s.LinkAddresses, err = uniqueSorted(s.LinkAddresses)
-		if err != nil || len(s.LinkAddresses) > 64 {
-			return nil, ErrUnknown
+		if err != nil {
+			return nil, at("kernel.corroboration.address.duplicate", err)
+		}
+		if len(s.LinkAddresses) > 64 {
+			return nil, at("kernel.corroboration.address.count", nil)
 		}
 		sort.Strings(s.Prefixes)
 		if len(s.Prefixes) == 0 || len(s.Prefixes) > 32 {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.prefix.count", nil)
 		}
 		if stock && !slices.Equal(s.Prefixes, nativeByInterface[s.Interface].prefixes) {
-			return nil, ErrUnknown
+			return nil, at("kernel.corroboration.prefix.native-mismatch", nil)
 		}
 		if stock {
 			v := nativeByInterface[s.Interface]
 			prefix, err := netip.ParsePrefix(v.prefixes[0])
 			if err != nil {
-				return nil, err
+				return nil, at("kernel.corroboration.prefix.native-parse", err)
 			}
 			if !slices.Contains(s.LinkAddresses, v.fields["address"]+"/"+strconv.Itoa(prefix.Bits())) {
-				return nil, ErrUnknown
+				return nil, at("kernel.corroboration.address.native-host-missing", nil)
 			}
 		}
 	}
@@ -215,7 +297,7 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 					a, _ := netip.ParsePrefix(left)
 					b, _ := netip.ParsePrefix(right)
 					if a.Overlaps(b) {
-						return nil, ErrUnknown
+						return nil, at("kernel.corroboration.prefix.overlap", nil)
 					}
 				}
 			}
@@ -225,21 +307,39 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 	return segments, nil
 }
 
-func matchNativeBridge(v nativeSegment, link kernelLink, frames []message) (bool, error) {
-	if link.kind != "bridge" || link.linkType != 1 || link.MAC != v.mac {
-		return false, nil
+// Closed comparison states are diagnostic only. Only Complete is a match.
+type bridgeMatch uint8
+
+const (
+	bridgeMatchNoMAC bridgeMatch = iota
+	bridgeMatchWrongKind
+	bridgeMatchWrongLinkType
+	bridgeMatchWrongPrefixes
+	bridgeMatchWrongAddress
+	bridgeMatchComplete
+)
+
+func matchNativeBridge(v nativeSegment, link kernelLink, frames []message) (bridgeMatch, error) {
+	if link.MAC != v.mac {
+		return bridgeMatchNoMAC, nil
+	}
+	if link.kind != "bridge" {
+		return bridgeMatchWrongKind, nil
+	}
+	if link.linkType != 1 {
+		return bridgeMatchWrongLinkType, nil
 	}
 	addresses, prefixes := []string{}, []string{}
 	for _, m := range frames {
 		if len(m.data) < 8 {
-			return false, ErrUnknown
+			return bridgeMatchNoMAC, at("kernel.corroboration.bridge.match.address-frame", nil)
 		}
 		if int(binary.NativeEndian.Uint32(m.data[4:8])) != link.IfIndex {
 			continue
 		}
 		_, address, prefix, err := decodeAddress(m)
 		if err != nil {
-			return false, err
+			return bridgeMatchNoMAC, at("kernel.corroboration.bridge.match.address-decode", err)
 		}
 		addresses = append(addresses, address)
 		if prefix != "" && !slices.Contains(prefixes, prefix) {
@@ -248,13 +348,19 @@ func matchNativeBridge(v nativeSegment, link kernelLink, frames []message) (bool
 	}
 	sort.Strings(prefixes)
 	if len(v.prefixes) != 1 {
-		return false, ErrUnknown
+		return bridgeMatchNoMAC, at("kernel.corroboration.bridge.match.native-prefix-count", nil)
 	}
 	p, err := netip.ParsePrefix(v.prefixes[0])
 	if err != nil {
-		return false, err
+		return bridgeMatchNoMAC, at("kernel.corroboration.bridge.match.native-prefix-parse", err)
 	}
-	return slices.Equal(prefixes, v.prefixes) && slices.Contains(addresses, v.fields["address"]+"/"+strconv.Itoa(p.Bits())), nil
+	if !slices.Equal(prefixes, v.prefixes) {
+		return bridgeMatchWrongPrefixes, nil
+	}
+	if !slices.Contains(addresses, v.fields["address"]+"/"+strconv.Itoa(p.Bits())) {
+		return bridgeMatchWrongAddress, nil
+	}
+	return bridgeMatchComplete, nil
 }
 func nativeMemberMatches(v nativeSegment, link kernelLink) bool {
 	if !validMAC(v.mac) || strings.ToLower(v.mac) != link.MAC || v.global == "yes" || v.fields["public"] == "yes" {
