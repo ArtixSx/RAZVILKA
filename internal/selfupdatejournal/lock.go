@@ -12,11 +12,25 @@ import (
 // Keep the inode permanently. Only the kernel lock proves a live writer;
 // neither an old PID nor an old modification time authorizes another writer.
 func lockWriter(root *ownedfs.Root, capture ...func(os.FileInfo)) (func(), error) {
+	return openWriter(root, true, capture...)
+}
+
+// Observation/copy must never manufacture a missing writer identity.
+func lockExistingWriter(root *ownedfs.Root, capture func(os.FileInfo)) (func(), error) {
+	return openWriter(root, false, capture)
+}
+
+func openWriter(root *ownedfs.Root, create bool, capture ...func(os.FileInfo)) (func(), error) {
 	const name = ".writer.lock"
 	const marker = "RAZVILKA self update writer v1\n"
-	f, err := root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL|fileFlags(), 0o600)
-	created := err == nil
-	if errors.Is(err, os.ErrExist) {
+	var f *os.File
+	var err error
+	created := false
+	if create {
+		f, err = root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL|fileFlags(), 0o600)
+		created = err == nil
+	}
+	if !create || errors.Is(err, os.ErrExist) {
 		f, err = root.OpenFile(name, os.O_RDWR|fileFlags(), 0o600)
 	}
 	if err != nil {
