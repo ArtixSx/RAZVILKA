@@ -38,6 +38,7 @@ type ListScopeBinding struct {
 	networkID                  string
 	network                    func(context.Context) (string, error)
 	verifyPhysical             func(context.Context) error
+	verifyCleanupPhysical      func(context.Context) error
 	physicalSnapshot           func() physicalscope.Snapshot
 	closePhysical              func() error
 	bound                      *dataplane.LANPolicyRuntimePlan
@@ -56,7 +57,8 @@ func NewReviewedStockNC1812ListScopeBinding(ctx context.Context, a *App, provide
 	if provider == nil {
 		return nil, ErrListScopeChanged
 	}
-	return newListScopeBinding(ctx, a, func(c context.Context, selection physicalscope.SelectionReader) (func(context.Context) error, func() physicalscope.Snapshot, func() error, error) {
+	var retained func(context.Context) error
+	b, err := newListScopeBinding(ctx, a, func(c context.Context, selection physicalscope.SelectionReader) (func(context.Context) error, func() physicalscope.Snapshot, func() error, error) {
 		observer := physicalscope.NewReviewedStockNC1812(provider, selection)
 		review, err := observer.Observe(c)
 		if err != nil {
@@ -64,8 +66,14 @@ func NewReviewedStockNC1812ListScopeBinding(ctx context.Context, a *App, provide
 		}
 		// These closed functions retain EXACT original pointers. No public
 		// constructor accepts a fact reader, snapshot or permission callback.
+		retained = func(c context.Context) error { return observer.VerifyRetainedIncarnation(c, review) }
 		return func(c context.Context) error { return observer.Verify(c, review) }, review.Snapshot, review.Close, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	b.verifyCleanupPhysical = retained
+	return b, nil
 }
 
 // acquire is a private source-level test seam. Production always constructs
