@@ -564,7 +564,8 @@ func TestOwnedDialPublicPurePinsLiteralAgainstRebinding(t *testing.T) {
 			resolveCalls, connectCalls := 0, 0
 			sockets := &probeSockets{}
 			fixture := &ownedDNSFixtureConn{}
-			connection, err := ownedDialPublic(context.Background(), proxy, "example.com:443", sockets,
+			owner := newOwnedProbeTargetFixture(t, nil)
+			connection, err := ownedDialPublic(owner.ctx, proxy, "example.com:443", sockets,
 				func(_ context.Context, host string) ([]netip.Addr, error) {
 					resolveCalls++
 					if host != "example.com" {
@@ -616,7 +617,8 @@ func TestOwnedDialPublicPureRefusesWholeUnsafeSetBeforeCONNECT(t *testing.T) {
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			resolveCalls, connectCalls := 0, 0
-			connection, err := ownedDialPublic(context.Background(), proxy, "example.com:443", &probeSockets{}, func(context.Context, string) ([]netip.Addr, error) {
+			owner := newOwnedProbeTargetFixture(t, nil)
+			connection, err := ownedDialPublic(owner.ctx, proxy, "example.com:443", &probeSockets{}, func(context.Context, string) ([]netip.Addr, error) {
 				resolveCalls++
 				return fixture.addresses, fixture.resolveErr
 			}, func(context.Context, netip.AddrPort, byte, []byte, *probeSockets) (net.Conn, []byte, error) {
@@ -642,13 +644,15 @@ func TestOwnedDialPublicPureCancellationLiteralAndNoFallback(t *testing.T) {
 		{"cancel connecting", "example.com:443", false, false, true, false, 1, 1},
 		{"connect error no fallback", "example.com:443", false, false, false, true, 1, 1},
 		{"literal bypasses DNS", "1.1.1.1:443", false, false, false, false, 0, 1},
+		{"IPv6 literal bypasses DNS", "[2606:4700:4700::1111]:443", false, false, false, false, 0, 1},
 		{"private literal", "10.0.0.1:443", false, false, false, false, 0, 0},
 		{"wrong port", "example.com:80", false, false, false, false, 0, 0},
 		{"noncanonical port", "example.com:0443", false, false, false, false, 0, 0},
 		{"localhost", "localhost:443", false, false, false, false, 0, 0},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			owner := newOwnedProbeTargetFixture(t, nil)
+			ctx, cancel := context.WithCancel(owner.ctx)
 			defer cancel()
 			if fixture.canceled {
 				cancel()
@@ -671,7 +675,7 @@ func TestOwnedDialPublicPureCancellationLiteralAndNoFallback(t *testing.T) {
 				}
 				return fake, nil, nil
 			})
-			wantSuccess := fixture.name == "literal bypasses DNS"
+			wantSuccess := fixture.name == "literal bypasses DNS" || fixture.name == "IPv6 literal bypasses DNS"
 			if (err == nil) != wantSuccess || (connection != nil) != wantSuccess || resolveCalls != fixture.wantResolve || connectCalls != fixture.wantConnect {
 				t.Fatalf("dial lifecycle: %v %v resolve %d connect %d", connection, err, resolveCalls, connectCalls)
 			}

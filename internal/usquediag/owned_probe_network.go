@@ -103,6 +103,11 @@ func validateOwnedNetworkHTTPS(raw string) (*url.URL, error) {
 
 func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (OwnedApplicationProof, error) {
 	var proof OwnedApplicationProof
+	request.Services = append([]OwnedServiceProbe(nil), request.Services...)
+	if request.UDP != nil {
+		udp := *request.UDP
+		request.UDP = &udp
+	}
 	if err := validateOwnedNetworkRequest(request); err != nil {
 		return proof, err
 	}
@@ -111,6 +116,9 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 	}
 	if parent.Err() != nil {
 		return proof, errOwnedNetworkStopped
+	}
+	if err := checkOwnedNetworkTargets(parent, request); err != nil {
+		return proof, err
 	}
 	timeout := request.Timeout
 	if timeout == 0 {
@@ -128,7 +136,14 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 	dnsClient := &http.Client{Transport: dnsTransport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resolve := func(resolveCtx context.Context, host string) ([]netip.Addr, error) {
 		return ownedResolvePublic(resolveCtx, host, func(exchangeCtx context.Context, query []byte) ([]byte, error) {
-			return ownedDoHExchange(exchangeCtx, dnsClient, query)
+			response, err := ownedDoHExchange(exchangeCtx, dnsClient, query)
+			if err != nil {
+				return nil, err
+			}
+			if err := checkOwnedDNSProbeAnswer(exchangeCtx, query, response); err != nil {
+				return nil, err
+			}
+			return response, nil
 		})
 	}
 	transport := ownedHTTPTransport(proxy, sockets, timeout, resolve)
@@ -136,7 +151,7 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 	client := &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	body, err := ownedHTTPSBody(ctx, client, ownedWarpTraceURL, "", ownedTraceBodyLimit, true)
 	if err != nil {
-		return proof, ownedNetworkFailure(ctx, errOwnedNetworkTrace)
+		return proof, ownedNetworkFailure(ctx, ownedProbeTargetFailure(errOwnedNetworkTrace, err))
 	}
 	proof, err = parseOwnedWarpTrace(body)
 	clear(body)
@@ -155,7 +170,7 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 		}
 		response, err := ownedHTTPSResponse(ctx, client, service.URL, challenge, limit, service.Challenge, !service.Challenge)
 		if err != nil {
-			return OwnedApplicationProof{}, ownedNetworkFailure(ctx, errOwnedNetworkHTTP)
+			return OwnedApplicationProof{}, ownedNetworkFailure(ctx, ownedProbeTargetFailure(errOwnedNetworkHTTP, err))
 		}
 		if err := validateOwnedServiceResponse(ctx, service, challenge, response); err != nil {
 			return OwnedApplicationProof{}, ownedNetworkFailure(ctx, errOwnedNetworkService)
@@ -164,12 +179,15 @@ func probeOwnedNetwork(parent context.Context, request OwnedNetworkRequest) (Own
 	}
 	if request.UDP != nil {
 		if err := probeOwnedSOCKSUDP(ctx, proxy, request.UDP.Target, sockets); err != nil {
-			return OwnedApplicationProof{}, ownedNetworkFailure(ctx, errOwnedNetworkUDP)
+			return OwnedApplicationProof{}, ownedNetworkFailure(ctx, ownedProbeTargetFailure(errOwnedNetworkUDP, err))
 		}
 		proof.UDPConfirmed = true
 	}
 	if ctx.Err() != nil {
 		return OwnedApplicationProof{}, errOwnedNetworkStopped
+	}
+	if err := checkOwnedNetworkTargets(ctx, request); err != nil {
+		return OwnedApplicationProof{}, err
 	}
 	return proof, nil
 }
@@ -229,14 +247,31 @@ func ownedDoHTransport(proxy netip.AddrPort, sockets *probeSockets, timeout time
 			if err != nil || (network != "tcp" && network != "tcp4" && network != "tcp6") || target != "cloudflare-dns.com:443" {
 				return nil, errOwnedNetworkDNS
 			}
-			address, _ := ownedSOCKSAddress("1.1.1.1", 443)
-			connection, _, err := ownedSOCKSCommand(operation, proxy, 1, address, sockets)
-			if err != nil {
-				return nil, errOwnedNetworkDNS
-			}
-			return connection, nil
+			return ownedDialDoH(operation, proxy, sockets, ownedSOCKSCommand)
 		},
 	}
+}
+
+func ownedDialDoH(ctx context.Context, proxy netip.AddrPort, sockets *probeSockets, connect func(context.Context, netip.AddrPort, byte, []byte, *probeSockets) (net.Conn, []byte, error)) (net.Conn, error) {
+	pins := []netip.Addr{netip.MustParseAddr("1.1.1.1")}
+	if connect == nil {
+		return nil, errOwnedNetworkDNS
+	}
+	if err := checkOwnedProbeTarget(ctx, "cloudflare-dns.com", pins); err != nil {
+		return nil, ownedProbeTargetFailure(errOwnedNetworkDNS, err)
+	}
+	address, _ := ownedSOCKSAddress(pins[0].String(), 443)
+	connection, _, err := connect(ctx, proxy, 1, address, sockets)
+	if err == nil && connection != nil {
+		err = checkOwnedProbeTarget(ctx, "cloudflare-dns.com", pins)
+	}
+	if err != nil || connection == nil {
+		if connection != nil {
+			connection.Close()
+		}
+		return nil, ownedProbeTargetFailure(errOwnedNetworkDNS, err)
+	}
+	return connection, nil
 }
 
 func ownedDoHExchange(ctx context.Context, client *http.Client, query []byte) ([]byte, error) {
@@ -255,7 +290,7 @@ func ownedDoHExchange(ctx context.Context, client *http.Client, query []byte) ([
 	request.Header.Set("Cache-Control", "no-cache, no-store")
 	response, err := client.Do(request)
 	if err != nil {
-		return nil, errOwnedNetworkDNS
+		return nil, ownedProbeTargetFailure(errOwnedNetworkDNS, err)
 	}
 	defer response.Body.Close()
 	mediaType, _, mediaErr := mime.ParseMediaType(response.Header.Get("Content-Type"))
@@ -282,15 +317,20 @@ func ownedDialPublic(ctx context.Context, proxy netip.AddrPort, target string, s
 		return nil, errOwnedNetworkHTTP
 	}
 	var addresses []netip.Addr
+	reviewHost := host
 	if literal, err := netip.ParseAddr(host); err == nil {
 		addresses = []netip.Addr{literal}
+		reviewHost = ""
 	} else {
+		if err := checkOwnedProbeTarget(ctx, host, nil); err != nil {
+			return nil, ownedProbeTargetFailure(errOwnedNetworkHTTP, err)
+		}
 		if resolve == nil {
 			return nil, errOwnedNetworkDNS
 		}
 		addresses, err = resolve(ctx, host)
 		if err != nil {
-			return nil, errOwnedNetworkDNS
+			return nil, ownedProbeTargetFailure(errOwnedNetworkDNS, err)
 		}
 		addresses = append([]netip.Addr(nil), addresses...)
 	}
@@ -305,18 +345,27 @@ func ownedDialPublic(ctx context.Context, proxy netip.AddrPort, target string, s
 	if ctx.Err() != nil {
 		return nil, errOwnedNetworkDNS
 	}
+	if err := checkOwnedProbeTarget(ctx, reviewHost, addresses); err != nil {
+		return nil, ownedProbeTargetFailure(errOwnedNetworkHTTP, err)
+	}
 	// One checked destination, one CONNECT. No second name resolution or
 	// fallback after a failed connection can move this request to another peer.
 	address, err := ownedSOCKSAddress(addresses[0].String(), 443)
 	if err != nil {
 		return nil, errOwnedNetworkDNS
 	}
+	if err := checkOwnedProbeTarget(ctx, reviewHost, []netip.Addr{addresses[0]}); err != nil {
+		return nil, ownedProbeTargetFailure(errOwnedNetworkHTTP, err)
+	}
 	connection, _, err := connect(ctx, proxy, 1, address, sockets)
+	if err == nil && ctx.Err() == nil && connection != nil {
+		err = checkOwnedProbeTarget(ctx, reviewHost, addresses)
+	}
 	if err != nil || ctx.Err() != nil || connection == nil {
 		if connection != nil {
 			connection.Close()
 		}
-		return nil, errOwnedNetworkHTTP
+		return nil, ownedProbeTargetFailure(errOwnedNetworkHTTP, err)
 	}
 	return connection, nil
 }
@@ -331,7 +380,7 @@ func ownedNetworkFailure(ctx context.Context, otherwise error) error {
 func ownedHTTPSBody(ctx context.Context, client *http.Client, raw, challenge string, limit int, requireOK bool) ([]byte, error) {
 	response, err := ownedHTTPSResponse(ctx, client, raw, challenge, limit, requireOK, false)
 	if err != nil {
-		return nil, errOwnedNetworkHTTP
+		return nil, ownedProbeTargetFailure(errOwnedNetworkHTTP, err)
 	}
 	return []byte(response.Body), nil
 }
@@ -511,6 +560,13 @@ func validateOwnedUDPRelay(address []byte, proxy netip.AddrPort) (netip.AddrPort
 }
 
 func probeOwnedSOCKSUDP(ctx context.Context, proxy, target netip.AddrPort, sockets *probeSockets) error {
+	if !ownedPublicTarget(target) || sockets == nil {
+		return errOwnedNetworkUDP
+	}
+	pins := []netip.Addr{target.Addr()}
+	if err := checkOwnedProbeTarget(ctx, "", pins); err != nil {
+		return ownedProbeTargetFailure(errOwnedNetworkUDP, err)
+	}
 	network := "udp4"
 	if proxy.Addr().Is6() {
 		network = "udp6"
@@ -529,6 +585,9 @@ func probeOwnedSOCKSUDP(ctx context.Context, proxy, target netip.AddrPort, socke
 	}
 	local := udp.LocalAddr().(*net.UDPAddr).AddrPort()
 	address, _ := ownedSOCKSAddress(local.Addr().String(), local.Port())
+	if err := checkOwnedProbeTarget(ctx, "", pins); err != nil {
+		return ownedProbeTargetFailure(errOwnedNetworkUDP, err)
+	}
 	control, reply, err := ownedSOCKSCommand(ctx, proxy, 3, address, sockets)
 	if err != nil {
 		return errOwnedNetworkUDP
@@ -548,6 +607,9 @@ func probeOwnedSOCKSUDP(ctx context.Context, proxy, target netip.AddrPort, socke
 		return errOwnedNetworkUDP
 	}
 	packet := append(append([]byte{0, 0, 0}, targetAddress...), expected...)
+	if err := checkOwnedProbeTarget(ctx, "", pins); err != nil {
+		return ownedProbeTargetFailure(errOwnedNetworkUDP, err)
+	}
 	if written, err := udp.WriteToUDPAddrPort(packet, relay); err != nil || written != len(packet) {
 		return errOwnedNetworkUDP
 	}
@@ -555,6 +617,9 @@ func probeOwnedSOCKSUDP(ctx context.Context, proxy, target netip.AddrPort, socke
 	n, source, err := udp.ReadFromUDPAddrPort(response[:])
 	if err != nil || source != relay || ctx.Err() != nil {
 		return errOwnedNetworkUDP
+	}
+	if err := checkOwnedProbeTarget(ctx, "", pins); err != nil {
+		return ownedProbeTargetFailure(errOwnedNetworkUDP, err)
 	}
 	return validateOwnedUDPReply(response[:n], target, expected)
 }

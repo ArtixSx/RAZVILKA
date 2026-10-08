@@ -73,7 +73,7 @@ func ownedHTTPSResponse(ctx context.Context, client *http.Client, raw, challenge
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return OwnedServiceResponse{}, errOwnedNetworkHTTP
+		return OwnedServiceResponse{}, ownedProbeTargetFailure(errOwnedNetworkHTTP, err)
 	}
 	defer response.Body.Close()
 	contentType := response.Header.Get("Content-Type")

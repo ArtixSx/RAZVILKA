@@ -243,7 +243,8 @@ func ownedDialNativeCase(t *testing.T, kind, mode string) {
 	if mode == "DNS-window" {
 		window = 20 * time.Second
 	}
-	owner, stopOwner := context.WithTimeout(context.Background(), 20*time.Second)
+	original := newOwnedProbeTargetFixture(t, nil)
+	owner, stopOwner := context.WithTimeout(original.ctx, 20*time.Second)
 	defer stopOwner()
 	ctx, cancel := context.WithTimeout(owner, window)
 	defer cancel()

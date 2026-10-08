@@ -189,7 +189,7 @@ func ownedResolvePublic(parent context.Context, host string, exchange func(conte
 		}
 		response, err := exchange(ctx, query)
 		if err != nil || ctx.Err() != nil {
-			return nil, errOwnedNetworkDNS
+			return nil, ownedProbeTargetFailure(errOwnedNetworkDNS, err)
 		}
 		answer, count, err := parseOwnedDNSAnswerDetails(query, response)
 		addressCount += count
