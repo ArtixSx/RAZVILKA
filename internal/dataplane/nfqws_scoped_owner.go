@@ -28,6 +28,8 @@ var ErrNFQWSScopedQueueInventory = errors.New("NFQUEUE kernel inventory unavaila
 type NFQWSScopedCandidate struct {
 	ID, Incarnation, ArgumentsSHA256 string
 	Traffic                          []NFQWSScopedTraffic
+	ServiceID                        string `json:"service_id,omitempty"`
+	IPFamily                         string `json:"ip_family,omitempty"`
 }
 
 type NFQWSScopedTraffic struct {
@@ -43,6 +45,7 @@ type NFQWSScopedSpec struct {
 	CommandSHA256                   string
 	Candidate                       NFQWSScopedCandidate
 	NetworkIdentity                 *netidentity.Identity `json:"network_identity,omitempty"`
+	Matches                         []NFQWSScopedMatch    `json:"matches,omitempty"`
 }
 
 type NFQWSScopedResources struct {
@@ -97,6 +100,7 @@ func (p *NFQWSScopedPlan) Spec() NFQWSScopedSpec {
 // It does not create a provider, a reservation or launch authority.
 func (s NFQWSScopedSpec) Clone() NFQWSScopedSpec {
 	s.Candidate.Traffic = slices.Clone(s.Candidate.Traffic)
+	s.Matches = slices.Clone(s.Matches)
 	s.NetworkIdentity = cloneNFQWSScopedNetworkIdentity(s.NetworkIdentity)
 	return s
 }
@@ -189,6 +193,9 @@ func nfqwsScopedPublic(p netip.Prefix) bool {
 // actual effect boundary. Passing typed input alone grants no authority.
 func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPlan, error) {
 	candidate := spec.Candidate
+	if len(spec.Matches) > 1024 {
+		return nil, ErrNFQWSScopedOwner
+	}
 	if expected.SchemaVersion != SchemaVersion || expected.PlanID == "" || len(expected.PlanID) > 128 || !lanPolicyHash(expected.Digest) || expected.Revision == 0 || expected.NetworkProfileID == "" || len(expected.NetworkProfileID) > 128 || !expected.Ready || expected.SafeMode || expected.Noop || len(expected.Blockers) != 0 || len(expected.ResourceConflicts) != 0 || spec.Queue == 0 || !nfqwsScopedSpecNetworkValid(spec) || !nfqws2ManagedHex(spec.SessionID, 32) || !lanPolicyHash(spec.CommandSHA256) || ValidateLANPolicyRuntime(expected.LAN) != nil || candidate.ID == "" || len(candidate.ID) > 128 || strings.ContainsAny(candidate.ID, "\x00\r\n") || len(candidate.Incarnation) != 32 || strings.Trim(candidate.Incarnation, "0123456789abcdef") != "" || !lanPolicyHash(candidate.ArgumentsSHA256) || len(candidate.Traffic) == 0 || len(candidate.Traffic) > 16 || len(expected.Routes) == 0 || len(expected.Routes) > 1024 {
 		return nil, ErrNFQWSScopedOwner
 	}
@@ -224,6 +231,10 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 	}
 	p.spec = spec.Clone()
 	p.spec.Candidate.Traffic = slices.Clone(traffic)
+	if err := nfqwsScopedValidateMatches(expected, &p.spec); err != nil {
+		return nil, err
+	}
+	matches := nfqwsScopedMatchSet(p.spec.Matches)
 	// Hash the complete frozen input, including incarnation and WAN, for names.
 	data, err := json.Marshal(struct {
 		Resources NFQWSScopedResources
@@ -236,6 +247,19 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 	domain := "nfqws-scoped-v1\x00"
 	if spec.NetworkIdentity != nil {
 		domain = "nfqws-scoped-v2\x00"
+	}
+	if len(p.spec.Matches) != 0 {
+		// Preserve old retained compiler images. Exact selection input uses a
+		// separate domain and includes every full tuple, origin and family.
+		data, err = json.Marshal(struct {
+			Frozen              json.RawMessage
+			ServiceID, IPFamily string
+			Matches             []NFQWSScopedMatch
+		}{data, candidate.ServiceID, candidate.IPFamily, p.spec.Matches})
+		if err != nil || len(data) > 512<<10 {
+			return nil, ErrNFQWSScopedOwner
+		}
+		domain = "nfqws-scoped-selected-v1\x00"
 	}
 	nameHash := routeidentity.Hash(append([]byte(domain), data...))
 	seen := map[string]bool{}
@@ -286,6 +310,9 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 							continue
 						}
 						for _, t := range traffic {
+							if len(matches) != 0 && !matches[nfqwsScopedMatchKey(route, iface, source, destination, t)] {
+								continue
+							}
 							port := strconv.Itoa(int(t.First))
 							if t.Last != t.First {
 								port += ":" + strconv.Itoa(int(t.Last))
