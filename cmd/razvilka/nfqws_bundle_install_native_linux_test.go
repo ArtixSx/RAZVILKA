@@ -51,6 +51,9 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 	owner := components.New()
+	if err := owner.PreflightManagedNFQWS(ctx); err != nil {
+		t.Fatal("actual managed payload filesystem preflight", err)
+	}
 	if floor, err := components.RequiredRetainedManagedUpdateReadVersion(ctx, owner.StateDir); err != nil || floor != components.ComponentUpdateSchema {
 		t.Fatal("first managed installation requires readable pre-schema3 component state", floor, err)
 	}
