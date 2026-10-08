@@ -7,7 +7,6 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
-	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 // These comparisons preserve saved intent, including a disabled RU snapshot.
@@ -68,7 +67,7 @@ func (a *SelfUpdateFileAdapter) configExclusionsCurrent(ctx context.Context, rev
 	}
 	old := current
 	if digestBytes(current) != review.OldConfigSHA256 {
-		journal, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+		journal, err := a.OpenFileJournal()
 		if err != nil {
 			return err
 		}

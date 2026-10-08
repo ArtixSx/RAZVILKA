@@ -130,7 +130,10 @@ func (a *ComponentHistoryAdmission) CheckWrite(ctx context.Context, wanted int) 
 }
 
 func (a *ComponentHistoryAdmission) controllerImages(ctx context.Context, currentSHA string) ([]selfupdatejournal.BinaryImage, error) {
-	images, err := retainedControllerImages(ctx, a.installation, a.stateRoot)
+	reader := NewSelfUpdateFileAdapter()
+	reader.directory, reader.fileJournal, reader.installation = filepath.Join(a.stateRoot, "self-update"), filepath.Join(a.stateRoot, "self-update-files"), a.installation
+	reader.owned, reader.layout = a.owned, a.layout
+	images, err := retainedControllerImagesWithAdapter(ctx, a.installation, a.stateRoot, reader)
 	if err != nil {
 		return nil, err
 	}
@@ -152,9 +155,6 @@ func (a *ComponentHistoryAdmission) controllerImages(ctx context.Context, curren
 		}
 		// Include sealed helper control.bin and every reviewed candidate,
 		// including retained jobs, using the existing full concrete inventory.
-		reader := NewSelfUpdateFileAdapter()
-		reader.directory, reader.fileJournal, reader.installation = helper, filepath.Join(a.stateRoot, "self-update-files"), a.installation
-		reader.owned, reader.layout = a.owned, a.layout
 		_, review, err := reader.loadBoundReview(ctx, record.Job.ID, true, false)
 		if err != nil {
 			return nil, err

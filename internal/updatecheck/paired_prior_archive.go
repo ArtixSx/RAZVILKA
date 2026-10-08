@@ -191,7 +191,7 @@ func (a *SelfUpdateFileAdapter) CapturePairedPriorState(ctx context.Context, id 
 		}
 		return a.runtimeInactive(c, id)
 	}
-	store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+	store, err := a.OpenFileJournal()
 	if err != nil {
 		return "", ErrPairedPriorArchive
 	}

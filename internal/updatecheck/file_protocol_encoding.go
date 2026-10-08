@@ -8,10 +8,12 @@ import (
 	"errors"
 	"io"
 	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 // Reader version is a format capability, not production installer readiness.
-const SelfUpdateReadVersion = 3
+const SelfUpdateReadVersion = selfupdatejournal.ReadVersion
 const selfUpdateProtocolSchema = 2
 
 var ErrFileProtocol = errors.New("self update file/helper protocol requires matching trusted evidence")

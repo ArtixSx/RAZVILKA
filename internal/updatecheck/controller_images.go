@@ -17,6 +17,10 @@ import (
 // Read-only concrete controller inventory shared by distinct typed format
 // admissions. It conveys sealed image identity, never read or effect authority.
 func retainedControllerImages(ctx context.Context, installation, stateRoot string) ([]selfupdatejournal.BinaryImage, error) {
+	return retainedControllerImagesWithAdapter(ctx, installation, stateRoot, nil)
+}
+
+func retainedControllerImagesWithAdapter(ctx context.Context, installation, stateRoot string, reader *SelfUpdateFileAdapter) ([]selfupdatejournal.BinaryImage, error) {
 	var images []selfupdatejournal.BinaryImage
 	helperPresent := false
 	helperID := ""
@@ -43,7 +47,11 @@ func retainedControllerImages(ctx context.Context, installation, stateRoot strin
 	}
 	files := filepath.Join(stateRoot, "self-update-files")
 	if _, err := os.Lstat(files); err == nil {
-		store, err := selfupdatejournal.Open(installation, files)
+		if reader == nil {
+			reader = NewSelfUpdateFileAdapter()
+			reader.installation, reader.directory, reader.fileJournal = installation, helper, files
+		}
+		store, err := selfupdatejournal.OpenWithPairedEvidence(installation, files, reader.verifyPairedState)
 		if err != nil {
 			return nil, err
 		}

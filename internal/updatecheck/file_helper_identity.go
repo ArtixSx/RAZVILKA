@@ -52,6 +52,35 @@ func sealFileHelperIdentity(a *SelfUpdateFileAdapter, id string, review fileRevi
 }
 
 func (a *SelfUpdateFileAdapter) helperIdentity(id string, review fileReview) (fileHelperIdentity, error) {
+	identity, err := a.readHelperIdentity(id, review)
+	if err != nil {
+		return identity, err
+	}
+	record, err := readAdapterRecord(a.directory, id)
+	if err != nil {
+		return identity, err
+	}
+	return bindHelperIdentity(id, review, record, identity)
+}
+
+// Retained jobs bind their identity to the verified retained helper record.
+// The current record may already describe a later, pending preparation.
+func (a *SelfUpdateFileAdapter) helperIdentityForRecord(id string, review fileReview, record updateRecord) (fileHelperIdentity, error) {
+	identity, err := a.readHelperIdentity(id, review)
+	if err != nil {
+		return identity, err
+	}
+	return bindHelperIdentity(id, review, record, identity)
+}
+
+func bindHelperIdentity(id string, review fileReview, record updateRecord, identity fileHelperIdentity) (fileHelperIdentity, error) {
+	if review.ID != id || record.Owner != updaterOwner || record.Job.ID != id || record.Job.HelperPID != identity.Process.PID || record.ParentPID != identity.OldPanel.PID {
+		return identity, ErrFileProtocol
+	}
+	return identity, nil
+}
+
+func (a *SelfUpdateFileAdapter) readHelperIdentity(id string, review fileReview) (fileHelperIdentity, error) {
 	var identity fileHelperIdentity
 	root, err := a.commandRoot(id)
 	if err != nil {
@@ -63,13 +92,6 @@ func (a *SelfUpdateFileAdapter) helperIdentity(id string, review fileReview) (fi
 		return identity, err
 	}
 	if decodeFileProtocol(data, &identity) != nil || identity.Schema != selfUpdateProtocolSchema || identity.ID != id || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != review.OldExecutableSHA256 || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot {
-		return identity, ErrFileProtocol
-	}
-	record, err := readAdapterRecord(a.directory, id)
-	if err != nil {
-		return identity, err
-	}
-	if record.Job.HelperPID != identity.Process.PID || record.ParentPID != identity.OldPanel.PID {
 		return identity, ErrFileProtocol
 	}
 	return identity, nil

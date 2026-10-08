@@ -37,7 +37,7 @@ func (a *SelfUpdateFileAdapter) SettleStoppedRollback(ctx context.Context, id st
 	if terminalHelperState(record.Job.State) && record.Job.State != stoppedRollbackState {
 		return ErrFileProtocol
 	}
-	binding := selfupdatejournal.StoppedBinding{InstallationID: review.AuthorityInstallationID, PreStopSequence: review.AuthoritySequence, StopSequence: review.AuthoritySequence + 1, Revision: review.Revision, RequiredReader: SelfUpdateReadVersion}
+	binding := selfupdatejournal.StoppedBinding{InstallationID: review.AuthorityInstallationID, PreStopSequence: review.AuthoritySequence, StopSequence: review.AuthoritySequence + 1, Revision: review.Revision, RequiredReader: selfupdatejournal.StoppedSchema}
 	check := func(ctx context.Context) error {
 		if a.stopCheck == nil {
 			return ErrFileProtocol
@@ -52,12 +52,12 @@ func (a *SelfUpdateFileAdapter) SettleStoppedRollback(ctx context.Context, id st
 		return authority.Check(ctx, id, review.AuthorityInstallationID, review.AuthoritySequence, review.Revision)
 	}
 	readers := func(ctx context.Context) error {
-		if err := a.CheckRetainedJournalReaders(ctx, id, SelfUpdateReadVersion); err != nil {
+		if err := a.CheckRetainedJournalReaders(ctx, id, selfupdatejournal.StoppedSchema); err != nil {
 			return err
 		}
-		return authority.AdmitReaders(ctx, id, SelfUpdateReadVersion)
+		return authority.AdmitReaders(ctx, id, selfupdatejournal.StoppedSchema)
 	}
-	store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+	store, err := a.OpenFileJournal()
 	if err != nil {
 		return err
 	}

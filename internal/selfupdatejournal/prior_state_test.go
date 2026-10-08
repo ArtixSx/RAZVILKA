@@ -15,6 +15,9 @@ import (
 func preparedPriorFixture(t *testing.T) *fixture {
 	t.Helper()
 	f := fixtureAt(t, t.TempDir())
+	if err := os.WriteFile(filepath.Join(f.installation, "etc/razvilka/config.json"), []byte("prior configuration"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for _, target := range []string{"etc/init.d/S99razvilka", "etc/razvilka/service-catalog.json", "etc/razvilka/community-catalog.json", "etc/razvilka/sources.json"} {
 		path := filepath.Join(f.installation, filepath.FromSlash(target))
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {

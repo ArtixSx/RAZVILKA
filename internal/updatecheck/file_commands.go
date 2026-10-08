@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
-	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 type fileProcess struct {
@@ -194,7 +193,7 @@ func (a *SelfUpdateFileAdapter) fileQuiescence(ctx context.Context, id string) e
 			return err
 		}
 	}
-	store, e := selfupdatejournal.Open(a.installation, a.fileJournal)
+	store, e := a.OpenFileJournal()
 	if e == nil {
 		receipt, present, err := store.Current()
 		store.Close()
@@ -209,7 +208,7 @@ func (a *SelfUpdateFileAdapter) fileQuiescence(ctx context.Context, id string) e
 			if err := fileCommandInactive(ctx, stopped); err != nil {
 				return err
 			}
-			if receipt.Phase == "prepared" || receipt.Phase == "installing" {
+			if receipt.Phase == "prepared" || receipt.Phase == "paired-prepared" || receipt.Phase == "installing" {
 				if err := a.oldPanelInactive(ctx, id); err != nil {
 					return err
 				}
@@ -229,7 +228,7 @@ func (a *SelfUpdateFileAdapter) fileQuiescence(ctx context.Context, id string) e
 					return err
 				}
 			}
-			if receipt.Phase == "prepared" || receipt.Phase == "installing" || receipt.Phase == "restoring" || receipt.Phase == "restored" {
+			if receipt.Phase == "prepared" || receipt.Phase == "paired-prepared" || receipt.Phase == "installing" || receipt.Phase == "restoring" || receipt.Phase == "restored" {
 				if err := a.filePanelAbsent(ctx); err != nil {
 					return err
 				}

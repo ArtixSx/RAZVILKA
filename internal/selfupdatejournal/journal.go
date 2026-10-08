@@ -26,13 +26,14 @@ const Schema = 2
 // Only stopped data settlement writes version 3. Ordinary live transactions
 // retain version 2; readers 1/2 must refuse the new terminal outcome.
 const StoppedSchema = 3
-const ReadVersion = StoppedSchema
+const ReadVersion = PairedSchema
 const maxFileBytes = 256 << 20
 
 var (
 	ErrPending     = errors.New("self update pending")
 	ErrUnknown     = errors.New("self update command outcome unknown; do not replay")
 	ErrMismatch    = errors.New("self update identity or file mismatch")
+	ErrRetired     = errors.New("paired prior state is offline; active rollback is unavailable")
 	idPattern      = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	commandPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 )
@@ -60,31 +61,34 @@ type image struct {
 }
 
 type Receipt struct {
-	Schema      int             `json:"schema"`
-	ID          string          `json:"id"`
-	Phase       string          `json:"phase"`
-	Index       int             `json:"index"`
-	Command     string          `json:"command,omitempty"`
-	Commands    []string        `json:"commands,omitempty"`
-	Rollback    bool            `json:"rollback,omitempty"`
-	BeforeFiles bool            `json:"before_files,omitempty"`
-	Files       []image         `json:"files"`
-	Stopped     *StoppedBinding `json:"stopped,omitempty"`
+	Schema      int                `json:"schema"`
+	ID          string             `json:"id"`
+	Phase       string             `json:"phase"`
+	Index       int                `json:"index"`
+	Command     string             `json:"command,omitempty"`
+	Commands    []string           `json:"commands,omitempty"`
+	Rollback    bool               `json:"rollback,omitempty"`
+	BeforeFiles bool               `json:"before_files,omitempty"`
+	Files       []image            `json:"files"`
+	Stopped     *StoppedBinding    `json:"stopped,omitempty"`
+	Paired      *PairedBinding     `json:"paired,omitempty"`
+	Retired     *RetirementBinding `json:"retired,omitempty"`
 }
 
 func (r Receipt) Pending() bool {
-	return r.Phase != "accepted" && r.Phase != "rolled-back" && r.Phase != "rolled-back-stopped"
+	return r.Phase != "accepted" && r.Phase != "rolled-back" && r.Phase != "rolled-back-stopped" && r.Phase != "archived"
 }
 
 // Store uses pre-existing directories. The caller must establish ownership and
 // durably create the private journal directory before opening it. Receipts and
 // LKG images are retained; there is deliberately no prune/delete API.
 type Store struct {
-	installation *ownedfs.Root
-	journal      *ownedfs.Root
-	files        *os.Root
-	journalFiles *os.Root
-	fault        func(string) error
+	installation   *ownedfs.Root
+	journal        *ownedfs.Root
+	files          *os.Root
+	journalFiles   *os.Root
+	fault          func(string) error
+	pairedEvidence PairedEvidence
 }
 
 func Open(installation, journal string) (*Store, error) {
@@ -192,7 +196,14 @@ func (s *Store) writeReceipt(r Receipt) error {
 }
 
 func valid(r Receipt) bool {
-	if (r.Schema != 1 && r.Schema != Schema && r.Schema != StoppedSchema) || (r.Schema == 1 && r.BeforeFiles) || !idPattern.MatchString(r.ID) || len(r.Files) == 0 || len(r.Files) > 6 || r.Index < 0 || r.Index > len(r.Files) {
+	if (r.Schema != 1 && r.Schema != Schema && r.Schema != StoppedSchema && r.Schema != PairedSchema) || (r.Schema == 1 && r.BeforeFiles) || !idPattern.MatchString(r.ID) || len(r.Files) == 0 || len(r.Files) > 6 || r.Index < 0 || r.Index > len(r.Files) {
+		return false
+	}
+	if r.Schema == PairedSchema {
+		if !validPairedReceipt(r) {
+			return false
+		}
+	} else if r.Paired != nil || r.Retired != nil || r.Phase == "paired-prepared" || r.Phase == "archived" {
 		return false
 	}
 	if r.Schema == StoppedSchema {
@@ -203,7 +214,7 @@ func valid(r Receipt) bool {
 		return false
 	}
 	switch r.Phase {
-	case "prepared":
+	case "prepared", "paired-prepared":
 		if r.Index != 0 || r.Command != "" || r.BeforeFiles || (r.Schema == 1 && len(r.Commands) != 0) {
 			return false
 		}
@@ -211,7 +222,7 @@ func valid(r Receipt) bool {
 		if r.Command != "" {
 			return false
 		}
-	case "installed", "restored", "accepted", "rolled-back", "rolled-back-stopped":
+	case "installed", "restored", "accepted", "rolled-back", "rolled-back-stopped", "archived":
 		if r.Index != len(r.Files) || r.Command != "" {
 			return false
 		}
@@ -244,7 +255,7 @@ func valid(r Receipt) bool {
 	if (r.Phase == "restoring" || r.Phase == "restored" || r.Phase == "rolled-back" || r.Phase == "rolled-back-stopped") && !r.Rollback {
 		return false
 	}
-	if (r.Phase == "prepared" || r.Phase == "installing" || r.Phase == "installed" || r.Phase == "accepted") && r.Rollback {
+	if (r.Phase == "prepared" || r.Phase == "paired-prepared" || r.Phase == "installing" || r.Phase == "installed" || r.Phase == "accepted" || r.Phase == "archived") && r.Rollback {
 		return false
 	}
 	seen := map[string]bool{}
@@ -295,7 +306,7 @@ func (s *Store) Current() (Receipt, bool, error) {
 		Schema int    `json:"schema"`
 		ID     string `json:"id"`
 	}
-	if decode(data, &pointer) != nil || (pointer.Schema != 1 && pointer.Schema != Schema && pointer.Schema != StoppedSchema) || !idPattern.MatchString(pointer.ID) {
+	if decode(data, &pointer) != nil || (pointer.Schema != 1 && pointer.Schema != Schema && pointer.Schema != StoppedSchema && pointer.Schema != PairedSchema) || !idPattern.MatchString(pointer.ID) {
 		return Receipt{}, false, ErrMismatch
 	}
 	canonical, err := json.Marshal(pointer)
@@ -316,7 +327,7 @@ func (s *Store) Current() (Receipt, bool, error) {
 	}
 	// Receipt publication precedes pointer publication. This one known cut
 	// can be completed idempotently; every other schema disagreement is fenced.
-	if pointer.Schema != r.Schema && !(pointer.Schema == Schema && r.Schema == StoppedSchema && r.Phase == "rolled-back-stopped") {
+	if pointer.Schema != r.Schema && !(pointer.Schema == Schema && (r.Schema == StoppedSchema && r.Phase == "rolled-back-stopped" || r.Schema == PairedSchema && r.Phase == "paired-prepared")) {
 		return Receipt{}, false, ErrMismatch
 	}
 	return r, true, nil
@@ -355,6 +366,9 @@ func (s *Store) RetainedReceipt(ctx context.Context, id string) (Receipt, error)
 		return r, ErrMismatch
 	}
 	if err := s.verifyImages(r); err != nil {
+		return r, err
+	}
+	if err := s.verifyPairedEvidence(ctx, r); err != nil {
 		return r, err
 	}
 	return r, ctx.Err()
@@ -445,6 +459,12 @@ func (s *Store) verifyInstallation(ctx context.Context, id string, rollback, ter
 	if r.Rollback != rollback || r.Index != len(r.Files) {
 		return ErrPending
 	}
+	if rollback && r.Schema == PairedSchema {
+		return ErrRetired
+	}
+	if err := s.verifyPairedEvidence(ctx, r); err != nil {
+		return err
+	}
 	if terminal && r.Pending() {
 		return ErrPending
 	}
@@ -500,6 +520,9 @@ func (s *Store) Prepare(ctx context.Context, id string, files []File, authority,
 	}
 	if present {
 		if err := s.verifyImages(current); err != nil {
+			return err
+		}
+		if err := s.verifyPairedEvidence(ctx, current); err != nil {
 			return err
 		}
 	}
@@ -702,16 +725,27 @@ func (s *Store) replace(ctx context.Context, id string, rollback bool, authority
 	if r.Phase == "command-started" {
 		return ErrUnknown
 	}
+	if r.Phase == "archived" || rollback && r.Schema == PairedSchema {
+		return ErrRetired
+	}
 	if !r.Pending() {
 		return ErrPending
 	}
 	if err := s.verifyImages(r); err != nil {
 		return err
 	}
+	if err := s.verifyPairedEvidence(ctx, r); err != nil {
+		return err
+	}
+	if r.Schema == PairedSchema {
+		if err := s.pairedCurrentReady(r.ID); err != nil {
+			return err
+		}
+	}
 	phase, finished := "installing", "installed"
 	if rollback {
 		phase, finished = "restoring", "restored"
-	} else if (r.Phase != "prepared" && r.Phase != "installing") || r.Rollback {
+	} else if (r.Phase != "prepared" && r.Phase != "paired-prepared" && r.Phase != "installing") || r.Rollback {
 		return ErrPending
 	}
 	if r.Phase == finished {
@@ -871,6 +905,12 @@ func (s *Store) Execute(ctx context.Context, id, command string, authority Check
 	if r.Phase == "command-started" {
 		return ErrUnknown
 	}
+	if r.Phase == "archived" {
+		return ErrRetired
+	}
+	if err := s.verifyPairedEvidence(ctx, r); err != nil {
+		return err
+	}
 	if err := s.verifyImages(r); err != nil {
 		return err
 	}
@@ -942,6 +982,9 @@ func (s *Store) ResolveUnknown(ctx context.Context, id string, authority, quiesc
 	if r.Phase != "command-started" {
 		return ErrPending
 	}
+	if err := s.verifyPairedEvidence(ctx, r); err != nil {
+		return err
+	}
 	if err := s.verifyImages(r); err != nil {
 		return err
 	}
@@ -975,6 +1018,12 @@ func (s *Store) Accept(ctx context.Context, id string, rollback bool, authority,
 	}
 	if r.Phase == "command-started" {
 		return ErrUnknown
+	}
+	if r.Phase == "archived" || rollback && r.Schema == PairedSchema {
+		return ErrRetired
+	}
+	if err := s.verifyPairedEvidence(ctx, r); err != nil {
+		return err
 	}
 	if err := s.verifyImages(r); err != nil {
 		return err

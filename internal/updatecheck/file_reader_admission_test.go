@@ -32,7 +32,7 @@ func TestJournalReaderSealRejectsDowngradeFutureAndDrift(t *testing.T) {
 				case "reader2":
 					return 2, nil
 				case "future":
-					return 4, nil
+					return SelfUpdateReadVersion + 1, nil
 				case "hash-drift":
 					_ = os.WriteFile(image.Path, []byte("changed during probe"), 0600)
 				case "unrecognized-job":
@@ -133,7 +133,7 @@ func TestLegacyReviewStaysReadableButCannotSettleStopped(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatal("ineligible stopped review wrote terminal3")
 	}
-	if SelfUpdateReadVersion != 3 || selfUpdateProtocolSchema != 2 {
+	if SelfUpdateReadVersion != 4 || selfUpdateProtocolSchema != 2 {
 		t.Fatal("reader capability coupled to replacement/private protocol")
 	}
 }
@@ -301,7 +301,7 @@ func TestOptionalReaderProofNeverFallsBackOnUnknownOrFuture(t *testing.T) {
 				}
 				switch test {
 				case "future":
-					return 4, nil
+					return SelfUpdateReadVersion + 1, nil
 				case "reader1":
 					return 1, nil
 				case "probe-error":

@@ -249,7 +249,7 @@ func (a *SelfUpdateFileAdapter) Inspect(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+	store, err := a.OpenFileJournal()
 	if err != nil {
 		return err
 	}
@@ -265,7 +265,7 @@ func (a *SelfUpdateFileAdapter) Inspect(ctx context.Context, id string) error {
 	if record.Job.State == stoppedRollbackState {
 		wanted = stoppedRollbackState
 	}
-	if receipt.Rollback != (record.Job.State != "completed") || receipt.Phase != wanted {
+	if receipt.Rollback != (record.Job.State != "completed") || (receipt.Phase != wanted && !(wanted == "accepted" && receipt.Phase == "archived")) {
 		return ErrFileProtocol
 	}
 	if wanted == stoppedRollbackState && (receipt.Stopped == nil || receipt.Stopped.InstallationID != review.AuthorityInstallationID || receipt.Stopped.PreStopSequence != review.AuthoritySequence || receipt.Stopped.Revision != review.Revision || !validJournalReaderProof(review.JournalReaders)) {
@@ -572,7 +572,7 @@ func (a *SelfUpdateFileAdapter) EffectAdmission(ctx context.Context, id, action,
 }
 
 func validFileEffectAction(effect, action string) bool {
-	if effect == installerHelperEffect || effect == journalReaderProbeEffect || effect == pairedPriorManifestEffect || fileLiveProbeEffect(effect) {
+	if effect == installerHelperEffect || effect == journalReaderProbeEffect || pairedFileEffect(effect) || fileLiveProbeEffect(effect) {
 		return action == "start/live"
 	}
 	for _, prefix := range []string{"command-worker-", "command-child-"} {
@@ -593,7 +593,7 @@ func validFileEffectAction(effect, action string) bool {
 }
 
 func validFileEffect(effect string) bool {
-	if effect == installerHelperEffect || effect == journalReaderProbeEffect || effect == pairedPriorManifestEffect || fileLiveProbeEffect(effect) {
+	if effect == installerHelperEffect || effect == journalReaderProbeEffect || pairedFileEffect(effect) || fileLiveProbeEffect(effect) {
 		return true
 	}
 	if strings.HasPrefix(effect, "rollback-private-") {
@@ -709,7 +709,7 @@ func (a *SelfUpdateFileAdapter) Finish(ctx context.Context, id string, rollback 
 	if err := a.Authority(ctx, id, review.Revision); err != nil {
 		return err
 	}
-	store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+	store, err := a.OpenFileJournal()
 	if err != nil {
 		return err
 	}

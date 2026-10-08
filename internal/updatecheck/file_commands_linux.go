@@ -21,7 +21,6 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
-	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 func fileBoot() (string, error) {
@@ -553,7 +552,7 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 	}
 	start := command == "start-candidate-panel" || command == "start-rollback-panel"
 	if start {
-		store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+		store, err := a.OpenFileJournal()
 		if err != nil {
 			return err
 		}
@@ -676,7 +675,7 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 			}
 		}
 		if ready && !cleanup {
-			store, e := selfupdatejournal.Open(a.installation, a.fileJournal)
+			store, e := a.OpenFileJournal()
 			if e != nil {
 				cleanup = true
 				continue
@@ -917,7 +916,7 @@ func (a *SelfUpdateFileAdapter) fileStartup(ctx context.Context, id, pidText str
 	if _, err := a.helperIdentity(id, review); err != nil {
 		return err
 	}
-	store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+	store, err := a.OpenFileJournal()
 	if err != nil {
 		return err
 	}
@@ -1016,7 +1015,7 @@ func (a *SelfUpdateFileAdapter) RuntimeQuiesceAuthority(ctx context.Context, id 
 		if err := a.AuthorityAction(ctx, id, revision, "stop-owned"); err != nil {
 			return err
 		}
-		store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+		store, err := a.OpenFileJournal()
 		if err != nil {
 			return err
 		}
@@ -1077,7 +1076,7 @@ func (a *SelfUpdateFileAdapter) liveFileRuntime(ctx context.Context, id string, 
 		return ErrFileProtocol
 	}
 	if r.State == "runtime-handed-off" {
-		store, e := selfupdatejournal.Open(a.installation, a.fileJournal)
+		store, e := a.OpenFileJournal()
 		if e != nil {
 			return e
 		}

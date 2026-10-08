@@ -34,12 +34,12 @@ type journalReaderProof struct {
 }
 
 func validJournalReaderProof(proof *journalReaderProof) bool {
-	if proof == nil || proof.Schema != SelfUpdateReadVersion || proof.RequiredReader != SelfUpdateReadVersion || len(proof.Controllers) == 0 || len(proof.Controllers) > 1024 {
+	if proof == nil || (proof.Schema != selfupdatejournal.StoppedSchema && proof.Schema != SelfUpdateReadVersion) || proof.RequiredReader != proof.Schema || len(proof.Controllers) == 0 || len(proof.Controllers) > 1024 {
 		return false
 	}
 	previous := ""
 	for _, image := range proof.Controllers {
-		if !filepath.IsAbs(image.Path) || image.Path != filepath.Clean(image.Path) || image.Path <= previous || !validDigest("sha256:"+image.SHA256) || image.ReadVersion != SelfUpdateReadVersion {
+		if !filepath.IsAbs(image.Path) || image.Path != filepath.Clean(image.Path) || image.Path <= previous || !validDigest("sha256:"+image.SHA256) || image.ReadVersion != proof.RequiredReader {
 			return false
 		}
 		previous = image.Path
@@ -138,12 +138,31 @@ func (a *SelfUpdateFileAdapter) journalReaderImagesWithCurrent(ctx context.Conte
 				return nil, archiveErr
 			}
 		}
-		images = append(images, selfupdatejournal.BinaryImage{Path: filepath.Join(a.directory, r.ID, "control.bin"), SHA256: r.OldExecutableSHA256})
+		retired := false
+		if _, err := os.Lstat(a.fileJournal); err == nil {
+			store, err := a.OpenFileJournal()
+			if err != nil {
+				return nil, err
+			}
+			fileReceipt, receiptErr := store.RetainedReceipt(ctx, r.ID)
+			store.Close()
+			if receiptErr != nil && !errors.Is(receiptErr, os.ErrNotExist) {
+				return nil, receiptErr
+			}
+			retired = receiptErr == nil && fileReceipt.Phase == "archived"
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		if !retired {
+			images = append(images, selfupdatejournal.BinaryImage{Path: filepath.Join(a.directory, r.ID, "control.bin"), SHA256: r.OldExecutableSHA256})
+		}
 		binaries := 0
 		for _, file := range r.Files {
 			if file.Target == "bin/razvilka" {
 				binaries++
-				images = append(images, selfupdatejournal.BinaryImage{Path: file.Candidate, SHA256: file.SHA256})
+				if !retired {
+					images = append(images, selfupdatejournal.BinaryImage{Path: file.Candidate, SHA256: file.SHA256})
+				}
 			}
 		}
 		if binaries != 1 {
@@ -154,7 +173,7 @@ func (a *SelfUpdateFileAdapter) journalReaderImagesWithCurrent(ctx context.Conte
 		return nil, ErrFileProtocol
 	}
 	if _, err := os.Lstat(a.fileJournal); err == nil {
-		store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+		store, err := a.OpenFileJournal()
 		if err != nil {
 			return nil, err
 		}
@@ -271,19 +290,35 @@ func (a *SelfUpdateFileAdapter) sealOptionalJournalReadersWithProbe(ctx context.
 	if err != nil {
 		return nil, err
 	}
-	proof := &journalReaderProof{Schema: SelfUpdateReadVersion, RequiredReader: SelfUpdateReadVersion}
+	required, err := a.requiredJournalReadVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// A new reader4 still reads the unchanged stopped3 declaration. Ordinary
+	// preparation does not demand reader4 merely because its binary supports it.
+	proof := &journalReaderProof{Schema: selfupdatejournal.StoppedSchema, RequiredReader: selfupdatejournal.StoppedSchema}
 	eligible := true
+	observedVersion := 0
 	for _, image := range images {
 		if err := check(); err != nil {
 			return nil, err
 		}
 		version, err := probe(ctx, review, image)
-		if err != nil || (version != selfUpdateProtocolSchema && version != SelfUpdateReadVersion) {
+		if err != nil || version < selfUpdateProtocolSchema || version > SelfUpdateReadVersion {
 			return nil, errors.Join(ErrFileProtocol, err)
+		}
+		// Keep the accepted ordinary2 compatibility path. Paired active
+		// evidence is a distinct version4 format and cannot borrow that path.
+		if required >= selfupdatejournal.PairedSchema && version < required {
+			return nil, ErrFileProtocol
 		}
 		if version == selfUpdateProtocolSchema {
 			eligible = false
 		}
+		if observedVersion != 0 && observedVersion != version {
+			eligible = false
+		}
+		observedVersion = version
 		proof.Controllers = append(proof.Controllers, journalReaderImage{image.Path, image.SHA256, version})
 	}
 	if err := check(); err != nil {
@@ -296,6 +331,7 @@ func (a *SelfUpdateFileAdapter) sealOptionalJournalReadersWithProbe(ctx context.
 	if !eligible {
 		return nil, nil
 	}
+	proof.Schema, proof.RequiredReader = observedVersion, observedVersion
 	return proof, nil
 }
 
@@ -373,7 +409,7 @@ func (a *SelfUpdateFileAdapter) probeJournalReader(ctx context.Context, review f
 // Read-only settlement consumer. Missing/old/future proof or any inventory or
 // digest drift refuses. This path never executes a version probe after Stop.
 func (a *SelfUpdateFileAdapter) CheckRetainedJournalReaders(ctx context.Context, id string, wanted int) error {
-	if wanted != SelfUpdateReadVersion {
+	if wanted < selfupdatejournal.StoppedSchema || wanted > SelfUpdateReadVersion {
 		return ErrFileProtocol
 	}
 	record, review, err := a.load(ctx, id)
@@ -439,7 +475,7 @@ func (a *SelfUpdateFileAdapter) requiredJournalReadVersion(ctx context.Context) 
 		if err := a.owned(a.fileJournal); err != nil {
 			return 0, err
 		}
-		store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+		store, err := a.OpenFileJournal()
 		if err != nil {
 			return 0, err
 		}
@@ -502,7 +538,9 @@ func (a *SelfUpdateFileAdapter) requiredJournalReadVersion(ctx context.Context) 
 			if !validJournalReaderProof(review.JournalReaders) {
 				return 0, ErrFileProtocol
 			}
-			required = SelfUpdateReadVersion
+			if required < review.JournalReaders.RequiredReader {
+				required = review.JournalReaders.RequiredReader
+			}
 		}
 		if record.Job.State == stoppedRollbackState && review.JournalReaders == nil {
 			return 0, ErrFileProtocol
@@ -525,7 +563,7 @@ func (a *SelfUpdateFileAdapter) checkRetainedHelperFile(ctx context.Context, rec
 	if err := a.checkHelperProcessFormats(ctx, record, review); err != nil {
 		return err
 	}
-	store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
+	store, err := a.OpenFileJournal()
 	if err != nil {
 		return err
 	}
@@ -541,7 +579,7 @@ func (a *SelfUpdateFileAdapter) checkRetainedHelperFile(ctx context.Context, rec
 	if record.Job.State == stoppedRollbackState {
 		wanted = stoppedRollbackState
 	}
-	if r.Pending() || r.Phase != wanted || r.Rollback != (record.Job.State != "completed") {
+	if r.Pending() || (r.Phase != wanted && !(wanted == "accepted" && r.Phase == "archived")) || r.Rollback != (record.Job.State != "completed") {
 		return ErrFileProtocol
 	}
 	if wanted == stoppedRollbackState && (r.Stopped == nil || r.Stopped.InstallationID != review.AuthorityInstallationID || r.Stopped.PreStopSequence != review.AuthoritySequence || r.Stopped.Revision != review.Revision || !validJournalReaderProof(review.JournalReaders)) {

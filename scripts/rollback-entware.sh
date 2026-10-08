@@ -182,7 +182,7 @@ probe_self_update_metadata() (
   done
   if [ "$SELF_PROBE_CODE" -eq 0 ] && [ ! -s "$SELF_PROBE_DIR/error" ]; then
     case "$2" in
-      -self-update-read-version) SELF_PROBE_VALUES='2 3' ;;
+      -self-update-read-version) SELF_PROBE_VALUES='2 3 4' ;;
       -self-update-schema) SELF_PROBE_VALUES='0 1 2' ;;
       -check-self-update-state) SELF_PROBE_VALUES='{"ok":true}' ;;
     esac
@@ -207,7 +207,7 @@ require_target_self_update_compatibility() {
   SELF_TARGET_READER="$(probe_self_update_metadata "$1" -self-update-read-version)" || return 1
   case "$SELF_TARGET_READER" in
     unsupported) return 0 ;; # Existing selected-backup/private-state gates still apply.
-    3)
+    3|4)
       # Fixed production roots only; no shell backup or public root arguments.
       probe_self_update_metadata "$1" -check-self-update-state >/dev/null || return 1
       ;;
@@ -332,6 +332,9 @@ require_native_enrollment_schema() {
     [ "$NATIVE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible native WARP schema; installation unchanged" >&2; return 1; }
   fi
 }
+# This fence also covers paired/archived receipt4. A raw shell selection can
+# never restore six old files over later state, even when metadata is readable.
+require_legacy_file_protocol_free
 if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then
   require_target_self_update_compatibility "$BACKUP/razvilka.bin"
   require_native_enrollment_schema "$BACKUP/razvilka.bin"

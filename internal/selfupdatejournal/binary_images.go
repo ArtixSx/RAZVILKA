@@ -86,7 +86,7 @@ func (s *Store) retainedBinaryImages(ctx context.Context, pendingID string, scan
 				Schema int    `json:"schema"`
 				ID     string `json:"id"`
 			}
-			if err != nil || decode(data, &pointer) != nil || pointer.ID != current.ID || (pointer.Schema != 1 && pointer.Schema != Schema && pointer.Schema != StoppedSchema) {
+			if err != nil || decode(data, &pointer) != nil || pointer.ID != current.ID || (pointer.Schema != 1 && pointer.Schema != Schema && pointer.Schema != StoppedSchema && pointer.Schema != PairedSchema) {
 				return nil, 0, ErrMismatch
 			}
 			canonical, _ := json.Marshal(pointer)
@@ -123,12 +123,18 @@ func (s *Store) retainedBinaryImages(ctx context.Context, pendingID string, scan
 		if err := s.verifyImages(receipt); err != nil {
 			return nil, 0, err
 		}
+		if err := s.verifyPairedInventory(ctx, receipt, pendingID, scan); err != nil {
+			return nil, 0, err
+		}
 		binaries := 0
 		for i, file := range receipt.Files {
 			if file.Target != "bin/razvilka" {
 				continue
 			}
 			binaries++
+			if receipt.Phase == "archived" {
+				continue
+			}
 			base := filepath.Join(s.journalFiles.Name(), receipt.ID)
 			if file.OldPresent {
 				images = append(images, BinaryImage{filepath.Join(base, "old-"+strconv.Itoa(i)), file.OldHash})

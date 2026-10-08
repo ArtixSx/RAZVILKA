@@ -26,7 +26,11 @@ const first = source.indexOf(targetCall, end);
 const second = source.indexOf(targetCall, stop);
 const third = source.indexOf(targetCall, recovery);
 assert(first > end && first < stop && second > stop && second < recovery && third > recovery);
-if (scriptName === 'rollback-entware.sh') assert(third < deactivate);
+if (scriptName === 'rollback-entware.sh') {
+  assert(third < deactivate);
+  const retainedFence = source.indexOf('\nrequire_legacy_file_protocol_free\n', end);
+  assert(retainedFence > end && retainedFence < first, 'raw rollback probed a target before fencing retained protocol');
+}
 else {
   assert(third < source.indexOf('STAMP="$(date', recovery));
   const stage = source.indexOf('stage 2 "');
@@ -134,6 +138,16 @@ try {
     fixture("printf '3\\n'", "printf '0\\n'", scanner);
     run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
   }
+  fixture("printf '4\\n'");
+  run('require_target_self_update_compatibility "$BINDIR/razvilka"', scriptName === 'rollback-entware.sh' ? 0 : 1);
+  if (scriptName === 'rollback-entware.sh') {
+    for (const scanner of ["printf '{\"ok\":false}\\n'; exit 1", "printf '{\"ok\":true}'", "printf '{\"ok\":true}\\n'; printf warning >&2", legacy]) {
+      fixture("printf '4\\n'", "printf '0\\n'", scanner);
+      run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
+    }
+  }
+  fixture("printf '5\\n'");
+  run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
   fixture(legacy);
   const scans = readFileSync(join(root, 'scans'), 'utf8');
   run('require_target_self_update_compatibility "$BINDIR/razvilka"', 0);
@@ -146,4 +160,4 @@ try {
   assert(basename(root).startsWith('razvilka-rollback-reader-'));
   rmSync(root, {recursive: true, force: true});
 }
-console.log(scriptName + ' immutable reader3 fence, strict bounded metadata and retained rechecks: PASS' + (fileLimit.status === 0 ? '' : ' (successful RLIMIT capture modeled; actual unavailable limit refuses)'));
+console.log(scriptName + ' retained protocol fence, strict bounded metadata and retained rechecks: PASS' + (fileLimit.status === 0 ? '' : ' (successful RLIMIT capture modeled; actual unavailable limit refuses)'));
