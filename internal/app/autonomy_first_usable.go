@@ -103,17 +103,21 @@ func (a *App) persistAutonomySearch(ctx context.Context, id string, r autonomy.R
 }
 
 func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, cfg config.Config, service catalog.Service, engine, profile, current string, ids []string) autonomy.Runtime {
+	store := a.Store
 	finish := func(state, message string) autonomy.Runtime { r.State, r.Message = state, message; return r }
 	guard := func(c context.Context) error {
 		if err := c.Err(); err != nil {
 			return err
 		}
-		if cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || !reflect.DeepEqual(a.Store.Get(), cfg) || !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(c) != nil {
+		if a.Store != store || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || !reflect.DeepEqual(a.Store.Get(), cfg) || !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(c) != nil {
 			return dataplane.ErrReviewChanged
 		}
 		latest, ok := a.autonomyService(s.ID)
 		if !ok || autonomyDefinition(latest) != s.Definition {
 			return dataplane.ErrReviewChanged
+		}
+		if err := a.autonomyResourceGuard(c, p, s, cfg, service); err != nil {
+			return err
 		}
 		observed, err := a.freshNetworkProfile(c)
 		if err != nil || observed != profile {

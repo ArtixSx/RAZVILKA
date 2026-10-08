@@ -38,7 +38,7 @@ func (a *App) autonomyConsent(p autonomy.Policy, s autonomy.Service) bool {
 // One service per coordinator round; all mutations use the same admission as
 // manual Apply/restore. No browser timer or second networking daemon is used.
 func (a *App) autonomyRound(ctx context.Context, now time.Time) {
-	release, err := a.Operations.Exclusive(ctx)
+	ctx, release, err := a.privateExclusiveOperation(ctx)
 	if err != nil {
 		return
 	}
@@ -80,7 +80,7 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	a.autonomy.mu.Lock()
 	ids := []string{}
 	for id, s := range a.autonomy.doc.Services {
-		if s.Enabled {
+		if s.Enabled && (s.Removing || cfg.Services[id].Enabled) {
 			ids = append(ids, id)
 		}
 	}
@@ -147,6 +147,12 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	}
 	if !a.autonomyConsent(p, s) || ctx.Err() != nil {
 		return finish("paused", "Разрешение отозвано или действие отменено.")
+	}
+	if err := a.autonomyResourceGuard(ctx, p, s, cfg, service); err != nil {
+		if !errors.Is(err, errAutonomyResourceIneligible) {
+			return finish("paused", "Условия автоматической проверки изменились или не подтверждены; маршрут не меняется.")
+		}
+		return finish("excluded", "Автоматическая проверка не разрешена текущим списком или исключениями. Маршрут не меняется.")
 	}
 	status, e := a.Dataplane.Status()
 	if e != nil || status.Execution != nil && status.Execution.State == "rollback-failed" {
@@ -261,7 +267,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			replace = true
 			r.State = "origin-expired"
 		} else {
-			check, _, err := a.checkAndRecordNodeForEngine(ctx, engine, currentNode, service, profile, 0)
+			check, err := a.checkAutonomyCurrentNode(ctx, p, s, cfg, engine, currentNode, service, profile)
 			verdict := "INCONCLUSIVE"
 			if err == nil {
 				verdict = autonomyNodeObservation(check, time.Now())
@@ -330,6 +336,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 			if !reflect.DeepEqual(a.Store.Get(), cfg) || !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(c) != nil {
 				return dataplane.ErrReviewChanged
+			}
+			if err := a.autonomyResourceGuard(c, p, s, cfg, service); err != nil {
+				return err
 			}
 			latest, ok := a.autonomyService(s.ID)
 			if !ok || autonomyDefinition(latest) != s.Definition {
@@ -444,12 +453,24 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 }
 
 func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, profile string) string {
-	if a.TestLab == nil || a.RouteProber == nil {
+	if a.TestLab == nil || a.RouteProber == nil || a.Store == nil {
 		return "INCONCLUSIVE"
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
+	p := a.autonomyPolicy()
+	a.autonomy.mu.Lock()
+	spec, known := a.autonomy.doc.Services[s.ID]
+	a.autonomy.mu.Unlock()
+	store := a.Store
+	cfg := store.Get()
+	if !known || a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
+		return "INCONCLUSIVE"
+	}
 	results, observed, err := a.probeRoutesInCurrentNetwork(probeCtx, a.catalogSnapshot(), []string{s.ID}, []string{route})
+	if a.Store != store || a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
+		return "INCONCLUSIVE"
+	}
 	if err != nil || observed != profile {
 		return "INCONCLUSIVE"
 	}
@@ -474,8 +495,16 @@ func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, 
 }
 
 func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, profile, route string) error {
+	store := a.Store
 	if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil || ctx.Err() != nil {
 		return dataplane.ErrReviewChanged
+	}
+	service, known := a.autonomyService(s.ID)
+	if !known {
+		return dataplane.ErrReviewChanged
+	}
+	if err := a.autonomyResourceGuard(ctx, p, s, base, service); err != nil {
+		return err
 	}
 	hypothetical := nodeRouteConfigForScope(base, s.ID, "unused", s.Sources)
 	state := hypothetical.Services[s.ID]
@@ -504,7 +533,7 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if !time.Now().Before(expires) || !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
+		if a.Store != store || !time.Now().Before(expires) || !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
 			return dataplane.ErrReviewChanged
 		}
 		cfg := a.Store.Get()
@@ -514,6 +543,16 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		}
 		if cfg.Revision != expected || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" {
 			return dataplane.ErrReviewChanged
+		}
+		if !sameAutonomyResourcePolicy(cfg, base) {
+			return dataplane.ErrReviewChanged
+		}
+		observation := base
+		if committed {
+			observation = cfg
+		}
+		if err := a.autonomyResourceGuard(ctx, p, s, observation, service); err != nil {
+			return err
 		}
 		observed, e := a.freshNetworkProfile(ctx)
 		if e != nil || observed != profile {

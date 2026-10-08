@@ -15,12 +15,16 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 	if ctx.Err() != nil || a.Operations.Snapshot().Fenced || a.NodeFeeds == nil || a.Store == nil || !a.autonomyConsent(p, s) {
 		return
 	}
-	cfg := a.Store.Get()
+	store := a.Store
+	cfg := store.Get()
 	if cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || len(r.Reserves) >= p.ReserveTarget {
 		return
 	}
 	service, ok := a.autonomyService(s.ID)
 	if !ok || s.Removing || s.ExpectedRoute == "nfqws2" && catalog.IsNFQWS2Starter(service) {
+		return
+	}
+	if a.autonomyResourceGuard(ctx, p, s, cfg, service) != nil {
 		return
 	}
 	switch r.State {
@@ -60,11 +64,17 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 	if err != nil {
 		return
 	}
-	if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
+	if a.Store != store || !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
+		return
+	}
+	if a.autonomyResourceGuard(ctx, p, s, cfg, service) != nil {
 		return
 	}
 	decision, err := a.NodeFeeds.RequestRefillRanked(ctx, p.SourceIDs, useful)
 	if err != nil {
+		return
+	}
+	if a.Store != store || a.autonomyResourceGuard(ctx, p, s, cfg, service) != nil {
 		return
 	}
 	a.autonomy.mu.Lock()

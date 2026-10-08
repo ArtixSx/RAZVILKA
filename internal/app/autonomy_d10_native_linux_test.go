@@ -1085,6 +1085,11 @@ func d10NativeChild(t *testing.T) {
 	if err := store.ApplyDraft(); err != nil {
 		t.Fatal(err)
 	}
+	// Explicit active draft intent precedes automation; committed A is still
+	// cold and is created only by the ordinary App/Manager transaction below.
+	if err := store.UpdateService(d10NativeService, config.ServiceState{Enabled: true, Route: engine}); err != nil {
+		t.Fatal(err)
+	}
 	state := "/opt/var/lib/razvilka/dataplane"
 	configs := engineconfig.New("/opt/var/lib/razvilka/drafts", "/opt/var/lib/razvilka/backups")
 	service := catalog.Service{ID: d10NativeService, Name: "Owned native D10 service", Category: "other", Strategy: []string{engine},

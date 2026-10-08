@@ -63,6 +63,9 @@ func (a *App) autonomyCandidateFailureForEngine(ctx context.Context, p autonomy.
 	if !ok || autonomyDefinition(service) != s.Definition {
 		return autonomy.CandidateFailure{}, false
 	}
+	if a.autonomyResourceGuard(ctx, p, s, base, service) != nil {
+		return autonomy.CandidateFailure{}, false
+	}
 	observed, networkErr := a.freshNetworkProfile(ctx)
 	if networkErr != nil || observed != profile {
 		return autonomy.CandidateFailure{}, false
@@ -95,12 +98,12 @@ func (a *App) checkAutonomyReserveForEngine(ctx context.Context, p autonomy.Poli
 		if !ok || autonomyDefinition(latest) != s.Definition {
 			return dataplane.ErrReviewChanged
 		}
-		return nil
+		return a.autonomyResourceGuard(ctx, p, s, base, service)
 	}
 	if err := guard(); err != nil {
 		return dataplane.NodeCheckResult{}, err
 	}
-	result, _, err := a.checkAndRecordNodeForEngine(ctx, engine, id, service, profile, 0)
+	result, err := a.checkAutonomyCurrentNode(ctx, p, s, base, engine, id, service, profile)
 	if err == nil {
 		err = guard()
 	}

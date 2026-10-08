@@ -55,6 +55,9 @@ func autonomousIntegrationFixture(t *testing.T) (*App, []string, *nodeApplyAdapt
 	if w.Code != 200 {
 		t.Fatalf("setup %d %s", w.Code, w.Body.String())
 	}
+	if err = a.Store.UpdateService("my-independent-site", config.ServiceState{Enabled: true, Route: "auto"}); err != nil {
+		t.Fatal(err)
+	}
 	if err = a.inheritAutonomyService(context.Background(), "my-independent-site"); err != nil {
 		t.Fatal(err)
 	}
