@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/config"
 )
 
 func TestDomainPolicyRuntimePlanRoundTripAndExpiredInventory(t *testing.T) {
@@ -33,5 +35,18 @@ func TestDomainPolicyRuntimePlanRoundTripAndExpiredInventory(t *testing.T) {
 	}
 	if _, err := CompileDomainPolicyForPlan(&readback, now.Add(3*time.Minute)); !errors.Is(err, ErrDomainPolicy) {
 		t.Fatal("retained intent extended freshness", err)
+	}
+}
+
+func TestDomainPolicyHistoricalPlanInventoryGrantsNoApply(t *testing.T) {
+	p, _, now := domainPolicyFixture(t, nil)
+	p.policy.Traffic = config.TrafficSelection{Mode: "all_except", DefaultRoute: "wireguard", AllExceptAllowed: true, Unavailable: "block"}
+	retained := &DomainPolicyRuntimePlan{Schema: 1, Generation: p.generation, Policy: p.policy, Scope: p.scope, Services: p.services}
+	retained.Digest = domainPolicyRuntimeDigest(retained)
+	if err := ValidateDomainPolicyRuntimePlan(retained); err != nil {
+		t.Fatal("historical intent cannot be inventoried", err)
+	}
+	if _, err := CompileDomainPolicyForPlan(retained, now); !errors.Is(err, ErrDomainPolicy) {
+		t.Fatal("historical inventory granted a new list-mode apply", err)
 	}
 }

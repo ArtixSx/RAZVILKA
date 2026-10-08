@@ -24,7 +24,7 @@ func TestNetworkScopeKeepsNegativeIdentityAcrossDHCPAndIPv6(t *testing.T) {
 		name, action, reason string
 		change               func(*config.NetworkPolicy, *ScopeObservation, *TrafficQuestion)
 	}{
-		{"selected service", "bypass", "DEFAULT_POLICY", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) {}},
+		{"selected service", "bypass", "SERVICE_OVERRIDE", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) {}},
 		{"unknown site", "base", "UNSELECTED_DESTINATION", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) { q.ServiceSelected = false }},
 		{"excluded MAC", "base", "DEVICE_EXCLUDED", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) {
 			q.Client.MAC = o.Devices[0].MAC
@@ -37,7 +37,7 @@ func TestNetworkScopeKeepsNegativeIdentityAcrossDHCPAndIPv6(t *testing.T) {
 			q.Client.MAC = o.Devices[0].MAC
 			q.Client.Address = netip.MustParseAddr("fd00:1::abcd")
 		}},
-		{"new owner of old IPv4", "bypass", "DEFAULT_POLICY", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) {
+		{"new owner of old IPv4", "bypass", "SERVICE_OVERRIDE", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) {
 			q.Client.MAC = "02:00:00:00:00:03"
 		}},
 		{"missing excluded binding", "unavailable", "SCOPE_UNAVAILABLE", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) { o.Devices = o.Devices[1:] }},
@@ -76,7 +76,7 @@ func TestNetworkScopeKeepsNegativeIdentityAcrossDHCPAndIPv6(t *testing.T) {
 			p.Clients.DeviceIDs = []string{"laptop"}
 		}},
 		{"stale scope", "unavailable", "SCOPE_UNAVAILABLE", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) { o.FreshUntil = o.ObservedAt }},
-		{"unknown other segment does not block home", "bypass", "DEFAULT_POLICY", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) {
+		{"unknown other segment does not block home", "bypass", "SERVICE_OVERRIDE", func(p *config.NetworkPolicy, o *ScopeObservation, q *TrafficQuestion) {
 			o.Devices[0].SegmentID = "guest"
 			o.Devices[0].Confirmed = false
 		}},
@@ -93,7 +93,7 @@ func TestNetworkScopeKeepsNegativeIdentityAcrossDHCPAndIPv6(t *testing.T) {
 	}
 }
 
-func TestNetworkPolicyPrioritiesAndExplicitRussianOverride(t *testing.T) {
+func TestNetworkPolicyExclusionsPrecedePinnedBypass(t *testing.T) {
 	p, o, q, now := scopeFixture()
 	p.Russian = config.RussianExclusions{Enabled: true, CatalogID: "ru-curated", Revision: 4, Digest: strings.Repeat("a", 64), ServiceIDs: []string{"bank"}}
 	assert := func(reason string) {
@@ -105,7 +105,7 @@ func TestNetworkPolicyPrioritiesAndExplicitRussianOverride(t *testing.T) {
 	}
 	assert("RU_CATALOG_DIRECT") // merely enabling a service does not override RU
 	q.ExplicitBypass = true
-	assert("MANUAL_BYPASS_OVERRIDE")
+	assert("RU_CATALOG_DIRECT")
 	p.Rules = []config.NetworkRule{{ID: "direct", Revision: 1, Kind: "suffix", Value: "example.ru", Action: "direct", Mandatory: true}}
 	assert("MANUAL_DIRECT")
 	q.ProtectedDestination = true
@@ -117,22 +117,22 @@ func TestNetworkPolicyPrioritiesAndExplicitRussianOverride(t *testing.T) {
 	p.Rules = nil
 	q.ExplicitBypass = false
 	q.ServiceID = "other"
-	assert("DEFAULT_POLICY") // .ru itself is not curated
+	assert("SERVICE_OVERRIDE") // .ru itself is not curated
 	p.Russian.BroadTLDs = []string{"ru"}
 	assert("RU_CATALOG_DIRECT")
 	q.Domain = "example.ru.attacker.test"
-	assert("DEFAULT_POLICY")
+	assert("SERVICE_OVERRIDE")
 	p.Russian.BroadTLDs = nil
 	q.ServiceSelected = false
 	assert("UNSELECTED_DESTINATION")
 	p.Traffic = config.TrafficSelection{Mode: "all_except", AllExceptAllowed: true, DefaultRoute: "usque", Unavailable: "retain"}
-	assert("DEFAULT_POLICY")
-	// DNS can reveal a conflict between a domain and a literal-IP rule that
-	// could not be determined from domain strings alone at config validation.
+	assert("LIST_MODE_REQUIRED")
+	// Cross-kind matches need actual resource identity. The negative remains
+	// baseline even when a mandatory positive matches the same destination.
 	q.Domain = "example.ru"
 	q.Address = netip.MustParseAddr("203.0.113.1")
 	p.Rules = []config.NetworkRule{{ID: "direct", Revision: 1, Kind: "exact", Value: q.Domain, Action: "direct", Mandatory: true}, {ID: "bypass", Revision: 1, Kind: "ip", Value: q.Address.String(), Action: "bypass", Mandatory: true}}
-	assert("MANUAL_RULE_CONFLICT")
+	assert("MANUAL_DIRECT")
 }
 
 func TestNetworkScopeDigestStableOnFreshObservation(t *testing.T) {

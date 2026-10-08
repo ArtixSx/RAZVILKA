@@ -153,8 +153,8 @@ func domainPolicyTCPPair(t *testing.T) (*net.TCPConn, *net.TCPConn) {
 func TestDomainPolicyTCPActualBytesChooseBeforeOutbound(t *testing.T) {
 	for _, tc := range []struct{ name, route, kind string }{
 		{"service.example.com", "xray", "service"},
-		{"unknown.example.com", "wireguard", "default"},
-		{"93.184.215.14", "wireguard", "default"},
+		{"unknown.example.com", "direct", "baseline"},
+		{"93.184.215.14", "direct", "baseline"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, flow, runtime := domainPolicyTCPFixture(t, nil)
@@ -179,6 +179,13 @@ func TestDomainPolicyTCPActualBytesChooseBeforeOutbound(t *testing.T) {
 					}
 				}()
 				return upstream, nil
+			}
+			if tc.kind == "baseline" {
+				runtime.BaselineDial = runtime.Dial // explicit protocol double for the baseline owner
+				runtime.Dial = func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision) (net.Conn, error) {
+					t.Error("unmatched flow reached bypass dial")
+					return nil, ErrDomainPolicy
+				}
 			}
 			done := make(chan error, 1)
 			go func() {
@@ -351,7 +358,7 @@ func TestDomainPolicyTCPBaselineGrantRequiredAndExplicitSuffix(t *testing.T) {
 	}
 	p, f, now := domainPolicyFixture(t, nil)
 	f.Name = "child.service.example.com"
-	if d := p.Decide(f, now); d.Kind != "default" {
+	if d := p.Decide(f, now); d.Kind != "baseline" {
 		t.Fatal("exact service widened", d)
 	}
 	p.services[0].DomainSuffixes = []string{"service.example.com"}

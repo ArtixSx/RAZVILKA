@@ -78,8 +78,8 @@ type DefaultRouteIngress struct {
 
 // DefaultRouteCompilation is immutable outside this package. The accessor
 // methods copy every mutable slice/map before handing it to a shared owner.
-// IP rules have disjoint source/destination rectangles across all adapters;
-// adapter priority ordering therefore cannot steal a service from default.
+// Overlapping IP rules must select the same resolved path. There is no
+// catch-all: only enabled, reviewed service destinations enter this plan.
 type DefaultRouteCompilation struct {
 	policy   *config.NetworkPolicy
 	snapshot DefaultRouteSnapshot
@@ -113,49 +113,87 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 		return nil, defaultRouteBound()
 	}
 	p := config.CloneNetworkPolicy(cfg.NetworkPolicy)
-	if config.ValidateNetworkPolicy(p) != nil || p == nil || p.Schema != 2 || p.Traffic.Mode != "all_except" {
-		return nil, fmt.Errorf("%w: concrete schema-2 all-except policy required", ErrDefaultRouteCapability)
+	if p == nil || config.ValidateAppliedNetworkPolicy(p) != nil || p.Traffic.Mode != "selected_services" {
+		return nil, fmt.Errorf("%w: selected-services policy required", ErrDefaultRouteCapability)
 	}
-	desiredDefault := p.Traffic.DefaultRoute
-	path, ok := snapshot.Paths["default"]
-	if !ok || path.Selected != desiredDefault || !defaultRoutePathValid(path) {
-		return nil, fmt.Errorf("%w: exact default profile/proof required", ErrDefaultRouteCapability)
-	}
-	if desiredDefault == config.DefaultRouteAuto {
-		p.Traffic.DefaultRoute = dataplane.AdapterID(path.Resolved)
-		if strings.HasPrefix(path.Resolved, "sing-box:node-") {
-			p.Traffic.DefaultRoute = path.Resolved
-		}
-	}
-	if config.ValidateAppliedNetworkPolicy(p) != nil {
-		return nil, fmt.Errorf("%w: auto default has no concrete permitted executor", ErrDefaultRouteCapability)
+	exclusions, err := config.EffectiveResourceExclusions(p)
+	if err != nil {
+		return nil, fmt.Errorf("%w: effective resource exclusions unavailable", ErrDefaultRouteCapability)
 	}
 	if cfg.SafeMode || cfg.ServiceControl.Stopped || snapshot.Stopped || cfg.Revision == 0 || cfg.Revision == ^uint64(0) || now.IsZero() {
 		return nil, dataplane.ErrReviewChanged
 	}
-	if snapshot.Authority.InstallationID == "" || snapshot.Authority.Sequence == 0 || !defaultRouteHash(snapshot.Authority.ConsentDigest) || snapshot.ProfileGeneration == 0 || !slices.Contains(snapshot.AllowedDefaultRoutes, p.Traffic.DefaultRoute) {
-		return nil, fmt.Errorf("%w: default authority/consent unavailable", ErrDefaultRouteCapability)
+	if snapshot.Authority.InstallationID == "" || snapshot.Authority.Sequence == 0 || !defaultRouteHash(snapshot.Authority.ConsentDigest) {
+		return nil, fmt.Errorf("%w: control review binding unavailable", ErrDefaultRouteCapability)
 	}
 	if snapshot.DNSMode != "baseline" {
 		return nil, fmt.Errorf("%w: general scoped DNS resolver is not implemented", ErrDefaultRouteCapability)
 	}
-	if p.Russian.Enabled {
-		return nil, fmt.Errorf("%w: domain-aware Russian exclusions require flow dispatch", ErrDefaultRouteCapability)
+	for _, r := range p.Rules {
+		if r.Action == "bypass" {
+			return nil, fmt.Errorf("%w: standalone list rule requires an exact resolved path", ErrDefaultRouteCapability)
+		}
+	}
+	c := &DefaultRouteCompilation{policy: p, snapshot: defaultRouteClone(snapshot)}
+	services = defaultRouteCloneRoutes(services)
+	sort.Slice(services, func(i, j int) bool { return services[i].ServiceID < services[j].ServiceID })
+	seen := map[string]bool{}
+	var active []dataplane.Route
+	for _, service := range services {
+		state, exists := cfg.Services[service.ServiceID]
+		if !exists || !state.Enabled {
+			continue
+		}
+		if service.ServiceID == "" || service.ServiceID == "default" || seen[service.ServiceID] {
+			return nil, fmt.Errorf("%w: ambiguous active service identity", ErrDefaultRouteCapability)
+		}
+		seen[service.ServiceID] = true
+		excluded, err := exclusions.Matches(config.ResourceTarget{ServiceID: service.ServiceID})
+		if err != nil {
+			return nil, fmt.Errorf("%w: resource exclusion identity unavailable", ErrDefaultRouteCapability)
+		}
+		if !excluded {
+			active = append(active, service)
+		}
+	}
+	for id, state := range cfg.Services {
+		if state.Enabled && !seen[id] {
+			return nil, fmt.Errorf("%w: enabled service definition missing", ErrDefaultRouteCapability)
+		}
+	}
+	// An empty active list needs no profile or native LAN effects. Retiring
+	// previous adapters remains the existing reviewed Manager transaction.
+	if len(active) == 0 {
+		c.bindDigest(cfg.Revision)
+		return c, nil
+	}
+	if snapshot.ProfileGeneration == 0 {
+		return nil, dataplane.ErrReviewChanged
+	}
+	for _, list := range [][]config.ResourceMatch{exclusions.Manual, exclusions.Russian} {
+		for _, match := range list {
+			if match.Kind == "exact" || match.Kind == "suffix" {
+				return nil, fmt.Errorf("%w: domain exclusions require flow dispatch", ErrDefaultRouteCapability)
+			}
+			if match.Kind == "service" {
+				return nil, fmt.Errorf("%w: service exclusions require flow dispatch for remaining IP positives", ErrDefaultRouteCapability)
+			}
+		}
+	}
+	if len(exclusions.BroadTLDs) != 0 {
+		return nil, fmt.Errorf("%w: domain exclusions require flow dispatch", ErrDefaultRouteCapability)
 	}
 	for _, r := range p.Rules {
 		if r.Kind == "exact" || r.Kind == "suffix" {
 			return nil, fmt.Errorf("%w: domain rules require flow dispatch", ErrDefaultRouteCapability)
 		}
+		if r.Kind == "service" {
+			return nil, fmt.Errorf("%w: service exclusions require flow dispatch for remaining IP positives", ErrDefaultRouteCapability)
+		}
 		if r.Action != "direct" || len(r.DeviceIDs) != 0 {
 			return nil, fmt.Errorf("%w: IP capability supports scope-wide direct exclusions", ErrDefaultRouteCapability)
 		}
 	}
-	if strings.HasPrefix(path.Resolved, "sing-box:node-") || strings.HasPrefix(path.Resolved, "xray:node-") {
-		if snapshot.NodeGeneration == 0 {
-			return nil, dataplane.ErrReviewChanged
-		}
-	}
-	c := &DefaultRouteCompilation{policy: p, snapshot: defaultRouteClone(snapshot)}
 	if err := c.compileIngress(now); err != nil {
 		return nil, err
 	}
@@ -163,21 +201,17 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 	if err != nil {
 		return nil, err
 	}
-	// Sort overrides for stable identity, but refuse conflicts instead of
+	// Sort active entries for stable identity, but refuse conflicts instead of
 	// making service order an undocumented routing priority.
-	services = defaultRouteCloneRoutes(services)
-	sort.Slice(services, func(i, j int) bool { return services[i].ServiceID < services[j].ServiceID })
-	seen := map[string]bool{}
 	var overrides []DefaultRouteRule
-	for _, service := range services {
+	for _, service := range active {
 		state, exists := cfg.Services[service.ServiceID]
 		if !exists || !state.Enabled {
 			continue
-		} // removed override returns to default
-		if service.ServiceID == "default" || service.ServiceID == "" || seen[service.ServiceID] || len(service.Domains) != 0 {
+		} // inactive catalogue entries never create a destination rule
+		if len(service.Domains) != 0 {
 			return nil, fmt.Errorf("%w: ambiguous or domain-aware service override", ErrDefaultRouteCapability)
 		}
-		seen[service.ServiceID] = true
 		path, ok := snapshot.Paths[service.ServiceID]
 		if !ok || !defaultRoutePathValid(path) || path.Selected != selectedRoute(state) || service.Selected != path.Selected || service.Resolved != path.Resolved || !slices.Equal(service.Sources, state.Sources) {
 			return nil, dataplane.ErrReviewChanged
@@ -222,50 +256,30 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 			}
 		}
 	}
-	for id, state := range cfg.Services {
-		if state.Enabled && !seen[id] {
-			return nil, fmt.Errorf("%w: enabled service definition missing", ErrDefaultRouteCapability)
-		}
-	}
 	if len(overrides) > defaultRouteRuleLimit {
 		return nil, defaultRouteBound()
 	}
 	for i, left := range overrides {
 		for _, right := range overrides[i+1:] {
-			if left.Ingress == right.Ingress && left.Source.Overlaps(right.Source) && left.Destination.Overlaps(right.Destination) {
-				return nil, fmt.Errorf("%w: overlapping service overrides", ErrDefaultRouteCapability)
+			if left.Route != right.Route && left.Ingress == right.Ingress && left.Source.Overlaps(right.Source) && left.Destination.Overlaps(right.Destination) {
+				return nil, fmt.Errorf("%w: overlapping active entries select different paths", ErrDefaultRouteCapability)
 			}
 		}
 	}
 	c.rules = slices.Clone(overrides)
-	for _, gate := range c.ingress {
-		for _, source := range gate.Sources {
-			for _, destination := range public {
-				if source.Addr().Is4() != destination.Addr().Is4() {
-					continue
-				}
-				remaining := []DefaultRouteRule{{"default", "default", path.Resolved, gate.Interface, source, destination}}
-				for _, override := range overrides {
-					var next []DefaultRouteRule
-					for _, rule := range remaining {
-						next = append(next, defaultRouteSubtractRule(rule, override)...)
-						if len(next)+len(c.rules) > defaultRouteRuleLimit {
-							return nil, defaultRouteBound()
-						}
-					}
-					remaining = next
-				}
-				c.rules = append(c.rules, remaining...)
-				if len(c.rules) > defaultRouteRuleLimit {
-					return nil, defaultRouteBound()
-				}
-			}
-		}
-	}
-	if len(c.rules) == 0 {
-		return nil, fmt.Errorf("%w: managed scope is empty", ErrDefaultRouteCapability)
-	}
 	sort.Slice(c.rules, func(i, j int) bool { return defaultRouteRuleKey(c.rules[i]) < defaultRouteRuleKey(c.rules[j]) })
+	c.bindDigest(cfg.Revision)
+	if len(c.rules) == 0 {
+		return c, nil
+	}
+	c.lan, err = defaultRouteCompileLAN(c.digest, c.ingress)
+	if err != nil {
+		return nil, fmt.Errorf("%w: shared LAN gate: %w", ErrDefaultRouteCapability, err)
+	}
+	return c, nil
+}
+
+func (c *DefaultRouteCompilation) bindDigest(revision uint64) {
 	// Digest binds the complete reviewed policy, scope, profiles and control
 	// epoch, not just the finite set of IP tuples produced from it.
 	c.digest = defaultRouteDigest(struct {
@@ -273,12 +287,7 @@ func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot,
 		Policy   *config.NetworkPolicy
 		Snapshot DefaultRouteSnapshot
 		Rules    []DefaultRouteRule
-	}{cfg.Revision, p, defaultRouteIdentity(c.snapshot), c.rules})
-	c.lan, err = defaultRouteCompileLAN(c.digest, c.ingress)
-	if err != nil {
-		return nil, fmt.Errorf("%w: shared LAN gate: %w", ErrDefaultRouteCapability, err)
-	}
-	return c, nil
+	}{revision, c.policy, defaultRouteIdentity(c.snapshot), c.rules})
 }
 
 func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
@@ -431,8 +440,23 @@ func defaultRoutePublic(p *config.NetworkPolicy) ([]netip.Prefix, error) {
 		if r.Kind == "ip" {
 			ip := netip.MustParseAddr(r.Value)
 			excluded = append(excluded, netip.PrefixFrom(ip, ip.BitLen()))
-		} else {
+		} else if r.Kind == "cidr" {
 			excluded = append(excluded, netip.MustParsePrefix(r.Value))
+		}
+	}
+	set, err := config.EffectiveResourceExclusions(p)
+	if err != nil {
+		return nil, err
+	}
+	for _, list := range [][]config.ResourceMatch{set.Manual, set.Russian} {
+		for _, match := range list {
+			switch match.Kind {
+			case "ip":
+				ip := netip.MustParseAddr(match.Value)
+				excluded = append(excluded, netip.PrefixFrom(ip, ip.BitLen()))
+			case "cidr":
+				excluded = append(excluded, netip.MustParsePrefix(match.Value))
+			}
 		}
 	}
 	return defaultRouteSubtractPrefixes([]netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")}, excluded)

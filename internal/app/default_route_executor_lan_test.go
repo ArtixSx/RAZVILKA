@@ -17,7 +17,7 @@ func TestDefaultRouteSharedLANGateBindsMembershipAndGeneration(t *testing.T) {
 	cfg.NetworkPolicy.Clients.ExcludedDeviceIDs = []string{"excluded"}
 	snapshot.Scope.Devices[0].MAC = "02:ab:cd:00:00:01"
 	snapshot.Scope.Devices[1].MAC = "02:cd:ab:00:00:02"
-	c, err := CompileDefaultRoutePolicy(cfg, snapshot, nil, now)
+	c, err := CompileDefaultRoutePolicy(cfg, snapshot, defaultRouteListedRoutes(), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestDefaultRouteSharedLANGateRejectsOwnedTunnelIngress(t *testing.T) {
 	for i := range snapshot.Scope.Devices {
 		snapshot.Scope.Devices[i].Interface = iface
 	}
-	if _, err := CompileDefaultRoutePolicy(cfg, snapshot, nil, now); !errors.Is(err, ErrDefaultRouteCapability) || !errors.Is(err, dataplane.ErrLANPolicyRuntime) {
+	if _, err := CompileDefaultRoutePolicy(cfg, snapshot, defaultRouteListedRoutes(), now); !errors.Is(err, ErrDefaultRouteCapability) || !errors.Is(err, dataplane.ErrLANPolicyRuntime) {
 		t.Fatal("owned tunnel masqueraded as physical LAN", err)
 	}
 }
@@ -68,7 +68,7 @@ func TestDefaultRouteSharedLANGateActualEffectBound(t *testing.T) {
 			ID: fmt.Sprintf("device-%d", i), MAC: fmt.Sprintf("02:00:00:00:%02x:%02x", i/256, i%256), Interface: "br0", SegmentID: "home", Confirmed: true,
 		})
 	}
-	if _, err := CompileDefaultRoutePolicy(cfg, snapshot, nil, now); !errors.Is(err, ErrDefaultRouteCapability) || !errors.Is(err, dataplane.ErrLANPolicyRuntime) {
+	if _, err := CompileDefaultRoutePolicy(cfg, snapshot, defaultRouteListedRoutes(), now); !errors.Is(err, ErrDefaultRouteCapability) || !errors.Is(err, dataplane.ErrLANPolicyRuntime) {
 		t.Fatal("actual shared effect capacity was bypassed", err)
 	}
 }
@@ -98,7 +98,7 @@ func TestDefaultRouteInputUsesExactSharedIngressGenerationAndRole(t *testing.T) 
 	if err != nil || !p.Ready {
 		t.Fatal("actual common Build rejected compiled authority shape", err, p.Blockers)
 	}
-	for adapter, wantDefault := range map[string]bool{"wireguard": true, "warp-wg": false} {
+	for adapter, wantDefault := range map[string]bool{"warp-wg": false} {
 		generation, hasDefault, err := dataplane.NetworkPolicyRouteAuthority(p, adapter)
 		if err != nil || generation != c.Digest() || hasDefault != wantDefault {
 			t.Fatal("common authority helper changed generation/role", adapter, generation, hasDefault, err)

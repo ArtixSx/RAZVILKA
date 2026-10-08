@@ -73,6 +73,17 @@ func (a *defaultRouteTransactionAdapter) VerifyRollback(c context.Context, _ dat
 	return a.verified && !a.live, a.step(c, "verify-rollback")
 }
 
+func (a *defaultRouteTransactionAdapter) Deactivate(c context.Context) error {
+	if err := a.step(c, "deactivate"); err != nil {
+		return err
+	}
+	if !a.verified {
+		return dataplane.ErrRuntimeInactivity
+	}
+	a.live = false
+	return a.step(c, "verify-inactive")
+}
+
 func defaultRouteExecutorFixture(t *testing.T) (*DefaultRouteExecutor, *DefaultRouteSnapshot, *defaultRouteTransactionAdapter) {
 	t.Helper()
 	cfg, snapshot, _ := defaultRouteFixture()
@@ -120,7 +131,7 @@ func defaultRouteExecutorFixtureConfig(t *testing.T, cfg config.Config, snapshot
 func TestDefaultRouteExecutorSingleManagerCommitAndReviewCopies(t *testing.T) {
 	defaultRouteRequireLinuxJournal(t)
 	e, _, adapter := defaultRouteExecutorFixture(t)
-	r, err := e.Review(context.Background(), nil)
+	r, err := e.Review(context.Background(), defaultRouteListedRoutes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,8 +146,8 @@ func TestDefaultRouteExecutorSingleManagerCommitAndReviewCopies(t *testing.T) {
 		t.Fatal("unexpected phases", adapter.steps)
 	}
 	current := e.app.Store.Get()
-	if current.AppliedNetworkPolicy == nil || current.AppliedRevision != 9 || current.Revision != 9 || len(current.AppliedServices) != 0 || !adapter.live {
-		t.Fatal("policy/default without services not committed")
+	if current.AppliedNetworkPolicy == nil || current.AppliedRevision != 9 || current.Revision != 9 || len(current.AppliedServices) != 1 || !adapter.live {
+		t.Fatal("active list and applied service view not committed")
 	}
 	committed, exists, err := e.app.Dataplane.Committed()
 	if err != nil || !exists || committed.Revision != current.AppliedRevision {
@@ -145,7 +156,7 @@ func TestDefaultRouteExecutorSingleManagerCommitAndReviewCopies(t *testing.T) {
 	if _, err := e.Execute(context.Background(), r, r.Digest()); !errors.Is(err, dataplane.ErrReviewChanged) {
 		t.Fatal("review replay accepted", err)
 	}
-	if _, err := e.Review(context.Background(), nil); err != nil {
+	if _, err := e.Review(context.Background(), defaultRouteListedRoutes()); err != nil {
 		t.Fatal("next review could not consume applied state", err)
 	}
 }
@@ -190,7 +201,7 @@ func TestDefaultRouteExecutorRealCommitServiceFencesAndEpochRollback(t *testing.
 					return undo, err
 				}
 			}
-			r, err := e.Review(context.Background(), nil)
+			r, err := e.Review(context.Background(), defaultRouteListedRoutes())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -234,7 +245,7 @@ func TestDefaultRouteExecutorRealCommitPreservesEmptyPolicyMapPreimage(t *testin
 	if c := e.app.Store.Get(); c.ServicePolicies == nil || len(c.ServicePolicies) != 0 {
 		t.Fatal("fixture did not retain empty policy map")
 	}
-	r, err := e.Review(context.Background(), nil)
+	r, err := e.Review(context.Background(), defaultRouteListedRoutes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +321,7 @@ func TestDefaultRouteExecutorChangedReviewNeverStarts(t *testing.T) {
 				defaultRouteRequireLinuxJournal(t)
 			}
 			e, s, adapter := defaultRouteExecutorFixture(t)
-			r, err := e.Review(context.Background(), nil)
+			r, err := e.Review(context.Background(), defaultRouteListedRoutes())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -328,7 +339,7 @@ func TestDefaultRouteExecutorStopCancelCASAndVerifiedRollback(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			e, s, adapter := defaultRouteExecutorFixture(t)
 			before := e.app.Store.Get()
-			r, err := e.Review(context.Background(), nil)
+			r, err := e.Review(context.Background(), defaultRouteListedRoutes())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -391,7 +402,7 @@ func TestDefaultRouteExecutorStopCancelCASAndVerifiedRollback(t *testing.T) {
 func TestDefaultRouteExecutorPostCommitDiskReplacementRefusesAndFences(t *testing.T) {
 	defaultRouteRequireLinuxJournal(t)
 	e, _, adapter := defaultRouteExecutorFixture(t)
-	r, err := e.Review(context.Background(), nil)
+	r, err := e.Review(context.Background(), defaultRouteListedRoutes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +436,7 @@ func TestDefaultRouteExecutorPostCommitDiskReplacementRefusesAndFences(t *testin
 
 func TestDefaultRouteExecutorDiskChangeDuringObservationNeverStarts(t *testing.T) {
 	e, _, adapter := defaultRouteExecutorFixture(t)
-	r, err := e.Review(context.Background(), nil)
+	r, err := e.Review(context.Background(), defaultRouteListedRoutes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +466,7 @@ func TestDefaultRouteExecutorDiskChangeDuringObservationNeverStarts(t *testing.T
 
 func TestDefaultRouteExecutorCrashJournalRefusesBeforeAdapter(t *testing.T) {
 	e, _, adapter := defaultRouteExecutorFixture(t)
-	r, err := e.Review(context.Background(), nil)
+	r, err := e.Review(context.Background(), defaultRouteListedRoutes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,7 +490,7 @@ func TestDefaultRouteExecutorMissingAndWeakeningBindingsRefused(t *testing.T) {
 		p.Routes = nil
 		return p, nil
 	}
-	if _, err := e.Review(context.Background(), nil); !errors.Is(err, ErrDefaultRouteCapability) {
+	if _, err := e.Review(context.Background(), defaultRouteListedRoutes()); !errors.Is(err, ErrDefaultRouteCapability) {
 		t.Fatal("binder silently dropped default", err)
 	}
 }
@@ -518,9 +529,9 @@ func TestDefaultRouteActualWireGuardAdapterRefusesUnsafeScopeAndLegacyEndpointOv
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := observed.Paths["default"]
+	path := observed.Paths["listed"]
 	path.WireGuardProfileRevision = imported.Revision
-	observed.Paths["default"] = path
+	observed.Paths["listed"] = path
 	adapter := dataplane.NewWireGuardAdapter(nil, e.app.Dataplane.StateRoot)
 	adapter.Profiles = profiles
 	runner := &defaultRouteReadOnlyRunner{}
@@ -536,7 +547,9 @@ func TestDefaultRouteActualWireGuardAdapterRefusesUnsafeScopeAndLegacyEndpointOv
 	if err := e.app.Dataplane.Register(adapter); err != nil {
 		t.Fatal(err)
 	}
-	r, err := e.Review(context.Background(), nil)
+	routes := defaultRouteListedRoutes()
+	routes[0].WireGuardProfileRevision = imported.Revision
+	r, err := e.Review(context.Background(), routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,6 +580,72 @@ func TestDefaultRouteActualWireGuardAdapterRefusesUnsafeScopeAndLegacyEndpointOv
 		if strings.Contains(call, "link add") || strings.Contains(call, "rule add") || strings.Contains(call, "setconf") {
 			t.Fatal("refused stage mutated kernel", runner.calls)
 		}
+	}
+}
+
+func TestDefaultRouteExecutorEmptyFreshListStartsNoAdapter(t *testing.T) {
+	defaultRouteRequireLinuxJournal(t)
+	cfg, snapshot, _ := defaultRouteFixture()
+	delete(cfg.Services, "listed")
+	snapshot.Paths, snapshot.ProfileGeneration = nil, 0
+	e, _, adapter := defaultRouteExecutorFixtureConfig(t, cfg, snapshot)
+	r, err := e.Review(context.Background(), nil)
+	if err != nil {
+		t.Fatal("empty fresh list could not be reviewed", err)
+	}
+	plan := r.Plan()
+	if !plan.Noop || len(plan.Routes) != 0 || len(plan.Adapters) != 0 || plan.LAN != nil {
+		t.Fatal("empty fresh list created an execution target", plan)
+	}
+	execution, err := e.Execute(context.Background(), r, r.Digest())
+	if err != nil || execution.State != "committed" || adapter.live || len(adapter.steps) != 0 {
+		t.Fatal("empty fresh list started an adapter", execution, err, adapter.steps)
+	}
+}
+
+func TestDefaultRouteExecutorExclusionChangeRevokesReviewedApply(t *testing.T) {
+	e, _, adapter := defaultRouteExecutorFixture(t)
+	r, err := e.Review(context.Background(), defaultRouteListedRoutes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual := []config.ResourceMatch{{Kind: "service", Value: "listed"}}
+	if _, err := e.app.Store.UpdateResourceExclusions(context.Background(), e.app.Store.Get(), &manual, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Execute(context.Background(), r, r.Digest()); !errors.Is(err, dataplane.ErrReviewChanged) || adapter.live || len(adapter.steps) != 0 {
+		t.Fatal("new exclusion did not revoke stale Apply before effects", err, adapter.steps)
+	}
+}
+
+func TestDefaultRouteExecutorRemovingLastEntryRetiresOwnedRuntime(t *testing.T) {
+	defaultRouteRequireLinuxJournal(t)
+	e, _, adapter := defaultRouteExecutorFixture(t)
+	r, err := e.Review(context.Background(), defaultRouteListedRoutes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if execution, err := e.Execute(context.Background(), r, r.Digest()); err != nil || execution.State != "committed" || !adapter.live {
+		t.Fatal("initial active list was not applied", execution, err)
+	}
+	if err := e.app.Store.DeleteService("listed"); err != nil {
+		t.Fatal(err)
+	}
+	r, err = e.Review(context.Background(), nil)
+	if err != nil {
+		t.Fatal("empty replacement left old capture without a retirement plan", err)
+	}
+	plan := r.Plan()
+	if plan.Noop || len(plan.Routes) != 0 || len(plan.Adapters) != 0 || plan.LAN != nil || !slices.Contains(plan.RetiringAdapters, "wireguard") || !slices.Contains(plan.RetiringAdapters, dataplane.NetworkPolicyAdapterID) {
+		t.Fatal("empty replacement lost exact owned retirement", plan)
+	}
+	execution, err := e.Execute(context.Background(), r, r.Digest())
+	if err != nil || execution.State != "committed" || adapter.live || !slices.Contains(adapter.steps, "verify-inactive") || len(e.app.Store.Get().AppliedServices) != 0 {
+		t.Fatal("last entry removal left owned capture active", execution, err, adapter.steps)
+	}
+	committed, exists, err := e.app.Dataplane.Committed()
+	if err != nil || !exists || committed.LAN != nil || len(committed.Routes) != 0 || len(committed.Adapters) != 0 {
+		t.Fatal("retirement retained old interception intent", committed, err)
 	}
 }
 

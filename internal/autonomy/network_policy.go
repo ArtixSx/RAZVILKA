@@ -42,22 +42,23 @@ type TrafficQuestion struct {
 	ServiceID            string
 	ServiceSelected      bool
 	ServiceSources       []string
-	ExplicitBypass       bool // explicit override, never inferred from ServiceSelected
+	ExplicitBypass       bool // never supplies a missing resolved active target
 	ProtectedDestination bool
-	// Schema 2: whether the applied default executor carries this traffic
-	// class (TCP/UDP, IPv4/IPv6, QUIC...). "supported", "unsupported" or
-	// "unknown"; empty is unknown and never becomes a supported path.
+	// Retained default coverage is diagnostic only in list mode. The actual
+	// selected adapter separately proves TCP/UDP and family capability.
 	DefaultCoverage string
 }
 type NetworkDecision struct {
-	Action         string `json:"action"`           // base, bypass, blocked or unavailable; no access proof
-	Target         string `json:"target,omitempty"` // service or default path of a bypass decision
-	Reason         string `json:"reason_code"`
-	RuleID         string `json:"rule_id,omitempty"`
-	RuleRevision   uint64 `json:"rule_revision,omitempty"`
-	PolicyRevision uint64 `json:"policy_revision"`
-	ScopeDigest    string `json:"scope_digest,omitempty"`
-	DeviceID       string `json:"device_id,omitempty"`
+	Action            string `json:"action"`           // base, bypass, blocked or unavailable; no access proof
+	Target            string `json:"target,omitempty"` // resolved active service; no unmatched default grant
+	Reason            string `json:"reason_code"`
+	RuleID            string `json:"rule_id,omitempty"`
+	RuleRevision      uint64 `json:"rule_revision,omitempty"`
+	PolicyRevision    uint64 `json:"policy_revision"`
+	ExclusionRevision uint64 `json:"exclusion_revision"`
+	ExclusionDigest   string `json:"exclusion_digest,omitempty"`
+	ScopeDigest       string `json:"scope_digest,omitempty"`
+	DeviceID          string `json:"device_id,omitempty"`
 }
 
 func validMAC(value string) (string, bool) {
@@ -160,6 +161,8 @@ func ruleMatches(r config.NetworkRule, q TrafficQuestion, device string) bool {
 		return false
 	}
 	switch r.Kind {
+	case "service":
+		return q.ServiceID != "" && q.ServiceID == r.Value
 	case "exact":
 		return q.Domain == r.Value
 	case "suffix":
@@ -186,14 +189,6 @@ func DecideNetworkPolicy(p *config.NetworkPolicy, observation ScopeObservation, 
 		d.Action, d.Reason = "base", "PROTECTED_DESTINATION"
 		return d
 	}
-	if q.Domain != "" {
-		name, err := config.PolicyDomain(q.Domain)
-		if err != nil {
-			d.Reason = "DOMAIN_IDENTITY_UNAVAILABLE"
-			return d
-		}
-		q.Domain = name
-	}
 	reason, device := clientScope(p, observation, q.Client, now)
 	d.DeviceID = device
 	if reason != "" {
@@ -204,6 +199,67 @@ func DecideNetworkPolicy(p *config.NetworkPolicy, observation ScopeObservation, 
 		return d
 	}
 	d.ScopeDigest = networkScopeDigest(p, observation)
+	if q.Domain != "" {
+		name, err := config.PolicyDomain(q.Domain)
+		if err != nil {
+			d.Reason = "DOMAIN_IDENTITY_UNAVAILABLE"
+			return d
+		}
+		q.Domain = name
+	}
+	exclusions, err := config.EffectiveResourceExclusions(p)
+	if err != nil {
+		d.Reason = "RESOURCE_EXCLUSIONS_UNAVAILABLE"
+		return d
+	}
+	d.ExclusionRevision, d.ExclusionDigest = exclusions.Revision, exclusions.Digest
+	var direct, bypass *config.NetworkRule
+	for i := range p.Rules {
+		rule := &p.Rules[i]
+		if !ruleMatches(*rule, q, device) {
+			continue
+		}
+		if rule.Action == "direct" {
+			if direct == nil || rule.ID < direct.ID {
+				direct = rule
+			}
+		} else if bypass == nil || rule.ID < bypass.ID {
+			bypass = rule
+		}
+	}
+	// Effective resource negatives precede every positive assignment, even a
+	// pinned bypass and an active entry scoped to a different client.
+	if direct != nil {
+		d.Action, d.Reason, d.RuleID, d.RuleRevision = "base", "MANUAL_DIRECT", direct.ID, direct.Revision
+		return d
+	}
+	if p.Russian.Enabled {
+		match := q.ServiceID != "" && slices.Contains(p.Russian.ServiceIDs, q.ServiceID)
+		for _, tld := range p.Russian.BroadTLDs {
+			match = match || q.Domain != "" && strings.HasSuffix(q.Domain, "."+tld)
+		}
+		if match {
+			d.Action, d.Reason, d.RuleID, d.RuleRevision = "base", "RU_CATALOG_DIRECT", p.Russian.CatalogID, p.Russian.Revision
+			return d
+		}
+	}
+	if q.ServiceID != "" || q.Domain != "" || q.Address.IsValid() {
+		excluded, err := exclusions.Matches(config.ResourceTarget{ServiceID: q.ServiceID, Domain: q.Domain, Address: q.Address, DeviceID: device})
+		if err != nil {
+			d.Reason = "RESOURCE_IDENTITY_UNAVAILABLE"
+			return d
+		}
+		if excluded {
+			d.Action, d.Reason, d.RuleRevision = "base", "RESOURCE_EXCLUDED", exclusions.Revision
+			return d
+		}
+	}
+	// Historical all-except intent remains decodable for recovery. It cannot
+	// authorize a new list-mode decision or an unmatched client-wide path.
+	if p.Traffic.Mode != "selected_services" {
+		d.Reason = "LIST_MODE_REQUIRED"
+		return d
+	}
 	if len(q.ServiceSources) > 128 {
 		d.Reason = "SCOPE_UNAVAILABLE"
 		return d
@@ -221,41 +277,9 @@ func DecideNetworkPolicy(p *config.NetworkPolicy, observation ScopeObservation, 
 			}
 		}
 		if !inherited {
-			if p.Schema < 2 || p.Traffic.Mode != "all_except" {
-				d.Action, d.Reason = "base", "SERVICE_SCOPE_MISMATCH"
-				return d
-			}
-			// All-internet: an override for other clients does not apply to
-			// this one; it continues through exclusions to the default path.
 			q.ServiceSelected = false
+			d.Reason = "SERVICE_SCOPE_MISMATCH"
 		}
-	}
-	var direct, bypass, mandatoryBypass *config.NetworkRule
-	for i := range p.Rules {
-		rule := &p.Rules[i]
-		if !ruleMatches(*rule, q, device) {
-			continue
-		}
-		if rule.Action == "direct" {
-			if direct == nil || rule.ID < direct.ID {
-				direct = rule
-			}
-		} else {
-			if bypass == nil || rule.ID < bypass.ID {
-				bypass = rule
-			}
-			if rule.Mandatory {
-				mandatoryBypass = rule
-			}
-		}
-	}
-	if direct != nil && mandatoryBypass != nil {
-		d.Reason = "MANUAL_RULE_CONFLICT"
-		return d
-	}
-	if direct != nil {
-		d.Action, d.Reason, d.RuleID, d.RuleRevision = "base", "MANUAL_DIRECT", direct.ID, direct.Revision
-		return d
 	}
 	if bypass != nil {
 		d.RuleID, d.RuleRevision = bypass.ID, bypass.Revision
@@ -264,60 +288,24 @@ func DecideNetworkPolicy(p *config.NetworkPolicy, observation ScopeObservation, 
 	if q.ExplicitBypass {
 		return routeDecision(p, q, d, "MANUAL_BYPASS_OVERRIDE")
 	}
-	if p.Russian.Enabled {
-		match := q.ServiceID != "" && slices.Contains(p.Russian.ServiceIDs, q.ServiceID)
-		for _, tld := range p.Russian.BroadTLDs {
-			match = match || q.Domain != "" && strings.HasSuffix(q.Domain, "."+tld)
-		}
-		if match {
-			d.Action, d.Reason, d.RuleID, d.RuleRevision = "base", "RU_CATALOG_DIRECT", p.Russian.CatalogID, p.Russian.Revision
-			return d
-		}
+	if q.ServiceSelected {
+		return routeDecision(p, q, d, "SERVICE_OVERRIDE")
 	}
-	if p.Schema >= 2 {
-		if q.ServiceSelected {
-			return routeDecision(p, q, d, "SERVICE_OVERRIDE")
-		}
-		if p.Traffic.Mode == "all_except" {
-			return routeDecision(p, q, d, "DEFAULT_POLICY")
-		}
-		d.Action, d.Reason = "base", "UNSELECTED_DESTINATION"
-		return d
-	}
-	d.Action, d.Reason = "base", "UNSELECTED_DESTINATION"
-	if q.ServiceSelected || p.Traffic.Mode == "all_except" {
-		d.Action, d.Reason = "bypass", "DEFAULT_POLICY"
-		d.Target = "default"
-		if q.ServiceSelected {
-			d.Target = "service"
-		}
+	d.Action = "base"
+	if d.Reason != "SERVICE_SCOPE_MISMATCH" {
+		d.Reason = "UNSELECTED_DESTINATION"
 	}
 	return d
 }
 
-// routeDecision sends a managed destination to its service override or to
-// the default path. In schema 2 the default path must cover the traffic
-// class; otherwise the policy's explicit Unavailable outcome applies and the
-// class never falls through to an implicit DIRECT.
+// A positive rule is intent. Without an actual resolved active target it
+// cannot fall through to a shared connection or a historical default path.
 func routeDecision(p *config.NetworkPolicy, q TrafficQuestion, d NetworkDecision, reason string) NetworkDecision {
-	d.Action, d.Reason = "bypass", reason
-	switch {
-	case q.ServiceSelected:
-		d.Target = "service"
-	case p.Traffic.Mode == "all_except":
-		d.Target = "default"
-	}
-	if p.Schema < 2 || d.Target != "default" || q.DefaultCoverage == "supported" {
+	if p.Traffic.Mode != "selected_services" || !q.ServiceSelected || q.ServiceID == "" {
+		d.Action, d.Reason = "unavailable", "LIST_ROUTE_UNAVAILABLE"
 		return d
 	}
-	switch p.Traffic.Unavailable {
-	case "base":
-		d.Action, d.Reason = "base", "DEFAULT_CLASS_BASE"
-	case "block":
-		d.Action, d.Reason = "blocked", "DEFAULT_CLASS_BLOCKED"
-	default:
-		d.Action, d.Reason = "unavailable", "DEFAULT_CLASS_UNAVAILABLE"
-	}
+	d.Action, d.Target, d.Reason = "bypass", "service", reason
 	return d
 }
 

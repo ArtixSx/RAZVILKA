@@ -11,7 +11,7 @@ import (
 
 func TestDefaultRouteNamedProfileRevisionBoundBeforeEffects(t *testing.T) {
 	cfg, snapshot, now := defaultRouteFixture()
-	c, err := CompileDefaultRoutePolicy(cfg, snapshot, nil, now)
+	c, err := CompileDefaultRoutePolicy(cfg, snapshot, defaultRouteListedRoutes(), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +19,7 @@ func TestDefaultRouteNamedProfileRevisionBoundBeforeEffects(t *testing.T) {
 	input := e.input(c, e.app.Store.Get())
 	for _, r := range input.Routes {
 		revision, err := dataplane.FrozenWireGuardProfileRevision(r)
-		if err != nil || revision != snapshot.Paths["default"].WireGuardProfileRevision {
+		if err != nil || revision != snapshot.Paths["listed"].WireGuardProfileRevision {
 			t.Fatal("input lost exact profile revision", err)
 		}
 	}
@@ -28,15 +28,17 @@ func TestDefaultRouteNamedProfileRevisionBoundBeforeEffects(t *testing.T) {
 	if defaultRouteBoundInput(input, changed) {
 		t.Fatal("binding could substitute a new profile")
 	}
-	path := snapshot.Paths["default"]
+	path := snapshot.Paths["listed"]
 	path.WireGuardProfileRevision = ""
-	snapshot.Paths["default"] = path
-	if _, err := CompileDefaultRoutePolicy(cfg, snapshot, nil, now); err == nil {
+	snapshot.Paths["listed"] = path
+	if _, err := CompileDefaultRoutePolicy(cfg, snapshot, defaultRouteListedRoutes(), now); err == nil {
 		t.Fatal("named profile had no exact revision")
 	}
 	path.WireGuardProfileRevision = strings.Repeat("7", 64)
-	snapshot.Paths["default"] = path
-	next, err := CompileDefaultRoutePolicy(cfg, snapshot, nil, now)
+	snapshot.Paths["listed"] = path
+	routes := defaultRouteListedRoutes()
+	routes[0].WireGuardProfileRevision = path.WireGuardProfileRevision
+	next, err := CompileDefaultRoutePolicy(cfg, snapshot, routes, now)
 	if err != nil || next.Digest() == c.Digest() {
 		t.Fatal("profile revision missing from compiler identity", err)
 	}

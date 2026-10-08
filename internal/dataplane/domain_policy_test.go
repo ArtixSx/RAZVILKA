@@ -15,7 +15,7 @@ import (
 func domainPolicyFixture(t *testing.T, rules []config.NetworkRule) (*DomainPolicy, DomainPolicyFlow, time.Time) {
 	t.Helper()
 	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
-	policy := &config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{"home"}, ExcludedDeviceIDs: []string{"excluded"}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "all_except", DefaultRoute: "wireguard", AllExceptAllowed: true, Unavailable: "block"}, Rules: rules}
+	policy := &config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{"home"}, ExcludedDeviceIDs: []string{"excluded"}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "selected_services", Unavailable: "block"}, Rules: rules}
 	scope := autonomy.ScopeObservation{BootID: "boot", NetworkID: "network", Revision: 1, ObservedAt: now.Add(-time.Second), FreshUntil: now.Add(time.Minute), Segments: []autonomy.HomeSegment{{ID: "home", Interface: "br0", Home: true, Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24"), netip.MustParsePrefix("fd00:1::/64")}}}, Devices: []autonomy.DeviceBinding{{ID: "excluded", MAC: "02:00:00:00:00:01", Interface: "br0", SegmentID: "home", Confirmed: true}, {ID: "selected", MAC: "02:00:00:00:00:02", Interface: "br0", SegmentID: "home", Confirmed: true}}}
 	services := []DomainPolicyService{{ID: "service", Route: "xray", Selected: true, Domains: []string{"service.example.com"}}}
 	p, err := CompileDomainPolicy(strings.Repeat("a", 64), policy, scope, nil, services, now)
@@ -26,7 +26,7 @@ func domainPolicyFixture(t *testing.T, rules []config.NetworkRule) (*DomainPolic
 	return p, f, now
 }
 
-func TestDomainPolicySharedCDNUnknownAndLiteralFlowUseDefault(t *testing.T) {
+func TestDomainPolicySharedCDNUnknownAndLiteralFlowRemainBaseline(t *testing.T) {
 	p, f, now := domainPolicyFixture(t, nil)
 	if d := p.Decide(f, now); d.Kind != "service" || d.Route != "xray" {
 		t.Fatal(d)
@@ -44,19 +44,19 @@ func TestDomainPolicySharedCDNUnknownAndLiteralFlowUseDefault(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			flow := f
 			mutate(&flow)
-			if d := p.Decide(flow, now); d.Kind != "default" || d.Route != "wireguard" {
+			if d := p.Decide(flow, now); d.Kind != "baseline" || d.Route != "direct" {
 				t.Fatal(d)
 			}
 		})
 	}
 	p.services[0].Selected = false
-	if d := p.Decide(f, now); d.Kind != "default" {
-		t.Fatal("removed override became DIRECT", d)
+	if d := p.Decide(f, now); d.Kind != "baseline" {
+		t.Fatal("inactive entry captured flow", d)
 	}
 	p.services[0].Selected = true
 	p.services[0].Sources = []string{"192.168.1.50/32"}
-	if d := p.Decide(f, now); d.Kind != "default" {
-		t.Fatal("override scope mismatch became DIRECT", d)
+	if d := p.Decide(f, now); d.Kind != "baseline" {
+		t.Fatal("source mismatch captured flow", d)
 	}
 }
 
@@ -67,9 +67,12 @@ func TestDomainPolicyDirectExclusionNeverWidensToSharedIP(t *testing.T) {
 		t.Fatal(d)
 	}
 	f.Name = "unknown.example.com"
-	if d := p.Decide(f, now); d.Kind != "default" {
-		t.Fatal("shared address inherited domain exclusion", d)
+	if d := p.Decide(f, now); d.Kind != "baseline" || d.Reason != "UNSELECTED_DESTINATION" {
+		t.Fatal("shared address acquired positive selection", d)
 	}
+	// A separately active IP entry could capture an opaque excluded domain.
+	// Refuse that disputed expansion without connection name visibility.
+	p.services[0].CIDRs = []string{f.Destination.String() + "/32"}
 	for _, source := range []string{"", "dns-observation", "fake-ip"} {
 		f.Name = "service.example.com"
 		f.NameSource = source
@@ -84,18 +87,24 @@ func TestDomainPolicyDirectExclusionNeverWidensToSharedIP(t *testing.T) {
 	}
 }
 
-func TestDomainPolicyIPDirectAndKnownMandatoryDomainBypassConflict(t *testing.T) {
+func TestDomainPolicyIPDirectPrecedesKnownMandatoryDomainBypass(t *testing.T) {
 	rules := []config.NetworkRule{
 		{ID: "ip-direct", Revision: 1, Kind: "ip", Value: "93.184.215.14", Action: "direct", Mandatory: true},
 		{ID: "domain-bypass", Revision: 1, Kind: "exact", Value: "service.example.com", Action: "bypass", Mandatory: true},
 	}
 	p, f, now := domainPolicyFixture(t, rules)
-	if d := p.Decide(f, now); d.Kind != "refused" || d.Reason != "MANUAL_RULE_CONFLICT" || d.Decision.Action != "unavailable" {
-		t.Fatal("IP direct bypassed known-name conflict", d)
+	if d := p.Decide(f, now); d.Kind != "baseline" || d.Reason != "MANUAL_DIRECT" || d.Decision.Target != "" {
+		t.Fatal("pinned domain bypass overrode IP exclusion", d)
 	}
 	called := false
-	if d, err := p.Dispatch(context.Background(), f, now, func(context.Context, string) error { return nil }, func(context.Context, DomainPolicyDecision) error { called = true; return nil }); !errors.Is(err, ErrDomainPolicy) || d.Kind != "refused" || called {
-		t.Fatal("conflicted known flow reached outbound", d, err, called)
+	if d, err := p.Dispatch(context.Background(), f, now, func(context.Context, string) error { return nil }, func(_ context.Context, d DomainPolicyDecision) error {
+		called = true
+		if d.Kind != "baseline" || d.Route != "direct" {
+			t.Fatal("negative resource reached bypass", d)
+		}
+		return nil
+	}); err != nil || d.Kind != "baseline" || !called {
+		t.Fatal("excluded flow lost baseline decision", d, err, called)
 	}
 	for _, name := range []string{"", "unknown.example.com"} {
 		f.Name = name
@@ -159,5 +168,96 @@ func TestDomainPolicyOwnerScopeRefreshKeepsIdentityAndRejectsChangedBinding(t *t
 	current.Devices[0].MAC = "02:00:00:00:00:99"
 	if d := p.DecideWithScope(f, current, later); d.Kind != "refused" || d.Reason != "SCOPE_IDENTITY_CHANGED" {
 		t.Fatal(d)
+	}
+}
+
+func TestDomainPolicyRemainingActiveOverlapAndSourceMatch(t *testing.T) {
+	p, f, now := domainPolicyFixture(t, nil)
+	other := p.services[0]
+	other.ID = "remaining"
+	p.services = append(p.services, other)
+	for _, first := range []DomainPolicyService{
+		{ID: "service", Route: "xray", Domains: []string{f.Name}},
+		{ID: "service", Route: "xray", Selected: true, Domains: []string{f.Name}, Sources: []string{"192.168.1.50/32"}},
+	} {
+		p.services[0] = first
+		if d := p.Decide(f, now); d.Kind != "service" || d.ServiceID != "remaining" || d.Route != "xray" {
+			t.Fatal("inactive/source-mismatched entry erased another match", d)
+		}
+	}
+	p.services[0] = other
+	p.services[0].ID = "service"
+	if d := p.Decide(f, now); d.Kind != "service" {
+		t.Fatal("same-path overlap refused", d)
+	}
+	p.services[0].Route = "warp-wg"
+	if d := p.Decide(f, now); d.Kind != "refused" || d.Reason != "AMBIGUOUS_SERVICE_DEFINITION" {
+		t.Fatal("different-path overlap silently selected a path", d)
+	}
+}
+
+func TestDomainPolicyRussianIdentityPrecedesPositiveSourceAndPin(t *testing.T) {
+	p, f, now := domainPolicyFixture(t, nil)
+	p.policy.Russian = config.RussianExclusions{Enabled: true, CatalogID: "ru-curated", Revision: 2, Digest: strings.Repeat("c", 64), ServiceIDs: []string{"bank"}}
+	p.policy.Rules = []config.NetworkRule{{ID: "pin", Revision: 1, Kind: "exact", Value: f.Name, Action: "bypass", Mandatory: true}}
+	p.services = append(p.services, DomainPolicyService{ID: "bank", Domains: []string{f.Name}, Sources: []string{"192.168.1.50/32"}})
+	if d := p.Decide(f, now); d.Kind != "baseline" || d.Reason != "RU_CATALOG_DIRECT" || d.Decision.Target != "" {
+		t.Fatal("unselected resource identity or source miss lost RU exclusion", d)
+	}
+}
+
+func TestDomainPolicyManualDomainNegativePrecedesOverlappingPaths(t *testing.T) {
+	p, f, now := domainPolicyFixture(t, []config.NetworkRule{{ID: "negative", Revision: 1, Kind: "suffix", Value: "example.com", Action: "direct", Mandatory: true}})
+	p.services = append(p.services, DomainPolicyService{ID: "other", Selected: true, Route: "warp-wg", Domains: []string{f.Name}})
+	if d := p.Decide(f, now); d.Kind != "baseline" || d.Reason != "MANUAL_DIRECT" {
+		t.Fatal("positive path ambiguity displaced exclusion", d)
+	}
+}
+
+func TestDomainPolicyTypedNegativePrecedesPinnedAndAmbiguousPositives(t *testing.T) {
+	for _, match := range []config.ResourceMatch{
+		{Kind: "exact", Value: "service.example.com"},
+		{Kind: "suffix", Value: "example.com"},
+		{Kind: "service", Value: "service"},
+		{Kind: "ip", Value: "93.184.215.14"},
+		{Kind: "cidr", Value: "93.184.215.0/24"},
+	} {
+		p, f, now := domainPolicyFixture(t, nil)
+		p.policy.Exclusions = &config.ResourceExclusions{Schema: 1, Revision: 2, Manual: []config.ResourceMatch{match}}
+		p.policy.Rules = []config.NetworkRule{{ID: "pin", Revision: 1, Kind: "service", Value: "service", Action: "bypass", Mandatory: true}}
+		p.services = append(p.services, DomainPolicyService{ID: "other", Selected: true, Route: "warp-wg", Domains: []string{f.Name}})
+		if d := p.Decide(f, now); d.Kind != "baseline" || d.Reason != "RESOURCE_EXCLUDED" || d.Decision.Target != "" || d.Decision.ExclusionRevision != 2 {
+			t.Fatal("typed negative lost to positive pin/ambiguity", match, d)
+		}
+	}
+}
+
+func TestDomainPolicyAcceptedRussianIdentityIncludesInactiveCatalogue(t *testing.T) {
+	p, f, now := domainPolicyFixture(t, nil)
+	snapshot := &config.AcceptedRussianSnapshot{CatalogID: "ru-source", Revision: 1, Entries: []config.ResourceMatch{{Kind: "service", Value: "bank"}}}
+	snapshot.Digest = config.RussianSnapshotDigest(snapshot)
+	p.policy.Exclusions = &config.ResourceExclusions{Schema: 1, Revision: 2, Manual: []config.ResourceMatch{}, RussianSnapshot: snapshot}
+	p.policy.Russian.Enabled = true
+	p.services = append(p.services, DomainPolicyService{ID: "bank", Domains: []string{f.Name}, Sources: []string{"192.168.1.50/32"}})
+	if d := p.Decide(f, now); d.Kind != "baseline" || d.Reason != "RESOURCE_EXCLUDED" {
+		t.Fatal("accepted RU identity depended on positive source/selection", d)
+	}
+}
+
+func TestDomainPolicyTypedDomainNegativeRefusesOpaqueIPPositive(t *testing.T) {
+	p, f, now := domainPolicyFixture(t, nil)
+	p.policy.Exclusions = &config.ResourceExclusions{Schema: 1, Revision: 1, Manual: []config.ResourceMatch{{Kind: "exact", Value: f.Name}}}
+	p.services[0].CIDRs = []string{f.Destination.String() + "/32"}
+	f.Name, f.NameSource = "", ""
+	if d := p.Decide(f, now); d.Kind != "refused" || d.Reason != "EXPLICIT_DOMAIN_DIRECT_REQUIRES_FLOW_IDENTITY" {
+		t.Fatal("opaque IP match captured possibly excluded domain", d)
+	}
+}
+
+func TestDomainPolicyMissingExcludedCatalogueIdentityRefusesCompilation(t *testing.T) {
+	p, _, now := domainPolicyFixture(t, nil)
+	p.policy.Exclusions = &config.ResourceExclusions{Schema: 1, Revision: 1, Manual: []config.ResourceMatch{{Kind: "service", Value: "missing-bank"}}}
+	if _, err := CompileDomainPolicy(p.generation, p.policy, p.scope, nil, p.services, now); !errors.Is(err, ErrDomainPolicy) {
+		t.Fatal("omitted negative catalogue identity became an executable plan", err)
 	}
 }

@@ -64,7 +64,13 @@ type DomainPolicy struct {
 }
 
 func CompileDomainPolicy(generation string, policy *config.NetworkPolicy, scope autonomy.ScopeObservation, guestOptIn []string, services []DomainPolicyService, now time.Time) (*DomainPolicy, error) {
-	if !lanPolicyHash(generation) || policy == nil || policy.Schema != 2 || config.ValidateAppliedNetworkPolicy(policy) != nil || len(services) > 128 || len(guestOptIn) > 16 || len(scope.Segments) > 16 || len(scope.Devices) > 512 || scope.BootID == "" || scope.NetworkID == "" || scope.Revision == 0 || now.IsZero() || now.Before(scope.ObservedAt) || !now.Before(scope.FreshUntil) || scope.FreshUntil.Sub(scope.ObservedAt) > 2*time.Minute {
+	return compileDomainPolicy(generation, policy, scope, guestOptIn, services, now, true)
+}
+
+// Retained intent may be inventoried during Stop/recovery; only the public
+// compiler can produce a new executable list-mode definition.
+func compileDomainPolicy(generation string, policy *config.NetworkPolicy, scope autonomy.ScopeObservation, guestOptIn []string, services []DomainPolicyService, now time.Time, listOnly bool) (*DomainPolicy, error) {
+	if !lanPolicyHash(generation) || policy == nil || config.ValidateAppliedNetworkPolicy(policy) != nil || listOnly && policy.Traffic.Mode != "selected_services" || len(services) > 128 || len(guestOptIn) > 16 || len(scope.Segments) > 16 || len(scope.Devices) > 512 || scope.BootID == "" || scope.NetworkID == "" || scope.Revision == 0 || now.IsZero() || now.Before(scope.ObservedAt) || !now.Before(scope.FreshUntil) || scope.FreshUntil.Sub(scope.ObservedAt) > 2*time.Minute {
 		return nil, ErrDomainPolicy
 	}
 	p := &DomainPolicy{generation: generation, policy: config.CloneNetworkPolicy(policy), scope: cloneDomainPolicyScope(scope), services: slices.Clone(services), guests: slices.Clone(guestOptIn)}
@@ -114,6 +120,24 @@ func CompileDomainPolicy(generation string, policy *config.NetworkPolicy, scope 
 				if err != nil || prefix != prefix.Masked() || prefix.Bits() == 0 || prefix.Addr().Is4In6() || prefix.Addr().Zone() != "" {
 					return nil, ErrDomainPolicy
 				}
+			}
+		}
+	}
+	if listOnly {
+		set, err := config.EffectiveResourceExclusions(p.policy)
+		if err != nil {
+			return nil, ErrDomainPolicy
+		}
+		for _, list := range [][]config.ResourceMatch{set.Manual, set.Russian} {
+			for _, match := range list {
+				if match.Kind == "service" && !seen[match.Value] {
+					return nil, ErrDomainPolicy // omitted catalogue identity cannot waive an exclusion
+				}
+			}
+		}
+		for _, rule := range set.LegacyRules {
+			if rule.Kind == "service" && !seen[rule.Value] {
+				return nil, ErrDomainPolicy
 			}
 		}
 	}
@@ -191,20 +215,38 @@ func (p *DomainPolicy) Decide(flow DomainPolicyFlow, now time.Time) DomainPolicy
 		return d
 	}
 	q.Domain = domainPolicyName(flow)
+	negative := autonomy.DecideNetworkPolicy(p.policy, p.scope, q, now)
+	if negative.Reason == "RESOURCE_IDENTITY_UNAVAILABLE" || negative.Reason == "RESOURCE_EXCLUSIONS_UNAVAILABLE" {
+		d.Decision, d.Reason = negative, negative.Reason
+		return d
+	}
+	if negative.Action == "base" && slices.Contains([]string{"MANUAL_DIRECT", "RU_CATALOG_DIRECT", "RESOURCE_EXCLUDED"}, negative.Reason) {
+		d.Decision, d.Kind, d.Route, d.Reason = negative, "baseline", "direct", negative.Reason
+		return d
+	}
+	// Catalogue exclusions are independent of positive selection and source
+	// scope. Check every matching identity before resolving active overlaps.
+	for i := range p.services {
+		s := &p.services[i]
+		if !domainPolicyServiceMatches(*s, q.Domain, flow.Destination) {
+			continue
+		}
+		identity := q
+		identity.ServiceID = s.ID
+		negative = autonomy.DecideNetworkPolicy(p.policy, p.scope, identity, now)
+		if negative.Reason == "RESOURCE_IDENTITY_UNAVAILABLE" || negative.Reason == "RESOURCE_EXCLUSIONS_UNAVAILABLE" {
+			d.Decision, d.Reason = negative, negative.Reason
+			return d
+		}
+		if negative.Action == "base" && slices.Contains([]string{"RU_CATALOG_DIRECT", "RESOURCE_EXCLUDED", "MANUAL_DIRECT"}, negative.Reason) {
+			d.Decision, d.Kind, d.Route, d.Reason = negative, "baseline", "direct", negative.Reason
+			return d
+		}
+	}
 	var match *DomainPolicyService
 	for i := range p.services {
 		s := &p.services[i]
-		matched := false
-		for _, name := range s.Domains {
-			matched = matched || q.Domain != "" && q.Domain == name
-		}
-		for _, name := range s.DomainSuffixes {
-			matched = matched || q.Domain != "" && (q.Domain == name || strings.HasSuffix(q.Domain, "."+name))
-		}
-		for _, value := range s.CIDRs {
-			matched = matched || netip.MustParsePrefix(value).Contains(flow.Destination)
-		}
-		if !matched {
+		if !s.Selected || !domainPolicyServiceMatches(*s, q.Domain, flow.Destination) {
 			continue
 		}
 		if len(s.Sources) > 0 {
@@ -214,25 +256,24 @@ func (p *DomainPolicy) Decide(flow DomainPolicyFlow, now time.Time) DomainPolicy
 			}
 			if !inside {
 				continue
-			} // override miss continues default
+			} // scan the other applicable active entries
 		}
-		if match != nil && (match.ID != s.ID || match.Route != s.Route) {
+		if match != nil && match.Route != s.Route {
 			d.Reason = "AMBIGUOUS_SERVICE_DEFINITION"
 			return d
 		}
-		match = s
+		if match == nil || s.ID < match.ID {
+			match = s
+		}
 	}
 	if match != nil {
 		q.ServiceID, q.ServiceSelected, q.ServiceSources = match.ID, match.Selected, match.Sources
 	}
 	d.Decision = autonomy.DecideNetworkPolicy(p.policy, p.scope, q, now)
 	d.Reason = d.Decision.Reason
-	// The complete shared question must settle an IP/domain rule conflict
-	// before an IP-direct exception can be honored. With no visible name,
-	// an explicit IP/CIDR direct rule still supplies independent authority.
-	// Other mandatory domain-direct exceptions cannot be promised for an
-	// opaque flow by labelling a shared CDN address or silently taking default.
-	if q.Domain == "" && !(d.Decision.Action == "base" && d.Decision.Reason == "MANUAL_DIRECT") && p.opaqueDirectApplies(gate.DeviceID, flow.Client.Address) {
+	// An unmatched opaque flow stays on baseline. An IP positive cannot
+	// capture a shared address while domain negatives remain unobservable.
+	if q.Domain == "" && d.Decision.Action == "bypass" && p.opaqueDirectApplies(gate.DeviceID, flow.Client.Address) {
 		d.Reason = "EXPLICIT_DOMAIN_DIRECT_REQUIRES_FLOW_IDENTITY"
 		return d
 	}
@@ -242,10 +283,10 @@ func (p *DomainPolicy) Decide(flow DomainPolicyFlow, now time.Time) DomainPolicy
 	case "blocked":
 		d.Kind = "blocked"
 	case "bypass":
-		if d.Decision.Target == "service" && match != nil {
+		if d.Decision.Target == "service" && match != nil && match.Selected && match.Route != "" {
 			d.Kind, d.Route, d.ServiceID = "service", match.Route, match.ID
 		} else {
-			d.Kind, d.Route = "default", p.policy.Traffic.DefaultRoute
+			d.Kind, d.Reason = "refused", "LIST_ROUTE_UNAVAILABLE"
 		}
 	default:
 		d.Kind = "refused"
@@ -253,12 +294,31 @@ func (p *DomainPolicy) Decide(flow DomainPolicyFlow, now time.Time) DomainPolicy
 	return d
 }
 
+func domainPolicyServiceMatches(s DomainPolicyService, domain string, address netip.Addr) bool {
+	matched := domain != "" && slices.Contains(s.Domains, domain)
+	for _, suffix := range s.DomainSuffixes {
+		matched = matched || domain != "" && (domain == suffix || strings.HasSuffix(domain, "."+suffix))
+	}
+	for _, value := range s.CIDRs {
+		matched = matched || netip.MustParsePrefix(value).Contains(address)
+	}
+	return matched
+}
+
 func (p *DomainPolicy) opaqueDirectApplies(device string, source netip.Addr) bool {
-	if p.policy.Russian.Enabled {
+	set, err := config.EffectiveResourceExclusions(p.policy)
+	if err != nil || len(set.BroadTLDs) != 0 {
 		return true
 	}
+	for _, list := range [][]config.ResourceMatch{set.Manual, set.Russian} {
+		for _, match := range list {
+			if match.Kind == "exact" || match.Kind == "suffix" || match.Kind == "service" {
+				return true
+			}
+		}
+	}
 	for _, rule := range p.policy.Rules {
-		if rule.Action == "direct" && (rule.Kind == "exact" || rule.Kind == "suffix") && (len(rule.DeviceIDs) == 0 || slices.Contains(rule.DeviceIDs, device)) {
+		if rule.Action == "direct" && (rule.Kind == "exact" || rule.Kind == "suffix" || rule.Kind == "service") && (len(rule.DeviceIDs) == 0 || slices.Contains(rule.DeviceIDs, device)) {
 			return true
 		}
 	}

@@ -11,6 +11,7 @@ type DefaultRouteDecisionKind string
 const (
 	DefaultRouteOutside  DefaultRouteDecisionKind = "OutsideOwnedScope"
 	DefaultRouteExcluded DefaultRouteDecisionKind = "ExplicitBaselineExclusion"
+	DefaultRouteBaseline DefaultRouteDecisionKind = "UnmatchedBaseline"
 	DefaultRouteDefault  DefaultRouteDecisionKind = "Default"
 	DefaultRouteOverride DefaultRouteDecisionKind = "ServiceOverride"
 	DefaultRouteRefused  DefaultRouteDecisionKind = "CapabilityRefused"
@@ -35,9 +36,17 @@ type DefaultRouteDecision struct {
 // Classify is a diagnostic/reference oracle for the compiled kernel policy.
 // It never installs rules, promises packet success or grants execution rights.
 func (c *DefaultRouteCompilation) Classify(flow DefaultRouteFlow) DefaultRouteDecision {
-	d := DefaultRouteDecision{Kind: DefaultRouteOutside, Generation: c.digest}
+	d := DefaultRouteDecision{Kind: DefaultRouteRefused}
+	if c == nil {
+		return d
+	}
+	d.Kind, d.Generation = DefaultRouteOutside, c.digest
 	if !flow.Source.IsValid() || !flow.Destination.IsValid() || flow.Source.Is4In6() || flow.Destination.Is4In6() || flow.Source.Zone() != "" || flow.Destination.Zone() != "" || flow.Source.Is4() != flow.Destination.Is4() {
 		d.Kind = DefaultRouteRefused
+		return d
+	}
+	if len(c.ingress) == 0 && len(c.rules) == 0 {
+		d.Kind = DefaultRouteBaseline
 		return d
 	}
 	var gate *DefaultRouteIngress
@@ -71,6 +80,15 @@ func (c *DefaultRouteCompilation) Classify(flow DefaultRouteFlow) DefaultRouteDe
 		d.Kind = DefaultRouteExcluded
 		return d
 	}
+	public, err := defaultRoutePublic(c.policy)
+	if err != nil {
+		d.Kind = DefaultRouteRefused
+		return d
+	}
+	if !defaultRouteContains(public, flow.Destination) {
+		d.Kind = DefaultRouteExcluded
+		return d
+	}
 	for _, rule := range c.rules {
 		if rule.Ingress == flow.Ingress && rule.Source.Contains(flow.Source) && rule.Destination.Contains(flow.Destination) {
 			d.Route, d.ServiceID = rule.Route, rule.ServiceID
@@ -81,7 +99,7 @@ func (c *DefaultRouteCompilation) Classify(flow DefaultRouteFlow) DefaultRouteDe
 			return d
 		}
 	}
-	d.Kind = DefaultRouteExcluded
+	d.Kind = DefaultRouteBaseline
 	return d
 }
 

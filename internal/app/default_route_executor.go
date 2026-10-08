@@ -30,8 +30,8 @@ type DefaultRouteDependencies struct {
 }
 
 // DefaultRouteFlowPolicy is the executable bridge's immutable input. A bridge
-// must select outbound before forwarding a connection, preserve default on a
-// typed service miss, and reject incomplete domain visibility/UDP coverage.
+// must select outbound before forwarding a connection, preserve baseline on
+// a list miss, and reject incomplete domain visibility/UDP coverage.
 // DNS-derived IP labels must never be used as FlowName authority.
 type DefaultRouteFlowPolicy struct {
 	Config   config.Config
@@ -110,14 +110,23 @@ func (e *DefaultRouteExecutor) Review(ctx context.Context, services []dataplane.
 	input := e.input(c, cfg)
 	if exists {
 		desired := map[string]bool{}
+		if input.LAN != nil {
+			desired[dataplane.NetworkPolicyAdapterID] = true
+		}
 		for _, route := range input.Routes {
 			desired[dataplane.AdapterID(route.Resolved)] = true
 		}
 		for _, id := range previous.Adapters {
 			if !desired[id] {
 				input.RetiringAdapters = append(input.RetiringAdapters, id)
+				// Empty list plans still retire actual previously registered
+				// owners. Build checks this capability; Manager additionally
+				// requires their existing scoped deactivation protocol.
+				capable := e.app.Dataplane.Capable(id)
+				input.Engines = append(input.Engines, dataplane.Engine{ID: id, Installed: capable, Configured: capable, Activatable: capable})
 			}
 		}
+		sort.Slice(input.Engines, func(i, j int) bool { return input.Engines[i].ID < input.Engines[j].ID })
 	}
 	baseInput := defaultRouteCloneInput(input)
 	input, err = e.deps.BindIngress(ctx, c, defaultRouteCloneInput(input))
@@ -152,8 +161,10 @@ func (e *DefaultRouteExecutor) Review(ctx context.Context, services []dataplane.
 
 func (e *DefaultRouteExecutor) input(c *DefaultRouteCompilation, cfg config.Config) dataplane.Input {
 	input := dataplane.Input{LAN: c.LAN(), Revision: cfg.Revision + 1, NetworkProfileID: c.snapshot.Scope.NetworkID, SafeMode: cfg.SafeMode}
-	gateCapable := e.app.Dataplane.Capable(dataplane.NetworkPolicyAdapterID)
-	input.Engines = append(input.Engines, dataplane.Engine{ID: dataplane.NetworkPolicyAdapterID, Installed: gateCapable, Configured: gateCapable, Activatable: gateCapable})
+	if input.LAN != nil {
+		gateCapable := e.app.Dataplane.Capable(dataplane.NetworkPolicyAdapterID)
+		input.Engines = append(input.Engines, dataplane.Engine{ID: dataplane.NetworkPolicyAdapterID, Installed: gateCapable, Configured: gateCapable, Activatable: gateCapable})
+	}
 	if e.app.DataplaneHost != nil {
 		input.Host = e.app.DataplaneHost()
 	} else {
@@ -256,7 +267,16 @@ func (e *DefaultRouteExecutor) observeConfig(ctx context.Context, expected confi
 	}
 	// Bounded disk observation borrows no writer lease. Its callback must
 	// never call Store/Observe or hold admission through adapter effects.
-	if err := e.app.Store.WithRevisionObservation(ctx, expected.Revision, func() error { return nil }); err != nil {
+	wanted, err := config.EffectiveResourceExclusions(expected.NetworkPolicy)
+	if err != nil {
+		return errors.Join(dataplane.ErrReviewChanged, err)
+	}
+	if err := e.app.Store.WithResourceExclusionObservation(ctx, expected, func(observed config.EffectiveExclusionSet) error {
+		if observed.PolicyRevision != wanted.PolicyRevision || observed.Revision != wanted.Revision || observed.Digest != wanted.Digest {
+			return dataplane.ErrReviewChanged
+		}
+		return nil
+	}); err != nil {
 		return errors.Join(dataplane.ErrReviewChanged, err)
 	}
 	// Same-revision legacy changes also invalidate the full reviewed image.

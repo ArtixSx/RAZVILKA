@@ -73,7 +73,7 @@ func ValidateDomainPolicyRuntimePlan(p *DomainPolicyRuntimePlan) error {
 	if p == nil || p.Schema != 1 || !lanPolicyHash(p.Generation) || !lanPolicyHash(p.Digest) || len(p.Services) > 128 || len(p.GuestOptIn) > 16 || len(p.Scope.Segments) > 16 || len(p.Scope.Devices) > 512 || p.Scope.ObservedAt.IsZero() {
 		return ErrDomainPolicy
 	}
-	if _, err := CompileDomainPolicy(p.Generation, p.Policy, p.Scope, p.GuestOptIn, p.Services, p.Scope.ObservedAt); err != nil {
+	if _, err := compileDomainPolicy(p.Generation, p.Policy, p.Scope, p.GuestOptIn, p.Services, p.Scope.ObservedAt, false); err != nil {
 		return err
 	}
 	if p.Digest != domainPolicyRuntimeDigest(p) {
