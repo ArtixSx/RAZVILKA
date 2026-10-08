@@ -218,7 +218,7 @@ probe_self_update_metadata() (
   done
   if [ "$SELF_PROBE_CODE" -eq 0 ] && [ ! -s "$SELF_PROBE_DIR/error" ]; then
     case "$2" in
-      -self-update-read-version) SELF_PROBE_VALUES='2 3' ;;
+      -self-update-read-version) SELF_PROBE_VALUES='2 3 4' ;;
       -self-update-schema) SELF_PROBE_VALUES='0 1 2' ;;
       -check-self-update-state) SELF_PROBE_VALUES='{"ok":true}' ;;
     esac
@@ -243,7 +243,7 @@ require_target_self_update_compatibility() {
   SELF_TARGET_READER="$(probe_self_update_metadata "$1" -self-update-read-version)" || return 1
   case "$SELF_TARGET_READER" in
     unsupported) return 0 ;; # Existing selected-backup/private-state gates still apply.
-    3)
+    3|4)
       # Fixed production roots only; no shell backup or public root arguments.
       probe_self_update_metadata "$1" -check-self-update-state >/dev/null || return 1
       ;;

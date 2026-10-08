@@ -66,6 +66,11 @@ review2. Реальный 0.19.3 не знает этих CLI/форматов �
 контроллера без matching disposition: это оставило бы ещё один активный reader.
 Существующие неизвестные legacy snapshots не получают задним числом retirement.
 
-CORE требуется обновить единственное CLI ожидание `"3\n"` в
+Root подключает два companion в App/main: stopped settlement сравнивает
+required/binding именно с `selfupdatejournal.StoppedSchema` (3), а CLI ожидание
+общей способности чтения `"3\n"` в
 `cmd/razvilka/self_update_read_state_test.go` на общую константу способности
-чтения. Schema3 stopped ожидания сохраняются. OPS не меняет чужие App/main файлы.
+чтения обновляется до 4. Schema3 stopped ожидания сохраняются. OPS не меняет
+чужие App/main файлы. Обычный upgrade installer также принимает reader4 только
+вместе с успешным strict check-state; будущий reader5 отвергается, raw retained
+fence остаётся прежним. Полный paired bootstrap этим не подключается.

@@ -139,12 +139,10 @@ try {
     run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
   }
   fixture("printf '4\\n'");
-  run('require_target_self_update_compatibility "$BINDIR/razvilka"', scriptName === 'rollback-entware.sh' ? 0 : 1);
-  if (scriptName === 'rollback-entware.sh') {
-    for (const scanner of ["printf '{\"ok\":false}\\n'; exit 1", "printf '{\"ok\":true}'", "printf '{\"ok\":true}\\n'; printf warning >&2", legacy]) {
-      fixture("printf '4\\n'", "printf '0\\n'", scanner);
-      run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
-    }
+  run('require_target_self_update_compatibility "$BINDIR/razvilka"', 0);
+  for (const scanner of ["printf '{\"ok\":false}\\n'; exit 1", "printf '{\"ok\":true}'", "printf '{\"ok\":true}\\n'; printf warning >&2", legacy]) {
+    fixture("printf '4\\n'", "printf '0\\n'", scanner);
+    run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
   }
   fixture("printf '5\\n'");
   run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
