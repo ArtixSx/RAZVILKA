@@ -153,11 +153,12 @@ func observeBorrowedPolicyEffects(ctx context.Context, plan PolicyEffectPlan, pa
 	if ctx == nil || ctx.Err() != nil {
 		return o, false, errors.Join(ErrPolicyAdditionReceipt, networkPolicyChecksContextError(ctx))
 	}
-	b, present := ctx.Value(policyEffectReceiptBorrowKey{}).(*policyEffectReceiptBorrow)
-	if !present {
+	raw := ctx.Value(policyEffectReceiptBorrowKey{})
+	if raw == nil {
 		return o, false, nil
 	}
-	if b == nil || b.self != b {
+	b, ok := raw.(*policyEffectReceiptBorrow)
+	if !ok || b == nil || b.self != b {
 		return o, true, ErrPolicyAdditionReceipt
 	}
 	b.mu.Lock()

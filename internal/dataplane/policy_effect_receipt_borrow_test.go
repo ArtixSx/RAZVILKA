@@ -73,6 +73,11 @@ func TestPolicyEffectBorrowRefusesForeignPlanRootAndCopiedIssuer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	f.runtime.Guard = func(c context.Context, _ int) error {
+		wrongType := context.WithValue(c, policyEffectReceiptBorrowKey{}, true)
+		if o, present, err := observeBorrowedPolicyEffects(wrongType, f.plan, f.root); !present || !errors.Is(err, ErrPolicyAdditionReceipt) {
+			o.close()
+			t.Fatal("present wrong-type issuer fell through as absence", present, err)
+		}
 		wrong, _, _ := copyPolicyEffectPlan(f.plan)
 		wrong.Effects[0].Add[0] = "-6"
 		for _, input := range []struct {
