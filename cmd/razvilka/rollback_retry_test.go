@@ -65,3 +65,33 @@ func TestCloseRollbackSettingsIgnoreOnlySafeMode(t *testing.T) {
 		}
 	}
 }
+
+func TestLegacyRollbackRefusesCurrentListIntentAndInactiveExclusions(t *testing.T) {
+	previous := dataplane.Plan{Revision: 4, Routes: []dataplane.Route{{ServiceID: "discord", Selected: "sing-box:private", Sources: []string{"192.168.1.40/32"}}}}
+	for _, target := range []config.ResourceMatch{{Kind: "service", Value: "discord"}, {Kind: "exact", Value: "discord.com"}, {Kind: "ip", Value: "203.0.113.40"}, {Kind: "cidr", Value: "203.0.113.0/24"}} {
+		for _, storage := range []string{"inactive", "configured"} {
+			t.Run(storage+"/"+target.Kind, func(t *testing.T) {
+				cfg := config.Config{Revision: 5, AppliedRevision: 4, AppliedServices: map[string]config.ServiceState{"discord": {Enabled: true, Route: "sing-box:private", Sources: []string{"192.168.1.40/32"}}}}
+				if !rollbackAppliedSettingsMatch(cfg, previous) {
+					t.Fatal("fixture does not match the legacy plan")
+				}
+				exclusions := &config.ResourceExclusions{Schema: 1, Revision: 1, Manual: []config.ResourceMatch{target}}
+				if storage == "inactive" {
+					cfg.InactiveResourceExclusions = exclusions
+				} else {
+					cfg.NetworkPolicy = &config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{"home"}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "selected_services", Unavailable: "retain"}, Exclusions: exclusions}
+				}
+				if rollbackAppliedSettingsMatch(cfg, previous) {
+					t.Fatal("legacy service comparison authorized current unsupported list intent")
+				}
+				cfg.SafeMode = true
+				if closeRollbackSettingsMatch(cfg, previous) {
+					t.Fatal("recovery Safe Mode exception waived current list intent")
+				}
+				if exclusions.Revision != 1 || len(exclusions.Manual) != 1 || exclusions.Manual[0] != target || !cfg.SafeMode {
+					t.Fatal("refusal changed saved intent")
+				}
+			})
+		}
+	}
+}
