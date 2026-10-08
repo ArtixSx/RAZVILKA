@@ -102,6 +102,9 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 					defer workers.Done()
 					defer func() { <-slots }()
 					_ = exchangeScopedDNS(ctx, handler, peer.Addr().Unmap(), wire, true, func(reply []byte) error {
+						if err := udp.SetWriteDeadline(time.Now().Add(endpointProbeTimeout)); err != nil {
+							return err
+						}
 						_, err := udp.WriteToUDPAddrPort(reply, peer)
 						return err
 					})
@@ -164,6 +167,9 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 							return
 						}
 						if err := exchangeScopedDNS(ctx, handler, peer, wire, false, func(reply []byte) error {
+							if err := connection.SetWriteDeadline(time.Now().Add(endpointProbeTimeout)); err != nil {
+								return err
+							}
 							binary.BigEndian.PutUint16(prefix[:], uint16(len(reply)))
 							_, err := io.Copy(connection, bytes.NewReader(append(prefix[:], reply...)))
 							return err

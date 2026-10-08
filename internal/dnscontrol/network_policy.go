@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -52,6 +53,7 @@ type NetworkPolicyDNSResolver struct {
 	baseline   func(context.Context, []byte) ([]byte, error)
 	now        func() time.Time
 	exclusions *NetworkPolicyDNSExclusions
+	operations *operationgate.Gate // immutable short-admission binding, no IO lease
 }
 
 func (m *Manager) NewNetworkPolicyDNSResolver(ctx context.Context, defaultProfile string, bindings []ClientDNSBinding, authority NetworkPolicyDNSAuthority, guard func(context.Context) error, admit func(context.Context, netip.Addr, string) (NetworkPolicyDNSAdmission, error), exclusions *NetworkPolicyDNSExclusions) (*NetworkPolicyDNSResolver, error) {
@@ -396,34 +398,38 @@ func (r *NetworkPolicyDNSResolver) Publish(ctx context.Context, client netip.Add
 	return publish(ctx, before, func() error {
 		// The original owner acquires its gate before entering this leaf. All
 		// owner/catalog/provider checks finish before the Store observation.
-		a, err := r.admission(ctx, client, name)
+		observe, write, err := r.preparePublication(ctx, client, name, before, wire, resolvedAt, send)
 		if err != nil {
 			return err
 		}
-		if a != before {
-			return ErrNetworkPolicyDNS
-		}
-		if a.Kind == "managed" && r.service != nil {
-			if choice, selected := r.service.choices[scopedDNSKey{client, name}]; selected {
-				if err := r.service.check(ctx, choice); err != nil {
-					return err
-				}
+		return observe(write)
+	})
+}
+
+// All original owner/provider/catalog checks finish BEFORE protected Stop/send
+// admission. observe retains the SAME Store negative boundary. write performs
+// only bounded local serialization and socket IO, never owner/Gate reentry.
+func (r *NetworkPolicyDNSResolver) preparePublication(ctx context.Context, client netip.Addr, name string, before NetworkPolicyDNSAdmission, wire []byte, resolvedAt time.Time, send func([]byte) error) (func(func() error) error, func() error, error) {
+	a, err := r.admission(ctx, client, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	if a != before {
+		return nil, nil, ErrNetworkPolicyDNS
+	}
+	if a.Kind == "managed" && r.service != nil {
+		if choice, selected := r.service.choices[scopedDNSKey{client, name}]; selected {
+			if err := r.service.check(ctx, choice); err != nil {
+				return nil, nil, err
 			}
 		}
-		targets, err := r.answerTargets(ctx, a, name, wire)
-		if err != nil {
-			return err
-		}
-		excluded, err := r.exclusions.observe(ctx, targets, func() error {
-			final, err := r.ageResidence(wire, resolvedAt)
-			if err != nil {
-				return err
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			return send(final)
-		})
+	}
+	targets, err := r.answerTargets(ctx, a, name, wire)
+	if err != nil {
+		return nil, nil, err
+	}
+	observe := func(write func() error) error {
+		excluded, err := r.exclusions.observe(ctx, targets, write)
 		if err != nil {
 			return err
 		}
@@ -431,7 +437,18 @@ func (r *NetworkPolicyDNSResolver) Publish(ctx context.Context, client netip.Add
 			return ErrNetworkPolicyDNSExcluded
 		}
 		return nil
-	})
+	}
+	write := func() error {
+		final, err := r.ageResidence(wire, resolvedAt)
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return send(final)
+	}
+	return observe, write, nil
 }
 
 // This enriches detached existing observations. It does not identify a flow
@@ -473,7 +490,7 @@ func (r *NetworkPolicyDNSResolver) Observations(ctx context.Context) ([]NetworkP
 			continue
 		}
 		names := append([]string{o.Domain}, o.Details.CNAMEChain...)
-		targets, err := r.exclusions.targets(ctx, a.DeviceID, names, o.Details.Addresses)
+		targets, err := r.resourceTargets(ctx, a.DeviceID, names, o.Details.Addresses)
 		if err != nil {
 			return nil, err
 		}

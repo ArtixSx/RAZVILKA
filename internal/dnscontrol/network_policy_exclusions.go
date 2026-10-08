@@ -70,7 +70,9 @@ func (f *NetworkPolicyDNSExclusions) Stamp() NetworkPolicyDNSExclusionStamp {
 // The only callback under the SAME Store RLock is a bounded closed leaf.
 // It MUST NOT call Store, owner.Current, the gate, providers or protocol IO.
 // At publication the original owner holds its gate lease outside this lock;
-// the leaf may perform only the already prepared local socket write.
+// the leaf may perform only prepared local publication: the original durable
+// control owner's raw lock/marker checks and bounded socket write. That control
+// bracket must admit Gate outside this Store lock and never reenter Gate/Store.
 func (f *NetworkPolicyDNSExclusions) observe(ctx context.Context, targets []config.ResourceTarget, leaf func() error) (bool, error) {
 	return f.observeDecision(ctx, func(ctx context.Context, set config.EffectiveExclusionSet) (bool, error) {
 		excluded := false
@@ -190,7 +192,7 @@ func (r *NetworkPolicyDNSResolver) queryExcluded(ctx context.Context, a NetworkP
 	if name == "" || a.Kind == "baseline" {
 		return false, r.exclusions.current(ctx)
 	}
-	targets, err := r.exclusions.targets(ctx, a.DeviceID, []string{name}, nil)
+	targets, err := r.resourceTargets(ctx, a.DeviceID, []string{name}, nil)
 	if err != nil {
 		return false, err
 	}
@@ -205,7 +207,20 @@ func (r *NetworkPolicyDNSResolver) answerTargets(ctx context.Context, a NetworkP
 	if err != nil {
 		return nil, err
 	}
-	return r.exclusions.targets(ctx, a.DeviceID, names, addresses)
+	return r.resourceTargets(ctx, a.DeviceID, names, addresses)
+}
+
+func (r *NetworkPolicyDNSResolver) resourceTargets(ctx context.Context, device string, names []string, addresses []netip.Addr) ([]config.ResourceTarget, error) {
+	if r.operations == nil {
+		return r.exclusions.targets(ctx, device, names, addresses)
+	}
+	var targets []config.ResourceTarget
+	err := networkPolicyDNSOperation(ctx, r.operations, func(held context.Context) error {
+		var err error
+		targets, err = r.exclusions.targets(held, device, names, addresses)
+		return err
+	})
+	return targets, err
 }
 
 func (r *NetworkPolicyDNSResolver) checkAnswer(ctx context.Context, a NetworkPolicyDNSAdmission, name string, wire []byte) error {
