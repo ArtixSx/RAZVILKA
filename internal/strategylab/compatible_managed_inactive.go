@@ -86,32 +86,50 @@ func (r *ManagedCompatibilityInactiveReview) Current(ctx context.Context) error 
 		m := r.manager
 		m.mu.RLock()
 		defer m.mu.RUnlock()
-		provider, kind, err := managedCompatibilityInactiveStateLocked(m, r.control)
-		if err != nil || provider != r.provider || kind != r.validatorKind || m.Path != r.path || !compatibilityImageEqual(m.image, r.image) {
-			return errors.Join(ErrCompatibilityQuiescenceUnknown, err)
-		}
-		if err := errors.Join(compatibilityProtectedPath(r.path, false), compatibilityPrivateStateParent(r.path)); err != nil {
+		if err := r.sourceCurrentLocked(ctx); err != nil {
 			return err
-		}
-		file, err := selectedReviewFileIdentity(r.path)
-		parent, parentErr := selectedReviewFileIdentity(filepath.Dir(r.path))
-		if err != nil || parentErr != nil || !os.SameFile(file, r.file) || !os.SameFile(parent, r.parent) {
-			return ErrCompatibilityQuiescenceUnknown
-		}
-		image, err := restorejournal.ReadFileImage(ctx, r.path)
-		var actual State
-		decoder := json.NewDecoder(bytes.NewReader(image.Data))
-		decoder.DisallowUnknownFields()
-		if err != nil || !compatibilityImageEqual(image, r.image) || compatibilityJSONUnique(image.Data) != nil || decoder.Decode(&actual) != nil || decoder.Decode(new(any)) != io.EOF || !compatibilityJSONEqual(actual, m.state) {
-			return errors.Join(ErrCompatibilityQuiescenceUnknown, err)
-		}
-		file, err = selectedReviewFileIdentity(r.path)
-		parent, parentErr = selectedReviewFileIdentity(filepath.Dir(r.path))
-		if err != nil || parentErr != nil || !os.SameFile(file, r.file) || !os.SameFile(parent, r.parent) {
-			return ErrCompatibilityQuiescenceUnknown
 		}
 		return r.control.Current(ctx)
 	})
+}
+
+// Caller holds the original review lock and Manager lock. No Gate/Components
+// admission is issued by these private comparison leaves.
+func (r *ManagedCompatibilityInactiveReview) sourceCurrentLocked(ctx context.Context) error {
+	m := r.manager
+	provider, kind, err := managedCompatibilityInactiveStateLocked(m, r.control)
+	if err != nil || provider != r.provider || kind != r.validatorKind {
+		return errors.Join(ErrCompatibilityQuiescenceUnknown, err)
+	}
+	return r.imageCurrentLocked(ctx)
+}
+
+func (r *ManagedCompatibilityInactiveReview) imageCurrentLocked(ctx context.Context) error {
+	m := r.manager
+	if m.Path != r.path || !compatibilityImageEqual(m.image, r.image) {
+		return ErrCompatibilityQuiescenceUnknown
+	}
+	if err := errors.Join(compatibilityProtectedPath(r.path, false), compatibilityPrivateStateParent(r.path)); err != nil {
+		return err
+	}
+	file, err := selectedReviewFileIdentity(r.path)
+	parent, parentErr := selectedReviewFileIdentity(filepath.Dir(r.path))
+	if err != nil || parentErr != nil || !os.SameFile(file, r.file) || !os.SameFile(parent, r.parent) {
+		return ErrCompatibilityQuiescenceUnknown
+	}
+	image, err := restorejournal.ReadFileImage(ctx, r.path)
+	var actual State
+	decoder := json.NewDecoder(bytes.NewReader(image.Data))
+	decoder.DisallowUnknownFields()
+	if err != nil || !compatibilityImageEqual(image, r.image) || compatibilityJSONUnique(image.Data) != nil || decoder.Decode(&actual) != nil || decoder.Decode(new(any)) != io.EOF || !compatibilityJSONEqual(actual, m.state) {
+		return errors.Join(ErrCompatibilityQuiescenceUnknown, err)
+	}
+	file, err = selectedReviewFileIdentity(r.path)
+	parent, parentErr = selectedReviewFileIdentity(filepath.Dir(r.path))
+	if err != nil || parentErr != nil || !os.SameFile(file, r.file) || !os.SameFile(parent, r.parent) {
+		return ErrCompatibilityQuiescenceUnknown
+	}
+	return nil
 }
 
 func (r *ManagedCompatibilityInactiveReview) Close() error {
