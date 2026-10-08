@@ -79,10 +79,27 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	}
 	a.autonomy.mu.Lock()
 	ids := []string{}
+	disabledChanged := false
 	for id, s := range a.autonomy.doc.Services {
+		if s.Enabled && !s.Removing && !cfg.Services[id].Enabled {
+			// Keep inactive entries out of the probe queue, but do not leave
+			// their last successful runtime presented as current automation.
+			r := a.autonomy.doc.Runtime[id]
+			const message = "Сервис отключён в настройках. Автоматические проверки и переключения приостановлены."
+			if r.State != "manual-change" || r.Message != message {
+				r.State, r.Message = "manual-change", message
+				a.autonomy.doc.Runtime[id] = r
+				disabledChanged = true
+			}
+			continue
+		}
 		if s.Enabled && (s.Removing || cfg.Services[id].Enabled) {
 			ids = append(ids, id)
 		}
+	}
+	if disabledChanged && a.persistAutonomyLocked(ctx) != nil {
+		a.autonomy.mu.Unlock()
+		return
 	}
 	sort.Strings(ids)
 	chosen := ""

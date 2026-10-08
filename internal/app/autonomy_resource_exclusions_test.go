@@ -102,10 +102,15 @@ func TestAutonomyResourceNegativeStopsBeforeCheckAndHistory(t *testing.T) {
 }
 
 func TestAutonomyInactiveServiceIsNotAutomaticallyChecked(t *testing.T) {
-	a, _, _ := autonomousIntegrationFixture(t)
+	a, _, adapter := autonomousIntegrationFixture(t)
 	state := a.Store.Get().Services["my-independent-site"]
 	state.Enabled = false
 	if err := a.Store.UpdateService("my-independent-site", state); err != nil {
+		t.Fatal(err)
+	}
+	before := a.Store.Get()
+	nodesBefore, err := a.Nodes.Snapshot(context.Background(), time.Now())
+	if err != nil {
 		t.Fatal(err)
 	}
 	checks := 0
@@ -114,8 +119,21 @@ func TestAutonomyInactiveServiceIsNotAutomaticallyChecked(t *testing.T) {
 		return dataplane.NodeCheckResult{}, nil
 	})
 	a.autonomyRound(context.Background(), time.Now())
-	if checks != 0 {
-		t.Fatal("inactive service was probed")
+	nodesAfter, err := a.Nodes.Snapshot(context.Background(), time.Now())
+	if checks != 0 || len(adapter.calls) != 0 || err != nil || !reflect.DeepEqual(before, a.Store.Get()) || !reflect.DeepEqual(nodesBefore, nodesAfter) {
+		t.Fatal("inactive service was checked, applied or changed", checks, adapter.calls, err)
+	}
+	if runtime := autonomyTestState(a); runtime.State != "manual-change" {
+		t.Fatal("inactive service kept stale automation status", runtime.State)
+	}
+	first, err := os.ReadFile(a.autonomy.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.autonomyRound(context.Background(), time.Now())
+	again, err := os.ReadFile(a.autonomy.path)
+	if err != nil || string(first) != string(again) || checks != 0 || len(adapter.calls) != 0 {
+		t.Fatal("inactive status was repeatedly changed or admitted work", err)
 	}
 }
 
