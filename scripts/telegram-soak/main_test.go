@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"math/big"
 	"net"
@@ -299,8 +300,12 @@ func TestEndpointGreetingTimeoutAndShorterParentDeadline(t *testing.T) {
 	}
 }
 
-func TestCancellationWhileWaitingNeverCompletesOrStartsAnotherRequest(t *testing.T) {
-	server, roots := fixtureTLS(t, telegramHost, func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "observed") })
+func TestCancellationOfPendingHTTPSNeverCompletesOrStartsAnotherRequest(t *testing.T) {
+	requestReceived := make(chan struct{})
+	server, roots := fixtureTLS(t, telegramHost, func(_ http.ResponseWriter, r *http.Request) {
+		close(requestReceived)
+		<-r.Context().Done() // No response: cancellation is strictly in the request.
+	})
 	socks := fixtureSOCKS(t, server.Listener.Addr().String(), "")
 	o := fixtureOptions(socks.address)
 	o.Duration = time.Second
@@ -315,18 +320,39 @@ func TestCancellationWhileWaitingNeverCompletesOrStartsAnotherRequest(t *testing
 		result <- r
 	}()
 	select {
-	case <-socks.disconnect:
+	case <-requestReceived:
 	case <-time.After(time.Second):
-		t.Fatal("first HTTPS did not finish")
+		t.Fatal("HTTPS fixture never received the request")
 	}
 	cancel()
 	select {
 	case r := <-result:
-		if r.ExitCode != 130 || r.Outcome != "canceled" || r.WindowCompleted || r.Accepted != 1 || r.Attempts != 1 || r.Final.OK || len(socks.commands) != 1 {
-			t.Fatal("an early successful sample became a completed window", r)
+		if r.ExitCode != 130 || r.Outcome != "canceled" || r.WindowCompleted || r.Accepted != 0 || r.Attempts != 1 || r.Failures != 1 || r.FailureCodes["canceled"] != 1 || r.Final.OK || len(socks.commands) != 1 {
+			t.Fatal("an unfinished canceled request became a completed window", r)
 		}
 	case <-time.After(300 * time.Millisecond):
-		t.Fatal("interval wait ignored cancellation")
+		t.Fatal("pending HTTPS ignored cancellation")
+	}
+}
+
+func TestSamplingWaitReturnsCancellationInsteadOfScheduledWork(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	entered := make(chan struct{})
+	result := make(chan error, 1)
+	go func() {
+		close(entered)
+		result <- waitUntil(ctx, time.Now().Add(time.Hour))
+	}()
+	<-entered
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal("canceled interval permitted its next scheduled operation", err)
+		}
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("sampling wait ignored cancellation")
 	}
 }
 
