@@ -82,7 +82,7 @@ func (f *SelfUpdateFiles) settleStoppedRollback(ctx context.Context, id string, 
 			return nil
 		},
 		AdmitReaders: func(c context.Context, actualID string, required int) error {
-			if actualID != id || required != updatecheck.SelfUpdateReadVersion {
+			if actualID != id || required != selfupdatejournal.StoppedSchema {
 				return errSelfUpdateRecovery
 			}
 			if err := scope(c); err != nil {
@@ -111,7 +111,7 @@ func (f *SelfUpdateFiles) settleStoppedRollback(ctx context.Context, id string, 
 	// Only after the provider returns, read the published terminal binding.
 	receipt, present, err := f.Current()
 	if err != nil || !present || receipt.ID != id || receipt.Schema != selfupdatejournal.StoppedSchema || receipt.Phase != "rolled-back-stopped" || receipt.Stopped == nil ||
-		receipt.Stopped.InstallationID != frozen.InstallationID || receipt.Stopped.PreStopSequence+1 != frozen.Sequence || receipt.Stopped.StopSequence != frozen.Sequence || receipt.Stopped.Revision != revision || receipt.Stopped.RequiredReader != updatecheck.SelfUpdateReadVersion {
+		receipt.Stopped.InstallationID != frozen.InstallationID || receipt.Stopped.PreStopSequence+1 != frozen.Sequence || receipt.Stopped.StopSequence != frozen.Sequence || receipt.Stopped.Revision != revision || receipt.Stopped.RequiredReader != selfupdatejournal.StoppedSchema {
 		return errSelfUpdateRecovery
 	}
 	return scope(ctx)

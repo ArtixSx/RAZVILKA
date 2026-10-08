@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -152,7 +153,7 @@ func TestSelfUpdateImmutableReaderCLIBypassesStopAndScanner(t *testing.T) {
 	}
 	t.Setenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE", control)
 	before := selfUpdateReadTree(t, base)
-	for flag, expected := range map[string]string{"-self-update-read-version": "3\n", "-self-update-schema": "0\n"} {
+	for flag, expected := range map[string]string{"-self-update-read-version": strconv.Itoa(selfupdatejournal.ReadVersion) + "\n", "-self-update-schema": "0\n"} {
 		out, diagnostic, code := selfUpdateReadCLI(t, base, flag)
 		if code != 0 || out != expected || diagnostic != "" {
 			t.Fatal("immutable metadata acquired a startup/scanner dependency", flag, out, diagnostic, code)
