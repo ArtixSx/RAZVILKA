@@ -66,6 +66,20 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if a.strategyCompatibilityPending() && strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
+			if a.Security == nil || !a.Security.Authenticated(r) {
+				http.Error(w, "administrator login is required", http.StatusUnauthorized)
+				return
+			}
+			if r.URL.Path == "/api/v1/strategy-lab" && r.Method == http.MethodGet {
+				a.strategyLabSnapshot(w, r)
+				return
+			}
+			if r.URL.Path != panelhealth.Path && r.URL.Path != panelSnapshotPath && r.URL.Path != panelInventoryPath && r.URL.Path != panelAutonomyPath && r.URL.Path != panelAuditPath && r.URL.Path != "/api/v1/metrics" && r.URL.Path != "/api/v1/connections" {
+				writeStrategyCompatibilityRecovery(w, true)
+				return
+			}
+		}
 		// Security.Middleware remains outside this middleware. Only this
 		// memory-only endpoints bypass admission, never runtime Store reads.
 		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelInventoryPath || r.URL.Path == panelAutonomyPath || r.URL.Path == panelAuditPath || r.URL.Path == "/api/v1/metrics" || r.URL.Path == "/api/v1/connections" {

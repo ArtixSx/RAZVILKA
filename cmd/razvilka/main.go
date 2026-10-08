@@ -552,6 +552,13 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	if err != nil {
 		log.Fatalf("Strategy Lab state: %v", err)
 	}
+	// Only the genuine managed-source constructor below can enable supervised
+	// compatibility. An unavailable component never falls back to PATH execution.
+	strategyLabManager.Validator = strategylab.CompatibleValidator{}
+	// The legacy SystemProbeExecutor cannot consume these managed source and
+	// list/client/negative owners. Leave probing closed until its actual scoped
+	// constructor exists; compatibility alone cannot enable packet interception.
+	strategyLabManager.Executor = nil
 	strategyLabManager.PackKeys, err = strategylab.LoadPackKeys(*strategyPackKeys)
 	if err != nil {
 		log.Fatal("strategy pack public-key configuration rejected")
@@ -664,6 +671,15 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	}
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
+	compatibilityControl, compatibilityErr := configureManagedNFQCompatibility(runtimeContext, a)
+	if compatibilityErr != nil {
+		if errors.Is(compatibilityErr, strategylab.ErrCompatibilityQuiescenceUnknown) {
+			a.Operations.FenceJournal()
+		}
+		log.Print("Managed NFQ compatibility source is unavailable; its retained state requires review")
+	} else {
+		defer compatibilityControl.Close()
+	}
 	a.StartSelfUpdate(runtimeContext)
 	selfRecoveryPending := a.PendingSelfUpdateRecovery()
 	if !selfRecoveryPending {
@@ -778,6 +794,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 		}
 		if err := a.WaitSelfUpdate(nodeShutdownContext); err != nil {
 			log.Print("Application update preparation cleanup did not finish before shutdown")
+		}
+		if err := a.WaitManagedStrategyCompatibility(nodeShutdownContext); err != nil {
+			log.Print("Managed NFQ compatibility completion remains unconfirmed; original operation was not released")
 		}
 		if err := a.WaitNodeAutofallback(nodeShutdownContext); err != nil {
 			log.Print("Node autofallback cleanup did not finish before shutdown")

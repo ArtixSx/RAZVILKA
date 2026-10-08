@@ -151,6 +151,7 @@ type App struct {
 	EngineConfigs             *engineconfig.Manager
 	EngineLab                 *enginelab.Manager
 	StrategyLab               *strategylab.Manager
+	strategyCompatibility     strategyCompatibilityState
 	Components                *components.Manager
 	componentRecoveryChecks   componentRecoveryChecks
 	Community                 *community.Manager
@@ -1139,7 +1140,11 @@ func (a *App) strategyLabSnapshot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Strategy Lab disabled", http.StatusServiceUnavailable)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.StrategyLab.Snapshot())
+	snapshot := a.StrategyLab.Snapshot()
+	if a.strategyCompatibilityPending() {
+		snapshot.QuiescenceUnknown = true
+	}
+	writeJSON(w, http.StatusOK, snapshot)
 }
 
 func (a *App) strategyLabCandidates(w http.ResponseWriter, r *http.Request) {
@@ -1229,13 +1234,7 @@ func (a *App) strategyLabCandidateAction(w http.ResponseWriter, r *http.Request)
 		a.writeOperationFailure(w, err)
 		return
 	}
-	defer release()
-	candidate, err := a.StrategyLab.Validate(ctx, id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusOK, candidate)
+	a.validateStrategyCandidate(w, ctx, id, release)
 }
 
 func (a *App) strategyLabSelections(w http.ResponseWriter, r *http.Request) {
