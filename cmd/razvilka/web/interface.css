@@ -1460,6 +1460,16 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .interface-ui .ui3-list-layout .r5-service-group .ui3-group-member-grid{grid-template-columns:1fr}
 
 .interface-ui #r5ServiceFilters[hidden]{display:none!important}
+.interface-ui #resourceExcludedTab[hidden]{display:none!important}
+.interface-ui .resource-exclusion-add{display:grid;grid-template-columns:minmax(150px,1fr) minmax(190px,2fr) auto;gap:12px;align-items:end;margin:20px 0 8px}
+.interface-ui .resource-exclusion-add label,.interface-ui .resource-search{display:grid;gap:6px;font-size:13px}
+.interface-ui .resource-exclusion-add input,.interface-ui .resource-exclusion-add select,.interface-ui .resource-search input{width:100%;min-width:0}
+.interface-ui .resource-exclusion-list li>div{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.interface-ui .resource-exclusion-list small,.interface-ui .resource-exclusion-list span{font-size:12px;color:var(--muted)}
+.interface-ui .resource-save,.interface-ui .resource-pages{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+.interface-ui .resource-nfqws-details{margin-top:24px}
+.interface-ui .resource-nfqws-details>summary{cursor:pointer;padding:16px 0;font-weight:600}
+@media(max-width:720px){.interface-ui .resource-exclusion-add{grid-template-columns:1fr}.interface-ui #r5ServiceFilters{flex-wrap:wrap}}
 
 /* In-flow status: never an overlay, pointer blocker or optimistic route badge. */
 .panel-availability {

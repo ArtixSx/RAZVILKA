@@ -3,6 +3,85 @@
 (function (root) {
   'use strict';
   const text = x => typeof x === 'string' ? x : '';
+  // Detached display of CORE's persisted resource_exclusions only. This does
+  // not match traffic, prove live application or grant a positive assignment.
+  function resourceExclusionView(exclusions, russianEnabled = false, services = []) {
+    const empty = (available, declared = false) => ({available,declared,revision:0,manual:[],russian:{present:false,enabled:russianEnabled===true,catalogID:'',revision:0,digest:'',rows:[]}});
+    if (exclusions == null) return empty(true);
+    const kinds = {service:'Сервис',exact:'Точный домен',suffix:'Домен и поддомены',ip:'IP-адрес',cidr:'Сеть IP'};
+    const matches = entries => Array.isArray(entries) && entries.every(entry => entry && Object.hasOwn(kinds,entry.kind) && typeof entry.value === 'string' && entry.value.trim().length > 0);
+    const manual = exclusions.manual == null ? [] : exclusions.manual, snapshot = exclusions.russian_snapshot;
+    if (exclusions.schema !== 1 || !Number.isSafeInteger(exclusions.revision) || exclusions.revision < 0 || !matches(manual)) return empty(false,true);
+    if (snapshot != null && (typeof snapshot.catalog_id !== 'string' || !snapshot.catalog_id.trim()
+      || !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0 || !/^[a-f0-9]{64}$/.test(snapshot.digest || '')
+      || !matches(snapshot.entries) || snapshot.entries.length === 0)) return empty(false,true);
+    const names = new Map(services.filter(service => service && typeof service.id === 'string' && typeof service.name === 'string').map(service => [service.id,service.name]));
+    const rows = (entries, origin) => entries.map(entry => ({kind:entry.kind,value:entry.value,
+      label:entry.kind === 'service' ? names.get(entry.value) || entry.value : entry.value,typeLabel:kinds[entry.kind],origin,
+      originLabel:origin === 'manual' ? 'Добавлено вручную' : 'Российский каталог',
+      reason:origin === 'manual' ? 'Ручное исключение ресурса' : 'Запись принятого российского каталога',
+      activeIntent:origin === 'manual' || russianEnabled === true}));
+    return {available:true,declared:true,revision:exclusions.revision,manual:rows(manual,'manual'),
+      russian:{present:snapshot != null,enabled:russianEnabled===true,catalogID:snapshot?.catalog_id || '',revision:snapshot?.revision || 0,digest:snapshot?.digest || '',rows:rows(snapshot?.entries || [],'russian')}};
+  }
+  // Validate the actual GET/POST DTO before using its revisions for an edit.
+  // These are saved policy images, never runtime admission or route evidence.
+  function resourceExclusionSnapshot(value, services = []) {
+    const revision = n => Number.isSafeInteger(n) && n >= 0;
+    const strings = a => a == null || Array.isArray(a) && a.every(v => typeof v === 'string');
+    const matches = a => Array.isArray(a) && a.every(m => m && ['service','exact','suffix','ip','cidr'].includes(m.kind) && typeof m.value === 'string' && m.value.trim());
+    const copyMatches = a => a.map(m => ({kind:m.kind,value:m.value}));
+    const sameMatches = (a,b) => JSON.stringify(copyMatches(a).sort((x,y)=>(x.kind+'\n'+x.value).localeCompare(y.kind+'\n'+y.value))) === JSON.stringify(copyMatches(b).sort((x,y)=>(x.kind+'\n'+x.value).localeCompare(y.kind+'\n'+y.value)));
+    const effective = e => {
+      if (!e || !revision(e.policy_revision) || !revision(e.revision) || typeof e.russian_enabled !== 'boolean' || !/^[a-f0-9]{64}$/.test(e.digest || '')
+        || !matches(e.manual) || !matches(e.russian) || !Array.isArray(e.legacy_rules) || !strings(e.broad_tlds)) return null;
+      const c=e.clients, r=e.legacy_russian;
+      if (!c || !['','selected_devices','lan_except'].includes(c.mode) || !['','inherit','base'].includes(c.new_devices)
+        || !['segment_ids','device_ids','excluded_device_ids','excluded_cidrs'].every(k=>strings(c[k]))
+        || !r || typeof r.enabled !== 'boolean' || typeof r.auto_update_allowed !== 'boolean' || !revision(r.revision)
+        || !strings(r.service_ids) || !strings(r.broad_tlds)
+        || e.legacy_rules.some(rule=>!rule || typeof rule.id !== 'string' || !revision(rule.revision) || rule.action !== 'direct' || typeof rule.mandatory !== 'boolean' || !strings(rule.device_ids) || !matches([rule]))) return null;
+      if (e.russian_snapshot != null && !resourceExclusionView({schema:1,revision:e.revision,manual:[],russian_snapshot:e.russian_snapshot},e.russian_enabled).available) return null;
+      return {policy_revision:e.policy_revision,revision:e.revision,russian_enabled:e.russian_enabled,digest:e.digest,
+        clients:{mode:c.mode,new_devices:c.new_devices,...Object.fromEntries(['segment_ids','device_ids','excluded_device_ids','excluded_cidrs'].map(k=>[k,[...(c[k]||[])]]))},
+        manual:copyMatches(e.manual),russian:copyMatches(e.russian),broad_tlds:[...(e.broad_tlds||[])],
+        legacy_russian:{enabled:r.enabled,auto_update_allowed:r.auto_update_allowed,catalog_id:text(r.catalog_id),revision:r.revision,digest:text(r.digest),service_ids:[...(r.service_ids||[])],broad_tlds:[...(r.broad_tlds||[])]},
+        legacy_rules:e.legacy_rules.map(rule=>({id:rule.id,revision:rule.revision,kind:rule.kind,value:rule.value,action:'direct',mandatory:rule.mandatory,device_ids:[...(rule.device_ids||[])]})),
+        russian_snapshot:e.russian_snapshot == null?null:{catalog_id:e.russian_snapshot.catalog_id,revision:e.russian_snapshot.revision,digest:e.russian_snapshot.digest,entries:copyMatches(e.russian_snapshot.entries)}};
+    };
+    if (!value || value.ok !== true || value.live_applied !== false || !['revision','policy_revision','exclusion_revision','applied_revision'].every(k=>revision(value[k]))
+      || !['russian_enabled','russian_auto_update_allowed','desired_matches_applied'].every(k=>typeof value[k] === 'boolean')) return null;
+    const view=resourceExclusionView(value.resource_exclusions,value.russian_enabled,services), desired=effective(value.effective), applied=effective(value.applied_effective);
+    if (!view.available || !desired || !applied || desired.policy_revision !== value.policy_revision || desired.revision !== value.exclusion_revision
+      || desired.russian_enabled !== value.russian_enabled || view.revision !== value.exclusion_revision || !sameMatches(view.manual,desired.manual)
+      || value.russian_auto_update_allowed && !value.russian_enabled) return null;
+    const expectedRussian=value.russian_enabled?[...view.russian.rows,...desired.legacy_russian.service_ids.map(value=>({kind:'service',value}))]:[];
+    const uniqueRussian=[...new Map(expectedRussian.map(row=>[row.kind+'\n'+row.value,row])).values()];
+    if(!sameMatches(uniqueRussian,desired.russian)
+      || desired.legacy_russian.enabled!==value.russian_enabled
+      || desired.legacy_russian.auto_update_allowed!==value.russian_auto_update_allowed
+      || !value.russian_enabled && (desired.russian_snapshot || desired.broad_tlds.length || desired.legacy_russian.service_ids.length)) return null;
+    if(value.russian_enabled&&view.russian.present&&(!desired.russian_snapshot || desired.russian_snapshot.catalog_id!==view.russian.catalogID || desired.russian_snapshot.revision!==view.russian.revision || desired.russian_snapshot.digest!==view.russian.digest || !sameMatches(desired.russian_snapshot.entries,view.russian.rows)))return null;
+    const kinds={service:'Сервис',exact:'Точный домен',suffix:'Домен и поддомены',ip:'IP-адрес',cidr:'Сеть IP'};
+    const names=new Map(services.map(s=>[s.id,s.name]));
+    const legacy=desired.legacy_rules.map(rule=>({kind:rule.kind,value:rule.value,label:rule.kind==='service'?names.get(rule.value)||rule.value:rule.value,typeLabel:kinds[rule.kind],origin:'legacy',originLabel:'Сохранённое правило',reason:rule.device_ids.length?'Без обхода только для указанных устройств':'Без обхода в сохранённой области',deviceIDs:rule.device_ids,activeIntent:true}));
+    // Historical explicit service/TLD entries remain visible with their real
+    // provenance. They are not invented members of the accepted RU snapshot.
+    for (const id of desired.legacy_russian.service_ids) if (!view.russian.rows.some(row=>row.kind==='service'&&row.value===id)) legacy.push({kind:'service',value:id,label:names.get(id)||id,typeLabel:'Сервис',origin:'legacy',originLabel:'Ранее сохранённое исключение',reason:'Явная запись прежней политики',deviceIDs:[],activeIntent:true});
+    for (const tld of desired.broad_tlds) legacy.push({kind:'tld',value:tld,label:'.'+tld,typeLabel:'Явное правило зоны',origin:'legacy',originLabel:'Ранее сохранённое исключение',reason:'Явно выбранная зона прежней политики',deviceIDs:[],activeIntent:true});
+    return {revision:value.revision,policy_revision:value.policy_revision,exclusion_revision:value.exclusion_revision,applied_revision:value.applied_revision,
+      russian_enabled:value.russian_enabled,russian_auto_update_allowed:value.russian_auto_update_allowed,desired_matches_applied:value.desired_matches_applied,live_applied:false,
+      view, effective:desired,applied_effective:applied,legacy};
+  }
+  function resourceServiceExclusions(snapshot) {
+    const out=Object.create(null);
+    if (!snapshot) return out;
+    for (const row of [...snapshot.view.manual,...snapshot.view.russian.rows,...snapshot.legacy]) {
+      if (row.kind !== 'service' || !row.activeIntent || row.deviceIDs?.length) continue;
+      (out[row.value] ||= []).push({...row});
+    }
+    return out;
+  }
   function category(service) {
     const raw = text(service?.category).trim();
     return /^(ai|ии|ии-сервисы|искусственный интеллект)$/i.test(raw) ? 'ИИ-сервисы' : /^(other|другое|другие)$/i.test(raw) ? 'Мои сервисы' : raw || 'Мои сервисы';
@@ -106,13 +185,14 @@
   function appliedView(s) {
     return s?.applied_state || {enabled:s?.applied_enabled === true,route:s?.applied_route,sources:s?.applied_sources};
   }
-  function humanService(s, summary = {}, managed = null, runtime = {}, available = true) {
+  function humanService(s, summary = {}, managed = null, runtime = {}, available = true, exclusions = []) {
     s=s&&typeof s==='object'?s:{};summary=summary&&typeof summary==='object'?summary:{};runtime=runtime&&typeof runtime==='object'?runtime:{};
     const applied=appliedView(s);
     const changed=serviceChanged(s)||(!s.suspended&&typeof s.dirty!=='boolean'&&typeof s.enabled==='boolean'&&typeof applied.enabled==='boolean'&&s.enabled!==applied.enabled);
     const member=s.enabled===true||!!managed||applied.enabled===true||changed;
     const result={member,changed,applied:applied.enabled===true,route:applied.enabled===true?text(applied.route):'',control:managed?managed.enabled?'Автоподбор включён':'Автоподбор на паузе':'Ручная настройка',kind:'unknown',actionable:false,label:'Не добавлен',detail:'Добавьте сервис, чтобы настроить доступ.'};
     if(!available||s.presentation_only)return {...result,label:'Нет свежих данных',detail:'Последние настройки сохранены. Работа сервиса сейчас не подтверждена.'};
+    if(exclusions.length)return {...result,excluded:true,label:'Исключение сохранено',control:exclusions.map(row=>row.originLabel).join(' · '),detail:'Сервис указан без обхода в сохранённой политике. Применение исключения и снятие прежнего маршрута ещё не подтверждены.',pendingLabel:'Применение исключения не подтверждено'};
     if(!member)return result;
     if(managed?.removing)return {...result,kind:'warn',label:'Отключение в очереди',detail:'Отключение ещё не завершено. Действующее подключение может сохраняться.'};
     if(changed){result.pendingLabel='Есть неприменённые изменения';result.actionable=true;}
@@ -132,11 +212,11 @@
     return {...result,kind:'warn',actionable:changed,label:'Нужна проверка',detail:matched?text(summary.detail)||'Подключение назначено, но свежего подтверждения доступа нет.':'Результат не подтверждает это подключение. Дождитесь новой проверки.'};
   }
 
-  function humanCounts(services, summaries = {}, managed = {}, runtime = {}, available = true) {
-    const rows=services.map(s=>({service:s,...humanService(s,summaries[s.id],managed[s.id],runtime[s.id],available)}));
-    const selected=rows.filter(s=>s.member);
+  function humanCounts(services, summaries = {}, managed = {}, runtime = {}, available = true, exclusions = {}) {
+    const rows=services.map(s=>({service:s,...humanService(s,summaries[s.id],managed[s.id],runtime[s.id],available,exclusions[s.id]||[])}));
+    const selected=rows.filter(s=>s.member&&!s.excluded);
     return {rows,selected:selected.length,good:selected.filter(s=>s.kind==='good').length,
-      attention:selected.filter(s=>s.actionable).length,unconfirmed:selected.filter(s=>s.kind!=='good').length,changed:selected.filter(s=>s.changed).length};
+      excluded:rows.filter(s=>s.excluded).length,attention:selected.filter(s=>s.actionable).length,unconfirmed:selected.filter(s=>s.kind!=='good').length,changed:rows.filter(s=>s.changed).length};
   }
   function engineUsage(services, summaries = {}) {
     const counts = {};
@@ -175,7 +255,7 @@
     return {owner:'overview',title:'Главная',pageTitle:'Главная'};
   }
 
-  const model = Object.freeze({ category, selectedView, selection, aggregate, filterServices, groupServices, finitePercent, freshEvidence, protocol, homeSnapshot, humanAuto, appliedView, humanService, humanCounts, taskSections, settingsTasks, navigation, engineUsage });
+  const model = Object.freeze({ resourceExclusionView, resourceExclusionSnapshot, resourceServiceExclusions, category, selectedView, selection, aggregate, filterServices, groupServices, finitePercent, freshEvidence, protocol, homeSnapshot, humanAuto, appliedView, humanService, humanCounts, taskSections, settingsTasks, navigation, engineUsage });
   root.RazvilkaInterfaceModel = model;
   if (typeof module !== 'undefined' && module.exports) module.exports = model;
 })(typeof globalThis === 'undefined' ? window : globalThis);

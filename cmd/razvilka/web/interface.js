@@ -58,8 +58,10 @@ function interfaceServicePresentation(service,summaries){
  const auto=rim.humanAuto(consoleSnapshot,state.status,!interfaceState.authRevoked&&!consoleAutonomyError);
  const running=auto.state==='enabled';
  const runtime=running?consoleSnapshot?.runtime?.[service.id]:{};
- const value=rim.humanService(original,summaries?.[service.id]||{},managed,runtime,!interfaceState.authRevoked&&!['error','busy'].includes(state.dataLoad?.services?.phase));
- if(managed?.enabled===true&&!running)value.control=auto.state==='unknown'?'Состояние автоподбора не получено':auto.state==='paused'?'Автоподбор на общей паузе':'Автоподбор ограничен общей настройкой';
+ const excluded=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
+ const available=!interfaceState.authRevoked&&!['error','busy'].includes(state.dataLoad?.services?.phase)&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready');
+ const value=rim.humanService(original,summaries?.[service.id]||{},managed,runtime,available,excluded[service.id]||[]);
+ if(!value.excluded&&managed?.enabled===true&&!running)value.control=auto.state==='unknown'?'Состояние автоподбора не получено':auto.state==='paused'?'Автоподбор на общей паузе':'Автоподбор ограничен общей настройкой';
  return value;
 }
 
@@ -68,10 +70,10 @@ function interfaceServiceCard(s,summaries,compact=false){
  if(s.presentation_only)return `<article class="ui3-service-card r5-service-card" data-rz-card="${esc(s.id)}"><div class="ui3-service-card-top"><span class="ui3-service-icon">${consoleServiceIcon(s)}</span><div class="ui3-service-name"><h4>${esc(s.name)}</h4><span>${esc(rim.category(s))}</span></div></div><div class="ui3-card-state"><span class="ui3-status unknown">Сохранённые настройки</span></div><p class="r5-service-description">Свежая доступность пока неизвестна</p><details class="r5-advanced"><summary>Выбранные настройки</summary><p>${(s.desired_state?.enabled ?? s.enabled)?'Включён':'Выключен'} · ${esc(interfaceRouteName(s.route))}</p><p>Устройства: ${s.sources?.length?esc(s.sources.join(', ')):'Все устройства в сохранённой области LAN'}</p><p>Эти данные не подтверждают действующий маршрут.</p></details><div class="ui3-card-footer"><small>Ожидаем обновления состояния</small></div></article>`;
  const h=interfaceServicePresentation(s,summaries);
  const ready=consoleSnapshot?.policy?.setup_complete===true&&!consoleAutonomyError;
- const action=h.member
+ const action=h.excluded?'<button type="button" class="secondary" data-rz-nav="exclusions">Исключения</button>':h.member
    ?`<button type="button" class="secondary" data-rz-inspect="${esc(s.id)}" data-rz-focus="service-${esc(s.id)}">Открыть</button>`
    :`<button type="button" class="primary" data-r5-add="${esc(s.id)}" data-rz-focus="service-${esc(s.id)}" ${interfaceState.busy?'disabled':''}>${ready?'Добавить':'Начать настройку'}</button>`;
- return `<article class="ui3-service-card r5-service-card ${h.member?'':'not-selected'}" data-rz-card="${esc(s.id)}"><div class="ui3-service-card-top"><span class="ui3-service-icon tone-${rim.category(s)==='ИИ-сервисы'?'violet':s.id==='youtube'?'rose':'teal'}">${consoleServiceIcon(s)}</span><div class="ui3-service-name"><h4>${esc(s.name)}</h4><span>${esc(rim.category(s))}</span></div></div><div class="ui3-card-state">${interfaceBadge(h)}${h.pendingLabel&&h.pendingLabel!==h.label?`<span class="ui3-pending-dot">${esc(h.pendingLabel)}</span>`:''}</div><p class="r5-service-description">${esc(h.member?h.control:'Доступ по выбранным правилам автопилота')}</p><div class="ui3-card-route"><span>Подключение</span><b>${esc(h.route?interfaceRouteName(h.route):'Пока не назначено')}</b></div><div class="ui3-card-footer"><small>${h.applied?'Настройки применены':'Применение не подтверждено'}</small>${action}</div></article>`;
+ return `<article class="ui3-service-card r5-service-card ${h.member?'':'not-selected'}" data-rz-card="${esc(s.id)}"><div class="ui3-service-card-top"><span class="ui3-service-icon tone-${rim.category(s)==='ИИ-сервисы'?'violet':s.id==='youtube'?'rose':'teal'}">${consoleServiceIcon(s)}</span><div class="ui3-service-name"><h4>${esc(s.name)}</h4><span>${esc(rim.category(s))}</span></div></div><div class="ui3-card-state">${interfaceBadge(h)}${h.pendingLabel&&h.pendingLabel!==h.label?`<span class="ui3-pending-dot">${esc(h.pendingLabel)}</span>`:''}</div><p class="r5-service-description">${esc(h.member||h.excluded?h.control:'Доступ по выбранным правилам автопилота')}</p><div class="ui3-card-route"><span>${h.excluded?'Прежнее назначение':'Подключение'}</span><b>${esc(h.route?interfaceRouteName(h.route):'Пока не назначено')}</b></div><div class="ui3-card-footer"><small>${h.excluded?'Исключение сохранено':h.applied?'Настройки применены':'Применение не подтверждено'}</small>${action}</div></article>`;
 }
 
 function interfaceGroupHTML(g,summaries,location){
@@ -138,7 +140,9 @@ function interfaceHomeServicesHTML(members,fresh){
 }
 
 function renderHomeEngineSummary(summaries,loaded,fresh){
- const usage=rim.engineUsage(loaded?state.services:[],fresh?summaries:{});
+ const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
+ const currentSummaries=Object.fromEntries(Object.entries(summaries||{}).filter(([id])=>!exclusions[id]));
+ const usage=rim.engineUsage(loaded?state.services:[],fresh?currentSummaries:{});
  const known=state.authenticated===true&&interfaceDataReady('inventory');
  const rows=Object.entries(consoleEngineMeta).filter(([id])=>known||usage[id]);
  interfaceHTML('ui7HomeEngines',`<div class="ui3-section-heading"><h3>Обходы и сервисы</h3><button type="button" class="text-button" data-rz-nav="engines">Управление ${ci('chevron')}</button></div>${!known?'<p class="r5-caption">Сведения о компонентах ещё загружаются. Это не означает, что обходы остановлены.</p>':''}<div class="ui7-engine-summary">${rows.map(([id,meta])=>{const info=consoleEngineState(id),n=usage[id]||{assigned:0,verified:0};return `<button class="ui7-engine-row" type="button" data-console-engine="${esc(id)}"><span class="engine-mini-icon ${meta.tone}">${ci(meta.icon)}</span><span><b>${esc(meta.name)}</b><small>${esc(info.label)}</small></span><span class="ui7-engine-count"><b>${loaded?n.assigned:'—'}</b><small>назначено${fresh&&n.assigned?` · ${n.verified} проверено`:''}</small></span>${ci('chevron')}</button>`;}).join('')}</div><p class="r5-caption">Считаются применённые назначения. Запущенный процесс сам по себе не подтверждает доступ.</p>`);
@@ -149,18 +153,20 @@ function renderInterfaceHome(summaries){
  const loaded=ready&&interfaceDataReady('services');
  const fresh=loaded&&!['error','busy'].includes(state.dataLoad?.services?.phase);
  const list=loaded?(state.services||[]):[];
- const counts=rim.humanCounts(list,summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'?consoleSnapshot?.runtime||{}:{},fresh);
+ const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
+ const counts=rim.humanCounts(list,summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'?consoleSnapshot?.runtime||{}:{},fresh&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready'),exclusions);
+ const savedScope=typeof resourceExclusionsCurrent==='function'&&resourceExclusionsCurrent()?.policy_revision>0;
  consoleText('ui3HomeCount',loaded?counts.selected:'—');consoleText('ui3NavCount',loaded?counts.selected:'—');
  interfaceHomeAuto(ready);
  renderHomeEngineSummary(summaries,loaded,fresh);
- interfaceHTML('ui3HealthBanner',`<div class="r5-counts"><div><strong>${loaded?counts.selected:'—'}</strong><span>Добавлено сервисов</span></div><div><strong>${fresh?counts.good:'—'}</strong><span>Работают по проверке</span></div><div><strong>${fresh?counts.unconfirmed:'—'}</strong><span>Без подтверждения</span></div></div><p class="r5-caption">${!loaded?'Получаем сведения о сервисах.':!fresh?'Показан последний список. Свежая доступность пока неизвестна.':counts.selected?'Проверяется конкретный сценарий, а не все функции приложения.':'Сервисы пока не добавлены. Начните с настройки автопилота.'}</p>`);
+ interfaceHTML('ui3HealthBanner',`<div class="r5-counts"><div><strong>${loaded?counts.selected:'—'}</strong><span>${savedScope?'В сохранённом списке обхода':'Добавлено сервисов'}</span></div><div><strong>${fresh?counts.good:'—'}</strong><span>Работают по проверке</span></div><div><strong>${fresh?counts.unconfirmed:'—'}</strong><span>Без подтверждения</span></div></div><p class="r5-caption">${savedScope?`Без обхода: ${Object.keys(exclusions).length} сервисов. Считаются сохранённые записи, применение исключений ещё не подтверждено. `:''}${!loaded?'Получаем сведения о сервисах.':!fresh?'Показан последний список. Свежая доступность пока неизвестна.':counts.selected?'Проверяется конкретный сценарий, а не все функции приложения.':counts.excluded?'Сохранённые сервисы находятся в исключениях.':'Сервисы пока не добавлены. Начните с настройки автопилота.'}</p>`);
  const attention=counts.rows.filter(s=>s.member&&s.actionable).slice(0,3);
  // Without a decision for the owner, still name the services without a
  // confirmed result and what the autopilot is doing with them.
- const waiting=attention.length?[]:interfaceHomeOrder(counts.rows.filter(s=>s.member&&s.kind!=='good')).slice(0,3);
+ const waiting=attention.length?[]:interfaceHomeOrder(counts.rows.filter(s=>s.member&&!s.excluded&&s.kind!=='good')).slice(0,3);
  const attentionRow=(h,action)=>`<button type="button" class="r5-attention-row" data-rz-inspect="${esc(h.service.id)}"><span><b>${esc(h.service.name)}</b><small>${esc(action?h.pendingDetail||h.pendingLabel||h.label:`${h.label}. ${h.detail||''}`.trim())}</small></span><span>${action?'Разобраться':'Подробнее'} ${ci('chevron')}</span></button>`;
  interfaceHTML('ui3Attention',`<div class="ui3-section-heading"><h3>Что требует внимания</h3>${ci('activity')}</div>${!fresh?'<p>Нет свежих данных для оценки. Это не означает, что подключения не работают.</p>':attention.length?attention.map(h=>attentionRow(h,true)).join(''):waiting.length?`<p class="r5-caption r5-attention-note">Вашего участия не требуется: автопилот занимается этим сам.</p>${waiting.map(h=>attentionRow(h,false)).join('')}`:`<p>${counts.selected?'В последних проверках проблем не обнаружено.':'После добавления сервисов здесь появятся проблемы, требующие вашего участия.'}</p>`}`);
- interfaceHTML('r42RouteDistribution',interfaceHomeServicesHTML(counts.rows.filter(s=>s.member),fresh));
+ interfaceHTML('r42RouteDistribution',interfaceHomeServicesHTML(counts.rows.filter(s=>s.member&&!s.excluded),fresh));
  consoleText('ui3RouterName',ready?state.system?.hostname||'Роутер':'Нет сведений');
  consoleText('ui3RouterMeta',ready?state.system?.architecture||'Платформа не определена':'');
  const m=ready?state.metrics?.latest||{}:{},at=Date.parse(m.timestamp||''),recent=Number.isFinite(at)&&at<=Date.now()&&Date.now()-at<180000;
@@ -179,20 +185,24 @@ function renderInterfaceServices(summaries){
   interfaceHTML('ui3ServiceCatalog',interfaceEmpty('Получаем список сервисов',interfaceLoadMessage('services'),'<button type="button" class="secondary" data-panel-refresh>Повторить загрузку</button>'));
   return;
  }
- const all=interfaceServices(),isCatalog=interfaceState.filter==='all';
+ const all=interfaceServices(),isCatalog=interfaceState.filter==='all',isExcluded=interfaceState.filter==='excluded';
+ const exclusionMap=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
+ const exclusionsReady=typeof resourceExclusionsCurrent==='function'&&resourceExclusionsCurrent()?.policy_revision>0;
+ if($('#resourceBypassTab'))$('#resourceBypassTab').textContent=exclusionsReady?'Обходить':'Мои сервисы';
+ if($('#resourceExcludedTab'))$('#resourceExcludedTab').hidden=!exclusionsReady;
  $('#ui3ServiceCatalog').classList.toggle('ui3-list-layout',interfaceState.layout==='list');
  $('#serviceList').classList.toggle('r41-grid',interfaceState.layout!=='list');
  $$('[data-rz-layout]').forEach(e=>{const on=e.dataset.rzLayout===interfaceState.layout;e.classList.toggle('active',on);e.setAttribute('aria-pressed',String(on));});
  const categories=[...new Set(all.map(rim.category))].sort((a,b)=>a.localeCompare(b,'ru'));
  interfaceHTML('ui3CategoryFilters',[['','Все категории'],...categories.map(c=>[c,c])].map(([v,t])=>`<button type="button" class="${v===interfaceState.category?'active':''}" aria-pressed="${v===interfaceState.category}" data-rz-category="${esc(v)}">${esc(t)}</button>`).join(''));
  const normalised={};for(const s of all)normalised[s.id]=interfaceServicePresentation(s,summaries);
- const list=rim.filterServices(all,{query:interfaceState.query,scope:interfaceState.filter,category:interfaceState.category},normalised);
- const counts=rim.humanCounts(state.services||[],summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'?consoleSnapshot?.runtime||{}:{},!['error','busy'].includes(state.dataLoad?.services?.phase));
- $('#ui3CategoryFilters').hidden=!isCatalog&&counts.selected<=8&&!interfaceState.category;
- consoleText('ui3CatalogSummary',`${isCatalog?'Каталог':'Ваш список'}: ${list.length} · Добавлено: ${counts.selected}${['error','busy'].includes(state.dataLoad?.services?.phase)?' · Показаны последние данные':''}`);
+ const list=rim.filterServices(interfaceState.filter==='selected'?all.filter(s=>!exclusionMap[s.id]):all,{query:interfaceState.query,scope:interfaceState.filter,category:interfaceState.category},normalised);
+ const counts=rim.humanCounts(state.services||[],summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'?consoleSnapshot?.runtime||{}:{},!['error','busy'].includes(state.dataLoad?.services?.phase)&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready'),exclusionMap);
+ $('#ui3CategoryFilters').hidden=isExcluded||!isCatalog&&counts.selected<=8&&!interfaceState.category;
+ consoleText('ui3CatalogSummary',exclusionsReady?`Сохранённый список: ${counts.selected} для обхода · Без обхода: ${Object.keys(exclusionMap).length} сервисов`:`${isCatalog?'Каталог':'Ваш список'}: ${list.length} · Добавлено: ${counts.selected}${['error','busy'].includes(state.dataLoad?.services?.phase)?' · Показаны последние данные':''}`);
  const title=interfaceState.filter==='attention'?'Нет сервисов, требующих проверки':interfaceState.filter==='selected'&&!counts.selected?'Добавьте нужные сервисы':'Ничего не найдено';
  const hint=interfaceState.filter==='selected'&&!counts.selected?'Откройте каталог, выберите сайт и нажмите «Добавить».':'Попробуйте другое название или сбросьте фильтры.';
- interfaceHTML('ui3ServiceCatalog',list.length?interfaceCards(list,summaries,'catalog'):interfaceEmpty(title,hint,'<button type="button" class="secondary" data-rz-reset-filters>Открыть каталог</button>'));
+ interfaceHTML('ui3ServiceCatalog',isExcluded&&typeof resourceExclusionsServicesHTML==='function'?resourceExclusionsServicesHTML(interfaceState.query):list.length?interfaceCards(list,summaries,'catalog'):interfaceEmpty(title,hint,'<button type="button" class="secondary" data-rz-reset-filters>Открыть каталог</button>'));
  $('#r5CatalogTools').hidden=!isCatalog;
  $('#r5ServiceFilters').hidden=isCatalog;
  if($('#r6ChangedServices')){$('#r6ChangedServices').hidden=counts.changed===0;$('#r6ChangedServices').textContent=`Изменения · ${counts.changed}`;}
@@ -389,6 +399,7 @@ function renderInterface(){
  const calls=[['navigation',()=>renderInterfaceNavigation()],['auto-labels',()=>{consoleText('ui3SidebarAuto',interfaceAutoLabel());consoleText('ui3TopAuto',interfaceAutoLabel());}],['workflow',()=>{if(typeof renderWorkflowControls==='function')renderWorkflowControls();}]];
  if(view==='overview')calls.push(['home',()=>renderInterfaceHome(interfaceSummaries())]);
  if(view==='services')calls.push(['services',()=>renderInterfaceServices(interfaceSummaries())]);
+ if(view==='exclusions'&&typeof renderResourceExclusions==='function')calls.push(['resource-exclusions',()=>renderResourceExclusions()]);
  if(view==='engines'||view==='engineconfig')calls.push(['engines',()=>renderInterfaceEngines()]);
  if(view==='settings')calls.push(['settings',()=>renderInterfaceSettings()]);
  if(interfaceState.inspector)calls.push(['inspector',()=>interfaceUpdateInspector()]);
@@ -554,6 +565,7 @@ function interfaceScopeLabel(service){
 }
 
 function interfaceInspectorControls(service){
+ if(typeof interfaceExclusionMap==='function'&&interfaceExclusionMap()[service.id])return '<p>Исключение сохранено. Добавление или выбор подключения его не отменяет.</p><button type="button" class="secondary" data-rz-nav="exclusions">Открыть исключения</button>';
  const managed=consoleSnapshot?.services?.[service.id];
  const setup=consoleSnapshot?.policy?.setup_complete===true&&!consoleAutonomyError;
  if(!setup)return '<button type="button" class="secondary" data-rz-action="setup">Настроить автопилот</button>';

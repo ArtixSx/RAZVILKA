@@ -1028,6 +1028,7 @@ function renderPanelSection(key) {
     nodeFeeds: renderNodes, nodeAutofallback: renderNodes,
     routeOptions: () => { renderServices(); if (state.currentView === 'testlab' && state.dataLoad.testlab?.loaded) renderTestLab(); },
     connections: renderConnections, devices: renderDevices, testlab: renderTestLab,
+    resourceExclusions: () => { if (typeof renderResourceExclusions === 'function') renderResourceExclusions(); },
     engineLab: renderEngineLab, audit: renderAudit, strategyLab: renderStrategyLab,
     z2kPreview: renderStrategyLab, smartRoute: renderStrategyLab,
     serviceControl: () => { if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls(); },
@@ -1041,6 +1042,7 @@ function renderPanelSection(key) {
 function acceptPanelSection(key, value, requestStartedAt) {
   if (key === 'sourceOffline') { acceptSourceOfflineCatalog(value); panelSectionState(key, 'ready'); return; }
   if (key === 'inventory') { acceptPanelInventory(value, requestStartedAt); return; }
+  if (key === 'resourceExclusions') { acceptResourceExclusions(value); panelSectionState(key, 'ready'); return; }
   const arrays = ['services', 'engines', 'engineConfigs', 'components', 'sources', 'routeOptions'];
   if (arrays.includes(key) && !Array.isArray(value)) throw new Error('Получен неполный список. Последние данные сохранены.');
   if (value === null || typeof value !== 'object') throw new Error('Получен неполный ответ. Последние данные сохранены.');
@@ -1128,15 +1130,15 @@ function refreshPanelInventory() {
 // Read only the active workspace. A tab visit never grants write authority.
 function panelViewKeys(view = state.currentView || 'overview') {
   const groups = {
-    overview: ['status','inventory','services','metrics','audit','serviceControl'],
+    overview: ['status','inventory','services','metrics','audit','serviceControl','resourceExclusions'],
     autopilot: ['status','inventory','services','serviceControl'],
-    services: ['status','inventory','services','routeOptions','nodes'],
+    services: ['status','inventory','services','routeOptions','nodes','resourceExclusions'],
     nodes: ['status','inventory','services','nodes','nodeFeeds','routeOptions'],
     providers: ['status','inventory','services','nodeFeeds','nodes'],
     'subscription-settings': ['status','nodeFeeds'],
     engines: ['status','inventory','services','engineConfigs'],
     engineconfig: ['status','inventory','services','engineConfigs','routeOptions','nodes','warp'],
-    devices: ['status','devices','services'], exclusions: ['status','devices','services'],
+    devices: ['status','devices','services'], exclusions: ['status','devices','services','resourceExclusions'],
     activity: ['status','audit'], settings: ['status','sessions'],
     dns: ['status','services','dns','dnsPlan'],
     strategylab: ['status','inventory','services','strategyLab','z2kPreview','smartRoute'],
@@ -1159,7 +1161,7 @@ function panelViewRequests(view = state.currentView || 'overview') {
     connections:'/api/v1/connections?include_closed=true', devices:'/api/v1/devices?view=status',
     testlab:'/api/v1/testlab', engineLab:'/api/v1/engine-lab', audit:'/api/v1/audit/current?limit=40',
     strategyLab:'/api/v1/strategy-lab', z2kPreview:'/api/v1/migrations/z2k/preview', smartRoute:'/api/v1/smart-route',
-    serviceControl:'/api/v1/service-control', dns:'/api/v1/dns', dnsPlan:'/api/v1/dns/plan', sessions:'/api/v1/auth/sessions'
+    serviceControl:'/api/v1/service-control', resourceExclusions:'/api/v1/networkpolicy/exclusions', dns:'/api/v1/dns', dnsPlan:'/api/v1/dns/plan', sessions:'/api/v1/auth/sessions'
   };
   return panelViewKeys(view).map(key => [key, paths[key]]);
 }
