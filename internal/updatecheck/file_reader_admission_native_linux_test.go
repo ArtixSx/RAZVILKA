@@ -20,8 +20,12 @@ func TestNativeJournalReaderLegacyABIAndStopAdmission(t *testing.T) {
 	}{
 		{"legacy2", "printf '%s\\n' 'flag provided but not defined: -self-update-read-version' >&2; exit 2", "printf '2\\n'", 2, 2},
 		{"reader3", "printf '3\\n'", "exit 91", 3, 1},
+		{"reader4", "printf '4\\n'", "exit 91", 4, 1},
 		{"panic2", "printf 'panic: failed reader\\n' >&2; exit 2", "printf '2\\n'", 0, 1},
-		{"future4", "printf '4\\n'", "printf '2\\n'", 0, 1},
+		{"future", fmt.Sprintf("printf '%d\\n'", SelfUpdateReadVersion+1), "printf '2\\n'", 0, 1},
+		{"reader4-nonzero", "printf '4\\n'; exit 2", "printf '2\\n'", 0, 1},
+		{"reader4-stderr", "printf '4\\n'; printf warning >&2", "printf '2\\n'", 0, 1},
+		{"reader4-no-newline", "printf '4'", "printf '2\\n'", 0, 1},
 		{"garbage", "printf 'unknown\\n'", "printf '2\\n'", 0, 1},
 		{"false-legacy3", "printf '%s\\n' 'flag provided but not defined: -self-update-read-version' >&2; exit 2", "printf '3\\n'", 0, 2},
 	} {
