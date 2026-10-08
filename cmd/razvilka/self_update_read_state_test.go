@@ -258,7 +258,7 @@ func TestSelfUpdateRetainedGatePrecedesStartupAndEarlyHelpers(t *testing.T) {
 		{"-config", configPath, "-stage", stage, "-migrate-config", "-self-update-installation", other, "-self-update-file-state", other + "-files", "-self-update-helper-state", other + "-helper"},
 		{"self-update-helper", id}, {"self-update-command-helper", id, "restore-private-state"},
 		{"self-update-runtime-quiesce", id, "7", "2"}, {"self-update-files", "restore", id, "7"},
-		{"nfqws-managed-process-supervisor", id}, {"component-package-supervisor", id, "xray", "upgrade"},
+		{"nfqws-managed-process-supervisor", id}, {"nfqws-compatibility-supervisor", id}, {"component-package-supervisor", id, "xray", "upgrade"},
 		{"component-package-supervision-probe"}, {"components", "--refresh"}, {"component", "plan", "xray", "install", "--refresh"},
 	} {
 		out, diagnostic, code := selfUpdateReadCLI(t, base, args...)

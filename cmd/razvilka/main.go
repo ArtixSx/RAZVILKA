@@ -798,6 +798,14 @@ func runCommandWithSelfUpdateJournalRoots(args []string, journalRoots selfUpdate
 	}
 	command := strings.ToLower(strings.TrimSpace(args[0]))
 	switch command {
+	case "nfqws-compatibility-supervisor":
+		if args[0] != command {
+			return true, 2
+		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
+		return true, runNFQWSCompatibilityCommand(args[1:], strategylab.RunCompatibilitySupervisor)
 	case "nfqws-managed-process-supervisor":
 		if args[0] != command {
 			return true, 2
