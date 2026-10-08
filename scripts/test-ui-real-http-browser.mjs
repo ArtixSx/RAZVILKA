@@ -47,10 +47,30 @@ export function realHTTPSettings(env,args=[]) {
     username,password,setupAccount,setupToken:setupToken?resolve(setupToken):null,preparePolicy:args.includes('--prepare-policy'),
     draftMutations:args.includes('--draft-mutations'),output:env.RAZVILKA_QA_UI_OUTPUT?resolve(env.RAZVILKA_QA_UI_OUTPUT):null};
 }
-export function realHTTPIdentity(value,instance) {
-  realHTTPAssert(value?.schema===1&&value.instance_id===instance&&value.state==='available'&&value.dataplane==='not-checked'
+function realHTTPIdentityFieldsValid(value,instance) {
+  return value?.schema===1&&value.instance_id===instance&&value.dataplane==='not-checked'
     &&Number.isFinite(value.data_age_ms)&&value.data_age_ms>=0&&Number.isFinite(value.max_age_seconds)&&value.max_age_seconds>0
-    &&value.data_age_ms<Math.min(value.max_age_seconds*1000,120000),'QA_INSTANCE_MISMATCH_OR_STALE');
+    &&value.data_age_ms<Math.min(value.max_age_seconds*1000,120000);
+}
+export function realHTTPIdentity(value,instance) {
+  realHTTPAssert(realHTTPIdentityFieldsValid(value,instance)&&value.state==='available','QA_INSTANCE_MISMATCH_OR_STALE');
+}
+export async function realHTTPAwaitIdentity(instance,read,{now=()=>performance.now(),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}) {
+  // GET-only admission observation. The server still admits the later write.
+  const deadline=now()+8000;
+  for(let attempt=0;attempt<17;attempt++){
+    const remaining=deadline-now();realHTTPAssert(remaining>0,'QA_IDENTITY_WAIT_TIMEOUT');
+    const value=await read(Math.max(1,Math.min(3000,Math.ceil(remaining))));
+    realHTTPAssert(realHTTPIdentityFieldsValid(value,instance)&&['available','retained'].includes(value.state),'QA_INSTANCE_MISMATCH_OR_STALE');
+    const admission=value.admission;
+    realHTTPAssert(typeof admission?.exclusive==='boolean'&&typeof admission.fenced==='boolean'
+      &&['idle','shared','busy','recovery-required'].includes(admission.state),'QA_IDENTITY_ADMISSION_INVALID');
+    realHTTPAssert(!admission.fenced&&admission.state!=='recovery-required','QA_IDENTITY_ADMISSION_FENCED');
+    realHTTPAssert(now()<deadline,'QA_IDENTITY_WAIT_TIMEOUT');
+    if(value.state==='available'&&admission.state==='idle'&&!admission.exclusive){realHTTPIdentity(value,instance);return value;}
+    await pause(Math.max(0,Math.min(500,deadline-now())));
+  }
+  realHTTPAssert(false,'QA_IDENTITY_WAIT_TIMEOUT');
 }
 export function realHTTPIdentityFacts(value,instance) {
   const age=value?.data_age_ms,limit=value?.max_age_seconds;
@@ -96,9 +116,9 @@ export async function runRealHTTPUI(config) {
     const receipt=await response.json().catch(()=>null);
     report.requests.push({method,path,status:response.status(),code:realHTTPCode(receipt?.code),source});return receipt;
   };
-  const readJSON=async(path,headers={})=>{
+  const readJSON=async(path,headers={},timeout=30000)=>{
     realHTTPAssert(/^\/api\/v1\/[a-z0-9/-]+$/.test(path),'INVALID_READ_PATH');
-    const response=await context.request.get(config.origin+path,{headers,maxRedirects:0,maxRetries:0,timeout:30000});
+    const response=await context.request.get(config.origin+path,{headers,maxRedirects:0,maxRetries:0,timeout});
     const receipt=await recordResponse(response,path,'GET','verification');
     if(['/api/v1/panel/snapshot','/api/v1/panel/inventory'].includes(path)){
       report.identity_checks.push({path,...realHTTPIdentityFacts(receipt,config.instance)});
@@ -106,7 +126,7 @@ export async function runRealHTTPUI(config) {
     }
     realHTTPAssert(response.status()===200,'HTTP_READ_REJECTED');return receipt;
   };
-  const checkIdentity=async()=>realHTTPIdentity(await readJSON('/api/v1/panel/snapshot'),config.instance);
+  const checkIdentity=async()=>realHTTPAwaitIdentity(config.instance,timeout=>readJSON('/api/v1/panel/snapshot',{},timeout));
   const beforeMutation=async()=>{
     realHTTPAssert(config.draftMutations&&fixtureVerified,'DRAFT_MUTATION_NOT_AUTHORIZED');await checkIdentity();report.cleanup_required=true;
   };

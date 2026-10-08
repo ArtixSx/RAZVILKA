@@ -1,6 +1,6 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
-import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis} from './test-ui-real-http-browser.mjs';
+import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
   RAZVILKA_QA_UI_INSTANCE:instance,RAZVILKA_QA_UI_CHROME:'installed-chrome',RAZVILKA_QA_UI_SESSION:'private-session.json'};
@@ -84,5 +84,53 @@ try{
 }catch(error){
   assert.equal(invoked,false);
   assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'known-scenario',status:'failed',code:'INVALID_DIAGNOSTIC_ID'});checks++;
+}
+const idle={...envelope,admission:{state:'idle',exclusive:false,fenced:false}};
+const busy={...idle,state:'retained',admission:{state:'busy',exclusive:true,fenced:false}};
+const waitFixture=values=>{
+  let elapsed=0,reads=0,pauses=0;
+  return {read:async timeout=>{assert(timeout>0&&timeout<=3000);return values[Math.min(reads++,values.length-1)];},
+    clock:{now:()=>elapsed,pause:async ms=>{elapsed+=ms;pauses++;}},counts:()=>({reads,pauses,elapsed})};
+};
+const waitReject=async(values,code)=>{
+  const f=waitFixture(values);
+  try{await realHTTPAwaitIdentity(instance,f.read,f.clock);assert.fail('expected identity wait rejection');}
+  catch(error){assert.equal(realHTTPFailure(error,'known-scenario').code,code);}
+  checks++;return f.counts();
+};
+{
+  const f=waitFixture([idle]);assert.equal(await realHTTPAwaitIdentity(instance,f.read,f.clock),idle);
+  assert.deepEqual(f.counts(),{reads:1,pauses:0,elapsed:0});checks++;
+}
+{
+  const f=waitFixture([{...idle,state:'retained',data_age_ms:12000},idle]);
+  assert.equal(await realHTTPAwaitIdentity(instance,f.read,f.clock),idle);
+  assert.deepEqual(f.counts(),{reads:2,pauses:1,elapsed:500});checks++;
+}
+{
+  const f=waitFixture([{...idle,admission:{state:'shared',exclusive:false,fenced:false}},busy,idle]);
+  assert.equal(await realHTTPAwaitIdentity(instance,f.read,f.clock),idle);
+  assert.deepEqual(f.counts(),{reads:3,pauses:2,elapsed:1000});checks++;
+}
+assert.deepEqual(await waitReject([busy,{...idle,instance_id:'b'.repeat(32)}],'QA_INSTANCE_MISMATCH_OR_STALE'),{reads:2,pauses:1,elapsed:500});
+assert.deepEqual(await waitReject([{...busy,admission:{state:'recovery-required',exclusive:true,fenced:true}}],'QA_IDENTITY_ADMISSION_FENCED'),{reads:1,pauses:0,elapsed:0});
+assert.deepEqual(await waitReject([{...busy,data_age_ms:120000}],'QA_INSTANCE_MISMATCH_OR_STALE'),{reads:1,pauses:0,elapsed:0});
+for(const value of [{...busy,schema:2},{...busy,dataplane:'unknown'},{...busy,max_age_seconds:1,data_age_ms:1000}]){
+  assert.deepEqual(await waitReject([value],'QA_INSTANCE_MISMATCH_OR_STALE'),{reads:1,pauses:0,elapsed:0});
+}
+for(const admission of [undefined,{state:'unknown',exclusive:false,fenced:false},{state:'idle',exclusive:false,fenced:undefined}]){
+  assert.deepEqual(await waitReject([{...idle,admission}],'QA_IDENTITY_ADMISSION_INVALID'),{reads:1,pauses:0,elapsed:0});
+}
+for(const state of ['empty','expired','unknown']){
+  assert.deepEqual(await waitReject([{...idle,state}],'QA_INSTANCE_MISMATCH_OR_STALE'),{reads:1,pauses:0,elapsed:0});
+}
+{
+  const counts=await waitReject([{...idle,state:'retained',data_age_ms:12000}],'QA_IDENTITY_WAIT_TIMEOUT');
+  assert(counts.reads<=17);assert.equal(counts.elapsed,8000);
+}
+{
+  let elapsed=0;
+  try{await realHTTPAwaitIdentity(instance,async()=>{elapsed=9000;return idle;},{now:()=>elapsed,pause:async()=>{assert.fail('overdue read must stop');}});assert.fail('expected overdue rejection');}
+  catch(error){assert.equal(realHTTPFailure(error,'known-scenario').code,'QA_IDENTITY_WAIT_TIMEOUT');checks++;}
 }
 console.log('PASS pure real HTTP client checks '+checks);
