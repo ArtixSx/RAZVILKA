@@ -217,28 +217,43 @@ func decodeAddress(m message) (int, string, string, error) {
 	return index, p.String(), prefix, nil
 }
 func decodeNeighbor(m message) (int, string, error) {
-	if len(m.data) < 12 || m.data[0] != 2 && m.data[0] != 10 {
-		return 0, "", ErrUnknown
+	if len(m.data) < 12 {
+		return 0, "", at("kernel.bindings.neighbor.header", nil)
+	}
+	if m.data[0] != 2 && m.data[0] != 10 {
+		return 0, "", at("kernel.bindings.neighbor.family", nil)
 	}
 	a, err := attrs(m.data[12:])
 	if err != nil {
-		return 0, "", err
+		return 0, "", at("kernel.bindings.neighbor.attributes", err)
 	}
 	index := int(int32(binary.NativeEndian.Uint32(m.data[4:8])))
 	address, ok := netip.AddrFromSlice(a[1])
-	if index <= 0 || !ok || address.Is4In6() || address.Is4() != (m.data[0] == 2) || address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() {
-		return 0, "", ErrUnknown
+	if index <= 0 {
+		return 0, "", at("kernel.bindings.neighbor.index", nil)
+	}
+	if !ok || address.Is4In6() || address.Is4() != (m.data[0] == 2) || address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() {
+		return 0, "", at("kernel.bindings.neighbor.address", nil)
 	}
 	state := binary.NativeEndian.Uint16(m.data[8:10])
 	states := map[uint16]string{1: "INCOMPLETE", 2: "REACHABLE", 4: "STALE", 8: "DELAY", 16: "PROBE", 32: "FAILED", 64: "NOARP", 128: "PERMANENT"}
 	label := states[state]
 	flags := m.data[10]
-	if label == "" || m.data[11] != 1 || flags&^(byte(2|16|128)) != 0 || flags&128 != 0 && (!address.Is6() || !address.IsLinkLocalUnicast()) {
-		return 0, "", ErrUnknown
+	if label == "" {
+		return 0, "", at("kernel.bindings.neighbor.state", nil)
+	}
+	if m.data[11] != 1 {
+		return 0, "", at("kernel.bindings.neighbor.type", nil)
+	}
+	if flags&^(byte(2|16|128)) != 0 {
+		return 0, "", at("kernel.bindings.neighbor.flags", nil)
+	}
+	if flags&128 != 0 && (!address.Is6() || !address.IsLinkLocalUnicast()) {
+		return 0, "", at("kernel.bindings.neighbor.router-flag", nil)
 	}
 	mac := net.HardwareAddr(a[2]).String()
 	if state != 1 && state != 32 && !validMAC(mac) {
-		return 0, "", ErrUnknown
+		return 0, "", at("kernel.bindings.neighbor.mac", nil)
 	}
 	row := address.String()
 	if len(a[2]) != 0 {

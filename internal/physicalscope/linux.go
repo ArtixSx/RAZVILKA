@@ -256,7 +256,7 @@ func captureKernel(ctx context.Context, selection Selection, native []nativeSegm
 	}
 	bindings, err := observeKernelBindings(ctx, segments)
 	if err != nil {
-		return nil, nil, at("kernel.bindings", err)
+		return nil, nil, err // Retain the closed binding branch; no raw data.
 	}
 	return segments, bindings, nil
 }
@@ -271,11 +271,14 @@ func observeKernelBindings(ctx context.Context, segments []Segment) ([]Device, e
 	for _, family := range []byte{2, 10} {
 		frames, err := dump(ctx, 30, family)
 		if err != nil {
-			return nil, err
+			if family == 2 {
+				return nil, at("kernel.bindings.ipv4.dump", err)
+			}
+			return nil, at("kernel.bindings.ipv6.dump", err)
 		}
 		for _, m := range frames {
 			if len(m.data) < 12 {
-				return nil, ErrUnknown
+				return nil, at("kernel.bindings.neighbor.header", nil)
 			}
 			index := int(binary.NativeEndian.Uint32(m.data[4:8]))
 			s, ok := byIndex[index]
@@ -288,7 +291,7 @@ func observeKernelBindings(ctx context.Context, segments []Segment) ([]Device, e
 			}
 			total += len(row)
 			if total > 1<<20 {
-				return nil, ErrUnknown
+				return nil, at("kernel.bindings.neighbor.byte-limit", nil)
 			}
 			rows[s.Interface][family == 10] = append(rows[s.Interface][family == 10], []byte(row)...)
 		}

@@ -3,6 +3,7 @@ package physicalscope
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"net/netip"
 	"slices"
 	"sort"
@@ -460,7 +461,13 @@ func bindDevices(ctx context.Context, segments []Segment, rows kernelNeighborRow
 	m := &devices.Manager{Runner: rows, IPCommand: "kernel-rtnetlink-neighbors"}
 	observed, err := m.ObserveBindings(ctx, ifaces)
 	if err != nil {
-		return nil, err
+		if ctx.Err() != nil {
+			return nil, at("kernel.bindings.devices.context", err)
+		}
+		if errors.Is(err, devices.ErrBindingAmbiguous) {
+			return nil, at("kernel.bindings.devices.ambiguous", err)
+		}
+		return nil, at("kernel.bindings.devices.observation", err)
 	}
 	out := make([]Device, 0, len(observed.Bindings))
 	owners := map[string]bool{}
@@ -473,19 +480,19 @@ func bindDevices(ctx context.Context, segments []Segment, rows kernelNeighborRow
 			}
 		}
 		if segment.IfIndex == 0 {
-			return nil, ErrUnknown
+			return nil, at("kernel.bindings.device.segment", nil)
 		}
 		device := Device{ID: b.ID, MAC: b.MAC, Interface: b.Interface, IfIndex: segment.IfIndex, SegmentID: segment.ID, Addresses: []string{}, LinkLocalAddresses: []string{}}
 		for _, a := range b.Addresses {
 			address, err := netip.ParseAddr(a.Address)
 			if err != nil {
-				return nil, err
+				return nil, at("kernel.bindings.device.address", err)
 			}
 			matches := 0
 			for _, p := range segment.Prefixes {
 				prefix, err := netip.ParsePrefix(p)
 				if err != nil {
-					return nil, err
+					return nil, at("kernel.bindings.segment.prefix", err)
 				}
 				if prefix.Contains(address) {
 					matches++
@@ -497,8 +504,14 @@ func bindDevices(ctx context.Context, segments []Segment, rows kernelNeighborRow
 				device.LinkLocalAddresses = append(device.LinkLocalAddresses, a.Address)
 				continue
 			}
-			if matches != 1 || owners[a.Address] {
-				return nil, ErrUnknown
+			if matches == 0 {
+				return nil, at("kernel.bindings.device.prefix.missing", nil)
+			}
+			if matches != 1 {
+				return nil, at("kernel.bindings.device.prefix.ambiguous", nil)
+			}
+			if owners[a.Address] {
+				return nil, at("kernel.bindings.device.address.reused", nil)
 			}
 			owners[a.Address] = true
 			device.Addresses = append(device.Addresses, a.Address)
