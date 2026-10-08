@@ -277,16 +277,23 @@ func (p *NFQWSPreparedHandle) Observe(ctx context.Context) (observation NFQWSAct
 	o := p.owner
 	o.mu.Lock()
 	valid := o.prepared == p && o.state == "prepared" && !o.stopRequested
+	activation, current, binding := o.activation, o.admission.Current, o.admission.Binding
 	o.mu.Unlock()
-	if !valid || o.activation.Err() != nil {
+	if !valid || activation == nil || current == nil || activation.Err() != nil {
 		return NFQWSActiveObservation{}, ErrNFQWSManagedProcessUnknown
 	}
-	if err := o.admission.Current(ctx, o.admission.Binding); err != nil {
+	if err := current(ctx, binding); err != nil {
 		return NFQWSActiveObservation{}, err
 	}
 	l, err := o.observe(ctx, true)
 	if err != nil {
 		return NFQWSActiveObservation{}, err
+	}
+	o.mu.Lock()
+	valid = o.prepared == p && o.state == "prepared" && !o.detached && !o.stopRequested
+	o.mu.Unlock()
+	if !valid || activation.Err() != nil {
+		return NFQWSActiveObservation{}, ErrNFQWSManagedProcessUnknown
 	}
 	return l.observation(), nil
 }
@@ -299,13 +306,20 @@ func (p *NFQWSPreparedHandle) VerifyOwnerObservation(ctx context.Context, suppli
 	o := p.owner
 	o.mu.Lock()
 	valid := o.prepared == p && !o.detached && !o.stopRequested && (o.state == "starting" || o.state == "prepared" || o.state == "committing")
+	activation := o.activation
 	o.mu.Unlock()
-	if !valid || o.activation.Err() != nil {
+	if !valid || activation == nil || activation.Err() != nil {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	l, err := o.observe(ctx, true)
 	if err != nil || l.observation() != supplied || (l.Transfer != "none" && l.Transfer != "provisional") {
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
+	}
+	o.mu.Lock()
+	valid = o.prepared == p && !o.detached && !o.stopRequested && (o.state == "starting" || o.state == "prepared" || o.state == "committing")
+	o.mu.Unlock()
+	if !valid || activation.Err() != nil {
+		return ErrNFQWSManagedProcessUnknown
 	}
 	return nil
 }
@@ -317,6 +331,9 @@ func (p *NFQWSPreparedHandle) Stop(ctx context.Context) (proof NFQWSScopedProces
 	o := p.owner
 	o.mu.Lock()
 	valid := o.prepared == p && !o.detached
+	if valid {
+		o.stopRequested = true
+	} // Linearize against D before releasing the lock.
 	o.mu.Unlock()
 	if !valid {
 		return NFQWSScopedProcessProof{}, ErrNFQWSManagedProcessUnknown
@@ -453,7 +470,7 @@ func (a *NFQWSActiveHandle) VerifyOwnerObservation(ctx context.Context, supplied
 	}
 	o := a.owner
 	o.mu.Lock()
-	valid := o.active == a && o.finalACK
+	valid := o.active == a && o.finalACK && !o.stopRequested
 	o.mu.Unlock()
 	if !valid {
 		return ErrNFQWSManagedProcessUnknown
@@ -461,6 +478,12 @@ func (a *NFQWSActiveHandle) VerifyOwnerObservation(ctx context.Context, supplied
 	l, err := o.observe(ctx, true)
 	if err != nil || l.Transfer != "final" || l.observation() != supplied {
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
+	}
+	o.mu.Lock()
+	valid = o.active == a && o.finalACK && !o.stopRequested
+	o.mu.Unlock()
+	if !valid {
+		return ErrNFQWSManagedProcessUnknown
 	}
 	return nil
 }
@@ -512,6 +535,12 @@ func (a *NFQWSActiveHandle) Current(ctx context.Context) (observation NFQWSActiv
 	}
 	if err = a.VerifyOwnerObservation(ctx, obs); err != nil {
 		return NFQWSActiveObservation{}, err
+	}
+	o.mu.Lock()
+	valid = o.active == a && o.detached && o.state == "active" && !o.stopRequested
+	o.mu.Unlock()
+	if !valid || o.panel.Err() != nil {
+		return NFQWSActiveObservation{}, ErrNFQWSManagedProcessUnknown
 	}
 	return obs, nil
 }
