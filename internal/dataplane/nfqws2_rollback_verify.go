@@ -14,6 +14,12 @@ import (
 // VerifyRollback only observes the restored instance. It never restarts a
 // process, consumes a draft, or treats a web probe as proof of rollback.
 func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root string) (bool, error) {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return false, err
+		}
+		return e.verifyRollback(ctx)
+	}
 	snapshot, err := readNFQWS2Snapshot(root)
 	if err != nil {
 		return false, err

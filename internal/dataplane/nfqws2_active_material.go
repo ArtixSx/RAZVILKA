@@ -38,6 +38,7 @@ type NFQWSActiveMaterial struct {
 	reference          strategylab.SelectedCandidateReference
 	command            nfqws2ActiveProcessCommand
 	queue              uint16
+	executionBound     bool
 }
 
 // ReviewManagedNFQWSActiveMaterial observes configured original owners only.

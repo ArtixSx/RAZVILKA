@@ -47,6 +47,7 @@ type NFQWS2Adapter struct {
 	Timeout              time.Duration
 	activationLeaseReady func()             // Deterministic fault injection before the first global write.
 	activeProcess        *nfqws2ActiveOwner // Only the actual separate producer can install it.
+	activeExecution      *nfqws2ActiveExecution
 }
 
 type nfqws2Snapshot struct {
@@ -73,6 +74,12 @@ func NewNFQWS2Adapter() *NFQWS2Adapter {
 func (*NFQWS2Adapter) ID() string { return "nfqws2" }
 
 func (a *NFQWS2Adapter) Snapshot(ctx context.Context, plan Plan, root string) error {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return preflightRefusalError{err}
+		}
+		return e.prepare(ctx)
+	}
 	snapshot := nfqws2Snapshot{}
 	var err error
 	snapshot.Lease, err = a.readLease()
@@ -114,7 +121,13 @@ func (a *NFQWS2Adapter) Snapshot(ctx context.Context, plan Plan, root string) er
 	return writeAtomic(filepath.Join(root, "snapshot.json"), data, 0o600)
 }
 
-func (a *NFQWS2Adapter) Stage(_ context.Context, plan Plan, root string) error {
+func (a *NFQWS2Adapter) Stage(ctx context.Context, plan Plan, root string) error {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return preflightRefusalError{err}
+		}
+		return e.prepare(ctx)
+	}
 	snapshot, err := readNFQWS2Snapshot(root)
 	if err != nil {
 		return err
@@ -161,7 +174,13 @@ func (a *NFQWS2Adapter) Stage(_ context.Context, plan Plan, root string) error {
 	return nil
 }
 
-func (a *NFQWS2Adapter) Validate(_ context.Context, _ Plan, root string) error {
+func (a *NFQWS2Adapter) Validate(ctx context.Context, plan Plan, root string) error {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return preflightRefusalError{err}
+		}
+		return e.prepare(ctx)
+	}
 	for _, path := range []string{a.InitPath, filepath.Join(root, "nfqws2.conf.staged"), filepath.Join(root, "user.list.staged"), filepath.Join(root, "ipset.list.staged")} {
 		if !regularFile(path) {
 			return fmt.Errorf("required NFQWS2 file is missing: %s", path)
@@ -184,7 +203,13 @@ func (a *NFQWS2Adapter) Validate(_ context.Context, _ Plan, root string) error {
 	return nil
 }
 
-func (a *NFQWS2Adapter) Activate(ctx context.Context, _ Plan, root string) error {
+func (a *NFQWS2Adapter) Activate(ctx context.Context, plan Plan, root string) error {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return err
+		}
+		return e.activate(ctx)
+	}
 	unlock, err := a.lockResources()
 	if err != nil {
 		return preflightRefusalError{err}
@@ -222,7 +247,13 @@ func (a *NFQWS2Adapter) Activate(ctx context.Context, _ Plan, root string) error
 	return nil
 }
 
-func (a *NFQWS2Adapter) Commit(_ context.Context, _ Plan, root string) error {
+func (a *NFQWS2Adapter) Commit(ctx context.Context, plan Plan, root string) error {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return err
+		}
+		return e.health(ctx)
+	}
 	if _, err := a.verifyOwnedLists(false); err != nil {
 		return err
 	}
@@ -239,7 +270,13 @@ func (a *NFQWS2Adapter) Commit(_ context.Context, _ Plan, root string) error {
 	return nil
 }
 
-func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, _ string) error {
+func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, root string) error {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return err
+		}
+		return e.health(ctx)
+	}
 	if _, err := a.verifyOwnedLists(false); err != nil {
 		return err
 	}
@@ -277,6 +314,12 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, _ string) error {
 }
 
 func (a *NFQWS2Adapter) Reconcile(ctx context.Context, plan Plan) error {
+	nfqws2ActiveAdapterMu.Lock()
+	active := a.activeExecution != nil || a.activeProcess != nil
+	nfqws2ActiveAdapterMu.Unlock()
+	if active {
+		return ErrNFQWSScopedOwner
+	}
 	unlock, err := a.lockResources()
 	if err != nil {
 		return err
@@ -384,6 +427,18 @@ func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 }
 
 func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
+	nfqws2ActiveAdapterMu.Lock()
+	e, active := a.activeExecution, a.activeProcess != nil
+	nfqws2ActiveAdapterMu.Unlock()
+	if e != nil {
+		if e.self != e || e.material == nil || e.material.adapter != a {
+			return ErrNFQWSScopedOwner
+		}
+		return e.rollback(ctx)
+	}
+	if active {
+		return ErrNFQWSScopedOwner
+	}
 	lease, err := a.readLease()
 	if err != nil || lease == nil {
 		return err // A generic marker or an interface name grants no ownership.
@@ -447,6 +502,12 @@ func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
 }
 
 func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) error {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return err
+		}
+		return e.rollback(ctx)
+	}
 	snapshot, err := readNFQWS2Snapshot(root)
 	if err != nil {
 		return err
