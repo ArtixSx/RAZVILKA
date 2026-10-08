@@ -20,6 +20,27 @@ type nfqwsExecutionTransferGuards struct {
 
 type nfqwsExecutionTransferGuardsKey struct{}
 
+// Pure original issuer lookup for the native tool's final Start leaf. It
+// performs no forward/source/provider/tool callback. The control primitive
+// separately joins and checks this actual still-held cleanup operation.
+func (r *NFQWSExecutionResource) commandCleanupReview(ctx context.Context) (*operationgate.ExclusiveCleanupReview, error) {
+	if r == nil || r.scope == nil || ctx == nil || ctx.Err() != nil {
+		return nil, ErrNFQWSScopedOwner
+	}
+	r.scope.mu.Lock()
+	defer r.scope.mu.Unlock()
+	if _, err := r.matching(r.binding); err != nil {
+		return nil, err
+	}
+	if r.transferGuards == nil || r.transferGuards.originalCleanup == nil || r.transferGuards.control == nil {
+		return nil, ErrNFQWSScopedOwner
+	}
+	if err := r.scope.checkOriginalOwner(ctx, &executionTransitResource{relative: r.relative, anchor: r.anchor}, false, true); err != nil {
+		return nil, err
+	}
+	return r.transferGuards.originalCleanup, nil
+}
+
 // Exists only while this SAME Apply has completed its desired-state callback
 // and fresh postimage guard. It never appears in a request or a journal.
 type nfqwsExecutionTransferBarrier struct {

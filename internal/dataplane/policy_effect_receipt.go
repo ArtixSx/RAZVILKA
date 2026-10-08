@@ -277,7 +277,7 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
 	effect := s.plan.Effects[index]
-	if _, err := runtime.Runner.Run(ctx, runtime.Tools.command(effect.Tool), append([]string(nil), effect.Add...)...); err != nil {
+	if _, err := s.runCommand(ctx, runtime, index, false, effect.Add); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
 	if err := s.fault("add", index); err != nil {
@@ -354,7 +354,7 @@ func (s *policyEffectSession) remove(ctx context.Context, runtime PolicyEffectRu
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
 	effect := s.plan.Effects[index]
-	if _, err := runtime.Runner.Run(ctx, runtime.Tools.command(effect.Tool), append([]string(nil), effect.Delete...)...); err != nil {
+	if _, err := s.runCommand(ctx, runtime, index, true, effect.Delete); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
 	if err := s.fault("delete", index); err != nil {
@@ -537,6 +537,19 @@ func removePolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan 
 	if s.doc.Phase != "active" || s.status().Unknown {
 		return ErrPolicyAdditionUnknown
 	}
+	// Borrow only this genuine strict loaded Remove writer. An existing
+	// receipt is mandatory and its original image is retained before checks.
+	borrow, err := newPolicyEffectReceiptBorrow(s)
+	if err != nil {
+		return err
+	}
+	defer borrow.close()
+	borrow.requireDocument()
+	if err := borrow.saved(); err != nil {
+		return err
+	}
+	s.borrow = borrow
+	ctx = context.WithValue(ctx, policyEffectReceiptBorrowKey{}, borrow)
 	if err := s.inspectCleanupPlan(ctx, runtime); err != nil {
 		return err
 	}

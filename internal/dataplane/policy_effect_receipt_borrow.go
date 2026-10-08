@@ -11,7 +11,7 @@ import (
 	"sync"
 )
 
-// Only the actual COMMON Apply installs this private in-call reader. It
+// Only actual COMMON Apply/Remove installs this private in-call reader. It
 // borrows the original locked session, not a status DTO or another journal.
 // Reads use a separate parser view and never race with the writer's s.doc.
 type policyEffectReceiptBorrow struct {
