@@ -34,6 +34,7 @@ type managedNFQBundleState struct {
 // finite exclusive operation. No process, source or consent is created here.
 func (a *App) ConfigureManagedNFQCompatibility(ctx context.Context) (*operationgate.ControlEpochReview, error) {
 	control, err := a.managedNFQControl(ctx)
+	defer a.closeUnretainedManagedNFQControl(control)
 	if err != nil {
 		return nil, err
 	}
@@ -59,12 +60,39 @@ func (a *App) managedNFQControl(ctx context.Context) (*operationgate.ControlEpoc
 		if err != nil {
 			return nil, err
 		}
-		a.managedNFQBundle.control = control
 	}
 	if !control.MatchesControlRoot(a.SelfUpdateFiles.ControlRoot) {
 		return nil, components.ErrRecoveryAuthority
 	}
 	return control, control.Current(ctx)
+}
+
+// Only an installed provider needs this exact descriptor across operations.
+// Failed initial construction/installation must not pin an unused epoch.
+func (a *App) retainManagedNFQControl(control *operationgate.ControlEpochReview) {
+	a.managedNFQBundle.mu.Lock()
+	defer a.managedNFQBundle.mu.Unlock()
+	a.managedNFQBundle.control = control
+}
+
+func (a *App) closeUnretainedManagedNFQControl(control *operationgate.ControlEpochReview) {
+	if control == nil {
+		return
+	}
+	a.managedNFQBundle.mu.Lock()
+	defer a.managedNFQBundle.mu.Unlock()
+	if a.managedNFQBundle.control != control {
+		_ = control.Close()
+	}
+}
+
+func (a *App) managedNFQRetainedControlCurrent(ctx context.Context) error {
+	a.managedNFQBundle.mu.Lock()
+	defer a.managedNFQBundle.mu.Unlock()
+	if a.managedNFQBundle.control == nil {
+		return nil
+	}
+	return a.managedNFQBundle.control.Current(ctx)
 }
 
 func (a *App) configureManagedNFQCompatibility(ctx context.Context, control *operationgate.ControlEpochReview, inactive *strategylab.ManagedCompatibilityInactiveReview) error {
@@ -80,6 +108,9 @@ func (a *App) configureManagedNFQCompatibility(ctx context.Context, control *ope
 		// Hot handover keeps this genuine runtime writer lease through the
 		// source owner's locked setter, carrying its SAME original review.
 		setErr := a.StrategyLab.InstallManagedCompatibilityValidator(ctx, control, provider, validator, inactive)
+		if setErr == nil {
+			a.retainManagedNFQControl(control)
+		}
 		return errors.Join(setErr, lease.Close())
 	}
 	if err := lease.Close(); err != nil {
@@ -87,6 +118,7 @@ func (a *App) configureManagedNFQCompatibility(ctx context.Context, control *ope
 	}
 	// Only ordinary main startup calls with nil, before workers or HTTP.
 	a.StrategyLab.Validator = validator
+	a.retainManagedNFQControl(control)
 	return nil
 }
 
@@ -234,7 +266,7 @@ func (a *App) managedNFQBundlePlan(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, plan)
 		return
 	}
-	if err := errors.Join(a.managedNFQConfigCurrent(ctx, cfg), a.managedNFQHistoryCurrent(ctx), control.Current(ctx)); err != nil {
+	if err := errors.Join(a.managedNFQRetainedControlCurrent(ctx), a.managedNFQConfigCurrent(ctx, cfg), a.managedNFQHistoryCurrent(ctx), control.Current(ctx)); err != nil {
 		plan["code"], plan["reason"] = managedNFQBundleFailureDetails(err)
 		writeJSON(w, http.StatusOK, plan)
 		return
@@ -316,51 +348,67 @@ func (a *App) managedNFQBundleInstall(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 	manifest, err := components.ReviewedManagedNFQWSManifest(runtime.GOARCH)
-	if err == nil {
-		err = a.managedNFQBundleConfigured()
-	}
 	if err != nil || runtime.GOOS != "linux" || os.Geteuid() != 0 {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "platform")
+		return
+	}
+	if err := a.managedNFQBundleConfigured(); err != nil {
+		a.writeManagedNFQBundleFailure(w, err, "configuration")
 		return
 	}
 	cfg := a.Store.Get()
 	if cfg.Revision != *in.ExpectedRevision {
-		a.writeManagedNFQBundleFailure(w, components.ErrRecoveryAuthority)
+		a.writeManagedNFQBundleFailure(w, components.ErrRecoveryAuthority, "config")
 		return
 	}
 	control, err := a.managedNFQControl(ctx)
-	if err == nil {
-		err = errors.Join(a.managedNFQConfigCurrent(ctx, cfg), a.managedNFQHistoryCurrent(ctx))
-	}
-	if err == nil {
-		err = a.StrategyLab.InitializeManagedCompatibilitySource(ctx, control)
-	}
+	defer a.closeUnretainedManagedNFQControl(control)
 	if err != nil {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "control")
+		return
+	}
+	if err := a.managedNFQConfigCurrent(ctx, cfg); err != nil {
+		a.writeManagedNFQBundleFailure(w, err, "config")
+		return
+	}
+	if err := a.managedNFQHistoryCurrent(ctx); err != nil {
+		a.writeManagedNFQBundleFailure(w, err, "history")
+		return
+	}
+	if err := a.StrategyLab.InitializeManagedCompatibilitySource(ctx, control); err != nil {
+		a.writeManagedNFQBundleFailure(w, err, "source_initialize")
 		return
 	}
 	inactive, err := a.StrategyLab.ReviewManagedCompatibilityInactive(ctx, control)
 	if err != nil {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "source_inactive")
 		return
 	}
 	defer inactive.Close()
+	// This independent read identifies filesystem refusal without exposing raw
+	// paths or errors. The installer repeats it under its actual writer lease.
+	if err := a.Components.PreflightManagedNFQWS(ctx); err != nil {
+		a.writeManagedNFQBundleFailure(w, err, "bundle_preflight")
+		return
+	}
 	receipt, err := a.Components.InstallManagedBundle(ctx, manifest, cfg.Revision, a.managedNFQAuthority(cfg, control, inactive))
 	if err != nil {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "bundle_install")
 		return
 	}
 	a.writeManagedNFQBundleSuccess(w, ctx, cfg, control, inactive, receipt)
 }
 
-func (a *App) writeManagedNFQBundleFailure(w http.ResponseWriter, err error) {
+// stage is an internal literal naming the caller's last failed check, not an
+// error string or a producer capability. No request data enters this field.
+func (a *App) writeManagedNFQBundleFailure(w http.ResponseWriter, err error, stage string) {
 	pending := a.PendingComponentRecovery()
 	status, code := http.StatusConflict, "MANAGED_NFQWS_INSTALL_REFUSED"
 	if pending {
 		status, code = http.StatusServiceUnavailable, "MANAGED_NFQWS_RECOVERY_REQUIRED"
 	}
 	reasonCode, reason := managedNFQBundleFailureDetails(err)
-	writeJSON(w, status, map[string]any{"ok": false, "code": code, "reason_code": reasonCode, "error": reason, "recovery_required": pending, "installed_idle": false, "working_routes_changed": false})
+	writeJSON(w, status, map[string]any{"ok": false, "code": code, "reason_code": reasonCode, "stage": stage, "error": reason, "recovery_required": pending, "installed_idle": false, "working_routes_changed": false})
 }
 
 func managedNFQBundleFailureDetails(err error) (string, string) {
@@ -375,12 +423,12 @@ func managedNFQBundleFailureDetails(err error) (string, string) {
 func (a *App) writeManagedNFQBundleSuccess(w http.ResponseWriter, ctx context.Context, cfg config.Config, control *operationgate.ControlEpochReview, inactive *strategylab.ManagedCompatibilityInactiveReview, receipt components.ManagedNFQWSBundleReceipt) {
 	installed, err := a.managedNFQInstalled(ctx)
 	if err != nil || installed["receipt_id"] != receipt.TransactionID || installed["manifest_sha256"] != receipt.ManifestSHA256 || installed["flavor"] != receipt.Flavor || installed["provider_id"] != receipt.ProviderID {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "installed_readback")
 		return
 	}
 	ready := a.configureManagedNFQCompatibility(ctx, control, inactive) == nil
 	if err := errors.Join(a.managedNFQConfigCurrent(ctx, cfg), a.managedNFQHistoryCurrent(ctx), control.Current(ctx)); err != nil {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "final_bookend")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "receipt": receipt, "installed_idle": installed["installed_idle"], "compatibility_ready": ready, "working_routes_changed": false})
@@ -388,35 +436,36 @@ func (a *App) writeManagedNFQBundleSuccess(w http.ResponseWriter, ctx context.Co
 
 func (a *App) recoverManagedNFQBundle(w http.ResponseWriter, ctx context.Context, observed components.ManagedUpdateState, action string, revision uint64) {
 	if a.managedNFQBundleConfigured() != nil {
-		a.writeManagedNFQBundleFailure(w, components.ErrRecoveryAuthority)
+		a.writeManagedNFQBundleFailure(w, components.ErrRecoveryAuthority, "configuration")
 		return
 	}
 	cfg := a.Store.Get()
 	if cfg.Revision != revision {
-		a.writeManagedNFQBundleFailure(w, components.ErrRecoveryAuthority)
+		a.writeManagedNFQBundleFailure(w, components.ErrRecoveryAuthority, "config")
 		return
 	}
 	control, err := a.managedNFQControl(ctx)
+	defer a.closeUnretainedManagedNFQControl(control)
 	if err != nil {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "control")
 		return
 	}
 	// Recovery never initializes a missing source or changes the saved epoch.
 	inactive, err := a.StrategyLab.ReviewManagedCompatibilityInactive(ctx, control)
 	if err != nil {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "source_inactive")
 		return
 	}
 	defer inactive.Close()
 	authority := a.managedNFQAuthority(cfg, control, inactive)
 	receipt, err := a.Components.RecoverManagedBundle(ctx, observed.TransactionID, action, authority)
 	if err != nil {
-		a.writeManagedNFQBundleFailure(w, err)
+		a.writeManagedNFQBundleFailure(w, err, "bundle_recovery")
 		return
 	}
 	if receipt.TransactionID == "" {
 		if err := errors.Join(a.managedNFQConfigCurrent(ctx, cfg), a.managedNFQHistoryCurrent(ctx), control.Current(ctx)); err != nil {
-			a.writeManagedNFQBundleFailure(w, err)
+			a.writeManagedNFQBundleFailure(w, err, "final_bookend")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "installed_idle": false, "compatibility_ready": false, "recovery_required": false, "working_routes_changed": false})

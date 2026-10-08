@@ -73,8 +73,10 @@ func (a *App) componentRecoveryStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "administrator login is required", http.StatusUnauthorized)
 		return
 	}
-	ctx := context.WithValue(r.Context(), componentAdmissionKey{}, componentAdmission{inspect: true})
-	release, err := a.Operations.Enter(ctx)
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	ctx = context.WithValue(ctx, componentAdmissionKey{}, componentAdmission{inspect: true})
+	ctx, release, err := a.Operations.ExclusiveContext(ctx)
 	if err != nil {
 		a.writeOperationFailure(w, err)
 		return

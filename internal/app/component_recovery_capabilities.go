@@ -17,7 +17,13 @@ func (a *App) componentRecoveryCapabilities(ctx context.Context, state component
 		// Availability permits a request only. POST acquires the exact original
 		// operation and repeats owner/source/controller checks under the writer.
 		if pending && a.managedNFQBundleConfigured() == nil {
-			result["available_actions"] = managedNFQRecoveryActions(state, pending)
+			control, err := a.Operations.ReviewControlEpoch(ctx, a.SelfUpdateFiles.ControlRoot)
+			if err == nil {
+				if a.managedNFQRetainedControlCurrent(ctx) == nil && control.Current(ctx) == nil {
+					result["available_actions"] = managedNFQRecoveryActions(state, pending)
+				}
+				_ = control.Close()
+			}
 		}
 		return result
 	}
