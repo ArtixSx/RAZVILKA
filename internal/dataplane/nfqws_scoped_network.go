@@ -25,7 +25,7 @@ func NewTypedNFQWSScopedBinding(provider *netidentity.Provider, inventory *Backe
 		binding.Tools.IPTables != inventory.reader.IPTables || binding.Tools.IP6Tables != inventory.reader.IP6Tables {
 		return nil, ErrNFQWSScopedOwner
 	}
-	if _, ok := binding.Runner.(backendInventoryBoundedRunner); !ok {
+	if _, ok := inventory.reader.Runner.(backendInventoryBoundedRunner); !ok {
 		return nil, ErrNFQWSScopedOwner
 	}
 	binding.network = &nfqwsScopedNetworkBinding{provider: provider, inventory: *inventory}
@@ -154,7 +154,9 @@ func (r nfqwsScopedTypedRunner) run(ctx context.Context, name string, limit int,
 		}
 		var err error
 		if limit != 0 {
-			bounded, ok := r.base.(backendInventoryBoundedRunner)
+			// The frozen policy runner consumes effect admission. Inspection
+			// uses only the SAME retained inventory's bounded read producer.
+			bounded, ok := r.network.inventory.reader.Runner.(backendInventoryBoundedRunner)
 			if !ok {
 				return ErrNFQWSScopedOwner
 			}

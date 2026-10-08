@@ -34,7 +34,9 @@ func nfqwsActiveCommandFixture(t *testing.T) (*nfqws2ActiveExecution, context.Co
 		t.Fatal("Start leaf invoked a tool runner")
 		return nil, nil
 	})
-	e.binding = &NFQWSScopedBinding{Tools: PolicyEffectTools{IPTables: e.inventory.reader.IPTables, IP6Tables: e.inventory.reader.IP6Tables},
+	e.runtime = &LANPolicyRuntime{Runner: &nfqwsFakeRunner{}, IPTables: e.inventory.reader.IPTables, IP6Tables: e.inventory.reader.IP6Tables}
+	e.runtimeFrozen = *e.runtime
+	e.binding = &NFQWSScopedBinding{Runner: e.runtimeFrozen.Runner, Tools: PolicyEffectTools{IPTables: e.inventory.reader.IPTables, IP6Tables: e.inventory.reader.IP6Tables},
 		ApplyGuard: func(context.Context, *NFQWSScopedPlan, PolicyEffect) error {
 			t.Fatal("Start leaf reentered full ApplyGuard")
 			return nil
@@ -199,8 +201,53 @@ func TestNFQWSActiveCommandPureOwnerMatchesOnlyOriginalCompilerCommands(t *testi
 	}
 }
 
+func TestNFQWSActiveCommandFinalCleanupRequiresOriginalSealedOwnerAfterPreparedCleared(t *testing.T) {
+	for _, outcome := range []string{"original", "copied-active", "missing-final-owner", "not-final-ack", "not-detached", "wait-unjoined"} {
+		t.Run(outcome, func(t *testing.T) {
+			e, ctx := nfqwsActiveCommandFixture(t)
+			o := e.prepared.owner
+			h := &NFQWSActiveHandle{owner: o} // Explicit original final native ACK model.
+			o.active, o.finalACK, o.detached = h, true, true
+			o.prepared, o.activation, o.activationCancel = nil, nil, nil
+			e.prepared = nil // Cleanup must not require or revive even the old handle.
+			e.resource.finalOwner = h
+			done := make(chan struct{})
+			close(done)
+			o.done = done
+			o.result = func() (nfqws2ActiveProcessLease, error) {
+				t.Fatal("final Start leaf reentered the Wait result")
+				return nfqws2ActiveProcessLease{}, nil
+			}
+			switch outcome {
+			case "copied-active":
+				e.resource.finalOwner = &NFQWSActiveHandle{owner: o}
+			case "missing-final-owner":
+				e.resource.finalOwner = nil
+			case "not-final-ack":
+				o.finalACK = false
+			case "not-detached":
+				o.detached = false
+			case "wait-unjoined":
+				o.done = make(chan struct{})
+			}
+			p, err := e.resource.plan.Effects()
+			if err != nil {
+				t.Fatal(err)
+			}
+			owner, err := nfqws2ReviewActiveCommandOwner(ctx, e.binding.Tools.command(p.Effects[0].Tool), p.Effects[0].Delete, e.inventory.review)
+			if outcome == "original" {
+				if err != nil || !owner.cleanup || owner.resource != e.resource {
+					t.Fatal("original sealed joined-owner comparison refused after old context was dropped", err)
+				}
+			} else if err == nil {
+				t.Fatal("copied/incomplete final owner became cleanup identity", outcome)
+			}
+		})
+	}
+}
+
 func TestNFQWSActiveCommandPureOwnerRefusesCopiesDriftAndBroadCommands(t *testing.T) {
-	for _, name := range []string{"raw-context", "copy-execution", "copy-material", "copy-resource", "copy-prepared", "foreign-association", "wrong-phase", "wrong-digest", "wrong-alias", "extra-argv", "read-argv", "stopped-forward", "resource-root-replaced"} {
+	for _, name := range []string{"raw-context", "copy-execution", "copy-material", "copy-resource", "copy-prepared", "foreign-association", "wrong-phase", "wrong-digest", "wrong-alias", "foreign-effect-runner", "runtime-runner-replaced", "extra-argv", "read-argv", "stopped-forward", "resource-root-replaced"} {
 		t.Run(name, func(t *testing.T) {
 			e, ctx := nfqwsActiveCommandFixture(t)
 			p, err := e.resource.plan.Effects()
@@ -228,6 +275,10 @@ func TestNFQWSActiveCommandPureOwnerRefusesCopiesDriftAndBroadCommands(t *testin
 				digest = strings.Repeat("e", 64)
 			case "wrong-alias":
 				command = "/foreign/iptables-legacy"
+			case "foreign-effect-runner":
+				e.binding.Runner = &nfqwsFakeRunner{}
+			case "runtime-runner-replaced":
+				e.runtime.Runner = &nfqwsFakeRunner{}
 			case "extra-argv":
 				args = append(args, "--queue-bypass")
 			case "read-argv":

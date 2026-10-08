@@ -120,6 +120,39 @@ func TestNFQWSScopedTypedBindingRequiresConcreteProviderAndNeverFallsBack(t *tes
 	}
 }
 
+func TestNFQWSScopedTypedBindingKeepsDistinctOriginalEffectAndBoundedReadRunners(t *testing.T) {
+	b, _, _ := nfqwsScopedBindingFixture(t)
+	provider := &netidentity.Provider{}
+	readCalls, effectCalls := 0, 0
+	read := backendInventoryTestRunner(func(context.Context, string, ...string) ([]byte, error) { readCalls++; return nil, nil })
+	effect := nfqws2RunFunc(func(context.Context, string, ...string) ([]byte, error) { effectCalls++; return nil, nil })
+	b.Runner = effect // The actual policy runner intentionally has no bounded read ABI.
+	root := t.TempDir()
+	b.Tools.IPTables, b.Tools.IP6Tables = filepath.Join(root, "iptables"), filepath.Join(root, "ip6tables")
+	inventory, err := NewReviewedStockNC1812BackendInventory(provider, BackendInventoryTools{Runner: read, IPTables: b.Tools.IPTables, IP6Tables: b.Tools.IP6Tables,
+		ReviewSHA256: strings.Repeat("a", 64), Check: func(context.Context, netidentity.Identity) error { return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := NewTypedNFQWSScopedBinding(provider, inventory, *b)
+	if err != nil || bound == nil {
+		t.Fatal("effect-only producer refused despite original bounded inventory", err)
+	}
+	if _, ok := bound.Runner.(backendInventoryBoundedRunner); ok {
+		t.Fatal("fixture effect producer accidentally acquired a read ABI")
+	}
+	if _, ok := bound.network.inventory.reader.Runner.(backendInventoryBoundedRunner); !ok {
+		t.Fatal("bounded read producer was lost")
+	}
+	inventory.reader.Runner = effect
+	if _, err := NewTypedNFQWSScopedBinding(provider, inventory, *b); err == nil {
+		t.Fatal("unbounded inventory was repaired using an effect runner")
+	}
+	if _, err := bound.Runner.Run(context.Background(), bound.Tools.IPTables, "model-effect"); err != nil || effectCalls != 1 || readCalls != 0 {
+		t.Fatal("effect did not retain its original producer", err, effectCalls, readCalls)
+	}
+}
+
 func TestNFQWSScopedTypedBindingRejectsForeignToolOrProviderPair(t *testing.T) {
 	b, _, _ := nfqwsScopedBindingFixture(t)
 	provider := netidentity.NewProcProvider()

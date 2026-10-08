@@ -430,7 +430,7 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 		return err
 	}
 	e.binding, err = NewTypedNFQWSScopedBinding(e.material.provider, &e.inventory, NFQWSScopedBinding{
-		Runner: e.inventory.reader.Runner, Tools: PolicyEffectTools{IPTables: e.inventory.reader.IPTables, IP6Tables: e.inventory.reader.IP6Tables},
+		Runner: e.runtimeFrozen.Runner, Tools: PolicyEffectTools{IPTables: e.inventory.reader.IPTables, IP6Tables: e.inventory.reader.IP6Tables},
 		ApplyGuard: r.ApplyGuard, CleanupGuard: r.CleanupGuard, VerifyLAN: e.verifyLAN, AdditionalReadback: e.additional,
 		ProcessRunning: func(c context.Context, p *NFQWSScopedPlan) (NFQWSScopedProcessProof, error) {
 			return e.process(c, p, false)

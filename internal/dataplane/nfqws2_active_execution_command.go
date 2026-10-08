@@ -73,6 +73,8 @@ func nfqws2ReviewActiveCommandOwner(ctx context.Context, name string, args []str
 	if !ok || e == nil || e.self != e || e.material == nil || e.material.self != e.material || e.material.manager == nil || e.material.adapter == nil ||
 		e.material.control == nil || e.inventory.review != digest || e.binding == nil || e.inventory.reader.IPTables == "" || e.inventory.reader.IP6Tables == "" ||
 		e.inventory.reader.IPTables == e.inventory.reader.IP6Tables || e.binding.Tools.IPTables != e.inventory.reader.IPTables || e.binding.Tools.IP6Tables != e.inventory.reader.IP6Tables ||
+		e.runtime == nil || e.runtimeFrozen.Runner == nil || !sameNetworkPolicyDependency(e.binding.Runner, e.runtimeFrozen.Runner) || !sameNetworkPolicyDependency(e.runtime.Runner, e.runtimeFrozen.Runner) ||
+		e.runtimeFrozen.IPTables != e.inventory.reader.IPTables || e.runtimeFrozen.IP6Tables != e.inventory.reader.IP6Tables ||
 		e.material.manager.StateRoot != e.material.managerRoot || e.material.adapter.StateRoot != e.material.command.StateRoot || nfqws2ActiveCommandMatchesSpec(e.material.command, e.spec) != nil {
 		return out, ErrNFQWSScopedOwner
 	}
@@ -80,7 +82,7 @@ func nfqws2ReviewActiveCommandOwner(ctx context.Context, name string, args []str
 	r, prepared := e.resource, e.prepared
 	live := e.started && e.launchInvoked && !e.retired
 	e.mu.Unlock()
-	if !live || r == nil || r.scope == nil || r.plan == nil || prepared == nil || prepared.owner == nil ||
+	if !live || r == nil || r.scope == nil || r.plan == nil ||
 		!reflect.DeepEqual(r.plan.spec, e.spec) || !nfqws2ActiveSamePlan(e.plan, r.scope.plan) || r.scope.manager != e.material.manager || r.scope.adapterOwner != e.material.adapter ||
 		r.root != filepath.Join(r.scope.root, r.relative) || r.scope.root != filepath.Join(e.material.managerRoot, "transactions", e.plan.PlanID) {
 		return out, ErrNFQWSScopedOwner
@@ -108,7 +110,7 @@ func nfqws2ReviewActiveCommandOwner(ctx context.Context, name string, args []str
 	r.scope.mu.Lock()
 	defer r.scope.mu.Unlock()
 	i, err := r.matching(r.binding)
-	if err != nil || r.activeCommand == nil || !reflect.DeepEqual(*r.activeCommand, e.material.command) || r.preparedOwner != prepared ||
+	if err != nil || r.activeCommand == nil || !reflect.DeepEqual(*r.activeCommand, e.material.command) ||
 		r.transferGuards == nil || r.transferGuards.control != e.material.control || !r.startACK || !r.preparedUsed ||
 		(!cleanup && r.scope.execution.Resources[i].Phase != "capture-ready") {
 		return out, errors.Join(ErrNFQWSScopedOwner, err)
@@ -118,19 +120,37 @@ func nfqws2ReviewActiveCommandOwner(ctx context.Context, name string, args []str
 	}
 	nfqws2ActiveAdapterMu.Lock()
 	defer nfqws2ActiveAdapterMu.Unlock()
-	o := prepared.owner
-	if e.material.adapter.activeExecution != e || e.material.adapter.activeProcess != o || o.adapter != e.material.adapter {
+	var o *nfqws2ActiveOwner
+	final := cleanup && r.finalOwner != nil
+	if final {
+		// Successful CommitPrepared drops the old prepared/activation owner.
+		// Final cleanup derives identity only from the original sealed handle.
+		o = r.finalOwner.owner
+	} else {
+		if prepared == nil || prepared.owner == nil || r.preparedOwner != prepared {
+			return out, ErrNFQWSScopedOwner
+		}
+		o = prepared.owner
+	}
+	if o == nil || e.material.adapter.activeExecution != e || e.material.adapter.activeProcess != o || o.adapter != e.material.adapter {
 		return out, ErrNFQWSScopedOwner
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if o.prepared != prepared || o.admission.Binding != r.binding || !reflect.DeepEqual(o.command, e.material.command) {
+	if o.admission.Binding != r.binding || !reflect.DeepEqual(o.command, e.material.command) {
+		return out, ErrNFQWSScopedOwner
+	}
+	if final {
+		if !o.finalACK || !o.detached || o.active != r.finalOwner {
+			return out, ErrNFQWSScopedOwner
+		}
+	} else if o.finalACK || o.detached || o.prepared != prepared {
 		return out, ErrNFQWSScopedOwner
 	}
 	if cleanup {
 		// The full original inactive/ECHILD/receipt/queue proof was checked
 		// before tools were entered. Its sole actual Wait must remain joined.
-		if !nfqws2ActiveDone(o.done) || o.result == nil || (o.finalACK && (r.finalOwner == nil || r.finalOwner != o.active || r.finalOwner.owner != o)) {
+		if !nfqws2ActiveDone(o.done) || o.result == nil {
 			return out, ErrNFQWSScopedOwner
 		}
 	} else if o.detached || o.finalACK || o.stopRequested || nfqws2ActiveDone(o.done) || (o.state != "starting" && o.state != "prepared") {
