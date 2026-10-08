@@ -300,38 +300,56 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 			allowedFlags = 0xf00
 		}
 		if m.flags&^allowedFlags != 0 {
-			return ErrUnknown
+			return at("notifications."+notificationClass(m.kind)+".flags", nil)
 		}
 		switch m.kind {
 		case 16, 17:
 			link, err := decodeLink(m)
 			if err != nil {
-				return err
+				return boundary("notifications.link.decode", err)
 			}
-			if tracked[link.IfIndex] || roots[link.master] || names[link.Interface] || link.ParentIfIndex != 0 && tracked[link.ParentIfIndex] {
-				return ErrUnknown
+			if tracked[link.IfIndex] {
+				return at("notifications.link.tracked-index", nil)
+			}
+			if roots[link.master] {
+				return at("notifications.link.selected-master", nil)
+			}
+			if names[link.Interface] {
+				return at("notifications.link.tracked-name", nil)
+			}
+			if link.ParentIfIndex != 0 && tracked[link.ParentIfIndex] {
+				return at("notifications.link.tracked-parent", nil)
 			}
 		case 20, 21:
 			if len(m.data) < 8 {
-				return ErrUnknown
+				return at("notifications.address.header", nil)
 			}
 			if tracked[int(binary.NativeEndian.Uint32(m.data[4:8]))] {
-				return ErrUnknown
+				return at("notifications.address.tracked", nil)
 			}
 		case 28, 29:
 			if len(m.data) < 12 {
-				return ErrUnknown
+				return at("notifications.neighbor.header", nil)
 			}
 			if segment, selected := byIndex[int(binary.NativeEndian.Uint32(m.data[4:8]))]; selected {
 				n, bookkeeping, err := decodeSegmentNeighbor(m, segment)
 				if err != nil {
-					return err
+					return boundary("notifications.neighbor.decode", err)
 				}
 				if bookkeeping {
 					continue
 				}
-				if m.kind == 29 || n.state == 1 || n.state == 32 || !validMAC(n.mac) {
-					return ErrUnknown
+				if m.kind == 29 {
+					return at("notifications.neighbor.delete", nil)
+				}
+				if n.state == 1 {
+					return at("notifications.neighbor.incomplete", nil)
+				}
+				if n.state == 32 {
+					return at("notifications.neighbor.failed", nil)
+				}
+				if !validMAC(n.mac) {
+					return at("notifications.neighbor.mac", nil)
 				}
 				matched := 0
 				for _, r := range segment.RouterNeighbors {
@@ -345,22 +363,76 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 					}
 				}
 				if matched != 1 {
-					return ErrUnknown
+					if matched > 1 {
+						return at("notifications.neighbor.binding.ambiguous", nil)
+					}
+					return at(neighborMismatch(n, segment, devices), nil)
 				}
 			}
 		case 24, 25:
 			indices, err := decodeWAN(m)
 			if err != nil {
-				return err
+				return boundary("notifications.route.decode", err)
 			}
 			for _, index := range indices {
 				if tracked[index] {
-					return ErrUnknown
+					return at("notifications.route.tracked", nil)
 				}
 			}
 		default:
-			return ErrUnknown
+			return at("notifications.kind", nil)
 		}
 	}
 	return nil
+}
+
+func notificationClass(kind uint16) string {
+	switch kind {
+	case 16, 17:
+		return "link"
+	case 20, 21:
+		return "address"
+	case 28, 29:
+		return "neighbor"
+	case 24, 25:
+		return "route"
+	default:
+		return "unknown"
+	}
+}
+
+// Diagnostic only, called after the unchanged exact binding match has refused.
+func neighborMismatch(n kernelNeighbor, s Segment, devices []Device) string {
+	address := n.address.String()
+	for _, r := range s.RouterNeighbors {
+		if r.Address == address && r.MAC == n.mac && r.Flags != n.flags {
+			return "notifications.neighbor.router.flags-changed"
+		}
+	}
+	for _, r := range s.RouterNeighbors {
+		if r.MAC == n.mac {
+			return "notifications.neighbor.router.binding-changed"
+		}
+	}
+	for _, r := range s.RouterNeighbors {
+		if r.Address == address {
+			return "notifications.neighbor.router.mac-changed"
+		}
+	}
+	for _, d := range devices {
+		if d.IfIndex != n.index {
+			continue
+		}
+		knownAddress := slicesContains(d.Addresses, address) || slicesContains(d.LinkLocalAddresses, address)
+		if d.MAC == n.mac && knownAddress && n.flags&128 != 0 {
+			return "notifications.neighbor.client.router-flag"
+		}
+		if d.MAC == n.mac {
+			return "notifications.neighbor.client.address-changed"
+		}
+		if knownAddress {
+			return "notifications.neighbor.client.mac-changed"
+		}
+	}
+	return "notifications.neighbor.binding.unknown"
 }

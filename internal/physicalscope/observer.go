@@ -217,11 +217,14 @@ func canonicalSelection(s Selection) (Selection, error) {
 	return s, nil
 }
 func operationContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
-	if ctx == nil || ctx.Err() != nil {
-		return nil, nil, ErrUnknown
+	if ctx == nil {
+		return nil, nil, at("context.missing", nil)
+	}
+	if ctx.Err() != nil {
+		return nil, nil, boundary("context.done", ctx.Err())
 	}
 	if _, ok := ctx.Deadline(); !ok {
-		return nil, nil, ErrUnknown
+		return nil, nil, at("context.deadline.missing", nil)
 	}
 	c, cancel := context.WithTimeout(ctx, 12*time.Second)
 	return c, cancel, nil
@@ -229,9 +232,13 @@ func operationContext(ctx context.Context) (context.Context, context.CancelFunc,
 func (o *Observer) readSelection(ctx context.Context) (Selection, error) {
 	s, err := o.selection(ctx)
 	if err != nil || ctx.Err() != nil {
-		return Selection{}, errors.Join(ErrUnknown, err, ctx.Err())
+		return Selection{}, boundary("selection.read", errors.Join(err, ctx.Err()))
 	}
-	return canonicalSelection(s)
+	s, err = canonicalSelection(s)
+	if err != nil {
+		return Selection{}, boundary("selection.canonical", err)
+	}
+	return s, nil
 }
 func (o *Observer) ready() bool {
 	return o != nil && o.selection != nil && o.source.current != nil && o.source.open != nil && o.source.capture != nil
@@ -242,16 +249,16 @@ func (o *Observer) ready() bool {
 // admission context; each later Verify needs its caller's fresh bounded context.
 func (o *Observer) Observe(ctx context.Context) (*Review, error) {
 	if !o.ready() {
-		return nil, ErrUnknown
+		return nil, at("observe.dependencies", nil)
 	}
 	c, cancel, err := operationContext(ctx)
 	if err != nil {
-		return nil, err
+		return nil, boundary("observe.context", err)
 	}
 	defer cancel()
 	selection, err := o.readSelection(c)
 	if err != nil {
-		return nil, err
+		return nil, boundary("observe.selection", err)
 	}
 	var fence lifecycleFence
 	var identity netidentity.Identity
@@ -259,25 +266,31 @@ func (o *Observer) Observe(ctx context.Context) (*Review, error) {
 		identity = id
 		var err error
 		fence, err = o.source.open(held)
-		return err
+		if err != nil {
+			return boundary("observe.fence.open", err)
+		}
+		return nil
 	})
 	if err != nil || fence == nil {
 		if fence != nil {
 			_ = fence.close()
 		}
-		return nil, errors.Join(ErrUnknown, err)
+		if err != nil {
+			return nil, boundary("observe.initial.current", err)
+		}
+		return nil, at("observe.fence.missing", nil)
 	}
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		_ = fence.close()
-		return nil, ErrUnknown
+		return nil, at("observe.nonce", err)
 	}
 	r := &Review{state: &reviewState{issuer: o, fence: fence}}
 	r.state.self = r
 	r.state.snapshot, err = o.capture(c, selection, identity, fence, nil)
 	if err != nil {
 		_ = r.Close()
-		return nil, err
+		return nil, boundary("observe.capture", err)
 	}
 	r.state.snapshot.ReviewID = hex.EncodeToString(nonce[:])
 	return r, nil
@@ -285,11 +298,15 @@ func (o *Observer) Observe(ctx context.Context) (*Review, error) {
 func (o *Observer) capture(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence, baseline *Snapshot) (Snapshot, error) {
 	var result Snapshot
 	for pass := 0; pass < 2; pass++ {
+		stage := [2]string{"capture.initial", "capture.pass"}[pass]
 		var segments []Segment
 		var devices []Device
 		err := o.source.current(ctx, func(held context.Context, id netidentity.Identity) error {
-			if id.Validate() != nil || id != expected {
-				return ErrUnknown
+			if err := id.Validate(); err != nil {
+				return at(stage+".identity.invalid", err)
+			}
+			if id != expected {
+				return at(stage+".identity.changed", nil)
 			}
 			original := baseline
 			if original == nil && pass > 0 {
@@ -297,45 +314,56 @@ func (o *Observer) capture(ctx context.Context, selection Selection, expected ne
 			}
 			if original != nil {
 				if err := fence.check(held, original.Segments, original.Devices); err != nil {
-					return err
+					return boundary(stage+".fence.before", err)
 				}
 			}
 			var err error
 			segments, devices, err = o.source.capture(held, selection)
 			if err != nil {
-				return err
+				return boundary(stage+".facts", err)
 			}
 			if original != nil {
-				return fence.check(held, original.Segments, original.Devices)
+				err = fence.check(held, original.Segments, original.Devices)
+			} else {
+				err = fence.check(held, segments, devices)
 			}
-			return fence.check(held, segments, devices)
+			if err != nil {
+				return boundary(stage+".fence.after", err)
+			}
+			return nil
 		})
 		if err != nil {
-			return Snapshot{}, errors.Join(ErrUnknown, err)
+			return Snapshot{}, boundary(stage+".current", err)
 		}
 		current := Snapshot{Identity: expected, Selection: selection, Segments: segments, Devices: devices}
 		if pass == 0 {
 			result = current
 		} else if !reflect.DeepEqual(result, current) {
-			return Snapshot{}, ErrUnknown
+			return Snapshot{}, boundary("capture.pass.snapshot", at(snapshotDifference(result, current), nil))
 		}
 	}
 	closing, err := o.readSelection(ctx)
-	if err != nil || !reflect.DeepEqual(selection, closing) {
-		return Snapshot{}, errors.Join(ErrUnknown, err)
+	if err != nil {
+		return Snapshot{}, boundary("capture.closing.selection.read", err)
+	}
+	if !reflect.DeepEqual(selection, closing) {
+		return Snapshot{}, at("capture.closing.selection.changed", nil)
 	}
 	// Catch queued churn during the closing selection read in the same scope.
 	if err := o.source.current(ctx, func(c context.Context, id netidentity.Identity) error {
 		if id != expected {
-			return ErrUnknown
+			return at("capture.closing.identity.changed", nil)
 		}
 		original := &result
 		if baseline != nil {
 			original = baseline
 		}
-		return fence.check(c, original.Segments, original.Devices)
+		if err := fence.check(c, original.Segments, original.Devices); err != nil {
+			return boundary("capture.closing.fence", err)
+		}
+		return nil
 	}); err != nil {
-		return Snapshot{}, errors.Join(ErrUnknown, err)
+		return Snapshot{}, boundary("capture.closing.current", err)
 	}
 	return result, nil
 }
@@ -346,29 +374,35 @@ func (o *Observer) capture(ctx context.Context, selection Selection, expected ne
 // not a wrapper around the whole Apply, a policy owner or cleanup admission.
 func (o *Observer) Verify(ctx context.Context, r *Review) error {
 	if !o.ready() || r == nil || r.state == nil || r.state.self != r {
-		return ErrUnknown
+		return at("verify.dependencies", nil)
 	}
 	c, cancel, err := operationContext(ctx)
 	if err != nil {
-		return err
+		return boundary("verify.context", err)
 	}
 	defer cancel()
 	s := r.state
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.issuer != o || s.closed || s.invalid || s.fence == nil {
-		return ErrUnknown
+		return at("verify.review.unavailable", nil)
 	}
 	selection, err := o.readSelection(c)
 	if err != nil || !reflect.DeepEqual(selection, s.snapshot.Selection) {
 		s.invalid = true
-		return errors.Join(ErrUnknown, err)
+		if err != nil {
+			return boundary("verify.selection.read", err)
+		}
+		return at("verify.selection.changed", nil)
 	}
 	snapshot, err := o.capture(c, selection, s.snapshot.Identity, s.fence, &s.snapshot)
 	snapshot.ReviewID = s.snapshot.ReviewID
 	if err != nil || !reflect.DeepEqual(snapshot, s.snapshot) {
 		s.invalid = true
-		return errors.Join(ErrUnknown, err)
+		if err != nil {
+			return boundary("verify.capture", err)
+		}
+		return boundary("verify.snapshot", at(snapshotDifference(s.snapshot, snapshot), nil))
 	}
 	return nil
 }

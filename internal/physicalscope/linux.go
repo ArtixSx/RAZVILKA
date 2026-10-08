@@ -5,7 +5,6 @@ package physicalscope
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"slices"
 	"sync/atomic"
 
@@ -18,7 +17,7 @@ func platformSource(provider *netidentity.Provider, stock bool) observerSource {
 		current: func(ctx context.Context, use func(context.Context, netidentity.Identity) error) error {
 			return provider.WithCurrent(ctx, func(c context.Context, id netidentity.Identity) error {
 				if stock && id.Kind != netidentity.ReviewedSingleInitNet || !stock && id.Kind != netidentity.ProcNetInode {
-					return ErrUnknown
+					return at("source.identity.kind", nil)
 				}
 				return use(c, id)
 			})
@@ -49,23 +48,23 @@ var requestSequence atomic.Uint32
 func routeSocket(groups uint32) (int, uint32, error) {
 	fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW|unix.SOCK_NONBLOCK|unix.SOCK_CLOEXEC, unix.NETLINK_ROUTE)
 	if err != nil {
-		return -1, 0, err
+		return -1, 0, at("netlink.socket.open", err)
 	}
-	fail := func(err error) (int, uint32, error) { _ = unix.Close(fd); return -1, 0, errors.Join(ErrUnknown, err) }
+	fail := func(stage string, err error) (int, uint32, error) { _ = unix.Close(fd); return -1, 0, at(stage, err) }
 	if err = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF, 2<<20); err != nil {
-		return fail(err)
+		return fail("netlink.socket.receive-buffer", err)
 	}
 	// NETLINK_NO_ENOBUFS is deliberately never set. Loss breaks continuity.
 	if err = unix.Bind(fd, &unix.SockaddrNetlink{Family: unix.AF_NETLINK, Groups: groups}); err != nil {
-		return fail(err)
+		return fail("netlink.socket.bind", err)
 	}
 	address, err := unix.Getsockname(fd)
 	if err != nil {
-		return fail(err)
+		return fail("netlink.socket.name", err)
 	}
 	bound, ok := address.(*unix.SockaddrNetlink)
 	if !ok || bound.Pid == 0 || bound.Groups != groups {
-		return fail(ErrUnknown)
+		return fail("netlink.socket.binding", nil)
 	}
 	return fd, bound.Pid, nil
 }
@@ -75,8 +74,17 @@ func receive(fd int, buf []byte) (int, error) {
 		return 0, err
 	}
 	sender, ok := from.(*unix.SockaddrNetlink)
-	if !ok || sender.Pid != 0 || flags&(unix.MSG_TRUNC|unix.MSG_CTRUNC) != 0 || n <= 0 {
-		return 0, ErrUnknown
+	if !ok {
+		return 0, at("netlink.receive.sender-type", nil)
+	}
+	if sender.Pid != 0 {
+		return 0, at("netlink.receive.sender-port", nil)
+	}
+	if flags&(unix.MSG_TRUNC|unix.MSG_CTRUNC) != 0 {
+		return 0, at("netlink.receive.truncated", nil)
+	}
+	if n <= 0 {
+		return 0, at("netlink.receive.empty", nil)
 	}
 	return n, nil
 }
@@ -166,11 +174,11 @@ type kernelFence struct {
 
 func openFence(ctx context.Context) (lifecycleFence, error) {
 	if ctx == nil || ctx.Err() != nil {
-		return nil, ErrUnknown
+		return nil, at("fence.open.context", nil)
 	}
 	fd, pid, err := routeSocket(fenceGroups)
 	if err != nil {
-		return nil, err
+		return nil, boundary("fence.open.socket", err)
 	}
 	cookie, err := unix.GetsockoptUint64(fd, unix.SOL_SOCKET, unix.SO_COOKIE)
 	if err != nil || cookie == 0 {
@@ -179,56 +187,83 @@ func openFence(ctx context.Context) (lifecycleFence, error) {
 	}
 	return &kernelFence{fd: fd, pid: pid, cookie: cookie}, nil
 }
-func (f *kernelFence) current() bool {
+func (f *kernelFence) currentError() error {
 	cookie, err := unix.GetsockoptUint64(f.fd, unix.SOL_SOCKET, unix.SO_COOKIE)
-	if err != nil || cookie != f.cookie || cookie == 0 {
-		return false
+	if err != nil {
+		return at("fence.descriptor.cookie.read", err)
+	}
+	if cookie != f.cookie || cookie == 0 {
+		return at("fence.descriptor.cookie.changed", nil)
 	}
 	address, err := unix.Getsockname(f.fd)
+	if err != nil {
+		return at("fence.descriptor.name", err)
+	}
 	bound, ok := address.(*unix.SockaddrNetlink)
-	return err == nil && ok && bound.Family == unix.AF_NETLINK && bound.Pid == f.pid && bound.Groups == fenceGroups
+	if !ok || bound.Family != unix.AF_NETLINK {
+		return at("fence.descriptor.family", nil)
+	}
+	if bound.Pid != f.pid {
+		return at("fence.descriptor.port", nil)
+	}
+	if bound.Groups != fenceGroups {
+		return at("fence.descriptor.groups", nil)
+	}
+	return nil
 }
 func (f *kernelFence) close() error {
 	if f.closed {
 		return nil
 	}
 	f.closed = true
-	if !f.current() {
-		return ErrUnknown
+	if err := f.currentError(); err != nil {
+		return boundary("fence.close.descriptor", err)
 	} // Never close a replaced descriptor.
 	return unix.Close(f.fd)
 }
 func (f *kernelFence) check(ctx context.Context, segments []Segment, devices []Device) error {
-	if f.closed || f.failed || ctx.Err() != nil || !f.current() {
-		return ErrUnknown
+	if f.closed {
+		return at("fence.check.closed", nil)
+	}
+	if f.failed {
+		return at("fence.check.failed", nil)
+	}
+	if ctx.Err() != nil {
+		return boundary("fence.check.context", ctx.Err())
+	}
+	if err := f.currentError(); err != nil {
+		return boundary("fence.check.descriptor", err)
 	}
 	buf := make([]byte, 1<<20)
 	total := 0
-	fail := func(err error) error { f.failed = true; return errors.Join(ErrUnknown, err) }
+	fail := func(stage string, err error) error { f.failed = true; return boundary(stage, err) }
 	for {
 		if ctx.Err() != nil {
-			return fail(ctx.Err())
+			return fail("fence.drain.context", ctx.Err())
 		}
 		n, err := receive(f.fd, buf)
 		if err == unix.EAGAIN || err == unix.EWOULDBLOCK {
-			if !f.current() {
-				return fail(ErrUnknown)
+			if err := f.currentError(); err != nil {
+				return fail("fence.drain.closing-descriptor", err)
 			}
 			return nil
 		}
 		if err != nil {
-			return fail(err)
+			if err == unix.ENOBUFS {
+				return fail("fence.receive.loss", err)
+			}
+			return fail("fence.receive.read", err)
 		}
 		total += n
 		if total > maxNetBytes {
-			return fail(ErrUnknown)
+			return fail("fence.receive.byte-limit", nil)
 		}
 		frames, err := messages(buf[:n])
 		if err != nil {
-			return fail(err)
+			return fail("fence.datagram.decode", err)
 		}
 		if err := checkNotifications(frames, segments, devices); err != nil {
-			return fail(err)
+			return fail("fence.notifications", err)
 		}
 	}
 }
