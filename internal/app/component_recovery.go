@@ -76,17 +76,34 @@ func (a *App) componentRecoveryStatus(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	ctx = context.WithValue(ctx, componentAdmissionKey{}, componentAdmission{inspect: true})
-	ctx, release, err := a.Operations.ExclusiveContext(ctx)
+	release, err := a.Operations.Enter(ctx)
 	if err != nil {
 		a.writeOperationFailure(w, err)
 		return
 	}
-	defer release()
+	defer func() {
+		if release != nil {
+			release()
+		}
+	}()
 	if a.Components == nil {
 		http.Error(w, "component manager unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	state, pending, err := a.Components.PendingManagedUpdate()
+	if err == nil && pending && state.SchemaVersion == components.ManagedNFQWSJournalSchema && state.Component == "nfqws2" {
+		// Ordinary journal reads may overlap other readers. Only matching
+		// managed recovery capabilities need an original exclusive control
+		// review. Re-read after acquiring it; never promote the earlier DTO.
+		release()
+		release = nil
+		ctx, release, err = a.Operations.ExclusiveContext(ctx)
+		if err != nil {
+			a.writeOperationFailure(w, err)
+			return
+		}
+		state, pending, err = a.Components.PendingManagedUpdate()
+	}
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"recovery_required": true, "code": "COMPONENT_JOURNAL_UNAVAILABLE", "error": "Журнал обновления не читается. Автоматические изменения приостановлены; сохраните журнал и резервную копию."})
 		return
