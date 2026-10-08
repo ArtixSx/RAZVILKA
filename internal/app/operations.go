@@ -125,6 +125,11 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if r.Method == http.MethodPost && (r.URL.Path == networkPolicyReviewPath || r.URL.Path == resourceExclusionsPath) {
 			exclusive = true
 		}
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/strategy-lab/candidates/") && strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/validate") {
+			// Supervised compatibility uses the original request operation for
+			// its exact source publication; a shared request cannot upgrade it.
+			exclusive = true
+		}
 		if r.Method == http.MethodPut && (r.URL.Path == "/api/v1/nfqws2/setup-mode" || r.URL.Path == "/api/v1/nfqws2/discord-repair") {
 			exclusive = true
 		}

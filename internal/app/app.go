@@ -1224,6 +1224,12 @@ func (a *App) strategyLabCandidateAction(w http.ResponseWriter, r *http.Request)
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	ctx, release, err := a.privateExclusiveOperation(ctx)
+	if err != nil {
+		a.writeOperationFailure(w, err)
+		return
+	}
+	defer release()
 	candidate, err := a.StrategyLab.Validate(ctx, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
