@@ -29,13 +29,18 @@ type NetworkPolicyDNSAdmission struct {
 	Authority NetworkPolicyDNSAuthority
 	Ingress   string
 	DeviceID  string
-	Kind      string // managed, baseline (explicit site exclusion), outside, refused
+	// managed requires an applicable active include after every effective
+	// exclusion. baseline covers unmatched/empty lists and excluded resources;
+	// outside covers excluded clients. The same policy owner supplies this
+	// fresh decision and fences changes to its include/exclusion revision.
+	Kind string // managed, baseline, outside, refused
 }
 
 // The resolver composes the existing strict service resolver with one
-// explicitly selected production default provider. Service failures/refusals
-// never become NoMatch. No independent cache, scheduler or network owner is
-// created; observations come from the service resolver's existing ledger.
+// explicitly selected common provider for admitted active-list traffic only.
+// A missing service binding does not prove a positive match; admission must
+// supply it. Service failures/refusals never become NoMatch. No independent
+// cache, scheduler or owner is created; the existing service ledger is reused.
 type NetworkPolicyDNSResolver struct {
 	authority  NetworkPolicyDNSAuthority
 	service    *ScopedDNSResolver
@@ -108,9 +113,9 @@ func (m *Manager) NewNetworkPolicyDNSResolver(defaultProfile string, bindings []
 }
 
 // UseReviewedBaseline is optional and must be configured before use. It is
-// called ONLY for an explicit baseline name decision, never an excluded
-// device or a failed selected/default provider. The owner reviews its loop
-// freedom and exact existing resolver identity along with the policy.
+// called ONLY for a baseline name decision, never an excluded device or an
+// implicit fallback after a failed selected/common provider. The owner reviews
+// its loop freedom and exact existing resolver identity along with the policy.
 func (r *NetworkPolicyDNSResolver) UseReviewedBaseline(exchange func(context.Context, []byte) ([]byte, error)) error {
 	if r == nil || exchange == nil {
 		return ErrNetworkPolicyDNS
@@ -127,12 +132,6 @@ func (r *NetworkPolicyDNSResolver) admission(ctx context.Context, client netip.A
 	if err := errors.Join(ctx.Err(), r.guard(ctx)); err != nil {
 		return a, err
 	}
-	if r.defaultDNS == nil {
-		return a, ErrNetworkPolicyDNS
-	}
-	if err := r.defaultDNS.check(ctx, r.choice); err != nil {
-		return a, err
-	}
 	a, err := r.admit(ctx, client, name)
 	if err != nil {
 		return a, err
@@ -146,7 +145,17 @@ func (r *NetworkPolicyDNSResolver) admission(ctx context.Context, client netip.A
 	switch a.Kind {
 	case "outside":
 		return a, ErrNetworkPolicyDNSOutside
-	case "managed", "baseline":
+	case "baseline":
+		return a, nil
+	case "managed":
+		// A selected provider's trust/availability cannot prevent an excluded
+		// or unmatched resource from keeping the separately reviewed baseline.
+		if r.defaultDNS == nil {
+			return a, ErrNetworkPolicyDNS
+		}
+		if err := r.defaultDNS.check(ctx, r.choice); err != nil {
+			return a, err
+		}
 		return a, nil
 	default:
 		return a, ErrNetworkPolicyDNS
@@ -384,10 +393,16 @@ func (r *NetworkPolicyDNSResolver) Observations(ctx context.Context) ([]NetworkP
 	}
 	result := make([]NetworkPolicyDNSObservation, 0, len(observations))
 	for _, o := range observations {
-		if _, err := r.admission(ctx, o.Client, o.Domain); errors.Is(err, ErrNetworkPolicyDNSOutside) {
+		a, err := r.admission(ctx, o.Client, o.Domain)
+		if errors.Is(err, ErrNetworkPolicyDNSOutside) {
 			continue
 		} else if err != nil {
 			return nil, err
+		}
+		if a.Kind != "managed" {
+			// A retained historical cache entry cannot re-propose a resource
+			// after exclusion/deactivation or become new positive authority.
+			continue
 		}
 		value := NetworkPolicyDNSObservation{Authority: r.authority, ScopedDNSObservation: o}
 		data, _ := json.Marshal(struct {
