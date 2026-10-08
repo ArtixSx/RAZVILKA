@@ -69,7 +69,12 @@ func TestPhysicalScopeNativeWireDependency(t *testing.T) {
 // The selection must be explicitly supplied by Root. No WAN/default route or
 // automatic bridge discovery can choose Home for this native acceptance test.
 func TestPhysicalScopeNativeSelectedObservation(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	retained := nativeRetainedIncarnationOptIn(t)
+	limit := 25 * time.Second
+	if retained {
+		limit = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	provider, stock := nativeProvider(t, ctx)
 	home := os.Getenv("RAZVILKA_PHYSICAL_SCOPE_HOME")
@@ -85,7 +90,8 @@ func TestPhysicalScopeNativeSelectedObservation(t *testing.T) {
 		selection.HomeSegmentID = ""
 		selection.GuestSegmentIDs = nil
 	}
-	read := func(c context.Context) (Selection, error) { return selection, c.Err() }
+	selectionReads := 0
+	read := func(c context.Context) (Selection, error) { selectionReads++; return selection, c.Err() }
 	o := NewLinux(provider, read)
 	if stock {
 		o = NewReviewedStockNC1812(provider, read)
@@ -95,6 +101,10 @@ func TestPhysicalScopeNativeSelectedObservation(t *testing.T) {
 		t.Fatal("observe", err)
 	}
 	defer r.Close()
+	if retained {
+		nativeRetainedIncarnationSequence(t, ctx, provider, o, r, &selection, &selectionReads)
+		return
+	}
 	if err := o.Verify(ctx, r); err != nil {
 		t.Fatal("verify", err)
 	}
