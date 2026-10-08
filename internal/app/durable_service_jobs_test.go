@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
@@ -275,7 +276,15 @@ func TestDurableServiceBatchesReleaseLeaseAndYieldToMaintenance(t *testing.T) {
 		definition := a.Catalog.Services[0]
 		definition.ID, definition.Name = id, id
 		a.Catalog.Services = append(a.Catalog.Services, definition)
+		// A library definition alone cannot authorize a primary check. These
+		// explicitly selected diagnostic subjects are active user entries;
+		// SafeMode, applied state and physical scope remain unchanged.
+		if err := a.Store.UpdateService(id, config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
+			t.Fatal(err)
+		}
 	}
+	revision := a.Store.Get().Revision
+	request.ExpectedRevision = &revision
 	var calls atomic.Int32
 	a.NodeChecker = jobNodeChecker(func(ctx context.Context, req dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 		calls.Add(1)

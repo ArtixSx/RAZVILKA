@@ -314,7 +314,12 @@ func TestAutonomyApplyFailureRetainsRealExecutionAndCause(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = a.applyAutonomyRoute(context.Background(), policy, service, a.Store.Get(), profile, "sing-box:"+ids[1])
+			ctx, release, err := a.privateExclusiveOperation(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer release()
+			err = a.applyAutonomyRoute(ctx, policy, service, a.Store.Get(), profile, "sing-box:"+ids[1])
 			var failure *autonomyApplyFailure
 			if !errors.As(err, &failure) || !errors.Is(err, cause) || failure.Execution.PlanID == "" || failure.Execution.FinishedAt == "" {
 				t.Fatalf("lost cause or execution: %T %v", err, err)

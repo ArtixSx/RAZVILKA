@@ -186,7 +186,12 @@ func (a *App) checkAutonomyCurrentNode(ctx context.Context, p autonomy.Policy, s
 		if a.Store != store {
 			closing = errors.Join(closing, dataplane.ErrReviewChanged)
 		}
-		return result, closing == nil, errors.Join(checkErr, closing)
+		if closing == nil {
+			// The first-usable owner consumes only the exact unsupported
+			// sentinel. Preserve it; joined local/refusal errors stay closed.
+			return result, true, checkErr
+		}
+		return result, false, errors.Join(checkErr, closing)
 	})
 	return result, err
 }

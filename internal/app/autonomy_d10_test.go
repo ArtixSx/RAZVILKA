@@ -164,7 +164,7 @@ func TestD10CursorWriteFailureCannotApplyOrPenalize(t *testing.T) {
 }
 
 func TestD10LocalErrorsDoNotConsumeOrApply(t *testing.T) {
-	for _, scenario := range []string{"busy", "runtime", "cleanup", "cancel", "inconclusive", "error-verdict", "unsupported-with-local-error", "stopped", "safe-mode"} {
+	for _, scenario := range []string{"busy", "runtime", "cleanup", "cancel", "inconclusive", "error-verdict", "unsupported-with-local-error", "unsupported-with-revoked-permission", "stopped", "safe-mode"} {
 		t.Run(scenario, func(t *testing.T) {
 			a, _, adapter := autonomousIntegrationFixture(t)
 			if scenario == "stopped" {
@@ -198,6 +198,11 @@ func TestD10LocalErrorsDoNotConsumeOrApply(t *testing.T) {
 					r.Verdict = evidence.VerdictError
 				case "unsupported-with-local-error":
 					return r, errors.Join(dataplane.ErrExactNodeUnsupported, dataplane.ErrExactNodeRuntime)
+				case "unsupported-with-revoked-permission":
+					if err := a.Store.SetSafeMode(true); err != nil {
+						t.Fatal(err)
+					}
+					return r, dataplane.ErrExactNodeUnsupported
 				case "stopped":
 					if _, err := a.Store.CommitServiceRuntime(true, map[string]string{"telegram": "sing-box"}, a.Store.Get().Revision); err != nil {
 						t.Fatal(err)
