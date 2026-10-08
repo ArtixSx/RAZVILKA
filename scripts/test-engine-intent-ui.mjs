@@ -380,3 +380,19 @@ resetReceipts();state.engineEditorDirty=false;state.engines[0].running=true;stat
 assert.equal(context.engineWorkflowPresentation('sing-box').complete.check,false,'running process and saved route became service proof');
 assert.doesNotMatch(context.engineWorkflowSummary('sing-box'),/data-engine-workspace-progress="(?:profile|check|apply)" class="confirmed"/);
 console.log('PASS one engine workflow: staged format→Apply→fresh service test, matching card/workspace receipts, selected-file isolation and no legacy process/route PASS');
+resetReceipts();state.engineEditorDirty=false;state.status.revision=0;state.serviceControl.config_revision=0;
+const initialBinding=context.engineProgressBinding('sing-box');assert.equal(initialBinding.revision,0,'explicit observed config revision zero was discarded');
+context.engineProgressFormat(initialBinding,{engine_id:'sing-box',file_id:'main',ok:true,native:true});
+assert.deepEqual(progress(),{format:true,service:false,apply:false,native:true},'format at revision zero became service or Apply proof');
+for(const [status,control] of [[{},{}],[{revision:-1},{}],[{revision:0},{config_revision:-1}],[{revision:'0'},{config_revision:0}],[{revision:0.5},{}]]){
+  state.status=status;state.serviceControl=control;assert.equal(context.engineProgressBinding('sing-box'),null,'missing/invalid revision acquired an invented binding');
+}
+for(const [status,control] of [[{revision:0},{}],[{},{config_revision:0}]]){
+  state.status=status;state.serviceControl=control;assert.equal(context.engineProgressBinding('sing-box').revision,0,'a genuine observed zero was treated as absent');
+}
+resetReceipts();state.engines[0].binary_path='';
+const packageOnly=context.engineWorkflowPresentation('sing-box');assert.equal(packageOnly.complete.install,false);assert.equal(packageOnly.next,'install','package metadata skipped unresolved binary detection');
+const packageCard=context.interfaceEngineCard('sing-box',context.consoleEngineMeta['sing-box']);assert.match(packageCard,/data-component-refresh="sing-box"[^>]*>Уточнить установку/);assert.doesNotMatch(packageCard,/data-component-action="install"/,'installed package offered another install instead of a read');
+resetReceipts();context.inventoryObservationStale=()=>true;
+assert.equal(context.engineWorkflowPresentation('sing-box').next,'install','stale binary observation skipped installation readback');delete context.inventoryObservationStale;
+console.log('PASS explicit cfg0 format binding without missing-revision proof; unresolved/stale binary keeps installation first with a real metadata read CTA');

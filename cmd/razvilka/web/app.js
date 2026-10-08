@@ -2743,12 +2743,22 @@ function assignSelectedEngineToService() {
   if (state.engineIntent) return;
   const engine = selectedEngineView();
   if (!engine) return;
+  const generation=state.authGeneration;
+  if(typeof interfaceState!=='undefined'){
+    interfaceState.filter='all';interfaceState.query='';interfaceState.category='';
+  }
+  if($('#ui3ServiceSearch'))$('#ui3ServiceSearch').value='';
   setView('services');
   $('#serviceSearch').value = '';
   $('#serviceCategory').value = '';
   renderServices();
-  showNotice('review', `Назначьте сервис обходу ${engine.name}`, `В карточке нужного сервиса включите его и выберите «${engine.name}» в поле «Желаемый маршрут». Затем примените изменения этой вкладки.`, { engine: engine.id, action: 'assign-service' });
-  requestAnimationFrame(() => $('#serviceSearch')?.focus());
+  showNotice('review', `Назначьте сервис обходу ${engine.name}`, `Откройте нужный сервис, затем «Открыть настройки сервиса». Включите его и выберите «${engine.name}» в поле «Желаемый маршрут». Затем примените изменения этой вкладки.`, { engine: engine.id, action: 'assign-service' });
+  requestAnimationFrame(() => {
+    if(state.currentView!=='services'||generation!==state.authGeneration||$('#authScreen')?.hidden===false)return;
+    const search=$('#ui3ServiceSearch')||$('#serviceSearch');
+    if(!$('#ui3ServiceSearch')&&$('#ui3ServiceExpert'))$('#ui3ServiceExpert').open=true;
+    search?.focus({preventScroll:true});
+  });
 }
 
 async function applyEngineConfig() {

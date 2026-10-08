@@ -9,7 +9,7 @@ const deferred=()=>{let resolve;const promise=new Promise(yes=>resolve=yes);retu
 function fixture(){
  const configs=['sing-box','xray','usque'].map(id=>({id,name:id,files:[{id:'main',exists:false,staged:false}]}));
  const state={authGeneration:4,currentView:'engines',selectedEngine:'sing-box',selectedEngineFile:'main',engineConfigs:configs,engineEditorDirty:false};
- const interfaceState={authEpoch:2,authRevoked:false},elements=new Map(),calls=[],notices=[],focus=[],tabs=[];
+ const interfaceState={authEpoch:2,authRevoked:false},elements=new Map(),calls=[],notices=[],focus=[],tabs=[],frames=[],renders=[];
  let confirmation=async()=>true,refresh=async()=>true;
  const $=id=>{if(!elements.has(id))elements.set(id,{hidden:id==='#authScreen',disabled:false,focus(){focus.push(id);},value:'private draft'});return elements.get(id);};
  const ctx={state,interfaceState,$,consoleEngineMeta:{'sing-box':{},xray:{},usque:{}},Object,Promise,
@@ -17,10 +17,11 @@ function fixture(){
    selectedEngineView:()=>state.engineConfigs.find(e=>e.id===state.selectedEngine),invalidateEngineEditorContext(){},
    noticeBelongsOnlyToEngine:()=>false,hideNotice(){},showNotice:(...args)=>notices.push(args),renderEngineControl(){},
    setView:name=>{state.currentView=name;},switchEngineTab:tab=>tabs.push(tab),
+   renderServices:()=>renders.push('services'),requestAnimationFrame:fn=>frames.push(fn),
    showAuth(){state.authGeneration++;$('#authScreen').hidden=false;},
  };
- vm.createContext(ctx);vm.runInContext(extract(app,'openEngineConfiguration')+extract(app,'selectEngine')+extract(ui,'interfaceOpenEngineStep'),ctx);
- return {ctx,state,elements,notices,calls,focus,tabs,$,confirm:fn=>confirmation=fn,refresh:fn=>refresh=fn};
+ vm.createContext(ctx);vm.runInContext(extract(app,'openEngineConfiguration')+extract(app,'selectEngine')+extract(app,'assignSelectedEngineToService')+extract(ui,'interfaceOpenEngineStep'),ctx);
+ return {ctx,state,interfaceState,elements,notices,calls,focus,tabs,renders,$,runFrames:()=>{while(frames.length)frames.shift()();},confirm:fn=>confirmation=fn,refresh:fn=>refresh=fn};
 }
 let tests=0;async function test(name,action){await action();tests++;console.log('PASS '+name);}
 await test('each card step opens its exact engine and never starts a write',async()=>{
@@ -76,5 +77,19 @@ await test('current read 401 closes auth; old read errors cannot replace new not
 });
 await test('unknown step and engine are inert',async()=>{
  const f=fixture();await f.ctx.interfaceOpenEngineStep('xray','future');await f.ctx.interfaceOpenEngineStep('future','profile');assert.equal(f.calls.length,0);assert.equal(f.focus.length,0);
+});
+await test('choose service opens the visible catalog after an excluded or filtered view without writing',()=>{
+ const f=fixture();Object.assign(f.interfaceState,{filter:'excluded',query:'old search',category:'ИИ-сервисы'});f.$('#ui3ServiceSearch').value='old search';
+ f.ctx.assignSelectedEngineToService();f.runFrames();assert.equal(f.state.currentView,'services');assert.equal(f.interfaceState.filter,'all');assert.equal(f.interfaceState.query,'');assert.equal(f.interfaceState.category,'');
+ assert.equal(f.$('#ui3ServiceSearch').value,'');assert.equal(f.focus.at(-1),'#ui3ServiceSearch');assert.equal(f.state.selectedEngine,'sing-box');assert.equal(f.calls.length,0);assert.deepEqual(f.renders,['services']);assert.match(f.notices.at(-1)[2],/Открыть настройки сервиса/);
+});
+await test('a queued choose-service focus cannot pull the user back after navigation or logout',()=>{
+ for(const leave of ['view','auth']){
+   const f=fixture();f.ctx.assignSelectedEngineToService();if(leave==='view')f.state.currentView='settings';else f.ctx.showAuth();f.runFrames();assert.equal(f.focus.length,0);assert.equal(f.calls.length,0);
+ }
+});
+await test('choose service stays inert during an engine operation or without a selected engine',()=>{
+ const busy=fixture();busy.state.engineIntent={};busy.ctx.assignSelectedEngineToService();busy.runFrames();assert.equal(busy.state.currentView,'engines');assert.equal(busy.notices.length,0);
+ const missing=fixture();missing.state.engineConfigs=[];missing.ctx.assignSelectedEngineToService();missing.runFrames();assert.equal(missing.state.currentView,'engines');assert.equal(missing.focus.length,0);
 });
 console.log(JSON.stringify({suite:'engine-card-flow',tests}));

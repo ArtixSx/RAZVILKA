@@ -224,12 +224,14 @@ const engineProgressEvidence = new Map();
 function engineProgressBinding(engineID,fileID='main') {
  const engine=state.engineConfigs?.find(item=>item.id===engineID),file=engine?.files?.find(item=>item.id===fileID);
  const component=state.components?.find(item=>item.id===engineID),runtime=state.engines?.find(item=>item.id===engineID);
- const revision=Math.max(state.status?.revision||0,state.serviceControl?.config_revision||0);
+ const revisions=[state.status?.revision,state.serviceControl?.config_revision].filter(value=>value!=null);
+ if(!revisions.length||revisions.some(value=>!Number.isSafeInteger(value)||value<0))return null;
+ const revision=Math.max(...revisions);
  const loaded=state.engineLoaded,loadedSame=loaded?.engine_id===engineID&&loaded.file_id===fileID;
  // FileView.sha256 is the live hash, even when a draft exists. Never bind a
  // staged validation to that live hash; use the actual Stage/read receipt.
  const sha256=file?.staged?(loadedSame&&loaded.source==='staged'?loaded.sha256:''):file?.sha256||(loadedSame&&loaded.source==='live'?loaded.sha256:'');
- if(!file||!Number.isSafeInteger(revision)||revision<1||!/^[a-f0-9]{64}$/.test(sha256||'')||state.authenticated===false||typeof interfaceState!=='undefined'&&interfaceState.authRevoked)return null;
+ if(!file||!/^[a-f0-9]{64}$/.test(sha256||'')||state.authenticated===false||typeof interfaceState!=='undefined'&&interfaceState.authRevoked)return null;
  return {engineID,fileID,sha256,staged:file.staged===true,revision,auth:state.authGeneration||0,requestedAt:Date.now(),
    profileGeneration:file.staged?file.staged_at||'':file.modified_at||'',
    generation:Number.isSafeInteger(state.nodes?.generation)?state.nodes.generation:null,network:state.nodes?.network_profile||'',
@@ -331,7 +333,7 @@ function engineWorkflowPresentation(id,info=consoleEngineState(id)) {
  const steps=[['install','Установка',info.observationStale?'Сведения устарели':binaryDetected?'Бинарник обнаружен':info.installed?'Есть сведения об установке; бинарник не уточнён':info.installedKnown?'Требуется компонент':'Состояние не прочитано'],['profile','Профиль',dirty?'Есть несохранённые изменения':progress.format?'Текущий профиль прошёл проверку формата':file?.staged?'Есть подготовленные изменения':file?.exists?'Файл есть; содержимое требует проверки':'Профиль ещё не подтверждён'],['check','Проверки',`Формат: ${progress.format?(progress.native?'проверен утилитой обхода':'прошёл предварительную проверку'):'не подтверждён'}. Сервис: ${progress.service?'свежий веб-сценарий подтверждён':file?.staged?'проверяется после применения подготовленного профиля':'нужна отдельная проверка'}`],['apply','Применение',progress.apply?'Получено совпадающее подтверждение применения':file?.staged&&progress.format?'Формат проверен. Примените подготовленный профиль, затем проверьте сервис.':used.length?`Сохранённых назначений: ${used.length}`:'Назначения ещё не подтверждены']];
  // A web probe observes the live profile. Do not hold a validated staged file
  // behind that probe; Apply first, then require a fresh post-Apply service test.
- const next=!info.installed?'install':dirty||!file?.exists&&!file?.staged?'profile':file?.staged&&progress.format?'apply':!checked?'check':'apply';
+ const next=!complete.install?'install':dirty||!file?.exists&&!file?.staged?'profile':file?.staged&&progress.format?'apply':!checked?'check':'apply';
  return {file,used,binaryDetected,progress,checked,complete,steps,next,current:steps.find(([step])=>step===next)};
 }
 function engineWorkflowSummary(id) {
@@ -356,7 +358,8 @@ function interfaceEngineCard(id,meta){
  if(info.installed&&component?.update_available)actions+=action('update',managedUpdate?'Обновить с проверкой':'Обновить',updateAllowed&&!stale&&component.can_update===true);
  if(info.installed)actions+=action('remove','Удалить',lifecycleAllowed&&component.can_remove===true);
  const {file,binaryDetected,progress,checked,complete,steps,next,current}=workflow;
- const stepAction=step=>step==='install'?install:`<button type="button" class="secondary" data-engine-step="${step}" data-card-engine="${esc(id)}" data-rz-focus="engine-${esc(id)}-${step}" ${state.engineIntent?'disabled':''}>Открыть ${step==='profile'?'профиль':step==='check'?'проверки':'применение'}</button>`;
+ const installationStep=info.installed?(complete.install?'':`<button type="button" class="secondary" data-component-refresh="${esc(id)}" data-rz-focus="engine-${esc(id)}-installation-read" ${busy?'disabled':''}>Уточнить установку</button>`):install;
+ const stepAction=step=>step==='install'?installationStep:`<button type="button" class="secondary" data-engine-step="${step}" data-card-engine="${esc(id)}" data-rz-focus="engine-${esc(id)}-${step}" ${state.engineIntent?'disabled':''}>Открыть ${step==='profile'?'профиль':step==='check'?'проверки':'применение'}</button>`;
  const flow=`<ol class="ui3-engine-progress" aria-label="Этапы настройки ${esc(meta.name)}">${steps.map(([step,title],index)=>`<li data-engine-progress="${step}" ${complete[step]?'data-completed="true"':''} ${step===next&&!complete[step]?'aria-current="step"':''}><span>${complete[step]?'✓':index+1}</span><b>${title}${complete[step]?' · подтверждено':''}</b></li>`).join('')}</ol><div class="ui3-engine-next"><div><b>${progress.apply&&checked?'Проверка и применение подтверждены':steps.indexOf(current)+1+'. '+current[1]}</b><small>${esc(current[2])}</small></div>${stepAction(next)}</div><details class="ui3-engine-flow-details" data-engine-disclosure="${esc(id)}-flow"><summary data-rz-focus="engine-${esc(id)}-flow">Все шаги настройки</summary><ol class="ui3-engine-workflow">${steps.map(([step,title,text],index)=>`<li><b>${index+1}. ${title}</b><small>${esc(text)}</small>${step===next?'':stepAction(step)}</li>`).join('')}</ol></details>`;
  const operation=state.componentOperation?.id===id?state.componentOperation.action:component?.operation_status==='running'?component.operation_action:'';
  const settledReceipt=info.recovery && ['accepted','accepted-installed-idle','rolled-back','abandoned'].includes(info.recovery.transaction?.phase);
