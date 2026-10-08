@@ -98,6 +98,26 @@ func TestListScopeNativeOriginalApplicationBinding(t *testing.T) {
 			t.Fatal("observation changed configuration or invented path proof")
 		}
 		t.Logf("actual App scope: segments=%d devices=%d no_paths=true no_network_mutation=true", len(snapshot.Scope.Segments), len(snapshot.Scope.Devices))
+		compiled, err := CompileDefaultRoutePolicy(before, snapshot, nil, time.Now())
+		if err != nil || len(compiled.Rules()) != 0 || compiled.LAN() != nil {
+			t.Fatal("empty actual list introduced capture", err)
+		}
+		if err := binding.BindCompilation(current, compiled); err != nil {
+			t.Fatal("empty compilation binding", err)
+		}
+		started := time.Now()
+		_, err = store.CommitNetworkPolicyWithRollback(before, compiled.Policy(), before.Services)
+		finished := time.Now()
+		if err != nil {
+			t.Fatal("private config CAS", err)
+		}
+		if err := binding.AcceptCommitted(current, store.Get(), started, finished); err != nil {
+			t.Fatal("same original scope after authorized private CAS", err)
+		}
+		if _, err := binding.Observe(current); err != nil {
+			t.Fatal("actual physical scope after authorized private CAS", err)
+		}
+		t.Log("empty list compiler -> original binding -> actual private Store CAS -> original physical review still current; no native effects")
 	})
 	if err := binding.Close(); err != nil {
 		t.Fatal(err)
