@@ -123,6 +123,8 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 	}
 	body, _ := json.Marshal(map[string]uint64{"expected_revision": plan.Revision})
 	var result struct {
+		Code       string                               `json:"code"`
+		Reason     string                               `json:"reason"`
 		OK         bool                                 `json:"ok"`
 		Receipt    components.ManagedNFQWSBundleReceipt `json:"receipt"`
 		Installed  bool                                 `json:"installed_idle"`
