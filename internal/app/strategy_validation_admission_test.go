@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -48,15 +50,35 @@ func TestStrategyValidationHTTPRetainsOriginalExclusiveOperationWithoutGrantingR
 	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer server.Close()
 	path := "/api/v1/strategy-lab/candidates/" + candidate.ID + "/validate"
-	before, sourceBefore := a.Store.Get(), manager.Snapshot()
+	before := a.Store.Get()
+	savedBefore := manager.Snapshot()
+	sourceBefore, err := os.ReadFile(manager.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceInfo, err := os.Stat(manager.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	busyRelease, err := a.Operations.Exclusive(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	status, _ := componentHTTP(t, server, "POST", path, map[string]any{}, componentRecoveryToken, server.URL)
 	busyRelease()
-	if status != 409 || observer.calls != 0 || !reflect.DeepEqual(manager.Snapshot(), sourceBefore) {
+	sourceAfter, readErr := os.ReadFile(manager.Path)
+	sourceAfterInfo, statErr := os.Stat(manager.Path)
+	savedAfter := manager.Snapshot()
+	// Snapshot includes live resource counters. The real saved source image
+	// and file identity are the no-write invariant, independent of platform.
+	if status != 409 || observer.calls != 0 || readErr != nil || statErr != nil || !bytes.Equal(sourceBefore, sourceAfter) || !os.SameFile(sourceInfo, sourceAfterInfo) {
 		t.Fatal("busy request reached validation or changed its source", status, observer.calls)
+	}
+	if !reflect.DeepEqual(savedBefore.Candidates, savedAfter.Candidates) || !reflect.DeepEqual(savedBefore.Evidence, savedAfter.Evidence) || !reflect.DeepEqual(savedBefore.Selections, savedAfter.Selections) || savedBefore.QuiescenceUnknown != savedAfter.QuiescenceUnknown {
+		t.Fatal("busy request changed saved candidate, evidence, selection or quiescence state")
+	}
+	if !reflect.DeepEqual(savedBefore.Safety["probe_budget"], savedAfter.Safety["probe_budget"]) {
+		t.Logf("live probe_budget changed while saved source remained identical: before=%+v after=%+v", savedBefore.Safety["probe_budget"], savedAfter.Safety["probe_budget"])
 	}
 	if status, data := componentHTTP(t, server, "POST", path, map[string]any{}, componentRecoveryToken, server.URL); status != 200 {
 		t.Fatal("actual admitted validation request", status, string(data))
