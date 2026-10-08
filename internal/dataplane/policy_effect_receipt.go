@@ -158,8 +158,19 @@ func PolicyEffectPlanDigest(plan PolicyEffectPlan) (string, error) {
 
 type policyEffectSession struct {
 	*policyAdditionSession
-	plan PolicyEffectPlan
-	hash string
+	plan   PolicyEffectPlan
+	hash   string
+	borrow *policyEffectReceiptBorrow
+}
+
+func (s *policyEffectSession) save(ctx context.Context) error {
+	if err := s.policyAdditionSession.save(ctx); err != nil {
+		return err
+	}
+	if s.borrow != nil {
+		return s.borrow.saved()
+	}
+	return nil
 }
 
 func openPolicyEffectSession(ctx context.Context, plan PolicyEffectPlan, path string, options policyAdditionOptions) (*policyEffectSession, error) {
@@ -380,6 +391,15 @@ func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan P
 		}
 		return ErrPolicyAdditionExists
 	}
+	// Shared consumer observations may borrow this actual existing writer;
+	// recursively acquiring its permanent lock would refuse a valid Apply.
+	borrow, err := newPolicyEffectReceiptBorrow(s)
+	if err != nil {
+		return err
+	}
+	defer borrow.close()
+	s.borrow = borrow
+	ctx = context.WithValue(ctx, policyEffectReceiptBorrowKey{}, borrow)
 	if err := s.guard(ctx, runtime, 0); err != nil {
 		return err
 	}
@@ -404,6 +424,7 @@ func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan P
 		steps[i] = policyAdditionStep{Tool: effect.Tool, Add: effect.Add, Delete: effect.Delete, Needs: effect.Needs, State: "planned"}
 	}
 	s.doc = policyAdditionDocument{Schema: 2, ID: hex.EncodeToString(nonce[:]), Boot: boot, Generation: s.plan.Generation, EffectsHash: s.hash, RootHash: policyAdditionRootHash(root), Phase: "active", Steps: steps}
+	borrow.requireDocument()
 	if err := s.save(ctx); err != nil {
 		return err
 	}

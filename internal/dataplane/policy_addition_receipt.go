@@ -69,6 +69,7 @@ type policyAdditionOptions struct {
 
 type policyAdditionSession struct {
 	root     *ownedfs.Root
+	lock     *os.File // The actual still-held permanent writer marker.
 	unlocked func()
 	path     string
 	state    PolicyState
@@ -165,7 +166,7 @@ func openPolicyAdditionRootSession(ctx context.Context, path string, options pol
 	if err != nil {
 		return nil, ErrPolicyAdditionReceipt
 	}
-	unlock, err := lockPolicyAdditionRoot(root)
+	unlock, lock, err := lockPolicyAdditionRoot(root)
 	if err != nil {
 		root.Close()
 		return nil, err
@@ -173,17 +174,17 @@ func openPolicyAdditionRootSession(ctx context.Context, path string, options pol
 	if options.boot == nil {
 		options.boot = func() (string, error) { return (&ProxyTunnelAdapter{}).currentBootIdentity() }
 	}
-	return &policyAdditionSession{root: root, unlocked: unlock, path: path, options: options}, nil
+	return &policyAdditionSession{root: root, lock: lock, unlocked: unlock, path: path, options: options}, nil
 }
 
-func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), error) {
+func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), *os.File, error) {
 	file, err := openNFQWS2LockFile(root, policyAdditionLock, true)
 	created := err == nil
 	if errors.Is(err, os.ErrExist) {
 		file, err = openNFQWS2LockFile(root, policyAdditionLock, false)
 	}
 	if err != nil {
-		return nil, ErrPolicyAdditionReceipt
+		return nil, nil, ErrPolicyAdditionReceipt
 	}
 	keep := false
 	defer func() {
@@ -193,33 +194,33 @@ func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), error) {
 	}()
 	info, err := file.Stat()
 	if err != nil || !validCloudflareScanLockFile(info) {
-		return nil, ErrPolicyAdditionReceipt
+		return nil, nil, ErrPolicyAdditionReceipt
 	}
 	if err := lockCloudflareScanFile(file); err != nil {
-		return nil, ErrPolicyAdditionBusy
+		return nil, nil, ErrPolicyAdditionBusy
 	}
 	current, err := root.Stat(policyAdditionLock)
 	if err != nil || !os.SameFile(info, current) {
-		return nil, ErrPolicyAdditionReceipt
+		return nil, nil, ErrPolicyAdditionReceipt
 	}
 	if created {
 		if info.Size() != 0 {
-			return nil, ErrPolicyAdditionReceipt
+			return nil, nil, ErrPolicyAdditionReceipt
 		}
 		if n, err := file.WriteString(policyAdditionMarker); err != nil || n != len(policyAdditionMarker) || file.Sync() != nil {
-			return nil, ErrPolicyAdditionReceipt
+			return nil, nil, ErrPolicyAdditionReceipt
 		}
 		if runtime.GOOS == "linux" && root.Sync() != nil {
-			return nil, ErrPolicyAdditionReceipt
+			return nil, nil, ErrPolicyAdditionReceipt
 		}
 	} else {
 		data, err := io.ReadAll(io.LimitReader(file, int64(len(policyAdditionMarker)+1)))
 		if err != nil || string(data) != policyAdditionMarker {
-			return nil, ErrPolicyAdditionReceipt
+			return nil, nil, ErrPolicyAdditionReceipt
 		}
 	}
 	keep = true
-	return func() { unlockCloudflareScanFile(file); file.Close() }, nil
+	return func() { unlockCloudflareScanFile(file); file.Close() }, file, nil
 }
 
 func (s *policyAdditionSession) close() { s.unlocked(); s.root.Close() }
