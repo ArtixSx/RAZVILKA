@@ -154,7 +154,8 @@ func (f *NetworkPolicyDNSExclusions) targets(ctx context.Context, device string,
 	var targets []config.ResourceTarget
 	seen := map[string]bool{}
 	for _, value := range names {
-		name, err := config.PolicyDomain(value)
+		// QNAME/CNAME are observed identities, not curated exact/suffix rules.
+		name, err := config.ResourceHostname(value)
 		if err != nil {
 			return nil, err
 		}
