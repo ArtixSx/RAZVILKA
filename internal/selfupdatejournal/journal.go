@@ -384,6 +384,44 @@ func (s *Store) VerifyReviewedImages(ctx context.Context, id string, files []Fil
 	return ctx.Err()
 }
 
+// ReviewedConfigImages returns bounded copies of the prior/candidate config
+// snapshots for typed preservation checks. It only observes the exact sealed
+// six-file review; callers still need current authority and quiescence for any
+// restore, and an independent runtime owner for live acceptance.
+func (s *Store) ReviewedConfigImages(ctx context.Context, id string, files []File, oldBinary, oldInit, oldConfig string) ([]byte, []byte, error) {
+	if ctx == nil {
+		return nil, nil, ErrMismatch
+	}
+	if err := s.VerifyReviewedImages(ctx, id, files, oldBinary, oldInit, oldConfig); err != nil {
+		return nil, nil, err
+	}
+	index := -1
+	for i, file := range files {
+		if file.Target == "etc/razvilka/config.json" {
+			index = i
+		}
+	}
+	if index < 0 {
+		return nil, nil, ErrMismatch
+	}
+	old, err := s.journal.ReadLimited(id+"/old-"+strconv.Itoa(index), 4<<20)
+	if err != nil {
+		return nil, nil, err
+	}
+	next, err := s.journal.ReadLimited(id+"/new-"+strconv.Itoa(index), 4<<20)
+	if err != nil {
+		return nil, nil, err
+	}
+	oldSum, nextSum := sha256.Sum256(old), sha256.Sum256(next)
+	if hex.EncodeToString(oldSum[:]) != oldConfig || hex.EncodeToString(nextSum[:]) != files[index].SHA256 {
+		return nil, nil, ErrMismatch
+	}
+	if err := s.VerifyReviewedImages(ctx, id, files, oldBinary, oldInit, oldConfig); err != nil {
+		return nil, nil, err
+	}
+	return old, next, nil
+}
+
 // VerifyInstallation is a fresh read-only observation for settlement of the
 // separate helper receipt after terminal file acceptance. It verifies frozen
 // images as well as actual installed bytes/modes, never executes or accepts.

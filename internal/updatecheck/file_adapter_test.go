@@ -242,6 +242,17 @@ func TestFileReviewImmutableAndFreshAuthority(t *testing.T) {
 	if err := os.WriteFile(path, append(old, '\n'), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if a.Authority(ctx, r.ID, 7) == nil {
+		t.Fatal("candidate config without actual prior snapshot was accepted")
+	}
+	if err := os.WriteFile(path, old, 0600); err != nil {
+		t.Fatal(err)
+	}
+	s := prepareFileExclusionJournal(t, a, u, r)
+	check := func(context.Context) error { return nil }
+	if err := s.InstallAdmitted(ctx, r.ID, check, check, func(_ context.Context, _ string, begin func() error) error { return begin() }); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.Authority(ctx, r.ID, 7); err != nil {
 		t.Fatal("frozen migrated image refused", err)
 	}

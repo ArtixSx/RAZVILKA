@@ -370,9 +370,8 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	if err != nil {
 		return "", err
 	}
-	var cfg config.Config
-	if json.Unmarshal(staged, &cfg) != nil || cfg.Revision != record.Job.ConfigRevision || cfg.SafeMode || cfg.ServiceControl.Stopped {
-		return "", ErrReviewChanged
+	if _, err := inspectFileMigration(old, staged, record.Job.ConfigRevision); err != nil {
+		return "", err
 	}
 	review := fileReview{Schema: selfUpdateProtocolSchema, ID: record.Job.ID, Revision: record.Job.ConfigRevision, OldConfigSHA256: digestBytes(old), MigratedConfigSHA256: digestBytes(staged), OldExecutableSHA256: record.ExecutableHash, OldVersion: record.CurrentVersion, NewVersion: record.Job.Release.Version, ReleaseID: record.Job.Release.ID}
 	review.AuthoritySequence = authority.Sequence
@@ -634,8 +633,14 @@ func (a *SelfUpdateFileAdapter) AuthorityAction(ctx context.Context, id string, 
 	if hash != review.OldConfigSHA256 && hash != review.MigratedConfigSHA256 {
 		return ErrReviewChanged
 	}
-	var cfg config.Config
-	if json.Unmarshal(data, &cfg) != nil || cfg.Revision != revision || cfg.SafeMode || cfg.ServiceControl.Stopped {
+	cfg, _, err := config.InspectBytes(data)
+	if err != nil || cfg.Revision != revision || cfg.SafeMode || cfg.ServiceControl.Stopped {
+		return ErrReviewChanged
+	}
+	if err := a.configExclusionsCurrent(ctx, review, data); err != nil {
+		return err
+	}
+	if action == "start/live" && (config.ValidateListNetworkPolicy(cfg.NetworkPolicy) != nil || config.ValidateListNetworkPolicy(cfg.AppliedNetworkPolicy) != nil || !filePolicyExclusionsEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy)) {
 		return ErrReviewChanged
 	}
 	return a.checkStop(ctx, id, action)
