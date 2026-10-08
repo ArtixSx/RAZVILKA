@@ -1171,6 +1171,10 @@ func d10NativeChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tunA, err := d10NativeOwnedTUN(ctx, filepath.Join(adapter.StateRoot, "runtime", "engine.json"))
+	if err != nil {
+		t.Fatal("A owned TUN identity readback", d10NativeErrorClass(err))
+	}
 	filesA := map[string][]byte{}
 	for _, name := range []string{"runtime/engine.json", "runtime/sidecar.json", "policy.json", "policy-generation.json"} {
 		filesA[name], err = os.ReadFile(filepath.Join(adapter.StateRoot, name))
@@ -1222,7 +1226,14 @@ func d10NativeChild(t *testing.T) {
 			}
 		}
 		kernel, err := d10NativeKernel(c)
-		if err != nil || !reflect.DeepEqual(kernel, kernelA) {
+		if err == nil {
+			var tun d10NativeTUNIdentity
+			tun, err = d10NativeOwnedTUN(c, filepath.Join(adapter.StateRoot, "runtime", "engine.json"))
+			if err == nil {
+				err = d10NativeRestoredKernel(kernelA, kernel, tunA, tun)
+			}
+		}
+		if err != nil {
 			d10NativeKernelDiagnostic(t, kernelA, kernel)
 			d10NativeIPv6RollbackReceipt(t, kernelA, kernel, filepath.Join(adapter.StateRoot, "runtime", "engine.json"))
 			return refuse("restored native A kernel differs", err)
@@ -1319,6 +1330,249 @@ func d10NativeDue(a *App) {
 	r := a.autonomy.doc.Runtime[d10NativeService]
 	r.NextCheck = time.Time{}
 	a.autonomy.doc.Runtime[d10NativeService] = r
+}
+
+type d10NativeTUNIdentity struct {
+	Name       string
+	Index      int
+	Up         bool
+	Generation int
+	Addresses  []netip.Prefix
+	Configured []netip.Prefix
+}
+
+// Read the actual owned live interface and its exact configured addresses.
+// This is fixture verification after production VerifyRollback, not authority.
+func d10NativeOwnedTUN(ctx context.Context, enginePath string) (d10NativeTUNIdentity, error) {
+	var identity d10NativeTUNIdentity
+	if err := ctx.Err(); err != nil {
+		return identity, err
+	}
+	file, err := os.Open(enginePath)
+	if err != nil {
+		return identity, err
+	}
+	data, readErr := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	closeErr := file.Close()
+	defer clear(data)
+	if readErr != nil || closeErr != nil || len(data) > 1<<20 {
+		return identity, errors.New("bounded owned TUN config unavailable")
+	}
+	var doc struct {
+		Inbounds []struct {
+			Type      string   `json:"type"`
+			Interface string   `json:"interface_name"`
+			Address   []string `json:"address"`
+			IPv4      string   `json:"inet4_address"`
+			IPv6      string   `json:"inet6_address"`
+		} `json:"inbounds"`
+	}
+	if json.Unmarshal(data, &doc) != nil {
+		return identity, errors.New("owned TUN config unreadable")
+	}
+	owned := 0
+	for _, inbound := range doc.Inbounds {
+		if inbound.Type != "tun" || inbound.Interface != "rz-sing" {
+			continue
+		}
+		owned++
+		for _, raw := range append(inbound.Address, inbound.IPv4, inbound.IPv6) {
+			if raw == "" {
+				continue
+			}
+			prefix, err := netip.ParsePrefix(raw)
+			if err != nil || len(identity.Configured) >= 24 {
+				return identity, errors.New("owned TUN configured address refused")
+			}
+			identity.Configured = append(identity.Configured, prefix)
+		}
+	}
+	if owned != 1 || len(identity.Configured) == 0 {
+		return identity, errors.New("exact owned TUN config unavailable")
+	}
+	link, err := net.InterfaceByName("rz-sing")
+	if err != nil {
+		return identity, err
+	}
+	identity.Name, identity.Index, identity.Up = link.Name, link.Index, link.Flags&net.FlagUp != 0
+	addresses, err := link.Addrs()
+	if err != nil || len(addresses) > 24 {
+		return identity, errors.New("bounded owned TUN addresses unavailable")
+	}
+	for _, address := range addresses {
+		prefix, err := netip.ParsePrefix(address.String())
+		if err != nil {
+			return identity, errors.New("owned TUN address unreadable")
+		}
+		identity.Addresses = append(identity.Addresses, prefix)
+	}
+	mode, err := os.ReadFile("/proc/sys/net/ipv6/conf/rz-sing/addr_gen_mode")
+	if err != nil || len(mode) > 8 {
+		return identity, errors.New("owned TUN address generation unavailable")
+	}
+	identity.Generation, err = strconv.Atoi(strings.TrimSpace(string(mode)))
+	if err != nil {
+		return identity, errors.New("owned TUN address generation unreadable")
+	}
+	return identity, ctx.Err()
+}
+
+// Native163 proved regeneration of exactly one kernel link-local local host
+// route after restoring the owned TUN. Permit only that address substitution,
+// witnessed in both actual interfaces; preserve all other bytes and qualifiers.
+func d10NativeRestoredKernel(before, after [][]byte, old, current d10NativeTUNIdentity) error {
+	refused := errors.New("restored owned TUN/kernel identity differs")
+	if len(before) != 6 || len(after) != 6 {
+		return refused
+	}
+	for i := range before {
+		if i != 3 && !bytes.Equal(before[i], after[i]) {
+			return refused
+		}
+	}
+	linkLocal := netip.MustParsePrefix("fe80::/64")
+	address := func(identity d10NativeTUNIdentity) (netip.Addr, bool) {
+		if identity.Name != "rz-sing" || identity.Index <= 0 || !identity.Up ||
+			(identity.Generation != 0 && identity.Generation != 2 && identity.Generation != 3) ||
+			len(identity.Configured) == 0 || len(identity.Configured) > 24 || len(identity.Addresses) > 24 {
+			return netip.Addr{}, false
+		}
+		for i, prefix := range identity.Configured {
+			if !prefix.IsValid() || prefix.Addr().IsLinkLocalUnicast() || prefix.Overlaps(linkLocal) ||
+				!slices.Contains(identity.Addresses, prefix) || slices.Contains(identity.Configured[:i], prefix) {
+				return netip.Addr{}, false
+			}
+		}
+		var local netip.Addr
+		for i, prefix := range identity.Addresses {
+			if !prefix.IsValid() || slices.Contains(identity.Addresses[:i], prefix) {
+				return netip.Addr{}, false
+			}
+			if prefix.Addr().IsLinkLocalUnicast() {
+				if local.IsValid() || prefix.Bits() != 64 || !linkLocal.Contains(prefix.Addr()) {
+					return netip.Addr{}, false
+				}
+				local = prefix.Addr()
+			} else if !slices.Contains(identity.Configured, prefix) {
+				return netip.Addr{}, false
+			}
+		}
+		return local, local.IsValid()
+	}
+	oldAddress, oldOK := address(old)
+	newAddress, newOK := address(current)
+	if !oldOK || !newOK || old.Generation != current.Generation || !slices.Equal(old.Configured, current.Configured) ||
+		(oldAddress != newAddress && old.Index == current.Index) {
+		return refused
+	}
+	normalize := func(data []byte, actual netip.Addr) ([]byte, bool) {
+		lines := strings.Split(string(data), "\n")
+		matched := 0
+		for i, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) < 2 || fields[0] != "local" || fields[1] != actual.String() {
+				continue
+			}
+			if len(fields) != 12 || !slices.Equal(fields[2:], []string{"dev", "rz-sing", "table", "local", "proto", "kernel", "metric", "0", "pref", "medium"}) {
+				return nil, false
+			}
+			matched++
+			lines[i] = strings.Replace(line, fields[1], "<owned-generated-link-local>", 1)
+		}
+		return []byte(strings.Join(lines, "\n")), matched == 1
+	}
+	oldRoutes, oldOK := normalize(before[3], oldAddress)
+	newRoutes, newOK := normalize(after[3], newAddress)
+	if !oldOK || !newOK || !bytes.Equal(oldRoutes, newRoutes) {
+		return refused
+	}
+	return nil
+}
+
+func TestD10NativeRestoredKernelRejectsUnwitnessedOrForeignIPv6Changes(t *testing.T) {
+	oldLL, newLL := "fe80::5efc:71cb:5211:a24a", "fe80::b9be:bb67:dd9e:c61b"
+	route := func(address string) string {
+		return "local " + address + " dev rz-sing table local proto kernel metric 0 pref medium\n"
+	}
+	configured := []netip.Prefix{netip.MustParsePrefix("172.19.0.1/30"), netip.MustParsePrefix("fd00:19::1/126")}
+	witness := func(address string, index int) d10NativeTUNIdentity {
+		return d10NativeTUNIdentity{Name: "rz-sing", Index: index, Up: true, Generation: 3,
+			Configured: slices.Clone(configured), Addresses: append(slices.Clone(configured), netip.MustParsePrefix(address+"/64"))}
+	}
+	kernel := func(address string) [][]byte {
+		return [][]byte{[]byte("ipv4 rules\n"), []byte("ipv6 rules\n"), []byte("ipv4 routes\n"),
+			[]byte("fd00:19::/126 dev rz-sing proto kernel metric 256 pref medium\n" +
+				"local fd00:19::1 dev rz-sing table local proto kernel metric 0 pref medium\n" + route(address)),
+			[]byte("ipv4 firewall\n"), []byte("ipv6 firewall\n")}
+	}
+	for _, tc := range []struct {
+		name    string
+		allowed bool
+		change  func([][]byte, *d10NativeTUNIdentity)
+	}{
+		{"witnessed-recreated-owned-link-local", true, func([][]byte, *d10NativeTUNIdentity) {}},
+		{"unchanged-link-local", true, func(k [][]byte, w *d10NativeTUNIdentity) { k[3] = kernel(oldLL)[3]; *w = witness(oldLL, 8) }},
+		{"unwitnessed-route-address", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), newLL, "fe80::99"))
+		}},
+		{"same-interface-generation", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Index = 5 }},
+		{"foreign-interface-witness", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Name = "br0" }},
+		{"missing-interface-witness", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Index = 0 }},
+		{"interface-down", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Up = false }},
+		{"no-kernel-address-generation", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Generation = 1 }},
+		{"address-generation-changed", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Generation = 2 }},
+		{"missing-live-address", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Addresses = slices.Clone(configured) }},
+		{"extra-live-link-local", false, func(_ [][]byte, w *d10NativeTUNIdentity) {
+			w.Addresses = append(w.Addresses, netip.MustParsePrefix("fe80::99/64"))
+		}},
+		{"wrong-live-prefix", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Addresses[2] = netip.MustParsePrefix(newLL + "/128") }},
+		{"explicit-link-local-configured", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Configured = append(w.Configured, w.Addresses[2]) }},
+		{"configured-ipv6-changed", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Configured[1] = netip.MustParsePrefix("fd00:20::1/126") }},
+		{"configured-ipv6-address-missing", false, func(_ [][]byte, w *d10NativeTUNIdentity) { w.Addresses = append(w.Addresses[:1], w.Addresses[2:]...) }},
+		{"foreign-device-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), "local "+newLL+" dev rz-sing", "local "+newLL+" dev br0"))
+		}},
+		{"foreign-table-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), "table local", "table main"))
+		}},
+		{"non-kernel-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), "proto kernel", "proto static"))
+		}},
+		{"changed-metric", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), "metric 0", "metric 1"))
+		}},
+		{"changed-preference", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), "pref medium", "pref high"))
+		}},
+		{"extra-route-qualifier", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), route(newLL), strings.TrimSuffix(route(newLL), "\n")+" linkdown\n"))
+		}},
+		{"missing-link-local-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), route(newLL), ""))
+		}},
+		{"duplicate-link-local-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) { k[3] = append(k[3], []byte(route(newLL))...) }},
+		{"extra-foreign-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = append(k[3], []byte("local fe80::99 dev br0 table local proto kernel metric 0 pref medium\n")...)
+		}},
+		{"missing-configured-ipv6-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), "fd00:19::/126 dev rz-sing proto kernel metric 256 pref medium\n", ""))
+		}},
+		{"changed-configured-ipv6-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) {
+			k[3] = []byte(strings.ReplaceAll(string(k[3]), "fd00:19::1", "fd00:19::2"))
+		}},
+		{"extra-ipv6-rule", false, func(k [][]byte, _ *d10NativeTUNIdentity) { k[1] = append(k[1], []byte("foreign rule\n")...) }},
+		{"changed-ipv4-route", false, func(k [][]byte, _ *d10NativeTUNIdentity) { k[2] = []byte("changed ipv4 routes\n") }},
+		{"changed-ipv6-firewall", false, func(k [][]byte, _ *d10NativeTUNIdentity) { k[5] = []byte("changed firewall\n") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before, after := kernel(oldLL), kernel(newLL)
+			old, current := witness(oldLL, 5), witness(newLL, 8)
+			tc.change(after, &current)
+			if err := d10NativeRestoredKernel(before, after, old, current); (err == nil) != tc.allowed {
+				t.Fatalf("restored kernel allowed=%t, want=%t", err == nil, tc.allowed)
+			}
+		})
+	}
 }
 
 func d10NativeIPv6RollbackReceipt(t *testing.T, before, after [][]byte, enginePath string) {
