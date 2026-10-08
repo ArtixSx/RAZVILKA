@@ -221,3 +221,83 @@ func TestFileConfigExclusionsUnappliedNegativesRefuseStart(t *testing.T) {
 		t.Fatal("unapplied exclusion was silently cleared")
 	}
 }
+
+func TestFileConfigInactiveExclusionsPreservedBeforeEffect(t *testing.T) {
+	for _, change := range []string{"preserved", "dropped", "replaced", "revision", "promoted"} {
+		t.Run(change, func(t *testing.T) {
+			a, u, r := fileAdapterFixture(t)
+			cfg := config.Default()
+			cfg.SafeMode, cfg.Revision = false, 7
+			cfg.InactiveResourceExclusions = &config.ResourceExclusions{Schema: 1, Revision: 2, Manual: []config.ResourceMatch{{Kind: "exact", Value: "manual.example.com"}}}
+			old, _ := json.Marshal(cfg)
+			switch change {
+			case "dropped":
+				cfg.InactiveResourceExclusions = nil
+			case "replaced":
+				cfg.InactiveResourceExclusions.Manual[0].Value = "other.example.com"
+			case "revision":
+				cfg.InactiveResourceExclusions.Revision--
+			case "promoted":
+				cfg.NetworkPolicy = fileExclusionConfig(t).NetworkPolicy
+				cfg.NetworkPolicy.Exclusions = cfg.InactiveResourceExclusions
+				cfg.InactiveResourceExclusions = nil
+			}
+			staged, _ := json.MarshalIndent(cfg, "", "  ")
+			if _, _, err := config.InspectBytes(staged); err != nil {
+				t.Fatal("test needs a strictly valid staged document", err)
+			}
+			r = sealFileExclusionFixture(t, a, u, r, old, staged)
+			calls := 0
+			err := a.EffectAdmission(context.Background(), r.ID, "replace-to-rollback", "rollback-file-5", func() error { calls++; return nil })
+			if change == "preserved" {
+				if err != nil || calls != 1 {
+					t.Fatal("exact inactive document refused for data-only rollback", err, calls)
+				}
+				calls = 0
+				if err = a.EffectAdmission(context.Background(), r.ID, "start/live", "command-child-start-rollback-panel", func() error { calls++; return nil }); !errors.Is(err, ErrReviewChanged) || calls != 0 {
+					t.Fatal("inactive document granted legacy forward start", err, calls)
+				}
+			} else if !errors.Is(err, ErrReviewChanged) || calls != 0 {
+				t.Fatal("changed inactive document reached a file effect", err, calls)
+			}
+			actual, _ := os.ReadFile(u.Deployment.Paths["config"])
+			if !bytes.Equal(actual, old) {
+				t.Fatal("inactive document was silently cleared or promoted")
+			}
+		})
+	}
+}
+
+func TestFileConfigInactiveExclusionsLatestEditKeepsThirdImageFence(t *testing.T) {
+	a, u, r := fileAdapterFixture(t)
+	cfg := config.Default()
+	cfg.SafeMode, cfg.Revision = false, 7
+	cfg.InactiveResourceExclusions = &config.ResourceExclusions{Schema: 1, Revision: 1, Manual: []config.ResourceMatch{{Kind: "exact", Value: "manual.example.com"}}}
+	old, _ := json.Marshal(cfg)
+	next, _ := json.MarshalIndent(cfg, "", "  ")
+	r = sealFileExclusionFixture(t, a, u, r, old, next)
+	s := prepareFileExclusionJournal(t, a, u, r)
+	check := func(context.Context) error { return nil }
+	if err := s.InstallAdmitted(context.Background(), r.ID, check, check, func(_ context.Context, _ string, begin func() error) error { return begin() }); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.AuthorityAction(context.Background(), r.ID, r.Revision, "replace-to-rollback"); err != nil {
+		t.Fatal("actual prior inactive image was not readable", err)
+	}
+	cfg.InactiveResourceExclusions.Manual = append(cfg.InactiveResourceExclusions.Manual, config.ResourceMatch{Kind: "cidr", Value: "203.0.113.0/24"})
+	cfg.InactiveResourceExclusions.Revision++
+	cfg.Revision++
+	latest, _ := json.Marshal(cfg)
+	path := u.Deployment.Paths["config"]
+	if err := os.WriteFile(path, latest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	if err := a.EffectAdmission(context.Background(), r.ID, "replace-to-rollback", "rollback-file-5", func() error { calls++; return nil }); !errors.Is(err, ErrReviewChanged) || calls != 0 {
+		t.Fatal("latest inactive edit reached old rollback effect", err, calls)
+	}
+	actual, _ := os.ReadFile(path)
+	if !bytes.Equal(actual, latest) {
+		t.Fatal("latest inactive edit was overwritten")
+	}
+}

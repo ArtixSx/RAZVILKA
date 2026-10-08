@@ -640,7 +640,7 @@ func (a *SelfUpdateFileAdapter) AuthorityAction(ctx context.Context, id string, 
 	if err := a.configExclusionsCurrent(ctx, review, data); err != nil {
 		return err
 	}
-	if action == "start/live" && (config.ValidateListNetworkPolicy(cfg.NetworkPolicy) != nil || config.ValidateListNetworkPolicy(cfg.AppliedNetworkPolicy) != nil || !filePolicyExclusionsEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy)) {
+	if action == "start/live" && (cfg.InactiveResourceExclusions != nil || config.ValidateListNetworkPolicy(cfg.NetworkPolicy) != nil || config.ValidateListNetworkPolicy(cfg.AppliedNetworkPolicy) != nil || !filePolicyExclusionsEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy)) {
 		return ErrReviewChanged
 	}
 	return a.checkStop(ctx, id, action)

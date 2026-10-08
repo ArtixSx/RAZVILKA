@@ -35,7 +35,8 @@ func fileConfigExclusionsPreserved(before, after config.Config) bool {
 	if after.DefaultRouteConsent != nil {
 		newConsent = after.DefaultRouteConsent.Policy
 	}
-	return filePolicyExclusionsEqual(before.NetworkPolicy, after.NetworkPolicy) &&
+	return reflect.DeepEqual(before.InactiveResourceExclusions, after.InactiveResourceExclusions) &&
+		filePolicyExclusionsEqual(before.NetworkPolicy, after.NetworkPolicy) &&
 		filePolicyExclusionsEqual(before.AppliedNetworkPolicy, after.AppliedNetworkPolicy) &&
 		filePolicyExclusionsEqual(oldConsent, newConsent)
 }

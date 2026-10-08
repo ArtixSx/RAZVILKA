@@ -111,3 +111,36 @@ CORE follow-up с `inactive_resource_exclusions` ещё не входит в dep
 5446. Reader этой порции строго откажет на неизвестном поле, сохранив bytes.
 После finished pin требуется добавить typed preservation этой единственной
 inactive записи; обход strict reader или молчаливое удаление запрещены.
+
+## Finished follow-up: inactive document
+
+Следующая порция OPS зависит от finished CORE
+`e9c974971885015350862957149360594360ba2b`, локально `ad4a01d`; Root принял
+CORE как `c563a48`. Это закрывает предыдущий пункт о неизвестном inactive
+поле. Root переносит две собственные OPS порции вместе, без повторного
+переноса уже принятой CORE dependency.
+
+`fileConfigExclusionsPreserved` теперь сравнивает весь сохранённый
+`Config.InactiveResourceExclusions`: schema, revision, manual и возможные
+retained snapshot metadata. Проверка действующего effective set недостаточна
+для сохранения полного документа. Миграция не вправе удалить, подменить,
+переписать revision или сама перенести его в active policy с новой областью.
+Последний edit после review остаётся третьим config image и не перезаписывается.
+
+При наличии inactive document `start/live` отказывает. Это включает Ready
+и forward self-update; полноценное обновление с inactive config пока не
+разрешено без реальной policy/owner проверки. Data-only rollback, наблюдение
+и stop-owned могут сохранить документ по своей прежней authority. Пустой
+manual document тоже не создаёт разрешения. Scope не придумывается, никакой
+implicit promotion или обход generic legacy Apply refusal не добавлен.
+
+Шесть новых cases проверяют сохранённый/удалённый/подменённый документ,
+переписанную revision, implicit promotion и реальный retained prior image
+после installation с новым третьим edit. Windows focused PASS 2.627 s;
+финальные полные updatecheck PASS 27.906 s, selfupdatejournal PASS 11.622 s,
+App SelfUpdate PASS 13.494 s, main self-update tests PASS 1.358 s. Windows vet
+и diff check — код 0. Linux amd64/arm64 vet обоих пакетов и полная
+cross-compilation updatecheck tests — код 0; артефакты
+`.review-local/selfupdate-inactive-exclusions-linux-{amd64,arm64}.test`.
+Linux/race/native здесь не исполнялись. Actual Store/DEFAULT/NET restored-plan
+compatibility остаётся отдельным открытым hook; comparison не выдаёт grant.
