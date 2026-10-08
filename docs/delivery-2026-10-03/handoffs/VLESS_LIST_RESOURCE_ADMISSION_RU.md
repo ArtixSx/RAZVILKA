@@ -35,8 +35,9 @@
   Неудостоверенная очистка имеет приоритет и сохраняет poison/fence.
 - Node preview/pin больше не включает библиотечный/удалённый/disabled сервис.
   Fallback/recovery проверяют текущую активность и negatives, даже если старый
-  committed/applied маршрут сохранился. Recovery проверяет это до подготовки
-  DNS. Смена exclusion revision отзывает прежнюю queued Apply через уже
+  committed/applied маршрут сохранился. Recovery сохраняет исходную очистку
+  старых owned DNS redirects; negatives блокируют следующие пробы и restore.
+  Смена exclusion revision отзывает прежнюю queued Apply через уже
   существующую revision/intent проверку; новый ledger не добавлен.
 
 ## Границы и последующие владельцы
@@ -80,3 +81,30 @@ HEAD blobs — после коммита. Артефакт:
 `.review-local/list-resource-admission-proof-20261008/source-proof.json`.
 В нём фиксируется список исходников; результаты Windows focused App/node
 dataplane, vet и Linux amd64/arm64 compile сохраняются рядом.
+
+## Дополнение: сохранённые manual до настройки scope
+
+Готовые Root CORE-пины `bf5958a`, `a4383bf`, `c563a48` подключены без изменений
+как `53ebbdf`, `7289a68`, `78603f6`. Новый `InactiveResourceExclusions`
+учитывается общим node consumer через тот же фактический
+`Store.WithResourceExclusionObservation`; p-only helper здесь не используется.
+Production node код не потребовал нового API или обхода scope fence.
+
+Отдельные тесты выполняют реальный manual CAS при nil NetworkPolicy:
+service/exact исключение останавливает Check/Record/runtime, не создаёт scope,
+consent или positive intent. Такой CAS во время кандидата закрывает исходный
+результат как INCONCLUSIVE до RecordCheck. Архив точного исходника дополнения:
+`.review-local/list-resource-inactive-proof-20261008-v3/source-proof.json`.
+
+В этом дополнении также исправлен порядок recovery: PrepareDNSRecovery только
+снимает старые owned redirects, поэтому negative не отзывает его cleanup
+authority. Первый slice ошибочно поставил preflight перед этой очисткой.
+Интегрировать первый slice вместе с дополнением; затем negative отказывает
+до нового Check/Record/restore. Отдельная модель проверяет фактический Manager
+cleanup и отсутствие новых проб у исключённого primary.
+
+Классификация auxiliary endpoint по service ID использует канонизацию
+`config.PolicyDomain` и для hostname, и для catalog domain. Trailing dot,
+регистр, Unicode/IDN и punycode не обходят service negative; suffix проверяется
+только на границе DNS label. Отдельные тесты защищают эти эквивалентности и
+похожие, но другие имена. DTO по-прежнему не даёт positive permission.

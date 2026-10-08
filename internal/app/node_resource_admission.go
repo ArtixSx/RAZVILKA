@@ -56,11 +56,22 @@ func (a *App) nodeResourceAdmission(ctx context.Context, expected config.Config,
 			if err := admit(target); err != nil {
 				return err
 			}
+			if target.Domain == "" {
+				return nil
+			}
+			canonicalHost, err := config.PolicyDomain(target.Domain)
+			if err != nil {
+				return dataplane.ErrNodeResourceDenied
+			}
 			// Auxiliary endpoints need not be positive entries, but a known
 			// catalog service exclusion must also win over their hostnames.
 			for _, known := range definitions.Services {
 				for _, domain := range known.Domains {
-					if strings.EqualFold(name, domain) || strings.HasSuffix(strings.ToLower(name), "."+strings.ToLower(domain)) {
+					canonicalDomain, err := config.PolicyDomain(domain)
+					if err != nil {
+						return dataplane.ErrNodeResourceDenied
+					}
+					if canonicalHost == canonicalDomain || strings.HasSuffix(canonicalHost, "."+canonicalDomain) {
 						if err := admit(config.ResourceTarget{ServiceID: known.ID}); err != nil {
 							return err
 						}

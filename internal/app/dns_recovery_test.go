@@ -23,7 +23,7 @@ func TestDNSRecoveryNewEpochWithoutNodeRegistryPreservesPendingChanges(t *testin
 	if err := a.DNS.SetDraft("security"); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: false, Route: "direct", Sources: []string{"192.168.1.41/32"}}); err != nil {
+	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct", Sources: []string{"192.168.1.41/32"}}); err != nil {
 		t.Fatal(err)
 	}
 	before := a.Store.Get()

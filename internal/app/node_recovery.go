@@ -327,17 +327,9 @@ type nodeRecoveryIntent struct {
 // prior committed configuration authorizes ONLY the identical applied targets;
 // fresh exact proofs authorize execution in the new network epoch.
 func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, profile string) (dataplane.Execution, error) {
-	// Negative intent is checked before DNS preparation can touch an old
-	// applied selection. Its runtime owner still performs the full recovery.
-	if a.Store == nil {
-		return dataplane.Execution{}, errNodeRecoveryReview
-	}
-	cfg := a.Store.Get()
-	for _, route := range previous.Routes {
-		if err := a.nodeServiceResourceAdmission(ctx, cfg, route.ServiceID); err != nil {
-			return dataplane.Execution{}, err
-		}
-	}
+	// Releasing old owned DNS redirects is cleanup, never positive admission.
+	// Keep its original authority even when current negatives deny rechecking
+	// or restoring that target below.
 	if previous.DNS != nil {
 		if err := a.Dataplane.PrepareDNSRecovery(ctx, previous); err != nil {
 			if !errors.Is(err, dataplane.ErrReviewChanged) && !errors.Is(err, context.Canceled) {
