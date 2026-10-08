@@ -130,8 +130,10 @@ func TestNFQWSActiveRetirementFailureRetainsFence(t *testing.T) {
 			m, a, removed := nfqws2ActiveRetirementFixture(t)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			if _, err := m.prepared.Stop(ctx); err != nil {
-				t.Fatal(err)
+			if failure != "missing-wait" {
+				if _, err := m.prepared.Stop(ctx); err != nil {
+					t.Fatal(err)
+				}
 			}
 			calls := 0
 			common := func(context.Context, NFQWSExecutionBinding, NFQWSScopedProcessProof) error {
@@ -153,9 +155,28 @@ func TestNFQWSActiveRetirementFailureRetainsFence(t *testing.T) {
 					return l, err
 				}
 			case "terminal-metadata":
+				m.mu.Lock()
 				m.lease.Acknowledged = false
+				m.mu.Unlock()
 			case "missing-wait":
-				m.owner.done = make(chan struct{}) // Terminal file alone cannot substitute sole Wait.
+				m.owner.mu.Lock()
+				m.owner.stopRequested = true
+				m.owner.mu.Unlock()
+				m.mu.Lock()
+				m.lease.Receipt.State = "reaped"
+				m.lease.Receipt.Reaped = 1
+				m.lease.Receipt.DirectReaped = true
+				m.lease.Receipt.WaitECHILD = true
+				m.lease.Receipt.Cancelled = true
+				m.lease.Receipt.ExitCode = 125
+				m.lease.Acknowledged = true
+				metadata := m.lease
+				m.mu.Unlock()
+				if nfqws2ValidateActiveLease(metadata) != nil {
+					t.Fatal("missing-Wait scenario needs a valid terminal image")
+				}
+				// Keep the original producer done channel open. Metadata alone
+				// cannot substitute actual Wait; never mutate a published channel.
 			case "post-unlink":
 				retire := m.owner.retire
 				m.owner.retire = func(c context.Context, l nfqws2ActiveProcessLease, f func() error) error {
