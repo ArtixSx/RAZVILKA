@@ -23,6 +23,7 @@ type NFQWSRuntimeDescriptor struct {
 // Complete generations are never modified/pruned by any provider API. These
 // invariants do not authorize an arbitrary root-euid writer or runtime launch.
 type ManagedNFQWSRuntimeLease struct {
+	self       *ManagedNFQWSRuntimeLease
 	manager    *Manager
 	tx         *updateTransaction
 	receipt    ManagedNFQWSBundleReceipt
@@ -31,6 +32,9 @@ type ManagedNFQWSRuntimeLease struct {
 }
 
 func (m *Manager) AcquireManagedNFQWSRuntime(ctx context.Context, receiptID string) (*ManagedNFQWSRuntimeLease, error) {
+	if m == nil || ctx == nil {
+		return nil, ErrManagedNFQWSBundle
+	}
 	if !bundleHash(receiptID, 32) || ctx.Err() != nil {
 		return nil, errors.Join(ErrManagedNFQWSBundle, ctx.Err())
 	}
@@ -79,11 +83,13 @@ func (m *Manager) AcquireManagedNFQWSRuntime(ctx context.Context, receiptID stri
 		}
 	}
 	keep = true
-	return &ManagedNFQWSRuntimeLease{manager: m, tx: tx, receipt: *receipt, descriptor: d}, nil
+	lease := &ManagedNFQWSRuntimeLease{manager: m, tx: tx, receipt: *receipt, descriptor: d}
+	lease.self = lease
+	return lease, nil
 }
 
 func (l *ManagedNFQWSRuntimeLease) Descriptor() NFQWSRuntimeDescriptor {
-	if l == nil {
+	if l == nil || l.self != l {
 		return NFQWSRuntimeDescriptor{}
 	}
 	l.mu.Lock()
@@ -119,7 +125,7 @@ func (l *ManagedNFQWSRuntimeLease) check(ctx context.Context) error {
 }
 
 func (l *ManagedNFQWSRuntimeLease) Check(ctx context.Context) error {
-	if l == nil {
+	if l == nil || l.self != l || ctx == nil {
 		return ErrManagedNFQWSBundle
 	}
 	l.mu.Lock()
@@ -130,6 +136,9 @@ func (l *ManagedNFQWSRuntimeLease) Check(ctx context.Context) error {
 func (l *ManagedNFQWSRuntimeLease) Close() error {
 	if l == nil {
 		return nil
+	}
+	if l.self != l {
+		return ErrManagedNFQWSBundle
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
