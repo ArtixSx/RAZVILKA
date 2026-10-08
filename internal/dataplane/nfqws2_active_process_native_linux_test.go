@@ -3,6 +3,7 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,8 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 func nfqws2ActiveNativeTrace(err error) string {
@@ -63,7 +66,7 @@ func TestNFQWSActiveProcessNative(t *testing.T) {
 		t.Fatal("active native: stage=PROFILE outcome=unknown capability=ungranted")
 	}
 	nfqws2ManagedNativeGate(t)
-	for _, scenario := range []string{"request-end-and-expiry", "prepared-cancel", "panel-stop"} {
+	for _, scenario := range []string{"request-end-and-expiry", "prepared-cancel", "panel-stop", "retirement-replacement"} {
 		t.Run(scenario, func(t *testing.T) { nfqws2ActiveProcessNativeScenario(t, mode, scenario) })
 	}
 }
@@ -191,6 +194,38 @@ func nfqws2ActiveProcessNativeScenario(t *testing.T, mode, scenario string) {
 		spec.NetNamespace = fmt.Sprintf("net:[%d]", identity.Inode)
 	}
 	binding := NFQWSExecutionBinding{ExecutionID: "dp-1123456789abcdef", PlanID: "dp-0123456789abcdef", PlanDigest: strings.Repeat("b", 64), ResourceID: "nq-" + strings.Repeat("c", 32), ResourceGeneration: strings.Repeat("d", 64), EffectsDigest: strings.Repeat("e", 64), SessionID: c.ID, CommandSHA256: spec.CommandSHA256}
+	// Explicit private TEST receipt, not either real COMMON execution record.
+	// It describes this fixture's zero kernel/LAN effects. Every use also needs
+	// actual complete inventory, empty queues and the original sole Wait proof.
+	commonPath := filepath.Join(private, "test-common-no-effects.json")
+	commonData, err := json.Marshal(struct {
+		Kind            string
+		Binding         NFQWSExecutionBinding
+		NetworkIdentity netidentity.Identity
+		KernelEffects   []string
+		LANApplied      bool
+	}{"nfqws-active-native/test-common-no-effects-v1", binding, identity, []string{}, false})
+	if err != nil {
+		t.Fatal("active native: stage=TEST_COMMON_IMAGE outcome=unknown")
+	}
+	commonImage := restorejournal.Image{Exists: true, Data: append(commonData, '\n')}
+	commonCtx, finishCommon := context.WithTimeout(context.Background(), 2*time.Second)
+	commonTarget, err := restorejournal.OpenFileTarget(commonPath)
+	if err == nil {
+		err = commonTarget.CompareAndSwap(commonCtx, restorejournal.Image{}, commonImage)
+		err = errors.Join(err, commonTarget.Close())
+	}
+	finishCommon()
+	if err != nil {
+		t.Fatal("active native: stage=TEST_COMMON_WRITE outcome=unknown")
+	}
+	checkCommonReceipt := func(ctx context.Context) error {
+		image, err := restorejournal.ReadFileImage(ctx, commonPath)
+		if err != nil || image.Exists != commonImage.Exists || !bytes.Equal(image.Data, commonImage.Data) || nfqws2ManagedProtected(commonPath, false) != nil {
+			return ErrNFQWSScopedOwner
+		}
+		return ctx.Err()
+	}
 	request, cancelRequest := context.WithDeadline(context.Background(), c.ActivationDeadline)
 	defer cancelRequest()
 	panel, cancelPanel := context.WithCancel(context.Background())
@@ -257,6 +292,7 @@ func nfqws2ActiveProcessNativeScenario(t *testing.T, mode, scenario string) {
 	if err != nil || prepared == nil {
 		t.Fatalf("active native: stage=START_PREPARED owner-step=%s elapsed-ms=%d outcome=unknown", nfqws2ActiveNativeTrace(err), time.Since(start).Milliseconds())
 	}
+	var stopped NFQWSScopedProcessProof
 	if scenario == "prepared-cancel" {
 		cancelRequest()
 		ctx, finish := context.WithTimeout(context.Background(), 5*time.Second)
@@ -265,6 +301,7 @@ func nfqws2ActiveProcessNativeScenario(t *testing.T, mode, scenario string) {
 		if err != nil || !proof.Acknowledged || !proof.Receipt.WaitECHILD || !proof.Receipt.DirectReaped || !proof.Receipt.Cancelled || proof.Receipt.ExitCode != 125 {
 			t.Fatal("active native: stage=PRECOMMIT_ABORT_ECHILD_ACK outcome=unknown")
 		}
+		stopped = proof
 	} else {
 		committed := func(ctx context.Context, h *NFQWSActiveHandle, obs NFQWSActiveObservation) error {
 			if obs.Binding != binding {
@@ -311,8 +348,111 @@ func nfqws2ActiveProcessNativeScenario(t *testing.T, mode, scenario string) {
 		if err != nil || !proof.Acknowledged || !proof.Receipt.WaitECHILD || !proof.Receipt.DirectReaped || !proof.Receipt.Cancelled || proof.Receipt.ExitCode != 125 {
 			t.Fatal("active native: stage=STOP_ECHILD_ACK outcome=unknown")
 		}
+		stopped = proof
 	}
 	checkClosing("CLOSING_EMPTY_CAPTURE_ABSENCE")
+	leasePath := filepath.Join(a.StateRoot, nfqws2LeaseFile)
+	owner := prepared.owner
+	if active != nil {
+		owner = active.owner
+	}
+	retireCtx, finishRetire := context.WithTimeout(context.Background(), 30*time.Second)
+	defer finishRetire()
+	commonCalls, commonStage := 0, "UNUSED"
+	var replacement []byte
+	testCommon := func(ctx context.Context, actual NFQWSExecutionBinding, proof NFQWSScopedProcessProof) error {
+		commonCalls++
+		commonStage = "RECEIPT_OPENING"
+		if ctx != retireCtx || commonCalls != 1 || actual != binding || proof != stopped || checkCommonReceipt(ctx) != nil {
+			return ErrNFQWSScopedOwner
+		}
+		commonStage = "TERMINAL_AND_NO_EFFECTS"
+		terminal, err := nfqws2ActiveRetirementTerminal(ctx, owner)
+		if err != nil || terminal.proof() != stopped || empty(ctx) != nil || noCapture(ctx) != nil {
+			return ErrNFQWSScopedOwner
+		}
+		commonStage = "CLOSING_NO_EFFECTS_RECEIPT"
+		if noCapture(ctx) != nil || empty(ctx) != nil || checkCommonReceipt(ctx) != nil {
+			return ErrNFQWSScopedOwner
+		}
+		if scenario == "retirement-replacement" {
+			commonStage = "REPLACE_TEST_OWNED_TERMINAL_IMAGE"
+			image, err := restorejournal.ReadFileImage(ctx, leasePath)
+			if err != nil || !image.Exists {
+				return ErrNFQWSScopedOwner
+			}
+			// Replace this stopped test owner's file during COMMON. The extra
+			// newline keeps the full decoded lease unchanged: a refusal must
+			// detect the actual platform's closing image, not malformed JSON.
+			replacement = append(append([]byte(nil), image.Data...), '\n')
+			decoded, decodeErr := nfqws2DecodeActiveLease(restorejournal.Image{Exists: true, Data: replacement}, c.StateRoot, c.Owner)
+			if decodeErr != nil || decoded.proof() != stopped {
+				return ErrNFQWSScopedOwner
+			}
+			root, err := ownedfs.Open(a.StateRoot)
+			if err != nil {
+				return ErrNFQWSScopedOwner
+			}
+			err = root.WriteAtomic(nfqws2LeaseFile, replacement, 0600)
+			err = errors.Join(err, root.Close())
+			if err != nil {
+				return ErrNFQWSScopedOwner
+			}
+		}
+		commonStage = "VERIFIED_TEST_COMMON_NO_EFFECTS"
+		return ctx.Err()
+	}
+	if active != nil {
+		err = a.retireActiveNFQWSProcess(retireCtx, active, testCommon)
+	} else {
+		err = a.retirePreparedNFQWSProcess(retireCtx, prepared, testCommon)
+	}
+	image, imageErr := restorejournal.ReadFileImage(retireCtx, leasePath)
+	nfqws2ActiveAdapterMu.Lock()
+	participant := a.activeProcess
+	nfqws2ActiveAdapterMu.Unlock()
+	replacementRefused := scenario == "retirement-replacement"
+	if replacementRefused {
+		if !errors.Is(err, ErrNFQWSManagedProcessUnknown) || commonCalls != 1 || commonStage != "VERIFIED_TEST_COMMON_NO_EFFECTS" || imageErr != nil || !image.Exists || !bytes.Equal(image.Data, replacement) || participant != owner {
+			t.Fatalf("active native: stage=RETIRE_REPLACEMENT_REFUSAL test-common-step=%s outcome=unknown", commonStage)
+		}
+		// No restore/retry/adoption: the expected refusal keeps the original
+		// participant fenced and the replaced file present until test teardown.
+	} else {
+		if err != nil || commonCalls != 1 || imageErr != nil || image.Exists || participant != nil {
+			t.Fatalf("active native: stage=RETIRE_FILE_ABSENCE owner-step=%s test-common-step=%s outcome=unknown", nfqws2ActiveNativeTrace(err), commonStage)
+		}
+		// Reopen the actual writer after retirement to prove Close released it.
+		target, openErr := restorejournal.OpenFileTarget(leasePath)
+		if openErr != nil {
+			t.Fatal("active native: stage=RETIRED_WRITER_REOPEN outcome=unknown")
+		}
+		absent, readErr := target.Read(retireCtx)
+		closeErr := target.Close()
+		if readErr != nil || closeErr != nil || absent.Exists {
+			t.Fatal("active native: stage=RETIRED_WRITER_ABSENCE outcome=unknown")
+		}
+		if _, err := nfqws2ActiveRetirementTerminal(retireCtx, owner); !errors.Is(err, ErrNFQWSManagedProcessUnknown) {
+			t.Fatal("active native: stage=RETIRED_ACTUAL_READER outcome=unknown")
+		}
+		var staleProof NFQWSScopedProcessProof
+		var staleErr error
+		if active != nil {
+			staleProof, staleErr = active.Stop(retireCtx)
+		} else {
+			staleProof, staleErr = prepared.Stop(retireCtx)
+		}
+		if staleProof != (NFQWSScopedProcessProof{}) || !errors.Is(staleErr, ErrNFQWSManagedProcessUnknown) {
+			t.Fatal("active native: stage=RETIRED_HANDLE_CLEANUP_AUTHORITY outcome=unknown")
+		}
+	}
+	if checkCommonReceipt(retireCtx) != nil {
+		t.Fatal("active native: stage=TEST_COMMON_CLOSING_RECEIPT outcome=unknown")
+	}
+	checkClosing("POST_RETIREMENT_EMPTY_CAPTURE_ABSENCE")
+	// Teardown removes only this test's original private fixture after exact
+	// Stop proof and independent closing inventory, including expected negative
+	// replacement evidence. It never clears/reuses a production participant.
 	safeCleanup = true
-	t.Logf("active native: mode=%s scenario=%s genuine-child=true sole-join-echild=true parent-ack=true closing-empty=true elapsed-ms=%d rules-mutated=false common-journals-tested=false capability=ungranted", mode, scenario, time.Since(start).Milliseconds())
+	t.Logf("active native: mode=%s scenario=%s genuine-child=true sole-join-echild=true parent-ack=true closing-empty=true ownership-unlinked=%t expected-replacement-refused=%t participant-fence-retained=%t test-common-no-effects-receipt=true test-fixture-teardown=true elapsed-ms=%d rules-mutated=false common-journals-tested=false real-manager-tested=false capability=ungranted", mode, scenario, !replacementRefused, replacementRefused, replacementRefused, time.Since(start).Milliseconds())
 }
