@@ -857,6 +857,22 @@ func d10NativeChild(t *testing.T) {
 			t.Fatalf("owned fixture setup: %v %s", err, out)
 		}
 	}
+	// Health reads the FIB for an actual LAN source with iif br0. Like the
+	// native router fixture, this private namespace must permit IPv4 forwarding.
+	// Set this before rp_filter: changing ip_forward resets IPv4 defaults.
+	const forwarding = "/proc/sys/net/ipv4/ip_forward"
+	beforeForwarding, err := os.ReadFile(forwarding)
+	if err != nil || (strings.TrimSpace(string(beforeForwarding)) != "0" && strings.TrimSpace(string(beforeForwarding)) != "1") {
+		t.Fatal("private router forwarding input unavailable", d10NativeErrorClass(err))
+	}
+	if err := os.WriteFile(forwarding, []byte("1\n"), 0600); err != nil {
+		t.Fatal("private router forwarding setup", d10NativeErrorClass(err))
+	}
+	afterForwarding, err := os.ReadFile(forwarding)
+	if err != nil || strings.TrimSpace(string(afterForwarding)) != "1" {
+		t.Fatal("private router forwarding readback refused", d10NativeErrorClass(err))
+	}
+	t.Logf("owned router IPv4 forwarding: before=%s after=1", strings.TrimSpace(string(beforeForwarding)))
 	if err := os.WriteFile("/proc/sys/net/ipv4/conf/all/rp_filter", []byte("0\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
