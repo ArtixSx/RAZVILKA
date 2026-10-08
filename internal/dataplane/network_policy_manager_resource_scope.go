@@ -39,6 +39,7 @@ type executionResourceScope struct {
 	issued             map[string]*executionTransitResource
 	nfqws              map[string]*NFQWSExecutionResource
 	networkIdentity    *networkPolicyIdentity
+	nfqwsTransfer      *nfqwsExecutionTransferBarrier
 }
 
 type executionTransitResource struct {
@@ -89,14 +90,27 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 }
 
 func (s *executionResourceScope) context() context.Context {
-	ctx := context.WithValue(s.ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
+	return s.contextWith(s.ctx)
+}
+
+// Preserve the actual phase's cancellation and values, including a finite
+// original-owner cleanup context. The issuer still checks its own lifetime.
+func (s *executionResourceScope) contextWith(ctx context.Context) context.Context {
+	ctx = context.WithValue(ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
 	return context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
 }
 
 // Called with s.mu held. Actual owner readback runs outside this mutex and
 // rechecks the matching record after returning, so read-only guards can reenter.
 func (s *executionResourceScope) checkCurrent(ctx context.Context, resource *executionTransitResource, forward bool) error {
-	if !s.open || s.failure != nil || s.guard == nil || ctx == nil || s.manager.StateRoot != s.managerRoot || s.manager.executionNetworkIdentity() != s.networkIdentity {
+	return s.checkOriginalOwner(ctx, resource, forward, false)
+}
+
+// A failed journal write cannot erase the original physical owner. Only the
+// separately pre-issued NFQ cleanup capability may ignore that sticky error;
+// the final journal still remains fenced. Forward use always checks failure.
+func (s *executionResourceScope) checkOriginalOwner(ctx context.Context, resource *executionTransitResource, forward, originalNFQCleanup bool) error {
+	if !s.open || s.failure != nil && !originalNFQCleanup || s.guard == nil || ctx == nil || s.manager.StateRoot != s.managerRoot || s.manager.executionNetworkIdentity() != s.networkIdentity {
 		return errors.Join(ErrNodeTransitUnavailable, s.failure)
 	}
 	if err := ctx.Err(); err != nil {
@@ -362,7 +376,17 @@ func (s *executionResourceScope) close() error {
 	if changed {
 		_ = s.persist() // Failure is sticky; pending never becomes terminal.
 	}
-	err := errors.Join(s.failure, validateExecutionResources(*s.execution, true))
+	// Closing one temporary phase cannot revoke another participant's retained
+	// Apply owner. Structural validation still covers the complete execution;
+	// only this issuer's own resources must already be terminal at its close.
+	ownedExecution := *s.execution
+	ownedExecution.Resources = nil
+	for _, resource := range s.execution.Resources {
+		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil {
+			ownedExecution.Resources = append(ownedExecution.Resources, resource)
+		}
+	}
+	err := errors.Join(s.failure, validateExecutionResources(*s.execution, false), validateExecutionResources(ownedExecution, true))
 	s.closedErr = errors.Join(err, s.owned.Close())
 	return s.closedErr
 }

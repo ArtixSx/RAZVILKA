@@ -44,6 +44,11 @@ type NFQWSExecutionResource struct {
 	activeReadback    nfqwsExecutionActiveReadback
 	activeObservation *NFQWSActiveObservation
 	transferUsed      bool
+	preparedOwner     *NFQWSPreparedHandle
+	transferGuards    *nfqwsExecutionTransferGuards
+	transferEntered   bool
+	transferACK       bool
+	finalOwner        *NFQWSActiveHandle
 }
 
 // AcquireNFQWSExecutionResource requires the private issuer and actual owner
@@ -188,6 +193,9 @@ func (r *NFQWSExecutionResource) matching(binding NFQWSExecutionBinding) (int, e
 }
 
 func (r *NFQWSExecutionResource) check(ctx context.Context, forward bool) error {
+	if !forward && r.activeCommand != nil {
+		return r.checkOriginalCleanup(ctx)
+	}
 	if err := r.scope.check(ctx, &executionTransitResource{relative: r.relative, anchor: r.anchor}, forward); err != nil {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}

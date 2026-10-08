@@ -1130,7 +1130,7 @@ func (m *Manager) Deactivate(ctx context.Context) (Deactivation, error) {
 // commit callback executes only after all live health checks pass. Any failure,
 // including a failed config commit, rolls prepared adapters back in reverse
 // order before returning.
-func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() error, error)) (Execution, error) {
+func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() error, error)) (result Execution, resultErr error) {
 	if m == nil || m.StateRoot == "" {
 		return Execution{}, errors.New("dataplane state root is not configured")
 	}
@@ -1212,6 +1212,15 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	var undoCommit func() error
 	commitPublicationAttempted := false
 	liveMutation := false
+	var activeNFQScope *executionResourceScope
+	defer func() {
+		if activeNFQScope != nil {
+			if err := activeNFQScope.close(); err != nil {
+				resultErr = errors.Join(resultErr, executionJournalError(err))
+				result.RollbackVerified = false
+			}
+		}
+	}()
 	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
 		restoring := phase == "rollback" || phase == "verify-rollback"
 		if !restoring {
@@ -1240,7 +1249,17 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			liveMutation = true
 		}
 		var err error
-		if (phase == "health" || phase == "canary") && validPlanID(plan.PlanID) && validPlanDigest(plan.Digest) {
+		_, actualNFQ := adapter.(*NFQWS2Adapter)
+		if actualNFQ && plan.LAN != nil && (phase == "activate" || phase == "health" || phase == "commit-adapter" || restoring) {
+			if activeNFQScope == nil && !restoring {
+				activeNFQScope, err = m.newExecutionResourceScope(ctx, plan, adapter.ID(), &execution, transactionRoot)
+			}
+			if err == nil && activeNFQScope != nil {
+				err = action(activeNFQScope.contextWith(runCtx), cloneExecutionResourcePlan(activeNFQScope.plan), adapterRoot)
+			} else if restoring {
+				err = action(runCtx, plan, adapterRoot)
+			}
+		} else if (phase == "health" || phase == "canary") && validPlanID(plan.PlanID) && validPlanDigest(plan.Digest) {
 			var scope *executionResourceScope
 			scope, err = m.newExecutionResourceScope(runCtx, plan, adapter.ID(), &execution, transactionRoot)
 			if err == nil {
@@ -1286,7 +1305,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			plan.RouteEvidence[index].Observed = evidence.None
 		}
 		execution.State = "rolling-back"
-		rollbackErr := errors.Join(writeExecution(), validateExecutionResources(execution, true))
+		rollbackErr := writeExecution()
 		var gate Adapter
 		for i := len(prepared) - 1; i >= 0; i-- {
 			adapter := prepared[i]
@@ -1332,6 +1351,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			verified = verified && confirmed && err == nil
 			consumersVerified = consumersVerified && confirmed && err == nil
 		}
+		// Original resource owners must first get their bounded rollback and
+		// independent readback opportunity. Pending metadata cannot itself
+		// prevent exact cleanup; it still prevents removing the LAN boundary.
+		resourceErr := validateExecutionResources(execution, true)
+		rollbackErr = errors.Join(rollbackErr, resourceErr)
+		verified = verified && resourceErr == nil
+		consumersVerified = consumersVerified && resourceErr == nil
 		if gate != nil {
 			if liveMutation && !consumersVerified {
 				// A successful rollback call alone cannot authorize removing the
@@ -1585,6 +1611,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 		}
 	}
+	if activeNFQScope != nil {
+		if commit == nil {
+			return execution, fail(ErrNFQWSScopedOwner)
+		}
+		if err := activeNFQScope.beginNFQWSTransfer(ctx); err != nil {
+			return execution, fail(err)
+		}
+	}
 	if commit != nil {
 		var err error
 		liveMutation = true
@@ -1595,6 +1629,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
 		return execution, fail(err)
+	}
+	if activeNFQScope != nil {
+		if err := activeNFQScope.commitNFQWSTransfer(ctx); err != nil {
+			return execution, fail(err)
+		}
 	}
 	plan.State = "committed"
 	plan.ObservedEvidence = plan.RequiredEvidence
