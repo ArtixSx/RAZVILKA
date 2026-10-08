@@ -69,10 +69,17 @@ func boundedJobDirectories(directory string) ([]os.DirEntry, error) {
 }
 
 func (a *SelfUpdateFileAdapter) journalReaderImages(ctx context.Context, review fileReview) ([]selfupdatejournal.BinaryImage, error) {
+	return a.journalReaderImagesWithCurrent(ctx, review, review.OldExecutableSHA256)
+}
+
+// A component writer observes the actually installed controller after a
+// terminal upgrade, while Prepare observes the pre-upgrade reviewed image.
+// Both use the same concrete helper/candidate/retained inventory and seals.
+func (a *SelfUpdateFileAdapter) journalReaderImagesWithCurrent(ctx context.Context, review fileReview, currentSHA string) ([]selfupdatejournal.BinaryImage, error) {
 	if a == nil || a.owned == nil || !jobIDPattern.MatchString(review.ID) {
 		return nil, ErrFileProtocol
 	}
-	images := []selfupdatejournal.BinaryImage{{Path: filepath.Join(a.installation, "bin/razvilka"), SHA256: review.OldExecutableSHA256}}
+	images := []selfupdatejournal.BinaryImage{{Path: filepath.Join(a.installation, "bin/razvilka"), SHA256: currentSHA}}
 	entries, err := boundedJobDirectories(a.directory)
 	if err != nil {
 		return nil, err

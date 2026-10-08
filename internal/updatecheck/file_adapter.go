@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
@@ -329,10 +330,14 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	if err != nil {
 		return "", err
 	}
-	if err := checkFileCapabilitiesForNodeHistory(ctx, binary, requiredNodeReader, probeFileCapability); err != nil {
+	requiredComponentReader, componentSeal, err := components.InspectRetainedManagedUpdateReadVersion(ctx, "/opt/var/lib/razvilka/components")
+	if err != nil {
 		return "", err
 	}
-	if err := checkFileCapabilitiesForNodeHistory(ctx, record.Deployment.Executable, requiredNodeReader, probeFileCapability); err != nil {
+	if err := checkFileCapabilitiesForHistories(ctx, binary, requiredNodeReader, requiredComponentReader, probeFileCapability); err != nil {
+		return "", err
+	}
+	if err := checkFileCapabilitiesForHistories(ctx, record.Deployment.Executable, requiredNodeReader, requiredComponentReader, probeFileCapability); err != nil {
 		return "", errors.New("current-file-controller-capability-refused")
 	}
 	if err := root.MkdirAll("staged", 0700); err != nil {
@@ -424,6 +429,10 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	if err != nil || freshNodeReader != requiredNodeReader {
 		return "", errors.Join(ErrReviewChanged, err)
 	}
+	freshComponentReader, freshComponentSeal, err := components.InspectRetainedManagedUpdateReadVersion(ctx, "/opt/var/lib/razvilka/components")
+	if err != nil || freshComponentReader != requiredComponentReader || freshComponentSeal != componentSeal {
+		return "", errors.Join(ErrReviewChanged, err)
+	}
 	freshAuthority, err := authorityReview(ctx, record.Job.ID)
 	if err != nil || freshAuthority != authority {
 		return "", errors.Join(ErrFileProtocol, err)
@@ -461,11 +470,19 @@ func checkFileCapabilities(ctx context.Context, binary string) error {
 	if err != nil {
 		return err
 	}
-	return checkFileCapabilitiesForNodeHistory(ctx, binary, required, probeFileCapability)
+	componentRequired, err := components.RequiredRetainedManagedUpdateReadVersion(ctx, "/opt/var/lib/razvilka/components")
+	if err != nil {
+		return err
+	}
+	return checkFileCapabilitiesForHistories(ctx, binary, required, componentRequired, probeFileCapability)
 }
 
 func checkFileCapabilitiesForNodeHistory(ctx context.Context, binary string, required int, probe func(context.Context, string, string) (string, error)) error {
-	if !knownNodeHistoryReadVersion(required) || probe == nil {
+	return checkFileCapabilitiesForHistories(ctx, binary, required, components.ComponentUpdateSchema, probe)
+}
+
+func checkFileCapabilitiesForHistories(ctx context.Context, binary string, required, componentRequired int, probe func(context.Context, string, string) (string, error)) error {
+	if !knownNodeHistoryReadVersion(required) || !knownComponentReadVersion(componentRequired) || probe == nil {
 		return ErrFileProtocol
 	}
 	// Keep the existing reader2 floor for ordinary file-protocol2 controllers.
@@ -485,7 +502,12 @@ func checkFileCapabilitiesForNodeHistory(ctx context.Context, binary string, req
 		if err != nil {
 			return errors.New("candidate-recovery-capability-refused")
 		}
-		if capability.flag == "-node-history-read-version" {
+		if capability.flag == "-component-update-schema" {
+			version, err := parseComponentReadVersion(output)
+			if err != nil || version < max(components.ComponentUpdateSchema, componentRequired) {
+				return ErrComponentHistoryAdmission
+			}
+		} else if capability.flag == "-node-history-read-version" {
 			version, err := parseNodeHistoryReadVersion(output)
 			if err != nil || version < required {
 				return ErrNodeHistoryAdmission
