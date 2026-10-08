@@ -83,3 +83,27 @@ func TestManagedCompatibilityInactivePublicReviewRefusesMissingOwnersWithoutWrit
 		t.Fatal("copied review closed original or any refusal changed source")
 	}
 }
+
+func TestManagedCompatibilityInactiveAcceptsOnlyDisabledCompatibleInitialSlot(t *testing.T) {
+	m, err := New(filepath.Join(t.TempDir(), "strategy-lab.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Executor, m.Validator = nil, CompatibleValidator{}
+	m.mu.RLock()
+	provider, kind, err := managedCompatibilityInactiveStateLocked(m, nil)
+	m.mu.RUnlock()
+	if err != nil || provider != nil || kind != "disabled-compatible" {
+		t.Fatal("actual disabled initial validator slot was refused", err)
+	}
+	// This is still a source predicate model, never an inactive issuer.
+	for _, validator := range []CompatibleValidator{{TrustedAssets: true}, {Binary: "claimed"}, {Timeout: time.Second}, {BaseArguments: []string{"claimed"}}, {Provider: &SupervisedCompatibilityProvider{}}} {
+		m.Validator = validator
+		m.mu.RLock()
+		_, _, err := managedCompatibilityInactiveStateLocked(m, nil)
+		m.mu.RUnlock()
+		if err == nil {
+			t.Fatal("nonzero/trusted caller declaration became disabled source proof")
+		}
+	}
+}

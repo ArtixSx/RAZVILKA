@@ -144,6 +144,20 @@ func managedCompatibilityInactiveStateLocked(m *Manager, control *operationgate.
 		}
 		kind = "initial"
 	case CompatibleValidator, *CompatibleValidator:
+		var disabled CompatibleValidator
+		switch value := configured.(type) {
+		case CompatibleValidator:
+			disabled = value
+		case *CompatibleValidator:
+			if value == nil {
+				return nil, "", errAdaptiveManagedValidator
+			}
+			disabled = *value
+		}
+		if disabled.Binary == "" && len(disabled.BaseArguments) == 0 && !disabled.TrustedAssets && disabled.Timeout == 0 && disabled.Provider == nil {
+			kind = "disabled-compatible"
+			break
+		}
 		validator, err := adaptiveManagedValidatorLocked(m)
 		if err != nil {
 			return nil, "", err
