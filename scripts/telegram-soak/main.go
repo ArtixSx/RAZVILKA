@@ -316,6 +316,7 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 	if o.Pin.IsValid() {
 		r.TargetMode = "fixed_public_ipv4_original_tls_host"
 	}
+	finalAttempted := false
 	r.Initial = endpointControl(parent, o)
 	if r.Initial.OK && contextStopCause(parent, time.Now()) == nil {
 		prober, err := newHTTPSProber(o, roots)
@@ -377,6 +378,7 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 			r.Protocol.Latency = summarize(protocolLatencies)
 		}
 		if contextStopCause(parent, time.Now()) == nil {
+			finalAttempted = true
 			r.Final = endpointControl(parent, o)
 			if r.WindowCompleted && r.Attempts > 0 {
 				r.Outcome, r.ExitCode = "completed_with_failures", 2
@@ -388,7 +390,9 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 	}
 	finished := time.Now()
 	if cause := contextStopCause(parent, finished); cause != nil {
-		r.Final.Code = "not_attempted_parent_cancellation"
+		if !finalAttempted {
+			r.Final.Code = "not_attempted_parent_cancellation"
+		}
 		r.Outcome, r.ExitCode = "parent_deadline", 1
 		if errors.Is(cause, context.Canceled) {
 			r.Outcome, r.ExitCode = "canceled", 130

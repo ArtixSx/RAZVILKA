@@ -50,13 +50,14 @@ func fixtureTLS(t *testing.T, name string, handler http.HandlerFunc) (*httptest.
 }
 
 type socksFixture struct {
-	address    string
-	commands   chan string
-	connected  chan struct{}
-	disconnect chan struct{}
-	mu         sync.Mutex
-	conns      map[net.Conn]bool
-	wg         sync.WaitGroup
+	address       string
+	commands      chan string
+	connected     chan struct{}
+	disconnect    chan struct{}
+	finalGreeting chan struct{}
+	mu            sync.Mutex
+	conns         map[net.Conn]bool
+	wg            sync.WaitGroup
 }
 
 // No target supplied by the probe is dialed. Every CONNECT is mapped to one
@@ -67,15 +68,18 @@ func fixtureSOCKS(t *testing.T, backend, stall string, mtBackend ...string) *soc
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &socksFixture{address: listener.Addr().String(), commands: make(chan string, 32), connected: make(chan struct{}, 16), disconnect: make(chan struct{}, 16), conns: map[net.Conn]bool{}}
+	f := &socksFixture{address: listener.Addr().String(), commands: make(chan string, 32), connected: make(chan struct{}, 16), disconnect: make(chan struct{}, 16), finalGreeting: make(chan struct{}), conns: map[net.Conn]bool{}}
 	f.wg.Add(1)
 	go func() {
 		defer f.wg.Done()
+		connections := 0
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
+			connections++
+			connectionNumber := connections
 			f.mu.Lock()
 			f.conns[conn] = true
 			f.mu.Unlock()
@@ -88,7 +92,11 @@ func fixtureSOCKS(t *testing.T, backend, stall string, mtBackend ...string) *soc
 				if _, err := io.ReadFull(conn, greeting[:]); err != nil || greeting != [3]byte{5, 1, 0} {
 					return
 				}
-				if stall == "greeting" {
+				// A single HTTPS cycle has initial, request, then final greetings.
+				if stall == "greeting" || stall == "final_greeting" && connectionNumber == 3 {
+					if stall == "final_greeting" {
+						close(f.finalGreeting)
+					}
 					_, _ = io.Copy(io.Discard, conn)
 					f.disconnect <- struct{}{}
 					return
@@ -350,6 +358,41 @@ func TestSamplingWaitHonorsDeadlineBeforeContextTimerDelivery(t *testing.T) {
 	parent.Context = canceled
 	if err := waitUntil(parent, time.Now()); !errors.Is(err, context.Canceled) {
 		t.Fatal("expired deadline replaced explicit cancellation", err)
+	}
+}
+
+func TestCancellationDuringFinalGreetingPreservesAttemptedControl(t *testing.T) {
+	server, roots := fixtureTLS(t, telegramHost, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "Telegram fixture")
+	})
+	socks := fixtureSOCKS(t, server.Listener.Addr().String(), "final_greeting")
+	o := fixtureOptions(socks.address)
+	o.ControlTimeout = 500 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	type observed struct {
+		r   report
+		err error
+	}
+	result := make(chan observed, 1)
+	go func() {
+		r, err := observe(ctx, o, roots)
+		result <- observed{r, err}
+	}()
+	select {
+	case <-socks.finalGreeting:
+	case <-time.After(time.Second):
+		t.Fatal("final SOCKS greeting never started")
+	}
+	cancel()
+	select {
+	case got := <-result:
+		r := got.r
+		if got.err != nil || r.Outcome != "canceled" || r.ExitCode != 130 || !r.WindowCompleted || !r.Initial.OK || r.Attempts != 1 || r.Accepted != 1 || r.Failures != 0 || r.Final.OK || r.Final.Code != "canceled" || len(socks.commands) != 1 {
+			t.Fatal("attempted final control became not attempted", got)
+		}
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("final SOCKS greeting ignored cancellation")
 	}
 }
 
