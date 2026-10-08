@@ -157,14 +157,15 @@ type Review struct {
 	state *reviewState
 }
 type reviewState struct {
-	self     *Review
-	mu       sync.Mutex
-	issuer   *Observer
-	fence    lifecycleFence
-	snapshot Snapshot
-	closed   bool
-	invalid  bool
-	closeErr error
+	self            *Review
+	mu              sync.Mutex
+	issuer          *Observer
+	fence           lifecycleFence
+	snapshot        Snapshot
+	closed          bool
+	invalid         bool // forward selection/physical revocation; never restored
+	physicalInvalid bool // independent sticky physical failure, including unknown facts
+	closeErr        error
 }
 
 // NewLinux requires explicit interface intent and the actual proc-net provider.
@@ -296,6 +297,14 @@ func (o *Observer) Observe(ctx context.Context) (*Review, error) {
 	return r, nil
 }
 func (o *Observer) capture(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence, baseline *Snapshot) (Snapshot, error) {
+	snapshot, _, err := o.captureObservation(ctx, selection, expected, fence, baseline, true)
+	return snapshot, err
+}
+
+// Only forward observations reread user selection. Both paths retain identical
+// physical capture passes and closing original NI/fence checks. physicalFailed
+// distinguishes actual physical uncertainty from a selection-only refusal.
+func (o *Observer) captureObservation(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence, baseline *Snapshot, checkSelection bool) (snapshot Snapshot, physicalFailed bool, err error) {
 	var result Snapshot
 	for pass := 0; pass < 2; pass++ {
 		stage := [2]string{"capture.initial", "capture.pass"}[pass]
@@ -333,21 +342,30 @@ func (o *Observer) capture(ctx context.Context, selection Selection, expected ne
 			return nil
 		})
 		if err != nil {
-			return Snapshot{}, boundary(stage+".current", err)
+			return Snapshot{}, true, boundary(stage+".current", err)
 		}
 		current := Snapshot{Identity: expected, Selection: selection, Segments: segments, Devices: devices}
 		if pass == 0 {
 			result = current
 		} else if !reflect.DeepEqual(result, current) {
-			return Snapshot{}, boundary("capture.pass.snapshot", at(snapshotDifference(result, current), nil))
+			return Snapshot{}, true, boundary("capture.pass.snapshot", at(snapshotDifference(result, current), nil))
 		}
 	}
-	closing, err := o.readSelection(ctx)
-	if err != nil {
-		return Snapshot{}, boundary("capture.closing.selection.read", err)
+	// A later selection refusal must not hide physical drift already observed
+	// against the original baseline, even if both capture passes agree.
+	if baseline != nil {
+		originalComparison := result
+		originalComparison.ReviewID = baseline.ReviewID
+		physicalFailed = !reflect.DeepEqual(originalComparison, *baseline)
 	}
-	if !reflect.DeepEqual(selection, closing) {
-		return Snapshot{}, at("capture.closing.selection.changed", nil)
+	if checkSelection {
+		closing, err := o.readSelection(ctx)
+		if err != nil {
+			return Snapshot{}, physicalFailed, boundary("capture.closing.selection.read", err)
+		}
+		if !reflect.DeepEqual(selection, closing) {
+			return Snapshot{}, physicalFailed, at("capture.closing.selection.changed", nil)
+		}
 	}
 	// Catch queued churn during the closing selection read in the same scope.
 	if err := o.source.current(ctx, func(c context.Context, id netidentity.Identity) error {
@@ -363,9 +381,9 @@ func (o *Observer) capture(ctx context.Context, selection Selection, expected ne
 		}
 		return nil
 	}); err != nil {
-		return Snapshot{}, boundary("capture.closing.current", err)
+		return Snapshot{}, true, boundary("capture.closing.current", err)
 	}
-	return result, nil
+	return result, physicalFailed, nil
 }
 
 // Verify uses only the same live Review, original selection and original kernel
@@ -384,7 +402,7 @@ func (o *Observer) Verify(ctx context.Context, r *Review) error {
 	s := r.state
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.issuer != o || s.closed || s.invalid || s.fence == nil {
+	if s.issuer != o || s.closed || s.invalid || s.physicalInvalid || s.fence == nil {
 		return at("verify.review.unavailable", nil)
 	}
 	selection, err := o.readSelection(c)
@@ -395,10 +413,11 @@ func (o *Observer) Verify(ctx context.Context, r *Review) error {
 		}
 		return at("verify.selection.changed", nil)
 	}
-	snapshot, err := o.capture(c, selection, s.snapshot.Identity, s.fence, &s.snapshot)
+	snapshot, physicalFailed, err := o.captureObservation(c, selection, s.snapshot.Identity, s.fence, &s.snapshot, true)
 	snapshot.ReviewID = s.snapshot.ReviewID
 	if err != nil || !reflect.DeepEqual(snapshot, s.snapshot) {
 		s.invalid = true
+		s.physicalInvalid = physicalFailed || err == nil
 		if err != nil {
 			return boundary("verify.capture", err)
 		}
