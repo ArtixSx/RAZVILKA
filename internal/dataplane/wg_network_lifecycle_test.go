@@ -50,6 +50,11 @@ func wgNetworkCommandOwnerFixture(t *testing.T) (*WARPWireGuardAdapter, *wgOpera
 
 func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Plan) (*WARPWireGuardAdapter, *wgOperationOwner, context.Context, context.CancelFunc, func(), string) {
 	t.Helper()
+	// These fixtures inherit this test binary as their actual child. Keep all
+	// race checks and the genuine Wait, but omit the race runtime's artificial
+	// exit sleep: it alone exhausts a one-second cleanup budget and compounds
+	// across COMMON's many commands. The current parent runtime is unchanged.
+	t.Setenv("GORACE", strings.TrimSpace(os.Getenv("GORACE")+" atexit_sleep_ms=0"))
 	a.Runner = wgExecRunner{adapter: a}
 	manager := New(t.TempDir())
 	if err := manager.Register(a); err != nil {
