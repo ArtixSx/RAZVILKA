@@ -385,6 +385,11 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 	if intent.config.SafeMode || intent.config.ServiceControl.Stopped {
 		return intent, recoveryBlock("settings-changed", "")
 	}
+	if intent.config.NetworkPolicy != nil || intent.config.AppliedNetworkPolicy != nil || intent.config.InactiveResourceExclusions != nil {
+		// This legacy reapply copies old positive routes. It cannot consume the
+		// unified negative policy or revive an old scope beneath new exclusions.
+		return intent, recoveryBlock("unsupported-plan", "")
+	}
 	if previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop || previous.Revision != intent.config.AppliedRevision {
 		return intent, recoveryBlock("scope-changed", "")
 	}
@@ -610,6 +615,9 @@ func (a *App) nodeRecoveryReviewMessage(status nodeRecoveryStatus) string {
 }
 
 func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, error) {
+	if intent.config.NetworkPolicy != nil || intent.config.AppliedNetworkPolicy != nil || intent.config.InactiveResourceExclusions != nil {
+		return dataplane.Plan{}, recoveryBlock("unsupported-plan", "")
+	}
 	var engines []dataplane.Engine
 	if intent.plan.DNS != nil {
 		capable := a.Dataplane != nil && a.Dataplane.Capable("dns-scoped")

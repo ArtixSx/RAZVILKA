@@ -646,6 +646,19 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 			return evidence, err
 		}
 	}
+	pinsByRoute := make(map[int][]netip.Addr)
+	if a.ID() == "xray" || a.ID() == "sing-box" {
+		for index, route := range plan.Routes {
+			if !a.nodeServiceIPScopeRequired(route) {
+				continue
+			}
+			pins, err := a.admittedNodeServiceIPv4(ctx, route)
+			if err != nil {
+				return evidence, err
+			}
+			pinsByRoute[index] = pins
+		}
+	}
 	if err := a.Processes.Start(ctx, spec); err != nil {
 		return evidence, fmt.Errorf("start isolated %s candidate: %w", a.ID(), err)
 	}
@@ -675,11 +688,21 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 		probe = probeTunnelViaSOCKS
 	}
 	probed := false
-	for _, route := range plan.Routes {
+	for index, route := range plan.Routes {
 		if strings.TrimSpace(route.ProbeURL) == "" {
 			continue
 		}
 		probed = true
+		if pins, finite := pinsByRoute[index]; finite {
+			// CIDR-only Xray uses AsIs and a blackhole default. Send the
+			// admitted literal immediately, retaining original Host/SNI and
+			// the same HTTPS response evaluator; never try an opaque FQDN.
+			if err := a.probeNodeServiceIPPins(ctx, route, address, pins); err != nil {
+				return evidence, err
+			}
+			evidence.ConfirmedRoutes = append(evidence.ConfirmedRoutes, route.ServiceName)
+			continue
+		}
 		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
 		err := probe(probeCtx, route.ProbeURL, address)
 		cancel()
@@ -690,7 +713,7 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 			return evidence, fmt.Errorf("candidate probe for %s failed: %w", route.ServiceName, err)
 		}
 		if a.scopedXray || plan.RequiresNetworkProof() {
-			if err := a.probeNodeServiceIP(ctx, route.ProbeURL, address); err != nil {
+			if err := a.probeNodeServiceIP(ctx, route, address); err != nil {
 				return evidence, err
 			}
 		}
@@ -970,7 +993,7 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 			continue
 		}
 		if (RoutePlan{Routes: []Route{route}}).RequiresNetworkProof() {
-			if err := a.probeNodeServiceIP(ctx, route.ProbeURL, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
+			if err := a.probeNodeServiceIP(ctx, route, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
 				return a.attributeCandidateFailure(ctx, plan, route, state, err)
 			}
 		}

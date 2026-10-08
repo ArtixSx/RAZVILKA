@@ -74,22 +74,70 @@ func probeTunnelViaSOCKSIP(ctx context.Context, rawURL, address string, pinned n
 	return err
 }
 
-func (a *ProxyTunnelAdapter) probeNodeServiceIP(ctx context.Context, rawURL, address string) error {
-	addresses, err := resolveNodeServiceIPv4(ctx, rawURL, a.Resolver)
+func (a *ProxyTunnelAdapter) nodeServiceIPScopeRequired(route Route) bool {
+	return route.NetworkPolicyGeneration != "" || route.NetworkPolicyRole != "" || a.scopedXray && len(route.Domains) == 0
+}
+
+// Admit the complete set before starting a candidate or probing its first pin.
+// The reviewed CIDRs already contain resource negatives; DNS cannot add a new
+// destination to them. Legacy domain diagnostics retain their existing scope.
+func (a *ProxyTunnelAdapter) admittedNodeServiceIPv4(ctx context.Context, route Route) ([]netip.Addr, error) {
+	if err := checkAddressRefreshAuthority(ctx); err != nil {
+		return nil, err
+	}
+	finite := a.nodeServiceIPScopeRequired(route)
+	if finite && (len(route.Domains) != 0 || len(route.CIDRs) == 0) {
+		return nil, ErrNodeResourceDenied
+	}
+	addresses, err := resolveNodeServiceIPv4(ctx, route.ProbeURL, a.Resolver)
+	if err != nil {
+		return nil, err
+	}
+	origin, _ := url.Parse(route.ProbeURL)
+	literal, literalErr := netip.ParseAddr(origin.Hostname())
+	for _, pinned := range addresses {
+		if literalErr == nil && literal != pinned || finite && !nodeRouterPinInScope(pinned, route.CIDRs) {
+			return nil, ErrNodeResourceDenied
+		}
+	}
+	if err := checkAddressRefreshAuthority(ctx); err != nil {
+		return nil, err
+	}
+	return addresses, nil
+}
+
+func (a *ProxyTunnelAdapter) probeNodeServiceIP(ctx context.Context, route Route, address string) error {
+	addresses, err := a.admittedNodeServiceIPv4(ctx, route)
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if errors.Is(err, ErrNodeResourceDenied) || errors.Is(err, ErrReviewChanged) {
+			return err
+		}
 		return errors.New("node service IP path unavailable: public IPv4 DNS proof required")
 	}
+	return a.probeNodeServiceIPPins(ctx, route, address, addresses)
+}
+
+func (a *ProxyTunnelAdapter) probeNodeServiceIPPins(ctx context.Context, route Route, address string, addresses []netip.Addr) error {
 	probe := a.ServiceIPProbe
 	if probe == nil {
 		probe = probeTunnelViaSOCKSIP
 	}
 	for _, pinned := range addresses {
+		if err := checkAddressRefreshAuthority(ctx); err != nil {
+			return err
+		}
+		if err := checkNodeResourceURL(ctx, route.ProbeURL, pinned); err != nil {
+			return err
+		}
 		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
-		err := probe(probeCtx, rawURL, address, pinned)
+		err := probe(probeCtx, route.ProbeURL, address, pinned)
 		cancel()
+		if guardErr := errors.Join(checkAddressRefreshAuthority(ctx), checkNodeResourceURL(ctx, route.ProbeURL, pinned)); guardErr != nil {
+			return guardErr
+		}
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
