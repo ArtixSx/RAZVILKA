@@ -49,7 +49,7 @@ func nodeAutofallbackFixture(t *testing.T, extras int) (*App, string, nodestore.
 		t.Fatal(err)
 	}
 	// These desired changes must survive both successful and failed fallback.
-	_ = a.Store.UpdateService("telegram", config.ServiceState{Enabled: false, Route: "direct", Sources: []string{"192.168.1.99/32"}})
+	_ = a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct", Sources: []string{"192.168.1.99/32"}})
 	_ = a.Store.UpdateService("youtube", config.ServiceState{Enabled: true, Route: "warp-wg"})
 	return a, currentID, group, adapter, previous
 }

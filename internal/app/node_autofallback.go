@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/netip"
 	"reflect"
 	"slices"
 	"sort"
@@ -199,6 +200,9 @@ func (a *App) nodeAutofallbackRound(ctx context.Context, now time.Time) {
 		if !ok || !state.Enabled || selectedRoute(state) != route.Selected || !strings.HasPrefix(route.Resolved, "sing-box:node-") {
 			continue
 		}
+		if a.nodeServiceResourceAdmission(ctx, cfg, route.ServiceID) != nil {
+			continue
+		}
 		eligible[route.ServiceID] = group
 		entry, found := a.nodeAutofallback.entries[route.ServiceID]
 		if !found || entry.status.GroupID != group.ID {
@@ -371,7 +375,7 @@ func (a *App) newNodeAutofallbackIntent(ctx context.Context, previous dataplane.
 			intent.routeIndex, intent.nodeID = index, strings.TrimPrefix(route.Resolved, "sing-box:")
 		}
 		seen[route.ServiceID] = true
-		intent.base.services = append(intent.base.services, service)
+		intent.base.services = append(intent.base.services, defaultRouteCloneCatalogService(service))
 	}
 	for id, state := range base.config.AppliedServices {
 		if state.Enabled && !seen[id] {
@@ -421,6 +425,9 @@ func (a *App) guardNodeAutofallbackBase(ctx context.Context, intent nodeAutofall
 		service, exists := services[route.ServiceID]
 		if !exists || !nodeRecoveryServiceMatches(route, service) || !reflect.DeepEqual(service.Probes, intent.base.services[index].Probes) {
 			return errNodeRecoveryReview
+		}
+		if err := a.nodeResourceAdmission(ctx, intent.base.config, service, "", netip.Addr{}); err != nil {
+			return err
 		}
 		nodeID := strings.TrimPrefix(route.Resolved, "sing-box:")
 		present := nodeRecoveryNodePresent(snapshot, nodeID, time.Now())

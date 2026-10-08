@@ -95,7 +95,7 @@ func nodeApplyFixture(t *testing.T) (*App, string, *nodeApplyAdapter) {
 	if err = store.ApplyDraft(); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.UpdateService("telegram", config.ServiceState{Enabled: false, Route: "direct", Sources: []string{"192.168.1.3/32"}}); err != nil {
+	if err = store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct", Sources: []string{"192.168.1.3/32"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err = store.UpdateService("youtube", config.ServiceState{Enabled: true, Route: "usque"}); err != nil {
@@ -260,8 +260,8 @@ func TestNodeScopeIsBoundToReviewDigestAndNewServiceIsExplicitlyIdentified(t *te
 		t.Fatal(err)
 	}
 	w = nodeRouteRequest(a, id, "preview", map[string]any{"service_id": "telegram", "scope": nodeScopeSelection{Mode: "all"}}, "owner-a", context.Background())
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"applied_scope_present":false`) || !strings.Contains(w.Body.String(), `"mode":"all","sources":[],"source_count":0`) {
-		t.Fatalf("new service scope is ambiguous: %d %s", w.Code, w.Body.String())
+	if w.Code != 409 || !strings.Contains(w.Body.String(), `"code":"NODE_RESOURCE_REFUSED"`) {
+		t.Fatalf("removed service could be re-enabled through a node pin: %d %s", w.Code, w.Body.String())
 	}
 }
 

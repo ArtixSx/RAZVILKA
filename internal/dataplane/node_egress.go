@@ -45,6 +45,9 @@ func probeNodeEgressPair(ctx context.Context, proxyAddress string, get nodeEgres
 	}
 	var result nodeEgressPair
 	for _, endpoint := range []nodeEgressEndpoint{{url: "https://www.cloudflare.com/cdn-cgi/trace", trace: true}, {url: "https://api.ipify.org/"}} {
+		if err := checkNodeResourceURL(ctx, endpoint.url, endpoint.pinned); err != nil {
+			return nodeEgressPair{directErr: err, proxyErr: err}
+		}
 		if err := ctx.Err(); err != nil {
 			return nodeEgressPair{directErr: err, proxyErr: err}
 		}
@@ -54,8 +57,12 @@ func probeNodeEgressPair(ctx context.Context, proxyAddress string, get nodeEgres
 			pinned, err := httpProbe.pin(resolveCtx, endpoint)
 			stop()
 			if err != nil {
-				done()
 				result = nodeEgressPair{directErr: err, proxyErr: err}
+				guardErr := checkNodeResource(provider, "", netip.Addr{})
+				done()
+				if errors.Is(guardErr, ErrNodeResourceDenied) {
+					return nodeEgressPair{directErr: guardErr, proxyErr: guardErr}
+				}
 				continue
 			}
 			endpoint = pinned
@@ -67,6 +74,12 @@ func probeNodeEgressPair(ctx context.Context, proxyAddress string, get nodeEgres
 				return "", err
 			}
 			ip, err := get(attempt, endpoint, address)
+			if guardErr := checkNodeResource(attempt, "", netip.Addr{}); guardErr != nil {
+				return "", guardErr
+			}
+			if errors.Is(err, ErrNodeResourceDenied) {
+				return "", err
+			}
 			if attempt.Err() != nil {
 				return "", attempt.Err()
 			}
@@ -77,8 +90,16 @@ func probeNodeEgressPair(ctx context.Context, proxyAddress string, get nodeEgres
 			return parsed.String(), nil
 		}
 		result.directIP, result.directErr = measure("")
+		if errors.Is(result.directErr, ErrNodeResourceDenied) {
+			done()
+			result.proxyErr = result.directErr
+			return result
+		}
 		result.proxyIP, result.proxyErr = measure(proxyAddress)
 		done()
+		if errors.Is(result.proxyErr, ErrNodeResourceDenied) {
+			return result
+		}
 		if err := ctx.Err(); err != nil {
 			return nodeEgressPair{directErr: err, proxyErr: err}
 		}
@@ -106,13 +127,23 @@ func probeNodeEgress(ctx context.Context, proxyAddress string, get nodeEgressGet
 		get = (nodeEgressHTTP{}).get
 	}
 	for _, endpoint := range []nodeEgressEndpoint{{url: "https://www.cloudflare.com/cdn-cgi/trace", trace: true}, {url: "https://api.ipify.org/"}} {
+		if err := checkNodeResourceURL(ctx, endpoint.url, endpoint.pinned); err != nil {
+			return "", err
+		}
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
 		attempt, stop := context.WithTimeout(ctx, 5*time.Second)
 		ip, err := get(attempt, endpoint, proxyAddress)
+		guardErr := checkNodeResource(attempt, "", netip.Addr{})
 		attemptErr := attempt.Err()
 		stop()
+		if errors.Is(err, ErrNodeResourceDenied) {
+			return "", err
+		}
+		if errors.Is(guardErr, ErrNodeResourceDenied) {
+			return "", guardErr
+		}
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
@@ -143,6 +174,9 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 		return "", errors.New("egress endpoint must be public HTTPS")
 	}
 	origin, _ := url.Parse(endpoint.url)
+	if err := checkNodeResource(ctx, origin.Hostname(), endpoint.pinned); err != nil {
+		return "", err
+	}
 	if !endpoint.pinned.IsValid() {
 		var err error
 		endpoint, err = p.pin(ctx, endpoint)
@@ -184,6 +218,9 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 			if err != nil || !samePinnedServiceHost(host, origin.Hostname()) || port != "443" || network != "tcp" && network != "tcp4" {
 				return nil, errors.New("egress transport target changed")
 			}
+			if err := checkNodeResource(ctx, host, pinned); err != nil {
+				return nil, err
+			}
 			return dial(ctx, "tcp4", net.JoinHostPort(pinned.String(), "443"))
 		},
 	}
@@ -196,6 +233,9 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 	request.Header.Set("User-Agent", "RAZVILKA-Node-Check/1")
 	response, err := client.Do(request)
 	if err != nil {
+		if guardErr := checkNodeResource(ctx, "", netip.Addr{}); guardErr != nil {
+			return "", guardErr
+		}
 		return "", errors.New("egress HTTPS request failed")
 	}
 	defer response.Body.Close()
@@ -223,6 +263,9 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 	if err != nil || !address.Is4() || address.Is4In6() || !publicfetch.PublicAddress(address) {
 		return "", errors.New("egress response is not public IPv4")
 	}
+	if err := checkNodeResource(ctx, origin.Hostname(), pinned); err != nil {
+		return "", err
+	}
 	return address.String(), nil
 }
 
@@ -231,6 +274,9 @@ func (p nodeEgressHTTP) pin(ctx context.Context, endpoint nodeEgressEndpoint) (n
 		return endpoint, errors.New("egress endpoint must be public HTTPS")
 	}
 	origin, _ := url.Parse(endpoint.url)
+	if err := checkNodeResource(ctx, origin.Hostname(), netip.Addr{}); err != nil {
+		return endpoint, err
+	}
 	resolve := p.resolve
 	if resolve == nil {
 		resolve = netresolve.LookupNetIP
@@ -240,6 +286,9 @@ func (p nodeEgressHTTP) pin(ctx context.Context, endpoint nodeEgressEndpoint) (n
 		return endpoint, errors.New("egress endpoint DNS is unavailable")
 	}
 	for _, address := range addresses {
+		if err := checkNodeResource(ctx, origin.Hostname(), address); err != nil {
+			return endpoint, err
+		}
 		if address.Is4In6() || !publicfetch.PublicAddress(address) {
 			return endpoint, errors.New("egress endpoint DNS is not public")
 		}

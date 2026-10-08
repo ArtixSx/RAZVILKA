@@ -63,6 +63,9 @@ func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned n
 		}
 	}
 	config.ServerName = origin.Hostname()
+	if err := checkNodeResource(ctx, origin.Hostname(), pinned); err != nil {
+		return nil, nil, err
+	}
 	dialer, err := xnetproxy.SOCKS5("tcp", address, nil, &net.Dialer{Timeout: 5 * time.Second})
 	if err != nil {
 		return nil, nil, errors.New("pinned service SOCKS transport is unavailable")
@@ -80,6 +83,9 @@ func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned n
 			if err != nil || !samePinnedServiceHost(host, origin.Hostname()) || port != "443" || network != "tcp" && network != "tcp4" {
 				return nil, errors.New("pinned service transport target changed")
 			}
+			if err := checkNodeResource(ctx, host, pinned); err != nil {
+				return nil, err
+			}
 			return contextDialer.DialContext(ctx, "tcp", net.JoinHostPort(pinned.String(), "443"))
 		},
 	}
@@ -94,6 +100,9 @@ func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned n
 	client := serviceProbeClient(&http.Client{Transport: transport, Timeout: 15 * time.Second}, rawURL)
 	previous := client.CheckRedirect
 	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if err := checkNodeResource(request.Context(), request.URL.Hostname(), pinned); err != nil {
+			return err
+		}
 		if request.URL.Scheme != "https" || request.URL.User != nil || !samePinnedServiceHost(request.URL.Hostname(), origin.Hostname()) || request.URL.Port() != "" && request.URL.Port() != "443" {
 			return errors.New("pinned service redirect changed its origin")
 		}

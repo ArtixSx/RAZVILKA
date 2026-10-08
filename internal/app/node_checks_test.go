@@ -58,7 +58,7 @@ func newNodeJobTest(t *testing.T, count int) (*App, []string) {
 	for i, node := range snapshot.Nodes {
 		ids[i] = node.ID
 	}
-	a := &App{Nodes: store, FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", ProbeURL: "https://telegram.org/"}}}}
+	a := &App{Nodes: store, Store: nodeResourceTestStore(t, "telegram"), FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", ProbeURL: "https://telegram.org/"}}}}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.StartNodeChecks(ctx)
 	t.Cleanup(func() {

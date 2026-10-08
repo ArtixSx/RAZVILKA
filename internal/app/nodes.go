@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
+	"reflect"
 	"strings"
 	"time"
 
@@ -386,6 +388,8 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "NODE_HISTORY_ADMISSION_REQUIRED", "engine": engine, "recorded": false, "working_routes_changed": false, "error": "Совместимость сохранённой истории при откате ещё не подтверждена. Проверка выбранным движком приостановлена."})
 		case result.ErrorCode == "node-cleanup-failed":
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "NODE_CLEANUP_REQUIRED", "error": "Очистка временного процесса не подтверждена. Проверки остановлены до восстановления.", "result": result, "recorded": false, "working_routes_changed": false})
+		case errors.Is(err, dataplane.ErrNodeResourceDenied):
+			writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "code": "NODE_RESOURCE_REFUSED", "recorded": false, "working_routes_changed": false, "error": "Ресурс исключён, не включён в активный список или условия проверки изменились."})
 		case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
 			status, code, message := http.StatusGatewayTimeout, "NODE_CHECK_DEADLINE", "Истекло общее время проверки. Повторите проверку узла."
 			if errors.Is(err, context.Canceled) {
@@ -440,8 +444,8 @@ func (a *App) checkAndRecordNodeForEngine(ctx context.Context, engine, id string
 	if err != nil {
 		return dataplane.NodeCheckResult{}, nodestore.Snapshot{}, err
 	}
-	return a.runAndRecordNode(ctx, engine, id, service, profile, generation, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
-		result, err := checker.Check(ctx, request)
+	return a.runAndRecordNode(ctx, engine, id, service, profile, generation, func(checkCtx context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
+		result, err := checker.Check(checkCtx, request)
 		return result, true, err
 	})
 }
@@ -463,8 +467,8 @@ func (a *App) screenAndRecordNodeForEngine(ctx context.Context, engine, id strin
 		return dataplane.NodeCheckResult{}, false, nil
 	}
 	decided := false
-	result, _, err := a.runAndRecordNode(ctx, engine, id, service, profile, 0, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
-		result, screened, err := screener.ScreenTransport(ctx, request)
+	result, _, err := a.runAndRecordNode(ctx, engine, id, service, profile, 0, func(checkCtx context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
+		result, screened, err := screener.ScreenTransport(checkCtx, request)
 		decided = screened
 		return result, screened, err
 	})
@@ -485,7 +489,7 @@ func (a *App) nodeCheckCapacity() int {
 // present and enabled: node IDs are derived from their configuration, so
 // other nodes or sources changing meanwhile, including parallel checks
 // recording their results, do not change what was checked.
-func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service catalog.Service, profile string, generation uint64, run func(dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error)) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
+func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service catalog.Service, profile string, generation uint64, run func(context.Context, dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error)) (dataplane.NodeCheckResult, nodestore.Snapshot, error) {
 	var result dataplane.NodeCheckResult
 	if a.Nodes == nil || run == nil || !serviceHasNodeProbe(service) {
 		return result, nodestore.Snapshot{}, dataplane.ErrExactNodeUnavailable
@@ -493,6 +497,25 @@ func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service c
 	if err := a.nodeHistoryAdmission(ctx, engine); err != nil {
 		return result, nodestore.Snapshot{}, err
 	}
+	if a.Store == nil {
+		return result, nodestore.Snapshot{}, dataplane.ErrNodeResourceDenied
+	}
+	owner, cfg := a.Store, a.Store.Get()
+	service = defaultRouteCloneCatalogService(service)
+	definitions := a.catalogSnapshot()
+	for i := range definitions.Services {
+		definitions.Services[i] = defaultRouteCloneCatalogService(definitions.Services[i])
+	}
+	resourceGuard := func(checkCtx context.Context, host string, address netip.Addr) error {
+		if a.Store != owner || !reflect.DeepEqual(definitions, a.catalogSnapshot()) {
+			return dataplane.ErrNodeResourceDenied
+		}
+		return a.nodeResourceAdmission(checkCtx, cfg, service, host, address)
+	}
+	if err := resourceGuard(ctx, "", netip.Addr{}); err != nil {
+		return result, nodestore.Snapshot{}, err
+	}
+	checkCtx := dataplane.WithNodeResourceGuard(ctx, resourceGuard)
 	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
 	if err != nil {
 		return result, snapshot, err
@@ -524,13 +547,23 @@ func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service c
 	record := false
 	err = a.Nodes.WithSecret(ctx, id, func(material []byte) error {
 		var checkErr error
-		result, record, checkErr = run(dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: service, NetworkProfile: profile})
+		if err := resourceGuard(checkCtx, "", netip.Addr{}); err != nil {
+			return err
+		}
+		result, record, checkErr = run(checkCtx, dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: defaultRouteCloneCatalogService(service), NetworkProfile: profile})
 		return checkErr
 	})
 	if err != nil {
+		if errors.Is(err, dataplane.ErrNodeResourceDenied) && result.Stage != "cleanup" {
+			dataplane.RefuseNodeResourceResult(&result)
+		}
 		return result, snapshot, err
 	}
 	if err := ctx.Err(); err != nil {
+		return result, snapshot, err
+	}
+	if err := resourceGuard(checkCtx, "", netip.Addr{}); err != nil {
+		dataplane.RefuseNodeResourceResult(&result)
 		return result, snapshot, err
 	}
 	if !record {
@@ -563,17 +596,24 @@ func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service c
 	if result.Available {
 		state = "available"
 	}
-	latest, err = a.Nodes.RecordCheck(ctx, id, nodestore.CheckRecord{
-		ProbeID: result.ProbeID, ServiceID: result.ServiceID, NetworkProfile: result.NetworkProfile,
-		RoutePathID: result.RoutePathID, TestLevel: result.TestLevel, Verdict: string(result.Verdict), State: state,
-		Stage: result.Stage, CheckedAt: result.FinishedAt, ExpiresAt: result.ExpiresAt, LatencyMS: result.LatencyMS,
-		EgressIP: result.EgressIP, HTTPStatus: result.HTTPStatus, ErrorCode: result.ErrorCode, Message: result.Message, DirectLeak: result.DirectLeak,
-	}, time.Now())
+	err = owner.WithResourceExclusionObservation(ctx, cfg, func(config.EffectiveExclusionSet) error {
+		var recordErr error
+		latest, recordErr = a.Nodes.RecordCheck(ctx, id, nodestore.CheckRecord{
+			ProbeID: result.ProbeID, ServiceID: result.ServiceID, NetworkProfile: result.NetworkProfile,
+			RoutePathID: result.RoutePathID, TestLevel: result.TestLevel, Verdict: string(result.Verdict), State: state,
+			Stage: result.Stage, CheckedAt: result.FinishedAt, ExpiresAt: result.ExpiresAt, LatencyMS: result.LatencyMS,
+			EgressIP: result.EgressIP, HTTPStatus: result.HTTPStatus, ErrorCode: result.ErrorCode, Message: result.Message, DirectLeak: result.DirectLeak,
+		}, time.Now())
+		return recordErr
+	})
 	if err == nil && latest.Generation != before+1 {
 		err = dataplane.ErrReviewChanged
 	}
 	if err == nil {
 		a.rememberNodeMeasurement(result)
+	} else if errors.Is(err, config.ErrRevisionChanged) {
+		dataplane.RefuseNodeResourceResult(&result)
+		err = errors.Join(dataplane.ErrNodeResourceDenied, err)
 	}
 	return result, latest, err
 }

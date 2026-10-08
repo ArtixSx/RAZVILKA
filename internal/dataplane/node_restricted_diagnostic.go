@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"net/netip"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
@@ -15,6 +16,9 @@ import (
 // mechanism needs its own native negative controls before enabling Apply.
 func (c *ExactNodeChecker) probeRestrictedDiagnostic(ctx context.Context, r *NodeCheckResult, address, proxyIP string, service catalog.Service) {
 	if ctx.Err() != nil || c.serviceProbe == nil {
+		return
+	}
+	if checkNodeResourceURL(ctx, selectedNodeProbe(service).URL, netip.Addr{}) != nil {
 		return
 	}
 	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < 2*time.Second {

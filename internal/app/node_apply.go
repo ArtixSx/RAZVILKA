@@ -184,8 +184,12 @@ func (a *App) nodeReviewProof(ctx context.Context, review nodeRouteReview, revis
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !time.Now().Before(review.ExpiresAt) || a.Store.Get().Revision != revision {
+	cfg := a.Store.Get()
+	if !time.Now().Before(review.ExpiresAt) || cfg.Revision != revision {
 		return dataplane.ErrReviewChanged
+	}
+	if err := a.nodeServiceResourceAdmission(ctx, cfg, review.ServiceID); err != nil {
+		return err
 	}
 	engine, err := nodeCheckEngine(review.Engine)
 	if err != nil || a.nodeHistoryAdmission(ctx, engine) != nil {
@@ -255,6 +259,10 @@ func (a *App) nodeRoutePreview(w http.ResponseWriter, r *http.Request, id string
 	cfg := a.Store.Get()
 	if cfg.Revision == ^uint64(0) || request.ExpectedRevision != nil && *request.ExpectedRevision != cfg.Revision {
 		writeNodeApplyError(w, "NODE_REVIEW_CHANGED", "Обновите настройки перед применением.")
+		return
+	}
+	if err := a.nodeServiceResourceAdmission(r.Context(), cfg, request.ServiceID); err != nil {
+		writeNodeApplyError(w, "NODE_RESOURCE_REFUSED", "Сервис исключён или не включён в активный список. Измените список перед выбором узла.")
 		return
 	}
 	scopeMode, scopeSources, err := resolveNodeScope(cfg, request.ServiceID, request.Scope)

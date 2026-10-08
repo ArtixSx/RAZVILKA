@@ -38,6 +38,11 @@ func nfqws2StandardScopedFixture(t *testing.T, service catalog.Service, devices 
 	t.Helper()
 	a, _, adapter := nodeApplyFixture(t)
 	a.Catalog.Services = []catalog.Service{service}
+	// Candidate selection now requires the actual active user list. Enabling
+	// the autonomy policy alone cannot activate a catalog/library service.
+	if err := a.Store.UpdateService(service.ID, config.ServiceState{Enabled: true, Route: "auto", Sources: devices}); err != nil {
+		t.Fatal(err)
+	}
 	snapshot, err := a.Nodes.Import(context.Background(), nodestore.Source{ID: "feed", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174002@feed.example:443?security=tls", time.Now(), time.Hour, false)
 	if err != nil {
 		t.Fatal(err)

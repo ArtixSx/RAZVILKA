@@ -94,7 +94,7 @@ func nodeRecoveryFixture(t *testing.T) (*App, string, *nodeApplyAdapter, *recove
 
 func TestAppliedNodeRecoveryNewEpochPreservesAllDrafts(t *testing.T) {
 	a, id, adapter, checker, previous := nodeRecoveryFixture(t)
-	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: false, Route: "direct", Sources: []string{"192.168.1.77/32"}}); err != nil {
+	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct", Sources: []string{"192.168.1.77/32"}}); err != nil {
 		t.Fatal(err)
 	}
 	root := t.TempDir()

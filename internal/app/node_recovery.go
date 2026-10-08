@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"reflect"
 	"slices"
 	"strings"
@@ -326,6 +327,17 @@ type nodeRecoveryIntent struct {
 // prior committed configuration authorizes ONLY the identical applied targets;
 // fresh exact proofs authorize execution in the new network epoch.
 func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, profile string) (dataplane.Execution, error) {
+	// Negative intent is checked before DNS preparation can touch an old
+	// applied selection. Its runtime owner still performs the full recovery.
+	if a.Store == nil {
+		return dataplane.Execution{}, errNodeRecoveryReview
+	}
+	cfg := a.Store.Get()
+	for _, route := range previous.Routes {
+		if err := a.nodeServiceResourceAdmission(ctx, cfg, route.ServiceID); err != nil {
+			return dataplane.Execution{}, err
+		}
+	}
 	if previous.DNS != nil {
 		if err := a.Dataplane.PrepareDNSRecovery(ctx, previous); err != nil {
 			if !errors.Is(err, dataplane.ErrReviewChanged) && !errors.Is(err, context.Canceled) {
@@ -401,11 +413,14 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 			!sameNodeRecoveryStrings(state.Sources, route.Sources) || !nodeRecoveryServiceMatches(route, service) {
 			return intent, recoveryBlock("scope-changed", route.ServiceID)
 		}
+		if err := a.nodeResourceAdmission(ctx, intent.config, service, "", netip.Addr{}); err != nil {
+			return intent, recoveryBlock("scope-changed", route.ServiceID)
+		}
 		if !serviceHasNodeProbe(service) || route.Selected != route.Resolved && route.Selected != "auto" && !(route.Resolved != "nfqws2" && strings.HasPrefix(route.Selected, "sing-box:group-")) {
 			return intent, recoveryBlock("unsupported-plan", route.ServiceID)
 		}
 		seen[route.ServiceID] = true
-		intent.services = append(intent.services, service)
+		intent.services = append(intent.services, defaultRouteCloneCatalogService(service))
 	}
 	for id, service := range intent.config.AppliedServices {
 		if service.Enabled && !seen[id] {
@@ -501,6 +516,9 @@ func (a *App) guardNodeRecoveryIntent(ctx context.Context, intent nodeRecoveryIn
 	for index, route := range intent.plan.Routes {
 		service, ok := services[route.ServiceID]
 		if !ok || !nodeRecoveryServiceMatches(route, service) || !reflect.DeepEqual(service.Probes, intent.services[index].Probes) {
+			return recoveryBlock("scope-changed", route.ServiceID)
+		}
+		if a.nodeResourceAdmission(ctx, intent.config, service, "", netip.Addr{}) != nil {
 			return recoveryBlock("scope-changed", route.ServiceID)
 		}
 		if !strings.HasPrefix(route.Resolved, "sing-box:node-") {

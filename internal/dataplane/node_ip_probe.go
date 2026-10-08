@@ -30,6 +30,9 @@ func resolveNodeServiceIPv4(ctx context.Context, rawURL string, resolver PrefixR
 			return netresolve.LookupNetIP(ctx, "ip", host)
 		}
 	}
+	if err := checkNodeResource(ctx, target.Hostname(), netip.Addr{}); err != nil {
+		return nil, err
+	}
 	addresses, err := resolver(ctx, target.Hostname())
 	if err != nil || !publicNodeAddresses(addresses) {
 		return nil, errors.New("node service DNS did not return an entirely public bounded set")
@@ -39,6 +42,9 @@ func resolveNodeServiceIPv4(ctx context.Context, rawURL string, resolver PrefixR
 	}
 	unique := map[netip.Addr]bool{}
 	for _, address := range addresses {
+		if err := checkNodeResource(ctx, target.Hostname(), address); err != nil {
+			return nil, err
+		}
 		address = address.Unmap()
 		if address.Is4() {
 			unique[address] = true

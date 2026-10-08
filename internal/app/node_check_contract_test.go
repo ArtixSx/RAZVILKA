@@ -40,7 +40,7 @@ func nodeCheckContractFixture(t *testing.T) (*App, *fakeNodeChecker, nodestore.S
 		Message: "Узел не подтвердил доступ к сервису по IP-адресу, необходимый для маршрута устройств.",
 		Stages:  []dataplane.NodeCheckStage{{ID: "service", Status: "passed"}, {ID: "service_ip", Status: "failed"}},
 	}}
-	a := &App{Nodes: store, NodeChecker: checker, FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "discord", Name: "Discord", ProbeURL: "https://discord.com/"}}}}
+	a := &App{Nodes: store, Store: nodeResourceTestStore(t, "discord"), NodeChecker: checker, FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "discord", Name: "Discord", ProbeURL: "https://discord.com/"}}}}
 	return a, checker, initial
 }
 

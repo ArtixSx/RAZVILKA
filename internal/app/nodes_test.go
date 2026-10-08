@@ -334,7 +334,7 @@ func TestNodeExactCheckPersistsOnlySafeEvidence(t *testing.T) {
 		EgressIP: "203.0.113.25", HTTPStatus: 204, LatencyMS: 1000, Message: "Узел и сервис подтверждены.",
 	}}
 	checker.result = modeledNodeServiceProof(checker.result, "sing-box")
-	a := &App{Nodes: store, NodeChecker: checker, FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
+	a := &App{Nodes: store, Store: nodeResourceTestStore(t, "telegram"), NodeChecker: checker, FreshProfile: stableNodeProfile, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`))
 	response := httptest.NewRecorder()
 	a.Handler(http.NotFoundHandler()).ServeHTTP(response, request)
@@ -375,7 +375,7 @@ func TestNodeCheckRequiresCatalogProbeAndEnabledNode(t *testing.T) {
 	}
 	id := snapshot.Nodes[0].ID
 	checker := &fakeNodeChecker{}
-	handler := (&App{Nodes: store, NodeChecker: checker, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "manual", Name: "Manual", Category: "other", Strategy: []string{"sing-box"}}}}}).Handler(http.NotFoundHandler())
+	handler := (&App{Nodes: store, Store: nodeResourceTestStore(t, "telegram"), NodeChecker: checker, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "manual", Name: "Manual", Category: "other", Strategy: []string{"sing-box"}}}}}).Handler(http.NotFoundHandler())
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"manual","confirm":"CHECK_NODE"}`)))
 	if response.Code != http.StatusBadRequest {
@@ -384,7 +384,7 @@ func TestNodeCheckRequiresCatalogProbeAndEnabledNode(t *testing.T) {
 	if _, err := store.SetDisabled(context.Background(), id, true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	handler = (&App{Nodes: store, NodeChecker: checker, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}).Handler(http.NotFoundHandler())
+	handler = (&App{Nodes: store, Store: nodeResourceTestStore(t, "telegram"), NodeChecker: checker, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}).Handler(http.NotFoundHandler())
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`)))
 	if response.Code != http.StatusConflict || checker.request.NodeID != "" {
@@ -432,7 +432,7 @@ func TestNodeCheckDoesNotPersistProofAcrossNetworkChange(t *testing.T) {
 					observationErr = errors.New("private WAN details must not escape")
 				}
 			}
-			a := &App{Nodes: store, NodeChecker: checker, FreshProfile: func(context.Context) (string, error) { return profile, observationErr }, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
+			a := &App{Nodes: store, Store: nodeResourceTestStore(t, "telegram"), NodeChecker: checker, FreshProfile: func(context.Context) (string, error) { return profile, observationErr }, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "messenger", Strategy: []string{"sing-box"}, ProbeURL: "https://telegram.org/"}}}}
 			response := httptest.NewRecorder()
 			a.Handler(http.NotFoundHandler()).ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/nodes/"+id+"/check", strings.NewReader(`{"service_id":"telegram","confirm":"CHECK_NODE"}`)))
 			if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "NODE_NETWORK_CHANGED") || strings.Contains(response.Body.String(), "private WAN") {

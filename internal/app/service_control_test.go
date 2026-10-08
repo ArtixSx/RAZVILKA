@@ -38,6 +38,9 @@ func serviceControlFixture(t *testing.T, count int) (*App, []string) {
 		t.Fatal(err)
 	}
 	a.Store = s
+	if err := s.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
 	return a, ids
 }
 

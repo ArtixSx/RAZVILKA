@@ -218,6 +218,9 @@ func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeChec
 		return endpoint, false
 	}
 	stageStarted := c.currentTime()
+	if err := checkNodeResource(ctx, endpoint.Host, netip.Addr{}); err != nil {
+		return endpoint, false
+	}
 	addresses, err := c.resolve(ctx, endpoint.Host)
 	if err != nil || len(addresses) == 0 || !publicNodeAddresses(addresses) {
 		result.fail("dns", "node-dns-failed", "Адрес узла не удалось безопасно определить.")
@@ -226,6 +229,11 @@ func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeChec
 		return endpoint, false
 	}
 	result.addStage("dns", "passed", "Адрес узла определён без раскрытия в интерфейсе.", stageStarted, c.currentTime())
+	for _, address := range addresses {
+		if err := checkNodeResource(ctx, endpoint.Host, address); err != nil {
+			return endpoint, false
+		}
+	}
 	stageStarted = c.currentTime()
 	selected, err := c.selectEndpoint(ctx, endpoint, addresses)
 	endpoint.Pinned = selected.Address
@@ -264,7 +272,15 @@ func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeC
 		return NodeCheckResult{}, false, err
 	}
 	result := c.newResult(request)
+	if err := checkNodeResource(ctx, "www.cloudflare.com", netip.Addr{}); err != nil {
+		RefuseNodeResourceResult(&result)
+		return result, false, err
+	}
 	_, passed := c.transportStages(ctx, request, &result)
+	if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
+		RefuseNodeResourceResult(&result)
+		return result, false, err
+	}
 	if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
 		return NodeCheckResult{}, false, err
 	}
@@ -298,6 +314,18 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	}
 	result = c.newResult(request)
 	finish := func() { c.finishResult(&result) }
+	defer func() {
+		if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
+			if result.Stage != "cleanup" {
+				RefuseNodeResourceResult(&result)
+			}
+			finish()
+			resultErr = errors.Join(resultErr, err)
+		}
+	}()
+	if err := checkNodeResource(ctx, "www.cloudflare.com", netip.Addr{}); err != nil {
+		return result, err
+	}
 	// Registered before session cleanup so this check runs after every probe
 	// and after cleanup, while the checker still owns its single runtime slot.
 	defer func() {
@@ -330,6 +358,9 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	}
 
 	stageStarted := c.currentTime()
+	if err := checkNodeResource(ctx, endpoint.Host, endpoint.Pinned); err != nil {
+		return result, err
+	}
 	session, err := c.prepare(ctx, c.session(slot), request, endpoint)
 	defer func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(parent), 8*time.Second)
@@ -355,6 +386,9 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	result.addStage("configuration", "passed", "Создан временный профиль только для этого узла.", stageStarted, c.currentTime())
 
 	stageStarted = c.currentTime()
+	if err := checkNodeResource(ctx, endpoint.Host, endpoint.Pinned); err != nil {
+		return result, err
+	}
 	if err := c.start(ctx, session); err != nil {
 		result.TestLevel = "protocol"
 		result.fail("protocol", "node-protocol-start-failed", "Узел не смог запустить рабочий протокольный сеанс.")
@@ -390,6 +424,9 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	}()
 
 	stageStarted = c.currentTime()
+	if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
+		return result, err
+	}
 	var directIP, proxyIP string
 	var directErr, proxyErr error
 	if c.egressPair != nil {
@@ -446,6 +483,9 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	result.addStage("egress", "passed", "Получен внешний IP через точный outbound; прямой контроль не совпал.", stageStarted, c.currentTime())
 
 	stageStarted = c.currentTime()
+	if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, netip.Addr{}); err != nil {
+		return result, err
+	}
 	proof, err := c.serviceProbe(ctx, session.Address, result.RoutePathID, proxyIP, request.Service)
 	proof.NetworkProfile = request.NetworkProfile
 	result.Evidence = proof
@@ -476,6 +516,9 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 			return result, resultErr
 		}
 		for _, address := range addresses {
+			if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, address); err != nil {
+				return result, err
+			}
 			ipProof, ipErr := c.serviceIPProbe(ctx, session.Address, result.RoutePathID, proxyIP, request.Service, address)
 			ipProof.NetworkProfile = request.NetworkProfile
 			if ipErr != nil || !ipProof.Valid() || !ipProof.AssuranceLevel().AtLeast(evidence.Service) || !exactNodeProofEngine(ipProof.Engine, c.EngineID()) || ipProof.RoutePathID != result.RoutePathID || ipProof.ExpectedRoutePathID != result.RoutePathID || ipProof.ObservedRoutePathID != result.RoutePathID {
@@ -917,6 +960,18 @@ func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routeP
 	var response *http.Response
 	var cleanup func()
 	var err error
+	if err = checkNodeResourceURL(ctx, probe.URL, pinned); err != nil {
+		return evidence.ProbeEvidence{}, err
+	}
+	if guard, _ := ctx.Value(nodeResourceGuardKey{}).(*nodeResourceGuard); guard != nil && !pinned.IsValid() {
+		// An App candidate cannot delegate opaque service DNS to SOCKS: its
+		// actual destination must pass the same negative boundary first.
+		addresses, resolveErr := resolveNodeServiceIPv4(ctx, probe.URL, c.resolve)
+		if resolveErr != nil {
+			return evidence.ProbeEvidence{}, resolveErr
+		}
+		pinned = addresses[0]
+	}
 	if pinned.IsValid() {
 		response, cleanup, err = socksHTTPGetPinned(ctx, probe.URL, address, pinned)
 	} else {

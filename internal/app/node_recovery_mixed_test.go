@@ -57,7 +57,7 @@ func TestMixedNodeRecoveryPreservesFullPlanAndPendingFiles(t *testing.T) {
 	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "direct", Sources: []string{"192.168.1.77/32"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.Store.UpdateService("youtube", config.ServiceState{Enabled: false, Route: "direct"}); err != nil {
+	if err := a.Store.UpdateService("youtube", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
