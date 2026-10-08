@@ -327,6 +327,7 @@ func (r *ManagedCompatibilityCompletion) RetireKnown(ctx context.Context) error 
 	if i.provider.managedInvocation != i {
 		return ErrCompatibilityQuiescenceUnknown
 	}
+	i.provider.managedRetiredSession = i.provider.session
 	i.provider.managedInvocation, r.retired = nil, true
 	return nil
 }

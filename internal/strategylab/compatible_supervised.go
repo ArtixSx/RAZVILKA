@@ -34,6 +34,9 @@ type SupervisedCompatibilityProvider struct {
 	managedControl    *operationgate.ControlEpochReview
 	managedDescriptor components.NFQWSRuntimeDescriptor
 	managedInvocation *managedCompatibilityInvocation
+	// Written only after successful original completion retirement. Reopening
+	// saved receipt data never manufactures this process-lifetime proof.
+	managedRetiredSession *compatibilitySession
 	// Tests use their own fixed helper entry in the Go test executable.
 	// Production always uses the early CORE CLI dispatch shown below.
 	helperPrefix []string
