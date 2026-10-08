@@ -19,7 +19,7 @@ import (
 // Actual protected source/control/rename tests only. No Components install,
 // NFQWS/Lua execution, kernel or global inactivity permission is issued.
 func TestNativeManagedCompatibilityInitialSource(t *testing.T) {
-	for _, outcome := range []string{"initial", "existing", "foreign", "foreign-prepared", "stop-prepared", "cancel-prepared", "stop-written"} {
+	for _, outcome := range []string{"initial", "existing", "unknown-existing", "foreign", "foreign-prepared", "stop-prepared", "cancel-prepared", "stop-written"} {
 		t.Run(outcome, func(t *testing.T) {
 			root := t.TempDir()
 			if err := os.Chmod(root, 0700); err != nil {
@@ -64,6 +64,17 @@ func TestNativeManagedCompatibilityInitialSource(t *testing.T) {
 				}
 			}
 			foreign := []byte("unknown independently owned source\n")
+			if outcome == "unknown-existing" {
+				foreign = []byte("{\"schema_version\":1,\"candidates\":{},\"evidence\":[],\"selections\":{},\"unknown\":\"claimed\"}\n")
+				if err := os.WriteFile(m.Path, foreign, 0600); err != nil {
+					t.Fatal(err)
+				}
+				m, err = New(m.Path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				m.Executor, m.Validator = nil, CompatibleValidator{}
+			}
 			if outcome == "foreign" {
 				if err := os.WriteFile(m.Path, foreign, 0600); err != nil {
 					t.Fatal(err)
@@ -87,6 +98,10 @@ func TestNativeManagedCompatibilityInitialSource(t *testing.T) {
 			err = m.InitializeManagedCompatibilitySource(original, control)
 			data, readErr := os.ReadFile(m.Path)
 			switch outcome {
+			case "unknown-existing":
+				if !errors.Is(err, ErrSelectedCandidateChanged) || readErr != nil || !bytes.Equal(data, foreign) {
+					t.Fatal("initializer accepted or overwrote unknown existing source fields", err, readErr)
+				}
 			case "foreign", "foreign-prepared":
 				if !errors.Is(err, restorejournal.ErrConflict) || readErr != nil || !bytes.Equal(data, foreign) || m.image.Exists {
 					t.Fatal("initializer adopted or overwrote a foreign source", err, readErr)

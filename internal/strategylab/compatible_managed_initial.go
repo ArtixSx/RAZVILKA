@@ -1,9 +1,11 @@
 package strategylab
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -51,7 +53,17 @@ func (m *Manager) InitializeManagedCompatibilitySource(ctx context.Context, cont
 	if current.Exists {
 		// A real existing source is deliberately not adopted or initialized.
 		// Its separate inactive review checks schema, history and producer proof.
-		return control.Current(ctx)
+		var actual State
+		decoder := json.NewDecoder(bytes.NewReader(current.Data))
+		decoder.DisallowUnknownFields()
+		if compatibilityJSONUnique(current.Data) != nil || decoder.Decode(&actual) != nil || decoder.Decode(new(any)) != io.EOF || !compatibilityJSONEqual(actual, m.state) {
+			return ErrSelectedCandidateChanged
+		}
+		closing, err := selectedReviewFileIdentity(filepath.Dir(path))
+		if err != nil || m.Path != path || !os.SameFile(parent, closing) {
+			return ErrSelectedCandidateChanged
+		}
+		return errors.Join(compatibilityProtectedPath(path, false), control.Current(ctx))
 	}
 	if err := m.managedCompatibilityInitialStateLocked(control); err != nil {
 		return err
