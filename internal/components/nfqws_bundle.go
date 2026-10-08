@@ -55,7 +55,10 @@ func validManagedNFQWSReceipt(r ManagedNFQWSBundleReceipt) bool {
 
 func validateManagedNFQWSJournal(doc updateJournal) error {
 	v := doc.ManagedNFQWS
-	if v == nil || doc.SchemaVersion != ManagedNFQWSJournalSchema || doc.Component != "nfqws2" || !bundleHash(doc.TransactionID, 32) || doc.Package != "" || doc.PackageFile != "" || doc.PackageSHA256 != "" || len(doc.Configs) != 0 || doc.CandidateSnapshot || len(doc.CandidateConfigs) != 0 || doc.SupervisionVersion != 0 || !bundleHash(v.InstallationID, 32) || v.Sequence == 0 || v.Revision == 0 || v.Stage != ".stage-"+doc.TransactionID || !validManagedNFQWSReceipt(v.After) || v.After.TransactionID != doc.TransactionID {
+	// Configuration revision zero is the actual freshly persisted Store
+	// preimage. Its mandatory canonical JSON field distinguishes it from
+	// missing/null data; the control epoch still requires a positive sequence.
+	if v == nil || doc.SchemaVersion != ManagedNFQWSJournalSchema || doc.Component != "nfqws2" || !bundleHash(doc.TransactionID, 32) || doc.Package != "" || doc.PackageFile != "" || doc.PackageSHA256 != "" || len(doc.Configs) != 0 || doc.CandidateSnapshot || len(doc.CandidateConfigs) != 0 || doc.SupervisionVersion != 0 || !bundleHash(v.InstallationID, 32) || v.Sequence == 0 || v.Stage != ".stage-"+doc.TransactionID || !validManagedNFQWSReceipt(v.After) || v.After.TransactionID != doc.TransactionID {
 		return ErrManagedNFQWSBundle
 	}
 	hash, err := v.Manifest.Digest()
@@ -301,7 +304,7 @@ func (m *Manager) installManagedNFQWS(ctx context.Context, manifest ManagedNFQWS
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var zero ManagedNFQWSBundleReceipt
-	if revision == 0 || m.reviewManagedNFQWS(manifest) != nil {
+	if m.reviewManagedNFQWS(manifest) != nil {
 		return zero, ErrManagedNFQWSBundle
 	}
 	v := &managedNFQWSTransaction{InstallationID: authority.InstallationID, Sequence: authority.Sequence, Revision: revision, Manifest: manifest}
