@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
 // Approve saves explicit authenticated review intent via the SAME Store CAS.
@@ -26,9 +27,13 @@ func (o *Owner) Approve(ctx context.Context, expected config.Config, policy *con
 		if err := o.control.Current(ctx); err != nil {
 			return err
 		}
-		snapshot, err := o.nodes.Snapshot(ctx, time.Now().UTC())
-		if err != nil {
-			return ErrChanged
+		var snapshot nodestore.Snapshot
+		var err error
+		if o.nodes != nil {
+			snapshot, err = o.nodes.Snapshot(ctx, time.Now().UTC())
+			if err != nil {
+				return ErrChanged
+			}
 		}
 		for _, g := range grants {
 			if config.ValidateDefaultRouteGrant(g) != nil {
@@ -37,6 +42,9 @@ func (o *Owner) Approve(ctx context.Context, expected config.Config, policy *con
 			engine, id, node := strings.Cut(g.Resolved, ":")
 			if !node || engine != "xray" && engine != "sing-box" {
 				continue
+			}
+			if o.nodes == nil {
+				return ErrChanged
 			}
 			found := false
 			for _, entry := range snapshot.Nodes {
@@ -83,9 +91,11 @@ func (o *Owner) Approve(ctx context.Context, expected config.Config, policy *con
 		if err := o.store.WithRevisionObservation(ctx, actual.Revision, func() error { return nil }); err != nil {
 			return err
 		}
-		closing, err := o.nodes.Snapshot(ctx, time.Now().UTC())
-		if err != nil || closing.Generation != snapshot.Generation {
-			return ErrChanged
+		if o.nodes != nil {
+			closing, err := o.nodes.Snapshot(ctx, time.Now().UTC())
+			if err != nil || closing.Generation != snapshot.Generation {
+				return ErrChanged
+			}
 		}
 		return o.control.Current(ctx)
 	})

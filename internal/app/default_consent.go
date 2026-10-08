@@ -28,23 +28,27 @@ type defaultConsentState struct {
 // creates no approval or authority. The explicit authenticated review constructs
 // the retained reader under original operation admission.
 func (a *App) ConfigureDefaultConsent(configPath, nodeRoot string) error {
-	if a == nil || a.Store == nil || a.Nodes == nil || a.SelfUpdateFiles == nil {
+	if a == nil || a.Store == nil || a.SelfUpdateFiles == nil {
 		return defaultconsent.ErrChanged
 	}
 	cfg, err := filepath.Abs(configPath)
 	if err != nil {
 		return err
 	}
-	nodes, err := filepath.Abs(nodeRoot)
-	if err != nil {
-		return err
+	nodes := ""
+	if a.Nodes != nil {
+		nodes, err = filepath.Abs(nodeRoot)
+		if err != nil {
+			return err
+		}
+		nodes = filepath.Clean(nodes)
 	}
 	a.defaultConsent.mu.Lock()
 	defer a.defaultConsent.mu.Unlock()
 	if a.defaultConsent.configPath != "" {
 		return defaultconsent.ErrChanged
 	}
-	a.defaultConsent.configPath, a.defaultConsent.nodeRoot = filepath.Clean(cfg), filepath.Clean(nodes)
+	a.defaultConsent.configPath, a.defaultConsent.nodeRoot = filepath.Clean(cfg), nodes
 	a.defaultConsent.controlRoot, a.defaultConsent.files = a.SelfUpdateFiles.ControlRoot, a.SelfUpdateFiles
 	return nil
 }
@@ -53,7 +57,7 @@ func (a *App) defaultConsentOwner(ctx context.Context) (*defaultconsent.Owner, e
 	a.defaultConsent.mu.Lock()
 	defer a.defaultConsent.mu.Unlock()
 	s := &a.defaultConsent
-	if s.configPath == "" || s.nodeRoot == "" || s.controlRoot == "" || a.SelfUpdateFiles != s.files || s.files.ControlRoot != s.controlRoot {
+	if s.configPath == "" || s.controlRoot == "" || a.SelfUpdateFiles != s.files || s.files.ControlRoot != s.controlRoot {
 		return nil, defaultconsent.ErrChanged
 	}
 	if s.owner != nil {
@@ -89,6 +93,17 @@ func (a *App) ReviewDefaultConsent(ctx context.Context, resolved string) (*defau
 	return owner.Review(ctx, resolved)
 }
 
+// ReviewListScope retains the actual approved client scope, current full config
+// and original control owner. It grants no engine, strategy, provider or effect;
+// the trusted compiler must retain those separate concrete source owners.
+func (a *App) ReviewListScope(ctx context.Context) (*defaultconsent.ScopeReview, error) {
+	owner, err := a.defaultConsentOwner(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return owner.ReviewScope(ctx)
+}
+
 func (a *App) networkPolicyReview(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if a.Security == nil || !a.Security.Authenticated(r) {
@@ -117,7 +132,7 @@ func (a *App) networkPolicyReview(w http.ResponseWriter, r *http.Request) {
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF || request.Confirm != "APPROVE_NETWORK_POLICY" || request.Policy == nil || len(request.Grants) == 0 {
+	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF || request.Confirm != "APPROVE_NETWORK_POLICY" || request.Policy == nil {
 		writeJSON(w, 400, map[string]any{"error": "Подтвердите выбранную область, пути и источники."})
 		return
 	}

@@ -83,10 +83,12 @@ func openAnchor(path string, private bool) (anchoredRoot, error) {
 }
 
 // NewOwner opens only existing roots. The original admission is mandatory and
-// actual restore-target bindings corroborate both configured paths. No Store,
-// authority record, source or directory is created here.
+// actual restore-target bindings corroborate the configured paths. A genuinely
+// absent NodeStore needs no node root and cannot review node grants. Its SAME
+// nil configured slot remains retained. No Store, authority record, source or
+// directory is created here.
 func NewOwner(ctx context.Context, gate *operationgate.Gate, storeSlot **config.Store, nodesSlot **nodestore.Store, configPath, nodeRoot, controlRoot string, configured func() bool) (*Owner, error) {
-	if gate == nil || storeSlot == nil || nodesSlot == nil || *storeSlot == nil || *nodesSlot == nil || configured == nil {
+	if gate == nil || storeSlot == nil || nodesSlot == nil || *storeSlot == nil || configured == nil || *nodesSlot == nil && nodeRoot != "" {
 		return nil, ErrChanged
 	}
 	o := &Owner{gate: gate, store: *storeSlot, nodes: *nodesSlot, storeSlot: storeSlot, nodesSlot: nodesSlot, configured: configured}
@@ -114,26 +116,28 @@ func NewOwner(ctx context.Context, gate *operationgate.Gate, storeSlot **config.
 			return ErrChanged
 		}
 		o.configBinding = cfgBinding
-		nodeBinding, err := nodestore.RestoreBinding(nodeRoot)
-		if err != nil {
-			return ErrChanged
+		paths := []string{filepath.Dir(configPath)}
+		var nodeInfo os.FileInfo
+		if o.nodes != nil {
+			nodeBinding, err := nodestore.RestoreBinding(nodeRoot)
+			if err != nil {
+				return ErrChanged
+			}
+			actualNodeBinding, info, err := o.nodes.OwnerRoot(ctx)
+			if err != nil || actualNodeBinding != nodeBinding {
+				return ErrChanged
+			}
+			o.nodeBinding, nodeInfo = nodeBinding, info
+			paths = append(paths, nodeRoot)
 		}
-		actualNodeBinding, nodeInfo, err := o.nodes.OwnerRoot(ctx)
-		if err != nil {
-			return ErrChanged
-		}
-		if actualNodeBinding != nodeBinding {
-			return ErrChanged
-		}
-		o.nodeBinding = nodeBinding
-		for i, path := range []string{filepath.Dir(configPath), nodeRoot} {
+		for i, path := range paths {
 			a, err := openAnchor(path, i == 1)
 			if err != nil {
 				return err
 			}
 			o.roots = append(o.roots, a)
 		}
-		if !os.SameFile(nodeInfo, o.roots[1].info) {
+		if o.nodes != nil && !os.SameFile(nodeInfo, o.roots[1].info) {
 			return ErrChanged
 		}
 		o.control, err = gate.ReviewControlEpoch(ctx, controlRoot)
@@ -164,9 +168,11 @@ func (o *Owner) bindings(ctx context.Context) error {
 	if err != nil || actualConfigBinding != o.configBinding {
 		return ErrChanged
 	}
-	actualNodeBinding, nodeInfo, err := o.nodes.OwnerRoot(ctx)
-	if err != nil || actualNodeBinding != o.nodeBinding || !os.SameFile(nodeInfo, o.roots[1].info) {
-		return ErrChanged
+	if o.nodes != nil {
+		actualNodeBinding, nodeInfo, err := o.nodes.OwnerRoot(ctx)
+		if err != nil || actualNodeBinding != o.nodeBinding || !os.SameFile(nodeInfo, o.roots[1].info) {
+			return ErrChanged
+		}
 	}
 	return nil
 }
@@ -226,13 +232,14 @@ func (o *Owner) Close() error {
 }
 
 type Review struct {
-	self  *Review
-	owner *Owner
-	ref   Reference
-	cfg   config.Config
-	cfgMu sync.RWMutex
-	grant config.DefaultRouteGrant
-	node  nodestore.Node
+	self      *Review
+	owner     *Owner
+	ref       Reference
+	cfg       config.Config
+	cfgMu     sync.RWMutex
+	grant     config.DefaultRouteGrant
+	node      nodestore.Node
+	scopeOnly bool
 }
 
 func (*Review) String() string   { return "[private explicit default consent]" }
@@ -242,11 +249,15 @@ func (*Review) GoString() string { return "[private explicit default consent]" }
 // Legacy AllExceptAllowed alone, unknown node/source/protocol and stale grants
 // refuse. Provider consent is permission only, never account/route health.
 func (o *Owner) Review(ctx context.Context, resolved string) (*Review, error) {
-	r := &Review{owner: o}
+	return o.review(ctx, resolved, false)
+}
+
+func (o *Owner) review(ctx context.Context, resolved string, scopeOnly bool) (*Review, error) {
+	r := &Review{owner: o, scopeOnly: scopeOnly}
 	r.self = r
 	err := o.withOwner(ctx, func() error {
 		r.cfg = o.store.Get()
-		if !config.CurrentDefaultRouteConsent(r.cfg) || r.cfg.SafeMode || r.cfg.ServiceControl.Stopped {
+		if !config.CurrentDefaultRouteScopeConsent(r.cfg) || r.cfg.SafeMode || r.cfg.ServiceControl.Stopped {
 			return ErrChanged
 		}
 		c := r.cfg.DefaultRouteConsent
@@ -254,9 +265,9 @@ func (o *Owner) Review(ctx context.Context, resolved string) (*Review, error) {
 		if c.InstallationID != epoch.InstallationID || c.Sequence != epoch.Sequence {
 			return ErrChanged
 		}
-		found := false
+		found := scopeOnly && resolved == ""
 		for _, g := range c.Grants {
-			if g.Resolved == resolved {
+			if !scopeOnly && g.Resolved == resolved {
 				r.grant = g
 				found = true
 				break
@@ -265,7 +276,7 @@ func (o *Owner) Review(ctx context.Context, resolved string) (*Review, error) {
 		if !found {
 			return ErrChanged
 		}
-		r.ref = Reference{Schema: 1, InstallationID: c.InstallationID, Sequence: c.Sequence, ApprovalRevision: c.ApprovalRevision, PolicyRevision: c.Policy.Revision, ConsentDigest: c.Digest, Resolved: resolved, EngineID: resolved}
+		r.ref = Reference{Schema: 1, InstallationID: c.InstallationID, Sequence: c.Sequence, ApprovalRevision: c.ApprovalRevision, PolicyRevision: r.cfg.NetworkPolicy.Revision, ConsentDigest: c.Digest, Resolved: resolved, EngineID: resolved}
 		if engine, id, ok := strings.Cut(resolved, ":"); ok {
 			r.ref.EngineID = engine
 			if engine == "xray" || engine == "sing-box" {
@@ -273,6 +284,9 @@ func (o *Owner) Review(ctx context.Context, resolved string) (*Review, error) {
 			}
 		}
 		if r.ref.NodeID != "" {
+			if o.nodes == nil {
+				return ErrChanged
+			}
 			snapshot, err := o.nodes.Snapshot(ctx, time.Now().UTC())
 			if err != nil {
 				return ErrChanged
@@ -334,7 +348,7 @@ func (r *Review) current(ctx context.Context) error {
 		return err
 	}
 	cfg := o.store.Get()
-	if !reflect.DeepEqual(cfg, expected) || !config.CurrentDefaultRouteConsent(cfg) || cfg.SafeMode || cfg.ServiceControl.Stopped {
+	if !reflect.DeepEqual(cfg, expected) || !config.CurrentDefaultRouteScopeConsent(cfg) || cfg.SafeMode || cfg.ServiceControl.Stopped {
 		return ErrChanged
 	}
 	if err := o.store.WithRevisionObservation(ctx, cfg.Revision, func() error { return nil }); err != nil {

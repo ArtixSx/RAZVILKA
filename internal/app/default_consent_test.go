@@ -133,3 +133,62 @@ func TestDefaultConsentHTTPRequiresConfirmKnownSourceAndExistingControl(t *testi
 		})
 	}
 }
+
+func TestListScopeActualHTTPWithoutNodeProviderAndFreshReviewAfterExclusionEdit(t *testing.T) {
+	fixture, body := defaultConsentHTTPFixture(t)
+	// A local-only startup has the genuine config/control owners but no NodeStore.
+	a := &App{Store: fixture.Store, Security: fixture.Security, SelfUpdateFiles: fixture.SelfUpdateFiles}
+	if err := a.ConfigureDefaultConsent(fixture.defaultConsent.configPath, ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = a.CloseDefaultConsent() })
+	body["grants"] = []config.DefaultRouteGrant{}
+	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer server.Close()
+	if status, data := componentHTTP(t, server, "POST", networkPolicyReviewPath, body, componentRecoveryToken, server.URL); status != 200 {
+		t.Fatal("explicit local scope review required an unrelated provider", status, string(data))
+	}
+	approved := a.Store.Get()
+	if len(approved.DefaultRouteConsent.Grants) != 0 || !config.CurrentDefaultRouteScopeConsent(approved) || approved.AppliedNetworkPolicy != nil || a.Nodes != nil {
+		t.Fatal("local approval inferred provider or applied runtime")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ctx, release, err := a.Operations.ExclusiveContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := a.ReviewListScope(ctx)
+	if err != nil || old.Current(ctx) != nil {
+		release()
+		t.Fatal("actual local scope reader", err)
+	}
+	release()
+	patch := map[string]any{"expected_revision": approved.Revision, "expected_policy_revision": approved.NetworkPolicy.Revision, "expected_exclusion_revision": uint64(0), "manual": []config.ResourceMatch{{Kind: "cidr", Value: "203.0.113.0/24"}}}
+	if status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL); status != 200 {
+		t.Fatal("ordinary authenticated exclusion edit", status, string(data))
+	}
+	after := a.Store.Get()
+	if config.CurrentDefaultRouteConsent(after) || !config.CurrentDefaultRouteScopeConsent(after) || after.DefaultRouteConsent.Digest != approved.DefaultRouteConsent.Digest {
+		t.Fatal("ordinary edit silently renewed old approval or changed approved clients")
+	}
+	ctx, freshCancel := context.WithTimeout(context.Background(), time.Second)
+	defer freshCancel()
+	ctx, release, err = a.Operations.ExclusiveContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if old.Current(ctx) == nil {
+		t.Fatal("old retained review survived actual HTTP exclusion write")
+	}
+	fresh, err := a.ReviewListScope(ctx)
+	if err != nil || fresh.Current(ctx) != nil || !fresh.MatchesConfigStore(a.Store) {
+		t.Fatal("fresh review needs redundant unlock for unchanged scope", err)
+	}
+	for _, provider := range []string{"usque", "warp-wg", "wireguard", "xray:node-unknown"} {
+		if _, err := a.ReviewDefaultConsent(ctx, provider); err == nil {
+			t.Fatal("zero provider grants authorized remote path", provider)
+		}
+	}
+}

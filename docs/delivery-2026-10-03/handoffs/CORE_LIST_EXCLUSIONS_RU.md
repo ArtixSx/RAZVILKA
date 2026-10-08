@@ -203,3 +203,40 @@ ServiceControl/Manager, независимый durable control не сбрасы
 durable Start/Resume API сейчас нет. Новый control epoch не подделывался,
 разрешение старого Review не обновлялось. Actual main/native/source owner
 construction и runtime consumers остаются отдельной следующей работой.
+
+### Текущая область списка без постороннего provider grant
+
+Schema 2 явное первоначальное одобрение допускает пустой `grants` через тот же
+authenticated/CSRF `/api/v1/networkpolicy/review` с прежним confirm/CAS.
+Schema 1 исторический all_except не получает новую permission. SAME реальный
+Store/control owner работает и при действительно отсутствующем NodeStore;
+его nil slot закреплён, node grant тогда отказывается.
+
+`config.CurrentDefaultRouteScopeConsent` — только сравнение сохранённого
+выбора Clients + selected mode. Оно допускает новую проверку после обычной
+правки ресурсов/активных сервисов в той же области. Strong
+`CurrentDefaultRouteConsent` сохраняет точный старый policy/revision predicate.
+Изменение Clients, будущий approval revision, all_except и новый provider/source
+не наследуют одобрение. Старый actual review всегда проверяет весь frozen cfg,
+disk bytes, SAME Store/slots/roots и control до/после и отзывается при любой правке.
+
+Trusted consumer: `App.ReviewListScope(originalOwnedCtx)` возвращает оригинальный
+opaque `*defaultconsent.ScopeReview`; `Reference` содержит только comparison
+данные actual epoch/approval/current policy revision, Engine/Resolved/Node пусты.
+`Current`, bounded `WithCurrent`, `MatchesConfigStore`, exact `AcceptCommitted`
+и synchronous `Close` сохраняют actual owner/admission. Zero/copied/closed/stopped
+или старый handle отказывается. Не вызывать reader из Store observation callback
+и не оборачивать им whole NFQ Start/transfer с повторным Current. Source/managed
+lease/strategy, active positive/catalog, physical clients и effect admission —
+отдельные обязательные concrete владельцы, не scope digest.
+
+Remote `ReviewDefaultConsent` всё ещё требует точный сохранённый grant и actual
+node/source/material. После negative edit новая проверка того же approved
+provider проверяет текущий negative; старый Review/queued Apply не возобновляется.
+Exact policy CAS может продвинуть только свой sanction postimage без изменения
+approval/digest и без принятия unrelated edit. Tests: actual local-only HTTP
+approval + HTTP exclusion write + fresh original admission; old handle refusal,
+zero grant remote refusal, scope expansion, node drift, closing callback,
+zero/copy/close/Stop и exact CAS after ordinary edit. Windows full config2.891s,
+defaultconsent1.931s, focused App0.445s/main0.080s и vet PASS; Linux amd64/arm64
+vet и четыре package test cross-build PASS. Actual Linux/race/runtime — Root.

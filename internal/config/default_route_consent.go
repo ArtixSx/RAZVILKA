@@ -115,7 +115,7 @@ func ValidateDefaultRouteConsent(c *DefaultRouteConsent) error {
 	}
 	legacy := c.Schema == 1 && c.Policy != nil && c.Policy.Schema == 2 && c.Policy.Traffic.Mode == "all_except" && c.Policy.Traffic.AllExceptAllowed
 	list := c.Schema == 2 && c.Policy != nil && ValidateListNetworkPolicy(c.Policy) == nil
-	if !legacy && !list || !consentHex(c.InstallationID, 32) || c.Sequence == 0 || c.ApprovalRevision == 0 || c.ConfigRevision < c.ApprovalRevision || ValidateNetworkPolicy(c.Policy) != nil || len(c.Grants) == 0 || len(c.Grants) > 64 || !consentHex(c.Digest, 64) || c.Digest != DefaultRouteConsentDigest(c) {
+	if !legacy && !list || !consentHex(c.InstallationID, 32) || c.Sequence == 0 || c.ApprovalRevision == 0 || c.ConfigRevision < c.ApprovalRevision || ValidateNetworkPolicy(c.Policy) != nil || legacy && len(c.Grants) == 0 || len(c.Grants) > 64 || !consentHex(c.Digest, 64) || c.Digest != DefaultRouteConsentDigest(c) {
 		return ErrDefaultRouteConsent
 	}
 	seen := map[string]bool{}
@@ -128,18 +128,32 @@ func ValidateDefaultRouteConsent(c *DefaultRouteConsent) error {
 	return nil
 }
 
-// CurrentDefaultRouteConsent checks saved intent only. Actual control epoch,
-// current source/material and original configured owners remain mandatory.
+// CurrentDefaultRouteScopeConsent checks only the previously explicit client
+// scope and selected-list mode. Resource/service edits do not expand that
+// approval. Every fresh executable review must separately freeze the whole
+// current Config and retain its actual Store/control/source owners. No old
+// target, probe, queued operation or Apply review survives an ordinary edit.
+// Empty provider grants permit this scope review only; they grant no provider.
+func CurrentDefaultRouteScopeConsent(cfg Config) bool {
+	c := cfg.DefaultRouteConsent
+	return c != nil && c.Schema == 2 && cfg.InactiveResourceExclusions == nil && ValidateListNetworkPolicy(cfg.NetworkPolicy) == nil && ValidateDefaultRouteConsent(c) == nil && c.ConfigRevision <= cfg.Revision && reflect.DeepEqual(c.Policy.Clients, cfg.NetworkPolicy.Clients) && c.Policy.Traffic.Mode == cfg.NetworkPolicy.Traffic.Mode
+}
+
+// CurrentDefaultRouteConsent is the stronger exact saved policy/revision check.
+// It is retained for exact approval publication and sanctioned config commits;
+// it is never used to renew an old executable review after an ordinary edit.
 func CurrentDefaultRouteConsent(cfg Config) bool {
 	c := cfg.DefaultRouteConsent
-	return c != nil && c.Schema == 2 && ValidateListNetworkPolicy(cfg.NetworkPolicy) == nil && ValidateDefaultRouteConsent(c) == nil && c.ConfigRevision == cfg.Revision && reflect.DeepEqual(c.Policy, cfg.NetworkPolicy)
+	return CurrentDefaultRouteScopeConsent(cfg) && c.ConfigRevision == cfg.Revision && reflect.DeepEqual(c.Policy, cfg.NetworkPolicy)
 }
 
 // ApproveDefaultRouteConsent is the exact config-file CAS used solely by the
 // authenticated explicit review writer. It saves intent, never applied routes.
 // Caller first verifies every selected source/node/provider against real owners
 // under original operation/control admission. Legacy AllExceptAllowed is not
-// promoted automatically. Subsequent unrelated config revisions revoke consent.
+// promoted automatically. Subsequent config revisions revoke every retained
+// executable review; only unchanged explicitly approved scope can be reviewed
+// again without an additional approval.
 func (s *Store) ApproveDefaultRouteConsent(ctx context.Context, expected Config, policy *NetworkPolicy, grants []DefaultRouteGrant, installationID string, sequence uint64) (DefaultRouteConsent, error) {
 	if ctx == nil || policy == nil || expected.Revision == ^uint64(0) {
 		return DefaultRouteConsent{}, ErrDefaultRouteConsent

@@ -102,3 +102,61 @@ func TestDefaultConsentStorageCancelledWriteAndCanonicalProtocol(t *testing.T) {
 		t.Fatal("display/URI alias accepted as canonical type")
 	}
 }
+
+func TestSelectedScopeApprovalAllowsNoProvidersAndSurvivesOnlySameClients(t *testing.T) {
+	s, _ := networkCommitFixture(t)
+	before := s.Get()
+	p := CloneNetworkPolicy(before.NetworkPolicy)
+	p.Revision++
+	p.Traffic = TrafficSelection{Mode: "selected_services", Unavailable: "retain"}
+	if _, err := s.ApproveDefaultRouteConsent(context.Background(), before, p, nil, "0123456789abcdef0123456789abcdef", 1); err != nil {
+		t.Fatal("scope-only explicit approval", err)
+	}
+	approved := s.Get()
+	if !CurrentDefaultRouteScopeConsent(approved) || !CurrentDefaultRouteConsent(approved) || len(approved.DefaultRouteConsent.Grants) != 0 {
+		t.Fatal("scope-only approval fabricated provider permission")
+	}
+	manual := []ResourceMatch{{Kind: "cidr", Value: "203.0.113.0/24"}}
+	if _, err := s.UpdateResourceExclusions(context.Background(), approved, &manual, nil); err != nil {
+		t.Fatal(err)
+	}
+	after := s.Get()
+	if CurrentDefaultRouteConsent(after) || !CurrentDefaultRouteScopeConsent(after) || after.DefaultRouteConsent.Digest != approved.DefaultRouteConsent.Digest {
+		t.Fatal("resource edit renewed exact review or revoked unchanged scope")
+	}
+	if err := s.UpdateService("local", ServiceState{Enabled: true, Route: "nfqws2"}); err != nil {
+		t.Fatal(err)
+	}
+	if !CurrentDefaultRouteScopeConsent(s.Get()) {
+		t.Fatal("active list edit expanded unchanged approved clients")
+	}
+	for _, change := range []string{"segment", "device", "device-exclusion", "inherit", "mode", "future", "legacy"} {
+		t.Run(change, func(t *testing.T) {
+			cfg := s.Get()
+			switch change {
+			case "segment":
+				cfg.NetworkPolicy.Clients.SegmentIDs = append(cfg.NetworkPolicy.Clients.SegmentIDs, "guest")
+			case "device":
+				cfg.NetworkPolicy.Clients.DeviceIDs = []string{"new-device"}
+			case "device-exclusion":
+				cfg.NetworkPolicy.Clients.ExcludedDeviceIDs = []string{"new-device"}
+			case "inherit":
+				cfg.NetworkPolicy.Clients.NewDevices = "base"
+			case "mode":
+				cfg.NetworkPolicy.Traffic.Mode = "all_except"
+				cfg.NetworkPolicy.Traffic.AllExceptAllowed = true
+			case "future":
+				cfg.DefaultRouteConsent.ConfigRevision = cfg.Revision + 1
+			case "legacy":
+				cfg.DefaultRouteConsent.Schema = 1
+				cfg.DefaultRouteConsent.Policy.Traffic.Mode = "all_except"
+				cfg.DefaultRouteConsent.Policy.Traffic.AllExceptAllowed = true
+				cfg.DefaultRouteConsent.Grants = []DefaultRouteGrant{consentConfigGrant()}
+				cfg.DefaultRouteConsent.Digest = DefaultRouteConsentDigest(cfg.DefaultRouteConsent)
+			}
+			if CurrentDefaultRouteScopeConsent(cfg) {
+				t.Fatal("changed or historical client scope inherited approval")
+			}
+		})
+	}
+}
