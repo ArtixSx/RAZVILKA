@@ -243,7 +243,9 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,diag
       await page.waitForFunction(()=>!panelLoad.request);
       assert.equal(requests.slice(start).filter(request=>/^\/api\/v1\/engine-configs\/[^/]+\/guided$/.test(request.path)).length,0,'hidden profile reader ran on the cards page');
       const step=async(id,name)=>{const button=page.locator('[data-engine-step="'+name+'"][data-card-engine="'+id+'"]');if(!await button.isVisible())await page.locator('[data-engine-disclosure="'+id+'-flow"] summary').click();await button.click();};
-      const summary=page.locator('[data-engine-disclosure="xray-flow"] summary');await summary.click();await summary.focus();
+      const summary=page.locator('[data-engine-disclosure="xray-flow"] summary');
+      if(!await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open))await summary.click();
+      await summary.focus();
       await page.evaluate(()=>refreshEngineConfigs());
       assert.equal(await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open),true);
       assert.equal(await summary.evaluate(element=>document.activeElement===element),true,'workflow disclosure lost focus on metadata readback');
