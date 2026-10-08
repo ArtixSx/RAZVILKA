@@ -27,6 +27,7 @@ type FileTarget struct {
 	release func()
 	closed  bool
 	write   func(Image) error
+	syncDir func() error
 }
 
 func (*FileTarget) String() string   { return "[private state file]" }
@@ -57,6 +58,7 @@ func OpenFileTarget(path string) (*FileTarget, error) {
 	}
 	binding, _ := FileBinding(full)
 	f := &FileTarget{root: root, name: name, release: release, binding: binding}
+	f.syncDir = func() error { return syncJournalDir(root) }
 	f.write = func(after Image) error {
 		var err error
 		if after.Exists {
@@ -67,7 +69,7 @@ func OpenFileTarget(path string) (*FileTarget, error) {
 		if err != nil {
 			return err
 		}
-		return syncJournalDir(root)
+		return f.syncDir()
 	}
 	if _, err := f.Read(context.Background()); err != nil {
 		_ = f.Close()
