@@ -206,9 +206,10 @@ func wgNetworkFirewallKey(rule []string, v6 bool) string {
 
 func (a *WARPWireGuardAdapter) wgNetworkEffectRuntime(ref warpWGPolicyReference, compiled wgNetworkEffects, guarded bool) PolicyEffectRuntime {
 	observer := a.wgForwardingObserver()
-	runtime := PolicyEffectRuntime{Runner: a.Runner, Tools: PolicyEffectTools{IP: a.ip(), IPTables: observer.firewallBinary(false), IP6Tables: observer.firewallBinary(true)}}
+	runner := wgPolicyCommandRunner{base: a.Runner, command: wgPolicyCommand{adapter: a, ref: ref, compiled: compiled}}
+	runtime := PolicyEffectRuntime{Runner: runner, Tools: PolicyEffectTools{IP: a.ip(), IPTables: observer.firewallBinary(false), IP6Tables: observer.firewallBinary(true)}}
 	if guarded {
-		runtime.Runner = wgNamedForwardRunner{base: a.Runner}
+		runtime.Runner = wgNamedForwardRunner{base: runner}
 	}
 	snapshot := func(ctx context.Context, table proxyFirewallTable) (proxyFirewallSnapshot, error) {
 		read, err := observer.firewallSnapshot(ctx, table)

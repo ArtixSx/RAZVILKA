@@ -50,7 +50,7 @@ func checkWGNamedReviewContext(ctx context.Context) error {
 // not by whichever catalog revision is present after a forward review failed.
 // Keep every other context authority, including the common operation guard.
 func wgNamedCleanupContext(ctx context.Context) context.Context {
-	return context.WithValue(ctx, wgNamedReviewKey{}, struct{}{})
+	return wgOperationCleanupContext(context.WithValue(ctx, wgNamedReviewKey{}, struct{}{}))
 }
 
 type wgNamedForwardRunner struct{ base NFQWS2Runner }

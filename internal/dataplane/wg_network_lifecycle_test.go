@@ -5,11 +5,376 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
+
+// The SAME test binary is a private CLI model only for the existing fixture's
+// child process. This avoids requiring a compiler on a native test router.
+// No WG command is implemented: the exact kernel observations remain models.
+func init() {
+	if os.Getenv("RAZVILKA_WG_COMMAND_CLI_MODEL") != "1" {
+		return
+	}
+	f, err := os.OpenFile(os.Getenv("RAZVILKA_WG_COMMAND_TEST_MARKER"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		os.Exit(2)
+	}
+	_, err = f.WriteString(strings.Join(os.Args[1:], " ") + "\n")
+	closeErr := f.Close()
+	if err != nil || closeErr != nil {
+		os.Exit(3)
+	}
+	os.Exit(0)
+}
+
+// Reuse the existing WG fixture's plan/profile. Gate/control/Manager/owned
+// files and the child Start/Wait are genuine; LAN/kernel/probe facts remain
+// that fixture's explicit models. This does not claim a native WG/App path.
+func wgNetworkCommandOwnerFixture(t *testing.T) (*WARPWireGuardAdapter, *wgOperationOwner, context.Context, context.CancelFunc, func(), string) {
+	t.Helper()
+	a, _, plan, _, _ := wgNetworkLifecycleFixture(t, true)
+	program, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.IP, a.WG = program, program
+	return wgNetworkCommandOwnerForPlan(t, a, plan)
+}
+
+func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Plan) (*WARPWireGuardAdapter, *wgOperationOwner, context.Context, context.CancelFunc, func(), string) {
+	t.Helper()
+	a.Runner = wgExecRunner{adapter: a}
+	manager := New(t.TempDir())
+	if err := manager.Register(a); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	gate := &operationgate.Gate{}
+	ctx, release, err := gate.ExclusiveContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(release)
+	controlRoot := filepath.Join(t.TempDir(), "control")
+	if _, err := operationgate.InitializeSelfUpdateControl(ctx, controlRoot); err != nil {
+		t.Fatal(err)
+	}
+	control, err := gate.ReviewControlEpoch(ctx, controlRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = control.Close() })
+	var material *WGOperationMaterial
+	ctx = WithReviewGuard(ctx, func(c context.Context) error {
+		if material != nil && material.IsCleanupContext(c) {
+			return control.CurrentForCleanup(c)
+		}
+		return control.Current(c)
+	})
+	material, err = ReviewWGOperationMaterial(ctx, manager, control, plan.LAN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = material.Close() })
+	ctx, err = material.Context(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.PlanID, plan.Digest, plan.Adapters = "dp-0123456789abcdef", strings.Repeat("b", 64), []string{a.ID()}
+	if err := manager.beginOperation(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.endOperation)
+	execution := Execution{PlanID: plan.PlanID, Digest: plan.Digest, State: "applying"}
+	root := filepath.Join(manager.StateRoot, "transactions", plan.PlanID)
+	if err := manager.prepareExecutionRoot(root); err != nil {
+		t.Fatal(err)
+	}
+	scope, err := manager.newExecutionResourceScope(ctx, plan, a.ID(), &execution, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = scope.close() })
+	owner, err := newWGOperationOwner(ctx, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err = owner.context(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a, owner, ctx, cancel, release, controlRoot
+}
+
+func TestWGOperationCommandProcess(t *testing.T) {
+	mode := os.Getenv("RAZVILKA_WG_COMMAND_TEST_PROCESS")
+	if mode == "" {
+		return
+	}
+	if err := os.WriteFile(os.Getenv("RAZVILKA_WG_COMMAND_TEST_MARKER"), []byte("started"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if mode == "wait" {
+		time.Sleep(time.Minute)
+	}
+}
+
+func TestWGNetworkCommandOwnerActualStartStopAndOriginalCleanup(t *testing.T) {
+	a, owner, ctx, _, release, controlRoot := wgNetworkCommandOwnerFixture(t)
+	marker := filepath.Join(t.TempDir(), "started")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_PROCESS", "echo")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_MARKER", marker)
+	args := []string{"-test.run=^TestWGOperationCommandProcess$"}
+	if _, err := a.Runner.Run(ctx, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("direct runner created native issuer", err)
+	}
+	if _, err := a.run(ctx, a.IP, args...); err != nil {
+		t.Fatal("actual original Start/Wait", err)
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := operationgate.RequestSelfUpdateStop(ctx, controlRoot, strings.Repeat("c", 32), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.run(ctx, a.IP, args...); err == nil {
+		t.Fatal("Start after durable Stop")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("rejected Start ran child", err)
+	}
+	cleanup, cancel := context.WithTimeout(wgNamedCleanupContext(context.WithoutCancel(ctx)), time.Second)
+	defer cancel()
+	if _, err := a.run(cleanup, a.IP, args...); err != nil {
+		t.Fatal("original preissued cleanup Start/Wait after Stop", err)
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if _, err := a.run(cleanup, a.IP, args...); err == nil {
+		t.Fatal("cleanup after original release")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("released cleanup ran child", err)
+	}
+	if err := owner.material.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWGNetworkCommandOwnerCancellationJoinsWaitAndClose(t *testing.T) {
+	a, owner, ctx, cancelOriginal, _, controlRoot := wgNetworkCommandOwnerFixture(t)
+	marker := filepath.Join(t.TempDir(), "started")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_PROCESS", "wait")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_MARKER", marker)
+	result := make(chan error, 1)
+	go func() { _, err := a.run(ctx, a.IP, "-test.run=^TestWGOperationCommandProcess$"); result <- err }()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if _, err := os.Stat(marker); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("actual child did not start")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	closed := make(chan error, 1)
+	stopCtx, cancelStop := context.WithTimeout(context.Background(), time.Second)
+	defer cancelStop()
+	if _, err := operationgate.RequestSelfUpdateStop(stopCtx, controlRoot, strings.Repeat("d", 32), 0); err != nil {
+		t.Fatal("Wait retained the durable Stop lock", err)
+	}
+	go func() { closed <- owner.material.Close() }()
+	select {
+	case err := <-closed:
+		t.Fatal("material closed before child Wait joined", err)
+	case <-time.After(15 * time.Millisecond):
+	}
+	cancelOriginal()
+	select {
+	case err := <-result:
+		if err == nil {
+			t.Fatal("canceled command acknowledged success")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("canceled child Wait did not join")
+	}
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("material close did not join")
+	}
+}
+
+func TestWGNetworkCommandOwnerCanceledForwardRetainsCleanupOnly(t *testing.T) {
+	a, _, ctx, cancelOriginal, _, _ := wgNetworkCommandOwnerFixture(t)
+	marker := filepath.Join(t.TempDir(), "started")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_PROCESS", "echo")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_MARKER", marker)
+	cancelOriginal()
+	args := []string{"-test.run=^TestWGOperationCommandProcess$"}
+	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+	defer cancel()
+	if _, err := a.run(detached, a.IP, args...); err == nil {
+		t.Fatal("detachment revived forward Start")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("detached forward ran child", err)
+	}
+	if _, err := a.run(wgNamedCleanupContext(detached), a.IP, args...); err != nil {
+		t.Fatal("preissued cleanup lost original owner", err)
+	}
+}
+
+func TestWGNetworkCommandOwnerRejectsCopiedForeignAndMissingScope(t *testing.T) {
+	a, owner, ctx, _, _, _ := wgNetworkCommandOwnerFixture(t)
+	args := []string{"-test.run=^TestWGOperationCommandProcess$"}
+	for _, wrong := range []context.Context{
+		context.WithValue(ctx, wgOperationOwnerKey{}, "wrong owner type"),
+		context.WithValue(ctx, wgOperationMaterialKey{}, "wrong material type"),
+		context.WithValue(context.WithValue(ctx, wgOperationOwnerKey{}, "wrong owner type"), wgOperationMaterialKey{}, "wrong material type"),
+		context.WithValue(ctx, wgOperationOwnerKey{}, (*wgOperationOwner)(nil)),
+		context.WithValue(ctx, wgOperationMaterialKey{}, (*WGOperationMaterial)(nil)),
+		context.WithValue(ctx, wgOperationMaterialKey{}, &WGOperationMaterial{}),
+	} {
+		if _, err := a.run(wrong, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+			t.Fatal("present invalid issuer downgraded to legacy", err)
+		}
+	}
+	materialOnly := context.WithValue(ctx, wgOperationOwnerKey{}, nil)
+	if _, err := a.run(materialOnly, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("material alone issued command owner", err)
+	}
+	copy := &wgOperationOwner{self: owner.self, material: owner.material, scope: owner.scope, adapter: owner.adapter, shape: owner.shape}
+	copied := context.WithValue(ctx, wgOperationOwnerKey{}, copy)
+	if _, err := a.run(copied, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("copied private owner", err)
+	}
+	other := NewWireGuardAdapter(a.Configs, t.TempDir())
+	if _, err := other.Runner.Run(ctx, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("foreign registered adapter", err)
+	}
+	foreignGate := &operationgate.Gate{}
+	foreign, cancelForeign := context.WithTimeout(context.Background(), time.Second)
+	defer cancelForeign()
+	foreign, releaseForeign, err := foreignGate.ExclusiveContext(foreign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseForeign()
+	foreign = context.WithValue(context.WithValue(foreign, wgOperationMaterialKey{}, owner.material), wgOperationOwnerKey{}, owner)
+	if _, err := a.run(foreign, a.IP, args...); err == nil {
+		t.Fatal("foreign Gate operation adopted original owner")
+	}
+	owner.scope.manager.StateRoot += "-foreign"
+	if _, err := a.run(ctx, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("changed Manager root", err)
+	}
+}
+
+func TestWGNetworkCommandOwnerCommonReceiptActualRunner(t *testing.T) {
+	// The existing lifecycle fixture supplies explicit kernel/health models
+	// and a genuine immutable WG binding/COMMON receipt. A private CLI model
+	// accepts the compiler's argv; its actual process Start/Wait runs unchanged.
+	a, _, plan, transaction, fixtureCtx := wgNetworkLifecycleFixture(t, true)
+	for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Activate, a.Commit} {
+		if err := step(fixtureCtx, plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, exists, err := a.loadPolicyState()
+	if err != nil || !exists {
+		t.Fatal(err)
+	}
+	ref, err := a.committedWGPolicyReference(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref.ID = strings.Repeat("e", 32) // new private test generation, never an App proof
+	ref.Checksum = wgPolicyReferenceChecksum(ref)
+	compiled, err := a.compileWGNetworkEffects(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.IP, a.WG, a.IPTables, a.IP6Tables = program, program, program, program
+	a, owner, ctx, _, _, controlRoot := wgNetworkCommandOwnerForPlan(t, a, plan)
+	marker := filepath.Join(t.TempDir(), "commands")
+	t.Setenv("RAZVILKA_WG_COMMAND_CLI_MODEL", "1")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_MARKER", marker)
+	presence := make([]int, len(compiled.plan.Effects)) // explicit exact-kernel model
+	var escaped context.Context
+	trusted := wgPolicyCommandRunner{base: a.Runner, command: wgPolicyCommand{adapter: a, ref: ref, compiled: compiled}}
+	rt := PolicyEffectRuntime{Tools: PolicyEffectTools{IP: program, IPTables: program, IP6Tables: program}, Preflight: func(c context.Context) error { return c.Err() }, BeforeDelete: func(c context.Context, _ int) error { return c.Err() }, Guard: func(c context.Context, _ int) error { return c.Err() }, ExactPresence: func(_ context.Context, i int) (int, error) { return presence[i], nil }}
+	rt.Runner = policyEffectInvocationTestRunner(func(c context.Context, name string, args ...string) ([]byte, error) {
+		escaped = context.WithValue(c, wgPolicyCommandKey{}, trusted.command)
+		out, err := trusted.Run(c, name, args...)
+		if err == nil {
+			i := c.Value(policyEffectCommandInvocationKey{}).(*policyEffectCommandInvocation)
+			if i.cleanup {
+				presence[i.index] = 0
+			} else {
+				presence[i.index] = 1
+			}
+		}
+		return out, err
+	})
+	receiptRoot := a.wgPolicyGenerationRoot(ref, "")
+	if err := os.MkdirAll(receiptRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyPolicyEffects(ctx, rt, compiled.plan, receiptRoot, a.policyReceiptOptions); err != nil {
+		t.Fatal("actual COMMON add Start/Wait", err)
+	}
+	before, err := os.ReadFile(marker)
+	if err != nil || len(before) == 0 {
+		t.Fatal("COMMON add did not start CLI model", err)
+	}
+	last := len(compiled.plan.Effects) - 1
+	if _, err := a.Runner.Run(escaped, program, compiled.plan.Effects[last].Add...); err == nil {
+		t.Fatal("escaped COMMON issuer restarted command")
+	}
+	if after, err := os.ReadFile(marker); err != nil || string(after) != string(before) {
+		t.Fatal("escaped COMMON context launched CLI", err)
+	}
+	if _, err := operationgate.RequestSelfUpdateStop(ctx, controlRoot, strings.Repeat("f", 32), 0); err != nil {
+		t.Fatal(err)
+	}
+	cleanup, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancelCleanup()
+	cleanup, err = owner.cleanupContext(cleanup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := removePolicyEffects(cleanup, rt, compiled.plan, receiptRoot, a.policyReceiptOptions); err != nil {
+		t.Fatal("actual COMMON original cleanup Start/Wait", err)
+	}
+	for _, count := range presence {
+		if count != 0 {
+			t.Fatal("COMMON cleanup did not settle")
+		}
+	}
+	status, err := inspectPolicyEffects(cleanup, compiled.plan, receiptRoot, a.policyReceiptOptions)
+	if err != nil || !status.Removed || status.Unknown {
+		t.Fatal("original COMMON removal receipt", status, err)
+	}
+}
 
 type wgNetworkLANReadbackRunner struct {
 	base     NFQWS2Runner

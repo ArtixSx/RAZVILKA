@@ -100,10 +100,12 @@ func NewWARPWireGuardAdapter(configs *engineconfig.Manager, stateRoot string) *W
 
 func NewAmneziaWGAdapter(configs *engineconfig.Manager, stateRoot string) *WARPWireGuardAdapter {
 	runtimeRoot := filepath.Join(stateRoot, "runtime", "amneziawg")
-	return &WARPWireGuardAdapter{
+	a := &WARPWireGuardAdapter{
 		EngineID: "amneziawg", Configs: configs, StateRoot: runtimeRoot, RuntimeConfigPath: filepath.Join(runtimeRoot, "rz-awg.conf"),
 		Interface: "rz-awg", Table: 205, PriorityBase: 26000, Runner: nfqws2ExecRunner{}, Timeout: 25 * time.Second,
 	}
+	a.Runner = wgExecRunner{adapter: a}
+	return a
 }
 
 // NewWireGuardAdapter manages an ordinary WireGuard client profile of the
@@ -112,10 +114,12 @@ func NewAmneziaWGAdapter(configs *engineconfig.Manager, stateRoot string) *WARPW
 // by handshake and the selected services, not by a Cloudflare endpoint.
 func NewWireGuardAdapter(configs *engineconfig.Manager, stateRoot string) *WARPWireGuardAdapter {
 	runtimeRoot := filepath.Join(stateRoot, "runtime", "wireguard")
-	return &WARPWireGuardAdapter{
+	a := &WARPWireGuardAdapter{
 		EngineID: "wireguard", Configs: configs, StateRoot: runtimeRoot, RuntimeConfigPath: filepath.Join(runtimeRoot, "rz-wg.conf"),
 		Interface: "rz-wg", Table: 206, PriorityBase: 28000, Runner: nfqws2ExecRunner{}, Timeout: 25 * time.Second, NativeOnly: true,
 	}
+	a.Runner = wgExecRunner{adapter: a}
+	return a
 }
 
 func (a *WARPWireGuardAdapter) ID() string {
@@ -469,7 +473,7 @@ func (a *WARPWireGuardAdapter) Canary(ctx context.Context, plan RoutePlan, root 
 	interfaceStarted := false
 	var installedSources []netip.Addr
 	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(wgNamedCleanupContext(context.WithoutCancel(ctx)), 8*time.Second)
 		defer cancel()
 		if errors.Is(retErr, ErrPolicyAdditionUnknown) {
 			return // Keep the private candidate and every unsettled selector prerequisite.
@@ -1487,7 +1491,7 @@ func (a *WARPWireGuardAdapter) run(parent context.Context, name string, args ...
 	}
 	ctx, cancel := context.WithTimeout(parent, a.timeout())
 	defer cancel()
-	output, err := (wgNamedForwardRunner{base: a.Runner}).Run(ctx, name, args...)
+	output, err := a.runWGCommand(ctx, name, args)
 	if ctx.Err() == context.DeadlineExceeded {
 		return output, errors.New("WARP command timed out")
 	}
