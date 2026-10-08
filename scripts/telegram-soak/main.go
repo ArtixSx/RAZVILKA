@@ -262,15 +262,28 @@ func (p *httpsProber) probe(parent context.Context, timeout time.Duration) sampl
 	return r
 }
 
+func contextStopCause(ctx context.Context, now time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Socket deadlines can fire before the context timer delivers Done/Err.
+	if deadline, ok := ctx.Deadline(); ok && !now.Before(deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
 func waitUntil(ctx context.Context, at time.Time) error {
+	if err := contextStopCause(ctx, time.Now()); err != nil {
+		return err
+	}
 	timer := time.NewTimer(max(0, time.Until(at)))
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
 	case <-timer.C:
-		return ctx.Err()
 	}
+	return contextStopCause(ctx, time.Now())
 }
 
 func observe(parent context.Context, o options, roots *tls.Config) (report, error) {
@@ -304,7 +317,7 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 		r.TargetMode = "fixed_public_ipv4_original_tls_host"
 	}
 	r.Initial = endpointControl(parent, o)
-	if r.Initial.OK {
+	if r.Initial.OK && contextStopCause(parent, time.Now()) == nil {
 		prober, err := newHTTPSProber(o, roots)
 		if err != nil {
 			return report{}, err
@@ -355,14 +368,15 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 			}
 		}
 		_ = waitUntil(window, end)
-		r.WindowCompleted = parent.Err() == nil && !time.Now().Before(end)
+		closedAt := time.Now()
+		r.WindowCompleted = contextStopCause(parent, closedAt) == nil && !closedAt.Before(end)
 		cancel()
 		r.SamplingElapsedSeconds = time.Since(samplingStarted).Seconds()
 		r.AllLatency, r.AcceptedLatency = summarize(all), summarize(accepted)
 		if o.MTProto {
 			r.Protocol.Latency = summarize(protocolLatencies)
 		}
-		if parent.Err() == nil {
+		if contextStopCause(parent, time.Now()) == nil {
 			r.Final = endpointControl(parent, o)
 			if r.WindowCompleted && r.Attempts > 0 {
 				r.Outcome, r.ExitCode = "completed_with_failures", 2
@@ -372,14 +386,15 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 			}
 		}
 	}
-	if parent.Err() != nil {
+	finished := time.Now()
+	if cause := contextStopCause(parent, finished); cause != nil {
 		r.Final.Code = "not_attempted_parent_cancellation"
 		r.Outcome, r.ExitCode = "parent_deadline", 1
-		if errors.Is(parent.Err(), context.Canceled) {
+		if errors.Is(cause, context.Canceled) {
 			r.Outcome, r.ExitCode = "canceled", 130
 		}
 	}
-	r.FinishedAt, r.ElapsedSeconds = time.Now().UTC(), time.Since(started).Seconds()
+	r.FinishedAt, r.ElapsedSeconds = finished.UTC(), finished.Sub(started).Seconds()
 	return r, nil
 }
 

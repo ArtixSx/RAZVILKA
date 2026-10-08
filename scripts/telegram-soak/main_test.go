@@ -306,6 +306,53 @@ func TestEndpointGreetingTimeoutAndShorterParentDeadline(t *testing.T) {
 	}
 }
 
+// Models the interval after the absolute deadline but before a context timer
+// delivers Done/Err. The socket still observes Deadline independently.
+type pendingDeadlineContext struct {
+	context.Context
+	deadline time.Time
+}
+
+func (c pendingDeadlineContext) Deadline() (time.Time, bool) { return c.deadline, true }
+
+func TestEndpointParentDeadlinePrecedesContextTimerDelivery(t *testing.T) {
+	socks := fixtureSOCKS(t, "", "greeting")
+	o := fixtureOptions(socks.address)
+	o.ControlTimeout = 100 * time.Millisecond
+	parent := pendingDeadlineContext{context.Background(), time.Now().Add(10 * time.Millisecond)}
+	r, err := observe(parent, o, nil)
+	if parent.Err() != nil || parent.Done() != nil || time.Now().Before(parent.deadline) {
+		t.Fatal("fixture did not retain the pending context notification")
+	}
+	if err != nil || r.Initial.OK || r.Initial.Code != "timeout" || r.Outcome != "parent_deadline" || r.ExitCode != 1 || r.Attempts != 0 || r.WindowCompleted || r.Final.Code != "not_attempted_parent_cancellation" || r.ElapsedSeconds > 0.3 || len(socks.commands) != 0 {
+		t.Fatal("expired parent deadline became an endpoint refusal", r, err)
+	}
+}
+
+func TestPendingParentDeadlineDoesNotReplaceLocalControlTimeout(t *testing.T) {
+	socks := fixtureSOCKS(t, "", "greeting")
+	o := fixtureOptions(socks.address)
+	o.ControlTimeout = 10 * time.Millisecond
+	parent := pendingDeadlineContext{context.Background(), time.Now().Add(time.Hour)}
+	r, err := observe(parent, o, nil)
+	if err != nil || r.Initial.OK || r.Initial.Code != "timeout" || r.Outcome != "refused" || r.ExitCode != 1 || r.Attempts != 0 || r.WindowCompleted || r.Final.Code != "not_attempted" {
+		t.Fatal("local control timeout became a parent deadline", r, err)
+	}
+}
+
+func TestSamplingWaitHonorsDeadlineBeforeContextTimerDelivery(t *testing.T) {
+	parent := pendingDeadlineContext{context.Background(), time.Now()}
+	if err := waitUntil(parent, time.Now().Add(time.Hour)); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("expired deadline permitted scheduled work", err)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	parent.Context = canceled
+	if err := waitUntil(parent, time.Now()); !errors.Is(err, context.Canceled) {
+		t.Fatal("expired deadline replaced explicit cancellation", err)
+	}
+}
+
 func TestCancellationOfPendingHTTPSNeverCompletesOrStartsAnotherRequest(t *testing.T) {
 	requestReceived := make(chan struct{})
 	server, roots := fixtureTLS(t, telegramHost, func(_ http.ResponseWriter, r *http.Request) {
