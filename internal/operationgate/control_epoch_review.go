@@ -187,6 +187,23 @@ func (r *ControlEpochReview) WithRename(ctx context.Context, rename func() error
 	return r.withShortEffect(ctx, rename)
 }
 
+// WithRemove linearizes only one synchronous bounded removal syscall with
+// durable Stop under this SAME retained control owner and original operation.
+// The caller must retain its exact file-target writer lease and verify the
+// preimage before admission; directory sync and readback happen afterwards.
+// remove MUST NOT call this review, Store/Gate, fsync or a recovery protocol.
+// This method grants no file ownership or permission to delete another image.
+func (r *ControlEpochReview) WithRemove(ctx context.Context, remove func() error) error {
+	if ctx == nil {
+		return ErrSelfUpdateStopChanged
+	}
+	deadline, bounded := ctx.Deadline()
+	if !bounded || !time.Now().Before(deadline) {
+		return errors.Join(ErrSelfUpdateStopChanged, ctx.Err())
+	}
+	return r.withShortEffect(ctx, remove)
+}
+
 func (r *ControlEpochReview) withShortEffect(ctx context.Context, begin func() error) error {
 	if r == nil || r.self != r || r.gate == nil || begin == nil {
 		return ErrSelfUpdateStopChanged
