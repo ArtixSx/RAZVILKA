@@ -16,8 +16,10 @@ function fixture(view='engines'){
   const requests=[],listeners=new Map(),notices=[],panel={innerHTML:'',contains:()=>false};
   const state={authenticated:true,currentView:view,status:{safe_mode:false,revision:7},serviceControl:{stopped:false}};
   let confirm=async()=>true,authCalls=0;
-  let now=Date.now();class Clock extends Date{static now(){return now;}}
-  const ctx={state,Date:Clock,AbortController,Promise,esc:value=>String(value??'').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),
+  let now=Date.now(),timerID=0;const timers=new Map();class Clock extends Date{static now(){return now;}}
+  const ctx={state,Date:Clock,AbortController,Promise,panelLoad:{request:null},
+    setTimeout(fn,delay){const id=++timerID;timers.set(id,{fn,at:now+delay});return id;},clearTimeout:id=>timers.delete(id),
+    esc:value=>String(value??'').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),
     document:{hidden:false,activeElement:null,querySelectorAll:()=>[panel],addEventListener(name,fn){listeners.set(name,fn);}},
     api(path,options={}){const pending=deferred();requests.push({path,options,...pending});return pending.promise;},
     askConfirmation:(...args)=>confirm(...args),showNotice:(...args)=>notices.push(args),routeLabel:id=>id,
@@ -28,6 +30,16 @@ function fixture(view='engines'){
   const click=(selector,action='accept-live')=>listeners.get('click')({target:{closest:value=>value===selector?{disabled:false,dataset:{componentRepair:selector==='[data-component-repair]'?action:undefined}}:null}});
   return {ctx,state,requests,notices,panel,authCalls:()=>authCalls,
     advance:milliseconds=>{now+=milliseconds;},
+    async tick(milliseconds){
+      const until=now+milliseconds;
+      for(let count=0;count<100;count++){
+        const next=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];if(!next||next[1].at>until)break;
+        now=next[1].at;timers.delete(next[0]);next[1].fn();await flush();
+        assert(count<99,'timer loop was not bounded');
+      }
+      now=until;await flush();
+    },
+    timerCount:()=>timers.size,panelRefresh:()=>listeners.get('razvilka:panel-refresh')(),
     confirm:fn=>{confirm=fn;},clickRead:()=>click('[data-component-recovery-read]'),clickRepair:action=>click('[data-component-repair]',action),
     revoke(){listeners.get('razvilka:auth-required')();state.authenticated=false;},
     view(name){listeners.get('razvilka:view-change')({detail:name});state.currentView=name;},
@@ -212,5 +224,80 @@ await test('schema 3 incomplete or route-changing acknowledgement cannot borrow 
 });
 await test('schema 3 completed journal without matching installed receipt readback remains unconfirmed',async()=>{
   const f=fixture();await f.ready(managedSnapshot());f.ctx.refreshManagedNFQBundle=async()=>false;f.clickRepair('resume');await flush();f.requests[1].resolve(managedAcknowledgement());await flush();f.requests[2].resolve(managedSnapshot('accepted-installed-idle'));await flush();assert.equal(f.notices.length,0);assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/независимое чтение/);
+});
+const busyRead=()=>Object.assign(new Error('operation temporarily busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY',not_started:true,recovery_required:false}});
+const idleSnapshot=()=>({revision:7,recovery_required:false,transaction:null});
+await test('recovery waits for the current panel batch with one read ticket',async()=>{
+  const f=fixture('overview'),panel=deferred();f.ctx.panelLoad.request=panel.promise;f.view('engines');await flush();
+  f.panelRefresh();f.clickRead();await flush();assert.equal(f.requests.length,0);assert.match(f.panel.innerHTML,/Читаем/);
+  f.ctx.panelLoad.request=null;panel.resolve();await flush();assert.equal(f.requests.length,1);
+  assert.equal(f.requests[0].options.cache,'no-store');f.requests[0].resolve(idleSnapshot());await flush();assert.equal(f.ctx.componentRecoveryFence(),false);assert.equal(f.timerCount(),0);
+});
+await test('a replaced genuine panel batch is joined before recovery starts',async()=>{
+  const f=fixture('overview'),first=deferred(),second=deferred();f.ctx.panelLoad.request=first.promise;f.view('engines');await flush();
+  f.ctx.panelLoad.request=second.promise;first.resolve();await flush();assert.equal(f.requests.length,0);
+  f.ctx.panelLoad.request=null;second.resolve();await flush();assert.equal(f.requests.length,1);f.requests[0].resolve(idleSnapshot());await flush();
+});
+await test('exact transient busy retries only GET after backoff and settles from a fresh journal',async()=>{
+  const f=fixture();await flush();f.requests[0].reject(busyRead());await flush();
+  assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/временно занят/);f.panelRefresh();f.clickRead();await flush();assert.equal(f.requests.length,1);
+  await f.tick(1999);assert.equal(f.requests.length,1);await f.tick(1);assert.equal(f.requests.length,2);
+  assert.equal(f.requests[1].options.signal,f.requests[0].options.signal);assert.equal(f.requests[1].options.readTimeoutMs,5000);assert.equal(f.requests[1].options.cache,'no-store');
+  f.requests[1].resolve(idleSnapshot());await flush();assert.equal(f.ctx.componentRecoveryFence(),false);assert.match(f.panel.innerHTML,/Незавершённых обновлений нет/);assert.equal(f.timerCount(),0);
+  assert(f.requests.every(request=>request.options.method===undefined));
+});
+await test('four persistent busy responses stop automatically and allow a separate explicit read',async()=>{
+  const f=fixture();await flush();
+  for(let attempt=0;attempt<4;attempt++){
+    assert.equal(f.requests.length,attempt+1);f.requests[attempt].reject(busyRead());await flush();
+    if(attempt<3)await f.tick([2000,3000,4000][attempt]);
+  }
+  assert.equal(f.timerCount(),0);assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/Журнал остаётся занят.*Автоматическое чтение остановлено/);
+  for(let repeat=0;repeat<8;repeat++)f.panelRefresh();await f.tick(30000);assert.equal(f.requests.length,4);
+  f.clickRead();await flush();assert.equal(f.requests.length,5);f.requests[4].resolve(idleSnapshot());await flush();assert.equal(f.ctx.componentRecoveryFence(),false);
+  assert.equal(f.requests.filter(request=>request.options.method==='POST').length,0);
+});
+await test('other 409, unknown busy shape and permanent 503 never auto retry',async()=>{
+  for(const error of [
+    Object.assign(new Error('changed journal'),{status:409,payload:{code:'COMPONENT_TRANSACTION_CHANGED'}}),
+    Object.assign(new Error('generic conflict'),{status:409}),
+    Object.assign(busyRead(),{payload:{code:'RESTORE_OPERATION_BUSY',recovery_required:false}}),
+    Object.assign(busyRead(),{payload:{code:'RESTORE_OPERATION_BUSY',not_started:true,recovery_required:true}}),
+    ...['COMPONENT_RECOVERY_REQUIRED','SELF_UPDATE_RECOVERY_REQUIRED','PRIVATE_BACKUP_RECOVERY_REQUIRED','DATAPLANE_RECOVERY_REQUIRED','COMPONENT_JOURNAL_UNAVAILABLE'].map(code=>Object.assign(new Error('persistent journal failure'),{status:503,payload:{code,recovery_required:true}}))
+  ]){
+    const f=fixture();await flush();f.requests[0].reject(error);await flush();f.panelRefresh();await f.tick(30000);
+    assert.equal(f.requests.length,1);assert.equal(f.timerCount(),0);assert.equal(f.ctx.componentRecoveryFence(),true);assert(f.panel.innerHTML.includes(error.message));
+  }
+});
+await test('busy after a previous clear journal expires its proof immediately',async()=>{
+  const f=fixture();await f.ready(idleSnapshot());assert.equal(f.ctx.componentRecoveryFence(),false);f.clickRead();await flush();f.requests[1].reject(busyRead());await flush();
+  assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/изменения компонентов заблокированы/);f.view('overview');await flush();assert.equal(f.timerCount(),0);
+});
+await test('leave or logout aborts a queued busy retry and late completion cannot restart it',async()=>{
+  for(const cancel of ['leave','logout']){
+    const f=fixture();await flush();f.requests[0].reject(busyRead());await flush();const signal=f.requests[0].options.signal;
+    if(cancel==='leave')f.view('overview');else f.revoke();await f.tick(30000);
+    assert.equal(signal.aborted,true);assert.equal(f.requests.length,1);assert.equal(f.timerCount(),0);assert.equal(f.notices.length,0);
+  }
+  const f=fixture();await flush();const old=f.requests[0];f.view('overview');old.reject(busyRead());await f.tick(30000);assert.equal(f.requests.length,1);assert.equal(f.timerCount(),0);
+});
+await test('leaving a panel wait aborts it before any recovery request',async()=>{
+  const f=fixture('overview'),pending=deferred();f.ctx.panelLoad.request=pending.promise;f.view('engines');await flush();f.view('overview');await flush();
+  f.ctx.panelLoad.request=null;pending.resolve();await f.tick(30000);assert.equal(f.requests.length,0);assert.equal(f.timerCount(),0);
+});
+await test('a stalled panel wait hits the same finite deadline and remains visibly fenced',async()=>{
+  const f=fixture('overview'),pending=deferred();f.ctx.panelLoad.request=pending.promise;f.view('engines');await flush();await f.tick(20000);
+  assert.equal(f.requests.length,0);assert.equal(f.timerCount(),0);assert.match(f.panel.innerHTML,/не прочитан за отведённое время/);assert.equal(f.ctx.componentRecoveryFence(),true);
+  f.ctx.panelLoad.request=null;pending.resolve();f.panelRefresh();await flush();assert.equal(f.requests.length,0);
+  f.clickRead();await flush();assert.equal(f.requests.length,1);f.requests[0].resolve(idleSnapshot());await flush();assert.equal(f.ctx.componentRecoveryFence(),false);
+});
+await test('deadline fences an ignored-abort GET and discards its late clear journal',async()=>{
+  const f=fixture();await flush();const old=f.requests[0];await f.tick(20000);
+  assert.equal(old.options.signal.aborted,true);assert.equal(f.timerCount(),0);assert.match(f.panel.innerHTML,/Автоматическое чтение остановлено/);assert.equal(f.ctx.componentRecoveryFence(),true);
+  old.resolve(idleSnapshot());await flush();f.panelRefresh();await flush();assert.equal(f.requests.length,1);assert.equal(f.ctx.componentRecoveryFence(),true);
+});
+await test('repair POST busy still never retries or automatically reads a journal',async()=>{
+  const f=fixture();await f.ready();f.clickRepair();await flush();f.requests[1].reject(busyRead());await f.tick(30000);
+  assert.equal(f.requests.length,2);assert.equal(f.requests.filter(request=>request.options.method==='POST').length,1);assert.equal(f.timerCount(),0);assert.equal(f.ctx.componentRecoveryFence(),true);
 });
 console.log(JSON.stringify({suite:'component-recovery',tests:total}));

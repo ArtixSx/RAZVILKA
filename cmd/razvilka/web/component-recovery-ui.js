@@ -64,7 +64,7 @@
   root.RazvilkaComponentRecovery=Object.freeze({valid,summary});
   if (typeof document==='undefined') return;
   const views=new Set(['engines','engineconfig','updates']);
-  const recovery={epoch:0,read:null,action:null,data:null,received:0,error:'',unknownWrite:false,receipt:null};
+  const recovery={epoch:0,read:null,action:null,data:null,received:0,error:'',unknownWrite:false,receipt:null,autoBlocked:false};
   const active=()=>state.authenticated && views.has(state.currentView) && !document.hidden;
   const fresh=()=>recovery.data && !recovery.error && recovery.received>0 && Date.now()-recovery.received<60000;
   const permissionFor=value=>state.status?.revision===value?.revision && (value?.transaction?.schema_version===3 || state.status?.safe_mode===false && state.serviceControl?.stopped!==true);
@@ -88,26 +88,69 @@
     if (typeof renderInterfaceEngines==='function' && views.has(state.currentView)) renderInterfaceEngines();
     if (typeof renderComponents==='function' && state.currentView==='engines') renderComponents();
   }
+  function waitRead(ticket,pending,delay=0) {
+    return new Promise((resolve,reject)=>{
+      let timer=null,settled=false;
+      const done=(error,value)=>{
+        if(settled)return;settled=true;
+        clearTimeout(timer);ticket.controller.signal.removeEventListener('abort',abort);
+        if(error)reject(error);else resolve(value);
+      };
+      const abort=()=>done(new Error('Чтение журнала остановлено. Повторите чтение состояния.'));
+      if(ticket.controller.signal.aborted){abort();return;}
+      ticket.controller.signal.addEventListener('abort',abort,{once:true});
+      if(pending)Promise.resolve(pending).then(value=>done(null,value),error=>done(error));
+      else timer=setTimeout(()=>done(),delay);
+    });
+  }
   async function read(force=false) {
     if (!active()) return false;
     if (recovery.read) return recovery.read.promise;
+    if (!force && recovery.autoBlocked) return false;
     if (!force && fresh()) return true;
-    const ticket={epoch:recovery.epoch,controller:new AbortController(),promise:null};
+    const ticket={epoch:recovery.epoch,controller:new AbortController(),promise:null,timedOut:false};
     recovery.read=ticket;
+    const current=()=>ticket.epoch===recovery.epoch && recovery.read===ticket && active();
+    const deadline=setTimeout(()=>{ticket.timedOut=true;ticket.controller.abort();},20000);
     ticket.promise=Promise.resolve().then(async()=>{
       try {
-        const data=await api('/api/v1/components/recovery',{signal:ticket.controller.signal,readTimeoutMs:5000});
-        if(ticket.epoch!==recovery.epoch || recovery.read!==ticket || !active())return false;
-        if(!valid(data))throw new Error('Получен неполный журнал. Изменения компонентов остаются заблокированы.');
-        recovery.data=data;recovery.received=Date.now();recovery.error='';recovery.unknownWrite=false;
-        if(recovery.receipt?.transaction_id!==data.transaction?.transaction_id)recovery.receipt=null;
-        return true;
+        for(let attempt=0;attempt<4;attempt++){
+          // Navigation and panel-refresh can start this reader before the
+          // metadata batch. Wait for its genuine single-flight completion;
+          // never change the backend's exclusive recovery admission.
+          let previous=null;
+          while(current()){
+            const pending=typeof panelLoad==='undefined'?null:panelLoad.request;
+            if(!pending || pending===previous)break;
+            previous=pending;await waitRead(ticket,pending);
+          }
+          if(!current())return false;
+          if(ticket.controller.signal.aborted)throw new Error('Чтение журнала остановлено.');
+          try{
+            const data=await waitRead(ticket,api('/api/v1/components/recovery',{signal:ticket.controller.signal,readTimeoutMs:5000,cache:'no-store'}));
+            if(!current())return false;
+            if(!valid(data))throw new Error('Получен неполный журнал. Изменения компонентов остаются заблокированы.');
+            recovery.data=data;recovery.received=Date.now();recovery.error='';recovery.unknownWrite=false;recovery.autoBlocked=false;
+            if(recovery.receipt?.transaction_id!==data.transaction?.transaction_id)recovery.receipt=null;
+            return true;
+          }catch(error){
+            if(!current())return false;
+            const busy=error?.status===409 && error.payload?.code==='RESTORE_OPERATION_BUSY' && error.payload.not_started===true && error.payload.recovery_required===false;
+            if(!busy)throw error;
+            recovery.received=0;
+            if(attempt===3)throw new Error('Журнал остаётся занят. Автоматическое чтение остановлено; повторите чтение состояния. Изменения компонентов заблокированы.');
+            recovery.error='Журнал временно занят. Повторяем чтение после завершения других запросов; изменения компонентов заблокированы.';paint();
+            await waitRead(ticket,null,[2000,3000,4000][attempt]);
+          }
+        }
       } catch(error) {
-        if(ticket.epoch!==recovery.epoch || recovery.read!==ticket)return false;
-        recovery.received=0;recovery.error=error.message || 'Журнал не прочитан. Повторите чтение.';
+        if(!current())return false;
+        recovery.received=0;recovery.autoBlocked=true;
+        recovery.error=ticket.timedOut?'Журнал не прочитан за отведённое время. Автоматическое чтение остановлено; повторите чтение состояния. Изменения компонентов заблокированы.':error.message || 'Журнал не прочитан. Повторите чтение.';
         if(error.status===401)showAuth({...state.status,authenticated:false},error.message);
         return false;
       } finally {
+        clearTimeout(deadline);
         if(recovery.read===ticket){recovery.read=null;render();}
       }
     });
@@ -168,15 +211,18 @@
     if(event.target.closest?.('[data-component-recovery-read]'))void read(true);
     const button=event.target.closest?.('[data-component-repair]');if(button && !button.disabled)void repair(button.dataset.componentRepair);
   });
-  document.addEventListener('razvilka:auth-required',()=>{recovery.epoch++;recovery.read?.controller.abort();recovery.read=null;recovery.action=null;recovery.data=null;recovery.received=0;recovery.error='';recovery.unknownWrite=false;recovery.receipt=null;paint();});
+  document.addEventListener('razvilka:auth-required',()=>{recovery.epoch++;recovery.read?.controller.abort();recovery.read=null;recovery.action=null;recovery.data=null;recovery.received=0;recovery.error='';recovery.unknownWrite=false;recovery.receipt=null;recovery.autoBlocked=false;paint();});
   document.addEventListener('razvilka:view-change',event=>{
     if(!views.has(event.detail) || recovery.action && event.detail!==state.currentView){
       const sent=recovery.action?.sent;recovery.epoch++;recovery.read?.controller.abort();recovery.read=null;recovery.action=null;
       if(sent){recovery.unknownWrite=true;recovery.received=0;recovery.error='Результат действия ещё не прочитан. Можно обновить состояние без повторной записи.';}
     }
-    if(views.has(event.detail))void Promise.resolve().then(()=>read());
+    if(views.has(event.detail)){
+      if(event.detail!==state.currentView)recovery.autoBlocked=false;
+      void Promise.resolve().then(()=>read());
+    }
   });
   document.addEventListener('razvilka:panel-refresh',()=>{void read();});
-  document.addEventListener('razvilka:auth-restored',()=>{void read();});
+  document.addEventListener('razvilka:auth-restored',()=>{recovery.autoBlocked=false;void read();});
   if(active())void read();
 })(typeof globalThis==='undefined'?window:globalThis);

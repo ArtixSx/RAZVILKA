@@ -115,7 +115,8 @@ export async function runManagedBundleUI(config) {
     await page.locator('.nav[data-view="engines"]').click();
     await page.waitForFunction(()=>state.currentView==='engines'&&!panelLoad.request);
     await page.locator(panel).waitFor({state:'visible'});
-    await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]')?.textContent.includes('Незавершённых обновлений нет'));
+    await page.waitForFunction(()=>document.querySelector('#view-engines [data-component-recovery-panel]')?.textContent.includes('Незавершённых обновлений нет')
+      && typeof componentRecoveryFence==='function'&&!componentRecoveryFence());
   };
   const noNavigationRead=start=>realHTTPAssert(browserRequests.slice(start).every(row=>row.method==='GET'&&!managedPaths.has(row.path)),'NAVIGATION_STARTED_MANAGED_READ_OR_WRITE');
   const explicitRead=async()=>{
