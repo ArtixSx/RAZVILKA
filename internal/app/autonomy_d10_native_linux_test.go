@@ -1205,6 +1205,10 @@ func d10NativeChild(t *testing.T) {
 		for name, expected := range filesA {
 			actual, err := os.ReadFile(filepath.Join(adapter.StateRoot, name))
 			match := err == nil && bytes.Equal(actual, expected)
+			if err == nil && name == "policy-generation.json" {
+				err = d10NativeRestoredBinding(expected, actual, filepath.Join(state, "transactions", failedB.PlanID, engine))
+				match = err == nil
+			}
 			clear(actual)
 			if !match {
 				t.Log("fresh C restored file refused:", name)
@@ -1308,6 +1312,96 @@ func d10NativeDue(a *App) {
 	r := a.autonomy.doc.Runtime[d10NativeService]
 	r.NextCheck = time.Time{}
 	a.autonomy.doc.Runtime[d10NativeService] = r
+}
+
+// Restoration issues fresh addition authority instead of reviving a consumed
+// receipt. Policy/runtime bytes must still match A.
+func d10NativeRestoredBinding(before, after []byte, transaction string) error {
+	type binding struct {
+		Schema     int    `json:"schema"`
+		Engine     string `json:"engine"`
+		Digest     string `json:"policy_sha256"`
+		Generation string `json:"generation"`
+		ReceiptID  string `json:"receipt_id,omitempty"`
+		Phase      string `json:"phase"`
+	}
+	decode := func(data []byte) (binding, error) {
+		var value binding
+		d := json.NewDecoder(bytes.NewReader(data))
+		d.DisallowUnknownFields()
+		if len(data) > 4096 || d.Decode(&value) != nil || d.Decode(new(any)) != io.EOF {
+			return value, errors.New("restoration binding encoding refused")
+		}
+		canonical, _ := json.Marshal(value)
+		id := regexp.MustCompile(`^[a-f0-9]{32}$`)
+		if !bytes.Equal(data, canonical) || value.Schema != 1 || value.Engine != "sing-box" || value.Phase != "active" ||
+			!regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(value.Digest) || !id.MatchString(value.Generation) || !id.MatchString(value.ReceiptID) {
+			return value, errors.New("restoration binding identity refused")
+		}
+		return value, nil
+	}
+	old, err := decode(before)
+	if err != nil {
+		return err
+	}
+	current, err := decode(after)
+	if err != nil {
+		return err
+	}
+	if current.Digest != old.Digest || current.Generation == old.Generation || current.ReceiptID == old.ReceiptID {
+		return errors.New("restoration did not retain A policy with fresh receipt")
+	}
+	data, err := os.ReadFile(filepath.Join(transaction, "policy-additions.json"))
+	if err != nil || len(data) > 4096 {
+		return errors.New("restoration transaction receipt unavailable")
+	}
+	defer clear(data)
+	// Production VerifyRollback just validated the checksummed complete receipt.
+	// Independently require its exact restoration reference here.
+	var receipt struct {
+		Schema                int
+		Engine, Phase         string
+		RestorationGeneration string `json:"restoration_generation"`
+	}
+	if json.Unmarshal(data, &receipt) != nil || receipt.Schema != 1 || receipt.Engine != current.Engine || receipt.Phase != "restored" || receipt.RestorationGeneration != current.Generation {
+		return errors.New("restoration receipt is not bound to fresh A authority")
+	}
+	return nil
+}
+
+func TestD10NativeRestoredBindingRejectsRevivedOrForeignAuthority(t *testing.T) {
+	oldGeneration, oldReceipt := strings.Repeat("1", 32), strings.Repeat("2", 32)
+	newGeneration, newReceipt := strings.Repeat("3", 32), strings.Repeat("4", 32)
+	binding := func(generation, receipt string) string {
+		return fmt.Sprintf(`{"schema":1,"engine":"sing-box","policy_sha256":"%s","generation":"%s","receipt_id":"%s","phase":"active"}`, strings.Repeat("a", 64), generation, receipt)
+	}
+	before, after := binding(oldGeneration, oldReceipt), binding(newGeneration, newReceipt)
+	receipt := fmt.Sprintf(`{"schema":1,"Engine":"sing-box","Phase":"restored","restoration_generation":"%s"}`, newGeneration)
+	for _, tc := range []struct {
+		name, after, receipt string
+		allowed              bool
+	}{
+		{"fresh-linked-A", after, receipt, true},
+		{"old-generation", binding(oldGeneration, newReceipt), receipt, false},
+		{"old-receipt", binding(newGeneration, oldReceipt), receipt, false},
+		{"foreign-policy", strings.Replace(after, strings.Repeat("a", 64), strings.Repeat("b", 64), 1), receipt, false},
+		{"inactive", strings.Replace(after, "active", "pending", 1), receipt, false},
+		{"foreign-engine", strings.Replace(after, "sing-box", "xray", 1), receipt, false},
+		{"duplicate-generation", strings.Replace(after, `"generation":`, `"generation":"`+oldGeneration+`","generation":`, 1), receipt, false},
+		{"trailing", after + " null", receipt, false},
+		{"wrong-restoration-link", after, strings.Replace(receipt, newGeneration, oldGeneration, 1), false},
+		{"unfinished-restoration", after, strings.Replace(receipt, "restored", "restoring", 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "policy-additions.json"), []byte(tc.receipt), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := d10NativeRestoredBinding([]byte(before), []byte(tc.after), root); (err == nil) != tc.allowed {
+				t.Fatalf("restoration assertion allowed=%t, want=%t", err == nil, tc.allowed)
+			}
+		})
+	}
 }
 
 func d10NativeBackendTopology(t *testing.T, ctx context.Context) (string, func() error) {
