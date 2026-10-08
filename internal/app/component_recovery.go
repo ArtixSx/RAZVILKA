@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
@@ -120,7 +121,7 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 	if !decodeServiceControl(w, r, &in) {
 		return
 	}
-	if in.TransactionID == "" || !components.ManagedUpdateSupported(in.Component) || in.ExpectedRevision == nil || in.Confirm != "REPAIR_COMPONENT_TRANSACTION" || (in.Action != "accept-live" && in.Action != "accept-installed-idle" && in.Action != "rollback" && in.Action != "verify-rollback" && in.Action != "abandon-prepared") || in.AllowUnknownRollback && in.Action != "rollback" || in.ExternalRepairConfirmed && in.Action != "verify-rollback" {
+	if in.TransactionID == "" || !components.ManagedUpdateSupported(in.Component) || in.ExpectedRevision == nil || in.Confirm != "REPAIR_COMPONENT_TRANSACTION" || (in.Action != "resume" && in.Action != "accept-live" && in.Action != "accept-installed-idle" && in.Action != "rollback" && in.Action != "verify-rollback" && in.Action != "abandon-prepared") || in.AllowUnknownRollback && in.Action != "rollback" || in.ExternalRepairConfirmed && in.Action != "verify-rollback" {
 		http.Error(w, "invalid matching component recovery request", http.StatusBadRequest)
 		return
 	}
@@ -134,7 +135,7 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Minute)
 	defer cancel()
-	observed, _, err := a.Components.PendingManagedUpdate()
+	observed, pendingObserved, err := a.Components.PendingManagedUpdate()
 	if err != nil {
 		a.writeOperationFailure(w, errComponentRecovery)
 		return
@@ -143,14 +144,23 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_TRANSACTION_CHANGED", "error": "component recovery does not match the reviewed transaction"})
 		return
 	}
+	managedBundle := observed.SchemaVersion == components.ManagedNFQWSJournalSchema && observed.Component == "nfqws2"
+	if managedBundle && (!slices.Contains(managedNFQRecoveryActions(observed, pendingObserved), in.Action) || in.AllowUnknownRollback || in.ExternalRepairConfirmed) || !managedBundle && in.Action == "resume" {
+		http.Error(w, "invalid matching component recovery action", http.StatusBadRequest)
+		return
+	}
 	ctx = context.WithValue(ctx, componentAdmissionKey{}, componentAdmission{transaction: in.TransactionID, component: in.Component})
-	release, err := a.Operations.Exclusive(ctx)
+	ctx, release, err := a.Operations.ExclusiveContext(ctx)
 	if err != nil {
 		a.writeOperationFailure(w, err)
 		return
 	}
 	defer release()
 	defer a.wakePanelSnapshot()
+	if managedBundle {
+		a.recoverManagedNFQBundle(w, ctx, observed, in.Action, *in.ExpectedRevision)
+		return
+	}
 	guard, err := a.componentUpdateGuard(ctx)
 	if err == nil && a.Store.Get().Revision != *in.ExpectedRevision {
 		err = components.ErrRecoveryAuthority

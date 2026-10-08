@@ -28,6 +28,9 @@ import (
 // production early CLI dispatch. No provider test prefix or asset approval is
 // introduced; all other invocations use the ordinary Go test runner.
 func TestMain(m *testing.M) {
+	if handled, code := runComponentReadCommand(os.Args[1:], productionComponentStateDirectory); handled {
+		os.Exit(code)
+	}
 	if len(os.Args) > 1 && os.Args[1] == "nfqws-compatibility-supervisor" {
 		handled, code := runCommand(os.Args[1:])
 		if !handled {

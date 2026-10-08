@@ -153,6 +153,8 @@ type App struct {
 	StrategyLab               *strategylab.Manager
 	strategyCompatibility     strategyCompatibilityState
 	Components                *components.Manager
+	ComponentHistory          *updatecheck.ComponentHistoryAdmission
+	managedNFQBundle          managedNFQBundleState
 	componentRecoveryChecks   componentRecoveryChecks
 	Community                 *community.Manager
 	CustomServices            *customservices.Manager
@@ -573,6 +575,9 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/node-groups", a.nodeGroups)
 	mux.HandleFunc("/api/v1/node-groups/", a.nodeGroupAction)
 	mux.HandleFunc("/api/v1/components", a.componentList)
+	mux.HandleFunc(managedNFQBundlePlanPath, a.managedNFQBundlePlan)
+	mux.HandleFunc(managedNFQBundleInstallPath, a.managedNFQBundleInstall)
+	mux.HandleFunc(managedNFQBundleInstalledPath, a.managedNFQBundleInstalled)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
 	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)

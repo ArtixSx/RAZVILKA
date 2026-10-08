@@ -139,6 +139,10 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if r.Method == http.MethodPost && (r.URL.Path == networkPolicyReviewPath || r.URL.Path == resourceExclusionsPath) {
 			exclusive = true
 		}
+		if r.Method == http.MethodGet && r.URL.Path == managedNFQBundlePlanPath {
+			// This bounded read compares the actual retained control owner.
+			exclusive = true
+		}
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/strategy-lab/candidates/") && strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/validate") {
 			// Supervised compatibility uses the original request operation for
 			// its exact source publication; a shared request cannot upgrade it.

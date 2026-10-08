@@ -11,6 +11,16 @@ import (
 func (a *App) componentRecoveryCapabilities(ctx context.Context, state components.ManagedUpdateState, pending bool) map[string]any {
 	actions := []string{}
 	result := map[string]any{"supported_actions": []string{"accept-live", "accept-installed-idle", "rollback", "verify-rollback", "abandon-prepared"}, "available_actions": actions, "installed_idle_accepted": state.Phase == components.UpdateAcceptedIdle, "live_proof_required": true, "quiescence_confirmed": false, "inactivity_confirmed": false}
+	if state.SchemaVersion == components.ManagedNFQWSJournalSchema && state.Component == "nfqws2" {
+		result["supported_actions"] = []string{"resume", "rollback"}
+		result["live_proof_required"] = false
+		// Availability permits a request only. POST acquires the exact original
+		// operation and repeats owner/source/controller checks under the writer.
+		if pending && a.managedNFQBundleConfigured() == nil {
+			result["available_actions"] = managedNFQRecoveryActions(state, pending)
+		}
+		return result
+	}
 	if !pending {
 		return result
 	}

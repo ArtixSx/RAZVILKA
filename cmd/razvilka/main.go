@@ -63,6 +63,9 @@ func main() {
 }
 
 func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
+	if handled, code := runComponentReadCommand(os.Args[1:], productionComponentStateDirectory); handled {
+		os.Exit(code)
+	}
 	if handled, code := runSelfUpdateJournalReadCommand(os.Args[1:], journalRoots); handled {
 		os.Exit(code)
 	}
@@ -148,6 +151,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	nodeHistoryConfigRoot := flag.String("node-history-config-root", "/opt/etc/razvilka", "absolute trusted retained node history config root")
 	nodeHistoryStateRoot := flag.String("node-history-state-root", "/opt/var/lib/razvilka", "absolute trusted retained node history state root")
 	componentUpdateSchema := flag.Bool("component-update-schema", false, "print the supported durable component update schema and exit")
+	flag.Bool("check-component-update-state", false, "check retained component journal and receipt readability without startup")
 	selfUpdateSchema := flag.Bool("self-update-schema", false, "print the supported application replacement capability and exit")
 	flag.Bool("self-update-read-version", false, "standalone immutable self update journal reader capability")
 	flag.Bool("check-self-update-state", false, "standalone read-only retained self update check at fixed production roots")
@@ -176,7 +180,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 		return
 	}
 	if *componentUpdateSchema {
-		fmt.Println(components.ComponentUpdateSchema)
+		fmt.Println(app.ManagedComponentReadVersion)
 		return
 	}
 	if *subscriptionSchema {
@@ -669,16 +673,23 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	if err != nil {
 		log.Print("Cloudflare legacy copy locations disabled; existing bypasses are unchanged")
 	}
+	a.ComponentHistory = updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)
+	componentReadContext, cancelComponentRead := context.WithTimeout(context.Background(), 10*time.Second)
+	componentReadErr := checkComponentReadState(componentReadContext, a.Components.StateDir, app.ManagedComponentReadVersion)
+	cancelComponentRead()
+	if componentReadErr != nil {
+		a.Operations.FenceJournal()
+		log.Print("Retained component state requires review; automatic changes are paused")
+	}
 	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRuntime()
-	compatibilityControl, compatibilityErr := configureManagedNFQCompatibility(runtimeContext, a)
+	_, compatibilityErr := configureManagedNFQCompatibility(runtimeContext, a)
+	defer a.CloseManagedNFQControl()
 	if compatibilityErr != nil {
 		if errors.Is(compatibilityErr, strategylab.ErrCompatibilityQuiescenceUnknown) {
 			a.Operations.FenceJournal()
 		}
 		log.Print("Managed NFQ compatibility source is unavailable; its retained state requires review")
-	} else {
-		defer compatibilityControl.Close()
 	}
 	a.StartSelfUpdate(runtimeContext)
 	selfRecoveryPending := a.PendingSelfUpdateRecovery()
@@ -812,6 +823,9 @@ func runCommand(args []string) (bool, int) {
 }
 
 func runCommandWithSelfUpdateJournalRoots(args []string, journalRoots selfUpdateJournalRoots) (bool, int) {
+	if handled, code := runComponentReadCommand(args, productionComponentStateDirectory); handled {
+		return handled, code
+	}
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return false, 0
 	}

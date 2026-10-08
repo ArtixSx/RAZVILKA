@@ -25,6 +25,7 @@ func TestManagedNFQCompatibilityStartupMissingInstalledSourceStaysClosed(t *test
 	owner := components.New()
 	owner.StateDir = t.TempDir()
 	a := &app.App{StrategyLab: manager, Components: owner, SelfUpdateFiles: &app.SelfUpdateFiles{ControlRoot: controlRoot}}
+	t.Cleanup(func() { _ = a.CloseManagedNFQControl() })
 	if control, err := configureManagedNFQCompatibility(context.Background(), a); err == nil || control != nil {
 		t.Fatal("missing genuine installed receipt configured provider", err)
 	}
