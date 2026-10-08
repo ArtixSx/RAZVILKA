@@ -527,6 +527,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/nfqws2/exclusions", a.nfqwsExclusions)
 	mux.HandleFunc("/api/v1/autonomy", a.autonomyAPI)
 	mux.HandleFunc(networkPolicyReviewPath, a.networkPolicyReview)
+	mux.HandleFunc(resourceExclusionsPath, a.resourceExclusions)
 	mux.HandleFunc("/api/v1/autonomy/services", a.autonomyEnroll)
 	mux.HandleFunc("/api/v1/autonomy/services/", a.autonomyRemove)
 	mux.HandleFunc("/api/v1/status", a.status)

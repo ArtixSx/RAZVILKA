@@ -113,7 +113,9 @@ func ValidateDefaultRouteConsent(c *DefaultRouteConsent) error {
 	if c == nil {
 		return nil
 	}
-	if c.Schema != 1 || !consentHex(c.InstallationID, 32) || c.Sequence == 0 || c.ApprovalRevision == 0 || c.ConfigRevision < c.ApprovalRevision || ValidateNetworkPolicy(c.Policy) != nil || c.Policy == nil || c.Policy.Schema != 2 || c.Policy.Traffic.Mode != "all_except" || !c.Policy.Traffic.AllExceptAllowed || len(c.Grants) == 0 || len(c.Grants) > 64 || !consentHex(c.Digest, 64) || c.Digest != DefaultRouteConsentDigest(c) {
+	legacy := c.Schema == 1 && c.Policy != nil && c.Policy.Schema == 2 && c.Policy.Traffic.Mode == "all_except" && c.Policy.Traffic.AllExceptAllowed
+	list := c.Schema == 2 && c.Policy != nil && ValidateListNetworkPolicy(c.Policy) == nil
+	if !legacy && !list || !consentHex(c.InstallationID, 32) || c.Sequence == 0 || c.ApprovalRevision == 0 || c.ConfigRevision < c.ApprovalRevision || ValidateNetworkPolicy(c.Policy) != nil || len(c.Grants) == 0 || len(c.Grants) > 64 || !consentHex(c.Digest, 64) || c.Digest != DefaultRouteConsentDigest(c) {
 		return ErrDefaultRouteConsent
 	}
 	seen := map[string]bool{}
@@ -130,7 +132,7 @@ func ValidateDefaultRouteConsent(c *DefaultRouteConsent) error {
 // current source/material and original configured owners remain mandatory.
 func CurrentDefaultRouteConsent(cfg Config) bool {
 	c := cfg.DefaultRouteConsent
-	return c != nil && ValidateDefaultRouteConsent(c) == nil && c.ConfigRevision == cfg.Revision && reflect.DeepEqual(c.Policy, cfg.NetworkPolicy)
+	return c != nil && c.Schema == 2 && ValidateListNetworkPolicy(cfg.NetworkPolicy) == nil && ValidateDefaultRouteConsent(c) == nil && c.ConfigRevision == cfg.Revision && reflect.DeepEqual(c.Policy, cfg.NetworkPolicy)
 }
 
 // ApproveDefaultRouteConsent is the exact config-file CAS used solely by the
@@ -139,7 +141,7 @@ func CurrentDefaultRouteConsent(cfg Config) bool {
 // under original operation/control admission. Legacy AllExceptAllowed is not
 // promoted automatically. Subsequent unrelated config revisions revoke consent.
 func (s *Store) ApproveDefaultRouteConsent(ctx context.Context, expected Config, policy *NetworkPolicy, grants []DefaultRouteGrant, installationID string, sequence uint64) (DefaultRouteConsent, error) {
-	if ctx == nil || policy == nil || expected.Revision == ^uint64(0) {
+	if ctx == nil || policy == nil || ValidateListNetworkPolicy(policy) != nil || !ResourceExclusionStateEqual(expected.NetworkPolicy, policy) || expected.Revision == ^uint64(0) {
 		return DefaultRouteConsent{}, ErrDefaultRouteConsent
 	}
 	previousPolicyRevision := uint64(0)
@@ -149,7 +151,7 @@ func (s *Store) ApproveDefaultRouteConsent(ctx context.Context, expected Config,
 	if previousPolicyRevision >= ^uint64(0)-1 || policy.Revision != previousPolicyRevision+1 {
 		return DefaultRouteConsent{}, ErrRevisionChanged
 	}
-	c := &DefaultRouteConsent{Schema: 1, InstallationID: installationID, Sequence: sequence, ApprovalRevision: expected.Revision + 1, ConfigRevision: expected.Revision + 1, Policy: CloneNetworkPolicy(policy), Grants: grants}
+	c := &DefaultRouteConsent{Schema: 2, InstallationID: installationID, Sequence: sequence, ApprovalRevision: expected.Revision + 1, ConfigRevision: expected.Revision + 1, Policy: CloneNetworkPolicy(policy), Grants: grants}
 	c = CloneDefaultRouteConsent(c)
 	c.Digest = DefaultRouteConsentDigest(c)
 	if ValidateDefaultRouteConsent(c) != nil {

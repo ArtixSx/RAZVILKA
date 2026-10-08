@@ -84,8 +84,11 @@ func TestPolicyDomainIdentityAndRuleConflicts(t *testing.T) {
 		bypass := NetworkRule{ID: "bypass", Revision: 1, Kind: "exact", Value: tt.value, Action: "bypass", Mandatory: true}
 		p := networkPolicyFixture()
 		p.Rules = []NetworkRule{direct, bypass}
-		if err := ValidateNetworkPolicy(p); (err != nil) != tt.overlap {
+		if err := ValidateNetworkPolicy(p); err != nil || NetworkRulesOverlap(direct, bypass) != tt.overlap {
 			t.Errorf("%s overlap=%v err=%v", tt.value, tt.overlap, err)
+		}
+		if excluded, err := ResourceExcluded(p, ResourceTarget{Domain: tt.value}); err != nil || excluded != tt.overlap {
+			t.Errorf("mandatory positive defeated negative: %v %v", excluded, err)
 		}
 		p.Rules[0].DeviceIDs = []string{"laptop"}
 		p.Rules[1].DeviceIDs = []string{"phone"}

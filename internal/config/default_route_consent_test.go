@@ -18,6 +18,7 @@ func TestDefaultConsentStoreExactCASCloneSanctionedCommitAndUnrelatedRevocation(
 	before := s.Get()
 	policy := CloneNetworkPolicy(before.NetworkPolicy)
 	policy.Revision++
+	policy.Traffic = TrafficSelection{Mode: "selected_services", Unavailable: "retain"}
 	if CurrentDefaultRouteConsent(before) {
 		t.Fatal("legacy all_except inferred grant")
 	}
@@ -40,6 +41,7 @@ func TestDefaultConsentStoreExactCASCloneSanctionedCommitAndUnrelatedRevocation(
 	}
 	digest := current.DefaultRouteConsent.Digest
 	applied, services := networkCommitCandidate(current)
+	applied = CloneNetworkPolicy(current.NetworkPolicy)
 	undo, err := s.CommitNetworkPolicyWithRollback(current, applied, services)
 	if err != nil {
 		t.Fatal(err)
@@ -82,6 +84,7 @@ func TestDefaultConsentStorageCancelledWriteAndCanonicalProtocol(t *testing.T) {
 	before := s.Get()
 	p := CloneNetworkPolicy(before.NetworkPolicy)
 	p.Revision++
+	p.Traffic = TrafficSelection{Mode: "selected_services", Unavailable: "retain"}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := s.ApproveDefaultRouteConsent(ctx, before, p, []DefaultRouteGrant{consentConfigGrant()}, "0123456789abcdef0123456789abcdef", 1); !errors.Is(err, context.Canceled) {

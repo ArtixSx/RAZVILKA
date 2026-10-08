@@ -54,7 +54,7 @@ func defaultConsentHTTPFixture(t *testing.T) (*App, map[string]any) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = a.CloseDefaultConsent() })
-	policy := &config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{"home"}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "all_except", DefaultRoute: "xray", AllExceptAllowed: true, Unavailable: "retain"}}
+	policy := &config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{"home"}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "selected_services", Unavailable: "retain"}}
 	g := config.DefaultRouteGrant{Resolved: "xray:" + snapshot.Nodes[0].ID, ProviderClass: "node", ProviderID: snapshot.Nodes[0].ID, SourceIDs: []string{"manual"}, SourceKinds: []string{"manual"}, Protocols: []string{"vless"}}
 	return a, map[string]any{"expected_revision": store.Get().Revision, "expected_policy_revision": uint64(0), "policy": policy, "grants": []config.DefaultRouteGrant{g}, "confirm": "APPROVE_NETWORK_POLICY"}
 }

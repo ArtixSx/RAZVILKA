@@ -14,18 +14,17 @@ import (
 // the existing per-service scope unchanged; it is never migrated from AllLAN.
 // This is intent, not packet classification or a permission to use an adapter.
 //
-// Schema 1 keeps the original selected-services semantics. Schema 2 is the
-// all-internet contract: services are overrides on top of a default path for
-// the rest of the internet of participating clients, DefaultRoute may be the
-// "auto" intent, and Unavailable may block the managed traffic. A binary that
-// only knows schema 1 rejects schema 2; rollback restores the prior config.
+// Schemas 1 and 2 retain their strict historical decoding. The current product
+// uses selected_services only: ValidateListNetworkPolicy is mandatory for a
+// new permission or execution. Historical all_except fields never authorize it.
 type NetworkPolicy struct {
-	Schema   int               `json:"schema"`
-	Revision uint64            `json:"revision"`
-	Clients  ClientScope       `json:"clients"`
-	Traffic  TrafficSelection  `json:"traffic"`
-	Rules    []NetworkRule     `json:"rules"`
-	Russian  RussianExclusions `json:"russian"`
+	Schema     int                 `json:"schema"`
+	Revision   uint64              `json:"revision"`
+	Clients    ClientScope         `json:"clients"`
+	Traffic    TrafficSelection    `json:"traffic"`
+	Rules      []NetworkRule       `json:"rules"`
+	Russian    RussianExclusions   `json:"russian"`
+	Exclusions *ResourceExclusions `json:"resource_exclusions,omitempty"`
 }
 
 type ClientScope struct {
@@ -62,7 +61,7 @@ func validDefaultRoute(route string, schema int) bool {
 type NetworkRule struct {
 	ID        string   `json:"id"`
 	Revision  uint64   `json:"revision"`
-	Kind      string   `json:"kind"` // exact, suffix, ip, cidr
+	Kind      string   `json:"kind"` // service, exact, suffix, ip, cidr
 	Value     string   `json:"value"`
 	Action    string   `json:"action"` // direct or bypass
 	Mandatory bool     `json:"mandatory"`
@@ -180,6 +179,10 @@ func ValidateNetworkPolicy(p *NetworkPolicy) error {
 		}
 		seen[rule.ID] = true
 		switch rule.Kind {
+		case "service":
+			if !policyIdentifier.MatchString(rule.Value) {
+				return ErrNetworkPolicy
+			}
 		case "exact", "suffix":
 			name, err := PolicyDomain(rule.Value)
 			if err != nil || name != rule.Value {
@@ -200,20 +203,25 @@ func ValidateNetworkPolicy(p *NetworkPolicy) error {
 	}
 	for i, first := range p.Rules {
 		for _, second := range p.Rules[i+1:] {
-			if first.Mandatory && second.Mandatory && first.Action != second.Action && NetworkRulesOverlap(first, second) {
+			if p.Traffic.Mode == "all_except" && first.Mandatory && second.Mandatory && first.Action != second.Action && NetworkRulesOverlap(first, second) {
 				return ErrNetworkPolicy
 			}
 		}
 	}
 	r := p.Russian
+	if ValidateResourceExclusions(p.Exclusions) != nil {
+		return ErrResourceExclusions
+	}
 	if !policyIDs(r.ServiceIDs, 128) || len(r.BroadTLDs) > 3 {
 		return ErrNetworkPolicy
 	}
 	if r.Enabled {
-		if !policyIdentifier.MatchString(r.CatalogID) || r.Revision == 0 || len(r.Digest) != 64 || strings.Trim(r.Digest, "0123456789abcdef") != "" || len(r.ServiceIDs) == 0 && len(r.BroadTLDs) == 0 {
+		typed := p.Exclusions != nil && p.Exclusions.RussianSnapshot != nil
+		legacy := r.CatalogID != "" || r.Revision != 0 || r.Digest != "" || len(r.ServiceIDs) != 0 || len(r.BroadTLDs) != 0
+		if (!typed || legacy) && (!policyIdentifier.MatchString(r.CatalogID) || r.Revision == 0 || len(r.Digest) != 64 || strings.Trim(r.Digest, "0123456789abcdef") != "" || len(r.ServiceIDs) == 0 && len(r.BroadTLDs) == 0) {
 			return ErrNetworkPolicy
 		}
-	} else if r.AutoUpdateAllowed || len(r.BroadTLDs) != 0 {
+	} else if r.AutoUpdateAllowed || len(r.BroadTLDs) != 0 && (!policyIdentifier.MatchString(r.CatalogID) || r.Revision == 0 || !consentHex(r.Digest, 64)) {
 		return ErrNetworkPolicy
 	}
 	seen = map[string]bool{}
@@ -250,6 +258,9 @@ func NetworkRulesOverlap(a, b NetworkRule) bool {
 		if !shared {
 			return false
 		}
+	}
+	if a.Kind == "service" || b.Kind == "service" {
+		return a.Kind == b.Kind && a.Value == b.Value
 	}
 	domain := func(r NetworkRule) bool { return r.Kind == "exact" || r.Kind == "suffix" }
 	if domain(a) && domain(b) {
@@ -289,5 +300,6 @@ func CloneNetworkPolicy(p *NetworkPolicy) *NetworkPolicy {
 	}
 	v.Russian.ServiceIDs = slices.Clone(p.Russian.ServiceIDs)
 	v.Russian.BroadTLDs = slices.Clone(p.Russian.BroadTLDs)
+	v.Exclusions = CloneResourceExclusions(p.Exclusions)
 	return &v
 }
