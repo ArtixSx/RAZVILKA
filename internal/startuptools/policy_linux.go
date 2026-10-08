@@ -99,7 +99,7 @@ func (l *Lease) policyEffect(original context.Context, index int, args []string)
 	// barrier and Provider's opening/actual-start/closing observations.
 	runtime.LockOSThread()
 	thread := syscall.Gettid()
-	admissionErr := invokeAdmission(original, name, args, l.digest, func() bool { return syscall.Gettid() == thread }, func() error {
+	admissionErr := func() error {
 		start, startCancel := context.WithTimeout(c, operationTimeout)
 		defer startCancel()
 		if err := l.lock(start); err != nil {
@@ -116,13 +116,19 @@ func (l *Lease) policyEffect(original context.Context, index int, args []string)
 			if held.Err() != nil || original.Err() != nil || c.Err() != nil || l.closed.Load() || l.lifetime.Err() != nil {
 				return at("EFFECT_START_CONTEXT", nil)
 			}
-			if err := command.Start(); err != nil {
-				return at("EFFECT_START", err)
-			}
-			started = true
-			return nil
+			// Admission runs under the retained tool gate and Provider bracket.
+			// Its owner must not reenter inventory, CheckTools, e.current,
+			// health or verifyLAN, which may reacquire this gate or Provider.
+			// Full prechecks precede this call; closing readbacks follow it.
+			return invokeAdmission(original, name, args, l.digest, func() bool { return syscall.Gettid() == thread }, func() error {
+				if err := command.Start(); err != nil {
+					return at("EFFECT_START", err)
+				}
+				started = true
+				return nil
+			})
 		})
-	})
+	}()
 	runtime.UnlockOSThread()
 	if !started {
 		return nil, at("EFFECT_NOT_STARTED", admissionErr)

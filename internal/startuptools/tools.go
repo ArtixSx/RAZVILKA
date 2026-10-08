@@ -177,8 +177,8 @@ func (l *Lease) Close() error {
 	if l.cancel != nil {
 		l.cancel()
 	}
-	// Join retain's closed check and Add before Wait. External admission may
-	// reenter Check, so it retains lifetime without holding the command gate.
+	// Join retain's closed check and Add before Wait. Effects retain lifetime
+	// through admission and Wait; admission must not reenter the held tool gate.
 	l.retainMu.Lock()
 	l.retainMu.Unlock()
 	l.retained.Wait()
