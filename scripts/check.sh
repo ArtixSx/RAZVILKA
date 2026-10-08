@@ -11,7 +11,10 @@ go test ./...
 go test -race ./...
 go vet ./...
 for script in scripts/*.sh scripts/S99razvilka build.sh; do
-  sh -n "$script"
+  case "$(head -n 1 "$script")" in
+    '#!/usr/bin/env bash'|'#!/bin/bash') bash -n "$script" ;;
+    *) sh -n "$script" ;;
+  esac
 done
 sh ./scripts/check-no-z2k-runtime.sh
 sh ./scripts/test-candidate-isolation.sh
