@@ -31,6 +31,8 @@ func TestProbeTargetActualOwnerChecksWholePinnedSetBeforeLeaf(t *testing.T) {
 		want error
 	}{
 		{"www.cloudflare.com", nil, nil},
+		{"discordsays.com", nil, nil},
+		{"discordsez.com", []netip.Addr{netip.MustParseAddr("203.0.113.9")}, ErrProbeTargetExcluded},
 		{"", []netip.Addr{netip.MustParseAddr("1.1.1.1")}, nil},
 		{"", []netip.Addr{netip.MustParseAddr("203.0.113.9")}, ErrProbeTargetExcluded},
 		{"", []netip.Addr{netip.MustParseAddr("2001:db8::1")}, ErrProbeTargetExcluded},

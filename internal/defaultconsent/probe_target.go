@@ -22,7 +22,7 @@ func (r *Review) CheckProbeTarget(ctx context.Context, hostname string, pins []n
 	name := ""
 	var err error
 	if hostname != "" {
-		name, err = config.PolicyDomain(hostname)
+		name, err = config.ResourceHostname(hostname)
 	}
 	if err != nil || len(pins) > 64 || hostname == "" && len(pins) == 0 {
 		return ErrProbeTargetUnknown

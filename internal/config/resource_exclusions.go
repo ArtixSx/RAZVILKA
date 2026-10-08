@@ -312,7 +312,7 @@ func normalizeResourceTarget(t ResourceTarget) (ResourceTarget, error) {
 		return t, ErrResourceExclusions
 	}
 	if t.Domain != "" {
-		name, err := PolicyDomain(t.Domain)
+		name, err := ResourceHostname(t.Domain)
 		if err != nil {
 			return t, ErrResourceExclusions
 		}

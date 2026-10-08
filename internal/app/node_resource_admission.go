@@ -59,7 +59,7 @@ func (a *App) nodeResourceAdmission(ctx context.Context, expected config.Config,
 			if target.Domain == "" {
 				return nil
 			}
-			canonicalHost, err := config.PolicyDomain(target.Domain)
+			canonicalHost, err := config.ResourceHostname(target.Domain)
 			if err != nil {
 				return dataplane.ErrNodeResourceDenied
 			}
@@ -67,7 +67,7 @@ func (a *App) nodeResourceAdmission(ctx context.Context, expected config.Config,
 			// catalog service exclusion must also win over their hostnames.
 			for _, known := range definitions.Services {
 				for _, domain := range known.Domains {
-					canonicalDomain, err := config.PolicyDomain(domain)
+					canonicalDomain, err := config.ResourceHostname(domain)
 					if err != nil {
 						return dataplane.ErrNodeResourceDenied
 					}

@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
@@ -80,10 +81,11 @@ type RussianExclusions struct {
 
 var ErrNetworkPolicy = errors.New("invalid home network policy")
 
-// PolicyDomain canonicalizes a name, not a URL. Public suffixes and private
-// hosting suffixes cannot masquerade as a curated service definition.
-func PolicyDomain(value string) (string, error) {
-	if value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, "/:@?#*\\") {
+// ResourceHostname canonicalizes an observed hostname, not a URL or a rule.
+// A syntactically valid private hosting suffix can be an actual DNS identity;
+// this comparison value grants no service, provider or packet permission.
+func ResourceHostname(value string) (string, error) {
+	if value == "" || !utf8.ValidString(value) || strings.TrimSpace(value) != value || strings.ContainsAny(value, "/:@?#*\\") {
 		return "", ErrNetworkPolicy
 	}
 	name, err := idna.Lookup.ToASCII(strings.TrimSuffix(value, "."))
@@ -99,8 +101,21 @@ func PolicyDomain(value string) (string, error) {
 			return "", ErrNetworkPolicy
 		}
 	}
+	if !strings.Contains(name, ".") {
+		return "", ErrNetworkPolicy
+	}
+	return name, nil
+}
+
+// PolicyDomain validates a curated match rule. Public suffixes and private
+// hosting suffixes cannot masquerade as a curated service definition.
+func PolicyDomain(value string) (string, error) {
+	name, err := ResourceHostname(value)
+	if err != nil {
+		return "", err
+	}
 	suffix, _ := publicsuffix.PublicSuffix(name)
-	if suffix == name || !strings.Contains(name, ".") {
+	if suffix == name {
 		return "", ErrNetworkPolicy
 	}
 	return name, nil

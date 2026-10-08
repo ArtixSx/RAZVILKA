@@ -178,6 +178,27 @@ func TestNodeResourceAdmissionDoesNotInventSuffixOrPositiveRecipeGrant(t *testin
 	}
 }
 
+func TestNodeResourceAdmissionClassifiesHostingHostnameWithoutAuthorizingRule(t *testing.T) {
+	a, _, _ := nodeApplyFixture(t)
+	a.Catalog.Services = append(a.Catalog.Services, catalog.Service{ID: "discord", Domains: []string{"discordsays.com", "discordsez.com"}})
+	installNodeResourcePolicy(t, a, []config.ResourceMatch{{Kind: "service", Value: "discord"}}, false)
+	cfg := a.Store.Get()
+	service := a.Catalog.Services[0]
+	for _, host := range []string{"api.ipify.org", "notdiscordsays.com", "discordsays.com.attacker.test"} {
+		if err := a.nodeResourceAdmission(context.Background(), cfg, service, host, netip.Addr{}); err != nil {
+			t.Fatal("unrelated hosting catalog identity blocked observed target", host, err)
+		}
+	}
+	for _, host := range []string{"discordsays.com", "assets.discordsays.com", "discordsez.com"} {
+		if err := a.nodeResourceAdmission(context.Background(), cfg, service, host, netip.Addr{}); !errors.Is(err, dataplane.ErrNodeResourceDenied) {
+			t.Fatal("known excluded service hostname was not denied", host, err)
+		}
+	}
+	if !reflect.DeepEqual(cfg, a.Store.Get()) {
+		t.Fatal("hostname comparison changed current intent")
+	}
+}
+
 func TestNodeResourceAdmissionExcludedRecoveryAndFallbackStartNoChecks(t *testing.T) {
 	a, _, _, checker, previous := nodeRecoveryFixture(t)
 	installNodeResourcePolicy(t, a, []config.ResourceMatch{{Kind: "service", Value: "telegram"}}, false)
