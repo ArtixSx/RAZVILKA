@@ -1750,6 +1750,14 @@ function renderAudit() {
   target.innerHTML = events.map(renderProjectAuditRow).join('') || `<div class="community-empty">${state.audit?.available === false && state.audit?.last_error ? esc(state.audit.last_error) : 'Действий пока нет.'}</div>`;
 }
 
+function strategyCompatibilityView(validation = {}) {
+  const compatible = validation?.ok === true && validation.native === true && validation.lua_checked === true && validation.quiescence_unknown !== true;
+  const rejected = validation?.quiescence_unknown !== true && ['COMPATIBILITY_REJECTED', 'NATIVE_REJECTED'].includes(validation?.code);
+  return { compatible, tone: compatible ? 'pass' : rejected ? 'fail' : 'warn',
+    label: compatible ? 'СОВМЕСТИМА' : rejected ? 'НЕСОВМЕСТИМА' : 'НЕ ПОДТВЕРЖДЕНО',
+    title: compatible ? 'Совместимость с установленным NFQWS2 и Lua подтверждена' : 'Совместимость с установленным NFQWS2 и Lua не подтверждена' };
+}
+
 function renderStrategyLab() {
   const lab = state.strategyLab || {};
   const pools = lab.pools || [];
@@ -1758,13 +1766,16 @@ function renderStrategyLab() {
   const selections = lab.selections || [];
   const migration = state.z2kPreview || {};
 	const budget = lab.safety?.probe_budget || {};
+	const probeUnavailable = lab.safety?.temporary_scoped_firewall_probe === false;
 	const budgetNode = $('#strategyResourceBudget');
 	if (budgetNode) {
-		budgetNode.classList.toggle('blocked', budget.allowed === false);
+		budgetNode.classList.toggle('blocked', probeUnavailable || budget.allowed === false);
 		const memory = budget.memory_total_kb ? `${Math.round((budget.memory_available_kb || 0) / 1024)} МиБ свободно · ${budget.memory_available_percent || 0}%` : 'RAM не определена';
 		const load = budget.cpu_count ? `load ${Number(budget.load_1 || 0).toFixed(2)} / ${budget.cpu_count} CPU` : 'нагрузка не определена';
-		budgetNode.innerHTML = `<b>${budget.allowed === false ? 'ТЕСТ ОТЛОЖЕН' : 'РЕСУРСЫ ТЕСТА'}</b><span>${esc(budget.reason || 'Проверяем RAM и нагрузку роутера…')} ${esc(memory)} · ${esc(load)} · лимит ${Math.round((budget.timeout_ms || 15000) / 1000)} с.</span>`;
+		budgetNode.innerHTML = probeUnavailable ? '<b>ИЗОЛИРОВАННЫЙ ТЕСТ НЕДОСТУПЕН</b><span>Исполнитель изолированного теста недоступен. Совместимость кандидата с установленным NFQWS2 и Lua проверяется отдельно.</span>' : `<b>${budget.allowed === false ? 'ТЕСТ ОТЛОЖЕН' : 'РЕСУРСЫ ТЕСТА'}</b><span>${esc(budget.reason || 'Проверяем RAM и нагрузку роутера…')} ${esc(memory)} · ${esc(load)} · лимит ${Math.round((budget.timeout_ms || 15000) / 1000)} с.</span>`;
 	}
+	$('#strategyTarget').disabled = probeUnavailable;
+	$('#strategyFamily').disabled = probeUnavailable;
 	const target = $('#strategyTarget').value;
 	const probeServices = (state.services || []).filter((service) => service.probe_url);
   $('#strategyTarget').innerHTML = probeServices.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('') || '<option value="">Нет сервисов с адресом проверки</option>';
@@ -1779,18 +1790,17 @@ function renderStrategyLab() {
   if (pools.some((pool) => pool.id === currentPool)) $('#strategyPool').value = currentPool;
   $('#strategyPools').innerHTML = pools.map((pool) => {
     const count = candidates.filter((candidate) => candidate.pool_id === pool.id).length;
-    const validated = candidates.filter((candidate) => candidate.pool_id === pool.id && candidate.validation?.ok && candidate.validation?.native).length;
-    return `<div class="strategy-pool"><span>${esc(pool.protocol.toUpperCase())}</span><b>${esc(pool.name)}</b><small>${esc(pool.description)}</small><em>${validated} проверено · ${count} всего</em></div>`;
+    const validated = candidates.filter((candidate) => candidate.pool_id === pool.id && strategyCompatibilityView(candidate.validation).compatible).length;
+    return `<div class="strategy-pool"><span>${esc(pool.protocol.toUpperCase())}</span><b>${esc(pool.name)}</b><small>${esc(pool.description)}</small><em>${validated} совместимо · ${count} всего</em></div>`;
   }).join('');
   $('#strategyCandidates').innerHTML = candidates.map((candidate) => {
     const validation = candidate.validation || {};
 		const pool = pools.find((item) => item.id === candidate.pool_id);
-    const cls = validation.ok && validation.native ? 'pass' : validation.native ? 'fail' : 'warn';
-    const label = validation.ok && validation.native ? 'ПРОВЕРЕНО' : validation.native ? 'ОТКЛОНЕНО' : 'НУЖНА ПРОВЕРКА';
-		const probe = validation.ok && validation.native
+    const compatibility = strategyCompatibilityView(validation);
+		const probe = compatibility.compatible && !probeUnavailable
 			? ['tcp', 'quic'].includes(pool?.protocol) ? `<button class="primary" data-strategy-probe="${esc(candidate.id)}">${pool?.protocol === 'quic' ? 'Тест HTTP/3' : 'Тест маршрута'}</button>` : '<button class="secondary" disabled title="Для голосового UDP нужен сервисный handshake">UDP сервиса</button>'
 			: '';
-    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${cls}" title="${esc(validation.output || '')}">${label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Проверить</button>${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
+    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${compatibility.tone}" title="${esc(validation.output || '')}">${compatibility.label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Проверить совместимость</button>${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
   }).join('') || '<div class="strategy-empty">Добавьте кандидата вручную или позже импортируйте совместимые данные. Ничего не применяется автоматически.</div>';
 	const evidence = lab.evidence || [];
   $('#strategyEvidence').innerHTML = summaries.map((summary) => {
@@ -1857,14 +1867,18 @@ async function addStrategyCandidate(event) {
 
 async function validateStrategyCandidate(id) {
   try {
-    const candidate = await api(`/api/v1/strategy-lab/candidates/${encodeURIComponent(id)}/validate`, { method: 'POST' });
+    await api(`/api/v1/strategy-lab/candidates/${encodeURIComponent(id)}/validate`, { method: 'POST' });
     state.strategyLab = await api('/api/v1/strategy-lab');
     renderStrategyLab();
-    showDetails(candidate.validation, candidate.validation?.ok ? 'Нативная проверка пройдена' : 'NFQWS2 отклонил стратегию');
-  } catch (error) { showDetails({ error: error.message }, 'Проверка не выполнена'); }
+    const saved = state.strategyLab?.candidates?.find(candidate => candidate.id === id);
+    if (!saved) return showDetails({ error: 'Сохранённый результат проверки не найден. Обновите список.' }, 'Совместимость с NFQWS2 не подтверждена');
+    showDetails(saved.validation, strategyCompatibilityView(saved.validation).title);
+    $('#detailsSubtitle').textContent = 'Проверка параметров и Lua установленного NFQWS2. Проверка соединения и применение выполняются отдельно.';
+  } catch (error) { showDetails({ error: error.message }, 'Совместимость с NFQWS2 не подтверждена'); }
 }
 
 async function probeStrategyCandidate(id) {
+	if (state.strategyLab?.safety?.temporary_scoped_firewall_probe === false) return showDetails({ error: 'Исполнитель изолированного теста недоступен. Совместимость кандидата проверяется отдельно.' }, 'Изолированный тест недоступен');
 	const serviceID = $('#strategyTarget').value;
 	if (!serviceID) return showDetails({ error: 'В каталоге нет сервиса с адресом проверки' }, 'Тест не запущен');
 	if (!await askConfirmation('Запустить изолированный тест NFQWS2?', `RAZVILKA временно направит только одно соединение к ${serviceName(serviceID)} в отдельную NFQUEUE. Основной маршрут и рабочий конфиг не меняются; временное правило удалится даже при тайм-ауте.`, 'Запустить тест')) return;
