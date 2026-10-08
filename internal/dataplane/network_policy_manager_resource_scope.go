@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -34,6 +35,7 @@ type executionResourceScope struct {
 	cancel             context.CancelFunc
 	guard              func(context.Context) error
 	open               bool
+	observationOpen    atomic.Bool // Read-only observers never reenter mu/guards.
 	failure            error
 	closedErr          error
 	issued             map[string]*executionTransitResource
@@ -84,9 +86,11 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 			return nil, err
 		}
 	}
-	return &executionResourceScope{manager: m, managerRoot: m.StateRoot, adapterOwner: adapterOwner, plan: plan, adapter: adapter, execution: execution,
+	s := &executionResourceScope{manager: m, managerRoot: m.StateRoot, adapterOwner: adapterOwner, plan: plan, adapter: adapter, execution: execution,
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
-		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}, nil
+		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}
+	s.observationOpen.Store(true)
+	return s, nil
 }
 
 func (s *executionResourceScope) context() context.Context {
@@ -364,6 +368,7 @@ func (s *executionResourceScope) close() error {
 		return s.closedErr
 	}
 	s.open = false
+	s.observationOpen.Store(false)
 	s.cancel()
 	changed := false
 	for i := range s.execution.Resources {

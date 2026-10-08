@@ -140,6 +140,65 @@ func observeNetworkPolicyProxyAddition(ctx context.Context, state PolicyState, p
 	return observation, ctx.Err()
 }
 
+func observeNetworkPolicyEffects(ctx context.Context, plan PolicyEffectPlan, path string, options policyAdditionOptions) (observation networkPolicyReceiptObservation, result error) {
+	if ctx == nil || ctx.Err() != nil {
+		return observation, ErrPolicyAdditionReceipt
+	}
+	plan, hash, err := copyPolicyEffectPlan(plan)
+	if err != nil {
+		return observation, err
+	}
+	root, anchor, err := openNetworkPolicyObservationRoot(path)
+	if err != nil {
+		return observation, err
+	}
+	defer func() {
+		if result != nil {
+			if observation.owner == nil {
+				root.Close()
+			} else {
+				observation.close()
+			}
+		}
+	}()
+	unlock, lock, err := lockNetworkPolicyReceiptExisting(root)
+	if err != nil {
+		return observation, err
+	}
+	defer unlock()
+	observation.owner, observation.lock = root, lock
+	if options.boot == nil {
+		options.boot = (&ProxyTunnelAdapter{}).currentBootIdentity
+	}
+	s := policyEffectSession{policyAdditionSession: &policyAdditionSession{root: root, path: path, options: options}, plan: plan, hash: hash}
+	if err := s.load(ctx); err != nil {
+		return observation, err
+	}
+	document, err := root.OpenFile(policyAdditionFile, os.O_RDONLY, 0)
+	if err != nil {
+		return observation, err
+	}
+	observation.document = document
+	info, err := document.Stat()
+	data, readErr := io.ReadAll(io.LimitReader(document, policyAdditionMaxBytes+1))
+	canonical, marshalErr := json.Marshal(s.doc)
+	var compact bytes.Buffer
+	if err != nil || readErr != nil || marshalErr != nil || !validNetworkPolicyReceiptFile(info) || len(data) > policyAdditionMaxBytes || json.Compact(&compact, data) != nil || !bytes.Equal(compact.Bytes(), canonical) {
+		return observation, ErrPolicyAdditionReceipt
+	}
+	current, err := root.Stat(policyAdditionFile)
+	if err != nil || !os.SameFile(info, current) {
+		return observation, ErrPolicyAdditionReceipt
+	}
+	lockInfo, err := lock.Stat()
+	if err != nil {
+		return observation, err
+	}
+	observation.path, observation.anchor, observation.fileInfo, observation.lockInfo = path, anchor, info, lockInfo
+	observation.status, observation.checksum, observation.canonical = s.status(), s.doc.Checksum, canonical
+	return observation, ctx.Err()
+}
+
 func lockNetworkPolicyReceiptExisting(root *ownedfs.Root) (func(), *os.File, error) {
 	file, err := openNFQWS2LockFile(root, policyAdditionLock, false)
 	if err != nil {
