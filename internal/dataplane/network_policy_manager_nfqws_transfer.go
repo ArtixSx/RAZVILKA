@@ -27,10 +27,15 @@ func (r *NFQWSExecutionResource) configureActive(ctx context.Context, command nf
 	}
 	r.scope.mu.Lock()
 	defer r.scope.mu.Unlock()
+	adapter, realAdapter := r.scope.adapterOwner.(*NFQWS2Adapter)
+	owner, ownerErr := "", error(nil)
+	if realAdapter && adapter != nil {
+		owner, ownerErr = adapter.owner()
+	}
 	i, err := r.matching(r.binding)
 	if err != nil || r.activeCommand != nil || r.beforeUsed || r.scope.execution.ResourcePlanID != "" ||
 		r.scope.execution.Resources[i].Phase != "planned" || r.scope.execution.PlanID != r.scope.plan.PlanID ||
-		command.StateRoot != filepath.Join(r.scope.manager.StateRoot, r.scope.adapter) || nfqws2ActiveCommandMatchesSpec(command, r.plan.Spec()) != nil {
+		!realAdapter || adapter == nil || ownerErr != nil || command.Owner != owner || adapter.StateRoot != filepath.Join(r.scope.manager.StateRoot, "runtime", r.scope.adapter) || command.StateRoot != adapter.StateRoot || nfqws2ActiveCommandMatchesSpec(command, r.plan.Spec()) != nil {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
 	readback, ok := ctx.Value(nfqwsExecutionActiveReadbackKey{}).(nfqwsExecutionActiveReadback)

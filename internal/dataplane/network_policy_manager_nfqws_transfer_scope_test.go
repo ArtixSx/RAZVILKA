@@ -28,14 +28,24 @@ type networkPolicyActiveScopeModel struct {
 func networkPolicyActiveScopeFixture(t *testing.T) *networkPolicyActiveScopeModel {
 	t.Helper()
 	f := executionNFQWSManagerFixture(t)
-	// Active commands use the actual runtime/nfqws2 owner layout. The older
-	// timed registrar fixture deliberately uses an arbitrary private root.
-	f.m.StateRoot = filepath.Join(t.TempDir(), "runtime")
+	// Use original Register's actual runtime/nfqws2 owner layout. Process,
+	// queue and COMMON reads below remain explicit models, never live proof.
+	f.m = New(t.TempDir())
+	f.m.FreshProfile = func(context.Context) (string, error) { return f.p.NetworkProfileID, nil }
+	adapter := NewNFQWS2Adapter()
+	if err := f.m.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.m.recordLocked(f.p); err != nil {
 		t.Fatal(err)
 	}
 	command, spec, _ := nfqws2ActiveCommandFixture(t)
-	command.StateRoot = filepath.Join(f.m.StateRoot, "nfqws2")
+	command.StateRoot = adapter.StateRoot
+	owner, ownerErr := adapter.owner()
+	if ownerErr != nil {
+		t.Fatal(ownerErr)
+	}
+	command.Owner = owner
 	spec.CommandSHA256 = nfqws2ActiveCommandDigest(command)
 	f.spec = spec
 	identity, current := networkPolicyIdentityFixture()
@@ -149,7 +159,7 @@ func TestNetworkPolicyManagerTransferProofFailureIsConsumedWithoutMetadataACK(t 
 }
 
 func TestNetworkPolicyManagerActiveScopeRefusesRootAndInstanceSubstitution(t *testing.T) {
-	for _, fault := range []string{"manager-root", "registered-instance", "missing-reader", "temporary-attempt"} {
+	for _, fault := range []string{"manager-root", "registered-instance", "adapter-state-root", "foreign-command-owner", "missing-reader", "temporary-attempt"} {
 		t.Run(fault, func(t *testing.T) {
 			x := networkPolicyActiveScopeFixture(t)
 			switch fault {
@@ -159,6 +169,10 @@ func TestNetworkPolicyManagerActiveScopeRefusesRootAndInstanceSubstitution(t *te
 				x.f.m.registryMu.Lock()
 				x.f.m.Adapters["nfqws2"] = &fakeAdapter{id: "nfqws2"}
 				x.f.m.registryMu.Unlock()
+			case "adapter-state-root":
+				x.r.scope.adapterOwner.(*NFQWS2Adapter).StateRoot = filepath.Join(x.f.m.StateRoot, "nfqws2")
+			case "foreign-command-owner":
+				x.command.Owner = "000000000000000000000000"
 			case "missing-reader":
 				x.ctx = context.WithValue(x.ctx, nfqwsExecutionActiveReadbackKey{}, nfqwsExecutionActiveReadback(nil))
 			case "temporary-attempt":
