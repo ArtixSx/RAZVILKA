@@ -161,8 +161,9 @@ func validateNativeBridge(v nativeSegment) (nativeSegment, error) {
 			return nativeSegment{}, at("kernel.corroboration.native.bridge.required-"+key, nil)
 		}
 	}
-	// The actual reviewed fixture has an empty IPv6 field. A future nonempty
-	// dialect must be reviewed; silently dropping a v6 LAN prefix is forbidden.
+	// The reviewed full "show interface" shape has an empty IPv6 field with
+	// no subtree. That is not proof of IPv6 absence; kernel facts are retained
+	// separately. A changed full-command dialect still requires review.
 	if v.fields["ipv6"] != "" {
 		return nativeSegment{}, at("kernel.corroboration.native.bridge.ipv6-value", nil)
 	}

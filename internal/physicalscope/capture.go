@@ -273,8 +273,11 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 		if len(s.Prefixes) == 0 || len(s.Prefixes) > 32 {
 			return nil, at("kernel.corroboration.prefix.count", nil)
 		}
-		if stock && !slices.Equal(s.Prefixes, nativeByInterface[s.Interface].prefixes) {
-			return nil, at("kernel.corroboration.prefix.native-mismatch", nil)
+		if stock {
+			match, err := matchNativeIPv4Prefixes(s.Prefixes, nativeByInterface[s.Interface].prefixes)
+			if err != nil || !match {
+				return nil, at("kernel.corroboration.prefix.native-mismatch", err)
+			}
 		}
 		if stock {
 			v := nativeByInterface[s.Interface]
@@ -354,7 +357,11 @@ func matchNativeBridge(v nativeSegment, link kernelLink, frames []message) (brid
 	if err != nil {
 		return bridgeMatchNoMAC, at("kernel.corroboration.bridge.match.native-prefix-parse", err)
 	}
-	if !slices.Equal(prefixes, v.prefixes) {
+	match, err := matchNativeIPv4Prefixes(prefixes, v.prefixes)
+	if err != nil {
+		return bridgeMatchNoMAC, at("kernel.corroboration.bridge.match.prefix-parse", err)
+	}
+	if !match {
 		return bridgeMatchWrongPrefixes, nil
 	}
 	if !slices.Contains(addresses, v.fields["address"]+"/"+strconv.Itoa(p.Bits())) {
@@ -362,6 +369,35 @@ func matchNativeBridge(v nativeSegment, link kernelLink, frames []message) (brid
 	}
 	return bridgeMatchComplete, nil
 }
+
+// The reviewed NDM "show interface" shape corroborates its exact IPv4
+// network/host, MAC and Bridge role. Its empty top-level IPv6 field is not an
+// assertion that IPv6 is absent: the actual selected-interface detail exposes
+// IPv6 addresses beneath that empty field. Kernel RTM_GETADDR supplies every
+// actual address/prefix on the uniquely corroborated bridge. IPv6 remains in
+// Segment.Prefixes/LinkAddresses and the original Review/fence comparison;
+// it is never synthesized, discarded or used to choose a generic bridge.
+func matchNativeIPv4Prefixes(observed, native []string) (bool, error) {
+	if len(native) != 1 {
+		return false, ErrUnknown
+	}
+	nativePrefix, err := netip.ParsePrefix(native[0])
+	if err != nil || !nativePrefix.Addr().Is4() || nativePrefix != nativePrefix.Masked() || !lanPrefix(nativePrefix) {
+		return false, ErrUnknown
+	}
+	var ipv4 []string
+	for _, value := range observed {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil || prefix != prefix.Masked() || prefix.Addr().Zone() != "" || !lanPrefix(prefix) {
+			return false, ErrUnknown
+		}
+		if prefix.Addr().Is4() {
+			ipv4 = append(ipv4, value)
+		}
+	}
+	return slices.Equal(ipv4, native), nil
+}
+
 func nativeMemberMatches(v nativeSegment, link kernelLink) bool {
 	if !validMAC(v.mac) || strings.ToLower(v.mac) != link.MAC || v.global == "yes" || v.fields["public"] == "yes" {
 		return false

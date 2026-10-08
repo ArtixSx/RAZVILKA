@@ -169,14 +169,13 @@ func TestPhysicalCorroboratesStockAndKernel(t *testing.T) {
 		"foreign member": func(l, a, r *[]message, n *[]nativeSegment) {
 			(*l)[1] = linkFrame(4, "foreign0", "", "02:00:00:00:00:09", 9)
 		},
-		"bridge is WAN":     func(l, a, r *[]message, n *[]nativeSegment) { *r = append(*r, routeFrame(9)) },
-		"member is WAN":     func(l, a, r *[]message, n *[]nativeSegment) { *r = append(*r, routeFrame(4)) },
-		"prefix mismatch":   func(l, a, r *[]message, n *[]nativeSegment) { (*a)[0] = addressFrame(9, "192.0.3.1/24") },
-		"host mismatch":     func(l, a, r *[]message, n *[]nativeSegment) { (*a)[0] = addressFrame(9, "192.0.2.2/24") },
-		"unexpected v6 LAN": func(l, a, r *[]message, n *[]nativeSegment) { *a = append(*a, addressFrame(9, "2001:db8::1/64")) },
-		"public role":       func(l, a, r *[]message, n *[]nativeSegment) { (*n)[0].global = "yes" },
-		"protected Home":    func(l, a, r *[]message, n *[]nativeSegment) { (*n)[0].security = "protected" },
-		"duplicate index":   func(l, a, r *[]message, n *[]nativeSegment) { *l = append(*l, (*l)[0]) },
+		"bridge is WAN":   func(l, a, r *[]message, n *[]nativeSegment) { *r = append(*r, routeFrame(9)) },
+		"member is WAN":   func(l, a, r *[]message, n *[]nativeSegment) { *r = append(*r, routeFrame(4)) },
+		"prefix mismatch": func(l, a, r *[]message, n *[]nativeSegment) { (*a)[0] = addressFrame(9, "192.0.3.1/24") },
+		"host mismatch":   func(l, a, r *[]message, n *[]nativeSegment) { (*a)[0] = addressFrame(9, "192.0.2.2/24") },
+		"public role":     func(l, a, r *[]message, n *[]nativeSegment) { (*n)[0].global = "yes" },
+		"protected Home":  func(l, a, r *[]message, n *[]nativeSegment) { (*n)[0].security = "protected" },
+		"duplicate index": func(l, a, r *[]message, n *[]nativeSegment) { *l = append(*l, (*l)[0]) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			l, a, r := kernelFixture()
