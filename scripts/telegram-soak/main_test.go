@@ -61,7 +61,7 @@ type socksFixture struct {
 
 // No target supplied by the probe is dialed. Every CONNECT is mapped to one
 // local TLS fixture, or deliberately stalled to test cancellation.
-func fixtureSOCKS(t *testing.T, backend, stall string) *socksFixture {
+func fixtureSOCKS(t *testing.T, backend, stall string, mtBackend ...string) *socksFixture {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -134,7 +134,11 @@ func fixtureSOCKS(t *testing.T, backend, stall string) *socksFixture {
 					f.disconnect <- struct{}{}
 					return
 				}
-				remote, err := net.DialTimeout("tcp", backend, time.Second)
+				destination := backend
+				if len(mtBackend) == 1 && net.JoinHostPort(host, strconvPort(port)) == qaMTEndpoint {
+					destination = mtBackend[0]
+				}
+				remote, err := net.DialTimeout("tcp", destination, time.Second)
 				if err != nil {
 					return
 				}
@@ -215,7 +219,7 @@ func TestHTTPSWindowRetainsSOCKSAndOriginalVerifiedHost(t *testing.T) {
 
 func TestHTTPSFailuresRedirectTLSAndBodyAreBoundedAndSanitized(t *testing.T) {
 	secret := "vless://UUID:PRIVATE-KEY@private.invalid/"
-	for _, mode := range []string{"status", "redirect", "tls", "body"} {
+	for _, mode := range []string{"status", "redirect", "tls", "body", "headers"} {
 		t.Run(mode, func(t *testing.T) {
 			name := telegramHost
 			if mode == "tls" {
@@ -230,17 +234,19 @@ func TestHTTPSFailuresRedirectTLSAndBodyAreBoundedAndSanitized(t *testing.T) {
 					w.WriteHeader(http.StatusFound)
 				case "body":
 					_, _ = w.Write(bytes.Repeat([]byte("x"), maxBody+1))
+				case "headers":
+					w.Header().Set("X-Oversize", strings.Repeat("x", 64<<10))
 				}
 				_, _ = io.WriteString(w, secret)
 			})
 			socks := fixtureSOCKS(t, server.Listener.Addr().String(), "")
 			r, err := observe(context.Background(), fixtureOptions(socks.address), roots)
-			wantCode := map[string]string{"status": "http_status", "redirect": "http_status", "tls": "tls_verification", "body": "body_limit"}[mode]
+			wantCode := map[string]string{"status": "http_status", "redirect": "http_status", "tls": "tls_verification", "body": "body_limit", "headers": "transport_failed"}[mode]
 			if err != nil || r.ExitCode != 2 || !r.WindowCompleted || r.Accepted != 0 || r.Failures != 1 || r.FailureCodes[wantCode] != 1 || len(socks.commands) != 1 || !r.Final.OK {
 				t.Fatal("failure or redirect acquired success", r, err)
 			}
 			data, err := json.Marshal(r)
-			if err != nil || bytes.Contains(data, []byte("UUID")) || bytes.Contains(data, []byte("PRIVATE-KEY")) || bytes.Contains(data, []byte("vless://")) || bytes.Contains(data, []byte("https://")) || r.MTProto != "not_tested_no_reviewed_tracked_implementation" {
+			if err != nil || bytes.Contains(data, []byte("UUID")) || bytes.Contains(data, []byte("PRIVATE-KEY")) || bytes.Contains(data, []byte("vless://")) || bytes.Contains(data, []byte("https://")) || r.MTProto != "not_tested_not_requested" || r.Protocol != nil {
 				t.Fatal("report leaked raw material or overstated protocol coverage")
 			}
 		})
@@ -371,6 +377,7 @@ func TestOptionsRefuseRemoteAuthUnboundedValuesAndSecretEcho(t *testing.T) {
 		{"-socks", "127.0.0.1:1080", "-duration", "2h"}, {"-socks", "127.0.0.1:1080", "-interval", "0s"},
 		{"-socks", "127.0.0.1:1080", "-probe-timeout", "0s"}, {"-socks", "127.0.0.1:1080", "-control-timeout", "1h"},
 		{"-socks", "127.0.0.1:1080", "-telegram-ip", "127.0.0.1"}, {"-socks", "127.0.0.1:1080", "-duration", "PRIVATE-KEY"},
+		{"-socks", "127.0.0.1:1080", "-duration", "10s"}, {"-socks", "127.0.0.1:1080", "-duration", "13s", "-mtproto"},
 	} {
 		_, help, err := parseOptions(args)
 		if err == nil || help || err.Error() != "invalid options" {

@@ -37,6 +37,14 @@ type options struct {
 	Interval       time.Duration
 	ProbeTimeout   time.Duration
 	ControlTimeout time.Duration
+	MTProto        bool
+}
+
+func (o options) cycleBudget() time.Duration {
+	if o.MTProto {
+		return o.ProbeTimeout + qaMTBudget
+	}
+	return o.ProbeTimeout
 }
 
 func defaults() options {
@@ -49,7 +57,7 @@ func (o options) validate() error {
 	number, portErr := strconv.Atoi(port)
 	if err != nil || parseErr != nil || !address.IsLoopback() || address.Zone() != "" || address.Is4In6() || portErr != nil || number < 1 || number > 65535 ||
 		o.Duration <= 0 || o.Duration > time.Hour || o.Interval < time.Second || o.Interval > 5*time.Minute ||
-		o.ProbeTimeout <= 0 || o.ProbeTimeout > 30*time.Second || o.Duration < o.ProbeTimeout || o.ControlTimeout <= 0 || o.ControlTimeout > 5*time.Second ||
+		o.ProbeTimeout <= 0 || o.ProbeTimeout > 30*time.Second || o.Duration <= o.cycleBudget() || o.ControlTimeout <= 0 || o.ControlTimeout > 5*time.Second ||
 		o.Pin.IsValid() && (!o.Pin.Is4() || !publicfetch.PublicAddress(o.Pin)) {
 		return errors.New("invalid options")
 	}
@@ -91,37 +99,49 @@ func summarize(values []float64) latency {
 }
 
 type report struct {
-	Schema                  int            `json:"schema"`
-	Tool                    string         `json:"tool"`
-	BuildRevision           string         `json:"build_revision,omitempty"`
-	BuildModified           bool           `json:"build_modified"`
-	Service                 string         `json:"service"`
-	Endpoint                string         `json:"loopback_socks_endpoint"`
-	TargetMode              string         `json:"target_mode"`
-	StartedAt               time.Time      `json:"started_at"`
-	SamplingStartedAt       *time.Time     `json:"sampling_started_at,omitempty"`
-	FinishedAt              time.Time      `json:"finished_at"`
-	SamplingDurationSeconds float64        `json:"requested_sampling_seconds"`
-	SamplingElapsedSeconds  float64        `json:"sampling_elapsed_seconds"`
-	ElapsedSeconds          float64        `json:"elapsed_seconds"`
-	IntervalSeconds         float64        `json:"interval_seconds"`
-	ProbeTimeoutSeconds     float64        `json:"probe_timeout_seconds"`
-	ControlTimeoutSeconds   float64        `json:"control_timeout_seconds"`
-	WindowCompleted         bool           `json:"window_completed"`
-	Outcome                 string         `json:"outcome"`
-	ExitCode                int            `json:"exit_code"`
-	Initial                 control        `json:"initial_endpoint_control"`
-	Final                   control        `json:"final_endpoint_control"`
-	Attempts                int            `json:"https_attempts"`
-	Accepted                int            `json:"https_accepted"`
-	Failures                int            `json:"https_failures"`
-	FailureCodes            map[string]int `json:"failure_codes"`
-	HTTPStatuses            map[int]int    `json:"http_statuses"`
-	SkippedSlots            int            `json:"skipped_overrun_slots"`
-	AllLatency              latency        `json:"all_attempts_latency"`
-	AcceptedLatency         latency        `json:"accepted_latency"`
-	MTProto                 string         `json:"mtproto"`
-	Limits                  []string       `json:"limits"`
+	Schema                  int             `json:"schema"`
+	Tool                    string          `json:"tool"`
+	BuildRevision           string          `json:"build_revision,omitempty"`
+	BuildModified           bool            `json:"build_modified"`
+	Service                 string          `json:"service"`
+	Endpoint                string          `json:"loopback_socks_endpoint"`
+	TargetMode              string          `json:"target_mode"`
+	StartedAt               time.Time       `json:"started_at"`
+	SamplingStartedAt       *time.Time      `json:"sampling_started_at,omitempty"`
+	FinishedAt              time.Time       `json:"finished_at"`
+	SamplingDurationSeconds float64         `json:"requested_sampling_seconds"`
+	SamplingElapsedSeconds  float64         `json:"sampling_elapsed_seconds"`
+	ElapsedSeconds          float64         `json:"elapsed_seconds"`
+	IntervalSeconds         float64         `json:"interval_seconds"`
+	ProbeTimeoutSeconds     float64         `json:"probe_timeout_seconds"`
+	ControlTimeoutSeconds   float64         `json:"control_timeout_seconds"`
+	WindowCompleted         bool            `json:"window_completed"`
+	Outcome                 string          `json:"outcome"`
+	ExitCode                int             `json:"exit_code"`
+	Initial                 control         `json:"initial_endpoint_control"`
+	Final                   control         `json:"final_endpoint_control"`
+	Attempts                int             `json:"https_attempts"`
+	Accepted                int             `json:"https_accepted"`
+	Failures                int             `json:"https_failures"`
+	FailureCodes            map[string]int  `json:"failure_codes"`
+	HTTPStatuses            map[int]int     `json:"http_statuses"`
+	SkippedSlots            int             `json:"skipped_overrun_slots"`
+	AllLatency              latency         `json:"all_attempts_latency"`
+	AcceptedLatency         latency         `json:"accepted_latency"`
+	MTProto                 string          `json:"mtproto"`
+	Protocol                *protocolReport `json:"mtproto_unauth,omitempty"`
+	Limits                  []string        `json:"limits"`
+}
+
+type protocolReport struct {
+	DC            int            `json:"dc"`
+	BudgetSeconds float64        `json:"request_budget_seconds"`
+	Attempts      int            `json:"attempts"`
+	Replies       int            `json:"nonce_matched_respq"`
+	Failures      int            `json:"failures"`
+	FailureCodes  map[string]int `json:"failure_codes"`
+	Latency       latency        `json:"latency"`
+	Scope         string         `json:"scope"`
 }
 
 // The control is only a no-auth SOCKS5 greeting at the configured address.
@@ -177,7 +197,7 @@ func newHTTPSProber(o options, roots *tls.Config) (*httpsProber, error) {
 		}
 		config.RootCAs = roots.RootCAs // Local fixtures only; no CLI trust override.
 	}
-	transport := &http.Transport{TLSClientConfig: config, DisableKeepAlives: true, DisableCompression: true,
+	transport := &http.Transport{TLSClientConfig: config, DisableKeepAlives: true, DisableCompression: true, MaxResponseHeaderBytes: 64 << 10,
 		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
 			if target != net.JoinHostPort(telegramHost, "443") || network != "tcp" {
 				return nil, errors.New("target changed")
@@ -258,11 +278,15 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 		return report{}, err
 	}
 	started := time.Now()
-	r := report{Schema: 1, Tool: "telegram-soak/1", Service: "telegram_https", Endpoint: o.SOCKS, TargetMode: "hostname_over_socks",
+	r := report{Schema: 1, Tool: "telegram-soak/2", Service: "telegram_https", Endpoint: o.SOCKS, TargetMode: "hostname_over_socks",
 		StartedAt: started.UTC(), SamplingDurationSeconds: o.Duration.Seconds(), IntervalSeconds: o.Interval.Seconds(), ProbeTimeoutSeconds: o.ProbeTimeout.Seconds(), ControlTimeoutSeconds: o.ControlTimeout.Seconds(),
 		Outcome: "refused", ExitCode: 1, Final: control{Code: "not_attempted"}, FailureCodes: map[string]int{}, HTTPStatuses: map[int]int{},
-		MTProto: "not_tested_no_reviewed_tracked_implementation",
-		Limits:  []string{"HTTPS TLS validation, HTTP 2xx and bounded response body only; redirects refused", "No authenticated chats, account login, media, voice, MTProto or authenticated Telegram server protocol identity", "Endpoint controls verify SOCKS5 greeting at one configured loopback address, not unchanged PID/config/VLESS node/WAN", "No LAN/TUN, application UI or release acceptance; the operator must separately verify VLESS runtime and network identity", "Sampling lasts the requested duration; initial and final controls add at most two control timeouts, excluding report output and scheduler delays"},
+		MTProto: "not_tested_not_requested",
+		Limits:  []string{"HTTPS TLS validation, HTTP 2xx, <=64KiB headers and <=256KiB body only; redirects refused", "No authenticated chats, account login, media, voice or authenticated MTProto server identity; no auth-key creation", "Endpoint controls verify SOCKS5 greeting at one configured loopback address, not unchanged PID/config/VLESS node/WAN", "No LAN/TUN, application UI or release acceptance; the operator must separately verify VLESS runtime and network identity", "Sampling lasts the requested duration; initial and final controls add at most two control timeouts, excluding report output and scheduler delays"},
+	}
+	if o.MTProto {
+		r.MTProto = "single_req_pq_multi_nonce_matched_resPQ_only"
+		r.Protocol = &protocolReport{DC: 2, BudgetSeconds: qaMTBudget.Seconds(), FailureCodes: map[string]int{}, Scope: "One unauthenticated req_pq_multi/resPQ through the same configured SOCKS endpoint; nonce/framing/TL/time checks only, not server authentication, account, media or voice"}
 	}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
@@ -291,12 +315,12 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 		r.SamplingStartedAt = &at
 		end := samplingStarted.Add(o.Duration)
 		window, cancel := context.WithDeadline(parent, end)
-		var all, accepted []float64
+		var all, accepted, protocolLatencies []float64
 		for next := samplingStarted; next.Before(end); {
 			if waitUntil(window, next) != nil {
 				break
 			}
-			if time.Until(end) < o.ProbeTimeout {
+			if time.Until(end) < o.cycleBudget() {
 				break // Do not start a request without its full remaining budget.
 			}
 			observed := prober.probe(window, o.ProbeTimeout)
@@ -312,6 +336,18 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 				r.Failures++
 				r.FailureCodes[observed.Code]++
 			}
+			if o.MTProto {
+				protocolStarted := time.Now()
+				observation := qaMTProbe(window, o.SOCKS)
+				r.Protocol.Attempts++
+				protocolLatencies = append(protocolLatencies, float64(time.Since(protocolStarted))/float64(time.Millisecond))
+				if observation.Reply {
+					r.Protocol.Replies++
+				} else {
+					r.Protocol.Failures++
+					r.Protocol.FailureCodes[observation.Code]++
+				}
+			}
 			next = next.Add(o.Interval)
 			for next.Before(time.Now()) && next.Before(end) {
 				r.SkippedSlots++
@@ -323,11 +359,14 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 		cancel()
 		r.SamplingElapsedSeconds = time.Since(samplingStarted).Seconds()
 		r.AllLatency, r.AcceptedLatency = summarize(all), summarize(accepted)
+		if o.MTProto {
+			r.Protocol.Latency = summarize(protocolLatencies)
+		}
 		if parent.Err() == nil {
 			r.Final = endpointControl(parent, o)
 			if r.WindowCompleted && r.Attempts > 0 {
 				r.Outcome, r.ExitCode = "completed_with_failures", 2
-				if r.Final.OK && r.Failures == 0 {
+				if r.Final.OK && r.Failures == 0 && (!o.MTProto || r.Protocol.Attempts == r.Attempts && r.Protocol.Replies == r.Protocol.Attempts) {
 					r.Outcome, r.ExitCode = "completed", 0
 				}
 			}
@@ -348,16 +387,19 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, `Build: go build -trimpath -o telegram-soak ./scripts/telegram-soak
 Run on the same host as the previously verified running VLESS SOCKS listener:
   ./telegram-soak -socks 127.0.0.1:1080 -duration 1h -interval 30s > telegram-soak.json
+Optional -mtproto adds one req_pq_multi/resPQ through that SOCKS to fixed production DC2 per cycle.
+It checks unauthenticated echoed nonce and bounded wire format; no RSA/DH/server authentication or account methods.
 Optional -telegram-ip PUBLIC_IPV4 uses a separately admitted literal with original TLS Host/SNI.
 Defaults: probe-timeout 10s, control-timeout 2s; duration >0..1h, interval 1s..5m.
+Duration must exceed probe-timeout (plus 3s with -mtproto); only cycles with that full remaining budget start.
 No engine startup, credentials/profile reads, route changes, direct fallback, or local Telegram DNS.
 TLS verification is mandatory; only https Telegram homepage 2xx with <=256KiB body is accepted.
 SIGINT/SIGTERM cancel requests and waits; no final network control follows parent cancellation.
 One bounded JSON summary is written at exit; no bodies, URLs, raw errors or credentials are emitted.
-Exit 0: entire sampling window, both SOCKS controls and all attempted HTTPS requests accepted.
-Exit 2: completed sampling with failed requests or final endpoint control. Exit 1: refused/incomplete/deadline. Exit 130: canceled.
+Exit 0: entire sampling window, both SOCKS controls, all HTTPS requests and all opted-in unauth resPQ checks accepted.
+Exit 2: completed sampling with failed HTTPS/protocol requests or final endpoint control. Exit 1: refused/incomplete/deadline. Exit 130: canceled.
 SOCKS controls do not prove unchanged process/node/config/WAN. Verify these separately before/after.
-MTProto, authenticated chats/media/voice, physical LAN/TUN and UI are not tested.
+MTProto is not tested without -mtproto. Authenticated chats/media/voice, physical LAN/TUN and UI are not tested.
 This prepares a read-only final test; Root owns the real hour, network gates and release.`)
 }
 
@@ -368,6 +410,7 @@ func parseOptions(args []string) (options, bool, error) {
 	var pin string
 	fs.StringVar(&o.SOCKS, "socks", "", "literal loopback SOCKS endpoint")
 	fs.StringVar(&pin, "telegram-ip", "", "optional separately admitted public IPv4")
+	fs.BoolVar(&o.MTProto, "mtproto", false, "opt in to one unauthenticated req_pq_multi/resPQ per cycle")
 	fs.DurationVar(&o.Duration, "duration", o.Duration, "sampling window")
 	fs.DurationVar(&o.Interval, "interval", o.Interval, "scheduled request interval")
 	fs.DurationVar(&o.ProbeTimeout, "probe-timeout", o.ProbeTimeout, "whole request timeout")
