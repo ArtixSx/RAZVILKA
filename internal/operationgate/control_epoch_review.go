@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 )
 
 // ControlEpochReference is a comparison value, never an admission. The held
@@ -91,6 +92,18 @@ func (r *ControlEpochReview) Reference() ControlEpochReference {
 	return r.ref
 }
 
+// MatchesControlRoot is comparison data only. Forward use still calls Current
+// or a short admission on this SAME original handle; equal epochs at another
+// root do not authorize publication through the configured owner.
+func (r *ControlEpochReview) MatchesControlRoot(path string) bool {
+	if r == nil || r.self != r {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return !r.closed && r.dir != nil && r.dir.path == path
+}
+
 // Current reads the SAME retained protected owner, epoch and permanent marker.
 // Fresh same-Gate operations may compare a durable consent epoch, but Current
 // itself does not grant consent, certify a Store or authorize an effect.
@@ -111,6 +124,27 @@ func (r *ControlEpochReview) Current(ctx context.Context) error {
 // not call this review or perform readiness, Wait, fsync or cleanup. No Gate
 // mutex is held while acquiring or holding the protected control lock.
 func (r *ControlEpochReview) WithStart(ctx context.Context, begin func() error) error {
+	return r.withShortEffect(ctx, begin)
+}
+
+// WithRename linearizes only one synchronous bounded rename syscall with
+// durable Stop under this SAME retained control owner and original operation.
+// The caller's exact existing file-target lease must stage/write/file-sync and
+// verify its preimage before admission; directory sync/readback/repair happen
+// afterwards. rename MUST NOT call this review, Store/Gate, fsync, Wait or any
+// whole publication protocol. This method grants no file, source or scope.
+func (r *ControlEpochReview) WithRename(ctx context.Context, rename func() error) error {
+	if ctx == nil {
+		return ErrSelfUpdateStopChanged
+	}
+	deadline, bounded := ctx.Deadline()
+	if !bounded || !time.Now().Before(deadline) {
+		return errors.Join(ErrSelfUpdateStopChanged, ctx.Err())
+	}
+	return r.withShortEffect(ctx, rename)
+}
+
+func (r *ControlEpochReview) withShortEffect(ctx context.Context, begin func() error) error {
 	if r == nil || r.self != r || r.gate == nil || begin == nil {
 		return ErrSelfUpdateStopChanged
 	}
