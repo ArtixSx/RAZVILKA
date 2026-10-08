@@ -1,5 +1,7 @@
 # NFQWS — D09: bounded библиотека и supervised compatibility
 
+> 08.10.2026: продуктовый контракт уточнён — [активный список и обязательные исключения](../LIST_MODE_CORRECTION_RU.md). Прежний full-tunnel охват не является текущей задачей или разрешением на применение. Ниже сохранена история реализации и проверок; затронутые сценарии требуют повторной проверки.
+
 Текущий supervised checkpoint и точный ROOT/CORE/OPS контракт: [NFQWS_SUPERVISED_RU.md](NFQWS_SUPERVISED_RU.md). Разделы ниже сохраняют историю первых двух порций; direct provider fence остаётся regression, новый provider использует отдельный subreaper helper и schema 3.
 
 04.10.2026. Worktree `C:/Projects/RAZVILKA/worktrees/sol-nfqws`, ветка `sol/nfqws-20261004`, base `fe7d0ab9baaec1151c92593f308e080274903a93`. Владение этой порции: только `internal/strategylab/**`, новый собственный launcher и этот handoff. VERSION 0.19.3, go.mod/go.sum сохранены. Код в app/worker, policy/ownership/journal и NET AWG/WG/DNS не менялся.

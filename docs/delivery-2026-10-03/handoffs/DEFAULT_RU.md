@@ -1,5 +1,7 @@
 # DEFAULT — IP compiler и consumer одной транзакции
 
+> 08.10.2026: продуктовый контракт уточнён — [активный список и обязательные исключения](../LIST_MODE_CORRECTION_RU.md). Прежний full-tunnel охват не является текущей задачей или разрешением на применение. Ниже сохранена история реализации и проверок; затронутые сценарии требуют повторной проверки.
+
 04.10.2026, база `e0e83db`, ветка `sol/default-executor-20261004`, worktree `C:/Projects/RAZVILKA/worktrees/sol-default`. Только новые `internal/app/default_route_executor*.go`, их tests и этот handoff. VERSION `0.19.3` / go.mod сохранены. Live Linux/router здесь не запускались.
 
 Checkpoint compiler/consumer `16c877e` принят координатором в `a3a7944`; Linux/race/vet по его независимому прогону RC0. MAC membership follow-up `6a4bfb7` принят в `b4bf42f`. Для текущей порции normal merge принятых integration `d37246f` и `999acbc` потребил CORE CAS `ab9d769` и pure postimage `47a222b`; чужой WIP не переносился.
