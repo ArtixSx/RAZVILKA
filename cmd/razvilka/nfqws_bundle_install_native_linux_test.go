@@ -67,8 +67,11 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.Validator, manager.Executor = strategylab.CompatibleValidator{}, nil
-	controlRoot := filepath.Join(root, "control")
-	if _, err := operationgate.InitializeSelfUpdateControl(ctx, controlRoot); err != nil {
+	files, err := productionSelfUpdateFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := operationgate.InitializeSelfUpdateControl(ctx, files.ControlRoot); err != nil {
 		t.Fatal(err)
 	}
 	const token = "native-managed-install-owned-token-0123456789"
@@ -76,7 +79,7 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app.App{Store: store, StrategyLab: manager, Components: owner, Security: sec, SelfUpdateFiles: &app.SelfUpdateFiles{ControlRoot: controlRoot}, ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
+	a := &app.App{Store: store, StrategyLab: manager, Components: owner, Security: sec, SelfUpdate: files.Helper, SelfUpdateFiles: files, ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
 	defer a.CloseManagedNFQControl()
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		t.Fatal(err)
