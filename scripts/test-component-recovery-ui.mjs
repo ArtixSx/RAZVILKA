@@ -10,6 +10,7 @@ function managedSnapshot(phase='prepared'){
   Object.assign(value.transaction,{schema_version:3,component:'nfqws2',before_version:'absent',after_version:'reviewed-flavor'});
   Object.assign(value.capabilities,{supported_actions:['resume','rollback'],available_actions:pending?(phase==='rollback-started'?['rollback']:['resume','rollback']):[],live_proof_required:false});return value;
 }
+function managedAcknowledgement(installed=true){return {ok:true,installed_idle:installed,compatibility_ready:installed,working_routes_changed:false,...(installed?{receipt:{schema:1,provider_id:'reviewed-provider',transaction_id:'a'.repeat(32),manifest_sha256:'b'.repeat(64),generation_path:'/owned/'+ 'b'.repeat(64),flavor:'reviewed-flavor',state:'ready-idle'}}:{recovery_required:false})};}
 const pure={};vm.createContext(pure);vm.runInContext(source,pure);const model=pure.RazvilkaComponentRecovery;
 function fixture(view='engines'){
   const requests=[],listeners=new Map(),notices=[],panel={innerHTML:'',contains:()=>false};
@@ -20,7 +21,7 @@ function fixture(view='engines'){
     document:{hidden:false,activeElement:null,querySelectorAll:()=>[panel],addEventListener(name,fn){listeners.set(name,fn);}},
     api(path,options={}){const pending=deferred();requests.push({path,options,...pending});return pending.promise;},
     askConfirmation:(...args)=>confirm(...args),showNotice:(...args)=>notices.push(args),routeLabel:id=>id,
-    renderInterfaceEngines(){},renderComponents(){},
+    renderInterfaceEngines(){},renderComponents(){},refreshManagedNFQBundle:async()=>true,
     showAuth(){authCalls++;state.authenticated=false;listeners.get('razvilka:auth-required')();}
   };
   vm.createContext(ctx);vm.runInContext(source,ctx);
@@ -187,21 +188,29 @@ await test('all schema 3 terminal phases stay neutral even with a matching forge
   }
 });
 await test('schema 3 resume allows Safe Mode and Stop but uses only current CAS and existing transaction confirmation',async()=>{
-  const f=fixture();f.state.status.safe_mode=true;f.state.serviceControl.stopped=true;await f.ready(managedSnapshot());let installedReads=0;f.ctx.refreshManagedNFQBundle=async()=>{installedReads++;};
+  const f=fixture();f.state.status.safe_mode=true;f.state.serviceControl.stopped=true;await f.ready(managedSnapshot());let installedReads=0;f.ctx.refreshManagedNFQBundle=async(journal,receipt)=>{installedReads++;assert.equal(journal.transaction.transaction_id,'a'.repeat(32));assert.equal(receipt.transaction_id,'a'.repeat(32));return true;};
   f.clickRepair('resume');await flush();assert.equal(f.requests.length,2);
   assert.deepEqual(JSON.parse(f.requests[1].options.body),{transaction_id:'a'.repeat(32),component:'nfqws2',action:'resume',expected_revision:7,confirm:'REPAIR_COMPONENT_TRANSACTION'});
-  f.requests[1].resolve({recovery_required:false});await flush();assert.equal(f.notices.length,0);f.requests[2].resolve(managedSnapshot('accepted-installed-idle'));await flush();
+  f.requests[1].resolve(managedAcknowledgement());await flush();assert.equal(f.notices.length,0);f.requests[2].resolve(managedSnapshot('accepted-installed-idle'));await flush();
   assert.equal(installedReads,1);assert.equal(f.ctx.componentRecoveryFence(),false);assert.equal(f.ctx.componentRecoverySummary('nfqws2').tone,'unknown');assert.equal(f.notices[0][0],'review');
 });
 await test('schema 3 rollback-started only offers the actually advertised rollback action',async()=>{
   const f=fixture();await f.ready(managedSnapshot('rollback-started'));f.clickRepair('resume');await flush();assert.equal(f.requests.length,1);
-  f.clickRepair('rollback');await flush();assert.equal(JSON.parse(f.requests[1].options.body).action,'rollback');f.requests[1].resolve({recovery_required:false});await flush();f.requests[2].resolve(managedSnapshot('rolled-back'));await flush();assert.equal(f.notices.length,1);
+  f.clickRepair('rollback');await flush();assert.equal(JSON.parse(f.requests[1].options.body).action,'rollback');f.requests[1].resolve(managedAcknowledgement(false));await flush();f.requests[2].resolve(managedSnapshot('rolled-back'));await flush();assert.equal(f.notices.length,1);
 });
 await test('schema 3 current revision still fences actions while Safe Mode and Stop stay allowed',async()=>{
   const f=fixture();f.state.status.safe_mode=true;f.state.serviceControl.stopped=true;await f.ready(managedSnapshot());const confirmation=deferred();f.confirm(()=>confirmation.promise);f.clickRepair('resume');await flush();f.state.status.revision=8;confirmation.resolve(true);await flush();assert.equal(f.requests.length,1);assert.equal(f.ctx.componentRecoveryFence(),true);
 });
 await test('schema 3 pending or a different readback transaction cannot settle the operation',async()=>{
   const pending=fixture();await pending.ready(managedSnapshot());pending.clickRepair('resume');await flush();pending.requests[1].resolve({recovery_required:true});await flush();assert.equal(pending.requests.length,2);assert.equal(pending.notices.length,0);assert.equal(pending.ctx.componentRecoveryFence(),true);
-  const other=fixture();await other.ready(managedSnapshot());other.clickRepair('resume');await flush();other.requests[1].resolve({recovery_required:false});await flush();const wrong=managedSnapshot('accepted-installed-idle');wrong.transaction.transaction_id='b'.repeat(32);other.requests[2].resolve(wrong);await flush();assert.equal(other.notices.length,0);assert.equal(other.ctx.componentRecoveryFence(),true);
+  const other=fixture();await other.ready(managedSnapshot());other.clickRepair('resume');await flush();other.requests[1].resolve(managedAcknowledgement());await flush();const wrong=managedSnapshot('accepted-installed-idle');wrong.transaction.transaction_id='b'.repeat(32);other.requests[2].resolve(wrong);await flush();assert.equal(other.notices.length,0);assert.equal(other.ctx.componentRecoveryFence(),true);
+});
+await test('schema 3 incomplete or route-changing acknowledgement cannot borrow a terminal result',async()=>{
+  for(const result of [{ok:true,working_routes_changed:false},{...managedAcknowledgement(),working_routes_changed:true}]){
+    const f=fixture();await f.ready(managedSnapshot());f.clickRepair('resume');await flush();f.requests[1].resolve(result);await flush();assert.equal(f.requests.length,2);assert.equal(f.notices.length,0);assert.equal(f.ctx.componentRecoveryFence(),true);
+  }
+});
+await test('schema 3 completed journal without matching installed receipt readback remains unconfirmed',async()=>{
+  const f=fixture();await f.ready(managedSnapshot());f.ctx.refreshManagedNFQBundle=async()=>false;f.clickRepair('resume');await flush();f.requests[1].resolve(managedAcknowledgement());await flush();f.requests[2].resolve(managedSnapshot('accepted-installed-idle'));await flush();assert.equal(f.notices.length,0);assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/независимое чтение/);
 });
 console.log(JSON.stringify({suite:'component-recovery',tests:total}));

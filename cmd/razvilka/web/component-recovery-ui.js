@@ -136,7 +136,8 @@
       ticket.sent=true;
       const result=await api('/api/v1/components/recovery',{method:'POST',body:JSON.stringify({transaction_id:t.transaction_id,component:t.component,action,expected_revision:observed.revision,confirm:'REPAIR_COMPONENT_TRANSACTION'})});
       if(!current())return;
-      if(result?.recovery_required!==false)throw new Error('Сервер ещё не подтвердил завершение восстановления. Прочитайте состояние; запись не повторяется.');
+      const acknowledged=managed?result?.ok===true && typeof result.installed_idle==='boolean' && typeof result.compatibility_ready==='boolean' && result.working_routes_changed===false && (result.recovery_required===undefined || result.recovery_required===false):result?.recovery_required===false;
+      if(!acknowledged)throw new Error('Сервер ещё не подтвердил завершение восстановления. Прочитайте состояние; запись не повторяется.');
       if(action==='accept-installed-idle' && (result.installed_idle_accepted!==true || result.live_accepted!==false))throw new Error('Принятие неактивной версии не подтверждено. Прочитайте состояние; запись не повторяется.');
       recovery.receipt={transaction_id:t.transaction_id,component:t.component,live_accepted:action==='accept-live' && result.live_accepted===true,installed_idle_accepted:action==='accept-installed-idle' && result.installed_idle_accepted===true};
       // The journal read, not the POST alone, determines whether the fence settled.
@@ -145,7 +146,7 @@
       if(!fresh() || recovery.data.transaction?.transaction_id!==t.transaction_id || recovery.data.recovery_required)throw new Error('Итог журнала ещё не подтверждён. Повторите чтение состояния.');
       if(managed && (recovery.data.transaction.schema_version!==3 || !['accepted-installed-idle','rolled-back','abandoned'].includes(recovery.data.transaction.phase)))throw new Error('Журнал ещё не подтвердил завершение операции с управляемым пакетом. Повторите чтение состояния.');
       if(action==='accept-installed-idle' && (recovery.data.transaction.phase!=='accepted-installed-idle' || recovery.data.capabilities?.installed_idle_accepted!==true))throw new Error('Журнал ещё не подтвердил принятие неактивной версии. Повторите чтение состояния.');
-      if(managed && typeof refreshManagedNFQBundle==='function')await refreshManagedNFQBundle(recovery.data);
+      if(managed && (typeof refreshManagedNFQBundle!=='function' || !await refreshManagedNFQBundle(recovery.data,result.receipt || null)))throw new Error('Журнал завершён, но независимое чтение управляемого пакета и квитанции ещё не подтверждено. Повторите чтение состояния.');
       if(!current())return;
       showNotice('review',summary(recovery.data,recovery.receipt).label,'Итог прочитан из журнала. Доступ каждого сервиса проверяется отдельно.');
     } catch(error) {

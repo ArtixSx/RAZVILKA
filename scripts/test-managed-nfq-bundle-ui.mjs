@@ -36,8 +36,9 @@ function fixture(view='engines'){
     revoke(){state.authenticated=false;listeners.get('razvilka:auth-required')();},
     view(name){state.currentView=name;listeners.get('razvilka:view-change')({detail:name});},
     async resolveRead(index=0,p=plan(),installed=null,revision=p.revision){
-      assert.deepEqual(requests.slice(index,index+3).map(request=>request.path),[base+'/plan',base+'/installed','/api/v1/status']);
-      requests[index].resolve(p);if(installed)requests[index+1].resolve(installed);else requests[index+1].reject(unavailable());
+      assert.equal(requests[index].path,base+'/plan');requests[index].resolve(p);await flush();
+      assert.equal(requests[index+1].path,base+'/installed');if(installed)requests[index+1].resolve(installed);else requests[index+1].reject(unavailable());await flush();
+      assert.equal(requests[index+2].path,'/api/v1/status');
       requests[index+2].resolve({revision});await flush();
     },async ready(p=plan(),installed=null,revision=p.revision){this.clickRead();await flush();await this.resolveRead(0,p,installed,revision);}
   };return f;
@@ -57,12 +58,21 @@ await test('stock component detection and rendering do not create managed proof 
   const f=fixture();assert.equal(f.requests.length,0);assert.match(f.card(),/Прочитайте план/);assert.match(f.card(),/data-managed-nfq-install[^>]*disabled/);assert.equal(f.context.managedNFQBundleCard('xray'),'');
   f.view('overview');f.view('engines');assert.equal(f.requests.length,0);f.clickInstall();assert.equal(f.requests.length,0);
 });
-await test('plan/readback navigation is three independent GETs, with no source-init POST',async()=>{
-  const f=fixture();f.clickRead();f.clickRead();await flush();assert.equal(f.requests.length,3);assert(f.requests.every(request=>!request.options.method && request.options.cache==='no-store'));await f.resolveRead();
+await test('plan/readback uses three bounded sequential GETs without competing with its own plan gate',async()=>{
+  const f=fixture();f.clickRead();f.clickRead();await flush();assert.equal(f.requests.length,1);await f.resolveRead();assert.equal(f.requests.length,3);assert(f.requests.every(request=>!request.options.method && request.options.cache==='no-store' && request.options.readTimeoutMs===20000));
   assert.doesNotMatch(f.card(),/data-managed-nfq-install[^>]*disabled/);assert.equal(f.notices.length,0);
 });
 await test('a blocked plan remains readable without offering installation',async()=>{
   const f=fixture();await f.ready(plan({ready:false,code:'NOT_READY',reason:'Сначала завершите восстановление.'}));f.clickInstall();assert.equal(f.requests.length,3);assert.match(f.card(),/Сначала завершите восстановление/);
+});
+await test('actual unreviewed platform reason without a manifest stays visible and read-only',async()=>{
+  const value=plan({ready:false,bundle:undefined,code:'MANAGED_NFQWS_PLATFORM_UNREVIEWED',reason:'Для этой платформы ещё нет проверенного пакета управляемого NFQWS2.'});
+  assert.equal(model.validPlan(value),true);assert.equal(model.matches(value,observation()),false);assert.equal(model.validPlan({...value,ready:true}),false);assert.equal(model.validPlan({...value,code:'OTHER'}),false);
+  const f=fixture();await f.ready(value);assert.match(f.card(),/Для этой платформы ещё нет проверенного пакета/);assert.match(f.card(),/data-managed-nfq-install[^>]*disabled/);f.clickInstall();assert.equal(f.requests.length,3);
+});
+await test('a busy plan stops the sequential read and cannot reuse an old ready plan or retry POST',async()=>{
+  const f=fixture();await f.ready();f.clickRead();await flush();f.requests[3].reject(Object.assign(new Error('metadata busy'),{status:409}));await flush();
+  assert.equal(f.requests.length,4);assert.match(f.card(),/metadata busy/);assert.match(f.card(),/data-managed-nfq-install[^>]*disabled/);f.clickInstall();assert.equal(f.requests.length,4);assert.equal(f.notices.length,0);
 });
 await test('an unavailable real lease never becomes installed from plan booleans',async()=>{
   const f=fixture();await f.ready(plan({installed_idle:true,compatibility_ready:true}));assert.doesNotMatch(f.card(),/Управляемый пакет установлен и сейчас/);assert.equal(f.notices.length,0);
@@ -72,8 +82,8 @@ await test('verified installed readback disables new installation and does not c
 });
 await test('one explicit idle install posts only observed CAS, including revision zero and Safe Mode/Stop',async()=>{
   const f=fixture();f.state.status.revision=0;await f.ready(plan({revision:0,paths:['ignored'],trusted:true}),null,0);f.clickInstall();f.clickInstall();await flush();
-  assert.equal(f.requests.length,4);const request=f.requests[3];assert.equal(request.path,base+'/install');assert.equal(request.options.method,'POST');assert.deepEqual(JSON.parse(request.options.body),{expected_revision:0});assert(f.state.componentOperation);assert.equal(f.notices.length,0);
-  request.resolve(success());await flush();assert.equal(f.requests.length,7);assert.equal(f.notices.length,0,'POST alone claimed installation');
+  assert.equal(f.requests.length,4);const request=f.requests[3];assert.equal(request.path,base+'/install');assert.equal(request.options.method,'POST');assert.deepEqual(JSON.parse(request.options.body),{expected_revision:0});assert(f.state.componentOperation);assert.equal(f.notices.length,0);assert.equal([...f.timers][0].milliseconds,370000);
+  request.resolve(success());await flush();assert.equal(f.requests.length,5);assert.equal(f.notices.length,0,'POST alone claimed installation');
   await f.resolveRead(4,plan({revision:0,installed_idle:true,compatibility_ready:true}),observation(),0);
   assert.equal(f.notices.length,1);assert.equal(f.notices[0][0],'review');assert.deepEqual(f.inventory,[false]);assert.equal(f.state.componentOperation,null);assert.equal(f.timers.size,0);
 });
@@ -84,12 +94,12 @@ await test('a different independently read receipt fences an optimistic successf
 await test('changed bundle identity or missing POST receipt never claims completed installation',async()=>{
   for(const response of [success({receipt:null}),success({receipt:receipt({manifest_sha256:'c'.repeat(64)})})]){
     const f=fixture();await f.ready();f.clickInstall();await flush();f.requests[3].resolve(response);await flush();
-    if(f.requests.length===7)await f.resolveRead(4,plan(),observation());
+    if(f.requests.length===5)await f.resolveRead(4,plan(),observation());
     assert.equal(f.notices.length,0);assert.match(f.card(),/Исход установки/);f.clickInstall();assert.equal(f.requests.filter(request=>request.options.method==='POST').length,1);
   }
 });
 await test('failed independent readback cannot turn successful native receipt into a success notice',async()=>{
-  const f=fixture();await f.ready();f.clickInstall();await flush();f.requests[3].resolve(success());await flush();f.requests[4].reject(new Error('read failed'));f.requests[5].reject(unavailable());f.requests[6].resolve({revision:7});await flush();
+  const f=fixture();await f.ready();f.clickInstall();await flush();f.requests[3].resolve(success());await flush();f.requests[4].resolve(plan());await flush();f.requests[5].reject(new Error('read failed'));await flush();assert.equal(f.requests.length,6,'a failed lease read should not issue a status read');
   assert.equal(f.notices.length,0);assert.match(f.card(),/Исход установки/);assert.equal(f.state.componentOperation,null);
 });
 await test('clean refused 409 requires fresh plan and never repeats POST automatically',async()=>{
@@ -117,6 +127,11 @@ await test('invalid, mismatched revision or idle-without-source journal cannot c
     const f=fixture();await f.ready();f.clickInstall();await flush();f.requests[3].reject(new Error('unknown'));await flush();const pending=f.context.refreshManagedNFQBundle(journal);await flush();await f.resolveRead(4);await pending;f.clickInstall();assert.equal(f.requests.filter(request=>request.options.method==='POST').length,1);assert.match(f.card(),/Исход установки/);
   }
 });
+await test('schema 3 receipt recovery requires the matching installed receipt after the terminal journal',async()=>{
+  for(const same of [true,false]){
+    const f=fixture();const pending=f.context.refreshManagedNFQBundle(terminalJournal('accepted-installed-idle'),receipt());await flush();await f.resolveRead(0,plan({installed_idle:true}),observation({receipt_id:(same?'b':'c').repeat(32)}));assert.equal(await pending,same);
+  }
+});
 await test('stale or changed revisions fence installation and do not auto-refresh or post',async()=>{
   const f=fixture();await f.ready();f.advance(60001);f.clickInstall();assert.equal(f.requests.length,3);
   const changed=fixture();await changed.ready();changed.state.status.revision=8;changed.clickInstall();assert.equal(changed.requests.length,3);assert.match(changed.card(),/Настройки изменились/);
@@ -126,11 +141,11 @@ await test('stock component activity and recovery block POST while managed reads
   for(const flag of ['operation','refresh','recovery']){
     const f=fixture();await f.ready();if(flag==='operation')f.state.componentOperation={id:'xray'};else if(flag==='refresh')f.state.componentRefreshRequest={};else f.fence(true);
     f.clickInstall();assert.equal(f.requests.length,3);
-    if(flag==='recovery'){f.clickRead();await flush();assert.equal(f.requests.length,6);await f.resolveRead(3);}
+    if(flag==='recovery'){f.clickRead();await flush();assert.equal(f.requests.length,4);await f.resolveRead(3);}
   }
 });
 await test('late GET and POST cannot revive proof or show a notice after logout',async()=>{
-  const readOnly=fixture();readOnly.clickRead();await flush();readOnly.revoke();await readOnly.resolveRead();assert.match(readOnly.card(),/Прочитайте план/);assert.equal(readOnly.notices.length,0);
+  const readOnly=fixture();readOnly.clickRead();await flush();readOnly.revoke();readOnly.requests[0].resolve(plan());await flush();assert.equal(readOnly.requests.length,1);assert.match(readOnly.card(),/Прочитайте план/);assert.equal(readOnly.notices.length,0);
   const writing=fixture();await writing.ready();writing.clickInstall();await flush();writing.revoke();writing.requests[3].resolve(success());await flush();assert.equal(writing.requests.length,4);assert.equal(writing.notices.length,0);assert.equal(writing.state.componentOperation,null);
 });
 await test('leaving a sent install releases UI busy state and requires independent read on return',async()=>{
@@ -138,10 +153,10 @@ await test('leaving a sent install releases UI busy state and requires independe
   assert.equal(f.state.componentOperation,null);assert.equal(f.notices.length,0);f.clickInstall();assert.equal(f.requests.length,4);f.clickRead();await flush();await f.resolveRead(4,plan({installed_idle:true}),observation());assert.equal(f.requests.filter(request=>request.options.method==='POST').length,1);
 });
 await test('hidden or obsolete reads release the read ticket and do not overwrite a newer session',async()=>{
-  const f=fixture();f.clickRead();await flush();f.context.document.hidden=true;await f.resolveRead();f.context.document.hidden=false;f.clickRead();await flush();assert.equal(f.requests.length,6);await f.resolveRead(3);
+  const f=fixture();f.clickRead();await flush();f.context.document.hidden=true;f.requests[0].resolve(plan());await flush();f.context.document.hidden=false;f.clickRead();await flush();assert.equal(f.requests.length,2);await f.resolveRead(1);
 });
 await test('current 401 closes the session and sanitized reason cannot create markup',async()=>{
-  const f=fixture();f.clickRead();await flush();f.requests[0].reject(Object.assign(new Error('login'),{status:401}));f.requests[1].reject(unavailable());f.requests[2].resolve({revision:7});await flush();assert.equal(f.authCalls(),1);
+  const f=fixture();f.clickRead();await flush();f.requests[0].reject(Object.assign(new Error('login'),{status:401}));await flush();assert.equal(f.authCalls(),1);assert.equal(f.requests.length,1);
   const markup=fixture();await markup.ready(plan({reason:'<img src=x onerror=bad()>',bundle:{...bundle,flavor:'<script>bad</script>'}}));assert.doesNotMatch(markup.card(),/<img|<script>/);assert.match(markup.card(),/&lt;img/);assert.doesNotMatch(markup.card(),/\/private\/generation/);
 });
 await test('the managed caller is wired in both actual and inherited cards, without stock action substitution',()=>{
