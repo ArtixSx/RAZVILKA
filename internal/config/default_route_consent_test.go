@@ -130,10 +130,12 @@ func TestSelectedScopeApprovalAllowsNoProvidersAndSurvivesOnlySameClients(t *tes
 	if !CurrentDefaultRouteScopeConsent(s.Get()) {
 		t.Fatal("active list edit expanded unchanged approved clients")
 	}
-	for _, change := range []string{"segment", "device", "device-exclusion", "inherit", "mode", "future", "legacy"} {
+	for _, change := range []string{"missing-policy", "segment", "device", "device-exclusion", "inherit", "mode", "future", "legacy"} {
 		t.Run(change, func(t *testing.T) {
 			cfg := s.Get()
 			switch change {
+			case "missing-policy":
+				cfg.NetworkPolicy = nil
 			case "segment":
 				cfg.NetworkPolicy.Clients.SegmentIDs = append(cfg.NetworkPolicy.Clients.SegmentIDs, "guest")
 			case "device":
@@ -154,7 +156,7 @@ func TestSelectedScopeApprovalAllowsNoProvidersAndSurvivesOnlySameClients(t *tes
 				cfg.DefaultRouteConsent.Grants = []DefaultRouteGrant{consentConfigGrant()}
 				cfg.DefaultRouteConsent.Digest = DefaultRouteConsentDigest(cfg.DefaultRouteConsent)
 			}
-			if CurrentDefaultRouteScopeConsent(cfg) {
+			if CurrentDefaultRouteScopeConsent(cfg) || CurrentDefaultRouteConsent(cfg) {
 				t.Fatal("changed or historical client scope inherited approval")
 			}
 		})

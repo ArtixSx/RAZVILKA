@@ -136,7 +136,7 @@ func ValidateDefaultRouteConsent(c *DefaultRouteConsent) error {
 // Empty provider grants permit this scope review only; they grant no provider.
 func CurrentDefaultRouteScopeConsent(cfg Config) bool {
 	c := cfg.DefaultRouteConsent
-	return c != nil && c.Schema == 2 && cfg.InactiveResourceExclusions == nil && ValidateListNetworkPolicy(cfg.NetworkPolicy) == nil && ValidateDefaultRouteConsent(c) == nil && c.ConfigRevision <= cfg.Revision && reflect.DeepEqual(c.Policy.Clients, cfg.NetworkPolicy.Clients) && c.Policy.Traffic.Mode == cfg.NetworkPolicy.Traffic.Mode
+	return c != nil && c.Schema == 2 && cfg.NetworkPolicy != nil && cfg.InactiveResourceExclusions == nil && ValidateListNetworkPolicy(cfg.NetworkPolicy) == nil && ValidateDefaultRouteConsent(c) == nil && c.ConfigRevision <= cfg.Revision && reflect.DeepEqual(c.Policy.Clients, cfg.NetworkPolicy.Clients) && c.Policy.Traffic.Mode == cfg.NetworkPolicy.Traffic.Mode
 }
 
 // CurrentDefaultRouteConsent is the stronger exact saved policy/revision check.
