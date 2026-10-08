@@ -15,6 +15,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/testlab"
 )
 
 func autonomyExclusionPolicy() *config.NetworkPolicy {
@@ -258,5 +259,101 @@ func TestAutonomyResourceNegativeAllowsPendingRemoval(t *testing.T) {
 	a.autonomyRound(context.Background(), time.Now())
 	if a.Store.Get().Services["my-independent-site"].Enabled || checks != 0 || len(adapter.calls) != 0 {
 		t.Fatal("exclusion prevented teardown or started a check/Apply")
+	}
+}
+
+type autonomyResourceRouteProber func(context.Context, catalog.Service, string) testlab.Result
+
+func (p autonomyResourceRouteProber) Probe(ctx context.Context, service catalog.Service, route string) testlab.Result {
+	return p(ctx, service, route)
+}
+
+func TestAutonomyResourceRouteProbeClosingRefusalDoesNotPublishHistory(t *testing.T) {
+	for _, outcome := range []string{"allowed", "negative-edit", "cancel", "foreign-profile", "network-change", "unknown-before"} {
+		t.Run(outcome, func(t *testing.T) {
+			a, _, _ := autonomousIntegrationFixture(t)
+			a.TestLab = testlab.NewRunner()
+			profile, err := stableNodeProfile(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, release, err := a.privateExclusiveOperation(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer release()
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			calls := 0
+			a.FreshProfile = func(context.Context) (string, error) {
+				if outcome == "unknown-before" || outcome == "network-change" && calls != 0 {
+					return "network-unknown", nil
+				}
+				return profile, nil
+			}
+			a.RouteProber = autonomyResourceRouteProber(func(probeCtx context.Context, service catalog.Service, route string) testlab.Result {
+				calls++
+				if outcome == "negative-edit" {
+					manual := []config.ResourceMatch{{Kind: "service", Value: service.ID}}
+					if _, err := a.Store.UpdateResourceExclusions(probeCtx, a.Store.Get(), &manual, nil); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if outcome == "cancel" {
+					cancel()
+				}
+				result := confirmedRouteProber{}.Probe(probeCtx, service, route)
+				if outcome == "foreign-profile" {
+					result.NetworkProfileID = "wan-ffffffffffff"
+				}
+				return result
+			})
+			service, _ := a.autonomyService("my-independent-site")
+			want := "INCONCLUSIVE"
+			if outcome == "allowed" {
+				want = "PASS"
+			}
+			if got := a.autonomyProbeRoute(ctx, service, "direct", profile); got != want {
+				t.Fatal("wrong guarded verdict", got, want)
+			}
+			wantCalls := 1
+			if outcome == "unknown-before" {
+				wantCalls = 0
+			}
+			if calls != wantCalls || len(a.TestLab.Snapshot(a.catalogSnapshot()).Current) != 0 {
+				t.Fatal("route observation ran before network admission or leaked into history", calls)
+			}
+		})
+	}
+}
+
+func TestAutonomyResourceNodeCheckPreservesLowerGuardContext(t *testing.T) {
+	a, ids, _ := autonomousIntegrationFixture(t)
+	type originalMarker struct{}
+	ctx, release, err := a.privateExclusiveOperation(context.WithValue(context.Background(), originalMarker{}, "original-owner"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	checks := 0
+	a.NodeChecker = jobNodeChecker(func(checkCtx context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		checks++
+		if checkCtx == ctx || checkCtx.Value(originalMarker{}) != "original-owner" {
+			t.Fatal("checker lost derived lower guard or original owner context")
+		}
+		return d10Result(request, "sing-box", true), nil
+	})
+	p := a.autonomyPolicy()
+	a.autonomy.mu.Lock()
+	spec := a.autonomy.doc.Services["my-independent-site"]
+	a.autonomy.mu.Unlock()
+	service, _ := a.autonomyService(spec.ID)
+	profile, err := stableNodeProfile(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := a.checkAutonomyCurrentNode(ctx, p, spec, a.Store.Get(), "sing-box", ids[0], service, profile)
+	if err != nil || checks != 1 || !result.Available {
+		t.Fatal("guarded node check did not complete", checks, err)
 	}
 }

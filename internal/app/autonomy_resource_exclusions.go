@@ -180,9 +180,9 @@ func (a *App) checkAutonomyCurrentNode(ctx context.Context, p autonomy.Policy, s
 	if err != nil {
 		return dataplane.NodeCheckResult{}, err
 	}
-	result, _, err := a.runAndRecordNode(ctx, engine, id, service, profile, 0, func(request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
-		result, checkErr := checker.Check(ctx, request)
-		closing := a.autonomyResourceGuard(ctx, p, s, cfg, service)
+	result, _, err := a.runAndRecordNode(ctx, engine, id, service, profile, 0, func(checkCtx context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, bool, error) {
+		result, checkErr := checker.Check(checkCtx, request)
+		closing := a.autonomyResourceGuard(checkCtx, p, s, cfg, service)
 		if a.Store != store {
 			closing = errors.Join(closing, dataplane.ErrReviewChanged)
 		}

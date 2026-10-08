@@ -467,11 +467,30 @@ func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, 
 	if !known || a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
 		return "INCONCLUSIVE"
 	}
-	results, observed, err := a.probeRoutesInCurrentNetwork(probeCtx, a.catalogSnapshot(), []string{s.ID}, []string{route})
-	if a.Store != store || a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
+	observed, err := a.freshNetworkProfile(probeCtx)
+	if err != nil || observed != profile {
 		return "INCONCLUSIVE"
 	}
-	if err != nil || observed != profile {
+	// Autonomy consumes this private verdict in its own round. Keep the batch
+	// unrecorded so a closing refusal cannot leak observations into TestLab
+	// history before resource admission. The prober still owns full cleanup.
+	runner, prober := a.TestLab, a.RouteProber
+	results := runner.ProbeRoutesUnrecorded(probeCtx, a.catalogSnapshot(), []string{s.ID}, []string{route}, prober)
+	current, err := a.freshNetworkProfile(probeCtx)
+	if err != nil || current != observed || a.TestLab != runner || a.Store != store {
+		return "INCONCLUSIVE"
+	}
+	for i := range results {
+		r := &results[i]
+		if r.NetworkProfileID != "" && r.NetworkProfileID != observed || r.EvidenceV2 != nil && r.EvidenceV2.NetworkProfile != "" && r.EvidenceV2.NetworkProfile != observed {
+			return "INCONCLUSIVE"
+		}
+		r.NetworkProfileID = observed
+		if r.EvidenceV2 != nil {
+			r.EvidenceV2.NetworkProfile = observed
+		}
+	}
+	if a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
 		return "INCONCLUSIVE"
 	}
 	for _, r := range testlab.AggregateScenarios(results) {
