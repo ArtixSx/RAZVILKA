@@ -23,11 +23,16 @@ func exclusionsHTTPFixture(t *testing.T) (*App, *httptest.Server, map[string]any
 
 func exclusionPatch(a *App) map[string]any {
 	cfg := a.Store.Get()
-	r := uint64(0)
-	if cfg.NetworkPolicy.Exclusions != nil {
-		r = cfg.NetworkPolicy.Exclusions.Revision
+	r, p := uint64(0), uint64(0)
+	if cfg.NetworkPolicy != nil {
+		p = cfg.NetworkPolicy.Revision
+		if cfg.NetworkPolicy.Exclusions != nil {
+			r = cfg.NetworkPolicy.Exclusions.Revision
+		}
+	} else if cfg.InactiveResourceExclusions != nil {
+		r = cfg.InactiveResourceExclusions.Revision
 	}
-	return map[string]any{"expected_revision": cfg.Revision, "expected_policy_revision": cfg.NetworkPolicy.Revision, "expected_exclusion_revision": r}
+	return map[string]any{"expected_revision": cfg.Revision, "expected_policy_revision": p, "expected_exclusion_revision": r}
 }
 
 func TestResourceExclusionsActualHTTPAuthCSRFCASAndSeparateIntent(t *testing.T) {
@@ -171,10 +176,56 @@ func TestResourceExclusionsFreshInstallReadOnlyAndNoInventedScope(t *testing.T) 
 		t.Fatal(status, string(data))
 	}
 	patch := map[string]any{"expected_revision": before.Revision, "expected_policy_revision": uint64(0), "expected_exclusion_revision": uint64(0), "manual": []config.ResourceMatch{{Kind: "service", Value: "video"}}}
-	if status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL); status != 503 {
-		t.Fatal("missing scope did not explicitly refuse", status, string(data))
+	if status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL); status != 200 {
+		t.Fatal("inactive manual storage failed", status, string(data))
 	}
-	if !reflect.DeepEqual(a.Store.Get(), before) {
-		t.Fatal("exclusion save inferred scope/permission")
+	after := a.Store.Get()
+	if after.NetworkPolicy != nil || after.DefaultRouteConsent != nil || after.InactiveResourceExclusions == nil || after.InactiveResourceExclusions.Revision != 1 || after.Revision != before.Revision+1 || after.SafeMode != before.SafeMode || !reflect.DeepEqual(after.Services, before.Services) || !reflect.DeepEqual(after.AppliedServices, before.AppliedServices) {
+		t.Fatal("manual intent inferred scope/path or applied traffic", after)
+	}
+	patch = exclusionPatch(a)
+	patch["manual"] = []config.ResourceMatch{}
+	patch["russian_enabled"] = true
+	if status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL); status != 503 || !reflect.DeepEqual(a.Store.Get(), after) {
+		t.Fatal("RU permission inferred without scope", status, string(data))
+	}
+	if status, data := componentHTTP(t, server, "GET", resourceExclusionsPath, nil, componentRecoveryToken, server.URL); status != 200 {
+		t.Fatal(status, string(data))
+	} else {
+		var result struct {
+			ScopeConfigured   bool   `json:"scope_configured"`
+			StorageState      string `json:"storage_state"`
+			PolicyRevision    uint64 `json:"policy_revision"`
+			ExclusionRevision uint64 `json:"exclusion_revision"`
+			LiveApplied       bool   `json:"live_applied"`
+		}
+		if json.Unmarshal(data, &result) != nil || result.ScopeConfigured || result.StorageState != "inactive" || result.PolicyRevision != 0 || result.ExclusionRevision != 1 || result.LiveApplied {
+			t.Fatal("inactive state misrepresented", string(data))
+		}
+	}
+}
+
+func TestInactiveExclusionsActualHTTPFirstScopeCarriesManualAtomically(t *testing.T) {
+	a, body := defaultConsentHTTPFixture(t)
+	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer server.Close()
+	patch := map[string]any{"expected_revision": a.Store.Get().Revision, "expected_policy_revision": uint64(0), "expected_exclusion_revision": uint64(0), "manual": []config.ResourceMatch{{Kind: "suffix", Value: "example.com"}}}
+	if status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL); status != 200 {
+		t.Fatal(status, string(data))
+	}
+	before := a.Store.Get()
+	saved := config.CloneResourceExclusions(before.InactiveResourceExclusions)
+	body["expected_revision"] = before.Revision
+	body["policy"].(*config.NetworkPolicy).Exclusions = &config.ResourceExclusions{Schema: 1, Revision: saved.Revision, Manual: []config.ResourceMatch{}}
+	if status, data := componentHTTP(t, server, "POST", networkPolicyReviewPath, body, componentRecoveryToken, server.URL); status != 409 || !reflect.DeepEqual(a.Store.Get(), before) {
+		t.Fatal("first positive edit cleared manual", status, string(data))
+	}
+	body["policy"].(*config.NetworkPolicy).Exclusions = nil
+	if status, data := componentHTTP(t, server, "POST", networkPolicyReviewPath, body, componentRecoveryToken, server.URL); status != 200 {
+		t.Fatal("explicit real scope failed", status, string(data))
+	}
+	after := a.Store.Get()
+	if after.InactiveResourceExclusions != nil || !reflect.DeepEqual(after.NetworkPolicy.Exclusions, saved) || after.NetworkPolicy.Revision != 1 || after.DefaultRouteConsent == nil || !reflect.DeepEqual(after.DefaultRouteConsent.Policy.Exclusions, saved) || after.AppliedNetworkPolicy != nil {
+		t.Fatal("first review lost manual or implied Apply", after)
 	}
 }

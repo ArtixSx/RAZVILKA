@@ -82,12 +82,14 @@ func (a *App) resourceExclusions(w http.ResponseWriter, r *http.Request) {
 		if before.NetworkPolicy.Exclusions != nil {
 			exclusionRevision = before.NetworkPolicy.Exclusions.Revision
 		}
+	} else if before.InactiveResourceExclusions != nil {
+		exclusionRevision = before.InactiveResourceExclusions.Revision
 	}
 	if before.Revision != request.ExpectedRevision || policyRevision != request.ExpectedPolicyRevision || exclusionRevision != request.ExpectedExclusionRevision {
 		writeJSON(w, 409, map[string]any{"code": "NETWORK_POLICY_EXCLUSIONS_CHANGED", "live_applied": false})
 		return
 	}
-	if before.NetworkPolicy == nil {
+	if before.NetworkPolicy == nil && (request.Accepted != nil || request.RussianEnabled != nil || request.RussianAutoUpdateAllowed != nil) {
 		writeJSON(w, 503, map[string]any{"code": "NETWORK_POLICY_SCOPE_REQUIRED", "live_applied": false})
 		return
 	}
@@ -118,7 +120,7 @@ func (a *App) resourceExclusions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) writeResourceExclusions(w http.ResponseWriter, cfg config.Config) {
-	effective, err := config.EffectiveResourceExclusions(cfg.NetworkPolicy)
+	effective, err := config.EffectiveConfigResourceExclusions(cfg)
 	if err != nil {
 		writeJSON(w, 503, map[string]any{"code": "NETWORK_POLICY_EXCLUSIONS_UNAVAILABLE"})
 		return
@@ -134,13 +136,20 @@ func (a *App) writeResourceExclusions(w http.ResponseWriter, cfg config.Config) 
 	if cfg.NetworkPolicy != nil {
 		exclusions, russianEnabled = cfg.NetworkPolicy.Exclusions, cfg.NetworkPolicy.Russian.Enabled
 		russianAutoUpdateAllowed = cfg.NetworkPolicy.Russian.AutoUpdateAllowed
+	} else {
+		exclusions = cfg.InactiveResourceExclusions
+	}
+	storageState := "inactive"
+	if cfg.NetworkPolicy != nil {
+		storageState = "configured"
 	}
 	writeJSON(w, 200, map[string]any{
 		"ok": true, "revision": cfg.Revision, "policy_revision": effective.PolicyRevision,
 		"exclusion_revision": effective.Revision, "resource_exclusions": exclusions,
 		"russian_enabled": russianEnabled, "russian_auto_update_allowed": russianAutoUpdateAllowed, "effective": effective,
+		"scope_configured": cfg.NetworkPolicy != nil, "storage_state": storageState,
 		"applied_revision": cfg.AppliedRevision, "applied_effective": applied,
-		"desired_matches_applied": reflect.DeepEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy),
+		"desired_matches_applied": cfg.InactiveResourceExclusions == nil && reflect.DeepEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy),
 		"live_applied":            false,
 	})
 }

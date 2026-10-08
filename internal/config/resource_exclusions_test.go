@@ -317,3 +317,78 @@ func TestActualStoreExclusionObservationBookendsFullConfigAndDisk(t *testing.T) 
 		t.Fatal("changed closing file accepted", err)
 	}
 }
+
+func TestInactiveExclusionsPersistenceStrictSingleSlotAndFirstExplicitScope(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	s, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := s.Get()
+	manual := []ResourceMatch{{Kind: "service", Value: "video"}}
+	inactive, err := s.UpdateResourceExclusions(context.Background(), before, &manual, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inactive.NetworkPolicy != nil || inactive.DefaultRouteConsent != nil || inactive.InactiveResourceExclusions.Revision != 1 || inactive.Revision != before.Revision+1 || inactive.SafeMode != before.SafeMode {
+		t.Fatal("inactive storage inferred scope/grant", inactive)
+	}
+	loaded, err := LoadExisting(path)
+	if err != nil || !reflect.DeepEqual(loaded.Get(), inactive) {
+		t.Fatal("reload lost inactive record", err)
+	}
+	view := loaded.Get()
+	view.InactiveResourceExclusions.Manual[0].Value = "changed"
+	if !reflect.DeepEqual(loaded.Get(), inactive) {
+		t.Fatal("inactive clone alias")
+	}
+	if excluded, err := ConfigResourceExcluded(inactive, ResourceTarget{ServiceID: "video"}); err != nil || !excluded {
+		t.Fatal("config-aware helper omitted inactive negatives", excluded, err)
+	}
+	if err := s.WithResourceExclusionObservation(context.Background(), inactive, func(set EffectiveExclusionSet) error {
+		if set.PolicyRevision != 0 || set.Revision != 1 || set.Clients.Mode != "" {
+			t.Fatal("inactive observer invented scope", set)
+		}
+		excluded, err := set.Matches(ResourceTarget{ServiceID: "video"})
+		if !excluded || err != nil {
+			t.Fatal(excluded, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := networkPolicyFixture()
+	dual := cloneConfig(inactive)
+	dual.NetworkPolicy = p
+	raw, _ := json.Marshal(dual)
+	if _, _, err := InspectBytes(raw); err == nil {
+		t.Fatal("dualactive/inactive state accepted")
+	}
+	future := cloneConfig(inactive)
+	future.InactiveResourceExclusions.Schema = 99
+	raw, _ = json.Marshal(future)
+	if _, _, err := InspectBytes(raw); err == nil {
+		t.Fatal("future inactive schema discarded")
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	clear := []ResourceMatch{}
+	if _, err := s.UpdateResourceExclusions(cancelled, inactive, &clear, nil); !errors.Is(err, context.Canceled) || !reflect.DeepEqual(s.Get(), inactive) {
+		t.Fatal("cancelled inactive clear", err)
+	}
+	if _, err := s.UpdateResourceExclusions(context.Background(), before, &clear, nil); !errors.Is(err, ErrRevisionChanged) {
+		t.Fatal("stale inactive CAS", err)
+	}
+	p.Exclusions = &ResourceExclusions{Schema: 1, Revision: 1, Manual: []ResourceMatch{}}
+	if _, err := s.ApproveDefaultRouteConsent(context.Background(), inactive, p, []DefaultRouteGrant{consentConfigGrant()}, "0123456789abcdef0123456789abcdef", 1); err == nil || !reflect.DeepEqual(s.Get(), inactive) {
+		t.Fatal("newscope cleared inactive record", err)
+	}
+	p.Exclusions = nil
+	if _, err := s.ApproveDefaultRouteConsent(context.Background(), inactive, p, []DefaultRouteGrant{consentConfigGrant()}, "0123456789abcdef0123456789abcdef", 1); err != nil {
+		t.Fatal(err)
+	}
+	after := s.Get()
+	if after.InactiveResourceExclusions != nil || !reflect.DeepEqual(after.NetworkPolicy.Exclusions, inactive.InactiveResourceExclusions) || after.NetworkPolicy.Revision != 1 || after.Revision != inactive.Revision+1 || after.AppliedNetworkPolicy != nil {
+		t.Fatal("nonatomic/lossy first review", after)
+	}
+}

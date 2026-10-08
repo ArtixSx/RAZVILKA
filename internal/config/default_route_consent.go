@@ -141,7 +141,11 @@ func CurrentDefaultRouteConsent(cfg Config) bool {
 // under original operation/control admission. Legacy AllExceptAllowed is not
 // promoted automatically. Subsequent unrelated config revisions revoke consent.
 func (s *Store) ApproveDefaultRouteConsent(ctx context.Context, expected Config, policy *NetworkPolicy, grants []DefaultRouteGrant, installationID string, sequence uint64) (DefaultRouteConsent, error) {
-	if ctx == nil || policy == nil || ValidateListNetworkPolicy(policy) != nil || !ResourceExclusionStateEqual(expected.NetworkPolicy, policy) || expected.Revision == ^uint64(0) {
+	if ctx == nil || policy == nil || expected.Revision == ^uint64(0) {
+		return DefaultRouteConsent{}, ErrDefaultRouteConsent
+	}
+	policy, err := NetworkPolicyWithRetainedExclusions(expected, policy)
+	if err != nil || ValidateListNetworkPolicy(policy) != nil {
 		return DefaultRouteConsent{}, ErrDefaultRouteConsent
 	}
 	previousPolicyRevision := uint64(0)
@@ -167,6 +171,7 @@ func (s *Store) ApproveDefaultRouteConsent(ctx context.Context, expected Config,
 	}
 	previous := cloneConfig(s.cfg)
 	s.cfg.NetworkPolicy = CloneNetworkPolicy(policy)
+	s.cfg.InactiveResourceExclusions = nil
 	s.cfg.DefaultRouteConsent = c
 	s.cfg.Revision++
 	if err := s.saveLocked(); err != nil {

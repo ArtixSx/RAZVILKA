@@ -161,3 +161,45 @@ client intent и positive path остаются обязательными в or
 Windows defaultconsent1.256s и vet PASS, Linux amd64/arm64 vet/test cross-build
 PASS; реального Linux/native probe CORE не выполнял. Бинарники Root:
 `.review-local/core-probe-target-linux-{amd64,arm64}.test`.
+
+Следующая законченная порция закрывает сохранение manual на новой установке.
+`Config.InactiveResourceExclusions`, JSON `inactive_resource_exclusions`,
+хранит тот же Schema1 документ в том же config.json только при nil desired
+NetworkPolicy. Двойное desired-active/inactive состояние строго отклоняется;
+clone/LoadExisting сохраняют запись. Обычный Save и strict Inspect валидируют
+это правило. Старый strict reader, не знающий поля, отклоняет его; проверки
+настоящего исторического бинарника CORE не выполнял.
+
+Nil-policy POST теперь сохраняет manual-only с cfgRev+1 / exclusionRev+1 /
+policyRev0. Никакие Clients/Home/AllLAN/consent/Applied state не создаются.
+RU snapshot/любой RU flag patch всё ещё503 SCOPE_REQUIRED, а invalid manual
+остаётся400. GET/POST добавляют `scope_configured:false` и
+`storage_state:"inactive"`; при реальной desired policy — true/"configured".
+`resource_exclusions` и effective manual видят сохранённую неактивную запись.
+`live_applied:false` неизменен, pending document не считается applied.
+
+`EffectiveConfigResourceExclusions(cfg)` / `ConfigResourceExcluded(cfg,target)`
+дополняют прежние policy-only helper; Store observer теперь использует полную
+конфигурацию, включая inactive. Runtime с уже настроенной policy по-прежнему
+использует её Exclusions. `NetworkPolicyWithRetainedExclusions(expected,policy)`
+losslessly переносит inactive doc при первом явном **валидированном** выборе
+настоящего scope/source/path; та же атомарная consent CAS очищает inactive slot.
+Положительный payload не может удалить/заменить сохранённые manual/snapshot.
+Перенос не изменяет содержимое/revision документа и не является Apply.
+
+Generic legacy Apply отказывается при наличии inactive slot до согласованного
+list executor/real policy: новый manual не может быть проигнорирован.
+Тесты: fresh GET/no-write, manual-only HTTP save без scope/grant, отдельный RU
+refusal, exact three-CAS, clone/restart/strictdual-state/unknownschema,
+cancel/stale CAS, actual Store observation и lossless first real policy approval,
+негативный overwrite, all legacy partial Apply scopes refuse before owner reads.
+Windows config3.315s/defaultconsent1.529s, focused App3.711s/main compile0.089s
+PASS; Windows vet PASS. Linux amd64/arm64 vet/test cross-build PASS, не actual
+Linux/race/native. Root binaries `.review-local/core-inactive-*-linux-*.test`.
+
+Cached-owner Stop гипотеза уточнена: обычный runtime Stop/Resume меняет
+ServiceControl/Manager, независимый durable control не сбрасывает. Recovery Stop
+намеренно постоянный; ready decoder допускает Sequence1, настоящего нового
+durable Start/Resume API сейчас нет. Новый control epoch не подделывался,
+разрешение старого Review не обновлялось. Actual main/native/source owner
+construction и runtime consumers остаются отдельной следующей работой.

@@ -182,6 +182,36 @@ func ValidateResourceExclusions(in *ResourceExclusions) error {
 	return validateRussianSnapshot(in.RussianSnapshot)
 }
 
+// ValidateResourceExclusionStorage permits one stored negative document. Before
+// a real network scope exists it remains inactive, without fabricated clients.
+func ValidateResourceExclusionStorage(cfg Config) error {
+	if cfg.InactiveResourceExclusions != nil && cfg.NetworkPolicy != nil {
+		return ErrResourceExclusions
+	}
+	return ValidateResourceExclusions(cfg.InactiveResourceExclusions)
+}
+
+// NetworkPolicyWithRetainedExclusions losslessly carries an inactive document
+// into the first explicit real policy. It issues no scope or path permission;
+// the caller still validates real clients, selected services and source owners.
+func NetworkPolicyWithRetainedExclusions(expected Config, policy *NetworkPolicy) (*NetworkPolicy, error) {
+	if policy == nil || ValidateResourceExclusionStorage(expected) != nil {
+		return nil, ErrResourceExclusions
+	}
+	out := CloneNetworkPolicy(policy)
+	before := expected.NetworkPolicy
+	if expected.InactiveResourceExclusions != nil {
+		if out.Exclusions == nil {
+			out.Exclusions = CloneResourceExclusions(expected.InactiveResourceExclusions)
+		}
+		before = &NetworkPolicy{Exclusions: expected.InactiveResourceExclusions}
+	}
+	if !ResourceExclusionStateEqual(before, out) {
+		return nil, ErrResourceExclusions
+	}
+	return out, nil
+}
+
 // EffectiveExclusionSet is a detached comparison/decision image. The actual
 // Store, complete config revision, control epoch and positive route proof remain
 // mandatory at each runtime admission. This DTO cannot grant any operation.
@@ -245,6 +275,25 @@ func EffectiveResourceExclusions(p *NetworkPolicy) (EffectiveExclusionSet, error
 		slices.Sort(v.Clients.ExcludedCIDRs)
 	}
 	v.Digest = exclusionDigest(v)
+	return v, nil
+}
+
+// EffectiveConfigResourceExclusions also sees the saved inactive document. Its
+// presence cannot create positive membership or make a nil policy executable.
+func EffectiveConfigResourceExclusions(cfg Config) (EffectiveExclusionSet, error) {
+	if err := ValidateResourceExclusionStorage(cfg); err != nil {
+		return EffectiveExclusionSet{}, err
+	}
+	v, err := EffectiveResourceExclusions(cfg.NetworkPolicy)
+	if err != nil {
+		return v, err
+	}
+	if cfg.InactiveResourceExclusions != nil {
+		v.Revision = cfg.InactiveResourceExclusions.Revision
+		v.Manual, _ = NormalizeResourceMatches(cfg.InactiveResourceExclusions.Manual)
+		v.Digest = ""
+		v.Digest = exclusionDigest(v)
+	}
 	return v, nil
 }
 
@@ -348,6 +397,14 @@ func ResourceExcluded(p *NetworkPolicy, target ResourceTarget) (bool, error) {
 	return v.Matches(target)
 }
 
+func ConfigResourceExcluded(cfg Config, target ResourceTarget) (bool, error) {
+	v, err := EffectiveConfigResourceExclusions(cfg)
+	if err != nil {
+		return false, err
+	}
+	return v.Matches(target)
+}
+
 // WithResourceExclusionObservation closes an independent bounded observation
 // against SAME actual Store, the entire frozen config and its observed disk
 // image. It supplies detached negatives, not positive/client/operation authority.
@@ -362,7 +419,7 @@ func (s *Store) WithResourceExclusionObservation(ctx context.Context, expected C
 		if !reflect.DeepEqual(s.cfg, expected) || ValidateListNetworkPolicy(s.cfg.NetworkPolicy) != nil {
 			return ErrRevisionChanged
 		}
-		set, err := EffectiveResourceExclusions(s.cfg.NetworkPolicy)
+		set, err := EffectiveConfigResourceExclusions(s.cfg)
 		if err != nil {
 			return err
 		}
@@ -404,11 +461,26 @@ type ResourceExclusionsPatch struct {
 
 func (s *Store) UpdateResourceExclusionsPatch(ctx context.Context, expected Config, patch ResourceExclusionsPatch) (Config, error) {
 	manual, accepted := patch.Manual, patch.Accepted
-	if ctx == nil || expected.NetworkPolicy == nil || ValidateListNetworkPolicy(expected.NetworkPolicy) != nil || manual == nil && accepted == nil && patch.RussianEnabled == nil && patch.RussianAutoUpdateAllowed == nil || expected.Revision == ^uint64(0) || expected.NetworkPolicy.Revision >= ^uint64(0)-1 {
+	if ctx == nil || ValidateResourceExclusionStorage(expected) != nil || ValidateListNetworkPolicy(expected.NetworkPolicy) != nil || manual == nil && accepted == nil && patch.RussianEnabled == nil && patch.RussianAutoUpdateAllowed == nil || expected.Revision == ^uint64(0) || expected.NetworkPolicy != nil && expected.NetworkPolicy.Revision >= ^uint64(0)-1 {
 		return Config{}, ErrResourceExclusions
 	}
 	next := cloneConfig(expected)
 	p := next.NetworkPolicy
+	if p == nil {
+		if manual == nil || accepted != nil || patch.RussianEnabled != nil || patch.RussianAutoUpdateAllowed != nil {
+			return Config{}, ErrResourceExclusions
+		}
+		if next.InactiveResourceExclusions == nil {
+			next.InactiveResourceExclusions = &ResourceExclusions{Schema: 1, Manual: []ResourceMatch{}}
+		}
+		entries, err := NormalizeResourceMatches(*manual)
+		if err != nil || len(entries) > 512 || next.InactiveResourceExclusions.Revision >= ^uint64(0)-1 {
+			return Config{}, ErrResourceExclusions
+		}
+		next.InactiveResourceExclusions.Manual = entries
+		next.InactiveResourceExclusions.Revision++
+		return s.commitResourceExclusions(ctx, expected, next)
+	}
 	if patch.RussianAutoUpdateAllowed != nil {
 		p.Russian.AutoUpdateAllowed = *patch.RussianAutoUpdateAllowed
 	}
@@ -445,10 +517,14 @@ func (s *Store) UpdateResourceExclusionsPatch(ctx context.Context, expected Conf
 	}
 	p.Exclusions.Revision++
 	p.Revision++
-	next.Revision++
 	if ValidateNetworkPolicy(p) != nil {
 		return Config{}, ErrResourceExclusions
 	}
+	return s.commitResourceExclusions(ctx, expected, next)
+}
+
+func (s *Store) commitResourceExclusions(ctx context.Context, expected, next Config) (Config, error) {
+	next.Revision++
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := ctx.Err(); err != nil {

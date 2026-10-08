@@ -27,21 +27,22 @@ type ServiceState struct {
 }
 
 type Config struct {
-	SchemaVersion        int                      `json:"schema_version"`
-	Listen               string                   `json:"listen"`
-	Services             map[string]ServiceState  `json:"services"` // desired/draft state
-	AppliedServices      map[string]ServiceState  `json:"applied_services"`
-	EngineOrder          []string                 `json:"engine_order"`
-	SafeMode             bool                     `json:"safe_mode"`
-	CatalogPath          string                   `json:"catalog_path,omitempty"`
-	Revision             uint64                   `json:"revision,omitempty"`
-	AppliedRevision      uint64                   `json:"applied_revision,omitempty"`
-	LastAppliedAt        string                   `json:"last_applied_at,omitempty"`
-	ServicePolicies      map[string]ServicePolicy `json:"service_policies,omitempty"`
-	ServiceControl       ServiceControl           `json:"service_control,omitempty"`
-	NetworkPolicy        *NetworkPolicy           `json:"network_policy,omitempty"`
-	AppliedNetworkPolicy *NetworkPolicy           `json:"applied_network_policy,omitempty"`
-	DefaultRouteConsent  *DefaultRouteConsent     `json:"default_route_consent,omitempty"`
+	SchemaVersion              int                      `json:"schema_version"`
+	Listen                     string                   `json:"listen"`
+	Services                   map[string]ServiceState  `json:"services"` // desired/draft state
+	AppliedServices            map[string]ServiceState  `json:"applied_services"`
+	EngineOrder                []string                 `json:"engine_order"`
+	SafeMode                   bool                     `json:"safe_mode"`
+	CatalogPath                string                   `json:"catalog_path,omitempty"`
+	Revision                   uint64                   `json:"revision,omitempty"`
+	AppliedRevision            uint64                   `json:"applied_revision,omitempty"`
+	LastAppliedAt              string                   `json:"last_applied_at,omitempty"`
+	ServicePolicies            map[string]ServicePolicy `json:"service_policies,omitempty"`
+	ServiceControl             ServiceControl           `json:"service_control,omitempty"`
+	NetworkPolicy              *NetworkPolicy           `json:"network_policy,omitempty"`
+	AppliedNetworkPolicy       *NetworkPolicy           `json:"applied_network_policy,omitempty"`
+	DefaultRouteConsent        *DefaultRouteConsent     `json:"default_route_consent,omitempty"`
+	InactiveResourceExclusions *ResourceExclusions      `json:"inactive_resource_exclusions,omitempty"`
 }
 
 type Store struct {
@@ -454,6 +455,9 @@ func (s *Store) Save() error {
 }
 
 func (s *Store) saveLocked() error {
+	if err := ValidateResourceExclusionStorage(s.cfg); err != nil {
+		return err
+	}
 	if err := validateConfigServiceBindings(s.cfg); err != nil {
 		return err
 	}
@@ -500,6 +504,7 @@ func cloneConfig(in Config) Config {
 	out.NetworkPolicy = CloneNetworkPolicy(in.NetworkPolicy)
 	out.AppliedNetworkPolicy = CloneNetworkPolicy(in.AppliedNetworkPolicy)
 	out.DefaultRouteConsent = CloneDefaultRouteConsent(in.DefaultRouteConsent)
+	out.InactiveResourceExclusions = CloneResourceExclusions(in.InactiveResourceExclusions)
 	out.ServiceControl = cloneServiceControl(in.ServiceControl)
 	out.Services = cloneServices(in.Services)
 	out.AppliedServices = cloneServices(in.AppliedServices)

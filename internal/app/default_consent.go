@@ -140,12 +140,13 @@ func (a *App) networkPolicyReview(w http.ResponseWriter, r *http.Request) {
 	}
 	policy := config.CloneNetworkPolicy(request.Policy)
 	policy.Revision = policyRevision + 1
-	if config.ValidateListNetworkPolicy(policy) != nil {
-		writeJSON(w, 400, map[string]any{"code": "NETWORK_POLICY_LIST_REQUIRED", "live_applied": false})
+	policy, err = config.NetworkPolicyWithRetainedExclusions(before, policy)
+	if err != nil {
+		writeJSON(w, 409, map[string]any{"code": "NETWORK_POLICY_EXCLUSIONS_SEPARATE", "live_applied": false})
 		return
 	}
-	if !config.ResourceExclusionStateEqual(before.NetworkPolicy, policy) {
-		writeJSON(w, 409, map[string]any{"code": "NETWORK_POLICY_EXCLUSIONS_SEPARATE", "live_applied": false})
+	if config.ValidateListNetworkPolicy(policy) != nil {
+		writeJSON(w, 400, map[string]any{"code": "NETWORK_POLICY_LIST_REQUIRED", "live_applied": false})
 		return
 	}
 	for _, grant := range request.Grants {
