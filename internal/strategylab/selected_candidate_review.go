@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -146,6 +147,22 @@ func (r *SelectedCandidateReview) Selection() Selection {
 
 func (r *SelectedCandidateReview) Current(ctx context.Context) error {
 	return r.WithCurrent(ctx, func() error { return nil })
+}
+
+// ManagedOwnersCurrent compares the SAME original runtime and provider control
+// objects, surrounded by the original complete source/material observation.
+// Equal descriptors/epochs cannot replace those owners. This read-only check
+// acquires no Gate and grants no process, scope, queue or effect permission.
+func (r *SelectedCandidateReview) ManagedOwnersCurrent(ctx context.Context, runtime *components.ManagedNFQWSRuntimeLease, control *operationgate.ControlEpochReview) error {
+	if runtime == nil || control == nil {
+		return ErrSelectedCandidateChanged
+	}
+	return r.WithCurrent(ctx, func() error {
+		if r.runtime != runtime || r.provider == nil || r.provider.managedControl != control {
+			return ErrSelectedCandidateChanged
+		}
+		return nil
+	})
 }
 
 // WithCurrent holds only this handle and the existing StrategyLab Manager read
