@@ -19,8 +19,12 @@ var ErrProbeTargetUnknown = errors.New("probe target exclusion decision is unkno
 // real retained catalog and check those negatives; a hostname is not a service ID.
 // Every resolved pin is checked, even one the producer does not intend to select.
 func (r *Review) CheckProbeTarget(ctx context.Context, hostname string, pins []netip.Addr) error {
-	name, err := config.PolicyDomain(hostname)
-	if err != nil || len(pins) > 64 {
+	name := ""
+	var err error
+	if hostname != "" {
+		name, err = config.PolicyDomain(hostname)
+	}
+	if err != nil || len(pins) > 64 || hostname == "" && len(pins) == 0 {
 		return ErrProbeTargetUnknown
 	}
 	pins = slices.Clone(pins)
@@ -36,8 +40,10 @@ func (r *Review) CheckProbeTarget(ctx context.Context, hostname string, pins []n
 				}
 				return nil
 			}
-			if err := check(config.ResourceTarget{Domain: name}); err != nil {
-				return err
+			if name != "" {
+				if err := check(config.ResourceTarget{Domain: name}); err != nil {
+					return err
+				}
 			}
 			for _, pin := range pins {
 				if !pin.IsValid() {
