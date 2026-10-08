@@ -153,4 +153,31 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 		t.Fatal("idle installation changed routes, scope or native probing")
 	}
 	t.Log("actual ARM64 first panel install: original closed source initialized, reviewed payload installed, fresh runtime readback and locked provider handover passed; no native compatibility, route or client-health claim")
+
+	// Exercise the installed validator on this SAME live App, without restart
+	// or rebuilding the provider through the independent startup test.
+	candidate, err := manager.AddCandidate("tcp-tls", "first installed compatibility", "--filter-tcp=443 --lua-desync=fake:blob=tls_clienthello", "expert")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var checked strategylab.Candidate
+	if status := request("POST", "/api/v1/strategy-lab/candidates/"+candidate.ID+"/validate", "{}", &checked); status != http.StatusOK || !checked.Validation.OK || !checked.Validation.Native || !checked.Validation.LuaChecked || checked.Validation.QuiescenceUnknown || checked.Validation.Code != "COMPATIBLE" {
+		t.Fatal("hot-installed provider did not complete actual compatibility", status, checked.Validation.Code)
+	}
+	saved, err = os.ReadFile(manager.Path)
+	if err != nil || !bytes.Contains(saved, []byte(`"wait_echild": true`)) || !bytes.Contains(saved, []byte(`"acknowledged": true`)) || manager.Snapshot().QuiescenceUnknown || a.Operations.Snapshot().Active != 0 {
+		t.Fatal("hot-installed compatibility did not retain actual completion and retirement", err)
+	}
+	if !reflect.DeepEqual(before, store.Get()) || manager.Executor != nil || manager.Snapshot().Safety["temporary_scoped_firewall_probe"] != false {
+		t.Fatal("compatibility changed configuration or enabled network probing")
+	}
+	current, err := owner.AcquireCurrentManagedNFQWSRuntime(ctx)
+	if err != nil {
+		t.Fatal("completed compatibility retained the runtime writer lease", err)
+	}
+	actual := current.Descriptor()
+	if closeErr := current.Close(); closeErr != nil || actual.ReceiptID != result.Receipt.TransactionID || actual.ManifestSHA256 != digest {
+		t.Fatal("compatibility changed the genuine installed generation", closeErr)
+	}
+	t.Log("same App first install -> actual authenticated dry-run/Lua -> saved ECHILD/ACK -> retired runtime lease passed; no firewall, routes or client-health claim")
 }
