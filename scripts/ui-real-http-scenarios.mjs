@@ -11,7 +11,8 @@ export const realHTTPDiagnosticIDs=Object.freeze([
   'UI_POLICY_DUPLICATE_SAVE_REQUEST_COUNT','UI_POLICY_DUPLICATE_SAVE_API_READBACK',
   'UI_POLICY_CAS_SECOND_WRITER','UI_POLICY_CAS_STALE_EDITOR_READY','UI_POLICY_CAS_RECEIPT','UI_POLICY_CAS_DRAFT_RETAINED',
   'UI_POLICY_CAS_EXPLICIT_READ','UI_POLICY_CAS_READ_NO_REPLAY','UI_POLICY_CAS_RESET',
-  'UI_POLICY_RESTORE_DISABLED_TUNING','UI_POLICY_RESTORE_READBACK'
+  'UI_POLICY_RESTORE_DISABLED_TUNING','UI_POLICY_RESTORE_READBACK',
+  'UI_SERVICE_ASSIGN_FILTER','UI_SERVICE_ASSIGN_EDITOR','UI_SERVICE_ASSIGN_BUTTON_VISIBLE','UI_SERVICE_ASSIGN_RETURN','UI_SERVICE_ASSIGN_BOOKEND'
 ]);
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
@@ -147,7 +148,7 @@ export async function runRealHTTPDraftScenarios({page,requests,test,readJSON,wri
   await navTo(page,'overview');
 }
 
-export async function runRealHTTPReadScenarios({page,requests,test,readJSON}) {
+export async function runRealHTTPReadScenarios({page,requests,test,readJSON,diagnose}) {
   const nav=async name=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name,name);};
   await test('cold boot and Nodes observers share reads without caching explicit refresh', 'real HTTP read lifecycle', async()=>{
     const cold=Object.fromEntries(['/api/v1/auth/status','/api/v1/status','/api/v1/panel/inventory','/api/v1/services','/api/v1/metrics'].map(path=>[path,requests.filter(request=>request.path===path).length]));
@@ -196,6 +197,46 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON}) {
     assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
     assert.equal(await page.evaluate(()=>componentRecoveryFence()),false);
     await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+  });
+  await test('choose service leaves a filtered list for the visible full catalog without writes', 'genuine clicks, engine editor and config GET bookends', async()=>{
+    const before=await readJSON('/api/v1/status'),start=requests.length;
+    await diagnose('UI_SERVICE_ASSIGN_FILTER',async()=>{
+      await navTo(page,'services');
+      await page.locator('#ui3ServiceSearch').fill('ui-d12-catalog-filter');
+      assert.equal(await page.locator('#ui3ServiceSearch').inputValue(),'ui-d12-catalog-filter');
+      await page.waitForFunction(()=>interfaceState.query==='ui-d12-catalog-filter');
+    });
+    await diagnose('UI_SERVICE_ASSIGN_EDITOR',async()=>{
+      await navTo(page,'engines');
+      const card=page.locator('#ui3EngineGrid [data-engine-card="xray"]');
+      await card.waitFor({state:'visible'});
+      const profile=card.locator('[data-engine-step="profile"][data-card-engine="xray"]');
+      if(!await profile.isVisible())await card.locator('[data-engine-disclosure="xray-flow"] > summary').click();
+      await profile.click();
+      await page.waitForFunction(()=>state.currentView==='engineconfig'&&state.selectedEngine==='xray'&&!panelLoad.request
+        &&!state.engineIntent&&!state.engineGuidedLoading&&!document.getElementById('engineAssignService').disabled);
+    });
+    await diagnose('UI_SERVICE_ASSIGN_BUTTON_VISIBLE',async()=>assert.equal(await page.locator('#engineAssignService').isVisible(),true));
+    await diagnose('UI_SERVICE_ASSIGN_RETURN',async()=>{
+      await page.locator('#engineAssignService').click();
+      await page.waitForFunction(()=>state.currentView==='services'&&!panelLoad.request&&interfaceState.filter==='all'
+        &&interfaceState.query===''&&interfaceState.category===''&&document.activeElement?.id==='ui3ServiceSearch');
+      assert.equal(await page.locator('#ui3ServiceCatalog').isVisible(),true);
+      assert.equal(await page.locator('#r5CatalogTools').isVisible(),true);
+      assert((await page.locator('#ui3ServiceCatalog [data-rz-card]').count())>0,'the real service catalog did not contain cards');
+      assert.equal(await page.locator('#ui3ServiceSearch').inputValue(),'');
+    });
+    await diagnose('UI_SERVICE_ASSIGN_BOOKEND',async()=>{
+      // Restore only local presentation with ordinary clicks so the next
+      // existing AI scenario starts from its original selected-services tab.
+      await page.locator('#r5CatalogButton').click();
+      await page.waitForFunction(()=>interfaceState.filter==='selected'&&!panelLoad.request);
+      await navTo(page,'overview');
+      const after=await readJSON('/api/v1/status');
+      assert.equal(after.revision,before.revision);assert.equal(after.applied_revision,before.applied_revision);
+      assert.equal(after.safe_mode,before.safe_mode);assert.equal(after.live_active,before.live_active);
+      assert.equal(requests.slice(start).filter(row=>row.method!=='GET').length,0,'navigation or local filtering started a business mutation');
+    });
   });
     await test('engine card steps keep the chosen engine and dirty profile without writes', 'real engine metadata HTTP and local draft', async()=>{
       const start=requests.length;await nav('engines');await page.evaluate(()=>refreshEngineConfigs());
