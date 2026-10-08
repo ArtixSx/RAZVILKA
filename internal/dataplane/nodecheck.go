@@ -208,6 +208,24 @@ func (c *ExactNodeChecker) finishResult(result *NodeCheckResult) {
 	}
 }
 
+// A resource observation can stop because its caller was canceled, even when
+// no resource guard is installed. Preserve that cause; an actual guard refusal
+// remains a resource denial even if it wraps its own deadline error.
+func refuseNodeResourceObservationResult(result *NodeCheckResult, err error) {
+	if errors.Is(err, ErrNodeResourceDenied) || !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		RefuseNodeResourceResult(result)
+		return
+	}
+	result.Available, result.Verdict, result.EgressIP = false, evidence.VerdictInconclusive, ""
+	result.Evidence.Verdict, result.Evidence.Outcome, result.Evidence.EgressIP = evidence.VerdictInconclusive, evidence.OutcomeUnknown, ""
+	if errors.Is(err, context.DeadlineExceeded) {
+		result.Stage, result.ErrorCode, result.Message = "deadline", "node-check-deadline", "Истекло общее время проверки. Изменение WAN этим не доказано."
+	} else {
+		result.Stage, result.ErrorCode, result.Message = "canceled", "node-check-canceled", "Проверка отменена; положительный результат не используется."
+	}
+	result.Evidence.ErrorCode = result.ErrorCode
+}
+
 // transportStages runs the DNS and transport stages of a check. It reports
 // false when the result is final because the node failed one of them.
 func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeCheckRequest, result *NodeCheckResult) (exactNodeEndpoint, bool) {
@@ -273,12 +291,12 @@ func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeC
 	}
 	result := c.newResult(request)
 	if err := checkNodeResource(ctx, "www.cloudflare.com", netip.Addr{}); err != nil {
-		RefuseNodeResourceResult(&result)
+		refuseNodeResourceObservationResult(&result, err)
 		return result, false, err
 	}
 	_, passed := c.transportStages(ctx, request, &result)
 	if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
-		RefuseNodeResourceResult(&result)
+		refuseNodeResourceObservationResult(&result, err)
 		return result, false, err
 	}
 	if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
@@ -317,7 +335,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	defer func() {
 		if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
 			if result.Stage != "cleanup" {
-				RefuseNodeResourceResult(&result)
+				refuseNodeResourceObservationResult(&result, err)
 			}
 			finish()
 			resultErr = errors.Join(resultErr, err)
