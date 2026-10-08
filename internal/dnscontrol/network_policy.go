@@ -18,9 +18,10 @@ var ErrNetworkPolicyDNS = errors.New("network policy DNS admission unavailable")
 var ErrNetworkPolicyDNSOutside = errors.New("client outside owned network policy DNS")
 
 type NetworkPolicyDNSAuthority struct {
-	Generation      string `json:"generation"`
-	ControlEpoch    uint64 `json:"control_epoch"`
-	BindingRevision uint64 `json:"binding_revision"`
+	Generation      string                         `json:"generation"`
+	ControlEpoch    uint64                         `json:"control_epoch"`
+	BindingRevision uint64                         `json:"binding_revision"`
+	Exclusions      NetworkPolicyDNSExclusionStamp `json:"exclusions"`
 }
 
 // Admission is supplied by the same physical LAN/device owner used by the
@@ -50,11 +51,21 @@ type NetworkPolicyDNSResolver struct {
 	admit      func(context.Context, netip.Addr, string) (NetworkPolicyDNSAdmission, error)
 	baseline   func(context.Context, []byte) ([]byte, error)
 	now        func() time.Time
+	exclusions *NetworkPolicyDNSExclusions
 }
 
-func (m *Manager) NewNetworkPolicyDNSResolver(defaultProfile string, bindings []ClientDNSBinding, authority NetworkPolicyDNSAuthority, guard func(context.Context) error, admit func(context.Context, netip.Addr, string) (NetworkPolicyDNSAdmission, error)) (*NetworkPolicyDNSResolver, error) {
-	if m == nil || len(authority.Generation) != 64 || strings.Trim(authority.Generation, "0123456789abcdef") != "" || authority.ControlEpoch == 0 || authority.BindingRevision == 0 || guard == nil || admit == nil || len(bindings) > 128 {
+func (m *Manager) NewNetworkPolicyDNSResolver(ctx context.Context, defaultProfile string, bindings []ClientDNSBinding, authority NetworkPolicyDNSAuthority, guard func(context.Context) error, admit func(context.Context, netip.Addr, string) (NetworkPolicyDNSAdmission, error), exclusions *NetworkPolicyDNSExclusions) (*NetworkPolicyDNSResolver, error) {
+	if ctx == nil || m == nil || len(authority.Generation) != 64 || strings.Trim(authority.Generation, "0123456789abcdef") != "" || authority.ControlEpoch == 0 || authority.BindingRevision == 0 || guard == nil || admit == nil || len(bindings) > 128 {
 		return nil, ErrNetworkPolicyDNS
+	}
+	if exclusions == nil || exclusions.self != exclusions || authority.Exclusions != exclusions.Stamp() {
+		return nil, ErrNetworkPolicyDNS
+	}
+	if err := guard(ctx); err != nil {
+		return nil, err
+	}
+	if err := exclusions.current(ctx); err != nil {
+		return nil, err
 	}
 	// Production trust is the same existing provider review, not successful
 	// diagnostic reachability or a caller-supplied capability bit.
@@ -92,7 +103,7 @@ func (m *Manager) NewNetworkPolicyDNSResolver(defaultProfile string, bindings []
 	if choice.target.detailedDoH == nil {
 		return nil, ErrNetworkPolicyDNS
 	}
-	r := &NetworkPolicyDNSResolver{authority: authority, choice: choice, guard: guard, admit: admit, now: time.Now}
+	r := &NetworkPolicyDNSResolver{authority: authority, choice: choice, guard: guard, admit: admit, now: time.Now, exclusions: exclusions}
 	r.defaultDNS = &ScopedDNSResolver{manager: m, choices: map[scopedDNSKey]scopedDNSChoice{}, guard: guard}
 	if len(bindings) != 0 {
 		var err error
@@ -108,6 +119,9 @@ func (m *Manager) NewNetworkPolicyDNSResolver(defaultProfile string, bindings []
 				return nil, ErrServiceDNSChanged
 			}
 		}
+	}
+	if err := exclusions.current(ctx); err != nil {
+		return nil, err
 	}
 	return r, nil
 }
@@ -142,12 +156,30 @@ func (r *NetworkPolicyDNSResolver) admission(ctx context.Context, client netip.A
 	if a.Authority != r.authority || a.Ingress == "" {
 		return a, ErrNetworkPolicyDNS
 	}
+	if a.Kind == "managed" || a.Kind == "baseline" {
+		outside, err := r.exclusions.clientExcluded(ctx, client, a.DeviceID)
+		if err != nil {
+			return a, err
+		}
+		if outside {
+			a.Kind = "outside"
+			return a, ErrNetworkPolicyDNSOutside
+		}
+	}
 	switch a.Kind {
 	case "outside":
 		return a, ErrNetworkPolicyDNSOutside
 	case "baseline":
-		return a, nil
+		return a, r.exclusions.current(ctx)
 	case "managed":
+		excluded, err := r.queryExcluded(ctx, a, name)
+		if err != nil {
+			return a, err
+		}
+		if excluded {
+			a.Kind = "baseline"
+			return a, nil
+		}
 		// A selected provider's trust/availability cannot prevent an excluded
 		// or unmatched resource from keeping the separately reviewed baseline.
 		if r.defaultDNS == nil {
@@ -188,7 +220,9 @@ func (r *NetworkPolicyDNSResolver) resolve(ctx context.Context, client netip.Add
 		key := scopedDNSKey{client, name}
 		if _, match := r.service.choices[key]; match {
 			// Unsupported types and provider changes are matched refusals.
-			wire, err = r.service.Resolve(ctx, client, query)
+			wire, err = r.service.resolve(ctx, client, query, func(answer []byte) error {
+				return r.checkAnswer(ctx, a, name, answer)
+			})
 		} else {
 			wire, err = r.resolveDefault(ctx, query, q)
 		}
@@ -205,6 +239,9 @@ func (r *NetworkPolicyDNSResolver) resolve(ctx context.Context, client netip.Add
 	current, err := r.admission(ctx, client, name)
 	if err != nil || current != a {
 		return nil, errors.Join(err, ErrNetworkPolicyDNS)
+	}
+	if err := r.checkAnswer(ctx, a, name, wire); err != nil {
+		return nil, err
 	}
 	if accepted != nil {
 		*accepted = a
@@ -341,8 +378,8 @@ func networkPolicyDNSAnswer(query, wire []byte) error {
 // Publish is the final short owner admission boundary. The owner atomically
 // rechecks its durable Stop/generation, client binding and gate readback with
 // sending the wire. A check followed by an unrelated socket write is weaker.
-func (r *NetworkPolicyDNSResolver) Publish(ctx context.Context, client netip.Addr, query []byte, send func(context.Context, NetworkPolicyDNSAdmission, []byte) error) error {
-	if send == nil {
+func (r *NetworkPolicyDNSResolver) Publish(ctx context.Context, client netip.Addr, query []byte, publish NetworkPolicyDNSPublisher, send func([]byte) error) error {
+	if publish == nil || send == nil {
 		return ErrNetworkPolicyDNS
 	}
 	var before NetworkPolicyDNSAdmission
@@ -355,18 +392,46 @@ func (r *NetworkPolicyDNSResolver) Publish(ctx context.Context, client netip.Add
 	if err != nil {
 		return err
 	}
-	a, err := r.admission(ctx, client, strings.ToLower(strings.TrimSuffix(q.Questions[0].Name.String(), ".")))
-	if err != nil {
-		return err
-	}
-	if a != before {
-		return ErrNetworkPolicyDNS
-	}
-	wire, err = r.ageResidence(wire, resolvedAt)
-	if err != nil {
-		return err
-	}
-	return send(ctx, a, wire)
+	name := strings.ToLower(strings.TrimSuffix(q.Questions[0].Name.String(), "."))
+	return publish(ctx, before, func() error {
+		// The original owner acquires its gate before entering this leaf. All
+		// owner/catalog/provider checks finish before the Store observation.
+		a, err := r.admission(ctx, client, name)
+		if err != nil {
+			return err
+		}
+		if a != before {
+			return ErrNetworkPolicyDNS
+		}
+		if a.Kind == "managed" && r.service != nil {
+			if choice, selected := r.service.choices[scopedDNSKey{client, name}]; selected {
+				if err := r.service.check(ctx, choice); err != nil {
+					return err
+				}
+			}
+		}
+		targets, err := r.answerTargets(ctx, a, name, wire)
+		if err != nil {
+			return err
+		}
+		excluded, err := r.exclusions.observe(ctx, targets, func() error {
+			final, err := r.ageResidence(wire, resolvedAt)
+			if err != nil {
+				return err
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return send(final)
+		})
+		if err != nil {
+			return err
+		}
+		if excluded {
+			return ErrNetworkPolicyDNSExcluded
+		}
+		return nil
+	})
 }
 
 // This enriches detached existing observations. It does not identify a flow
@@ -382,6 +447,9 @@ func (r *NetworkPolicyDNSResolver) Observations(ctx context.Context) ([]NetworkP
 		return nil, ErrNetworkPolicyDNS
 	}
 	if err := errors.Join(ctx.Err(), r.guard(ctx)); err != nil {
+		return nil, err
+	}
+	if err := r.exclusions.current(ctx); err != nil {
 		return nil, err
 	}
 	if r.service == nil {
@@ -404,6 +472,18 @@ func (r *NetworkPolicyDNSResolver) Observations(ctx context.Context) ([]NetworkP
 			// after exclusion/deactivation or become new positive authority.
 			continue
 		}
+		names := append([]string{o.Domain}, o.Details.CNAMEChain...)
+		targets, err := r.exclusions.targets(ctx, a.DeviceID, names, o.Details.Addresses)
+		if err != nil {
+			return nil, err
+		}
+		excluded, err := r.exclusions.observe(ctx, targets, nil)
+		if err != nil {
+			return nil, err
+		}
+		if excluded {
+			continue
+		}
 		value := NetworkPolicyDNSObservation{Authority: r.authority, ScopedDNSObservation: o}
 		data, _ := json.Marshal(struct {
 			Authority                NetworkPolicyDNSAuthority
@@ -418,6 +498,9 @@ func (r *NetworkPolicyDNSResolver) Observations(ctx context.Context) ([]NetworkP
 		result = append(result, value)
 	}
 	if err := errors.Join(ctx.Err(), r.guard(ctx)); err != nil {
+		return nil, err
+	}
+	if err := r.exclusions.current(ctx); err != nil {
 		return nil, err
 	}
 	return result, nil

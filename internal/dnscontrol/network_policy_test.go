@@ -18,10 +18,11 @@ func networkDNSFixture(t *testing.T) (*NetworkPolicyDNSResolver, netip.Addr) {
 		t.Fatal(err)
 	}
 	client := netip.MustParseAddr("127.0.0.1")
-	authority := NetworkPolicyDNSAuthority{Generation: strings.Repeat("a", 64), ControlEpoch: 1, BindingRevision: 2}
-	r, err := m.NewNetworkPolicyDNSResolver("private", []ClientDNSBinding{{Client: client, Domain: "service.example.com", ProfileID: "private"}}, authority, func(ctx context.Context) error { return ctx.Err() }, func(_ context.Context, _ netip.Addr, _ string) (NetworkPolicyDNSAdmission, error) {
+	exclusions, _, _ := networkDNSExclusionFixture(t)
+	authority := NetworkPolicyDNSAuthority{Generation: strings.Repeat("a", 64), ControlEpoch: 1, BindingRevision: 2, Exclusions: exclusions.Stamp()}
+	r, err := m.NewNetworkPolicyDNSResolver(context.Background(), "private", []ClientDNSBinding{{Client: client, Domain: "service.example.com", ProfileID: "private"}}, authority, func(ctx context.Context) error { return ctx.Err() }, func(_ context.Context, _ netip.Addr, _ string) (NetworkPolicyDNSAdmission, error) {
 		return NetworkPolicyDNSAdmission{Authority: authority, Ingress: "br0", DeviceID: "selected", Kind: "managed"}, nil
-	})
+	}, exclusions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestNetworkPolicyDNSExcludedAndChangedBindingCannotUseCacheOrPublish(t *tes
 		t.Fatal("excluded client served old cache", err, calls)
 	}
 	published := false
-	if err := r.Publish(context.Background(), client, q, func(context.Context, NetworkPolicyDNSAdmission, []byte) error { published = true; return nil }); !errors.Is(err, ErrNetworkPolicyDNSOutside) || published {
+	if err := r.Publish(context.Background(), client, q, networkDNSModelPublisher, func([]byte) error { published = true; return nil }); !errors.Is(err, ErrNetworkPolicyDNSOutside) || published {
 		t.Fatal(err, published)
 	}
 	if observations, err := r.Observations(context.Background()); err != nil || len(observations) != 0 {
@@ -204,7 +205,7 @@ func TestNetworkPolicyDNSCNAMENODATAConsumesSOAMinimumAndFinalResidence(t *testi
 				return original(ctx, c, n)
 			}
 			var answer dnsmessage.Message
-			if err := r.Publish(context.Background(), client, query, func(_ context.Context, _ NetworkPolicyDNSAdmission, wire []byte) error { return answer.Unpack(wire) }); err != nil {
+			if err := r.Publish(context.Background(), client, query, networkDNSModelPublisher, func(wire []byte) error { return answer.Unpack(wire) }); err != nil {
 				t.Fatal(err)
 			}
 			want := uint32(5) // min(120,30) - HTTP Age20 - exchange2 - final3
@@ -237,7 +238,7 @@ func TestNetworkPolicyDNSCNAMEAgeAndPublicationUseExistingMinimumLease(t *testin
 		return dohResponse{wire: scopedPack(t, a), age: 3}, nil
 	})
 	var answer dnsmessage.Message
-	if err := r.Publish(context.Background(), client, scopedQuery(t, key.host, dnsmessage.TypeA), func(_ context.Context, _ NetworkPolicyDNSAdmission, wire []byte) error { return answer.Unpack(wire) }); err != nil {
+	if err := r.Publish(context.Background(), client, scopedQuery(t, key.host, dnsmessage.TypeA), networkDNSModelPublisher, func(wire []byte) error { return answer.Unpack(wire) }); err != nil {
 		t.Fatal(err)
 	}
 	if answer.Answers[0].Header.TTL != 1 {

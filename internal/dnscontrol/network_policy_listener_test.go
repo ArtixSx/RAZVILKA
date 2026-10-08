@@ -160,7 +160,7 @@ func TestNetworkPolicyDNSPublishAccountsForFinalGuardAndKeepsObservationIdentity
 		return original(ctx, c, n)
 	}
 	var ttl uint32
-	if err := r.Publish(context.Background(), client, scopedQuery(t, "unknown.example.com", dnsmessage.TypeA), func(_ context.Context, _ NetworkPolicyDNSAdmission, wire []byte) error {
+	if err := r.Publish(context.Background(), client, scopedQuery(t, "unknown.example.com", dnsmessage.TypeA), networkDNSModelPublisher, func(wire []byte) error {
 		var answer dnsmessage.Message
 		_ = answer.Unpack(wire)
 		ttl = answer.Answers[0].Header.TTL

@@ -21,6 +21,7 @@ type NetworkPolicyDNSPlan struct {
 	DefaultProfileID     string                            `json:"default_profile_id"`
 	DefaultProfileDigest string                            `json:"default_profile_digest"`
 	Bindings             []NetworkPolicyDNSReviewedBinding `json:"bindings,omitempty"`
+	Exclusions           NetworkPolicyDNSExclusionStamp    `json:"exclusions"`
 }
 
 type NetworkPolicyDNSReviewedBinding struct {
@@ -50,7 +51,7 @@ func networkPolicyDNSPlanDigest(p *NetworkPolicyDNSPlan) string {
 }
 
 func ValidateNetworkPolicyDNSPlan(p *NetworkPolicyDNSPlan) error {
-	if p == nil || p.Schema != 1 || !networkPolicyDNSHash(p.Generation) || !networkPolicyDNSHash(p.Digest) || !networkPolicyDNSHash(p.DefaultProfileDigest) || len(p.Bindings) > 128 {
+	if p == nil || p.Schema != 2 || !networkPolicyDNSHash(p.Generation) || !networkPolicyDNSHash(p.Digest) || !networkPolicyDNSHash(p.DefaultProfileDigest) || !networkPolicyDNSHash(p.Exclusions.Digest) || len(p.Bindings) > 128 {
 		return ErrNetworkPolicyDNS
 	}
 	if _, ok := profileByID(p.DefaultProfileID); !ok {
@@ -75,7 +76,21 @@ func ValidateNetworkPolicyDNSPlan(p *NetworkPolicyDNSPlan) error {
 
 // FreezeNetworkPolicyDNSPlan captures every production provider identity under
 // the same existing Manager read lock. Diagnostic reachability is not authority.
-func (m *Manager) FreezeNetworkPolicyDNSPlan(generation, defaultProfile string, bindings []ClientDNSBinding) (*NetworkPolicyDNSPlan, error) {
+func (m *Manager) FreezeNetworkPolicyDNSPlan(ctx context.Context, generation, defaultProfile string, bindings []ClientDNSBinding, exclusions *NetworkPolicyDNSExclusions) (*NetworkPolicyDNSPlan, error) {
+	if err := exclusions.current(ctx); err != nil {
+		return nil, err
+	}
+	p, err := m.freezeNetworkPolicyDNSPlan(generation, defaultProfile, bindings, exclusions.Stamp())
+	if err != nil {
+		return nil, err
+	}
+	if err := exclusions.current(ctx); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (m *Manager) freezeNetworkPolicyDNSPlan(generation, defaultProfile string, bindings []ClientDNSBinding, stamp NetworkPolicyDNSExclusionStamp) (*NetworkPolicyDNSPlan, error) {
 	if m == nil || !networkPolicyDNSHash(generation) || len(bindings) > 128 {
 		return nil, ErrNetworkPolicyDNS
 	}
@@ -85,7 +100,7 @@ func (m *Manager) FreezeNetworkPolicyDNSPlan(generation, defaultProfile string, 
 	if err != nil {
 		return nil, err
 	}
-	p := &NetworkPolicyDNSPlan{Schema: 1, Generation: generation, DefaultProfileID: defaultProfile, DefaultProfileDigest: identity}
+	p := &NetworkPolicyDNSPlan{Schema: 2, Generation: generation, DefaultProfileID: defaultProfile, DefaultProfileDigest: identity, Exclusions: stamp}
 	for _, binding := range bindings {
 		identity, err := scopedProfileIdentity(m.doc, binding.ProfileID)
 		if err != nil {
@@ -125,7 +140,7 @@ func (m *Manager) checkNetworkPolicyDNSDefinition(p *NetworkPolicyDNSPlan) error
 // CheckNetworkPolicyDNSPlan is the read-only Stage/Validate/Health boundary
 // for the existing NET participant. It neither constructs sockets nor changes
 // DNS settings or ownership records.
-func (m *Manager) CheckNetworkPolicyDNSPlan(plan *NetworkPolicyDNSPlan) error {
+func (m *Manager) CheckNetworkPolicyDNSPlan(ctx context.Context, plan *NetworkPolicyDNSPlan, exclusions *NetworkPolicyDNSExclusions) error {
 	if m == nil || plan == nil || len(plan.Bindings) > 128 {
 		return ErrNetworkPolicyDNS
 	}
@@ -133,20 +148,30 @@ func (m *Manager) CheckNetworkPolicyDNSPlan(plan *NetworkPolicyDNSPlan) error {
 	if err := ValidateNetworkPolicyDNSPlan(p); err != nil {
 		return err
 	}
+	if exclusions == nil || p.Exclusions != exclusions.Stamp() {
+		return ErrNetworkPolicyDNS
+	}
+	if err := exclusions.current(ctx); err != nil {
+		return err
+	}
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.checkNetworkPolicyDNSDefinition(p)
+	err := m.checkNetworkPolicyDNSDefinition(p)
+	m.mu.RUnlock()
+	if err != nil {
+		return err
+	}
+	return exclusions.current(ctx)
 }
 
 // NewNetworkPolicyDNSResolverForPlan consumes the reviewed definition, never
 // a fresh set of profiles obtained after review. Existing per-query/send checks
 // continue fencing the provider identities selected here.
-func (m *Manager) NewNetworkPolicyDNSResolverForPlan(plan *NetworkPolicyDNSPlan, authority NetworkPolicyDNSAuthority, guard func(context.Context) error, admit func(context.Context, netip.Addr, string) (NetworkPolicyDNSAdmission, error)) (*NetworkPolicyDNSResolver, error) {
+func (m *Manager) NewNetworkPolicyDNSResolverForPlan(ctx context.Context, plan *NetworkPolicyDNSPlan, authority NetworkPolicyDNSAuthority, guard func(context.Context) error, admit func(context.Context, netip.Addr, string) (NetworkPolicyDNSAdmission, error), exclusions *NetworkPolicyDNSExclusions) (*NetworkPolicyDNSResolver, error) {
 	if m == nil || plan == nil || len(plan.Bindings) > 128 {
 		return nil, ErrNetworkPolicyDNS
 	}
 	p := CloneNetworkPolicyDNSPlan(plan)
-	if ValidateNetworkPolicyDNSPlan(p) != nil || authority.Generation != p.Generation {
+	if ValidateNetworkPolicyDNSPlan(p) != nil || authority.Generation != p.Generation || authority.Exclusions != p.Exclusions {
 		return nil, ErrNetworkPolicyDNS
 	}
 	m.mu.RLock()
@@ -159,13 +184,13 @@ func (m *Manager) NewNetworkPolicyDNSResolverForPlan(plan *NetworkPolicyDNSPlan,
 	for _, b := range p.Bindings {
 		bindings = append(bindings, b.ClientDNSBinding)
 	}
-	r, err := m.NewNetworkPolicyDNSResolver(p.DefaultProfileID, bindings, authority, guard, admit)
+	r, err := m.NewNetworkPolicyDNSResolver(ctx, p.DefaultProfileID, bindings, authority, guard, admit, exclusions)
 	if err != nil {
 		return nil, err
 	}
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 	if err := m.checkNetworkPolicyDNSDefinition(p); err != nil {
+		m.mu.RUnlock()
 		return nil, err
 	}
 	// A provider changed and reverted during construction must not leave a
@@ -179,8 +204,13 @@ func (m *Manager) NewNetworkPolicyDNSResolverForPlan(plan *NetworkPolicyDNSPlan,
 	for _, choice := range choices {
 		current, ok := providerByIDFor(choice.provider.ID, m.doc)
 		if !ok || !reflect.DeepEqual(current, choice.provider) {
+			m.mu.RUnlock()
 			return nil, ErrServiceDNSChanged
 		}
+	}
+	m.mu.RUnlock()
+	if err := exclusions.current(ctx); err != nil {
+		return nil, err
 	}
 	return r, nil
 }

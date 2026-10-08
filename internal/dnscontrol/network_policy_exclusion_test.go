@@ -106,7 +106,7 @@ func TestNetworkPolicyDNSExclusionDuringAnswerCannotPublish(t *testing.T) {
 	if err := r.UseReviewedBaseline(func(context.Context, []byte) ([]byte, error) { base = true; return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
-	err := r.Publish(context.Background(), client, scopedQuery(t, key.host, dnsmessage.TypeA), func(context.Context, NetworkPolicyDNSAdmission, []byte) error { sent = true; return nil })
+	err := r.Publish(context.Background(), client, scopedQuery(t, key.host, dnsmessage.TypeA), networkDNSModelPublisher, func([]byte) error { sent = true; return nil })
 	if !errors.Is(err, ErrNetworkPolicyDNS) || sent || base {
 		t.Fatal("obsolete positive admission published or became implicit fallback", err)
 	}

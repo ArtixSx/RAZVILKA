@@ -122,6 +122,13 @@ func (r *ScopedDNSResolver) MatchClientQuery(ctx context.Context, client netip.A
 // preserves authenticated DNS data rather than synthesizing A/AAAA records.
 // Unknown types/options are explicitly refused by this first scoped executor.
 func (r *ScopedDNSResolver) Resolve(ctx context.Context, client netip.Addr, query []byte) (_ []byte, resultErr error) {
+	return r.resolve(ctx, client, query, nil)
+}
+
+// The network-policy participant checks actual negatives before accepting a
+// fresh ledger entry and before releasing a cached wire. This adds no cache or
+// positive grant; the standalone primitive retains its original owner contract.
+func (r *ScopedDNSResolver) resolve(ctx context.Context, client netip.Addr, query []byte, answerCheck func([]byte) error) (_ []byte, resultErr error) {
 	message, _, err := scopedDNSQuestion(query)
 	if err != nil {
 		return nil, err
@@ -139,6 +146,11 @@ func (r *ScopedDNSResolver) Resolve(ctx context.Context, client netip.Addr, quer
 	if cached != nil {
 		if err := r.check(ctx, choice); err != nil {
 			return nil, err
+		}
+		if answerCheck != nil {
+			if err := answerCheck(cached); err != nil {
+				return nil, err
+			}
 		}
 		return cached, nil
 	}
@@ -211,6 +223,11 @@ func (r *ScopedDNSResolver) Resolve(ctx context.Context, client netip.Addr, quer
 	}
 	if err = r.check(ctx, choice); err != nil {
 		return nil, err
+	}
+	if answerCheck != nil {
+		if err := answerCheck(wire); err != nil {
+			return nil, err
+		}
 	}
 	r.cache.accept(cacheKey, identity, ticket, started, wire, details)
 	accepted = true
