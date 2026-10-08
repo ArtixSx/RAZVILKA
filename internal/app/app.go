@@ -155,6 +155,8 @@ type App struct {
 	Components                *components.Manager
 	ComponentHistory          *updatecheck.ComponentHistoryAdmission
 	managedNFQBundle          managedNFQBundleState
+	managedNFQListMu          sync.Mutex
+	managedNFQList            *ManagedNFQWSListRuntime
 	componentRecoveryChecks   componentRecoveryChecks
 	Community                 *community.Manager
 	CustomServices            *customservices.Manager

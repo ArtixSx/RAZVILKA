@@ -165,7 +165,13 @@ func (r *NFQWSExecutionResource) matching(binding NFQWSExecutionBinding) (int, e
 	}
 	for i, recorded := range r.scope.execution.Resources {
 		if recorded.ID == binding.ResourceID {
-			if recorded.Kind != "nfqws-scoped" || recorded.State != "prepared" || recorded.NFQWS == nil || recorded.NodeTransit != nil ||
+			if (recorded.State == "active") != (recorded.Phase == "active") {
+				return -1, ErrNFQWSScopedOwner
+			}
+			if recorded.State == "active" && (r.finalOwner == nil || !r.transferACK) {
+				return -1, ErrNFQWSScopedOwner
+			}
+			if recorded.Kind != "nfqws-scoped" || recorded.State != "prepared" && recorded.State != "active" || recorded.NFQWS == nil || recorded.NodeTransit != nil ||
 				recorded.Generation != binding.ResourceGeneration || recorded.EffectsDigest != binding.EffectsDigest ||
 				!reflect.DeepEqual(recorded.NFQWS.Plan, r.scope.plan) || !reflect.DeepEqual(recorded.NFQWS.Spec, r.plan.Spec()) {
 				return -1, ErrNFQWSScopedOwner
@@ -182,7 +188,7 @@ func (r *NFQWSExecutionResource) matching(binding NFQWSExecutionBinding) (int, e
 				return -1, ErrNFQWSScopedOwner
 			}
 			switch recorded.Phase {
-			case "planned", "process-pending", "capture-ready", "transfer-intent", "transfer-ack", "closed":
+			case "planned", "process-pending", "capture-ready", "transfer-intent", "transfer-ack", "closed", "active":
 			default:
 				return -1, ErrNFQWSScopedOwner
 			}

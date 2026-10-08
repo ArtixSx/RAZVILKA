@@ -18,8 +18,9 @@ type LANPolicyReceiptBinding struct {
 	// RetireCheck proves ALL routing/filter/DNS/NFQ/capture consumers settled.
 	// A remaining or unknown consumer retains this gate, even if its kernel
 	// rules do not directly reference the gate chain.
-	RetireCheck func(context.Context, *LANPolicyRuntimePlan) error
-	options     policyAdditionOptions // package tests only; no config/HTTP source
+	RetireCheck  func(context.Context, *LANPolicyRuntimePlan) error
+	options      policyAdditionOptions // package tests only; no config/HTTP source
+	commandOwner *LANPolicyCommandAdmission
 }
 
 func cloneLANPolicyEffect(e LANPolicyEffect) LANPolicyEffect {
@@ -118,6 +119,7 @@ func (b *LANPolicyReceiptBinding) Apply(ctx context.Context, plan *LANPolicyRunt
 	if err != nil {
 		return err
 	}
+	b.bindCommandRunner(c, root, false)
 	if err := applyPolicyEffects(ctx, c.runtime, c.mixed, root, b.options); err != nil {
 		return err
 	}
@@ -132,6 +134,7 @@ func (b *LANPolicyReceiptBinding) Remove(ctx context.Context, plan *LANPolicyRun
 	if err != nil {
 		return err
 	}
+	b.bindCommandRunner(c, root, true)
 	// Refuse the whole retire before changing receipt grants; check again at
 	// every deletion boundary because consumers outside Needs can change.
 	if err := b.RetireCheck(ctx, CloneLANPolicyRuntime(c.plan)); err != nil {

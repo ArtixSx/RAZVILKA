@@ -58,6 +58,9 @@ type Manager struct {
 	Adapters           map[string]Adapter
 	RollbackTimeout    time.Duration
 	FreshProfile       func(context.Context) (string, error)
+	retainedNFQMu      sync.Mutex
+	retainedNFQ        *retainedNFQWSExecution
+	pendingNFQ         *pendingNFQWSExecution
 }
 
 type Adapter interface {
@@ -1142,6 +1145,12 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, err
 	}
 	defer m.endOperation()
+	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() {
+		return execution, ErrNetworkPolicyReplacement // Join the original owner with explicit Stop first.
+	}
+	if err := m.checkManagedNFQWSApply(ctx, plan); err != nil {
+		return execution, err
+	}
 	if err := validateNetworkPolicyParticipation(plan); err != nil {
 		return execution, err
 	}
@@ -1213,8 +1222,17 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	commitPublicationAttempted := false
 	liveMutation := false
 	var activeNFQScope *executionResourceScope
+	var retryNFQRollback func(context.Context) error
 	defer func() {
-		if activeNFQScope != nil {
+		if (activeNFQScope == nil || !activeNFQScope.retained) && result.State == "rollback-failed" && retryNFQRollback != nil {
+			if err := m.retainPendingNFQWS(ctx, activeNFQScope, retryNFQRollback); err == nil {
+				// Returned data never aliases the private retained original owner.
+				result.Resources = cloneExecutionResources(result.Resources)
+				result.Steps = slices.Clone(result.Steps)
+				return
+			}
+		}
+		if activeNFQScope != nil && !activeNFQScope.retained {
 			if err := activeNFQScope.close(); err != nil {
 				resultErr = errors.Join(resultErr, executionJournalError(err))
 				result.RollbackVerified = false
@@ -1296,8 +1314,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		return errors.Join(err, journalErr, writeExecution())
 	}
+	rollbackParent := ctx
 	rollback := func(cause error) error {
-		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(ctx), m.rollbackTimeout())
+		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(rollbackParent), m.rollbackTimeout())
 		defer cancelRollback()
 		execution.Error = cause.Error()
 		plan.ObservedEvidence = evidence.None
@@ -1409,6 +1428,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		return cause
 	}
+	retryNFQRollback = func(parent context.Context) error {
+		rollbackParent = parent
+		_ = rollback(ErrNFQWSScopedOwner)
+		if execution.State != "rolled-back" || !execution.RollbackVerified {
+			return executionJournalError(ErrNFQWSScopedOwner)
+		}
+		return nil
+	}
 	rejectCanary := func(cause error) error {
 		plan.Ready = false
 		plan.State = "canary-failed"
@@ -1456,6 +1483,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	finishCommit := func() error {
 		execution.State = "committing"
+		if activeNFQScope != nil {
+			if err := activeNFQScope.prepareActiveNFQWS(ctx); err != nil {
+				return rollback(err)
+			}
+		}
 		if err := writeExecution(); err != nil {
 			return rollback(err)
 		}
@@ -1467,6 +1499,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if err := writeExecution(); err != nil {
 			return rollback(err)
+		}
+		if activeNFQScope != nil {
+			if err := m.retainActiveNFQWS(ctx, activeNFQScope); err != nil {
+				return rollback(err)
+			}
 		}
 		return nil
 	}

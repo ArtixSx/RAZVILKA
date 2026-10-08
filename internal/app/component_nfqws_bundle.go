@@ -124,7 +124,7 @@ func (a *App) configureManagedNFQCompatibility(ctx context.Context, control *ope
 
 // Main closes this retained descriptor only after HTTP/worker cleanup joins.
 func (a *App) CloseManagedNFQControl() error {
-	if a.strategyCompatibilityPending() {
+	if a.strategyCompatibilityPending() || a.managedNFQListPending() {
 		return strategylab.ErrCompatibilityQuiescenceUnknown
 	}
 	a.managedNFQBundle.mu.Lock()

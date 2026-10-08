@@ -162,7 +162,7 @@ func validateExecutionNFQWSMode(execution Execution, resource ExecutionResource,
 		if d.Observation != nil {
 			return ErrExecutionJournal
 		}
-	case "transfer-ack":
+	case "transfer-ack", "active":
 		if d.Observation == nil {
 			return ErrExecutionJournal
 		}

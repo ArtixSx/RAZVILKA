@@ -30,10 +30,31 @@ func (r *NFQWSExecutionResource) commandCleanupReview(ctx context.Context) (*ope
 	r.scope.mu.Lock()
 	defer r.scope.mu.Unlock()
 	if _, err := r.matching(r.binding); err != nil {
-		return nil, err
+		// Known terminal retirement still needs the fresh operation's read
+		// capability. This does not reopen matching or a command invocation.
+		if r.scope.nfqws[r.binding.ResourceID] != r {
+			return nil, err
+		}
+		found := false
+		for _, record := range r.scope.execution.Resources {
+			if record.ID == r.binding.ResourceID && record.State == "removed" && record.Phase == "removed" && record.Kind == "nfqws-scoped" && record.NFQWS != nil &&
+				record.Generation == r.binding.ResourceGeneration && record.EffectsDigest == r.binding.EffectsDigest && reflect.DeepEqual(record.NFQWS.Plan, r.scope.plan) && reflect.DeepEqual(record.NFQWS.Spec, r.plan.Spec()) {
+				found = true
+			}
+		}
+		if !found {
+			return nil, err
+		}
 	}
 	if r.transferGuards == nil || r.transferGuards.originalCleanup == nil || r.transferGuards.control == nil {
 		return nil, ErrNFQWSScopedOwner
+	}
+	if r.scope.retained {
+		op, err := r.scope.retainedOperation(ctx)
+		if err != nil || op.forward || op.cleanup == nil {
+			return nil, ErrNFQWSScopedOwner
+		}
+		return op.cleanup, nil
 	}
 	if err := r.scope.checkOriginalOwner(ctx, &executionTransitResource{relative: r.relative, anchor: r.anchor}, false, true); err != nil {
 		return nil, err
@@ -106,7 +127,15 @@ func (r *NFQWSExecutionResource) checkOriginalCleanup(ctx context.Context) error
 		return ErrNFQWSScopedOwner
 	}
 	g := r.transferGuards
-	return g.originalCleanup.WithCurrent(ctx, func() error {
+	cleanup := g.originalCleanup
+	if r.scope.retained {
+		op, err := r.scope.retainedOperation(ctx)
+		if err != nil || op.forward || op.cleanup == nil {
+			return ErrNFQWSScopedOwner
+		}
+		cleanup = op.cleanup
+	}
+	return cleanup.WithCurrent(ctx, func() error {
 		owner := &executionTransitResource{relative: r.relative, anchor: r.anchor}
 		check := func() error {
 			if err := r.scope.checkOriginalOwner(ctx, owner, false, true); err != nil {
@@ -307,6 +336,9 @@ func (s *executionResourceScope) commitNFQWSTransfer(ctx context.Context) error 
 			return err
 		}
 		if err := r.Current(ctx, observed.Binding); err != nil {
+			return err
+		}
+		if err := r.bindActive(ctx, handle, observed); err != nil {
 			return err
 		}
 	}

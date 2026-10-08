@@ -80,6 +80,9 @@ func (m *Manager) checkExecutionRecovery() error {
 	if !exists || !reflect.DeepEqual(latest, transaction) {
 		return executionJournalError(errors.New("execution records disagree; recovery is required"))
 	}
+	if err := m.checkRetainedNFQWSRecord(*latest); err != nil {
+		return executionJournalError(err)
+	}
 	return nil
 }
 
@@ -106,6 +109,10 @@ func (m *Manager) settleCommittedPublication() (bool, error) {
 		return false, nil
 	}
 	if validateExecutionResources(*latest, true) != nil || validateExecutionResources(*transaction, true) != nil {
+		return false, nil
+	}
+	// A documentary ACTIVE row cannot reconstruct the original live owner.
+	if m.checkRetainedNFQWSRecord(*latest) != nil {
 		return false, nil
 	}
 	for _, step := range latest.Steps {

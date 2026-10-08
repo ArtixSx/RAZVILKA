@@ -78,6 +78,7 @@ type ResourceConflict struct {
 }
 
 type Input struct {
+	managedNFQWS       *NFQWSActiveMaterial  // Original in-call managed owner; never JSON/HTTP input.
 	LAN                *LANPolicyRuntimePlan `json:"lan_policy,omitempty"`
 	DNS                *ScopedDNSPlan        `json:"scoped_dns,omitempty"`
 	SuspendDNS         bool                  `json:"suspend_dns,omitempty"`
@@ -490,6 +491,12 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 				plan.Blockers = append(plan.Blockers, Blocker{Code: "LAN_GATE_TOOLS_UNAVAILABLE", Adapter: adapter, Message: "Допуск LAN требует проверки правил IPv4 и IPv6.", Resolution: "Восстановите инструменты проверки сети и сформируйте новый план."})
 			}
 		case "nfqws2":
+			if input.managedNFQWS != nil {
+				if !input.Host.IPCommand || !input.Host.IPTables || !input.Host.IP6Tables || !input.Host.NFQueueTarget {
+					plan.Blockers = append(plan.Blockers, Blocker{Code: "MANAGED_NFQ_TOOLS_UNAVAILABLE", Adapter: adapter, Message: "Проверка системных инструментов NFQUEUE не завершена."})
+				}
+				break // The actual managed source owns helper/config; no global init service is used.
+			}
 			addNFQWS2Preflight(&plan, input.Host)
 			for _, route := range input.Routes {
 				if adapterID(route.Resolved) == adapter && len(route.Sources) > 0 {

@@ -124,6 +124,10 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 				if resource.State != "removed" {
 					return ErrExecutionJournal
 				}
+			case "active":
+				if resource.State != "active" || resource.NFQWS.Mode != nfqws2ActiveProcessMode || resource.NFQWS.Observation == nil || execution.State != "committing" && execution.State != "committed" && execution.State != "rolling-back" && execution.State != "rollback-failed" {
+					return ErrExecutionJournal
+				}
 			default:
 				return ErrExecutionJournal
 			}
@@ -136,6 +140,10 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 				return errors.Join(ErrExecutionJournal, ErrPolicyAdditionUnknown)
 			}
 		case "removed", "unused":
+		case "active":
+			if resource.Kind != "nfqws-scoped" || resource.Phase != "active" {
+				return ErrExecutionJournal
+			}
 		default:
 			return ErrExecutionJournal
 		}

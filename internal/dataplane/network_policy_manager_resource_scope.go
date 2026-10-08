@@ -42,6 +42,9 @@ type executionResourceScope struct {
 	nfqws              map[string]*NFQWSExecutionResource
 	networkIdentity    *networkPolicyIdentity
 	nfqwsTransfer      *nfqwsExecutionTransferBarrier
+	retained           bool
+	retainedOwner      *retainedNFQWSExecution
+	pending            bool // Original unknown Apply: cleanup only, never ACTIVE.
 }
 
 type executionTransitResource struct {
@@ -121,7 +124,15 @@ func (s *executionResourceScope) checkOriginalOwner(ctx context.Context, resourc
 		return err
 	}
 	if forward {
-		if err := s.ctx.Err(); err != nil {
+		if s.pending {
+			return ErrNFQWSScopedOwner
+		}
+		if s.retained {
+			op, err := s.retainedOperation(ctx)
+			if err != nil || !op.forward {
+				return ErrNFQWSScopedOwner
+			}
+		} else if err := s.ctx.Err(); err != nil {
 			return err // Cancellation detachment grants cleanup only.
 		}
 	}
@@ -268,7 +279,16 @@ func (s *executionResourceScope) matchingTransit(resource *executionTransitResou
 }
 
 func (s *executionResourceScope) persist() error {
+	if s.retainedOwner != nil {
+		if err := s.retainedOwner.recordsCurrent(); err != nil {
+			s.failure = errors.Join(s.failure, err)
+			return err
+		}
+	}
 	err := s.manager.writeExecution(s.root, *s.execution)
+	if err == nil && s.retainedOwner != nil {
+		err = s.retainedOwner.captureRecords()
+	}
 	if err != nil {
 		s.failure = errors.Join(s.failure, err)
 	}
@@ -373,7 +393,8 @@ func (s *executionResourceScope) close() error {
 	changed := false
 	for i := range s.execution.Resources {
 		resource := &s.execution.Resources[i]
-		if s.nfqws[resource.ID] != nil && resource.State == "prepared" {
+		if s.nfqws[resource.ID] != nil && (resource.State == "prepared" || resource.State == "active") {
+			resource.State = "prepared"
 			resource.Phase = "closed"
 			changed = true
 		}

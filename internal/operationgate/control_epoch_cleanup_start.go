@@ -5,6 +5,16 @@ import (
 	"errors"
 )
 
+// CurrentForCleanupOperation additionally joins this SAME Gate's actual
+// still-held cleanup operation. It grants no command or resource ownership.
+// The retained Manager uses it before binding a fresh App Stop operation.
+func (r *ControlEpochReview) CurrentForCleanupOperation(ctx context.Context, cleanup *ExclusiveCleanupReview) error {
+	if r == nil || r.self != r || r.gate == nil || cleanup == nil || cleanup.self != cleanup || cleanup.owner == nil || cleanup.owner.gate != r.gate {
+		return ErrSelfUpdateStopChanged
+	}
+	return cleanup.WithCurrent(ctx, func() error { return r.CurrentForCleanup(ctx) })
+}
+
 // WithCleanupStart serializes only an original owner's bounded Cmd.Start
 // with durable Stop. The caller proves exact receipt, inactive ownership and
 // command outside this leaf. cleanup must belong to a still-held actual
