@@ -300,7 +300,7 @@ func TestPhysicalSelectedSetResolvesActualHomeAndExplicitGuests(t *testing.T) {
 func TestPhysicalNativeMemberSharedMACRequiresUnambiguousKernelKind(t *testing.T) {
 	l, a, r := kernelFixture()
 	mac := "02:00:00:00:00:02"
-	l[1] = linkFrame(4, "eth0.1", "vlan", mac, 9)
+	l[1] = vlanFrame(4, "eth0.1", mac, 5, 9, 1, 0x8100, 1, 3)
 	l = append(l, linkFrame(6, "wlan0", "", mac, 9))
 	raw := strings.Replace(ndmHome(), ndmField("summary", "ignored"), fmt.Sprintf("%33s: %s\n", "interface, link = yes", "Wifi0/AP0")+ndmField("summary", "ignored"), 1)
 	raw += ndmObject("Vlan1", "GE0/0", "GigabitEthernet0/Vlan1", "Vlan") + ndmField("mac", mac) + ndmObject("AccessPoint", "Wifi0/AP0", "AccessPoint", "AccessPoint") + ndmField("mac", mac)

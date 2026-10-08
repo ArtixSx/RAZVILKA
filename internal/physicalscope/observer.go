@@ -74,6 +74,42 @@ type Link struct {
 	NativeName          string `json:"native_name"`
 	NativeInterfaceName string `json:"native_interface_name"`
 	NativeType          string `json:"native_type"`
+	// Physical facts are value types: Snapshot cannot mutate the held Review.
+	Origin           string     `json:"origin"`
+	LinkType         uint16     `json:"link_type"`
+	Flags            uint32     `json:"flags"`
+	MasterIfIndex    int        `json:"master_ifindex"`
+	ParentIfIndex    int        `json:"parent_ifindex"`
+	ForeignParent    bool       `json:"foreign_parent"`
+	SlaveKind        string     `json:"slave_kind"`
+	BridgeStateKnown bool       `json:"bridge_state_known"`
+	BridgePortState  uint8      `json:"bridge_port_state"`
+	VLAN             VLANFacts  `json:"vlan"`
+	Parent           ParentLink `json:"parent"`
+}
+
+type VLANFacts struct {
+	Known       bool   `json:"known"`
+	ID          uint16 `json:"id"`
+	Protocol    uint16 `json:"protocol"`
+	FlagsKnown  bool   `json:"flags_known"`
+	Flags       uint32 `json:"flags"`
+	FlagsMask   uint32 `json:"flags_mask"`
+	Unsupported bool   `json:"unsupported"`
+	InfoSHA256  string `json:"info_sha256"`
+}
+
+type ParentLink struct {
+	Known         bool   `json:"known"`
+	Interface     string `json:"interface"`
+	IfIndex       int    `json:"ifindex"`
+	MAC           string `json:"mac"`
+	Kind          string `json:"kind"`
+	LinkType      uint16 `json:"link_type"`
+	Flags         uint32 `json:"flags"`
+	MasterIfIndex int    `json:"master_ifindex"`
+	ParentIfIndex int    `json:"parent_ifindex"`
+	ForeignParent bool   `json:"foreign_parent"`
 }
 type Device struct {
 	ID                 string   `json:"id"`

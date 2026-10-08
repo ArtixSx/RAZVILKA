@@ -2,7 +2,9 @@ package physicalscope
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"net"
 	"net/netip"
 	"sort"
@@ -99,7 +101,13 @@ func decodeLink(m message) (kernelLink, error) {
 	if err != nil {
 		return kernelLink{}, err
 	}
-	result := kernelLink{Link: Link{Interface: name, IfIndex: index, MAC: net.HardwareAddr(a[1]).String()}, linkType: binary.NativeEndian.Uint16(m.data[2:4]), master: int(master), up: binary.NativeEndian.Uint32(m.data[8:12])&1 != 0}
+	parent, err := u32(a, 5)
+	if err != nil || int32(parent) < 0 || int32(master) < 0 || a[37] != nil && len(a[37]) != 4 {
+		return kernelLink{}, ErrUnknown
+	}
+	linkType := binary.NativeEndian.Uint16(m.data[2:4])
+	flags := binary.NativeEndian.Uint32(m.data[8:12])
+	result := kernelLink{Link: Link{Interface: name, IfIndex: index, MAC: net.HardwareAddr(a[1]).String(), LinkType: linkType, Flags: flags, MasterIfIndex: int(master), ParentIfIndex: int(parent), ForeignParent: a[37] != nil}, linkType: linkType, master: int(master), up: flags&1 != 0}
 	if info := a[18]; info != nil {
 		nested, err := attrs(info)
 		if err != nil {
@@ -111,9 +119,57 @@ func decodeLink(m message) (kernelLink, error) {
 				return kernelLink{}, err
 			}
 		}
+		if result.kind == "vlan" {
+			result.VLAN, err = decodeVLAN(nested[2])
+			if err != nil {
+				return kernelLink{}, err
+			}
+		}
+		if nested[4] != nil {
+			result.SlaveKind, err = wireString(nested[4], 64)
+			if err != nil {
+				return kernelLink{}, err
+			}
+		}
+		if result.SlaveKind == "bridge" && nested[5] != nil {
+			port, err := attrs(nested[5])
+			if err != nil || port[1] != nil && (len(port[1]) != 1 || port[1][0] > 4) {
+				return kernelLink{}, ErrUnknown
+			}
+			if port[1] != nil {
+				result.BridgeStateKnown, result.BridgePortState = true, port[1][0]
+			}
+		}
 	}
 	result.Link.Kind = result.kind
 	return result, nil
+}
+
+func decodeVLAN(raw []byte) (VLANFacts, error) {
+	a, err := attrs(raw)
+	if err != nil || len(a[1]) != 2 || len(a[5]) != 2 {
+		return VLANFacts{}, ErrUnknown
+	}
+	v := VLANFacts{Known: true, ID: binary.NativeEndian.Uint16(a[1]), Protocol: binary.BigEndian.Uint16(a[5])}
+	if v.ID > 4094 {
+		return VLANFacts{}, ErrUnknown
+	}
+	if a[2] != nil {
+		if len(a[2]) != 8 {
+			return VLANFacts{}, ErrUnknown
+		}
+		v.FlagsKnown, v.Flags, v.FlagsMask = true, binary.NativeEndian.Uint32(a[2][:4]), binary.NativeEndian.Uint32(a[2][4:])
+	}
+	for key, value := range a {
+		if key != 1 && key != 2 && key != 5 && (key != 3 && key != 4 || len(value) != 0) {
+			v.Unsupported = true
+		}
+	}
+	// Bind the exact bounded configuration bytes as well as decoded fields.
+	// This is attribute evidence, not an interface incarnation or authority.
+	digest := sha256.Sum256(raw)
+	v.InfoSHA256 = hex.EncodeToString(digest[:])
+	return v, nil
 }
 func decodeAddress(m message) (int, string, string, error) {
 	if len(m.data) < 8 || m.data[0] != 2 && m.data[0] != 10 {
@@ -235,6 +291,9 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 		tracked[s.IfIndex], roots[s.IfIndex], names[s.Interface] = true, true, true
 		for _, m := range s.Members {
 			tracked[m.IfIndex], names[m.Interface] = true, true
+			if m.Parent.Known {
+				tracked[m.Parent.IfIndex], names[m.Parent.Interface] = true, true
+			}
 		}
 	}
 	for _, m := range frames {
@@ -257,7 +316,7 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 			if err != nil {
 				return err
 			}
-			if tracked[link.IfIndex] || roots[link.master] || names[link.Interface] {
+			if tracked[link.IfIndex] || roots[link.master] || names[link.Interface] || link.ParentIfIndex != 0 && tracked[link.ParentIfIndex] {
 				return ErrUnknown
 			}
 		case 20, 21:

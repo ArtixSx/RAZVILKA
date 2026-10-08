@@ -195,7 +195,16 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 			if member.kind == "bridge" {
 				return nil, at("kernel.corroboration.member.nested-bridge", nil)
 			}
-			s.Members = append(s.Members, member.Link)
+			facts := member.Link
+			facts.Origin = "kernel"
+			if facts.VLAN.Known {
+				parent, ok := links[facts.ParentIfIndex]
+				if !ok || facts.ForeignParent || parent.ForeignParent || parent.IfIndex == facts.IfIndex {
+					return nil, at("kernel.corroboration.member.vlan-parent", nil)
+				}
+				facts.Parent = ParentLink{Known: true, Interface: parent.Interface, IfIndex: parent.IfIndex, MAC: parent.MAC, Kind: parent.kind, LinkType: parent.linkType, Flags: parent.Flags, MasterIfIndex: parent.master, ParentIfIndex: parent.ParentIfIndex, ForeignParent: parent.ForeignParent}
+			}
+			s.Members = append(s.Members, facts)
 		}
 		if len(s.Members) == 0 || len(s.Members) > 64 {
 			return nil, at("kernel.corroboration.member.count", nil)
@@ -228,9 +237,17 @@ func assembleSegments(selection Selection, native []nativeSegment, stock bool, l
 				m := &s.Members[position]
 				matched[m.IfIndex] = true
 				m.NativeID, m.NativeName, m.NativeInterfaceName, m.NativeType = v.id, v.name, v.osName, v.kind
+				m.Origin = "ndm"
 			}
-			if len(matched) != len(s.Members) {
-				return nil, at("kernel.corroboration.member.kernel-unmatched", nil)
+			for j := range s.Members {
+				m := &s.Members[j]
+				if matched[m.IfIndex] {
+					continue
+				}
+				if err := reviewedStockKernelVLAN(s, *m, links, wan, native); err != nil {
+					return nil, err
+				}
+				m.Origin = "reviewed-stock-kernel-vlan"
 			}
 		}
 		segments = append(segments, s)
