@@ -51,22 +51,41 @@ func compatibilityLaunchSupervisor(ctx context.Context, statePath string, review
 	cmd := exec.Command(program, args...)
 	cmd.Env = []string{"PATH=/opt/bin:/opt/sbin:/usr/bin:/bin", "LANG=C", "TZ=UTC", "RAZVILKA_STRATEGY_LAB_STATE=" + statePath, "RAZVILKA_SELF_UPDATE_CONTROL_STATE=" + review.ControlPath}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	phase := managedLaunchPhase(ctx, invocationID)
+	started := false
 	// Intent has been fsynced and its FileTarget lease released. Only Start
 	// occurs under the common authority lock; Wait and receipt I/O follow it.
-	err = operationgate.WithSelfUpdateEffectAdmission(ctx, review.ControlPath, invocationID, review.InstallationID, review.Sequence, "nfqws-compatibility-helper", cmd.Start)
-	if err != nil {
+	err = operationgate.WithSelfUpdateEffectAdmission(ctx, review.ControlPath, invocationID, review.InstallationID, review.Sequence, "nfqws-compatibility-helper", func() error {
+		startErr := cmd.Start()
+		started = startErr == nil
+		if phase != nil {
+			phase.launched = started
+		}
+		return startErr
+	})
+	if !started {
 		return identity, err
 	}
+	admissionErr := err
 	identity, identityErr := components.ReadNFQWSSupervisionProcessIdentity(cmd.Process.Pid)
+	if phase != nil {
+		phase.helper = identity
+	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }() // Parent owns this one helper, never its descendants.
-	if identityErr != nil || identity.Group != identity.PID {
+	joined := func(waitErr error) error {
+		if phase != nil {
+			phase.joined = true
+		}
+		return errors.Join(admissionErr, waitErr)
+	}
+	if admissionErr != nil || identityErr != nil || identity.Group != identity.PID {
 		_ = cmd.Process.Signal(syscall.SIGTERM)
 		err = errors.Join(ErrCompatibilityQuiescenceUnknown, identityErr)
 	} else {
 		select {
 		case err := <-done:
-			return identity, errors.Join(err, ctx.Err())
+			return identity, errors.Join(joined(err), ctx.Err())
 		case <-ctx.Done():
 			_ = cmd.Process.Signal(syscall.SIGTERM)
 			err = ctx.Err()
@@ -76,8 +95,15 @@ func compatibilityLaunchSupervisor(ctx context.Context, statePath string, review
 	defer timer.Stop()
 	select {
 	case waitErr := <-done:
-		return identity, errors.Join(err, waitErr)
+		return identity, errors.Join(err, joined(waitErr))
 	case <-timer.C:
+		if phase != nil {
+			// Cancellation has already reached the exact owned helper. Keep the
+			// original caller/lease until its one Wait really joins; the elapsed
+			// grace period remains an unknown outcome, never synthetic ECHILD.
+			waitErr := <-done
+			return identity, errors.Join(err, joined(waitErr))
+		}
 		// Keep the exact helper's sole reap owner alive to finish cleanup. A
 		// late terminal record remains unacknowledged and cannot permit replay.
 		return identity, errors.Join(ErrCompatibilityQuiescenceUnknown, err)

@@ -23,12 +23,17 @@ import (
 // A helper receives only an invocation ID and reads its frozen command from
 // this Manager's existing StrategyLab state file.
 type SupervisedCompatibilityProvider struct {
+	self    *SupervisedCompatibilityProvider
 	manager *Manager
 	review  compatibilityReview
 	mu      sync.Mutex
 	running bool
 	unknown bool
 	session *compatibilitySession
+	// Set only by the actual managed-material constructor, before any Run.
+	managedControl    *operationgate.ControlEpochReview
+	managedDescriptor components.NFQWSRuntimeDescriptor
+	managedInvocation *managedCompatibilityInvocation
 	// Tests use their own fixed helper entry in the Go test executable.
 	// Production always uses the early CORE CLI dispatch shown below.
 	helperPrefix []string
@@ -51,7 +56,9 @@ func NewSupervisedCompatibilityProvider(manager *Manager, approval Compatibility
 	if unknown {
 		return nil, ErrCompatibilityQuiescenceUnknown
 	}
-	return &SupervisedCompatibilityProvider{manager: manager, review: review}, nil
+	provider := &SupervisedCompatibilityProvider{manager: manager, review: review}
+	provider.self = provider
+	return provider, nil
 }
 
 func compatibilityProtectedReview(statePath string, review compatibilityReview) error {
@@ -76,6 +83,11 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	result.Quiescent = true // Rejections before intent/launch have no owned tree.
 	if parent == nil {
 		return result, errors.New("compatibility context is required")
+	}
+	if p.managedControl != nil {
+		if err := p.managedMaterialCurrent(parent); err != nil {
+			return result, err
+		}
 	}
 	p.mu.Lock()
 	if p.unknown {
@@ -162,15 +174,29 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 		p.manager.mu.Unlock()
 		return result, errors.New("compatibility provider requires Manager validation admission")
 	}
-	err = p.manager.beginCompatibilitySessionLocked(ctx, session)
+	managed := managedInvocation(parent, p)
+	var managedPhase *managedCompatibilityPhase
+	if managed != nil {
+		managedPhase, err = managed.preparePhaseLocked(session)
+	}
+	if err == nil {
+		err = p.manager.beginCompatibilitySessionLocked(ctx, session)
+	}
 	p.manager.mu.Unlock()
 	if err != nil {
+		if managedPhase != nil {
+			result.Quiescent = false
+			return p.completeManagedPhase(managed, managedPhase, err)
+		}
 		return result, err
 	}
 	// After intent, failure is retained unknown unless this exact helper
 	// publishes and the parent acknowledges an ECHILD terminal receipt.
 	result.Quiescent = false
 	helper, launchErr := compatibilityLaunchSupervisor(ctx, p.manager.Path, p.review, id, p.helperPrefix)
+	if managedPhase != nil {
+		return p.completeManagedPhase(managed, managedPhase, launchErr)
+	}
 	if launchErr != nil {
 		err = launchErr
 		return result, err
@@ -239,6 +265,11 @@ func (m *Manager) prepareCompatibilityPublicationLocked(ctx context.Context, val
 	}
 	if provider == nil || provider.manager != m {
 		return ErrCompatibilityQuiescenceUnknown
+	}
+	if provider.managedControl != nil {
+		if err := provider.managedMaterialCurrent(ctx); err != nil {
+			return errors.Join(ErrCompatibilityQuiescenceUnknown, err)
+		}
 	}
 	provider.mu.Lock()
 	verified := !provider.running && !provider.unknown && provider.session != nil && compatibilityJSONEqual(provider.session, m.state.CompatibilitySession)

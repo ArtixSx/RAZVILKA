@@ -193,6 +193,15 @@ func (r *SelectedCandidateReview) currentLocked(ctx context.Context) error {
 	if err := r.sourceLocked(ctx); err != nil {
 		return err
 	}
+	// A legacy/native-QA compatibility publisher cannot become a production
+	// source by attaching a component DTO after its unadmitted publication.
+	if r.provider.self != r.provider || r.provider.managedControl == nil || !r.provider.managedControl.MatchesControlRoot(r.review.ControlPath) || !compatibilityJSONEqual(r.descriptor, r.provider.managedDescriptor) {
+		return ErrSelectedCandidateChanged
+	}
+	ref := r.provider.managedControl.Reference()
+	if ref.InstallationID != r.review.InstallationID || ref.Sequence != r.review.Sequence {
+		return ErrSelectedCandidateChanged
+	}
 	if err := compatibilityControlCurrent(ctx, r.review); err != nil {
 		return errors.Join(ErrSelectedCandidateChanged, err)
 	}

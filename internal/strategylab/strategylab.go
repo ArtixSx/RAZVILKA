@@ -349,7 +349,7 @@ func (m *Manager) Snapshot() Snapshot {
 		QuiescenceUnknown: m.compatibilityUnknownLocked(),
 		SchemaVersion:     m.state.SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
 		Candidates: candidates, Evidence: evidence, Summaries: summaries, Selections: selections,
-		Safety: map[string]any{"state_write_blocked": m.writeBlocked, "live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": true, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour), "probe_budget": m.resourceBudget()},
+		Safety: map[string]any{"state_write_blocked": m.writeBlocked, "live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": m.Executor != nil, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour), "probe_budget": m.resourceBudget()},
 	}
 }
 
@@ -529,7 +529,11 @@ func (m *Manager) validateCandidate(ctx context.Context, id string, expected *ad
 	if m.state.CompatibilityFinalizing && !validation.QuiescenceUnknown {
 		err := m.publishCompatibilityValidationLocked(ctx, adaptiveCandidateDetached(candidate))
 		if err != nil {
-			candidate.Validation = compatibilityPublicationUnknown(candidate.Validation)
+			if errors.Is(err, errManagedCompatibilityRefused) && !m.compatibilityUnknownLocked() && !m.writeBlocked {
+				candidate.Validation = m.state.Candidates[id].Validation
+			} else {
+				candidate.Validation = compatibilityPublicationUnknown(candidate.Validation)
+			}
 		}
 		m.mu.Unlock()
 		return adaptiveCandidateDetached(candidate), err

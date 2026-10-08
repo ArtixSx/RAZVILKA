@@ -11,11 +11,16 @@ import (
 
 // Caller owns Manager.mu and the existing validation admission. Serialize the
 // complete image and open its existing CAS lease before the final ctx/epoch
-// check. Neither this operation nor its repair uses the Start-only Stop lock.
-// A CORE atomic-rename admission is still required for serial publication with
-// Stop; pre/post checks cannot remove the crash interval between rename and
-// re-fencing. Production capability must remain closed until that is wired.
+// check. Actual managed publication admits only the prepared rename through
+// its retained CORE control owner. Payload/directory sync and known-image
+// unknown repair remain outside that admission. Legacy/native-QA publication
+// retains its previous source-only behavior and cannot issue a managed review.
 func (m *Manager) publishCompatibilityValidationLocked(parent context.Context, candidate Candidate) error {
+	if parent != nil {
+		if i, ok := parent.Value(managedCompatibilityContextKey{}).(*managedCompatibilityInvocation); ok && i != nil && i.manager == m && managedCompatibilityRun(parent, i.provider) {
+			return m.publishManagedCompatibilityValidationLocked(parent, candidate, i.provider, i)
+		}
+	}
 	current, exists := m.state.Candidates[candidate.ID]
 	bound := candidate
 	bound.Validation = current.Validation
@@ -49,11 +54,17 @@ func (m *Manager) publishCompatibilityValidationLocked(parent context.Context, c
 		return errors.Join(ErrCompatibilityQuiescenceUnknown, err)
 	}
 	defer target.Close()
-	if m.compatibilityPublicationHook != nil {
-		m.compatibilityPublicationHook("prepared")
+	prepare := func() error {
+		if m.compatibilityPublicationHook != nil {
+			m.compatibilityPublicationHook("prepared")
+		}
+		if err := m.prepareCompatibilityPublicationLocked(ctx, candidate.Validation); err != nil {
+			m.compatibilityUnknown = true
+			return err
+		}
+		return nil
 	}
-	if err := m.prepareCompatibilityPublicationLocked(ctx, candidate.Validation); err != nil {
-		m.compatibilityUnknown = true
+	if err := prepare(); err != nil {
 		return err
 	}
 	writeErr := target.CompareAndSwap(ctx, before, after)

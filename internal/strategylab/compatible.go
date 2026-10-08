@@ -79,6 +79,20 @@ func (v CompatibleValidator) Validate(parent context.Context, arguments []string
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	run := func(args []string) (CompatibilityCompletion, error) {
+		// The concrete managed owner must join Run synchronously. A timeout of
+		// the generic goroutine below cannot release its operation/runtime lease
+		// while the actual helper's sole Wait is still pending.
+		if provider, ok := v.Provider.(*SupervisedCompatibilityProvider); ok && provider != nil && provider.managedControl != nil {
+			completion, err := provider.Run(ctx, binary, args...)
+			if !completion.Quiescent || errors.Is(err, ErrCompatibilityQuiescenceUnknown) {
+				result.QuiescenceUnknown = true
+				return completion, errors.Join(ErrCompatibilityQuiescenceUnknown, err)
+			}
+			if err == nil && !completion.Started {
+				return completion, errors.New("provider returned success without an executed command")
+			}
+			return completion, err
+		}
 		type response struct {
 			completion CompatibilityCompletion
 			err        error

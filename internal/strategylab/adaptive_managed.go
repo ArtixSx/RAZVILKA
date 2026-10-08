@@ -149,6 +149,9 @@ func adaptiveManagedValidatorLocked(m *Manager) (Validator, error) {
 	if !ok || provider == nil || provider.manager != m || !validator.TrustedAssets || validator.Binary != provider.review.Binary.Path || !slices.Equal(validator.BaseArguments, provider.review.BaseArguments) || validateCompatibilityReview(provider.review) != nil {
 		return nil, errAdaptiveManagedValidator
 	}
+	if provider.managedControl != nil && provider.self != provider {
+		return nil, errAdaptiveManagedValidator
+	}
 	validator.BaseArguments = slices.Clone(validator.BaseArguments)
 	return validator, nil
 }
