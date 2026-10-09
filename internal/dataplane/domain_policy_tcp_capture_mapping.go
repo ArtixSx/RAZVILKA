@@ -155,7 +155,7 @@ func (c *DomainPolicyTCPCapture) PrepareSyntheticMapping(ctx context.Context, so
 	}
 	life, cancel := context.WithCancel(c.ctx)
 	observation.CNAMEChain = slices.Clone(observation.CNAMEChain)
-	m := &DomainPolicyTCPCaptureMapping{capture: c, source: source, observation: observation, ctx: life, cancel: cancel, connections: make(map[*net.TCPConn]struct{}), watchDone: make(chan struct{}), closeDone: make(chan struct{})}
+	m := &DomainPolicyTCPCaptureMapping{capture: c, source: source, observation: observation, ctx: life, cancel: cancel, connections: make(map[*net.TCPConn]context.CancelFunc), watchDone: make(chan struct{}), closeDone: make(chan struct{})}
 	m.self = m
 	// Done is revocation only. No observation flag or TTL can grant forwarding.
 	go func() {
@@ -237,7 +237,7 @@ type DomainPolicyTCPCaptureMapping struct {
 	cancel               context.CancelFunc
 	mu                   sync.Mutex
 	closed               bool
-	connections          map[*net.TCPConn]struct{}
+	connections          map[*net.TCPConn]context.CancelFunc
 	flows                sync.WaitGroup
 	watchDone, closeDone chan struct{}
 }
@@ -288,13 +288,10 @@ func (m *DomainPolicyTCPCaptureMapping) enterFlow(parent context.Context, conn *
 		return nil, nil, ErrDomainPolicyTCPConsumer
 	}
 	m.mu.Lock()
-	if m.closed || m.ctx.Err() != nil {
+	if m.closed || m.ctx.Err() != nil || m.connections[conn] != nil {
 		m.mu.Unlock()
 		return nil, nil, ErrDomainPolicyTCPConsumer
 	}
-	m.flows.Add(1)
-	m.connections[conn] = struct{}{}
-	m.mu.Unlock()
 	// The accepted flow's parent carries current admission/operation values.
 	// Capture startup values cannot replace that authority. Mapping lifetime
 	// adds revocation and only a stricter deadline to this SAME parent.
@@ -308,6 +305,11 @@ func (m *DomainPolicyTCPCaptureMapping) enterFlow(parent context.Context, conn *
 	if life == nil {
 		life, cancel = context.WithCancel(parent)
 	}
+	// Register the original flow cancel while holding the same Close lock.
+	// No admitted flow can be missed between lifetime creation and shutdown.
+	m.flows.Add(1)
+	m.connections[conn] = cancel
+	m.mu.Unlock()
 	stop := context.AfterFunc(m.ctx, cancel)
 	if m.ctx.Err() != nil {
 		cancel()
@@ -336,7 +338,10 @@ func (m *DomainPolicyTCPCaptureMapping) Close() error {
 	m.closed = true
 	m.cancel()
 	connections := make([]*net.TCPConn, 0, len(m.connections))
-	for conn := range m.connections {
+	for conn, cancel := range m.connections {
+		// Parent-derived flow contexts are not synchronous children of m.ctx.
+		// Revoke each flow before its FD closes; AfterFunc alone is asynchronous.
+		cancel()
 		connections = append(connections, conn)
 	}
 	m.mu.Unlock()

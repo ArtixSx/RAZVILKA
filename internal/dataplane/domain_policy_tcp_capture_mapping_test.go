@@ -89,7 +89,7 @@ func TestDomainPolicySyntheticTCPCaptureRejectsUnpublishedOrUnpreparedOriginalAs
 					life, cancel := context.WithCancel(capture.ctx)
 					watchDone := make(chan struct{})
 					close(watchDone)
-					mapping := &DomainPolicyTCPCaptureMapping{capture: capture, source: owner.lookup, ctx: life, cancel: cancel, connections: make(map[*net.TCPConn]struct{}), watchDone: watchDone, closeDone: make(chan struct{})}
+					mapping := &DomainPolicyTCPCaptureMapping{capture: capture, source: owner.lookup, ctx: life, cancel: cancel, connections: make(map[*net.TCPConn]context.CancelFunc), watchDone: watchDone, closeDone: make(chan struct{})}
 					mapping.self = mapping
 					capture.mappings[owner.lookup] = mapping
 				}
@@ -115,7 +115,7 @@ func TestDomainPolicySyntheticTCPCaptureMappingCloseModelCancelsAndJoinsSocket(t
 	life, cancel := context.WithCancel(context.Background())
 	watchDone := make(chan struct{})
 	close(watchDone)
-	m := &DomainPolicyTCPCaptureMapping{ctx: life, cancel: cancel, connections: make(map[*net.TCPConn]struct{}), watchDone: watchDone, closeDone: make(chan struct{})}
+	m := &DomainPolicyTCPCaptureMapping{ctx: life, cancel: cancel, connections: make(map[*net.TCPConn]context.CancelFunc), watchDone: watchDone, closeDone: make(chan struct{})}
 	m.self = m
 	flowCtx, release, err := m.enterFlow(context.Background(), conn)
 	if err != nil {
@@ -132,6 +132,9 @@ func TestDomainPolicySyntheticTCPCaptureMappingCloseModelCancelsAndJoinsSocket(t
 	}
 	if flowCtx.Err() == nil {
 		t.Fatal("Close did not revoke flow")
+	}
+	if _, _, err := m.enterFlow(context.Background(), client); !errors.Is(err, ErrDomainPolicyTCPConsumer) {
+		t.Fatal("closing mapping admitted a new flow before join", err)
 	}
 	select {
 	case err := <-closed:
@@ -177,7 +180,7 @@ func TestDomainPolicySyntheticTCPCaptureFlowModelRetainsParentAuthorityAndBothRe
 			defer revokeParent()
 			watchDone := make(chan struct{})
 			close(watchDone)
-			m := &DomainPolicyTCPCaptureMapping{ctx: mappingCtx, cancel: revokeMapping, connections: make(map[*net.TCPConn]struct{}), watchDone: watchDone, closeDone: make(chan struct{})}
+			m := &DomainPolicyTCPCaptureMapping{ctx: mappingCtx, cancel: revokeMapping, connections: make(map[*net.TCPConn]context.CancelFunc), watchDone: watchDone, closeDone: make(chan struct{})}
 			m.self = m
 			flow, release, err := m.enterFlow(parent, conn)
 			if err != nil {
