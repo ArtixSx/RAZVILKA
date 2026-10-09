@@ -125,9 +125,6 @@ func syntheticBaselineExactPresence(rows []backendInventoryRow, plan PolicyEffec
 	chain := plan.Effects[0].Add[3]
 	counts := make([]int, len(plan.Effects))
 	for _, row := range rows {
-		if row.Family != 4 || row.Table != "nat" {
-			continue
-		}
 		t := row.Tokens
 		owned := len(t) > 1 && t[1] == chain
 		for n := 2; n+1 < len(t); n++ {
@@ -137,6 +134,9 @@ func syntheticBaselineExactPresence(rows []backendInventoryRow, plan PolicyEffec
 		}
 		if !owned {
 			continue
+		}
+		if row.Family != 4 || row.Table != "nat" {
+			return 0, ErrSyntheticBaselineTransition
 		}
 		actualKey, err := syntheticBaselineRuleKey(t)
 		if err != nil {

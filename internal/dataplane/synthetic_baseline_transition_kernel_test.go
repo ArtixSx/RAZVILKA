@@ -46,6 +46,15 @@ func TestSyntheticBaselineKernelExactWholeOwner(t *testing.T) {
 		t.Fatal("absent owner cannot prepare", count, err)
 	}
 	chain := plan.Effects[0].Add[3]
+	for _, row := range []backendInventoryRow{
+		{Family: 6, Table: "nat", Tokens: []string{"-N", chain}},
+		{Family: 4, Table: "mangle", Tokens: []string{"-A", "PREROUTING", "-j", chain}},
+	} {
+		bad := append(slices.Clone(rows), row)
+		if _, err := syntheticBaselineExactPresence(bad, plan, 0); err == nil {
+			t.Fatal("same owned namespace in a foreign family/table accepted")
+		}
+	}
 	for _, tokens := range [][]string{
 		{"-A", chain, "-j", "ACCEPT"},
 		{"-A", "FOREIGN", "-g", chain},
