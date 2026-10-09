@@ -3,6 +3,7 @@ package physicalscope
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -44,5 +45,45 @@ func TestPhysicalDiagnosticStagesKeepsExistingTraversalBound(t *testing.T) {
 	}
 	if stages := DiagnosticStages(errors.Join(wide...)); len(stages) > 64 {
 		t.Fatal("node limit widened", len(stages))
+	}
+}
+
+func TestPhysicalDiagnosticStagesKeepsPrimaryNotificationThroughJoinedCleanup(t *testing.T) {
+	private := &privateDiagnosticCause{}
+	var forward error = at("notifications.neighbor.delete", private)
+	for _, stage := range []string{"fence.notifications", "capture.initial.fence.before", "capture.initial.current", "verify.capture"} {
+		forward = boundary(stage, forward)
+	}
+	// App/COMMON wrappers are opaque to this package. They used to exhaust
+	// the depth limit before the original notification, while a shallower
+	// joined cleanup error misleadingly remained visible.
+	for range 20 {
+		forward = fmt.Errorf("opaque outer boundary: %w", forward)
+	}
+	joined := errors.Join(forward, at("retained.review.unavailable", nil))
+	want := []string{"verify.capture", "capture.initial.current", "capture.initial.fence.before", "fence.notifications", "notifications.neighbor.delete", "retained.review.unavailable"}
+	if got := DiagnosticStages(joined); !reflect.DeepEqual(got, want) {
+		t.Fatalf("original notification hidden by outer wrappers: %q", got)
+	}
+	if !errors.Is(joined, private) || !errors.Is(joined, ErrUnknown) {
+		t.Fatal("diagnostic extraction changed original causes")
+	}
+}
+
+type cyclicDiagnosticWrapper struct{}
+
+func (e *cyclicDiagnosticWrapper) Error() string { panic("formatted opaque cycle") }
+func (e *cyclicDiagnosticWrapper) Unwrap() error { return e }
+
+func TestPhysicalDiagnosticStagesBoundsOpaqueTraversal(t *testing.T) {
+	if got := DiagnosticStages(&cyclicDiagnosticWrapper{}); len(got) != 0 {
+		t.Fatal("opaque cycle supplied a private label")
+	}
+	var wrapped error = at("notifications.neighbor.delete", nil)
+	for range 64 {
+		wrapped = fmt.Errorf("opaque outer boundary: %w", wrapped)
+	}
+	if got := DiagnosticStages(wrapped); len(got) != 0 {
+		t.Fatal("node limit widened", got)
 	}
 }

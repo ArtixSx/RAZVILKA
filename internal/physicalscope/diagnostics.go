@@ -27,6 +27,9 @@ func (e *boundaryFailure) Error() string {
 // and exact context sentinels from an outer error chain. It never formats a
 // foreign cause or accepts caller text as a stage. This is diagnostic data,
 // not freshness, physical evidence or permission to retry a revoked Review.
+// Joined branches are flattened in traversal order, not a single call stack.
+// The 16-stage depth bound applies to closed physical labels; opaque outer
+// wrappers and the package's sentinel joins consume only the 64-node budget.
 func DiagnosticStages(err error) []string {
 	stages := []string{}
 	remaining := 64
@@ -39,22 +42,26 @@ func DiagnosticStages(err error) []string {
 		switch e := err.(type) {
 		case *boundaryFailure:
 			stages = append(stages, e.stage)
+			depth++
 		case *failure:
 			stages = append(stages, e.stage)
+			depth++
 		default:
 			if err == context.Canceled {
 				stages = append(stages, "context.canceled")
+				depth++
 			} else if err == context.DeadlineExceeded {
 				stages = append(stages, "context.deadline")
+				depth++
 			}
 		}
 		switch e := err.(type) {
 		case interface{ Unwrap() []error }:
 			for _, cause := range e.Unwrap() {
-				visit(cause, depth+1)
+				visit(cause, depth)
 			}
 		case interface{ Unwrap() error }:
-			visit(e.Unwrap(), depth+1)
+			visit(e.Unwrap(), depth)
 		}
 	}
 	visit(err, 0)
