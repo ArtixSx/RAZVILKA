@@ -55,6 +55,11 @@ func TestNativeStageFileReviewBeforeCurrentReviewPublication(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(job, "bundle", filepath.FromSlash(binaryName)), program, 0700); err != nil {
 		t.Fatal(err)
 	}
+	// Extracted files already exist; WriteFile's mode applies only on create.
+	// The real producer follows executable preflight, so reproduce that mode.
+	if err := os.Chmod(filepath.Join(job, "bundle", filepath.FromSlash(binaryName)), 0700); err != nil {
+		t.Fatal(err)
+	}
 	checksums := []byte(sha + "  " + u.record.Job.Release.Binary.Name + "\n")
 	if err := os.WriteFile(filepath.Join(job, "bundle/dist/SHA256SUMS"), checksums, 0600); err != nil {
 		t.Fatal(err)
