@@ -114,7 +114,10 @@ func (p *DomainPolicy) serveDomainPolicyTCPCapture(ctx context.Context, spec Dom
 	if err != nil {
 		return err
 	}
-	defer capture.Close()
+	// This terminal producer runs only after the original synchronous scope
+	// returns, including its ALL-handler WaitGroup. It then joins preparation,
+	// admitted mapping flows and watchers through the original capture.Close.
+	defer capture.completeRetirement()
 	return domainPolicyTCPSynchronousScope(ctx, func(consume func(context.Context) error) error {
 		return owner.WithCapture(ctx, spec, capture, consume)
 	}, func(captureCtx context.Context) error {

@@ -31,6 +31,7 @@ type DomainPolicyTCPCapture struct {
 	preparing    sync.WaitGroup
 	closeDone    chan struct{}
 	closeErr     error
+	retirement   *DomainPolicyTCPCaptureRetirement
 }
 
 func (*DomainPolicyTCPCapture) String() string   { return "[original synthetic TCP capture]" }
@@ -48,6 +49,7 @@ func newDomainPolicyTCPCapture(ctx context.Context, p *DomainPolicy, spec Domain
 	life, cancel := context.WithCancel(ctx)
 	c := &DomainPolicyTCPCapture{policy: p, spec: spec, owner: owner, xray: xray, listener: listener, ctx: life, cancel: cancel, mappings: make(map[*dnscontrol.SyntheticDNSMapping]*DomainPolicyTCPCaptureMapping), reservations: make(map[*dnscontrol.SyntheticDNSMapping]*domainPolicyTCPCapturePreparation), closeDone: make(chan struct{})}
 	c.self = c
+	c.retirement = newDomainPolicyTCPCaptureRetirement(c)
 	return c, nil
 }
 
@@ -197,9 +199,10 @@ func (c *DomainPolicyTCPCapture) matchesObservation(o dnscontrol.SyntheticDNSMap
 		o.RealIPv4 == s.Xray.RealIP && domainPolicyTCPPublicIPv4(o.RealIPv4) && domainPolicyTCPSyntheticPool.Contains(o.Synthetic) && !o.ExpiresAt.IsZero()
 }
 
-// Close drains this listener's consumers. The common coordinator removes
-// active proxy selectors BEFORE Close and retains NET standby DNAT afterwards.
-// This is never DNS-cache/conntrack settlement or complete Manager Stop.
+// Close closes the listener and joins preparation and admitted mapping flows.
+// The original retirement carrier additionally waits for ALL outer handlers.
+// The coordinator removes active selectors BEFORE Close and retains standby
+// DNAT afterwards. This is never cache/conntrack settlement or Manager Stop.
 func (c *DomainPolicyTCPCapture) Close() error {
 	if c == nil || c.self != c {
 		return ErrDomainPolicyTCPConsumer
