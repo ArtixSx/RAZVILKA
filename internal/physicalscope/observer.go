@@ -1,7 +1,8 @@
 // Package physicalscope observes selected physical LAN attachments. A detached
 // snapshot is a compilation binding; only its original, open Review retains
-// the kernel lifecycle fence. The observer performs no configuration writes,
-// network effects, registry merges, background reads or scheduling.
+// the kernel lifecycle fence. Its sole reader drains kernel notifications until
+// Review.Close joins it. The observer performs no configuration writes, network
+// effects, registry merges, polling of external services or scheduled actions.
 package physicalscope
 
 import (
