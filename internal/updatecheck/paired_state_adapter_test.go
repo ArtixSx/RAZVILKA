@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
@@ -360,6 +361,13 @@ func TestPairedReadersAllRefuseCorruptArchiveAndOrphanEvidence(t *testing.T) {
 }
 
 func TestPairedRetainedHistoryAllowsOnlyMatchingFuturePreparationWithReader4(t *testing.T) {
+	for _, state := range []string{"ready", "preparing"} {
+		t.Run(state, func(t *testing.T) { testPairedNextPreparation(t, state) })
+	}
+}
+
+func testPairedNextPreparation(t *testing.T, state string) {
+	t.Helper()
 	f := pairedReaderSetup(t)
 	f.accept(t)
 	if err := f.retire(t); err != nil {
@@ -403,6 +411,21 @@ func TestPairedRetainedHistoryAllowsOnlyMatchingFuturePreparationWithReader4(t *
 	f.updater.record.Job.CanApply = true
 	f.updater.record.ExecutableHash, f.updater.record.CurrentVersion = review.OldExecutableSHA256, review.OldVersion
 	saveStoppedReview(t, a, f.updater, review)
+	if state == "preparing" {
+		// This is the actual producer shape: prospective review and verified
+		// files exist in memory, before the review/digests are published.
+		if err := os.Remove(filepath.Join(newJob, "file-review.json")); err != nil {
+			t.Fatal(err)
+		}
+		f.updater.record.Job.State, f.updater.record.Job.Stage, f.updater.record.Job.Channel = "preparing", "preflight", "stable"
+		f.updater.record.Job.CanApply, f.updater.record.Job.CanCancel, f.updater.record.Job.ReviewToken = false, true, ""
+		f.updater.record.ParentPID = os.Getpid()
+		f.updater.record.FileReviewSHA256, f.updater.record.ExecutableHash, f.updater.record.Files = "", "", nil
+		f.updater.record.ConfigFingerprint = ConfigFingerprint(config.Config{Revision: review.Revision})
+		if err := f.updater.persistLocked(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := f.store.RetainedBinaryImages(f.ctx); !errors.Is(err, selfupdatejournal.ErrPending) {
 		t.Fatal("default fleet omitted a newly pending helper", err)
 	}

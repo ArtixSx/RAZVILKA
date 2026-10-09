@@ -520,7 +520,11 @@ func (a *SelfUpdateFileAdapter) requiredJournalReadVersion(ctx context.Context) 
 	if decodeFileProtocol(data, &current) != nil || current.Owner != updaterOwner || !jobIDPattern.MatchString(current.Job.ID) {
 		return 0, ErrFileProtocol
 	}
-	found := false
+	preparing, err := a.preparingHelper(ctx, current)
+	if err != nil {
+		return 0, err
+	}
+	found := preparing && current.Job.Stage == "metadata"
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
 			return 0, err
@@ -532,6 +536,13 @@ func (a *SelfUpdateFileAdapter) requiredJournalReadVersion(ctx context.Context) 
 			return 0, ErrFileProtocol
 		}
 		retained := entry.Name() != current.Job.ID
+		if !retained && preparing {
+			found = true
+			if required < selfUpdateProtocolSchema {
+				required = selfUpdateProtocolSchema
+			}
+			continue
+		}
 		record, review, err := a.loadBoundReview(ctx, entry.Name(), true, retained)
 		if err != nil {
 			return 0, err

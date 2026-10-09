@@ -306,6 +306,17 @@ func reviewedFileList(jobPath string, release Release, hashes map[string]string,
 }
 
 func stageFileReview(ctx context.Context, directory string, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), admission SelfUpdateEffectAdmission) (string, error) {
+	a := NewSelfUpdateFileAdapterWithAuthority(nil, admission)
+	a.directory = directory
+	return a.stageFileReview(ctx, record, authorityReview)
+}
+
+// Production and isolated native fixtures use this same producer sequence.
+// Only the fixed adapter roots differ; commands and capability readers do not.
+func (a *SelfUpdateFileAdapter) stageFileReview(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error)) (string, error) {
+	directory := a.directory
+	configRootPath := filepath.Join(a.installation, "etc/razvilka")
+	stateRootPath := filepath.Join(a.installation, "var/lib/razvilka")
 	if record.Job.Release == nil || !helperConfigMatches(record) {
 		return "", ErrReviewChanged
 	}
@@ -326,11 +337,11 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	}
 	jobPath := filepath.Join(directory, record.Job.ID)
 	binary := filepath.Join(jobPath, "bundle", "dist", record.Job.Release.Binary.Name)
-	requiredNodeReader, err := RequiredRetainedNodeHistoryReadVersion(ctx, "/opt/etc/razvilka", "/opt/var/lib/razvilka", validatedNodeHistoryRead)
+	requiredNodeReader, err := RequiredRetainedNodeHistoryReadVersion(ctx, configRootPath, stateRootPath, validatedNodeHistoryRead)
 	if err != nil {
 		return "", err
 	}
-	requiredComponentReader, componentSeal, err := components.InspectRetainedManagedUpdateReadVersion(ctx, "/opt/var/lib/razvilka/components")
+	requiredComponentReader, componentSeal, err := components.InspectRetainedManagedUpdateReadVersion(ctx, filepath.Join(stateRootPath, "components"))
 	if err != nil {
 		return "", err
 	}
@@ -381,7 +392,7 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	review := fileReview{Schema: selfUpdateProtocolSchema, ID: record.Job.ID, Revision: record.Job.ConfigRevision, OldConfigSHA256: digestBytes(old), MigratedConfigSHA256: digestBytes(staged), OldExecutableSHA256: record.ExecutableHash, OldVersion: record.CurrentVersion, NewVersion: record.Job.Release.Version, ReleaseID: record.Job.Release.ID}
 	review.AuthoritySequence = authority.Sequence
 	review.AuthorityInstallationID = authority.InstallationID
-	review.OldInitSHA256, err = hashRegularFile("/opt/etc/init.d/S99razvilka", 256<<10)
+	review.OldInitSHA256, err = hashRegularFile(filepath.Join(a.installation, "etc/init.d/S99razvilka"), 256<<10)
 	if err != nil {
 		return "", err
 	}
@@ -389,12 +400,10 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 		return "", err
 	}
 	review.Files = reviewedFileList(jobPath, *record.Job.Release, record.Files, review.MigratedConfigSHA256)
-	readerAdapter := NewSelfUpdateFileAdapterWithAuthority(nil, admission)
-	readerAdapter.directory = directory
 	// Nil proof is an explicit ineligible outcome for stopped settlement.
 	// Keeping the schema2 encoding unchanged lets the existing reader2 helper
 	// perform an ordinary live upgrade; it cannot write the new terminal3.
-	review.JournalReaders, err = readerAdapter.sealOptionalJournalReadersWithProbe(ctx, review, authorityReview, readerAdapter.probeJournalReader)
+	review.JournalReaders, err = a.sealOptionalJournalReadersWithProbe(ctx, review, authorityReview, a.probeJournalReader)
 	if err != nil {
 		return "", err
 	}
@@ -425,11 +434,11 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 	if !helperConfigMatches(record) {
 		return "", ErrReviewChanged
 	}
-	freshNodeReader, err := RequiredRetainedNodeHistoryReadVersion(ctx, "/opt/etc/razvilka", "/opt/var/lib/razvilka", validatedNodeHistoryRead)
+	freshNodeReader, err := RequiredRetainedNodeHistoryReadVersion(ctx, configRootPath, stateRootPath, validatedNodeHistoryRead)
 	if err != nil || freshNodeReader != requiredNodeReader {
 		return "", errors.Join(ErrReviewChanged, err)
 	}
-	freshComponentReader, freshComponentSeal, err := components.InspectRetainedManagedUpdateReadVersion(ctx, "/opt/var/lib/razvilka/components")
+	freshComponentReader, freshComponentSeal, err := components.InspectRetainedManagedUpdateReadVersion(ctx, filepath.Join(stateRootPath, "components"))
 	if err != nil || freshComponentReader != requiredComponentReader || freshComponentSeal != componentSeal {
 		return "", errors.Join(ErrReviewChanged, err)
 	}

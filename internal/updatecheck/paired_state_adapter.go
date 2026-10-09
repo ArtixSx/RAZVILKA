@@ -132,11 +132,15 @@ func (a *SelfUpdateFileAdapter) pairedHelperNamespace(ctx context.Context, recei
 	if readErr != nil || decodeFileProtocol(currentData, &current) != nil || current.Owner != updaterOwner || !jobIDPattern.MatchString(current.Job.ID) {
 		return ErrFileProtocol
 	}
+	preparing, err := a.preparingHelper(ctx, current)
+	if err != nil {
+		return err
+	}
 	if !terminalHelperState(current.Job.State) && !formatOnly && current.Job.ID != pendingID {
 		return selfupdatejournal.ErrPending
 	}
 	found := false
-	foundCurrent := false
+	foundCurrent := preparing && current.Job.Stage == "metadata"
 	for _, entry := range entries {
 		if entry.Name() == "current.json" {
 			continue
@@ -145,11 +149,14 @@ func (a *SelfUpdateFileAdapter) pairedHelperNamespace(ctx context.Context, recei
 			return ErrFileProtocol
 		}
 		isCurrent := entry.Name() == current.Job.ID
-		if !fileIDs[entry.Name()] && !(isCurrent && (current.Job.State == "ready" || current.Job.State == "installing") && (formatOnly || pendingID == current.Job.ID)) {
+		if !fileIDs[entry.Name()] && !(isCurrent && (current.Job.State == "ready" || current.Job.State == "installing" || preparing) && (formatOnly || pendingID == current.Job.ID)) {
 			return ErrFileProtocol
 		}
 		if isCurrent {
 			foundCurrent = true
+			if preparing {
+				continue
+			}
 		}
 		if entry.Name() == receipt.ID {
 			found = true

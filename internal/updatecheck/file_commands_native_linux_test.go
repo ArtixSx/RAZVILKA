@@ -29,6 +29,39 @@ type nativeFileProfile struct {
 }
 
 func TestMain(m *testing.M) {
+	if len(os.Args) == 2 {
+		value := ""
+		switch os.Args[1] {
+		case "-self-update-schema":
+			value = "2"
+		case "-component-update-schema", "-node-history-read-version":
+			value = "3"
+		case "-native-enrollment-schema", "-subscription-schema":
+			value = "1"
+		}
+		if value != "" {
+			fmt.Println(value)
+			os.Exit(0)
+		}
+	}
+	if len(os.Args) > 1 && os.Args[1] == "-migrate-config" {
+		configPath := ""
+		for i := 2; i+1 < len(os.Args); i++ {
+			if os.Args[i] == "-config" {
+				configPath = os.Args[i+1]
+			}
+		}
+		// Fixture migration changes formatting only. This runs the actual
+		// child and producer; it is not real-version migration acceptance.
+		if !filepath.IsAbs(configPath) || filepath.Base(filepath.Dir(configPath)) != "staged" {
+			os.Exit(98)
+		}
+		data, err := os.ReadFile(configPath)
+		if err != nil || !json.Valid(data) || os.WriteFile(configPath, append(data, '\n'), 0600) != nil {
+			os.Exit(98)
+		}
+		os.Exit(0)
+	}
 	// Readonly probe CLI of the copied test image, not actual HTTP health.
 	if len(os.Args) == 2 && os.Args[1] == "-version" {
 		if binary, err := os.Executable(); err == nil && filepath.Base(binary) == "live-probe-hold.bin" {
