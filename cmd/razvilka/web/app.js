@@ -261,6 +261,7 @@ function renderAuthBusy() {
 
 function invalidateAuthAction() {
   state.authGeneration = (state.authGeneration || 0) + 1;
+  state.applyRequest?.cancel?.();
   state.authAction = null;
   renderAuthBusy();
 }
@@ -287,6 +288,7 @@ function showAuth(status, message = '') {
   if (typeof invalidatePanelReads === 'function') invalidatePanelReads();
   // Also fence authentication responses, which do not use interfaceRequest.
   state.authGeneration = (state.authGeneration || 0) + 1;
+  state.applyRequest?.cancel?.();
   state.authAction = null;
   if (typeof renderAuthBusy === 'function') renderAuthBusy();
   state.authenticated = false;
@@ -4588,12 +4590,11 @@ function openNodeServiceSection(id) {
 
 async function applyDraft(scope = 'all', engineID = '', options = {}) {
   const auth = state.authGeneration || 0;
-  const current = () => auth === (state.authGeneration || 0) && !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
+  const controller = new AbortController();
+  const current = () => auth === (state.authGeneration || 0) && !controller.signal.aborted && !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
   if (!current() || state.applyRequest) return null;
   const progress = scope === 'engine' && typeof engineProgressBinding === 'function' ? engineProgressBinding(engineID, state.selectedEngineFile || 'main') : null;
   let awaitingReview = false;
-  const closeCanceledReview = () => { if (awaitingReview && $('#applyReviewDialog').open) $('#applyReviewDialog').close(); };
-  options.signal?.addEventListener('abort', closeCanceledReview, { once: true });
   const buttons = scope === 'routing'
     ? [$('#applyChanges'), $('#applyServiceChanges'), $('#applyDeviceChanges')]
     : scope === 'services'
@@ -4606,9 +4607,22 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
   const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}${engineID ? `&engine=${encodeURIComponent(engineID)}` : ''}`;
   const request = state.applyRequest = { auth, phase: 'plan', buttons };
   const labels = buttons.map(button => button.textContent);
+  const closeCanceledReview = () => { if (state.applyRequest === request && awaitingReview && $('#applyReviewDialog').open) $('#applyReviewDialog').close(''); };
+  const abort = () => controller.abort();
+  // Revoke only this session's UI ownership. Aborting an unknown POST is not
+  // proof of rollback and must never resume or replay it in the next session.
+  request.cancel = () => {
+    if (state.applyRequest !== request) return;
+    controller.abort();
+    options.signal?.removeEventListener('abort', abort);
+    state.applyRequest = null;
+    buttons.forEach((button,index) => { button.disabled = false; button.textContent = labels[index]; });
+  };
+  controller.signal.addEventListener('abort', closeCanceledReview, { once: true });
+  options.signal?.addEventListener('abort', abort, { once: true });
   buttons.forEach((b) => { b.disabled = true; b.textContent = 'Проверка…'; });
   try {
-    const preview = options.preview || await planWithRetainedNodeCheck(query, { signal: options.signal, isCurrent: current });
+    const preview = options.preview || await planWithRetainedNodeCheck(query, { signal: controller.signal, isCurrent: current });
     if (!current()) return null;
     const review = preview.review;
     if (!Number.isSafeInteger(review?.expected_revision) || typeof review?.reviewed_digest !== 'string' || !review.reviewed_digest) throw new Error('Откройте новый просмотр изменений: подтверждение плана отсутствует.');
@@ -4628,14 +4642,14 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
     if (!current()) return null;
     request.phase = 'apply';
     buttons.forEach((b) => { b.textContent = 'Применение…'; });
-    const result = await api(`/api/v1/apply${query}`, { method: 'POST', signal: options.signal, body: JSON.stringify({ expected_revision: review.expected_revision, reviewed_digest: review.reviewed_digest }) });
+    const result = await api(`/api/v1/apply${query}`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ expected_revision: review.expected_revision, reviewed_digest: review.reviewed_digest }) });
     if (!current()) return null;
     request.phase = 'readback';
     await refreshCoreAfterEdit();
     if (!current()) return null;
     await refreshEngineConfigs(options.engineIntent || null);
     if (!current()) return null;
-    await showPlan({ signal: options.signal, isCurrent: current });
+    await showPlan({ signal: controller.signal, isCurrent: current });
     if (!current()) return null;
     if (typeof engineProgressApply === 'function') engineProgressApply(progress, preview, result);
     if (result.safe_mode === true && result.reviewed === true && result.live_applied !== true) {
@@ -4670,14 +4684,16 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
 	    showNotice('error', 'Применение заблокировано', error.payload?.note || error.message, error.payload || { error: error.message }, true);
 	  }
 	}
-	if (request.phase === 'apply' || request.phase === 'readback') await showPlan({ signal: options.signal, isCurrent: current });
+	if (request.phase === 'apply' || request.phase === 'readback') await showPlan({ signal: controller.signal, isCurrent: current });
   } finally {
-    options.signal?.removeEventListener('abort', closeCanceledReview);
-    if (state.applyRequest === request) {
+    options.signal?.removeEventListener('abort', abort);
+    controller.signal.removeEventListener('abort', closeCanceledReview);
+    const ownsUI = state.applyRequest === request;
+    if (ownsUI) {
       state.applyRequest = null;
       buttons.forEach((button,index) => { button.disabled = false; button.textContent = labels[index]; });
     }
-    if (current()) {
+    if (ownsUI && current()) {
       buttons.forEach((button) => { button.disabled = false; });
       renderStatus();
       if (scope === 'engine') $('#engineApplyConfig').textContent = 'Проверить и применить';

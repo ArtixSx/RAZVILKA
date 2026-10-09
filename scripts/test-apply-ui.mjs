@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const source=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
 const extract=name=>{const match=source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];};
-const functions=['api','friendlyErrorMessage','panelReadContext','panelReadContextCurrent','invalidatePanelReads','readPanelResource','planWithRetainedNodeCheck','applyDraft','showPlan','renderStatus'].map(extract).join('\n');
+const functions=['api','friendlyErrorMessage','panelReadContext','panelReadContextCurrent','invalidatePanelReads','readPanelResource','renderAuthBusy','showAuth','hideAuth','planWithRetainedNodeCheck','applyDraft','showPlan','renderStatus'].map(extract).join('\n');
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const preview=()=>({review:{expected_revision:12,reviewed_digest:'exact-reviewed-digest'},transaction:{ready:true,blockers:[],actions:[],routes:[]}});
@@ -15,19 +15,22 @@ function fixture(){
   let now=0,serial=0,handler=async(path,options)=>options.method==='POST'?committed():preview();
   let review=async()=>true,refresh=async()=>{};
   const elements=new Map(),calls=[],notices=[],timers=new Map(),auth=[];
-  const $=id=>{if(!elements.has(id))elements.set(id,{value:'visible dirty form',textContent:'Apply',innerHTML:'',disabled:false,hidden:true,open:false,classList:{toggle(){}},close(){this.open=false;this.onClose?.();}});return elements.get(id);};
-  const state={authGeneration:0,status:{revision:12,safe_mode:false,pending_changes:true},engineEditorDirty:true,currentView:'settings'};
-  const c={state,$,Headers,AbortController,Number,JSON,Object,Promise,Map,Set,encodeURIComponent,
+  const document=Object.assign(new EventTarget(),{activeElement:null});
+  const $=id=>{if(!elements.has(id))elements.set(id,Object.assign(new EventTarget(),{value:'visible dirty form',textContent:'Apply',innerHTML:'',disabled:false,hidden:true,open:false,returnValue:'',classList:{toggle(){},remove(){}},
+    close(value=''){this.open=false;this.returnValue=value;this.dispatchEvent(new Event('close'));this.onClose?.();},showModal(){this.open=true;},
+    contains(element){return element===this;},focus(){document.activeElement=this;},blur(){document.activeElement=null;},setAttribute(){},removeAttribute(){}}));return elements.get(id);};
+  const state={authGeneration:0,authenticated:true,status:{revision:12,safe_mode:false,pending_changes:true},engineEditorDirty:true,currentView:'settings'};
+  const c={state,$,$$:()=>[],document,Event,Headers,AbortController,Number,JSON,Object,Promise,Map,Set,encodeURIComponent,
     Date:class extends Date{static now(){return now;}},ADMIN_TOKEN_KEY:'unit',sessionStorage:{getItem:()=>null},panelReads:{epoch:0,entries:new Map()},
     setTimeout(fn,ms){timers.set(++serial,{fn,at:now+ms,ms});return serial;},clearTimeout(id){timers.delete(id);},
     fetch:async(path,options)=>{calls.push({path,options});const value=await handler(path,options);return {ok:true,json:async()=>value};},
     retainedNodeDependency:()=>null,checkRetainedNodeRoute:async()=>{},needsApplyReview:()=>true,reviewApplyPlan:value=>review(value),
     refreshCoreAfterEdit:()=>refresh(),refreshEngineConfigs:async()=>{},fallbackLabels:{},
     showNotice:(...args)=>notices.push(args),showRouteDependencyNotice:error=>notices.push(['error','dependency',error.message]),
-    showAuth(_status,message){auth.push(message);state.authGeneration++;state.authenticated=false;c.invalidatePanelReads();},
     nodeActivityActive:()=>false,evidenceAtLeast:()=>false,evidenceLevelLabel:value=>value||'none',esc:String,
     formatUptime:()=>'',renderPendingServiceChanges(){},pendingChangeViews:()=>[],
   };
+  document.addEventListener('razvilka:auth-required',event=>auth.push(event.type));
   vm.createContext(c);vm.runInContext(functions,c);
   return {c,state,$,calls,notices,timers,auth,handler(fn){handler=fn;},review(fn){review=fn;},refresh(fn){refresh=fn;},
     async advance(ms){now+=ms;for(const [id,timer] of [...timers])if(timer.at<=now){timers.delete(id);timer.fn();}await flush();}};
@@ -96,6 +99,40 @@ await test('late plan review or Apply response from a former auth generation can
     assert.equal(posts(f).length,phase==='apply'?1:0);assert.equal(successful(f).length,0);assert.equal(f.notices.length,0);assert.equal(f.state.applyRequest,null);assert.equal(f.$('#applySettings').disabled,false);assert.equal(f.state.engineEditorDirty,true);
   }
 });
+await test('new auth releases old pending Plan or POST ownership and late old finally cannot enable new controls',async()=>{
+  for(const phase of ['plan','review','apply','readback']){
+    const f=fixture(),oldResponse=deferred(),newPlan=deferred();
+    f.handler((_path,options)=>phase==='plan'&&options.method==='GET'?oldResponse.promise:phase==='apply'&&options.method==='POST'?oldResponse.promise:options.method==='POST'?committed():preview());
+    if(phase==='review')f.review(()=>{f.$('#applyReviewDialog').open=true;return oldResponse.promise;});
+    if(phase==='readback')f.refresh(()=>oldResponse.promise);
+    const oldPending=f.c.applyDraft();await flush();const oldOwner=f.state.applyRequest,oldCalls=f.calls.length;
+    const oldSignal=f.calls.find(call=>call.options.method===(phase==='apply'?'POST':'GET')).options.signal;
+    f.c.showAuth(f.state.status,'session closed');
+    assert.equal(f.state.applyRequest,null,'old pending Apply still owns the UI after actual showAuth');
+    if(phase==='plan'||phase==='apply')assert.equal(oldSignal.aborted,true);
+    assert.equal(f.$('#applySettings').disabled,false);assert.equal(successful(f).length,0);
+    f.c.hideAuth();f.review(async()=>true);f.refresh(async()=>{});f.handler((_path,options)=>options.method==='POST'?{ok:true}:newPlan.promise);
+    const newPending=f.c.applyDraft();await flush();const newOwner=f.state.applyRequest;
+    assert.ok(newOwner);assert.notEqual(newOwner,oldOwner);assert.equal(f.calls.length,oldCalls+1);assert.equal(f.calls.at(-1).options.method,'GET');
+    assert.equal(posts(f).length,phase==='plan'||phase==='review'?0:1,'auth restoration replayed an unknown POST');
+    oldResponse.resolve(phase==='plan'?preview():phase==='review'?true:phase==='apply'?committed():undefined);await oldPending;
+    assert.equal(f.state.applyRequest,newOwner);assert.equal(f.$('#applySettings').disabled,true);assert.equal(f.$('#applySettings').textContent,'Проверка…');
+    assert.equal(f.calls.at(-1).options.signal.aborted,false);assert.equal(successful(f).length,0);assert.equal(f.state.engineEditorDirty,true);
+    const fresh={...preview(),review:{expected_revision:13,reviewed_digest:'new-session-reviewed-digest'}};
+    newPlan.resolve(fresh);await newPending;
+    assert.deepEqual(JSON.parse(posts(f).at(-1).options.body),fresh.review);assert.equal(posts(f).length,phase==='plan'||phase==='review'?1:2);
+    assert.equal(successful(f).length,0);assert.equal(f.state.applyRequest,null);
+  }
+});
+await test('actual auth lifecycle closes an old Apply review without approving or closing the next review',async()=>{
+  const f=fixture(),caller=new AbortController();vm.runInContext(extract('reviewApplyPlan'),f.c);
+  const oldPending=f.c.applyDraft('all','',{signal:caller.signal});await flush();assert.equal(f.$('#applyReviewDialog').open,true);
+  f.c.showAuth(f.state.status,'session closed');assert.equal(f.$('#applyReviewDialog').open,false);assert.equal(f.state.applyRequest,null);
+  f.c.hideAuth();const newPending=f.c.applyDraft();await flush();const newOwner=f.state.applyRequest;
+  assert.ok(newOwner);assert.equal(f.$('#applyReviewDialog').open,true);assert.equal(posts(f).length,0);
+  await oldPending;caller.abort();await flush();assert.equal(f.$('#applyReviewDialog').open,true);assert.equal(f.state.applyRequest,newOwner);assert.equal(f.$('#applySettings').disabled,true);
+  f.$('#applyReviewDialog').close('');await newPending;assert.equal(posts(f).length,0);assert.equal(successful(f).length,0);
+});
 await test('caller cancellation closes pending review and sends no Apply',async()=>{
   const f=fixture(),waiting=deferred(),controller=new AbortController();
   f.review(()=>{f.$('#applyReviewDialog').open=true;f.$('#applyReviewDialog').onClose=()=>waiting.resolve(false);return waiting.promise;});
@@ -139,7 +176,7 @@ await test('ordinary plan and Apply 401 use the existing auth flow without conti
   for(const phase of ['plan','apply','passive']){
     const f=fixture();f.handler((_path,options)=>{if(phase!=='apply'||options.method==='POST')throw Object.assign(new Error('login required'),{status:401});return preview();});
     if(phase==='passive')await f.c.showPlan();else await f.c.applyDraft();
-    assert.deepEqual(f.auth,['login required']);assert.equal(successful(f).length,0);assert.equal(posts(f).length,phase==='apply'?1:0);assert.equal(f.state.authenticated,false);assert.equal(f.state.applyRequest??null,null);
+    assert.deepEqual(f.auth,['razvilka:auth-required']);assert.equal(f.$('#authMessage').textContent,'login required');assert.equal(successful(f).length,0);assert.equal(posts(f).length,phase==='apply'?1:0);assert.equal(f.state.authenticated,false);assert.equal(f.state.applyRequest??null,null);
   }
 });
 console.log(JSON.stringify({suite:'ordinary-apply-ui',mode:'production-functions-no-runtime',passed}));
