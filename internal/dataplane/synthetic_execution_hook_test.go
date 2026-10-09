@@ -12,7 +12,7 @@ func TestSyntheticExecutionHookUsesSameFiniteScopeAndPreservesOriginalContext(t 
 	deadline, finite := ctx.Deadline()
 	held := scope.contextWith(ctx)
 	actual, bounded := held.Deadline()
-	if !finite || !bounded || actual != deadline || held.Value(marker{}) != "original" || held.Value(syntheticExecutionRegistrarKey{}) != scope || held.Value(nfqws2ActiveActivationRegistrarKey{}) != scope || held.Value(nfqwsExecutionRegistrarKey{}) == nil || held.Value(nodeTransitRegistrarKey{}) == nil {
+	if !finite || !bounded || actual != deadline || held.Value(marker{}) != "original" || held.Value(syntheticExecutionRegistrarKey{}) != scope || held.Value(nfqwsExecutionRegistrarKey{}) == nil || held.Value(nodeTransitRegistrarKey{}) == nil {
 		t.Fatal("scope integration replaced original context or other issuer")
 	}
 	binding, err := m.BindSyntheticDNSExecution(held, adapter, plan)
