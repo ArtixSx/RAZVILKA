@@ -316,9 +316,30 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 		}
 		domain = "nfqws-scoped-selected-v1\x00"
 	}
+	direct := p.lan.Mode == LANPolicyNFQWSDirectMode
+	if direct {
+		if len(p.spec.Matches) == 0 {
+			return nil, ErrNFQWSScopedOwner
+		}
+		if _, err := expected.FrozenLAN(); err != nil {
+			return nil, err
+		}
+		domain = "nfqws-scoped-direct-selected-v1\x00"
+	}
 	nameHash := routeidentity.Hash(append([]byte(domain), data...))
+	families := []int{4, 6}
+	if direct {
+		p.chains, err = nfqwsScopedDirectChains(p.lan, p.spec, nameHash)
+		if err != nil {
+			return nil, err
+		}
+		for _, chain := range p.chains {
+			p.resources.Chains = append(p.resources.Chains, chain.name)
+		}
+		families = nil
+	}
 	seen := map[string]bool{}
-	for _, family := range []int{4, 6} {
+	for _, family := range families {
 		c := nfqwsScopedChain{tool: PolicyEffectIPTables, name: fmt.Sprintf("RZQ_%s_%d", nameHash[:18], family)}
 		if family == 6 {
 			c.tool = PolicyEffectIP6Tables

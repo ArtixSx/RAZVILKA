@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -153,7 +154,7 @@ func nfqwsScopedRuleKey(fields []string) string {
 		}
 		key, value := fields[i], fields[i+1]
 		if key == "-m" {
-			if value != "mark" && value != "tcp" && value != "udp" || modules[value] {
+			if value != "mark" && value != "tcp" && value != "udp" && value != "mac" || modules[value] {
 				return unknown
 			}
 			modules[value] = true
@@ -173,10 +174,19 @@ func nfqwsScopedRuleKey(fields []string) string {
 			}
 		case "-s", "-d", "--mark":
 			value = strings.Split(lanClassifierChainKey([]string{key, value}), " ")[1]
+		case "--mac-source":
+			mac, err := net.ParseMAC(value)
+			if err != nil || len(mac) != 6 || mac[0]&1 != 0 || mac.String() == "00:00:00:00:00:00" || !strings.EqualFold(value, mac.String()) {
+				return unknown
+			}
+			value = strings.ToUpper(mac.String())
 		default:
 			return unknown
 		}
 		values[key] = value
+	}
+	if modules["mac"] != (values["--mac-source"] != "") {
+		return unknown
 	}
 	keys := make([]string, 0, len(values))
 	for key := range values {
