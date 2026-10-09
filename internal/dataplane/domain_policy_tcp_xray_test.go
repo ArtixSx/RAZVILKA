@@ -16,6 +16,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 )
 
 // These are source/socket MODELS. NodeStore eligibility, Manager resource,
@@ -26,6 +27,8 @@ type syntheticTCPModelOwner struct {
 	lease      *syntheticTCPModelLease
 	processErr error
 	admitted   atomic.Int32
+	prepared   atomic.Int32
+	lookup     *dnscontrol.SyntheticDNSMapping
 }
 
 func (o *syntheticTCPModelOwner) WithTCPProcess(ctx context.Context, _ ProcessSpec, _ string, consume func(context.Context) error) error {
@@ -39,8 +42,25 @@ func (o *syntheticTCPModelOwner) CheckTCPProcess(ctx context.Context, _ ProcessS
 	return errors.Join(ctx.Err(), o.processErr)
 }
 
-func (o *syntheticTCPModelOwner) WithCapture(context.Context, DomainPolicyTCPCaptureSpec, netip.AddrPort, func(context.Context) error) error {
+func (o *syntheticTCPModelOwner) WithCapture(context.Context, DomainPolicyTCPCaptureSpec, *DomainPolicyTCPCapture, func(context.Context) error) error {
 	return ErrDomainPolicyTCPConsumer // no native selector/transition in this model
+}
+
+func (o *syntheticTCPModelOwner) CheckCapture(ctx context.Context, _ *DomainPolicyTCPCapture) error {
+	return ctx.Err()
+}
+func (o *syntheticTCPModelOwner) PrepareSyntheticCapture(context.Context, *DomainPolicyTCPCapture, *dnscontrol.SyntheticDNSMapping) error {
+	o.prepared.Add(1)
+	return ErrDomainPolicyTCPConsumer
+}
+func (o *syntheticTCPModelOwner) CurrentSyntheticCapture(context.Context, *DomainPolicyTCPCapture, *dnscontrol.SyntheticDNSMapping) error {
+	return ErrDomainPolicyTCPConsumer
+}
+func (o *syntheticTCPModelOwner) LookupPublished(context.Context, netip.Addr, netip.Addr) (*dnscontrol.SyntheticDNSMapping, error) {
+	if o.lookup != nil {
+		return o.lookup, nil
+	}
+	return nil, ErrDomainPolicyTCPConsumer
 }
 
 func (o *syntheticTCPModelOwner) AdmitTCP(context.Context, DomainPolicyTCPSocket) (DomainPolicyTCPFlowLease, error) {
@@ -49,15 +69,15 @@ func (o *syntheticTCPModelOwner) AdmitTCP(context.Context, DomainPolicyTCPSocket
 }
 
 type syntheticTCPModelLease struct {
-	mapping  DomainPolicyTCPSyntheticMapping
+	mapping  domainPolicyTCPSyntheticMapping
 	policy   *DomainPolicy
 	guard    func(int32) error
 	calls    atomic.Int32
 	leaseCtx context.Context
 }
 
-func (l *syntheticTCPModelLease) Binding() (DomainPolicyTCPSyntheticMapping, string) {
-	return l.mapping, "model-flow-original-1"
+func (l *syntheticTCPModelLease) Binding() (*dnscontrol.SyntheticDNSMapping, string) {
+	return nil, "model-flow-original-1" // this byte/backend fixture has no original DNS producer
 }
 
 func (l *syntheticTCPModelLease) Guard(ctx context.Context, _ DomainPolicyTCPSocket) (autonomy.ScopeObservation, error) {
@@ -85,9 +105,9 @@ func syntheticTCPModelFixture(t *testing.T) (*scopedXrayFixture, *DomainPolicy, 
 	p.scope.ObservedAt, p.scope.FreshUntil = now.Add(-time.Second), now.Add(time.Minute)
 	p.services[0].ID = "telegram"
 	p.services[0].Route = f.plan.Routes[0].Resolved
-	s := DomainPolicyTCPCaptureSpec{Client: original.Client, Listen: netip.MustParseAddrPort("192.168.1.1:18091"), Limits: DomainPolicySniffLimits{Bytes: 16 << 10, Timeout: 100 * time.Millisecond},
+	s := DomainPolicyTCPCaptureSpec{Client: original.Client, DeviceID: "selected", Listen: netip.MustParseAddrPort("192.168.1.1:18091"), Limits: DomainPolicySniffLimits{Bytes: 16 << 10, Timeout: 100 * time.Millisecond},
 		Xray: DomainPolicyTCPXraySpec{Generation: p.generation, NetworkProfile: executionNetwork, ServiceID: "telegram", NodeID: f.plan.Routes[0].Resolved[5:], Name: "service.example.com", RealIP: original.Destination}}
-	m := DomainPolicyTCPSyntheticMapping{Generation: p.generation, PublicationID: "model-possibly-issued-1", Name: s.Xray.Name, ServiceID: s.Xray.ServiceID, NodeID: s.Xray.NodeID, Client: original.Client,
+	m := domainPolicyTCPSyntheticMapping{Generation: p.generation, PublicationID: "model-possibly-issued-1", Name: s.Xray.Name, ServiceID: s.Xray.ServiceID, NodeID: s.Xray.NodeID, Client: original.Client,
 		SyntheticIP: netip.MustParseAddr("198.18.0.17"), RealIP: s.Xray.RealIP, ExpiresAt: now.Add(time.Minute)}
 	o := &syntheticTCPModelOwner{lease: &syntheticTCPModelLease{mapping: m, policy: p}}
 	if !s.valid() {
@@ -96,8 +116,34 @@ func syntheticTCPModelFixture(t *testing.T) (*scopedXrayFixture, *DomainPolicy, 
 	return f, p, s, o
 }
 
-func syntheticTCPModelSocket(s DomainPolicyTCPCaptureSpec, m DomainPolicyTCPSyntheticMapping, port uint16) DomainPolicyTCPSocket {
+func syntheticTCPModelSocket(s DomainPolicyTCPCaptureSpec, m domainPolicyTCPSyntheticMapping, port uint16) DomainPolicyTCPSocket {
 	return DomainPolicyTCPSocket{Source: netip.AddrPortFrom(s.Client.Address, 32123), OriginalDestination: netip.AddrPortFrom(m.SyntheticIP, port), Listener: s.Listen}
+}
+
+// Byte/backend MODEL only. It constructs a private test comparison seal and
+// exercises HandleTCP + actual numeric SOCKS. It does NOT call the production
+// capture handler, prepare an original DNS mapping or grant publication.
+func syntheticTCPBytesBackendModel(p *DomainPolicy, ctx context.Context, conn *net.TCPConn, spec DomainPolicyTCPCaptureSpec, owner *syntheticTCPModelOwner, xray *DomainPolicyTCPXray, observe func(*net.TCPConn) (DomainPolicyTCPSocket, error)) (DomainPolicyDecision, error) {
+	socket, err := observe(conn)
+	if err != nil {
+		_ = conn.Close()
+		return DomainPolicyDecision{Kind: "refused"}, err
+	}
+	mapping := owner.lease.mapping
+	b := &domainPolicyTCPSyntheticBinding{mapping: mapping, socket: socket, spec: spec.Xray}
+	flow := DomainPolicyTCPFlow{Generation: mapping.Generation, FlowID: "bytes-backend-model-only", Source: socket.Source, Destination: socket.OriginalDestination, Client: mapping.Client, synthetic: b}
+	runtime := DomainPolicyTCPRuntime{Limits: spec.Limits, Dial: xray.dial,
+		Guard: func(c context.Context, _ DomainPolicyTCPFlow) (autonomy.ScopeObservation, error) {
+			if !time.Now().Before(mapping.ExpiresAt) {
+				return autonomy.ScopeObservation{}, ErrDomainPolicyTCPConsumer
+			}
+			return owner.lease.Guard(c, socket)
+		},
+		Lease: func(c context.Context, _ DomainPolicyTCPFlow, _ DomainPolicyDecision, forward func(context.Context) error) error {
+			return owner.lease.WithFlow(c, socket, forward)
+		},
+	}
+	return p.HandleTCP(ctx, conn, flow, runtime)
 }
 
 func syntheticTCPModelSOCKS(t *testing.T, f *scopedXrayFixture, target netip.AddrPort) (<-chan []byte, <-chan error, *atomic.Int32) {
@@ -166,7 +212,7 @@ func TestDomainPolicySyntheticTCPModelActualHTTPAndTLSNumericSOCKS(t *testing.T)
 				client, capture := domainPolicyTCPPair(t)
 				done := make(chan error, 1)
 				go func() {
-					d, err := p.handleCapturedDomainPolicyTCP(ctx, capture, spec, owner, xray, func(*net.TCPConn) (DomainPolicyTCPSocket, error) { return socket, nil })
+					d, err := syntheticTCPBytesBackendModel(p, ctx, capture, spec, owner, xray, func(*net.TCPConn) (DomainPolicyTCPSocket, error) { return socket, nil })
 					if d.Kind != "service" || d.Route != p.services[0].Route {
 						t.Errorf("actual bytes did not select reviewed route: %+v", d)
 					}
@@ -232,7 +278,7 @@ func TestDomainPolicySyntheticTCPModelCaptureRefusals(t *testing.T) {
 				client, capture := domainPolicyTCPPair(t)
 				done := make(chan DomainPolicyDecision, 1)
 				go func() {
-					d, _ := p.handleCapturedDomainPolicyTCP(ctx, capture, spec, owner, xray, func(*net.TCPConn) (DomainPolicyTCPSocket, error) { return socket, nil })
+					d, _ := syntheticTCPBytesBackendModel(p, ctx, capture, spec, owner, xray, func(*net.TCPConn) (DomainPolicyTCPSocket, error) { return socket, nil })
 					done <- d
 				}()
 				_, _ = client.Write(payload)
@@ -410,7 +456,7 @@ func TestDomainPolicySyntheticTCPModelLeaseRevocationClosesAndJoins(t *testing.T
 		client, capture := domainPolicyTCPPair(t)
 		done := make(chan error, 1)
 		go func() {
-			_, err := p.handleCapturedDomainPolicyTCP(ctx, capture, spec, owner, xray, func(*net.TCPConn) (DomainPolicyTCPSocket, error) { return socket, nil })
+			_, err := syntheticTCPBytesBackendModel(p, ctx, capture, spec, owner, xray, func(*net.TCPConn) (DomainPolicyTCPSocket, error) { return socket, nil })
 			done <- err
 		}()
 		_, _ = client.Write([]byte("GET / HTTP/1.1\r\nHost: service.example.com\r\n\r\n"))

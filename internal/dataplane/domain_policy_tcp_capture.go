@@ -11,6 +11,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
@@ -26,21 +27,20 @@ func domainPolicyTCPPublicIPv4(ip netip.Addr) bool {
 // original Manager/NET owner must provide the live interfaces, not a JSON
 // receipt, reconstructed tuple, DNS observation or caller-provided Ready flag.
 type DomainPolicyTCPCaptureSpec struct {
-	Xray   DomainPolicyTCPXraySpec
-	Client autonomy.ClientPacket
-	Listen netip.AddrPort
-	Limits DomainPolicySniffLimits
+	Xray     DomainPolicyTCPXraySpec
+	Client   autonomy.ClientPacket
+	DeviceID string
+	Listen   netip.AddrPort
+	Limits   DomainPolicySniffLimits
 }
 
 type DomainPolicyTCPSocket struct {
 	Source, OriginalDestination, Listener netip.AddrPort
 }
 
-// Comparison image returned by the original flow owner. It cannot construct
-// NET's original DNS mapping or its prepared transition/capture handle. The
-// shared production coordinator must bind those original objects separately;
-// no implementation or publication capability is installed by this leaf.
-type DomainPolicyTCPSyntheticMapping struct {
+// Private numeric/name comparison derived from the held original NET mapping
+// after admission. It cannot construct a source, prepared handle or flow lease.
+type domainPolicyTCPSyntheticMapping struct {
 	Generation, PublicationID, Name, ServiceID, NodeID string
 	Client                                             autonomy.ClientPacket
 	SyntheticIP, RealIP                                netip.Addr
@@ -54,7 +54,7 @@ type DomainPolicyTCPSyntheticMapping struct {
 // and join these leases before retiring Xray; NET retains the standby DNAT
 // until its separate cache/conntrack settlement proves cleanup permissible.
 type DomainPolicyTCPFlowLease interface {
-	Binding() (DomainPolicyTCPSyntheticMapping, string)
+	Binding() (*dnscontrol.SyntheticDNSMapping, string)
 	Guard(context.Context, DomainPolicyTCPSocket) (autonomy.ScopeObservation, error)
 	WithFlow(context.Context, DomainPolicyTCPSocket, func(context.Context) error) error
 }
@@ -64,8 +64,14 @@ type DomainPolicyTCPFlowLease interface {
 // synchronously. It cannot publish DNS merely from listener readiness. AdmitTCP
 // binds the actual accepted tuple to the original MAC/iif and transition owner.
 // No production implementation is inferred when that integration is absent.
+// PrepareSyntheticCapture/CurrentSyntheticCapture are lower original kernel
+// operations; they must not call the final DNS publication Current combiner.
 type DomainPolicyTCPCaptureOwner interface {
-	WithCapture(context.Context, DomainPolicyTCPCaptureSpec, netip.AddrPort, func(context.Context) error) error
+	WithCapture(context.Context, DomainPolicyTCPCaptureSpec, *DomainPolicyTCPCapture, func(context.Context) error) error
+	CheckCapture(context.Context, *DomainPolicyTCPCapture) error
+	PrepareSyntheticCapture(context.Context, *DomainPolicyTCPCapture, *dnscontrol.SyntheticDNSMapping) error
+	CurrentSyntheticCapture(context.Context, *DomainPolicyTCPCapture, *dnscontrol.SyntheticDNSMapping) error
+	LookupPublished(context.Context, netip.Addr, netip.Addr) (*dnscontrol.SyntheticDNSMapping, error)
 	AdmitTCP(context.Context, DomainPolicyTCPSocket) (DomainPolicyTCPFlowLease, error)
 }
 
@@ -89,6 +95,7 @@ func (a *ProxyTunnelAdapter) RunDomainPolicyTCP(ctx context.Context, policy *Dom
 func (s DomainPolicyTCPCaptureSpec) valid() bool {
 	mac, err := net.ParseMAC(s.Client.MAC)
 	return s.Xray.valid() && s.Limits.valid() && s.Client.Address.Is4() && s.Client.Address.IsGlobalUnicast() &&
+		s.DeviceID != "" && len(s.DeviceID) <= 128 && !strings.ContainsAny(s.DeviceID, "\x00\r\n") &&
 		len(mac) == 6 && err == nil && strings.ToLower(mac.String()) == s.Client.MAC && mac[0]&1 == 0 &&
 		proxyFirewallInterface.MatchString(s.Client.Interface) && s.Client.Interface != "lo" && s.Client.SegmentID != "" &&
 		s.Listen.IsValid() && s.Listen.Port() != 0 && s.Listen.Addr().Is4() && s.Listen.Addr().IsGlobalUnicast() && !s.Listen.Addr().IsLoopback()
@@ -103,8 +110,13 @@ func (p *DomainPolicy) serveDomainPolicyTCPCapture(ctx context.Context, spec Dom
 		return err
 	}
 	defer listener.Close()
+	capture, err := newDomainPolicyTCPCapture(ctx, p, spec, owner, xray, listener)
+	if err != nil {
+		return err
+	}
+	defer capture.Close()
 	return domainPolicyTCPSynchronousScope(ctx, func(consume func(context.Context) error) error {
-		return owner.WithCapture(ctx, spec, listener.Addr().(*net.TCPAddr).AddrPort(), consume)
+		return owner.WithCapture(ctx, spec, capture, consume)
 	}, func(captureCtx context.Context) error {
 		if captureCtx == nil {
 			return ErrDomainPolicyTCPConsumer
@@ -137,7 +149,7 @@ func (p *DomainPolicy) serveDomainPolicyTCPCapture(ctx context.Context, spec Dom
 				go func() {
 					defer flows.Done()
 					defer func() { <-capacity }()
-					_, _ = p.handleCapturedDomainPolicyTCP(flowCtx, conn, spec, owner, xray, observeDomainPolicyTCPSocket)
+					_, _ = capture.handleTCP(flowCtx, conn, observeDomainPolicyTCPSocket)
 				}()
 			default:
 				_ = conn.Close()
@@ -202,15 +214,16 @@ func domainPolicyTCPSynchronousScope(parent context.Context, with func(func(cont
 
 // observe is private and injected only by socket-model tests. Production uses
 // the accepted *net.TCPConn's native SO_ORIGINAL_DST and actual RemoteAddr.
-func (p *DomainPolicy) handleCapturedDomainPolicyTCP(ctx context.Context, conn *net.TCPConn, spec DomainPolicyTCPCaptureSpec, owner DomainPolicyTCPCaptureOwner, xray *DomainPolicyTCPXray, observe func(*net.TCPConn) (DomainPolicyTCPSocket, error)) (DomainPolicyDecision, error) {
+func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.TCPConn, observe func(*net.TCPConn) (DomainPolicyTCPSocket, error)) (DomainPolicyDecision, error) {
 	refused := DomainPolicyDecision{Kind: "refused", Reason: "SYNTHETIC_CAPTURE_AUTHORITY_REQUIRED"}
 	if conn == nil {
 		return refused, ErrDomainPolicyTCPConsumer
 	}
 	defer conn.Close()
-	if owner == nil || xray == nil || observe == nil || ctx == nil || ctx.Err() != nil {
+	if capture == nil || capture.self != capture || observe == nil || ctx == nil || ctx.Err() != nil {
 		return refused, ErrDomainPolicyTCPConsumer
 	}
+	spec, owner, xray, p := capture.spec, capture.owner, capture.xray, capture.policy
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	socket, err := observe(conn)
@@ -218,11 +231,36 @@ func (p *DomainPolicy) handleCapturedDomainPolicyTCP(ctx context.Context, conn *
 		!socket.Source.IsValid() || socket.Source.Port() == 0 || (socket.OriginalDestination.Port() != 80 && socket.OriginalDestination.Port() != 443) {
 		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
+	original, err := owner.LookupPublished(ctx, socket.Source.Addr(), socket.OriginalDestination.Addr())
+	if err != nil || original == nil {
+		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
+	}
+	capture.mu.Lock()
+	prepared := capture.mappings[original]
+	capture.mu.Unlock()
+	if prepared == nil || prepared.source != original {
+		return refused, ErrDomainPolicyTCPConsumer
+	}
+	flowCtx, release, err := prepared.enterFlow(ctx, conn)
+	if err != nil {
+		return refused, err
+	}
+	defer release()
+	ctx = flowCtx
+	stopFlow := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopFlow()
+	if err := prepared.Current(ctx); err != nil {
+		return refused, err
+	}
 	lease, err := owner.AdmitTCP(ctx, socket)
 	if err != nil || lease == nil {
 		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
-	mapping, flowID := lease.Binding()
+	leased, flowID := lease.Binding()
+	if leased != original {
+		return refused, ErrDomainPolicyTCPConsumer
+	}
+	mapping := prepared.flowComparison()
 	binding := &domainPolicyTCPSyntheticBinding{mapping: mapping, socket: socket, spec: spec.Xray}
 	flow := DomainPolicyTCPFlow{Generation: mapping.Generation, FlowID: flowID, Source: socket.Source, Destination: socket.OriginalDestination, Client: mapping.Client, synthetic: binding}
 	if mapping.Client != spec.Client || !p.validTCPFlow(flow) || !time.Now().Before(mapping.ExpiresAt) || !xray.matches(spec.Xray) {
@@ -232,8 +270,11 @@ func (p *DomainPolicy) handleCapturedDomainPolicyTCP(ctx context.Context, conn *
 		Limits: spec.Limits,
 		Guard: func(c context.Context, f DomainPolicyTCPFlow) (autonomy.ScopeObservation, error) {
 			current, id := lease.Binding()
-			if current != mapping || id != flowID || !binding.matches(f) || !time.Now().Before(mapping.ExpiresAt) {
+			if current != original || id != flowID || !binding.matches(f) || !time.Now().Before(mapping.ExpiresAt) {
 				return autonomy.ScopeObservation{}, ErrDomainPolicyTCPConsumer
+			}
+			if err := prepared.Current(c); err != nil {
+				return autonomy.ScopeObservation{}, err
 			}
 			return lease.Guard(c, socket)
 		},
@@ -246,7 +287,7 @@ func (p *DomainPolicy) handleCapturedDomainPolicyTCP(ctx context.Context, conn *
 }
 
 type domainPolicyTCPSyntheticBinding struct {
-	mapping DomainPolicyTCPSyntheticMapping
+	mapping domainPolicyTCPSyntheticMapping
 	socket  DomainPolicyTCPSocket
 	spec    DomainPolicyTCPXraySpec
 }
