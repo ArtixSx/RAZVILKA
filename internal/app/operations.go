@@ -148,6 +148,9 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			// its exact source publication; a shared request cannot upgrade it.
 			exclusive = true
 		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/strategy-lab/selections" {
+			exclusive = true
+		}
 		if r.Method == http.MethodPut && (r.URL.Path == "/api/v1/nfqws2/setup-mode" || r.URL.Path == "/api/v1/nfqws2/discord-repair") {
 			exclusive = true
 		}

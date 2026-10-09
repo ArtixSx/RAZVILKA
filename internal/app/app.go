@@ -1254,15 +1254,28 @@ func (a *App) strategyLabSelections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Action      string `json:"action"`
-		ServiceID   string `json:"service_id"`
-		Protocol    string `json:"protocol"`
-		IPFamily    string `json:"ip_family"`
-		CandidateID string `json:"candidate_id"`
-		Frozen      bool   `json:"frozen"`
+		Action      string                   `json:"action"`
+		ServiceID   string                   `json:"service_id"`
+		Protocol    string                   `json:"protocol"`
+		IPFamily    string                   `json:"ip_family"`
+		CandidateID string                   `json:"candidate_id"`
+		Mode        strategylab.AdaptiveMode `json:"mode"`
+		Frozen      bool                     `json:"frozen"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&input); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if input.Mode != "" && input.Mode != strategylab.ModeManual {
+		http.Error(w, "unsupported selection mode", http.StatusBadRequest)
+		return
+	}
+	if input.Mode == strategylab.ModeManual && input.Action != "" {
+		http.Error(w, "manual selection does not accept an action", http.StatusBadRequest)
+		return
+	}
+	if input.Mode == strategylab.ModeManual {
+		a.selectManagedStrategyManual(w, r, input.ServiceID, input.Protocol, input.IPFamily, input.CandidateID)
 		return
 	}
 	if input.Action == "reset" {
