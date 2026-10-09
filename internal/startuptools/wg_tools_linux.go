@@ -104,5 +104,19 @@ func (l *Lease) runWG(ctx context.Context, engine, name string, args ...string) 
 	// Every native WG RPC, including readback, uses the original owner's
 	// admission. The existing policy producer owns the actual held-fd Start,
 	// short tool/Provider gate, cancellation and exactly one Wait outside it.
-	return l.policyEffect(ctx, index, frozen)
+	actual, stockRead := wgStockNumericRuleArguments(frozen)
+	stockRead = stockRead && l.profile.stock && index == 2
+	if stockRead {
+		var err error
+		ctx, err = wgStockReadContext(ctx, name, l.digest, frozen, actual)
+		if err != nil {
+			return nil, err
+		}
+		frozen = actual
+	}
+	data, err := l.policyEffect(ctx, index, frozen)
+	if err == nil && stockRead {
+		data, err = stockNumericRules(data)
+	}
+	return data, err
 }
