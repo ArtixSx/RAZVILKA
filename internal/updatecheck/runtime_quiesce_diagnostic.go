@@ -13,7 +13,7 @@ import (
 
 const runtimeQuiesceDiagnosticFile = "quiesce-old-runtime.diagnostic"
 
-var runtimeQuiesceFailureStages = []string{"entry", "provider", "authority-opening", "independent-opening", "manager-construction", "installer-role-binding", "deactivate", "runtime-inactivity", "authority-closing", "independent-closing"}
+var runtimeQuiesceFailureStages = append([]string{"entry", "provider", "authority-opening", "independent-opening", "manager-construction", "installer-role-binding", "deactivate", "runtime-inactivity", "authority-closing", "independent-closing"}, runtimeQuiesceInactiveFailureStages()...)
 
 func knownRuntimeQuiesceFailure(stage string) bool {
 	for _, known := range runtimeQuiesceFailureStages {

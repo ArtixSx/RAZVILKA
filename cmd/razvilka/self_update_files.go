@@ -336,8 +336,8 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 	if _, err := manager.Deactivate(ctx); err != nil {
 		return refuseSelfUpdateRuntimeQuiesce("deactivate")
 	}
-	if verifySelfUpdateRuntimeInactive(ctx, manager) != nil {
-		return refuseSelfUpdateRuntimeQuiesce("runtime-inactivity")
+	if err := verifySelfUpdateRuntimeInactive(ctx, manager); err != nil {
+		return refuseSelfUpdateRuntimeQuiesce(selfUpdateRuntimeInactiveFailureStage(err))
 	}
 	if adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
 		return refuseSelfUpdateRuntimeQuiesce("authority-closing")
