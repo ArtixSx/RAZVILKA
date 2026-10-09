@@ -12,7 +12,13 @@ func ValidateNetworkPolicyLAN(lan *LANPolicyRuntimePlan, routes []Route) error {
 	if err := ValidateLANPolicyRuntime(lan); err != nil {
 		return err
 	}
+	if lan.Mode == LANPolicyNFQWSDirectMode && len(routes) == 0 {
+		return ErrNetworkPolicyAuthority
+	}
 	for _, route := range routes {
+		if lan.Mode == LANPolicyNFQWSDirectMode && (AdapterID(route.Resolved) != "nfqws2" || len(route.Domains) != 0 || len(route.CIDRs) == 0) {
+			return ErrNetworkPolicyAuthority
+		}
 		if route.NetworkPolicyGeneration != lan.Generation {
 			return ErrNetworkPolicyAuthority
 		}
