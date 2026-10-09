@@ -290,6 +290,33 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 			}
 			for cycle := 1; cycle <= 2; cycle++ {
 				for _, action := range []string{"start", "check", "stop", "stop"} {
+					if cycle == 2 && action == "start" {
+						// Exercise the ordinary UI caller with its freshly returned
+						// review, not a reconstructed digest or private admission.
+						var planned struct {
+							Review json.RawMessage `json:"review"`
+							Health string          `json:"service_health"`
+						}
+						if status := request("GET", "/api/v1/plan", "", &planned); status != http.StatusOK || len(planned.Review) == 0 || planned.Health != "unverified" {
+							t.Fatal("ordinary native plan refused", status)
+						}
+						reply = nil
+						if status := request("POST", "/api/v1/apply", string(planned.Review), &reply); status != http.StatusOK || reply["ok"] != true || reply["live_applied"] != true || reply["service_health"] != "unverified" {
+							t.Fatal("ordinary reviewed native Apply refused", status, reply)
+						}
+						var active struct {
+							Health      string `json:"service_health"`
+							Transaction struct {
+								State string `json:"state"`
+								Noop  bool   `json:"noop"`
+							} `json:"transaction"`
+						}
+						if status := request("GET", "/api/v1/plan", "", &active); status != http.StatusOK || active.Health != "unverified" || active.Transaction.State != "committed" || !active.Transaction.Noop {
+							t.Fatal("ordinary active readback refused", status, active)
+						}
+						t.Log("actual same-App ordinary plan/reviewed Apply/active readback passed; service_health=unverified")
+						continue
+					}
 					body := map[string]string{"action": action}
 					if action == "start" {
 						body["service_id"], body["protocol"], body["ip_family"] = "native-manual", "tcp", "ipv4"
