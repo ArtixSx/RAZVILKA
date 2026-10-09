@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -18,7 +19,9 @@ func inlineCIDRReviewFixture(t *testing.T) (context.Context, *Manager, catalog.S
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	m, err := Load(filepath.Join(t.TempDir(), "custom-services.json"))
+	// Go TempDir's per-test child uses 0777 subject to umask. The ordinary
+	// Manager creates a missing registry parent at 0700; use that real path.
+	m, err := Load(filepath.Join(t.TempDir(), "private-registry", "custom-services.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,6 +30,32 @@ func inlineCIDRReviewFixture(t *testing.T) (context.Context, *Manager, catalog.S
 		t.Fatal(err)
 	}
 	return ctx, m, clone([]catalog.Service{service})[0]
+}
+
+func TestInlineCIDRReviewRequiresPrivateOrdinaryRegistryOnLinux(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits are enforced on Linux")
+	}
+	ctx, m, service := inlineCIDRReviewFixture(t)
+	directory, err := os.Stat(filepath.Dir(m.path))
+	if err != nil || directory.Mode().Perm() != 0700 {
+		t.Fatal("ordinary Manager did not create its private registry parent")
+	}
+	if err := os.Chmod(filepath.Dir(m.path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := m.ReviewAppliedInlineCIDRs(ctx, service); r != nil || !errors.Is(err, ErrInlineCIDRReview) {
+		t.Fatal("nonprivate registry parent issued a review")
+	}
+	if err := os.Chmod(filepath.Dir(m.path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(m.path, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := m.ReviewAppliedInlineCIDRs(ctx, service); r != nil || !errors.Is(err, ErrInlineCIDRReview) {
+		t.Fatal("nonprivate registry file issued a review")
+	}
 }
 
 func TestInlineCIDRReviewRequiresOriginalPublishedManagerAndDetachedMetadata(t *testing.T) {
