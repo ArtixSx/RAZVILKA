@@ -38,6 +38,8 @@ func LANPolicyPreflightFailureStage(err error) string {
 		return failure.stage
 	case "inventory-stock-source", "inventory-stock-owned", "inventory-stock-graph":
 		return failure.stage
+	case "inventory-stock-graph-parse", "inventory-stock-graph-shape", "inventory-stock-graph-reachability", "inventory-stock-graph-collision", "inventory-stock-graph-unknown-option", "inventory-stock-graph-coverage", "inventory-stock-graph-budget", "inventory-stock-graph-owned":
+		return failure.stage
 	}
 	return ""
 }

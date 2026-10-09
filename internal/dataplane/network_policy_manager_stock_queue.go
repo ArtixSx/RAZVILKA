@@ -133,5 +133,16 @@ func networkPolicyStockQueueRows(s BackendInventorySnapshot, queue uint16, e *nf
 		}
 	}
 	rows, err := inspectNFQWSDirectStockQueuesWithOwned(s, queue, exactOwned)
-	return rows, lanPolicyPreflightAt("inventory-stock-graph", err)
+	return rows, networkPolicyStockGraphFailure(err)
+}
+
+// Only the graph producer's private fixed enum can add a diagnostic leaf.
+// This preserves the actual refusal and never formats capture/foreign input.
+func networkPolicyStockGraphFailure(err error) error {
+	stage := "inventory-stock-graph"
+	switch leaf := nfqwsDirectStockQueueFailureStage(err); leaf {
+	case "parse", "shape", "reachability", "collision", "unknown-option", "coverage", "budget", "owned":
+		stage += "-" + leaf
+	}
+	return lanPolicyPreflightAt(stage, err)
 }
