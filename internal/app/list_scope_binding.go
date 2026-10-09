@@ -42,6 +42,8 @@ type ListScopeBinding struct {
 	verifyCleanupPhysical      func(context.Context) error
 	physicalSnapshot           func() physicalscope.Snapshot
 	closePhysical              func() error
+	originalPhysicalObserver   *physicalscope.Observer
+	originalPhysicalReview     *physicalscope.Review
 	bound                      *dataplane.LANPolicyRuntimePlan
 	boundOnce, invalid, closed bool
 	closeErr                   error
@@ -59,12 +61,15 @@ func NewReviewedStockNC1812ListScopeBinding(ctx context.Context, a *App, provide
 		return nil, ErrListScopeChanged
 	}
 	var retained func(context.Context) error
+	var originalObserver *physicalscope.Observer
+	var originalReview *physicalscope.Review
 	b, err := newListScopeBinding(ctx, a, func(c context.Context, selection physicalscope.SelectionReader) (func(context.Context) error, func() physicalscope.Snapshot, func() error, error) {
 		observer := physicalscope.NewReviewedStockNC1812(provider, selection)
 		review, err := observer.Observe(c)
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		originalObserver, originalReview = observer, review
 		// These closed functions retain EXACT original pointers. No public
 		// constructor accepts a fact reader, snapshot or permission callback.
 		retained = func(c context.Context) error { return observer.VerifyRetainedIncarnation(c, review) }
@@ -74,6 +79,7 @@ func NewReviewedStockNC1812ListScopeBinding(ctx context.Context, a *App, provide
 		return nil, err
 	}
 	b.verifyCleanupPhysical = retained
+	b.originalPhysicalObserver, b.originalPhysicalReview = originalObserver, originalReview
 	return b, nil
 }
 
