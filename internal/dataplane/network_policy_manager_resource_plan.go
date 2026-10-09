@@ -4,6 +4,8 @@ import "slices"
 
 func cloneExecutionResourcePlan(plan Plan) Plan {
 	plan.LAN = CloneLANPolicyRuntime(plan.LAN)
+	plan.DomainPolicy = CloneDomainPolicyRuntimePlan(plan.DomainPolicy)
+	plan.SyntheticDNS = CloneSyntheticDNSTransportPlan(plan.SyntheticDNS)
 	if plan.DNS != nil {
 		dns := *plan.DNS
 		dns.Bindings = slices.Clone(dns.Bindings)

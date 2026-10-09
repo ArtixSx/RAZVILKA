@@ -1145,6 +1145,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, err
 	}
 	defer m.endOperation()
+	if err := validateDomainTransportForExecution(plan); err != nil {
+		return execution, err
+	}
 	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() {
 		return execution, ErrNetworkPolicyReplacement // Join the original owner with explicit Stop first.
 	}
