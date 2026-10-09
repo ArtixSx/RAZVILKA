@@ -852,6 +852,9 @@ func runCommand(args []string) (bool, int) {
 }
 
 func runCommandWithSelfUpdateJournalRoots(args []string, journalRoots selfUpdateJournalRoots) (bool, int) {
+	if handled, code := runExternalBootstrapCommand(args, journalRoots); handled {
+		return true, code
+	}
 	if handled, code := runPairedRestoreCommand(args, journalRoots); handled {
 		return true, code
 	}

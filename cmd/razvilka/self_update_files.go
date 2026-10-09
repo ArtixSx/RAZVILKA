@@ -51,12 +51,18 @@ func selfUpdateStopCheck(ctx context.Context, id string) (bool, error) {
 }
 
 func selfUpdateEffectAdmission(ctx context.Context, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
+	return selfUpdateEffectAdmissionAt(ctx, selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop"), selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), id, installationID, sequence, action, effect, begin)
+}
+
+// The production worker supplies its fixed roots above. A bootstrap's offline
+// source state is separate from durable Stop; it uses only the original live
+// control epoch and never the stopped compensation admission.
+func selfUpdateEffectAdmissionAt(ctx context.Context, control, configuration, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
 	switch action {
-	case "start/live", "stop-owned", "replace-to-rollback":
+	case "start/live", "stop-owned", "replace-to-rollback", "bootstrap-offline":
 	default:
 		return operationgate.ErrSelfUpdateStopChanged
 	}
-	control := selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop")
 	r, present, err := operationgate.ReadSelfUpdateStop(ctx, control)
 	if err != nil {
 		return err
@@ -67,7 +73,10 @@ func selfUpdateEffectAdmission(ctx context.Context, id, installationID string, s
 	if !r.Stopped {
 		return operationgate.WithSelfUpdateEffectAdmission(ctx, control, id, installationID, sequence, effect, begin)
 	}
-	store, err := config.LoadExisting(selfUpdateDefaultPath("/opt/etc/razvilka/config.json"))
+	if action == "bootstrap-offline" {
+		return operationgate.ErrSelfUpdateStopped
+	}
+	store, err := config.LoadExisting(configuration)
 	if err != nil {
 		return err
 	}
