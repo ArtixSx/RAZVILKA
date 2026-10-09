@@ -170,28 +170,36 @@ func (b *ListScopeBinding) changed(err error) error {
 	return errors.Join(ErrListScopeChanged, err)
 }
 
-func (b *ListScopeBinding) currentLocked(ctx context.Context) error {
+func (b *ListScopeBinding) currentLocked(ctx context.Context) (resultErr error) {
+	phase := "scope-owner"
+	defer func() { resultErr = managedNFQFailureAt(phase, resultErr) }()
 	if b.closed || b.invalid || b.scope == nil || b.verifyPhysical == nil || b.app.Store != b.store {
 		return b.changed(nil)
 	}
+	phase = "scope-authority-before"
 	ref, err := defaultRouteScopeAuthority(ctx, b.store, b.scope)
 	if err != nil || ref != b.reference || !reflect.DeepEqual(b.store.Get(), b.expected) {
 		return b.changed(err)
 	}
+	phase = "scope-selection"
 	selection, err := b.selection(ctx)
 	if err != nil || !reflect.DeepEqual(selection, b.facts.Selection) {
 		return b.changed(err)
 	}
+	phase = "scope-physical-verify"
 	if err := b.verifyPhysical(ctx); err != nil {
 		return b.changed(err)
 	}
+	phase = "scope-physical-snapshot"
 	if !reflect.DeepEqual(b.physicalSnapshot(), b.facts) {
 		return b.changed(nil)
 	}
+	phase = "scope-wan-identity"
 	network, err := b.network(ctx)
 	if err != nil || network != b.networkID {
 		return b.changed(err)
 	}
+	phase = "scope-authority-after"
 	ref, err = defaultRouteScopeAuthority(ctx, b.store, b.scope)
 	if err != nil || ref != b.reference || !reflect.DeepEqual(b.store.Get(), b.expected) {
 		return b.changed(err)

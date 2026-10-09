@@ -7,9 +7,11 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/physicalscope"
 )
 
 const managedNFQListRuntimePath = "/api/v1/strategy-lab/runtime"
@@ -75,6 +77,9 @@ func (a *App) managedNFQListRuntimeHTTP(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		stage, reason := managedNFQFailureDiagnostic(err)
 		log.Printf("Managed NFQ runtime %s refused at %s (%s)", input.Action, stage, reason)
+		if physical := physicalscope.DiagnosticStages(err); len(physical) > 0 {
+			log.Printf("Managed NFQ original physical refusal: %s", strings.Join(physical, " > "))
+		}
 		status, code := http.StatusConflict, "MANAGED_NFQWS_RUNTIME_REFUSED"
 		if errors.Is(err, operationgate.ErrBusy) {
 			code = "MANAGED_NFQWS_RUNTIME_BUSY"
