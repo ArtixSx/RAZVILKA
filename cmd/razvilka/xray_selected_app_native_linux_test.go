@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -38,7 +39,10 @@ import (
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
-// Root-only native preparation, not an hour/LAN/Telegram acceptance test.
+// Root-only genuine HTTP operation. Ordinary mode is preparation; explicit
+// soak mode reports native owner hold/retirement separately from ROOT's LAN
+// Telegram/process/path/counters acceptance. Run in a fresh PRIVATE MOUNT
+// namespace with the CURRENT ACTUAL NETWORK namespace; never unshare net.
 // Build with GOOS=linux GOARCH=arm64 go test -c ./cmd/razvilka; Root runs only
 // TestXraySelectedAppNativeHTTP with -test.timeout=20m and these inputs:
 // RAZVILKA_NATIVE_XRAY_SELECTED=1
@@ -50,8 +54,18 @@ import (
 //	and one segment, selected_services, NewDevices=base, no rules
 //
 // ..._HTTPS_IPV4 / ..._CLIENT_IPV4: agreed public Telegram HTTPS pin/LAN PC IPv4
-// Component paths remain ordinary configuredComponentsFromEnv bindings.
+// Component paths remain ordinary componentsFromEnv bindings.
 // Original controller/downgrade admission remains real /opt/bin/razvilka.
+//
+// ..._SOAK=1 requires -test.timeout=95m. After phase=active_observed in
+// <QA_ROOT>/qa-soak-control/status, ROOT runs the LAN PC tool with its agreed
+// --lan-client, -telegram-ip, -mtproto, -duration=1h and -interval=30s. ROOT
+// must verify the complete PC sampling interval is contained in the native
+// active_at_utc..owner_observed_until_utc interval plus original owner/path
+// evidence. Then atomically create command (0600) with STOP <run_id>\n.
+// Use ABORT <run_id>\n for failure. Both files are bounded private test-only
+// plain text, never runtime grants. No automatic Stop exactly at 3600s:
+// STOP before 1h fails; no valid STOP by 70m fails and ordinary cleanup runs.
 //
 // Known at Root88f998fb: the selected TCP Xray publisher and Main->App Apply
 // integration are not installed yet. Custom CIDRs do not manufacture an applied
@@ -68,14 +82,30 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal("stage=inputs code=invalid_paths_or_addresses")
 	}
+	if in.Soak {
+		deadline, ok := t.Deadline()
+		if !ok || time.Until(deadline) < 94*time.Minute {
+			t.Fatal("stage=inputs code=explicit_95m_outer_timeout_required")
+		}
+	}
 	rootInfo, err := os.Lstat(in.Root)
-	if err != nil || !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 || rootInfo.Mode().Perm()&077 != 0 || rootInfo.Sys().(*syscall.Stat_t).Uid != 0 {
+	if err != nil || !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 || rootInfo.Mode().Perm() != 0700 || rootInfo.Sys().(*syscall.Stat_t).Uid != 0 {
 		t.Fatal("stage=inputs code=private_real_root_required")
 	}
 	entries, err := os.ReadDir(in.Root)
 	if err != nil || len(entries) != 0 {
 		t.Fatal("stage=inputs code=empty_qa_root_required")
 	}
+	var soakFiles *xraySelectedSoakFiles
+	if in.Soak {
+		soakFiles, err = xraySelectedNewSoakFiles(in.Root)
+		if err != nil {
+			t.Fatal("stage=soak_control code=private_test_control_unavailable")
+		}
+		defer soakFiles.Close()
+	}
+	runLife, stopRunLife := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopRunLife()
 	profile := xraySelectedReadFile(t, "selected_profile", in.Profile, providerprofile.MaxProfileBytes, true)
 	defer clear(profile)
 	parsed, err := providerprofile.ParseCanonicalProfile(string(profile))
@@ -106,7 +136,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal("stage=sources code=actual_registry_unavailable")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	ctx, cancel := context.WithTimeout(runLife, 15*time.Minute)
 	defer cancel()
 	configPath := filepath.Join(in.Root, "config.json")
 	store, err := config.Load(configPath)
@@ -215,6 +245,10 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	call("manual_mode", "PUT", "/api/v1/service-control", map[string]any{"expected_revision": store.Get().Revision, "mode": "manual", "confirm": "SAVE_SERVICE_CONTROL"}, 200, nil)
 	var service catalog.Service
 	call("custom_service", "POST", "/api/v1/custom-services", xraySelectedQAService(in.HTTPS), 201, &service)
+	customParent, err := os.Lstat(filepath.Dir(filepath.Join(in.Root, "custom-services.json")))
+	if err != nil || !os.SameFile(rootInfo, customParent) || !xraySelectedSoakPrivate(customParent, true) || customParent.Mode()&os.ModeSymlink != 0 {
+		t.Fatal("stage=custom_service code=original_private_0700_parent_required")
+	}
 	if len(service.Domains) != 0 || service.ID != xraySelectedQAID || !reflect.DeepEqual(service.CIDRs, xraySelectedQAService(in.HTTPS).CIDRs) || !reflect.DeepEqual(a.Catalog, builtIn) {
 		t.Fatal("stage=custom_service code=definition_changed_or_built_in_modified")
 	}
@@ -278,16 +312,56 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 		t.Fatal("stage=original_plan_review code=selected_list_scope_missing_or_widened")
 	}
 	stopConfirmed := false
-	defer func() {
-		if stopConfirmed {
-			return
+	soakCompleted := false
+	soakStatus := xraySelectedSoakStatus{}
+	if soakFiles != nil {
+		soakStatus.RunID, soakStatus.Phase, soakStatus.Code = soakFiles.runID, "failed", "apply_or_owner_unconfirmed"
+	}
+	// Every cleanup step has its own deadline and is independent of canceled
+	// startup/hold/signal contexts. Keep App, HTTP, source owners and DNS alive
+	// through public Stop/repeatedStop and actual production absence checks.
+	stopRuntime := func() bool {
+		ok := true
+		for attempt := 1; attempt <= 2; attempt++ {
+			cleanup, stop := context.WithTimeout(context.Background(), 2*time.Minute)
+			status, data, err := xraySelectedCall(cleanup, client, base, token, "POST", "/api/v1/service-control/runtime",
+				map[string]any{"expected_revision": store.Get().Revision, "action": "stop", "confirm": "STOP_OWNED_ROUTES"})
+			stop()
+			var body struct {
+				OK bool `json:"ok"`
+			}
+			if err != nil || status != 200 || json.Unmarshal(data, &body) != nil || !body.OK || !store.Get().ServiceControl.Stopped {
+				t.Errorf("stage=ordinary_stop attempt=%d status=%d code=%s; retain original QA artifacts", attempt, status, xraySelectedRefusal(data))
+				ok = false
+			}
+			clear(data)
 		}
-		cleanup, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		status, data, err := xraySelectedCall(cleanup, client, base, token, "POST", "/api/v1/service-control/runtime",
-			map[string]any{"expected_revision": store.Get().Revision, "action": "stop", "confirm": "STOP_OWNED_ROUTES"})
-		if err != nil || status != 200 {
-			t.Errorf("stage=apply_cleanup status=%d code=%s; retain original QA journal for Root", status, xraySelectedRefusal(data))
+		cleanup, stop := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer stop()
+		stoppedPlan, exists, err := manager.Committed()
+		if err != nil || !exists || stoppedPlan.State != "committed" || len(stoppedPlan.Routes) != 0 || verifySelfUpdateRuntimeInactive(cleanup, manager) != nil {
+			t.Error("stage=retirement code=actual_runtime_absence_unconfirmed; retain original QA artifacts")
+			ok = false
+		}
+		return ok
+	}
+	defer func() {
+		if !stopConfirmed {
+			stopConfirmed = stopRuntime()
+		}
+		if soakFiles != nil {
+			soakStatus.UpdatedAt = time.Now()
+			switch {
+			case !stopConfirmed:
+				soakStatus.Phase, soakStatus.Code = "cleanup_unconfirmed", "ordinary_retirement_unconfirmed"
+			case soakCompleted:
+				soakStatus.Phase, soakStatus.Code = "retired", ""
+			default:
+				soakStatus.Phase = "failed_retired"
+			}
+			if soakFiles.Publish(soakStatus) != nil {
+				t.Error("stage=soak_status code=final_private_status_unconfirmed; retain original QA artifacts")
+			}
 		}
 	}()
 	// Explicit field tags are required; accepted/reviewed/partial is never active.
@@ -299,30 +373,43 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	call("original_apply", "POST", "/api/v1/apply?scope=services",
 		map[string]any{"expected_revision": *plan.Review.Revision, "reviewed_digest": plan.Review.Digest}, 200, &applyBody)
 	committed, exists, err := manager.Committed()
-	if err != nil || !applyBody.OK || !applyBody.LiveApplied || applyBody.Pending || !exists || committed.State != "committed" || len(committed.Routes) != 1 || committed.Routes[0].Selected != route || manager.ObserveCommittedRuntime(ctx, committed) != nil {
+	if err != nil || !applyBody.OK || !applyBody.LiveApplied || applyBody.Pending || !exists || committed.State != "committed" || !committed.Ready || committed.LAN == nil || len(committed.Routes) != 1 || committed.Routes[0].Selected != route || manager.ObserveCommittedRuntime(ctx, committed) != nil {
 		t.Fatal("stage=active_runtime code=actual_owned_runtime_unconfirmed")
 	}
-	for attempt := 1; attempt <= 2; attempt++ {
-		var stopped struct {
-			OK bool `json:"ok"`
+	activeConfig, activeSources := store.Get(), a.Sources
+	cancel() // completed admission/request work is never stretched into a grant
+	if soakFiles != nil {
+		soakStatus, err = xraySelectedHold(runLife, soakFiles.runID, xraySelectedSoakHooks{
+			Now: time.Now, Wait: xraySelectedSoakWait, Command: soakFiles.Command, Publish: soakFiles.Publish,
+			Observe: func(observe context.Context) error {
+				if a.Store != store || a.Nodes != nodes || a.Dataplane != manager || a.Sources != activeSources || a.CustomServices != custom || a.DNS != dns || a.SelfUpdateFiles != files ||
+					!reflect.DeepEqual(store.Get(), activeConfig) || !reflect.DeepEqual(custom.List(), []catalog.Service{service}) || !reflect.DeepEqual(a.Catalog, builtIn) {
+					return app.ErrXrayListSource
+				}
+				current, err := nodes.Snapshot(observe, time.Now())
+				if err != nil || current.Generation != after.Generation {
+					return app.ErrXrayListSource
+				}
+				return manager.ObserveCommittedRuntime(observe, committed)
+			},
+		})
+		if err != nil {
+			t.Fatalf("stage=soak_hold code=%s; retain original QA artifacts", soakStatus.Code)
 		}
-		call("ordinary_stop", "POST", "/api/v1/service-control/runtime",
-			map[string]any{"expected_revision": store.Get().Revision, "action": "stop", "confirm": "STOP_OWNED_ROUTES"}, 200, &stopped)
-		if !stopped.OK || !store.Get().ServiceControl.Stopped {
-			t.Fatal("stage=ordinary_stop code=actual_stop_unconfirmed")
-		}
+		soakCompleted = true
 	}
-	stoppedPlan, exists, err := manager.Committed()
-	if err != nil || !exists || stoppedPlan.State != "committed" || len(stoppedPlan.Routes) != 0 || verifySelfUpdateRuntimeInactive(ctx, manager) != nil {
-		t.Fatal("stage=retirement code=actual_runtime_absence_unconfirmed")
+	// The deferred retirement executes before closing HTTP/App scopes and
+	// reports failure through testing.T; no direct process launcher/kill exists.
+	if soakCompleted {
+		t.Log("native measured full owner hold; ordinary retirement still required; ROOT separately verifies full PC LAN sampling containment and actual owner/process/path/counters")
+	} else {
+		t.Log("actual original App import/check/persisted history/review/Apply/runtime completed; ordinary retirement still required; HTTPS-only exact check, no hour/LAN/authenticated Telegram acceptance")
 	}
-	stopConfirmed = true
-	t.Log("actual original App import/check/persisted history/review/Apply/runtime/Stop/repeatedStop completed; HTTPS-only exact check, no hour, physical LAN, proxy path or authenticated Telegram acceptance")
 }
 
 func xraySelectedReadFile(t *testing.T, stage, path string, limit int, private bool) []byte {
 	t.Helper()
-	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		t.Fatalf("stage=%s code=existing_regular_file_required", stage)
 	}

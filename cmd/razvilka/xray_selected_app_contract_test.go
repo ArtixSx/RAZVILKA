@@ -26,12 +26,20 @@ const xraySelectedMaxResponse = 1 << 20
 type xraySelectedNativeInput struct {
 	Root, Profile, Catalog, Sources, Scope string
 	HTTPS, Client                          netip.Addr
+	Soak                                   bool
 }
 
 // Inputs select files and addresses, never health, receipts, process IDs or
 // private runtime authority. The native test validates the existing files too.
 func xraySelectedParseInput(getenv func(string) string) (xraySelectedNativeInput, error) {
 	var in xraySelectedNativeInput
+	switch getenv("RAZVILKA_NATIVE_XRAY_SELECTED_SOAK") {
+	case "":
+	case "1":
+		in.Soak = true
+	default:
+		return in, errors.New("explicit soak opt-in required")
+	}
 	for key, target := range map[string]*string{
 		"ROOT": &in.Root, "PROFILE": &in.Profile, "CATALOG": &in.Catalog, "SOURCES": &in.Sources, "SCOPE": &in.Scope,
 	} {
