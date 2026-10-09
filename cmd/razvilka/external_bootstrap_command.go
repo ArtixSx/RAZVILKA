@@ -132,7 +132,7 @@ func externalBootstrapFailureOutput(category string) string {
 // The native gate may print only a recognized complete fixed CLI diagnostic.
 // Arbitrary stderr, paths, result bytes and execution errors stay private.
 func externalBootstrapDiagnosticCategory(diagnostic []byte) string {
-	for _, category := range []string{"preparation-owner", "candidate-version", "source-config", "release-catalogs", "release-script-syntax", "filesystem", "review-capabilities", "staged-migration", "file-review", "review-owner", "external-bootstrap-refused"} {
+	for _, category := range updatecheck.ExternalBootstrapFailureCategories() {
 		if bytes.Equal(diagnostic, []byte(externalBootstrapFailureOutput(category)+"\n")) {
 			return category
 		}

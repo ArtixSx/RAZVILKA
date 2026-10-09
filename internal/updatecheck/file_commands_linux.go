@@ -284,6 +284,11 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if _, err := root.Stat(command + ".process.json"); !errors.Is(err, os.ErrNotExist) {
 		return ErrFileProtocol
 	}
+	if command == "quiesce-old-runtime" {
+		if _, err := root.Stat(runtimeQuiesceDiagnosticFile); !errors.Is(err, os.ErrNotExist) {
+			return ErrFileProtocol
+		}
+	}
 	controller := filepath.Join(a.directory, id, "control.bin")
 	hash, err := hashRegularFile(controller, MaximumBinaryBytes)
 	if err != nil || hash != reviewedHelperSHA(review) {
@@ -402,6 +407,9 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 				return err
 			}
 			if waitErr != nil || r.State != "reaped" || r.Cancelled || r.ExitCode != 0 {
+				if command == "quiesce-old-runtime" && r.State == "reaped" && !r.Cancelled && r.ExitCode != 0 {
+					return runtimeQuiesceCommandFailure(root, errors.Join(ErrFileProtocol, waitErr))
+				}
 				return ErrFileProtocol
 			}
 			return nil
@@ -627,6 +635,14 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 	cmd.Env = commandEnvironment()
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
+	var diagnostic *fileQuiesceDiagnosticPipe
+	if command == "quiesce-old-runtime" {
+		diagnostic, err = newFileQuiesceDiagnosticPipe(cmd)
+		if err != nil {
+			return err
+		}
+		defer diagnostic.Close()
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if start {
 		cmd.Env = append(cmd.Env, "RAZVILKA_SELF_UPDATE_JOB="+id, "RAZVILKA_SELF_UPDATE_HELPER_PID="+strconv.Itoa(os.Getpid()))
@@ -641,6 +657,11 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		cancel()
 	}
 	spawned = true
+	if diagnostic != nil {
+		if err := diagnostic.started(); err != nil {
+			cancel()
+		}
+	}
 	r.DirectPID = cmd.Process.Pid
 	r.State = "running"
 	writeErr := writeFileCommand(root, r)
@@ -759,6 +780,14 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 	_ = cmd.Process.Release()
+	var diagnosticErr error
+	if diagnostic != nil {
+		data, err := diagnostic.finish(ctx)
+		diagnosticErr = err
+		if err == nil && code != 0 && !cleanup {
+			diagnosticErr = retainRuntimeQuiesceDiagnostic(root, data)
+		}
+	}
 	if writeErr != nil {
 		return writeErr
 	}
@@ -779,9 +808,9 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		return err
 	}
 	if code != 0 {
-		return fmt.Errorf("self update command completion %d", code)
+		return errors.Join(fmt.Errorf("self update command completion %d", code), diagnosticErr)
 	}
-	return nil
+	return diagnosticErr
 }
 
 func (a *SelfUpdateFileAdapter) ownedPanelBeforeStop(id string, review fileReview, command string) error {

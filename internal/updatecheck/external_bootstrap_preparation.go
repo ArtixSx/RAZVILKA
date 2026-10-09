@@ -324,10 +324,21 @@ func externalBootstrapFailure(stage string, err error) error {
 func ExternalBootstrapFailureCategory(err error) string {
 	var failure *externalBootstrapFailureError
 	if errors.As(err, &failure) {
+		if strings.HasPrefix(failure.stage, "quiesce-") && knownRuntimeQuiesceFailure(strings.TrimPrefix(failure.stage, "quiesce-")) {
+			return failure.stage
+		}
 		switch failure.stage {
 		case "preparation-owner", "candidate-version", "source-config", "release-catalogs", "release-script-syntax", "filesystem", "review-capabilities", "staged-migration", "file-review", "review-owner":
 			return failure.stage
 		}
 	}
 	return "external-bootstrap-refused"
+}
+
+func ExternalBootstrapFailureCategories() []string {
+	categories := []string{"preparation-owner", "candidate-version", "source-config", "release-catalogs", "release-script-syntax", "filesystem", "review-capabilities", "staged-migration", "file-review", "review-owner", "external-bootstrap-refused"}
+	for _, stage := range runtimeQuiesceFailureStages {
+		categories = append(categories, "quiesce-"+stage)
+	}
+	return categories
 }

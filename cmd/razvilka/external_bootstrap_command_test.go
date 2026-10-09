@@ -22,7 +22,7 @@ func TestExternalBootstrapCommandRejectsUnknownInputBeforeProtectedRoots(t *test
 }
 
 func TestExternalBootstrapDiagnosticNeverPrintsUnknownData(t *testing.T) {
-	for _, category := range []string{"candidate-version", "release-script-syntax", "review-capabilities", "staged-migration", "external-bootstrap-refused"} {
+	for _, category := range []string{"candidate-version", "release-script-syntax", "review-capabilities", "staged-migration", "external-bootstrap-refused", "quiesce-deactivate", "quiesce-authority-closing"} {
 		if got := externalBootstrapDiagnosticCategory([]byte(externalBootstrapFailureOutput(category) + "\n")); got != category {
 			t.Fatal("fixed diagnostic lost its category", got)
 		}

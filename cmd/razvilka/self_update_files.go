@@ -307,40 +307,43 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 		return 2
 	}
 	if !allowSelfUpdateJournalCommand(journalRoots) {
-		return 3
+		return refuseSelfUpdateRuntimeQuiesce("entry")
 	}
 	adapter, ok := nativeSelfUpdateFileAdapter().(interface {
 		RuntimeQuiesceAuthority(context.Context, string, uint64, int) error
 	})
 	if !ok {
-		return 3
+		return refuseSelfUpdateRuntimeQuiesce("provider")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	// This exact helper/command identity must be proven before any Store or
 	// runtime manager is opened. Ordinary bootstrap remains fenced.
 	if adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
-		return 3
+		return refuseSelfUpdateRuntimeQuiesce("authority-opening")
 	}
 	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane")) != nil {
-		return 3
+		return refuseSelfUpdateRuntimeQuiesce("independent-opening")
 	}
 	manager, err := selfUpdateRuntimeManager()
 	if err != nil {
-		return 3
+		return refuseSelfUpdateRuntimeQuiesce("manager-construction")
 	}
 	installer, ok := adapter.(*updatecheck.SelfUpdateFileAdapter)
 	if !ok || bindSelfUpdateInstallerRoles(ctx, manager, installer, args[0]) != nil {
-		return 3
+		return refuseSelfUpdateRuntimeQuiesce("installer-role-binding")
 	}
 	if _, err := manager.Deactivate(ctx); err != nil {
-		return 3
+		return refuseSelfUpdateRuntimeQuiesce("deactivate")
 	}
-	if verifySelfUpdateRuntimeInactive(ctx, manager) != nil || adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
-		return 3
+	if verifySelfUpdateRuntimeInactive(ctx, manager) != nil {
+		return refuseSelfUpdateRuntimeQuiesce("runtime-inactivity")
+	}
+	if adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
+		return refuseSelfUpdateRuntimeQuiesce("authority-closing")
 	}
 	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), manager.StateRoot) != nil {
-		return 3
+		return refuseSelfUpdateRuntimeQuiesce("independent-closing")
 	}
 	return 0
 }
