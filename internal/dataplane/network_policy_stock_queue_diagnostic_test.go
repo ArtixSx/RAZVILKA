@@ -28,7 +28,7 @@ func TestNetworkPolicyStockQueueDiagnosticsPreserveClosedInnerCause(t *testing.T
 			}
 			_, err := o.comparison(s, consumers)
 			outer := lanPolicyPreflightAt("inventory-row-unallowed", err)
-			if err == nil || LANPolicyPreflightFailureStage(outer) != "inventory-stock-"+cut || !errors.Is(outer, cause) || outer.Error() != cause.Error() {
+			if err == nil || LANPolicyPreflightFailureStage(outer) != "inventory-stock-"+cut || !errors.Is(outer, cause) || outer.Error() != err.Error() {
 				t.Fatal("outer stage hid stock boundary/cause", cut, LANPolicyPreflightFailureStage(outer), outer)
 			}
 		})
