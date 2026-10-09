@@ -20,6 +20,14 @@ func boundary(stage string, err error) error {
 }
 func (e *boundaryFailure) Unwrap() error { return e.cause }
 func (e *boundaryFailure) Error() string {
+	return "physical LAN: " + strings.Join(DiagnosticStages(e), " > ")
+}
+
+// DiagnosticStages extracts only this package's private, closed branch labels
+// and exact context sentinels from an outer error chain. It never formats a
+// foreign cause or accepts caller text as a stage. This is diagnostic data,
+// not freshness, physical evidence or permission to retry a revoked Review.
+func DiagnosticStages(err error) []string {
 	stages := []string{}
 	remaining := 64
 	var visit func(error, int)
@@ -49,8 +57,8 @@ func (e *boundaryFailure) Error() string {
 			visit(e.Unwrap(), depth+1)
 		}
 	}
-	visit(e, 0)
-	return "physical LAN: " + strings.Join(stages, " > ")
+	visit(err, 0)
+	return stages
 }
 
 // Called only after the original exact snapshot comparison has refused.
