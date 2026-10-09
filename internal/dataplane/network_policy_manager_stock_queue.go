@@ -93,7 +93,7 @@ func (o *networkPolicyStockQueueObservation) comparison(s BackendInventorySnapsh
 	}
 	e := o.execution
 	if s.Scope.Network != e.identity.value || s.Scope.ToolReviewID != e.inventory.review || s.IPTables != e.inventory.reader.IPTables || s.IP6Tables != e.inventory.reader.IP6Tables {
-		return nil, ErrNetworkPolicyConsumers
+		return nil, lanPolicyPreflightAt("inventory-stock-source", ErrNetworkPolicyConsumers)
 	}
 	return networkPolicyStockQueueRows(s, o.queue, e, consumers)
 }
@@ -111,12 +111,12 @@ func networkPolicyStockQueueRows(s BackendInventorySnapshot, queue uint16, e *nf
 	allowed := map[string]int{}
 	for _, consumer := range consumers {
 		if consumer.execution != e || len(consumer.rows) != len(consumer.required) {
-			return nil, ErrNetworkPolicyConsumers
+			return nil, lanPolicyPreflightAt("inventory-stock-owned", ErrNetworkPolicyConsumers)
 		}
 		for _, row := range consumer.rows {
 			key := networkPolicyRowKey(row, true)
 			if key == "" || !networkPolicyNFQRow(row) {
-				return nil, ErrNetworkPolicyConsumers
+				return nil, lanPolicyPreflightAt("inventory-stock-owned", ErrNetworkPolicyConsumers)
 			}
 			allowed[key]++
 		}
@@ -132,5 +132,6 @@ func networkPolicyStockQueueRows(s BackendInventorySnapshot, queue uint16, e *nf
 			allowed[key]--
 		}
 	}
-	return inspectNFQWSDirectStockQueuesWithOwned(s, queue, exactOwned)
+	rows, err := inspectNFQWSDirectStockQueuesWithOwned(s, queue, exactOwned)
+	return rows, lanPolicyPreflightAt("inventory-stock-graph", err)
 }
