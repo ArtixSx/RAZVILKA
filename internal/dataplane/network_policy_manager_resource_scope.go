@@ -20,6 +20,7 @@ import (
 // keep the existing journal fenced. No persisted outcome creates an issuer.
 type executionResourceScope struct {
 	mu                 sync.Mutex
+	closeMu            sync.Mutex
 	startMu            sync.RWMutex
 	manager            *Manager
 	managerRoot        string
@@ -44,6 +45,8 @@ type executionResourceScope struct {
 	nfqwsTransfer      *nfqwsExecutionTransferBarrier
 	retained           bool
 	retainedOwner      *retainedNFQWSExecution
+	syntheticPhases    map[*syntheticBaselineExecutionPhase]struct{}
+	syntheticClosing   bool
 	pending            bool // Original unknown Apply: cleanup only, never ACTIVE.
 }
 
@@ -380,6 +383,30 @@ func (s *executionResourceScope) settleTransit(ctx context.Context, resource *ex
 }
 
 func (s *executionResourceScope) close() error {
+	// Revoke every finite DNS carrier before joining any borrower. Its closing
+	// Current can need startMu.RLock, so cancellation/join must precede the
+	// closing writer barrier. Scope cancellation still waits for real Start ACK.
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	s.mu.Lock()
+	if !s.open {
+		err := s.closedErr
+		s.mu.Unlock()
+		return err
+	}
+	s.syntheticClosing = true
+	phases := make([]*syntheticBaselineExecutionPhase, 0, len(s.syntheticPhases))
+	for phase := range s.syntheticPhases {
+		phases = append(phases, phase)
+	}
+	s.mu.Unlock()
+	for _, phase := range phases {
+		phase.cancel()
+	}
+	var phaseErr error
+	for _, phase := range phases {
+		phaseErr = errors.Join(phaseErr, phase.Close())
+	}
 	// A live one-shot managed Start holds this barrier through actual child
 	// Start ACK. Closing cannot release the operation or revoke its root early.
 	s.startMu.Lock()
@@ -414,7 +441,7 @@ func (s *executionResourceScope) close() error {
 			ownedExecution.Resources = append(ownedExecution.Resources, resource)
 		}
 	}
-	err := errors.Join(s.failure, validateExecutionResources(*s.execution, false), validateExecutionResources(ownedExecution, true))
+	err := errors.Join(phaseErr, s.failure, validateExecutionResources(*s.execution, false), validateExecutionResources(ownedExecution, true))
 	s.closedErr = errors.Join(err, s.owned.Close())
 	return s.closedErr
 }

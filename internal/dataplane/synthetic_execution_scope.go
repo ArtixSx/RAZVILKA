@@ -73,7 +73,35 @@ func (m *Manager) BindSyntheticDNSExecution(ctx context.Context, original *Scope
 	if err != nil {
 		return nil, err
 	}
+	if err := scope.registerSyntheticPhase(ctx, b); err != nil {
+		_ = b.phase.Close()
+		return nil, err
+	}
 	return b, nil
+}
+
+// Registration precedes publishing the binding. Only the actual finite issuer
+// can register its SAME phase; Close freezes this set before cancellation/join.
+func (s *executionResourceScope) registerSyntheticPhase(ctx context.Context, b *SyntheticDNSExecutionBinding) error {
+	if s == nil || ctx == nil || ctx.Err() != nil || ctx.Value(syntheticExecutionRegistrarKey{}) != s || b == nil || b.self != b || b.scope != s || b.phase == nil || b.phase.self != b.phase || b.phase.binding != b || b.phase.ctx == nil || b.phase.cancel == nil {
+		return ErrSyntheticBaselineTransition
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.open || s.syntheticClosing || b.phase.closed.Load() || b.phase.ctx.Err() != nil || len(s.syntheticPhases) >= maxExecutionResources {
+		return ErrSyntheticBaselineTransition
+	}
+	if _, exists := s.syntheticPhases[b.phase]; exists {
+		return ErrSyntheticBaselineTransition
+	}
+	if err := s.checkOriginalOwner(ctx, nil, true, false); err != nil {
+		return errors.Join(ErrSyntheticBaselineTransition, err)
+	}
+	if s.syntheticPhases == nil {
+		s.syntheticPhases = make(map[*syntheticBaselineExecutionPhase]struct{})
+	}
+	s.syntheticPhases[b.phase] = struct{}{}
+	return nil
 }
 
 // External physical/profile/guard reads run outside the scope's metadata
@@ -92,7 +120,7 @@ func (b *SyntheticDNSExecutionBinding) Current(ctx context.Context) error {
 	checkLocal := func() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if s.manager == nil || s.adapterOwner != b.adapter || b.adapter == nil || b.adapter.DNS != b.dns || b.adapter.StateRoot != b.root || b.adapter.lifetime == nil || b.adapter.lifetime.Err() != nil || b.adapter.InactivityIdentity != s.networkIdentity.provider || !reflect.DeepEqual(s.plan, b.plan) {
+		if s.syntheticClosing || s.manager == nil || s.adapterOwner != b.adapter || b.adapter == nil || b.adapter.DNS != b.dns || b.adapter.StateRoot != b.root || b.adapter.lifetime == nil || b.adapter.lifetime.Err() != nil || b.adapter.InactivityIdentity != s.networkIdentity.provider || !reflect.DeepEqual(s.plan, b.plan) {
 			return ErrDomainTransportRuntime
 		}
 		return s.checkOriginalOwner(ctx, nil, true, false)
