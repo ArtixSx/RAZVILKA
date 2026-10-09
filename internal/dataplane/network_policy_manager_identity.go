@@ -77,35 +77,35 @@ func newNetworkPolicyIdentityAdapter(options NetworkPolicyAssemblyOptions, ident
 	runtime := *binding.Runtime
 	physical, apply, cleanup, retire := runtime.ScopeCheck, binding.ApplyGuard, binding.CleanupGuard, binding.RetireCheck
 	inventory := options.InventoryCheck
-	boundary := func(ctx context.Context, p *LANPolicyRuntimePlan, check func(context.Context) error) error {
-		return identity.use(ctx, func(c context.Context) error {
+	boundary := func(ctx context.Context, p *LANPolicyRuntimePlan, stage string, check func(context.Context) error) error {
+		return lanPolicyPreflightAt("boundary-identity", identity.use(ctx, func(c context.Context) error {
 			if p != nil && (ValidateLANPolicyRuntime(p) != nil || p.Mode != identity.mode) {
-				return ErrLANPolicyRuntime
+				return lanPolicyPreflightAt("boundary-plan", ErrLANPolicyRuntime)
 			}
 			if err := check(c); err != nil {
-				return err
+				return lanPolicyPreflightAt(stage, err)
 			}
-			return inventory(c, identity.value, CloneLANPolicyRuntime(p))
-		})
+			return lanPolicyPreflightAt("boundary-inventory", inventory(c, identity.value, CloneLANPolicyRuntime(p)))
+		}))
 	}
 	runtime.Runner = networkPolicyIdentityRunner{identity: identity, runner: runtime.Runner}
 	runtime.ScopeCheck = func(ctx context.Context, p *LANPolicyRuntimePlan) error {
-		return boundary(ctx, p, func(c context.Context) error { return physical(c, CloneLANPolicyRuntime(p)) })
+		return boundary(ctx, p, "boundary-physical", func(c context.Context) error { return physical(c, CloneLANPolicyRuntime(p)) })
 	}
 	binding.Runtime = &runtime
 	binding.ApplyGuard = func(ctx context.Context, p *LANPolicyRuntimePlan, effect LANPolicyEffect) error {
-		return boundary(ctx, p, func(c context.Context) error { return apply(c, CloneLANPolicyRuntime(p), cloneLANPolicyEffect(effect)) })
+		return boundary(ctx, p, "boundary-apply", func(c context.Context) error { return apply(c, CloneLANPolicyRuntime(p), cloneLANPolicyEffect(effect)) })
 	}
 	binding.CleanupGuard = func(ctx context.Context, p *LANPolicyRuntimePlan, effect LANPolicyEffect) error {
-		return boundary(ctx, p, func(c context.Context) error {
+		return boundary(ctx, p, "boundary-cleanup", func(c context.Context) error {
 			return cleanup(c, CloneLANPolicyRuntime(p), cloneLANPolicyEffect(effect))
 		})
 	}
 	binding.RetireCheck = func(ctx context.Context, p *LANPolicyRuntimePlan) error {
-		return boundary(ctx, p, func(c context.Context) error { return retire(c, CloneLANPolicyRuntime(p)) })
+		return boundary(ctx, p, "boundary-retire", func(c context.Context) error { return retire(c, CloneLANPolicyRuntime(p)) })
 	}
 	return &NetworkPolicyAdapter{Binding: &binding, identity: identity, InventoryCheck: func(ctx context.Context) error {
-		return boundary(ctx, nil, func(c context.Context) error { return c.Err() })
+		return boundary(ctx, nil, "boundary-inventory", func(c context.Context) error { return c.Err() })
 	}}, nil
 }
 

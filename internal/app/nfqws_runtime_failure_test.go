@@ -39,7 +39,7 @@ func TestManagedNFQRuntimeDiagnosticReportsActualClosedLANPreflightStage(t *test
 	cause := (&dataplane.LANPolicyRuntime{}).Preflight(context.Background(), nil)
 	err := managedNFQFailureAt("native-apply", cause)
 	stage, reason := managedNFQFailureDiagnostic(err)
-	if stage != "lan-preflight-scope-open" || reason != "LAN_GATE_REFUSED" || !errors.Is(err, dataplane.ErrLANPolicyRuntime) {
+	if stage != "lan-preflight-runtime-plan" || reason != "LAN_GATE_REFUSED" || !errors.Is(err, dataplane.ErrLANPolicyRuntime) {
 		t.Fatal("actual LAN branch hidden by outer operation", stage, reason, err)
 	}
 }

@@ -338,7 +338,7 @@ func (r *LANPolicyRuntime) check(ctx context.Context, p *LANPolicyRuntimePlan) e
 		return err
 	}
 	if r.ScopeCheck == nil {
-		return ErrLANPolicyRuntime
+		return lanPolicyPreflightAt("runtime-scope-missing", ErrLANPolicyRuntime)
 	}
 	if err := errors.Join(ctx.Err(), r.ScopeCheck(ctx, CloneLANPolicyRuntime(p))); err != nil {
 		return err
@@ -348,10 +348,10 @@ func (r *LANPolicyRuntime) check(ctx context.Context, p *LANPolicyRuntimePlan) e
 
 func (r *LANPolicyRuntime) checkTools(ctx context.Context, p *LANPolicyRuntimePlan) error {
 	if err := ValidateLANPolicyRuntime(p); err != nil {
-		return err
+		return lanPolicyPreflightAt("runtime-plan", err)
 	}
 	if r == nil || r.Runner == nil || r.IP == "" || r.IPTables == "" || r.IP6Tables == "" {
-		return ErrLANPolicyRuntime
+		return lanPolicyPreflightAt("runtime-tools", ErrLANPolicyRuntime)
 	}
 	return ctx.Err()
 }

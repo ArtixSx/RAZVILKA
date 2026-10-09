@@ -28,16 +28,16 @@ func (c *NetworkPolicyChecks) ConsumerCheck(ctx context.Context, lan *LANPolicyR
 func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity netidentity.Identity, lan *LANPolicyRuntimePlan, requireConsumer bool) error {
 	lan = CloneLANPolicyRuntime(lan)
 	if lan != nil && (ValidateLANPolicyRuntime(lan) != nil || c == nil || c.gate == nil || c.gate.identity == nil || lan.Mode != c.gate.identity.mode) {
-		return ErrLANPolicyRuntime
+		return lanPolicyPreflightAt("inventory-mode", ErrLANPolicyRuntime)
 	}
-	return c.boundary(ctx, func(held context.Context) error {
+	return lanPolicyPreflightAt("inventory-boundary", c.boundary(ctx, func(held context.Context) error {
 		if identity != c.gate.identity.value {
-			return ErrNetworkPolicyIdentity
+			return lanPolicyPreflightAt("inventory-identity", ErrNetworkPolicyIdentity)
 		}
 		opening, err := c.proxyConsumers(held, lan)
 		defer closeNetworkPolicyProxyObservations(opening)
 		if err != nil {
-			return errors.Join(ErrNetworkPolicyConsumers, err)
+			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		openingNFQ, err := c.nfqConsumers(held, lan)
 		defer func() {
@@ -46,11 +46,11 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 			}
 		}()
 		if err != nil || requireConsumer && len(opening)+len(openingNFQ) == 0 {
-			return errors.Join(ErrNetworkPolicyConsumers, err)
+			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		first, err := c.read(held, identity)
 		if err != nil {
-			return err
+			return lanPolicyPreflightAt("inventory-read-open", err)
 		}
 		if err := checkNetworkPolicyInventoryForMode(first, identity, lan, c.gate.identity.mode, opening, openingNFQ...); err != nil {
 			return err
@@ -58,7 +58,7 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		closing, err := c.proxyConsumers(held, lan)
 		defer closeNetworkPolicyProxyObservations(closing)
 		if err != nil || !equalNetworkPolicyProxyObservations(opening, closing) {
-			return errors.Join(ErrNetworkPolicyConsumers, err)
+			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		closingNFQ, err := c.nfqConsumers(held, lan)
 		defer func() {
@@ -67,14 +67,18 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 			}
 		}()
 		if err != nil || !equalNetworkPolicyNFQObservations(openingNFQ, closingNFQ) {
-			return errors.Join(ErrNetworkPolicyConsumers, err)
+			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		// No external owner callback runs after this final complete capture.
 		// Compare the entire image, including unrelated/custom-table rows. This
 		// does not claim an atomic snapshot or immunity to undetected ABA.
 		last, err := c.read(held, identity)
 		if err != nil || !reflect.DeepEqual(first, last) {
-			return errors.Join(ErrBackendInventoryUnknown, err)
+			stage := "inventory-image-changed"
+			if err != nil {
+				stage = "inventory-read-close"
+			}
+			return lanPolicyPreflightAt(stage, errors.Join(ErrBackendInventoryUnknown, err))
 		}
 		var nfqErr error
 		for _, observations := range [][]networkPolicyNFQObservation{openingNFQ, closingNFQ} {
@@ -82,8 +86,8 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 				nfqErr = errors.Join(nfqErr, o.current(held))
 			}
 		}
-		return errors.Join(checkNetworkPolicyInventoryForMode(last, identity, lan, c.gate.identity.mode, closing, closingNFQ...), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr)
-	})
+		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(checkNetworkPolicyInventoryForMode(last, identity, lan, c.gate.identity.mode, closing, closingNFQ...), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr))
+	}))
 }
 
 // CheckLANPolicyInventory is a pure observation predicate allowing only the
@@ -195,23 +199,27 @@ func checkNetworkPolicyInventory(s BackendInventorySnapshot, identity netidentit
 
 func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity netidentity.Identity, lan *LANPolicyRuntimePlan, mode string, consumers []networkPolicyProxyObservation, nfqConsumers ...networkPolicyNFQObservation) error {
 	if mode != "" && mode != LANPolicyNFQWSDirectMode || lan != nil && lan.Mode != mode {
-		return ErrLANPolicyRuntime
+		return lanPolicyPreflightAt("inventory-mode", ErrLANPolicyRuntime)
 	}
 	if err := s.RequireComplete(); err != nil || identity.Validate() != nil || s.Scope.Network != identity {
-		return errors.Join(ErrBackendInventoryUnknown, err)
+		stage := "inventory-identity"
+		if err != nil {
+			stage = "inventory-coverage"
+		}
+		return lanPolicyPreflightAt(stage, errors.Join(ErrBackendInventoryUnknown, err))
 	}
 	a, err := networkPolicyInventoryAllowed(lan, consumers, nfqConsumers...)
 	if err != nil {
-		return err
+		return lanPolicyPreflightAt("inventory-definition", err)
 	}
 	positions := map[string]int{}
 	for _, row := range s.Rows {
 		if row.Family != 4 && row.Family != 6 || !backendClassicTableName(row.Table) || len(row.Tokens) < 2 || len(row.Tokens) > 128 {
-			return ErrBackendInventoryUnknown
+			return lanPolicyPreflightAt("inventory-row-shape", ErrBackendInventoryUnknown)
 		}
 		reserved, err := networkPolicyReservedRowForMode(row.Tokens, mode)
 		if err != nil {
-			return err
+			return lanPolicyPreflightAt("inventory-row-syntax", err)
 		}
 		if !reserved {
 			continue
@@ -219,7 +227,11 @@ func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity net
 		consumer := strings.HasPrefix(row.Tokens[1], "RZP_") || networkPolicyReferencesPrefix(row.Tokens, "RZP_") || networkPolicyNFQRow(row)
 		key := networkPolicyRowKey(row, consumer)
 		if key == "" || a.counts[key] <= 0 {
-			return ErrLANPolicyRuntime
+			stage := "inventory-row-unallowed"
+			if key == "" {
+				stage = "inventory-row-key"
+			}
+			return lanPolicyPreflightAt(stage, ErrLANPolicyRuntime)
 		}
 		a.counts[key]--
 		if consumer {
@@ -231,14 +243,14 @@ func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity net
 			position := positions[coordinate]
 			offset := slices.Index(order[position:], key)
 			if offset < 0 {
-				return ErrLANPolicyRuntime
+				return lanPolicyPreflightAt("inventory-row-order", ErrLANPolicyRuntime)
 			}
 			positions[coordinate] = position + offset + 1
 		}
 	}
 	for _, count := range a.required {
 		if count != 0 {
-			return ErrNetworkPolicyConsumers
+			return lanPolicyPreflightAt("inventory-consumer-required", ErrNetworkPolicyConsumers)
 		}
 	}
 	return nil
