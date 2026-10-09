@@ -552,6 +552,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/strategy-lab/candidates", a.strategyLabCandidates)
 	mux.HandleFunc("/api/v1/strategy-lab/candidates/", a.strategyLabCandidateAction)
 	mux.HandleFunc("/api/v1/strategy-lab/selections", a.strategyLabSelections)
+	mux.HandleFunc(managedNFQListRuntimePath, a.managedNFQListRuntimeHTTP)
 	mux.HandleFunc("/api/v1/migrations/z2k/preview", a.z2kMigrationPreview)
 	mux.HandleFunc("/api/v1/migrations/z2k/import-strategies", a.z2kMigrationImportStrategies)
 	mux.HandleFunc("/api/v1/engine-configs", a.engineConfigs)

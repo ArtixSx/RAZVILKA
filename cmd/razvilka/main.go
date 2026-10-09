@@ -691,6 +691,34 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 		}
 		log.Print("Managed NFQ compatibility source is unavailable; its retained state requires review")
 	}
+	// The original held tools must remain alive while signal cancellation
+	// stops HTTP/workers and their cleanup joins. This service lifetime ends
+	// only after the SAME runtime confirms native and COMMON retirement.
+	managedNFQLifetime, cancelManagedNFQLifetime := context.WithCancel(context.Background())
+	managedNFQList, managedNFQListErr := configureManagedNFQList(managedNFQLifetime, a)
+	if managedNFQListErr != nil {
+		cancelManagedNFQLifetime()
+		log.Print("Managed NFQ list startup owner is unavailable; scoped activation remains closed")
+	}
+	managedNFQCloseAttempted := false
+	closeManagedNFQList := func(ctx context.Context) {
+		if managedNFQCloseAttempted {
+			return
+		}
+		managedNFQCloseAttempted = true
+		if managedNFQList != nil {
+			if err := managedNFQList.Close(ctx); err != nil {
+				log.Print("Managed NFQ retirement remains unconfirmed; original tools and cleanup owner were not released")
+				return
+			}
+		}
+		cancelManagedNFQLifetime()
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		closeManagedNFQList(ctx)
+	}()
 	a.StartSelfUpdate(runtimeContext)
 	selfRecoveryPending := a.PendingSelfUpdateRecovery()
 	if !selfRecoveryPending {
@@ -815,6 +843,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 		if err := a.WaitNodeFeeds(nodeShutdownContext); err != nil {
 			log.Print("Subscription update cleanup did not finish before shutdown")
 		}
+		closeManagedNFQList(shutdownContext)
 	}
 }
 

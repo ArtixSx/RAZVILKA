@@ -122,6 +122,10 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || r.URL.Path == "/api/v1/dns/service-compare" && r.Method == http.MethodPost
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || isNodeApplyPath(r)
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || isScopedDNSApplyPath(r)
+		// This caller delegates admission to the original retained runtime.
+		// A pending Stop must join its existing owner even while it fences new
+		// operations; request middleware must not create a second admission.
+		nodeJobOwnsAdmission = nodeJobOwnsAdmission || r.URL.Path == managedNFQListRuntimePath && r.Method == http.MethodPost
 		nodeJobMemoryOnly := r.URL.Path == "/api/v1/node-checks/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/node-autofallback" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
 		nodeJobMemoryOnly = nodeJobMemoryOnly || r.URL.Path == "/api/v1/service-control/current" && (r.Method == http.MethodGet || r.Method == http.MethodDelete)
