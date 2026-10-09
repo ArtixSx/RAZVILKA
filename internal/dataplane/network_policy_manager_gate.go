@@ -277,6 +277,27 @@ func (a *NetworkPolicyAdapter) inspectAbsent(ctx context.Context, lan *LANPolicy
 	if err := a.check(); err != nil {
 		return err
 	}
+	if lan != nil && lan.Mode == LANPolicyNFQWSDirectMode {
+		// Direct preparation has no COMMON effects to iterate. Missing files
+		// still require original retained cleanup, settled consumers and fresh
+		// complete namespace/RPDB absence before the exact owner can be cleared.
+		if a.InventoryCheck == nil {
+			return ErrRuntimeInactivity
+		}
+		if err := a.Binding.directGuard(ctx, lan, true); err != nil {
+			return err
+		}
+		if err := a.Binding.RetireCheck(ctx, CloneLANPolicyRuntime(lan)); err != nil {
+			return err
+		}
+		if err := a.InventoryCheck(ctx); err != nil {
+			return err
+		}
+		if err := a.Binding.Runtime.inspectDirectRPDB(ctx); err != nil {
+			return err
+		}
+		return a.Binding.directGuard(ctx, lan, true)
+	}
 	effects, err := lan.Effects()
 	if err != nil {
 		return err

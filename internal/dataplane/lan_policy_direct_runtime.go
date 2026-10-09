@@ -11,6 +11,15 @@ import (
 // it must not require an unregistered raw table or change firmware matches.
 // All project routing ownership conflicts remain a refusal.
 func (r *LANPolicyRuntime) preflightDirect(ctx context.Context, p *LANPolicyRuntimePlan) error {
+	if err := r.inspectDirectRPDB(ctx); err != nil {
+		return err
+	}
+	return lanPolicyPreflightAt("scope-close", r.check(ctx, p))
+}
+
+// A retained cleanup caller brackets this read with its original cleanup
+// guard. It must not borrow an expired forward ScopeCheck to prove absence.
+func (r *LANPolicyRuntime) inspectDirectRPDB(ctx context.Context) error {
 	for _, family := range []int{4, 6} {
 		output, err := r.read(ctx, "ip", "-"+strconv.Itoa(family), "-N", "rule", "show")
 		if err != nil {
@@ -42,5 +51,5 @@ func (r *LANPolicyRuntime) preflightDirect(ctx context.Context, p *LANPolicyRunt
 			}
 		}
 	}
-	return lanPolicyPreflightAt("scope-close", r.check(ctx, p))
+	return ctx.Err()
 }
