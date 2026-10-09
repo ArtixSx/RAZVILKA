@@ -21,6 +21,7 @@ func TestManagedNFQRuntimeDiagnosticPreservesCauseAndSanitizesPresentation(t *te
 		{errors.Join(secret, fs.ErrPermission), "SOURCE_PERMISSION"},
 		{errors.Join(secret, ErrDefaultRouteCapability), "COMPILED_CAPABILITY_REFUSED"},
 		{errors.Join(secret, dataplane.ErrNFQWSScopedOwner), "NATIVE_OWNER_REFUSED"},
+		{errors.Join(secret, dataplane.ErrLANPolicyRuntime), "LAN_GATE_REFUSED"},
 	} {
 		err := managedNFQFailureAt("physical-observe", test.cause)
 		stage, reason := managedNFQFailureDiagnostic(err)
@@ -31,5 +32,14 @@ func TestManagedNFQRuntimeDiagnosticPreservesCauseAndSanitizesPresentation(t *te
 		if got, _ := managedNFQFailureDiagnostic(wrapped); got != stage {
 			t.Fatal("original failed stage replaced", got)
 		}
+	}
+}
+
+func TestManagedNFQRuntimeDiagnosticReportsActualClosedLANPreflightStage(t *testing.T) {
+	cause := (&dataplane.LANPolicyRuntime{}).Preflight(context.Background(), nil)
+	err := managedNFQFailureAt("native-apply", cause)
+	stage, reason := managedNFQFailureDiagnostic(err)
+	if stage != "lan-preflight-scope-open" || reason != "LAN_GATE_REFUSED" || !errors.Is(err, dataplane.ErrLANPolicyRuntime) {
+		t.Fatal("actual LAN branch hidden by outer operation", stage, reason, err)
 	}
 }

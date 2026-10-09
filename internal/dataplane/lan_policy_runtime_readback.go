@@ -28,7 +28,7 @@ func lanPolicyRuleKey(line string) string {
 // an identical-looking occupant is never adopted here.
 func (r *LANPolicyRuntime) Preflight(ctx context.Context, p *LANPolicyRuntimePlan) error {
 	if err := r.check(ctx, p); err != nil {
-		return err
+		return lanPolicyPreflightAt("scope-open", err)
 	}
 	for _, family := range []int{4, 6} {
 		args := []string{"-4", "-N", "rule", "show"}
@@ -37,7 +37,7 @@ func (r *LANPolicyRuntime) Preflight(ctx context.Context, p *LANPolicyRuntimePla
 		}
 		output, err := r.read(ctx, "ip", args...)
 		if err != nil {
-			return err
+			return lanPolicyPreflightAt("rpdb-read", err)
 		}
 		for _, line := range strings.Split(output, "\n") {
 			if strings.TrimSpace(line) == "" {
@@ -45,25 +45,25 @@ func (r *LANPolicyRuntime) Preflight(ctx context.Context, p *LANPolicyRuntimePla
 			}
 			priority, ok := policyLinePriority(line)
 			if !ok || !lanPolicyRuleSyntax(line) {
-				return ErrLANPolicyRuntime
+				return lanPolicyPreflightAt("rpdb-syntax", ErrLANPolicyRuntime)
 			}
 			if priority == LANPolicySkipPriority || priority == LANPolicyAnchorPriority {
-				return ErrLANPolicyRuntime
+				return lanPolicyPreflightAt("rpdb-reserved-priority", ErrLANPolicyRuntime)
 			}
 			f := strings.Fields(line)
 			for i, value := range f {
 				if value == "goto" && i+1 < len(f) && f[i+1] == "73" {
-					return ErrLANPolicyRuntime
+					return lanPolicyPreflightAt("rpdb-goto-anchor", ErrLANPolicyRuntime)
 				}
 				if value == "fwmark" && i+1 < len(f) && lanPolicyMarkTouches(f[i+1]) {
-					return ErrLANPolicyRuntime
+					return lanPolicyPreflightAt("rpdb-gate-mark", ErrLANPolicyRuntime)
 				}
 				if (value == "lookup" || value == "table") && i+1 < len(f) {
 					for _, owner := range PolicyOwnershipSpecs() {
 						// Old IP-only selectors, especially indexed priorities,
 						// cannot be skipped safely while preserving firmware.
 						if f[i+1] == strconv.Itoa(owner.Table) {
-							return ErrLANPolicyRuntime
+							return lanPolicyPreflightAt("rpdb-owned-table", ErrLANPolicyRuntime)
 						}
 					}
 				}
@@ -76,25 +76,25 @@ func (r *LANPolicyRuntime) Preflight(ctx context.Context, p *LANPolicyRuntimePla
 		for _, table := range []string{"mangle", "nat", "filter", "raw"} {
 			output, err := r.read(ctx, tool, "-t", table, "-S")
 			if err != nil {
-				return err // missing table/capability is an explicit refusal
+				return lanPolicyPreflightAt("table-read", err) // missing table/capability is an explicit refusal
 			}
 			for _, line := range strings.Split(output, "\n") {
 				f := strings.Fields(line)
 				for i, value := range f {
 					if strings.HasPrefix(value, "RZG_") {
-						return ErrLANPolicyRuntime
+						return lanPolicyPreflightAt("table-owned-chain", ErrLANPolicyRuntime)
 					}
 					if slices.Contains([]string{"--mark", "--set-mark", "--set-xmark", "--or-mark", "--xor-mark"}, value) && i+1 < len(f) && lanPolicyMarkTouches(f[i+1]) {
-						return ErrLANPolicyRuntime
+						return lanPolicyPreflightAt("table-gate-mark", ErrLANPolicyRuntime)
 					}
 					if value == "CONNMARK" || value == "--and-mark" {
-						return ErrLANPolicyRuntime // no inferred connmark compatibility
+						return lanPolicyPreflightAt("table-connmark", ErrLANPolicyRuntime) // no inferred connmark compatibility
 					}
 				}
 			}
 		}
 	}
-	return r.check(ctx, p)
+	return lanPolicyPreflightAt("scope-close", r.check(ctx, p))
 }
 
 func lanPolicyMarkTouches(value string) bool {

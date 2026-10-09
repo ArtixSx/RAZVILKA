@@ -38,6 +38,12 @@ func managedNFQFailureDiagnostic(err error) (stage, reason string) {
 	if errors.As(err, &failure) {
 		stage = failure.stage
 	}
+	if lanStage := dataplane.LANPolicyPreflightFailureStage(err); lanStage != "" {
+		stage = "lan-preflight-" + lanStage
+		if failure != nil && failure.stage != "native-apply" {
+			stage += "/" + failure.stage
+		}
+	}
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		reason = "DEADLINE_EXCEEDED"
@@ -67,6 +73,8 @@ func managedNFQFailureDiagnostic(err error) (stage, reason string) {
 		reason = "LAN_CONSUMER_REFUSED"
 	case errors.Is(err, dataplane.ErrNFQWSScopedOwner):
 		reason = "NATIVE_OWNER_REFUSED"
+	case errors.Is(err, dataplane.ErrLANPolicyRuntime):
+		reason = "LAN_GATE_REFUSED"
 	}
 	return
 }
